@@ -2,6 +2,10 @@ import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
 import type { TuiAgent } from '../../../shared/types'
 
 export type AgentStartupPlan = {
+  /** Why: surfaces the agent id so downstream paste-draft logic can resolve
+   * the per-agent draft injection strategy without re-deriving from the
+   * launch command string. */
+  agent: TuiAgent
   launchCommand: string
   expectedProcess: string
   followupPrompt: string | null
@@ -38,6 +42,7 @@ export function buildAgentStartupPlan(args: {
       return null
     }
     return {
+      agent,
       launchCommand: baseCommand,
       expectedProcess: config.expectedProcess,
       followupPrompt: null
@@ -48,6 +53,7 @@ export function buildAgentStartupPlan(args: {
 
   if (config.promptInjectionMode === 'argv') {
     return {
+      agent,
       launchCommand: `${baseCommand} ${quotedPrompt}`,
       expectedProcess: config.expectedProcess,
       followupPrompt: null
@@ -56,6 +62,7 @@ export function buildAgentStartupPlan(args: {
 
   if (config.promptInjectionMode === 'flag-prompt') {
     return {
+      agent,
       launchCommand: `${baseCommand} --prompt ${quotedPrompt}`,
       expectedProcess: config.expectedProcess,
       followupPrompt: null
@@ -64,6 +71,7 @@ export function buildAgentStartupPlan(args: {
 
   if (config.promptInjectionMode === 'flag-prompt-interactive') {
     return {
+      agent,
       launchCommand: `${baseCommand} --prompt-interactive ${quotedPrompt}`,
       expectedProcess: config.expectedProcess,
       followupPrompt: null
@@ -72,6 +80,7 @@ export function buildAgentStartupPlan(args: {
 
   if (config.promptInjectionMode === 'flag-interactive') {
     return {
+      agent,
       launchCommand: `${baseCommand} -i ${quotedPrompt}`,
       expectedProcess: config.expectedProcess,
       followupPrompt: null
@@ -79,6 +88,7 @@ export function buildAgentStartupPlan(args: {
   }
 
   return {
+    agent,
     launchCommand: baseCommand,
     expectedProcess: config.expectedProcess,
     // Why: several agent TUIs either lack a documented "start interactive

@@ -7,11 +7,26 @@ export type AgentPromptInjectionMode =
   | 'flag-interactive'
   | 'stdin-after-start'
 
+// Why: how Orca should type a non-submitted draft (e.g. a linked work-item
+// URL) into the agent's live input box. Different TUIs accept different
+// signals — Claude reliably honors bracketed paste, Codex needs a longer
+// settle period before the input is editable, Pi/OpenCode work best with
+// per-character typing because they intercept paste markers themselves.
+export type AgentDraftInjectionStrategy =
+  | 'bracketed-paste'
+  | 'bracketed-paste-slow'
+  | 'type-chars'
+  | 'unsupported'
+
 export type TuiAgentConfig = {
   detectCmd: string
   launchCmd: string
   expectedProcess: string
   promptInjectionMode: AgentPromptInjectionMode
+  /** Defaults to 'bracketed-paste' when omitted. Set 'unsupported' for
+   *  agents whose TUI ignores both bracketed paste and char-by-char input
+   *  before user interaction (rare; surface a toast instead). */
+  draftInjectionStrategy?: AgentDraftInjectionStrategy
 }
 
 // Why: the new-workspace handoff depends on three pieces of per-agent
@@ -31,19 +46,31 @@ export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
     detectCmd: 'codex',
     launchCmd: 'codex',
     expectedProcess: 'codex',
-    promptInjectionMode: 'argv'
+    promptInjectionMode: 'argv',
+    // Why: Codex emits `\x1b[?2004h` (bracketed paste mode) almost instantly
+    // on launch, but the input box only becomes editable after the splash /
+    // model-readiness phase. Use the longer-settle variant so the URL paste
+    // arrives after the input is actually accepting drafts.
+    draftInjectionStrategy: 'bracketed-paste-slow'
   },
   opencode: {
     detectCmd: 'opencode',
     launchCmd: 'opencode',
     expectedProcess: 'opencode',
-    promptInjectionMode: 'flag-prompt'
+    promptInjectionMode: 'flag-prompt',
+    // Why: OpenCode's Bubble Tea TUI is conservative about treating pastes as
+    // drafts; per-character typing lands more reliably across versions.
+    draftInjectionStrategy: 'type-chars'
   },
   pi: {
     detectCmd: 'pi',
     launchCmd: 'pi',
     expectedProcess: 'pi',
-    promptInjectionMode: 'argv'
+    promptInjectionMode: 'argv',
+    // Why: Pi's titlebar/spinner extension owns input mode aggressively and
+    // historically swallows bracketed-paste markers. Type each character so
+    // the URL appears as if the user typed it.
+    draftInjectionStrategy: 'type-chars'
   },
   gemini: {
     detectCmd: 'gemini',

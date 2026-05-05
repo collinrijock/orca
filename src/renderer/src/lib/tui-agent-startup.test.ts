@@ -11,6 +11,7 @@ describe('buildAgentStartupPlan', () => {
         platform: 'darwin'
       })
     ).toEqual({
+      agent: 'claude',
       launchCommand: "claude 'Fix the bug'",
       expectedProcess: 'claude',
       followupPrompt: null
@@ -26,6 +27,7 @@ describe('buildAgentStartupPlan', () => {
         platform: 'linux'
       })
     ).toEqual({
+      agent: 'gemini',
       launchCommand: "gemini --prompt-interactive 'Investigate this regression'",
       expectedProcess: 'gemini',
       followupPrompt: null
@@ -41,6 +43,7 @@ describe('buildAgentStartupPlan', () => {
         platform: 'linux'
       })
     ).toEqual({
+      agent: 'aider',
       launchCommand: 'aider',
       expectedProcess: 'aider',
       followupPrompt: 'Refactor the parser'
@@ -56,6 +59,7 @@ describe('buildAgentStartupPlan', () => {
         platform: 'darwin'
       })
     ).toEqual({
+      agent: 'cursor',
       launchCommand: "cursor-agent 'Review this file'",
       expectedProcess: 'cursor-agent',
       followupPrompt: null
@@ -71,6 +75,7 @@ describe('buildAgentStartupPlan', () => {
         platform: 'linux'
       })
     ).toEqual({
+      agent: 'droid',
       launchCommand: "/opt/factory/bin/droid 'Ship the fix'",
       expectedProcess: 'droid',
       followupPrompt: null
@@ -86,6 +91,7 @@ describe('buildAgentStartupPlan', () => {
         platform: 'darwin'
       })
     ).toEqual({
+      agent: 'copilot',
       launchCommand: "copilot -i 'Fix the bug'",
       expectedProcess: 'copilot',
       followupPrompt: null
@@ -112,6 +118,7 @@ describe('buildAgentStartupPlan', () => {
         platform: 'darwin'
       })
     ).toEqual({
+      agent: 'copilot',
       launchCommand: "copilot -i 'Fix the bug'",
       expectedProcess: 'copilot',
       followupPrompt: null

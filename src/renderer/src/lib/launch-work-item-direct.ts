@@ -105,6 +105,7 @@ async function pasteWorkItemDraftWhenAgentReady(args: {
     tabId: primaryTabId,
     expectedProcess: startupPlan.expectedProcess,
     content,
+    agent: startupPlan.agent,
     timeoutMs: 5000,
     onTimeout: () =>
       toast.message(
