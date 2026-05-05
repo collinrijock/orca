@@ -514,7 +514,7 @@ function App(): React.JSX.Element {
       mq.addEventListener('change', handler)
       return () => mq.removeEventListener('change', handler)
     }
-  }, [settings])
+  }, [settings?.theme])
 
   useEffect(() => {
     document.documentElement.style.setProperty(
