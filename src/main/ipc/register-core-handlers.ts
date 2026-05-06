@@ -72,7 +72,7 @@ export function registerCoreHandlers(
   registerClaudeUsageHandlers(claudeUsage)
   registerCodexUsageHandlers(codexUsage)
   registerCodexAccountHandlers(codexAccounts)
-  registerAgentHookHandlers()
+  registerAgentHookHandlers(store)
   registerAgentTrustHandlers()
   registerClaudeAccountHandlers(claudeAccounts)
   registerRateLimitHandlers(rateLimits)

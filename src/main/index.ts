@@ -563,7 +563,12 @@ app.whenReady().then(async () => {
       // file (PORT/TOKEN/ENV/VERSION) to a stable location. Hook scripts
       // source that file at invocation time so they reach the current Orca
       // even when the PTY's env was frozen under a prior instance.
-      userDataPath: app.getPath('userData')
+      userDataPath: app.getPath('userData'),
+      // Why: gate the on-disk last-status cache on the experimental dashboard
+      // setting. Read at write time (closure) so the gate flip takes effect
+      // without restarting the server. When off: hydration is skipped and
+      // any existing file is deleted on the next scheduled write.
+      getDashboardEnabled: () => store?.getSettings().experimentalAgentDashboard === true
     })
   } catch (error) {
     // Why: Claude/Codex/Gemini/OpenCode/Cursor hook callbacks are sidebar

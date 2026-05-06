@@ -1162,6 +1162,9 @@ export type PreloadApi = {
         interrupted?: boolean
       }) => void
     ) => () => void
+    /** Drop a paneKey from the main-process hook cache and the on-disk
+     *  last-status file. Fire-and-forget. */
+    drop: (paneKey: string) => void
   }
   mobile: {
     listNetworkInterfaces: () => Promise<{

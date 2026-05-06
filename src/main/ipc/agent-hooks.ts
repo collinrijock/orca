@@ -1,15 +1,17 @@
 import { ipcMain } from 'electron'
 import type { AgentHookInstallStatus } from '../../shared/agent-hook-types'
+import { agentHookServer } from '../agent-hooks/server'
 import { claudeHookService } from '../claude/hook-service'
 import { codexHookService } from '../codex/hook-service'
 import { geminiHookService } from '../gemini/hook-service'
 import { cursorHookService } from '../cursor/hook-service'
+import type { Store } from '../persistence'
 
 // Why: install/remove are intentionally not exposed to the renderer. Orca
 // auto-installs managed hooks at app startup (see src/main/index.ts), so a
 // renderer-triggered remove would be silently reverted on the next launch
 // and mislead the user.
-export function registerAgentHookHandlers(): void {
+export function registerAgentHookHandlers(store: Store): void {
   // Why: matches the defensive pattern in src/main/ipc/pty.ts so re-registration
   // never throws "Attempted to register a second handler..." if this function is
   // ever invoked more than once (e.g. the macOS app re-activation path that
@@ -20,6 +22,23 @@ export function registerAgentHookHandlers(): void {
   ipcMain.removeHandler('agentHooks:codexStatus')
   ipcMain.removeHandler('agentHooks:geminiStatus')
   ipcMain.removeHandler('agentHooks:cursorStatus')
+  // Why: agentStatus:drop is sent fire-and-forget from the renderer via
+  // ipcRenderer.send(); we listen with ipcMain.on (not handle) so we don't
+  // round-trip a response. Removing first keeps re-registration safe even
+  // though the module-level registered guard already prevents re-entry today.
+  ipcMain.removeAllListeners('agentStatus:drop')
+  ipcMain.on('agentStatus:drop', (_event, paneKey: unknown) => {
+    if (typeof paneKey !== 'string' || paneKey.length === 0) {
+      return
+    }
+    // Why: gate on the same experimentalAgentDashboard flag used everywhere
+    // else in main. clearPaneState is itself idempotent, but the gate keeps
+    // a non-opted-in renderer from churning the persistence path.
+    if (store.getSettings().experimentalAgentDashboard !== true) {
+      return
+    }
+    agentHookServer.clearPaneState(paneKey)
+  })
 
   // Why: errors from getStatus() (fs permission denied, homedir resolution
   // failure, etc.) must be reported inline via state:'error' so the sidebar can

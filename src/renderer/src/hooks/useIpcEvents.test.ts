@@ -88,6 +88,7 @@ describe('useIpcEvents updater integration', () => {
 
     vi.doMock('../store', () => ({
       useAppStore: {
+        subscribe: vi.fn(() => () => {}),
         getState: () => ({
           setUpdateStatus,
           fetchRepos: vi.fn(),
@@ -311,6 +312,7 @@ describe('useIpcEvents updater integration', () => {
 
     vi.doMock('../store', () => ({
       useAppStore: {
+        subscribe: vi.fn(() => () => {}),
         getState: () => storeState,
         setState: vi.fn((updater: (state: typeof storeState) => typeof storeState) =>
           updater(storeState)
@@ -473,6 +475,7 @@ describe('useIpcEvents updater integration', () => {
 
     vi.doMock('../store', () => ({
       useAppStore: {
+        subscribe: vi.fn(() => () => {}),
         getState: () => ({
           setUpdateStatus: vi.fn(),
           createTab,
@@ -672,6 +675,7 @@ describe('useIpcEvents browser tab close routing', () => {
 
     vi.doMock('../store', () => ({
       useAppStore: {
+        subscribe: vi.fn(() => () => {}),
         getState: () => ({
           setUpdateStatus: vi.fn(),
           fetchRepos: vi.fn(),
@@ -865,6 +869,7 @@ describe('useIpcEvents browser tab close routing', () => {
 
     vi.doMock('../store', () => ({
       useAppStore: {
+        subscribe: vi.fn(() => () => {}),
         getState: () => ({
           setUpdateStatus: vi.fn(),
           fetchRepos: vi.fn(),
@@ -1057,6 +1062,7 @@ describe('useIpcEvents browser tab close routing', () => {
 
     vi.doMock('../store', () => ({
       useAppStore: {
+        subscribe: vi.fn(() => () => {}),
         getState: () => ({
           setUpdateStatus: vi.fn(),
           fetchRepos: vi.fn(),
@@ -1251,6 +1257,7 @@ describe('useIpcEvents shortcut hint clearing', () => {
 
     vi.doMock('../store', () => ({
       useAppStore: {
+        subscribe: vi.fn(() => () => {}),
         getState: () => ({
           toggleSidebar,
           toggleRightSidebar: vi.fn(),
@@ -1470,6 +1477,7 @@ describe('useIpcEvents CLI-created worktree activation', () => {
 
     vi.doMock('../store', () => ({
       useAppStore: {
+        subscribe: vi.fn(() => () => {}),
         getState: () => ({
           fetchRepos: vi.fn(),
           fetchWorktrees,

@@ -2180,6 +2180,13 @@ const api = {
       ) => callback(data)
       ipcRenderer.on('agentStatus:set', listener)
       return () => ipcRenderer.removeListener('agentStatus:set', listener)
+    },
+    /** Drop the cached hook status for a paneKey on both sides — main-process
+     *  cache (lastStatusByPaneKey) and on-disk last-status file. Fired from
+     *  the renderer when the user dismisses a retained row so a relaunch
+     *  cannot resurrect it. Fire-and-forget; no response. */
+    drop: (paneKey: string): void => {
+      ipcRenderer.send('agentStatus:drop', paneKey)
     }
   }
 }

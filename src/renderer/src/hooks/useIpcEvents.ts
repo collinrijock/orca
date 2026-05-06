@@ -27,7 +27,14 @@ import { setFitOverride, hydrateOverrides } from '@/lib/pane-manager/mobile-fit-
 import { setDriverForPty } from '@/lib/pane-manager/mobile-driver-state'
 import { destroyPersistentWebview } from '@/components/browser-pane/webview-registry'
 
+export { resetAgentStatusBootstrapQueue as __resetAgentStatusBootstrapQueueForTests } from './agent-status-bootstrap-queue'
 export { resolveZoomTarget } from './resolve-zoom-target'
+
+import {
+  drainAgentStatusBootstrapQueue,
+  enqueueAgentStatusBootstrap,
+  resetAgentStatusBootstrapQueue
+} from './agent-status-bootstrap-queue'
 
 const ZOOM_STEP = 0.5
 
@@ -812,6 +819,9 @@ export function useIpcEvents(): void {
     // unconditional so flipping the experimental dashboard setting takes
     // effect without re-running this App-mount effect; the per-event guard
     // inside the handler drops payloads when the setting is off.
+    // Why: reset the queue every effect mount so HMR / Strict Mode double-mount
+    // cannot accumulate stale entries across remounts.
+    resetAgentStatusBootstrapQueue()
     unsubs.push(
       window.api.agentStatus.onSet((data) => {
         const store = useAppStore.getState()
@@ -844,11 +854,48 @@ export function useIpcEvents(): void {
         // from accumulating in agentStatusByPaneKey.
         const { exists, title } = resolvePaneKey(store, data.paneKey)
         if (!exists) {
+          // Why: events for unknown tabs that arrive before workspaceSessionReady
+          // are most likely hydrated entries from the on-disk last-status cache
+          // replayed by the main-process setListener() during window creation
+          // (which runs synchronously before App.tsx's async hydration completes).
+          // Buffer them and drain on the false→true transition so the dashboard
+          // sees them once tabsByWorktree is populated. Post-drain, fall back to
+          // the original drop-on-unknown-tab behavior — those are real orphans
+          // (closed tabs) that must not pin entries in the store.
+          if (!store.workspaceSessionReady) {
+            enqueueAgentStatusBootstrap({ paneKey: data.paneKey, payload, title })
+          }
           return
         }
         store.setAgentStatus(data.paneKey, payload, title)
       })
     )
+
+    // Why: drain the bootstrap queue on the workspaceSessionReady false→true
+    // transition. Re-resolve each paneKey at drain time — a tab that was closed
+    // in the prior session won't be in the new tabsByWorktree, and dropping
+    // those silently is the right behavior (matches the "Tab closed between
+    // sessions" edge case in the design doc).
+    const drainNow = (): void => {
+      const store = useAppStore.getState()
+      drainAgentStatusBootstrapQueue((entry) => {
+        const { exists, title } = resolvePaneKey(store, entry.paneKey)
+        if (!exists) {
+          return
+        }
+        store.setAgentStatus(entry.paneKey, entry.payload, title ?? entry.title)
+      })
+    }
+    if (useAppStore.getState().workspaceSessionReady) {
+      drainNow()
+    } else {
+      const unsubscribe = useAppStore.subscribe((state) => {
+        if (state.workspaceSessionReady) {
+          drainNow()
+        }
+      })
+      unsubs.push(unsubscribe)
+    }
 
     // Why: hydrate mobile-fit overrides before terminal panes run their first
     // attach/fit logic, so a renderer reload doesn't undo active mobile fits.

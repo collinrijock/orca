@@ -7,6 +7,7 @@ import {
   mkdirSync,
   openSync,
   readdirSync,
+  readFileSync,
   readSync,
   renameSync,
   statSync,
@@ -15,6 +16,7 @@ import {
 } from 'fs'
 import { join } from 'path'
 import {
+  normalizeAgentStatusPayload,
   parseAgentStatusPayload,
   type ParsedAgentStatusPayload
 } from '../../shared/agent-status-types'
@@ -1062,6 +1064,75 @@ function getEndpointFileName(): string {
   return process.platform === 'win32' ? 'endpoint.cmd' : 'endpoint.env'
 }
 
+// Why: name of the on-disk cache that survives Orca restart. Lives next to
+// the endpoint file in userData/agent-hooks/ so all hook-server-owned cross-
+// restart artifacts stay co-located.
+const LAST_STATUS_FILE_NAME = 'last-status.json'
+
+// Why: bumping this rejects on-disk files written by older shapes — see the
+// "Stale file from a prior Orca version" edge case in the design doc. A
+// mismatched version is treated as a corrupt file (silent empty hydration).
+const LAST_STATUS_FILE_VERSION = 1
+
+// Why: trailing-edge debounce so a burst of hook events from a multi-agent
+// run produces one disk write instead of N. The latency budget matches other
+// hook-server batching; quit-time uses flushStatusPersistSync() for the
+// guaranteed final flush.
+const STATUS_PERSIST_DEBOUNCE_MS = 250
+
+type LastStatusFile = {
+  version: number
+  entries: Record<string, AgentHookEventPayload>
+}
+
+// Why: paneKey is `${tabId}:${paneId}` — exactly one ':' with non-empty
+// segments on either side. Used both at write time (defensive) and at
+// hydrate time (drop on mismatch).
+function isValidPaneKey(value: unknown): value is string {
+  if (typeof value !== 'string' || value.length === 0) {
+    return false
+  }
+  const colon = value.indexOf(':')
+  if (colon <= 0 || colon === value.length - 1) {
+    return false
+  }
+  // Why: exactly one colon. ParseAgentStatusPayload elsewhere is generous,
+  // but the file is downstream of internal callers — anything weirder is
+  // corruption.
+  return !value.includes(':', colon + 1)
+}
+
+function sanitizeHydratedEntry(paneKey: string, rawEntry: unknown): AgentHookEventPayload | null {
+  if (!isValidPaneKey(paneKey)) {
+    return null
+  }
+  if (typeof rawEntry !== 'object' || rawEntry === null) {
+    return null
+  }
+  const record = rawEntry as Record<string, unknown>
+  if (record.paneKey !== paneKey) {
+    return null
+  }
+  const tabId = record.tabId
+  if (tabId !== undefined && (typeof tabId !== 'string' || tabId.length === 0)) {
+    return null
+  }
+  const worktreeId = record.worktreeId
+  if (worktreeId !== undefined && (typeof worktreeId !== 'string' || worktreeId.length === 0)) {
+    return null
+  }
+  const payload = normalizeAgentStatusPayload(record.payload)
+  if (!payload) {
+    return null
+  }
+  return {
+    paneKey,
+    tabId: typeof tabId === 'string' ? tabId : undefined,
+    worktreeId: typeof worktreeId === 'string' ? worktreeId : undefined,
+    payload
+  }
+}
+
 // Why: every value in the endpoint file is sourced as shell. Reject any
 // value that contains shell/cmd metacharacters so a future field whose
 // value is not shell-safe-by-construction cannot command-inject via the
@@ -1099,6 +1170,28 @@ export class AgentHookServer {
   // ENDPOINT env var on a successful write preserves the
   // fail-open-to-fresh-env guarantee.
   private endpointFileWritten = false
+  // Why: full path to the on-disk last-status cache. Set in start() from
+  // userDataPath. Null when the server runs without a userDataPath (e.g.
+  // tests that skip the userDataPath option) — in that case, persistence is
+  // a no-op and only in-memory replay applies.
+  private lastStatusFilePath: string | null = null
+  // Why: closure that reads the experimentalAgentDashboard setting at write
+  // time. Passed in from index.ts so the hook server stays decoupled from
+  // the Store class. Null when unset → persistence runs (back-compat for
+  // callers that haven't wired the gate yet); the design doc gates on the
+  // flag, so production callers always pass a closure.
+  private getDashboardEnabled: (() => boolean) | null = null
+  // Why: trailing-edge debounce timer. captured per-instance so multiple
+  // server instances in the same process (tests) don't share state.
+  private statusPersistTimer: ReturnType<typeof setTimeout> | null = null
+  // Why: identity check — skip writes when the JSON-stringified contents
+  // exactly match the last successful disk write. Cheap protection against
+  // re-firing trailing timers when nothing changed.
+  private lastWrittenJson: string | null = null
+  // Why: when the gate flips on → off, we delete the file once and skip
+  // subsequent scheduled writes until the gate flips back on. Tracking
+  // delete-attempted on the instance avoids re-stat'ing on every tick.
+  private deletedOnDisable = false
 
   setListener(listener: ((payload: AgentHookEventPayload) => void) | null): void {
     this.onAgentStatus = listener
@@ -1116,7 +1209,11 @@ export class AgentHookServer {
     }
   }
 
-  async start(options?: { env?: string; userDataPath?: string }): Promise<void> {
+  async start(options?: {
+    env?: string
+    userDataPath?: string
+    getDashboardEnabled?: () => boolean
+  }): Promise<void> {
     if (this.server) {
       return
     }
@@ -1127,9 +1224,23 @@ export class AgentHookServer {
     if (options?.userDataPath) {
       this.endpointDir = join(options.userDataPath, 'agent-hooks')
       this.endpointFilePathCache = join(this.endpointDir, getEndpointFileName())
+      this.lastStatusFilePath = join(this.endpointDir, LAST_STATUS_FILE_NAME)
+    }
+    if (options?.getDashboardEnabled) {
+      this.getDashboardEnabled = options.getDashboardEnabled
     }
     this.token = randomUUID()
     this.endpointFileWritten = false
+    this.lastWrittenJson = null
+    this.deletedOnDisable = false
+    // Why: hydrate before binding the HTTP listener so any new hook POST
+    // (which goes through lastStatusByPaneKey.set) runs against an already-
+    // populated map. The setListener() replay loop on the next window
+    // creation then fans hydrated entries into the renderer through the
+    // existing IPC path.
+    if (this.lastStatusFilePath && this.isDashboardEnabled()) {
+      this.hydrateLastStatusFromDisk()
+    }
     this.server = createServer(async (req: IncomingMessage, res: ServerResponse) => {
       if (req.method !== 'POST') {
         res.writeHead(404)
@@ -1177,6 +1288,7 @@ export class AgentHookServer {
         const payload = normalizeHookPayload(source, body, this.env)
         if (payload) {
           lastStatusByPaneKey.set(payload.paneKey, payload)
+          this.scheduleStatusPersist()
           this.onAgentStatus?.(payload)
         }
 
@@ -1223,6 +1335,12 @@ export class AgentHookServer {
   }
 
   stop(): void {
+    // Why: flush any pending debounced write to disk BEFORE we clear the
+    // in-memory map. Quit-time state must be captured even if the trailing
+    // timer was scheduled but had not yet fired; otherwise a multi-agent
+    // run that ended its last hook event <250 ms before quit would lose
+    // that final delta on relaunch.
+    this.flushStatusPersistSync()
     this.server?.close()
     this.server = null
     this.port = 0
@@ -1240,6 +1358,10 @@ export class AgentHookServer {
     this.endpointDir = null
     this.endpointFilePathCache = null
     this.endpointFileWritten = false
+    this.lastStatusFilePath = null
+    this.getDashboardEnabled = null
+    this.lastWrittenJson = null
+    this.deletedOnDisable = false
     // Why: drop all per-pane cache entries on shutdown so a subsequent start()
     // in the same process (e.g. during tests or a settings-driven restart)
     // does not inherit stale prompt/tool state from the previous run.
@@ -1257,9 +1379,17 @@ export class AgentHookServer {
     // accumulate entries for dead panes over the process lifetime. Without
     // this, every closed pane leaves its prompt + tool snapshot pinned in
     // memory for the life of the main process.
+    const hadStatus = lastStatusByPaneKey.has(paneKey)
     lastPromptByPaneKey.delete(paneKey)
     lastToolByPaneKey.delete(paneKey)
     lastStatusByPaneKey.delete(paneKey)
+    // Why: only schedule a write when we actually evicted a status entry —
+    // dropping prompt/tool caches for a pane that never produced a hook
+    // event does not change the on-disk file, and skipping the write avoids
+    // re-stat'ing on every dead-pane teardown.
+    if (hadStatus) {
+      this.scheduleStatusPersist()
+    }
   }
 
   buildPtyEnv(): Record<string, string> {
@@ -1369,7 +1499,13 @@ export class AgentHookServer {
         const entries = readdirSync(this.endpointDir)
         const cutoff = Date.now() - 5 * 60 * 1000
         for (const entry of entries) {
-          if (!entry.startsWith('.endpoint-') || !entry.endsWith('.tmp')) {
+          // Why: sweep both endpoint-file and last-status-file orphan tmps —
+          // either writer can crash mid-rename. Matching the same prefix
+          // pattern keeps the dir bounded without needing a separate sweep
+          // pass per file type.
+          const isEndpointTmp = entry.startsWith('.endpoint-') && entry.endsWith('.tmp')
+          const isLastStatusTmp = entry.startsWith('.last-status-') && entry.endsWith('.tmp')
+          if (!isEndpointTmp && !isLastStatusTmp) {
             continue
           }
           const entryPath = join(this.endpointDir, entry)
@@ -1411,6 +1547,174 @@ export class AgentHookServer {
         } catch {
           // Why: tmp may already be gone (rename partially succeeded, or an
           // external process cleaned it). Nothing to do.
+        }
+      }
+    }
+  }
+
+  // Why: callers that haven't wired the gate get persistence enabled by
+  // default — matches the back-compat posture for fields like getDashboardEnabled
+  // being optional. Production main always passes the closure; tests opt
+  // out by passing a closure that returns false.
+  private isDashboardEnabled(): boolean {
+    return this.getDashboardEnabled ? this.getDashboardEnabled() === true : true
+  }
+
+  private hydrateLastStatusFromDisk(): void {
+    if (!this.lastStatusFilePath) {
+      return
+    }
+    let raw: string
+    try {
+      raw = readFileSync(this.lastStatusFilePath, 'utf8')
+    } catch (err) {
+      // Why: missing file is the common case (first launch with the gate on).
+      // Other errors (EACCES, etc.) degrade to empty hydration with a single
+      // warn so the dashboard renders normally.
+      if ((err as NodeJS.ErrnoException).code !== 'ENOENT') {
+        console.warn('[agent-hooks] failed to read last-status file:', err)
+      }
+      return
+    }
+    let parsed: unknown
+    try {
+      parsed = JSON.parse(raw)
+    } catch {
+      console.warn('[agent-hooks] last-status file is not valid JSON; ignoring')
+      return
+    }
+    if (typeof parsed !== 'object' || parsed === null) {
+      console.warn('[agent-hooks] last-status file is not an object; ignoring')
+      return
+    }
+    const file = parsed as Partial<LastStatusFile>
+    if (file.version !== LAST_STATUS_FILE_VERSION) {
+      console.warn(
+        `[agent-hooks] last-status file version mismatch (${String(
+          file.version
+        )} != ${LAST_STATUS_FILE_VERSION}); ignoring`
+      )
+      return
+    }
+    const entries = file.entries
+    if (typeof entries !== 'object' || entries === null) {
+      console.warn('[agent-hooks] last-status file entries missing or wrong shape; ignoring')
+      return
+    }
+    let hydrated = 0
+    for (const [paneKey, rawEntry] of Object.entries(entries)) {
+      const entry = sanitizeHydratedEntry(paneKey, rawEntry)
+      if (entry) {
+        lastStatusByPaneKey.set(paneKey, entry)
+        hydrated += 1
+      }
+    }
+    if (hydrated > 0) {
+      // Why: prime lastWrittenJson so an immediate scheduleStatusPersist()
+      // (e.g. from a hook event that arrives before any change) does not
+      // re-write the file with byte-identical contents.
+      this.lastWrittenJson = this.serializeStatusFile()
+    }
+  }
+
+  private serializeStatusFile(): string {
+    const entries: Record<string, AgentHookEventPayload> = {}
+    for (const [paneKey, payload] of lastStatusByPaneKey) {
+      // Why: defensive — never persist invalid keys even if they slipped
+      // into the in-memory map somehow. Same invariant the hydrate path
+      // enforces.
+      if (!isValidPaneKey(paneKey)) {
+        continue
+      }
+      entries[paneKey] = payload
+    }
+    const file: LastStatusFile = { version: LAST_STATUS_FILE_VERSION, entries }
+    return JSON.stringify(file)
+  }
+
+  private scheduleStatusPersist(): void {
+    if (!this.lastStatusFilePath) {
+      return
+    }
+    if (this.statusPersistTimer) {
+      return
+    }
+    this.statusPersistTimer = setTimeout(() => {
+      this.statusPersistTimer = null
+      this.runStatusPersist()
+    }, STATUS_PERSIST_DEBOUNCE_MS)
+    // Why: don't keep the event loop alive just for a status flush — quit
+    // already triggers flushStatusPersistSync(). On Node 12+ unref() is a
+    // no-op when called on an already-unref'd timer.
+    if (typeof this.statusPersistTimer.unref === 'function') {
+      this.statusPersistTimer.unref()
+    }
+  }
+
+  flushStatusPersistSync(): void {
+    if (this.statusPersistTimer) {
+      clearTimeout(this.statusPersistTimer)
+      this.statusPersistTimer = null
+    }
+    if (!this.lastStatusFilePath) {
+      return
+    }
+    this.runStatusPersist()
+  }
+
+  private runStatusPersist(): void {
+    if (!this.lastStatusFilePath || !this.endpointDir) {
+      return
+    }
+    if (!this.isDashboardEnabled()) {
+      // Why: when the gate flips off, delete the existing file once so the
+      // user has no hook-payload data on disk. Subsequent ticks no-op until
+      // the gate flips back on; tracking deletedOnDisable on the instance
+      // avoids re-stat'ing every tick.
+      if (this.deletedOnDisable) {
+        return
+      }
+      try {
+        unlinkSync(this.lastStatusFilePath)
+      } catch (err) {
+        if ((err as NodeJS.ErrnoException).code !== 'ENOENT') {
+          console.warn('[agent-hooks] failed to delete last-status file:', err)
+        }
+      }
+      this.deletedOnDisable = true
+      this.lastWrittenJson = null
+      return
+    }
+    // Why: the gate is back on after being off — clear the suppression
+    // flag so the next on→off transition deletes the freshly-written file
+    // again instead of being skipped.
+    this.deletedOnDisable = false
+    const json = this.serializeStatusFile()
+    if (json === this.lastWrittenJson) {
+      return
+    }
+    const tmpPath = join(this.endpointDir, `.last-status-${process.pid}-${randomUUID()}.tmp`)
+    let tmpWritten = false
+    try {
+      mkdirSync(this.endpointDir, { recursive: true, mode: 0o700 })
+      if (process.platform !== 'win32') {
+        try {
+          chmodSync(this.endpointDir, 0o700)
+        } catch {
+          // best-effort
+        }
+      }
+      writeFileSync(tmpPath, json, { mode: 0o600 })
+      tmpWritten = true
+      renameSync(tmpPath, this.lastStatusFilePath)
+      this.lastWrittenJson = json
+    } catch (err) {
+      console.warn('[agent-hooks] failed to write last-status file:', err)
+      if (tmpWritten) {
+        try {
+          unlinkSync(tmpPath)
+        } catch {
+          // tmp already gone
         }
       }
     }

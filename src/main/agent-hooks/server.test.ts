@@ -1054,3 +1054,369 @@ describe('Endpoint file lifecycle', () => {
     }
   })
 })
+
+describe('Last-status persistence', () => {
+  let userDataPath: string
+
+  beforeEach(() => {
+    userDataPath = mkdtempSync(join(tmpdir(), 'orca-laststatus-'))
+  })
+
+  afterEach(() => {
+    rmSync(userDataPath, { recursive: true, force: true })
+  })
+
+  function lastStatusPath(): string {
+    return join(userDataPath, 'agent-hooks', 'last-status.json')
+  }
+
+  async function postHookEvent(
+    server: AgentHookServer,
+    body: Body,
+    path: string = '/hook/claude'
+  ): Promise<Response> {
+    const env = server.buildPtyEnv()
+    return fetch(`http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}${path}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Orca-Agent-Hook-Token': env.ORCA_AGENT_HOOK_TOKEN
+      },
+      body: JSON.stringify(body)
+    })
+  }
+
+  it('writes last-status.json after a hook event when the gate is on', async () => {
+    const server = new AgentHookServer()
+    await server.start({
+      env: 'production',
+      userDataPath,
+      getDashboardEnabled: () => true
+    })
+    try {
+      await postHookEvent(
+        server,
+        buildBody({ hook_event_name: 'UserPromptSubmit', prompt: 'persist me' })
+      )
+      // Synchronous flush via stop() captures the trailing-debounced write.
+      server.flushStatusPersistSync()
+      expect(existsSync(lastStatusPath())).toBe(true)
+      const file = JSON.parse(readFileSync(lastStatusPath(), 'utf8'))
+      expect(file.version).toBe(1)
+      expect(file.entries[PANE]).toMatchObject({
+        paneKey: PANE,
+        tabId: 'tab-1',
+        worktreeId: 'wt-1',
+        payload: expect.objectContaining({ state: 'working', prompt: 'persist me' })
+      })
+    } finally {
+      server.stop()
+    }
+  })
+
+  it('skips writing when the gate is off', async () => {
+    const server = new AgentHookServer()
+    await server.start({
+      env: 'production',
+      userDataPath,
+      getDashboardEnabled: () => false
+    })
+    try {
+      await postHookEvent(
+        server,
+        buildBody({ hook_event_name: 'UserPromptSubmit', prompt: 'gated off' })
+      )
+      server.flushStatusPersistSync()
+      expect(existsSync(lastStatusPath())).toBe(false)
+    } finally {
+      server.stop()
+    }
+  })
+
+  it('deletes last-status.json once after the gate flips on -> off', async () => {
+    let enabled = true
+    const server = new AgentHookServer()
+    await server.start({
+      env: 'production',
+      userDataPath,
+      getDashboardEnabled: () => enabled
+    })
+    try {
+      await postHookEvent(
+        server,
+        buildBody({ hook_event_name: 'UserPromptSubmit', prompt: 'before flip' })
+      )
+      server.flushStatusPersistSync()
+      expect(existsSync(lastStatusPath())).toBe(true)
+      enabled = false
+      // Trigger another event; the next debounced/synchronous write should
+      // observe the gate-off state and delete the file.
+      await postHookEvent(
+        server,
+        buildBody({
+          hook_event_name: 'PostToolUse',
+          tool_name: 'Read',
+          tool_input: { file_path: '/x' }
+        })
+      )
+      server.flushStatusPersistSync()
+      expect(existsSync(lastStatusPath())).toBe(false)
+    } finally {
+      server.stop()
+    }
+  })
+
+  it('hydrates last-status.json into the cache before listener registration', async () => {
+    // Pre-populate the file directly to simulate a prior session.
+    mkdirSync(join(userDataPath, 'agent-hooks'), { recursive: true })
+    const fileContents = {
+      version: 1,
+      entries: {
+        [PANE]: {
+          paneKey: PANE,
+          tabId: 'tab-1',
+          worktreeId: 'wt-1',
+          payload: {
+            state: 'done',
+            prompt: 'survived restart',
+            agentType: 'claude'
+          }
+        }
+      }
+    }
+    writeFileSync(lastStatusPath(), JSON.stringify(fileContents), 'utf8')
+
+    const server = new AgentHookServer()
+    await server.start({
+      env: 'production',
+      userDataPath,
+      getDashboardEnabled: () => true
+    })
+    try {
+      const listener = vi.fn()
+      server.setListener(listener)
+      expect(listener).toHaveBeenCalledTimes(1)
+      expect(listener).toHaveBeenCalledWith({
+        paneKey: PANE,
+        tabId: 'tab-1',
+        worktreeId: 'wt-1',
+        payload: expect.objectContaining({
+          state: 'done',
+          prompt: 'survived restart',
+          agentType: 'claude'
+        })
+      })
+    } finally {
+      server.stop()
+    }
+  })
+
+  it('skips hydration when the gate is off', async () => {
+    mkdirSync(join(userDataPath, 'agent-hooks'), { recursive: true })
+    writeFileSync(
+      lastStatusPath(),
+      JSON.stringify({
+        version: 1,
+        entries: {
+          [PANE]: {
+            paneKey: PANE,
+            payload: { state: 'done', prompt: 'should not load', agentType: 'claude' }
+          }
+        }
+      }),
+      'utf8'
+    )
+    const server = new AgentHookServer()
+    await server.start({
+      env: 'production',
+      userDataPath,
+      getDashboardEnabled: () => false
+    })
+    try {
+      const listener = vi.fn()
+      server.setListener(listener)
+      expect(listener).not.toHaveBeenCalled()
+    } finally {
+      server.stop()
+    }
+  })
+
+  it('treats a corrupt file as empty hydration without throwing', async () => {
+    mkdirSync(join(userDataPath, 'agent-hooks'), { recursive: true })
+    writeFileSync(lastStatusPath(), 'not-json{{', 'utf8')
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const server = new AgentHookServer()
+    await server.start({
+      env: 'production',
+      userDataPath,
+      getDashboardEnabled: () => true
+    })
+    try {
+      const listener = vi.fn()
+      server.setListener(listener)
+      expect(listener).not.toHaveBeenCalled()
+      expect(warnSpy).toHaveBeenCalled()
+    } finally {
+      server.stop()
+      warnSpy.mockRestore()
+    }
+  })
+
+  it('rejects a stale version mismatch on hydrate', async () => {
+    mkdirSync(join(userDataPath, 'agent-hooks'), { recursive: true })
+    writeFileSync(
+      lastStatusPath(),
+      JSON.stringify({
+        version: 0,
+        entries: {
+          [PANE]: {
+            paneKey: PANE,
+            payload: { state: 'done', prompt: 'old version', agentType: 'claude' }
+          }
+        }
+      }),
+      'utf8'
+    )
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const server = new AgentHookServer()
+    await server.start({
+      env: 'production',
+      userDataPath,
+      getDashboardEnabled: () => true
+    })
+    try {
+      const listener = vi.fn()
+      server.setListener(listener)
+      expect(listener).not.toHaveBeenCalled()
+    } finally {
+      server.stop()
+      warnSpy.mockRestore()
+    }
+  })
+
+  it('drops entries with malformed paneKeys but keeps valid ones', async () => {
+    mkdirSync(join(userDataPath, 'agent-hooks'), { recursive: true })
+    writeFileSync(
+      lastStatusPath(),
+      JSON.stringify({
+        version: 1,
+        entries: {
+          // Missing colon — drop.
+          'no-colon': {
+            paneKey: 'no-colon',
+            payload: { state: 'done', prompt: 'bad', agentType: 'claude' }
+          },
+          // Embedded paneKey mismatch — drop.
+          [PANE]: {
+            paneKey: 'tab-x:99',
+            payload: { state: 'done', prompt: 'mismatch', agentType: 'claude' }
+          },
+          // Valid.
+          'tab-good:0': {
+            paneKey: 'tab-good:0',
+            tabId: 'tab-good',
+            payload: { state: 'done', prompt: 'survived', agentType: 'claude' }
+          }
+        }
+      }),
+      'utf8'
+    )
+    const server = new AgentHookServer()
+    await server.start({
+      env: 'production',
+      userDataPath,
+      getDashboardEnabled: () => true
+    })
+    try {
+      const listener = vi.fn()
+      server.setListener(listener)
+      expect(listener).toHaveBeenCalledTimes(1)
+      expect(listener).toHaveBeenCalledWith(
+        expect.objectContaining({
+          paneKey: 'tab-good:0',
+          payload: expect.objectContaining({ prompt: 'survived' })
+        })
+      )
+    } finally {
+      server.stop()
+    }
+  })
+
+  it('clearPaneState evicts the entry from the on-disk file', async () => {
+    const server = new AgentHookServer()
+    await server.start({
+      env: 'production',
+      userDataPath,
+      getDashboardEnabled: () => true
+    })
+    try {
+      await postHookEvent(
+        server,
+        buildBody({ hook_event_name: 'UserPromptSubmit', prompt: 'about to drop' })
+      )
+      server.flushStatusPersistSync()
+      let parsed = JSON.parse(readFileSync(lastStatusPath(), 'utf8'))
+      expect(parsed.entries[PANE]).toBeTruthy()
+
+      server.clearPaneState(PANE)
+      server.flushStatusPersistSync()
+      parsed = JSON.parse(readFileSync(lastStatusPath(), 'utf8'))
+      expect(parsed.entries[PANE]).toBeUndefined()
+    } finally {
+      server.stop()
+    }
+  })
+
+  it('skips a write when the serialized contents are byte-identical to the previous write', async () => {
+    const server = new AgentHookServer()
+    await server.start({
+      env: 'production',
+      userDataPath,
+      getDashboardEnabled: () => true
+    })
+    try {
+      await postHookEvent(
+        server,
+        buildBody({ hook_event_name: 'UserPromptSubmit', prompt: 'first' })
+      )
+      server.flushStatusPersistSync()
+      const firstMtime = statSync(lastStatusPath()).mtimeMs
+
+      // Why: a no-op clearPaneState on a paneKey not in the cache is a
+      // mutation site that should NOT trigger a redundant write. (clear was
+      // designed to bail when nothing was evicted.)
+      server.clearPaneState('non-existent:0')
+      server.flushStatusPersistSync()
+      // Touch back to the same mtime would let the test pass spuriously, so
+      // assert no rewrite happened by checking that mtime is unchanged after
+      // a forced sync flush.
+      const secondMtime = statSync(lastStatusPath()).mtimeMs
+      expect(secondMtime).toBe(firstMtime)
+    } finally {
+      server.stop()
+    }
+  })
+
+  it('stop() flushes pending debounced writes synchronously', async () => {
+    const server = new AgentHookServer()
+    await server.start({
+      env: 'production',
+      userDataPath,
+      getDashboardEnabled: () => true
+    })
+    try {
+      await postHookEvent(
+        server,
+        buildBody({ hook_event_name: 'UserPromptSubmit', prompt: 'flush me' })
+      )
+      // Note: do NOT call flushStatusPersistSync explicitly — let stop() do it.
+    } finally {
+      server.stop()
+    }
+    // Why: file written even though we never explicitly flushed before stop —
+    // stop() must synchronously drain the pending trailing-debounced timer.
+    expect(existsSync(lastStatusPath())).toBe(true)
+    const parsed = JSON.parse(readFileSync(lastStatusPath(), 'utf8'))
+    expect(parsed.entries[PANE]?.payload?.prompt).toBe('flush me')
+  })
+})
