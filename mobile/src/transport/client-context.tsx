@@ -278,13 +278,23 @@ export function RpcClientProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
-  // Close all clients on provider unmount (app shutdown / hot reload).
+  // Close all clients on provider unmount (app shutdown).
+  // Why: deps must be empty so this cleanup ONLY runs on real unmount.
+  // Hot-reload re-evaluates this module, which makes closeEntry a new
+  // function identity. With [closeEntry] as deps, every Fast Refresh
+  // would tear down all open WebSockets, leaving screens holding closed
+  // clients and the user staring at a 'Reconnecting…' card. Reading
+  // storeRef.current and the locally-scoped closeEntry inside the
+  // cleanup is safe — the ref is stable across renders, and the
+  // function captured here will be the one defined in the same
+  // closure as this effect.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     const store = storeRef.current
     return () => {
       for (const [hostId] of store) closeEntry(hostId)
     }
-  }, [closeEntry])
+  }, [])
 
   const value = useMemo<ContextValue>(
     () => ({
