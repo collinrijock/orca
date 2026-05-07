@@ -519,6 +519,8 @@ const api = {
       feedback: string
       githubLogin: string | null
       githubEmail: string | null
+      anonymousGithubLogin?: string | null
+      anonymousContact?: string | null
     }): Promise<{ ok: true } | { ok: false; status: number | null; error: string }> =>
       ipcRenderer.invoke('feedback:submit', args)
   },

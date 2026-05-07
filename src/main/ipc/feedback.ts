@@ -13,6 +13,13 @@ export type FeedbackSubmitArgs = {
   feedback: string
   githubLogin: string | null
   githubEmail: string | null
+  // Why: when the user submits anonymously they can still volunteer a GitHub
+  // handle (so we can @-mention them on the fix PR) or a contact (email / x
+  // handle for follow-up). These are separate fields rather than reusing
+  // githubLogin/githubEmail so the backend can tell verified gh identity
+  // apart from a self-typed handle.
+  anonymousGithubLogin?: string | null
+  anonymousContact?: string | null
 }
 
 type FeedbackSubmitBody = FeedbackSubmitArgs & {
