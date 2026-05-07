@@ -63,7 +63,8 @@ function FeedbackDialog({
   const [isViewerLoading, setIsViewerLoading] = useState(false)
   const [submitAnonymously, setSubmitAnonymously] = useState(false)
   const [anonGithubLogin, setAnonGithubLogin] = useState('')
-  const [anonContact, setAnonContact] = useState('')
+  const [anonEmail, setAnonEmail] = useState('')
+  const [anonX, setAnonX] = useState('')
 
   React.useEffect(() => {
     if (!open) {
@@ -119,7 +120,8 @@ function FeedbackDialog({
         // anonymous. Otherwise the regular gh identity already covers tagging
         // and contact, and we don't want to surprise non-anonymous submitters.
         anonymousGithubLogin: submitAnonymously ? normalizeOptional(anonGithubLogin) : null,
-        anonymousContact: submitAnonymously ? normalizeOptional(anonContact) : null
+        anonymousEmail: submitAnonymously ? normalizeOptional(anonEmail) : null,
+        anonymousX: submitAnonymously ? normalizeOptional(anonX) : null
       })
 
       if (!result.ok) {
@@ -130,7 +132,8 @@ function FeedbackDialog({
       setFeedback('')
       setSubmitAnonymously(false)
       setAnonGithubLogin('')
-      setAnonContact('')
+      setAnonEmail('')
+      setAnonX('')
       onOpenChange(false)
     } catch (err) {
       toast.error('Failed to submit feedback. Please try again.')
@@ -246,34 +249,32 @@ function FeedbackDialog({
           <div className="overflow-hidden">
             <div className="space-y-2 rounded-md border border-border/70 bg-muted/30 p-3">
               <div className="text-xs text-foreground">
-                If we fix the issue, we can&apos;t let you know 🥲
+                If we fix the issue, we can&apos;t let you know 🥲 (all optional)
               </div>
-              <label className="block space-y-1">
-                <span className="text-[11px] text-muted-foreground">
-                  If you leave your GitHub username, we&apos;ll tag you on the PR.
-                </span>
-                <input
-                  type="text"
-                  value={anonGithubLogin}
-                  onChange={(event) => setAnonGithubLogin(event.target.value)}
-                  placeholder="github-username (optional)"
-                  tabIndex={submitAnonymously ? 0 : -1}
-                  className="h-8 w-full rounded-md border border-border bg-background px-2 text-xs outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring"
-                />
-              </label>
-              <label className="block space-y-1">
-                <span className="text-[11px] text-muted-foreground">
-                  Optional: email or x.com handle. We&apos;ll reach out when it&apos;s fixed.
-                </span>
-                <input
-                  type="text"
-                  value={anonContact}
-                  onChange={(event) => setAnonContact(event.target.value)}
-                  placeholder="you@example.com or @handle (optional)"
-                  tabIndex={submitAnonymously ? 0 : -1}
-                  className="h-8 w-full rounded-md border border-border bg-background px-2 text-xs outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring"
-                />
-              </label>
+              <input
+                type="text"
+                value={anonGithubLogin}
+                onChange={(event) => setAnonGithubLogin(event.target.value)}
+                placeholder="GitHub username — we'll tag you on the PR"
+                tabIndex={submitAnonymously ? 0 : -1}
+                className="h-8 w-full rounded-md border border-border bg-background px-2 text-xs outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring"
+              />
+              <input
+                type="email"
+                value={anonEmail}
+                onChange={(event) => setAnonEmail(event.target.value)}
+                placeholder="Email — we'll reach out when fixed"
+                tabIndex={submitAnonymously ? 0 : -1}
+                className="h-8 w-full rounded-md border border-border bg-background px-2 text-xs outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring"
+              />
+              <input
+                type="text"
+                value={anonX}
+                onChange={(event) => setAnonX(event.target.value)}
+                placeholder="x.com handle — we'll reach out when fixed"
+                tabIndex={submitAnonymously ? 0 : -1}
+                className="h-8 w-full rounded-md border border-border bg-background px-2 text-xs outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring"
+              />
             </div>
           </div>
         </div>
