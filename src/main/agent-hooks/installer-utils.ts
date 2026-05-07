@@ -74,7 +74,11 @@ export function createManagedCommandMatcher(
 // poisons the user's session. Failures inside the script itself are
 // unaffected — only the missing-script case short-circuits.
 export function wrapPosixHookCommand(scriptPath: string): string {
-  return `if [ -x "${scriptPath}" ]; then /bin/sh "${scriptPath}"; fi`
+  // Why: POSIX single-quote escape so $, `, ", and \ in scriptPath are taken
+  // literally — avoids a shell-injection footgun if a future caller passes an
+  // arbitrary path.
+  const quoted = `'${scriptPath.replaceAll("'", "'\\''")}'`
+  return `if [ -x ${quoted} ]; then /bin/sh ${quoted}; fi`
 }
 
 export function removeManagedCommands(
