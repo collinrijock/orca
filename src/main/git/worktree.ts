@@ -198,9 +198,22 @@ export async function addWorktree(
   // Why: with --no-track there is no upstream until first push. Setting
   // push.autoSetupRemote=true makes a plain `git push` from the terminal
   // create origin/<branch> and set it as upstream automatically — matching
-  // user expectations from modern git without requiring `-u`. Scoped to
-  // this worktree's local config; safe because --no-track guarantees no
-  // wrong upstream exists at first push.
+  // user expectations from modern git without requiring `-u`. Note that
+  // `--local` on a linked worktree writes to the shared common-dir config,
+  // so this affects the whole repo, not just this worktree. That is
+  // intentional and acceptable: the value is benign and idempotent, and
+  // every Orca-created worktree wants the same default. True per-worktree
+  // scope would require enabling extensions.worktreeConfig=true repo-wide,
+  // which is a larger change we deliberately avoid.
+  //
+  // Notes on the design:
+  // - push.autoSetupRemote is honored by git >= 2.37; older clients ignore
+  //   the value, so `git push` falls back to the pre-2.37 "no upstream"
+  //   error and the user runs `git push -u` once.
+  // - Failures here are warn-only: config writes are best-effort and a
+  //   missing write degrades to the same fallback as old git.
+  // - The write is unconditional and does not preserve a pre-existing
+  //   user value, including push.autoSetupRemote=false.
   try {
     await gitExecFileAsync(['config', '--local', 'push.autoSetupRemote', 'true'], {
       cwd: worktreePath
