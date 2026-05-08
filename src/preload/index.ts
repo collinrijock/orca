@@ -1568,6 +1568,35 @@ const api = {
       ipcRenderer.on('window:fullscreen-changed', listener)
       return () => ipcRenderer.removeListener('window:fullscreen-changed', listener)
     },
+    /** Windows only: minimize the window via the renderer-drawn title bar. */
+    minimize: (): void => {
+      ipcRenderer.send('window:minimize')
+    },
+    /** Windows only: toggle maximize/restore via the renderer-drawn title bar. */
+    maximize: (): void => {
+      ipcRenderer.send('window:maximize')
+    },
+    /** Windows only: subscribe to maximize state changes so the renderer-drawn
+     *  maximize button can show the correct restore/maximize icon. */
+    onMaximizeChanged: (callback: (isMaximized: boolean) => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, isMaximized: boolean) =>
+        callback(isMaximized)
+      ipcRenderer.on('window:maximize-changed', listener)
+      return () => ipcRenderer.removeListener('window:maximize-changed', listener)
+    },
+    /** Windows only: request a close from the renderer-drawn close button.
+     *  Routes through main so the BrowserWindow 'close' event fires and the
+     *  terminal-running confirmation guard in the renderer stays active.
+     *  window.close() is unreliable in sandboxed renderers. */
+    requestClose: (): void => {
+      ipcRenderer.send('window:request-close')
+    },
+    /** Windows only: pop up the application menu at the cursor position.
+     *  Replicates the Alt-key reveal that autoHideMenuBar normally provides,
+     *  triggered by the ··· button in the renderer-drawn title bar. */
+    popupMenu: (): void => {
+      ipcRenderer.send('menu:popup')
+    },
     /** Fired by the main process when the user tries to close the window
      *  (X button, Cmd+Q, etc.). Renderer should show a confirmation dialog
      *  if terminals are still running, then call confirmWindowClose().

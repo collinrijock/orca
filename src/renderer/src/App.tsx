@@ -2,7 +2,8 @@
 import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { DEFAULT_STATUS_BAR_ITEMS, DEFAULT_WORKTREE_CARD_PROPERTIES } from '../../shared/constants'
 
-import { ArrowLeft, ArrowRight, Minimize2, PanelLeft, PanelRight } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Minimize2, MoreHorizontal, PanelLeft, PanelRight } from 'lucide-react'
+import logo from '../../../resources/logo.svg'
 import {
   FOCUS_TERMINAL_PANE_EVENT,
   SYNC_FIT_PANES_EVENT,
@@ -46,6 +47,67 @@ import {
 import { dispatchClearModifierHints } from './hooks/useModifierHint'
 
 const isMac = navigator.userAgent.includes('Mac')
+const isWindows = !isMac && navigator.userAgent.includes('Windows')
+
+// Why: 'hidden' titleBarStyle on Windows removes the native OS title bar,
+// so we render our own minimize/maximize/close buttons.  These SVG icons match
+// the Fluent/Win11 style: thin 10×10 paths on a 40×30 hit area.
+function WindowControls(): React.JSX.Element {
+  const [maximized, setMaximized] = useState(false)
+  useEffect(() => {
+    return window.api.ui.onMaximizeChanged(setMaximized)
+  }, [])
+  return (
+    <div className="window-controls">
+      <button
+        className="window-controls-btn"
+        aria-label="Minimize"
+        onClick={() => window.api.ui.minimize()}
+      >
+        <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden>
+          <path d="M0 5h10v1H0z" fill="currentColor" />
+        </svg>
+      </button>
+      <button
+        className="window-controls-btn"
+        aria-label={maximized ? 'Restore' : 'Maximize'}
+        onClick={() => window.api.ui.maximize()}
+      >
+        {maximized ? (
+          // Restore icon (two overlapping squares)
+          <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden>
+            <path
+              d="M2 0v2H0v8h8V8h2V0H2zm6 9H1V3h7v6zM9 7H8V2H3V1h6v6z"
+              fill="currentColor"
+            />
+          </svg>
+        ) : (
+          // Maximize icon (single square outline)
+          <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden>
+            <path d="M0 0v10h10V0H0zm9 9H1V1h8v8z" fill="currentColor" />
+          </svg>
+        )}
+      </button>
+      <button
+        className="window-controls-btn window-controls-close"
+        aria-label="Close"
+        // Why: IPC to main so the BrowserWindow 'close' event fires, which
+        // sends 'window:close-requested' back to the renderer and keeps the
+        // terminal-running confirmation guard active. window.close() is
+        // unreliable in sandboxed renderers.
+        onClick={() => window.api.ui.requestClose()}
+      >
+        <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden>
+          <path
+            d="M1 0L0 1l4 4-4 4 1 1 4-4 4 4 1-1-4-4 4-4-1-1-4 4-4-4z"
+            fill="currentColor"
+          />
+        </svg>
+      </button>
+    </div>
+  )
+}
+
 const Landing = lazy(() => import('./components/Landing'))
 const TaskPage = lazy(() => import('./components/TaskPage'))
 const Settings = lazy(() => import('./components/settings/Settings'))
@@ -742,7 +804,33 @@ function App(): React.JSX.Element {
     // collapsed (Cmd+B), producing a half-occluded, non-scrollable tab strip.
     <div ref={titlebarLeftControlsRef} className="flex h-full w-full shrink-0 items-center">
       <div className="flex h-full items-center">
-        <div className={isMac && !isFullScreen ? 'titlebar-traffic-light-pad' : 'pl-2'} />
+        {isMac && !isFullScreen ? (
+          <div className="titlebar-traffic-light-pad" />
+        ) : isWindows ? (
+          /* Why: on Windows the native title bar is hidden, so we render the
+             Orca logo as a non-interactive identity anchor and a ··· button
+             that pops up the application menu (the same menu revealed by Alt
+             on the default autoHideMenuBar). */
+          <>
+            <img src={logo} alt="" aria-hidden className="titlebar-logo" />
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  className="titlebar-icon-button"
+                  aria-label="Application menu"
+                  onClick={() => window.api.ui.popupMenu()}
+                >
+                  <MoreHorizontal size={14} />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" sideOffset={6}>
+                Application menu
+              </TooltipContent>
+            </Tooltip>
+          </>
+        ) : (
+          <div className="pl-2" />
+        )}
         {showSidebar && (
           <Tooltip>
             <TooltipTrigger asChild>
@@ -989,6 +1077,9 @@ function App(): React.JSX.Element {
               </Tooltip>
             )}
             {rightSidebarToggle}
+            {/* Why: reserve space so controls before us are not obscured by the
+                fixed-position window-controls overlay on Windows. */}
+            {isWindows && <div className="window-controls-titlebar-spacer" />}
           </div>
         ) : null}
         <div className="flex flex-row flex-1 min-h-0 overflow-hidden">
@@ -1103,6 +1194,11 @@ function App(): React.JSX.Element {
       <ZoomOverlay />
       <SshPassphraseDialog />
       <Toaster closeButton toastOptions={{ className: 'font-sans text-sm' }} />
+      {/* Why: rendered last so it sits after all -webkit-app-region:drag elements
+          in DOM order. Electron's hit-test for drag regions is DOM-order-based and
+          ignores z-index — placing WindowControls earlier caused the drag region to
+          win, making the buttons unclickable. */}
+      {isWindows && <WindowControls />}
     </div>
   )
 }
