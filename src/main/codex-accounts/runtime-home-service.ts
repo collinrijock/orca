@@ -18,6 +18,12 @@ import type { CodexManagedAccount } from '../../shared/types'
 import type { Store } from '../persistence'
 import { writeFileAtomically } from './fs-utils'
 
+type CodexAuthIdentity = {
+  email: string | null
+  providerAccountId: string | null
+  workspaceAccountId: string | null
+}
+
 export class CodexRuntimeHomeService {
   // Why: tracks whether auth.json is currently managed by Orca. When null,
   // Orca does NOT own auth.json and must not overwrite external changes
@@ -92,7 +98,7 @@ export class CodexRuntimeHomeService {
     // last wrote, the CLI must have refreshed — so we preserve those tokens
     // back to managed storage before overwriting runtime with managed state.
     if (this.lastSyncedAccountId === activeAccount.id) {
-      this.readBackRefreshedTokens(activeAuthPath)
+      this.readBackRefreshedTokens(activeAccount, activeAuthPath)
     }
 
     this.lastSyncedAccountId = activeAccount.id
@@ -107,7 +113,10 @@ export class CodexRuntimeHomeService {
     this.lastWrittenAuthJson = null
   }
 
-  private readBackRefreshedTokens(managedAuthPath: string): void {
+  private readBackRefreshedTokens(
+    activeAccount: CodexManagedAccount,
+    managedAuthPath: string
+  ): void {
     try {
       const runtimeAuthPath = this.getRuntimeAuthPath()
       if (!existsSync(runtimeAuthPath)) {
@@ -120,6 +129,10 @@ export class CodexRuntimeHomeService {
 
       const runtimeContents = readFileSync(runtimeAuthPath, 'utf-8')
       if (runtimeContents === this.lastWrittenAuthJson) {
+        return
+      }
+
+      if (!this.runtimeAuthMatchesAccount(runtimeContents, activeAccount)) {
         return
       }
 
@@ -148,6 +161,124 @@ export class CodexRuntimeHomeService {
       return null
     }
     return accounts.find((account) => account.id === activeAccountId) ?? null
+  }
+
+  private runtimeAuthMatchesAccount(
+    runtimeAuthContents: string,
+    activeAccount: CodexManagedAccount
+  ): boolean {
+    const identity = this.readIdentityFromAuthContents(runtimeAuthContents)
+    if (!identity) {
+      return false
+    }
+
+    // Why: old live Codex PTYs can still write refreshed tokens into the
+    // shared runtime home after the user switches accounts. Never persist
+    // that write into the newly active managed account unless the auth claims
+    // still match the account Orca believes is selected.
+    if (
+      activeAccount.email &&
+      identity.email &&
+      this.normalizeField(activeAccount.email) !== identity.email
+    ) {
+      return false
+    }
+
+    if (
+      activeAccount.providerAccountId &&
+      identity.providerAccountId &&
+      this.normalizeField(activeAccount.providerAccountId) !== identity.providerAccountId
+    ) {
+      return false
+    }
+
+    if (
+      activeAccount.workspaceAccountId &&
+      identity.workspaceAccountId &&
+      this.normalizeField(activeAccount.workspaceAccountId) !== identity.workspaceAccountId
+    ) {
+      return false
+    }
+
+    return Boolean(identity.email || identity.providerAccountId || identity.workspaceAccountId)
+  }
+
+  private readIdentityFromAuthContents(contents: string): CodexAuthIdentity | null {
+    let raw: Record<string, unknown>
+    try {
+      raw = JSON.parse(contents) as Record<string, unknown>
+    } catch {
+      return null
+    }
+
+    const tokens = this.readRecordClaim(raw, 'tokens')
+    const idToken = this.normalizeField(
+      this.readStringClaim(tokens, 'id_token') ?? this.readStringClaim(tokens, 'idToken')
+    )
+    const payload = idToken ? this.parseJwtPayload(idToken) : null
+    const authClaims = this.readRecordClaim(payload, 'https://api.openai.com/auth')
+    const profileClaims = this.readRecordClaim(payload, 'https://api.openai.com/profile')
+
+    return {
+      email: this.normalizeField(
+        this.readStringClaim(payload, 'email') ?? this.readStringClaim(profileClaims, 'email')
+      ),
+      providerAccountId: this.normalizeField(
+        this.readStringClaim(tokens, 'account_id') ??
+          this.readStringClaim(tokens, 'accountId') ??
+          this.readStringClaim(authClaims, 'chatgpt_account_id') ??
+          this.readStringClaim(payload, 'chatgpt_account_id')
+      ),
+      workspaceAccountId: this.normalizeField(
+        this.readStringClaim(authClaims, 'workspace_account_id') ??
+          this.readStringClaim(tokens, 'account_id') ??
+          this.readStringClaim(tokens, 'accountId') ??
+          this.readStringClaim(payload, 'chatgpt_account_id')
+      )
+    }
+  }
+
+  private parseJwtPayload(token: string): Record<string, unknown> | null {
+    const parts = token.split('.')
+    if (parts.length < 2) {
+      return null
+    }
+
+    let payload = parts[1].replace(/-/g, '+').replace(/_/g, '/')
+    while (payload.length % 4 !== 0) {
+      payload += '='
+    }
+
+    try {
+      const json = Buffer.from(payload, 'base64').toString('utf-8')
+      return JSON.parse(json) as Record<string, unknown>
+    } catch {
+      return null
+    }
+  }
+
+  private readRecordClaim(
+    value: Record<string, unknown> | null,
+    key: string
+  ): Record<string, unknown> | null {
+    const claim = value?.[key]
+    if (!claim || typeof claim !== 'object' || Array.isArray(claim)) {
+      return null
+    }
+    return claim as Record<string, unknown>
+  }
+
+  private readStringClaim(value: Record<string, unknown> | null, key: string): string | null {
+    const claim = value?.[key]
+    return typeof claim === 'string' ? claim : null
+  }
+
+  private normalizeField(value: string | null | undefined): string | null {
+    if (!value) {
+      return null
+    }
+    const trimmed = value.trim()
+    return trimmed === '' ? null : trimmed
   }
 
   private safeMigrateLegacyManagedState(): void {

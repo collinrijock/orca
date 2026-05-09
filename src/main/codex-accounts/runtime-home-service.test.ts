@@ -132,6 +132,32 @@ function createManagedAuth(rootDir: string, accountId: string, auth: string): st
   return managedHomePath
 }
 
+function encodeJwtPart(value: Record<string, unknown>): string {
+  return Buffer.from(JSON.stringify(value)).toString('base64url')
+}
+
+function createCodexAuthJson(email: string, accountId: string, refreshToken: string): string {
+  const idToken = [
+    encodeJwtPart({ alg: 'none', typ: 'JWT' }),
+    encodeJwtPart({
+      email,
+      'https://api.openai.com/auth': {
+        chatgpt_account_id: accountId,
+        workspace_account_id: accountId
+      }
+    }),
+    ''
+  ].join('.')
+
+  return `${JSON.stringify({
+    tokens: {
+      id_token: idToken,
+      account_id: accountId,
+      refresh_token: refreshToken
+    }
+  })}\n`
+}
+
 describe('CodexRuntimeHomeService', () => {
   beforeEach(() => {
     vi.resetModules()
@@ -510,11 +536,9 @@ describe('CodexRuntimeHomeService', () => {
   it('reads back CLI-refreshed tokens into managed storage on subsequent sync', async () => {
     const runtimeAuthPath = join(testState.fakeHomeDir, '.codex', 'auth.json')
     writeFileSync(runtimeAuthPath, '{"account":"system"}\n', 'utf-8')
-    const managedHomePath = createManagedAuth(
-      testState.userDataDir,
-      'account-1',
-      '{"tokens":"original"}\n'
-    )
+    const originalAuth = createCodexAuthJson('user@example.com', 'acct-1', 'original')
+    const refreshedAuth = createCodexAuthJson('user@example.com', 'acct-1', 'refreshed')
+    const managedHomePath = createManagedAuth(testState.userDataDir, 'account-1', originalAuth)
     const managedAuthPath = join(managedHomePath, 'auth.json')
     const settings = createSettings({
       codexManagedAccounts: [
@@ -522,9 +546,9 @@ describe('CodexRuntimeHomeService', () => {
           id: 'account-1',
           email: 'user@example.com',
           managedHomePath,
-          providerAccountId: null,
+          providerAccountId: 'acct-1',
           workspaceLabel: null,
-          workspaceAccountId: null,
+          workspaceAccountId: 'acct-1',
           createdAt: 1,
           updatedAt: 1,
           lastAuthenticatedAt: 1
@@ -538,13 +562,50 @@ describe('CodexRuntimeHomeService', () => {
     const service = new CodexRuntimeHomeService(store as never)
 
     // Simulate CLI refreshing the token in ~/.codex/auth.json
-    writeFileSync(runtimeAuthPath, '{"tokens":"refreshed"}\n', 'utf-8')
+    writeFileSync(runtimeAuthPath, refreshedAuth, 'utf-8')
 
     // Next sync should read back the refreshed token to managed storage
     service.syncForCurrentSelection()
 
-    expect(readFileSync(managedAuthPath, 'utf-8')).toBe('{"tokens":"refreshed"}\n')
-    expect(readFileSync(runtimeAuthPath, 'utf-8')).toBe('{"tokens":"refreshed"}\n')
+    expect(readFileSync(managedAuthPath, 'utf-8')).toBe(refreshedAuth)
+    expect(readFileSync(runtimeAuthPath, 'utf-8')).toBe(refreshedAuth)
+  })
+
+  it('rejects runtime read-back from a different Codex identity', async () => {
+    const runtimeAuthPath = join(testState.fakeHomeDir, '.codex', 'auth.json')
+    writeFileSync(runtimeAuthPath, '{"account":"system"}\n', 'utf-8')
+    const selectedAuth = createCodexAuthJson('selected@example.com', 'acct-selected', 'selected')
+    const staleLivePtyAuth = createCodexAuthJson('stale@example.com', 'acct-stale', 'stale')
+    const managedHomePath = createManagedAuth(testState.userDataDir, 'account-1', selectedAuth)
+    const managedAuthPath = join(managedHomePath, 'auth.json')
+    const settings = createSettings({
+      codexManagedAccounts: [
+        {
+          id: 'account-1',
+          email: 'selected@example.com',
+          managedHomePath,
+          providerAccountId: 'acct-selected',
+          workspaceLabel: null,
+          workspaceAccountId: 'acct-selected',
+          createdAt: 1,
+          updatedAt: 1,
+          lastAuthenticatedAt: 1
+        }
+      ],
+      activeCodexManagedAccountId: 'account-1'
+    })
+    const store = createStore(settings)
+
+    const { CodexRuntimeHomeService } = await import('./runtime-home-service')
+    const service = new CodexRuntimeHomeService(store as never)
+
+    // Simulate an old live Codex PTY from another account refreshing the
+    // shared runtime auth after Orca has already selected account-1.
+    writeFileSync(runtimeAuthPath, staleLivePtyAuth, 'utf-8')
+    service.syncForCurrentSelection()
+
+    expect(readFileSync(managedAuthPath, 'utf-8')).toBe(selectedAuth)
+    expect(readFileSync(runtimeAuthPath, 'utf-8')).toBe(selectedAuth)
   })
 
   it('skips read-back on first sync after restart (lastWrittenAuthJson is null)', async () => {
