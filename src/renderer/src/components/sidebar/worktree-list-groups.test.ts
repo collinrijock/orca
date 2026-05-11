@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { buildRows, getPRGroupKey } from './worktree-list-groups'
 import type { Repo, Worktree } from '../../../../shared/types'
@@ -90,5 +92,58 @@ describe('buildRows with pinned worktrees', () => {
     const allPinned = { ...unpinned1, isPinned: true }
     const rows = buildRows('none', [pinned, allPinned], repoMap, null, new Set())
     expect(rows.some((r) => r.type === 'header' && r.key === 'all')).toBe(false)
+  })
+
+  it('preserves repo display casing in group labels', () => {
+    const lowercaseRepo = { ...repo, displayName: 'c15t' }
+    const rows = buildRows('repo', [worktree], new Map([[repo.id, lowercaseRepo]]), null, new Set())
+
+    expect(rows[0]).toMatchObject({ type: 'header', label: 'c15t' })
+  })
+
+  it('groups folder-mode workspaces under their folder name', () => {
+    const folderRepo: Repo = {
+      ...repo,
+      id: 'folder-1',
+      path: '/tmp/design-assets',
+      displayName: 'design-assets',
+      kind: 'folder'
+    }
+    const folderWorktree: Worktree = {
+      ...worktree,
+      id: 'folder-1::/tmp/design-assets',
+      repoId: folderRepo.id,
+      path: folderRepo.path,
+      branch: '',
+      displayName: folderRepo.displayName,
+      isMainWorktree: true
+    }
+    const rows = buildRows(
+      'repo',
+      [folderWorktree],
+      new Map([[folderRepo.id, folderRepo]]),
+      null,
+      new Set()
+    )
+
+    expect(rows[0]).toMatchObject({
+      type: 'header',
+      key: 'repo:folder-1',
+      label: 'design-assets',
+      count: 1,
+      repo: folderRepo
+    })
+    expect(rows[1]).toMatchObject({ type: 'item', worktree: { id: folderWorktree.id } })
+  })
+})
+
+describe('WorktreeList header styles', () => {
+  it('does not title-case workspace group labels', () => {
+    const source = readFileSync(
+      fileURLToPath(new URL('./WorktreeList.tsx', import.meta.url)),
+      'utf8'
+    )
+
+    expect(source).not.toContain('leading-none capitalize')
   })
 })

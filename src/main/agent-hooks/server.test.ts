@@ -14,6 +14,7 @@ import {
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { AgentHookServer, _internals } from './server'
+import { parseAgentStatusPayload } from '../../shared/agent-status-types'
 
 const PANE = 'tab-1:0'
 
@@ -77,6 +78,7 @@ describe('AgentHookServer listener replay', () => {
         paneKey: PANE,
         tabId: 'tab-1',
         worktreeId: 'wt-1',
+        connectionId: null,
         payload: expect.objectContaining({
           state: 'working',
           prompt: 'replay me',
@@ -151,6 +153,7 @@ describe('AgentHookServer listener replay', () => {
         paneKey: PANE,
         tabId: 'tab-1',
         worktreeId: 'repo::/tmp/worktree with "quotes"',
+        connectionId: null,
         payload: expect.objectContaining({
           state: 'working',
           prompt: 'form encoded',
@@ -660,6 +663,22 @@ describe('OpenCode hook normalization', () => {
     expect(result?.payload.state).toBe('waiting')
   })
 
+  it('AskUserQuestion maps to waiting', () => {
+    // Why: OpenCode emits `question.asked` when the agent uses an ask-the-user
+    // tool (distinct from `permission.asked`, which blocks on tool approval).
+    // Both leave the agent idle-but-waiting on a human, so both must render
+    // the same red "needs attention" indicator. Without this mapping the pane
+    // silently stays in `working` and the user has no visual cue that the
+    // agent is waiting on them.
+    const result = _internals.normalizeHookPayload(
+      'opencode',
+      buildBody({ hook_event_name: 'AskUserQuestion' }),
+      'production'
+    )
+    expect(result?.payload.state).toBe('waiting')
+    expect(result?.payload.agentType).toBe('opencode')
+  })
+
   it('unknown event name returns null', () => {
     const result = _internals.normalizeHookPayload(
       'opencode',
@@ -834,6 +853,154 @@ describe('Cursor hook normalization', () => {
     const result = _internals.normalizeHookPayload(
       'cursor',
       buildBody({ hook_event_name: 'somethingElse' }),
+      'production'
+    )
+    expect(result).toBeNull()
+  })
+})
+
+describe('Pi hook normalization', () => {
+  it('before_agent_start maps to working and captures the prompt', () => {
+    const result = _internals.normalizeHookPayload(
+      'pi',
+      buildBody({ hook_event_name: 'before_agent_start', prompt: 'rename this fn' }),
+      'production'
+    )
+    expect(result?.payload.state).toBe('working')
+    expect(result?.payload.agentType).toBe('pi')
+    expect(result?.payload.prompt).toBe('rename this fn')
+  })
+
+  it('agent_start without a prompt keeps the cached prompt from the current turn', () => {
+    _internals.normalizeHookPayload(
+      'pi',
+      buildBody({ hook_event_name: 'before_agent_start', prompt: 'first prompt' }),
+      'production'
+    )
+    const result = _internals.normalizeHookPayload(
+      'pi',
+      buildBody({ hook_event_name: 'agent_start' }),
+      'production'
+    )
+    expect(result?.payload.state).toBe('working')
+    expect(result?.payload.prompt).toBe('first prompt')
+  })
+
+  it('before_agent_start clears the previous turn’s tool cache', () => {
+    _internals.normalizeHookPayload(
+      'pi',
+      buildBody({
+        hook_event_name: 'tool_call',
+        tool_name: 'bash',
+        tool_input: { command: 'ls' }
+      }),
+      'production'
+    )
+    const result = _internals.normalizeHookPayload(
+      'pi',
+      buildBody({ hook_event_name: 'before_agent_start', prompt: 'next' }),
+      'production'
+    )
+    expect(result?.payload.toolName).toBeUndefined()
+    expect(result?.payload.toolInput).toBeUndefined()
+  })
+
+  it('tool_call surfaces tool_name + tool_input preview', () => {
+    const result = _internals.normalizeHookPayload(
+      'pi',
+      buildBody({
+        hook_event_name: 'tool_call',
+        tool_name: 'bash',
+        tool_input: { command: 'pnpm test' }
+      }),
+      'production'
+    )
+    expect(result?.payload.state).toBe('working')
+    expect(result?.payload.toolName).toBe('bash')
+    expect(result?.payload.toolInput).toBe('pnpm test')
+  })
+
+  it('tool_execution_start also populates the tool preview', () => {
+    const result = _internals.normalizeHookPayload(
+      'pi',
+      buildBody({
+        hook_event_name: 'tool_execution_start',
+        tool_name: 'read',
+        tool_input: { path: 'src/main/index.ts' }
+      }),
+      'production'
+    )
+    expect(result?.payload.state).toBe('working')
+    expect(result?.payload.toolName).toBe('read')
+    expect(result?.payload.toolInput).toBe('src/main/index.ts')
+  })
+
+  it('message_end (assistant) stays in working but captures lastAssistantMessage', () => {
+    const result = _internals.normalizeHookPayload(
+      'pi',
+      buildBody({
+        hook_event_name: 'message_end',
+        role: 'assistant',
+        text: 'Done — I refactored the helper.'
+      }),
+      'production'
+    )
+    expect(result?.payload.state).toBe('working')
+    expect(result?.payload.lastAssistantMessage).toBe('Done — I refactored the helper.')
+  })
+
+  it('message_end (user) is ignored', () => {
+    const result = _internals.normalizeHookPayload(
+      'pi',
+      buildBody({ hook_event_name: 'message_end', role: 'user', text: 'hi' }),
+      'production'
+    )
+    // Why: pi captures the user prompt via before_agent_start, not via
+    // message_end. A user-role message_end should not flip lastAssistantMessage.
+    expect(result?.payload.lastAssistantMessage).toBeUndefined()
+  })
+
+  it('agent_end maps to done', () => {
+    const result = _internals.normalizeHookPayload(
+      'pi',
+      buildBody({ hook_event_name: 'agent_end' }),
+      'production'
+    )
+    expect(result?.payload.state).toBe('done')
+    expect(result?.payload.agentType).toBe('pi')
+  })
+
+  it('session_shutdown maps to done', () => {
+    const result = _internals.normalizeHookPayload(
+      'pi',
+      buildBody({ hook_event_name: 'session_shutdown' }),
+      'production'
+    )
+    expect(result?.payload.state).toBe('done')
+  })
+
+  it('done preserves the cached lastAssistantMessage from a prior message_end', () => {
+    _internals.normalizeHookPayload(
+      'pi',
+      buildBody({
+        hook_event_name: 'message_end',
+        role: 'assistant',
+        text: 'final reply'
+      }),
+      'production'
+    )
+    const result = _internals.normalizeHookPayload(
+      'pi',
+      buildBody({ hook_event_name: 'agent_end' }),
+      'production'
+    )
+    expect(result?.payload.lastAssistantMessage).toBe('final reply')
+  })
+
+  it('unknown event names are dropped', () => {
+    const result = _internals.normalizeHookPayload(
+      'pi',
+      buildBody({ hook_event_name: 'never_heard_of_it' }),
       'production'
     )
     expect(result).toBeNull()
@@ -1036,5 +1203,147 @@ describe('Endpoint file lifecycle', () => {
     } finally {
       server.stop()
     }
+  })
+})
+
+describe('AgentHookServer ingestRemote', () => {
+  it('stamps connectionId and forwards a valid relay envelope to the listener', () => {
+    const server = new AgentHookServer()
+    const payload = parseAgentStatusPayload(
+      JSON.stringify({ state: 'working', prompt: 'p', agentType: 'claude' })
+    )
+    if (!payload) {
+      throw new Error('parseAgentStatusPayload returned null for a known-good fixture')
+    }
+    const listener = vi.fn()
+    server.setListener(listener)
+    server.ingestRemote({ paneKey: PANE, tabId: 'tab-1', worktreeId: 'wt-1', payload }, 'conn-1')
+    expect(listener).toHaveBeenCalledTimes(1)
+    expect(listener).toHaveBeenCalledWith({
+      paneKey: PANE,
+      tabId: 'tab-1',
+      worktreeId: 'wt-1',
+      connectionId: 'conn-1',
+      payload
+    })
+  })
+
+  it('drops envelopes whose payload state is not in AGENT_STATUS_STATES', () => {
+    const server = new AgentHookServer()
+    const listener = vi.fn()
+    server.setListener(listener)
+    // Why: bypass parseAgentStatusPayload (which itself rejects bad states) by
+    // constructing an obviously-invalid payload — `ingestRemote` is the trust
+    // boundary we're testing, not the parser.
+    server.ingestRemote(
+      {
+        paneKey: PANE,
+        tabId: 'tab-1',
+        worktreeId: 'wt-1',
+        payload: { state: 'nonsense', prompt: '', agentType: 'claude' }
+      },
+      'conn-1'
+    )
+    expect(listener).not.toHaveBeenCalled()
+  })
+
+  it('drops envelopes whose paneKey exceeds MAX_PANE_KEY_LEN', () => {
+    const server = new AgentHookServer()
+    const payload = parseAgentStatusPayload(
+      JSON.stringify({ state: 'working', prompt: 'p', agentType: 'claude' })
+    )
+    if (!payload) {
+      throw new Error('parseAgentStatusPayload returned null for a known-good fixture')
+    }
+    const listener = vi.fn()
+    server.setListener(listener)
+    // 201 chars — one past the listener's 200-char cap.
+    const oversized = 'a'.repeat(201)
+    server.ingestRemote(
+      { paneKey: oversized, tabId: 'tab-1', worktreeId: 'wt-1', payload },
+      'conn-1'
+    )
+    expect(listener).not.toHaveBeenCalled()
+  })
+
+  it('rejects empty connectionId', () => {
+    const server = new AgentHookServer()
+    const payload = parseAgentStatusPayload(
+      JSON.stringify({ state: 'working', prompt: 'p', agentType: 'claude' })
+    )
+    if (!payload) {
+      throw new Error('parseAgentStatusPayload returned null for a known-good fixture')
+    }
+    const listener = vi.fn()
+    server.setListener(listener)
+    server.ingestRemote({ paneKey: PANE, tabId: 'tab-1', worktreeId: 'wt-1', payload }, '')
+    expect(listener).not.toHaveBeenCalled()
+  })
+
+  it('rejects whitespace-only connectionId', () => {
+    const server = new AgentHookServer()
+    const payload = parseAgentStatusPayload(
+      JSON.stringify({ state: 'working', prompt: 'p', agentType: 'claude' })
+    )
+    if (!payload) {
+      throw new Error('parseAgentStatusPayload returned null for a known-good fixture')
+    }
+    const listener = vi.fn()
+    server.setListener(listener)
+    server.ingestRemote({ paneKey: PANE, tabId: 'tab-1', worktreeId: 'wt-1', payload }, '   ')
+    expect(listener).not.toHaveBeenCalled()
+  })
+
+  it('rejects non-string tabId', () => {
+    const server = new AgentHookServer()
+    const payload = parseAgentStatusPayload(
+      JSON.stringify({ state: 'working', prompt: 'p', agentType: 'claude' })
+    )
+    if (!payload) {
+      throw new Error('parseAgentStatusPayload returned null for a known-good fixture')
+    }
+    const listener = vi.fn()
+    server.setListener(listener)
+    server.ingestRemote(
+      { paneKey: PANE, tabId: 123 as unknown as string, worktreeId: 'wt-1', payload },
+      'conn-1'
+    )
+    expect(listener).not.toHaveBeenCalled()
+  })
+
+  it('rejects empty paneKey after trim', () => {
+    const server = new AgentHookServer()
+    const payload = parseAgentStatusPayload(
+      JSON.stringify({ state: 'working', prompt: 'p', agentType: 'claude' })
+    )
+    if (!payload) {
+      throw new Error('parseAgentStatusPayload returned null for a known-good fixture')
+    }
+    const listener = vi.fn()
+    server.setListener(listener)
+    server.ingestRemote({ paneKey: '   ', tabId: 'tab-1', worktreeId: 'wt-1', payload }, 'conn-1')
+    expect(listener).not.toHaveBeenCalled()
+  })
+
+  it('normalizes inner payload via normalizeAgentStatusPayload — clamps oversized prompt', () => {
+    // Why: the relay normally normalizes the payload on the wire, but a buggy
+    // or malicious relay could forward an over-cap field. ingestRemote must
+    // re-run the canonical normalizer so the AGENT_STATUS_MAX_FIELD_LENGTH
+    // cap (200 chars) is enforced at the trust boundary.
+    const server = new AgentHookServer()
+    const listener = vi.fn()
+    server.setListener(listener)
+    server.ingestRemote(
+      {
+        paneKey: PANE,
+        tabId: 'tab-1',
+        worktreeId: 'wt-1',
+        payload: { state: 'working', prompt: 'x'.repeat(500), agentType: 'claude' }
+      },
+      'conn-1'
+    )
+    expect(listener).toHaveBeenCalledTimes(1)
+    const event = listener.mock.calls[0][0] as { payload: { prompt: string } }
+    expect(event.payload.prompt.length).toBe(200)
   })
 })
