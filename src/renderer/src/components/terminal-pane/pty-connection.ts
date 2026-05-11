@@ -23,6 +23,7 @@ import { warnTerminalLifecycleAnomaly } from './terminal-lifecycle-diagnostics'
 import { registerPtySerializer, registerPtyTitleSource } from './pty-buffer-serializer'
 import {
   discardTerminalOutput,
+  flushTerminalOutput,
   waitForTerminalOutputParsed,
   writeTerminalOutput
 } from '@/lib/pane-manager/pane-terminal-output-scheduler'
@@ -588,6 +589,9 @@ export function connectPanePty(
     // regardless of DOM visibility and the guard stays engaged via the
     // write-completion callback until xterm finishes parsing.
     const writeReplayData = (data: string): void => {
+      // Why: drain any queued background bytes BEFORE the replay paint, so the
+      // scheduler's deferred drain cannot land older bytes on top of the replay.
+      flushTerminalOutput(pane.terminal)
       if (terminalOutputRequiresDomRenderer(data)) {
         manager.markPaneHasComplexScriptOutput(pane.id)
       }
@@ -606,8 +610,11 @@ export function connectPanePty(
       if (terminalOutputRequiresDomRenderer(data)) {
         manager.markPaneHasComplexScriptOutput(pane.id)
       }
+      // Why: visibility is the right gate — split-pane layouts have multiple
+      // visible-but-inactive panes whose output the user is watching. Only
+      // hidden panes (background tabs) should be throttled.
       writeTerminalOutput(pane.terminal, data, {
-        foreground: deps.isActiveRef.current && deps.isVisibleRef.current
+        foreground: deps.isVisibleRef.current
       })
 
       if (pendingStartupCommand) {

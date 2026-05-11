@@ -226,7 +226,9 @@ test.describe('Terminal output scheduler', () => {
 
     const debug = await getSchedulerDebug(orcaPage)
     expect(debug.foregroundWriteCount).toBeGreaterThan(0)
-    expect(Math.max(...debug.drainWrites)).toBeLessThanOrEqual(2)
+    if (debug.drainWrites.length > 0) {
+      expect(Math.max(...debug.drainWrites)).toBeLessThanOrEqual(2)
+    }
 
     const firstBackground = backgroundCommands[0]
     const firstBackgroundTabId = tabIds[1]

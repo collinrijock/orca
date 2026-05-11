@@ -212,7 +212,7 @@ function App(): React.JSX.Element {
   // inline agents section. The retention hooks are hosted inside
   // <RetainedAgentsSyncGate /> (a leaf component that renders null) rather
   // than being called inline here so its high-churn store subscriptions
-  // (agentStatusByPaneKey + agentStatusEpoch tick at PTY event frequency)
+  // (agentStatusByPaneKey ticks at PTY event frequency)
   // do not re-render the App tree on every agent status update.
   // Why: git conflict-operation state also drives the worktree cards. Polling
   // cannot live under RightSidebar because App unmounts that subtree when the

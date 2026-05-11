@@ -105,4 +105,25 @@ describe('pane terminal output scheduler', () => {
 
     expect(terminal.write).not.toHaveBeenCalled()
   })
+
+  it('survives a write to a disposed terminal during background drain', async () => {
+    vi.useFakeTimers()
+    const { writeTerminalOutput } = await loadScheduler()
+    const throwing = {
+      write: vi.fn(() => {
+        throw new Error('terminal disposed')
+      })
+    }
+
+    writeTerminalOutput(throwing, 'late-ping', { foreground: false })
+
+    // Why: drain runs inside setTimeout; if the throw escapes drainQueuedOutput
+    // it would crash the timer callback and leave the scheduler poisoned.
+    expect(() => vi.advanceTimersByTime(50)).not.toThrow()
+    expect(throwing.write).toHaveBeenCalledTimes(1)
+
+    // Advancing further must not rediscover the dead entry.
+    vi.advanceTimersByTime(100)
+    expect(throwing.write).toHaveBeenCalledTimes(1)
+  })
 })

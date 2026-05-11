@@ -110,7 +110,15 @@ function writeQueuedChunk(entry: QueueEntry): boolean {
   if (!data) {
     return false
   }
-  entry.terminal.write(data)
+  try {
+    entry.terminal.write(data)
+  } catch {
+    // Why: pane.terminal.dispose() can race with a queued late-arriving PTY ping;
+    // a write to a disposed terminal throws. Drop the entry rather than crashing
+    // the scheduler for other panes still draining.
+    entry.chunks.length = 0
+    return false
+  }
   return true
 }
 
@@ -119,7 +127,7 @@ function drainQueuedOutput(): void {
   let writes = 0
 
   while (queuedByTerminal.size > 0 && writes < MAX_WRITES_PER_DRAIN) {
-    const entry = queuedByTerminal.values().next().value as QueueEntry | undefined
+    const entry = queuedByTerminal.values().next().value
     if (!entry) {
       break
     }
@@ -191,7 +199,14 @@ export function flushTerminalOutput(terminal: TerminalOutputTarget): void {
     if (debugEnabled) {
       debugState.flushWriteCount++
     }
-    terminal.write(data)
+    try {
+      terminal.write(data)
+    } catch {
+      // Why: pane.terminal.dispose() can race with a queued late-arriving PTY ping;
+      // a write to a disposed terminal throws. Drop the entry rather than crashing
+      // the scheduler for other panes still draining.
+      return
+    }
     data = takeQueuedChunk(entry, BACKGROUND_CHUNK_CHARS)
   }
 }
