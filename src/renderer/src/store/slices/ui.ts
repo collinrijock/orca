@@ -76,6 +76,12 @@ const MAX_LEFT_SIDEBAR_WIDTH = 500
 // cap on wide displays. Use a large hard ceiling purely as a safety net for
 // corrupted/manually-edited values rather than as a product limit.
 const MAX_RIGHT_SIDEBAR_WIDTH = 4000
+// Why: bound disk growth for acknowledgedAgentsByPaneKey across hard quits —
+// in-session cleanup (agent-status.ts) prunes on pane lifecycle, but crash/
+// forced-kill paths leave entries pinned. Mirrors HYDRATE_MAX_AGE_MS in
+// src/main/agent-hooks/server.ts for parallel reasoning with the sibling
+// hook-status entries these acks pair with.
+const HYDRATE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000
 const VALID_TASK_PRESETS = new Set<TaskViewPresetId>([
   'all',
   'issues',
@@ -109,6 +115,34 @@ function sanitizePersistedSidebarWidth(width: unknown, fallback: number, maxWidt
     return fallback
   }
   return Math.min(maxWidth, Math.max(MIN_SIDEBAR_WIDTH, width))
+}
+
+// Why: persisted JSON can be tampered with or carry legacy/corrupt shapes.
+// Reject arrays (typeof [] === 'object'), prototype-pollution keys, and
+// non-positive-finite values; drop entries past the TTL so hard-quit leaks
+// don't accumulate forever.
+function sanitizeAcknowledgedAgentsByPaneKey(value: unknown): Record<string, number> {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+    return {}
+  }
+  const cutoff = Date.now() - HYDRATE_MAX_AGE_MS
+  const out: Record<string, number> = {}
+  for (const [key, ackAt] of Object.entries(value as Record<string, unknown>)) {
+    if (typeof key !== 'string') {
+      continue
+    }
+    if (key === '__proto__' || key === 'constructor' || key === 'prototype') {
+      continue
+    }
+    if (typeof ackAt !== 'number' || !Number.isFinite(ackAt) || ackAt <= 0) {
+      continue
+    }
+    if (ackAt < cutoff) {
+      continue
+    }
+    out[key] = ackAt
+  }
+  return out
 }
 
 function sanitizeTaskResumeState(value: unknown): TaskResumeState | undefined {
@@ -154,9 +188,10 @@ export type UISlice = {
    *  the user clicks an agent row or its parent workspace card from the
    *  dashboard. A row is considered unvisited when no ack exists OR the
    *  agent's current stateStartedAt is newer than the last ack (i.e. the
-   *  agent has transitioned state since the user last saw it). Session-only
-   *  — restart resets everyone to unvisited, which is harmless since the
-   *  first visit after launch is a legitimate "need to see" moment. */
+   *  agent has transitioned state since the user last saw it). Persisted
+   *  via PersistedUIState because agent rows themselves now survive restart
+   *  (see docs/agent-dashboard-retention-restart.md) — without this, rows
+   *  you'd already visited come back bold on relaunch. */
   acknowledgedAgentsByPaneKey: Record<string, number>
   acknowledgeAgents: (paneKeys: string[]) => void
   /** Per-worktree collapsed state for the inline agents section shown inside
@@ -745,6 +780,16 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         trustedOrcaHooks: filterTrustedOrcaHooksToValidRepos(
           ui.trustedOrcaHooks ?? {},
           validRepoIds
+        ),
+        // Why: restore visited-row acks alongside the persisted hook entries
+        // they pair with. Stale acks for paneKeys whose tab/PTY no longer
+        // exists are inert (no row references them); a paneKey reuse stamps a
+        // fresh stateStartedAt that beats the old ack via the ackAt <
+        // stateStartedAt comparison in WorktreeCardAgents. Sanitizer drops
+        // entries past HYDRATE_MAX_AGE_MS so hard-quit/crash paths that miss
+        // the in-session cleanup in agent-status.ts can't accumulate forever.
+        acknowledgedAgentsByPaneKey: sanitizeAcknowledgedAgentsByPaneKey(
+          ui.acknowledgedAgentsByPaneKey
         ),
         persistedUIReady: true
       }

@@ -18,7 +18,7 @@ In scope:
 
 Out of scope:
 
-- Renderer-side persistence (`retainedAgentsByPaneKey`, `acknowledgedAgentsByPaneKey`, `retentionSuppressedPaneKeys`). The renderer's retention slice and `useRetainedAgentsSync` continue to operate purely in memory; their "stay until dismissed" contract is upheld by the live entry being pulled from the main-process status snapshot after renderer hydration.
+- Renderer-side persistence of `retainedAgentsByPaneKey` and `retentionSuppressedPaneKeys`. The retention slice and `useRetainedAgentsSync` continue to operate purely in memory; their "stay until dismissed" contract is upheld by the live entry being pulled from the main-process status snapshot after renderer hydration. `acknowledgedAgentsByPaneKey` is the deliberate exception — see "Why this beats the renderer-side alternative" below for the rationale.
 - Daemon-side persistence. The daemon owns PTY lifetime and scrollback, not hook events. The hook server (in the Electron main process) is the right home.
 - Cross-device sync. The on-disk file lives in `userData`; running Orca on a second machine does not carry retained activity.
 - Reintroducing the old experimental dashboard gate. Agent activity is now default-on; row visibility is controlled by worktree-card properties.
@@ -253,7 +253,7 @@ Follow-ups (explicitly out of this design):
 
 ## Non-Goals
 
-- Persisting `retainedAgentsByPaneKey`, `acknowledgedAgentsByPaneKey`, or `retentionSuppressedPaneKeys`. The renderer's retention slice is computed downstream from the live cache; the live cache is now persistent, so retention falls out for free.
+- Persisting `retainedAgentsByPaneKey` or `retentionSuppressedPaneKeys`. The renderer's retention slice is computed downstream from the live cache; the live cache is now persistent, so retention falls out for free. `acknowledgedAgentsByPaneKey` is intentionally persisted — see "Why this beats the renderer-side alternative" for why that one map is the exception.
 - Daemon-side persistence. The daemon owns PTY lifetime and does not see hook events. The hook server (in the Electron main process) is the right home.
 - Cross-device sync. The persisted file lives in local `userData/agent-hooks/`; running Orca on a second machine does not carry status over.
 - A dedicated settings UI. Agent activity is default-on; no new toggle is added.
@@ -266,6 +266,8 @@ An earlier draft of this design proposed mirroring `retainedAgentsByPaneKey` to 
 1. **Wrong source of truth.** The hook server's `lastStatusByPaneKey` is upstream of every renderer-side surface. Persisting upstream means the existing in-process replay path (`setListener`) handles the renderer-facing work for free; persisting downstream forks responsibility across processes and only addresses the `done` slice of the user-visible problem.
 2. **Wrong scope.** A renderer-side retention persister, by definition, cannot resurrect a `blocked` Claude or a quiet `working` agent — those entries never made it into `retainedAgentsByPaneKey` in the first place (retention is gated on `state === 'done'`). Persisting the upstream cache covers all three states with one mechanism.
 3. **Wrong file.** `PersistedUIState` holds scalar prefs and small bounded metadata; structured event payloads with multi-KB `lastAssistantMessage` strings do not belong there. `WorkspaceSessionState` is closer in spirit but inherits problem (1) and (2) above. `userData/agent-hooks/` already exists for hook-server-owned cross-restart artifacts (the endpoint file); the cache file is the natural neighbor.
+
+The deliberately narrow exception: `acknowledgedAgentsByPaneKey` IS persisted in `PersistedUIState`, despite the general rule above. Why it fits: it's a tiny `Record<string, number>` of paneKey → ack timestamp, not an event payload — it inherits exactly the "scalar prefs and small bounded metadata" character `PersistedUIState` was designed for. Hydrate-time TTL plus shape sanitization (in `src/renderer/src/store/slices/ui.ts`) bound size across many sessions. And without it, agent rows the user already visited come back bold every relaunch now that the rows themselves survive restart, defeating the whole point of the restart-preservation work.
 
 The renderer-side approach was strictly smaller code; the upstream approach is strictly more correct. The diff size for both is roughly the same once tests are factored in (one main-process file with bounded changes vs. one renderer slice + one shared type + one App.tsx init effect + sanitization), so we picked correctness.
 

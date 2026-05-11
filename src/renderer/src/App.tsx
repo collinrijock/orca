@@ -189,6 +189,7 @@ function App(): React.JSX.Element {
   const showActiveOnly = useAppStore((s) => s.showActiveOnly)
   const hideDefaultBranchWorkspace = useAppStore((s) => s.hideDefaultBranchWorkspace)
   const filterRepoIds = useAppStore((s) => s.filterRepoIds)
+  const acknowledgedAgentsByPaneKey = useAppStore((s) => s.acknowledgedAgentsByPaneKey)
   const persistedUIReady = useAppStore((s) => s.persistedUIReady)
   const rightSidebarWidth = useAppStore((s) => s.rightSidebarWidth)
   const rightSidebarOpen = useAppStore((s) => s.rightSidebarOpen)
@@ -490,7 +491,14 @@ function App(): React.JSX.Element {
         sortBy,
         showActiveOnly,
         hideDefaultBranchWorkspace,
-        filterRepoIds
+        filterRepoIds,
+        // Why: rides the same debounced save so dashboard auto-acks (which fire
+        // on focus/visibility) and the in-memory ack cleanup paths in
+        // agent-status.ts (close/dismiss) both flow to disk through map
+        // identity changes. Without persisting, agent rows that survive
+        // restart (per docs/agent-dashboard-retention-restart.md) come back
+        // bold even when the user had already visited them.
+        acknowledgedAgentsByPaneKey
       })
     }, 150)
 
@@ -503,7 +511,8 @@ function App(): React.JSX.Element {
     sortBy,
     showActiveOnly,
     hideDefaultBranchWorkspace,
-    filterRepoIds
+    filterRepoIds,
+    acknowledgedAgentsByPaneKey
   ])
 
   // Apply theme to document

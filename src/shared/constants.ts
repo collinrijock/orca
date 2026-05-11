@@ -292,7 +292,8 @@ export function getDefaultUIState(): PersistedUIState {
     statusBarVisible: true,
     dismissedUpdateVersion: null,
     lastUpdateCheckAt: null,
-    trustedOrcaHooks: {}
+    trustedOrcaHooks: {},
+    acknowledgedAgentsByPaneKey: {}
   }
 }
 
