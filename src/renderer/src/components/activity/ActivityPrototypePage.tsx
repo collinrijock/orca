@@ -569,7 +569,11 @@ function ThreadRow({
         //   tint, mirroring WorktreeCard's "weight alone" pattern. Three
         //   stacked tints (selected + unread + hover) made selected and
         //   unread look identical when hovered.
-        'group relative grid w-full grid-cols-[minmax(0,1fr)_auto] gap-2 border-b border-border px-3 py-2.5 text-left transition-colors',
+        // Why (asymmetric padding): the title uses leading-snug, which adds
+        // ~3px of internal space above the cap-height that isn't present
+        // below the secondary badge row. Symmetric py made the top read
+        // heavier; pt-2 / pb-2.5 visually evens the row.
+        'group relative grid w-full grid-cols-[minmax(0,1fr)_auto] gap-2 border-b border-border px-3 pt-2 pb-2.5 text-left transition-colors',
         selected
           ? 'bg-black/[0.08] shadow-[0_1px_2px_rgba(0,0,0,0.04)] dark:bg-white/[0.10] dark:shadow-[0_1px_2px_rgba(0,0,0,0.03)]'
           : 'hover:bg-accent/40'
