@@ -11,7 +11,7 @@ import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-cl
 import type { AppState } from '../types'
 
 type CacheEntry<T> = { data: T | null; fetchedAt: number }
-type FetchOptions = { force?: boolean }
+type FetchOptions = { force?: boolean; repoId?: string }
 
 const CACHE_TTL_MS = 60_000
 
@@ -28,11 +28,12 @@ function isFresh<T>(entry: CacheEntry<T> | undefined): entry is CacheEntry<T> {
 export function getHostedReviewCacheKey(
   repoPath: string,
   branch: string,
-  settings?: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null
+  settings?: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null,
+  repoId?: string | null
 ): string {
   const target = getActiveRuntimeTarget(settings)
   const scope = target.kind === 'environment' ? `runtime:${target.environmentId}` : 'local'
-  return `${scope}::${repoPath}::${branch}`
+  return `${scope}::${repoId ?? repoPath}::${branch}`
 }
 
 export type HostedReviewSlice = {
@@ -110,7 +111,7 @@ export const createHostedReviewSlice: StateCreator<AppState, [], [], HostedRevie
   ): Promise<HostedReviewInfo | null> => {
     const settings = get().settings
     const target = getActiveRuntimeTarget(settings)
-    const cacheKey = getHostedReviewCacheKey(repoPath, branch, settings)
+    const cacheKey = getHostedReviewCacheKey(repoPath, branch, settings, options?.repoId)
     const cached = get().hostedReviewCache[cacheKey]
     const linkedRefetch =
       cached?.data === null &&
@@ -134,6 +135,7 @@ export const createHostedReviewSlice: StateCreator<AppState, [], [], HostedRevie
       try {
         const args = {
           branch,
+          ...(options?.repoId !== undefined ? { repoId: options.repoId } : {}),
           linkedGitHubPR: options?.linkedGitHubPR ?? null,
           linkedGitLabMR: options?.linkedGitLabMR ?? null,
           linkedBitbucketPR: options?.linkedBitbucketPR ?? null,
@@ -144,7 +146,7 @@ export const createHostedReviewSlice: StateCreator<AppState, [], [], HostedRevie
             ? await callRuntimeRpc<HostedReviewInfo | null>(
                 target,
                 'hostedReview.forBranch',
-                { repo: repoPath, ...args },
+                { repo: options?.repoId ?? repoPath, repoPath, ...args },
                 // Why: remote dev boxes can be slower at `git`/`gh` lookups
                 // than local desktop repos, especially on Windows filesystem
                 // paths. The main-process queue caps concurrency, so a longer

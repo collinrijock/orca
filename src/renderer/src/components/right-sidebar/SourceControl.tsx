@@ -476,27 +476,34 @@ function SourceControlInner(): React.JSX.Element {
 
   const branchName = activeWorktree?.branch.replace(/^refs\/heads\//, '') ?? 'HEAD'
   const hostedReviewCacheKey =
-    activeRepo && branchName ? getHostedReviewCacheKey(activeRepo.path, branchName, settings) : null
+    activeRepo && branchName
+      ? getHostedReviewCacheKey(activeRepo.path, branchName, settings, activeRepo.id)
+      : null
+  const hostedReviewEntry = hostedReviewCacheKey
+    ? hostedReviewCache[hostedReviewCacheKey]
+    : undefined
   const hostedReview: HostedReviewInfo | null = hostedReviewCacheKey
-    ? (hostedReviewCache[hostedReviewCacheKey]?.data ?? null)
+    ? (hostedReviewEntry?.data ?? null)
     : null
 
   const linkedGitHubPR = activeWorktree?.linkedPR ?? null
   const linkedGitLabMR = activeWorktree?.linkedGitLabMR ?? null
+  const isHostedReviewStateLoading =
+    (linkedGitHubPR !== null || linkedGitLabMR !== null) && hostedReviewEntry === undefined
   useEffect(() => {
     if (!isBranchVisible || !activeRepo || isFolder || !branchName || branchName === 'HEAD') {
       return
     }
-    if (activeRepo.connectionId) {
-      return
-    }
-
     // Why: the Source Control panel renders branch review status directly.
     // When a terminal checkout moves this worktree onto a new branch, we need
     // to fetch that branch's PR/MR immediately instead of waiting for the user
     // to reselect the worktree. The linked ids handle create-from-review
     // worktrees whose local branch differs from the remote head branch.
-    void fetchHostedReviewForBranch(activeRepo.path, branchName, { linkedGitHubPR, linkedGitLabMR })
+    void fetchHostedReviewForBranch(activeRepo.path, branchName, {
+      repoId: activeRepo.id,
+      linkedGitHubPR,
+      linkedGitLabMR
+    })
   }, [
     activeRepo,
     branchName,
@@ -1027,6 +1034,8 @@ function SourceControlInner(): React.JSX.Element {
         isCommitting,
         isRemoteOperationActive,
         upstreamStatus: remoteStatus,
+        prState: hostedReview?.state ?? null,
+        isPRStateLoading: isHostedReviewStateLoading,
         inFlightRemoteOpKind,
         hostedReviewCreation
       }),
@@ -1038,6 +1047,8 @@ function SourceControlInner(): React.JSX.Element {
       isRemoteOperationActive,
       inFlightRemoteOpKind,
       hostedReviewCreation,
+      isHostedReviewStateLoading,
+      hostedReview?.state,
       remoteStatus,
       unresolvedConflicts.length
     ]
@@ -1053,6 +1064,8 @@ function SourceControlInner(): React.JSX.Element {
         isCommitting,
         isRemoteOperationActive,
         upstreamStatus: remoteStatus,
+        prState: hostedReview?.state ?? null,
+        isPRStateLoading: isHostedReviewStateLoading,
         inFlightRemoteOpKind,
         hostedReviewCreation
       }),
@@ -1064,6 +1077,8 @@ function SourceControlInner(): React.JSX.Element {
       isRemoteOperationActive,
       inFlightRemoteOpKind,
       hostedReviewCreation,
+      isHostedReviewStateLoading,
+      hostedReview?.state,
       remoteStatus,
       unresolvedConflicts.length
     ]

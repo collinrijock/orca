@@ -3,6 +3,7 @@ import type { SshRemotePtyLease, SshTarget } from './ssh-types'
 import type { Automation, AutomationRun } from './automations-types'
 import type { WorkspaceSource } from './telemetry-events'
 import type { GitHubProjectSettings } from './github-project-types'
+import type { MigrationUnsupportedPtyEntry } from './agent-status-types'
 import type { VoiceSettings } from './speech-types'
 import type { GitLabProjectSettings } from './gitlab-types'
 
@@ -229,15 +230,9 @@ export type TabGroupLayoutNode =
     }
 
 // ─── Unified Tab ────────────────────────────────────────────────────
-export type TabContentType =
-  | 'terminal'
-  | 'editor'
-  | 'diff'
-  | 'conflict-review'
-  | 'browser'
-  | 'notes'
+export type TabContentType = 'terminal' | 'editor' | 'diff' | 'conflict-review' | 'browser'
 
-export type WorkspaceVisibleTabType = 'terminal' | 'editor' | 'browser' | 'notes'
+export type WorkspaceVisibleTabType = 'terminal' | 'editor' | 'browser'
 
 export type Tab = {
   id: string // UUID for terminals, filePath for editors (preserves current convention)
@@ -252,7 +247,6 @@ export type Tab = {
   createdAt: number
   isPreview?: boolean // preview tabs get replaced by next single-click open
   isPinned?: boolean // pinned tabs survive "close others"
-  isDirty?: boolean // unsaved tab-local content, currently used by Project Notes
 }
 
 export type TabGroup = {
@@ -433,7 +427,7 @@ export type TerminalLayoutSnapshot = {
   ptyIdsByLeafId?: Record<string, string>
   /** Serialized terminal buffers per leaf for scrollback restoration on restart. */
   buffersByLeafId?: Record<string, string>
-  /** User-assigned pane titles, keyed by leafId (e.g. "pane:3").
+  /** User-assigned pane titles, keyed by stable layout leaf UUID.
    *  Persisted alongside buffers via the existing session:set flow. */
   titlesByLeafId?: Record<string, string>
 }
@@ -680,16 +674,31 @@ export type GitHubWorkItemDetails = {
 export type LinearViewer = {
   displayName: string
   email: string | null
+  organizationId?: string
   organizationName: string
+  organizationUrlKey?: string
 }
+
+export type LinearWorkspace = LinearViewer & {
+  id: string
+  organizationId: string
+  isLegacy?: true
+}
+
+export type LinearWorkspaceSelection = string | 'all'
 
 export type LinearConnectionStatus = {
   connected: boolean
   viewer: LinearViewer | null
+  workspaces?: LinearWorkspace[]
+  activeWorkspaceId?: string | null
+  selectedWorkspaceId?: LinearWorkspaceSelection | null
 }
 
 export type LinearIssue = {
   id: string
+  workspaceId?: string
+  workspaceName?: string
   identifier: string
   title: string
   description?: string
@@ -885,6 +894,8 @@ export type LinearMember = {
 
 export type LinearTeam = {
   id: string
+  workspaceId?: string
+  workspaceName?: string
   name: string
   key: string
 }
@@ -952,6 +963,7 @@ export type CreateWorktreeArgs = {
   sparseCheckout?: CreateSparseCheckoutRequest
   linkedIssue?: number
   linkedPR?: number
+  linkedLinearIssue?: string
   pushTarget?: GitPushTarget
   /** Agent selected in the create surface. Omitted for blank-shell creates. */
   createdWithAgent?: TuiAgent
@@ -1349,6 +1361,8 @@ export type GlobalSettings = {
   geminiCliOAuthEnabled: boolean
   /** Per-agent CLI command overrides. A missing key means use the catalog default binary name. */
   agentCmdOverrides: Partial<Record<TuiAgent, string>>
+  /** When true, Orca prevents local app suspension while hook-reported agents are working. */
+  keepComputerAwakeWhileAgentsRun: boolean
   /** Why: macOS terminals must choose between letting Option compose layout
    *  characters (@ on German, € on French) or treating Option as Meta/Esc for
    *  readline shortcuts. Mirrors Ghostty's macos-option-as-alt setting — and
@@ -1789,6 +1803,7 @@ export type PersistedState = {
   workspaceSession: WorkspaceSessionState
   sshTargets: SshTarget[]
   sshRemotePtyLeases: SshRemotePtyLease[]
+  migrationUnsupportedPtyEntries: MigrationUnsupportedPtyEntry[]
   automations: Automation[]
   automationRuns: AutomationRun[]
   onboarding: OnboardingState

@@ -1,3 +1,4 @@
+/* eslint-disable max-lines -- Why: this state-machine table intentionally keeps every primary-action priority case together so merge regressions are visible in one file. */
 import { describe, expect, it } from 'vitest'
 import { resolvePrimaryAction, type PrimaryActionInputs } from './source-control-primary-action'
 
@@ -180,6 +181,16 @@ describe('resolvePrimaryAction', () => {
       title: 'Publish this branch to origin',
       disabled: false
     })
+  })
+
+  it.each([
+    [{ prState: 'merged' as const }, 'Nothing to commit. PR is already merged.'],
+    [{ isPRStateLoading: true }, 'Checking PR status…']
+  ])('does not offer Publish Branch when linked PR state blocks it', (overrides, title) => {
+    const result = resolvePrimaryAction(
+      inputs({ upstreamStatus: { hasUpstream: false, ahead: 0, behind: 0 }, ...overrides })
+    )
+    expect(result).toEqual({ kind: 'commit', label: 'Commit', title, disabled: true })
   })
 
   it('returns Sync when clean + tracked + diverged both ways', () => {
