@@ -446,6 +446,11 @@ const pendingRemoteWatcherRetries = new Map<string, ReturnType<typeof setTimeout
 // Without this, the awaited unwatch handle would be installed after the
 // renderer thinks the watch is gone, leaking a native watcher.
 const inFlightRemoteInstalls = new Map<string, { cancelled: boolean }>()
+// Why: dedupe concurrent installRemoteWatcher calls for the same key so
+// overlapping fs:watchWorktree IPCs share one native watcher and one listener
+// map, instead of each call independently invoking provider.watch() and
+// overwriting the per-key state on resolution.
+const pendingRemoteInstallPromises = new Map<string, Promise<RemoteWatcherInstallResult>>()
 const REMOTE_WATCH_RETRY_MS = 1_000
 const REMOTE_WATCH_RETRY_TIMEOUT_MS = 60_000
 
@@ -491,8 +496,39 @@ async function installRemoteWatcher(
     addRemoteWatchListener(key, sender)
     return 'installed'
   }
+  // Why: a second concurrent fs:watchWorktree for the same key must share the
+  // first call's provider.watch() instead of starting its own. Without this,
+  // both calls would create distinct native watchers and the second's resolve
+  // would overwrite the per-key state, dropping the first's unwatch handle
+  // and erasing its sender from the listener map.
+  const pendingInstall = pendingRemoteInstallPromises.get(key)
+  if (pendingInstall) {
+    const result = await pendingInstall
+    if (result === 'installed' && remoteWatchers.has(key) && !sender.isDestroyed()) {
+      addRemoteWatchListener(key, sender)
+    }
+    return result
+  }
   const cancelToken = { cancelled: false }
   inFlightRemoteInstalls.set(key, cancelToken)
+  const installPromise = doInstallRemoteWatcher(provider, sender, key, worktreePath, cancelToken)
+  pendingRemoteInstallPromises.set(key, installPromise)
+  try {
+    return await installPromise
+  } finally {
+    if (pendingRemoteInstallPromises.get(key) === installPromise) {
+      pendingRemoteInstallPromises.delete(key)
+    }
+  }
+}
+
+async function doInstallRemoteWatcher(
+  provider: NonNullable<ReturnType<typeof getSshFilesystemProvider>>,
+  sender: WebContents,
+  key: string,
+  worktreePath: string,
+  cancelToken: { cancelled: boolean }
+): Promise<RemoteWatcherInstallResult> {
   let unwatch: () => void
   try {
     unwatch = await provider.watch(worktreePath, (events) => {
