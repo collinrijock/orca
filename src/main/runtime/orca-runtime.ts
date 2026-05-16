@@ -204,7 +204,13 @@ import {
   getRemoteDrift,
   getRecentDriftSubjects
 } from '../git/repo'
-import { listWorktrees, addWorktree, addSparseWorktree, removeWorktree } from '../git/worktree'
+import {
+  listWorktrees,
+  addWorktree,
+  addSparseWorktree,
+  assertWorktreeCleanForRemoval,
+  removeWorktree
+} from '../git/worktree'
 import { isENOENT } from '../ipc/filesystem-auth'
 import {
   createSetupRunnerScript,
@@ -235,6 +241,7 @@ import {
   computeWorktreePath,
   ensurePathWithinWorkspace,
   formatWorktreeRemovalError,
+  isOrphanCompatiblePreflightError,
   isOrphanedWorktreeError,
   mergeWorktree,
   sanitizeWorktreeName,
@@ -6016,15 +6023,36 @@ export class OrcaRuntimeService {
       return {}
     }
 
-    // Why: kill every PTY belonging to this worktree BEFORE the git-level
-    // removal. Some shells keep the worktree directory busy, and `git worktree
-    // remove` throws a confusing error if PTYs still hold it open. This also
-    // closes the headless-CLI leak (design §2a/§2b): without this call, the
-    // CLI path runs git removal and never touches PTYs, leaving zombies
-    // behind. Best-effort: any failure here must not prevent git removal —
-    // the worst case without the call is the status quo.
+    const hooks = getEffectiveHooks(repo)
+    let warning: string | undefined
+    if (hooks?.scripts.archive && runHooks) {
+      const result = await runHook('archive', worktree.path, repo)
+      if (!result.success) {
+        console.error(`[hooks] archive hook failed for ${worktree.path}:`, result.output)
+      }
+    } else if (hooks?.scripts.archive) {
+      // Runtime RPC calls have no renderer trust prompt, so hooks require explicit CLI opt-in.
+      warning = `orca.yaml archive hook skipped for ${worktree.path}; pass --run-hooks to run it.`
+      console.warn(`[hooks] ${warning}`)
+    }
+
+    let shouldTearDownPtys = true
+    try {
+      await assertWorktreeCleanForRemoval(worktree.path, force)
+    } catch (error) {
+      if (!isOrphanCompatiblePreflightError(error)) {
+        throw new Error(formatWorktreeRemovalError(error, worktree.path, force))
+      }
+      // Why: orphan cleanup does not need live shells to be killed first,
+      // and preflight did not prove the worktree is cleanly removable.
+      shouldTearDownPtys = false
+    }
+
     const localProvider = this.getLocalProvider()
-    if (localProvider) {
+    if (localProvider && shouldTearDownPtys) {
+      // Why: once preflight proves normal deletion is clean, kill PTYs before
+      // git-level removal so shells cannot keep the directory busy. This also
+      // closes the headless-CLI leak for confirmed-removable worktrees.
       await killAllProcessesForWorktree(worktree.id, {
         runtime: this,
         localProvider
@@ -6045,19 +6073,6 @@ export class OrcaRuntimeService {
         .catch((err) => {
           console.warn(`[worktree-teardown] failed for ${worktree.id}:`, err)
         })
-    }
-
-    const hooks = getEffectiveHooks(repo)
-    let warning: string | undefined
-    if (hooks?.scripts.archive && runHooks) {
-      const result = await runHook('archive', worktree.path, repo)
-      if (!result.success) {
-        console.error(`[hooks] archive hook failed for ${worktree.path}:`, result.output)
-      }
-    } else if (hooks?.scripts.archive) {
-      // Runtime RPC calls have no renderer trust prompt, so hooks require explicit CLI opt-in.
-      warning = `orca.yaml archive hook skipped for ${worktree.path}; pass --run-hooks to run it.`
-      console.warn(`[hooks] ${warning}`)
     }
 
     try {
