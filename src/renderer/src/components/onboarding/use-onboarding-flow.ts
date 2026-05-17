@@ -20,6 +20,7 @@ import {
 import { STEPS, type StepNumber } from './use-onboarding-flow-types'
 import { persistStep, useCloseWith, usePersistCurrentStep } from './use-onboarding-flow-persistence'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
+import { buildOnboardingFolderAgentStartup } from './onboarding-folder-agent-startup'
 
 export { STEPS } from './use-onboarding-flow-types'
 export type { StepId, StepNumber } from './use-onboarding-flow-types'
@@ -264,7 +265,10 @@ export function useOnboardingFlow(
       await fetchWorktrees(repoId)
       const worktree = useAppStore.getState().worktreesByRepo[repoId]?.[0]
       if (worktree) {
-        activateAndRevealWorktree(worktree.id)
+        // Why: onboarding asks for a default agent immediately before this step.
+        // Non-git folders skip the composer, so seed their first terminal here.
+        const startup = isGit ? undefined : buildOnboardingFolderAgentStartup(settings)
+        activateAndRevealWorktree(worktree.id, startup ? { startup } : undefined)
       }
       // Why: next() short-circuits step 4, so emit step_completed here once the
       // repo is successfully added to keep the funnel consistent. Gate on
@@ -295,7 +299,7 @@ export function useOnboardingFlow(
         })
       }
     },
-    [closeWith, consumeStepDurationMs, fetchRepos, fetchWorktrees, openModal]
+    [closeWith, consumeStepDurationMs, fetchRepos, fetchWorktrees, openModal, settings]
   )
 
   const persistCurrentStep = usePersistCurrentStep({
