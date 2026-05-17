@@ -1,3 +1,6 @@
+/* eslint-disable max-lines -- Why: the combined diff tree keeps filtering,
+directory rows, file rows, drag metadata, and navigation wiring together so
+the row contracts stay local to the surface. */
 import React from 'react'
 import {
   Check,
@@ -6,10 +9,9 @@ import {
   Folder,
   FolderOpen,
   PanelLeftClose,
-  PanelLeftOpen,
   Search
 } from 'lucide-react'
-import { basename, dirname } from '@/lib/path'
+import { basename, dirname, joinPath } from '@/lib/path'
 import { cn } from '@/lib/utils'
 import { getFileTypeIcon } from '@/lib/file-type-icons'
 import { Button } from '@/components/ui/button'
@@ -54,6 +56,7 @@ type CombinedDiffTreeNode = SourceControlTreeNode<
 const COMBINED_DIFF_TREE_INDENT_PX = 12
 const COMBINED_DIFF_TREE_DIRECTORY_PADDING_PX = 8
 const COMBINED_DIFF_TREE_FILE_PADDING_PX = 20
+const ORCA_PATH_MIME = 'text/x-orca-file-path'
 const UNCOMMITTED_AREA_ORDER: readonly GitStagingArea[] = ['unstaged', 'staged', 'untracked']
 const UNCOMMITTED_AREA_LABELS: Record<GitStagingArea, string> = {
   unstaged: 'Changes',
@@ -100,6 +103,7 @@ function buildBranchRows(
 
 export function CombinedDiffFileTree({
   mode,
+  worktreePath,
   entries,
   sectionIndexByKey,
   activeSectionKey,
@@ -109,6 +113,7 @@ export function CombinedDiffFileTree({
   onNavigate
 }: {
   mode: CombinedDiffFileTreeMode
+  worktreePath: string
   entries: readonly CombinedDiffFileTreeEntry[]
   sectionIndexByKey: ReadonlyMap<string, number>
   activeSectionKey: string | null
@@ -116,7 +121,7 @@ export function CombinedDiffFileTree({
   collapsed: boolean
   onCollapsedChange: (collapsed: boolean) => void
   onNavigate: (entry: CombinedDiffFileTreeEntry) => void
-}): React.JSX.Element {
+}): React.JSX.Element | null {
   const [collapsedDirectoryKeys, setCollapsedDirectoryKeys] = React.useState<Set<string>>(
     () => new Set()
   )
@@ -184,19 +189,7 @@ export function CombinedDiffFileTree({
   )
 
   if (collapsed) {
-    return (
-      <aside className="flex w-10 shrink-0 flex-col items-center border-r border-border bg-background py-2">
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-sm"
-          aria-label="Show file tree"
-          onClick={() => onCollapsedChange(false)}
-        >
-          <PanelLeftOpen className="size-4" />
-        </Button>
-      </aside>
-    )
+    return null
   }
 
   return (
@@ -299,6 +292,7 @@ export function CombinedDiffFileTree({
                   key={node.key}
                   node={node}
                   mode={mode}
+                  worktreePath={worktreePath}
                   activeSectionKey={activeSectionKey}
                   sectionIndexByKey={sectionIndexByKey}
                   isCollapsed={collapsedDirectoryKeys.has(node.key)}
@@ -314,6 +308,7 @@ export function CombinedDiffFileTree({
               key={node.key}
               node={node}
               mode={mode}
+              worktreePath={worktreePath}
               activeSectionKey={activeSectionKey}
               sectionIndexByKey={sectionIndexByKey}
               isCollapsed={collapsedDirectoryKeys.has(node.key)}
@@ -330,6 +325,7 @@ export function CombinedDiffFileTree({
 function CombinedDiffFileTreeRow({
   node,
   mode,
+  worktreePath,
   activeSectionKey,
   sectionIndexByKey,
   isCollapsed,
@@ -338,6 +334,7 @@ function CombinedDiffFileTreeRow({
 }: {
   node: CombinedDiffTreeNode
   mode: CombinedDiffFileTreeMode
+  worktreePath: string
   activeSectionKey: string | null
   sectionIndexByKey: ReadonlyMap<string, number>
   isCollapsed: boolean
@@ -350,6 +347,11 @@ function CombinedDiffFileTreeRow({
         className="group relative flex w-full items-center gap-1 py-1 pr-3 text-xs text-muted-foreground transition-colors hover:bg-accent/40 hover:text-foreground"
         style={{
           paddingLeft: `${node.depth * COMBINED_DIFF_TREE_INDENT_PX + COMBINED_DIFF_TREE_DIRECTORY_PADDING_PX}px`
+        }}
+        draggable
+        onDragStart={(event) => {
+          event.dataTransfer.setData(ORCA_PATH_MIME, joinPath(worktreePath, node.path))
+          event.dataTransfer.effectAllowed = 'copy'
         }}
       >
         <button
@@ -394,6 +396,15 @@ function CombinedDiffFileTreeRow({
         paddingLeft: `${node.depth * COMBINED_DIFF_TREE_INDENT_PX + COMBINED_DIFF_TREE_FILE_PADDING_PX}px`
       }}
       disabled={disabled}
+      draggable={!disabled}
+      onDragStart={(event) => {
+        if (disabled) {
+          event.preventDefault()
+          return
+        }
+        event.dataTransfer.setData(ORCA_PATH_MIME, joinPath(worktreePath, node.entry.path))
+        event.dataTransfer.effectAllowed = 'copy'
+      }}
       onClick={() => onNavigate(node.entry)}
     >
       <FileIcon className="size-3.5 shrink-0" style={{ color: STATUS_COLORS[status] }} />

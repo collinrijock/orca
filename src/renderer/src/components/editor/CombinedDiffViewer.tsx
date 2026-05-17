@@ -47,7 +47,7 @@ import type {
   GitDiffResult,
   GitStatusEntry
 } from '../../../../shared/types'
-import { Check, Copy, MessageSquare, Send, Trash2 } from 'lucide-react'
+import { Check, Copy, MessageSquare, PanelLeftOpen, Send, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { DiffSectionItem } from './DiffSectionItem'
 import {
@@ -77,6 +77,7 @@ const EMPTY_GIT_STATUS_ENTRIES: GitStatusEntry[] = []
 const EMPTY_GIT_BRANCH_ENTRIES: GitBranchChangeEntry[] = []
 let combinedDiffCollapsedPreference: boolean | null = null
 let combinedDiffSideBySidePreference: boolean | null = null
+let combinedDiffFileTreeCollapsedPreference: boolean | null = null
 // Why: local Electron IPC has no RPC timeout; a hung git diff should turn into
 // a retryable row error instead of leaving the editor in "Loading..." forever.
 const COMBINED_DIFF_SECTION_LOAD_TIMEOUT_MS = 30_000
@@ -115,6 +116,12 @@ function getDiffSectionLoadErrorMessage(error: unknown): string {
 
 function getInitialCombinedDiffSideBySide(diffDefaultView: string | undefined): boolean {
   return combinedDiffSideBySidePreference ?? diffDefaultView === 'side-by-side'
+}
+
+function getInitialCombinedDiffFileTreeCollapsed(
+  combinedDiffFileTreeVisibleByDefault: boolean | undefined
+): boolean {
+  return combinedDiffFileTreeCollapsedPreference ?? combinedDiffFileTreeVisibleByDefault === false
 }
 
 function commitMessageBody(message: string | undefined, subject: string | undefined): string {
@@ -178,7 +185,9 @@ export default function CombinedDiffViewer({
   const [clearNotesDialogOpen, setClearNotesDialogOpen] = useState(false)
   const [isClearingNotes, setIsClearingNotes] = useState(false)
   const [notesCopied, setNotesCopied] = useState(false)
-  const [fileTreeCollapsed, setFileTreeCollapsed] = useState(false)
+  const [fileTreeCollapsed, setFileTreeCollapsedState] = useState(() =>
+    getInitialCombinedDiffFileTreeCollapsed(settings?.combinedDiffFileTreeVisibleByDefault)
+  )
   // Why: `generation` is a state counter used as a React key to force remounting
   // DiffSectionItem components when the entry list changes. A separate ref
   // (`generationRef`) is kept in sync for stale-async-result detection inside
@@ -206,6 +215,20 @@ export default function CombinedDiffViewer({
       setSideBySide(settings.diffDefaultView === 'side-by-side')
     }
   }, [settings?.diffDefaultView])
+
+  useEffect(() => {
+    if (
+      settings?.combinedDiffFileTreeVisibleByDefault !== undefined &&
+      combinedDiffFileTreeCollapsedPreference === null
+    ) {
+      setFileTreeCollapsedState(settings.combinedDiffFileTreeVisibleByDefault === false)
+    }
+  }, [settings?.combinedDiffFileTreeVisibleByDefault])
+
+  const setFileTreeCollapsed = useCallback((collapsed: boolean) => {
+    combinedDiffFileTreeCollapsedPreference = collapsed
+    setFileTreeCollapsedState(collapsed)
+  }, [])
 
   const isBranchMode = file.diffSource === 'combined-branch'
   const isCommitMode = file.diffSource === 'combined-commit'
@@ -1008,6 +1031,24 @@ export default function CombinedDiffViewer({
       <div className="flex flex-col flex-1 min-h-0">
         <div className="flex items-center justify-between gap-3 px-3 py-1.5 border-b border-border bg-background/50 shrink-0">
           <div className="flex min-w-0 items-center gap-2">
+            {fileTreeCollapsed && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-xs"
+                    aria-label="Show file tree"
+                    onClick={() => setFileTreeCollapsed(false)}
+                  >
+                    <PanelLeftOpen className="size-3.5" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" sideOffset={6}>
+                  Show file tree
+                </TooltipContent>
+              </Tooltip>
+            )}
             <span className="truncate text-xs text-muted-foreground">
               {sections.length} changed files
               {isBranchMode && branchCompare ? ` vs ${branchCompare.baseRef}` : ''}
@@ -1099,6 +1140,7 @@ export default function CombinedDiffViewer({
         <div className="flex min-h-0 flex-1">
           <CombinedDiffFileTree
             mode={treeMode}
+            worktreePath={file.filePath}
             entries={entries}
             sectionIndexByKey={sectionIndexByKey}
             activeSectionKey={activeTreeSectionKey}
