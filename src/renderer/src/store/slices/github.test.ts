@@ -3,7 +3,7 @@ envelope, and IssueSourceIndicator suppression tests in one file keeps the
 GitHub slice's cross-cutting invariants verifiable in one place. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { create } from 'zustand'
-import { createGitHubSlice } from './github'
+import { createGitHubSlice, workItemsCacheKey } from './github'
 import type { AppState } from '../types'
 import type { PRInfo } from '../../../../shared/types'
 import {
@@ -66,6 +66,101 @@ function makePR(overrides: Partial<PRInfo> = {}): PRInfo {
     ...overrides
   }
 }
+
+describe('createGitHubSlice.evictGitHubRepoCaches', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    resetRemoteRuntimeMocks()
+  })
+
+  it('evicts repo-id and legacy path scoped cache entries', () => {
+    const store = createTestStore()
+    const repoId = 'repo-1'
+    const repoPath = '/repo/one'
+    store.setState({
+      workItemsInvalidationNonce: 4,
+      workItemsCache: {
+        [workItemsCacheKey(repoId, 20, '')]: { data: [], fetchedAt: 1 },
+        [workItemsCacheKey(repoPath, 20, '')]: { data: [], fetchedAt: 1 },
+        [workItemsCacheKey('repo-2', 20, '')]: { data: [], fetchedAt: 1 }
+      },
+      prCache: {
+        [`${repoId}::branch`]: { data: makePR(), fetchedAt: 1 },
+        [`${repoPath}::branch`]: { data: makePR(), fetchedAt: 1 },
+        'repo-2::branch': { data: makePR(), fetchedAt: 1 }
+      },
+      issueCache: {
+        [`${repoId}::12`]: { data: {} as never, fetchedAt: 1 },
+        [`${repoPath}::12`]: { data: {} as never, fetchedAt: 1 },
+        'repo-2::12': { data: {} as never, fetchedAt: 1 }
+      },
+      checksCache: {
+        [`${repoId}::pr-checks::12`]: { data: [], fetchedAt: 1 },
+        [`${repoPath}::pr-checks::12`]: { data: [], fetchedAt: 1 },
+        'repo-2::pr-checks::12': { data: [], fetchedAt: 1 }
+      },
+      commentsCache: {
+        [`${repoId}::pr-comments::12`]: { data: [], fetchedAt: 1 },
+        [`${repoPath}::pr-comments::12`]: { data: [], fetchedAt: 1 },
+        'repo-2::pr-comments::12': { data: [], fetchedAt: 1 }
+      }
+    })
+
+    store.getState().evictGitHubRepoCaches(repoId, repoPath)
+    const state = store.getState()
+
+    expect(Object.keys(state.workItemsCache)).toEqual([workItemsCacheKey('repo-2', 20, '')])
+    expect(Object.keys(state.prCache)).toEqual(['repo-2::branch'])
+    expect(Object.keys(state.issueCache)).toEqual(['repo-2::12'])
+    expect(Object.keys(state.checksCache)).toEqual(['repo-2::pr-checks::12'])
+    expect(Object.keys(state.commentsCache)).toEqual(['repo-2::pr-comments::12'])
+    expect(state.workItemsInvalidationNonce).toBe(5)
+  })
+
+  it('does not bump the work-item invalidation nonce when no work-item entries are evicted', () => {
+    const store = createTestStore()
+    store.setState({
+      workItemsInvalidationNonce: 4,
+      prCache: {
+        'repo-1::branch': { data: makePR(), fetchedAt: 1 }
+      }
+    })
+
+    store.getState().evictGitHubRepoCaches('repo-1', '/repo/one')
+
+    expect(store.getState().prCache).toEqual({})
+    expect(store.getState().workItemsInvalidationNonce).toBe(4)
+  })
+
+  it('clears matching in-flight work-item dedupe keys before the next fetch', async () => {
+    const store = createTestStore()
+    type WorkItemsEnvelope = {
+      items: []
+      sources: { issues: null; prs: null; upstreamCandidate: null }
+    }
+    let resolveFirst: (value: WorkItemsEnvelope) => void = () => {}
+    const firstRequest = new Promise<WorkItemsEnvelope>((resolve) => {
+      resolveFirst = resolve
+    })
+    mockApi.gh.listWorkItems.mockReturnValueOnce(firstRequest).mockResolvedValueOnce({
+      items: [],
+      sources: { issues: null, prs: null, upstreamCandidate: null }
+    })
+
+    const firstFetch = store.getState().fetchWorkItems('repo-1', '/repo/one', 20, '')
+    await Promise.resolve()
+    store.getState().evictGitHubRepoCaches('repo-1', '/repo/one')
+    const secondFetch = store.getState().fetchWorkItems('repo-1', '/repo/one', 20, '')
+    resolveFirst({
+      items: [],
+      sources: { issues: null, prs: null, upstreamCandidate: null }
+    })
+    await firstFetch
+    await secondFetch
+
+    expect(mockApi.gh.listWorkItems).toHaveBeenCalledTimes(2)
+  })
+})
 
 describe('createGitHubSlice.fetchPRChecks', () => {
   beforeEach(() => {

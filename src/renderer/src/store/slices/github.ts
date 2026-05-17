@@ -355,6 +355,44 @@ function repoScopedCacheKey(repoPath: string, repoId: string | undefined, suffix
   return `${repoId ?? repoPath}::${suffix}`
 }
 
+function repoCacheKeyPrefixes(repoId: string, repoPath?: string): string[] {
+  const prefixes = [`${repoId}::`]
+  if (repoPath && repoPath !== repoId) {
+    prefixes.push(`${repoPath}::`)
+  }
+  return prefixes
+}
+
+function matchesRepoCacheKey(key: string, prefixes: readonly string[]): boolean {
+  return prefixes.some((prefix) => key.startsWith(prefix))
+}
+
+function clearInflightWorkItemsForRepo(repoId: string, repoPath?: string): void {
+  const prefixes = repoCacheKeyPrefixes(repoId, repoPath)
+  for (const key of Array.from(inflightWorkItemsRequests.keys())) {
+    if (matchesRepoCacheKey(key, prefixes)) {
+      inflightWorkItemsRequests.delete(key)
+    }
+  }
+}
+
+function evictRepoCacheEntries<T>(
+  cache: Record<string, CacheEntry<T>>,
+  prefixes: readonly string[]
+): { cache: Record<string, CacheEntry<T>>; evicted: boolean } {
+  let next: Record<string, CacheEntry<T>> | null = null
+  for (const key of Object.keys(cache)) {
+    if (!matchesRepoCacheKey(key, prefixes)) {
+      continue
+    }
+    if (!next) {
+      next = { ...cache }
+    }
+    delete next[key]
+  }
+  return next ? { cache: next, evicted: true } : { cache, evicted: false }
+}
+
 // Why: 500 entries is generous enough that active developers will never hit it
 // during normal use, but prevents the cache from growing without bound across
 // many repos and branches over a long-running session.
@@ -553,6 +591,7 @@ export type GitHubSlice = {
     repoPath: string,
     preference: IssueSourcePreference
   ) => Promise<void>
+  evictGitHubRepoCaches: (repoId: string, repoPath?: string) => void
   // ── ProjectV2 view cache ─────────────────────────────────────────────
   projectViewCache: Record<string, ProjectViewCacheEntry<GitHubProjectTable>>
   fetchProjectViewTable: (
@@ -1650,11 +1689,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
     // dispatch could collapse onto it and skip the source swap. Clearing
     // first makes the "new fetch gets a fresh request" invariant impossible
     // to trip on later refactors that change zustand or React flush timing.
-    for (const key of Array.from(inflightWorkItemsRequests.keys())) {
-      if (key.startsWith(`${repoId}::`) || key.startsWith(`${repoPath}::`)) {
-        inflightWorkItemsRequests.delete(key)
-      }
-    }
+    clearInflightWorkItemsForRepo(repoId, repoPath)
     // Why: evict every cache entry keyed on this repo AFTER the IPC
     // resolves. If we evicted before awaiting, an overlapping fetch triggered
     // by a different subscriber would hit main with the pre-flip persisted
@@ -1676,6 +1711,38 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
       // the just-evicted entries. Evicting alone wouldn't trigger the effect
       // because it doesn't depend on the cache.
       return { workItemsCache: next, workItemsInvalidationNonce: s.workItemsInvalidationNonce + 1 }
+    })
+  },
+
+  evictGitHubRepoCaches: (repoId, repoPath) => {
+    clearInflightWorkItemsForRepo(repoId, repoPath)
+    set((s) => {
+      const prefixes = repoCacheKeyPrefixes(repoId, repoPath)
+      const workItems = evictRepoCacheEntries(s.workItemsCache, prefixes)
+      const prs = evictRepoCacheEntries(s.prCache, prefixes)
+      const issues = evictRepoCacheEntries(s.issueCache, prefixes)
+      const checks = evictRepoCacheEntries(s.checksCache, prefixes)
+      const comments = evictRepoCacheEntries(s.commentsCache, prefixes)
+      const updates: Partial<AppState> = {}
+
+      if (workItems.evicted) {
+        updates.workItemsCache = workItems.cache
+        updates.workItemsInvalidationNonce = s.workItemsInvalidationNonce + 1
+      }
+      if (prs.evicted) {
+        updates.prCache = prs.cache
+      }
+      if (issues.evicted) {
+        updates.issueCache = issues.cache
+      }
+      if (checks.evicted) {
+        updates.checksCache = checks.cache
+      }
+      if (comments.evicted) {
+        updates.commentsCache = comments.cache
+      }
+
+      return updates
     })
   },
 

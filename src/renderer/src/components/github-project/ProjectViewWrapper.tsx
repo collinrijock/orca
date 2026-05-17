@@ -46,6 +46,7 @@ import type { GitHubWorkItem } from '../../../../shared/types'
 import ProjectPicker, { type ResolvedProjectSelection } from './ProjectPicker'
 import ProjectViewList from './ProjectViewList'
 import ProjectItemSlugDialog from './ProjectItemSlugDialog'
+import { filterProjectTableRowsByOpenRepos } from './project-row-filtering'
 
 type Props = Record<string, never>
 
@@ -70,7 +71,8 @@ export default function ProjectViewWrapper(_props: Props = {} as Props): React.J
   const patchProjectIssueOrPr = useAppStore((s) => s.patchProjectIssueOrPr)
   const patchProjectRowIssueType = useAppStore((s) => s.patchProjectRowIssueType)
   const addRepoFromStore = useAppStore((s) => s.addRepo)
-  const lookupSlug = useRepoSlugIndex()
+  const repos = useAppStore((s) => s.repos)
+  const { lookupSlug, ready: slugIndexReady } = useRepoSlugIndex()
 
   const activeProject = settings?.githubProjects?.activeProject ?? null
   const lastViewByProject = useMemo(
@@ -288,6 +290,31 @@ export default function ProjectViewWrapper(_props: Props = {} as Props): React.J
   const table: GitHubProjectTable | null = currentCacheKey
     ? (projectViewCache[currentCacheKey]?.data ?? null)
     : null
+  const filteredTable = useMemo(
+    () => (table && slugIndexReady ? filterProjectTableRowsByOpenRepos(table, lookupSlug) : null),
+    [table, slugIndexReady, lookupSlug]
+  )
+  const [lastFilteredTable, setLastFilteredTable] = useState<{
+    cacheKey: string
+    table: GitHubProjectTable
+  } | null>(null)
+
+  useEffect(() => {
+    if (!currentCacheKey || !table) {
+      setLastFilteredTable(null)
+      return
+    }
+    if (slugIndexReady && filteredTable) {
+      setLastFilteredTable({ cacheKey: currentCacheKey, table: filteredTable })
+    }
+  }, [currentCacheKey, table, slugIndexReady, filteredTable])
+
+  const visibleTable =
+    slugIndexReady || !currentCacheKey
+      ? filteredTable
+      : lastFilteredTable?.cacheKey === currentCacheKey
+        ? lastFilteredTable.table
+        : null
 
   // Parent-dropped toast, once per table.
   useEffect(() => {
@@ -332,6 +359,28 @@ export default function ProjectViewWrapper(_props: Props = {} as Props): React.J
     repo: string
     url: string | null
   } | null>(null)
+  const liveRepoIds = useMemo(() => new Set(repos.map((repo) => repo.id)), [repos])
+
+  useEffect(() => {
+    if (dialogRepoItem && !liveRepoIds.has(dialogRepoItem.repoId)) {
+      setDialogRepoItem(null)
+    }
+  }, [dialogRepoItem, liveRepoIds])
+
+  useEffect(() => {
+    if (!slugIndexReady) {
+      return
+    }
+    if (
+      slugDialog &&
+      lookupSlug(`${slugDialog.origin.owner}/${slugDialog.origin.repo}`).length > 0
+    ) {
+      setSlugDialog(null)
+    }
+    if (repoNotInOrca && lookupSlug(`${repoNotInOrca.owner}/${repoNotInOrca.repo}`).length > 0) {
+      setRepoNotInOrca(null)
+    }
+  }, [slugIndexReady, lookupSlug, slugDialog, repoNotInOrca])
 
   const buildWorkItem = useCallback(
     (row: GitHubProjectRow, repoId: string): GitHubWorkItem | null => {
@@ -597,7 +646,7 @@ export default function ProjectViewWrapper(_props: Props = {} as Props): React.J
         {table ? (
           <>
             <span className="ml-auto rounded-full border border-border/50 bg-background px-2 py-0.5 text-[11px]">
-              {table.totalCount}
+              {visibleTable?.totalCount ?? table.totalCount}
             </span>
             {selectedViewUrl ? (
               <Button
@@ -679,9 +728,9 @@ export default function ProjectViewWrapper(_props: Props = {} as Props): React.J
             }
           }}
         />
-      ) : table ? (
+      ) : visibleTable ? (
         <ProjectViewList
-          table={table}
+          table={visibleTable}
           onOpenDialog={handleOpenDialog}
           onEditField={handleEditField}
           onEditAssignees={(row, add, remove) => void handleEditAssignees(row, add, remove)}

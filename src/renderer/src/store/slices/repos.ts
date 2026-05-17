@@ -187,6 +187,10 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
         : callRuntimeRpc(target, 'repo.rm', { repo: repoId }, { timeoutMs: 15_000 }))
 
       get().clearOrcaHookTrustForRepo(repoId)
+      const repoPath = get().repos.find((repo) => repo.id === repoId)?.path
+      get().evictGitHubRepoCaches(repoId, repoPath)
+      const { clearRepoSlugCacheEntry } = await import('../../lib/repo-slug-index')
+      clearRepoSlugCacheEntry(repoId)
 
       // Kill PTYs for all worktrees belonging to this repo
       const worktreeIds = (get().worktreesByRepo[repoId] ?? []).map((w) => w.id)
