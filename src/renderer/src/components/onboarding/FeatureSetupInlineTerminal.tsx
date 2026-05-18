@@ -28,8 +28,19 @@ export function FeatureSetupInlineTerminal({
   const closeTab = useAppStore((s) => s.closeTab)
   const setActiveTabForWorktree = useAppStore((s) => s.setActiveTabForWorktree)
   const setTabCustomTitle = useAppStore((s) => s.setTabCustomTitle)
+  const prefersReducedMotion = useMemo(
+    () =>
+      typeof window !== 'undefined' &&
+      typeof window.matchMedia === 'function' &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches,
+    []
+  )
   const [cwd, setCwd] = useState<string | null>(null)
   const [tabId, setTabId] = useState<string | null>(null)
+  // Why: starts at `prefersReducedMotion` so users opted out of motion never
+  // see the slide-in frame; otherwise we flip to true after first paint so the
+  // CSS transition has a starting state to interpolate from.
+  const [entered, setEntered] = useState(prefersReducedMotion)
   const terminalSectionRef = useRef<HTMLElement>(null)
   const autoInsertedRef = useRef<string | null>(null)
   const terminalOpenedTrackedRef = useRef(false)
@@ -83,17 +94,39 @@ export function FeatureSetupInlineTerminal({
   }, [createTab, setActiveTabForWorktree, setTabCustomTitle])
 
   useEffect(() => {
-    const frame = window.requestAnimationFrame(() => {
-      const prefersReducedMotion =
-        typeof window.matchMedia === 'function' &&
-        window.matchMedia('(prefers-reduced-motion: reduce)').matches
-      terminalSectionRef.current?.scrollIntoView({
-        behavior: prefersReducedMotion ? 'auto' : 'smooth',
-        block: 'center'
+    if (prefersReducedMotion) {
+      const scrollFrame = window.requestAnimationFrame(() => {
+        terminalSectionRef.current?.scrollIntoView({ behavior: 'auto', block: 'center' })
       })
+      return () => window.cancelAnimationFrame(scrollFrame)
+    }
+    // Why: double rAF guarantees the browser commits the initial collapsed
+    // styles before we flip to `entered`, so the height/opacity transition
+    // actually plays instead of snapping straight to the final state.
+    const enterFrame = window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => setEntered(true))
     })
-    return () => window.cancelAnimationFrame(frame)
-  }, [])
+    return () => window.cancelAnimationFrame(enterFrame)
+  }, [prefersReducedMotion])
+
+  // Why: tracking scroll *during* the height transition is unavoidably
+  // jumpy — ResizeObserver / rAF ticks land in pixel-sized chunks, and each
+  // chunk reads as a step. Instead, let the section grow in place, then once
+  // the height has nearly settled fire a single native smooth scroll. The
+  // browser eases that scroll itself, which is the smoothest path available.
+  useEffect(() => {
+    if (!entered || prefersReducedMotion) {
+      return
+    }
+    const section = terminalSectionRef.current
+    if (!section) {
+      return
+    }
+    const scrollTimer = window.setTimeout(() => {
+      section.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }, 500)
+    return () => window.clearTimeout(scrollTimer)
+  }, [entered, prefersReducedMotion])
 
   const insertCommand = useCallback(() => {
     if (!tabId) {
@@ -148,41 +181,55 @@ export function FeatureSetupInlineTerminal({
     }
   }, [command, insertCommand, tabId])
 
+  // Why: grid 0fr → 1fr animates to the child's natural height without a
+  // hardcoded max-height, so we don't leave dead space if the terminal
+  // section's intrinsic size shifts. The inner section is positioned via the
+  // grid row, so xterm.js measures its real container on mount.
   return (
-    <section
-      ref={terminalSectionRef}
-      aria-label="Skill setup command"
-      className="mt-5 overflow-hidden rounded-xl border border-border bg-card"
+    <div
+      aria-hidden={!entered}
+      className="grid transition-[grid-template-rows,opacity,margin-top] duration-[700ms] ease-[cubic-bezier(0.32,0.72,0,1)] motion-reduce:transition-none"
+      style={{
+        gridTemplateRows: entered ? '1fr' : '0fr',
+        opacity: entered ? 1 : 0,
+        marginTop: entered ? 20 : 0
+      }}
     >
-      <div className="border-b border-border px-4 py-3">
-        <p className="text-xs leading-relaxed text-muted-foreground">
-          Press Enter to run the command and confirm npm if asked. You can also set this up later in
-          Settings.
-        </p>
-      </div>
-      <div
-        className="relative h-[280px] min-h-0 bg-background"
-        onKeyDownCapture={(event) => trackTerminalInteraction('keyboard', event)}
-        onPointerDownCapture={() => trackTerminalInteraction('pointer')}
+      <section
+        ref={terminalSectionRef}
+        aria-label="Skill setup command"
+        className="min-h-0 overflow-hidden rounded-xl border border-border bg-card"
       >
-        {cwd && tabId ? (
-          <TerminalPane
-            tabId={tabId}
-            worktreeId={ONBOARDING_SETUP_TERMINAL_WORKTREE_ID}
-            cwd={cwd}
-            isActive
-            isVisible
-            onPtyExit={() => closeTab(tabId)}
-            onCloseTab={() => closeTab(tabId)}
-          />
-        ) : (
-          <div className="flex h-full items-center justify-center gap-2 text-xs text-muted-foreground">
-            <Loader2 className="size-4 animate-spin" />
-            Starting terminal...
-          </div>
-        )}
-      </div>
-    </section>
+        <div className="border-b border-border px-4 py-3">
+          <p className="text-xs leading-relaxed text-muted-foreground">
+            Press Enter to run the command and confirm npm if asked. You can also set this up later
+            in Settings.
+          </p>
+        </div>
+        <div
+          className="relative h-[280px] min-h-0 bg-background"
+          onKeyDownCapture={(event) => trackTerminalInteraction('keyboard', event)}
+          onPointerDownCapture={() => trackTerminalInteraction('pointer')}
+        >
+          {cwd && tabId ? (
+            <TerminalPane
+              tabId={tabId}
+              worktreeId={ONBOARDING_SETUP_TERMINAL_WORKTREE_ID}
+              cwd={cwd}
+              isActive
+              isVisible
+              onPtyExit={() => closeTab(tabId)}
+              onCloseTab={() => closeTab(tabId)}
+            />
+          ) : (
+            <div className="flex h-full items-center justify-center gap-2 text-xs text-muted-foreground">
+              <Loader2 className="size-4 animate-spin" />
+              Starting terminal...
+            </div>
+          )}
+        </div>
+      </section>
+    </div>
   )
 }
 
