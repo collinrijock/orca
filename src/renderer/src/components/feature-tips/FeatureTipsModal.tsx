@@ -37,6 +37,18 @@ function FeatureTipVisual({ tip }: { tip: FeatureTip }): JSX.Element {
           </div>
         </div>
       )
+    case 'open-release-notes':
+      return (
+        <div className="flex aspect-video w-full max-w-sm items-center justify-center overflow-hidden rounded-lg border border-border bg-muted/40">
+          <img
+            src={tip.mediaUrl}
+            alt=""
+            className="h-full w-full object-cover"
+            loading="lazy"
+            draggable={false}
+          />
+        </div>
+      )
   }
 }
 
@@ -93,7 +105,12 @@ export default function FeatureTipsModal(): JSX.Element | null {
         closeModal()
         openSettingsTarget({ pane: 'voice', repoId: null })
         openSettingsPage()
+        break
       }
+      case 'open-release-notes':
+        closeModal()
+        void window.api.shell.openUrl(currentTip.releaseNotesUrl)
+        break
     }
   }
 

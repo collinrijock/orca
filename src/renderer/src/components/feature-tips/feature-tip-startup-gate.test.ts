@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { getDefaultOnboardingState, getDefaultVoiceSettings } from '../../../../shared/constants'
+import { FEATURE_TIP_IDS } from '../../../../shared/feature-tips'
 import type { GlobalSettings, OnboardingState } from '../../../../shared/types'
 import { getFeatureTipsAppOpenDecision } from './feature-tip-startup-gate'
 
@@ -64,7 +65,7 @@ describe('feature tip startup gate', () => {
     ).toEqual({ kind: 'skip' })
   })
 
-  it('does not reopen after the tip was marked seen', () => {
+  it('opens the next unseen tip after the voice tip was marked seen', () => {
     expect(
       getFeatureTipsAppOpenDecision({
         activeModal: 'none',
@@ -75,10 +76,24 @@ describe('feature tip startup gate', () => {
         settings: makeSettings(),
         suppressedByOnboardingThisSession: false
       })
+    ).toEqual({ kind: 'open', tipId: 'changelog-1-3-41' })
+  })
+
+  it('does not reopen after every tip was marked seen', () => {
+    expect(
+      getFeatureTipsAppOpenDecision({
+        activeModal: 'none',
+        featureTipsSeenIds: FEATURE_TIP_IDS,
+        onboarding: existingUserOnboarding,
+        persistedUIReady: true,
+        promptedThisSession: false,
+        settings: makeSettings(),
+        suppressedByOnboardingThisSession: false
+      })
     ).toEqual({ kind: 'skip' })
   })
 
-  it('does not open after voice dictation is already enabled', () => {
+  it('opens the next unseen tip after voice dictation is already enabled', () => {
     expect(
       getFeatureTipsAppOpenDecision({
         activeModal: 'none',
@@ -89,6 +104,6 @@ describe('feature tip startup gate', () => {
         settings: makeSettings(true),
         suppressedByOnboardingThisSession: false
       })
-    ).toEqual({ kind: 'skip' })
+    ).toEqual({ kind: 'open', tipId: 'changelog-1-3-41' })
   })
 })

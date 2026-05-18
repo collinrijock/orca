@@ -17,6 +17,7 @@
     "check:feature-wall-assets": "node config/scripts/check-feature-wall-assets.mjs",
     "verify:macos-entitlements": "node config/scripts/verify-macos-entitlements.mjs",
     "vendor:feature-wall-assets": "node config/scripts/vendor-feature-wall-assets.mjs",
+    "sync:feature-tips": "node config/scripts/sync-feature-tips-from-changelog.mjs",
     "tc:node": "pnpm run typecheck:node",
     "tc:cli": "pnpm run typecheck:cli",
     "tc:web": "pnpm run typecheck:web",

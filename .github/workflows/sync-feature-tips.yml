@@ -1,0 +1,77 @@
+name: Sync Feature Tips
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '37 16 * * *'
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: sync-feature-tips
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: package.json
+
+      - name: Generate feature tips from changelog
+        run: node config/scripts/sync-feature-tips-from-changelog.mjs
+
+      - name: Check for changes
+        id: changes
+        run: |
+          if git diff --quiet -- src/shared/marketing-feature-tips.ts; then
+            echo "changed=false" >>"$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >>"$GITHUB_OUTPUT"
+          fi
+
+      - name: Open or update PR
+        if: steps.changes.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          branch="automation/feature-tips"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -B "$branch"
+          git add src/shared/marketing-feature-tips.ts
+          git commit -m "Update feature tips from changelog"
+          git push --force-with-lease origin "$branch"
+
+          pr_body="$(mktemp)"
+          cat >"$pr_body" <<'BODY'
+          Updates the generated feature-tip card from the public changelog feed.
+
+          The sync only promotes GIF-backed changelog entries, so the tips popup stays reserved for features with marketing media ready for review.
+          BODY
+
+          head="${GITHUB_REPOSITORY_OWNER}:${branch}"
+          existing_pr="$(gh pr list --head "$head" --json number --jq '.[0].number // ""')"
+          if [[ -n "$existing_pr" ]]; then
+            gh pr edit "$existing_pr" \
+              --title "Update feature tips from changelog" \
+              --body-file "$pr_body"
+          else
+            gh pr create \
+              --base main \
+              --head "$branch" \
+              --title "Update feature tips from changelog" \
+              --body-file "$pr_body"
+          fi

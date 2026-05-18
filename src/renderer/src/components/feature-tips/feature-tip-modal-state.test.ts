@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { getDefaultVoiceSettings } from '../../../../shared/constants'
+import { FEATURE_TIP_IDS } from '../../../../shared/feature-tips'
 import type { GlobalSettings } from '../../../../shared/types'
 import { getFeatureTipForModal } from './feature-tip-modal-state'
 
@@ -36,7 +37,7 @@ describe('feature tip modal state', () => {
   it('returns no tip when every tip is already seen and no modal tip id is pinned', () => {
     const tip = getFeatureTipForModal({
       modalData: {},
-      seenTipIds: ['voice-dictation'],
+      seenTipIds: FEATURE_TIP_IDS,
       settings: makeSettings()
     })
 

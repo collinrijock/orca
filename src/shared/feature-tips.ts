@@ -1,24 +1,37 @@
-export type FeatureTipId = 'voice-dictation'
+import { MARKETING_FEATURE_TIPS } from './marketing-feature-tips'
+
+export type ManualFeatureTipId = 'voice-dictation'
+export type MarketingFeatureTipId = (typeof MARKETING_FEATURE_TIPS)[number]['id']
+export type FeatureTipId = ManualFeatureTipId | MarketingFeatureTipId
 
 export type FeatureTipPriority = 'new' | 'unseen'
 
-export type FeatureTipAction = 'enable-voice'
+export type FeatureTipAction = 'enable-voice' | 'open-release-notes'
 
-export type FeatureTip = {
+type FeatureTipBase = {
   id: FeatureTipId
   priority: FeatureTipPriority
   eyebrow: string
   title: string
   description: string
-  action: FeatureTipAction
   ctaLabel: string
 }
+
+export type FeatureTip =
+  | (FeatureTipBase & {
+      action: 'enable-voice'
+    })
+  | (FeatureTipBase & {
+      action: 'open-release-notes'
+      mediaUrl: string
+      releaseNotesUrl: string
+    })
 
 export type CompletedFeatureTipState = {
   voiceDictationEnabled: boolean
 }
 
-export const FEATURE_TIPS = [
+const MANUAL_FEATURE_TIPS = [
   {
     id: 'voice-dictation',
     priority: 'new',
@@ -29,6 +42,11 @@ export const FEATURE_TIPS = [
     action: 'enable-voice',
     ctaLabel: 'Set Up Voice'
   }
+] as const satisfies readonly FeatureTip[]
+
+export const FEATURE_TIPS = [
+  ...MANUAL_FEATURE_TIPS,
+  ...MARKETING_FEATURE_TIPS
 ] as const satisfies readonly FeatureTip[]
 
 export const FEATURE_TIP_IDS = FEATURE_TIPS.map((tip) => tip.id)
