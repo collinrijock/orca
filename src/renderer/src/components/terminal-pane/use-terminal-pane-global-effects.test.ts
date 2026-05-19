@@ -7,8 +7,10 @@ const mocks = vi.hoisted(() => ({
   fitAndFocusPanes: vi.fn(),
   fitPanes: vi.fn(),
   flushTerminalOutput: vi.fn(),
+  getTerminalOutputEpoch: vi.fn(() => 0),
   handleTerminalFileDrop: vi.fn(),
-  restoreScrollState: vi.fn()
+  restoreScrollState: vi.fn(),
+  restoreScrollStateAfterLayout: vi.fn()
 }))
 
 const reactRefState = vi.hoisted(() => ({
@@ -29,6 +31,7 @@ vi.mock('react', async (importOriginal) => {
   const actual = await importOriginal<typeof ReactModule>()
   return {
     ...actual,
+    useCallback: <T extends (...args: never[]) => unknown>(callback: T) => callback,
     useEffect: (effect: () => void | (() => void)) => {
       effect()
     },
@@ -54,7 +57,9 @@ vi.mock('@/lib/pane-manager/pane-terminal-output-scheduler', () => ({
 
 vi.mock('@/lib/pane-manager/pane-scroll', () => ({
   captureScrollState: mocks.captureScrollState,
-  restoreScrollState: mocks.restoreScrollState
+  getTerminalOutputEpoch: mocks.getTerminalOutputEpoch,
+  restoreScrollState: mocks.restoreScrollState,
+  restoreScrollStateAfterLayout: mocks.restoreScrollStateAfterLayout
 }))
 
 vi.mock('./terminal-drop-handler', () => ({
@@ -75,6 +80,7 @@ function useMountForFileDrop(
     cwd?: string
     isActive?: boolean
     isVisible?: boolean
+    paneCount?: number
   } = {}
 ): {
   onFileDrop: DropCallback
@@ -108,6 +114,7 @@ function useMountForFileDrop(
     cwd: options.cwd,
     isActive: options.isActive ?? true,
     isVisible: options.isVisible ?? true,
+    paneCount: options.paneCount ?? 0,
     managerRef: { current: manager as never },
     containerRef: { current: null },
     paneTransportsRef: { current: paneTransports },
@@ -162,7 +169,7 @@ describe('useTerminalPaneGlobalEffects', () => {
       order.push(`capture:${terminal.name}`)
       return { terminalName: terminal.name }
     })
-    mocks.restoreScrollState.mockImplementation((terminal: { name: string }) => {
+    mocks.restoreScrollStateAfterLayout.mockImplementation((terminal: { name: string }) => {
       order.push(`restore:${terminal.name}`)
     })
     mocks.fitAndFocusPanes.mockImplementation(() => order.push('fit-focus'))
@@ -175,6 +182,7 @@ describe('useTerminalPaneGlobalEffects', () => {
       worktreeId: 'wt-1',
       isActive: true,
       isVisible: true,
+      paneCount: 2,
       managerRef: { current: manager as never },
       containerRef: { current: null },
       paneTransportsRef: { current: new Map() },
@@ -250,7 +258,7 @@ describe('useTerminalPaneGlobalEffects', () => {
 
     expect(mocks.captureScrollState).toHaveBeenCalledTimes(2)
     expect(manager.suspendRendering).toHaveBeenCalledTimes(1)
-    expect(mocks.restoreScrollState).toHaveBeenLastCalledWith(terminalA, preHideState)
+    expect(mocks.restoreScrollStateAfterLayout).toHaveBeenLastCalledWith(terminalA, preHideState)
   })
 
   it('ignores terminal file drops for another terminal tab', () => {

@@ -182,7 +182,8 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
               worktreeId: args.worktreeId,
               leafId: paneTarget.leafId,
               ackPaneKeyOnSuccess: args.paneKey,
-              flashFocusedPane: true
+              flashFocusedPane: true,
+              scrollToBottomIfOutputSinceLastView: true
             })
           }
         })

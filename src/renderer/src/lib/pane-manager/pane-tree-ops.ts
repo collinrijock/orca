@@ -8,7 +8,7 @@ import type {
 import { createDivider } from './pane-divider'
 import { getFitOverrideForPty } from './mobile-fit-overrides'
 import { disposeWebgl, attachWebgl } from './pane-webgl-renderer'
-import { captureScrollState, restoreScrollState } from './pane-scroll'
+import { captureScrollState, restoreScrollStateAfterLayout } from './pane-scroll'
 
 export { captureScrollState, restoreScrollState } from './pane-scroll'
 
@@ -73,7 +73,7 @@ export function safeFit(pane: ManagedPane): void {
     // Container may not have dimensions yet
   } finally {
     if (shouldRestoreScroll && scrollState) {
-      restoreScrollState(pane.terminal, scrollState)
+      restoreScrollStateAfterLayout(pane.terminal, scrollState)
     }
   }
 }

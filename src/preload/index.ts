@@ -2460,6 +2460,7 @@ const api = {
         leafId?: string | null
         ackPaneKeyOnSuccess?: string
         flashFocusedPane?: boolean
+        scrollToBottomIfOutputSinceLastView?: boolean
       }) => void
     ): (() => void) => {
       const listener = (
@@ -2470,6 +2471,7 @@ const api = {
           leafId?: string | null
           ackPaneKeyOnSuccess?: string
           flashFocusedPane?: boolean
+          scrollToBottomIfOutputSinceLastView?: boolean
         }
       ) => callback(data)
       ipcRenderer.on('ui:focusTerminal', listener)

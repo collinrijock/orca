@@ -1,6 +1,12 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Terminal } from '@xterm/xterm'
-import { captureScrollState, restoreScrollState } from './pane-scroll'
+import {
+  captureScrollState,
+  getTerminalOutputEpoch,
+  recordTerminalOutput,
+  restoreScrollState,
+  restoreScrollStateAfterLayout
+} from './pane-scroll'
 import type { ScrollState } from './pane-manager-types'
 
 function createTerminal(args: {
@@ -28,6 +34,11 @@ function createTerminal(args: {
 }
 
 describe('scroll state', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+    vi.unstubAllGlobals()
+  })
+
   it('captures the numeric viewport position', () => {
     const terminal = createTerminal({ viewportY: 42, baseY: 100 })
 
@@ -37,6 +48,18 @@ describe('scroll state', () => {
       viewportY: 42,
       baseY: 100
     })
+  })
+
+  it('tracks output epochs per terminal', () => {
+    const terminalA = createTerminal({ viewportY: 0, baseY: 0 })
+    const terminalB = createTerminal({ viewportY: 0, baseY: 0 })
+
+    recordTerminalOutput(terminalA)
+    recordTerminalOutput(terminalA)
+    recordTerminalOutput(terminalB)
+
+    expect(getTerminalOutputEpoch(terminalA)).toBe(2)
+    expect(getTerminalOutputEpoch(terminalB)).toBe(1)
   })
 
   it('restores the captured viewport line', () => {
@@ -52,6 +75,66 @@ describe('scroll state', () => {
 
     expect(terminal.scrollToLine).toHaveBeenCalledWith(42)
     expect(terminal.buffer.active.viewportY).toBe(42)
+  })
+
+  it('reapplies a layout restore after xterm settles asynchronously', () => {
+    vi.useFakeTimers()
+    const rafCallbacks: FrameRequestCallback[] = []
+    vi.stubGlobal(
+      'requestAnimationFrame',
+      vi.fn((callback: FrameRequestCallback) => {
+        rafCallbacks.push(callback)
+        return rafCallbacks.length
+      })
+    )
+    vi.stubGlobal('cancelAnimationFrame', vi.fn())
+    const terminal = createTerminal({ viewportY: 10, baseY: 100 })
+    const state: ScrollState = {
+      bufferType: 'normal',
+      wasAtBottom: false,
+      viewportY: 42,
+      baseY: 100
+    }
+
+    restoreScrollStateAfterLayout(terminal, state)
+    const activeBuffer = terminal.buffer.active as { viewportY: number }
+    activeBuffer.viewportY = 0
+    rafCallbacks.shift()?.(0)
+    activeBuffer.viewportY = 0
+    vi.advanceTimersByTime(80)
+
+    expect(terminal.buffer.active.viewportY).toBe(42)
+    expect(terminal.scrollToLine).toHaveBeenCalledWith(42)
+  })
+
+  it('does not run stale animation-frame restores after the timeout restore completes', () => {
+    vi.useFakeTimers()
+    const rafCallbacks: FrameRequestCallback[] = []
+    vi.stubGlobal(
+      'requestAnimationFrame',
+      vi.fn((callback: FrameRequestCallback) => {
+        rafCallbacks.push(callback)
+        return rafCallbacks.length
+      })
+    )
+    vi.stubGlobal('cancelAnimationFrame', vi.fn())
+    const terminal = createTerminal({ viewportY: 10, baseY: 100 })
+    const state: ScrollState = {
+      bufferType: 'normal',
+      wasAtBottom: false,
+      viewportY: 42,
+      baseY: 100
+    }
+
+    restoreScrollStateAfterLayout(terminal, state)
+    vi.advanceTimersByTime(80)
+    expect(terminal.buffer.active.viewportY).toBe(42)
+
+    const activeBuffer = terminal.buffer.active as { viewportY: number }
+    activeBuffer.viewportY = 7
+    rafCallbacks.shift()?.(0)
+
+    expect(terminal.buffer.active.viewportY).toBe(7)
   })
 
   it('clamps the restored viewport line to the current buffer bottom', () => {

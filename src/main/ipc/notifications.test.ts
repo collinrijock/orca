@@ -251,7 +251,8 @@ describe('registerNotificationHandlers', () => {
       worktreeId: 'repo::wt1',
       leafId: '11111111-1111-4111-8111-111111111111',
       ackPaneKeyOnSuccess: paneKey,
-      flashFocusedPane: true
+      flashFocusedPane: true,
+      scrollToBottomIfOutputSinceLastView: true
     })
   })
 

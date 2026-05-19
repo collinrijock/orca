@@ -1708,6 +1708,7 @@ export type PreloadApi = {
         leafId?: string | null
         ackPaneKeyOnSuccess?: string
         flashFocusedPane?: boolean
+        scrollToBottomIfOutputSinceLastView?: boolean
       }) => void
     ) => () => void
     onFocusEditorTab: (

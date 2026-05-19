@@ -30,6 +30,8 @@ export type FocusTerminalPaneDetail = {
   ackPaneKeyOnSuccess?: string
   /** Briefly lights the resolved pane rim after focus for click-to-locate flows. */
   flashFocusedPane?: boolean
+  /** Follow live agent output when activation is explicitly about that agent. */
+  scrollToBottomIfOutputSinceLastView?: boolean
 }
 
 export type PasteTerminalTextDetail = {

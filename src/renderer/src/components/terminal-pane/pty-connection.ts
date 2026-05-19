@@ -29,6 +29,7 @@ import {
   waitForTerminalOutputParsed,
   writeTerminalOutput
 } from '@/lib/pane-manager/pane-terminal-output-scheduler'
+import { recordTerminalOutput } from '@/lib/pane-manager/pane-scroll'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { createTerminalCommandLifecycle } from './terminal-command-lifecycle'
 import { e2eConfig } from '@/lib/e2e-config'
@@ -1137,6 +1138,7 @@ export function connectPanePty(
       if (terminalOutputPrefersDomRenderer(data)) {
         manager.markPaneHasComplexScriptOutput(pane.id)
       }
+      recordTerminalOutput(pane.terminal)
       // Why: the active split pane owns keyboard latency. Visible inactive
       // panes still drain, but through the shared scheduler so a build log in
       // another split cannot monopolize xterm writes while the user types.

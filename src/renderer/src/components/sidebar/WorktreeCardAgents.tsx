@@ -108,7 +108,8 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
       if (tabs.some((t) => t.id === tabId)) {
         activateTabAndFocusPane(tabId, parsed.leafId, {
           ackPaneKeyOnSuccess: paneKey,
-          flashFocusedPane: true
+          flashFocusedPane: true,
+          scrollToBottomIfOutputSinceLastView: true
         })
       } else {
         dismissStaleAgentRowByKey(paneKey)

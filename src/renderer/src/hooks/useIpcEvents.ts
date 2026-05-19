@@ -987,7 +987,14 @@ export function useIpcEvents(): void {
 
     unsubs.push(
       window.api.ui.onFocusTerminal(
-        ({ tabId, worktreeId, leafId, ackPaneKeyOnSuccess, flashFocusedPane }) => {
+        ({
+          tabId,
+          worktreeId,
+          leafId,
+          ackPaneKeyOnSuccess,
+          flashFocusedPane,
+          scrollToBottomIfOutputSinceLastView
+        }) => {
           const store = useAppStore.getState()
           store.setActiveWorktree(worktreeId)
           // Why: CLI-driven focus is a user-initiated switch; stamp focus
@@ -996,10 +1003,13 @@ export function useIpcEvents(): void {
           store.setActiveView('terminal')
           store.setActiveTab(tabId)
           store.revealWorktreeInSidebar(worktreeId)
-          if (ackPaneKeyOnSuccess || flashFocusedPane) {
+          if (ackPaneKeyOnSuccess || flashFocusedPane || scrollToBottomIfOutputSinceLastView) {
             activateTabAndFocusPane(tabId, leafId ?? null, {
               ...(ackPaneKeyOnSuccess ? { ackPaneKeyOnSuccess } : {}),
-              ...(flashFocusedPane ? { flashFocusedPane: true } : {})
+              ...(flashFocusedPane ? { flashFocusedPane: true } : {}),
+              ...(scrollToBottomIfOutputSinceLastView
+                ? { scrollToBottomIfOutputSinceLastView: true }
+                : {})
             })
             return
           }
