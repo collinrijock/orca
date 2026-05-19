@@ -51,7 +51,7 @@ type ManagedPty = {
   paneKey?: string
   tabId?: string
   worktreeId?: string
-  unacknowledgedChars?: number
+  unacknowledgedCharsByClient?: Map<number, number>
   flowPaused?: boolean
 }
 
@@ -146,7 +146,8 @@ export class PtyHandler {
   constructor(dispatcher: RelayDispatcher, graceTimeMs = DEFAULT_GRACE_TIME_MS) {
     this.dispatcher = dispatcher
     this.graceTimeMs = graceTimeMs
-    this.dispatcher.onClientDetached(() => {
+    this.dispatcher.onClientDetached((clientId) => {
+      this.clearFlowControlForDetachedClient(clientId)
       if (!this.dispatcher.hasOpenClient()) {
         this.clearFlowControlForDetachedClients()
       }
@@ -204,14 +205,12 @@ export class PtyHandler {
   private wireAndStore(managed: ManagedPty): void {
     this.ptys.set(managed.id, managed)
     managed.pty.onData((data: string) => {
-      if (this.dispatcher.hasOpenClient()) {
-        this.observeUnacknowledgedData(managed, data.length)
-      }
       managed.buffered += data
       if (managed.buffered.length > REPLAY_BUFFER_MAX) {
         managed.buffered = managed.buffered.slice(-REPLAY_BUFFER_MAX)
       }
-      this.dispatcher.notify('pty.data', { id: managed.id, data })
+      const deliveredClientIds = this.dispatcher.notify('pty.data', { id: managed.id, data })
+      this.observeUnacknowledgedData(managed, data.length, deliveredClientIds)
     })
     managed.pty.onExit(({ exitCode }: { exitCode: number }) => {
       if (managed.disposed) {
@@ -282,7 +281,7 @@ export class PtyHandler {
 
     this.dispatcher.onNotification('pty.data', (p) => this.writeData(p))
     this.dispatcher.onNotification('pty.resize', (p) => this.resize(p))
-    this.dispatcher.onNotification('pty.ackData', (p) => this.ackData(p))
+    this.dispatcher.onNotification('pty.ackData', (p, context) => this.ackData(p, context))
   }
 
   private async spawn(
@@ -404,12 +403,22 @@ export class PtyHandler {
     }
   }
 
-  private observeUnacknowledgedData(managed: ManagedPty, charCount: number): void {
-    if (charCount <= 0 || managed.disposed) {
+  private observeUnacknowledgedData(
+    managed: ManagedPty,
+    charCount: number,
+    clientIds: number[]
+  ): void {
+    if (charCount <= 0 || clientIds.length === 0 || managed.disposed) {
       return
     }
-    managed.unacknowledgedChars = (managed.unacknowledgedChars ?? 0) + charCount
-    if (!managed.flowPaused && managed.unacknowledgedChars > FLOW_CONTROL_HIGH_WATERMARK_CHARS) {
+    const byClient = this.getFlowState(managed)
+    for (const clientId of clientIds) {
+      byClient.set(clientId, (byClient.get(clientId) ?? 0) + charCount)
+    }
+    if (
+      !managed.flowPaused &&
+      this.totalUnacknowledgedChars(managed) > FLOW_CONTROL_HIGH_WATERMARK_CHARS
+    ) {
       // Why: renderer ACKs arrive after xterm parses output. Pausing remote
       // node-pty prevents one SSH PTY from filling the relay/socket queues.
       managed.pty.pause()
@@ -417,30 +426,69 @@ export class PtyHandler {
     }
   }
 
-  private ackData(params: Record<string, unknown>): void {
+  private ackData(params: Record<string, unknown>, context?: RequestContext): void {
     const id = params.id as string
     const managed = this.ptys.get(id)
-    if (!managed || managed.disposed) {
+    if (!managed || managed.disposed || !context) {
       return
     }
     const charCount = Math.max(0, Math.floor(Number(params.charCount) || 0))
-    this.ackManagedData(managed, charCount)
+    this.ackManagedData(managed, context.clientId, charCount)
   }
 
-  private ackManagedData(managed: ManagedPty, charCount: number): void {
+  private ackManagedData(managed: ManagedPty, clientId: number, charCount: number): void {
     if (charCount <= 0) {
       return
     }
-    managed.unacknowledgedChars = Math.max(0, (managed.unacknowledgedChars ?? 0) - charCount)
-    if (managed.flowPaused && managed.unacknowledgedChars < FLOW_CONTROL_LOW_WATERMARK_CHARS) {
+    const byClient = managed.unacknowledgedCharsByClient
+    if (!byClient) {
+      return
+    }
+    const next = Math.max(0, (byClient.get(clientId) ?? 0) - charCount)
+    if (next === 0) {
+      byClient.delete(clientId)
+    } else {
+      byClient.set(clientId, next)
+    }
+    if (
+      managed.flowPaused &&
+      this.totalUnacknowledgedChars(managed) < FLOW_CONTROL_LOW_WATERMARK_CHARS
+    ) {
       managed.pty.resume()
       managed.flowPaused = false
     }
   }
 
+  private getFlowState(managed: ManagedPty): Map<number, number> {
+    managed.unacknowledgedCharsByClient ??= new Map()
+    return managed.unacknowledgedCharsByClient
+  }
+
+  private totalUnacknowledgedChars(managed: ManagedPty): number {
+    let total = 0
+    for (const count of managed.unacknowledgedCharsByClient?.values() ?? []) {
+      total += count
+    }
+    return total
+  }
+
+  private clearFlowControlForDetachedClient(clientId: number): void {
+    for (const managed of this.ptys.values()) {
+      managed.unacknowledgedCharsByClient?.delete(clientId)
+      if (
+        managed.flowPaused &&
+        !managed.disposed &&
+        this.totalUnacknowledgedChars(managed) < FLOW_CONTROL_LOW_WATERMARK_CHARS
+      ) {
+        managed.pty.resume()
+        managed.flowPaused = false
+      }
+    }
+  }
+
   private clearFlowControlForDetachedClients(): void {
     for (const managed of this.ptys.values()) {
-      managed.unacknowledgedChars = 0
+      managed.unacknowledgedCharsByClient?.clear()
       if (managed.flowPaused && !managed.disposed) {
         managed.pty.resume()
         managed.flowPaused = false

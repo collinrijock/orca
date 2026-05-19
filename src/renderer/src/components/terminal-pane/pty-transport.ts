@@ -60,6 +60,7 @@ type ProcessPtyOutputOptions = {
   replayingBufferedData?: boolean
   suppressAttentionEvents?: boolean
   onParsed?: (charCount: number) => void
+  sourceCharCount?: number
 }
 
 export function createPtyOutputProcessor({
@@ -127,7 +128,7 @@ export function createPtyOutputProcessor({
     callbacks: PtyOutputCallbacks,
     options: ProcessPtyOutputOptions = {}
   ): void {
-    const sourceCharCount = data.length
+    const sourceCharCount = options.sourceCharCount ?? data.length
     const suppressAttentionEvents = options.suppressAttentionEvents === true
     // Why: OSC 9999 is a renderer-only control protocol. Parse it before
     // xterm sees the bytes, and keep parser state across chunks so partial
@@ -280,10 +281,11 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
         storedCallbacks.onData?.(data, 0)
       }
     })
-    ptyDataHandlers.set(id, (data) => {
+    ptyDataHandlers.set(id, (data, sourceCharCount) => {
       outputProcessor.processData(data, storedCallbacks, {
         replayingBufferedData,
-        suppressAttentionEvents
+        suppressAttentionEvents,
+        sourceCharCount
       })
     })
   }

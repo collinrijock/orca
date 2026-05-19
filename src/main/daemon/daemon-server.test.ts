@@ -13,23 +13,39 @@ function createTestDir(): string {
   return mkdtempSync(join(tmpdir(), 'daemon-server-test-'))
 }
 
-function createMockSubprocess(): SubprocessHandle {
+type MockSubprocess = Omit<SubprocessHandle, 'pause' | 'resume'> & {
+  pause: ReturnType<typeof vi.fn<() => void>>
+  resume: ReturnType<typeof vi.fn<() => void>>
+  simulateData(data: string): void
+}
+
+let spawnedSubprocesses: MockSubprocess[] = []
+
+function createMockSubprocess(): MockSubprocess {
+  let onDataCb: ((data: string) => void) | null = null
   let onExitCb: ((code: number) => void) | null = null
-  return {
+  const subprocess: MockSubprocess = {
     pid: 55555,
     write: vi.fn(),
     resize: vi.fn(),
+    pause: vi.fn<() => void>(),
+    resume: vi.fn<() => void>(),
     kill: vi.fn(() => setTimeout(() => onExitCb?.(0), 5)),
     forceKill: vi.fn(),
     signal: vi.fn(),
-    onData(_cb) {
-      /* stored for future tests */
+    onData(cb) {
+      onDataCb = cb
     },
     onExit(cb) {
       onExitCb = cb
     },
-    dispose: vi.fn()
+    dispose: vi.fn(),
+    simulateData(data: string) {
+      onDataCb?.(data)
+    }
   }
+  spawnedSubprocesses.push(subprocess)
+  return subprocess
 }
 
 describe('DaemonServer', () => {
@@ -43,6 +59,7 @@ describe('DaemonServer', () => {
     dir = createTestDir()
     socketPath = join(dir, 'test.sock')
     tokenPath = join(dir, 'test.token')
+    spawnedSubprocesses = []
   })
 
   afterEach(async () => {
@@ -129,6 +146,26 @@ describe('DaemonServer', () => {
         isNew: true,
         pid: 55555
       })
+    })
+
+    it('detaches sessions and clears flow control when a client disconnects', async () => {
+      await startServer()
+      const c = await connectClient()
+
+      await c.request('createOrAttach', {
+        sessionId: 'test-session',
+        cols: 80,
+        rows: 24
+      })
+
+      const subprocess = spawnedSubprocesses[0]
+      subprocess.simulateData('x'.repeat(100_001))
+      expect(subprocess.pause).toHaveBeenCalledTimes(1)
+
+      c.disconnect()
+      await new Promise((resolve) => setTimeout(resolve, 20))
+
+      expect(subprocess.resume).toHaveBeenCalledTimes(1)
     })
 
     it('handles listSessions', async () => {

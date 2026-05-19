@@ -260,6 +260,31 @@ describe('RelayDispatcher', () => {
     expect(written.length).toBe(before)
   })
 
+  it('does not report notifications as delivered to an invalidated primary client', () => {
+    dispatcher.invalidateClient()
+    const before = written.length
+
+    const deliveredClientIds = dispatcher.notify('pty.data', { id: 'pty-1', data: 'x' })
+
+    expect(deliveredClientIds).toEqual([])
+    expect(written).toHaveLength(before)
+  })
+
+  it('detaches the primary client when its write callback throws', () => {
+    const failingDispatcher = new RelayDispatcher(() => {
+      throw new Error('stdout closed')
+    })
+    const listener = vi.fn()
+    failingDispatcher.onClientDetached(listener)
+
+    const deliveredClientIds = failingDispatcher.notify('pty.data', { id: 'pty-1', data: 'x' })
+
+    expect(deliveredClientIds).toEqual([])
+    expect(listener).toHaveBeenCalledWith(1)
+    expect(failingDispatcher.hasOpenClient()).toBe(false)
+    failingDispatcher.dispose()
+  })
+
   it('drops in-flight responses after client invalidation', async () => {
     let resolveHandler!: () => void
     const handler = vi.fn(
@@ -317,5 +342,15 @@ describe('RelayDispatcher', () => {
     dispatcher.invalidateClient()
 
     expect(listener).toHaveBeenCalledWith(1)
+  })
+
+  it('notifies primary detach listeners only once across repeated invalidations', () => {
+    const listener = vi.fn()
+    dispatcher.onClientDetached(listener)
+
+    dispatcher.invalidateClient()
+    dispatcher.invalidateClient()
+
+    expect(listener).toHaveBeenCalledTimes(1)
   })
 })

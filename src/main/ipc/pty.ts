@@ -650,14 +650,36 @@ export function registerPtyHandlers(
   const PTY_IPC_CHUNK_CHARS = 64 * 1024
   const PTY_MAX_IPC_CHUNKS_PER_FLUSH = 8
 
-  const sendPtyData = (id: string, data: string): void => {
-    mainWindow.webContents.send('pty:data', { id, data })
+  const acknowledgeDroppedPtyData = (id: string, charCount: number): void => {
+    if (charCount <= 0) {
+      return
+    }
+    tryGetProviderForPty(id)?.acknowledgeDataEvent(id, charCount)
+  }
+
+  const acknowledgePendingPtyData = (): void => {
+    for (const [id, data] of pendingData) {
+      acknowledgeDroppedPtyData(id, data.length)
+    }
+    pendingData.clear()
+  }
+
+  const sendPtyData = (id: string, data: string): boolean => {
+    try {
+      mainWindow.webContents.send('pty:data', { id, data })
+      return true
+    } catch {
+      // Why: the provider already counted these bytes for flow control. If
+      // Electron rejects delivery during teardown, no renderer can parse/ACK them.
+      acknowledgeDroppedPtyData(id, data.length)
+      return false
+    }
   }
 
   const flushPendingData = (): void => {
     flushTimer = null
     if (mainWindow.isDestroyed()) {
-      pendingData.clear()
+      acknowledgePendingPtyData()
       return
     }
 
@@ -672,11 +694,15 @@ export function registerPtyHandlers(
       if (data.length <= PTY_IPC_CHUNK_CHARS) {
         sendPtyData(id, data)
       } else {
-        sendPtyData(id, data.slice(0, PTY_IPC_CHUNK_CHARS))
+        const chunk = data.slice(0, PTY_IPC_CHUNK_CHARS)
         // Why: a single noisy PTY can otherwise serialize megabytes of IPC in
         // one main-process turn. Requeue the remainder behind other PTYs so
         // active terminal redraws and control IPC keep getting turns.
-        pendingData.set(id, data.slice(PTY_IPC_CHUNK_CHARS))
+        if (sendPtyData(id, chunk)) {
+          pendingData.set(id, data.slice(PTY_IPC_CHUNK_CHARS))
+        } else {
+          acknowledgeDroppedPtyData(id, data.length - chunk.length)
+        }
       }
       sentChunks++
     }
@@ -722,7 +748,8 @@ export function registerPtyHandlers(
           clearTimeout(flushTimer)
           flushTimer = null
         }
-        pendingData.clear()
+        acknowledgePendingPtyData()
+        acknowledgeDroppedPtyData(payload.id, payload.data.length)
         return
       }
       const existing = pendingData.get(payload.id)
@@ -763,6 +790,12 @@ export function registerPtyHandlers(
         }
         lastInputAtByPty.delete(payload.id)
         mainWindow.webContents.send('pty:exit', payload)
+      } else {
+        if (flushTimer) {
+          clearTimeout(flushTimer)
+          flushTimer = null
+        }
+        acknowledgePendingPtyData()
       }
     })
   }

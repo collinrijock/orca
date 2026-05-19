@@ -1,3 +1,5 @@
+/* oxlint-disable max-lines -- Why: daemon socket routing, client/session
+ownership, and stream cleanup share lifecycle state and must stay auditable. */
 import { createServer, type Server, type Socket } from 'net'
 import { randomUUID } from 'crypto'
 import { writeFileSync, chmodSync, unlinkSync } from 'fs'
@@ -31,6 +33,7 @@ type ConnectedClient = {
   clientId: string
   controlSocket: Socket
   streamSocket: Socket | null
+  attachTokens: Map<string, symbol>
 }
 
 export class DaemonServer {
@@ -143,7 +146,8 @@ export class DaemonServer {
       const client: ConnectedClient = {
         clientId: hello.clientId,
         controlSocket: socket,
-        streamSocket: null
+        streamSocket: null,
+        attachTokens: new Map()
       }
       this.clients.set(hello.clientId, client)
       this.setupControlSocket(socket, hello.clientId)
@@ -229,6 +233,11 @@ export class DaemonServer {
             }
           }
         })
+        const existingToken = client?.attachTokens.get(p.sessionId)
+        if (existingToken) {
+          this.host.detach(p.sessionId, existingToken)
+        }
+        client?.attachTokens.set(p.sessionId, result.attachToken)
         return {
           isNew: result.isNew,
           snapshot: result.snapshot,
@@ -278,8 +287,13 @@ export class DaemonServer {
         return {}
 
       case 'detach':
-        // Note: detach token handling is simplified here — full implementation
-        // would track tokens per client
+        {
+          const token = client?.attachTokens.get(request.payload.sessionId)
+          if (token) {
+            this.host.detach(request.payload.sessionId, token)
+            client?.attachTokens.delete(request.payload.sessionId)
+          }
+        }
         return {}
 
       case 'getCwd':
@@ -331,6 +345,12 @@ export class DaemonServer {
     }
     this.streamDataBatcher.clear(clientId)
     this.clients.delete(clientId)
+    if (client) {
+      for (const [sessionId, token] of client.attachTokens) {
+        this.host.detach(sessionId, token)
+      }
+      client.attachTokens.clear()
+    }
     client?.streamSocket?.destroy()
     client?.controlSocket.destroy()
   }

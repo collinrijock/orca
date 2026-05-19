@@ -69,7 +69,7 @@ type StoreState = {
 }
 
 type ConnectCallbacks = {
-  onData?: (data: string) => void
+  onData?: (data: string, sourceCharCount?: number) => void
   onError?: (msg: string) => void
 }
 
@@ -992,6 +992,115 @@ describe('connectPanePty', () => {
     } finally {
       globalThis.setTimeout = originalSetTimeout
     }
+  })
+
+  it('acknowledges active pane PTY bytes after xterm write callback', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport()
+    const capturedDataCallback: {
+      current: ((data: string, sourceCharCount?: number) => void) | null
+    } = {
+      current: null
+    }
+    transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+      capturedDataCallback.current = callbacks.onData ?? null
+      return 'pty-id'
+    })
+    transportFactoryQueue.push(transport)
+
+    const pane = createPane(1)
+    const manager = createManager(1)
+    const deps = createDeps()
+
+    connectPanePty(pane as never, manager as never, deps as never)
+    await flushAsyncTicks(6)
+
+    capturedDataCallback.current?.('hello')
+
+    expect(transport.acknowledgeDataEvent).toHaveBeenCalledWith('hello'.length)
+  })
+
+  it('acknowledges stripped control bytes separately from parsed terminal bytes', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport()
+    const capturedDataCallback: {
+      current: ((data: string, sourceCharCount?: number) => void) | null
+    } = {
+      current: null
+    }
+    transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+      capturedDataCallback.current = callbacks.onData ?? null
+      return 'pty-id'
+    })
+    transportFactoryQueue.push(transport)
+
+    const pane = createPane(1)
+    const manager = createManager(1)
+    const deps = createDeps()
+
+    connectPanePty(pane as never, manager as never, deps as never)
+    await flushAsyncTicks(6)
+
+    capturedDataCallback.current?.('hello', 10)
+
+    expect(transport.acknowledgeDataEvent.mock.calls).toEqual([[5], [5]])
+  })
+
+  it('renders synthetic PTY data without acknowledging provider-owned bytes', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport()
+    const capturedDataCallback: {
+      current: ((data: string, sourceCharCount?: number) => void) | null
+    } = {
+      current: null
+    }
+    transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+      capturedDataCallback.current = callbacks.onData ?? null
+      return 'pty-id'
+    })
+    transportFactoryQueue.push(transport)
+
+    const pane = createPane(1)
+    const manager = createManager(1)
+    const deps = createDeps()
+
+    connectPanePty(pane as never, manager as never, deps as never)
+    await flushAsyncTicks(6)
+
+    capturedDataCallback.current?.('\x1b]0;⠋ Cursor Agent\x07', 0)
+
+    expect(pane.terminal.write).toHaveBeenCalledWith(
+      '\x1b]0;⠋ Cursor Agent\x07',
+      expect.any(Function)
+    )
+    expect(transport.acknowledgeDataEvent).not.toHaveBeenCalled()
+  })
+
+  it('acknowledges source bytes immediately when control parsing removes all terminal data', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport()
+    const capturedDataCallback: {
+      current: ((data: string, sourceCharCount?: number) => void) | null
+    } = {
+      current: null
+    }
+    transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+      capturedDataCallback.current = callbacks.onData ?? null
+      return 'pty-id'
+    })
+    transportFactoryQueue.push(transport)
+
+    const pane = createPane(1)
+    const manager = createManager(1)
+    const deps = createDeps()
+
+    connectPanePty(pane as never, manager as never, deps as never)
+    await flushAsyncTicks(6)
+
+    capturedDataCallback.current?.('', 10)
+
+    expect(transport.acknowledgeDataEvent).toHaveBeenCalledWith(10)
+    expect(pane.terminal.write).not.toHaveBeenCalledWith('', expect.any(Function))
   })
 
   it('queues visible inactive split-pane PTY bytes so active pane input stays responsive', async () => {

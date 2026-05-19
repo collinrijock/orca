@@ -740,8 +740,18 @@ export class SshRelaySession {
       this.runtime?.onPtyData(payload.id, payload.data, Date.now())
       const win = getWin()
       if (win && !win.isDestroyed()) {
-        win.webContents.send('pty:data', payload)
+        try {
+          win.webContents.send('pty:data', payload)
+          return
+        } catch {
+          // Fall through and ACK below; the renderer cannot parse bytes that
+          // Electron rejected during window teardown.
+        }
       }
+      // Why: the SSH relay already counted these bytes as delivered to this
+      // client. If no renderer can receive them, ACK the intentional drop so
+      // remote PTY flow control cannot remain paused forever.
+      ptyProvider.acknowledgeDataEvent(payload.id, payload.data.length)
     })
     ptyProvider.onReplay((payload) => {
       const win = getWin()

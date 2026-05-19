@@ -76,10 +76,13 @@ export class RelayDispatcher {
   // disconnects even if no replacement has connected yet. Otherwise a late
   // pty.spawn/fs.watch completion can create remote state nobody can own.
   invalidateClient(): void {
+    const wasClosed = this.primaryClient.closed
     this.requestAborts.abortClient(this.primaryClient.id)
     this.primaryClient.generation++
     this.primaryClient.closed = true
-    this.notifyClientDetached(this.primaryClient.id)
+    if (!wasClosed) {
+      this.notifyClientDetached(this.primaryClient.id)
+    }
   }
 
   // Why: synced remote workspaces can have more than one Orca client attached
@@ -150,18 +153,22 @@ export class RelayDispatcher {
     }
   }
 
-  notify(method: string, params?: Record<string, unknown>): void {
+  notify(method: string, params?: Record<string, unknown>): number[] {
     if (this.disposed) {
-      return
+      return []
     }
     const msg: JsonRpcNotification = {
       jsonrpc: '2.0',
       method,
       ...(params !== undefined ? { params } : {})
     }
+    const deliveredClientIds: number[] = []
     for (const client of this.clients.values()) {
-      this.sendFrame(client, msg)
+      if (this.sendFrame(client, msg)) {
+        deliveredClientIds.push(client.id)
+      }
     }
+    return deliveredClientIds
   }
 
   dispose(): void {
@@ -305,13 +312,13 @@ export class RelayDispatcher {
   private sendFrame(
     client: RelayClient,
     msg: JsonRpcRequest | JsonRpcResponse | JsonRpcNotification
-  ): void {
+  ): boolean {
     if (this.disposed || client.closed) {
-      return
+      return false
     }
     const seq = client.nextOutgoingSeq++
     const frame = encodeJsonRpcFrame(msg, seq, client.highestReceivedSeq)
-    this.writeFrame(client, frame)
+    return this.writeFrame(client, frame)
   }
 
   private startKeepalive(): void {
@@ -334,19 +341,21 @@ export class RelayDispatcher {
     this.keepaliveTimer.unref()
   }
 
-  private writeFrame(client: RelayClient, frame: Buffer): void {
+  private writeFrame(client: RelayClient, frame: Buffer): boolean {
     try {
       client.write(frame)
+      return true
     } catch (err) {
       client.closed = true
       client.generation++
       if (client !== this.primaryClient) {
         this.clients.delete(client.id)
-        this.notifyClientDetached(client.id)
       }
+      this.notifyClientDetached(client.id)
       process.stderr.write(
         `[relay] Client write failed: ${err instanceof Error ? err.message : String(err)}\n`
       )
+      return false
     }
   }
 

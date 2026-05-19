@@ -13,7 +13,9 @@ import type { EventProps } from '../../../../shared/telemetry-events'
 // PTY ID. Eliminates the N-listener problem that triggers
 // MaxListenersExceededWarning with many panes/tabs.
 
-export const ptyDataHandlers = new Map<string, (data: string) => void>()
+export type PtyDataPayload = { id: string; data: string; synthetic?: boolean }
+
+export const ptyDataHandlers = new Map<string, (data: string, sourceCharCount?: number) => void>()
 /** Sidecar subscriptions that observe PTY data without owning the primary
  *  handler. Used by features that need to react to the live byte stream
  *  (e.g. agent-paste-draft watching for DECSET 2004 / bracketed-paste-
@@ -81,7 +83,15 @@ export function ensurePtyDispatcher(): void {
   }
   ptyDispatcherAttached = true
   window.api.pty.onData((payload) => {
-    ptyDataHandlers.get(payload.id)?.(payload.data)
+    const sourceCharCount = payload.synthetic ? 0 : payload.data.length
+    const primaryHandler = ptyDataHandlers.get(payload.id)
+    if (primaryHandler) {
+      primaryHandler(payload.data, sourceCharCount)
+    } else if (payload.data.length > 0 && !payload.synthetic) {
+      // Why: detach/remount gaps intentionally have no xterm consumer. ACK
+      // dropped bytes so upstream PTYs cannot remain paused waiting on parsing.
+      window.api.pty.ackData(payload.id, payload.data.length)
+    }
     const sidecars = ptyDataSidecars.get(payload.id)
     if (sidecars && sidecars.size > 0) {
       // Why: snapshot the Set before iterating because watchers commonly

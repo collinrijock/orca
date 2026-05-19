@@ -883,21 +883,22 @@ export function connectPanePty(
       if (terminalOutputPrefersDomRenderer(data)) {
         manager.markPaneHasComplexScriptOutput(pane.id)
       }
+      const strippedCharCount = Math.max(0, sourceCharCount - data.length)
+      if (strippedCharCount > 0) {
+        transport.acknowledgeDataEvent(strippedCharCount)
+      }
+      let remainingParsedAckChars = Math.min(data.length, sourceCharCount)
       // Why: the active split pane owns keyboard latency. Visible inactive
       // panes still drain, but through the shared scheduler so a build log in
       // another split cannot monopolize xterm writes while the user types.
       const activePaneId = manager.getActivePane()?.id ?? pane.id
-      let ackedSourceChunk = false
       writeTerminalOutput(pane.terminal, data, {
         foreground: deps.isVisibleRef.current && activePaneId === pane.id,
         onParsed: (charCount) => {
-          if (sourceCharCount === data.length) {
-            transport.acknowledgeDataEvent(charCount)
-            return
-          }
-          if (!ackedSourceChunk) {
-            ackedSourceChunk = true
-            transport.acknowledgeDataEvent(sourceCharCount)
+          const ackChars = Math.min(charCount, remainingParsedAckChars)
+          remainingParsedAckChars -= ackChars
+          if (ackChars > 0) {
+            transport.acknowledgeDataEvent(ackChars)
           }
         }
       })

@@ -32,10 +32,17 @@ function createMockDispatcher() {
     string,
     (params: Record<string, unknown>, context?: { isStale: () => boolean }) => Promise<unknown>
   >()
-  const notificationHandlers = new Map<string, (params: Record<string, unknown>) => void>()
+  const notificationHandlers = new Map<
+    string,
+    (
+      params: Record<string, unknown>,
+      context?: { clientId: number; isStale: () => boolean }
+    ) => void
+  >()
   const notifications: { method: string; params?: Record<string, unknown> }[] = []
   const clientDetachListeners = new Set<(clientId: number) => void>()
   let hasOpenClient = true
+  let deliveredClientIds = [1]
 
   const dispatcher = {
     onRequest: vi.fn(
@@ -54,6 +61,7 @@ function createMockDispatcher() {
     }),
     notify: vi.fn((method: string, params?: Record<string, unknown>) => {
       notifications.push({ method, params })
+      return hasOpenClient ? deliveredClientIds : []
     }),
     onClientDetached: vi.fn((listener: (clientId: number) => void) => {
       clientDetachListeners.add(listener)
@@ -66,6 +74,9 @@ function createMockDispatcher() {
     _notifications: notifications,
     _setHasOpenClient(value: boolean) {
       hasOpenClient = value
+    },
+    _setDeliveredClientIds(clientIds: number[]) {
+      deliveredClientIds = clientIds
     },
     _detachClient(clientId = 1) {
       for (const listener of clientDetachListeners) {
@@ -83,12 +94,12 @@ function createMockDispatcher() {
       }
       return handler(params, context)
     },
-    callNotification(method: string, params: Record<string, unknown> = {}) {
+    callNotification(method: string, params: Record<string, unknown> = {}, clientId = 1) {
       const handler = notificationHandlers.get(method)
       if (!handler) {
         throw new Error(`No handler for ${method}`)
       }
-      handler(params)
+      handler(params, { clientId, isStale: () => false })
     }
   }
 
@@ -354,6 +365,60 @@ describe('PtyHandler', () => {
 
     dispatcher._setHasOpenClient(false)
     dispatcher._detachClient()
+
+    expect(mockResume).toHaveBeenCalledTimes(1)
+  })
+
+  it('tracks acknowledgements per relay client before resuming output', async () => {
+    let dataCallback: ((data: string) => void) | undefined
+    const mockPause = vi.fn()
+    const mockResume = vi.fn()
+    mockPtySpawn.mockReturnValue({
+      ...mockPtyInstance,
+      pause: mockPause,
+      resume: mockResume,
+      onData: vi.fn((cb: (data: string) => void) => {
+        dataCallback = cb
+      }),
+      onExit: vi.fn()
+    })
+
+    dispatcher._setDeliveredClientIds([1, 2])
+    await dispatcher.callRequest('pty.spawn', {})
+    dataCallback!('x'.repeat(60_000))
+
+    expect(mockPause).toHaveBeenCalledTimes(1)
+
+    dispatcher.callNotification('pty.ackData', { id: 'pty-1', charCount: 60_000 }, 1)
+    expect(mockResume).not.toHaveBeenCalled()
+
+    dispatcher.callNotification('pty.ackData', { id: 'pty-1', charCount: 56_000 }, 2)
+    expect(mockResume).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not let a detached relay client block another client from resuming output', async () => {
+    let dataCallback: ((data: string) => void) | undefined
+    const mockPause = vi.fn()
+    const mockResume = vi.fn()
+    mockPtySpawn.mockReturnValue({
+      ...mockPtyInstance,
+      pause: mockPause,
+      resume: mockResume,
+      onData: vi.fn((cb: (data: string) => void) => {
+        dataCallback = cb
+      }),
+      onExit: vi.fn()
+    })
+
+    dispatcher._setDeliveredClientIds([1, 2])
+    await dispatcher.callRequest('pty.spawn', {})
+    dataCallback!('x'.repeat(60_000))
+    dataCallback!('y'.repeat(45_000))
+
+    expect(mockPause).toHaveBeenCalledTimes(1)
+
+    dispatcher._detachClient(1)
+    dispatcher.callNotification('pty.ackData', { id: 'pty-1', charCount: 101_000 }, 2)
 
     expect(mockResume).toHaveBeenCalledTimes(1)
   })

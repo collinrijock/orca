@@ -190,10 +190,14 @@ export class Session {
     if (idx !== -1) {
       this.attachedClients.splice(idx, 1)
     }
+    if (this.attachedClients.length === 0) {
+      this.clearFlowControlState()
+    }
   }
 
   detachAllClients(): void {
     this.attachedClients.length = 0
+    this.clearFlowControlState()
   }
 
   getSnapshot(): TerminalSnapshot | null {
@@ -357,6 +361,19 @@ export class Session {
       this.subprocess.pause()
       this.subprocessPaused = true
     }
+  }
+
+  private clearFlowControlState(): void {
+    this.unacknowledgedChars = 0
+    if (
+      this.subprocessPaused &&
+      !this._disposed &&
+      this._state !== 'exited' &&
+      this.subprocess.resume
+    ) {
+      this.subprocess.resume()
+    }
+    this.subprocessPaused = false
   }
 
   private handleSubprocessExit(code: number): void {

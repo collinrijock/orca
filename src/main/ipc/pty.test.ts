@@ -326,6 +326,51 @@ describe('registerPtyHandlers', () => {
     }
   }
 
+  function createForwardingProvider() {
+    let dataHandler: ((payload: { id: string; data: string }) => void) | null = null
+    let exitHandler: ((payload: { id: string; code: number }) => void) | null = null
+    const provider = {
+      spawn: vi.fn(async (options: { sessionId?: string }) => ({
+        id: options.sessionId ?? 'forwarded-pty',
+        pid: 123
+      })),
+      attach: vi.fn(async () => undefined),
+      write: vi.fn(),
+      resize: vi.fn(),
+      shutdown: vi.fn(async () => undefined),
+      sendSignal: vi.fn(async () => undefined),
+      getCwd: vi.fn(async () => ''),
+      getInitialCwd: vi.fn(async () => ''),
+      clearBuffer: vi.fn(async () => undefined),
+      acknowledgeDataEvent: vi.fn(),
+      hasChildProcesses: vi.fn(async () => false),
+      getForegroundProcess: vi.fn(async () => null),
+      serialize: vi.fn(async () => ''),
+      revive: vi.fn(async () => undefined),
+      listProcesses: vi.fn(async () => []),
+      getDefaultShell: vi.fn(async () => 'zsh'),
+      getProfiles: vi.fn(async () => []),
+      onData: vi.fn((handler: (payload: { id: string; data: string }) => void) => {
+        dataHandler = handler
+        return vi.fn()
+      }),
+      onReplay: vi.fn(() => vi.fn()),
+      onExit: vi.fn((handler: (payload: { id: string; code: number }) => void) => {
+        exitHandler = handler
+        return vi.fn()
+      })
+    }
+    return {
+      provider,
+      emitData(payload: { id: string; data: string }) {
+        dataHandler?.(payload)
+      },
+      emitExit(payload: { id: string; code: number }) {
+        exitHandler?.(payload)
+      }
+    }
+  }
+
   function getPtyWriteListener(): (event: unknown, args: { id: string; data: string }) => void {
     const writeCall = onMock.mock.calls.find((call: unknown[]) => call[0] === 'pty:write')
     if (!writeCall) {
@@ -2464,6 +2509,155 @@ describe('registerPtyHandlers', () => {
         id: spawnResult.id,
         data: 'x'.repeat(64 * 1024)
       })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('acks batched PTY output dropped because the window was destroyed before flush', async () => {
+    vi.useFakeTimers()
+    const { provider, emitData } = createForwardingProvider()
+    const isDestroyedSpy = vi.spyOn(mainWindow, 'isDestroyed')
+    setLocalPtyProvider(provider as never)
+
+    try {
+      registerPtyHandlers(mainWindow as never)
+      const spawnResult = (await handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24,
+        cwd: '/tmp'
+      })) as { id: string }
+      mainWindow.webContents.send.mockClear()
+
+      emitData({ id: spawnResult.id, data: 'queued output' })
+      expect(mainWindow.webContents.send).not.toHaveBeenCalled()
+
+      isDestroyedSpy.mockReturnValue(true)
+      vi.advanceTimersByTime(8)
+
+      expect(mainWindow.webContents.send).not.toHaveBeenCalled()
+      expect(provider.acknowledgeDataEvent).toHaveBeenCalledWith(
+        spawnResult.id,
+        'queued output'.length
+      )
+    } finally {
+      isDestroyedSpy.mockRestore()
+      vi.useRealTimers()
+    }
+  })
+
+  it('acks pending and current PTY output when data arrives after window destruction', async () => {
+    vi.useFakeTimers()
+    const { provider, emitData } = createForwardingProvider()
+    const isDestroyedSpy = vi.spyOn(mainWindow, 'isDestroyed')
+    setLocalPtyProvider(provider as never)
+
+    try {
+      registerPtyHandlers(mainWindow as never)
+      const spawnResult = (await handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24,
+        cwd: '/tmp'
+      })) as { id: string }
+
+      emitData({ id: spawnResult.id, data: 'pending' })
+      isDestroyedSpy.mockReturnValue(true)
+      emitData({ id: spawnResult.id, data: 'after destroy' })
+
+      expect(provider.acknowledgeDataEvent.mock.calls).toEqual([
+        [spawnResult.id, 'pending'.length],
+        [spawnResult.id, 'after destroy'.length]
+      ])
+      vi.advanceTimersByTime(8)
+      expect(provider.acknowledgeDataEvent).toHaveBeenCalledTimes(2)
+    } finally {
+      isDestroyedSpy.mockRestore()
+      vi.useRealTimers()
+    }
+  })
+
+  it('acks pending PTY output when the process exits after window destruction', async () => {
+    vi.useFakeTimers()
+    const { provider, emitData, emitExit } = createForwardingProvider()
+    const isDestroyedSpy = vi.spyOn(mainWindow, 'isDestroyed')
+    setLocalPtyProvider(provider as never)
+
+    try {
+      registerPtyHandlers(mainWindow as never)
+      const spawnResult = (await handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24,
+        cwd: '/tmp'
+      })) as { id: string }
+
+      emitData({ id: spawnResult.id, data: 'final output' })
+      isDestroyedSpy.mockReturnValue(true)
+      emitExit({ id: spawnResult.id, code: 0 })
+
+      expect(provider.acknowledgeDataEvent).toHaveBeenCalledWith(
+        spawnResult.id,
+        'final output'.length
+      )
+      vi.advanceTimersByTime(8)
+      expect(provider.acknowledgeDataEvent).toHaveBeenCalledTimes(1)
+    } finally {
+      isDestroyedSpy.mockRestore()
+      vi.useRealTimers()
+    }
+  })
+
+  it('acks PTY output when Electron rejects renderer delivery', async () => {
+    vi.useFakeTimers()
+    const { provider, emitData } = createForwardingProvider()
+    setLocalPtyProvider(provider as never)
+    mainWindow.webContents.send.mockImplementation(() => {
+      throw new Error('window is gone')
+    })
+
+    try {
+      registerPtyHandlers(mainWindow as never)
+      const spawnResult = (await handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24,
+        cwd: '/tmp'
+      })) as { id: string }
+      const writeListener = getPtyWriteListener()
+
+      writeListener(null, { id: spawnResult.id, data: 'a' })
+      emitData({ id: spawnResult.id, data: 'redraw' })
+
+      expect(provider.acknowledgeDataEvent).toHaveBeenCalledWith(spawnResult.id, 'redraw'.length)
+      vi.advanceTimersByTime(8)
+      expect(provider.acknowledgeDataEvent).toHaveBeenCalledTimes(1)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('acks the unsent remainder when a large IPC chunk send fails', async () => {
+    vi.useFakeTimers()
+    const { provider, emitData } = createForwardingProvider()
+    setLocalPtyProvider(provider as never)
+    mainWindow.webContents.send.mockImplementation(() => {
+      throw new Error('window is gone')
+    })
+
+    try {
+      registerPtyHandlers(mainWindow as never)
+      const spawnResult = (await handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24,
+        cwd: '/tmp'
+      })) as { id: string }
+
+      const largeOutput = 'x'.repeat(2 * 64 * 1024)
+      emitData({ id: spawnResult.id, data: largeOutput })
+      vi.advanceTimersByTime(8)
+
+      expect(provider.acknowledgeDataEvent.mock.calls).toEqual([
+        [spawnResult.id, 64 * 1024],
+        [spawnResult.id, 64 * 1024]
+      ])
     } finally {
       vi.useRealTimers()
     }

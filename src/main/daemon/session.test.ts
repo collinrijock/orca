@@ -172,6 +172,29 @@ describe('Session', () => {
 
       expect(subprocess.pause).not.toHaveBeenCalled()
     })
+
+    it('resumes and clears flow control when the last client detaches', () => {
+      createSession()
+      const token = session.attachClient({ onData: () => {}, onExit: () => {} })
+      subprocess.simulateData('x'.repeat(100_001))
+      expect(subprocess.pause).toHaveBeenCalledTimes(1)
+
+      session.detachClient(token)
+
+      expect(subprocess.resume).toHaveBeenCalledTimes(1)
+    })
+
+    it('resumes and clears flow control when all clients detach', () => {
+      createSession()
+      session.attachClient({ onData: () => {}, onExit: () => {} })
+      session.attachClient({ onData: () => {}, onExit: () => {} })
+      subprocess.simulateData('x'.repeat(100_001))
+      expect(subprocess.pause).toHaveBeenCalledTimes(1)
+
+      session.detachAllClients()
+
+      expect(subprocess.resume).toHaveBeenCalledTimes(1)
+    })
   })
 
   describe('write', () => {

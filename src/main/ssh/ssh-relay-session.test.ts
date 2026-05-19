@@ -41,6 +41,7 @@ vi.mock('../providers/ssh-pty-provider', () => ({
     onData = vi.fn().mockReturnValue(() => {})
     onReplay = vi.fn().mockReturnValue(() => {})
     onExit = vi.fn().mockReturnValue(() => {})
+    acknowledgeDataEvent = vi.fn()
     attach = vi.fn().mockResolvedValue(undefined)
     dispose = vi.fn()
   }
@@ -156,6 +157,51 @@ describe('SshRelaySession', () => {
     expect(registerSshPtyProvider).toHaveBeenCalledWith('target-1', expect.anything())
     expect(registerSshFilesystemProvider).toHaveBeenCalledWith('target-1', expect.anything())
     expect(registerSshGitProvider).toHaveBeenCalledWith('target-1', expect.anything())
+  })
+
+  it('forwards SSH PTY data to the renderer without main-process ACK when the window is alive', async () => {
+    const { mockConn, mockStore, mockPortForward, getMainWindow, mockWindow } = createMockDeps()
+    const session = new SshRelaySession('target-1', getMainWindow, mockStore, mockPortForward)
+
+    await session.establish(mockConn)
+
+    const provider = vi.mocked(registerSshPtyProvider).mock.calls[0][1] as unknown as {
+      onData: ReturnType<typeof vi.fn>
+      acknowledgeDataEvent: ReturnType<typeof vi.fn>
+    }
+    const onData = provider.onData.mock.calls[0][0] as (payload: {
+      id: string
+      data: string
+    }) => void
+
+    onData({ id: 'pty-1', data: 'visible output' })
+
+    expect(mockWindow.webContents.send).toHaveBeenCalledWith('pty:data', {
+      id: 'pty-1',
+      data: 'visible output'
+    })
+    expect(provider.acknowledgeDataEvent).not.toHaveBeenCalled()
+  })
+
+  it('acknowledges SSH PTY data dropped while no renderer window can receive it', async () => {
+    const { mockConn, mockStore, mockPortForward, getMainWindow } = createMockDeps()
+    getMainWindow.mockReturnValue(null)
+    const session = new SshRelaySession('target-1', getMainWindow, mockStore, mockPortForward)
+
+    await session.establish(mockConn)
+
+    const provider = vi.mocked(registerSshPtyProvider).mock.calls[0][1] as unknown as {
+      onData: ReturnType<typeof vi.fn>
+      acknowledgeDataEvent: ReturnType<typeof vi.fn>
+    }
+    const onData = provider.onData.mock.calls[0][0] as (payload: {
+      id: string
+      data: string
+    }) => void
+
+    onData({ id: 'pty-1', data: 'dropped output' })
+
+    expect(provider.acknowledgeDataEvent).toHaveBeenCalledWith('pty-1', 'dropped output'.length)
   })
 
   it('installs remote managed hooks and relay-owned plugin assets before registering the SSH PTY provider', async () => {

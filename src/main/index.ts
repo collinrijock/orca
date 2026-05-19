@@ -729,7 +729,7 @@ function sendSyntheticTitle(ptyId: string, data: string): void {
   if (!mainWindow || mainWindow.isDestroyed()) {
     return
   }
-  mainWindow.webContents.send('pty:data', { id: ptyId, data })
+  mainWindow.webContents.send('pty:data', { id: ptyId, data, synthetic: true })
 }
 
 function stopSyntheticTitleSpinner(paneKey: string): void {

@@ -181,12 +181,14 @@ async function main(): Promise<void> {
   // socket client reconnects, setWrite swaps the callback to the socket.
   let stdoutAlive = true
   const dispatcher = new RelayDispatcher((data) => {
-    if (stdoutAlive) {
-      try {
-        process.stdout.write(data)
-      } catch {
-        stdoutAlive = false
-      }
+    if (!stdoutAlive) {
+      throw new Error('stdout is not writable')
+    }
+    try {
+      process.stdout.write(data)
+    } catch (err) {
+      stdoutAlive = false
+      throw err
     }
   })
 
@@ -500,6 +502,7 @@ async function main(): Promise<void> {
     // pipe), start the grace timer (socket connect will cancel it), and
     // rely entirely on the Unix socket for client communication.
     stdoutAlive = false
+    dispatcher.invalidateClient()
     startGrace()
   } else {
     process.stdin.on('data', (chunk: Buffer) => {

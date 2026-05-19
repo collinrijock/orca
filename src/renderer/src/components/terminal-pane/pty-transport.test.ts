@@ -12,7 +12,7 @@ import { createTerminalSessionStateSaveFailureMessage } from '../../../../shared
 
 describe('createIpcPtyTransport', () => {
   const originalWindow = (globalThis as { window?: typeof window }).window
-  let onData: ((payload: { id: string; data: string }) => void) | null = null
+  let onData: ((payload: { id: string; data: string; synthetic?: boolean }) => void) | null = null
   let onExit: ((payload: { id: string; code: number }) => void) | null = null
 
   beforeEach(() => {
@@ -31,10 +31,12 @@ describe('createIpcPtyTransport', () => {
           resize: vi.fn(),
           ackData: vi.fn(),
           kill: vi.fn(),
-          onData: vi.fn((callback: (payload: { id: string; data: string }) => void) => {
-            onData = callback
-            return () => {}
-          }),
+          onData: vi.fn(
+            (callback: (payload: { id: string; data: string; synthetic?: boolean }) => void) => {
+              onData = callback
+              return () => {}
+            }
+          ),
           onReplay: vi.fn(() => () => {}),
           onExit: vi.fn((callback: (payload: { id: string; code: number }) => void) => {
             onExit = callback
@@ -187,6 +189,26 @@ describe('createIpcPtyTransport', () => {
 
     expect(window.api.pty.ackData).toHaveBeenCalledWith('pty-restored', first.length)
     expect(window.api.pty.ackData).toHaveBeenCalledWith('pty-restored', second.length)
+    expect(window.api.pty.ackData).toHaveBeenCalledTimes(2)
+  })
+
+  it('acknowledges PTY bytes dropped during detach/remount gaps', async () => {
+    const { ensurePtyDispatcher } = await import('./pty-transport')
+    ensurePtyDispatcher()
+
+    onData?.({ id: 'pty-detached', data: 'lost output' })
+
+    expect(window.api.pty.ackData).toHaveBeenCalledWith('pty-detached', 'lost output'.length)
+    expect(window.api.pty.ackData).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not acknowledge synthetic title bytes during detach/remount gaps', async () => {
+    const { ensurePtyDispatcher } = await import('./pty-transport')
+    ensurePtyDispatcher()
+
+    onData?.({ id: 'pty-detached', data: '\x1b]0;⠋ Cursor Agent\x07', synthetic: true })
+
+    expect(window.api.pty.ackData).not.toHaveBeenCalled()
   })
 
   it('routes the attach-time clear sequence through onReplayData for non-alternate-screen sessions', async () => {
