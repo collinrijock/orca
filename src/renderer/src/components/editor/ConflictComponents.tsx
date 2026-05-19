@@ -11,7 +11,6 @@ import {
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { getFileTypeIcon } from '@/lib/file-type-icons'
 import { cn } from '@/lib/utils'
 import type { ConflictReviewEntry, OpenFile } from '@/store/slices/editor'
 import type { GitConflictKind, GitStatusEntry } from '../../../../shared/types'
@@ -185,105 +184,6 @@ export function ConflictPlaceholderView({ file }: { file: OpenFile }): React.JSX
   )
 }
 
-function ConflictReviewOverview({
-  entries,
-  resolvedCount,
-  onOpenEntry,
-  onReturnToSourceControl,
-  onDismiss
-}: {
-  entries: readonly ConflictReviewPanelEntry[]
-  resolvedCount: number
-  onOpenEntry: (entry: GitStatusEntry) => void
-  onReturnToSourceControl: () => void
-  onDismiss: () => void
-}): React.JSX.Element {
-  return (
-    <div className="min-h-0 flex-1 overflow-y-auto scrollbar-sleek">
-      <div className="mx-auto flex w-full max-w-4xl flex-col gap-4 px-5 py-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="min-w-0">
-            <div className="text-sm font-medium text-foreground">Conflicts</div>
-            <div className="mt-1 text-xs text-muted-foreground">
-              Open a file to resolve markers in the editor.
-            </div>
-          </div>
-          <div className="flex shrink-0 items-center gap-2">
-            <Button type="button" size="sm" variant="outline" onClick={onReturnToSourceControl}>
-              <GitMerge className="size-3.5" />
-              Source Control
-            </Button>
-            <Button type="button" size="sm" variant="ghost" onClick={onDismiss}>
-              <X className="size-3.5" />
-              Dismiss
-            </Button>
-          </div>
-        </div>
-        {resolvedCount > 0 && (
-          <div className="rounded-md border border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
-            {resolvedCount} conflict{resolvedCount === 1 ? '' : 's'} no longer live in Git.
-          </div>
-        )}
-        <div className="overflow-hidden rounded-md border border-border">
-          {entries.map((entry) => {
-            const FileIcon = getFileTypeIcon(entry.path)
-            const liveEntry = entry.liveEntry
-            const isUnresolved = liveEntry?.conflictStatus === 'unresolved'
-            const statusLabel = isUnresolved ? 'Unresolved' : liveEntry ? 'Resolved' : 'Gone'
-
-            return (
-              <button
-                key={entry.path}
-                type="button"
-                className={cn(
-                  'group flex w-full min-w-0 items-start gap-3 border-b border-border px-3 py-3 text-left transition-colors last:border-b-0 hover:bg-accent/40 disabled:cursor-default disabled:hover:bg-transparent',
-                  !liveEntry && 'opacity-65'
-                )}
-                disabled={!liveEntry}
-                onClick={() => {
-                  if (liveEntry) {
-                    onOpenEntry(liveEntry)
-                  }
-                }}
-              >
-                <FileIcon
-                  className={cn('mt-0.5 size-4 shrink-0', isUnresolved && 'text-destructive')}
-                />
-                <div className="min-w-0 flex-1 space-y-1">
-                  <div className="flex min-w-0 flex-wrap items-center gap-2">
-                    <span className="min-w-0 break-all font-mono text-xs text-foreground">
-                      {entry.path}
-                    </span>
-                    <span
-                      className={cn(
-                        'shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-semibold',
-                        isUnresolved
-                          ? 'bg-destructive/12 text-destructive'
-                          : 'bg-muted text-muted-foreground'
-                      )}
-                    >
-                      {statusLabel}
-                    </span>
-                  </div>
-                  <div className="text-xs text-muted-foreground">
-                    {CONFLICT_KIND_LABELS[entry.conflictKind]} ·{' '}
-                    {CONFLICT_HINT_MAP[entry.conflictKind]}
-                  </div>
-                  {liveEntry?.oldPath && (
-                    <div className="text-xs text-muted-foreground">
-                      Renamed from {liveEntry.oldPath}
-                    </div>
-                  )}
-                </div>
-              </button>
-            )
-          })}
-        </div>
-      </div>
-    </div>
-  )
-}
-
 export function ConflictReviewPanel({
   file,
   liveEntries,
@@ -323,7 +223,6 @@ export function ConflictReviewPanel({
     (entry) => entry.liveEntry?.conflictStatus === 'unresolved'
   )
   const unresolvedCount = unresolvedSnapshotEntries.length
-  const resolvedCount = Math.max(0, snapshotEntries.length - unresolvedCount)
   const snapshotTime = new Date(
     file.conflictReview?.snapshotTimestamp ?? Date.now()
   ).toLocaleTimeString()
@@ -401,13 +300,9 @@ export function ConflictReviewPanel({
         </div>
         <div className="flex min-h-0 flex-1 flex-col">
           {selectedContent ?? (
-            <ConflictReviewOverview
-              entries={treeEntries}
-              resolvedCount={resolvedCount}
-              onOpenEntry={onOpenEntry}
-              onReturnToSourceControl={onReturnToSourceControl}
-              onDismiss={onDismiss}
-            />
+            <div className="flex h-full min-h-0 items-center justify-center px-6 text-center text-sm text-muted-foreground">
+              Loading conflict contents...
+            </div>
           )}
         </div>
       </div>

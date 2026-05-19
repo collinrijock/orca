@@ -7,6 +7,7 @@ already live in their own modules. */
 import React, { lazy } from 'react'
 import { AlertCircle, RefreshCw } from 'lucide-react'
 import { detectLanguage } from '@/lib/language-detect'
+import { joinPath } from '@/lib/path'
 import { useAppStore } from '@/store'
 import { Button } from '@/components/ui/button'
 import { ChangesModeView } from './ChangesModeView'
@@ -232,6 +233,40 @@ export function EditorContent({
     ]
   )
 
+  const createConflictReviewContentFile = (entry: GitStatusEntry): OpenFile => {
+    const absolutePath = joinPath(activeFile.filePath, entry.path)
+    const conflict =
+      entry.conflictKind && entry.conflictStatus && entry.conflictStatusSource
+        ? entry.status === 'deleted'
+          ? {
+              kind: 'conflict-placeholder' as const,
+              conflictKind: entry.conflictKind,
+              conflictStatus: entry.conflictStatus,
+              conflictStatusSource: entry.conflictStatusSource,
+              message:
+                'This file is in a conflict state, but no working-tree file is available to edit.',
+              guidance: 'Resolve the conflict in Git or restore one side before reopening it.'
+            }
+          : {
+              kind: 'conflict-editable' as const,
+              conflictKind: entry.conflictKind,
+              conflictStatus: entry.conflictStatus,
+              conflictStatusSource: entry.conflictStatusSource
+            }
+        : undefined
+
+    return {
+      id: absolutePath,
+      filePath: absolutePath,
+      relativePath: entry.path,
+      worktreeId: activeFile.worktreeId,
+      language: detectLanguage(entry.path),
+      isDirty: false,
+      mode: 'edit',
+      conflict
+    }
+  }
+
   const renderMonacoEditor = (fc: FileContent): React.JSX.Element => (
     // Why: Without a key, React reuses the same MonacoEditor instance when
     // switching tabs or split panes, just updating props. That means
@@ -400,12 +435,16 @@ export function EditorContent({
     contentFile,
     entry,
     className,
-    viewStateKeySuffix
+    viewStateKeySuffix,
+    readOnly = false,
+    autoHeight = false
   }: {
     contentFile: OpenFile
     entry: GitStatusEntry | null
     className: string
     viewStateKeySuffix: string
+    readOnly?: boolean
+    autoHeight?: boolean
   }): React.JSX.Element => {
     if (contentFile.conflict?.kind === 'conflict-placeholder') {
       return (
@@ -470,7 +509,7 @@ export function EditorContent({
             conflictNavigation={getConflictNavigation(contentFile, selectedContent)}
           />
         )}
-        <div className="min-h-0 flex-1">
+        <div className={autoHeight ? 'shrink-0' : 'min-h-0 flex-1'}>
           <MonacoEditor
             key={`${viewStateScopeId}:${contentFile.id}:${viewStateKeySuffix}`}
             filePath={contentFile.filePath}
@@ -478,11 +517,15 @@ export function EditorContent({
             relativePath={contentFile.relativePath}
             content={selectedContent}
             language={monacoSelectedLanguage}
-            onContentChange={(content) => handleContentChangeForFile(contentFile, content)}
-            onSave={(content) => handleSaveForFile(contentFile, content)}
+            onContentChange={
+              readOnly ? () => {} : (content) => handleContentChangeForFile(contentFile, content)
+            }
+            onSave={readOnly ? () => {} : (content) => handleSaveForFile(contentFile, content)}
             worktreeId={contentFile.worktreeId}
             markdownAnnotationsEnabled={false}
             conflictDecorationsEnabled={contentFile.conflict?.conflictStatus === 'unresolved'}
+            readOnly={readOnly}
+            autoHeight={autoHeight}
             revealLine={
               pendingEditorReveal?.filePath === contentFile.filePath
                 ? pendingEditorReveal.line
@@ -516,6 +559,34 @@ export function EditorContent({
     })
   }
 
+  const renderConflictReviewInlineFile = (entry: GitStatusEntry): React.JSX.Element => {
+    const contentFile = createConflictReviewContentFile(entry)
+
+    return renderConflictReviewEditorContent({
+      contentFile,
+      entry,
+      className: 'flex min-h-[120px] flex-col border-b border-border last:border-b-0',
+      viewStateKeySuffix: `overview:${entry.path}`,
+      readOnly: true,
+      autoHeight: true
+    })
+  }
+
+  const renderConflictReviewAllContent = (): React.JSX.Element => {
+    const snapshotEntries = activeFile.conflictReview?.entries ?? []
+    const liveEntriesByPath = new Map(worktreeEntries.map((entry) => [entry.path, entry]))
+    const unresolvedEntries = snapshotEntries.flatMap((entry) => {
+      const liveEntry = liveEntriesByPath.get(entry.path)
+      return liveEntry?.conflictStatus === 'unresolved' && liveEntry.conflictKind ? [liveEntry] : []
+    })
+
+    return (
+      <div className="min-h-0 flex-1 overflow-y-auto bg-editor-surface scrollbar-sleek">
+        {unresolvedEntries.map(renderConflictReviewInlineFile)}
+      </div>
+    )
+  }
+
   if (activeFile.mode === 'conflict-review') {
     return (
       <ConflictReviewPanel
@@ -526,7 +597,7 @@ export function EditorContent({
         selectedContent={
           selectedConflictReviewFile
             ? renderConflictReviewSelectedContent(selectedConflictReviewFile)
-            : null
+            : renderConflictReviewAllContent()
         }
         onDismiss={() => closeFile(activeFile.id)}
         onRefreshSnapshot={() =>

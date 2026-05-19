@@ -4,6 +4,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { OpenFile } from '@/store/slices/editor'
 import { getConnectionId } from '@/lib/connection-context'
+import { joinPath } from '@/lib/path'
 import { useAppStore } from '@/store'
 import { getRuntimeFileReadScope, readRuntimeFileContent } from '@/runtime/runtime-file-client'
 import { settingsForRuntimeOwner } from '@/runtime/runtime-rpc-client'
@@ -257,6 +258,32 @@ export function useEditorPanelContentState({
   )
 
   useEffect(() => {
+    if (activeFile?.mode === 'conflict-review' && !selectedConflictReviewFile) {
+      const snapshotEntries = activeFile.conflictReview?.entries ?? []
+      if (snapshotEntries.length === 0) {
+        return
+      }
+
+      const snapshotPaths = new Set(snapshotEntries.map((entry) => entry.path))
+      const liveEntries = gitStatusByWorktree[activeFile.worktreeId] ?? []
+      for (const entry of liveEntries) {
+        if (
+          !snapshotPaths.has(entry.path) ||
+          entry.conflictStatus !== 'unresolved' ||
+          !entry.conflictKind ||
+          entry.status === 'deleted'
+        ) {
+          continue
+        }
+
+        const absolutePath = joinPath(activeFile.filePath, entry.path)
+        if (!fileContents[absolutePath]) {
+          void loadFileContent(absolutePath, absolutePath, activeFile.worktreeId, entry.path)
+        }
+      }
+      return
+    }
+
     const fileToLoad = selectedConflictReviewFile ?? activeFile
     if (!fileToLoad || (activeFile?.mode === 'conflict-review' && !selectedConflictReviewFile)) {
       return
