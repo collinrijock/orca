@@ -63,6 +63,7 @@ type StoreState = {
   consumePendingColdRestore: ReturnType<typeof vi.fn>
   consumePendingSnapshot: ReturnType<typeof vi.fn>
   agentStatusByPaneKey: Record<string, unknown>
+  setAgentStatus: ReturnType<typeof vi.fn>
   removeAgentStatus: ReturnType<typeof vi.fn>
   dropAgentStatus: ReturnType<typeof vi.fn>
 }
@@ -308,6 +309,15 @@ describe('connectPanePty', () => {
       consumePendingColdRestore: vi.fn(() => null),
       consumePendingSnapshot: vi.fn(() => null),
       agentStatusByPaneKey: {},
+      setAgentStatus: vi.fn((paneKey: string, payload: Record<string, unknown>) => {
+        mockStoreState.agentStatusByPaneKey[paneKey] = {
+          ...payload,
+          paneKey,
+          updatedAt: Date.now(),
+          stateStartedAt: Date.now(),
+          stateHistory: []
+        }
+      }),
       removeAgentStatus: vi.fn(),
       dropAgentStatus: vi.fn()
     } as StoreState
@@ -319,6 +329,8 @@ describe('connectPanePty', () => {
         },
         pty: {
           signal: vi.fn(),
+          getForegroundProcess: vi.fn().mockResolvedValue(null),
+          hasChildProcesses: vi.fn().mockResolvedValue(false),
           ackColdRestore: vi.fn(),
           onClearBufferRequest: vi.fn(() => vi.fn()),
           onSerializeBufferRequest: vi.fn(() => vi.fn()),
@@ -1311,6 +1323,119 @@ describe('connectPanePty', () => {
     expect(deps.dispatchNotification).not.toHaveBeenCalledWith(
       expect.objectContaining({ source: 'agent-task-complete' })
     )
+  })
+
+  it('dispatches agent-task-complete for generic Codex spinner titles after process identity is confirmed', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport('pty-codex')
+    transportFactoryQueue.push(transport)
+
+    vi.useFakeTimers()
+    const api = (
+      globalThis as unknown as {
+        window: { api: { pty: { getForegroundProcess: ReturnType<typeof vi.fn> } } }
+      }
+    ).window.api
+    api.pty.getForegroundProcess.mockResolvedValue('codex')
+    const pane = createPane(1)
+    const manager = createManager(1)
+    const deps = createDeps()
+
+    connectPanePty(pane as never, manager as never, deps as never)
+
+    const titleHandler = createdTransportOptions[0]?.onTitleChange as
+      | ((title: string, rawTitle: string) => void)
+      | undefined
+    if (!titleHandler) {
+      throw new Error('Expected onTitleChange to be registered')
+    }
+
+    titleHandler('⠋ experimental-agent-observability', '⠋ experimental-agent-observability')
+    titleHandler('experimental-agent-observability', 'experimental-agent-observability')
+    await flushAsyncTicks()
+
+    vi.advanceTimersByTime(1000)
+
+    expect(deps.dispatchNotification).toHaveBeenCalledWith({
+      source: 'agent-task-complete',
+      terminalTitle: 'experimental-agent-observability',
+      paneKey: makePaneKey('tab-1', LEAF_1)
+    })
+  })
+
+  it('does not dispatch generic spinner completions when process inspection finds no agent', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport('pty-shell')
+    transportFactoryQueue.push(transport)
+
+    vi.useFakeTimers()
+    const api = (
+      globalThis as unknown as {
+        window: { api: { pty: { getForegroundProcess: ReturnType<typeof vi.fn> } } }
+      }
+    ).window.api
+    api.pty.getForegroundProcess.mockResolvedValue('zsh')
+    const pane = createPane(1)
+    const manager = createManager(1)
+    const deps = createDeps()
+
+    connectPanePty(pane as never, manager as never, deps as never)
+
+    const titleHandler = createdTransportOptions[0]?.onTitleChange as
+      | ((title: string, rawTitle: string) => void)
+      | undefined
+    if (!titleHandler) {
+      throw new Error('Expected onTitleChange to be registered')
+    }
+
+    titleHandler('⠋ experimental-agent-observability', '⠋ experimental-agent-observability')
+    titleHandler('experimental-agent-observability', 'experimental-agent-observability')
+    await flushAsyncTicks()
+
+    vi.advanceTimersByTime(16_000)
+
+    expect(deps.dispatchNotification).not.toHaveBeenCalledWith(
+      expect.objectContaining({ source: 'agent-task-complete' })
+    )
+  })
+
+  it('dispatches agent-task-complete from recognized hook completion events', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport('pty-hook')
+    transportFactoryQueue.push(transport)
+
+    vi.useFakeTimers()
+    const pane = createPane(1)
+    const manager = createManager(1)
+    const deps = createDeps()
+
+    connectPanePty(pane as never, manager as never, deps as never)
+
+    const statusHandler = createdTransportOptions[0]?.onAgentStatus as
+      | ((payload: {
+          state: 'done'
+          prompt: string
+          agentType: 'codex'
+          lastAssistantMessage: string
+        }) => void)
+      | undefined
+    if (!statusHandler) {
+      throw new Error('Expected onAgentStatus to be registered')
+    }
+
+    statusHandler({
+      state: 'done',
+      prompt: 'finish the implementation',
+      agentType: 'codex',
+      lastAssistantMessage: 'Done.'
+    })
+    vi.advanceTimersByTime(250)
+
+    expect(deps.dispatchNotification).toHaveBeenCalledWith({
+      source: 'agent-task-complete',
+      terminalTitle: 'codex',
+      paneKey: makePaneKey('tab-1', LEAF_1)
+    })
   })
 
   it('restores a suppressed terminal bell when the pending agent completion is canceled', async () => {

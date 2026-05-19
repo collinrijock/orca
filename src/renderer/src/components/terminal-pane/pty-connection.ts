@@ -18,6 +18,7 @@ import { POST_REPLAY_MODE_RESET, POST_REPLAY_FOCUS_REPORTING_RESET } from './lay
 import { warnTerminalLifecycleAnomaly } from './terminal-lifecycle-diagnostics'
 import { registerPtySerializer, registerPtyTitleSource } from './pty-buffer-serializer'
 import { getRemoteRuntimePtyEnvironmentId } from '@/runtime/runtime-terminal-stream'
+import { inspectRuntimeTerminalProcess } from '@/runtime/runtime-terminal-inspection'
 import {
   discardTerminalOutput,
   flushTerminalOutput,
@@ -29,6 +30,7 @@ import { createTerminalCommandLifecycle } from './terminal-command-lifecycle'
 import { e2eConfig } from '@/lib/e2e-config'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import { isWebTerminalSurfaceTabId } from '@/runtime/web-terminal-surface-id'
+import { createAgentCompletionCoordinator } from './agent-completion-coordinator'
 
 const pendingSpawnByPaneKey = new Map<string, Promise<string | null>>()
 const SSH_SESSION_EXPIRED_ERROR = 'SSH_SESSION_EXPIRED'
@@ -202,7 +204,25 @@ export function connectPanePty(
   })
   commandLifecycle.attachXtermConsumer(pane.terminal)
 
+  const agentCompletionCoordinator = createAgentCompletionCoordinator({
+    paneKey: cacheKey,
+    getPtyId: () => transport.getPtyId(),
+    getSettings: () => useAppStore.getState().settings,
+    inspectProcess: inspectRuntimeTerminalProcess,
+    dispatchCompletion: (title) => scheduleAgentTaskCompleteNotification(title),
+    isLive: () => {
+      if (disposed) {
+        return false
+      }
+      if (transport.getPtyId()) {
+        return true
+      }
+      return (useAppStore.getState().ptyIdsByTabId[deps.tabId] ?? []).length > 0
+    }
+  })
+
   const onExit = (ptyId: string): void => {
+    agentCompletionCoordinator.dispose()
     deps.syncPanePtyLayoutBinding(pane.id, null)
     deps.clearRuntimePaneTitle(deps.tabId, pane.id)
     deps.clearTabPtyId(deps.tabId, ptyId)
@@ -245,6 +265,7 @@ export function connectPanePty(
   const onTitleChange = (title: string, rawTitle: string): void => {
     manager.setPaneGpuRendering(pane.id, !isGeminiTerminalTitle(rawTitle))
     deps.setRuntimePaneTitle(deps.tabId, pane.id, title)
+    agentCompletionCoordinator.observeTitle(rawTitle)
     // Why: only the focused pane should drive the tab title — otherwise two
     // agents in split panes cause rapid title flickering as each emits OSC
     // sequences. Only the active split's title propagates to the tab. When
@@ -278,6 +299,7 @@ export function connectPanePty(
     // Spawn completion is when a pane gains a concrete PTY ID. The initial
     // frame-level sync often runs before that async result arrives.
     scheduleRuntimeGraphSync()
+    agentCompletionCoordinator.startProcessTracking()
   }
   // ─── Attention signal: BEL ────────────────────────────────────────────
   //
@@ -429,18 +451,12 @@ export function connectPanePty(
     if (isClaudeAgent(title) && (settings === null || settings.promptCacheTimerEnabled)) {
       deps.setCacheTimerStartedAt(cacheKey, Date.now())
     }
-    // Why: this is the sole producer of 'agent-task-complete' in the renderer;
-    // removing it (as #944 did) leaves the user-facing Settings toggle with no
-    // events to fire. Dispatch is gated per-source in main; the main-process
-    // dedupe also collapses concurrent BEL + task-complete for the same
-    // worktree into a single notification.
-    // Why: title idle can beat the final hook status update by one event-loop
-    // turn; delay slightly so the notification can snapshot the richer status.
     if (isAgentTaskCompleteNotificationEnabled()) {
-      scheduleAgentTaskCompleteNotification(title)
+      agentCompletionCoordinator.observeClassifiedTitleCompletion(title)
     }
   }
   const onAgentBecameWorking = (): void => {
+    agentCompletionCoordinator.observeTitleWorking()
     // Why: a new API call refreshes the prompt-cache TTL, so clear any running
     // countdown. The timer will restart when the agent becomes idle again.
     deps.setCacheTimerStartedAt(cacheKey, null)
@@ -524,6 +540,9 @@ export function connectPanePty(
       const currentState = useAppStore.getState()
       const title = currentState.runtimePaneTitlesByTabId?.[deps.tabId]?.[pane.id]
       currentState.setAgentStatus(cacheKey, payload, title)
+      if (isAgentTaskCompleteNotificationEnabled()) {
+        agentCompletionCoordinator.observeHookStatus(payload)
+      }
     }
   }
   const transport = runtimeEnvironmentId
@@ -883,6 +902,7 @@ export function connectPanePty(
       pane.container.dataset.ptyId = ptyId
       deps.syncPanePtyLayoutBinding(pane.id, ptyId)
       deps.updateTabPtyId(deps.tabId, ptyId)
+      agentCompletionCoordinator.startProcessTracking()
 
       // Why: mobile terminal streaming needs the exact screen state from
       // xterm.js. The shared helper installs both the SerializeAddon-backed
@@ -1356,6 +1376,7 @@ export function connectPanePty(
         })
         deps.syncPanePtyLayoutBinding(pane.id, attachPtyId)
         deps.updateTabPtyId(deps.tabId, attachPtyId)
+        agentCompletionCoordinator.startProcessTracking()
       } catch (err) {
         reportError(err instanceof Error ? err.message : String(err))
         deps.clearTabPtyId(deps.tabId, attachPtyId)
@@ -1393,6 +1414,7 @@ export function connectPanePty(
             // even if no later spawn event or layout snapshot runs.
             deps.syncPanePtyLayoutBinding(pane.id, spawnedPtyId)
             deps.updateTabPtyId(deps.tabId, spawnedPtyId)
+            agentCompletionCoordinator.startProcessTracking()
             transport.attach({
               existingPtyId: spawnedPtyId,
               cols,
@@ -1449,6 +1471,7 @@ export function connectPanePty(
         pendingGeometryReportRaf = null
       }
       commandLifecycle.dispose()
+      agentCompletionCoordinator.dispose()
     }
   }
 }
