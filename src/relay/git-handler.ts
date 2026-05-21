@@ -20,6 +20,10 @@ import { checkIgnoredPathsOp, detectConflictOperation, getStatusOp } from './git
 import { resolveRelayPushTarget } from './git-handler-push-target'
 import { normalizeGitErrorMessage, isNoUpstreamError } from '../shared/git-remote-error'
 import { upstreamOnlyCommitsArePatchEquivalent } from '../shared/git-upstream-status'
+import {
+  getEffectiveGitUpstreamStatus,
+  resolveEffectiveGitUpstream
+} from '../shared/git-effective-upstream'
 import { loadGitHistoryFromExecutor } from '../shared/git-history'
 import { buildRelayCommandEnv } from './relay-command-env'
 
@@ -289,43 +293,10 @@ export class GitHandler {
     const worktreePath = params.worktreePath as string
 
     try {
-      const { stdout: upstreamStdout } = await this.git(
-        ['rev-parse', '--abbrev-ref', 'HEAD@{u}'],
-        worktreePath
+      return await getEffectiveGitUpstreamStatus(
+        (args) => this.git(args, worktreePath),
+        (upstreamName) => this.getBehindCommitsArePatchEquivalent(worktreePath, upstreamName)
       )
-      const upstreamName = upstreamStdout.trim()
-      if (!upstreamName) {
-        return { hasUpstream: false, ahead: 0, behind: 0 }
-      }
-      const { stdout: countsStdout } = await this.git(
-        ['rev-list', '--left-right', '--count', 'HEAD...@{u}'],
-        worktreePath
-      )
-      const tokens = countsStdout.trim().split(/\s+/)
-      if (tokens.length !== 2) {
-        // Why: 'rev-list --left-right --count HEAD...@{u}' must emit exactly two
-        // tokens; anything else (empty stdout, SSH transport truncation, unexpected
-        // locale) is a real failure and must not be silently reported as "in sync" 0/0.
-        throw new Error(`Unexpected git rev-list output: ${JSON.stringify(countsStdout)}`)
-      }
-      const ahead = Number.parseInt(tokens[0]!, 10)
-      const behind = Number.parseInt(tokens[1]!, 10)
-      if (!Number.isFinite(ahead) || !Number.isFinite(behind) || ahead < 0 || behind < 0) {
-        throw new Error(`Unparseable git rev-list counts: ${JSON.stringify(countsStdout)}`)
-      }
-      const behindCommitsArePatchEquivalent =
-        ahead > 0 && behind > 0
-          ? await this.getBehindCommitsArePatchEquivalent(worktreePath)
-          : undefined
-      return {
-        hasUpstream: true,
-        upstreamName,
-        ahead,
-        behind,
-        ...(behindCommitsArePatchEquivalent !== undefined
-          ? { behindCommitsArePatchEquivalent }
-          : {})
-      }
     } catch (error) {
       // Why: we only swallow the 'no upstream configured' error — that's an
       // expected state, not a failure. Other errors (auth, corruption, network)
@@ -339,10 +310,13 @@ export class GitHandler {
     }
   }
 
-  private async getBehindCommitsArePatchEquivalent(worktreePath: string): Promise<boolean> {
+  private async getBehindCommitsArePatchEquivalent(
+    worktreePath: string,
+    upstreamName: string
+  ): Promise<boolean> {
     try {
       const { stdout } = await this.git(
-        ['log', '--oneline', '--cherry-mark', '--right-only', 'HEAD...@{u}', '--'],
+        ['log', '--oneline', '--cherry-mark', '--right-only', `HEAD...${upstreamName}`, '--'],
         worktreePath
       )
       return upstreamOnlyCommitsArePatchEquivalent(stdout)
@@ -395,6 +369,13 @@ export class GitHandler {
     // Why: plain `git pull` uses the user's configured pull strategy (merge by
     // default) so diverged branches reconcile instead of erroring out.
     try {
+      const upstream = await resolveEffectiveGitUpstream((args) => this.git(args, worktreePath))
+      if (upstream && !upstream.isConfiguredUpstream) {
+        // Why: legacy Orca branches may still track origin/main while pushes
+        // target origin/<branch>. Pull the same effective branch the UI reports.
+        await this.git(['pull', upstream.remoteName, upstream.branchName], worktreePath)
+        return
+      }
       await this.git(['pull'], worktreePath)
     } catch (error) {
       // Why: mirror the local gitPull normalization so SSH users see the same

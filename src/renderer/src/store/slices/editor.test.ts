@@ -51,6 +51,11 @@ function createEditorTabsStore(): StoreApi<AppState> {
   })) as unknown as StoreApi<AppState>
 }
 
+async function flushAsyncRemoteRefresh(): Promise<void> {
+  await Promise.resolve()
+  await Promise.resolve()
+}
+
 function ownedEditorFileId(
   filePath: string,
   worktreeId: string,
@@ -1434,7 +1439,7 @@ describe('createEditorSlice remote branch actions', () => {
     expect(store.getState().isRemoteOperationActive).toBe(false)
   })
 
-  it('preserves actionable publish errors and avoids refresh on failure', async () => {
+  it('preserves actionable publish errors and refreshes upstream after rejection', async () => {
     const store = createEditorStore()
     const publishError = new Error(
       'Push rejected: remote has newer commits (non-fast-forward). Please pull or sync first.'
@@ -1448,8 +1453,17 @@ describe('createEditorSlice remote branch actions', () => {
     expect(toastErrorMock).toHaveBeenCalledWith(
       'Push rejected — remote has changes. Pull first, then try again.'
     )
+    await flushAsyncRemoteRefresh()
+
     expect(gitStatusMock).not.toHaveBeenCalled()
-    expect(gitUpstreamStatusMock).not.toHaveBeenCalled()
+    expect(gitFetchMock).toHaveBeenCalledWith({
+      worktreePath: '/repo',
+      connectionId: undefined
+    })
+    expect(gitUpstreamStatusMock).toHaveBeenCalledWith({
+      worktreePath: '/repo',
+      connectionId: undefined
+    })
     expect(store.getState().isRemoteOperationActive).toBe(false)
   })
 
@@ -1467,8 +1481,17 @@ describe('createEditorSlice remote branch actions', () => {
     expect(toastErrorMock).toHaveBeenCalledWith(
       'Push rejected — remote has changes. Pull first, then try again.'
     )
+    await flushAsyncRemoteRefresh()
+
     expect(gitStatusMock).not.toHaveBeenCalled()
-    expect(gitUpstreamStatusMock).not.toHaveBeenCalled()
+    expect(gitFetchMock).toHaveBeenCalledWith({
+      worktreePath: '/repo',
+      connectionId: undefined
+    })
+    expect(gitUpstreamStatusMock).toHaveBeenCalledWith({
+      worktreePath: '/repo',
+      connectionId: undefined
+    })
     expect(store.getState().isRemoteOperationActive).toBe(false)
   })
 
@@ -1519,8 +1542,17 @@ describe('createEditorSlice remote branch actions', () => {
     expect(toastErrorMock).toHaveBeenCalledWith(
       'Push rejected — remote has changes. Pull first, then try again.'
     )
+    await flushAsyncRemoteRefresh()
+
     expect(gitStatusMock).not.toHaveBeenCalled()
-    expect(gitUpstreamStatusMock).not.toHaveBeenCalled()
+    expect(gitFetchMock).toHaveBeenCalledWith({
+      worktreePath: '/repo',
+      connectionId: undefined
+    })
+    expect(gitUpstreamStatusMock).toHaveBeenCalledWith({
+      worktreePath: '/repo',
+      connectionId: undefined
+    })
     expect(store.getState().isRemoteOperationActive).toBe(false)
   })
 
@@ -1536,8 +1568,17 @@ describe('createEditorSlice remote branch actions', () => {
     expect(toastErrorMock).toHaveBeenCalledWith(
       'Push rejected — remote has changes. Pull first, then try again.'
     )
+    await flushAsyncRemoteRefresh()
+
     expect(gitStatusMock).not.toHaveBeenCalled()
-    expect(gitUpstreamStatusMock).not.toHaveBeenCalled()
+    expect(gitFetchMock).toHaveBeenCalledWith({
+      worktreePath: '/repo',
+      connectionId: undefined
+    })
+    expect(gitUpstreamStatusMock).toHaveBeenCalledWith({
+      worktreePath: '/repo',
+      connectionId: undefined
+    })
     expect(store.getState().isRemoteOperationActive).toBe(false)
   })
 

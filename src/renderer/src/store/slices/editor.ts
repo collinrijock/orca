@@ -825,6 +825,13 @@ function extractPublishFailureDetail(message: string): string | null {
   return null
 }
 
+function isNonFastForwardRemoteError(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    /non-fast-forward|fetch first|updates were rejected/i.test(error.message)
+  )
+}
+
 export function resolveRemoteOperationErrorMessage(
   error: unknown,
   options?: { publish?: boolean; isPush?: boolean; isSync?: boolean; isFetch?: boolean }
@@ -2694,16 +2701,27 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
     // as fire-and-forget so it doesn't block the mutation but updates the
     // store as soon as the IPC resolves.
     get().beginRemoteOperation(publish ? 'publish' : 'push')
+    let shouldRefreshAfterRejectedPush = false
     try {
       await pushRuntimeGit(
         { settings: get().settings, worktreeId, worktreePath, connectionId },
         { publish, pushTarget, forceWithLease: options.forceWithLease }
       )
     } catch (error) {
+      shouldRefreshAfterRejectedPush = isNonFastForwardRemoteError(error)
       toast.error(resolveRemoteOperationErrorMessage(error, { publish, isPush: true }))
       throw error
     } finally {
       get().endRemoteOperation()
+      if (shouldRefreshAfterRejectedPush) {
+        const context = { settings: get().settings, worktreeId, worktreePath, connectionId }
+        // Why: the rejected push proved the publish branch moved. Fetch first
+        // so legacy base-tracking worktrees can discover origin/<branch>, then
+        // refresh ahead/behind so Pull/Sync become actionable immediately.
+        void fetchRuntimeGit(context)
+          .catch(() => undefined)
+          .then(() => get().fetchUpstreamStatus(worktreeId, worktreePath, connectionId))
+      }
     }
     void get().fetchUpstreamStatus(worktreeId, worktreePath, connectionId)
     const refreshGitHubForWorktree = get().refreshGitHubForWorktree

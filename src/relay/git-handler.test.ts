@@ -570,6 +570,33 @@ describe('GitHandler', () => {
       }
     })
 
+    it('reports ahead/behind counts against a configured local-branch upstream', async () => {
+      gitInit(tmpDir)
+      writeFileSync(path.join(tmpDir, 'base.txt'), 'base')
+      gitCommit(tmpDir, 'initial')
+      const baseRef = execFileSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], {
+        cwd: tmpDir,
+        encoding: 'utf-8'
+      }).trim()
+
+      execFileSync('git', ['checkout', '-b', 'feature'], { cwd: tmpDir, stdio: 'pipe' })
+      execFileSync('git', ['branch', '--set-upstream-to', baseRef], {
+        cwd: tmpDir,
+        stdio: 'pipe'
+      })
+      writeFileSync(path.join(tmpDir, 'feature.txt'), 'feature')
+      gitCommit(tmpDir, 'feature commit')
+
+      const result = (await dispatcher.callRequest('git.upstreamStatus', {
+        worktreePath: tmpDir
+      })) as { hasUpstream: boolean; upstreamName?: string; ahead: number; behind: number }
+
+      expect(result.hasUpstream).toBe(true)
+      expect(result.upstreamName).toBe(baseRef)
+      expect(result.ahead).toBe(1)
+      expect(result.behind).toBe(0)
+    })
+
     it('fetches from a configured remote without throwing', async () => {
       const bareDir = mkdtempSync(path.join(tmpdir(), 'relay-git-bare-'))
       try {
