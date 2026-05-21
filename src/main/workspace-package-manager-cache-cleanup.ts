@@ -20,6 +20,7 @@ import type { IFilesystemProvider } from './providers/types'
 import { getSshGitProvider } from './providers/ssh-git-dispatch'
 import { commandExecFileAsync } from './git/runner'
 
+const CLI_PROBE_CONCURRENCY = 6
 const CLI_CHECK_TIMEOUT_MS = 8_000
 const CACHE_PATH_TIMEOUT_MS = 8_000
 const CACHE_SIZE_TIMEOUT_MS = 30_000
@@ -475,8 +476,17 @@ export async function buildPackageManagerCacheTargets(
     perCwdSeeds.set(id, seed)
   }
 
-  const resolvedSeeds = await Promise.all(
-    [...perCwdSeeds.values()].map(async (seed) => {
+  const seedList = [...perCwdSeeds.values()]
+  const resolvedSeeds: PackageManagerTargetSeed[] = new Array(seedList.length)
+  let nextSeedIndex = 0
+  const workerCount = Math.min(CLI_PROBE_CONCURRENCY, seedList.length)
+  const workers = Array.from({ length: workerCount }, async () => {
+    while (true) {
+      const index = nextSeedIndex++
+      if (index >= seedList.length) {
+        return
+      }
+      const seed = seedList[index]!
       seed.cliAvailable = await isPackageManagerCliAvailable({
         packageManager: seed.packageManager,
         connectionId: seed.connectionId,
@@ -491,9 +501,10 @@ export async function buildPackageManagerCacheTargets(
             signal: options.signal
           })
         : null
-      return seed
-    })
-  )
+      resolvedSeeds[index] = seed
+    }
+  })
+  await Promise.all(workers)
 
   const targetSeeds = new Map<string, PackageManagerTargetSeed>()
   for (const seed of resolvedSeeds) {
