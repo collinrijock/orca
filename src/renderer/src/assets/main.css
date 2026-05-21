@@ -723,6 +723,8 @@
 
 .editor-header-path {
   display: block;
+  min-width: 0;
+  flex: 0 1 auto;
   padding: 0;
   max-width: 100%;
   border: none;

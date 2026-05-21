@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   Columns2,
   Copy,
@@ -108,6 +108,10 @@ export function EditorPanelHeader({
   const headerCopyState = getEditorHeaderCopyState(activeFile)
   const diffComments = useAppStore((s) => s.getDiffComments(activeFile.worktreeId))
   const activeGroupId = useAppStore((s) => s.activeGroupIdByWorktree[activeFile.worktreeId])
+  const fileDiffComments = useMemo(
+    () => diffComments.filter((comment) => comment.filePath === activeFile.relativePath),
+    [activeFile.relativePath, diffComments]
+  )
 
   useEffect(() => {
     const closeMenu = (): void => setPathMenuOpen(false)
@@ -208,14 +212,17 @@ export function EditorPanelHeader({
           </Tooltip>
         </TooltipProvider>
       )}
-      {isSingleDiff && diffComments.length > 0 && (
+      {isSingleDiff && fileDiffComments.length > 0 && (
         <DiffNotesSendMenu
           worktreeId={activeFile.worktreeId}
           groupId={activeGroupId ?? activeFile.worktreeId}
           comments={diffComments}
           filePath={activeFile.relativePath}
           showFileScope
-          triggerClassName="p-1 flex-shrink-0"
+          triggerLabel="AI notes"
+          triggerCount={fileDiffComments.length}
+          triggerClassName="h-6 shrink-0 gap-1 rounded-full border border-border/70 bg-muted/40 px-2 text-[11px] font-medium leading-none text-foreground/80 hover:bg-accent hover:text-foreground"
+          iconClassName="size-3"
         />
       )}
       {canOpenPreviewToSide && (
