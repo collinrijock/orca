@@ -1,4 +1,4 @@
-import { TerminalSquare } from 'lucide-react'
+import { PanelsTopLeft } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
@@ -18,7 +18,7 @@ export function FloatingTerminalToggleButton({
   return (
     <FloatingTerminalIconContextMenu
       currentLocation="floating-button"
-      className={cn('fixed bottom-8 right-3 z-40', className)}
+      className={cn('fixed bottom-3 right-3 z-40', className)}
     >
       <Tooltip>
         <TooltipTrigger asChild>
@@ -28,17 +28,17 @@ export function FloatingTerminalToggleButton({
             size="icon-sm"
             className="border-border bg-secondary text-secondary-foreground shadow-xs hover:bg-accent hover:text-accent-foreground"
             data-floating-terminal-toggle
-            aria-label={open ? 'Minimize floating terminal' : 'Show floating terminal'}
+            aria-label={open ? 'Minimize floating workspace' : 'Show floating workspace'}
             aria-pressed={open}
             onClick={onToggle}
           >
-            <TerminalSquare className="size-3.5" />
+            <PanelsTopLeft className="size-3.5" />
           </Button>
         </TooltipTrigger>
         <TooltipContent
           side="left"
           sideOffset={6}
-        >{`${open ? 'Minimize' : 'Show'} floating terminal (${shortcutLabel})`}</TooltipContent>
+        >{`${open ? 'Minimize' : 'Show'} floating workspace (${shortcutLabel})`}</TooltipContent>
       </Tooltip>
     </FloatingTerminalIconContextMenu>
   )

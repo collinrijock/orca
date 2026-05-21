@@ -6,9 +6,9 @@ import {
   Activity,
   ChevronDown,
   ChevronRight,
+  PanelsTopLeft,
   RefreshCw,
-  Server,
-  TerminalSquare
+  Server
 } from 'lucide-react'
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -829,7 +829,9 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
 
   const compact = containerWidth < 900
   const iconOnly = containerWidth < 500
-  const floatingTerminalActionLabel = floatingTerminalOpen ? 'Minimize Terminal' : 'Show Terminal'
+  const floatingTerminalActionLabel = floatingTerminalOpen
+    ? 'Minimize Floating Workspace'
+    : 'Show Floating Workspace'
 
   return (
     <div
@@ -912,7 +914,7 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
                     window.dispatchEvent(new CustomEvent(TOGGLE_FLOATING_TERMINAL_EVENT))
                   }}
                 >
-                  <TerminalSquare className="size-3.5" />
+                  <PanelsTopLeft className="size-3.5" />
                 </button>
               </TooltipTrigger>
               <TooltipContent side="top" sideOffset={6}>
