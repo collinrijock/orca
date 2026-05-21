@@ -321,6 +321,7 @@ export default function TerminalPane({
   // without changing the other platforms' interaction model.
   const rightClickToPaste = isWindowsUserAgent() && (settings?.terminalRightClickToPaste ?? true)
   const [startup] = useState(() => useAppStore.getState().pendingStartupByTabId[tabId])
+  const shouldMeasureHiddenStartup = startup !== undefined && !isVisible
   const consumeTabStartupCommand = useAppStore((store) => store.consumeTabStartupCommand)
   const [setupSplit] = useState(() => useAppStore.getState().pendingSetupSplitByTabId[tabId])
   const consumeTabSetupSplit = useAppStore((store) => store.consumeTabSetupSplit)
@@ -1486,7 +1487,8 @@ export default function TerminalPane({
     // Why: split groups can keep one terminal visible in an unfocused group so
     // users still see its output while typing elsewhere. Hiding on `isActive`
     // blanked the previously focused pane and exposed the white group body.
-    display: isVisible ? 'flex' : 'none',
+    display: isVisible || shouldMeasureHiddenStartup ? 'flex' : 'none',
+    ...(shouldMeasureHiddenStartup ? { opacity: 0, pointerEvents: 'none' } : {}),
     ['--orca-terminal-divider-color' as string]:
       effectiveAppearance?.dividerColor ?? DEFAULT_TERMINAL_DIVIDER_DARK,
     ['--orca-terminal-divider-color-strong' as string]: normalizeColor(

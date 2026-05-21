@@ -11,7 +11,7 @@ import type {
   RuntimeTerminalWait
 } from '../../shared/runtime-types'
 import type { CommandHandler } from '../dispatch'
-import { shouldForceVisibleCodexTerminal } from '../codex-command-classification'
+import { shouldUseRendererBackedInteractiveTerminal } from '../codex-command-classification'
 import {
   formatTerminalClose,
   formatTerminalCreate,
@@ -130,17 +130,18 @@ export const TERMINAL_HANDLERS: Record<string, CommandHandler> = {
       )
     }
     const command = getOptionalStringFlag(flags, 'command')
+    const useRendererBackedInteractiveTerminal =
+      !client.isRemote && shouldUseRendererBackedInteractiveTerminal(command)
     const focus = flags.get('focus') === true
-    const rendererBacked = !client.isRemote && shouldForceVisibleCodexTerminal(command)
     const result = await client.call<{ terminal: RuntimeTerminalCreate }>('terminal.create', {
       worktree: await getBrowserWorktreeSelector(flags, cwd, client),
       command,
       title: getOptionalStringFlag(flags, 'title'),
-      // Why: Codex's interactive TUI must be born in a renderer-backed
-      // terminal. The runtime's default create path spawns first in a
-      // headless/background PTY and only adopts into the UI afterward.
+      // Why: interactive local agent TUIs need the renderer-backed terminal
+      // path for browser-side features, but CLI creates must stay backgrounded
+      // unless the caller explicitly asks for focus.
       focus,
-      ...(rendererBacked ? { rendererBacked: true, activate: focus } : {})
+      ...(useRendererBackedInteractiveTerminal ? { rendererBacked: true, activate: focus } : {})
     })
     printResult(result, json, formatTerminalCreate)
   },

@@ -216,6 +216,8 @@ orca terminal read --json
 
 Why: `--terminal` is optional for most commands. When omitted, Orca auto-resolves to the active terminal in the current worktree (same as browser commands target the active tab). Use explicit `--terminal <handle>` when operating on a specific pane.
 
+Why: `terminal create` creates a background session unless `--focus` is explicit. Interactive local agent commands such as bare `codex` or bare `claude` use Orca's renderer-backed terminal path so they can start at the app's measured terminal geometry without stealing focus from the user.
+
 Why: long terminal transcripts should be read with cursors. After a limited tail preview without an input cursor, page retained transcript from `oldestCursor`; in that case `nextCursor` already equals `latestCursor` and would skip omitted output. After a cursor read, if `limited` remains true and `nextCursor !== latestCursor`, continue with the returned `nextCursor`. Cursor reads default to the retained transcript size; `--limit` can request a smaller page. If `truncated` is true, older output has already fallen out of the retained buffer; use `oldestCursor` as the earliest available cursor.
 
 Why: terminal handles are runtime-scoped and may go stale after reloads. If Orca returns `terminal_handle_stale`, reacquire a fresh handle with `terminal list`.

@@ -519,25 +519,50 @@ function Terminal(): React.JSX.Element | null {
   // Only mount TerminalPanes for visited worktrees to prevent mass PTY
   // spawning when restoring a session with many saved worktree tabs.
   const mountedWorktreeIdsRef = useRef(new Set<string>())
+  const measurableBackgroundWorktreeIdsRef = useRef(new Set<string>())
+  const measurableBackgroundWorktreeTimersRef = useRef(new Map<string, number>())
   const [, setBackgroundMountRevision] = useState(0)
   useEffect(() => {
+    const timers = measurableBackgroundWorktreeTimersRef.current
     const onBackgroundMountTerminalWorktree = (event: Event): void => {
       const customEvent = event as CustomEvent<BackgroundMountTerminalWorktreeDetail>
-      addBackgroundMountedTerminalWorktree(
-        mountedWorktreeIdsRef.current,
-        customEvent.detail?.worktreeId,
-        () => setBackgroundMountRevision((revision) => revision + 1)
+      const worktreeId = customEvent.detail?.worktreeId
+      addBackgroundMountedTerminalWorktree(mountedWorktreeIdsRef.current, worktreeId, () =>
+        setBackgroundMountRevision((revision) => revision + 1)
       )
+      if (!worktreeId) {
+        return
+      }
+      measurableBackgroundWorktreeIdsRef.current.add(worktreeId)
+      const existingTimer = timers.get(worktreeId)
+      if (existingTimer !== undefined) {
+        window.clearTimeout(existingTimer)
+      }
+      // Why: background renderer-backed terminal creation must be measurable
+      // for the first xterm fit, but it must not keep hidden worktrees laid
+      // out indefinitely after the PTY has started.
+      const timer = window.setTimeout(() => {
+        measurableBackgroundWorktreeIdsRef.current.delete(worktreeId)
+        timers.delete(worktreeId)
+        setBackgroundMountRevision((revision) => revision + 1)
+      }, 3000)
+      timers.set(worktreeId, timer)
+      setBackgroundMountRevision((revision) => revision + 1)
     }
     window.addEventListener(
       BACKGROUND_MOUNT_TERMINAL_WORKTREE_EVENT,
       onBackgroundMountTerminalWorktree as EventListener
     )
-    return () =>
+    return () => {
       window.removeEventListener(
         BACKGROUND_MOUNT_TERMINAL_WORKTREE_EVENT,
         onBackgroundMountTerminalWorktree as EventListener
       )
+      for (const timer of timers.values()) {
+        window.clearTimeout(timer)
+      }
+      timers.clear()
+    }
   }, [])
   // Why: gated on workspaceSessionReady to prevent TerminalPane from mounting
   // before reconnectPersistedTerminals() has finished eagerly spawning PTYs.
@@ -1384,6 +1409,8 @@ function Terminal(): React.JSX.Element | null {
               // Why: use strict equality with 'terminal' instead of !== 'settings'
               // so the terminal/browser surface hides on the tasks page too.
               const isVisible = activeView === 'terminal' && worktree.id === activeWorktreeId
+              const shouldMeasureHiddenWorktree =
+                !isVisible && measurableBackgroundWorktreeIdsRef.current.has(worktree.id)
               return (
                 <WorktreeSplitSurface
                   key={`tab-groups-${worktree.id}`}
@@ -1392,6 +1419,7 @@ function Terminal(): React.JSX.Element | null {
                   layout={layout}
                   focusedGroupId={activeGroupIdByWorktree[worktree.id]}
                   isVisible={isVisible}
+                  shouldMeasureHiddenWorktree={shouldMeasureHiddenWorktree}
                   activityTerminalPortals={activityTerminalPortals}
                 />
               )
@@ -1439,10 +1467,18 @@ function Terminal(): React.JSX.Element | null {
                 // Why: use strict equality with 'terminal' instead of !== 'settings'
                 // so the terminal/browser surface hides on the tasks page too.
                 const isVisible = activeView === 'terminal' && worktree.id === activeWorktreeId
+                const shouldMeasureHiddenWorktree =
+                  !isVisible && measurableBackgroundWorktreeIdsRef.current.has(worktree.id)
                 return (
                   <div
                     key={worktree.id}
-                    className={isVisible ? 'absolute inset-0' : 'absolute inset-0 hidden'}
+                    className={
+                      isVisible
+                        ? 'absolute inset-0'
+                        : shouldMeasureHiddenWorktree
+                          ? 'absolute inset-0 opacity-0 pointer-events-none'
+                          : 'absolute inset-0 hidden'
+                    }
                     aria-hidden={!isVisible}
                   >
                     <CodexRestartChip worktreeId={worktree.id} />
@@ -1639,6 +1675,7 @@ const WorktreeSplitSurface = React.memo(function WorktreeSplitSurface({
   layout,
   focusedGroupId,
   isVisible,
+  shouldMeasureHiddenWorktree,
   activityTerminalPortals
 }: {
   worktreeId: string
@@ -1646,11 +1683,18 @@ const WorktreeSplitSurface = React.memo(function WorktreeSplitSurface({
   layout: TabGroupLayoutNode
   focusedGroupId?: string
   isVisible: boolean
+  shouldMeasureHiddenWorktree: boolean
   activityTerminalPortals: ActivityTerminalPortalTarget[]
 }): React.JSX.Element {
   return (
     <div
-      className={isVisible ? 'absolute inset-0 flex' : 'absolute inset-0 hidden'}
+      className={
+        isVisible
+          ? 'absolute inset-0 flex'
+          : shouldMeasureHiddenWorktree
+            ? 'absolute inset-0 flex opacity-0 pointer-events-none'
+            : 'absolute inset-0 hidden'
+      }
       aria-hidden={!isVisible}
     >
       <CodexRestartChip worktreeId={worktreeId} />
