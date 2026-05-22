@@ -127,4 +127,19 @@ describe('DeleteWorktreeDialog lineage copy', () => {
     expect(markup).toContain('Delete Parent Only')
     expect(markup).not.toContain('Don&apos;t ask again')
   })
+
+  it('keeps long child workspace paths constrained inside the lineage notice', async () => {
+    const child = makeWorktree(
+      'docs-file-upload-discovery-with-a-very-long-name',
+      '/Users/jinjingliang/Documents/projects/agent-slack/docs-file-upload-discovery-with-a-very-long-path-segment'
+    )
+    const { DeleteWorktreeLineageNotice } = await import('./DeleteWorktreeLineageNotice')
+
+    const markup = renderToStaticMarkup(<DeleteWorktreeLineageNotice descendants={[child]} />)
+
+    expect(markup).toContain('min-w-0 max-w-full overflow-hidden rounded-md')
+    expect(markup).toContain('mt-2 min-w-0 max-w-full space-y-1 overflow-hidden')
+    expect(markup).toContain('min-w-0 overflow-hidden')
+    expect(markup).toContain('truncate text-muted-foreground')
+  })
 })
