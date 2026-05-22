@@ -1021,6 +1021,14 @@ function App(): React.JSX.Element {
       if (e.defaultPrevented) {
         return
       }
+      // Why: the Settings recorder intentionally captures existing app
+      // shortcuts, so global handlers must not fire while its button has focus.
+      if (
+        e.target instanceof Element &&
+        e.target.closest('[data-shortcut-recorder-active]') !== null
+      ) {
+        return
+      }
       const context = getKeybindingContext(e.target)
 
       // Note: some app-level shortcuts are also intercepted via

@@ -82,6 +82,8 @@ export function ShortcutBindingRow({
     if (recording) {
       recordButtonRef.current?.focus()
     }
+    window.api.ui.setShortcutRecorderFocused(recording)
+    return () => window.api.ui.setShortcutRecorderFocused(false)
   }, [recording])
 
   const statusMessage = error ?? (warnings.length > 0 ? warnings.join(' ') : '')
@@ -171,6 +173,8 @@ export function ShortcutBindingRow({
         size="sm"
         aria-invalid={Boolean(error)}
         aria-pressed={recording}
+        data-shortcut-recorder=""
+        data-shortcut-recorder-active={recording ? '' : undefined}
         onClick={() => {
           if (recording) {
             return

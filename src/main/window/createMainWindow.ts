@@ -508,6 +508,7 @@ export function createMainWindow(
   let markdownEditorFocused = false
   let terminalInputFocused = false
   let floatingTerminalInputFocused = false
+  let shortcutRecorderFocused = false
 
   const markdownFocusChannel = 'ui:setMarkdownEditorFocused'
   // Why: coerce to strict boolean and verify the sender. A renderer bug or
@@ -543,6 +544,16 @@ export function createMainWindow(
     floatingTerminalInputFocused = focused === true
   }
   ipcMain.on(floatingTerminalInputFocusChannel, onFloatingTerminalInputFocused)
+  const shortcutRecorderFocusChannel = 'ui:setShortcutRecorderFocused'
+  // Why: the Settings recorder must receive existing app shortcuts so users can
+  // rebind them; before-input-event would otherwise consume the key first.
+  const onShortcutRecorderFocused = (event: Electron.IpcMainEvent, focused: unknown): void => {
+    if (event.sender !== mainWindow.webContents) {
+      return
+    }
+    shortcutRecorderFocused = focused === true
+  }
+  ipcMain.on(shortcutRecorderFocusChannel, onShortcutRecorderFocused)
 
   const onMainContextMenu = (_event: Electron.Event, params: Electron.ContextMenuParams): void => {
     const template = buildEditableContextMenuTemplate(params, mainWindow.webContents)
@@ -567,6 +578,9 @@ export function createMainWindow(
   }
   const resetFloatingTerminalInputFocus = (): void => {
     floatingTerminalInputFocused = false
+  }
+  const resetShortcutRecorderFocus = (): void => {
+    shortcutRecorderFocused = false
   }
   let rendererProcessGone = false
   let rendererRecoveryTimer: ReturnType<typeof setTimeout> | null = null
@@ -609,6 +623,7 @@ export function createMainWindow(
     resetMarkdownEditorFocus()
     resetTerminalInputFocus()
     resetFloatingTerminalInputFocus()
+    resetShortcutRecorderFocus()
     if (opts?.shouldRecordRendererCrash?.(details, rendererWebContentsId) !== false) {
       opts?.onRendererProcessGone?.(details, rendererWebContentsId)
     }
@@ -619,12 +634,14 @@ export function createMainWindow(
     resetMarkdownEditorFocus()
     resetTerminalInputFocus()
     resetFloatingTerminalInputFocus()
+    resetShortcutRecorderFocus()
   })
   mainWindow.webContents.on('did-start-navigation', (_e, _url, _isInPlace, isMainFrame) => {
     if (isMainFrame) {
       resetMarkdownEditorFocus()
       resetTerminalInputFocus()
       resetFloatingTerminalInputFocus()
+      resetShortcutRecorderFocus()
     }
   })
   mainWindow.webContents.on('did-finish-load', () => {
@@ -634,6 +651,10 @@ export function createMainWindow(
 
   let ctrlTabSwitching = false
   mainWindow.webContents.on('before-input-event', (event, input) => {
+    if (shortcutRecorderFocused) {
+      return
+    }
+
     if (input.type === 'keyDown' && is.dev && input.code === 'F12') {
       event.preventDefault()
       if (mainWindow.webContents.isDevToolsOpened()) {
@@ -988,6 +1009,7 @@ export function createMainWindow(
     markdownEditorFocused = false
     terminalInputFocused = false
     floatingTerminalInputFocused = false
+    shortcutRecorderFocused = false
     clearRendererRecoveryTimer()
     ipcMain.removeListener(trafficLightChannel, onSyncTrafficLights)
     ipcMain.removeListener(minimizeChannel, onMinimize)
@@ -1000,6 +1022,7 @@ export function createMainWindow(
     ipcMain.removeListener(markdownFocusChannel, onMarkdownEditorFocused)
     ipcMain.removeListener(terminalInputFocusChannel, onTerminalInputFocused)
     ipcMain.removeListener(floatingTerminalInputFocusChannel, onFloatingTerminalInputFocused)
+    ipcMain.removeListener(shortcutRecorderFocusChannel, onShortcutRecorderFocused)
     // Why: on updater-triggered shutdown, BrowserWindow can emit `closed`
     // after its webContents has already been destroyed. The destroyed
     // webContents owns its listeners, so do not touch `mainWindow.webContents`
