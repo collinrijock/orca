@@ -755,6 +755,57 @@ describe('Store', () => {
     expect(store.getRepos()).toHaveLength(1)
   })
 
+  it('migrates legacy commit-message AI settings to source-control AI on load', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: {
+        commitMessageAi: {
+          enabled: true,
+          agentId: 'cursor',
+          selectedModelByAgent: { cursor: 'gpt-5.2' },
+          selectedModelByAgentByHost: { 'ssh:conn-1': { cursor: 'remote-model' } },
+          discoveredModelsByAgent: {
+            cursor: [{ id: 'gpt-5.2', label: 'GPT 5.2' }]
+          },
+          discoveredModelsByAgentByHost: {
+            'ssh:conn-1': {
+              cursor: [{ id: 'remote-model', label: 'Remote Model' }]
+            }
+          },
+          selectedThinkingByModel: { 'gpt-5.2': 'high' },
+          customPrompt: 'Use Conventional Commits.',
+          customAgentCommand: 'cursor-agent'
+        }
+      },
+      ui: {},
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+
+    const store = await createStore()
+    const sourceControlAi = store.getSettings().sourceControlAi
+
+    expect(sourceControlAi).toMatchObject({
+      enabled: true,
+      agentId: 'cursor',
+      selectedModelByAgent: { cursor: 'gpt-5.2' },
+      selectedThinkingByModel: { 'gpt-5.2': 'high' },
+      customAgentCommand: 'cursor-agent',
+      instructionsByOperation: {
+        commitMessage: 'Use Conventional Commits.',
+        pullRequest: ''
+      }
+    })
+    expect(sourceControlAi?.selectedModelByAgentByHost?.['ssh:conn-1']?.cursor).toBe('remote-model')
+    expect(sourceControlAi?.discoveredModelsByAgent?.cursor?.[0]?.id).toBe('gpt-5.2')
+    expect(sourceControlAi?.discoveredModelsByAgentByHost?.['ssh:conn-1']?.cursor?.[0]?.id).toBe(
+      'remote-model'
+    )
+    expect(store.getSettings().commitMessageAi?.customPrompt).toBe('Use Conventional Commits.')
+  })
+
   it('normalizes malformed visible task providers on load', async () => {
     writeDataFile({
       schemaVersion: 1,
@@ -1462,6 +1513,32 @@ describe('Store', () => {
     expect(updated!.externalWorktreeVisibilityLegacy).toBe(true)
   })
 
+  it('updateRepo clears source-control AI overrides independently from other clearable fields', async () => {
+    const store = await createStore()
+    store.addRepo(
+      makeRepo({
+        issueSourcePreference: 'origin',
+        sourceControlAi: {
+          instructionsByOperation: { commitMessage: 'Repo style' },
+          prCreationDefaults: { draft: true }
+        }
+      })
+    )
+
+    store.updateRepo('r1', {
+      issueSourcePreference: undefined,
+      sourceControlAi: undefined
+    })
+
+    expect(store.getRepo('r1')!.issueSourcePreference).toBeUndefined()
+    expect(store.getRepo('r1')!.sourceControlAi).toBeUndefined()
+
+    store.flush()
+    const reloaded = await createStore()
+    expect(reloaded.getRepo('r1')!.issueSourcePreference).toBeUndefined()
+    expect(reloaded.getRepo('r1')!.sourceControlAi).toBeUndefined()
+  })
+
   // ── 8. setWorktreeMeta and getWorktreeMeta ─────────────────────────
 
   it('setWorktreeMeta creates meta with defaults for missing fields', async () => {
@@ -1507,6 +1584,63 @@ describe('Store', () => {
     expect(updated.terminalFontWeight).toBe(600)
     // Other fields preserved
     expect(updated.branchPrefix).toBe('git-username')
+  })
+
+  it('updateSettings keeps the legacy commit-message AI projection in sync', async () => {
+    const store = await createStore()
+    const current = store.getSettings().sourceControlAi!
+
+    const updated = store.updateSettings({
+      sourceControlAi: {
+        ...current,
+        enabled: true,
+        agentId: 'codex',
+        selectedModelByAgent: { codex: 'gpt-5.4' },
+        selectedThinkingByModel: { 'gpt-5.4': 'high' },
+        instructionsByOperation: {
+          commitMessage: 'Write concise commit messages.',
+          pullRequest: 'Write release-note-ready PR details.'
+        },
+        customAgentCommand: ''
+      }
+    })
+
+    expect(updated.commitMessageAi).toMatchObject({
+      enabled: true,
+      agentId: 'codex',
+      selectedModelByAgent: { codex: 'gpt-5.4' },
+      selectedThinkingByModel: { 'gpt-5.4': 'high' },
+      customPrompt: 'Write concise commit messages.',
+      customAgentCommand: ''
+    })
+  })
+
+  it('updateSettings keeps source-control AI in sync for legacy commit-message updates', async () => {
+    const store = await createStore()
+    const current = store.getSettings().commitMessageAi!
+
+    const updated = store.updateSettings({
+      commitMessageAi: {
+        ...current,
+        enabled: false,
+        agentId: 'claude',
+        selectedModelByAgent: { claude: 'sonnet' },
+        selectedThinkingByModel: { sonnet: 'medium' },
+        customPrompt: 'Legacy settings update',
+        customAgentCommand: 'claude'
+      }
+    })
+
+    expect(updated.sourceControlAi).toMatchObject({
+      enabled: false,
+      agentId: 'claude',
+      selectedModelByAgent: { claude: 'sonnet' },
+      selectedThinkingByModel: { sonnet: 'medium' },
+      customAgentCommand: 'claude',
+      instructionsByOperation: {
+        commitMessage: 'Legacy settings update'
+      }
+    })
   })
 
   it('updateSettings normalizes open-in applications', async () => {

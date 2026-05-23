@@ -629,6 +629,7 @@ export type PreloadApi = {
           | 'issueSourcePreference'
           | 'externalWorktreeVisibility'
           | 'externalWorktreeVisibilityPromptDismissedAt'
+          | 'sourceControlAi'
         >
       >
     }) => Promise<Repo>
@@ -1642,6 +1643,7 @@ export type PreloadApi = {
     }) => Promise<{ success: boolean; error?: string }>
     generateCommitMessage: (args: {
       worktreePath: string
+      repoId?: string
       connectionId?: string
     }) => Promise<
       | { success: true; message: string; agentLabel?: string }
@@ -1666,6 +1668,7 @@ export type PreloadApi = {
     }) => Promise<void>
     generatePullRequestFields: (args: {
       worktreePath: string
+      repoId?: string
       base: string
       title: string
       body: string

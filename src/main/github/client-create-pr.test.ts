@@ -1,19 +1,31 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { readFile } from 'fs/promises'
 
-const { ghExecFileAsyncMock, getOwnerRepoMock, extractExecErrorMock, acquireMock, releaseMock } =
-  vi.hoisted(() => ({
-    ghExecFileAsyncMock: vi.fn(),
-    getOwnerRepoMock: vi.fn(),
-    extractExecErrorMock: vi.fn((error: unknown) => {
-      const value = error as { stderr?: string; stdout?: string; message?: string }
-      return {
-        stderr: value?.stderr ?? value?.message ?? '',
-        stdout: value?.stdout ?? ''
-      }
-    }),
-    acquireMock: vi.fn(),
-    releaseMock: vi.fn()
-  }))
+const {
+  ghExecFileAsyncMock,
+  getOwnerRepoMock,
+  extractExecErrorMock,
+  acquireMock,
+  releaseMock,
+  getSshFilesystemProviderMock
+} = vi.hoisted(() => ({
+  ghExecFileAsyncMock: vi.fn(),
+  getOwnerRepoMock: vi.fn(),
+  extractExecErrorMock: vi.fn((error: unknown) => {
+    const value = error as { stderr?: string; stdout?: string; message?: string }
+    return {
+      stderr: value?.stderr ?? value?.message ?? '',
+      stdout: value?.stdout ?? ''
+    }
+  }),
+  acquireMock: vi.fn(),
+  releaseMock: vi.fn(),
+  getSshFilesystemProviderMock: vi.fn()
+}))
+
+vi.mock('../providers/ssh-filesystem-dispatch', () => ({
+  getSshFilesystemProvider: getSshFilesystemProviderMock
+}))
 
 vi.mock('./gh-utils', () => ({
   execFileAsync: vi.fn(),
@@ -49,6 +61,7 @@ describe('createGitHubPullRequest', () => {
     extractExecErrorMock.mockClear()
     acquireMock.mockReset()
     releaseMock.mockReset()
+    getSshFilesystemProviderMock.mockReset()
     acquireMock.mockResolvedValue(undefined)
   })
 
@@ -147,6 +160,50 @@ describe('createGitHubPullRequest', () => {
       idempotent: false
     })
     expect(options).not.toHaveProperty('cwd')
+  })
+
+  it('reads PR templates from the SSH filesystem provider', async () => {
+    const readRemoteFile = vi.fn().mockResolvedValue({
+      content: 'Remote template body',
+      isBinary: false
+    })
+    getSshFilesystemProviderMock.mockReturnValue({ readFile: readRemoteFile })
+    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
+    const writtenBodies: string[] = []
+    ghExecFileAsyncMock.mockImplementationOnce(async (args: string[]) => {
+      const bodyPath = args[args.indexOf('--body-file') + 1]
+      writtenBodies.push(await readFile(bodyPath, 'utf8'))
+      return {
+        stdout: JSON.stringify({
+          number: 46,
+          url: 'https://github.com/acme/widgets/pull/46'
+        })
+      }
+    })
+
+    await expect(
+      createGitHubPullRequest(
+        '/remote/repo-root',
+        {
+          provider: 'github',
+          base: 'main',
+          head: 'feature/ssh-template',
+          title: 'SSH Template PR',
+          body: '',
+          useTemplate: true
+        },
+        'ssh-1'
+      )
+    ).resolves.toEqual({
+      ok: true,
+      number: 46,
+      url: 'https://github.com/acme/widgets/pull/46'
+    })
+
+    expect(readRemoteFile).toHaveBeenCalledWith(
+      '/remote/repo-root/.github/pull_request_template.md'
+    )
+    expect(writtenBodies).toEqual(['Remote template body'])
   })
 
   it('falls back to parsing the PR URL for older gh output', async () => {

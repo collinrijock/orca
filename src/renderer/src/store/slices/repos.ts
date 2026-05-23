@@ -27,6 +27,7 @@ type RepoUpdate = Partial<
     | 'issueSourcePreference'
     | 'externalWorktreeVisibility'
     | 'externalWorktreeVisibilityPromptDismissedAt'
+    | 'sourceControlAi'
   >
 >
 

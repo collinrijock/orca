@@ -94,6 +94,12 @@ import {
 } from '../shared/workspace-statuses'
 import { isLegacyRepoForExternalWorktreeVisibility } from '../shared/worktree-ownership'
 import { sanitizeRepoIcon } from '../shared/repo-icon'
+import {
+  mergeLegacyCommitMessageAiIntoSourceControlAi,
+  normalizeSourceControlAiSettings,
+  projectSourceControlAiToLegacyCommitMessageAi,
+  sourceControlAiSettingsFromLegacy
+} from '../shared/source-control-ai'
 
 function encrypt(plaintext: string): string {
   if (!plaintext || !safeStorage.isEncryptionAvailable()) {
@@ -1401,6 +1407,18 @@ export class Store {
         // Merge with defaults in case new fields were added
         const homeDir = homedir()
         const defaults = getDefaultPersistedState(homeDir)
+        const rawSourceControlAiMissing = parsed.settings?.sourceControlAi === undefined
+        if (rawSourceControlAiMissing) {
+          this.loadNeedsSave = true
+        }
+        const migratedSourceControlAi = normalizeSourceControlAiSettings(
+          rawSourceControlAiMissing
+            ? sourceControlAiSettingsFromLegacy(
+                parsed.settings?.commitMessageAi ?? defaults.settings.commitMessageAi
+              )
+            : parsed.settings?.sourceControlAi,
+          parsed.settings?.commitMessageAi ?? defaults.settings.commitMessageAi
+        )
         // Why: before the layout-aware 'auto' mode shipped (issue #903),
         // terminalMacOptionAsAlt defaulted to 'true' globally. That silently
         // broke Option-layer characters (@ on Turkish via Option+Q, @ on
@@ -1544,6 +1562,14 @@ export class Store {
             ),
             openInApplications: normalizeOpenInApplications(parsed.settings?.openInApplications),
             notifications: normalizeNotificationSettings(parsed.settings?.notifications),
+            sourceControlAi: migratedSourceControlAi,
+            // Why: new builds read sourceControlAi, but keep the legacy
+            // commitMessageAi projection fresh so rollback builds preserve
+            // commit-message behavior during the compatibility window.
+            commitMessageAi: projectSourceControlAiToLegacyCommitMessageAi(
+              migratedSourceControlAi,
+              parsed.settings?.commitMessageAi ?? defaults.settings.commitMessageAi
+            ),
             voice: {
               ...getDefaultVoiceSettings(),
               ...parsed.settings?.voice
@@ -2089,9 +2115,11 @@ export class Store {
         | 'hookSettings'
         | 'worktreeBaseRef'
         | 'kind'
+        | 'symlinkPaths'
         | 'issueSourcePreference'
         | 'externalWorktreeVisibility'
         | 'externalWorktreeVisibilityPromptDismissedAt'
+        | 'sourceControlAi'
       >
     >
   ): Repo | null {
@@ -2105,20 +2133,14 @@ export class Store {
       repo.externalWorktreeVisibilityLegacy === undefined
         ? isLegacyRepoForExternalWorktreeVisibility(repo)
         : undefined
-    // Why: `issueSourcePreference === undefined` in the patch means "reset to
-    // auto" (and the persisted record should drop the key, not preserve a
-    // stale explicit value via Object.assign's skip-on-undefined behavior).
-    // Without this delete branch, toggling explicit → auto would silently
-    // leave the old preference in place on disk.
+    // Why: selected repo fields use `undefined` as an explicit clear signal,
+    // so delete them before assigning the rest of the patch.
     if (
       'issueSourcePreference' in sanitizedUpdates &&
       sanitizedUpdates.issueSourcePreference === undefined
     ) {
       delete repo.issueSourcePreference
-      const { issueSourcePreference: _drop, ...rest } = sanitizedUpdates
-      Object.assign(repo, rest)
-    } else {
-      Object.assign(repo, sanitizedUpdates)
+      delete sanitizedUpdates.issueSourcePreference
     }
     if (
       'externalWorktreeVisibility' in sanitizedUpdates &&
@@ -2128,6 +2150,11 @@ export class Store {
       // time visibility changes so later hide/show choices keep legacy safety.
       repo.externalWorktreeVisibilityLegacy = externalWorktreeVisibilityLegacy
     }
+    if ('sourceControlAi' in sanitizedUpdates && sanitizedUpdates.sourceControlAi === undefined) {
+      delete repo.sourceControlAi
+      delete sanitizedUpdates.sourceControlAi
+    }
+    Object.assign(repo, sanitizedUpdates)
     this.scheduleSave()
     return this.hydrateRepo(repo)
   }
@@ -2514,6 +2541,22 @@ export class Store {
       sanitizedUpdates.telemetry !== undefined
         ? { ...this.state.settings.telemetry, ...sanitizedUpdates.telemetry }
         : this.state.settings.telemetry
+    if ('sourceControlAi' in sanitizedUpdates) {
+      const normalizedSourceControlAi = normalizeSourceControlAiSettings(
+        sanitizedUpdates.sourceControlAi,
+        this.state.settings.commitMessageAi
+      )
+      sanitizedUpdates.sourceControlAi = normalizedSourceControlAi
+      sanitizedUpdates.commitMessageAi = projectSourceControlAiToLegacyCommitMessageAi(
+        normalizedSourceControlAi,
+        this.state.settings.commitMessageAi
+      )
+    } else if ('commitMessageAi' in sanitizedUpdates) {
+      sanitizedUpdates.sourceControlAi = mergeLegacyCommitMessageAiIntoSourceControlAi(
+        this.state.settings.sourceControlAi,
+        sanitizedUpdates.commitMessageAi
+      )
+    }
     this.state.settings = {
       ...this.state.settings,
       ...sanitizedUpdates,

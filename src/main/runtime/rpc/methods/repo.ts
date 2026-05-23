@@ -42,7 +42,8 @@ const RepoUpdate = RepoSelector.extend({
     symlinkPaths: z.array(z.string()).optional(),
     issueSourcePreference: z.enum(['auto', 'upstream', 'origin']).optional(),
     externalWorktreeVisibility: z.enum(['hide', 'show']).optional(),
-    externalWorktreeVisibilityPromptDismissedAt: z.number().finite().optional()
+    externalWorktreeVisibilityPromptDismissedAt: z.number().finite().optional(),
+    sourceControlAi: z.unknown().optional()
   })
 })
 

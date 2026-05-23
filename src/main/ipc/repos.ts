@@ -496,6 +496,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
             | 'issueSourcePreference'
             | 'externalWorktreeVisibility'
             | 'externalWorktreeVisibilityPromptDismissedAt'
+            | 'sourceControlAi'
           >
         >
       }

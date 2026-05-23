@@ -766,7 +766,7 @@ function Settings(): React.JSX.Element {
                 <SettingsSection
                   id="git"
                   title="Git & Source Control"
-                  description="Branch naming, base refs, attribution, and AI commit messages."
+                  description="Branch naming, base refs, attribution, and Source Control AI."
                   searchEntries={getSectionSearchEntries('git')}
                   forceVisible={hasUnsavedCommitPromptChanges}
                 >

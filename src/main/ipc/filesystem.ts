@@ -18,6 +18,7 @@ import type {
   MarkdownDocument,
   SearchOptions,
   SearchResult,
+  Repo,
   TuiAgent
 } from '../../shared/types'
 import type { GitHistoryOptions, GitHistoryResult } from '../../shared/git-history'
@@ -115,6 +116,10 @@ const PREVIEWABLE_BINARY_MIME_TYPES: Record<string, string> = {
   '.bmp': 'image/bmp',
   '.ico': 'image/x-icon',
   '.pdf': 'application/pdf'
+}
+
+function getRepoForSourceControlAi(store: Store, repoId: string | undefined): Repo | null {
+  return repoId ? (store.getRepo(repoId) ?? null) : null
 }
 
 function validateFullGitObjectId(value: string, label: string): string {
@@ -625,11 +630,17 @@ export function registerFilesystemHandlers(
       _event,
       args: {
         worktreePath: string
+        repoId?: string
         connectionId?: string
       }
     ): Promise<GenerateCommitMessageResult> => {
       const discoveryHostKey = getCommitMessageModelDiscoveryHostKey(args.connectionId ?? null)
-      const resolvedSettings = resolveCommitMessageSettings(store.getSettings(), discoveryHostKey)
+      const resolvedSettings = resolveCommitMessageSettings(
+        store.getSettings(),
+        discoveryHostKey,
+        'commitMessage',
+        getRepoForSourceControlAi(store, args.repoId)
+      )
       if (!resolvedSettings.ok) {
         return { success: false, error: resolvedSettings.error }
       }
@@ -751,6 +762,7 @@ export function registerFilesystemHandlers(
       _event,
       args: {
         worktreePath: string
+        repoId?: string
         base: string
         title: string
         body: string
@@ -759,7 +771,12 @@ export function registerFilesystemHandlers(
       }
     ): Promise<GeneratePullRequestFieldsResult> => {
       const discoveryHostKey = getCommitMessageModelDiscoveryHostKey(args.connectionId ?? null)
-      const resolvedSettings = resolveCommitMessageSettings(store.getSettings(), discoveryHostKey)
+      const resolvedSettings = resolveCommitMessageSettings(
+        store.getSettings(),
+        discoveryHostKey,
+        'pullRequest',
+        getRepoForSourceControlAi(store, args.repoId)
+      )
       if (!resolvedSettings.ok) {
         return { success: false, error: resolvedSettings.error }
       }
