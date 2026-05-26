@@ -32,7 +32,7 @@ describe('OnboardingFlow', () => {
 
     expect(html).toContain('Explore Orca')
     expect(html).toContain('Preview the core workflow.')
-    expect(html).toContain('Run agents in isolated workspaces.')
+    expect(html).toContain('Run agents in isolated worktrees.')
     expect(html).toContain('Orchestrate agents to finish larger tasks.')
     expect(html).toContain('Start tasks from GitHub or Linear.')
     expect(html).toContain('Send webpage elements to agents from the Orca browser.')

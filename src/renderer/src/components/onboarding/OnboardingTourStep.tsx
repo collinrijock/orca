@@ -8,7 +8,7 @@ import { FeatureWallTourSurface } from '../feature-wall/FeatureWallTourSurface'
 import { usePrefersReducedMotion } from '../feature-wall/feature-wall-modal-helpers'
 
 const TOUR_LEARNING_POINTS: readonly string[] = [
-  'Run agents in isolated workspaces.',
+  'Run agents in isolated worktrees.',
   'Orchestrate agents to finish larger tasks.',
   'Start tasks from GitHub or Linear.',
   'Send webpage elements to agents from the Orca browser.'
