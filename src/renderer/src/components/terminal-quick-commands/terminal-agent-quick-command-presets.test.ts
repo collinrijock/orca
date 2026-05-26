@@ -10,6 +10,7 @@ describe('terminal agent quick command presets', () => {
       codex: "codex 'your prompt here'",
       copilot: "copilot -i 'your prompt here'",
       opencode: "opencode --prompt 'your prompt here'",
+      omp: "omp 'your prompt here'",
       pi: "pi 'your prompt here'",
       gemini: "gemini --prompt-interactive 'your prompt here'",
       antigravity: "agy --prompt-interactive 'your prompt here'",
