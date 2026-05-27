@@ -20,6 +20,7 @@ import { mergeLegacyCommitMessageAiIntoSourceControlAi } from '../../shared/sour
 import type { SourceControlAiOperation } from '../../shared/source-control-ai-types'
 import { getRemoteFileUrl } from '../git/repo'
 import {
+  abortMerge,
   bulkDiscardChanges,
   bulkStageFiles,
   bulkUnstageFiles,
@@ -174,6 +175,20 @@ export class RuntimeGitCommands {
       return provider.detectConflictOperation(target.worktree.path)
     }
     return detectConflictOperation(target.worktree.path)
+  }
+
+  async abortRuntimeGitMerge(worktreeSelector: string): Promise<{ ok: true }> {
+    const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
+    const provider = target.connectionId ? getSshGitProvider(target.connectionId) : null
+    if (target.connectionId) {
+      if (!provider) {
+        throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
+      }
+      await provider.abortMerge(target.worktree.path)
+      return { ok: true }
+    }
+    await abortMerge(target.worktree.path)
+    return { ok: true }
   }
 
   async getRuntimeGitDiff(
