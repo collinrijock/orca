@@ -2394,41 +2394,56 @@ html.onboarding-tour-start-transition::view-transition-new(root) {
   gap: 6px;
 }
 
-/* Why: contextual-tour highlight is sized to the target rect and reads
-   as a focus ring sitting on the surface. The inset shadow keeps the
-   crisp ring inside the element so it doesn't get clipped at viewport
-   edges; the outer shadow is a soft halo that blooms outward without
-   drawing a hard frame. */
-.contextual-tour-highlight {
+/* Why: contextual-tour spotlight is a full-cover scrim with an SVG-mask
+   hole at the target rect plus a thin edge stroke, so attention reads
+   from the dim contrast rather than from chrome painted over the target.
+   The mask uses the target's own border-radius so curved buttons don't
+   leave un-dimmed corners between their curve and the cutout edge. */
+.contextual-tour-spotlight {
   pointer-events: none;
-  box-shadow:
-    inset 0 0 0 2px color-mix(in srgb, var(--ring) 80%, transparent),
-    0 0 0 2px color-mix(in srgb, var(--ring) 40%, transparent),
-    0 0 24px 6px color-mix(in srgb, var(--ring) 28%, transparent),
-    0 0 56px 16px color-mix(in srgb, var(--ring) 14%, transparent);
-  animation: contextual-tour-highlight-pulse 2.6s ease-in-out infinite;
+  inset: 0;
+  animation: contextual-tour-spotlight-fade-in 200ms ease-out;
 }
 
-@keyframes contextual-tour-highlight-pulse {
-  0%,
-  100% {
-    box-shadow:
-      inset 0 0 0 2px color-mix(in srgb, var(--ring) 80%, transparent),
-      0 0 0 2px color-mix(in srgb, var(--ring) 40%, transparent),
-      0 0 24px 6px color-mix(in srgb, var(--ring) 28%, transparent),
-      0 0 56px 16px color-mix(in srgb, var(--ring) 14%, transparent);
+.contextual-tour-spotlight-svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+/* Why: tint toward black so the scrim reads as a dim regardless of
+   theme — tinting toward --background would be invisible in light theme
+   (white over white). */
+.contextual-tour-spotlight-fill {
+  fill: rgb(0 0 0 / 0.5);
+}
+
+.contextual-tour-spotlight-edge {
+  pointer-events: none;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ring) 55%, transparent);
+  transition:
+    top 180ms ease,
+    left 180ms ease,
+    width 180ms ease,
+    height 180ms ease;
+}
+
+@keyframes contextual-tour-spotlight-fade-in {
+  from {
+    opacity: 0;
   }
-  50% {
-    box-shadow:
-      inset 0 0 0 2px color-mix(in srgb, var(--ring) 95%, transparent),
-      0 0 0 2px color-mix(in srgb, var(--ring) 55%, transparent),
-      0 0 32px 10px color-mix(in srgb, var(--ring) 38%, transparent),
-      0 0 68px 22px color-mix(in srgb, var(--ring) 22%, transparent);
+  to {
+    opacity: 1;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .contextual-tour-highlight {
+  .contextual-tour-spotlight {
     animation: none;
+  }
+  .contextual-tour-spotlight-edge {
+    transition: none;
   }
 }

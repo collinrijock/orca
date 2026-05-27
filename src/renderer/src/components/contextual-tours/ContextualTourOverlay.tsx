@@ -30,10 +30,14 @@ import {
   ContextualTourOverlaySurface,
   getContextualTourFocusableElements,
   handleContextualTourOverlayKeyDown,
-  type ActiveTourRenderState
+  type ActiveTourRenderState,
+  type SpotlightRect
 } from './ContextualTourOverlaySurface'
 
 const PANEL_FALLBACK_SIZE = { width: 304, height: 172 }
+// Why: padding around the spotlight cutout so a tight ring of the
+// underlying surface still reads as part of the highlighted target.
+const SPOTLIGHT_PADDING = 6
 
 export function ContextualTourOverlay(): JSX.Element | null {
   const activeTourId = useAppStore((s) => s.activeContextualTourId)
@@ -290,24 +294,29 @@ export function ContextualTourOverlay(): JSX.Element | null {
     }
     // Why: Radix dialog/sheet content owns focus and z-index; hosting controls
     // there avoids outside-focus dismissal and keeps them above the backdrop.
-    // For hosted panels, the panel sits inside the dialog (no floating arrow
-    // / highlight rect on top), so we mark the target itself with a soft ring.
+    // The hosted spotlight portals into the host so it dims only the panel
+    // contents around the target, not the rest of the app.
     const previousZIndex = panelHost.style.zIndex
     const targetElement =
       renderState?.targetElement instanceof HTMLElement ? renderState.targetElement : null
-    const previousBoxShadow = targetElement?.style.boxShadow
-    const previousBorderRadius = targetElement?.style.borderRadius
+    const previousPosition = targetElement?.style.position
+    const previousZ = targetElement?.style.zIndex
     panelHost.style.zIndex = '80'
     if (targetElement) {
-      targetElement.style.boxShadow =
-        '0 0 8px 0 color-mix(in srgb, var(--ring) 55%, transparent), 0 0 24px 4px color-mix(in srgb, var(--ring) 32%, transparent), 0 0 56px 16px color-mix(in srgb, var(--ring) 16%, transparent)'
-      targetElement.style.borderRadius ||= 'var(--radius-md)'
+      // Why: lift the target above the host-portaled scrim quadrants so the
+      // cutout reads as un-dimmed even though the scrim shares its stacking
+      // context. Setting position only when unset preserves any existing
+      // layout behavior.
+      if (!targetElement.style.position) {
+        targetElement.style.position = 'relative'
+      }
+      targetElement.style.zIndex = '1'
     }
     return () => {
       panelHost.style.zIndex = previousZIndex
       if (targetElement) {
-        targetElement.style.boxShadow = previousBoxShadow ?? ''
-        targetElement.style.borderRadius = previousBorderRadius ?? ''
+        targetElement.style.position = previousPosition ?? ''
+        targetElement.style.zIndex = previousZ ?? ''
       }
     }
   }, [activeTourId, renderState])
@@ -339,24 +348,31 @@ export function ContextualTourOverlay(): JSX.Element | null {
     top: cssPosition.top,
     '--contextual-tour-arrow-offset': `${cssPosition.arrowOffset}px`
   }
-  // Why: align the highlight rect to the element so the ring sits ON the
-  // surface like a focus ring. Outsetting it floats the ring in empty
-  // space when the element touches a viewport edge (e.g. the right
-  // sidebar) and reads as misplaced chrome. The glow in box-shadow
-  // already extends outward from the element edge.
-  const highlightStyle: CSSProperties = {
-    left: renderState.rect.left,
-    top: renderState.rect.top,
-    width: renderState.rect.width,
-    height: renderState.rect.height
+  const targetRadius = getContextualTourTargetRadius(renderState.targetElement)
+  const spotlightRect: SpotlightRect = {
+    left: renderState.rect.left - SPOTLIGHT_PADDING,
+    top: renderState.rect.top - SPOTLIGHT_PADDING,
+    width: renderState.rect.width + SPOTLIGHT_PADDING * 2,
+    height: renderState.rect.height + SPOTLIGHT_PADDING * 2,
+    radius: targetRadius + SPOTLIGHT_PADDING
   }
+  const spotlightHostRect: SpotlightRect | null = panelHostRect
+    ? {
+        left: spotlightRect.left - panelHostRect.left,
+        top: spotlightRect.top - panelHostRect.top,
+        width: spotlightRect.width,
+        height: spotlightRect.height,
+        radius: spotlightRect.radius
+      }
+    : null
 
   return (
     <ContextualTourOverlaySurface
       activeTourId={activeTourId}
       renderState={renderState}
       panelRef={panelRef}
-      highlightStyle={highlightStyle}
+      spotlightRect={spotlightRect}
+      spotlightHostRect={spotlightHostRect}
       panelPosition={panelPosition}
       panelPlacement={clamped.placement}
       panelHost={renderState.panelHost}
@@ -376,4 +392,23 @@ export function ContextualTourOverlay(): JSX.Element | null {
       onOverlayKeyDownCapture={handleContextualTourOverlayKeyDown}
     />
   )
+}
+
+function getContextualTourTargetRadius(element: Element): number {
+  if (typeof window === 'undefined' || !(element instanceof HTMLElement)) {
+    return 0
+  }
+  // Why: read all four corners and take the max so the cutout never has a
+  // smaller radius than the target. Asymmetric radii are uncommon in our
+  // chrome but worth handling.
+  const style = window.getComputedStyle(element)
+  const radii = [
+    style.borderTopLeftRadius,
+    style.borderTopRightRadius,
+    style.borderBottomRightRadius,
+    style.borderBottomLeftRadius
+  ]
+    .map((value) => parseFloat(value))
+    .filter((value) => Number.isFinite(value))
+  return radii.length > 0 ? Math.max(...radii) : 0
 }

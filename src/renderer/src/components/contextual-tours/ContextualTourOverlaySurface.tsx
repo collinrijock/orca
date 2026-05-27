@@ -30,7 +30,8 @@ type ContextualTourOverlaySurfaceProps = {
   activeTourId: ContextualTourId
   renderState: ActiveTourRenderState
   panelRef: RefObject<HTMLElement | null>
-  highlightStyle: CSSProperties
+  spotlightRect: SpotlightRect
+  spotlightHostRect: SpotlightRect | null
   panelPosition: PanelPositionStyle
   panelPlacement: ContextualTourPanelPlacement | null
   panelHost: HTMLElement | null
@@ -38,6 +39,14 @@ type ContextualTourOverlaySurfaceProps = {
   onBack: () => void
   onNext: () => void
   onOverlayKeyDownCapture: (event: KeyboardEvent<HTMLDivElement>) => void
+}
+
+export type SpotlightRect = {
+  top: number
+  left: number
+  width: number
+  height: number
+  radius: number
 }
 
 if (typeof window !== 'undefined') {
@@ -59,7 +68,8 @@ export function ContextualTourOverlaySurface({
   activeTourId,
   renderState,
   panelRef,
-  highlightStyle,
+  spotlightRect,
+  spotlightHostRect,
   panelPosition,
   panelPlacement,
   panelHost,
@@ -134,6 +144,14 @@ export function ContextualTourOverlaySurface({
     </section>
   )
 
+  const spotlight = panelHost ? (
+    spotlightHostRect ? (
+      <ContextualTourSpotlight rect={spotlightHostRect} hosted />
+    ) : null
+  ) : (
+    <ContextualTourSpotlight rect={spotlightRect} hosted={false} />
+  )
+
   return (
     <div
       className={cn(
@@ -146,17 +164,73 @@ export function ContextualTourOverlaySurface({
       role="presentation"
       onKeyDownCapture={onOverlayKeyDownCapture}
     >
-      {panelHost ? null : (
-        <div
-          aria-hidden="true"
-          data-contextual-tour-highlight=""
-          className="contextual-tour-highlight fixed rounded-md animate-in fade-in-0 duration-200"
-          style={highlightStyle}
-        />
-      )}
+      {panelHost ? null : spotlight}
       <div className="pointer-events-auto">
-        {panelHost ? createPortal(panel, panelHost) : panel}
+        {panelHost
+          ? createPortal(
+              <>
+                {spotlight}
+                {panel}
+              </>,
+              panelHost
+            )
+          : panel}
       </div>
+    </div>
+  )
+}
+
+function ContextualTourSpotlight({
+  rect,
+  hosted
+}: {
+  rect: SpotlightRect
+  hosted: boolean
+}): JSX.Element {
+  // Why: an SVG mask scrim cuts a rounded-rect hole that follows the
+  // target's border-radius, so curved buttons don't leave un-dimmed
+  // corners between the target's curve and the cutout edge.
+  const positionClass = hosted ? 'absolute' : 'fixed'
+  const maskId = `contextual-tour-spotlight-mask-${hosted ? 'hosted' : 'fixed'}`
+  return (
+    <div
+      aria-hidden="true"
+      data-contextual-tour-spotlight=""
+      data-contextual-tour-spotlight-hosted={hosted ? 'true' : undefined}
+      className={cn('contextual-tour-spotlight', positionClass)}
+    >
+      <svg className="contextual-tour-spotlight-svg" preserveAspectRatio="none" aria-hidden="true">
+        <defs>
+          <mask id={maskId}>
+            <rect width="100%" height="100%" fill="white" />
+            <rect
+              x={rect.left}
+              y={rect.top}
+              width={rect.width}
+              height={rect.height}
+              rx={rect.radius}
+              ry={rect.radius}
+              fill="black"
+            />
+          </mask>
+        </defs>
+        <rect
+          width="100%"
+          height="100%"
+          className="contextual-tour-spotlight-fill"
+          mask={`url(#${maskId})`}
+        />
+      </svg>
+      <div
+        className={cn('contextual-tour-spotlight-edge', positionClass)}
+        style={{
+          top: rect.top,
+          left: rect.left,
+          width: rect.width,
+          height: rect.height,
+          borderRadius: rect.radius
+        }}
+      />
     </div>
   )
 }
