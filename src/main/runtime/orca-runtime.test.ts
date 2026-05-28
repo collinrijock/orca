@@ -4,6 +4,7 @@ import { EventEmitter } from 'events'
 import { lstat, mkdir, mkdtemp, rm, writeFile } from 'fs/promises'
 import { tmpdir } from 'os'
 import { join } from 'path'
+import { ipcMain } from 'electron'
 import type { WorktreeLineage, WorktreeMeta } from '../../shared/types'
 import {
   addWorktree,
@@ -33,6 +34,36 @@ import {
 import { registerSshGitProvider, unregisterSshGitProvider } from '../providers/ssh-git-dispatch'
 import { DEFAULT_REPO_BADGE_COLOR } from '../../shared/constants'
 import { advertisedUrlWatcher } from '../ports/advertised-url-watcher'
+
+const electronMocks = vi.hoisted(() => {
+  type Listener = (...args: unknown[]) => void
+  const listeners = new Map<string, Set<Listener>>()
+  const ipcMain = {
+    on: vi.fn((channel: string, listener: Listener) => {
+      const existing = listeners.get(channel) ?? new Set<Listener>()
+      existing.add(listener)
+      listeners.set(channel, existing)
+      return ipcMain
+    }),
+    removeListener: vi.fn((channel: string, listener: Listener) => {
+      listeners.get(channel)?.delete(listener)
+      return ipcMain
+    }),
+    emit: vi.fn((channel: string, ...args: unknown[]) => {
+      for (const listener of listeners.get(channel) ?? []) {
+        listener(...args)
+      }
+      return true
+    })
+  }
+  return {
+    BrowserWindow: { fromId: vi.fn((_id: number): unknown => null) },
+    ipcMain,
+    app: { getPath: vi.fn(() => '/tmp') }
+  }
+})
+
+vi.mock('electron', () => electronMocks)
 
 const {
   MOCK_GIT_WORKTREES,
@@ -273,6 +304,11 @@ vi.mock('../git/repo', async (importOriginal) => {
 
 afterEach(() => {
   advertisedUrlWatcher.clear()
+  electronMocks.BrowserWindow.fromId.mockReset()
+  electronMocks.BrowserWindow.fromId.mockReturnValue(null)
+  electronMocks.ipcMain.on.mockClear()
+  electronMocks.ipcMain.removeListener.mockClear()
+  electronMocks.ipcMain.emit.mockClear()
   vi.mocked(listWorktrees).mockResolvedValue(MOCK_GIT_WORKTREES)
   vi.mocked(addWorktree).mockReset()
   vi.mocked(assertWorktreeCleanForRemoval).mockReset()
@@ -4808,6 +4844,81 @@ describe('OrcaRuntimeService', () => {
         terminal: result.tab.terminal
       })
     ])
+  })
+
+  it('forwards inactive mobile terminal creation to the renderer without focusing it', async () => {
+    const focusTerminal = vi.fn()
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setNotifier({
+      focusTerminal,
+      worktreesChanged: vi.fn(),
+      reposChanged: vi.fn(),
+      activateWorktree: vi.fn(),
+      createTerminal: vi.fn(),
+      revealTerminalSession: vi.fn(),
+      splitTerminal: vi.fn(),
+      renameTerminal: vi.fn(),
+      closeTerminal: vi.fn(),
+      closeSessionTab: vi.fn(),
+      sleepWorktree: vi.fn(),
+      terminalFitOverrideChanged: vi.fn(),
+      terminalDriverChanged: vi.fn()
+    })
+    const send = vi.fn((_channel: string, payload: { requestId: string; activate?: boolean }) => {
+      runtime.syncWindowGraph(1, {
+        tabs: [],
+        leaves: [],
+        mobileSessionTabs: [
+          {
+            worktree: TEST_WORKTREE_ID,
+            publicationEpoch: 'epoch-1',
+            snapshotVersion: 1,
+            activeGroupId: 'group-1',
+            activeTabId: null,
+            activeTabType: null,
+            tabs: [
+              {
+                type: 'terminal',
+                id: 'tab-renderer::pane:1',
+                parentTabId: 'tab-renderer',
+                leafId: 'pane:1',
+                title: 'Terminal',
+                isActive: false
+              }
+            ]
+          }
+        ]
+      })
+      ipcMain.emit(
+        'terminal:tabCreateReply',
+        {},
+        {
+          requestId: payload.requestId,
+          tabId: 'tab-renderer',
+          title: 'Terminal'
+        }
+      )
+    })
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+    electronMocks.BrowserWindow.fromId.mockReturnValue({
+      isDestroyed: () => false,
+      webContents: { send }
+    })
+
+    const result = await runtime.createMobileSessionTerminal(`id:${TEST_WORKTREE_ID}`, {
+      activate: false
+    })
+
+    expect(send).toHaveBeenCalledWith(
+      'terminal:requestTabCreate',
+      expect.objectContaining({
+        worktreeId: TEST_WORKTREE_ID,
+        activate: false
+      })
+    )
+    expect(focusTerminal).not.toHaveBeenCalled()
+    expect(result.tab).toMatchObject({ parentTabId: 'tab-renderer', isActive: false })
   })
 
   it('reports browser tab creation as unsupported for headless runtime servers', async () => {

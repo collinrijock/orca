@@ -2293,6 +2293,8 @@ const api = {
   ui: {
     get: (): Promise<unknown> => ipcRenderer.invoke('ui:get'),
     set: (args: Record<string, unknown>): Promise<void> => ipcRenderer.invoke('ui:set', args),
+    recordFeatureInteraction: (id: string): Promise<unknown> =>
+      ipcRenderer.invoke('ui:recordFeatureInteraction', id),
     onOpenSettings: (callback: () => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent) => callback()
       ipcRenderer.on('ui:openSettings', listener)

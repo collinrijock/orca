@@ -66,11 +66,15 @@ export function MobileSettingsPane({
               type="button"
               role="switch"
               aria-checked={settings.experimentalMobile}
-              onClick={() =>
+              onClick={() => {
+                const nextEnabled = !settings.experimentalMobile
+                if (nextEnabled) {
+                  useAppStore.getState().recordFeatureInteraction('mobile-pairing')
+                }
                 updateSettings({
-                  experimentalMobile: !settings.experimentalMobile
+                  experimentalMobile: nextEnabled
                 })
-              }
+              }}
               className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border border-transparent transition-colors ${
                 settings.experimentalMobile ? 'bg-foreground' : 'bg-muted-foreground/30'
               }`}

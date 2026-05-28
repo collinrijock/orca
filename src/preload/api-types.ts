@@ -115,6 +115,7 @@ import type { GitHistoryOptions, GitHistoryResult } from '../shared/git-history'
 import type { PublicKnownRuntimeEnvironment } from '../shared/runtime-environments'
 import type { RuntimeAccessGrant } from '../shared/runtime-access-grants'
 import type { RuntimeRpcResponse } from '../shared/runtime-rpc-envelope'
+import type { FeatureInteractionId } from '../shared/feature-interactions'
 import type {
   AddIssueCommentBySlugArgs,
   ClearProjectItemFieldArgs,
@@ -1764,6 +1765,7 @@ export type PreloadApi = {
   ui: {
     get: () => Promise<PersistedUIState>
     set: (args: Partial<PersistedUIState>) => Promise<void>
+    recordFeatureInteraction: (id: FeatureInteractionId) => Promise<PersistedUIState>
     onOpenSettings: (callback: () => void) => () => void
     onOpenFeatureTour: (callback: () => void) => () => void
     onOpenCrashReport: (callback: () => void) => () => void

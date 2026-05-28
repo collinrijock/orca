@@ -270,6 +270,7 @@ const MOBILE_RPC_METHOD_ALLOWLIST = new Set([
   'terminal.unsubscribe',
   'terminal.updateViewport',
   'ui.get',
+  'ui.recordFeatureInteraction',
   'ui.set',
   'worktree.activate',
   'worktree.create',

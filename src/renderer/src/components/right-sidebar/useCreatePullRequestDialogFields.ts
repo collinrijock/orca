@@ -357,6 +357,7 @@ export function useCreatePullRequestDialogFields({
         return
       }
       applyGeneratedFields(result.fields, currentSeed.fieldRevisions)
+      useAppStore.getState().recordFeatureInteraction('ai-pr-generation')
       setGenerateError(null)
     } catch (error) {
       if (generationRequestIdRef.current !== requestId) {

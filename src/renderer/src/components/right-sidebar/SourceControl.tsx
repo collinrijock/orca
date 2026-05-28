@@ -1955,6 +1955,7 @@ function SourceControlInner(): React.JSX.Element {
         }
         return writeCommitDraftForWorktree(prev, activeWorktreeId, result.message)
       })
+      useAppStore.getState().recordFeatureInteraction('ai-commit-generation')
       setGenerateErrors((prev) => ({ ...prev, [activeWorktreeId]: null }))
     } catch (error) {
       setGenerateErrors((prev) => ({
@@ -2252,6 +2253,9 @@ function SourceControlInner(): React.JSX.Element {
         )
         if (result.branchChangedByPreparation) {
           await refreshGitStatusAfterPullRequestGeneration(context)
+        }
+        if (result.success) {
+          useAppStore.getState().recordFeatureInteraction('ai-pr-generation')
         }
         setPrGenerationRecords((prev) => {
           const record = prev[generationKey]

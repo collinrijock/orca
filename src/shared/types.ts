@@ -13,6 +13,7 @@ import type { WorkspaceCleanupUIState } from './workspace-cleanup'
 import type { GitLabProjectSettings } from './gitlab-types'
 import type { TaskProvider } from './task-providers'
 import type { FeatureTipId } from './feature-tips'
+import type { FeatureInteractionState } from './feature-interactions'
 import type { GitBranchChangeStatus } from './git-status-types'
 import type { KeybindingOverrides, TerminalShortcutPolicy } from './keybindings'
 import type { RepoIcon } from './repo-icon'
@@ -2305,6 +2306,9 @@ export type PersistedUIState = {
   /** Feature tips already surfaced to the user. Startup only opens the tips
    *  modal when this list is missing one of the current tip ids. */
   featureTipsSeenIds?: FeatureTipId[]
+  /** Local product-state facts: feature ids the user has actually used.
+   *  Used by education surfaces to avoid teaching already-discovered features. */
+  featureInteractions?: FeatureInteractionState
 }
 
 export const PET_SIZE_MIN = 60

@@ -2104,6 +2104,47 @@ describe('Store', () => {
     expect(store.getUI().rightSidebarTab).toBe('explorer')
   })
 
+  it('updateUI merges feature interactions instead of replacing stale snapshots', async () => {
+    const store = await createStore()
+
+    store.updateUI({
+      featureInteractions: {
+        'agent-browser-use': { firstInteractedAt: 100, interactionCount: 1 }
+      }
+    })
+    store.updateUI({
+      featureInteractions: {
+        tasks: { firstInteractedAt: 200, interactionCount: 1 }
+      }
+    })
+
+    expect(store.getUI().featureInteractions).toEqual({
+      'agent-browser-use': { firstInteractedAt: 100, interactionCount: 1 },
+      tasks: { firstInteractedAt: 200, interactionCount: 1 }
+    })
+  })
+
+  it('recordFeatureInteraction increments from the current persisted UI state', async () => {
+    const store = await createStore()
+
+    store.updateUI({
+      featureInteractions: {
+        tasks: { firstInteractedAt: 100, interactionCount: 2 }
+      }
+    })
+
+    const ui = store.recordFeatureInteraction('tasks')
+
+    expect(ui.featureInteractions?.tasks).toEqual({
+      firstInteractedAt: 100,
+      interactionCount: 3
+    })
+    expect(store.getUI().featureInteractions?.tasks).toEqual({
+      firstInteractedAt: 100,
+      interactionCount: 3
+    })
+  })
+
   it('updateUI restores fixed card properties from direct UI writes', async () => {
     const store = await createStore()
     store.updateUI({ worktreeCardProperties: ['inline-agents'] })

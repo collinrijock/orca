@@ -940,7 +940,7 @@ export function useIpcEvents(): void {
             // the runtime's stored title would otherwise silently overwrite on
             // every focus.
             if (title && !reusedTab) {
-              store.setTabCustomTitle(tab.id, title)
+              store.setTabCustomTitle(tab.id, title, { recordInteraction: false })
             }
             if (leafId && ptyId) {
               if (splitFromLeafId) {
@@ -1057,7 +1057,7 @@ export function useIpcEvents(): void {
             worktreeId,
             data.targetGroupId,
             undefined,
-            shouldActivate ? undefined : { activate: false }
+            shouldActivate ? undefined : { activate: false, recordInteraction: false }
           )
           if (data.afterTabId) {
             const createdUnifiedTab = useAppStore
@@ -1081,7 +1081,9 @@ export function useIpcEvents(): void {
                 0,
                 createdUnifiedTab.id
               )
-              useAppStore.getState().reorderUnifiedTabs(createdUnifiedTab.groupId, order)
+              useAppStore.getState().reorderUnifiedTabs(createdUnifiedTab.groupId, order, {
+                recordInteraction: false
+              })
             }
           }
           if (shouldActivate) {
@@ -1090,7 +1092,7 @@ export function useIpcEvents(): void {
             store.revealWorktreeInSidebar(worktreeId)
           }
           if (data.title) {
-            store.setTabCustomTitle(tab.id, data.title)
+            store.setTabCustomTitle(tab.id, data.title, { recordInteraction: false })
           }
           if (data.command) {
             store.queueTabStartupCommand(tab.id, { command: data.command })

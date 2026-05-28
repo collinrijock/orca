@@ -1,4 +1,8 @@
 import { z } from 'zod'
+import {
+  isFeatureInteractionId,
+  type FeatureInteractionId
+} from '../../../../shared/feature-interactions'
 import { isTuiAgent } from '../../../../shared/tui-agent-config'
 import type { PersistedUIState } from '../../../../shared/types'
 import { defineMethod, type RpcMethod } from '../core'
@@ -48,6 +52,28 @@ const WorkspaceCleanup = z
     dismissals: z.record(z.string(), WorkspaceCleanupDismissal)
   })
   .strict()
+const FeatureInteractionRecord = z
+  .object({
+    firstInteractedAt: z.number().finite().nonnegative(),
+    interactionCount: z.number().int().positive().optional()
+  })
+  .strict()
+const FeatureInteractions = z
+  .record(z.string(), FeatureInteractionRecord)
+  .superRefine((value, ctx) => {
+    for (const id of Object.keys(value)) {
+      if (!isFeatureInteractionId(id)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `Unknown feature interaction id: ${id}`,
+          path: [id]
+        })
+      }
+    }
+  })
+const FeatureInteractionIdParam = z.custom<FeatureInteractionId>(isFeatureInteractionId, {
+  message: 'Unknown feature interaction id'
+})
 const GitHubProjectRef = z
   .object({
     owner: z.string(),
@@ -159,7 +185,9 @@ const UiUpdate = z
     customSidekicks: UnknownRecordArray.optional(),
     sidekickSize: z.number().finite().optional(),
     taskResumeState: TaskResumeState.optional(),
-    workspaceCleanup: WorkspaceCleanup.optional()
+    workspaceCleanup: WorkspaceCleanup.optional(),
+    featureTipsSeenIds: StringArray.optional(),
+    featureInteractions: FeatureInteractions.optional()
   })
   .strict()
   .default({})
@@ -185,6 +213,13 @@ export const CLIENT_UI_METHODS: RpcMethod[] = [
     params: UiUpdate,
     handler: (params, { runtime }) => ({
       ui: runtime.updateUIState(params as Partial<PersistedUIState>)
+    })
+  }),
+  defineMethod({
+    name: 'ui.recordFeatureInteraction',
+    params: FeatureInteractionIdParam,
+    handler: (params, { runtime }) => ({
+      ui: runtime.recordFeatureInteraction(params)
     })
   })
 ]
