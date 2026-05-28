@@ -3735,6 +3735,9 @@ function BrowserPagePane({
   const startGrabIntent = useCallback(
     (nextIntent: GrabIntent): void => {
       recordFeatureInteraction('browser-grab')
+      if (nextIntent === 'annotate') {
+        recordFeatureInteraction('browser-annotations')
+      }
       setGrabIntent(nextIntent)
       if (nextIntent === 'copy') {
         setPendingAnnotationPayload(null)
