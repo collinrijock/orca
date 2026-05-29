@@ -129,6 +129,7 @@ import {
 } from '../../shared/keybindings'
 import { isGitRepoKind } from '../../shared/repo-kind'
 import { showTerminalShortcutCaptureNotification } from '@/lib/terminal-shortcut-capture-notification'
+import { resolveMountedLazyModalIds, type LazyModalId } from './lazy-modal-mount-state'
 
 const isMac = navigator.userAgent.includes('Mac')
 const isWindows = !isMac && navigator.userAgent.includes('Windows')
@@ -474,7 +475,7 @@ function App(): React.JSX.Element {
   const canGoForwardWorktree = useAppStore(canGoForwardWorktreeHistory)
   const titlebarLeftControlsRef = useRef<HTMLDivElement | null>(null)
   const [collapsedSidebarHeaderWidth, setCollapsedSidebarHeaderWidth] = useState(0)
-  const [mountedLazyModalIds, setMountedLazyModalIds] = useState(() => new Set<string>())
+  const [mountedLazyModalIds, setMountedLazyModalIds] = useState<Set<LazyModalId>>(() => new Set())
   const [onboarding, setOnboarding] = useState<OnboardingState | null>(null)
   const featureTipsPromptedThisSessionRef = useRef(false)
   const featureTipsSuppressedByOnboardingThisSessionRef = useRef(false)
@@ -1408,28 +1409,12 @@ function App(): React.JSX.Element {
     return () => observer.disconnect()
   }, [isFullScreen, settings?.showTitlebarAppName, showSidebar, workspaceActive, sidebarOpen])
 
-  useEffect(() => {
-    if (
-      activeModal !== 'quick-open' &&
-      activeModal !== 'worktree-palette' &&
-      activeModal !== 'new-workspace-composer' &&
-      activeModal !== 'workspace-cleanup' &&
-      activeModal !== 'feature-wall' &&
-      activeModal !== 'feature-tips'
-    ) {
-      return
-    }
-    setMountedLazyModalIds((currentIds) => {
-      if (currentIds.has(activeModal)) {
-        return currentIds
-      }
-      const nextIds = new Set(currentIds)
-      // Why: lazy-load these modals only after first use, then keep them mounted
-      // so repeat opens preserve their local state and avoid re-fetch flashes.
-      nextIds.add(activeModal)
-      return nextIds
-    })
-  }, [activeModal])
+  const resolvedMountedLazyModalIds = resolveMountedLazyModalIds(activeModal, mountedLazyModalIds)
+  if (resolvedMountedLazyModalIds !== mountedLazyModalIds) {
+    // Why: lazy-load these modals only after first use, then keep them mounted
+    // so repeat opens preserve their local state and avoid re-fetch flashes.
+    setMountedLazyModalIds(new Set(resolvedMountedLazyModalIds))
+  }
 
   // Why: extracted so both the full-width titlebar (settings/landing) and
   // the sidebar-width left header (workspace view) can share the same
@@ -1851,7 +1836,7 @@ function App(): React.JSX.Element {
           {/* Why: root overlays can render Radix <Tooltip>s; keep them inside
             the shared provider so lazy surfaces mount safely from any entry point. */}
           <Suspense fallback={null}>
-            {mountedLazyModalIds.has('new-workspace-composer') ? (
+            {resolvedMountedLazyModalIds.has('new-workspace-composer') ? (
               <RecoverableRenderErrorBoundary
                 boundaryId="modal.new-workspace-composer"
                 surface="modal"
@@ -1861,7 +1846,7 @@ function App(): React.JSX.Element {
                 <NewWorkspaceComposerModal />
               </RecoverableRenderErrorBoundary>
             ) : null}
-            {mountedLazyModalIds.has('workspace-cleanup') ? (
+            {resolvedMountedLazyModalIds.has('workspace-cleanup') ? (
               <RecoverableRenderErrorBoundary
                 boundaryId="modal.workspace-cleanup"
                 surface="modal"
@@ -1873,7 +1858,7 @@ function App(): React.JSX.Element {
             ) : null}
           </Suspense>
           <Suspense fallback={null}>
-            {mountedLazyModalIds.has('quick-open') ? (
+            {resolvedMountedLazyModalIds.has('quick-open') ? (
               <RecoverableRenderErrorBoundary
                 boundaryId="modal.quick-open"
                 surface="modal"
@@ -1883,7 +1868,7 @@ function App(): React.JSX.Element {
                 <QuickOpen />
               </RecoverableRenderErrorBoundary>
             ) : null}
-            {mountedLazyModalIds.has('worktree-palette') ? (
+            {resolvedMountedLazyModalIds.has('worktree-palette') ? (
               <RecoverableRenderErrorBoundary
                 boundaryId="modal.worktree-palette"
                 surface="modal"
@@ -1893,7 +1878,7 @@ function App(): React.JSX.Element {
                 <WorktreeJumpPalette />
               </RecoverableRenderErrorBoundary>
             ) : null}
-            {mountedLazyModalIds.has('feature-wall') ? (
+            {resolvedMountedLazyModalIds.has('feature-wall') ? (
               <RecoverableRenderErrorBoundary
                 boundaryId="modal.feature-wall"
                 surface="modal"
@@ -1903,7 +1888,7 @@ function App(): React.JSX.Element {
                 <FeatureWallModal />
               </RecoverableRenderErrorBoundary>
             ) : null}
-            {mountedLazyModalIds.has('feature-tips') ? (
+            {resolvedMountedLazyModalIds.has('feature-tips') ? (
               <RecoverableRenderErrorBoundary
                 boundaryId="modal.feature-tips"
                 surface="modal"
