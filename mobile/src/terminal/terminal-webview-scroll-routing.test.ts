@@ -33,6 +33,20 @@ describe('TerminalWebView scroll routing', () => {
     expect(momentumBlock).toContain('routeScrollLines(lines, ts.lastX, ts.lastY);')
   })
 
+  it('routes taps as terminal mouse clicks before focusing live input', () => {
+    expect(source).toContain('function buildMouseClickInput(clientX, clientY)')
+    expect(source).toContain("return mouseTrackingMode !== 'none';")
+
+    const touchEndBlock = sliceBetween(
+      "document.addEventListener('touchend'",
+      '}, { capture: true, passive: true });'
+    )
+    expect(touchEndBlock.indexOf('var clickInput = buildMouseClickInput')).toBeLessThan(
+      touchEndBlock.indexOf("notify({ type: 'terminal-tap' });")
+    )
+    expect(touchEndBlock).toContain("notify({ type: 'terminal-input', bytes: clickInput });")
+  })
+
   it('does not rubber-band normal scroll at scrollback edges', () => {
     expect(source).toContain('function canScrollNormalBufferDelta(deltaY)')
     const smoothScrollBlock = sliceBetween(

@@ -1090,6 +1090,36 @@ const XTERM_HTML = `<!DOCTYPE html>
     return ESC + '[M' + String.fromCharCode(button) + String.fromCharCode(col) + String.fromCharCode(row);
   }
 
+  function isClickMouseTrackingMode(mouseTrackingMode) {
+    return mouseTrackingMode !== 'none';
+  }
+
+  function buildMouseClickInput(clientX, clientY) {
+    var mouseTrackingMode = getMouseTrackingMode();
+    if (!isClickMouseTrackingMode(mouseTrackingMode)) return '';
+    var cell = viewportToMouseReportCell(clientX, clientY);
+    if (!cell) return '';
+    if (sgrMousePixelsMode) {
+      return ESC + '[<0;' + cell.x + ';' + cell.y + 'M' + ESC + '[<0;' + cell.x + ';' + cell.y + 'm';
+    }
+    if (sgrMouseMode) {
+      // Why: xterm increments zero-based mouse cells before encoding reports.
+      var sgrCol = cell.col + 1;
+      var sgrRow = cell.row + 1;
+      return ESC + '[<0;' + sgrCol + ';' + sgrRow + 'M' + ESC + '[<0;' + sgrCol + ';' + sgrRow + 'm';
+    }
+    // Why: default mouse reports use ASCII-offset cell coordinates and code 3
+    // for release; wide coordinates cannot survive the mobile string bridge.
+    var pressButton = 32;
+    var releaseButton = 35;
+    var col = cell.col + 1 + 32;
+    var row = cell.row + 1 + 32;
+    if (pressButton > 126 || releaseButton > 126 || col > 126 || row > 126) return '';
+    var press = ESC + '[M' + String.fromCharCode(pressButton) + String.fromCharCode(col) + String.fromCharCode(row);
+    if (mouseTrackingMode === 'x10') return press;
+    return press + ESC + '[M' + String.fromCharCode(releaseButton) + String.fromCharCode(col) + String.fromCharCode(row);
+  }
+
   function isWheelMouseTrackingMode(mode) {
     return mode !== 'none' && mode !== 'x10';
   }
@@ -1540,7 +1570,12 @@ const XTERM_HTML = `<!DOCTYPE html>
     }
     if (dispatch.mode === 'surface') {
       if (e.touches.length === 0 && longPressOrigin && selMode !== 'select') {
-        notify({ type: 'terminal-tap' });
+        var clickInput = buildMouseClickInput(longPressOrigin.x, longPressOrigin.y);
+        if (clickInput) {
+          notify({ type: 'terminal-input', bytes: clickInput });
+        } else {
+          notify({ type: 'terminal-tap' });
+        }
       }
       clearLongPress();
       if (e.touches.length === 0) {

@@ -327,6 +327,10 @@ function isWheelMouseTrackingMode(mode: TerminalModes['mouseTrackingMode'] | und
   return mode === 'vt200' || mode === 'drag' || mode === 'any'
 }
 
+function isGestureMouseTrackingMode(mode: TerminalModes['mouseTrackingMode'] | undefined): boolean {
+  return mode === 'x10' || isWheelMouseTrackingMode(mode)
+}
+
 function TerminalPaneView({
   handle,
   active,
@@ -2401,9 +2405,9 @@ export default function SessionScreen() {
       if (handle !== activeHandleRef.current || activeSessionTabTypeRef.current !== 'terminal')
         return
       const modes = ptyModesRef.current.get(handle)
-      // Why: WebView messages can become PTY input here. Only TUI scroll paths
-      // generate gesture input, and the bridge is rate-limited for SSH safety.
-      if (!modes?.altScreen && !isWheelMouseTrackingMode(modes?.mouseTrackingMode)) return
+      // Why: WebView messages can become PTY input here. Only TUI gesture paths
+      // generate these bounded reports, and the bridge is rate-limited for SSH safety.
+      if (!modes?.altScreen && !isGestureMouseTrackingMode(modes?.mouseTrackingMode)) return
       const sequenceCount = countTerminalGestureInputSequences(bytes)
       if (sequenceCount == null) return
       if (!allowTerminalGestureInput(handle, sequenceCount)) return

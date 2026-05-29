@@ -19,10 +19,23 @@ describe('isTerminalGestureInput', () => {
     expect(isTerminalGestureInput(`${ESC}[<64;0;0M`)).toBe(true)
   })
 
+  it('accepts SGR left-click press and release sequences', () => {
+    expect(isTerminalGestureInput(`${ESC}[<0;38;20M${ESC}[<0;38;20m`)).toBe(true)
+    expect(countTerminalGestureInputSequences(`${ESC}[<0;38;20M${ESC}[<0;38;20m`)).toBe(2)
+  })
+
   it('accepts repeated default mouse wheel sequences', () => {
     expect(
       isTerminalGestureInput(
         `${ESC}[M${String.fromCharCode(96, 97, 33)}${ESC}[M${String.fromCharCode(97, 126, 126)}`
+      )
+    ).toBe(true)
+  })
+
+  it('accepts default left-click press and release sequences', () => {
+    expect(
+      isTerminalGestureInput(
+        `${ESC}[M${String.fromCharCode(32, 70, 52)}${ESC}[M${String.fromCharCode(35, 70, 52)}`
       )
     ).toBe(true)
   })
