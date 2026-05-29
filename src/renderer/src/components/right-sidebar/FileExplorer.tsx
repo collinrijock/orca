@@ -35,6 +35,7 @@ import {
 import type { TreeNode } from './file-explorer-types'
 import { useFileExplorerSelection } from './useFileExplorerSelection'
 import { useFileExplorerGitIgnoredRows } from './useFileExplorerGitIgnoredRows'
+import { getDotfileVisibleFileExplorerRows } from './file-explorer-entries'
 
 function FileExplorerInner(): React.JSX.Element {
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
@@ -55,6 +56,10 @@ function FileExplorerInner(): React.JSX.Element {
   const closeFile = useAppStore((s) => s.closeFile)
   const openModal = useAppStore((s) => s.openModal)
   const rightSidebarOpen = useAppStore((s) => s.rightSidebarOpen)
+  const showDotfiles = useAppStore((s) =>
+    activeWorktreeId ? (s.showDotfilesByWorktree[activeWorktreeId] ?? true) : true
+  )
+  const toggleShowDotfilesForWorktree = useAppStore((s) => s.toggleShowDotfilesForWorktree)
 
   const worktreePath = activeWorktree?.path ?? null
   const visibleWorktreePath = rightSidebarOpen ? worktreePath : null
@@ -80,13 +85,22 @@ function FileExplorerInner(): React.JSX.Element {
     refreshDir,
     resetAndLoad
   } = useFileExplorerTree(worktreePath, expanded, activeWorktreeId)
+  const dotfileVisibleFlatRows = useMemo(
+    () => getDotfileVisibleFileExplorerRows(flatRows, showDotfiles),
+    [flatRows, showDotfiles]
+  )
   const {
     visibleFlatRows,
     rowsByPath,
     ignoredByRelativePath,
     showGitIgnoredFiles,
     toggleGitIgnoredFiles
-  } = useFileExplorerGitIgnoredRows(activeWorktreeId, worktreePath, flatRows, activeRepoSupportsGit)
+  } = useFileExplorerGitIgnoredRows(
+    activeWorktreeId,
+    worktreePath,
+    dotfileVisibleFlatRows,
+    activeRepoSupportsGit
+  )
   const manualRefresh = useFileExplorerManualRefresh(refreshTree)
   const canCollapseAll = expanded.size > 0
   const handleCollapseAll = useCallback(() => {
@@ -95,6 +109,11 @@ function FileExplorerInner(): React.JSX.Element {
     }
     collapseAllDirs(activeWorktreeId)
   }, [activeWorktreeId, collapseAllDirs])
+  const handleToggleDotfiles = useCallback(() => {
+    if (activeWorktreeId) {
+      toggleShowDotfilesForWorktree(activeWorktreeId)
+    }
+  }, [activeWorktreeId, toggleShowDotfilesForWorktree])
 
   const [flashingPath, setFlashingPath] = useState<string | null>(null)
   const [bgMenuOpen, setBgMenuOpen] = useState(false)
@@ -422,6 +441,8 @@ function FileExplorerInner(): React.JSX.Element {
           showGitIgnoredFilesToggle={activeRepoSupportsGit}
           showGitIgnoredFiles={showGitIgnoredFiles}
           onToggleGitIgnoredFiles={toggleGitIgnoredFiles}
+          showDotfiles={showDotfiles}
+          onToggleDotfiles={handleToggleDotfiles}
         />
         <ScrollArea
           className={cn(

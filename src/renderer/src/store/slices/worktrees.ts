@@ -715,6 +715,7 @@ function buildWorktreePurgeState(s: AppState, worktreeIds: string[]): Partial<Ap
     gitBranchChangesByWorktree: omitByWorktree(s.gitBranchChangesByWorktree),
     gitBranchCompareSummaryByWorktree: omitByWorktree(s.gitBranchCompareSummaryByWorktree),
     gitBranchCompareRequestKeyByWorktree: omitByWorktree(s.gitBranchCompareRequestKeyByWorktree),
+    showDotfilesByWorktree: omitByWorktree(s.showDotfilesByWorktree),
     expandedDirs: omitByWorktree(s.expandedDirs),
     // Per-file editor state for removed files
     editorDrafts: omitByFileId(s.editorDrafts),
@@ -1317,6 +1318,8 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
         }
         const nextExpandedDirs = { ...s.expandedDirs }
         delete nextExpandedDirs[worktreeId]
+        const nextShowDotfilesByWorktree = { ...s.showDotfilesByWorktree }
+        delete nextShowDotfilesByWorktree[worktreeId]
         // If the active file belonged to the removed worktree, clear it
         const activeFileCleared = s.activeFileId
           ? s.openFiles.some((f) => f.id === s.activeFileId && f.worktreeId === worktreeId)
@@ -1377,6 +1380,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
           editorDrafts: nextEditorDrafts,
           markdownViewMode: nextMarkdownViewMode,
           editorViewMode: nextEditorViewMode,
+          showDotfilesByWorktree: nextShowDotfilesByWorktree,
           expandedDirs: nextExpandedDirs,
           gitStatusByWorktree: nextGitStatusByWorktree,
           gitIgnoredPathsByWorktree: nextGitIgnoredPathsByWorktree,
