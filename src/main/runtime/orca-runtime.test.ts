@@ -1820,7 +1820,7 @@ describe('OrcaRuntimeService', () => {
     expect(provider.addWorktree).toHaveBeenCalledWith(
       '/remote/repo',
       'mobile-feature',
-      '/remote/repo/../mobile-feature',
+      '/remote/mobile-feature',
       { base: 'origin/main' }
     )
     expect(result.worktree).toMatchObject({

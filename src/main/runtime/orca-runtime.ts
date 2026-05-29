@@ -15,7 +15,6 @@ import {
   deriveValidatedClonePath,
   getClonePathComparisonKey
 } from '../git/repo-clone-path'
-import { isWslPath, parseWslPath, getWslHome } from '../wsl'
 import { createHash, randomUUID } from 'crypto'
 import { isAbsolute, join } from 'path'
 import { mkdir, readFile, readdir, rm, stat } from 'fs/promises'
@@ -377,8 +376,11 @@ import { AgentDetector } from '../stats/agent-detector'
 import {
   computeBranchName,
   computeWorktreePath,
+  computeWorkspaceRoot,
   ensurePathWithinWorkspace,
   formatWorktreeRemovalError,
+  getWorktreeCreationLayout,
+  getWorktreePathSettings,
   isOrphanCompatiblePreflightError,
   isOrphanedWorktreeError,
   mergeWorktree,
@@ -5768,6 +5770,7 @@ export class OrcaRuntimeService {
         | 'repoIcon'
         | 'hookSettings'
         | 'worktreeBaseRef'
+        | 'worktreeBasePath'
         | 'kind'
         | 'symlinkPaths'
         | 'issueSourcePreference'
@@ -5783,9 +5786,16 @@ export class OrcaRuntimeService {
       throw new Error('runtime_unavailable')
     }
     const repo = await this.resolveRepoSelector(repoSelector)
-    const updated = this.store.updateRepo(repo.id, omitUndefinedProperties(updates))
+    const sanitizedUpdates = omitUndefinedProperties(updates)
+    if ('worktreeBasePath' in updates && updates.worktreeBasePath === undefined) {
+      sanitizedUpdates.worktreeBasePath = undefined
+    }
+    const updated = this.store.updateRepo(repo.id, sanitizedUpdates)
     if (!updated) {
       throw new Error('repo_not_found')
+    }
+    if ('worktreeBasePath' in updates) {
+      invalidateAuthorizedRootsCache()
     }
     this.invalidateResolvedWorktreeCache()
     this.notifier?.reposChanged()
@@ -7206,7 +7216,7 @@ export class OrcaRuntimeService {
       worktree,
       meta: this.store?.getWorktreeMeta(worktree.id),
       settings,
-      knownOrcaLayouts: repo.connectionId ? [] : buildKnownOrcaWorkspaceLayouts(settings, repo),
+      knownOrcaLayouts: buildKnownOrcaWorkspaceLayouts(settings, repo),
       isLegacyRepoForVisibility: isLegacyRepoForExternalWorktreeVisibility(repo)
     })
   }
@@ -7642,6 +7652,7 @@ export class OrcaRuntimeService {
       args.lineage || args.comment ? { ...args.lineage, comment: args.comment } : undefined
     const lineageResolution = await this.resolveLineageForWorktreeCreate(lineageInput)
     const settings = createSettings
+    const worktreePathSettings = getWorktreePathSettings(repo, settings)
     let effectiveRequestedName = args.name
     const requestedDisplayName = args.displayName?.trim() || undefined
     const sanitizedName = sanitizeWorktreeName(args.name)
@@ -7708,12 +7719,10 @@ export class OrcaRuntimeService {
       }
     }
 
+    const workspaceRoot = computeWorkspaceRoot(repo.path, worktreePathSettings)
     // Why: CLI-managed WSL worktrees live under ~/orca/workspaces inside the
-    // distro filesystem. If home lookup fails, still validate against the
-    // configured workspace dir so the traversal guard is never bypassed.
-    const wslInfo = isWslPath(repo.path) ? parseWslPath(repo.path) : null
-    const wslHome = wslInfo ? getWslHome(wslInfo.distro) : null
-    const workspaceRoot = wslHome ? join(wslHome, 'orca', 'workspaces') : settings.workspaceDir
+    // distro filesystem through computeWorkspaceRoot. If home lookup fails,
+    // still validate against the effective workspace dir.
     let worktreePath = ''
     let worktreePathResolved = !args.branchNameOverride
     for (let suffix = 1; suffix < 100; suffix += 1) {
@@ -7725,7 +7734,7 @@ export class OrcaRuntimeService {
             ? `${args.name}-${suffix}`
             : effectiveSanitizedName
       worktreePath = ensurePathWithinWorkspace(
-        computeWorktreePath(effectiveSanitizedName, repo.path, settings),
+        computeWorktreePath(effectiveSanitizedName, repo.path, worktreePathSettings),
         workspaceRoot
       )
       if (!args.branchNameOverride || !(await pathExists(worktreePath))) {
@@ -7861,10 +7870,7 @@ export class OrcaRuntimeService {
       createdAt: now,
       orcaCreatedAt: now,
       orcaCreationSource: 'runtime',
-      orcaCreationWorkspaceLayout: {
-        path: settings.workspaceDir,
-        nestWorkspaces: settings.nestWorkspaces
-      },
+      orcaCreationWorkspaceLayout: getWorktreeCreationLayout(repo, settings),
       ...displayNameMeta,
       baseRef: baseBranch,
       ...(checkoutExistingBranch ? { preserveBranchOnDelete: true } : {}),
@@ -9188,9 +9194,7 @@ export class OrcaRuntimeService {
       )
       if (!registeredWorktree) {
         let canCleanOrphanedDirectory = false
-        const knownOrcaLayouts = repo.connectionId
-          ? []
-          : buildKnownOrcaWorkspaceLayouts(store.getSettings(), repo)
+        const knownOrcaLayouts = buildKnownOrcaWorkspaceLayouts(store.getSettings(), repo)
         if (
           canCleanupUnregisteredOrcaWorktreeDirectory({
             meta: removedMeta,
