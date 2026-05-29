@@ -172,6 +172,19 @@ describe('worktree ownership classification', () => {
     ).toBe('orca-managed')
   })
 
+  it('resolves relative workspace roots against the repo path when matching managed worktrees', () => {
+    const repo = makeRepo({ path: '/repos/app' })
+    const settings = makeSettings({ workspaceDir: '../.worktrees' })
+    expect(
+      classifyWorktreeOwnership({
+        repo,
+        settings,
+        worktree: makeWorktree({ path: '/repos/.worktrees/app/feature' }),
+        knownOrcaLayouts: buildKnownOrcaWorkspaceLayouts(settings, repo)
+      })
+    ).toBe('orca-managed')
+  })
+
   it('handles Windows drive casing and separators', () => {
     const repo = makeRepo({ path: 'C:\\repos\\App' })
     const settings = makeSettings({ workspaceDir: 'C:\\Orca\\Workspaces' })

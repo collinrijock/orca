@@ -48,4 +48,19 @@ describe('computeWorktreePath WSL layout', () => {
       })
     ).toBe(win32.join('C:\\workspaces', 'feature'))
   })
+
+  it('resolves relative workspace directories against the WSL repo path', () => {
+    parseWslPathMock.mockReturnValue({
+      distro: 'Ubuntu',
+      linuxPath: '/home/jin/src/repo'
+    })
+    getWslHomeMock.mockReturnValue('\\\\wsl.localhost\\Ubuntu\\home\\jin')
+
+    expect(
+      computeWorktreePath('feature', '\\\\wsl.localhost\\Ubuntu\\home\\jin\\src\\repo', {
+        nestWorkspaces: true,
+        workspaceDir: '..\\.worktrees'
+      })
+    ).toBe(win32.join('\\\\wsl.localhost\\Ubuntu\\home\\jin\\src\\.worktrees', 'repo', 'feature'))
+  })
 })

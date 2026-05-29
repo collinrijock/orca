@@ -8,7 +8,7 @@
 // cohesive flow would split awkwardly.
 
 import type { BrowserWindow } from 'electron'
-import { join, posix, win32 } from 'path'
+import { posix, win32 } from 'path'
 import { existsSync } from 'fs'
 import { randomUUID } from 'crypto'
 import type { Store } from '../persistence'
@@ -30,7 +30,6 @@ import { gitExecFileAsync } from '../git/runner'
 import { parseGitHubOwnerRepo } from '../github/gh-utils'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type { RemoteFetchResult, RemoteTrackingBase } from '../runtime/orca-runtime'
-import { isWslPath, parseWslPath, getWslHome } from '../wsl'
 import {
   buildPosixRunnerScript,
   buildWindowsRunnerScript,
@@ -53,6 +52,8 @@ import {
   sanitizeWorktreeDisplayName,
   computeBranchName,
   computeWorktreePath,
+  computeRemoteWorktreePath,
+  computeWorkspaceRoot,
   ensurePathWithinWorkspace,
   shouldSetDisplayName,
   mergeWorktree,
@@ -735,8 +736,7 @@ export async function createRemoteWorktree(
     username
   )
 
-  // Compute worktree path relative to the repo's parent on the remote
-  const remotePath = `${repo.path}/../${sanitizedName}`
+  const remotePath = computeRemoteWorktreePath(sanitizedName, repo.path, settings)
 
   // Determine base branch
   // Why: previously fell back to a hardcoded 'origin/main' when
@@ -1113,13 +1113,7 @@ export async function createLocalWorktree(
       .catch(() => undefined)
     emitCreateWorktreeProgress(mainWindow, 'fetching')
   }
-  // Why: WSL worktrees live under ~/orca/workspaces inside the WSL
-  // filesystem. Validate against that root, not the Windows workspace dir.
-  // If WSL home lookup fails, keep using the configured workspace root so
-  // the path traversal guard still runs on the fallback path.
-  const wslInfo = isWslPath(repo.path) ? parseWslPath(repo.path) : null
-  const wslHome = wslInfo ? getWslHome(wslInfo.distro) : null
-  const workspaceRoot = wslHome ? join(wslHome, 'orca', 'workspaces') : settings.workspaceDir
+  const workspaceRoot = computeWorkspaceRoot(repo.path, settings)
 
   // Why: this validation does not depend on remote refs, so it can overlap a
   // required remote-tracking base refresh.

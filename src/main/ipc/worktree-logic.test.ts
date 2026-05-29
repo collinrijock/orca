@@ -1,7 +1,7 @@
 /* eslint-disable max-lines -- Why: these worktree path/name tests share a
 single setup-free pure-logic module, and splitting them would make the related
 edge cases harder to audit together. */
-import { join, resolve } from 'path'
+import { join, posix, resolve, win32 } from 'path'
 import { describe, expect, it } from 'vitest'
 import {
   sanitizeWorktreeName,
@@ -15,7 +15,8 @@ import {
   formatWorktreeRemovalError,
   isOrphanCompatiblePreflightError,
   isOrphanedWorktreeError,
-  areWorktreePathsEqual
+  areWorktreePathsEqual,
+  computeRemoteWorktreePath
 } from './worktree-logic'
 
 describe('sanitizeWorktreeName', () => {
@@ -167,6 +168,62 @@ describe('computeWorktreePath', () => {
         workspaceDir: '/workspaces'
       })
     ).toBe(join('/workspaces', 'my-project', 'feature'))
+  })
+
+  it('resolves POSIX relative workspace directories against the repo path', () => {
+    expect(
+      computeWorktreePath('feature', '/repos/my-project', {
+        nestWorkspaces: true,
+        workspaceDir: '../.worktrees'
+      })
+    ).toBe(resolve('/repos/.worktrees/my-project/feature'))
+  })
+
+  it('normalizes relative workspace directory traversal before appending the worktree name', () => {
+    expect(
+      computeWorktreePath('feature', '/repos/my-project', {
+        nestWorkspaces: false,
+        workspaceDir: '../repos/../.worktrees/./nested'
+      })
+    ).toBe(resolve('/repos/.worktrees/nested/feature'))
+  })
+
+  it('keeps absolute workspace directories rooted at their configured path', () => {
+    expect(
+      computeWorktreePath('feature', '/repos/my-project', {
+        nestWorkspaces: false,
+        workspaceDir: '/workspaces'
+      })
+    ).toBe(join('/workspaces', 'feature'))
+  })
+
+  it('resolves Windows relative workspace directories against the repo path', () => {
+    expect(
+      computeWorktreePath('feature', 'C:\\src\\my-project', {
+        nestWorkspaces: true,
+        workspaceDir: '..\\.worktrees'
+      })
+    ).toBe(win32.resolve('C:\\src\\.worktrees\\my-project\\feature'))
+  })
+})
+
+describe('computeRemoteWorktreePath', () => {
+  it('resolves relative workspace directories against the remote repo path', () => {
+    expect(
+      computeRemoteWorktreePath('feature', '/home/user/my-project', {
+        nestWorkspaces: true,
+        workspaceDir: '../.worktrees'
+      })
+    ).toBe(posix.resolve('/home/user/.worktrees/my-project/feature'))
+  })
+
+  it('keeps SSH worktrees repo-sibling when workspaceDir is an absolute local setting', () => {
+    expect(
+      computeRemoteWorktreePath('feature', '/home/user/my-project', {
+        nestWorkspaces: true,
+        workspaceDir: '/Users/local/orca/workspaces'
+      })
+    ).toBe(posix.resolve('/home/user/feature'))
   })
 })
 

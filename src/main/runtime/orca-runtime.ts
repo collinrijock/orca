@@ -15,7 +15,6 @@ import {
   deriveValidatedClonePath,
   getClonePathComparisonKey
 } from '../git/repo-clone-path'
-import { isWslPath, parseWslPath, getWslHome } from '../wsl'
 import { createHash, randomUUID } from 'crypto'
 import { isAbsolute, join } from 'path'
 import { mkdir, readFile, readdir, rm, stat } from 'fs/promises'
@@ -349,6 +348,7 @@ import { AgentDetector } from '../stats/agent-detector'
 import {
   computeBranchName,
   computeWorktreePath,
+  computeWorkspaceRoot,
   ensurePathWithinWorkspace,
   formatWorktreeRemovalError,
   isOrphanCompatiblePreflightError,
@@ -7561,12 +7561,7 @@ export class OrcaRuntimeService {
     }
 
     let worktreePath = computeWorktreePath(sanitizedName, repo.path, settings)
-    // Why: CLI-managed WSL worktrees live under ~/orca/workspaces inside the
-    // distro filesystem. If home lookup fails, still validate against the
-    // configured workspace dir so the traversal guard is never bypassed.
-    const wslInfo = isWslPath(repo.path) ? parseWslPath(repo.path) : null
-    const wslHome = wslInfo ? getWslHome(wslInfo.distro) : null
-    const workspaceRoot = wslHome ? join(wslHome, 'orca', 'workspaces') : settings.workspaceDir
+    const workspaceRoot = computeWorkspaceRoot(repo.path, settings)
     worktreePath = ensurePathWithinWorkspace(worktreePath, workspaceRoot)
     const remoteTrackingBase = await this.resolveRemoteTrackingBase(repo.path, baseBranch)
     if (remoteTrackingBase) {

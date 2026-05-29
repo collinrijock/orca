@@ -1,4 +1,4 @@
-import { basename, join, resolve, relative, isAbsolute, posix, win32 } from 'path'
+import { basename, resolve, relative, isAbsolute, posix, win32 } from 'path'
 import type { GitWorktreeInfo, Worktree, WorktreeMeta } from '../../shared/types'
 import { splitWorktreeId } from '../../shared/worktree-id'
 import { DEFAULT_WORKSPACE_STATUS_ID } from '../../shared/workspace-statuses'
@@ -97,35 +97,43 @@ export function computeWorktreePath(
   repoPath: string,
   settings: { nestWorkspaces: boolean; workspaceDir: string }
 ): string {
-  const pathOps =
-    looksLikeWindowsPath(repoPath) || looksLikeWindowsPath(settings.workspaceDir)
-      ? win32
-      : { basename, join }
-
-  const wsl = parseWslPath(repoPath)
-  if (wsl) {
-    const wslHome = getWslHome(wsl.distro)
-    if (wslHome) {
-      // Why: WSL UNC paths are still Windows paths from Node's perspective.
-      // On Linux CI, the default path helpers use POSIX semantics and would
-      // treat `\\wsl.localhost\...` as a plain string, producing mixed-separator
-      // paths like `\\wsl.localhost\Ubuntu\home\jin/orca/...`. Use win32 path
-      // operations whenever a Windows/UNC path is involved so behavior matches
-      // the Windows production runtime.
-      const wslWorkspaceDir = win32.join(wslHome, 'orca', 'workspaces')
-      if (settings.nestWorkspaces) {
-        const repoName = win32.basename(repoPath).replace(/\.git$/, '')
-        return win32.join(wslWorkspaceDir, repoName, sanitizedName)
-      }
-      return win32.join(wslWorkspaceDir, sanitizedName)
-    }
-  }
+  const workspaceRoot = computeWorkspaceRoot(repoPath, settings)
+  const pathOps = getRuntimePathOps(repoPath, workspaceRoot)
 
   if (settings.nestWorkspaces) {
     const repoName = pathOps.basename(repoPath).replace(/\.git$/, '')
-    return pathOps.join(settings.workspaceDir, repoName, sanitizedName)
+    return pathOps.join(workspaceRoot, repoName, sanitizedName)
   }
-  return pathOps.join(settings.workspaceDir, sanitizedName)
+  return pathOps.join(workspaceRoot, sanitizedName)
+}
+
+export function computeWorkspaceRoot(repoPath: string, settings: { workspaceDir: string }): string {
+  const wsl = parseWslPath(repoPath)
+  if (wsl && !isWorkspaceDirRelativeToRepo(repoPath, settings.workspaceDir)) {
+    const wslHome = getWslHome(wsl.distro)
+    if (wslHome) {
+      // Why: WSL UNC paths are still Windows paths from Node's perspective.
+      // Mirror absolute local Windows workspace roots inside the distro so
+      // terminals stay on the WSL filesystem; repo-relative roots can resolve
+      // directly against the WSL repo path.
+      return win32.join(wslHome, 'orca', 'workspaces')
+    }
+  }
+  return resolveWorkspaceDirForRepo(repoPath, settings.workspaceDir)
+}
+
+export function computeRemoteWorktreePath(
+  sanitizedName: string,
+  repoPath: string,
+  settings: { nestWorkspaces: boolean; workspaceDir: string }
+): string {
+  if (isWorkspaceDirRelativeToRepo(repoPath, settings.workspaceDir)) {
+    return computeWorktreePath(sanitizedName, repoPath, settings)
+  }
+  // Why: absolute workspaceDir values are local-desktop settings. SSH worktrees
+  // keep the legacy repo-sibling root unless the user opts into a relative
+  // root that can be resolved on the remote host.
+  return getRuntimePathOps(repoPath, repoPath).join(repoPath, '..', sanitizedName)
 }
 
 export function areWorktreePathsEqual(
@@ -148,7 +156,27 @@ export function areWorktreePathsEqual(
 }
 
 function looksLikeWindowsPath(pathValue: string): boolean {
-  return /^[A-Za-z]:[\\/]/.test(pathValue) || pathValue.startsWith('\\\\')
+  return (
+    /^[A-Za-z]:[\\/]/.test(pathValue) || pathValue.startsWith('\\\\') || pathValue.startsWith('//')
+  )
+}
+
+function getRuntimePathOps(
+  repoPath: string,
+  workspaceDir: string
+): Pick<typeof posix, 'basename' | 'isAbsolute' | 'join' | 'normalize' | 'resolve'> {
+  return looksLikeWindowsPath(repoPath) || looksLikeWindowsPath(workspaceDir) ? win32 : posix
+}
+
+function resolveWorkspaceDirForRepo(repoPath: string, workspaceDir: string): string {
+  const pathOps = getRuntimePathOps(repoPath, workspaceDir)
+  return pathOps.isAbsolute(workspaceDir)
+    ? pathOps.normalize(workspaceDir)
+    : pathOps.resolve(repoPath, workspaceDir)
+}
+
+function isWorkspaceDirRelativeToRepo(repoPath: string, workspaceDir: string): boolean {
+  return !getRuntimePathOps(repoPath, workspaceDir).isAbsolute(workspaceDir)
 }
 
 /**

@@ -3,7 +3,8 @@ import {
   isWindowsAbsolutePathLike,
   normalizeRuntimePathForComparison,
   normalizeRuntimePathSeparators,
-  relativePathInsideRoot
+  relativePathInsideRoot,
+  resolveRuntimePath
 } from './cross-platform-path'
 import { parseWslUncPath } from './wsl-paths'
 import type {
@@ -48,8 +49,16 @@ export function buildKnownOrcaWorkspaceLayouts(
 ): OrcaWorkspaceLayout[] {
   const layouts: OrcaWorkspaceLayout[] = []
   if (!repo?.connectionId && settings.workspaceDir) {
-    layouts.push({ path: settings.workspaceDir, nestWorkspaces: settings.nestWorkspaces })
-    layouts.push(...(settings.workspaceDirHistory ?? []))
+    layouts.push({
+      path: repo ? resolveRuntimePath(repo.path, settings.workspaceDir) : settings.workspaceDir,
+      nestWorkspaces: settings.nestWorkspaces
+    })
+    layouts.push(
+      ...(settings.workspaceDirHistory ?? []).map((layout) => ({
+        ...layout,
+        path: repo ? resolveRuntimePath(repo.path, layout.path) : layout.path
+      }))
+    )
   }
 
   const wslLayouts = repo ? buildWslWorkspaceLayouts(repo.path, settings) : []
