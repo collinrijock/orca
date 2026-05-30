@@ -1,4 +1,6 @@
-/* eslint-disable max-lines */
+/* eslint-disable max-lines -- Why: cleanup scan, SSH process probes, IPC
+   registration, and git-safety classification share mocked integration tests
+   and must evolve as one safety surface. */
 import { ipcMain } from 'electron'
 import { basename } from 'node:path'
 import type { Store } from '../persistence'
@@ -187,7 +189,13 @@ export async function scanWorkspaceCleanup(
   args: WorkspaceCleanupScanArgs = {}
 ): Promise<WorkspaceCleanupScanResult> {
   const scannedAt = Date.now()
-  const repos = store.getRepos()
+  const parsedTarget = args.worktreeId ? splitWorktreeId(args.worktreeId) : null
+  if (args.worktreeId && !parsedTarget) {
+    return { scannedAt, candidates: [], errors: [] }
+  }
+  const repos = parsedTarget
+    ? store.getRepos().filter((repo) => repo.id === parsedTarget.repoId)
+    : store.getRepos()
   const errors: WorkspaceCleanupScanResult['errors'] = []
   const candidates: WorkspaceCleanupCandidate[] = []
 

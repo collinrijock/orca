@@ -253,6 +253,50 @@ describe('workspace cleanup scan', () => {
     })
   })
 
+  it('only inspects the target repo during focused scans', async () => {
+    const repoTwo = { ...REPO, id: 'repo-2', path: '/repo-two', displayName: 'Repo Two' }
+    listRepoWorktreesMock.mockImplementation((repo: Repo) =>
+      Promise.resolve([
+        {
+          path: `${repo.path}-feature`,
+          head: 'abc123',
+          branch: 'refs/heads/feature',
+          isBare: false,
+          isMainWorktree: false
+        }
+      ])
+    )
+
+    const result = await scanWorkspaceCleanup(
+      makeStore({
+        repos: [REPO, repoTwo]
+      }),
+      { worktreeId: 'repo-2::/repo-two-feature' }
+    )
+
+    expect(listRepoWorktreesMock).toHaveBeenCalledTimes(1)
+    expect(listRepoWorktreesMock).toHaveBeenCalledWith(repoTwo)
+    expect(result.candidates).toHaveLength(1)
+    expect(result.candidates[0]).toMatchObject({
+      worktreeId: 'repo-2::/repo-two-feature',
+      repoId: 'repo-2'
+    })
+  })
+
+  it('returns no focused scan rows when the encoded repo id is unknown', async () => {
+    const result = await scanWorkspaceCleanup(makeStore(), {
+      worktreeId: 'missing-repo::/repo-feature'
+    })
+
+    expect(listRepoWorktreesMock).not.toHaveBeenCalled()
+    expect(getStatusMock).not.toHaveBeenCalled()
+    expect(result).toEqual({
+      scannedAt: NOW,
+      candidates: [],
+      errors: []
+    })
+  })
+
   it('honors renderer git deferrals without hiding the workspace', async () => {
     const result = await scanWorkspaceCleanup(makeStore(), {
       skipGitWorktreeIds: ['repo-1::/repo-feature']

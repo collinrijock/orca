@@ -85,7 +85,215 @@ function createCleanupTestStore(removeWorktree = vi.fn()) {
   )
 }
 
+function installWorkspaceCleanupApi(scan: ReturnType<typeof vi.fn>) {
+  ;(globalThis as { window: unknown }).window = {
+    api: {
+      workspaceCleanup: {
+        scan,
+        dismiss: vi.fn().mockResolvedValue(undefined),
+        clearDismissals: vi.fn().mockResolvedValue(undefined),
+        hasKillableLocalProcesses: vi.fn().mockResolvedValue({
+          hasKillableProcesses: false
+        })
+      }
+    }
+  }
+}
+
+function deferred<T>(): {
+  promise: Promise<T>
+  resolve: (value: T) => void
+  reject: (error: unknown) => void
+} {
+  let resolve!: (value: T) => void
+  let reject!: (error: unknown) => void
+  const promise = new Promise<T>((innerResolve, innerReject) => {
+    resolve = innerResolve
+    reject = innerReject
+  })
+  return { promise, resolve, reject }
+}
+
 describe('workspace cleanup viewed rows', () => {
+  it('joins duplicate broad cleanup scans', async () => {
+    const pending = deferred<WorkspaceCleanupScanResult>()
+    const scan = vi.fn().mockReturnValue(pending.promise)
+    installWorkspaceCleanupApi(scan)
+    const store = createCleanupTestStore()
+
+    const first = store.getState().scanWorkspaceCleanup()
+    const second = store.getState().scanWorkspaceCleanup()
+
+    expect(scan).toHaveBeenCalledTimes(1)
+    expect(store.getState().workspaceCleanupLoading).toBe(true)
+
+    const result = { scannedAt: NOW, candidates: [makeCandidate()], errors: [] }
+    pending.resolve(result)
+
+    await expect(Promise.all([first, second])).resolves.toEqual([result, result])
+    expect(store.getState().workspaceCleanupScan?.candidates).toHaveLength(1)
+    expect(store.getState().workspaceCleanupLoading).toBe(false)
+  })
+
+  it('does not join broad cleanup scans with different explicit args', async () => {
+    const firstPending = deferred<WorkspaceCleanupScanResult>()
+    const secondPending = deferred<WorkspaceCleanupScanResult>()
+    const firstResult = {
+      scannedAt: NOW,
+      candidates: [makeCandidate({ worktreeId: 'repo1::/tmp/first' })],
+      errors: []
+    }
+    const secondResult = {
+      scannedAt: NOW + 1,
+      candidates: [makeCandidate({ worktreeId: 'repo1::/tmp/second' })],
+      errors: []
+    }
+    const scan = vi.fn((args?: { skipGitWorktreeIds?: string[] }) =>
+      args?.skipGitWorktreeIds?.includes('repo1::/tmp/first')
+        ? firstPending.promise
+        : secondPending.promise
+    )
+    installWorkspaceCleanupApi(scan)
+    const store = createCleanupTestStore()
+
+    const first = store
+      .getState()
+      .scanWorkspaceCleanup({ skipGitWorktreeIds: ['repo1::/tmp/first'] })
+    const second = store
+      .getState()
+      .scanWorkspaceCleanup({ skipGitWorktreeIds: ['repo1::/tmp/second'] })
+
+    expect(scan).toHaveBeenCalledTimes(2)
+    secondPending.resolve(secondResult)
+    await second
+    expect(store.getState().workspaceCleanupScan).toMatchObject(secondResult)
+
+    firstPending.resolve(firstResult)
+    await expect(Promise.all([first, second])).resolves.toEqual([firstResult, secondResult])
+    expect(store.getState().workspaceCleanupScan).toMatchObject(secondResult)
+  })
+
+  it('keeps stale cleanup results visible after a broad refresh failure', async () => {
+    const previous = { scannedAt: NOW, candidates: [makeCandidate()], errors: [] }
+    const scan = vi
+      .fn()
+      .mockResolvedValueOnce(previous)
+      .mockRejectedValueOnce(new Error('scan failed'))
+    installWorkspaceCleanupApi(scan)
+    const store = createCleanupTestStore()
+
+    await store.getState().scanWorkspaceCleanup()
+    await expect(store.getState().scanWorkspaceCleanup()).rejects.toThrow('scan failed')
+
+    expect(store.getState().workspaceCleanupScan).toMatchObject(previous)
+    expect(store.getState().workspaceCleanupError).toBe('scan failed')
+    expect(store.getState().workspaceCleanupLoading).toBe(false)
+  })
+
+  it('keeps focused cleanup preflight scans separate from broad scans', async () => {
+    const broad = deferred<WorkspaceCleanupScanResult>()
+    const scan = vi.fn((args?: { worktreeId?: string }) => {
+      if (args?.worktreeId) {
+        return Promise.resolve({
+          scannedAt: NOW + 1,
+          candidates: [makeCandidate({ worktreeId: args.worktreeId })],
+          errors: []
+        } satisfies WorkspaceCleanupScanResult)
+      }
+      return broad.promise
+    })
+    installWorkspaceCleanupApi(scan)
+    const store = createCleanupTestStore()
+
+    const broadScan = store.getState().scanWorkspaceCleanup()
+    const focusedScan = await store.getState().scanWorkspaceCleanup({ worktreeId: WORKTREE_ID })
+
+    expect(scan).toHaveBeenCalledTimes(2)
+    expect(focusedScan.candidates[0]?.worktreeId).toBe(WORKTREE_ID)
+    expect(store.getState().workspaceCleanupScan).toBeNull()
+
+    broad.resolve({ scannedAt: NOW, candidates: [], errors: [] })
+    await broadScan
+    expect(store.getState().workspaceCleanupScan?.scannedAt).toBe(NOW)
+  })
+
+  it('preflights cleanup removals concurrently and deletes each repo deepest first', async () => {
+    let activePreflights = 0
+    let maxActivePreflights = 0
+    let activeDeletes = 0
+    let maxActiveDeletes = 0
+    const deleteOrderByRepo = new Map<string, string[]>()
+    const candidates = [
+      makeCandidate({
+        worktreeId: 'repo-a::/repo/parent',
+        repoId: 'repo-a',
+        path: '/repo/parent',
+        displayName: 'parent'
+      }),
+      makeCandidate({
+        worktreeId: 'repo-a::/repo/parent/child',
+        repoId: 'repo-a',
+        path: '/repo/parent/child',
+        displayName: 'child'
+      }),
+      makeCandidate({
+        worktreeId: 'repo-b::/other',
+        repoId: 'repo-b',
+        path: '/other',
+        displayName: 'other',
+        git: { clean: null, upstreamAhead: null, upstreamBehind: null, checkedAt: null },
+        blockers: ['git-status-error']
+      })
+    ]
+    const candidateById = new Map(candidates.map((candidate) => [candidate.worktreeId, candidate]))
+    const scan = vi.fn(async (args?: { worktreeId?: string }) => {
+      activePreflights += 1
+      maxActivePreflights = Math.max(maxActivePreflights, activePreflights)
+      await new Promise((resolve) => setTimeout(resolve, 5))
+      activePreflights -= 1
+      return {
+        scannedAt: NOW,
+        candidates: args?.worktreeId ? [candidateById.get(args.worktreeId)!] : [],
+        errors: []
+      } satisfies WorkspaceCleanupScanResult
+    })
+    installWorkspaceCleanupApi(scan)
+
+    const removeWorktree = vi.fn(async (worktreeId: string) => {
+      const candidate = candidateById.get(worktreeId)!
+      const repoOrder = deleteOrderByRepo.get(candidate.repoId) ?? []
+      repoOrder.push(worktreeId)
+      deleteOrderByRepo.set(candidate.repoId, repoOrder)
+      activeDeletes += 1
+      maxActiveDeletes = Math.max(maxActiveDeletes, activeDeletes)
+      await new Promise((resolve) => setTimeout(resolve, 5))
+      activeDeletes -= 1
+      return { ok: true as const }
+    })
+    const store = createCleanupTestStore(removeWorktree)
+    store.setState({
+      workspaceCleanupScan: { scannedAt: NOW, candidates, errors: [] }
+    } as Partial<AppState>)
+
+    await expect(
+      store
+        .getState()
+        .removeWorkspaceCleanupCandidates(candidates.map((candidate) => candidate.worktreeId))
+    ).resolves.toEqual({
+      removedIds: expect.arrayContaining(candidates.map((candidate) => candidate.worktreeId)),
+      failures: []
+    })
+
+    expect(maxActivePreflights).toBeGreaterThan(1)
+    expect(maxActiveDeletes).toBeGreaterThan(1)
+    expect(deleteOrderByRepo.get('repo-a')).toEqual([
+      'repo-a::/repo/parent/child',
+      'repo-a::/repo/parent'
+    ])
+    expect(removeWorktree).toHaveBeenCalledWith('repo-b::/other', true)
+    expect(store.getState().workspaceCleanupScan?.candidates).toEqual([])
+  })
+
   it('demotes an active suggested workspace when it was not viewed from cleanup', async () => {
     const [candidate] = await enrichWorkspaceCleanupCandidates(
       [makeCandidate()],

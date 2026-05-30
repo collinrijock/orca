@@ -1,4 +1,6 @@
-/* eslint-disable max-lines */
+/* eslint-disable max-lines -- Why: cleanup scan persistence, renderer safety
+   enrichment, dismissals, and destructive preflight/delete orchestration share
+   one store state contract. */
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import {
@@ -60,6 +62,13 @@ type EnrichOptions = {
 
 const RECENT_VISIBLE_CONTEXT_MS = 24 * 60 * 60 * 1000
 const VIEWED_FROM_CLEANUP_MS = 2 * 60 * 60 * 1000
+const WORKSPACE_CLEANUP_PREFLIGHT_CONCURRENCY = 4
+
+let inFlightWorkspaceCleanupScan: {
+  key: string
+  promise: Promise<WorkspaceCleanupScanResult>
+} | null = null
+let latestWorkspaceCleanupScanToken = 0
 
 const SHELL_PROCESS_NAMES = new Set([
   'bash',
@@ -101,29 +110,55 @@ export const createWorkspaceCleanupSlice: StateCreator<AppState, [], [], Workspa
   workspaceCleanupViewedCandidates: {},
 
   scanWorkspaceCleanup: async (args) => {
+    if (args?.worktreeId !== undefined) {
+      const scan = await window.api.workspaceCleanup.scan(args)
+      const enriched = await enrichWorkspaceCleanupCandidates(scan.candidates, get(), {
+        applyDismissals: false
+      })
+      return { ...scan, candidates: enriched }
+    }
+
+    const scanArgs = {
+      ...args,
+      skipGitWorktreeIds: [
+        ...new Set([
+          ...(args?.skipGitWorktreeIds ?? []),
+          ...getInitialWorkspaceCleanupGitDeferrals(get())
+        ])
+      ]
+    }
+    const scanKey = getWorkspaceCleanupScanKey(scanArgs)
+
+    if (inFlightWorkspaceCleanupScan?.key === scanKey) {
+      set({ workspaceCleanupLoading: true, workspaceCleanupError: null })
+      return inFlightWorkspaceCleanupScan.promise
+    }
+
     set({ workspaceCleanupLoading: true, workspaceCleanupError: null })
-    try {
-      const scanArgs =
-        args?.worktreeId !== undefined
-          ? args
-          : {
-              ...args,
-              skipGitWorktreeIds: [
-                ...new Set([
-                  ...(args?.skipGitWorktreeIds ?? []),
-                  ...getInitialWorkspaceCleanupGitDeferrals(get())
-                ])
-              ]
-            }
+    const scanToken = ++latestWorkspaceCleanupScanToken
+    const promise = (async () => {
       const scan = await window.api.workspaceCleanup.scan(scanArgs)
       const enriched = await enrichWorkspaceCleanupCandidates(scan.candidates, get())
       const result = { ...scan, candidates: enriched }
-      set({ workspaceCleanupScan: result, workspaceCleanupLoading: false })
+      if (scanToken === latestWorkspaceCleanupScanToken) {
+        set({ workspaceCleanupScan: result, workspaceCleanupLoading: false })
+      }
       return result
+    })()
+    inFlightWorkspaceCleanupScan = { key: scanKey, promise }
+
+    try {
+      return await promise
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
-      set({ workspaceCleanupError: message, workspaceCleanupLoading: false })
+      if (scanToken === latestWorkspaceCleanupScanToken) {
+        set({ workspaceCleanupError: message, workspaceCleanupLoading: false })
+      }
       throw error
+    } finally {
+      if (inFlightWorkspaceCleanupScan?.promise === promise) {
+        inFlightWorkspaceCleanupScan = null
+      }
     }
   },
 
@@ -193,35 +228,55 @@ export const createWorkspaceCleanupSlice: StateCreator<AppState, [], [], Workspa
     const removedIds: string[] = []
     const failures: WorkspaceCleanupFailure[] = []
 
-    for (const worktreeId of worktreeIds) {
-      const preflight = await preflightWorkspaceCleanupCandidate(worktreeId, get)
+    const preflights = await mapWithConcurrency(
+      worktreeIds,
+      WORKSPACE_CLEANUP_PREFLIGHT_CONCURRENCY,
+      (worktreeId) => preflightWorkspaceCleanupCandidate(worktreeId, get)
+    )
+    const candidatesByRepo = new Map<string, WorkspaceCleanupCandidate[]>()
+
+    for (const preflight of preflights) {
       if (!preflight.ok) {
         failures.push(preflight.failure)
         continue
       }
-
-      const result = await get().removeWorktree(
-        worktreeId,
-        shouldForceWorkspaceCleanupRemoval(preflight.candidate)
-      )
-      if (result.ok) {
-        removedIds.push(worktreeId)
+      const existing = candidatesByRepo.get(preflight.candidate.repoId)
+      if (existing) {
+        existing.push(preflight.candidate)
       } else {
-        failures.push({
-          worktreeId,
-          displayName: preflight.candidate.displayName,
-          message: result.error
-        })
+        candidatesByRepo.set(preflight.candidate.repoId, [preflight.candidate])
       }
     }
 
+    await Promise.all(
+      [...candidatesByRepo.values()].map(async (repoCandidates) => {
+        const sortedCandidates = [...repoCandidates].sort((a, b) => b.path.length - a.path.length)
+        for (const candidate of sortedCandidates) {
+          const result = await get().removeWorktree(
+            candidate.worktreeId,
+            shouldForceWorkspaceCleanupRemoval(candidate)
+          )
+          if (result.ok) {
+            removedIds.push(candidate.worktreeId)
+          } else {
+            failures.push({
+              worktreeId: candidate.worktreeId,
+              displayName: candidate.displayName,
+              message: result.error
+            })
+          }
+        }
+      })
+    )
+
     if (removedIds.length > 0) {
+      const removedIdSet = new Set(removedIds)
       set((state) => ({
         workspaceCleanupScan: state.workspaceCleanupScan
           ? {
               ...state.workspaceCleanupScan,
               candidates: state.workspaceCleanupScan.candidates.filter(
-                (candidate) => !removedIds.includes(candidate.worktreeId)
+                (candidate) => !removedIdSet.has(candidate.worktreeId)
               )
             }
           : state.workspaceCleanupScan
@@ -231,6 +286,32 @@ export const createWorkspaceCleanupSlice: StateCreator<AppState, [], [], Workspa
     return { removedIds, failures }
   }
 })
+
+function getWorkspaceCleanupScanKey(args: WorkspaceCleanupScanArgs): string {
+  return JSON.stringify({
+    skipGitWorktreeIds: [...new Set(args.skipGitWorktreeIds ?? [])].sort()
+  })
+}
+
+async function mapWithConcurrency<T, R>(
+  items: readonly T[],
+  limit: number,
+  fn: (item: T) => Promise<R>
+): Promise<R[]> {
+  const results: R[] = []
+  let nextIndex = 0
+  const workerCount = Math.min(limit, items.length)
+  await Promise.all(
+    Array.from({ length: workerCount }, async () => {
+      while (nextIndex < items.length) {
+        const index = nextIndex
+        nextIndex += 1
+        results[index] = await fn(items[index])
+      }
+    })
+  )
+  return results
+}
 
 function getInitialWorkspaceCleanupGitDeferrals(state: AppState): string[] {
   const ids = new Set<string>()

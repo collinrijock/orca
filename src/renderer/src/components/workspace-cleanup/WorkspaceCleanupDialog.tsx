@@ -1,6 +1,9 @@
-/* eslint-disable max-lines */
-import React, { useCallback, useEffect, useMemo, useState } from 'react'
+/* eslint-disable max-lines -- Why: the cleanup dialog keeps scan status,
+   filters, row actions, and force-aware confirmation in one modal flow. */
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
+  ArrowDown,
+  ArrowUp,
   AlertTriangle,
   Check,
   EyeOff,
@@ -12,6 +15,7 @@ import {
   X
 } from 'lucide-react'
 import { toast } from 'sonner'
+import { useShallow } from 'zustand/react/shallow'
 import {
   Dialog,
   DialogContent,
@@ -21,8 +25,16 @@ import {
   DialogTitle
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import RepoMultiCombobox from '@/components/ui/repo-multi-combobox'
 import { ScrollArea } from '@/components/ui/scroll-area'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from '@/components/ui/select'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useAppStore } from '@/store'
 import { cn } from '@/lib/utils'
@@ -35,6 +47,21 @@ import {
   type WorkspaceCleanupScanError,
   type WorkspaceCleanupTier
 } from '../../../../shared/workspace-cleanup'
+import {
+  filterWorkspaceCleanupCandidates,
+  getWorkspaceCleanupGitLabel,
+  getWorkspaceCleanupReviewInfo,
+  hasWorkspaceCleanupLocalContext,
+  sortWorkspaceCleanupCandidates,
+  type WorkspaceCleanupContextFilter,
+  type WorkspaceCleanupFilters,
+  type WorkspaceCleanupGitFilter,
+  type WorkspaceCleanupReviewFilter,
+  type WorkspaceCleanupReviewInfo,
+  type WorkspaceCleanupSortDirection,
+  type WorkspaceCleanupSortKey,
+  type WorkspaceCleanupTimeFilter
+} from './workspace-cleanup-presentation'
 
 const TIER_LABELS: Record<WorkspaceCleanupTier, string> = {
   ready: 'Suggested cleanup',
@@ -43,6 +70,24 @@ const TIER_LABELS: Record<WorkspaceCleanupTier, string> = {
 }
 
 type CleanupView = WorkspaceCleanupTier | 'hidden'
+
+const DEFAULT_FILTERS: WorkspaceCleanupFilters = {
+  query: '',
+  time: 'all',
+  review: 'all',
+  git: 'all',
+  context: 'all'
+}
+
+const FILTER_SELECT_CLASSNAME = 'h-8 w-[118px] bg-background px-2 text-xs'
+
+const EMPTY_REVIEW_INFO: WorkspaceCleanupReviewInfo = {
+  hasReview: false,
+  label: null,
+  state: null,
+  provider: null,
+  title: null
+}
 
 const BLOCKER_LABELS: Record<WorkspaceCleanupBlocker, string> = {
   'main-worktree': 'Main workspace',
@@ -135,38 +180,6 @@ function formatScanErrorReason(message: string | undefined): string {
   return message.replace(/\.$/, '')
 }
 
-function isOldWorkspaceCandidate(candidate: WorkspaceCleanupCandidate): boolean {
-  if (candidate.blockers.includes('main-worktree') || candidate.blockers.includes('folder-repo')) {
-    return false
-  }
-  return candidate.reasons.includes('archived') || candidate.reasons.includes('idle-clean')
-}
-
-function compareCleanupCandidates(
-  a: WorkspaceCleanupCandidate,
-  b: WorkspaceCleanupCandidate
-): number {
-  const priorityA = getCleanupCandidatePriority(a)
-  const priorityB = getCleanupCandidatePriority(b)
-  if (priorityA !== priorityB) {
-    return priorityA - priorityB
-  }
-  return a.lastActivityAt - b.lastActivityAt
-}
-
-function getCleanupCandidatePriority(candidate: WorkspaceCleanupCandidate): number {
-  if (candidate.tier === 'ready') {
-    return 0
-  }
-  if (candidate.reasons.length > 0) {
-    return 1
-  }
-  if (isOldWorkspaceCandidate(candidate)) {
-    return 2
-  }
-  return 3
-}
-
 export default function WorkspaceCleanupDialog(): React.JSX.Element {
   const activeModal = useAppStore((s) => s.activeModal)
   const closeModal = useAppStore((s) => s.closeModal)
@@ -174,6 +187,14 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
   const loading = useAppStore((s) => s.workspaceCleanupLoading)
   const error = useAppStore((s) => s.workspaceCleanupError)
   const repos = useAppStore((s) => s.repos)
+  const reviewStateInputs = useAppStore(
+    useShallow((s) => ({
+      worktreesByRepo: s.worktreesByRepo,
+      hostedReviewCache: s.hostedReviewCache,
+      repos: s.repos,
+      settings: s.settings
+    }))
+  )
   const scanWorkspaceCleanup = useAppStore((s) => s.scanWorkspaceCleanup)
   const markCandidateViewed = useAppStore((s) => s.markWorkspaceCleanupCandidateViewed)
   const dismissCandidates = useAppStore((s) => s.dismissWorkspaceCleanupCandidates)
@@ -187,20 +208,43 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
   const [removing, setRemoving] = useState(false)
   const [rowFailures, setRowFailures] = useState<Record<string, string>>({})
   const [repoSelection, setRepoSelection] = useState<ReadonlySet<string>>(() => new Set())
+  const [filters, setFilters] = useState<WorkspaceCleanupFilters>(DEFAULT_FILTERS)
+  const [sortKey, setSortKey] = useState<WorkspaceCleanupSortKey>('activity')
+  const [sortDirection, setSortDirection] = useState<WorkspaceCleanupSortDirection>('asc')
+  const selectedDefaultsScanAtRef = useRef<number | null>(null)
+  const autoScanAttemptedForOpenRef = useRef(false)
+  const wasOpenRef = useRef(false)
   const eligibleRepos = useMemo(() => repos.filter((repo) => isGitRepoKind(repo)), [repos])
   const eligibleRepoIds = useMemo(() => eligibleRepos.map((repo) => repo.id), [eligibleRepos])
 
   useEffect(() => {
-    if (open) {
-      setRowFailures({})
+    if (!open) {
+      wasOpenRef.current = false
+      autoScanAttemptedForOpenRef.current = false
+      return
+    }
+    if (!wasOpenRef.current) {
+      wasOpenRef.current = true
+      autoScanAttemptedForOpenRef.current = false
       setActiveView('ready')
+      setConfirming(false)
+      setRowFailures({})
+      setFilters(DEFAULT_FILTERS)
+      setSortKey('activity')
+      setSortDirection('asc')
+      if (scan) {
+        setSelectedIds(getDefaultSelectedWorkspaceCleanupIds(scan.candidates))
+      }
+    }
+    if (!loading && !autoScanAttemptedForOpenRef.current) {
+      autoScanAttemptedForOpenRef.current = true
       void scanWorkspaceCleanup().catch((err: unknown) => {
         toast.error('Workspace cleanup scan failed', {
           description: err instanceof Error ? err.message : String(err)
         })
       })
     }
-  }, [open, scanWorkspaceCleanup])
+  }, [loading, open, scan, scanWorkspaceCleanup])
 
   useEffect(() => {
     if (!open) {
@@ -210,6 +254,13 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
   }, [eligibleRepoIds, open])
 
   const candidates = useMemo(() => scan?.candidates ?? [], [scan?.candidates])
+  const reviewInfoByWorktreeId = useMemo(() => {
+    const infos = new Map<string, WorkspaceCleanupReviewInfo>()
+    for (const candidate of candidates) {
+      infos.set(candidate.worktreeId, getWorkspaceCleanupReviewInfo(candidate, reviewStateInputs))
+    }
+    return infos
+  }, [candidates, reviewStateInputs])
   const effectiveRepoSelection = useMemo<ReadonlySet<string>>(() => {
     if (repoSelection.size > 0 || eligibleRepoIds.length === 0) {
       return repoSelection
@@ -227,29 +278,28 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
   }, [candidates, effectiveRepoSelection, eligibleRepoIds.length])
 
   useEffect(() => {
-    if (!open || !scan) {
+    if (!scan || selectedDefaultsScanAtRef.current === scan.scannedAt) {
       return
     }
-    setSelectedIds(
-      new Set(
-        candidates
-          .filter((candidate) => candidate.selectedByDefault)
-          .map((candidate) => candidate.worktreeId)
-      )
-    )
+    selectedDefaultsScanAtRef.current = scan.scannedAt
+    setSelectedIds(getDefaultSelectedWorkspaceCleanupIds(scan.candidates))
     setConfirming(false)
-  }, [open, scan, scan?.scannedAt, candidates])
+    setRowFailures({})
+  }, [scan])
 
   const visibleCandidates = useMemo(() => {
     const rows = filteredCandidates.filter((candidate) => !candidate.blockers.includes('dismissed'))
-    return [...rows].sort(compareCleanupCandidates)
-  }, [filteredCandidates])
+    return sortWorkspaceCleanupCandidates(rows, 'activity', 'asc', reviewInfoByWorktreeId)
+  }, [filteredCandidates, reviewInfoByWorktreeId])
   const hiddenCandidates = useMemo(
     () =>
-      filteredCandidates
-        .filter((candidate) => candidate.blockers.includes('dismissed'))
-        .sort(compareCleanupCandidates),
-    [filteredCandidates]
+      sortWorkspaceCleanupCandidates(
+        filteredCandidates.filter((candidate) => candidate.blockers.includes('dismissed')),
+        'activity',
+        'asc',
+        reviewInfoByWorktreeId
+      ),
+    [filteredCandidates, reviewInfoByWorktreeId]
   )
   const groups = useMemo(
     () => ({
@@ -259,16 +309,6 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
     }),
     [visibleCandidates]
   )
-  const selectedCandidates = useMemo(() => {
-    const byId = new Map(filteredCandidates.map((candidate) => [candidate.worktreeId, candidate]))
-    return [...selectedIds]
-      .map((id) => byId.get(id))
-      .filter(
-        (candidate): candidate is WorkspaceCleanupCandidate =>
-          candidate != null && canQueueWorkspaceCleanupCandidate(candidate)
-      )
-  }, [filteredCandidates, selectedIds])
-
   const hiddenByKeepCount = filteredCandidates.filter((candidate) =>
     candidate.blockers.includes('dismissed')
   ).length
@@ -289,7 +329,36 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
   const inactiveCount = filteredCandidates.length
   const hasAnyCandidates = candidates.length > 0
   const initialLoading = loading && !scan
-  const activeRows = activeView === 'hidden' ? hiddenCandidates : groups[activeView]
+  const activeBaseRows = activeView === 'hidden' ? hiddenCandidates : groups[activeView]
+  const activeRows = useMemo(
+    () =>
+      sortWorkspaceCleanupCandidates(
+        filterWorkspaceCleanupCandidates(
+          activeBaseRows,
+          filters,
+          reviewInfoByWorktreeId,
+          scan?.scannedAt ?? Date.now()
+        ),
+        sortKey,
+        sortDirection,
+        reviewInfoByWorktreeId
+      ),
+    [activeBaseRows, filters, reviewInfoByWorktreeId, scan?.scannedAt, sortDirection, sortKey]
+  )
+  const activeRowIds = useMemo(
+    () => new Set(activeRows.map((candidate) => candidate.worktreeId)),
+    [activeRows]
+  )
+  const activeFilters = hasActiveWorkspaceCleanupFilters(filters)
+  const selectedCandidates = useMemo(() => {
+    const byId = new Map(activeRows.map((candidate) => [candidate.worktreeId, candidate]))
+    return [...selectedIds]
+      .map((id) => byId.get(id))
+      .filter(
+        (candidate): candidate is WorkspaceCleanupCandidate =>
+          candidate != null && canQueueWorkspaceCleanupCandidate(candidate)
+      )
+  }, [activeRows, selectedIds])
   const activeQueueableRows = useMemo(
     () => activeRows.filter(canQueueWorkspaceCleanupCandidate),
     [activeRows]
@@ -308,10 +377,22 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
       : 'unchecked'
 
   useEffect(() => {
+    if (!open || confirming) {
+      return
+    }
+    // Why: destructive selection must stay scoped to the rows the user can
+    // currently review after tier/filter changes.
+    setSelectedIds((current) => {
+      const next = new Set([...current].filter((id) => activeRowIds.has(id)))
+      return next.size === current.size ? current : next
+    })
+  }, [activeRowIds, confirming, open])
+
+  useEffect(() => {
     if (!open || loading || !scan) {
       return
     }
-    if (activeRows.length > 0) {
+    if (activeBaseRows.length > 0) {
       return
     }
     if (readyCount > 0) {
@@ -324,7 +405,7 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
       setActiveView('hidden')
     }
   }, [
-    activeRows.length,
+    activeBaseRows.length,
     groups.protected.length,
     groups.review.length,
     hiddenCandidates.length,
@@ -506,6 +587,7 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
                   {protectedCount > 0 ? (
                     <StatusPill>{protectedCount} not suggested</StatusPill>
                   ) : null}
+                  {loading ? <StatusPill>Refreshing</StatusPill> : null}
                 </div>
                 <div className="flex min-w-0 flex-wrap items-center gap-2">
                   {eligibleRepos.length > 1 ? (
@@ -529,6 +611,16 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
                     Delete selected
                   </Button>
                 </div>
+              </div>
+            ) : null}
+
+            {loading && scan ? (
+              <div className="flex items-center gap-2 border-b border-border bg-muted/25 px-5 py-2 text-xs text-muted-foreground">
+                <Loader2 className="size-3.5 shrink-0 animate-spin" />
+                <span>
+                  Refreshing inactive workspaces. You can leave this modal; the last result stays
+                  visible.
+                </span>
               </div>
             ) : null}
 
@@ -596,10 +688,20 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
                     </Button>
                   ) : (
                     <div className="shrink-0 text-xs text-muted-foreground">
-                      Sorted by oldest activity
+                      Sorted by {formatWorkspaceCleanupSortLabel(sortKey, sortDirection)}
                     </div>
                   )}
                 </div>
+                {filteredCandidates.length > 0 ? (
+                  <WorkspaceCleanupFilterToolbar
+                    filters={filters}
+                    sortKey={sortKey}
+                    sortDirection={sortDirection}
+                    onFiltersChange={setFilters}
+                    onSortKeyChange={setSortKey}
+                    onSortDirectionChange={setSortDirection}
+                  />
+                ) : null}
                 <ScrollArea className="min-h-0 flex-1">
                   <div>
                     {initialLoading ? <SkeletonRows /> : null}
@@ -629,13 +731,31 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
                         onAction={() => setActiveView('hidden')}
                       />
                     ) : null}
-                    {!loading && scan && activeRows.length === 0 && visibleCandidates.length > 0 ? (
+                    {!loading &&
+                    scan &&
+                    activeRows.length === 0 &&
+                    activeBaseRows.length > 0 &&
+                    activeFilters ? (
+                      <EmptyState
+                        title="No workspaces match these filters."
+                        actionLabel="Clear filters"
+                        onAction={() => setFilters(DEFAULT_FILTERS)}
+                      />
+                    ) : null}
+                    {!loading &&
+                    scan &&
+                    activeRows.length === 0 &&
+                    visibleCandidates.length > 0 &&
+                    !activeFilters ? (
                       <EmptyState title="No workspaces in this cleanup set." />
                     ) : null}
                     {activeRows.map((candidate, index) => (
                       <CandidateRow
                         key={candidate.worktreeId}
                         candidate={candidate}
+                        reviewInfo={
+                          reviewInfoByWorktreeId.get(candidate.worktreeId) ?? EMPTY_REVIEW_INFO
+                        }
                         last={index === activeRows.length - 1}
                         selected={selectedIds.has(candidate.worktreeId)}
                         failure={rowFailures[candidate.worktreeId]}
@@ -658,6 +778,7 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
         ) : (
           <ConfirmRemove
             candidates={selectedCandidates}
+            reviewInfoByWorktreeId={reviewInfoByWorktreeId}
             removing={removing}
             onCancel={() => setConfirming(false)}
             onConfirm={() => void confirmRemove()}
@@ -693,6 +814,139 @@ function StatusPill({
     >
       {children}
     </span>
+  )
+}
+
+function WorkspaceCleanupFilterToolbar({
+  filters,
+  sortKey,
+  sortDirection,
+  onFiltersChange,
+  onSortKeyChange,
+  onSortDirectionChange
+}: {
+  filters: WorkspaceCleanupFilters
+  sortKey: WorkspaceCleanupSortKey
+  sortDirection: WorkspaceCleanupSortDirection
+  onFiltersChange: (filters: WorkspaceCleanupFilters) => void
+  onSortKeyChange: (sortKey: WorkspaceCleanupSortKey) => void
+  onSortDirectionChange: (direction: WorkspaceCleanupSortDirection) => void
+}): React.JSX.Element {
+  const updateFilter = <K extends keyof WorkspaceCleanupFilters>(
+    key: K,
+    value: WorkspaceCleanupFilters[K]
+  ): void => {
+    onFiltersChange({ ...filters, [key]: value })
+  }
+
+  return (
+    <div className="flex flex-wrap items-center gap-2 border-b border-border bg-muted/15 px-3 py-2">
+      <div className="relative min-w-[180px] flex-1">
+        <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+        <Input
+          value={filters.query}
+          onChange={(event) => updateFilter('query', event.target.value)}
+          placeholder="Search workspaces"
+          className="h-8 pl-8 text-xs"
+        />
+      </div>
+      <FilterSelect<WorkspaceCleanupTimeFilter>
+        value={filters.time}
+        options={[
+          ['all', 'Any age'],
+          ['30d', '30d+'],
+          ['90d', '90d+'],
+          ['archived', 'Archived']
+        ]}
+        onChange={(value) => updateFilter('time', value)}
+      />
+      <FilterSelect<WorkspaceCleanupReviewFilter>
+        value={filters.review}
+        options={[
+          ['all', 'Any review'],
+          ['no-review', 'No PR/MR'],
+          ['has-review', 'Has PR/MR'],
+          ['open-review', 'Open'],
+          ['closed-review', 'Closed']
+        ]}
+        onChange={(value) => updateFilter('review', value)}
+      />
+      <FilterSelect<WorkspaceCleanupGitFilter>
+        value={filters.git}
+        options={[
+          ['all', 'Any git'],
+          ['clean', 'Clean'],
+          ['dirty', 'Dirty'],
+          ['unpushed', 'Unpushed'],
+          ['unknown', 'Unknown']
+        ]}
+        onChange={(value) => updateFilter('git', value)}
+      />
+      <FilterSelect<WorkspaceCleanupContextFilter>
+        value={filters.context}
+        options={[
+          ['all', 'Any context'],
+          ['has-context', 'Has context'],
+          ['no-context', 'No context']
+        ]}
+        onChange={(value) => updateFilter('context', value)}
+      />
+      <FilterSelect<WorkspaceCleanupSortKey>
+        value={sortKey}
+        options={[
+          ['activity', 'Activity'],
+          ['name', 'Name'],
+          ['repo', 'Repo'],
+          ['review', 'Review'],
+          ['git', 'Git']
+        ]}
+        onChange={onSortKeyChange}
+      />
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            variant="outline"
+            size="icon-sm"
+            aria-label={sortDirection === 'asc' ? 'Sort ascending' : 'Sort descending'}
+            onClick={() => onSortDirectionChange(sortDirection === 'asc' ? 'desc' : 'asc')}
+          >
+            {sortDirection === 'asc' ? (
+              <ArrowUp className="size-3.5" />
+            ) : (
+              <ArrowDown className="size-3.5" />
+            )}
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent side="top" sideOffset={4}>
+          {sortDirection === 'asc' ? 'Ascending' : 'Descending'}
+        </TooltipContent>
+      </Tooltip>
+    </div>
+  )
+}
+
+function FilterSelect<T extends string>({
+  value,
+  options,
+  onChange
+}: {
+  value: T
+  options: readonly (readonly [T, string])[]
+  onChange: (value: T) => void
+}): React.JSX.Element {
+  return (
+    <Select value={value} onValueChange={(nextValue) => onChange(nextValue as T)}>
+      <SelectTrigger size="sm" className={FILTER_SELECT_CLASSNAME}>
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        {options.map(([optionValue, label]) => (
+          <SelectItem key={optionValue} value={optionValue} className="text-xs">
+            {label}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
   )
 }
 
@@ -736,6 +990,7 @@ function CleanupViewNav({
 
 function CandidateRow({
   candidate,
+  reviewInfo,
   last,
   selected,
   failure,
@@ -745,6 +1000,7 @@ function CandidateRow({
   onRemove
 }: {
   candidate: WorkspaceCleanupCandidate
+  reviewInfo: WorkspaceCleanupReviewInfo
   last: boolean
   selected: boolean
   failure?: string
@@ -759,6 +1015,8 @@ function CandidateRow({
   const contextDetails = formatContextDetails(candidate)
   const branchSafetyDetails = formatBranchSafetyDetails(candidate)
   const status = getCandidateStatus(candidate)
+  const gitLabel = getWorkspaceCleanupGitLabel(candidate)
+  const contextPillLabel = getContextPillLabel(candidate)
 
   return (
     <div
@@ -786,6 +1044,11 @@ function CandidateRow({
           <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5">
             <span className="min-w-0 truncate text-sm font-medium">{candidate.displayName}</span>
             <StatusPill tone={status.tone}>{status.label}</StatusPill>
+            {reviewInfo.label ? (
+              <StatusPill tone={getReviewPillTone(reviewInfo)}>{reviewInfo.label}</StatusPill>
+            ) : null}
+            <StatusPill tone={gitLabel === 'Clean' ? 'ready' : 'review'}>{gitLabel}</StatusPill>
+            {contextPillLabel ? <StatusPill>{contextPillLabel}</StatusPill> : null}
             <span className="text-xs text-muted-foreground">
               Last active {formatRelativeTime(candidate.lastActivityAt)}
             </span>
@@ -897,11 +1160,16 @@ function getCandidateStatus(candidate: WorkspaceCleanupCandidate): {
 }
 
 function formatGitStatus(candidate: WorkspaceCleanupCandidate): string {
-  if (candidate.git.clean === true) {
-    return 'Clean git'
-  }
-  if (candidate.git.clean === false) {
-    return 'Dirty git'
+  const label = getWorkspaceCleanupGitLabel(candidate)
+  switch (label) {
+    case 'Clean':
+      return 'Clean git'
+    case 'Dirty':
+      return 'Dirty git'
+    case 'Unpushed':
+      return 'Unpushed commits'
+    case 'Unknown':
+      return 'Git unknown'
   }
   return 'Git unknown'
 }
@@ -962,11 +1230,13 @@ function formatContextDetails(candidate: WorkspaceCleanupCandidate): string | nu
 
 function ConfirmRemove({
   candidates,
+  reviewInfoByWorktreeId,
   removing,
   onCancel,
   onConfirm
 }: {
   candidates: WorkspaceCleanupCandidate[]
+  reviewInfoByWorktreeId: ReadonlyMap<string, WorkspaceCleanupReviewInfo>
   removing: boolean
   onCancel: () => void
   onConfirm: () => void
@@ -1002,6 +1272,7 @@ function ConfirmRemove({
             <ConfirmRemoveRow
               key={candidate.worktreeId}
               candidate={candidate}
+              reviewInfo={reviewInfoByWorktreeId.get(candidate.worktreeId) ?? EMPTY_REVIEW_INFO}
               last={index === candidates.length - 1}
             />
           ))}
@@ -1022,13 +1293,17 @@ function ConfirmRemove({
 
 function ConfirmRemoveRow({
   candidate,
+  reviewInfo,
   last
 }: {
   candidate: WorkspaceCleanupCandidate
+  reviewInfo: WorkspaceCleanupReviewInfo
   last: boolean
 }): React.JSX.Element {
   const dirtyLabel = getDirtyGitLabel(candidate)
   const branchDiffersFromName = candidate.branch !== candidate.displayName
+  const contextPillLabel = getContextPillLabel(candidate)
+  const status = getCandidateStatus(candidate)
   return (
     <div className={cn('border-b border-border/60 px-5 py-2.5', last && 'border-b-0')}>
       <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5">
@@ -1036,6 +1311,11 @@ function ConfirmRemoveRow({
         <span className="text-xs text-muted-foreground">
           Last active {formatRelativeTime(candidate.lastActivityAt)}
         </span>
+        <StatusPill tone={status.tone}>{status.label}</StatusPill>
+        {reviewInfo.label ? (
+          <StatusPill tone={getReviewPillTone(reviewInfo)}>{reviewInfo.label}</StatusPill>
+        ) : null}
+        {contextPillLabel ? <StatusPill>{contextPillLabel}</StatusPill> : null}
         {dirtyLabel ? <StatusPill tone="destructive">{dirtyLabel}</StatusPill> : null}
       </div>
       <div className="mt-0.5 flex min-w-0 flex-wrap items-baseline gap-x-2 text-xs text-muted-foreground">
@@ -1055,6 +1335,14 @@ function ConfirmRemoveRow({
 }
 
 function getDirtyGitLabel(candidate: WorkspaceCleanupCandidate): string | null {
+  if (candidate.blockers.includes('unpushed-commits')) {
+    if (candidate.git.upstreamAhead && candidate.git.upstreamAhead > 0) {
+      return `${candidate.git.upstreamAhead} unpushed commit${
+        candidate.git.upstreamAhead === 1 ? '' : 's'
+      }`
+    }
+    return 'Unpushed commits'
+  }
   if (candidate.git.upstreamAhead && candidate.git.upstreamAhead > 0) {
     return `${candidate.git.upstreamAhead} unpushed commit${
       candidate.git.upstreamAhead === 1 ? '' : 's'
@@ -1063,10 +1351,75 @@ function getDirtyGitLabel(candidate: WorkspaceCleanupCandidate): string | null {
   if (candidate.git.clean === false) {
     return 'Uncommitted changes'
   }
-  if (candidate.git.clean == null) {
+  if (
+    candidate.git.clean == null ||
+    candidate.blockers.includes('unknown-base') ||
+    candidate.blockers.includes('git-status-error')
+  ) {
     return 'Git status unknown'
   }
   return null
+}
+
+function getReviewPillTone(
+  reviewInfo: WorkspaceCleanupReviewInfo
+): 'neutral' | 'ready' | 'review' | 'destructive' {
+  if (reviewInfo.state === 'open' || reviewInfo.state === 'draft') {
+    return 'review'
+  }
+  return 'neutral'
+}
+
+function getContextPillLabel(candidate: WorkspaceCleanupCandidate): string | null {
+  if (!hasWorkspaceCleanupLocalContext(candidate)) {
+    return null
+  }
+  const count =
+    candidate.localContext.terminalTabCount +
+    candidate.localContext.cleanEditorTabCount +
+    candidate.localContext.browserTabCount +
+    candidate.localContext.diffCommentCount +
+    candidate.localContext.retainedDoneAgentCount
+  return `${count} context`
+}
+
+function hasActiveWorkspaceCleanupFilters(filters: WorkspaceCleanupFilters): boolean {
+  return (
+    filters.query.trim() !== '' ||
+    filters.time !== 'all' ||
+    filters.review !== 'all' ||
+    filters.git !== 'all' ||
+    filters.context !== 'all'
+  )
+}
+
+function getDefaultSelectedWorkspaceCleanupIds(
+  candidates: readonly WorkspaceCleanupCandidate[]
+): Set<string> {
+  return new Set(
+    candidates
+      .filter((candidate) => candidate.selectedByDefault)
+      .map((candidate) => candidate.worktreeId)
+  )
+}
+
+function formatWorkspaceCleanupSortLabel(
+  sortKey: WorkspaceCleanupSortKey,
+  sortDirection: WorkspaceCleanupSortDirection
+): string {
+  const direction = sortDirection === 'asc' ? 'ascending' : 'descending'
+  switch (sortKey) {
+    case 'activity':
+      return sortDirection === 'asc' ? 'oldest activity' : 'newest activity'
+    case 'name':
+      return `name ${direction}`
+    case 'repo':
+      return `repo ${direction}`
+    case 'review':
+      return `review ${direction}`
+    case 'git':
+      return `git ${direction}`
+  }
 }
 
 function SkeletonRows(): React.JSX.Element {
