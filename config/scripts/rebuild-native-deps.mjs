@@ -4,11 +4,11 @@
  *
  * The standard `electron-builder install-app-deps` uses @electron/rebuild
  * internally but does not expose the `ignoreModules` option (as of
- * electron-builder 26.x).  On Windows dev machines that lack the full
- * Visual C++ / Python build toolchain, `cpu-features@0.0.10` (an optional
- * performance dependency of `ssh2`) fails to build with node-gyp because
- * `buildcheck.gypi` is missing from the tarball.  This causes the entire
- * postinstall step to fail and prevents `pnpm install` from completing.
+ * electron-builder 26.x).  `cpu-features@0.0.10` is an optional performance
+ * dependency of `ssh2`; it fails to build in common environments (missing
+ * buildcheck.gypi on Windows, and Electron 42's V8 external-pointer API on
+ * Linux).  This can make the entire postinstall step fail and prevent
+ * `pnpm install` from completing.
  *
  * This script replaces `electron-builder install-app-deps` in the postinstall
  * lifecycle.  It calls @electron/rebuild's JS API directly so that we can skip
