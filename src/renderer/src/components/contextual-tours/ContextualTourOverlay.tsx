@@ -80,6 +80,10 @@ export function ContextualTourOverlay(): JSX.Element | null {
   )
 
   useLayoutEffect(() => {
+    if (!activeTourId) {
+      setRenderState(null)
+      return
+    }
     // Why: reset before the measurement layout effect below, otherwise the
     // first passive effect can hide a freshly measured tour until the next tick.
     markedTourIdRef.current = null
@@ -225,7 +229,7 @@ export function ContextualTourOverlay(): JSX.Element | null {
     }
 
     const emitPendingCancellation = (): void => {
-      emitContextualTourOutcome('cancelled')
+      emitContextualTourOutcome(getContextualTourCleanupOutcome(activeTourId))
     }
 
     window.addEventListener('beforeunload', emitPendingCancellation)
@@ -316,6 +320,14 @@ export function ContextualTourOverlay(): JSX.Element | null {
       onOverlayKeyDownCapture={handleContextualTourOverlayKeyDown}
     />
   )
+}
+
+export function getContextualTourCleanupOutcome(
+  activeTourId: ContextualTourId
+): ContextualTourOutcome {
+  return useAppStore.getState().lastCompletedContextualTourId === activeTourId
+    ? 'completed'
+    : 'cancelled'
 }
 
 function formatContextualTourStepCopy(

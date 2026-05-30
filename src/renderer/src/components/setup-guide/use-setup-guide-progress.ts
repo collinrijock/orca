@@ -1,8 +1,17 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useAppStore } from '@/store'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
 import { checkRuntimeHooks } from '@/runtime/runtime-hooks-client'
 import { hasEffectiveSetupCommand } from '@/lib/setup-script-status'
+import {
+  COMPUTER_USE_SKILL_NAME,
+  ORCA_CLI_SKILL_NAME,
+  ORCHESTRATION_SKILL_NAME
+} from '@/lib/agent-feature-install-commands'
+import {
+  GLOBAL_AGENT_SKILL_SOURCE_KINDS,
+  useInstalledAgentSkill
+} from '@/hooks/useInstalledAgentSkills'
 import {
   getFeatureWallSetupProgress,
   type FeatureWallSetupProgress
@@ -27,6 +36,25 @@ export function useSetupGuideProgress(
   const repos = useAppStore((s) => s.repos)
   const activeRepoId = useAppStore((s) => s.activeRepoId)
   const [hasSetupScript, setHasSetupScript] = useState(false)
+  const [computerUsePermissionsReady, setComputerUsePermissionsReady] = useState(false)
+  const { installed: detectedBrowserUseSkillInstalled } = useInstalledAgentSkill(
+    ORCA_CLI_SKILL_NAME,
+    {
+      enabled: shouldRefreshCoreState,
+      sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS
+    }
+  )
+  const { installed: computerUseSkillInstalled } = useInstalledAgentSkill(COMPUTER_USE_SKILL_NAME, {
+    enabled: shouldRefreshCoreState,
+    sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS
+  })
+  const { installed: detectedOrchestrationSkillInstalled } = useInstalledAgentSkill(
+    ORCHESTRATION_SKILL_NAME,
+    {
+      enabled: shouldRefreshCoreState,
+      sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS
+    }
+  )
 
   useEffect(() => {
     if (!shouldRefreshCoreState) {
@@ -79,6 +107,47 @@ export function useSetupGuideProgress(
     }
   }, [activeRepoId, repos, settings, shouldRefreshCoreState])
 
+  const readComputerUsePermissions = useCallback(async (isStale: () => boolean): Promise<void> => {
+    const status = await window.api.computerUsePermissions.getStatus().catch(() => null)
+    if (isStale()) {
+      return
+    }
+    setComputerUsePermissionsReady(
+      status !== null &&
+        status.helperUnavailableReason === null &&
+        status.permissions.every((permission) => permission.status !== 'not-granted')
+    )
+  }, [])
+
+  useEffect(() => {
+    if (!shouldRefreshCoreState || !computerUseSkillInstalled) {
+      setComputerUsePermissionsReady(false)
+      return
+    }
+    let stale = false
+    const refreshComputerUsePermissions = (): void => {
+      void readComputerUsePermissions(() => stale)
+    }
+    refreshComputerUsePermissions()
+    const handleFocus = (): void => {
+      void refreshComputerUsePermissions()
+    }
+    const handleVisibilityChange = (): void => {
+      if (document.visibilityState === 'visible') {
+        void refreshComputerUsePermissions()
+      }
+    }
+    // Why: users grant Computer Use permissions outside the setup guide. Refresh
+    // on return so the checklist updates without requiring a remount.
+    window.addEventListener('focus', handleFocus)
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    return () => {
+      stale = true
+      window.removeEventListener('focus', handleFocus)
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+    }
+  }, [computerUseSkillInstalled, readComputerUsePermissions, shouldRefreshCoreState])
+
   const hasConnectedTaskSource =
     (preflightStatus?.gh.installed === true && preflightStatus.gh.authenticated === true) ||
     (preflightStatus?.glab?.installed === true && preflightStatus.glab.authenticated === true) ||
@@ -91,8 +160,11 @@ export function useSetupGuideProgress(
         settings,
         featureInteractions,
         hasConnectedTaskSource,
-        browserUseSkillInstalled,
-        orchestrationSkillInstalled,
+        browserUseSkillInstalled: browserUseSkillInstalled || detectedBrowserUseSkillInstalled,
+        computerUseSkillInstalled,
+        computerUsePermissionsReady,
+        orchestrationSkillInstalled:
+          orchestrationSkillInstalled || detectedOrchestrationSkillInstalled,
         gitRepoCount,
         worktreesByRepo,
         tabsByWorktree,
@@ -101,6 +173,10 @@ export function useSetupGuideProgress(
       }),
     [
       browserUseSkillInstalled,
+      computerUsePermissionsReady,
+      computerUseSkillInstalled,
+      detectedBrowserUseSkillInstalled,
+      detectedOrchestrationSkillInstalled,
       featureInteractions,
       gitRepoCount,
       hasConnectedTaskSource,

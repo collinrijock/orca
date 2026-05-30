@@ -21,6 +21,7 @@ type OnboardingInlineCommandTerminalProps = {
   worktreeId?: string
   onOpened?: () => void
   onInteracted?: (method: 'keyboard' | 'pointer', event?: KeyboardEvent<HTMLElement>) => void
+  onTerminalExit?: () => void
 }
 
 export function OnboardingInlineCommandTerminal({
@@ -33,7 +34,8 @@ export function OnboardingInlineCommandTerminal({
   autoScrollIntoView = true,
   worktreeId = ONBOARDING_INLINE_TERMINAL_WORKTREE_ID,
   onOpened,
-  onInteracted
+  onInteracted,
+  onTerminalExit
 }: OnboardingInlineCommandTerminalProps): React.JSX.Element {
   const createTab = useAppStore((s) => s.createTab)
   const closeTab = useAppStore((s) => s.closeTab)
@@ -242,7 +244,10 @@ export function OnboardingInlineCommandTerminal({
               cwd={cwd}
               isActive
               isVisible
-              onPtyExit={() => closeTab(tabId, { recordInteraction: false })}
+              onPtyExit={() => {
+                onTerminalExit?.()
+                closeTab(tabId, { recordInteraction: false })
+              }}
               onCloseTab={() => closeTab(tabId, { recordInteraction: false })}
             />
           ) : (

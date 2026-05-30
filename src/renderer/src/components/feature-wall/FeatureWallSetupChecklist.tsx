@@ -42,6 +42,7 @@ function SetupStepRow(props: {
     <button
       type="button"
       onClick={onSelect}
+      aria-current={active ? 'step' : undefined}
       className={cn(
         'flex w-full items-start gap-3 rounded-md border px-3 py-2.5 text-left transition-colors',
         active
@@ -53,7 +54,7 @@ function SetupStepRow(props: {
         className={cn(
           'mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full border',
           done
-            ? 'border-green-500/45 bg-green-500/10 text-green-600 dark:text-green-300'
+            ? 'border-primary/35 bg-primary/10 text-foreground'
             : 'border-border text-muted-foreground'
         )}
       >
@@ -242,7 +243,7 @@ export function FeatureWallSetupChecklist(
                 className={cn(
                   'shrink-0 rounded-full border px-2.5 py-1 text-xs font-medium',
                   activeDone
-                    ? 'border-green-500/45 bg-green-500/10 text-green-600 dark:text-green-300'
+                    ? 'border-primary/35 bg-primary/10 text-foreground'
                     : 'border-border bg-muted/30 text-muted-foreground'
                 )}
               >

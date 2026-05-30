@@ -1208,6 +1208,7 @@ describe('createUISlice contextual tours', () => {
 
     expect(store.getState().activeContextualTourId).toBeNull()
     expect(store.getState().contextualToursSeenIds).toEqual(['workspace-agent-sessions'])
+    expect(store.getState().lastCompletedContextualTourId).toBe('workspace-agent-sessions')
     expect(store.getState().featureInteractions['terminal-pane-split']).toMatchObject({
       interactionCount: 1
     })
@@ -1251,6 +1252,7 @@ describe('createUISlice contextual tours', () => {
 
     expect(store.getState().activeContextualTourId).toBeNull()
     expect(store.getState().contextualTourShownThisSession).toBe(false)
+    expect(store.getState().lastCompletedContextualTourId).toBeNull()
     expect(store.getState().contextualToursSeenIds).toEqual([])
     expect(setMock).not.toHaveBeenCalled()
   })
@@ -1302,6 +1304,7 @@ describe('createUISlice contextual tours', () => {
 
     expect(store.getState().activeContextualTourId).toBeNull()
     expect(store.getState().contextualToursSeenIds).toEqual<ContextualTourId[]>(['automations'])
+    expect(store.getState().lastCompletedContextualTourId).toBeNull()
     expect(setMock).toHaveBeenCalledWith({ contextualToursSeenIds: ['automations'] })
   })
 

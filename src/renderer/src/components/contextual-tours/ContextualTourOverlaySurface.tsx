@@ -95,7 +95,6 @@ export function ContextualTourOverlaySurface({
     <section
       ref={panelRef}
       aria-live="polite"
-      aria-modal="true"
       aria-label={renderState.title}
       data-contextual-tour-panel=""
       data-placement={panelPlacement ?? undefined}
@@ -167,40 +166,15 @@ export function handleContextualTourOverlayKeyDown(event: KeyboardEvent<HTMLDivE
     event.stopPropagation()
     const skipButton = event.currentTarget.querySelector<HTMLButtonElement>(SKIP_BUTTON_SELECTOR)
     skipButton?.click()
-    return
   }
 
-  if (event.key !== 'Tab') {
-    return
-  }
-
-  const focusRoot =
-    document.querySelector<HTMLElement>('[data-contextual-tour-panel]') ?? event.currentTarget
-  const focusableElements = getContextualTourFocusableElements(focusRoot)
-  if (focusableElements.length === 0) {
-    event.preventDefault()
-    return
-  }
-
-  const activeElement = document.activeElement
-  const activeIndex =
-    activeElement instanceof HTMLElement ? focusableElements.indexOf(activeElement) : -1
-  const nextIndex = event.shiftKey
-    ? activeIndex <= 0
-      ? focusableElements.length - 1
-      : activeIndex - 1
-    : activeIndex === -1 || activeIndex === focusableElements.length - 1
-      ? 0
-      : activeIndex + 1
-
-  event.preventDefault()
-  event.stopPropagation()
-  focusableElements[nextIndex]?.focus({ preventScroll: true })
+  // Why: tours are non-modal callouts over live UI. Keyboard users must be able
+  // to tab into the highlighted surface just as pointer users can click it.
 }
 
 export function handleContextualTourGlobalKeyDown(event: globalThis.KeyboardEvent): void {
   const activeTourId = useAppStore.getState().activeContextualTourId
-  if (!activeTourId || (event.key !== 'Escape' && event.key !== 'Tab')) {
+  if (!activeTourId || event.key !== 'Escape') {
     return
   }
 
@@ -210,37 +184,12 @@ export function handleContextualTourGlobalKeyDown(event: globalThis.KeyboardEven
     return
   }
 
-  if (event.key === 'Escape') {
-    event.preventDefault()
-    event.stopImmediatePropagation()
-    const skipButton = focusRoot.querySelector<HTMLButtonElement>(SKIP_BUTTON_SELECTOR)
-    if (skipButton) {
-      skipButton.click()
-    }
-    return
-  }
-
-  const focusableElements = getContextualTourFocusableElements(focusRoot)
-  if (focusableElements.length === 0) {
-    event.preventDefault()
-    event.stopImmediatePropagation()
-    return
-  }
-
-  const activeElement = document.activeElement
-  const activeIndex =
-    activeElement instanceof HTMLElement ? focusableElements.indexOf(activeElement) : -1
-  const nextIndex = event.shiftKey
-    ? activeIndex <= 0
-      ? focusableElements.length - 1
-      : activeIndex - 1
-    : activeIndex === -1 || activeIndex === focusableElements.length - 1
-      ? 0
-      : activeIndex + 1
-
   event.preventDefault()
   event.stopImmediatePropagation()
-  focusableElements[nextIndex]?.focus({ preventScroll: true })
+  const skipButton = focusRoot.querySelector<HTMLButtonElement>(SKIP_BUTTON_SELECTOR)
+  if (skipButton) {
+    skipButton.click()
+  }
 }
 
 export function getContextualTourFocusableElements(root: HTMLElement): HTMLElement[] {

@@ -544,6 +544,7 @@ export type UISlice = {
   contextualTourShownThisSession: boolean
   contextualToursOnboardingVisible: boolean
   contextualToursBlockingSurfaceVisible: boolean
+  lastCompletedContextualTourId: ContextualTourId | null
   setContextualToursAutoEligible: (eligible: boolean) => void
   setContextualToursOnboardingVisible: (visible: boolean) => void
   setContextualToursBlockingSurfaceVisible: (visible: boolean) => void
@@ -1052,6 +1053,7 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
   contextualTourShownThisSession: false,
   contextualToursOnboardingVisible: false,
   contextualToursBlockingSurfaceVisible: false,
+  lastCompletedContextualTourId: null,
   setContextualToursAutoEligible: (eligible) =>
     set((s) => {
       if (s.contextualToursAutoEligible === eligible) {
@@ -1099,7 +1101,8 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         activeContextualTourWasFeaturePreviouslyInteracted:
           wasFeaturePreviouslyInteracted ?? hasFeatureInteraction(s.featureInteractions, id),
         activeContextualTourSuppressed: false,
-        contextualTourShownThisSession: true
+        contextualTourShownThisSession: true,
+        lastCompletedContextualTourId: null
       }
     }),
   suppressContextualTour: (id, source) =>
@@ -1157,7 +1160,8 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         activeContextualTourStepIndex: 0,
         activeContextualTourSource: null,
         activeContextualTourWasFeaturePreviouslyInteracted: false,
-        activeContextualTourSuppressed: false
+        activeContextualTourSuppressed: false,
+        lastCompletedContextualTourId: null
       }
     })
   },
@@ -1179,7 +1183,8 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         activeContextualTourStepIndex: 0,
         activeContextualTourSource: null,
         activeContextualTourWasFeaturePreviouslyInteracted: false,
-        activeContextualTourSuppressed: false
+        activeContextualTourSuppressed: false,
+        lastCompletedContextualTourId: tourId ?? null
       }
     })
   },
@@ -1197,6 +1202,7 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         activeContextualTourSource: null,
         activeContextualTourWasFeaturePreviouslyInteracted: false,
         activeContextualTourSuppressed: false,
+        lastCompletedContextualTourId: null,
         contextualTourShownThisSession: alreadyShown ? s.contextualTourShownThisSession : false
       }
     }),

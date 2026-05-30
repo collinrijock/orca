@@ -12,6 +12,8 @@ function makeInput(
     featureInteractions: {},
     hasConnectedTaskSource: false,
     browserUseSkillInstalled: false,
+    computerUseSkillInstalled: false,
+    computerUsePermissionsReady: false,
     orchestrationSkillInstalled: false,
     gitRepoCount: 0,
     worktreesByRepo: {},
@@ -51,11 +53,27 @@ describe('getFeatureWallSetupProgress', () => {
     ])
   })
 
-  it('marks two agents complete once the terminal has been split', () => {
+  it('does not mark two agents complete from split-pane interaction alone', () => {
     const progress = getFeatureWallSetupProgress(
       makeInput({
         featureInteractions: {
           'terminal-pane-split': { firstInteractedAt: 1_700_000_000_000, interactionCount: 1 }
+        }
+      })
+    )
+
+    expect(progress.stepDone['two-agents']).toBe(false)
+  })
+
+  it('marks two agents complete once two agent sessions exist in one worktree', () => {
+    const progress = getFeatureWallSetupProgress(
+      makeInput({
+        worktreesByRepo: { 'repo-1': [makeWorktree('worktree-1')] },
+        tabsByWorktree: {
+          'worktree-1': [
+            { id: 'tab-1', title: 'Claude' },
+            { id: 'tab-2', title: 'Codex' }
+          ] as never
         }
       })
     )
@@ -85,5 +103,46 @@ describe('getFeatureWallSetupProgress', () => {
     const progress = getFeatureWallSetupProgress(makeInput({ hasConnectedTaskSource: true }))
 
     expect(progress.stepDone['task-sources']).toBe(true)
+  })
+
+  it('does not mark agent capabilities complete from setup-start interactions alone', () => {
+    const progress = getFeatureWallSetupProgress(
+      makeInput({
+        featureInteractions: {
+          'agent-browser-setup': { firstInteractedAt: 1_700_000_000_000, interactionCount: 1 },
+          'computer-use-setup': { firstInteractedAt: 1_700_000_000_001, interactionCount: 1 },
+          'agent-orchestration-setup': {
+            firstInteractedAt: 1_700_000_000_002,
+            interactionCount: 1
+          }
+        }
+      })
+    )
+
+    expect(progress.stepDone['agent-capabilities']).toBe(false)
+  })
+
+  it('marks agent capabilities complete only when required skills and permissions are ready', () => {
+    expect(
+      getFeatureWallSetupProgress(
+        makeInput({
+          browserUseSkillInstalled: true,
+          computerUseSkillInstalled: true,
+          computerUsePermissionsReady: false,
+          orchestrationSkillInstalled: true
+        })
+      ).stepDone['agent-capabilities']
+    ).toBe(false)
+
+    const progress = getFeatureWallSetupProgress(
+      makeInput({
+        browserUseSkillInstalled: true,
+        computerUseSkillInstalled: true,
+        computerUsePermissionsReady: true,
+        orchestrationSkillInstalled: true
+      })
+    )
+
+    expect(progress.stepDone['agent-capabilities']).toBe(true)
   })
 })

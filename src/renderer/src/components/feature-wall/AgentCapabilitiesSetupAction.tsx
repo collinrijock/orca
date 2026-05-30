@@ -21,8 +21,7 @@ export function AgentCapabilitiesSetupAction(props: {
   onOrchestrationSkillInstalledChange: (installed: boolean) => void
   onBrowserUseSkillInstalledChange: (installed: boolean) => void
 }): React.JSX.Element {
-  const { reducedMotion, onBrowserUseSkillInstalledChange, onOrchestrationSkillInstalledChange } =
-    props
+  const { reducedMotion } = props
   const [featureSetup, setFeatureSetup] = useState<OnboardingFeatureSetupSelection>(
     DEFAULT_ONBOARDING_FEATURE_SETUP_SELECTION
   )
@@ -40,14 +39,12 @@ export function AgentCapabilitiesSetupAction(props: {
       const result = await runOnboardingFeatureSetup(featureSetup)
       if (featureSetup.browserUse) {
         recordFeatureInteraction('agent-browser-setup')
-        onBrowserUseSkillInstalledChange(true)
       }
       if (featureSetup.computerUse) {
         recordFeatureInteraction('computer-use-setup')
       }
       if (featureSetup.orchestration) {
         recordFeatureInteraction('agent-orchestration-setup')
-        onOrchestrationSkillInstalledChange(true)
       }
       const firstWarning = result.warnings[0]
       if (firstWarning) {
@@ -70,14 +67,7 @@ export function AgentCapabilitiesSetupAction(props: {
     } finally {
       setSetupBusyLabel(null)
     }
-  }, [
-    featureSetup,
-    featureSetupCommand,
-    onBrowserUseSkillInstalledChange,
-    onOrchestrationSkillInstalledChange,
-    recordFeatureInteraction,
-    setupBusyLabel
-  ])
+  }, [featureSetup, featureSetupCommand, recordFeatureInteraction, setupBusyLabel])
 
   return (
     <div className="space-y-5">

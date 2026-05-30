@@ -174,14 +174,17 @@ const SidebarNav = React.memo(function SidebarNav() {
           onClick={() => openModal('setup-guide', { setupStepId: firstUnfinishedSetupStepId })}
           aria-current={setupActive ? 'page' : undefined}
           className={cn(
-            'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] font-medium tracking-tight transition-colors',
+            'flex w-full items-center gap-2 rounded-md border border-sidebar-border px-2 py-1.5 text-left text-[13px] font-medium tracking-tight transition-colors',
             setupActive
-              ? 'bg-yellow-500/20 text-sidebar-foreground ring-1 ring-yellow-500/30'
-              : 'bg-yellow-500/10 text-sidebar-foreground hover:bg-yellow-500/15'
+              ? 'bg-sidebar-accent text-sidebar-accent-foreground ring-1 ring-sidebar-ring'
+              : 'bg-sidebar-accent/60 text-sidebar-foreground hover:bg-sidebar-accent'
           )}
         >
           <ListChecks
-            className={cn('size-4 shrink-0', setupActive ? 'text-yellow-700' : 'text-yellow-600')}
+            className={cn(
+              'size-4 shrink-0',
+              setupActive ? 'text-sidebar-accent-foreground' : 'text-sidebar-foreground/70'
+            )}
             strokeWidth={setupActive ? 2.25 : 1.75}
           />
           <span className="flex-1">Getting started with Orca</span>
