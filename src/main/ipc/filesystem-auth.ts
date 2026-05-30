@@ -103,9 +103,8 @@ export async function rebuildAuthorizedRootsCache(store: Store): Promise<void> {
         roots.push(resolve(repo.path))
 
         const worktrees = await listRepoWorktrees(repo)
-        const worktreeRoots = worktrees.map((wt) => resolve(wt.path))
-        for (const worktreeRoot of worktreeRoots) {
-          roots.push(worktreeRoot)
+        for (const worktree of worktrees) {
+          roots.push(resolve(worktree.path))
         }
       } catch (error) {
         // Why: a single inaccessible repo (EACCES, EIO, etc.) must not break
