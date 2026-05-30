@@ -100,6 +100,19 @@ describe('loadUserSshConfig', () => {
     expect(loadUserSshConfig().map((host) => host.host)).toEqual(['first', 'second'])
   })
 
+  it('loads an include file with more lines than the JavaScript argument limit', () => {
+    const home = makeHome()
+    const manyCommentLines = Array.from({ length: 130_000 }, () => '#').join('\n')
+    writeFile(
+      home,
+      '.ssh/config',
+      'Include many-comments.conf\nHost after\n  HostName after.example.com\n'
+    )
+    writeFile(home, '.ssh/many-comments.conf', manyCommentLines)
+
+    expect(loadUserSshConfig().map((host) => host.host)).toEqual(['after'])
+  })
+
   it('supports relative includes, ${VAR}, and local % tokens', () => {
     const home = makeHome()
     process.env.ORCA_SSH_INCLUDE = 'from-env.conf'

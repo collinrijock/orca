@@ -64,12 +64,20 @@ function expandSshConfigFile(
 
     for (const includeArg of includeArgs) {
       for (const matchedPath of resolveIncludePaths(includeArg, context)) {
-        expandedLines.push(...expandSshConfigFile(matchedPath, context, nextStack))
+        appendExpandedLines(expandedLines, expandSshConfigFile(matchedPath, context, nextStack))
       }
     }
   }
 
   return expandedLines
+}
+
+function appendExpandedLines(target: string[], source: string[]): void {
+  // Why: valid include files can stay under the byte cap while still exceeding
+  // V8's argument limit if appended with `push(...source)`.
+  for (const line of source) {
+    target.push(line)
+  }
 }
 
 function readCachedFile(filePath: string, context: IncludeExpansionContext): string | null {
