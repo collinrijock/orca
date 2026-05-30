@@ -695,6 +695,7 @@ export function ResourceUsageStatusSegment({
   // somewhere stable for keyboard users.
   const popoverBodyRef = useRef<HTMLDivElement | null>(null)
   const popoverBodyFocusFrameRef = useRef<number | null>(null)
+  const mountedRef = useRef(true)
 
   const cancelPopoverBodyFocusFrame = useCallback((): void => {
     if (popoverBodyFocusFrameRef.current === null) {
@@ -702,6 +703,13 @@ export function ResourceUsageStatusSegment({
     }
     cancelAnimationFrame(popoverBodyFocusFrameRef.current)
     popoverBodyFocusFrameRef.current = null
+  }, [])
+
+  useEffect(() => {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+    }
   }, [])
 
   const setPopoverBodyNode = useCallback(
@@ -717,16 +725,23 @@ export function ResourceUsageStatusSegment({
 
   const refreshSessions = useCallback(async () => {
     if (runtimeEnvironmentActive) {
-      setSessions([])
-      setSessionsError(false)
+      if (mountedRef.current) {
+        setSessions([])
+        setSessionsError(false)
+      }
       return
     }
     try {
       const result = await window.api.pty.listSessions()
+      if (!mountedRef.current) {
+        return
+      }
       setSessions(result)
       setSessionsError(false)
     } catch {
-      setSessionsError(true)
+      if (mountedRef.current) {
+        setSessionsError(true)
+      }
     }
   }, [runtimeEnvironmentActive])
 
@@ -1063,19 +1078,21 @@ export function ResourceUsageStatusSegment({
     } catch {
       /* already dead — fall through */
     } finally {
-      setKilling(false)
-      setKillConfirm(null)
-      // Why: after the killed row unmounts, focus would otherwise drop to
-      // <body>. Park focus on the popover body so keyboard users land back
-      // in the list rather than outside the popover.
-      cancelPopoverBodyFocusFrame()
-      if (popoverBodyRef.current) {
-        popoverBodyFocusFrameRef.current = requestAnimationFrame(() => {
-          popoverBodyFocusFrameRef.current = null
-          popoverBodyRef.current?.focus()
-        })
+      if (mountedRef.current) {
+        setKilling(false)
+        setKillConfirm(null)
+        // Why: after the killed row unmounts, focus would otherwise drop to
+        // <body>. Park focus on the popover body so keyboard users land back
+        // in the list rather than outside the popover.
+        cancelPopoverBodyFocusFrame()
+        if (popoverBodyRef.current) {
+          popoverBodyFocusFrameRef.current = requestAnimationFrame(() => {
+            popoverBodyFocusFrameRef.current = null
+            popoverBodyRef.current?.focus()
+          })
+        }
+        void refreshSessions()
       }
-      void refreshSessions()
     }
   }, [cancelPopoverBodyFocusFrame, killConfirm, refreshSessions])
 

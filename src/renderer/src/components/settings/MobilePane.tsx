@@ -53,6 +53,9 @@ export function MobilePane(): React.JSX.Element {
   const [refreshingNetworkInterfaces, setRefreshingNetworkInterfaces] = useState(false)
   const [codeCopied, setCodeCopied] = useState(false)
   const codeCopiedResetTimerRef = useRef<number | null>(null)
+  // Why: clipboard IPC can resolve after settings navigation; avoid starting
+  // a reset timer that will outlive this pane.
+  const isMountedRef = useRef(false)
 
   const clearCodeCopiedResetTimer = useCallback((): void => {
     if (codeCopiedResetTimerRef.current !== null) {
@@ -63,6 +66,7 @@ export function MobilePane(): React.JSX.Element {
 
   const setPairingCodeButtonRef = useCallback(
     (node: HTMLButtonElement | null) => {
+      isMountedRef.current = node !== null
       if (node === null) {
         clearCodeCopiedResetTimer()
       }
@@ -158,6 +162,9 @@ export function MobilePane(): React.JSX.Element {
       // (no transient activation, non-secure context). Use the main-process
       // IPC clipboard which the rest of the app uses everywhere.
       await window.api.ui.writeClipboardText(pairingUrl)
+      if (!isMountedRef.current) {
+        return
+      }
       clearCodeCopiedResetTimer()
       setCodeCopied(true)
       codeCopiedResetTimerRef.current = window.setTimeout(() => {

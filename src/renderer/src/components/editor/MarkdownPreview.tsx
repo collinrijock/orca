@@ -527,6 +527,9 @@ export default function MarkdownPreview({
   const [activeAnnotationBlockKey, setActiveAnnotationBlockKey] = useState<string | null>(null)
   const [reviewNotesCopied, setReviewNotesCopied] = useState(false)
   const reviewNotesCopiedResetTimerRef = useRef<number | null>(null)
+  // Why: clipboard IPC can resolve after the preview unmounts; skip copied
+  // feedback instead of starting a reset timer on a stale preview.
+  const reviewNotesCopyMountedRef = useRef(false)
   const [activeReviewCommentId, setActiveReviewCommentId] = useState<string | null>(null)
   const [attentionReviewCommentId, setAttentionReviewCommentId] = useState<string | null>(null)
   const attentionReviewCommentTimeoutRef = useRef<number | null>(null)
@@ -661,6 +664,17 @@ export default function MarkdownPreview({
       reviewNotesCopiedResetTimerRef.current = null
     }
   }, [])
+
+  const setRootRef = useCallback(
+    (node: HTMLDivElement | null) => {
+      rootRef.current = node
+      reviewNotesCopyMountedRef.current = node !== null
+      if (node === null) {
+        clearReviewNotesCopiedResetTimer()
+      }
+    },
+    [clearReviewNotesCopiedResetTimer]
+  )
 
   const scrollToAnchor = useCallback((rawAnchor: string): boolean => {
     const container = rootRef.current
@@ -797,6 +811,9 @@ export default function MarkdownPreview({
     }
     try {
       await window.api.ui.writeClipboardText(markdownReviewPrompt)
+      if (!reviewNotesCopyMountedRef.current) {
+        return
+      }
       clearReviewNotesCopiedResetTimer()
       setReviewNotesCopied(true)
       reviewNotesCopiedResetTimerRef.current = window.setTimeout(() => {
@@ -1491,7 +1508,7 @@ export default function MarkdownPreview({
   return (
     <div className="markdown-preview-shell">
       <div
-        ref={rootRef}
+        ref={setRootRef}
         tabIndex={0}
         style={{ fontSize: `${editorFontSize}px` }}
         className={`markdown-preview h-full min-h-0 overflow-auto scrollbar-editor ${isDark ? 'markdown-dark' : 'markdown-light'}`}
@@ -1696,6 +1713,14 @@ function MarkdownAnnotationComposer({
   const [body, setBody] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
+  const mountedRef = useRef(true)
+
+  useEffect(() => {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+    }
+  }, [])
 
   useEffect(() => {
     textareaRef.current?.focus()
@@ -1710,11 +1735,16 @@ function MarkdownAnnotationComposer({
     setSubmitting(true)
     try {
       const ok = await onSubmit(trimmed)
+      if (!mountedRef.current) {
+        return
+      }
       if (ok) {
         setBody('')
       }
     } finally {
-      setSubmitting(false)
+      if (mountedRef.current) {
+        setSubmitting(false)
+      }
     }
   }
 

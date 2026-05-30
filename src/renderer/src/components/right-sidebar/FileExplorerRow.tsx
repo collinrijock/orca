@@ -1,4 +1,4 @@
-/* eslint-disable max-lines -- File Explorer rows own dense context-menu and drag/drop interactions. */
+/* eslint-disable max-lines -- Why: the row owns dense file-tree rendering plus its context menu, drag target, and inline-input sibling contract. */
 import React, { useCallback, useEffect, useRef } from 'react'
 import { basename } from '@/lib/path'
 import {
@@ -252,6 +252,8 @@ type FileExplorerRowProps = {
   onStartNew: (type: 'file' | 'folder', dir: string, depth: number) => void
   onStartRename: (node: TreeNode) => void
   onDuplicate: (node: TreeNode) => void
+  onAddFolderAsProject: () => void
+  canAddAsProject: boolean
   onRequestDelete: () => void
   onCollapseFolderSubtree: () => void
   onFindInFolder: () => void
@@ -292,6 +294,8 @@ export function FileExplorerRow({
   onStartNew,
   onStartRename,
   onDuplicate,
+  onAddFolderAsProject,
+  canAddAsProject,
   onRequestDelete,
   onCollapseFolderSubtree,
   onFindInFolder,
@@ -505,6 +509,12 @@ export function FileExplorerRow({
           <ContextMenuItem onSelect={() => onDuplicate(node)}>
             <Files />
             Duplicate
+          </ContextMenuItem>
+        )}
+        {canAddAsProject && (
+          <ContextMenuItem onSelect={onAddFolderAsProject}>
+            <FolderPlus />
+            Add as Project...
           </ContextMenuItem>
         )}
         {!node.isDirectory && activeWorktreeId && (

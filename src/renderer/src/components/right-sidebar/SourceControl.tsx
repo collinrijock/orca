@@ -1030,6 +1030,13 @@ function SourceControlInner(): React.JSX.Element {
   const [pendingDiffCommentsClear, setPendingDiffCommentsClear] =
     useState<PendingDiffCommentsClear | null>(null)
   const [isClearingDiffComments, setIsClearingDiffComments] = useState(false)
+  // Why: clipboard IPC can resolve after Source Control unmounts; skip copied
+  // feedback instead of starting a reset timer on a stale panel.
+  const diffCommentsCopyMountedRef = useRef(false)
+  const setSourceControlRootRef = useCallback((node: HTMLDivElement | null) => {
+    sourceControlRef.current = node
+    diffCommentsCopyMountedRef.current = node !== null
+  }, [])
 
   useEffect(() => {
     return () => cancelSourceControlEditorRevealFrames(pendingCommentEditorRevealFrameIdsRef)
@@ -1041,6 +1048,9 @@ function SourceControlInner(): React.JSX.Element {
     }
     try {
       await window.api.ui.writeClipboardText(diffCommentsPrompt)
+      if (!diffCommentsCopyMountedRef.current) {
+        return
+      }
       setDiffCommentsCopied(true)
     } catch {
       // Why: swallow — clipboard write can fail when the window isn't focused.
@@ -3926,7 +3936,7 @@ function SourceControlInner(): React.JSX.Element {
 
   return (
     <>
-      <div ref={sourceControlRef} className="relative flex h-full flex-col overflow-hidden">
+      <div ref={setSourceControlRootRef} className="relative flex h-full flex-col overflow-hidden">
         <div className="flex items-center px-3 pt-2 border-b border-border">
           {(['all', 'uncommitted'] as const).map((value) => (
             <button
@@ -5843,6 +5853,12 @@ function DiffCommentsInlineList({
   }, [comments])
 
   const [copiedId, setCopiedId] = useState<string | null>(null)
+  // Why: clipboard IPC can resolve after the inline notes list unmounts; skip
+  // copied feedback instead of starting a reset timer on a stale list.
+  const copiedIdMountedRef = useRef(false)
+  const setInlineDiffCommentsListRef = useCallback((node: HTMLDivElement | null) => {
+    copiedIdMountedRef.current = node !== null
+  }, [])
 
   // Why: auto-dismiss the per-row "copied" indicator so the button returns to
   // its default icon after a brief confirmation window. Matches the top-level
@@ -5858,6 +5874,9 @@ function DiffCommentsInlineList({
   const handleCopyOne = useCallback(async (c: DiffComment): Promise<void> => {
     try {
       await window.api.ui.writeClipboardText(formatDiffComment(c))
+      if (!copiedIdMountedRef.current) {
+        return
+      }
       setCopiedId(c.id)
     } catch {
       // Why: swallow — clipboard write can fail when the window isn't focused.
@@ -5873,7 +5892,7 @@ function DiffCommentsInlineList({
   }
 
   return (
-    <div className="bg-muted/20">
+    <div ref={setInlineDiffCommentsListRef} className="bg-muted/20">
       {groups.map(([filePath, list]) => (
         <div key={filePath} className="px-3 py-1.5">
           <div className="group/file flex items-center gap-1">

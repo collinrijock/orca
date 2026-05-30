@@ -3112,6 +3112,14 @@ function CommentReplyForm({
   const [body, setBody] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const mountedRef = useRef(true)
+
+  useEffect(() => {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+    }
+  }, [])
 
   useEffect(() => {
     textareaRef.current?.focus()
@@ -3125,11 +3133,16 @@ function CommentReplyForm({
     setSubmitting(true)
     try {
       const ok = await onSubmit(trimmed)
+      if (!mountedRef.current) {
+        return
+      }
       if (ok) {
         setBody('')
       }
     } finally {
-      setSubmitting(false)
+      if (mountedRef.current) {
+        setSubmitting(false)
+      }
     }
   }, [body, onSubmit, submitting])
 
@@ -5008,6 +5021,14 @@ function GHCommentComposer({
   const [body, setBody] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const mountedRef = useRef(true)
+
+  useEffect(() => {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+    }
+  }, [])
 
   const autoGrow = useCallback(() => {
     const el = textareaRef.current
@@ -5032,6 +5053,9 @@ function GHCommentComposer({
         body: trimmed,
         type: itemType
       })
+      if (!mountedRef.current) {
+        return
+      }
       if (result.ok) {
         setBody('')
         requestAnimationFrame(autoGrow)
@@ -5042,9 +5066,13 @@ function GHCommentComposer({
         toast.error(result.error ?? 'Failed to add comment')
       }
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to add comment')
+      if (mountedRef.current) {
+        toast.error(err instanceof Error ? err.message : 'Failed to add comment')
+      }
     } finally {
-      setSubmitting(false)
+      if (mountedRef.current) {
+        setSubmitting(false)
+      }
     }
   }, [autoGrow, body, repoPath, repoId, issueNumber, itemType, onCommentAdded])
 
@@ -5440,6 +5468,12 @@ export default function GitHubItemDialog({
   const files = details?.files ?? []
   const checks = details?.checks ?? []
   const [pendingViewedPaths, setPendingViewedPaths] = useState<Set<string>>(() => new Set())
+  // Why: clipboard IPC can resolve after the dialog unmounts; skip copied-state
+  // feedback instead of starting its reset timer on a stale surface.
+  const linkCopyMountedRef = useRef(false)
+  const setLinkCopyButtonRef = useCallback((node: HTMLButtonElement | null) => {
+    linkCopyMountedRef.current = node !== null
+  }, [])
 
   useEffect(() => {
     setLinkCopied(false)
@@ -5461,6 +5495,9 @@ export default function GitHubItemDialog({
       // Why: Electron's clipboard IPC is reliable even when browser clipboard
       // APIs lose focus/activation inside nested overlay surfaces.
       await window.api.ui.writeClipboardText(workItem.url)
+      if (!linkCopyMountedRef.current) {
+        return
+      }
       setLinkCopied(true)
       toast.success('GitHub link copied')
     } catch {
@@ -5580,6 +5617,7 @@ export default function GitHubItemDialog({
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <Button
+                      ref={setLinkCopyButtonRef}
                       type="button"
                       variant="ghost"
                       size="icon-sm"
@@ -5722,6 +5760,7 @@ export default function GitHubItemDialog({
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
+                    ref={setLinkCopyButtonRef}
                     type="button"
                     variant="ghost"
                     size="icon-sm"

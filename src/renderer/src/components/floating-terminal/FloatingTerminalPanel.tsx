@@ -141,6 +141,7 @@ export function FloatingTerminalPanel({
   const panelRef = useRef<HTMLDivElement>(null)
   const shortcutFocusFrameRef = useRef<number | null>(null)
   const shortcutFocusTimeoutRef = useRef<number | null>(null)
+  const mountedRef = useRef(true)
   const dragRef = useRef<{
     pointerId: number
     startX: number
@@ -345,6 +346,13 @@ export function FloatingTerminalPanel({
   }, [handleSaveDialogCancel])
 
   useEffect(() => {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+    }
+  }, [])
+
+  useEffect(() => {
     if (!open || normalizedInitialBoundsRef.current || typeof window === 'undefined') {
       return
     }
@@ -356,15 +364,31 @@ export function FloatingTerminalPanel({
   }, [bounds.left, bounds.width, open])
 
   useEffect(() => {
+    let cancelled = false
     void window.api.app
       .getFloatingTerminalCwd({
         path: floatingTerminalCwd
       })
-      .then(setCwd)
+      .then((nextCwd) => {
+        if (!cancelled) {
+          setCwd(nextCwd)
+        }
+      })
+    return () => {
+      cancelled = true
+    }
   }, [floatingTerminalCwd])
 
   useEffect(() => {
-    void window.api.app.getFloatingMarkdownDirectory().then(setMarkdownCwd)
+    let cancelled = false
+    void window.api.app.getFloatingMarkdownDirectory().then((nextMarkdownCwd) => {
+      if (!cancelled) {
+        setMarkdownCwd(nextMarkdownCwd)
+      }
+    })
+    return () => {
+      cancelled = true
+    }
   }, [])
 
   useEffect(() => {
@@ -394,9 +418,13 @@ export function FloatingTerminalPanel({
     }
     try {
       const status = await window.api.cli.getInstallStatus()
-      setShowOrchestrationSetup(!isOrcaCliAvailableOnPath(status))
+      if (mountedRef.current) {
+        setShowOrchestrationSetup(!isOrcaCliAvailableOnPath(status))
+      }
     } catch {
-      setShowOrchestrationSetup(true)
+      if (mountedRef.current) {
+        setShowOrchestrationSetup(true)
+      }
     }
   }, [])
 

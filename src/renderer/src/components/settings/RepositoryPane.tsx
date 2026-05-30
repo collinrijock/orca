@@ -56,6 +56,9 @@ export function RepositoryPane({
   const [confirmingRemove, setConfirmingRemove] = useState<string | null>(null)
   const [copiedTemplate, setCopiedTemplate] = useState(false)
   const copiedTemplateResetTimerRef = useRef<number | null>(null)
+  // Why: clipboard IPC can resolve after settings navigation; avoid starting
+  // a reset timer that will outlive this pane.
+  const isMountedRef = useRef(false)
   // Why: searching a project name is navigation to that project, not a
   // request to hide every child row that does not repeat the project name.
   const forceFullPaneForRepoMatch = matchesRepositoryIdentitySearch(searchQuery, repo)
@@ -69,6 +72,7 @@ export function RepositoryPane({
 
   const setRepositoryPaneRootRef = useCallback(
     (node: HTMLDivElement | null) => {
+      isMountedRef.current = node !== null
       if (node === null) {
         clearCopiedTemplateResetTimer()
       }
@@ -100,6 +104,9 @@ export function RepositoryPane({
     pnpm worktree:setup
   archive: |
     echo "Cleaning up before archive"`)
+    if (!isMountedRef.current) {
+      return
+    }
     clearCopiedTemplateResetTimer()
     setCopiedTemplate(true)
     copiedTemplateResetTimerRef.current = window.setTimeout(() => {
