@@ -121,6 +121,11 @@ import {
   type MobileNewTabAgentOption,
   type MobileNewTabAgentSettings
 } from '../../../../src/session/mobile-new-tab-agent-options'
+import {
+  createMobileSessionCreateWarningState,
+  dismissMobileSessionCreateWarningState,
+  reconcileMobileSessionCreateWarningState
+} from '../../../../src/session/mobile-session-create-warning-state'
 import { colors, spacing, radii, typography } from '../../../../src/theme/mobile-theme'
 import type { DiffComment } from '../../../../../src/shared/types'
 
@@ -981,7 +986,9 @@ export default function SessionScreen() {
   const [creatingBrowser, setCreatingBrowser] = useState(false)
   const [creatingMarkdown, setCreatingMarkdown] = useState(false)
   const [createError, setCreateError] = useState('')
-  const [createWarning, setCreateWarning] = useState(initialCreateWarning)
+  const [createWarningState, setCreateWarningState] = useState(() =>
+    createMobileSessionCreateWarningState(initialCreateWarning)
+  )
   const [showCreateTabDrawer, setShowCreateTabDrawer] = useState(false)
   const [createTabAgentLoadState, setCreateTabAgentLoadState] =
     useState<MobileNewTabAgentLoadState>('idle')
@@ -1089,10 +1096,16 @@ export default function SessionScreen() {
     activeSessionTab?.type !== 'browser'
   const liveInputEnabled = activeHandle ? liveInputTerminalHandles.has(activeHandle) : false
   const [browserScreencastSupported, setBrowserScreencastSupported] = useState<boolean | null>(null)
-
-  useEffect(() => {
-    setCreateWarning(initialCreateWarning)
-  }, [initialCreateWarning])
+  const reconciledCreateWarningState = reconcileMobileSessionCreateWarningState(
+    createWarningState,
+    initialCreateWarning
+  )
+  // Why: Expo can reuse this screen for a new route. Reconcile before paint
+  // so a dismissed old creation warning never flashes for the next session.
+  if (reconciledCreateWarningState !== createWarningState) {
+    setCreateWarningState(reconciledCreateWarningState)
+  }
+  const createWarning = reconciledCreateWarningState.visible
 
   const clearToastHideTimer = useCallback(() => {
     if (!toastHideTimerRef.current) return
@@ -3782,7 +3795,7 @@ export default function SessionScreen() {
             <Text style={styles.createWarningText}>{createWarning}</Text>
             <Pressable
               style={styles.createWarningDismiss}
-              onPress={() => setCreateWarning('')}
+              onPress={() => setCreateWarningState(dismissMobileSessionCreateWarningState)}
               accessibilityLabel="Dismiss workspace creation warning"
               hitSlop={8}
             >
