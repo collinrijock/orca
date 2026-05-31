@@ -262,7 +262,7 @@ function applyRemoteWorkspacePatchStatus(
 }
 
 function App(): React.JSX.Element {
-  useUnreadDockBadge()
+  const clearUnreadDockBadge = useUnreadDockBadge()
   useRadixBodyPointerEventsRecovery()
   useWebSessionTabsSync()
   const [floatingTerminalOpen, setFloatingTerminalOpen] = useState(false)
@@ -374,12 +374,13 @@ function App(): React.JSX.Element {
 
   const setAppRootNode = useCallback(
     (node: HTMLDivElement | null): void => {
-      // Why: return-focus frames are only valid while the App root is mounted.
+      // Why: these best-effort App chrome cleanups share the App root lifetime.
       if (!node) {
         cancelFloatingTerminalReturnFocusFrame()
+        clearUnreadDockBadge()
       }
     },
-    [cancelFloatingTerminalReturnFocusFrame]
+    [cancelFloatingTerminalReturnFocusFrame, clearUnreadDockBadge]
   )
 
   const rememberFloatingTerminalReturnFocus = useCallback((): void => {
