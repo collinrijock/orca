@@ -79,8 +79,8 @@ import {
   markCopilotFolderTrusted,
   markCursorWorkspaceTrusted
 } from '../agent-trust-presets'
+import { markRemoteAgentWorkspaceTrusted } from '../remote-agent-trust-presets'
 import { applyAgentStatusHooksEnabled } from '../agent-hooks/managed-agent-hook-controls'
-import { upsertProjectTrustLevelInContent } from '../codex/config-toml-trust'
 import {
   isWindowsAbsolutePathLike,
   isPathInsideOrEqual,
@@ -390,7 +390,6 @@ import { MOBILE_SUBSCRIBE_SCROLLBACK_ROWS } from './scrollback-limits'
 import type { IFilesystemProvider, IPtyProvider } from '../providers/types'
 import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
 import { getSshGitProvider, requireSshGitProvider } from '../providers/ssh-git-dispatch'
-import { getActiveMultiplexer } from '../ipc/ssh'
 import { detectRepoIcon } from '../repo-icon-autodetect'
 import type { ClaudeAccountService } from '../claude-accounts/service'
 import type { CodexAccountService } from '../codex-accounts/service'
@@ -7195,132 +7194,10 @@ export class OrcaRuntimeService {
       return
     }
     try {
-      const home = await this.resolveRemoteHome(connectionId)
-      const fsProvider = getSshFilesystemProvider(connectionId)
-      if (!home || !fsProvider) {
-        return
-      }
-      const absPath = await this.canonicalizeRemoteWorkspacePath(fsProvider, workspacePath)
-      if (preset === 'codex') {
-        await this.markRemoteCodexProjectTrusted(fsProvider, home, absPath)
-      } else if (preset === 'cursor') {
-        await this.markRemoteCursorWorkspaceTrusted(fsProvider, home, absPath)
-      } else if (preset === 'copilot') {
-        await this.markRemoteCopilotFolderTrusted(fsProvider, home, absPath)
-      }
+      await markRemoteAgentWorkspaceTrusted({ preset, connectionId, workspacePath })
     } catch {
       // Best-effort: the user can still accept the remote agent trust prompt manually.
     }
-  }
-
-  private async resolveRemoteHome(connectionId: string): Promise<string | null> {
-    const mux = getActiveMultiplexer(connectionId)
-    if (!mux || mux.isDisposed?.()) {
-      return null
-    }
-    const result = (await mux.request('session.resolveHome', { path: '~' })) as {
-      resolvedPath?: unknown
-    }
-    const home = typeof result.resolvedPath === 'string' ? result.resolvedPath.trim() : ''
-    return home && home.startsWith('/') && !/[\u0000\r\n]/.test(home)
-      ? home.replace(/\/$/, '')
-      : null
-  }
-
-  private async canonicalizeRemoteWorkspacePath(
-    fsProvider: IFilesystemProvider,
-    workspacePath: string
-  ): Promise<string> {
-    try {
-      return await fsProvider.realpath(workspacePath)
-    } catch {
-      return workspacePath
-    }
-  }
-
-  private async readRemoteTextFile(
-    fsProvider: IFilesystemProvider,
-    filePath: string
-  ): Promise<string> {
-    try {
-      const result = await fsProvider.readFile(filePath)
-      return result.isBinary ? '' : result.content
-    } catch {
-      return ''
-    }
-  }
-
-  private async markRemoteCodexProjectTrusted(
-    fsProvider: IFilesystemProvider,
-    remoteHome: string,
-    workspacePath: string
-  ): Promise<void> {
-    const codexDir = `${remoteHome}/.codex`
-    const configPath = `${codexDir}/config.toml`
-    const existing = await this.readRemoteTextFile(fsProvider, configPath)
-    const updated = upsertProjectTrustLevelInContent(existing, workspacePath, 'trusted')
-    if (updated === existing) {
-      return
-    }
-    await fsProvider.createDir(codexDir)
-    await fsProvider.writeFile(configPath, updated)
-  }
-
-  private async markRemoteCursorWorkspaceTrusted(
-    fsProvider: IFilesystemProvider,
-    remoteHome: string,
-    workspacePath: string
-  ): Promise<void> {
-    const slug = workspacePath.replace(/^[\\/]+/, '').replace(/[\\/]+/g, '-')
-    if (!slug) {
-      return
-    }
-    const trustDir = `${remoteHome}/.cursor/projects/${slug}`
-    const trustFile = `${trustDir}/.workspace-trusted`
-    try {
-      await fsProvider.stat(trustFile)
-      return
-    } catch {
-      // Missing marker: write the same shape the local trust preset writes.
-    }
-    await fsProvider.createDir(trustDir)
-    await fsProvider.writeFile(
-      trustFile,
-      `${JSON.stringify({ trustedAt: new Date().toISOString(), workspacePath }, null, 2)}\n`
-    )
-  }
-
-  private async markRemoteCopilotFolderTrusted(
-    fsProvider: IFilesystemProvider,
-    remoteHome: string,
-    workspacePath: string
-  ): Promise<void> {
-    const configDir = `${remoteHome}/.copilot`
-    const configPath = `${configDir}/config.json`
-    const raw = await this.readRemoteTextFile(fsProvider, configPath)
-    let config: Record<string, unknown> = {}
-    if (raw.trim()) {
-      try {
-        const parsed = JSON.parse(raw)
-        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-          config = parsed as Record<string, unknown>
-        }
-      } catch {
-        return
-      }
-    }
-    const existing = Array.isArray(config.trustedFolders)
-      ? (config.trustedFolders as unknown[])
-      : []
-    if (existing.includes(workspacePath)) {
-      return
-    }
-    config.trustedFolders = [
-      ...existing.filter((entry) => typeof entry === 'string'),
-      workspacePath
-    ]
-    await fsProvider.createDir(configDir)
-    await fsProvider.writeFile(configPath, `${JSON.stringify(config, null, 2)}\n`)
   }
 
   private pasteStartupDraftWhenReady(handle: string, draft: WorktreeStartupDraftPaste): void {
