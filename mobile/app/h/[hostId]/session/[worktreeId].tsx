@@ -70,8 +70,10 @@ import {
   loadTerminalAccessoryLayout
 } from '../../../../src/terminal/terminal-accessory-layout'
 import {
+  clearTerminalLiveInputFocusTimer,
   getTerminalLiveSpecialKeyBytes,
-  isTerminalLiveInputWithinByteLimit
+  isTerminalLiveInputWithinByteLimit,
+  scheduleTerminalLiveInputFocus
 } from '../../../../src/terminal/terminal-live-input'
 import { countTerminalGestureInputSequences } from '../../../../src/terminal/terminal-gesture-input'
 import { MobileBrowserPane, type MobileBrowserTab } from '../../../../src/browser/MobileBrowserPane'
@@ -1048,6 +1050,7 @@ export default function SessionScreen() {
   const viewportMeasuredRef = useRef(false)
   const terminalRefs = useRef<Map<string, TerminalWebViewHandle>>(new Map())
   const liveInputRef = useRef<TextInput>(null)
+  const liveInputFocusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const terminalUnsubsRef = useRef<Map<string, () => void>>(new Map())
   const subscribingHandlesRef = useRef<Set<string>>(new Set())
   const initializedHandlesRef = useRef<Set<string>>(new Set())
@@ -1132,6 +1135,7 @@ export default function SessionScreen() {
       // so pending animation callbacks cannot clear a newer/unmounted surface.
       toastSeqRef.current += 1
       clearToastHideTimer()
+      clearTerminalLiveInputFocusTimer(liveInputFocusTimerRef)
     }
   }, [clearToastHideTimer])
 
@@ -2714,8 +2718,9 @@ export default function SessionScreen() {
     })
     setLiveInputCapture('')
     if (nextEnabled) {
-      setTimeout(() => liveInputRef.current?.focus(), 50)
+      scheduleTerminalLiveInputFocus(liveInputFocusTimerRef, () => liveInputRef.current?.focus())
     } else {
+      clearTerminalLiveInputFocusTimer(liveInputFocusTimerRef)
       liveInputRef.current?.blur()
     }
   }, [activeHandle, liveInputTerminalHandles])
