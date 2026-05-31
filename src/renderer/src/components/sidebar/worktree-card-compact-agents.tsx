@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react'
+import React, { useCallback, useRef } from 'react'
 import { ChevronRight } from 'lucide-react'
 import { AgentStateDot, agentStateLabel, type AgentDotState } from '@/components/AgentStateDot'
 import type { DashboardAgentRow as DashboardAgentRowData } from '@/components/dashboard/useDashboardData'
@@ -190,13 +190,13 @@ export function CompactAgentExpansion({
   expanded,
   children
 }: CompactAgentExpansionProps): React.JSX.Element {
-  const [hasRenderedChildren, setHasRenderedChildren] = useState(expanded)
-  useEffect(() => {
-    if (expanded) {
-      setHasRenderedChildren(true)
-    }
-  }, [expanded])
-  const shouldRenderChildren = expanded || hasRenderedChildren
+  const hasRenderedChildrenRef = useRef(expanded)
+  if (expanded) {
+    // Why: keep already-opened content mounted for the collapse transition
+    // without paying an extra Effect-driven render on first expansion.
+    hasRenderedChildrenRef.current = true
+  }
+  const shouldRenderChildren = expanded || hasRenderedChildrenRef.current
 
   return (
     <div
