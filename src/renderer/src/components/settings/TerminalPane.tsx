@@ -9,6 +9,7 @@ import { clampNumber } from '@/lib/terminal-theme'
 import {
   SettingsRow,
   SettingsSegmentedControl,
+  SettingsSwitch,
   SettingsSubsectionHeader,
   SettingsSwitchRow
 } from './SettingsFormControls'
@@ -53,6 +54,8 @@ type TerminalPaneProps = {
   gitBashAvailable?: boolean
 }
 
+const DEFAULT_LIMITED_TERMINAL_VIEW_COUNT = 16
+
 export function TerminalPane({
   settings,
   updateSettings,
@@ -90,6 +93,8 @@ export function TerminalPane({
   const powerShellImplementation = settings.terminalWindowsPowerShellImplementation ?? 'auto'
   const showWindowsPowerShellImplementation = isWindows && windowsShell === 'powershell.exe'
   const showGitBashOption = gitBashAvailable || windowsShell === WINDOWS_GIT_BASH_SHELL
+  const maxLiveTerminalPanes = Math.floor(clampNumber(settings.maxLiveTerminalPanes ?? 0, 0, 500))
+  const limitHiddenTerminalViews = maxLiveTerminalPanes > 0
 
   const visibleSections = [
     isWindows && matchesSettingsSearch(searchQuery, TERMINAL_WINDOWS_SHELL_SEARCH_ENTRY) ? (
@@ -231,36 +236,67 @@ export function TerminalPane({
           </SearchableSetting>
 
           <SearchableSetting
-            title="Live Terminal Pane Limit"
-            description="Caps how many hidden terminal renderer panes stay mounted. 0 disables eviction."
-            keywords={['terminal', 'live panes', 'limit', 'lru', 'memory', 'xterm', 'renderer']}
+            title="Limit hidden terminal views"
+            description="Unload older hidden terminal views while keeping their shells running."
+            keywords={[
+              'terminal',
+              'hidden views',
+              'limit',
+              'lru',
+              'memory',
+              'xterm',
+              'renderer',
+              'unlimited',
+              'no limit'
+            ]}
           >
             <SettingsRow
-              label="Live Pane Limit"
+              label="Limit hidden terminal views"
               description={
-                (settings.maxLiveTerminalPanes ?? 0) === 0
-                  ? 'Disabled; all open terminal panes stay mounted.'
-                  : 'Older hidden local terminal panes are detached and restored when reopened.'
+                limitHiddenTerminalViews
+                  ? 'Older hidden local terminal views are unloaded and restored when reopened.'
+                  : 'No limit; all terminal views stay mounted.'
               }
+              alignTop={limitHiddenTerminalViews}
               control={
-                <div className="flex items-center gap-2">
-                  <Input
-                    type="number"
-                    min={0}
-                    max={500}
-                    step={1}
-                    value={settings.maxLiveTerminalPanes ?? 0}
-                    onChange={(e) => {
-                      const value = Number(e.target.value)
-                      if (Number.isFinite(value)) {
-                        updateSettings({
-                          maxLiveTerminalPanes: Math.floor(clampNumber(value, 0, 500))
-                        })
-                      }
+                <div className="flex items-center gap-3">
+                  <SettingsSwitch
+                    checked={limitHiddenTerminalViews}
+                    ariaLabel="Limit hidden terminal views"
+                    onChange={() => {
+                      updateSettings({
+                        maxLiveTerminalPanes: limitHiddenTerminalViews
+                          ? 0
+                          : DEFAULT_LIMITED_TERMINAL_VIEW_COUNT
+                      })
                     }}
-                    className="number-input-clean w-24 tabular-nums"
                   />
-                  <span className="text-xs text-muted-foreground">panes</span>
+                  {limitHiddenTerminalViews ? (
+                    <div className="flex items-center gap-2">
+                      <Input
+                        type="number"
+                        min={1}
+                        max={500}
+                        step={1}
+                        value={maxLiveTerminalPanes}
+                        onChange={(e) => {
+                          const value = Number(e.target.value)
+                          if (Number.isFinite(value)) {
+                            updateSettings({
+                              maxLiveTerminalPanes: Math.max(
+                                1,
+                                Math.floor(clampNumber(value, 1, 500))
+                              )
+                            })
+                          }
+                        }}
+                        className="number-input-clean w-24 tabular-nums"
+                      />
+                      <span className="text-xs text-muted-foreground">views</span>
+                    </div>
+                  ) : (
+                    <span className="text-xs text-muted-foreground">No limit</span>
+                  )}
                 </div>
               }
             />

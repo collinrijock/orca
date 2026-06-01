@@ -60,9 +60,19 @@ export const TERMINAL_RENDERING_SEARCH_ENTRIES: SettingsSearchEntry[] = [
     ]
   },
   {
-    title: 'Live Terminal Pane Limit',
-    description: 'Caps how many hidden terminal renderer panes stay mounted. 0 disables eviction.',
-    keywords: ['terminal', 'live panes', 'limit', 'lru', 'memory', 'xterm', 'renderer']
+    title: 'Limit hidden terminal views',
+    description: 'Unload older hidden terminal views while keeping their shells running.',
+    keywords: [
+      'terminal',
+      'hidden views',
+      'limit',
+      'lru',
+      'memory',
+      'xterm',
+      'renderer',
+      'unlimited',
+      'no limit'
+    ]
   }
 ]
 
