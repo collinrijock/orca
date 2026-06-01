@@ -723,13 +723,19 @@ export type PreloadApi = {
     scanNested: (args: {
       path: string
       connectionId?: string
+      scanId?: string
       options?: Record<string, unknown>
     }) => Promise<NestedRepoScanResult>
+    cancelNestedScan: (args: { scanId: string }) => Promise<boolean>
+    onNestedScanProgress: (
+      callback: (data: { scanId: string; scan: NestedRepoScanResult }) => void
+    ) => () => void
     importNested: (args: {
       parentPath: string
       groupName: string
       projectPaths: string[]
       connectionId?: string
+      scanId?: string
       mode: ProjectGroupImportMode
     }) => Promise<ProjectGroupImportResult>
   }

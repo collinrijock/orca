@@ -5328,7 +5328,7 @@ export class OrcaRuntimeService {
     if (!isAbsolute(path)) {
       throw new Error('Project path must be an absolute path')
     }
-    return scanNestedRepos({ path })
+    return scanNestedRepos({ path, options: { timeoutMs: 15_000 } })
   }
 
   async importNestedRepos(args: {
@@ -5343,10 +5343,10 @@ export class OrcaRuntimeService {
     if (!isAbsolute(args.parentPath)) {
       throw new Error('Project path must be an absolute path')
     }
-    const scan = await scanNestedRepos({ path: args.parentPath })
+    const scan = await scanNestedRepos({ path: args.parentPath, options: { timeoutMs: 15_000 } })
     const selection = resolveNestedRepoSelection({ scan, projectPaths: args.projectPaths })
     const groupResolver = createNestedProjectGroupResolver({
-      parentPath: scan.selectedPath,
+      parentPath: args.parentPath,
       groupName: args.groupName,
       mode: args.mode,
       createGroup: (input) => this.store!.createProjectGroup!(input)

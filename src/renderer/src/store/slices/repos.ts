@@ -42,6 +42,21 @@ type RepoUpdate = Partial<
   >
 >
 
+type NestedRepoScanControls = {
+  scanId?: string
+  onProgress?: (scan: NestedRepoScanResult) => void
+}
+
+function normalizeNestedRepoScanResult(scan: NestedRepoScanResult): NestedRepoScanResult {
+  return {
+    ...scan,
+    stopped: scan.stopped ?? false,
+    maxDepth: scan.maxDepth ?? 3,
+    maxRepos: scan.maxRepos ?? 100,
+    timeoutMs: scan.timeoutMs ?? null
+  }
+}
+
 function sanitizeRepoUpdate(updates: RepoUpdate): RepoUpdate {
   const sanitized = { ...updates }
   if ('badgeColor' in sanitized) {
@@ -97,12 +112,18 @@ export type RepoSlice = {
   addRepo: () => Promise<Repo | null>
   addRepoPath: (path: string, kind?: 'git' | 'folder') => Promise<Repo | null>
   addNonGitFolder: (path: string) => Promise<Repo | null>
-  scanNestedRepos: (path: string, connectionId?: string) => Promise<NestedRepoScanResult | null>
+  scanNestedRepos: (
+    path: string,
+    connectionId?: string,
+    controls?: NestedRepoScanControls
+  ) => Promise<NestedRepoScanResult | null>
+  cancelNestedRepoScan: (scanId: string) => Promise<boolean>
   importNestedRepos: (args: {
     parentPath: string
     groupName: string
     projectPaths: string[]
     connectionId?: string
+    scanId?: string
     mode: 'group' | 'separate'
   }) => Promise<ProjectGroupImportResult | null>
   createProjectGroup: (name: string) => Promise<ProjectGroup | null>
@@ -183,23 +204,56 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
     }
   },
 
-  scanNestedRepos: async (path, connectionId) => {
+  scanNestedRepos: async (path, connectionId, controls) => {
     try {
       const target = getActiveRuntimeTarget(get().settings)
-      return target.kind === 'local'
-        ? await window.api.projectGroups.scanNested({
-            path,
-            connectionId
-          })
-        : await callRuntimeRpc<NestedRepoScanResult>(
-            target,
-            'projectGroup.scanNested',
-            { path },
-            { timeoutMs: 15_000 }
+      if (target.kind === 'local') {
+        const unsubscribe =
+          controls?.scanId && controls.onProgress
+            ? window.api.projectGroups.onNestedScanProgress(({ scanId, scan }) => {
+                if (scanId === controls.scanId) {
+                  controls.onProgress?.(normalizeNestedRepoScanResult(scan))
+                }
+              })
+            : undefined
+        try {
+          return normalizeNestedRepoScanResult(
+            await window.api.projectGroups.scanNested({
+              path,
+              connectionId,
+              scanId: controls?.scanId
+            })
           )
+        } finally {
+          unsubscribe?.()
+        }
+      }
+      return normalizeNestedRepoScanResult(
+        await callRuntimeRpc<NestedRepoScanResult>(
+          target,
+          'projectGroup.scanNested',
+          { path },
+          // Why: older runtime servers cannot stream or cancel scans, so the
+          // renderer must retain a bounded failure path for large folders.
+          { timeoutMs: 20_000 }
+        )
+      )
     } catch (err) {
       console.error('Failed to scan nested repos:', err)
       return null
+    }
+  },
+
+  cancelNestedRepoScan: async (scanId) => {
+    try {
+      const target = getActiveRuntimeTarget(get().settings)
+      if (target.kind !== 'local') {
+        return false
+      }
+      return await window.api.projectGroups.cancelNestedScan({ scanId })
+    } catch (err) {
+      console.error('Failed to cancel nested repo scan:', err)
+      return false
     }
   },
 
@@ -216,6 +270,7 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
                 parentPath: args.parentPath,
                 groupName: args.groupName,
                 projectPaths: args.projectPaths,
+                scanId: args.scanId,
                 mode: args.mode
               },
               { timeoutMs: 60_000 }
