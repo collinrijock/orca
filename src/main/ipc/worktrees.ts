@@ -95,6 +95,7 @@ import {
 import { isWindowsAbsolutePathLike } from '../../shared/cross-platform-path'
 import { DEFAULT_WORKSPACE_STATUS_ID } from '../../shared/workspace-statuses'
 import { FOLDER_WORKSPACE_INSTANCE_SEPARATOR } from '../../shared/worktree-id'
+import { prefetchWorktreeCreateBase } from '../worktree-create-base-prefetch'
 
 const WORKTREE_ARCHIVE_HOOK_TIMEOUT_MS = 120_000
 const WORKTREE_LIST_ALL_CONCURRENCY = 8
@@ -637,6 +638,7 @@ export function registerWorktreeHandlers(
   ipcMain.removeHandler('worktrees:list')
   ipcMain.removeHandler('worktrees:listDetected')
   ipcMain.removeHandler('worktrees:create')
+  ipcMain.removeHandler('worktrees:prefetchCreateBase')
   ipcMain.removeHandler('worktrees:resolvePrBase')
   ipcMain.removeHandler('worktrees:resolveMrBase')
   ipcMain.removeHandler('worktrees:remove')
@@ -839,6 +841,22 @@ export function registerWorktreeHandlers(
           }
         }
         return { repoId: repo.id, authoritative: false, source: 'metadata-fallback', worktrees: [] }
+      }
+    }
+  )
+
+  ipcMain.handle(
+    'worktrees:prefetchCreateBase',
+    async (_event, args: { repoId: string; baseBranch?: string }): Promise<void> => {
+      const repo = store.getRepo(args.repoId)
+      if (!repo) {
+        return
+      }
+      try {
+        await prefetchWorktreeCreateBase({ repo, baseBranch: args.baseBranch, runtime })
+      } catch {
+        // Why: this is an optimistic warm-up. The actual create path still
+        // awaits the same refresh and reports user-visible failures there.
       }
     }
   )
@@ -1104,10 +1122,13 @@ export function registerWorktreeHandlers(
             notifyWorktreesChanged(mainWindow, repoId)
             return {}
           }
-          if (args.force && (await isAlreadyRemovedWorktreePath(repo, worktreePath))) {
-            // Why: Force-delete can be retried from stale UI after a prior delete
-            // already removed the directory and Git registration. Treat that as
-            // successful cleanup, but do not delete any unregistered existing path.
+          if (
+            (args.force || removedMeta) &&
+            (await isAlreadyRemovedWorktreePath(repo, worktreePath))
+          ) {
+            // Why: a manually deleted worktree is already gone from Git and disk.
+            // The sidebar delete action has persisted metadata proving this was
+            // an Orca-known row, so no force confirmation is needed.
             if (repo.connectionId) {
               await cleanupUnusedWorktreePushTargetRemoteSsh(
                 provider!,

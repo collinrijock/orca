@@ -86,8 +86,7 @@ import {
   getPtyIdForPaneKey,
   registerPaneKeyTeardownListener,
   getLocalPtyProvider,
-  registerHeadlessPtyRuntime,
-  isRendererPtyOutputPaused
+  registerHeadlessPtyRuntime
 } from './ipc/pty'
 import { AgentBrowserBridge } from './browser/agent-browser-bridge'
 import { browserManager } from './browser/browser-manager'
@@ -398,6 +397,9 @@ function prepareCodexRuntimeHomeForLaunch(target?: CodexAccountSelectionTarget):
       } runtime hooks before launch`,
       error
     )
+  }
+  if (target?.runtime !== 'wsl') {
+    return codexRuntimeHome!.refreshCurrentHostLaunchHome() ?? runtimeHomePath
   }
   return runtimeHomePath
 }
@@ -921,9 +923,6 @@ registerPaneKeyTeardownListener((paneKey) => {
 
 function sendSyntheticTitle(ptyId: string, data: string, options: { force?: boolean } = {}): void {
   if (!mainWindow || mainWindow.isDestroyed()) {
-    return
-  }
-  if (options.force !== true && isRendererPtyOutputPaused(ptyId)) {
     return
   }
   // Why: repeated working-spinner frames are decorative and can arrive every

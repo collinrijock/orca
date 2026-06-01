@@ -175,6 +175,8 @@ function makeDisposable() {
 }
 
 describe('registerPtyHandlers', () => {
+  const testCodexHomePath =
+    process.platform === 'win32' ? 'C:\\tmp\\orca-codex-home' : '/tmp/orca-codex-home'
   const handlers = new Map<string, (_event: unknown, args: unknown) => unknown>()
   const mainWindow = {
     isDestroyed: () => false,
@@ -529,9 +531,9 @@ describe('registerPtyHandlers', () => {
     })
 
     it('injects the selected Codex home into Orca terminal PTYs', async () => {
-      const env = await spawnAndGetEnv(undefined, undefined, () => '/tmp/orca-codex-home')
-      expect(env.CODEX_HOME).toBe('/tmp/orca-codex-home')
-      expect(env.ORCA_CODEX_HOME).toBe('/tmp/orca-codex-home')
+      const env = await spawnAndGetEnv(undefined, undefined, () => testCodexHomePath)
+      expect(env.CODEX_HOME).toBe(testCodexHomePath)
+      expect(env.ORCA_CODEX_HOME).toBe(testCodexHomePath)
     })
 
     it('injects the OpenCode hook env into Orca terminal PTYs', async () => {
@@ -866,10 +868,10 @@ describe('registerPtyHandlers', () => {
       const env = await spawnAndGetEnv(
         undefined,
         { CODEX_HOME: '/tmp/system-codex-home' },
-        () => '/tmp/orca-codex-home'
+        () => testCodexHomePath
       )
-      expect(env.CODEX_HOME).toBe('/tmp/orca-codex-home')
-      expect(env.ORCA_CODEX_HOME).toBe('/tmp/orca-codex-home')
+      expect(env.CODEX_HOME).toBe(testCodexHomePath)
+      expect(env.ORCA_CODEX_HOME).toBe(testCodexHomePath)
     })
 
     it('injects explicit proxy settings into local PTY env', async () => {
@@ -1075,9 +1077,9 @@ describe('registerPtyHandlers', () => {
       })
 
       it('injects the selected Codex home on the daemon path', async () => {
-        const env = await daemonSpawnAndGetEnv({}, () => '/tmp/orca-codex-home')
-        expect(env.CODEX_HOME).toBe('/tmp/orca-codex-home')
-        expect(env.ORCA_CODEX_HOME).toBe('/tmp/orca-codex-home')
+        const env = await daemonSpawnAndGetEnv({}, () => testCodexHomePath)
+        expect(env.CODEX_HOME).toBe(testCodexHomePath)
+        expect(env.ORCA_CODEX_HOME).toBe(testCodexHomePath)
       })
 
       it('injects explicit proxy settings on the daemon path', async () => {
@@ -2707,6 +2709,50 @@ describe('registerPtyHandlers', () => {
       expect(spawnOptions.env.CODEX_HOME).toBeUndefined()
       expect(spawnOptions.env.ORCA_CODEX_HOME).toBeUndefined()
     })
+
+    it('converts selected WSL Codex homes to Linux paths for wsl.exe shells', () => {
+      const originalPlatform = process.platform
+      Object.defineProperty(process, 'platform', {
+        configurable: true,
+        value: 'win32'
+      })
+      process.env.COMSPEC = 'C:\\Windows\\system32\\cmd.exe'
+      isPwshAvailableMock.mockReturnValue(false)
+
+      try {
+        registerPtyHandlers(
+          mainWindow as never,
+          undefined,
+          () =>
+            '\\\\wsl.localhost\\Ubuntu\\home\\test\\.local\\share\\orca\\codex-runtime-home\\launch\\wsl\\system\\home',
+          () =>
+            ({
+              terminalWindowsShell: 'powershell.exe',
+              terminalWindowsPowerShellImplementation: 'powershell.exe'
+            }) as never
+        )
+        handlers.get('pty:spawn')!(null, {
+          cols: 80,
+          rows: 24,
+          shellOverride: 'wsl.exe'
+        })
+
+        const spawnOptions = spawnMock.mock.calls.at(-1)?.[2] as { env: Record<string, string> }
+        expect(spawnOptions.env.CODEX_HOME).toBe(
+          '/home/test/.local/share/orca/codex-runtime-home/launch/wsl/system/home'
+        )
+        expect(spawnOptions.env.ORCA_CODEX_HOME).toBe(
+          '/home/test/.local/share/orca/codex-runtime-home/launch/wsl/system/home'
+        )
+        expect(spawnOptions.env.WSLENV).toContain('CODEX_HOME')
+        expect(spawnOptions.env.WSLENV).toContain('ORCA_CODEX_HOME')
+      } finally {
+        Object.defineProperty(process, 'platform', {
+          configurable: true,
+          value: originalPlatform
+        })
+      }
+    })
   })
 
   it('rejects missing WSL worktree cwd instead of validating only the fallback Windows cwd', async () => {
@@ -2966,162 +3012,6 @@ describe('registerPtyHandlers', () => {
       expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:data', {
         id: spawnResult.id,
         data: 'background output'
-      })
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it('does not send renderer PTY data while renderer output is paused', async () => {
-    vi.useFakeTimers()
-    const mockProc = createMockProc()
-    spawnMock.mockReturnValue(mockProc.proc)
-
-    try {
-      registerPtyHandlers(mainWindow as never)
-      const spawnResult = (await handlers.get('pty:spawn')!(null, {
-        cols: 80,
-        rows: 24,
-        cwd: '/tmp'
-      })) as { id: string }
-      const pauseCall = onMock.mock.calls.find((call: unknown[]) => call[0] === 'pty:pauseOutput')
-      if (!pauseCall) {
-        throw new Error('missing pty:pauseOutput listener')
-      }
-      const pauseRendererOutput = pauseCall[1] as (
-        event: unknown,
-        args: { id: string; paused: boolean }
-      ) => void
-      mainWindow.webContents.send.mockClear()
-
-      pauseRendererOutput(null, { id: spawnResult.id, paused: true })
-      mockProc.emitData('hidden output')
-      vi.advanceTimersByTime(50)
-
-      expect(mainWindow.webContents.send).not.toHaveBeenCalledWith('pty:data', {
-        id: spawnResult.id,
-        data: 'hidden output'
-      })
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it('answers mode 2031 subscribes while renderer PTY output is paused', async () => {
-    const mockProc = createMockProc()
-    spawnMock.mockReturnValue(mockProc.proc)
-
-    registerPtyHandlers(mainWindow as never)
-    const spawnResult = (await handlers.get('pty:spawn')!(null, {
-      cols: 80,
-      rows: 24,
-      cwd: '/tmp'
-    })) as { id: string }
-    const pauseCall = onMock.mock.calls.find((call: unknown[]) => call[0] === 'pty:pauseOutput')
-    if (!pauseCall) {
-      throw new Error('missing pty:pauseOutput listener')
-    }
-    const pauseRendererOutput = pauseCall[1] as (
-      event: unknown,
-      args: { id: string; paused: boolean }
-    ) => void
-    mainWindow.webContents.send.mockClear()
-
-    pauseRendererOutput(null, { id: spawnResult.id, paused: true })
-    mockProc.emitData('\x1b[?2031h')
-
-    expect(mockProc.proc.write).toHaveBeenCalledWith('\x1b[?997;1n')
-    expect(mainWindow.webContents.send).not.toHaveBeenCalledWith(
-      'pty:data',
-      expect.objectContaining({ id: spawnResult.id })
-    )
-  })
-
-  it('answers split paused mode 2031 subscribes using current app color scheme', async () => {
-    const mockProc = createMockProc()
-    spawnMock.mockReturnValue(mockProc.proc)
-
-    registerPtyHandlers(mainWindow as never, undefined, undefined, (() => ({
-      theme: 'light'
-    })) as never)
-    const spawnResult = (await handlers.get('pty:spawn')!(null, {
-      cols: 80,
-      rows: 24,
-      cwd: '/tmp'
-    })) as { id: string }
-    const pauseCall = onMock.mock.calls.find((call: unknown[]) => call[0] === 'pty:pauseOutput')
-    if (!pauseCall) {
-      throw new Error('missing pty:pauseOutput listener')
-    }
-    const pauseRendererOutput = pauseCall[1] as (
-      event: unknown,
-      args: { id: string; paused: boolean }
-    ) => void
-
-    pauseRendererOutput(null, { id: spawnResult.id, paused: true })
-    mockProc.emitData('\x1b[?20')
-    expect(mockProc.proc.write).not.toHaveBeenCalled()
-
-    mockProc.emitData('31h')
-    expect(mockProc.proc.write).toHaveBeenCalledWith('\x1b[?997;2n')
-  })
-
-  it('keeps 250 paused background PTYs off the renderer input path', async () => {
-    vi.useFakeTimers()
-    const backgroundCount = 250
-    const procs = Array.from({ length: backgroundCount + 1 }, () => createMockProc())
-    let spawnIndex = 0
-    spawnMock.mockImplementation(() => procs[spawnIndex++].proc)
-
-    try {
-      registerPtyHandlers(mainWindow as never)
-      const activeSpawn = (await handlers.get('pty:spawn')!(null, {
-        cols: 80,
-        rows: 24,
-        cwd: '/tmp'
-      })) as { id: string }
-      const backgroundSpawns: { id: string }[] = []
-      for (let index = 0; index < backgroundCount; index++) {
-        backgroundSpawns.push(
-          (await handlers.get('pty:spawn')!(null, {
-            cols: 80,
-            rows: 24,
-            cwd: '/tmp'
-          })) as { id: string }
-        )
-      }
-      const pauseCall = onMock.mock.calls.find((call: unknown[]) => call[0] === 'pty:pauseOutput')
-      if (!pauseCall) {
-        throw new Error('missing pty:pauseOutput listener')
-      }
-      const pauseRendererOutput = pauseCall[1] as (
-        event: unknown,
-        args: { id: string; paused: boolean }
-      ) => void
-      for (const spawn of backgroundSpawns) {
-        pauseRendererOutput(null, { id: spawn.id, paused: true })
-      }
-      mainWindow.webContents.send.mockClear()
-
-      for (let index = 0; index < backgroundCount; index++) {
-        procs[index + 1].emitData(`hidden ${index}\n`)
-      }
-      vi.advanceTimersByTime(100)
-
-      for (let index = 0; index < backgroundCount; index++) {
-        expect(mainWindow.webContents.send).not.toHaveBeenCalledWith('pty:data', {
-          id: backgroundSpawns[index].id,
-          data: `hidden ${index}\n`
-        })
-      }
-
-      const writeListener = getPtyWriteListener()
-      writeListener(null, { id: activeSpawn.id, data: 'a' })
-      procs[0].emitData('redraw')
-
-      expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:data', {
-        id: activeSpawn.id,
-        data: 'redraw'
       })
     } finally {
       vi.useRealTimers()

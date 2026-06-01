@@ -1,7 +1,17 @@
 /* eslint-disable max-lines -- Why: the checks panel co-locates PR header, checks, comments,
 merge actions, and conflict state in one component to keep the data flow straightforward. */
 import React, { useCallback, useEffect, useRef, useState } from 'react'
-import { LoaderCircle, ExternalLink, RefreshCw, Check, X, Pencil, GitMerge } from 'lucide-react'
+import {
+  LoaderCircle,
+  RefreshCw,
+  Check,
+  X,
+  Pencil,
+  GitMerge,
+  Ellipsis,
+  Link,
+  Unlink
+} from 'lucide-react'
 import { useAppStore } from '@/store'
 import {
   mergePRCommentIntoList,
@@ -12,12 +22,19 @@ import { getGitHubPRCacheKey, getGitHubRepoCacheKey } from '@/store/slices/githu
 import { useActiveWorktree, useRepoById } from '@/store/selectors'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger
+} from '@/components/ui/dropdown-menu'
 import { isFolderRepo } from '../../../../shared/repo-kind'
 import HostedReviewActions from './HostedReviewActions'
 import {
   PullRequestIcon,
   prStateColor,
   ConflictingFilesSection,
+  ConflictTriageStrip,
   MergeConflictNotice,
   ChecksList,
   PRCommentsList,
@@ -29,6 +46,7 @@ import type {
   GitLabWorkItemDetails,
   PRInfo,
   PRCheckDetail,
+  PRCheckRunDetails,
   PRComment
 } from '../../../../shared/types'
 import { getConnectionId } from '@/lib/connection-context'
@@ -38,7 +56,11 @@ import {
   buildResolvePullRequestConflictsPrompt,
   pickDefaultSourceControlAgent
 } from './SourceControl'
-import { buildFixBrokenChecksPrompt, getBrokenChecks } from '../pr-checks-fix-prompt'
+import {
+  buildFixBrokenChecksPrompt,
+  getBrokenChecks,
+  getCheckDetailsPromptKey
+} from '../pr-checks-fix-prompt'
 import { CreatePullRequestDialog } from './CreatePullRequestDialog'
 import type {
   HostedReviewCreationEligibility,
@@ -95,6 +117,88 @@ type ChecksPanelReview = Pick<
   'provider' | 'number' | 'title' | 'state' | 'url' | 'status' | 'updatedAt' | 'mergeable'
 > &
   Partial<Pick<HostedReviewInfo, 'headSha' | 'conflictSummary'>>
+
+type ChecksPanelReviewHeaderProps = {
+  review: ChecksPanelReview
+  isRefreshing: boolean
+  canUnlinkPullRequest: boolean
+  onRefresh: () => void
+  onOpenReview: () => void
+  onUnlinkPullRequest: () => void
+  onLinkAnotherPullRequest: () => void
+}
+
+export function ChecksPanelReviewHeader({
+  review,
+  isRefreshing,
+  canUnlinkPullRequest,
+  onRefresh,
+  onOpenReview,
+  onUnlinkPullRequest,
+  onLinkAnotherPullRequest
+}: ChecksPanelReviewHeaderProps): React.JSX.Element {
+  const reviewNumberLabel = review.provider === 'gitlab' ? `!${review.number}` : `#${review.number}`
+  const ReviewIcon = review.provider === 'gitlab' ? GitMerge : PullRequestIcon
+  const reviewHostLabel = review.provider === 'gitlab' ? 'GitLab' : 'GitHub'
+  const showPullRequestMenu = review.provider === 'github'
+
+  return (
+    <div className="flex items-center gap-2">
+      <ReviewIcon className="size-4 text-muted-foreground shrink-0" />
+      <button
+        type="button"
+        className="rounded px-0.5 text-[12px] font-semibold text-foreground underline-offset-2 hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+        title={`Open on ${reviewHostLabel}`}
+        onClick={onOpenReview}
+      >
+        {reviewNumberLabel}
+      </button>
+      <span
+        className={cn(
+          'text-[9px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded border',
+          prStateColor(review.state)
+        )}
+      >
+        {review.state}
+      </span>
+      <div className="flex-1" />
+      <button
+        className="cursor-pointer rounded p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:cursor-default disabled:opacity-50"
+        title="Refresh"
+        onClick={onRefresh}
+        disabled={isRefreshing}
+      >
+        <RefreshCw className={cn('size-3.5', isRefreshing && 'animate-spin')} />
+      </button>
+      {showPullRequestMenu && (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-xs"
+              aria-label="More PR actions"
+              title="More PR actions"
+              className="text-muted-foreground hover:text-foreground"
+            >
+              <Ellipsis className="size-3.5" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-44">
+            <DropdownMenuItem disabled={!canUnlinkPullRequest} onSelect={onUnlinkPullRequest}>
+              <Unlink className="size-3.5" />
+              unlink PR
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={onLinkAnotherPullRequest}>
+              <Link className="size-3.5" />
+              Link another PR
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      )}
+    </div>
+  )
+}
 
 function gitHubPRToChecksPanelReview(pr: PRInfo): ChecksPanelReview {
   return {
@@ -211,6 +315,7 @@ export default function ChecksPanel(): React.JSX.Element {
   const setRightSidebarOpen = useAppStore((s) => s.setRightSidebarOpen)
   const setRightSidebarTab = useAppStore((s) => s.setRightSidebarTab)
   const updateWorktreeMeta = useAppStore((s) => s.updateWorktreeMeta)
+  const openModal = useAppStore((s) => s.openModal)
 
   // Why: the sidebar stays mounted when closed (for performance). Gate
   // polling on visibility so we don't fetch checks/comments in the background
@@ -1798,12 +1903,44 @@ export default function ChecksPanel(): React.JSX.Element {
       if (!isCurrentAsyncResult(requestKey)) {
         return
       }
+      const checkRunDetailsByCheckKey: Record<string, PRCheckRunDetails> = {}
+      if (activeReview.provider !== 'gitlab' && repo) {
+        await Promise.all(
+          broken.slice(0, 5).map(async (check, index) => {
+            if (!check.checkRunId && !check.workflowRunId && !check.url) {
+              return
+            }
+            try {
+              const details = await fetchPRCheckDetails(
+                repo.path,
+                {
+                  checkRunId: check.checkRunId,
+                  workflowRunId: check.workflowRunId,
+                  checkName: check.name,
+                  url: check.url,
+                  prRepo: pr?.prRepo ?? null
+                },
+                { repoId: repo.id }
+              )
+              if (details) {
+                checkRunDetailsByCheckKey[getCheckDetailsPromptKey(check, index)] = details
+              }
+            } catch (error) {
+              console.warn('[ChecksPanel] failed to load check details for AI fix prompt', error)
+            }
+          })
+        )
+      }
+      if (!isCurrentAsyncResult(requestKey)) {
+        return
+      }
       const prompt = buildFixBrokenChecksPrompt({
         reviewKind: activeReview.provider === 'gitlab' ? 'MR' : 'PR',
         reviewNumber: activeReview.number,
         reviewTitle: activeReview.title,
         reviewUrl: activeReview.url,
-        checks
+        checks,
+        checkRunDetailsByCheckKey
       })
       const result = launchAgentInNewTab({
         agent,
@@ -1827,8 +1964,11 @@ export default function ChecksPanel(): React.JSX.Element {
     activeReview,
     activeWorktreeId,
     checks,
+    fetchPRCheckDetails,
     isCurrentAsyncResult,
     isFixingChecksWithAI,
+    pr?.prRepo,
+    repo,
     stateRequestKey
   ])
 
@@ -1838,6 +1978,27 @@ export default function ChecksPanel(): React.JSX.Element {
       window.api.shell.openUrl(activeReview.url)
     }
   }, [activeReview])
+
+  const handleUnlinkPullRequest = useCallback(() => {
+    if (!activeWorktreeId || activeReview?.provider !== 'github' || linkedPR === null) {
+      return
+    }
+    void updateWorktreeMeta(activeWorktreeId, { linkedPR: null })
+  }, [activeReview?.provider, activeWorktreeId, linkedPR, updateWorktreeMeta])
+
+  const handleLinkAnotherPullRequest = useCallback(() => {
+    if (!activeWorktreeId || !activeWorktree || activeReview?.provider !== 'github') {
+      return
+    }
+    openModal('edit-meta', {
+      worktreeId: activeWorktreeId,
+      currentDisplayName: activeWorktree.displayName,
+      currentIssue: activeWorktree.linkedIssue,
+      currentPR: activeWorktree.linkedPR ?? activeReview.number,
+      currentComment: activeWorktree.comment,
+      focus: 'pr'
+    })
+  }, [activeReview, activeWorktree, activeWorktreeId, openModal])
 
   const pushBeforeCreatePullRequest = useCallback(async (): Promise<boolean> => {
     if (!activeWorktreeId || !activeWorktree?.path) {
@@ -2236,44 +2397,20 @@ export default function ChecksPanel(): React.JSX.Element {
   }
 
   const reviewShortLabel = activeReview.provider === 'gitlab' ? 'MR' : 'PR'
-  const reviewNumberLabel =
-    activeReview.provider === 'gitlab' ? `!${activeReview.number}` : `#${activeReview.number}`
-  const ReviewIcon = activeReview.provider === 'gitlab' ? GitMerge : PullRequestIcon
-  const reviewHostLabel = activeReview.provider === 'gitlab' ? 'GitLab' : 'GitHub'
-
   return (
     <div ref={setChecksPanelContentRef} className="flex-1 overflow-auto scrollbar-sleek">
       {/* Hosted review header */}
       <div className="px-3 py-3 border-b border-border space-y-2.5">
         {/* Review number + state badge + refresh + open link */}
-        <div className="flex items-center gap-2">
-          <ReviewIcon className="size-4 text-muted-foreground shrink-0" />
-          <span className="text-[12px] font-semibold text-foreground">{reviewNumberLabel}</span>
-          <span
-            className={cn(
-              'text-[9px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded border',
-              prStateColor(activeReview.state)
-            )}
-          >
-            {activeReview.state}
-          </span>
-          <div className="flex-1" />
-          <button
-            className="cursor-pointer rounded p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:cursor-default disabled:opacity-50"
-            title="Refresh"
-            onClick={() => void handleRefresh()}
-            disabled={isRefreshing}
-          >
-            <RefreshCw className={cn('size-3.5', isRefreshing && 'animate-spin')} />
-          </button>
-          <button
-            className="cursor-pointer rounded p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-            title={`Open on ${reviewHostLabel}`}
-            onClick={handleOpenPR}
-          >
-            <ExternalLink className="size-3.5" />
-          </button>
-        </div>
+        <ChecksPanelReviewHeader
+          review={activeReview}
+          isRefreshing={isRefreshing}
+          canUnlinkPullRequest={linkedPR !== null}
+          onRefresh={() => void handleRefresh()}
+          onOpenReview={handleOpenPR}
+          onUnlinkPullRequest={handleUnlinkPullRequest}
+          onLinkAnotherPullRequest={handleLinkAnotherPullRequest}
+        />
 
         {/* Review title */}
         {editingTitle ? (
@@ -2352,17 +2489,8 @@ export default function ChecksPanel(): React.JSX.Element {
 
       {activeConflictReview && (
         <>
-          <ConflictingFilesSection
-            pr={activeConflictReview}
-            isResolvingWithAI={isResolvingConflictsWithAI}
-            onResolveWithAI={() => void handleResolveConflictsWithAI()}
-            resolveDisabled={Boolean(aiActionDisabledReason)}
-            resolveDisabledReason={aiActionDisabledReason}
-          />
-          <MergeConflictNotice
-            pr={activeConflictReview}
-            isRefreshingConflictDetails={isRefreshing || conflictDetailsRefreshing}
-          />
+          {/* Why: the triage strip owns the single Resolve action for PR and MR
+              conflicts; the file list and fallback notice are informational. */}
           {pr ? (
             <PRTriageStrip
               pr={pr}
@@ -2376,7 +2504,20 @@ export default function ChecksPanel(): React.JSX.Element {
               fixChecksDisabled={Boolean(aiActionDisabledReason)}
               fixChecksDisabledReason={aiActionDisabledReason}
             />
-          ) : null}
+          ) : (
+            <ConflictTriageStrip
+              reviewKind={activeConflictReview.provider === 'gitlab' ? 'MR' : 'PR'}
+              isResolvingConflictsWithAI={isResolvingConflictsWithAI}
+              onResolveConflictsWithAI={() => void handleResolveConflictsWithAI()}
+              resolveConflictsDisabled={Boolean(aiActionDisabledReason)}
+              resolveConflictsDisabledReason={aiActionDisabledReason}
+            />
+          )}
+          <ConflictingFilesSection pr={activeConflictReview} />
+          <MergeConflictNotice
+            pr={activeConflictReview}
+            isRefreshingConflictDetails={isRefreshing || conflictDetailsRefreshing}
+          />
         </>
       )}
       {/* Why: when the hosted review has merge conflicts and no checks have been fetched,

@@ -1007,6 +1007,12 @@ function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees']> {
         manualOrder: args.manualOrder
       })
     },
+    prefetchCreateBase: async ({ repoId, baseBranch }) => {
+      await callRuntimeResult('worktree.prefetchCreateBase', {
+        repo: repoId,
+        baseBranch
+      })
+    },
     resolvePrBase: async ({ repoId, prNumber, headRefName, isCrossRepository }) =>
       callRuntimeResult('worktree.resolvePrBase', {
         repo: repoId,
@@ -2030,7 +2036,6 @@ function createPtyApi(): NonNullable<Partial<PreloadApi>['pty']> {
     signal: () => {},
     kill: () => Promise.resolve(),
     ackColdRestore: () => {},
-    pauseOutput: () => {},
     hasChildProcesses: () => Promise.resolve(false),
     getForegroundProcess: () => Promise.resolve(null),
     getCwd: () => Promise.resolve('~'),

@@ -26,6 +26,12 @@ export type WorktreeDeleteState = {
   canForceDelete: boolean
 }
 
+export type WorktreeMetaUpdateGuard = (worktree: Worktree | DetectedWorktree | undefined) => boolean
+
+export type WorktreeMetaUpdateOptions = {
+  shouldApply?: WorktreeMetaUpdateGuard
+}
+
 export type WorktreeSlice = {
   worktreesByRepo: Record<string, Worktree[]>
   detectedWorktreesByRepo: Record<string, DetectedWorktreeListResult>
@@ -101,6 +107,7 @@ export type WorktreeSlice = {
     linkedGitLabIssue?: number,
     startup?: WorktreeStartupLaunch
   ) => Promise<CreateWorktreeResult>
+  prefetchWorktreeCreateBase: (repoId: string, baseBranch?: string) => Promise<void>
   removeWorktree: (
     worktreeId: string,
     force?: boolean
@@ -112,7 +119,11 @@ export type WorktreeSlice = {
     expectedHead: string
   ) => Promise<({ ok: true } & ForceDeleteWorktreeBranchResult) | { ok: false; error: string }>
   clearWorktreeDeleteState: (worktreeId: string) => void
-  updateWorktreeMeta: (worktreeId: string, updates: Partial<WorktreeMeta>) => Promise<void>
+  updateWorktreeMeta: (
+    worktreeId: string,
+    updates: Partial<WorktreeMeta>,
+    options?: WorktreeMetaUpdateOptions
+  ) => Promise<void>
   updateWorktreesMeta: (
     updatesByWorktreeId: ReadonlyMap<string, Partial<WorktreeMeta>>
   ) => Promise<void>

@@ -532,6 +532,8 @@ const api = {
 
     create: (args) => ipcRenderer.invoke('worktrees:create', args),
 
+    prefetchCreateBase: (args) => ipcRenderer.invoke('worktrees:prefetchCreateBase', args),
+
     resolvePrBase: (args) => ipcRenderer.invoke('worktrees:resolvePrBase', args),
 
     resolveMrBase: (args) => ipcRenderer.invoke('worktrees:resolveMrBase', args),
@@ -669,10 +671,6 @@ const api = {
 
     ackColdRestore: (id: string): void => {
       ipcRenderer.send('pty:ackColdRestore', { id })
-    },
-
-    pauseOutput: (id: string, paused: boolean): void => {
-      ipcRenderer.send('pty:pauseOutput', { id, paused })
     },
 
     kill: (id: string, opts?: { keepHistory?: boolean }): Promise<void> =>

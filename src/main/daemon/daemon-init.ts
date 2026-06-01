@@ -32,7 +32,7 @@ import {
   getDaemonLaunchIdentity,
   getProcessStartedAtMs,
   healthCheckDaemon,
-  isDaemonOlderThanPathMtime,
+  isDaemonStaleForCurrentBundle,
   killStaleDaemon
 } from './daemon-health'
 import {
@@ -144,6 +144,23 @@ function createPreservedDaemonHandle(
   }
 }
 
+async function shouldPreserveDaemonWithLiveSessions(
+  socketPath: string,
+  tokenPath: string,
+  replacementLabel: string
+): Promise<boolean> {
+  const liveSessionCount = await getAliveDaemonSessionCount(socketPath, tokenPath)
+  if (liveSessionCount === 0) {
+    return false
+  }
+  console.warn(
+    liveSessionCount === null
+      ? `[daemon] Preserving daemon ${replacementLabel} because live session state could not be verified`
+      : `[daemon] Preserving daemon ${replacementLabel} because it owns ${liveSessionCount} live session${liveSessionCount === 1 ? '' : 's'}`
+  )
+  return true
+}
+
 function createOutOfProcessLauncher(runtimeDir: string): DaemonLauncher {
   return async (socketPath, tokenPath) => {
     const entryPath = getDaemonEntryPath()
@@ -169,8 +186,17 @@ function createOutOfProcessLauncher(runtimeDir: string): DaemonLauncher {
         // /Applications/Orca.app path is replaced during update.
         const identity = getDaemonLaunchIdentity(runtimeDir, socketPath, tokenPath, entryPath)
         const stalePackagedBundle =
-          app.isPackaged && isDaemonOlderThanPathMtime(runtimeDir, socketPath, tokenPath, entryPath)
+          app.isPackaged &&
+          isDaemonStaleForCurrentBundle(runtimeDir, socketPath, tokenPath, app.getVersion())
         if (identity === 'mismatch' || stalePackagedBundle) {
+          // Why: replacing a healthy daemon kills its child PTYs; defer code
+          // freshness until no live terminal sessions would be lost.
+          const replacementLabel = stalePackagedBundle
+            ? 'launched before the current app bundle was installed'
+            : 'launched from a different app path'
+          if (await shouldPreserveDaemonWithLiveSessions(socketPath, tokenPath, replacementLabel)) {
+            return createPreservedDaemonHandle(runtimeDir)
+          }
           console.warn(
             stalePackagedBundle
               ? '[daemon] Replacing daemon launched before the current app bundle was installed'
@@ -255,7 +281,8 @@ function createOutOfProcessLauncher(runtimeDir: string): DaemonLauncher {
               serializeDaemonPidFile({
                 pid: child.pid,
                 startedAtMs: getProcessStartedAtMs(child.pid),
-                entryPath
+                entryPath,
+                appVersion: app.getVersion()
               }),
               { mode: 0o600 }
             )

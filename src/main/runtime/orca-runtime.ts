@@ -397,6 +397,7 @@ import {
   ORPHANED_WORKTREE_DIRECTORY_MESSAGE,
   stripOrcaProvenanceMetaUpdates
 } from '../worktree-removal-safety'
+import { prefetchWorktreeCreateBase } from '../worktree-create-base-prefetch'
 import { invalidateAuthorizedRootsCache } from '../ipc/filesystem-auth'
 import { HeadlessEmulator } from '../daemon/headless-emulator'
 import { killAllProcessesForWorktree } from './worktree-teardown'
@@ -1393,8 +1394,9 @@ export class OrcaRuntimeService {
   // A literal "insert before await / read-back after await" without these
   // three rules wedges future fetches on the same repo after a single
   // DNS hiccup until process restart (see §3.3 Lifecycle). Exact base-ref
-  // refreshes share the in-flight rule but intentionally do not write the
-  // full-remote freshness timestamp.
+  // refreshes share the in-flight rule and maintain their own exact-base
+  // freshness entries; a full-remote fetch may be narrowed by repo refspecs,
+  // so it must not prove a specific branch for create.
   private fetchInflight = new Map<string, Promise<RemoteFetchResult>>()
   // Why: `git fetch origin` and `git fetch origin <refspec>` contend for the
   // same repo remote/ref locks. This queue serializes all fetch shapes for one
@@ -7509,6 +7511,22 @@ export class OrcaRuntimeService {
     })
   }
 
+  async prefetchManagedWorktreeCreateBase(args: {
+    repoSelector: string
+    baseBranch?: string
+  }): Promise<void> {
+    if (!this.store) {
+      throw new Error('runtime_unavailable')
+    }
+
+    const repo = await this.resolveRepoSelector(args.repoSelector)
+    await prefetchWorktreeCreateBase({
+      repo,
+      baseBranch: args.baseBranch,
+      runtime: this
+    })
+  }
+
   async createManagedWorktree(args: {
     repoSelector: string
     name: string
@@ -8359,18 +8377,30 @@ export class OrcaRuntimeService {
     return promise
   }
 
+  private getFreshFetchCompletedAt(key: string): number | null {
+    const lastAt = this.fetchLastCompletedAt.get(key)
+    if (lastAt === undefined) {
+      return null
+    }
+    if (Date.now() - lastAt < FETCH_FRESHNESS_MS) {
+      setBoundedMapEntry(this.fetchLastCompletedAt, key, lastAt, REMOTE_FETCH_CACHE_MAX)
+      return lastAt
+    }
+    this.fetchLastCompletedAt.delete(key)
+    return null
+  }
+
+  private rememberFreshFetchCompletedAt(key: string, completedAt = Date.now()): void {
+    setBoundedMapEntry(this.fetchLastCompletedAt, key, completedAt, REMOTE_FETCH_CACHE_MAX)
+  }
+
   async getOrStartRemoteFetch(repoPath: string, remote: string): Promise<RemoteFetchResult> {
     const key = await this.getCanonicalFetchKey(repoPath, remote)
-    const lastAt = this.fetchLastCompletedAt.get(key)
-    if (lastAt !== undefined) {
-      if (Date.now() - lastAt < FETCH_FRESHNESS_MS) {
-        // Why: freshness window hit — skip the fetch entirely. Do NOT reuse any
-        // in-flight promise here; the timestamp is only written on success, so
-        // hitting this branch means a previous fetch did succeed recently.
-        setBoundedMapEntry(this.fetchLastCompletedAt, key, lastAt, REMOTE_FETCH_CACHE_MAX)
-        return { ok: true }
-      }
-      this.fetchLastCompletedAt.delete(key)
+    if (this.getFreshFetchCompletedAt(key) !== null) {
+      // Why: freshness window hit — skip the fetch entirely. Do NOT reuse any
+      // in-flight promise here; the timestamp is only written on success, so
+      // hitting this branch means a previous fetch did succeed recently.
+      return { ok: true }
     }
 
     const existing = this.fetchInflight.get(key)
@@ -8385,7 +8415,7 @@ export class OrcaRuntimeService {
         .then((): RemoteFetchResult => {
           // Why (§3.3 Lifecycle): timestamp on success ONLY. Writing on rejection
           // would make the freshness cache lie about the last known remote state.
-          setBoundedMapEntry(this.fetchLastCompletedAt, key, Date.now(), REMOTE_FETCH_CACHE_MAX)
+          this.rememberFreshFetchCompletedAt(key)
           return { ok: true }
         })
         .catch((err): RemoteFetchResult => {
@@ -8412,17 +8442,29 @@ export class OrcaRuntimeService {
   ): Promise<RemoteFetchResult> {
     const remoteKey = await this.getCanonicalFetchKey(repoPath, base.remote)
     const key = await this.getCanonicalFetchKey(repoPath, `base:${base.remote}:${base.branch}`)
+    if (this.getFreshFetchCompletedAt(key) !== null) {
+      // Why: exact-base freshness is the safety boundary. A full remote fetch
+      // can be narrowed by repo refspecs, so it must not prove this branch.
+      return { ok: true }
+    }
+
     const existing = this.fetchInflight.get(key)
     if (existing) {
       return existing
     }
 
-    const promise = this.enqueueRemoteFetch(remoteKey, () =>
-      gitExecFileAsync(
+    const promise = this.enqueueRemoteFetch(remoteKey, async () => {
+      if (this.getFreshFetchCompletedAt(key) !== null) {
+        return { ok: true }
+      }
+      return gitExecFileAsync(
         ['fetch', '--no-tags', base.remote, `+refs/heads/${base.branch}:${base.ref}`],
         { cwd: repoPath }
       )
-        .then((): RemoteFetchResult => ({ ok: true }))
+        .then((): RemoteFetchResult => {
+          this.rememberFreshFetchCompletedAt(key)
+          return { ok: true }
+        })
         .catch((err): RemoteFetchResult => {
           console.warn(
             `[refreshRemoteTrackingBase] ${base.base} refresh failed for ${repoPath}:`,
@@ -8430,7 +8472,7 @@ export class OrcaRuntimeService {
           )
           return { ok: false, errorKind: 'git_error' }
         })
-    ).finally(() => {
+    }).finally(() => {
       this.fetchInflight.delete(key)
     })
 
@@ -9011,8 +9053,7 @@ export class OrcaRuntimeService {
   }
 
   private async resolveWorktreeRemovalTarget(
-    worktreeSelector: string,
-    force: boolean
+    worktreeSelector: string
   ): Promise<RuntimeWorktreeRemovalTarget> {
     try {
       const worktree = await this.resolveWorktreeSelector(worktreeSelector)
@@ -9025,7 +9066,7 @@ export class OrcaRuntimeService {
         ? { ...removalTarget, pushTarget: worktree.pushTarget }
         : removalTarget
     } catch (error) {
-      if (!force || !(error instanceof Error) || error.message !== 'selector_not_found') {
+      if (!(error instanceof Error) || error.message !== 'selector_not_found') {
         throw error
       }
       const removalTarget = parseExactWorktreeIdSelector(worktreeSelector)
@@ -9033,9 +9074,9 @@ export class OrcaRuntimeService {
       if (!removalTarget || !meta) {
         throw error
       }
-      // Why: force-delete retries can arrive after Git no longer lists the
-      // worktree. Only exact IDs with persisted Orca metadata are accepted here
-      // so branch/path selectors cannot resolve to an arbitrary missing path.
+      // Why: delete requests can arrive after Git no longer lists the worktree.
+      // Only exact IDs with persisted Orca metadata are accepted here so
+      // branch/path selectors cannot resolve to an arbitrary missing path.
       return meta.pushTarget ? { ...removalTarget, pushTarget: meta.pushTarget } : removalTarget
     }
   }
@@ -9154,7 +9195,7 @@ export class OrcaRuntimeService {
       throw new Error('runtime_unavailable')
     }
     const store = this.store
-    const removalTarget = await this.resolveWorktreeRemovalTarget(worktreeSelector, force)
+    const removalTarget = await this.resolveWorktreeRemovalTarget(worktreeSelector)
     const optionsKey = getRuntimeWorktreeRemovalOptionsKey(force, runHooks)
     const inFlightRemoval = this.removeManagedWorktreeInFlight.get(removalTarget.id)
     if (inFlightRemoval) {
@@ -9268,9 +9309,9 @@ export class OrcaRuntimeService {
           this.notifier?.worktreesChanged(repo.id)
           return {}
         }
-        if (force && (await isRuntimeWorktreePathMissing(repo, removalTarget.path))) {
-          // Why: runtime clients can retry a force delete after another surface
-          // already removed the worktree. Finish Orca cleanup without touching
+        if (await isRuntimeWorktreePathMissing(repo, removalTarget.path)) {
+          // Why: a manually deleted worktree is already gone from Git and disk.
+          // Finish runtime metadata cleanup without requiring force or touching
           // any unregistered path that still exists.
           await (repo.connectionId
             ? cleanupUnusedWorktreePushTargetRemoteSsh(

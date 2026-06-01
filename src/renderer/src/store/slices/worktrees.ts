@@ -6,7 +6,6 @@ import type {
   TerminalLayoutSnapshot,
   TerminalPaneLayoutNode,
   LocalBaseRefRefreshResult,
-  Repo,
   ForceDeleteWorktreeBranchResult,
   GitHubPrStartPoint,
   Worktree,
@@ -16,7 +15,6 @@ import type {
   WorktreeLineage,
   WorktreeMeta
 } from '../../../../shared/types'
-import type { TerminalGitHubPRLink } from '@/lib/terminal-github-pr-link-detector'
 import type { RuntimeWorktreeListResult } from '../../../../shared/runtime-types'
 import {
   findWorktreeById,
@@ -37,7 +35,6 @@ import { moveFocusToRendererBeforeFocusedWebviewHidden } from './browser-webview
 import { toast } from 'sonner'
 import { requestVirtualizedScrollAnchorRecord } from '@/hooks/requestVirtualizedScrollAnchorRecord'
 import { branchName } from '@/lib/git-utils'
-import { basename } from '@/lib/path'
 export type { WorktreeSlice, WorktreeDeleteState } from './worktree-helpers'
 
 // Why: old runtime servers only have `worktree.list`; preserve the large-list
@@ -91,6 +88,7 @@ function showLocalBaseRefRefreshToast(result: LocalBaseRefRefreshResult | undefi
 
 function showPreservedBranchToast(
   result: RemoveWorktreeResult | undefined,
+  worktree: Pick<Worktree, 'displayName' | 'isMainWorktree'> | undefined,
   onForceDelete: (branchName: string, expectedHead: string) => void
 ): void {
   const preservedBranch = result?.preservedBranch
@@ -98,6 +96,10 @@ function showPreservedBranchToast(
   if (!branch) {
     return
   }
+  const targetTitle = worktree?.isMainWorktree ? 'Workspace' : 'Worktree'
+  const targetLabel = targetTitle.toLowerCase()
+  const targetName = worktree?.displayName?.trim()
+  const deletedTarget = targetName ? ` after deleting ${targetLabel} "${targetName}"` : ''
   const expectedHead = preservedBranch.head
   const action = expectedHead
     ? {
@@ -105,8 +107,8 @@ function showPreservedBranchToast(
         onClick: () => onForceDelete(branch, expectedHead)
       }
     : undefined
-  toast.warning('Workspace deleted, branch kept', {
-    description: `Git could not safely delete "${branch}", so Orca kept it to avoid losing local commits.`,
+  toast.warning(`${targetTitle} deleted, branch kept`, {
+    description: `Git could not safely delete branch "${branch}"${deletedTarget}, so Orca kept it to avoid losing local commits.`,
     ...(action ? { action } : {})
   })
 }
@@ -119,63 +121,6 @@ function arraysShallowEqual(a: string[] | undefined, b: string[] | undefined): b
     return !a?.length && !b?.length
   }
   return a.every((v, i) => v === b[i])
-}
-
-function normalizeGitHubRepoName(value: string | null | undefined): string | null {
-  const trimmed = value?.trim()
-  if (!trimmed) {
-    return null
-  }
-  return trimmed.replace(/\.git$/i, '').toLowerCase()
-}
-
-function parseGitHubRemoteSlug(
-  remoteUrl: string | null | undefined
-): { owner: string; repo: string } | null {
-  const trimmed = remoteUrl?.trim()
-  if (!trimmed) {
-    return null
-  }
-  const withoutGitSuffix = trimmed.replace(/\.git(?:[?#].*)?$/i, '')
-  const match =
-    /^git@github\.com:([^/]+)\/([^/?#]+)$/i.exec(withoutGitSuffix) ??
-    /^ssh:\/\/(?:[^@/]+@)?github\.com[:/]+([^/]+)\/([^/?#]+)$/i.exec(withoutGitSuffix) ??
-    /^https?:\/\/(?:[^@/]+@)?github\.com\/([^/]+)\/([^/?#]+)$/i.exec(withoutGitSuffix)
-  if (!match) {
-    return null
-  }
-  return { owner: match[1], repo: match[2] }
-}
-
-function githubSlugsEqual(
-  left: { owner: string; repo: string } | null,
-  right: { owner: string; repo: string }
-): boolean {
-  return (
-    left !== null &&
-    left.owner.toLowerCase() === right.owner.toLowerCase() &&
-    left.repo.toLowerCase() === right.repo.toLowerCase()
-  )
-}
-
-function shouldOptimisticallyLinkTerminalGitHubPR(
-  repo: Repo,
-  worktree: Pick<Worktree, 'path' | 'pushTarget'>,
-  link: TerminalGitHubPRLink
-): boolean {
-  if (githubSlugsEqual(parseGitHubRemoteSlug(worktree.pushTarget?.remoteUrl), link.slug)) {
-    return true
-  }
-
-  const observedRepo = normalizeGitHubRepoName(link.slug.repo)
-  if (!observedRepo) {
-    return false
-  }
-  const localRepoNames = [repo.displayName, basename(repo.path), basename(worktree.path)]
-    .map(normalizeGitHubRepoName)
-    .filter((name): name is string => name !== null)
-
-  return localRepoNames.includes(observedRepo)
 }
 
 function areLineageRecordsEqual(
@@ -1008,6 +953,28 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
     }))
   },
 
+  prefetchWorktreeCreateBase: async (repoId, baseBranch) => {
+    try {
+      const target = getActiveRuntimeTarget(get().settings)
+      if (target.kind === 'local') {
+        await window.api.worktrees.prefetchCreateBase({
+          repoId,
+          ...(baseBranch ? { baseBranch } : {})
+        })
+        return
+      }
+      await callRuntimeRpc(
+        target,
+        'worktree.prefetchCreateBase',
+        { repo: repoId, ...(baseBranch ? { baseBranch } : {}) },
+        { timeoutMs: 30_000 }
+      )
+    } catch {
+      // Why: prefetch is only a latency hedge. The create path awaits the same
+      // backend refresh and owns user-visible error reporting.
+    }
+  },
+
   createWorktree: async (
     repoId,
     name,
@@ -1168,6 +1135,9 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       const trustDecision = await ensureHooksConfirmed(get(), repoIdForTrust, 'archive')
       const skipArchive = trustDecision === 'skip'
 
+      const worktreeBeforeRemoval = get()
+        .allWorktrees()
+        .find((entry) => entry.id === worktreeId)
       const target = getActiveRuntimeTarget(get().settings)
       const removalResult = await (target.kind === 'local'
         ? window.api.worktrees.remove({ worktreeId, force, skipArchive })
@@ -1178,10 +1148,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
             { timeoutMs: 60_000 }
           ))
 
-      const worktreeDisplayName = get()
-        .allWorktrees()
-        .find((entry) => entry.id === worktreeId)
-        ?.displayName?.trim()
+      const worktreeDisplayName = worktreeBeforeRemoval?.displayName?.trim()
       if (worktreeDisplayName) {
         try {
           await window.api.automations?.snapshotWorkspaceName?.({
@@ -1398,7 +1365,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
         }
       })
       get().removeWorkspaceSpaceWorktrees?.([worktreeId])
-      showPreservedBranchToast(removalResult, (branch, expectedHead) => {
+      showPreservedBranchToast(removalResult, worktreeBeforeRemoval, (branch, expectedHead) => {
         void get().forceDeletePreservedBranch(worktreeId, branch, expectedHead)
       })
       return removalResult?.preservedBranch
@@ -1485,8 +1452,12 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
     })
   },
 
-  updateWorktreeMeta: async (worktreeId, updates) => {
+  updateWorktreeMeta: async (worktreeId, updates, options) => {
+    const shouldApplyUpdate = options?.shouldApply
     const existingWorktree = get().getKnownWorktreeById(worktreeId)
+    if (shouldApplyUpdate && !shouldApplyUpdate(existingWorktree)) {
+      return
+    }
     // Why: manual PR linking only supplies the PR number. Resolve the PR head
     // branch here so Push targets the review branch, but don't repeat that
     // network lookup for no-op linkedPR metadata saves.
@@ -1506,12 +1477,16 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
             linkedPrForPushTarget
           )
         : undefined
+    const worktreeForUpdate = get().getKnownWorktreeById(worktreeId)
+    if (shouldApplyUpdate && !shouldApplyUpdate(worktreeForUpdate)) {
+      return
+    }
     const shouldRefreshHostedReview =
-      updates.linkedPR === null && existingWorktree?.linkedPR !== null
+      updates.linkedPR === null && worktreeForUpdate?.linkedPR !== null
     const reviewRepo = shouldRefreshHostedReview
-      ? get().repos.find((repo) => repo.id === existingWorktree?.repoId)
+      ? get().repos.find((repo) => repo.id === worktreeForUpdate?.repoId)
       : undefined
-    const reviewBranch = existingWorktree?.branch.replace(/^refs\/heads\//, '')
+    const reviewBranch = worktreeForUpdate?.branch.replace(/^refs\/heads\//, '')
 
     // Why: editing a comment is meaningful interaction with the worktree.
     // Without refreshing lastActivityAt, the time-decay score has decayed
@@ -1526,7 +1501,12 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
         ? { ...targetEnriched, lastActivityAt: Date.now() }
         : targetEnriched
 
+    let didApply = false
     set((s) => {
+      if (shouldApplyUpdate && !shouldApplyUpdate(findKnownWorktreeById(s, worktreeId))) {
+        return {}
+      }
+      didApply = true
       const nextWorktrees = applyWorktreeUpdates(s.worktreesByRepo, worktreeId, enriched)
       const nextDetectedWorktrees = applyDetectedWorktreeUpdates(
         s.detectedWorktreesByRepo,
@@ -1603,6 +1583,9 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
         ...(nextPRCache !== prCache ? { prCache: nextPRCache } : {})
       }
     })
+    if (shouldApplyUpdate && !didApply) {
+      return
+    }
 
     try {
       await persistWorktreeMeta(get().settings, worktreeId, enriched)
@@ -1613,7 +1596,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
         void get().fetchHostedReviewForBranch(reviewRepo.path, reviewBranch, {
           repoId: reviewRepo.id,
           linkedGitHubPR: null,
-          linkedGitLabMR: existingWorktree?.linkedGitLabMR ?? null,
+          linkedGitLabMR: worktreeForUpdate?.linkedGitLabMR ?? null,
           force: true
         })
       }
@@ -1741,58 +1724,49 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
     }
 
     const branch = branchName(worktree.branch)
-    const shouldLinkNow =
-      worktree.linkedPR === link.number ||
-      shouldOptimisticallyLinkTerminalGitHubPR(repo, worktree, link)
-
-    if (shouldLinkNow && worktree.linkedPR !== link.number) {
-      set((s) => {
-        const nextWorktrees = applyWorktreeUpdates(s.worktreesByRepo, worktreeId, {
-          linkedPR: link.number
-        })
-        const nextDetectedWorktrees = applyDetectedWorktreeUpdates(
-          s.detectedWorktreesByRepo,
-          worktreeId,
-          { linkedPR: link.number }
-        )
-        return {
-          ...(nextWorktrees !== s.worktreesByRepo
-            ? { worktreesByRepo: nextWorktrees, sortEpoch: s.sortEpoch + 1 }
-            : {}),
-          ...(nextDetectedWorktrees !== s.detectedWorktreesByRepo
-            ? { detectedWorktreesByRepo: nextDetectedWorktrees }
-            : {})
-        }
-      })
-      // Why: `gh pr create` prints the canonical PR URL before the agent is
-      // done. Persist the exact number immediately so the workspace card can
-      // show it without waiting for the completion-time GitHub refresh.
-      void get().updateWorktreeMeta(worktreeId, { linkedPR: link.number })
-    }
+    const alreadyLinked = worktree.linkedPR === link.number
 
     const fetchPRForBranch = get().fetchPRForBranch
     if (typeof fetchPRForBranch === 'function') {
       void fetchPRForBranch(repo.path, branch, {
         force: true,
         repoId: repo.id,
-        linkedPRNumber: shouldLinkNow ? link.number : null,
-        fallbackPRNumber: shouldLinkNow ? null : link.number,
-        fallbackPRSource: shouldLinkNow ? null : 'explicit'
+        linkedPRNumber: alreadyLinked ? link.number : null,
+        fallbackPRNumber: null,
+        fallbackPRSource: alreadyLinked ? null : 'explicit'
       }).then((pr) => {
-        if (!shouldLinkNow && pr?.number === link.number) {
-          void get().updateWorktreeMeta(worktreeId, { linkedPR: link.number })
+        if (!alreadyLinked && pr?.number === link.number) {
+          // Why: terminal output can include arbitrary PR URLs from docs,
+          // agents, or logs. Persist only after branch lookup confirms it and
+          // the user has not picked a different PR while lookup was in flight.
+          void get().updateWorktreeMeta(
+            worktreeId,
+            { linkedPR: link.number },
+            {
+              shouldApply: (currentWorktree) =>
+                Boolean(
+                  currentWorktree &&
+                  !currentWorktree.isBare &&
+                  !currentWorktree.isArchived &&
+                  (currentWorktree.linkedPR == null || currentWorktree.linkedPR === link.number)
+                )
+            }
+          )
         }
       })
+      return
     }
 
     const fetchHostedReviewForBranch = get().fetchHostedReviewForBranch
     if (typeof fetchHostedReviewForBranch === 'function') {
+      // Why: full app stores always have fetchPRForBranch, which syncs the
+      // GitHub hosted-review cache. Keep this only as a slice-test fallback.
       void refreshHostedReviewCard(fetchHostedReviewForBranch, {
         repoPath: repo.path,
         repoId: repo.id,
         branch,
-        linkedGitHubPR: shouldLinkNow ? link.number : null,
-        fallbackGitHubPR: shouldLinkNow ? null : link.number,
+        linkedGitHubPR: alreadyLinked ? link.number : null,
+        fallbackGitHubPR: null,
         linkedGitLabMR: worktree.linkedGitLabMR ?? null
       })
     }
