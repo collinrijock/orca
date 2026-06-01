@@ -23,7 +23,7 @@ describe('RepositorySourceControlAiSection draft state', () => {
     expect(resolveRepoAiDraftState(state, 'repo-1', persisted)).toEqual({
       repoId: 'repo-1',
       value: persisted,
-      baseSerialized: JSON.stringify(persisted)
+      baseSerialized: JSON.stringify(normalizeRepoSourceControlAiOverrides(persisted))
     })
   })
 
@@ -69,7 +69,7 @@ describe('RepositorySourceControlAiSection draft state', () => {
     expect(resolveRepoAiDraftState(state, 'repo-2', persisted)).toEqual({
       repoId: 'repo-2',
       value: persisted,
-      baseSerialized: JSON.stringify(persisted)
+      baseSerialized: JSON.stringify(normalizeRepoSourceControlAiOverrides(persisted))
     })
   })
 })

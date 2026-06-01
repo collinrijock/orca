@@ -2049,13 +2049,17 @@ export type PreloadApi = {
       body: string
       draft: boolean
       connectionId?: string
+      sourceControlAiResolvedParams?: ResolvedSourceControlAiGenerationParams
+      sourceControlAi?: SourceControlAiSettings
+      agentCmdOverrides?: Partial<Record<TuiAgent, string>>
     }) => Promise<
       | {
           success: true
           fields: { base: string; title: string; body: string; draft: boolean }
           agentLabel?: string
+          branchChangedByPreparation?: boolean
         }
-      | { success: false; error: string; canceled?: boolean }
+      | { success: false; error: string; canceled?: boolean; branchChangedByPreparation?: boolean }
     >
     cancelGeneratePullRequestFields: (args: {
       worktreePath: string

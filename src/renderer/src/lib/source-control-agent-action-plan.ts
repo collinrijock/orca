@@ -1,6 +1,7 @@
 import {
   buildAgentDraftLaunchPlan,
   buildAgentStartupPlan,
+  planAgentCliArgsSuffix,
   type AgentStartupPlan
 } from '@/lib/tui-agent-startup'
 import { CLIENT_PLATFORM } from '@/lib/new-workspace'
@@ -32,11 +33,12 @@ export function planSourceControlAgentActionLaunch(args: {
   detectedAgents: TuiAgent[]
   disabledAgents?: TuiAgent[]
   cmdOverrides?: Partial<Record<TuiAgent, string>>
+  agentArgs?: string | null
   platform?: NodeJS.Platform
 }): SourceControlLaunchPlanResult {
   const agent = args.agent
   if (!agent) {
-    return { ok: false, error: 'Choose an agent before checking delivery.' }
+    return { ok: false, error: 'Choose an agent before starting.' }
   }
   if (!isTuiAgentEnabled(agent, args.disabledAgents)) {
     return { ok: false, error: 'The selected agent is disabled in Settings.' }
@@ -52,6 +54,11 @@ export function planSourceControlAgentActionLaunch(args: {
 
   const cmdOverrides = args.cmdOverrides ?? {}
   const platform = args.platform ?? CLIENT_PLATFORM
+  const shell = platform === 'win32' ? 'powershell' : 'posix'
+  const plannedArgs = planAgentCliArgsSuffix(args.agentArgs, shell)
+  if (!plannedArgs.ok) {
+    return { ok: false, error: plannedArgs.error }
+  }
   let startupPlan: AgentStartupPlan | null = null
   let delivery: SourceControlLaunchPlanDelivery
 
@@ -61,6 +68,7 @@ export function planSourceControlAgentActionLaunch(args: {
       prompt: '',
       cmdOverrides,
       platform,
+      agentArgs: args.agentArgs,
       allowEmptyPromptLaunch: true
     })
     delivery = 'paste-submit'
@@ -69,7 +77,8 @@ export function planSourceControlAgentActionLaunch(args: {
       agent,
       draft: trimmedInput,
       cmdOverrides,
-      platform
+      platform,
+      agentArgs: args.agentArgs
     })
     if (draftLaunchPlan) {
       startupPlan = {
@@ -86,6 +95,7 @@ export function planSourceControlAgentActionLaunch(args: {
         prompt: '',
         cmdOverrides,
         platform,
+        agentArgs: args.agentArgs,
         allowEmptyPromptLaunch: true
       })
       delivery = 'draft-paste'
@@ -96,6 +106,7 @@ export function planSourceControlAgentActionLaunch(args: {
       prompt: '',
       cmdOverrides,
       platform,
+      agentArgs: args.agentArgs,
       allowEmptyPromptLaunch: true
     })
     delivery = 'draft-paste'
@@ -105,6 +116,7 @@ export function planSourceControlAgentActionLaunch(args: {
       prompt: trimmedInput,
       cmdOverrides,
       platform,
+      agentArgs: args.agentArgs,
       allowEmptyPromptLaunch: false
     })
     delivery = 'argv'

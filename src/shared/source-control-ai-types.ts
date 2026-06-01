@@ -52,6 +52,7 @@ export type RepoSourceControlAiOverrides = {
       {
         agentId?: TuiAgent | null
         commandInputTemplate?: string | null
+        agentArgs?: string | null
       }
     >
   >

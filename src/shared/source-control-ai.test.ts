@@ -68,6 +68,36 @@ describe('source-control AI resolution', () => {
     expect(resolve('branchName').params.model).toBe('gpt-5.5')
   })
 
+  it('resolves text action CLI args into generation params', () => {
+    const base = settings()
+    base.sourceControlAi = {
+      ...base.sourceControlAi!,
+      actions: {
+        ...base.sourceControlAi!.actions,
+        pullRequest: {
+          commandInputTemplate: '{basePrompt}',
+          agentArgs: '  --model gpt-5.4  '
+        }
+      }
+    }
+
+    expect(
+      resolveSourceControlAiForOperation({
+        settings: base,
+        repo: null,
+        operation: 'pullRequest',
+        discoveryHostKey: 'local'
+      })
+    ).toMatchObject({
+      ok: true,
+      value: {
+        params: {
+          agentArgs: '--model gpt-5.4'
+        }
+      }
+    })
+  })
+
   it('resolves PR defaults even when Source Control AI generation is disabled', () => {
     const base = settings()
     base.sourceControlAi = {
@@ -351,7 +381,8 @@ describe('source-control AI resolution', () => {
         ...base.sourceControlAi!.actions,
         fixChecks: {
           agentId: 'claude',
-          commandInputTemplate: '{basePrompt}\n\nglobal'
+          commandInputTemplate: '{basePrompt}\n\nglobal',
+          agentArgs: '--model sonnet'
         }
       }
     }
@@ -364,7 +395,8 @@ describe('source-control AI resolution', () => {
             actionOverrides: {
               fixChecks: {
                 agentId: 'codex',
-                commandInputTemplate: '  {basePrompt}\n\nrepo  '
+                commandInputTemplate: '  {basePrompt}\n\nrepo  ',
+                agentArgs: '  --model gpt-5.5  '
               }
             }
           }
@@ -373,7 +405,43 @@ describe('source-control AI resolution', () => {
       })
     ).toEqual({
       agentId: 'codex',
-      commandInputTemplate: '{basePrompt}\n\nrepo'
+      commandInputTemplate: '{basePrompt}\n\nrepo',
+      agentArgs: '--model gpt-5.5'
+    })
+  })
+
+  it('lets repo action recipes explicitly clear inherited CLI args', () => {
+    const base = settings()
+    base.sourceControlAi = {
+      ...base.sourceControlAi!,
+      actions: {
+        ...base.sourceControlAi!.actions,
+        fixChecks: {
+          agentId: 'claude',
+          commandInputTemplate: '{basePrompt}',
+          agentArgs: '--model sonnet'
+        }
+      }
+    }
+
+    expect(
+      resolveSourceControlActionRecipe({
+        settings: base,
+        repo: {
+          sourceControlAi: {
+            actionOverrides: {
+              fixChecks: {
+                agentArgs: null
+              }
+            }
+          }
+        },
+        actionId: 'fixChecks'
+      })
+    ).toEqual({
+      agentId: 'claude',
+      commandInputTemplate: '{basePrompt}',
+      agentArgs: ''
     })
   })
 

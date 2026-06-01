@@ -11,12 +11,20 @@ describe('source-control AI launch action defaults', () => {
   it('normalizes safe launch action defaults', () => {
     expect(
       normalizeSourceControlAiActionDefaults({
-        fixChecks: { agentId: 'codex', commandInputTemplate: '  {basePrompt}  ' },
+        fixChecks: {
+          agentId: 'codex',
+          commandInputTemplate: '  {basePrompt}  ',
+          agentArgs: '  --model gpt-5.5  '
+        },
         resolveConflicts: { agentId: null },
         pullRequest: { agentId: 'claude' }
       })
     ).toEqual({
-      fixChecks: { agentId: 'codex', commandInputTemplate: '  {basePrompt}  ' },
+      fixChecks: {
+        agentId: 'codex',
+        commandInputTemplate: '  {basePrompt}  ',
+        agentArgs: '  --model gpt-5.5  '
+      },
       resolveConflicts: { agentId: null },
       pullRequest: { agentId: 'claude' }
     })
@@ -33,15 +41,21 @@ describe('source-control AI launch action defaults', () => {
     ).toBeUndefined()
   })
 
-  it('trims command templates only when reading them', () => {
+  it('trims command templates and CLI args only when reading them', () => {
     const defaults = normalizeSourceControlAiActionDefaults({
-      fixCommitFailure: { agentId: 'claude', commandInputTemplate: '  {basePrompt}  ' }
+      fixCommitFailure: {
+        agentId: 'claude',
+        commandInputTemplate: '  {basePrompt}  ',
+        agentArgs: '  --model sonnet  '
+      }
     })
 
     expect(defaults?.fixCommitFailure?.commandInputTemplate).toBe('  {basePrompt}  ')
+    expect(defaults?.fixCommitFailure?.agentArgs).toBe('  --model sonnet  ')
     expect(readSourceControlActionDefault(defaults, 'fixCommitFailure')).toEqual({
       agentId: 'claude',
-      commandInputTemplate: '{basePrompt}'
+      commandInputTemplate: '{basePrompt}',
+      agentArgs: '--model sonnet'
     })
   })
 
@@ -76,5 +90,13 @@ describe('source-control AI launch action defaults', () => {
         thing: 'CI'
       })
     ).toBe('fix CI with {missing}')
+  })
+
+  it('leaves inherited prototype names visible instead of rendering function source', () => {
+    expect(
+      renderSourceControlActionCommandTemplate('use {constructor} and {toString}', {
+        thing: 'CI'
+      })
+    ).toBe('use {constructor} and {toString}')
   })
 })

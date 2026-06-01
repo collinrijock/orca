@@ -1,4 +1,6 @@
-import { useEffect } from 'react'
+/* eslint-disable max-lines -- Why: this pane owns Source Control AI defaults,
+   action recipe drafts, model discovery, and PR defaults in one settings flow. */
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type React from 'react'
 import { Terminal } from 'lucide-react'
 import type { GlobalSettings, TuiAgent } from '../../../../shared/types'
@@ -12,26 +14,29 @@ import {
   selectSourceControlAiModelChoiceForHost
 } from '../../../../shared/source-control-ai'
 import {
+  DEFAULT_SOURCE_CONTROL_ACTION_COMMAND_TEMPLATES,
   SOURCE_CONTROL_ACTION_IDS,
   SOURCE_CONTROL_ACTION_LABELS,
-  SOURCE_CONTROL_TEXT_ACTION_IDS,
-  resolveSourceControlActionCommandTemplate,
   setSourceControlActionDefault,
   type SourceControlActionId
 } from '../../../../shared/source-control-ai-actions'
-import {
-  listCommitMessageAgentCapabilities,
-  type CommitMessageModelCapability
-} from '../../../../shared/commit-message-agent-spec'
+import type { CommitMessageModelCapability } from '../../../../shared/commit-message-agent-spec'
 import { getCommitMessageModelDiscoveryHostKeyForScope } from '../../../../shared/commit-message-host-key'
-import { AGENT_CATALOG, AgentIcon } from '@/lib/agent-catalog'
+import { AgentIcon } from '@/lib/agent-catalog'
 import { getRuntimeGitScope } from '../../runtime/runtime-git-client'
 import { useAppStore } from '../../store'
 import { SourceControlActionVariableChips } from '../source-control/SourceControlActionVariableChips'
+import { Button } from '../ui/button'
+import { Input } from '../ui/input'
 import { Label } from '../ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
 import { SearchableSetting } from './SearchableSetting'
 import { matchesSettingsSearch } from './settings-search'
+import {
+  ACTION_DESCRIPTIONS,
+  getAgentCatalogForAction,
+  getSourceControlAgentArgsPlaceholder
+} from './source-control-action-recipe-options'
 
 type CommitMessageAiPaneProps = {
   settings: GlobalSettings
@@ -42,34 +47,61 @@ type CommitMessageAiPaneProps = {
 }
 
 const DEFAULT_AGENT_VALUE = '__default_agent__'
-const SOURCE_CONTROL_TEXT_ACTION_ID_SET = new Set<string>(SOURCE_CONTROL_TEXT_ACTION_IDS)
-const TEXT_GENERATION_AGENT_ID_SET = new Set(
-  listCommitMessageAgentCapabilities().map((capability) => capability.id)
-)
 
-const ACTION_DESCRIPTIONS: Record<SourceControlActionId, string> = {
-  commitMessage: 'Generate the commit message from staged changes.',
-  pullRequest: 'Generate the hosted review title and description.',
-  branchName: 'Rename Orca-created branches from the initial agent task.',
-  fixCommitFailure: 'Start an agent when a commit hook or git commit fails.',
-  fixChecks: 'Start an agent from failed hosted-review checks.',
-  resolveConflicts: 'Start an agent for local or hosted-review merge conflicts.'
+type ActionRecipeDraftValue = {
+  commandInputTemplate: string
+  agentArgs: string
+}
+
+type ActionRecipeDraftState = {
+  values: Record<SourceControlActionId, ActionRecipeDraftValue>
+  baseValues: Record<SourceControlActionId, ActionRecipeDraftValue>
+}
+
+function resolveAgentArgsPlaceholderAgent(
+  selectedAgent: TuiAgent | null | undefined,
+  defaultTuiAgent: GlobalSettings['defaultTuiAgent']
+): TuiAgent | null {
+  if (selectedAgent) {
+    return selectedAgent
+  }
+  return defaultTuiAgent && defaultTuiAgent !== 'blank' ? defaultTuiAgent : null
 }
 
 function readSettings(settings: GlobalSettings): SourceControlAiSettings {
   return normalizeSourceControlAiSettings(settings.sourceControlAi, settings.commitMessageAi)
 }
 
-export function getAgentCatalogForAction(
-  actionId: SourceControlActionId,
-  selectedAgent: TuiAgent | null
-): typeof AGENT_CATALOG {
-  if (!SOURCE_CONTROL_TEXT_ACTION_ID_SET.has(actionId)) {
-    return AGENT_CATALOG
+function readActionRecipeInputValue(
+  config: SourceControlAiSettings,
+  actionId: SourceControlActionId
+): ActionRecipeDraftValue {
+  const recipe = config.actions?.[actionId]
+  const value = recipe?.commandInputTemplate
+  // Why: execution trims templates, but the controlled textarea must preserve
+  // an in-progress trailing space so users can keep typing the next word.
+  return {
+    commandInputTemplate:
+      typeof value === 'string' ? value : DEFAULT_SOURCE_CONTROL_ACTION_COMMAND_TEMPLATES[actionId],
+    agentArgs: typeof recipe?.agentArgs === 'string' ? recipe.agentArgs : ''
   }
-  return AGENT_CATALOG.filter(
-    (agent) => TEXT_GENERATION_AGENT_ID_SET.has(agent.id) || agent.id === selectedAgent
-  )
+}
+
+function readActionRecipeInputValues(
+  config: SourceControlAiSettings
+): Record<SourceControlActionId, ActionRecipeDraftValue> {
+  return Object.fromEntries(
+    SOURCE_CONTROL_ACTION_IDS.map((actionId) => [
+      actionId,
+      readActionRecipeInputValue(config, actionId)
+    ])
+  ) as Record<SourceControlActionId, ActionRecipeDraftValue>
+}
+
+function serializeActionRecipeInputValues(
+  values: Record<SourceControlActionId, ActionRecipeDraftValue>
+): string {
+  return JSON.stringify(SOURCE_CONTROL_ACTION_IDS.map((actionId) => [actionId, values[actionId]]))
 }
 
 export function mergeDiscoveredModelsIntoCommitMessageConfig(
@@ -125,15 +157,77 @@ export function CommitMessageAiPane({
   settings,
   updateSettings,
   writeSourceControlAiSettings,
-  onCustomPromptDirtyChange
+  onCustomPromptDirtyChange,
+  customPromptDiscardSignal
 }: CommitMessageAiPaneProps): React.JSX.Element {
   const searchQuery = useAppStore((s) => s.settingsSearchQuery)
   const config = readSettings(settings)
+  const persistedActionRecipeValues = useMemo(
+    () => readActionRecipeInputValues(readSettings(settings)),
+    [settings]
+  )
+  const persistedActionRecipeSerialized = useMemo(
+    () => serializeActionRecipeInputValues(persistedActionRecipeValues),
+    [persistedActionRecipeValues]
+  )
+  const persistedActionRecipeValuesRef = useRef(persistedActionRecipeValues)
+  persistedActionRecipeValuesRef.current = persistedActionRecipeValues
+  const [actionRecipeDraftState, setActionRecipeDraftState] = useState<ActionRecipeDraftState>(
+    () => ({
+      values: persistedActionRecipeValues,
+      baseValues: persistedActionRecipeValues
+    })
+  )
+  const [savingActionTemplateIds, setSavingActionTemplateIds] = useState<
+    Partial<Record<SourceControlActionId, boolean>>
+  >({})
+  const actionRecipeDraftSerialized = useMemo(
+    () => serializeActionRecipeInputValues(actionRecipeDraftState.values),
+    [actionRecipeDraftState.values]
+  )
+  const actionRecipeBaseSerialized = useMemo(
+    () => serializeActionRecipeInputValues(actionRecipeDraftState.baseValues),
+    [actionRecipeDraftState.baseValues]
+  )
+  const actionTemplateDirty = actionRecipeDraftSerialized !== actionRecipeBaseSerialized
 
   useEffect(() => {
-    onCustomPromptDirtyChange?.(false)
-    return () => onCustomPromptDirtyChange?.(false)
-  }, [onCustomPromptDirtyChange])
+    setActionRecipeDraftState((current) => {
+      const currentSerialized = serializeActionRecipeInputValues(current.values)
+      const baseSerialized = serializeActionRecipeInputValues(current.baseValues)
+      if (
+        currentSerialized === baseSerialized ||
+        currentSerialized === persistedActionRecipeSerialized
+      ) {
+        return {
+          values: persistedActionRecipeValues,
+          baseValues: persistedActionRecipeValues
+        }
+      }
+      return {
+        values: current.values,
+        baseValues: persistedActionRecipeValues
+      }
+    })
+  }, [persistedActionRecipeSerialized, persistedActionRecipeValues])
+
+  useEffect(() => {
+    setActionRecipeDraftState({
+      values: persistedActionRecipeValuesRef.current,
+      baseValues: persistedActionRecipeValuesRef.current
+    })
+  }, [customPromptDiscardSignal])
+
+  useEffect(() => {
+    onCustomPromptDirtyChange?.(actionTemplateDirty)
+  }, [actionTemplateDirty, onCustomPromptDirtyChange])
+
+  useEffect(
+    () => () => {
+      onCustomPromptDirtyChange?.(false)
+    },
+    [onCustomPromptDirtyChange]
+  )
 
   const localWriteConfig = (patch: SourceControlAiSettingsPatch): Promise<void> => {
     const current = readSettings(settings)
@@ -161,17 +255,86 @@ export function CommitMessageAiPane({
   }
 
   const onActionTemplateChange = (actionId: SourceControlActionId, value: string): void => {
-    void writeConfig((current) => ({
-      actions: setSourceControlActionDefault(current.actions, actionId, {
-        commandInputTemplate: value
+    setActionRecipeDraftState((current) => ({
+      ...current,
+      values: {
+        ...current.values,
+        [actionId]: {
+          ...current.values[actionId],
+          commandInputTemplate: value
+        }
+      }
+    }))
+  }
+
+  const onActionAgentArgsChange = (actionId: SourceControlActionId, value: string): void => {
+    setActionRecipeDraftState((current) => ({
+      ...current,
+      values: {
+        ...current.values,
+        [actionId]: {
+          ...current.values[actionId],
+          agentArgs: value
+        }
+      }
+    }))
+  }
+
+  const saveActionTemplateDraft = async (actionId: SourceControlActionId): Promise<void> => {
+    const nextValue = actionRecipeDraftState.values[actionId]
+    if (
+      JSON.stringify(nextValue) === JSON.stringify(actionRecipeDraftState.baseValues[actionId]) ||
+      savingActionTemplateIds[actionId]
+    ) {
+      return
+    }
+    setSavingActionTemplateIds((current) => ({ ...current, [actionId]: true }))
+    try {
+      await writeConfig((current) => {
+        return {
+          actions: setSourceControlActionDefault(current.actions, actionId, {
+            commandInputTemplate: nextValue.commandInputTemplate,
+            agentArgs: nextValue.agentArgs
+          })
+        }
       })
+      setActionRecipeDraftState((current) => ({
+        values: current.values,
+        baseValues: {
+          ...current.baseValues,
+          [actionId]: nextValue
+        }
+      }))
+    } finally {
+      setSavingActionTemplateIds((current) => ({ ...current, [actionId]: false }))
+    }
+  }
+
+  const discardActionTemplateDraft = (actionId: SourceControlActionId): void => {
+    setActionRecipeDraftState((current) => ({
+      ...current,
+      values: {
+        ...current.values,
+        [actionId]: current.baseValues[actionId]
+      }
     }))
   }
 
   const appendVariable = (actionId: SourceControlActionId, variable: string): void => {
-    const currentTemplate = resolveSourceControlActionCommandTemplate(config.actions, actionId)
-    const separator = currentTemplate.endsWith('\n') || currentTemplate.length === 0 ? '' : ' '
-    onActionTemplateChange(actionId, `${currentTemplate}${separator}{${variable}}`)
+    setActionRecipeDraftState((current) => {
+      const currentTemplate = current.values[actionId].commandInputTemplate
+      const separator = currentTemplate.endsWith('\n') || currentTemplate.length === 0 ? '' : ' '
+      return {
+        ...current,
+        values: {
+          ...current.values,
+          [actionId]: {
+            ...current.values[actionId],
+            commandInputTemplate: `${currentTemplate}${separator}{${variable}}`
+          }
+        }
+      }
+    })
   }
 
   const onPrDefaultChange = (
@@ -232,16 +395,41 @@ export function CommitMessageAiPane({
     config.enabled &&
     matchesSettingsSearch(searchQuery, {
       title: 'Action recipes',
-      description: 'Agent and command template used by each Source Control AI button.',
-      keywords: ['agent', 'command', 'template', 'fix', 'checks', 'commit', 'pull request']
+      description:
+        'Agent, CLI arguments, and command template used by each Source Control AI button.',
+      keywords: [
+        'agent',
+        'arguments',
+        'args',
+        'cli',
+        'command',
+        'model',
+        'template',
+        'fix',
+        'checks',
+        'commit',
+        'pull request'
+      ]
     })
   ) {
     sections.push(
       <SearchableSetting
         key="action-recipes"
         title="Action recipes"
-        description="Agent and command template used by each Source Control AI button."
-        keywords={['agent', 'command', 'template', 'fix', 'checks', 'commit', 'pull request']}
+        description="Agent, CLI arguments, and command template used by each Source Control AI button."
+        keywords={[
+          'agent',
+          'arguments',
+          'args',
+          'cli',
+          'command',
+          'model',
+          'template',
+          'fix',
+          'checks',
+          'commit',
+          'pull request'
+        ]}
         className="space-y-3 px-1 py-2"
       >
         <div className="space-y-0.5">
@@ -255,7 +443,16 @@ export function CommitMessageAiPane({
           {SOURCE_CONTROL_ACTION_IDS.map((actionId) => {
             const recipe = config.actions?.[actionId]
             const selectedAgent = recipe?.agentId ?? null
-            const template = resolveSourceControlActionCommandTemplate(config.actions, actionId)
+            const draftValue = actionRecipeDraftState.values[actionId]
+            const template = draftValue.commandInputTemplate
+            const agentArgs = draftValue.agentArgs
+            const agentArgsPlaceholder = getSourceControlAgentArgsPlaceholder(
+              resolveAgentArgsPlaceholderAgent(selectedAgent, settings.defaultTuiAgent)
+            )
+            const templateDirty =
+              JSON.stringify(draftValue) !==
+              JSON.stringify(actionRecipeDraftState.baseValues[actionId])
+            const isSavingTemplate = savingActionTemplateIds[actionId] === true
             const agentOptions = getAgentCatalogForAction(actionId, selectedAgent)
             return (
               <div key={actionId} className="rounded-md border border-border px-3 py-3">
@@ -293,19 +490,58 @@ export function CommitMessageAiPane({
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="mt-3 space-y-2">
-                  <Label className="text-[11px] text-muted-foreground">Command template</Label>
-                  <textarea
-                    value={template}
-                    rows={3}
-                    spellCheck={false}
-                    onChange={(event) => onActionTemplateChange(actionId, event.target.value)}
-                    className="w-full resize-y rounded-md border border-border bg-background px-2.5 py-2 font-mono text-xs text-foreground outline-none placeholder:text-muted-foreground/70 focus-visible:ring-1 focus-visible:ring-ring"
-                  />
-                  <SourceControlActionVariableChips
-                    actionId={actionId}
-                    onInsert={(variable) => appendVariable(actionId, variable)}
-                  />
+                <div className="mt-3 grid gap-3 sm:grid-cols-[220px_1fr]">
+                  <div className="space-y-2">
+                    <Label className="text-[11px] text-muted-foreground">CLI arguments</Label>
+                    <Input
+                      value={agentArgs}
+                      spellCheck={false}
+                      placeholder={agentArgsPlaceholder}
+                      onChange={(event) => onActionAgentArgsChange(actionId, event.target.value)}
+                      className="h-8 font-mono text-xs"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-[11px] text-muted-foreground">Command template</Label>
+                    <textarea
+                      value={template}
+                      rows={3}
+                      spellCheck={false}
+                      onChange={(event) => onActionTemplateChange(actionId, event.target.value)}
+                      className="w-full resize-y rounded-md border border-border bg-background px-2.5 py-2 font-mono text-xs text-foreground outline-none placeholder:text-muted-foreground/70 focus-visible:ring-1 focus-visible:ring-ring"
+                    />
+                    <SourceControlActionVariableChips
+                      actionId={actionId}
+                      onInsert={(variable) => appendVariable(actionId, variable)}
+                    />
+                  </div>
+                </div>
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-[11px] text-muted-foreground">
+                    {templateDirty ? 'Unsaved changes' : 'Saved'}
+                  </p>
+                  <div className="flex items-center gap-2">
+                    {templateDirty ? (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="xs"
+                        onClick={() => discardActionTemplateDraft(actionId)}
+                        disabled={isSavingTemplate}
+                      >
+                        Discard
+                      </Button>
+                    ) : null}
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="xs"
+                      onClick={() => void saveActionTemplateDraft(actionId)}
+                      disabled={!templateDirty || isSavingTemplate}
+                    >
+                      {isSavingTemplate ? 'Saving...' : 'Save'}
+                    </Button>
+                  </div>
                 </div>
               </div>
             )

@@ -1,9 +1,14 @@
 import { describe, expect, it, vi } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { CommitArea } from './SourceControl'
+import {
+  CommitArea,
+  hasConfiguredCommitMessageGenerationDefaults,
+  hasConfiguredSourceControlTextGenerationDefaults
+} from './SourceControl'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { resolvePrimaryAction, type PrimaryActionInputs } from './source-control-primary-action'
 import { resolveDropdownItems, type DropdownActionKind } from './source-control-dropdown-items'
+import { getDefaultSettings } from '../../../../shared/constants'
 
 function buildInputs(overrides: Partial<PrimaryActionInputs> = {}): PrimaryActionInputs {
   return {
@@ -106,7 +111,7 @@ describe('CommitArea AI generation', () => {
     expect(button).toContain('title="Clear the message to regenerate."')
   })
 
-  it('disables AI generation until the configured agent can actually run', () => {
+  it('hides AI generation until the configured agent can actually run', () => {
     const props = baseProps({ hasMessage: false })
     const markup = renderCommitArea({
       ...props,
@@ -115,9 +120,8 @@ describe('CommitArea AI generation', () => {
       aiAgentConfigured: false
     })
 
-    const button = buttonByLabel(markup, 'Generate commit message with AI')
-    expect(hasDisabledAttribute(button)).toBe(true)
-    expect(button).toContain('Pick an agent in Settings')
+    expect(markup).not.toContain('aria-label="Generate commit message with AI"')
+    expect(markup).toContain('Commit')
   })
 
   it('turns the generating icon into a stop affordance', () => {
@@ -184,5 +188,106 @@ describe('CommitArea AI generation', () => {
     expect(markup).not.toContain('aria-label="Generate commit message with AI"')
     expect(markup).toContain('Nothing to commit')
     expect(markup).toContain('aria-label="More commit and remote actions"')
+  })
+})
+
+describe('commit-message generation defaults', () => {
+  it('treats factory Source Control AI settings as needing the first-run dialog', () => {
+    expect(
+      hasConfiguredCommitMessageGenerationDefaults({
+        settings: getDefaultSettings('/tmp'),
+        repo: null
+      })
+    ).toBe(false)
+  })
+
+  it('treats a saved action agent or custom template as configured defaults', () => {
+    const settings = getDefaultSettings('/tmp')
+    expect(
+      hasConfiguredCommitMessageGenerationDefaults({
+        settings: {
+          ...settings,
+          sourceControlAi: {
+            ...settings.sourceControlAi!,
+            actions: {
+              ...settings.sourceControlAi!.actions,
+              commitMessage: {
+                commandInputTemplate: '{basePrompt}',
+                agentId: 'codex'
+              }
+            }
+          }
+        },
+        repo: null
+      })
+    ).toBe(true)
+
+    expect(
+      hasConfiguredCommitMessageGenerationDefaults({
+        settings: {
+          ...settings,
+          sourceControlAi: {
+            ...settings.sourceControlAi!,
+            actions: {
+              ...settings.sourceControlAi!.actions,
+              commitMessage: {
+                commandInputTemplate: 'just use "{branch}"'
+              }
+            }
+          }
+        },
+        repo: null
+      })
+    ).toBe(true)
+  })
+
+  it('uses the same configured-defaults check for pull-request generation', () => {
+    const settings = getDefaultSettings('/tmp')
+    expect(
+      hasConfiguredSourceControlTextGenerationDefaults({
+        actionId: 'pullRequest',
+        settings,
+        repo: null
+      })
+    ).toBe(false)
+
+    expect(
+      hasConfiguredSourceControlTextGenerationDefaults({
+        actionId: 'pullRequest',
+        settings: {
+          ...settings,
+          sourceControlAi: {
+            ...settings.sourceControlAi!,
+            actions: {
+              ...settings.sourceControlAi!.actions,
+              pullRequest: {
+                commandInputTemplate: '{basePrompt}\n\nKeep it short.'
+              }
+            }
+          }
+        },
+        repo: null
+      })
+    ).toBe(true)
+
+    expect(
+      hasConfiguredSourceControlTextGenerationDefaults({
+        actionId: 'pullRequest',
+        settings: {
+          ...settings,
+          sourceControlAi: {
+            ...settings.sourceControlAi!,
+            actions: {
+              ...settings.sourceControlAi!.actions,
+              pullRequest: {
+                commandInputTemplate: '{basePrompt}',
+                agentArgs: '--model gpt-5.5'
+              }
+            }
+          }
+        },
+        repo: null
+      })
+    ).toBe(true)
   })
 })

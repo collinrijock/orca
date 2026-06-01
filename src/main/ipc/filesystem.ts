@@ -970,15 +970,28 @@ export function registerFilesystemHandlers(
         body: string
         draft: boolean
         connectionId?: string
+        sourceControlAiResolvedParams?: ResolvedSourceControlAiGenerationParams
+        sourceControlAi?: GlobalSettings['sourceControlAi']
+        agentCmdOverrides?: GlobalSettings['agentCmdOverrides']
       }
     ): Promise<GeneratePullRequestFieldsResult> => {
       const discoveryHostKey = getCommitMessageModelDiscoveryHostKey(args.connectionId ?? null)
-      const resolvedSettings = resolveCommitMessageSettings(
-        store.getSettings(),
-        discoveryHostKey,
-        'pullRequest',
-        await getRepoForSourceControlAi(store, args)
-      )
+      const baseSettings = store.getSettings()
+      const requestSettings = {
+        ...baseSettings,
+        ...(args.sourceControlAi !== undefined ? { sourceControlAi: args.sourceControlAi } : {}),
+        ...(args.agentCmdOverrides !== undefined
+          ? { agentCmdOverrides: args.agentCmdOverrides }
+          : {})
+      }
+      const resolvedSettings = args.sourceControlAiResolvedParams
+        ? { ok: true as const, params: args.sourceControlAiResolvedParams }
+        : resolveCommitMessageSettings(
+            requestSettings,
+            discoveryHostKey,
+            'pullRequest',
+            await getRepoForSourceControlAi(store, args)
+          )
       if (!resolvedSettings.ok) {
         return { success: false, error: resolvedSettings.error }
       }

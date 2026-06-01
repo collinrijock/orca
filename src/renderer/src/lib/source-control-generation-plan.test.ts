@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { planSourceControlCommitMessageGeneration } from './source-control-generation-plan'
+import {
+  planSourceControlCommitMessageGeneration,
+  planSourceControlTextGeneration
+} from './source-control-generation-plan'
 
 describe('planSourceControlCommitMessageGeneration', () => {
   it('catches empty custom commands without invoking an agent', () => {
@@ -35,5 +38,26 @@ describe('planSourceControlCommitMessageGeneration', () => {
     expect(result.ok && result.commandLabel).toContain('codex exec')
     expect(result.ok && result.delivery).toContain('stdin')
     expect(result.ok && result.caveat).toContain('Windows .cmd')
+  })
+
+  it('plans pull-request generation with pull-request variables', () => {
+    const result = planSourceControlTextGeneration('pullRequest', {
+      agentId: 'codex',
+      model: 'gpt-5.5',
+      commandInputTemplate: '{basePrompt}\n\nReview {changedFiles}'
+    })
+
+    expect(result.ok && result.commandLabel).toContain('codex exec')
+  })
+
+  it('shows per-action CLI arguments in dry-run command labels', () => {
+    const result = planSourceControlTextGeneration('pullRequest', {
+      agentId: 'codex',
+      model: 'gpt-5.5',
+      agentArgs: '--model gpt-5.4',
+      commandInputTemplate: '{basePrompt}'
+    })
+
+    expect(result.ok && result.commandLabel).toContain('--model gpt-5.4')
   })
 })

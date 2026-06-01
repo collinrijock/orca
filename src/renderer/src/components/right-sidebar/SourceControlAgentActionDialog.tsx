@@ -12,6 +12,7 @@ import {
   DialogHeader,
   DialogTitle
 } from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { AGENT_CATALOG, getAgentLabel } from '@/lib/agent-catalog'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
@@ -33,7 +34,6 @@ import { SourceControlActionVariableChips } from '../source-control/SourceContro
 
 type DeliveryPlanState =
   | { status: 'idle' }
-  | { status: 'checking' }
   | { status: 'success'; summary: string; commandLabel: string; caveat: string }
   | { status: 'error'; error: string }
 
@@ -45,6 +45,7 @@ export type SourceControlAgentActionDialogProps = {
   description: string
   baseCommandInput: string
   savedCommandInputTemplate?: string | null
+  savedAgentArgs?: string | null
   worktreeId?: string | null
   groupId?: string | null
   connectionId?: string | null
@@ -58,7 +59,11 @@ export type SourceControlAgentActionDialogProps = {
   onOpenSettings?: () => void
   onLaunched?: () => void
   startLabel?: string
-  onStart?: (args: { agent: TuiAgent; commandInput: string }) => boolean | Promise<boolean>
+  onStart?: (args: {
+    agent: TuiAgent
+    commandInput: string
+    agentArgs: string
+  }) => boolean | Promise<boolean>
 }
 
 function isAgentDetectedAndEnabled(
@@ -79,6 +84,7 @@ export function SourceControlAgentActionDialog({
   description,
   baseCommandInput,
   savedCommandInputTemplate,
+  savedAgentArgs,
   worktreeId,
   groupId,
   connectionId,
@@ -97,12 +103,13 @@ export function SourceControlAgentActionDialog({
   const [commandTemplate, setCommandTemplate] = useState(
     savedCommandInputTemplate ?? '{basePrompt}'
   )
+  const [agentArgs, setAgentArgs] = useState(savedAgentArgs ?? '')
   const [selectedAgent, setSelectedAgent] = useState<TuiAgent | null>(savedAgentId ?? null)
   const [detectedAgents, setDetectedAgents] = useState<TuiAgent[]>([])
   const [detecting, setDetecting] = useState(false)
   const [deliveryPlan, setDeliveryPlan] = useState<DeliveryPlanState>({ status: 'idle' })
   const [isStarting, setIsStarting] = useState(false)
-  const [saveAgentDefault, setSaveAgentDefault] = useState(false)
+  const [saveAgentDefault, setSaveAgentDefault] = useState(true)
 
   const disabledAgents = settings?.disabledTuiAgents
   const connectionUnavailable = Boolean(worktreeId && connectionId === undefined)
@@ -131,36 +138,41 @@ export function SourceControlAgentActionDialog({
       return
     }
     setCommandTemplate(savedCommandInputTemplate ?? '{basePrompt}')
+    setAgentArgs(savedAgentArgs ?? '')
     setDeliveryPlan({ status: 'idle' })
-    setSaveAgentDefault(false)
+    setSaveAgentDefault(true)
     setSelectedAgent(savedAgentId ?? null)
     let stale = false
     void refreshDetectedAgents().then((nextAgents) => {
       if (stale) {
         return
       }
-      setSelectedAgent((current) =>
-        isAgentDetectedAndEnabled(current, nextAgents, disabledAgents)
-          ? current
-          : current
-            ? current
-            : pickSourceControlLaunchAgent({
-                savedAgent: savedAgentId,
-                defaultAgent: settings?.defaultTuiAgent,
-                detectedAgents: nextAgents,
-                disabledAgents
-              })
+      // Keep an explicitly selected agent even when it's unavailable so the
+      // selectedAgentUnavailable warning surfaces; only auto-pick when nothing
+      // is selected yet.
+      setSelectedAgent(
+        (current) =>
+          current ??
+          pickSourceControlLaunchAgent({
+            savedAgent: savedAgentId,
+            defaultAgent: settings?.defaultTuiAgent,
+            detectedAgents: nextAgents,
+            disabledAgents
+          })
       )
     })
     return () => {
       stale = true
     }
+    // baseCommandInput is intentionally excluded: this effect resets on dialog
+    // open, and including it would wipe user edits when the generated prompt
+    // changes while the dialog stays open.
   }, [
-    baseCommandInput,
     disabledAgents,
     open,
     refreshDetectedAgents,
     savedAgentId,
+    savedAgentArgs,
     savedCommandInputTemplate,
     settings?.defaultTuiAgent
   ])
@@ -201,6 +213,7 @@ export function SourceControlAgentActionDialog({
       const result = planSourceControlAgentActionLaunch({
         agent: selectedAgent,
         commandInput,
+        agentArgs,
         promptDelivery,
         detectedAgents: currentDetectedAgents,
         disabledAgents: useAppStore.getState().settings?.disabledTuiAgents,
@@ -216,13 +229,15 @@ export function SourceControlAgentActionDialog({
         caveat: result.caveat
       }
     },
-    [commandInput, connectionUnavailable, promptDelivery, refreshDetectedAgents, selectedAgent]
+    [
+      agentArgs,
+      commandInput,
+      connectionUnavailable,
+      promptDelivery,
+      refreshDetectedAgents,
+      selectedAgent
+    ]
   )
-
-  const handleCheckDelivery = useCallback(async () => {
-    setDeliveryPlan({ status: 'checking' })
-    setDeliveryPlan(await buildPlan())
-  }, [buildPlan])
 
   const handleStart = useCallback(async () => {
     if (!selectedAgent || isStarting) {
@@ -244,13 +259,18 @@ export function SourceControlAgentActionDialog({
 
       let launched = false
       if (onStart) {
-        launched = await onStart({ agent: selectedAgent, commandInput: trimmedCommandInput })
+        launched = await onStart({
+          agent: selectedAgent,
+          commandInput: trimmedCommandInput,
+          agentArgs
+        })
       } else if (worktreeId) {
         const result = launchAgentInNewTab({
           agent: selectedAgent,
           worktreeId,
           groupId: groupId ?? worktreeId,
           prompt: trimmedCommandInput,
+          agentArgs,
           promptDelivery,
           launchSource
         })
@@ -266,7 +286,8 @@ export function SourceControlAgentActionDialog({
       if (saveAgentDefault && onSaveAgentDefault) {
         await onSaveAgentDefault(actionId, {
           agentId: selectedAgent,
-          commandInputTemplate: commandTemplate
+          commandInputTemplate: commandTemplate,
+          agentArgs
         })
       }
       onLaunched?.()
@@ -276,6 +297,7 @@ export function SourceControlAgentActionDialog({
     }
   }, [
     actionId,
+    agentArgs,
     buildPlan,
     commandTemplate,
     connectionUnavailable,
@@ -344,6 +366,23 @@ export function SourceControlAgentActionDialog({
           </div>
 
           <div className="space-y-2">
+            <Label htmlFor="source-control-agent-cli-args" className="text-xs">
+              CLI arguments
+            </Label>
+            <Input
+              id="source-control-agent-cli-args"
+              value={agentArgs}
+              spellCheck={false}
+              placeholder="--model sonnet"
+              onChange={(event) => {
+                setAgentArgs(event.target.value)
+                setDeliveryPlan({ status: 'idle' })
+              }}
+              className="h-8 font-mono text-xs"
+            />
+          </div>
+
+          <div className="space-y-2">
             <div className="flex items-center justify-between gap-2">
               <Label htmlFor="source-control-agent-command-input" className="text-xs">
                 Command template
@@ -373,6 +412,7 @@ export function SourceControlAgentActionDialog({
             />
             <SourceControlActionVariableChips
               actionId={actionId}
+              variablePreviews={{ basePrompt: baseCommandInput }}
               onInsert={(variable) => {
                 const separator =
                   commandTemplate.endsWith('\n') || commandTemplate.length === 0 ? '' : ' '
@@ -390,8 +430,8 @@ export function SourceControlAgentActionDialog({
                 onChange={(event) => setSaveAgentDefault(event.target.checked)}
                 className="size-3.5 rounded border-border"
               />
-              Save {getAgentLabel(selectedAgent)} and this command template as the default for this
-              action
+              Save {getAgentLabel(selectedAgent)}, these CLI arguments, and this command template as
+              the default for this action
             </label>
           ) : null}
 
@@ -404,12 +444,7 @@ export function SourceControlAgentActionDialog({
                   : 'border-border bg-muted/30 text-muted-foreground'
               )}
             >
-              {deliveryPlan.status === 'checking' ? (
-                <span className="inline-flex items-center gap-2">
-                  <RefreshCw className="size-3.5 animate-spin" />
-                  Checking delivery…
-                </span>
-              ) : deliveryPlan.status === 'error' ? (
+              {deliveryPlan.status === 'error' ? (
                 <span className="inline-flex items-start gap-2">
                   <TriangleAlert className="mt-px size-3.5 shrink-0" />
                   {deliveryPlan.error}
@@ -431,14 +466,6 @@ export function SourceControlAgentActionDialog({
         </div>
 
         <DialogFooter className="gap-2">
-          <Button type="button" variant="outline" size="sm" onClick={handleCheckDelivery}>
-            {deliveryPlan.status === 'checking' ? (
-              <RefreshCw className="size-4 animate-spin" />
-            ) : (
-              <CheckCircle2 className="size-4" />
-            )}
-            Check delivery
-          </Button>
           <Button type="button" size="sm" disabled={!canStart} onClick={() => void handleStart()}>
             {isStarting ? (
               <RefreshCw className="size-4 animate-spin" />

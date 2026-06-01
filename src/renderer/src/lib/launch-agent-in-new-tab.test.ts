@@ -292,4 +292,23 @@ describe('launchAgentInNewTab', () => {
 
     expect(mockTrack).not.toHaveBeenCalledWith('agent_prompt_sent', expect.anything())
   })
+
+  it('queues per-launch CLI arguments without putting generated prompts in argv', async () => {
+    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
+
+    launchAgentInNewTab({
+      agent: 'codex',
+      worktreeId: 'wt-1',
+      prompt: 'large generated prompt',
+      agentArgs: '--model gpt-5.5',
+      promptDelivery: 'submit-after-ready'
+    })
+
+    expect(mockQueueTabStartupCommand).toHaveBeenCalledWith(
+      'tab-1',
+      expect.objectContaining({
+        command: "codex '--model' 'gpt-5.5'"
+      })
+    )
+  })
 })

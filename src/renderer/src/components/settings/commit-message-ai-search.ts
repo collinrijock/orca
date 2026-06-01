@@ -19,10 +19,15 @@ export const COMMIT_MESSAGE_AI_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
   },
   {
     title: 'Action recipes',
-    description: 'Agent and command template used by each Source Control AI button.',
+    description:
+      'Agent, CLI arguments, and command template used by each Source Control AI button.',
     keywords: [
       'agent',
+      'arguments',
+      'args',
+      'cli',
       'command',
+      'model',
       'template',
       'prompt',
       'fix',

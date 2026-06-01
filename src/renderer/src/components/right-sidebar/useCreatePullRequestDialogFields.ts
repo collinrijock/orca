@@ -6,6 +6,7 @@ import { useAppStore, type AppState } from '@/store'
 import {
   cancelRuntimeGeneratePullRequestFields,
   generateRuntimePullRequestFields,
+  type RuntimeGeneratePullRequestFieldsOverrides,
   type RuntimeGitContext
 } from '@/runtime/runtime-git-client'
 import {
@@ -47,7 +48,11 @@ type UseCreatePullRequestDialogFieldsOptions = {
   generation?: {
     generating: boolean
     generateError: string | null
-    onGenerate: (fields: PullRequestDraftFields, fieldRevisions: PullRequestFieldRevisions) => void
+    onGenerate: (
+      fields: PullRequestDraftFields,
+      fieldRevisions: PullRequestFieldRevisions,
+      overrides?: RuntimeGeneratePullRequestFieldsOverrides
+    ) => void
     onCancelGenerate: () => void
   }
 }
@@ -318,89 +323,100 @@ export function useCreatePullRequestDialogFields({
   }
   const generateDisabled = !effectiveGenerating && Boolean(generateDisabledReason)
 
-  const handleGenerate = useCallback(async (): Promise<void> => {
-    if (!worktreePath || !base.trim() || effectiveGenerating || generateDisabled) {
-      return
-    }
-    if (generation) {
-      generation.onGenerate({ base, title, body, draft }, { ...fieldRevisionsRef.current })
-      return
-    }
-    const requestId = generationRequestIdRef.current + 1
-    generationRequestIdRef.current = requestId
-    const connectionId = getConnectionId(worktreeId) ?? undefined
-    const requestContext = {
-      settings: useAppStore.getState().settings,
-      worktreeId,
-      worktreePath,
-      connectionId
-    }
-    const seed = {
-      requestId,
-      fieldRevisions: { ...fieldRevisionsRef.current },
-      context: requestContext
-    }
-    generationSeedRef.current = seed
-    generateInFlightRef.current = true
-    setGenerating(true)
-    setGenerateError(null)
-    try {
-      const result = await generateRuntimePullRequestFields(requestContext, {
-        base: stripBaseRef(base.trim()),
-        title,
-        body,
-        draft
-      })
-      if (result.branchChangedByPreparation) {
-        await onBranchChangedByGeneration?.()
-      }
-      const isCurrentRequest = generationRequestIdRef.current === requestId
-      if (!isCurrentRequest) {
+  const handleGenerate = useCallback(
+    async (overrides?: RuntimeGeneratePullRequestFieldsOverrides): Promise<void> => {
+      if (!worktreePath || !base.trim() || effectiveGenerating || generateDisabled) {
         return
       }
-      if (!result.success) {
-        if (result.canceled) {
-          setGenerateError(null)
+      if (generation) {
+        generation.onGenerate(
+          { base, title, body, draft },
+          { ...fieldRevisionsRef.current },
+          overrides
+        )
+        return
+      }
+      const requestId = generationRequestIdRef.current + 1
+      generationRequestIdRef.current = requestId
+      const connectionId = getConnectionId(worktreeId) ?? undefined
+      const requestContext = {
+        settings: useAppStore.getState().settings,
+        worktreeId,
+        worktreePath,
+        connectionId
+      }
+      const seed = {
+        requestId,
+        fieldRevisions: { ...fieldRevisionsRef.current },
+        context: requestContext
+      }
+      generationSeedRef.current = seed
+      generateInFlightRef.current = true
+      setGenerating(true)
+      setGenerateError(null)
+      try {
+        const result = await generateRuntimePullRequestFields(
+          requestContext,
+          {
+            base: stripBaseRef(base.trim()),
+            title,
+            body,
+            draft
+          },
+          overrides
+        )
+        if (result.branchChangedByPreparation) {
+          await onBranchChangedByGeneration?.()
+        }
+        const isCurrentRequest = generationRequestIdRef.current === requestId
+        if (!isCurrentRequest) {
           return
         }
-        setGenerateError(result.error)
-        return
-      }
+        if (!result.success) {
+          if (result.canceled) {
+            setGenerateError(null)
+            return
+          }
+          setGenerateError(result.error)
+          return
+        }
 
-      const currentSeed = generationSeedRef.current
-      if (!currentSeed || currentSeed.requestId !== requestId) {
-        return
+        const currentSeed = generationSeedRef.current
+        if (!currentSeed || currentSeed.requestId !== requestId) {
+          return
+        }
+        applyGeneratedFields(result.fields, currentSeed.fieldRevisions)
+        useAppStore.getState().recordFeatureInteraction('ai-pr-generation')
+        setGenerateError(null)
+      } catch (error) {
+        if (generationRequestIdRef.current !== requestId) {
+          return
+        }
+        setGenerateError(
+          error instanceof Error ? error.message : 'Failed to generate pull request details'
+        )
+      } finally {
+        if (generationRequestIdRef.current === requestId) {
+          generateInFlightRef.current = false
+          generationSeedRef.current = null
+          setGenerating(false)
+        }
       }
-      applyGeneratedFields(result.fields, currentSeed.fieldRevisions)
-      useAppStore.getState().recordFeatureInteraction('ai-pr-generation')
-      setGenerateError(null)
-    } catch (error) {
-      if (generationRequestIdRef.current !== requestId) {
-        return
-      }
-      setGenerateError(
-        error instanceof Error ? error.message : 'Failed to generate pull request details'
-      )
-    } finally {
-      if (generationRequestIdRef.current === requestId) {
-        generateInFlightRef.current = false
-        generationSeedRef.current = null
-        setGenerating(false)
-      }
-    }
-  }, [
-    base,
-    body,
-    draft,
-    effectiveGenerating,
-    applyGeneratedFields,
-    generation,
-    generateDisabled,
-    onBranchChangedByGeneration,
-    title,
-    worktreeId,
-    worktreePath
-  ])
+    },
+    [
+      base,
+      body,
+      draft,
+      effectiveGenerating,
+      applyGeneratedFields,
+      generation,
+      generateDisabled,
+      onBranchChangedByGeneration,
+      title,
+      worktreeId,
+      worktreePath
+    ]
+  )
 
   const handleCancelGenerate = useCallback((): void => {
     if (generation) {

@@ -64,6 +64,8 @@ export type RuntimeGenerateCommitMessageOverrides = {
   agentCmdOverrides?: GlobalSettings['agentCmdOverrides']
 }
 
+export type RuntimeGeneratePullRequestFieldsOverrides = RuntimeGenerateCommitMessageOverrides
+
 function getRuntimeCommitMessageSettings(
   settings: RuntimeGitSettings | null | undefined,
   connectionId?: string
@@ -568,7 +570,8 @@ export async function cancelRuntimeGenerateCommitMessage(
 
 export async function generateRuntimePullRequestFields(
   context: RuntimeGitContext,
-  input: { base: string; title: string; body: string; draft: boolean }
+  input: { base: string; title: string; body: string; draft: boolean },
+  overrides?: RuntimeGeneratePullRequestFieldsOverrides
 ): Promise<RuntimeGeneratePullRequestFieldsResult> {
   const target = getActiveRuntimeTarget(context.settings)
   if (target.kind === 'local' || !context.worktreeId) {
@@ -576,7 +579,12 @@ export async function generateRuntimePullRequestFields(
       worktreePath: context.worktreePath,
       repoId: context.worktreeId ? getRepoIdFromWorktreeId(context.worktreeId) : undefined,
       connectionId: context.connectionId,
-      ...input
+      ...input,
+      ...(overrides?.sourceControlAiResolvedParams
+        ? { sourceControlAiResolvedParams: overrides.sourceControlAiResolvedParams }
+        : {}),
+      ...(overrides?.sourceControlAi ? { sourceControlAi: overrides.sourceControlAi } : {}),
+      ...(overrides?.agentCmdOverrides ? { agentCmdOverrides: overrides.agentCmdOverrides } : {})
     }) as Promise<RuntimeGeneratePullRequestFieldsResult>
   }
   return callRuntimeRpc<RuntimeGeneratePullRequestFieldsResult>(
@@ -585,7 +593,12 @@ export async function generateRuntimePullRequestFields(
     {
       worktree: context.worktreeId,
       ...input,
-      ...getRuntimeCommitMessageSettings(context.settings, context.connectionId)
+      ...getRuntimeCommitMessageSettings(context.settings, context.connectionId),
+      ...(overrides?.sourceControlAiResolvedParams
+        ? { sourceControlAiResolvedParams: overrides.sourceControlAiResolvedParams }
+        : {}),
+      ...(overrides?.sourceControlAi ? { sourceControlAi: overrides.sourceControlAi } : {}),
+      ...(overrides?.agentCmdOverrides ? { agentCmdOverrides: overrides.agentCmdOverrides } : {})
     },
     { timeoutMs: 75_000 }
   )

@@ -10,6 +10,7 @@ export type SourceControlActionId = SourceControlTextActionId | SourceControlLau
 export type SourceControlActionRecipe = {
   agentId?: TuiAgent | null
   commandInputTemplate?: string
+  agentArgs?: string
 }
 
 export type SourceControlAiActionDefaults = Partial<
@@ -64,7 +65,16 @@ export const DEFAULT_SOURCE_CONTROL_ACTION_COMMAND_TEMPLATES: Record<
 
 export const SOURCE_CONTROL_ACTION_VARIABLES: Record<SourceControlActionId, string[]> = {
   commitMessage: ['basePrompt', 'branch', 'stagedFiles', 'stagedPatch'],
-  pullRequest: ['basePrompt', 'branch', 'baseBranch', 'currentTitle', 'currentBody'],
+  pullRequest: [
+    'basePrompt',
+    'branch',
+    'baseBranch',
+    'currentTitle',
+    'currentBody',
+    'commitSummary',
+    'changedFiles',
+    'patch'
+  ],
   branchName: ['basePrompt', 'firstPrompt', 'assistantMessage'],
   fixCommitFailure: ['basePrompt'],
   fixChecks: ['basePrompt'],
@@ -108,6 +118,19 @@ export const SOURCE_CONTROL_ACTION_VARIABLE_INFO: Record<string, SourceControlAc
       description: 'The PR description currently typed in the composer before generation starts.',
       example: 'Adds configurable agents and command templates for Source Control actions.'
     },
+    commitSummary: {
+      description: 'A newline-separated list of commits on the branch compared to the base.',
+      example: 'a1b2c3d Add action recipe defaults\nd4e5f6a Render command templates'
+    },
+    changedFiles: {
+      description: 'A summary of files changed between the branch and the base branch.',
+      example:
+        'src/shared/source-control-ai-actions.ts | 24 +++++\nsrc/main/text-generation.ts | 8 +-'
+    },
+    patch: {
+      description: 'The branch diff against the base branch used for PR-details generation.',
+      example: 'diff --git a/src/app.ts b/src/app.ts\n+renderSourceControlActionCommandTemplate()'
+    },
     firstPrompt: {
       description: 'The first user request that created the Orca workspace.',
       example: 'Fix CI and commit the result'
@@ -146,6 +169,9 @@ export function normalizeSourceControlActionRecipe(
   if (typeof value.commandInputTemplate === 'string') {
     normalized.commandInputTemplate = value.commandInputTemplate
   }
+  if (typeof value.agentArgs === 'string') {
+    normalized.agentArgs = value.agentArgs
+  }
   return Object.keys(normalized).length > 0 ? normalized : undefined
 }
 
@@ -178,7 +204,8 @@ export function readSourceControlActionDefault(
     ...(value?.agentId !== undefined ? { agentId: value.agentId } : {}),
     ...(typeof value?.commandInputTemplate === 'string'
       ? { commandInputTemplate: value.commandInputTemplate.trim() }
-      : {})
+      : {}),
+    ...(typeof value?.agentArgs === 'string' ? { agentArgs: value.agentArgs.trim() } : {})
   }
 }
 
@@ -222,6 +249,11 @@ export function renderSourceControlActionCommandTemplate(
     /\{\{\s*([a-zA-Z][a-zA-Z0-9_]*)\s*\}\}|\{\s*([a-zA-Z][a-zA-Z0-9_]*)\s*\}/g,
     (match, doubleName, singleName) => {
       const name = (doubleName ?? singleName) as string
+      // Why: only own keys are real variables; inherited Object.prototype names
+      // (e.g. `constructor`) must stay visible instead of rendering their value.
+      if (!Object.prototype.hasOwnProperty.call(variables, name)) {
+        return match
+      }
       const value = variables[name]
       return value === undefined || value === null ? match : value
     }

@@ -138,7 +138,8 @@ import {
   getRuntimeGitHistory,
   stageRuntimeGitPath,
   unstageRuntimeGitPath,
-  type RuntimeGenerateCommitMessageOverrides
+  type RuntimeGenerateCommitMessageOverrides,
+  type RuntimeGeneratePullRequestFieldsOverrides
 } from '@/runtime/runtime-git-client'
 import { getRuntimeRepoBaseRefDefault } from '@/runtime/runtime-repo-client'
 import { PullRequestIcon } from './checks-panel-content'
@@ -158,6 +159,8 @@ import type {
   GitConflictKind,
   GitConflictOperation,
   GitStatusEntry,
+  GlobalSettings,
+  Repo,
   SourceControlViewMode,
   TuiAgent
 } from '../../../../shared/types'
@@ -170,14 +173,17 @@ import { STATUS_COLORS, STATUS_LABELS } from './status-display'
 import { isCustomAgentId } from '../../../../shared/commit-message-agent-spec'
 import {
   DEFAULT_SOURCE_CONTROL_AI_PR_CREATION_DEFAULTS,
+  normalizeRepoSourceControlAiOverrides,
   normalizeSourceControlAiSettings,
   resolveSourceControlActionRecipe,
   resolveSourceControlAiForOperation,
   resolveSourceControlAiPrCreationDefaults
 } from '../../../../shared/source-control-ai'
 import {
+  DEFAULT_SOURCE_CONTROL_ACTION_COMMAND_TEMPLATES,
   renderSourceControlActionCommandTemplate,
   setSourceControlActionDefault,
+  type SourceControlTextActionId,
   type SourceControlActionRecipe,
   type SourceControlLaunchActionId
 } from '../../../../shared/source-control-ai-actions'
@@ -200,8 +206,9 @@ import {
 import { SourceControlAgentActionDialog } from './SourceControlAgentActionDialog'
 import {
   applyCommitMessageGenerationDefaults,
-  SourceControlCommitMessageGenerationDialog
-} from './SourceControlCommitMessageGenerationDialog'
+  applySourceControlTextGenerationDefaults,
+  SourceControlTextGenerationDialog
+} from './SourceControlTextGenerationDialog'
 
 export type SourceControlScope = 'all' | 'uncommitted'
 type AbortConflictOperation = Extract<GitConflictOperation, 'merge' | 'rebase'>
@@ -209,6 +216,61 @@ type AbortActionErrorKind = 'abort_merge' | 'abort_rebase'
 export type SourceControlActionError = {
   kind: RemoteOpKind | AbortActionErrorKind
   message: string
+}
+type TextGenerationRecipeConfiguration = {
+  agentId?: TuiAgent | null
+  commandInputTemplate?: string | null
+  agentArgs?: string | null
+}
+
+function textGenerationRecipeIsConfigured(
+  actionId: SourceControlTextActionId,
+  recipe: TextGenerationRecipeConfiguration | null | undefined
+): boolean {
+  if (Object.prototype.hasOwnProperty.call(recipe ?? {}, 'agentId')) {
+    return true
+  }
+  if (
+    typeof recipe?.commandInputTemplate === 'string' &&
+    recipe.commandInputTemplate.trim() !== DEFAULT_SOURCE_CONTROL_ACTION_COMMAND_TEMPLATES[actionId]
+  ) {
+    return true
+  }
+  return typeof recipe?.agentArgs === 'string' && recipe.agentArgs.trim().length > 0
+}
+
+export function hasConfiguredSourceControlTextGenerationDefaults(input: {
+  actionId: SourceControlTextActionId
+  settings: Pick<GlobalSettings, 'sourceControlAi' | 'commitMessageAi'> | null | undefined
+  repo?: Pick<Repo, 'sourceControlAi'> | null
+}): boolean {
+  const repoRecipe = normalizeRepoSourceControlAiOverrides(input.repo?.sourceControlAi)
+    ?.actionOverrides?.[input.actionId]
+  if (textGenerationRecipeIsConfigured(input.actionId, repoRecipe)) {
+    return true
+  }
+  if (
+    textGenerationRecipeIsConfigured(
+      input.actionId,
+      input.settings?.sourceControlAi?.actions?.[input.actionId]
+    )
+  ) {
+    return true
+  }
+  return (
+    input.settings?.sourceControlAi?.agentId != null ||
+    input.settings?.commitMessageAi?.agentId != null
+  )
+}
+
+export function hasConfiguredCommitMessageGenerationDefaults(input: {
+  settings: Pick<GlobalSettings, 'sourceControlAi' | 'commitMessageAi'> | null | undefined
+  repo?: Pick<Repo, 'sourceControlAi'> | null
+}): boolean {
+  return hasConfiguredSourceControlTextGenerationDefaults({
+    ...input,
+    actionId: 'commitMessage'
+  })
 }
 
 const EMPTY_GIT_STATUS_ENTRIES: GitStatusEntry[] = []
@@ -777,6 +839,24 @@ export function appendCommitFailureCustomInstruction(
   return `${prompt.slice(0, -COMMIT_FAILURE_REPLY_INSTRUCTION.length)}${customInstructionBlock}${COMMIT_FAILURE_REPLY_INSTRUCTION}`
 }
 
+export function buildCommitFailureAgentCommandInput({
+  promptOverride,
+  commandInputTemplate,
+  basePrompt
+}: {
+  promptOverride?: string
+  commandInputTemplate?: string | null
+  basePrompt: string
+}): string {
+  return (
+    promptOverride ??
+    renderSourceControlActionCommandTemplate(
+      commandInputTemplate ?? DEFAULT_SOURCE_CONTROL_ACTION_COMMAND_TEMPLATES.fixCommitFailure,
+      { basePrompt }
+    )
+  ).trim()
+}
+
 export function buildResolveConflictsPrompt({
   conflictOperation,
   entries,
@@ -1073,6 +1153,7 @@ function SourceControlInner(): React.JSX.Element {
   const isRemoteOperationActive = useAppStore((s) => s.isRemoteOperationActive)
   const inFlightRemoteOpKind = useAppStore((s) => s.inFlightRemoteOpKind)
   const settings = useAppStore((s) => s.settings)
+  const updateSettings = useAppStore((s) => s.updateSettings)
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
   const hostedReviewCache = useAppStore((s) => s.hostedReviewCache)
@@ -1270,6 +1351,7 @@ function SourceControlInner(): React.JSX.Element {
   >({})
   const [generateErrors, setGenerateErrors] = useState<Record<string, string | null>>({})
   const [commitGenerationDialogOpen, setCommitGenerationDialogOpen] = useState(false)
+  const [pullRequestGenerationDialogOpen, setPullRequestGenerationDialogOpen] = useState(false)
   const isGenerating = generateInFlightByWorktree[activeWorktreeId ?? ''] ?? false
   const generateError = generateErrors[activeWorktreeId ?? ''] ?? null
   const [hostedReviewCreationState, setHostedReviewCreationState] =
@@ -1820,16 +1902,21 @@ function SourceControlInner(): React.JSX.Element {
           toast.error('Could not build the agent prompt.')
           return false
         }
+        const prompt = buildCommitFailureAgentCommandInput({
+          promptOverride,
+          commandInputTemplate: savedRecipe.commandInputTemplate,
+          basePrompt: commitFailureRecoveryPrompt
+        })
+        if (!prompt) {
+          toast.error('Commit failure prompt is empty. Update Source Control AI settings.')
+          return false
+        }
         const result = launchAgentInNewTab({
           agent,
           worktreeId: activeWorktreeId,
           groupId: activeGroupId ?? activeWorktreeId,
-          prompt:
-            promptOverride ??
-            renderSourceControlActionCommandTemplate(
-              savedRecipe.commandInputTemplate ?? '{basePrompt}',
-              { basePrompt: commitFailureRecoveryPrompt }
-            ),
+          prompt,
+          agentArgs: savedRecipe.agentArgs,
           promptDelivery: 'submit-after-ready',
           launchSource: 'source_control_recovery'
         })
@@ -2126,6 +2213,17 @@ function SourceControlInner(): React.JSX.Element {
     [activeWorktreeId, effectiveCommitMessageAgentId, sourceControlAi, worktreePath]
   )
 
+  const handleGenerateCommitMessageClick = useCallback((): void => {
+    if (
+      hasConfiguredCommitMessageGenerationDefaults({ settings, repo: activeRepo ?? null }) &&
+      resolvedCommitMessageAi?.ok
+    ) {
+      void handleGenerate({ sourceControlAiResolvedParams: resolvedCommitMessageAi.value.params })
+      return
+    }
+    setCommitGenerationDialogOpen(true)
+  }, [activeRepo, handleGenerate, resolvedCommitMessageAi, settings])
+
   const handleCancelGenerate = useCallback((): void => {
     if (!activeWorktreeId || !worktreePath) {
       return
@@ -2163,6 +2261,28 @@ function SourceControlInner(): React.JSX.Element {
       })
     },
     [sourceControlAiDiscoveryHostKey, updateSettings]
+  )
+
+  const handleSavePullRequestGenerationDefaults = useCallback(
+    async (
+      params: NonNullable<
+        RuntimeGeneratePullRequestFieldsOverrides['sourceControlAiResolvedParams']
+      >
+    ): Promise<void> => {
+      const latestSettings = useAppStore.getState().settings
+      const latestSourceControlAi = normalizeSourceControlAiSettings(
+        latestSettings?.sourceControlAi,
+        latestSettings?.commitMessageAi
+      )
+      await updateSettings({
+        sourceControlAi: applySourceControlTextGenerationDefaults(
+          latestSourceControlAi,
+          'pullRequest',
+          params
+        )
+      })
+    },
+    [updateSettings]
   )
 
   // Why: a single dispatcher for every remote-only action the split button or
@@ -2473,7 +2593,8 @@ function SourceControlInner(): React.JSX.Element {
   const handleGeneratePullRequestFieldsForActive = useCallback(
     async (
       fields: PullRequestGenerationFields,
-      fieldRevisions: PullRequestFieldRevisions
+      fieldRevisions: PullRequestFieldRevisions,
+      overrides?: RuntimeGeneratePullRequestFieldsOverrides
     ): Promise<void> => {
       if (!activeRepo || !activePullRequestGenerationKey || !worktreePath || !branchName) {
         return
@@ -2512,7 +2633,8 @@ function SourceControlInner(): React.JSX.Element {
             title: seed.title,
             body: seed.body,
             draft: seed.draft
-          }
+          },
+          overrides
         )
         if (result.branchChangedByPreparation) {
           await refreshGitStatusAfterPullRequestGeneration(context)
@@ -2673,12 +2795,26 @@ function SourceControlInner(): React.JSX.Element {
     generation: {
       generating: activePullRequestGenerationRecord?.status === 'running',
       generateError: activePullRequestGenerationRecord?.error ?? null,
-      onGenerate: (fields, fieldRevisions) => {
-        void handleGeneratePullRequestFieldsForActive(fields, fieldRevisions)
+      onGenerate: (fields, fieldRevisions, overrides) => {
+        void handleGeneratePullRequestFieldsForActive(fields, fieldRevisions, overrides)
       },
       onCancelGenerate: handleCancelGeneratePullRequestFieldsForActive
     }
   })
+
+  const handleGeneratePullRequestFieldsClick = useCallback((): void => {
+    if (
+      hasConfiguredSourceControlTextGenerationDefaults({
+        actionId: 'pullRequest',
+        settings,
+        repo: activeRepo ?? null
+      })
+    ) {
+      void handleGeneratePullRequestFields()
+      return
+    }
+    setPullRequestGenerationDialogOpen(true)
+  }, [activeRepo, handleGeneratePullRequestFields, settings])
 
   useEffect(() => {
     if (
@@ -4424,7 +4560,7 @@ function SourceControlInner(): React.JSX.Element {
                 isCreating={isCreatingPr}
                 primaryAction={primaryAction}
                 dropdownItems={dropdownItems}
-                onGenerate={() => void handleGeneratePullRequestFields()}
+                onGenerate={handleGeneratePullRequestFieldsClick}
                 onCancelGenerate={handleCancelGeneratePullRequestFields}
                 onPrimaryAction={handlePrimaryClick}
                 onDropdownAction={handleActionInvoke}
@@ -4468,7 +4604,7 @@ function SourceControlInner(): React.JSX.Element {
                     writeCommitDraftForWorktree(prev, activeWorktreeId, value)
                   )
                 }}
-                onGenerate={() => setCommitGenerationDialogOpen(true)}
+                onGenerate={handleGenerateCommitMessageClick}
                 onCancelGenerate={handleCancelGenerate}
                 onSaveLaunchActionDefault={saveLaunchActionDefault}
                 onOpenSourceControlAiSettings={openSourceControlAiSettings}
@@ -4866,13 +5002,18 @@ function SourceControlInner(): React.JSX.Element {
         savedCommandInputTemplate={
           getLaunchActionRecipe('resolveConflicts').commandInputTemplate ?? null
         }
+        savedAgentArgs={getLaunchActionRecipe('resolveConflicts').agentArgs ?? null}
         onSaveAgentDefault={saveLaunchActionDefault}
         onOpenSettings={openSourceControlAiSettings}
         onLaunched={() => toast.success('Started an AI agent for the conflicts.')}
       />
-      <SourceControlCommitMessageGenerationDialog
+      <SourceControlTextGenerationDialog
         open={commitGenerationDialogOpen}
         onOpenChange={setCommitGenerationDialogOpen}
+        actionId="commitMessage"
+        title="Generate Commit Message"
+        description="Choose the agent and command template for this run."
+        generateLabel="Generate"
         settings={settings}
         repo={activeRepo ?? null}
         discoveryHostKey={sourceControlAiDiscoveryHostKey}
@@ -4880,6 +5021,21 @@ function SourceControlInner(): React.JSX.Element {
           void handleGenerate({ sourceControlAiResolvedParams: params })
         }}
         onSaveDefaults={handleSaveCommitMessageGenerationDefaults}
+      />
+      <SourceControlTextGenerationDialog
+        open={pullRequestGenerationDialogOpen}
+        onOpenChange={setPullRequestGenerationDialogOpen}
+        actionId="pullRequest"
+        title="Generate Hosted Review Details"
+        description="Choose the agent and command template for this run."
+        generateLabel="Generate"
+        settings={settings}
+        repo={activeRepo ?? null}
+        discoveryHostKey={sourceControlAiDiscoveryHostKey}
+        onGenerate={(params) => {
+          void handleGeneratePullRequestFields({ sourceControlAiResolvedParams: params })
+        }}
+        onSaveDefaults={handleSavePullRequestGenerationDefaults}
       />
     </>
   )
@@ -5246,6 +5402,7 @@ type CommitFailureFixSplitButtonProps = {
   chevronClassName?: string
   savedAgentId?: TuiAgent | null
   savedCommandInputTemplate?: string | null
+  savedAgentArgs?: string | null
   onSaveAgentDefault?: (
     actionId: SourceControlLaunchActionId,
     recipe: SourceControlActionRecipe
@@ -5269,6 +5426,7 @@ function CommitFailureFixSplitButton({
   chevronClassName,
   savedAgentId,
   savedCommandInputTemplate,
+  savedAgentArgs,
   onSaveAgentDefault,
   onOpenSettings,
   onFixWithDefaultAgent,
@@ -5342,6 +5500,7 @@ function CommitFailureFixSplitButton({
           launchSource="source_control_recovery"
           savedAgentId={savedAgentId}
           savedCommandInputTemplate={savedCommandInputTemplate}
+          savedAgentArgs={savedAgentArgs}
           onSaveAgentDefault={onSaveAgentDefault}
           onOpenSettings={onOpenSettings}
           onLaunched={onPromptDelivered}
@@ -5533,10 +5692,9 @@ export function CommitArea({
     .filter(Boolean)
     .join(' ')
 
-  // Why: only render the Generate button when the user has opted into the
-  // feature. Mounting a perma-disabled button would leak space and add noise
-  // for users who never plan to use AI commit messages.
-  const showGenerate = showComposer && aiEnabled
+  // Why: only render Generate when it has a runnable path; otherwise the
+  // composer should stay focused on the normal Commit action.
+  const showGenerate = showComposer && aiEnabled && (aiAgentConfigured || isGenerating)
   let generateDisabledReason: string | undefined
   if (isGenerating) {
     generateDisabledReason = 'Generating commit message…'
@@ -5765,6 +5923,7 @@ export function CommitArea({
                 chevronClassName="h-6 px-1.5"
                 savedAgentId={fixCommitFailureRecipe?.agentId ?? null}
                 savedCommandInputTemplate={fixCommitFailureRecipe?.commandInputTemplate ?? null}
+                savedAgentArgs={fixCommitFailureRecipe?.agentArgs ?? null}
                 onSaveAgentDefault={onSaveLaunchActionDefault}
                 onOpenSettings={onOpenSourceControlAiSettings}
                 onFixWithDefaultAgent={handleFixCommitFailureWithAI}
@@ -5814,6 +5973,7 @@ export function CommitArea({
                 chevronClassName="rounded-l-none border-l border-primary-foreground/20 px-2"
                 savedAgentId={fixCommitFailureRecipe?.agentId ?? null}
                 savedCommandInputTemplate={fixCommitFailureRecipe?.commandInputTemplate ?? null}
+                savedAgentArgs={fixCommitFailureRecipe?.agentArgs ?? null}
                 onSaveAgentDefault={onSaveLaunchActionDefault}
                 onOpenSettings={onOpenSourceControlAiSettings}
                 onFixWithDefaultAgent={handleFixCommitFailureWithAI}

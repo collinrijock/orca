@@ -11,12 +11,71 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/
 type SourceControlActionVariableChipsProps = {
   actionId: SourceControlActionId
   disabled?: boolean
+  variablePreviews?: Partial<Record<string, string>>
   onInsert: (variable: string) => void
+}
+
+function hasVariablePreview(
+  variablePreviews: Partial<Record<string, string>> | undefined,
+  variable: string
+): boolean {
+  return Boolean(
+    variablePreviews &&
+    Object.prototype.hasOwnProperty.call(variablePreviews, variable) &&
+    variablePreviews[variable] !== undefined &&
+    variablePreviews[variable] !== null
+  )
+}
+
+function SourceControlVariableTooltip({
+  variable,
+  preview
+}: {
+  variable: string
+  preview?: string
+}): React.JSX.Element {
+  if (preview !== undefined) {
+    if (variable === 'basePrompt') {
+      return (
+        <pre className="scrollbar-sleek max-h-72 max-w-[min(32rem,calc(100vw-2rem))] overflow-auto whitespace-pre-wrap break-words font-mono text-[11px] leading-relaxed">
+          {preview || '(empty)'}
+        </pre>
+      )
+    }
+
+    return (
+      <div className="space-y-1.5">
+        <div className="font-mono text-[11px] text-background/70">{`{${variable}}`}</div>
+        <pre className="scrollbar-sleek max-h-72 max-w-[min(32rem,calc(100vw-2rem))] overflow-auto rounded-sm bg-background/10 p-2 whitespace-pre-wrap break-words font-mono text-[11px] leading-relaxed">
+          {preview || '(empty)'}
+        </pre>
+      </div>
+    )
+  }
+
+  const info = SOURCE_CONTROL_ACTION_VARIABLE_INFO[variable]
+  return (
+    <div className="max-w-80 space-y-2 text-left leading-relaxed">
+      <div className="space-y-0.5">
+        <div className="font-mono text-[11px]">{`{${variable}}`}</div>
+        <div className="text-background/80">{info.description}</div>
+      </div>
+      <div className="space-y-1">
+        <div className="text-[10px] font-semibold uppercase tracking-wide text-background/60">
+          Example
+        </div>
+        <pre className="scrollbar-sleek max-h-40 overflow-auto rounded-sm bg-background/10 p-2 whitespace-pre-wrap break-words font-mono text-[11px] leading-relaxed">
+          {info.example}
+        </pre>
+      </div>
+    </div>
+  )
 }
 
 export function SourceControlActionVariableChips({
   actionId,
   disabled = false,
+  variablePreviews,
   onInsert
 }: SourceControlActionVariableChipsProps): React.JSX.Element {
   return (
@@ -27,7 +86,9 @@ export function SourceControlActionVariableChips({
           Variables
         </span>
         {SOURCE_CONTROL_ACTION_VARIABLES[actionId].map((variable) => {
-          const info = SOURCE_CONTROL_ACTION_VARIABLE_INFO[variable]
+          const preview = hasVariablePreview(variablePreviews, variable)
+            ? variablePreviews?.[variable]
+            : undefined
           return (
             <Tooltip key={variable}>
               <TooltipTrigger asChild>
@@ -44,15 +105,8 @@ export function SourceControlActionVariableChips({
                   </Button>
                 </span>
               </TooltipTrigger>
-              <TooltipContent side="top" sideOffset={6} className="max-w-80 text-left">
-                <div className="space-y-1">
-                  <div className="font-mono text-[11px]">{`{${variable}}`}</div>
-                  <div>{info.description}</div>
-                  <div className="font-mono text-[11px] opacity-80 whitespace-pre-wrap">
-                    {info.example}
-                  </div>
-                  <div className="text-[11px] opacity-70">Click to insert this variable.</div>
-                </div>
+              <TooltipContent side="top" sideOffset={6} className="px-2 py-2 text-left">
+                <SourceControlVariableTooltip variable={variable} preview={preview} />
               </TooltipContent>
             </Tooltip>
           )

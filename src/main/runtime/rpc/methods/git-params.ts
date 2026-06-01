@@ -105,7 +105,8 @@ const SourceControlAiSettings = CommitMessageAiSettings.omit({ customPrompt: tru
       z.string(),
       z.object({
         agentId: z.string().nullable().optional(),
-        commandInputTemplate: z.string().optional()
+        commandInputTemplate: z.string().optional(),
+        agentArgs: z.string().optional()
       })
     )
     .optional(),
@@ -135,7 +136,8 @@ const SourceControlAiSettings = CommitMessageAiSettings.omit({ customPrompt: tru
       z.string(),
       z.object({
         agentId: z.string().nullable().optional(),
-        commandInputTemplate: z.string().optional()
+        commandInputTemplate: z.string().optional(),
+        agentArgs: z.string().optional()
       })
     )
     .optional()
@@ -147,6 +149,7 @@ const ResolvedSourceControlAiGenerationParams = z.object({
   thinkingLevel: z.string().optional(),
   customPrompt: z.string().optional(),
   commandInputTemplate: z.string().optional(),
+  agentArgs: z.string().optional(),
   customAgentCommand: z.string().optional(),
   agentCommandOverride: z.string().optional()
 })

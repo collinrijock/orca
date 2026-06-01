@@ -14,19 +14,24 @@ import {
 import {
   SOURCE_CONTROL_ACTION_IDS,
   SOURCE_CONTROL_ACTION_LABELS,
-  SOURCE_CONTROL_TEXT_ACTION_IDS,
   resolveSourceControlActionCommandTemplate,
   type SourceControlActionId
 } from '../../../../shared/source-control-ai-actions'
 import { Label } from '../ui/label'
+import { Input } from '../ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
 import { useAppStore } from '../../store'
 import { getRepositorySourceControlAiSectionId } from './repository-settings-targets'
 import { Button } from '../ui/button'
 import { useMountedRef } from '@/hooks/useMountedRef'
-import { AGENT_CATALOG, AgentIcon } from '@/lib/agent-catalog'
+import { AgentIcon } from '@/lib/agent-catalog'
 import { SourceControlActionVariableChips } from '../source-control/SourceControlActionVariableChips'
-import { listCommitMessageAgentCapabilities } from '../../../../shared/commit-message-agent-spec'
+import {
+  ACTION_DESCRIPTIONS,
+  SOURCE_CONTROL_TEXT_ACTION_ID_SET,
+  getAgentCatalogForAction,
+  getSourceControlAgentArgsPlaceholder
+} from './source-control-action-recipe-options'
 
 type RepositorySourceControlAiSectionProps = {
   repo: Repo
@@ -37,19 +42,6 @@ const ACTION_MODE_INHERIT = 'inherit'
 const ACTION_MODE_OVERRIDE = 'override'
 const INHERIT_AGENT_VALUE = '__inherit_agent__'
 const DEFAULT_AGENT_VALUE = '__default_agent__'
-const SOURCE_CONTROL_TEXT_ACTION_ID_SET = new Set<string>(SOURCE_CONTROL_TEXT_ACTION_IDS)
-const TEXT_GENERATION_AGENT_ID_SET = new Set(
-  listCommitMessageAgentCapabilities().map((capability) => capability.id)
-)
-
-const ACTION_DESCRIPTIONS: Record<SourceControlActionId, string> = {
-  commitMessage: 'Generate the commit message from staged changes.',
-  pullRequest: 'Generate the hosted review title and description.',
-  branchName: 'Rename Orca-created branches from the initial agent task.',
-  fixCommitFailure: 'Start an agent when a commit hook or git commit fails.',
-  fixChecks: 'Start an agent from failed hosted-review checks.',
-  resolveConflicts: 'Start an agent for local or hosted-review merge conflicts.'
-}
 
 type PrDefaultKey = keyof NonNullable<RepoSourceControlAiOverrides['prCreationDefaults']>
 type RepoAiDraftState = {
@@ -134,6 +126,13 @@ function readInheritedCommandTemplate(
   return resolveSourceControlActionCommandTemplate(source.actions, actionId)
 }
 
+function readInheritedAgentArgs(
+  source: SourceControlAiSettings,
+  actionId: SourceControlActionId
+): string {
+  return source.actions?.[actionId]?.agentArgs?.trim() ?? ''
+}
+
 export function dropRepoLegacyInstructionForAction(
   value: RepoSourceControlAiOverrides,
   actionId: SourceControlActionId
@@ -157,16 +156,17 @@ function actionAgentSelectValue(agentId: TuiAgent | null | undefined): string {
   return agentId ?? DEFAULT_AGENT_VALUE
 }
 
-function getAgentCatalogForAction(
+function resolveAgentArgsPlaceholderAgent(
+  agentId: TuiAgent | null | undefined,
+  source: SourceControlAiSettings,
   actionId: SourceControlActionId,
-  selectedAgent: TuiAgent | null | undefined
-): typeof AGENT_CATALOG {
-  if (!SOURCE_CONTROL_TEXT_ACTION_ID_SET.has(actionId)) {
-    return AGENT_CATALOG
+  defaultTuiAgent: TuiAgent | 'blank' | null | undefined
+): TuiAgent | null {
+  const effectiveAgent = agentId === undefined ? source.actions?.[actionId]?.agentId : agentId
+  if (effectiveAgent) {
+    return effectiveAgent
   }
-  return AGENT_CATALOG.filter(
-    (agent) => TEXT_GENERATION_AGENT_ID_SET.has(agent.id) || agent.id === selectedAgent
-  )
+  return defaultTuiAgent && defaultTuiAgent !== 'blank' ? defaultTuiAgent : null
 }
 
 export function RepositorySourceControlAiSection({
@@ -284,7 +284,8 @@ export function RepositorySourceControlAiSection({
         delete nextActionOverrides[actionId]
       } else if (!hasOwnActionOverride(nextActionOverrides, actionId)) {
         nextActionOverrides[actionId] = {
-          commandInputTemplate: readInheritedCommandTemplate(source, actionId)
+          commandInputTemplate: readInheritedCommandTemplate(source, actionId),
+          agentArgs: readInheritedAgentArgs(source, actionId)
         }
       }
       return dropRepoLegacyInstructionForAction(
@@ -298,7 +299,8 @@ export function RepositorySourceControlAiSection({
     updateDraftRepoAi((current) => {
       const nextActionOverrides = { ...current.actionOverrides }
       const currentOverride = nextActionOverrides[actionId] ?? {
-        commandInputTemplate: readInheritedCommandTemplate(source, actionId)
+        commandInputTemplate: readInheritedCommandTemplate(source, actionId),
+        agentArgs: readInheritedAgentArgs(source, actionId)
       }
       if (value === INHERIT_AGENT_VALUE) {
         const { agentId: _agentId, ...rest } = currentOverride
@@ -326,6 +328,24 @@ export function RepositorySourceControlAiSection({
             [actionId]: {
               ...current.actionOverrides?.[actionId],
               commandInputTemplate: value
+            }
+          }
+        },
+        actionId
+      )
+    )
+  }
+
+  const updateActionAgentArgs = (actionId: SourceControlActionId, value: string): void => {
+    updateDraftRepoAi((current) =>
+      dropRepoLegacyInstructionForAction(
+        {
+          ...current,
+          actionOverrides: {
+            ...current.actionOverrides,
+            [actionId]: {
+              ...current.actionOverrides?.[actionId],
+              agentArgs: value
             }
           }
         },
@@ -411,10 +431,23 @@ export function RepositorySourceControlAiSection({
           const hasOverride = hasOwnActionOverride(repoAi.actionOverrides, actionId)
           const override = repoAi.actionOverrides?.[actionId]
           const inheritedTemplate = readInheritedCommandTemplate(source, actionId)
+          const inheritedAgentArgs = readInheritedAgentArgs(source, actionId)
           const templateValue =
             hasOverride && typeof override?.commandInputTemplate === 'string'
               ? override.commandInputTemplate
               : ''
+          const agentArgsValue =
+            hasOverride && typeof override?.agentArgs === 'string' ? override.agentArgs : ''
+          const agentArgsPlaceholder =
+            inheritedAgentArgs ||
+            getSourceControlAgentArgsPlaceholder(
+              resolveAgentArgsPlaceholderAgent(
+                override?.agentId,
+                source,
+                actionId,
+                settings?.defaultTuiAgent
+              )
+            )
           const agentOptions = getAgentCatalogForAction(actionId, override?.agentId)
           return (
             <div key={actionId} className="space-y-3 rounded-md border border-border px-3 py-3">
@@ -474,6 +507,15 @@ export function RepositorySourceControlAiSection({
                       ))}
                     </SelectContent>
                   </Select>
+                  <Label className="text-[11px] text-muted-foreground">CLI arguments</Label>
+                  <Input
+                    value={agentArgsValue}
+                    onChange={(event) => updateActionAgentArgs(actionId, event.target.value)}
+                    disabled={!hasOverride}
+                    placeholder={agentArgsPlaceholder}
+                    spellCheck={false}
+                    className="h-8 font-mono text-xs disabled:cursor-not-allowed disabled:bg-muted/40"
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label className="text-[11px] text-muted-foreground">Command template</Label>

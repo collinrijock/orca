@@ -49,6 +49,7 @@ export type ResolvedSourceControlAiGenerationParams = {
   thinkingLevel?: string
   customPrompt?: string
   commandInputTemplate?: string
+  agentArgs?: string
   customAgentCommand?: string
   agentCommandOverride?: string
 }
@@ -91,7 +92,10 @@ const OPERATION_LABEL: Record<SourceControlAiOperation, string> = {
   branchName: 'branch names'
 }
 
-const SOURCE_CONTROL_AI_OPERATIONS = ['commitMessage', 'pullRequest', 'branchName'] as const
+// Why: SourceControlAiOperation is exactly SourceControlTextActionId, so the
+// operation list must stay derived from the canonical action ids, not duplicated.
+const SOURCE_CONTROL_AI_OPERATIONS: readonly SourceControlAiOperation[] =
+  SOURCE_CONTROL_TEXT_ACTION_IDS
 const PR_CREATION_DEFAULT_KEYS = [
   'draft',
   'useTemplate',
@@ -265,6 +269,9 @@ export function normalizeRepoSourceControlAiOverrides(
       }
       if (item.commandInputTemplate === null) {
         normalized.commandInputTemplate = null
+      }
+      if (item.agentArgs === null) {
+        normalized.agentArgs = null
       }
       return Object.keys(normalized).length > 0 ? normalized : undefined
     }
@@ -653,8 +660,11 @@ export function normalizeSourceControlAiSettings(
 ): SourceControlAiSettings {
   const base = value ?? sourceControlAiSettingsFromLegacy(legacy)
   const defaults = getDefaultSourceControlAiSettings()
+  const normalizedLaunchActionDefaults = normalizeSourceControlAiActionDefaults(
+    base.launchActionDefaults
+  )
   const normalizedActions = {
-    ...normalizeSourceControlAiActionDefaults(base.launchActionDefaults),
+    ...normalizedLaunchActionDefaults,
     ...normalizeSourceControlAiActionDefaults(base.actions)
   }
   const migratedTextActions = Object.fromEntries(
@@ -711,9 +721,7 @@ export function normalizeSourceControlAiSettings(
       ...base.prCreationDefaults
     },
     actions,
-    launchActionDefaults:
-      normalizeSourceControlAiActionDefaults(base.launchActionDefaults) ??
-      defaults.launchActionDefaults
+    launchActionDefaults: normalizedLaunchActionDefaults ?? defaults.launchActionDefaults
   }
 }
 
@@ -928,6 +936,28 @@ function readRepoInstructionOverride(
   return typeof instruction === 'string' ? instruction : undefined
 }
 
+// Why: callers that already normalized settings/repo overrides reuse this to
+// avoid re-normalizing the same inputs on every instruction lookup.
+function resolveInstructionsFromNormalized(
+  source: SourceControlAiSettings,
+  repoOverrides: RepoSourceControlAiOverrides | null | undefined,
+  operation: SourceControlAiOperation,
+  legacyCustomPrompt: string | undefined
+): string {
+  const repoInstruction = readRepoInstructionOverride(
+    repoOverrides?.instructionsByOperation,
+    operation
+  )
+  if (repoInstruction !== undefined) {
+    return repoInstruction.trim()
+  }
+  const globalInstruction = source.instructionsByOperation[operation]
+  if (typeof globalInstruction === 'string') {
+    return globalInstruction.trim()
+  }
+  return operation === 'commitMessage' ? (legacyCustomPrompt ?? '').trim() : ''
+}
+
 export function resolveSourceControlAiInstructions(args: {
   settings: Pick<GlobalSettings, 'sourceControlAi' | 'commitMessageAi'>
   repo?: Pick<Repo, 'sourceControlAi'> | null
@@ -938,20 +968,12 @@ export function resolveSourceControlAiInstructions(args: {
     args.settings.commitMessageAi
   )
   const repoOverrides = normalizeRepoSourceControlAiOverrides(args.repo?.sourceControlAi)
-  const repoInstruction = readRepoInstructionOverride(
-    repoOverrides?.instructionsByOperation,
-    args.operation
+  return resolveInstructionsFromNormalized(
+    source,
+    repoOverrides,
+    args.operation,
+    args.settings.commitMessageAi?.customPrompt
   )
-  if (repoInstruction !== undefined) {
-    return repoInstruction.trim()
-  }
-  const globalInstruction = source.instructionsByOperation[args.operation]
-  if (typeof globalInstruction === 'string') {
-    return globalInstruction.trim()
-  }
-  return args.operation === 'commitMessage'
-    ? (args.settings.commitMessageAi?.customPrompt ?? '').trim()
-    : ''
 }
 
 export function hasConfiguredSourceControlAiInstructions(args: {
@@ -996,7 +1018,7 @@ function resolveActionRecipeForTextOperation(
   source: SourceControlAiSettings,
   repoOverrides: RepoSourceControlAiOverrides | null | undefined,
   operation: SourceControlAiOperation
-): { agentId?: TuiAgent | null; commandInputTemplate: string } {
+): { agentId?: TuiAgent | null; commandInputTemplate: string; agentArgs?: string } {
   const globalRecipe = readSourceControlActionDefault(source.actions, operation)
   const repoRecipe = repoOverrides?.actionOverrides?.[operation]
   const repoInstruction = readRepoInstructionOverride(
@@ -1013,11 +1035,22 @@ function resolveActionRecipeForTextOperation(
       : repoRecipe?.commandInputTemplate === null
         ? ''
         : undefined
+  const repoAgentArgs =
+    typeof repoRecipe?.agentArgs === 'string'
+      ? repoRecipe.agentArgs.trim()
+      : repoRecipe?.agentArgs === null
+        ? ''
+        : undefined
   return {
     ...(repoRecipe?.agentId !== undefined
       ? { agentId: repoRecipe.agentId }
       : globalRecipe.agentId !== undefined
         ? { agentId: globalRecipe.agentId }
+        : {}),
+    ...(repoAgentArgs !== undefined
+      ? { agentArgs: repoAgentArgs }
+      : globalRecipe.agentArgs !== undefined
+        ? { agentArgs: globalRecipe.agentArgs }
         : {}),
     commandInputTemplate:
       repoTemplate !== undefined
@@ -1064,6 +1097,11 @@ export function resolveSourceControlActionRecipe(input: {
       ? { commandInputTemplate: repoRecipe.commandInputTemplate.trim() }
       : repoRecipe.commandInputTemplate === null
         ? { commandInputTemplate: '' }
+        : {}),
+    ...(typeof repoRecipe.agentArgs === 'string'
+      ? { agentArgs: repoRecipe.agentArgs.trim() }
+      : repoRecipe.agentArgs === null
+        ? { agentArgs: '' }
         : {})
   }
 }
@@ -1124,8 +1162,14 @@ export function resolveSourceControlAiForOperation(
         params: {
           agentId: CUSTOM_AGENT_ID,
           model: '',
-          customPrompt: resolveSourceControlAiInstructions(input),
+          customPrompt: resolveInstructionsFromNormalized(
+            source,
+            repoOverrides,
+            input.operation,
+            legacy?.customPrompt
+          ),
           commandInputTemplate: actionRecipe.commandInputTemplate,
+          ...(actionRecipe.agentArgs !== undefined ? { agentArgs: actionRecipe.agentArgs } : {}),
           customAgentCommand
         },
         prCreationDefaults
@@ -1192,8 +1236,14 @@ export function resolveSourceControlAiForOperation(
         agentId: resolvedActionAgentId,
         model: model.id,
         thinkingLevel,
-        customPrompt: resolveSourceControlAiInstructions(input),
+        customPrompt: resolveInstructionsFromNormalized(
+          source,
+          repoOverrides,
+          input.operation,
+          legacy?.customPrompt
+        ),
         commandInputTemplate: actionRecipe.commandInputTemplate,
+        ...(actionRecipe.agentArgs !== undefined ? { agentArgs: actionRecipe.agentArgs } : {}),
         ...(agentCommandOverride ? { agentCommandOverride } : {})
       },
       prCreationDefaults

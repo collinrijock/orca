@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { CheckCircle2, RefreshCw, Save, Sparkles, Terminal, TriangleAlert } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -9,6 +9,7 @@ import {
   DialogHeader,
   DialogTitle
 } from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import {
   Select,
@@ -18,7 +19,7 @@ import {
   SelectValue
 } from '@/components/ui/select'
 import { AGENT_CATALOG, AgentIcon } from '@/lib/agent-catalog'
-import { planSourceControlCommitMessageGeneration } from '@/lib/source-control-generation-plan'
+import { planSourceControlTextGeneration } from '@/lib/source-control-generation-plan'
 import {
   CUSTOM_AGENT_ID,
   getCommitMessageAgentCapability,
@@ -29,7 +30,10 @@ import {
   resolveSourceControlAiForOperation,
   type ResolvedSourceControlAiGenerationParams
 } from '../../../../shared/source-control-ai'
-import { setSourceControlActionDefault } from '../../../../shared/source-control-ai-actions'
+import {
+  setSourceControlActionDefault,
+  type SourceControlTextActionId
+} from '../../../../shared/source-control-ai-actions'
 import type { SourceControlAiSettings } from '../../../../shared/source-control-ai-types'
 import type { GlobalSettings, Repo, TuiAgent } from '../../../../shared/types'
 import { toast } from 'sonner'
@@ -40,7 +44,7 @@ type PlanState =
   | { status: 'success'; commandLabel: string; delivery: string; caveat: string }
   | { status: 'error'; error: string }
 
-type SourceControlCommitMessageGenerationDialogProps = {
+type SourceControlTextGenerationBaseDialogProps = {
   open: boolean
   onOpenChange: (open: boolean) => void
   settings: GlobalSettings | null
@@ -48,6 +52,13 @@ type SourceControlCommitMessageGenerationDialogProps = {
   discoveryHostKey: string
   onGenerate: (params: ResolvedSourceControlAiGenerationParams) => void
   onSaveDefaults: (params: ResolvedSourceControlAiGenerationParams) => Promise<void> | void
+}
+
+type SourceControlTextGenerationDialogProps = SourceControlTextGenerationBaseDialogProps & {
+  actionId: SourceControlTextActionId
+  title: string
+  description: string
+  generateLabel: string
 }
 
 const UNCONFIGURED_AGENT_SELECT_VALUE = ''
@@ -60,6 +71,7 @@ function agentLabel(agentId: TuiAgent): string {
 export function buildCommitMessageGenerationParams(args: {
   agentId: CommitMessageGenerationAgentChoice
   commandTemplate: string
+  agentArgs?: string
   baseParams: ResolvedSourceControlAiGenerationParams | null
   settings: Pick<GlobalSettings, 'agentCmdOverrides'> | null | undefined
 }): ResolvedSourceControlAiGenerationParams | null {
@@ -72,6 +84,7 @@ export function buildCommitMessageGenerationParams(args: {
       model: '',
       customPrompt: args.baseParams?.customPrompt,
       commandInputTemplate: args.commandTemplate,
+      ...(args.agentArgs !== undefined ? { agentArgs: args.agentArgs } : {}),
       customAgentCommand: args.baseParams?.customAgentCommand ?? ''
     }
   }
@@ -96,11 +109,16 @@ export function buildCommitMessageGenerationParams(args: {
     model: modelId,
     ...(thinkingLevel ? { thinkingLevel } : {}),
     commandInputTemplate: args.commandTemplate,
+    ...(args.agentArgs !== undefined ? { agentArgs: args.agentArgs } : {}),
     ...(agentCommandOverride ? { agentCommandOverride } : {})
   }
 }
 
-export function SourceControlCommitMessageGenerationDialog({
+export function SourceControlTextGenerationDialog({
+  actionId,
+  title,
+  description,
+  generateLabel,
   open,
   onOpenChange,
   settings,
@@ -108,18 +126,18 @@ export function SourceControlCommitMessageGenerationDialog({
   discoveryHostKey,
   onGenerate,
   onSaveDefaults
-}: SourceControlCommitMessageGenerationDialogProps): React.JSX.Element {
+}: SourceControlTextGenerationDialogProps): React.JSX.Element {
   const resolved = useMemo(
     () =>
       settings
         ? resolveSourceControlAiForOperation({
             settings,
             repo: repo ?? null,
-            operation: 'commitMessage',
+            operation: actionId,
             discoveryHostKey
           })
         : { ok: false as const, error: 'Settings are not loaded.' },
-    [discoveryHostKey, repo, settings]
+    [actionId, discoveryHostKey, repo, settings]
   )
   const baseParams = resolved.ok ? resolved.value.params : null
   const capabilities = useMemo(listCommitMessageAgentCapabilities, [])
@@ -128,8 +146,10 @@ export function SourceControlCommitMessageGenerationDialog({
   )
   const [agentId, setAgentId] = useState<CommitMessageGenerationAgentChoice>('')
   const [commandTemplate, setCommandTemplate] = useState('{basePrompt}')
+  const [agentArgs, setAgentArgs] = useState('')
   const [plan, setPlan] = useState<PlanState>({ status: 'idle' })
   const [saving, setSaving] = useState(false)
+  const commandTemplateId = `source-control-${actionId}-command-template`
 
   useEffect(() => {
     if (!open || !baseParams) {
@@ -137,16 +157,18 @@ export function SourceControlCommitMessageGenerationDialog({
     }
     setAgentId(baseParams.agentId)
     setCommandTemplate(baseParams.commandInputTemplate ?? '{basePrompt}')
+    setAgentArgs(baseParams.agentArgs ?? '')
     setPlan({ status: 'idle' })
   }, [baseParams, open])
 
   const params = buildCommitMessageGenerationParams({
     agentId,
     commandTemplate,
+    agentArgs,
     baseParams,
     settings
   })
-  const paramsPlanResult = params ? planSourceControlCommitMessageGeneration(params) : null
+  const paramsPlanResult = params ? planSourceControlTextGeneration(actionId, params) : null
   const canRunGeneration = Boolean(params && paramsPlanResult?.ok)
 
   const handlePlan = (): void => {
@@ -166,6 +188,32 @@ export function SourceControlCommitMessageGenerationDialog({
     )
   }
 
+  const saveCurrentDefaults = useCallback(
+    async (options: { showToast: boolean; showErrors: boolean }): Promise<boolean> => {
+      if (!params || saving || !paramsPlanResult?.ok) {
+        if (options.showErrors && paramsPlanResult && !paramsPlanResult.ok) {
+          setPlan({ status: 'error', error: paramsPlanResult.error })
+        }
+        return false
+      }
+      setSaving(true)
+      try {
+        await onSaveDefaults(params)
+        if (options.showToast) {
+          toast.success(
+            actionId === 'commitMessage'
+              ? 'Saved commit-message recipe.'
+              : 'Saved hosted-review recipe.'
+          )
+        }
+        return true
+      } finally {
+        setSaving(false)
+      }
+    },
+    [actionId, onSaveDefaults, params, paramsPlanResult, saving]
+  )
+
   const handleGenerate = (): void => {
     if (!params || !paramsPlanResult?.ok) {
       if (paramsPlanResult && !paramsPlanResult.ok) {
@@ -178,29 +226,15 @@ export function SourceControlCommitMessageGenerationDialog({
   }
 
   const handleSaveDefaults = async (): Promise<void> => {
-    if (!params || saving || !paramsPlanResult?.ok) {
-      if (paramsPlanResult && !paramsPlanResult.ok) {
-        setPlan({ status: 'error', error: paramsPlanResult.error })
-      }
-      return
-    }
-    setSaving(true)
-    try {
-      await onSaveDefaults(params)
-      toast.success('Saved commit-message recipe.')
-    } finally {
-      setSaving(false)
-    }
+    await saveCurrentDefaults({ showToast: true, showErrors: true })
   }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-xl">
         <DialogHeader>
-          <DialogTitle className="text-sm">Generate Commit Message</DialogTitle>
-          <DialogDescription className="text-xs">
-            Choose the agent and command template for this run.
-          </DialogDescription>
+          <DialogTitle className="text-sm">{title}</DialogTitle>
+          <DialogDescription className="text-xs">{description}</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
@@ -248,11 +282,28 @@ export function SourceControlCommitMessageGenerationDialog({
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="commit-message-command-template" className="text-xs">
+            <Label htmlFor={`source-control-${actionId}-cli-args`} className="text-xs">
+              CLI arguments
+            </Label>
+            <Input
+              id={`source-control-${actionId}-cli-args`}
+              value={agentArgs}
+              spellCheck={false}
+              placeholder="--model sonnet"
+              onChange={(event) => {
+                setAgentArgs(event.target.value)
+                setPlan({ status: 'idle' })
+              }}
+              className="h-8 font-mono text-xs"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor={commandTemplateId} className="text-xs">
               Command template
             </Label>
             <textarea
-              id="commit-message-command-template"
+              id={commandTemplateId}
               rows={8}
               value={commandTemplate}
               spellCheck={false}
@@ -263,7 +314,7 @@ export function SourceControlCommitMessageGenerationDialog({
               className="w-full resize-y rounded-md border border-border bg-background px-2.5 py-2 font-mono text-xs text-foreground outline-none placeholder:text-muted-foreground/70 focus-visible:ring-1 focus-visible:ring-ring"
             />
             <SourceControlActionVariableChips
-              actionId="commitMessage"
+              actionId={actionId}
               onInsert={(variable) => {
                 const separator =
                   commandTemplate.endsWith('\n') || commandTemplate.length === 0 ? '' : ' '
@@ -315,9 +366,14 @@ export function SourceControlCommitMessageGenerationDialog({
             {saving ? <RefreshCw className="size-4 animate-spin" /> : <Save className="size-4" />}
             Save as default
           </Button>
-          <Button type="button" size="sm" disabled={!canRunGeneration} onClick={handleGenerate}>
+          <Button
+            type="button"
+            size="sm"
+            disabled={!canRunGeneration || saving}
+            onClick={handleGenerate}
+          >
             <Sparkles className="size-4" />
-            Generate
+            {generateLabel}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -325,30 +381,44 @@ export function SourceControlCommitMessageGenerationDialog({
   )
 }
 
-export function applyCommitMessageGenerationDefaults(
+export function applySourceControlTextGenerationDefaults(
   current: SourceControlAiSettings,
-  _hostKey: string,
+  actionId: SourceControlTextActionId,
   params: ResolvedSourceControlAiGenerationParams
 ): SourceControlAiSettings {
   if (params.agentId === CUSTOM_AGENT_ID) {
-    const currentCommitRecipe = current.actions?.commitMessage ?? {}
-    const { agentId: _agentId, ...recipeWithoutAgent } = currentCommitRecipe
+    const currentRecipe = current.actions?.[actionId] ?? {}
+    const { agentId: _agentId, ...recipeWithoutAgent } = currentRecipe
     return {
       ...current,
+      // Why: custom commands are stored as the global Source Control AI
+      // fallback, not as per-action TUI agents; saving must make that
+      // fallback explicit so the action keeps using the custom command.
+      agentId: CUSTOM_AGENT_ID,
       actions: {
         ...current.actions,
-        commitMessage: {
+        [actionId]: {
           ...recipeWithoutAgent,
-          commandInputTemplate: params.commandInputTemplate ?? '{basePrompt}'
+          commandInputTemplate: params.commandInputTemplate ?? '{basePrompt}',
+          ...(params.agentArgs !== undefined ? { agentArgs: params.agentArgs } : {})
         }
       }
     }
   }
   return {
     ...current,
-    actions: setSourceControlActionDefault(current.actions, 'commitMessage', {
+    actions: setSourceControlActionDefault(current.actions, actionId, {
       agentId: params.agentId,
-      commandInputTemplate: params.commandInputTemplate ?? '{basePrompt}'
+      commandInputTemplate: params.commandInputTemplate ?? '{basePrompt}',
+      ...(params.agentArgs !== undefined ? { agentArgs: params.agentArgs } : {})
     })
   }
+}
+
+export function applyCommitMessageGenerationDefaults(
+  current: SourceControlAiSettings,
+  _hostKey: string,
+  params: ResolvedSourceControlAiGenerationParams
+): SourceControlAiSettings {
+  return applySourceControlTextGenerationDefaults(current, 'commitMessage', params)
 }

@@ -59,6 +59,7 @@ import {
   getBrokenChecks,
   getCheckDetailsPromptKey
 } from '../pr-checks-fix-prompt'
+import { startFixChecksAgent } from '@/lib/fix-checks-agent-launch'
 import { CreatePullRequestDialog } from './CreatePullRequestDialog'
 import type {
   HostedReviewCreationEligibility,
@@ -1847,7 +1848,7 @@ export default function ChecksPanel(): React.JSX.Element {
   }, [activeConflictReview, activeWorktreeId, activeWorktreePath])
 
   const handleFixChecksWithAI = useCallback(async (): Promise<void> => {
-    if (isFixingChecksWithAI || !activeWorktreeId || !activeReview) {
+    if (isFixingChecksWithAI || !activeWorktreeId || !activeReview || !repo) {
       return
     }
     const broken = getBrokenChecks(checks)
@@ -1889,20 +1890,24 @@ export default function ChecksPanel(): React.JSX.Element {
       if (!isCurrentAsyncResult(requestKey)) {
         return
       }
-      setAgentComposerState({
-        actionId: 'fixChecks',
-        title: 'Fix Checks With AI',
-        description: 'Review and edit the full command input before starting an agent.',
-        prompt: buildFixBrokenChecksPrompt({
-          reviewKind: activeReview.provider === 'gitlab' ? 'MR' : 'PR',
-          reviewNumber: activeReview.number,
-          reviewTitle: activeReview.title,
-          reviewUrl: activeReview.url,
-          checks,
-          checkRunDetailsByCheckKey
-        }),
+      const basePrompt = buildFixBrokenChecksPrompt({
+        reviewKind: activeReview.provider === 'gitlab' ? 'MR' : 'PR',
+        reviewNumber: activeReview.number,
+        reviewTitle: activeReview.title,
+        reviewUrl: activeReview.url,
+        checks,
+        checkRunDetailsByCheckKey
+      })
+      const started = await startFixChecksAgent({
+        repoId: repo.id,
+        basePrompt,
+        worktreeId: activeWorktreeId,
+        groupId: activeWorktreeId,
         launchSource: 'task_page'
       })
+      if (started) {
+        toast.success('Started an AI agent for the broken checks.')
+      }
     } finally {
       setIsFixingChecksWithAI(false)
     }
@@ -2605,6 +2610,15 @@ export default function ChecksPanel(): React.JSX.Element {
                 repo,
                 actionId: agentComposerState.actionId
               }).commandInputTemplate ?? null)
+            : null
+        }
+        savedAgentArgs={
+          agentComposerState
+            ? (resolveSourceControlActionRecipe({
+                settings,
+                repo,
+                actionId: agentComposerState.actionId
+              }).agentArgs ?? null)
             : null
         }
         onSaveAgentDefault={saveLaunchActionDefault}

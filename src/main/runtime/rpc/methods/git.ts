@@ -24,6 +24,62 @@ import {
   WorktreeSelector
 } from './git-params'
 
+type CommitMessageGenerationOverride = {
+  commitMessageAi?: GlobalSettings['commitMessageAi']
+  sourceControlAi?: GlobalSettings['sourceControlAi']
+  sourceControlAiResolvedParams?: ResolvedSourceControlAiGenerationParams
+  agentCmdOverrides?: GlobalSettings['agentCmdOverrides']
+  enableGitHubAttribution?: boolean
+  commitMessageDiscoveryHostKey?: string
+}
+
+// Why: generateCommitMessage and generatePullRequestFields share the same optional
+// override fields; returning undefined when none are set keeps the no-override call path.
+function buildCommitMessageGenerationOverride(params: {
+  commitMessageAi?: unknown
+  sourceControlAi?: unknown
+  sourceControlAiResolvedParams?: unknown
+  agentCmdOverrides?: unknown
+  enableGitHubAttribution?: boolean
+  commitMessageDiscoveryHostKey?: string
+}): CommitMessageGenerationOverride | undefined {
+  if (
+    params.commitMessageAi === undefined &&
+    params.sourceControlAi === undefined &&
+    params.sourceControlAiResolvedParams === undefined &&
+    params.agentCmdOverrides === undefined &&
+    params.enableGitHubAttribution === undefined &&
+    params.commitMessageDiscoveryHostKey === undefined
+  ) {
+    return undefined
+  }
+  return {
+    ...(params.commitMessageAi !== undefined
+      ? { commitMessageAi: params.commitMessageAi as GlobalSettings['commitMessageAi'] }
+      : {}),
+    ...(params.sourceControlAi !== undefined
+      ? { sourceControlAi: params.sourceControlAi as GlobalSettings['sourceControlAi'] }
+      : {}),
+    ...(params.sourceControlAiResolvedParams !== undefined
+      ? {
+          sourceControlAiResolvedParams:
+            params.sourceControlAiResolvedParams as ResolvedSourceControlAiGenerationParams
+        }
+      : {}),
+    ...(params.agentCmdOverrides !== undefined
+      ? {
+          agentCmdOverrides: params.agentCmdOverrides as GlobalSettings['agentCmdOverrides']
+        }
+      : {}),
+    ...(params.enableGitHubAttribution !== undefined
+      ? { enableGitHubAttribution: params.enableGitHubAttribution }
+      : {}),
+    ...(params.commitMessageDiscoveryHostKey !== undefined
+      ? { commitMessageDiscoveryHostKey: params.commitMessageDiscoveryHostKey }
+      : {})
+  }
+}
+
 export const GIT_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'git.status',
@@ -167,41 +223,11 @@ export const GIT_METHODS: RpcMethod[] = [
     name: 'git.generateCommitMessage',
     params: GitGenerateCommitMessage,
     handler: async (params, { runtime }) => {
-      if (
-        params.commitMessageAi === undefined &&
-        params.sourceControlAi === undefined &&
-        params.sourceControlAiResolvedParams === undefined &&
-        params.agentCmdOverrides === undefined &&
-        params.enableGitHubAttribution === undefined &&
-        params.commitMessageDiscoveryHostKey === undefined
-      ) {
+      const override = buildCommitMessageGenerationOverride(params)
+      if (override === undefined) {
         return runtime.generateRuntimeCommitMessage(params.worktree)
       }
-      return runtime.generateRuntimeCommitMessage(params.worktree, {
-        ...(params.commitMessageAi !== undefined
-          ? { commitMessageAi: params.commitMessageAi as GlobalSettings['commitMessageAi'] }
-          : {}),
-        ...(params.sourceControlAi !== undefined
-          ? { sourceControlAi: params.sourceControlAi as GlobalSettings['sourceControlAi'] }
-          : {}),
-        ...(params.sourceControlAiResolvedParams !== undefined
-          ? {
-              sourceControlAiResolvedParams:
-                params.sourceControlAiResolvedParams as ResolvedSourceControlAiGenerationParams
-            }
-          : {}),
-        ...(params.agentCmdOverrides !== undefined
-          ? {
-              agentCmdOverrides: params.agentCmdOverrides as GlobalSettings['agentCmdOverrides']
-            }
-          : {}),
-        ...(params.enableGitHubAttribution !== undefined
-          ? { enableGitHubAttribution: params.enableGitHubAttribution }
-          : {}),
-        ...(params.commitMessageDiscoveryHostKey !== undefined
-          ? { commitMessageDiscoveryHostKey: params.commitMessageDiscoveryHostKey }
-          : {})
-      })
+      return runtime.generateRuntimeCommitMessage(params.worktree, override)
     }
   }),
   defineMethod({
@@ -234,41 +260,11 @@ export const GIT_METHODS: RpcMethod[] = [
         body: params.body,
         draft: params.draft
       }
-      if (
-        params.commitMessageAi === undefined &&
-        params.sourceControlAi === undefined &&
-        params.sourceControlAiResolvedParams === undefined &&
-        params.agentCmdOverrides === undefined &&
-        params.enableGitHubAttribution === undefined &&
-        params.commitMessageDiscoveryHostKey === undefined
-      ) {
+      const override = buildCommitMessageGenerationOverride(params)
+      if (override === undefined) {
         return runtime.generateRuntimePullRequestFields(params.worktree, input)
       }
-      return runtime.generateRuntimePullRequestFields(params.worktree, input, {
-        ...(params.commitMessageAi !== undefined
-          ? { commitMessageAi: params.commitMessageAi as GlobalSettings['commitMessageAi'] }
-          : {}),
-        ...(params.sourceControlAi !== undefined
-          ? { sourceControlAi: params.sourceControlAi as GlobalSettings['sourceControlAi'] }
-          : {}),
-        ...(params.sourceControlAiResolvedParams !== undefined
-          ? {
-              sourceControlAiResolvedParams:
-                params.sourceControlAiResolvedParams as ResolvedSourceControlAiGenerationParams
-            }
-          : {}),
-        ...(params.agentCmdOverrides !== undefined
-          ? {
-              agentCmdOverrides: params.agentCmdOverrides as GlobalSettings['agentCmdOverrides']
-            }
-          : {}),
-        ...(params.enableGitHubAttribution !== undefined
-          ? { enableGitHubAttribution: params.enableGitHubAttribution }
-          : {}),
-        ...(params.commitMessageDiscoveryHostKey !== undefined
-          ? { commitMessageDiscoveryHostKey: params.commitMessageDiscoveryHostKey }
-          : {})
-      })
+      return runtime.generateRuntimePullRequestFields(params.worktree, input, override)
     }
   }),
   defineMethod({

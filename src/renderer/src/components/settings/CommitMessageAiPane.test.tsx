@@ -10,10 +10,13 @@ import {
 import { useAppStore } from '../../store'
 import {
   CommitMessageAiPane,
-  getAgentCatalogForAction,
   getCommitMessageSettingsPaneDiscoveryHostKey,
   mergeDiscoveredModelsIntoCommitMessageConfig
 } from './CommitMessageAiPane'
+import {
+  getAgentCatalogForAction,
+  getSourceControlAgentArgsPlaceholder
+} from './source-control-action-recipe-options'
 import { COMMIT_MESSAGE_AI_PANE_SEARCH_ENTRIES } from './commit-message-ai-search'
 
 function renderPane(settings: GlobalSettings): string {
@@ -78,12 +81,71 @@ describe('CommitMessageAiPane', () => {
     expect(markup).toContain('Commit failure fixes')
     expect(markup).toContain('Broken checks fixes')
     expect(markup).toContain('Conflict resolution')
+    expect(markup).toContain('CLI arguments')
     expect(markup).toContain('Command template')
     expect(markup).toContain('{basePrompt}')
     expect(markup).toContain('{stagedPatch}')
     expect(markup).toContain('Use Conventional Commits.')
     expect(markup).not.toContain('Default model')
     expect(markup).not.toContain('Thinking effort')
+  })
+
+  it('uses agent-specific CLI argument placeholders', () => {
+    const markup = renderPane(
+      buildSettings({
+        sourceControlAi: {
+          enabled: true,
+          agentId: null,
+          selectedModelByAgent: {},
+          selectedModelByAgentByHost: {},
+          discoveredModelsByAgent: {},
+          discoveredModelsByAgentByHost: {},
+          selectedThinkingByModel: {},
+          instructionsByOperation: {},
+          customAgentCommand: '',
+          actions: {
+            fixChecks: {
+              agentId: 'codex'
+            }
+          },
+          prCreationDefaults: {},
+          launchActionDefaults: {}
+        }
+      })
+    )
+
+    expect(markup).toContain('placeholder="--model gpt-5.4-mini"')
+  })
+
+  it('falls back to the preferred default agent for CLI argument placeholders', () => {
+    const markup = renderPane(
+      buildSettings({
+        defaultTuiAgent: 'codex',
+        sourceControlAi: {
+          enabled: true,
+          agentId: null,
+          selectedModelByAgent: {},
+          selectedModelByAgentByHost: {},
+          discoveredModelsByAgent: {},
+          discoveredModelsByAgentByHost: {},
+          selectedThinkingByModel: {},
+          instructionsByOperation: {},
+          customAgentCommand: '',
+          actions: {},
+          prCreationDefaults: {},
+          launchActionDefaults: {}
+        }
+      })
+    )
+
+    expect(markup.match(/placeholder="--model gpt-5\.4-mini"/g)?.length ?? 0).toBeGreaterThan(0)
+  })
+
+  it('uses known model flags when building source-control CLI argument placeholders', () => {
+    expect(getSourceControlAgentArgsPlaceholder('claude')).toBe('--model sonnet')
+    expect(getSourceControlAgentArgsPlaceholder('codex')).toBe('--model gpt-5.4-mini')
+    expect(getSourceControlAgentArgsPlaceholder('amp')).toBe('--mode smart')
+    expect(getSourceControlAgentArgsPlaceholder('aider')).toBe('--model <model>')
   })
 
   it('only offers non-interactive generation agents for text generation actions', () => {
@@ -149,6 +211,33 @@ describe('CommitMessageAiPane', () => {
     expect(markup).not.toContain('Custom command')
   })
 
+  it('preserves in-progress trailing spaces in command template textareas', () => {
+    const markup = renderPane(
+      buildSettings({
+        sourceControlAi: {
+          enabled: true,
+          agentId: null,
+          selectedModelByAgent: {},
+          selectedModelByAgentByHost: {},
+          discoveredModelsByAgent: {},
+          discoveredModelsByAgentByHost: {},
+          selectedThinkingByModel: {},
+          instructionsByOperation: { commitMessage: '', pullRequest: '', branchName: '' },
+          customAgentCommand: '',
+          actions: {
+            fixChecks: {
+              commandInputTemplate: 'use /fix-ci-issue '
+            }
+          },
+          prCreationDefaults: {},
+          launchActionDefaults: {}
+        }
+      })
+    )
+
+    expect(markup).toContain('use /fix-ci-issue </textarea>')
+  })
+
   it('allows default-agent recipes even when the old default generator is unsupported', () => {
     const markup = renderPane(
       buildSettings({
@@ -195,7 +284,7 @@ describe('CommitMessageAiPane', () => {
     )
 
     expect(actionRecipesEntry?.keywords).toEqual(
-      expect.arrayContaining(['agent', 'command', 'template', 'ci'])
+      expect.arrayContaining(['agent', 'arguments', 'cli', 'command', 'model', 'template', 'ci'])
     )
   })
 
