@@ -140,6 +140,7 @@ describe('ContextualTourOverlaySurface', () => {
     expect(markup).toContain('aria-valuenow="1"')
     expect(markup).toContain('aria-valuemax="3"')
     expect(markup).toContain('Step 1 of 3')
+    expect(markup).toContain('1 of 3')
     expect(markup).toContain('Choose the work source')
     expect(markup).toContain('Switch between connected providers')
     expect(markup).toContain('aria-label="Skip tour"')
@@ -165,6 +166,7 @@ describe('ContextualTourOverlaySurface', () => {
 
     expect(markup).toContain('aria-valuenow="2"')
     expect(markup).toContain('aria-valuemax="2"')
+    expect(markup).toContain('2 of 2')
     expect(markup).toContain('Start from work items')
     expect(markup).toContain('Done')
   })
