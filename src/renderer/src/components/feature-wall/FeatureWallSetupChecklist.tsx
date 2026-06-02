@@ -12,11 +12,11 @@ import { TasksAnimatedVisual } from './TasksAnimatedVisual'
 import { AgentCapabilitiesSetupAction } from './AgentCapabilitiesSetupAction'
 import {
   AddReposAction,
-  SetupPreview,
   SetupScriptAction,
   TwoAgentsAction,
   WorkspacesAction
 } from './FeatureWallSetupWorkflowActions'
+import { SetupStepPreview } from './SetupStepPreview'
 import { Button } from '@/components/ui/button'
 import { GitHubRow, LinearRow } from '../onboarding/IntegrationsStep'
 import { AgentStep } from '../onboarding/AgentStep'
@@ -208,9 +208,9 @@ function TaskSourcesAction(props: { reducedMotion: boolean }): React.JSX.Element
         <ArrowUpRight className="size-3.5" />
         See tasks
       </Button>
-      <SetupPreview className="mx-auto h-[220px] w-full max-w-[480px]">
+      <SetupStepPreview className="mx-auto h-[220px] w-full max-w-[480px]">
         <TasksAnimatedVisual reducedMotion={props.reducedMotion} />
-      </SetupPreview>
+      </SetupStepPreview>
     </div>
   )
 }

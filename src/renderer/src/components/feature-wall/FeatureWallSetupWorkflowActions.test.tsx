@@ -1,14 +1,27 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
+  SETUP_GUIDE_PROJECT_PROMPT,
   activateWorktreeTerminalForSetupTour,
   cancelPendingSetupGuideTourRequest,
+  getSetupGuideGitRepo,
   isSetupGuideWorkspaceComposerRequestCurrent,
+  promptForSetupGuideProject,
   requestSetupGuideTourAfterFrame,
   requestSetupGuideTourWhenReady
 } from './FeatureWallSetupWorkflowActions'
 import { useAppStore } from '@/store'
 import * as worktreeActivation from '@/lib/worktree-activation'
 import * as webRuntimeSession from '@/runtime/web-runtime-session'
+import { toast } from 'sonner'
+import type { Repo } from '../../../../shared/types'
+
+vi.mock('sonner', () => ({
+  toast: {
+    message: vi.fn(),
+    success: vi.fn(),
+    error: vi.fn()
+  }
+}))
 
 vi.mock('@/lib/worktree-activation', () => ({
   activateAndRevealWorktree: vi.fn()
@@ -35,6 +48,18 @@ vi.mock('./SetupScriptAnimatedVisual', () => ({
   SetupScriptAnimatedVisual: () => <div />
 }))
 
+function makeRepo(id: string, overrides: Partial<Repo> = {}): Repo {
+  return {
+    id,
+    path: `/tmp/${id}`,
+    displayName: id,
+    badgeColor: '#000000',
+    addedAt: 1,
+    kind: 'git',
+    ...overrides
+  }
+}
+
 describe('TwoAgentsAction', () => {
   afterEach(() => {
     vi.restoreAllMocks()
@@ -47,6 +72,33 @@ describe('TwoAgentsAction', () => {
       activeGroupIdByWorktree: {},
       terminalLayoutsByTabId: {}
     })
+  })
+
+  it('prompts for a project before setup-guide actions that need one', () => {
+    const openModal = vi.fn()
+
+    promptForSetupGuideProject(openModal)
+
+    expect(openModal).toHaveBeenCalledWith('add-repo')
+    expect(toast.message).toHaveBeenCalledWith(SETUP_GUIDE_PROJECT_PROMPT)
+  })
+
+  it('chooses the active git repo for setup-guide workspace creation', () => {
+    const active = makeRepo('active')
+
+    expect(getSetupGuideGitRepo([makeRepo('first'), active], 'active')).toBe(active)
+  })
+
+  it('falls back to the first git repo when the active project is a folder', () => {
+    const gitRepo = makeRepo('git')
+
+    expect(getSetupGuideGitRepo([makeRepo('folder', { kind: 'folder' }), gitRepo], 'folder')).toBe(
+      gitRepo
+    )
+  })
+
+  it('returns no setup-guide repo when only folders exist', () => {
+    expect(getSetupGuideGitRepo([makeRepo('folder', { kind: 'folder' })], 'folder')).toBeNull()
   })
 
   it('creates a terminal tab before requesting the split tour when a worktree has only editor/browser tabs', () => {

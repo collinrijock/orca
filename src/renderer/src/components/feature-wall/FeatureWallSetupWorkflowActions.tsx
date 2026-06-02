@@ -1,38 +1,46 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { ArrowUpRight, Plus, Save, Settings } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { cn } from '@/lib/utils'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import { useAppStore } from '@/store'
 import { useAllWorktrees } from '@/store/selectors'
 import { getDefaultRepoHookSettings } from '../../../../shared/constants'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
-import type { RepoHookSettings, TerminalPaneLayoutNode, Worktree } from '../../../../shared/types'
+import type {
+  Repo,
+  RepoHookSettings,
+  TerminalPaneLayoutNode,
+  Worktree
+} from '../../../../shared/types'
 import { getRepositoryLocalCommandsSectionId } from '../settings/repository-settings-targets'
 import { AddReposAnimatedVisual } from './AddReposAnimatedVisual'
 import { SetupTwoAgentsVisual, SetupWorkspacesVisual } from './FeatureWallSetupStepVisuals'
 import { SetupScriptAnimatedVisual } from './SetupScriptAnimatedVisual'
+import { SetupStepPreview } from './SetupStepPreview'
 import {
   requestContextualTourWhenReady,
   type RequestContextualTourWhenReadyArgs
 } from '../contextual-tours/request-contextual-tour-when-ready'
 import { isWebRuntimeSessionActive } from '@/runtime/web-runtime-session'
 
-export function SetupPreview(props: {
-  children: ReactNode
-  className?: string
-}): React.JSX.Element {
-  return (
-    <div className={cn('relative', props.className)}>
-      <div className="pointer-events-none absolute left-3 top-3 z-20 rounded-md bg-card/85 px-1.5 py-0.5 text-xs font-semibold leading-none text-muted-foreground shadow-xs backdrop-blur-sm">
-        Preview
-      </div>
-      <div className="h-full [&>*]:h-full [&>*]:pt-8">{props.children}</div>
-    </div>
-  )
+export const SETUP_GUIDE_PROJECT_PROMPT = "First add a project you'd like to work on."
+
+export function promptForSetupGuideProject(openModal: (modal: 'add-repo') => void): void {
+  openModal('add-repo')
+  toast.message(SETUP_GUIDE_PROJECT_PROMPT)
+}
+
+export function getSetupGuideGitRepo(
+  repos: readonly Repo[],
+  activeRepoId: string | null
+): Repo | null {
+  const activeRepo = activeRepoId
+    ? repos.find((entry) => entry.id === activeRepoId && isGitRepoKind(entry))
+    : undefined
+  return activeRepo ?? repos.find((entry) => isGitRepoKind(entry)) ?? null
 }
 
 export function AddReposAction(props: { reducedMotion: boolean }): React.JSX.Element {
@@ -43,9 +51,9 @@ export function AddReposAction(props: { reducedMotion: boolean }): React.JSX.Ele
         <Plus className="size-3.5" />
         Add project
       </Button>
-      <SetupPreview>
+      <SetupStepPreview>
         <AddReposAnimatedVisual reducedMotion={props.reducedMotion} />
-      </SetupPreview>
+      </SetupStepPreview>
     </div>
   )
 }
@@ -61,18 +69,7 @@ export function TwoAgentsAction(props: {
   const handlePrimaryAction = useCallback(() => {
     cancelPendingSetupGuideTourRequest()
     if (!targetWorktree) {
-      const tourRequestId = createSetupGuideTourRequestId()
-      openModal('new-workspace-composer', {
-        telemetrySource: 'unknown',
-        contextualTourSource: 'setup_guide_parallel_work',
-        setupGuideTourRequestId: tourRequestId
-      })
-      requestSetupGuideTourWhenReady({
-        id: 'workspace-creation',
-        source: 'setup_guide_parallel_work',
-        wasFeaturePreviouslyInteracted: false,
-        shouldContinue: () => isSetupGuideWorkspaceComposerRequestCurrent(tourRequestId)
-      })
+      promptForSetupGuideProject(openModal)
       return
     }
     closeModal()
@@ -99,9 +96,9 @@ export function TwoAgentsAction(props: {
           </div>
         </div>
       ) : null}
-      <SetupPreview>
+      <SetupStepPreview>
         <SetupTwoAgentsVisual reducedMotion={props.reducedMotion} />
-      </SetupPreview>
+      </SetupStepPreview>
     </div>
   )
 }
@@ -112,6 +109,8 @@ export function WorkspacesAction(props: {
 }): React.JSX.Element {
   const openModal = useAppStore((s) => s.openModal)
   const activeRepoId = useAppStore((s) => s.activeRepoId)
+  const repos = useAppStore((s) => s.repos)
+  const repo = getSetupGuideGitRepo(repos, activeRepoId)
   return (
     <div className="space-y-4">
       {!props.done ? (
@@ -121,9 +120,13 @@ export function WorkspacesAction(props: {
           className="w-fit gap-2"
           onClick={() => {
             cancelPendingSetupGuideTourRequest()
+            if (!repo) {
+              promptForSetupGuideProject(openModal)
+              return
+            }
             const tourRequestId = createSetupGuideTourRequestId()
             openModal('new-workspace-composer', {
-              ...(activeRepoId ? { initialRepoId: activeRepoId } : {}),
+              initialRepoId: repo.id,
               telemetrySource: 'unknown',
               contextualTourSource: 'setup_guide_parallel_work',
               setupGuideTourRequestId: tourRequestId
@@ -140,9 +143,9 @@ export function WorkspacesAction(props: {
           Try it out
         </Button>
       ) : null}
-      <SetupPreview>
+      <SetupStepPreview>
         <SetupWorkspacesVisual reducedMotion={props.reducedMotion} />
-      </SetupPreview>
+      </SetupStepPreview>
     </div>
   )
 }
@@ -155,11 +158,8 @@ export function SetupScriptAction(props: { reducedMotion: boolean }): React.JSX.
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
   const setSettingsSearchQuery = useAppStore((s) => s.setSettingsSearchQuery)
   const updateRepo = useAppStore((s) => s.updateRepo)
-  const activeRepo = activeRepoId
-    ? repos.find((entry) => entry.id === activeRepoId && isGitRepoKind(entry))
-    : undefined
-  const repo = activeRepo ?? repos.find((entry) => isGitRepoKind(entry)) ?? null
-  const canConfigure = repo && isGitRepoKind(repo)
+  const repo = getSetupGuideGitRepo(repos, activeRepoId)
+  const canConfigure = repo !== null
   const [setupScript, setSetupScript] = useState('pnpm install')
 
   useEffect(() => {
@@ -250,9 +250,9 @@ export function SetupScriptAction(props: { reducedMotion: boolean }): React.JSX.
           Add a git project first, then configure the setup script for that repository.
         </p>
       ) : null}
-      <SetupPreview>
+      <SetupStepPreview>
         <SetupScriptAnimatedVisual reducedMotion={props.reducedMotion} />
-      </SetupPreview>
+      </SetupStepPreview>
     </div>
   )
 }
