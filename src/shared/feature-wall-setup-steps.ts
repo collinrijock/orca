@@ -25,15 +25,16 @@ export type FeatureWallSetupSectionId = 'parallel-work' | 'setup'
 export const FEATURE_WALL_SETUP_STEPS: readonly FeatureWallSetupStep[] = [
   {
     id: 'split-terminal',
-    name: 'Run two things at once',
-    subtitle: 'Run two things at once',
+    name: 'Run two things in the same terminal',
+    subtitle: 'Run two things in the same terminal',
     description: 'Keep an agent, dev server, or REPL visible side by side in one worktree.'
   },
   {
     id: 'two-worktrees',
-    name: 'Work on a second branch',
-    subtitle: 'Work on a second branch',
-    description: 'Let agents tackle separate changes in separate worktrees without stepping on each other.'
+    name: 'Work on a second task in its own worktree',
+    subtitle: 'Work on a second task in its own worktree',
+    description:
+      'Let agents tackle separate changes in separate worktrees without stepping on each other.'
   },
   {
     id: 'notifications',
@@ -64,13 +65,15 @@ export const FEATURE_WALL_SETUP_STEPS: readonly FeatureWallSetupStep[] = [
     id: 'add-two-repos',
     name: 'Add your projects',
     subtitle: 'Add your projects',
-    description: 'Bring your key repos into Orca so you can start agent work without hunting for folders.'
+    description:
+      'Bring your key repos into Orca so you can start agent work without hunting for folders.'
   },
   {
     id: 'agent-capabilities',
     name: 'Unlock agent actions',
     subtitle: 'Unlock agent actions',
-    description: 'Let agents use the browser, computer, and orchestration tools when a task needs it.'
+    description:
+      'Let agents use the browser, computer, and orchestration tools when a task needs it.'
   }
 ] as const
 
