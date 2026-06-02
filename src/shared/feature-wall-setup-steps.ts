@@ -63,8 +63,8 @@ export const FEATURE_WALL_SETUP_STEPS: readonly FeatureWallSetupStep[] = [
   },
   {
     id: 'add-two-repos',
-    name: 'Add your projects',
-    subtitle: 'Add your projects',
+    name: 'Start work in multiple repos',
+    subtitle: 'Start work in multiple repos',
     description:
       'Bring your key repos into Orca so you can start agent work without hunting for folders.'
   },
