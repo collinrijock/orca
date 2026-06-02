@@ -32,6 +32,7 @@ import {
   TERMINAL_WINDOWS_POWERSHELL_IMPLEMENTATION_SEARCH_ENTRY,
   TERMINAL_WINDOWS_SHELL_SEARCH_ENTRY
 } from './terminal-windows-search'
+import { useState } from 'react'
 import { useDetectedOptionAsAlt } from '@/lib/keyboard-layout/use-effective-mac-option-as-alt'
 import { ManageSessionsSection } from './ManageSessionsSection'
 import { OSC52_CLIPBOARD_SETTING_ID } from '../terminal-pane/osc52-clipboard-setting-anchor'
@@ -97,6 +98,33 @@ export function TerminalPane({
   const showGitBashOption = gitBashAvailable || windowsShell === WINDOWS_GIT_BASH_SHELL
   const maxLiveTerminalPanes = Math.floor(clampNumber(settings.maxLiveTerminalPanes ?? 0, 0, 500))
   const limitHiddenTerminalViews = maxLiveTerminalPanes > 0
+  const [maxLiveTerminalPanesDraft, setMaxLiveTerminalPanesDraft] = useState(
+    Number.isFinite(maxLiveTerminalPanes) ? String(maxLiveTerminalPanes) : ''
+  )
+  const [prevMaxLiveTerminalPanes, setPrevMaxLiveTerminalPanes] = useState(maxLiveTerminalPanes)
+
+  if (maxLiveTerminalPanes !== prevMaxLiveTerminalPanes) {
+    setPrevMaxLiveTerminalPanes(maxLiveTerminalPanes)
+    setMaxLiveTerminalPanesDraft(
+      Number.isFinite(maxLiveTerminalPanes) ? String(maxLiveTerminalPanes) : ''
+    )
+  }
+
+  const commitMaxLiveTerminalPanes = (): void => {
+    const trimmed = maxLiveTerminalPanesDraft.trim()
+    if (trimmed === '') {
+      setMaxLiveTerminalPanesDraft(String(maxLiveTerminalPanes))
+      return
+    }
+    const value = Number(trimmed)
+    if (!Number.isFinite(value)) {
+      setMaxLiveTerminalPanesDraft(String(maxLiveTerminalPanes))
+      return
+    }
+    const next = Math.max(1, Math.floor(clampNumber(value, 1, 500)))
+    updateSettings({ maxLiveTerminalPanes: next })
+    setMaxLiveTerminalPanesDraft(String(next))
+  }
 
   const visibleSections = [
     isWindows && matchesSettingsSearch(searchQuery, TERMINAL_WINDOWS_SHELL_SEARCH_ENTRY) ? (
@@ -276,16 +304,12 @@ export function TerminalPane({
                         min={1}
                         max={500}
                         step={1}
-                        value={maxLiveTerminalPanes}
-                        onChange={(e) => {
-                          const value = Number(e.target.value)
-                          if (Number.isFinite(value)) {
-                            updateSettings({
-                              maxLiveTerminalPanes: Math.max(
-                                1,
-                                Math.floor(clampNumber(value, 1, 500))
-                              )
-                            })
+                        value={maxLiveTerminalPanesDraft}
+                        onChange={(e) => setMaxLiveTerminalPanesDraft(e.target.value)}
+                        onBlur={commitMaxLiveTerminalPanes}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            commitMaxLiveTerminalPanes()
                           }
                         }}
                         className="number-input-clean w-24 tabular-nums"
