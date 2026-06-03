@@ -266,10 +266,9 @@ describe('OpenCodeHookService buildPtyEnv / clearPty round-trip', () => {
 describe('OpenCodeHookService overlay mode (user OPENCODE_CONFIG_DIR set)', () => {
   // Why: locks in docs/opencode-config-dir-collision.md — when the user has
   // their own OPENCODE_CONFIG_DIR (e.g. a company-wide opencode config repo),
-  // Orca must mirror it into a per-PTY overlay rather than `delete` its own
-  // injection (the prior bug) or overwrite the user's value (Superset's
-  // failure mode). The user's auth/models/keymap and Orca's status plugin
-  // both load via a single OPENCODE_CONFIG_DIR.
+  // Orca must mirror it into a source-scoped overlay rather than `delete` its
+  // own injection or overwrite the user's value. The user's auth/models/keymap
+  // and Orca's status plugin both load via a single OPENCODE_CONFIG_DIR.
   const ptyId = 'overlay-pty-1'
   let userDataDir: string
   let userConfigDir: string

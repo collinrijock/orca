@@ -172,8 +172,8 @@ function getOpenCodePluginSource(): string {
     '// Why: oh-my-opencode style tools spawn child sessions that emit their',
     '// own session.idle / message events. Those child completions must not',
     '// flip the root Orca pane to done or overwrite the parent turn preview.',
-    '// Match Superset by checking `parentID` via client.session.list(), cache',
-    '// the result per session, and fail closed (assume child) on lookup errors',
+    '// Detect child sessions by checking `parentID` via client.session.list(),',
+    '// cache the result per session, and fail closed (assume child) on lookup errors',
     '// so a transient SDK failure cannot create false "done" transitions.',
     'async function isChildSession(client, sessionID) {',
     '  if (!sessionID) return true;',
@@ -369,9 +369,9 @@ export class OpenCodeHookService {
     }
 
     // Why: do NOT `mkdir -p` the user's typoed path — overriding it with an
-    // Orca-owned dir is the exact failure mode we reject Superset's wrapper
-    // for in docs/opencode-config-dir-collision.md. Let OpenCode surface the
-    // typo on its own; we only forfeit our status plugin for this pane.
+    // Orca-owned dir is the exact config-replacement failure mode documented in
+    // docs/opencode-config-dir-collision.md. Let OpenCode surface the typo on
+    // its own; we only forfeit our status plugin for this pane.
     if (!existsSync(existingConfigDir)) {
       return { OPENCODE_CONFIG_DIR: existingConfigDir }
     }
