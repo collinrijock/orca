@@ -75,6 +75,7 @@ type PtyOutputCallbacks = Parameters<PtyTransport['connect']>[0]['callbacks']
 type PtyOutputProcessorOptions = Pick<
   IpcPtyTransportOptions,
   | 'onTitleChange'
+  | 'onNormalizedTitleRepeat'
   | 'onBell'
   | 'onAgentBecameIdle'
   | 'onAgentBecameWorking'
@@ -131,6 +132,7 @@ function removeIgnoredCursorNativeTitles(titles: string[]): boolean {
 
 export function createPtyOutputProcessor({
   onTitleChange,
+  onNormalizedTitleRepeat,
   onBell,
   onAgentBecameIdle,
   onAgentBecameWorking,
@@ -192,8 +194,17 @@ export function createPtyOutputProcessor({
   }
 
   function applyObservedTerminalTitle(title: string, suppressAgentTracker = false): void {
-    lastEmittedTitle = normalizeTerminalTitle(title)
-    onTitleChange?.(lastEmittedTitle, title)
+    const nextTitle = normalizeTerminalTitle(title)
+    // Why: high-churn CLIs can repeat equivalent OSC titles; tracking still
+    // sees the frame, but the store-facing publication is a no-op.
+    if (nextTitle !== lastEmittedTitle) {
+      lastEmittedTitle = nextTitle
+      onTitleChange?.(nextTitle, title)
+    } else {
+      // Why: ownership can resolve after any Pi-compatible status frame;
+      // downstream policy re-evaluates repeats without republishing unchanged state.
+      onNormalizedTitleRepeat?.(title)
+    }
     if (!suppressAgentTracker) {
       agentTracker?.handleTitle(title)
     }
@@ -508,6 +519,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
     telemetry,
     onPtyExit,
     onTitleChange,
+    onNormalizedTitleRepeat,
     onPtySpawn,
     onBell,
     onAgentBecameIdle,
@@ -530,6 +542,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
   })
   const outputProcessor = createPtyOutputProcessor({
     onTitleChange,
+    onNormalizedTitleRepeat,
     onBell,
     onAgentBecameIdle: (title) => {
       if (!suppressAttentionEvents) {

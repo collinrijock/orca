@@ -140,6 +140,7 @@ export type IpcPtyTransportOptions = {
   telemetry?: EventProps<'agent_started'>
   onPtyExit?: (ptyId: string) => void
   onTitleChange?: (title: string, rawTitle: string) => void
+  onNormalizedTitleRepeat?: (rawTitle: string) => void
   onPtySpawn?: (ptyId: string) => void
   onBell?: () => void
   onAgentBecameIdle?: (title: string) => void
