@@ -53,8 +53,8 @@ export type WorkspaceSessionSnapshot = Pick<
   | 'lastKnownRelayPtyIdByTabId'
   | 'lastVisitedAtByWorktreeId'
   | 'defaultTerminalTabsAppliedByWorktreeId'
-  | 'sleptWorktreeIds'
->
+> &
+  Partial<Pick<AppState, 'sleptWorktreeIds'>>
 
 // Why: the App-level Zustand subscriber that debounces session writes uses
 // this list as a shallow-equality gate so it only resets the timer when a
