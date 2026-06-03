@@ -5,7 +5,8 @@ import {
   canParkTerminalWorktreeRenderers,
   getTerminalWorktreeColdParkRecheckDelayMs,
   selectColdParkedTerminalWorktrees,
-  isSnapshotBackedTerminalPty
+  isSnapshotBackedTerminalPty,
+  shouldBypassTerminalWorktreeHotRetentionForAgentIdle
 } from './terminal-worktree-parking'
 
 describe('isSnapshotBackedTerminalPty', () => {
@@ -188,6 +189,38 @@ describe('selectColdParkedTerminalWorktrees', () => {
     expect(selected).toEqual(new Set(['wt-1']))
   })
 
+  it('cold-parks completed hidden agent worktrees without hot retention', () => {
+    const selected = selectColdParkedTerminalWorktrees({
+      worktrees: [
+        {
+          ...localCandidate('wt-agent-done', nowMs - TERMINAL_WORKTREE_PARK_DELAY_MS),
+          agentActivity: { hasCompletedAgent: true, hasActiveAgent: false }
+        }
+      ],
+      pendingStartupByTabId: {},
+      nowMs,
+      hotRetainLimit: 4
+    })
+
+    expect(selected).toEqual(new Set(['wt-agent-done']))
+  })
+
+  it('keeps active-agent worktrees in the normal hot-retain pool', () => {
+    const selected = selectColdParkedTerminalWorktrees({
+      worktrees: [
+        {
+          ...localCandidate('wt-agent-working', nowMs - TERMINAL_WORKTREE_PARK_DELAY_MS),
+          agentActivity: { hasCompletedAgent: true, hasActiveAgent: true }
+        }
+      ],
+      pendingStartupByTabId: {},
+      nowMs,
+      hotRetainLimit: 4
+    })
+
+    expect(selected).toEqual(new Set())
+  })
+
   it('does not cold-park terminals without local snapshot recovery', () => {
     const selected = selectColdParkedTerminalWorktrees({
       worktrees: [
@@ -242,6 +275,30 @@ describe('selectColdParkedTerminalWorktrees', () => {
     })
 
     expect(selected).toEqual(new Set())
+  })
+})
+
+describe('shouldBypassTerminalWorktreeHotRetentionForAgentIdle', () => {
+  it('requires completed agent activity with no active agent state', () => {
+    expect(
+      shouldBypassTerminalWorktreeHotRetentionForAgentIdle({
+        hasCompletedAgent: true,
+        hasActiveAgent: false
+      })
+    ).toBe(true)
+    expect(
+      shouldBypassTerminalWorktreeHotRetentionForAgentIdle({
+        hasCompletedAgent: true,
+        hasActiveAgent: true
+      })
+    ).toBe(false)
+    expect(
+      shouldBypassTerminalWorktreeHotRetentionForAgentIdle({
+        hasCompletedAgent: false,
+        hasActiveAgent: false
+      })
+    ).toBe(false)
+    expect(shouldBypassTerminalWorktreeHotRetentionForAgentIdle(undefined)).toBe(false)
   })
 })
 

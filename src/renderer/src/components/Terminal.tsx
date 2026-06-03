@@ -62,6 +62,10 @@ import {
   selectColdParkedTerminalWorktrees,
   type TerminalWorktreeColdParkCandidate
 } from './terminal/terminal-worktree-parking'
+import {
+  summarizeTerminalAgentIdleParking,
+  terminalAgentIdleParkingSummariesEqual
+} from './terminal/terminal-agent-idle-parking'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import { appendUniqueOpenFileIds } from './terminal/unsaved-close-queue'
 import CodexRestartChip from './CodexRestartChip'
@@ -196,9 +200,13 @@ function getKeybindingContext(target: EventTarget | null): KeybindingContext {
 }
 
 function Terminal(): React.JSX.Element | null {
+  const [initialTerminalAgentIdleParkingByWorktree] = useState(() =>
+    summarizeTerminalAgentIdleParking(useAppStore.getState())
+  )
   const mountedWorktreeIdsRef = useRef(new Set<string>())
   const measurableBackgroundWorktreeIdsRef = useRef(new Set<string>())
   const parkedTerminalWorktreeIdsRef = useRef(new Set<string>())
+  const terminalAgentIdleParkingByWorktreeRef = useRef(initialTerminalAgentIdleParkingByWorktree)
   const terminalWorktreeHiddenSinceRef = useRef(new Map<string, number>())
   const terminalWorktreeParkingTimersRef = useRef(new Map<string, number>())
   const allWorktrees = useAllWorktrees()
@@ -674,6 +682,7 @@ function Terminal(): React.JSX.Element | null {
   const measurableBackgroundWorktreeTimersRef = useRef(new Map<string, number>())
   const [backgroundMountRevision, setBackgroundMountRevision] = useState(0)
   const [terminalParkingRevision, setTerminalParkingRevision] = useState(0)
+  const [terminalAgentParkingRevision, setTerminalAgentParkingRevision] = useState(0)
   useEffect(() => {
     const timers = measurableBackgroundWorktreeTimersRef.current
     const closeDialogDebounceTimers = closeDialogDebounceTimersRef.current
@@ -734,6 +743,33 @@ function Terminal(): React.JSX.Element | null {
     }
   }, [])
 
+  // Why: agent hook updates can be frequent. Keep a ref-backed summary so
+  // renderer parking only rechecks when active/completed worktree state flips.
+  useEffect(() => {
+    const refreshAgentParkingSummary = (state: TerminalStoreSnapshot): void => {
+      const next = summarizeTerminalAgentIdleParking(state)
+      if (
+        terminalAgentIdleParkingSummariesEqual(terminalAgentIdleParkingByWorktreeRef.current, next)
+      ) {
+        return
+      }
+      terminalAgentIdleParkingByWorktreeRef.current = next
+      setTerminalAgentParkingRevision((revision) => revision + 1)
+    }
+
+    return useAppStore.subscribe((state, previousState) => {
+      if (
+        state.tabsByWorktree === previousState.tabsByWorktree &&
+        state.agentStatusByPaneKey === previousState.agentStatusByPaneKey &&
+        state.migrationUnsupportedByPtyId === previousState.migrationUnsupportedByPtyId &&
+        state.retainedAgentsByPaneKey === previousState.retainedAgentsByPaneKey
+      ) {
+        return
+      }
+      refreshAgentParkingSummary(state)
+    })
+  }, [])
+
   useEffect(() => {
     const parkingTimers = terminalWorktreeParkingTimersRef.current
     for (const timer of parkingTimers.values()) {
@@ -774,7 +810,8 @@ function Terminal(): React.JSX.Element | null {
         isVisible,
         shouldMeasureHiddenWorktree,
         hasActivityTerminalPortal,
-        hiddenSinceMs: terminalWorktreeHiddenSinceRef.current.get(worktreeId) ?? null
+        hiddenSinceMs: terminalWorktreeHiddenSinceRef.current.get(worktreeId) ?? null,
+        agentActivity: terminalAgentIdleParkingByWorktreeRef.current.get(worktreeId)
       })
     }
 
@@ -823,6 +860,7 @@ function Terminal(): React.JSX.Element | null {
     pendingStartupByTabId,
     renderedActiveWorktreeId,
     tabsByWorktree,
+    terminalAgentParkingRevision,
     terminalParkingRevision
   ])
   // Why: gated on workspaceSessionReady to prevent TerminalPane from mounting

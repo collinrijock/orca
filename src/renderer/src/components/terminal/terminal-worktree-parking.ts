@@ -13,6 +13,11 @@ export const TERMINAL_TAB_HOT_RETAIN_LIMIT = 12
 
 export type ColdParkableTerminalTab = Pick<TerminalTab, 'id' | 'ptyId' | 'pendingActivationSpawn'>
 
+export type TerminalWorktreeAgentActivity = {
+  hasCompletedAgent: boolean
+  hasActiveAgent: boolean
+}
+
 export type TerminalWorktreeColdParkCandidate = {
   worktreeId: string
   terminalTabs: readonly ColdParkableTerminalTab[]
@@ -20,6 +25,7 @@ export type TerminalWorktreeColdParkCandidate = {
   shouldMeasureHiddenWorktree: boolean
   hasActivityTerminalPortal: boolean
   hiddenSinceMs: number | null
+  agentActivity?: TerminalWorktreeAgentActivity
 }
 
 export type TerminalTabColdParkCandidate = ColdParkableTerminalTab & {
@@ -105,6 +111,12 @@ export function canParkTerminalTabRenderer(args: {
   return isSnapshotBackedTerminalPty(tab.ptyId, args.worktreeId)
 }
 
+export function shouldBypassTerminalWorktreeHotRetentionForAgentIdle(
+  activity: TerminalWorktreeAgentActivity | undefined
+): boolean {
+  return activity?.hasCompletedAgent === true && activity.hasActiveAgent === false
+}
+
 export function selectColdParkedTerminalWorktrees(args: {
   worktrees: readonly TerminalWorktreeColdParkCandidate[]
   pendingStartupByTabId: Readonly<Record<string, unknown>>
@@ -134,7 +146,12 @@ export function selectColdParkedTerminalWorktrees(args: {
     if (hiddenSinceMs === null) {
       continue
     }
-    if (args.nowMs - hiddenSinceMs >= hotRetainMs) {
+    const bypassHotRetention = shouldBypassTerminalWorktreeHotRetentionForAgentIdle(
+      worktree.agentActivity
+    )
+    // Why: completed hidden agents no longer need the hot renderer cache, but
+    // they still pass the same snapshot-backed eligibility checks above.
+    if (bypassHotRetention || args.nowMs - hiddenSinceMs >= hotRetainMs) {
       coldParkedWorktreeIds.add(worktree.worktreeId)
       continue
     }
