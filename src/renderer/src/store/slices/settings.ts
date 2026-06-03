@@ -69,6 +69,9 @@ function runtimeScopedStateReset(): Partial<AppState> {
     activeTabIdByWorktree: {},
     ptyIdsByTabId: {},
     runtimePaneTitlesByTabId: {},
+    runtimeTerminalActivityByWorktreeId: {},
+    runtimeTerminalActivityTargetKey: null,
+    runtimeTerminalActivityError: null,
     unreadTerminalTabs: {},
     suppressedPtyExitIds: {},
     pendingCodexPaneRestartIds: {},
@@ -336,6 +339,9 @@ export const createSettingsSlice: StateCreator<AppState, [], [], SettingsSlice> 
           (nextSettings as GlobalSettings | undefined) ??
           (s.settings ? { ...s.settings, activeRuntimeEnvironmentId: nextId } : null)
       }))
+      // Why: terminal.list polling can have in-flight responses from the old
+      // runtime; invalidate them after the server-scoped state reset lands.
+      get().clearRuntimeTerminalActivity()
       // Why: server-owned state is cleared before refetch so old worktree,
       // terminal, browser, and issue IDs cannot be used against the new server
       // while the new environment is loading.
