@@ -8,6 +8,7 @@ type StoredOpenAiKey = {
 }
 
 const OPENAI_SPEECH_TOKEN_FILE = 'openai-speech-token.enc'
+let cachedOpenAiSpeechApiKey: string | null = null
 
 function getOrcaDir(): string {
   return join(homedir(), '.orca')
@@ -54,6 +55,7 @@ export function saveOpenAiSpeechApiKey(apiKey: string): void {
   ensureOrcaDir()
   if (safeStorage.isEncryptionAvailable()) {
     writeFileSync(getOpenAiKeyPath(), safeStorage.encryptString(trimmed), { mode: 0o600 })
+    cachedOpenAiSpeechApiKey = trimmed
     return
   }
 
@@ -61,9 +63,14 @@ export function saveOpenAiSpeechApiKey(apiKey: string): void {
     '[speech] safeStorage encryption unavailable — storing OpenAI speech key in plaintext'
   )
   writeFileSync(getOpenAiKeyPath(), trimmed, { encoding: 'utf8', mode: 0o600 })
+  cachedOpenAiSpeechApiKey = trimmed
 }
 
 export function readOpenAiSpeechApiKey(): string {
+  if (cachedOpenAiSpeechApiKey !== null) {
+    return cachedOpenAiSpeechApiKey
+  }
+
   const keyPath = getOpenAiKeyPath()
   if (!existsSync(keyPath)) {
     throw new Error('OpenAI API key is not configured')
@@ -72,16 +79,21 @@ export function readOpenAiSpeechApiKey(): string {
     const raw = readFileSync(keyPath)
     const legacyJson = readLegacyJsonStoredOpenAiKey()
     if (legacyJson) {
-      return safeStorage.decryptString(Buffer.from(legacyJson.encryptedKeyBase64, 'base64'))
+      cachedOpenAiSpeechApiKey = safeStorage.decryptString(
+        Buffer.from(legacyJson.encryptedKeyBase64, 'base64')
+      )
+      return cachedOpenAiSpeechApiKey
     }
-    return safeStorage.isEncryptionAvailable()
+    cachedOpenAiSpeechApiKey = safeStorage.isEncryptionAvailable()
       ? safeStorage.decryptString(raw)
       : raw.toString('utf8')
+    return cachedOpenAiSpeechApiKey
   } catch {
     throw new Error('OpenAI API key could not be decrypted')
   }
 }
 
 export function clearOpenAiSpeechApiKey(): void {
+  cachedOpenAiSpeechApiKey = null
   rmSync(getOpenAiKeyPath(), { force: true })
 }

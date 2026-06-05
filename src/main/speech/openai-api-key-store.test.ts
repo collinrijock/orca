@@ -60,6 +60,24 @@ describe('OpenAI speech API key store', () => {
     expect(safeStorageMock.decryptString).toHaveBeenCalledOnce()
   })
 
+  it('caches the decrypted key so repeated dictations do not repeatedly touch safeStorage', async () => {
+    writeStoredOpenAiKey('encrypted-key')
+    const store = await loadStoreModule()
+
+    expect(store.readOpenAiSpeechApiKey()).toBe('encrypted-key')
+    expect(store.readOpenAiSpeechApiKey()).toBe('encrypted-key')
+    expect(safeStorageMock.decryptString).toHaveBeenCalledOnce()
+  })
+
+  it('uses the in-memory key after save without decrypting from safeStorage', async () => {
+    const store = await loadStoreModule()
+
+    store.saveOpenAiSpeechApiKey('saved-key')
+
+    expect(store.readOpenAiSpeechApiKey()).toBe('saved-key')
+    expect(safeStorageMock.decryptString).not.toHaveBeenCalled()
+  })
+
   it('reports missing status without creating storage files', async () => {
     const store = await loadStoreModule()
 
