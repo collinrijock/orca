@@ -2359,6 +2359,8 @@ export function connectPanePty(
         if (priority === 'inactive') {
           if (!hiddenOutputRestoreScheduled) {
             hiddenOutputRestoreScheduled = true
+            const scheduledPtyId = ptyId
+            const scheduledGeneration = hiddenOutputRestoreGeneration
             // Why: tab/worktree resume can make many split panes visible at once.
             // Restore the focused pane immediately and spread inactive replays
             // across frames so xterm scrollback replay does not block return.
@@ -2366,6 +2368,17 @@ export function connectPanePty(
               pane.terminal,
               () => {
                 hiddenOutputRestoreScheduled = false
+                if (
+                  disposed ||
+                  hiddenOutputRestoreGeneration !== scheduledGeneration ||
+                  hiddenOutputRestorePtyId !== scheduledPtyId ||
+                  transport.getPtyId() !== scheduledPtyId ||
+                  !canUseHiddenOutputSnapshot(scheduledPtyId) ||
+                  (!hiddenOutputRestoreNeeded && hiddenOutputRestorePendingChunks.length === 0) ||
+                  !shouldWritePtyOutputForeground(deps.isVisibleRef.current)
+                ) {
+                  return
+                }
                 requestHiddenOutputRestoreIfNeeded({ bypassScheduler: true })
               },
               priority
