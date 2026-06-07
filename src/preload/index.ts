@@ -708,6 +708,17 @@ const api = {
       source?: 'headless' | 'renderer'
     } | null> => ipcRenderer.invoke('pty:getMainBufferSnapshot', { id, opts }),
 
+    getRendererDeliveryDebugSnapshot: (): Promise<{
+      pendingPtyCount: number
+      pendingChars: number
+      maxPendingCharsByPty: number
+      rendererInFlightPtyCount: number
+      rendererInFlightChars: number
+      maxRendererInFlightCharsByPty: number
+      activeRendererPtyCount: number
+      flushScheduled: boolean
+    }> => ipcRenderer.invoke('pty:getRendererDeliveryDebugSnapshot'),
+
     /** Check if a PTY's shell has child processes (e.g. a running command).
      *  Returns false for an idle shell prompt. */
     hasChildProcesses: (id: string): Promise<boolean> =>

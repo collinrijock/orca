@@ -965,6 +965,7 @@ export function registerPtyHandlers(
   ipcMain.removeHandler('pty:settlePaneSerializer')
   ipcMain.removeHandler('pty:clearPendingPaneSerializer')
   ipcMain.removeHandler('pty:getMainBufferSnapshot')
+  ipcMain.removeHandler('pty:getRendererDeliveryDebugSnapshot')
   ipcMain.removeHandler('pty:writeAccepted')
   ipcMain.removeAllListeners('pty:write')
   ipcMain.removeAllListeners('pty:ackColdRestore')
@@ -1856,6 +1857,10 @@ export function registerPtyHandlers(
       }
     }
   )
+
+  ipcMain.handle('pty:getRendererDeliveryDebugSnapshot', (): PtyRendererDeliveryDebugSnapshot => {
+    return getPtyRendererDeliveryDebugSnapshot()
+  })
 
   ipcMain.handle(
     'pty:spawn',

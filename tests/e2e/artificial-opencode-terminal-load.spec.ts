@@ -65,6 +65,17 @@ type TerminalOutputSchedulerDebugSnapshot = {
   drainWrites: number[]
 }
 
+type MainPtyPressureDebugSnapshot = {
+  pendingPtyCount: number
+  pendingChars: number
+  maxPendingCharsByPty: number
+  rendererInFlightPtyCount: number
+  rendererInFlightChars: number
+  maxRendererInFlightCharsByPty: number
+  activeRendererPtyCount: number
+  flushScheduled: boolean
+}
+
 const KEY_LATENCY_SAMPLES = 'abcdefghijklmnop'
 const DEFAULT_SAME_WORKSPACE_PANES = 5
 const DEFAULT_CROSS_WORKSPACE_PANES_PER_WORKTREE = 3
@@ -354,19 +365,29 @@ async function readTerminalOutputSchedulerDebug(
   })
 }
 
+async function readMainPtyPressureDebug(page: Page): Promise<MainPtyPressureDebugSnapshot | null> {
+  return page.evaluate(async () => {
+    return window.api.pty.getRendererDeliveryDebugSnapshot()
+  })
+}
+
 function annotateTypingMeasurement(
   testInfo: TestInfo,
   type: string,
   paneCount: number,
   measurement: TypingMeasurement,
   debug: TerminalPtyOutputDebugSnapshot | null = null,
-  scheduler: TerminalOutputSchedulerDebugSnapshot | null = null
+  scheduler: TerminalOutputSchedulerDebugSnapshot | null = null,
+  mainPressure: MainPtyPressureDebugSnapshot | null = null
 ): void {
   const hiddenSkipSummary = debug
     ? ` hiddenSkips=${debug.hiddenRendererSkipCount} hiddenSkippedChars=${debug.hiddenRendererSkippedChars} mode2031Replies=${debug.hiddenRendererMode2031ReplyCount}`
     : ''
   const schedulerSummary = scheduler
     ? ` deferredForegroundEnqueue=${scheduler.deferredForegroundEnqueueCount} deferredForegroundWrite=${scheduler.deferredForegroundWriteCount} scheduledDrains=${scheduler.scheduledDrainCount}`
+    : ''
+  const mainPressureSummary = mainPressure
+    ? ` mainPendingPtys=${mainPressure.pendingPtyCount} mainPendingChars=${mainPressure.pendingChars} mainMaxPendingChars=${mainPressure.maxPendingCharsByPty} mainInFlightPtys=${mainPressure.rendererInFlightPtyCount} mainInFlightChars=${mainPressure.rendererInFlightChars} mainMaxInFlightChars=${mainPressure.maxRendererInFlightCharsByPty} mainActivePtys=${mainPressure.activeRendererPtyCount} mainFlushScheduled=${mainPressure.flushScheduled}`
     : ''
   testInfo.annotations.push({
     type,
@@ -376,7 +397,7 @@ function annotateTypingMeasurement(
       1
     )}ms maxTimerDrift=${measurement.maxTimerDriftMs.toFixed(1)}ms samples=${measurement.latencies
       .map((value) => value.toFixed(1))
-      .join(',')}${hiddenSkipSummary}${schedulerSummary}`
+      .join(',')}${hiddenSkipSummary}${schedulerSummary}${mainPressureSummary}`
   })
 }
 
@@ -423,13 +444,15 @@ async function measureCrossWorkspaceTypingDuringHiddenLoad({
     const measurement = await measureTypingDuringLoad(orcaPage, scriptPath, typingPtyId, runId)
     const debug = await readTerminalPtyOutputDebug(orcaPage)
     const scheduler = await readTerminalOutputSchedulerDebug(orcaPage)
+    const mainPressure = await readMainPtyPressureDebug(orcaPage)
     annotateTypingMeasurement(
       testInfo,
       annotationType,
       hiddenPanes.length + 1,
       measurement,
       debug,
-      scheduler
+      scheduler,
+      mainPressure
     )
     expect(debug?.hiddenRendererSkipCount ?? 0).toBeGreaterThan(0)
     expect(debug?.hiddenRendererSkippedChars ?? 0).toBeGreaterThan(0)
@@ -464,13 +487,15 @@ test.describe('Artificial OpenCode terminal load', () => {
       const measurement = await measureTypingDuringLoad(orcaPage, scriptPath, typingPtyId, runId)
       const debug = await readTerminalPtyOutputDebug(orcaPage)
       const scheduler = await readTerminalOutputSchedulerDebug(orcaPage)
+      const mainPressure = await readMainPtyPressureDebug(orcaPage)
       annotateTypingMeasurement(
         testInfo,
         'opencode-baseline-typing',
         1,
         measurement,
         debug,
-        scheduler
+        scheduler,
+        mainPressure
       )
       expect(measurement.medianLatencyMs).toBeLessThan(MAX_MEDIAN_KEY_LATENCY_MS)
       expect(measurement.worstLatencyMs).toBeLessThan(MAX_WORST_KEY_LATENCY_MS)
@@ -512,7 +537,8 @@ test.describe('Artificial OpenCode terminal load', () => {
         panes.length,
         measurement,
         await readTerminalPtyOutputDebug(orcaPage),
-        await readTerminalOutputSchedulerDebug(orcaPage)
+        await readTerminalOutputSchedulerDebug(orcaPage),
+        await readMainPtyPressureDebug(orcaPage)
       )
       expect(measurement.medianLatencyMs).toBeLessThan(MAX_MEDIAN_KEY_LATENCY_MS)
       expect(measurement.worstLatencyMs).toBeLessThan(MAX_WORST_KEY_LATENCY_MS)
@@ -556,7 +582,8 @@ test.describe('Artificial OpenCode terminal load', () => {
           panes.length,
           measurement,
           await readTerminalPtyOutputDebug(orcaPage),
-          await readTerminalOutputSchedulerDebug(orcaPage)
+          await readTerminalOutputSchedulerDebug(orcaPage),
+          await readMainPtyPressureDebug(orcaPage)
         )
         expect(measurement.medianLatencyMs).toBeLessThan(MAX_MEDIAN_KEY_LATENCY_MS)
         expect(measurement.worstLatencyMs).toBeLessThan(MAX_WORST_KEY_LATENCY_MS)

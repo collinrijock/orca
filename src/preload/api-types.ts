@@ -918,6 +918,16 @@ export type PreloadApi = {
       seq?: number
       source?: 'headless' | 'renderer'
     } | null>
+    getRendererDeliveryDebugSnapshot: () => Promise<{
+      pendingPtyCount: number
+      pendingChars: number
+      maxPendingCharsByPty: number
+      rendererInFlightPtyCount: number
+      rendererInFlightChars: number
+      maxRendererInFlightCharsByPty: number
+      activeRendererPtyCount: number
+      flushScheduled: boolean
+    }>
     onData: (
       callback: (data: { id: string; data: string; seq?: number; rawLength?: number }) => void
     ) => () => void

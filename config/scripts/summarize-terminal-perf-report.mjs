@@ -79,7 +79,15 @@ function printMarkdownTable(rows) {
     ['Hidden Chars', 'hiddenSkippedChars'],
     ['Foreground Enqueues', 'deferredForegroundEnqueue'],
     ['Foreground Writes', 'deferredForegroundWrite'],
-    ['Drains', 'scheduledDrains']
+    ['Drains', 'scheduledDrains'],
+    ['Main Pending PTYs', 'mainPendingPtys'],
+    ['Main Pending Chars', 'mainPendingChars'],
+    ['Main Max Pending', 'mainMaxPendingChars'],
+    ['Main In-Flight PTYs', 'mainInFlightPtys'],
+    ['Main In-Flight Chars', 'mainInFlightChars'],
+    ['Main Max In-Flight', 'mainMaxInFlightChars'],
+    ['Main Active PTYs', 'mainActivePtys'],
+    ['Main Flush Scheduled', 'mainFlushScheduled']
   ]
 
   console.log(`| ${columns.map(([label]) => label).join(' | ')} |`)
