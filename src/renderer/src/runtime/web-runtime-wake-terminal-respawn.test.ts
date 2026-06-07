@@ -12,14 +12,13 @@ describe('web-runtime-wake-terminal-respawn', () => {
     resetWebRuntimeWakeTerminalRespawnForTests()
   })
 
-  it('dedupes wake respawn requests for the same worktree', () => {
+  it('dedupes concurrent wake respawn requests for the same worktree', () => {
     expect(beginWebRuntimeWakeTerminalRespawn('wt-1')).toBe(true)
     expect(shouldSkipWebRuntimeWakeTerminalRespawn('wt-1')).toBe(true)
     expect(beginWebRuntimeWakeTerminalRespawn('wt-1')).toBe(false)
     endWebRuntimeWakeTerminalRespawn('wt-1')
-    // Why: beginWebRuntimeWakeTerminalRespawn is one request per worktree;
-    // endWebRuntimeWakeTerminalRespawn only clears the in-flight bit.
-    expect(shouldSkipWebRuntimeWakeTerminalRespawn('wt-1')).toBe(true)
+    expect(shouldSkipWebRuntimeWakeTerminalRespawn('wt-1')).toBe(false)
+    expect(beginWebRuntimeWakeTerminalRespawn('wt-1')).toBe(true)
   })
 
   it('clears wake respawn tracking for a removed worktree', () => {
