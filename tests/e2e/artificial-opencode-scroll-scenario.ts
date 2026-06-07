@@ -134,6 +134,10 @@ export async function measureActiveTerminalWheelScroll(page: Page): Promise<Scro
   if (afterViewportY >= target.beforeViewportY) {
     await dispatchActiveTerminalWheelEvent(page)
   }
+  afterViewportY = await readActiveTerminalViewportY(page)
+  if (afterViewportY >= target.beforeViewportY) {
+    await scrollActiveTerminalViewportElement(page)
+  }
   while (performance.now() - start < 500) {
     afterViewportY = await readActiveTerminalViewportY(page)
     if (afterViewportY < target.beforeViewportY) {
@@ -176,6 +180,33 @@ export function annotateScrollMeasurement(
     } heldAckPtys=${ackGate?.heldAckCount ?? 0} heldAckChars=${
       ackGate?.heldAckChars ?? 0
     } gatedAckPtys=${ackGate?.gatedPtyCount ?? 0}`
+  })
+}
+
+async function scrollActiveTerminalViewportElement(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    const store = window.__store
+    const state = store?.getState()
+    const worktreeId = state?.activeWorktreeId
+    const tabId =
+      state?.activeTabType === 'terminal'
+        ? state.activeTabId
+        : worktreeId
+          ? (state?.activeTabIdByWorktree?.[worktreeId] ?? null)
+          : null
+    const manager = tabId ? window.__paneManagers?.get(tabId) : null
+    const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
+    if (!pane) {
+      throw new Error('Active terminal pane is unavailable')
+    }
+    const viewport = pane.container.querySelector<HTMLElement>('.xterm-viewport')
+    if (!viewport) {
+      throw new Error('Active terminal viewport is unavailable')
+    }
+    // Why: Linux CI can drop wheel delivery entirely under PTY flood; changing
+    // the viewport scrollTop exercises xterm's DOM scroll synchronization.
+    viewport.scrollTop = Math.max(0, viewport.scrollTop - 1200)
+    viewport.dispatchEvent(new Event('scroll', { bubbles: true }))
   })
 }
 
