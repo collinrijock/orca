@@ -895,9 +895,6 @@ export function connectPanePty(
   })
   commandLifecycle.attachXtermConsumer(pane.terminal)
   const onTerminalKeyDown = (event: KeyboardEvent): void => {
-    deps.clearTerminalTabUnread(deps.tabId)
-    deps.clearTerminalPaneUnread(cacheKey)
-    deps.clearWorktreeUnread(deps.worktreeId)
     if (isPlainEscapeKeyEvent(event)) {
       setPendingTerminalInputIntent('plain-escape')
       return
@@ -908,6 +905,30 @@ export function connectPanePty(
       }
       setPendingTerminalInputIntent('ctrl-c')
     }
+    // Why: only treat keydowns that will produce real terminal input as the
+    // "user is here" signal. Modifier-only presses, autorepeat, and Cmd/Ctrl+C
+    // copy chords with an active selection must not dismiss attention on a
+    // sibling pane before the user has seen it.
+    if (
+      event.repeat ||
+      event.key === 'Alt' ||
+      event.key === 'AltGraph' ||
+      event.key === 'Control' ||
+      event.key === 'Meta' ||
+      event.key === 'Shift'
+    ) {
+      return
+    }
+    if (
+      (event.metaKey || event.ctrlKey) &&
+      event.key.toLowerCase() === 'c' &&
+      pane.terminal.hasSelection()
+    ) {
+      return
+    }
+    deps.clearTerminalTabUnread(deps.tabId)
+    deps.clearTerminalPaneUnread(cacheKey)
+    deps.clearWorktreeUnread(deps.worktreeId)
   }
   // Why: infer only from focused xterm key events. Raw PTY bytes cannot
   // distinguish plain Escape from Alt/meta sequences, and programmatic writes
