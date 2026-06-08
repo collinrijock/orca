@@ -440,6 +440,7 @@ function App(): React.JSX.Element {
   const sidebarOpen = useAppStore((s) => s.sidebarOpen)
   const groupBy = useAppStore((s) => s.groupBy)
   const sortBy = useAppStore((s) => s.sortBy)
+  const projectOrderBy = useAppStore((s) => s.projectOrderBy)
   const showSleepingWorkspaces = useAppStore((s) => s.showSleepingWorkspaces)
   const hideDefaultBranchWorkspace = useAppStore((s) => s.hideDefaultBranchWorkspace)
   const showDotfilesByWorktree = useAppStore((s) => s.showDotfilesByWorktree)
@@ -1028,6 +1029,7 @@ function App(): React.JSX.Element {
         rightSidebarWidth,
         groupBy,
         sortBy,
+        projectOrderBy,
         showActiveOnly: false,
         hideSleepingWorkspaces: !showSleepingWorkspaces,
         showSleepingWorkspaces,
@@ -1052,6 +1054,7 @@ function App(): React.JSX.Element {
     rightSidebarWidth,
     groupBy,
     sortBy,
+    projectOrderBy,
     showSleepingWorkspaces,
     hideDefaultBranchWorkspace,
     showDotfilesByWorktree,
