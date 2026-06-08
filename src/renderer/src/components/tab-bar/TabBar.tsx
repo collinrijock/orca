@@ -237,17 +237,11 @@ function TabBarInner({
     const repo = worktree ? s.repos?.find((entry) => entry.id === worktree.repoId) : null
     return Boolean(repo?.connectionId)
   })
-  const unifiedNewTabLauncherEnabled = useAppStore(
-    (s) => s.settings?.experimentalUnifiedNewTabLauncher === true
-  )
   const defaultAgent = useAppStore((s) => s.settings?.defaultTuiAgent)
   const agentCmdOverrides = useAppStore(
     (s) => s.settings?.agentCmdOverrides ?? EMPTY_AGENT_CMD_OVERRIDES
   )
   const connectionId = useAppStore((s) => {
-    if (!unifiedNewTabLauncherEnabled) {
-      return undefined
-    }
     const allWorktrees = Object.values(s.worktreesByRepo ?? {}).flat()
     const worktree = allWorktrees.find((w) => w.id === worktreeId)
     if (!worktree) {
@@ -969,7 +963,7 @@ function TabBarInner({
         <DropdownMenuContent
           align="start"
           sideOffset={6}
-          className={`${unifiedNewTabLauncherEnabled ? 'w-72 max-w-[calc(100vw-1rem)]' : 'min-w-[11rem]'} rounded-[11px] border-border/80 p-1 shadow-[0_16px_36px_rgba(0,0,0,0.24)]`}
+          className="w-72 max-w-[calc(100vw-1rem)] rounded-[11px] border-border/80 p-1 shadow-[0_16px_36px_rgba(0,0,0,0.24)]"
           onCloseAutoFocus={(e) => {
             // Why: terminal-producing menu actions activate a freshly-mounted
             // xterm. Radix's default focus restore sends focus back to the "+"
@@ -978,7 +972,7 @@ function TabBarInner({
             runPendingNewTabMenuFocusAfterClose()
           }}
         >
-          {!terminalOnly && onOpenEntry && unifiedNewTabLauncherEnabled ? (
+          {!terminalOnly && onOpenEntry ? (
             <>
               <TabBarCreateEntry
                 worktreeId={worktreeId}
