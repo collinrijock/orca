@@ -1,4 +1,3 @@
-/* eslint-disable max-lines -- Why: runtime git command coverage shares one mocked command host fixture. */
 import { mkdtempSync, rmSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'

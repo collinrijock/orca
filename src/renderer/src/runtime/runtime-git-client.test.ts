@@ -463,7 +463,7 @@ describe('runtime git client', () => {
       selector: 'env-1',
       method: 'git.generateCommitMessage',
       params: {
-        worktree: 'wt-1',
+        worktree: 'id:wt-1',
         commitMessageDiscoveryHostKey: 'runtime:env-1',
         sourceControlAiResolvedParams
       },

@@ -188,7 +188,7 @@ export function SourceControlAgentActionDialogForm({
             ) : (
               <div className="space-y-1.5">
                 <div className="flex items-start gap-2 text-foreground">
-                  <CheckCircle2 className="mt-px size-3.5 shrink-0 text-emerald-500" />
+                  <CheckCircle2 className="mt-px size-3.5 shrink-0 text-status-success" />
                   <span>{deliveryPlan.summary}</span>
                 </div>
                 <div className="truncate font-mono text-[11px]">

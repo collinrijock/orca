@@ -1,6 +1,3 @@
-/* eslint-disable max-lines -- Why: the setting owns one collapsed form with
-   queued writes and command-template draft state. Splitting the tiny
-   subcontrols would make the settings write flow harder to audit. */
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { ChevronDown } from 'lucide-react'
 import type { GlobalSettings } from '../../../../shared/types'

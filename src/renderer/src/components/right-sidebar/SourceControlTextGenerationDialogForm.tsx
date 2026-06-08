@@ -256,7 +256,7 @@ export function SourceControlTextGenerationDialogForm({
             ) : (
               <>
                 <div className="flex items-start gap-2 text-foreground">
-                  <CheckCircle2 className="mt-px size-3.5 shrink-0 text-emerald-500" />
+                  <CheckCircle2 className="mt-px size-3.5 shrink-0 text-status-success" />
                   {plan.delivery}
                 </div>
                 <div className="truncate font-mono text-[11px]">Launch: {plan.commandLabel}</div>

@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   pasteDraftWhenAgentReady: vi.fn(),
   openModalFallback: vi.fn(),
   resolvePrBase: vi.fn(),
+  getConnectionId: vi.fn(),
   store: {} as Record<string, unknown> & {
     ensureDetectedAgents: ReturnType<typeof vi.fn>
     ensureRemoteDetectedAgents: ReturnType<typeof vi.fn>
@@ -46,7 +47,7 @@ vi.mock('@/lib/ensure-hooks-confirmed', () => ({
 }))
 
 vi.mock('@/lib/connection-context', () => ({
-  getConnectionId: vi.fn().mockReturnValue(null)
+  getConnectionId: mocks.getConnectionId
 }))
 
 vi.mock('@/runtime/runtime-hooks-client', () => ({
@@ -61,7 +62,7 @@ vi.mock('@/runtime/runtime-rpc-client', () => ({
 }))
 
 vi.mock('@/lib/new-workspace', () => ({
-  CLIENT_PLATFORM: 'darwin',
+  CLIENT_PLATFORM: 'win32',
   getWorkspaceIntentName: (args: {
     workItem?: { type: 'issue' | 'pr' | 'mr'; number: number; title: string } | null
   }) =>
@@ -119,6 +120,7 @@ describe('launchWorkItemDirect', () => {
     })
     mocks.ensureDetectedAgents.mockResolvedValue(['codex'])
     mocks.ensureRemoteDetectedAgents.mockResolvedValue(['codex'])
+    mocks.getConnectionId.mockReturnValue(null)
     mocks.createWorktree.mockResolvedValue({
       worktree: { id: 'repo-1::/repo/worktree', path: '/repo/worktree' },
       setup: undefined
@@ -132,7 +134,6 @@ describe('launchWorkItemDirect', () => {
           id: 'repo-1',
           path: '/repo',
           displayName: 'Repo',
-          badgeColor: '#fff',
           addedAt: 1
         }
       ],
@@ -327,5 +328,81 @@ describe('launchWorkItemDirect', () => {
     expect(mocks.toastError).toHaveBeenCalledWith(
       'Selected agent is not available in the created workspace.'
     )
+  })
+
+  it('plans direct SSH workspace agent startup for the remote host platform', async () => {
+    mocks.getConnectionId.mockReturnValue('ssh-1')
+    mocks.ensureRemoteDetectedAgents.mockResolvedValue(['pi'])
+    mocks.store.repos = [
+      {
+        id: 'repo-1',
+        path: '/home/alice/repo',
+        connectionId: 'ssh-1',
+        displayName: 'Remote Repo',
+        addedAt: 1
+      }
+    ]
+    const { launchWorkItemDirect } = await import('./launch-work-item-direct')
+
+    await expect(
+      launchWorkItemDirect({
+        item: {
+          title: 'Fix failing checks',
+          url: 'https://github.com/acme/repo/pull/1',
+          type: 'issue',
+          number: 1,
+          pasteContent: 'Fix the failing checks.'
+        },
+        repoId: 'repo-1',
+        openModalFallback: mocks.openModalFallback,
+        launchSource: 'task_page',
+        agentOverride: 'pi'
+      })
+    ).resolves.toBe(true)
+
+    expect(mocks.activateAndRevealWorktree).toHaveBeenCalled()
+    const activationOptions = mocks.activateAndRevealWorktree.mock.calls.at(-1)?.[1]
+    expect(activationOptions.startup.command).toContain('unset ORCA_PI_PREFILL')
+    expect(activationOptions.startup.command).not.toContain('Remove-Item Env:ORCA_PI_PREFILL')
+  })
+
+  it('uses the repo SSH connection when the created worktree is not hydrated yet', async () => {
+    mocks.getConnectionId.mockReturnValue(undefined)
+    mocks.ensureRemoteDetectedAgents.mockResolvedValue(['pi'])
+    mocks.store.settings = {
+      defaultTuiAgent: 'pi',
+      disabledTuiAgents: [],
+      agentCmdOverrides: {}
+    }
+    mocks.store.repos = [
+      {
+        id: 'repo-1',
+        path: '/home/alice/repo',
+        connectionId: 'ssh-1',
+        displayName: 'Remote Repo',
+        addedAt: 1
+      }
+    ]
+    const { launchWorkItemDirect } = await import('./launch-work-item-direct')
+
+    await expect(
+      launchWorkItemDirect({
+        item: {
+          title: 'Fix failing checks',
+          url: 'https://github.com/acme/repo/pull/1',
+          type: 'issue',
+          number: 1,
+          pasteContent: 'Fix the failing checks.'
+        },
+        repoId: 'repo-1',
+        openModalFallback: mocks.openModalFallback,
+        launchSource: 'task_page'
+      })
+    ).resolves.toBe(true)
+
+    expect(mocks.ensureRemoteDetectedAgents).toHaveBeenCalledWith('ssh-1')
+    expect(mocks.ensureDetectedAgents).not.toHaveBeenCalled()
+    const activationOptions = mocks.activateAndRevealWorktree.mock.calls.at(-1)?.[1]
+    expect(activationOptions.startup.command).toContain('unset ORCA_PI_PREFILL')
   })
 })

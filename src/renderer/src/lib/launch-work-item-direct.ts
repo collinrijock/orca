@@ -34,6 +34,7 @@ import {
   resolveDirectPrStartPoint,
   resolveDirectSetupDecision
 } from '@/lib/launch-work-item-direct-preflight'
+import { resolveSourceControlLaunchPlatform } from '@/lib/source-control-launch-platform'
 
 export type LaunchableWorkItem = {
   title: string
@@ -85,6 +86,8 @@ export type LaunchWorkItemDirectArgs = {
   /** Controls whether pasted work-item content remains editable or starts the
    *  agent immediately after the TUI is ready. */
   promptDelivery?: 'draft' | 'submit-after-ready'
+  /** Shell platform for the host that will execute the startup command. */
+  launchPlatform?: NodeJS.Platform
 }
 
 function getDirectDraftContent(item: LaunchableWorkItem): string {
@@ -208,11 +211,19 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
     const agentLaunchPlatform = getAgentLaunchPlatformForRepo(repo)
 
     const createdConnectionId = getConnectionId(worktreeId)
+    const launchConnectionId =
+      createdConnectionId === undefined ? repoConnectionId : createdConnectionId
+    const launchPlatform =
+      args.launchPlatform ??
+      resolveSourceControlLaunchPlatform({
+        connectionId: launchConnectionId,
+        worktreePath
+      })
     const latestStore = useAppStore.getState()
     if (agentOverride) {
       const detectedAgents =
-        typeof createdConnectionId === 'string'
-          ? await latestStore.ensureRemoteDetectedAgents(createdConnectionId)
+        typeof launchConnectionId === 'string'
+          ? await latestStore.ensureRemoteDetectedAgents(launchConnectionId)
           : await latestStore.ensureDetectedAgents()
       if (
         !detectedAgents.includes(agentOverride) ||
@@ -228,10 +239,10 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
       effectiveAgent = agentOverride
     } else {
       const detectedAgents =
-        createdConnectionId === repoConnectionId
+        launchConnectionId === repoConnectionId
           ? await detectedAgentsPromise!
-          : typeof createdConnectionId === 'string'
-            ? await latestStore.ensureRemoteDetectedAgents(createdConnectionId)
+          : typeof launchConnectionId === 'string'
+            ? await latestStore.ensureRemoteDetectedAgents(launchConnectionId)
             : await latestStore.ensureDetectedAgents()
       const detectedIds = new Set(detectedAgents)
       effectiveAgent = pickTuiAgent(
@@ -281,7 +292,7 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
             agent: effectiveAgent,
             draft: draftContent,
             cmdOverrides: settings?.agentCmdOverrides ?? {},
-            platform: agentLaunchPlatform,
+            platform: launchPlatform,
             agentArgs
           })
     if (draftLaunchPlan) {
@@ -298,7 +309,7 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
         agent: effectiveAgent,
         prompt: '',
         cmdOverrides: settings?.agentCmdOverrides ?? {},
-        platform: agentLaunchPlatform,
+        platform: launchPlatform,
         agentArgs,
         allowEmptyPromptLaunch: true
       })
