@@ -200,7 +200,8 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     // that lacks ligatures or if they've explicitly opted out. The resolver
     // is in shared/terminal-ligatures.ts.
     terminalLigatures: 'auto',
-    terminalCursorStyle: 'bar',
+    terminalCursorStyle: 'block',
+    terminalCursorStyleDefaultedToBlock: true,
     terminalCursorBlink: true,
     terminalThemeDark: 'Ghostty Default Style Dark',
     terminalDividerColorDark: '#3f3f46',

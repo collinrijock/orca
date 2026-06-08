@@ -3105,6 +3105,36 @@ describe('Store', () => {
     expect(store.getSettings().terminalMacOptionAsAltMigrated).toBe(true)
   })
 
+  it('migrates inherited terminal bar cursor defaults to block on first load', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: { terminalCursorStyle: 'bar' },
+      ui: {},
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+    const store = await createStore()
+    expect(store.getSettings().terminalCursorStyle).toBe('block')
+    expect(store.getSettings().terminalCursorStyleDefaultedToBlock).toBe(true)
+  })
+
+  it('preserves terminal cursor choices after the block-default migration', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: { terminalCursorStyle: 'bar', terminalCursorStyleDefaultedToBlock: true },
+      ui: {},
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+    const store = await createStore()
+    expect(store.getSettings().terminalCursorStyle).toBe('bar')
+    expect(store.getSettings().terminalCursorStyleDefaultedToBlock).toBe(true)
+  })
+
   it('preserves explicit "false" terminalMacOptionAsAlt through migration', async () => {
     // 'false' never matched the old default — it was an explicit choice.
     writeDataFile({

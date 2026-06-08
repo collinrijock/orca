@@ -24,6 +24,7 @@ import {
 } from './pane-fit-resize-observer'
 import { clearPendingSplitScrollRestore } from './pane-split-scroll'
 import { buildDefaultTerminalOptions } from './pane-terminal-options'
+import { attachDomRendererFocusClassSync } from './pane-dom-focus-class-sync'
 import {
   ENABLE_WEBGL_RENDERER,
   attachWebgl,
@@ -148,6 +149,7 @@ export function createPaneDOM(
     paneMouseEnterHandler,
     paneDragCleanup,
     compositionHandler: null,
+    focusClassSyncCleanup: null,
     pendingSplitScrollState: null,
     pendingSplitScrollRafIds: [],
     pendingSplitScrollTimerId: null,
@@ -240,6 +242,8 @@ export function openTerminal(pane: ManagedPaneInternal): void {
     pane.compositionHandler = handler
   }
 
+  pane.focusClassSyncCleanup = attachDomRendererFocusClassSync(terminal.element)
+
   if (pane.gpuRenderingEnabled) {
     attachWebgl(pane)
   }
@@ -327,6 +331,8 @@ export function disposePane(
   }
   pane.paneDragCleanup?.()
   pane.paneDragCleanup = null
+  pane.focusClassSyncCleanup?.()
+  pane.focusClassSyncCleanup = null
   if (pane.compositionHandler) {
     pane.terminal.element?.removeEventListener('compositionstart', pane.compositionHandler, true)
     pane.compositionHandler = null

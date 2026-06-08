@@ -1997,6 +1997,8 @@ export type GlobalSettings = {
    *    switches fonts, so "off" always stays off. */
   terminalLigatures: 'auto' | 'on' | 'off'
   terminalCursorStyle: 'bar' | 'block' | 'underline'
+  /** One-shot migration guard for moving inherited cursor defaults to block. */
+  terminalCursorStyleDefaultedToBlock?: boolean
   terminalCursorBlink: boolean
   terminalThemeDark: string
   terminalDividerColorDark: string

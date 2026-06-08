@@ -124,6 +124,7 @@ import {
   sourceControlAiSettingsFromLegacy
 } from '../shared/source-control-ai'
 import { normalizeDisabledTuiAgents } from '../shared/tui-agent-selection'
+import { normalizeTerminalCursorStyleDefault } from '../shared/terminal-cursor-style-settings'
 import { normalizeBrowserPageZoomLevel } from '../shared/browser-page-zoom'
 import {
   collectTerminalScrollbackSnapshotRefs,
@@ -1825,6 +1826,7 @@ export class Store {
         const migratedAutoRenameBranchFromWork = normalizeAutoRenameBranchFromWorkDefaultOn(
           parsed.settings
         )
+        const migratedTerminalCursorStyle = normalizeTerminalCursorStyleDefault(parsed.settings)
         const rawTaskProviderSettings = normalizeTaskProviderSettings({
           visibleTaskProviders: parsed.settings?.visibleTaskProviders,
           defaultTaskSource: parsed.settings?.defaultTaskSource
@@ -1894,6 +1896,7 @@ export class Store {
             primarySelectionMiddleClickPasteDefaultedForTerminalDefaults:
               primarySelectionDefaultedForTerminalDefaults || stampPrimarySelectionTerminalDefaults,
             ...migratedAutoRenameBranchFromWork,
+            ...migratedTerminalCursorStyle,
             experimentalActivity: migratedExperimentalActivity,
             experimentalActivityDefaultedOffForAllUsers: true,
             terminalMacOptionAsAlt: migratedOptionAsAlt,

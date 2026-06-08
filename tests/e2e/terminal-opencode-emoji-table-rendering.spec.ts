@@ -10,14 +10,30 @@ import {
   waitForActiveTerminalManager,
   waitForTerminalOutput
 } from './helpers/terminal'
+import {
+  analyzeRasterCursorCells,
+  type TerminalRasterProbeTarget
+} from './terminal-cursor-raster-probe'
 
 type TerminalRenderState = {
   coreCursorHidden: boolean | null
   cursorElementCount: number
   cursorVisibleElementCount: number
+  cursorBlink: boolean | null
+  blinkIntervalDuration: number | null
+  cursorClassName: string
+  cursorAnimationName: string
+  cursorAnimationDuration: string
+  rowContainerClassName: string
+  xtermClassName: string
   hasWebglCanvas: boolean
   hasComplexScriptOutput: boolean
   renderer: 'dom' | 'webgl'
+}
+
+type CursorBlinkSample = {
+  elapsedMs: number
+  paintedCursorCellCount: number
 }
 
 const EMOJI_TABLE_MARKER = 'ORCA_EMOJI_TABLE_RENDER_DONE'
@@ -88,6 +104,10 @@ async function readActiveTerminalRenderState(page: Page): Promise<TerminalRender
         coreService?: { isCursorHidden?: boolean }
       }
     }
+    const cursorElement = pane.container.querySelector<HTMLElement>('.xterm-cursor')
+    const cursorStyle = cursorElement ? window.getComputedStyle(cursorElement) : null
+    const rowContainer = pane.container.querySelector<HTMLElement>('.xterm-rows')
+    const xterm = pane.container.querySelector<HTMLElement>('.xterm')
 
     return {
       coreCursorHidden:
@@ -96,11 +116,101 @@ async function readActiveTerminalRenderState(page: Page): Promise<TerminalRender
           : null,
       cursorElementCount: cursorElements.length,
       cursorVisibleElementCount,
+      cursorBlink:
+        typeof pane.terminal.options.cursorBlink === 'boolean'
+          ? pane.terminal.options.cursorBlink
+          : null,
+      blinkIntervalDuration:
+        typeof pane.terminal.options.blinkIntervalDuration === 'number'
+          ? pane.terminal.options.blinkIntervalDuration
+          : null,
+      cursorClassName: cursorElement?.className ?? '',
+      cursorAnimationName: cursorStyle?.animationName ?? '',
+      cursorAnimationDuration: cursorStyle?.animationDuration ?? '',
+      rowContainerClassName: rowContainer?.className ?? '',
+      xtermClassName: xterm?.className ?? '',
       hasWebglCanvas: pane.container.querySelector('.xterm-webgl canvas') !== null,
       hasComplexScriptOutput: pane.hasComplexScriptOutput === true,
       renderer: pane.webglAddon ? 'webgl' : 'dom'
     }
   })
+}
+
+async function forceCursorProbeTheme(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    const state = window.__store?.getState()
+    const worktreeId = state?.activeWorktreeId
+    const tabId =
+      state?.activeTabType === 'terminal'
+        ? state.activeTabId
+        : worktreeId
+          ? (state?.activeTabIdByWorktree?.[worktreeId] ?? null)
+          : null
+    const manager = tabId ? window.__paneManagers?.get(tabId) : null
+    const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
+    if (!pane) {
+      throw new Error('No active terminal pane')
+    }
+    pane.terminal.options.theme = {
+      ...pane.terminal.options.theme,
+      cursor: '#23ff45',
+      cursorAccent: '#001000'
+    }
+    pane.terminal.options.cursorStyle = 'block'
+    pane.terminal.options.cursorBlink = true
+    pane.terminal.focus()
+    pane.terminal.refresh(0, pane.terminal.rows - 1)
+  })
+}
+
+async function readActiveTerminalRasterTarget(page: Page): Promise<TerminalRasterProbeTarget> {
+  return page.evaluate(() => {
+    const state = window.__store?.getState()
+    const worktreeId = state?.activeWorktreeId
+    const tabId =
+      state?.activeTabType === 'terminal'
+        ? state.activeTabId
+        : worktreeId
+          ? (state?.activeTabIdByWorktree?.[worktreeId] ?? null)
+          : null
+    const manager = tabId ? window.__paneManagers?.get(tabId) : null
+    const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
+    if (!pane) {
+      throw new Error('No active terminal pane')
+    }
+    const screen = pane.container.querySelector<HTMLElement>('.xterm-screen')
+    const dimensions = pane.terminal._core?._renderService?.dimensions?.css?.cell
+    if (!screen || !dimensions) {
+      throw new Error('Active terminal has no measurable xterm screen')
+    }
+    const rect = screen.getBoundingClientRect()
+    return {
+      clip: { x: rect.x, y: rect.y, width: rect.width, height: rect.height },
+      cellWidth: dimensions.width,
+      cellHeight: dimensions.height,
+      rows: pane.terminal.rows,
+      cols: pane.terminal.cols
+    }
+  })
+}
+
+async function sampleCursorBlink(page: Page): Promise<CursorBlinkSample[]> {
+  const samples: CursorBlinkSample[] = []
+  const target = await readActiveTerminalRasterTarget(page)
+  const viewport = page.viewportSize() ?? undefined
+  const start = performance.now()
+  for (let index = 0; index < 9; index += 1) {
+    if (index > 0) {
+      await page.waitForTimeout(200)
+    }
+    const screenshot = await page.screenshot()
+    const cells = analyzeRasterCursorCells(Buffer.from(screenshot), target, viewport)
+    samples.push({
+      elapsedMs: performance.now() - start,
+      paintedCursorCellCount: cells.length
+    })
+  }
+  return samples
 }
 
 async function enableRiskyTerminalRendererPath(page: Page): Promise<void> {
@@ -140,17 +250,24 @@ test.describe('OpenCode emoji table terminal rendering', () => {
       await sendToTerminal(orcaPage, ptyId, `node ${JSON.stringify(scriptPath)}\r`)
       await waitForTerminalOutput(orcaPage, marker, 10_000)
       await orcaPage.waitForTimeout(250)
+      await forceCursorProbeTheme(orcaPage)
+      await orcaPage.waitForTimeout(50)
 
       const renderState = await readActiveTerminalRenderState(orcaPage)
+      const blinkSamples = await sampleCursorBlink(orcaPage)
       testInfo.annotations.push({
         type: 'opencode-emoji-table-rendering',
-        description: JSON.stringify(renderState)
+        description: JSON.stringify({ renderState, blinkSamples })
       })
 
       expect(renderState.renderer).toBe('dom')
       expect(renderState.hasWebglCanvas).toBe(false)
       expect(renderState.coreCursorHidden).toBe(false)
       expect(renderState.cursorVisibleElementCount).toBeGreaterThan(0)
+      expect(renderState.cursorBlink).toBe(true)
+      expect(renderState.cursorAnimationName).not.toBe('none')
+      expect(blinkSamples.some((sample) => sample.paintedCursorCellCount > 0)).toBe(true)
+      expect(blinkSamples.some((sample) => sample.paintedCursorCellCount === 0)).toBe(true)
     } finally {
       rmSync(scriptPath, { force: true })
     }

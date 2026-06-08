@@ -39,6 +39,7 @@ import { relativePathInsideRoot } from '../../../shared/cross-platform-path'
 import { toRuntimeWorktreeSelector } from '../runtime/runtime-worktree-selector'
 import { normalizeDisabledTuiAgents } from '../../../shared/tui-agent-selection'
 import { normalizeAutoRenameBranchFromWorkDefaultOn } from '../../../shared/auto-rename-branch-from-work-settings'
+import { normalizeTerminalCursorStyleDefault } from '../../../shared/terminal-cursor-style-settings'
 import type { RateLimitState } from '../../../shared/rate-limit-types'
 import type { RuntimeStatus, RuntimeSyncWindowGraph } from '../../../shared/runtime-types'
 import {
@@ -2400,13 +2401,17 @@ function getStoredSettings(): GlobalSettings {
   const stored = readJson<Partial<GlobalSettings>>(SETTINGS_STORAGE_KEY, {})
   const migratedStored = {
     ...stored,
-    ...normalizeAutoRenameBranchFromWorkDefaultOn(stored)
+    ...normalizeAutoRenameBranchFromWorkDefaultOn(stored),
+    ...normalizeTerminalCursorStyleDefault(stored)
   }
   if (
     rawStoredSettings &&
     (stored.autoRenameBranchFromWork !== migratedStored.autoRenameBranchFromWork ||
       stored.autoRenameBranchFromWorkDefaultedOn !==
-        migratedStored.autoRenameBranchFromWorkDefaultedOn)
+        migratedStored.autoRenameBranchFromWorkDefaultedOn ||
+      stored.terminalCursorStyle !== migratedStored.terminalCursorStyle ||
+      stored.terminalCursorStyleDefaultedToBlock !==
+        migratedStored.terminalCursorStyleDefaultedToBlock)
   ) {
     try {
       const parsed = JSON.parse(rawStoredSettings) as unknown

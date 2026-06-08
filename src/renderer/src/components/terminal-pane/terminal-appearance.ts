@@ -214,7 +214,7 @@ export function applyTerminalAppearance(
     // bleeding in from a prior opacity setting that has since been reset.
     pane.terminal.options.allowTransparency =
       settings.terminalBackgroundOpacity !== undefined && settings.terminalBackgroundOpacity < 1
-    const cursorStyle = settings.terminalCursorStyle ?? 'bar'
+    const cursorStyle = settings.terminalCursorStyle ?? 'block'
     pane.terminal.options.cursorStyle = cursorStyle
     pane.terminal.options.cursorInactiveStyle = resolveTerminalCursorInactiveStyle(cursorStyle)
     pane.terminal.options.cursorBlink = settings.terminalCursorBlink
