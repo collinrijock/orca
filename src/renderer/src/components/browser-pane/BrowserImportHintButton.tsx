@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Import } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -121,6 +121,21 @@ export function BrowserImportHintButton({
     setBrowserImportHintHidden(true)
     setOpen(false)
   }, [setBrowserImportHintHidden])
+
+  // Why: Electron <webview> elements run in a separate process, so clicking
+  // inside one never dispatches pointerdown on the renderer document. Radix
+  // popovers rely on that event for outside-click detection, so window blur
+  // catches the moment focus leaves the renderer (including into a webview).
+  useEffect(() => {
+    if (!open) {
+      return
+    }
+    const dismiss = (): void => {
+      handleOpenChange(false)
+    }
+    window.addEventListener('blur', dismiss)
+    return () => window.removeEventListener('blur', dismiss)
+  }, [handleOpenChange, open])
 
   if (!shouldShow) {
     return null
