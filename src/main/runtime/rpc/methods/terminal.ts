@@ -1045,6 +1045,11 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
           )
         }
       }
+      const flushAllAckPendingOutput = (): void => {
+        for (const stream of streams.values()) {
+          flushAckPendingOutput(stream)
+        }
+      }
       const acknowledgeOutput = (stream: TerminalMultiplexStream, bytes: number): void => {
         if (!stream.ackOutput || bytes <= 0) {
           return
@@ -1052,7 +1057,7 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
         const acknowledged = Math.min(stream.ackInFlightBytes, bytes)
         stream.ackInFlightBytes -= acknowledged
         ackTotalInFlightBytes = Math.max(0, ackTotalInFlightBytes - acknowledged)
-        flushAckPendingOutput(stream)
+        flushAllAckPendingOutput()
       }
       const detachStream = (streamId: number, emitEnd: boolean): void => {
         const stream = streams.get(streamId)
@@ -1073,6 +1078,7 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
         stream.unsubscribeDriver()
         stream.unregisterBinaryHandler()
         streams.delete(streamId)
+        flushAllAckPendingOutput()
         if (stream.isMobile && stream.client?.id) {
           runtime.handleMobileUnsubscribe(stream.ptyId, stream.client.id)
         }
