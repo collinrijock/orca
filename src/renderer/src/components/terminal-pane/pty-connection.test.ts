@@ -533,6 +533,8 @@ describe('connectPanePty', () => {
     }
     delete (globalThis as unknown as { window?: unknown }).window
     delete (globalThis as Record<string, unknown>).__ptyConnectDiag
+    delete (globalThis as Record<string, unknown>)
+      .__ORCA_TEST_ALLOW_SYNCHRONIZED_HIDDEN_MODEL_RESTORE__
   })
 
   it('does not retain PTY connect diagnostics unless e2e debug state is enabled', async () => {
@@ -3130,6 +3132,82 @@ describe('connectPanePty', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  it('can prototype hidden rich synchronized restore from the headless model', async () => {
+    ;(globalThis as Record<string, unknown>).__ORCA_TEST_ALLOW_SYNCHRONIZED_HIDDEN_MODEL_RESTORE__ =
+      true
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport('pty-id')
+    const capturedDataCallback: {
+      current: ((data: string, meta?: { seq?: number; rawLength?: number }) => void) | null
+    } = { current: null }
+    transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+      capturedDataCallback.current = callbacks.onData ?? null
+      return 'pty-id'
+    })
+    transportFactoryQueue.push(transport)
+    const getMainBufferSnapshot = window.api.pty.getMainBufferSnapshot as unknown as ReturnType<
+      typeof vi.fn
+    >
+    const richHiddenFrame = [
+      '\x1b[?2026h',
+      '\x1b[?1049h',
+      '\x1b[2J\x1b[H',
+      '\x1b[?25l',
+      '\x1b[2;36m╭────────────────────────────╮\x1b[0m\r\n',
+      '\x1b[2;36m│ model-backed rich 😀 ███░ │\x1b[0m\r\n',
+      '\x1b[2;36m╰────────────────────────────╯\x1b[0m',
+      '\x1b[6;4H\x1b[?25h',
+      '\x1b[?2026l'
+    ].join('')
+    const visibleTrigger = 'visible-trigger\r\n'
+    getMainBufferSnapshot.mockResolvedValue({
+      data: richHiddenFrame,
+      cols: 96,
+      rows: 18,
+      seq: richHiddenFrame.length + visibleTrigger.length,
+      source: 'headless'
+    })
+
+    const pane = createPane(1)
+    const refresh = vi.fn()
+    const terminal = pane.terminal as typeof pane.terminal & {
+      _core?: { refresh: typeof refresh }
+    }
+    terminal._core = { refresh }
+    terminal.write = vi.fn((_data: string, callback?: () => void) => {
+      callback?.()
+    })
+    const manager = createManager(1)
+    const deps = createDeps({
+      isVisibleRef: { current: false }
+    })
+    const disposable = connectPanePty(pane as never, manager as never, deps as never)
+    await flushAsyncTicks(6)
+
+    capturedDataCallback.current?.(richHiddenFrame, {
+      seq: richHiddenFrame.length,
+      rawLength: richHiddenFrame.length
+    })
+    await flushAsyncTicks(2)
+
+    expect(pane.terminal.write).not.toHaveBeenCalled()
+    expect(getMainBufferSnapshot).not.toHaveBeenCalled()
+
+    ;(deps.isVisibleRef as { current: boolean }).current = true
+    capturedDataCallback.current?.(visibleTrigger, {
+      seq: richHiddenFrame.length + visibleTrigger.length,
+      rawLength: visibleTrigger.length
+    })
+    await flushAsyncTicks(20)
+
+    expect(getMainBufferSnapshot).toHaveBeenCalledWith('pty-id', { scrollbackRows: 5000 })
+    expect(pane.terminal.resize).toHaveBeenCalledWith(96, 18)
+    expect(pane.terminal.write).toHaveBeenCalledWith(richHiddenFrame, expect.any(Function))
+    expect(pane.terminal.write).not.toHaveBeenCalledWith(visibleTrigger, expect.any(Function))
+    expect(refresh).toHaveBeenCalledWith(0, 39, true)
+    disposable.dispose()
   })
 
   it('queues visible split-pane PTY bytes when the pane is not active', async () => {

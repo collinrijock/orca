@@ -19,6 +19,7 @@ import {
 } from './helpers/terminal'
 
 type HiddenTuiWindow = Window & {
+  __ORCA_TEST_ALLOW_SYNCHRONIZED_HIDDEN_MODEL_RESTORE__?: boolean
   __terminalPtyDataInjection?: {
     inject: (paneKey: string, data: string, meta?: { seq?: number; rawLength?: number }) => boolean
   }
@@ -80,6 +81,15 @@ async function resetHiddenDebug(page: Page): Promise<void> {
   await page.evaluate(() => {
     ;(window as HiddenTuiWindow).__terminalPtyOutputDebug?.reset()
   })
+}
+
+async function setPrototypeSynchronizedHiddenModelRestore(
+  page: Page,
+  enabled: boolean
+): Promise<void> {
+  await page.evaluate((enabled) => {
+    ;(window as HiddenTuiWindow).__ORCA_TEST_ALLOW_SYNCHRONIZED_HIDDEN_MODEL_RESTORE__ = enabled
+  }, enabled)
 }
 
 function writeHiddenFrameScript(scriptPath: string, runId: string): void {
@@ -377,6 +387,98 @@ test.describe('Hidden terminal TUI visual restore', () => {
       contentType: 'image/png'
     })
     rmSync(scriptPath, { force: true })
+  })
+
+  test('prototypes rich synchronized TUI restore from the headless model', async ({
+    orcaPage,
+    testRepoPath
+  }, testInfo: TestInfo) => {
+    await waitForSessionReady(orcaPage)
+    const firstWorktreeId = await waitForActiveWorktree(orcaPage)
+    const secondWorktreeId = (await getAllWorktreeIds(orcaPage)).find(
+      (id) => id !== firstWorktreeId
+    )
+    test.skip(!secondWorktreeId, 'hidden TUI restore needs the seeded secondary worktree')
+    if (!secondWorktreeId) {
+      return
+    }
+
+    await switchToWorktree(orcaPage, secondWorktreeId)
+    await ensureTerminalVisible(orcaPage)
+    await waitForActiveTerminalManager(orcaPage, 30_000)
+    const hiddenSnapshot = await waitForPaneIdentitySnapshot(orcaPage, 1)
+    const hiddenPane = hiddenSnapshot.panes[0]
+    if (!hiddenPane?.ptyId) {
+      throw new Error('hidden rich model prototype pane did not bind a PTY')
+    }
+    await switchToWorktree(orcaPage, firstWorktreeId)
+    await expect
+      .poll(() => getActiveWorktreeId(orcaPage), {
+        timeout: 10_000,
+        message: 'first worktree did not become active before hidden rich model prototype'
+      })
+      .toBe(firstWorktreeId)
+
+    const runId = randomUUID()
+    const finalMarker = `VISUAL_RESTORE_FINAL_${runId}_24`
+    const scriptPath = path.join(testRepoPath, `.orca-hidden-rich-model-${runId}.mjs`)
+    writeHiddenFrameScript(scriptPath, runId)
+    await resetHiddenDebug(orcaPage)
+    await setPrototypeSynchronizedHiddenModelRestore(orcaPage, true)
+    try {
+      await writeHiddenFrames(orcaPage, hiddenPane.ptyId, scriptPath)
+      await resetHiddenDebug(orcaPage)
+
+      await expect
+        .poll(async () => (await readHiddenDebug(orcaPage))?.hiddenRendererSkipCount ?? 0, {
+          timeout: 10_000,
+          message: 'prototype rich hidden TUI output should skip renderer writes'
+        })
+        .toBeGreaterThan(0)
+      await expect
+        .poll(() => readMainSnapshotSource(orcaPage, hiddenPane.ptyId!), {
+          timeout: 10_000,
+          message: 'prototype rich hidden TUI source did not come from headless model'
+        })
+        .toBe('headless')
+
+      await switchToWorktree(orcaPage, secondWorktreeId)
+      await ensureTerminalVisible(orcaPage)
+      await waitForActiveTerminalManager(orcaPage, 30_000)
+
+      await expect
+        .poll(() => getTerminalContent(orcaPage, 12_000), {
+          timeout: 10_000,
+          message: 'prototype rich headless TUI frame did not restore when visible'
+        })
+        .toContain(finalMarker)
+
+      const content = await getTerminalContent(orcaPage, 12_000)
+      expect(content).toContain(`Frame 024`)
+      expect(content).toContain('╭')
+      expect(content).toContain('├')
+      expect(content).toContain('█')
+      expect(content).not.toContain('Orca skipped hidden terminal output')
+      await expect
+        .poll(() => readTuiCursorState(orcaPage), {
+          timeout: 5_000,
+          message: 'prototype rich headless TUI cursor stayed hidden after restore'
+        })
+        .toMatchObject({
+          hidden: false,
+          initialized: true
+        })
+
+      const screenshotPath = testInfo.outputPath('hidden-rich-model-restore-final.png')
+      await orcaPage.screenshot({ path: screenshotPath, fullPage: true })
+      await testInfo.attach('hidden-rich-model-restore-final.png', {
+        path: screenshotPath,
+        contentType: 'image/png'
+      })
+    } finally {
+      await setPrototypeSynchronizedHiddenModelRestore(orcaPage, false)
+      rmSync(scriptPath, { force: true })
+    }
   })
 
   test('keeps hidden terminal side effects live while hidden output may restore', async ({

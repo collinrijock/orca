@@ -420,6 +420,15 @@ function recordPtyConnectDiagnostic(message: string): void {
   }
 }
 
+function shouldAllowPrototypeSynchronizedHiddenModelRestore(): boolean {
+  const target = globalThis as {
+    __ORCA_TEST_ALLOW_SYNCHRONIZED_HIDDEN_MODEL_RESTORE__?: boolean
+  }
+  return (
+    import.meta.env.DEV && target.__ORCA_TEST_ALLOW_SYNCHRONIZED_HIDDEN_MODEL_RESTORE__ === true
+  )
+}
+
 // Why: when multiple panes/tabs need the same deferred SSH connection,
 // the first one calls ssh.connect() and subsequent ones must wait for it
 // rather than returning early (which would leave them disconnected). This
@@ -2609,6 +2618,7 @@ export function connectPanePty(
         canRestoreHiddenOutput: canUseHiddenOutputSnapshot(transport.getPtyId()),
         startupRendererQueryWindowActive: isHiddenStartupRendererQueryWindowActive(),
         synchronizedOutputActive: synchronizedHiddenOutput,
+        allowSynchronizedModelRestore: shouldAllowPrototypeSynchronizedHiddenModelRestore(),
         data
       })
       if (shouldSkipHiddenOutput) {

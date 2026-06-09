@@ -3,6 +3,7 @@ export type HiddenRendererSkipEligibility = {
   canRestoreHiddenOutput: boolean
   startupRendererQueryWindowActive: boolean
   synchronizedOutputActive: boolean
+  allowSynchronizedModelRestore?: boolean
   data: string
 }
 
@@ -116,18 +117,21 @@ export function shouldSkipHiddenRendererOutput({
   canRestoreHiddenOutput,
   startupRendererQueryWindowActive,
   synchronizedOutputActive,
+  allowSynchronizedModelRestore = false,
   data
 }: HiddenRendererSkipEligibility): boolean {
   if (
     foreground ||
     !canRestoreHiddenOutput ||
     startupRendererQueryWindowActive ||
-    // Why: DEC 2026 frames can arrive split across chunks; safe-looking rows
-    // may precede rich table/TUI bytes that need live xterm renderer state.
-    synchronizedOutputActive ||
     data.length === 0
   ) {
     return false
+  }
+  if (synchronizedOutputActive) {
+    // Why: release behavior keeps split DEC 2026 frames live. The override is
+    // only for proving model-backed replay before shipping richer hidden skips.
+    return allowSynchronizedModelRestore
   }
   return containsOnlyRestorableHiddenOutput(data)
 }

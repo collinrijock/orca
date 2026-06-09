@@ -85,6 +85,19 @@ describe('shouldSkipHiddenRendererOutput', () => {
     ).toBe(false)
   })
 
+  it('can opt synchronized chunks into model-backed restore for prototype coverage', () => {
+    expect(
+      shouldSkipHiddenRendererOutput({
+        foreground: false,
+        canRestoreHiddenOutput: true,
+        startupRendererQueryWindowActive: false,
+        synchronizedOutputActive: true,
+        allowSynchronizedModelRestore: true,
+        data: '\x1b[?2026h\x1b[2J\x1b[H╭ rich 😀 ╮\r\n\x1b[?2026l'
+      })
+    ).toBe(true)
+  })
+
   it('keeps startup query windows live', () => {
     expect(
       shouldSkipHiddenRendererOutput({
