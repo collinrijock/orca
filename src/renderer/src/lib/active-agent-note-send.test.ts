@@ -2,7 +2,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   getActiveAgentNoteTarget,
+  getActiveAgentRuntimeProbeDescriptor,
   getActiveTerminalNoteTarget,
+  probeActiveAgentNoteTarget,
   sendNotesToActiveAgentSession
 } from './active-agent-note-send'
 import type { AgentStatusEntry } from '../../../shared/agent-status-types'
@@ -125,6 +127,44 @@ describe('active agent note send', () => {
 
   it('does not offer the active terminal send target when the focused pane has no agent status', () => {
     expect(getActiveAgentNoteTarget(testState.appState, 'wt-1', NOW)).toBeNull()
+  })
+
+  it('runtime-probes a manually started agent before title or hooks report it', async () => {
+    testState.callRuntimeRpc.mockImplementation(async (_target, method) => {
+      if (method === 'terminal.list') {
+        return {
+          terminals: [
+            {
+              handle: 'term-1',
+              worktreeId: 'wt-1',
+              worktreePath: '/repo',
+              branch: 'main',
+              tabId: 'tab-1',
+              leafId: LEAF_ID,
+              title: 'repo terminal',
+              connected: true,
+              writable: true,
+              lastOutputAt: 1,
+              preview: ''
+            }
+          ],
+          totalCount: 1,
+          truncated: false
+        }
+      }
+      if (method === 'terminal.isRunningAgent') {
+        return { isRunningAgent: true }
+      }
+      throw new Error(`unexpected method ${method}`)
+    })
+
+    const descriptor = getActiveAgentRuntimeProbeDescriptor(testState.appState, 'wt-1')
+
+    expect(descriptor).toMatchObject({
+      key: `local:wt-1:tab-1:${LEAF_ID}:pty-1`,
+      noteTarget: { tabId: 'tab-1', leafId: LEAF_ID }
+    })
+    await expect(probeActiveAgentNoteTarget(descriptor!)).resolves.toBe(true)
   })
 
   it('offers the active terminal send target for a fresh title-detected agent before hooks report', () => {
