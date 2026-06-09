@@ -291,6 +291,38 @@ function trimPendingOutputToBudget(
   return { bytes: pendingOutputBytes, overflowed: omittedChunkCount > 0 }
 }
 
+function trimPendingOutputCoveredBySnapshot(
+  pendingOutput: TerminalOutputChunk[],
+  snapshotSeq: number | undefined
+): { chunks: TerminalOutputChunk[]; bytes: number } {
+  if (typeof snapshotSeq !== 'number') {
+    return {
+      chunks: pendingOutput,
+      bytes: pendingOutput.reduce((sum, chunk) => sum + terminalStreamByteLength(chunk.data), 0)
+    }
+  }
+  const chunks: TerminalOutputChunk[] = []
+  let bytes = 0
+  for (const chunk of pendingOutput) {
+    const chunkSeq = chunk.meta?.seq
+    const rawLength = chunk.meta?.rawLength ?? chunk.data.length
+    if (typeof chunkSeq !== 'number' || rawLength !== chunk.data.length) {
+      chunks.push(chunk)
+      bytes += terminalStreamByteLength(chunk.data)
+      continue
+    }
+    const startSeq = chunkSeq - rawLength
+    if (snapshotSeq >= chunkSeq) {
+      continue
+    }
+    const data =
+      snapshotSeq > startSeq ? chunk.data.slice(Math.max(0, snapshotSeq - startSeq)) : chunk.data
+    chunks.push({ data, meta: data === chunk.data ? chunk.meta : undefined })
+    bytes += terminalStreamByteLength(data)
+  }
+  return { chunks, bytes }
+}
+
 function terminalStreamByteLength(data: string): number {
   return terminalStreamTextEncoder.encode(data).byteLength
 }
@@ -1566,8 +1598,9 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
       let cursor = 0
       let closed = false
       let buffering = true
-      const pendingOutput: string[] = []
+      let pendingOutput: TerminalOutputChunk[] = []
       let pendingOutputBytes = 0
+      let pendingOutputOverflowed = false
       let unsubscribeData = (): void => {}
       let unsubscribeResize = (): void => {}
       let unsubscribeFit = (): void => {}
@@ -1669,17 +1702,19 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
           return
         }
 
-        unsubscribeData = runtime.subscribeToTerminalData(ptyId, (data) => {
+        unsubscribeData = runtime.subscribeToTerminalData(ptyId, (data, meta) => {
           if (closed) {
             return
           }
           if (buffering) {
-            pendingOutput.push(data)
+            pendingOutput.push({ data, meta })
             pendingOutputBytes += terminalStreamByteLength(data)
-            pendingOutputBytes = trimPendingOutputToBudget(pendingOutput, pendingOutputBytes).bytes
+            const trimmed = trimPendingOutputToBudget(pendingOutput, pendingOutputBytes)
+            pendingOutputBytes = trimmed.bytes
+            pendingOutputOverflowed ||= trimmed.overflowed
             return
           }
-          outputBatcher?.push(data)
+          outputBatcher?.push(data, meta)
         })
 
         const read = await runtime.readTerminal(params.terminal)
@@ -1723,9 +1758,47 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
           scrollbackRows: serialized?.scrollbackRows,
           truncatedByByteBudget: serialized?.truncatedByByteBudget === true
         })
+        let recoveryAttempts = 0
+        // Why: if the bounded pre-subscribe tail overflowed, only a fresh
+        // model snapshot can cover the dropped middle without replay gaps.
+        while (pendingOutputOverflowed && recoveryAttempts < 2) {
+          pendingOutputOverflowed = false
+          recoveryAttempts += 1
+          const recovery = await serializeBudgetedMobileSnapshot(runtime, ptyId, isMobile)
+          if (closed) {
+            return
+          }
+          if (!recovery) {
+            break
+          }
+          const recoveryStats = sendSnapshotFrames(sendFrame, {
+            kind: 'scrollback',
+            cols: recovery.cols,
+            rows: recovery.rows,
+            displayMode,
+            reason: 'pending-output-overflow',
+            seq: recovery.seq,
+            source: recovery.source,
+            truncated: false,
+            truncatedByByteBudget: recovery.truncatedByByteBudget,
+            data: recovery.data
+          })
+          console.log('[mobile-terminal-stream] recovery snapshot', {
+            terminal: params.terminal,
+            streamId,
+            reason: 'pending-output-overflow',
+            bytes: recoveryStats.bytes,
+            chunks: recoveryStats.chunks,
+            scrollbackRows: recovery.scrollbackRows,
+            truncatedByByteBudget: recovery.truncatedByByteBudget === true
+          })
+          const trimmed = trimPendingOutputCoveredBySnapshot(pendingOutput, recovery.seq)
+          pendingOutput = trimmed.chunks
+          pendingOutputBytes = trimmed.bytes
+        }
         buffering = false
         for (const item of pendingOutput.splice(0)) {
-          outputBatcher.push(item)
+          outputBatcher.push(item.data, item.meta)
         }
         pendingOutputBytes = 0
         outputBatcher.flush()
