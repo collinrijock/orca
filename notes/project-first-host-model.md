@@ -731,6 +731,11 @@ Landed so far:
   and reuses the existing local/SSH/runtime repo import behavior underneath,
   with an identity guard so an imported folder does not silently become a
   different project.
+- Added a project settings "Available Hosts" section that lists setups for the
+  current durable project, lets users navigate between setup-specific settings
+  panes, and imports an existing folder on another known local, SSH, or active
+  runtime host. Setup routing now follows the selected setup host instead of the
+  currently focused runtime.
 - Added tests for local repos, SSH repos, same-provider multi-host grouping,
   no-identity same-name non-grouping, selector cache behavior, persistence
   backfill, repo mutation synchronization, renderer hydration, and runtime RPC
@@ -746,16 +751,16 @@ Important limitation:
   compatibility records, and workspace creation still maps the resolved
   project-host setup back into the existing repo-centric `createWorktree` API.
   Existing workspaces without the new ownership metadata still infer host/project
-  through their repo compatibility record. Settings and setup-on-host flows still
-  use the current repo-centric APIs until later steps are implemented.
+  through their repo compatibility record. Settings now expose setup-specific
+  host panes and existing-folder setup, but still use repo compatibility records
+  underneath.
 
 Remaining end-to-end work:
 
 - teach workspace creation to resolve `{ projectId, hostId }` through a ready
   project-host setup
-- add setup-on-host flows for local paths and SSH paths
-- add clone/provision setup-on-host flows; existing-folder setup now has an API
-  bridge, but not a complete user-facing project settings flow
+- broaden setup-on-host flows beyond known local, SSH, and active runtime hosts
+- add clone/provision setup-on-host flows
 - split settings into explicit client, host, project, and project-host setup
   scopes
 - backfill explicit workspace project/setup/host ownership for existing

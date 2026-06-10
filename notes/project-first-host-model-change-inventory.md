@@ -329,8 +329,9 @@ Needs:
 - bulk setup when adding a new host
 - future cloud provisioning hook
 
-Current branch status: existing-folder API plumbing is partially implemented;
-full user-facing setup UI is not complete.
+Current branch status: existing-folder setup is partially implemented through
+API/CLI plumbing and a project settings import form for known local, SSH, and
+active runtime hosts. Clone, provisioning, and bulk setup are not complete.
 
 ### 6. Sidebar Row Model
 
@@ -359,8 +360,9 @@ Needs:
 - host dropdown/table inside settings
 - provider-neutral source-control settings
 
-Current branch status: in progress; a read-only available-hosts section has been
-started, but full ownership split is not complete.
+Current branch status: in progress. Project settings now include an
+available-hosts table, navigation between setup-specific settings panes, and an
+existing-folder import form. The full ownership split is not complete.
 
 ### 8. Host Settings
 
@@ -456,6 +458,8 @@ Already partially landed:
 - optional workspace metadata for `projectId`, `hostId`, and
   `projectHostSetupId`
 - setup-existing-folder API plumbing through local IPC/preload/runtime paths
+- project settings existing-folder setup form for known local, SSH, and active
+  runtime hosts
 - CLI commands for listing projects/setups and creating worktrees by
   project/setup
 - composer `Run on` selector when a project has multiple ready setups
@@ -463,8 +467,8 @@ Already partially landed:
 Not complete yet:
 
 - full project-first default sidebar
-- full setup-on-host UI for local and SSH
 - clone/provision flows
+- bulk setup flows and setup for hosts that are not already known to the client
 - project settings split into global and host-specific ownership
 - host settings/capability UI aligned with project setup
 - complete cache/request ownership audit
