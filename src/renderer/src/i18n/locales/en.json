@@ -3003,7 +3003,9 @@
                   "f15fd80989": "Your new worktree is current, but local {{value0}} is {{value1}} {{value2}} behind, so AI diffs may compare to stale history. Let Orca keep it up to date automatically. Change this anytime in",
                   "3d260e1a5d": "Settings › {{value0}}",
                   "34a03a6565": "Keep {{value0}} up to date",
-                  "4a18052018": "Local {{value0}} is behind {{value1}}"
+                  "4a18052018": "Local {{value0}} is behind {{value1}}",
+                  "commit": "commit",
+                  "commits": "commits"
                 }
               }
             }

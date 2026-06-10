@@ -3734,12 +3734,14 @@
               "suggestion": {
                 "toast": {
                   "670864ab52": "ローカル {{value0}} を最新の状態に保つ",
-                  "84c62e4d7f": "Could not turn on {{value0}}",
-                  "442552c656": "Open Settings and try again.",
-                  "f15fd80989": "Your new worktree is current, but local {{value0}} is {{value1}} {{value2}} behind, so AI diffs may compare to stale history. Let Orca keep it up to date automatically. Change this anytime in",
-                  "3d260e1a5d": "Settings › {{value0}}",
-                  "34a03a6565": "Keep {{value0}} up to date",
-                  "4a18052018": "Local {{value0}} is behind {{value1}}"
+                  "84c62e4d7f": "{{value0}} をオンにできませんでした",
+                  "442552c656": "設定を開いてもう一度お試しください。",
+                  "f15fd80989": "新しいワークツリーは最新ですが、ローカル {{value0}} は {{value1}} {{value2}} 遅れているため、AI diff が古い履歴と比較する可能性があります。Orca が自動で最新状態を保つようにできます。これはいつでもここで変更できます",
+                  "3d260e1a5d": "設定 › {{value0}}",
+                  "34a03a6565": "{{value0}} を最新の状態に保つ",
+                  "4a18052018": "ローカル {{value0}} は {{value1}} より遅れています",
+                  "commit": "コミット",
+                  "commits": "コミット"
                 }
               }
             }
@@ -7200,7 +7202,7 @@
                 "to": {
                   "date": {
                     "setting": {
-                      "f8bda25f29": "Keep Local Main Up to Date"
+                      "f8bda25f29": "ローカル main を最新の状態に保つ"
                     }
                   }
                 }

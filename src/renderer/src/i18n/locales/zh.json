@@ -3734,12 +3734,14 @@
               "suggestion": {
                 "toast": {
                   "670864ab52": "使本地 {{value0}} 保持最新",
-                  "84c62e4d7f": "Could not turn on {{value0}}",
-                  "442552c656": "Open Settings and try again.",
-                  "f15fd80989": "Your new worktree is current, but local {{value0}} is {{value1}} {{value2}} behind, so AI diffs may compare to stale history. Let Orca keep it up to date automatically. Change this anytime in",
-                  "3d260e1a5d": "Settings › {{value0}}",
-                  "34a03a6565": "Keep {{value0}} up to date",
-                  "4a18052018": "Local {{value0}} is behind {{value1}}"
+                  "84c62e4d7f": "无法开启 {{value0}}",
+                  "442552c656": "打开设置并重试。",
+                  "f15fd80989": "新工作树是最新的，但本地 {{value0}} 落后 {{value1}} {{value2}}，因此 AI 差异可能会与过时历史比较。让 Orca 自动保持它最新。可随时在",
+                  "3d260e1a5d": "设置 › {{value0}}",
+                  "34a03a6565": "保持 {{value0}} 最新",
+                  "4a18052018": "本地 {{value0}} 落后于 {{value1}}",
+                  "commit": "次提交",
+                  "commits": "次提交"
                 }
               }
             }
@@ -6399,7 +6401,7 @@
             "28192e3a63": "掌握",
             "e3e9adde59": "主要的",
             "0e993bf00f": "当您创建工作区时，Orca 会刷新远程库并安全地快进匹配的本地分支，例如 main 或 master。这使得像 git diff main...HEAD 这样的命令无法与过时的历史记录进行比较。如果该分支有未提交的更改或仅限本地提交，Orca 会跳过更新。",
-            "f8bda25f29": "保持本地主要更新",
+            "f8bda25f29": "保持本地 main 最新",
             "769ddd7f81": "风俗",
             "1d2fae1fa2": "git 用户名",
             "f83c8937c4": "分支命名",
@@ -7200,7 +7202,7 @@
                 "to": {
                   "date": {
                     "setting": {
-                      "f8bda25f29": "Keep Local Main Up to Date"
+                      "f8bda25f29": "保持本地 main 最新"
                     }
                   }
                 }
