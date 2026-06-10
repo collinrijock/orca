@@ -84,6 +84,47 @@ export type RepoKind = 'git' | 'folder'
 export type IssueSourcePreference = 'upstream' | 'origin' | 'auto'
 export type ExternalWorktreeVisibility = 'hide' | 'show'
 
+export type ProjectProviderIdentity = {
+  provider: 'github'
+  owner: string
+  repo: string
+}
+
+export type Project = {
+  id: string
+  displayName: string
+  badgeColor: string
+  repoIcon?: RepoIcon | null
+  kind?: RepoKind
+  providerIdentity?: ProjectProviderIdentity
+  sourceRepoIds: string[]
+  createdAt: number
+  updatedAt: number
+}
+
+export type ProjectHostSetupState = 'ready' | 'not-set-up' | 'setting-up' | 'error' | 'unsupported'
+export type ProjectHostSetupMethod = 'legacy-repo' | 'imported-existing-folder' | 'cloned'
+
+export type ProjectHostSetup = {
+  id: string
+  projectId: string
+  hostId: ExecutionHostId
+  repoId: string
+  path: string
+  displayName: string
+  kind?: RepoKind
+  connectionId?: string | null
+  executionHostId?: ExecutionHostId | null
+  worktreeBasePath?: string
+  hookSettings?: RepoHookSettings
+  gitUsername?: string
+  setupState: ProjectHostSetupState
+  setupMethod: ProjectHostSetupMethod
+  sourceControlAi?: RepoSourceControlAiOverrides
+  createdAt: number
+  updatedAt: number
+}
+
 export type Repo = {
   id: string
   path: string
@@ -2891,6 +2932,8 @@ export type LegacyPaneKeyAliasEntry = {
 export type PersistedState = {
   schemaVersion: number
   repos: Repo[]
+  projects: Project[]
+  projectHostSetups: ProjectHostSetup[]
   projectGroups: ProjectGroup[]
   /** Sparse-checkout presets keyed by repoId. Empty record on first launch;
    *  presets are managed from the new-workspace composer and repo settings. */

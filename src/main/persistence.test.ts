@@ -270,6 +270,55 @@ describe('Store', () => {
     expect(store.getRepos()).toEqual([])
   })
 
+  it('backfills project host setup compatibility records from legacy repos on load', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [
+        makeRepo({
+          id: 'local-repo',
+          path: '/Users/alice/orca',
+          displayName: 'Orca',
+          upstream: { owner: 'StablyAI', repo: 'Orca' }
+        }),
+        makeRepo({
+          id: 'remote-repo',
+          path: '/home/alice/orca',
+          displayName: 'orca',
+          connectionId: 'gpu-vm',
+          upstream: { owner: 'stablyai', repo: 'orca' }
+        })
+      ]
+    })
+
+    const store = await createStore()
+
+    expect(store.getProjects()).toEqual([
+      expect.objectContaining({
+        id: 'github:stablyai/orca',
+        sourceRepoIds: ['local-repo', 'remote-repo']
+      })
+    ])
+    expect(store.getProjectHostSetups()).toEqual([
+      expect.objectContaining({
+        id: 'local-repo',
+        projectId: 'github:stablyai/orca',
+        hostId: 'local',
+        path: '/Users/alice/orca'
+      }),
+      expect.objectContaining({
+        id: 'remote-repo',
+        projectId: 'github:stablyai/orca',
+        hostId: 'ssh:gpu-vm',
+        path: '/home/alice/orca'
+      })
+    ])
+
+    store.flush()
+    const persisted = readDataFile() as PersistedState
+    expect(persisted.projects).toEqual(store.getProjects())
+    expect(persisted.projectHostSetups).toEqual(store.getProjectHostSetups())
+  })
+
   it('returns default settings when no data file exists', async () => {
     const store = await createStore()
     const settings = store.getSettings()
@@ -2196,6 +2245,17 @@ describe('Store', () => {
     expect(store.getWorktreeMeta('r2::/other')!.displayName).toBe('other')
   })
 
+  it('removeProject removes the derived project host setup compatibility record', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo({ id: 'r1' }))
+    store.addRepo(makeRepo({ id: 'r2', path: '/repo2' }))
+
+    store.removeProject('r1')
+
+    expect(store.getProjects().map((project) => project.id)).toEqual(['repo:r2'])
+    expect(store.getProjectHostSetups().map((setup) => setup.id)).toEqual(['r2'])
+  })
+
   it('removeProject deletes child and parent lineage for the repo', async () => {
     const store = await createStore()
     store.addRepo(makeRepo({ id: 'r1' }))
@@ -2240,6 +2300,33 @@ describe('Store', () => {
     expect(updated).not.toBeNull()
     expect(updated!.displayName).toBe('renamed')
     expect(store.getRepo('r1')!.displayName).toBe('renamed')
+  })
+
+  it('updateRepo keeps project host setup compatibility records in sync', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo({ worktreeBasePath: '../worktrees' }))
+
+    store.updateRepo('r1', {
+      displayName: 'renamed',
+      worktreeBasePath: '../new-worktrees',
+      upstream: { owner: 'stablyai', repo: 'orca' }
+    })
+
+    expect(store.getProjects()).toEqual([
+      expect.objectContaining({
+        id: 'github:stablyai/orca',
+        displayName: 'renamed',
+        sourceRepoIds: ['r1']
+      })
+    ])
+    expect(store.getProjectHostSetups()).toEqual([
+      expect.objectContaining({
+        id: 'r1',
+        projectId: 'github:stablyai/orca',
+        displayName: 'renamed',
+        worktreeBasePath: '../new-worktrees'
+      })
+    ])
   })
 
   it('updateRepo drops repo icons that fail shared sanitization', async () => {

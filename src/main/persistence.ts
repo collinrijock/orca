@@ -34,6 +34,8 @@ import {
 import { normalizeAutomationPrecheck } from '../shared/automation-precheck'
 import type {
   PersistedState,
+  Project,
+  ProjectHostSetup,
   Repo,
   ProjectGroup,
   SparsePreset,
@@ -52,6 +54,7 @@ import type {
   WorkspaceSessionPatch,
   WorkspaceSessionState
 } from '../shared/types'
+import { projectHostSetupProjectionFromRepos } from '../shared/project-host-setup-projection'
 import type { MigrationUnsupportedPtyEntry } from '../shared/agent-status-types'
 import type { SshRemotePtyLease, SshTarget } from '../shared/ssh-types'
 import { isFolderRepo } from '../shared/repo-kind'
@@ -1565,6 +1568,26 @@ function migrationUnsupportedEntriesEqual(
   })
 }
 
+function projectHostSetupCompatibilityStateEqual(
+  state: Pick<PersistedState, 'projects' | 'projectHostSetups'>,
+  projection: Pick<PersistedState, 'projects' | 'projectHostSetups'>
+): boolean {
+  return (
+    JSON.stringify(state.projects ?? []) === JSON.stringify(projection.projects) &&
+    JSON.stringify(state.projectHostSetups ?? []) === JSON.stringify(projection.projectHostSetups)
+  )
+}
+
+function buildProjectHostSetupCompatibilityState(
+  repos: readonly Repo[]
+): Pick<PersistedState, 'projects' | 'projectHostSetups'> {
+  const projection = projectHostSetupProjectionFromRepos(repos)
+  return {
+    projects: projection.projects,
+    projectHostSetups: projection.setups
+  }
+}
+
 function createMinimalPersistedTerminalTab(args: {
   worktreeId: string
   tabId: string
@@ -2256,9 +2279,16 @@ export class Store {
       this.loadNeedsSave = true
     }
 
+    const repos = clearMissingProjectGroupMemberships(result.repos, result.projectGroups ?? [])
+    const projectHostSetupCompatibility = buildProjectHostSetupCompatibilityState(repos)
+    if (!projectHostSetupCompatibilityStateEqual(result, projectHostSetupCompatibility)) {
+      this.loadNeedsSave = true
+    }
+
     result = {
       ...result,
-      repos: clearMissingProjectGroupMemberships(result.repos, result.projectGroups ?? []),
+      repos,
+      ...projectHostSetupCompatibility,
       workspaceSession: migratedScrollback.session
     }
 
@@ -2474,6 +2504,14 @@ export class Store {
     return this.state.repos.map((repo) => this.hydrateRepo(repo))
   }
 
+  getProjects(): Project[] {
+    return [...this.state.projects]
+  }
+
+  getProjectHostSetups(): ProjectHostSetup[] {
+    return [...this.state.projectHostSetups]
+  }
+
   /**
    * O(1) read of the persisted repo count. Use this when you only need the
    * count (e.g. cohort-classifier) — `getRepos()` hydrates each repo and
@@ -2581,6 +2619,7 @@ export class Store {
 
   addRepo(repo: Repo): void {
     this.state.repos.push(repo)
+    this.syncProjectHostSetupCompatibilityState()
     this.scheduleSave()
   }
 
@@ -2612,12 +2651,14 @@ export class Store {
       next.push(repo)
     }
     this.state.repos = next
+    this.syncProjectHostSetupCompatibilityState()
     this.scheduleSave()
     return true
   }
 
   removeProject(id: string): void {
     this.state.repos = this.state.repos.filter((r) => r.id !== id)
+    this.syncProjectHostSetupCompatibilityState()
     // Why: presets are repo-scoped, so removing the repo means the presets
     // can never be referenced again — drop them with the parent.
     delete this.state.sparsePresetsByRepo[id]
@@ -2723,8 +2764,15 @@ export class Store {
       }
     }
     Object.assign(repo, sanitizedUpdates)
+    this.syncProjectHostSetupCompatibilityState()
     this.scheduleSave()
     return this.hydrateRepo(repo)
+  }
+
+  private syncProjectHostSetupCompatibilityState(): void {
+    const compatibilityState = buildProjectHostSetupCompatibilityState(this.state.repos)
+    this.state.projects = compatibilityState.projects
+    this.state.projectHostSetups = compatibilityState.projectHostSetups
   }
 
   private hydrateRepo(repo: Repo): Repo {

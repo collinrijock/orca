@@ -1,9 +1,10 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import type { Worktree } from '../../../shared/types'
+import type { Repo, Worktree } from '../../../shared/types'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import type { AppState } from './types'
 import {
   getAllWorktreesFromState,
+  getProjectHostSetupProjectionFromState,
   getWorktreeMapFromState,
   resetFloatingVisibleTabCountSelectorCacheForTest,
   selectFloatingVisibleTabCount
@@ -28,6 +29,15 @@ function makeWorktree(args: { id: string; repoId: string; displayName: string })
     branch: 'main',
     isBare: false,
     isMainWorktree: false
+  }
+}
+
+function makeRepo(args: Pick<Repo, 'id' | 'path' | 'displayName'> & Partial<Repo>): Repo {
+  return {
+    badgeColor: '#737373',
+    addedAt: 100,
+    kind: 'git',
+    ...args
   }
 }
 
@@ -155,5 +165,27 @@ describe('store selectors', () => {
 
     expect(selectFloatingVisibleTabCount({ ...state })).toBe(3)
     expect(openFileScans).toBe(1)
+  })
+
+  it('caches the project host setup projection by repo slice identity', () => {
+    const repos = [
+      makeRepo({
+        id: 'repo-1',
+        path: '/Users/alice/orca',
+        displayName: 'orca'
+      })
+    ]
+    const state = { repos }
+
+    const projection = getProjectHostSetupProjectionFromState(state)
+
+    expect(projection.projects).toHaveLength(1)
+    expect(projection.setups[0]).toMatchObject({
+      id: 'repo-1',
+      projectId: 'repo:repo-1',
+      hostId: 'local'
+    })
+    expect(getProjectHostSetupProjectionFromState({ repos })).toBe(projection)
+    expect(getProjectHostSetupProjectionFromState({ repos: [...repos] })).not.toBe(projection)
   })
 })

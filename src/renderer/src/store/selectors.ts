@@ -3,6 +3,10 @@ import { useShallow } from 'zustand/react/shallow'
 import type { Repo, Worktree, TerminalTab } from '../../../shared/types'
 import type { AppState } from './types'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
+import {
+  projectHostSetupProjectionFromRepos,
+  type ProjectHostSetupProjection
+} from '../../../shared/project-host-setup-projection'
 
 const EMPTY_WORKTREES: Worktree[] = []
 const EMPTY_TABS: TerminalTab[] = []
@@ -31,6 +35,7 @@ type FloatingVisibleTabCountCache = {
 const worktreeSnapshotCache = new WeakMap<AppState['worktreesByRepo'], WorktreeSnapshot>()
 const hasAnyWorktreesCache = new WeakMap<AppState['worktreesByRepo'], boolean>()
 const repoMapCache = new WeakMap<AppState['repos'], Map<string, Repo>>()
+const projectHostSetupProjectionCache = new WeakMap<AppState['repos'], ProjectHostSetupProjection>()
 let floatingVisibleTabCountCache: FloatingVisibleTabCountCache | null = null
 
 function getWorktreeSnapshot(worktreesByRepo: AppState['worktreesByRepo']): WorktreeSnapshot {
@@ -92,6 +97,17 @@ function getCachedRepoMap(repos: AppState['repos']): Map<string, Repo> {
   const repoMap = new Map(repos.map((repo) => [repo.id, repo]))
   repoMapCache.set(repos, repoMap)
   return repoMap
+}
+
+function getCachedProjectHostSetupProjection(repos: AppState['repos']): ProjectHostSetupProjection {
+  const cachedProjection = projectHostSetupProjectionCache.get(repos)
+  if (cachedProjection) {
+    return cachedProjection
+  }
+
+  const projection = projectHostSetupProjectionFromRepos(repos)
+  projectHostSetupProjectionCache.set(repos, projection)
+  return projection
 }
 
 export function selectFloatingVisibleTabCount(state: FloatingVisibleTabCountState): number {
@@ -169,6 +185,12 @@ export function getRepoMapFromState(state: Pick<AppState, 'repos'>): Map<string,
   return getCachedRepoMap(state.repos)
 }
 
+export function getProjectHostSetupProjectionFromState(
+  state: Pick<AppState, 'repos'>
+): ProjectHostSetupProjection {
+  return getCachedProjectHostSetupProjection(state.repos)
+}
+
 // ─── Repos ──────────────────────────────────────────────────────────
 export const useRepos = () => useAppStore((s) => s.repos)
 export const useActiveRepoId = () => useAppStore((s) => s.activeRepoId)
@@ -177,6 +199,8 @@ export const useActiveRepo = () =>
 export const useRepoMap = () => useAppStore((s) => getCachedRepoMap(s.repos))
 export const useRepoById = (repoId: string | null) =>
   useAppStore((s) => (repoId ? (getCachedRepoMap(s.repos).get(repoId) ?? null) : null))
+export const useProjectHostSetupProjection = () =>
+  useAppStore((s) => getCachedProjectHostSetupProjection(s.repos))
 
 // ─── Worktrees ──────────────────────────────────────────────────────
 export const useActiveWorktreeId = () => useAppStore((s) => s.activeWorktreeId)

@@ -111,6 +111,111 @@ Potential names for `ProjectHostSetup`:
 
 `ProjectHostSetup` is probably the clearest product/data term for now.
 
+## Current Orca Model Inventory
+
+Orca currently has pieces of the new model, but they are attached to the wrong
+concepts for a project-first product.
+
+### Repo Is Both Project And Host Setup
+
+`Repo` currently represents the user's project in the UI, but it also owns
+host-local setup fields:
+
+- `path`
+- `worktreeBasePath`
+- `connectionId`
+- `executionHostId`
+- `hookSettings`
+- `gitUsername`
+- repo-specific source-control overrides
+
+That means two checkouts of the same project on two machines become two repos,
+even when the user thinks of them as one project.
+
+In the project-first model:
+
+- project identity should move to `Project`
+- host-local checkout information should move to `ProjectHostSetup`
+- compatibility can keep `Repo` as a transitional projection for old APIs
+
+### Worktree Belongs To Repo Only
+
+`Worktree` currently stores `repoId`, and the host is inferred from the owning
+repo. This works when "repo" means "checkout on one host", but it is awkward
+when one project can exist on several hosts.
+
+In the project-first model, a workspace should know:
+
+- `projectId`
+- `hostId`
+- the selected `projectHostSetupId`
+- the worktree path on that host
+
+The existing `repoId` can initially point at a compatibility setup id, but the
+durable direction should be explicit.
+
+### Persistence Stores Repos As The Durable Root
+
+`PersistedState` currently stores `repos: Repo[]`, `projectGroups`, and
+worktree metadata keyed around repo/worktree ids. Recent multi-host work also
+stores per-host session partitions, which is good for runtime ownership, but it
+does not create a durable "project is set up on host" record.
+
+The migration should derive:
+
+- one `Project` per existing user-visible project identity
+- one `ProjectHostSetup` per existing `Repo`
+- one `Host` from local, SSH, runtime, and future cloud targets
+- existing worktrees attached to the setup derived from their current repo
+
+For a local-only user this should be boring: every existing repo becomes a
+project with one local setup.
+
+### Renderer Store Is Repo-Centric
+
+The renderer store has repo-first actions:
+
+- `fetchRepos`
+- `addRepoPath`
+- `addRepo`
+- `removeProject`
+- `updateRepo`
+- `fetchWorktrees(repoId)`
+- `createWorktree(repoId, ...)`
+
+Remote runtime support already chooses a target based on the active runtime or
+repo owner, but the public shape is still repo-centric. A project-first API
+needs calls like:
+
+- `fetchProjects`
+- `fetchProjectHostSetups(projectId)`
+- `setupProjectOnHost(projectId, hostId, ...)`
+- `createWorkspace({ projectId, hostId, ... })`
+
+During migration, these can be implemented as wrappers around the current repo
+APIs so the change is incremental.
+
+### Add Project Means Add A Host-Local Checkout
+
+Local `repos:add` and SSH `repos:addRemote` both persist a repo at a concrete
+path. That path is the important host-local fact, but the UI labels the result
+as a project.
+
+In the new model, the add/setup flows split into three actions:
+
+- create or import a durable project identity
+- set up that project on a specific host
+- create workspaces from any ready setup
+
+### Runtime Ownership Is Already Pointing The Right Way
+
+Terminals, sessions, remote PTYs, browser routing, and runtime RPC already have
+host-aware pieces. The problem is that host ownership is inferred through repo
+ownership rather than declared on the workspace/setup model.
+
+The new model should preserve the current runtime routing discipline while
+making host ownership explicit in the data model.
+
 ## Data Model Shape
 
 ### Project
@@ -299,7 +404,7 @@ still needs a per-host location/method.
 
 This is a large model change. It is not just a sidebar reorder.
 
-At a high level, roughly 10 areas need to change.
+At a high level, 12 areas need to change.
 
 ### 1. Data Model
 
@@ -308,6 +413,15 @@ Add a first-class project-host setup record.
 Current host ownership is mostly attached to repos/workspaces through
 execution-host IDs. The new model needs a durable record for "project X is
 available on host Y at path Z."
+
+Concrete changes:
+
+- add `Project`
+- add `ProjectHostSetup`
+- decide whether existing `Repo` becomes a compatibility projection, a renamed
+  setup type, or is gradually replaced
+- add selectors that answer "which setups exist for this project?" and "which
+  host owns this workspace?"
 
 ### 2. Persistence And Migration
 
@@ -319,7 +433,16 @@ Existing repos/worktrees need to migrate into:
 - workspace records tied to both project and host
 
 For current local-only users, migration should feel invisible: each project gets
-a Local Mac setup.
+a local-host setup.
+
+Concrete changes:
+
+- bump schema version
+- migrate every existing `Repo` into a `Project` plus one `ProjectHostSetup`
+- preserve old repo ids or create an alias map so worktree metadata, terminal
+  panes, caches, hooks, automations, and settings do not lose references
+- keep downgrade behavior in mind because current persisted state is read by
+  older builds
 
 ### 3. Sidebar Row Model
 
@@ -328,12 +451,28 @@ The sidebar should group primarily by project, not host.
 Host grouping becomes nested under projects only when helpful, or becomes a
 filter/view option.
 
+Concrete changes:
+
+- build sidebar rows from projects, setups, hosts, and workspaces
+- show host labels inline for mixed-host projects without adding unnecessary
+  nesting
+- keep the host-first view/filter as an operational mode if it remains useful
+- revisit drag/reorder so project order, host order within a project, and
+  workspace order remain understandable
+
 ### 4. Workspace Creation
 
 Create workspace needs a host picker that is constrained by project setup.
 
 If the selected host does not have the project, the flow needs setup actions
 instead of silently failing or creating an ambiguous remote workspace.
+
+Concrete changes:
+
+- change creation input from `repoId` to `{ projectId, hostId }`
+- list ready setups first and unavailable hosts with clear reasons
+- inline setup/import/clone when a project is not available on the chosen host
+- ensure created workspaces persist explicit host/setup ownership
 
 ### 5. Project Setup / Add Project
 
@@ -344,6 +483,14 @@ Adding a project must distinguish:
 - set up an existing project on another host
 
 This likely replaces a single "add repo" flow with a project-first setup flow.
+
+Concrete changes:
+
+- add "Set up on this host" flows for local paths, SSH paths, runtime hosts,
+  and future cloud VMs
+- support clone and import-existing-folder
+- support bulk setup when a new host is added
+- keep current add-repo flows as compatibility entry points during migration
 
 ### 6. Project Settings
 
@@ -357,6 +504,15 @@ Project settings need a host selector or host table for host-specific settings:
 
 Project-global settings remain global.
 
+Concrete changes:
+
+- split settings into project-global and host-specific sections
+- use a host dropdown/table for location, worktree base path, setup scripts, and
+  platform constraints
+- keep source-control and review settings provider-aware, not GitHub-only
+- make the "which host am I editing?" answer explicit on every host-specific
+  settings pane
+
 ### 7. Host Settings
 
 Host settings remain host-global:
@@ -369,6 +525,12 @@ Host settings remain host-global:
 
 They should not become a separate copy of all project settings.
 
+Concrete changes:
+
+- expose host connection, health, version, platform, and capabilities
+- include compatibility warnings for mismatched client/server versions
+- keep host-global defaults separate from per-project setup overrides
+
 ### 8. Runtime Ownership
 
 Terminals, browser panes, agents, PTYs, filesystem operations, and setup scripts
@@ -376,6 +538,14 @@ must route through the workspace's host.
 
 The UI can show project-first organization, but execution still happens on the
 owning host.
+
+Concrete changes:
+
+- derive runtime target from workspace/setup host, not active sidebar grouping
+- keep local, SSH, runtime, and future cloud execution behind the same routing
+  contract
+- audit filesystem, git, terminal, browser, agent, hook, and automation paths
+  for repo-id assumptions
 
 ### 9. Compatibility And Availability
 
@@ -390,6 +560,13 @@ Workspace creation must handle:
 
 This should be surfaced before creation where possible.
 
+Concrete changes:
+
+- add capability/version probing to host records
+- gate project setup and workspace creation on host readiness
+- define behavior for new client/old server and old client/new server
+- keep unsupported actions disabled with a specific reason
+
 ### 10. CLI / API
 
 CLI and API commands need to accept the project-first model:
@@ -402,11 +579,50 @@ orca project hosts list <project-id>
 
 Existing commands should keep compatibility aliases where possible.
 
+Concrete changes:
+
+- add project/setup/workspace commands that take host explicitly
+- keep old repo/worktree commands working as aliases where possible
+- return structured availability errors instead of generic failures
+
+### 11. Caches, Metadata, And Request Ownership
+
+Caches and request ownership need to follow the same identity split.
+
+Project-global caches can stay project keyed. Host-local caches must include the
+host/setup key because two machines can have different refs, branches, worktree
+paths, installed agents, filesystem state, and server capabilities for the same
+project.
+
+Concrete changes:
+
+- decide which caches are project-global versus host/setup-local
+- include host/setup ids in branch, worktree, status, filesystem, terminal, and
+  remote capability cache keys
+- keep request cancellation scoped to the host that owns the operation
+
+### 12. Tests And Validation
+
+The validation surface is broad because this changes identity, persistence,
+runtime routing, and UI organization.
+
+Concrete changes:
+
+- migration tests for local, SSH, runtime, duplicate project-on-two-hosts, and
+  missing/offline hosts
+- selector tests for project/setup/workspace grouping
+- workspace creation tests for ready, not set up, offline, incompatible, and
+  unsupported hosts
+- sidebar tests for single-host projects, mixed-host projects, host filters, and
+  drag/reorder
+- SSH end-to-end validation for remote setup and remote workspace creation
+- Electron UI verification for the create-workspace and settings flows
+
 ## Implementation Scale
 
 This is probably not a small patch.
 
-Estimated change categories:
+Estimated change categories: 12 meaningful surfaces.
 
 1. shared types and persistence
 2. migration logic
@@ -421,9 +637,52 @@ Estimated change categories:
 11. CLI/API updates
 12. tests and compatibility coverage
 
-So the answer is: about 10 to 12 meaningful product/engineering surfaces need
-to change, with the data model and creation/setup flows being the most important
-and highest-risk pieces.
+So the answer is: about 12 meaningful product/engineering surfaces need to
+change, with the data model, migration, creation/setup flows, and runtime
+routing being the most important and highest-risk pieces.
+
+## Suggested Implementation Sequence
+
+This should be implemented as an additive migration, not a big-bang rename.
+
+1. Add project/setup types, selectors, and compatibility helpers while keeping
+   existing `Repo` APIs alive.
+2. Add persistence migration that derives one setup per existing repo.
+3. Update store selectors so the sidebar and creation flows can read
+   project-first data without requiring every backend call to change at once.
+4. Update workspace creation to accept project plus host, then map through the
+   selected setup to current worktree creation internals.
+5. Add setup-on-host flows for local and SSH paths.
+6. Split settings into project-global and host-specific sections with an
+   explicit host selector.
+7. Move sidebar default grouping to project-first while preserving host filters
+   and host-first operational mode if we still want it.
+8. Audit runtime routing and caches so every host-local operation is keyed by
+   setup/host, not only project.
+9. Add CLI/API compatibility commands.
+10. Run migration, unit, SSH, and Electron validation before calling it done.
+
+## Implementation Status
+
+Landed so far:
+
+- Added shared `Project` and `ProjectHostSetup` types.
+- Added a pure compatibility projection from existing `Repo[]` into
+  project-first `Project[]` and `ProjectHostSetup[]`.
+- Added renderer store selectors that expose the projected model without
+  duplicating derived state in Zustand.
+- Added persisted `projects` and `projectHostSetups` compatibility fields that
+  are backfilled from existing repos on load and kept in sync when repos are
+  added, updated, reordered, or removed.
+- Added tests for local repos, SSH repos, same-provider multi-host grouping,
+  no-identity same-name non-grouping, selector cache behavior, persistence
+  backfill, and repo mutation synchronization.
+
+Important limitation:
+
+- This is not the full migration yet. `Repo` remains the source of truth for the
+  compatibility records, and create-workspace/settings/sidebar flows still use
+  the current repo-centric APIs until the later steps above are implemented.
 
 ## Recommendation
 
@@ -443,4 +702,3 @@ This gives us:
 - clear handling for project exclusivity
 - a natural future cloud VM monetization path
 - a better fit for repo/worktree/task/agent workflows
-
