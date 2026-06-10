@@ -6,19 +6,23 @@ import { CreateStep } from './AddRepoCreateStep'
 import type { GitAvailability, RepoKind } from './create-project-defaults'
 
 function renderCreateStep({
+  createName = '',
   createKind = 'git',
   gitAvailability = 'available',
-  createParent = '/Users/alice/orca/projects'
+  createParent = '/Users/alice/orca/projects',
+  parentDefaultPending = false
 }: {
+  createName?: string
   createKind?: RepoKind
   gitAvailability?: GitAvailability
   createParent?: string
+  parentDefaultPending?: boolean
 } = {}): string {
   return renderToStaticMarkup(
     <TooltipProvider>
       <Dialog open>
         <CreateStep
-          createName=""
+          createName={createName}
           createParent={createParent}
           createKind={createKind}
           createError={null}
@@ -26,6 +30,7 @@ function renderCreateStep({
           defaultParent="/Users/alice/orca/projects"
           gitAvailability={gitAvailability}
           runtimeParentStatus="idle"
+          parentDefaultPending={parentDefaultPending}
           onNameChange={vi.fn()}
           onParentChange={vi.fn()}
           onKindChange={vi.fn()}
@@ -56,5 +61,14 @@ describe('CreateStep', () => {
 
     expect(html).toContain('Folder in ~/orca/projects')
     expect(html).toContain('Git isn&#x27;t installed, so a plain folder is the default.')
+  })
+
+  it('disables create while an auto-filled parent belongs to a previous target', () => {
+    const html = renderCreateStep({
+      createName: 'demo-project',
+      parentDefaultPending: true
+    })
+
+    expect(html).toContain('disabled=""')
   })
 })

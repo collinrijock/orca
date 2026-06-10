@@ -44,6 +44,7 @@ type AddRepoDialogStepContentProps = {
   createDefaultParent: string
   createGitAvailability: GitAvailability
   createRuntimeParentStatus: 'idle' | 'checking' | 'failed'
+  createParentDefaultPending: boolean
   onBrowse: () => void
   onOpenCloneStep: () => void
   onOpenCreateStep: () => void
@@ -105,6 +106,7 @@ export function AddRepoDialogStepContent({
   createDefaultParent,
   createGitAvailability,
   createRuntimeParentStatus,
+  createParentDefaultPending,
   onBrowse,
   onOpenCloneStep,
   onOpenCreateStep,
@@ -229,6 +231,7 @@ export function AddRepoDialogStepContent({
         defaultParent={createDefaultParent}
         gitAvailability={createGitAvailability}
         runtimeParentStatus={createRuntimeParentStatus}
+        parentDefaultPending={createParentDefaultPending}
         manualParentEntry={isRuntimeEnvironmentActive}
         runtimeEnvironmentId={activeRuntimeEnvironmentId}
         onNameChange={onCreateNameChange}

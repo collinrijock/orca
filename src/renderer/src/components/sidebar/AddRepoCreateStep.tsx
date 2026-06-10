@@ -30,6 +30,7 @@ type CreateStepProps = {
   defaultParent?: string
   gitAvailability?: GitAvailability
   runtimeParentStatus?: 'idle' | 'checking' | 'failed'
+  parentDefaultPending?: boolean
   manualParentEntry?: boolean
   runtimeEnvironmentId?: string | null
   onNameChange: (value: string) => void
@@ -48,6 +49,7 @@ export function CreateStep({
   defaultParent = '',
   gitAvailability = 'unknown',
   runtimeParentStatus = 'idle',
+  parentDefaultPending = false,
   manualParentEntry = false,
   runtimeEnvironmentId,
   onNameChange,
@@ -98,6 +100,7 @@ export function CreateStep({
     createName.trim().length > 0 &&
     createParent.trim().length > 0 &&
     gitAvailability !== 'checking' &&
+    !parentDefaultPending &&
     !isCreating
   const missingLocationLabel = translate(
     'auto.components.sidebar.AddRepoCreateStep.3a13f6e88b',

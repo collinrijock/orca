@@ -151,6 +151,7 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
     createDefaultParent,
     createGitAvailability,
     createRuntimeParentStatus,
+    createParentDefaultPending,
     resetCreateDefaultState,
     markCreateParentTouched,
     markCreateKindTouched
@@ -337,6 +338,7 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
           createDefaultParent={createDefaultParent}
           createGitAvailability={createGitAvailability}
           createRuntimeParentStatus={createRuntimeParentStatus}
+          createParentDefaultPending={createParentDefaultPending}
           onBrowse={handleBrowse}
           onOpenCloneStep={() => {
             setCloneError(null)

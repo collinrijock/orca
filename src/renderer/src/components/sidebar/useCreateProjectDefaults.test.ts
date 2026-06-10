@@ -193,6 +193,7 @@ describe('useCreateProjectDefaults', () => {
       createParent: '/Users/alice/orca/projects'
     })
 
+    expect(runtime.result.createParentDefaultPending).toBe(true)
     expect(runtime.setCreateParent).toHaveBeenCalledWith('')
     expect(mocks.stateValues[RUNTIME_PARENT_STATUS_STATE]).toBe('checking')
     expect(mocks.browseRuntimeServerDirectory).not.toHaveBeenCalled()
@@ -206,6 +207,7 @@ describe('useCreateProjectDefaults', () => {
     expect(mocks.browseRuntimeServerDirectory).toHaveBeenCalledWith('env-1', '~')
     expect(resolvedRuntime.setCreateParent).toHaveBeenCalledWith('/home/alice/orca/projects')
     expect(mocks.stateValues[DEFAULT_PARENT_STATE]).toBe('/home/alice/orca/projects')
+    expect(resolvedRuntime.result.createParentDefaultPending).toBe(false)
   })
 
   it('does not replace a touched parent when switching to a runtime target', async () => {

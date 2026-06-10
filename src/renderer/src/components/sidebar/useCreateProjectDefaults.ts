@@ -58,6 +58,7 @@ export function useCreateProjectDefaults({
   createDefaultParent: string
   createGitAvailability: GitAvailability
   createRuntimeParentStatus: CreateRuntimeParentStatus
+  createParentDefaultPending: boolean
   resetCreateDefaultState: () => void
   markCreateParentTouched: () => void
   markCreateKindTouched: () => void
@@ -72,6 +73,7 @@ export function useCreateProjectDefaults({
   const createKindTouchedRef = useRef(false)
   const createParentDefaultGenRef = useRef(0)
   const createGitProbeGenRef = useRef(0)
+  const activeCreateParentRuntimeEnvironmentId = activeRuntimeEnvironmentId?.trim() || null
 
   const canReplaceCreateParentDefault = useCallback((parent: string): boolean => {
     if (createParentTouchedRef.current) {
@@ -102,11 +104,19 @@ export function useCreateProjectDefaults({
     createKindTouchedRef.current = true
   }, [])
 
+  const createParentDefaultPending =
+    step === 'create' &&
+    !createParentTouchedRef.current &&
+    Boolean(createParent.trim()) &&
+    autoFilledCreateParentRef.current?.parent === createParent.trim() &&
+    autoFilledCreateParentRef.current.runtimeEnvironmentId !==
+      activeCreateParentRuntimeEnvironmentId
+
   useEffect(() => {
     if (step !== 'create') {
       return
     }
-    if (activeRuntimeEnvironmentId?.trim()) {
+    if (activeCreateParentRuntimeEnvironmentId) {
       return
     }
     // Why: invalidate any in-flight runtime parent probe once local mode owns the default.
@@ -150,6 +160,7 @@ export function useCreateProjectDefaults({
       })
   }, [
     activeRuntimeEnvironmentId,
+    activeCreateParentRuntimeEnvironmentId,
     canReplaceCreateParentDefault,
     createParent,
     setCreateParent,
@@ -160,7 +171,7 @@ export function useCreateProjectDefaults({
     if (step !== 'create') {
       return
     }
-    const runtimeEnvironmentId = activeRuntimeEnvironmentId?.trim()
+    const runtimeEnvironmentId = activeCreateParentRuntimeEnvironmentId
     if (!runtimeEnvironmentId) {
       setCreateRuntimeParentStatus('idle')
       return
@@ -216,6 +227,7 @@ export function useCreateProjectDefaults({
       })
   }, [
     activeRuntimeEnvironmentId,
+    activeCreateParentRuntimeEnvironmentId,
     canReplaceCreateParentDefault,
     createParent,
     setCreateParent,
@@ -264,6 +276,7 @@ export function useCreateProjectDefaults({
     createDefaultParent,
     createGitAvailability,
     createRuntimeParentStatus,
+    createParentDefaultPending,
     resetCreateDefaultState,
     markCreateParentTouched,
     markCreateKindTouched
