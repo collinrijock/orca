@@ -61,6 +61,10 @@ import {
   getBrokenChecks,
   getCheckDetailsPromptKey
 } from '../pr-checks-fix-prompt'
+import {
+  buildPRCommentsResolutionPrompt,
+  isResolvablePRCommentGroup
+} from '../pr-comments-resolution-prompt'
 import { startFixChecksAgent } from '@/lib/fix-checks-agent-launch'
 import { CreatePullRequestDialog } from './CreatePullRequestDialog'
 import type {
@@ -70,18 +74,16 @@ import type {
 import { getHostedReviewCacheKey, refreshHostedReviewCard } from '@/store/slices/hosted-review'
 import { toast } from 'sonner'
 import { useConfirmationDialog } from '@/components/confirmation-dialog'
-import {
-  classifyHostedReview,
-  type HostedReviewClassificationOptions
-} from '../../../../shared/hosted-review-queue'
-import { hostedReviewSummaryFromGitHubPRInfo } from '../../../../shared/hosted-review-github'
 import { type ChecksPanelReview, gitHubPRToChecksPanelReview } from './checks-panel-review'
-import { hostedReviewSummaryFromGitLabInfo } from '../../../../shared/hosted-review-gitlab'
 import {
   checksPanelAsyncResultKey,
   checksPanelHostedReviewAsyncResultKey,
   shouldCommitChecksPanelAsyncResult
 } from './checks-panel-async-result-key'
+import {
+  markPRCommentThreadResolved,
+  restorePRCommentThreadSnapshot
+} from './pr-comment-thread-resolution'
 import { installWindowVisibilityTimeoutPoller } from '@/lib/window-visibility-timeout-poller'
 import {
   getChecksPanelEmptyStateCopy,
@@ -116,6 +118,7 @@ import {
 } from '../../../../shared/source-control-ai-recipe-save'
 import { resolveSourceControlLaunchPlatform } from '@/lib/source-control-launch-platform'
 import { translate } from '@/i18n/i18n'
+import { groupPRComments, type PRCommentGroup } from '@/lib/pr-comment-groups'
 
 const RUNTIME_SSH_STATUS_REFRESH_MS = 3000
 const GIT_STATUS_FAILURE_RETRY_MS = 3000
@@ -134,6 +137,12 @@ type ChecksAgentComposerState = {
   description: string
   prompt: string
   launchSource: 'conflict_resolution' | 'task_page'
+  commentResolution?: {
+    reviewContextKey: string
+    provider: ChecksPanelReview['provider']
+    selectedThreadIds: string[]
+    selectedGroups: PRCommentGroup[]
+  }
 }
 type ChecksPanelReviewHeaderProps = {
   review: ChecksPanelReview
@@ -358,7 +367,7 @@ export default function ChecksPanel(): React.JSX.Element {
   const [checksLoading, setChecksLoading] = useState(false)
   const [comments, setComments] = useState<PRComment[]>([])
   const [commentsLoading, setCommentsLoading] = useState(false)
-  const [gitLabDetailsFetchedAt, setGitLabDetailsFetchedAt] = useState<number | null>(null)
+  const commentsRef = useRef<PRComment[]>([])
   const [emptyRefreshing, setEmptyRefreshing] = useState(false)
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [conflictDetailsRefreshing, setConflictDetailsRefreshing] = useState(false)
@@ -386,6 +395,7 @@ export default function ChecksPanel(): React.JSX.Element {
   const confirm = useConfirmationDialog()
   const prevChecksRef = useRef<string>('')
   const conflictSummaryRefreshKeyRef = useRef<string | null>(null)
+  commentsRef.current = comments
 
   const saveLaunchActionDefault = useCallback(
     async (
@@ -442,6 +452,8 @@ export default function ChecksPanel(): React.JSX.Element {
     worktreeId: activeWorktreeId,
     worktreePath: activeWorktreePath,
     branch,
+    linkedGitHubPR: activeWorktree?.linkedPR ?? null,
+    linkedGitLabMR: activeWorktree?.linkedGitLabMR ?? null,
     runtimeEnvironmentId,
     repoConnectionId,
     pushTarget: activeWorktreePushTarget
@@ -482,7 +494,6 @@ export default function ChecksPanel(): React.JSX.Element {
     setChecksLoading(false)
     setComments([])
     setCommentsLoading(false)
-    setGitLabDetailsFetchedAt(null)
     setIsRefreshing(false)
     setEmptyRefreshing(false)
     setConflictDetailsRefreshing(false)
@@ -644,6 +655,15 @@ export default function ChecksPanel(): React.JSX.Element {
       shouldCommitChecksPanelAsyncResult(asyncResultKeyRef.current, requestKey),
     []
   )
+  useEffect(() => {
+    if (
+      agentComposerState?.commentResolution &&
+      agentComposerState.commentResolution.reviewContextKey !== stateRequestKey
+    ) {
+      setAgentComposerState(null)
+    }
+  }, [agentComposerState?.commentResolution, stateRequestKey])
+
   useEffect(() => {
     if (isPanelVisible && repo && !isFolder && branch) {
       void fetchHostedReviewForBranch(repo.path, branch, {
@@ -929,6 +949,7 @@ export default function ChecksPanel(): React.JSX.Element {
     void fetchPRForBranch(repo.path, branch, {
       force: true,
       repoId: repo.id,
+      worktreeId: activeWorktreeId ?? undefined,
       linkedPRNumber: linkedPR,
       fallbackPRNumber: fallbackGitHubPRNumber ?? pr.number
     }).finally(() => {
@@ -1066,7 +1087,6 @@ export default function ChecksPanel(): React.JSX.Element {
         const result = gitLabPipelineJobsToPRChecks(details?.pipelineJobs ?? [])
         setChecks(result)
         setComments(gitLabMRCommentsToPRComments(details?.comments))
-        setGitLabDetailsFetchedAt(Date.now())
         const signature = JSON.stringify(result.map((c) => `${c.name}:${c.status}:${c.conclusion}`))
         pollIntervalRef.current =
           signature === prevChecksRef.current
@@ -1080,7 +1100,6 @@ export default function ChecksPanel(): React.JSX.Element {
         console.warn('Failed to fetch GitLab MR checks:', err)
         setChecks([])
         setComments([])
-        setGitLabDetailsFetchedAt(null)
       } finally {
         if (isCurrentAsyncResult(requestKey)) {
           setChecksLoading(false)
@@ -1328,6 +1347,7 @@ export default function ChecksPanel(): React.JSX.Element {
       const refreshedPR = await fetchPRForBranch(repo.path, branch, {
         force: true,
         repoId: repo.id,
+        worktreeId: activeWorktreeId ?? undefined,
         linkedPRNumber: linkedPR,
         fallbackPRNumber: fallbackGitHubPRNumber
       })
@@ -1577,6 +1597,7 @@ export default function ChecksPanel(): React.JSX.Element {
     const refreshedPR = await fetchPRForBranch(repo.path, branch, {
       force: true,
       repoId: repo.id,
+      worktreeId: activeWorktreeId ?? undefined,
       linkedPRNumber: linkedPR,
       fallbackPRNumber: fallbackGitHubPRNumber
     })
@@ -1591,6 +1612,7 @@ export default function ChecksPanel(): React.JSX.Element {
   }, [
     activeGitLabReview,
     activeReview?.provider,
+    activeWorktreeId,
     branch,
     fallbackGitHubPRNumber,
     fetchGitLabDetails,
@@ -1685,14 +1707,21 @@ export default function ChecksPanel(): React.JSX.Element {
   )
 
   const handleResolve = useCallback(
-    async (threadId: string, resolve: boolean): Promise<boolean> => {
+    async (
+      threadId: string,
+      resolve: boolean,
+      options: { notifyOnFailure?: boolean } = {}
+    ): Promise<boolean> => {
+      const notifyOnFailure = options.notifyOnFailure !== false
+      const rollbackThread = (previousThreadComments: PRComment[]): void => {
+        setComments((prev) => restorePRCommentThreadSnapshot(prev, previousThreadComments))
+      }
       if (repo && activeGitLabReview) {
-        const previousComments = comments
-        setComments((prev) =>
-          prev.map((comment) =>
-            comment.threadId === threadId ? { ...comment, isResolved: resolve } : comment
-          )
-        )
+        let previousThreadComments: PRComment[] = []
+        setComments((prev) => {
+          previousThreadComments = prev.filter((comment) => comment.threadId === threadId)
+          return markPRCommentThreadResolved(prev, threadId, resolve)
+        })
         const result = await resolveGitLabMRDiscussionForChecks({
           repoPath: repo.path,
           repoId: repo.id,
@@ -1702,8 +1731,10 @@ export default function ChecksPanel(): React.JSX.Element {
           resolved: resolve
         })
         if (!result.ok) {
-          setComments(previousComments)
-          toast.error(result.error)
+          rollbackThread(previousThreadComments)
+          if (notifyOnFailure) {
+            toast.error(result.error)
+          }
           return false
         }
         return true
@@ -1718,12 +1749,11 @@ export default function ChecksPanel(): React.JSX.Element {
         pr?.prRepo,
         pr?.headSha
       )
-      const previousComments = comments
-      setComments((prev) =>
-        prev.map((comment) =>
-          comment.threadId === threadId ? { ...comment, isResolved: resolve } : comment
-        )
-      )
+      let previousThreadComments: PRComment[] = []
+      setComments((prev) => {
+        previousThreadComments = prev.filter((comment) => comment.threadId === threadId)
+        return markPRCommentThreadResolved(prev, threadId, resolve)
+      })
       const ok = await resolveReviewThread(repo.path, prNumber, threadId, resolve, {
         repoId: repo.id,
         prRepo: pr?.prRepo
@@ -1732,20 +1762,21 @@ export default function ChecksPanel(): React.JSX.Element {
         return ok
       }
       if (!ok) {
-        setComments(previousComments)
-        toast.error(
-          translate(
-            'auto.components.right.sidebar.ChecksPanel.5788d1059d',
-            'Could not update review thread. Check the GitHub API budget.'
+        rollbackThread(previousThreadComments)
+        if (notifyOnFailure) {
+          toast.error(
+            translate(
+              'auto.components.right.sidebar.ChecksPanel.5788d1059d',
+              'Could not update review thread. Check the GitHub API budget.'
+            )
           )
-        )
+        }
       }
       return ok
     },
     [
       activeGitLabReview,
       branch,
-      comments,
       isCurrentAsyncResult,
       pr?.headSha,
       pr?.prRepo,
@@ -1775,6 +1806,19 @@ export default function ChecksPanel(): React.JSX.Element {
     : noEnabledAgentKnown
       ? 'No enabled AI agents. Configure agents in Settings.'
       : undefined
+  const resolveCommentsWithAIDisabledReason = commentsLoading
+    ? 'Comments are still loading.'
+    : aiActionDisabledReason
+      ? aiActionDisabledReason
+      : !activeReview
+        ? 'Open a PR or MR before launching an AI action.'
+        : !repo
+          ? 'Select a repository before launching an AI action.'
+          : activeReview.provider === 'github' && !prNumber
+            ? 'Open a GitHub PR before resolving comments.'
+            : activeReview.provider === 'gitlab' && !activeGitLabReview
+              ? 'Open a GitLab MR before resolving comments.'
+              : undefined
 
   const handleAddPRComment = useCallback(
     async (body: string) => {
@@ -1945,6 +1989,131 @@ export default function ChecksPanel(): React.JSX.Element {
     })
   }, [activeConflictReview, activeWorktreeId, activeWorktreePath])
 
+  const handleResolveCommentsWithAI = useCallback(
+    (selectedGroups: PRCommentGroup[]): void => {
+      if (!activeWorktreeId || !activeReview || !repo || resolveCommentsWithAIDisabledReason) {
+        return
+      }
+      const selectedThreadIds = selectedGroups.flatMap((group) =>
+        group.kind === 'thread' && isResolvablePRCommentGroup(group) ? [group.threadId] : []
+      )
+      if (selectedGroups.length === 0) {
+        toast.message(
+          translate(
+            'auto.components.right.sidebar.ChecksPanel.f316a8ca2b',
+            'No unresolved comments selected.'
+          )
+        )
+        return
+      }
+      setAgentComposerState({
+        actionId: 'resolveComments',
+        title: translate(
+          'auto.components.right.sidebar.ChecksPanel.d00ebdc402',
+          'Resolve {{value0}} Comments With AI',
+          { value0: activeReview.provider === 'gitlab' ? 'MR' : 'PR' }
+        ),
+        description: translate(
+          'auto.components.right.sidebar.ChecksPanel.ed3f79c031',
+          'Review the prompt before starting an agent. Selected threads are marked resolved after launch.'
+        ),
+        prompt: buildPRCommentsResolutionPrompt({
+          reviewKind: activeReview.provider === 'gitlab' ? 'MR' : 'PR',
+          reviewNumber: activeReview.number,
+          reviewTitle: activeReview.title,
+          reviewUrl: activeReview.url,
+          groups: selectedGroups,
+          worktreePath: activeWorktreePath
+        }),
+        launchSource: 'task_page',
+        commentResolution: {
+          reviewContextKey: stateRequestKey,
+          provider: activeReview.provider,
+          selectedThreadIds,
+          selectedGroups
+        }
+      })
+    },
+    [
+      activeReview,
+      activeWorktreeId,
+      activeWorktreePath,
+      repo,
+      resolveCommentsWithAIDisabledReason,
+      stateRequestKey
+    ]
+  )
+
+  const refreshCommentsAfterBulkResolve = useCallback(
+    async (provider: ChecksPanelReview['provider']): Promise<void> => {
+      if (provider === 'gitlab') {
+        await fetchGitLabDetails({ commitAsCurrent: true })
+        return
+      }
+      await fetchComments({ force: true })
+    },
+    [fetchComments, fetchGitLabDetails]
+  )
+
+  const resolveSelectedThreadsAfterLaunch = useCallback(
+    async (resolution: NonNullable<ChecksAgentComposerState['commentResolution']>) => {
+      let resolved = 0
+      let skipped = 0
+      let failed = 0
+      if (resolution.selectedThreadIds.length === 0) {
+        toast.success(
+          translate(
+            'auto.components.right.sidebar.ChecksPanel.3c3ad3a1d2',
+            'Started the agent. No selected comments can be marked resolved on the host.'
+          )
+        )
+        return
+      }
+      for (const threadId of resolution.selectedThreadIds) {
+        if (asyncResultKeyRef.current !== resolution.reviewContextKey) {
+          skipped += resolution.selectedThreadIds.length - resolved - skipped - failed
+          break
+        }
+        const currentGroup = groupPRComments(commentsRef.current).find(
+          (group) => group.kind === 'thread' && group.threadId === threadId
+        )
+        if (!currentGroup || !isResolvablePRCommentGroup(currentGroup)) {
+          skipped += 1
+          continue
+        }
+        const ok = await handleResolve(threadId, true, { notifyOnFailure: false })
+        if (ok) {
+          resolved += 1
+        } else {
+          failed += 1
+        }
+      }
+
+      if (asyncResultKeyRef.current === resolution.reviewContextKey) {
+        await refreshCommentsAfterBulkResolve(resolution.provider)
+      }
+
+      if (failed > 0) {
+        toast.error(
+          translate(
+            'auto.components.right.sidebar.ChecksPanel.f273f2271c',
+            'Started the agent. Marked {{value0}} resolved, skipped {{value1}}, failed {{value2}}.',
+            { value0: resolved, value1: skipped, value2: failed }
+          )
+        )
+        return
+      }
+      toast.success(
+        translate(
+          'auto.components.right.sidebar.ChecksPanel.aa95b81a3a',
+          'Started the agent. Marked {{value0}} resolved, skipped {{value1}}, failed {{value2}}.',
+          { value0: resolved, value1: skipped, value2: failed }
+        )
+      )
+    },
+    [handleResolve, refreshCommentsAfterBulkResolve]
+  )
+
   const handleFixChecksWithAI = useCallback(async (): Promise<void> => {
     if (isFixingChecksWithAI || !activeWorktreeId || !activeReview || !repo) {
       return
@@ -2051,6 +2220,7 @@ export default function ChecksPanel(): React.JSX.Element {
         const refreshedPR = await fetchPRForBranch(repo.path, branch, {
           force: true,
           repoId: repo.id,
+          worktreeId: activeWorktreeId ?? undefined,
           linkedPRNumber
         })
         if (!isCurrentRequestContext()) {
@@ -2158,6 +2328,7 @@ export default function ChecksPanel(): React.JSX.Element {
       }
     },
     [
+      activeWorktreeId,
       branch,
       fetchHostedReviewForBranch,
       fetchPRChecks,
@@ -2337,82 +2508,6 @@ export default function ChecksPanel(): React.JSX.Element {
     ]
   )
 
-  const activeReviewClassification = React.useMemo(() => {
-    if (!repo) {
-      return null
-    }
-    const options: HostedReviewClassificationOptions = {
-      agentAuthorLogins: [],
-      viewer: null
-    }
-    if (activeGitLabReview) {
-      const commentsForClassification =
-        gitLabDetailsFetchedAt !== null && !commentsLoading ? comments : undefined
-      const summary = hostedReviewSummaryFromGitLabInfo({
-        review: activeGitLabReview,
-        comments: commentsForClassification,
-        checks
-      })
-      return classifyHostedReview(summary, options)
-    }
-    if (!pr) {
-      return null
-    }
-    let host = 'github.com'
-    let owner = 'unknown'
-    let repoName = 'unknown'
-    try {
-      const parsed = new URL(pr.url)
-      host = parsed.host || host
-      const segments = parsed.pathname.split('/').filter(Boolean)
-      if (segments.length >= 2) {
-        owner = segments[0]
-        repoName = segments[1]
-      }
-    } catch {
-      // Why: malformed URLs should not block queue-state classification.
-    }
-
-    // Why: unresolved thread data is paginated and fetched separately. Until
-    // comments have loaded for this PR, do not let queue badges imply a clean review.
-    const commentsForClassification =
-      commentsFetchedAt !== undefined && !commentsLoading ? comments : undefined
-    const summary = hostedReviewSummaryFromGitHubPRInfo({
-      pr,
-      owner,
-      repo: repoName,
-      host,
-      comments: commentsForClassification,
-      checks
-    })
-    return classifyHostedReview(summary, options)
-  }, [
-    activeGitLabReview,
-    repo,
-    gitLabDetailsFetchedAt,
-    commentsLoading,
-    comments,
-    checks,
-    pr,
-    commentsFetchedAt
-  ])
-
-  const queueBadges = React.useMemo(() => {
-    if (!activeReviewClassification) {
-      return [] as string[]
-    }
-    const badges: string[] = []
-    if (activeReviewClassification.needsResponse) {
-      badges.push('Needs response')
-    }
-    // Why: viewer/author/requestedReviewer signals are not wired into the
-    // ChecksPanel call site yet, so `state` and `requested` would mis-classify
-    // every PR (collapsing to 'teammate'). Suppress those badges until the
-    // inputs are available; needs-response works from PR metadata alone and
-    // remains accurate.
-    return badges
-  }, [activeReviewClassification])
-
   // ── Empty state ──
   if (!activeWorktree) {
     return (
@@ -2473,13 +2568,15 @@ export default function ChecksPanel(): React.JSX.Element {
       (!publishActionHasUncommittedChanges &&
         shouldShowChecksPanelPublishBranchAction({
           hostedReviewBlockedReason: hostedReviewCreation?.blockedReason,
-          hasUpstream: publishActionRemoteStatus?.hasUpstream
+          hasUpstream: publishActionRemoteStatus?.hasUpstream,
+          hasCurrentBranch: Boolean(branch)
         }))
     const emptyStateCopy = getChecksPanelEmptyStateCopy({
       operationLabel,
       prRefreshStatus: emptyReviewIsGitLab ? undefined : prRefreshState?.status,
       hostedReviewBlockedReason: hostedReviewCreation?.blockedReason,
       hasUpstream: publishActionRemoteStatus?.hasUpstream,
+      hasCurrentBranch: Boolean(branch),
       reviewLabel: emptyReviewLabel,
       reviewShortLabel: emptyReviewShortLabel
     })
@@ -2649,19 +2746,6 @@ export default function ChecksPanel(): React.JSX.Element {
             {new Date(activeReview.updatedAt).toLocaleString()}
           </div>
         )}
-        {queueBadges.length > 0 ? (
-          <div className="flex flex-wrap gap-1">
-            {queueBadges.map((badge) => (
-              <span
-                key={badge}
-                className="rounded-full border border-border px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground"
-              >
-                {badge}
-              </span>
-            ))}
-          </div>
-        ) : null}
-
         {/* Merge / Delete Workspace actions */}
         {activeReview && activeWorktree && repo && (
           <HostedReviewActions
@@ -2714,9 +2798,14 @@ export default function ChecksPanel(): React.JSX.Element {
       <PRCommentsList
         comments={comments}
         commentsLoading={commentsLoading}
+        reviewKind={reviewShortLabel}
         commentsDisabled={!canTargetPRComments}
         commentsDisabledReason={commentsDisabledReason}
+        selectionContextKey={stateRequestKey}
+        resolveCommentsWithAIDisabled={Boolean(resolveCommentsWithAIDisabledReason)}
+        resolveCommentsWithAIDisabledReason={resolveCommentsWithAIDisabledReason}
         onAddComment={pr ? handleAddPRComment : undefined}
+        onResolveSelectedCommentsWithAI={handleResolveCommentsWithAI}
         onReply={pr ? handleReplyToComment : undefined}
         onResolve={pr || activeGitLabReview ? handleResolve : undefined}
         onEditComment={pr ? handleEditComment : undefined}
@@ -2774,7 +2863,18 @@ export default function ChecksPanel(): React.JSX.Element {
         }
         onSaveAgentDefault={saveLaunchActionDefault}
         onLaunched={() => {
-          if (agentComposerState?.actionId === 'resolveConflicts') {
+          const launchedState = agentComposerState
+          if (launchedState?.actionId === 'resolveComments' && launchedState.commentResolution) {
+            void resolveSelectedThreadsAfterLaunch(launchedState.commentResolution).catch((err) => {
+              console.warn('Failed to resolve selected review comments after AI launch:', err)
+              toast.error(
+                translate(
+                  'auto.components.right.sidebar.ChecksPanel.495b2f8c4b',
+                  'Started the agent, but could not mark the selected comments resolved.'
+                )
+              )
+            })
+          } else if (launchedState?.actionId === 'resolveConflicts') {
             toast.success(
               translate(
                 'auto.components.right.sidebar.ChecksPanel.a0181a8d76',

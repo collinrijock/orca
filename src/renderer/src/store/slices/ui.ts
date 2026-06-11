@@ -248,6 +248,7 @@ function normalizePersistedRightSidebarTab(
   if (
     tab === 'explorer' ||
     tab === 'search' ||
+    tab === 'vault' ||
     tab === 'source-control' ||
     tab === 'checks' ||
     tab === 'ports'
@@ -617,11 +618,6 @@ export type UISlice = {
       title: string
       url: string
       linearIdentifier?: string
-      linkedContext?: {
-        provider: TaskProvider
-        version: 1
-        renderedText: string
-      }
     } | null
     agent: TuiAgent
     linkedIssue: string

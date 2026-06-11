@@ -1175,7 +1175,7 @@ export default function SmartWorkspaceNameField({
               {translate(
                 'auto.components.new.workspace.SmartWorkspaceNameField.ad188067ae',
                 'The GitHub URL points to'
-              )}
+              )}{' '}
               {crossRepoPrompt?.link.slug.owner}/{crossRepoPrompt?.link.slug.repo}
               {translate(
                 'auto.components.new.workspace.SmartWorkspaceNameField.9ef1a7c4b0',
@@ -1194,7 +1194,7 @@ export default function SmartWorkspaceNameField({
               {translate(
                 'auto.components.new.workspace.SmartWorkspaceNameField.eadf877af5',
                 'Keep'
-              )}
+              )}{' '}
               {selectedRepo?.displayName ??
                 translate(
                   'auto.components.new.workspace.SmartWorkspaceNameField.fda67f0b61',
@@ -1206,7 +1206,7 @@ export default function SmartWorkspaceNameField({
                 {translate(
                   'auto.components.new.workspace.SmartWorkspaceNameField.a76fcb4fa0',
                   'Switch to'
-                )}
+                )}{' '}
                 {crossRepoPrompt.matchingRepo.displayName}
               </Button>
             ) : (

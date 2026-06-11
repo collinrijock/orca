@@ -262,10 +262,19 @@ const PRIMARY_ICONS: Partial<
 // This keeps unresolved conflicts visible at the top of the list where the
 // user won't miss them.
 const SECTION_ORDER = ['unstaged', 'staged', 'untracked'] as const
-const SECTION_LABELS: Record<(typeof SECTION_ORDER)[number], string> = {
-  staged: 'Staged Changes',
-  unstaged: 'Changes',
-  untracked: 'Untracked Files'
+const SECTION_LABELS: Record<(typeof SECTION_ORDER)[number], { key: string; fallback: string }> = {
+  staged: {
+    key: 'auto.components.right.sidebar.SourceControl.48a003c1b1',
+    fallback: 'Staged Changes'
+  },
+  unstaged: {
+    key: 'auto.components.right.sidebar.SourceControl.d4ef4bafc5',
+    fallback: 'Changes'
+  },
+  untracked: {
+    key: 'auto.components.right.sidebar.SourceControl.522f44dce5',
+    fallback: 'Untracked Files'
+  }
 }
 
 const BRANCH_REFRESH_INTERVAL_MS = 5000
@@ -2005,6 +2014,7 @@ function SourceControlInner(): React.JSX.Element {
           fetchPRForBranch(activeRepo.path, branchName, {
             force: true,
             repoId: activeRepo.id,
+            worktreeId: activeWorktreeId ?? undefined,
             linkedPRNumber: result.number
           })
         ])
@@ -2545,7 +2555,8 @@ function SourceControlInner(): React.JSX.Element {
       inFlightRemoteOpKind,
       hostedReviewCreation,
       branchCommitsAhead:
-        branchSummary?.status === 'ready' ? (branchSummary.commitsAhead ?? 0) : undefined
+        branchSummary?.status === 'ready' ? (branchSummary.commitsAhead ?? 0) : undefined,
+      hasCurrentBranch: Boolean(branchName)
     })
     return isCreatingPr && action.kind === 'create_pr'
       ? {
@@ -2575,6 +2586,7 @@ function SourceControlInner(): React.JSX.Element {
     isCreatingPr,
     branchSummary?.commitsAhead,
     branchSummary?.status,
+    branchName,
     remoteStatus,
     unresolvedConflicts.length
   ])
@@ -2599,6 +2611,7 @@ function SourceControlInner(): React.JSX.Element {
         isPullRequestOperationActive: prGenerating || isCreatingPr,
         branchCommitsAhead:
           branchSummary?.status === 'ready' ? (branchSummary.commitsAhead ?? 0) : undefined,
+        hasCurrentBranch: Boolean(branchName),
         rebaseBaseRef: effectiveBaseRef
       }),
     [
@@ -2619,6 +2632,7 @@ function SourceControlInner(): React.JSX.Element {
       prGenerating,
       branchSummary?.commitsAhead,
       branchSummary?.status,
+      branchName,
       effectiveBaseRef,
       remoteStatus,
       unresolvedConflicts.length
@@ -4212,10 +4226,11 @@ function SourceControlInner(): React.JSX.Element {
                   getUnstageAllPaths(grouped.staged).length > 0
                 const canRevertAll =
                   !normalizedFilter && getDiscardAllPaths(grouped[area], area).length > 0
+                const sectionLabel = SECTION_LABELS[area]
                 return (
                   <div key={area}>
                     <SectionHeader
-                      label={SECTION_LABELS[area]}
+                      label={translate(sectionLabel.key, sectionLabel.fallback)}
                       count={items.length}
                       conflictCount={
                         items.filter((entry) => entry.conflictStatus === 'unresolved').length

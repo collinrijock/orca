@@ -1284,7 +1284,7 @@ describe('createUISlice settings navigation', () => {
 })
 
 describe('createUISlice new workspace draft', () => {
-  it('preserves Linear linked work item metadata and context', () => {
+  it('preserves Linear linked work item metadata', () => {
     const store = createUIStore()
 
     store.getState().setNewWorkspaceDraft({
@@ -1298,12 +1298,7 @@ describe('createUISlice new workspace draft', () => {
         number: 0,
         title: 'Fix launch context handoff',
         url: 'https://linear.app/acme/issue/ENG-123/fix-launch-context-handoff',
-        linearIdentifier: 'ENG-123',
-        linkedContext: {
-          provider: 'linear',
-          version: 1,
-          renderedText: 'Identifier: ENG-123'
-        }
+        linearIdentifier: 'ENG-123'
       },
       agent: 'claude',
       linkedIssue: '',
@@ -1313,12 +1308,7 @@ describe('createUISlice new workspace draft', () => {
     })
 
     expect(store.getState().newWorkspaceDraft?.linkedWorkItem).toMatchObject({
-      linearIdentifier: 'ENG-123',
-      linkedContext: {
-        provider: 'linear',
-        version: 1,
-        renderedText: 'Identifier: ENG-123'
-      }
+      linearIdentifier: 'ENG-123'
     })
   })
 

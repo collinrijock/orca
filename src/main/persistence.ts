@@ -129,6 +129,13 @@ import {
   sourceControlAiSettingsFromLegacy
 } from '../shared/source-control-ai'
 import { normalizeDisabledTuiAgents } from '../shared/tui-agent-selection'
+import {
+  DEFAULT_TUI_AGENT_ARGS,
+  DEFAULT_TUI_AGENT_ENV,
+  hasUnsupportedTuiAgentArgs,
+  normalizeTuiAgentArgsRecord,
+  normalizeTuiAgentEnvRecord
+} from '../shared/tui-agent-launch-defaults'
 import { normalizeTerminalCursorStyleDefault } from '../shared/terminal-cursor-style-settings'
 import { normalizeUiLanguage } from '../shared/ui-language'
 import { normalizeBrowserPageZoomLevel } from '../shared/browser-page-zoom'
@@ -259,6 +266,53 @@ function getWorkspaceLayoutHistoryKey(layout: OrcaWorkspaceLayout): string {
   return `${normalizeRuntimePathForComparison(layout.path)}:${layout.nestWorkspaces}`
 }
 
+function migrateAgentYoloDefaults(
+  settings: GlobalSettings | undefined
+): Pick<GlobalSettings, 'agentDefaultArgs' | 'agentDefaultEnv' | 'agentYoloDefaultsMigrated'> {
+  const existingArgs = normalizeTuiAgentArgsRecord(settings?.agentDefaultArgs)
+  const existingEnv = normalizeTuiAgentEnvRecord(settings?.agentDefaultEnv)
+  if (settings?.agentYoloDefaultsMigrated === true) {
+    return {
+      agentDefaultArgs: existingArgs,
+      agentDefaultEnv: existingEnv,
+      agentYoloDefaultsMigrated: true
+    }
+  }
+
+  const commandOverrides = settings?.agentCmdOverrides ?? {}
+  const migratedArgs = { ...existingArgs }
+  for (const [agent, args] of Object.entries(DEFAULT_TUI_AGENT_ARGS)) {
+    if (agent in migratedArgs) {
+      continue
+    }
+    if (agent in commandOverrides) {
+      migratedArgs[agent as keyof typeof DEFAULT_TUI_AGENT_ARGS] = ''
+      continue
+    }
+    migratedArgs[agent as keyof typeof DEFAULT_TUI_AGENT_ARGS] = args
+  }
+
+  const migratedEnv = { ...existingEnv }
+  for (const [agent, env] of Object.entries(DEFAULT_TUI_AGENT_ENV)) {
+    if (agent in migratedEnv) {
+      continue
+    }
+    if (agent in commandOverrides) {
+      migratedEnv[agent as keyof typeof DEFAULT_TUI_AGENT_ENV] = {}
+      continue
+    }
+    migratedEnv[agent as keyof typeof DEFAULT_TUI_AGENT_ENV] = { ...env }
+  }
+
+  return {
+    // Why: legacy users could only customize per-agent launch defaults via
+    // command overrides, so those agents are treated as already user-owned.
+    agentDefaultArgs: migratedArgs,
+    agentDefaultEnv: migratedEnv,
+    agentYoloDefaultsMigrated: true
+  }
+}
+
 function normalizeGroupBy(groupBy: unknown): PersistedState['ui']['groupBy'] {
   if (
     groupBy === 'none' ||
@@ -369,6 +423,7 @@ function normalizeRightSidebarTab(tab: unknown): PersistedState['ui']['rightSide
   if (
     tab === 'explorer' ||
     tab === 'search' ||
+    tab === 'vault' ||
     tab === 'source-control' ||
     tab === 'checks' ||
     tab === 'ports'
@@ -1902,6 +1957,14 @@ export class Store {
         const migratedDisabledTuiAgents = normalizeDisabledTuiAgents(
           parsed.settings?.disabledTuiAgents
         )
+        const migratedAgentYoloDefaults = migrateAgentYoloDefaults(parsed.settings)
+        if (
+          parsed.settings?.agentYoloDefaultsMigrated !== true ||
+          hasUnsupportedTuiAgentArgs('opencode', parsed.settings?.agentDefaultArgs?.opencode) ||
+          hasUnsupportedTuiAgentArgs('kilo', parsed.settings?.agentDefaultArgs?.kilo)
+        ) {
+          this.loadNeedsSave = true
+        }
         if (
           !claudeAgentTeamsDefaultDisabledMigrated &&
           !migratedDisabledTuiAgents.includes('claude-agent-teams')
@@ -1978,6 +2041,7 @@ export class Store {
               parsed.settings?.terminalShortcutPolicy
             ),
             disabledTuiAgents: migratedDisabledTuiAgents,
+            ...migratedAgentYoloDefaults,
             claudeAgentTeamsDefaultDisabledMigrated: true,
             openInApplications: normalizeOpenInApplications(parsed.settings?.openInApplications, {
               seedDefaults: true
@@ -3095,6 +3159,14 @@ export class Store {
     const sanitizedUpdates = { ...updates }
     if ('disabledTuiAgents' in updates) {
       sanitizedUpdates.disabledTuiAgents = normalizeDisabledTuiAgents(updates.disabledTuiAgents)
+    }
+    if ('agentDefaultArgs' in updates) {
+      sanitizedUpdates.agentDefaultArgs = normalizeTuiAgentArgsRecord(updates.agentDefaultArgs)
+      sanitizedUpdates.agentYoloDefaultsMigrated = true
+    }
+    if ('agentDefaultEnv' in updates) {
+      sanitizedUpdates.agentDefaultEnv = normalizeTuiAgentEnvRecord(updates.agentDefaultEnv)
+      sanitizedUpdates.agentYoloDefaultsMigrated = true
     }
     if ('terminalQuickCommands' in updates) {
       sanitizedUpdates.terminalQuickCommands = normalizeTerminalQuickCommands(
