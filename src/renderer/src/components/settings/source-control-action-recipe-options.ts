@@ -44,6 +44,10 @@ export const getActionDescriptions = createLocalizedCatalog(
     resolveConflicts: translate(
       'auto.components.settings.source.control.action.recipe.options.resolveConflicts',
       'Start an agent for local or hosted-review merge conflicts.'
+    ),
+    resolveComments: translate(
+      'auto.components.settings.source.control.action.recipe.options.resolveComments',
+      'Start an agent from selected unresolved PR or MR comments.'
     )
   })
 )

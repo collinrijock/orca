@@ -7311,7 +7311,8 @@
                   "resolveConflicts": "Start an agent for local or hosted-review merge conflicts.",
                   "customCommand": "Custom command",
                   "supportedAgents": "Supported agents for this recipe: {{value0}}.",
-                  "unsupportedSavedAgent": "{{value0}} cannot run this text-generation recipe. Pick one of the supported agents below."
+                  "unsupportedSavedAgent": "{{value0}} cannot run this text-generation recipe. Pick one of the supported agents below.",
+                  "resolveComments": "Start an agent from selected unresolved PR or MR comments."
                 }
               }
             }
@@ -7463,7 +7464,14 @@
             "fdb27637f2": "Publishing…",
             "e56c42122e": "destructive",
             "786e3c143f": "Delete",
-            "653c105ecc": "More PR actions"
+            "653c105ecc": "More PR actions",
+            "f316a8ca2b": "No unresolved comments selected.",
+            "d00ebdc402": "Resolve {{value0}} Comments With AI",
+            "ed3f79c031": "Review the prompt before starting an agent. Selected threads are marked resolved after launch.",
+            "f273f2271c": "Started the agent. Marked {{value0}} resolved, skipped {{value1}}, failed {{value2}}.",
+            "aa95b81a3a": "Started the agent. Marked {{value0}} resolved, skipped {{value1}}, failed {{value2}}.",
+            "495b2f8c4b": "Started the agent, but could not mark the selected comments resolved.",
+            "3c3ad3a1d2": "Started the agent. No selected comments can be marked resolved on the host."
           },
           "CreatePullRequestDialog": {
             "2bc1b4345e": "Cancel",
@@ -7848,7 +7856,10 @@
             "3e8f21954f": "error",
             "74168d7ada": "idle",
             "1d47db9bf0": "No enabled agents",
-            "c7ff8cef11": "Detecting agents..."
+            "c7ff8cef11": "Detecting agents...",
+            "b0da3a4d3e": "Launch recipe already saved",
+            "bff4795a6d": "Change the agent, arguments, or prompt template to update the saved recipe.",
+            "5c75b24735": "Customize what the agent receives before Orca starts it."
           },
           "SourceControlTextGenerationDialog": {
             "c5b7fa7cb6": "Save as global default",
@@ -7943,7 +7954,13 @@
                 "cdbfda4dec": "Annotation",
                 "066fedd446": "Failed jobs",
                 "ae8a04ef17": "Conflict file details are unavailable",
-                "73d0675356": "Refreshing conflict details…"
+                "73d0675356": "Refreshing conflict details…",
+                "5dc3af25c0": "Select comment",
+                "d7a2f9c401": "Send unresolved {{value0}} comments",
+                "d91f2a6c39": "Send {{value0}} queued comments",
+                "a6de3e5a20": "Clear queued comments",
+                "49ea0937e4": "Add comment to resolve list",
+                "9fecebb29d": "Add"
               },
               "empty": {
                 "state": {
@@ -8094,7 +8111,8 @@
                   "a6457b46a7": "Resolve conflicts before committing",
                   "484f45c439": "{{value0}} in progress…",
                   "74fc171e99": "Force Push in progress…",
-                  "16aee3a5c1": "Commit in progress…"
+                  "16aee3a5c1": "Commit in progress…",
+                  "e61b0d7a3c": "Check out a branch before publishing commits."
                 }
               }
             }
@@ -8163,6 +8181,7 @@
             "scanningSessions": "Scanning sessions",
             "scopeAriaLabel": "Session History scope: {{value0}}",
             "currentWorkspaceLower": "current workspace",
+            "currentWorktreeLower": "current worktree",
             "allSessionsLower": "all sessions",
             "thisScope": "This",
             "allScope": "All",
@@ -8181,6 +8200,7 @@
             "resetView": "Reset view",
             "hideEmptySessions": "Hide empty sessions",
             "workspaceScope": "Workspace",
+            "worktreeScope": "Worktree",
             "globalScope": "Global"
           },
           "AiVaultSessionDetails": {
@@ -8194,6 +8214,7 @@
             "usageValue": "{{value0}} msgs{{value1}}",
             "tokenSuffix": " · {{value0}} tok",
             "session": "Session",
+            "copyDetailValue": "Copy {{value0}}",
             "latestLog": "Latest log",
             "noReadablePreview": "No readable message preview in this transcript.",
             "resumeCommand": "Resume command",

@@ -7273,9 +7273,10 @@
                   "fixCommitFailure": "Inicie un agente cuando falle un enlace de commit o una commit de git.",
                   "fixChecks": "Inicie un agente a partir de comprobaciones fallidas de revisión alojada.",
                   "resolveConflicts": "Inicie un agente para conflictos de fusión de revisión local o alojada.",
-                  "customCommand": "Custom command",
-                  "supportedAgents": "Supported agents for this recipe: {{value0}}.",
-                  "unsupportedSavedAgent": "{{value0}} cannot run this text-generation recipe. Pick one of the supported agents below."
+                  "customCommand": "Comando personalizado",
+                  "supportedAgents": "Agentes compatibles con esta receta: {{value0}}.",
+                  "unsupportedSavedAgent": "{{value0}} no puede ejecutar esta receta de generación de texto. Seleccione uno de los agentes compatibles a continuación.",
+                  "resolveComments": "Inicia un agente a partir de comentarios de PR o MR sin resolver seleccionados."
                 }
               }
             }
@@ -7463,7 +7464,14 @@
             "fdb27637f2": "Publicación…",
             "e56c42122e": "destructivo",
             "786e3c143f": "Borrar",
-            "653c105ecc": "Más acciones de relaciones públicas"
+            "653c105ecc": "Más acciones de relaciones públicas",
+            "f316a8ca2b": "No hay comentarios sin resolver seleccionados.",
+            "d00ebdc402": "Resolver comentarios de {{value0}} con IA",
+            "ed3f79c031": "Revisa el prompt antes de iniciar un agente. Los hilos seleccionados se marcan como resueltos después del inicio.",
+            "f273f2271c": "Agente iniciado. Marcados {{value0}} como resueltos, omitidos {{value1}}, con error {{value2}}.",
+            "aa95b81a3a": "Agente iniciado. Marcados {{value0}} como resueltos, omitidos {{value1}}, con error {{value2}}.",
+            "495b2f8c4b": "Agente iniciado, pero no se pudieron marcar los comentarios seleccionados como resueltos.",
+            "3c3ad3a1d2": "Agente iniciado. Ningún comentario seleccionado se puede marcar como resuelto en el host."
           },
           "CreatePullRequestDialog": {
             "2bc1b4345e": "Cancelar",
@@ -7848,7 +7856,10 @@
             "3e8f21954f": "error",
             "74168d7ada": "idle",
             "1d47db9bf0": "No hay agents habilitados",
-            "c7ff8cef11": "Detectando agents..."
+            "c7ff8cef11": "Detectando agents...",
+            "b0da3a4d3e": "La receta de lanzamiento ya está guardada",
+            "bff4795a6d": "Cambia el agente, los argumentos o la plantilla del prompt para actualizar la receta guardada.",
+            "5c75b24735": "Personaliza lo que recibe el agente antes de que Orca lo inicie."
           },
           "SourceControlTextGenerationDialog": {
             "c5b7fa7cb6": "Guardar como valor predeterminado global",
@@ -7943,7 +7954,13 @@
                 "cdbfda4dec": "Anotación",
                 "066fedd446": "Trabajos fallidos",
                 "ae8a04ef17": "Los detalles del archivo de conflicto no están disponibles",
-                "73d0675356": "Detalles refrescantes del conflicto..."
+                "73d0675356": "Detalles refrescantes del conflicto...",
+                "5dc3af25c0": "Seleccionar comentario",
+                "d7a2f9c401": "Enviar comentarios sin resolver de {{value0}}",
+                "d91f2a6c39": "Enviar {{value0}} comentarios en cola",
+                "a6de3e5a20": "Borrar comentarios en cola",
+                "49ea0937e4": "Agregar comentario a la lista de resolución",
+                "9fecebb29d": "Agregar"
               },
               "empty": {
                 "state": {
@@ -8094,7 +8111,8 @@
                   "a6457b46a7": "Resolver conflictos antes de comprometerse",
                   "484f45c439": "{{value0}} en progreso…",
                   "74fc171e99": "Empuje forzado en progreso...",
-                  "16aee3a5c1": "Compromiso en progreso..."
+                  "16aee3a5c1": "Compromiso en progreso...",
+                  "e61b0d7a3c": "Check out a branch before publishing commits."
                 }
               }
             }
@@ -8163,6 +8181,7 @@
             "scanningSessions": "Scanning sessions",
             "scopeAriaLabel": "Session History scope: {{value0}}",
             "currentWorkspaceLower": "current workspace",
+            "currentWorktreeLower": "current worktree",
             "allSessionsLower": "all sessions",
             "thisScope": "This",
             "allScope": "All",
@@ -8181,6 +8200,7 @@
             "resetView": "Reset view",
             "hideEmptySessions": "Hide empty sessions",
             "workspaceScope": "Workspace",
+            "worktreeScope": "Worktree",
             "globalScope": "Global"
           },
           "AiVaultSessionDetails": {
@@ -8194,6 +8214,7 @@
             "usageValue": "{{value0}} msgs{{value1}}",
             "tokenSuffix": " · {{value0}} tok",
             "session": "Session",
+            "copyDetailValue": "Copy {{value0}}",
             "latestLog": "Latest log",
             "noReadablePreview": "No readable message preview in this transcript.",
             "resumeCommand": "Resume command",

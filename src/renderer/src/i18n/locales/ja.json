@@ -7294,9 +7294,10 @@
                   "fixCommitFailure": "commit フックまたは git commit が失敗したときに agent を開始します。",
                   "fixChecks": "失敗したホスト型レビュー チェックから agent を開始します。",
                   "resolveConflicts": "ローカルまたはホストされたレビューのマージ競合に対して agent を開始します。",
-                  "customCommand": "Custom command",
-                  "supportedAgents": "Supported agents for this recipe: {{value0}}.",
-                  "unsupportedSavedAgent": "{{value0}} cannot run this text-generation recipe. Pick one of the supported agents below."
+                  "customCommand": "カスタムコマンド",
+                  "supportedAgents": "このレシピでサポートされている agent: {{value0}}。",
+                  "unsupportedSavedAgent": "{{value0}} はこのテキスト生成レシピを実行できません。以下からサポートされている agent のいずれかを選択してください。",
+                  "resolveComments": "選択した未解決の PR または MR コメントから agent を開始します。"
                 }
               }
             }
@@ -7463,7 +7464,14 @@
             "fdb27637f2": "公開中…",
             "e56c42122e": "破壊的な",
             "786e3c143f": "削除",
-            "653c105ecc": "その他の PR 操作"
+            "653c105ecc": "その他の PR 操作",
+            "f316a8ca2b": "未解決のコメントが選択されていません。",
+            "d00ebdc402": "{{value0}} のコメントを AI で解決",
+            "ed3f79c031": "agent を開始する前にプロンプトを確認してください。選択したスレッドは開始後に解決済みにマークされます。",
+            "f273f2271c": "agent を開始しました。{{value0}} 件を解決済みにし、{{value1}} 件をスキップ、{{value2}} 件が失敗しました。",
+            "aa95b81a3a": "agent を開始しました。{{value0}} 件を解決済みにし、{{value1}} 件をスキップ、{{value2}} 件が失敗しました。",
+            "495b2f8c4b": "agent を開始しましたが、選択したコメントを解決済みにできませんでした。",
+            "3c3ad3a1d2": "agent を開始しました。選択したコメントにホスト上で解決済みにできるものはありません。"
           },
           "CreatePullRequestDialog": {
             "2bc1b4345e": "キャンセル",
@@ -7848,7 +7856,10 @@
             "6cefcdfba1": "You can change it later in Source Control AI settings.",
             "c29f9cf266": "Save this prompt and don't show this review next time",
             "d8f40128ee": "{basePrompt} is Orca's default prompt.",
-            "ea4788705e": "Cancel"
+            "ea4788705e": "Cancel",
+            "b0da3a4d3e": "起動レシピはすでに保存されています",
+            "bff4795a6d": "保存済みのレシピを更新するには、agent、引数、またはプロンプトテンプレートを変更してください。",
+            "5c75b24735": "Orca が起動する前に agent が受け取る内容をカスタマイズします。"
           },
           "SourceControlTextGenerationDialog": {
             "c5b7fa7cb6": "グローバルデフォルトとして保存",
@@ -7943,7 +7954,13 @@
                 "cdbfda4dec": "注釈",
                 "066fedd446": "失敗したジョブ",
                 "ae8a04ef17": "競合ファイルの詳細は利用できません",
-                "73d0675356": "競合の詳細を更新しています…"
+                "73d0675356": "競合の詳細を更新しています…",
+                "5dc3af25c0": "コメントを選択",
+                "d7a2f9c401": "{{value0}} の未解決コメントを送信",
+                "d91f2a6c39": "キュー内の {{value0}} 件のコメントを送信",
+                "a6de3e5a20": "キュー内のコメントをクリア",
+                "49ea0937e4": "コメントを解決リストに追加",
+                "9fecebb29d": "追加"
               },
               "empty": {
                 "state": {
@@ -8094,7 +8111,8 @@
                   "a6457b46a7": "コミットする前に競合を解決する",
                   "484f45c439": "{{value0}} が進行中です…",
                   "74fc171e99": "強制プッシュ中です…",
-                  "16aee3a5c1": "Commit 中です…"
+                  "16aee3a5c1": "Commit 中です…",
+                  "e61b0d7a3c": "Check out a branch before publishing commits."
                 }
               }
             }
@@ -8163,6 +8181,7 @@
             "scanningSessions": "Scanning sessions",
             "scopeAriaLabel": "Session History scope: {{value0}}",
             "currentWorkspaceLower": "current workspace",
+            "currentWorktreeLower": "current worktree",
             "allSessionsLower": "all sessions",
             "thisScope": "This",
             "allScope": "All",
@@ -8181,6 +8200,7 @@
             "resetView": "Reset view",
             "hideEmptySessions": "Hide empty sessions",
             "workspaceScope": "Workspace",
+            "worktreeScope": "Worktree",
             "globalScope": "Global"
           },
           "AiVaultSessionDetails": {
@@ -8194,6 +8214,7 @@
             "usageValue": "{{value0}} msgs{{value1}}",
             "tokenSuffix": " · {{value0}} tok",
             "session": "Session",
+            "copyDetailValue": "Copy {{value0}}",
             "latestLog": "Latest log",
             "noReadablePreview": "No readable message preview in this transcript.",
             "resumeCommand": "Resume command",

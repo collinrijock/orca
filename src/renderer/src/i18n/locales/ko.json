@@ -7258,9 +7258,10 @@
                   "fixCommitFailure": "commit 후크 또는 git commit이 실패하면 agent를 시작합니다.",
                   "fixChecks": "실패한 호스팅 PR 체크에서 agent를 시작합니다.",
                   "resolveConflicts": "로컬 또는 호스팅 PR 병합 충돌에 대한 agent를 시작합니다.",
-                  "customCommand": "Custom command",
-                  "supportedAgents": "Supported agents for this recipe: {{value0}}.",
-                  "unsupportedSavedAgent": "{{value0}} cannot run this text-generation recipe. Pick one of the supported agents below."
+                  "customCommand": "사용자 지정 명령",
+                  "supportedAgents": "이 레시피에 지원되는 agent: {{value0}}.",
+                  "unsupportedSavedAgent": "{{value0}}은(는) 이 텍스트 생성 레시피를 실행할 수 없습니다. 아래에서 지원되는 agent 중 하나를 선택하세요.",
+                  "resolveComments": "선택한 해결되지 않은 PR 또는 MR 댓글에서 agent를 시작합니다."
                 }
               }
             }
@@ -7463,7 +7464,14 @@
             "fdb27637f2": "출판…",
             "e56c42122e": "파괴적인",
             "786e3c143f": "삭제",
-            "653c105ecc": "더 많은 PR 작업"
+            "653c105ecc": "더 많은 PR 작업",
+            "f316a8ca2b": "선택한 해결되지 않은 댓글이 없습니다.",
+            "d00ebdc402": "AI로 {{value0}} 댓글 해결",
+            "ed3f79c031": "agent를 시작하기 전에 prompt를 검토하세요. 선택한 스레드는 시작 후 해결됨으로 표시됩니다.",
+            "f273f2271c": "agent를 시작했습니다. {{value0}}개 해결됨으로 표시, {{value1}}개 건너뜀, {{value2}}개 실패.",
+            "aa95b81a3a": "agent를 시작했습니다. {{value0}}개 해결됨으로 표시, {{value1}}개 건너뜀, {{value2}}개 실패.",
+            "495b2f8c4b": "agent를 시작했지만 선택한 댓글을 해결됨으로 표시할 수 없습니다.",
+            "3c3ad3a1d2": "agent를 시작했습니다. 호스트에서 해결됨으로 표시할 수 있는 선택된 댓글이 없습니다."
           },
           "CreatePullRequestDialog": {
             "2bc1b4345e": "취소",
@@ -7848,7 +7856,10 @@
             "6cefcdfba1": "You can change it later in Source Control AI settings.",
             "c29f9cf266": "Save this prompt and don't show this review next time",
             "d8f40128ee": "{basePrompt} is Orca's default prompt.",
-            "ea4788705e": "Cancel"
+            "ea4788705e": "Cancel",
+            "b0da3a4d3e": "실행 레시피가 이미 저장되었습니다",
+            "bff4795a6d": "저장된 레시피를 업데이트하려면 agent, 인수 또는 프롬프트 템플릿을 변경하세요.",
+            "5c75b24735": "Orca가 시작하기 전에 agent가 받을 내용을 사용자 지정합니다."
           },
           "SourceControlTextGenerationDialog": {
             "c5b7fa7cb6": "전역 기본값으로 저장",
@@ -7943,7 +7954,13 @@
                 "cdbfda4dec": "주석",
                 "066fedd446": "실패한 작업",
                 "ae8a04ef17": "충돌 파일 세부정보를 사용할 수 없습니다.",
-                "73d0675356": "충돌 세부정보 새로고침 중…"
+                "73d0675356": "충돌 세부정보 새로고침 중…",
+                "5dc3af25c0": "댓글 선택",
+                "d7a2f9c401": "해결되지 않은 {{value0}} 댓글 보내기",
+                "d91f2a6c39": "대기 중인 댓글 {{value0}}개 보내기",
+                "a6de3e5a20": "대기 중인 댓글 지우기",
+                "49ea0937e4": "댓글을 해결 목록에 추가",
+                "9fecebb29d": "추가"
               },
               "empty": {
                 "state": {
@@ -8094,7 +8111,8 @@
                   "a6457b46a7": "커밋하기 전에 충돌을 해결하세요.",
                   "484f45c439": "{{value0}} 진행 중…",
                   "74fc171e99": "강제 푸시 진행 중…",
-                  "16aee3a5c1": "Commit 진행 중…"
+                  "16aee3a5c1": "Commit 진행 중…",
+                  "e61b0d7a3c": "Check out a branch before publishing commits."
                 }
               }
             }
@@ -8163,6 +8181,7 @@
             "scanningSessions": "Scanning sessions",
             "scopeAriaLabel": "Session History scope: {{value0}}",
             "currentWorkspaceLower": "current workspace",
+            "currentWorktreeLower": "current worktree",
             "allSessionsLower": "all sessions",
             "thisScope": "This",
             "allScope": "All",
@@ -8181,6 +8200,7 @@
             "resetView": "Reset view",
             "hideEmptySessions": "Hide empty sessions",
             "workspaceScope": "Workspace",
+            "worktreeScope": "Worktree",
             "globalScope": "Global"
           },
           "AiVaultSessionDetails": {
@@ -8194,6 +8214,7 @@
             "usageValue": "{{value0}} msgs{{value1}}",
             "tokenSuffix": " · {{value0}} tok",
             "session": "Session",
+            "copyDetailValue": "Copy {{value0}}",
             "latestLog": "Latest log",
             "noReadablePreview": "No readable message preview in this transcript.",
             "resumeCommand": "Resume command",
