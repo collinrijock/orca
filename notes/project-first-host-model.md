@@ -785,6 +785,9 @@ Landed so far:
 - Added renderer-store lifecycle actions for first-class setup create, update,
   and delete. Runtime-owned setups route through their owning runtime instead
   of whichever host is currently focused.
+- Added a project settings action to create pending project-host setup metadata
+  for a known host without requiring an existing checkout path. This lets the UI
+  represent setup/provisioning intent before import/clone/provisioning finishes.
 - Added tests for local repos, SSH repos, same-provider multi-host grouping,
   no-identity same-name non-grouping, selector cache behavior, persistence
   backfill, repo mutation synchronization, renderer hydration, runtime RPC
@@ -815,8 +818,8 @@ Important limitation:
   across load and repo mutations, but the UI/API still mostly creates setups
   through repo-backed import/clone paths. First-class setup update now exists,
   first-class setup create/update/delete now exist for independent metadata and
-  are exposed through the renderer store, but actual provisioning execution and
-  full UI flows are still future work.
+  are exposed through the renderer store/settings, but actual provisioning
+  execution and full UI flows are still future work.
 
 Remaining end-to-end work:
 
@@ -824,7 +827,7 @@ Remaining end-to-end work:
 - finish SSH clone streamed-progress parity, provisioning, and bulk setup-on-host
   flows
 - add actual provisioning execution APIs instead of only recording independent
-  setup/provisioning metadata
+  setup/provisioning metadata and intent
 - split settings into explicit client, host, project, and project-host setup
   scopes
 - validate the default project-first sidebar view in Electron and continue

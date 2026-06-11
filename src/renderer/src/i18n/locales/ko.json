@@ -5045,6 +5045,8 @@
           "setupKindFolder": "폴더",
           "settingUpHost": "가져오는 중...",
           "setupHost": "가져오기",
+          "creatingPendingSetup": "생성 중...",
+          "createPendingSetup": "설정 추적",
           "499a437335": "신원"
         },
         "RepositorySourceControlAiActionRows": {

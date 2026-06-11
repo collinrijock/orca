@@ -5045,6 +5045,8 @@
           "setupKindFolder": "フォルダー",
           "settingUpHost": "インポート中...",
           "setupHost": "インポート",
+          "creatingPendingSetup": "作成中...",
+          "createPendingSetup": "セットアップを追跡",
           "499a437335": "身元"
         },
         "RepositorySourceControlAiActionRows": {

@@ -508,6 +508,8 @@ Already partially landed:
   runtime RPC, and CLI for independent setup/provisioning metadata
 - renderer-store lifecycle actions for project-host setup create, update, and
   delete, routed by setup-owning host
+- project settings action for creating pending setup/provisioning metadata on a
+  known host before a checkout path exists
 
 Not complete yet:
 

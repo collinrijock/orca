@@ -98,6 +98,7 @@ export function RepositoryHostSetupsSection({
   const openSettingsPage = useAppStore((state) => state.openSettingsPage)
   const openSettingsTarget = useAppStore((state) => state.openSettingsTarget)
   const setupProjectExistingFolder = useAppStore((state) => state.setupProjectExistingFolder)
+  const createProjectHostSetup = useAppStore((state) => state.createProjectHostSetup)
   const deleteProjectHostSetup = useAppStore((state) => state.deleteProjectHostSetup)
   const sshTargetLabels = useAppStore((state) => state.sshTargetLabels)
   const activeRuntimeEnvironmentId = useAppStore(
@@ -123,6 +124,7 @@ export function RepositoryHostSetupsSection({
   const [setupPath, setSetupPath] = useState('')
   const [setupKind, setSetupKind] = useState<'git' | 'folder'>('git')
   const [isSettingUp, setIsSettingUp] = useState(false)
+  const [isCreatingPendingSetup, setIsCreatingPendingSetup] = useState(false)
   const [deletingSetupId, setDeletingSetupId] = useState<string | null>(null)
   const setupTargetHostId = selectedSetupHostId ?? setupHostOptions[0]?.id ?? null
 
@@ -308,6 +310,39 @@ export function RepositoryHostSetupsSection({
               {isSettingUp
                 ? translate('auto.components.settings.RepositoryPane.settingUpHost', 'Importing...')
                 : translate('auto.components.settings.RepositoryPane.setupHost', 'Import')}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={!setupTargetHostId || isCreatingPendingSetup}
+              onClick={async () => {
+                if (!setupTargetHostId || !selectedProjectHostSetup) {
+                  return
+                }
+                setIsCreatingPendingSetup(true)
+                const result = await createProjectHostSetup({
+                  projectId: selectedProjectHostSetup.projectId,
+                  hostId: setupTargetHostId,
+                  displayName: repo.displayName,
+                  setupState: 'not-set-up',
+                  setupMethod: 'provisioned'
+                })
+                setIsCreatingPendingSetup(false)
+                if (result) {
+                  setSelectedSetupHostId(null)
+                }
+              }}
+            >
+              {isCreatingPendingSetup
+                ? translate(
+                    'auto.components.settings.RepositoryPane.creatingPendingSetup',
+                    'Creating...'
+                  )
+                : translate(
+                    'auto.components.settings.RepositoryPane.createPendingSetup',
+                    'Track setup'
+                  )}
             </Button>
           </div>
         </div>

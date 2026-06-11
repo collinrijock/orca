@@ -266,4 +266,58 @@ describe('RepositoryHostSetupsSection', () => {
     expect(openSettingsPage).toHaveBeenCalledTimes(1)
     expect(openSettingsTarget).toHaveBeenCalledWith({ pane: 'repo', repoId: 'remote-repo' })
   })
+
+  it('creates pending setup metadata for a known host without requiring a path', async () => {
+    const createProjectHostSetup = vi.fn().mockResolvedValue({
+      project: makeProject({ id: 'github:stablyai/orca' }),
+      setup: makeSetup({
+        id: 'gpu-setup',
+        projectId: 'github:stablyai/orca',
+        repoId: '',
+        hostId: 'runtime:gpu',
+        path: '',
+        setupState: 'not-set-up',
+        setupMethod: 'provisioned'
+      })
+    })
+    const localRepo = makeRepo({
+      id: 'local-repo',
+      displayName: 'Orca',
+      path: '/Users/alice/orca'
+    })
+    useAppStore.setState({
+      repos: [localRepo],
+      projects: [makeProject({ id: 'github:stablyai/orca' })],
+      projectHostSetups: [
+        makeSetup({
+          id: 'local-repo',
+          projectId: 'github:stablyai/orca',
+          repoId: 'local-repo',
+          hostId: 'local',
+          path: '/Users/alice/orca'
+        })
+      ],
+      settings: { activeRuntimeEnvironmentId: 'gpu' } as never,
+      createProjectHostSetup
+    })
+
+    renderSection(localRepo)
+
+    const trackButton = Array.from(container.querySelectorAll('button')).find(
+      (button) => button.textContent === 'Track setup'
+    )
+    expect(trackButton).toBeTruthy()
+
+    await act(async () => {
+      trackButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    expect(createProjectHostSetup).toHaveBeenCalledWith({
+      projectId: 'github:stablyai/orca',
+      hostId: 'runtime:gpu',
+      displayName: 'Orca',
+      setupState: 'not-set-up',
+      setupMethod: 'provisioned'
+    })
+  })
 })

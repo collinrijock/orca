@@ -5065,6 +5065,8 @@
           "setupKindFolder": "Folder",
           "settingUpHost": "Importing...",
           "setupHost": "Import",
+          "creatingPendingSetup": "Creating...",
+          "createPendingSetup": "Track setup",
           "499a437335": "Identity"
         },
         "RepositorySourceControlAiActionRows": {

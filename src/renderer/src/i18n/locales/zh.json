@@ -5045,6 +5045,8 @@
           "setupKindFolder": "文件夹",
           "settingUpHost": "正在导入...",
           "setupHost": "导入",
+          "creatingPendingSetup": "正在创建...",
+          "createPendingSetup": "跟踪设置",
           "499a437335": "身份"
         },
         "RepositorySourceControlAiActionRows": {
