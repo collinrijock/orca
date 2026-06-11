@@ -3,7 +3,7 @@ protocol surface so local and SSH git behavior stay in one dispatch table. */
 import { execFile } from 'child_process'
 import { promisify } from 'util'
 import * as path from 'path'
-import type { RelayDispatcher } from './dispatcher'
+import type { RelayDispatcher, RequestContext } from './dispatcher'
 import type { RelayContext } from './context'
 import { expandTilde } from './context'
 import {
@@ -93,14 +93,14 @@ export class GitHandler {
       this.refreshLocalBaseRefForWorktreeCreate(p)
     )
     this.dispatcher.onRequest('git.renameCurrentBranch', (p) => this.renameCurrentBranch(p))
-    this.dispatcher.onRequest('git.exec', (p) => this.exec(p))
+    this.dispatcher.onRequest('git.exec', (p, context) => this.exec(p, context))
     this.dispatcher.onRequest('git.isGitRepo', (p) => this.isGitRepo(p))
   }
 
   private async git(
     args: string[],
     cwd: string,
-    opts?: { maxBuffer?: number; disableOptionalLocks?: boolean }
+    opts?: { maxBuffer?: number; disableOptionalLocks?: boolean; signal?: AbortSignal }
   ): Promise<{ stdout: string; stderr: string }> {
     const env = buildRelayCommandEnv()
     if (opts?.disableOptionalLocks) {
@@ -110,7 +110,8 @@ export class GitHandler {
       cwd: expandTilde(cwd),
       env,
       encoding: 'utf-8',
-      maxBuffer: opts?.maxBuffer ?? MAX_GIT_BUFFER
+      maxBuffer: opts?.maxBuffer ?? MAX_GIT_BUFFER,
+      signal: opts?.signal
     })
   }
 
@@ -585,12 +586,12 @@ export class GitHandler {
     })
   }
 
-  private async exec(params: Record<string, unknown>) {
+  private async exec(params: Record<string, unknown>, context?: RequestContext) {
     const args = params.args as string[]
     const cwd = params.cwd as string
 
     validateGitExecArgs(args)
-    const { stdout, stderr } = await this.git(args, cwd)
+    const { stdout, stderr } = await this.git(args, cwd, { signal: context?.signal })
     return { stdout, stderr }
   }
 

@@ -176,6 +176,32 @@ describe('SshGitProvider', () => {
     expect(mux.request).toHaveBeenCalledWith('agent.cancelExec', { cwd: '/home/user/repo' })
   })
 
+  it('exec forwards abort and timeout options to the relay request', async () => {
+    const controller = new AbortController()
+    mux.request.mockResolvedValue({ stdout: '', stderr: '' })
+
+    await provider.exec(
+      ['clone', '--progress', '--', 'git@example.com:repo.git', 'repo'],
+      '/home/user',
+      {
+        signal: controller.signal,
+        timeoutMs: 60_000
+      }
+    )
+
+    expect(mux.request).toHaveBeenCalledWith(
+      'git.exec',
+      {
+        args: ['clone', '--progress', '--', 'git@example.com:repo.git', 'repo'],
+        cwd: '/home/user'
+      },
+      {
+        signal: controller.signal,
+        timeoutMs: 60_000
+      }
+    )
+  })
+
   it('getStagedCommitContext reads branch, staged summary, and staged patch remotely', async () => {
     mux.request.mockImplementation(async (method, payload) => {
       expect(method).toBe('git.exec')

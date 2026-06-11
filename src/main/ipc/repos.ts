@@ -320,9 +320,46 @@ async function cloneRemoteRepo(
     return existing
   }
 
-  // Why: the SSH relay exposes argv-based git execution, not a shell. Use the
-  // repo folder name as the target so git creates it inside the chosen parent.
-  await gitProvider.exec(['clone', '--', args.url.trim(), repoName], trimmedDestination)
+  const fsProvider = getSshFilesystemProvider(args.connectionId)
+  const canCleanupCloneTarget =
+    !existing &&
+    !!fsProvider &&
+    !(await fsProvider
+      .stat(clonePath)
+      .then(() => true)
+      .catch(() => false))
+  const controller = new AbortController()
+  const metadata: ActiveRemoteCloneMetadata = {
+    connectionId: args.connectionId,
+    clonePath,
+    controller
+  }
+  activeRemoteClone = metadata
+  try {
+    // Why: the SSH relay exposes argv-based git execution, not a shell. Use
+    // the repo folder name as the target so git creates it inside the chosen
+    // parent, and keep the same flag separator safety as local clone.
+    await gitProvider.exec(
+      ['clone', '--progress', '--', args.url.trim(), repoName],
+      trimmedDestination,
+      {
+        signal: controller.signal,
+        timeoutMs: 10 * 60_000
+      }
+    )
+  } catch (err) {
+    if (canCleanupCloneTarget) {
+      await fsProvider?.deletePath(clonePath, true).catch(() => undefined)
+    }
+    if (controller.signal.aborted) {
+      throw new Error('Clone aborted')
+    }
+    throw err
+  } finally {
+    if (activeRemoteClone === metadata) {
+      activeRemoteClone = null
+    }
+  }
   if (existing && isFolderRepo(existing)) {
     const updated = store.updateRepo(existing.id, { kind: 'git' })
     if (updated) {
@@ -356,10 +393,17 @@ type ActiveCloneMetadata = {
   resolvePendingAbortCleanup: (() => void) | null
 }
 
+type ActiveRemoteCloneMetadata = {
+  connectionId: string
+  clonePath: string
+  controller: AbortController
+}
+
 // Why: module-scoped so the abort handle survives window re-creation on macOS.
 // registerRepoHandlers is called again when a new BrowserWindow is created,
 // and a function-scoped variable would lose the reference to an in-flight clone.
 let activeClone: ActiveCloneMetadata | null = null
+let activeRemoteClone: ActiveRemoteCloneMetadata | null = null
 let nextCloneGeneration = 1
 const latestCloneGenerationByPath = new Map<string, number>()
 const pendingAbortCleanupByPath = new Map<string, Promise<void>>()
@@ -1438,6 +1482,10 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
       markCloneAbortCleanupPending(clone)
       clone.process.kill()
       activeClone = null
+    }
+    if (activeRemoteClone) {
+      activeRemoteClone.controller.abort()
+      activeRemoteClone = null
     }
   })
 

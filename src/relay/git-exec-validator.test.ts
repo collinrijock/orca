@@ -207,4 +207,23 @@ describe('validateGitExecArgs', () => {
       expectBlocked(['diff', '--cached', '--no-index', '/etc/passwd'], 'git diff flag not allowed')
     })
   })
+
+  describe('git clone', () => {
+    it('allows only the project setup clone shape', () => {
+      expectAllowed(['clone', '--', 'https://github.com/stablyai/orca.git', 'orca'])
+      expectAllowed(['clone', '--progress', '--', 'git@github.com:stablyai/orca.git', 'orca'])
+    })
+
+    it.each([
+      [['clone', 'https://github.com/stablyai/orca.git']],
+      [['clone', 'https://github.com/stablyai/orca.git', 'orca']],
+      [['clone', '--depth=1', '--', 'https://github.com/stablyai/orca.git', 'orca']],
+      [['clone', '--', 'https://github.com/stablyai/orca.git', '.']],
+      [['clone', '--', 'https://github.com/stablyai/orca.git', '..']],
+      [['clone', '--', 'https://github.com/stablyai/orca.git', 'nested/orca']],
+      [['clone', '--', 'https://github.com/stablyai/orca.git', 'nested\\orca']]
+    ])('rejects unsafe clone args %j', (args) => {
+      expectBlocked(args, 'git clone')
+    })
+  })
 })

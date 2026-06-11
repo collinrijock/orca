@@ -411,7 +411,7 @@ Already partially landed:
 
 Still needed:
 
-- finish SSH clone progress/abort/cleanup parity and provisioning flows
+- finish SSH clone streamed-progress parity and provisioning flows
 - independent project-host setup persistence beyond the repo-backed
   compatibility records
 - bulk setup flows and setup for newly added hosts

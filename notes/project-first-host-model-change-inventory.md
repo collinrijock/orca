@@ -338,8 +338,9 @@ Current branch status: existing-folder setup is partially implemented through
 API/CLI plumbing and a project settings import form for known local, SSH, and
 active runtime hosts. Composer clone setup is implemented for local/runtime
 hosts by composing the existing clone APIs with existing-folder setup; SSH clone
-uses the relay git provider and then links the cloned path. Provisioning and
-bulk setup are not complete.
+uses the relay git provider, propagates abort to the relay request, cleans up
+only fresh clone targets, and then links the cloned path. Provisioning, bulk
+setup, and streamed SSH clone progress are not complete.
 
 ### 6. Sidebar Row Model
 
@@ -489,7 +490,7 @@ Already partially landed:
 
 Not complete yet:
 
-- SSH clone progress/abort/cleanup parity and provisioning flows
+- SSH clone streamed-progress parity and provisioning flows
 - independent project-host setup persistence beyond the repo-backed
   compatibility records
 - bulk setup flows and setup for hosts that are not already known to the client

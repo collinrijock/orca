@@ -530,8 +530,15 @@ export class SshGitProvider implements IGitProvider {
     await this.mux.request('git.renameCurrentBranch', { worktreePath, newBranch })
   }
 
-  async exec(args: string[], cwd: string): Promise<{ stdout: string; stderr: string }> {
-    return (await this.mux.request('git.exec', { args, cwd })) as {
+  async exec(
+    args: string[],
+    cwd: string,
+    options?: { signal?: AbortSignal; timeoutMs?: number }
+  ): Promise<{ stdout: string; stderr: string }> {
+    const result = options
+      ? await this.mux.request('git.exec', { args, cwd }, options)
+      : await this.mux.request('git.exec', { args, cwd })
+    return result as {
       stdout: string
       stderr: string
     }

@@ -18,6 +18,7 @@ const ALLOWED_GIT_SUBCOMMANDS = new Set([
   'merge-base',
   'diff',
   'ls-files',
+  'clone',
   'for-each-ref',
   'check-ref-format',
   'config'
@@ -80,6 +81,26 @@ const DIFF_ALLOWED_FLAGS = new Set([
   '--no-color',
   '--no-ext-diff'
 ])
+
+function validateCloneArgs(args: string[]): void {
+  // Why: project-host setup needs remote clone, but git.exec must not become a
+  // general write surface. Permit only `git clone [--progress] -- <url> <dir>`.
+  const allowed = args[1] === '--progress' ? args.slice(2) : args.slice(1)
+  if (allowed.length !== 3 || allowed[0] !== '--') {
+    throw new Error('git clone via exec is restricted to clone [--progress] -- <url> <dir>')
+  }
+  const targetDir = allowed[2]
+  if (
+    !targetDir ||
+    targetDir === '.' ||
+    targetDir === '..' ||
+    targetDir.includes('/') ||
+    targetDir.includes('\\') ||
+    targetDir.includes('\0')
+  ) {
+    throw new Error('git clone target directory must be a single safe path segment')
+  }
+}
 
 // Why: git accepts --flag=value compound syntax (e.g. --file=/etc/passwd),
 // which bypasses exact-match Set.has() checks. This helper catches both forms.
@@ -155,5 +176,8 @@ export function validateGitExecArgs(args: string[]): void {
     if (unsupportedArg) {
       throw new Error(`git diff flag not allowed via exec: ${unsupportedArg}`)
     }
+  }
+  if (subcommand === 'clone') {
+    validateCloneArgs(args)
   }
 }

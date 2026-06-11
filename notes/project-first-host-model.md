@@ -778,8 +778,9 @@ Important limitation:
   host panes and existing-folder setup, but still use repo compatibility records
   underneath.
 - SSH clone setup is implemented through the relay git provider, but it does
-  not yet have local-clone parity for progress events, abort, and owned partial
-  clone cleanup.
+  not yet have local-clone parity for progress events. Abort now propagates to
+  the relay `git.exec` request, and failed/aborted SSH clones clean up only
+  when Orca can prove the target did not already exist before the clone.
 - Project-host setup records are still regenerated from repo compatibility
   records. The setup method now persists through that projection, but the final
   independent setup table is still future work.
@@ -787,8 +788,8 @@ Important limitation:
 Remaining end-to-end work:
 
 - broaden setup-on-host flows beyond known local, SSH, and active runtime hosts
-- finish SSH clone progress/abort/cleanup parity, provisioning, and bulk
-  setup-on-host flows
+- finish SSH clone streamed-progress parity, provisioning, and bulk setup-on-host
+  flows
 - split settings into explicit client, host, project, and project-host setup
   scopes
 - validate the default project-first sidebar view in Electron and continue

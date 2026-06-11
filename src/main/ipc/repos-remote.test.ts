@@ -52,7 +52,8 @@ const {
   mockFilesystemProvider: {
     readDir: vi.fn().mockResolvedValue([]),
     readFile: vi.fn().mockRejectedValue(new Error('not found')),
-    stat: vi.fn().mockRejectedValue(new Error('not found'))
+    stat: vi.fn().mockRejectedValue(new Error('not found')),
+    deletePath: vi.fn().mockResolvedValue(undefined)
   },
   mockMultiplexer: {
     request: vi.fn(),
@@ -830,6 +831,10 @@ describe('repos:addRemote', () => {
       pathSeparator: '/',
       pathDelimiter: ':'
     })
+    mockFilesystemProvider.stat.mockReset()
+    mockFilesystemProvider.stat.mockRejectedValue(new Error('not found'))
+    mockFilesystemProvider.deletePath.mockReset()
+    mockFilesystemProvider.deletePath.mockResolvedValue(undefined)
     mockMultiplexer.request.mockReset()
     mockMultiplexer.notify.mockReset()
     gitSpawnMock.mockReset()
@@ -898,8 +903,12 @@ describe('repos:addRemote', () => {
     })
 
     expect(mockGitProvider.exec).toHaveBeenCalledWith(
-      ['clone', '--', 'https://github.com/stablyai/orca.git', 'orca'],
-      '/home/user'
+      ['clone', '--progress', '--', 'https://github.com/stablyai/orca.git', 'orca'],
+      '/home/user',
+      expect.objectContaining({
+        signal: expect.any(AbortSignal),
+        timeoutMs: 10 * 60_000
+      })
     )
     expect(mockStore.addRepo).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -963,12 +972,70 @@ describe('repos:addRemote', () => {
     })
 
     expect(mockGitProvider.exec).toHaveBeenCalledWith(
-      ['clone', '--', 'https://github.com/stablyai/orca.git', 'orca'],
-      '/home/user'
+      ['clone', '--progress', '--', 'https://github.com/stablyai/orca.git', 'orca'],
+      '/home/user',
+      expect.objectContaining({
+        signal: expect.any(AbortSignal),
+        timeoutMs: 10 * 60_000
+      })
     )
     expect(mockStore.updateRepo).toHaveBeenCalledWith('existing-folder', { kind: 'git' })
     expect(mockStore.addRepo).not.toHaveBeenCalled()
     expect(result).toBe(updated)
+  })
+
+  it('cleans up a fresh SSH clone target after git clone fails', async () => {
+    mockGitProvider.exec.mockRejectedValueOnce(new Error('repository not found'))
+    mockFilesystemProvider.stat.mockRejectedValueOnce(new Error('not found'))
+
+    await expect(
+      handlers.get('repos:cloneRemote')!(null, {
+        connectionId: 'conn-1',
+        url: 'https://github.com/stablyai/orca.git',
+        destination: '/home/user'
+      })
+    ).rejects.toThrow('repository not found')
+
+    expect(mockFilesystemProvider.deletePath).toHaveBeenCalledWith('/home/user/orca', true)
+  })
+
+  it('does not clean up a pre-existing SSH clone target after git clone fails', async () => {
+    mockGitProvider.exec.mockRejectedValueOnce(new Error('destination already exists'))
+    mockFilesystemProvider.stat.mockResolvedValueOnce({ type: 'directory', size: 0, mtime: 0 })
+
+    await expect(
+      handlers.get('repos:cloneRemote')!(null, {
+        connectionId: 'conn-1',
+        url: 'https://github.com/stablyai/orca.git',
+        destination: '/home/user'
+      })
+    ).rejects.toThrow('destination already exists')
+
+    expect(mockFilesystemProvider.deletePath).not.toHaveBeenCalled()
+  })
+
+  it('aborts an active SSH clone and reports the abort without deleting pre-existing targets', async () => {
+    mockFilesystemProvider.stat.mockResolvedValueOnce({ type: 'directory', size: 0, mtime: 0 })
+    mockGitProvider.exec.mockImplementationOnce(
+      async (_args: string[], _cwd: string, options?: { signal?: AbortSignal }) =>
+        new Promise<{ stdout: string; stderr: string }>((_resolve, reject) => {
+          options?.signal?.addEventListener('abort', () => reject(new Error('aborted by test')))
+        })
+    )
+
+    const clonePromise = handlers.get('repos:cloneRemote')!(null, {
+      connectionId: 'conn-1',
+      url: 'https://github.com/stablyai/orca.git',
+      destination: '/home/user'
+    })
+    await waitForAssertion(() => expect(mockGitProvider.exec).toHaveBeenCalledTimes(1))
+
+    await handlers.get('repos:cloneAbort')!(null, undefined)
+
+    await expect(clonePromise).rejects.toThrow('Clone aborted')
+    const options = mockGitProvider.exec.mock.calls[0][2] as { signal: AbortSignal }
+    expect(options.signal.aborted).toBe(true)
+    expect(mockFilesystemProvider.deletePath).not.toHaveBeenCalled()
   })
 
   it('rejects SSH clone destinations that are not absolute host paths', async () => {

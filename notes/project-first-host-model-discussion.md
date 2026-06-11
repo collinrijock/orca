@@ -357,8 +357,9 @@ Needs:
 Current branch status: partially implemented. Ready project-host setups can be
 selected from the composer `Run on` menu, and known hosts that still need setup
 now appear as setup-target rows instead of being invisible. The composer can
-import an existing folder for those hosts and then switch to the new ready
-setup. Inline clone/provision actions for those rows are still missing.
+import an existing folder for those hosts and can clone onto local, runtime, and
+SSH hosts, then switch to the new ready setup. Provisioning actions are still
+missing.
 
 ### 5. Project Setup Flow
 
@@ -373,8 +374,12 @@ Needs:
 - bulk setup when adding a new host
 - future cloud provisioning hook
 
-Current branch status: existing-folder setup is partially implemented. Clone,
-provisioning, bulk setup, and setup for unknown/new hosts are not complete.
+Current branch status: existing-folder setup is partially implemented. Clone
+setup is wired for local, runtime, and SSH hosts from the composer. SSH clone
+still needs streamed-progress parity; abort now propagates to the relay request,
+and cleanup is conservative so Orca only removes targets it can treat as fresh
+clone outputs. Provisioning, bulk setup, and setup for unknown/new hosts are not
+complete.
 
 ### 6. Sidebar Row Model
 
@@ -518,12 +523,17 @@ Already partially landed:
   set up yet
 - inline `Run on` import-existing-folder setup for known hosts where the
   selected project is not set up yet
+- inline `Run on` clone setup for not-yet-set-up local, runtime, and SSH hosts
+- repo-backed setup method metadata so imported and cloned setups survive
+  compatibility projection and persistence sync
 
 Not complete yet:
 
-- clone/provision flows
-- inline clone/provision actions from the composer `Run on` menu
+- SSH clone streamed-progress parity
+- provisioning flows and inline provisioning actions from the composer
 - bulk setup flows and setup for hosts that are not already known to the client
+- independent project-host setup persistence beyond repo-backed compatibility
+  records
 - full project settings split into global and host-specific ownership
 - host settings/capability UI aligned with project setup
 - complete cache/request ownership audit
