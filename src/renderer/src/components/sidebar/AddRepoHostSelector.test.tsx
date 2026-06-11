@@ -11,8 +11,18 @@ vi.mock('@/components/ui/popover', () => ({
 vi.mock('@/components/ui/command', () => ({
   Command: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   CommandList: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  CommandItem: ({ children, disabled }: { children: React.ReactNode; disabled?: boolean }) => (
-    <div aria-disabled={disabled}>{children}</div>
+  CommandItem: ({
+    children,
+    disabled,
+    className
+  }: {
+    children: React.ReactNode
+    disabled?: boolean
+    className?: string
+  }) => (
+    <div aria-disabled={disabled} className={className}>
+      {children}
+    </div>
   )
 }))
 
@@ -47,6 +57,9 @@ describe('AddRepoHostSelector', () => {
 
     expect(html).toContain('Builder')
     expect(html).toContain('Disconnected')
+    expect(html).toContain('aria-disabled="true"')
+    expect(html).toContain('cursor-not-allowed')
+    expect(html).toContain('opacity-55')
   })
 
   it('shows exact update guidance for incompatible runtime hosts', () => {
@@ -87,5 +100,6 @@ describe('AddRepoHostSelector', () => {
     expect(html).toContain('Update needed')
     expect(html).toContain('The selected Orca server is too old for this client.')
     expect(html).toContain('Update Orca on the server.')
+    expect(html).toContain('aria-disabled="true"')
   })
 })

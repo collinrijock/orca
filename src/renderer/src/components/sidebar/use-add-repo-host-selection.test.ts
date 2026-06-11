@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as ReactModule from 'react'
-import type { SidebarHostScopeOption } from './sidebar-host-options'
+import type { SidebarHostOption } from './sidebar-host-options'
 
 const mocks = vi.hoisted(() => ({
   stateValues: [] as unknown[],
@@ -8,7 +8,7 @@ const mocks = vi.hoisted(() => ({
   stateIndex: 0,
   refValues: [] as unknown[],
   refIndex: 0,
-  hostOptions: [] as SidebarHostScopeOption[],
+  hostOptions: [] as SidebarHostOption[],
   storeState: {
     settings: { activeRuntimeEnvironmentId: null as string | null },
     switchRuntimeEnvironment: vi.fn()
@@ -60,9 +60,30 @@ describe('useAddRepoHostSelection', () => {
     mocks.refIndex = 0
     mocks.refValues = []
     mocks.hostOptions = [
-      { id: 'local', label: 'Local Mac', detail: 'This computer', health: 'available' },
-      { id: 'ssh:ssh-1', label: 'Builder', detail: 'SSH', health: 'available' },
-      { id: 'runtime:env-1', label: 'Server', detail: 'Runtime', health: 'available' }
+      {
+        id: 'local',
+        label: 'Local Mac',
+        detail: 'This computer',
+        kind: 'local',
+        health: 'local',
+        presence: 'local'
+      },
+      {
+        id: 'ssh:ssh-1',
+        label: 'Builder',
+        detail: 'SSH',
+        kind: 'ssh',
+        health: 'available',
+        presence: 'configured'
+      },
+      {
+        id: 'runtime:env-1',
+        label: 'Server',
+        detail: 'Runtime',
+        kind: 'runtime',
+        health: 'available',
+        presence: 'active'
+      }
     ]
     mocks.storeState.settings = { activeRuntimeEnvironmentId: null }
     mocks.storeState.switchRuntimeEnvironment.mockResolvedValue(true)
@@ -104,5 +125,50 @@ describe('useAddRepoHostSelection', () => {
     expect(mocks.storeState.switchRuntimeEnvironment).toHaveBeenCalledWith(null)
     expect(mocks.stateSetters[0]).toHaveBeenCalledWith('ssh:ssh-1')
     expect(setStep).toHaveBeenCalledWith('add')
+  })
+
+  it('falls back from a disconnected selected host to the local host', async () => {
+    mocks.stateValues = ['ssh:ssh-1', false]
+    mocks.hostOptions[1] = {
+      ...mocks.hostOptions[1],
+      health: 'disconnected'
+    }
+    const { useAddRepoHostSelection } = await import('./use-add-repo-host-selection')
+
+    const result = useAddRepoHostSelection({ isOpen: true, setStep: vi.fn() })
+
+    expect(result.selectedHostId).toBe('local')
+    expect(result.selectedSshTargetId).toBeNull()
+  })
+
+  it('does not select a disconnected host', async () => {
+    mocks.stateValues = ['local', false]
+    mocks.hostOptions[1] = {
+      ...mocks.hostOptions[1],
+      health: 'disconnected'
+    }
+    const setStep = vi.fn()
+    const { useAddRepoHostSelection } = await import('./use-add-repo-host-selection')
+
+    const result = useAddRepoHostSelection({ isOpen: true, setStep })
+    await result.handleSelectAddProjectHost('ssh:ssh-1')
+
+    expect(mocks.storeState.switchRuntimeEnvironment).not.toHaveBeenCalled()
+    expect(mocks.stateSetters[0]).not.toHaveBeenCalledWith('ssh:ssh-1')
+    expect(setStep).not.toHaveBeenCalled()
+  })
+
+  it('does not auto-select the active runtime host while it is unavailable', async () => {
+    mocks.stateValues = ['local', false]
+    mocks.hostOptions[2] = {
+      ...mocks.hostOptions[2],
+      health: 'blocked'
+    }
+    mocks.storeState.settings = { activeRuntimeEnvironmentId: 'env-1' }
+    const { useAddRepoHostSelection } = await import('./use-add-repo-host-selection')
+
+    useAddRepoHostSelection({ isOpen: true, setStep: vi.fn() })
+
+    expect(mocks.stateSetters[0]).toHaveBeenCalledWith('local')
   })
 })

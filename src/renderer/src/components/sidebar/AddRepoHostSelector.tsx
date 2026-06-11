@@ -8,6 +8,7 @@ import { getSidebarHostHealthLabel, shouldShowHostScopeControls } from './sideba
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import { describeRuntimeCompatBlock } from '../../../../shared/protocol-compat'
 import { translate } from '@/i18n/i18n'
+import { canSelectAddRepoHost } from './add-repo-host-availability'
 
 type AddRepoHostSelectorProps = {
   hosts: SidebarHostOption[]
@@ -26,10 +27,6 @@ function getHostKindLabel(host: SidebarHostOption): string {
     case 'runtime':
       return translate('auto.components.sidebar.AddRepoHostSelector.runtime', 'Server')
   }
-}
-
-function isHostDisabled(host: SidebarHostOption): boolean {
-  return host.health === 'blocked'
 }
 
 function getHostStatusDetail(host: SidebarHostOption): string {
@@ -98,7 +95,7 @@ export function AddRepoHostSelector({
               <CommandList>
                 {hosts.map((host) => {
                   const selected = host.id === selectedHostId
-                  const disabled = isHostDisabled(host)
+                  const disabled = !canSelectAddRepoHost(host)
                   return (
                     <CommandItem
                       key={host.id}
@@ -111,7 +108,10 @@ export function AddRepoHostSelector({
                         onSelectHost(host.id)
                         onOpenChange(false)
                       }}
-                      className="items-start gap-2 px-3 py-2 text-xs"
+                      className={cn(
+                        'items-start gap-2 px-3 py-2 text-xs',
+                        disabled && 'cursor-not-allowed opacity-55'
+                      )}
                     >
                       <Check
                         className={cn(

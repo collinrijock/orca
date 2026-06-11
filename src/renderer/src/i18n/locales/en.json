@@ -1609,7 +1609,8 @@
         "worktreesHeader": "Worktrees",
         "recentWorktreesHeader": "Recent Worktrees",
         "settingsBadge": "Settings",
-        "actionBadge": "Action"
+        "actionBadge": "Action",
+        "paletteHostBadge": "Host: {{value0}}"
       },
       "github": {
         "pr": {
