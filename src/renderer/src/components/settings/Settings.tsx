@@ -947,6 +947,7 @@ function Settings(): React.JSX.Element {
     >
       <SettingsSidebar
         activeSectionId={activeSectionId}
+        settings={settings}
         generalGroups={generalNavGroups}
         repoSections={repoNavSections}
         hasRepos={repos.length > 0}
