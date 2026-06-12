@@ -152,7 +152,9 @@ export function resolveAttention(panes: PaneInput[], now: number): WorktreeAtten
         // been working for an hour. Falls back to the current stateStartedAt
         // when stateHistory is empty (e.g. fresh after restart).
         const prior = mostRecentAttentionInHistory(entry.stateHistory)
-        ts = prior ?? entry.stateStartedAt
+        // Why: a fresh stateStartedAt (new turn while still working) must beat
+        // stale history timestamps — Command Code has no UserPromptSubmit hook.
+        ts = prior !== null ? Math.max(prior, entry.stateStartedAt) : entry.stateStartedAt
       }
     } else {
       // Title-heuristic fallback (no fresh hook entry for this pane). Hook

@@ -23,6 +23,7 @@ import {
   resolveAgentStatusIdentity,
   shouldSuppressInheritedTerminalStatus
 } from '../../../../shared/agent-status-identity'
+import { isCommandCodeNewTurnWhileWorking } from '../../../../shared/command-code-turn-boundary'
 import type { TerminalTab } from '../../../../shared/types'
 import { isExplicitAgentStatusFresh } from '@/lib/agent-status'
 import {
@@ -1229,14 +1230,6 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
           }
         }
 
-        // Why: prefer main's authoritative stateStartedAt when provided — main's
-        // attachStatusTiming preserves it across same-state pings (server.ts) and
-        // persists it across restart. Fall back to existing.stateStartedAt only when
-        // main did not send timing (legacy callers / OSC fallback path), and to
-        // updatedAt for a brand-new pane.
-        const stateStartedAt =
-          timing?.stateStartedAt ??
-          (existing && existing.state === payload.state ? existing.stateStartedAt : updatedAt)
         const identity = resolveAgentStatusIdentity({
           existing: existing
             ? {
@@ -1248,6 +1241,29 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
           incoming: payload.agentType,
           now: updatedAt
         })
+        // Why: Command Code has no UserPromptSubmit; a fresh transcript prompt while
+        // still `working` is the smart-sort turn boundary.
+        const commandCodeNewTurn =
+          existing !== undefined &&
+          isCommandCodeNewTurnWhileWorking({
+            agentType: identity.agentType,
+            previousState: existing.state,
+            incomingState: payload.state,
+            previousPrompt: existing.prompt,
+            incomingPrompt: payload.prompt
+          })
+        // Why: prefer main's authoritative stateStartedAt when provided — main's
+        // attachStatusTiming preserves it across same-state pings (server.ts) and
+        // persists it across restart. Fall back to existing.stateStartedAt only when
+        // main did not send timing (legacy callers / OSC fallback path), and to
+        // updatedAt for a brand-new pane.
+        const stateStartedAt =
+          timing?.stateStartedAt ??
+          (commandCodeNewTurn
+            ? updatedAt
+            : existing && existing.state === payload.state
+              ? existing.stateStartedAt
+              : updatedAt)
         if (
           existing &&
           shouldSuppressInheritedTerminalStatus({
@@ -1394,7 +1410,8 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
         //      stale.
         const wasFresh =
           !!existing && isExplicitAgentStatusFresh(existing, updatedAt, AGENT_STATUS_STALE_AFTER_MS)
-        const sortRelevantChange = !existing || existing.state !== payload.state || !wasFresh
+        const sortRelevantChange =
+          !existing || existing.state !== payload.state || !wasFresh || commandCodeNewTurn
         const doneRetentionFieldsChanged =
           existing?.state === 'done' &&
           entry.state === 'done' &&

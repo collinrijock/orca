@@ -174,7 +174,7 @@ describe('resolveAttention', () => {
     expect(resolveAttention([hookPane(entry)], NOW)).toEqual(IDLE)
   })
 
-  it('classifies a working pane with prior done as Class 3 with the prior timestamp', () => {
+  it('classifies a working pane with prior done as Class 3 using the fresher turn timestamp', () => {
     const entry = makeEntry({
       paneKey: 't:1',
       state: 'working',
@@ -184,7 +184,22 @@ describe('resolveAttention', () => {
     })
     expect(resolveAttention([hookPane(entry)], NOW)).toEqual({
       cls: 3,
-      attentionTimestamp: NOW - 5 * 60_000
+      attentionTimestamp: NOW - 10_000
+    })
+  })
+
+  it('uses a reset stateStartedAt for Command Code new prompts while still working', () => {
+    const entry = makeEntry({
+      paneKey: 't:1',
+      state: 'working',
+      agentType: 'command-code',
+      stateStartedAt: NOW - 2_000,
+      updatedAt: NOW - 500,
+      stateHistory: [makeHistory('done', NOW - 30 * 60_000)]
+    })
+    expect(resolveAttention([hookPane(entry)], NOW)).toEqual({
+      cls: 3,
+      attentionTimestamp: NOW - 2_000
     })
   })
 

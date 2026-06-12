@@ -664,6 +664,34 @@ describe('agent status tool + assistant fields', () => {
     expect(store.getState().agentStatusEpoch).toBe(firstEpoch + 1)
     expect(store.getState().sortEpoch).toBe(firstSortEpoch + 1)
   })
+
+  it('bumps sort epoch when Command Code starts a new prompt while still working', () => {
+    vi.useFakeTimers()
+    const store = createTestStore()
+    store
+      .getState()
+      .setAgentStatus(
+        'tab-1:1',
+        { state: 'working', prompt: 'first task', agentType: 'command-code' },
+        'command-code',
+        { updatedAt: 1_000, stateStartedAt: 1_000 }
+      )
+    const firstSortEpoch = store.getState().sortEpoch
+
+    store
+      .getState()
+      .setAgentStatus(
+        'tab-1:1',
+        { state: 'working', prompt: 'second task', agentType: 'command-code' },
+        'command-code',
+        { updatedAt: 2_000, stateStartedAt: 2_000 }
+      )
+
+    const entry = store.getState().agentStatusByPaneKey['tab-1:1']
+    expect(entry.prompt).toBe('second task')
+    expect(entry.stateStartedAt).toBe(2_000)
+    expect(store.getState().sortEpoch).toBe(firstSortEpoch + 1)
+  })
 })
 
 describe('agent status PR refresh handoff', () => {
