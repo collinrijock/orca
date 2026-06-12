@@ -116,13 +116,43 @@ describe('SourceControl commit message generation records', () => {
         worktreeId: 'wt-a',
         worktreePath: '/repo/a',
         connectionId: 'conn-a',
-        requestId
+        requestId,
+        runtimeTargetSettings: { activeRuntimeEnvironmentId: 'runtime-a' }
       })
     )
 
     expect(store.getState().commitMessageGenerationRecords[key]).toMatchObject({
-      context: { requestId, worktreeId: 'wt-a', worktreePath: '/repo/a' },
+      context: {
+        requestId,
+        worktreeId: 'wt-a',
+        worktreePath: '/repo/a',
+        runtimeTargetSettings: { activeRuntimeEnvironmentId: 'runtime-a' }
+      },
       status: 'running'
     })
+  })
+
+  it('prunes commit generation records for removed worktrees', () => {
+    const store = createCommitMessageGenerationTestStore()
+    store.getState().setCommitMessageGenerationRecord(
+      'wt-a',
+      createRunningCommitMessageGenerationRecord({
+        worktreeId: 'wt-a',
+        worktreePath: '/repo/a',
+        requestId: 1
+      })
+    )
+    store.getState().setCommitMessageGenerationRecord(
+      'wt-b',
+      createRunningCommitMessageGenerationRecord({
+        worktreeId: 'wt-b',
+        worktreePath: '/repo/b',
+        requestId: 2
+      })
+    )
+
+    store.getState().pruneCommitMessageGenerationRecords(new Set(['wt-a']))
+
+    expect(Object.keys(store.getState().commitMessageGenerationRecords)).toEqual(['wt-a'])
   })
 })

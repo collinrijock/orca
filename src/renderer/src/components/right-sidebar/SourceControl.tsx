@@ -895,12 +895,16 @@ function SourceControlInner(): React.JSX.Element {
   const updateCommitMessageGenerationRecord = useAppStore(
     (s) => s.updateCommitMessageGenerationRecord
   )
+  const pruneCommitMessageGenerationRecords = useAppStore(
+    (s) => s.pruneCommitMessageGenerationRecords
+  )
   const prGenerationRecords = useAppStore((s) => s.pullRequestGenerationRecords)
   const allocatePullRequestGenerationRequestId = useAppStore(
     (s) => s.allocatePullRequestGenerationRequestId
   )
   const setPullRequestGenerationRecord = useAppStore((s) => s.setPullRequestGenerationRecord)
   const updatePullRequestGenerationRecord = useAppStore((s) => s.updatePullRequestGenerationRecord)
+  const prunePullRequestGenerationRecords = useAppStore((s) => s.prunePullRequestGenerationRecords)
   const filterInputRef = useRef<HTMLInputElement>(null)
   const commitMessage = readCommitDraftForWorktree(commitDrafts, activeWorktreeId)
   const commitError = commitErrors[activeWorktreeId ?? ''] ?? null
@@ -1382,11 +1386,18 @@ function SourceControlInner(): React.JSX.Element {
   // state — especially commitInFlightRef, which would permanently disable
   // Commit for that ID if left stuck at `true`.
   useEffect(() => {
+    const liveWorktreeKeys = new Set<string>()
+    for (const worktree of worktreeMap.values()) {
+      liveWorktreeKeys.add(worktree.id)
+      if (worktree.path.trim()) {
+        liveWorktreeKeys.add(worktree.path)
+      }
+    }
     const pruneRecord = <T,>(prev: Record<string, T>): Record<string, T> => {
       let changed = false
       const next: Record<string, T> = {}
       for (const key of Object.keys(prev)) {
-        if (worktreeMap.has(key)) {
+        if (liveWorktreeKeys.has(key)) {
           next[key] = prev[key]
         } else {
           changed = true
@@ -1400,18 +1411,20 @@ function SourceControlInner(): React.JSX.Element {
     setCommitInFlightByWorktree((prev) => pruneRecord(prev))
     setAbortOperationInFlightByWorktree((prev) => pruneRecord(prev))
     setGitHistoryByWorktree((prev) => pruneRecord(prev))
+    pruneCommitMessageGenerationRecords(liveWorktreeKeys)
+    prunePullRequestGenerationRecords(liveWorktreeKeys)
     // Refs don't need setState — mutate in place to drop stale keys.
     for (const key of Object.keys(commitInFlightRef.current)) {
-      if (!worktreeMap.has(key)) {
+      if (!liveWorktreeKeys.has(key)) {
         delete commitInFlightRef.current[key]
       }
     }
     for (const key of Object.keys(gitHistoryRequestByWorktreeRef.current)) {
-      if (!worktreeMap.has(key)) {
+      if (!liveWorktreeKeys.has(key)) {
         delete gitHistoryRequestByWorktreeRef.current[key]
       }
     }
-  }, [worktreeMap])
+  }, [pruneCommitMessageGenerationRecords, prunePullRequestGenerationRecords, worktreeMap])
 
   useEffect(() => {
     // Why: users often finish merge/rebase conflicts in a terminal. Once git
@@ -1595,7 +1608,10 @@ function SourceControlInner(): React.JSX.Element {
               worktreeId,
               worktreePath: generationWorktreePath,
               connectionId,
-              requestId
+              requestId,
+              runtimeTargetSettings: {
+                activeRuntimeEnvironmentId: target.settings?.activeRuntimeEnvironmentId ?? null
+              }
             }),
             requestId,
             error: 'Custom command is empty. Add one in Settings -> Git -> Source Control AI.'
@@ -1608,13 +1624,18 @@ function SourceControlInner(): React.JSX.Element {
       }
 
       const requestId = allocateCommitMessageGenerationRequestId()
+      // Why: Stop must route to the runtime selected at generation start, even
+      // if the user changes settings before cancellation.
       setCommitMessageGenerationRecord(
         generationKey,
         createRunningCommitMessageGenerationRecord({
           worktreeId,
           worktreePath: generationWorktreePath,
           connectionId,
-          requestId
+          requestId,
+          runtimeTargetSettings: {
+            activeRuntimeEnvironmentId: target.settings?.activeRuntimeEnvironmentId ?? null
+          }
         })
       )
       try {
@@ -1743,7 +1764,7 @@ function SourceControlInner(): React.JSX.Element {
     // resolves with `{canceled: true}` once the kill propagates, while the
     // durable record lets the visible spinner clear immediately.
     void cancelRuntimeGenerateCommitMessage({
-      settings: useAppStore.getState().settings,
+      settings: context.runtimeTargetSettings,
       worktreeId: context.worktreeId,
       worktreePath: context.worktreePath,
       connectionId: context.connectionId
@@ -2147,13 +2168,18 @@ function SourceControlInner(): React.JSX.Element {
         return
       }
       const requestId = allocatePullRequestGenerationRequestId()
+      // Why: Stop must route to the runtime selected at generation start, even
+      // if the user changes settings before cancellation.
       const context: PullRequestGenerationContext = {
         worktreeId: target.worktreeId,
         worktreePath: target.worktreePath,
         connectionId: target.connectionId,
         requestId,
         repoId: target.repoId,
-        branch: target.branch
+        branch: target.branch,
+        runtimeTargetSettings: {
+          activeRuntimeEnvironmentId: target.settings?.activeRuntimeEnvironmentId ?? null
+        }
       }
       const seed = { ...target.fields }
       // Why: SourceControl can unmount on tab/worktree switches; the record is
@@ -2245,7 +2271,7 @@ function SourceControlInner(): React.JSX.Element {
       return resolvePullRequestGenerationCancel(current)
     })
     void cancelRuntimeGeneratePullRequestFields({
-      settings: useAppStore.getState().settings,
+      settings: record.context.runtimeTargetSettings,
       worktreeId: record.context.worktreeId,
       worktreePath: record.context.worktreePath,
       connectionId: record.context.connectionId

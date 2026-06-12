@@ -1,11 +1,18 @@
 import type { StateCreator } from 'zustand'
+import type { GlobalSettings } from '../../../../shared/types'
 import type { AppState } from '../types'
+
+export type CommitMessageGenerationRuntimeTargetSettings = Pick<
+  GlobalSettings,
+  'activeRuntimeEnvironmentId'
+>
 
 export type CommitMessageGenerationContext = {
   worktreeId: string
   worktreePath: string
   connectionId?: string
   requestId: number
+  runtimeTargetSettings?: CommitMessageGenerationRuntimeTargetSettings | null
 }
 
 export type CommitMessageGenerationStatus = 'idle' | 'running' | 'canceled' | 'failed' | 'succeeded'
@@ -29,6 +36,7 @@ export type CommitMessageGenerationSlice = {
     key: string,
     updater: (record: CommitMessageGenerationRecord | null) => CommitMessageGenerationRecord | null
   ) => void
+  pruneCommitMessageGenerationRecords: (liveWorktreeKeys: ReadonlySet<string>) => void
 }
 
 export function getCommitMessageGenerationRecordKey(
@@ -160,5 +168,22 @@ export const createCommitMessageGenerationSlice: StateCreator<
           [key]: nextRecord
         }
       }
+    }),
+  pruneCommitMessageGenerationRecords: (liveWorktreeKeys) =>
+    set((state) => {
+      let changed = false
+      const nextRecords: CommitMessageGenerationRecords = {}
+      for (const [key, record] of Object.entries(state.commitMessageGenerationRecords)) {
+        const worktreeKey = getCommitMessageGenerationRecordKey(
+          record.context.worktreeId,
+          record.context.worktreePath
+        )
+        if (worktreeKey && liveWorktreeKeys.has(worktreeKey)) {
+          nextRecords[key] = record
+        } else {
+          changed = true
+        }
+      }
+      return changed ? { commitMessageGenerationRecords: nextRecords } : {}
     })
 })
