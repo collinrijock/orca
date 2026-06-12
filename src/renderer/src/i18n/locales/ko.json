@@ -2124,7 +2124,8 @@
             "c44659e09f": "모바일 원격 조작",
             "7cffad954c": "접기",
             "3eed73394f": "키보드가 일시중지되었습니다.",
-            "faa367dc74": "이 terminal은 모바일 앱에 맞게 크기가 조정됩니다."
+            "faa367dc74": "이 terminal은 모바일 앱에 맞게 크기가 조정됩니다.",
+            "54f7d6f69d": "모든 terminal 크기 조정"
           },
           "TerminalAgentSessionForkDialog": {
             "17fc841e59": "컨텍스트 복사",

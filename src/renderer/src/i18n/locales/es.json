@@ -2124,7 +2124,8 @@
             "c44659e09f": "conducción móvil",
             "7cffad954c": "Colapsar",
             "3eed73394f": "Tu teclado está en pausa",
-            "faa367dc74": "Este terminal tiene el tamaño adecuado para tu aplicación móvil"
+            "faa367dc74": "Este terminal tiene el tamaño adecuado para tu aplicación móvil",
+            "54f7d6f69d": "Cambiar tamaño de todas las terminales"
           },
           "TerminalAgentSessionForkDialog": {
             "17fc841e59": "Copiar contexto",

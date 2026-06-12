@@ -2124,7 +2124,8 @@
             "c44659e09f": "Mobile driving",
             "7cffad954c": "Collapse",
             "3eed73394f": "Your keyboard is paused",
-            "faa367dc74": "This terminal is sized for your mobile app"
+            "faa367dc74": "This terminal is sized for your mobile app",
+            "54f7d6f69d": "Resize all terminals"
           },
           "TerminalAgentSessionForkDialog": {
             "17fc841e59": "Copy context",
