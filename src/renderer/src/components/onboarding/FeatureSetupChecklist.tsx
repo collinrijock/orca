@@ -86,7 +86,12 @@ const FEATURE_SETUP_ROWS: readonly FeatureSetupRow[] = [
         'Agents can use linked Linear tasks for richer ticket-aware handoffs.'
       )
     },
-    setupSummary: 'Recommended for Linear workspaces; does not affect Linear connection setup.',
+    get setupSummary() {
+      return translate(
+        'auto.components.onboarding.FeatureSetupChecklist.linearTicketsSetupSummary',
+        'Recommended for Linear workspaces; does not affect Linear connection setup.'
+      )
+    },
     icon: <TicketCheck className="size-4" />
   }
 ]

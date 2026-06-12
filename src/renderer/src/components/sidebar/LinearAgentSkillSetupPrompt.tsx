@@ -169,11 +169,11 @@ export function LinearAgentSkillSetupPrompt({
       : !cliAvailable
         ? translate(
             'auto.components.sidebar.LinearAgentSkillSetupPrompt.missingCli',
-            'Orca CLI setup is missing.'
+            'Orca CLI is missing.'
           )
         : translate(
             'auto.components.sidebar.LinearAgentSkillSetupPrompt.missingSkill',
-            'Linear agent skill setup is missing.'
+            'Linear agent skill is missing.'
           )
 
   if (!missingSetup) {

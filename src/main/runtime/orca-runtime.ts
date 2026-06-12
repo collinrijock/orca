@@ -14978,13 +14978,16 @@ export class OrcaRuntimeService {
       ? await this.resolveLinearCommentParentId(target.issue.id, params.replyTo, target.workspaceId)
       : null
     const writeId = params.writeId ?? randomUUID()
-    const existing = await this.getMatchingLinearCommentWrite(
-      writeId,
-      target.issue.id,
-      parentId,
-      target.workspaceId,
+    const existing =
       params.writeId !== undefined
-    )
+        ? await this.getMatchingLinearCommentWrite(
+            writeId,
+            target.issue.id,
+            parentId,
+            target.workspaceId,
+            true
+          )
+        : null
     if (existing) {
       await this.notifyLinearLinkedIssueUpdated(target.workspaceId, target.issue.identifier)
       return this.linearCommentResult(existing, target, params.body.length, writeId, true)
@@ -15040,12 +15043,15 @@ export class OrcaRuntimeService {
     const target = await this.resolveLinearAgentWriteTarget(params)
     const writeId = params.writeId ?? randomUUID()
     const title = params.title?.trim() || this.defaultLinearAttachmentTitle(url)
-    const existing = await this.getMatchingLinearAttachmentWrite(
-      writeId,
-      target.issue.id,
-      target.workspaceId,
+    const existing =
       params.writeId !== undefined
-    )
+        ? await this.getMatchingLinearAttachmentWrite(
+            writeId,
+            target.issue.id,
+            target.workspaceId,
+            true
+          )
+        : null
     if (existing) {
       await this.notifyLinearLinkedIssueUpdated(target.workspaceId, target.issue.identifier)
       return this.linearAttachResult(existing, target, writeId, true)
@@ -15118,13 +15124,16 @@ export class OrcaRuntimeService {
     const team = await this.resolveLinearCreateTeam(params.teamKey, params.workspaceId, parent)
     const parentId = parent?.issue.id ?? null
     const writeId = params.writeId ?? randomUUID()
-    const existing = await this.getMatchingLinearCreatedIssue(
-      writeId,
-      team.id,
-      parentId,
-      team.workspaceId,
+    const existing =
       params.writeId !== undefined
-    )
+        ? await this.getMatchingLinearCreatedIssue(
+            writeId,
+            team.id,
+            parentId,
+            team.workspaceId,
+            true
+          )
+        : null
     if (existing) {
       if (parent) {
         await this.notifyLinearLinkedIssueUpdated(parent.workspaceId, parent.issue.identifier)
@@ -15395,6 +15404,8 @@ export class OrcaRuntimeService {
     unconfirmed: (cause?: string) => LinearAgentAccessError
   ): Promise<NonNullable<Awaited<ReturnType<typeof getLinearCommentByUuidForAgent>>>> {
     try {
+      // Why: a duplicate-id response can mean the original write landed; only
+      // the exact target relationship proves this pinned retry.
       const comment = await this.getMatchingLinearCommentWrite(
         writeId,
         issueId,
@@ -15425,6 +15436,8 @@ export class OrcaRuntimeService {
     unconfirmed: (cause?: string) => LinearAgentAccessError
   ): Promise<NonNullable<Awaited<ReturnType<typeof getLinearAttachmentByUuidForAgent>>>> {
     try {
+      // Why: a duplicate-id response can mean the original write landed; only
+      // the exact target relationship proves this pinned retry.
       const attachment = await this.getMatchingLinearAttachmentWrite(
         writeId,
         issueId,
@@ -15455,6 +15468,8 @@ export class OrcaRuntimeService {
     unconfirmed: (cause?: string) => LinearAgentAccessError
   ): Promise<NonNullable<Awaited<ReturnType<typeof getLinearIssueByUuidForAgent>>>> {
     try {
+      // Why: a duplicate-id response can mean the original write landed; only
+      // the exact target relationship proves this pinned retry.
       const issue = await this.getMatchingLinearCreatedIssue(
         writeId,
         teamId,
@@ -15654,6 +15669,8 @@ export class OrcaRuntimeService {
     } = {}
   ): LinearAgentAccessError {
     const workspaceId = target?.workspaceId ?? extra.team?.workspaceId ?? ''
+    // Why: unconfirmed writes need a retry that preserves id and target so
+    // duplicate recovery can prove intent without matching mutable content.
     const pinned =
       verb === 'create'
         ? [

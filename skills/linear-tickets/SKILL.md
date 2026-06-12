@@ -29,7 +29,7 @@ orca open --json
 orca status --json
 ```
 
-If the installed CLI help disagrees with this skill, trust `orca linear --help` for the available command surface and tell the user the skill guidance may be stale. In dev builds, run `pnpm build:cli` first and use the dev CLI wrapper if the global `orca` points at a packaged install.
+If the installed CLI help disagrees with this skill, trust `orca linear --help` for the available command surface and tell the user the skill guidance may be stale.
 
 ## Read First
 

@@ -3936,9 +3936,15 @@
           "b826a98b6f": "busy"
         },
         "LinearAgentSkillSetupPrompt": {
-          "missingBoth": "Orca CLI and Linear agent skill setup are missing.",
-          "missingCli": "Orca CLI setup is missing.",
-          "missingSkill": "Linear agent skill setup is missing.",
+          "missingCliAndSkill": "Orca CLI and Linear agent skill are missing.",
+          "modalTitle": "Enable Linear ticket access",
+          "modalDescription": "Install the Linear skill from a terminal.",
+          "modalPrompt": "Enable agents to read and edit the attached Linear ticket.",
+          "dontShowAgain": "Don't show again",
+          "notNow": "Not now",
+          "missingBoth": "Orca CLI and Linear agent skill are missing.",
+          "missingCli": "Orca CLI is missing.",
+          "missingSkill": "Linear agent skill is missing.",
           "title": "Set up Linear agent skill",
           "remoteCopy": "This installs host setup; remote agent environments may need separate setup.",
           "hostCopy": "Install it for host agent handoffs from linked Linear work.",
@@ -4354,6 +4360,8 @@
           "8671e406f0": "Cancel",
           "a4aafe46e3": "Target path:",
           "e8012c03a1": "Enables agents to use Orca workspace, terminal, and progress commands.",
+          "cliSkillTerminalTitle": "CLI skill setup",
+          "cliSkillTerminalAria": "CLI skill install terminal",
           "6053cf736c": "CLI skill",
           "36a6f919ba": "Give agents Orca-aware workspace, terminal, and progress workflows.",
           "04873eea3e": "Agent skills",
@@ -7552,15 +7560,15 @@
                 "eae4a9f16b": "Add Linear access to browse and link issues.",
                 "fe9231215b": "Checking Linear access before showing setup actions.",
                 "e1f5e6424c": "{{value0}} workspace{{value1}} connected",
-                "disconnect_all": "Disconnect",
+                "disconnect_all": "Disconnect all",
                 "linearSkillTitle": "Linear agent skill",
-                "linearSkillDescription": "Install the host agent skill agents use for richer linked Linear task handoffs.",
+                "linearSkillDescription": "Install the host agent skill that agents use for richer linked Linear task handoffs.",
                 "linearSkillTerminalTitle": "Install Linear agent skill",
                 "linearSkillTerminalAria": "Linear agent skill installer terminal",
                 "linearSkillInstall": "Install CLI & Skill",
                 "linearSkillOptionalHint": "Optional next step: install the Linear agent skill for ticket-aware agent handoffs.",
                 "linearSkillDismissHint": "Dismiss optional Linear agent skill setup note",
-                "linearSkillWslDescription": "Install the WSL agent skill agents use for richer linked Linear task handoffs.",
+                "linearSkillWslDescription": "Install the WSL agent skill that agents use for richer linked Linear task handoffs.",
                 "linearSkillWslLabel": "WSL default"
               }
             }
@@ -8522,7 +8530,8 @@
           "01426f3a23": "Agents can navigate sites, inspect pages, and work through browser tasks.",
           "ea85d9e628": "Agent Browser Use",
           "linearTicketsTitle": "Linear agent skill",
-          "linearTicketsDescription": "Agents can use linked Linear tasks for richer ticket-aware handoffs."
+          "linearTicketsDescription": "Agents can use linked Linear tasks for richer ticket-aware handoffs.",
+          "linearTicketsSetupSummary": "Recommended for Linear workspaces; does not affect Linear connection setup."
         },
         "FeatureSetupInlineTerminal": {
           "789b59936e": "Press Enter to run the command and confirm npx if asked. You can also set this up later in Settings.",

@@ -81,9 +81,6 @@ export const LINEAR_HANDLERS: Record<string, CommandHandler> = {
   },
   'linear comment add': async ({ flags, client, cwd, json }) => {
     const body = await readLinearBody(flags, cwd, { required: true })
-    if (body === undefined) {
-      throw new RuntimeClientError('invalid_argument', 'Missing --body or --body-file')
-    }
     const request: LinearCommentAddRequest = {
       ...buildWriteTargetRequest(flags, cwd, client.isRemote),
       body,
@@ -171,14 +168,7 @@ function buildIssueRequest(
     workspaceId,
     include: includes,
     depth: clampLinearIssueDepth(requestedDepth),
-    context: {
-      remote,
-      ...(remote ? {} : { cwd }),
-      ...(process.env.ORCA_WORKTREE_ID ? { worktreeId: process.env.ORCA_WORKTREE_ID } : {}),
-      ...(process.env.ORCA_TERMINAL_HANDLE
-        ? { terminalHandle: process.env.ORCA_TERMINAL_HANDLE }
-        : {})
-    }
+    context: buildLinearCurrentContext(cwd, remote)
   }
 }
 
@@ -248,6 +238,16 @@ function getHttpUrlFlag(flags: Map<string, string | boolean>, name: string): str
   throw new RuntimeClientError('linear_invalid_url', '--url must be an absolute http(s) URL')
 }
 
+function readLinearBody(
+  flags: Map<string, string | boolean>,
+  cwd: string,
+  options: { required: true }
+): Promise<string>
+function readLinearBody(
+  flags: Map<string, string | boolean>,
+  cwd: string,
+  options: { required: false }
+): Promise<string | undefined>
 async function readLinearBody(
   flags: Map<string, string | boolean>,
   cwd: string,

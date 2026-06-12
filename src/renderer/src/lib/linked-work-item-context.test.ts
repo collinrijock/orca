@@ -74,7 +74,7 @@ describe('buildLinearLaunchContextBlock', () => {
     expect(block).toContain('https://linear.app/acme/issue/ENG-123/test')
     expect(block).toContain('Before planning or editing, fetch the full ticket with:')
     expect(block).toContain('orca linear issue --current --full --json')
-    expect(block).toContain('check `meta` for caps, `partial`, and `includeErrors`')
+    expect(block).toContain('check `meta.partial`, `meta.includeErrors`, and `meta.sections`')
     expect(block).toContain('linear-tickets completion flow')
   })
 

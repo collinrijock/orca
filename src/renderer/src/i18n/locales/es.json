@@ -3936,22 +3936,28 @@
           "b826a98b6f": "ocupado"
         },
         "LinearAgentSkillSetupPrompt": {
-          "missingBoth": "Orca CLI and Linear agent skill setup are missing.",
-          "missingCli": "Orca CLI setup is missing.",
-          "missingSkill": "Linear agent skill setup is missing.",
-          "title": "Set up Linear agent skill",
-          "remoteCopy": "This installs host setup; remote agent environments may need separate setup.",
-          "hostCopy": "Install it for host agent handoffs from linked Linear work.",
-          "dismiss": "Dismiss Linear agent skill setup",
-          "setup": "Set up",
-          "recheck": "Re-check",
-          "panelTitle": "Linear agent skill",
-          "panelDescription": "Install the host agent skill for linked Linear task handoffs.",
-          "terminalTitle": "Install Linear agent skill",
-          "terminalAria": "Linear agent skill installer terminal",
+          "missingCliAndSkill": "Faltan la CLI de Orca y la habilidad de Agent de Linear.",
+          "modalTitle": "Activar acceso a tickets de Linear",
+          "modalDescription": "Instala la habilidad de Linear desde una terminal.",
+          "modalPrompt": "Permite que los Agents lean y editen el ticket de Linear adjunto.",
+          "dontShowAgain": "No volver a mostrar",
+          "notNow": "Ahora no",
+          "missingBoth": "Faltan la CLI de Orca y la habilidad de Agent de Linear.",
+          "missingCli": "Falta la CLI de Orca.",
+          "missingSkill": "Falta la habilidad de Agent de Linear.",
+          "title": "Configurar habilidad de Agent de Linear",
+          "remoteCopy": "Esto instala la configuración del host; los entornos de Agent remotos pueden necesitar una configuración separada.",
+          "hostCopy": "Instálala para traspasos de Agent del host desde trabajo Linear enlazado.",
+          "dismiss": "Descartar configuración de habilidad de Agent de Linear",
+          "setup": "Configurar",
+          "recheck": "Volver a comprobar",
+          "panelTitle": "Habilidad de Agent de Linear",
+          "panelDescription": "Instala la habilidad de Agent del host para traspasos desde tareas Linear enlazadas.",
+          "terminalTitle": "Instalar habilidad de Agent de Linear",
+          "terminalAria": "Terminal de instalación de la habilidad de Agent de Linear",
           "install": "Instalar CLI y habilidad",
-          "wslCopy": "Install it for WSL agent handoffs from linked Linear work.",
-          "wslLabel": "WSL default"
+          "wslCopy": "Instálala para traspasos de Agent en WSL desde trabajo Linear enlazado.",
+          "wslLabel": "WSL predeterminado"
         },
         "FolderWorkspaceComposerDialog": {
           "connectFailed": "No se pudo conectar al proyecto.",
@@ -4354,6 +4360,8 @@
           "8671e406f0": "Cancelar",
           "a4aafe46e3": "Ruta de destino:",
           "e8012c03a1": "Permite a los agents utilizar el espacio de trabajo, la terminal y los comandos de progreso de Orca.",
+          "cliSkillTerminalTitle": "Configuración de habilidad CLI",
+          "cliSkillTerminalAria": "Terminal de instalación de la habilidad CLI",
           "6053cf736c": "Habilidad CLI",
           "36a6f919ba": "Ofrezca a los agents espacios de trabajo, terminales y flujos de trabajo de progreso compatibles con Orca.",
           "04873eea3e": "Habilidades del Agent",
@@ -7552,16 +7560,16 @@
                 "eae4a9f16b": "Add Linear access to browse and link issues.",
                 "fe9231215b": "Checking Linear access before showing setup actions.",
                 "e1f5e6424c": "{{value0}} workspace{{value1}} connected",
-                "disconnect_all": "Disconnect",
-                "linearSkillTitle": "Linear agent skill",
-                "linearSkillDescription": "Install the host agent skill agents use for richer linked Linear task handoffs.",
-                "linearSkillTerminalTitle": "Install Linear agent skill",
-                "linearSkillTerminalAria": "Linear agent skill installer terminal",
+                "disconnect_all": "Desconectar todo",
+                "linearSkillTitle": "Habilidad de Agent de Linear",
+                "linearSkillDescription": "Instala la habilidad de Agent del host que los Agents usan para traspasos más completos con tareas Linear enlazadas.",
+                "linearSkillTerminalTitle": "Instalar habilidad de Agent de Linear",
+                "linearSkillTerminalAria": "Terminal de instalación de la habilidad de Agent de Linear",
                 "linearSkillInstall": "Instalar CLI y habilidad",
-                "linearSkillOptionalHint": "Optional next step: install the Linear agent skill for ticket-aware agent handoffs.",
-                "linearSkillDismissHint": "Dismiss optional Linear agent skill setup note",
-                "linearSkillWslDescription": "Install the WSL agent skill agents use for richer linked Linear task handoffs.",
-                "linearSkillWslLabel": "WSL default"
+                "linearSkillOptionalHint": "Paso opcional siguiente: instala la habilidad de Agent de Linear para traspasos con contexto del ticket.",
+                "linearSkillDismissHint": "Descartar la nota opcional de configuración de la habilidad de Agent de Linear",
+                "linearSkillWslDescription": "Instala la habilidad de Agent de WSL que los Agents usan para traspasos más completos con tareas Linear enlazadas.",
+                "linearSkillWslLabel": "WSL predeterminado"
               }
             }
           }
@@ -8521,8 +8529,9 @@
           "1ecfb490ac": "Uso de la computadora",
           "01426f3a23": "Los Agents pueden navegar por sitios, inspeccionar páginas y realizar tareas del navegador.",
           "ea85d9e628": "Uso del navegador del Agent",
-          "linearTicketsTitle": "Linear agent skill",
-          "linearTicketsDescription": "Agents can use linked Linear tasks for richer ticket-aware handoffs."
+          "linearTicketsTitle": "Habilidad de Agent de Linear",
+          "linearTicketsDescription": "Los Agents pueden usar tareas Linear enlazadas para traspasos más completos y conscientes del ticket.",
+          "linearTicketsSetupSummary": "Recomendado para espacios de trabajo Linear; no afecta la configuración de conexión de Linear."
         },
         "FeatureSetupInlineTerminal": {
           "789b59936e": "Presione Enter para ejecutar el comando y confirme npx si se le solicita. También puedes configurar esto más tarde en Configuración.",
@@ -8938,8 +8947,8 @@
             "c605f51f2b": "Configuración de capacidad lista",
             "1aa657d8f4": "Alguna configuración de capacidad necesita atención",
             "c89534cbe9": "Instalar CLI y habilidades",
-            "linearTicketsTitle": "Linear agent skill",
-            "linearTicketsDescription": "Recommended when agents work from linked Linear tasks."
+            "linearTicketsTitle": "Habilidad de Agent de Linear",
+            "linearTicketsDescription": "Recomendado cuando los Agents trabajan desde tareas Linear enlazadas."
           },
           "AiCommitPrSettingsCard": {
             "8d4152701a": "p.ej. ollama corre llama3.1 {{value0}}",

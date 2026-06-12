@@ -243,11 +243,11 @@ export function LinearIntegrationCard(): React.JSX.Element {
               agentRuntime.runtime === 'wsl'
                 ? translate(
                     'auto.components.settings.task.tracker.integration.cards.linearSkillWslDescription',
-                    'Install the WSL agent skill agents use for richer linked Linear task handoffs.'
+                    'Install the WSL agent skill that agents use for richer linked Linear task handoffs.'
                   )
                 : translate(
                     'auto.components.settings.task.tracker.integration.cards.linearSkillDescription',
-                    'Install the host agent skill agents use for richer linked Linear task handoffs.'
+                    'Install the host agent skill that agents use for richer linked Linear task handoffs.'
                   )
             }
             command={linearTicketsInstallCommand}

@@ -113,8 +113,14 @@ export function CliAgentSkillSetup({
           'Enables agents to use Orca workspace, terminal, and progress commands.'
         )}
         command={cliSkillInstallCommand}
-        terminalTitle="CLI skill setup"
-        terminalAriaLabel="CLI skill install terminal"
+        terminalTitle={translate(
+          'auto.components.settings.CliSection.cliSkillTerminalTitle',
+          'CLI skill setup'
+        )}
+        terminalAriaLabel={translate(
+          'auto.components.settings.CliSection.cliSkillTerminalAria',
+          'CLI skill install terminal'
+        )}
         terminalWorktreeId={`settings-cli-skill-terminal-${agentRuntime.runtime}`}
         terminalShellOverride={cliSkillTerminalShellOverride}
         installed={cliSkillDetected}

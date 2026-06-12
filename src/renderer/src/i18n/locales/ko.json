@@ -3936,22 +3936,28 @@
           }
         },
         "LinearAgentSkillSetupPrompt": {
-          "missingBoth": "Orca CLI and Linear agent skill setup are missing.",
-          "missingCli": "Orca CLI setup is missing.",
-          "missingSkill": "Linear agent skill setup is missing.",
-          "title": "Set up Linear agent skill",
-          "remoteCopy": "This installs host setup; remote agent environments may need separate setup.",
-          "hostCopy": "Install it for host agent handoffs from linked Linear work.",
-          "dismiss": "Dismiss Linear agent skill setup",
-          "setup": "Set up",
-          "recheck": "Re-check",
-          "panelTitle": "Linear agent skill",
-          "panelDescription": "Install the host agent skill for linked Linear task handoffs.",
-          "terminalTitle": "Install Linear agent skill",
-          "terminalAria": "Linear agent skill installer terminal",
+          "missingCliAndSkill": "Orca CLI와 Linear agent 스킬이 없습니다.",
+          "modalTitle": "Linear 티켓 접근 활성화",
+          "modalDescription": "terminal에서 Linear 스킬을 설치합니다.",
+          "modalPrompt": "agents가 첨부된 Linear 티켓을 읽고 편집할 수 있게 합니다.",
+          "dontShowAgain": "다시 표시하지 않음",
+          "notNow": "나중에",
+          "missingBoth": "Orca CLI와 Linear agent 스킬이 없습니다.",
+          "missingCli": "Orca CLI가 없습니다.",
+          "missingSkill": "Linear agent 스킬이 없습니다.",
+          "title": "Linear agent 스킬 설정",
+          "remoteCopy": "호스트 설정을 설치합니다. 원격 agent 환경에는 별도 설정이 필요할 수 있습니다.",
+          "hostCopy": "연결된 Linear 작업에서 호스트 agent 인계를 위해 설치합니다.",
+          "dismiss": "Linear agent 스킬 설정 닫기",
+          "setup": "설정",
+          "recheck": "다시 확인",
+          "panelTitle": "Linear agent 스킬",
+          "panelDescription": "연결된 Linear 작업 인계를 위해 호스트 agent 스킬을 설치합니다.",
+          "terminalTitle": "Linear agent 스킬 설치",
+          "terminalAria": "Linear agent 스킬 설치 terminal",
           "install": "CLI 및 스킬 설치",
-          "wslCopy": "Install it for WSL agent handoffs from linked Linear work.",
-          "wslLabel": "WSL default"
+          "wslCopy": "연결된 Linear 작업에서 WSL agent 인계를 위해 설치합니다.",
+          "wslLabel": "WSL 기본값"
         },
         "FolderWorkspaceComposerDialog": {
           "connectFailed": "프로젝트에 연결하지 못했습니다.",
@@ -4339,6 +4345,8 @@
           "8671e406f0": "취소",
           "a4aafe46e3": "대상 경로:",
           "e8012c03a1": "agents가 Orca 워크스페이스, terminal 및 진행 명령을 사용할 수 있도록 합니다.",
+          "cliSkillTerminalTitle": "CLI 스킬 설정",
+          "cliSkillTerminalAria": "CLI 스킬 설치 terminal",
           "6053cf736c": "CLI 스킬",
           "36a6f919ba": "agents에게 Orca 인식 워크스페이스, terminal 및 진행 워크플로를 제공합니다.",
           "04873eea3e": "Agent 스킬",
@@ -7552,16 +7560,16 @@
                 "eae4a9f16b": "Add Linear access to browse and link issues.",
                 "fe9231215b": "Checking Linear access before showing setup actions.",
                 "e1f5e6424c": "{{value0}} workspace{{value1}} connected",
-                "disconnect_all": "Disconnect",
-                "linearSkillTitle": "Linear agent skill",
-                "linearSkillDescription": "Install the host agent skill agents use for richer linked Linear task handoffs.",
-                "linearSkillTerminalTitle": "Install Linear agent skill",
-                "linearSkillTerminalAria": "Linear agent skill installer terminal",
+                "disconnect_all": "모두 연결 해제",
+                "linearSkillTitle": "Linear agent 스킬",
+                "linearSkillDescription": "연결된 Linear 작업 인계를 더 풍부하게 하기 위해 agents가 사용하는 호스트 agent 스킬을 설치합니다.",
+                "linearSkillTerminalTitle": "Linear agent 스킬 설치",
+                "linearSkillTerminalAria": "Linear agent 스킬 설치 terminal",
                 "linearSkillInstall": "CLI 및 스킬 설치",
-                "linearSkillOptionalHint": "Optional next step: install the Linear agent skill for ticket-aware agent handoffs.",
-                "linearSkillDismissHint": "Dismiss optional Linear agent skill setup note",
-                "linearSkillWslDescription": "Install the WSL agent skill agents use for richer linked Linear task handoffs.",
-                "linearSkillWslLabel": "WSL default"
+                "linearSkillOptionalHint": "선택적 다음 단계: 티켓 맥락을 반영한 agent 인계를 위해 Linear agent 스킬을 설치하세요.",
+                "linearSkillDismissHint": "선택적 Linear agent 스킬 설정 안내 닫기",
+                "linearSkillWslDescription": "연결된 Linear 작업 인계를 더 풍부하게 하기 위해 agents가 사용하는 WSL agent 스킬을 설치합니다.",
+                "linearSkillWslLabel": "WSL 기본값"
               }
             }
           }
@@ -8521,8 +8529,9 @@
           "1ecfb490ac": "컴퓨터 사용",
           "01426f3a23": "Agents는 사이트를 탐색하고, 페이지를 검사하고, 브라우저 작업을 수행할 수 있습니다.",
           "ea85d9e628": "Agent 브라우저 사용",
-          "linearTicketsTitle": "Linear agent skill",
-          "linearTicketsDescription": "Agents can use linked Linear tasks for richer ticket-aware handoffs."
+          "linearTicketsTitle": "Linear agent 스킬",
+          "linearTicketsDescription": "Agents는 연결된 Linear 작업을 사용해 티켓 맥락을 반영한 더 풍부한 인계를 할 수 있습니다.",
+          "linearTicketsSetupSummary": "Linear 워크스페이스에 권장됩니다. Linear 연결 설정에는 영향을 주지 않습니다."
         },
         "FeatureSetupInlineTerminal": {
           "789b59936e": "Enter를 눌러 명령을 실행하고 요청 시 npx를 확인합니다. 나중에 설정에서 설정할 수도 있습니다.",
@@ -8938,8 +8947,8 @@
             "c605f51f2b": "기능 설정 준비 완료",
             "1aa657d8f4": "일부 기능 설정에 주의가 필요합니다.",
             "c89534cbe9": "CLI 및 스킬 설치",
-            "linearTicketsTitle": "Linear agent skill",
-            "linearTicketsDescription": "Recommended when agents work from linked Linear tasks."
+            "linearTicketsTitle": "Linear agent 스킬",
+            "linearTicketsDescription": "agents가 연결된 Linear 작업에서 일할 때 권장됩니다."
           },
           "AiCommitPrSettingsCard": {
             "8d4152701a": "예를 들어 올라마는 llama3.1 {{value0}}을 실행합니다.",
