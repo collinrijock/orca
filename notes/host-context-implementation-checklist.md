@@ -64,7 +64,7 @@ Done means: users can tell where Tasks are being fetched from, and changing exec
 - [x] Update clone/browse/create project flows so selected host is not repeated as a fake editable SSH field.
 - [x] Ensure clone destination defaults are human and host-appropriate, and allow changing the clone location where the host supports it.
 - [x] Improve clone error messages for existing destination paths with the actual path and next action.
-- [~] Ensure PR/MR base resolution uses source context for provider data and run host context for local/remote git commands.
+- [x] Ensure PR/MR base resolution uses source context for provider data and run host context for local/remote git commands.
 
 Done means: starting work from an external item carries the item’s source identity separately from where the agent will run.
 
@@ -254,3 +254,4 @@ Done means: reviewers and future agents can understand the vision, implementatio
 - [x] 2026-06-12: Added a TaskPage boundary regression proving source-provider switching updates only task source/default task source and does not mutate focused runtime, project-host setup, or workspace run context; this completes the task-source versus run-host switching row alongside the existing Composer host-context boundary tests.
 - [x] 2026-06-12: Marked provider task-source diagnostics complete based on the Tasks source summary/picker implementation that names provider, host, repo/project identity, Linear workspace, Jira site, and unavailable source-host state; verified with source-summary and combobox tests.
 - [x] 2026-06-12: Marked task drawer source-context persistence complete based on UI slice coverage that records GitHub, GitLab, Linear, and Jira task-detail history entries with their exact `TaskSourceContext`, plus direct-open prefetch coverage for source-scoped GitHub and Linear reads.
+- [x] 2026-06-12: Marked PR/MR base resolution complete based on `useComposerState-host-context-boundaries.test.ts`, which asserts GitHub PR and GitLab MR base lookup uses the selected run repo instead of the provider item's source repo while preserving source item metadata separately.
