@@ -13,10 +13,60 @@ export function getDefaultTaskRepoSelection(repos: readonly Repo[]): Set<string>
   return new Set([...selectedByProject.values()].map((repo) => repo.id))
 }
 
-function getTaskRepoProjectKey(repo: Repo): string {
+export function getTaskProjectPickerRepos(
+  repos: readonly Repo[],
+  preferredSelection: ReadonlySet<string> = new Set()
+): Repo[] {
+  const selectedByProject = new Map<string, Repo>()
+  for (const repo of repos) {
+    const projectKey = getTaskRepoProjectKey(repo)
+    const current = selectedByProject.get(projectKey)
+    if (!current || compareTaskProjectPickerCandidate(repo, current, preferredSelection) < 0) {
+      selectedByProject.set(projectKey, repo)
+    }
+  }
+  return [...selectedByProject.values()]
+}
+
+export function normalizeTaskRepoSelection(
+  repos: readonly Repo[],
+  selection: ReadonlySet<string>
+): Set<string> {
+  const selectedByProject = new Map<string, Repo>()
+  const selectedIds = new Set(selection)
+  for (const repo of repos) {
+    if (!selectedIds.has(repo.id)) {
+      continue
+    }
+    const projectKey = getTaskRepoProjectKey(repo)
+    const current = selectedByProject.get(projectKey)
+    if (!current || compareDefaultTaskRepoCandidate(repo, current) < 0) {
+      selectedByProject.set(projectKey, repo)
+    }
+  }
+  if (selectedByProject.size === 0) {
+    return getDefaultTaskRepoSelection(repos)
+  }
+  return new Set([...selectedByProject.values()].map((repo) => repo.id))
+}
+
+export function getTaskRepoProjectKey(repo: Repo): string {
   const owner = typeof repo.upstream?.owner === 'string' ? repo.upstream.owner.trim() : ''
   const name = typeof repo.upstream?.repo === 'string' ? repo.upstream.repo.trim() : ''
   return owner && name ? `github:${owner.toLowerCase()}/${name.toLowerCase()}` : `repo:${repo.id}`
+}
+
+function compareTaskProjectPickerCandidate(
+  a: Repo,
+  b: Repo,
+  preferredSelection: ReadonlySet<string>
+): number {
+  const aPreferred = preferredSelection.has(a.id)
+  const bPreferred = preferredSelection.has(b.id)
+  if (aPreferred !== bPreferred) {
+    return aPreferred ? -1 : 1
+  }
+  return compareDefaultTaskRepoCandidate(a, b)
 }
 
 function compareDefaultTaskRepoCandidate(a: Repo, b: Repo): number {

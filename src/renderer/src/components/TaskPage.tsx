@@ -182,7 +182,11 @@ import {
 import { shouldHideTaskPageListChrome } from '@/components/task-page-list-chrome-visibility'
 import { findTaskPageJiraIssue } from '@/components/task-page-jira-cache-selectors'
 import { getRepoBackedTaskEmptyState } from '@/components/task-page-empty-state'
-import { getDefaultTaskRepoSelection } from '@/components/task-page-default-repo-selection'
+import {
+  getDefaultTaskRepoSelection,
+  getTaskProjectPickerRepos,
+  normalizeTaskRepoSelection
+} from '@/components/task-page-default-repo-selection'
 import {
   getRepoBackedProviderAvailability,
   type RuntimeProviderPreflightStatus
@@ -818,6 +822,10 @@ function getLinearIssueGridTemplate(visibleProperties: ReadonlySet<LinearDisplay
   }
   columns.push('64px')
   return columns.join(' ')
+}
+
+function areStringSetsEqual(a: ReadonlySet<string>, b: ReadonlySet<string>): boolean {
+  return a.size === b.size && [...a].every((value) => b.has(value))
 }
 
 function getJiraStatusTone(categoryKey: string): string {
@@ -2774,7 +2782,7 @@ export default function TaskPage(): React.JSX.Element {
     if (Array.isArray(persisted)) {
       const filtered = persisted.filter((id) => eligibleRepos.some((r) => r.id === id))
       if (filtered.length > 0) {
-        return new Set(filtered)
+        return normalizeTaskRepoSelection(eligibleRepos, new Set(filtered))
       }
       // Why: empty after filtering (e.g. all persisted repos were removed)
       // falls through to the automatic default so the page never renders with
@@ -2784,17 +2792,19 @@ export default function TaskPage(): React.JSX.Element {
   }, [eligibleRepos, pageData.preselectedRepoId, settings?.defaultRepoSelection])
 
   const [repoSelection, setRepoSelection] = useState<ReadonlySet<string>>(resolvedInitialSelection)
+  const taskPickerRepos = useMemo(
+    () => getTaskProjectPickerRepos(eligibleRepos, repoSelection),
+    [eligibleRepos, repoSelection]
+  )
 
   // Why: prune selection when a previously-selected repo is removed, and
-  // preserve sticky-all (when the selection equaled every eligible repo
-  // pre-change, keep it equal to every eligible repo post-change so "All
-  // repos" stays truthful). Recreating the Set every time eligibleRepos
-  // changes would churn the fetch effect — only write when the identity of
-  // the selection actually needs to change.
-  const prevEligibleCountRef = useRef(eligibleRepos.length)
+  // preserve sticky-all (when the selection equaled every logical project
+  // pre-change, keep it equal to every logical project post-change). Recreating
+  // the Set every time eligibleRepos changes would churn the fetch effect.
+  const prevTaskPickerCountRef = useRef(taskPickerRepos.length)
   useEffect(() => {
-    const prevCount = prevEligibleCountRef.current
-    prevEligibleCountRef.current = eligibleRepos.length
+    const prevCount = prevTaskPickerCountRef.current
+    prevTaskPickerCountRef.current = taskPickerRepos.length
     const eligibleIds = new Set(eligibleRepos.map((r) => r.id))
     const wasAll = repoSelection.size === prevCount && prevCount > 0
     const pruned = new Set<string>()
@@ -2804,20 +2814,20 @@ export default function TaskPage(): React.JSX.Element {
       }
     }
     if (wasAll) {
-      const allNow = new Set(eligibleIds)
-      if (allNow.size !== repoSelection.size || [...allNow].some((id) => !repoSelection.has(id))) {
+      const allNow = new Set(taskPickerRepos.map((repo) => repo.id))
+      if (!areStringSetsEqual(allNow, repoSelection)) {
         setRepoSelection(allNow)
       }
       return
     }
-    if (pruned.size === 0 && eligibleIds.size > 0) {
-      setRepoSelection(getDefaultTaskRepoSelection(eligibleRepos))
+    if (pruned.size === 0 && eligibleIds.size === 0) {
       return
     }
-    if (pruned.size !== repoSelection.size) {
-      setRepoSelection(pruned)
+    const normalized = normalizeTaskRepoSelection(eligibleRepos, pruned)
+    if (!areStringSetsEqual(normalized, repoSelection)) {
+      setRepoSelection(normalized)
     }
-  }, [eligibleRepos, repoSelection])
+  }, [eligibleRepos, repoSelection, taskPickerRepos])
 
   const selectedRepos = useMemo(
     () => eligibleRepos.filter((r) => repoSelection.has(r.id)),
@@ -7698,22 +7708,25 @@ export default function TaskPage(): React.JSX.Element {
                       <>
                         <div className="min-w-0 max-w-[220px] shrink-0">
                           <RepoMultiCombobox
-                            repos={eligibleRepos}
+                            repos={taskPickerRepos}
                             selected={repoSelection}
                             getRepoHostLabel={getTaskPickerRepoHostLabel}
                             onChange={(next) => {
-                              setRepoSelection(next)
-                              void updateSettings({ defaultRepoSelection: [...next] }).catch(() => {
-                                toast.error(
-                                  translate(
-                                    'auto.components.TaskPage.dfd72673e7',
-                                    'Failed to save project selection.'
+                              const normalized = normalizeTaskRepoSelection(eligibleRepos, next)
+                              setRepoSelection(normalized)
+                              void updateSettings({ defaultRepoSelection: [...normalized] }).catch(
+                                () => {
+                                  toast.error(
+                                    translate(
+                                      'auto.components.TaskPage.dfd72673e7',
+                                      'Failed to save project selection.'
+                                    )
                                   )
-                                )
-                              })
+                                }
+                              )
                             }}
                             onSelectAll={() => {
-                              const allIds = new Set(eligibleRepos.map((r) => r.id))
+                              const allIds = new Set(taskPickerRepos.map((r) => r.id))
                               setRepoSelection(allIds)
                               void updateSettings({ defaultRepoSelection: null }).catch(() => {
                                 toast.error(
@@ -8406,22 +8419,25 @@ export default function TaskPage(): React.JSX.Element {
                       </div>
                       <div className="min-w-0 w-full sm:w-[200px]">
                         <RepoMultiCombobox
-                          repos={eligibleRepos}
+                          repos={taskPickerRepos}
                           selected={repoSelection}
                           getRepoHostLabel={getTaskPickerRepoHostLabel}
                           onChange={(next) => {
-                            setRepoSelection(next)
-                            void updateSettings({ defaultRepoSelection: [...next] }).catch(() => {
-                              toast.error(
-                                translate(
-                                  'auto.components.TaskPage.dfd72673e7',
-                                  'Failed to save project selection.'
+                            const normalized = normalizeTaskRepoSelection(eligibleRepos, next)
+                            setRepoSelection(normalized)
+                            void updateSettings({ defaultRepoSelection: [...normalized] }).catch(
+                              () => {
+                                toast.error(
+                                  translate(
+                                    'auto.components.TaskPage.dfd72673e7',
+                                    'Failed to save project selection.'
+                                  )
                                 )
-                              )
-                            })
+                              }
+                            )
                           }}
                           onSelectAll={() => {
-                            const allIds = new Set(eligibleRepos.map((r) => r.id))
+                            const allIds = new Set(taskPickerRepos.map((r) => r.id))
                             setRepoSelection(allIds)
                             void updateSettings({ defaultRepoSelection: null }).catch(() => {
                               toast.error(
