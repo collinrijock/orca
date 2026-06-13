@@ -180,6 +180,7 @@ import { shouldHideTaskPageListChrome } from '@/components/task-page-list-chrome
 import { findTaskPageJiraIssue } from '@/components/task-page-jira-cache-selectors'
 import { getRepoBackedTaskEmptyState } from '@/components/task-page-empty-state'
 import { getDefaultTaskRepoSelection } from '@/components/task-page-default-repo-selection'
+import { getRepoBackedProviderAvailability } from '@/components/task-source-provider-availability'
 import {
   createTaskPageGitHubStatusStateDraft,
   resolveTaskPageGitHubStatusStateDraft,
@@ -2946,17 +2947,31 @@ export default function TaskPage(): React.JSX.Element {
     },
     [hostRegistryById, taskSource]
   )
-  const taskSourceHostAvailability = useMemo<TaskSourceHostAvailability[]>(
-    () =>
-      taskSource === 'github' || taskSource === 'gitlab'
-        ? taskSourceRepoContexts.flatMap((context) => {
-            const host = hostRegistryById.get(context.hostId)
-            const availability = getTaskSourceHostAvailabilityForHost(host, context.hostId)
-            return availability ? [availability] : []
-          })
-        : [],
-    [hostRegistryById, taskSource, taskSourceRepoContexts]
-  )
+  const taskSourceHostAvailability = useMemo<TaskSourceHostAvailability[]>(() => {
+    if (taskSource !== 'github' && taskSource !== 'gitlab') {
+      return []
+    }
+    return [
+      ...taskSourceRepoContexts.flatMap((context) => {
+        const host = hostRegistryById.get(context.hostId)
+        const availability = getTaskSourceHostAvailabilityForHost(host, context.hostId)
+        return availability ? [availability] : []
+      }),
+      ...getRepoBackedProviderAvailability({
+        provider: taskSource,
+        contexts: taskSourceRepoContexts,
+        preflightStatus,
+        preflightReady: preflightStatusCurrent && preflightStatusChecked
+      })
+    ]
+  }, [
+    hostRegistryById,
+    preflightStatus,
+    preflightStatusChecked,
+    preflightStatusCurrent,
+    taskSource,
+    taskSourceRepoContexts
+  ])
   const accountBackedTaskSourceHostId = useMemo(
     () => getSettingsFocusedExecutionHostId(settings),
     [settings]
@@ -3026,13 +3041,21 @@ export default function TaskPage(): React.JSX.Element {
     Partial<Record<TaskProvider, TaskSourceAvailabilityNotice>>
   >(() => {
     const availabilityForContexts = (
+      provider: Extract<TaskProvider, 'github' | 'gitlab'>,
       contexts: readonly TaskSourceContext[]
-    ): TaskSourceHostAvailability[] =>
-      contexts.flatMap((context) => {
+    ): TaskSourceHostAvailability[] => [
+      ...contexts.flatMap((context) => {
         const host = hostRegistryById.get(context.hostId)
         const availability = getTaskSourceHostAvailabilityForHost(host, context.hostId)
         return availability ? [availability] : []
+      }),
+      ...getRepoBackedProviderAvailability({
+        provider,
+        contexts,
+        preflightStatus,
+        preflightReady: preflightStatusCurrent && preflightStatusChecked
       })
+    ]
     const accountHost = hostRegistryById.get(accountBackedTaskSourceHostId)
     const accountHostAvailability = getTaskSourceHostAvailabilityForHost(
       accountHost,
@@ -3047,6 +3070,7 @@ export default function TaskPage(): React.JSX.Element {
           providerLabel: labelFor('github'),
           sourceCount: selectedRepos.length,
           hostAvailability: availabilityForContexts(
+            'github',
             selectedRepos
               .map((repo) => getTaskPageRepoSourceContext(repo, 'github'))
               .filter((context): context is TaskSourceContext => context !== null)
@@ -3057,6 +3081,7 @@ export default function TaskPage(): React.JSX.Element {
           providerLabel: labelFor('gitlab'),
           sourceCount: selectedRepos.length,
           hostAvailability: availabilityForContexts(
+            'gitlab',
             selectedRepos
               .map((repo) => getTaskPageRepoSourceContext(repo, 'gitlab'))
               .filter((context): context is TaskSourceContext => context !== null)
@@ -3075,7 +3100,15 @@ export default function TaskPage(): React.JSX.Element {
           hostAvailability: accountAvailability
         }) ?? undefined
     }
-  }, [accountBackedTaskSourceHostId, hostRegistryById, selectedRepos, sourceOptions])
+  }, [
+    accountBackedTaskSourceHostId,
+    hostRegistryById,
+    preflightStatus,
+    preflightStatusChecked,
+    preflightStatusCurrent,
+    selectedRepos,
+    sourceOptions
+  ])
   const taskSourceContextSummary = useMemo(() => {
     const providerLabel =
       sourceOptions.find((source) => source.id === taskSource)?.label ?? taskSource
