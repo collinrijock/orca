@@ -2,6 +2,11 @@ import type { ProjectHostSetup } from '../shared/types'
 import type { RuntimeClient } from './runtime-client'
 import { RuntimeClientError } from './runtime-client'
 
+export type ProjectCreateTarget = {
+  repoSelector: string
+  setup: ProjectHostSetup
+}
+
 function getPresentStringFlag(
   flags: Map<string, string | boolean>,
   name: string
@@ -40,6 +45,13 @@ export async function resolveProjectCreateRepoSelector(
   flags: Map<string, string | boolean>,
   client: RuntimeClient
 ): Promise<string | undefined> {
+  return (await resolveProjectCreateTarget(flags, client))?.repoSelector
+}
+
+export async function resolveProjectCreateTarget(
+  flags: Map<string, string | boolean>,
+  client: RuntimeClient
+): Promise<ProjectCreateTarget | undefined> {
   const projectHostSetupId = getPresentStringFlag(flags, 'project-host-setup')
   const projectId = getPresentStringFlag(flags, 'project')
   const hostId = getPresentStringFlag(flags, 'host')
@@ -66,5 +78,8 @@ export async function resolveProjectCreateRepoSelector(
         : `Project is not set up on the selected host: ${projectId}${hostId ? ` on ${hostId}` : ''}`
     )
   }
-  return `id:${setup.repoId}`
+  return {
+    repoSelector: `id:${setup.repoId}`,
+    setup
+  }
 }

@@ -7,7 +7,11 @@ import type {
   AutomationSchedulePreset,
   AutomationUpdateInput
 } from '../../shared/automations-types'
-import type { TuiAgent } from '../../shared/types'
+import {
+  buildWorkspaceRunContext,
+  type WorkspaceRunContext
+} from '../../shared/task-source-context'
+import type { ProjectHostSetup, TuiAgent } from '../../shared/types'
 import {
   DEFAULT_AUTOMATION_PRECHECK_TIMEOUT_SECONDS,
   MAX_AUTOMATION_PRECHECK_TIMEOUT_SECONDS
@@ -33,7 +37,7 @@ import { getOptionalWorktreeSelector, resolveCurrentWorktreeSelector } from '../
 import {
   assertWorkspaceTargetFlagsCompatible,
   hasWorkspaceProjectTarget,
-  resolveProjectCreateRepoSelector
+  resolveProjectCreateTarget
 } from '../worktree-project-target'
 
 type AutomationCreateParams = Omit<AutomationCreateInput, 'projectId' | 'timezone'> & {
@@ -298,7 +302,7 @@ async function resolveDefaultTarget(
   flags: Map<string, string | boolean>,
   cwd: string,
   client: Parameters<CommandHandler>[0]['client']
-): Promise<{ repo?: string; workspace?: string }> {
+): Promise<{ repo?: string; workspace?: string; runContext?: WorkspaceRunContext }> {
   assertWorkspaceTargetFlagsCompatible(flags)
   const repo = getOptionalStringFlag(flags, 'repo')
   if (repo && getOptionalStringFlag(flags, 'workspace')) {
@@ -310,9 +314,12 @@ async function resolveDefaultTarget(
       'Use either --workspace or project target flags, not both.'
     )
   }
-  const projectRepo = await resolveProjectCreateRepoSelector(flags, client)
-  if (projectRepo) {
-    return { repo: projectRepo }
+  const projectTarget = await resolveProjectCreateTarget(flags, client)
+  if (projectTarget) {
+    return {
+      repo: projectTarget.repoSelector,
+      runContext: buildAutomationRunContextFromSetup(projectTarget.setup)
+    }
   }
   const workspace = await getOptionalWorktreeSelector(flags, 'workspace', cwd, client)
   if (repo || workspace) {
@@ -332,7 +339,7 @@ async function getExplicitTarget(
   flags: Map<string, string | boolean>,
   cwd: string,
   client: Parameters<CommandHandler>[0]['client']
-): Promise<{ repo?: string; workspace?: string }> {
+): Promise<{ repo?: string; workspace?: string; runContext?: WorkspaceRunContext }> {
   assertWorkspaceTargetFlagsCompatible(flags)
   const repo = getOptionalStringFlag(flags, 'repo')
   if (repo && getOptionalStringFlag(flags, 'workspace')) {
@@ -344,12 +351,32 @@ async function getExplicitTarget(
       'Use either --workspace or project target flags, not both.'
     )
   }
-  const projectRepo = await resolveProjectCreateRepoSelector(flags, client)
-  if (projectRepo) {
-    return { repo: projectRepo }
+  const projectTarget = await resolveProjectCreateTarget(flags, client)
+  if (projectTarget) {
+    return {
+      repo: projectTarget.repoSelector,
+      runContext: buildAutomationRunContextFromSetup(projectTarget.setup)
+    }
   }
   const workspace = await getOptionalWorktreeSelector(flags, 'workspace', cwd, client)
   return { repo, workspace }
+}
+
+function buildAutomationRunContextFromSetup(setup: ProjectHostSetup): WorkspaceRunContext {
+  const runContext = buildWorkspaceRunContext({
+    projectId: setup.projectId,
+    hostId: setup.hostId,
+    projectHostSetupId: setup.id,
+    repoId: setup.repoId,
+    path: setup.path
+  })
+  if (!runContext) {
+    throw new RuntimeClientError(
+      'invalid_argument',
+      `Project host setup is missing automation run context fields: ${setup.id}`
+    )
+  }
+  return runContext
 }
 
 export const AUTOMATION_HANDLERS: Record<string, CommandHandler> = {
@@ -376,6 +403,7 @@ export const AUTOMATION_HANDLERS: Record<string, CommandHandler> = {
       prompt: getRequiredStringFlag(flags, 'prompt'),
       precheck: getPrecheckFlag(flags),
       agentId: getProviderFlag(flags),
+      ...(target.runContext ? { runContext: target.runContext } : {}),
       repo: target.repo,
       workspace: target.workspace,
       workspaceMode,
@@ -398,6 +426,7 @@ export const AUTOMATION_HANDLERS: Record<string, CommandHandler> = {
         prompt: getOptionalStringFlag(flags, 'prompt'),
         precheck: getPrecheckFlag(flags),
         agentId: getOptionalProviderFlag(flags),
+        ...(target.runContext ? { runContext: target.runContext } : {}),
         repo: target.repo,
         workspace: target.workspace,
         workspaceMode: getWorkspaceModeFlag(flags),

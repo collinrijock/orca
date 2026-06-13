@@ -2710,8 +2710,67 @@ describe('orca cli worktree awareness', () => {
       'automation.create',
       expect.objectContaining({
         repo: 'id:repo-gpu',
+        runContext: {
+          kind: 'workspace-run',
+          projectId: 'github:stablyai/orca',
+          hostId: 'runtime:gpu',
+          projectHostSetupId: 'setup-gpu',
+          repoId: 'repo-gpu',
+          path: '/srv/orca'
+        },
         workspace: undefined,
         workspaceMode: 'new_per_run'
+      })
+    )
+  })
+
+  it('resolves project-host-setup flags for automation edit with explicit run context', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_project_setups', {
+        setups: [
+          {
+            id: 'setup-gpu',
+            projectId: 'github:stablyai/orca',
+            hostId: 'runtime:gpu',
+            repoId: 'repo-gpu',
+            path: '/srv/orca',
+            displayName: 'Orca',
+            setupState: 'ready',
+            setupMethod: 'legacy-repo',
+            createdAt: 1,
+            updatedAt: 1
+          }
+        ]
+      }),
+      okFixture('req_edit', {
+        automation: { id: 'auto-1', name: 'GPU review' }
+      })
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      ['automations', 'edit', 'auto-1', '--project-host-setup', 'setup-gpu', '--json'],
+      '/tmp/repo'
+    )
+
+    expect(callMock).toHaveBeenNthCalledWith(1, 'projectHostSetup.list')
+    expect(callMock).toHaveBeenNthCalledWith(
+      2,
+      'automation.update',
+      expect.objectContaining({
+        id: 'auto-1',
+        updates: expect.objectContaining({
+          repo: 'id:repo-gpu',
+          runContext: {
+            kind: 'workspace-run',
+            projectId: 'github:stablyai/orca',
+            hostId: 'runtime:gpu',
+            projectHostSetupId: 'setup-gpu',
+            repoId: 'repo-gpu',
+            path: '/srv/orca'
+          }
+        })
       })
     )
   })
