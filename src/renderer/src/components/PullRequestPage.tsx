@@ -523,7 +523,6 @@ function PRReviewersPanel({
     reviewRequests: item.reviewRequests
   }))
   const patchWorkItem = useAppStore((s) => s.patchWorkItem)
-  const settings = useAppStore((s) => s.settings)
   const repoOwnerSettings = useAppStore(
     useShallow((s) => getSettingsForRepoRuntimeOwner(s, item.repoId ?? null))
   )
@@ -601,11 +600,12 @@ function PRReviewersPanel({
     open && reviewSlug ? reviewSlug.owner : null,
     open && reviewSlug ? reviewSlug.repo : null,
     reviewerSeedUsers.map((user) => user.login),
-    settings
+    repoOwnerSettings
   )
   const reviewerMetadataByPath = useRepoAssignees(
     open && !reviewSlug ? repoPath : null,
-    open && !reviewSlug ? item.repoId : null
+    open && !reviewSlug ? item.repoId : null,
+    repoOwnerSettings
   )
   const reviewerMetadata = reviewSlug ? reviewerMetadataBySlug : reviewerMetadataByPath
   const displayItem = { ...item, reviewRequests: localReviewRequests }
@@ -4960,6 +4960,9 @@ function GHEditSection({
   const assigneesItemKey = `${item.repoId}\0${item.id}`
   const patchWorkItem = useAppStore((s) => s.patchWorkItem)
   const patchProjectRowContent = useAppStore((s) => s.patchProjectRowContent)
+  const repoOwnerSettings = useAppStore(
+    useShallow((s) => getSettingsForRepoRuntimeOwner(s, item.repoId ?? repoId ?? null))
+  )
   const { isPending, run } = useImmediateMutation()
   // Why: when the dialog opens from a Project view, mutations route through
   // *BySlug IPCs and we must keep `projectViewCache` in sync alongside
@@ -4983,15 +4986,22 @@ function GHEditSection({
   const slugRepo = projectOrigin?.repo ?? null
   const repoLabelsByPath = useRepoLabels(
     projectOrigin ? null : repoPath,
-    projectOrigin ? null : repoId
+    projectOrigin ? null : repoId,
+    repoOwnerSettings
   )
-  const repoLabelsBySlug = useRepoLabelsBySlug(slugOwner, slugRepo)
+  const repoLabelsBySlug = useRepoLabelsBySlug(slugOwner, slugRepo, repoOwnerSettings)
   const repoLabels = projectOrigin ? repoLabelsBySlug : repoLabelsByPath
   const repoAssigneesByPath = useRepoAssignees(
     projectOrigin ? null : repoPath,
-    projectOrigin ? null : repoId
+    projectOrigin ? null : repoId,
+    repoOwnerSettings
   )
-  const repoAssigneesBySlug = useRepoAssigneesBySlug(slugOwner, slugRepo, assignees)
+  const repoAssigneesBySlug = useRepoAssigneesBySlug(
+    slugOwner,
+    slugRepo,
+    assignees,
+    repoOwnerSettings
+  )
   const repoAssignees = projectOrigin ? repoAssigneesBySlug : repoAssigneesByPath
 
   // Why: sync local assignees when item changes or when the detail fetch
