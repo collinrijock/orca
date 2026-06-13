@@ -1,7 +1,7 @@
 import type { Automation } from '../../../../shared/automations-types'
 import { getRepoExecutionHostId, parseExecutionHostId } from '../../../../shared/execution-host'
 import type { SshConnectionState } from '../../../../shared/ssh-types'
-import type { Repo, Worktree } from '../../../../shared/types'
+import type { ProjectHostSetup, Repo, Worktree } from '../../../../shared/types'
 
 export type AutomationTargetAvailability =
   | {
@@ -13,6 +13,8 @@ export type AutomationTargetAvailability =
       canRunNow: false
       reason:
         | 'missing-project'
+        | 'missing-project-host-setup'
+        | 'project-host-setup-not-ready'
         | 'missing-workspace'
         | 'host-mismatch'
         | 'unsupported-host'
@@ -26,6 +28,7 @@ type AutomationTargetAvailabilityArgs = {
   automation: Automation
   repo: Repo | null | undefined
   workspace: Worktree | null | undefined
+  projectHostSetups: readonly ProjectHostSetup[]
   sshConnectionStates: ReadonlyMap<string, Pick<SshConnectionState, 'status'>>
 }
 
@@ -33,6 +36,7 @@ export function getAutomationTargetAvailability({
   automation,
   repo,
   workspace,
+  projectHostSetups,
   sshConnectionStates
 }: AutomationTargetAvailabilityArgs): AutomationTargetAvailability {
   if (!repo) {
@@ -46,7 +50,26 @@ export function getAutomationTargetAvailability({
         'This automation targets a remote server that this client cannot run manually yet.'
       )
     }
+    const setup = projectHostSetups.find(
+      (candidate) => candidate.id === automation.runContext?.projectHostSetupId
+    )
+    if (!setup) {
+      return unavailable(
+        'missing-project-host-setup',
+        'Project is not set up on the selected automation host anymore.'
+      )
+    }
+    if (setup.setupState !== 'ready') {
+      return unavailable(
+        'project-host-setup-not-ready',
+        `Project setup on the selected automation host is ${setup.setupState}.`
+      )
+    }
     if (
+      setup.projectId !== automation.runContext.projectId ||
+      setup.hostId !== automation.runContext.hostId ||
+      setup.repoId !== automation.runContext.repoId ||
+      setup.path !== automation.runContext.path ||
       automation.runContext.repoId !== repo.id ||
       automation.runContext.path !== repo.path ||
       automation.runContext.hostId !== getRepoExecutionHostId(repo)

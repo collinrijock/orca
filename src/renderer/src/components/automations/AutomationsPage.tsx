@@ -497,6 +497,7 @@ export default function AutomationsPage(): React.JSX.Element {
         automation: selected,
         repo: selectedRepo,
         workspace: selectedWorktree,
+        projectHostSetups,
         sshConnectionStates
       })
     : null
@@ -1248,6 +1249,7 @@ export default function AutomationsPage(): React.JSX.Element {
       automation,
       repo,
       workspace,
+      projectHostSetups,
       sshConnectionStates
     })
     if (!availability.canRunNow) {
@@ -1830,6 +1832,7 @@ export default function AutomationsPage(): React.JSX.Element {
                 automation,
                 repo: automationRepo,
                 workspace: automationWorktree,
+                projectHostSetups,
                 sshConnectionStates
               })
               const workspaceLabel =

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Automation } from '../../../../shared/automations-types'
-import type { Repo, Worktree } from '../../../../shared/types'
+import type { ProjectHostSetup, Repo, Worktree } from '../../../../shared/types'
 import { getAutomationTargetAvailability } from './automation-target-availability'
 
 function makeAutomation(overrides: Partial<Automation> = {}): Automation {
@@ -53,6 +53,22 @@ function makeWorkspace(overrides: Partial<Worktree> = {}): Worktree {
   } as Worktree
 }
 
+function makeProjectHostSetup(overrides: Partial<ProjectHostSetup> = {}): ProjectHostSetup {
+  return {
+    id: 'setup-1',
+    projectId: 'project-1',
+    hostId: 'local',
+    repoId: 'repo-1',
+    path: '/repo',
+    displayName: 'Repo',
+    setupState: 'ready',
+    setupMethod: 'legacy-repo',
+    createdAt: 1,
+    updatedAt: 1,
+    ...overrides
+  }
+}
+
 describe('automation target availability', () => {
   it('allows local automations with an available existing workspace', () => {
     expect(
@@ -60,6 +76,7 @@ describe('automation target availability', () => {
         automation: makeAutomation(),
         repo: makeRepo(),
         workspace: makeWorkspace(),
+        projectHostSetups: [],
         sshConnectionStates: new Map()
       })
     ).toEqual({ canRunNow: true, reason: 'available', message: null })
@@ -71,6 +88,7 @@ describe('automation target availability', () => {
         automation: makeAutomation(),
         repo: null,
         workspace: makeWorkspace(),
+        projectHostSetups: [],
         sshConnectionStates: new Map()
       }).reason
     ).toBe('missing-project')
@@ -80,6 +98,7 @@ describe('automation target availability', () => {
         automation: makeAutomation(),
         repo: makeRepo(),
         workspace: null,
+        projectHostSetups: [],
         sshConnectionStates: new Map()
       }).reason
     ).toBe('missing-workspace')
@@ -100,9 +119,46 @@ describe('automation target availability', () => {
         }),
         repo: makeRepo(),
         workspace: makeWorkspace(),
+        projectHostSetups: [makeProjectHostSetup()],
         sshConnectionStates: new Map()
       }).reason
     ).toBe('host-mismatch')
+  })
+
+  it('blocks saved run contexts whose project host setup is missing or not ready', () => {
+    const automation = makeAutomation({
+      runContext: {
+        kind: 'workspace-run',
+        projectId: 'project-1',
+        hostId: 'local',
+        projectHostSetupId: 'setup-1',
+        repoId: 'repo-1',
+        path: '/repo'
+      }
+    })
+
+    expect(
+      getAutomationTargetAvailability({
+        automation,
+        repo: makeRepo(),
+        workspace: makeWorkspace(),
+        projectHostSetups: [],
+        sshConnectionStates: new Map()
+      }).reason
+    ).toBe('missing-project-host-setup')
+
+    expect(
+      getAutomationTargetAvailability({
+        automation,
+        repo: makeRepo(),
+        workspace: makeWorkspace(),
+        projectHostSetups: [makeProjectHostSetup({ setupState: 'error' })],
+        sshConnectionStates: new Map()
+      })
+    ).toMatchObject({
+      reason: 'project-host-setup-not-ready',
+      message: 'Project setup on the selected automation host is error.'
+    })
   })
 
   it('requires SSH hosts to be connected before manual runs', () => {
@@ -125,6 +181,13 @@ describe('automation target availability', () => {
         automation,
         repo,
         workspace: makeWorkspace(),
+        projectHostSetups: [
+          makeProjectHostSetup({
+            hostId: 'ssh:devbox',
+            connectionId: 'devbox',
+            executionHostId: 'ssh:devbox'
+          })
+        ],
         sshConnectionStates: new Map([['devbox', { status: 'connected' }]])
       }).canRunNow
     ).toBe(true)
@@ -134,6 +197,13 @@ describe('automation target availability', () => {
         automation,
         repo,
         workspace: makeWorkspace(),
+        projectHostSetups: [
+          makeProjectHostSetup({
+            hostId: 'ssh:devbox',
+            connectionId: 'devbox',
+            executionHostId: 'ssh:devbox'
+          })
+        ],
         sshConnectionStates: new Map([['devbox', { status: 'disconnected' }]])
       }).reason
     ).toBe('ssh-unavailable')
@@ -143,6 +213,13 @@ describe('automation target availability', () => {
         automation,
         repo,
         workspace: makeWorkspace(),
+        projectHostSetups: [
+          makeProjectHostSetup({
+            hostId: 'ssh:devbox',
+            connectionId: 'devbox',
+            executionHostId: 'ssh:devbox'
+          })
+        ],
         sshConnectionStates: new Map([['devbox', { status: 'auth-failed' }]])
       }).reason
     ).toBe('ssh-auth-needed')
@@ -152,6 +229,13 @@ describe('automation target availability', () => {
         automation,
         repo,
         workspace: makeWorkspace(),
+        projectHostSetups: [
+          makeProjectHostSetup({
+            hostId: 'ssh:devbox',
+            connectionId: 'devbox',
+            executionHostId: 'ssh:devbox'
+          })
+        ],
         sshConnectionStates: new Map([['devbox', { status: 'reconnecting' }]])
       }).reason
     ).toBe('ssh-connecting')
