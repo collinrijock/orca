@@ -796,11 +796,14 @@ describe('mobile rpc-client connection timeout', () => {
     it('re-subscribes active streams after an auth-retry reconnect', async () => {
       const client = connect('ws://desktop.invalid', 'token', 'server-key')
       const first = mockSockets[0]!
+      const terminalEvents: unknown[] = []
       authenticate(first)
       expect(client.getState()).toBe('connected')
 
       // An active terminal subscription on the live connection.
-      client.subscribe('terminal.subscribe', { terminal: 'term-1' }, () => {})
+      client.subscribe('terminal.subscribe', { terminal: 'term-1' }, (event) => {
+        terminalEvents.push(event)
+      })
       expect(sentRequests(first, 'terminal.subscribe')).toHaveLength(1)
 
       // Mid-session transient unauthorized — handleAuthRejection retries
@@ -822,6 +825,23 @@ describe('mobile rpc-client connection timeout', () => {
       authenticate(second)
       expect(client.getState()).toBe('connected')
       expect(sentRequests(second, 'terminal.subscribe')).toHaveLength(1)
+      const resumedSubscribe = sentRequest(second, 'terminal.subscribe')
+      second.receive(
+        `encrypted:${JSON.stringify({
+          id: resumedSubscribe.id,
+          ok: true,
+          streaming: true,
+          result: { type: 'subscribed', streamId: 77 }
+        })}`
+      )
+      second.receive(encodeTerminalOutput(77, 'after-reconnect'))
+      await Promise.resolve()
+      await Promise.resolve()
+      expect(terminalEvents).toContainEqual({
+        type: 'data',
+        streamId: 77,
+        chunk: 'after-reconnect'
+      })
 
       client.close()
     })

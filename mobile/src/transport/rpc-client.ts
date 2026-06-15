@@ -716,9 +716,7 @@ export function connect(
     sharedKey = null
     activeBrowserScreencastRequestId = null
     pendingBrowserScreencastRequestId = null
-    for (const stream of streamListeners.values()) {
-      stream.sent = false
-    }
+    streamListeners.forEach((stream) => (stream.sent = false))
     if (handshakeTimer) {
       clearTimeout(handshakeTimer)
       handshakeTimer = null
@@ -768,15 +766,8 @@ export function connect(
       const closing = ws
       ws = null
       sharedKey = null
-      // Why: nulling ws before closing makes handleSocketClosed stale-bail
-      // (ws !== closedWs), so its stream.sent reset never runs for this
-      // close. Reset here so the e2ee_authenticated replay loop re-sends
-      // active subscriptions (e.g. terminal.subscribe) after the retry
-      // reconnect — otherwise the terminal shows 'connected' but stays
-      // frozen because the subscribe was never re-sent (issue #5200).
-      for (const stream of streamListeners.values()) {
-        stream.sent = false
-      }
+      // Why: close cleanup stale-bails here, so mark active streams for replay.
+      streamListeners.forEach((stream) => (stream.sent = false))
       rejectAllPending(reason)
       if (closing) {
         closing.close()
