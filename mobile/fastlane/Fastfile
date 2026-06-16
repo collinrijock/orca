@@ -33,9 +33,13 @@ platform :ios do
       scheme: SCHEME,
       configuration: "Release",
       export_method: "app-store",
-      # Why: let xcodebuild create/download the App Store provisioning profile
-      # from the API key instead of committing one. The distribution cert
-      # itself is pre-imported into the keychain by the workflow.
+      # Why: pass the API key to gym so it forwards
+      # -authenticationKeyID/-authenticationKeyIssuerID/-authenticationKeyPath to
+      # xcodebuild. Without it, `-allowProvisioningUpdates` has no credentials and
+      # the archive fails with "No Accounts" / "No profiles for ... were found".
+      # The distribution cert itself is pre-imported into the keychain by the
+      # workflow; the API key only generates/downloads the provisioning profile.
+      api_key: api_key,
       xcargs: "-allowProvisioningUpdates DEVELOPMENT_TEAM=#{team_id}",
       export_options: {
         teamID: team_id,
