@@ -3,7 +3,7 @@
 import React, { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { toSshExecutionHostId } from '../../../../shared/execution-host'
+import { getLocalExecutionHostLabel, toSshExecutionHostId } from '../../../../shared/execution-host'
 import {
   PROJECT_HOST_SETUP_RUNTIME_CAPABILITY,
   RUNTIME_PROTOCOL_VERSION,
@@ -12,6 +12,8 @@ import {
 import type { Project, ProjectHostSetup, Repo } from '../../../../shared/types'
 import { useAppStore } from '../../store'
 import { RepositoryHostSetupsSection } from './RepositoryHostSetupsSection'
+
+const LOCAL_HOST_LABEL = getLocalExecutionHostLabel()
 
 let container: HTMLDivElement
 let root: Root
@@ -142,7 +144,7 @@ describe('RepositoryHostSetupsSection', () => {
     renderSection(localRepo)
 
     expect(container.textContent).toContain('Viewing host')
-    expect(container.textContent).toContain('Local Mac')
+    expect(container.textContent).toContain(LOCAL_HOST_LABEL)
   })
 
   it('opens the selected host setup settings pane through the setup repo id', () => {
