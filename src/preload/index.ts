@@ -748,6 +748,9 @@ const api = {
     setActiveRendererPty: (id: string, active: boolean): void => {
       ipcRenderer.send('pty:setActiveRendererPty', { id, active })
     },
+    setVisibleRendererPty: (id: string, visible: boolean): void => {
+      ipcRenderer.send('pty:setVisibleRendererPty', { id, visible })
+    },
 
     kill: (id: string, opts?: { keepHistory?: boolean }): Promise<void> =>
       ipcRenderer.invoke('pty:kill', { id, keepHistory: opts?.keepHistory ?? false }),
@@ -781,6 +784,10 @@ const api = {
       peakRendererInFlightChars: number
       peakMaxRendererInFlightCharsByPty: number
       ackGatedFlushSkipCount: number
+      hiddenHeadlessPtyCount: number
+      deferredHeadlessPtyCount: number
+      deferredHeadlessChars: number
+      maxDeferredHeadlessCharsByPty: number
     }> => ipcRenderer.invoke('pty:getRendererDeliveryDebugSnapshot'),
 
     resetRendererDeliveryDebug: (): Promise<void> =>
@@ -822,6 +829,12 @@ const api = {
         callback(data)
       ipcRenderer.on('pty:exit', listener)
       return () => ipcRenderer.removeListener('pty:exit', listener)
+    },
+
+    onRendererOutputSkipped: (callback: (data: { id: string }) => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, data: { id: string }) => callback(data)
+      ipcRenderer.on('pty:rendererOutputSkipped', listener)
+      return () => ipcRenderer.removeListener('pty:rendererOutputSkipped', listener)
     },
 
     onSerializeBufferRequest: (

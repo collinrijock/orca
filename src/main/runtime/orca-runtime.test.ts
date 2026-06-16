@@ -4097,6 +4097,101 @@ describe('OrcaRuntimeService', () => {
     })
   })
 
+  it('defers hidden headless parsing while keeping terminal reads current', async () => {
+    const runtime = createRuntime()
+    syncSinglePty(runtime, 'pty-1')
+    const [terminal] = (await runtime.listTerminals()).terminals
+
+    runtime.setPtyHeadlessTerminalVisible('pty-1', false)
+    runtime.onPtyData('pty-1', 'hidden line 1\nhidden line 2\n', 100)
+
+    expect(runtime.getHeadlessTerminalBacklogDebugSnapshot()).toMatchObject({
+      hiddenPtyCount: 1,
+      deferredPtyCount: 1,
+      deferredChars: 'hidden line 1\nhidden line 2\n'.length
+    })
+    await expect(runtime.readTerminal(terminal.handle)).resolves.toMatchObject({
+      tail: ['hidden line 1', 'hidden line 2'],
+      latestCursor: '2'
+    })
+
+    const snapshot = await runtime.serializeMainTerminalBuffer('pty-1', { scrollbackRows: 1000 })
+    expect(snapshot).toMatchObject({
+      source: 'headless',
+      seq: 'hidden line 1\nhidden line 2\n'.length
+    })
+    expect(snapshot?.data).toContain('hidden line 1')
+    expect(runtime.getHeadlessTerminalBacklogDebugSnapshot()).toMatchObject({
+      deferredPtyCount: 0,
+      deferredChars: 0
+    })
+  })
+
+  it('spools large hidden headless backlog outside the in-memory queue', async () => {
+    const runtime = createRuntime()
+    syncSinglePty(runtime, 'pty-1')
+    const hiddenOutput = `${'x'.repeat(9 * 1024 * 1024)}\nSPOOLED_HIDDEN_TAIL\n`
+
+    runtime.setPtyHeadlessTerminalVisible('pty-1', false)
+    runtime.onPtyData('pty-1', hiddenOutput, 100)
+
+    const headless = (
+      runtime as unknown as {
+        headlessTerminals: Map<
+          string,
+          {
+            deferredChunks: { data: string; outputSequence: number }[]
+            deferredChars: number
+            deferredSpoolChars: number
+            deferredSpoolPath?: string
+          }
+        >
+      }
+    ).headlessTerminals.get('pty-1')
+    expect(headless?.deferredSpoolChars).toBeGreaterThan(0)
+    expect(headless?.deferredSpoolPath).toBeTruthy()
+    expect(headless?.deferredChars).toBeLessThan(hiddenOutput.length)
+    if (!headless) {
+      throw new Error('expected headless terminal state')
+    }
+
+    const internals = runtime as unknown as {
+      drainOneDeferredHeadlessChunk: (state: NonNullable<typeof headless>) => Promise<void>
+    }
+    while (headless.deferredChunks.length > 0) {
+      await internals.drainOneDeferredHeadlessChunk(headless)
+    }
+    expect(headless.deferredChars).toBe(0)
+    expect(headless.deferredSpoolChars).toBeGreaterThan(0)
+
+    const snapshot = await runtime.serializeMainTerminalBuffer('pty-1', { scrollbackRows: 1000 })
+    expect(snapshot?.seq).toBe(hiddenOutput.length)
+    expect(snapshot?.data).toContain('SPOOLED_HIDDEN_TAIL')
+    expect(runtime.getHeadlessTerminalBacklogDebugSnapshot()).toMatchObject({
+      deferredPtyCount: 0,
+      deferredChars: 0
+    })
+  })
+
+  it('preserves deferred hidden headless order when visible output resumes', async () => {
+    const runtime = createRuntime()
+    syncSinglePty(runtime, 'pty-1')
+    const hiddenOutput = `${'A'.repeat(20 * 1024)}\nHIDDEN_DONE\n`
+    const visibleOutput = 'VISIBLE_AFTER_HIDDEN\n'
+
+    runtime.setPtyHeadlessTerminalVisible('pty-1', false)
+    runtime.onPtyData('pty-1', hiddenOutput, hiddenOutput.length)
+    runtime.setPtyHeadlessTerminalVisible('pty-1', true)
+    runtime.onPtyData('pty-1', visibleOutput, hiddenOutput.length + visibleOutput.length)
+
+    const snapshot = await runtime.serializeMainTerminalBuffer('pty-1', { scrollbackRows: 1000 })
+    const hiddenDoneIndex = snapshot?.data.indexOf('HIDDEN_DONE') ?? -1
+    const visibleIndex = snapshot?.data.indexOf('VISIBLE_AFTER_HIDDEN') ?? -1
+    expect(hiddenDoneIndex).toBeGreaterThanOrEqual(0)
+    expect(visibleIndex).toBeGreaterThan(hiddenDoneIndex)
+    expect(snapshot?.seq).toBe(hiddenOutput.length + visibleOutput.length)
+  })
+
   it('adopts renderer-seeded titles into headless main terminal snapshots', async () => {
     const serializeBuffer = vi.fn().mockResolvedValue({
       data: 'renderer scrollback\n',

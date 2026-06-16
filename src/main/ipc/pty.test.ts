@@ -2,6 +2,7 @@
 one focused file because the registration helper is stateful and each spawn-path
 assertion reuses the same mocked IPC and node-pty harness. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { tmpdir } from 'node:os'
 import { delimiter, join } from 'node:path'
 
 const {
@@ -487,6 +488,19 @@ describe('registerPtyHandlers', () => {
       throw new Error('missing pty:setActiveRendererPty listener')
     }
     return activeCall[1] as (event: unknown, args: { id: string; active: boolean }) => void
+  }
+
+  function getPtySetVisibleRendererPtyListener(): (
+    event: unknown,
+    args: { id: string; visible: boolean }
+  ) => void {
+    const visibleCall = onMock.mock.calls.find(
+      (call: unknown[]) => call[0] === 'pty:setVisibleRendererPty'
+    )
+    if (!visibleCall) {
+      throw new Error('missing pty:setVisibleRendererPty listener')
+    }
+    return visibleCall[1] as (event: unknown, args: { id: string; visible: boolean }) => void
   }
 
   /** Helper: trigger pty:spawn and return the env passed to node-pty. */
@@ -4553,7 +4567,7 @@ describe('registerPtyHandlers', () => {
       const spawnResult = (await handlers.get('pty:spawn')!(null, {
         cols: 80,
         rows: 24,
-        cwd: '/tmp'
+        cwd: tmpdir()
       })) as { id: string }
       mainWindow.webContents.send.mockClear()
 
@@ -4582,7 +4596,7 @@ describe('registerPtyHandlers', () => {
       const spawnResult = (await handlers.get('pty:spawn')!(null, {
         cols: 80,
         rows: 24,
-        cwd: '/tmp'
+        cwd: tmpdir()
       })) as { id: string }
       const writeListener = getPtyWriteListener()
 
@@ -4641,7 +4655,7 @@ describe('registerPtyHandlers', () => {
       const spawnResult = (await handlers.get('pty:spawn')!(null, {
         cols: 80,
         rows: 24,
-        cwd: '/tmp'
+        cwd: tmpdir()
       })) as { id: string }
       const writeListener = getPtyWriteListener()
 
@@ -4675,7 +4689,7 @@ describe('registerPtyHandlers', () => {
       const spawnResult = (await handlers.get('pty:spawn')!(null, {
         cols: 80,
         rows: 24,
-        cwd: '/tmp'
+        cwd: tmpdir()
       })) as { id: string }
       const writeListener = getPtyWriteListener()
 
@@ -4966,6 +4980,105 @@ describe('registerPtyHandlers', () => {
     }
   })
 
+  it('suppresses hidden local PTY renderer delivery and resumes when visible', async () => {
+    vi.useFakeTimers()
+    const provider = installObservableDaemonTestProvider()
+    const runtime = {
+      onPtyData: vi.fn((_id: string, data: string) => data.length),
+      getPtyOutputSequence: vi.fn(() => 0),
+      onPtySpawned: vi.fn(),
+      onPtyExit: vi.fn(),
+      setPtyHeadlessTerminalVisible: vi.fn(),
+      setPtyController: vi.fn(),
+      createPreAllocatedTerminalHandle: vi.fn(() => 'term-preallocated'),
+      registerPreAllocatedHandleForPty: vi.fn()
+    }
+
+    try {
+      registerPtyHandlers(mainWindow as never, runtime as never)
+      const spawnResult = (await handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24,
+        cwd: tmpdir()
+      })) as { id: string }
+      const setVisibleRendererPty = getPtySetVisibleRendererPtyListener()
+      mainWindow.webContents.send.mockClear()
+
+      setVisibleRendererPty(null, { id: spawnResult.id, visible: false })
+      provider.emitData(spawnResult.id, 'hidden-output')
+      vi.advanceTimersByTime(8)
+
+      expect(runtime.setPtyHeadlessTerminalVisible).toHaveBeenCalledWith(spawnResult.id, false)
+      expect(mainWindow.webContents.send).toHaveBeenCalledTimes(1)
+      expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:rendererOutputSkipped', {
+        id: spawnResult.id
+      })
+      expect(getPtyRendererDeliveryDebugSnapshot()).toMatchObject({
+        pendingPtyCount: 0,
+        rendererInFlightChars: 0
+      })
+
+      setVisibleRendererPty(null, { id: spawnResult.id, visible: true })
+      provider.emitData(spawnResult.id, 'visible-output')
+      vi.advanceTimersByTime(8)
+
+      expect(runtime.setPtyHeadlessTerminalVisible).toHaveBeenLastCalledWith(spawnResult.id, true)
+      expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:data', {
+        id: spawnResult.id,
+        data: 'visible-output',
+        seq: 'visible-output'.length,
+        rawLength: 'visible-output'.length
+      })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('does not suppress renderer delivery for hidden remote-owned PTYs', async () => {
+    vi.useFakeTimers()
+    const provider = installObservableDaemonTestProvider()
+    const runtime = {
+      onPtyData: vi.fn((_id: string, data: string) => data.length),
+      getPtyOutputSequence: vi.fn(() => 0),
+      onPtySpawned: vi.fn(),
+      onPtyExit: vi.fn(),
+      setPtyHeadlessTerminalVisible: vi.fn(),
+      setPtyController: vi.fn(),
+      createPreAllocatedTerminalHandle: vi.fn(() => 'term-preallocated'),
+      registerPreAllocatedHandleForPty: vi.fn()
+    }
+
+    try {
+      registerPtyHandlers(mainWindow as never, runtime as never)
+      const spawnResult = (await handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24,
+        cwd: tmpdir()
+      })) as { id: string }
+      setPtyOwnership(spawnResult.id, 'ssh-1')
+      const setVisibleRendererPty = getPtySetVisibleRendererPtyListener()
+      mainWindow.webContents.send.mockClear()
+
+      setVisibleRendererPty(null, { id: spawnResult.id, visible: false })
+      provider.emitData(spawnResult.id, 'remote-hidden-output')
+      vi.advanceTimersByTime(8)
+
+      expect(runtime.setPtyHeadlessTerminalVisible).not.toHaveBeenCalled()
+      expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:data', {
+        id: spawnResult.id,
+        data: 'remote-hidden-output',
+        seq: 'remote-hidden-output'.length,
+        rawLength: 'remote-hidden-output'.length
+      })
+      expect(mainWindow.webContents.send).not.toHaveBeenCalledWith('pty:rendererOutputSkipped', {
+        id: spawnResult.id
+      })
+    } finally {
+      deletePtyOwnership('daemon-pty')
+      vi.useRealTimers()
+    }
+  })
+
   it('reserves a bounded renderer lane for interactive output when bulk output is saturated', async () => {
     vi.useFakeTimers()
     const bulkProcs = Array.from({ length: 16 }, () => createMockProc())
@@ -4980,13 +5093,13 @@ describe('registerPtyHandlers', () => {
         await handlers.get('pty:spawn')!(null, {
           cols: 80,
           rows: 24,
-          cwd: '/tmp'
+          cwd: tmpdir()
         })
       }
       const interactiveSpawn = (await handlers.get('pty:spawn')!(null, {
         cols: 80,
         rows: 24,
-        cwd: '/tmp'
+        cwd: tmpdir()
       })) as { id: string }
       const writeListener = getPtyWriteListener()
       mainWindow.webContents.send.mockClear()

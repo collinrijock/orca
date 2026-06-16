@@ -83,7 +83,6 @@ vi.mock('react', async () => {
     memo: <T>(component: T) => component,
     useEffect: () => {},
     useLayoutEffect: () => {},
-    useCallback: <T extends (...args: never[]) => unknown>(callback: T) => callback,
     useMemo: <T>(factory: () => T) => factory(),
     useRef: <T>(current: T) => ({ current }),
     useState: <T>(initial: T | (() => T)) => {

@@ -93,6 +93,8 @@ const interactiveOutputCharsByPty = new Map<string, number>()
 const activeRendererPtys = new Set<string>()
 const KEEP_HISTORY_STOP_SETTLE_MS = 1_000
 const KEEP_HISTORY_STOP_POLL_MS = 100
+const hiddenRendererPtys = new Set<string>()
+const skippedRendererOutputPtys = new Set<string>()
 // Why: the agent-hooks server caches per-paneKey state (last prompt, last
 // tool) that otherwise grows unbounded as panes come and go. Track the
 // spawn-time paneKey so clearProviderPtyState can clear that cache on PTY
@@ -886,6 +888,8 @@ export function clearProviderPtyState(id: string): void {
   lastInputAtByPty.delete(id)
   interactiveOutputCharsByPty.delete(id)
   activeRendererPtys.delete(id)
+  hiddenRendererPtys.delete(id)
+  skippedRendererOutputPtys.delete(id)
   const paneKey = ptyPaneKey.get(id)
   const stillOwnsPaneKey = paneKey ? paneKeyPtyId.get(paneKey) === id : false
   // Why: drop the memory-collector registration so a dead PTY does not keep
@@ -990,6 +994,10 @@ export type PtyRendererDeliveryDebugSnapshot = {
   peakRendererInFlightChars: number
   peakMaxRendererInFlightCharsByPty: number
   ackGatedFlushSkipCount: number
+  hiddenHeadlessPtyCount: number
+  deferredHeadlessPtyCount: number
+  deferredHeadlessChars: number
+  maxDeferredHeadlessCharsByPty: number
 }
 
 const EMPTY_PTY_RENDERER_DELIVERY_DEBUG_SNAPSHOT: PtyRendererDeliveryDebugSnapshot = {
@@ -1005,7 +1013,11 @@ const EMPTY_PTY_RENDERER_DELIVERY_DEBUG_SNAPSHOT: PtyRendererDeliveryDebugSnapsh
   peakMaxPendingCharsByPty: 0,
   peakRendererInFlightChars: 0,
   peakMaxRendererInFlightCharsByPty: 0,
-  ackGatedFlushSkipCount: 0
+  ackGatedFlushSkipCount: 0,
+  hiddenHeadlessPtyCount: 0,
+  deferredHeadlessPtyCount: 0,
+  deferredHeadlessChars: 0,
+  maxDeferredHeadlessCharsByPty: 0
 }
 
 let readPtyRendererDeliveryDebugSnapshot = (): PtyRendererDeliveryDebugSnapshot => ({
@@ -1082,6 +1094,8 @@ export function registerPtyHandlers(
   ipcMain.removeAllListeners('pty:write')
   ipcMain.removeAllListeners('pty:ackColdRestore')
   ipcMain.removeAllListeners('pty:ackData')
+  ipcMain.removeAllListeners('pty:setActiveRendererPty')
+  ipcMain.removeAllListeners('pty:setVisibleRendererPty')
   ipcMain.removeAllListeners('pty:serializeBuffer:response')
 
   // Configure the local provider with app-specific hooks.
@@ -1141,6 +1155,9 @@ export function registerPtyHandlers(
       onExit: (id, code) => {
         clearProviderPtyState(id)
         ptyOwnership.delete(id)
+        activeRendererPtys.delete(id)
+        hiddenRendererPtys.delete(id)
+        skippedRendererOutputPtys.delete(id)
         markClaudePtyExited(id)
         runtime?.onPtyExit(id, code)
       },
@@ -1200,6 +1217,10 @@ export function registerPtyHandlers(
       pendingChars += chars
       maxPendingCharsByPty = Math.max(maxPendingCharsByPty, chars)
     }
+    const headlessBacklog =
+      typeof runtime?.getHeadlessTerminalBacklogDebugSnapshot === 'function'
+        ? runtime.getHeadlessTerminalBacklogDebugSnapshot()
+        : null
     return {
       pendingPtyCount: pendingData.size,
       pendingChars,
@@ -1213,7 +1234,11 @@ export function registerPtyHandlers(
       peakMaxPendingCharsByPty,
       peakRendererInFlightChars,
       peakMaxRendererInFlightCharsByPty,
-      ackGatedFlushSkipCount
+      ackGatedFlushSkipCount,
+      hiddenHeadlessPtyCount: headlessBacklog?.hiddenPtyCount ?? 0,
+      deferredHeadlessPtyCount: headlessBacklog?.deferredPtyCount ?? 0,
+      deferredHeadlessChars: headlessBacklog?.deferredChars ?? 0,
+      maxDeferredHeadlessCharsByPty: headlessBacklog?.maxDeferredCharsByPty ?? 0
     }
   }
 
@@ -1314,6 +1339,22 @@ export function registerPtyHandlers(
     mainWindow.webContents.send('pty:data', payload)
   }
 
+  function shouldSkipRendererDeliveryForHiddenPty(id: string): boolean {
+    // Why: only local PTYs have a main-owned buffer snapshot that can restore
+    // hidden bytes later. SSH/remote PTYs still need the live renderer path.
+    return ptyOwnership.get(id) === null && hiddenRendererPtys.has(id)
+  }
+
+  function markRendererOutputSkipped(id: string): void {
+    if (skippedRendererOutputPtys.has(id)) {
+      return
+    }
+    skippedRendererOutputPtys.add(id)
+    if (!mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('pty:rendererOutputSkipped', { id })
+    }
+  }
+
   function getPendingPtyFlushEntries(): [string, PendingPtyData][] {
     const entries = Array.from(pendingData.entries())
     const active: [string, PendingPtyData][] = []
@@ -1358,6 +1399,8 @@ export function registerPtyHandlers(
       pendingData.clear()
       rendererInFlightCharsByPty.clear()
       rendererInFlightTotalChars = 0
+      skippedRendererOutputPtys.clear()
+      hiddenRendererPtys.clear()
       recordPtyRendererDeliveryPressure()
       return
     }
@@ -1437,6 +1480,18 @@ export function registerPtyHandlers(
         recordPtyRendererDeliveryPressure()
         return
       }
+      if (shouldSkipRendererDeliveryForHiddenPty(payload.id)) {
+        pendingData.delete(payload.id)
+        rendererInFlightTotalChars = Math.max(
+          0,
+          rendererInFlightTotalChars - (rendererInFlightCharsByPty.get(payload.id) ?? 0)
+        )
+        rendererInFlightCharsByPty.delete(payload.id)
+        markRendererOutputSkipped(payload.id)
+        recordPtyRendererDeliveryPressure()
+        tryGetProviderForPty(payload.id)?.acknowledgeDataEvent(payload.id, payload.data.length)
+        return
+      }
       const existing = pendingData.get(payload.id)
       const pending = appendPendingPtyData(existing, payload.data, startSeq)
       const nextData = pending.data
@@ -1477,6 +1532,9 @@ export function registerPtyHandlers(
       if (!isLocalProvider) {
         clearProviderPtyState(payload.id)
         ptyOwnership.delete(payload.id)
+        activeRendererPtys.delete(payload.id)
+        hiddenRendererPtys.delete(payload.id)
+        skippedRendererOutputPtys.delete(payload.id)
         markClaudePtyExited(payload.id)
         runtime?.onPtyExit(payload.id, payload.code)
       }
@@ -2795,7 +2853,6 @@ export function registerPtyHandlers(
     }
   })
 
-  ipcMain.removeAllListeners('pty:setActiveRendererPty')
   ipcMain.on('pty:setActiveRendererPty', (_event, args: { id: string; active: boolean }) => {
     if (typeof args.id !== 'string' || !args.id) {
       return
@@ -2810,6 +2867,27 @@ export function registerPtyHandlers(
     }
     if (pendingData.size > 0 && !flushTimer) {
       schedulePendingDataFlush(0)
+    }
+  })
+
+  ipcMain.on('pty:setVisibleRendererPty', (_event, args: { id: string; visible: boolean }) => {
+    if (typeof args.id !== 'string' || !args.id) {
+      return
+    }
+    const isLocalPty = ptyOwnership.get(args.id) === null
+    if (args.visible) {
+      hiddenRendererPtys.delete(args.id)
+      if (skippedRendererOutputPtys.delete(args.id) && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('pty:rendererOutputSkipped', { id: args.id })
+      }
+    } else {
+      hiddenRendererPtys.add(args.id)
+    }
+    if (pendingData.size > 0 && !flushTimer) {
+      schedulePendingDataFlush(0)
+    }
+    if (isLocalPty) {
+      runtime?.setPtyHeadlessTerminalVisible(args.id, args.visible)
     }
   })
 

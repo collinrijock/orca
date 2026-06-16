@@ -29,6 +29,7 @@ const LEAF_1 = '11111111-1111-4111-8111-111111111111' as const
 const LEAF_2 = '22222222-2222-4222-8222-222222222222' as const
 const AGENT_TASK_COMPLETE_NOTIFICATION_GRACE_MS = 250
 const AGENT_TASK_COMPLETE_NOTIFICATION_MAX_WAIT_MS = 1_500
+const HIDDEN_RESTORE_CLEAR_SEQUENCE = '\x1b[2J\x1b[3J\x1b[H'
 
 function leafIdForPane(paneId: number): string {
   return paneId === 2 ? LEAF_2 : LEAF_1
@@ -3243,50 +3244,7 @@ describe('connectPanePty', () => {
     expect(transport.sendInput).not.toHaveBeenCalled()
   })
 
-  it('keeps non-visible local PTY bytes on the live xterm path for release', async () => {
-    const pendingTimeouts: (() => void)[] = []
-    const originalSetTimeout = globalThis.setTimeout
-    globalThis.setTimeout = vi.fn((fn: () => void) => {
-      pendingTimeouts.push(fn)
-      return 999 as unknown as ReturnType<typeof setTimeout>
-    }) as unknown as typeof setTimeout
-
-    try {
-      const { connectPanePty } = await import('./pty-connection')
-      const transport = createMockTransport('pty-id')
-      const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
-      transport.connect.mockImplementation(
-        async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
-          capturedDataCallback.current = callbacks.onData ?? null
-          return 'pty-id'
-        }
-      )
-      transportFactoryQueue.push(transport)
-
-      const pane = createPane(1)
-      const manager = createManager(1)
-      const deps = createDeps({
-        isVisibleRef: { current: false }
-      })
-
-      connectPanePty(pane as never, manager as never, deps as never)
-      await flushAsyncTicks(6)
-
-      expect(capturedDataCallback.current).not.toBeNull()
-      capturedDataCallback.current?.('hello\r\n')
-      expect(pane.terminal.write).not.toHaveBeenCalledWith('hello\r\n')
-
-      for (const fn of pendingTimeouts) {
-        fn()
-      }
-
-      expect(pane.terminal.write).toHaveBeenCalledWith('hello\r\n')
-    } finally {
-      globalThis.setTimeout = originalSetTimeout
-    }
-  })
-
-  it('keeps visually rich hidden PTY bytes on the live xterm path', async () => {
+  it('blanks hidden local PTY bytes instead of keeping them live', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport('pty-id')
     const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
@@ -3306,21 +3264,18 @@ describe('connectPanePty', () => {
     await flushAsyncTicks(6)
 
     expect(capturedDataCallback.current).not.toBeNull()
-    vi.useFakeTimers()
-    try {
-      const hiddenTuiChunk = '\x1b[2J\x1b[H╭ table 😀 ╮\r\n'
-      capturedDataCallback.current?.(hiddenTuiChunk)
+    capturedDataCallback.current?.('hello\r\n')
 
-      expect(pane.terminal.write).not.toHaveBeenCalledWith(hiddenTuiChunk)
-      vi.advanceTimersByTime(50)
-      expect(pane.terminal.write).toHaveBeenCalledWith(hiddenTuiChunk)
-      expect(window.api.pty.getMainBufferSnapshot).not.toHaveBeenCalled()
-    } finally {
-      vi.useRealTimers()
-    }
+    expect(pane.terminal.write).toHaveBeenCalledWith(
+      HIDDEN_RESTORE_CLEAR_SEQUENCE,
+      expect.any(Function)
+    )
+    expect(pane.terminal.write).not.toHaveBeenCalledWith('hello\r\n')
+    expect(pane.terminal.write).not.toHaveBeenCalledWith('hello\r\n', expect.any(Function))
+    expect(window.api.pty.getMainBufferSnapshot).not.toHaveBeenCalled()
   })
 
-  it('keeps split hidden synchronized output frames on the live xterm path', async () => {
+  it('blanks visually rich hidden PTY bytes instead of parsing them live', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport('pty-id')
     const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
@@ -3340,23 +3295,53 @@ describe('connectPanePty', () => {
     await flushAsyncTicks(6)
 
     expect(capturedDataCallback.current).not.toBeNull()
-    vi.useFakeTimers()
-    try {
-      const startChunk = '\x1b[?2026h'
-      const plainRowChunk = '| Sam Syntax | Compiler | Online |\r\n'
-      const endChunk = 'LONG_TABLE_SCROLL_RESTORE_marker\r\n\x1b[?2026l'
+    const hiddenTuiChunk = '\x1b[2J\x1b[H╭ table 😀 ╮\r\n'
+    capturedDataCallback.current?.(hiddenTuiChunk)
 
-      capturedDataCallback.current?.(startChunk)
-      capturedDataCallback.current?.(plainRowChunk)
-      capturedDataCallback.current?.(endChunk)
+    expect(pane.terminal.write).toHaveBeenCalledWith(
+      HIDDEN_RESTORE_CLEAR_SEQUENCE,
+      expect.any(Function)
+    )
+    expect(pane.terminal.write).not.toHaveBeenCalledWith(hiddenTuiChunk)
+    expect(pane.terminal.write).not.toHaveBeenCalledWith(hiddenTuiChunk, expect.any(Function))
+    expect(window.api.pty.getMainBufferSnapshot).not.toHaveBeenCalled()
+  })
 
-      expect(pane.terminal.write).not.toHaveBeenCalledWith(plainRowChunk)
-      vi.advanceTimersByTime(50)
-      expect(pane.terminal.write).toHaveBeenCalledWith(`${startChunk}${plainRowChunk}${endChunk}`)
-      expect(window.api.pty.getMainBufferSnapshot).not.toHaveBeenCalled()
-    } finally {
-      vi.useRealTimers()
-    }
+  it('blanks split hidden synchronized output frames once instead of parsing them live', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport('pty-id')
+    const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
+    transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+      capturedDataCallback.current = callbacks.onData ?? null
+      return 'pty-id'
+    })
+    transportFactoryQueue.push(transport)
+
+    const pane = createPane(1)
+    const manager = createManager(1)
+    const deps = createDeps({
+      isVisibleRef: { current: false }
+    })
+
+    connectPanePty(pane as never, manager as never, deps as never)
+    await flushAsyncTicks(6)
+
+    expect(capturedDataCallback.current).not.toBeNull()
+    const startChunk = '\x1b[?2026h'
+    const plainRowChunk = '| Sam Syntax | Compiler | Online |\r\n'
+    const endChunk = 'LONG_TABLE_SCROLL_RESTORE_marker\r\n\x1b[?2026l'
+
+    capturedDataCallback.current?.(startChunk)
+    capturedDataCallback.current?.(plainRowChunk)
+    capturedDataCallback.current?.(endChunk)
+
+    const clearWrites = pane.terminal.write.mock.calls.filter(
+      ([data]) => data === HIDDEN_RESTORE_CLEAR_SEQUENCE
+    )
+    expect(clearWrites).toHaveLength(1)
+    expect(pane.terminal.write).not.toHaveBeenCalledWith(plainRowChunk)
+    expect(pane.terminal.write).not.toHaveBeenCalledWith(`${startChunk}${plainRowChunk}${endChunk}`)
+    expect(window.api.pty.getMainBufferSnapshot).not.toHaveBeenCalled()
   })
 
   it('queues visible split-pane PTY bytes when the pane is not active', async () => {
@@ -4265,7 +4250,7 @@ describe('connectPanePty', () => {
     binding.dispose()
   })
 
-  it('writes ordinary hidden output live instead of proactively restoring a snapshot', async () => {
+  it('restores ordinary hidden local output from a main snapshot when visible', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport('pty-id')
     const capturedDataCallback: {
@@ -4285,7 +4270,7 @@ describe('connectPanePty', () => {
       data: `snapshot-with-${hidden}`,
       cols: 100,
       rows: 30,
-      seq: hidden.length + live.length
+      seq: hidden.length
     })
 
     const pane = createPane(1)
@@ -4297,6 +4282,11 @@ describe('connectPanePty', () => {
     await flushAsyncTicks(6)
 
     capturedDataCallback.current?.(hidden, { seq: hidden.length, rawLength: hidden.length })
+    expect(pane.terminal.write).toHaveBeenCalledWith(
+      HIDDEN_RESTORE_CLEAR_SEQUENCE,
+      expect.any(Function)
+    )
+    expect(pane.terminal.write).not.toHaveBeenCalledWith(hidden)
     expect(pane.terminal.write).not.toHaveBeenCalledWith(hidden, expect.any(Function))
 
     ;(deps.isVisibleRef as { current: boolean }).current = true
@@ -4306,23 +4296,28 @@ describe('connectPanePty', () => {
     })
     await flushAsyncTicks(20)
 
-    expect(getMainBufferSnapshot).not.toHaveBeenCalled()
-    expect(pane.terminal.write).toHaveBeenCalledWith(hidden)
+    expect(getMainBufferSnapshot).toHaveBeenCalledWith('pty-id', { scrollbackRows: 5000 })
+    expect(pane.terminal.write).toHaveBeenCalledWith(
+      `snapshot-with-${hidden}`,
+      expect.any(Function)
+    )
     expect(pane.terminal.write).toHaveBeenCalledWith(live, expect.any(Function))
     disposable.dispose()
   })
 
-  it('writes ordinary hidden remote runtime output live instead of restoring a snapshot', async () => {
+  it('restores ordinary hidden remote runtime output from a transport snapshot', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport('remote:env-1@@terminal-1')
     const capturedDataCallback: {
       current: ((data: string, meta?: { seq?: number; rawLength?: number }) => void) | null
     } = { current: null }
+    const hidden = 'hidden remote output\r\n'
+    const live = 'visible remote output\r\n'
     transport.serializeBuffer = vi.fn().mockResolvedValue({
       data: 'remote snapshot\r\n',
       cols: 120,
       rows: 40,
-      seq: 40,
+      seq: hidden.length,
       source: 'headless'
     })
     transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
@@ -4340,9 +4335,12 @@ describe('connectPanePty', () => {
     const disposable = connectPanePty(pane as never, manager as never, deps as never)
     await flushAsyncTicks(6)
 
-    const hidden = 'hidden remote output\r\n'
-    const live = 'visible remote output\r\n'
     capturedDataCallback.current?.(hidden, { seq: hidden.length, rawLength: hidden.length })
+    expect(pane.terminal.write).toHaveBeenCalledWith(
+      HIDDEN_RESTORE_CLEAR_SEQUENCE,
+      expect.any(Function)
+    )
+    expect(pane.terminal.write).not.toHaveBeenCalledWith(hidden)
     expect(pane.terminal.write).not.toHaveBeenCalledWith(hidden, expect.any(Function))
 
     ;(deps.isVisibleRef as { current: boolean }).current = true
@@ -4353,13 +4351,13 @@ describe('connectPanePty', () => {
     await flushAsyncTicks(20)
 
     expect(getMainBufferSnapshot).not.toHaveBeenCalled()
-    expect(transport.serializeBuffer).not.toHaveBeenCalled()
-    expect(pane.terminal.write).toHaveBeenCalledWith(hidden)
+    expect(transport.serializeBuffer).toHaveBeenCalledWith({ scrollbackRows: 5000 })
+    expect(pane.terminal.write).toHaveBeenCalledWith('remote snapshot\r\n', expect.any(Function))
     expect(pane.terminal.write).toHaveBeenCalledWith(live, expect.any(Function))
     disposable.dispose()
   })
 
-  it('keeps inactive split-pane hidden output live instead of deferring snapshot restore', async () => {
+  it('defers inactive split-pane hidden restore instead of parsing hidden output live', async () => {
     const { resetHiddenOutputRestoreSchedulerForTests } =
       await import('./hidden-output-restore-scheduler')
     let disposable: { dispose: () => void } | null = null
@@ -4383,7 +4381,7 @@ describe('connectPanePty', () => {
         data: 'inactive snapshot\r\n',
         cols: 100,
         rows: 30,
-        seq: 64
+        seq: 'hidden inactive output\r\n'.length
       })
 
       const pane = createPane(1)
@@ -4397,6 +4395,11 @@ describe('connectPanePty', () => {
       const live = 'visible inactive output\r\n'
       expect(capturedDataCallback.current).not.toBeNull()
       capturedDataCallback.current?.(hidden, { seq: hidden.length, rawLength: hidden.length })
+      expect(pane.terminal.write).toHaveBeenCalledWith(
+        HIDDEN_RESTORE_CLEAR_SEQUENCE,
+        expect.any(Function)
+      )
+      expect(pane.terminal.write).not.toHaveBeenCalledWith(hidden)
       ;(deps.isVisibleRef as { current: boolean }).current = true
       capturedDataCallback.current?.(live, {
         seq: hidden.length + live.length,
@@ -4411,8 +4414,11 @@ describe('connectPanePty', () => {
       await new Promise((resolve) => setTimeout(resolve, 30))
       await flushAsyncTicks(20)
 
-      expect(getMainBufferSnapshot).not.toHaveBeenCalled()
-      expect(pane.terminal.write).toHaveBeenCalledWith(hidden)
+      expect(getMainBufferSnapshot).toHaveBeenCalledWith('pty-id', { scrollbackRows: 5000 })
+      expect(pane.terminal.write).toHaveBeenCalledWith(
+        'inactive snapshot\r\n',
+        expect.any(Function)
+      )
       expect(pane.terminal.write).toHaveBeenCalledWith(live, expect.any(Function))
     } finally {
       disposable?.dispose()
@@ -4478,17 +4484,19 @@ describe('connectPanePty', () => {
     }
   })
 
-  it('does not retry remote snapshots for ordinary hidden runtime output', async () => {
+  it('retries a deferred remote snapshot for ordinary hidden runtime output', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport('remote:env-1@@terminal-1')
     const capturedDataCallback: {
       current: ((data: string, meta?: { seq?: number; rawLength?: number }) => void) | null
     } = { current: null }
+    const hidden = 'hidden remote output\r\n'
+    const firstLive = 'first visible output\r\n'
     transport.serializeBuffer = vi.fn().mockResolvedValueOnce(null).mockResolvedValueOnce({
       data: 'remote recovered snapshot\r\n',
       cols: 120,
       rows: 40,
-      seq: 80,
+      seq: hidden.length,
       source: 'headless'
     })
     transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
@@ -4503,9 +4511,11 @@ describe('connectPanePty', () => {
     const disposable = connectPanePty(pane as never, manager as never, deps as never)
     await flushAsyncTicks(6)
 
-    const hidden = 'hidden remote output\r\n'
-    const firstLive = 'first visible output\r\n'
     capturedDataCallback.current?.(hidden, { seq: hidden.length, rawLength: hidden.length })
+    expect(pane.terminal.write).toHaveBeenCalledWith(
+      HIDDEN_RESTORE_CLEAR_SEQUENCE,
+      expect.any(Function)
+    )
 
     ;(deps.isVisibleRef as { current: boolean }).current = true
     capturedDataCallback.current?.(firstLive, {
@@ -4514,7 +4524,7 @@ describe('connectPanePty', () => {
     })
     await flushAsyncTicks(20)
 
-    expect(transport.serializeBuffer).not.toHaveBeenCalled()
+    expect(transport.serializeBuffer).toHaveBeenCalledTimes(1)
     expect(pane.terminal.write).not.toHaveBeenCalledWith(
       expect.stringContaining('Orca skipped hidden terminal output'),
       expect.any(Function)
@@ -4527,7 +4537,11 @@ describe('connectPanePty', () => {
     await new Promise((resolve) => setTimeout(resolve, 80))
     await flushAsyncTicks(20)
 
-    expect(transport.serializeBuffer).not.toHaveBeenCalled()
+    expect(transport.serializeBuffer).toHaveBeenCalledTimes(2)
+    expect(pane.terminal.write).toHaveBeenCalledWith(
+      'remote recovered snapshot\r\n',
+      expect.any(Function)
+    )
     expect(pane.terminal.write).toHaveBeenCalledWith(firstLive, expect.any(Function))
     disposable.dispose()
   })
@@ -4564,7 +4578,12 @@ describe('connectPanePty', () => {
     await flushAsyncTicks(6)
 
     capturedDataCallback.current?.(hidden, { seq: hidden.length, rawLength: hidden.length })
-    expect(pane.terminal.write).not.toHaveBeenCalled()
+    expect(pane.terminal.write).toHaveBeenCalledWith(
+      HIDDEN_RESTORE_CLEAR_SEQUENCE,
+      expect.any(Function)
+    )
+    expect(pane.terminal.write).not.toHaveBeenCalledWith(hidden)
+    expect(pane.terminal.write).not.toHaveBeenCalledWith(hidden, expect.any(Function))
 
     ;(deps.isVisibleRef as { current: boolean }).current = true
     capturedDataCallback.current?.(live, {
@@ -4714,6 +4733,9 @@ describe('connectPanePty', () => {
     })
     await flushAsyncTicks(2)
     expect(clearBufferCallback.current).not.toBeNull()
+    const clearWritesBeforeExplicitClear = pane.terminal.write.mock.calls.filter(
+      ([data]) => data === HIDDEN_RESTORE_CLEAR_SEQUENCE
+    ).length
 
     clearBufferCallback.current?.({ ptyId: 'pty-id' })
     snapshot.resolve({
@@ -4726,10 +4748,10 @@ describe('connectPanePty', () => {
 
     expect(pane.terminal.clear).toHaveBeenCalled()
     expect(pane.terminal.write).not.toHaveBeenCalledWith(live, expect.any(Function))
-    expect(pane.terminal.write).not.toHaveBeenCalledWith(
-      '\x1b[2J\x1b[3J\x1b[H',
-      expect.any(Function)
-    )
+    const clearWritesAfterExplicitClear = pane.terminal.write.mock.calls.filter(
+      ([data]) => data === HIDDEN_RESTORE_CLEAR_SEQUENCE
+    ).length
+    expect(clearWritesAfterExplicitClear).toBe(clearWritesBeforeExplicitClear)
     disposable.dispose()
   })
 

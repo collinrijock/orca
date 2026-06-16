@@ -1037,6 +1037,7 @@ export type PreloadApi = {
     ackColdRestore: (id: string) => void
     ackData: (id: string, charCount: number) => void
     setActiveRendererPty: (id: string, active: boolean) => void
+    setVisibleRendererPty: (id: string, visible: boolean) => void
     hasChildProcesses: (id: string) => Promise<boolean>
     getForegroundProcess: (id: string) => Promise<string | null>
     getCwd: (id: string) => Promise<string>
@@ -1066,6 +1067,10 @@ export type PreloadApi = {
       peakRendererInFlightChars: number
       peakMaxRendererInFlightCharsByPty: number
       ackGatedFlushSkipCount: number
+      hiddenHeadlessPtyCount: number
+      deferredHeadlessPtyCount: number
+      deferredHeadlessChars: number
+      maxDeferredHeadlessCharsByPty: number
     }>
     resetRendererDeliveryDebug: () => Promise<void>
     onData: (
@@ -1073,6 +1078,7 @@ export type PreloadApi = {
     ) => () => void
     onReplay: (callback: (data: { id: string; data: string }) => void) => () => void
     onExit: (callback: (data: { id: string; code: number }) => void) => () => void
+    onRendererOutputSkipped: (callback: (data: { id: string }) => void) => () => void
     onSerializeBufferRequest: (
       callback: (data: {
         requestId: string

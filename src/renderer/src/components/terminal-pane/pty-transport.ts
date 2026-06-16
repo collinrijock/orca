@@ -11,6 +11,7 @@ import {
 } from '../../../../shared/agent-detection'
 import {
   ptyDataHandlers,
+  ptyRendererOutputSkippedHandlers,
   ptyReplayHandlers,
   ptyExitHandlers,
   ptyTeardownHandlers,
@@ -461,6 +462,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
 
   function unregisterPtyHandlers(id: string): void {
     ptyDataHandlers.delete(id)
+    ptyRendererOutputSkippedHandlers.delete(id)
     ptyReplayHandlers.delete(id)
     ptyExitHandlers.delete(id)
     ptyTeardownHandlers.delete(id)
@@ -468,6 +470,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
 
   function unregisterPtyDataAndStatusHandlers(id: string): void {
     ptyDataHandlers.delete(id)
+    ptyRendererOutputSkippedHandlers.delete(id)
     ptyReplayHandlers.delete(id)
   }
 
@@ -500,6 +503,9 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
         },
         meta
       )
+    })
+    ptyRendererOutputSkippedHandlers.set(id, () => {
+      storedCallbacks.onRendererOutputSkipped?.()
     })
   }
 

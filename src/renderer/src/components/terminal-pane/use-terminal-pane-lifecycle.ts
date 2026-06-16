@@ -109,6 +109,19 @@ function reportActiveRendererPtyForPane(
   }
 }
 
+function reportVisibleRendererPtys(
+  paneTransports: Map<number, PtyTransport>,
+  visible: boolean
+): void {
+  for (const transport of paneTransports.values()) {
+    const ptyId = transport.getPtyId()
+    if (!ptyId || ptyId.startsWith('remote:')) {
+      continue
+    }
+    window.api.pty.setVisibleRendererPty?.(ptyId, visible)
+  }
+}
+
 type UseTerminalPaneLifecycleDeps = {
   tabId: string
   worktreeId: string
@@ -431,6 +444,11 @@ export function useTerminalPaneLifecycle({
     }
     send()
   }
+
+  useEffect(() => {
+    reportVisibleRendererPtys(paneTransportsRef.current, isActive && isVisible)
+    return () => reportVisibleRendererPtys(paneTransportsRef.current, false)
+  }, [isActive, isVisible, paneTransportsRef])
 
   // Initialize PaneManager instance once
   useEffect(() => {

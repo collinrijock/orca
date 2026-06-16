@@ -28,6 +28,7 @@ export type PtyBufferSnapshot = {
 }
 
 export const ptyDataHandlers = new Map<string, (data: string, meta?: PtyDataMeta) => void>()
+export const ptyRendererOutputSkippedHandlers = new Map<string, () => void>()
 /** Sidecar subscriptions that observe PTY data without owning the primary
  *  handler. Used by features that need to react to the live byte stream
  *  (e.g. agent-paste-draft watching for DECSET 2004 / bracketed-paste-
@@ -83,6 +84,7 @@ let ptyDispatcherAttached = false
 export function unregisterPtyDataHandlers(ptyIds: string[]): void {
   for (const id of ptyIds) {
     ptyDataHandlers.delete(id)
+    ptyRendererOutputSkippedHandlers.delete(id)
     ptyReplayHandlers.delete(id)
     ptyTeardownHandlers.get(id)?.()
     ptyTeardownHandlers.delete(id)
@@ -141,6 +143,9 @@ export function ensurePtyDispatcher(): void {
         sidecar(payload.code)
       }
     }
+  })
+  window.api.pty.onRendererOutputSkipped((payload) => {
+    ptyRendererOutputSkippedHandlers.get(payload.id)?.()
   })
 }
 
@@ -260,6 +265,7 @@ export function registerEagerPtyBuffer(
       // reference). After attach() replaces the handler this becomes a no-op.
       if (ptyDataHandlers.get(ptyId) === dataHandler) {
         ptyDataHandlers.delete(ptyId)
+        ptyRendererOutputSkippedHandlers.delete(ptyId)
         ptyReplayHandlers.delete(ptyId)
       }
       if (ptyExitHandlers.get(ptyId) === exitHandler) {
@@ -304,6 +310,7 @@ export type PtyTransport = {
        *  the replay guard — otherwise xterm auto-replies to embedded query
        *  sequences leak into the shell. See replay-guard.ts. */
       onReplayData?: (data: string) => void
+      onRendererOutputSkipped?: () => void
       onStatus?: (shell: string) => void
       onError?: (message: string, errors?: string[]) => void
       onExit?: (code: number) => void
@@ -325,6 +332,7 @@ export type PtyTransport = {
       onData?: (data: string, meta?: PtyDataMeta) => void
       /** See note on connect.callbacks.onReplayData. */
       onReplayData?: (data: string) => void
+      onRendererOutputSkipped?: () => void
       onStatus?: (shell: string) => void
       onError?: (message: string, errors?: string[]) => void
       onExit?: (code: number) => void
