@@ -596,10 +596,11 @@ export default function CombinedDiffViewer({
 
       const largeDiffRenderLimit =
         !error && result.kind === 'text'
-          ? getLargeDiffRenderLimit({
+          ? (result.largeDiffRenderLimit ??
+            getLargeDiffRenderLimit({
               originalContent: result.originalContent,
               modifiedContent: result.modifiedContent
-            })
+            }))
           : null
 
       loadingIndicesRef.current.delete(index)

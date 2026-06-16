@@ -1,6 +1,7 @@
 /* eslint-disable max-lines -- Why: git status/discard/chunking behavior is verified together here to keep the command contract readable in one place. */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import path from 'path'
+import { MAX_RENDERED_DIFF_COMBINED_CHARACTERS } from '../../shared/large-diff-render-limit'
 
 const {
   gitExecFileAsyncMock,
@@ -354,6 +355,33 @@ describe('getDiff', () => {
     expect(result.kind).toBe('binary')
     expect(result.modifiedIsBinary).toBe(true)
     expect(result.modifiedContent).toBe('')
+  })
+
+  it('omits over-limit text bodies before returning the diff payload', async () => {
+    const oversizedText = 'a'.repeat(MAX_RENDERED_DIFF_COMBINED_CHARACTERS + 1)
+    gitExecFileAsyncBufferMock.mockResolvedValueOnce({ stdout: Buffer.from('index-content\n') })
+    statMock.mockResolvedValueOnce({
+      isFile: () => true,
+      size: oversizedText.length
+    })
+    readFileMock.mockResolvedValue(Buffer.from(oversizedText))
+
+    const result = await getDiff('/repo', 'dist/large.log', false)
+
+    expect(result.kind).toBe('text')
+    if (result.kind !== 'text') {
+      throw new Error('expected text diff result')
+    }
+    expect(result.originalContent).toBe('')
+    expect(result.modifiedContent).toBe('')
+    expect(result.largeDiffRenderLimit?.limited).toBe(true)
+    if (result.largeDiffRenderLimit?.limited !== true) {
+      throw new Error('expected large diff render limit')
+    }
+    expect(result.largeDiffRenderLimit.reason).toBe('character-count')
+    expect(result.largeDiffRenderLimit.characterCount).toBe(
+      oversizedText.length + 'index-content\n'.length
+    )
   })
 
   it('includes preview metadata for pdf diffs', async () => {

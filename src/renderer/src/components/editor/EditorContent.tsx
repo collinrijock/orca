@@ -915,6 +915,7 @@ export function EditorContent({
       modifiedModelKey={modifiedModelKey}
       originalContent={dc.originalContent}
       modifiedContent={modifiedDiffContent}
+      largeDiffRenderLimit={dc.largeDiffRenderLimit}
       language={monacoLanguage}
       filePath={activeFile.filePath}
       relativePath={activeFile.relativePath}

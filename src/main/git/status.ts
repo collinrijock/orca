@@ -44,6 +44,7 @@ import {
 } from '../../shared/git-discard-path-safety'
 import { resolveWorktreeAddBaseRef } from '../../shared/worktree-base-ref'
 import { hasWorktreeBaseCommitRef } from './worktree-base-ref-probe'
+import { getLargeDiffRenderLimit } from '../../shared/large-diff-render-limit'
 
 const MAX_GIT_SHOW_BYTES = 10 * 1024 * 1024
 const MAX_STAGED_COMMIT_CONTEXT_BYTES = MAX_GIT_SHOW_BYTES
@@ -1063,6 +1064,18 @@ function buildDiffResult(
       // that legacy flag for PDFs until the wider contract is renamed.
       ...(mimeType ? { isImage: true, mimeType } : {})
     } as GitDiffResult
+  }
+
+  const largeDiffRenderLimit = getLargeDiffRenderLimit({ originalContent, modifiedContent })
+  if (largeDiffRenderLimit.limited) {
+    return {
+      kind: 'text',
+      originalContent: '',
+      modifiedContent: '',
+      originalIsBinary: false,
+      modifiedIsBinary: false,
+      largeDiffRenderLimit
+    }
   }
 
   return {

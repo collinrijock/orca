@@ -11,6 +11,7 @@ import type {
 } from './agent-status-types'
 import type { VoiceSettings } from './speech-types'
 import type { WorkspaceCleanupUIState } from './workspace-cleanup'
+import type { LargeDiffRenderLimit } from './large-diff-render-limit'
 import type { GitLabProjectSettings } from './gitlab-types'
 import type { TaskProvider } from './task-providers'
 import type { FeatureTipId } from './feature-tips'
@@ -3320,6 +3321,7 @@ export type GitDiffTextResult = {
   modifiedContent: string
   originalIsBinary: false
   modifiedIsBinary: false
+  largeDiffRenderLimit?: LargeDiffRenderLimit
 }
 
 export type GitDiffBinaryResult = {

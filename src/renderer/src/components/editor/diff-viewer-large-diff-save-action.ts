@@ -13,7 +13,7 @@ export function getDiffViewerLargeDiffSaveAction({
 }: DiffViewerLargeDiffSaveActionInput):
   | { label: string; description: string; onClick: () => void }
   | undefined {
-  if (!editable || !onSave) {
+  if (!editable || !onSave || modifiedContent.length === 0) {
     return undefined
   }
 
