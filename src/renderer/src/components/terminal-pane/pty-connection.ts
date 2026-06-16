@@ -2864,6 +2864,10 @@ export function connectPanePty(
       hiddenStartupRendererQueryPtyId = ptyId
     }
 
+    function isHiddenStartupRendererQueryWindowActive(): boolean {
+      return shouldSnapshotHiddenCodexOutput && hiddenStartupRendererQueryPending.length > 0
+    }
+
     function takeHiddenStartupRendererQueryPendingForForeground(data: string): {
       statelessQueryData: string
       statefulQueryData: string
