@@ -135,7 +135,11 @@ import { isTerminalLeafId, makePaneKey, parsePaneKey } from '../../shared/stable
 import { parseAppSshPtyId } from '../../shared/ssh-pty-id'
 import { isValidHostTerminalTabId } from '../../shared/terminal-tab-id'
 import { buildAgentDraftLaunchPlan, buildAgentStartupPlan } from '../../shared/tui-agent-startup'
-import { isExpectedAgentProcess } from '../../shared/agent-process-recognition'
+import {
+  isAgentForegroundWrapperProcess,
+  isExpectedAgentProcess,
+  recognizeAgentProcess
+} from '../../shared/agent-process-recognition'
 import { isTuiAgentEnabled, pickTuiAgent } from '../../shared/tui-agent-selection'
 import {
   resolveTuiAgentLaunchArgs,
@@ -891,6 +895,8 @@ function getAgentLaunchPlatformForRepo(repo: Pick<Repo, 'connectionId' | 'path'>
   return isWindowsAbsolutePathLike(repo.path) ? 'win32' : 'linux'
 }
 
+const FOREGROUND_AGENT_WRAPPER_RETRY_INTERVAL_MS = 150
+const FOREGROUND_AGENT_WRAPPER_RETRY_TIMEOUT_MS = 6_500
 const DECSET_BRACKETED_PASTE = '\x1b[?2004h'
 const CODEX_COMPOSER_PROMPT = '›'
 const BRACKETED_PASTE_BEGIN = '\x1b[200~'
@@ -14644,13 +14650,16 @@ export class OrcaRuntimeService {
       // Why: Claude's management UI runs under the Claude process but is not a
       // task-capable agent session. Suppress that process only; another foreground
       // agent can take over before titles update.
-      if (
-        (paneTitleClassification === 'management' || tabTitleClassification === 'management') &&
-        isExpectedAgentProcess(fg, 'claude')
-      ) {
+      const shouldSuppressClaudeForeground =
+        paneTitleClassification === 'management' || tabTitleClassification === 'management'
+      if (shouldSuppressClaudeForeground && isExpectedAgentProcess(fg, 'claude')) {
         return false
       }
-      return !isShellProcess(fg)
+      // Why: review-note delivery auto-submits with Enter. A generic non-shell
+      // TUI can be focused in a terminal, but only known agent processes are safe.
+      return await this.isRecognizedForegroundAgentProcess(leaf.ptyId, fg, {
+        suppressClaude: shouldSuppressClaudeForeground
+      })
     } catch {
       return false
     }
@@ -14710,7 +14719,53 @@ export class OrcaRuntimeService {
     if (shouldSuppressClaudeForeground && isExpectedAgentProcess(fg, 'claude')) {
       return false
     }
-    return !isShellProcess(fg)
+    // Why: review-note delivery auto-submits with Enter. A generic non-shell
+    // TUI can be focused in a terminal, but only known agent processes are safe.
+    return await this.isRecognizedForegroundAgentProcess(pty.ptyId, fg, {
+      suppressClaude: shouldSuppressClaudeForeground
+    })
+  }
+
+  private async isRecognizedForegroundAgentProcess(
+    ptyId: string,
+    foregroundProcess: string,
+    options: { suppressClaude?: boolean } = {}
+  ): Promise<boolean> {
+    const initialRecognition = recognizeAgentProcess(foregroundProcess)
+    if (initialRecognition !== null) {
+      return !(
+        options.suppressClaude === true &&
+        isExpectedAgentProcess(initialRecognition.processName, 'claude')
+      )
+    }
+    if (!this.isAgentWrapperForegroundProcess(foregroundProcess) || !this.ptyController) {
+      return false
+    }
+    const startedAt = Date.now()
+    while (Date.now() - startedAt < FOREGROUND_AGENT_WRAPPER_RETRY_TIMEOUT_MS) {
+      await new Promise((resolve) =>
+        setTimeout(resolve, FOREGROUND_AGENT_WRAPPER_RETRY_INTERVAL_MS)
+      )
+      const refreshedProcess = await this.ptyController.getForegroundProcess(ptyId)
+      const refreshedRecognition = recognizeAgentProcess(refreshedProcess)
+      if (refreshedRecognition !== null) {
+        return !(
+          options.suppressClaude === true &&
+          isExpectedAgentProcess(refreshedRecognition.processName, 'claude')
+        )
+      }
+      if (!refreshedProcess || !this.isAgentWrapperForegroundProcess(refreshedProcess)) {
+        return false
+      }
+    }
+    return false
+  }
+
+  private isAgentWrapperForegroundProcess(processName: string): boolean {
+    // Why: daemon/SSH PTYs can report the interpreter before their async
+    // command-line cache resolves to the actual agent binary. Retry only
+    // known wrappers, never arbitrary non-shell TUIs.
+    return isAgentForegroundWrapperProcess(processName)
   }
 
   private getPrimaryLeafForPty(ptyId: string): RuntimeLeafRecord | null {
