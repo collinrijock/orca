@@ -1793,7 +1793,8 @@
             "fd15491034": "Abrir vista en GitHub",
             "22df63c393": "Los datos de la subemisión no están disponibles para su token.",
             "067119985c": "Búsqueda de GitHub, p. cesionario:@yo es:abierto",
-            "1850fceac8": "{{value0}}/{{value1}} no se agrega a Orca. Agréguelo para comenzar a trabajar o ábralo en GitHub."
+            "1850fceac8": "{{value0}}/{{value1}} no se agrega a Orca. Agréguelo para comenzar a trabajar o ábralo en GitHub.",
+            "1aa7c952b9": "Project view"
           },
           "slug": {
             "dialog": {

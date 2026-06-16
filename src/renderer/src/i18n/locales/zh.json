@@ -1793,7 +1793,8 @@
             "fd15491034": "在 GitHub 中打开视图",
             "22df63c393": "您的 Token 无法获取子议题数据。",
             "067119985c": "GitHub 搜索，例如负责人：@我是：开放",
-            "1850fceac8": "{{value0}}/{{value1}} 未添加到 Orca。添加它以开始工作，或在 GitHub 中打开。"
+            "1850fceac8": "{{value0}}/{{value1}} 未添加到 Orca。添加它以开始工作，或在 GitHub 中打开。",
+            "1aa7c952b9": "Project view"
           },
           "slug": {
             "dialog": {

@@ -1793,7 +1793,8 @@
             "fd15491034": "Open view in GitHub",
             "22df63c393": "Sub-issue data is unavailable for your token.",
             "067119985c": "GitHub search, e.g. assignee:@me is:open",
-            "1850fceac8": "{{value0}}/{{value1}} isn't added to Orca. Add it to start work, or open in GitHub."
+            "1850fceac8": "{{value0}}/{{value1}} isn't added to Orca. Add it to start work, or open in GitHub.",
+            "1aa7c952b9": "Project view"
           },
           "slug": {
             "dialog": {
