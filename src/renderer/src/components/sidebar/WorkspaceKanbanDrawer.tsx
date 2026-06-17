@@ -175,12 +175,29 @@ export default function WorkspaceKanbanDrawer({
           getSettingsForWorktreeRuntimeOwner(useAppStore.getState(), worktreeId),
         getLatestWorkspaceStatus: (worktreeId) =>
           useAppStore.getState().getKnownWorktreeById(worktreeId)?.workspaceStatus
-      }).then((result) => {
-        if (result.updated > 0 || result.failed > 0 || result.messages.length > 0) {
-          console.info('Workspace board task status sync result', result)
-        }
-        handleTaskStatusSyncResult(result)
       })
+        .then((result) => {
+          if (result.updated > 0 || result.failed > 0 || result.messages.length > 0) {
+            console.info('Workspace board task status sync result', result)
+          }
+          handleTaskStatusSyncResult(result)
+        })
+        .catch((error: unknown) => {
+          const message =
+            error instanceof Error
+              ? error.message
+              : translate(
+                  'auto.components.sidebar.WorkspaceKanbanDrawer.1975a4e480',
+                  'Task status sync failed'
+                )
+          console.warn('Workspace board task status sync failed', error)
+          handleTaskStatusSyncResult({
+            updated: 0,
+            skipped: 0,
+            failed: request.worktreeIds.length,
+            messages: [message]
+          })
+        })
     },
     [handleTaskStatusSyncResult, syncTaskStatusFromWorkspaceBoard, workspaceStatuses, worktreeById]
   )

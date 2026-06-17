@@ -3617,8 +3617,8 @@
           "395e541d5d": "状态",
           "34f03eb0de": "董事会设置",
           "26cbc92150": "工作区板设置",
-          "87d24a0c2f": "Sync board and issue status",
-          "4c2eaa78cc": "Moving a linked workspace updates its Linear issue status when a matching workflow state exists."
+          "87d24a0c2f": "同步看板和议题状态",
+          "4c2eaa78cc": "移动已关联的工作区时，如果存在匹配的工作流状态，将更新其 Linear 议题状态。"
         },
         "WorkspaceKanbanStatusLane": {
           "8ad104642b": "空的",
@@ -4092,8 +4092,8 @@
           "6e7f8a9b0c": "Remove host…"
         },
         "WorkspaceKanbanDrawer": {
-          "1975a4e480": "Task status sync failed",
-          "e02b0d92ff": "Task status sync skipped"
+          "1975a4e480": "任务状态同步失败",
+          "e02b0d92ff": "任务状态同步已跳过"
         }
       },
       "shared": {
@@ -10064,7 +10064,8 @@
           "06357eea60": "目录",
           "27d0a9c49a": "目录",
           "65b036a6c8": "展开 {{value0}}",
-          "97ad46f11f": "折叠 {{value0}}"
+          "97ad46f11f": "折叠 {{value0}}",
+          "8f4d2c1a9b": "Resize table of contents"
         },
         "MarkdownTemplatePicker": {
           "22cd94426f": "无标题.md",

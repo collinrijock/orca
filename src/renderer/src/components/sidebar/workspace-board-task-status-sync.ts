@@ -78,7 +78,7 @@ const defaultDeps: WorkspaceBoardTaskStatusSyncDependencies = {
 const worktreeSyncQueues = new Map<string, Promise<unknown>>()
 
 function normalizeStateName(name: string): string {
-  return name.trim().toLocaleLowerCase()
+  return name.trim().toLowerCase()
 }
 
 function matchingWorkflowStates(
@@ -165,7 +165,9 @@ async function syncLinearWorktreeStatus(
     return skipped(result)
   }
 
-  const settings = args.getSettingsForWorktree?.(worktreeId) ?? args.settings
+  const settings = args.getSettingsForWorktree
+    ? args.getSettingsForWorktree(worktreeId)
+    : args.settings
   const linkedWorkspaceId = worktree.linkedLinearIssueWorkspaceId ?? undefined
 
   try {

@@ -3617,8 +3617,8 @@
           "395e541d5d": "ステータス",
           "34f03eb0de": "ボードの設定",
           "26cbc92150": "ワークスペースボードの設定",
-          "87d24a0c2f": "Sync board and issue status",
-          "4c2eaa78cc": "Moving a linked workspace updates its Linear issue status when a matching workflow state exists."
+          "87d24a0c2f": "ボードとイシューのステータスを同期",
+          "4c2eaa78cc": "リンク済みワークスペースを移動すると、一致するワークフロー状態がある場合に Linear イシューのステータスが更新されます。"
         },
         "WorkspaceKanbanStatusLane": {
           "8ad104642b": "空の",
@@ -4092,8 +4092,8 @@
           "6e7f8a9b0c": "Remove host…"
         },
         "WorkspaceKanbanDrawer": {
-          "1975a4e480": "Task status sync failed",
-          "e02b0d92ff": "Task status sync skipped"
+          "1975a4e480": "タスクステータスの同期に失敗しました",
+          "e02b0d92ff": "タスクステータスの同期をスキップしました"
         }
       },
       "shared": {
@@ -10064,7 +10064,8 @@
           "06357eea60": "目次",
           "27d0a9c49a": "目次",
           "65b036a6c8": "{{value0}} を展開します",
-          "97ad46f11f": "{{value0}} を折りたたむ"
+          "97ad46f11f": "{{value0}} を折りたたむ",
+          "8f4d2c1a9b": "Resize table of contents"
         },
         "MarkdownTemplatePicker": {
           "22cd94426f": "無題.md",

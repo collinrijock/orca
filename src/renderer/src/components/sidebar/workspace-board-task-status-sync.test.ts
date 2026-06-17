@@ -201,6 +201,31 @@ describe('syncWorkspaceBoardTaskStatuses', () => {
     )
   })
 
+  it('preserves null settings from the moved worktree resolver', async () => {
+    const { item, target, getIssue, teamStates, updateIssue } = setup()
+    const getSettingsForWorktree = vi.fn(() => null)
+
+    await syncWorkspaceBoardTaskStatuses({
+      worktreeIds: [item.id],
+      targetStatus: target,
+      worktreesById: new Map([[item.id, item]]),
+      settings: { activeRuntimeEnvironmentId: 'focused-runtime' },
+      getSettingsForWorktree,
+      getLatestWorkspaceStatus: () => target.id,
+      deps: { getIssue, teamStates, updateIssue }
+    })
+
+    expect(getSettingsForWorktree).toHaveBeenCalledWith(item.id)
+    expect(getIssue).toHaveBeenCalledWith(null, 'ORC-1', 'workspace-1')
+    expect(teamStates).toHaveBeenCalledWith(null, 'team-1', 'workspace-1')
+    expect(updateIssue).toHaveBeenCalledWith(
+      null,
+      'issue-1',
+      { stateId: 'state-review' },
+      'workspace-1'
+    )
+  })
+
   it('skips worktrees without linked Linear issues', async () => {
     const { item, target, getIssue, teamStates, updateIssue } = setup({ linkedLinearIssue: null })
 

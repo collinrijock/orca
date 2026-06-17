@@ -3617,8 +3617,8 @@
           "395e541d5d": "상태",
           "34f03eb0de": "보드 설정",
           "26cbc92150": "워크스페이스 보드 설정",
-          "87d24a0c2f": "Sync board and issue status",
-          "4c2eaa78cc": "Moving a linked workspace updates its Linear issue status when a matching workflow state exists."
+          "87d24a0c2f": "보드와 이슈 상태 동기화",
+          "4c2eaa78cc": "연결된 워크스페이스를 이동하면 일치하는 워크플로 상태가 있을 때 Linear 이슈 상태가 업데이트됩니다."
         },
         "WorkspaceKanbanStatusLane": {
           "8ad104642b": "비어 있는",
@@ -4092,8 +4092,8 @@
           "6e7f8a9b0c": "Remove host…"
         },
         "WorkspaceKanbanDrawer": {
-          "1975a4e480": "Task status sync failed",
-          "e02b0d92ff": "Task status sync skipped"
+          "1975a4e480": "작업 상태 동기화 실패",
+          "e02b0d92ff": "작업 상태 동기화 건너뜀"
         }
       },
       "shared": {
@@ -10064,7 +10064,8 @@
           "06357eea60": "목차",
           "27d0a9c49a": "목차",
           "65b036a6c8": "{{value0}} 확장",
-          "97ad46f11f": "{{value0}} 접기"
+          "97ad46f11f": "{{value0}} 접기",
+          "8f4d2c1a9b": "Resize table of contents"
         },
         "MarkdownTemplatePicker": {
           "22cd94426f": "제목없음.md",

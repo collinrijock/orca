@@ -34,7 +34,7 @@ const {
   documentDropState
 } = vi.hoisted(() => ({
   syncWorkspaceBoardTaskStatusesMock: vi.fn(() =>
-    Promise.resolve({ updated: 1, skipped: 0, failed: 0, messages: [] })
+    Promise.resolve({ updated: 1, skipped: 0, failed: 0, messages: [] as string[] })
   ),
   toastErrorMock: vi.fn(),
   toastWarningMock: vi.fn(),
@@ -160,6 +160,7 @@ vi.mock('./workspace-board-task-status-sync', async (importOriginal) => {
 let container: HTMLDivElement
 let root: Root
 let consoleInfoSpy: ReturnType<typeof vi.spyOn>
+let consoleWarnSpy: ReturnType<typeof vi.spyOn>
 
 const statuses = [
   { id: 'todo', label: 'Todo' },
@@ -238,6 +239,7 @@ beforeEach(() => {
   toastErrorMock.mockClear()
   toastWarningMock.mockClear()
   consoleInfoSpy = vi.spyOn(console, 'info').mockImplementation(() => {})
+  consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
 })
 
 afterEach(() => {
@@ -245,6 +247,7 @@ afterEach(() => {
     root.unmount()
   })
   consoleInfoSpy.mockRestore()
+  consoleWarnSpy.mockRestore()
   container.remove()
 })
 
@@ -260,7 +263,9 @@ describe('WorkspaceKanbanDrawer task status sync wiring', () => {
     expect(syncWorkspaceBoardTaskStatusesMock).toHaveBeenCalledWith(
       expect.objectContaining({
         worktreeIds: [item.id],
-        targetStatus: { id: 'in-review', label: 'In review' }
+        targetStatus: { id: 'in-review', label: 'In review' },
+        getSettingsForWorktree: expect.any(Function),
+        getLatestWorkspaceStatus: expect.any(Function)
       })
     )
   })
@@ -322,5 +327,50 @@ describe('WorkspaceKanbanDrawer task status sync wiring', () => {
     })
 
     expect(syncWorkspaceBoardTaskStatusesMock).not.toHaveBeenCalled()
+  })
+
+  it('shows a warning toast when task status sync is skipped with a message', async () => {
+    syncWorkspaceBoardTaskStatusesMock.mockResolvedValueOnce({
+      updated: 0,
+      skipped: 1,
+      failed: 0,
+      messages: ['No matching Linear workflow state for In review.']
+    })
+    const item = worktree()
+    renderDrawer(item)
+
+    await act(async () => {
+      documentDropState.current?.onMoveWorktreeToStatus(item.id, 'in-review')
+      await Promise.resolve()
+    })
+
+    expect(toastWarningMock).toHaveBeenCalledWith(
+      'Task status sync skipped',
+      expect.objectContaining({
+        description: '1 skipped. No matching Linear workflow state for In review.'
+      })
+    )
+  })
+
+  it('shows an error toast when task status sync unexpectedly rejects', async () => {
+    syncWorkspaceBoardTaskStatusesMock.mockRejectedValueOnce(new Error('Runtime disconnected'))
+    const item = worktree()
+    renderDrawer(item)
+
+    await act(async () => {
+      documentDropState.current?.onMoveWorktreeToStatus(item.id, 'in-review')
+      await Promise.resolve()
+    })
+
+    expect(consoleWarnSpy).toHaveBeenCalledWith(
+      'Workspace board task status sync failed',
+      expect.any(Error)
+    )
+    expect(toastErrorMock).toHaveBeenCalledWith(
+      'Task status sync failed',
+      expect.objectContaining({
+        description: '1 failed. Runtime disconnected'
+      })
+    )
   })
 })
