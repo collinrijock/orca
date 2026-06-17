@@ -4106,7 +4106,16 @@
         },
         "WorkspaceKanbanDrawer": {
           "1975a4e480": "작업 상태 동기화 실패",
-          "e02b0d92ff": "작업 상태 동기화 건너뜀"
+          "e02b0d92ff": "작업 상태 동기화 건너뜀",
+          "c1d2e3f4a5": "Linear 이슈 {{value0}}을(를) 읽을 수 없습니다.",
+          "d2e3f4a5b6": "{{value0}}에 일치하는 Linear 워크플로 상태가 없습니다.",
+          "e3f4a5b6c7": "{{value0}}에 일치하는 Linear 워크플로 상태가 여러 개입니다.",
+          "f4a5b6c7d8": "Linear 이슈 {{value0}}을(를) 업데이트할 수 없습니다.",
+          "a5b6c7d8e9": "Linear 이슈 {{value0}}을(를) 동기화할 수 없습니다.",
+          "b6c7d8e9f0": "작업 상태 동기화를 완료할 수 없습니다.",
+          "c7d8e9f0a1": "{{value0}}개 업데이트됨",
+          "d8e9f0a1b2": "{{value0}}개 건너뜀",
+          "e9f0a1b2c3": "{{value0}}개 실패"
         }
       },
       "shared": {

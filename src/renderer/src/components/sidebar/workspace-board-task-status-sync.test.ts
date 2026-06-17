@@ -263,7 +263,7 @@ describe('syncWorkspaceBoardTaskStatuses', () => {
       updated: 0,
       skipped: 1,
       failed: 0,
-      messages: ['No matching Linear workflow state for In review.']
+      messages: [{ kind: 'missing-workflow-state', statusLabel: 'In review' }]
     })
     expect(missing.updateIssue).not.toHaveBeenCalled()
 
@@ -277,7 +277,7 @@ describe('syncWorkspaceBoardTaskStatuses', () => {
       updated: 0,
       skipped: 1,
       failed: 0,
-      messages: ['Multiple Linear workflow states match In review.']
+      messages: [{ kind: 'ambiguous-workflow-state', statusLabel: 'In review' }]
     })
     expect(ambiguous.updateIssue).not.toHaveBeenCalled()
   })
@@ -361,7 +361,13 @@ describe('syncWorkspaceBoardTaskStatuses', () => {
       updated: 0,
       skipped: 0,
       failed: 1,
-      messages: ['Linear is unavailable']
+      messages: [
+        {
+          kind: 'update-failed',
+          issueIdentifier: 'ORC-1',
+          detail: 'Linear is unavailable'
+        }
+      ]
     })
   })
 })

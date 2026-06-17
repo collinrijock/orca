@@ -4106,7 +4106,16 @@
         },
         "WorkspaceKanbanDrawer": {
           "1975a4e480": "Error al sincronizar el estado de la tarea",
-          "e02b0d92ff": "Sincronización del estado de la tarea omitida"
+          "e02b0d92ff": "Sincronización del estado de la tarea omitida",
+          "c1d2e3f4a5": "No se pudo leer la incidencia {{value0}} de Linear.",
+          "d2e3f4a5b6": "No hay ningún estado de flujo de trabajo de Linear que coincida con {{value0}}.",
+          "e3f4a5b6c7": "Varios estados de flujo de trabajo de Linear coinciden con {{value0}}.",
+          "f4a5b6c7d8": "No se pudo actualizar la incidencia {{value0}} de Linear.",
+          "a5b6c7d8e9": "No se pudo sincronizar la incidencia {{value0}} de Linear.",
+          "b6c7d8e9f0": "No se pudo completar la sincronización del estado de la tarea.",
+          "c7d8e9f0a1": "{{value0}} actualizadas",
+          "d8e9f0a1b2": "{{value0}} omitidas",
+          "e9f0a1b2c3": "{{value0}} fallidas"
         }
       },
       "shared": {

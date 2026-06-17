@@ -4106,7 +4106,16 @@
         },
         "WorkspaceKanbanDrawer": {
           "1975a4e480": "Task status sync failed",
-          "e02b0d92ff": "Task status sync skipped"
+          "e02b0d92ff": "Task status sync skipped",
+          "c1d2e3f4a5": "Linear issue {{value0}} could not be read.",
+          "d2e3f4a5b6": "No matching Linear workflow state for {{value0}}.",
+          "e3f4a5b6c7": "Multiple Linear workflow states match {{value0}}.",
+          "f4a5b6c7d8": "Could not update Linear issue {{value0}}.",
+          "a5b6c7d8e9": "Could not sync Linear issue {{value0}}.",
+          "b6c7d8e9f0": "Task status sync could not finish.",
+          "c7d8e9f0a1": "{{value0}} updated",
+          "d8e9f0a1b2": "{{value0}} skipped",
+          "e9f0a1b2c3": "{{value0}} failed"
         }
       },
       "shared": {

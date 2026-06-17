@@ -18,8 +18,16 @@ export type WorkspaceBoardTaskStatusSyncResult = {
   updated: number
   skipped: number
   failed: number
-  messages: string[]
+  messages: WorkspaceBoardTaskStatusSyncMessage[]
 }
+
+export type WorkspaceBoardTaskStatusSyncMessage =
+  | { kind: 'issue-read-failed'; issueIdentifier: string }
+  | { kind: 'missing-workflow-state'; statusLabel: string }
+  | { kind: 'ambiguous-workflow-state'; statusLabel: string }
+  | { kind: 'update-failed'; issueIdentifier: string; detail?: string }
+  | { kind: 'provider-error'; issueIdentifier: string; detail?: string }
+  | { kind: 'unexpected-error'; detail?: string }
 
 type WorkspaceBoardTaskStatusSyncDependencies = {
   getIssue: typeof linearGetIssue
@@ -89,15 +97,23 @@ function matchingWorkflowStates(
   return states.filter((state) => normalizeStateName(state.name) === targetName)
 }
 
-function addMessage(result: WorkspaceBoardTaskStatusSyncResult, message: string): void {
-  if (!result.messages.includes(message)) {
+function getMessageKey(message: WorkspaceBoardTaskStatusSyncMessage): string {
+  return JSON.stringify(message)
+}
+
+function addMessage(
+  result: WorkspaceBoardTaskStatusSyncResult,
+  message: WorkspaceBoardTaskStatusSyncMessage
+): void {
+  const key = getMessageKey(message)
+  if (!result.messages.some((item) => getMessageKey(item) === key)) {
     result.messages.push(message)
   }
 }
 
 function skipped(
   result: WorkspaceBoardTaskStatusSyncResult,
-  message?: string
+  message?: WorkspaceBoardTaskStatusSyncMessage
 ): WorkspaceBoardTaskStatusSyncResult {
   result.skipped += 1
   if (message) {
@@ -108,7 +124,7 @@ function skipped(
 
 function failed(
   result: WorkspaceBoardTaskStatusSyncResult,
-  message: string
+  message: WorkspaceBoardTaskStatusSyncMessage
 ): WorkspaceBoardTaskStatusSyncResult {
   result.failed += 1
   addMessage(result, message)
@@ -173,17 +189,26 @@ async function syncLinearWorktreeStatus(
   try {
     const issue = await deps.getIssue(settings, worktree.linkedLinearIssue, linkedWorkspaceId)
     if (!issue?.team?.id) {
-      return skipped(result, `Linear issue ${worktree.linkedLinearIssue} could not be read.`)
+      return skipped(result, {
+        kind: 'issue-read-failed',
+        issueIdentifier: worktree.linkedLinearIssue
+      })
     }
 
     const workspaceId = linkedWorkspaceId ?? issue.workspaceId
     const states = await deps.teamStates(settings, issue.team.id, workspaceId)
     const matches = matchingWorkflowStates(states, args.targetStatus)
     if (matches.length === 0) {
-      return skipped(result, `No matching Linear workflow state for ${args.targetStatus.label}.`)
+      return skipped(result, {
+        kind: 'missing-workflow-state',
+        statusLabel: args.targetStatus.label
+      })
     }
     if (matches.length > 1) {
-      return skipped(result, `Multiple Linear workflow states match ${args.targetStatus.label}.`)
+      return skipped(result, {
+        kind: 'ambiguous-workflow-state',
+        statusLabel: args.targetStatus.label
+      })
     }
 
     const [workflowState] = matches
@@ -204,18 +229,20 @@ async function syncLinearWorktreeStatus(
       workspaceId
     )
     if (updateResult.ok === false) {
-      return failed(
-        result,
-        updateResult.error || `Failed to update Linear issue ${issue.identifier}.`
-      )
+      return failed(result, {
+        kind: 'update-failed',
+        issueIdentifier: issue.identifier,
+        detail: updateResult.error
+      })
     }
     result.updated += 1
     return result
   } catch (error) {
-    return failed(
-      result,
-      error instanceof Error ? error.message : `Failed to sync ${worktree.linkedLinearIssue}.`
-    )
+    return failed(result, {
+      kind: 'provider-error',
+      issueIdentifier: worktree.linkedLinearIssue,
+      detail: error instanceof Error ? error.message : undefined
+    })
   }
 }
 

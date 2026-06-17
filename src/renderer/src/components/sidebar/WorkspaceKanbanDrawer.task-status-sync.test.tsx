@@ -34,7 +34,12 @@ const {
   documentDropState
 } = vi.hoisted(() => ({
   syncWorkspaceBoardTaskStatusesMock: vi.fn(() =>
-    Promise.resolve({ updated: 1, skipped: 0, failed: 0, messages: [] as string[] })
+    Promise.resolve({
+      updated: 1,
+      skipped: 0,
+      failed: 0,
+      messages: [] as WorkspaceBoardTaskStatusSync.WorkspaceBoardTaskStatusSyncMessage[]
+    })
   ),
   toastErrorMock: vi.fn(),
   toastWarningMock: vi.fn(),
@@ -221,6 +226,7 @@ function renderDrawer(item: Worktree, enabled = true): void {
     root.render(
       <WorkspaceKanbanDrawer
         open={true}
+        dragPreview={false}
         preserveOpenForMenu={false}
         onOpenChange={vi.fn()}
         onMenuOpenChange={vi.fn()}
@@ -334,7 +340,7 @@ describe('WorkspaceKanbanDrawer task status sync wiring', () => {
       updated: 0,
       skipped: 1,
       failed: 0,
-      messages: ['No matching Linear workflow state for In review.']
+      messages: [{ kind: 'missing-workflow-state', statusLabel: 'In review' }]
     })
     const item = worktree()
     renderDrawer(item)
@@ -369,7 +375,7 @@ describe('WorkspaceKanbanDrawer task status sync wiring', () => {
     expect(toastErrorMock).toHaveBeenCalledWith(
       'Task status sync failed',
       expect.objectContaining({
-        description: '1 failed. Runtime disconnected'
+        description: '1 failed. Task status sync could not finish.'
       })
     )
   })
