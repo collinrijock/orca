@@ -1,6 +1,10 @@
 import React, { useCallback, useEffect, useRef } from 'react'
 import { GitPullRequestArrow, Loader2, Search, X } from 'lucide-react'
-import type { GitBranchCompareSummary, SourceControlViewMode } from '../../../../shared/types'
+import type {
+  GitBranchCompareSummary,
+  GitUpstreamStatus,
+  SourceControlViewMode
+} from '../../../../shared/types'
 import type { HostedReviewInfo } from '../../../../shared/hosted-review'
 import type { PrimaryAction } from './source-control-primary-action'
 import { Button } from '@/components/ui/button'
@@ -34,7 +38,8 @@ type SourceControlHeaderToolbarProps = {
   diffCommentCount: number
   onExpandNotes: () => void
   branchSummary: GitBranchCompareSummary | null
-  branchName: string
+  compareBaseRef: string | null
+  upstreamStatus?: GitUpstreamStatus
 }
 
 function HostedReviewToolbarLink({
@@ -137,7 +142,8 @@ export function SourceControlHeaderToolbar({
   diffCommentCount,
   onExpandNotes,
   branchSummary,
-  branchName
+  compareBaseRef,
+  upstreamStatus
 }: SourceControlHeaderToolbarProps): React.JSX.Element {
   const filterInputRef = useRef<HTMLInputElement>(null)
   const normalizedFilter = filterQuery.trim()
@@ -278,11 +284,12 @@ export function SourceControlHeaderToolbar({
         )}
       </div>
 
-      {shouldShowSourceControlBranchContextRow(branchSummary) ? (
+      {shouldShowSourceControlBranchContextRow(branchSummary, compareBaseRef) ? (
         <div className="mt-1">
           <SourceControlBranchContextRow
             summary={branchSummary}
-            branchName={branchName}
+            compareBaseRef={compareBaseRef}
+            upstreamStatus={upstreamStatus}
             onChangeBaseRef={onChangeBaseRef}
             onRetry={onRefreshBranchCompare}
           />

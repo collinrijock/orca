@@ -4688,7 +4688,8 @@ function SourceControlInner(): React.JSX.Element {
           diffCommentCount={diffCommentCount}
           onExpandNotes={() => setDiffCommentsExpanded(true)}
           branchSummary={branchSummary}
-          branchName={branchName}
+          compareBaseRef={effectiveBaseRef}
+          upstreamStatus={remoteStatus}
         />
 
         {detachedHeadDisplay && (
@@ -5965,7 +5966,7 @@ export function CommitArea({
             aria-describedby={describedBy || undefined}
             // Why: reserve right padding so typed text does not slide under the
             // absolute-positioned Generate icon in the top-right corner.
-            className={`mt-0.5 w-full resize-none rounded-md border border-border bg-background px-2 py-1.5 text-xs text-foreground outline-none placeholder:text-muted-foreground/70 focus-visible:ring-1 focus-visible:ring-ring ${
+            className={`mt-0.5 min-h-14 w-full resize-none rounded-md border border-border bg-background px-2 py-1.5 text-xs text-foreground outline-none placeholder:text-muted-foreground/70 focus-visible:ring-1 focus-visible:ring-ring ${
               showGenerate ? 'pr-8' : ''
             }`}
           />

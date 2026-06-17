@@ -8391,7 +8391,15 @@
             "createPrIntentPushing": "正在推送 commits…",
             "createPrIntentRemoteFailed": "无法更新远程分支。请重试创建 PR。",
             "createPrIntentGeneratingDetails": "Generating review details…",
-            "createPrIntentCreatingReview": "Creating review…"
+            "createPrIntentCreatingReview": "Creating review…",
+            "a91f8e2b01": "View as list",
+            "b82e9f3c12": "View as tree",
+            "f71c4a8d90": "More source control actions",
+            "c8e4a1f902": "Filter: {{value0}}",
+            "b3c8f1a902": "Filter files by name",
+            "d4f8c2a901": "Clear and close filter",
+            "f9b2441bb6": "1 commit ahead of {{value0}}",
+            "b715ef615b": "{{value0}} commits ahead of {{value1}}"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "无法启动选定的 Agent。",

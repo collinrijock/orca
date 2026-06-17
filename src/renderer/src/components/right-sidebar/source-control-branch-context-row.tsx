@@ -1,45 +1,100 @@
 import React from 'react'
-import { ArrowUp, Loader2, RefreshCw } from 'lucide-react'
-import type { GitBranchCompareSummary } from '../../../../shared/types'
-import { Button } from '@/components/ui/button'
+import { Loader2, RefreshCw } from 'lucide-react'
+import type { GitBranchCompareSummary, GitUpstreamStatus } from '../../../../shared/types'
+import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { SourceControlHeaderIconButton } from './source-control-header-icon-button'
+import {
+  buildSourceControlBranchContextStats,
+  resolveSourceControlDisplayedBaseRef,
+  shouldShowSourceControlBranchContextRow
+} from './source-control-branch-context-stats'
 
-export function shouldShowSourceControlBranchContextRow(
-  summary: GitBranchCompareSummary | null
-): boolean {
-  if (!summary || summary.status === 'loading') {
-    return true
+export { shouldShowSourceControlBranchContextRow } from './source-control-branch-context-stats'
+
+function BaseRefButton({
+  baseRef,
+  onClick,
+  title
+}: {
+  baseRef: string
+  onClick: () => void
+  title: string
+}): React.JSX.Element {
+  return (
+    <button
+      type="button"
+      className="min-w-0 max-w-[9rem] truncate rounded-sm border-0 bg-transparent p-0 text-left font-mono text-[10.5px] font-medium text-foreground/90 underline decoration-border underline-offset-2 hover:text-foreground hover:decoration-foreground"
+      onClick={onClick}
+      title={`${title} (${baseRef})`}
+    >
+      {baseRef}
+    </button>
+  )
+}
+
+function ContextStat({
+  stat
+}: {
+  stat: ReturnType<typeof buildSourceControlBranchContextStats>[number]
+}): React.JSX.Element {
+  const className = cn(
+    'shrink-0 tabular-nums text-muted-foreground',
+    stat.tone === 'muted' && 'text-muted-foreground/70'
+  )
+
+  if (!stat.title) {
+    return <span className={className}>{stat.label}</span>
   }
-  if (summary.status !== 'ready') {
-    return true
-  }
-  return typeof summary.commitsAhead === 'number' && summary.commitsAhead > 0
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span className={className}>{stat.label}</span>
+      </TooltipTrigger>
+      <TooltipContent side="bottom" sideOffset={6}>
+        {stat.title}
+      </TooltipContent>
+    </Tooltip>
+  )
 }
 
 export function SourceControlBranchContextRow({
   summary,
-  branchName,
+  compareBaseRef,
+  upstreamStatus,
   onChangeBaseRef,
   onRetry
 }: {
   summary: GitBranchCompareSummary | null
-  branchName: string
+  compareBaseRef: string | null
+  upstreamStatus?: GitUpstreamStatus
   onChangeBaseRef: () => void
   onRetry: () => void
 }): React.JSX.Element | null {
-  if (!shouldShowSourceControlBranchContextRow(summary)) {
+  const displayedBaseRef = resolveSourceControlDisplayedBaseRef(summary, compareBaseRef)
+  if (!shouldShowSourceControlBranchContextRow(summary, compareBaseRef) || !displayedBaseRef) {
     return null
   }
 
+  const changeBaseTitle = translate(
+    'auto.components.right.sidebar.SourceControl.493f963029',
+    'Change base ref'
+  )
+
   if (!summary || summary.status === 'loading') {
     return (
-      <div className="flex min-w-0 items-center gap-2 text-[11px] text-muted-foreground">
+      <div className="flex min-w-0 items-center gap-1.5 text-[11px] text-muted-foreground">
         <Loader2 className="size-3 shrink-0 animate-spin" />
-        <span className="min-w-0 truncate">
-          {translate('auto.components.right.sidebar.SourceControl.11b5dd8e41', 'Comparing against')}
-          {summary?.baseRef ?? '…'}
+        <span className="shrink-0 text-muted-foreground">
+          {translate('auto.components.right.sidebar.SourceControl.e8a1c4b203', 'vs')}
         </span>
+        <BaseRefButton
+          baseRef={displayedBaseRef}
+          onClick={onChangeBaseRef}
+          title={changeBaseTitle}
+        />
       </div>
     )
   }
@@ -47,6 +102,11 @@ export function SourceControlBranchContextRow({
   if (summary.status !== 'ready') {
     return (
       <div className="flex min-w-0 items-center gap-1.5 text-[11px] text-muted-foreground">
+        <BaseRefButton
+          baseRef={displayedBaseRef}
+          onClick={onChangeBaseRef}
+          title={changeBaseTitle}
+        />
         <span className="min-w-0 flex-1 truncate" title={summary.errorMessage ?? undefined}>
           {summary.errorMessage ??
             translate(
@@ -54,15 +114,6 @@ export function SourceControlBranchContextRow({
               'Branch compare unavailable'
             )}
         </span>
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          className="h-5 shrink-0 px-1.5 text-[10px] text-muted-foreground hover:text-foreground"
-          onClick={onChangeBaseRef}
-        >
-          {translate('auto.components.right.sidebar.SourceControl.493f963029', 'Change base ref')}
-        </Button>
         <SourceControlHeaderIconButton
           icon={RefreshCw}
           label={translate('auto.components.right.sidebar.SourceControl.286dbda4d6', 'Retry')}
@@ -72,38 +123,25 @@ export function SourceControlBranchContextRow({
     )
   }
 
-  const commitsAhead = summary.commitsAhead
-  const showCommitsAhead = typeof commitsAhead === 'number' && commitsAhead > 0
-  if (!showCommitsAhead) {
-    return null
-  }
-
-  const branchLabel = branchName || summary.compareRef
-  const aheadLabel = `${commitsAhead} ${translate('auto.components.right.sidebar.SourceControl.3278b2767b', 'ahead')}`
+  const stats = buildSourceControlBranchContextStats({
+    summary,
+    baseRef: displayedBaseRef,
+    upstreamStatus
+  })
 
   return (
     <div className="flex min-w-0 items-center gap-1.5 text-[11px] text-muted-foreground">
-      <span
-        className="min-w-0 flex-1 truncate font-mono text-[10.5px]"
-        title={`${commitsAhead} ${commitsAhead === 1 ? 'commit' : 'commits'} ahead of ${summary.baseRef}`}
-      >
-        <span className="text-foreground/90">{branchLabel}</span>
-        <span className="text-muted-foreground"> → {summary.baseRef}</span>
-        <span className="text-muted-foreground"> · </span>
-        <span className="inline-flex items-center gap-0.5 font-medium text-status-success">
-          <ArrowUp className="size-2.5" />
-          {aheadLabel}
+      <span className="shrink-0">
+        {translate('auto.components.right.sidebar.SourceControl.e8a1c4b203', 'vs')}
+      </span>
+      <BaseRefButton baseRef={displayedBaseRef} onClick={onChangeBaseRef} title={changeBaseTitle} />
+      <span className="min-w-0 flex-1 truncate">
+        <span className="inline-flex min-w-0 items-center gap-1.5">
+          {stats.map((stat) => (
+            <ContextStat key={stat.key} stat={stat} />
+          ))}
         </span>
       </span>
-      <Button
-        type="button"
-        variant="ghost"
-        size="sm"
-        className="h-5 shrink-0 px-1.5 text-[10px] text-muted-foreground hover:text-foreground"
-        onClick={onChangeBaseRef}
-      >
-        {translate('auto.components.right.sidebar.SourceControl.476b77745b', 'Change Base Ref')}
-      </Button>
     </div>
   )
 }
