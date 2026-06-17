@@ -5550,8 +5550,8 @@ function SourceControlInner(): React.JSX.Element {
       />
 
       <Dialog open={baseRefDialogOpen} onOpenChange={setBaseRefDialogOpen}>
-        <DialogContent className="max-w-xl">
-          <DialogHeader>
+        <DialogContent className="flex max-h-[min(85vh,36rem)] max-w-xl flex-col overflow-hidden">
+          <DialogHeader className="shrink-0">
             <DialogTitle className="text-sm">
               {translate(
                 'auto.components.right.sidebar.SourceControl.476b77745b',
@@ -5565,28 +5565,30 @@ function SourceControlInner(): React.JSX.Element {
               )}
             </DialogDescription>
           </DialogHeader>
-          <BaseRefPicker
-            repoId={activeRepo.id}
-            currentBaseRef={pickerBaseRef}
-            onSelect={(ref) => {
-              if (baseRefOwnedByWorktree && activeWorktreeId) {
-                void updateWorktreeMeta(activeWorktreeId, { baseRef: ref })
-              } else {
-                void updateRepo(activeRepo.id, { worktreeBaseRef: ref })
-              }
-              setBaseRefDialogOpen(false)
-              window.setTimeout(() => void refreshBranchCompare(), 0)
-            }}
-            onUsePrimary={() => {
-              if (baseRefOwnedByWorktree && activeWorktreeId) {
-                void updateWorktreeMeta(activeWorktreeId, { baseRef: undefined })
-              } else {
-                void updateRepo(activeRepo.id, { worktreeBaseRef: undefined })
-              }
-              setBaseRefDialogOpen(false)
-              window.setTimeout(() => void refreshBranchCompare(), 0)
-            }}
-          />
+          <div className="min-h-0 overflow-y-auto scrollbar-sleek">
+            <BaseRefPicker
+              repoId={activeRepo.id}
+              currentBaseRef={pickerBaseRef}
+              onSelect={(ref) => {
+                if (baseRefOwnedByWorktree && activeWorktreeId) {
+                  void updateWorktreeMeta(activeWorktreeId, { baseRef: ref })
+                } else {
+                  void updateRepo(activeRepo.id, { worktreeBaseRef: ref })
+                }
+                setBaseRefDialogOpen(false)
+                window.setTimeout(() => void refreshBranchCompare(), 0)
+              }}
+              onUsePrimary={() => {
+                if (baseRefOwnedByWorktree && activeWorktreeId) {
+                  void updateWorktreeMeta(activeWorktreeId, { baseRef: undefined })
+                } else {
+                  void updateRepo(activeRepo.id, { worktreeBaseRef: undefined })
+                }
+                setBaseRefDialogOpen(false)
+                window.setTimeout(() => void refreshBranchCompare(), 0)
+              }}
+            />
+          </div>
         </DialogContent>
       </Dialog>
       <SourceControlAgentActionDialog
