@@ -67,11 +67,11 @@ export function WorktreeCardStatusSlot({
         <TooltipTrigger asChild>
           <span
             className={cn(
-              'inline-flex size-4 -translate-y-0.5 items-center justify-center p-0.5',
+              'inline-flex size-5 -translate-y-px items-center justify-center p-0.5',
               className
             )}
           >
-            <ReviewIcon review={prDisplay} className="size-3.5" />
+            <ReviewIcon review={prDisplay} className="size-4" />
             <span className="sr-only">{passiveStatusLabel}</span>
           </span>
         </TooltipTrigger>
@@ -108,7 +108,8 @@ export function WorktreeCardStatusSlot({
             onPointerDown={onPointerDown}
             onClick={onToggleUnread}
             className={cn(
-              'group/unread relative flex size-4 cursor-pointer items-center justify-center rounded transition-all',
+              'group/unread relative flex cursor-pointer items-center justify-center rounded transition-all',
+              canShowReviewStatus && prDisplay ? 'size-5' : 'size-4',
               'hover:bg-accent/80 active:scale-95',
               'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring',
               className
@@ -119,8 +120,8 @@ export function WorktreeCardStatusSlot({
               <FilledBellIcon className="size-[13px] text-amber-500 drop-shadow-sm" />
             ) : showStatus && canShowReviewStatus && prDisplay ? (
               <>
-                <span className="inline-flex size-4 -translate-y-0.5 items-center justify-center p-0.5 transition-opacity group-hover/unread:opacity-0 group-focus-within/unread:opacity-0">
-                  <ReviewIcon review={prDisplay} className="size-3.5" />
+                <span className="inline-flex size-5 -translate-y-px items-center justify-center p-0.5 transition-opacity group-hover/unread:opacity-0 group-focus-within/unread:opacity-0">
+                  <ReviewIcon review={prDisplay} className="size-4" />
                 </span>
                 <Bell className="absolute size-3 text-muted-foreground/40 opacity-0 transition-opacity group-hover/unread:opacity-100 group-focus-within/unread:opacity-100" />
               </>

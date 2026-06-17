@@ -1064,7 +1064,8 @@ const WorktreeCard = React.memo(function WorktreeCard({
       {showCombinedStatusSlot ? (
         <div
           className={cn(
-            'mr-1 flex shrink-0 items-start justify-center pt-[2px]',
+            'mr-1 flex shrink-0 justify-center',
+            compactCards ? 'items-start pt-px' : 'items-start pt-[2px]',
             affiliateListMode && 'px-1'
           )}
           data-worktree-card-status-slot=""
@@ -1143,7 +1144,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
               displayName={cardTitleDisplay}
               disabled={isDeleting || affiliateListMode}
               showUnreadEmphasis={showUnreadEmphasis}
-              className="text-[12px]"
+              className={compactCards ? 'text-[13px] leading-5' : 'text-[12px]'}
               editingClassName="flex-1"
               titleWrapper={titleWrapper}
               onEditingChange={affiliateListMode ? undefined : setTitleRenaming}
