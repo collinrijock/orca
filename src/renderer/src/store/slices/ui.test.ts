@@ -1013,7 +1013,7 @@ describe('createUISlice hydratePersistedUI', () => {
       })
     )
 
-    expect(store.getState().worktreeCardProperties).toEqual(['inline-agents'])
+    expect(store.getState().worktreeCardProperties).toEqual(['status', 'unread', 'inline-agents'])
   })
 
   it('adds default-on status items once for older persisted UI', () => {
@@ -1421,10 +1421,10 @@ describe('createUISlice hydratePersistedUI', () => {
 
     store.getState().setWorktreeCardProperties(['inline-agents', 'inline-agents'])
 
-    expect(store.getState().worktreeCardProperties).toEqual(['inline-agents'])
+    expect(store.getState().worktreeCardProperties).toEqual(['status', 'unread', 'inline-agents'])
     expect(store.getState()._worktreeCardModeDefaulted).toBe(false)
     expect(setUI).toHaveBeenCalledWith({
-      worktreeCardProperties: ['inline-agents'],
+      worktreeCardProperties: ['status', 'unread', 'inline-agents'],
       _worktreeCardModeDefaulted: false
     })
   })

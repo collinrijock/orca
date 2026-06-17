@@ -23,6 +23,7 @@ describe('worktree card property options', () => {
     const options = getWorktreeCardPropertyOptions({ newCardStyle: true })
 
     expect(options.map((option) => option.id)).not.toContain('tasks')
+    expect(options.map((option) => option.id)).not.toContain('status')
     expect(options.find((option) => option.id === 'issue')?.properties).toEqual(['issue'])
     expect(options.find((option) => option.id === 'linear-issue')?.properties).toEqual([
       'linear-issue'

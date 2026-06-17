@@ -207,6 +207,9 @@ export function getWorktreeCardPropertyOptions({
   const issueOptions = newCardStyle
     ? ISSUE_WORKTREE_CARD_PROPERTY_OPTIONS
     : [TASK_WORKTREE_CARD_PROPERTY_OPTION]
+  if (newCardStyle) {
+    return [...issueOptions, ...BASE_WORKTREE_CARD_PROPERTY_OPTIONS.slice(1)]
+  }
   return [
     BASE_WORKTREE_CARD_PROPERTY_OPTIONS[0],
     ...issueOptions,
