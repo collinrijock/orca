@@ -2924,7 +2924,7 @@ export default function SessionScreen() {
       }
       void handleCreateBrowser(url)
     },
-    [terminalLinkOpenMode]
+    [terminalLinkOpenMode, handleCreateBrowser]
   )
 
   const toggleLiveInput = useCallback(() => {
