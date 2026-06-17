@@ -1009,7 +1009,6 @@ function SourceControlInner(): React.JSX.Element {
     (s) => s.updateCommitMessageGenerationRecord
   )
 
-  const filterInputRef = useRef<HTMLInputElement>(null)
   const sourceControlCommitDraftsByWorktree = useAppStore(
     (s) => s.sourceControlCommitDraftsByWorktree
   )
@@ -2739,10 +2738,7 @@ function SourceControlInner(): React.JSX.Element {
     ) {
       return
     }
-    setCommitDraftForWorktreeIfEmpty(
-      activeWorktreeId,
-      activeCommitMessageGenerationRecord.message
-    )
+    setCommitDraftForWorktreeIfEmpty(activeWorktreeId, activeCommitMessageGenerationRecord.message)
     updateCommitMessageGenerationRecord(activeCommitMessageGenerationKey, (record) =>
       markCommitMessageGenerationHydrated(record)
     )
