@@ -2241,11 +2241,18 @@
           },
           "MobileDriverOverlay": {
             "c6460cf584": "Devolver",
-            "c44659e09f": "conducción móvil",
+            "c8f2e1a4b9": "Recuperar este terminal",
+            "c44659e09f": "Teléfono al mando",
             "7cffad954c": "Colapsar",
             "3eed73394f": "Tu teclado está en pausa",
-            "faa367dc74": "Este terminal tiene el tamaño adecuado para tu aplicación móvil",
-            "54f7d6f69d": "Cambiar tamaño de todas las terminales"
+            "faa367dc74": "Tu teléfono dejó esto en tamaño móvil",
+            "54f7d6f69d": "Recuperar todos los terminales",
+            "b3d8e1f42a": "Restaurar este terminal",
+            "e8c4f2a91b": "Restaurar todos los terminales",
+            "f2a8b9c1d3": "Desde tu teléfono",
+            "c7e4a2b8f1": "Tu teléfono está al mando",
+            "d9f3c6e2a4": "El teclado del escritorio está en pausa. Recupera este terminal para escribir aquí, recupera todos los terminales que controla tu teléfono, o colapsa para seguir mirando.",
+            "a6b1d8f3e2": "La sesión del teléfono terminó. Restaura el tamaño de escritorio para este terminal o para todos los terminales que tu teléfono dejó en tamaño móvil."
           },
           "TerminalAgentSessionForkDialog": {
             "17fc841e59": "Copiar contexto",
@@ -5080,7 +5087,7 @@
         },
         "MobilePane": {
           "dd3cd78d04": "Escanear con Orca Móvil",
-          "35100bca5d": "Mientras usas un terminal en tu teléfono, Orca lo reduce para que se ajuste a la pantalla de tu teléfono. Cuando cierra la aplicación o la abandona, esto controla si permanece en el tamaño del teléfono (para que las herramientas CLI interactivas no vuelvan a fluir) o cambia de tamaño a su escritorio. Siempre puedes hacer clic en Restaurar en el banner del terminal para cambiar su tamaño manualmente.",
+          "35100bca5d": "Mientras usas un terminal en tu teléfono, Orca lo reduce para que se ajuste a la pantalla de tu teléfono. Cuando cierra la aplicación o la abandona, esto controla si permanece en el tamaño del teléfono (para que las herramientas CLI interactivas no vuelvan a fluir) o cambia de tamaño a su escritorio. Siempre puedes usar Restaurar este terminal o Restaurar todos los terminales en el banner para cambiar el tamaño manualmente.",
           "ee56f1c7e4": "Cuando sales de la aplicación móvil",
           "3939fd062c": "Revocar un dispositivo lo desconecta inmediatamente.",
           "254a6d09e4": "emparejado",
