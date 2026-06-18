@@ -39,6 +39,13 @@ export type RetainedAgentEntry = {
   tab: TerminalTab
   agentType: AgentType
   startedAt: number
+  /** True when this snapshot is passive auto-hibernation completion evidence
+   *  (the worktree was slept while the agent had finished cleanly). The inline
+   *  agents list keeps these rows inert because activating the worktree would
+   *  resume the sleeping session. Ordinary completion snapshots (an agent that
+   *  vanished from live status without sleeping the worktree) leave this unset
+   *  so their rows stay clickable and jump to the agent's tab. */
+  hibernated?: true
 }
 
 export type AgentStatusWorktreeShutdownReason =
@@ -224,7 +231,11 @@ function retainedAgentEntryFromLive(
     worktreeId,
     tab,
     agentType,
-    startedAt: entry.stateHistory[0]?.startedAt ?? entry.stateStartedAt
+    startedAt: entry.stateHistory[0]?.startedAt ?? entry.stateStartedAt,
+    // Why: this constructor is used only by the auto-hibernation evidence
+    // paths, so the snapshots it produces are the ones whose rows must stay
+    // inert (clicking them would resume the slept session).
+    hibernated: true
   }
 }
 

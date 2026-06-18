@@ -316,7 +316,11 @@ export function buildWorktreeAgentRows(args: {
       entry: rowEntry,
       tab: ra.tab,
       agentType: resolveRowAgentType(rowEntry, ra.tab),
-      rowSource: 'retained',
+      // Why: only auto-hibernation evidence routes to the inert activation
+      // handler. Ordinary completion snapshots (a `done` agent that vanished
+      // from live status without sleeping the worktree) stay clickable so the
+      // row still jumps to the agent's tab.
+      rowSource: ra.hibernated ? 'hibernated' : 'retained',
       state: 'done',
       startedAt: ra.startedAt
     })

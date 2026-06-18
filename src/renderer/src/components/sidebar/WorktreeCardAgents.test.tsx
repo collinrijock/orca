@@ -76,8 +76,8 @@ const activationMocks = vi.hoisted(() => ({
   activateTabAndFocusPane: vi.fn()
 }))
 
-vi.mock('@/store', () => ({
-  useAppStore: (selector: (state: unknown) => unknown) =>
+vi.mock('@/store', () => {
+  const useAppStore = (selector: (state: unknown) => unknown) =>
     selector({
       agentActivityDisplayMode: mockAgentActivityDisplayMode,
       acknowledgedAgentsByPaneKey: {},
@@ -90,7 +90,15 @@ vi.mock('@/store', () => ({
       terminalLayoutsByTabId: {},
       sendPromptToSidebarAgentTarget: vi.fn()
     })
-}))
+  // Why: handleActivateAgentTab reads useAppStore.getState() after routing
+  // through activateAndRevealWorktree. Seed a matching tab so a clicked
+  // non-hibernation retained row resolves to activateTabAndFocusPane.
+  useAppStore.getState = () => ({
+    tabsByWorktree: { 'wt-1': [{ id: 'tab-1' }] },
+    agentStatusByPaneKey: {}
+  })
+  return { useAppStore }
+})
 
 vi.mock('@/lib/worktree-activation', () => ({
   activateAndRevealWorktree: activationMocks.activateAndRevealWorktree
@@ -219,9 +227,9 @@ describe('WorktreeCardAgents', () => {
     expect(markup).toContain('data-pane-key="tab-1:2"')
   })
 
-  it('keeps retained completion rows passive when activated', async () => {
+  it('keeps hibernated completion rows passive when activated', async () => {
     mockAgentActivityDisplayMode = 'full'
-    mockAgents = [mockAgent({ rowSource: 'retained', state: 'done' })]
+    mockAgents = [mockAgent({ rowSource: 'hibernated', state: 'done' })]
     const { default: WorktreeCardAgents } = await import('./WorktreeCardAgents')
 
     renderToStaticMarkup(<WorktreeCardAgents worktreeId="wt-1" />)
@@ -230,6 +238,24 @@ describe('WorktreeCardAgents', () => {
 
     expect(activationMocks.activateAndRevealWorktree).not.toHaveBeenCalled()
     expect(activationMocks.activateTabAndFocusPane).not.toHaveBeenCalled()
+  })
+
+  it('jumps to the agent tab when a non-hibernation retained completion row is activated', async () => {
+    mockAgentActivityDisplayMode = 'full'
+    const paneKey = 'tab-1:11111111-1111-4111-8111-111111111111'
+    mockAgents = [mockAgent({ rowSource: 'retained', state: 'done', paneKey })]
+    const { default: WorktreeCardAgents } = await import('./WorktreeCardAgents')
+
+    renderToStaticMarkup(<WorktreeCardAgents worktreeId="wt-1" />)
+    expect(capturedRowActivations).toHaveLength(1)
+    capturedRowActivations[0].onActivate('tab-1', paneKey)
+
+    expect(activationMocks.activateAndRevealWorktree).toHaveBeenCalledWith('wt-1')
+    expect(activationMocks.activateTabAndFocusPane).toHaveBeenCalledWith(
+      'tab-1',
+      '11111111-1111-4111-8111-111111111111',
+      expect.objectContaining({ ackPaneKeyOnSuccess: paneKey })
+    )
   })
 
   it('shows orchestration child agent rows under their parent by default', async () => {
