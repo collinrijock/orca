@@ -291,6 +291,74 @@ describe('fetchCodexRateLimits', () => {
     )
   })
 
+  it('aborts a stalled backend usage fetch instead of hanging the refresh', async () => {
+    const rpcChild = makeRpcChild()
+    childSpawnMock.mockReturnValue(rpcChild)
+    readFileMock.mockResolvedValue(
+      JSON.stringify({
+        tokens: {
+          access_token: 'access-token',
+          account_id: 'account-id'
+        }
+      })
+    )
+    // Why: model a backend that accepts the connection but never responds.
+    // The fetch only settles when its AbortSignal fires; without the timeout
+    // fix the overall fetchCodexRateLimits promise would never resolve.
+    vi.mocked(fetch).mockImplementation((_url, init?: RequestInit) => {
+      return new Promise((_resolve, reject) => {
+        const signal = init?.signal
+        if (signal) {
+          signal.addEventListener('abort', () => {
+            reject(new DOMException('The operation was aborted.', 'AbortError'))
+          })
+        }
+      })
+    })
+    rpcChild.stdin.write.mockImplementation((line: string) => {
+      const msg = JSON.parse(line) as { id?: number; method?: string }
+      if (msg.method === 'initialize') {
+        setTimeout(() => {
+          rpcChild.stdout.emit(
+            'data',
+            Buffer.from(`${JSON.stringify({ jsonrpc: '2.0', id: msg.id, result: {} })}\n`)
+          )
+        }, 0)
+      }
+      if (msg.method === 'account/rateLimits/read') {
+        setTimeout(() => {
+          rpcChild.stdout.emit(
+            'data',
+            Buffer.from(
+              `${JSON.stringify({
+                jsonrpc: '2.0',
+                id: msg.id,
+                result: { rateLimits: { primary: { usedPercent: 3 }, secondary: { usedPercent: 4 } } }
+              })}\n`
+            )
+          )
+        }, 0)
+      }
+    })
+
+    const resultPromise = fetchCodexRateLimits({ codexHomePath: '/managed/codex-home' })
+    await vi.advanceTimersByTimeAsync(1)
+    await vi.advanceTimersByTimeAsync(1)
+    // Advance past the backend usage timeout so the stalled fetch is aborted.
+    await vi.advanceTimersByTimeAsync(10_000)
+    const result = await resultPromise
+
+    // The RPC windows still resolve; the stalled backend just contributes no
+    // reset-credit metadata instead of hanging the whole refresh.
+    expect(result.status).toBe('ok')
+    expect(result.session?.usedPercent).toBe(3)
+    expect(result.rateLimitResetCredits).toBeUndefined()
+    expect(fetch).toHaveBeenCalledWith(
+      'https://chatgpt.com/backend-api/wham/usage',
+      expect.objectContaining({ signal: expect.any(AbortSignal) })
+    )
+  })
+
   it('uses reset-credit count from newer app-server responses without backend fallback', async () => {
     const rpcChild = makeRpcChild()
     childSpawnMock.mockReturnValue(rpcChild)

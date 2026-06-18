@@ -21,6 +21,7 @@ import { extractCodexAuthError, isCodexAuthError } from '../../shared/codex-auth
 const RPC_TIMEOUT_MS = 10_000
 const WSL_RPC_TIMEOUT_MS = 25_000
 const PTY_TIMEOUT_MS = 15_000
+const BACKEND_USAGE_TIMEOUT_MS = 10_000
 const MAX_DIAGNOSTIC_OUTPUT_LENGTH = 100_000
 
 export type FetchCodexRateLimitsOptions = {
@@ -175,7 +176,22 @@ async function fetchBackendRateLimitResetCredits(
   }
   // Why: published Codex 0.140 can read windows through app-server but strips
   // reset-credit metadata that the backend already returns.
-  const response = await fetch('https://chatgpt.com/backend-api/wham/usage', auth)
+  // Why timeout: this fetch runs on the normal poll/refresh path under the
+  // shared fetch lock. Without an AbortSignal a stalled backend (TCP connects
+  // but never responds) hangs for undici's ~300s default, keeping isFetching
+  // true and a forced refresh's waitForFetchIdle pending. Match the bounded
+  // signal pattern used by claude/gemini/kimi/opencode fetchers.
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), BACKEND_USAGE_TIMEOUT_MS)
+  let response: Response
+  try {
+    response = await fetch('https://chatgpt.com/backend-api/wham/usage', {
+      ...auth,
+      signal: controller.signal
+    })
+  } finally {
+    clearTimeout(timeout)
+  }
   if (!response.ok) {
     return null
   }
