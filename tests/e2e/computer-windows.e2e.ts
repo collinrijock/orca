@@ -43,6 +43,36 @@ async function waitForNotepadText(app: string, marker: string): Promise<Computer
   )
 }
 
+async function focusNotepadDocument(app: string): Promise<void> {
+  const snapshot = parseJsonOutput<{ result: ComputerSnapshotResult }>(
+    (
+      await runOrcaCli([
+        'computer',
+        'get-app-state',
+        '--app',
+        app,
+        '--restore-window',
+        '--no-screenshot',
+        '--json'
+      ])
+    ).stdout
+  )
+  const documentIndex = findRoleIndex(snapshot.result.snapshot.treeText, editableRolePattern)
+  expect(documentIndex).toBeGreaterThanOrEqual(0)
+
+  await runOrcaCli([
+    'computer',
+    'click',
+    '--app',
+    app,
+    '--element-index',
+    String(documentIndex),
+    '--restore-window',
+    '--no-screenshot',
+    '--json'
+  ])
+}
+
 describe.skipIf(!isWindows || !e2eOptIn)('computer-use Windows e2e (Notepad)', () => {
   beforeAll(async () => {
     await ensureOrcaRuntimeLaunched()
@@ -105,6 +135,7 @@ describe.skipIf(!isWindows || !e2eOptIn)('computer-use Windows e2e (Notepad)', (
   test('paste-text mutates the test-owned document', async () => {
     const app = getNotepadAppSelector()
     const marker = `orca-windows-paste-${Date.now()}`
+    await focusNotepadDocument(app)
     const action = parseJsonOutput<{ result: ComputerActionResult }>(
       (
         await runOrcaCli([
@@ -133,6 +164,7 @@ describe.skipIf(!isWindows || !e2eOptIn)('computer-use Windows e2e (Notepad)', (
   test('Unicode payloads survive paste-text', async () => {
     const app = getNotepadAppSelector()
     const unicode = `orca unicode café Ω 漢字 ${Date.now()}`
+    await focusNotepadDocument(app)
     const pasted = parseJsonOutput<{ result: ComputerActionResult }>(
       (
         await runOrcaCli([
@@ -154,6 +186,7 @@ describe.skipIf(!isWindows || !e2eOptIn)('computer-use Windows e2e (Notepad)', (
   test('hotkey and paste-text can replace the document selection', async () => {
     const app = getNotepadAppSelector()
     const first = `orca-windows-first-${Date.now()}`
+    await focusNotepadDocument(app)
     await runOrcaCli([
       'computer',
       'paste-text',
