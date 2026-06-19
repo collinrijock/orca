@@ -11399,6 +11399,7 @@
         },
         "FolderWorkspacePrChecksPanel": {
           "unavailable": "PR チェックはフォルダーワークスペースでのみ表示されます。",
+          "reviewChecks": "レビューのチェック",
           "refresh": "PR チェックを更新",
           "emptyTitle": "添付ワークツリーはまだありません",
           "emptyCopy": "このフォルダーワークスペースにワークツリーを添付すると、ここに PR チェックが表示されます。",
@@ -11407,14 +11408,13 @@
           "summary": "{{value0}} 件添付 · PR/MR あり {{value1}} 件 · 要対応 {{value2}} 件 · 保留中 {{value3}} 件 · 成功 {{value4}} 件 · PR なし {{value5}} 件 · 不明 {{value6}} 件",
           "showDetails": "{{value0}} の PR チェック詳細を表示",
           "hideDetails": "{{value0}} の PR チェック詳細を非表示",
-          "reviewChecks": "Review checks",
-          "allChecksPassing": "all checks passing",
-          "oneWorktree": "1 worktree",
-          "worktreeCount": "{{value0}} worktrees",
-          "oneFailing": "1 failing",
-          "failingCount": "{{value0}} failing",
-          "onePending": "1 pending",
-          "pendingCount": "{{value0}} pending"
+          "allChecksPassing": "すべてのチェックが成功",
+          "oneWorktree": "1 件のワークツリー",
+          "worktreeCount": "{{value0}} 件のワークツリー",
+          "oneFailing": "1 件失敗",
+          "failingCount": "{{value0}} 件失敗",
+          "onePending": "1 件保留中",
+          "pendingCount": "{{value0}} 件保留中"
         },
         "parentPrChecks": {
           "rowSummary": {

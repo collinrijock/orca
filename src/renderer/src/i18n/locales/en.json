@@ -11399,6 +11399,7 @@
         },
         "FolderWorkspacePrChecksPanel": {
           "unavailable": "PR checks are only shown for folder workspaces.",
+          "reviewChecks": "Review checks",
           "refresh": "Refresh PR checks",
           "emptyTitle": "No attached worktrees yet",
           "emptyCopy": "PR checks will appear here after worktrees are attached to this folder workspace.",
@@ -11407,7 +11408,6 @@
           "summary": "{{value0}} attached · {{value1}} with PR/MR · {{value2}} attention · {{value3}} pending · {{value4}} passing · {{value5}} no PR · {{value6}} unknown",
           "showDetails": "Show {{value0}} PR check details",
           "hideDetails": "Hide {{value0}} PR check details",
-          "reviewChecks": "Review checks",
           "allChecksPassing": "all checks passing",
           "oneWorktree": "1 worktree",
           "worktreeCount": "{{value0}} worktrees",

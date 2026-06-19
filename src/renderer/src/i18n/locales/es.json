@@ -11399,6 +11399,7 @@
         },
         "FolderWorkspacePrChecksPanel": {
           "unavailable": "Las comprobaciones de PR solo se muestran en espacios de trabajo de carpeta.",
+          "reviewChecks": "Comprobaciones de revisión",
           "refresh": "Actualizar comprobaciones de PR",
           "emptyTitle": "Aún no hay árboles de trabajo adjuntos",
           "emptyCopy": "Las comprobaciones de PR aparecerán aquí cuando se adjunten árboles de trabajo a este espacio de trabajo de carpeta.",
@@ -11407,14 +11408,13 @@
           "summary": "{{value0}} adjuntos · {{value1}} con PR/MR · {{value2}} requieren atención · {{value3}} pendientes · {{value4}} correctos · {{value5}} sin PR · {{value6}} desconocidos",
           "showDetails": "Mostrar detalles de comprobaciones de PR de {{value0}}",
           "hideDetails": "Ocultar detalles de comprobaciones de PR de {{value0}}",
-          "reviewChecks": "Review checks",
-          "allChecksPassing": "all checks passing",
-          "oneWorktree": "1 worktree",
-          "worktreeCount": "{{value0}} worktrees",
-          "oneFailing": "1 failing",
-          "failingCount": "{{value0}} failing",
-          "onePending": "1 pending",
-          "pendingCount": "{{value0}} pending"
+          "allChecksPassing": "todas las comprobaciones correctas",
+          "oneWorktree": "1 árbol de trabajo",
+          "worktreeCount": "{{value0}} árboles de trabajo",
+          "oneFailing": "1 fallando",
+          "failingCount": "{{value0}} fallando",
+          "onePending": "1 pendiente",
+          "pendingCount": "{{value0}} pendientes"
         },
         "parentPrChecks": {
           "rowSummary": {
