@@ -58,7 +58,6 @@ export function SourceControlViewModeEducation({
               type="button"
               size="xs"
               variant={sourceControlViewMode === 'tree' ? 'secondary' : 'outline'}
-              className="h-6 px-2 text-[11px]"
               disabled={disabled}
               onClick={() => onChooseViewMode('tree')}
             >
@@ -69,7 +68,6 @@ export function SourceControlViewModeEducation({
               type="button"
               size="xs"
               variant={sourceControlViewMode === 'list' ? 'secondary' : 'outline'}
-              className="h-6 px-2 text-[11px]"
               disabled={disabled}
               onClick={() => onChooseViewMode('list')}
             >

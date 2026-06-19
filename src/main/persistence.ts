@@ -2471,7 +2471,10 @@ export class Store {
         // Merge with defaults in case new fields were added
         const homeDir = homedir()
         const defaults = getDefaultPersistedState(homeDir)
-        const rawSettings = parsed.settings as Partial<GlobalSettings> | undefined
+        const rawSettings =
+          parsed.settings && typeof parsed.settings === 'object' && !Array.isArray(parsed.settings)
+            ? (parsed.settings as Partial<GlobalSettings>)
+            : undefined
         const hasPersistedSourceControlViewMode =
           rawSettings !== undefined &&
           Object.prototype.hasOwnProperty.call(rawSettings, 'sourceControlViewMode')

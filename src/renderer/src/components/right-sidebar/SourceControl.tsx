@@ -542,6 +542,8 @@ function requestSourceControlEditorRevealFrame(
 type CommitDraftsByWorktree = Record<string, string>
 
 export function normalizeSourceControlViewMode(value: unknown): SourceControlViewMode {
+  // Why: missing renderer values should match the new-profile default; the
+  // persistence load path separately preserves legacy implicit-list profiles.
   return value === 'tree' || value === 'list' ? value : 'tree'
 }
 
