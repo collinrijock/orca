@@ -4,26 +4,15 @@ import { toast } from 'sonner'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { useAppStore } from '@/store'
 import { PhoneCarousel } from './PhoneCarousel'
-import {
-  HeroFlow,
-  HeroIntro,
-  HeroPaired,
-  type PairedDevice,
-  type Platform,
-  type StepIndex
-} from './MobileHero'
+import { HeroFlow, HeroIntro, HeroPaired, type Platform, type StepIndex } from './MobileHero'
 import { PLATFORM_COPY } from './mobile-platform-copy'
 import {
   selectRefreshedNetworkAddress,
   type MobileNetworkInterface
 } from '../settings/mobile-network-interface-selection'
-import { useMobilePairingDevicePolling } from '../settings/mobile-pairing-device-polling'
-import {
-  shouldShowPairedAfterDeviceRefresh,
-  type MobilePageStage as FlowStage
-} from './mobile-page-stage'
 import { MobilePageToolbar } from './MobilePageToolbar'
 import { translate } from '@/i18n/i18n'
+import { useMobilePagePairedDevices } from './use-mobile-page-paired-devices'
 
 async function renderQrDataUrl(text: string): Promise<string> {
   return QRCodeBrowser.toDataURL(text, {
@@ -34,9 +23,6 @@ async function renderQrDataUrl(text: string): Promise<string> {
 }
 
 export default function MobilePage(): React.JSX.Element {
-  // Why: stage starts unresolved so we don't flash the intro before we know
-  // whether any devices are already paired.
-  const [stage, setStage] = useState<FlowStage | null>(null)
   const [stepIdx, setStepIdx] = useState<StepIndex>(0)
 
   const [platform, setPlatform] = useState<Platform>('ios')
@@ -48,127 +34,21 @@ export default function MobilePage(): React.JSX.Element {
   const [networkInterfaces, setNetworkInterfaces] = useState<MobileNetworkInterface[]>([])
   const [selectedAddress, setSelectedAddress] = useState<string | undefined>(undefined)
   const [refreshingNetworkInterfaces, setRefreshingNetworkInterfaces] = useState(false)
-  const [devices, setDevices] = useState<PairedDevice[]>([])
-  const [revokingDeviceIds, setRevokingDeviceIds] = useState<string[]>([])
-  const [deviceCountAtPairStart, setDeviceCountAtPairStart] = useState<number | null>(null)
   const hasGeneratedRef = useRef(false)
   const mountedRef = useMountedRef()
-  const stageRef = useRef<FlowStage | null>(null)
-  const deviceCountAtPairStartRef = useRef<number | null>(null)
   const closeMobilePage = useAppStore((s) => s.closeMobilePage)
   const showMobileButton = useAppStore((s) => s.settings?.showMobileButton !== false)
   const updateSettings = useAppStore((s) => s.updateSettings)
-
-  const setPairingDeviceBaseline = useCallback(
-    (count: number | null): void => {
-      deviceCountAtPairStartRef.current = count
-      if (mountedRef.current) {
-        setDeviceCountAtPairStart(count)
-      }
-    },
-    [mountedRef]
-  )
-
-  const showStage = useCallback(
-    (nextStage: FlowStage | null): void => {
-      stageRef.current = nextStage
-      if (mountedRef.current) {
-        setStage(nextStage)
-      }
-    },
-    [mountedRef]
-  )
-
-  const showPairedDevices = useCallback(
-    (deviceCount: number): void => {
-      // Why: paired-view polling uses this baseline; setting it with the
-      // transition avoids the render-plus-Effect gap where polling stops.
-      setPairingDeviceBaseline(deviceCount)
-      showStage('paired')
-    },
-    [setPairingDeviceBaseline, showStage]
-  )
-
-  const loadDevices = useCallback(async (): Promise<PairedDevice[]> => {
-    try {
-      const result = await window.api.mobile.listDevices()
-      if (mountedRef.current) {
-        setDevices(result.devices)
-        if (
-          shouldShowPairedAfterDeviceRefresh({
-            stage: stageRef.current,
-            deviceCountAtPairStart: deviceCountAtPairStartRef.current,
-            nextDeviceCount: result.devices.length
-          })
-        ) {
-          showPairedDevices(result.devices.length)
-        }
-      }
-      return result.devices
-    } catch (err) {
-      // Log so a transient IPC failure (which routes the user to 'intro') is
-      // observable; keep returning [] so callers' behavior is unchanged.
-      console.error('mobile.listDevices failed', err)
-      return []
-    }
-  }, [mountedRef, showPairedDevices])
-
-  // Why: pick the initial stage based on whether any devices are already
-  // paired so returning users don't see the marketing intro every time.
-  useEffect(() => {
-    let cancelled = false
-    void (async () => {
-      const initialDevices = await loadDevices()
-      if (cancelled) {
-        return
-      }
-      if (initialDevices.length > 0) {
-        showPairedDevices(initialDevices.length)
-      } else {
-        showStage('intro')
-      }
-    })()
-    return () => {
-      cancelled = true
-    }
-  }, [loadDevices, showPairedDevices, showStage])
-
-  const revokeDevice = useCallback(
-    async (deviceId: string) => {
-      // Dedupe rapid double-clicks: if a revoke for this id is already in
-      // flight, bail before issuing a second IPC call.
-      let alreadyRevoking = false
-      setRevokingDeviceIds((prev) => {
-        if (prev.includes(deviceId)) {
-          alreadyRevoking = true
-          return prev
-        }
-        return [...prev, deviceId]
-      })
-      if (alreadyRevoking) {
-        return
-      }
-      try {
-        await window.api.mobile.revokeDevice({ deviceId })
-        const remaining = await loadDevices()
-        if (mountedRef.current) {
-          toast.success(translate("auto.components.mobile.MobilePage.255372e6e8", "Device revoked"))
-        }
-        if (remaining.length === 0 && mountedRef.current) {
-          showStage('intro')
-        }
-      } catch {
-        if (mountedRef.current) {
-          toast.error(translate("auto.components.mobile.MobilePage.4e1eb5d55c", "Failed to revoke device"))
-        }
-      } finally {
-        if (mountedRef.current) {
-          setRevokingDeviceIds((prev) => prev.filter((id) => id !== deviceId))
-        }
-      }
-    },
-    [loadDevices, mountedRef, showStage]
-  )
+  const {
+    devices,
+    enterFlow: showFirstPairingFlow,
+    handleBack,
+    pairAnotherDevice: showPairAnotherDeviceFlow,
+    revokeDevice,
+    revokingDeviceIds,
+    showPairedDevices,
+    stage
+  } = useMobilePagePairedDevices({ stepIdx, setStepIdx })
 
   // Why: render install QRs lazily — only after the user enters the flow,
   // and re-render whenever the platform changes.
@@ -216,12 +96,22 @@ export default function MobilePage(): React.JSX.Element {
           hasGeneratedRef.current = true
         } else {
           if (mountedRef.current) {
-            toast.error(translate("auto.components.mobile.MobilePage.b353e18de1", "WebSocket transport is not running"))
+            toast.error(
+              translate(
+                'auto.components.mobile.MobilePage.b353e18de1',
+                'WebSocket transport is not running'
+              )
+            )
           }
         }
       } catch {
         if (mountedRef.current) {
-          toast.error(translate("auto.components.mobile.MobilePage.4c8bd11c1a", "Failed to generate pairing code"))
+          toast.error(
+            translate(
+              'auto.components.mobile.MobilePage.4c8bd11c1a',
+              'Failed to generate pairing code'
+            )
+          )
         }
       } finally {
         if (mountedRef.current) {
@@ -283,12 +173,16 @@ export default function MobilePage(): React.JSX.Element {
     try {
       await window.api.ui.writeClipboardText(pairingUrl)
       if (mountedRef.current) {
-        toast.success(translate("auto.components.mobile.MobilePage.3c1f7168bb", "Pairing code copied"))
+        toast.success(
+          translate('auto.components.mobile.MobilePage.3c1f7168bb', 'Pairing code copied')
+        )
       }
     } catch (err) {
       console.error('writeClipboardText failed', err)
       if (mountedRef.current) {
-        toast.error(translate("auto.components.mobile.MobilePage.6a66e38943", "Failed to copy pairing code"))
+        toast.error(
+          translate('auto.components.mobile.MobilePage.6a66e38943', 'Failed to copy pairing code')
+        )
       }
     }
   }, [mountedRef, pairingUrl])
@@ -303,52 +197,24 @@ export default function MobilePage(): React.JSX.Element {
     void generatePairing(false)
   }, [stage, stepIdx, generatePairing])
 
-  // Why: poll for new pairings while the user is on Step 2 so we can
-  // auto-transition to the paired summary the moment their phone connects.
-  const polledLoadDevices = useCallback(async () => {
-    await loadDevices()
-  }, [loadDevices])
-
-  // Why: poll for new pairings on Step 2 (waiting for the first pair) and
-  // also on the paired view (so additional phones that finish pairing while
-  // the user is reading the list show up without a manual refresh).
-  useMobilePairingDevicePolling({
-    deviceCountAtQr:
-      (stage === 'flow' && stepIdx === 1) || stage === 'paired' ? deviceCountAtPairStart : null,
-    currentDeviceCount: devices.length,
-    loadDevices: polledLoadDevices
-  })
-
   const enterFlow = (): void => {
-    setStepIdx(0)
-    setPairingDeviceBaseline(devices.length)
     // Force the auto-generate effect to mint a fresh pairing token on next
     // entry into Step 2, and clear stale QR state so we never flash an
     // expired code from a previous session.
     hasGeneratedRef.current = false
     setPairQrDataUrl(null)
     setPairingUrl(null)
-    showStage('flow')
+    showFirstPairingFlow()
   }
 
   // Why: from the paired summary, "Pair another device" jumps straight to
   // Step 2 since the app is presumably already installed on the user's phone.
   const pairAnotherDevice = (): void => {
-    setStepIdx(1)
-    setPairingDeviceBaseline(devices.length)
     // Same reset as enterFlow — re-entering must mint a fresh pairing offer.
     hasGeneratedRef.current = false
     setPairQrDataUrl(null)
     setPairingUrl(null)
-    showStage('flow')
-  }
-
-  const handleBack = (): void => {
-    if (stepIdx === 1) {
-      setStepIdx(0)
-    } else {
-      showStage('intro')
-    }
+    showPairAnotherDeviceFlow()
   }
 
   const handleContinue = (): void => {
@@ -365,12 +231,16 @@ export default function MobilePage(): React.JSX.Element {
     try {
       await window.api.ui.writeClipboardText(PLATFORM_COPY[platform].url)
       if (mountedRef.current) {
-        toast.success(translate("auto.components.mobile.MobilePage.fad833de8d", "Install link copied"))
+        toast.success(
+          translate('auto.components.mobile.MobilePage.fad833de8d', 'Install link copied')
+        )
       }
     } catch (err) {
       console.error('writeClipboardText failed', err)
       if (mountedRef.current) {
-        toast.error(translate("auto.components.mobile.MobilePage.baea63c445", "Failed to copy link"))
+        toast.error(
+          translate('auto.components.mobile.MobilePage.baea63c445', 'Failed to copy link')
+        )
       }
     }
   }
@@ -417,9 +287,9 @@ export default function MobilePage(): React.JSX.Element {
       />
       <section className="mp-hero">
         <div className="mp-hero-copy">
-          {stage === null ? null : stage === "intro" ? (
+          {stage === null ? null : stage === 'intro' ? (
             <HeroIntro onStart={enterFlow} />
-          ) : stage === "paired" ? (
+          ) : stage === 'paired' ? (
             <HeroPaired
               devices={devices}
               onPairAnother={pairAnotherDevice}
@@ -452,7 +322,10 @@ export default function MobilePage(): React.JSX.Element {
           )}
         </div>
 
-        <div className="mp-stage" aria-label={translate("auto.components.mobile.MobilePage.e17393c6a3", "Phone preview")}>
+        <div
+          className="mp-stage"
+          aria-label={translate('auto.components.mobile.MobilePage.e17393c6a3', 'Phone preview')}
+        >
           <PhoneCarousel />
         </div>
       </section>

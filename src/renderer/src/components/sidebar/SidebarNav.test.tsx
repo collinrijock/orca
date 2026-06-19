@@ -3,6 +3,7 @@
 import { act, type ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { TooltipProvider } from '@/components/ui/tooltip'
 import { getDefaultSettings } from '../../../../shared/constants'
 import type { GlobalSettings, Repo } from '../../../../shared/types'
 
@@ -16,6 +17,7 @@ const mocks = vi.hoisted(() => ({
   updateSettings: vi.fn(),
   refreshPreflightStatus: vi.fn(),
   checkLinearConnection: vi.fn(),
+  hasPairedMobileDevice: false,
   dismissMobileOnboardingBadge: vi.fn(),
   setSetupGuideSidebarDismissed: vi.fn()
 }))
@@ -42,6 +44,7 @@ vi.mock('@/hooks/useShortcutLabel', () => ({
 vi.mock('./mobile-sidebar-onboarding-badge', () => ({
   useMobileSidebarOnboardingBadge: () => ({
     visible: false,
+    hasPairedDevice: mocks.hasPairedMobileDevice,
     dismiss: mocks.dismissMobileOnboardingBadge
   })
 }))
@@ -141,7 +144,11 @@ async function renderSidebarNav(): Promise<HTMLDivElement> {
   const root = createRoot(container)
   mountedRoots.push(root)
   await act(async () => {
-    root.render(<SidebarNav />)
+    root.render(
+      <TooltipProvider>
+        <SidebarNav />
+      </TooltipProvider>
+    )
   })
   return container
 }
@@ -191,6 +198,7 @@ describe('SidebarNav', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+    mocks.hasPairedMobileDevice = false
     setSidebarState()
   })
 
@@ -223,6 +231,24 @@ describe('SidebarNav', () => {
 
   it('hides the Mobile entry when the sidebar setting is off', () => {
     expect(shouldShowMobileButton({ showMobileButton: false })).toBe(false)
+  })
+
+  it('keeps Mobile visible after pairing and offers an inline hide control', async () => {
+    mocks.hasPairedMobileDevice = true
+
+    const container = await renderSidebarNav()
+    const hideButton = container.querySelector<HTMLButtonElement>(
+      'button[aria-label="Hide from sidebar"]'
+    )
+
+    expect(queryButtonByText(container, 'Orca Mobile')).not.toBeNull()
+    expect(hideButton).not.toBeNull()
+    expect(hideButton?.querySelector('svg')).not.toBeNull()
+
+    await clickButton(hideButton as HTMLButtonElement)
+
+    expect(mocks.updateSettings).toHaveBeenCalledWith({ showMobileButton: false })
+    expect(mocks.openMobilePage).not.toHaveBeenCalled()
   })
 
   it('shows the Automations entry by default for older settings', () => {
