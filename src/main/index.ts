@@ -145,6 +145,7 @@ import type { AgentStatusState } from '../shared/agent-status-types'
 import { KeybindingService } from './keybindings/keybinding-service'
 import { applyElectronProxySettings } from './network/proxy-settings'
 import { preserveAgentAuthBeforeRestart } from './agent-auth-restart-preservation'
+import { CliInstaller } from './cli/cli-installer'
 
 let mainWindow: BrowserWindow | null = null
 /** Whether a manual app.quit() (Cmd+Q, etc.) is in progress. Shared with the
@@ -1603,6 +1604,24 @@ app.whenReady().then(async () => {
       throw error
     })
     installServeSignalHandlers()
+    // Why: the `orca` CLI command (~/.local/bin/orca on Linux, /usr/local/bin/orca on
+    // macOS) is normally installed by the renderer onboarding / Settings "Install CLI"
+    // flow via the cli:install IPC. Headless serve has no renderer, so without this the
+    // command is never created and an in-terminal `orca …` — including the Claude Team
+    // launcher `orca claude-teams` opened by "Start new agent" — fails with
+    // command-not-found. The installer is idempotent and best-effort: a failure must
+    // not block serve startup.
+    try {
+      const cliStatus = await new CliInstaller().install()
+      console.log(
+        `[serve] orca CLI install: ${cliStatus.state}${cliStatus.commandPath ? ` (${cliStatus.commandPath})` : ''}`
+      )
+    } catch (error) {
+      console.warn(
+        '[serve] orca CLI install skipped:',
+        error instanceof Error ? error.message : String(error)
+      )
+    }
     await printServeReady(serveOptions)
     return
   }
