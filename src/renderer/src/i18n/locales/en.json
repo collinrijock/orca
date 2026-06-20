@@ -5036,7 +5036,12 @@
           "f35007e6e8": "git-username",
           "3d172725cc": "None",
           "1f32ba27a6": "Custom",
-          "a182c5125e": "Git Username"
+          "a182c5125e": "Git Username",
+          "sourceControlGroupOrderTitle": "Source Control Group Order",
+          "sourceControlGroupOrderDescription": "Choose whether Changes, Staged Changes, or Untracked Files appear first in Source Control.",
+          "changesFirst": "Changes first",
+          "stagedFirst": "Staged first",
+          "untrackedFirst": "Untracked first"
         },
         "HiddenExperimentalGroup": {
           "d0f914a528": "Placeholder toggle",
@@ -7125,7 +7130,15 @@
             "1d2fae1fa2": "git username",
             "f83c8937c4": "branch naming",
             "5ecd91c5ef": "Prefix added to branch names when creating worktrees.",
-            "68bd65fdb8": "Branch Prefix"
+            "68bd65fdb8": "Branch Prefix",
+            "sourceControlGroupOrderTitle": "Source Control Group Order",
+            "sourceControlGroupOrderDescription": "Choose whether Changes, Staged Changes, or Untracked Files appear first in Source Control.",
+            "groupOrder": "group order",
+            "changesFirst": "changes first",
+            "stagedFirst": "staged first",
+            "untrackedFirst": "untracked first",
+            "sourceControl": "source control",
+            "gitChanges": "git changes"
           }
         },
         "input": {
@@ -8448,6 +8461,7 @@
             "a1f2c8d901": "View"
           },
           "SourceControl": {
+            "conflictsSection": "Conflicts",
             "1406954883": "Clear all notes...",
             "cc05b2d088": "Open in File Explorer",
             "03194cfff4": "Local session state derived from a conflict you opened here.",
@@ -8907,7 +8921,8 @@
                   "9e779995dd": "Create {{value0}}",
                   "226b85a3a7": "Fetch",
                   "323bb614aa": "Commit & Sync",
-                  "2b8e6595fd": "Commit"
+                  "2b8e6595fd": "Commit",
+                  "04d709801d": "Fetch from remote without merging"
                 }
               },
               "primary": {

@@ -2316,6 +2316,7 @@ export type OpenInApplication = {
 }
 
 export type SourceControlViewMode = 'list' | 'tree'
+export type SourceControlGroupOrder = 'changes-first' | 'staged-first' | 'untracked-first'
 
 export type LeftSidebarAppearanceMode = 'default' | 'match-terminal' | 'tinted'
 
@@ -2497,6 +2498,8 @@ export type GlobalSettings = {
   showGitIgnoredFiles?: boolean
   /** Preferred Source Control changes layout. Per-user, not per-workspace. */
   sourceControlViewMode: SourceControlViewMode
+  /** Preferred Source Control group order. Per-user, not per-workspace. */
+  sourceControlGroupOrder: SourceControlGroupOrder
   /** Whether to show the Orca app name in the titlebar. */
   showTitlebarAppName: boolean
   /** Why: some users do not use the Tasks feature and prefer to keep the

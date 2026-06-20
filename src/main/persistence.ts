@@ -128,6 +128,7 @@ import { normalizeTaskProviderSettings } from '../shared/task-providers'
 import { normalizeAutoRenameBranchFromWorkDefaultOn } from '../shared/auto-rename-branch-from-work-settings'
 import { normalizeOpenInApplications } from '../shared/open-in-applications'
 import { normalizeTerminalShortcutPolicy } from '../shared/keybindings'
+import { normalizeSourceControlGroupOrder } from '../shared/source-control-group-order'
 import { normalizeAppIconId } from '../shared/app-icon'
 import { normalizeTerminalCustomThemes } from '../shared/terminal-custom-themes'
 import {
@@ -2657,6 +2658,15 @@ export class Store {
           parsed.settings?.compactWorktreeCards ??
           parsed.settings?.experimentalCompactWorktreeCards ??
           defaults.settings.compactWorktreeCards
+        const normalizedSourceControlGroupOrder = normalizeSourceControlGroupOrder(
+          parsed.settings?.sourceControlGroupOrder
+        )
+        if (
+          parsed.settings?.sourceControlGroupOrder !== undefined &&
+          parsed.settings.sourceControlGroupOrder !== normalizedSourceControlGroupOrder
+        ) {
+          this.loadNeedsSave = true
+        }
         result = {
           ...defaults,
           ...parsed,
@@ -2732,6 +2742,7 @@ export class Store {
             }),
             notifications: normalizeNotificationSettings(parsed.settings?.notifications),
             sourceControlAi: migratedSourceControlAi,
+            sourceControlGroupOrder: normalizedSourceControlGroupOrder,
             // Why: new builds read sourceControlAi, but rollback builds still
             // write commitMessageAi; after merging those writes, refresh the
             // legacy projection for continued rollback compatibility.
@@ -4554,6 +4565,11 @@ export class Store {
     if ('terminalShortcutPolicy' in updates) {
       sanitizedUpdates.terminalShortcutPolicy = normalizeTerminalShortcutPolicy(
         updates.terminalShortcutPolicy
+      )
+    }
+    if ('sourceControlGroupOrder' in updates) {
+      sanitizedUpdates.sourceControlGroupOrder = normalizeSourceControlGroupOrder(
+        updates.sourceControlGroupOrder
       )
     }
     if ('appIcon' in updates) {

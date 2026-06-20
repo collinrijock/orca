@@ -4999,7 +4999,12 @@
           "f35007e6e8": "nombre de usuario git",
           "3d172725cc": "Ninguno",
           "1f32ba27a6": "Costumbre",
-          "a182c5125e": "Nombre de usuario"
+          "a182c5125e": "Nombre de usuario",
+          "sourceControlGroupOrderTitle": "Orden de grupos de control de código fuente",
+          "sourceControlGroupOrderDescription": "Elige si Cambios, Cambios preparados o Archivos sin seguimiento aparecen primero en Control de código fuente.",
+          "changesFirst": "Cambios primero",
+          "stagedFirst": "Cambios preparados primero",
+          "untrackedFirst": "Archivos sin seguimiento primero"
         },
         "HiddenExperimentalGroup": {
           "d0f914a528": "Alternar marcador de posición",
@@ -7088,7 +7093,15 @@
             "1d2fae1fa2": "nombre de usuario git",
             "f83c8937c4": "denominación de sucursales",
             "5ecd91c5ef": "Prefijo agregado a los nombres de las ramas al crear árboles de trabajo.",
-            "68bd65fdb8": "Prefijo de rama"
+            "68bd65fdb8": "Prefijo de rama",
+            "sourceControlGroupOrderTitle": "Orden de grupos de control de código fuente",
+            "sourceControlGroupOrderDescription": "Elige si Cambios, Cambios preparados o Archivos sin seguimiento aparecen primero en Control de código fuente.",
+            "groupOrder": "orden de grupos",
+            "changesFirst": "cambios primero",
+            "stagedFirst": "cambios preparados primero",
+            "untrackedFirst": "sin seguimiento primero",
+            "sourceControl": "control de código fuente",
+            "gitChanges": "cambios de git"
           }
         },
         "input": {
@@ -8448,6 +8461,7 @@
             "a1f2c8d901": "Ver"
           },
           "SourceControl": {
+            "conflictsSection": "Conflictos",
             "1406954883": "Borrar todas las notas...",
             "cc05b2d088": "Abrir en el Explorador de archivos",
             "03194cfff4": "Estado de la sesión local derivado de un conflicto que abrió aquí.",
@@ -8907,7 +8921,8 @@
                   "9e779995dd": "Crear {{value0}}",
                   "226b85a3a7": "Buscar",
                   "323bb614aa": "Commit y sincronizar",
-                  "2b8e6595fd": "Commit"
+                  "2b8e6595fd": "Commit",
+                  "04d709801d": "Fetch from remote without merging"
                 }
               },
               "primary": {
@@ -9146,7 +9161,7 @@
             }
           },
           "SourceControlEntryContextMenu": {
-            "a1f2c8d901": "View"
+            "a1f2c8d901": "Ver"
           }
         }
       },

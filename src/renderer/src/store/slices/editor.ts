@@ -500,7 +500,8 @@ export type EditorSlice = {
     worktreeId: string,
     worktreePath: string,
     alternate?: CombinedDiffAlternate,
-    areaFilter?: string
+    areaFilter?: string,
+    entriesSnapshot?: GitStatusEntry[]
   ) => void
   openConflictFile: (
     worktreeId: string,
@@ -2630,7 +2631,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
     )
   },
 
-  openAllDiffs: (worktreeId, worktreePath, alternate, areaFilter) => {
+  openAllDiffs: (worktreeId, worktreePath, alternate, areaFilter, entriesSnapshot) => {
     const id = areaFilter
       ? `${worktreeId}::all-diffs::uncommitted::${areaFilter}`
       : `${worktreeId}::all-diffs::uncommitted`
@@ -2640,12 +2641,14 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         ] ?? 'All Changes')
       : 'All Changes'
     set((s) => {
-      const relevantEntries = (s.gitStatusByWorktree[worktreeId] ?? []).filter((entry) => {
-        if (areaFilter) {
-          return entry.area === areaFilter
-        }
-        return entry.area !== 'untracked'
-      })
+      const relevantEntries =
+        entriesSnapshot ??
+        (s.gitStatusByWorktree[worktreeId] ?? []).filter((entry) => {
+          if (areaFilter) {
+            return entry.area === areaFilter
+          }
+          return entry.area !== 'untracked'
+        })
       const skippedConflicts = relevantEntries
         .filter((entry) => entry.conflictStatus === 'unresolved' && entry.conflictKind)
         .map((entry) => ({ path: entry.path, conflictKind: entry.conflictKind! }))

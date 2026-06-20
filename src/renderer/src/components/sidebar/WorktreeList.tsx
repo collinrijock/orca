@@ -349,6 +349,14 @@ function handleRepoHeaderActionPointerDown(event: React.PointerEvent<HTMLElement
   event.stopPropagation()
 }
 
+function handleRepoHeaderCollapseAffordancePointerDown(
+  event: React.PointerEvent<HTMLElement>
+): void {
+  // Why: repo-header drag arms from the row press surface; keep collapse
+  // clicks on the hover chevron from promoting into a drag session.
+  event.stopPropagation()
+}
+
 function stopRepoHeaderMenuEvent(event: React.SyntheticEvent<HTMLElement>): void {
   event.stopPropagation()
 }
@@ -3666,6 +3674,11 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                 (isConfirmedStaleFolderPathStatus(projectGroupPathStatus) ||
                   projectGroupPathStatus.reason === 'ambiguous-connection')
               const projectGroupDepth = row.projectGroupDepth ?? 0
+              const isHeaderCollapsed = collapsedGroups.has(row.key)
+              // Why: repo/project headers already reveal actions on hover; tuck
+              // the collapse chevron into that cluster instead of a new surface.
+              const showHeaderCollapseAffordance =
+                row.count > 0 && (isRepoHeader || isProjectGroupHeader)
               // Why: non-project section headers like "All" are labels for the
               // flat list, so they should not reserve project hierarchy indent.
               const headerPaddingLeft =
@@ -3704,6 +3717,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                   <div
                     role="button"
                     tabIndex={0}
+                    aria-expanded={showHeaderCollapseAffordance ? !isHeaderCollapsed : undefined}
                     data-repo-header-id={projectIdForHeader}
                     data-repo-header-index={repoHeaderIndex}
                     data-repo-header-bucket={repoHeaderBucketKey}
@@ -3797,6 +3811,27 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                     </div>
 
                     <ProjectHeaderActions>
+                      {showHeaderCollapseAffordance ? (
+                        <div
+                          className="flex size-5 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent/70 hover:text-foreground"
+                          data-repo-header-collapse-affordance=""
+                          aria-hidden
+                          onPointerDown={handleRepoHeaderCollapseAffordancePointerDown}
+                          onClick={(event) => {
+                            event.preventDefault()
+                            event.stopPropagation()
+                            toggleGroupWithScrollAnchor(row.key)
+                          }}
+                        >
+                          <ChevronDown
+                            className={cn(
+                              'size-3.5 transition-transform',
+                              isHeaderCollapsed && '-rotate-90'
+                            )}
+                          />
+                        </div>
+                      ) : null}
+
                       {isProjectGroupHeader && !row.repo && row.projectGroup?.id ? (
                         <DropdownMenu modal={false}>
                           <DropdownMenuTrigger asChild>

@@ -5021,7 +5021,12 @@
           "f35007e6e8": "git ユーザー名",
           "3d172725cc": "なし",
           "1f32ba27a6": "カスタム",
-          "a182c5125e": "Gitのユーザー名"
+          "a182c5125e": "Gitのユーザー名",
+          "sourceControlGroupOrderTitle": "ソース管理のグループ順序",
+          "sourceControlGroupOrderDescription": "ソース管理で「変更」「ステージ済みの変更」「未追跡ファイル」のどれを先に表示するかを選択します。",
+          "changesFirst": "変更を先頭",
+          "stagedFirst": "ステージ済みを先頭",
+          "untrackedFirst": "未追跡を先頭"
         },
         "HiddenExperimentalGroup": {
           "d0f914a528": "プレースホルダーの切り替え",
@@ -7110,7 +7115,15 @@
             "1d2fae1fa2": "git ユーザー名",
             "f83c8937c4": "ブランチの命名",
             "5ecd91c5ef": "ワークツリーの作成時にブランチ名に追加されるプレフィックス。",
-            "68bd65fdb8": "ブランチプレフィックス"
+            "68bd65fdb8": "ブランチプレフィックス",
+            "sourceControlGroupOrderTitle": "ソース管理のグループ順序",
+            "sourceControlGroupOrderDescription": "ソース管理で「変更」「ステージ済みの変更」「未追跡ファイル」のどれを先に表示するかを選択します。",
+            "groupOrder": "グループ順序",
+            "changesFirst": "変更を先頭",
+            "stagedFirst": "ステージ済みを先頭",
+            "untrackedFirst": "未追跡を先頭",
+            "sourceControl": "ソース管理",
+            "gitChanges": "git の変更"
           }
         },
         "input": {
@@ -8448,6 +8461,7 @@
             "a1f2c8d901": "表示"
           },
           "SourceControl": {
+            "conflictsSection": "競合",
             "1406954883": "すべてのメモをクリアします...",
             "cc05b2d088": "ファイルエクスプローラーで開く",
             "03194cfff4": "ここで開いた競合から派生したローカル セッション状態。",
@@ -8907,7 +8921,8 @@
                   "9e779995dd": "{{value0}} を作成する",
                   "226b85a3a7": "フェッチ",
                   "323bb614aa": "Commit と同期",
-                  "2b8e6595fd": "Commit"
+                  "2b8e6595fd": "Commit",
+                  "04d709801d": "Fetch from remote without merging"
                 }
               },
               "primary": {
@@ -9146,7 +9161,7 @@
             }
           },
           "SourceControlEntryContextMenu": {
-            "a1f2c8d901": "View"
+            "a1f2c8d901": "表示"
           }
         }
       },
