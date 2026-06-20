@@ -53,7 +53,17 @@ export function useHoldDictationGesture({
       if (!holdGestureActiveRef.current) {
         return
       }
-      if (!keybindingMatchesAction('voice.dictation', e, getShortcutPlatform(), keybindings)) {
+      // Why: releasing the modifier (e.g. Cmd) before the main key leaves
+      // neither keyup matching the full chord — the Meta-up reports key 'Meta'
+      // and the E-up reports metaKey=false. Treat releasing a held modifier as
+      // ending the hold so dictation stops on any chord-breaking release, not
+      // only when the main key is released last.
+      const isModifierRelease =
+        e.key === 'Meta' || e.key === 'Control' || e.key === 'Alt' || e.key === 'Shift'
+      if (
+        !isModifierRelease &&
+        !keybindingMatchesAction('voice.dictation', e, getShortcutPlatform(), keybindings)
+      ) {
         return
       }
       if (dictationStateRef.current === 'idle' || dictationStateRef.current === 'stopping') {
