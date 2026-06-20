@@ -11,6 +11,8 @@ import {
 export function canClickBlockedCreateReviewReason(
   reason: HostedReviewCreationBlockedReason | undefined
 ): boolean {
+  // Why: actionable blocked states stay clickable so the UI can explain the
+  // next step inline instead of silently hard-disabling Create Review.
   return (
     reason === 'dirty' ||
     reason === 'default_branch' ||
@@ -21,7 +23,7 @@ export function canClickBlockedCreateReviewReason(
   )
 }
 
-function authInstruction(provider: HostedReviewProvider): string {
+export function resolveHostedReviewAuthInstruction(provider: HostedReviewProvider): string {
   if (provider === 'gitlab') {
     return 'Run glab auth login'
   }
@@ -59,7 +61,7 @@ export function resolveBlockedCreateReviewNoticeMessage(
     case 'needs_sync':
       return `Create ${copy.shortLabel} failed: sync this branch before creating a ${copy.reviewLabel}.`
     case 'auth_required':
-      return `Create ${copy.shortLabel} failed: ${copy.providerName} is not authenticated. Next step: ${authInstruction(eligibility.provider)} in this environment.`
+      return `Create ${copy.shortLabel} failed: ${copy.providerName} is not authenticated. Next step: ${resolveHostedReviewAuthInstruction(eligibility.provider)} in this environment.`
     case 'detached_head':
     case 'existing_review':
     case 'fork_head_unsupported':

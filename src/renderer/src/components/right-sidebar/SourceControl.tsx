@@ -2850,6 +2850,8 @@ function SourceControlInner(): React.JSX.Element {
     }
 
     if (!hostedReviewCreation.canCreate) {
+      // Why: blocked Create Review clicks are intentional for actionable states;
+      // the inline notice tells users which prerequisite to clear next.
       const message = resolveBlockedCreateReviewNoticeMessage(hostedReviewCreation)
       if (message) {
         setCreatePrIntentNoticeForWorktree(activeWorktreeId, {
@@ -3727,17 +3729,23 @@ function SourceControlInner(): React.JSX.Element {
       hasCurrentBranch: Boolean(branchName),
       isPrIntentInFlight: isCreatePrIntentInFlight
     })
-    return isCreatingPr && action?.kind === 'create_pr'
-      ? {
-          ...action,
-          title: translate(
-            'auto.components.right.sidebar.SourceControl.fe5bd1a610',
-            'Creating {{value0}}...',
-            { value0: hostedReviewCreateCopy.reviewLabel }
-          ),
-          disabled: true
-        }
-      : action
+    if ((prGenerating || isCreatingPr) && action?.kind === 'create_pr') {
+      return {
+        ...action,
+        title: prGenerating
+          ? translate(
+              'auto.components.right.sidebar.SourceControl.createPrIntentGeneratingDetails',
+              'Generating review details…'
+            )
+          : translate(
+              'auto.components.right.sidebar.SourceControl.fe5bd1a610',
+              'Creating {{value0}}...',
+              { value0: hostedReviewCreateCopy.reviewLabel }
+            ),
+        disabled: true
+      }
+    }
+    return action
   }, [
     branchName,
     branchSummary?.commitsAhead,
@@ -3758,13 +3766,14 @@ function SourceControlInner(): React.JSX.Element {
     isHostedReviewCreationLoading,
     isHostedReviewStateLoading,
     isRemoteOperationActive,
+    prGenerating,
     remoteStatus,
     unresolvedConflicts.length
   ])
   const directCreatePrAction =
     createPrHeaderAction?.kind === 'create_pr' &&
     hostedReviewCreation?.canCreate === true &&
-    (!createPrHeaderAction.disabled || isCreatingPr)
+    (!createPrHeaderAction.disabled || isCreatingPr || prGenerating)
       ? createPrHeaderAction
       : null
   const visibleCreatePrHeaderAction = resolveVisibleCreatePrHeaderAction({
@@ -5054,7 +5063,7 @@ function SourceControlInner(): React.JSX.Element {
           visibleCreatePrHeaderAction={visibleCreatePrHeaderAction}
           hostedReview={hostedReview}
           isCreatePrIntentInFlight={isCreatePrIntentInFlight}
-          isCreatingPr={isCreatingPr}
+          isCreatingPr={isCreatingPr || prGenerating}
           onCreatePrHeaderClick={handleCreatePrHeaderClick}
           onOpenHostedReviewInChecks={openHostedReviewInChecks}
           sourceControlViewMode={sourceControlViewMode}

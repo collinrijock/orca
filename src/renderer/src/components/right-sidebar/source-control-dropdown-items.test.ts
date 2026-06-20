@@ -184,7 +184,7 @@ describe('resolveDropdownItems', () => {
     )
 
     expect(byKind.push.label).toBe('Push (14)')
-    expect(byKind.push.disabled).toBe(false)
+    expect(byKind.push.disabled).toBe(true)
     expect(byKind.push.title).toBe('Use Force Push — remote only has older copies of local commits')
     expect(byKind.force_push.label).toBe('Force Push (4)')
     expect(byKind.force_push.disabled).toBe(false)
@@ -207,7 +207,7 @@ describe('resolveDropdownItems', () => {
     expect(byKind.commit_sync.title).toBe(
       'Use Commit & Force Push — remote only has older copies of local commits'
     )
-    expect(byKind.sync.disabled).toBe(false)
+    expect(byKind.sync.disabled).toBe(true)
     expect(byKind.sync.title).toBe('Use Force Push — remote only has older copies of local commits')
     expect(byKind.create_pr.hint).toBe('Force Push first')
     expect(byKind.push_create_pr.label).toBe('Force Push before PR')

@@ -8,7 +8,6 @@ export function resolveUnpublishedPrimaryAction({
   prState
 }: {
   hasCurrentBranch: boolean
-  branchCommitsAhead?: number
   isPRStateLoading?: boolean
   prState?: PRState | null
 }): PrimaryAction {

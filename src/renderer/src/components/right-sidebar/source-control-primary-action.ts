@@ -195,7 +195,6 @@ export function resolvePrimaryAction(inputs: PrimaryActionInputs): PrimaryAction
   if (!upstreamStatus.hasUpstream) {
     const unpublishedAction = resolveUnpublishedPrimaryAction({
       hasCurrentBranch,
-      branchCommitsAhead,
       isPRStateLoading,
       prState
     })

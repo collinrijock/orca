@@ -11,7 +11,10 @@ import {
   localizedHostedReviewCopy,
   resolveSupportedHostedReviewCopyProvider
 } from '@/i18n/hosted-review-localized-copy'
-import { canClickBlockedCreateReviewReason } from './source-control-create-review-blocked-action'
+import {
+  canClickBlockedCreateReviewReason,
+  resolveHostedReviewAuthInstruction
+} from './source-control-create-review-blocked-action'
 
 export type DropdownActionInputs = PrimaryActionInputs & {
   conflictOperation?: GitConflictOperation
@@ -101,17 +104,9 @@ function reviewCopy(
 ): ReturnType<typeof localizedHostedReviewCopy> & {
   authInstruction: string
 } {
-  const authInstruction =
-    provider === 'gitlab'
-      ? 'Run glab auth login'
-      : provider === 'azure-devops'
-        ? 'Set ORCA_AZURE_DEVOPS_TOKEN'
-        : provider === 'gitea'
-          ? 'Set ORCA_GITEA_TOKEN'
-          : 'Run gh auth login'
   return {
     ...localizedHostedReviewCopy(resolveSupportedHostedReviewCopyProvider(provider)),
-    authInstruction
+    authInstruction: resolveHostedReviewAuthInstruction(provider ?? 'github')
   }
 }
 
@@ -314,7 +309,8 @@ export function resolveDropdownItems(inputs: DropdownActionInputs): DropdownEntr
       globalBusy ||
       upstreamLoading ||
       (!hasUpstream && !canPushUntrackedHostedReview) ||
-      publishBlockedByDetachedHead
+      publishBlockedByDetachedHead ||
+      shouldForcePushWithLease
   }
 
   const forcePushItem: DropdownItem = {
@@ -400,7 +396,12 @@ export function resolveDropdownItems(inputs: DropdownActionInputs): DropdownEntr
                 : ahead === 0 && behind === 0
                   ? 'Branch is up to date'
                   : describeSyncCounts(ahead, behind),
-    disabled: globalBusy || upstreamLoading || !hasUpstream || publishBlockedByDetachedHead
+    disabled:
+      globalBusy ||
+      upstreamLoading ||
+      !hasUpstream ||
+      publishBlockedByDetachedHead ||
+      shouldForcePushWithLease
   }
 
   const rebaseBaseLabel = rebaseBaseRef ? formatRebaseBaseRef(rebaseBaseRef) : null
