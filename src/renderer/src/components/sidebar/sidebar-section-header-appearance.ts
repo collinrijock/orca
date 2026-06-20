@@ -1,11 +1,12 @@
 import type { GlobalSettings } from '../../../../shared/types'
+import { FLUSH_CARD_CONTENT_PULLBACK } from './worktree-list-indentation'
 
 // Why: evaluate larger section typography on its own before shipping selection chrome.
 export const SHOW_SIDEBAR_ACTIVE_REPO_HIGHLIGHT = false
 
 export const DEFAULT_SIDEBAR_SECTION_HEADER_ROW_HEIGHT = 28
 export const LARGER_SIDEBAR_SECTION_HEADER_ROW_HEIGHT = 32
-export const DEFAULT_FLUSH_CARD_CONTENT_PULLBACK = 4
+export const DEFAULT_FLUSH_CARD_CONTENT_PULLBACK = FLUSH_CARD_CONTENT_PULLBACK
 export const LARGER_FLUSH_CARD_CONTENT_PULLBACK = 8
 const WORKTREE_REVEAL_TOP_CLEARANCE = 6
 

@@ -4805,10 +4805,10 @@
             "toggleLabel": "새 카드 스타일 전환"
           },
           "largerSidebarSections": {
-            "title": "Larger sidebar sections",
-            "description": "Preview larger project and section headers in the worktree sidebar.",
-            "copy": "Increases project and section header type, repo icons, and slightly pulls grouped workspace cards left.",
-            "toggleLabel": "Toggle larger sidebar sections"
+            "copy": "프로젝트 및 섹션 헤더 글자와 저장소 아이콘을 키우고, 그룹화된 워크스페이스 카드를 약간 왼쪽으로 당깁니다.",
+            "description": "worktree 사이드바에서 더 큰 프로젝트 및 섹션 헤더를 미리 봅니다.",
+            "title": "더 큰 사이드바 섹션",
+            "toggleLabel": "더 큰 사이드바 섹션 전환"
           }
         },
         "FloatingWorkspacePane": {
@@ -6888,8 +6888,15 @@
               "worktrees": "worktrees"
             },
             "largerSidebarSections": {
-              "title": "Larger sidebar sections",
-              "description": "Preview larger project and section headers in the worktree sidebar, including repo icons."
+              "description": "worktree 사이드바에서 저장소 아이콘을 포함한 더 큰 프로젝트 및 섹션 헤더를 미리 봅니다.",
+              "headers": "헤더",
+              "icons": "아이콘",
+              "projects": "프로젝트",
+              "repo": "저장소",
+              "sections": "섹션",
+              "sidebar": "사이드바",
+              "title": "더 큰 사이드바 섹션",
+              "typography": "타이포그래피"
             }
           }
         },

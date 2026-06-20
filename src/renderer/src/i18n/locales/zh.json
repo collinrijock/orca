@@ -4805,10 +4805,10 @@
             "toggleLabel": "切换新卡片样式"
           },
           "largerSidebarSections": {
-            "title": "Larger sidebar sections",
-            "description": "Preview larger project and section headers in the worktree sidebar.",
-            "copy": "Increases project and section header type, repo icons, and slightly pulls grouped workspace cards left.",
-            "toggleLabel": "Toggle larger sidebar sections"
+            "copy": "增大项目和分区标题文字、仓库图标，并将分组工作区卡片略微向左对齐。",
+            "description": "在 worktree 侧边栏中预览更大的项目和分区标题。",
+            "title": "更大的侧边栏分区",
+            "toggleLabel": "切换更大的侧边栏分区"
           }
         },
         "FloatingWorkspacePane": {
@@ -6888,8 +6888,15 @@
               "worktrees": "worktrees"
             },
             "largerSidebarSections": {
-              "title": "Larger sidebar sections",
-              "description": "Preview larger project and section headers in the worktree sidebar, including repo icons."
+              "description": "在 worktree 侧边栏中预览更大的项目和分区标题，包括仓库图标。",
+              "headers": "标题",
+              "icons": "图标",
+              "projects": "项目",
+              "repo": "仓库",
+              "sections": "分区",
+              "sidebar": "侧边栏",
+              "title": "更大的侧边栏分区",
+              "typography": "排版"
             }
           }
         },

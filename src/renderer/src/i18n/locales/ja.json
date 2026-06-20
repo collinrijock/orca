@@ -4805,10 +4805,10 @@
             "toggleLabel": "新しいカードスタイルを切り替え"
           },
           "largerSidebarSections": {
-            "title": "Larger sidebar sections",
-            "description": "Preview larger project and section headers in the worktree sidebar.",
-            "copy": "Increases project and section header type, repo icons, and slightly pulls grouped workspace cards left.",
-            "toggleLabel": "Toggle larger sidebar sections"
+            "copy": "プロジェクトとセクションのヘッダー文字、リポジトリアイコンを大きくし、グループ化されたワークスペースカードを少し左に寄せます。",
+            "description": "worktree サイドバーで大きめのプロジェクトヘッダーとセクションヘッダーをプレビューします。",
+            "title": "サイドバーセクションを大きく表示",
+            "toggleLabel": "サイドバーセクションの大きめ表示を切り替え"
           }
         },
         "FloatingWorkspacePane": {
@@ -6925,8 +6925,15 @@
               "worktrees": "worktrees"
             },
             "largerSidebarSections": {
-              "title": "Larger sidebar sections",
-              "description": "Preview larger project and section headers in the worktree sidebar, including repo icons."
+              "description": "worktree サイドバーでリポジトリアイコンを含む大きめのプロジェクトヘッダーとセクションヘッダーをプレビューします。",
+              "headers": "ヘッダー",
+              "icons": "アイコン",
+              "projects": "プロジェクト",
+              "repo": "リポジトリ",
+              "sections": "セクション",
+              "sidebar": "サイドバー",
+              "title": "サイドバーセクションを大きく表示",
+              "typography": "タイポグラフィ"
             }
           }
         },

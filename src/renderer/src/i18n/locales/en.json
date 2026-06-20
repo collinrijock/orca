@@ -4820,9 +4820,9 @@
           "dd6f0a1d45": "Pet",
           "0e89a574ae": "Floating animated pet in the bottom-right corner.",
           "largerSidebarSections": {
-            "title": "Larger sidebar sections",
-            "description": "Preview larger project and section headers in the worktree sidebar.",
             "copy": "Increases project and section header type, repo icons, and slightly pulls grouped workspace cards left.",
+            "description": "Preview larger project and section headers in the worktree sidebar.",
+            "title": "Larger sidebar sections",
             "toggleLabel": "Toggle larger sidebar sections"
           }
         },
@@ -6940,8 +6940,15 @@
             "6b5a56ac35": "Floating animated pet in the bottom-right corner.",
             "87d99e634b": "Pet",
             "largerSidebarSections": {
+              "description": "Preview larger project and section headers in the worktree sidebar, including repo icons.",
+              "headers": "headers",
+              "icons": "icons",
+              "projects": "projects",
+              "repo": "repo",
+              "sections": "sections",
+              "sidebar": "sidebar",
               "title": "Larger sidebar sections",
-              "description": "Preview larger project and section headers in the worktree sidebar, including repo icons."
+              "typography": "typography"
             }
           }
         },

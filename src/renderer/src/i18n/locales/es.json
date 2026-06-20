@@ -4820,10 +4820,10 @@
             "toggleLabel": "Alternar nuevo estilo de tarjeta"
           },
           "largerSidebarSections": {
-            "title": "Larger sidebar sections",
-            "description": "Preview larger project and section headers in the worktree sidebar.",
-            "copy": "Increases project and section header type, repo icons, and slightly pulls grouped workspace cards left.",
-            "toggleLabel": "Toggle larger sidebar sections"
+            "copy": "Aumenta el tamaño del texto de los encabezados de proyecto y sección, los iconos de repositorio y desplaza ligeramente a la izquierda las tarjetas de espacios de trabajo agrupadas.",
+            "description": "Previsualiza encabezados de proyecto y sección más grandes en la barra lateral de worktrees.",
+            "title": "Secciones más grandes en la barra lateral",
+            "toggleLabel": "Alternar secciones más grandes en la barra lateral"
           }
         },
         "FloatingWorkspacePane": {
@@ -6903,8 +6903,15 @@
               "worktrees": "worktrees"
             },
             "largerSidebarSections": {
-              "title": "Larger sidebar sections",
-              "description": "Preview larger project and section headers in the worktree sidebar, including repo icons."
+              "description": "Previsualiza encabezados de proyecto y sección más grandes en la barra lateral de worktrees, incluidos los iconos de repositorio.",
+              "headers": "encabezados",
+              "icons": "iconos",
+              "projects": "proyectos",
+              "repo": "repositorio",
+              "sections": "secciones",
+              "sidebar": "barra lateral",
+              "title": "Secciones más grandes en la barra lateral",
+              "typography": "tipografía"
             }
           }
         },
