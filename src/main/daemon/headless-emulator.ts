@@ -130,7 +130,8 @@ export class HeadlessEmulator {
     const modes = this.getModes()
     const snapshotAnsi = this.normalizeSnapshotAnsiForModes(
       this.serializer.serialize({ scrollback: opts.scrollbackRows }),
-      modes
+      modes,
+      (opts.scrollbackRows ?? 0) > 0
     )
     return {
       snapshotAnsi,
@@ -271,9 +272,19 @@ export class HeadlessEmulator {
     return /^[0-9;]*$/.test(params)
   }
 
-  private normalizeSnapshotAnsiForModes(snapshotAnsi: string, modes: TerminalModes): string {
+  private normalizeSnapshotAnsiForModes(
+    snapshotAnsi: string,
+    modes: TerminalModes,
+    preserveNormalBufferBeforeAltScreen: boolean
+  ): string {
     if (!modes.alternateScreen) {
       return snapshotAnsi
+    }
+    if (preserveNormalBufferBeforeAltScreen) {
+      // Why: desktop hidden-output recovery clears xterm entirely. Restore the
+      // normal buffer first, then let the serialized payload re-enter alt-screen.
+      const rehydrateModes = this.buildRehydrateSequences(modes, false)
+      return `\x1b[?1049l${snapshotAnsi}${rehydrateModes}`
     }
     const alternateScreenMarker = '\x1b[?1049h'
     const start = snapshotAnsi.lastIndexOf(alternateScreenMarker)
@@ -308,9 +319,9 @@ export class HeadlessEmulator {
     }
   }
 
-  private buildRehydrateSequences(modes: TerminalModes): string {
+  private buildRehydrateSequences(modes: TerminalModes, includeAlternateScreen = true): string {
     const seqs: string[] = []
-    if (modes.alternateScreen) {
+    if (modes.alternateScreen && includeAlternateScreen) {
       seqs.push('\x1b[?1049h')
     }
     if (modes.bracketedPaste) {

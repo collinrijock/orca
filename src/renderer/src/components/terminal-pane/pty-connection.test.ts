@@ -5189,7 +5189,10 @@ describe('connectPanePty', () => {
     })
     await flushAsyncTicks(20)
 
-    expect(getMainBufferSnapshot).toHaveBeenCalledWith('pty-id', { scrollbackRows: 5000 })
+    expect(getMainBufferSnapshot).toHaveBeenCalledWith('pty-id', {
+      scrollbackRows: 5000,
+      altScreenForcesZeroRows: false
+    })
     expect(pane.terminal.resize).toHaveBeenCalledWith(100, 30)
     expect(pane.terminal.write).toHaveBeenCalledWith('\x1b[2J\x1b[3J\x1b[H', expect.any(Function))
     expect(pane.terminal.write).toHaveBeenCalledWith('snapshot-state\r\n', expect.any(Function))
@@ -5240,7 +5243,10 @@ describe('connectPanePty', () => {
     })
     await flushAsyncTicks(20)
 
-    expect(getMainBufferSnapshot).toHaveBeenCalledWith('old-pty-id', { scrollbackRows: 5000 })
+    expect(getMainBufferSnapshot).toHaveBeenCalledWith('old-pty-id', {
+      scrollbackRows: 5000,
+      altScreenForcesZeroRows: false
+    })
     expect(pane.terminal.write).not.toHaveBeenCalledWith(
       'old-snapshot-state\r\n',
       expect.any(Function)

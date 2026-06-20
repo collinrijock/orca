@@ -6468,11 +6468,12 @@ describe('registerPtyHandlers', () => {
 
       const result = await handlers.get('pty:getMainBufferSnapshot')!(null, {
         id: 'pty-1',
-        opts: { scrollbackRows: 999_999 }
+        opts: { scrollbackRows: 999_999, altScreenForcesZeroRows: false }
       })
 
       expect(runtime.serializeMainTerminalBuffer).toHaveBeenCalledWith('pty-1', {
-        scrollbackRows: 50_000
+        scrollbackRows: 50_000,
+        altScreenForcesZeroRows: false
       })
       expect(result).toEqual({
         data: 'snapshot\r\n',

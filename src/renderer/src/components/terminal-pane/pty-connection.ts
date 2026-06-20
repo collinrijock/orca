@@ -2303,7 +2303,7 @@ export function connectPanePty(
 
     async function serializeHiddenOutputSnapshot(
       ptyId: string,
-      opts: { scrollbackRows?: number }
+      opts: { scrollbackRows?: number; altScreenForcesZeroRows?: boolean }
     ): Promise<PtyBufferSnapshot | null> {
       const e2eSnapshot = readE2eHiddenSnapshotOverride(ptyId)
       if (e2eSnapshot) {
@@ -2949,7 +2949,10 @@ export function connectPanePty(
           let snapshot: PtyBufferSnapshot | null = null
           try {
             snapshot = await serializeHiddenOutputSnapshot(currentPtyId, {
-              scrollbackRows: HIDDEN_OUTPUT_RESTORE_SCROLLBACK_ROWS
+              scrollbackRows: HIDDEN_OUTPUT_RESTORE_SCROLLBACK_ROWS,
+              // Why: desktop hidden-output recovery clears this xterm; preserve
+              // normal-buffer history even if the agent TUI is in alt-screen.
+              altScreenForcesZeroRows: false
             })
           } catch {
             snapshot = null

@@ -5060,6 +5060,23 @@ describe('OrcaRuntimeService', () => {
     })
   })
 
+  it('preserves requested desktop-recovery scrollback while an alternate-screen TUI is active', async () => {
+    const runtime = createRuntime()
+    syncSinglePty(runtime, 'pty-1')
+    const history = Array.from({ length: 60 }, (_, index) => `history-${index}\r\n`).join('')
+
+    runtime.onPtyData('pty-1', history, 100)
+    runtime.onPtyData('pty-1', '\x1b[?1049hClaude Code\r\nWorking\r\n', 100)
+
+    const snapshot = await runtime.serializeMainTerminalBuffer('pty-1', {
+      scrollbackRows: 1000,
+      altScreenForcesZeroRows: false
+    })
+
+    expect(snapshot?.data).toContain('history-0')
+    expect(snapshot?.data).toContain('Claude Code')
+  })
+
   it('emits explicit OSC 9999 agent status from runtime PTY data', () => {
     const statuses: RuntimeTerminalAgentStatusEvent[] = []
     const runtime = new OrcaRuntimeService(store, undefined, {

@@ -5052,7 +5052,7 @@ export class OrcaRuntimeService {
 
   serializeMainTerminalBuffer(
     ptyId: string,
-    opts: { scrollbackRows?: number } = {}
+    opts: { scrollbackRows?: number; altScreenForcesZeroRows?: boolean } = {}
   ): Promise<{
     data: string
     cols: number
@@ -5384,7 +5384,11 @@ export class OrcaRuntimeService {
 
   private async serializeHeadlessTerminalBuffer(
     ptyId: string,
-    opts: { scrollbackRows?: number; includeEmpty?: boolean } = {}
+    opts: {
+      scrollbackRows?: number
+      includeEmpty?: boolean
+      altScreenForcesZeroRows?: boolean
+    } = {}
   ): Promise<{
     data: string
     cols: number
@@ -5400,15 +5404,13 @@ export class OrcaRuntimeService {
       return null
     }
     await state.writeChain
-    // Why: when an alternate-screen TUI (Claude Code, vim, etc.) is currently
-    // active, the visible content is the alt-screen snapshot — replaying any
-    // normal-buffer scrollback before it can duplicate shell prompts and
-    // flatten SGR attributes when the mobile xterm replays the data. Force
-    // scrollbackRows=0 in that case. When the buffer is in normal mode the
-    // caller can request scrollback so the user can scroll up to see prior
-    // agent output.
+    // Why: mobile/hydration snapshots suppress normal-buffer scrollback while
+    // alt-screen TUIs are active. Desktop hidden-output recovery opts out
+    // because it clears xterm and needs the user's scrollback restored too.
     const requested = opts.scrollbackRows ?? 0
-    const scrollbackRows = state.emulator.isAlternateScreen ? 0 : requested
+    const altScreenForcesZeroRows = opts.altScreenForcesZeroRows !== false
+    const scrollbackRows =
+      state.emulator.isAlternateScreen && altScreenForcesZeroRows ? 0 : requested
     const snapshot = state.emulator.getSnapshot({ scrollbackRows })
     const data = snapshot.rehydrateSequences + snapshot.snapshotAnsi
     return data.length > 0 || opts.includeEmpty === true
