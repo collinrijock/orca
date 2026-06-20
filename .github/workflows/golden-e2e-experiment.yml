@@ -40,7 +40,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
         with:
-          ref: ${{ inputs.ref || github.ref }}
+          # Why: pull_request merge refs disappear after merge, but experiment
+          # reruns still need a stable commit to checkout.
+          ref: ${{ inputs.ref || github.event.pull_request.head.sha || github.ref }}
 
       - name: Install native build tools
         if: runner.os == 'Linux'
