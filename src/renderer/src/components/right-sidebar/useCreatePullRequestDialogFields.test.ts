@@ -135,6 +135,14 @@ describe('useCreatePullRequestDialogFields', () => {
       expect(harness.current().base).toBe('release')
       expect(harness.current().title).toBe('Review title')
       expect(harness.current().body).toBe('Review body')
+
+      await harness.rerender({
+        eligibility: createEligibility({
+          defaultBaseRef: 'refs/remotes/origin/develop'
+        })
+      })
+
+      expect(harness.current().base).toBe('develop')
     } finally {
       harness.unmount()
     }
@@ -179,6 +187,45 @@ describe('useCreatePullRequestDialogFields', () => {
       })
 
       expect(harness.current().base).toBe('custom-target')
+    } finally {
+      harness.unmount()
+    }
+  })
+
+  it('keeps a synced base when stale generated fields arrive', async () => {
+    const harness = renderDialogFields({
+      eligibility: createEligibility(),
+      currentBaseRef: 'refs/remotes/origin/main'
+    })
+    try {
+      await harness.rerender({
+        eligibility: createEligibility(),
+        currentBaseRef: 'refs/remotes/origin/main'
+      })
+      const seedRevisions = { ...harness.current().fieldRevisions }
+
+      await harness.rerender({
+        eligibility: createEligibility(),
+        currentBaseRef: 'refs/remotes/origin/release'
+      })
+      expect(harness.current().base).toBe('release')
+
+      act(() => {
+        harness.current().applyGeneratedFields(
+          {
+            base: 'main',
+            title: 'Generated title',
+            body: 'Generated body',
+            draft: true
+          },
+          seedRevisions
+        )
+      })
+
+      expect(harness.current().base).toBe('release')
+      expect(harness.current().title).toBe('Generated title')
+      expect(harness.current().body).toBe('Generated body')
+      expect(harness.current().draft).toBe(true)
     } finally {
       harness.unmount()
     }
