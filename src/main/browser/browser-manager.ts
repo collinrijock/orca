@@ -1729,6 +1729,10 @@ export class BrowserManager {
         continue
       }
       this.cancelDownloadInternal(downloadId, 'Browser page closed before download could be shown.')
+      const afterCancel = this.downloadsById.get(downloadId)
+      if (afterCancel?.terminalEvent && !afterCancel.browserTabId) {
+        this.downloadsById.delete(downloadId)
+      }
     }
   }
 

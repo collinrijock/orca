@@ -19,6 +19,7 @@ type BrowserDownloadDestinationOptions = {
 }
 
 function normalizeFilename(filename: string): string {
+  // Normalize separators first so basename strips paths from any platform.
   const normalizedSeparators = filename.replace(/\\/g, '/')
   const rawBasename = path.posix.basename(normalizedSeparators).trim()
   const safeName = [...rawBasename]
@@ -45,6 +46,7 @@ function buildCollisionCandidate(filename: string, suffix: number): string {
 
 function normalizeReservationKey(filePath: string, platform: NodeJS.Platform): string {
   const normalizedPath = path.resolve(filePath)
+  // Use a fixed locale for stable ASCII folding on case-insensitive filesystems.
   return platform === 'win32' || platform === 'darwin'
     ? normalizedPath.toLocaleLowerCase('en-US')
     : normalizedPath

@@ -1188,6 +1188,35 @@ describe('browserManager', () => {
     ])
   })
 
+  it('drops pending download records when an unregistered guest is destroyed', () => {
+    const guest = {
+      id: 412,
+      isDestroyed: vi.fn(() => false),
+      getType: vi.fn(() => 'webview'),
+      setBackgroundThrottling: guestSetBackgroundThrottlingMock,
+      setWindowOpenHandler: guestSetWindowOpenHandlerMock,
+      on: guestOnMock,
+      off: guestOffMock,
+      openDevTools: guestOpenDevToolsMock
+    }
+    const item = createDownloadItem()
+    webContentsFromIdMock.mockReturnValue(guest)
+
+    browserManager.attachGuestPolicies(guest as never)
+    browserManager.handleGuestWillDownload({ guestWebContentsId: guest.id, item })
+
+    const managerState = browserManager as unknown as { downloadsById: Map<string, unknown> }
+    expect(managerState.downloadsById.size).toBe(1)
+
+    const destroyedHandler = guestOnMock.mock.calls.find(
+      ([event]) => event === 'destroyed'
+    )?.[1] as (() => void) | undefined
+    destroyedHandler?.()
+
+    expect(item.cancel).toHaveBeenCalledTimes(1)
+    expect(managerState.downloadsById.size).toBe(0)
+  })
+
   it('cancels active downloads when the owning browser tab closes', () => {
     const rendererSendMock = vi.fn()
     const guest = {

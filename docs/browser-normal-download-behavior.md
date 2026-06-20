@@ -81,7 +81,7 @@ Make built-in browser downloads feel like a normal browser:
 
 6. **Use existing shell bridges for actions**
 
-   Use `window.api.shell.openFilePath(savePath)` for `Open` and `window.api.shell.openInFileManager(savePath)` for `Show`. `openPath` is a legacy reveal wrapper with a void renderer contract, so it cannot report action failure honestly. If either action fails or the file has been moved/deleted, show an inline or toast failure that does not claim the file opened.
+   Use `window.api.shell.openFilePath(savePath)` for `Open` and `window.api.shell.openInFileManager(savePath)` for `Show`. `openPath` is a legacy reveal wrapper whose `void` return type prevents the preload bridge from reporting success or failure back to the renderer. If either action fails or the file has been moved/deleted, show an inline or toast failure that does not claim the file opened.
 
 ## Data Flow
 
@@ -149,8 +149,8 @@ Stage 5 must capture:
 1. Add the destination builder and focused tests.
 2. Move BrowserManager download handling to immediate save-path assignment and progress tracking.
 3. Update browser IPC/preload/API types to remove approval semantics and carry save-path/status data.
-4. Update BrowserPane state and UI for active/recent downloads.
-5. Update renderer notices/tests and localization catalog as required.
+4. Refresh BrowserPane state and UI for active/recent downloads.
+5. Add renderer notices, tests, and localization catalog entries as required.
 6. Run targeted unit tests, typecheck, lint, then Electron validation with screenshots.
 
 ## Lightweight Eng Review
