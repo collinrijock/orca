@@ -1070,9 +1070,25 @@ const WorktreeCard = React.memo(function WorktreeCard({
     ? hasMetadataBadge || (newCardStyle && showBranch) || cacheStartedAt != null
     : hasDetailedMetaRowContent
   const showHeaderActions = showTitleRowPrimary || showDeleteQuickAction
+  const trimmedVisibleCardTitle = visibleCardTitle.trim()
   const showBranchIdentityHover = newCardStyle
-    ? !isFolder && branch.length > 0 && !cardProps.includes('branch') && branch !== visibleCardTitle
+    ? !isFolder &&
+      branch.length > 0 &&
+      !cardProps.includes('branch') &&
+      branch !== trimmedVisibleCardTitle
     : compactCards && showBranch
+  const hoverBranchName = newCardStyle
+    ? !isFolder && branch.length > 0
+      ? branch
+      : undefined
+    : showBranchIdentityHover
+      ? branch
+      : undefined
+  const hoverWorkspaceTitle =
+    trimmedVisibleCardTitle.length > 0 && trimmedVisibleCardTitle !== hoverBranchName
+      ? trimmedVisibleCardTitle
+      : undefined
+  const hasHoverIdentity = Boolean(hoverWorkspaceTitle || hoverBranchName)
   const showInlineAgentList = cardProps.includes('inline-agents') && (newCardStyle || !compactCards)
   const hasHoverDetails =
     newCardStyle &&
@@ -1084,7 +1100,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
       automationProvenance: metaAutomationProvenance
     }) ||
       workspacePorts.length > 0 ||
-      showBranchIdentityHover)
+      hasHoverIdentity)
   // Why: the parent row owns metadata hover; avoid stacking the title's
   // truncation tooltip on top of the richer details popover.
   const titleWrapper = newCardStyle
@@ -1667,8 +1683,8 @@ const WorktreeCard = React.memo(function WorktreeCard({
         comment={hoverComment}
         automationProvenance={metaAutomationProvenance}
         automationHostId={worktree.hostId}
-        branchName={showBranchIdentityHover ? branch : undefined}
-        workspaceTitle={showBranchIdentityHover ? visibleCardTitle : undefined}
+        branchName={hoverBranchName}
+        workspaceTitle={hoverWorkspaceTitle}
         detailsAfter={
           workspacePorts.length > 0 ? <WorktreeCardPortsDetails ports={workspacePorts} /> : null
         }
