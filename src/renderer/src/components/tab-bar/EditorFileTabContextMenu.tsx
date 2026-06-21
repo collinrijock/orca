@@ -13,6 +13,7 @@ import { useShortcutLabel } from '@/hooks/useShortcutLabel'
 import type { OpenFile } from '../../store/slices/editor'
 import { shouldBlockEditorTabLocalOpen } from './editor-tab-local-open-guard'
 import { translate } from '@/i18n/i18n'
+import { TabWorkspaceLayoutMenuSection } from './TabWorkspaceLayoutMenuSection'
 
 const isMac = navigator.userAgent.includes('Mac')
 const isLinux = navigator.userAgent.includes('Linux')
@@ -28,6 +29,8 @@ type EditorFileTabContextMenuProps = {
   open: boolean
   menuPoint: { x: number; y: number }
   file: OpenFile & { tabId?: string }
+  unifiedTabId: string
+  groupId: string
   isPinned: boolean
   isRenaming: boolean
   hasTabsToRight: boolean
@@ -59,6 +62,8 @@ export function EditorFileTabContextMenu({
   open,
   menuPoint,
   file,
+  unifiedTabId,
+  groupId,
   isPinned,
   isRenaming,
   hasTabsToRight,
@@ -119,6 +124,7 @@ export function EditorFileTabContextMenu({
             ? translate('auto.components.tab.bar.EditorFileTabContextMenu.8e9d603a09', 'Unpin Tab')
             : translate('auto.components.tab.bar.EditorFileTabContextMenu.fdd29eb669', 'Pin Tab')}
         </DropdownMenuItem>
+        <TabWorkspaceLayoutMenuSection unifiedTabId={unifiedTabId} groupId={groupId} />
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={() => !isPinned && onClose()} disabled={isPinned}>
           {translate('auto.components.tab.bar.EditorFileTabContextMenu.1ba8492c5b', 'Close')}

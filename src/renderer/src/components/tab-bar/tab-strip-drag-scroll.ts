@@ -30,18 +30,17 @@ export function useTabStripDragScrollHandlers(
       if (!isTabDragActive) {
         return
       }
-      if (direction === 'start' && !canScrollRef.current.start) {
-        return
-      }
-      if (direction === 'end' && !canScrollRef.current.end) {
+
+      const canScrollInDirection = (): boolean =>
+        direction === 'start' ? canScrollRef.current.start : canScrollRef.current.end
+
+      if (!canScrollInDirection()) {
         return
       }
 
       const tick = (): void => {
-        if (direction === 'start' && !canScrollRef.current.start) {
-          return
-        }
-        if (direction === 'end' && !canScrollRef.current.end) {
+        if (!canScrollInDirection()) {
+          stopDragScroll()
           return
         }
         scrollTabStrip(direction, 'auto')

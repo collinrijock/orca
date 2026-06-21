@@ -27,6 +27,8 @@ import { useTabStripPointerActivation } from './tab-strip-pointer-activation'
 
 type SortableTabProps = {
   tab: TerminalTab
+  unifiedTabId: string
+  groupId: string
   tabCount: number
   hasTabsToRight: boolean
   isActive: boolean
@@ -49,6 +51,8 @@ export const CLOSE_ALL_CONTEXT_MENUS_EVENT = 'orca-close-all-context-menus'
 
 export default function SortableTab({
   tab,
+  unifiedTabId,
+  groupId,
   tabCount,
   hasTabsToRight,
   isActive,
@@ -455,12 +459,16 @@ export default function SortableTab({
 
       <SortableTabContextMenu
         tab={tab}
+        unifiedTabId={unifiedTabId}
+        groupId={groupId}
+        isActive={isActive}
         open={menuOpen}
         point={menuPoint}
         tabCount={tabCount}
         hasTabsToRight={hasTabsToRight}
         isPinned={isPinned}
         onOpenChange={setMenuOpen}
+        onActivate={onActivate}
         onClose={onClose}
         onCloseOthers={onCloseOthers}
         onCloseToRight={onCloseToRight}

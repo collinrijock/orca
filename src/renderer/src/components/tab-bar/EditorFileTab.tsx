@@ -396,6 +396,8 @@ export default function EditorFileTab({
         open={menuOpen}
         menuPoint={menuPoint}
         file={file}
+        unifiedTabId={dragData.unifiedTabId}
+        groupId={dragData.groupId}
         isPinned={isPinned}
         isRenaming={isRenaming}
         hasTabsToRight={hasTabsToRight}

@@ -27,6 +27,7 @@ import { preventMiddleButtonDefault } from './middle-button-default-guard'
 import { translate } from '@/i18n/i18n'
 import { TAB_CONTAINER_WIDTH_CLASSES, TAB_LABEL_WIDTH_CLASSES } from './tab-width-rules'
 import { useTabStripPointerActivation } from './tab-strip-pointer-activation'
+import { TabWorkspaceLayoutMenuSection } from './TabWorkspaceLayoutMenuSection'
 
 function formatBrowserTabUrlLabel(url: string): string {
   if (url === ORCA_BROWSER_BLANK_URL || url === 'about:blank') {
@@ -295,6 +296,10 @@ export default function BrowserTab({
               ? translate('auto.components.tab.bar.BrowserTab.c5aaee8c39', 'Unpin Tab')
               : translate('auto.components.tab.bar.BrowserTab.911542656f', 'Pin Tab')}
           </DropdownMenuItem>
+          <TabWorkspaceLayoutMenuSection
+            unifiedTabId={dragData.unifiedTabId}
+            groupId={dragData.groupId}
+          />
           <DropdownMenuSeparator />
           <DropdownMenuItem onSelect={() => !isPinned && onClose()} disabled={isPinned}>
             {translate('auto.components.tab.bar.BrowserTab.1611a1324b', 'Close')}

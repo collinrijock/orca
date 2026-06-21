@@ -1074,6 +1074,8 @@ function TabBarInner({
                   <SortableTab
                     key={item.id}
                     tab={terminalTab}
+                    unifiedTabId={item.unifiedTabId}
+                    groupId={resolvedGroupId}
                     tabCount={orderedItems.length}
                     hasTabsToRight={index < orderedItems.length - 1}
                     isActive={

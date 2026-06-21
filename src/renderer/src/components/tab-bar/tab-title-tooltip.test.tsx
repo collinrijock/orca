@@ -62,6 +62,10 @@ vi.mock('@/components/ui/dropdown-menu', () => ({
   DropdownMenuItem: ({ children }: { children?: ReactNode }) => <>{children}</>,
   DropdownMenuSeparator: () => null,
   DropdownMenuShortcut: ({ children }: { children?: ReactNode }) => <>{children}</>,
+  DropdownMenuLabel: ({ children }: { children?: ReactNode }) => <>{children}</>,
+  DropdownMenuSub: ({ children }: { children?: ReactNode }) => <>{children}</>,
+  DropdownMenuSubContent: ({ children }: { children?: ReactNode }) => <>{children}</>,
+  DropdownMenuSubTrigger: ({ children }: { children?: ReactNode }) => <>{children}</>,
   DropdownMenuTrigger: ({ children }: { children: ReactNode }) => <>{children}</>
 }))
 
@@ -241,6 +245,8 @@ describe('tab title tooltips', () => {
     const markup = renderToStaticMarkup(
       <SortableTab
         tab={makeTerminalTab({ customTitle: 'Custom terminal title' })}
+        unifiedTabId="terminal-1"
+        groupId="group-1"
         tabCount={1}
         hasTabsToRight={false}
         isActive={true}
@@ -272,6 +278,8 @@ describe('tab title tooltips', () => {
     const markup = renderToStaticMarkup(
       <SortableTab
         tab={makeTerminalTab({ title: '✳ Claude Code' })}
+        unifiedTabId="terminal-1"
+        groupId="group-1"
         tabCount={1}
         hasTabsToRight={false}
         isActive={true}
