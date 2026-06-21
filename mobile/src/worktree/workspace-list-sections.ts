@@ -18,6 +18,9 @@ export type Worktree = {
   // (matching the desktop's collision check), not against displayName which
   // the user may have renamed.
   path: string
+  isArchived?: boolean
+  isMainWorktree?: boolean
+  hasHostSidebarActivity?: boolean
   liveTerminalCount: number
   hasAttachedPty: boolean
   preview: string
@@ -62,6 +65,9 @@ export function getWorktreeStatus(
 // worktrees with idle terminal prompts had no recent output and were excluded.
 // Any worktree with live terminals or unread output counts as "active".
 export function isWorktreeActive(w: Worktree): boolean {
+  if (w.hasHostSidebarActivity !== undefined) {
+    return w.hasHostSidebarActivity
+  }
   if (w.unread) {
     return true
   }
@@ -74,9 +80,15 @@ export function isWorktreeActive(w: Worktree): boolean {
   return false
 }
 
-// Why: mobile worktree.ps carries no per-repo default branch, so we treat the
-// conventional main/master as the default for the hideDefaultBranch filter.
-function isOnDefaultBranch(w: Worktree): boolean {
+function isDefaultBranchWorkspace(w: Worktree): boolean {
+  if (w.workspaceKind === 'folder-workspace') {
+    return false
+  }
+  if (w.isMainWorktree !== undefined) {
+    return w.isMainWorktree && w.branch.trim() !== ''
+  }
+  // Why: older hosts did not include isMainWorktree in worktree.ps, so keep the
+  // legacy fallback until all paired runtimes carry the desktop predicate input.
   const branch = w.branch.replace(/^refs\/heads\//, '')
   return branch === 'main' || branch === 'master'
 }
@@ -135,12 +147,12 @@ export function filterWorktrees(
   filters: FilterState,
   search: string
 ): Worktree[] {
-  let result = worktrees
+  let result = worktrees.filter((w) => !w.isArchived)
   if (filters.hideSleeping) {
-    result = result.filter((w) => getWorktreeStatus(w) !== 'inactive')
+    result = result.filter(isWorktreeActive)
   }
   if (filters.hideDefaultBranch) {
-    result = result.filter((w) => !isOnDefaultBranch(w))
+    result = result.filter((w) => !isDefaultBranchWorkspace(w))
   }
   if (filters.filterRepoIds.size > 0) {
     result = result.filter((w) => filters.filterRepoIds.has(w.repoId))

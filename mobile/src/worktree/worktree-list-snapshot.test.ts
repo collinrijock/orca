@@ -67,6 +67,14 @@ describe('areWorktreeListsEqual', () => {
     expect(areWorktreeListsEqual(first, renamed)).toBe(false)
   })
 
+  it('detects host visibility field changes', () => {
+    expect(areWorktreeListsEqual([worktree()], [worktree({ isArchived: true })])).toBe(false)
+    expect(areWorktreeListsEqual([worktree()], [worktree({ isMainWorktree: true })])).toBe(false)
+    expect(areWorktreeListsEqual([worktree()], [worktree({ hasHostSidebarActivity: true })])).toBe(
+      false
+    )
+  })
+
   it('detects agent status changes', () => {
     const first = [worktree({ agents: [agent({ state: 'working' })] })]
     const second = [worktree({ agents: [agent({ state: 'waiting' })] })]
