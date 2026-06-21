@@ -85,12 +85,16 @@ export function createMockWorktrees(
 }
 
 function createMockAgent(index: number, now: number): RuntimeWorktreeAgentRow {
+  const scenarioTitle = `Investigate mobile lag scenario ${index + 1}`
+
   return {
     paneKey: `agent-${index}`,
     parentPaneKey: null,
     state: index % 12 === 0 ? 'waiting' : 'working',
     agentType: index % 3 === 0 ? 'claude' : 'codex',
-    prompt: `Investigate mobile lag scenario ${index + 1}`,
+    prompt: scenarioTitle,
+    taskTitle: scenarioTitle,
+    displayName: `Mobile lag ${index + 1}`,
     lastAssistantMessage: index % 6 === 0 ? 'Running focused checks' : null,
     toolName: null,
     toolInput: null,
