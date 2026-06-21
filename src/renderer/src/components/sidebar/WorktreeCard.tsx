@@ -117,6 +117,7 @@ type WorktreeCardProps = {
 }
 
 const EMPTY_WORKSPACE_PORTS = []
+const HOSTED_REVIEW_CARD_REFRESH_INTERVAL_MS = 60_000
 
 export function shouldBeginWorktreeRename(
   request: WorktreeRenameRequest | null,
@@ -534,10 +535,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
     ) {
       return
     }
-    const refreshHostedReviewIfVisible = (): void => {
-      if (!isWindowVisible()) {
-        return
-      }
+    const refreshHostedReview = (): void => {
       // Why: branch lookup is lossy for fork/deleted-head PRs; reuse a known PR
       // number from explicit metadata whenever we have one.
       void fetchHostedReviewForBranch(repo.path, branch, {
@@ -550,13 +548,12 @@ const WorktreeCard = React.memo(function WorktreeCard({
         staleWhileRevalidate: true
       })
     }
-    refreshHostedReviewIfVisible()
-    window.addEventListener('focus', refreshHostedReviewIfVisible)
-    document.addEventListener('visibilitychange', refreshHostedReviewIfVisible)
-    return () => {
-      window.removeEventListener('focus', refreshHostedReviewIfVisible)
-      document.removeEventListener('visibilitychange', refreshHostedReviewIfVisible)
-    }
+    // Why: PRs created outside Orca (for example `gh pr create`) do not emit a
+    // renderer event; visible-card polling discovers them after an earlier miss.
+    return installWindowVisibilityInterval({
+      run: refreshHostedReview,
+      intervalMs: HOSTED_REVIEW_CARD_REFRESH_INTERVAL_MS
+    })
   }, [
     repo,
     isFolder,
