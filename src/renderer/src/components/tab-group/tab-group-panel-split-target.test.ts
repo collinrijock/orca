@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { TabGroupLayoutNode } from '../../../../shared/types'
+import type { TabGroup, TabGroupLayoutNode } from '../../../../shared/types'
 import type { TabDragItemData } from './useTabDragSplit'
 import {
+  captureTabGroupPanelGeometrySnapshot,
   findTabGroupPanelUnderPointer,
   resolveActivePaneColumnSplitTarget,
   resolvePanelEdgePaneColumnSplit
@@ -60,6 +61,165 @@ function mockTabGroupRects(panelRect: DOMRect, bodyRect: DOMRect): void {
       }
     ])
   })
+}
+
+function rect({
+  left,
+  top,
+  width,
+  height
+}: {
+  left: number
+  top: number
+  width: number
+  height: number
+}): DOMRect {
+  return {
+    left,
+    top,
+    width,
+    height,
+    right: left + width,
+    bottom: top + height
+  } as DOMRect
+}
+
+function mockTabGroupGeometry(
+  entries: {
+    groupId: string
+    panelRect: DOMRect
+    bodyRect: DOMRect
+    counts?: { panelReads: number; bodyReads: number }
+  }[]
+): { queryAll: ReturnType<typeof vi.fn> } {
+  const bodies = entries.map((entry) => ({
+    dataset: {
+      tabGroupBodyId: entry.groupId,
+      worktreeId: 'wt-1'
+    },
+    getBoundingClientRect: () => {
+      if (entry.counts) {
+        entry.counts.bodyReads += 1
+      }
+      return entry.bodyRect
+    },
+    parentElement: {
+      getBoundingClientRect: () => {
+        if (entry.counts) {
+          entry.counts.panelReads += 1
+        }
+        return entry.panelRect
+      }
+    }
+  }))
+  const queryAll = vi.fn(() => bodies)
+  vi.stubGlobal('document', {
+    querySelector: vi.fn((selector: string) => {
+      const match = selector.match(/data-tab-group-body-id="([^"]+)"/)
+      return bodies.find((body) => body.dataset.tabGroupBodyId === match?.[1]) ?? null
+    }),
+    querySelectorAll: queryAll
+  })
+  return { queryAll }
+}
+
+function percentile(values: number[], p: number): number {
+  const sorted = [...values].sort((a, b) => a - b)
+  return sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * p))]
+}
+
+function fourGroupFixture(): {
+  counts: { panelReads: number; bodyReads: number }[]
+  groupsByWorktree: Record<string, TabGroup[]>
+  layoutByWorktree: Record<string, TabGroupLayoutNode>
+  queryAll: ReturnType<typeof vi.fn>
+} {
+  const counts = [
+    { panelReads: 0, bodyReads: 0 },
+    { panelReads: 0, bodyReads: 0 },
+    { panelReads: 0, bodyReads: 0 },
+    { panelReads: 0, bodyReads: 0 }
+  ]
+  const { queryAll } = mockTabGroupGeometry([
+    {
+      groupId: 'group-1',
+      panelRect: rect({ left: 0, top: 0, width: 300, height: 600 }),
+      bodyRect: rect({
+        left: 0,
+        top: TAB_GROUP_TAB_STRIP_HEIGHT_PX,
+        width: 300,
+        height: 600 - TAB_GROUP_TAB_STRIP_HEIGHT_PX
+      }),
+      counts: counts[0]
+    },
+    {
+      groupId: 'group-2',
+      panelRect: rect({ left: 304, top: 0, width: 300, height: 600 }),
+      bodyRect: rect({
+        left: 304,
+        top: TAB_GROUP_TAB_STRIP_HEIGHT_PX,
+        width: 300,
+        height: 600 - TAB_GROUP_TAB_STRIP_HEIGHT_PX
+      }),
+      counts: counts[1]
+    },
+    {
+      groupId: 'group-3',
+      panelRect: rect({ left: 608, top: 0, width: 300, height: 600 }),
+      bodyRect: rect({
+        left: 608,
+        top: TAB_GROUP_TAB_STRIP_HEIGHT_PX,
+        width: 300,
+        height: 600 - TAB_GROUP_TAB_STRIP_HEIGHT_PX
+      }),
+      counts: counts[2]
+    },
+    {
+      groupId: 'group-4',
+      panelRect: rect({ left: 912, top: 0, width: 300, height: 600 }),
+      bodyRect: rect({
+        left: 912,
+        top: TAB_GROUP_TAB_STRIP_HEIGHT_PX,
+        width: 300,
+        height: 600 - TAB_GROUP_TAB_STRIP_HEIGHT_PX
+      }),
+      counts: counts[3]
+    }
+  ])
+
+  return {
+    counts,
+    queryAll,
+    groupsByWorktree: {
+      'wt-1': [
+        { id: 'group-1', worktreeId: 'wt-1', activeTabId: 'tab-1', tabOrder: ['tab-1', 'tab-5'] },
+        { id: 'group-2', worktreeId: 'wt-1', activeTabId: 'tab-2', tabOrder: ['tab-2'] },
+        { id: 'group-3', worktreeId: 'wt-1', activeTabId: 'tab-3', tabOrder: ['tab-3'] },
+        { id: 'group-4', worktreeId: 'wt-1', activeTabId: 'tab-4', tabOrder: ['tab-4'] }
+      ]
+    },
+    layoutByWorktree: {
+      'wt-1': {
+        type: 'split',
+        direction: 'horizontal',
+        ratio: 0.5,
+        first: {
+          type: 'split',
+          direction: 'horizontal',
+          ratio: 0.5,
+          first: { type: 'leaf', groupId: 'group-1' },
+          second: { type: 'leaf', groupId: 'group-2' }
+        },
+        second: {
+          type: 'split',
+          direction: 'horizontal',
+          ratio: 0.5,
+          first: { type: 'leaf', groupId: 'group-3' },
+          second: { type: 'leaf', groupId: 'group-4' }
+        }
+      }
+    }
+  }
 }
 
 const horizontalLayout: TabGroupLayoutNode = {
@@ -208,7 +368,7 @@ describe('resolveActivePaneColumnSplitTarget', () => {
         worktreeId: 'wt-1',
         getDragPointer: () => ({ x: 880, y: 300 })
       })
-    ).toEqual({ groupId: 'group-2', zone: 'right' })
+    ).toEqual(expect.objectContaining({ groupId: 'group-2', zone: 'right' }))
   })
 
   it('skips pane-edge splits for cross-group tab-strip hovers', () => {
@@ -229,5 +389,137 @@ describe('resolveActivePaneColumnSplitTarget', () => {
         getDragPointer: () => ({ x: 650, y: 16 })
       })
     ).toBeNull()
+  })
+
+  it('attaches cached panel bounds to same-group tab-strip pane split targets', () => {
+    const panelRect = rect({ left: 500, top: 0, width: 400, height: 600 })
+    mockTabGroupGeometry([
+      {
+        groupId: 'group-1',
+        panelRect,
+        bodyRect: rect({
+          left: 500,
+          top: TAB_GROUP_TAB_STRIP_HEIGHT_PX,
+          width: 400,
+          height: 600 - TAB_GROUP_TAB_STRIP_HEIGHT_PX
+        })
+      }
+    ])
+    const geometry = captureTabGroupPanelGeometrySnapshot('wt-1')
+
+    expect(
+      resolveActivePaneColumnSplitTarget({
+        event: makeEvent({
+          activeData: makeDragData({ groupId: 'group-1', unifiedTabId: 'tab-1' }),
+          overData: makeDragData({
+            groupId: 'group-1',
+            unifiedTabId: 'tab-2',
+            visibleTabId: 'tab-2'
+          }),
+          pointer: { x: 560, y: 16 }
+        }),
+        groupsByWorktree: {
+          'wt-1': [
+            {
+              id: 'group-1',
+              worktreeId: 'wt-1',
+              activeTabId: 'tab-1',
+              tabOrder: ['tab-1', 'tab-2']
+            }
+          ]
+        },
+        layoutByWorktree: {
+          'wt-1': { type: 'leaf', groupId: 'group-1' }
+        },
+        worktreeId: 'wt-1',
+        getDragPointer: () => ({ x: 560, y: 16 }),
+        geometry
+      })
+    ).toEqual(expect.objectContaining({ groupId: 'group-1', zone: 'right', panelRect }))
+  })
+
+  it('reuses one geometry snapshot across drag frames instead of measuring layout per move', () => {
+    const {
+      counts,
+      groupsByWorktree,
+      layoutByWorktree: fourGroupLayoutByWorktree,
+      queryAll
+    } = fourGroupFixture()
+    const geometry = captureTabGroupPanelGeometrySnapshot('wt-1')
+
+    const points = [
+      { x: 295, y: 300 },
+      { x: 360, y: 300 },
+      { x: 595, y: 300 },
+      { x: 664, y: 300 },
+      { x: 899, y: 300 },
+      { x: 968, y: 300 },
+      { x: 1204, y: 300 }
+    ]
+    for (const pointer of points) {
+      resolveActivePaneColumnSplitTarget({
+        event: makeEvent({
+          activeData: makeDragData({ groupId: 'group-1' }),
+          overData: null,
+          pointer
+        }),
+        groupsByWorktree,
+        layoutByWorktree: fourGroupLayoutByWorktree,
+        worktreeId: 'wt-1',
+        getDragPointer: () => pointer,
+        geometry
+      })
+    }
+
+    expect(queryAll).toHaveBeenCalledTimes(1)
+    expect(counts.reduce((sum, entry) => sum + entry.panelReads + entry.bodyReads, 0)).toBe(8)
+  })
+
+  it('reports cached split-target resolution timing without gating CI on wall-clock time', () => {
+    const {
+      counts,
+      groupsByWorktree,
+      layoutByWorktree: fourGroupLayoutByWorktree,
+      queryAll
+    } = fourGroupFixture()
+    const geometry = captureTabGroupPanelGeometrySnapshot('wt-1')
+    const points = [
+      { x: 295, y: 300 },
+      { x: 360, y: 300 },
+      { x: 595, y: 300 },
+      { x: 664, y: 300 },
+      { x: 899, y: 300 },
+      { x: 968, y: 300 },
+      { x: 1204, y: 300 },
+      { x: 650, y: 300 }
+    ]
+    const durations: number[] = []
+    for (let index = 0; index < 1_000; index += 1) {
+      const pointer = points[index % points.length]!
+      const startedAt = performance.now()
+      resolveActivePaneColumnSplitTarget({
+        event: makeEvent({
+          activeData: makeDragData({ groupId: 'group-1' }),
+          overData: null,
+          pointer
+        }),
+        groupsByWorktree,
+        layoutByWorktree: fourGroupLayoutByWorktree,
+        worktreeId: 'wt-1',
+        getDragPointer: () => pointer,
+        geometry
+      })
+      durations.push(performance.now() - startedAt)
+    }
+
+    const p95Ms = percentile(durations, 0.95)
+    const maxMs = Math.max(...durations)
+    console.info(
+      `tab split preview resolver perf: p95=${p95Ms.toFixed(3)}ms max=${maxMs.toFixed(
+        3
+      )}ms samples=${durations.length}`
+    )
+    expect(queryAll).toHaveBeenCalledTimes(1)
+    expect(counts.reduce((sum, entry) => sum + entry.panelReads + entry.bodyReads, 0)).toBe(8)
   })
 })

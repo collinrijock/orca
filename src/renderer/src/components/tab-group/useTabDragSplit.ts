@@ -39,7 +39,12 @@ import {
 } from './tab-drag-preview-activation'
 import { resolveDragPreviewTabId, resolveSourceGroupRestoreOnDrop } from './tab-drag-preview-target'
 import { getDragPointer } from './tab-drag-pointer'
-import { resolveActivePaneColumnSplitTarget } from './tab-group-panel-split-target'
+import {
+  captureTabGroupPanelGeometrySnapshot,
+  resolveActivePaneColumnSplitTarget,
+  type ActivePaneColumnSplitTarget,
+  type TabGroupPanelGeometrySnapshot
+} from './tab-group-panel-split-target'
 
 export type { HoveredTabInsertion }
 
@@ -75,6 +80,7 @@ export type TabPaneDropData = {
 export type HoveredTabDropTarget = {
   groupId: string
   zone: TabDropZone
+  panelRect?: DOMRect
 }
 
 function mirrorWebRuntimeTabMove(
@@ -191,6 +197,7 @@ export function useTabDragSplit({
   const lastPreviewRef = useRef<{ groupId: string; tabId: string | null } | null>(null)
   const lastHoveredTabPreviewRef = useRef<{ groupId: string; tabId: string } | null>(null)
   const tabDragActiveRef = useRef(false)
+  const dragGeometryRef = useRef<TabGroupPanelGeometrySnapshot | null>(null)
   const tabInsertion = useHoveredTabInsertion(isTabDragData, getDragPointer)
 
   // Why: hidden worktrees stay mounted so their PTYs survive worktree
@@ -237,6 +244,7 @@ export function useTabDragSplit({
     preDragActivationSnapshotRef.current = null
     lastPreviewRef.current = null
     lastHoveredTabPreviewRef.current = null
+    dragGeometryRef.current = null
   }, [releaseWebviewDragPassthrough, tabInsertion])
 
   const restorePreDragActivation = useCallback(() => {
@@ -312,7 +320,7 @@ export function useTabDragSplit({
   )
 
   const updateHoveredDropTargetFromSplit = useCallback(
-    (splitTarget: ReturnType<typeof resolveActivePaneColumnSplitTarget>) => {
+    (splitTarget: ActivePaneColumnSplitTarget | null) => {
       if (!splitTarget) {
         setHoveredDropTarget((prev) => (prev === null ? prev : null))
         return
@@ -321,7 +329,11 @@ export function useTabDragSplit({
         if (prev?.groupId === splitTarget.groupId && prev?.zone === splitTarget.zone) {
           return prev
         }
-        return { groupId: splitTarget.groupId, zone: splitTarget.zone }
+        return {
+          groupId: splitTarget.groupId,
+          zone: splitTarget.zone,
+          panelRect: splitTarget.panelRect
+        }
       })
     },
     []
@@ -340,7 +352,8 @@ export function useTabDragSplit({
         groupsByWorktree: state.groupsByWorktree,
         layoutByWorktree: state.layoutByWorktree,
         worktreeId,
-        getDragPointer
+        getDragPointer,
+        geometry: dragGeometryRef.current
       })
       updateHoveredDropTargetFromSplit(splitTarget)
       if (splitTarget) {
@@ -362,6 +375,7 @@ export function useTabDragSplit({
 
       setActiveDrag(dragData)
       tabDragActiveRef.current = true
+      dragGeometryRef.current = captureTabGroupPanelGeometrySnapshot(worktreeId)
       preDragActivationSnapshotRef.current = captureTabDragActivationSnapshot(worktreeId)
       acquireWebviewDragPassthrough()
     },
@@ -397,7 +411,8 @@ export function useTabDragSplit({
         groupsByWorktree: state.groupsByWorktree,
         layoutByWorktree: state.layoutByWorktree,
         worktreeId,
-        getDragPointer
+        getDragPointer,
+        geometry: dragGeometryRef.current
       })
       if (paneColumnSplit) {
         const moved = dropUnifiedTab(activeData.unifiedTabId, {

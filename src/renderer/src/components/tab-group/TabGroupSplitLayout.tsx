@@ -292,10 +292,11 @@ export default function TabGroupSplitLayout({
         <DragOverlay dropAnimation={null}>
           {dragSplit.activeDrag ? <TabDragPreview drag={dragSplit.activeDrag} /> : null}
         </DragOverlay>
-        {dragSplit.hoveredDropTarget && dragSplit.hoveredDropTarget.zone !== 'center' ? (
+        {dragSplit.hoveredDropTarget &&
+        dragSplit.hoveredDropTarget.zone !== 'center' &&
+        dragSplit.hoveredDropTarget.panelRect ? (
           <TabPaneColumnSplitDragOverlay
-            worktreeId={worktreeId}
-            groupId={dragSplit.hoveredDropTarget.groupId}
+            panelRect={dragSplit.hoveredDropTarget.panelRect}
             zone={dragSplit.hoveredDropTarget.zone}
           />
         ) : null}

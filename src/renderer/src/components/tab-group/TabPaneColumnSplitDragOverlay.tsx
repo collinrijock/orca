@@ -1,7 +1,6 @@
 import { createPortal } from 'react-dom'
 import type { CSSProperties } from 'react'
 import TabGroupDropOverlay from './TabGroupDropOverlay'
-import { getTabGroupPanelRect } from './tab-group-panel-split-target'
 import type { TabDropZone } from './useTabDragSplit'
 
 function getOverlayBounds(
@@ -41,19 +40,12 @@ function getOverlayBounds(
 }
 
 export default function TabPaneColumnSplitDragOverlay({
-  worktreeId,
-  groupId,
+  panelRect,
   zone
 }: {
-  worktreeId: string
-  groupId: string
+  panelRect: DOMRect
   zone: Exclude<TabDropZone, 'center'>
 }): React.JSX.Element | null {
-  const panelRect = getTabGroupPanelRect(groupId, worktreeId)
-  if (!panelRect) {
-    return null
-  }
-
   const bounds = getOverlayBounds(panelRect, zone)
   return createPortal(
     <div aria-hidden="true" className="pointer-events-none fixed z-[10001]" style={bounds}>
