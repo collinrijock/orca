@@ -35,7 +35,8 @@ const MODIFIER_KEYS_BY_NAME: Partial<Record<string, keyof HeldModifiers>> = {
   Shift: 'shift'
 }
 
-const UNIDENTIFIED_RELEASE_KEYS = new Set(['', 'Dead', 'Unidentified'])
+const UNRELIABLE_KEY_VALUES = new Set(['', 'Dead', 'Unidentified'])
+const UNRELIABLE_CODE_VALUES = new Set(['', 'Unidentified'])
 
 function normalizeReleasedKey(key: string): string {
   return key.length === 1 ? key.toLowerCase() : key
@@ -66,12 +67,19 @@ function getReleasedPrimaryKey(event: KeyboardEvent): string | null {
     return null
   }
   const key = normalizeReleasedKey(event.key)
-  return UNIDENTIFIED_RELEASE_KEYS.has(key) ? null : key
+  return UNRELIABLE_KEY_VALUES.has(key) ? null : key
+}
+
+function getReleasedPrimaryCode(event: KeyboardEvent): string | null {
+  if (getReleasedModifier(event) || UNRELIABLE_CODE_VALUES.has(event.code)) {
+    return null
+  }
+  return event.code
 }
 
 function createHoldDictationReleaseMatcher(event: KeyboardEvent): HoldDictationReleaseMatcher {
   const primaryKey = getReleasedPrimaryKey(event)
-  const primaryCode = getReleasedModifier(event) ? null : event.code
+  const primaryCode = getReleasedPrimaryCode(event)
   const heldModifiers: HeldModifiers = {
     alt: event.altKey,
     control: event.ctrlKey,
@@ -86,10 +94,11 @@ function createHoldDictationReleaseMatcher(event: KeyboardEvent): HoldDictationR
     }
     // Why: modifier state can already be false on the keyup that ends a chord,
     // so release matching tracks the accepted keydown's key identity instead.
-    return (
-      (primaryCode !== null && releaseEvent.code === primaryCode) ||
-      (primaryKey !== null && getReleasedPrimaryKey(releaseEvent) === primaryKey)
-    )
+    const releasePrimaryCode = getReleasedPrimaryCode(releaseEvent)
+    if (primaryCode !== null && releasePrimaryCode !== null) {
+      return releasePrimaryCode === primaryCode
+    }
+    return primaryKey !== null && getReleasedPrimaryKey(releaseEvent) === primaryKey
   }
 }
 
