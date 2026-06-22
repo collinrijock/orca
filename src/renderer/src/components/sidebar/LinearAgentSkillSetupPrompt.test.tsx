@@ -6,6 +6,10 @@ import type { CliInstallStatus } from '../../../../shared/cli-install-types'
 import type { ProjectExecutionRuntimeResolution } from '../../../../shared/project-execution-runtime'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
+  LINEAR_AGENT_SKILL_NAMES,
+  ORCA_LINEAR_SKILL_UPDATE_COMMAND
+} from '@/lib/agent-feature-install-commands'
+import {
   LinearAgentSkillSetupPrompt,
   _linearAgentSkillSetupPromptInternalsForTests
 } from './LinearAgentSkillSetupPrompt'
@@ -41,9 +45,10 @@ const mocks = vi.hoisted(() => ({
     installed: false,
     loading: false,
     error: null as string | null,
+    skills: [],
     refresh: vi.fn(async () => {})
   },
-  useInstalledAgentSkill: vi.fn(),
+  useInstalledAgentSkillNames: vi.fn(),
   getCliStatus: vi.fn(),
   getWslCliStatus: vi.fn(),
   ensureCli: vi.fn(async () => null as CliInstallStatus | null),
@@ -51,9 +56,9 @@ const mocks = vi.hoisted(() => ({
   panelProps: [] as Record<string, unknown>[]
 }))
 
-vi.mock('@/hooks/useInstalledAgentSkills', () => ({
-  GLOBAL_AGENT_SKILL_SOURCE_KINDS: ['home'],
-  useInstalledAgentSkill: mocks.useInstalledAgentSkill
+vi.mock('@/hooks/useInstalledAgentSkills', async (importOriginal) => ({
+  ...(await importOriginal()),
+  useInstalledAgentSkillNames: mocks.useInstalledAgentSkillNames
 }))
 
 vi.mock('@/lib/agent-skill-cli-prerequisite', () => ({
@@ -196,13 +201,10 @@ async function showSuccessfulModalRecheck(): Promise<void> {
 
 describe('LinearAgentSkillSetupPrompt', () => {
   beforeEach(() => {
-    mocks.skillState.installed = false
-    mocks.skillState.loading = false
-    mocks.skillState.error = null
-    mocks.skillState.refresh.mockReset()
-    mocks.skillState.refresh.mockImplementation(async () => {})
-    mocks.useInstalledAgentSkill.mockReset()
-    mocks.useInstalledAgentSkill.mockReturnValue(mocks.skillState)
+    Object.assign(mocks.skillState, { installed: false, loading: false, error: null, skills: [] })
+    mocks.skillState.refresh.mockReset().mockImplementation(async () => {})
+    mocks.useInstalledAgentSkillNames.mockReset()
+    mocks.useInstalledAgentSkillNames.mockReturnValue(mocks.skillState)
     mocks.getCliStatus.mockReset()
     mocks.getCliStatus.mockResolvedValue(
       cliStatus({ state: 'not_installed', pathConfigured: false })
@@ -241,8 +243,8 @@ describe('LinearAgentSkillSetupPrompt', () => {
     expect(rendered.textContent).toContain('Set up Linear agent skill')
     expect(rendered.textContent).toContain('Orca CLI and Linear agent skill are missing')
     expect(rendered.textContent).toContain('Install it for host agent handoffs')
-    expect(mocks.useInstalledAgentSkill).toHaveBeenCalledWith(
-      'linear-tickets',
+    expect(mocks.useInstalledAgentSkillNames).toHaveBeenCalledWith(
+      LINEAR_AGENT_SKILL_NAMES,
       expect.objectContaining({ enabled: true, sourceKinds: ['home'] })
     )
   })
@@ -294,8 +296,8 @@ describe('LinearAgentSkillSetupPrompt', () => {
     expect(rendered.textContent).toContain('remote agent environments may need separate setup')
     expect(mocks.getCliStatus).toHaveBeenCalled()
     expect(mocks.getWslCliStatus).not.toHaveBeenCalled()
-    expect(mocks.useInstalledAgentSkill).toHaveBeenCalledWith(
-      'linear-tickets',
+    expect(mocks.useInstalledAgentSkillNames).toHaveBeenCalledWith(
+      LINEAR_AGENT_SKILL_NAMES,
       expect.objectContaining({
         discoveryTarget: undefined,
         enabled: true,
@@ -326,10 +328,9 @@ describe('LinearAgentSkillSetupPrompt', () => {
       }
     })
 
-    expect(mocks.getCliStatus).not.toHaveBeenCalled()
     expect(mocks.getWslCliStatus).toHaveBeenCalledWith({ distro: 'Fedora' })
-    expect(mocks.useInstalledAgentSkill).toHaveBeenCalledWith(
-      'linear-tickets',
+    expect(mocks.useInstalledAgentSkillNames).toHaveBeenCalledWith(
+      LINEAR_AGENT_SKILL_NAMES,
       expect.objectContaining({
         discoveryTarget: { runtime: 'wsl', wslDistro: 'Fedora' },
         enabled: true,
@@ -350,14 +351,12 @@ describe('LinearAgentSkillSetupPrompt', () => {
     )
     expect(mocks.panelProps.at(-1)).toEqual(
       expect.objectContaining({
-        installedCommand:
-          "wsl.exe -d 'Fedora' -- bash -lc 'npx --yes skills update linear-tickets --global --yes'",
+        installedCommand: `wsl.exe -d 'Fedora' -- bash -lc '${ORCA_LINEAR_SKILL_UPDATE_COMMAND}'`,
         terminalShellOverride: 'powershell.exe',
         getPrerequisiteStatus: expect.any(Function)
       })
     )
     const getPrerequisiteStatus = mocks.panelProps.at(-1)?.getPrerequisiteStatus
-    expect(getPrerequisiteStatus).toEqual(expect.any(Function))
     await (getPrerequisiteStatus as () => Promise<unknown>)()
     expect(mocks.getWslCliStatus).toHaveBeenLastCalledWith({ distro: 'Fedora' })
 
@@ -441,7 +440,7 @@ describe('LinearAgentSkillSetupPrompt', () => {
     })
 
     expect(document.body.querySelector('[data-testid="linear-skill-inline-panel"]')).not.toBeNull()
-    expect(document.body.textContent).toContain('linear-tickets')
+    expect(document.body.textContent).toContain('orca-linear')
 
     const installButton = Array.from(document.body.querySelectorAll('button')).find(
       (button) => button.textContent === 'Mock install'
@@ -853,8 +852,8 @@ describe('LinearAgentSkillSetupPrompt', () => {
       }
     })
 
-    expect(mocks.useInstalledAgentSkill).toHaveBeenLastCalledWith(
-      'linear-tickets',
+    expect(mocks.useInstalledAgentSkillNames).toHaveBeenLastCalledWith(
+      LINEAR_AGENT_SKILL_NAMES,
       expect.objectContaining({
         discoveryTarget: { projectRuntime: projectHostRuntime }
       })
@@ -876,8 +875,8 @@ describe('LinearAgentSkillSetupPrompt', () => {
       }
     })
 
-    expect(mocks.useInstalledAgentSkill).toHaveBeenLastCalledWith(
-      'linear-tickets',
+    expect(mocks.useInstalledAgentSkillNames).toHaveBeenLastCalledWith(
+      LINEAR_AGENT_SKILL_NAMES,
       expect.objectContaining({
         discoveryTarget: { projectRuntime: projectWslRuntime }
       })

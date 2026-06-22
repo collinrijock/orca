@@ -4,6 +4,7 @@ import {
   buildAgentFeatureSkillUpdateCommand,
   COMPUTER_USE_SKILL_UPDATE_COMMAND,
   LINEAR_TICKETS_SKILL_UPDATE_COMMAND,
+  ORCA_LINEAR_SKILL_UPDATE_COMMAND,
   ORCA_CLI_ORCHESTRATION_SKILL_INSTALL_COMMAND,
   ORCA_CLI_SKILL_UPDATE_COMMAND,
   ORCHESTRATION_SKILL_UPDATE_COMMAND
@@ -33,6 +34,9 @@ describe('agent feature skill commands', () => {
     )
     expect(LINEAR_TICKETS_SKILL_UPDATE_COMMAND).toBe(
       'npx --yes skills update linear-tickets --global --yes'
+    )
+    expect(ORCA_LINEAR_SKILL_UPDATE_COMMAND).toBe(
+      'npx --yes skills update orca-linear --global --yes'
     )
     expect(ORCA_CLI_ORCHESTRATION_SKILL_INSTALL_COMMAND).toBe(
       buildAgentFeatureSkillInstallCommand(['orca-cli', 'orchestration'])

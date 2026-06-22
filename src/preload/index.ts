@@ -11,6 +11,7 @@ import type { AgentHookInstallStatus } from '../shared/agent-hook-types'
 import type { TerminalPaneSplitSource } from '../shared/feature-education-telemetry'
 import type { ProjectExecutionRuntimeResolution } from '../shared/project-execution-runtime'
 import type { StartupCommandDelivery } from '../shared/codex-startup-delivery'
+import type { SleepingAgentLaunchConfig } from '../shared/agent-session-resume'
 import type {
   BaseRefSearchResult,
   BaseRefDefaultResult,
@@ -44,6 +45,7 @@ import type {
   FloatingTerminalCwdRequest,
   MarkdownDocument,
   SearchResult,
+  TuiAgent,
   UpdateStatus,
   WorktreeBaseStatusEvent,
   WorktreeDefaultTabsLaunch,
@@ -707,6 +709,9 @@ const api = {
       cwd?: string
       env?: Record<string, string>
       command?: string
+      launchConfig?: SleepingAgentLaunchConfig
+      launchToken?: string
+      launchAgent?: TuiAgent
       startupCommandDelivery?: StartupCommandDelivery
       connectionId?: string | null
       worktreeId?: string
@@ -727,6 +732,7 @@ const api = {
       telemetry?: { agent_kind: AgentKind; launch_source: LaunchSource; request_kind: RequestKind }
     }): Promise<{
       id: string
+      launchConfig?: SleepingAgentLaunchConfig
       snapshot?: string
       snapshotCols?: number
       snapshotRows?: number
@@ -950,6 +956,7 @@ const api = {
       branch: string
       linkedPRNumber?: number | null
       fallbackPRNumber?: number | null
+      acceptMergedFallbackPR?: boolean
     }): Promise<unknown> => ipcRenderer.invoke('gh:prForBranch', args),
 
     refreshPRNow: (args: { candidate: GitHubPRRefreshCandidate }): Promise<unknown> =>
@@ -2023,6 +2030,8 @@ const api = {
         filename: string
         totalBytes: number | null
         mimeType: string | null
+        savePath: string
+        status: 'downloading'
       }) => void
     ): (() => void) => {
       const listener = (
@@ -2034,6 +2043,8 @@ const api = {
           filename: string
           totalBytes: number | null
           mimeType: string | null
+          savePath: string
+          status: 'downloading'
         }
       ) => callback(data)
       ipcRenderer.on('browser:download-requested', listener)
@@ -2042,14 +2053,22 @@ const api = {
 
     onDownloadProgress: (
       callback: (event: {
+        browserPageId?: string
         downloadId: string
         receivedBytes: number
         totalBytes: number | null
+        state: 'progressing' | 'interrupted' | null
       }) => void
     ): (() => void) => {
       const listener = (
         _event: Electron.IpcRendererEvent,
-        data: { downloadId: string; receivedBytes: number; totalBytes: number | null }
+        data: {
+          browserPageId?: string
+          downloadId: string
+          receivedBytes: number
+          totalBytes: number | null
+          state: 'progressing' | 'interrupted' | null
+        }
       ) => callback(data)
       ipcRenderer.on('browser:download-progress', listener)
       return () => ipcRenderer.removeListener('browser:download-progress', listener)
@@ -2057,6 +2076,7 @@ const api = {
 
     onDownloadFinished: (
       callback: (event: {
+        browserPageId?: string
         downloadId: string
         status: 'completed' | 'canceled' | 'failed'
         savePath: string | null
@@ -2066,6 +2086,7 @@ const api = {
       const listener = (
         _event: Electron.IpcRendererEvent,
         data: {
+          browserPageId?: string
           downloadId: string
           status: 'completed' | 'canceled' | 'failed'
           savePath: string | null
@@ -2159,11 +2180,6 @@ const api = {
       ipcRenderer.on('browser:open-link-in-orca-tab', listener)
       return () => ipcRenderer.removeListener('browser:open-link-in-orca-tab', listener)
     },
-
-    acceptDownload: (args: {
-      downloadId: string
-    }): Promise<{ ok: true } | { ok: false; reason: string }> =>
-      ipcRenderer.invoke('browser:acceptDownload', args),
 
     cancelDownload: (args: { downloadId: string }): Promise<boolean> =>
       ipcRenderer.invoke('browser:cancelDownload', args),
@@ -3032,6 +3048,10 @@ const api = {
         requestId?: string
         worktreeId: string
         command?: string
+        env?: Record<string, string>
+        launchConfig?: SleepingAgentLaunchConfig
+        launchToken?: string
+        launchAgent?: TuiAgent
         title?: string
         ptyId?: string
         activate?: boolean
@@ -3048,6 +3068,10 @@ const api = {
           requestId?: string
           worktreeId: string
           command?: string
+          env?: Record<string, string>
+          launchConfig?: SleepingAgentLaunchConfig
+          launchToken?: string
+          launchAgent?: TuiAgent
           title?: string
           ptyId?: string
           activate?: boolean
@@ -3068,6 +3092,10 @@ const api = {
         afterTabId?: string
         targetGroupId?: string
         command?: string
+        env?: Record<string, string>
+        launchConfig?: SleepingAgentLaunchConfig
+        launchToken?: string
+        launchAgent?: TuiAgent
         startupCommandDelivery?: StartupCommandDelivery
         title?: string
         activate?: boolean
@@ -3081,6 +3109,10 @@ const api = {
           afterTabId?: string
           targetGroupId?: string
           command?: string
+          env?: Record<string, string>
+          launchConfig?: SleepingAgentLaunchConfig
+          launchToken?: string
+          launchAgent?: TuiAgent
           startupCommandDelivery?: StartupCommandDelivery
           title?: string
           activate?: boolean
@@ -3276,6 +3308,8 @@ const api = {
         mode: options?.mode === 'paste-and-match-style' ? 'paste-and-match-style' : 'paste'
       })
     },
+    writeClipboardFile: (filePath: string): Promise<{ ok: boolean; reason?: string }> =>
+      ipcRenderer.invoke('clipboard:writeFile', filePath),
     onFileDrop: (callback: (data: NativeFileDropPayload) => void): (() => void) =>
       subscribeNativeFileDrop(callback),
     getZoomLevel: (): number => webFrame.getZoomLevel(),
@@ -3844,6 +3878,11 @@ const api = {
      *  cannot resurrect it. Fire-and-forget; no response. */
     drop: (paneKey: string): void => {
       ipcRenderer.send('agentStatus:drop', paneKey)
+    },
+    /** Drop all cached hook statuses under one terminal tab prefix. Fired on
+     *  explicit tab close even when the renderer has no matching local row. */
+    dropByTabPrefix: (tabId: string): void => {
+      ipcRenderer.send('agentStatus:dropByTabPrefix', tabId)
     }
   },
 

@@ -59,7 +59,15 @@ export function hasInstalledAgentSkill(
   skillName: string,
   options: InstalledAgentSkillMatchOptions = {}
 ): boolean {
-  const expected = normalizeSkillName(skillName)
+  return hasInstalledAgentSkillNamed(skills, [skillName], options)
+}
+
+export function hasInstalledAgentSkillNamed(
+  skills: readonly DiscoveredSkill[],
+  skillNames: readonly string[],
+  options: InstalledAgentSkillMatchOptions = {}
+): boolean {
+  const expected = new Set(skillNames.map(normalizeSkillName))
   return skills.some((skill) => {
     if (!skill.installed) {
       return false
@@ -75,8 +83,8 @@ export function hasInstalledAgentSkill(
       return false
     }
     return (
-      normalizeSkillName(skill.name) === expected ||
-      normalizeSkillName(basenameFromPath(skill.directoryPath)) === expected
+      expected.has(normalizeSkillName(skill.name)) ||
+      expected.has(normalizeSkillName(basenameFromPath(skill.directoryPath)))
     )
   })
 }
@@ -99,12 +107,21 @@ export function useInstalledAgentSkill(
   skillName: string,
   options: InstalledAgentSkillOptions = {}
 ): InstalledAgentSkillState {
+  return useInstalledAgentSkillNames([skillName], options)
+}
+
+export function useInstalledAgentSkillNames(
+  skillNames: readonly string[],
+  options: InstalledAgentSkillOptions = {}
+): InstalledAgentSkillState {
   const {
     enabled = true,
     discoveryTarget,
     projectRootPath = discoveryTarget?.projectRootPath,
     sourceKinds
   } = options
+  const skillNamesKey = skillNames.map(normalizeSkillName).join('\n')
+  const candidateSkillNames = useMemo(() => skillNamesKey.split('\n'), [skillNamesKey])
   const discoveryTargetKey = getSkillDiscoveryTargetKey(discoveryTarget)
   const cachedDiscovery = getCachedInstalledAgentSkillDiscovery(discoveryTarget)
   const [result, setResult] = useState<SkillDiscoveryResult | null>(cachedDiscovery)
@@ -161,7 +178,7 @@ export function useInstalledAgentSkill(
       let installedAfterRefresh = false
       try {
         const next = await discoverInstalledAgentSkills(force, discoveryTarget)
-        installedAfterRefresh = hasInstalledAgentSkill(next.skills, skillName, {
+        installedAfterRefresh = hasInstalledAgentSkillNamed(next.skills, candidateSkillNames, {
           projectRootPath,
           sourceKinds
         })
@@ -185,12 +202,12 @@ export function useInstalledAgentSkill(
       return installedAfterRefresh
     },
     [
+      candidateSkillNames,
       discoveryTarget,
       discoveryTargetKey,
       enabled,
       mountedRef,
       projectRootPath,
-      skillName,
       sourceKinds
     ]
   )
@@ -223,17 +240,19 @@ export function useInstalledAgentSkill(
 
   const installed = useMemo(
     () =>
-      enabled ? hasInstalledAgentSkill(skills, skillName, { projectRootPath, sourceKinds }) : false,
-    [enabled, projectRootPath, skills, skillName, sourceKinds]
+      enabled
+        ? hasInstalledAgentSkillNamed(skills, candidateSkillNames, { projectRootPath, sourceKinds })
+        : false,
+    [candidateSkillNames, enabled, projectRootPath, skills, sourceKinds]
   )
 
   useEffect(() => {
-    if (installed && isOrchestrationSkillName(skillName)) {
+    if (installed && candidateSkillNames.some(isOrchestrationSkillName)) {
       // Why: older floating-workspace education still keys off this marker; any
       // surface that detects the orchestration skill should satisfy setup.
       markOrchestrationSetupComplete()
     }
-  }, [installed, skillName])
+  }, [candidateSkillNames, installed])
 
   const forceRefresh = useCallback(() => refresh(true), [refresh])
 

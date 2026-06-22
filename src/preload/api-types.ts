@@ -15,6 +15,7 @@ import type { TerminalPaneSplitSource } from '../shared/feature-education-teleme
 import type { TaskSourceContext } from '../shared/task-source-context'
 import type { ProjectExecutionRuntimeResolution } from '../shared/project-execution-runtime'
 import type { StartupCommandDelivery } from '../shared/codex-startup-delivery'
+import type { SleepingAgentLaunchConfig } from '../shared/agent-session-resume'
 import type {
   FolderWorkspacePathStatus,
   FolderWorkspacePathStatusRequest
@@ -441,9 +442,6 @@ export type BrowserApi = {
   onOpenLinkInOrcaTab: (
     callback: (event: { browserPageId: string; url: string }) => void
   ) => () => void
-  acceptDownload: (args: {
-    downloadId: string
-  }) => Promise<{ ok: true } | { ok: false; reason: string }>
   cancelDownload: (args: { downloadId: string }) => Promise<boolean>
   setGrabMode: (args: BrowserSetGrabModeArgs) => Promise<BrowserSetGrabModeResult>
   awaitGrabSelection: (args: BrowserAwaitGrabSelectionArgs) => Promise<BrowserGrabResult>
@@ -1023,6 +1021,9 @@ export type PreloadApi = {
       cwd?: string
       env?: Record<string, string>
       command?: string
+      launchConfig?: SleepingAgentLaunchConfig
+      launchToken?: string
+      launchAgent?: TuiAgent
       startupCommandDelivery?: StartupCommandDelivery
       connectionId?: string | null
       worktreeId?: string
@@ -1044,6 +1045,7 @@ export type PreloadApi = {
       telemetry?: { agent_kind: AgentKind; launch_source: LaunchSource; request_kind: RequestKind }
     }) => Promise<{
       id: string
+      launchConfig?: SleepingAgentLaunchConfig
       snapshot?: string
       snapshotCols?: number
       snapshotRows?: number
@@ -1154,6 +1156,7 @@ export type PreloadApi = {
       branch: string
       linkedPRNumber?: number | null
       fallbackPRNumber?: number | null
+      acceptMergedFallbackPR?: boolean
     }) => Promise<PRInfo | null>
     refreshPRNow: (args: { candidate: GitHubPRRefreshCandidate }) => Promise<PRRefreshOutcome>
     enqueuePRRefresh: (args: {
@@ -2386,6 +2389,10 @@ export type PreloadApi = {
         requestId?: string
         worktreeId: string
         command?: string
+        env?: Record<string, string>
+        launchConfig?: SleepingAgentLaunchConfig
+        launchToken?: string
+        launchAgent?: TuiAgent
         title?: string
         ptyId?: string
         activate?: boolean
@@ -2403,6 +2410,10 @@ export type PreloadApi = {
         afterTabId?: string
         targetGroupId?: string
         command?: string
+        env?: Record<string, string>
+        launchConfig?: SleepingAgentLaunchConfig
+        launchToken?: string
+        launchAgent?: TuiAgent
         startupCommandDelivery?: StartupCommandDelivery
         title?: string
         activate?: boolean
@@ -2480,6 +2491,7 @@ export type PreloadApi = {
     writeSelectionClipboardText: (text: string) => Promise<void>
     writeClipboardImage: (dataUrl: string) => Promise<void>
     performNativePaste: (options?: { mode?: 'paste' | 'paste-and-match-style' }) => void
+    writeClipboardFile: (filePath: string) => Promise<{ ok: boolean; reason?: string }>
     onFileDrop: (callback: (data: NativeFileDropPayload) => void) => () => void
     getZoomLevel: () => number
     setZoomLevel: (level: number) => void
@@ -2691,6 +2703,9 @@ export type PreloadApi = {
     /** Drop a paneKey from the main-process hook cache and the on-disk
      *  last-status file. Fire-and-forget. */
     drop: (paneKey: string) => void
+    /** Drop every cached hook status under one terminal tab prefix.
+     *  Fire-and-forget. */
+    dropByTabPrefix: (tabId: string) => void
   }
   mobile: {
     listNetworkInterfaces: () => Promise<{

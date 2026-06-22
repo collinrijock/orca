@@ -660,7 +660,8 @@ function createWebPreloadApi(): Partial<PreloadApi> {
       onMigrationUnsupported: () => noopUnsubscribe,
       onMigrationUnsupportedClear: () => noopUnsubscribe,
       getMigrationUnsupportedSnapshot: () => Promise.resolve([]),
-      drop: () => {}
+      drop: () => {},
+      dropByTabPrefix: () => {}
     },
     mobile: {
       listNetworkInterfaces: () => Promise.resolve({ interfaces: [] }),
@@ -1164,6 +1165,19 @@ function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees']> {
         setupDecision: args.setupDecision,
         createdWithAgent: args.createdWithAgent,
         pendingFirstAgentMessageRename: args.pendingFirstAgentMessageRename,
+        ...(args.startup
+          ? {
+              startupCommand: args.startup.command,
+              ...(args.startup.env ? { startupEnv: args.startup.env } : {}),
+              ...(args.startup.launchConfig
+                ? { startupLaunchConfig: args.startup.launchConfig }
+                : {}),
+              ...(args.startup.startupCommandDelivery
+                ? { startupCommandDelivery: args.startup.startupCommandDelivery }
+                : {}),
+              activate: true
+            }
+          : {}),
         parentWorkspace: args.parentWorkspace,
         workspaceStatus: args.workspaceStatus,
         manualOrder: args.manualOrder,
@@ -1208,13 +1222,19 @@ function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees']> {
         branchName,
         expectedHead
       }),
-    updateMeta: async ({ worktreeId, updates }) =>
-      (
+    updateMeta: async ({ worktreeId, updates }) => {
+      const rpcUpdates =
+        Object.prototype.hasOwnProperty.call(updates, 'pushTarget') &&
+        updates.pushTarget === undefined
+          ? { ...updates, pushTarget: null }
+          : updates
+      return (
         await callRuntimeResult<{ worktree: Worktree }>('worktree.set', {
           worktree: toRuntimeWorktreeSelector(worktreeId),
-          ...updates
+          ...rpcUpdates
         })
-      ).worktree,
+      ).worktree
+    },
     listLineage: async () =>
       await callRuntimeResult<{
         lineage: Record<string, WorktreeLineage>
@@ -1592,8 +1612,6 @@ function createBrowserApi(): NonNullable<Partial<PreloadApi>['browser']> {
     onActivateView: () => noopUnsubscribe,
     onPaneFocus: () => noopUnsubscribe,
     onOpenLinkInOrcaTab: () => noopUnsubscribe,
-    acceptDownload: () =>
-      Promise.resolve({ ok: false, reason: 'Downloads are handled by the server browser.' }),
     cancelDownload: () => Promise.resolve(false),
     setGrabMode: () =>
       Promise.resolve({
@@ -1680,12 +1698,17 @@ function createGitHubApi(): WebGitHubApi {
     prForBranch: (args) =>
       route<WebGitHubResult<'prForBranch'>>(GITHUB_WEB_RPC_METHODS.prForBranch, args),
     refreshPRNow: async ({ candidate }) => {
+      const acceptMergedFallbackPR =
+        candidate.linkedPRNumber == null &&
+        candidate.fallbackPRNumber != null &&
+        candidate.fallbackPRSource != null
       const pr = await route<WebGitHubResult<'prForBranch'>>(GITHUB_WEB_RPC_METHODS.prForBranch, {
         repoPath: candidate.repoPath,
         repoId: candidate.repoId,
         branch: candidate.branch,
         linkedPRNumber: candidate.linkedPRNumber ?? null,
-        fallbackPRNumber: candidate.fallbackPRNumber ?? null
+        fallbackPRNumber: candidate.fallbackPRNumber ?? null,
+        ...(acceptMergedFallbackPR ? { acceptMergedFallbackPR: true } : {})
       })
       return pr
         ? { kind: 'found', pr, fetchedAt: Date.now() }
@@ -2023,6 +2046,7 @@ function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     writeSelectionClipboardText: () =>
       Promise.reject(new Error('Selection clipboard is unavailable in the web client')),
     writeClipboardImage: () => Promise.resolve(),
+    writeClipboardFile: () => Promise.resolve({ ok: false, reason: 'unsupported-platform' }),
     performNativePaste: () => {
       document.execCommand?.('paste')
     },
