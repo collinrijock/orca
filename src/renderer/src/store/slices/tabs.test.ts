@@ -424,6 +424,74 @@ describe('TabsSlice', () => {
       expect(buildMobileSessionTabSnapshots(store.getState())[0]?.tabs ?? []).toEqual([])
     })
 
+    it('closes only the targeted split copy when a file is open in two groups, leaving the other intact', () => {
+      // Why: a file split into two groups via copyUnifiedTabToGroup yields two
+      // unified tabs sharing one entityId. Closing one copy from mobile must not
+      // tear down the shared file (which would close BOTH copies) — only the
+      // targeted unified tab should go.
+      const file = makeOpenFile({
+        id: '/tmp/feature/README.md',
+        filePath: '/tmp/feature/README.md',
+        relativePath: 'README.md',
+        language: 'markdown',
+        worktreeId: WT
+      })
+      const groupA = 'editor-group-a'
+      const groupB = 'editor-group-b'
+      const copyA = makeUnifiedTab({
+        id: 'readme-unified-a',
+        entityId: file.id,
+        contentType: 'editor',
+        label: 'README.md',
+        worktreeId: WT,
+        groupId: groupA
+      })
+      const copyB = makeUnifiedTab({
+        id: 'readme-unified-b',
+        entityId: file.id,
+        contentType: 'editor',
+        label: 'README.md',
+        worktreeId: WT,
+        groupId: groupB
+      })
+      store.setState({
+        openFiles: [file],
+        unifiedTabsByWorktree: { [WT]: [copyA, copyB] },
+        groupsByWorktree: {
+          [WT]: [
+            makeTabGroup({
+              id: groupA,
+              worktreeId: WT,
+              activeTabId: copyA.id,
+              tabOrder: [copyA.id],
+              recentTabIds: [copyA.id]
+            }),
+            makeTabGroup({
+              id: groupB,
+              worktreeId: WT,
+              activeTabId: copyB.id,
+              tabOrder: [copyB.id],
+              recentTabIds: [copyB.id]
+            })
+          ]
+        },
+        activeGroupIdByWorktree: { [WT]: groupB },
+        activeFileId: file.id,
+        activeFileIdByWorktree: { [WT]: file.id },
+        activeWorktreeId: WT,
+        activeTabType: 'editor',
+        activeTabTypeByWorktree: { [WT]: 'editor' }
+      })
+
+      // Close the second copy (copyB) from mobile.
+      expect(closeMobileSessionTabInStore(store.getState(), WT, copyB.id)).toBe(true)
+
+      // The shared file stays open and the non-targeted split copy survives;
+      // only copyB is removed.
+      expect(store.getState().openFiles).toEqual([file])
+      expect(store.getState().unifiedTabsByWorktree[WT].map((tab) => tab.id)).toEqual([copyA.id])
+    })
+
     it('activates the previously-active tab (MRU) instead of the visual neighbor', () => {
       const t1 = store.getState().createUnifiedTab(WT, 'terminal')
       const t2 = store.getState().createUnifiedTab(WT, 'terminal')

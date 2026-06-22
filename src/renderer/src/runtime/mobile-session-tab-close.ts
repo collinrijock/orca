@@ -7,10 +7,24 @@ export function closeMobileSessionTabInStore(
   worktreeId: string,
   tabId: string
 ): boolean {
-  const unifiedTab = (store.unifiedTabsByWorktree[worktreeId] ?? []).find(
-    (tab) => tab.id === tabId || tab.entityId === tabId
-  )
+  const worktreeTabs = store.unifiedTabsByWorktree[worktreeId] ?? []
+  const unifiedTab = worktreeTabs.find((tab) => tab.id === tabId || tab.entityId === tabId)
   if (unifiedTab && EDITOR_SESSION_CONTENT_TYPES.has(unifiedTab.contentType)) {
+    // Why: split copies (copyUnifiedTabToGroup) share one entityId. closeFile
+    // removes the file from openFiles and closes only the first matching unified
+    // tab, so it would tear down BOTH copies — and the wrong one first. Mirror
+    // the desktop reference-counting guard (closeEditorIfUnreferenced): when
+    // another editor tab still references this entityId, close only the targeted
+    // copy and leave the shared file (and the other split) intact.
+    const hasOtherReference = worktreeTabs.some(
+      (tab) =>
+        tab.id !== unifiedTab.id &&
+        tab.entityId === unifiedTab.entityId &&
+        EDITOR_SESSION_CONTENT_TYPES.has(tab.contentType)
+    )
+    if (hasOtherReference) {
+      return store.closeUnifiedTab(unifiedTab.id) !== null
+    }
     store.closeFile(unifiedTab.entityId)
     return true
   }
