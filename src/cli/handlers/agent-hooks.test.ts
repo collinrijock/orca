@@ -4,23 +4,36 @@ import { join } from 'path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultPersistedState } from '../../shared/constants'
 import type { PersistedState } from '../../shared/types'
-import type { HandlerContext } from '../dispatch'
-import { RuntimeClient } from '../runtime-client'
 
 const {
   applyAgentStatusHooksEnabledMock,
+  callMock,
+  getCliStatusMock,
   getDefaultUserDataPathMock,
   getManagedAgentHookStatusesMock
 } = vi.hoisted(() => ({
   applyAgentStatusHooksEnabledMock: vi.fn(),
+  callMock: vi.fn(),
+  getCliStatusMock: vi.fn(() =>
+    Promise.resolve({
+      id: 'test-status',
+      ok: true,
+      result: {
+        app: { running: false, pid: null },
+        runtime: { state: 'not_running', reachable: false, runtimeId: null },
+        graph: { state: 'not_running' }
+      },
+      _meta: { runtimeId: 'test' }
+    })
+  ),
   getDefaultUserDataPathMock: vi.fn(),
   getManagedAgentHookStatusesMock: vi.fn()
 }))
 
 vi.mock('../runtime-client', () => {
   class RuntimeClient {
-    getCliStatus = vi.fn()
-    call = vi.fn()
+    call = callMock
+    getCliStatus = getCliStatusMock
   }
 
   class RuntimeClientError extends Error {
@@ -44,7 +57,7 @@ vi.mock('../../main/agent-hooks/managed-agent-hook-controls', () => ({
   getManagedAgentHookStatuses: getManagedAgentHookStatusesMock
 }))
 
-import { AGENT_HOOK_HANDLERS } from './agent-hooks'
+import { main } from '../index'
 
 function readDataFile(userDataPath: string): PersistedState {
   return JSON.parse(readFileSync(join(userDataPath, 'orca-data.json'), 'utf-8')) as PersistedState
@@ -55,30 +68,9 @@ function writeDataFile(userDataPath: string, state: PersistedState): void {
   writeFileSync(join(userDataPath, 'orca-data.json'), JSON.stringify(state, null, 2), 'utf-8')
 }
 
-function createOfflineClient(): HandlerContext['client'] {
-  const client = new RuntimeClient()
-  vi.spyOn(client, 'getCliStatus').mockResolvedValue({
-    id: 'test-status',
-    ok: true,
-    result: {
-      app: { running: false, pid: null },
-      runtime: { state: 'not_running', reachable: false, runtimeId: null },
-      graph: { state: 'not_running' }
-    },
-    _meta: { runtimeId: 'test' }
-  })
-  vi.spyOn(client, 'call').mockRejectedValue(new Error('runtime offline'))
-  return client
-}
-
 async function runAgentHooksOff(userDataPath: string): Promise<void> {
   getDefaultUserDataPathMock.mockReturnValue(userDataPath)
-  await AGENT_HOOK_HANDLERS['agent hooks off']({
-    flags: new Map(),
-    client: createOfflineClient(),
-    cwd: userDataPath,
-    json: true
-  })
+  await main(['agent', 'hooks', 'off', '--json'], userDataPath)
 }
 
 describe('agent hooks CLI handler', () => {
@@ -87,8 +79,12 @@ describe('agent hooks CLI handler', () => {
   beforeEach(() => {
     userDataPath = mkdtempSync(join(tmpdir(), 'orca-agent-hooks-cli-'))
     applyAgentStatusHooksEnabledMock.mockReturnValue([])
+    callMock.mockReset()
+    getCliStatusMock.mockClear()
     getManagedAgentHookStatusesMock.mockReturnValue([])
+    process.exitCode = undefined
     vi.spyOn(console, 'log').mockImplementation(() => {})
+    vi.spyOn(console, 'error').mockImplementation(() => {})
   })
 
   afterEach(() => {
