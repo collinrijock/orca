@@ -70,6 +70,13 @@ function isDirectExecutablePath(command: string, platform: NodeJS.Platform): boo
   if (!/[\\/]/.test(unquoted)) {
     return false
   }
+  // Why: an absolute path may legitimately contain spaces (e.g. "C:\Program
+  // Files\...\nvim.exe"), but a trailing flag argument (e.g.
+  // "/usr/local/bin/code --wait") is not part of the executable name. Spawning
+  // it as a single file would ENOENT, so route those through the shell instead.
+  if (/\s-/.test(unquoted)) {
+    return false
+  }
   return platform === 'win32' ? win32.isAbsolute(unquoted) : posix.isAbsolute(unquoted)
 }
 

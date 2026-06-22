@@ -92,4 +92,32 @@ describe('resolveExternalEditorLaunchSpec', () => {
       spawnArgs: ['/d', '/s', '/c', 'nvim --clean C:\\workspaces\\orca']
     })
   })
+
+  it('routes absolute editor paths with trailing arguments through the shell', () => {
+    expect(
+      resolveExternalEditorLaunchSpec('/usr/local/bin/code --wait', '/tmp/workspace', {
+        platform: 'darwin'
+      })
+    ).toEqual({
+      kind: 'shell',
+      hideWindowsConsole: true,
+      spawnCmd: '/bin/sh',
+      spawnArgs: ['-c', '/usr/local/bin/code --wait /tmp/workspace']
+    })
+  })
+
+  it('routes absolute Windows editor paths with trailing arguments through cmd.exe', () => {
+    expect(
+      resolveExternalEditorLaunchSpec(
+        'C:\\Program Files\\Neovim\\bin\\nvim.exe --clean',
+        'C:\\workspaces\\orca',
+        { platform: 'win32' }
+      )
+    ).toEqual({
+      kind: 'shell',
+      hideWindowsConsole: true,
+      spawnCmd: getCmdExePath(),
+      spawnArgs: ['/d', '/s', '/c', 'C:\\Program Files\\Neovim\\bin\\nvim.exe --clean C:\\workspaces\\orca']
+    })
+  })
 })
