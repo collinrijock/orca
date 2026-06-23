@@ -274,6 +274,36 @@ describe('shouldRecordProcessGoneCrash', () => {
     ).toBe(true)
   })
 
+  it('records Windows renderer killed exit 1 outside expected lifecycle teardown only', () => {
+    expect(
+      shouldRecordProcessGoneCrash({
+        source: 'renderer',
+        processType: 'renderer',
+        reason: 'killed',
+        exitCode: 1,
+        expectedTeardown: 'none'
+      })
+    ).toBe(true)
+    expect(
+      shouldRecordProcessGoneCrash({
+        source: 'renderer',
+        processType: 'renderer',
+        reason: 'killed',
+        exitCode: 1,
+        expectedTeardown: 'renderer-reload'
+      })
+    ).toBe(false)
+    expect(
+      shouldRecordProcessGoneCrash({
+        source: 'renderer',
+        processType: 'renderer',
+        reason: 'killed',
+        exitCode: 1,
+        expectedTeardown: 'app-shutdown'
+      })
+    ).toBe(false)
+  })
+
   it('records non-SIGTERM child-process killed events during renderer-only reloads', () => {
     expect(
       shouldRecordProcessGoneCrash({
