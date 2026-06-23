@@ -5801,29 +5801,37 @@ function GHCommentComposer({
   const canSubmitComment = hasBoundedCommentBodyText(body)
 
   return (
-    <div className={cn('flex flex-col items-start gap-2', className)}>
+    <div className={cn('relative', className)}>
       <GitHubMarkdownComposer
         value={body}
         onChange={setBody}
         placeholder={translate('auto.components.GitHubItemDialog.c5c117270e', 'Add a comment…')}
         disabled={submitting}
-        minHeightClassName="min-h-28"
+        minHeightClassName="min-h-28 pb-14 pr-14"
         className="w-full"
         onSubmitShortcut={() => void handleSubmit()}
       />
-      <Button
-        onClick={handleSubmit}
-        disabled={!canSubmitComment || submitting}
-        className="gap-2"
-        aria-label={translate('auto.components.GitHubItemDialog.0a73f59e85', 'Send comment')}
-      >
-        {submitting ? (
-          <LoaderCircle className="size-3.5 animate-spin" />
-        ) : (
-          <Send className="size-3.5" />
-        )}
-        {translate('auto.components.GitHubItemDialog.bf43425540', 'Comment')}
-      </Button>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            type="button"
+            size="icon-sm"
+            onClick={handleSubmit}
+            disabled={!canSubmitComment || submitting}
+            className="absolute bottom-3 right-3 shadow-sm"
+            aria-label={translate('auto.components.GitHubItemDialog.0a73f59e85', 'Send comment')}
+          >
+            {submitting ? (
+              <LoaderCircle className="size-4 animate-spin" />
+            ) : (
+              <Send className="size-4" />
+            )}
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>
+          {translate('auto.components.GitHubItemDialog.0a73f59e85', 'Send comment')}
+        </TooltipContent>
+      </Tooltip>
     </div>
   )
 }
