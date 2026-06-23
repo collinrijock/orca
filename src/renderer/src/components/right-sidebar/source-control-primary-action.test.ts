@@ -210,7 +210,8 @@ describe('resolvePrimaryAction', () => {
         upstreamStatus: { hasUpstream: false, ahead: 0, behind: 0 },
         branchCommitsAhead: 1,
         prState: 'open',
-        canPushLinkedReviewWithoutUpstream: true
+        hasExplicitPushTarget: true,
+        remoteActionsRequireExplicitPushTarget: true
       })
     )
     expect(result).toEqual({
@@ -333,6 +334,47 @@ describe('resolvePrimaryAction', () => {
       kind: 'push',
       label: 'Push',
       title: 'Push 3 commits',
+      disabled: false
+    })
+  })
+
+  it('does not treat a linked review helper upstream as the review push target', () => {
+    const result = resolvePrimaryAction(
+      inputs({
+        upstreamStatus: {
+          hasUpstream: true,
+          upstreamName: 'origin/helper-review-checkout',
+          ahead: 3,
+          behind: 0
+        },
+        prState: 'open',
+        remoteActionsRequireExplicitPushTarget: true
+      })
+    )
+    expect(result).toEqual({
+      kind: 'commit',
+      label: 'Commit',
+      title: 'Linked review branch target is unavailable.',
+      disabled: true
+    })
+  })
+
+  it('uses the normal upstream for open reviews that do not require an explicit push target', () => {
+    const result = resolvePrimaryAction(
+      inputs({
+        upstreamStatus: {
+          hasUpstream: true,
+          upstreamName: 'origin/feature',
+          ahead: 2,
+          behind: 0
+        },
+        prState: 'open'
+      })
+    )
+    expect(result).toEqual({
+      kind: 'push',
+      label: 'Push',
+      title: 'Push 2 commits',
       disabled: false
     })
   })

@@ -3,12 +3,12 @@ import type { PrimaryAction } from './source-control-primary-action-types'
 
 export function resolveLinkedReviewPrimaryAction(args: {
   hasOpenHostedReview: boolean
-  canPushLinkedReviewWithoutUpstream: boolean
+  hasExplicitPushTarget: boolean
 }): PrimaryAction | null {
   if (!args.hasOpenHostedReview) {
     return null
   }
-  if (args.canPushLinkedReviewWithoutUpstream) {
+  if (args.hasExplicitPushTarget) {
     return {
       kind: 'push',
       label: translate(

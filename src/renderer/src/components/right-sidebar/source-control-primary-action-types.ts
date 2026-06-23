@@ -66,10 +66,14 @@ export type PrimaryActionInputs = {
   // Why: detached HEAD can look like an unpublished branch from upstream
   // status alone, but it has no branch ref that Publish Branch can push.
   hasCurrentBranch?: boolean
-  // Why: linked review branches without upstream counts are pushable only when
-  // Orca has a persisted or Git-configured target. Otherwise Push could fall
-  // through to the default publish-to-origin behavior.
-  canPushLinkedReviewWithoutUpstream?: boolean
+  // Why: explicit push targets can be persisted on the worktree or supplied by
+  // git status for the current operation target; without one, push falls back
+  // to the branch's upstream/default publish behavior.
+  hasExplicitPushTarget?: boolean
+  // Why: some worktrees intentionally use a local helper upstream that is not
+  // the branch Orca should update. Those remote actions must wait for an
+  // explicit push target instead of treating upstream as the destination.
+  remoteActionsRequireExplicitPushTarget?: boolean
   isPrIntentInFlight?: boolean
   // Why: eligibility is fetched asynchronously; keep the header anchor visible
   // while the request is in flight instead of flashing it in after ~1s.

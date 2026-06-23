@@ -71,7 +71,8 @@ export function resolvePrimaryAction(inputs: PrimaryActionInputs): PrimaryAction
     hostedReviewCreation,
     branchCommitsAhead,
     hasCurrentBranch = true,
-    canPushLinkedReviewWithoutUpstream = false,
+    hasExplicitPushTarget = false,
+    remoteActionsRequireExplicitPushTarget = false,
     isPrIntentInFlight = false
   } = inputs
 
@@ -122,6 +123,10 @@ export function resolvePrimaryAction(inputs: PrimaryActionInputs): PrimaryAction
 
   const hasStaged = stagedCount > 0
   const hasOpenHostedReview = prState === 'open' || prState === 'draft'
+  const explicitPushTargetUnavailable =
+    remoteActionsRequireExplicitPushTarget &&
+    !hasExplicitPushTarget &&
+    (hasOpenHostedReview || prState == null)
 
   // Why: partial staging can break hook-time restores during the intent flow;
   // keep Stage All visible as a sibling prerequisite without replacing Create PR.
@@ -212,6 +217,16 @@ export function resolvePrimaryAction(inputs: PrimaryActionInputs): PrimaryAction
     }
   }
 
+  if (explicitPushTargetUnavailable) {
+    const linkedReviewAction = resolveLinkedReviewPrimaryAction({
+      hasOpenHostedReview: true,
+      hasExplicitPushTarget: false
+    })
+    if (linkedReviewAction) {
+      return linkedReviewAction
+    }
+  }
+
   if (!upstreamStatus.hasUpstream) {
     const unpublishedAction = resolveUnpublishedPrimaryAction({
       hasCurrentBranch,
@@ -223,7 +238,7 @@ export function resolvePrimaryAction(inputs: PrimaryActionInputs): PrimaryAction
     if (unpublishedAction.kind === 'publish') {
       const linkedReviewAction = resolveLinkedReviewPrimaryAction({
         hasOpenHostedReview,
-        canPushLinkedReviewWithoutUpstream
+        hasExplicitPushTarget
       })
       if (linkedReviewAction) {
         return linkedReviewAction

@@ -502,7 +502,8 @@ describe('resolveDropdownItems', () => {
         upstreamStatus: { hasUpstream: false, ahead: 0, behind: 0 },
         branchCommitsAhead: 1,
         prState: 'open',
-        canPushLinkedReviewWithoutUpstream: true
+        hasExplicitPushTarget: true,
+        remoteActionsRequireExplicitPushTarget: true
       })
     )
     const byKind = Object.fromEntries(
@@ -536,6 +537,62 @@ describe('resolveDropdownItems', () => {
     expect(byKind.publish.label).toBe('Linked Review')
     expect(byKind.publish.title).toBe('Linked review branch target is unavailable')
     expect(byKind.publish.disabled).toBe(true)
+  })
+
+  it('blocks linked review remote actions when the local upstream is not the review target', () => {
+    const items = resolveDropdownItems(
+      inputs({
+        stagedCount: 1,
+        hasMessage: true,
+        upstreamStatus: {
+          hasUpstream: true,
+          upstreamName: 'origin/helper-review-checkout',
+          ahead: 2,
+          behind: 1
+        },
+        prState: 'open',
+        remoteActionsRequireExplicitPushTarget: true
+      })
+    )
+    const byKind = Object.fromEntries(
+      items.filter((e) => e.kind !== 'separator').map((e) => [e.kind, e])
+    )
+    for (const kind of [
+      'commit_push',
+      'commit_sync',
+      'push',
+      'force_push',
+      'pull',
+      'fast_forward',
+      'sync',
+      'fetch',
+      'publish'
+    ] as const) {
+      expect(byKind[kind].title).toBe('Linked review branch target is unavailable')
+      expect(byKind[kind].disabled).toBe(true)
+    }
+    expect(byKind.publish.label).toBe('Linked Review')
+  })
+
+  it('uses the normal upstream for open reviews that do not require an explicit push target', () => {
+    const items = resolveDropdownItems(
+      inputs({
+        upstreamStatus: {
+          hasUpstream: true,
+          upstreamName: 'origin/feature',
+          ahead: 2,
+          behind: 0
+        },
+        prState: 'open'
+      })
+    )
+    const byKind = Object.fromEntries(
+      items.filter((e) => e.kind !== 'separator').map((e) => [e.kind, e])
+    )
+    expect(byKind.push.title).toBe('Push 2 commits')
+    expect(byKind.push.disabled).toBe(false)
+    expect(byKind.fetch.title).toBe('Fetch from remote without merging')
+    expect(byKind.fetch.disabled).toBe(false)
   })
 
   it('waits for linked PR state before showing a publish prompt', () => {

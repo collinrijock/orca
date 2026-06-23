@@ -239,6 +239,12 @@ import {
   shouldShowSourceControlCompareUnavailableCard,
   SourceControlHeaderToolbar
 } from './source-control-header-toolbar'
+import {
+  canApplyResolvedSourceControlPushTarget,
+  getSourceControlPushTargetResolutionKey,
+  resolveSourceControlPushTarget,
+  shouldRequireResolvedSourceControlPushTarget
+} from './source-control-push-target'
 export { HostedReviewHeaderLink } from './hosted-review-header-chrome'
 import {
   createRunningCommitMessageGenerationRecord,
@@ -980,6 +986,7 @@ function SourceControlInner(): React.JSX.Element {
   >({})
   const isCreatePrIntentInFlight = createPrIntentInFlightByWorktree[activeWorktreeId ?? ''] ?? false
   const createPrIntentNotice = createPrIntentNotices[activeWorktreeId ?? ''] ?? null
+  const sourceControlPushTargetResolutionKeyRef = useRef<string | null>(null)
   const setCreatePrIntentNoticeForWorktree = useCallback(
     (worktreeId: string, notice: CreatePrIntentNotice | null): void => {
       setCreatePrIntentNotices((prev) => ({ ...prev, [worktreeId]: notice }))
@@ -1341,6 +1348,20 @@ function SourceControlInner(): React.JSX.Element {
   const linkedBitbucketPR = activeWorktree?.linkedBitbucketPR ?? null
   const linkedAzureDevOpsPR = activeWorktree?.linkedAzureDevOpsPR ?? null
   const linkedGiteaPR = activeWorktree?.linkedGiteaPR ?? null
+  const sourceControlPushTargetMetadata = useMemo(
+    () => ({
+      linkedGitHubPR,
+      linkedGitLabMR,
+      linkedBitbucketPR,
+      linkedAzureDevOpsPR,
+      linkedGiteaPR
+    }),
+    [linkedAzureDevOpsPR, linkedBitbucketPR, linkedGitHubPR, linkedGitLabMR, linkedGiteaPR]
+  )
+  const sourceControlPushTargetKey = useMemo(
+    () => getSourceControlPushTargetResolutionKey(sourceControlPushTargetMetadata),
+    [sourceControlPushTargetMetadata]
+  )
   const shouldResolveHostedReviewCreation =
     isBranchVisible &&
     Boolean(activeRepo) &&
@@ -1397,6 +1418,9 @@ function SourceControlInner(): React.JSX.Element {
     linkedBitbucketPR !== null ||
     linkedAzureDevOpsPR !== null ||
     linkedGiteaPR !== null
+  const remoteActionsRequireExplicitPushTarget = shouldRequireResolvedSourceControlPushTarget(
+    sourceControlPushTargetMetadata
+  )
   // Why: when activeRepo.connectionId is truthy, neither the SourceControl
   // effect below nor WorktreeCard.tsx fetches hostedReview for this branch,
   // so hostedReviewEntry would stay undefined forever and would permanently
@@ -1405,6 +1429,70 @@ function SourceControlInner(): React.JSX.Element {
   // gate doesn't latch.
   const isHostedReviewStateLoading =
     !activeRepo?.connectionId && hasLinkedHostedReview && hostedReviewEntry === undefined
+  useEffect(() => {
+    if (
+      !isBranchVisible ||
+      !activeRepo ||
+      isFolder ||
+      !activeWorktreeId ||
+      !worktreePath ||
+      activeWorktree?.pushTarget ||
+      !sourceControlPushTargetKey ||
+      hostedReview?.state === 'merged' ||
+      hostedReview?.state === 'closed'
+    ) {
+      return
+    }
+
+    const resolutionKey = `${activeWorktreeId}:${sourceControlPushTargetKey}`
+    if (sourceControlPushTargetResolutionKeyRef.current === resolutionKey) {
+      return
+    }
+    sourceControlPushTargetResolutionKeyRef.current = resolutionKey
+    let stale = false
+    void resolveSourceControlPushTarget({
+      repoId: activeRepo.id,
+      settings: activeRepoSettings,
+      metadata: sourceControlPushTargetMetadata
+    })
+      .then(async (pushTarget) => {
+        if (stale || !pushTarget) {
+          return
+        }
+        await updateWorktreeMeta(
+          activeWorktreeId,
+          { pushTarget },
+          {
+            shouldApply: (worktree) =>
+              canApplyResolvedSourceControlPushTarget({
+                worktree,
+                metadata: sourceControlPushTargetMetadata
+              })
+          }
+        )
+      })
+      .catch((error) => {
+        console.warn('[SourceControl] source control push target resolution failed', error)
+      })
+    return () => {
+      stale = true
+      if (sourceControlPushTargetResolutionKeyRef.current === resolutionKey) {
+        sourceControlPushTargetResolutionKeyRef.current = null
+      }
+    }
+  }, [
+    activeRepo,
+    activeRepoSettings,
+    activeWorktree?.pushTarget,
+    activeWorktreeId,
+    hostedReview?.state,
+    isBranchVisible,
+    isFolder,
+    sourceControlPushTargetKey,
+    sourceControlPushTargetMetadata,
+    updateWorktreeMeta,
+    worktreePath
+  ])
   useEffect(() => {
     if (
       !isBranchVisible ||
@@ -3667,8 +3755,9 @@ function SourceControlInner(): React.JSX.Element {
       branchCommitsAhead:
         branchSummary?.status === 'ready' ? (branchSummary.commitsAhead ?? 0) : undefined,
       hasCurrentBranch: Boolean(branchName),
-      canPushLinkedReviewWithoutUpstream:
+      hasExplicitPushTarget:
         Boolean(activeWorktree?.pushTarget) || remoteStatus?.hasConfiguredPushTarget === true,
+      remoteActionsRequireExplicitPushTarget,
       isPrIntentInFlight: isCreatePrIntentInFlight
     })
   }, [
@@ -3682,6 +3771,7 @@ function SourceControlInner(): React.JSX.Element {
     isRemoteOperationActive,
     inFlightRemoteOpKind,
     hostedReviewCreation,
+    remoteActionsRequireExplicitPushTarget,
     isHostedReviewStateLoading,
     hostedReview?.state,
     activeWorktree?.pushTarget,
@@ -3780,8 +3870,9 @@ function SourceControlInner(): React.JSX.Element {
         branchCommitsAhead:
           branchSummary?.status === 'ready' ? (branchSummary.commitsAhead ?? 0) : undefined,
         hasCurrentBranch: Boolean(branchName),
-        canPushLinkedReviewWithoutUpstream:
+        hasExplicitPushTarget:
           Boolean(activeWorktree?.pushTarget) || remoteStatus?.hasConfiguredPushTarget === true,
+        remoteActionsRequireExplicitPushTarget,
         rebaseBaseRef: effectiveBaseRef
       }),
     [
@@ -3796,6 +3887,7 @@ function SourceControlInner(): React.JSX.Element {
       isRemoteOperationActive,
       inFlightRemoteOpKind,
       hostedReviewCreation,
+      remoteActionsRequireExplicitPushTarget,
       isCreatingPr,
       isCreatePrIntentInFlight,
       isHostedReviewStateLoading,
