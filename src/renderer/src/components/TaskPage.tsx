@@ -1314,11 +1314,11 @@ function GHStatusCell({
           className={cn(
             'group/status inline-flex cursor-pointer items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium transition hover:brightness-125 hover:ring-1 hover:ring-white/10',
             localState === 'closed'
-              ? 'border-ring/50 bg-primary/10 text-foreground'
-              : 'border-border/60 bg-muted/20 text-foreground hover:bg-accent/60'
+              ? 'border-primary/40 bg-primary/10 text-primary'
+              : 'border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-200'
           )}
         >
-          {localState === 'open' ? <CircleDot className="size-2.5 text-emerald-500" /> : null}
+          {localState === 'open' ? <CircleDot className="size-2.5" /> : null}
           <span>
             {localState === 'closed'
               ? translate('auto.components.TaskPage.d09bf34db7', 'Closed')
