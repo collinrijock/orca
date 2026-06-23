@@ -5633,6 +5633,7 @@ export default function TaskPage(): React.JSX.Element {
   )
 
   const activeGithubTaskKind = getGitHubTaskKind(activeTaskPreset, appliedTaskSearch)
+  const appliedTaskQuery = useMemo(() => parseTaskQuery(appliedTaskSearch), [appliedTaskSearch])
   const selectedGitHubRepoExternalLink = useMemo(() => {
     if (selectedRepos.length !== 1) {
       return null
@@ -6405,11 +6406,18 @@ export default function TaskPage(): React.JSX.Element {
     setTaskRefreshNonce((current) => current + 1)
   }, [activeGithubTaskKind, setTaskResumeState, taskSearchInput])
 
-  const handleTaskSearchChange = useCallback((event: React.ChangeEvent<HTMLInputElement>): void => {
-    const next = event.target.value
-    setTaskSearchInput(next)
-    setActiveTaskPreset(null)
-  }, [])
+  const handleTaskSearchChange = useCallback(
+    (event: React.ChangeEvent<HTMLInputElement>): void => {
+      const next = event.target.value
+      const scoped = scopeGitHubTaskSearch(next, activeGithubTaskKind)
+      setTaskSearchInput(next)
+      setActiveTaskPreset(null)
+      // Why: the visible rows are keyed by appliedTaskSearch, not the draft
+      // input. Hide stale rows as soon as the draft would change the query.
+      setTasksFiltering(scoped !== appliedTaskSearch)
+    },
+    [activeGithubTaskKind, appliedTaskSearch]
+  )
 
   const handleSetDefaultTaskPreset = useCallback(
     (presetId: TaskViewPresetId): void => {
@@ -8227,7 +8235,7 @@ export default function TaskPage(): React.JSX.Element {
                     </div>
                     <div className="flex min-w-0 flex-wrap items-center gap-2">
                       <PRFilterDropdowns
-                        parsed={parseTaskQuery(taskSearchInput)}
+                        parsed={appliedTaskQuery}
                         kind={activeGithubTaskKind}
                         authorLogins={loadedGitHubAuthorLogins}
                         primarySlug={primaryGithubFilterSlug}
