@@ -71,6 +71,7 @@ import {
   resolveQuickCreateLinkedWorkItemPrompt
 } from '@/lib/linked-work-item-context'
 import { getLocalRepoProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
+import { isOrcaCliAvailableForLaunch } from '@/lib/orca-cli-launch-availability'
 import {
   buildLinearIssueLinkedWorkItem,
   isLinearLinkedWorkItem
@@ -2962,7 +2963,15 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
               }
             )
           : ''
-      const linkedPromptContext = getLinkedWorkItemPromptContext(submitLinkedWorkItem)
+      // Why: the hint must never point agents at a command that cannot run;
+      // SSH worktrees always have the relay shim, local launches need the
+      // installed CLI on PATH.
+      const linearCliAvailable = submitLinkedWorkItem?.linearIdentifier
+        ? await isOrcaCliAvailableForLaunch({ remote: isRemote })
+        : false
+      const linkedPromptContext = getLinkedWorkItemPromptContext(submitLinkedWorkItem, {
+        cliAvailable: linearCliAvailable
+      })
       const submitStartupPrompt = submitShouldApplyLinkedOnlyTemplate
         ? buildAgentPromptWithContext(
             submitLinkedOnlyTemplatePrompt,
@@ -3179,6 +3188,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     issueCommandTemplate,
     effectiveLinkedPR,
     hasLoadedIssueCommand,
+    isRemote,
     linkedGitLabIssue,
     linkedGitLabMR,
     linkedWorkItem,
@@ -3385,8 +3395,13 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         // self-contained. Agents that need post-ready paste/follow-up stay on
         // the renderer path so prompt delivery is not skipped.
         const promptLinkedWorkItem = agent === null ? null : submitLinkedWorkItem
+        const quickLinearCliAvailable = promptLinkedWorkItem?.linearIdentifier
+          ? await isOrcaCliAvailableForLaunch({ remote: isRemote })
+          : false
         const { prompt: quickPrompt, draftPrompt: quickDraftPrompt } =
-          resolveQuickCreateLinkedWorkItemPrompt(promptLinkedWorkItem, trimmedNote)
+          resolveQuickCreateLinkedWorkItemPrompt(promptLinkedWorkItem, trimmedNote, {
+            cliAvailable: quickLinearCliAvailable
+          })
         const draftLaunchPlan =
           agent === null || !quickDraftPrompt
             ? null
@@ -3537,6 +3552,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       clearNewWorkspaceDraft,
       fallbackCreatureName,
       effectiveLinkedPR,
+      isRemote,
       linkedGitLabIssue,
       linkedGitLabMR,
       linkedPR,
