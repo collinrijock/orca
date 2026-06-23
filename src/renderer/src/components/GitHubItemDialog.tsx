@@ -5080,14 +5080,16 @@ function GHEditSection({
               isSidebar
                 ? 'inline-flex w-full items-center justify-between gap-2 rounded-md border px-2.5 py-1.5 text-[12px] font-medium transition hover:brightness-125 hover:ring-1 hover:ring-white/10 disabled:opacity-50'
                 : 'group/status inline-flex items-center gap-0.5 rounded-full border px-2 py-0.5 text-[11px] font-medium transition hover:brightness-125 hover:ring-1 hover:ring-white/10 disabled:opacity-50',
-              getStateTone({ ...item, state: localState })
+              localState === 'closed'
+                ? getStateTone({ ...item, state: localState })
+                : 'border-border/60 bg-muted/20 text-foreground hover:bg-accent/60'
             )}
           >
             <span className="inline-flex items-center gap-1.5">
               {localState === 'closed' ? (
                 <CircleDashed className={isSidebar ? 'size-3.5' : 'size-3'} />
               ) : (
-                <CircleDot className={isSidebar ? 'size-3.5' : 'size-3'} />
+                <CircleDot className={cn(isSidebar ? 'size-3.5' : 'size-3', 'text-emerald-500')} />
               )}
               {getStateLabel({ ...item, state: localState })}
             </span>

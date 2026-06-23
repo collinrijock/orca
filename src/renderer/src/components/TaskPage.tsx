@@ -1311,15 +1311,18 @@ function GHStatusCell({
           type="button"
           onClick={(e) => e.stopPropagation()}
           className={cn(
-            'group/status inline-flex cursor-pointer items-center gap-0.5 rounded-full border px-2 py-0.5 text-[10px] font-medium transition hover:brightness-125 hover:ring-1 hover:ring-white/10',
+            'group/status inline-flex cursor-pointer items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium transition hover:brightness-125 hover:ring-1 hover:ring-white/10',
             localState === 'closed'
               ? 'border-ring/50 bg-primary/10 text-foreground'
-              : 'border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-300'
+              : 'border-border/60 bg-muted/20 text-foreground hover:bg-accent/60'
           )}
         >
-          {localState === 'closed'
-            ? translate('auto.components.TaskPage.d09bf34db7', 'Closed')
-            : translate('auto.components.TaskPage.606a85c774', 'Open')}
+          {localState === 'open' ? <CircleDot className="size-2.5 text-emerald-500" /> : null}
+          <span>
+            {localState === 'closed'
+              ? translate('auto.components.TaskPage.d09bf34db7', 'Closed')
+              : translate('auto.components.TaskPage.606a85c774', 'Open')}
+          </span>
           <ChevronDown className="size-2.5 opacity-50" />
         </button>
       </PopoverTrigger>
