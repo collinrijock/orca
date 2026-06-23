@@ -72,6 +72,13 @@ function normalizePollingInterval(ms: number): number {
   return Math.min(MAX_POLL_MS, Math.max(MIN_POLL_MS, ms))
 }
 
+function isSystemDefaultClaudeAuth(
+  authPreparation: ClaudeRuntimeAuthPreparation | undefined
+): boolean {
+  const provenance = authPreparation?.provenance
+  return provenance === 'system' || Boolean(provenance?.endsWith(':system'))
+}
+
 export class RateLimitService {
   private state: InternalRateLimitState = {
     claude: null,
@@ -792,10 +799,18 @@ export class RateLimitService {
     return process.platform !== 'win32'
   }
 
-  private shouldAllowClaudePtyFallback(): boolean {
+  private shouldAllowClaudePtyFallback(
+    authPreparation: ClaudeRuntimeAuthPreparation | undefined
+  ): boolean {
     // Why: automatic recovery uses Claude CLI as the next source, but Windows
     // hidden PTY support remains less reliable than host/WSL shells.
-    return process.platform !== 'win32'
+    if (process.platform === 'win32') {
+      return false
+    }
+    // Why: system-default Claude is not an Orca-managed account. Background
+    // quota refresh may read existing OAuth, but must not launch Claude and
+    // trigger auth/browser flows for users who never configured Claude in Orca.
+    return !isSystemDefaultClaudeAuth(authPreparation)
   }
 
   private withFetchingStatus(
@@ -861,7 +876,7 @@ export class RateLimitService {
       await Promise.allSettled([
         fetchClaudeRateLimits({
           authPreparation: claudeAuthPreparation,
-          allowPtyFallback: this.shouldAllowClaudePtyFallback()
+          allowPtyFallback: this.shouldAllowClaudePtyFallback(claudeAuthPreparation)
         }),
         missingWslCodexHome ??
           fetchCodexRateLimits({
@@ -1036,7 +1051,7 @@ export class RateLimitService {
 
     const claude = await fetchClaudeRateLimits({
       authPreparation: claudeAuthPreparation,
-      allowPtyFallback: this.shouldAllowClaudePtyFallback()
+      allowPtyFallback: this.shouldAllowClaudePtyFallback(claudeAuthPreparation)
     }).catch(
       (err): ProviderRateLimits => ({
         provider: 'claude',
