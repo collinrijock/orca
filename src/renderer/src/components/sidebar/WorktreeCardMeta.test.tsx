@@ -27,7 +27,28 @@ vi.mock('@/components/ui/dropdown-menu', () => ({
 }))
 
 describe('WorktreeCardDetailsHover', () => {
-  it('includes branch identity before metadata details', () => {
+  it('wraps workspace and branch identity so long names stay readable in the hover panel', () => {
+    const markup = renderToStaticMarkup(
+      <WorktreeCardDetailsHover
+        branchName="bug-hold-to-talk-speech-to-text-option-no-longer-works"
+        workspaceTitle="[Bug]: Hold-to-talk speech-to-text option no longer works"
+        issue={null}
+        linearIssue={null}
+        review={null}
+        comment={null}
+        onEditIssue={vi.fn()}
+        onEditComment={vi.fn()}
+      >
+        <span>Workspace card</span>
+      </WorktreeCardDetailsHover>
+    )
+
+    expect(markup).toContain('break-words')
+    expect(markup).not.toContain('truncate font-mono')
+    expect(markup).not.toContain('truncate text-[13px]')
+  })
+
+  it('puts workspace title before branch identity and metadata details', () => {
     const markup = renderToStaticMarkup(
       <WorktreeCardDetailsHover
         branchName="feature/local-branch"
@@ -53,8 +74,8 @@ describe('WorktreeCardDetailsHover', () => {
     )
 
     expect(markup).toContain('feature/local-branch')
+    expect(markup.indexOf('Fix stale GH PR')).toBeLessThan(markup.indexOf('feature/local-branch'))
     expect(markup.indexOf('feature/local-branch')).toBeLessThan(markup.indexOf('PR #456'))
-    expect(markup).toContain('Fix stale GH PR')
   })
 
   it('puts unlink behind the first PR actions menu and keeps GitHub last', () => {
@@ -92,6 +113,36 @@ describe('WorktreeCardDetailsHover', () => {
     expect(moreActionsIndex).toBeLessThan(openInOrcaIndex)
     expect(openInOrcaIndex).toBeLessThan(viewOnGitHubIndex)
     expect(markup).not.toContain('aria-label="Unlink PR"')
+  })
+
+  it('puts issue edit before open actions and keeps GitHub last', () => {
+    const markup = renderToStaticMarkup(
+      <WorktreeCardDetailsHover
+        issue={{
+          number: 5518,
+          title: 'Agent monitor lists ephemeral headless subprocesses',
+          state: 'closed',
+          url: 'https://github.com/acme/orca/issues/5518',
+          labels: []
+        }}
+        linearIssue={null}
+        review={null}
+        comment={null}
+        onEditIssue={vi.fn()}
+        onEditComment={vi.fn()}
+        onOpenGitHubIssueInOrca={vi.fn()}
+      >
+        <span>Linked issue</span>
+      </WorktreeCardDetailsHover>
+    )
+
+    const editIssueIndex = markup.indexOf('aria-label="Edit issue"')
+    const openInOrcaIndex = markup.indexOf('aria-label="Open in Orca"')
+    const viewOnGitHubIndex = markup.indexOf('aria-label="View on GitHub"')
+
+    expect(editIssueIndex).toBeGreaterThan(-1)
+    expect(editIssueIndex).toBeLessThan(openInOrcaIndex)
+    expect(openInOrcaIndex).toBeLessThan(viewOnGitHubIndex)
   })
 
   it('labels GitLab unlink actions with MR terminology', () => {

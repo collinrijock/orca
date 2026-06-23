@@ -1,12 +1,13 @@
 /* eslint-disable max-lines -- Why: these hook tests share a mocked React lifecycle harness with global event cases. */
 import type * as ReactModule from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { SYNC_FIT_PANES_EVENT } from '@/constants/terminal'
+import { PASTE_TERMINAL_TEXT_EVENT, SYNC_FIT_PANES_EVENT } from '@/constants/terminal'
 import {
   registerLivePaneManager,
   unregisterLivePaneManager
 } from '@/lib/pane-manager/pane-manager-registry'
 import { useTerminalPaneGlobalEffects } from './use-terminal-pane-global-effects'
+import { TERMINAL_PASTE_DIRECT_MAX_BYTES } from './terminal-paste-coordinator'
 
 const mocks = vi.hoisted(() => ({
   captureScrollState: vi.fn(),
@@ -15,6 +16,8 @@ const mocks = vi.hoisted(() => ({
   flushTerminalOutput: vi.fn(),
   getTerminalOutputEpoch: vi.fn(() => 0),
   handleTerminalFileDrop: vi.fn(),
+  pasteTerminalText: vi.fn(),
+  recordTerminalUserInputForLeaf: vi.fn(),
   requestTerminalBacklogRecovery: vi.fn(),
   restoreScrollState: vi.fn(),
   restoreScrollStateAfterLayout: vi.fn()
@@ -74,12 +77,34 @@ vi.mock('./terminal-drop-handler', () => ({
   handleTerminalFileDrop: mocks.handleTerminalFileDrop
 }))
 
+vi.mock('./terminal-bracketed-paste', () => ({
+  BRACKETED_PASTE_END: '\u001b[201~',
+  BRACKETED_PASTE_START: '\u001b[200~',
+  pasteTerminalText: mocks.pasteTerminalText,
+  sanitizeTerminalPasteText: (text: string) => text.split('\u001b').join('\u241b')
+}))
+
+vi.mock('./terminal-input-activity', () => ({
+  recordTerminalUserInputForLeaf: mocks.recordTerminalUserInputForLeaf
+}))
+
 class MockResizeObserver {
   observe = vi.fn()
   disconnect = vi.fn()
 }
 
-type DropCallback = (data: { paths: string[]; target: string; tabId?: string }) => void
+type DropCallback = (data: {
+  paths: string[]
+  target: string
+  tabId?: string
+  paneLeafId?: string
+}) => void
+
+async function flushPasteTasks(iterations = 3): Promise<void> {
+  for (let index = 0; index < iterations; index++) {
+    await new Promise((resolve) => setTimeout(resolve, 0))
+  }
+}
 
 function useMountForFileDrop(
   options: {
@@ -171,6 +196,7 @@ describe('useTerminalPaneGlobalEffects', () => {
     for (const manager of registeredManagers.splice(0)) {
       unregisterLivePaneManager(manager)
     }
+    vi.unstubAllGlobals()
     delete (globalThis as unknown as { window?: unknown }).window
     delete (globalThis as unknown as { ResizeObserver?: unknown }).ResizeObserver
   })
@@ -383,6 +409,223 @@ describe('useTerminalPaneGlobalEffects', () => {
     expect(manager.resetWebglTextureAtlases).toHaveBeenCalledTimes(1)
   })
 
+  it('clears WebGL texture atlases when the active visible terminal document becomes visible', () => {
+    let visibilityState: DocumentVisibilityState = 'hidden'
+    const documentListeners = new Map<string, EventListenerOrEventListenerObject>()
+    vi.stubGlobal('document', {
+      get visibilityState() {
+        return visibilityState
+      },
+      addEventListener: vi.fn((eventName: string, listener: EventListenerOrEventListenerObject) => {
+        documentListeners.set(eventName, listener)
+      }),
+      removeEventListener: vi.fn()
+    })
+    const manager = {
+      getPanes: vi.fn(() => []),
+      resumeRendering: vi.fn(),
+      resetWebglTextureAtlases: vi.fn(),
+      suspendRendering: vi.fn(),
+      getActivePane: vi.fn(() => null)
+    }
+    const siblingManager = {
+      resetWebglTextureAtlases: vi.fn()
+    }
+
+    registerManagerForReset(manager)
+    registerManagerForReset(siblingManager)
+    beginHookRender()
+    useTerminalPaneGlobalEffects({
+      tabId: 'tab-1',
+      worktreeId: 'wt-1',
+      isActive: true,
+      isVisible: true,
+      isSyncFitEnabled: true,
+      paneCount: 0,
+      managerRef: { current: manager as never },
+      containerRef: { current: null },
+      paneTransportsRef: { current: new Map() },
+      isActiveRef: { current: false },
+      isVisibleRef: { current: false },
+      toggleExpandPane: vi.fn()
+    })
+
+    const listener = documentListeners.get('visibilitychange')
+    expect(listener).toBeDefined()
+    if (typeof listener !== 'function') {
+      throw new Error('expected visibilitychange listener')
+    }
+    manager.resetWebglTextureAtlases.mockClear()
+    siblingManager.resetWebglTextureAtlases.mockClear()
+    listener(new Event('visibilitychange'))
+    expect(manager.resetWebglTextureAtlases).not.toHaveBeenCalled()
+    expect(siblingManager.resetWebglTextureAtlases).not.toHaveBeenCalled()
+
+    visibilityState = 'visible'
+    listener(new Event('visibilitychange'))
+
+    expect(manager.resetWebglTextureAtlases).toHaveBeenCalledTimes(1)
+    expect(siblingManager.resetWebglTextureAtlases).toHaveBeenCalledTimes(1)
+  })
+
+  it('registers document visibility recovery for visible inactive terminals but not hidden ones', () => {
+    const addEventListener = vi.fn()
+    vi.stubGlobal('document', {
+      visibilityState: 'visible',
+      addEventListener,
+      removeEventListener: vi.fn()
+    })
+    const manager = {
+      getPanes: vi.fn(() => []),
+      resumeRendering: vi.fn(),
+      resetWebglTextureAtlases: vi.fn(),
+      suspendRendering: vi.fn(),
+      getActivePane: vi.fn(() => null)
+    }
+    const useMountForVisibilityRecovery = (options: {
+      isActive: boolean
+      isVisible: boolean
+    }): void => {
+      resetHookRefs()
+      beginHookRender()
+      useTerminalPaneGlobalEffects({
+        tabId: 'tab-1',
+        worktreeId: 'wt-1',
+        isActive: options.isActive,
+        isVisible: options.isVisible,
+        isSyncFitEnabled: options.isVisible,
+        paneCount: 0,
+        managerRef: { current: manager as never },
+        containerRef: { current: null },
+        paneTransportsRef: { current: new Map() },
+        isActiveRef: { current: false },
+        isVisibleRef: { current: false },
+        toggleExpandPane: vi.fn()
+      })
+    }
+
+    useMountForVisibilityRecovery({ isActive: false, isVisible: true })
+    expect(
+      addEventListener.mock.calls.some(([eventName]) => eventName === 'visibilitychange')
+    ).toBe(true)
+
+    addEventListener.mockClear()
+    useMountForVisibilityRecovery({ isActive: true, isVisible: false })
+
+    expect(
+      addEventListener.mock.calls.some(([eventName]) => eventName === 'visibilitychange')
+    ).toBe(false)
+  })
+
+  it('records terminal input for targeted paste events', async () => {
+    const terminal = { name: 'terminal-a', focus: vi.fn(), modes: { bracketedPasteMode: false } }
+    const pane = { id: 1, leafId: 'leaf-1', terminal }
+    const manager = {
+      getPanes: vi.fn(() => [pane]),
+      resumeRendering: vi.fn(),
+      resetWebglTextureAtlases: vi.fn(),
+      suspendRendering: vi.fn(),
+      getActivePane: vi.fn(() => pane)
+    }
+    const transport = {
+      getPtyId: vi.fn(() => 'pty-1'),
+      isConnected: vi.fn(() => true),
+      sendInput: vi.fn<(data: string) => boolean>(() => true)
+    }
+
+    beginHookRender()
+    useTerminalPaneGlobalEffects({
+      tabId: 'tab-1',
+      worktreeId: 'wt-1',
+      isActive: true,
+      isVisible: true,
+      isSyncFitEnabled: true,
+      paneCount: 1,
+      managerRef: { current: manager as never },
+      containerRef: { current: null },
+      paneTransportsRef: { current: new Map([[pane.id, transport]]) as never },
+      isActiveRef: { current: false },
+      isVisibleRef: { current: false },
+      toggleExpandPane: vi.fn()
+    })
+
+    const pasteListener = vi
+      .mocked(window.addEventListener)
+      .mock.calls.find(([eventName]) => eventName === PASTE_TERMINAL_TEXT_EVENT)
+
+    expect(pasteListener).toBeDefined()
+    const listener = pasteListener?.[1]
+    if (typeof listener !== 'function') {
+      throw new Error('expected paste listener')
+    }
+    listener(
+      new CustomEvent(PASTE_TERMINAL_TEXT_EVENT, { detail: { tabId: 'tab-1', text: 'git status' } })
+    )
+
+    await flushPasteTasks()
+
+    expect(mocks.pasteTerminalText).toHaveBeenCalledWith(terminal, 'git status', {
+      forceBracketedPaste: false
+    })
+    expect(mocks.recordTerminalUserInputForLeaf).toHaveBeenCalledWith('tab-1', 'leaf-1')
+    expect(terminal.focus).toHaveBeenCalledOnce()
+  })
+
+  it('chunks large programmatic paste events through the pane PTY transport', async () => {
+    const largePaste = `${'x'.repeat(TERMINAL_PASTE_DIRECT_MAX_BYTES)}tail`
+    const terminal = { name: 'terminal-a', focus: vi.fn(), modes: { bracketedPasteMode: false } }
+    const pane = { id: 1, leafId: 'leaf-1', terminal }
+    const manager = {
+      getPanes: vi.fn(() => [pane]),
+      resumeRendering: vi.fn(),
+      resetWebglTextureAtlases: vi.fn(),
+      suspendRendering: vi.fn(),
+      getActivePane: vi.fn(() => pane)
+    }
+    const transport = {
+      getPtyId: vi.fn(() => 'pty-1'),
+      isConnected: vi.fn(() => true),
+      sendInput: vi.fn<(data: string) => boolean>(() => true)
+    }
+
+    beginHookRender()
+    useTerminalPaneGlobalEffects({
+      tabId: 'tab-1',
+      worktreeId: 'wt-1',
+      isActive: true,
+      isVisible: true,
+      isSyncFitEnabled: true,
+      paneCount: 1,
+      managerRef: { current: manager as never },
+      containerRef: { current: null },
+      paneTransportsRef: { current: new Map([[1, transport]]) as never },
+      isActiveRef: { current: false },
+      isVisibleRef: { current: false },
+      toggleExpandPane: vi.fn()
+    })
+
+    const pasteListener = vi
+      .mocked(window.addEventListener)
+      .mock.calls.find(([eventName]) => eventName === PASTE_TERMINAL_TEXT_EVENT)
+
+    expect(pasteListener).toBeDefined()
+    const listener = pasteListener?.[1]
+    if (typeof listener !== 'function') {
+      throw new Error('expected paste listener')
+    }
+    listener(
+      new CustomEvent(PASTE_TERMINAL_TEXT_EVENT, { detail: { tabId: 'tab-1', text: largePaste } })
+    )
+
+    await flushPasteTasks(12)
+
+    expect(mocks.pasteTerminalText).not.toHaveBeenCalled()
+    expect(transport.sendInput.mock.calls.map((call) => call[0]).join('')).toBe(largePaste)
+    expect(transport.sendInput.mock.calls.length).toBeGreaterThan(1)
+    expect(mocks.recordTerminalUserInputForLeaf).toHaveBeenCalledWith('tab-1', 'leaf-1')
+    expect(terminal.focus).toHaveBeenCalledOnce()
+  })
+
   it('ignores terminal file drops for another terminal tab', () => {
     const { onFileDrop } = useMountForFileDrop()
 
@@ -396,13 +639,19 @@ describe('useTerminalPaneGlobalEffects', () => {
       cwd: '/worktree'
     })
 
-    const data = { paths: ['/tmp/image.png'], target: 'terminal', tabId: 'tab-1' }
+    const data = {
+      paths: ['/tmp/image.png'],
+      target: 'terminal',
+      tabId: 'tab-1',
+      paneLeafId: 'leaf-1'
+    }
     onFileDrop(data)
 
     expect(mocks.handleTerminalFileDrop).toHaveBeenCalledWith({
       manager,
       paneTransports,
       worktreeId: 'wt-1',
+      tabId: 'tab-1',
       cwd: '/worktree',
       data
     })
@@ -418,6 +667,7 @@ describe('useTerminalPaneGlobalEffects', () => {
       manager,
       paneTransports,
       worktreeId: 'wt-1',
+      tabId: 'tab-1',
       cwd: undefined,
       data
     })

@@ -10,27 +10,27 @@ import {
 import { translate } from '@/i18n/i18n'
 
 type CliRegistrationDialogProps = {
-  open: boolean
-  onOpenChange: (open: boolean) => void
-  isEnabled: boolean
-  isSupported: boolean
+  busyAction: 'install' | 'remove' | null
   commandName: string
   commandPath: string | null | undefined
-  busyAction: 'install' | 'remove' | null
-  onInstall: () => void
-  onRemove: () => void
+  isEnabled: boolean
+  isSupported: boolean
+  onInstall: () => Promise<void>
+  onOpenChange: (open: boolean) => void
+  onRemove: () => Promise<void>
+  open: boolean
 }
 
 export function CliRegistrationDialog({
-  open,
-  onOpenChange,
-  isEnabled,
-  isSupported,
+  busyAction,
   commandName,
   commandPath,
-  busyAction,
+  isEnabled,
+  isSupported,
   onInstall,
-  onRemove
+  onOpenChange,
+  onRemove,
+  open
 }: CliRegistrationDialogProps): React.JSX.Element {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -41,16 +41,12 @@ export function CliRegistrationDialog({
               ? translate(
                   'auto.components.settings.CliSection.14444243ba',
                   'Remove `{{value0}}` from PATH?',
-                  {
-                    value0: commandName
-                  }
+                  { value0: commandName }
                 )
               : translate(
                   'auto.components.settings.CliSection.fa87db3d6e',
                   'Register `{{value0}}` in PATH?',
-                  {
-                    value0: commandName
-                  }
+                  { value0: commandName }
                 )}
           </DialogTitle>
           <DialogDescription>

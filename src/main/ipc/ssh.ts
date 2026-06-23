@@ -154,7 +154,15 @@ function broadcastSshState(
   targetId: string,
   state: SshConnectionState
 ): void {
-  broadcastToMainWindows('ssh:state-changed', { targetId, state })
+  broadcastToMainWindows('ssh:state-changed', {
+    targetId,
+    state: withSshRemotePlatform(targetId, state)
+  })
+}
+
+function withSshRemotePlatform(targetId: string, state: SshConnectionState): SshConnectionState {
+  const remotePlatform = activeSessions.get(targetId)?.getHostPlatform()?.os
+  return remotePlatform ? { ...state, remotePlatform } : state
 }
 
 function publishRelayOverride(
@@ -164,7 +172,7 @@ function publishRelayOverride(
   error: string | null,
   reconnectAttempt: number
 ): void {
-  const state: SshConnectionState = { targetId, status, error, reconnectAttempt }
+  const state = withSshRemotePlatform(targetId, { targetId, status, error, reconnectAttempt })
   relayStateOverrides.set(targetId, state)
   broadcastSshState(getMainWindow, targetId, state)
 }
@@ -174,7 +182,8 @@ function clearRelayStateOverride(targetId: string): void {
 }
 
 function getPublicSshState(targetId: string): SshConnectionState | undefined {
-  return relayStateOverrides.get(targetId) ?? connectionManager!.getState(targetId) ?? undefined
+  const state = relayStateOverrides.get(targetId) ?? connectionManager!.getState(targetId)
+  return state ? withSshRemotePlatform(targetId, state) : undefined
 }
 
 function broadcastPortForwards(_getMainWindow: () => BrowserWindow | null, targetId: string): void {

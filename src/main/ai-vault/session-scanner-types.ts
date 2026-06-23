@@ -9,11 +9,13 @@ export type AiVaultScanOptions = {
   claudeProjectsDir?: string
   codexSessionsDir?: string
   additionalCodexSessionsDirs?: readonly string[]
+  wslHomeDirs?: readonly string[]
   geminiSessionsDir?: string
   copilotSessionsDir?: string
   cursorProjectsDir?: string
   opencodeStorageDir?: string
   grokSessionsDir?: string
+  devinTranscriptsDir?: string
   hermesSessionsDir?: string
   rovoSessionsDir?: string
   openclawStateDir?: string
@@ -21,6 +23,7 @@ export type AiVaultScanOptions = {
   piSessionsDir?: string
   droidSessionsDir?: string
   droidProjectsDir?: string
+  kimiSessionsDir?: string
   limit?: number
   limitPerAgent?: number
   platform?: NodeJS.Platform

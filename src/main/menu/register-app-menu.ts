@@ -12,7 +12,7 @@ import {
   type AppearanceMenuKey,
   type AppearanceMenuState
 } from './register-app-menu-appearance'
-import { getMenuTargetWebContents, reloadMenuTarget } from './menu-target-web-contents'
+import { reloadMenuTarget } from './menu-target-web-contents'
 
 export { getNextDefaultOnAppearanceSettingValue }
 
@@ -108,22 +108,6 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
     click: (_menuItem, window) => onOpenCrashReport(window)
   }
 
-  const exportPdfItem: Electron.MenuItemConstructorOptions = {
-    label: `${translateMain('menu.exportPdf', 'Export as PDF...')}\t${shortcutLabel('file.exportPdf')}`,
-    click: (_menuItem, window) => {
-      // Why: fire a one-way event into the focused renderer. The renderer
-      // owns the knowledge of whether a markdown surface is active and
-      // what DOM to extract — when no markdown surface is active this is
-      // a silent no-op on that side (see design doc §4 "Renderer UI
-      // trigger"). Keeping this as a send (not an invoke) avoids main
-      // needing to reason about surface state. Using
-      // BrowserWindow.getFocusedWindow() rather than the menu's
-      // menu-provided window first keeps multi-window menu actions local to
-      // the window that invoked them.
-      getMenuTargetWebContents(window)?.send('export:requestPdf')
-    }
-  }
-
   // Why: the macOS app-menu (named after the app) is mandatory on darwin and
   // owns hide/hideOthers/unhide/services/quit roles that only make sense in
   // the system menu bar. On Windows/Linux that menu would render as a
@@ -148,6 +132,9 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
 
   const fileMenu: Electron.MenuItemConstructorOptions = {
     label: translateMain('menu.file', 'File'),
+    // Why: on Windows/Linux there is no app-named menu, so Settings and
+    // Quit live under File — matching the common platform convention and
+    // keeping all user-facing actions reachable from the in-window menu bar.
     submenu: [
       // Why: the multi-window code path is still experimental and is read at
       // startup. Hiding the entry keeps normal users on the single-window path
@@ -155,7 +142,6 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
       ...(multiWindowEnabled
         ? ([newWindowItem, { type: 'separator' }] satisfies Electron.MenuItemConstructorOptions[])
         : []),
-      exportPdfItem,
       // Why: on Windows/Linux there is no app-named menu, so Settings and
       // Quit live under File — matching the common platform convention and
       // keeping all user-facing actions reachable from the in-window menu bar.

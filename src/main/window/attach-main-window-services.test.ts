@@ -1,5 +1,6 @@
 /* eslint-disable max-lines -- Why: attachMainWindowServices centralizes main-window IPC wiring; keeping its integration-style mocks together avoids brittle cross-file setup. */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { Store } from '../persistence'
 
 const {
   onMock,
@@ -177,8 +178,8 @@ function createMainWindow(extraWebContents: { on?: MockFn; send?: MockFn } = {})
   return window
 }
 
-function createStore(): never {
-  return { flush: vi.fn() } as never
+function createStore(): Store & { flush: MockFn } {
+  return { flush: vi.fn() } as Store & { flush: MockFn }
 }
 
 function createRuntime(): RuntimeStub {
@@ -299,6 +300,36 @@ describe('attachMainWindowServices', () => {
 
     expect(hydrateLocalPtyRegistryAtBootMock).toHaveBeenCalledTimes(2)
     expect(hydrateLocalPtyRegistryAtBootMock).toHaveBeenLastCalledWith(store)
+  })
+
+  it('passes injected update quit cleanup to the auto-updater', async () => {
+    const onBeforeUpdateQuit = vi.fn()
+    const store = createStore()
+
+    attachMainWindowServices(
+      createMainWindow() as never,
+      store,
+      createRuntime() as never,
+      undefined,
+      undefined,
+      { onBeforeUpdateQuit }
+    )
+
+    expect(setupAutoUpdaterMock).toHaveBeenCalledTimes(1)
+    await setupAutoUpdaterMock.mock.calls[0][1].onBeforeQuit()
+
+    expect(onBeforeUpdateQuit).toHaveBeenCalledTimes(1)
+    expect(store.flush).toHaveBeenCalledTimes(1)
+  })
+
+  it('flushes the store before update quit when no cleanup is injected', async () => {
+    const store = createStore()
+
+    attachMainWindowServices(createMainWindow() as never, store, createRuntime() as never)
+
+    await setupAutoUpdaterMock.mock.calls[0][1].onBeforeQuit()
+
+    expect(store.flush).toHaveBeenCalledTimes(1)
   })
 
   it('ignores app reload requests from non-main webContents', async () => {
@@ -708,7 +739,7 @@ describe('attachMainWindowServices', () => {
     expect(relayHandler).toBeTypeOf('function')
     expect(removeAllListenersMock).toHaveBeenCalledWith(channel)
 
-    const payload = { paths: ['/tmp/example.txt'] }
+    const payload = { paths: ['/tmp/example.txt'], target: 'editor' }
     relayHandler?.({ sender: mainWindow.webContents } as never, payload)
 
     expect(mainWindow.webContents.send).toHaveBeenCalledWith('terminal:file-drop', payload)
@@ -729,7 +760,79 @@ describe('attachMainWindowServices', () => {
     }
 
     expect(runtime.markGraphUnavailable).toHaveBeenCalledWith(1)
-    expect(runtime.setNotifier).not.toHaveBeenCalledWith(null)
+    expect(runtime.setNotifier).toHaveBeenCalledWith(null)
+  })
+
+  it('relays native file drops only from the owning renderer webContents', () => {
+    const sendMock = vi.fn()
+    const mainWindow = createMainWindow({ send: sendMock })
+
+    attachMainWindowServices(mainWindow as never, createStore(), createRuntime() as never)
+
+    const channel = 'terminal:file-dropped-from-preload'
+    const relayHandler = onMock.mock.calls.find(([event]) => event === channel)?.[1]
+    const payload = { paths: ['/tmp/a'], target: 'editor' }
+
+    relayHandler?.({ sender: { id: 999 } }, payload)
+
+    expect(sendMock).not.toHaveBeenCalled()
+
+    relayHandler?.({ sender: mainWindow.webContents }, payload)
+
+    expect(sendMock).toHaveBeenCalledWith('terminal:file-drop', payload)
+  })
+
+  it('ignores malformed native file-drop payloads from the owning renderer', () => {
+    const sendMock = vi.fn()
+    const mainWindow = createMainWindow({ send: sendMock })
+
+    attachMainWindowServices(mainWindow as never, createStore(), createRuntime() as never)
+
+    const channel = 'terminal:file-dropped-from-preload'
+    const relayHandler = onMock.mock.calls.find(([event]) => event === channel)?.[1]
+
+    relayHandler?.(
+      { sender: mainWindow.webContents },
+      { paths: ['C:\\Users\\alice\\secret.txt'], target: 'browser' }
+    )
+    relayHandler?.(
+      { sender: mainWindow.webContents },
+      { paths: ['/tmp/a'], target: 'file-explorer' }
+    )
+
+    expect(sendMock).not.toHaveBeenCalled()
+  })
+
+  it('ignores native file drops after the owning webContents is destroyed', () => {
+    const sendMock = vi.fn()
+    const mainWindow = createMainWindow({ send: sendMock })
+
+    attachMainWindowServices(mainWindow as never, createStore(), createRuntime() as never)
+
+    const channel = 'terminal:file-dropped-from-preload'
+    const relayHandler = onMock.mock.calls.find(([event]) => event === channel)?.[1]
+    mainWindow.webContents.isDestroyed?.mockReturnValue(true)
+
+    relayHandler?.({ sender: mainWindow.webContents }, { paths: ['/tmp/a'], target: 'editor' })
+
+    expect(sendMock).not.toHaveBeenCalled()
+  })
+
+  it('clears the runtime notifier when the owning window closes', () => {
+    const mainWindowOnMock = vi.fn()
+    const mainWindow = createMainWindow()
+    mainWindow.on = mainWindowOnMock
+    const runtime = createRuntime()
+
+    attachMainWindowServices(mainWindow as never, createStore(), runtime as never)
+
+    runtime.setNotifier.mockClear()
+    for (const handler of getClosedHandlers(mainWindowOnMock)) {
+      handler()
+    }
+
+    expect(runtime.markGraphUnavailable).toHaveBeenCalledWith(1)
+    expect(runtime.setNotifier).toHaveBeenCalledWith(null)
   })
 
   it('keeps the registry-backed runtime notifier when an older window closes late', () => {
@@ -755,7 +858,7 @@ describe('attachMainWindowServices', () => {
     for (const handler of getClosedHandlers(newWindowOnMock)) {
       handler()
     }
-    expect(runtime.setNotifier).not.toHaveBeenCalledWith(null)
+    expect(runtime.setNotifier).toHaveBeenCalledWith(null)
   })
 
   it('forwards runtime notifier events to the renderer', () => {

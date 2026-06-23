@@ -187,6 +187,19 @@ describe('registerAppMenu', () => {
     expect(paletteItem?.accelerator).toBeUndefined()
   })
 
+  it('keeps Edit > Paste on the native Electron paste role in this split', () => {
+    const send = vi.fn()
+    getFocusedWindowMock.mockReturnValue({ webContents: { send } })
+    registerAppMenu(buildMenuOptions())
+
+    const editSubmenu = getSubmenu(getTemplate(), 'Edit')
+    const pasteItem = editSubmenu.find((item) => item.role === 'paste')
+
+    expect(pasteItem).toBeDefined()
+    expect(pasteItem?.click).toBeUndefined()
+    expect(send).not.toHaveBeenCalled()
+  })
+
   it.runIf(!isMac)('puts Settings and Exit under File on Windows/Linux', () => {
     registerAppMenu(buildMenuOptions())
 
@@ -198,12 +211,7 @@ describe('registerAppMenu', () => {
 
     const fileLabels = getSubmenu(template, 'File').map((item) => item.label)
     expect(fileLabels).toEqual(
-      expect.arrayContaining([
-        `Export as PDF...\t${isMac ? '⌘⇧E' : 'Ctrl+Shift+E'}`,
-        'New Window',
-        `Settings\t${isMac ? '⌘,' : 'Ctrl+,'}`,
-        'Exit'
-      ])
+      expect.arrayContaining(['New Window', `Settings\t${isMac ? '⌘,' : 'Ctrl+,'}`, 'Exit'])
     )
 
     const helpLabels = getSubmenu(template, 'Help').map((item) => item.label)
@@ -227,7 +235,7 @@ describe('registerAppMenu', () => {
       expect.arrayContaining(['Check for Updates...', `Settings\t${isMac ? '⌘,' : 'Ctrl+,'}`])
     )
     // Why: on macOS File should NOT duplicate Settings/Exit — those live in
-    // the system app menu, so only Export belongs under File.
+    // the system app menu, so only window-local File actions belong here.
     const fileLabels = getSubmenu(template, 'File').map((item) => item.label)
     expect(fileLabels).toContain('New Window')
     expect(fileLabels).not.toContain(`Settings\t${isMac ? '⌘,' : 'Ctrl+,'}`)

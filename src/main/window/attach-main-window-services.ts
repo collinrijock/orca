@@ -37,7 +37,7 @@ import type {
   RuntimeMarkdownSaveTabResult
 } from '../../shared/mobile-markdown-document'
 import type { RuntimeMobileSessionTabMove } from '../../shared/runtime-types'
-import type { NativeFileDropPayload } from '../../shared/native-file-drop'
+import { isNativeFileDropPayload, type NativeFileDropPayload } from '../../shared/native-file-drop'
 import { requestMobileMarkdownFromRenderer } from './mobile-markdown-request-relay'
 import type { CodexAccountSelectionTarget } from '../codex-accounts/runtime-selection'
 import type { ClaudeAccountSelectionTarget } from '../claude-accounts/runtime-selection'
@@ -52,6 +52,8 @@ import {
 let onBeforeAppRendererReload:
   | ((args: { webContentsId: number; ignoreCache: boolean }) => void)
   | undefined
+let runtimeNotifierTokenCounter = 0
+let activeRuntimeNotifierToken: number | null = null
 
 export function attachMainWindowServices(
   mainWindow: BrowserWindow,
@@ -64,6 +66,7 @@ export function attachMainWindowServices(
   options?: {
     awaitLocalPtyStartup?: () => Promise<void>
     onBeforeRendererReload?: (args: { webContentsId: number; ignoreCache: boolean }) => void
+    onBeforeUpdateQuit?: () => void | Promise<void>
   }
 ): void {
   registerAppReloadHandler(mainWindow, options?.onBeforeRendererReload)
@@ -120,7 +123,13 @@ export function attachMainWindowServices(
   registerFileDropRelay(mainWindow)
   setupAutoUpdater(mainWindow, {
     getLastUpdateCheckAt: () => store.getUI().lastUpdateCheckAt,
-    onBeforeQuit: () => store.flush(),
+    onBeforeQuit: async () => {
+      try {
+        await options?.onBeforeUpdateQuit?.()
+      } finally {
+        store.flush()
+      }
+    },
     setLastUpdateCheckAt: (timestamp) => {
       store.updateUI({ lastUpdateCheckAt: timestamp })
     },
@@ -295,6 +304,8 @@ function registerRuntimeWindowLifecycle(
   mainWindow: BrowserWindow,
   runtime: OrcaRuntimeService
 ): void {
+  const notifierToken = ++runtimeNotifierTokenCounter
+  activeRuntimeNotifierToken = notifierToken
   runtime.attachWindow(mainWindow.id)
   const getWindowByOwnerId = (windowId: number | null): BrowserWindow | null =>
     windowId === null ? null : getMainWindowById(windowId)
@@ -326,7 +337,8 @@ function registerRuntimeWindowLifecycle(
   const broadcast = (channel: string, ...args: unknown[]): void =>
     broadcastToMainWindows(channel, ...args)
   runtime.setNotifier({
-    worktreesChanged: (repoId) => broadcast('worktrees:changed', { repoId }),
+    worktreesChanged: (repoId, renamed) =>
+      broadcast('worktrees:changed', renamed ? { repoId, renamed } : { repoId }),
     worktreeBaseStatus: (event) => broadcast('worktree:baseStatus', event),
     worktreeRemoteBranchConflict: (event) => broadcast('worktree:remoteBranchConflict', event),
     reposChanged: () => broadcast('repos:changed'),
@@ -349,6 +361,7 @@ function registerRuntimeWindowLifecycle(
       sendToTarget('ui:createTerminal', {
         worktreeId,
         command: opts.command,
+        ...(opts.env ? { env: opts.env } : {}),
         title: opts.title
       }),
     revealTerminalSession: (worktreeId, opts) =>
@@ -412,6 +425,9 @@ function registerRuntimeWindowLifecycle(
           worktreeId,
           ptyId: opts.ptyId,
           title: opts.title ?? undefined,
+          ...(opts.launchConfig ? { launchConfig: opts.launchConfig } : {}),
+          ...(opts.launchToken ? { launchToken: opts.launchToken } : {}),
+          ...(opts.launchAgent ? { launchAgent: opts.launchAgent } : {}),
           activate: opts.activate !== false,
           // Why: pre-minted tabId from main keeps the renderer's tab id aligned
           // with the paneKey baked into the PTY env at spawn time, so hook
@@ -541,6 +557,12 @@ function registerRuntimeWindowLifecycle(
   })
   mainWindow.on('closed', () => {
     runtime.markGraphUnavailable(mainWindow.id)
+    if (activeRuntimeNotifierToken === notifierToken) {
+      // Why: the notifier closes over renderer routing helpers; clear the
+      // active token during no-window gaps so stale closures do not linger.
+      runtime.setNotifier(null)
+      activeRuntimeNotifierToken = null
+    }
   })
 }
 
@@ -549,7 +571,12 @@ function registerFileDropRelay(_mainWindow: BrowserWindow): void {
   ipcMain.removeAllListeners(channel)
   ipcMain.on(channel, (event: Electron.IpcMainEvent, args: NativeFileDropPayload) => {
     const window = getMainWindowForWebContents(event.sender)
-    if (!window) {
+    if (
+      !window ||
+      window.isDestroyed() ||
+      window.webContents.isDestroyed() ||
+      !isNativeFileDropPayload(args)
+    ) {
       return
     }
 

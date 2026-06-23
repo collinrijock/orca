@@ -2,6 +2,7 @@ import type { SettingsSearchEntry } from './settings-search'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 import { translate } from '@/i18n/i18n'
 import { translateSearchKeyword } from './settings-search-keywords'
+import { getNewWorktreeCardStyleSearchEntry } from './new-worktree-card-style-search-entry'
 
 type KeywordSpec = readonly [key: string, fallback: string]
 
@@ -78,24 +79,92 @@ export const getExperimentalPaneSearchEntries = createLocalizedCatalog(
         ['auto.components.settings.experimental.search.7b79081695', 'unread']
       ]
     ),
-    entry(
-      'auto.components.settings.experimental.search.78c2a8dc74',
-      'Symlinks on worktrees',
-      'auto.components.settings.experimental.search.603d29ed74',
-      'Automatically symlink configured files or folders into newly created worktrees so shared state (envs, caches, installs) stays connected.',
-      [
-        experimentalKeyword,
-        ['auto.components.settings.experimental.search.d23ae13990', 'worktree'],
-        ['auto.components.settings.experimental.search.10b52f79c1', 'worktrees'],
-        ['auto.components.settings.experimental.search.c387565812', 'symlink'],
-        ['auto.components.settings.experimental.search.bff1ff7768', 'symlinks'],
-        ['auto.components.settings.experimental.search.3028f0bd3a', 'link'],
-        ['auto.components.settings.experimental.search.f082788cfe', 'links'],
-        ['auto.components.settings.experimental.search.3021571c30', 'shared'],
-        ['auto.components.settings.experimental.search.4ad605f222', 'env'],
-        ['auto.components.settings.experimental.search.44c7f209d5', 'node_modules']
+    {
+      title: translate(
+        'auto.components.settings.experimental.search.agentHibernation.title',
+        'Agent sleep'
+      ),
+      description: translate(
+        'auto.components.settings.experimental.search.agentHibernation.description',
+        'Stops idle background agent terminals after the configured idle window and resumes supported sessions when opened again. Agent sleep preserves launch options for agents started by Orca; manually started agents may resume with current Orca defaults.'
+      ),
+      keywords: [
+        ...translateSearchKeyword(
+          'auto.components.settings.experimental.search.0d24759f14',
+          'experimental'
+        ),
+        ...translateSearchKeyword(
+          'auto.components.settings.experimental.search.agentHibernation.agent',
+          'agent'
+        ),
+        ...translateSearchKeyword(
+          'auto.components.settings.experimental.search.agentHibernation.agents',
+          'agents'
+        ),
+        ...translateSearchKeyword(
+          'auto.components.settings.experimental.search.agentHibernation.sleep',
+          'sleep'
+        ),
+        ...translateSearchKeyword(
+          'auto.components.settings.experimental.search.agentHibernation.minutes',
+          'minutes'
+        ),
+        ...translateSearchKeyword(
+          'auto.components.settings.experimental.search.agentHibernation.terminal',
+          'terminal'
+        )
       ]
-    ),
+    },
+    getNewWorktreeCardStyleSearchEntry(),
+    {
+      title: translate(
+        'auto.components.settings.experimental.search.78c2a8dc74',
+        'Shared paths on worktrees'
+      ),
+      description: translate(
+        'auto.components.settings.experimental.search.603d29ed74',
+        'Automatically materialize configured files or folders into newly created worktrees using APFS clone-copy on macOS when possible, otherwise symlinks.'
+      ),
+      keywords: [
+        ...translateSearchKeyword(
+          'auto.components.settings.experimental.search.0d24759f14',
+          'experimental'
+        ),
+        ...translateSearchKeyword(
+          'auto.components.settings.experimental.search.d23ae13990',
+          'worktree'
+        ),
+        ...translateSearchKeyword(
+          'auto.components.settings.experimental.search.10b52f79c1',
+          'worktrees'
+        ),
+        ...translateSearchKeyword(
+          'auto.components.settings.experimental.search.c387565812',
+          'symlink'
+        ),
+        ...translateSearchKeyword(
+          'auto.components.settings.experimental.search.bff1ff7768',
+          'symlinks'
+        ),
+        ...translateSearchKeyword(
+          'auto.components.settings.experimental.search.3028f0bd3a',
+          'link'
+        ),
+        ...translateSearchKeyword(
+          'auto.components.settings.experimental.search.f082788cfe',
+          'links'
+        ),
+        ...translateSearchKeyword(
+          'auto.components.settings.experimental.search.3021571c30',
+          'shared'
+        ),
+        ...translateSearchKeyword('auto.components.settings.experimental.search.4ad605f222', 'env'),
+        ...translateSearchKeyword(
+          'auto.components.settings.experimental.search.44c7f209d5',
+          'node_modules'
+        )
+      ]
+    },
     entry(
       'auto.components.settings.experimental.search.4f0b2bb8d1',
       'Smart New Tab menu',
@@ -156,8 +225,23 @@ export function getExperimentalSearchEntry() {
     terminalAttention: findEntry(
       translate('auto.components.settings.experimental.search.9e4ddf776d', 'Terminal attention')
     ),
+    agentHibernation: findEntry(
+      translate(
+        'auto.components.settings.experimental.search.agentHibernation.title',
+        'Agent sleep'
+      )
+    ),
+    newWorktreeCardStyle: findEntry(
+      translate(
+        'auto.components.settings.experimental.search.newWorktreeCardStyle.title',
+        'New card style'
+      )
+    ),
     symlinksOnWorktrees: findEntry(
-      translate('auto.components.settings.experimental.search.78c2a8dc74', 'Symlinks on worktrees')
+      translate(
+        'auto.components.settings.experimental.search.78c2a8dc74',
+        'Shared paths on worktrees'
+      )
     ),
     unifiedNewTabLauncher: findEntry(
       translate('auto.components.settings.experimental.search.4f0b2bb8d1', 'Smart New Tab menu')
