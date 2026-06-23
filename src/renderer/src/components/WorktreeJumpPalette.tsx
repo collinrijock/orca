@@ -986,11 +986,6 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
         })
       }
       appendPaletteListEntries(entries, visibleWorktreeItems)
-      if (showCreateAction) {
-        // Why: the typed create affordance is workspace-scoped, so keep it
-        // directly under workspace matches instead of after actions/tabs.
-        entries.push({ id: CREATE_WORKTREE_ITEM_ID, type: 'create-worktree' })
-      }
       if (showWorktreeHint) {
         entries.push({
           id: '__hint_worktree_cap__',
@@ -1015,6 +1010,11 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
         })
       }
       appendPaletteListEntries(entries, visibleProjectTargetItems)
+    }
+    if (showCreateAction) {
+      // Why: project/group jump targets are navigation results; keep them
+      // directly after worktree matches before the creation fallback.
+      entries.push({ id: CREATE_WORKTREE_ITEM_ID, type: 'create-worktree' })
     }
     if (visibleMiddleItems.length > 0) {
       if (showMiddleHeader) {
