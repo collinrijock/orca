@@ -11436,6 +11436,7 @@ export class OrcaRuntimeService {
     if (!agent) {
       let detected: string[] = []
       try {
+        // Why: startup-draft fallback can run from sparse runtime launch envs too.
         detected = repo.connectionId
           ? await detectRemoteAgents({ connectionId: repo.connectionId })
           : await detectInstalledAgentsWithShellPathHydration()
