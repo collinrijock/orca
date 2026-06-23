@@ -1,10 +1,14 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
   getTaskPageGitHubPRIconTone,
   getTaskPageGitHubWorkItemStateLabel,
   getTaskPageGitHubWorkItemStateTone,
   isTaskPageGitHubDraftPR
 } from './task-page-github-work-item-status'
+
+vi.mock('@/i18n/i18n', () => ({
+  translate: (_key: string, fallback: string) => fallback
+}))
 
 describe('task-page-github-work-item-status', () => {
   it('maps PR states to labels', () => {

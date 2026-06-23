@@ -86,6 +86,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import TaskProjectSourceCombobox from '@/components/task-project-source-combobox'
 import { LinearApiKeyDialog } from '@/components/linear-api-key-dialog'
 import { LinearScopeSelector } from '@/components/linear-scope-selector'
@@ -215,6 +216,10 @@ import {
   getTaskPageGitHubPRIconTone,
   isTaskPageGitHubDraftPR
 } from '@/components/task-page-github-work-item-status'
+import {
+  createTaskPageJiraLoadFailureState,
+  type TaskPageJiraLoadError
+} from '@/components/task-page-jira-load-state'
 import { deriveTaskPagePRCheckSummary } from '@/components/task-page-pr-check-summary'
 import { presentGitHubPRMergeState } from '@/components/github-pr-merge-state'
 import { buildJiraCreateTextAdf } from '@/components/jira-create-adf'
@@ -819,6 +824,51 @@ function groupLinearIssues(
     }
   }
   return [...sections.values()]
+}
+
+function TaskPageJiraErrorBanner({
+  error,
+  open,
+  onOpenChange
+}: {
+  error: TaskPageJiraLoadError
+  open: boolean
+  onOpenChange: (open: boolean) => void
+}): React.JSX.Element {
+  return (
+    <Collapsible
+      open={open}
+      onOpenChange={onOpenChange}
+      className="border-b border-border bg-destructive/10 px-4 py-3 text-sm text-destructive"
+    >
+      <div className="flex items-start gap-2">
+        <AlertCircle className="mt-0.5 size-4 flex-none" />
+        <div className="min-w-0 flex-1">
+          <div className="font-medium leading-5">{error.title}</div>
+          {error.details ? (
+            <>
+              <CollapsibleTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="xs"
+                  className="-ml-1 mt-1 h-6 px-1.5 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                >
+                  {open ? <ChevronDown className="size-3" /> : <ChevronRight className="size-3" />}
+                  {translate('auto.components.TaskPage.40eaf2c27c', 'Details')}
+                </Button>
+              </CollapsibleTrigger>
+              <CollapsibleContent>
+                <div className="mt-1 rounded-md border border-destructive/20 bg-background/80 px-2 py-1.5 font-mono text-xs text-foreground">
+                  {error.details}
+                </div>
+              </CollapsibleContent>
+            </>
+          ) : null}
+        </div>
+      </div>
+    </Collapsible>
+  )
 }
 
 function getLinearIssueGridTemplate(visibleProperties: ReadonlySet<LinearDisplayProperty>): string {
@@ -4123,7 +4173,8 @@ export default function TaskPage(): React.JSX.Element {
   // Jira tab state
   const [jiraIssues, setJiraIssues] = useState<JiraIssue[]>([])
   const [jiraLoading, setJiraLoading] = useState(false)
-  const [jiraError, setJiraError] = useState<string | null>(null)
+  const [jiraError, setJiraError] = useState<TaskPageJiraLoadError | null>(null)
+  const [jiraErrorDetailsOpen, setJiraErrorDetailsOpen] = useState(false)
   const [jiraSearchInput, setJiraSearchInput] = useState('')
   const [appliedJiraSearch, setAppliedJiraSearch] = useState('')
   const [activeJiraPreset, setActiveJiraPreset] = useState<JiraPresetId>('assigned')
@@ -7233,6 +7284,7 @@ export default function TaskPage(): React.JSX.Element {
     let cancelled = false
     setJiraLoading(true)
     setJiraError(null)
+    setJiraErrorDetailsOpen(false)
 
     const trimmed = appliedJiraSearch.trim()
     const request =
@@ -7254,7 +7306,9 @@ export default function TaskPage(): React.JSX.Element {
         if (cancelled) {
           return
         }
-        setJiraError(err instanceof Error ? err.message : 'Failed to load Jira issues.')
+        const failureState = createTaskPageJiraLoadFailureState(err)
+        setJiraIssues(failureState.issues)
+        setJiraError(failureState.error)
         setJiraLoading(false)
       })
 
@@ -9409,10 +9463,17 @@ export default function TaskPage(): React.JSX.Element {
                   className="min-h-0 flex-1 overflow-y-auto scrollbar-sleek"
                   style={{ scrollbarGutter: 'stable' }}
                 >
-                  {(jiraStatus.credentialError ?? jiraError) ? (
+                  {jiraStatus.credentialError ? (
                     <div className="border-b border-border px-4 py-4 text-sm text-destructive">
-                      {jiraStatus.credentialError ?? jiraError}
+                      {jiraStatus.credentialError}
                     </div>
+                  ) : null}
+                  {!jiraStatus.credentialError && jiraError ? (
+                    <TaskPageJiraErrorBanner
+                      error={jiraError}
+                      open={jiraErrorDetailsOpen}
+                      onOpenChange={setJiraErrorDetailsOpen}
+                    />
                   ) : null}
 
                   {jiraLoading && jiraIssues.length === 0 ? (
