@@ -434,6 +434,33 @@ function mergeProjectCompatibilityProjects(
   return merged
 }
 
+function getCurrentSourceRepoIds(project: Project, currentRepoIds: ReadonlySet<string>): string[] {
+  return project.sourceRepoIds.filter((repoId) => currentRepoIds.has(repoId))
+}
+
+function projectWithCurrentSourceRepoIds(
+  project: Project,
+  currentRepoIds: ReadonlySet<string>
+): Project {
+  const sourceRepoIds = getCurrentSourceRepoIds(project, currentRepoIds)
+  return sourceRepoIds.length === project.sourceRepoIds.length
+    ? project
+    : { ...project, sourceRepoIds }
+}
+
+function mergePreviousProjectMetadata(
+  previous: Project,
+  current: Project,
+  currentRepoIds: ReadonlySet<string>
+): Project {
+  return {
+    ...mergeProjectCompatibilityProject(previous, current),
+    // Why: fetched project metadata can lag behind repo.list; repo ownership
+    // must track the freshly reconciled repos so removed host repos do not linger.
+    sourceRepoIds: getCurrentSourceRepoIds(current, currentRepoIds)
+  }
+}
+
 function mergeProjectHostSetupCompatibility(
   derived: Pick<RepoSlice, 'projects' | 'projectHostSetups'>,
   fetched: ProjectHostSetupProjection
@@ -496,19 +523,30 @@ function mergeFetchedProjectCompatibilityForHost({
   const preservedSetups = previous.projectHostSetups.filter((setup) => setup.hostId !== hostId)
   const projectHostSetups = mergeById(preservedSetups, fetchedSetupsForHost)
   const previousProjectById = new Map(previous.projects.map((project) => [project.id, project]))
-  const fetchedProjectsForHost = fetched.projects
-    .filter((project) => getProjectHostIds(project, fetched.projectHostSetups, repos).has(hostId))
+  const currentRepoIds = new Set(repos.map((repo) => repo.id))
+  const hasCurrentOwner = (project: Project): boolean =>
+    project.sourceRepoIds.some((repoId) => currentRepoIds.has(repoId)) ||
+    projectHostSetups.some((setup) => setup.projectId === project.id)
+  const fetchedProjects = fetched.projects
+    .filter(
+      (project) =>
+        hasCurrentOwner(project) ||
+        getProjectHostIds(project, fetched.projectHostSetups, repos).has(hostId)
+    )
     .map((project) => {
       const previousProject = previousProjectById.get(project.id)
-      // Why: refreshing one host replaces that host's project record, but
-      // same-id projects can carry metadata learned only from another host.
-      return previousProject ? mergeProjectCompatibilityProject(previousProject, project) : project
+      return previousProject
+        ? mergePreviousProjectMetadata(previousProject, project, currentRepoIds)
+        : projectWithCurrentSourceRepoIds(project, currentRepoIds)
     })
+  const fetchedProjectIds = new Set(fetchedProjects.map((project) => project.id))
   const preservedProjects = previous.projects.filter(
-    (project) => !getProjectHostIds(project, previous.projectHostSetups, repos).has(hostId)
+    (project) =>
+      !fetchedProjectIds.has(project.id) &&
+      !getProjectHostIds(project, previous.projectHostSetups, repos).has(hostId)
   )
   return {
-    projects: mergeProjectCompatibilityProjects(preservedProjects, fetchedProjectsForHost),
+    projects: mergeProjectCompatibilityProjects(preservedProjects, fetchedProjects),
     projectHostSetups
   }
 }

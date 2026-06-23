@@ -1405,6 +1405,49 @@ describe('project groups', () => {
     })
   })
 
+  it('does not render collapsed child-group repos as missing metadata fallbacks', () => {
+    const parentGroup: ProjectGroup = {
+      id: 'parent-group',
+      name: 'Platform',
+      parentPath: '/platform',
+      parentGroupId: null,
+      createdFrom: 'folder-scan',
+      tabOrder: 0,
+      isCollapsed: false,
+      color: null,
+      createdAt: 1,
+      updatedAt: 1
+    }
+    const childGroup: ProjectGroup = {
+      ...parentGroup,
+      id: 'child-group',
+      name: 'Services',
+      parentPath: '/platform/services',
+      parentGroupId: parentGroup.id
+    }
+    const repoInChildGroup: Repo = { ...repo, projectGroupId: childGroup.id }
+
+    const rows = buildRows(
+      'repo',
+      [worktree],
+      new Map([[repoInChildGroup.id, repoInChildGroup]]),
+      null,
+      new Set(['project-group:parent-group']),
+      new Map([[repoInChildGroup.id, 0]]),
+      undefined,
+      'manual',
+      {},
+      new Map([[worktree.id, worktree]]),
+      false,
+      undefined,
+      [parentGroup, childGroup]
+    )
+
+    expect(rows.filter((row) => row.type === 'header').map((row) => row.key)).toEqual([
+      'project-group:parent-group'
+    ])
+  })
+
   it('disambiguates duplicate top-level repo basenames without renaming repos', () => {
     const group: ProjectGroup = {
       id: 'group-1',

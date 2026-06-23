@@ -1155,7 +1155,7 @@ export function buildRows(
 
   const remainingRepoEntries = [...(groupByProjectGroupId.get(null) ?? [])]
   for (const [projectGroupId, entries] of groupByProjectGroupId) {
-    if (projectGroupId === null) {
+    if (projectGroupId === null || projectGroupsById.has(projectGroupId)) {
       continue
     }
     // Why: startup can have repos from hosts whose project-group metadata was

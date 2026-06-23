@@ -188,7 +188,10 @@ beforeEach(() => {
   })
 })
 
-function configureSharedProjectCompatibilityMocks(): { sharedProjectId: string } {
+function configureSharedProjectCompatibilityMocks(): {
+  sharedProjectId: string
+  sharedRemoteProject: Project
+} {
   const sharedProjectId = 'github:stablyai/orca'
   const localRepoWithIdentity: Repo = {
     ...localRepo,
@@ -262,7 +265,7 @@ function configureSharedProjectCompatibilityMocks(): { sharedProjectId: string }
       _meta: { runtimeId: 'runtime-remote' }
     }
   })
-  return { sharedProjectId }
+  return { sharedProjectId, sharedRemoteProject }
 }
 
 function expectSharedProjectMetadata(projects: readonly Project[], sharedProjectId: string): void {
@@ -323,6 +326,107 @@ describe('fetchReposForAllHosts', () => {
     await store.getState().fetchRuntimeEnvironmentRepos('env-1')
 
     expectSharedProjectMetadata(store.getState().projects, sharedProjectId)
+  })
+
+  it('keeps the local side of a shared project when a runtime refresh removes its repos', async () => {
+    const { sharedProjectId } = configureSharedProjectCompatibilityMocks()
+    const store = createTestStore()
+    store.setState({ settings: { activeRuntimeEnvironmentId: 'env-1' } as never })
+
+    await store.getState().fetchReposForAllHosts()
+    runtimeEnvironmentCall.mockImplementation((args: RuntimeEnvironmentCallRequest) => {
+      if (args.method === 'repo.list') {
+        return {
+          id: 'rpc-repo-list-empty',
+          ok: true,
+          result: { repos: [] },
+          _meta: { runtimeId: 'runtime-remote' }
+        }
+      }
+      if (args.method === 'project.list') {
+        return {
+          id: 'rpc-project-list-empty',
+          ok: true,
+          result: { projects: [] },
+          _meta: { runtimeId: 'runtime-remote' }
+        }
+      }
+      if (args.method === 'projectHostSetup.list') {
+        return {
+          id: 'rpc-project-host-setup-list-empty',
+          ok: true,
+          result: { setups: [] },
+          _meta: { runtimeId: 'runtime-remote' }
+        }
+      }
+      return {
+        id: 'rpc-other',
+        ok: true,
+        result: {},
+        _meta: { runtimeId: 'runtime-remote' }
+      }
+    })
+
+    await store.getState().fetchRuntimeEnvironmentRepos('env-1')
+
+    const sharedProject = store
+      .getState()
+      .projects.find((project) => project.id === sharedProjectId)
+    expect(sharedProject?.sourceRepoIds).toEqual(['local-repo'])
+    expect(sharedProject?.localWindowsRuntimePreference).toEqual({ kind: 'windows-host' })
+    expect(store.getState().projectHostSetups).toEqual([
+      expect.objectContaining({
+        projectId: sharedProjectId,
+        hostId: 'local',
+        repoId: 'local-repo'
+      })
+    ])
+  })
+
+  it('drops stale runtime repo ownership when project metadata lags behind repo removal', async () => {
+    const { sharedProjectId, sharedRemoteProject } = configureSharedProjectCompatibilityMocks()
+    const store = createTestStore()
+    store.setState({ settings: { activeRuntimeEnvironmentId: 'env-1' } as never })
+
+    await store.getState().fetchReposForAllHosts()
+    runtimeEnvironmentCall.mockImplementation((args: RuntimeEnvironmentCallRequest) => {
+      if (args.method === 'repo.list') {
+        return {
+          id: 'rpc-repo-list-empty',
+          ok: true,
+          result: { repos: [] },
+          _meta: { runtimeId: 'runtime-remote' }
+        }
+      }
+      if (args.method === 'project.list') {
+        return {
+          id: 'rpc-project-list-stale',
+          ok: true,
+          result: { projects: [sharedRemoteProject] },
+          _meta: { runtimeId: 'runtime-remote' }
+        }
+      }
+      if (args.method === 'projectHostSetup.list') {
+        return {
+          id: 'rpc-project-host-setup-list-empty',
+          ok: true,
+          result: { setups: [] },
+          _meta: { runtimeId: 'runtime-remote' }
+        }
+      }
+      return {
+        id: 'rpc-other',
+        ok: true,
+        result: {},
+        _meta: { runtimeId: 'runtime-remote' }
+      }
+    })
+
+    await store.getState().fetchRuntimeEnvironmentRepos('env-1')
+
+    expect(
+      store.getState().projects.find((project) => project.id === sharedProjectId)?.sourceRepoIds
+    ).toEqual(['local-repo'])
   })
 
   it('fails soft when a runtime environment is unreachable, keeping local repos', async () => {
