@@ -521,19 +521,9 @@ export class DaemonPtyAdapter implements IPtyProvider {
       return
     }
 
+    let aliveSessionIds: Set<string>
     try {
-      const aliveSessionIds = await this.probeAliveSessionIds()
-      if (this.isDisposed || generation !== this.disconnectReconcileGeneration) {
-        return
-      }
-      const exitedIds = idsAtDisconnect.filter((id) => !aliveSessionIds.has(id))
-      this.fanoutSyntheticExitIds(exitedIds, -1)
-      if (exitedIds.length < idsAtDisconnect.length) {
-        await this.client.ensureConnected()
-        if (this.isDisposed || generation !== this.disconnectReconcileGeneration) {
-          this.client.disconnect()
-        }
-      }
+      aliveSessionIds = await this.probeAliveSessionIds()
     } catch {
       if (this.isDisposed || generation !== this.disconnectReconcileGeneration) {
         return
@@ -541,6 +531,22 @@ export class DaemonPtyAdapter implements IPtyProvider {
       // Why: if reconnect/listSessions fails, the adapter cannot know whether
       // daemon-backed PTYs still exist. Prefer visible exits over dropped input.
       this.fanoutSyntheticExitIds(idsAtDisconnect, -1)
+      return
+    }
+
+    if (this.isDisposed || generation !== this.disconnectReconcileGeneration) {
+      return
+    }
+
+    const exitedIds = idsAtDisconnect.filter((id) => !aliveSessionIds.has(id))
+    this.fanoutSyntheticExitIds(exitedIds, -1)
+    if (exitedIds.length < idsAtDisconnect.length) {
+      await this.client.ensureConnected()
+      if (this.isDisposed || generation !== this.disconnectReconcileGeneration) {
+        // Why: a newer disconnect/dispose won the race while reconnecting; undo
+        // this stale reconnect so it cannot keep sockets alive behind teardown.
+        this.client.disconnect()
+      }
     }
   }
 

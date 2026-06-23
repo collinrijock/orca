@@ -388,6 +388,24 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       expect(exits).toEqual([{ id: 'old-session', code: -1 }])
       expect(adapter.getActiveSessionIds()).toEqual(['new-session'])
     })
+
+    it('does not exit surviving sessions when a synthetic exit listener throws', async () => {
+      adapter.onExit(() => {
+        throw new Error('listener failed')
+      })
+
+      const internals = adapter as unknown as {
+        activeSessionIds: Set<string>
+        probeAliveSessionIds: () => Promise<Set<string>>
+        reconcileAfterDaemonDisconnect: () => Promise<void>
+      }
+      internals.activeSessionIds.add('dead-session')
+      internals.activeSessionIds.add('live-session')
+      internals.probeAliveSessionIds = vi.fn(async () => new Set(['live-session']))
+
+      await expect(internals.reconcileAfterDaemonDisconnect()).rejects.toThrow('listener failed')
+      expect(adapter.getActiveSessionIds()).toEqual(['live-session'])
+    })
   })
 
   describe('spawn with sessionId (reattach)', () => {
