@@ -495,9 +495,15 @@ function mergeFetchedProjectCompatibilityForHost({
   const fetchedSetupsForHost = fetched.projectHostSetups.filter((setup) => setup.hostId === hostId)
   const preservedSetups = previous.projectHostSetups.filter((setup) => setup.hostId !== hostId)
   const projectHostSetups = mergeById(preservedSetups, fetchedSetupsForHost)
-  const fetchedProjectsForHost = fetched.projects.filter((project) =>
-    getProjectHostIds(project, fetched.projectHostSetups, repos).has(hostId)
-  )
+  const previousProjectById = new Map(previous.projects.map((project) => [project.id, project]))
+  const fetchedProjectsForHost = fetched.projects
+    .filter((project) => getProjectHostIds(project, fetched.projectHostSetups, repos).has(hostId))
+    .map((project) => {
+      const previousProject = previousProjectById.get(project.id)
+      // Why: refreshing one host replaces that host's project record, but
+      // same-id projects can carry metadata learned only from another host.
+      return previousProject ? mergeProjectCompatibilityProject(previousProject, project) : project
+    })
   const preservedProjects = previous.projects.filter(
     (project) => !getProjectHostIds(project, previous.projectHostSetups, repos).has(hostId)
   )

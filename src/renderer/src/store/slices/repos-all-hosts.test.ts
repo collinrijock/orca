@@ -188,6 +188,89 @@ beforeEach(() => {
   })
 })
 
+function configureSharedProjectCompatibilityMocks(): { sharedProjectId: string } {
+  const sharedProjectId = 'github:stablyai/orca'
+  const localRepoWithIdentity: Repo = {
+    ...localRepo,
+    upstream: { owner: 'stablyai', repo: 'orca' }
+  }
+  const remoteRepoWithIdentity: Repo = {
+    ...remoteRepo,
+    upstream: { owner: 'stablyai', repo: 'orca' }
+  }
+  const sharedLocalProject: Project = {
+    id: sharedProjectId,
+    displayName: 'Orca',
+    badgeColor: '#000',
+    sourceRepoIds: ['local-repo'],
+    localWindowsRuntimePreference: { kind: 'windows-host' },
+    createdAt: 1,
+    updatedAt: 1
+  }
+  const sharedRemoteProject: Project = {
+    id: sharedProjectId,
+    displayName: 'Orca',
+    badgeColor: '#111',
+    sourceRepoIds: ['remote-repo'],
+    createdAt: 2,
+    updatedAt: 2
+  }
+  const sharedLocalSetup: ProjectHostSetup = {
+    ...localProjectHostSetup,
+    projectId: sharedProjectId
+  }
+  const sharedRemoteSetup: ProjectHostSetup = {
+    ...localProjectHostSetup,
+    id: 'remote-setup',
+    projectId: sharedProjectId,
+    repoId: 'remote-repo',
+    path: '/srv/repo',
+    displayName: 'Remote setup'
+  }
+  reposList.mockResolvedValue([localRepoWithIdentity])
+  projectsList.mockResolvedValue([sharedLocalProject])
+  listHostSetups.mockResolvedValue([sharedLocalSetup])
+  runtimeEnvironmentCall.mockImplementation((args: RuntimeEnvironmentCallRequest) => {
+    if (args.method === 'repo.list') {
+      return {
+        id: 'rpc-repo-list',
+        ok: true,
+        result: { repos: [remoteRepoWithIdentity] },
+        _meta: { runtimeId: 'runtime-remote' }
+      }
+    }
+    if (args.method === 'project.list') {
+      return {
+        id: 'rpc-project-list',
+        ok: true,
+        result: { projects: [sharedRemoteProject] },
+        _meta: { runtimeId: 'runtime-remote' }
+      }
+    }
+    if (args.method === 'projectHostSetup.list') {
+      return {
+        id: 'rpc-project-host-setup-list',
+        ok: true,
+        result: { setups: [sharedRemoteSetup] },
+        _meta: { runtimeId: 'runtime-remote' }
+      }
+    }
+    return {
+      id: 'rpc-other',
+      ok: true,
+      result: {},
+      _meta: { runtimeId: 'runtime-remote' }
+    }
+  })
+  return { sharedProjectId }
+}
+
+function expectSharedProjectMetadata(projects: readonly Project[], sharedProjectId: string): void {
+  const sharedProject = projects.find((project) => project.id === sharedProjectId)
+  expect([...(sharedProject?.sourceRepoIds ?? [])].sort()).toEqual(['local-repo', 'remote-repo'])
+  expect(sharedProject?.localWindowsRuntimePreference).toEqual({ kind: 'windows-host' })
+}
+
 describe('fetchReposForAllHosts', () => {
   it('loads local + all configured runtime environments even when a remote env is active', async () => {
     // Why: a cold start that restored a remote workspace leaves the remote
@@ -208,89 +291,13 @@ describe('fetchReposForAllHosts', () => {
   })
 
   it('preserves shared project metadata when the same project id is fetched from multiple hosts', async () => {
-    const sharedProjectId = 'github:stablyai/orca'
-    const localRepoWithIdentity: Repo = {
-      ...localRepo,
-      upstream: { owner: 'stablyai', repo: 'orca' }
-    }
-    const remoteRepoWithIdentity: Repo = {
-      ...remoteRepo,
-      upstream: { owner: 'stablyai', repo: 'orca' }
-    }
-    const sharedLocalProject: Project = {
-      id: sharedProjectId,
-      displayName: 'Orca',
-      badgeColor: '#000',
-      sourceRepoIds: ['local-repo'],
-      localWindowsRuntimePreference: { kind: 'windows-host' },
-      createdAt: 1,
-      updatedAt: 1
-    }
-    const sharedRemoteProject: Project = {
-      id: sharedProjectId,
-      displayName: 'Orca',
-      badgeColor: '#111',
-      sourceRepoIds: ['remote-repo'],
-      createdAt: 2,
-      updatedAt: 2
-    }
-    const sharedLocalSetup: ProjectHostSetup = {
-      ...localProjectHostSetup,
-      projectId: sharedProjectId
-    }
-    const sharedRemoteSetup: ProjectHostSetup = {
-      ...localProjectHostSetup,
-      id: 'remote-setup',
-      projectId: sharedProjectId,
-      repoId: 'remote-repo',
-      path: '/srv/repo',
-      displayName: 'Remote setup'
-    }
-    reposList.mockResolvedValue([localRepoWithIdentity])
-    projectsList.mockResolvedValue([sharedLocalProject])
-    listHostSetups.mockResolvedValue([sharedLocalSetup])
-    runtimeEnvironmentCall.mockImplementation((args: RuntimeEnvironmentCallRequest) => {
-      if (args.method === 'repo.list') {
-        return {
-          id: 'rpc-repo-list',
-          ok: true,
-          result: { repos: [remoteRepoWithIdentity] },
-          _meta: { runtimeId: 'runtime-remote' }
-        }
-      }
-      if (args.method === 'project.list') {
-        return {
-          id: 'rpc-project-list',
-          ok: true,
-          result: { projects: [sharedRemoteProject] },
-          _meta: { runtimeId: 'runtime-remote' }
-        }
-      }
-      if (args.method === 'projectHostSetup.list') {
-        return {
-          id: 'rpc-project-host-setup-list',
-          ok: true,
-          result: { setups: [sharedRemoteSetup] },
-          _meta: { runtimeId: 'runtime-remote' }
-        }
-      }
-      return {
-        id: 'rpc-other',
-        ok: true,
-        result: {},
-        _meta: { runtimeId: 'runtime-remote' }
-      }
-    })
+    const { sharedProjectId } = configureSharedProjectCompatibilityMocks()
     const store = createTestStore()
     store.setState({ settings: { activeRuntimeEnvironmentId: 'env-1' } as never })
 
     await store.getState().fetchReposForAllHosts()
 
-    const sharedProject = store
-      .getState()
-      .projects.find((project) => project.id === sharedProjectId)
-    expect([...(sharedProject?.sourceRepoIds ?? [])].sort()).toEqual(['local-repo', 'remote-repo'])
-    expect(sharedProject?.localWindowsRuntimePreference).toEqual({ kind: 'windows-host' })
+    expectSharedProjectMetadata(store.getState().projects, sharedProjectId)
     expect(store.getState().projectHostSetups).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -305,6 +312,17 @@ describe('fetchReposForAllHosts', () => {
         })
       ])
     )
+  })
+
+  it('preserves shared project metadata after a runtime-only repo refresh', async () => {
+    const { sharedProjectId } = configureSharedProjectCompatibilityMocks()
+    const store = createTestStore()
+    store.setState({ settings: { activeRuntimeEnvironmentId: 'env-1' } as never })
+
+    await store.getState().fetchReposForAllHosts()
+    await store.getState().fetchRuntimeEnvironmentRepos('env-1')
+
+    expectSharedProjectMetadata(store.getState().projects, sharedProjectId)
   })
 
   it('fails soft when a runtime environment is unreachable, keeping local repos', async () => {
