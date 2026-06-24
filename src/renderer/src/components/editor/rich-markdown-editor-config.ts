@@ -1,5 +1,4 @@
-import type { Editor } from '@tiptap/react'
-import type { EditorOptions } from '@tiptap/core'
+import type { Editor, UseEditorOptions } from '@tiptap/react'
 import { handleRichMarkdownCut } from './rich-markdown-cut-handler'
 import { handleRichMarkdownPaste } from './rich-markdown-paste-handler'
 import { encodeRawMarkdownHtmlForRichEditor } from './raw-markdown-html'
@@ -75,7 +74,7 @@ export type EditorConfigParams = {
   setDocLinkMenu: Dispatch<SetStateAction<DocLinkMenuState | null>>
 }
 
-export function createRichMarkdownEditorConfig(params: EditorConfigParams): Partial<EditorOptions> {
+export function createRichMarkdownEditorConfig(params: EditorConfigParams): UseEditorOptions {
   const {
     content,
     filePath,

@@ -93,25 +93,23 @@ async function inlineBlobImageSources(root: Element): Promise<void> {
       if (!src) {
         return
       }
-      const dataUrl = await readBlobImageAsDataUrl(src)
-      if (dataUrl) {
-        image.setAttribute('src', dataUrl)
-      }
+      image.setAttribute('src', await readBlobImageAsDataUrl(src))
     })
   )
 }
 
-async function readBlobImageAsDataUrl(src: string): Promise<string | null> {
+async function readBlobImageAsDataUrl(src: string): Promise<string> {
   try {
     const response = await fetch(src)
     if (!response.ok) {
-      return null
+      throw new Error('Unable to fetch blob image')
     }
     const blob = await response.blob()
     const bytes = new Uint8Array(await blob.arrayBuffer())
     return `data:${blob.type || 'application/octet-stream'};base64,${bytesToBase64(bytes)}`
-  } catch {
-    return null
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    throw new Error(`Failed to inline image for PDF export: ${message}`)
   }
 }
 

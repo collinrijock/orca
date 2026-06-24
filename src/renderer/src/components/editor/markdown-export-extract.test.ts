@@ -50,4 +50,20 @@ describe('getActiveMarkdownExportPayload', () => {
     expect(payload?.html).toContain('src="data:image/png;base64,AQID"')
     expect(payload?.html).not.toContain('blob:rich-local-image')
   })
+
+  it('fails extraction when a blob image cannot be inlined', async () => {
+    vi.mocked(fetch).mockResolvedValue({
+      ok: false
+    } as Response)
+    const root = document.createElement('div')
+    root.innerHTML =
+      '<div class="ProseMirror"><p><img src="blob:missing-local-image" alt="diagram"></p></div>'
+
+    await expect(
+      getActiveMarkdownExportPayload({
+        fileId: '/repo/docs/readme.md',
+        root
+      })
+    ).rejects.toThrow('Failed to inline image for PDF export')
+  })
 })
