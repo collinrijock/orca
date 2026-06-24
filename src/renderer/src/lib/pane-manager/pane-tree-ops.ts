@@ -9,7 +9,14 @@ import type {
 import { createDivider, disposeDivider } from './pane-divider'
 import { getFitOverrideForPty } from './mobile-fit-overrides'
 import { disposeWebgl, attachWebgl } from './pane-webgl-renderer'
-import { captureScrollState, restoreScrollStateAfterLayout } from './pane-scroll'
+import {
+  captureScrollStateForLayout,
+  getRememberedTerminalContainerScrollState,
+  getRememberedTerminalLeafScrollState,
+  rememberTerminalContainerScrollState,
+  rememberTerminalLeafScrollState,
+  restoreScrollStateAfterLayout
+} from './pane-scroll'
 
 export { captureScrollState, restoreScrollState } from './pane-scroll'
 
@@ -29,6 +36,7 @@ type TreeOpsCallbacks = {
 
 type SafeFitOptions = {
   debugSource?: string
+  scrollStatesByLeafId?: Map<ManagedPane['leafId'], ScrollState>
   syncScrollbar?: boolean
   useMarkers?: boolean
 }
@@ -68,7 +76,11 @@ function captureScrollStateForFit(pane: ManagedPane): ScrollState | null {
   // Why: split reparent has its own delayed restore; restoring here can fight that timer.
   return 'pendingSplitScrollState' in pane && (pane as ManagedPaneInternal).pendingSplitScrollState
     ? null
-    : captureScrollState(pane.terminal)
+    : captureScrollStateForLayout(
+        pane.terminal,
+        getRememberedTerminalContainerScrollState(pane.container) ??
+          getRememberedTerminalLeafScrollState(pane.leafId)
+      )
 }
 
 export function safeFit(pane: ManagedPane, options: SafeFitOptions = {}): void {
@@ -101,7 +113,11 @@ export function safeFit(pane: ManagedPane, options: SafeFitOptions = {}): void {
       // churn, which was causing visible terminal blinking while resizing.
       return
     }
-    scrollState = captureScrollStateForFit(pane)
+    scrollState = options.scrollStatesByLeafId?.get(pane.leafId) ?? captureScrollStateForFit(pane)
+    if (scrollState) {
+      rememberTerminalContainerScrollState(pane.container, scrollState)
+      rememberTerminalLeafScrollState(pane.leafId, scrollState)
+    }
     shouldRestoreScroll = true
     pane.fitAddon.fit()
   } catch {

@@ -20,6 +20,9 @@ const mocks = vi.hoisted(() => ({
   handleTerminalFileDrop: vi.fn(),
   pasteTerminalText: vi.fn(),
   recordTerminalUserInputForLeaf: vi.fn(),
+  rememberTerminalContainerScrollState: vi.fn(),
+  rememberTerminalLeafScrollState: vi.fn(),
+  rememberTerminalScrollState: vi.fn(),
   requestTerminalBacklogRecovery: vi.fn(),
   restoreScrollState: vi.fn(),
   restoreScrollStateAfterLayout: vi.fn()
@@ -73,6 +76,9 @@ vi.mock('@/lib/pane-manager/pane-scroll', () => ({
   captureScrollState: mocks.captureScrollState,
   getPendingScrollRestoreState: mocks.getPendingScrollRestoreState,
   getTerminalOutputEpoch: mocks.getTerminalOutputEpoch,
+  rememberTerminalContainerScrollState: mocks.rememberTerminalContainerScrollState,
+  rememberTerminalLeafScrollState: mocks.rememberTerminalLeafScrollState,
+  rememberTerminalScrollState: mocks.rememberTerminalScrollState,
   restoreScrollState: mocks.restoreScrollState,
   restoreScrollStateAfterLayout: mocks.restoreScrollStateAfterLayout
 }))
@@ -533,6 +539,7 @@ describe('useTerminalPaneGlobalEffects', () => {
     expect(manager.resumeRendering).toHaveBeenCalledTimes(1)
     expect(mocks.fitAndFocusPanes).toHaveBeenCalledWith(manager, {
       debugSource: 'visibility-resume-fit',
+      scrollStatesByLeafId: expect.any(Map),
       syncScrollbar: false,
       useMarkers: false
     })

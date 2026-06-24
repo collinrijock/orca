@@ -75,6 +75,9 @@ import { safeFit } from '@/lib/pane-manager/pane-tree-ops'
 import {
   captureScrollState,
   getPendingScrollRestoreState,
+  rememberTerminalContainerScrollState,
+  rememberTerminalLeafScrollState,
+  rememberTerminalScrollState,
   restoreScrollStateAfterLayout
 } from '@/lib/pane-manager/pane-scroll'
 import {
@@ -218,10 +221,13 @@ function isTransientTerminalEdgeSnap(
   if (!previous || previous.wasAtBottom || current.bufferType !== previous.bufferType) {
     return false
   }
-  if (current.baseY !== previous.baseY || current.viewportY === previous.viewportY) {
+  if (current.viewportY === previous.viewportY) {
     return false
   }
-  return current.viewportY === 0 || current.wasAtBottom
+  return (
+    Math.abs(current.baseY - previous.baseY) <= 2 &&
+    (current.viewportY === 0 || current.wasAtBottom)
+  )
 }
 
 function arePaneTitleOverlayRectsEqual(
@@ -491,7 +497,7 @@ export default function TerminalPane({
   const savedScrollStatesByLeafIdRef = useRef(savedLayout.scrollStatesByLeafId)
   savedScrollStatesByLeafIdRef.current = savedLayout.scrollStatesByLeafId
   const lastVisibleScrollStatesByLeafIdRef = useRef(savedLayout.scrollStatesByLeafId)
-  const hasAppliedDurableScrollRestoreRef = useRef(false)
+  const wasVisibleForDurableRestoreRef = useRef(false)
   const updateTabTitle = useAppStore((store) => store.updateTabTitle)
   const setRuntimePaneTitle = useAppStore((store) => store.setRuntimePaneTitle)
   const clearRuntimePaneTitle = useAppStore((store) => store.clearRuntimePaneTitle)
@@ -740,6 +746,9 @@ export default function TerminalPane({
             const previous = lastVisibleScrollStatesByLeafIdRef.current?.[pane.leafId]
             const stable =
               previous && isTransientTerminalEdgeSnap(current, previous) ? previous : current
+            rememberTerminalScrollState(pane.terminal, stable)
+            rememberTerminalContainerScrollState(pane.container, stable)
+            rememberTerminalLeafScrollState(pane.leafId, stable)
             logTerminalScrollRestore('layout-persist', {
               baseY: stable.baseY,
               bufferType: stable.bufferType,
@@ -872,6 +881,9 @@ export default function TerminalPane({
         const previous = lastVisibleScrollStatesByLeafIdRef.current?.[pane.leafId]
         const stable =
           previous && isTransientTerminalEdgeSnap(current, previous) ? previous : current
+        rememberTerminalScrollState(pane.terminal, stable)
+        rememberTerminalContainerScrollState(pane.container, stable)
+        rememberTerminalLeafScrollState(pane.leafId, stable)
         logTerminalScrollRestore('capture-current', {
           baseY: stable.baseY,
           bufferType: stable.bufferType,
@@ -903,7 +915,9 @@ export default function TerminalPane({
   }, [captureCurrentScrollStatesByLeafId, isVisible, persistCurrentScrollStates])
 
   useLayoutEffect(() => {
-    if (!isVisible || hasAppliedDurableScrollRestoreRef.current) {
+    const shouldRestore = isVisible && !wasVisibleForDurableRestoreRef.current
+    wasVisibleForDurableRestoreRef.current = isVisible
+    if (!shouldRestore) {
       return
     }
     const scrollStatesByLeafId =
@@ -940,7 +954,6 @@ export default function TerminalPane({
         })
       }
     }
-    hasAppliedDurableScrollRestoreRef.current = true
   }, [isVisible, paneCount, tabId, worktreeId])
 
   const clearPaneScrollback = useCallback(

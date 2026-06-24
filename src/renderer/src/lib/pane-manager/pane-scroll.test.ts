@@ -2,8 +2,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { IMarker, Terminal } from '@xterm/xterm'
 import {
   captureScrollState,
+  captureScrollStateForLayout,
+  getRememberedTerminalLeafScrollState,
   getTerminalOutputEpoch,
   isTerminalScrollRestoreInProgress,
+  rememberTerminalLeafScrollState,
+  rememberTerminalScrollState,
   recordTerminalOutput,
   restoreScrollState,
   restoreScrollStateAfterLayout
@@ -88,6 +92,53 @@ describe('scroll state', () => {
 
     expect(getTerminalOutputEpoch(terminalA)).toBe(2)
     expect(getTerminalOutputEpoch(terminalB)).toBe(1)
+  })
+
+  it('rejects transient layout edge snaps against the last stable scroll state', () => {
+    const terminal = createTerminal({ viewportY: 150, baseY: 154 })
+    rememberTerminalScrollState(terminal, {
+      bufferType: 'normal',
+      wasAtBottom: false,
+      viewportY: 150,
+      baseY: 154
+    })
+    ;(terminal.buffer.active as { baseY: number; viewportY: number }).viewportY = 0
+    ;(terminal.buffer.active as { baseY: number; viewportY: number }).baseY = 155
+
+    expect(captureScrollStateForLayout(terminal)).toMatchObject({
+      bufferType: 'normal',
+      wasAtBottom: false,
+      viewportY: 150,
+      baseY: 154
+    })
+
+    rememberTerminalScrollState(terminal, {
+      bufferType: 'normal',
+      wasAtBottom: false,
+      viewportY: 0,
+      baseY: 154
+    })
+    expect(captureScrollStateForLayout(terminal)).toMatchObject({
+      viewportY: 0,
+      baseY: 155
+    })
+  })
+
+  it('rejects transient layout edge snaps using leaf-stable state after remount', () => {
+    const terminal = createTerminal({ viewportY: 0, baseY: 155 })
+    rememberTerminalLeafScrollState('leaf-a', {
+      bufferType: 'normal',
+      wasAtBottom: false,
+      viewportY: 150,
+      baseY: 154
+    })
+
+    expect(
+      captureScrollStateForLayout(terminal, getRememberedTerminalLeafScrollState('leaf-a'))
+    ).toMatchObject({
+      viewportY: 150,
+      baseY: 154
+    })
   })
 
   it('restores the captured viewport line', () => {

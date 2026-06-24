@@ -13,7 +13,10 @@ const mocks = vi.hoisted(() => ({
   flushTerminalOutput: vi.fn(),
   getPendingScrollRestoreState: vi.fn((): unknown => null),
   getTerminalOutputEpoch: vi.fn(() => 1),
-  isTerminalScrollRestoreInProgress: vi.fn(() => false)
+  isTerminalScrollRestoreInProgress: vi.fn(() => false),
+  rememberTerminalContainerScrollState: vi.fn(),
+  rememberTerminalLeafScrollState: vi.fn(),
+  rememberTerminalScrollState: vi.fn()
 }))
 
 const reactRefState = vi.hoisted(() => ({
@@ -69,7 +72,10 @@ vi.mock('@/lib/pane-manager/pane-scroll', () => ({
   captureScrollState: mocks.captureScrollState,
   getPendingScrollRestoreState: mocks.getPendingScrollRestoreState,
   getTerminalOutputEpoch: mocks.getTerminalOutputEpoch,
-  isTerminalScrollRestoreInProgress: mocks.isTerminalScrollRestoreInProgress
+  isTerminalScrollRestoreInProgress: mocks.isTerminalScrollRestoreInProgress,
+  rememberTerminalContainerScrollState: mocks.rememberTerminalContainerScrollState,
+  rememberTerminalLeafScrollState: mocks.rememberTerminalLeafScrollState,
+  rememberTerminalScrollState: mocks.rememberTerminalScrollState
 }))
 
 describe('useTerminalScrollVisibilityMemory', () => {

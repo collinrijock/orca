@@ -1,7 +1,9 @@
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
+import type { ManagedPane, ScrollState } from '@/lib/pane-manager/pane-manager-types'
 
 type FitPanesOptions = {
   debugSource?: string
+  scrollStatesByLeafId?: Map<ManagedPane['leafId'], ScrollState>
   syncScrollbar?: boolean
   useMarkers?: boolean
 }

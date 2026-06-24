@@ -5,7 +5,8 @@ import type {
   ManagedPane,
   ManagedPaneInternal,
   PaneRenderingDiagnostics,
-  DropZone
+  DropZone,
+  ScrollState
 } from './pane-manager-types'
 import type { SplitPaneAroundLeafIdsOptions } from './pane-subtree-split'
 import {
@@ -163,6 +164,7 @@ export class PaneManager {
 
   fitAllPanes(options?: {
     debugSource?: string
+    scrollStatesByLeafId?: Map<ManagedPane['leafId'], ScrollState>
     syncScrollbar?: boolean
     useMarkers?: boolean
   }): void {

@@ -74,7 +74,7 @@ export function resumeTerminalVisibility({
         focusActivePane(manager)
       }
     } else {
-      resumeTerminalVisibilityHeavy(manager, isActive)
+      resumeTerminalVisibilityHeavy(manager, isActive, viewportPositions)
     }
     if (!shouldUseLightTabResume) {
       // Why: this clear wipes the glyph atlas shared with other same-config
@@ -136,7 +136,11 @@ function requestLightTabBacklogRecovery(manager: PaneManager): void {
   }
 }
 
-function resumeTerminalVisibilityHeavy(manager: PaneManager, isActive: boolean): void {
+function resumeTerminalVisibilityHeavy(
+  manager: PaneManager,
+  isActive: boolean,
+  viewportPositions: Map<ManagedPane['leafId'], ScrollState>
+): void {
   // Why: hidden panes can accumulate large PTY bursts while Chromium is
   // occluded. Drain a bounded slice before fitting; the scheduler keeps
   // ordering and continues the rest asynchronously so return-to-app does
@@ -156,12 +160,14 @@ function resumeTerminalVisibilityHeavy(manager: PaneManager, isActive: boolean):
   if (isActive) {
     fitAndFocusPanes(manager, {
       debugSource: 'visibility-resume-fit',
+      scrollStatesByLeafId: viewportPositions,
       syncScrollbar: false,
       useMarkers: false
     })
   } else {
     fitPanes(manager, {
       debugSource: 'visibility-resume-fit',
+      scrollStatesByLeafId: viewportPositions,
       syncScrollbar: false,
       useMarkers: false
     })

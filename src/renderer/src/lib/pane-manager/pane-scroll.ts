@@ -5,6 +5,14 @@ import {
   terminalScrollStateForDebug,
   terminalViewportForDebug
 } from './terminal-scroll-restore-debug'
+import {
+  getRememberedTerminalContainerScrollState,
+  getRememberedTerminalLeafScrollState,
+  rememberTerminalContainerScrollState,
+  rememberTerminalLeafScrollState,
+  rememberTerminalScrollState,
+  selectStableLayoutScrollState
+} from './pane-scroll-stability'
 
 const terminalOutputEpochs = new WeakMap<Terminal, number>()
 const terminalScrollRestoreDepths = new WeakMap<Terminal, number>()
@@ -75,6 +83,20 @@ export function captureScrollState(terminal: Terminal): ScrollState {
         ? terminal.registerMarker?.(viewportY - (buf.baseY + buf.cursorY))
         : undefined
   }
+}
+
+export function captureScrollStateForLayout(
+  terminal: Terminal,
+  fallbackStableState?: ScrollState
+): ScrollState {
+  const state = captureScrollState(terminal)
+  const stableState = selectStableLayoutScrollState(terminal, state, fallbackStableState)
+  if (stableState !== state) {
+    releaseScrollStateMarker(state)
+    return stableState
+  }
+  rememberTerminalScrollState(terminal, state)
+  return state
 }
 
 export function restoreScrollState(terminal: Terminal, state: ScrollState): void {
@@ -182,6 +204,11 @@ function restoreScrollStateNow(
   if (state.wasAtBottom) {
     const before = terminalViewportForDebug(terminal)
     if (safeScrollRestoreCall(terminal, () => terminal.scrollToBottom())) {
+      rememberTerminalScrollState(terminal, {
+        ...state,
+        baseY: terminal.buffer.active.baseY,
+        viewportY: terminal.buffer.active.viewportY
+      })
       if (options.syncScrollbar) {
         forceViewportScrollbarSync(terminal)
       }
@@ -212,6 +239,12 @@ function restoreScrollStateNow(
   // restoreScrollStateAfterLayout, cancelDeferredScrollRestore) own disposal.
   const before = terminalViewportForDebug(terminal)
   if (safeScrollRestoreCall(terminal, () => terminal.scrollToLine(targetLine))) {
+    rememberTerminalScrollState(terminal, {
+      ...state,
+      baseY: terminal.buffer.active.baseY,
+      viewportY: terminal.buffer.active.viewportY,
+      wasAtBottom: terminal.buffer.active.viewportY >= terminal.buffer.active.baseY
+    })
     if (options.syncScrollbar) {
       forceViewportScrollbarSync(terminal)
     }
@@ -261,6 +294,14 @@ function safeScrollRestoreCall(terminal: Terminal, fn: () => void): boolean {
       }
     }, 0)
   }
+}
+
+export {
+  getRememberedTerminalContainerScrollState,
+  getRememberedTerminalLeafScrollState,
+  rememberTerminalContainerScrollState,
+  rememberTerminalLeafScrollState,
+  rememberTerminalScrollState
 }
 
 export function releaseScrollStateMarker(state: ScrollState): void {
