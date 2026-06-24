@@ -352,12 +352,43 @@
 .pane-title-bar[data-chromeless] {
   background: transparent;
   border-bottom: none;
-  padding: 0 4px;
+  padding: 0 2px;
   pointer-events: none;
 }
 
 .pane-title-bar[data-chromeless] .pane-title-actions {
   pointer-events: auto;
+}
+
+.pane-title-bar[data-chromeless] .pane-title-split-trigger,
+.pane-title-bar[data-chromeless] .pane-title-close {
+  position: relative;
+  width: 18px;
+  min-width: 18px;
+  height: var(--orca-pane-title-height);
+  padding: 0;
+}
+
+.pane-title-bar[data-chromeless] .pane-title-close {
+  margin-left: -1px;
+}
+
+.pane-title-bar[data-chromeless] .pane-title-split-trigger::before,
+.pane-title-bar[data-chromeless] .pane-title-close::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 23px;
+  height: 23px;
+  background: radial-gradient(
+    circle,
+    var(--orca-pane-title-bg, var(--background)) 0 44%,
+    color-mix(in srgb, var(--orca-pane-title-bg, var(--background)) 74%, transparent) 62%,
+    transparent 100%
+  );
+  border-radius: 9999px;
+  transform: translate(-50%, -50%);
 }
 
 .pane-title-close {
@@ -384,8 +415,9 @@
 
 .pane-title-bar[data-chromeless] .pane-title-split-trigger svg,
 .pane-title-bar[data-chromeless] .pane-title-close svg {
-  /* Why: chromeless controls overlap row-one terminal text, so the glyphs
-     need enough opaque stroke weight without adding a blocking button fill. */
+  /* Why: chromeless controls overlap row-one terminal text; the rounded backing
+     clears text inside open glyphs without adding one shared toolbar fill. */
+  position: relative;
   stroke-width: 2.75px;
 }
 
