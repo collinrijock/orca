@@ -96,6 +96,9 @@ const COMMENT_AVATAR =
 const RESOLVED_SECTION_LABEL =
   'text-[11px] font-semibold uppercase tracking-wider text-muted-foreground'
 
+const CARD_COMMENT_BODY_SIZE = 'text-[13px] leading-relaxed'
+const CARD_COMMENT_AUTHOR_SIZE = 'text-[13px]'
+
 const RESOLVED_SECTION_TRIGGER = cn(
   RESOLVED_SECTION_LABEL,
   'rounded-none border-0 bg-transparent px-3 py-2 shadow-none hover:bg-accent/40 hover:text-foreground hover:no-underline'
@@ -173,8 +176,6 @@ export function getPRCommentPresentationClasses(
   }
 
   const isFocus = variant === 'focus'
-  const bodySize = isFocus ? 'text-[14px] leading-relaxed' : 'text-[13px] leading-relaxed'
-  const authorSize = isFocus ? 'text-[14px]' : 'text-[13px]'
   const listGap = isFocus ? 'gap-3' : 'gap-2'
   const bodyPadding = isFocus ? 'px-4 py-3' : 'px-4 py-2.5'
   const headerPadding = isFocus ? 'px-3.5 py-2.5' : 'px-3 py-2'
@@ -191,10 +192,10 @@ export function getPRCommentPresentationClasses(
     commentRowReply: `border-t ${COMMENT_CARD_DIVIDER} bg-muted/25 dark:bg-muted/10`,
     commentHeader: `flex flex-col gap-1 border-b ${COMMENT_CARD_DIVIDER} ${headerPadding}`,
     commentHeaderReply: `flex min-w-0 items-center gap-2 ${headerPadding}`,
-    commentBody: `${bodyPadding} ${bodySize} text-foreground`,
-    commentBodyReply: `${bodyPadding} ${bodySize} text-foreground`,
+    commentBody: `${bodyPadding} ${CARD_COMMENT_BODY_SIZE} text-foreground`,
+    commentBodyReply: `${bodyPadding} ${CARD_COMMENT_BODY_SIZE} text-foreground`,
     commentBodyMarkdown: MARKDOWN_BASE,
-    author: `min-w-0 flex-1 truncate ${authorSize} font-semibold text-foreground`,
+    author: `min-w-0 flex-1 truncate ${CARD_COMMENT_AUTHOR_SIZE} font-semibold text-foreground`,
     authorResolved: 'text-muted-foreground',
     avatar: `size-5 ${COMMENT_AVATAR}`,
     avatarReply: `size-4 ${COMMENT_AVATAR}`,

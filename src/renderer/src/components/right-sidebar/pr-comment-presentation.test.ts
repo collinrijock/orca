@@ -22,8 +22,12 @@ describe('pr-comment-presentation', () => {
     expect(cards.avatar).toContain('border-border')
     expect(cards.avatar).toContain('bg-background')
 
-    expect(getPRCommentPresentationClasses('focus').useCardLayout).toBe(true)
-    expect(getPRCommentPresentationClasses('focus').commentBody).toContain('text-[14px]')
+    const focus = getPRCommentPresentationClasses('focus')
+    expect(focus.useCardLayout).toBe(true)
+    expect(focus.commentBody).toContain('text-[13px]')
+    expect(focus.commentBodyReply).toContain('text-[13px]')
+    expect(focus.author).toContain('text-[13px]')
+    expect(focus.list).toContain('gap-3')
   })
 
   it('preserves the legacy flat layout tokens', () => {
