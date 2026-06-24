@@ -76,6 +76,7 @@ import {
   type AgentInterruptInputIntent
 } from '../../../../shared/agent-interrupt-intent'
 import { createAgentCompletionCoordinator } from './agent-completion-coordinator'
+import { createCodexAutoApprovalHookCompletionSuppressor } from './codex-auto-approval-notification-suppression'
 import type { AgentCompletionStatusSnapshot } from './agent-completion-coordinator-types'
 import {
   markTerminalBracketedPasteInterrupted,
@@ -1282,7 +1283,8 @@ export function connectPanePty(
         return true
       }
       return (useAppStore.getState().ptyIdsByTabId[deps.tabId] ?? []).length > 0
-    }
+    },
+    shouldSuppressHookCompletion: createCodexAutoApprovalHookCompletionSuppressor(cacheKey)
   })
 
   const onExit = (ptyId: string): void => {

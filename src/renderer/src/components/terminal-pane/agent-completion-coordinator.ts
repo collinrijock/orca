@@ -610,6 +610,9 @@ export function createAgentCompletionCoordinator(
   }
 
   function observeHookStatus(payload: AgentCompletionStatusSnapshot): void {
+    if (options.shouldSuppressHookCompletion?.(payload)) {
+      return
+    }
     if (isRecognizedAgentType(payload.agentType)) {
       establishAgentEvidence()
     }

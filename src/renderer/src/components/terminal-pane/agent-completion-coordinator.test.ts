@@ -1113,4 +1113,58 @@ describe('agent completion coordinator', () => {
 
     expect(dispatchCompletion).toHaveBeenCalledWith('experimental-agent-observability')
   })
+
+  it('does not mutate completion state when hook completion is suppressed', () => {
+    const dispatchCompletion = vi.fn()
+    const shouldSuppressHookCompletion = vi.fn(
+      (payload: { state: string }) => payload.state === 'waiting' || payload.state === 'blocked'
+    )
+    const coordinator = createAgentCompletionCoordinator({
+      paneKey: 'tab-1:leaf-1',
+      getPtyId: () => 'pty-1',
+      getSettings: () => null,
+      inspectProcess: vi.fn(),
+      dispatchCompletion,
+      isLive: () => true,
+      shouldSuppressHookCompletion
+    })
+
+    coordinator.observeHookStatus({
+      state: 'working',
+      prompt: 'implement notifications',
+      agentType: 'codex'
+    })
+    coordinator.observeHookStatus({
+      state: 'waiting',
+      prompt: 'implement notifications',
+      agentType: 'codex',
+      toolName: 'exec_command',
+      toolInput: 'git status'
+    })
+
+    expect(dispatchCompletion).not.toHaveBeenCalled()
+    expect(shouldSuppressHookCompletion).toHaveBeenCalled()
+
+    coordinator.observeHookStatus({
+      state: 'done',
+      prompt: 'implement notifications',
+      agentType: 'codex',
+      stateStartedAt: 1_700_000_010_000,
+      lastAssistantMessage: 'Done.'
+    })
+    vi.advanceTimersByTime(HOOK_DONE_QUIET_MS)
+
+    expect(dispatchCompletion).toHaveBeenCalledTimes(1)
+    expect(dispatchCompletion).toHaveBeenCalledWith(
+      'codex',
+      expect.objectContaining({
+        source: 'hook',
+        quietedHookDone: true,
+        agentStatus: expect.objectContaining({
+          state: 'done',
+          agentType: 'codex'
+        })
+      })
+    )
+  })
 })
