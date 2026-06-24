@@ -531,7 +531,8 @@ describe('useTerminalPaneGlobalEffects', () => {
     expect(manager.resumeRendering).toHaveBeenCalledTimes(1)
     expect(mocks.fitAndFocusPanes).toHaveBeenCalledWith(manager, {
       debugSource: 'visibility-resume-fit',
-      syncScrollbar: false
+      syncScrollbar: false,
+      useMarkers: false
     })
     expect(manager.resetWebglTextureAtlases).toHaveBeenCalledTimes(1)
   })
@@ -623,7 +624,8 @@ describe('useTerminalPaneGlobalEffects', () => {
     expect(manager.suspendRendering).toHaveBeenCalledTimes(1)
     expect(mocks.restoreScrollStateAfterLayout).toHaveBeenLastCalledWith(terminalA, preHideState, {
       debugSource: 'visibility-restore',
-      syncScrollbar: false
+      syncScrollbar: false,
+      useMarkers: false
     })
   })
 

@@ -156,12 +156,14 @@ function resumeTerminalVisibilityHeavy(manager: PaneManager, isActive: boolean):
   if (isActive) {
     fitAndFocusPanes(manager, {
       debugSource: 'visibility-resume-fit',
-      syncScrollbar: false
+      syncScrollbar: false,
+      useMarkers: false
     })
   } else {
     fitPanes(manager, {
       debugSource: 'visibility-resume-fit',
-      syncScrollbar: false
+      syncScrollbar: false,
+      useMarkers: false
     })
   }
 }
@@ -182,7 +184,8 @@ function restoreTerminalViewportPositions(
       })
       restoreScrollStateAfterLayout(pane.terminal, position, {
         debugSource: 'visibility-restore',
-        syncScrollbar: false
+        syncScrollbar: false,
+        useMarkers: false
       })
     }
   }

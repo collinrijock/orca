@@ -210,6 +210,23 @@ describe('scroll state', () => {
     expect(marker.dispose).toHaveBeenCalledTimes(1)
   })
 
+  it('can disable marker restore for visibility resume', () => {
+    const terminal = createTerminal({ viewportY: 10, baseY: 300 })
+    const marker = createMarker(71)
+    const state: ScrollState = {
+      bufferType: 'normal',
+      wasAtBottom: false,
+      viewportY: 150,
+      baseY: 154,
+      firstVisibleLineMarker: marker
+    }
+
+    restoreScrollStateAfterLayout(terminal, state, { useMarkers: false })
+
+    expect(terminal.scrollToLine).toHaveBeenCalledWith(150)
+    expect(terminal.buffer.active.viewportY).toBe(150)
+  })
+
   it('reapplies a layout restore after xterm settles asynchronously', () => {
     vi.useFakeTimers()
     const rafCallbacks: FrameRequestCallback[] = []

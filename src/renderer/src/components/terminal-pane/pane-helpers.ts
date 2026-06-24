@@ -3,6 +3,7 @@ import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 type FitPanesOptions = {
   debugSource?: string
   syncScrollbar?: boolean
+  useMarkers?: boolean
 }
 
 export function fitPanes(manager: PaneManager, options?: FitPanesOptions): void {

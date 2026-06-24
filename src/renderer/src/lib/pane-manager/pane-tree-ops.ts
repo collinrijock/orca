@@ -30,6 +30,7 @@ type TreeOpsCallbacks = {
 type SafeFitOptions = {
   debugSource?: string
   syncScrollbar?: boolean
+  useMarkers?: boolean
 }
 
 const MIN_PANE_FIT_WIDTH_PX = 48
@@ -110,7 +111,8 @@ export function safeFit(pane: ManagedPane, options: SafeFitOptions = {}): void {
       try {
         restoreScrollStateAfterLayout(pane.terminal, scrollState, {
           debugSource: options.debugSource ?? 'safeFit',
-          syncScrollbar: options.syncScrollbar
+          syncScrollbar: options.syncScrollbar,
+          useMarkers: options.useMarkers
         })
       } catch {
         // Why: xterm can temporarily expose a terminal whose renderer has not
