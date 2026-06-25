@@ -5,6 +5,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { DashboardAgentRow as DashboardAgentRowData } from '@/components/dashboard/useDashboardData'
+import type * as ActivateTabAndFocusPaneModule from '@/lib/activate-tab-and-focus-pane'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 
 const LEAF_A = '11111111-1111-4111-8111-111111111111'
@@ -51,8 +52,12 @@ let mockAgentActivityDisplayMode: 'compact' | 'full' | undefined
 let mockTabsByWorktree: Record<string, { id: string }[]> = {}
 let mockAgentStatusByPaneKey: Record<string, { worktreeId?: string }> = {}
 let mockActiveTabId: string | null = null
+let mockActiveTabType: string = 'editor'
 const mockSetActiveTab = vi.fn((tabId: string) => {
   mockActiveTabId = tabId
+})
+const mockSetActiveTabType = vi.fn((tabType: string) => {
+  mockActiveTabType = tabType
 })
 let capturedRowActivations: {
   paneKey: string
@@ -71,7 +76,9 @@ function buildMockStoreState(): Record<string, unknown> {
     agentStatusByPaneKey: mockAgentStatusByPaneKey,
     agentStatusEpoch: 0,
     activeTabId: mockActiveTabId,
+    activeTabType: mockActiveTabType,
     setActiveTab: mockSetActiveTab,
+    setActiveTabType: mockSetActiveTabType,
     tabsByWorktree: mockTabsByWorktree,
     terminalLayoutsByTabId: {},
     ptyIdsByTabId: {},
@@ -143,11 +150,13 @@ describe('WorktreeCardAgents activation', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     activationMocks.activateAndRevealWorktree.mockImplementation(() => undefined)
+    activationMocks.activateTabAndFocusPane.mockImplementation(() => undefined)
     mockAgents = []
     mockAgentActivityDisplayMode = undefined
     mockTabsByWorktree = {}
     mockAgentStatusByPaneKey = {}
     mockActiveTabId = null
+    mockActiveTabType = 'editor'
     capturedRowActivations = []
   })
 
@@ -183,6 +192,46 @@ describe('WorktreeCardAgents activation', () => {
       scrollToBottomIfOutputSinceLastView: true
     })
     expect(staleAgentRowMocks.dismissStaleAgentRowByKey).not.toHaveBeenCalled()
+  })
+
+  it('reveals the terminal surface through the helper path when activating a hydrated row', async () => {
+    mockAgentActivityDisplayMode = 'full'
+    const tabId = 'visible-worker-tab'
+    const paneKey = makePaneKey(tabId, LEAF_A)
+    mockAgents = [
+      mockAgent({
+        paneKey,
+        tabId,
+        agentType: 'codex',
+        prompt: 'Show full log',
+        worktreeId: 'wt-1'
+      })
+    ]
+    mockTabsByWorktree = { 'wt-1': [{ id: tabId }] }
+    mockAgentStatusByPaneKey = { [paneKey]: { worktreeId: 'wt-1' } }
+    const actualActivation = await vi.importActual<typeof ActivateTabAndFocusPaneModule>(
+      '@/lib/activate-tab-and-focus-pane'
+    )
+    // Why: keep the component import mocked for call assertions, but delegate
+    // this repro to the real helper so it fails if the terminal-surface fix
+    // regresses.
+    activationMocks.activateTabAndFocusPane.mockImplementation(
+      actualActivation.activateTabAndFocusPane
+    )
+    const { default: WorktreeCardAgents } = await import('./WorktreeCardAgents')
+
+    renderToStaticMarkup(<WorktreeCardAgents worktreeId="wt-1" />)
+    expect(capturedRowActivations).toHaveLength(1)
+    capturedRowActivations[0].onActivate(tabId, paneKey)
+
+    expect(activationMocks.activateAndRevealWorktree).toHaveBeenCalledWith('wt-1')
+    expect(activationMocks.activateTabAndFocusPane).toHaveBeenCalledWith(tabId, LEAF_A, {
+      ackPaneKeyOnSuccess: paneKey,
+      flashFocusedPane: true,
+      scrollToBottomIfOutputSinceLastView: true
+    })
+    expect(mockActiveTabType).toBe('terminal')
+    expect(mockActiveTabId).toBe(tabId)
   })
 
   it('keeps a live worktree-attributed row visible while its tab is hydrating', async () => {
