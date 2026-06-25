@@ -71,7 +71,6 @@ import {
   resolveQuickCreateLinkedWorkItemPrompt
 } from '@/lib/linked-work-item-context'
 import { getLocalRepoProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
-import { isOrcaCliAvailableForLaunch } from '@/lib/orca-cli-launch-availability'
 import {
   buildLinearIssueLinkedWorkItem,
   isLinearLinkedWorkItem
@@ -1167,14 +1166,16 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       }),
     [agentPrompt, fallbackCreatureName, linkedPR, name, parsedLinkedIssueNumber]
   )
-  // Why: when the user links an issue/PR but has not typed any prompt text
-  // (attachments don't count), swap the generic "Linked work items:" context
-  // block for the repo's issueCommand template — or the built-in
-  // "Complete {{artifact_url}}" default when none is configured. This makes
-  // the common "paste a link and hit enter" flow produce a useful agent task
-  // instead of a bare URL bullet.
+  // Why: Linear blank launches are context-only unless a repo explicitly
+  // configures issueCommand; avoid turning third-party ticket text into a task.
+  const canApplyDefaultLinkedOnlyTemplate =
+    !isLinearLinkedWorkItem(linkedWorkItem) || issueCommandTemplate.trim().length > 0
   const shouldApplyLinkedOnlyTemplate =
-    enableIssueAutomation && !agentPrompt.trim() && Boolean(linkedWorkItem) && hasLoadedIssueCommand
+    enableIssueAutomation &&
+    !agentPrompt.trim() &&
+    Boolean(linkedWorkItem) &&
+    hasLoadedIssueCommand &&
+    canApplyDefaultLinkedOnlyTemplate
   const linkedOnlyTemplatePrompt = useMemo(() => {
     if (!shouldApplyLinkedOnlyTemplate || !linkedWorkItem) {
       return ''
@@ -2951,7 +2952,8 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         enableIssueAutomation &&
         !agentPrompt.trim() &&
         Boolean(submitLinkedWorkItem) &&
-        hasLoadedIssueCommand
+        hasLoadedIssueCommand &&
+        (!isLinearLinkedWorkItem(submitLinkedWorkItem) || issueCommandTemplate.trim().length > 0)
       const submitLinkedOnlyTemplatePrompt =
         submitShouldApplyLinkedOnlyTemplate && submitLinkedWorkItem
           ? renderIssueCommandTemplate(
@@ -2963,15 +2965,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
               }
             )
           : ''
-      // Why: the hint must never point agents at a command that cannot run;
-      // SSH worktrees always have the relay shim, local launches need the
-      // installed CLI on PATH.
-      const linearCliAvailable = submitLinkedWorkItem?.linearIdentifier
-        ? await isOrcaCliAvailableForLaunch({ remote: isRemote })
-        : false
-      const linkedPromptContext = getLinkedWorkItemPromptContext(submitLinkedWorkItem, {
-        cliAvailable: linearCliAvailable
-      })
+      const linkedPromptContext = getLinkedWorkItemPromptContext(submitLinkedWorkItem)
       const submitStartupPrompt = submitShouldApplyLinkedOnlyTemplate
         ? buildAgentPromptWithContext(
             submitLinkedOnlyTemplatePrompt,
@@ -3041,14 +3035,24 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         Boolean(tuiAgent) &&
         !effectiveBranchNameOverride &&
         !createDisplayName
-      const startupPlan = buildAgentStartupPlan({
+      const submitAgentArgs = resolveTuiAgentLaunchArgs(tuiAgent, settings?.agentDefaultArgs)
+      const submitAgentEnv = resolveTuiAgentLaunchEnv(tuiAgent, settings?.agentDefaultEnv)
+      // Why: linked source blocks should stay reviewable as drafts; do not send
+      // third-party Linear text as an already-submitted startup prompt.
+      const submitUsesDraftDelivery = linkedPromptContext.linkedContextBlocks.length > 0
+      let startupPlan: ReturnType<typeof buildAgentStartupPlan> = null
+      startupPlan = buildAgentStartupPlan({
         agent: tuiAgent,
-        prompt: submitStartupPrompt,
+        prompt: submitUsesDraftDelivery ? '' : submitStartupPrompt,
         cmdOverrides: settings?.agentCmdOverrides ?? {},
-        agentArgs: resolveTuiAgentLaunchArgs(tuiAgent, settings?.agentDefaultArgs),
-        agentEnv: resolveTuiAgentLaunchEnv(tuiAgent, settings?.agentDefaultEnv),
-        platform: selectedRepoAgentLaunchPlatform
+        agentArgs: submitAgentArgs,
+        agentEnv: submitAgentEnv,
+        platform: selectedRepoAgentLaunchPlatform,
+        allowEmptyPromptLaunch: submitUsesDraftDelivery
       })
+      if (startupPlan && submitUsesDraftDelivery) {
+        startupPlan.draftPrompt = submitStartupPrompt
+      }
 
       // Why: backend startup is safe only when the launch command is
       // self-contained. Agents that need post-ready paste/follow-up stay on
@@ -3141,7 +3145,9 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
                 ...(startupPlan.startupCommandDelivery
                   ? { startupCommandDelivery: startupPlan.startupCommandDelivery }
                   : {}),
-                ...(tuiAgent === 'command-code' && submitStartupPrompt.trim().length > 0
+                ...(tuiAgent === 'command-code' &&
+                !submitUsesDraftDelivery &&
+                submitStartupPrompt.trim().length > 0
                   ? {
                       initialAgentStatus: {
                         agent: tuiAgent,
@@ -3188,7 +3194,6 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     issueCommandTemplate,
     effectiveLinkedPR,
     hasLoadedIssueCommand,
-    isRemote,
     linkedGitLabIssue,
     linkedGitLabMR,
     linkedWorkItem,
@@ -3395,15 +3400,11 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         // self-contained. Agents that need post-ready paste/follow-up stay on
         // the renderer path so prompt delivery is not skipped.
         const promptLinkedWorkItem = agent === null ? null : submitLinkedWorkItem
-        const quickLinearCliAvailable = promptLinkedWorkItem?.linearIdentifier
-          ? await isOrcaCliAvailableForLaunch({ remote: isRemote })
-          : false
         const { prompt: quickPrompt, draftPrompt: quickDraftPrompt } =
-          resolveQuickCreateLinkedWorkItemPrompt(promptLinkedWorkItem, trimmedNote, {
-            cliAvailable: quickLinearCliAvailable
-          })
+          resolveQuickCreateLinkedWorkItemPrompt(promptLinkedWorkItem, trimmedNote)
+        const quickUsesLinearSourceDraft = Boolean(promptLinkedWorkItem?.linearIdentifier)
         const draftLaunchPlan =
-          agent === null || !quickDraftPrompt
+          agent === null || !quickDraftPrompt || quickUsesLinearSourceDraft
             ? null
             : buildAgentDraftLaunchPlan({
                 agent,
@@ -3552,7 +3553,6 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       clearNewWorkspaceDraft,
       fallbackCreatureName,
       effectiveLinkedPR,
-      isRemote,
       linkedGitLabIssue,
       linkedGitLabMR,
       linkedPR,

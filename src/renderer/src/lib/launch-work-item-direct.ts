@@ -158,6 +158,7 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
   let effectiveAgent: TuiAgent | null = null
   let draftLaunchedNatively = false
   const draftContent = await getDirectWorkItemDraftContent(item, repoConnectionId)
+  const usesGeneratedLinearContext = Boolean(item.linearIdentifier && !item.pasteContent?.trim())
   let startupPlanFailed = false
   try {
     const result = await store.createWorktree(
@@ -268,9 +269,7 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
       }
     }
 
-    // Why: draft launches prefer a native prefill flag when the CLI exposes one;
-    // submit-after-ready launches must avoid native drafts so Orca can send the
-    // generated prompt as the first turn after the TUI is ready.
+    // Why: keep Linear source text out of native prefill argv/env and auto-submit.
     const effectiveAgentArgs =
       effectiveAgent && agentArgs === undefined
         ? resolveTuiAgentLaunchArgs(effectiveAgent, settings?.agentDefaultArgs)
@@ -279,7 +278,9 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
       ? resolveTuiAgentLaunchEnv(effectiveAgent, settings?.agentDefaultEnv)
       : null
     const draftLaunchPlan =
-      promptDelivery === 'submit-after-ready' || effectiveAgent === null
+      promptDelivery === 'submit-after-ready' ||
+      usesGeneratedLinearContext ||
+      effectiveAgent === null
         ? null
         : buildAgentDraftLaunchPlan({
             agent: effectiveAgent,
@@ -358,8 +359,8 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
     primaryTabId,
     startupPlan,
     content: draftContent,
-    submit: promptDelivery === 'submit-after-ready',
-    forcePaste: promptDelivery === 'submit-after-ready'
+    submit: promptDelivery === 'submit-after-ready' && !usesGeneratedLinearContext,
+    forcePaste: promptDelivery === 'submit-after-ready' && !usesGeneratedLinearContext
   })
   return true
 }

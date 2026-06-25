@@ -395,8 +395,30 @@ describe('useComposerState host-context boundaries', () => {
       'const promptLinkedWorkItem = agent === null ? null : submitLinkedWorkItem'
     )
     expect(quickSubmit).toContain('resolveQuickCreateLinkedWorkItemPrompt(promptLinkedWorkItem')
+    expect(quickSubmit).toContain(
+      'const quickUsesLinearSourceDraft = Boolean(promptLinkedWorkItem?.linearIdentifier)'
+    )
+    expect(quickSubmit).toContain(
+      'agent === null || !quickDraftPrompt || quickUsesLinearSourceDraft'
+    )
     expect(quickSubmit).not.toContain('explicitAgentChoice')
     expect(quickSubmit).not.toContain('shouldPrepareQuickLinkedWorkItemAgentPrompt')
     expect(HOOK_SOURCE).not.toContain('resolveQuickWorkspaceSubmitAgent')
+  })
+
+  it('keeps regular linked-context submit text on draft delivery', () => {
+    const fullSubmit = sourceBetween(
+      HOOK_SOURCE,
+      'const submit = useCallback',
+      'const submitQuick = useCallback'
+    )
+
+    expect(fullSubmit).toContain(
+      'const submitUsesDraftDelivery = linkedPromptContext.linkedContextBlocks.length > 0'
+    )
+    expect(fullSubmit).not.toContain('draft: submitStartupPrompt')
+    expect(fullSubmit).toContain('allowEmptyPromptLaunch: submitUsesDraftDelivery')
+    expect(fullSubmit).toContain('startupPlan.draftPrompt = submitStartupPrompt')
+    expect(fullSubmit).toContain('!submitUsesDraftDelivery &&')
   })
 })

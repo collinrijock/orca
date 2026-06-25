@@ -275,6 +275,75 @@ describe('submitFolderWorkspaceCreate', () => {
     })
   })
 
+  it('pastes Linear source context as a draft without persisting it on linked metadata', async () => {
+    const createFolderWorkspace = vi.fn(async () => makeFolderWorkspace())
+    const linkedWorkItem = {
+      provider: 'linear' as const,
+      type: 'issue' as const,
+      number: 0,
+      title: 'Fix launch context handoff',
+      url: 'https://linear.app/acme/issue/ENG-123/fix-launch-context-handoff',
+      linearIdentifier: 'ENG-123',
+      linkedContext: {
+        provider: 'linear' as const,
+        version: 1 as const,
+        renderedText: [
+          'Linear issue context snapshot',
+          'Identifier: ENG-123',
+          'Title: Fix launch context handoff',
+          'Description:',
+          'Actual Linear issue body with a distinctive folder launch detail.'
+        ].join('\n')
+      }
+    }
+
+    await submitFolderWorkspaceCreate({
+      projectGroup: makeProjectGroup(),
+      name: '',
+      lastAutoName: '',
+      linkedWorkItem,
+      note: '',
+      quickAgent: 'codex',
+      autoRenameBranchFromWork: false,
+      agentCmdOverrides: {},
+      createFolderWorkspace,
+      onOpenChange: vi.fn()
+    })
+
+    expect(createFolderWorkspace).toHaveBeenCalledWith({
+      projectGroupId: 'group-1',
+      name: 'ENG-123 Fix launch context handoff',
+      connectionId: null,
+      linkedTask: {
+        provider: 'linear',
+        type: 'issue',
+        number: 0,
+        title: 'Fix launch context handoff',
+        url: 'https://linear.app/acme/issue/ENG-123/fix-launch-context-handoff',
+        linearIdentifier: 'ENG-123'
+      },
+      createdWithAgent: 'codex'
+    })
+    expect(mocks.ensureAgentStartupInTerminal).toHaveBeenCalledWith({
+      worktreeId: folderWorkspaceKey('folder-workspace-1'),
+      primaryTabId: 'tab-1',
+      startup: expect.objectContaining({
+        agent: 'codex',
+        launchCommand: 'codex',
+        followupPrompt: null,
+        draftPrompt: expect.stringContaining(
+          'Actual Linear issue body with a distinctive folder launch detail.'
+        )
+      })
+    })
+    const draftPrompt = mocks.ensureAgentStartupInTerminal.mock.calls[0]?.[0]?.startup?.draftPrompt
+    expect(draftPrompt).toContain('--- BEGIN LINKED WORK ITEM CONTEXT ---')
+    expect(draftPrompt).not.toContain('orca linear')
+    expect(draftPrompt).not.toContain('Orca Settings')
+    expect(draftPrompt).not.toContain('PATH')
+    expect(draftPrompt).not.toContain('fetch the full ticket')
+  })
+
   it('pre-marks remote linked Codex folder workspaces trusted before draft paste', async () => {
     const createFolderWorkspace = vi.fn(async () =>
       makeFolderWorkspace({

@@ -22,7 +22,7 @@ function makeIssue(patch: Partial<LinearIssue> = {}): LinearIssue {
 }
 
 describe('buildLinearIssueLinkedWorkItem', () => {
-  it('preserves Linear metadata without attaching ticket content', () => {
+  it('preserves Linear metadata and attaches prompt-time ticket context', () => {
     const item = buildLinearIssueLinkedWorkItem(makeIssue())
 
     expect(item).toMatchObject({
@@ -34,9 +34,12 @@ describe('buildLinearIssueLinkedWorkItem', () => {
       linearIdentifier: 'ENG-123',
       linearOrganizationUrlKey: 'acme'
     })
-    // Why: ticket prose must never ride on the work item into launch prompts;
-    // agents fetch it through the `orca linear` CLI instead.
-    expect(Object.keys(item)).not.toContain('linkedContext')
+    expect(item.linkedContext).toMatchObject({
+      provider: 'linear',
+      version: 1
+    })
+    expect(item.linkedContext?.renderedText).toContain('Title: Fix launch context handoff')
+    expect(item.linkedContext?.renderedText).toContain('Pass Linear issue details into the agent.')
   })
 
   it('carries the Linear workspace id when the issue has one', () => {
