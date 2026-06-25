@@ -305,16 +305,19 @@ describe('WorktreeCardAgents activation', () => {
       })
     ]
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
-    const { default: WorktreeCardAgents } = await import('./WorktreeCardAgents')
+    try {
+      const { default: WorktreeCardAgents } = await import('./WorktreeCardAgents')
 
-    renderToStaticMarkup(<WorktreeCardAgents worktreeId="wt-1" />)
-    expect(capturedRowActivations).toHaveLength(1)
-    capturedRowActivations[0].onActivate('worker-tab', paneKey)
+      renderToStaticMarkup(<WorktreeCardAgents worktreeId="wt-1" />)
+      expect(capturedRowActivations).toHaveLength(1)
+      capturedRowActivations[0].onActivate('worker-tab', paneKey)
 
-    expect(activationMocks.activateAndRevealWorktree).not.toHaveBeenCalled()
-    expect(activationMocks.activateTabAndFocusPane).not.toHaveBeenCalled()
-    expect(staleAgentRowMocks.dismissStaleAgentRowByKey).toHaveBeenCalledWith(paneKey)
-    warnSpy.mockRestore()
+      expect(activationMocks.activateAndRevealWorktree).not.toHaveBeenCalled()
+      expect(activationMocks.activateTabAndFocusPane).not.toHaveBeenCalled()
+      expect(staleAgentRowMocks.dismissStaleAgentRowByKey).toHaveBeenCalledWith(paneKey)
+    } finally {
+      warnSpy.mockRestore()
+    }
   })
 
   it('dismisses a pane key whose parsed tab does not match the row tab', async () => {
