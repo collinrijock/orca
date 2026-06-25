@@ -66,6 +66,8 @@ export class SshGitProvider implements IGitProvider {
   private nonInteractiveExecQueues = new Map<string, NonInteractiveExecQueueEntry[]>()
 
   private async runWithDiffDedupeClear<T>(run: () => Promise<T>): Promise<T> {
+    // Why: git mutations can stale both existing and concurrently-started diff reads.
+    // Clear before and after so later reads never join pre-mutation work.
     this.gitDiffReadDedupe.clear()
     try {
       return await run()
