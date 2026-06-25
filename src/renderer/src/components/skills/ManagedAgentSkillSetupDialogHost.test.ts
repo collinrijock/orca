@@ -1,5 +1,12 @@
+// @vitest-environment happy-dom
+
+import React from 'react'
+import { act } from 'react'
+import { createRoot, type Root } from 'react-dom/client'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { getDefaultSettings } from '../../../../shared/constants'
 import type { ManagedAgentSkillFallback } from '../../../../shared/skills'
+import type { GlobalSettings } from '../../../../shared/types'
 import {
   getManagedSkillFallbackDisplayMessage,
   getManagedSkillContextCopy,
@@ -12,9 +19,35 @@ import {
   prepareManagedAgentSkillSetupTerminal,
   replaceActiveAfterManagedAgentSkillRecheck
 } from './managed-agent-skill-dialog-state'
+import { ManagedAgentSkillSetupDialogHost } from './ManagedAgentSkillSetupDialogHost'
 
 const cliPrerequisiteMocks = vi.hoisted(() => ({
   ensureOrcaCliAvailableForAgentSkillTerminal: vi.fn()
+}))
+
+const hookMocks = vi.hoisted(() => ({
+  notifyInstalledAgentSkillsChanged: vi.fn(),
+  useInstalledAgentSkill: vi.fn(() => ({
+    installed: false,
+    loading: false,
+    error: null
+  }))
+}))
+
+const storeMocks = vi.hoisted(() => ({
+  state: {
+    settings: null as ReturnType<typeof getDefaultSettings> | null,
+    updateSettings: vi.fn<(updates: Partial<GlobalSettings>) => Promise<void>>(async () => {
+      return undefined
+    }),
+    openSettingsPage: vi.fn(),
+    openSettingsTarget: vi.fn()
+  }
+}))
+
+const toastMocks = vi.hoisted(() => ({
+  error: vi.fn(),
+  message: vi.fn()
 }))
 
 vi.mock('@/lib/agent-skill-cli-prerequisite', () => ({
@@ -22,6 +55,26 @@ vi.mock('@/lib/agent-skill-cli-prerequisite', () => ({
   ensureOrcaCliAvailableForAgentSkillTerminal:
     cliPrerequisiteMocks.ensureOrcaCliAvailableForAgentSkillTerminal,
   isOrcaCliAvailableOnPath: vi.fn()
+}))
+
+vi.mock('@/hooks/useInstalledAgentSkills', () => ({
+  notifyInstalledAgentSkillsChanged: hookMocks.notifyInstalledAgentSkillsChanged,
+  useInstalledAgentSkill: hookMocks.useInstalledAgentSkill
+}))
+
+vi.mock('@/store', () => {
+  const useAppStore = Object.assign(
+    (selector: (state: typeof storeMocks.state) => unknown) => selector(storeMocks.state),
+    { getState: () => storeMocks.state }
+  )
+  return { useAppStore }
+})
+
+vi.mock('sonner', () => ({
+  toast: {
+    error: toastMocks.error,
+    message: toastMocks.message
+  }
 }))
 
 function fallback(
@@ -50,6 +103,20 @@ function fallback(
 
 beforeEach(() => {
   cliPrerequisiteMocks.ensureOrcaCliAvailableForAgentSkillTerminal.mockReset()
+  hookMocks.notifyInstalledAgentSkillsChanged.mockReset()
+  hookMocks.useInstalledAgentSkill.mockClear()
+  storeMocks.state.settings = getDefaultSettings('/tmp')
+  storeMocks.state.updateSettings.mockReset()
+  storeMocks.state.updateSettings.mockImplementation(async (updates) => {
+    storeMocks.state.settings = storeMocks.state.settings
+      ? { ...storeMocks.state.settings, ...updates }
+      : null
+  })
+  storeMocks.state.openSettingsPage.mockReset()
+  storeMocks.state.openSettingsTarget.mockReset()
+  toastMocks.error.mockReset()
+  toastMocks.message.mockReset()
+  document.body.innerHTML = ''
 })
 
 describe('ManagedAgentSkillSetupDialogHost copy', () => {
@@ -182,5 +249,120 @@ describe('ManagedAgentSkillSetupDialogHost queue state', () => {
       active: reviewFallback,
       queue: []
     })
+  })
+})
+
+describe('ManagedAgentSkillSetupDialogHost rendering', () => {
+  async function renderHost(): Promise<{
+    root: Root
+    emitFallback: (event: ManagedAgentSkillFallback) => void
+  }> {
+    let fallbackListener: ((event: ManagedAgentSkillFallback) => void) | null = null
+    window.api = {
+      skills: {
+        onManagedFallback: vi.fn((listener) => {
+          fallbackListener = listener
+          return vi.fn()
+        }),
+        onManagedUpdated: vi.fn(() => vi.fn())
+      }
+    } as unknown as typeof window.api
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+    await act(async () => {
+      root.render(React.createElement(ManagedAgentSkillSetupDialogHost))
+    })
+    return {
+      root,
+      emitFallback: (event) => {
+        if (!fallbackListener) {
+          throw new Error('fallback listener was not registered')
+        }
+        fallbackListener(event)
+      }
+    }
+  }
+
+  it('turns off managed skill setup prompts when Don’t show again is clicked', async () => {
+    const { root, emitFallback } = await renderHost()
+    await act(async () => {
+      emitFallback(fallback({ context: 'agent-orchestration' }))
+    })
+
+    const button = Array.from(document.querySelectorAll('button')).find(
+      (entry) => entry.textContent === "Don't show again"
+    )
+    if (!button) {
+      throw new Error("Don't show again button was not rendered")
+    }
+
+    await act(async () => {
+      button.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    expect(storeMocks.state.updateSettings).toHaveBeenCalledWith({
+      managedAgentSkillSetupPromptsEnabled: false
+    })
+    expect(toastMocks.message).toHaveBeenCalledWith(
+      'Agent skill setup prompts are off',
+      expect.objectContaining({
+        description: 'Turn them back on in Settings → Agents.',
+        action: expect.objectContaining({ label: 'Open Settings' })
+      })
+    )
+    const toastOptions = toastMocks.message.mock.calls[0]?.[1]
+    toastOptions?.action?.onClick()
+    expect(storeMocks.state.openSettingsTarget).toHaveBeenCalledWith({
+      pane: 'agents',
+      repoId: null
+    })
+    expect(storeMocks.state.openSettingsPage).toHaveBeenCalledOnce()
+    root.unmount()
+  })
+
+  it('keeps the modal open when Don’t show again cannot persist', async () => {
+    storeMocks.state.updateSettings.mockResolvedValue(undefined)
+    const { root, emitFallback } = await renderHost()
+    await act(async () => {
+      emitFallback(fallback({ context: 'agent-orchestration' }))
+    })
+
+    const button = Array.from(document.querySelectorAll('button')).find(
+      (entry) => entry.textContent === "Don't show again"
+    )
+    if (!button) {
+      throw new Error("Don't show again button was not rendered")
+    }
+
+    await act(async () => {
+      button.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    expect(toastMocks.error).toHaveBeenCalledWith(
+      "Couldn't turn off agent skill setup prompts",
+      expect.objectContaining({
+        description: 'Try again from Settings → Agents.',
+        action: expect.objectContaining({ label: 'Open Settings' })
+      })
+    )
+    expect(toastMocks.message).not.toHaveBeenCalled()
+    expect(document.body.textContent).toContain('Agent skill setup needed')
+    root.unmount()
+  })
+
+  it('does not show managed skill setup prompts when the setting is off', async () => {
+    storeMocks.state.settings = {
+      ...getDefaultSettings('/tmp'),
+      managedAgentSkillSetupPromptsEnabled: false
+    }
+    const { root, emitFallback } = await renderHost()
+
+    await act(async () => {
+      emitFallback(fallback({ context: 'agent-orchestration' }))
+    })
+
+    expect(document.body.textContent).not.toContain('Agent skill setup needed')
+    root.unmount()
   })
 })

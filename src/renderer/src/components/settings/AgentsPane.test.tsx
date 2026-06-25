@@ -10,7 +10,7 @@ import { useAppStore } from '../../store'
 import { getAgentGeneratedTabTitlesTitle } from './agent-generated-tab-title-copy'
 import { getAgentStatusHooksTitle } from './agent-status-hooks-copy'
 import { getAgentAwakeDescription, getAgentAwakeTitle } from './agent-awake-copy'
-import { getManagedAgentSkillBackgroundUpdatesTitle } from './managed-agent-skill-background-updates-copy'
+import { getManagedAgentSkillSetupPromptsTitle } from './managed-agent-skill-setup-prompts-copy'
 import { AgentAwakeSetting } from './AgentAwakeSetting'
 import {
   AgentAvailabilityControl,
@@ -18,7 +18,7 @@ import {
   AgentGeneratedTabTitlesSetting,
   AgentStatusHooksSetting,
   AgentsPane,
-  ManagedAgentSkillBackgroundUpdatesSetting,
+  ManagedAgentSkillSetupPromptsSetting,
   getAgentsPaneSearchEntries,
   buildAgentAvailabilitySettingsUpdate,
   createAgentAvailabilityUpdateQueue
@@ -146,11 +146,12 @@ describe('AgentsPane', () => {
     expect(markup).toContain(
       'Keeps this computer and display awake while agents are working. Orca also asks this device to stay awake when the lid is closed, subject to its power policy.'
     )
-    expect(markup).toContain('Automatically update verified Orca skills')
+    expect(markup).toContain('Show agent skill setup prompts')
     expect(markup).toContain(
-      'Experimental. When enabled, Orca can update verified Orca-managed global skills in the background when a workflow needs them. When off, Orca asks you to review updates manually.'
+      'When an Orca workflow needs a missing or outdated managed skill, show a prompt to install or update it.'
     )
-    expect(markup).toContain('aria-checked="false"')
+    expect(markup).toContain('aria-checked="true"')
+    expect(markup).not.toContain('Automatically update verified Orca skills')
   })
 
   it('does not render the legacy agent location control on Windows', () => {
@@ -229,21 +230,21 @@ describe('AgentsPane', () => {
     })
   })
 
-  it('enables experimental managed skill background updates from the default off state', () => {
+  it('disables managed skill setup prompts from the default on state', () => {
     const updateSettings = vi.fn()
-    const element = ManagedAgentSkillBackgroundUpdatesSetting({
+    const element = ManagedAgentSkillSetupPromptsSetting({
       settings: getDefaultSettings('/tmp'),
       updateSettings
     })
 
-    const updatesSwitch = findSwitchRow(element, getManagedAgentSkillBackgroundUpdatesTitle())
-    expect(updatesSwitch.props.checked).toBe(false)
+    const updatesSwitch = findSwitchRow(element, getManagedAgentSkillSetupPromptsTitle())
+    expect(updatesSwitch.props.checked).toBe(true)
 
     const onChange = updatesSwitch.props.onChange as () => void
     onChange()
 
     expect(updateSettings).toHaveBeenCalledWith({
-      managedAgentSkillBackgroundUpdatesEnabled: true
+      managedAgentSkillSetupPromptsEnabled: false
     })
   })
 
@@ -280,10 +281,10 @@ describe('AgentsPane', () => {
     expect(matchesSettingsSearch('codex', getAgentsPaneSearchEntries())).toBe(true)
   })
 
-  it('includes managed skill update search metadata', () => {
-    expect(matchesSettingsSearch('experimental', getAgentsPaneSearchEntries())).toBe(true)
-    expect(matchesSettingsSearch('automatic', getAgentsPaneSearchEntries())).toBe(true)
-    expect(matchesSettingsSearch('manual', getAgentsPaneSearchEntries())).toBe(true)
+  it('includes managed skill prompt search metadata', () => {
+    expect(matchesSettingsSearch('prompt', getAgentsPaneSearchEntries())).toBe(true)
+    expect(matchesSettingsSearch('setup', getAgentsPaneSearchEntries())).toBe(true)
+    expect(matchesSettingsSearch('install', getAgentsPaneSearchEntries())).toBe(true)
     expect(matchesSettingsSearch('skills', getAgentsPaneSearchEntries())).toBe(true)
   })
 

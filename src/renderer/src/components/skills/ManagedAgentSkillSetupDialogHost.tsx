@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Info, RefreshCw } from 'lucide-react'
+import { toast } from 'sonner'
 import type { ManagedAgentSkillFallback } from '../../../../shared/skills'
 import { buildAgentFeatureSkillUpdateCommand } from '@/lib/agent-feature-install-commands'
 import {
@@ -34,9 +35,8 @@ import {
   isOrcaCliAvailableOnPath
 } from '@/lib/agent-skill-cli-prerequisite'
 import { basename } from '@/lib/path'
+import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
-
-const DISMISS_STORAGE_PREFIX = 'orca:managed-agent-skill-setup-dismissed:'
 
 export function ManagedAgentSkillSetupDialogHost(): React.JSX.Element | null {
   const [dialogState, setDialogState] = useState<ManagedAgentSkillDialogState>({
@@ -46,6 +46,12 @@ export function ManagedAgentSkillSetupDialogHost(): React.JSX.Element | null {
   const queuedKeysRef = useRef(new Set<string>())
   const snoozedKeysRef = useRef(new Set<string>())
   const [rechecking, setRechecking] = useState(false)
+  const setupPromptsEnabled = useAppStore(
+    (state) => state.settings?.managedAgentSkillSetupPromptsEnabled !== false
+  )
+  const updateSettings = useAppStore((state) => state.updateSettings)
+  const openSettingsPage = useAppStore((state) => state.openSettingsPage)
+  const openSettingsTarget = useAppStore((state) => state.openSettingsTarget)
   const active = dialogState.active
   const installedState = useInstalledAgentSkill(active?.skillName ?? 'linear-tickets', {
     enabled: active !== null,
@@ -54,16 +60,29 @@ export function ManagedAgentSkillSetupDialogHost(): React.JSX.Element | null {
     sourceKinds: active ? getInstalledStateSourceKinds(active.scope) : undefined
   })
 
-  const enqueueFallback = useCallback((event: ManagedAgentSkillFallback): void => {
-    if (isDismissed(event.uiKey) || snoozedKeysRef.current.has(event.uiKey)) {
+  const enqueueFallback = useCallback(
+    (event: ManagedAgentSkillFallback): void => {
+      if (!setupPromptsEnabled || snoozedKeysRef.current.has(event.uiKey)) {
+        return
+      }
+      if (queuedKeysRef.current.has(event.uiKey)) {
+        return
+      }
+      queuedKeysRef.current.add(event.uiKey)
+      setDialogState((current) => enqueueManagedAgentSkillFallback(current, event))
+    },
+    [setupPromptsEnabled]
+  )
+
+  useEffect(() => {
+    if (setupPromptsEnabled) {
       return
     }
-    if (queuedKeysRef.current.has(event.uiKey)) {
-      return
-    }
-    queuedKeysRef.current.add(event.uiKey)
-    setDialogState((current) => enqueueManagedAgentSkillFallback(current, event))
-  }, [])
+    queuedKeysRef.current.clear()
+    snoozedKeysRef.current.clear()
+    setDialogState({ active: null, queue: [] })
+    setRechecking(false)
+  }, [setupPromptsEnabled])
 
   const advanceQueue = useCallback((): void => {
     setDialogState((current) => {
@@ -244,8 +263,59 @@ export function ManagedAgentSkillSetupDialogHost(): React.JSX.Element | null {
             variant="ghost"
             size="sm"
             onClick={() => {
-              setDismissed(active.uiKey)
-              advanceQueue()
+              void (async () => {
+                await updateSettings({ managedAgentSkillSetupPromptsEnabled: false })
+                if (
+                  useAppStore.getState().settings?.managedAgentSkillSetupPromptsEnabled !== false
+                ) {
+                  toast.error(
+                    translate(
+                      'auto.components.skills.ManagedAgentSkillSetupDialogHost.promptsDisableFailedToast',
+                      "Couldn't turn off agent skill setup prompts"
+                    ),
+                    {
+                      description: translate(
+                        'auto.components.skills.ManagedAgentSkillSetupDialogHost.promptsDisableFailedToastDescription',
+                        'Try again from Settings → Agents.'
+                      ),
+                      action: {
+                        label: translate(
+                          'auto.components.skills.ManagedAgentSkillSetupDialogHost.openSettings',
+                          'Open Settings'
+                        ),
+                        onClick: () => {
+                          openSettingsTarget({ pane: 'agents', repoId: null })
+                          openSettingsPage()
+                        }
+                      }
+                    }
+                  )
+                  return
+                }
+                toast.message(
+                  translate(
+                    'auto.components.skills.ManagedAgentSkillSetupDialogHost.promptsDisabledToast',
+                    'Agent skill setup prompts are off'
+                  ),
+                  {
+                    description: translate(
+                      'auto.components.skills.ManagedAgentSkillSetupDialogHost.promptsDisabledToastDescription',
+                      'Turn them back on in Settings → Agents.'
+                    ),
+                    action: {
+                      label: translate(
+                        'auto.components.skills.ManagedAgentSkillSetupDialogHost.openSettings',
+                        'Open Settings'
+                      ),
+                      onClick: () => {
+                        openSettingsTarget({ pane: 'agents', repoId: null })
+                        openSettingsPage()
+                      }
+                    }
+                  }
+                )
+                advanceQueue()
+              })()
             }}
           >
             {translate(
@@ -268,20 +338,4 @@ export function ManagedAgentSkillSetupDialogHost(): React.JSX.Element | null {
       </DialogContent>
     </Dialog>
   )
-}
-
-function isDismissed(uiKey: string): boolean {
-  try {
-    return window.localStorage.getItem(`${DISMISS_STORAGE_PREFIX}${uiKey}`) === 'true'
-  } catch {
-    return false
-  }
-}
-
-function setDismissed(uiKey: string): void {
-  try {
-    window.localStorage.setItem(`${DISMISS_STORAGE_PREFIX}${uiKey}`, 'true')
-  } catch {
-    // Local storage can be unavailable in constrained test/browser contexts.
-  }
 }

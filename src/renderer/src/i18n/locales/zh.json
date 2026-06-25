@@ -3316,6 +3316,11 @@
           "recheck": "重新检查",
           "dontShowAgain": "不再显示",
           "notNow": "稍后",
+          "promptsDisabledToast": "代理技能设置提示已关闭",
+          "promptsDisabledToastDescription": "可在 Settings → Agents 中重新开启。",
+          "promptsDisableFailedToast": "无法关闭代理技能设置提示",
+          "promptsDisableFailedToastDescription": "请从 Settings → Agents 重试。",
+          "openSettings": "打开设置",
           "linearWorktreeContext": "A worktree was started from a Linear task. {{actionLabel}} the Linear agent skill to enable agents to read and update Linear issues.",
           "agentOrchestrationContext": "Orca Orchestration was used. {{actionLabel}} the orchestration skill to enable agents to coordinate reliably.",
           "agentComputerUseContext": "Computer Use was used. {{actionLabel}} the Computer Use skill to enable agents to control apps reliably.",
@@ -4373,6 +4378,20 @@
                   "description": "实验性功能。启用后，当工作流需要技能时，Orca 可以在后台更新已验证的 Orca 托管全局技能。关闭时，Orca 会要求你手动审核更新。",
                   "search": {
                     "experimental": "experimental"
+                  }
+                }
+              },
+              "setup": {
+                "prompts": {
+                  "title": "显示代理技能设置提示",
+                  "description": "当 Orca 工作流需要缺失或过期的托管技能时，显示安装或更新提示。",
+                  "search": {
+                    "agent": "代理",
+                    "skills": "技能",
+                    "setup": "设置",
+                    "prompt": "提示",
+                    "install": "安装",
+                    "update": "更新"
                   }
                 }
               }

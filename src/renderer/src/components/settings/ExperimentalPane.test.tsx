@@ -8,6 +8,7 @@ import type { GlobalSettings } from '../../../../shared/types'
 import { getDefaultSettings } from '../../../../shared/constants'
 import { ExperimentalPane } from './ExperimentalPane'
 import { getExperimentalPaneSearchEntries } from './experimental-search'
+import { getManagedAgentSkillBackgroundUpdatesTitle } from './managed-agent-skill-background-updates-copy'
 
 vi.mock('../../store', () => ({
   useAppStore: (selector: (state: { settingsSearchQuery: string }) => unknown) =>
@@ -77,6 +78,21 @@ describe('ExperimentalPane', () => {
     )
   })
 
+  it('renders managed skill background updates as an off-by-default experimental switch', () => {
+    const settings = getDefaultSettings('/tmp')
+    const markup = renderToStaticMarkup(
+      <ExperimentalPane settings={settings} updateSettings={vi.fn()} />
+    )
+
+    expect(settings.managedAgentSkillBackgroundUpdatesEnabled).toBe(false)
+    expect(markup).toContain('Automatically update verified Orca skills')
+    expect(markup).toContain('Experimental. When enabled')
+    expect(markup).toContain('aria-checked="false"')
+    expect(getExperimentalPaneSearchEntries().map((entry) => entry.title)).toContain(
+      getManagedAgentSkillBackgroundUpdatesTitle()
+    )
+  })
+
   it('renders the agent sleep idle duration as configurable minutes', async () => {
     const updateSettings = vi.fn()
     const settings = {
@@ -136,6 +152,27 @@ describe('ExperimentalPane', () => {
     })
 
     expect(updateSettings).toHaveBeenCalledWith({ experimentalNewWorktreeCardStyle: true })
+    root.unmount()
+  })
+
+  it('enables managed skill background updates through the experimental switch', async () => {
+    const updateSettings = vi.fn()
+    const { root, container } = await renderExperimentalPane({ updateSettings })
+
+    const switchButton = container.querySelector<HTMLButtonElement>(
+      '#experimental-managed-skill-background-updates button[role="switch"]'
+    )
+    if (!switchButton) {
+      throw new Error('Managed skill background updates switch was not rendered')
+    }
+
+    await act(async () => {
+      switchButton.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    expect(updateSettings).toHaveBeenCalledWith({
+      managedAgentSkillBackgroundUpdatesEnabled: true
+    })
     root.unmount()
   })
 })

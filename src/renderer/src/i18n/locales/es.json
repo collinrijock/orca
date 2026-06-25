@@ -3316,6 +3316,11 @@
           "recheck": "Volver a comprobar",
           "dontShowAgain": "No volver a mostrar",
           "notNow": "Ahora no",
+          "promptsDisabledToast": "Los avisos de configuración de habilidades de agente están desactivados",
+          "promptsDisabledToastDescription": "Puedes volver a activarlos en Configuración → Agentes.",
+          "promptsDisableFailedToast": "No se pudieron desactivar los avisos de configuración de habilidades de agente",
+          "promptsDisableFailedToastDescription": "Inténtalo de nuevo desde Configuración → Agentes.",
+          "openSettings": "Abrir Configuración",
           "linearWorktreeContext": "A worktree was started from a Linear task. {{actionLabel}} the Linear agent skill to enable agents to read and update Linear issues.",
           "agentOrchestrationContext": "Orca Orchestration was used. {{actionLabel}} the orchestration skill to enable agents to coordinate reliably.",
           "agentComputerUseContext": "Computer Use was used. {{actionLabel}} the Computer Use skill to enable agents to control apps reliably.",
@@ -4388,6 +4393,20 @@
                   "description": "Experimental. Cuando está activado, Orca puede actualizar en segundo plano las habilidades globales verificadas administradas por Orca cuando un flujo de trabajo las necesita. Cuando está desactivado, Orca te pide revisar las actualizaciones manualmente.",
                   "search": {
                     "experimental": "experimental"
+                  }
+                }
+              },
+              "setup": {
+                "prompts": {
+                  "title": "Mostrar avisos de configuración de habilidades de agente",
+                  "description": "Cuando un flujo de trabajo de Orca necesite una habilidad administrada faltante o desactualizada, muestra un aviso para instalarla o actualizarla.",
+                  "search": {
+                    "agent": "agente",
+                    "skills": "habilidades",
+                    "setup": "configuración",
+                    "prompt": "aviso",
+                    "install": "instalar",
+                    "update": "actualizar"
                   }
                 }
               }

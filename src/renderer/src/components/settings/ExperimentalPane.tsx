@@ -6,6 +6,10 @@ import { matchesSettingsSearch } from './settings-search'
 import { getExperimentalPaneSearchEntries, getExperimentalSearchEntry } from './experimental-search'
 import { HiddenExperimentalGroup } from './HiddenExperimentalGroup'
 import { NumberField, SettingsSwitch } from './SettingsFormControls'
+import {
+  getManagedAgentSkillBackgroundUpdatesDescription,
+  getManagedAgentSkillBackgroundUpdatesTitle
+} from './managed-agent-skill-background-updates-copy'
 import { translate } from '@/i18n/i18n'
 import {
   MAX_AGENT_HIBERNATION_IDLE_MS,
@@ -47,8 +51,13 @@ export function ExperimentalPane({
   const showNewWorktreeCardStyle = matchesSettingsSearch(searchQuery, [
     getExperimentalSearchEntry().newWorktreeCardStyle
   ])
+  const showManagedSkillBackgroundUpdates = matchesSettingsSearch(searchQuery, [
+    getExperimentalSearchEntry().managedSkillBackgroundUpdates
+  ])
   const agentHibernationEnabled = settings.experimentalAgentHibernation === true
   const newWorktreeCardStyleEnabled = settings.experimentalNewWorktreeCardStyle === true
+  const managedSkillBackgroundUpdatesEnabled =
+    settings.managedAgentSkillBackgroundUpdatesEnabled === true
   // Why: the planner owns ms-based bounds/defaults; the UI edits minutes
   // while displaying the same effective clamped value the planner will use.
   const agentHibernationIdleMinutes = Math.round(
@@ -306,6 +315,34 @@ export function ExperimentalPane({
               onChange={() =>
                 updateSettings({
                   experimentalNewWorktreeCardStyle: !newWorktreeCardStyleEnabled
+                })
+              }
+            />
+          </div>
+        </SearchableSetting>
+      ) : null}
+
+      {showManagedSkillBackgroundUpdates ? (
+        <SearchableSetting
+          title={getManagedAgentSkillBackgroundUpdatesTitle()}
+          description={getManagedAgentSkillBackgroundUpdatesDescription()}
+          keywords={getExperimentalSearchEntry().managedSkillBackgroundUpdates.keywords}
+          className="space-y-3 py-2"
+          id="experimental-managed-skill-background-updates"
+        >
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0 shrink space-y-0.5">
+              <Label>{getManagedAgentSkillBackgroundUpdatesTitle()}</Label>
+              <p className="text-xs text-muted-foreground">
+                {getManagedAgentSkillBackgroundUpdatesDescription()}
+              </p>
+            </div>
+            <SettingsSwitch
+              checked={managedSkillBackgroundUpdatesEnabled}
+              ariaLabel={getManagedAgentSkillBackgroundUpdatesTitle()}
+              onChange={() =>
+                updateSettings({
+                  managedAgentSkillBackgroundUpdatesEnabled: !managedSkillBackgroundUpdatesEnabled
                 })
               }
             />

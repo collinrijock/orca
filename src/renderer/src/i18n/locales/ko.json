@@ -3316,6 +3316,11 @@
           "recheck": "다시 확인",
           "dontShowAgain": "다시 표시하지 않기",
           "notNow": "나중에",
+          "promptsDisabledToast": "에이전트 스킬 설정 프롬프트가 꺼져 있습니다",
+          "promptsDisabledToastDescription": "Settings → Agents에서 다시 켤 수 있습니다.",
+          "promptsDisableFailedToast": "에이전트 스킬 설정 프롬프트를 끌 수 없습니다",
+          "promptsDisableFailedToastDescription": "Settings → Agents에서 다시 시도하세요.",
+          "openSettings": "설정 열기",
           "linearWorktreeContext": "A worktree was started from a Linear task. {{actionLabel}} the Linear agent skill to enable agents to read and update Linear issues.",
           "agentOrchestrationContext": "Orca Orchestration was used. {{actionLabel}} the orchestration skill to enable agents to coordinate reliably.",
           "agentComputerUseContext": "Computer Use was used. {{actionLabel}} the Computer Use skill to enable agents to control apps reliably.",
@@ -4373,6 +4378,20 @@
                   "description": "실험적 기능입니다. 활성화하면 워크플로에 필요할 때 Orca가 검증된 Orca 관리 글로벌 스킬을 백그라운드에서 업데이트할 수 있습니다. 꺼져 있으면 Orca가 업데이트를 수동으로 검토하도록 요청합니다.",
                   "search": {
                     "experimental": "experimental"
+                  }
+                }
+              },
+              "setup": {
+                "prompts": {
+                  "title": "에이전트 스킬 설정 프롬프트 표시",
+                  "description": "Orca 워크플로에 누락되었거나 오래된 관리형 스킬이 필요하면 설치 또는 업데이트 프롬프트를 표시합니다.",
+                  "search": {
+                    "agent": "에이전트",
+                    "skills": "스킬",
+                    "setup": "설정",
+                    "prompt": "프롬프트",
+                    "install": "설치",
+                    "update": "업데이트"
                   }
                 }
               }

@@ -15,10 +15,10 @@ import {
   getAgentStatusHooksTitle
 } from './agent-status-hooks-copy'
 import {
-  getManagedAgentSkillBackgroundUpdatesDescription,
-  getManagedAgentSkillBackgroundUpdatesSearchKeywords,
-  getManagedAgentSkillBackgroundUpdatesTitle
-} from './managed-agent-skill-background-updates-copy'
+  getManagedAgentSkillSetupPromptsDescription,
+  getManagedAgentSkillSetupPromptsSearchKeywords,
+  getManagedAgentSkillSetupPromptsTitle
+} from './managed-agent-skill-setup-prompts-copy'
 import { getAgentCacheTimerSearchEntries } from './agent-cache-timer-search'
 import { translate } from '@/i18n/i18n'
 import { searchKeywords, translateSearchKeyword, uniqueKeywords } from './settings-search-keywords'
@@ -79,9 +79,9 @@ export const getAgentsPaneSearchEntries = createLocalizedCatalog(() => [
     keywords: getAgentStatusHooksSearchKeywords()
   },
   {
-    title: getManagedAgentSkillBackgroundUpdatesTitle(),
-    description: getManagedAgentSkillBackgroundUpdatesDescription(),
-    keywords: getManagedAgentSkillBackgroundUpdatesSearchKeywords()
+    title: getManagedAgentSkillSetupPromptsTitle(),
+    description: getManagedAgentSkillSetupPromptsDescription(),
+    keywords: getManagedAgentSkillSetupPromptsSearchKeywords()
   },
   {
     title: getAgentGeneratedTabTitlesTitle(),

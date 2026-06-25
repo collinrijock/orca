@@ -3,6 +3,11 @@ import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 import { translate } from '@/i18n/i18n'
 import { translateSearchKeyword } from './settings-search-keywords'
 import { getNewWorktreeCardStyleSearchEntry } from './new-worktree-card-style-search-entry'
+import {
+  getManagedAgentSkillBackgroundUpdatesDescription,
+  getManagedAgentSkillBackgroundUpdatesSearchKeywords,
+  getManagedAgentSkillBackgroundUpdatesTitle
+} from './managed-agent-skill-background-updates-copy'
 
 export const getExperimentalPaneSearchEntries = createLocalizedCatalog(
   (): SettingsSearchEntry[] => [
@@ -183,6 +188,11 @@ export const getExperimentalPaneSearchEntries = createLocalizedCatalog(
     },
     getNewWorktreeCardStyleSearchEntry(),
     {
+      title: getManagedAgentSkillBackgroundUpdatesTitle(),
+      description: getManagedAgentSkillBackgroundUpdatesDescription(),
+      keywords: getManagedAgentSkillBackgroundUpdatesSearchKeywords()
+    },
+    {
       title: translate(
         'auto.components.settings.experimental.search.78c2a8dc74',
         'Shared paths on worktrees'
@@ -266,6 +276,7 @@ export function getExperimentalSearchEntry() {
         'New card style'
       )
     ),
+    managedSkillBackgroundUpdates: findEntry(getManagedAgentSkillBackgroundUpdatesTitle()),
     symlinksOnWorktrees: findEntry(
       translate(
         'auto.components.settings.experimental.search.78c2a8dc74',

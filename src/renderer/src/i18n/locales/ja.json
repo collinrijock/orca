@@ -3316,6 +3316,11 @@
           "recheck": "再チェック",
           "dontShowAgain": "今後表示しない",
           "notNow": "今はしない",
+          "promptsDisabledToast": "エージェントスキル設定プロンプトはオフです",
+          "promptsDisabledToastDescription": "Settings → Agents で再度オンにできます。",
+          "promptsDisableFailedToast": "エージェントスキル設定プロンプトをオフにできませんでした",
+          "promptsDisableFailedToastDescription": "Settings → Agents からもう一度お試しください。",
+          "openSettings": "設定を開く",
           "linearWorktreeContext": "A worktree was started from a Linear task. {{actionLabel}} the Linear agent skill to enable agents to read and update Linear issues.",
           "agentOrchestrationContext": "Orca Orchestration was used. {{actionLabel}} the orchestration skill to enable agents to coordinate reliably.",
           "agentComputerUseContext": "Computer Use was used. {{actionLabel}} the Computer Use skill to enable agents to control apps reliably.",
@@ -4373,6 +4378,20 @@
                   "description": "実験的機能です。有効にすると、ワークフローで必要になったときに、Orca は検証済みの Orca 管理グローバルスキルをバックグラウンドで更新できます。オフの場合、Orca は更新を手動で確認するよう求めます。",
                   "search": {
                     "experimental": "experimental"
+                  }
+                }
+              },
+              "setup": {
+                "prompts": {
+                  "title": "エージェントスキル設定プロンプトを表示",
+                  "description": "Orca のワークフローで未インストールまたは古い管理対象スキルが必要になったとき、インストールまたは更新のプロンプトを表示します。",
+                  "search": {
+                    "agent": "エージェント",
+                    "skills": "スキル",
+                    "setup": "設定",
+                    "prompt": "プロンプト",
+                    "install": "インストール",
+                    "update": "更新"
                   }
                 }
               }

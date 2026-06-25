@@ -3316,6 +3316,11 @@
           "recheck": "Re-check",
           "dontShowAgain": "Don't show again",
           "notNow": "Not now",
+          "promptsDisabledToast": "Agent skill setup prompts are off",
+          "promptsDisabledToastDescription": "Turn them back on in Settings → Agents.",
+          "promptsDisableFailedToast": "Couldn't turn off agent skill setup prompts",
+          "promptsDisableFailedToastDescription": "Try again from Settings → Agents.",
+          "openSettings": "Open Settings",
           "linearWorktreeContext": "A worktree was started from a Linear task. {{actionLabel}} the Linear agent skill to enable agents to read and update Linear issues.",
           "agentOrchestrationContext": "Orca Orchestration was used. {{actionLabel}} the orchestration skill to enable agents to coordinate reliably.",
           "agentComputerUseContext": "Computer Use was used. {{actionLabel}} the Computer Use skill to enable agents to control apps reliably.",
@@ -4388,6 +4393,20 @@
                   "description": "Experimental. When enabled, Orca can update verified Orca-managed global skills in the background when a workflow needs them. When off, Orca asks you to review updates manually.",
                   "search": {
                     "experimental": "experimental"
+                  }
+                }
+              },
+              "setup": {
+                "prompts": {
+                  "title": "Show agent skill setup prompts",
+                  "description": "When an Orca workflow needs a missing or outdated managed skill, show a prompt to install or update it.",
+                  "search": {
+                    "agent": "agent",
+                    "skills": "skills",
+                    "setup": "setup",
+                    "prompt": "prompt",
+                    "install": "install",
+                    "update": "update"
                   }
                 }
               }

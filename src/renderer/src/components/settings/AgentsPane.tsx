@@ -18,9 +18,9 @@ import {
 } from './agent-generated-tab-title-copy'
 import { getAgentStatusHooksDescription, getAgentStatusHooksTitle } from './agent-status-hooks-copy'
 import {
-  getManagedAgentSkillBackgroundUpdatesDescription,
-  getManagedAgentSkillBackgroundUpdatesTitle
-} from './managed-agent-skill-background-updates-copy'
+  getManagedAgentSkillSetupPromptsDescription,
+  getManagedAgentSkillSetupPromptsTitle
+} from './managed-agent-skill-setup-prompts-copy'
 import {
   SettingsBadge,
   SettingsSegmentedControl,
@@ -827,10 +827,7 @@ export function AgentsPane({ settings, updateSettings }: AgentsPaneProps): React
 
       <AgentStatusHooksSetting settings={settings} updateSettings={updateSettings} />
 
-      <ManagedAgentSkillBackgroundUpdatesSetting
-        settings={settings}
-        updateSettings={updateSettings}
-      />
+      <ManagedAgentSkillSetupPromptsSetting settings={settings} updateSettings={updateSettings} />
 
       <AgentGeneratedTabTitlesSetting settings={settings} updateSettings={updateSettings} />
 
@@ -978,23 +975,23 @@ export function AgentStatusHooksSetting({
   )
 }
 
-export function ManagedAgentSkillBackgroundUpdatesSetting({
+export function ManagedAgentSkillSetupPromptsSetting({
   settings,
   updateSettings
 }: AgentsPaneProps): React.JSX.Element {
-  const enabled = settings.managedAgentSkillBackgroundUpdatesEnabled === true
+  const enabled = settings.managedAgentSkillSetupPromptsEnabled !== false
   return (
     <section className="space-y-3">
       <SettingsSwitchRow
-        label={getManagedAgentSkillBackgroundUpdatesTitle()}
-        description={getManagedAgentSkillBackgroundUpdatesDescription()}
+        label={getManagedAgentSkillSetupPromptsTitle()}
+        description={getManagedAgentSkillSetupPromptsDescription()}
         checked={enabled}
         onChange={() =>
           updateSettings({
-            managedAgentSkillBackgroundUpdatesEnabled: !enabled
+            managedAgentSkillSetupPromptsEnabled: !enabled
           })
         }
-        ariaLabel={getManagedAgentSkillBackgroundUpdatesTitle()}
+        ariaLabel={getManagedAgentSkillSetupPromptsTitle()}
       />
     </section>
   )

@@ -2648,6 +2648,9 @@ export type GlobalSettings = {
   /** Why: disabling must persist so startup does not reinstall global agent
    *  hook entries right after the user removes them from Settings or CLI. */
   agentStatusHooksEnabled: boolean
+  /** Why: users can silence managed-skill setup prompts from the modal, but
+   *  the prompt should be easy to restore from normal Agents settings. */
+  managedAgentSkillSetupPromptsEnabled?: boolean
   /** Why: verified background updates mutate user skill files, so this remains
    *  opt-in while experimental; off makes updates manual. */
   managedAgentSkillBackgroundUpdatesEnabled?: boolean
