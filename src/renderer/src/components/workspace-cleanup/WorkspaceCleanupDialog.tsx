@@ -562,12 +562,6 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
                       'Delete Inactive Workspaces'
                     )}
                   </DialogTitle>
-                  <DialogDescription className="mt-1 text-xs">
-                    {translate(
-                      'auto.components.workspace.cleanup.WorkspaceCleanupDialog.e0b5a4deaa',
-                      'Review inactive workspaces before deleting their local files and Orca state.'
-                    )}
-                  </DialogDescription>
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
                   <Tooltip>
