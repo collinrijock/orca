@@ -4,8 +4,7 @@ import type {
 } from '../../../shared/crash-reporting'
 import { getBrowserWebviewMemoryProfile } from '../components/browser-pane/webview-registry'
 
-const RENDERER_MEMORY_SAMPLE_INTERVAL_MS = 60_000
-const RENDERER_SURFACE_SAMPLE_INTERVAL_MS = 60_000
+const RENDERER_DIAGNOSTICS_SAMPLE_INTERVAL_MS = 60_000
 const BYTES_PER_MEGABYTE = 1024 * 1024
 
 type BrowserPerformanceMemory = {
@@ -15,8 +14,7 @@ type BrowserPerformanceMemory = {
 }
 
 let rendererCrashDiagnosticsInstalled = false
-let rendererMemoryInterval: number | null = null
-let rendererSurfaceInterval: number | null = null
+let rendererDiagnosticsInterval: number | null = null
 
 export function recordRendererCrashBreadcrumb(
   name: string,
@@ -44,17 +42,10 @@ export function installRendererCrashDiagnostics(): void {
   window.addEventListener('error', recordRendererError)
   window.addEventListener('unhandledrejection', recordRendererUnhandledRejection)
 
-  if (getPerformanceMemory()) {
-    recordRendererMemory('startup')
-    rendererMemoryInterval = window.setInterval(
-      () => recordRendererMemory('interval'),
-      RENDERER_MEMORY_SAMPLE_INTERVAL_MS
-    )
-  }
-  recordRendererSurface('startup')
-  rendererSurfaceInterval = window.setInterval(
-    () => recordRendererSurface('interval'),
-    RENDERER_SURFACE_SAMPLE_INTERVAL_MS
+  recordRendererDiagnostics('startup')
+  rendererDiagnosticsInterval = window.setInterval(
+    () => recordRendererDiagnostics('interval'),
+    RENDERER_DIAGNOSTICS_SAMPLE_INTERVAL_MS
   )
 }
 
@@ -69,13 +60,9 @@ function disposeRendererCrashDiagnostics(): void {
   rendererCrashDiagnosticsInstalled = false
   window.removeEventListener('error', recordRendererError)
   window.removeEventListener('unhandledrejection', recordRendererUnhandledRejection)
-  if (rendererMemoryInterval !== null) {
-    window.clearInterval(rendererMemoryInterval)
-    rendererMemoryInterval = null
-  }
-  if (rendererSurfaceInterval !== null) {
-    window.clearInterval(rendererSurfaceInterval)
-    rendererSurfaceInterval = null
+  if (rendererDiagnosticsInterval !== null) {
+    window.clearInterval(rendererDiagnosticsInterval)
+    rendererDiagnosticsInterval = null
   }
 }
 
@@ -103,6 +90,11 @@ function recordRendererUnhandledRejection(event: PromiseRejectionEvent): void {
     'renderer_unhandled_rejection',
     compactBreadcrumbData(describeUnknownValue('reason', event.reason))
   )
+}
+
+function recordRendererDiagnostics(reason: string): void {
+  recordRendererMemory(reason)
+  recordRendererSurface(reason)
 }
 
 function recordRendererMemory(reason: string): void {

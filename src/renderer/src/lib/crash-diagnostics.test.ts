@@ -101,7 +101,7 @@ describe('renderer crash diagnostics', () => {
     diagnostics.installRendererCrashDiagnostics()
 
     expect(window.addEventListener).toHaveBeenCalledTimes(2)
-    expect(setIntervalMock).toHaveBeenCalledTimes(2)
+    expect(setIntervalMock).toHaveBeenCalledTimes(1)
     expect(recordBreadcrumbMock).toHaveBeenCalledWith({
       name: 'renderer_memory',
       data: {
@@ -174,7 +174,7 @@ describe('renderer crash diagnostics', () => {
 
     expect(removeEventListenerMock).toHaveBeenCalledWith('error', expect.any(Function))
     expect(removeEventListenerMock).toHaveBeenCalledWith('unhandledrejection', expect.any(Function))
-    expect(clearIntervalMock).toHaveBeenCalledTimes(2)
+    expect(clearIntervalMock).toHaveBeenCalledTimes(1)
     expect(listeners.get('error')).toHaveLength(0)
     expect(listeners.get('unhandledrejection')).toHaveLength(0)
   })
