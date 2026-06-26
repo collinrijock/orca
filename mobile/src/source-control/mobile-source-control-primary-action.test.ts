@@ -245,6 +245,23 @@ describe('mobile source-control primary action decision parity', () => {
         inFlightRemoteOpKind: 'pull',
         upstreamStatus: { hasUpstream: true, ahead: 2, behind: 0 }
       })
+    },
+    {
+      name: 'in-flight force push mirrors force push',
+      input: decisionInputs({
+        isRemoteOperationActive: true,
+        inFlightRemoteOpKind: 'force_push',
+        upstreamStatus: { hasUpstream: true, ahead: 2, behind: 0 }
+      })
+    },
+    {
+      name: 'in-flight push blocks committable candidate',
+      input: decisionInputs({
+        isRemoteOperationActive: true,
+        inFlightRemoteOpKind: 'push',
+        stagedCount: 1,
+        hasMessage: true
+      })
     }
   ])('matches the shared commit-area decision for $name', ({ input }) => {
     expect(resolveMobileSourceControlCommitAreaPrimaryActionDecision(input)).toEqual(

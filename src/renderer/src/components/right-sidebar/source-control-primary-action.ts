@@ -152,9 +152,15 @@ function resolvePrimaryActionTitle(
         { value0: resolvePrimaryActionLabel(decision, inputs) }
       )
     case 'remote_operation_in_progress':
-      return 'Remote operation in progress…'
+      return translate(
+        'auto.components.right.sidebar.source.control.primary.action.6f7a8b9c0d',
+        'Remote operation in progress…'
+      )
     case 'remote_operation_blocks_commit':
-      return 'Remote operation in progress — try again once it finishes'
+      return translate(
+        'auto.components.right.sidebar.source.control.primary.action.7f8a9b0c1d',
+        'Remote operation in progress — try again once it finishes'
+      )
     case 'resolve_conflicts_before_commit':
       return translate(
         'auto.components.right.sidebar.source.control.primary.action.a6457b46a7',
@@ -237,7 +243,10 @@ function resolvePrimaryActionTitle(
         { value0: copy.reviewLabel }
       )
     case 'nothing_to_commit_up_to_date':
-      return 'Nothing to commit. Branch is up to date.'
+      return translate(
+        'auto.components.right.sidebar.source.control.primary.action.8f9a0b1c2d',
+        'Nothing to commit. Branch is up to date.'
+      )
     case 'checking_review_creation':
       return translate(
         'auto.components.right.sidebar.source.control.primary.action.h3i4j5k607',

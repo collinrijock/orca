@@ -1,4 +1,5 @@
 import { shouldForcePushWithLeaseForUpstream } from './git-upstream-status'
+import { supportsHostedReviewCreation } from './hosted-review-creation-providers'
 import { resolveCreateReviewIntentEligibility } from './source-control-create-review-intent'
 import { resolveSourceControlPrimaryActionDuringRemoteOp } from './source-control-primary-action-in-flight'
 import type {
@@ -32,7 +33,8 @@ export function resolveSourceControlPrimaryActionDecision(
     branchCommitsAhead,
     hasCurrentBranch = true,
     canPushLinkedReviewWithoutUpstream = false,
-    isPrIntentInFlight = false
+    isPrIntentInFlight = false,
+    isHostedReviewCreationLoading = false
   } = inputs
 
   if (isPrIntentInFlight) {
@@ -65,6 +67,19 @@ export function resolveSourceControlPrimaryActionDecision(
       kind: 'commit',
       labelIntent: 'commit',
       titleIntent: 'resolve_conflicts_before_commit',
+      disabled: true
+    }
+  }
+
+  if (
+    isHostedReviewCreationLoading &&
+    hostedReviewCreation &&
+    shouldOfferCreateReviewLoadingAction(hostedReviewCreation)
+  ) {
+    return {
+      kind: 'create_pr',
+      labelIntent: 'create_pr',
+      titleIntent: 'checking_review_creation',
       disabled: true
     }
   }
@@ -190,6 +205,18 @@ export function resolveSourceControlPrimaryActionDecision(
     titleIntent: hasUnstagedChanges ? 'stage_file_to_commit' : 'nothing_to_commit_up_to_date',
     disabled: true
   }
+}
+
+function shouldOfferCreateReviewLoadingAction(
+  hostedReviewCreation: SourceControlPrimaryActionDecisionInputs['hostedReviewCreation']
+): boolean {
+  if (!supportsHostedReviewCreation(hostedReviewCreation?.provider)) {
+    return false
+  }
+  return (
+    hostedReviewCreation.blockedReason !== 'existing_review' &&
+    hostedReviewCreation.blockedReason !== 'unsupported_provider'
+  )
 }
 
 export function resolveSourceControlCommitAreaPrimaryActionDecision(
