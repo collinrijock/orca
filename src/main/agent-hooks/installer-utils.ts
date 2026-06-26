@@ -148,11 +148,9 @@ function quotePowerShellString(value: string): string {
 }
 
 export function wrapWindowsHookCommand(scriptPath: string): string {
-  if (!/[ \t&()^|<>%!"]/u.test(scriptPath)) {
-    return scriptPath
-  }
-  // Why: Windows splits raw hook commands on whitespace, and cmd.exe expands
-  // `%`/`^`; use PowerShell only for paths that need that compatibility shim.
+  // Why: most Windows agents run hooks through Git Bash or another shell that
+  // mangles a raw backslash path. Codex has its own cmd.exe-safe fast path; the
+  // shared wrapper keeps the encoded launcher for every other agent.
   const command = `& ${quotePowerShellString(scriptPath)}; exit $LASTEXITCODE`
   const encodedCommand = Buffer.from(command, 'utf16le').toString('base64')
   return `powershell -NoProfile -ExecutionPolicy Bypass -EncodedCommand ${encodedCommand}`
@@ -181,7 +179,7 @@ export function buildWindowsAgentHookPostCommand(source: AgentHookSource): strin
 // <event> hook" rows make visible. curl.exe (Windows 10 1803+) posts the same
 // form fields as the POSIX hook and reads the raw payload from stdin via
 // `--data-urlencode payload@-`, so UTF-8 (e.g. CJK prompts) survives byte-for-
-// byte without the code-page translation that forced the PowerShell post.
+// byte without the code-page translation that previously forced PowerShell.
 export function buildWindowsAgentHookCurlPostCommand(source: AgentHookSource): string {
   return [
     '"%SystemRoot%\\System32\\curl.exe" -sS -X POST',

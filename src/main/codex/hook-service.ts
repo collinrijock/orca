@@ -59,16 +59,6 @@ const CODEX_EVENTS = [
   'Stop'
 ] as const
 
-const CODEX_WINDOWS_LOCAL_EVENTS = ['PreToolUse', 'PermissionRequest', 'PostToolUse'] as const
-
-function getLocalCodexManagedEvents(): readonly (typeof CODEX_EVENTS)[number][] {
-  // Why: Codex renders synchronous lifecycle hooks as prominent TUI progress
-  // rows on Windows, where even fast hook processes leave multi-second stale
-  // screen fragments. Keep the tool/permission hooks Orca needs for live
-  // status and approvals, but avoid chat lifecycle hooks in local Windows PTYs.
-  return process.platform === 'win32' ? CODEX_WINDOWS_LOCAL_EVENTS : CODEX_EVENTS
-}
-
 function getConfigPath(): string {
   return join(getOrcaManagedCodexHomePath(), 'hooks.json')
 }
@@ -96,9 +86,9 @@ const CODEX_EVENT_LABEL: Record<(typeof CODEX_EVENTS)[number], CodexEventLabel> 
   Stop: 'stop'
 }
 
-function getLocalCodexManagedEventLabels(): Set<CodexEventLabel> {
-  return new Set(getLocalCodexManagedEvents().map((eventName) => CODEX_EVENT_LABEL[eventName]))
-}
+const CODEX_MANAGED_EVENT_LABELS = new Set<CodexEventLabel>(
+  CODEX_EVENTS.map((eventName) => CODEX_EVENT_LABEL[eventName])
+)
 
 const CODEX_HOOK_EVENT_LABEL: Record<string, CodexEventLabel> = {
   ...CODEX_EVENT_LABEL,
@@ -470,7 +460,7 @@ function moveMirroredRuntimeUserTrustAfterManagedStatusHook(
   entries: readonly MirroredRuntimeUserHookTrustEntry[]
 ): MirroredRuntimeUserHookTrustEntry[] {
   return entries.map(({ entry, enabled }) => {
-    if (!getLocalCodexManagedEventLabels().has(entry.eventLabel)) {
+    if (!CODEX_MANAGED_EVENT_LABELS.has(entry.eventLabel)) {
       return { entry, enabled }
     }
     return {
@@ -785,7 +775,7 @@ export class CodexHookService {
     const trustMissing: string[] = []
     const disabled: string[] = []
     let presentCount = 0
-    for (const eventName of getLocalCodexManagedEvents()) {
+    for (const eventName of CODEX_EVENTS) {
       const definitions = Array.isArray(config.hooks?.[eventName]) ? config.hooks![eventName]! : []
       // Why: older installs appended this command, while current installs
       // prepend it. Picking the last match keeps status repair conservative
@@ -889,8 +879,7 @@ export class CodexHookService {
     const command = getManagedCommand(scriptPath)
     const hookPlan = getRuntimeHooksWithSystemUserHooks(config.hooks, isManagedCommand)
     const nextHooks = hookPlan.hooks
-    const localManagedEvents = getLocalCodexManagedEvents()
-    const managedEvents = new Set<string>(localManagedEvents)
+    const managedEvents = new Set<string>(CODEX_EVENTS)
 
     // Why: sweep managed entries out of events we no longer subscribe to
     // (e.g., PreToolUse from a prior install). Without this, users who
@@ -923,7 +912,7 @@ export class CodexHookService {
       hookPlan.trustEntries
     )
     const trustEntries: CodexTrustEntry[] = mirroredUserTrustEntries.map(({ entry }) => entry)
-    for (const eventName of localManagedEvents) {
+    for (const eventName of CODEX_EVENTS) {
       const current = Array.isArray(nextHooks[eventName]) ? nextHooks[eventName] : []
       const cleaned = removeManagedCommands(current, isManagedCommand)
       const definition: HookDefinition = {

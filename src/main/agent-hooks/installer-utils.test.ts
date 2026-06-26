@@ -346,9 +346,12 @@ describe('wrapWindowsHookCommand', () => {
     return Buffer.from(encodedCommand!, 'base64').toString('utf16le')
   }
 
-  it('uses the script path directly when no cmd escaping is needed', () => {
+  it('invokes the .cmd through an encoded PowerShell command', () => {
     const command = wrapWindowsHookCommand('C:\\Users\\alice\\.orca\\agent-hooks\\codex-hook.cmd')
-    expect(command).toBe('C:\\Users\\alice\\.orca\\agent-hooks\\codex-hook.cmd')
+    expect(command).toMatch(/^powershell -NoProfile -ExecutionPolicy Bypass -EncodedCommand \S+$/)
+    expect(decodeWindowsHookCommand(command)).toBe(
+      "& 'C:\\Users\\alice\\.orca\\agent-hooks\\codex-hook.cmd'; exit $LASTEXITCODE"
+    )
   })
 
   // Why: a user profile path like `C:\Users\Jane Doe` is the regression from
@@ -408,7 +411,7 @@ describe('buildWindowsAgentHookCurlPostCommand', () => {
   it('posts form fields via curl.exe and reads the payload from stdin', () => {
     const command = buildWindowsAgentHookCurlPostCommand('codex')
 
-    // Why: the fast path must not spawn a second PowerShell — that startup cost
+    // Why: the fast path must not spawn a second PowerShell; that startup cost
     // is the regression this replaces.
     expect(command).not.toMatch(/powershell/i)
     expect(command).toContain('%SystemRoot%\\System32\\curl.exe')
