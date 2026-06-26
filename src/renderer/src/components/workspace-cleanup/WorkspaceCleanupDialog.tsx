@@ -210,6 +210,7 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
   const removeCandidates = useAppStore((s) => s.removeWorkspaceCleanupCandidates)
 
   const open = activeModal === 'workspace-cleanup'
+  const openRef = useRef(open)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set())
   const [activeView, setActiveView] = useState<WorkspaceCleanupView>('ready')
   const [confirming, setConfirming] = useState(false)
@@ -227,12 +228,16 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
   const eligibleRepos = useMemo(() => repos.filter((repo) => isGitRepoKind(repo)), [repos])
   const eligibleRepoIds = useMemo(() => eligibleRepos.map((repo) => repo.id), [eligibleRepos])
 
+  useEffect(() => {
+    openRef.current = open
+  }, [open])
+
   const startWorkspaceCleanupScan = useCallback(
     (options: { notifyWhenReady?: boolean } = {}) => {
       setRowFailures({})
       void scanWorkspaceCleanup()
         .then((result) => {
-          if (!mountedRef.current || !options.notifyWhenReady) {
+          if (!mountedRef.current || !options.notifyWhenReady || openRef.current) {
             return
           }
           if (latestReadyToastScanAtRef.current === result.scannedAt) {
