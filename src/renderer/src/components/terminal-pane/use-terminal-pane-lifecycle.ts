@@ -54,9 +54,11 @@ import { handleOsc52ClipboardRequest } from './osc52-clipboard'
 import { showOsc52ClipboardBlockedToast } from './osc52-clipboard-blocked-toast'
 import { parseOsc7 } from './parse-osc7'
 import { resolveTerminalJisYenInput } from './terminal-jis-yen-input'
+import { installTerminalImeCompositionTracker } from './terminal-ime-composition-tracker'
 import {
   shouldBypassXtermKeyboardEvent,
   shouldHandleTerminalInterruptKeyboardEvent,
+  shouldSuppressTerminalImeKeyboardEvent,
   shouldSuppressTerminalInterruptKeyup,
   shouldSuppressTerminalModifierKeyboardEvent,
   TERMINAL_INTERRUPT_INPUT
@@ -429,6 +431,7 @@ export function useTerminalPaneLifecycle({
   const osc52DisposablesRef = useRef(new Map<number, IDisposable>())
   const osc7DisposablesRef = useRef(new Map<number, IDisposable>())
   const mouseHideDisposablesRef = useRef(new Map<number, IDisposable>())
+  const imeCompositionDisposablesRef = useRef(new Map<number, IDisposable>())
 
   const applyAppearance = (manager: PaneManager): void => {
     const currentSettings = settingsRef.current
@@ -494,6 +497,7 @@ export function useTerminalPaneLifecycle({
     const selectionDisposables = selectionDisposablesRef.current
     const selectionCaptureTimers = selectionCaptureTimersRef.current
     const mouseHideDisposables = mouseHideDisposablesRef.current
+    const imeCompositionDisposables = imeCompositionDisposablesRef.current
     const worktreePath =
       useAppStore
         .getState()
@@ -684,8 +688,17 @@ export function useTerminalPaneLifecycle({
         // encoder runs, letting the browser and Electron paths fire normally.
         // See xterm-bypass-policy.ts for the rule derivation.
         let pendingTerminalInterruptKeyup = false
+        const imeCompositionTracker = installTerminalImeCompositionTracker(pane.terminal.element)
+        imeCompositionDisposablesRef.current.set(pane.id, imeCompositionTracker)
         pane.terminal.attachCustomKeyEventHandler((e) => {
           const isMac = navigator.userAgent.includes('Mac')
+          if (
+            shouldSuppressTerminalImeKeyboardEvent(e, {
+              compositionActive: imeCompositionTracker.isActive()
+            })
+          ) {
+            return false
+          }
           if (pendingTerminalInterruptKeyup && shouldSuppressTerminalInterruptKeyup(e)) {
             pendingTerminalInterruptKeyup = false
             return false
@@ -917,6 +930,11 @@ export function useTerminalPaneLifecycle({
         if (selectionDisposable) {
           selectionDisposable.dispose()
           selectionDisposablesRef.current.delete(paneId)
+        }
+        const imeCompositionDisposable = imeCompositionDisposablesRef.current.get(paneId)
+        if (imeCompositionDisposable) {
+          imeCompositionDisposable.dispose()
+          imeCompositionDisposablesRef.current.delete(paneId)
         }
         const selectionCaptureTimer = selectionCaptureTimersRef.current.get(paneId)
         if (selectionCaptureTimer !== undefined) {
@@ -1398,6 +1416,10 @@ export function useTerminalPaneLifecycle({
         disposable.dispose()
       }
       mouseHideDisposables.clear()
+      for (const disposable of imeCompositionDisposables.values()) {
+        disposable.dispose()
+      }
+      imeCompositionDisposables.clear()
       for (const transport of paneTransports.values()) {
         const ptyId = transport.getPtyId()
         if (
