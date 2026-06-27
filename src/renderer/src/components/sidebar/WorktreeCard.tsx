@@ -136,6 +136,7 @@ type WorktreeCardProps = {
 
 const EMPTY_WORKSPACE_PORTS = []
 const HOSTED_REVIEW_CARD_REFRESH_INTERVAL_MS = 60_000
+type WorktreeCardPRCacheEntry = { data?: PRInfo | null; fetchedAt?: number }
 
 export function shouldBeginWorktreeRename(
   request: WorktreeRenameRequest | null,
@@ -175,6 +176,19 @@ function isCachedMergedBranchPRCurrentForWorktree(
     worktree.head.length > 0 &&
     cachedPR.headSha === worktree.head
   )
+}
+
+function findDetachedPRCacheEntry(
+  prCache: Record<string, WorktreeCardPRCacheEntry> | undefined,
+  cacheBranch: string
+): WorktreeCardPRCacheEntry | undefined {
+  if (!prCache || !cacheBranch.startsWith('__detached_head__:')) {
+    return undefined
+  }
+  // Why: imported/folder workspaces can observe the same detached PR under a
+  // different repo owner key; the HEAD-scoped suffix is still exact.
+  const suffix = `::${cacheBranch}`
+  return Object.entries(prCache).find(([key, entry]) => key.endsWith(suffix) && entry?.data)?.[1]
 }
 
 function getDirectoryName(folderPath: string): string {
@@ -472,7 +486,8 @@ const WorktreeCard = React.memo(function WorktreeCard({
     (s) =>
       (prCacheKey ? s.prCache?.[prCacheKey] : undefined) ??
       (legacyRepoScopedPRCacheKey ? s.prCache?.[legacyRepoScopedPRCacheKey] : undefined) ??
-      (legacyPathScopedPRCacheKey ? s.prCache?.[legacyPathScopedPRCacheKey] : undefined)
+      (legacyPathScopedPRCacheKey ? s.prCache?.[legacyPathScopedPRCacheKey] : undefined) ??
+      findDetachedPRCacheEntry(s.prCache, prCacheBranch)
   )
   const issueEntry = useAppStore((s) => (issueCacheKey ? s.issueCache[issueCacheKey] : undefined))
   const linearIssueEntry = useAppStore((s) =>

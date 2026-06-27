@@ -222,6 +222,35 @@ describe('WorktreeCard merged PR fallback display', () => {
     expect(markup).not.toContain('Detached HEAD @ merge-c')
   })
 
+  it('shows detached PRs when cache owner prefix differs', async () => {
+    hostedReviewCache = {
+      'local::repo-1::__detached_head__:merge-commit': {
+        data: null,
+        fetchedAt: 200
+      }
+    }
+    prCache = {
+      'runtime:windows::other-repo-id::__detached_head__:merge-commit': {
+        data: makePRInfo({
+          headSha: 'pr-head-before-merge'
+        }),
+        fetchedAt: 100
+      }
+    }
+    const { default: WorktreeCard } = await import('./WorktreeCard')
+
+    const markup = renderWorktreeCardMarkup(
+      <WorktreeCard
+        worktree={makeWorktree({ branch: '', linkedPR: null, head: 'merge-commit' })}
+        repo={makeRepo()}
+        isActive={false}
+      />
+    )
+
+    expect(markup).toContain('Linked PR #6340')
+    expect(markup).not.toContain('Detached HEAD @ merge-c')
+  })
+
   it('hides detached HEAD badge when the parent list supplies PR status', async () => {
     const { default: WorktreeCard } = await import('./WorktreeCard')
 

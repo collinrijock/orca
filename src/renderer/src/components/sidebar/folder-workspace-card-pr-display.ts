@@ -264,7 +264,8 @@ function getCachedGitHubPr({
       : undefined) ??
     (legacyPathScopedCacheKey
       ? (prCache[legacyPathScopedCacheKey] as PrCacheEntry | undefined)
-      : undefined)
+      : undefined) ??
+    findDetachedPRCacheEntry(prCache, cacheBranch)
   const pr = entry?.data ?? null
   if (!pr) {
     return null
@@ -273,6 +274,22 @@ function getCachedGitHubPr({
     return pr
   }
   return pr.number === worktree.linkedPR ? pr : null
+}
+
+function findDetachedPRCacheEntry(
+  prCache: Record<string, unknown>,
+  cacheBranch: string
+): PrCacheEntry | undefined {
+  if (!cacheBranch.startsWith('__detached_head__:')) {
+    return undefined
+  }
+  // Why: folder/import aggregate rows may represent a different repo identity
+  // than the active worktree, but a detached HEAD cache suffix is unambiguous.
+  const suffix = `::${cacheBranch}`
+  return Object.entries(prCache).find(([key, entry]) => {
+    const data = (entry as PrCacheEntry | undefined)?.data
+    return key.endsWith(suffix) && data
+  })?.[1] as PrCacheEntry | undefined
 }
 
 function compareReviewDisplays(left: WorktreeCardPrDisplay, right: WorktreeCardPrDisplay): number {
