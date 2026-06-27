@@ -55,6 +55,7 @@ const SlugAssignableUsers = SlugRepo.extend({
 })
 
 const PrForBranch = RepoSelector.extend({
+  // Why: detached/merge-commit worktrees have no branch; currentHeadOid can still resolve PR context.
   branch: requiredStringAllowingEmpty('Missing branch'),
   linkedPRNumber: z.number().int().positive().nullable().optional(),
   fallbackPRNumber: z.number().int().positive().nullable().optional(),

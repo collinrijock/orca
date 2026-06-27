@@ -1219,6 +1219,21 @@ describe('getPRForBranch', () => {
     })
   })
 
+  it('treats stale fallback PR misses as accessible before merge-commit 404s', async () => {
+    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
+    ghExecFileAsyncMock
+      .mockRejectedValueOnce(new Error('HTTP 404: PR not found'))
+      .mockRejectedValueOnce(new Error('HTTP 404: REST PR not found'))
+      .mockRejectedValueOnce(new Error('HTTP 404: Commit association not found'))
+
+    const outcome = await getPRForBranchOutcome('/repo-root', '', null, null, 123, {
+      currentHeadOid: 'dddddddd'
+    })
+
+    expect(outcome).toMatchObject({ kind: 'no-pr' })
+    expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(2)
+  })
+
   it('treats a merged branch lookup as a miss before using a fallback PR number', async () => {
     getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
     ghExecFileAsyncMock

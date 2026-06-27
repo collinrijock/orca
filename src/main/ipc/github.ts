@@ -291,8 +291,10 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
       if (args.acceptMergedFallbackPR === true) {
         lookupOptions.acceptMergedFallbackPR = true
       }
-      if (typeof args.currentHeadOid === 'string') {
-        lookupOptions.currentHeadOid = args.currentHeadOid
+      const currentHeadOid =
+        typeof args.currentHeadOid === 'string' ? args.currentHeadOid.trim() : ''
+      if (currentHeadOid) {
+        lookupOptions.currentHeadOid = currentHeadOid
       }
       const lookupOptionArgs: [] | [GitHubPRBranchLookupOptions] =
         Object.keys(lookupOptions).length > 0 ? [lookupOptions] : []

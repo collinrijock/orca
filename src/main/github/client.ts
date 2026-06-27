@@ -2898,10 +2898,10 @@ async function lookupPRByNumber(args: {
   for (const candidate of args.candidates) {
     try {
       const linkedData = await getPRByNumber(candidate, args.number, args.ghOptions)
+      args.accessibleRepos?.add(prOwnerRepoKey(candidate))
       if (!linkedData) {
         continue
       }
-      args.accessibleRepos?.add(prOwnerRepoKey(candidate))
       return { data: linkedData, dataRepo: candidate }
     } catch (err) {
       if (shouldStopAfterExactLookupError(err)) {

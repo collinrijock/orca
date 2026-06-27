@@ -1164,7 +1164,7 @@ export default function ChecksPanel(): React.JSX.Element {
     [setPrTitle]
   )
   const stateRequestKey =
-    repo && branch
+    repo && hasReviewLookupIdentity
       ? activeGitLabReview
         ? checksPanelHostedReviewAsyncResultKey(
             hostedReviewCacheKey,
@@ -2141,7 +2141,7 @@ export default function ChecksPanel(): React.JSX.Element {
   // duplicate fetches from rapid show/hide toggles. See
   // docs/refresh-on-checks-tab.md.
   const entryKey =
-    isPanelVisible && repo && !isFolder && branch
+    isPanelVisible && repo && !isFolder && hasReviewLookupIdentity
       ? `${activeWorktreeId ?? ''}::${activeGitLabReview ? hostedReviewCacheKey : prCacheKey}`
       : ''
   const lastEntryKeyRef = useRef<string>('')

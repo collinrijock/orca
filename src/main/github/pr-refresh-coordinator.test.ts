@@ -790,6 +790,34 @@ describe('pr-refresh-coordinator', () => {
     })
   })
 
+  it('normalizes worktree HEAD hints before lookup and alias emission', async () => {
+    const { refreshPRNow } = await import('./pr-refresh-coordinator')
+    getPRForBranchOutcomeMock.mockResolvedValueOnce({
+      kind: 'no-pr',
+      fetchedAt: Date.now()
+    })
+
+    await refreshPRNow(
+      makeCandidate({
+        branch: '',
+        worktreeHead: '  abcdef1  ',
+        cacheKey: '/repo::__detached_head__:abcdef1'
+      })
+    )
+
+    expect(getPRForBranchOutcomeMock).toHaveBeenCalledWith('/repo', '', null, null, null, {
+      currentHeadOid: 'abcdef1'
+    })
+    expect(
+      sendMock.mock.calls.map(([, event]) => event).find((event) => event.outcome)?.aliases
+    ).toEqual([
+      expect.objectContaining({
+        cacheKey: '/repo::__detached_head__:abcdef1',
+        worktreeHead: 'abcdef1'
+      })
+    ])
+  })
+
   it('does not coalesce detached refreshes for different worktree HEADs', async () => {
     const { reportVisiblePRRefreshCandidates } = await import('./pr-refresh-coordinator')
     getPRForBranchOutcomeMock

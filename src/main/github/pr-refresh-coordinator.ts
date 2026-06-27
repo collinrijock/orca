@@ -52,8 +52,9 @@ function hostedReviewOptionArgs(
   if (candidate.localGitOptions?.wslDistro) {
     options.localGitExecOptions = { wslDistro: candidate.localGitOptions.wslDistro }
   }
-  if (candidate.worktreeHead) {
-    options.currentHeadOid = candidate.worktreeHead
+  const worktreeHead = normalizedWorktreeHead(candidate.worktreeHead)
+  if (worktreeHead) {
+    options.currentHeadOid = worktreeHead
   }
   if (shouldAcceptMergedFallbackPR(candidate)) {
     options.acceptMergedFallbackPR = true
@@ -178,11 +179,16 @@ function refreshKey(candidate: GitHubPRRefreshCandidate): string {
   if (typeof candidate.linkedPRNumber === 'number') {
     return `${connectionScope}::${runtimeScope}::${candidate.repoPath}::pr::${candidate.linkedPRNumber}`
   }
-  const detachedHead = candidate.branch ? null : candidate.worktreeHead?.trim()
+  const detachedHead = candidate.branch ? null : normalizedWorktreeHead(candidate.worktreeHead)
   if (detachedHead) {
     return `${connectionScope}::${runtimeScope}::${candidate.repoPath}::head::${detachedHead}`
   }
   return `${connectionScope}::${runtimeScope}::${candidate.repoPath}::branch::${candidate.branch}`
+}
+
+function normalizedWorktreeHead(head: string | null | undefined): string | null {
+  const trimmed = head?.trim()
+  return trimmed ? trimmed : null
 }
 
 function isVisibleKey(key: string): boolean {
@@ -245,7 +251,7 @@ function validateCandidate(
     !candidate.branch &&
     typeof candidate.linkedPRNumber !== 'number' &&
     typeof candidate.fallbackPRNumber !== 'number' &&
-    !candidate.worktreeHead
+    !normalizedWorktreeHead(candidate.worktreeHead)
   ) {
     return 'fresh'
   }
@@ -286,7 +292,7 @@ function aliasFromCandidate(candidate: GitHubPRRefreshCandidate): GitHubPRRefres
     repoPath: candidate.repoPath,
     branch: candidate.branch,
     worktreeId: candidate.worktreeId,
-    worktreeHead: candidate.worktreeHead ?? null,
+    worktreeHead: normalizedWorktreeHead(candidate.worktreeHead),
     connectionId: candidate.connectionId ?? null,
     linkedPRNumber: candidate.linkedPRNumber ?? null,
     fallbackPRNumber:
