@@ -8,7 +8,9 @@ const {
   mkdirSyncMock,
   writeFileSyncMock,
   spawnMock,
-  resolveAgentForegroundProcessMock
+  resolveAgentForegroundProcessMock,
+  hasManagedCodexNetworkPermissionRequirementMock,
+  buildCodexManagedNetworkRequirementsWarningCommandMock
 } = vi.hoisted(() => ({
   existsSyncMock: vi.fn(),
   statSyncMock: vi.fn(),
@@ -16,7 +18,9 @@ const {
   mkdirSyncMock: vi.fn(),
   writeFileSyncMock: vi.fn(),
   spawnMock: vi.fn(),
-  resolveAgentForegroundProcessMock: vi.fn()
+  resolveAgentForegroundProcessMock: vi.fn(),
+  hasManagedCodexNetworkPermissionRequirementMock: vi.fn(),
+  buildCodexManagedNetworkRequirementsWarningCommandMock: vi.fn()
 }))
 
 vi.mock('fs', () => ({
@@ -41,6 +45,12 @@ vi.mock('node-pty', () => ({
 
 vi.mock('./agent-foreground-process', () => ({
   resolveAgentForegroundProcess: resolveAgentForegroundProcessMock
+}))
+
+vi.mock('../codex/codex-managed-network-requirements', () => ({
+  hasManagedCodexNetworkPermissionRequirement: hasManagedCodexNetworkPermissionRequirementMock,
+  buildCodexManagedNetworkRequirementsWarningCommand:
+    buildCodexManagedNetworkRequirementsWarningCommandMock
 }))
 
 vi.mock('../wsl', () => ({
@@ -95,6 +105,10 @@ describe('LocalPtyProvider', () => {
     resolveAgentForegroundProcessMock.mockReset()
     resolveAgentForegroundProcessMock.mockImplementation(
       async (_pid: number, fallbackProcess: string | null) => fallbackProcess
+    )
+    hasManagedCodexNetworkPermissionRequirementMock.mockReturnValue(false)
+    buildCodexManagedNetworkRequirementsWarningCommandMock.mockReturnValue(
+      "printf '%s\\n' 'Codex managed network requirements are not supported'"
     )
 
     exitCb = undefined
@@ -263,6 +277,32 @@ describe('LocalPtyProvider', () => {
         vi.advanceTimersByTime(1)
         await Promise.resolve()
         expect(mockProc.write).toHaveBeenCalledWith("printf 'linked issue context'\n")
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('prints a diagnostic instead of launching Codex when managed network requirements would crash the TUI', async () => {
+      vi.useFakeTimers()
+      try {
+        Object.defineProperty(process, 'platform', { configurable: true, value: 'darwin' })
+        hasManagedCodexNetworkPermissionRequirementMock.mockReturnValue(true)
+
+        await provider.spawn({
+          cols: 80,
+          rows: 24,
+          command: "codex '--dangerously-bypass-approvals-and-sandbox'"
+        })
+
+        const dataCallback = mockProc.onData.mock.calls[0]?.[0] as (data: string) => void
+        dataCallback('\x1b]777;orca-shell-ready\x07user@host % ')
+        await Promise.resolve()
+        vi.advanceTimersByTime(30)
+        await Promise.resolve()
+
+        expect(mockProc.write).toHaveBeenCalledWith(
+          "printf '%s\\n' 'Codex managed network requirements are not supported'\n"
+        )
       } finally {
         vi.useRealTimers()
       }

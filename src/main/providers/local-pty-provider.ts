@@ -49,6 +49,10 @@ import { resolveAgentForegroundProcess } from './agent-foreground-process'
 import { getAgentForegroundContextPaths } from './agent-foreground-context-paths'
 import { recognizeAgentProcessFromCommandLine } from '../../shared/agent-process-recognition'
 import { shouldUseShellReadyStartupDelivery } from '../../shared/codex-startup-delivery'
+import {
+  buildCodexManagedNetworkRequirementsWarningCommand,
+  hasManagedCodexNetworkPermissionRequirement
+} from '../codex/codex-managed-network-requirements'
 
 const PANE_IDENTITY_ENV_KEYS = [
   'ORCA_PANE_KEY',
@@ -476,6 +480,16 @@ export class LocalPtyProvider implements IPtyProvider {
     const isWslShell = Boolean(wslInfo) || pathWin32.basename(shellPath).toLowerCase() === 'wsl.exe'
     const launchWslDistro =
       wslInfo?.distro ?? worktreeWslContext?.distro ?? preferredWslContext?.distro ?? null
+    if (
+      process.platform === 'darwin' &&
+      args.command &&
+      recognizeAgentProcessFromCommandLine(args.command)?.agent === 'codex' &&
+      hasManagedCodexNetworkPermissionRequirement()
+    ) {
+      // Why: Codex 0.142 exits the TUI before the first turn when managed
+      // requirements enable a permission-profile network policy on macOS.
+      args.command = buildCodexManagedNetworkRequirementsWarningCommand()
+    }
     const finalEnv = this.opts.buildSpawnEnv
       ? this.opts.buildSpawnEnv(id, spawnEnv, {
           command: args.command,
