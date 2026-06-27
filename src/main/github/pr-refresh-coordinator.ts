@@ -34,7 +34,7 @@ type PRRefreshOutcomeObserver = (
 
 type PRBranchLookupCandidate = Pick<
   GitHubPRRefreshCandidate,
-  'localGitOptions' | 'linkedPRNumber' | 'fallbackPRNumber' | 'fallbackPRSource'
+  'localGitOptions' | 'linkedPRNumber' | 'fallbackPRNumber' | 'fallbackPRSource' | 'worktreeHead'
 >
 
 function shouldAcceptMergedFallbackPR(candidate: PRBranchLookupCandidate): boolean {
@@ -51,6 +51,9 @@ function hostedReviewOptionArgs(
   const options: GitHubPRBranchLookupOptions = {}
   if (candidate.localGitOptions?.wslDistro) {
     options.localGitExecOptions = { wslDistro: candidate.localGitOptions.wslDistro }
+  }
+  if (candidate.worktreeHead) {
+    options.currentHeadOid = candidate.worktreeHead
   }
   if (shouldAcceptMergedFallbackPR(candidate)) {
     options.acceptMergedFallbackPR = true
@@ -747,6 +750,9 @@ export function enqueuePRRefresh(
   const dueAt = freshDueAt ?? Date.now() + (reason === 'post-push' ? POST_PUSH_DELAY_MS : 0)
   if (existing) {
     existing.aliases.set(alias.cacheKey, alias)
+    // Why: visible refreshes can sit in the queue while git status advances.
+    // Keep the latest HEAD/cache hints without changing priority or timing.
+    existing.candidate = candidate
     diagnosticsCounters.coalesced += 1
     recordPRRefreshQueueDiagnostic('coalesced', reason)
     const shouldPromoteExisting =
@@ -760,7 +766,6 @@ export function enqueuePRRefresh(
       existing.dueAt = Math.min(existing.dueAt, dueAt)
       existing.queuedAt = nextQueueOrder()
       existing.activeDelayNotified = false
-      existing.candidate = candidate
       existing.windowId = windowId ?? existing.windowId
     }
   } else {

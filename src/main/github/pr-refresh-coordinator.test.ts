@@ -747,6 +747,29 @@ describe('pr-refresh-coordinator', () => {
     )
   })
 
+  it('uses the latest coalesced worktree HEAD hint for queued refreshes', async () => {
+    const { reportVisiblePRRefreshCandidates } = await import('./pr-refresh-coordinator')
+    getPRForBranchOutcomeMock.mockResolvedValueOnce({
+      kind: 'no-pr',
+      fetchedAt: Date.now()
+    })
+
+    reportVisiblePRRefreshCandidates([makeCandidate({ worktreeHead: '1111111' })], 1, 1)
+    reportVisiblePRRefreshCandidates([makeCandidate({ worktreeHead: '2222222' })], 2, 1)
+    await vi.runOnlyPendingTimersAsync()
+    await vi.advanceTimersByTimeAsync(10_000)
+
+    expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(1)
+    expect(getPRForBranchOutcomeMock).toHaveBeenCalledWith(
+      '/repo',
+      'feature/test',
+      null,
+      null,
+      null,
+      { currentHeadOid: '2222222' }
+    )
+  })
+
   it('preserves coalesced aliases across visible follow-up refreshes', async () => {
     const { reportVisiblePRRefreshCandidates } = await import('./pr-refresh-coordinator')
     getPRForBranchOutcomeMock

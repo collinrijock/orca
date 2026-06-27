@@ -150,6 +150,9 @@ function formatSparseDirectoryPreview(directories: string[]): string {
 }
 
 function isWebClient(): boolean {
+  if (typeof window === 'undefined') {
+    return false
+  }
   return Boolean((window as unknown as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__)
 }
 
@@ -608,6 +611,17 @@ const WorktreeCard = React.memo(function WorktreeCard({
   const showComment = cardProps.includes('comment')
   const showPorts = cardProps.includes('ports')
   const shouldRefreshHostedReview = newCardStyle ? showStatus : showPR
+  const canPassivelyRefreshHostedReview =
+    !isWebClient() && repo !== undefined && !isMacAppDataPath(repo.path)
+  const hostedReviewLookupPending =
+    newCardStyle &&
+    shouldRefreshHostedReview &&
+    canPassivelyRefreshHostedReview &&
+    repo !== undefined &&
+    !isFolder &&
+    !worktree.isBare &&
+    hostedReviewCacheKey.length > 0 &&
+    hostedReviewEntry === undefined
   const detailsHoverControl = useWorktreeCardDetailsHoverControl()
   const hoverDetailsOpen = detailsHoverControl.hoverOpen
 
@@ -1357,7 +1371,9 @@ const WorktreeCard = React.memo(function WorktreeCard({
             onToggleUnread={handleToggleUnreadQuick}
             prDisplay={statusLaneReview}
             newCardStyle={newCardStyle}
-            hasBranchIdentity={Boolean(branchIdentityDisplay)}
+            // Why: an unresolved branch-review lookup means "unknown", not
+            // "no PR"; showing the branch glyph here causes visible PR flicker.
+            hasBranchIdentity={Boolean(branchIdentityDisplay) && !hostedReviewLookupPending}
           />
         </div>
       ) : null}
