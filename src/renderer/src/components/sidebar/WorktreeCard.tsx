@@ -3,7 +3,7 @@ import React, { useEffect, useCallback, useState } from 'react'
 import { useAppStore } from '@/store'
 import { getHostedReviewCacheKey } from '@/store/slices/hosted-review'
 import { issueCacheKey as getIssueCacheKey } from '@/store/slices/github'
-import { getGitHubPRCacheKey } from '@/store/slices/github-cache-key'
+import { getGitHubPRCacheBranch, getGitHubPRCacheKey } from '@/store/slices/github-cache-key'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
@@ -153,7 +153,10 @@ function isWebClient(): boolean {
   if (typeof window === 'undefined') {
     return false
   }
-  return Boolean((window as unknown as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__)
+  return (
+    Boolean((window as unknown as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__) ||
+    window.location.pathname.endsWith('/web-index.html')
+  )
 }
 
 function isCachedMergedBranchPRCurrentForWorktree(
@@ -407,11 +410,12 @@ const WorktreeCard = React.memo(function WorktreeCard({
   const folderMetaRowContent = newCardStyle
     ? hasPathIdentityEnabled && Boolean(folderPathIdentityDisplay)
     : isFolder
+  const prCacheBranch = getGitHubPRCacheBranch(branch, worktree.head)
   const hostedReviewCacheKey =
-    repo && branch
+    repo && prCacheBranch
       ? getHostedReviewCacheKey(
           repo.path,
-          branch,
+          prCacheBranch,
           settings,
           repo.id,
           repo.connectionId,
@@ -420,11 +424,11 @@ const WorktreeCard = React.memo(function WorktreeCard({
         )
       : ''
   const prCacheKey =
-    repo && branch
+    repo && prCacheBranch
       ? getGitHubPRCacheKey(
           repo.path,
           repo.id,
-          branch,
+          prCacheBranch,
           settings,
           repo.connectionId,
           repo.executionHostId,

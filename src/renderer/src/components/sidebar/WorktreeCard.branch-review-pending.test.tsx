@@ -155,4 +155,16 @@ describe('WorktreeCard branch review lookup pending state', () => {
     expect(markup).toContain('Branch')
     expect(markup).toContain('lucide-git-branch')
   })
+
+  it('keeps branch status on pathname-detected paired web clients', async () => {
+    vi.stubGlobal('window', { location: { pathname: '/web-index.html' } })
+    const { default: WorktreeCard } = await import('./WorktreeCard')
+
+    const markup = renderWorktreeCardMarkup(
+      <WorktreeCard worktree={makeWorktree()} repo={makeRepo()} isActive={false} />
+    )
+
+    expect(markup).toContain('Branch')
+    expect(markup).toContain('lucide-git-branch')
+  })
 })

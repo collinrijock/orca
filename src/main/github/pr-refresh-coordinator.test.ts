@@ -790,6 +790,32 @@ describe('pr-refresh-coordinator', () => {
     })
   })
 
+  it('does not coalesce detached refreshes for different worktree HEADs', async () => {
+    const { reportVisiblePRRefreshCandidates } = await import('./pr-refresh-coordinator')
+    getPRForBranchOutcomeMock
+      .mockResolvedValueOnce({ kind: 'no-pr', fetchedAt: Date.now() })
+      .mockResolvedValueOnce({ kind: 'no-pr', fetchedAt: Date.now() })
+
+    reportVisiblePRRefreshCandidates(
+      [
+        makeCandidate({ branch: '', worktreeHead: '1111111', cacheKey: '/repo::head::1111111' }),
+        makeCandidate({ branch: '', worktreeHead: '2222222', cacheKey: '/repo::head::2222222' })
+      ],
+      1,
+      1
+    )
+    await vi.runOnlyPendingTimersAsync()
+    await vi.advanceTimersByTimeAsync(10_000)
+
+    expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(2)
+    expect(getPRForBranchOutcomeMock).toHaveBeenNthCalledWith(1, '/repo', '', null, null, null, {
+      currentHeadOid: '1111111'
+    })
+    expect(getPRForBranchOutcomeMock).toHaveBeenNthCalledWith(2, '/repo', '', null, null, null, {
+      currentHeadOid: '2222222'
+    })
+  })
+
   it('accounts for the extra core probe on background PR refreshes', async () => {
     const { reportVisiblePRRefreshCandidates } = await import('./pr-refresh-coordinator')
     getPRForBranchOutcomeMock.mockResolvedValueOnce({

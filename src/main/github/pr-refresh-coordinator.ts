@@ -178,6 +178,10 @@ function refreshKey(candidate: GitHubPRRefreshCandidate): string {
   if (typeof candidate.linkedPRNumber === 'number') {
     return `${connectionScope}::${runtimeScope}::${candidate.repoPath}::pr::${candidate.linkedPRNumber}`
   }
+  const detachedHead = candidate.branch ? null : candidate.worktreeHead?.trim()
+  if (detachedHead) {
+    return `${connectionScope}::${runtimeScope}::${candidate.repoPath}::head::${detachedHead}`
+  }
   return `${connectionScope}::${runtimeScope}::${candidate.repoPath}::branch::${candidate.branch}`
 }
 
@@ -236,6 +240,7 @@ function validateCandidate(
   if (candidate.connectionId && candidate.connectionState === 'disconnected') {
     return 'disconnected'
   }
+  // Why: detached worktrees can still resolve a PR from the checked-out merge commit.
   if (
     !candidate.branch &&
     typeof candidate.linkedPRNumber !== 'number' &&
@@ -281,6 +286,7 @@ function aliasFromCandidate(candidate: GitHubPRRefreshCandidate): GitHubPRRefres
     repoPath: candidate.repoPath,
     branch: candidate.branch,
     worktreeId: candidate.worktreeId,
+    worktreeHead: candidate.worktreeHead ?? null,
     connectionId: candidate.connectionId ?? null,
     linkedPRNumber: candidate.linkedPRNumber ?? null,
     fallbackPRNumber:

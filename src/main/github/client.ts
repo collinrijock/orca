@@ -2460,6 +2460,13 @@ async function probeCommitAssociatedPRForRepo(args: {
     cacheCommitAssociatedPRResult(args.cacheKey, result)
     return result
   } catch (err) {
+    if (isMissingCommitAssociatedPRError(err)) {
+      // Why: local/unpushed commits commonly do not exist in GitHub yet; that is
+      // an empty association, not a PR refresh failure.
+      const result: Extract<CommitAssociatedPRProbeResult, { kind: 'empty' }> = { kind: 'empty' }
+      cacheCommitAssociatedPRResult(args.cacheKey, result)
+      return result
+    }
     if (!isNotFoundGhError(err)) {
       throw err
     }
@@ -2932,6 +2939,11 @@ function isNotFoundGhError(err: unknown): boolean {
   return classifyGhError(stderr).type === 'not_found'
 }
 
+function isMissingCommitAssociatedPRError(err: unknown): boolean {
+  const stderr = err instanceof Error ? err.message : String(err)
+  return /no commit found for sha/i.test(stderr) && /http 422/i.test(stderr)
+}
+
 function shouldStopAfterExactLookupError(err: unknown): boolean {
   const stderr = err instanceof Error ? err.message : String(err)
   const type = classifyGhError(stderr).type
@@ -2997,12 +3009,15 @@ export async function getPRForBranchOutcome(
     let currentHeadOidResolved = false
     let acceptedByExactMergeCommit = false
     const accessibleRepos = new Set<string>()
+    const explicitCurrentHeadOid = isUsableHeadOid(options.currentHeadOid ?? null)
+      ? (options.currentHeadOid ?? null)
+      : null
 
     const getCurrentHeadOidForLookup = async (): Promise<string | null> => {
       if (!currentHeadOidResolved) {
-        currentHeadOidForMergedImplicit = isUsableHeadOid(options.currentHeadOid ?? null)
-          ? (options.currentHeadOid ?? null)
-          : await getCurrentHeadOid(repoPath, connectionId, localGitOptions)
+        currentHeadOidForMergedImplicit =
+          explicitCurrentHeadOid ??
+          (await getCurrentHeadOid(repoPath, connectionId, localGitOptions))
         currentHeadOidResolved = true
       }
       return currentHeadOidForMergedImplicit ?? null
@@ -3106,11 +3121,10 @@ export async function getPRForBranchOutcome(
       dataHeadRepo = headRepo
     }
     if (!data && typeof linkedPRNumber !== 'number') {
-      currentHeadOidForMergedImplicit = await getCurrentHeadOidForLookup()
-      if (isUsableHeadOid(currentHeadOidForMergedImplicit) && candidates.length > 0) {
+      if (explicitCurrentHeadOid && candidates.length > 0) {
         const mergeCommitLookup = await lookupPRByMergeCommit({
           candidates,
-          headOid: currentHeadOidForMergedImplicit,
+          headOid: explicitCurrentHeadOid,
           ghOptions,
           repoPath,
           connectionId,

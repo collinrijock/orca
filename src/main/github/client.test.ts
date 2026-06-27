@@ -840,9 +840,7 @@ describe('getPRForBranch', () => {
 
   it('returns a merged PR by exact merge commit when branch lookup misses', async () => {
     getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
-    gitExecFileAsyncMock
-      .mockResolvedValueOnce({ stdout: 'feature/test\0\n', stderr: '' })
-      .mockResolvedValueOnce({ stdout: 'aaaaaaaa\n', stderr: '' })
+    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: 'feature/test\0\n', stderr: '' })
     ghExecFileAsyncMock
       .mockResolvedValueOnce({ stdout: JSON.stringify([]) })
       .mockResolvedValueOnce({
@@ -890,7 +888,9 @@ describe('getPRForBranch', () => {
         })
       })
 
-    const pr = await getPRForBranch('/repo-root', 'feature/test')
+    const pr = await getPRForBranch('/repo-root', 'feature/test', null, null, null, {
+      currentHeadOid: 'aaaaaaaa'
+    })
 
     expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
       2,
@@ -920,9 +920,7 @@ describe('getPRForBranch', () => {
 
   it('rejects open and merge-commit mismatched associated PRs', async () => {
     getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
-    gitExecFileAsyncMock
-      .mockResolvedValueOnce({ stdout: 'feature/test\0\n', stderr: '' })
-      .mockResolvedValueOnce({ stdout: 'aaaaaaaa\n', stderr: '' })
+    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: 'feature/test\0\n', stderr: '' })
     ghExecFileAsyncMock
       .mockResolvedValueOnce({ stdout: JSON.stringify([]) })
       .mockResolvedValueOnce({
@@ -953,8 +951,43 @@ describe('getPRForBranch', () => {
         ])
       })
 
-    await expect(getPRForBranch('/repo-root', 'feature/test')).resolves.toBeNull()
+    await expect(
+      getPRForBranch('/repo-root', 'feature/test', null, null, null, {
+        currentHeadOid: 'aaaaaaaa'
+      })
+    ).resolves.toBeNull()
     expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('treats a missing GitHub commit association as no PR for local-only commits', async () => {
+    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
+    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: 'feature/test\0\n', stderr: '' })
+    ghExecFileAsyncMock
+      .mockResolvedValueOnce({ stdout: JSON.stringify([]) })
+      .mockRejectedValueOnce(new Error('gh: No commit found for SHA: aaaaaaaa (HTTP 422)'))
+
+    await expect(
+      getPRForBranchOutcome('/repo-root', 'feature/test', null, null, null, {
+        currentHeadOid: 'aaaaaaaa'
+      })
+    ).resolves.toMatchObject({ kind: 'no-pr' })
+    expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('does not discover merge-commit PRs from repo-root HEAD without an explicit head hint', async () => {
+    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
+    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: 'feature/test\0\n', stderr: '' })
+    ghExecFileAsyncMock.mockResolvedValueOnce({ stdout: JSON.stringify([]) })
+
+    await expect(getPRForBranchOutcome('/repo-root', 'feature/test')).resolves.toMatchObject({
+      kind: 'no-pr'
+    })
+
+    expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(1)
+    expect(ghExecFileAsyncMock).toHaveBeenCalledWith(
+      ['api', 'repos/acme/widgets/pulls?head=acme%3Afeature%2Ftest&state=all&per_page=1'],
+      { cwd: '/repo-root' }
+    )
   })
 
   it('reuses an unavailable HEAD lookup after hiding a stale merged branch PR', async () => {
@@ -1002,7 +1035,6 @@ describe('getPRForBranch', () => {
 
   it('runs the merge-commit fallback for detached HEAD', async () => {
     getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
-    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: 'dddddddd\n', stderr: '' })
     ghExecFileAsyncMock
       .mockResolvedValueOnce({
         stdout: JSON.stringify([
@@ -1037,7 +1069,9 @@ describe('getPRForBranch', () => {
         })
       })
 
-    const pr = await getPRForBranch('/repo-root', '')
+    const pr = await getPRForBranch('/repo-root', '', null, null, null, {
+      currentHeadOid: 'dddddddd'
+    })
 
     expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
       1,
@@ -1160,7 +1194,6 @@ describe('getPRForBranch', () => {
 
   it('does not use invalid current HEAD hints for merge-commit lookup', async () => {
     getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
-    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '', stderr: '' })
 
     await expect(
       getPRForBranch('/repo-root', '', null, null, null, {
@@ -1168,16 +1201,17 @@ describe('getPRForBranch', () => {
       })
     ).resolves.toBeNull()
 
-    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['rev-parse', 'HEAD'], { cwd: '/repo-root' })
+    expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
     expect(ghExecFileAsyncMock).not.toHaveBeenCalled()
   })
 
   it('keeps unproven merge-commit 404s distinct from no-pr misses', async () => {
     getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
-    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: 'dddddddd\n', stderr: '' })
     ghExecFileAsyncMock.mockRejectedValueOnce(new Error('HTTP 404: Not Found'))
 
-    const outcome = await getPRForBranchOutcome('/repo-root', '')
+    const outcome = await getPRForBranchOutcome('/repo-root', '', null, null, null, {
+      currentHeadOid: 'dddddddd'
+    })
 
     expect(outcome).toMatchObject({
       kind: 'upstream-error',
@@ -1568,13 +1602,11 @@ describe('getPRForBranch', () => {
     getOwnerRepoForRemoteMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
     gitExecFileAsyncMock
       .mockResolvedValueOnce({ stdout: 'existing\0\n', stderr: '' })
-      .mockResolvedValueOnce({ stdout: '1111111\n', stderr: '' })
       .mockResolvedValueOnce({
         stdout: 'existing\0\nnew-feature\0origin/contributor/original\n',
         stderr: ''
       })
     ghExecFileAsyncMock
-      .mockResolvedValueOnce({ stdout: JSON.stringify([]) })
       .mockResolvedValueOnce({ stdout: JSON.stringify([]) })
       .mockResolvedValueOnce({ stdout: JSON.stringify([]) })
       .mockResolvedValueOnce({
@@ -1750,10 +1782,8 @@ describe('getPRForBranch', () => {
       .mockResolvedValueOnce('/repo-root/.git/config\u0000mtime-b\u0000120')
     gitExecFileAsyncMock
       .mockResolvedValueOnce({ stdout: 'feature\0\n', stderr: '' })
-      .mockResolvedValueOnce({ stdout: '2222222\n', stderr: '' })
       .mockResolvedValueOnce({ stdout: 'feature\0origin/contributor/original\n', stderr: '' })
     ghExecFileAsyncMock
-      .mockResolvedValueOnce({ stdout: JSON.stringify([]) })
       .mockResolvedValueOnce({ stdout: JSON.stringify([]) })
       .mockResolvedValueOnce({ stdout: JSON.stringify([]) })
       .mockResolvedValueOnce({
@@ -1814,10 +1844,8 @@ describe('getPRForBranch', () => {
       .mockResolvedValueOnce('/repo-root/.git/config\u0000mtime-b\u0000120')
     gitExecFileAsyncMock
       .mockResolvedValueOnce({ stdout: 'feature\0origin/old-upstream\n', stderr: '' })
-      .mockResolvedValueOnce({ stdout: '2222222\n', stderr: '' })
       .mockResolvedValueOnce({ stdout: 'feature\0origin/contributor/original\n', stderr: '' })
     ghExecFileAsyncMock
-      .mockResolvedValueOnce({ stdout: JSON.stringify([]) })
       .mockResolvedValueOnce({ stdout: JSON.stringify([]) })
       .mockResolvedValueOnce({ stdout: JSON.stringify([]) })
       .mockResolvedValueOnce({ stdout: JSON.stringify([]) })
@@ -1863,10 +1891,8 @@ describe('getPRForBranch', () => {
       .mockResolvedValueOnce('/repo-root/.git/config\u0000mtime-b\u0000120')
     gitExecFileAsyncMock
       .mockResolvedValueOnce({ stdout: 'feature\0\n', stderr: '' })
-      .mockResolvedValueOnce({ stdout: '2222222\n', stderr: '' })
       .mockResolvedValueOnce({ stdout: 'feature\0origin/contributor/original\n', stderr: '' })
     ghExecFileAsyncMock
-      .mockResolvedValueOnce({ stdout: JSON.stringify([]) })
       .mockResolvedValueOnce({ stdout: JSON.stringify([]) })
       .mockResolvedValueOnce({ stdout: JSON.stringify([]) })
       .mockResolvedValueOnce({
@@ -2327,7 +2353,6 @@ describe('getPRForBranch', () => {
       getOwnerRepoMock.mockResolvedValue({ owner: 'acme', repo: 'widgets' })
       getOwnerRepoForRemoteMock.mockResolvedValue({ owner: 'acme', repo: 'widgets' })
       ghExecFileAsyncMock
-        .mockResolvedValueOnce({ stdout: JSON.stringify([]) })
         .mockResolvedValueOnce({ stdout: JSON.stringify([]) })
         .mockResolvedValueOnce({ stdout: JSON.stringify([]) })
         .mockResolvedValueOnce({ stdout: JSON.stringify([]) })

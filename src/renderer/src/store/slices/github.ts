@@ -44,7 +44,11 @@ import { settingsForProjectRowOwner } from './github-project-row-owner'
 import { rightSidebarShowsPullRequestData } from '@/lib/right-sidebar-visibility'
 import { hostedReviewInfoFromGitHubPRInfo } from '../../../../shared/hosted-review-github'
 import { getHostedReviewCacheKey, linkedReviewHintKey } from './hosted-review-cache-identity'
-import { getGitHubPRCacheKey, getGitHubRepoCacheKey } from './github-cache-key'
+import {
+  getGitHubPRCacheBranch,
+  getGitHubPRCacheKey,
+  getGitHubRepoCacheKey
+} from './github-cache-key'
 import { isGitHubWorkItemsQueryTooLarge } from './github-work-items-query-bounds'
 import { isMacAppDataPath } from '@/lib/passive-macos-app-data-access'
 import { translate } from '@/i18n/i18n'
@@ -1018,10 +1022,11 @@ function buildPRRefreshCandidate(
     return null
   }
   const branch = worktree.branch.replace(/^refs\/heads\//, '')
+  const cacheBranch = getGitHubPRCacheBranch(branch, worktree.head)
   const cacheKey = prCacheKey(
     repoPath ?? repo.path,
     repo.id,
-    branch,
+    cacheBranch,
     settingsForGitHubRepoOwner(state.settings, repo),
     repo.connectionId,
     repo.executionHostId,
@@ -1032,7 +1037,7 @@ function buildPRRefreshCandidate(
     state,
     repoPath ?? repo.path,
     repo.id,
-    branch,
+    cacheBranch,
     repo.connectionId,
     repo.executionHostId,
     true
@@ -1156,6 +1161,7 @@ function syncHostedReviewCacheFromGitHubPRResult(args: {
   cache: AppState['hostedReviewCache']
   repoPath: string
   branch: string
+  hostedReviewBranch?: string
   settings: AppState['settings']
   repoId?: string
   connectionId?: string | null
@@ -1171,7 +1177,7 @@ function syncHostedReviewCacheFromGitHubPRResult(args: {
 }): { cache: AppState['hostedReviewCache']; accepted: boolean } {
   const hostedReviewCacheKey = getHostedReviewCacheKey(
     args.repoPath,
-    args.branch,
+    args.hostedReviewBranch ?? args.branch,
     args.settings,
     args.repoId,
     args.connectionId,
@@ -1343,6 +1349,7 @@ function setGitHubPRResultCaches(
     prCacheKey: string
     repoPath: string
     branch: string
+    hostedReviewBranch?: string
     settings: AppState['settings']
     repoId?: string
     connectionId?: string | null
@@ -1362,6 +1369,7 @@ function setGitHubPRResultCaches(
     cache: state.hostedReviewCache,
     repoPath: args.repoPath,
     branch: args.branch,
+    hostedReviewBranch: args.hostedReviewBranch,
     settings: args.settings,
     repoId: args.repoId,
     connectionId: args.connectionId,
@@ -1377,7 +1385,7 @@ function setGitHubPRResultCaches(
   })
   const hostedReviewCacheKey = getHostedReviewCacheKey(
     args.repoPath,
-    args.branch,
+    args.hostedReviewBranch ?? args.branch,
     args.settings,
     args.repoId,
     args.connectionId,
@@ -1420,6 +1428,7 @@ function applyGitHubPRResultToCaches(args: {
   prCacheKey: string
   repoPath: string
   branch: string
+  hostedReviewBranch?: string
   settings: AppState['settings']
   repoId?: string
   connectionId?: string | null
@@ -1442,6 +1451,7 @@ function applyGitHubPRResultToCaches(args: {
     cache: args.hostedReviewCache,
     repoPath: args.repoPath,
     branch: args.branch,
+    hostedReviewBranch: args.hostedReviewBranch,
     settings: args.settings,
     repoId: args.repoId,
     connectionId: args.connectionId,
@@ -1457,7 +1467,7 @@ function applyGitHubPRResultToCaches(args: {
   })
   const hostedReviewCacheKey = getHostedReviewCacheKey(
     args.repoPath,
-    args.branch,
+    args.hostedReviewBranch ?? args.branch,
     args.settings,
     args.repoId,
     args.connectionId,
@@ -2865,11 +2875,13 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
       options?.repoId ? candidate.id === options.repoId : candidate.path === repoPath
     )
     const repoId = options?.repoId ?? repo?.id
+    const requestWorktree = options?.worktreeId ? findWorktreeById(get(), options.worktreeId) : null
     const requestSettings = settingsForGitHubRepoOwner(get().settings, repo)
+    const cacheBranch = getGitHubPRCacheBranch(branch, requestWorktree?.head)
     const cacheKey = prCacheKey(
       repoPath,
       repoId,
-      branch,
+      cacheBranch,
       requestSettings,
       repo?.connectionId,
       repo?.executionHostId,
@@ -2878,7 +2890,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
     const cached = get().prCache[cacheKey]
     const hostedReviewCacheKey = getHostedReviewCacheKey(
       repoPath,
-      branch,
+      cacheBranch,
       requestSettings,
       repoId,
       repo?.connectionId,
@@ -2895,7 +2907,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
       get(),
       repoPath,
       repoId,
-      branch,
+      cacheBranch,
       repo?.connectionId,
       repo?.executionHostId,
       repo !== undefined
@@ -2946,6 +2958,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
                 repo: runtimeRepo.repo.id,
                 branch,
                 linkedPRNumber,
+                ...(requestWorktree?.head ? { currentHeadOid: requestWorktree.head } : {}),
                 ...(fallbackPRNumber !== null
                   ? { fallbackPRNumber, acceptMergedFallbackPR: fallbackPRSource !== null }
                   : {})
@@ -2957,9 +2970,6 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
                 : ({ kind: 'no-pr', fetchedAt: Date.now() } as const)
             )
           : await (async () => {
-              const requestWorktree = options?.worktreeId
-                ? findWorktreeById(get(), options.worktreeId)
-                : null
               const candidate: GitHubPRRefreshCandidate = {
                 repoId: repoId ?? '',
                 repoPath,
@@ -2989,6 +2999,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
                       branch,
                       linkedPRNumber,
                       fallbackPRNumber,
+                      currentHeadOid: requestWorktree?.head ?? null,
                       acceptMergedFallbackPR: fallbackPRNumber !== null && fallbackPRSource !== null
                     })
                     .then((pr) =>
@@ -3016,6 +3027,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
               prCacheKey: cacheKey,
               repoPath,
               branch,
+              hostedReviewBranch: cacheBranch,
               settings: requestSettings,
               repoId,
               connectionId: repo?.connectionId,
@@ -3877,12 +3889,14 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
           if (isStaleExactLinkedPRLookup(s, alias.worktreeId, alias.linkedPRNumber)) {
             continue
           }
+          const hostedReviewBranch = getGitHubPRCacheBranch(alias.branch, alias.worktreeHead)
           const nextCaches = applyGitHubPRResultToCaches({
             prCache: nextPRCache,
             hostedReviewCache: nextHostedReviewCache,
             prCacheKey: alias.cacheKey,
             repoPath: alias.repoPath,
             branch: alias.branch,
+            hostedReviewBranch,
             settings: s.settings,
             repoId: alias.repoId,
             connectionId: alias.connectionId,
@@ -3909,9 +3923,10 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
             deletePRRefreshStartedEntry(previousSequence, alias.cacheKey)
           }
           if (event.status === 'in-flight' && event.requestStartedAt !== undefined) {
+            const hostedReviewBranch = getGitHubPRCacheBranch(alias.branch, alias.worktreeHead)
             const hostedReviewCacheKey = getHostedReviewCacheKey(
               alias.repoPath,
-              alias.branch,
+              hostedReviewBranch,
               s.settings,
               alias.repoId,
               alias.connectionId,
@@ -3998,12 +4013,13 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
         }
 
         const branch = wt.branch.replace(/^refs\/heads\//, '')
-        if (shouldRefreshPRs && !wt.isBare && branch) {
+        if (shouldRefreshPRs && !wt.isBare && (branch || wt.head)) {
           const ownerSettings = settingsForGitHubRepoOwner(state.settings, repo)
+          const cacheBranch = getGitHubPRCacheBranch(branch, wt.head)
           const prKey = prCacheKey(
             repo.path,
             repo.id,
-            branch,
+            cacheBranch,
             ownerSettings,
             repo.connectionId,
             repo.executionHostId
@@ -4081,11 +4097,12 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
 
     // Invalidate this worktree's cache entries
     const branch = worktree.branch.replace(/^refs\/heads\//, '')
+    const cacheBranch = getGitHubPRCacheBranch(branch, worktree.head)
     const ownerSettings = settingsForGitHubRepoOwner(state.settings, repo)
     const prKey = prCacheKey(
       repo.path,
       repo.id,
-      branch,
+      cacheBranch,
       ownerSettings,
       repo.connectionId,
       repo.executionHostId
@@ -4116,8 +4133,8 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
       return updates
     })
 
-    // Re-fetch (skip when branch is empty — detached HEAD during rebase)
-    if (!worktree.isBare && branch) {
+    // Re-fetch; detached merged worktrees resolve PRs from the checked-out HEAD.
+    if (!worktree.isBare && (branch || worktree.head)) {
       const candidate = buildPRRefreshCandidate(get(), worktree)
       if (candidate) {
         if (getPRRefreshRuntimeRepoTarget(get(), candidate)) {
@@ -4315,7 +4332,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
         : cardProps.includes('pr') || rawCardProps.includes('ci')) ||
       rightSidebarShowsPullRequestData(state)
 
-    if (shouldRefreshPR && !worktree.isBare && branch) {
+    if (shouldRefreshPR && !worktree.isBare && (branch || worktree.head)) {
       const candidate = buildPRRefreshCandidate(state, worktree)
       if (candidate) {
         if (getPRRefreshRuntimeRepoTarget(state, candidate)) {

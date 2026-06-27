@@ -20,7 +20,11 @@ import {
   prChecksCacheSuffix,
   prCommentsCacheSuffix
 } from '@/store/slices/github'
-import { getGitHubPRCacheKey, getGitHubRepoCacheKey } from '@/store/slices/github-cache-key'
+import {
+  getGitHubPRCacheBranch,
+  getGitHubPRCacheKey,
+  getGitHubRepoCacheKey
+} from '@/store/slices/github-cache-key'
 import { useActiveWorktree, useRepoById } from '@/store/selectors'
 import { cn } from '@/lib/utils'
 import { openHttpLink } from '@/lib/http-link-routing'
@@ -599,12 +603,14 @@ export default function ChecksPanel(): React.JSX.Element {
 
   // Find active worktree and repo
   const isFolder = repo ? isFolderRepo(repo) : false
+  const prCacheBranch = getGitHubPRCacheBranch(branch, activeWorktree?.head)
+  const hasReviewLookupIdentity = Boolean(branch || activeWorktree?.head)
   const prCacheKey =
-    repo && branch
+    repo && hasReviewLookupIdentity
       ? getGitHubPRCacheKey(
           repo.path,
           repo.id,
-          branch,
+          prCacheBranch,
           settings,
           repo.connectionId,
           repo.executionHostId,
@@ -612,10 +618,10 @@ export default function ChecksPanel(): React.JSX.Element {
         )
       : ''
   const hostedReviewCacheKey =
-    repo && branch
+    repo && hasReviewLookupIdentity
       ? getHostedReviewCacheKey(
           repo.path,
-          branch,
+          prCacheBranch,
           settings,
           repo.id,
           repo.connectionId,
@@ -1186,17 +1192,19 @@ export default function ChecksPanel(): React.JSX.Element {
   }, [agentComposerState?.commentResolution, stateRequestKey])
 
   useEffect(() => {
-    if (isPanelVisible && repo && !isFolder && branch) {
-      void fetchHostedReviewForBranch(repo.path, branch, {
-        repoId: repo.id,
-        linkedGitHubPR: linkedPR,
-        fallbackGitHubPR: fallbackGitHubPRNumber,
-        linkedGitLabMR,
-        linkedBitbucketPR,
-        linkedAzureDevOpsPR,
-        linkedGiteaPR,
-        staleWhileRevalidate: true
-      })
+    if (isPanelVisible && repo && !isFolder && hasReviewLookupIdentity) {
+      if (branch) {
+        void fetchHostedReviewForBranch(repo.path, branch, {
+          repoId: repo.id,
+          linkedGitHubPR: linkedPR,
+          fallbackGitHubPR: fallbackGitHubPRNumber,
+          linkedGitLabMR,
+          linkedBitbucketPR,
+          linkedAzureDevOpsPR,
+          linkedGiteaPR,
+          staleWhileRevalidate: true
+        })
+      }
       if (activeWorktreeId && !isGitLabReviewContext) {
         enqueueGitHubPRRefresh(activeWorktreeId, 'swr', 30)
       }
@@ -1207,6 +1215,7 @@ export default function ChecksPanel(): React.JSX.Element {
     enqueueGitHubPRRefresh,
     fallbackGitHubPRNumber,
     fetchHostedReviewForBranch,
+    hasReviewLookupIdentity,
     isFolder,
     isGitLabReviewContext,
     isPanelVisible,
@@ -1834,7 +1843,7 @@ export default function ChecksPanel(): React.JSX.Element {
   }, [activeGitLabReview, fetchComments, isPanelVisible, prNumber, repo])
 
   const handleRefresh = useCallback(async () => {
-    if (!repo || !branch) {
+    if (!repo || !hasReviewLookupIdentity || (isGitLabReviewContext && !branch)) {
       return
     }
     const initialRequestKey = checksPanelAsyncResultKey(
@@ -1920,17 +1929,19 @@ export default function ChecksPanel(): React.JSX.Element {
       if (!isCurrentRequest()) {
         return
       }
-      await refreshHostedReviewCard(fetchHostedReviewForBranch, {
-        repoPath: repo.path,
-        repoId: repo.id,
-        branch,
-        linkedGitHubPR: linkedPR,
-        fallbackGitHubPR: refreshedPR?.number ?? fallbackGitHubPRNumber,
-        linkedGitLabMR,
-        linkedBitbucketPR,
-        linkedAzureDevOpsPR,
-        linkedGiteaPR
-      })
+      if (branch) {
+        await refreshHostedReviewCard(fetchHostedReviewForBranch, {
+          repoPath: repo.path,
+          repoId: repo.id,
+          branch,
+          linkedGitHubPR: linkedPR,
+          fallbackGitHubPR: refreshedPR?.number ?? fallbackGitHubPRNumber,
+          linkedGitLabMR,
+          linkedBitbucketPR,
+          linkedAzureDevOpsPR,
+          linkedGiteaPR
+        })
+      }
       if (!isCurrentRequest()) {
         return
       }
@@ -2057,6 +2068,7 @@ export default function ChecksPanel(): React.JSX.Element {
     linkedPR,
     fallbackGitHubPRNumber,
     fetchGitLabDetails,
+    hasReviewLookupIdentity,
     linkedAzureDevOpsPR,
     linkedBitbucketPR,
     linkedGiteaPR,
