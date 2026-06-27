@@ -290,12 +290,10 @@ export class CliInstaller {
     launcherPath: string,
     defaultCommandPath: string
   ): Promise<string | null> {
+    let reachedDefaultCommandPath = false
     for (const commandPath of this.getPathCommandCandidates(defaultCommandPath)) {
-      if (samePathEntry(this.platform, commandPath, defaultCommandPath)) {
-        // Why: once PATH reaches Orca's configured install location, installing
-        // there will shadow any later same-name command.
-        return defaultCommandPath
-      }
+      const isDefaultCommandPath = samePathEntry(this.platform, commandPath, defaultCommandPath)
+      reachedDefaultCommandPath ||= isDefaultCommandPath
 
       if (!(await isExecutableFile(commandPath))) {
         continue
@@ -303,8 +301,13 @@ export class CliInstaller {
 
       const status = await this.inspectSymlink(commandPath, launcherPath)
       if (status.state !== 'not_installed') {
-        // Why: PATH lookup is first-match-wins; an earlier unmanaged command
-        // must surface as a conflict instead of letting Orca install a shadowed path.
+        if (reachedDefaultCommandPath && !isDefaultCommandPath && status.state === 'conflict') {
+          // Why: a non-Orca command after an empty/default install slot can be
+          // shadowed safely by installing there; no user file needs replacing.
+          continue
+        }
+        // Why: PATH lookup is first-match-wins; use the executable command the
+        // shell will actually run, while preserving conflicts that shadow Orca.
         return commandPath
       }
     }

@@ -4481,8 +4481,8 @@
           "failedToCopyCommand": "コマンドのコピーに失敗しました。",
           "copyCommandAria": "コマンドをコピー",
           "runCommandDescription": "Enter を押してコマンドを実行します。",
-          "5f818f12ab": "Preparing...",
-          "4c05b9d7cb": "Preparing setup terminal."
+          "5f818f12ab": "準備中...",
+          "4c05b9d7cb": "セットアップ用ターミナルを準備しています。"
         },
         "AgentsPane": {
           "d83834f5e6": "インストールされている agents を検出しています…",
@@ -5303,9 +5303,9 @@
           "ff4b7e65d6": "コーディング agents が Orca CLI コマンドを使用してアクティブなモバイル エミュレータを制御できるようにします。",
           "2a674aa810": "Agent モバイル エミュレータ制御",
           "cdeaed9e37": "Orca CLIをPATHに登録しました。",
-          "3d34423e88": "Registering the Orca CLI",
-          "3be27641c9": "so emulator commands can run from agent shells.",
-          "3941719a56": "Checking Orca CLI before opening skill setup."
+          "3d34423e88": "Orca CLI を登録しています",
+          "3be27641c9": "agent のシェルからエミュレーターコマンドを実行できるようにします。",
+          "3941719a56": "スキル設定を開く前に Orca CLI を確認しています。"
         },
         "MobileEmulatorExamples": {
           "edf13dd03b": "コピー",
@@ -10465,9 +10465,9 @@
             "64fb057667": "このワークツリーの orca エミュレーターコマンドを agents に教えます。",
             "5c59ea96ca": "Mobile emulator Orca CLI skill setup",
             "bff5341ac3": "Mobile emulator Orca CLI skill install terminal",
-            "3d34423e88": "Registering the Orca CLI",
-            "3be27641c9": "so emulator commands can run from agent shells.",
-            "3941719a56": "Checking Orca CLI before opening skill setup."
+            "3d34423e88": "Orca CLI を登録しています",
+            "3be27641c9": "agent のシェルからエミュレーターコマンドを実行できるようにします。",
+            "3941719a56": "スキル設定を開く前に Orca CLI を確認しています。"
           },
           "MobileEmulatorTabIntroCallout": {
             "1924982130": "閉じる",

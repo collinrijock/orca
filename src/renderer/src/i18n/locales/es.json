@@ -4496,8 +4496,8 @@
           "failedToCopyCommand": "No se pudo copiar el comando.",
           "copyCommandAria": "Copiar comando",
           "runCommandDescription": "Presiona Enter para ejecutar el comando.",
-          "5f818f12ab": "Preparing...",
-          "4c05b9d7cb": "Preparing setup terminal."
+          "5f818f12ab": "Preparando...",
+          "4c05b9d7cb": "Preparando el terminal de configuración."
         },
         "AgentsPane": {
           "d83834f5e6": "Detectando agents instalados…",
@@ -5281,9 +5281,9 @@
           "ff4b7e65d6": "Deje que los agents de codificación controlen el emulador móvil activo con los comandos CLI de Orca.",
           "2a674aa810": "Control del emulador móvil del Agent",
           "cdeaed9e37": "Registré Orca CLI en PATH.",
-          "3d34423e88": "Registering the Orca CLI",
-          "3be27641c9": "so emulator commands can run from agent shells.",
-          "3941719a56": "Checking Orca CLI before opening skill setup."
+          "3d34423e88": "Registrando la CLI de Orca",
+          "3be27641c9": "para que los comandos del emulador se puedan ejecutar desde shells de agents.",
+          "3941719a56": "Comprobando la CLI de Orca antes de abrir la configuración de la skill."
         },
         "MobileEmulatorExamples": {
           "edf13dd03b": "Copiar",
@@ -10465,9 +10465,9 @@
             "64fb057667": "Enseña a los agents los comandos del emulador orca para este worktree.",
             "5c59ea96ca": "Mobile emulator Orca CLI skill setup",
             "bff5341ac3": "Mobile emulator Orca CLI skill install terminal",
-            "3d34423e88": "Registering the Orca CLI",
-            "3be27641c9": "so emulator commands can run from agent shells.",
-            "3941719a56": "Checking Orca CLI before opening skill setup."
+            "3d34423e88": "Registrando la CLI de Orca",
+            "3be27641c9": "para que los comandos del emulador se puedan ejecutar desde shells de agents.",
+            "3941719a56": "Comprobando la CLI de Orca antes de abrir la configuración de la skill."
           },
           "MobileEmulatorTabIntroCallout": {
             "1924982130": "Descartar",

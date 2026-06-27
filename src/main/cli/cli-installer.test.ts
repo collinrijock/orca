@@ -746,6 +746,129 @@ describe('CliInstaller', () => {
     }
   )
 
+  // Why: shells skip missing PATH entries, so a managed command later in PATH
+  // is still the shell-visible Orca command until the default path is installed.
+  it.skipIf(process.platform === 'win32')(
+    'uses a later managed macOS orca command when the default command is missing',
+    async () => {
+      const fixture = await makeFixture()
+      const homePath = join(fixture.root, 'home')
+      const resourcesPath = await createPackagedMacLauncher(fixture.root)
+      const usrLocalBin = join(fixture.root, 'usr', 'local', 'bin')
+      const userLocalBin = join(homePath, '.local', 'bin')
+      const defaultInstallPath = join(usrLocalBin, 'orca')
+      const userInstallPath = join(userLocalBin, 'orca')
+      const launcherPath = join(resourcesPath, 'bin', 'orca')
+      await mkdir(usrLocalBin, { recursive: true })
+      await mkdir(userLocalBin, { recursive: true })
+      await symlink(launcherPath, userInstallPath)
+
+      const installer = new CliInstaller({
+        platform: 'darwin',
+        isPackaged: true,
+        resourcesPath,
+        userDataPath: fixture.userDataPath,
+        execPath: '/Applications/Orca.app/Contents/MacOS/Orca',
+        appPath: fixture.appPath,
+        homePath,
+        defaultMacCommandPath: defaultInstallPath,
+        processPathEnv: `${usrLocalBin}:${userLocalBin}`
+      })
+
+      const status = await installer.getStatus()
+      expect(status.commandPath).toBe(userInstallPath)
+      expect(status.state).toBe('installed')
+
+      const installed = await installer.install()
+      expect(installed.commandPath).toBe(userInstallPath)
+      await expect(lstat(defaultInstallPath)).rejects.toMatchObject({ code: 'ENOENT' })
+    }
+  )
+
+  // Why: bash/zsh skip non-executable PATH entries even at Orca's configured
+  // install slot, then keep looking for a runnable command later in PATH.
+  it.skipIf(process.platform === 'win32')(
+    'uses a later managed macOS orca command when the default command is not executable',
+    async () => {
+      const fixture = await makeFixture()
+      const homePath = join(fixture.root, 'home')
+      const resourcesPath = await createPackagedMacLauncher(fixture.root)
+      const usrLocalBin = join(fixture.root, 'usr', 'local', 'bin')
+      const userLocalBin = join(homePath, '.local', 'bin')
+      const defaultInstallPath = join(usrLocalBin, 'orca')
+      const userInstallPath = join(userLocalBin, 'orca')
+      const launcherPath = join(resourcesPath, 'bin', 'orca')
+      await mkdir(usrLocalBin, { recursive: true })
+      await mkdir(userLocalBin, { recursive: true })
+      await writeFile(defaultInstallPath, '#!/usr/bin/env bash\necho other-orca\n', 'utf8')
+      await symlink(launcherPath, userInstallPath)
+
+      const installer = new CliInstaller({
+        platform: 'darwin',
+        isPackaged: true,
+        resourcesPath,
+        userDataPath: fixture.userDataPath,
+        execPath: '/Applications/Orca.app/Contents/MacOS/Orca',
+        appPath: fixture.appPath,
+        homePath,
+        defaultMacCommandPath: defaultInstallPath,
+        processPathEnv: `${usrLocalBin}:${userLocalBin}`
+      })
+
+      const status = await installer.getStatus()
+      expect(status.commandPath).toBe(userInstallPath)
+      expect(status.state).toBe('installed')
+
+      const installed = await installer.install()
+      expect(installed.commandPath).toBe(userInstallPath)
+      await expect(readFile(defaultInstallPath, 'utf8')).resolves.toContain('other-orca')
+    }
+  )
+
+  // Why: a non-Orca command after an empty default install slot can be shadowed
+  // by installing the default path without replacing the user's command.
+  it.skipIf(process.platform === 'win32')(
+    'installs the default macOS command instead of replacing an unmanaged later command',
+    async () => {
+      const fixture = await makeFixture()
+      const homePath = join(fixture.root, 'home')
+      const resourcesPath = await createPackagedMacLauncher(fixture.root)
+      const usrLocalBin = join(fixture.root, 'usr', 'local', 'bin')
+      const userLocalBin = join(homePath, '.local', 'bin')
+      const defaultInstallPath = join(usrLocalBin, 'orca')
+      const userInstallPath = join(userLocalBin, 'orca')
+      const launcherPath = join(resourcesPath, 'bin', 'orca')
+      await mkdir(usrLocalBin, { recursive: true })
+      await mkdir(userLocalBin, { recursive: true })
+      await writeFile(userInstallPath, '#!/usr/bin/env bash\necho other-orca\n', {
+        encoding: 'utf8',
+        mode: 0o755
+      })
+
+      const installer = new CliInstaller({
+        platform: 'darwin',
+        isPackaged: true,
+        resourcesPath,
+        userDataPath: fixture.userDataPath,
+        execPath: '/Applications/Orca.app/Contents/MacOS/Orca',
+        appPath: fixture.appPath,
+        homePath,
+        defaultMacCommandPath: defaultInstallPath,
+        processPathEnv: `${usrLocalBin}:${userLocalBin}`
+      })
+
+      const status = await installer.getStatus()
+      expect(status.commandPath).toBe(defaultInstallPath)
+      expect(status.state).toBe('not_installed')
+
+      const installed = await installer.install()
+      expect(installed.commandPath).toBe(defaultInstallPath)
+      expect(installed.state).toBe('installed')
+      await expect(readlink(defaultInstallPath)).resolves.toBe(launcherPath)
+      await expect(readFile(userInstallPath, 'utf8')).resolves.toContain('other-orca')
+    }
+  )
+
   // Why: an off-PATH ~/.local/bin/orca must not hijack CLI registration and
   // leave the shell-visible /usr/local/bin command missing.
   it.skipIf(process.platform === 'win32')(

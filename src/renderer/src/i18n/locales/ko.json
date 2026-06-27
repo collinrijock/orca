@@ -4481,8 +4481,8 @@
           "failedToCopyCommand": "명령 복사 실패.",
           "copyCommandAria": "명령 복사",
           "runCommandDescription": "Enter를 눌러 명령을 실행하세요.",
-          "5f818f12ab": "Preparing...",
-          "4c05b9d7cb": "Preparing setup terminal."
+          "5f818f12ab": "준비 중...",
+          "4c05b9d7cb": "설정 터미널을 준비하고 있습니다."
         },
         "AgentsPane": {
           "d83834f5e6": "설치된 agents 감지 중…",
@@ -5266,9 +5266,9 @@
           "ff4b7e65d6": "코딩 agents가 Orca CLI 명령을 사용하여 활성 모바일 에뮬레이터를 제어하도록 합니다.",
           "2a674aa810": "Agent 모바일 에뮬레이터 제어",
           "cdeaed9e37": "PATH에 Orca CLI를 등록했습니다.",
-          "3d34423e88": "Registering the Orca CLI",
-          "3be27641c9": "so emulator commands can run from agent shells.",
-          "3941719a56": "Checking Orca CLI before opening skill setup."
+          "3d34423e88": "Orca CLI를 등록하는 중",
+          "3be27641c9": "agent 셸에서 에뮬레이터 명령을 실행할 수 있도록 합니다.",
+          "3941719a56": "스킬 설정을 열기 전에 Orca CLI를 확인하고 있습니다."
         },
         "MobileEmulatorExamples": {
           "edf13dd03b": "복사",
@@ -10465,9 +10465,9 @@
             "64fb057667": "이 워크트리의 orca 에뮬레이터 명령을 agents에게 알려줍니다.",
             "5c59ea96ca": "모바일 에뮬레이터 Orca CLI 스킬 설정",
             "bff5341ac3": "모바일 에뮬레이터 Orca CLI 스킬 설치 terminal",
-            "3d34423e88": "Registering the Orca CLI",
-            "3be27641c9": "so emulator commands can run from agent shells.",
-            "3941719a56": "Checking Orca CLI before opening skill setup."
+            "3d34423e88": "Orca CLI를 등록하는 중",
+            "3be27641c9": "agent 셸에서 에뮬레이터 명령을 실행할 수 있도록 합니다.",
+            "3941719a56": "스킬 설정을 열기 전에 Orca CLI를 확인하고 있습니다."
           },
           "MobileEmulatorTabIntroCallout": {
             "1924982130": "닫기",
