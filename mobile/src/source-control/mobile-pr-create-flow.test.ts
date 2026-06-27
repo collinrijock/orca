@@ -46,6 +46,28 @@ describe('createMobilePr', () => {
     })
   })
 
+  it('persists the same trimmed base ref used for creation', async () => {
+    const client = clientWith([
+      ok({ ok: true, number: 42, url: 'https://github.com/o/r/pull/42' }),
+      ok({ worktree: { linkedPR: 42 } })
+    ])
+
+    await expect(
+      createMobilePr(client, 'repo-1::/tmp/wt', {
+        provider: 'github',
+        base: ' main ',
+        title: 'T',
+        body: '',
+        draft: false
+      })
+    ).resolves.toEqual({ ok: true, number: 42, url: 'https://github.com/o/r/pull/42' })
+    expect(client.calls[0].params).toMatchObject({ base: 'main' })
+    expect(client.calls[1]).toEqual({
+      method: 'worktree.set',
+      params: { worktree: 'id:repo-1::/tmp/wt', baseRef: 'main', linkedPR: 42 }
+    })
+  })
+
   it('links created merge requests through the provider-specific worktree field', async () => {
     const client = clientWith([
       ok({ ok: true, number: 7, url: 'https://gitlab.com/o/r/-/merge_requests/7' }),

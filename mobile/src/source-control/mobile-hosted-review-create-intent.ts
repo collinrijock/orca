@@ -65,11 +65,11 @@ async function readStatus(
 }
 
 function branchStillMatches(inputBranch: string, status: MobileGitStatusResult | null): boolean {
-  return (
-    !status?.branch ||
-    status.branch === inputBranch ||
-    status.branch === `refs/heads/${inputBranch}`
-  )
+  const branch = status?.branch
+  if (!branch) {
+    return false
+  }
+  return branch === inputBranch || branch === `refs/heads/${inputBranch}`
 }
 
 function hasUnresolvedConflicts(status: MobileGitStatusResult | null): boolean {

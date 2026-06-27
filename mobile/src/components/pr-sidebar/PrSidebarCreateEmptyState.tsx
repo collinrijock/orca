@@ -72,6 +72,8 @@ export function PrSidebarCreateEmptyState({
         setCreateWarning('Check out a branch before creating a pull request.')
         return
       }
+      // Why: mobile skips the local compose step here and runs the hosted create
+      // flow directly so PR creation matches the automated hosted-review path.
       const outcome = await runMobileHostedReviewCreateIntent(client, worktreeId, {
         branch: gitBranch,
         title: gitBranch,
@@ -86,9 +88,8 @@ export function PrSidebarCreateEmptyState({
       setCreateWarning(outcome.warning ?? null)
       openMobilePrUrl(outcome.url)
       onCreated()
-    } catch {
-      // Best-effort: if prefill resolution rejects, leave the empty state so the
-      // user can retry rather than surfacing an unhandled rejection.
+    } catch (err) {
+      setCreateWarning(err instanceof Error ? err.message : 'Failed to create pull request.')
     } finally {
       setLoading(false)
     }

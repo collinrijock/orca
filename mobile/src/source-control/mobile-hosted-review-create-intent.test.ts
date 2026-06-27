@@ -129,6 +129,36 @@ describe('prepareMobileHostedReviewCreateIntent', () => {
     })
   })
 
+  it('blocks when refreshed status loses its branch during staging', async () => {
+    const client = clientWith([
+      ok(status([entry('unstaged')])),
+      ok({ success: true }),
+      ok({ ...status([entry('staged')]), branch: null })
+    ])
+
+    const result = await prepareMobileHostedReviewCreateIntent(client, 'repo-1::/tmp/wt', {
+      branch: 'feature/x',
+      title: 'feature/x',
+      status: null
+    })
+
+    expect(result).toEqual({
+      ok: false,
+      error: 'Branch changed while preparing the pull request.',
+      committed: false,
+      status: expect.objectContaining({
+        entries: [expect.objectContaining({ area: 'staged' })]
+      })
+    })
+    expect(result.status?.branch).toBeUndefined()
+
+    expect(client.calls.map((call) => call.method)).toEqual([
+      'git.status',
+      'git.bulkStage',
+      'git.status'
+    ])
+  })
+
   it('returns an actionable error when commit message generation fails', async () => {
     const client = clientWith([
       ok(status([entry('staged')])),

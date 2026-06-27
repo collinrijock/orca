@@ -190,10 +190,11 @@ async function finishMobileHostedReviewCreateSuccess(
   result: { number: number; url: string },
   existing?: boolean
 ): Promise<MobileHostedReviewCreateOutcome> {
+  const baseRef = input.base.trim()
   const linked = await linkMobileHostedReview(client, worktreeId, input.provider, result.number, {
     // Why: mobile branch compare cannot infer the new hosted review's target
     // base from renderer cache; persist the submitted base for the refresh.
-    baseRef: input.base
+    baseRef
   })
   return {
     ok: true,
