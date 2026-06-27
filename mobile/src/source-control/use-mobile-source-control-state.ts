@@ -101,8 +101,9 @@ export function useMobileSourceControlState(params: MobileSourceControlStatePara
     const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide'
 
     const onShow = Keyboard.addListener(showEvent, (event) => {
-      const height = event.endCoordinates.height - (Platform.OS === 'ios' ? insets.bottom : 0)
-      setKeyboardLift(Math.max(0, height))
+      // Why: iOS keyboard height already describes the obscured screen area.
+      // Subtracting the safe-area inset lets the commit bar tuck under the keyboard.
+      setKeyboardLift(Math.max(0, event.endCoordinates.height))
     })
     const onHide = Keyboard.addListener(hideEvent, () => setKeyboardLift(0))
 
@@ -110,7 +111,7 @@ export function useMobileSourceControlState(params: MobileSourceControlStatePara
       onShow.remove()
       onHide.remove()
     }
-  }, [insets.bottom])
+  }, [])
 
   const status = screenState.kind === 'ready' ? screenState.status : null
   const entries = status?.entries ?? []
