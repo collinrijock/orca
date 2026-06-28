@@ -248,11 +248,22 @@ test.describe('Terminal column desync repro', () => {
     // the columns. The PTY must follow, otherwise the existing shell keeps
     // emitting full-width output into a half-width pane.
     await splitActiveTerminalPane(orcaPage, 'vertical')
+    await expect
+      .poll(
+        async () => {
+          const snapshot = await waitForPaneIdentitySnapshot(orcaPage, 2)
+          return snapshot.panes
+            .map((pane) => pane.ptyId)
+            .filter((ptyId): ptyId is string => Boolean(ptyId))
+        },
+        { timeout: 30_000, message: 'vertical split should produce two PTY-backed panes' }
+      )
+      .toHaveLength(2)
     const snapshot = await waitForPaneIdentitySnapshot(orcaPage, 2)
-    await orcaPage.waitForTimeout(700)
 
     for (const pane of snapshot.panes) {
       const ptyId = pane.ptyId
+      expect(ptyId, 'split pane should be bound to a PTY').toBeTruthy()
       if (!ptyId) {
         continue
       }

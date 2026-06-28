@@ -2119,7 +2119,11 @@ export function connectPanePty(
   // settled and force the PTY to xterm's dimensions; the initial spawn-time sync
   // is authoritative by definition, so it bypasses the visibility gate (but not
   // the mobile-fit override, which legitimately parks the PTY at phone dims).
-  const reconcilePtySizeAfterSpawn = (ptyId: string, spawnCols: number, spawnRows: number): void => {
+  const reconcilePtySizeAfterSpawn = (
+    ptyId: string,
+    spawnCols: number,
+    spawnRows: number
+  ): void => {
     requestAnimationFrame(() => {
       if (disposed || transport.getPtyId() !== ptyId) {
         return
@@ -2511,6 +2515,9 @@ export function connectPanePty(
             // viable delivery target and must not wait for a future pane.
             clearRegisteredStartupLaunchConfig()
           }
+          if (resolvedPtyId) {
+            reconcilePtySizeAfterSpawn(resolvedPtyId, cols, rows)
+          }
           const gen = await preSignalPromise
           if (typeof gen === 'number' && resolvedPtyId) {
             if (!isRemoteRuntimePtyId(resolvedPtyId)) {
@@ -2522,9 +2529,6 @@ export function connectPanePty(
           }
           if (resolvedPtyId && connectionId) {
             schedulePendingStartupCommandDelivery()
-          }
-          if (resolvedPtyId) {
-            reconcilePtySizeAfterSpawn(resolvedPtyId, cols, rows)
           }
           return resolvedPtyId
         })
