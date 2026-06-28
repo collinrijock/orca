@@ -247,6 +247,71 @@ describe('RateLimitService', () => {
     }
   })
 
+  it('re-attempts on focus within the debounce window after a failed deferred-startup fetch', async () => {
+    vi.useFakeTimers()
+    try {
+      // Why: post-update warm relaunch — the first fetch fails (Claude CLI/auth
+      // still restarting), then succeeds once the runtime is ready.
+      vi.mocked(fetchClaudeRateLimits)
+        .mockResolvedValueOnce(errorProvider('claude', 'auth restarting'))
+        .mockResolvedValueOnce(okProvider('claude', 12))
+      vi.mocked(fetchCodexRateLimits)
+        .mockResolvedValueOnce(errorProvider('codex', 'auth restarting'))
+        .mockResolvedValueOnce(okProvider('codex', 24))
+      vi.mocked(fetchGeminiRateLimits).mockResolvedValue(errorProvider('gemini', 'auth restarting'))
+      vi.mocked(fetchOpenCodeGoRateLimits).mockResolvedValue(
+        errorProvider('opencode-go', 'auth restarting')
+      )
+
+      const service = new RateLimitService()
+      const window = new FakeRateLimitWindow()
+      service.attach(asRateLimitWindow(window))
+      service.start({ fetchImmediately: false })
+
+      await vi.advanceTimersByTimeAsync(1000)
+      expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(1)
+      expect(service.getState().claude?.status).toBe('error')
+
+      // Focus well within MIN_REFETCH_MS — must NOT be suppressed because the
+      // first fetch produced no successful read.
+      window.emit('focus')
+      await vi.advanceTimersByTimeAsync(0)
+
+      expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(2)
+      expect(service.getState().claude?.status).toBe('ok')
+
+      service.stop()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('still debounces a focus event within the window after a successful fetch', async () => {
+    vi.useFakeTimers()
+    try {
+      vi.mocked(fetchClaudeRateLimits).mockResolvedValue(okProvider('claude', 12))
+      vi.mocked(fetchCodexRateLimits).mockResolvedValue(okProvider('codex', 24))
+
+      const service = new RateLimitService()
+      const window = new FakeRateLimitWindow()
+      service.attach(asRateLimitWindow(window))
+      service.start({ fetchImmediately: false })
+
+      await vi.advanceTimersByTimeAsync(1000)
+      expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(1)
+
+      // A focus within MIN_REFETCH_MS after a GOOD fetch must still no-op.
+      window.emit('focus')
+      await vi.advanceTimersByTimeAsync(0)
+
+      expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(1)
+
+      service.stop()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('keeps recent stale data across repeated failures', async () => {
     const service = new RateLimitService()
     const internal = serviceInternals(service)

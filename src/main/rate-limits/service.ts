@@ -95,7 +95,9 @@ export class RateLimitService {
   private pollInterval: number = DEFAULT_POLL_MS
   private timer: ReturnType<typeof setInterval> | null = null
   private deferredStartupRefreshTimer: ReturnType<typeof setTimeout> | null = null
-  private lastFetchAt = 0
+  // Why: auto-refresh debounce keys off the last SUCCESSFUL read, not the last
+  // attempt, so a failed post-update/relaunch fetch doesn't suppress recovery.
+  private lastSuccessfulFetchAt = 0
   private mainWindow: BrowserWindow | null = null
   private detachWindowListeners: (() => void) | null = null
   private isFetching = false
@@ -616,7 +618,10 @@ export class RateLimitService {
     // Why: startup intentionally skips the pre-paint fetch. The first visible
     // activation must still populate usage after update relaunches where the
     // timer can be focus-gated for a long time.
-    if (Date.now() - this.lastFetchAt < MIN_REFETCH_MS) {
+    // Why: debounce off the last successful read so a failed post-update/relaunch
+    // fetch doesn't suppress auto-recovery for MIN_REFETCH_MS — focus/show/restore
+    // and the deferred-startup retry can re-attempt immediately after a failure.
+    if (Date.now() - this.lastSuccessfulFetchAt < MIN_REFETCH_MS) {
       return
     }
     await this.fetchAll()
@@ -993,7 +998,16 @@ export class RateLimitService {
       kimi: this.applyStalePolicy(kimi, previousState.kimi)
     })
 
-    this.lastFetchAt = Date.now()
+    // Why: re-arm the debounce only when a provider actually returned fresh
+    // quota data. An unconfigured provider reports 'unavailable' (not an error),
+    // so a relaunch where the only configured provider errored out must not
+    // count as success, otherwise focus/show/restore recovery stays suppressed.
+    const cycleHadFreshData = [claude, codex, gemini, opencodeGo, kimi].some(
+      (result) => result.status === 'ok'
+    )
+    if (cycleHadFreshData) {
+      this.lastSuccessfulFetchAt = Date.now()
+    }
   }
 
   private async runFetchCodexOnlyCycle(): Promise<void> {
@@ -1039,7 +1053,10 @@ export class RateLimitService {
       codex: shouldApplyCodex ? this.applyStalePolicy(codex, previousState.codex) : this.state.codex
     })
 
-    this.lastFetchAt = Date.now()
+    // Why: a failed Codex read must not poison the success-debounce window.
+    if (codex.status === 'ok') {
+      this.lastSuccessfulFetchAt = Date.now()
+    }
   }
 
   private async runFetchClaudeOnlyCycle(): Promise<void> {
@@ -1082,7 +1099,10 @@ export class RateLimitService {
         : this.state.claude
     })
 
-    this.lastFetchAt = Date.now()
+    // Why: a failed Claude read must not poison the success-debounce window.
+    if (claude.status === 'ok') {
+      this.lastSuccessfulFetchAt = Date.now()
+    }
   }
 
   private applyStalePolicy(
