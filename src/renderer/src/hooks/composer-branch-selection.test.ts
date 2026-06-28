@@ -57,6 +57,78 @@ describe('resolveComposerBranchSelection', () => {
     })
   })
 
+  it('replaces a typed substring (non-prefix) with the selected branch name', () => {
+    // Why (#6208): branch search is a substring match, so typing `bug` surfaces
+    // `fix/bug-0`; selecting it must overwrite the throwaway search text.
+    expect(
+      resolveComposerBranchSelection({
+        refName: 'fix/bug-0',
+        localBranchName: 'fix/bug-0',
+        currentName: 'bug',
+        lastAutoName: ''
+      })
+    ).toEqual({
+      baseBranch: 'fix/bug-0',
+      branchNameOverride: 'fix/bug-0',
+      branchAutoName: 'fix/bug-0',
+      name: 'fix/bug-0',
+      lastAutoName: 'fix/bug-0'
+    })
+  })
+
+  it('replaces a typed mid-ref substring with the selected branch name', () => {
+    expect(
+      resolveComposerBranchSelection({
+        refName: 'feature/oauth-login',
+        localBranchName: 'feature/oauth-login',
+        currentName: 'auth',
+        lastAutoName: ''
+      })
+    ).toEqual({
+      baseBranch: 'feature/oauth-login',
+      branchNameOverride: 'feature/oauth-login',
+      branchAutoName: 'feature/oauth-login',
+      name: 'feature/oauth-login',
+      lastAutoName: 'feature/oauth-login'
+    })
+  })
+
+  it('replaces a case-mismatched typed substring with the selected branch name', () => {
+    // Why (#6208): git for-each-ref globs are case-insensitive on the typed
+    // query, so an uppercase `FIX` must still be treated as throwaway text.
+    expect(
+      resolveComposerBranchSelection({
+        refName: 'fix/bug-0',
+        localBranchName: 'fix/bug-0',
+        currentName: 'FIX',
+        lastAutoName: ''
+      })
+    ).toEqual({
+      baseBranch: 'fix/bug-0',
+      branchNameOverride: 'fix/bug-0',
+      branchAutoName: 'fix/bug-0',
+      name: 'fix/bug-0',
+      lastAutoName: 'fix/bug-0'
+    })
+  })
+
+  it('does not override a custom name that is not contained in the selected branch', () => {
+    // Why: a typed name absent from the picked ref (and not the prior auto-name)
+    // is a genuine user choice, so it must be preserved.
+    expect(
+      resolveComposerBranchSelection({
+        refName: 'feature/x',
+        localBranchName: 'feature/x',
+        currentName: 'my-cool-name',
+        lastAutoName: 'previous-auto'
+      })
+    ).toMatchObject({
+      baseBranch: 'feature/x',
+      branchNameOverride: undefined,
+      name: undefined
+    })
+  })
+
   it('keeps resolver-provided PR branch overrides when the workspace name changes', () => {
     expect(
       resolveComposerBranchNameOverrideForCreate({

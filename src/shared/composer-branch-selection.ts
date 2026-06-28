@@ -13,11 +13,16 @@ export function resolveComposerBranchSelection(args: {
   lastAutoName: string
 }): ComposerBranchSelection {
   const trimmedCurrentName = args.currentName.trim()
+  const needle = trimmedCurrentName.toLowerCase()
   const shouldAutoName =
     !trimmedCurrentName ||
     args.currentName === args.lastAutoName ||
-    args.localBranchName.startsWith(trimmedCurrentName) ||
-    args.refName.startsWith(trimmedCurrentName)
+    // Why (#6208): the branch search is a substring match (git for-each-ref
+    // `*query*` globs), so a typed query like `bug` legitimately surfaces
+    // `fix/bug-0`. Treat any case-insensitive substring of the picked ref as
+    // throwaway search text to overwrite, not just a literal prefix.
+    args.localBranchName.toLowerCase().includes(needle) ||
+    args.refName.toLowerCase().includes(needle)
   if (!shouldAutoName) {
     return {
       baseBranch: args.refName,
