@@ -29,6 +29,10 @@ export function useTerminalWindowWakeRecovery({
       wakeRecoveryFrameId = null
     }
     const recoverVisibleWake = (): void => {
+      // Focus and visibility often fire together; keep one immediate recovery and one settled RAF pass.
+      if (wakeRecoveryFrameId !== null) {
+        return
+      }
       const manager = managerRef.current
       if (!manager) {
         return
@@ -37,7 +41,6 @@ export function useTerminalWindowWakeRecovery({
         manager,
         isActive: isActiveRef.current
       })
-      cancelScheduledWakeRecovery()
       if (typeof requestAnimationFrame !== 'function') {
         return
       }
