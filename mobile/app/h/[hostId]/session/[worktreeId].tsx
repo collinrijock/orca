@@ -36,11 +36,9 @@ import {
   FileText,
   GitBranch,
   Globe,
-  ImagePlus,
   Keyboard as KeyboardIcon,
   ListChecks,
   MessageSquare,
-  Mic,
   Monitor,
   Plus,
   RefreshCw,
@@ -110,6 +108,10 @@ import {
   getTerminalLiveInputKeyboardType
 } from '../../../../src/terminal/terminal-keyboard-type'
 import { normalizeTerminalTextInput } from '../../../../src/terminal/terminal-text-input-normalization'
+import {
+  appendBufferedDictation,
+  routeDictationTranscript
+} from '../../../../src/terminal/terminal-live-dictation-routing'
 import { countTerminalGestureInputSequences } from '../../../../src/terminal/terminal-gesture-input'
 import {
   recoverActiveTerminalAfterForeground,
@@ -163,6 +165,8 @@ import {
   type MobileClipboardImageResizer
 } from '../../../../src/session/mobile-clipboard-image'
 import { useMobileImageAttachment } from '../../../../src/session/use-mobile-image-attachment'
+import { MobileTerminalLiveInputStatus } from '../../../../src/session/MobileTerminalLiveInputStatus'
+import { MobileTerminalInputActions } from '../../../../src/session/MobileTerminalInputActions'
 import { classifyMobileArtifact } from '../../../../src/session/mobile-artifact-kind'
 import { useLiveWorktreeName } from '../../../../src/session/use-live-worktree-name'
 import {
@@ -1044,6 +1048,10 @@ export default function SessionScreen() {
   const terminalRefs = useRef<Map<string, TerminalWebViewHandle>>(new Map())
   const liveInputRef = useRef<TextInput>(null)
   const liveInputFocusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const dictationRouteContextRef = useRef<{
+    readonly handle: string | null
+    readonly liveInputEnabled: boolean
+  } | null>(null)
   const terminalUnsubsRef = useRef<Map<string, () => void>>(new Map())
   const subscribingHandlesRef = useRef<Set<string>>(new Set())
   const initializedHandlesRef = useRef<Set<string>>(new Set())
@@ -1232,15 +1240,29 @@ export default function SessionScreen() {
     client,
     enabled: canSend,
     onTranscript: (text) => {
-      setInput((current) => {
-        if (!current.trim()) {
-          return text
+      // Live mode inserts the transcript straight into its originating PTY as
+      // text (no Return — the user sends it themselves), matching live keystroke
+      // semantics; buffered mode keeps appending to the command field.
+      const routeContext = dictationRouteContextRef.current
+      dictationRouteContextRef.current = null
+      const route = routeDictationTranscript(
+        text,
+        routeContext?.liveInputEnabled ?? liveInputEnabled
+      )
+      if (route.kind === 'live-insert') {
+        const insertHandle = routeContext?.handle ?? activeHandleRef.current
+        if (!insertHandle) {
+          return
         }
-        return `${current.trimEnd()} ${text}`
-      })
+        sendLiveTerminalInput(insertHandle, route.text)
+        showToast('Dictation inserted')
+        return
+      }
+      setInput((current) => appendBufferedDictation(current, route.text))
       showToast('Dictation inserted')
     },
     onError: (err) => {
+      dictationRouteContextRef.current = null
       // Dictation isn't set up on the desktop yet → open the setup sheet so the
       // user can download a model + enable it from here, instead of a dead-end toast.
       if (isDictationSetupRequiredError(err.message)) {
@@ -1253,16 +1275,28 @@ export default function SessionScreen() {
   })
 
   const startDictation = useCallback(() => {
+    const routeContext = activeHandle
+      ? { handle: activeHandle, liveInputEnabled: liveInputTerminalHandles.has(activeHandle) }
+      : null
+    dictationRouteContextRef.current = routeContext
     void dictation.start().catch((err) => {
+      if (dictationRouteContextRef.current === routeContext) {
+        dictationRouteContextRef.current = null
+      }
       triggerError()
       showToast(err instanceof Error ? err.message : String(err))
     })
-  }, [dictation, triggerError, showToast])
+  }, [activeHandle, dictation, liveInputTerminalHandles, triggerError, showToast])
+
+  const cancelDictation = useCallback(() => {
+    dictationRouteContextRef.current = null
+    void dictation.cancel()
+  }, [dictation])
 
   // Toggle mode: one tap starts, the next stops; long-press cancels mid-record.
   const handleDictationToggle = useCallback(() => {
     if (dictation.isProcessing) {
-      void dictation.cancel()
+      cancelDictation()
     } else if (dictation.isStarting) {
       return
     } else if (dictation.isRecording) {
@@ -1270,7 +1304,7 @@ export default function SessionScreen() {
     } else {
       startDictation()
     }
-  }, [dictation, startDictation])
+  }, [cancelDictation, dictation, startDictation])
 
   // Hold mode: press starts, release stops — like a walkie-talkie.
   const handleDictationPressIn = useCallback(() => {
@@ -1284,9 +1318,9 @@ export default function SessionScreen() {
       void dictation.stop()
     } else if (dictation.isStarting) {
       // Released before recording began: cancel so we don't leave a live mic.
-      void dictation.cancel()
+      cancelDictation()
     }
-  }, [dictation])
+  }, [cancelDictation, dictation])
 
   const refreshDictationMode = useCallback(async () => {
     if (!client) {
@@ -4166,10 +4200,11 @@ export default function SessionScreen() {
       })
       if (response.ok) {
         if (tab.type === 'terminal' && typeof tab.terminal === 'string') {
-          unsubscribeTerminal(tab.terminal)
-          terminalRefs.current.delete(tab.terminal)
-          initializedHandlesRef.current.delete(tab.terminal)
-          clearTerminalLiveInputDefault(tab.terminal)
+          const terminalHandle = tab.terminal
+          unsubscribeTerminal(terminalHandle)
+          terminalRefs.current.delete(terminalHandle)
+          initializedHandlesRef.current.delete(terminalHandle)
+          clearTerminalLiveInputDefault(terminalHandle)
         }
         setSessionTabs((prev) => prev.filter((candidate) => candidate.id !== tab.id))
         // Why: tombstone the closed tab and rely on the subscription/poll
@@ -4980,16 +5015,34 @@ export default function SessionScreen() {
 
                 {/* Input bar */}
                 {liveInputEnabled ? (
-                  <Pressable
-                    style={[styles.inputBar, styles.liveInputBar]}
-                    disabled={!canSend}
-                    onPress={focusLiveInput}
-                    accessibilityLabel="Focus live terminal input"
-                  >
-                    <KeyboardIcon size={16} color={colors.textSecondary} strokeWidth={2} />
-                    <Text style={styles.liveInputHint} numberOfLines={1}>
-                      Keyboard input directly goes to terminal
-                    </Text>
+                  <View style={[styles.inputBar, styles.liveInputBar]}>
+                    <Pressable
+                      style={styles.liveInputFocusTarget}
+                      disabled={!canSend}
+                      onPress={focusLiveInput}
+                      accessibilityLabel="Focus live terminal input"
+                    >
+                      <KeyboardIcon size={16} color={colors.textSecondary} strokeWidth={2} />
+                      <MobileTerminalLiveInputStatus
+                        dictation={dictation}
+                        isAttaching={isAttaching}
+                      />
+                    </Pressable>
+                    <MobileTerminalInputActions
+                      canSend={canSend}
+                      isAttaching={isAttaching}
+                      dictation={dictation}
+                      dictationMode={dictationMode}
+                      buttonStyle={styles.dictationButton}
+                      activeButtonStyle={styles.dictationButtonActive}
+                      disabledButtonStyle={styles.sendButtonDisabled}
+                      onAttachImage={() => void attachImage('library')}
+                      onAttachFile={() => void attachImage('files')}
+                      onDictationToggle={handleDictationToggle}
+                      onDictationPressIn={handleDictationPressIn}
+                      onDictationPressOut={handleDictationPressOut}
+                      onDictationCancel={cancelDictation}
+                    />
                     <TextInput
                       ref={liveInputRef}
                       style={styles.liveInputCapture}
@@ -5011,7 +5064,7 @@ export default function SessionScreen() {
                       editable={canSend}
                       importantForAutofill="no"
                     />
-                  </Pressable>
+                  </View>
                 ) : (
                   <View style={styles.inputBar}>
                     <TextInput
@@ -5046,64 +5099,21 @@ export default function SessionScreen() {
                       editable={canSend}
                       onSubmitEditing={() => void handleSend()}
                     />
-                    <Pressable
-                      style={[
-                        styles.dictationButton,
-                        (!canSend || isAttaching) && styles.sendButtonDisabled
-                      ]}
-                      disabled={!canSend || isAttaching}
-                      // Tap opens the photo library straight away (one-tap, like
-                      // Discord); long-press is the escape hatch for picking a file.
-                      onPress={() => void attachImage('library')}
-                      onLongPress={() => void attachImage('files')}
-                      delayLongPress={350}
-                      accessibilityLabel={isAttaching ? 'Sending image' : 'Attach a photo'}
-                      accessibilityHint="Long press to attach a file instead"
-                    >
-                      {isAttaching ? (
-                        <ActivityIndicator size="small" color={colors.textSecondary} />
-                      ) : (
-                        <ImagePlus size={17} color={colors.textSecondary} strokeWidth={2.4} />
-                      )}
-                    </Pressable>
-                    <Pressable
-                      style={[
-                        styles.dictationButton,
-                        (dictation.isStarting || dictation.isRecording) &&
-                          styles.dictationButtonActive,
-                        !canSend && styles.sendButtonDisabled
-                      ]}
-                      disabled={!canSend}
-                      onPress={dictationMode === 'toggle' ? handleDictationToggle : undefined}
-                      onPressIn={dictationMode === 'hold' ? handleDictationPressIn : undefined}
-                      onPressOut={dictationMode === 'hold' ? handleDictationPressOut : undefined}
-                      onLongPress={
-                        dictationMode === 'toggle'
-                          ? () => {
-                              if (dictation.isRecording || dictation.isProcessing) {
-                                void dictation.cancel()
-                              }
-                            }
-                          : undefined
-                      }
-                      accessibilityLabel={
-                        dictation.isRecording
-                          ? 'Stop voice dictation'
-                          : dictation.isProcessing
-                            ? 'Cancel voice dictation'
-                            : dictation.isStarting
-                              ? 'Starting voice dictation'
-                              : 'Start voice dictation'
-                      }
-                    >
-                      {dictation.isProcessing ? (
-                        <ActivityIndicator size="small" color={colors.textSecondary} />
-                      ) : dictation.isStarting || dictation.isRecording ? (
-                        <Mic size={17} color={colors.textPrimary} strokeWidth={2.4} />
-                      ) : (
-                        <Mic size={17} color={colors.textSecondary} strokeWidth={2.4} />
-                      )}
-                    </Pressable>
+                    <MobileTerminalInputActions
+                      canSend={canSend}
+                      isAttaching={isAttaching}
+                      dictation={dictation}
+                      dictationMode={dictationMode}
+                      buttonStyle={styles.dictationButton}
+                      activeButtonStyle={styles.dictationButtonActive}
+                      disabledButtonStyle={styles.sendButtonDisabled}
+                      onAttachImage={() => void attachImage('library')}
+                      onAttachFile={() => void attachImage('files')}
+                      onDictationToggle={handleDictationToggle}
+                      onDictationPressIn={handleDictationPressIn}
+                      onDictationPressOut={handleDictationPressOut}
+                      onDictationCancel={cancelDictation}
+                    />
                     <Pressable
                       style={[styles.sendButton, !canSend && styles.sendButtonDisabled]}
                       disabled={!canSend}
