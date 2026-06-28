@@ -196,6 +196,8 @@ export function ExternalAutomationManagers({
                         <Tooltip>
                           <TooltipTrigger asChild>
                             <span className="inline-flex shrink-0 items-center gap-1.5">
+                              {/* Match either key: job.enabled flips mid-flight, so a single-action
+                                  match would drop the spinner a render early. */}
                               {runningActionKey === actionKey(manager, job, 'pause') ||
                               runningActionKey === actionKey(manager, job, 'resume') ? (
                                 <RefreshCw className="size-3.5 animate-spin" />
