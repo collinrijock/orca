@@ -2049,6 +2049,46 @@ describe('OrcaRuntimeRpcServer', () => {
     await server.stop()
   })
 
+  it('stamps the authenticated device scope onto status.get for WebSocket clients', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    const runtime = new OrcaRuntimeService()
+    const server = new OrcaRuntimeRpcServer({ runtime, userDataPath, enableWebSocket: false })
+    server['deviceRegistry'] = new DeviceRegistry(userDataPath)
+    const mobile = server['deviceRegistry']!.addDevice('phone', 'mobile')
+    const runtimeDevice = server['deviceRegistry']!.addDevice('browser', 'runtime')
+
+    const sendStatus = async (token: string): Promise<Record<string, unknown>> => {
+      const replies: Record<string, unknown>[] = []
+      await server['handleWebSocketMessage'](
+        JSON.stringify({ id: 'req_status', method: 'status.get', deviceToken: token }),
+        (response) => replies.push(JSON.parse(response) as Record<string, unknown>),
+        () => {}
+      )
+      return replies[0]!
+    }
+
+    const mobileReply = await sendStatus(mobile.token)
+    expect(mobileReply).toMatchObject({ id: 'req_status', ok: true })
+    // Why: the mobile-scope web client reads this to refuse the full app.
+    expect((mobileReply.result as { deviceScope?: string }).deviceScope).toBe('mobile')
+
+    const runtimeReply = await sendStatus(runtimeDevice.token)
+    expect((runtimeReply.result as { deviceScope?: string }).deviceScope).toBe('runtime')
+
+    // Other methods stay unmodified — only status.get carries the scope.
+    const replies: Record<string, unknown>[] = []
+    await server['handleWebSocketMessage'](
+      JSON.stringify({ id: 'req_forbidden', method: 'files.delete', deviceToken: mobile.token }),
+      (response) => replies.push(JSON.parse(response) as Record<string, unknown>),
+      () => {}
+    )
+    expect(replies[0]).toMatchObject({
+      id: 'req_forbidden',
+      ok: false,
+      error: { code: 'forbidden' }
+    })
+  })
+
   it('rejects requests with the wrong auth token', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
     const runtime = new OrcaRuntimeService()

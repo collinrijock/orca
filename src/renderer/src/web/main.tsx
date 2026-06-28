@@ -11,11 +11,7 @@ import {
   parseWebPairingInput,
   readPairingInputFromLocation
 } from './web-pairing'
-import {
-  createStoredWebRuntimeEnvironment,
-  readStoredWebRuntimeEnvironment,
-  saveStoredWebRuntimeEnvironment
-} from './web-runtime-environment'
+import { readStoredWebRuntimeEnvironment } from './web-runtime-environment'
 import { installWebPreloadApi } from './web-preload-api'
 import { I18nProvider } from '../i18n/I18nProvider'
 import { translate } from '../i18n/i18n'
@@ -24,22 +20,27 @@ const App = lazy(() => import('../App'))
 
 function WebRoot(): React.JSX.Element {
   const initialPairingInput = useMemo(() => readPairingInputFromLocation(window.location), [])
-  const [hasEnvironment, setHasEnvironment] = useState(() => {
+  // Why: a freshly-parsed offer must be probed by WebConnect (status.get) before
+  // entering the app — auto-saving here would let a mobile-scope token through
+  // and silently render empty workspaces. Clear the secret-bearing URL now; the
+  // offer is handed to WebConnect via initialPairingInput. Stored environments
+  // were already scope-checked at connect time, so they keep the fast path.
+  const freshPairingInput = useMemo(() => {
     const offer = initialPairingInput ? parseWebPairingInput(initialPairingInput) : null
-    if (offer) {
-      saveStoredWebRuntimeEnvironment(
-        createStoredWebRuntimeEnvironment({ name: 'Orca Server', offer })
-      )
-      clearPairingInputFromAddressBar()
-      return true
+    if (!offer) {
+      return null
     }
-    return readStoredWebRuntimeEnvironment() !== null
-  })
+    clearPairingInputFromAddressBar()
+    return initialPairingInput
+  }, [initialPairingInput])
+  const [hasEnvironment, setHasEnvironment] = useState(
+    () => freshPairingInput === null && readStoredWebRuntimeEnvironment() !== null
+  )
 
   if (!hasEnvironment) {
     return (
       <WebConnect
-        initialPairingInput={initialPairingInput}
+        initialPairingInput={freshPairingInput}
         onConnected={() => setHasEnvironment(true)}
       />
     )

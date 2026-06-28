@@ -365,6 +365,23 @@ function isLongPollRequest(request: RpcRequest): boolean {
   return false
 }
 
+// Why: stamp the authenticated connection's scope onto the status.get success
+// envelope. status.get has no per-connection context inside the dispatcher, so
+// the scope is added here at the transport boundary where the device is known.
+// Failures fall back to the untouched reply rather than dropping the response.
+function injectDeviceScope(response: string, scope: DeviceScope): string {
+  try {
+    const parsed = JSON.parse(response) as RpcResponse
+    if (parsed.ok !== true || typeof parsed.result !== 'object' || parsed.result === null) {
+      return response
+    }
+    ;(parsed.result as Record<string, unknown>).deviceScope = scope
+    return JSON.stringify(parsed)
+  } catch {
+    return response
+  }
+}
+
 export class OrcaRuntimeRpcServer {
   private readonly runtime: OrcaRuntimeService
   private readonly dispatcher: RpcDispatcher
@@ -969,9 +986,18 @@ export class OrcaRuntimeRpcServer {
       this.activeLongPolls += 1
     }
 
+    // Why: WebSocket clients can't see their own token scope (the pairing offer
+    // omits it), so stamp it onto the one method that probes the connection.
+    // A mobile-scope web client then refuses to enter the full app instead of
+    // rendering empty workspaces from silently-forbidden worktree RPCs.
+    const replyForRequest =
+      request.method === 'status.get'
+        ? (response: string): void => reply(injectDeviceScope(response, device.scope))
+        : reply
+
     const connectionId = ws ? this.wsConnectionIds.get(ws) : undefined
     try {
-      await this.dispatcher.dispatchStreaming(request, reply, {
+      await this.dispatcher.dispatchStreaming(request, replyForRequest, {
         connectionId,
         clientId: token,
         // Why: gates the mobile-only payload diet (native-chat char clipping) so

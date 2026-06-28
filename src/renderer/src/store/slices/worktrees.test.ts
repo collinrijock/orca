@@ -1187,6 +1187,40 @@ describe('fetchWorktrees', () => {
     })
   })
 
+  it('surfaces one deduped scope-mismatch toast when a mobile pairing forbids worktree RPCs', async () => {
+    const store = createTestStore()
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
+      repos: [
+        { id: 'repo1', path: '/r1', displayName: 'R1', badgeColor: '#000', addedAt: 0 },
+        { id: 'repo2', path: '/r2', displayName: 'R2', badgeColor: '#000', addedAt: 0 }
+      ]
+    } as Partial<AppState>)
+    // Why: a mobile-scope device token is denied non-allowlisted runtime RPCs.
+    runtimeEnvironmentCall.mockResolvedValue({
+      id: 'rpc-1',
+      ok: false,
+      error: {
+        code: 'forbidden',
+        message: "Method 'worktree.detectedList' is not available to mobile clients"
+      },
+      _meta: { runtimeId: 'runtime-remote' }
+    })
+
+    const repo1Result = await store.getState().fetchWorktrees('repo1')
+    const repo2Result = await store.getState().fetchWorktrees('repo2')
+    await store.getState().fetchDetectedWorktrees('repo1')
+
+    expect(repo1Result).toBe(false)
+    expect(repo2Result).toBe(false)
+    expect(store.getState().worktreesByRepo.repo1).toBeUndefined()
+    // Why: per-repo failures must collapse to a single stable-id toast, not spam.
+    expect(toast.error).toHaveBeenCalledTimes(3)
+    for (const call of (toast.error as ReturnType<typeof vi.fn>).mock.calls) {
+      expect(call[1]).toMatchObject({ id: 'runtime-scope-forbidden' })
+    }
+  })
+
   it('updates remote worktree records when only lineage changes', async () => {
     const store = createTestStore()
     const initial = makeWorktree({

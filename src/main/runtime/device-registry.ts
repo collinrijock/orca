@@ -6,9 +6,10 @@ import { randomBytes, randomUUID } from 'crypto'
 import { existsSync, readFileSync } from 'fs'
 import { join } from 'path'
 import { hardenExistingSecureFile, writeSecureJsonFile } from '../../shared/secure-file'
+import type { DeviceScope } from '../../shared/runtime-types'
 import { DEVICE_REGISTRY_FILENAME } from './mobile-pairing-files'
 
-export type DeviceScope = 'mobile' | 'runtime'
+export type { DeviceScope }
 
 export type DeviceEntry = {
   deviceId: string
