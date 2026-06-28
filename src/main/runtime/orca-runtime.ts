@@ -5391,7 +5391,7 @@ export class OrcaRuntimeService {
 
   serializeTerminalBuffer(
     ptyId: string,
-    opts: { scrollbackRows?: number } = {}
+    opts: { scrollbackRows?: number; altScreenPreservesScrollback?: boolean } = {}
   ): Promise<{
     data: string
     cols: number
@@ -5672,7 +5672,7 @@ export class OrcaRuntimeService {
 
   private async serializeTerminalBufferFromAvailableState(
     ptyId: string,
-    opts: { scrollbackRows?: number } = {}
+    opts: { scrollbackRows?: number; altScreenPreservesScrollback?: boolean } = {}
   ): Promise<{
     data: string
     cols: number
@@ -5783,7 +5783,11 @@ export class OrcaRuntimeService {
 
   private async serializeHeadlessTerminalBuffer(
     ptyId: string,
-    opts: { scrollbackRows?: number; includeEmpty?: boolean } = {}
+    opts: {
+      scrollbackRows?: number
+      includeEmpty?: boolean
+      altScreenPreservesScrollback?: boolean
+    } = {}
   ): Promise<{
     data: string
     cols: number
@@ -5807,10 +5811,18 @@ export class OrcaRuntimeService {
     // scrollbackRows=0 in that case. When the buffer is in normal mode the
     // caller can request scrollback so the user can scroll up to see prior
     // agent output.
+    // Why: the desktop live SSH restore path opts in (altScreenPreservesScrollback)
+    // to keep the pre-TUI normal-buffer scrollback so hidden/restore does not drop
+    // the user's earlier shell output. Mobile must NOT opt in: its xterm re-wraps
+    // the replay and would duplicate prompts / flatten SGR, so it keeps rows=0.
     const requested = opts.scrollbackRows ?? 0
     const isAlternateScreen = state.emulator.isAlternateScreen
-    const scrollbackRows = isAlternateScreen ? 0 : requested
-    const snapshot = state.emulator.getSnapshot({ scrollbackRows })
+    const shouldPreserveAltScreen = opts.altScreenPreservesScrollback === true
+    const scrollbackRows = isAlternateScreen && !shouldPreserveAltScreen ? 0 : requested
+    const snapshot = state.emulator.getSnapshot({
+      scrollbackRows,
+      preserveNormalBufferOnAltScreen: shouldPreserveAltScreen && isAlternateScreen
+    })
     const data = snapshot.rehydrateSequences + snapshot.snapshotAnsi
     return data.length > 0 || opts.includeEmpty === true
       ? {

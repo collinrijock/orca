@@ -15,6 +15,7 @@ import {
 function stubRuntime(overrides: Partial<OrcaRuntimeService> = {}): OrcaRuntimeService {
   return {
     getRuntimeId: () => 'test-runtime',
+    isTerminalAlternateScreen: () => false,
     ...overrides
   } as OrcaRuntimeService
 }

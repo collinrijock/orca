@@ -18,6 +18,7 @@ import {
 function stubRuntime(overrides: Partial<OrcaRuntimeService> = {}): OrcaRuntimeService {
   return {
     getRuntimeId: () => 'test-runtime',
+    isTerminalAlternateScreen: () => false,
     ...overrides
   } as OrcaRuntimeService
 }
@@ -223,7 +224,8 @@ describe('terminal multiplex RPC', () => {
         requestId: 7
       })
       expect(runtime.serializeTerminalBuffer).toHaveBeenLastCalledWith('pty-1', {
-        scrollbackRows: 5000
+        scrollbackRows: 5000,
+        altScreenPreservesScrollback: true
       })
       expect(
         requestedSnapshotFrames
@@ -237,6 +239,181 @@ describe('terminal multiplex RPC', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  it('preserves alternate-screen scrollback on desktop multiplex subscribe', async () => {
+    const messages: string[] = []
+    const binaryFrames: Uint8Array<ArrayBufferLike>[] = []
+    const handlers = new Map<
+      number,
+      (frame: NonNullable<ReturnType<typeof decodeTerminalStreamFrame>>) => void
+    >()
+    const cleanups = new Map<string, () => void>()
+    const runtime = stubRuntime({
+      resolveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
+      readTerminal: vi.fn().mockResolvedValue({ tail: [], truncated: false }),
+      serializeTerminalBuffer: vi.fn().mockResolvedValue({
+        data: 'PRE_CODEX_START\x1b[?1049hTUI_FRAME',
+        cols: 120,
+        rows: 40
+      }),
+      getTerminalSize: vi.fn().mockReturnValue({ cols: 120, rows: 40 }),
+      getMobileDisplayMode: vi.fn().mockReturnValue('auto'),
+      getLayout: vi.fn().mockReturnValue({ seq: 1 }),
+      isTerminalAlternateScreen: vi.fn().mockReturnValue(true),
+      subscribeToTerminalData: vi.fn().mockReturnValue(vi.fn()),
+      subscribeToTerminalResize: vi.fn().mockReturnValue(vi.fn()),
+      subscribeToFitOverrideChanges: vi.fn().mockReturnValue(vi.fn()),
+      subscribeToDriverChanges: vi.fn().mockReturnValue(vi.fn()),
+      getTerminalFitOverride: vi.fn().mockReturnValue(null),
+      getDriver: vi.fn().mockReturnValue({ kind: 'idle' }),
+      registerSubscriptionCleanup: vi.fn((id: string, cleanup: () => void) => {
+        cleanups.set(id, cleanup)
+      }),
+      waitForTerminal: vi.fn(() => new Promise<RuntimeTerminalWait>(() => {})),
+      sendTerminal: vi.fn().mockResolvedValue({ accepted: true }),
+      updateDesktopViewport: vi.fn().mockResolvedValue(true)
+    })
+    const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
+
+    const dispatchPromise = dispatcher.dispatchStreaming(
+      makeRequest('terminal.multiplex', {}),
+      (msg) => messages.push(msg),
+      {
+        connectionId: 'conn-desktop-alt-subscribe',
+        sendBinary: (bytes) => binaryFrames.push(bytes),
+        registerBinaryStreamHandler: (streamId, handler) => {
+          handlers.set(streamId, handler)
+          return () => handlers.delete(streamId)
+        }
+      }
+    )
+
+    await vi.waitFor(() =>
+      expect(messages.some((msg) => JSON.parse(msg).result?.type === 'ready')).toBe(true)
+    )
+    handlers.get(0)?.(
+      decodeTerminalStreamFrame(
+        encodeTerminalStreamFrame({
+          opcode: TerminalStreamOpcode.Subscribe,
+          streamId: 0,
+          seq: 1,
+          payload: encodeTerminalStreamJson({
+            streamId: 12,
+            terminal: 'terminal-1',
+            client: { id: 'desktop-1', type: 'desktop' },
+            viewport: { cols: 120, rows: 40 }
+          })
+        })
+      )!
+    )
+
+    await vi.waitFor(() =>
+      expect(messages.some((msg) => JSON.parse(msg).result?.type === 'subscribed')).toBe(true)
+    )
+    expect(runtime.serializeTerminalBuffer).toHaveBeenCalledWith('pty-1', {
+      scrollbackRows: 1000,
+      altScreenPreservesScrollback: true
+    })
+    const snapshotData = binaryFrames
+      .map((frame) => decodeTerminalStreamFrame(frame))
+      .filter((frame) => frame?.opcode === TerminalStreamOpcode.SnapshotChunk)
+      .map((frame) => (frame ? decodeTerminalStreamText(frame.payload) : ''))
+      .join('')
+    expect(snapshotData).toContain('PRE_CODEX_START')
+    expect(snapshotData).toContain('TUI_FRAME')
+
+    cleanups.get('terminal-multiplex:conn-desktop-alt-subscribe')?.()
+    await dispatchPromise
+  })
+
+  it('does not forward alternate-screen snapshot flag for mobile snapshot requests', async () => {
+    const messages: string[] = []
+    const binaryFrames: Uint8Array<ArrayBufferLike>[] = []
+    const handlers = new Map<
+      number,
+      (frame: NonNullable<ReturnType<typeof decodeTerminalStreamFrame>>) => void
+    >()
+    const cleanups = new Map<string, () => void>()
+    const runtime = stubRuntime({
+      resolveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
+      readTerminal: vi.fn().mockResolvedValue({ tail: [], truncated: false }),
+      serializeTerminalBuffer: vi.fn().mockResolvedValue({
+        data: 'snapshot',
+        cols: 120,
+        rows: 40
+      }),
+      getTerminalSize: vi.fn().mockReturnValue({ cols: 120, rows: 40 }),
+      getMobileDisplayMode: vi.fn().mockReturnValue('auto'),
+      getLayout: vi.fn().mockReturnValue({ seq: 1 }),
+      subscribeToTerminalData: vi.fn().mockReturnValue(vi.fn()),
+      subscribeToTerminalResize: vi.fn().mockReturnValue(vi.fn()),
+      subscribeToFitOverrideChanges: vi.fn().mockReturnValue(vi.fn()),
+      subscribeToDriverChanges: vi.fn().mockReturnValue(vi.fn()),
+      getTerminalFitOverride: vi.fn().mockReturnValue(null),
+      getDriver: vi.fn().mockReturnValue({ kind: 'idle' }),
+      handleMobileSubscribe: vi.fn().mockResolvedValue(undefined),
+      handleMobileUnsubscribe: vi.fn().mockResolvedValue(undefined),
+      registerSubscriptionCleanup: vi.fn((id: string, cleanup: () => void) => {
+        cleanups.set(id, cleanup)
+      }),
+      waitForTerminal: vi.fn(() => new Promise<RuntimeTerminalWait>(() => {})),
+      sendTerminal: vi.fn().mockResolvedValue({ accepted: true }),
+      updateDesktopViewport: vi.fn().mockResolvedValue(true)
+    })
+    const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
+
+    const dispatchPromise = dispatcher.dispatchStreaming(
+      makeRequest('terminal.multiplex', {}),
+      (msg) => messages.push(msg),
+      {
+        connectionId: 'conn-mobile-request',
+        sendBinary: (bytes) => binaryFrames.push(bytes),
+        registerBinaryStreamHandler: (streamId, handler) => {
+          handlers.set(streamId, handler)
+          return () => handlers.delete(streamId)
+        }
+      }
+    )
+
+    await vi.waitFor(() =>
+      expect(messages.some((msg) => JSON.parse(msg).result?.type === 'ready')).toBe(true)
+    )
+    handlers.get(0)?.(
+      decodeTerminalStreamFrame(
+        encodeTerminalStreamFrame({
+          opcode: TerminalStreamOpcode.Subscribe,
+          streamId: 0,
+          seq: 1,
+          payload: encodeTerminalStreamJson({
+            streamId: 11,
+            terminal: 'terminal-1',
+            client: { id: 'phone-1', type: 'mobile' },
+            viewport: { cols: 120, rows: 40 }
+          })
+        })
+      )!
+    )
+    await vi.waitFor(() =>
+      expect(messages.some((msg) => JSON.parse(msg).result?.type === 'subscribed')).toBe(true)
+    )
+    handlers.get(11)?.(
+      decodeTerminalStreamFrame(
+        encodeTerminalStreamFrame({
+          opcode: TerminalStreamOpcode.SnapshotRequest,
+          streamId: 11,
+          seq: 2,
+          payload: encodeTerminalStreamJson({ requestId: 9, scrollbackRows: 5000 })
+        })
+      )!
+    )
+    await vi.waitFor(() => expect(runtime.serializeTerminalBuffer).toHaveBeenCalledTimes(2))
+    expect(runtime.serializeTerminalBuffer).toHaveBeenLastCalledWith('pty-1', {
+      scrollbackRows: 5000
+    })
+
+    cleanups.get('terminal-multiplex:conn-mobile-request')?.()
+    await dispatchPromise
   })
 
   it('drops stale mobile resize re-stream completions for multiplex streams', async () => {
@@ -657,10 +834,12 @@ describe('terminal multiplex RPC', () => {
       truncatedByByteBudget: true
     })
     expect(runtime.serializeTerminalBuffer).toHaveBeenNthCalledWith(2, 'pty-1', {
-      scrollbackRows: 5000
+      scrollbackRows: 5000,
+      altScreenPreservesScrollback: true
     })
     expect(runtime.serializeTerminalBuffer).toHaveBeenNthCalledWith(3, 'pty-1', {
-      scrollbackRows: 1000
+      scrollbackRows: 1000,
+      altScreenPreservesScrollback: true
     })
     expect(
       requestedFrames
@@ -935,6 +1114,80 @@ describe('terminal multiplex RPC', () => {
         interrupt: false
       })
     )
+
+    runtime.cleanupSubscription('terminal-1:desktop-1')
+    await dispatchPromise
+  })
+
+  it('preserves alternate-screen scrollback on desktop binary subscribe', async () => {
+    const messages: string[] = []
+    const binaryFrames: Uint8Array<ArrayBufferLike>[] = []
+    const cleanups = new Map<string, () => void>()
+    const runtime = stubRuntime({
+      resolveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
+      readTerminal: vi.fn().mockResolvedValue({ tail: [], truncated: false }),
+      serializeTerminalBuffer: vi.fn().mockResolvedValue({
+        data: 'PRE_CODEX_START\x1b[?1049hTUI_FRAME',
+        cols: 120,
+        rows: 40
+      }),
+      getTerminalSize: vi.fn().mockReturnValue({ cols: 120, rows: 40 }),
+      getMobileDisplayMode: vi.fn().mockReturnValue('auto'),
+      getLayout: vi.fn().mockReturnValue({ seq: 1 }),
+      isTerminalAlternateScreen: vi.fn().mockReturnValue(true),
+      subscribeToTerminalData: vi.fn().mockReturnValue(vi.fn()),
+      subscribeToTerminalResize: vi.fn().mockReturnValue(vi.fn()),
+      subscribeToFitOverrideChanges: vi.fn().mockReturnValue(vi.fn()),
+      getDriver: vi.fn().mockReturnValue({ kind: 'idle' }),
+      registerSubscriptionCleanup: vi.fn((id: string, cleanup: () => void) => {
+        cleanups.set(id, cleanup)
+      }),
+      cleanupSubscription: vi.fn((id: string) => {
+        const cleanup = cleanups.get(id)
+        cleanups.delete(id)
+        cleanup?.()
+      }),
+      waitForTerminal: vi.fn(() => new Promise<RuntimeTerminalWait>(() => {})),
+      sendTerminal: vi.fn().mockResolvedValue({ accepted: true }),
+      updateDesktopViewport: vi.fn().mockResolvedValue(true)
+    })
+    const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
+
+    const dispatchPromise = dispatcher.dispatchStreaming(
+      makeRequest('terminal.subscribe', {
+        terminal: 'terminal-1',
+        client: { id: 'desktop-1', type: 'desktop' },
+        capabilities: { terminalBinaryStream: 1 }
+      }),
+      (msg) => messages.push(msg),
+      {
+        connectionId: 'conn-subscribe-desktop-alt',
+        sendBinary: (bytes) => binaryFrames.push(bytes),
+        registerBinaryStreamHandler: vi.fn(() => vi.fn())
+      }
+    )
+
+    await vi.waitFor(() =>
+      expect(messages.some((msg) => JSON.parse(msg).result?.type === 'subscribed')).toBe(true)
+    )
+    await vi.waitFor(() =>
+      expect(
+        binaryFrames.some(
+          (frame) => decodeTerminalStreamFrame(frame)?.opcode === TerminalStreamOpcode.SnapshotEnd
+        )
+      ).toBe(true)
+    )
+    expect(runtime.serializeTerminalBuffer).toHaveBeenCalledWith('pty-1', {
+      scrollbackRows: 1000,
+      altScreenPreservesScrollback: true
+    })
+    const snapshotData = binaryFrames
+      .map((frame) => decodeTerminalStreamFrame(frame))
+      .filter((frame) => frame?.opcode === TerminalStreamOpcode.SnapshotChunk)
+      .map((frame) => (frame ? decodeTerminalStreamText(frame.payload) : ''))
+      .join('')
+    expect(snapshotData).toContain('PRE_CODEX_START')
+    expect(snapshotData).toContain('TUI_FRAME')
 
     runtime.cleanupSubscription('terminal-1:desktop-1')
     await dispatchPromise

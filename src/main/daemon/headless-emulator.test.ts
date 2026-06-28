@@ -498,6 +498,51 @@ describe('HeadlessEmulator', () => {
       expect(snapshot.rehydrateSequences).toContain('\x1b[?1006h')
       expect(snapshot.rehydrateSequences).not.toContain('\x1b[?1002h')
     })
+
+    it('preserves pre-alternate-screen content with opt-in mode', async () => {
+      emulator = new HeadlessEmulator({ cols: 80, rows: 24 })
+      await emulator.write('PRE_CODEX_START\nls | head -5\n')
+      await emulator.write('\x1b[?1049h')
+      await emulator.write('TUI_FRAME\n')
+
+      const defaultSnapshot = emulator.getSnapshot({ scrollbackRows: 10 })
+      expect(defaultSnapshot.snapshotAnsi).not.toContain('PRE_CODEX_START')
+      expect(defaultSnapshot.snapshotAnsi).toContain('TUI_FRAME')
+      expect(defaultSnapshot.rehydrateSequences).toContain('\x1b[?1049h')
+
+      const preservedSnapshot = emulator.getSnapshot({
+        scrollbackRows: 10,
+        preserveNormalBufferOnAltScreen: true
+      })
+      expect(preservedSnapshot.snapshotAnsi).toContain('PRE_CODEX_START')
+      expect(preservedSnapshot.snapshotAnsi).toContain('TUI_FRAME')
+      expect(preservedSnapshot.snapshotAnsi).toContain('\x1b[?1049h')
+      // No mouse modes are active, so the serializer covers everything and the
+      // opt-in path needs no extra rehydrate sequences.
+      expect(preservedSnapshot.rehydrateSequences).toBe('')
+    })
+
+    it('preserves SGR mouse encoding in the opt-in alternate-screen snapshot', async () => {
+      emulator = new HeadlessEmulator({ cols: 80, rows: 24 })
+      await emulator.write('PRE_CODEX_START\n')
+      // Enter alt screen and enable drag tracking with SGR encoding, as Codex /
+      // Claude / OpenTUI do. SerializeAddon emits ?1002h but drops ?1006h.
+      await emulator.write('\x1b[?1049h\x1b[?1002;1006h')
+
+      const preservedSnapshot = emulator.getSnapshot({
+        scrollbackRows: 10,
+        preserveNormalBufferOnAltScreen: true
+      })
+      expect(preservedSnapshot.modes.sgrMouseMode).toBe(true)
+      // Why: the raw blob already entered alt screen and carries tracking modes,
+      // but not the SGR encoding — it must be restored so clicks past col/row 223
+      // keep using SGR rather than degrading to legacy X10 reports.
+      const payload = preservedSnapshot.rehydrateSequences + preservedSnapshot.snapshotAnsi
+      expect(payload).toContain('\x1b[?1006h')
+      expect(payload).toContain('PRE_CODEX_START')
+      // The opt-in branch must not duplicate the alt-screen entry.
+      expect(payload.split('\x1b[?1049h')).toHaveLength(2)
+    })
   })
 
   describe('dispose', () => {

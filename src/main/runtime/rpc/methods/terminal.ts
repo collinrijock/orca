@@ -410,11 +410,18 @@ function requestedSnapshotScrollbackCandidates(requestedRows: number | undefined
 async function serializeBudgetedRequestedSnapshot(
   runtime: OrcaRuntimeService,
   ptyId: string,
-  scrollbackRows: number | undefined
+  scrollbackRows: number | undefined,
+  options: { altScreenPreservesScrollback?: boolean } = {}
 ): Promise<SerializedSnapshot> {
   const requestedRows = scrollbackRows ?? 0
   for (const rows of requestedSnapshotScrollbackCandidates(scrollbackRows)) {
-    const serialized = await runtime.serializeTerminalBuffer(ptyId, { scrollbackRows: rows })
+    // Why: forward the caller's intent verbatim — desktop restore opts in to keep
+    // pre-TUI scrollback, mobile omits the flag so its replay path stays unchanged.
+    const requestOptions = {
+      scrollbackRows: rows,
+      ...(options.altScreenPreservesScrollback ? { altScreenPreservesScrollback: true } : {})
+    }
+    const serialized = await runtime.serializeTerminalBuffer(ptyId, requestOptions)
     if (!serialized) {
       return null
     }
@@ -464,12 +471,19 @@ function sendSnapshotFrames(
   return { bytes, chunks }
 }
 
-async function serializeBudgetedMobileSnapshot(
+async function serializeBudgetedSubscribeSnapshot(
   runtime: OrcaRuntimeService,
   ptyId: string,
   isMobile: boolean
 ): Promise<SerializedSnapshot> {
   if (!isMobile) {
+    if (runtime.isTerminalAlternateScreen(ptyId)) {
+      // Why: desktop first-attach must match hidden tab restore for active TUIs;
+      // otherwise shell output printed before Codex/Claude still disappears.
+      return serializeBudgetedRequestedSnapshot(runtime, ptyId, MOBILE_SUBSCRIBE_SCROLLBACK_ROWS, {
+        altScreenPreservesScrollback: true
+      })
+    }
     const serialized = await runtime.serializeTerminalBuffer(ptyId, { scrollbackRows: 0 })
     return serialized ? { ...serialized, scrollbackRows: 0, truncatedByByteBudget: false } : null
   }
@@ -512,7 +526,7 @@ async function sendMobileResizeRestream(
   if (event.reason !== 'apply-layout' || runtime.isTerminalAlternateScreen(ptyId)) {
     return false
   }
-  const serialized = await serializeBudgetedMobileSnapshot(runtime, ptyId, true)
+  const serialized = await serializeBudgetedSubscribeSnapshot(runtime, ptyId, true)
   if (!serialized) {
     return false
   }
@@ -1330,7 +1344,8 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
           let serialized = await serializeBudgetedRequestedSnapshot(
             runtime,
             stream.ptyId,
-            scrollbackRows
+            scrollbackRows,
+            { altScreenPreservesScrollback: !stream.isMobile }
           )
           if (closed || streams.get(stream.streamId) !== stream) {
             return
@@ -1346,7 +1361,8 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
             serialized = await serializeBudgetedRequestedSnapshot(
               runtime,
               stream.ptyId,
-              scrollbackRows
+              scrollbackRows,
+              { altScreenPreservesScrollback: !stream.isMobile }
             )
             if (closed || streams.get(stream.streamId) !== stream) {
               return
@@ -1505,7 +1521,7 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
           }
 
           const read = await runtime.readTerminal(request.terminal)
-          const serialized = await serializeBudgetedMobileSnapshot(runtime, ptyId, isMobile)
+          const serialized = await serializeBudgetedSubscribeSnapshot(runtime, ptyId, isMobile)
           if (closed || streams.get(request.streamId) !== stream) {
             return
           }
@@ -1697,7 +1713,7 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
       const clientId = params.client?.id
       if (!useBinaryStream) {
         const read = await runtime.readTerminal(params.terminal)
-        const serialized = await serializeBudgetedMobileSnapshot(runtime, ptyId, false)
+        const serialized = await serializeBudgetedSubscribeSnapshot(runtime, ptyId, false)
         // Why: legacy JSON streams register cleanup after snapshot awaits; if
         // the socket closed meanwhile, registering now would orphan listeners.
         if (signal?.aborted) {
@@ -1892,7 +1908,7 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
         })
 
         const read = await runtime.readTerminal(params.terminal)
-        const serialized = await serializeBudgetedMobileSnapshot(runtime, ptyId, isMobile)
+        const serialized = await serializeBudgetedSubscribeSnapshot(runtime, ptyId, isMobile)
         if (closed) {
           return
         }

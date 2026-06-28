@@ -134,12 +134,18 @@ export class HeadlessEmulator {
     return { cols: this.terminal.cols, rows: this.terminal.rows }
   }
 
-  getSnapshot(opts: { scrollbackRows?: number } = {}): TerminalSnapshot {
+  getSnapshot(
+    opts: { scrollbackRows?: number; preserveNormalBufferOnAltScreen?: boolean } = {}
+  ): TerminalSnapshot {
     const modes = this.getModes()
-    const snapshotAnsi = this.normalizeSnapshotAnsiForModes(
-      this.serializer.serialize({ scrollback: opts.scrollbackRows }),
-      modes
-    )
+    const rawSnapshotAnsi = this.serializer.serialize({ scrollback: opts.scrollbackRows })
+    // Why: the desktop live-restore path opts in to keep the pre-TUI normal
+    // buffer (SerializeAddon emits it before the embedded ?1049h). Mobile must
+    // NOT opt in: its xterm re-wraps the replay and would duplicate prompts.
+    const preserveAltScreen = opts.preserveNormalBufferOnAltScreen === true && modes.alternateScreen
+    const snapshotAnsi = preserveAltScreen
+      ? rawSnapshotAnsi
+      : this.normalizeSnapshotAnsiForModes(rawSnapshotAnsi, modes)
     return {
       snapshotAnsi,
       scrollbackAnsi: '',
@@ -148,7 +154,12 @@ export class HeadlessEmulator {
         opts.scrollbackRows,
         this.restoredOscLinks
       ),
-      rehydrateSequences: this.buildRehydrateSequences(modes),
+      // Why: the raw blob already enters alt screen via its embedded ?1049h, so
+      // we only append the encoding modes SerializeAddon omits (?1006h/?1016h)
+      // to avoid degrading SGR mouse reports to legacy X10 after restore.
+      rehydrateSequences: preserveAltScreen
+        ? this.buildMouseEncodingSequence(modes)
+        : this.buildRehydrateSequences(modes),
       cwd: this.cwd,
       modes,
       cols: this.terminal.cols,
@@ -316,6 +327,14 @@ export class HeadlessEmulator {
     }
   }
 
+  // Why: xterm tracks the mouse protocol and SGR encoding as independent modes,
+  // and SerializeAddon emits the TRACKING modes but NOT the SGR ENCODING. So the
+  // opt-in raw snapshot reuses this to restore only the dropped encoding, keeping
+  // clicks past col/row 223 on SGR rather than degrading to legacy X10 reports.
+  private buildMouseEncodingSequence(modes: TerminalModes): string {
+    return modes.sgrMousePixelsMode ? '\x1b[?1016h' : modes.sgrMouseMode ? '\x1b[?1006h' : ''
+  }
+
   private buildRehydrateSequences(modes: TerminalModes): string {
     const seqs: string[] = []
     if (modes.alternateScreen) {
@@ -345,13 +364,7 @@ export class HeadlessEmulator {
       case 'none':
         break
     }
-    // Why: xterm tracks the mouse protocol and SGR encoding as independent
-    // modes, so snapshots must preserve the encoding even when reporting is off.
-    if (modes.sgrMousePixelsMode) {
-      seqs.push('\x1b[?1016h')
-    } else if (modes.sgrMouseMode) {
-      seqs.push('\x1b[?1006h')
-    }
+    seqs.push(this.buildMouseEncodingSequence(modes))
     return seqs.join('')
   }
 }

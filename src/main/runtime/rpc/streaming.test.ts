@@ -9,6 +9,7 @@ import type { RuntimeTerminalWait } from '../../../shared/runtime-types'
 function stubRuntime(overrides: Partial<OrcaRuntimeService> = {}): OrcaRuntimeService {
   return {
     getRuntimeId: () => 'test-runtime',
+    isTerminalAlternateScreen: () => false,
     ...overrides
   } as OrcaRuntimeService
 }
