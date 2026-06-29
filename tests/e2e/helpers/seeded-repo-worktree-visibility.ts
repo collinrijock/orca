@@ -1,0 +1,112 @@
+import { expect as playwrightExpect, type Page } from '@stablyai/playwright-test'
+
+export async function optIntoVisibleSeededRepoWorktrees(
+  page: Page,
+  repoPath: string
+): Promise<void> {
+  // Why: macOS CI can paint the added repo before the first renderer fetch has
+  // updated the test-side store read. Poll the public fetch path.
+  await page.waitForFunction(
+    async (repoPath) => {
+      const store = window.__store
+      if (!store) {
+        return false
+      }
+
+      await store.getState().fetchRepos()
+      const repo = store.getState().repos.find((candidate) => candidate.path === repoPath)
+      if (!repo) {
+        return false
+      }
+
+      // Why: the fixture deliberately creates external Git worktrees. New
+      // repos hide those by default after the visibility rollout, so opt this
+      // disposable repo into showing them before specs assert on worktree state.
+      const updated = await store
+        .getState()
+        .updateRepo(repo.id, { externalWorktreeVisibility: 'show' })
+      if (!updated) {
+        return false
+      }
+      return (
+        store.getState().repos.find((candidate) => candidate.id === repo.id)
+          ?.externalWorktreeVisibility === 'show'
+      )
+    },
+    repoPath,
+    { timeout: 30_000 }
+  )
+}
+
+export async function waitForVisibleSeededRepoWorktrees(
+  page: Page,
+  repoPath: string
+): Promise<void> {
+  // Why: parallel specs mutate real git worktrees in the shared fixture repo.
+  // A first scan can briefly return no rows while git holds a worktree lock.
+  // Poll the main-process detected list after the visibility opt-in so the
+  // secondary external worktree is visible before renderer state is asserted.
+  await playwrightExpect
+    .poll(
+      () =>
+        page.evaluate(async (repoPath) => {
+          const store = window.__store
+          if (!store) {
+            return 'store-missing'
+          }
+          const repo = store.getState().repos.find((candidate) => candidate.path === repoPath)
+          if (!repo) {
+            return 'repo-missing'
+          }
+          const updated = await store
+            .getState()
+            .updateRepo(repo.id, { externalWorktreeVisibility: 'show' })
+          const currentRepo = store.getState().repos.find((candidate) => candidate.id === repo.id)
+          const detected = await window.api.worktrees.listDetected({ repoId: repo.id })
+          const visibleCount = detected.worktrees.filter((worktree) => worktree.visible).length
+          if (!updated || currentRepo?.externalWorktreeVisibility !== 'show' || visibleCount < 2) {
+            return JSON.stringify({
+              updated,
+              repoVisibility: currentRepo?.externalWorktreeVisibility ?? null,
+              detectedAuthoritative: detected.authoritative,
+              detectedSource: detected.source,
+              detectedCount: detected.worktrees.length,
+              visibleCount
+            })
+          }
+          const authoritative = await store
+            .getState()
+            .fetchWorktrees(repo.id, { requireAuthoritative: true })
+          if (!authoritative) {
+            return JSON.stringify({
+              updated,
+              repoVisibility: currentRepo.externalWorktreeVisibility,
+              detectedAuthoritative: detected.authoritative,
+              detectedSource: detected.source,
+              detectedCount: detected.worktrees.length,
+              visibleCount,
+              rendererAuthoritative: false
+            })
+          }
+          const rendererCount = store.getState().worktreesByRepo[repo.id]?.length ?? 0
+          if (rendererCount < 2) {
+            return JSON.stringify({
+              updated,
+              repoVisibility: currentRepo.externalWorktreeVisibility,
+              detectedAuthoritative: detected.authoritative,
+              detectedSource: detected.source,
+              detectedCount: detected.worktrees.length,
+              visibleCount,
+              rendererAuthoritative: true,
+              rendererCount
+            })
+          }
+          return 'ready'
+        }, repoPath),
+      {
+        timeout: 60_000,
+        message: 'seeded e2e worktrees did not load'
+      }
+    )
+    .toBe('ready')
+}
