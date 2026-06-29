@@ -23,7 +23,11 @@ function createFakeEditor(initialCount: number): FakeDiffEditor {
     goToDiff: vi.fn(),
     onDidUpdateDiff: (cb: () => void) => {
       updateCallback = cb
-      return { dispose: () => {} }
+      return {
+        dispose: () => {
+          updateCallback = null
+        }
+      }
     },
     setLineChanges: (next: number) => {
       count = next
@@ -102,6 +106,14 @@ describe('DiffNavigationProvider', () => {
     // Fast-swap: new editor registers before the old one's dispose fires.
     act(() => captured?.registerDiffEditor(oldEditor))
     act(() => captured?.registerDiffEditor(newEditor))
+    expect(captured?.changeCount).toBe(4)
+
+    // A stale update from the old editor must not flip the count back: registering
+    // the new editor disposed the old subscription, so its callback no longer fires.
+    act(() => {
+      oldEditor.setLineChanges(9)
+      oldEditor.fireUpdate()
+    })
     expect(captured?.changeCount).toBe(4)
 
     act(() => captured?.unregisterDiffEditor(oldEditor))
