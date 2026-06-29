@@ -190,6 +190,28 @@ describe('buildNewWorkspaceProjectOptions', () => {
     expect(options[0]?.detail).toBe('Project')
   })
 
+  it('trims whitespace around the representative path detail', () => {
+    const options = buildNewWorkspaceProjectOptions({
+      projects: [
+        localProject({
+          id: 'repo:local-app'
+        })
+      ],
+      projectHostSetups: [
+        setup({
+          id: 'local-setup',
+          projectId: 'repo:local-app',
+          repoId: 'local-repo',
+          path: '  /tmp/local-app  '
+        })
+      ],
+      eligibleRepos: [repo('local-repo')]
+    })
+
+    expect(options).toHaveLength(1)
+    expect(options[0]?.detail).toBe('/tmp/local-app')
+  })
+
   it('excludes projects that do not have a ready eligible setup', () => {
     const options = buildNewWorkspaceProjectOptions({
       projects: [project(), project({ id: 'repo:other', displayName: 'other' })],

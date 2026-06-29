@@ -109,6 +109,8 @@ const SidebarFilter = React.memo(function SidebarFilter({
     (hideAutomationGeneratedWorkspaces ? 1 : 0) +
     selectedCount
 
+  // Why: derive duplicates from the full repo list so same-name path subtitles
+  // stay visible even when the rendered list is narrowed by search.
   const duplicateDisplayNames = useMemo(() => getDuplicateRepoDisplayNames(repos), [repos])
   const filteredRepos = useMemo(() => searchRepos(repos, query), [repos, query])
   const commandValue =

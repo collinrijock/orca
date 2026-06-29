@@ -61,6 +61,8 @@ const SidebarRepositoryFilterSection = React.memo(function SidebarRepositoryFilt
   }, [repos, filterRepoIds])
   const selectedCount = selectedRepoIdSet.size
   const hasRepoFilter = selectedCount > 0
+  // Why: derive duplicates from the full repo list so a surviving same-name row
+  // keeps its path subtitle even after its sibling moves into selected pills.
   const duplicateDisplayNames = useMemo(() => getDuplicateRepoDisplayNames(repos), [repos])
   const selectedRepos = useMemo(
     () => repos.filter((repo) => selectedRepoIdSet.has(repo.id)),

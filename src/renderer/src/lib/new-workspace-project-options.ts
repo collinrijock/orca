@@ -105,12 +105,13 @@ export function buildNewWorkspaceProjectOptions(
       (readySetupCountsByProjectId.get(setup.projectId) ?? 0) + 1
     )
     // Why: Path fallback disambiguates same-named local projects (issue #6235).
+    const trimmedPath = setup.path?.trim()
     if (
-      setup.path?.trim() &&
+      trimmedPath &&
       (!representativePathByProjectId.has(setup.projectId) ||
         setup.hostId === LOCAL_EXECUTION_HOST_ID)
     ) {
-      representativePathByProjectId.set(setup.projectId, setup.path)
+      representativePathByProjectId.set(setup.projectId, trimmedPath)
     }
   }
 
