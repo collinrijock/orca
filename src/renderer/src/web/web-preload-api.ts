@@ -2542,6 +2542,7 @@ function createPtyApi(): NonNullable<Partial<PreloadApi>['pty']> {
     hasChildProcesses: () => Promise.resolve(false),
     getForegroundProcess: () => Promise.resolve(null),
     getCwd: () => Promise.resolve('~'),
+    getSize: () => Promise.resolve(null),
     listSessions: () => Promise.resolve([]),
     getMainBufferSnapshot: () => Promise.resolve(null),
     getRendererDeliveryDebugSnapshot: () =>
