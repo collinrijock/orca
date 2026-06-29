@@ -2303,11 +2303,15 @@ export function connectPanePty(
   let reassertingPtySizeOnResume = false
   const reassertPtySizeOnResume = (): void => {
     const ptyId = transport.getPtyId()
-    // forwardPtyResize re-checks the visibility/mobile gates at send time, so
-    // here we only need the cheap pre-hop early-outs. Skip remote-runtime PTYs:
-    // their resize goes through a separate viewport channel (not pty:resize), so
-    // the local ptySizes map getSize reads is never populated for them.
-    if (disposed || reassertingPtySizeOnResume || !ptyId || isRemoteRuntimePtyId(ptyId)) {
+    // Skip parked/mobile-driven PTYs before the async size read: their drift
+    // from desktop xterm dims is intentional until mobile hands control back.
+    if (
+      disposed ||
+      reassertingPtySizeOnResume ||
+      !ptyId ||
+      isRemoteRuntimePtyId(ptyId) ||
+      shouldSuppressDesktopPtyResize()
+    ) {
       return
     }
     reassertingPtySizeOnResume = true
