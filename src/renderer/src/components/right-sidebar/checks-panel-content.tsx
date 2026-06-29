@@ -916,7 +916,7 @@ function CheckRunDetails({
 
           {!state?.error && !hasOutput && !hasAnnotations && !hasJobs && (
             <div className="text-[12px] text-muted-foreground">
-              {getCheckConclusion(check) === 'action_required'
+              {getCheckConclusion(detailsStatusCheck) === 'action_required'
                 ? translate(
                     'auto.components.right.sidebar.checks.panel.content.actionRequiredHint',
                     'Needs a manual action on GitHub (e.g. approving the run) to unblock merging.'

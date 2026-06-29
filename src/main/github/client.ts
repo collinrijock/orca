@@ -3124,6 +3124,7 @@ async function getPendingApprovalCheckSuites(
     noteRateLimitSpend('core')
     const data = JSON.parse(stdout) as {
       check_suites?: {
+        id?: number | null
         status: string | null
         conclusion: string | null
         app?: { name?: string | null; slug?: string | null } | null
@@ -3131,15 +3132,13 @@ async function getPendingApprovalCheckSuites(
     }
     return (data.check_suites ?? [])
       .filter((suite) => suite.conclusion?.toLowerCase() === 'action_required')
-      .map((suite) => ({
-        name: suite.app?.name
-          ? `${suite.app.name} (approval required)`
-          : 'Workflow approval required',
+      .map((suite, index) => ({
+        name: getPendingApprovalCheckSuiteName(suite, headSha, index),
         status: 'completed' as const,
         conclusion: 'action_required' as const,
         // Why: check suites expose no per-PR details URL; the checks tab is the
         // closest actionable destination for approving the run.
-        url: `https://github.com/${ownerRepo.owner}/${ownerRepo.repo}/commits/${headSha}/checks`
+        url: getPendingApprovalCheckSuiteUrl(ownerRepo, headSha, suite.id)
       }))
   } catch (err) {
     // Why: this is a best-effort enrichment; a failed suites lookup must not
@@ -3147,6 +3146,39 @@ async function getPendingApprovalCheckSuites(
     console.warn('getPendingApprovalCheckSuites failed:', err)
     return []
   }
+}
+
+function getPendingApprovalCheckSuiteName(
+  suite: {
+    id?: number | null
+    app?: { name?: string | null; slug?: string | null } | null
+  },
+  headSha: string,
+  index: number
+): string {
+  const appName = suite.app?.name ?? suite.app?.slug ?? null
+  const suiteId = typeof suite.id === 'number' && Number.isFinite(suite.id) ? `#${suite.id}` : null
+  if (appName && suiteId) {
+    return `${appName} ${suiteId}`
+  }
+  if (appName) {
+    return appName
+  }
+  if (suiteId) {
+    return suiteId
+  }
+  return `${headSha.slice(0, 12)}:${index + 1}`
+}
+
+function getPendingApprovalCheckSuiteUrl(
+  ownerRepo: OwnerRepo,
+  headSha: string,
+  suiteId: number | null | undefined
+): string {
+  const base = `https://github.com/${ownerRepo.owner}/${ownerRepo.repo}/commits/${headSha}/checks`
+  return typeof suiteId === 'number' && Number.isFinite(suiteId)
+    ? `${base}#check-suite-${suiteId}`
+    : base
 }
 
 function nullableString(value: unknown): string | null {

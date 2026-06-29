@@ -210,7 +210,11 @@ function getCheckDetailNames(checks: readonly PRCheckDetail[]): string[] {
       check.status === 'queued' ||
       check.status === 'in_progress'
   )
-  return interesting.slice(0, 2).map((check) => check.name)
+  const ordered = [
+    ...interesting.filter((check) => check.conclusion === 'action_required'),
+    ...interesting.filter((check) => check.conclusion !== 'action_required')
+  ]
+  return ordered.slice(0, 2).map((check) => check.name)
 }
 
 function getGitHubChecksEntry(

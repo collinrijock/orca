@@ -144,8 +144,24 @@ describe('getPRChecks', () => {
       .mockResolvedValueOnce({
         stdout: JSON.stringify({
           check_suites: [
-            { status: 'completed', conclusion: 'success', app: { name: 'GitHub Actions' } },
-            { status: 'completed', conclusion: 'action_required', app: { name: 'GitHub Actions' } }
+            {
+              id: 1000,
+              status: 'completed',
+              conclusion: 'success',
+              app: { name: 'GitHub Actions' }
+            },
+            {
+              id: 1001,
+              status: 'completed',
+              conclusion: 'action_required',
+              app: { name: 'GitHub Actions' }
+            },
+            {
+              id: 1002,
+              status: 'completed',
+              conclusion: 'action_required',
+              app: { name: 'GitHub Actions' }
+            }
           ]
         })
       })
@@ -166,10 +182,16 @@ describe('getPRChecks', () => {
         workflowRunId: 1
       },
       {
-        name: 'GitHub Actions (approval required)',
+        name: 'GitHub Actions #1001',
         status: 'completed',
         conclusion: 'action_required',
-        url: 'https://github.com/acme/widgets/commits/head-oid/checks'
+        url: 'https://github.com/acme/widgets/commits/head-oid/checks#check-suite-1001'
+      },
+      {
+        name: 'GitHub Actions #1002',
+        status: 'completed',
+        conclusion: 'action_required',
+        url: 'https://github.com/acme/widgets/commits/head-oid/checks#check-suite-1002'
       }
     ])
   })
@@ -251,7 +273,12 @@ describe('getPRChecks', () => {
       .mockResolvedValueOnce({
         stdout: JSON.stringify({
           check_suites: [
-            { status: 'completed', conclusion: 'action_required', app: { name: 'GitHub Actions' } }
+            {
+              id: 1001,
+              status: 'completed',
+              conclusion: 'action_required',
+              app: { name: 'GitHub Actions' }
+            }
           ]
         })
       })
@@ -262,10 +289,10 @@ describe('getPRChecks', () => {
     expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(2)
     expect(checks).toEqual([
       {
-        name: 'GitHub Actions (approval required)',
+        name: 'GitHub Actions #1001',
         status: 'completed',
         conclusion: 'action_required',
-        url: 'https://github.com/acme/widgets/commits/head-oid/checks'
+        url: 'https://github.com/acme/widgets/commits/head-oid/checks#check-suite-1001'
       }
     ])
   })

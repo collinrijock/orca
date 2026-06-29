@@ -4869,6 +4869,18 @@ function ChecksTab({
         className: CHECK_COLOR.failure
       })
     }
+    if (counts.needsAction > 0) {
+      countChips.push({
+        label: translate(
+          'auto.components.PullRequestPage.checksNeedActionChip',
+          '{{value0}} action required',
+          {
+            value0: counts.needsAction
+          }
+        ),
+        className: CHECK_COLOR.action_required
+      })
+    }
     if (counts.pending > 0) {
       countChips.push({
         label: translate('auto.components.PullRequestPage.88267924d5', '{{value0}} pending', {

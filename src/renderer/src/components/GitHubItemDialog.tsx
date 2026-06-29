@@ -4826,6 +4826,18 @@ function ChecksTab({
         className: CHECK_COLOR.failure
       })
     }
+    if (counts.needsAction > 0) {
+      countChips.push({
+        label: translate(
+          'auto.components.GitHubItemDialog.checksNeedActionChip',
+          '{{value0}} action required',
+          {
+            value0: counts.needsAction
+          }
+        ),
+        className: CHECK_COLOR.action_required
+      })
+    }
     if (counts.pending > 0) {
       countChips.push({
         label: translate('auto.components.GitHubItemDialog.18f80e1329', '{{value0}} pending', {
