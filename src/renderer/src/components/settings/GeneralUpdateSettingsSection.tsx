@@ -5,11 +5,13 @@ import { toast } from 'sonner'
 import { useAppStore } from '../../store'
 import { Button } from '../ui/button'
 import { SearchableSetting } from './SearchableSetting'
-import { SettingsSubsectionHeader } from './SettingsFormControls'
+import { SettingsSubsectionHeader, SettingsSwitchRow } from './SettingsFormControls'
 import { translate } from '@/i18n/i18n'
 
 export function GeneralUpdateSettingsSection(): React.JSX.Element {
   const updateStatus = useAppStore((s) => s.updateStatus)
+  const settings = useAppStore((s) => s.settings)
+  const updateSettings = useAppStore((s) => s.updateSettings)
   // Why: the 'error' variant of UpdateStatus does not carry a `version` field.
   // The main process emits `{ state: 'error' }` for both check failures (no
   // version known yet) and download/install failures (version was known from
@@ -70,6 +72,33 @@ export function GeneralUpdateSettingsSection(): React.JSX.Element {
           { value0: appVersion ?? '...' }
         )}
       />
+
+      <SearchableSetting
+        title={translate(
+          'auto.components.settings.GeneralUpdateSettingsSection.a73f0c19be',
+          'Automatic updates'
+        )}
+        description={translate(
+          'auto.components.settings.GeneralUpdateSettingsSection.b8e724f0d3',
+          'Download new updates automatically in the background. Once an update is downloaded, Orca installs it the next time you quit — your terminal sessions are never interrupted.'
+        )}
+        keywords={['update', 'automatic', 'auto', 'background', 'download', 'install']}
+      >
+        <SettingsSwitchRow
+          label={translate(
+            'auto.components.settings.GeneralUpdateSettingsSection.a73f0c19be',
+            'Automatic updates'
+          )}
+          description={translate(
+            'auto.components.settings.GeneralUpdateSettingsSection.b8e724f0d3',
+            'Download new updates automatically in the background. Once an update is downloaded, Orca installs it the next time you quit — your terminal sessions are never interrupted.'
+          )}
+          checked={settings?.automaticUpdates === true}
+          onChange={() =>
+            updateSettings({ automaticUpdates: !(settings?.automaticUpdates === true) })
+          }
+        />
+      </SearchableSetting>
 
       <SearchableSetting
         title={translate(

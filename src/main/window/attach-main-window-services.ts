@@ -118,6 +118,7 @@ export function attachMainWindowServices(
   registerFileDropRelay(mainWindow)
   setupAutoUpdater(mainWindow, {
     getLastUpdateCheckAt: () => store.getUI().lastUpdateCheckAt,
+    getAutomaticUpdates: () => store.getSettings().automaticUpdates === true,
     onBeforeQuit: async () => {
       try {
         await options?.onBeforeUpdateQuit?.()

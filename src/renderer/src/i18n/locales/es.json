@@ -5125,7 +5125,9 @@
           "31fd7150cf": "Buscando actualizaciones...",
           "3394d1f663": "de cheques",
           "d69a09b672": "Las actualizaciones se verifican automáticamente al iniciarse.",
-          "7173352632": "idle"
+          "7173352632": "idle",
+          "a73f0c19be": "Automatic updates",
+          "b8e724f0d3": "Download new updates automatically in the background. Once an update is downloaded, Orca installs it the next time you quit — your terminal sessions are never interrupted."
         },
         "GeneralWorkspaceSettingsSection": {
           "3d538a98f7": "Elija las aplicaciones disponibles en el menú Abrir en de un espacio de trabajo.",
@@ -7303,7 +7305,9 @@
             "161a86a9da": "Confirmar antes de cerrar pestañas fijadas",
             "8e593f04fc": "Muestra un diálogo de confirmación antes de cerrar una pestaña fijada.",
             "defaultProjectRuntime": "Default Project Runtime",
-            "defaultProjectRuntimeDescription": "Choose the runtime inherited by local Windows projects."
+            "defaultProjectRuntimeDescription": "Choose the runtime inherited by local Windows projects.",
+            "a1c4e7f209": "Automatic updates",
+            "b2d5f8a310": "Download and install updates automatically in the background."
           }
         },
         "git": {

@@ -58,6 +58,7 @@ let pendingQuitAndInstallTimer: ReturnType<typeof setTimeout> | null = null
 let quitAndInstallInProgress = false
 let persistLastUpdateCheckAt: ((timestamp: number) => void) | null = null
 let _getLastUpdateCheckAt: (() => number | null) | null = null
+let getAutomaticUpdatesEnabled: (() => boolean) | null = null
 let backgroundCheckLaunchPending = false
 // Why: a manually promoted background check can emit an error event before the
 // paired promise catch runs; keep the promotion attached to that launch.
@@ -1132,10 +1133,37 @@ export function dismissNudge(): void {
   }
 }
 
+export function maybeAutoDownload(): void {
+  if (!app.isPackaged || is.dev) {
+    return
+  }
+  // Why: this reuses the manual download path without enabling
+  // electron-updater's eager autoDownload behavior.
+  if (
+    getAutomaticUpdatesEnabled?.() === true &&
+    currentStatus.state === 'available' &&
+    hasNewerDownloadedVersion()
+  ) {
+    downloadUpdate()
+  }
+}
+
+export function applyAutomaticUpdatesSetting(enabled: boolean): void {
+  if (!app.isPackaged || is.dev) {
+    return
+  }
+  // Why: enabling while an update is already offered should start it now;
+  // disabling leaves any in-flight download alone.
+  if (enabled) {
+    maybeAutoDownload()
+  }
+}
+
 export function setupAutoUpdater(
   mainWindow: BrowserWindow,
   opts?: {
     getLastUpdateCheckAt?: () => number | null
+    getAutomaticUpdates?: () => boolean
     onBeforeQuit?: () => void | Promise<void>
     setLastUpdateCheckAt?: (timestamp: number) => void
     getPendingUpdateNudgeId?: () => string | null
@@ -1148,6 +1176,7 @@ export function setupAutoUpdater(
   onBeforeQuitCleanup = opts?.onBeforeQuit ?? null
   persistLastUpdateCheckAt = opts?.setLastUpdateCheckAt ?? null
   _getLastUpdateCheckAt = opts?.getLastUpdateCheckAt ?? null
+  getAutomaticUpdatesEnabled = opts?.getAutomaticUpdates ?? null
   _getPendingUpdateNudgeId = opts?.getPendingUpdateNudgeId ?? null
   _getDismissedUpdateNudgeId = opts?.getDismissedUpdateNudgeId ?? null
   _setPendingUpdateNudgeId = opts?.setPendingUpdateNudgeId ?? null
@@ -1218,6 +1247,7 @@ export function setupAutoUpdater(
     getPendingInstallVersion,
     getUserInitiatedCheck: () => userInitiatedCheck,
     hasNewerDownloadedVersion,
+    maybeAutoDownload,
     shouldHandleUpdaterErrorEvent,
     performQuitAndInstall,
     clearUpdateAvailableEventPending,
