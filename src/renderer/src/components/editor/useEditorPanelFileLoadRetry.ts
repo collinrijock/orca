@@ -1,4 +1,4 @@
-import { useEffect, type Dispatch, type MutableRefObject, type SetStateAction } from 'react'
+import { useEffect, useRef, type Dispatch, type MutableRefObject, type SetStateAction } from 'react'
 import type { OpenFile } from '@/store/slices/editor'
 import {
   WORKTREE_OWNER_NOT_READY_ERROR,
@@ -56,6 +56,12 @@ export function useEditorPanelFileLoadRetry({
   openFilesRef,
   setFileContents
 }: UseEditorPanelFileLoadRetryParams): void {
+  // Why: the owner-not-ready (~160) and regular (3) retry budgets share a single
+  // fileLoadRetryAttemptsRef counter. Track which tabs spent attempts on the
+  // owner-not-ready budget so the counter can be reset when the error class
+  // changes — otherwise the regular budget is already exhausted and a transient
+  // post-connect read error gets zero of its backoff retries (#6648).
+  const ownerNotReadyBudgetIdsRef = useRef<Set<string>>(new Set())
   const activeFileLoadRetryId = activeFile?.id ?? null
   const activeFileLoadError = activeFileLoadRetryId
     ? fileContents[activeFileLoadRetryId]?.loadError
@@ -70,6 +76,15 @@ export function useEditorPanelFileLoadRetry({
       return
     }
     const ownerNotReady = isOwnerNotReadyError(activeFileLoadError)
+    if (ownerNotReady) {
+      ownerNotReadyBudgetIdsRef.current.add(activeFileLoadRetryId)
+    } else if (ownerNotReadyBudgetIdsRef.current.delete(activeFileLoadRetryId)) {
+      // Why: the error just transitioned off owner-not-ready (the SSH owner
+      // resolved). The shared counter still holds the owner-not-ready attempts,
+      // which would consume the entire 3-attempt regular budget; reset it so the
+      // first real read error still gets its full backoff retries (#6648).
+      delete fileLoadRetryAttemptsRef.current[activeFileLoadRetryId]
+    }
     const retryCount = fileLoadRetryAttemptsRef.current[activeFileLoadRetryId] ?? 0
     const retryLimit = ownerNotReady
       ? OWNER_NOT_READY_RETRY_LIMIT
