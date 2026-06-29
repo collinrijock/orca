@@ -1173,9 +1173,8 @@ export function HostScreen({
           keyExtractor={(w) => w.sectionListKey ?? w.worktreeId}
           stickySectionHeadersEnabled={false}
           onScrollToIndexFailed={onScrollToIndexFailed}
-          // Why: edge-to-edge — the list scrolls under the system nav bar
-          // while reserving insets.bottom keeps the last worktree row reachable
-          // above the Samsung 3-button nav / iOS home indicator.
+          // Why: edge-to-edge — reserve the system bottom inset and, on phone
+          // layouts, extra clearance so the last row can scroll above the FAB.
           contentContainerStyle={[
             styles.list,
             {

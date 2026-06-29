@@ -202,10 +202,10 @@ async function waitForRepoLoaded(page: Page, repoPath: string): Promise<void> {
         page.evaluate(
           ({ targetPath, targetRepoName }) => {
             const state = window.__store?.getState()
-            const repo = state?.repos.find(
-              (candidate) =>
-                candidate.path === targetPath || candidate.displayName === targetRepoName
-            )
+            const repoByPath = state?.repos.find((candidate) => candidate.path === targetPath)
+            const reposByName =
+              state?.repos.filter((candidate) => candidate.displayName === targetRepoName) ?? []
+            const repo = repoByPath ?? (reposByName.length === 1 ? reposByName[0] : undefined)
             if (!state || !repo) {
               return false
             }
@@ -278,10 +278,11 @@ async function expectActiveWorkspaceBelongsToRepo(
             if (!state?.activeWorktreeId) {
               return null
             }
-            const repo = state.repos.find(
-              (candidate) =>
-                candidate.path === targetRepoPath || candidate.displayName === targetRepoName
+            const repoByPath = state.repos.find((candidate) => candidate.path === targetRepoPath)
+            const reposByName = state.repos.filter(
+              (candidate) => candidate.displayName === targetRepoName
             )
+            const repo = repoByPath ?? (reposByName.length === 1 ? reposByName[0] : undefined)
             if (!repo) {
               return null
             }
