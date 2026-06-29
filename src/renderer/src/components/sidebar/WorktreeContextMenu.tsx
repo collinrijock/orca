@@ -19,6 +19,8 @@ import {
   Bell,
   BellOff,
   CircleX,
+  GitBranch,
+  GitPullRequest,
   Moon,
   Pencil,
   Pin,
@@ -34,7 +36,9 @@ import {
 import { useAppStore } from '@/store'
 import { useAllWorktrees, useRepoById, useRepoMap, useWorktreeMap } from '@/store/selectors'
 import { cn } from '@/lib/utils'
+import { getWorktreeGitIdentityDisplay } from '@/lib/worktree-git-identity-display'
 import type { Repo, Worktree } from '../../../../shared/types'
+import type { HostedReviewProvider } from '../../../../shared/hosted-review'
 import { runWorktreeBatchDelete, runWorktreeDelete } from './delete-worktree-flow'
 import { runSleepWorktrees } from './sleep-worktree-flow'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
@@ -61,6 +65,8 @@ type Props = {
   selectedWorktrees?: readonly Worktree[]
   onContextMenuSelect?: (event: React.MouseEvent<HTMLElement>) => readonly Worktree[]
   onOpenChange?: (open: boolean) => void
+  pullRequestUrl?: string | null
+  pullRequestProvider?: HostedReviewProvider | null
 }
 
 const CLOSE_ALL_CONTEXT_MENUS_EVENT = 'orca-close-all-context-menus'
@@ -246,7 +252,9 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
   contentClassName,
   selectedWorktrees,
   onContextMenuSelect,
-  onOpenChange
+  onOpenChange,
+  pullRequestUrl,
+  pullRequestProvider
 }: Props) {
   const defaultSelectedWorktrees = useMemo(() => [worktree], [worktree])
   const effectiveSelectedWorktrees = selectedWorktrees ?? defaultSelectedWorktrees
@@ -380,9 +388,26 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
     []
   )
 
+  const branchIdentity = getWorktreeGitIdentityDisplay(worktree)
+  const branchName = branchIdentity?.kind === 'branch' ? branchIdentity.branchName : null
+  // Why: GitLab calls reviews "Merge Requests"; every other forge uses "Pull Request".
+  const isMergeRequest = pullRequestProvider === 'gitlab'
+
   const handleCopyPath = useCallback(() => {
     window.api.ui.writeClipboardText(worktree.path)
   }, [worktree.path])
+
+  const handleCopyBranchName = useCallback(() => {
+    if (branchName) {
+      window.api.ui.writeClipboardText(branchName)
+    }
+  }, [branchName])
+
+  const handleCopyPullRequestUrl = useCallback(() => {
+    if (pullRequestUrl) {
+      window.api.ui.writeClipboardText(pullRequestUrl)
+    }
+  }, [pullRequestUrl])
 
   const handleToggleRead = useCallback(() => {
     updateWorktreeMeta(worktree.id, { isUnread: !worktree.isUnread })
@@ -695,10 +720,45 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
                 connectionId={repo?.connectionId ?? null}
                 disabled={isDeleting}
               />
-              <DropdownMenuItem onSelect={handleCopyPath} disabled={isDeleting}>
-                <Copy className="size-3.5" />
-                {translate('auto.components.sidebar.WorktreeContextMenu.3350101edb', 'Copy Path')}
-              </DropdownMenuItem>
+              <DropdownMenuSub>
+                <DropdownMenuSubTrigger disabled={isDeleting}>
+                  <Copy className="size-3.5" />
+                  {translate('auto.components.sidebar.WorktreeContextMenu.8938e51bab', 'Copy')}
+                </DropdownMenuSubTrigger>
+                <DropdownMenuSubContent>
+                  <DropdownMenuItem onSelect={handleCopyPath} disabled={isDeleting}>
+                    <Copy className="size-3.5" />
+                    {translate(
+                      'auto.components.sidebar.WorktreeContextMenu.3350101edb',
+                      'Copy Path'
+                    )}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onSelect={handleCopyBranchName}
+                    disabled={isDeleting || !branchName}
+                  >
+                    <GitBranch className="size-3.5" />
+                    {translate(
+                      'auto.components.sidebar.WorktreeContextMenu.9b0a2d280c',
+                      'Copy Branch Name'
+                    )}
+                  </DropdownMenuItem>
+                  {pullRequestUrl && (
+                    <DropdownMenuItem onSelect={handleCopyPullRequestUrl} disabled={isDeleting}>
+                      <GitPullRequest className="size-3.5" />
+                      {isMergeRequest
+                        ? translate(
+                            'auto.components.sidebar.WorktreeContextMenu.d94dc7c103',
+                            'Copy Merge Request URL'
+                          )
+                        : translate(
+                            'auto.components.sidebar.WorktreeContextMenu.42049bf2d3',
+                            'Copy Pull Request URL'
+                          )}
+                    </DropdownMenuItem>
+                  )}
+                </DropdownMenuSubContent>
+              </DropdownMenuSub>
               <DropdownMenuSeparator />
               <DropdownMenuItem onSelect={handleTogglePin} disabled={isDeleting}>
                 {worktree.isPinned ? <PinOff className="size-3.5" /> : <Pin className="size-3.5" />}
