@@ -49,12 +49,14 @@ export function useGitGraphHistory(worktreeId: string): UseGitGraphHistory {
   }, [repo, settings, worktreeId, worktreePath])
 
   useEffect(() => {
+    // Bump before the null-check so a fetch still in flight from a prior
+    // worktree can't resolve and overwrite this 'idle' state once it clears.
+    const requestId = (requestIdRef.current += 1)
     const ctx = context
     if (!ctx) {
       setState({ status: 'idle' })
       return
     }
-    const requestId = (requestIdRef.current += 1)
     setState((prev) =>
       prev.status === 'ready' || prev.status === 'refreshing'
         ? { status: 'refreshing', result: prev.result }
