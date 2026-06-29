@@ -3982,7 +3982,9 @@
           "250de158fd": "워크스페이스 제거",
           "changeParentWorkspace": "상위 워크트리 변경...",
           "setParentWorkspace": "상위 워크트리 설정...",
-          "workspaceSection": "워크스페이스"
+          "workspaceSection": "워크스페이스",
+          "primaryDeleteDisabled": "기본 작업 트리는 삭제할 수 없습니다. 대신 프로젝트를 제거하세요.",
+          "deleteWorktree": "작업 트리 삭제"
         },
         "WorktreeList": {
           "d880ea0744": "그룹을 만들고 이 프로젝트를 그룹으로 이동하세요.",

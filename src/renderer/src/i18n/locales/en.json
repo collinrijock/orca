@@ -4015,7 +4015,9 @@
           "250de158fd": "Remove Workspace",
           "changeParentWorkspace": "Change Parent Worktree...",
           "setParentWorkspace": "Set Parent Worktree...",
-          "workspaceSection": "Workspace"
+          "workspaceSection": "Workspace",
+          "primaryDeleteDisabled": "Primary worktree — can't be deleted. Remove the project instead.",
+          "deleteWorktree": "Delete Worktree"
         },
         "WorktreeList": {
           "7a8b9c0d1e": "Update required",

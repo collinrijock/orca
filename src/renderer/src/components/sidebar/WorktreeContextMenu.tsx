@@ -830,6 +830,25 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
                   )}
             </TooltipContent>
           </Tooltip>
+          {/* Why: primary checkout rows can't be git-worktree-removed, so keep a
+             disabled Delete Worktree for parity with non-primary cards and pair
+             it with the enabled Remove Project action below. */}
+          {!isMultiContext && removesProject ? (
+            <DropdownMenuItem
+              variant="destructive"
+              disabled
+              title={translate(
+                'auto.components.sidebar.WorktreeContextMenu.primaryDeleteDisabled',
+                "Primary worktree — can't be deleted. Remove the project instead."
+              )}
+            >
+              <Trash2 className="size-3.5" />
+              {translate(
+                'auto.components.sidebar.WorktreeContextMenu.deleteWorktree',
+                'Delete Worktree'
+              )}
+            </DropdownMenuItem>
+          ) : null}
           {/* Why: primary checkout rows remove the project from Orca instead of
              invoking git worktree deletion. Radix forwards unknown props to the
              DOM element, so `title` works directly without a wrapper span —

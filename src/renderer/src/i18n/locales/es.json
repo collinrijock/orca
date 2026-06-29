@@ -4001,7 +4001,9 @@
           "250de158fd": "Eliminar espacio de trabajo",
           "changeParentWorkspace": "Cambiar árbol de trabajo padre...",
           "setParentWorkspace": "Establecer árbol de trabajo padre...",
-          "workspaceSection": "Espacio de trabajo"
+          "workspaceSection": "Espacio de trabajo",
+          "primaryDeleteDisabled": "El árbol de trabajo principal no se puede eliminar. Elimina el proyecto en su lugar.",
+          "deleteWorktree": "Eliminar árbol de trabajo"
         },
         "WorktreeList": {
           "d880ea0744": "Crea un grupo y mueve este proyecto a él.",
