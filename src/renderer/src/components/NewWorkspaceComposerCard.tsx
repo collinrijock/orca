@@ -42,6 +42,7 @@ import type {
 } from '../../../shared/types'
 import SparseCheckoutPresetSelect from '@/components/sparse/SparseCheckoutPresetSelect'
 import SmartWorkspaceNameField, {
+  type SmartWorkspaceBranchSelectionContext,
   type SmartWorkspaceNameSelection
 } from '@/components/new-workspace/SmartWorkspaceNameField'
 import ProjectCombobox from '@/components/new-workspace/ProjectCombobox'
@@ -89,7 +90,11 @@ type NewWorkspaceComposerCardProps = {
   onNameValueChange: (value: string) => void
   onSmartGitHubItemSelect: (item: GitHubWorkItem) => void
   onSmartGitLabItemSelect: (item: GitLabWorkItem) => void
-  onSmartBranchSelect: (refName: string, localBranchName: string) => void
+  onSmartBranchSelect: (
+    refName: string,
+    localBranchName: string,
+    context?: SmartWorkspaceBranchSelectionContext
+  ) => void
   onSmartLinearIssueSelect: (issue: LinearIssue) => void
   smartNameSelection: SmartWorkspaceNameSelection | null
   onClearSmartNameSelection: () => void

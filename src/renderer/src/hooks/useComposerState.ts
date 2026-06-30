@@ -137,7 +137,10 @@ import { getHostDisplayLabelOverrides } from '../../../shared/host-setting-overr
 import { queueNewWorkspaceTerminalFocus } from '@/lib/new-workspace-terminal-focus'
 import { getSettingsForRepoRuntimeOwner } from '@/lib/repo-runtime-owner'
 import { getSuggestedCreatureName } from '@/components/sidebar/worktree-name-suggestions'
-import type { SmartWorkspaceNameSelection } from '@/components/new-workspace/SmartWorkspaceNameField'
+import type {
+  SmartWorkspaceBranchSelectionContext,
+  SmartWorkspaceNameSelection
+} from '@/components/new-workspace/SmartWorkspaceNameField'
 import { getForkPushWarning } from './fork-push-warning'
 import { CONTEXTUAL_TOUR_ENABLE_AUTO_WORKSPACE_NAME_EVENT } from '@/components/contextual-tours/contextual-tour-composer-events'
 import { ensureHooksConfirmed } from '@/lib/ensure-hooks-confirmed'
@@ -249,7 +252,11 @@ export type ComposerCardProps = {
   onNameValueChange: (value: string) => void
   onSmartGitHubItemSelect: (item: GitHubWorkItem) => void
   onSmartGitLabItemSelect: (item: GitLabWorkItem) => void
-  onSmartBranchSelect: (refName: string, localBranchName: string) => void
+  onSmartBranchSelect: (
+    refName: string,
+    localBranchName: string,
+    context?: SmartWorkspaceBranchSelectionContext
+  ) => void
   onSmartLinearIssueSelect: (issue: LinearIssue) => void
   smartNameGitHubSourceContext?: TaskSourceContext | null
   /** GitLab parallel of onBaseBranchPrSelect. */
@@ -2896,13 +2903,18 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   )
 
   const handleSmartBranchSelect = useCallback(
-    (refName: string, localBranchName: string): void => {
+    (
+      refName: string,
+      localBranchName: string,
+      context?: SmartWorkspaceBranchSelectionContext
+    ): void => {
       smartGitHubPrStartPointSelectionRef.current = null
       const selection = resolveComposerBranchSelection({
         refName,
         localBranchName,
         currentName: name,
-        lastAutoName: lastAutoNameRef.current
+        lastAutoName: lastAutoNameRef.current,
+        branchSearchQuery: context?.branchSearchQuery
       })
       setBaseBranch(selection.baseBranch)
       setCompareBaseRef(undefined)

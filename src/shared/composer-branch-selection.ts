@@ -11,18 +11,25 @@ export function resolveComposerBranchSelection(args: {
   localBranchName: string
   currentName: string
   lastAutoName: string
+  branchSearchQuery?: string
 }): ComposerBranchSelection {
   const trimmedCurrentName = args.currentName.trim()
-  const needle = trimmedCurrentName.toLowerCase()
+  const currentNameNeedle = trimmedCurrentName.toLowerCase()
+  const localBranchName = args.localBranchName.toLowerCase()
+  const refName = args.refName.toLowerCase()
+  const branchSearchNeedle = (args.branchSearchQuery ?? '').trim().toLowerCase()
+  const selectedBranchMatchesSearchQuery =
+    branchSearchNeedle.length > 0 &&
+    branchSearchNeedle === currentNameNeedle &&
+    (localBranchName.includes(branchSearchNeedle) || refName.includes(branchSearchNeedle))
   const shouldAutoName =
     !trimmedCurrentName ||
     args.currentName === args.lastAutoName ||
-    // Why (#6208): the branch search is a substring match (git for-each-ref
-    // `*query*` globs), so a typed query like `bug` legitimately surfaces
-    // `fix/bug-0`. Treat any case-insensitive substring of the picked ref as
-    // throwaway search text to overwrite, not just a literal prefix.
-    args.localBranchName.toLowerCase().includes(needle) ||
-    args.refName.toLowerCase().includes(needle)
+    localBranchName.startsWith(currentNameNeedle) ||
+    refName.startsWith(currentNameNeedle) ||
+    // Why (#6208): substring-only replacement is safe when the Branch tab's
+    // actual search query produced this row. Smart/Text values can be names.
+    selectedBranchMatchesSearchQuery
   if (!shouldAutoName) {
     return {
       baseBranch: args.refName,

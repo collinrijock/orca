@@ -58,14 +58,15 @@ describe('resolveComposerBranchSelection', () => {
   })
 
   it('replaces a typed substring (non-prefix) with the selected branch name', () => {
-    // Why (#6208): branch search is a substring match, so typing `bug` surfaces
-    // `fix/bug-0`; selecting it must overwrite the throwaway search text.
+    // Why (#6208): Branch-tab search is a substring match, so typing `bug`
+    // surfaces `fix/bug-0`; selecting it must overwrite the search text.
     expect(
       resolveComposerBranchSelection({
         refName: 'fix/bug-0',
         localBranchName: 'fix/bug-0',
         currentName: 'bug',
-        lastAutoName: ''
+        lastAutoName: '',
+        branchSearchQuery: 'bug'
       })
     ).toEqual({
       baseBranch: 'fix/bug-0',
@@ -82,7 +83,8 @@ describe('resolveComposerBranchSelection', () => {
         refName: 'feature/oauth-login',
         localBranchName: 'feature/oauth-login',
         currentName: 'auth',
-        lastAutoName: ''
+        lastAutoName: '',
+        branchSearchQuery: 'auth'
       })
     ).toEqual({
       baseBranch: 'feature/oauth-login',
@@ -101,7 +103,8 @@ describe('resolveComposerBranchSelection', () => {
         refName: 'fix/bug-0',
         localBranchName: 'fix/bug-0',
         currentName: 'FIX',
-        lastAutoName: ''
+        lastAutoName: '',
+        branchSearchQuery: 'FIX'
       })
     ).toEqual({
       baseBranch: 'fix/bug-0',
@@ -109,6 +112,39 @@ describe('resolveComposerBranchSelection', () => {
       branchAutoName: 'fix/bug-0',
       name: 'fix/bug-0',
       lastAutoName: 'fix/bug-0'
+    })
+  })
+
+  it('does not override a substring custom name without a branch search query', () => {
+    // Why: in Smart/Text modes, a substring can be the user's intended
+    // workspace name rather than throwaway Branch-tab search text.
+    expect(
+      resolveComposerBranchSelection({
+        refName: 'feature/oauth-login',
+        localBranchName: 'feature/oauth-login',
+        currentName: 'login',
+        lastAutoName: ''
+      })
+    ).toMatchObject({
+      baseBranch: 'feature/oauth-login',
+      branchNameOverride: undefined,
+      name: undefined
+    })
+  })
+
+  it('does not use a stale branch search query to override the current name', () => {
+    expect(
+      resolveComposerBranchSelection({
+        refName: 'feature/oauth-login',
+        localBranchName: 'feature/oauth-login',
+        currentName: 'login',
+        lastAutoName: '',
+        branchSearchQuery: 'auth'
+      })
+    ).toMatchObject({
+      baseBranch: 'feature/oauth-login',
+      branchNameOverride: undefined,
+      name: undefined
     })
   })
 

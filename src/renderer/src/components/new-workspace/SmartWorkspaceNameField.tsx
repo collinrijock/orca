@@ -96,7 +96,11 @@ type SmartWorkspaceNameFieldProps = {
   /** Optional so callers that pre-date GitLab support don't need to wire
    *  it. When omitted, GitLab paste-URL detection is silently skipped. */
   onGitLabItemSelect?: (item: GitLabWorkItem) => void
-  onBranchSelect: (refName: string, localBranchName: string) => void
+  onBranchSelect: (
+    refName: string,
+    localBranchName: string,
+    context?: SmartWorkspaceBranchSelectionContext
+  ) => void
   onLinearIssueSelect: (issue: LinearIssue) => void
   selectedSource: SmartWorkspaceNameSelection | null
   onClearSelectedSource: () => void
@@ -118,6 +122,10 @@ export type SmartWorkspaceNameSelection = {
   kind: 'github-pr' | 'github-issue' | 'gitlab-mr' | 'gitlab-issue' | 'branch' | 'linear' | 'jira'
   label: string
   url?: string
+}
+
+export type SmartWorkspaceBranchSelectionContext = {
+  branchSearchQuery?: string
 }
 
 const SEARCH_DEBOUNCE_MS = 200
@@ -1135,13 +1143,23 @@ export default function SmartWorkspaceNameField({
         // no-op for hosts that haven't wired GitLab support yet.
         onGitLabItemSelect?.(row.item)
       } else if (row.kind === 'branch') {
-        onBranchSelect(row.refName, row.localBranchName)
+        onBranchSelect(row.refName, row.localBranchName, {
+          branchSearchQuery: mode === 'branches' ? branchResultsSource?.query : undefined
+        })
       } else {
         onLinearIssueSelect(row.issue)
       }
       setOpen(false)
     },
-    [onBranchSelect, onGitHubItemSelect, onGitLabItemSelect, onLinearIssueSelect, onValueChange]
+    [
+      branchResultsSource?.query,
+      mode,
+      onBranchSelect,
+      onGitHubItemSelect,
+      onGitLabItemSelect,
+      onLinearIssueSelect,
+      onValueChange
+    ]
   )
 
   const acceptGitHubLink = useCallback(
