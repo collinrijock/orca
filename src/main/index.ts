@@ -5,7 +5,7 @@
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import os from 'node:os'
-import { app, BrowserWindow, ipcMain, nativeTheme } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, nativeTheme } from 'electron'
 import { electronApp, is } from '@electron-toolkit/utils'
 import * as QRCode from 'qrcode'
 import {
@@ -718,6 +718,14 @@ function openMainWindow(): BrowserWindow {
         reason: details.reason,
         expectedTeardown: getExpectedTeardownScope(webContentsId)
       }),
+    onRendererRecoveryExhausted: ({ details, recentRecoveryCount }) => {
+      recordCrashBreadcrumb('renderer_recovery_circuit_breaker_open', {
+        reason: details.reason,
+        exitCode: details.exitCode ?? null,
+        recentRecoveryCount
+      })
+      void presentRendererRecoveryPrompt(recentRecoveryCount)
+    },
     deferLoad: true,
     title: devInstanceIdentity.name,
     getKeybindings: () => keybindings?.getOverrides(),
@@ -942,6 +950,35 @@ function sendOpenCrashReport(targetWindow?: BrowserWindow | null): void {
   const webContents =
     targetWindow && !targetWindow.isDestroyed() ? targetWindow.webContents : mainWindow?.webContents
   webContents?.send('ui:openCrashReport')
+}
+
+// Why: when the renderer crash-loops, the breaker stops auto-reloading and the
+// window is left blank. The renderer is dead, so a main-process dialog is the
+// only surface that can offer a retry or a clean quit instead of a silent loop.
+async function presentRendererRecoveryPrompt(recentRecoveryCount: number): Promise<void> {
+  if (isQuitting) {
+    return
+  }
+  const window = mainWindow && !mainWindow.isDestroyed() ? mainWindow : undefined
+  const options = {
+    type: 'error' as const,
+    buttons: ['Reload', 'Quit'],
+    defaultId: 0,
+    cancelId: 1,
+    title: 'Orca keeps failing to load',
+    message: 'The app window crashed repeatedly and stopped reloading automatically.',
+    detail: `Orca tried to recover ${recentRecoveryCount} times in a row without success. This is often a graphics-driver or installation problem. Reload to try again, or quit and relaunch Orca.`
+  }
+  const { response } = window
+    ? await dialog.showMessageBox(window, options)
+    : await dialog.showMessageBox(options)
+  if (response === 0 && mainWindow && !mainWindow.isDestroyed()) {
+    recordCrashBreadcrumb('renderer_recovery_manual_retry')
+    loadMainWindow(mainWindow)
+  } else if (response === 1) {
+    isQuitting = true
+    app.quit()
+  }
 }
 
 function recordProcessGoneCrash(
