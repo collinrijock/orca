@@ -1,94 +1,10 @@
 import { exec, spawn, type ChildProcess } from 'child_process'
-import { existsSync } from 'fs'
-import { basename, delimiter, join } from 'path'
 import type { RelayDispatcher, RequestContext } from './dispatcher'
-import { resolveDefaultShell } from './pty-shell-utils'
+import { getSpawnPlan, isSpawnEnoent, type SpawnCommand } from './agent-exec-spawn-plan'
 
 const DEFAULT_TIMEOUT_MS = 60_000
 const MAX_TIMEOUT_MS = 5 * 60 * 1000
 const MAX_OUTPUT_BYTES = 4 * 1024 * 1024
-const WINDOWS_BATCH_UNSAFE_ARGUMENTS_ERROR = 'UNSAFE_WINDOWS_BATCH_ARGUMENTS'
-
-function getCmdExePath(): string {
-  return process.env.ComSpec || `${process.env.SystemRoot ?? 'C:\\Windows'}\\System32\\cmd.exe`
-}
-
-function isWindowsBatchScript(commandPath: string): boolean {
-  return process.platform === 'win32' && /\.(cmd|bat)$/i.test(commandPath)
-}
-
-function hasUnsafeWindowsBatchSyntax(value: string): boolean {
-  return /[&|<>^"%!\r\n]/.test(value)
-}
-
-function quoteWindowsBatchToken(value: string): string {
-  if (hasUnsafeWindowsBatchSyntax(value)) {
-    throw new Error(WINDOWS_BATCH_UNSAFE_ARGUMENTS_ERROR)
-  }
-  return `"${value}"`
-}
-
-function resolveWindowsCommand(binary: string, env: NodeJS.ProcessEnv): string {
-  if (process.platform !== 'win32') {
-    return binary
-  }
-  if (/[\\/]/.test(binary) || /\.[a-z0-9]+$/i.test(binary)) {
-    return binary
-  }
-
-  const pathEnv = env.PATH ?? env.Path
-  if (!pathEnv) {
-    return binary
-  }
-  const names = [`${binary}.cmd`, `${binary}.exe`, `${binary}.bat`, binary]
-  for (const directory of pathEnv.split(delimiter).filter(Boolean)) {
-    for (const name of names) {
-      const candidate = join(directory, name)
-      if (existsSync(candidate)) {
-        return candidate
-      }
-    }
-  }
-  return binary
-}
-
-function getWindowsSafeSpawn(
-  binary: string,
-  args: string[],
-  env: NodeJS.ProcessEnv
-): { spawnCmd: string; spawnArgs: string[] } {
-  const resolvedBinary = resolveWindowsCommand(binary, env)
-  if (!isWindowsBatchScript(resolvedBinary)) {
-    return { spawnCmd: resolvedBinary, spawnArgs: args }
-  }
-  const commandLine = [resolvedBinary, ...args].map(quoteWindowsBatchToken).join(' ')
-  return { spawnCmd: getCmdExePath(), spawnArgs: ['/d', '/s', '/c', commandLine] }
-}
-
-function getSpawnPlan(
-  binary: string,
-  args: string[],
-  env: NodeJS.ProcessEnv,
-  useShell: boolean
-): { spawnCmd: string; spawnArgs: string[] } {
-  if (process.platform === 'win32' || !useShell) {
-    return getWindowsSafeSpawn(binary, args, env)
-  }
-  const shell = resolveDefaultShell()
-  const shellName = basename(shell).toLowerCase()
-  if (shellName !== 'bash' && shellName !== 'zsh') {
-    return { spawnCmd: binary, spawnArgs: args }
-  }
-  // Why: SSH relay processes are launched by a non-interactive SSH command,
-  // whose PATH often lacks nvm/fnm/Homebrew agent installs. The interactive
-  // flag (`-i`) is required so .bashrc/.zshrc — where those PATH hooks live —
-  // get sourced; a plain login shell (`-lc`) would skip them. This resolves
-  // remote agent commands like the user's Orca terminal shell does.
-  return {
-    spawnCmd: shell,
-    spawnArgs: ['-ilc', 'exec "$@"', '_', binary, ...args]
-  }
-}
 
 // Why: mirrors src/main/text-generation/commit-message-text-generation.ts. On
 // Windows, npm-installed CLIs like `claude`/`codex` are usually `.cmd` shims.
@@ -199,15 +115,20 @@ export class AgentExecHandler {
     const useShell = params.shell === true
 
     return new Promise<ExecResult>((resolve) => {
-      let child
-      try {
-        const { spawnCmd, spawnArgs } = getSpawnPlan(binary, args, spawnEnv, useShell)
-        child = spawn(spawnCmd, spawnArgs, {
+      const spawnPlannedChild = (plan: SpawnCommand): ChildProcess =>
+        spawn(plan.spawnCmd, plan.spawnArgs, {
           cwd,
           env: spawnEnv,
           stdio: ['pipe', 'pipe', 'pipe'],
           windowsHide: true
         })
+
+      let child: ChildProcess
+      let shellFallback: SpawnCommand | undefined
+      try {
+        const spawnPlan = getSpawnPlan(binary, args, spawnEnv, useShell)
+        shellFallback = spawnPlan.shellFallback
+        child = spawnPlannedChild(spawnPlan)
       } catch (error) {
         resolve({
           stdout: '',
@@ -226,6 +147,7 @@ export class AgentExecHandler {
       let timedOut = false
       let canceled = false
       let settled = false
+      let shellFallbackUsed = false
       const laneKey = typeof cwd === 'string' ? this.laneKey(cwd, params.operation) : ''
       let entry: InFlightExec | null = null
       let timer: ReturnType<typeof setTimeout> | null = null
@@ -246,6 +168,13 @@ export class AgentExecHandler {
           this.inFlightByLane.delete(laneKey)
         }
         resolve(result)
+      }
+      const sendStdin = (): void => {
+        if (stdinPayload !== null) {
+          child.stdin?.end(stdinPayload)
+        } else {
+          child.stdin?.end()
+        }
       }
       const cancelCurrent = (): void => {
         canceled = true
@@ -290,6 +219,28 @@ export class AgentExecHandler {
         stderr += chunk.toString('utf-8')
       }
       const onError = (error: Error): void => {
+        if (!settled && !canceled && !shellFallbackUsed && shellFallback && isSpawnEnoent(error)) {
+          shellFallbackUsed = true
+          detachChildListeners()
+          try {
+            child = spawnPlannedChild(shellFallback)
+            if (entry) {
+              entry.child = child
+            }
+            attachChildListeners()
+            sendStdin()
+          } catch (fallbackError) {
+            finish({
+              stdout,
+              stderr,
+              exitCode: null,
+              timedOut,
+              spawnError:
+                fallbackError instanceof Error ? fallbackError.message : String(fallbackError)
+            })
+          }
+          return
+        }
         finish({
           stdout,
           stderr,
@@ -301,16 +252,19 @@ export class AgentExecHandler {
       const onClose = (code: number | null): void => {
         finish({ stdout, stderr, exitCode: code, timedOut, canceled })
       }
-      child.stdout?.on('data', onStdoutData)
-      child.stderr?.on('data', onStderrData)
-      child.on('error', onError)
-      child.on('close', onClose)
-      detachChildListeners = () => {
-        child.stdout?.off('data', onStdoutData)
-        child.stderr?.off('data', onStderrData)
-        child.off('error', onError)
-        child.off('close', onClose)
+      function attachChildListeners(): void {
+        child.stdout?.on('data', onStdoutData)
+        child.stderr?.on('data', onStderrData)
+        child.on('error', onError)
+        child.on('close', onClose)
+        detachChildListeners = () => {
+          child.stdout?.off('data', onStdoutData)
+          child.stderr?.off('data', onStderrData)
+          child.off('error', onError)
+          child.off('close', onClose)
+        }
       }
+      attachChildListeners()
 
       if (context?.signal) {
         if (context.signal.aborted) {
@@ -323,11 +277,7 @@ export class AgentExecHandler {
         }
       }
 
-      if (stdinPayload !== null) {
-        child.stdin?.end(stdinPayload)
-      } else {
-        child.stdin?.end()
-      }
+      sendStdin()
     })
   }
 }

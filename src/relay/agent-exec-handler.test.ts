@@ -1,6 +1,20 @@
 import { exec, spawn } from 'child_process'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as ChildProcess from 'child_process'
+import type * as Os from 'os'
+
+const { userInfoMock } = vi.hoisted(() => ({
+  userInfoMock: vi.fn<() => { shell: string | null }>(() => ({ shell: null }))
+}))
+
+vi.mock('os', async (importOriginal) => {
+  const actual = await importOriginal<typeof Os>()
+  return {
+    ...actual,
+    userInfo: userInfoMock
+  }
+})
+
 import {
   createFakeChild,
   createHandlers,
@@ -22,10 +36,30 @@ const execMock = vi.mocked(exec)
 
 type AgentExecResult = { exitCode: number | null; timedOut: boolean }
 
+async function withShell<T>(shell: string | undefined, fn: () => Promise<T>): Promise<T> {
+  const originalShell = process.env.SHELL
+  if (shell === undefined) {
+    delete process.env.SHELL
+  } else {
+    process.env.SHELL = shell
+  }
+  try {
+    return await fn()
+  } finally {
+    if (originalShell === undefined) {
+      delete process.env.SHELL
+    } else {
+      process.env.SHELL = originalShell
+    }
+  }
+}
+
 describe('AgentExecHandler', () => {
   beforeEach(() => {
     spawnMock.mockReset()
     execMock.mockReset()
+    userInfoMock.mockReset()
+    userInfoMock.mockReturnValue({ shell: null })
   })
 
   it('executes a non-interactive command with captured output and stdin', async () => {
@@ -102,10 +136,8 @@ describe('AgentExecHandler', () => {
     })
   })
 
-  it('uses the default POSIX shell when requested so SSH agent commands inherit shell PATH', async () => {
-    const originalShell = process.env.SHELL
-    process.env.SHELL = '/bin/bash'
-    try {
+  it('tries the inherited PATH before shell fallback when shell PATH resolution is requested', async () => {
+    await withShell('/bin/bash', async () => {
       await withPlatform('linux', async () => {
         const child = createFakeChild()
         spawnMock.mockReturnValue(child as never)
@@ -114,7 +146,7 @@ describe('AgentExecHandler', () => {
         const pending = handlers.get('agent.execNonInteractive')!(
           {
             binary: 'opencode',
-            args: ['run', '--model', 'opencode/deepseek-v4-flash-free'],
+            args: ['run'],
             cwd: '/repo',
             stdin: 'PROMPT',
             timeoutMs: 5_000,
@@ -129,7 +161,61 @@ describe('AgentExecHandler', () => {
           exitCode: 0,
           timedOut: false
         })
-        expect(spawnMock).toHaveBeenCalledWith(
+        expect(spawnMock).toHaveBeenCalledWith('opencode', ['run'], {
+          cwd: '/repo',
+          env: process.env,
+          stdio: ['pipe', 'pipe', 'pipe'],
+          windowsHide: true
+        })
+        expect(spawnMock).toHaveBeenCalledTimes(1)
+        expect(child.stdin.end).toHaveBeenCalledWith('PROMPT')
+      })
+    })
+  })
+
+  it('falls back to the explicit POSIX shell when the inherited PATH misses the agent', async () => {
+    await withShell('/bin/bash', async () => {
+      await withPlatform('linux', async () => {
+        const directChild = createFakeChild()
+        const shellChild = createFakeChild()
+        spawnMock.mockReturnValueOnce(directChild as never).mockReturnValueOnce(shellChild as never)
+        const handlers = createHandlers()
+
+        const pending = handlers.get('agent.execNonInteractive')!(
+          {
+            binary: 'opencode',
+            args: ['run', '--model', 'opencode/deepseek-v4-flash-free'],
+            cwd: '/repo',
+            stdin: 'PROMPT',
+            timeoutMs: 5_000,
+            shell: true
+          },
+          requestContext()
+        )
+
+        directChild.emit(
+          'error',
+          Object.assign(new Error('spawn opencode ENOENT'), { code: 'ENOENT' })
+        )
+        shellChild.emit('close', 0)
+
+        await expect(pending).resolves.toMatchObject({
+          exitCode: 0,
+          timedOut: false
+        })
+        expect(spawnMock).toHaveBeenNthCalledWith(
+          1,
+          'opencode',
+          ['run', '--model', 'opencode/deepseek-v4-flash-free'],
+          {
+            cwd: '/repo',
+            env: process.env,
+            stdio: ['pipe', 'pipe', 'pipe'],
+            windowsHide: true
+          }
+        )
+        expect(spawnMock).toHaveBeenNthCalledWith(
+          2,
           '/bin/bash',
           [
             '-ilc',
@@ -147,14 +233,95 @@ describe('AgentExecHandler', () => {
             windowsHide: true
           }
         )
-        expect(child.stdin.end).toHaveBeenCalledWith('PROMPT')
+        expect(directChild.stdin.end).toHaveBeenCalledWith('PROMPT')
+        expect(shellChild.stdin.end).toHaveBeenCalledWith('PROMPT')
       })
-    } finally {
-      if (originalShell === undefined) {
-        delete process.env.SHELL
-      } else {
-        process.env.SHELL = originalShell
-      }
+    })
+  })
+
+  it('falls back to the account login shell when SHELL is unset', async () => {
+    userInfoMock.mockReturnValue({ shell: '/bin/zsh' })
+    await withShell(undefined, async () => {
+      await withPlatform('linux', async () => {
+        const directChild = createFakeChild()
+        const shellChild = createFakeChild()
+        spawnMock.mockReturnValueOnce(directChild as never).mockReturnValueOnce(shellChild as never)
+        const handlers = createHandlers()
+
+        const pending = handlers.get('agent.execNonInteractive')!(
+          {
+            binary: 'opencode',
+            args: ['run'],
+            cwd: '/repo',
+            stdin: null,
+            timeoutMs: 5_000,
+            shell: true
+          },
+          requestContext()
+        )
+
+        directChild.emit(
+          'error',
+          Object.assign(new Error('spawn opencode ENOENT'), { code: 'ENOENT' })
+        )
+        shellChild.emit('close', 0)
+
+        await expect(pending).resolves.toMatchObject({
+          exitCode: 0,
+          timedOut: false
+        })
+        expect(spawnMock).toHaveBeenNthCalledWith(
+          2,
+          '/bin/zsh',
+          ['-ilc', 'exec "$@"', '_', 'opencode', 'run'],
+          {
+            cwd: '/repo',
+            env: process.env,
+            stdio: ['pipe', 'pipe', 'pipe'],
+            windowsHide: true
+          }
+        )
+      })
+    })
+  })
+
+  it('does not run shell fallback when the configured shell is missing or unsupported', async () => {
+    for (const shell of [undefined, '/usr/bin/fish']) {
+      await withShell(shell, async () => {
+        await withPlatform('linux', async () => {
+          const child = createFakeChild()
+          spawnMock.mockReturnValue(child as never)
+          const handlers = createHandlers()
+
+          const pending = handlers.get('agent.execNonInteractive')!(
+            {
+              binary: 'opencode',
+              args: ['run'],
+              cwd: '/repo',
+              stdin: null,
+              timeoutMs: 5_000,
+              shell: true
+            },
+            requestContext()
+          )
+
+          child.emit('error', Object.assign(new Error('spawn opencode ENOENT'), { code: 'ENOENT' }))
+
+          await expect(pending).resolves.toMatchObject({
+            exitCode: null,
+            timedOut: false,
+            spawnError: 'spawn opencode ENOENT'
+          })
+          expect(spawnMock).toHaveBeenCalledWith('opencode', ['run'], {
+            cwd: '/repo',
+            env: process.env,
+            stdio: ['pipe', 'pipe', 'pipe'],
+            windowsHide: true
+          })
+          expect(spawnMock).toHaveBeenCalledTimes(1)
+        })
+      })
+      spawnMock.mockReset()
     }
   })
 

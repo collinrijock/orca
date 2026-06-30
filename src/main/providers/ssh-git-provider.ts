@@ -194,7 +194,7 @@ export class SshGitProvider implements IGitProvider {
         timeoutMs,
         operation,
         // Why: commit/PR agents on SSH hosts are often installed by shell
-        // startup files, so this path opts into login-shell PATH resolution.
+        // startup files, so this path allows relay-side shell PATH fallback.
         shell: true
       },
       undefined,
