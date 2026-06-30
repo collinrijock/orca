@@ -182,10 +182,9 @@ describe('shouldSuppressTerminalImeKeyboardEvent — Windows/Linux', () => {
   })
 
   it('does NOT suppress IME-owned editing keys on non-Mac (no CJK input-source gate)', () => {
-    // Why: the CJK input-source tracker is Mac-only and is null on Windows/Linux,
-    // so isCjkCompositionActive is always false here. The candidate-window
-    // swallow therefore never fires; inline composition keys reach xterm. The
-    // Windows IME Process-key path (keyCode 229) still covers active preedit.
+    // Why: without a CJK input-source or CJK composition-text signal, inline
+    // composition keys must reach xterm. The Windows IME Process-key path
+    // (keyCode 229) still covers active preedit.
     for (const key of ['Backspace', 'Enter', 'ArrowDown']) {
       expect(
         shouldSuppressTerminalImeKeyboardEvent(event({ key, code: key }), {
@@ -193,6 +192,19 @@ describe('shouldSuppressTerminalImeKeyboardEvent — Windows/Linux', () => {
           isCjkCompositionActive: false
         })
       ).toBe(false)
+    }
+  })
+
+  it('suppresses IME-owned editing keys when CJK composition text is active', () => {
+    // Why: non-Mac has no input-source bridge. CJK script in the preedit text is
+    // the platform-neutral signal that candidate-window editing owns these keys.
+    for (const key of ['Backspace', 'Enter', 'ArrowDown']) {
+      expect(
+        shouldSuppressTerminalImeKeyboardEvent(event({ key, code: key }), {
+          compositionActive: true,
+          isCjkCompositionActive: true
+        })
+      ).toBe(true)
     }
   })
 

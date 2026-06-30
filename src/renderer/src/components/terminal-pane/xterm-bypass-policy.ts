@@ -35,9 +35,9 @@ export type XtermBypassOptions = {
 
 export type XtermImeKeyboardOptions = {
   compositionActive: boolean
-  /** True only when the active macOS input source is CJK. Gates the
-   *  IME-owned-key swallow to candidate-window IMEs and away from inline
-   *  IMEs (Vietnamese Telex/VNI), where mid-composition Backspace is real. */
+  /** True when the current input-source or composition text identifies CJK.
+   *  Gates the IME-owned-key swallow to candidate-window IMEs and away from
+   *  inline IMEs (Vietnamese Telex/VNI), where mid-composition Backspace is real. */
   isCjkCompositionActive: boolean
 }
 

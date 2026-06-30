@@ -716,7 +716,11 @@ export function useTerminalPaneLifecycle({
           if (
             shouldSuppressTerminalImeKeyboardEvent(e, {
               compositionActive: imeCompositionTracker.isActive(),
-              isCjkCompositionActive: macCjkInputSourceTracker?.isActive() === true
+              // Why: non-Mac has no input-source bridge, but CJK script in the
+              // preedit text is a platform-neutral candidate-window signal.
+              isCjkCompositionActive:
+                macCjkInputSourceTracker?.isActive() === true ||
+                imeCompositionTracker.hasCjkCompositionText()
             })
           ) {
             return false
