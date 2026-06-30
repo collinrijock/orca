@@ -127,6 +127,13 @@ export function resyncTerminalFocusForWindowFocus(args: {
       const active = reclaimedHelper.ownerDocument.activeElement
       if (active === reclaimedHelper || isDocumentBodyOrNull(active, reclaimedHelper.ownerDocument)) {
         reclaimedHelper.focus()
+      } else {
+        // Why: a newer focus owner (dialog/sidebar/rename input) grabbed focus
+        // before this deferred reclaim ran, so the eager syncFocused(true) above
+        // is now wrong — the terminal does not own focus. Roll the main-process
+        // mirror back to false so shortcuts resolve in 'app' context instead of
+        // staying stuck in 'terminal' until the next terminal focus/blur.
+        args.syncFocused(false)
       }
     })
     return true
