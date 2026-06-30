@@ -133,11 +133,9 @@ describe('hydrateShellPath', () => {
     expect(result).toEqual({ segments: [], ok: false, failureReason: 'empty_path' })
   })
 
-  // Why: the `-i` (interactive) flag forces sourcing of interactive rc init
-  // (compinit, oh-my-zsh, completion generators) that forks nested execs and
-  // wedges startup in uninterruptible sleep under macOS Endpoint Security
-  // agents (#5657). The PATH probe must spawn login-but-non-interactive (`-lc`).
-  it('spawns the shell login-but-non-interactive (-lc, never -ilc) for the PATH probe', async () => {
+  // Why: #5657 hangs when this probe runs interactive rc init. Startup must
+  // stay login-non-interactive and rely on no-spawn fallbacks for rc-only dirs.
+  it('uses a login-non-interactive shell (-lc, not -ilc) for the PATH probe', async () => {
     const proc = createMockShellProcess()
     spawnMock.mockReturnValue(proc)
 
@@ -149,8 +147,7 @@ describe('hydrateShellPath', () => {
     expect(spawnArgs[0]).toBe('-lc')
     expect(spawnArgs).not.toContain('-ilc')
 
-    // Emit a PATH containing version-manager dirs and confirm it still parses,
-    // proving login profiles + unguarded rc exports remain captured under -lc.
+    // The parser still accepts manager dirs when login files provide them.
     const path = [
       '/Users/tester/.cargo/bin',
       '/Users/tester/.pyenv/shims',

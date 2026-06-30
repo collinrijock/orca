@@ -81,15 +81,8 @@ function spawnShellAndReadPath(shell: string): Promise<HydrationResult> {
   return new Promise((resolve) => {
     // Why: printing $PATH between delimiters is resilient to rc-file banners,
     // MOTDs, and `echo` invocations that shells like fish print unprompted.
-    // Why: login-but-non-interactive (`-lc`, not `-ilc`). PATH lives in login
-    // profiles (.zprofile/.zlogin/.profile/.bash_profile) and unguarded rc
-    // exports, all still sourced under `-lc`, so the captured PATH stays
-    // complete. The dropped `-i` flag is what matters: interactive init
-    // (compinit, oh-my-zsh, `source <(tool completion ...)`, nvm/sdkman) forks
-    // many nested execs that, under macOS Endpoint Security agents (Jamf
-    // Protect / CrowdStrike), each await an ES_EVENT_TYPE_AUTH_EXEC verdict; a
-    // stalled verdict wedges the spawn in uninterruptible kernel sleep (`U`),
-    // which SIGKILL cannot reap — hanging startup until reboot (#5657).
+    // Why: use login-but-non-interactive (`-lc`, not `-ilc`) so login PATH
+    // files run without spawn-heavy interactive init wedging macOS ES agents.
     const command = `printf '%s' '${DELIMITER}'; printf '%s' "$PATH"; printf '%s' '${DELIMITER}'`
     let finished = false
     let stdout = ''
@@ -126,9 +119,8 @@ function spawnShellAndReadPath(shell: string): Promise<HydrationResult> {
     timer = setTimeout(() => {
       // Why: slow rc files (corporate env setup, nvm eager init) can exceed
       // our budget. Kill the shell and fall back to process.env rather than
-      // blocking the Agents pane indefinitely. Defense-in-depth only — SIGKILL
-      // cannot reap a child stuck in `U` (uninterruptible) state, so the real
-      // fix for the Endpoint Security wedge is the non-interactive `-lc` above.
+      // blocking the Agents pane indefinitely. Defense-in-depth only: a child
+      // in kernel sleep may ignore SIGKILL, so avoiding `-i` is the real fix.
       try {
         child.kill('SIGKILL')
       } catch {
