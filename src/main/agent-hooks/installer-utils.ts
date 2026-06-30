@@ -271,6 +271,8 @@ export function writeManagedScript(scriptPath: string, content: string): void {
     try {
       if (readFileSync(scriptPath, 'utf-8') === content) {
         if (process.platform !== 'win32') {
+          // Why: POSIX [ -x ] checks the running user's execute access, not
+          // whether any owner/group/other execute bit happens to be set.
           try {
             accessSync(scriptPath, constants.X_OK)
           } catch {
