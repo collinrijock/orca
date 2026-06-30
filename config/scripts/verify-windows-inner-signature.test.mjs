@@ -1,7 +1,7 @@
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import {
   DEFAULT_EXPECTED_SIGNER,
@@ -39,6 +39,28 @@ function withTempFile(callback) {
 }
 
 describe('verify-windows-inner-signature', () => {
+  const originalExpectedSigners = process.env.ORCA_WINDOWS_EXPECTED_SIGNERS
+  const originalExpectedThumbprints = process.env.ORCA_WINDOWS_EXPECTED_THUMBPRINTS
+
+  beforeEach(() => {
+    delete process.env.ORCA_WINDOWS_EXPECTED_SIGNERS
+    delete process.env.ORCA_WINDOWS_EXPECTED_THUMBPRINTS
+  })
+
+  afterEach(() => {
+    if (originalExpectedSigners === undefined) {
+      delete process.env.ORCA_WINDOWS_EXPECTED_SIGNERS
+    } else {
+      process.env.ORCA_WINDOWS_EXPECTED_SIGNERS = originalExpectedSigners
+    }
+
+    if (originalExpectedThumbprints === undefined) {
+      delete process.env.ORCA_WINDOWS_EXPECTED_THUMBPRINTS
+    } else {
+      process.env.ORCA_WINDOWS_EXPECTED_THUMBPRINTS = originalExpectedThumbprints
+    }
+  })
+
   it('normalizes signer subjects without widening exact matching', () => {
     expect(
       normalizeSignerSubject(
