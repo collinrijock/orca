@@ -98,12 +98,30 @@ export function useChecksPanelTerminalWorktree(args: {
           : { ptyId: activeTerminalPtyId, cwd }
       )
     }
+    // Retain the last resolved cwd when a poll comes back empty or throws (e.g. a
+    // macOS lsof timeout). Without this, a single transient getCwd failure flips
+    // the followed worktree back to the sidebar default, which re-keys the Checks
+    // panel and wipes mid-edit state (PR title draft, create-PR error).
+    const retainResolvedOrClear = (): void => {
+      if (disposed) {
+        return
+      }
+      setPolledCwd((prev) =>
+        prev?.ptyId === activeTerminalPtyId && prev.cwd !== null
+          ? prev
+          : { ptyId: activeTerminalPtyId, cwd: null }
+      )
+    }
     const refresh = async (): Promise<void> => {
       try {
         const cwd = (await window.api.pty.getCwd(activeTerminalPtyId)).trim()
-        commit(cwd || null)
+        if (cwd) {
+          commit(cwd)
+        } else {
+          retainResolvedOrClear()
+        }
       } catch {
-        commit(null)
+        retainResolvedOrClear()
       }
     }
 
