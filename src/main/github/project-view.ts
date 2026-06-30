@@ -54,6 +54,7 @@ import {
   GITHUB_PROJECT_REF_INPUT_TOO_LARGE_ERROR,
   isGitHubProjectRefInputTooLarge
 } from '../../shared/github-project-ref-input'
+import { normalizeGitHubApiHost } from './github-remote-identity-parsing'
 
 // Re-export the public API so existing call sites (`./project-view`) keep
 // working unchanged. The split is internal-only.
@@ -136,10 +137,8 @@ function getProjectViewCacheEntry<K, V>(cache: Map<K, V>, key: K): V | undefined
 // module locals so a dev-time code swap naturally re-runs capability probes
 // instead of carrying a stale "unsupported" flag into fresh code.
 const ownerTypeCache = new Map<string, GitHubProjectOwnerType | null>()
-// Why: keyed by `${owner}\0${ownerType}` rather than a process-global flag so
-// a single owner's capability gap (e.g. token without scope on org A) doesn't
-// poison every subsequent fetch for unrelated owners that DO support
-// Issue.parent. See bug-scan finding 2.
+// Why: capability probes are host-scoped. Same-named owners can exist on
+// github.com and GHES; caching only by owner would let one host poison another.
 const parentFieldRetriedByOwner = new Map<string, true>()
 const parentFieldWarningLoggedByOwner = new Map<string, true>()
 // Why: concurrent fetchAllItems calls for the same owner all observe the
@@ -148,16 +147,38 @@ const parentFieldWarningLoggedByOwner = new Map<string, true>()
 // one caller drives the probe; siblings await the same result.
 const parentFieldProbeInFlight = new Map<string, Promise<void>>()
 
-function ownerScopeKey(owner: string, ownerType: GitHubProjectOwnerType): string {
-  return `${owner}\u0000${ownerType}`
+function routeCacheScope(route: GhApiRoute): string {
+  if (route.hostname) {
+    return `host:${route.hostname.toLowerCase()}`
+  }
+  return route.cwd ? `cwd:${route.cwd}` : 'global'
 }
 
-function rememberOwnerType(owner: string, ownerType: GitHubProjectOwnerType | null): void {
-  rememberProjectViewCacheEntry(ownerTypeCache, owner, ownerType)
+function ownerTypeCacheKey(owner: string, route: GhApiRoute): string {
+  return `${routeCacheScope(route)}\u0000${owner}`
 }
 
-function getCachedOwnerType(owner: string): GitHubProjectOwnerType | null | undefined {
-  return getProjectViewCacheEntry(ownerTypeCache, owner)
+function ownerScopeKey(
+  owner: string,
+  ownerType: GitHubProjectOwnerType,
+  route: GhApiRoute
+): string {
+  return `${ownerTypeCacheKey(owner, route)}\u0000${ownerType}`
+}
+
+function rememberOwnerType(
+  owner: string,
+  ownerType: GitHubProjectOwnerType | null,
+  route: GhApiRoute
+): void {
+  rememberProjectViewCacheEntry(ownerTypeCache, ownerTypeCacheKey(owner, route), ownerType)
+}
+
+function getCachedOwnerType(
+  owner: string,
+  route: GhApiRoute
+): GitHubProjectOwnerType | null | undefined {
+  return getProjectViewCacheEntry(ownerTypeCache, ownerTypeCacheKey(owner, route))
 }
 
 function markParentFieldRetried(scopeKey: string): void {
@@ -200,36 +221,62 @@ export function _getProjectViewCacheSizesForTests(): {
 /** @internal - exposed for cache-bound tests only. */
 export function _rememberProjectViewOwnerTypeForTests(
   owner: string,
-  ownerType: GitHubProjectOwnerType | null
+  ownerType: GitHubProjectOwnerType | null,
+  route: GhApiRoute = {}
 ): void {
-  rememberOwnerType(owner, ownerType)
+  rememberOwnerType(owner, ownerType, route)
 }
 
 /** @internal - exposed for cache-bound tests only. */
 export function _getProjectViewOwnerTypeForTests(
-  owner: string
+  owner: string,
+  route: GhApiRoute = {}
 ): GitHubProjectOwnerType | null | undefined {
-  return getCachedOwnerType(owner)
+  return getCachedOwnerType(owner, route)
 }
 
 /** @internal - exposed for cache-bound tests only. */
-export function _markProjectViewParentFieldRetriedForTests(scopeKey: string): void {
-  markParentFieldRetried(scopeKey)
+export function _markProjectViewParentFieldRetriedForTests(
+  scopeKeyOrOwner: string,
+  ownerType?: GitHubProjectOwnerType,
+  route: GhApiRoute = {}
+): void {
+  markParentFieldRetried(
+    ownerType ? ownerScopeKey(scopeKeyOrOwner, ownerType, route) : scopeKeyOrOwner
+  )
 }
 
 /** @internal - exposed for cache-bound tests only. */
-export function _hasProjectViewParentFieldRetriedForTests(scopeKey: string): boolean {
-  return hasParentFieldRetried(scopeKey)
+export function _hasProjectViewParentFieldRetriedForTests(
+  scopeKeyOrOwner: string,
+  ownerType?: GitHubProjectOwnerType,
+  route: GhApiRoute = {}
+): boolean {
+  return hasParentFieldRetried(
+    ownerType ? ownerScopeKey(scopeKeyOrOwner, ownerType, route) : scopeKeyOrOwner
+  )
 }
 
 /** @internal - exposed for cache-bound tests only. */
-export function _markProjectViewParentFieldWarningLoggedForTests(scopeKey: string): void {
-  markParentFieldWarningLogged(scopeKey)
+export function _markProjectViewParentFieldWarningLoggedForTests(
+  scopeKeyOrOwner: string,
+  ownerType?: GitHubProjectOwnerType,
+  route: GhApiRoute = {}
+): void {
+  markParentFieldWarningLogged(
+    ownerType ? ownerScopeKey(scopeKeyOrOwner, ownerType, route) : scopeKeyOrOwner
+  )
 }
 
 /** @internal - exposed for cache-bound tests only. */
-export function _hasProjectViewParentFieldWarningLoggedForTests(scopeKey: string): boolean {
-  return hasParentFieldWarningLogged(scopeKey)
+export function _hasProjectViewParentFieldWarningLoggedForTests(
+  scopeKeyOrOwner: string,
+  ownerType?: GitHubProjectOwnerType,
+  route: GhApiRoute = {}
+): boolean {
+  return hasParentFieldWarningLogged(
+    ownerType ? ownerScopeKey(scopeKeyOrOwner, ownerType, route) : scopeKeyOrOwner
+  )
 }
 
 // ─── Normalizers ───────────────────────────────────────────────────────
@@ -1010,10 +1057,9 @@ async function fetchAllItems(
   | { ok: true; rows: GitHubProjectRow[]; totalCount: number; parentFieldDropped: boolean }
   | { ok: false; error: GitHubProjectViewError; totalCount?: number }
 > {
-  // Why: caches keyed by (owner, ownerType) so a single owner's lack of
-  // Issue.parent capability (e.g. token without scope on org A) doesn't
-  // poison fetches for unrelated owners. See bug-scan finding 2.
-  const scopeKey = ownerScopeKey(args.owner, args.ownerType)
+  // Why: include the gh route so a same-named owner on github.com and GHES
+  // can't inherit each other's Issue.parent capability decision.
+  const scopeKey = ownerScopeKey(args.owner, args.ownerType, route)
   // Why: if another caller for the SAME owner is currently probing whether
   // Issue.parent is supported, await its decision so we don't fire a
   // duplicate with-parent probe. We must re-read the retried flag AFTER
@@ -1570,7 +1616,7 @@ export async function listAccessibleProjects(
       // Cache owner → ownerType for downstream paste/resolve even when the
       // nested projects query was empty or partially failed — paste-to-add
       // uses this to disambiguate /orgs/ vs /users/ URLs.
-      rememberOwnerType(login, 'organization')
+      rememberOwnerType(login, 'organization', ghRoute)
       const nodes = org.projectsV2?.nodes ?? []
       let ownerCount = 0
       for (const n of nodes) {
@@ -1598,7 +1644,7 @@ export async function listAccessibleProjects(
   }
 
   if (viewerLogin) {
-    rememberOwnerType(viewerLogin, 'user')
+    rememberOwnerType(viewerLogin, 'user', ghRoute)
   }
 
   return {
@@ -1666,9 +1712,9 @@ export function parseProjectPaste(input: string): ParsedPaste | null {
 }
 
 function normalizeProjectUrlHost(host: string): string | null {
-  const normalized = host.trim().toLowerCase()
-  // Reject a leading dash so a pasted host can never be mistaken for a gh flag.
-  return /^[a-z0-9]([a-z0-9.-]*)?(?::[0-9]+)?$/.test(normalized) ? normalized : null
+  // Why: pasted URLs should observe the same host allow/drop rules as repo
+  // remotes, so known non-GitHub providers fail before we invoke gh.
+  return normalizeGitHubApiHost(host)
 }
 
 async function resolveOwnerType(
@@ -1720,7 +1766,7 @@ async function resolveOwnerType(
     return { ok: true, title: '' }
   }
 
-  const cached = getCachedOwnerType(owner)
+  const cached = getCachedOwnerType(owner, route)
   const candidates: GitHubProjectOwnerType[] = preferred
     ? [preferred]
     : cached
@@ -1738,7 +1784,7 @@ async function resolveOwnerType(
   for (const ot of ordered) {
     const r = await tryOne(ot, null)
     if (r.ok) {
-      rememberOwnerType(owner, ot)
+      rememberOwnerType(owner, ot, route)
       return { ok: true, ownerType: ot, title: r.title }
     }
     lastError = r.error
@@ -1747,7 +1793,7 @@ async function resolveOwnerType(
       return { ok: false, error: r.error }
     }
   }
-  rememberOwnerType(owner, null)
+  rememberOwnerType(owner, null, route)
   return {
     ok: false,
     error: lastError ?? { type: 'not_found', message: 'Owner not found.' }

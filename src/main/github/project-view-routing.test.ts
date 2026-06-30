@@ -24,7 +24,9 @@ vi.mock('./rate-limit', () => ({
 
 import { _resetOwnerRepoCache } from './gh-utils'
 import {
+  _resetProjectViewCachesForTests,
   listAccessibleProjects,
+  resolveProjectRef,
   updateIssueBySlug,
   updateProjectItemFieldValue
 } from './project-view'
@@ -63,6 +65,7 @@ describe('GitHub Project gh routing', () => {
     rateLimitGuardMock.mockReturnValue({ blocked: false })
     noteRateLimitSpendMock.mockReset()
     _resetOwnerRepoCache()
+    _resetProjectViewCachesForTests()
   })
 
   it('passes --hostname for GitHub Enterprise repo targets', async () => {
@@ -145,5 +148,68 @@ describe('GitHub Project gh routing', () => {
     expect(ghExecFileAsyncMock.mock.calls[0][0]).toEqual(
       expect.arrayContaining(['--hostname', 'ghe.acme.internal'])
     )
+  })
+
+  it('does not reuse owner-type probes across github.com and GHES routes', async () => {
+    gitExecFileAsyncMock
+      .mockRejectedValueOnce(new Error('upstream missing'))
+      .mockResolvedValueOnce({ stdout: 'https://github.com/acme/orca.git\n' })
+    ghExecFileAsyncMock
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify({ data: { organization: null } }),
+        stderr: ''
+      })
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify({ data: { user: { login: 'acme' } } }),
+        stderr: ''
+      })
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify({
+          data: { user: { projectV2: { id: 'PVT_public', title: 'Public project' } } }
+        }),
+        stderr: ''
+      })
+
+    await expect(resolveProjectRef({ repoPath: '/github-repo', input: 'acme/2' })).resolves.toEqual(
+      {
+        ok: true,
+        owner: 'acme',
+        ownerType: 'user',
+        number: 2,
+        title: 'Public project'
+      }
+    )
+
+    gitExecFileAsyncMock.mockReset()
+    ghExecFileAsyncMock.mockReset()
+    gitExecFileAsyncMock
+      .mockRejectedValueOnce(new Error('upstream missing'))
+      .mockResolvedValueOnce({ stdout: 'https://ghe.acme.internal/acme/orca.git\n' })
+    ghExecFileAsyncMock
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify({ data: { organization: { login: 'acme' } } }),
+        stderr: ''
+      })
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify({
+          data: {
+            organization: { projectV2: { id: 'PVT_enterprise', title: 'Enterprise project' } }
+          }
+        }),
+        stderr: ''
+      })
+
+    await expect(resolveProjectRef({ repoPath: '/ghe-repo', input: 'acme/2' })).resolves.toEqual({
+      ok: true,
+      owner: 'acme',
+      ownerType: 'organization',
+      number: 2,
+      title: 'Enterprise project'
+    })
+
+    const firstGheArgv = ghExecFileAsyncMock.mock.calls[0][0] as string[]
+    const firstGheQuery = firstGheArgv.find((arg) => arg.startsWith('query=')) ?? ''
+    expect(firstGheArgv).toEqual(expect.arrayContaining(['--hostname', 'ghe.acme.internal']))
+    expect(firstGheQuery).toContain('organization(login:$owner)')
   })
 })
