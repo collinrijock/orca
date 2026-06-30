@@ -6,6 +6,7 @@ import {
 } from './agent-history-session-card'
 import { buildMobileAgentHistorySections } from './agent-history-sections'
 import { MOBILE_AI_VAULT_CAPABILITY } from './agent-history-capability'
+import { shouldShowMobileCurrentWorktreeBadge } from './agent-history-current-worktree-badge'
 
 const NOW = Date.parse('2026-06-29T00:00:00.000Z')
 
@@ -179,5 +180,16 @@ describe('MOBILE_AI_VAULT_CAPABILITY', () => {
     // Why: mobile's protocol-version copy lacks the host constant; this literal
     // must match src/shared/protocol-version.ts AI_VAULT_RUNTIME_CAPABILITY.
     expect(MOBILE_AI_VAULT_CAPABILITY).toBe('aiVault.v1')
+  })
+})
+
+describe('shouldShowMobileCurrentWorktreeBadge', () => {
+  it('hides the repeated current-worktree badge in Workspace scope', () => {
+    expect(shouldShowMobileCurrentWorktreeBadge('workspace')).toBe(false)
+  })
+
+  it('keeps the badge in mixed Project and All scopes', () => {
+    expect(shouldShowMobileCurrentWorktreeBadge('project')).toBe(true)
+    expect(shouldShowMobileCurrentWorktreeBadge('all')).toBe(true)
   })
 })

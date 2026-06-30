@@ -17,6 +17,7 @@ type Props = {
   sections: MobileAgentHistorySection[]
   sessionsById: ReadonlyMap<string, AiVaultSession>
   refreshing: boolean
+  showCurrentWorktreeBadges: boolean
   onRefresh: () => void
 }
 
@@ -24,6 +25,7 @@ export function MobileAgentSessionHistoryList({
   sections,
   sessionsById,
   refreshing,
+  showCurrentWorktreeBadges,
   onRefresh
 }: Props) {
   const [expandedId, setExpandedId] = useState<string | null>(null)
@@ -38,10 +40,11 @@ export function MobileAgentSessionHistoryList({
         card={item}
         expanded={expandedId === item.id}
         session={sessionsById.get(item.id) ?? null}
+        showCurrentWorktreeBadge={showCurrentWorktreeBadges}
         onPress={() => toggleExpanded(item.id)}
       />
     ),
-    [expandedId, sessionsById, toggleExpanded]
+    [expandedId, sessionsById, showCurrentWorktreeBadges, toggleExpanded]
   )
 
   return (
@@ -74,11 +77,13 @@ function AgentHistoryCardRow({
   card,
   expanded,
   session,
+  showCurrentWorktreeBadge,
   onPress
 }: {
   card: MobileAgentHistoryCard
   expanded: boolean
   session: AiVaultSession | null
+  showCurrentWorktreeBadge: boolean
   onPress: () => void
 }) {
   const previewTurns = useMemo(
@@ -108,7 +113,7 @@ function AgentHistoryCardRow({
         <Text style={styles.cardMetaText}>
           {card.messageCount} {card.messageCount === 1 ? 'message' : 'messages'}
         </Text>
-        {card.isCurrentWorktree ? (
+        {showCurrentWorktreeBadge && card.isCurrentWorktree ? (
           <View style={styles.currentBadge}>
             <Text style={styles.currentBadgeText}>current worktree</Text>
           </View>

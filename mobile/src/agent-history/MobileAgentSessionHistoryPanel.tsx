@@ -11,6 +11,7 @@ import type { AiVaultScope, AiVaultSession } from '../../../src/shared/ai-vault-
 import type { Worktree } from '../worktree/workspace-list-types'
 import { useMobileAgentHistoryState } from './use-mobile-agent-history-state'
 import { buildMobileAgentHistorySections } from './agent-history-sections'
+import { shouldShowMobileCurrentWorktreeBadge } from './agent-history-current-worktree-badge'
 import { MobileAgentSessionHistoryList } from './MobileAgentSessionHistoryList'
 import { styles } from './agent-history-styles'
 
@@ -198,6 +199,7 @@ export function MobileAgentSessionHistoryPanel({
               sections={sections}
               sessionsById={sessionsById}
               refreshing={refreshing}
+              showCurrentWorktreeBadges={shouldShowMobileCurrentWorktreeBadge(scope)}
               onRefresh={() => void onRefresh()}
             />
           )}
