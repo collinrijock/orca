@@ -63,6 +63,7 @@ import {
   type CachedVisibleProjectTable
 } from './project-visible-table-cache'
 import { translate } from '@/i18n/i18n'
+import { buildTaskSourceContextFromRepo } from '../../../../shared/task-source-context'
 
 type Props = {
   selectedRepoIds: ReadonlySet<string>
@@ -459,6 +460,16 @@ export default function ProjectViewWrapper({ selectedRepoIds }: Props): React.JS
     // Orca; clear them before the modal tree receives stale repo ids.
     setDialogRepoItem(resolvedDialogRepoItem)
   }
+  const resolvedDialogRepo = resolvedDialogRepoItem
+    ? (repos.find((repo) => repo.id === resolvedDialogRepoItem.repoId) ?? null)
+    : null
+  const resolvedDialogSourceContext = resolvedDialogRepo
+    ? buildTaskSourceContextFromRepo({
+        provider: 'github',
+        projectId: resolvedDialogRepo.id,
+        repo: resolvedDialogRepo
+      })
+    : null
 
   const resolvedMissingRepoDialogs = resolveMissingRepoProjectDialogState({
     slugIndexReady,
@@ -957,6 +968,7 @@ export default function ProjectViewWrapper({ selectedRepoIds }: Props): React.JS
           workItem={resolvedDialogRepoItem.workItem}
           repoPath={resolvedDialogRepoItem.repoPath}
           repoId={resolvedDialogRepoItem.repoId}
+          sourceContext={resolvedDialogSourceContext}
           projectOrigin={resolvedDialogRepoItem.origin}
           backLabel={translate(
             'auto.components.github.project.ProjectViewWrapper.1aa7c952b9',
