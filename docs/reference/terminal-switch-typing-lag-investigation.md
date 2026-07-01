@@ -31,6 +31,33 @@ ORCA_PROBE_RUNS=4 ORCA_PROBE_FOCUS_EACH_RUN=0 ORCA_PROBE_SKIP_FOCUS=1 ORCA_PROBE
 
 ## Key Measurements
 
+### 2026-07-01 follow-up: cold visit vs warm revisit
+
+After the metadata-only `listSessions()` fix, the user reported a sharper
+pattern:
+
+- First visit to a terminal, where the terminal briefly shows blank while the
+  renderer/webgl surface loads, does not show the typing lag.
+- Revisiting that same already-mounted terminal brings the lag back.
+
+Code-level reproduction:
+
+- `connectPanePty` previously armed a one-shot input liveness check from
+  `noteVisibilityResume()`.
+- The first `xterm.onData` input after a warm visibility resume called
+  `window.api.pty.listSessions()` before forwarding the byte with
+  `transport.sendInput(data)`.
+- A focused unit regression captured the bad order as
+  `["listSessions", "sendInput"]`.
+
+Fix direction:
+
+- Terminal input no longer starts a renderer→main→daemon session enumeration.
+- Hidden→visible lifecycle reconciliation and daemon missing-session exit events
+  remain responsible for stale pane cleanup.
+- The focused regression now asserts that repeated warm resumes plus typing
+  produce zero `listSessions()` calls from the input handler.
+
 ### CLI `terminal-send`, switch away/back
 
 Result file: `.tmp/terminal-main-app-typing-lag/result-2026-07-01T06-59-45-098Z.json`

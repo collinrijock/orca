@@ -1694,9 +1694,8 @@ export function useTerminalPaneLifecycle({
         noteVisibilityResume?: () => void
       }
       bindingWithVisibility.syncProcessTracking?.()
-      // Why: re-arm the once-per-resume input liveness re-check so the typing
-      // hot path stays off the listSessions IPC between resumes (the re-check
-      // is only useful right after a hidden→visible flip).
+      // Why: visible-resume repairs dropped hidden resizes, but it must not fit
+      // against xterm's transient hidden DOM fallback.
       if (resumedFromHidden) {
         bindingWithVisibility.noteVisibilityResume?.()
       }
