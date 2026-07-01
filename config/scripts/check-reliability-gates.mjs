@@ -6,7 +6,6 @@ import process from 'node:process'
 import { parse, printParseErrorCode } from 'jsonc-parser'
 
 const MANIFEST_PATH = path.join('config', 'reliability-gates.jsonc')
-const MATURITIES = new Set(['experimental', 'soak', 'blocking', 'accepted-gap', 'deprecated'])
 const RED_GREEN_STATUSES = new Set(['missing', 'partial', 'complete', 'not-required'])
 const FLAKE_STATUSES = new Set(['not-started', 'unknown', 'soaking', 'stable', 'flaky'])
 
@@ -32,6 +31,39 @@ function requireStringArray(gate, field, failures) {
   if (!hasNonEmptyStringArray(gate[field])) {
     failures.push(`${gate.id ?? '<unknown>'}: ${field} must be a non-empty string array`)
   }
+}
+
+function requireNonNegativeNumber(record, field, owner, failures) {
+  if (!Number.isFinite(record[field]) || record[field] < 0) {
+    failures.push(`${owner}.${field} must be a non-negative number`)
+  }
+}
+
+function validatePolicy(manifest, failures) {
+  if (!isRecord(manifest.policy)) {
+    failures.push('policy must be an object')
+    return new Set()
+  }
+  if (!hasNonEmptyStringArray(manifest.policy.maturityLevels)) {
+    failures.push('policy.maturityLevels must be a non-empty string array')
+  }
+  if (!isRecord(manifest.policy.blockingPromotion)) {
+    failures.push('policy.blockingPromotion must be an object')
+  } else {
+    for (const field of ['minimumSoakRuns', 'minimumSoakDays', 'maximumUnexplainedFlakes']) {
+      requireNonNegativeNumber(
+        manifest.policy.blockingPromotion,
+        field,
+        'policy.blockingPromotion',
+        failures
+      )
+    }
+  }
+  return new Set(
+    Array.isArray(manifest.policy.maturityLevels)
+      ? manifest.policy.maturityLevels.filter(isNonEmptyString)
+      : []
+  )
 }
 
 function validateRuntimeBudget(gate, failures) {
@@ -74,7 +106,7 @@ function validatePerformanceBudget(gate, failures) {
   }
 }
 
-function validateGate(gate) {
+function validateGate(gate, maturities) {
   const failures = []
   if (!isRecord(gate)) {
     return ['gate entry must be an object']
@@ -82,7 +114,7 @@ function validateGate(gate) {
   for (const field of ['id', 'title', 'owner', 'layer', 'invariant', 'oracle', 'demotionRule']) {
     requireNonEmptyString(gate, field, failures)
   }
-  if (!MATURITIES.has(gate.maturity)) {
+  if (!maturities.has(gate.maturity)) {
     failures.push(`${gate.id ?? '<unknown>'}: maturity is invalid`)
   }
   for (const field of [
@@ -120,7 +152,14 @@ function validateGate(gate) {
 
 export async function main(root = process.cwd()) {
   const manifestPath = path.join(root, MANIFEST_PATH)
-  const raw = await fs.readFile(manifestPath, 'utf8')
+  let raw
+  try {
+    raw = await fs.readFile(manifestPath, 'utf8')
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    console.error(`${MANIFEST_PATH}: unable to read manifest (${message})`)
+    return 1
+  }
   const parseErrors = []
   const manifest = parse(raw, parseErrors, { allowTrailingComma: true })
   if (parseErrors.length > 0) {
@@ -138,6 +177,7 @@ export async function main(root = process.cwd()) {
     if (manifest.schemaVersion !== 1) {
       failures.push('schemaVersion must be 1')
     }
+    const maturities = validatePolicy(manifest, failures)
     if (!Array.isArray(manifest.gates) || manifest.gates.length === 0) {
       failures.push('gates must be a non-empty array')
     } else {
@@ -149,7 +189,7 @@ export async function main(root = process.cwd()) {
           }
           seenIds.add(gate.id)
         }
-        failures.push(...validateGate(gate))
+        failures.push(...validateGate(gate, maturities))
       }
     }
   }

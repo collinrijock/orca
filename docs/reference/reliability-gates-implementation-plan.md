@@ -70,6 +70,8 @@ A gate can move from `soak` to `blocking` when:
 - there are zero unexplained flakes in the promotion window;
 - any required perf/git-crash budget has measured evidence.
 
+The manifest also allows `accepted-gap` for explicitly deferred reliability work with a named owner and `deprecated` for gates superseded by a stronger invariant or removed product surface. Those levels should stay visible in the manifest so factory review can distinguish intentional gaps from missing coverage.
+
 ## Factory Contract
 
 `brennan-yolo-lite`, `review-code`, `perf`, and `git-crash-perf` should treat the manifest as the source of truth.
