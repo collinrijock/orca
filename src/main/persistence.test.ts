@@ -1122,6 +1122,31 @@ describe('Store', () => {
     expect(onDisk?.port).toBe(2222)
   })
 
+  it('preserves a user-entered 3-hour bounded timeout through add and disk round-trip', async () => {
+    // Why: the legacy-default (10800s) strip is a one-time load migration only.
+    // A user who deliberately picks a bounded 3-hour timeout via the form must
+    // keep it — dropping it silently converts it to unlimited (until reset).
+    const store = await createStore()
+    store.addSshTarget({
+      id: 'ssh-explicit-3h',
+      label: 'explicit-3h',
+      configHost: 'explicit-3h',
+      host: '10.0.0.9',
+      port: 22,
+      username: 'dev',
+      relayGracePeriodSeconds: LEGACY_DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS
+    })
+
+    expect(store.getSshTarget('ssh-explicit-3h')?.relayGracePeriodSeconds).toBe(
+      LEGACY_DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS
+    )
+
+    store.flush()
+    const persisted = readDataFile() as { sshTargets?: Record<string, unknown>[] }
+    const onDisk = persisted.sshTargets?.find((t) => t.id === 'ssh-explicit-3h')
+    expect(onDisk?.relayGracePeriodSeconds).toBe(LEGACY_DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS)
+  })
+
   it('upserts ~/.ssh/config through the real store: rotated port updates in place and persists', async () => {
     loadUserSshConfigMock.mockReturnValue([{ host: 'cluster' }])
     const candidate = (port: number, id: string) => [

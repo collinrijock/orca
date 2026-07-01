@@ -1014,13 +1014,23 @@ function normalizeSshTarget(t: SshTarget): SshTarget {
     ...target,
     configHost: target.configHost ?? target.label ?? target.host
   }
-  // Why: the old SSH form eagerly persisted 10800 even when the user had not
-  // chosen a timeout; treat that legacy default as the new implicit default.
-  if (
-    relayGracePeriodSeconds !== undefined &&
-    relayGracePeriodSeconds !== LEGACY_DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS
-  ) {
+  if (relayGracePeriodSeconds !== undefined) {
     normalized.relayGracePeriodSeconds = relayGracePeriodSeconds
+  }
+  return normalized
+}
+
+// Why: the old SSH form eagerly persisted 10800 even when the user had not
+// chosen a timeout. Treat that legacy default as the new implicit default —
+// but ONLY as a one-time migration of already-persisted state on load. The
+// live add/update/get paths must not run this, or a user who deliberately
+// picks a 3-hour (10800s) bounded timeout has it silently discarded.
+function migrateLegacySshTargetOnLoad(t: SshTarget): SshTarget {
+  const normalized = normalizeSshTarget(t)
+  if (normalized.relayGracePeriodSeconds === LEGACY_DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS) {
+    const { relayGracePeriodSeconds: _legacyDefault, ...rest } = normalized
+    void _legacyDefault
+    return rest
   }
   return normalized
 }
@@ -3150,7 +3160,7 @@ export class Store {
             parsed.workspaceSessionsByHostId,
             defaults.workspaceSession
           ),
-          sshTargets: (parsed.sshTargets ?? []).map(normalizeSshTarget),
+          sshTargets: (parsed.sshTargets ?? []).map(migrateLegacySshTargetOnLoad),
           sshRemotePtyLeases: (parsed.sshRemotePtyLeases ?? [])
             .map(normalizeSshRemotePtyLease)
             .filter((lease): lease is SshRemotePtyLease => lease !== null),
