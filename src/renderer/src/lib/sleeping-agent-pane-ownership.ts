@@ -1,5 +1,9 @@
 import type { useAppStore } from '@/store'
 import {
+  AGENT_STATUS_STALE_AFTER_MS,
+  type AgentStatusEntry
+} from '../../../shared/agent-status-types'
+import {
   isResumableTuiAgent,
   type AgentProviderSessionMetadata,
   type ResumableTuiAgent,
@@ -47,6 +51,10 @@ function findTerminalTabWorktreeId(
 function getTabIdFromPaneKey(paneKey: string): string | undefined {
   const separator = paneKey.indexOf(':')
   return separator > 0 ? paneKey.slice(0, separator) : undefined
+}
+
+function isFreshProviderSessionClaim(entry: AgentStatusEntry): boolean {
+  return Date.now() - entry.updatedAt <= AGENT_STATUS_STALE_AFTER_MS
 }
 
 function addClaimKey(
@@ -105,10 +113,15 @@ export function getQueuedOrPendingProviderSessionClaimKeys(
     if (!entry.providerSession || !isResumableTuiAgent(entry.agentType) || entry.state === 'done') {
       continue
     }
-    const entryWorktreeId =
-      entry.worktreeId ??
-      findTerminalTabWorktreeId(state.tabsByWorktree, entry.tabId ?? getTabIdFromPaneKey(paneKey))
+    const tabWorktreeId = findTerminalTabWorktreeId(
+      state.tabsByWorktree,
+      entry.tabId ?? getTabIdFromPaneKey(paneKey)
+    )
+    const entryWorktreeId = tabWorktreeId ?? entry.worktreeId
     if (entryWorktreeId !== worktreeId) {
+      continue
+    }
+    if (!tabWorktreeId && !isFreshProviderSessionClaim(entry)) {
       continue
     }
     addClaimKey(keys, {

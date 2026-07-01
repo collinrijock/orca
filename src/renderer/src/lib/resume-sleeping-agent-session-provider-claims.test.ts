@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
+import { AGENT_STATUS_STALE_AFTER_MS } from '../../../shared/agent-status-types'
 import { makePaneKey } from '../../../shared/stable-pane-id'
 import { useAppStore } from '@/store'
 import { resumeSleepingAgentSessionsForWorktree } from './resume-sleeping-agent-session'
@@ -239,6 +240,30 @@ describe('resumeSleepingAgentSessionsForWorktree provider claims', () => {
     const state = useAppStore.getState()
     expect(launched).toBe(0)
     expect(state.tabsByWorktree['wt-1']).toHaveLength(1)
+    expect(state.sleepingAgentSessionsByPaneKey[record.paneKey]).toBeUndefined()
+  })
+
+  it('does not let a stale orphan live status clear a resumable record', () => {
+    const paneKey = makePaneKey('missing-tab', LEAF_ID)
+    const record = makeRecord()
+    useAppStore.setState({
+      tabsByWorktree: { 'wt-1': [] },
+      agentStatusByPaneKey: {
+        [paneKey]: {
+          ...makeLiveAgentStatus(paneKey, 'sess-1'),
+          tabId: 'missing-tab',
+          updatedAt: Date.now() - AGENT_STATUS_STALE_AFTER_MS - 1
+        }
+      },
+      sleepingAgentSessionsByPaneKey: { [record.paneKey]: record }
+    } as never)
+
+    const launched = resumeSleepingAgentSessionsForWorktree('wt-1')
+
+    const state = useAppStore.getState()
+    const resumedTab = state.tabsByWorktree['wt-1']?.[0]
+    expect(launched).toBe(1)
+    expect(resumedTab?.launchAgent).toBe('claude')
     expect(state.sleepingAgentSessionsByPaneKey[record.paneKey]).toBeUndefined()
   })
 
