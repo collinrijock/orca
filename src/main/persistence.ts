@@ -325,6 +325,33 @@ function getDataFile(): string {
   return _dataFile
 }
 
+// Why a sidecar: githubCache is a refetchable 5-min-TTL poll cache whose
+// fetchedAt stamps change on every refresh — keeping it inside orca-data.json
+// made every poll cycle rewrite the whole multi-MB durable state (defeating
+// the content-hash guard by design). It lives in memory during the session
+// and is snapshotted here best-effort at quit so PR/issue badges still paint
+// instantly on the next launch. Loss of this file costs nothing.
+function getGithubCacheFile(): string {
+  return join(dirname(getDataFile()), 'orca-github-cache.json')
+}
+
+function readGithubCacheSnapshot(): PersistedState['githubCache'] | null {
+  try {
+    const parsed = JSON.parse(readFileSync(getGithubCacheFile(), 'utf-8')) as unknown
+    if (
+      parsed &&
+      typeof parsed === 'object' &&
+      typeof (parsed as { pr?: unknown }).pr === 'object' &&
+      typeof (parsed as { issue?: unknown }).issue === 'object'
+    ) {
+      return parsed as PersistedState['githubCache']
+    }
+  } catch {
+    // Missing or corrupt snapshot: start with an empty cache and refetch.
+  }
+  return null
+}
+
 /**
  * Return the userData directory captured at initDataPath() time, before
  * app.setName() can change how app.getPath('userData') resolves.
@@ -2451,6 +2478,7 @@ export class Store {
   // on-disk bytes differ even for identical state.
   private lastWrittenStateHash: string | null = null
   private firstPendingSaveAt: number | null = null
+  private githubCacheDirty = false
   private gitUsernameCache = new Map<string, string>()
   private loadNeedsSave = false
   private settingsChangeListeners = new Set<
@@ -3294,6 +3322,24 @@ export class Store {
     result = folderScopeConnectionMigration.state
 
     const migrated = this.migrateTelemetry(result, fileExistedOnLoad)
+
+    // githubCache lives in a sidecar file now (see getGithubCacheFile). A
+    // legacy in-file cache (pre-sidecar build, or a downgrade round-trip) is
+    // kept as this session's seed and stripped from the durable file by the
+    // save scheduled below; otherwise seed from the sidecar snapshot.
+    const legacyCache = migrated.githubCache
+    const hasLegacyCache =
+      Object.keys(legacyCache?.pr ?? {}).length > 0 ||
+      Object.keys(legacyCache?.issue ?? {}).length > 0
+    if (hasLegacyCache) {
+      this.loadNeedsSave = true
+      // Why: mark dirty so the first flush writes the sidecar even if no
+      // poll refresh happens this session — the seed survives the migration.
+      this.githubCacheDirty = true
+    } else {
+      migrated.githubCache = readGithubCacheSnapshot() ?? migrated.githubCache
+    }
+
     logPersistenceStartupMilestone('persistence-load-done', {
       repos: migrated.repos.length,
       workspaceSessionBytes: Buffer.byteLength(JSON.stringify(migrated.workspaceSession))
@@ -3403,8 +3449,16 @@ export class Store {
     }
   }
 
+  // Why githubCache is omitted: it is memory-only during the session (see
+  // getGithubCacheFile) — excluding it from both the payload and the hash
+  // keeps cache refreshes from ever touching the durable file.
+  private getDurableState(): Omit<PersistedState, 'githubCache'> {
+    const { githubCache: _memoryOnly, ...durable } = this.state
+    return durable
+  }
+
   private computeStateHash(): string {
-    return createHash('sha1').update(JSON.stringify(this.state)).digest('hex')
+    return createHash('sha1').update(JSON.stringify(this.getDurableState())).digest('hex')
   }
 
   // Why: builds the on-disk payload synchronously so the hash and the
@@ -3414,7 +3468,7 @@ export class Store {
     // Why: secrets must be encrypted on disk. Clone state so the in-memory
     // this.state stays plaintext for the rest of the app.
     const stateToSave = {
-      ...this.state,
+      ...this.getDurableState(),
       settings: {
         ...this.state.settings,
         opencodeSessionCookie: encrypt(this.state.settings.opencodeSessionCookie),
@@ -5241,8 +5295,12 @@ export class Store {
   }
 
   setGitHubCache(cache: PersistedState['githubCache']): void {
+    // Why no scheduleSave: the cache is memory-only during the session and
+    // snapshotted to its sidecar file at flush (quit/reload) time. Every poll
+    // refresh restamps fetchedAt, so persisting here rewrote the whole
+    // durable state file once per poll cycle for refetchable data.
     this.state.githubCache = cache
-    this.scheduleSave()
+    this.githubCacheDirty = true
   }
 
   // ── Workspace Session ─────────────────────────────────────────────
@@ -5946,6 +6004,29 @@ export class Store {
       this.flushOrThrow()
     } catch (err) {
       console.error('[persistence] Failed to flush state:', err)
+    }
+    this.writeGithubCacheSnapshotSync()
+  }
+
+  // Why best-effort: the sidecar is a refetchable cache — a failed write only
+  // costs a cold badge paint on next launch, never data.
+  private writeGithubCacheSnapshotSync(): void {
+    if (!this.githubCacheDirty) {
+      return
+    }
+    const cacheFile = getGithubCacheFile()
+    const tmpFile = `${cacheFile}.${process.pid}.tmp`
+    try {
+      writeFileSync(tmpFile, JSON.stringify(this.state.githubCache), 'utf-8')
+      renameSync(tmpFile, cacheFile)
+      this.githubCacheDirty = false
+    } catch (err) {
+      try {
+        unlinkSync(tmpFile)
+      } catch {
+        // Best-effort cleanup.
+      }
+      console.warn('[persistence] Failed to write github cache snapshot:', err)
     }
   }
 }

@@ -4584,6 +4584,49 @@ describe('Store', () => {
     expect(statSync(dataFile()).ino).toBe(inoBefore)
   })
 
+  // ── GitHub cache sidecar ───────────────────────────────────────────
+
+  it('cache refreshes never rewrite the durable state file', async () => {
+    vi.useFakeTimers()
+    try {
+      const store = await createStore()
+      store.updateUI({ sidebarWidth: 411 })
+      vi.advanceTimersByTime(1000)
+      await store.waitForPendingWrite()
+      const inoBefore = statSync(dataFile()).ino
+      expect((readDataFile() as { githubCache?: unknown }).githubCache).toBeUndefined()
+
+      store.setGitHubCache({ pr: { 'o/r#1': { fetchedAt: 123 } as never }, issue: {} })
+      vi.advanceTimersByTime(6000)
+      await store.waitForPendingWrite()
+
+      expect(statSync(dataFile()).ino).toBe(inoBefore)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('snapshots the cache at flush and seeds the next Store from the sidecar', async () => {
+    const store = await createStore()
+    store.setGitHubCache({ pr: { 'o/r#7': { fetchedAt: 7 } as never }, issue: {} })
+    store.flush()
+    expect(existsSync(join(testState.dir, 'orca-github-cache.json'))).toBe(true)
+
+    const restarted = await createStore()
+    expect(restarted.getGitHubCache().pr['o/r#7']).toEqual({ fetchedAt: 7 })
+  })
+
+  it('keeps a legacy in-file cache as the seed and strips it from disk', async () => {
+    writeDataFile({ githubCache: { pr: { legacy: { fetchedAt: 1 } }, issue: {} } })
+
+    const store = await createStore()
+    expect(store.getGitHubCache().pr.legacy).toEqual({ fetchedAt: 1 })
+
+    // The legacy key marks the state dirty at load; the next write drops it.
+    store.flush()
+    expect((readDataFile() as { githubCache?: unknown }).githubCache).toBeUndefined()
+  })
+
   // ── UI state ───────────────────────────────────────────────────────
 
   it('updateUI merges partial updates', async () => {
