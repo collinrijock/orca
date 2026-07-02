@@ -494,6 +494,34 @@ describe('notes send agent targets', () => {
     ])
   })
 
+  it('does not borrow a stale tab title for an active split pane after another pane has title evidence', () => {
+    const stalePaneKey = makePaneKey(LAUNCH_TAB_ID, LEAF_A)
+    const targets = deriveNotesSendAgentTargets(
+      state({
+        agentStatusByPaneKey: {
+          [stalePaneKey]: entry(stalePaneKey, 'done', OLD_STATUS_UPDATED_AT)
+        },
+        tabsByWorktree: {
+          [WORKTREE_ID]: [tab(LAUNCH_TAB_ID, { title: 'Codex ready', launchAgent: 'codex' })]
+        },
+        terminalLayoutsByTabId: {
+          [LAUNCH_TAB_ID]: splitLayout(LEAF_B, { [LEAF_A]: 'pty-a', [LEAF_B]: 'pty-b' })
+        },
+        runtimePaneTitlesByTabId: { [LAUNCH_TAB_ID]: { 1: 'zsh' } }
+      }),
+      WORKTREE_ID,
+      NOW
+    )
+
+    expect(targets).toEqual([
+      expect.objectContaining({
+        paneKey: stalePaneKey,
+        status: 'disabled',
+        disabledReason: 'Agent status is stale'
+      })
+    ])
+  })
+
   it('skips a launch-agent tab whose active leaf is not a terminal leaf', () => {
     const targets = deriveNotesSendAgentTargets(
       state({

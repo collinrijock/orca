@@ -294,6 +294,37 @@ describe('running agent send targets', () => {
     expect(target).not.toHaveProperty('disabledReason')
   })
 
+  it('treats a missing tab title as absent live title evidence', () => {
+    const paneKey = makePaneKey(TAB_ID, RIGHT_LEAF_ID)
+    const target = resolveRunningAgentSendTarget(
+      state({
+        agentStatusByPaneKey: {
+          [paneKey]: entry(paneKey, 'done')
+        },
+        tabsByWorktree: {
+          [WORKTREE_ID]: [{ ...tab(TAB_ID), title: undefined } as unknown as TerminalTab]
+        },
+        terminalLayoutsByTabId: {
+          [TAB_ID]: {
+            root: { type: 'leaf', leafId: RIGHT_LEAF_ID },
+            activeLeafId: RIGHT_LEAF_ID,
+            expandedLeafId: null,
+            ptyIdsByLeafId: { [RIGHT_LEAF_ID]: 'pty-right' }
+          }
+        }
+      }),
+      WORKTREE_ID,
+      paneKey,
+      NOW
+    )
+
+    expect(target).toMatchObject({
+      paneKey,
+      ptyId: 'pty-right',
+      status: 'eligible'
+    })
+  })
+
   it('keeps stale agent status rows disabled when the live pane title needs permission', () => {
     const stalePaneKey = makePaneKey(TAB_ID, RIGHT_LEAF_ID)
     const target = resolveRunningAgentSendTarget(

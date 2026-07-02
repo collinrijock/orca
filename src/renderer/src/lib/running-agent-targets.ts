@@ -7,7 +7,7 @@ import type { TerminalTab } from '../../../shared/types'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
 import { isExplicitAgentStatusFresh } from './agent-status'
 import { detectAgentSendTitleStatus } from './agent-send-title-status'
-import { resolveRuntimePaneTitleForLeaf } from './runtime-pane-title-leaf-id'
+import { resolveRuntimePaneTitleLeafResolution } from './runtime-pane-title-leaf-id'
 
 export type RunningAgentTargetState = Pick<
   AppState,
@@ -100,10 +100,10 @@ function detectLiveAgentPaneStatus(
 ): ReturnType<typeof detectAgentSendTitleStatus> {
   const layout = state.terminalLayoutsByTabId[tabId]
   const paneTitles = state.runtimePaneTitlesByTabId?.[tabId]
-  const paneTitle = resolveRuntimePaneTitleForLeaf(layout, paneTitles, leafId)
+  const paneTitleResolution = resolveRuntimePaneTitleLeafResolution(layout, paneTitles, leafId)
   // Why: runtime pane titles are the freshest title signal for split panes; use
   // the tab title only before the runtime has reported a pane title for the leaf.
-  const title = paneTitle ?? (paneTitles && Object.keys(paneTitles).length > 0 ? null : tabTitle)
+  const title = paneTitleResolution.title ?? (paneTitleResolution.hasAnyPaneTitle ? null : tabTitle)
   if (title === null) {
     return null
   }

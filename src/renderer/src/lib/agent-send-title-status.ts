@@ -5,8 +5,8 @@ const CLAUDE_IDLE_PREFIX = '\u2733'
 const GEMINI_IDLE_PREFIX = '\u25c7'
 const PI_IDLE_PREFIX = '\u03c0 - '
 
-export function detectAgentSendTitleStatus(title: string | null): AgentStatus | null {
-  if (title === null || getAgentLabel(title) === null) {
+export function detectAgentSendTitleStatus(title: string | null | undefined): AgentStatus | null {
+  if (!title || getAgentLabel(title) === null) {
     return null
   }
 

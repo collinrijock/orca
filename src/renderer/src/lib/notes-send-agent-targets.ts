@@ -3,7 +3,10 @@ import type { AppState } from '@/store/types'
 import { isTerminalLeafId, makePaneKey } from '../../../shared/stable-pane-id'
 import type { TerminalTab } from '../../../shared/types'
 import { detectAgentSendTitleStatus } from './agent-send-title-status'
-import { resolveRuntimePaneTitleForLeaf } from './runtime-pane-title-leaf-id'
+import {
+  resolveRuntimePaneTitleLeafResolution,
+  type RuntimePaneTitleLeafResolution
+} from './runtime-pane-title-leaf-id'
 import {
   deriveRunningAgentSendTargets,
   type RunningAgentTargetState
@@ -22,12 +25,18 @@ export type NotesSendAgentTarget = {
   disabledReason?: string
 }
 
-function detectLaunchAgentPaneStatus(paneTitle: string | null, tabTitle: string) {
-  if (paneTitle !== null) {
-    return detectAgentSendTitleStatus(paneTitle)
+function detectLaunchAgentPaneStatus(
+  paneTitleResolution: RuntimePaneTitleLeafResolution,
+  tabTitle: string
+) {
+  if (paneTitleResolution.title !== null) {
+    return detectAgentSendTitleStatus(paneTitleResolution.title)
   }
   // Why: mirror isTerminalRunningAgent — the OSC-enriched tab title only counts
   // when the leaf has no runtime pane title of its own yet.
+  if (paneTitleResolution.hasAnyPaneTitle) {
+    return null
+  }
   return detectAgentSendTitleStatus(tabTitle)
 }
 
@@ -104,12 +113,9 @@ function deriveLaunchAgentTarget(
     return null
   }
 
-  const paneTitle = resolveRuntimePaneTitleForLeaf(
-    layout,
-    state.runtimePaneTitlesByTabId[tab.id],
-    leafId
-  )
-  const launchStatus = detectLaunchAgentPaneStatus(paneTitle, tab.title)
+  const paneTitles = state.runtimePaneTitlesByTabId[tab.id]
+  const paneTitleResolution = resolveRuntimePaneTitleLeafResolution(layout, paneTitles, leafId)
+  const launchStatus = detectLaunchAgentPaneStatus(paneTitleResolution, tab.title)
   if (!launchStatus) {
     // Why: launchAgent is set the instant Orca spawns the tab, but the runtime
     // only accepts a send once the pane reads as an agent. Skipping until the
