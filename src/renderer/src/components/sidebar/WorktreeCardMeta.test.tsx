@@ -106,6 +106,7 @@ describe('WorktreeCardDetailsHover', () => {
     expect(identityHeaderTag).not.toContain('border-l')
     expect(identityHeaderTag).not.toContain('pl-2')
     expect(markup).toContain('data-worktree-title-inline-rename=""')
+    expect(markup).toContain('cursor-text text-[13px] font-semibold')
     expect(markup).toContain('Fix stale GH PR')
     expect(markup).toContain('border-l border-border/70 pl-3')
   })

@@ -40,11 +40,11 @@ export function WorktreeCardHoverIdentityHeader({
           editingPresentation="field"
           wrapTitle
           className={cn(
-            'text-[13px] font-semibold leading-snug text-foreground',
+            'cursor-text text-[13px] font-semibold leading-snug text-foreground',
             identityOrder === 'branch-first' && 'mt-1'
           )}
           editingClassName={cn(
-            '-mx-1.5 w-[calc(100%+0.75rem)] text-[13px] leading-snug',
+            '-mx-1.5 w-[calc(100%+0.75rem)] cursor-text text-[13px] leading-snug',
             identityOrder === 'branch-first' && 'mt-1'
           )}
           onEditingChange={onWorkspaceTitleEditingChange}
