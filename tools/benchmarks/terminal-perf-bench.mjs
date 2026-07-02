@@ -459,7 +459,11 @@ function summarizeScenario(name, result) {
   }
   const fields = {}
   const keys = new Set()
-  for (const sample of result.samples) {
+  // Why: a timed-out sample carries its timeout ceiling as the measurement,
+  // which would masquerade as a giant latency in median/p95/max. Timeouts are
+  // reported through the separate timedOut count instead.
+  const completedSamples = result.samples.filter((sample) => !sample.timedOut)
+  for (const sample of completedSamples) {
     for (const [key, value] of Object.entries(sample)) {
       if (typeof value === 'number' && key !== 'index') {
         keys.add(key)
@@ -467,7 +471,7 @@ function summarizeScenario(name, result) {
     }
   }
   for (const key of keys) {
-    fields[key] = summarize(result.samples.map((sample) => sample[key]))
+    fields[key] = summarize(completedSamples.map((sample) => sample[key]))
   }
   const longtasks = result.longtasks ?? []
   return {
@@ -482,14 +486,9 @@ function summarizeScenario(name, result) {
 
 async function main() {
   const args = parseArgs()
-  const fixture = createLocalRepoFixture()
-  const cdpPort = await pickFreePort()
-  const userDataDir = createGpuUserDataDirectory('bench')
-  console.log(`[terminal-perf] fixture=${fixture.baseDir} userData=${userDataDir} cdp=${cdpPort}`)
-  const launched = launchDevApp({ cdpPort, userDataDir })
-  let browser = null
-  let page = null
   const startedAt = Date.now()
+  // Why: the report and clocks exist before any setup so a launch/setup
+  // failure still produces a report and reaches the cleanup below.
   const report = {
     label: args.label,
     startedAt: new Date(startedAt).toISOString(),
@@ -501,7 +500,17 @@ async function main() {
     finalDiagnostics: null,
     cleanupErrors: []
   }
+  let fixture = null
+  let userDataDir = null
+  let launched = null
+  let browser = null
+  let page = null
   try {
+    fixture = createLocalRepoFixture()
+    const cdpPort = await pickFreePort()
+    userDataDir = createGpuUserDataDirectory('bench')
+    console.log(`[terminal-perf] fixture=${fixture.baseDir} userData=${userDataDir} cdp=${cdpPort}`)
+    launched = launchDevApp({ cdpPort, userDataDir })
     const connected = await connectToApp(cdpPort)
     browser = connected.browser
     page = connected.page
@@ -554,16 +563,28 @@ async function main() {
     if (browser) {
       await browser.close().catch(() => undefined)
     }
-    await stopDevApp(launched.child)
-    report.appLogsTail = launched.logs.slice(-80)
-    // Main-process phase attribution (requires ORCA_PTY_SPAWN_TIMING=1 in the
-    // benchmark's environment; launchDevApp inherits it into the app).
-    report.ptySpawnTimings = launched.logs
-      .filter((entry) => entry.line.includes('[pty-spawn-timing]'))
-      .map((entry) => entry.line.slice(entry.line.indexOf('[pty-spawn-timing]')))
+    if (launched) {
+      // Why: a shutdown failure must not abort the rest of teardown — the
+      // report still gets written and temp dirs still get removed.
+      try {
+        await stopDevApp(launched.child)
+      } catch (error) {
+        report.cleanupErrors.push(error instanceof Error ? error.message : String(error))
+      }
+      report.appLogsTail = launched.logs.slice(-80)
+      // Main-process phase attribution (requires ORCA_PTY_SPAWN_TIMING=1 in the
+      // benchmark's environment; launchDevApp inherits it into the app).
+      report.ptySpawnTimings = launched.logs
+        .filter((entry) => entry.line.includes('[pty-spawn-timing]'))
+        .map((entry) => entry.line.slice(entry.line.indexOf('[pty-spawn-timing]')))
+    }
     if (!args.keep) {
-      safeRemoveLocalDirectory(fixture.baseDir, report.cleanupErrors)
-      safeRemoveLocalDirectory(userDataDir, report.cleanupErrors)
+      if (fixture) {
+        safeRemoveLocalDirectory(fixture.baseDir, report.cleanupErrors)
+      }
+      if (userDataDir) {
+        safeRemoveLocalDirectory(userDataDir, report.cleanupErrors)
+      }
     }
     const stamp = new Date(startedAt).toISOString().replace(/[:.]/g, '-')
     const reportPath = path.resolve(

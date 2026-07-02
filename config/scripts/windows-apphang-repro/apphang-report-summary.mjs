@@ -64,6 +64,7 @@ export function summarizeResult(result) {
     gpuMode: result.gpuMode,
     reproduced: result.reproduced,
     reproductionReason: result.reproductionReason,
+    harnessError: result.harnessError ?? null,
     elapsedMs: result.elapsedMs,
     sampleCount: samples.length,
     maxActivationMs,

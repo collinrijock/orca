@@ -278,7 +278,31 @@ async function killActivePty(page) {
   )
 }
 
+async function resetRendererProbe(page) {
+  // Why: probe drift is cumulative since installation; without a per-cycle
+  // reset, one startup/setup stall gets re-reported as a hang in every
+  // later cycle's rendererMaxDriftMs check.
+  await runWithTimeout(
+    'renderer probe reset',
+    () =>
+      page.evaluate(() => {
+        const probe = globalThis.__orcaApphangProbe?.probe
+        if (!probe) {
+          return
+        }
+        const now = performance.now()
+        probe.last = now
+        probe.lastTickAt = now
+        probe.startedAt = now
+        probe.maxDriftMs = 0
+        probe.samples = 0
+      }),
+    rendererActionTimeoutMs
+  )
+}
+
 async function runActivationCycle(page, target, args) {
+  await resetRendererProbe(page)
   const marker = `ORCA_APPHANG_${target.index}_${Date.now()}`
   const cycleStartedAt = Date.now()
   const activationStartedAt = Date.now()
@@ -381,6 +405,7 @@ export async function runGpuMode(gpuMode, args, fixture) {
     gpuMode,
     reproduced: false,
     reproductionReason: null,
+    harnessError: null,
     startedAt,
     elapsedMs: null,
     cdpPort,
@@ -438,9 +463,10 @@ export async function runGpuMode(gpuMode, args, fixture) {
       result.reproductionReason = error.message
       result.samples.push(error.evidence)
     } else {
-      result.reproduced = true
-      result.reproductionReason =
-        error instanceof Error ? error.stack || error.message : String(error)
+      // Why: setup/CDP/selector failures are inconclusive, not hang evidence.
+      // Conflating them with `reproduced` lets --expect=repro pass on a broken
+      // harness; callers treat harnessError as a hard failure instead.
+      result.harnessError = error instanceof Error ? error.stack || error.message : String(error)
     }
   } finally {
     result.elapsedMs = Date.now() - startedAt

@@ -60,12 +60,16 @@ export function launchDevApp({ cdpPort, userDataDir }) {
     REMOTE_DEBUGGING_PORT: String(cdpPort),
     VITE_EXPOSE_STORE: 'true'
   })
-  const child = spawn(process.execPath, ['config/scripts/run-electron-vite-dev.mjs'], {
-    cwd: rootDir,
-    env,
-    stdio: ['ignore', 'pipe', 'pipe'],
-    windowsHide: true
-  })
+  const child = spawn(
+    process.execPath,
+    [path.join('config', 'scripts', 'run-electron-vite-dev.mjs')],
+    {
+      cwd: rootDir,
+      env,
+      stdio: ['ignore', 'pipe', 'pipe'],
+      windowsHide: true
+    }
+  )
   const logs = []
   const collect = (source) => (chunk) => {
     const text = chunk.toString()

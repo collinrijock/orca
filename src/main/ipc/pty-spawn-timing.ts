@@ -14,7 +14,8 @@ const noopTiming: PtySpawnTiming = {
 }
 
 export function createPtySpawnTiming(): PtySpawnTiming {
-  if (!process.env.ORCA_PTY_SPAWN_TIMING) {
+  const flag = process.env.ORCA_PTY_SPAWN_TIMING
+  if (!flag || flag === '0' || flag.toLowerCase() === 'false') {
     return noopTiming
   }
   const startedAt = Date.now()

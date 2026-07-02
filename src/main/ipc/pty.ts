@@ -2295,6 +2295,8 @@ export function registerPtyHandlers(
           // not revive a terminal the user explicitly closed.
           finishPtyShutdown(ptyId, connectionId, store)
           runtime?.onPtyExit(ptyId, -1)
+          rememberSyntheticKillExit(ptyId)
+          sendPtyExitToRenderer({ id: ptyId, code: -1 })
           return true
         }
         return false
@@ -2302,16 +2304,25 @@ export function registerPtyHandlers(
       // Why: shutdown() is async but the PtyController interface is sync. Defer
       // cleanup until shutdown resolves so transient SSH/daemon failures don't
       // hide a still-running remote process or local daemon session.
-      void provider
-        .shutdown(ptyId, { immediate: false })
-        .then(() => {
+      //
+      // Same synthetic-exit contract as the renderer pty:kill handler: when the
+      // provider emitted its own exit during shutdown, the exit listener already
+      // delivered runtime + renderer exits — synthesizing again would double-fire.
+      void shutdownProviderAndDetectExit(provider, ptyId, { immediate: false })
+        .then((providerExitObserved) => {
           finishPtyShutdown(ptyId, connectionId, store)
-          runtime?.onPtyExit(ptyId, -1)
+          if (!providerExitObserved) {
+            runtime?.onPtyExit(ptyId, -1)
+            rememberSyntheticKillExit(ptyId)
+            sendPtyExitToRenderer({ id: ptyId, code: -1 })
+          }
         })
         .catch((err) => {
           if (isPtyAlreadyGoneError(err)) {
             finishPtyShutdown(ptyId, connectionId, store)
             runtime?.onPtyExit(ptyId, -1)
+            rememberSyntheticKillExit(ptyId)
+            sendPtyExitToRenderer({ id: ptyId, code: -1 })
             return
           }
           console.warn(
@@ -2338,12 +2349,15 @@ export function registerPtyHandlers(
           // await, but the relay lease must still be tombstoned.
           finishPtyShutdown(ptyId, connectionId, store)
           runtime?.onPtyExit(ptyId, -1)
+          rememberSyntheticKillExit(ptyId)
+          sendPtyExitToRenderer({ id: ptyId, code: -1 })
           return true
         }
         return false
       }
+      let providerExitObserved = false
       try {
-        await provider.shutdown(ptyId, {
+        providerExitObserved = await shutdownProviderAndDetectExit(provider, ptyId, {
           immediate: true,
           keepHistory: opts?.keepHistory ?? false
         })
@@ -2368,7 +2382,11 @@ export function registerPtyHandlers(
         return false
       }
       finishPtyShutdown(ptyId, connectionId, store)
-      runtime?.onPtyExit(ptyId, -1)
+      if (!providerExitObserved) {
+        runtime?.onPtyExit(ptyId, -1)
+        rememberSyntheticKillExit(ptyId)
+        sendPtyExitToRenderer({ id: ptyId, code: -1 })
+      }
       return true
     },
     getForegroundProcess: async (ptyId) => {

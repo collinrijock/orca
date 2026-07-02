@@ -162,6 +162,21 @@ async function main() {
     console.log(JSON.stringify(payload, null, 2))
   }
 
+  // Why: a broken harness run (CDP/setup/selector failure) proves nothing —
+  // it must fail both --expect=repro and --expect=pass rather than being
+  // miscounted as hang evidence or as a clean pass.
+  const harnessErrors = results.filter((result) => result.harnessError)
+  if (harnessErrors.length > 0) {
+    const harnessErrorLines = harnessErrors
+      .map((result) => `  gpu=${result.gpuMode}: ${result.harnessError}`)
+      .join('\n')
+    console.error(
+      `[apphang-repro] Harness failed in ${harnessErrors.length} run(s); result inconclusive:\n${harnessErrorLines}`
+    )
+    if (args.expect !== 'none') {
+      process.exit(1)
+    }
+  }
   const reproduced = results.some((result) => result.reproduced)
   if (args.expect === 'repro' && !reproduced) {
     console.error(
