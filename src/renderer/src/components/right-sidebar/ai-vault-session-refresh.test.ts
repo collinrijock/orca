@@ -105,6 +105,44 @@ describe('useAiVaultSessionRefresh refocus behavior', () => {
     expect(listSessionsMock).toHaveBeenCalledTimes(1)
   })
 
+  it('does not raise the loading flag for refocus refreshes', async () => {
+    await renderHook()
+    await flushMicrotasks()
+
+    let resolveScan: ((result: AiVaultListResult) => void) | null = null
+    listSessionsMock.mockImplementationOnce(
+      () => new Promise<AiVaultListResult>((resolve) => (resolveScan = resolve))
+    )
+    await dispatch(window, 'focus')
+
+    expect(listSessionsMock).toHaveBeenCalledTimes(2)
+    expect(latest?.loading).toBe(false)
+
+    await act(async () => {
+      resolveScan?.({ ...EMPTY_RESULT, scannedAt: '2026-07-01T00:00:01.000Z' })
+    })
+    await flushMicrotasks()
+    expect(latest?.loading).toBe(false)
+  })
+
+  it('skips state updates when a refocus refresh returns the cached snapshot', async () => {
+    await renderHook()
+    await flushMicrotasks()
+    const firstResult = latest?.scanResult
+
+    // Same scannedAt = the main-process cache replayed the applied snapshot.
+    listSessionsMock.mockResolvedValueOnce({ ...EMPTY_RESULT })
+    await dispatch(window, 'focus')
+    expect(latest?.scanResult).toBe(firstResult)
+
+    listSessionsMock.mockResolvedValueOnce({
+      ...EMPTY_RESULT,
+      scannedAt: '2026-07-01T00:00:02.000Z'
+    })
+    await dispatch(window, 'focus')
+    expect(latest?.scanResult).not.toBe(firstResult)
+  })
+
   it('keeps the manual refresh button forcing a cache bypass', async () => {
     await renderHook()
     await flushMicrotasks()

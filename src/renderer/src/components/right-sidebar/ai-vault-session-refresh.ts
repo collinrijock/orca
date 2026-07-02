@@ -3,10 +3,12 @@ import type { AiVaultListResult, AiVaultSession } from '../../../../shared/ai-va
 
 const SESSION_LIMIT = 500
 
+type AiVaultRefreshArgs = { force?: boolean; background?: boolean }
+
 export function useAiVaultSessionRefresh(scopePaths: readonly string[]): {
   error: string | null
   loading: boolean
-  refresh: (args?: { force?: boolean }) => Promise<void>
+  refresh: (args?: AiVaultRefreshArgs) => Promise<void>
   scanResult: AiVaultListResult | null
   sessions: AiVaultSession[]
 } {
@@ -18,25 +20,34 @@ export function useAiVaultSessionRefresh(scopePaths: readonly string[]): {
   const refreshInFlightRef = useRef(false)
   const pendingRefreshRef = useRef(false)
   const pendingForceRef = useRef(false)
+  const pendingBackgroundRef = useRef(true)
+  const lastAppliedScanRef = useRef<{ scopeKey: string; scannedAt: string } | null>(null)
   const mountedRef = useRef(true)
   const scopePathsKey = useMemo(() => scopePaths.join('\n'), [scopePaths])
   const scopePathsRef = useRef<readonly string[]>(scopePaths)
   scopePathsRef.current = scopePaths
 
-  const refresh = useCallback(async (args: { force?: boolean } = {}): Promise<void> => {
+  const refresh = useCallback(async (args: AiVaultRefreshArgs = {}): Promise<void> => {
     // A scope change during an in-flight scan must not be dropped; queue one more
     // scan so the current scoped view is refreshed after the older scan settles.
     if (refreshInFlightRef.current) {
       pendingRefreshRef.current = true
       pendingForceRef.current ||= args.force === true
+      pendingBackgroundRef.current &&= args.background === true
       return
     }
 
     refreshInFlightRef.current = true
     const refreshId = refreshIdRef.current + 1
     refreshIdRef.current = refreshId
-    setLoading(true)
+    // Background (refocus) refreshes usually resolve from the main-process
+    // cache; suppressing the loading flag avoids a spinner flash on every
+    // return to the app.
+    if (args.background !== true) {
+      setLoading(true)
+    }
     setError(null)
+    const scopeKey = scopePathsRef.current.join('\n')
     try {
       const result = await window.api.aiVault.listSessions({
         limit: SESSION_LIMIT,
@@ -46,6 +57,15 @@ export function useAiVaultSessionRefresh(scopePaths: readonly string[]): {
       if (!mountedRef.current || refreshIdRef.current !== refreshId) {
         return
       }
+      // A cache hit returns the snapshot already on screen; skip the state
+      // updates so refocus flips don't force pointless re-renders.
+      if (
+        lastAppliedScanRef.current?.scopeKey === scopeKey &&
+        lastAppliedScanRef.current.scannedAt === result.scannedAt
+      ) {
+        return
+      }
+      lastAppliedScanRef.current = { scopeKey, scannedAt: result.scannedAt }
       setScanResult(result)
       setSessions(result.sessions)
     } catch (err) {
@@ -60,8 +80,11 @@ export function useAiVaultSessionRefresh(scopePaths: readonly string[]): {
       if (pendingRefreshRef.current && mountedRef.current) {
         pendingRefreshRef.current = false
         const force = pendingForceRef.current
+        // The queued refresh is background-only if every queued caller was.
+        const background = pendingBackgroundRef.current
         pendingForceRef.current = false
-        void refresh({ force })
+        pendingBackgroundRef.current = true
+        void refresh({ force, background })
       }
     }
     // Deps are intentionally empty: refresh reads changing values through refs
@@ -91,7 +114,7 @@ export function useAiVaultSessionRefresh(scopePaths: readonly string[]): {
       if (document.visibilityState !== 'visible') {
         return
       }
-      void refresh()
+      void refresh({ background: true })
     }
     window.addEventListener('focus', onRefocus)
     document.addEventListener('visibilitychange', onRefocus)
