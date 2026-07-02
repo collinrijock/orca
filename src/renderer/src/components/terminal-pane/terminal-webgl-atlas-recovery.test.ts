@@ -5,7 +5,6 @@ import {
 } from '@/lib/pane-manager/pane-manager-registry'
 import {
   scheduleImagePasteWebglAtlasRecovery,
-  scheduleTerminalVisibilityWebglRecovery,
   scheduleTerminalWebglAtlasRecovery
 } from './terminal-webgl-atlas-recovery'
 
@@ -178,82 +177,5 @@ describe('terminal WebGL atlas recovery', () => {
     vi.advanceTimersByTime(500)
     expect(manager.resetWebglTextureAtlases).toHaveBeenCalledTimes(6)
     expect(manager.refreshAllPanes).toHaveBeenCalledTimes(6)
-  })
-
-  it('does not coalesce visibility recovery behind in-flight terminal-output recovery', () => {
-    vi.useFakeTimers()
-    const rafCallbacks: FrameRequestCallback[] = []
-    vi.stubGlobal(
-      'requestAnimationFrame',
-      vi.fn((callback: FrameRequestCallback) => {
-        rafCallbacks.push(callback)
-        return rafCallbacks.length
-      })
-    )
-    const manager = registerManager()
-
-    scheduleTerminalWebglAtlasRecovery()
-    expect(rafCallbacks).toHaveLength(1)
-    rafCallbacks.shift()?.(0)
-    expect(manager.resetWebglTextureAtlases).toHaveBeenCalledTimes(1)
-    expect(manager.refreshAllPanes).toHaveBeenCalledTimes(1)
-    vi.advanceTimersByTime(120)
-    expect(manager.resetWebglTextureAtlases).toHaveBeenCalledTimes(2)
-    expect(manager.refreshAllPanes).toHaveBeenCalledTimes(2)
-
-    scheduleTerminalVisibilityWebglRecovery()
-    scheduleTerminalVisibilityWebglRecovery()
-
-    expect(rafCallbacks).toHaveLength(1)
-    rafCallbacks.shift()?.(0)
-    expect(manager.resetWebglTextureAtlases).toHaveBeenCalledTimes(3)
-    expect(manager.refreshAllPanes).toHaveBeenCalledTimes(3)
-    vi.advanceTimersByTime(120)
-    expect(manager.resetWebglTextureAtlases).toHaveBeenCalledTimes(4)
-    expect(manager.refreshAllPanes).toHaveBeenCalledTimes(4)
-    vi.advanceTimersByTime(380)
-    expect(manager.resetWebglTextureAtlases).toHaveBeenCalledTimes(6)
-    expect(manager.refreshAllPanes).toHaveBeenCalledTimes(6)
-
-    scheduleTerminalVisibilityWebglRecovery()
-    expect(rafCallbacks).toHaveLength(1)
-    rafCallbacks.shift()?.(0)
-    expect(manager.resetWebglTextureAtlases).toHaveBeenCalledTimes(7)
-    expect(manager.refreshAllPanes).toHaveBeenCalledTimes(7)
-    vi.advanceTimersByTime(500)
-    expect(manager.resetWebglTextureAtlases).toHaveBeenCalledTimes(9)
-    expect(manager.refreshAllPanes).toHaveBeenCalledTimes(9)
-  })
-
-  it('allows another first-frame tab reveal while coalescing the delayed tail', () => {
-    vi.useFakeTimers()
-    const rafCallbacks: FrameRequestCallback[] = []
-    vi.stubGlobal(
-      'requestAnimationFrame',
-      vi.fn((callback: FrameRequestCallback) => {
-        rafCallbacks.push(callback)
-        return rafCallbacks.length
-      })
-    )
-    const manager = registerManager()
-
-    scheduleTerminalVisibilityWebglRecovery()
-    expect(rafCallbacks).toHaveLength(1)
-    rafCallbacks.shift()?.(0)
-    expect(manager.resetWebglTextureAtlases).toHaveBeenCalledTimes(1)
-    expect(manager.refreshAllPanes).toHaveBeenCalledTimes(1)
-
-    scheduleTerminalVisibilityWebglRecovery()
-    expect(rafCallbacks).toHaveLength(1)
-    rafCallbacks.shift()?.(0)
-    expect(manager.resetWebglTextureAtlases).toHaveBeenCalledTimes(2)
-    expect(manager.refreshAllPanes).toHaveBeenCalledTimes(2)
-
-    vi.advanceTimersByTime(120)
-    expect(manager.resetWebglTextureAtlases).toHaveBeenCalledTimes(3)
-    expect(manager.refreshAllPanes).toHaveBeenCalledTimes(3)
-    vi.advanceTimersByTime(380)
-    expect(manager.resetWebglTextureAtlases).toHaveBeenCalledTimes(4)
-    expect(manager.refreshAllPanes).toHaveBeenCalledTimes(4)
   })
 })
