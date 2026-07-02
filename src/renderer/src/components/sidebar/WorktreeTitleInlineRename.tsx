@@ -180,6 +180,13 @@ export function WorktreeTitleInlineRename({
     event.stopPropagation()
   }, [])
 
+  const stopInputDragEvent = useCallback((event: React.DragEvent<HTMLInputElement>) => {
+    // Why: selected rename text can become a drag target, which flips the cursor
+    // away from the I-beam while the title editor is active.
+    event.preventDefault()
+    event.stopPropagation()
+  }, [])
+
   const startRename = useCallback(
     (event: React.MouseEvent<HTMLElement>) => {
       if (disabled) {
@@ -263,7 +270,7 @@ export function WorktreeTitleInlineRename({
         data-worktree-title-inline-rename="editing"
       >
         <span
-          className="invisible col-start-1 row-start-1 min-w-0 truncate whitespace-pre"
+          className="pointer-events-none invisible col-start-1 row-start-1 min-w-0 truncate whitespace-pre"
           aria-hidden="true"
         >
           {displayName}
@@ -273,6 +280,7 @@ export function WorktreeTitleInlineRename({
           value={value}
           style={{ font: 'inherit' }}
           disabled={saving}
+          draggable={false}
           spellCheck={false}
           aria-label={translate(
             'auto.components.sidebar.WorktreeTitleInlineRename.bff3bdd00c',
@@ -283,10 +291,11 @@ export function WorktreeTitleInlineRename({
           onBlur={() => void commitRename()}
           onClick={stopCardEvent}
           onDoubleClick={stopCardEvent}
+          onDragStart={stopInputDragEvent}
           onPointerDown={stopCardEvent}
           onKeyDown={handleKeyDown}
           className={cn(
-            'col-start-1 row-start-1 min-w-0 select-text truncate text-foreground outline-none',
+            'col-start-1 row-start-1 min-w-0 cursor-text select-text truncate text-foreground outline-none',
             editingInputClassName,
             saving && savingInputClassName,
             inputClassName

@@ -213,14 +213,28 @@ describe('WorktreeCardDetailsHover interactions', () => {
       title?.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, cancelable: true }))
     })
     const input = container.querySelector('[data-worktree-title-rename-input]')
+    const sizingTitle = container.querySelector(
+      '[data-worktree-title-inline-rename="editing"] [aria-hidden="true"]'
+    )
 
     expect(identityHeader?.className).toContain('cursor-text')
     expect(input).not.toBeNull()
+    expect(input?.className).toContain('cursor-text')
     expect(input?.className).toContain('select-text')
+    expect(sizingTitle?.className).toContain('pointer-events-none')
+    expect(input?.getAttribute('draggable')).toBe('false')
     expect(input?.className).toContain('bg-input/40')
     expect(input?.className).toContain('rounded-sm')
     expect(input?.className).toContain('selection:bg-[Highlight]')
     expect(input?.className).toContain('focus-visible:ring-[1px]')
+
+    const dragStart = new DragEvent('dragstart', { bubbles: true, cancelable: true })
+
+    act(() => {
+      input?.dispatchEvent(dragStart)
+    })
+
+    expect(dragStart.defaultPrevented).toBe(true)
 
     act(() => {
       interactionMocks.onHoverOpenChange?.(false)
