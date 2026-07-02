@@ -11,7 +11,7 @@ const mocks = vi.hoisted(() => ({
   recordRendererCrashBreadcrumb: vi.fn()
 }))
 
-vi.mock('@/lib/crash-diagnostics', () => ({
+vi.mock('@/lib/crash-breadcrumb-recorder', () => ({
   recordRendererCrashBreadcrumb: mocks.recordRendererCrashBreadcrumb
 }))
 

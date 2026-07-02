@@ -12,7 +12,7 @@ import {
   enforceTerminalWriteScrollIntent
 } from './terminal-scroll-intent'
 import { runGuardedWriteCompletionStep } from './xterm-write-callback-guard'
-import { recordRendererCrashBreadcrumb } from '@/lib/crash-diagnostics'
+import { recordRendererCrashBreadcrumb } from '@/lib/crash-breadcrumb-recorder'
 import {
   TERMINAL_OUTPUT_BACKLOG_MIN_CAP_CHARS,
   terminalOutputBacklogCapChars

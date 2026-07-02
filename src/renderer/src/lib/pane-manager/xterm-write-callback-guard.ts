@@ -1,4 +1,4 @@
-import { recordRendererCrashBreadcrumb } from '@/lib/crash-diagnostics'
+import { recordRendererCrashBreadcrumb } from '@/lib/crash-breadcrumb-recorder'
 
 // Why: xterm's WriteBuffer._innerWrite invokes write-completion callbacks with
 // no try/catch; a synchronous throw skips the loop's tail re-schedule, and
