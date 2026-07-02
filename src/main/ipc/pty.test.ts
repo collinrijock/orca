@@ -6742,6 +6742,70 @@ describe('registerPtyHandlers', () => {
     }
   })
 
+  it('caps per-PTY pending output while the renderer is starved and heals via a droppedOutput sentinel', async () => {
+    vi.useFakeTimers()
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const mockProc = createMockProc()
+    spawnMock.mockReturnValue(mockProc.proc)
+
+    try {
+      registerPtyHandlers(mainWindow as never)
+      const spawn = (await handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24,
+        cwd: '/tmp'
+      })) as { id: string }
+      const ackData = getPtyAckDataListener()
+      mainWindow.webContents.send.mockClear()
+
+      // Saturate the renderer in-flight window (512 KB) with no ACKs — the
+      // frozen/starved-renderer shape from the field reports.
+      mockProc.emitData('x'.repeat(600 * 1024))
+      vi.advanceTimersByTime(8)
+      for (let index = 0; index < 32; index++) {
+        vi.advanceTimersByTime(1)
+      }
+
+      // Keep flooding well past the 2 MB per-PTY pending cap. Main must not
+      // buffer this unboundedly (previously: unbounded string concat).
+      mockProc.emitData('y'.repeat(3 * 1024 * 1024))
+      expect(getPtyRendererDeliveryDebugSnapshot()).toMatchObject({
+        pendingPtyCount: 1,
+        pendingChars: 0
+      })
+
+      // Later output while dropped must stay O(1), not start re-accumulating.
+      mockProc.emitData('z'.repeat(64 * 1024))
+      expect(getPtyRendererDeliveryDebugSnapshot()).toMatchObject({
+        pendingPtyCount: 1,
+        pendingChars: 0
+      })
+
+      // Renderer recovers and ACKs: the flush must deliver the droppedOutput
+      // sentinel so the pane repaints from the main-owned snapshot.
+      mainWindow.webContents.send.mockClear()
+      ackData(null, { id: spawn.id, charCount: 512 * 1024 })
+      vi.advanceTimersByTime(8)
+      expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:data', {
+        id: spawn.id,
+        data: '',
+        droppedOutput: true
+      })
+
+      // Fresh output after the sentinel flows normally again.
+      mainWindow.webContents.send.mockClear()
+      mockProc.emitData('back to normal')
+      vi.advanceTimersByTime(8)
+      expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:data', {
+        id: spawn.id,
+        data: 'back to normal'
+      })
+    } finally {
+      errorSpy.mockRestore()
+      vi.useRealTimers()
+    }
+  })
+
   it('forwards only actually in-flight bytes to provider ACK backpressure', async () => {
     vi.useFakeTimers()
     const acknowledgeDataEvent = vi.fn()

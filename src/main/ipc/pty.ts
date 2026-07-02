@@ -1352,6 +1352,7 @@ export function registerPtyHandlers(
     data: string
     startSeq?: number
     containsBackgroundOutput?: boolean
+    droppedOutput?: true
   }
 
   type PtyDataPayload = {
@@ -1360,6 +1361,7 @@ export function registerPtyHandlers(
     seq?: number
     rawLength?: number
     background?: boolean
+    droppedOutput?: boolean
   }
 
   const pendingData = new Map<string, PendingPtyData>()
@@ -1373,6 +1375,12 @@ export function registerPtyHandlers(
   const PTY_BATCH_FLUSH_MAX_WRITES = 2
   const PTY_RENDERER_IN_FLIGHT_HIGH_WATER_CHARS = 512 * 1024
   const PTY_RENDERER_TOTAL_IN_FLIGHT_HIGH_WATER_CHARS = 8 * 1024 * 1024
+  // Why: while the renderer cannot receive (frozen, starved, mid-reload), a
+  // chatty PTY used to grow its pendingData string without bound — main-process
+  // heap ballooning that a renderer reload cannot clear. Beyond this cap the
+  // buffered bytes are dropped and the pane heals from the main-owned buffer
+  // snapshot via the droppedOutput sentinel (renderer hidden-output restore).
+  const PTY_PENDING_DATA_MAX_CHARS_PER_PTY = 2 * 1024 * 1024
   const PTY_RENDERER_INTERACTIVE_RESERVE_CHARS = 256 * 1024
   // Why: active panes need a bounded lane through old hidden bulk output so a
   // keystroke redraw can reach the renderer before every background ACK lands.
@@ -1561,27 +1569,55 @@ export function registerPtyHandlers(
     return [...active, ...background]
   }
 
+  const pendingDataDropWarnedPtys = new Set<string>()
+
+  function dropOversizedPendingPtyData(id: string, pending: PendingPtyData): PendingPtyData {
+    if (
+      pending.droppedOutput === true ||
+      pending.data.length <= PTY_PENDING_DATA_MAX_CHARS_PER_PTY
+    ) {
+      return pending
+    }
+    if (!pendingDataDropWarnedPtys.has(id)) {
+      pendingDataDropWarnedPtys.add(id)
+      console.error(
+        `[pty] dropped ${pending.data.length} buffered chars for ${id}: renderer not receiving and per-PTY pending cap exceeded; pane will restore from the main-owned snapshot`
+      )
+    }
+    // Why empty data, not a trimmed tail: a mid-stream gap would silently
+    // corrupt the pane. The droppedOutput sentinel routes the pane through
+    // hidden-output restore, which repaints from the authoritative main-owned
+    // buffer and realigns with the live stream by sequence.
+    return { data: '', droppedOutput: true }
+  }
+
   function appendPendingPtyData(
+    id: string,
     existing: PendingPtyData | undefined,
     data: string,
     startSeq: number | undefined,
     preservesSeq: boolean,
     containsBackgroundOutput: boolean
   ): PendingPtyData {
+    // Why: once over the cap, stay dropped at O(1) memory until the renderer
+    // can receive again — the restore sentinel supersedes any interim bytes.
+    if (existing?.droppedOutput === true) {
+      return existing
+    }
     const nextContainsBackgroundOutput =
       existing?.containsBackgroundOutput === true || containsBackgroundOutput
     if (!preservesSeq) {
-      return {
+      return dropOversizedPendingPtyData(id, {
         data: (existing?.data ?? '') + data,
         ...(nextContainsBackgroundOutput ? { containsBackgroundOutput: true } : {})
-      }
+      })
     }
     if (!existing) {
-      return {
+      return dropOversizedPendingPtyData(id, {
         data,
         ...(typeof startSeq === 'number' ? { startSeq } : {}),
         ...(nextContainsBackgroundOutput ? { containsBackgroundOutput: true } : {})
-      }
+      })
     }
     const next: PendingPtyData = {
       data: existing.data + data,
@@ -1590,7 +1626,7 @@ export function registerPtyHandlers(
     if (typeof existing.startSeq === 'number') {
       next.startSeq = existing.startSeq
     }
-    return next
+    return dropOversizedPendingPtyData(id, next)
   }
 
   function schedulePendingDataFlush(delayMs: number): void {
@@ -1618,6 +1654,14 @@ export function registerPtyHandlers(
         continue
       }
       pendingData.delete(id)
+      if (pending.droppedOutput === true) {
+        // Why: the buffered bytes were dropped at the pending cap; tell the
+        // renderer so the pane repaints from the main-owned buffer snapshot
+        // instead of continuing a stream with a silent gap.
+        sendPtyDataToRenderer(id, { id, data: '', droppedOutput: true })
+        writes++
+        continue
+      }
       const { data } = pending
       const chunk = data.slice(0, PTY_BATCH_FLUSH_CHUNK_CHARS)
       const remaining = data.slice(PTY_BATCH_FLUSH_CHUNK_CHARS)
@@ -1703,6 +1747,7 @@ export function registerPtyHandlers(
       }
       const existing = pendingData.get(payload.id)
       const pending = appendPendingPtyData(
+        payload.id,
         existing,
         rendererData,
         startSeq,

@@ -923,6 +923,47 @@ describe('pane terminal output scheduler', () => {
     expect(output).not.toContain('x'.repeat(1024))
   })
 
+  it('caps a visible pane backlog the drain cannot keep up with and writes a warning', async () => {
+    // Why: the foreground path was previously uncapped — a flooding visible
+    // TUI on a starved renderer grew queuedChars without bound (field
+    // reports of ~1.5 GB renderer RSS before terminals froze).
+    vi.useFakeTimers()
+    const { writeTerminalOutput } = await loadScheduler()
+    const terminal = createTerminal()
+    const chunk = 'x'.repeat(512 * 1024)
+
+    for (let i = 0; i < 5; i++) {
+      writeTerminalOutput(terminal, chunk, { foreground: true, latencySensitive: false })
+    }
+    writeTerminalOutput(terminal, 'after-cap\r\n', { foreground: true, latencySensitive: false })
+
+    vi.advanceTimersByTime(0)
+
+    const output = terminal.write.mock.calls.map(([data]) => data).join('')
+    expect(output).toContain('Orca skipped a burst of terminal output')
+    expect(output).toContain('after-cap')
+    expect(output).not.toContain('x'.repeat(1024))
+  })
+
+  it('caps a held/coalesced foreground backlog as well', async () => {
+    vi.useFakeTimers()
+    const { writeTerminalOutput } = await loadScheduler()
+    const terminal = createForegroundTerminal()
+    const chunk = 'y'.repeat(512 * 1024)
+
+    // holdForeground engages the synchronized-output hold — the branch a
+    // flooding TUI in sync mode exercises.
+    for (let i = 0; i < 5; i++) {
+      writeTerminalOutput(terminal, chunk, { foreground: true, holdForeground: true })
+    }
+
+    vi.advanceTimersByTime(1_000)
+
+    const output = terminal.write.mock.calls.map(([data]) => data).join('')
+    expect(output).toContain('Orca skipped a burst of terminal output')
+    expect(output).not.toContain('y'.repeat(1024))
+  })
+
   it('caps hidden backlog chunk count even when each chunk is tiny', async () => {
     vi.useFakeTimers()
     const { writeTerminalOutput } = await loadScheduler()

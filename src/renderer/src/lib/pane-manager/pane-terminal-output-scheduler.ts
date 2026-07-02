@@ -91,6 +91,11 @@ const SYNCHRONIZED_OUTPUT_END_SEQUENCE = '\x1b[?2026l'
 // the lossy-backlog warning.
 const BACKGROUND_BACKLOG_WARNING =
   '\x18\x1b[0m\r\n[Orca skipped hidden terminal output because the backlog exceeded 2 MB.]\r\n'
+// Why a separate foreground message: a visible pane hitting the cap means the
+// drain could not keep up with a flood (starved renderer) — the output was
+// skipped, not merely produced while hidden.
+const FOREGROUND_BACKLOG_WARNING =
+  '\x18\x1b[0m\r\n[Orca skipped a burst of terminal output because the backlog exceeded 2 MB.]\r\n'
 
 const queuedByTerminal = new Map<TerminalOutputTarget, QueueEntry>()
 const backlogRecoveryByTerminal = new WeakMap<
@@ -580,12 +585,22 @@ function enqueueChunk(
   recordQueueDebugPressure()
 }
 
-function replaceBacklogWithWarning(entry: QueueEntry): void {
+function queueCapExceeded(entry: QueueEntry): boolean {
+  return (
+    entry.queuedChars > MAX_BACKGROUND_QUEUE_CHARS ||
+    entry.chunks.length - entry.chunkIndex > MAX_BACKGROUND_QUEUE_CHUNKS
+  )
+}
+
+function replaceBacklogWithWarning(
+  entry: QueueEntry,
+  warning: string = BACKGROUND_BACKLOG_WARNING
+): void {
   const shouldNotify = !entry.backgroundBacklogDropped
   clearForegroundHoldSafety(entry)
   entry.chunks = [
     {
-      data: BACKGROUND_BACKLOG_WARNING,
+      data: warning,
       foreground: false,
       forceForegroundRefresh: false,
       followupForegroundRefresh: false,
@@ -593,7 +608,7 @@ function replaceBacklogWithWarning(entry: QueueEntry): void {
     }
   ]
   entry.chunkIndex = 0
-  entry.queuedChars = BACKGROUND_BACKLOG_WARNING.length
+  entry.queuedChars = warning.length
   entry.backgroundBacklogDropped = true
   entry.highPriority = true
   entry.foregroundHold = false
@@ -811,6 +826,13 @@ export function writeTerminalOutput(
         debugState.foregroundWriteCount++
         debugState.deferredForegroundEnqueueCount++
       }
+      // Why: a visible pane's queue was previously uncapped — a flood the
+      // drain can't keep up with ballooned renderer memory without bound.
+      if (queueCapExceeded(queued)) {
+        replaceBacklogWithWarning(queued, FOREGROUND_BACKLOG_WARNING)
+        scheduleDrain(0)
+        return
+      }
       if (options.holdForeground) {
         // Why: synchronized-output start/body chunks contain transient cursor
         // moves. Holding them prevents Chromium from rasterizing those states.
@@ -878,6 +900,9 @@ export function writeTerminalOutput(
         debugState.foregroundWriteCount++
         debugState.deferredForegroundEnqueueCount++
       }
+      if (queueCapExceeded(entry)) {
+        replaceBacklogWithWarning(entry, FOREGROUND_BACKLOG_WARNING)
+      }
       // Why: returning from a hidden window can have megabytes queued. Keep
       // byte order, but drain it asynchronously so the first foreground frame
       // is not pinned behind the entire backlog.
@@ -904,6 +929,9 @@ export function writeTerminalOutput(
       if (debugEnabled) {
         debugState.foregroundWriteCount++
         debugState.deferredForegroundEnqueueCount++
+      }
+      if (queueCapExceeded(queued)) {
+        replaceBacklogWithWarning(queued, FOREGROUND_BACKLOG_WARNING)
       }
       // Why: visible command floods are throughput work, not keystroke echo.
       // Queue them behind a zero-delay drain so one IPC callback cannot pin
@@ -940,10 +968,7 @@ export function writeTerminalOutput(
   enqueueChunk(entry, data, {
     onParsed: options.onParsed
   })
-  if (
-    entry.queuedChars > MAX_BACKGROUND_QUEUE_CHARS ||
-    entry.chunks.length - entry.chunkIndex > MAX_BACKGROUND_QUEUE_CHUNKS
-  ) {
+  if (queueCapExceeded(entry)) {
     replaceBacklogWithWarning(entry)
   }
   if (debugEnabled) {
