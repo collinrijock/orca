@@ -37,6 +37,11 @@ export function startWorkspaceCleanupBackgroundRemoval({
   removalTimeoutMs = DEFAULT_WORKSPACE_CLEANUP_REMOVAL_TIMEOUT_MS
 }: WorkspaceCleanupBackgroundRemovalArgs): void {
   if (candidates.length === 0) {
+    try {
+      onResult?.({ removedIds: [], failures: [] })
+    } catch (callbackError) {
+      console.error('Workspace cleanup result callback failed', callbackError)
+    }
     return
   }
 

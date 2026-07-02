@@ -13,7 +13,10 @@ import type {
   WorkspaceCleanupScanProgress,
   WorkspaceCleanupScanResult
 } from '../../shared/workspace-cleanup'
-import { resolveWorkspaceCleanupActivityWorktree } from './workspace-cleanup-activity'
+import {
+  getPersistedWorkspaceCleanupActivityAt,
+  resolveWorkspaceCleanupActivityWorktree
+} from './workspace-cleanup-activity'
 import {
   buildWorkspaceCleanupCandidate,
   buildWorkspaceCleanupCandidateFromError,
@@ -199,14 +202,6 @@ function shouldResolveBroadWorkspaceCleanupActivity(
     },
     scannedAt
   )
-}
-
-function getPersistedWorkspaceCleanupActivityAt(
-  worktree: Pick<Worktree, 'createdAt' | 'lastActivityAt'>
-): number {
-  const lastActivityAt = Number.isFinite(worktree.lastActivityAt) ? worktree.lastActivityAt : 0
-  const createdAt = Number.isFinite(worktree.createdAt) ? (worktree.createdAt ?? 0) : 0
-  return Math.max(lastActivityAt, createdAt)
 }
 
 async function listCleanupGitWorktrees(

@@ -1,12 +1,11 @@
 import type { WorkspaceCleanupCandidate } from '../../../../shared/workspace-cleanup'
+import type { WorktreeDeleteState } from '@/store/slices/worktrees'
 
-type DeleteState = {
-  isDeleting?: boolean
-}
+type DeletionFlagState = Pick<WorktreeDeleteState, 'isDeleting'>
 
 export function filterWorkspaceCleanupRemovalCandidates(
   candidates: readonly WorkspaceCleanupCandidate[],
-  deleteStateByWorktreeId: Record<string, DeleteState | undefined>
+  deleteStateByWorktreeId: Record<string, DeletionFlagState | undefined>
 ): WorkspaceCleanupCandidate[] {
   return candidates.filter(
     (candidate) => deleteStateByWorktreeId[candidate.worktreeId]?.isDeleting !== true

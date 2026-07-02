@@ -28,6 +28,26 @@ describe('startWorkspaceCleanupBackgroundRemoval', () => {
     vi.useRealTimers()
   })
 
+  it('reports an empty result without starting removal when there are no candidates', async () => {
+    const removeCandidates = vi.fn()
+    const onProgress = vi.fn()
+    const onResult = vi.fn()
+
+    startWorkspaceCleanupBackgroundRemoval({
+      candidates: [],
+      removeCandidates,
+      onProgress,
+      onResult
+    })
+    await settleBackgroundRemoval()
+
+    expect(removeCandidates).not.toHaveBeenCalled()
+    expect(onProgress).not.toHaveBeenCalled()
+    expect(onResult).toHaveBeenCalledWith({ removedIds: [], failures: [] })
+    expect(toast.success).not.toHaveBeenCalled()
+    expect(toast.error).not.toHaveBeenCalled()
+  })
+
   it('reports deletion progress while the slow removal promise is pending', async () => {
     let resolveRemoval: (
       result: Awaited<ReturnType<WorkspaceCleanupBackgroundRemovalArgs['removeCandidates']>>

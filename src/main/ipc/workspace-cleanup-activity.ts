@@ -7,6 +7,14 @@ import { toWindowsWslPath } from '../wsl'
 type StatPath = (targetPath: string) => Promise<{ mtimeMs: number }>
 type ReadTextFile = (targetPath: string) => Promise<string>
 
+export function getPersistedWorkspaceCleanupActivityAt(
+  worktree: Pick<Worktree, 'createdAt' | 'lastActivityAt'>
+): number {
+  const persistedActivityAt = Number.isFinite(worktree.lastActivityAt) ? worktree.lastActivityAt : 0
+  const createdAt = Number.isFinite(worktree.createdAt) ? (worktree.createdAt ?? 0) : 0
+  return Math.max(persistedActivityAt, createdAt)
+}
+
 export async function resolveWorkspaceCleanupActivityWorktree(
   repo: Repo,
   worktree: Worktree,
@@ -35,10 +43,9 @@ async function resolveWorkspaceCleanupActivityAt(
   statPath: StatPath,
   readTextFile: ReadTextFile
 ): Promise<number> {
-  const persistedActivityAt = Number.isFinite(worktree.lastActivityAt) ? worktree.lastActivityAt : 0
-  const createdAt = Number.isFinite(worktree.createdAt) ? (worktree.createdAt ?? 0) : 0
+  const persistedActivityAt = getPersistedWorkspaceCleanupActivityAt(worktree)
   if (repo.connectionId) {
-    return Math.max(persistedActivityAt, createdAt)
+    return persistedActivityAt
   }
 
   const filesystemActivityAt = await getNewestLocalWorktreeStatMtime(
@@ -46,7 +53,7 @@ async function resolveWorkspaceCleanupActivityAt(
     statPath,
     readTextFile
   )
-  return Math.max(persistedActivityAt, createdAt, filesystemActivityAt)
+  return Math.max(persistedActivityAt, filesystemActivityAt)
 }
 
 async function getNewestLocalWorktreeStatMtime(
