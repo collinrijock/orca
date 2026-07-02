@@ -38,6 +38,7 @@ import {
 } from './pane-rendering-control'
 import type { TerminalLeafId } from '../../../../shared/stable-pane-id'
 import { registerLivePaneManager, unregisterLivePaneManager } from './pane-manager-registry'
+import { schedulePaneRevealRepaint } from './pane-reveal-repaint'
 import { PaneIdentityRegistry } from './pane-identity-registry'
 import { closeManagedPane, splitManagedPane } from './pane-split-close'
 import { FIRST_PANE_ID } from '../../../../shared/pane-key'
@@ -288,6 +289,10 @@ export class PaneManager {
 
   resetWebglTextureAtlases(): void {
     resetPaneWebglTextureAtlases(this.panes.values())
+  }
+
+  scheduleRevealRepaint(): void {
+    schedulePaneRevealRepaint(() => this.panes.values())
   }
 
   suspendRendering(): void {
