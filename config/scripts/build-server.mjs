@@ -112,7 +112,7 @@ const serverPkg = {
   version: rootPkg.version,
   description: 'Headless, Electron-free Orca runtime server',
   type: 'commonjs',
-  bin: { 'orca-ide': './orca-ide.js', 'orca-server': './orca-server.js' },
+  bin: { 'orca-ide': './orca-ide.js' },
   main: './orca-server.js',
   // Why: limit the published tarball to the runtime artifacts. Without this npm
   // would include stray files in OUT_DIR (metafile.json, etc.). The prebuilts
@@ -145,7 +145,7 @@ copyFileSync(
   join(OUT_DIR, 'scripts', 'install-node-pty-prebuilt.mjs')
 )
 console.log(
-  `Wrote ${join(OUT_DIR, 'package.json')} (type: commonjs, bin: orca-ide + orca-server, postinstall: prebuilt installer)`
+  `Wrote ${join(OUT_DIR, 'package.json')} (type: commonjs, bin: orca-ide, main: orca-server.js, postinstall: prebuilt installer)`
 )
 
 console.log('\norca server bundles complete.')

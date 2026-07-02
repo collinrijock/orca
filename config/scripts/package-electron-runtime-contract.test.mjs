@@ -360,13 +360,12 @@ describe('Electron runtime package contract', () => {
     expect(tarballStep.run).toContain('^package/orca-ide.js$')
     expect(tarballStep.run).toContain('^package/orca.js$')
     expect(tarballStep.run).toContain('UNSAFE orca bin bundle present')
-    expect(buildServerScript).toContain(
-      "bin: { 'orca-ide': './orca-ide.js', 'orca-server': './orca-server.js' }"
-    )
+    expect(buildServerScript).toContain("bin: { 'orca-ide': './orca-ide.js' }")
     expect(buildServerScript).toContain(
       "files: ['orca-ide.js', 'orca-server.js', 'package.json', 'scripts/', 'prebuilds/']"
     )
     expect(buildServerScript).not.toContain("bin: { orca: './orca.js'")
+    expect(buildServerScript).not.toContain("'orca-server': './orca-server.js'")
     expect(npmPublishJob.steps).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
