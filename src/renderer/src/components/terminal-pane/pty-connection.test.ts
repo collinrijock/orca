@@ -708,7 +708,8 @@ describe('connectPanePty', () => {
           restoreTerminalFit: vi.fn().mockResolvedValue({ restored: true })
         },
         agentStatus: {
-          inferInterrupt: vi.fn().mockResolvedValue(false)
+          inferInterrupt: vi.fn().mockResolvedValue(false),
+          drop: vi.fn()
         }
       }
     }
@@ -1497,6 +1498,7 @@ describe('connectPanePty', () => {
       }),
       'Codex ready'
     )
+    expect(window.api.agentStatus.drop).toHaveBeenCalledWith(paneKey)
   })
 
   it('does not complete a non-Codex row from Codex stream-disconnect text', async () => {
@@ -10423,6 +10425,7 @@ describe('connectPanePty', () => {
       agentType: 'codex',
       lastAssistantMessage: 'Usage limit reached.'
     })
+    expect(window.api.agentStatus.drop).toHaveBeenCalledWith(paneKey)
     vi.advanceTimersByTime(AGENT_TASK_COMPLETE_NOTIFICATION_GRACE_MS)
 
     expect(deps.dispatchNotification).toHaveBeenCalledWith(
@@ -10491,6 +10494,7 @@ describe('connectPanePty', () => {
       agentType: 'codex',
       lastAssistantMessage: 'Connection failed.'
     })
+    expect(window.api.agentStatus.drop).toHaveBeenCalledWith(paneKey)
   })
 
   it('does not dispatch generic spinner completions when process inspection finds no agent', async () => {

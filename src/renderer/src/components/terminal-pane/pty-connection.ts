@@ -1476,6 +1476,11 @@ export function connectPanePty(
     activePanePtyBindingBoundAt = null
     delete pane.container.dataset.ptyId
   }
+  const dropMainAgentStatusCacheAfterSyntheticCompletion = (): void => {
+    // Why: title/output/process repairs are renderer-synthesized; remove any
+    // stale main-hook working snapshot so reloads cannot resurrect it.
+    window.api?.agentStatus?.drop?.(cacheKey)
+  }
 
   const completeWorkingStatusFromCompletionSignal = (
     signal: AgentCompletionStatusRepairSignal
@@ -1511,6 +1516,7 @@ export function connectPanePty(
     // Why: title/process completion can prove a turn ended even when the agent
     // missed its final hook; keep the explicit row in sync before dedupe gates.
     currentState.setAgentStatus(cacheKey, statusPayload, statusTitle)
+    dropMainAgentStatusCacheAfterSyntheticCompletion()
     const storedStatus = useAppStore.getState().agentStatusByPaneKey[cacheKey]
     return typeof storedStatus?.stateStartedAt === 'number'
       ? { ...statusPayload, stateStartedAt: storedStatus.stateStartedAt }
@@ -1841,6 +1847,7 @@ export function connectPanePty(
     // Why: Codex failed turns can finalize the TUI without emitting the managed
     // Stop hook Orca normally uses to clear an explicit working row.
     currentState.setAgentStatus(cacheKey, statusPayload, statusTitle)
+    dropMainAgentStatusCacheAfterSyntheticCompletion()
   }
   const shouldObserveCodexStreamErrorOutput = (): boolean => {
     const currentEntry = useAppStore.getState().agentStatusByPaneKey[cacheKey]
