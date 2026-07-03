@@ -1,5 +1,6 @@
 import { spawn, type ChildProcess } from 'node:child_process'
 import { homedir } from 'node:os'
+import { ORCA_SKILLS_REPOSITORY_URL } from '../../shared/agent-feature-install-commands'
 import type { ManagedAgentSkillName } from '../../shared/skills'
 
 export type ManagedSkillUpdateRunnerResult =
@@ -17,9 +18,24 @@ export function buildManagedSkillUpdateCommand(skillName: ManagedAgentSkillName)
   executable: string
   args: string[]
 } {
+  // Why: `skills update` is unreliable on native Windows; reinstalling from the
+  // same repo source is idempotent and passes the same post-update verification.
+  const args =
+    process.platform === 'win32'
+      ? [
+          '--yes',
+          'skills',
+          'add',
+          ORCA_SKILLS_REPOSITORY_URL,
+          '--skill',
+          skillName,
+          '--global',
+          '--yes'
+        ]
+      : ['--yes', 'skills', 'update', skillName, '--global', '--yes']
   return {
     executable: process.platform === 'win32' ? 'npx.cmd' : 'npx',
-    args: ['--yes', 'skills', 'update', skillName, '--global', '--yes']
+    args
   }
 }
 

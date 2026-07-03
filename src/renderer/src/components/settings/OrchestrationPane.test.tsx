@@ -164,7 +164,8 @@ describe('OrchestrationPane', () => {
     expect(mocks.panelProps.at(-1)).toEqual(
       expect.objectContaining({
         command: INSTALL_COMMAND,
-        installedCommand: UPDATE_COMMAND
+        // Why: this suite mocks a win32 host, where updates reinstall via add.
+        installedCommand: INSTALL_COMMAND
       })
     )
 

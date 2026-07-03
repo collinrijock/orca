@@ -90,6 +90,38 @@ describe('createManagedSkillUpdateRunner', () => {
     )
   })
 
+  it('reinstalls from the repo source instead of skills update on native Windows', async () => {
+    const child = new FakeChildProcess()
+    vi.mocked(spawn).mockReturnValue(child as never)
+    const platform = vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
+    const runner = createManagedSkillUpdateRunner({ cwd: TEST_ALICE_HOME, timeoutMs: 1_000 })
+
+    const resultPromise = runner(ORCHESTRATION_SKILL_NAME)
+    child.emit('close', 0)
+
+    await expect(resultPromise).resolves.toEqual({ status: 'success' })
+    expect(spawn).toHaveBeenCalledWith(
+      'npx.cmd',
+      [
+        '--yes',
+        'skills',
+        'add',
+        'https://github.com/stablyai/orca',
+        '--skill',
+        'orchestration',
+        '--global',
+        '--yes'
+      ],
+      {
+        cwd: TEST_ALICE_HOME,
+        shell: false,
+        stdio: 'ignore',
+        windowsHide: true
+      }
+    )
+    platform.mockRestore()
+  })
+
   it('uses taskkill for Windows process-tree cleanup on timeout', async () => {
     vi.useFakeTimers()
     const child = new FakeChildProcess(123)

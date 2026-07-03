@@ -277,9 +277,20 @@ describe('ManagedSkillUpdateCoordinator safety cases', () => {
       args: ['--yes', 'skills', 'update', 'orchestration', '--global', '--yes']
     })
     const platform = vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
+    // Why: `skills update` is unreliable on native Windows, so the runner
+    // reinstalls from the repo source there instead.
     expect(buildManagedSkillUpdateCommand(ORCHESTRATION_SKILL_NAME)).toEqual({
       executable: 'npx.cmd',
-      args: ['--yes', 'skills', 'update', 'orchestration', '--global', '--yes']
+      args: [
+        '--yes',
+        'skills',
+        'add',
+        'https://github.com/stablyai/orca',
+        '--skill',
+        'orchestration',
+        '--global',
+        '--yes'
+      ]
     })
     platform.mockRestore()
   })

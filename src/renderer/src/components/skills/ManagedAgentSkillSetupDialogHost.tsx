@@ -21,6 +21,7 @@ import {
   type ManagedAgentSkillDialogState
 } from './managed-agent-skill-dialog-state'
 import { AgentSkillSetupPanel } from '@/components/settings/AgentSkillSetupPanel'
+import { buildSkillCommandForRuntime } from '@/components/settings/CliSkillRuntimeSetup'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -126,10 +127,16 @@ export function ManagedAgentSkillSetupDialogHost(): React.JSX.Element | null {
         ? translate('auto.components.skills.ManagedAgentSkillSetupDialogHost.update', 'Update')
         : translate('auto.components.skills.ManagedAgentSkillSetupDialogHost.review', 'Review')
   const contextCopy = active ? getManagedSkillContextCopy(active.context, contextActionLabel) : ''
-  const installedCommand = useMemo(
-    () => (active ? buildAgentFeatureSkillUpdateCommand(active.skillName) : ''),
-    [active]
-  )
+  const installedCommand = useMemo(() => {
+    if (!active) {
+      return ''
+    }
+    // Why: main builds update-kind manual commands host-platform-aware; only
+    // renderer-built fallbacks need the local Windows update->add conversion.
+    return active.manualCommand?.kind === 'update'
+      ? active.manualCommand.command
+      : buildSkillCommandForRuntime(buildAgentFeatureSkillUpdateCommand(active.skillName))
+  }, [active])
 
   const recheck = useCallback(async (): Promise<void> => {
     if (!active || rechecking) {

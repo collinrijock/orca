@@ -100,7 +100,12 @@ function normalizeWindowsSkillUpdateCommand(
   }
 
   const trimmedCommand = command.trim()
-  const updateMatch = /^npx\s+skills\s+update\s+([A-Za-z0-9_-]+)\s+--global$/i.exec(trimmedCommand)
+  // Why: match both the legacy interactive shape and the non-interactive
+  // `npx --yes … --yes` shape emitted by buildAgentFeatureSkillUpdateCommand.
+  const updateMatch =
+    /^npx\s+(?:--yes\s+)?skills\s+update\s+([A-Za-z0-9_-]+)\s+--global(?:\s+--yes)?$/i.exec(
+      trimmedCommand
+    )
   if (!updateMatch) {
     return command
   }

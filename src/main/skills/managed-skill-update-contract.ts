@@ -30,6 +30,14 @@ export function buildManagedSkillManualCommand(
     command:
       kind === 'install'
         ? buildAgentFeatureSkillInstallCommand([skillName])
-        : buildAgentFeatureSkillUpdateCommand(skillName)
+        : buildManagedSkillHostUpdateCommand(skillName)
   }
+}
+
+function buildManagedSkillHostUpdateCommand(skillName: ManagedAgentSkillName): string {
+  // Why: `skills update` is unreliable on native Windows; reinstalling from the
+  // same repo source is idempotent and keeps the manual action working.
+  return process.platform === 'win32'
+    ? buildAgentFeatureSkillInstallCommand([skillName])
+    : buildAgentFeatureSkillUpdateCommand(skillName)
 }

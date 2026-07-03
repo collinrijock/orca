@@ -6,6 +6,7 @@ import {
   lockfile,
   orchestrationRequest
 } from './managed-skill-test-fixtures'
+import { buildManagedSkillManualCommand } from './managed-skill-update-contract'
 import { ManagedSkillUpdateCoordinator } from './managed-skill-updates'
 
 describe('ManagedSkillUpdateCoordinator', () => {
@@ -196,6 +197,17 @@ describe('ManagedSkillUpdateCoordinator', () => {
     expect(updateRunner).toHaveBeenCalledTimes(1)
     expect(discoverHostSkills).toHaveBeenCalledTimes(1)
     expect(readTextFile).toHaveBeenCalledTimes(1)
+  })
+
+  it('serves the repo-source add command for manual updates on native Windows', () => {
+    const platform = vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
+    try {
+      expect(buildManagedSkillManualCommand('update', ORCHESTRATION_SKILL_NAME).command).toBe(
+        'npx --yes skills add https://github.com/stablyai/orca --skill orchestration --global --yes'
+      )
+    } finally {
+      platform.mockRestore()
+    }
   })
 
   it('lets explicit re-checks bypass automatic update cooldown', async () => {

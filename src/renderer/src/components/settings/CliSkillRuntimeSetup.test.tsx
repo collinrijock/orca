@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
-import { buildAgentFeatureSkillInstallCommand } from '../../../../shared/agent-feature-install-commands'
+import {
+  buildAgentFeatureSkillInstallCommand,
+  ORCA_CLI_SKILL_UPDATE_COMMAND,
+  ORCHESTRATION_SKILL_UPDATE_COMMAND
+} from '../../../../shared/agent-feature-install-commands'
 import {
   buildSkillCommandForRuntime,
   buildSkillInstallCommandForRuntime,
@@ -22,18 +26,35 @@ describe('CliSkillRuntimeSetup runtime helpers', () => {
   })
 
   it('wraps WSL skill updates with the same selected distro login shell', () => {
-    const command = buildSkillCommandForRuntime('npx skills update orchestration --global', {
-      runtime: 'wsl',
-      wslDistro: 'Fedora Remix',
-      label: 'WSL Fedora Remix'
-    })
+    const command = buildSkillCommandForRuntime(
+      ORCHESTRATION_SKILL_UPDATE_COMMAND,
+      {
+        runtime: 'wsl',
+        wslDistro: 'Fedora Remix',
+        label: 'WSL Fedora Remix'
+      },
+      'win32'
+    )
 
     expect(command).toContain("wsl.exe -d 'Fedora Remix' -- sh -c")
     expect(command).toContain('getent passwd')
-    expect(command).toContain('npx skills update orchestration --global')
+    expect(command).toContain(ORCHESTRATION_SKILL_UPDATE_COMMAND)
   })
 
   it('reinstalls Windows-host skill updates through the add path', () => {
+    expect(
+      buildSkillCommandForRuntime(
+        ORCHESTRATION_SKILL_UPDATE_COMMAND,
+        {
+          runtime: 'host',
+          label: 'Windows'
+        },
+        'win32'
+      )
+    ).toBe(buildAgentFeatureSkillInstallCommand(['orchestration']))
+  })
+
+  it('reinstalls legacy-shape Windows-host skill updates through the add path', () => {
     expect(
       buildSkillCommandForRuntime(
         'npx skills update orchestration --global',
@@ -47,22 +68,22 @@ describe('CliSkillRuntimeSetup runtime helpers', () => {
   })
 
   it('treats missing runtime as a Windows host fallback for skill updates', () => {
-    expect(
-      buildSkillCommandForRuntime('npx skills update orca-cli --global', undefined, 'win32')
-    ).toBe(buildAgentFeatureSkillInstallCommand(['orca-cli']))
+    expect(buildSkillCommandForRuntime(ORCA_CLI_SKILL_UPDATE_COMMAND, undefined, 'win32')).toBe(
+      buildAgentFeatureSkillInstallCommand(['orca-cli'])
+    )
   })
 
   it('keeps non-Windows host skill updates on the update path', () => {
     expect(
       buildSkillCommandForRuntime(
-        'npx skills update orchestration --global',
+        ORCHESTRATION_SKILL_UPDATE_COMMAND,
         {
           runtime: 'host',
           label: 'This device'
         },
         'linux'
       )
-    ).toBe('npx skills update orchestration --global')
+    ).toBe(ORCHESTRATION_SKILL_UPDATE_COMMAND)
   })
 
   it('preserves the selected WSL distro for skill discovery', () => {
