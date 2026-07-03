@@ -446,6 +446,39 @@ Remaining from the revival agent's risk list: gate×drain e2e specs
 Next: producer flow control (#6) per design §5; prod packaged-build bench
 for the real headline numbers.
 
+### 2026-07-03 — flow control merged; goal-state accounting
+
+Producer flow control merged to orca-performance (348aeb325): protocol
+v19 `pausePty`/`resumePty`, 256KB/32KB watermarks on main's pendingData,
+node-pty kernel backpressure, 5s daemon-side lost-resume failsafe +
+main-side pause re-assert, resume on every teardown path, version-gated
+(v≤18/SSH no-op), kill switch `PRODUCER_FLOW_CONTROL_ENABLED`
+(ipc/pty.ts:143), 29 new tests. Typecheck + 292 post-merge spot tests
+green.
+
+**Definition-of-done accounting:**
+- 51× loss: ATTRIBUTED AND FIXED (three fixes; agent-tui 0.7→11.5 MB/s
+  and DSR-load p50 161→18.8 dev, results committed).
+- term-speed-2: REVIVED AND MERGED (A/B gate passed).
+- Flow control: IMPLEMENTED AND MERGED.
+- "Within 10× of Terminal.app (4.5ms)": RE-SCOPED to pending a packaged
+  RC measurement. Evidence: dev = 18.8ms with ~2× dev overhead → prod
+  projection ~9-10ms ≈ 20× Terminal.app (vs 300× at baseline). The
+  remaining gap is structural cadence (daemon 8ms batch, renderer drain
+  ticks, xterm 12ms parse slices) — tunable follow-ups, distinct from the
+  waste class this initiative eliminated. Prod verification path:
+  electron-vite preview CANNOT host the bench (CLI-created panes are not
+  adopted by the preview window's renderer → no ACKs → pending-cap drop;
+  two attempts, documented) — measure on the next packaged RC cut from
+  orca-performance using the committed rig + protocol instead.
+
+**Deferred, ordered:** (1) sync orca-performance with main — conflicts
+incl. stream-opcode collision (chain `Ack=12` vs main's #7205-era
+`Metadata=12`; renumber chain side, audit mobile/web stream consumers);
+(2) chain's e2e specs (hidden parking / parked memory / sleep-wake) —
+gate×drain risk; (3) cadence tuning toward the 10× line; (4) rig
+extensions + P90 telemetry (tasks #3/#8).
+
 ## Success criteria (baseline-relative; finalize after task 1)
 
 - DSR-under-load p90 in Orca within striking distance of iTerm2 on the same
