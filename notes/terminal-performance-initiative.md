@@ -249,6 +249,38 @@ visible-pane floods to the background drip — check
 gap (13 vs 83 MB/s headless) — likely per-chunk `beforeWrite` side-effect
 scanning; profile after (a).
 
+### 2026-07-03 — THE WHALE: main's retained-tail redraw path is O(tail) per chunk
+
+Parse-clock fix didn't move end-to-end (agent-tui still 0.7 MB/s dev). Layered
+probes (renderer scheduler counters → main whole-method timer → per-section
+timers → targeted micro-benches) attributed it fully:
+
+- Renderer receives only ~350–770 KB/s — it is **starved**, not slow.
+- `OrcaRuntime.onPtyData` consumes **~93% of main's event loop** during the
+  flood (~950 ms/s at ~450 chunks/s ≈ 2.1 ms/chunk).
+- All wrapped sub-calls (OSC scanners, agent detect, watchers, headless
+  track, leaves loop, mobile touch) together: **~3.5%**. The remainder is the
+  pty-record tail block.
+- Micro-bench (`appendNormalizedToTailBuffer` with a real agent-TUI frame
+  containing `ESC[10A ESC[0J`): **0.888 ms/chunk at a 2,000-line tail** — 32×
+  the plain-append path. Cause: `appendNormalizedToMultilineTailBuffer`
+  materializes ~2,001 row objects per chunk (orca-runtime.ts:22324) and
+  `finalizeRetainedTerminalRows` allocates them all again plus runs a
+  trailing-whitespace regex per row (:22458) — ~4k allocations + 2k regexes
+  per tiny chunk, twice the tail length in O(n) passes. Every Claude-Code
+  frame (cursor-up + erase-below) takes this path; plain logs don't — which
+  is exactly the measured agent-tui vs ascii asymmetry.
+
+Chain: TUI flood → O(tail) work per chunk in main → main event loop
+saturates → daemon socket backpressures → renderer starved at ~0.4 MB/s →
+deep queue → 134 ms DSR-under-load.
+
+Fix (in progress): run the existing algorithm on a lazy suffix window (the
+cursor's maximum upward reach, computed from the chunk) with the untouched
+prefix shared by reference; differential fuzz test proves output equality
+against the original implementation. Worst case (pathological full-height
+cursor-up) falls back to today's cost.
+
 ## Success criteria (baseline-relative; finalize after task 1)
 
 - DSR-under-load p90 in Orca within striking distance of iTerm2 on the same
