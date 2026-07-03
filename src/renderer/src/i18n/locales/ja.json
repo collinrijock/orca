@@ -3489,7 +3489,9 @@
           "8401a7a0d0": "1 個の repos",
           "d4f1df62ef": "{{value0}} 個の repos",
           "b4263a2ac4": "{{value1}} で {{value0}} が見つかりました。",
-          "24eda6c8b2": "スキャン中... {{value0}}"
+          "24eda6c8b2": "スキャン中... {{value0}}",
+          "6149d5203f": "選択されている repos がありません。代わりに親フォルダーを開くと、Git 機能なしでエディター、terminal、検索を利用できます。",
+          "e52454b7f6": "フォルダーとして開く"
         },
         "AddRepoRemoteStep": {
           "5b205b5281": "スキャンの停止",
@@ -10216,8 +10218,8 @@
           "title": "カスタムネットワークアドレス",
           "description": "同じ Wi-Fi に接続していないときにスマートフォンから到達できるアドレスを指定します。たとえば Tailscale のホスト名や静的 IP です。",
           "label": "アドレス",
-          "placeholder": "my-mac.ts.net または 192.168.1.50",
-          "hint": "IP アドレスまたは Tailscale のホスト名（.ts.net で終わる）を入力してください。",
+          "placeholder": "my-mac.ts.net、home.example.com、または 192.168.1.50",
+          "hint": "IP アドレスまたはホスト名（Tailscale の MagicDNS 名、DDNS ドメイン、LAN のホスト名など）を入力してください。必要に応じて :ポート を付けられます。",
           "cancel": "キャンセル",
           "use": "アドレスを使用"
         },

@@ -2822,6 +2822,7 @@ describe('createMainWindow', () => {
         invalidate: vi.fn(),
         setWindowOpenHandler: vi.fn(),
         send: vi.fn(),
+        isDestroyed: vi.fn(() => false),
         id: 1
       }
       const instance = {
@@ -2874,6 +2875,20 @@ describe('createMainWindow', () => {
       createMainWindow(null)
       const onResume = getPowerResumeListener()
       instance.isDestroyed.mockReturnValue(true)
+      webContents.send.mockClear()
+      webContents.invalidate.mockClear()
+
+      onResume()
+
+      expect(webContents.send).not.toHaveBeenCalled()
+      expect(webContents.invalidate).not.toHaveBeenCalled()
+    })
+
+    it('does not send the resume event once webContents is destroyed', () => {
+      const { webContents } = setupResumeWindow()
+      createMainWindow(null)
+      const onResume = getPowerResumeListener()
+      webContents.isDestroyed.mockReturnValue(true)
       webContents.send.mockClear()
       webContents.invalidate.mockClear()
 

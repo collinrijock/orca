@@ -345,7 +345,7 @@ export function createMainWindow(
   // run. Relay powerMonitor resume explicitly (supported on mac/win/linux)
   // and force a repaint so stale compositor surfaces recover too.
   const onSystemResume = (): void => {
-    if (mainWindow.isDestroyed()) {
+    if (mainWindow.isDestroyed() || mainWindow.webContents.isDestroyed?.() === true) {
       return
     }
     forceRepaint(mainWindow)
