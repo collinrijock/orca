@@ -22277,7 +22277,104 @@ function trimTerminalLineRight(line: string): string {
   return end === line.length ? line : line.slice(0, end)
 }
 
+// Why a window: the unwindowed implementation below materializes a row object
+// per retained tail line and finalize re-allocates + regex-trims every row —
+// O(tail) per chunk (~0.9ms at the 2,000-line cap), measured at ~93% of the
+// main-process event loop under an agent-TUI flood (findings log 2026-07-03).
+// A redraw can only touch rows the cursor can reach, so run the algorithm on
+// a suffix window sized by the chunk's maximum upward cursor excursion and
+// share the untouched prefix by reference. Equality with the unwindowed
+// implementation is fuzz-verified in
+// retained-tail-redraw-window.equivalence.test.ts.
+const REDRAW_WINDOW_SAFETY_ROWS = 8
+
+function maxUpwardCursorReach(
+  normalizedChunk: string,
+  previousRedrawCursor: RetainedTailRedrawCursor | null
+): number {
+  let reach = previousRedrawCursor ? previousRedrawCursor.rowFromEnd : 0
+  const cursorUpPattern = /\x1b\[(\d*)(?:;[\d;]*)?A/g
+  let match: RegExpExecArray | null
+  while ((match = cursorUpPattern.exec(normalizedChunk)) !== null) {
+    reach += match[1] ? Number.parseInt(match[1], 10) : 1
+  }
+  return reach
+}
+
 function appendNormalizedToMultilineTailBuffer(
+  previousLines: string[],
+  boundedPreviousPartialLine: string,
+  normalizedChunk: string,
+  previousPartialWasCapped: boolean,
+  previousRedrawCursor: RetainedTailRedrawCursor | null
+): {
+  lines: string[]
+  partialLine: string
+  redrawCursor: RetainedTailRedrawCursor | null
+  truncated: boolean
+  newCompleteLines: number
+} {
+  const windowRows =
+    maxUpwardCursorReach(normalizedChunk, previousRedrawCursor) + REDRAW_WINDOW_SAFETY_ROWS
+  if (windowRows >= previousLines.length) {
+    return appendNormalizedToMultilineTailBufferUnwindowed(
+      previousLines,
+      boundedPreviousPartialLine,
+      normalizedChunk,
+      previousPartialWasCapped,
+      previousRedrawCursor
+    )
+  }
+  const prefixLength = previousLines.length - windowRows
+  const suffix = previousLines.slice(prefixLength)
+  const windowed = appendNormalizedToMultilineTailBufferUnwindowed(
+    suffix,
+    boundedPreviousPartialLine,
+    normalizedChunk,
+    previousPartialWasCapped,
+    previousRedrawCursor
+  )
+  let lines = previousLines.slice(0, prefixLength)
+  // Why: the unwindowed finalize trims trailing spaces/tabs on every row; the
+  // shared prefix must match without paying a regex per untouched row.
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index]!
+    const lastChar = line.charCodeAt(line.length - 1)
+    if (lastChar === 32 || lastChar === 9) {
+      lines[index] = line.replace(/[ \t]+$/g, '')
+    }
+  }
+  for (const line of windowed.lines) {
+    lines.push(line)
+  }
+  let truncated = windowed.truncated
+  if (lines.length > MAX_TAIL_LINES) {
+    lines = lines.slice(lines.length - MAX_TAIL_LINES)
+    truncated = true
+  }
+  let totalChars = windowed.partialLine.length
+  for (const line of lines) {
+    totalChars += line.length
+  }
+  let dropCount = 0
+  while (dropCount < lines.length && totalChars > MAX_TAIL_CHARS) {
+    totalChars -= lines[dropCount]!.length
+    dropCount += 1
+  }
+  if (dropCount > 0) {
+    lines = lines.slice(dropCount)
+    truncated = true
+  }
+  return {
+    lines,
+    partialLine: windowed.partialLine,
+    redrawCursor: windowed.redrawCursor,
+    truncated,
+    newCompleteLines: windowed.newCompleteLines
+  }
+}
+
+export function appendNormalizedToMultilineTailBufferUnwindowed(
   previousLines: string[],
   boundedPreviousPartialLine: string,
   normalizedChunk: string,
