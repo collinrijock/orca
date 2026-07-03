@@ -23,6 +23,10 @@ export const AI_VAULT_AGENTS = [
   'kimi'
 ] as const satisfies readonly TuiAgent[]
 
+// Why: the aiVault.listSessions RPC schema REJECTS (not truncates) requests
+// past this bound, so every scopePaths producer must cap against the same value.
+export const AI_VAULT_SCOPE_PATHS_MAX_COUNT = 64
+
 export type AiVaultAgent = (typeof AI_VAULT_AGENTS)[number]
 export type AiVaultScope = 'workspace' | 'project' | 'all'
 export type AiVaultSort = 'updated' | 'created'

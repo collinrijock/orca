@@ -3,13 +3,10 @@ import {
   normalizeRuntimePathForComparison
 } from '../../../src/shared/cross-platform-path'
 import type { Worktree } from '../worktree/workspace-list-types'
-import type { AiVaultScope } from '../../../src/shared/ai-vault-types'
-
-// Why: the aiVault.listSessions RPC rejects (does not truncate) scopePaths past
-// AI_VAULT_SCOPE_PATHS_MAX_COUNT, so a repo with many sibling worktrees must cap
-// here or the whole project-scope load hard-fails. scopePaths only widen
-// discovery, so a truncated list omits some siblings instead of erroring.
-const MOBILE_AI_VAULT_SCOPE_PATHS_MAX = 64
+import {
+  AI_VAULT_SCOPE_PATHS_MAX_COUNT,
+  type AiVaultScope
+} from '../../../src/shared/ai-vault-types'
 
 // Why: the renderer's deriveAiVault* helpers are renderer-located and
 // Metro-unresolvable, so mobile does its own minimal derivation seeded by the
@@ -34,7 +31,9 @@ export function deriveMobileAiVaultScopePaths(
   // covers same-repo sibling worktrees so the project view stays complete.
   if (scope === 'project') {
     for (const worktree of liveWorktrees) {
-      if (paths.length >= MOBILE_AI_VAULT_SCOPE_PATHS_MAX) {
+      // Why: the RPC rejects (does not truncate) oversized scopePaths, and the
+      // list only widens discovery — dropping tail siblings beats hard-failing.
+      if (paths.length >= AI_VAULT_SCOPE_PATHS_MAX_COUNT) {
         break
       }
       if (worktree.repoId === activeWorktree.repoId) {

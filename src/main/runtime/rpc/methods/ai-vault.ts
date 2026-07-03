@@ -1,12 +1,12 @@
 import { z } from 'zod'
 import { defineMethod, type RpcMethod } from '../core'
 import { OptionalBoolean } from '../schemas'
+import { AI_VAULT_SCOPE_PATHS_MAX_COUNT } from '../../../../shared/ai-vault-types'
 
 // Why: bound limit + scopePaths so a client cannot force an unbounded scan.
 // Each scopePath is a host-local match prefix (validated/capped, never used for
 // traversal); the count/length caps mirror the worktree-schemas bounding style.
 const AI_VAULT_SCOPE_PATH_MAX_LENGTH = 4096
-const AI_VAULT_SCOPE_PATHS_MAX_COUNT = 64
 const AI_VAULT_LIMIT_MAX = 2000
 
 export const AiVaultListSessionsParams = z.object({
