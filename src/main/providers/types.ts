@@ -77,6 +77,11 @@ export type PtySpawnResult = {
    *  writing the snapshot so ANSI cursor positions land correctly. */
   snapshotCols?: number
   snapshotRows?: number
+  /** Kitty keyboard flags persisted in the daemon snapshot, threaded so the
+   *  re-seeded runtime emulator answers hidden `CSI ? u` with the real flags
+   *  (terminal-query-authority.md §kitty). Never replayed into a renderer
+   *  xterm — POST_REPLAY_REATTACH_RESET's kitty reset stays authoritative. */
+  snapshotKittyKeyboardFlags?: number
   /** True when the spawn reattached to an existing daemon session. */
   isReattach?: boolean
   /** True when the reattached session uses the alternate screen buffer

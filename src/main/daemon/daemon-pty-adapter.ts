@@ -7,6 +7,7 @@ import { DaemonClient } from './client'
 import { getMacDaemonSystemResolverHealth } from './daemon-health'
 import { HistoryManager } from './history-manager'
 import { HistoryReader } from './history-reader'
+import type { ColdRestoreInfo } from './history-reader'
 import { mintPtySessionId, parsePtySessionId } from './pty-session-id'
 import { supportsPtyStartupBarrier } from './shell-ready'
 import { CODEX_SHELL_READY_TIMEOUT_MS } from './session'
@@ -80,6 +81,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
   // mount → ??? The sticky cache returns the same cold restore data on the
   // second mount until the renderer explicitly acknowledges it.
   private coldRestoreCache = new Map<string, ColdRestorePayload>()
+  private sleepRestoreSessionIds = new Set<string>()
   private activeSessionIds = new Set<string>()
   private dirtySessionVersions = new Map<string, number>()
   // Why: a cold-restored session is a fresh shell whose on-disk checkpoint and
@@ -200,6 +202,14 @@ export class DaemonPtyAdapter implements IPtyProvider {
     // but should still return the cached cold restore data.
     const cachedRestore = this.coldRestoreCache.get(sessionId)
     if (cachedRestore) {
+      // Why: wake after sleep also lands here, and the slept session's active
+      // tracking and history writer were dropped when sleep killed the PTY.
+      // Without re-registering both, checkpoints stop after wake and the
+      // second sleep/wake cycle restores a blank terminal.
+      this.activeSessionIds.add(sessionId)
+      if (this.historyManager) {
+        this.historyManager.reopenSession(sessionId)
+      }
       return {
         id: sessionId,
         pid,
@@ -215,17 +225,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
     // an unclean shutdown → return saved scrollback so the renderer can
     // display the previous terminal content.
     if (result.isNew && restoreInfo) {
-      // Why prefer scrollbackAnsi for alt-screen: snapshotAnsi is the alt buffer
-      // (vim/less/htop); normal sessions use the full snapshot + rehydrate.
-      // Why the snapshotAnsi fallback: a hibernated TUI agent (empty scrollback)
-      // would otherwise get `|| null` → blank pane on wake. snapshotAnsi *alone*
-      // (no rehydrateSequences — they start with \x1b[?1049h, which the
-      // renderer's POST_REPLAY_MODE_RESET does NOT undo) lands the last frame as
-      // normal scrollback. An empty snapshot still yields null → no-op.
-      const isAltScreen = restoreInfo.modes.alternateScreen
-      const scrollback = isAltScreen
-        ? restoreInfo.scrollbackAnsi || restoreInfo.snapshotAnsi || null
-        : restoreInfo.rehydrateSequences + restoreInfo.snapshotAnsi
+      const coldRestore = this.buildColdRestorePayload(restoreInfo)
       // Why: use registerWriter (not openSession) to avoid deleting the
       // existing checkpoint.json. If the revived daemon crashes again before
       // the next 5s tick, the checkpoint is the only recovery data available.
@@ -237,8 +237,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
         // within one adapter) must not defer this re-anchor.
         this.lastFullCheckpointAt.delete(sessionId)
       }
-      if (scrollback) {
-        const coldRestore = { scrollback, cwd: restoreInfo.cwd, oscLinks: restoreInfo.oscLinks }
+      if (coldRestore) {
         this.coldRestoreCache.set(sessionId, coldRestore)
         return { id: sessionId, pid, coldRestore }
       }
@@ -277,12 +276,20 @@ export class DaemonPtyAdapter implements IPtyProvider {
 
     const isAltScreen = result.snapshot.modes.alternateScreen
     const snapshotPayload = result.snapshot.rehydrateSequences + result.snapshot.snapshotAnsi
+    // Why kitty flags ride beside the payload, not inside it: the snapshot
+    // string reaches renderer xterms too, where POST_REPLAY_REATTACH_RESET's
+    // deliberate kitty reset must win. Only the runtime emulator re-seed
+    // consumes the flags (terminal-query-authority.md §kitty).
+    const kittyKeyboardFlags = result.snapshot.modes.kittyKeyboardFlags
     return {
       id: sessionId,
       pid,
       snapshot: snapshotPayload,
       snapshotCols: result.snapshot.cols,
       snapshotRows: result.snapshot.rows,
+      ...(typeof kittyKeyboardFlags === 'number' && kittyKeyboardFlags > 0
+        ? { snapshotKittyKeyboardFlags: kittyKeyboardFlags }
+        : {}),
       isReattach: true,
       isAlternateScreen: isAltScreen
     }
@@ -313,15 +320,27 @@ export class DaemonPtyAdapter implements IPtyProvider {
   }
 
   async shutdown(id: string, opts: { immediate?: boolean; keepHistory?: boolean }): Promise<void> {
-    // Why: sleep/exact-stop must preserve restorable terminal history,
-    // so force a final checkpoint before killing the daemon session.
+    // Why: sleep/exact-stop kills the live PTY before the periodic checkpoint may run.
+    // Force a final snapshot so wake can restore the pane users left.
     if (opts.keepHistory) {
+      if (this.checkpointInFlight) {
+        await this.checkpointInFlight
+      }
       await this.checkpointSessions([id], { final: true, teardown: true })
+      const restoreInfo = this.historyReader?.detectColdRestore(id) ?? null
+      const coldRestore = restoreInfo ? this.buildColdRestorePayload(restoreInfo) : null
+      if (coldRestore) {
+        this.coldRestoreCache.set(id, coldRestore)
+        this.sleepRestoreSessionIds.add(id)
+      }
     }
     await this.client.request('kill', { sessionId: id, immediate: opts.immediate ?? false })
     this.activeSessionIds.delete(id)
     this.dirtySessionVersions.delete(id)
-    this.coldRestoreCache.delete(id)
+    if (!opts.keepHistory) {
+      this.coldRestoreCache.delete(id)
+      this.sleepRestoreSessionIds.delete(id)
+    }
     // Why: the !keepHistory close path doesn't take a final checkpoint, so a
     // session stranded in sessionsNeedingFullCheckpoint would never be cleared.
     // (Under keepHistory the final checkpoint above already cleared the flag, so
@@ -357,10 +376,28 @@ export class DaemonPtyAdapter implements IPtyProvider {
 
   ackColdRestore(sessionId: string): void {
     this.coldRestoreCache.delete(sessionId)
+    this.sleepRestoreSessionIds.delete(sessionId)
   }
 
   clearTombstone(sessionId: string): void {
     this.killedSessionTombstones.delete(sessionId)
+  }
+
+  private buildColdRestorePayload(restoreInfo: ColdRestoreInfo): ColdRestorePayload | null {
+    // Why prefer scrollbackAnsi for alt-screen: snapshotAnsi is the alt buffer
+    // (vim/less/htop); normal sessions use the full snapshot + rehydrate.
+    // Why the snapshotAnsi fallback: a hibernated TUI agent (empty scrollback)
+    // would otherwise get `|| null` → blank pane on wake. snapshotAnsi *alone*
+    // (no rehydrateSequences — they start with \x1b[?1049h, which the
+    // renderer's POST_REPLAY_MODE_RESET does NOT undo) lands the last frame as
+    // normal scrollback. An empty snapshot still yields null → no-op.
+    const scrollback = restoreInfo.modes.alternateScreen
+      ? restoreInfo.scrollbackAnsi || restoreInfo.snapshotAnsi || null
+      : restoreInfo.rehydrateSequences + restoreInfo.snapshotAnsi
+    if (!scrollback) {
+      return null
+    }
+    return { scrollback, cwd: restoreInfo.cwd, oscLinks: restoreInfo.oscLinks }
   }
 
   async sendSignal(id: string, signal: string): Promise<void> {
@@ -976,7 +1013,9 @@ export class DaemonPtyAdapter implements IPtyProvider {
       } else if (event.event === 'exit') {
         this.activeSessionIds.delete(event.sessionId)
         this.dirtySessionVersions.delete(event.sessionId)
-        this.coldRestoreCache.delete(event.sessionId)
+        if (!this.sleepRestoreSessionIds.has(event.sessionId)) {
+          this.coldRestoreCache.delete(event.sessionId)
+        }
         // Why: an exited session can never be checkpointed again, so its pending
         // full-checkpoint flag is dead state. Without this, a cold-restored
         // session that exits before its first checkpoint leaks a permanent entry.

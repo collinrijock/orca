@@ -735,6 +735,25 @@ function writeForegroundTerminalChunkWithIntent(
 }
 
 function takeNextDrainableEntry(): QueueEntry | null {
+  let largeBacklogEntry: QueueEntry | null = null
+  for (const entry of queuedByTerminal.values()) {
+    if (!isEntryDrainable(entry)) {
+      continue
+    }
+    // Why: active/foreground output should be chosen first, not just widen the
+    // drain budget while older background terminals keep their insertion order.
+    if (entry.highPriority) {
+      queuedByTerminal.delete(entry.terminal)
+      return entry
+    }
+    if (!largeBacklogEntry && entry.queuedChars > LARGE_BACKLOG_CHARS) {
+      largeBacklogEntry = entry
+    }
+  }
+  if (largeBacklogEntry) {
+    queuedByTerminal.delete(largeBacklogEntry.terminal)
+    return largeBacklogEntry
+  }
   for (const entry of queuedByTerminal.values()) {
     if (!isEntryDrainable(entry)) {
       continue

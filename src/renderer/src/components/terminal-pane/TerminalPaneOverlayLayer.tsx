@@ -12,6 +12,8 @@ import {
 import TerminalPane from './TerminalPane'
 import { closeTerminalTab } from '../terminal/terminal-tab-actions'
 import { useNativeChatToggleShortcut } from '../native-chat/use-native-chat-toggle-shortcut'
+import { shouldDeferParkedPtyExitTabClose } from './terminal-parked-tab-watchers'
+import { useTerminalTabColdParking } from './use-terminal-tab-cold-parking'
 
 type TerminalOverlayAssignment = {
   unifiedTabId: string
@@ -237,6 +239,12 @@ const TerminalOverlaySlot = memo(function TerminalOverlaySlot({
         if (consumeSuppressedPtyExit(ptyId)) {
           return
         }
+        // Why: a parked multi-leaf tab has no PaneManager to promote split
+        // siblings, so closing the tab here would kill them; the reveal
+        // remount handles dead PTYs per leaf instead.
+        if (shouldDeferParkedPtyExitTabClose(terminalTabId, ptyId)) {
+          return
+        }
         closeTab(terminalTabId)
         leaveWorktreeIfEmpty()
       }}
@@ -278,11 +286,15 @@ const TerminalPaneOverlayLayer = memo(function TerminalPaneOverlayLayer({
   worktreeId,
   worktreePath,
   isWorktreeActive,
+  coldParkTerminalPanes = false,
+  shouldMeasureHiddenWorktree = false,
   activityTerminalPortals = EMPTY_ACTIVITY_PORTALS
 }: {
   worktreeId: string
   worktreePath: string
   isWorktreeActive: boolean
+  coldParkTerminalPanes?: boolean
+  shouldMeasureHiddenWorktree?: boolean
   activityTerminalPortals?: ActivityTerminalPortalTarget[]
 }): React.JSX.Element | null {
   const { terminalTabs, unifiedTabs, groups, activeGroupId } = useAppStore(
@@ -346,6 +358,16 @@ const TerminalPaneOverlayLayer = memo(function TerminalPaneOverlayLayer({
     return entries
   }, [groupActiveTabById, unifiedTabs])
 
+  const parkedTerminalTabIds = useTerminalTabColdParking({
+    worktreeId,
+    terminalTabs,
+    assignments,
+    isWorktreeActive,
+    coldParkTerminalPanes,
+    shouldMeasureHiddenWorktree,
+    activityTerminalPortals
+  })
+
   if (!worktreePath) {
     return null
   }
@@ -360,6 +382,12 @@ const TerminalPaneOverlayLayer = memo(function TerminalPaneOverlayLayer({
           worktreeId,
           tabId: terminalTab.id
         })
+        // Why: parking is exactly the unmount path tab-group moves use —
+        // transports detach, the PTY and tab model survive, and the parked
+        // byte watcher takes over side effects until reveal remounts here.
+        if (parkedTerminalTabIds.has(terminalTab.id)) {
+          return null
+        }
         return (
           <TerminalOverlaySlot
             key={terminalTab.id}

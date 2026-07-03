@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { createBellDetector } from './bell-detector'
+import { createBellDetector } from './terminal-bell-detector'
 
 describe('createBellDetector', () => {
   it('skips ANSI chunks without losing later real bells', () => {

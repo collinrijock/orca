@@ -166,14 +166,22 @@ describe('Session', () => {
 
   describe('emulator does not reply to terminal queries', () => {
     // Why: daemon emulator parses in-process synchronously — before
-    // handleSubprocessData forwards bytes to the renderer over IPC — so any
-    // auto-reply it emits races ahead of the renderer's xterm and clobbers
-    // it with default-xterm values (no theme, stale cursor). The renderer is
-    // the authoritative responder; a daemon-side reply to any query is a bug.
+    // handleSubprocessData forwards bytes onward — so any auto-reply it
+    // emits races ahead of the live answerer and clobbers it with
+    // default-xterm values (no theme, stale cursor). Query authority is
+    // structural (terminal-query-authority.md): a delivered chunk is
+    // answered by the consuming view's xterm, a hidden-dropped chunk by
+    // MAIN's runtime model responder. The daemon emulator is neither — it
+    // stays write-only forever, and these pins are permanent.
     it.each([
+      ['OSC 10 foreground-color', '\x1b]10;?\x07'],
       ['OSC 11 background-color', '\x1b]11;?\x07'],
+      ['OSC 12 cursor-color', '\x1b]12;?\x1b\\'],
       ['DA1 device-attributes', '\x1b[c'],
-      ['DSR cursor-position', '\x1b[6n']
+      ['DA2 secondary device-attributes', '\x1b[>c'],
+      ['DSR terminal status', '\x1b[5n'],
+      ['DSR cursor-position', '\x1b[6n'],
+      ['DECRPM bracketed-paste mode', '\x1b[?2004$p']
     ])('does not reply to %s query', async (_label, query) => {
       createSession({ shellReadySupported: false })
       subprocess.simulateData(query)

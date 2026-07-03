@@ -15,6 +15,9 @@ import {
 function stubRuntime(overrides: Partial<OrcaRuntimeService> = {}): OrcaRuntimeService {
   return {
     getRuntimeId: () => 'test-runtime',
+    // Why: subscribe streams register as remote view subscribers for Phase-5
+    // query-authority suppression (terminal-query-authority.md).
+    registerRemoteTerminalViewSubscriber: () => () => {},
     ...overrides
   } as OrcaRuntimeService
 }
@@ -331,21 +334,35 @@ describe('terminal subscribe buffering', () => {
     await dispatchPromise
   })
 
-  it('bounds legacy binary output queued while the initial snapshot is serializing', async () => {
+  it('recovers binary output overflow queued while the initial snapshot is serializing', async () => {
     vi.useFakeTimers()
     try {
       const messages: string[] = []
       const binaryFrames: Uint8Array<ArrayBufferLike>[] = []
       const cleanups = new Map<string, () => void>()
-      const dataListenerRef: { current?: (data: string) => void } = {}
-      let resolveSnapshot: (value: { data: string; cols: number; rows: number }) => void = () => {}
+      const dataListenerRef: {
+        current?: (data: string, meta?: { seq?: number; rawLength?: number }) => void
+      } = {}
+      const snapshotResolvers: ((value: {
+        data: string
+        cols: number
+        rows: number
+        seq?: number
+        source?: 'headless' | 'renderer'
+      }) => void)[] = []
       const runtime = stubRuntime({
         resolveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
         readTerminal: vi.fn().mockResolvedValue({ tail: [], truncated: false }),
         serializeTerminalBuffer: vi.fn(
           () =>
-            new Promise<{ data: string; cols: number; rows: number }>((resolve) => {
-              resolveSnapshot = resolve
+            new Promise<{
+              data: string
+              cols: number
+              rows: number
+              seq?: number
+              source?: 'headless' | 'renderer'
+            }>((resolve) => {
+              snapshotResolvers.push(resolve)
             })
         ),
         getTerminalSize: vi.fn().mockReturnValue({ cols: 120, rows: 40 }),
@@ -386,26 +403,63 @@ describe('terminal subscribe buffering', () => {
 
       await vi.waitFor(() => expect(dataListenerRef.current).toBeDefined())
       const shiftSpy = vi.spyOn(Array.prototype, 'shift')
+      let seq = 0
       for (let index = 0; index < 400; index += 1) {
-        dataListenerRef.current?.(`${String(index).padStart(3, '0')}${'x'.repeat(1021)}`)
+        const data = `${String(index).padStart(3, '0')}${'x'.repeat(1021)}`
+        seq += data.length
+        dataListenerRef.current?.(data, { seq, rawLength: data.length })
       }
       const shiftCallCount = shiftSpy.mock.calls.length
       shiftSpy.mockRestore()
       await vi.waitFor(() => expect(runtime.serializeTerminalBuffer).toHaveBeenCalled())
-      resolveSnapshot({ data: '', cols: 120, rows: 40 })
+      snapshotResolvers[0]?.({ data: '', cols: 120, rows: 40, seq: 0, source: 'headless' })
+      await vi.waitFor(() => expect(runtime.serializeTerminalBuffer).toHaveBeenCalledTimes(2))
+      snapshotResolvers[1]?.({
+        data: 'recovered after overflow\r\n',
+        cols: 120,
+        rows: 40,
+        seq,
+        source: 'headless'
+      })
       await vi.waitFor(() =>
         expect(messages.some((msg) => JSON.parse(msg).result?.type === 'subscribed')).toBe(true)
       )
       await vi.runOnlyPendingTimersAsync()
 
-      const output = binaryFrames
+      const decodedFrames = binaryFrames
         .map((frame) => decodeTerminalStreamFrame(frame))
-        .filter((frame) => frame?.opcode === TerminalStreamOpcode.Output)
-        .map((frame) => (frame ? decodeTerminalStreamText(frame.payload) : ''))
+        .filter((frame): frame is NonNullable<typeof frame> => frame !== null)
+      const snapshotStarts = decodedFrames.filter(
+        (frame) => frame.opcode === TerminalStreamOpcode.SnapshotStart
+      )
+      const decodedStarts = snapshotStarts.map((frame) => decodeTerminalStreamJson(frame.payload))
+      // Why: shipped mobile clients only apply a mid-session snapshot when it
+      // arrives as a resized frame; a second scrollback frame is dropped.
+      // Why seq 0: the merged stream prefers the snapshot's own output seq
+      // (post-restore live-chunk reconciliation) over the layout seq.
+      expect(decodedStarts).toEqual([
+        expect.objectContaining({ kind: 'scrollback', seq: 0 }),
+        expect.objectContaining({
+          kind: 'resized',
+          reason: 'pending-output-overflow',
+          source: 'headless'
+        })
+      ])
+      // Why: output-byte sequences must not pollute the client layout-seq
+      // staleness filter.
+      expect(decodedStarts[1]).not.toHaveProperty('seq')
+      const snapshotText = decodedFrames
+        .filter((frame) => frame.opcode === TerminalStreamOpcode.SnapshotChunk)
+        .map((frame) => decodeTerminalStreamText(frame.payload))
+        .join('')
+      const output = decodedFrames
+        .filter((frame) => frame.opcode === TerminalStreamOpcode.Output)
+        .map((frame) => decodeTerminalStreamText(frame.payload))
         .join('')
       expect(output.length).toBeLessThanOrEqual(256 * 1024)
       expect(output).not.toContain('000')
-      expect(output).toContain('399')
+      expect(output).not.toContain('399')
+      expect(snapshotText).toContain('recovered after overflow')
       expect(shiftCallCount).toBe(0)
 
       runtime.cleanupSubscription('terminal-1:desktop-1')
@@ -530,5 +584,121 @@ describe('terminal subscribe buffering', () => {
 
     runtime.cleanupSubscription('terminal-1:phone-1')
     await dispatchPromise
+  })
+
+  it('keeps bounded replay when overflow recovery has no output seq', async () => {
+    vi.useFakeTimers()
+    try {
+      const messages: string[] = []
+      const binaryFrames: Uint8Array<ArrayBufferLike>[] = []
+      const cleanups = new Map<string, () => void>()
+      const dataListenerRef: {
+        current?: (data: string, meta?: { seq?: number; rawLength?: number }) => void
+      } = {}
+      const snapshotResolvers: ((value: {
+        data: string
+        cols: number
+        rows: number
+        seq?: number
+        source?: 'headless' | 'renderer'
+      }) => void)[] = []
+      const runtime = stubRuntime({
+        resolveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
+        readTerminal: vi.fn().mockResolvedValue({ tail: [], truncated: false }),
+        serializeTerminalBuffer: vi.fn(
+          () =>
+            new Promise<{
+              data: string
+              cols: number
+              rows: number
+              seq?: number
+              source?: 'headless' | 'renderer'
+            }>((resolve) => {
+              snapshotResolvers.push(resolve)
+            })
+        ),
+        getTerminalSize: vi.fn().mockReturnValue({ cols: 120, rows: 40 }),
+        getMobileDisplayMode: vi.fn().mockReturnValue('auto'),
+        getLayout: vi.fn().mockReturnValue({ seq: 1 }),
+        subscribeToTerminalData: vi.fn((_: string, listener: (data: string) => void) => {
+          dataListenerRef.current = listener
+          return vi.fn()
+        }),
+        subscribeToTerminalResize: vi.fn().mockReturnValue(vi.fn()),
+        subscribeToFitOverrideChanges: vi.fn().mockReturnValue(vi.fn()),
+        registerSubscriptionCleanup: vi.fn((id: string, cleanup: () => void) => {
+          cleanups.set(id, cleanup)
+        }),
+        cleanupSubscription: vi.fn((id: string) => {
+          const cleanup = cleanups.get(id)
+          cleanups.delete(id)
+          cleanup?.()
+        }),
+        waitForTerminal: vi.fn(() => new Promise<RuntimeTerminalWait>(() => {})),
+        sendTerminal: vi.fn().mockResolvedValue({ accepted: true }),
+        updateMobileViewport: vi.fn().mockResolvedValue(false)
+      })
+      const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
+
+      const dispatchPromise = dispatcher.dispatchStreaming(
+        makeRequest('terminal.subscribe', {
+          terminal: 'terminal-1',
+          client: { id: 'desktop-1', type: 'desktop' },
+          capabilities: { terminalBinaryStream: 1 }
+        }),
+        (msg) => messages.push(msg),
+        {
+          connectionId: 'conn-buffered-no-seq',
+          sendBinary: (bytes) => binaryFrames.push(bytes)
+        }
+      )
+
+      await vi.waitFor(() => expect(dataListenerRef.current).toBeDefined())
+      let seq = 0
+      for (let index = 0; index < 400; index += 1) {
+        const data = `${String(index).padStart(3, '0')}${'x'.repeat(1021)}`
+        seq += data.length
+        dataListenerRef.current?.(data, { seq, rawLength: data.length })
+      }
+      await vi.waitFor(() => expect(runtime.serializeTerminalBuffer).toHaveBeenCalled())
+      snapshotResolvers[0]?.({ data: '', cols: 120, rows: 40, seq: 0, source: 'headless' })
+      await vi.waitFor(() => expect(runtime.serializeTerminalBuffer).toHaveBeenCalledTimes(2))
+      // Why: renderer-source snapshots carry no output seq, so covered chunks
+      // cannot be trimmed and the recovery snapshot must not be applied.
+      snapshotResolvers[1]?.({
+        data: 'renderer fallback snapshot\r\n',
+        cols: 120,
+        rows: 40,
+        source: 'renderer'
+      })
+      await vi.waitFor(() =>
+        expect(messages.some((msg) => JSON.parse(msg).result?.type === 'subscribed')).toBe(true)
+      )
+      await vi.runOnlyPendingTimersAsync()
+
+      const decodedFrames = binaryFrames
+        .map((frame) => decodeTerminalStreamFrame(frame))
+        .filter((frame): frame is NonNullable<typeof frame> => frame !== null)
+      const snapshotStarts = decodedFrames.filter(
+        (frame) => frame.opcode === TerminalStreamOpcode.SnapshotStart
+      )
+      // Why seq 0: the merged stream prefers the snapshot's own output seq
+      // (post-restore live-chunk reconciliation) over the layout seq.
+      expect(snapshotStarts.map((frame) => decodeTerminalStreamJson(frame.payload))).toEqual([
+        expect.objectContaining({ kind: 'scrollback', seq: 0 })
+      ])
+      const output = decodedFrames
+        .filter((frame) => frame.opcode === TerminalStreamOpcode.Output)
+        .map((frame) => decodeTerminalStreamText(frame.payload))
+        .join('')
+      expect(output.length).toBeLessThanOrEqual(256 * 1024)
+      expect(output).not.toContain('000')
+      expect(output).toContain('399')
+
+      runtime.cleanupSubscription('terminal-1:desktop-1')
+      await dispatchPromise
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

@@ -37,6 +37,7 @@ import { createAgentStatusOscProcessor } from '../../../shared/agent-status-osc'
 import type { RuntimeTerminalCreate } from '../../../shared/runtime-types'
 import { createSshBackgroundStartupDelivery } from '@/lib/ssh-background-startup-delivery'
 import { shouldUseShellReadyStartupDelivery } from '../../../shared/codex-startup-delivery'
+import { isMainTerminalSideEffectAuthorityForPty } from '@/components/terminal-pane/terminal-side-effect-facts-handler'
 
 export async function launchAgentBackgroundSession(
   args: LaunchAgentBackgroundSessionArgs
@@ -257,6 +258,16 @@ export async function launchAgentBackgroundSession(
     useAppStore.getState().clearAgentLaunchConfig(paneKey)
     onExit?.(ptyId, code)
   }
+  // Why: for local/SSH PTYs main already parses OSC 9999 and routes it through
+  // the hook server (agentStatus:set → store), so a second store write here
+  // would race/duplicate the authoritative path. Remote-runtime bytes never
+  // transit local main; the kill switch restores the legacy write. The
+  // onAgentStatus callback always fires — automation completion tracking is
+  // this sidecar's own responsibility, not a store side effect.
+  const mainOwnsAgentStatusWrites = isMainTerminalSideEffectAuthorityForPty({
+    settings: store.settings,
+    runtimeEnvironmentId: runtimeTarget.kind === 'environment' ? runtimeTarget.environmentId : null
+  })
   const processAgentStatus = createAgentStatusOscProcessor()
   const handleData = (data: string): void => {
     data = sshStartupDelivery.handleData(data)
@@ -264,9 +275,11 @@ export async function launchAgentBackgroundSession(
     sshStartupDelivery.schedule(ptyId)
     const processed = processAgentStatus(data)
     for (const payload of processed.payloads) {
-      useAppStore.getState().setAgentStatus(paneKey, payload, undefined, undefined, undefined, {
-        launchToken
-      })
+      if (!mainOwnsAgentStatusWrites) {
+        useAppStore.getState().setAgentStatus(paneKey, payload, undefined, undefined, undefined, {
+          launchToken
+        })
+      }
       onAgentStatus?.(payload)
     }
   }

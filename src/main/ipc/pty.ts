@@ -87,6 +87,26 @@ import {
 import { parseWslPath } from '../wsl'
 import { mergePersistedWindowsPath } from '../pty/windows-environment-path'
 import { addOrcaWslInteropEnv } from '../pty/wsl-orca-env'
+import {
+  clearHiddenRendererPtyDeliveryState,
+  getHiddenRendererPtyDeliveryDebug,
+  isHiddenPtyDeliveryGateEnabled,
+  markHiddenRendererPty,
+  recordHiddenRendererPtyDataDrop,
+  resetHiddenRendererPtyDeliveryDebugCounters,
+  resetRendererScopedHiddenPtyDeliveryState,
+  setRendererPtyDeliveryInterest,
+  shouldDropHiddenRendererPtyData,
+  unmarkHiddenRendererPty
+} from './pty-hidden-delivery-gate'
+import {
+  clearNativeWindowsConptyPty,
+  isNativeWindowsLocalPtySpawn,
+  markNativeWindowsConptyPty
+} from '../runtime/terminal-model-query-authority'
+import { setTerminalViewAttributes } from '../runtime/terminal-view-attribute-store'
+import { validateTerminalViewAttributes } from '../../shared/terminal-view-attributes'
+import type { PtyModelRestoreReason } from '../../shared/pty-model-restore-marker'
 import type { CodexAccountSelectionTarget } from '../codex-accounts/runtime-selection'
 import { isHostCodexHomeForWsl, isWslCodexHomeForHost } from '../pty/codex-home-wsl-env'
 import { buildConfiguredProxyEnv, type NetworkProxySettings } from '../../shared/network-proxy'
@@ -1045,6 +1065,12 @@ export function clearProviderPtyState(id: string): void {
   pendingHiddenRendererResizeOutputPtys.delete(id)
   deliveredHiddenRendererResizeOutputPtys.delete(id)
   clearStartupTerminalColorQueryReplies(id)
+  // Why: every PTY teardown path funnels through here (local exit, daemon
+  // shutdown, SSH exit/connection teardown) — hidden/interest gate bits must
+  // not outlive the PTY or a reused map entry could silently gate a new one.
+  clearHiddenRendererPtyDeliveryState(id)
+  // Why: the Phase-5 ConPTY DA1 spawn record must not leak onto a reused id.
+  clearNativeWindowsConptyPty(id)
   const paneKey = ptyPaneKey.get(id)
   const stillOwnsPaneKey = paneKey ? paneKeyPtyId.get(paneKey) === id : false
   // Why: drop the memory-collector registration so a dead PTY does not keep
@@ -1124,6 +1150,14 @@ let didFinishLoadHandler: (() => void) | null = null
 let didFinishLoadWebContents: WebContents | null = null
 let rendererLifecycleResetWebContents: WebContents | null = null
 let rendererLifecycleResetHandler: (() => void) | null = null
+// Why: the hidden-delivery gate's interest/hidden registries mirror renderer
+// state (ref-counted holds, per-pane hidden marks). A reload or renderer
+// crash destroys the owners without unregistering, so the registries are
+// reset whenever the renderer process is replaced
+// (resetRendererScopedHiddenPtyDeliveryState preserves drop memory).
+let rendererGateResetLoadHandler: (() => void) | null = null
+let rendererGateResetGoneHandler: (() => void) | null = null
+let rendererGateResetWebContents: WebContents | null = null
 
 // Why: the "Restart daemon" path needs to re-bind provider→renderer listeners
 // against the freshly-created adapter after replaceDaemonProvider swaps the
@@ -1151,6 +1185,11 @@ export type PtyRendererDeliveryDebugSnapshot = {
   peakRendererInFlightChars: number
   peakMaxRendererInFlightCharsByPty: number
   ackGatedFlushSkipCount: number
+  hiddenDeliveryGatedPtyCount: number
+  deliveryInterestPtyCount: number
+  hiddenDeliveryDroppedChars: number
+  hiddenDeliveryDroppedChunks: number
+  pendingDroppedChars: number
 }
 
 const EMPTY_PTY_RENDERER_DELIVERY_DEBUG_SNAPSHOT: PtyRendererDeliveryDebugSnapshot = {
@@ -1166,7 +1205,12 @@ const EMPTY_PTY_RENDERER_DELIVERY_DEBUG_SNAPSHOT: PtyRendererDeliveryDebugSnapsh
   peakMaxPendingCharsByPty: 0,
   peakRendererInFlightChars: 0,
   peakMaxRendererInFlightCharsByPty: 0,
-  ackGatedFlushSkipCount: 0
+  ackGatedFlushSkipCount: 0,
+  hiddenDeliveryGatedPtyCount: 0,
+  deliveryInterestPtyCount: 0,
+  hiddenDeliveryDroppedChars: 0,
+  hiddenDeliveryDroppedChunks: 0,
+  pendingDroppedChars: 0
 }
 
 let readPtyRendererDeliveryDebugSnapshot = (): PtyRendererDeliveryDebugSnapshot => ({
@@ -1226,6 +1270,23 @@ function registerRendererLifecycleResetHandlers(webContents: WebContents): void 
   webContents.on('destroyed', rendererLifecycleResetHandler)
 }
 
+function clearRendererGateResetHandlers(): void {
+  if (rendererGateResetWebContents) {
+    if (rendererGateResetLoadHandler) {
+      rendererGateResetWebContents.removeListener('did-finish-load', rendererGateResetLoadHandler)
+    }
+    if (rendererGateResetGoneHandler) {
+      rendererGateResetWebContents.removeListener(
+        'render-process-gone',
+        rendererGateResetGoneHandler
+      )
+    }
+  }
+  rendererGateResetLoadHandler = null
+  rendererGateResetGoneHandler = null
+  rendererGateResetWebContents = null
+}
+
 // Why: the "Restart daemon" flow needs to detach listeners from the current
 // adapter *after* synthetic pty:exit events fan out (so the renderer receives
 // them) but *before* replaceDaemonProvider swaps in the new adapter (so the
@@ -1277,6 +1338,7 @@ export function registerPtyHandlers(
   ipcMain.removeHandler('pty:settlePaneSerializer')
   ipcMain.removeHandler('pty:clearPendingPaneSerializer')
   ipcMain.removeHandler('pty:getMainBufferSnapshot')
+  ipcMain.removeHandler('pty:sideEffectSnapshot')
   ipcMain.removeHandler('pty:getRendererDeliveryDebugSnapshot')
   ipcMain.removeHandler('pty:resetRendererDeliveryDebug')
   ipcMain.removeHandler('pty:writeAccepted')
@@ -1370,10 +1432,14 @@ export function registerPtyHandlers(
   }
 
   const pendingData = new Map<string, PendingPtyData>()
+  // Why: one restore marker per overflow episode — cleared when the entry
+  // fully drains so a later overflow re-marks the renderer exactly once.
+  const pendingOverflowMarkedPtys = new Set<string>()
   const rendererInFlightCharsByPty = new Map<string, number>()
   const trustedTerminalHandleEnv = new Set<string>()
   let flushTimer: ReturnType<typeof setTimeout> | null = null
   let rendererInFlightTotalChars = 0
+  let pendingDroppedChars = 0
   const PTY_BATCH_INTERVAL_MS = 8
   const PTY_BATCH_DRAIN_CONTINUE_MS = 1
   const PTY_BATCH_FLUSH_CHUNK_CHARS = 16 * 1024
@@ -1421,6 +1487,7 @@ export function registerPtyHandlers(
       pendingChars += chars
       maxPendingCharsByPty = Math.max(maxPendingCharsByPty, chars)
     }
+    const hiddenDeliveryDebug = getHiddenRendererPtyDeliveryDebug()
     return {
       pendingPtyCount: pendingData.size,
       pendingChars,
@@ -1434,7 +1501,9 @@ export function registerPtyHandlers(
       peakMaxPendingCharsByPty,
       peakRendererInFlightChars,
       peakMaxRendererInFlightCharsByPty,
-      ackGatedFlushSkipCount
+      ackGatedFlushSkipCount,
+      ...hiddenDeliveryDebug,
+      pendingDroppedChars
     }
   }
 
@@ -1456,6 +1525,8 @@ export function registerPtyHandlers(
     peakRendererInFlightChars = 0
     peakMaxRendererInFlightCharsByPty = 0
     ackGatedFlushSkipCount = 0
+    pendingDroppedChars = 0
+    resetHiddenRendererPtyDeliveryDebugCounters()
     recordPtyRendererDeliveryPressure()
   }
 
@@ -1563,6 +1634,26 @@ export function registerPtyHandlers(
     deliveredHiddenRendererResizeOutputPtys.delete(id)
   }
 
+  // Why: when main drops renderer delivery (hidden gate / pending cap), an
+  // explicit out-of-band pty:modelRestoreNeeded signal tells the renderer to
+  // latch model-restore-needed. It must NOT ride pty:data: an in-band empty
+  // chunk is indistinguishable from a chunk fully consumed by renderer-side
+  // OSC-9999 stripping, which spuriously restored visible panes.
+  function sendModelRestoreNeededMarker(
+    id: string,
+    reason: PtyModelRestoreReason,
+    markerSeq: number | undefined
+  ): void {
+    if (mainWindow.isDestroyed()) {
+      return
+    }
+    mainWindow.webContents.send('pty:modelRestoreNeeded', {
+      id,
+      reason,
+      ...(typeof markerSeq === 'number' ? { markerSeq } : {})
+    })
+  }
+
   function getPendingPtyFlushEntries(): [string, PendingPtyData][] {
     const entries = Array.from(pendingData.entries())
     const active: [string, PendingPtyData][] = []
@@ -1597,6 +1688,15 @@ export function registerPtyHandlers(
         capChars
       })
     }
+    // Why: with the hidden-delivery gate rolled out, the model snapshot can
+    // recover the dropped middle — emit the out-of-band restore marker once
+    // per overflow episode alongside the droppedOutput sentinel so a fresh
+    // or reloaded view latches restore too.
+    if (isHiddenPtyDeliveryGateEnabled(getSettings?.()) && !pendingOverflowMarkedPtys.has(id)) {
+      pendingOverflowMarkedPtys.add(id)
+      sendModelRestoreNeededMarker(id, 'pending-cap', runtime?.getPtyOutputSequence(id))
+    }
+    pendingDroppedChars += pending.data.length
     // Why empty data, not a trimmed tail: a mid-stream gap would silently
     // corrupt the pane. The droppedOutput sentinel routes the pane through
     // hidden-output restore, which repaints from the authoritative main-owned
@@ -1653,15 +1753,28 @@ export function registerPtyHandlers(
     flushTimer = null
     if (mainWindow.isDestroyed()) {
       pendingData.clear()
+      pendingOverflowMarkedPtys.clear()
       rendererInFlightCharsByPty.clear()
       rendererInFlightTotalChars = 0
       recordPtyRendererDeliveryPressure()
       return
     }
+    const settings = getSettings?.()
     let writes = 0
     for (const [id, pending] of getPendingPtyFlushEntries()) {
       if (writes >= PTY_BATCH_FLUSH_MAX_WRITES) {
         break
+      }
+      // Why: hidden-gated bytes are dropped, never re-queued — the model
+      // already ingested them; reveal restores from the snapshot+seq machinery.
+      if (shouldDropHiddenRendererPtyData(id, settings)) {
+        pendingData.delete(id)
+        pendingOverflowMarkedPtys.delete(id)
+        const drop = recordHiddenRendererPtyDataDrop(id, pending.data.length)
+        if (drop.shouldEmitRestoreMarker) {
+          sendModelRestoreNeededMarker(id, 'hidden-drop', runtime?.getPtyOutputSequence(id))
+        }
+        continue
       }
       if (!canSendPtyDataToRenderer(id, { interactive: activeRendererPtys.has(id) })) {
         continue
@@ -1687,6 +1800,8 @@ export function registerPtyHandlers(
           nextPending.containsBackgroundOutput = true
         }
         pendingData.set(id, nextPending)
+      } else {
+        pendingOverflowMarkedPtys.delete(id)
       }
       sendPtyDataToRenderer(
         id,
@@ -1759,6 +1874,7 @@ export function registerPtyHandlers(
       )
       pendingData.delete(payload.id)
     }
+    pendingOverflowMarkedPtys.delete(payload.id)
     lastInputAtByPty.delete(payload.id)
     interactiveOutputCharsByPty.delete(payload.id)
     rendererInFlightTotalChars = Math.max(
@@ -1821,9 +1937,23 @@ export function registerPtyHandlers(
           flushTimer = null
         }
         pendingData.clear()
+        pendingOverflowMarkedPtys.clear()
         rendererInFlightCharsByPty.clear()
         rendererInFlightTotalChars = 0
         recordPtyRendererDeliveryPressure()
+        return
+      }
+      const settings = getSettings?.()
+      // Why: hidden-delivery gate — runtime ingestion above already consumed
+      // the chunk; gated renderer delivery is DROPPED (never queued) and the
+      // reveal path restores from the model snapshot via the seq guard. The
+      // drop sits before the interactive bypass so gated PTYs take neither
+      // the immediate nor the batched renderer path.
+      if (shouldDropHiddenRendererPtyData(payload.id, settings)) {
+        const drop = recordHiddenRendererPtyDataDrop(payload.id, payload.data.length)
+        if (drop.shouldEmitRestoreMarker) {
+          sendModelRestoreNeededMarker(payload.id, 'hidden-drop', outputSeq)
+        }
         return
       }
       if (rendererData.length === 0) {
@@ -1859,6 +1989,7 @@ export function registerPtyHandlers(
           return
         }
         pendingData.delete(payload.id)
+        pendingOverflowMarkedPtys.delete(payload.id)
         clearFlushTimerIfIdle()
         // Why: agent TUIs redraw small prompt regions after every keystroke.
         // Waiting for the throughput batch timer adds visible input latency.
@@ -1980,6 +2111,19 @@ export function registerPtyHandlers(
       mainWindow.webContents.send('pty:serializeBuffer:request', payload)
     })
   }
+
+  // Why: a reload (did-finish-load) or renderer crash replaces the process
+  // that owned every delivery-interest hold and hidden mark; surviving
+  // daemon/SSH PTYs would otherwise stay force-fed (leaked interest defeats
+  // the gate) or stay gated against a renderer that never marked them. Drop
+  // memory is preserved — each pane's first sync re-marks/unmarks and the
+  // unmark path re-emits the restore marker for unrestored drops.
+  clearRendererGateResetHandlers()
+  rendererGateResetLoadHandler = () => resetRendererScopedHiddenPtyDeliveryState()
+  rendererGateResetGoneHandler = () => resetRendererScopedHiddenPtyDeliveryState()
+  rendererGateResetWebContents = mainWindow.webContents
+  mainWindow.webContents.on('did-finish-load', rendererGateResetLoadHandler)
+  mainWindow.webContents.on('render-process-gone', rendererGateResetGoneHandler)
 
   // Kill orphaned PTY processes from previous page loads when the renderer reloads.
   // Why: only applies to LocalPtyProvider where PTYs live in the Electron main
@@ -2240,6 +2384,18 @@ export function registerPtyHandlers(
           }
         }
         ptyOwnership.set(result.id, args.connectionId ?? null)
+        // Why: Phase-5 ConPTY DA1 — record the native-Windows-local-PTY
+        // determination from the spawn record before any byte reaches the
+        // runtime emulator, so its DA1 override exists from byte zero.
+        if (
+          isNativeWindowsLocalPtySpawn({
+            connectionId: args.connectionId,
+            cwd: args.cwd,
+            shellOverride: daemonShellOverride
+          })
+        ) {
+          markNativeWindowsConptyPty(result.id)
+        }
         const relayResultId = getRelayPtyId(args.connectionId, result.id)
         const persistSshLease = (): void => {
           if (!store || !args.connectionId) {
@@ -2296,6 +2452,10 @@ export function registerPtyHandlers(
         if (args.worktreeId) {
           runtime?.registerPty(result.id, args.worktreeId, args.connectionId ?? null)
         }
+        // Why: arms main's per-PTY Command Code output detector from the launch
+        // command (renderer startupCommand parity); banner detection covers
+        // PTYs spawned without one.
+        runtime?.noteTerminalSpawnCommand?.(result.id, args.command ?? null)
         if (isClaudeLaunch) {
           markClaudePtySpawned(result.id)
         }
@@ -2536,6 +2696,7 @@ export function registerPtyHandlers(
       cwd?: string | null
       lastTitle?: string
       seq?: number
+      pendingDeliveryStartSeq?: number
       source?: 'headless' | 'renderer'
       alternateScreen?: boolean
     } | null> => {
@@ -2544,12 +2705,42 @@ export function registerPtyHandlers(
       }
       const scrollbackRows = normalizeSnapshotScrollbackRows(args.opts?.scrollbackRows)
       try {
-        return await runtime.serializeHiddenOutputRecoveryBuffer(args.id, { scrollbackRows })
+        const snapshot = await runtime.serializeHiddenOutputRecoveryBuffer(args.id, {
+          scrollbackRows
+        })
+        if (!snapshot || typeof snapshot.seq !== 'number') {
+          return snapshot
+        }
+        // Why: sampled after serialize — every byte at or below snapshot.seq
+        // that can still reach the renderer sits in this pending queue. The
+        // renderer's post-restore dedupe bounds its duplicate window with it;
+        // without the bound a stale baseline silently swallows genuinely-new
+        // chunks whose seq domain sits below the snapshot counter.
+        const pending = pendingData.get(args.id)
+        if (pending && typeof pending.startSeq !== 'number') {
+          // Why: a seq-less backlog cannot be bounded — stay conservative.
+          return snapshot
+        }
+        return {
+          ...snapshot,
+          pendingDeliveryStartSeq: Math.min(pending?.startSeq ?? snapshot.seq, snapshot.seq)
+        }
       } catch {
         return null
       }
     }
   )
+
+  // Why: with main holding side-effect authority the renderer no longer
+  // derives titles from replayed bytes on (re)attach. This title-only replay
+  // snapshot restores title state — never historical bells/completions (the
+  // no-attention-replay rule, terminal-side-effect-authority.md).
+  ipcMain.handle('pty:sideEffectSnapshot', (_event, args: { id: string }) => {
+    if (!runtime || typeof args?.id !== 'string' || args.id.length === 0) {
+      return null
+    }
+    return runtime.getTerminalSideEffectSnapshot(args.id)
+  })
 
   ipcMain.handle('pty:getRendererDeliveryDebugSnapshot', (): PtyRendererDeliveryDebugSnapshot => {
     return getPtyRendererDeliveryDebugSnapshot()
@@ -2582,6 +2773,11 @@ export function registerPtyHandlers(
           foreground?: unknown
           background?: unknown
         }
+        // Why: hidden-at-spawn declaration (terminal-query-authority.md
+        // §races) — the renderer knows at spawn time that no visible view
+        // will consume this PTY's bytes, so main marks it hidden BEFORE the
+        // first byte and the gate + model responder own spawn-time queries.
+        initiallyHidden?: boolean
         // Why: closes the SIGKILL race documented in INVESTIGATION.md by
         // letting main patch + sync-flush the (worktreeId, tabId, leafId →
         // ptyId) binding before pty:spawn returns. Only the renderer's
@@ -2940,6 +3136,20 @@ export function registerPtyHandlers(
         return await existingPaneSpawn.promise
       }
       const paneSpawnReservation = reservationPaneKey ? reservePaneSpawn(reservationPaneKey) : null
+      const initiallyHidden = args.initiallyHidden === true
+      // Why pre-spawn for daemon-host sessions (id minted up front): daemon
+      // PTYs can emit prompt bytes before spawn() resolves, and the hidden
+      // mark must beat the first byte so the gate + model responder own
+      // spawn-time queries (terminal-query-authority.md §races). Other
+      // providers cannot emit until spawn resolves; the post-spawn mark
+      // below is byte-zero-safe for them.
+      const preSpawnHiddenMarkId =
+        initiallyHidden && isDaemonHostSpawn && effectiveSessionAppId !== undefined
+          ? effectiveSessionAppId
+          : null
+      if (preSpawnHiddenMarkId !== null) {
+        markHiddenRendererPty(preSpawnHiddenMarkId)
+      }
       let result: PtySpawnResult
       try {
         try {
@@ -2958,6 +3168,11 @@ export function registerPtyHandlers(
           result = await provider.spawn(spawnOptions)
           spawnTiming.mark('provider_spawn')
         } catch (err) {
+          // Why: a failed spawn must not leave a stale hidden mark on a session
+          // id a later visible attach may reuse.
+          if (preSpawnHiddenMarkId !== null) {
+            unmarkHiddenRendererPty(preSpawnHiddenMarkId)
+          }
           const rawMessage = err instanceof Error ? err.message : String(err)
           const spawnError = normalizeNodePtySpawnError(err)
           if (preSpawnStartupTerminalColorReplyPtyId) {
@@ -3022,6 +3237,30 @@ export function registerPtyHandlers(
           reattach: result.isReattach ?? false
         })
         ptyOwnership.set(result.id, args.connectionId ?? null)
+        if (initiallyHidden) {
+          // Why marked synchronously before any await below: local/SSH provider
+          // data events dispatch on later tasks, so this is still ahead of the
+          // first byte's delivery decision. Idempotent for daemon hosts already
+          // marked pre-spawn; the renderer's first visibility sync re-marks or
+          // unmarks (emitting the restore marker) through the Phase-4 path.
+          markHiddenRendererPty(result.id)
+          if (preSpawnHiddenMarkId !== null && preSpawnHiddenMarkId !== result.id) {
+            // Defense: never strand a mark on an id the provider renamed.
+            unmarkHiddenRendererPty(preSpawnHiddenMarkId)
+          }
+        }
+        // Why: Phase-5 ConPTY DA1 — record the native-Windows-local-PTY
+        // determination from the spawn record before the headless seed below,
+        // so the runtime emulator's DA1 override exists from byte zero.
+        if (
+          isNativeWindowsLocalPtySpawn({
+            connectionId: args.connectionId,
+            cwd: args.cwd,
+            shellOverride: effectiveShellOverride
+          })
+        ) {
+          markNativeWindowsConptyPty(result.id)
+        }
         if (startupTerminalColorQueryReplyColors) {
           if (result.isReattach) {
             if (preSpawnStartupTerminalColorReplyPtyId) {
@@ -3130,7 +3369,18 @@ export function registerPtyHandlers(
               ? { cols: result.snapshotCols, rows: result.snapshotRows }
               : undefined
           if (typeof result.snapshot === 'string' && result.snapshot.length > 0) {
-            runtime.seedHeadlessTerminal(result.id, result.snapshot, seedSize)
+            // Why kitty flags ride seed metadata: the snapshot string omits
+            // them by design (renderer kitty reset stays authoritative), but
+            // the re-seeded emulator must answer hidden `CSI ? u` with the
+            // flags the still-running app pushed (terminal-query-authority.md).
+            runtime.seedHeadlessTerminal(
+              result.id,
+              result.snapshot,
+              seedSize,
+              typeof result.snapshotKittyKeyboardFlags === 'number'
+                ? { kittyKeyboardFlags: result.snapshotKittyKeyboardFlags }
+                : {}
+            )
           } else if (
             result.coldRestore &&
             typeof result.coldRestore.scrollback === 'string' &&
@@ -3149,6 +3399,13 @@ export function registerPtyHandlers(
         ) {
           runtime?.registerPty(result.id, args.worktreeId, args.connectionId ?? null)
         }
+        // Why: arms main's per-PTY Command Code output detector from the launch
+        // command (renderer startupCommand parity); banner detection covers
+        // PTYs spawned without one.
+        runtime?.noteTerminalSpawnCommand?.(
+          result.id,
+          typeof args.command === 'string' ? args.command : null
+        )
         if (isClaudeLaunch) {
           markClaudePtySpawned(result.id)
         }
@@ -3530,6 +3787,66 @@ export function registerPtyHandlers(
     } else {
       visibleRendererPtys.delete(args.id)
     }
+  })
+
+  ipcMain.removeAllListeners('pty:setHiddenRendererPty')
+  ipcMain.on('pty:setHiddenRendererPty', (_event, args: { id: string; hidden: boolean }) => {
+    if (typeof args.id !== 'string' || !args.id) {
+      return
+    }
+    if (args.hidden === true) {
+      markHiddenRendererPty(args.id)
+      // Why: bytes already queued for a newly hidden PTY are model-owned
+      // state; drop them now instead of holding them under ACK starvation.
+      // Reveal restores from the snapshot.
+      const pending = pendingData.get(args.id)
+      if (pending && shouldDropHiddenRendererPtyData(args.id, getSettings?.())) {
+        pendingData.delete(args.id)
+        pendingOverflowMarkedPtys.delete(args.id)
+        const drop = recordHiddenRendererPtyDataDrop(args.id, pending.data.length)
+        if (drop.shouldEmitRestoreMarker) {
+          sendModelRestoreNeededMarker(
+            args.id,
+            'hidden-drop',
+            runtime?.getPtyOutputSequence(args.id)
+          )
+        }
+        recordPtyRendererDeliveryPressure()
+      }
+      return
+    }
+    const { droppedWhileHidden } = unmarkHiddenRendererPty(args.id)
+    // Why: a renderer reload or remount can replace the view that latched
+    // restore-needed from the first-drop marker. Re-emit on unhide so the
+    // (possibly fresh) visible view still pulls the model snapshot covering
+    // the dropped bytes. If the original view is still alive this can trigger
+    // a redundant second restore — accepted: a snapshot replay is cheap and
+    // idempotent, while a missed restore leaves a corrupt pane.
+    if (droppedWhileHidden) {
+      sendModelRestoreNeededMarker(args.id, 'unhide', runtime?.getPtyOutputSequence(args.id))
+    }
+  })
+
+  ipcMain.removeAllListeners('pty:terminalViewAttributes')
+  ipcMain.on('pty:terminalViewAttributes', (_event, args: unknown) => {
+    // Why validate-or-drop: the responder must never store a malformed
+    // palette — a wrong color reply breaks TUI theme detection worse than
+    // the documented silent-until-first-push behavior.
+    const attributes = validateTerminalViewAttributes(args)
+    if (attributes) {
+      setTerminalViewAttributes(attributes)
+    }
+  })
+
+  ipcMain.removeAllListeners('pty:setPtyDeliveryInterest')
+  ipcMain.on('pty:setPtyDeliveryInterest', (_event, args: { id: string; interested: boolean }) => {
+    if (typeof args.id !== 'string' || !args.id) {
+      return
+    }
+    // Why: explicit delivery-interest signal from renderer sidecars / eager
+    // pre-mount buffers — any interest suppresses the hidden-delivery gate so
+    // raw-byte consumers keep receiving while the view is hidden or parked.
+    setRendererPtyDeliveryInterest(args.id, args.interested === true)
   })
 
   ipcMain.removeAllListeners('pty:signal')

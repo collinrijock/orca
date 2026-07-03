@@ -91,6 +91,12 @@ vi.mock('../providers/ssh-git-dispatch', () => ({
 }))
 
 const { deployAndLaunchRelay } = await import('./ssh-relay-deploy')
+// Why: the hidden-delivery gate module is intentionally real (pure state, no
+// electron deps) so the SSH parity tests exercise the same gate main uses.
+const { markHiddenRendererPty, setRendererPtyDeliveryInterest } =
+  await import('../ipc/pty-hidden-delivery-gate')
+const { _resetHiddenRendererPtyDeliveryGateForTest } =
+  await import('../ipc/pty-hidden-delivery-gate')
 const { execCommand } = await import('./ssh-relay-deploy-helpers')
 const { getRemoteHostPlatform } = await import('./ssh-remote-platform')
 const {
@@ -147,6 +153,95 @@ describe('SshRelaySession', () => {
     installRemoteManagedAgentHooksMock.mockResolvedValue([])
     mockDeploySuccess()
     vi.mocked(getPtyIdsForConnection).mockReturnValue([])
+    _resetHiddenRendererPtyDeliveryGateForTest()
+  })
+
+  it('drops hidden-gated PTY data after runtime ingestion with one restore marker', async () => {
+    const { mockConn, mockStore, mockPortForward, getMainWindow, mockWindow } = createMockDeps()
+    const runtime = {
+      onPtyData: vi.fn(() => 99),
+      onPtyExit: vi.fn()
+    }
+    const session = new SshRelaySession(
+      'target-1',
+      getMainWindow,
+      mockStore,
+      mockPortForward,
+      runtime as never
+    )
+    await session.establish(mockConn)
+    const ptyProvider = vi.mocked(registerSshPtyProvider).mock.calls[0]?.[1] as unknown as {
+      onData: ReturnType<typeof vi.fn>
+    }
+    const onData = ptyProvider.onData.mock.calls[0]?.[0] as (payload: {
+      id: string
+      data: string
+    }) => void
+
+    markHiddenRendererPty('ssh-pty-1')
+    onData({ id: 'ssh-pty-1', data: 'hidden ssh output' })
+
+    // Runtime ingestion still ran; renderer delivery shrank to one marker.
+    expect(runtime.onPtyData).toHaveBeenCalledWith(
+      'ssh-pty-1',
+      'hidden ssh output',
+      expect.any(Number)
+    )
+    expect(mockWindow.webContents.send).toHaveBeenCalledTimes(1)
+    // Why out-of-band: an in-band empty pty:data sentinel is ambiguous with
+    // chunks fully consumed by renderer OSC-9999 stripping.
+    expect(mockWindow.webContents.send).toHaveBeenCalledWith('pty:modelRestoreNeeded', {
+      id: 'ssh-pty-1',
+      reason: 'hidden-drop',
+      markerSeq: 99
+    })
+
+    onData({ id: 'ssh-pty-1', data: 'more hidden ssh output' })
+    expect(mockWindow.webContents.send).toHaveBeenCalledTimes(1)
+
+    // Delivery interest (renderer sidecars) suppresses the gate — parity with
+    // the local path in ipc/pty.ts.
+    setRendererPtyDeliveryInterest('ssh-pty-1', true)
+    onData({ id: 'ssh-pty-1', data: 'sidecar ssh bytes' })
+    expect(mockWindow.webContents.send).toHaveBeenLastCalledWith('pty:data', {
+      id: 'ssh-pty-1',
+      data: 'sidecar ssh bytes',
+      seq: 99,
+      rawLength: 'sidecar ssh bytes'.length
+    })
+
+    // Non-hidden PTYs are unaffected.
+    onData({ id: 'ssh-pty-2', data: 'visible ssh output' })
+    expect(mockWindow.webContents.send).toHaveBeenLastCalledWith('pty:data', {
+      id: 'ssh-pty-2',
+      data: 'visible ssh output',
+      seq: 99,
+      rawLength: 'visible ssh output'.length
+    })
+  })
+
+  it('keeps hidden SSH delivery when the gate kill switch is off', async () => {
+    const { mockConn, mockStore, mockPortForward, getMainWindow, mockWindow } = createMockDeps()
+    ;(mockStore as unknown as { getSettings: () => unknown }).getSettings = vi.fn(() => ({
+      terminalHiddenDeliveryGate: false
+    }))
+    const session = new SshRelaySession('target-1', getMainWindow, mockStore, mockPortForward)
+    await session.establish(mockConn)
+    const ptyProvider = vi.mocked(registerSshPtyProvider).mock.calls[0]?.[1] as unknown as {
+      onData: ReturnType<typeof vi.fn>
+    }
+    const onData = ptyProvider.onData.mock.calls[0]?.[0] as (payload: {
+      id: string
+      data: string
+    }) => void
+
+    markHiddenRendererPty('ssh-pty-1')
+    onData({ id: 'ssh-pty-1', data: 'still delivered' })
+
+    expect(mockWindow.webContents.send).toHaveBeenCalledWith('pty:data', {
+      id: 'ssh-pty-1',
+      data: 'still delivered'
+    })
   })
 
   it('starts in idle state', () => {

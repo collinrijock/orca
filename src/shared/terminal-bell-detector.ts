@@ -2,6 +2,10 @@
  * Stateful BEL detector that correctly ignores BEL (0x07) bytes
  * occurring inside OSC escape sequences.
  *
+ * Shared between the renderer transport processor and main's per-PTY
+ * side-effect tracker (docs/reference/terminal-side-effect-authority.md):
+ * bell semantics must not drift between the two parsing authorities.
+ *
  * Why stateful: PTY data arrives in arbitrary chunks, so an OSC sequence
  * may span multiple calls. The detector tracks in-progress escape state
  * across invocations so a BEL used as an OSC terminator is never
@@ -17,7 +21,10 @@
  * that ended mid-escape does not leak into the next stream.
  */
 export type BellDetector = {
-  chunkContainsBell(data: string): boolean
+  /** `hints.containsOscIntroducer` lets a caller that already scanned for
+   *  `\x1b]` (the title-extraction gate) share the result instead of paying
+   *  a second includes() pass per chunk on the hot path. */
+  chunkContainsBell(data: string, hints?: { containsOscIntroducer?: boolean }): boolean
   reset(): void
 }
 
@@ -27,11 +34,11 @@ export function createBellDetector(): BellDetector {
   let pendingOscEscape = false
 
   return {
-    chunkContainsBell(data: string): boolean {
+    chunkContainsBell(data: string, hints: { containsOscIntroducer?: boolean } = {}): boolean {
       if (!inOsc && !pendingEscape && !data.includes('\x07')) {
         // Why: CSI/plain chunks with no BEL and no OSC start cannot affect
         // bell state; avoid walking every byte of normal terminal output.
-        if (!data.includes('\x1b]')) {
+        if (!(hints.containsOscIntroducer ?? data.includes('\x1b]'))) {
           pendingEscape = data.endsWith('\x1b')
           return false
         }

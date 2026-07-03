@@ -78,7 +78,10 @@ import {
   writeTerminalOutput
 } from '@/lib/pane-manager/pane-terminal-output-scheduler'
 import { recordAgentHibernationPaneOutput } from '@/lib/agent-hibernation-output-activity'
-import { isLocalNativeWindowsConpty } from '@/lib/pane-manager/windows-pty-compatibility'
+import {
+  isLocalNativeWindowsConpty,
+  resolveWindowsShellOverride
+} from '@/lib/pane-manager/windows-pty-compatibility'
 import { recordTerminalOutput } from '@/lib/pane-manager/pane-scroll'
 import {
   captureTerminalWriteScrollIntent,
@@ -119,10 +122,10 @@ import {
 import { getTerminalPasteSshRemotePlatform } from './terminal-paste-ssh-platform'
 import { resolveTerminalPasteRuntime } from './terminal-paste-runtime'
 import { isKnownTuiAgentTerminalStartupCommand } from './terminal-startup-command-classifier'
-import { createCommandCodeOutputStatusDetector } from './command-code-output-status'
+import { createCommandCodeOutputStatusDetector } from '../../../../shared/command-code-output-status'
 import type { PtyDataMeta } from './pty-dispatcher'
 import { getEagerPtyBufferHandle } from './pty-dispatcher'
-import { createTerminalGitHubPRLinkDetector } from '@/lib/terminal-github-pr-link-detector'
+import { createTerminalGitHubPRLinkDetector } from '../../../../shared/terminal-github-pr-link-detector'
 import { scheduleTerminalWebglAtlasRecovery } from './terminal-webgl-atlas-recovery'
 import {
   CONPTY_DA1_RESPONSE,
@@ -130,6 +133,7 @@ import {
   installTerminalCapabilityReplyHandlers,
   sendTerminalOscColorQueryReplies
 } from './terminal-capability-replies'
+import { registerPtyModelRestoreNeededHandler } from './pty-model-restore-channel'
 import {
   cancelScheduledHiddenOutputRestore,
   scheduleHiddenOutputRestore
@@ -166,14 +170,23 @@ import {
   releaseAgentStartupDeliveryAttempt
 } from '@/lib/agent-startup-delayed-delivery'
 import { isExpectedAgentProcess } from '../../../../shared/agent-process-recognition'
+import {
+  AGENT_TASK_COMPLETE_NOTIFICATION_GRACE_MS,
+  AGENT_TASK_COMPLETE_NOTIFICATION_MAX_WAIT_MS,
+  canDispatchAgentNotificationAfterGrace,
+  isAgentTaskCompleteOsNotificationEnabledFromState,
+  isAgentTaskCompleteTrackingEnabledFromState
+} from './agent-task-complete-policy'
+import {
+  isMainTerminalSideEffectAuthorityForPty,
+  registerTerminalSideEffectFactConsumer
+} from './terminal-side-effect-facts-handler'
+import { isRendererHiddenPtyDeliveryGateEnabled } from './terminal-hidden-delivery-gate'
 
 const pendingSpawnByPaneKey = new Map<string, Promise<string | null>>()
 const SSH_SESSION_EXPIRED_ERROR = 'SSH_SESSION_EXPIRED'
 const REMOTE_PTY_ID_PREFIX = 'remote:'
 const PTY_CONNECT_DIAG_LIMIT = 200
-const AGENT_TASK_COMPLETE_NOTIFICATION_GRACE_MS = 250
-const AGENT_TASK_COMPLETE_NOTIFICATION_MAX_WAIT_MS = 1500
-const AGENT_TASK_COMPLETE_NOTIFICATION_DETAIL_MAX_AGE_MS = 10_000
 const COMMAND_CODE_OUTPUT_DONE_SETTLE_MS = 1500
 const SSH_SHELL_READY_STARTUP_FALLBACK_MS = 1500
 const STARTUP_DRAFT_PASTE_QUIET_MS = 1500
@@ -333,6 +346,9 @@ type E2eTerminalHiddenSnapshotOverride = {
 
 const e2eTerminalHiddenSnapshotOverrides = new Map<string, E2eTerminalHiddenSnapshotOverride>()
 
+// Why: the per-chunk hidden-skip grammar is deleted (Phase 6) — hidden bytes
+// either never reach the renderer (delivery gate) or ride the background
+// scheduler queue. Only the mode-2031 fact-reply counter still has a producer.
 type E2eTerminalPtyOutputDebugSnapshot = {
   hiddenRendererSkipCount: number
   hiddenRendererSkippedChars: number
@@ -652,40 +668,19 @@ type PanePtyBinding = IDisposable & {
   noteVisibilityResume: () => void
   reconcileIfSessionDead: (liveSessionIds: Set<string>, snapshotRequestedAt?: number) => void
   reconcileIfSessionMissing: (hasPty: HasPty, livenessRequestedAt?: number) => void
+  /** True when the hidden-delivery gate structurally manages the pane's
+   *  current PTY. The lifecycle's xterm CSI ?2031h observer consults this to
+   *  stay silent — main's '2031-subscribe' fact is the sole responder for
+   *  gate-managed PTYs. */
+  isHiddenDeliveryGateManagedPty: () => boolean
 }
 
 function isAgentTaskCompleteNotificationEnabled(): boolean {
-  return isAgentTaskCompleteNotificationEnabledFromState(useAppStore.getState())
-}
-
-function isAgentTaskCompleteNotificationEnabledFromState(
-  state: ReturnType<typeof useAppStore.getState>
-): boolean {
-  const notifications = state.settings?.notifications
-  return notifications?.enabled !== false && notifications?.agentTaskComplete !== false
-}
-
-function isTerminalAttentionEnabledFromState(
-  state: ReturnType<typeof useAppStore.getState>
-): boolean {
-  return state.settings?.experimentalTerminalAttention === true
+  return isAgentTaskCompleteOsNotificationEnabledFromState(useAppStore.getState())
 }
 
 function isAgentTaskCompleteTrackingEnabled(): boolean {
-  const state = useAppStore.getState()
-  return (
-    isAgentTaskCompleteNotificationEnabledFromState(state) ||
-    isTerminalAttentionEnabledFromState(state)
-  )
-}
-
-function isAgentTaskCompleteTrackingEnabledFromState(
-  state: ReturnType<typeof useAppStore.getState>
-): boolean {
-  return (
-    isAgentTaskCompleteNotificationEnabledFromState(state) ||
-    isTerminalAttentionEnabledFromState(state)
-  )
+  return isAgentTaskCompleteTrackingEnabledFromState(useAppStore.getState())
 }
 
 const agentTaskCompleteTrackingEnabledListeners = new Set<() => void>()
@@ -695,7 +690,7 @@ let agentTaskCompleteTrackingSettingsSnapshot: string | null = null
 function getAgentTaskCompleteTrackingSettingsSnapshot(
   state: ReturnType<typeof useAppStore.getState>
 ): string {
-  return `${isAgentTaskCompleteTrackingEnabledFromState(state)}:${isAgentTaskCompleteNotificationEnabledFromState(state)}`
+  return `${isAgentTaskCompleteTrackingEnabledFromState(state)}:${isAgentTaskCompleteOsNotificationEnabledFromState(state)}`
 }
 
 function subscribeAgentTaskCompleteTrackingEnabled(listener: () => void): () => void {
@@ -727,27 +722,6 @@ function subscribeAgentTaskCompleteTrackingEnabled(listener: () => void): () => 
       agentTaskCompleteTrackingSettingsSnapshot = null
     }
   }
-}
-
-function hasAgentNotificationDetail(entry: AgentStatusEntry | undefined): boolean {
-  return Boolean(
-    entry &&
-    Date.now() - entry.updatedAt <= AGENT_TASK_COMPLETE_NOTIFICATION_DETAIL_MAX_AGE_MS &&
-    (entry.lastAssistantMessage || entry.toolName || entry.toolInput)
-  )
-}
-
-function canDispatchAgentNotificationAfterGrace(
-  entry: AgentStatusEntry | undefined,
-  options: { allowDoneDetailAfterGrace?: boolean } = {}
-): boolean {
-  // Why: hook-backed goal/mission loops can report `done` between milestones.
-  // User-input states may notify as soon as detail arrives, but `done` waits
-  // for the max quiet window so resumed work can cancel the pending banner.
-  return (
-    hasAgentNotificationDetail(entry) &&
-    (entry?.state !== 'done' || options.allowDoneDetailAfterGrace === true)
-  )
 }
 
 function recordPtyConnectDiagnostic(message: string): void {
@@ -1056,6 +1030,11 @@ export function connectPanePty(
   // window still drains on the fast path instead of the 1s coalesce fallback.
   let synchronizedForegroundFrameInteractive = false
   let suppressSnapshotReplayPtyResize = false
+  // Why: hidden-delivery gate sync is wired up alongside the deferred PTY
+  // output plumbing inside the connect frame; lifecycle hooks (visibility
+  // flips, exit, dispose) run before/after it exists, so start with no-ops.
+  let syncHiddenRendererPtyDelivery: () => void = () => {}
+  let releaseHiddenRendererPtyDelivery: () => void = () => {}
   // Why: idle callbacks are registered before the deferred PTY output plumbing
   // exists. Start with the shared scheduler, then switch to the PTY writer
   // below so hidden-tab resets keep backlog-recovery callbacks and byte order.
@@ -1519,36 +1498,43 @@ export function connectPanePty(
     }
     return pendingWrite.then(() => interruptInference.flushPending())
   }
-  const commandLifecycle = createTerminalCommandLifecycle({
-    onCommandFinished: () => {
-      // Why: the finished command may have moved HEAD or the index (e.g.
-      // `git checkout`); nudge git UI now instead of waiting for a poll.
-      dispatchTerminalCommandFinishedEvent(deps.worktreeId)
-      const state = useAppStore.getState()
-      const entry = state.agentStatusByPaneKey[cacheKey]
-      const inferenceResult = flushPendingInterruptInference()
-      if (inferenceResult === true) {
-        // Why: OSC 133 D means the foreground shell command exited. If an
-        // interrupt was inferred first, drop only when the current interrupted
-        // row is still the same turn; otherwise a killed OpenCode CLI leaves a
-        // stale "interrupted" row even though the process is gone.
-        dropCommandFinishedStatusIfSameTurn(entry, { allowInferredInterrupt: true })
-        return
-      }
-      if (inferenceResult instanceof Promise) {
-        void inferenceResult.then((applied) => {
-          dropCommandFinishedStatusIfSameTurn(entry, {
-            allowInferredInterrupt: applied === true
-          })
-        })
-        return
-      }
-      // Why: OSC 133 D marks the foreground shell command exiting. Remove the
-      // row without retaining a done snapshot; this section represents a live
-      // agent process, and the shell prompt means that process is gone.
-      dropCommandFinishedStatusIfSameTurn(entry)
+  // Why: one command-finished policy whether the signal arrives as bytes
+  // (remote PTYs, kill switch off) or as a main-derived pty:sideEffect fact —
+  // routing both through this handler keeps the drop/interrupt semantics
+  // identical across authority modes.
+  const handleCommandFinished = (_bestEffortExitCode: number | null): void => {
+    // Why: the finished command may have moved HEAD or the index (e.g.
+    // `git checkout`); nudge git UI now instead of waiting for a poll.
+    dispatchTerminalCommandFinishedEvent(deps.worktreeId)
+    const state = useAppStore.getState()
+    const entry = state.agentStatusByPaneKey[cacheKey]
+    const inferenceResult = flushPendingInterruptInference()
+    if (inferenceResult === true) {
+      // Why: OSC 133 D means the foreground shell command exited. If an
+      // interrupt was inferred first, drop only when the current interrupted
+      // row is still the same turn; otherwise a killed OpenCode CLI leaves a
+      // stale "interrupted" row even though the process is gone.
+      dropCommandFinishedStatusIfSameTurn(entry, { allowInferredInterrupt: true })
+      return
     }
+    if (inferenceResult instanceof Promise) {
+      void inferenceResult.then((applied) => {
+        dropCommandFinishedStatusIfSameTurn(entry, {
+          allowInferredInterrupt: applied === true
+        })
+      })
+      return
+    }
+    // Why: OSC 133 D marks the foreground shell command exiting. Remove the
+    // row without retaining a done snapshot; this section represents a live
+    // agent process, and the shell prompt means that process is gone.
+    dropCommandFinishedStatusIfSameTurn(entry)
+  }
+  const commandLifecycle = createTerminalCommandLifecycle({
+    onCommandFinished: handleCommandFinished
   })
+  // Why: the xterm OSC 133 swallow is rendering hygiene, not a side effect —
+  // it stays attached in every authority mode.
   commandLifecycle.attachXtermConsumer(pane.terminal)
   const onTerminalKeyDown = (event: KeyboardEvent): void => {
     if (isPlainEscapeKeyEvent(event)) {
@@ -1611,6 +1597,47 @@ export function connectPanePty(
   // Why: bind time lets async liveness reconcile ignore a request started
   // before this PTY bound (newborn race). Null disables the guard (fail-safe).
   let activePanePtyBindingBoundAt: number | null = null
+
+  // Why: with main side-effect authority on, the pane's title/bell/agent
+  // policy callbacks consume pty:sideEffect facts instead of transport byte
+  // parsers (which stay unregistered) — same policy code, single consumer.
+  // restoreTitleOnRegister replaces the eager-replay title restore: main's
+  // title-only snapshot carries the no-attention-replay rule.
+  let unregisterSideEffectFactConsumer: (() => void) | null = null
+  const registerSideEffectFactConsumerForPty = (ptyId: string): void => {
+    if (!mainSideEffectAuthority || disposed) {
+      return
+    }
+    unregisterSideEffectFactConsumer?.()
+    unregisterSideEffectFactConsumer = registerTerminalSideEffectFactConsumer({
+      ptyId,
+      callbacks: {
+        onTitleChange,
+        onBell,
+        onAgentBecameIdle,
+        onAgentBecameWorking,
+        onAgentExited,
+        onCommandFinished: handleCommandFinished,
+        onPrLink: (link) =>
+          useAppStore.getState().observeTerminalGitHubPullRequestLink(deps.worktreeId, link),
+        // Why: the Command Code settle policy stays here — the done settle
+        // timer must consult the live store row (which hook events and
+        // renderer seeds also write), so main only emits scrape facts.
+        onCommandCodeWorking: seedCommandCodeOutputWorkingStatus,
+        onCommandCodeDone: scheduleCommandCodeOutputDoneStatus,
+        // Why: gated hidden panes never see the subscribe bytes; the fact
+        // replaces the byte scan (and the old post-latch subscribe drop).
+        ...(hiddenDeliveryGateActive
+          ? { onMode2031Subscribe: handleHiddenMode2031SubscribeFact }
+          : {})
+      },
+      restoreTitleOnRegister: true
+    })
+  }
+  const dropSideEffectFactConsumer = (): void => {
+    unregisterSideEffectFactConsumer?.()
+    unregisterSideEffectFactConsumer = null
+  }
   const clearPanePtyFitBinding = (): void => {
     // Why: fit bindings live in a module-level map, so pane teardown must
     // clear them explicitly instead of relying on DOM removal.
@@ -1712,6 +1739,10 @@ export function connectPanePty(
     }
     handledExitPtyId = ptyId
     agentCompletionCoordinator.dispose()
+    dropSideEffectFactConsumer()
+    // Why: main clears gate state on PTY exit too; this only resets the
+    // pane-local marker so a reused pane cannot skip re-marking a new PTY.
+    releaseHiddenRendererPtyDelivery()
     clearPanePtyFitBinding()
     const isSuppressedExit = deps.consumeSuppressedPtyExit(ptyId)
     if (!isSuppressedExit) {
@@ -1782,7 +1813,11 @@ export function connectPanePty(
   let hasConsideredInitialCacheTimerSeed = false
   let allowInitialIdleCacheSeed = false
 
-  const onTitleChange = (title: string, rawTitle: string): void => {
+  const onTitleChange = (
+    title: string,
+    rawTitle: string,
+    meta?: { staleWorkingTitleClear?: boolean }
+  ): void => {
     const paneTitle = normalizeCompatibleAgentTitleForOwner(title, getAuthoritativePaneAgent())
     if (
       shouldSuppressCodexAutoApprovalSyntheticTitle(paneTitle, {
@@ -1795,7 +1830,11 @@ export function connectPanePty(
     }
     manager.setPaneGpuRendering(pane.id, !isGeminiTerminalTitle(rawTitle))
     deps.setRuntimePaneTitle(deps.tabId, pane.id, paneTitle)
-    if (syncAgentTaskCompleteTrackingEnabled()) {
+    // Why: a stale-derived cleared title comes from main's unthrottled 3s
+    // timer, not agent output. It must update the visible title but never
+    // feed completion tracking — observeTitle would classify the cleared
+    // title as idle and mint a task-complete for a merely-paused agent.
+    if (!meta?.staleWorkingTitleClear && syncAgentTaskCompleteTrackingEnabled()) {
       agentCompletionCoordinator.observeTitle(rawTitle)
     }
     // Why: only the focused pane should drive the tab title — otherwise two
@@ -1914,11 +1953,6 @@ export function connectPanePty(
     }, COMMAND_CODE_OUTPUT_DONE_SETTLE_MS)
   }
 
-  const commandCodeOutputStatusDetector = createCommandCodeOutputStatusDetector({
-    startupCommand: paneStartup?.command,
-    onWorking: seedCommandCodeOutputWorkingStatus,
-    onDone: scheduleCommandCodeOutputDoneStatus
-  })
   const observeTerminalGitHubPRLink = createTerminalGitHubPRLinkDetector()
   const reportPanePtyVisibility = (ptyId: string | null | undefined, visible: boolean): void => {
     if (!ptyId || isRemoteRuntimePtyId(ptyId)) {
@@ -1941,6 +1975,8 @@ export function connectPanePty(
     // Why: record bind time on the spawn/attach chokepoint so the reconcile
     // guard knows this binding is newer than any pre-bind snapshot.
     activePanePtyBindingBoundAt = performance.now()
+    registerSideEffectFactConsumerForPty(ptyId)
+    syncHiddenRendererPtyDelivery()
     deps.syncPanePtyLayoutBinding(pane.id, ptyId)
     const tabPtyIds = useAppStore.getState().ptyIdsByTabId?.[deps.tabId] ?? []
     if (options.updateTabPtyId !== 'if-missing' || !tabPtyIds.includes(ptyId)) {
@@ -2155,7 +2191,16 @@ export function connectPanePty(
   // findable after the OS banner is gone. Double-firing with a concurrent BEL
   // is handled by delaying the BEL OS notification below; main still keeps a
   // 5 s per-worktree dedupe as the final guard.
-  const onAgentBecameIdle = (title: string): void => {
+  const onAgentBecameIdle = (title: string, meta?: { staleWorkingTitleClear?: boolean }): void => {
+    // Why: a stale-derived idle comes from main's UNTHROTTLED 3s timer, not
+    // observed bytes — a merely-paused agent (>3s silent mid-task, window
+    // minimized) would otherwise mint a false task-complete OS notification
+    // that renderer timer throttling previously damped. Clear session-tied
+    // state only; never schedule completion attention from it.
+    if (meta?.staleWorkingTitleClear) {
+      deps.setCacheTimerStartedAt(cacheKey, null)
+      return
+    }
     // Why: only start the prompt-cache countdown for Claude agents — other
     // agents have different (or no) prompt-caching semantics and showing a
     // timer for them would be misleading.
@@ -2243,7 +2288,10 @@ export function connectPanePty(
     userAgent: navigator.userAgent,
     connectionId,
     cwd: deps.cwd,
-    shellOverride,
+    // Why: main folds the global Windows shell into its spawn classification
+    // (pty.ts effectiveShellOverride); fold it here too so both sides treat
+    // a global-WSL default identically (terminal-query-authority.md ConPTY).
+    shellOverride: resolveWindowsShellOverride(shellOverride, state.settings?.terminalWindowsShell),
     executionHostId
   })
   if (isNativeWindowsConpty) {
@@ -2287,6 +2335,37 @@ export function connectPanePty(
         })
       : undefined
   const shouldOwnAgentStatusInRenderer = runtimeEnvironmentId !== null
+  // Why: when main holds side-effect authority for this PTY's bytes, the
+  // transport must NOT register title/bell/agent byte parsers — the
+  // pty:sideEffect fact consumer below is the single policy consumer.
+  // Decided once at transport creation so a fact never has two consumers.
+  const mainSideEffectAuthority = isMainTerminalSideEffectAuthorityForPty({
+    settings: state.settings,
+    runtimeEnvironmentId
+  })
+  // Why: Phase-4 hidden-delivery gate — only meaningful under main authority
+  // (renderer byte parsers need bytes otherwise). Decided once at pane
+  // creation: it picks the mode-2031 answer path (fact reply vs byte scan),
+  // which must have exactly one owner.
+  const hiddenDeliveryGateActive =
+    mainSideEffectAuthority && isRendererHiddenPtyDeliveryGateEnabled(state.settings)
+  // Why: structural per-PTY gate predicate (authority on + gate on + bytes
+  // transit local main, which implies snapshot-backed). Shared by the hidden
+  // mark sync and mode-2031 reply ownership so reply ownership can never
+  // disagree with what main may drop — and never depends on the racy hidden
+  // mark (a fact can outrun the pty:data task that sets it).
+  const isHiddenDeliveryGateManagedPty = (ptyId: string | null): ptyId is string =>
+    hiddenDeliveryGateActive && Boolean(ptyId) && !isRemoteRuntimePtyId(ptyId)
+  // Why (byte-parser mode only): with main authority the Command Code scrape
+  // runs in main's per-PTY tracker and arrives as command-code facts; running
+  // the byte detector too would double-drive the seed/settle policy above.
+  const commandCodeOutputStatusDetector = mainSideEffectAuthority
+    ? null
+    : createCommandCodeOutputStatusDetector({
+        startupCommand: paneStartup?.command,
+        onWorking: seedCommandCodeOutputWorkingStatus,
+        onDone: scheduleCommandCodeOutputDoneStatus
+      })
   const shouldDeliverStartupViaTerminalPaste = paneStartup?.delivery === 'terminal-paste'
   const hadExistingPaneTransportAtConnect = deps.paneTransportsRef.current.size > 0
   let lastTerminalInputAt = Number.NEGATIVE_INFINITY
@@ -2329,12 +2408,16 @@ export function connectPanePty(
     ...(paneStartup?.launchAgent ? { launchAgent: paneStartup.launchAgent } : {}),
     ...(paneStartup?.telemetry ? { telemetry: paneStartup.telemetry } : {}),
     onPtyExit: onExit,
-    onTitleChange,
     onPtySpawn,
-    onBell,
-    onAgentBecameIdle,
-    onAgentBecameWorking,
-    onAgentExited,
+    ...(mainSideEffectAuthority
+      ? {}
+      : {
+          onTitleChange,
+          onBell,
+          onAgentBecameIdle,
+          onAgentBecameWorking,
+          onAgentExited
+        }),
     // Why: local IPC terminals are now model-owned in main: OrcaRuntimeService
     // parses OSC 9999 before renderer delivery and forwards through the hook
     // server with local/SSH identity. Remote-runtime streams do not pass through
@@ -2404,6 +2487,28 @@ export function connectPanePty(
   const transport = runtimeEnvironmentId
     ? createRemoteRuntimePtyTransport(runtimeEnvironmentId, transportOptions)
     : createIpcPtyTransport(transportOptions)
+  // Why (gate mode only): for gate-managed PTYs this fact is the SOLE 2031
+  // responder — visible, hidden, marked or not. Conditioning the reply on the
+  // hidden mark double-fired (mark set + bytes delivered live via interest →
+  // fact AND xterm both replied) or dropped the reply entirely (fact outran
+  // the pty:data task that set the mark). The xterm-side CSI reply and the
+  // skipped-byte scan are disabled for these panes (same structural
+  // predicate), so exactly one reply goes out.
+  const handleHiddenMode2031SubscribeFact = (): void => {
+    if (disposed || !isHiddenDeliveryGateManagedPty(transport.getPtyId())) {
+      return
+    }
+    const mode = resolveTerminalColorSchemeMode(
+      useAppStore.getState().settings,
+      getSystemPrefersDark()
+    )
+    transport.sendInput(mode2031SequenceFor(mode))
+    // Why: register the subscription exactly like the xterm CSI handler
+    // would — without the registry entry, later theme flips never push the
+    // CSI 997 update and the TUI keeps a stale theme after reveal.
+    deps.recordPaneMode2031Subscription?.(pane.id, mode)
+    recordHiddenMode2031Reply()
+  }
   deps.paneTransportsRef.current.set(pane.id, transport)
   const terminalCapabilityRepliesDisposable = installTerminalCapabilityReplyHandlers({
     terminal: pane.terminal,
@@ -3277,6 +3382,7 @@ export function connectPanePty(
         ...(coldRestoreOverride ? { launchConfig: coldRestoreOverride.launchConfig } : {}),
         ...(coldRestoreOverride ? { launchToken: coldRestoreOverride.launchToken } : {}),
         ...(coldRestoreOverride ? { launchAgent: coldRestoreOverride.agent } : {}),
+        ...(shouldDeclareHiddenAtSpawn() ? { initiallyHidden: true } : {}),
         callbacks: {
           onData: dataCallback,
           onReplayData: replayDataCallback,
@@ -3633,6 +3739,54 @@ export function connectPanePty(
     // can reuse the pane object for a different session before visibility.
     let hiddenOutputRestorePtyId: string | null = null
     let hiddenOutputRestoreGeneration = 0
+    // Why: after a snapshot restore, main can still drain ACK-backlog chunks
+    // whose bytes the snapshot already covers — writing them unguarded
+    // duplicates visible output. Track the restored baseline seq (per PTY)
+    // and the expected next chunk start so dataCallback can drop/slice
+    // overlaps and detect seq gaps from main-side pending-cap trims whose
+    // one-shot marker was already consumed.
+    let restoredSnapshotBaselineSeq: number | null = null
+    let restoredSnapshotBaselinePtyId: string | null = null
+    let restoredSnapshotExpectedStartSeq: number | null = null
+    // Why: main samples its pending renderer-delivery queue with the snapshot.
+    // Chunks at or below this seq can never be backlog duplicates (delivery is
+    // once-and-in-order), so the dedupe window is (windowStart, baseline].
+    let restoredSnapshotDeliveryWindowStartSeq: number | null = null
+
+    function setRestoredSnapshotBaseline(
+      ptyId: string,
+      snapshot: { seq?: number; pendingDeliveryStartSeq?: number }
+    ): void {
+      if (typeof snapshot.seq !== 'number') {
+        clearRestoredSnapshotBaseline()
+        return
+      }
+      const windowStartSeq =
+        typeof snapshot.pendingDeliveryStartSeq === 'number'
+          ? Math.min(snapshot.pendingDeliveryStartSeq, snapshot.seq)
+          : null
+      if (windowStartSeq !== null && windowStartSeq >= snapshot.seq) {
+        // Why: main reported an empty undelivered backlog — no chunk at or
+        // below the snapshot seq can ever arrive again (delivery is once and
+        // in order) and a future pending-cap trim re-arms the out-of-band
+        // marker. Arming a baseline anyway would misread live chunks from a
+        // foreign seq domain (restarted counter / synthetic injection) as
+        // duplicates or trim gaps and silently drop genuinely-new output.
+        clearRestoredSnapshotBaseline()
+        return
+      }
+      restoredSnapshotBaselineSeq = snapshot.seq
+      restoredSnapshotBaselinePtyId = ptyId
+      restoredSnapshotExpectedStartSeq = snapshot.seq
+      restoredSnapshotDeliveryWindowStartSeq = windowStartSeq
+    }
+
+    function clearRestoredSnapshotBaseline(): void {
+      restoredSnapshotBaselineSeq = null
+      restoredSnapshotBaselinePtyId = null
+      restoredSnapshotExpectedStartSeq = null
+      restoredSnapshotDeliveryWindowStartSeq = null
+    }
     let foregroundImmediateBudgetChars = 0
     let foregroundImmediateBudgetWindowStart = 0
     let foregroundRewriteChunkEndedWithCarriageReturn = false
@@ -3678,26 +3832,115 @@ export function connectPanePty(
       return transport.serializeBuffer(opts)
     }
 
-    function respondToSkippedMode2031Subscribe(data: string): void {
-      const scan = scanMode2031Sequences(hiddenMode2031ScanTail, data)
-      hiddenMode2031ScanTail = scan.tail
-      if (scan.finalState === 'unsubscribed') {
-        deps.paneMode2031Ref.current.delete(pane.id)
-        deps.paneLastThemeModeRef.current.delete(pane.id)
-      }
-      if (scan.finalState !== 'subscribed') {
+    // Why: hidden/parked panes used to mark hidden only at the first
+    // dataCallback sync, leaving a spawn-time window where neither side
+    // answered queries (the spawn-time DA1 loss). Declaring hidden on the
+    // spawn IPC lets main mark the PTY before its first byte — including
+    // codex spawns: the model responder answers their startup probes from
+    // byte zero now that the 10s renderer query window is gone.
+    // Remote-runtime PTYs are never gate-markable (no local main transit).
+    function shouldDeclareHiddenAtSpawn(): boolean {
+      return (
+        hiddenDeliveryGateActive &&
+        !runtimeEnvironmentId &&
+        !disposed &&
+        !shouldWritePtyOutputForeground(deps.isVisibleRef.current)
+      )
+    }
+
+    // ── Hidden-delivery gate sync (Phase 4) ─────────────────────────────
+    // Why: marks this pane's PTY hidden in main while no visible view needs
+    // its bytes; main then drops delivery after model ingestion and reveal
+    // restores from the snapshot. The marked id is tracked locally so PTY
+    // changes (reattach/restart) can never leave a stale id gated.
+    let hiddenDeliverySyncedPtyId: string | null = null
+    let hiddenDeliveryMarkedHidden = false
+    let modelRestoreSubscribedPtyId: string | null = null
+    let unregisterModelRestoreNeeded: (() => void) | null = null
+
+    function sendHiddenRendererPtyDelivery(ptyId: string, hidden: boolean): void {
+      window.api.pty.setHiddenRendererPty?.(ptyId, hidden)
+    }
+
+    // Why: main reports dropped renderer-bound bytes (hidden gate / pending
+    // cap) out-of-band — routed per PTY by pty-model-restore-channel.ts.
+    function handleModelRestoreNeededMarker(): void {
+      if (disposed) {
         return
       }
-      const settings = useAppStore.getState().settings
-      const mode = resolveTerminalColorSchemeMode(settings, getSystemPrefersDark())
-      // Why: hidden snapshot-backed panes skip xterm.write for PTY bytes. Answer
-      // mode 2031 out-of-band so TUIs still render the snapshot with the same
-      // theme-dependent styling they would have used in a visible pane.
-      deps.paneMode2031Ref.current.set(pane.id, true)
-      transport.sendInput(mode2031SequenceFor(mode))
-      deps.paneLastThemeModeRef.current.set(pane.id, mode)
-      recordHiddenMode2031Reply()
+      // Why: dropped bytes invalidate every cross-chunk carry — a partial
+      // OSC-9999 prefix spanning the gap would corrupt the next live chunk.
+      transport.resetCrossChunkParserState?.()
+      // Why: parity with the hidden skip path — a marker landing while a
+      // restore is in flight means the in-flight snapshot may predate the
+      // drop, so a fresh snapshot must follow. Captured BEFORE the mark: on a
+      // visible pane the mark starts a restore synchronously, which must not
+      // count as "already in flight".
+      const restoreWasInFlight = hiddenOutputRestoreInFlight !== null
+      markHiddenOutputRestoreNeeded()
+      if (restoreWasInFlight) {
+        hiddenOutputRestoreFreshSnapshotNeeded = true
+      }
     }
+
+    function syncModelRestoreNeededSubscription(ptyId: string | null): void {
+      if (modelRestoreSubscribedPtyId === ptyId) {
+        return
+      }
+      unregisterModelRestoreNeeded?.()
+      unregisterModelRestoreNeeded = null
+      modelRestoreSubscribedPtyId = ptyId
+      // Why: markers exist only for PTYs whose bytes transit local main;
+      // remote-runtime transports are structurally unaffected.
+      if (!ptyId || isRemoteRuntimePtyId(ptyId)) {
+        return
+      }
+      unregisterModelRestoreNeeded = registerPtyModelRestoreNeededHandler(
+        ptyId,
+        handleModelRestoreNeededMarker
+      )
+    }
+
+    syncHiddenRendererPtyDelivery = (): void => {
+      const ptyId = transport.getPtyId()
+      syncModelRestoreNeededSubscription(ptyId)
+      if (hiddenDeliverySyncedPtyId !== null && hiddenDeliverySyncedPtyId !== ptyId) {
+        if (hiddenDeliveryMarkedHidden) {
+          sendHiddenRendererPtyDelivery(hiddenDeliverySyncedPtyId, false)
+        }
+        hiddenDeliverySyncedPtyId = null
+        hiddenDeliveryMarkedHidden = false
+      }
+      if (!isHiddenDeliveryGateManagedPty(ptyId) || !canUseHiddenOutputSnapshot(ptyId)) {
+        return
+      }
+      const shouldHide = !disposed && !shouldWritePtyOutputForeground(deps.isVisibleRef.current)
+      const isFirstSyncForPty = hiddenDeliverySyncedPtyId !== ptyId
+      hiddenDeliverySyncedPtyId = ptyId
+      if (shouldHide) {
+        if (!hiddenDeliveryMarkedHidden) {
+          hiddenDeliveryMarkedHidden = true
+          sendHiddenRendererPtyDelivery(ptyId, true)
+        }
+      } else if (hiddenDeliveryMarkedHidden || isFirstSyncForPty) {
+        // Why: clear unconditionally on the first sync for a PTY — a stale
+        // main-side hidden bit can survive a renderer reload for
+        // daemon-backed PTYs that keep their session id.
+        hiddenDeliveryMarkedHidden = false
+        sendHiddenRendererPtyDelivery(ptyId, false)
+      }
+    }
+    releaseHiddenRendererPtyDelivery = (): void => {
+      if (hiddenDeliverySyncedPtyId !== null && hiddenDeliveryMarkedHidden) {
+        sendHiddenRendererPtyDelivery(hiddenDeliverySyncedPtyId, false)
+      }
+      hiddenDeliverySyncedPtyId = null
+      hiddenDeliveryMarkedHidden = false
+      unregisterModelRestoreNeeded?.()
+      unregisterModelRestoreNeeded = null
+      modelRestoreSubscribedPtyId = null
+    }
+
     function beforeTerminalOutputWrite(): void {
       recordTerminalOutput(pane.terminal)
     }
@@ -3811,6 +4054,27 @@ export function connectPanePty(
         inPlaceRewrite: false,
         recoverWebglAtlasAfterParse: false
       }
+    }
+
+    function respondToSkippedMode2031Subscribe(data: string): void {
+      const scan = scanMode2031Sequences(hiddenMode2031ScanTail, data)
+      hiddenMode2031ScanTail = scan.tail
+      if (scan.finalState === 'unsubscribed') {
+        deps.paneMode2031Ref.current.delete(pane.id)
+        deps.paneLastThemeModeRef.current.delete(pane.id)
+      }
+      if (scan.finalState !== 'subscribed') {
+        return
+      }
+      const settings = useAppStore.getState().settings
+      const mode = resolveTerminalColorSchemeMode(settings, getSystemPrefersDark())
+      // Why: hidden snapshot-backed panes skip xterm.write for PTY bytes. Answer
+      // mode 2031 out-of-band so TUIs still render the snapshot with the same
+      // theme-dependent styling they would have used in a visible pane.
+      deps.paneMode2031Ref.current.set(pane.id, true)
+      transport.sendInput(mode2031SequenceFor(mode))
+      deps.paneLastThemeModeRef.current.set(pane.id, mode)
+      recordHiddenMode2031Reply()
     }
 
     function writePtyOutputToXterm(
@@ -4120,6 +4384,75 @@ export function connectPanePty(
       return chunk.data.slice(offset)
     }
 
+    type RestoredSnapshotReconciliation =
+      | { action: 'write'; data: string; meta: PtyDataMeta | undefined }
+      | { action: 'drop-duplicate' }
+      | { action: 'force-fresh-restore' }
+
+    // Why: same slicing rules as getChunkDataAfterSnapshot, applied to LIVE
+    // chunks after a restore completed — main's ACK backlog keeps draining
+    // chunks at or before the snapshot seq, and pending-cap trims can drop
+    // seq ranges silently once the one-shot overflow marker was consumed.
+    function reconcileChunkAgainstRestoredSnapshot(
+      data: string,
+      meta: PtyDataMeta | undefined
+    ): RestoredSnapshotReconciliation {
+      if (restoredSnapshotBaselineSeq === null) {
+        return { action: 'write', data, meta }
+      }
+      if (transport.getPtyId() !== restoredSnapshotBaselinePtyId) {
+        clearRestoredSnapshotBaseline()
+        return { action: 'write', data, meta }
+      }
+      if (typeof meta?.seq !== 'number') {
+        // Why: seq-less chunks (no runtime metering) cannot be reconciled;
+        // mirror getChunkDataAfterSnapshot and pass them through.
+        return { action: 'write', data, meta }
+      }
+      if (
+        restoredSnapshotDeliveryWindowStartSeq !== null &&
+        meta.seq <= restoredSnapshotDeliveryWindowStartSeq
+      ) {
+        // Why: every byte main could still deliver at snapshot time started
+        // AFTER this seq, and delivery is once-and-in-order — so this chunk
+        // cannot be a backlog duplicate. It is a new seq domain (restarted
+        // counter / synthetic source); retire the stale baseline and write
+        // instead of silently dropping genuinely-new live output.
+        clearRestoredSnapshotBaseline()
+        return { action: 'write', data, meta }
+      }
+      const rawLength = meta.rawLength ?? data.length
+      const startSeq = meta.seq - rawLength
+      const expectedStartSeq = restoredSnapshotExpectedStartSeq
+      restoredSnapshotExpectedStartSeq = Math.max(expectedStartSeq ?? meta.seq, meta.seq)
+      if (expectedStartSeq !== null && startSeq > expectedStartSeq) {
+        // Why: the chunk starts past the continuity point — bytes between
+        // were dropped (pending-cap trim after the marker fired). Only the
+        // model snapshot can heal the gap.
+        return { action: 'force-fresh-restore' }
+      }
+      if (meta.seq <= restoredSnapshotBaselineSeq) {
+        return { action: 'drop-duplicate' }
+      }
+      if (startSeq >= restoredSnapshotBaselineSeq) {
+        return { action: 'write', data, meta }
+      }
+      if (rawLength !== data.length) {
+        // Why: renderer-only OSC stripping makes raw sequence offsets
+        // impossible to map onto cleaned text — fetch a fresh snapshot
+        // instead of risking duplicate visible output.
+        return { action: 'force-fresh-restore' }
+      }
+      const sliced = data.slice(restoredSnapshotBaselineSeq - startSeq)
+      return {
+        action: 'write',
+        data: sliced,
+        // Why: keep seq metadata consistent with the sliced payload so a
+        // later restore queue drain slices against accurate offsets.
+        meta: { ...meta, rawLength: sliced.length }
+      }
+    }
+
     function drainPendingLiveChunksAfterSnapshot(snapshotSeq: number | undefined): boolean {
       if (hiddenOutputRestorePendingOverflow) {
         hiddenOutputRestorePendingOverflow = false
@@ -4140,6 +4473,12 @@ export function connectPanePty(
             hiddenOutputRestorePendingChunks = []
             hiddenOutputRestorePendingChars = 0
             return false
+          }
+          // Why: drained chunks advance the post-restore continuity point so
+          // the live-chunk reconciliation neither re-drops them as duplicates
+          // nor misreads the next live chunk as a gap.
+          if (typeof chunk.seq === 'number' && restoredSnapshotExpectedStartSeq !== null) {
+            restoredSnapshotExpectedStartSeq = Math.max(restoredSnapshotExpectedStartSeq, chunk.seq)
           }
           if (data) {
             writePtyOutputToXterm(data, true)
@@ -4342,6 +4681,7 @@ export function connectPanePty(
         // Why: renderer backlog is tied to the old PTY stream; after reattach,
         // queued hidden bytes must not delay or replay before the new PTY.
         clearHiddenOutputRestoreState()
+        clearRestoredSnapshotBaseline()
         clearPaneMode2031State()
         discardTerminalOutput(pane.terminal)
       }
@@ -4534,6 +4874,10 @@ export function connectPanePty(
           }
           hiddenOutputRestoreDeferredRetryAttempts = 0
           applyMainBufferSnapshot(snapshot)
+          // Why: everything at or before snapshot.seq is now painted; chunks
+          // still draining from main's ACK backlog below that point are
+          // duplicates the dataCallback reconciliation must suppress.
+          setRestoredSnapshotBaseline(currentPtyId, snapshot)
           const needsFreshSnapshot = hiddenOutputRestoreFreshSnapshotNeeded
           hiddenOutputRestoreFreshSnapshotNeeded = false
           if (drainPendingLiveChunksAfterSnapshot(snapshot.seq) && !needsFreshSnapshot) {
@@ -4574,16 +4918,22 @@ export function connectPanePty(
       return true
     }
 
-    unregisterBacklogRecovery = registerTerminalBacklogRecovery(
-      pane.terminal,
-      requestHiddenOutputRestoreIfNeeded
-    )
+    unregisterBacklogRecovery = registerTerminalBacklogRecovery(pane.terminal, () => {
+      // Why: clear the hidden-delivery bit BEFORE the restore snapshot
+      // request — bytes arriving between the unhide IPC and the snapshot
+      // are reconciled by the existing seq guard.
+      syncHiddenRendererPtyDelivery()
+      return requestHiddenOutputRestoreIfNeeded()
+    })
     if (
       typeof document !== 'undefined' &&
       typeof document.addEventListener === 'function' &&
       typeof document.removeEventListener === 'function'
     ) {
       const onDocumentVisibilityChange = (): void => {
+        // Why: document hide/show flips the foreground predicate without any
+        // pane lifecycle event — re-sync the hidden-delivery gate both ways.
+        syncHiddenRendererPtyDelivery()
         if (shouldWritePtyOutputForeground(deps.isVisibleRef.current)) {
           requestHiddenOutputRestoreIfNeeded()
         }
@@ -4616,19 +4966,52 @@ export function connectPanePty(
       }
       respondToTerminalPixelSizeQueries(data)
       observeTerminalBracketedPasteModeOutput(pane.terminal, data)
-      for (const link of observeTerminalGitHubPRLink(data)) {
-        useAppStore.getState().observeTerminalGitHubPullRequestLink(deps.worktreeId, link)
+      // Why: with main side-effect authority, command-finished, pr-link, and
+      // the Command Code scrape arrive as pty:sideEffect facts —
+      // byte-scanning here too would double-fire the same policy.
+      // Remote-runtime PTYs (and the kill switch off) keep this byte path as
+      // their only parser.
+      if (!mainSideEffectAuthority) {
+        for (const link of observeTerminalGitHubPRLink(data)) {
+          useAppStore.getState().observeTerminalGitHubPullRequestLink(deps.worktreeId, link)
+        }
+        commandLifecycle.handlePtyData(data)
       }
-      commandCodeOutputStatusDetector.observe(data)
-      commandLifecycle.handlePtyData(data)
+      commandCodeOutputStatusDetector?.observe(data)
       // Why: split-pane layouts have multiple visible-but-inactive panes whose
       // output the user is watching. Throttle only when the pane or whole
       // Electron document is hidden.
       const foreground =
         shouldWritePtyOutputForeground(deps.isVisibleRef.current) && meta?.background !== true
+      // Why: latch the hidden-delivery gate from the byte path too — covers a
+      // PTY id arriving after the initial sync. No-op when state is current.
+      if (!foreground) {
+        syncHiddenRendererPtyDelivery()
+      }
       if (foreground && hiddenMode2031ScanTail) {
         respondToSkippedMode2031Subscribe(data)
       }
+      // Why: post-restore reconciliation — drop/slice backlog chunks the
+      // restored snapshot already covers, and force a fresh restore for seq
+      // gaps or overlaps whose offsets cannot be mapped. Runs after the byte
+      // observers above (those bytes were never delivered before; their side
+      // effects are still real) but before any xterm write decision.
+      const reconciliation = reconcileChunkAgainstRestoredSnapshot(data, meta)
+      if (reconciliation.action === 'drop-duplicate') {
+        return
+      }
+      if (reconciliation.action === 'force-fresh-restore') {
+        // Why: in-flight captured BEFORE the mark — on a visible pane the
+        // mark starts the restore synchronously and must not flag itself.
+        const restoreWasInFlight = hiddenOutputRestoreInFlight !== null
+        markHiddenOutputRestoreNeeded()
+        if (restoreWasInFlight) {
+          hiddenOutputRestoreFreshSnapshotNeeded = true
+        }
+        return
+      }
+      data = reconciliation.data
+      meta = reconciliation.meta
       // Why: a hidden Codex query can be split just before visibility changes;
       // xterm needs the completed query, while other bytes still follow restore.
       const pendingForegroundQuery = foreground
@@ -4677,7 +5060,15 @@ export function connectPanePty(
           hiddenOutputRestoreNeeded = true
           hiddenOutputRestoreFreshSnapshotNeeded = true
         }
+        // Why: hidden chunks with a restore already latched are dropped here —
+        // the model snapshot fetched on reveal covers their bytes.
       } else {
+        // Why: gate-managed hidden panes normally receive no bytes (main
+        // drops after model ingestion). Any hidden chunk that still arrives
+        // (kill switch off, interest-held delivery) rides the bounded
+        // background scheduler queue; on overflow the scheduler latches the
+        // model restore. The kill-switch-off startup-query grammar above is
+        // the byte-identical fallback.
         if (pendingForegroundQuery?.statefulQueryData) {
           writePtyOutputToXterm(pendingForegroundQuery.statefulQueryData, true, {
             hiddenStartupRendererQuery: true
@@ -4749,6 +5140,8 @@ export function connectPanePty(
       }
       setPanePtyFitBinding(ptyId)
       reportPanePtyVisibility(ptyId, deps.isVisibleRef.current)
+      registerSideEffectFactConsumerForPty(ptyId)
+      syncHiddenRendererPtyDelivery()
       deps.syncPanePtyLayoutBinding(pane.id, ptyId)
       deps.updateTabPtyId(deps.tabId, ptyId)
       agentCompletionCoordinator.startProcessTracking()
@@ -5035,6 +5428,7 @@ export function connectPanePty(
                 ? { launchToken: coldRestoreStartup.launchToken }
                 : {}),
               ...(coldRestoreStartup?.agent ? { launchAgent: coldRestoreStartup.agent } : {}),
+              ...(shouldDeclareHiddenAtSpawn() ? { initiallyHidden: true } : {}),
               callbacks: {
                 onData: dataCallback,
                 onReplayData: replayDataCallback,
@@ -5212,6 +5606,7 @@ export function connectPanePty(
           : {}),
         ...(coldRestoreStartup?.launchToken ? { launchToken: coldRestoreStartup.launchToken } : {}),
         ...(coldRestoreStartup?.agent ? { launchAgent: coldRestoreStartup.agent } : {}),
+        ...(shouldDeclareHiddenAtSpawn() ? { initiallyHidden: true } : {}),
         callbacks: {
           onData: dataCallback,
           onReplayData: replayDataCallback,
@@ -5460,6 +5855,12 @@ export function connectPanePty(
   return {
     syncProcessTracking() {
       agentCompletionCoordinator.startProcessTracking()
+      // Why: the lifecycle hook calls this on every pane visibility flip —
+      // the hidden-delivery gate must follow the same transitions.
+      syncHiddenRendererPtyDelivery()
+    },
+    isHiddenDeliveryGateManagedPty() {
+      return isHiddenDeliveryGateManagedPty(transport.getPtyId())
     },
     // Why: called from the lifecycle visibility effect so the visible-resume
     // size readback can repair dropped hidden resizes without refitting against
@@ -5482,6 +5883,9 @@ export function connectPanePty(
         cancelAnimationFrame(pendingForegroundGridDriftCheckRaf)
         pendingForegroundGridDriftCheckRaf = null
       }
+      // Why: a pane unmount (tab move, parking teardown) must never leave its
+      // PTY gated — the parked watcher or the remounted pane re-decides.
+      releaseHiddenRendererPtyDelivery()
       if (terminalKeyTargetSupportsEvents) {
         terminalKeyTarget.removeEventListener('keydown', onTerminalKeyDown, { capture: true })
       }
@@ -5522,6 +5926,9 @@ export function connectPanePty(
       unregisterDocumentVisibilityRecovery?.()
       unregisterDocumentVisibilityRecovery = null
       reportPanePtyVisibility(activePanePtyBinding ?? transport.getPtyId(), false)
+      // Why: a parked-tab watcher may take over this PTY's facts in the same
+      // effect flush; the pane's consumer must be gone before that handoff.
+      dropSideEffectFactConsumer()
       clearPanePtyFitBinding()
       discardTerminalOutput(pane.terminal)
       unregisterE2ePtyDataInjection()

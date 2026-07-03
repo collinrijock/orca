@@ -21,6 +21,8 @@ import { getFitOverrideForPty } from '@/lib/pane-manager/mobile-fit-overrides'
 import type { PtyTransport } from './pty-transport'
 import type { EffectiveMacOptionAsAlt } from '@/lib/keyboard-layout/detect-option-as-alt'
 import { HEX_COLOR_RE } from '../../../../shared/color-validation'
+import type { TerminalViewAttributes } from '../../../../shared/terminal-view-attributes'
+import { publishTerminalViewAttributes } from './terminal-view-attributes-publisher'
 
 export { mode2031SequenceFor }
 
@@ -206,6 +208,54 @@ export function composeActiveTerminalTheme(
   return theme
 }
 
+/** App-start publication (terminal-query-authority.md §Phase 6
+ *  prerequisites): hidden-at-launch PTYs can query OSC 10/11 before any
+ *  terminal pane mounts, and main's responder is silent-until-first-push.
+ *  Composes the same theme applyTerminalAppearance would and publishes it
+ *  through the same deduped publisher, so the later pane-mount apply is a
+ *  no-op re-push. Returns whether a publish actually went out. */
+export function publishTerminalViewAttributesAtAppStart(
+  settings: GlobalSettings | null | undefined,
+  systemPrefersDark: boolean,
+  send?: (attributes: TerminalViewAttributes) => boolean
+): boolean {
+  if (!settings) {
+    return false
+  }
+  const appearance = resolveEffectiveTerminalAppearance(settings, systemPrefersDark)
+  const baseTheme: ITheme | null = appearance.theme ?? getBuiltinTheme(appearance.themeName)
+  const theme = composeActiveTerminalTheme(baseTheme, settings)
+  return send !== undefined
+    ? publishTerminalViewAttributes(theme, appearance.mode, settings, send)
+    : publishTerminalViewAttributes(theme, appearance.mode, settings)
+}
+
+// Value equality over composed ITheme objects (flat string slots plus the
+// extendedAnsi string array), used to gate the per-pane options.theme write.
+function composedTerminalThemesEqual(a: ITheme | undefined, b: ITheme): boolean {
+  if (!a) {
+    return false
+  }
+  if (a === b) {
+    return true
+  }
+  const keys = new Set([...Object.keys(a), ...Object.keys(b)])
+  for (const key of keys) {
+    if (key === 'extendedAnsi') {
+      continue
+    }
+    if (a[key as keyof ITheme] !== b[key as keyof ITheme]) {
+      return false
+    }
+  }
+  const extA = a.extendedAnsi
+  const extB = b.extendedAnsi
+  if (!extA || !extB) {
+    return extA === extB
+  }
+  return extA.length === extB.length && extA.every((value, i) => value === extB[i])
+}
+
 export function applyTerminalAppearance(
   manager: PaneManager,
   settings: GlobalSettings,
@@ -220,6 +270,11 @@ export function applyTerminalAppearance(
   const paneStyles = resolvePaneStyleOptions(settings)
   const baseTheme: ITheme | null = appearance.theme ?? getBuiltinTheme(appearance.themeName)
   const theme = composeActiveTerminalTheme(baseTheme, settings)
+  // View-attribute bridge (Phase 5 slice 2): this is the single point where
+  // the composed app-global terminal appearance exists, so publish it to
+  // main's hidden-PTY query responder here. Deduped inside the publisher —
+  // per-pane re-applies and attribute-neutral tweaks do not re-push.
+  publishTerminalViewAttributes(theme, appearance.mode, settings)
   const paneBackground = theme?.background ?? '#000000'
 
   const terminalFontWeights = resolveTerminalFontWeights(settings.terminalFontWeight)
@@ -229,7 +284,14 @@ export function applyTerminalAppearance(
   )
 
   for (const pane of manager.getPanes()) {
-    if (theme) {
+    // Why value-gated: xterm's OptionsService fires on object identity, and
+    // ThemeService._setTheme rebuilds the palette, discarding TUI OSC
+    // 4/10/11/12 SET mutations. Attribute-neutral applies (font size/family,
+    // line height, padding, per-pane zoom) compose a fresh-but-identical
+    // theme; skipping the write keeps visible-pane mutations alive (a
+    // pre-existing loss this also fixes) and matches the hidden responder's
+    // deduped overlay behavior, so hidden and visible no longer drift.
+    if (theme && !composedTerminalThemesEqual(pane.terminal.options.theme, theme)) {
       pane.terminal.options.theme = theme
     }
     // Why: xterm's allowTransparency has measurable rendering cost, so clear

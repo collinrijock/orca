@@ -807,6 +807,31 @@ describe('pane terminal output scheduler', () => {
     expect(terminals[2].write).toHaveBeenCalledWith('pane-2')
   })
 
+  it('drains active foreground backlog before older background terminal backlog', async () => {
+    vi.useFakeTimers()
+    const { writeTerminalOutput } = await loadScheduler()
+    const backgroundA = createTerminal()
+    const backgroundB = createTerminal()
+    const active = createTerminal()
+
+    writeTerminalOutput(backgroundA, 'background-a', { foreground: false })
+    writeTerminalOutput(backgroundB, 'background-b', { foreground: false })
+    writeTerminalOutput(active, 'active', {
+      foreground: true,
+      latencySensitive: false
+    })
+
+    vi.advanceTimersByTime(0)
+
+    expect(active.write).toHaveBeenCalledWith('active', expect.any(Function))
+    expect(active.write.mock.invocationCallOrder[0]).toBeLessThan(
+      backgroundA.write.mock.invocationCallOrder[0]
+    )
+    expect(active.write.mock.invocationCallOrder[0]).toBeLessThan(
+      backgroundB.write.mock.invocationCallOrder[0]
+    )
+  })
+
   it('rotates terminals with remaining backlog behind untouched queued terminals', async () => {
     vi.useFakeTimers()
     const { writeTerminalOutput } = await loadScheduler()

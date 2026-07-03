@@ -49,6 +49,7 @@ import {
   type RuntimeTerminalAgentStatusEvent
 } from './orca-runtime'
 import type { RuntimeMobileSessionTabsResult } from '../../shared/runtime-types'
+import type { TerminalSideEffectBatch } from '../../shared/terminal-side-effect-facts'
 import {
   TERMINAL_INPUT_CHUNK_MAX_BYTES,
   TERMINAL_INPUT_MAX_BYTES,
@@ -5391,6 +5392,654 @@ describe('OrcaRuntimeService', () => {
 
     expect((await runtime.listTerminals()).terminals[0]).toMatchObject({
       title: 'Codex'
+    })
+  })
+
+  it('resolves tui-idle when a completion title is coalesced with the next working title', async () => {
+    // Why: node-pty + the main batch window can coalesce "task done" and the
+    // next task's working title into one chunk. A last-title reader never
+    // sees the intermediate idle and the waiter hangs (issue #1083 class).
+    const runtime = createRuntime()
+    syncSinglePty(runtime)
+    runtime.onPtyData('pty-1', '\x1b]0;Codex working\x07', 100)
+    const [terminal] = (await runtime.listTerminals()).terminals
+    const wait = runtime.waitForTerminal(terminal.handle, {
+      condition: 'tui-idle',
+      timeoutMs: 1_000
+    })
+
+    runtime.onPtyData('pty-1', '\x1b]0;Codex done\x07\x1b]0;Codex working\x07', 101)
+
+    await expect(wait).resolves.toMatchObject({
+      handle: terminal.handle,
+      condition: 'tui-idle',
+      status: 'running'
+    })
+  })
+
+  it('ignores the bare cursor-agent native title so synthesized spinner state survives', async () => {
+    const ptyId = `${TEST_REPO_ID}::/tmp/worktree-a@@pty-bg`
+    const runtime = createRuntime()
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null,
+      listProcesses: async () => [{ id: ptyId, cwd: '/tmp/worktree-a', title: 'shell' }]
+    })
+    runtime.attachWindow(1)
+    runtime.markGraphReady(1)
+
+    runtime.onPtyData(ptyId, '\x1b]0;⠋ Cursor Agent\x07', 100)
+    // cursor-agent re-emits its bare native title on internal redraws while
+    // still working; it must not stomp the synthesized working title.
+    runtime.onPtyData(ptyId, '\x1b]0;Cursor Agent\x07', 101)
+
+    expect((await runtime.listTerminals()).terminals[0]).toMatchObject({
+      title: '⠋ Cursor Agent'
+    })
+  })
+
+  it('clears a stale working title after 3s of title-less output', async () => {
+    vi.useFakeTimers()
+    try {
+      const ptyId = `${TEST_REPO_ID}::/tmp/worktree-a@@pty-bg`
+      const runtime = createRuntime()
+      runtime.setPtyController({
+        write: () => true,
+        kill: () => true,
+        getForegroundProcess: async () => null,
+        listProcesses: async () => [{ id: ptyId, cwd: '/tmp/worktree-a', title: 'shell' }]
+      })
+      runtime.attachWindow(1)
+      runtime.markGraphReady(1)
+
+      runtime.onPtyData(ptyId, '\x1b]0;Codex working\x07', 100)
+      runtime.onPtyData(ptyId, 'output without a title\r\n', 101)
+      expect((await runtime.listTerminals()).terminals[0]).toMatchObject({
+        title: 'Codex working'
+      })
+
+      await vi.advanceTimersByTimeAsync(3_000)
+
+      expect((await runtime.listTerminals()).terminals[0]).toMatchObject({
+        title: 'Codex'
+      })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('cancels the stale-title timer when the PTY exits', async () => {
+    vi.useFakeTimers()
+    try {
+      const ptyId = `${TEST_REPO_ID}::/tmp/worktree-a@@pty-bg`
+      const runtime = createRuntime()
+      runtime.setPtyController({
+        write: () => true,
+        kill: () => true,
+        getForegroundProcess: async () => null,
+        listProcesses: async () => [{ id: ptyId, cwd: '/tmp/worktree-a', title: 'shell' }]
+      })
+      runtime.attachWindow(1)
+      runtime.markGraphReady(1)
+
+      runtime.onPtyData(ptyId, '\x1b]0;Codex working\x07', 100)
+      runtime.onPtyData(ptyId, 'output without a title\r\n', 101)
+      runtime.onPtyExit(ptyId, 0)
+
+      await vi.advanceTimersByTimeAsync(4_000)
+
+      // The dead session keeps its factual last title — the disposed tracker's
+      // stale-title rewrite must not fire into the retained record.
+      expect((await runtime.listTerminals()).terminals[0]).toMatchObject({
+        title: 'Codex working'
+      })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('keeps stale-title timers isolated per PTY', async () => {
+    vi.useFakeTimers()
+    try {
+      const ptyA = `${TEST_REPO_ID}::/tmp/worktree-a@@pty-a`
+      const ptyB = `${TEST_REPO_ID}::/tmp/worktree-a@@pty-b`
+      const runtime = createRuntime()
+      runtime.setPtyController({
+        write: () => true,
+        kill: () => true,
+        getForegroundProcess: async () => null,
+        listProcesses: async () => [
+          { id: ptyA, cwd: '/tmp/worktree-a', title: 'shell' },
+          { id: ptyB, cwd: '/tmp/worktree-a', title: 'shell' }
+        ]
+      })
+      runtime.attachWindow(1)
+      runtime.markGraphReady(1)
+
+      runtime.onPtyData(ptyA, '\x1b]0;Codex working\x07', 100)
+      runtime.onPtyData(ptyB, '\x1b]0;Aider working\x07', 100)
+      // Only A receives title-less output, so only A's stale timer arms.
+      runtime.onPtyData(ptyA, 'output without a title\r\n', 101)
+
+      await vi.advanceTimersByTimeAsync(3_000)
+
+      const { terminals } = await runtime.listTerminals()
+      expect(terminals.find((t) => t.tabId === `pty:${ptyA}`)).toMatchObject({ title: 'Codex' })
+      expect(terminals.find((t) => t.tabId === `pty:${ptyB}`)).toMatchObject({
+        title: 'Aider working'
+      })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  // ─── pty:sideEffect channel (terminal-side-effect-authority.md, slice 2) ──
+  describe('terminal side-effect fact channel', () => {
+    function createSideEffectRuntime(): {
+      runtime: OrcaRuntimeService
+      batches: TerminalSideEffectBatch[]
+    } {
+      const batches: TerminalSideEffectBatch[] = []
+      const runtime = new OrcaRuntimeService(store, undefined, {
+        onTerminalSideEffects: (batch) => batches.push(batch)
+      })
+      return { runtime, batches }
+    }
+
+    it('emits one batched event per chunk with facts in byte order and attribution', () => {
+      const { runtime, batches } = createSideEffectRuntime()
+      syncSinglePty(runtime)
+
+      const chunk = '\x1b]0;Codex working\x07response\x1b]0;Codex done\x07\x07'
+      runtime.onPtyData('pty-1', chunk, 100)
+
+      expect(batches).toHaveLength(1)
+      expect(batches[0]).toMatchObject({
+        ptyId: 'pty-1',
+        seq: chunk.length,
+        worktreeId: TEST_WORKTREE_ID,
+        tabId: 'tab-1',
+        paneKey: 'tab-1:1'
+      })
+      expect(batches[0].replay).toBeUndefined()
+      expect(batches[0].facts).toEqual([
+        { kind: 'title', normalizedTitle: 'Codex working', rawTitle: 'Codex working' },
+        { kind: 'agent-working' },
+        { kind: 'title', normalizedTitle: 'Codex done', rawTitle: 'Codex done' },
+        { kind: 'agent-idle', title: 'Codex done' },
+        { kind: 'bell' }
+      ])
+    })
+
+    it('keeps per-PTY ordering across chunks and accumulates seq', () => {
+      const { runtime, batches } = createSideEffectRuntime()
+      syncSinglePty(runtime)
+
+      runtime.onPtyData('pty-1', '\x1b]0;Codex working\x07', 100)
+      runtime.onPtyData('pty-1', '\x1b]0;Codex done\x07', 101)
+
+      expect(batches.map((batch) => batch.facts[0]?.kind)).toEqual(['title', 'title'])
+      expect(batches[0].seq).toBeLessThan(batches[1].seq)
+    })
+
+    it('emits nothing for chunks without derived facts', () => {
+      const { runtime, batches } = createSideEffectRuntime()
+      syncSinglePty(runtime)
+
+      // Plain output, a BEL-terminated non-title OSC split across chunks, and
+      // an Orca status payload: none of these is a title/bell/agent fact.
+      runtime.onPtyData('pty-1', 'plain output\r\n', 100)
+      runtime.onPtyData('pty-1', '\x1b]7;file://host', 101)
+      runtime.onPtyData('pty-1', '/tmp\x07', 102)
+      runtime.onPtyData('pty-1', '\x1b]9999;{"state":"working","agentType":"codex"}\x07', 103)
+
+      expect(batches).toEqual([])
+    })
+
+    it('emits the stale-working-title rewrite as between-chunk fact batches', async () => {
+      vi.useFakeTimers()
+      try {
+        const { runtime, batches } = createSideEffectRuntime()
+        syncSinglePty(runtime)
+
+        runtime.onPtyData('pty-1', '\x1b]0;Codex working\x07', 100)
+        runtime.onPtyData('pty-1', 'output without a title\r\n', 101)
+        batches.length = 0
+
+        await vi.advanceTimersByTimeAsync(3_000)
+
+        // Timer facts fire outside a chunk, so each emits immediately —
+        // still strictly ordered per PTY. They carry staleWorkingTitleClear:
+        // the renderer must clear state without scheduling a task-complete
+        // notification main's unthrottled timer did not earn.
+        expect(batches.flatMap((batch) => batch.facts)).toEqual([
+          {
+            kind: 'title',
+            normalizedTitle: 'Codex',
+            rawTitle: 'Codex',
+            staleWorkingTitleClear: true
+          },
+          { kind: 'agent-idle', title: 'Codex', staleWorkingTitleClear: true }
+        ])
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('ingests synthetic title frames without touching the byte pipeline', () => {
+      const { runtime, batches } = createSideEffectRuntime()
+      syncSinglePty(runtime)
+
+      runtime.ingestSyntheticTitleFrame('pty-1', '\x1b]0;⠋ Cursor Agent\x07')
+
+      expect(batches).toHaveLength(1)
+      expect(batches[0].facts).toEqual([
+        { kind: 'title', normalizedTitle: '⠋ Cursor Agent', rawTitle: '⠋ Cursor Agent' },
+        // The synthesized spinner classifies as working — agent facts derive
+        // from synthetic frames the same as from real bytes.
+        { kind: 'agent-working' }
+      ])
+      // Synthetic frames are fabricated by main: they must not advance the
+      // metered output sequence the renderer ACK budget is based on.
+      expect(runtime.getPtyOutputSequence('pty-1')).toBe(0)
+    })
+
+    it('carries the synthetic permission BEL as a bell fact', () => {
+      const { runtime, batches } = createSideEffectRuntime()
+      syncSinglePty(runtime)
+
+      runtime.ingestSyntheticTitleFrame('pty-1', '\x1b]0;Cursor needs your input\x07\x07')
+
+      expect(batches[0].facts.at(0)).toMatchObject({ kind: 'title' })
+      expect(batches[0].facts.at(-1)).toEqual({ kind: 'bell' })
+    })
+
+    it('emits command-finished facts with best-effort exit codes across chunk splits', () => {
+      const { runtime, batches } = createSideEffectRuntime()
+      syncSinglePty(runtime)
+
+      runtime.onPtyData('pty-1', 'output\x1b]133;D;13', 100)
+      expect(batches).toEqual([])
+      runtime.onPtyData('pty-1', '0\x07prompt $ ', 101)
+      runtime.onPtyData('pty-1', '\x1b]133;D\x07', 102)
+
+      expect(batches.flatMap((batch) => batch.facts)).toEqual([
+        { kind: 'command-finished', exitCode: 130 },
+        { kind: 'command-finished', exitCode: null }
+      ])
+    })
+
+    it('emits pr-link facts once per URL with batch attribution', () => {
+      const { runtime, batches } = createSideEffectRuntime()
+      syncSinglePty(runtime)
+
+      runtime.onPtyData('pty-1', 'PR https://github.com/acme/orca/pull/4', 100)
+      runtime.onPtyData('pty-1', '2\r\nand https://github.com/acme/orca/pull/43 done\r\n', 101)
+      // Repeated URL: deduped per PTY, like the renderer byte detector.
+      runtime.onPtyData('pty-1', 'again https://github.com/acme/orca/pull/42\r\n', 102)
+
+      expect(batches).toHaveLength(1)
+      expect(batches[0]).toMatchObject({
+        ptyId: 'pty-1',
+        worktreeId: TEST_WORKTREE_ID,
+        tabId: 'tab-1'
+      })
+      expect(batches[0].facts).toEqual([
+        {
+          kind: 'pr-link',
+          link: {
+            url: 'https://github.com/acme/orca/pull/42',
+            slug: { owner: 'acme', repo: 'orca' },
+            number: 42
+          }
+        },
+        {
+          kind: 'pr-link',
+          link: {
+            url: 'https://github.com/acme/orca/pull/43',
+            slug: { owner: 'acme', repo: 'orca' },
+            number: 43
+          }
+        }
+      ])
+    })
+
+    it('emits 2031-subscribe facts across chunk splits', () => {
+      // Why: hidden-delivery-gated views never receive the bytes — this fact
+      // is their only signal to send the DECSET 2031 color-scheme reply.
+      const { runtime, batches } = createSideEffectRuntime()
+      syncSinglePty(runtime)
+
+      runtime.onPtyData('pty-1', '\x1b[?20', 100)
+      expect(batches).toEqual([])
+      runtime.onPtyData('pty-1', '31h', 101)
+
+      expect(batches.flatMap((batch) => batch.facts)).toEqual([{ kind: '2031-subscribe' }])
+    })
+
+    it('prefers the tracked title over the renderer snapshot lastTitle', async () => {
+      const { runtime } = createSideEffectRuntime()
+      const serializeBuffer = vi.fn().mockResolvedValue({
+        data: 'visible content',
+        cols: 80,
+        rows: 24,
+        // The renderer xterm never saw the synthetic frame (it no longer
+        // rides pty:data), so its serializer reports a stale title.
+        lastTitle: 'stale shell title'
+      })
+      runtime.setPtyController({
+        write: () => true,
+        kill: () => true,
+        getForegroundProcess: async () => null,
+        serializeBuffer,
+        hasRendererSerializer: () => true,
+        getSize: () => ({ cols: 80, rows: 24 })
+      })
+      syncSinglePty(runtime)
+
+      runtime.ingestSyntheticTitleFrame('pty-1', '\x1b]0;⠋ Cursor Agent\x07')
+
+      const snapshot = await runtime.serializeTerminalBuffer('pty-1', { scrollbackRows: 10 })
+      expect(snapshot?.source).toBe('renderer')
+      expect(snapshot?.lastTitle).toBe('⠋ Cursor Agent')
+    })
+
+    it('prefers the tracked title over the headless emulator lastTitle', async () => {
+      const { runtime } = createSideEffectRuntime()
+      syncSinglePty(runtime)
+
+      runtime.onPtyData('pty-1', '\x1b]0;Codex working\x07real output\r\n', 100)
+      // The hook-driven idle frame lands only in main's tracker — the
+      // emulator never sees fabricated bytes (invariant 5).
+      runtime.ingestSyntheticTitleFrame('pty-1', '\x1b]0;Codex ready\x07')
+
+      const snapshot = await runtime.serializeMainTerminalBuffer('pty-1', { scrollbackRows: 10 })
+      expect(snapshot?.source).toBe('headless')
+      expect(snapshot?.lastTitle).toBe('Codex ready')
+    })
+
+    it('returns a title-only replay snapshot and never historical attention', () => {
+      const { runtime } = createSideEffectRuntime()
+      syncSinglePty(runtime)
+
+      runtime.onPtyData('pty-1', '\x1b]0;Codex working\x07\x07', 100)
+
+      expect(runtime.getTerminalSideEffectSnapshot('pty-1')).toMatchObject({
+        ptyId: 'pty-1',
+        replay: true,
+        facts: [{ kind: 'title', normalizedTitle: 'Codex working', rawTitle: 'Codex working' }]
+      })
+      expect(runtime.getTerminalSideEffectSnapshot('pty-unknown')).toBeNull()
+    })
+
+    it('drops the cursor-agent literal from record-fallback snapshots', () => {
+      const { runtime } = createSideEffectRuntime()
+      syncSinglePty(runtime)
+
+      runtime.onPtyData('pty-1', 'plain output\n', 100)
+      // Simulate a record title restored by a path that bypassed the tracker
+      // (the tracker itself refuses to store the bare native title).
+      const records = (
+        runtime as unknown as {
+          ptysById: Map<string, { lastOscTitle: string | null }>
+        }
+      ).ptysById
+      records.get('pty-1')!.lastOscTitle = 'Cursor Agent'
+
+      expect(runtime.getTerminalSideEffectSnapshot('pty-1')).toBeNull()
+    })
+
+    it('emits the chunk agentStatus events before its side-effect batch', () => {
+      // Cross-channel contract order per chunk: status → titles → bell.
+      const order: string[] = []
+      const runtime = new OrcaRuntimeService(store, undefined, {
+        onTerminalAgentStatus: () => order.push('agentStatus:set'),
+        onTerminalSideEffects: () => order.push('pty:sideEffect')
+      })
+      syncSinglePty(runtime)
+
+      runtime.onPtyData(
+        'pty-1',
+        '\x1b]9999;{"state":"working","agentType":"codex"}\x07\x1b]0;Codex working\x07\x07',
+        100
+      )
+
+      expect(order).toEqual(['agentStatus:set', 'pty:sideEffect'])
+    })
+
+    it('still emits a throwing chunk’s facts under its own seq, not the next chunk’s', () => {
+      const { runtime, batches } = createSideEffectRuntime()
+      syncSinglePty(runtime)
+      vi.spyOn(
+        runtime as unknown as { applyTrackedPtyTitle: (ptyId: string, title: string) => boolean },
+        'applyTrackedPtyTitle'
+      ).mockImplementationOnce(() => {
+        throw new Error('tracker boom')
+      })
+
+      const first = '\x1b]0;Codex working\x07'
+      expect(() => runtime.onPtyData('pty-1', first, 100)).toThrow('tracker boom')
+      runtime.onPtyData('pty-1', '\x1b]0;Codex done\x07', 101)
+
+      expect(batches).toHaveLength(2)
+      expect(batches[0].seq).toBe(first.length)
+      expect(batches[0].facts).toEqual([
+        { kind: 'title', normalizedTitle: 'Codex working', rawTitle: 'Codex working' }
+      ])
+      // The next chunk's batch carries only its own facts (the throw aborted
+      // the first chunk's agent-tracker pass, so no working state was kept).
+      expect(batches[1].seq).toBeGreaterThan(batches[0].seq)
+      expect(batches[1].facts).toEqual([
+        { kind: 'title', normalizedTitle: 'Codex done', rawTitle: 'Codex done' }
+      ])
+    })
+
+    it('parses synthetic frames statelessly so ticks cannot corrupt the bell detector', () => {
+      const { runtime, batches } = createSideEffectRuntime()
+      syncSinglePty(runtime)
+
+      runtime.onPtyData('pty-1', '\x1b]0;split ti', 100)
+      // An 80ms spinner tick lands between the two halves of the real OSC.
+      runtime.ingestSyntheticTitleFrame('pty-1', '\x1b]0;⠋ Cursor Agent\x07')
+      // Continuation: this BEL terminates the real OSC — it is NOT a bell.
+      runtime.onPtyData('pty-1', 'tle\x07', 101)
+      // A later standalone BEL is a real bell and must not be swallowed.
+      runtime.onPtyData('pty-1', 'ready\x07', 102)
+
+      expect(batches.flatMap((batch) => batch.facts)).toEqual([
+        { kind: 'title', normalizedTitle: '⠋ Cursor Agent', rawTitle: '⠋ Cursor Agent' },
+        { kind: 'agent-working' },
+        { kind: 'title', normalizedTitle: 'split title', rawTitle: 'split title' },
+        { kind: 'bell' }
+      ])
+    })
+
+    it('touches mobile snapshots once for decorative spinner ticks, again on idle', () => {
+      const { runtime } = createSideEffectRuntime()
+      syncSinglePty(runtime)
+      const touchSpy = vi.spyOn(
+        runtime as unknown as { touchMobileSessionSnapshotsForPty: (ptyId: string) => void },
+        'touchMobileSessionSnapshotsForPty'
+      )
+
+      for (const frame of ['⠋', '⠙', '⠹', '⠸', '⠼']) {
+        runtime.ingestSyntheticTitleFrame('pty-1', `\x1b]0;${frame} Cursor Agent\x07`)
+      }
+      // Five ticks with the same de-spinnered title: one snapshot fan-out.
+      expect(touchSpy).toHaveBeenCalledTimes(1)
+
+      runtime.ingestSyntheticTitleFrame('pty-1', '\x1b]0;Cursor ready\x07')
+      expect(touchSpy).toHaveBeenCalledTimes(2)
+      // Raw record titles still track every frame for worktree ps/mobile tabs.
+      expect(
+        (
+          runtime as unknown as {
+            ptysById: Map<string, { lastOscTitle: string | null }>
+          }
+        ).ptysById.get('pty-1')?.lastOscTitle
+      ).toBe('Cursor ready')
+    })
+
+    it('seeds the lazily created tracker from the daemon-snapshot title', async () => {
+      const { runtime, batches } = createSideEffectRuntime()
+      const serializeBuffer = vi.fn().mockResolvedValue({
+        data: 'restored scrollback\n',
+        cols: 80,
+        rows: 24,
+        lastTitle: 'Codex working'
+      })
+      runtime.setPtyController({
+        write: () => true,
+        kill: () => true,
+        getForegroundProcess: async () => null,
+        serializeBuffer,
+        hasRendererSerializer: () => true,
+        getSize: () => ({ cols: 80, rows: 24 })
+      })
+      syncSinglePty(runtime)
+
+      // First live chunk creates the tracker cold and kicks off hydration;
+      // the snapshot seed must land in the already-created tracker.
+      runtime.onPtyData('pty-1', 'plain output without a title\n', 100)
+      await runtime.serializeMainTerminalBuffer('pty-1', { scrollbackRows: 10 })
+      batches.length = 0
+
+      runtime.onPtyData('pty-1', '\x1b]0;Codex done\x07', 101)
+
+      // Without the seed the tracker never saw 'working', so this idle title
+      // could not produce a completion fact.
+      expect(batches.flatMap((batch) => batch.facts)).toContainEqual({
+        kind: 'agent-idle',
+        title: 'Codex done'
+      })
+    })
+
+    it('arms the stale-title timer for a seeded working title', async () => {
+      vi.useFakeTimers()
+      try {
+        const { runtime, batches } = createSideEffectRuntime()
+        const serializeBuffer = vi.fn().mockResolvedValue({
+          data: 'restored scrollback\n',
+          cols: 80,
+          rows: 24,
+          lastTitle: 'Codex working'
+        })
+        runtime.setPtyController({
+          write: () => true,
+          kill: () => true,
+          getForegroundProcess: async () => null,
+          serializeBuffer,
+          hasRendererSerializer: () => true,
+          getSize: () => ({ cols: 80, rows: 24 })
+        })
+        syncSinglePty(runtime)
+
+        runtime.onPtyData('pty-1', 'plain output\n', 100)
+        // Settle the async daemon-snapshot hydration that seeds the tracker.
+        await vi.advanceTimersByTimeAsync(0)
+        runtime.onPtyData('pty-1', 'still no title\n', 101)
+        batches.length = 0
+
+        await vi.advanceTimersByTimeAsync(3_000)
+
+        expect(batches.flatMap((batch) => batch.facts)).toEqual([
+          {
+            kind: 'title',
+            normalizedTitle: 'Codex',
+            rawTitle: 'Codex',
+            staleWorkingTitleClear: true
+          },
+          { kind: 'agent-idle', title: 'Codex', staleWorkingTitleClear: true }
+        ])
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('emits command-code-working facts only after the banner arms the scrape', () => {
+      const { runtime, batches } = createSideEffectRuntime()
+      syncSinglePty(runtime)
+
+      // Generic status words without the Command Code banner must not arm.
+      runtime.onPtyData('pty-1', '❯ Fix the spinner\r\nThinking...', 100)
+      expect(batches.flatMap((batch) => batch.facts)).toEqual([])
+
+      runtime.onPtyData('pty-1', '# Command Code v0.27.3\r\n', 101)
+      runtime.onPtyData('pty-1', '❯ Fix the spinner\r\n\x1b[35m✻ Thinking...\x1b[0m', 102)
+
+      expect(batches.at(-1)).toMatchObject({
+        ptyId: 'pty-1',
+        worktreeId: TEST_WORKTREE_ID,
+        tabId: 'tab-1'
+      })
+      expect(batches.at(-1)?.facts).toEqual([
+        { kind: 'command-code-working', prompt: 'Fix the spinner' }
+      ])
+    })
+
+    it('emits a command-code-done fact when the idle composer returns', () => {
+      const { runtime, batches } = createSideEffectRuntime()
+      syncSinglePty(runtime)
+
+      runtime.onPtyData('pty-1', '# Command Code v0.27.3\r\n', 100)
+      runtime.onPtyData('pty-1', '❯ say hi\r\n✻ Thinking...', 101)
+      runtime.onPtyData(
+        'pty-1',
+        '\r\n✻ Thought for 1 second\r\n:: Hi!\r\n❯ Ask your question...',
+        102
+      )
+
+      expect(batches.at(-1)?.facts).toEqual([{ kind: 'command-code-done', prompt: 'say hi' }])
+    })
+
+    it('arms the Command Code scrape from the noted spawn command', () => {
+      const { runtime, batches } = createSideEffectRuntime()
+      syncSinglePty(runtime)
+
+      // Mirrors the renderer detector's startupCommand fast-arm: no banner
+      // needed when main saw the launch command at spawn time.
+      runtime.noteTerminalSpawnCommand('pty-1', 'command-code --trust')
+      runtime.onPtyData('pty-1', '❯ Fix the spinner\r\n✻ Thinking...', 100)
+
+      expect(batches.flatMap((batch) => batch.facts)).toContainEqual({
+        kind: 'command-code-working',
+        prompt: 'Fix the spinner'
+      })
+    })
+
+    it('prefers the tracked title over a stale renderer lastTitle in the hydration seed', async () => {
+      const { runtime } = createSideEffectRuntime()
+      const serializeBuffer = vi.fn().mockResolvedValue({
+        data: 'renderer scrollback\n',
+        cols: 80,
+        rows: 24,
+        // The renderer xterm never saw the synthetic hook frame (it no longer
+        // rides pty:data), so its serializer reports the pre-agent title.
+        lastTitle: 'stale shell title'
+      })
+      runtime.setPtyController({
+        write: () => true,
+        kill: () => true,
+        getForegroundProcess: async () => null,
+        serializeBuffer,
+        hasRendererSerializer: () => true,
+        getSize: () => ({ cols: 80, rows: 24 })
+      })
+      syncSinglePty(runtime)
+
+      runtime.ingestSyntheticTitleFrame('pty-1', '\x1b]0;⠋ Claude working\x07')
+      // First live chunk kicks off renderer hydration; awaiting the snapshot
+      // below settles the seed write chain.
+      runtime.onPtyData('pty-1', 'plain output\n', 100)
+      await runtime.serializeMainTerminalBuffer('pty-1', { scrollbackRows: 10 })
+
+      const leaves = (
+        runtime as unknown as { leaves: Map<string, { lastOscTitle: string | null }> }
+      ).leaves
+      // The seed must not stomp the leaf record (worktree ps status source)
+      // back to the renderer's stale title.
+      expect([...leaves.values()][0]?.lastOscTitle).toBe('⠋ Claude working')
     })
   })
 

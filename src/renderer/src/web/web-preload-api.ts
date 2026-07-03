@@ -498,6 +498,9 @@ function createWebPreloadApi(): Partial<PreloadApi> {
     },
     settings: {
       get: async () => getRuntimeBackedStoredSettings(),
+      // Why: localStorage-backed settings are synchronous in the web client,
+      // so the pre-hydration kill-switch read works the same as desktop.
+      getSync: () => getStoredSettings(),
       set: async (updates) => {
         if (updates.activeRuntimeEnvironmentId === null) {
           disconnectActiveRuntimeEnvironment()
@@ -2543,6 +2546,11 @@ function createPtyApi(): NonNullable<Partial<PreloadApi>['pty']> {
     ackData: () => {},
     setActiveRendererPty: () => {},
     setRendererPtyVisible: () => {},
+    setHiddenRendererPty: () => {},
+    setPtyDeliveryInterest: () => {},
+    // Why no-op: remote-runtime PTYs are never hidden-gate markable, so the
+    // web client has no main-side responder to feed.
+    publishTerminalViewAttributes: () => {},
     hasChildProcesses: () => Promise.resolve(false),
     getForegroundProcess: () => Promise.resolve(null),
     getCwd: () => Promise.resolve('~'),
@@ -2550,6 +2558,10 @@ function createPtyApi(): NonNullable<Partial<PreloadApi>['pty']> {
     listSessions: () => Promise.resolve([]),
     hasPty: () => Promise.resolve(null),
     getMainBufferSnapshot: () => Promise.resolve(null),
+    // Why: remote-runtime PTYs never transit local main, so the web client has
+    // no side-effect facts source; renderer byte parsing stays authoritative.
+    onSideEffect: () => noopUnsubscribe,
+    getSideEffectSnapshot: () => Promise.resolve(null),
     getRendererDeliveryDebugSnapshot: () =>
       Promise.resolve({
         pendingPtyCount: 0,
@@ -2564,11 +2576,17 @@ function createPtyApi(): NonNullable<Partial<PreloadApi>['pty']> {
         peakMaxPendingCharsByPty: 0,
         peakRendererInFlightChars: 0,
         peakMaxRendererInFlightCharsByPty: 0,
-        ackGatedFlushSkipCount: 0
+        ackGatedFlushSkipCount: 0,
+        hiddenDeliveryGatedPtyCount: 0,
+        deliveryInterestPtyCount: 0,
+        hiddenDeliveryDroppedChars: 0,
+        hiddenDeliveryDroppedChunks: 0,
+        pendingDroppedChars: 0
       }),
     resetRendererDeliveryDebug: () => Promise.resolve(),
     onData: () => noopUnsubscribe,
     onReplay: () => noopUnsubscribe,
+    onModelRestoreNeeded: () => noopUnsubscribe,
     onExit: () => noopUnsubscribe,
     onSerializeBufferRequest: () => noopUnsubscribe,
     onClearBufferRequest: () => noopUnsubscribe,

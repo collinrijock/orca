@@ -99,6 +99,8 @@ type StoreState = {
     terminalWindowsShell?: string
     terminalWindowsWslDistro?: string | null
     localWindowsRuntimeDefault?: { kind: 'windows-host' } | { kind: 'wsl'; distro: string | null }
+    terminalMainSideEffectAuthority?: boolean
+    terminalHiddenDeliveryGate?: boolean
     notifications?: {
       enabled?: boolean
       agentTaskComplete?: boolean
@@ -678,7 +680,14 @@ describe('connectPanePty', () => {
       projects: [],
       sshConnectionStates: new Map(),
       cacheTimerByKey: {},
-      settings: { promptCacheTimerEnabled: true, experimentalTerminalAttention: true },
+      // Why: terminalMainSideEffectAuthority false pins the legacy renderer
+      // byte-parser wiring this suite asserts on (onTitleChange/onBell on the
+      // transport). The authority-on fact-consumer mode has its own tests.
+      settings: {
+        promptCacheTimerEnabled: true,
+        experimentalTerminalAttention: true,
+        terminalMainSideEffectAuthority: false
+      },
       codexRestartNoticeByPtyId: {},
       deferredSshReconnectTargets: [],
       deferredSshSessionIdsByTabId: {},
@@ -740,6 +749,8 @@ describe('connectPanePty', () => {
           hasChildProcesses: vi.fn().mockResolvedValue(false),
           write: vi.fn(),
           writeAccepted: vi.fn().mockResolvedValue(true),
+          setHiddenRendererPty: vi.fn(),
+          setPtyDeliveryInterest: vi.fn(),
           ackColdRestore: vi.fn(),
           onClearBufferRequest: vi.fn(() => vi.fn()),
           onSerializeBufferRequest: vi.fn(() => vi.fn()),
@@ -5563,18 +5574,81 @@ describe('connectPanePty', () => {
     expect(transport.sendInput).not.toHaveBeenCalled()
   })
 
-  it('keeps non-visible local PTY bytes on the live xterm path for release', async () => {
-    const pendingTimeouts: (() => void)[] = []
-    const originalSetTimeout = globalThis.setTimeout
-    globalThis.setTimeout = vi.fn((fn: () => void) => {
-      pendingTimeouts.push(fn)
-      return 999 as unknown as ReturnType<typeof setTimeout>
-    }) as unknown as typeof setTimeout
+  // Why: Phase 6 deleted the hidden-skip eligibility grammar. With the kill
+  // switch off, EVERY hidden chunk — plain, control-heavy, rich glyphs,
+  // synchronized frames, embedded queries — rides the bounded background
+  // scheduler queue and parses in xterm; nothing is content-scanned per chunk.
+  it('queues hidden PTY bytes on the background scheduler without per-chunk scanning', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport('pty-id')
+    const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
+    transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+      capturedDataCallback.current = callbacks.onData ?? null
+      return 'pty-id'
+    })
+    transportFactoryQueue.push(transport)
 
+    const pane = createPane(1)
+    const manager = createManager(1)
+    const deps = createDeps({
+      isVisibleRef: { current: false }
+    })
+
+    connectPanePty(pane as never, manager as never, deps as never)
+    await flushAsyncTicks(6)
+
+    expect(capturedDataCallback.current).not.toBeNull()
+    vi.useFakeTimers()
     try {
+      const hiddenChunks = [
+        'plain hidden text\r\n',
+        '\x1b[2J\x1b[Hcontrol redraw\r\n',
+        '\x1b[2J\x1b[H╭ table 😀 ╮\r\n',
+        '\x1b[?2026h| Sam Syntax | 😀 |\r\n\x1b[?2026l',
+        '\x1b[?2026h\x1b[6n'
+      ]
+      for (const chunk of hiddenChunks) {
+        capturedDataCallback.current?.(chunk)
+      }
+
+      // Background path defers writes; nothing is written synchronously.
+      expect(pane.terminal.write).not.toHaveBeenCalled()
+      vi.advanceTimersByTime(50)
+      // The drain may coalesce queued chunks into one write — assert content.
+      const written = pane.terminal.write.mock.calls.map((call) => String(call[0])).join('')
+      for (const chunk of hiddenChunks) {
+        expect(written).toContain(chunk)
+      }
+      // No model restore is latched for bounded hidden output.
+      expect(window.api.pty.getMainBufferSnapshot).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  describe('hidden-delivery gate', () => {
+    function enableMainAuthority(): void {
+      mockStoreState.settings = {
+        ...mockStoreState.settings,
+        terminalMainSideEffectAuthority: true
+      } as StoreState['settings']
+    }
+
+    function getSetHiddenRendererPtyMock(): ReturnType<typeof vi.fn> {
+      return window.api.pty.setHiddenRendererPty as unknown as ReturnType<typeof vi.fn>
+    }
+
+    async function connectHiddenPane(deps: ReturnType<typeof createDeps>): Promise<{
+      transport: MockTransport
+      pane: ReturnType<typeof createPane>
+      dataCallback: (data: string, meta?: { seq?: number; rawLength?: number }) => void
+      binding: { syncProcessTracking: () => void; dispose: () => void }
+    }> {
       const { connectPanePty } = await import('./pty-connection')
       const transport = createMockTransport('pty-id')
-      const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
+      const capturedDataCallback: {
+        current: ((data: string, meta?: { seq?: number; rawLength?: number }) => void) | null
+      } = { current: null }
       transport.connect.mockImplementation(
         async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
           capturedDataCallback.current = callbacks.onData ?? null
@@ -5582,101 +5656,553 @@ describe('connectPanePty', () => {
         }
       )
       transportFactoryQueue.push(transport)
-
       const pane = createPane(1)
       const manager = createManager(1)
-      const deps = createDeps({
-        isVisibleRef: { current: false }
+      const binding = connectPanePty(pane as never, manager as never, deps as never) as {
+        syncProcessTracking: () => void
+        dispose: () => void
+      }
+      await flushAsyncTicks(6)
+      expect(capturedDataCallback.current).not.toBeNull()
+      return { transport, pane, dataCallback: capturedDataCallback.current!, binding }
+    }
+
+    it('marks the PTY hidden on hidden output and clears it before requesting restore on reveal', async () => {
+      enableMainAuthority()
+      const deps = createDeps({ isVisibleRef: { current: false } })
+      const { pane, dataCallback } = await connectHiddenPane(deps)
+      const setHiddenRendererPty = getSetHiddenRendererPtyMock()
+      const getMainBufferSnapshot = window.api.pty.getMainBufferSnapshot as unknown as ReturnType<
+        typeof vi.fn
+      >
+      getMainBufferSnapshot.mockResolvedValue({
+        data: 'model snapshot\r\n',
+        cols: 100,
+        rows: 30,
+        seq: 64
       })
 
-      connectPanePty(pane as never, manager as never, deps as never)
-      await flushAsyncTicks(6)
+      dataCallback('hidden output\r\n', { seq: 16, rawLength: 16 })
+      expect(setHiddenRendererPty).toHaveBeenCalledWith('pty-id', true)
 
-      expect(capturedDataCallback.current).not.toBeNull()
-      capturedDataCallback.current?.('hello\r\n')
-      expect(pane.terminal.write).not.toHaveBeenCalledWith('hello\r\n')
+      // Why: with the skip grammar gone, gated drops latch the restore via
+      // main's out-of-band marker, not a renderer-side content scan.
+      const { _dispatchPtyModelRestoreNeededForTest } = await import('./pty-model-restore-channel')
+      _dispatchPtyModelRestoreNeededForTest({ id: 'pty-id', reason: 'hidden-drop', markerSeq: 64 })
 
-      for (const fn of pendingTimeouts) {
-        fn()
+      // Reveal rides the visible-resume backlog recovery hook.
+      ;(deps.isVisibleRef as { current: boolean }).current = true
+      const { requestTerminalBacklogRecovery } =
+        await import('@/lib/pane-manager/pane-terminal-output-scheduler')
+      requestTerminalBacklogRecovery(pane.terminal as never)
+      await flushAsyncTicks(20)
+
+      expect(setHiddenRendererPty).toHaveBeenLastCalledWith('pty-id', false)
+      expect(getMainBufferSnapshot).toHaveBeenCalledWith('pty-id', { scrollbackRows: 5000 })
+      // The unhide IPC must precede the snapshot request (seq-guard contract).
+      const unhideOrder = setHiddenRendererPty.mock.invocationCallOrder.at(-1)!
+      const snapshotOrder = getMainBufferSnapshot.mock.invocationCallOrder[0]!
+      expect(unhideOrder).toBeLessThan(snapshotOrder)
+      expect(pane.terminal.write).toHaveBeenCalledWith(
+        expect.stringContaining('model snapshot'),
+        expect.any(Function)
+      )
+    })
+
+    it('clears the hidden bit on visibility flips through syncProcessTracking', async () => {
+      enableMainAuthority()
+      const deps = createDeps({ isVisibleRef: { current: false } })
+      const { dataCallback, binding } = await connectHiddenPane(deps)
+      const setHiddenRendererPty = getSetHiddenRendererPtyMock()
+
+      dataCallback('hidden output\r\n')
+      expect(setHiddenRendererPty).toHaveBeenLastCalledWith('pty-id', true)
+      ;(deps.isVisibleRef as { current: boolean }).current = true
+      binding.syncProcessTracking()
+      expect(setHiddenRendererPty).toHaveBeenLastCalledWith('pty-id', false)
+
+      // Hiding again re-marks through the same lifecycle hook.
+      ;(deps.isVisibleRef as { current: boolean }).current = false
+      binding.syncProcessTracking()
+      expect(setHiddenRendererPty).toHaveBeenLastCalledWith('pty-id', true)
+    })
+
+    it('marks hidden codex panes immediately — no startup renderer-query window remains', async () => {
+      enableMainAuthority()
+      const deps = createDeps({
+        isVisibleRef: { current: false },
+        startup: { command: 'codex' }
+      })
+      const { transport, dataCallback } = await connectHiddenPane(deps)
+      const setHiddenRendererPty = getSetHiddenRendererPtyMock()
+      const transportOptions = createdTransportOptions.at(-1) as {
+        onPtySpawn?: (ptyId: string) => void
+      }
+      transportOptions.onPtySpawn?.('pty-id')
+      const factsHandler = await import('./terminal-side-effect-facts-handler')
+
+      // Why: Phase 6 deleted the 10s codex window — codex startups gate like
+      // any hidden pane and the main responder answers their startup probes.
+      dataCallback('startup probe output\r\n')
+      expect(setHiddenRendererPty).toHaveBeenCalledWith('pty-id', true)
+
+      // The fact stays the sole 2031 responder for gate-managed PTYs.
+      factsHandler._dispatchTerminalSideEffectBatchForTest({
+        ptyId: 'pty-id',
+        seq: 8,
+        facts: [{ kind: '2031-subscribe' }]
+      })
+      expect(transport.sendInput).toHaveBeenCalledTimes(1)
+      expect(transport.sendInput).toHaveBeenCalledWith('\x1b[?997;1n')
+    })
+
+    it('latches model restore from the out-of-band marker and restores on reveal', async () => {
+      enableMainAuthority()
+      const deps = createDeps({ isVisibleRef: { current: false } })
+      const { pane, dataCallback } = await connectHiddenPane(deps)
+      const getMainBufferSnapshot = window.api.pty.getMainBufferSnapshot as unknown as ReturnType<
+        typeof vi.fn
+      >
+      getMainBufferSnapshot.mockResolvedValue({
+        data: 'dropped bytes snapshot\r\n',
+        cols: 100,
+        rows: 30,
+        seq: 64
+      })
+      // Why: the marker subscription is keyed by the live PTY id — the byte
+      // path latches it on the first hidden chunk, like the hidden mark.
+      dataCallback('pre-drop output\r\n', { seq: 16, rawLength: 17 })
+      const { _dispatchPtyModelRestoreNeededForTest } = await import('./pty-model-restore-channel')
+
+      // Main dropped gated bytes and signalled it out-of-band.
+      _dispatchPtyModelRestoreNeededForTest({ id: 'pty-id', reason: 'hidden-drop', markerSeq: 64 })
+      expect(getMainBufferSnapshot).not.toHaveBeenCalled()
+      ;(deps.isVisibleRef as { current: boolean }).current = true
+      const { requestTerminalBacklogRecovery } =
+        await import('@/lib/pane-manager/pane-terminal-output-scheduler')
+      requestTerminalBacklogRecovery(pane.terminal as never)
+      await flushAsyncTicks(20)
+
+      expect(getMainBufferSnapshot).toHaveBeenCalledWith('pty-id', { scrollbackRows: 5000 })
+      expect(pane.terminal.write).toHaveBeenCalledWith(
+        expect.stringContaining('dropped bytes snapshot'),
+        expect.any(Function)
+      )
+    })
+
+    it('answers each 2031-subscribe fact exactly once, before any hidden mark exists', async () => {
+      enableMainAuthority()
+      const deps = createDeps({ isVisibleRef: { current: false } })
+      const { transport } = await connectHiddenPane(deps)
+      // Simulate the transport's spawn completion so the pane registers its
+      // side-effect fact consumer (the mock transport never calls onPtySpawn).
+      const transportOptions = createdTransportOptions.at(-1) as {
+        onPtySpawn?: (ptyId: string) => void
+      }
+      transportOptions.onPtySpawn?.('pty-id')
+      const factsHandler = await import('./terminal-side-effect-facts-handler')
+
+      // Why: no pty:data has flowed, so no hidden mark was sent — the fact
+      // can outrun the mark (codex post-startup-window race) and must still
+      // reply: ownership is structural, never mark-dependent.
+      factsHandler._dispatchTerminalSideEffectBatchForTest({
+        ptyId: 'pty-id',
+        seq: 12,
+        facts: [{ kind: '2031-subscribe' }]
+      })
+      expect(transport.sendInput).toHaveBeenCalledTimes(1)
+      expect(transport.sendInput).toHaveBeenCalledWith('\x1b[?997;1n')
+
+      // Why: a visible gated pane still answers via the fact — the lifecycle
+      // suppresses the xterm CSI reply for gate-managed panes, so this stays
+      // the only reply for the new subscribe.
+      ;(deps.isVisibleRef as { current: boolean }).current = true
+      factsHandler._dispatchTerminalSideEffectBatchForTest({
+        ptyId: 'pty-id',
+        seq: 24,
+        facts: [{ kind: '2031-subscribe' }]
+      })
+      expect(transport.sendInput).toHaveBeenCalledTimes(2)
+      expect(transport.sendInput).toHaveBeenLastCalledWith('\x1b[?997;1n')
+    })
+
+    it('registers the fact-answered 2031 subscription for later theme flips', async () => {
+      enableMainAuthority()
+      const recordPaneMode2031Subscription = vi.fn()
+      const deps = createDeps({
+        isVisibleRef: { current: false },
+        recordPaneMode2031Subscription
+      })
+      const { transport } = await connectHiddenPane(deps)
+      const transportOptions = createdTransportOptions.at(-1) as {
+        onPtySpawn?: (ptyId: string) => void
+      }
+      transportOptions.onPtySpawn?.('pty-id')
+      const factsHandler = await import('./terminal-side-effect-facts-handler')
+
+      factsHandler._dispatchTerminalSideEffectBatchForTest({
+        ptyId: 'pty-id',
+        seq: 12,
+        facts: [{ kind: '2031-subscribe' }]
+      })
+
+      expect(transport.sendInput).toHaveBeenCalledWith('\x1b[?997;1n')
+      // Why: without the registry write, applyTerminalAppearance's
+      // maybePushMode2031Flip never pushes CSI 997 after a theme change and
+      // the revealed TUI keeps a stale theme.
+      expect(recordPaneMode2031Subscription).toHaveBeenCalledWith(1, 'dark')
+    })
+
+    it('reports the gate-managed predicate on the binding for the xterm 2031 observer', async () => {
+      enableMainAuthority()
+      const deps = createDeps({ isVisibleRef: { current: false } })
+      const { binding } = await connectHiddenPane(deps)
+      const bindingWithPredicate = binding as typeof binding & {
+        isHiddenDeliveryGateManagedPty: () => boolean
+      }
+      expect(bindingWithPredicate.isHiddenDeliveryGateManagedPty()).toBe(true)
+    })
+
+    it('declares hidden-at-spawn on connect for hidden panes', async () => {
+      enableMainAuthority()
+      const deps = createDeps({ isVisibleRef: { current: false } })
+      const { transport } = await connectHiddenPane(deps)
+      // Why: waiting for the first dataCallback sync left a spawn-time query
+      // window where neither side replied (the spawn-time DA1 loss). The flag
+      // lets main mark the PTY hidden before its first byte.
+      expect(transport.connect).toHaveBeenCalledWith(
+        expect.objectContaining({ initiallyHidden: true })
+      )
+    })
+
+    it('keeps visible spawns undeclared (visible spawn unchanged)', async () => {
+      enableMainAuthority()
+      const deps = createDeps()
+      const { transport } = await connectHiddenPane(deps)
+      expect(transport.connect.mock.calls[0]![0]).not.toHaveProperty('initiallyHidden')
+    })
+
+    it('declares hidden-at-spawn for hidden codex panes too', async () => {
+      enableMainAuthority()
+      const deps = createDeps({
+        isVisibleRef: { current: false },
+        startup: { command: 'codex' }
+      })
+      const { transport } = await connectHiddenPane(deps)
+      // Why: the 10s codex startup window is deleted — codex spawns are
+      // main-owned from byte zero, with the model responder answering their
+      // startup probes (including ConPTY's blocking DA1; the main-side pin is
+      // pty.test.ts 'answers DA1 from the model on the first chunk of a
+      // hidden-at-spawn PTY').
+      expect(transport.connect).toHaveBeenCalledWith(
+        expect.objectContaining({ initiallyHidden: true })
+      )
+    })
+
+    it('does not gate or fact-reply when the hidden-delivery kill switch is off', async () => {
+      enableMainAuthority()
+      mockStoreState.settings = {
+        ...mockStoreState.settings,
+        terminalHiddenDeliveryGate: false
+      } as StoreState['settings']
+      const deps = createDeps({ isVisibleRef: { current: false } })
+      const { transport, dataCallback, binding } = await connectHiddenPane(deps)
+      // Why: the lifecycle's xterm CSI observer consults this predicate —
+      // kill switch off must keep the legacy xterm reply path.
+      expect(
+        (
+          binding as typeof binding & { isHiddenDeliveryGateManagedPty: () => boolean }
+        ).isHiddenDeliveryGateManagedPty()
+      ).toBe(false)
+      const transportOptions = createdTransportOptions.at(-1) as {
+        onPtySpawn?: (ptyId: string) => void
+      }
+      transportOptions.onPtySpawn?.('pty-id')
+      const setHiddenRendererPty = getSetHiddenRendererPtyMock()
+
+      dataCallback('hidden output\r\n')
+      expect(setHiddenRendererPty).not.toHaveBeenCalled()
+
+      // Why: gate off keeps the byte-scan responder authoritative — the fact
+      // must not produce a second reply for the same subscribe.
+      const factsHandler = await import('./terminal-side-effect-facts-handler')
+      factsHandler._dispatchTerminalSideEffectBatchForTest({
+        ptyId: 'pty-id',
+        seq: 12,
+        facts: [{ kind: '2031-subscribe' }]
+      })
+      expect(transport.sendInput).not.toHaveBeenCalled()
+    })
+
+    it('clears a marked-hidden PTY on dispose so a remount is never gated', async () => {
+      enableMainAuthority()
+      const deps = createDeps({ isVisibleRef: { current: false } })
+      const { dataCallback, binding } = await connectHiddenPane(deps)
+      const setHiddenRendererPty = getSetHiddenRendererPtyMock()
+
+      dataCallback('hidden output\r\n')
+      expect(setHiddenRendererPty).toHaveBeenLastCalledWith('pty-id', true)
+
+      binding.dispose()
+      expect(setHiddenRendererPty).toHaveBeenLastCalledWith('pty-id', false)
+    })
+
+    it('never treats a live chunk that strips to empty as a restore marker', async () => {
+      // Why: a chunk that is purely OSC 9999 reaches the data callback as ''
+      // (transport stripping) — only the out-of-band pty:modelRestoreNeeded
+      // channel may trigger a snapshot restore, or visible panes would be
+      // spuriously cleared and repainted mid-session.
+      enableMainAuthority()
+      const deps = createDeps({ isVisibleRef: { current: true } })
+      const { dataCallback } = await connectHiddenPane(deps)
+      const getMainBufferSnapshot = window.api.pty.getMainBufferSnapshot as unknown as ReturnType<
+        typeof vi.fn
+      >
+
+      dataCallback('', { seq: 32, rawLength: 24 })
+      await flushAsyncTicks(20)
+
+      expect(getMainBufferSnapshot).not.toHaveBeenCalled()
+    })
+
+    it('fetches a fresh snapshot when a marker lands while a restore is in flight', async () => {
+      enableMainAuthority()
+      const deps = createDeps({ isVisibleRef: { current: true } })
+      await connectHiddenPane(deps)
+      const transportOptions = createdTransportOptions.at(-1) as {
+        onPtySpawn?: (ptyId: string) => void
+      }
+      transportOptions.onPtySpawn?.('pty-id')
+      const getMainBufferSnapshot = window.api.pty.getMainBufferSnapshot as unknown as ReturnType<
+        typeof vi.fn
+      >
+      const firstSnapshot = createDeferred<{
+        data: string
+        cols: number
+        rows: number
+        seq: number
+      }>()
+      getMainBufferSnapshot
+        .mockReturnValueOnce(firstSnapshot.promise)
+        .mockResolvedValue({ data: 'fresh snapshot\r\n', cols: 100, rows: 30, seq: 96 })
+      const { _dispatchPtyModelRestoreNeededForTest } = await import('./pty-model-restore-channel')
+
+      _dispatchPtyModelRestoreNeededForTest({ id: 'pty-id', reason: 'pending-cap', markerSeq: 64 })
+      await flushAsyncTicks(4)
+      expect(getMainBufferSnapshot).toHaveBeenCalledTimes(1)
+
+      // Second drop while the first snapshot is still being serialized — the
+      // in-flight snapshot may predate it, so a fresh one must follow.
+      _dispatchPtyModelRestoreNeededForTest({ id: 'pty-id', reason: 'pending-cap', markerSeq: 80 })
+      firstSnapshot.resolve({ data: 'stale snapshot\r\n', cols: 100, rows: 30, seq: 64 })
+      await flushAsyncTicks(20)
+
+      expect(getMainBufferSnapshot).toHaveBeenCalledTimes(2)
+    })
+
+    describe('post-restore backlog reconciliation', () => {
+      async function restoreVisiblePaneToBaseline(): Promise<{
+        pane: ReturnType<typeof createPane>
+        dataCallback: (data: string, meta?: { seq?: number; rawLength?: number }) => void
+        getMainBufferSnapshot: ReturnType<typeof vi.fn>
+      }> {
+        enableMainAuthority()
+        const deps = createDeps({ isVisibleRef: { current: true } })
+        const { pane, dataCallback } = await connectHiddenPane(deps)
+        const transportOptions = createdTransportOptions.at(-1) as {
+          onPtySpawn?: (ptyId: string) => void
+        }
+        transportOptions.onPtySpawn?.('pty-id')
+        const getMainBufferSnapshot = window.api.pty.getMainBufferSnapshot as unknown as ReturnType<
+          typeof vi.fn
+        >
+        getMainBufferSnapshot.mockResolvedValue({
+          data: 'restored snapshot\r\n',
+          cols: 100,
+          rows: 30,
+          seq: 64
+        })
+        const { _dispatchPtyModelRestoreNeededForTest } =
+          await import('./pty-model-restore-channel')
+        _dispatchPtyModelRestoreNeededForTest({
+          id: 'pty-id',
+          reason: 'pending-cap',
+          markerSeq: 64
+        })
+        await flushAsyncTicks(20)
+        expect(getMainBufferSnapshot).toHaveBeenCalledTimes(1)
+        expect(pane.terminal.write).toHaveBeenCalledWith(
+          expect.stringContaining('restored snapshot'),
+          expect.any(Function)
+        )
+        pane.terminal.write.mockClear()
+        return { pane, dataCallback, getMainBufferSnapshot }
       }
 
-      expect(pane.terminal.write).toHaveBeenCalledWith('hello\r\n')
-    } finally {
-      globalThis.setTimeout = originalSetTimeout
-    }
-  })
+      function writtenData(pane: ReturnType<typeof createPane>): string {
+        return pane.terminal.write.mock.calls.map((call) => String(call[0])).join('')
+      }
 
-  it('keeps visually rich hidden PTY bytes on the live xterm path', async () => {
-    const { connectPanePty } = await import('./pty-connection')
-    const transport = createMockTransport('pty-id')
-    const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
-    transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
-      capturedDataCallback.current = callbacks.onData ?? null
-      return 'pty-id'
+      it('drops backlog chunks the restored snapshot already covers', async () => {
+        const { pane, dataCallback } = await restoreVisiblePaneToBaseline()
+
+        // Whole chunk at or before the baseline seq: duplicate, never written.
+        dataCallback('OLD-DUPLICATE', { seq: 60, rawLength: 13 })
+        await flushAsyncTicks(8)
+        expect(writtenData(pane)).not.toContain('OLD-DUPLICATE')
+
+        // Contiguous post-baseline chunk flows through normally.
+        dataCallback('NEW', { seq: 67, rawLength: 3 })
+        await flushAsyncTicks(8)
+        expect(writtenData(pane)).toContain('NEW')
+      })
+
+      it('slices a partial overlap when raw and clean lengths match', async () => {
+        const { pane, dataCallback } = await restoreVisiblePaneToBaseline()
+
+        // start seq 61 < baseline 64 < end seq 67 — only the last 3 chars are new.
+        dataCallback('ABCDEF', { seq: 67, rawLength: 6 })
+        await flushAsyncTicks(8)
+
+        const written = writtenData(pane)
+        expect(written).toContain('DEF')
+        expect(written).not.toContain('ABC')
+      })
+
+      it('forces a fresh snapshot for an overlap whose offsets cannot be mapped', async () => {
+        const { pane, dataCallback, getMainBufferSnapshot } = await restoreVisiblePaneToBaseline()
+        getMainBufferSnapshot.mockResolvedValue({
+          data: 'second snapshot\r\n',
+          cols: 100,
+          rows: 30,
+          seq: 80
+        })
+
+        // rawLength (6) !== data.length (4): renderer-side OSC stripping makes
+        // the slice offset unmappable — restore from a fresh snapshot instead.
+        dataCallback('ABCD', { seq: 67, rawLength: 6 })
+        await flushAsyncTicks(20)
+
+        expect(writtenData(pane)).not.toContain('ABCD')
+        expect(getMainBufferSnapshot).toHaveBeenCalledTimes(2)
+        expect(writtenData(pane)).toContain('second snapshot')
+      })
+
+      it('detects a seq gap after restore and forces another restore', async () => {
+        const { pane, dataCallback, getMainBufferSnapshot } = await restoreVisiblePaneToBaseline()
+        getMainBufferSnapshot.mockResolvedValue({
+          data: 'gap-heal snapshot\r\n',
+          cols: 100,
+          rows: 30,
+          seq: 120
+        })
+
+        // Why: a chunk starting past the continuity point (start seq 87 >
+        // expected 64) means main trimmed bytes after the one-shot overflow
+        // marker was consumed — only the model snapshot can heal the gap.
+        dataCallback('AFTER-GAP', { seq: 96, rawLength: 9 })
+        await flushAsyncTicks(20)
+
+        expect(writtenData(pane)).not.toContain('AFTER-GAP')
+        expect(getMainBufferSnapshot).toHaveBeenCalledTimes(2)
+        expect(writtenData(pane)).toContain('gap-heal snapshot')
+      })
+
+      it('writes genuinely-new live output whose seq sits below an empty-backlog baseline', async () => {
+        // E2E twin (terminal-hidden-tui-visual-restore "keeps newer live
+        // output correct"): main's snapshot seq is a cumulative PTY counter
+        // (shell init + prompt echo + hidden frame), while a synthetic live
+        // chunk meters only its own frames — far below the baseline. With an
+        // empty pending queue main can never re-deliver seqs at or below the
+        // snapshot, so the chunk must write, never silently drop.
+        enableMainAuthority()
+        const isVisibleRef = { current: true }
+        const deps = createDeps({ isVisibleRef })
+        const { pane, dataCallback } = await connectHiddenPane(deps)
+        const transportOptions = createdTransportOptions.at(-1) as {
+          onPtySpawn?: (ptyId: string) => void
+        }
+        transportOptions.onPtySpawn?.('pty-id')
+        const getMainBufferSnapshot = window.api.pty.getMainBufferSnapshot as unknown as ReturnType<
+          typeof vi.fn
+        >
+        // Visible prompt echo metered in main's cumulative seq domain.
+        dataCallback('$ node frame-script.mjs\r\n', { seq: 2_315, rawLength: 25 })
+        // Pane hides mid-stream; main drops the hidden frame and marks restore.
+        isVisibleRef.current = false
+        const { _dispatchPtyModelRestoreNeededForTest } =
+          await import('./pty-model-restore-channel')
+        _dispatchPtyModelRestoreNeededForTest({
+          id: 'pty-id',
+          reason: 'hidden-drop',
+          markerSeq: 2_472
+        })
+        // Reveal: the snapshot covers everything ingested; pending queue empty
+        // (pendingDeliveryStartSeq === seq).
+        getMainBufferSnapshot.mockResolvedValue({
+          data: 'LOW_RISK_RESTORE_FRAME_40\r\n',
+          cols: 100,
+          rows: 30,
+          seq: 2_472,
+          pendingDeliveryStartSeq: 2_472
+        })
+        isVisibleRef.current = true
+        const { requestTerminalBacklogRecovery } =
+          await import('@/lib/pane-manager/pane-terminal-output-scheduler')
+        requestTerminalBacklogRecovery(pane.terminal as never)
+        await flushAsyncTicks(20)
+        expect(writtenData(pane)).toContain('LOW_RISK_RESTORE_FRAME_40')
+        pane.terminal.write.mockClear()
+
+        // Newer live frame injected with a seq domain unrelated to main's
+        // counter (e2e __terminalPtyDataInjection twin).
+        dataCallback('LOW_RISK_RESTORE_FRAME_41\r\n', { seq: 315, rawLength: 27 })
+        await flushAsyncTicks(8)
+        expect(writtenData(pane)).toContain('LOW_RISK_RESTORE_FRAME_41')
+
+        // The retired baseline keeps subsequent low-seq live chunks flowing.
+        dataCallback('progress=041\r\n', { seq: 329, rawLength: 14 })
+        await flushAsyncTicks(8)
+        expect(writtenData(pane)).toContain('progress=041')
+      })
+
+      it('keeps suppressing backlog duplicates inside the reported pending window', async () => {
+        const { pane, dataCallback, getMainBufferSnapshot } = await restoreVisiblePaneToBaseline()
+        getMainBufferSnapshot.mockResolvedValue({
+          data: 'windowed snapshot\r\n',
+          cols: 100,
+          rows: 30,
+          seq: 96,
+          pendingDeliveryStartSeq: 80
+        })
+        const { _dispatchPtyModelRestoreNeededForTest } =
+          await import('./pty-model-restore-channel')
+        _dispatchPtyModelRestoreNeededForTest({
+          id: 'pty-id',
+          reason: 'pending-cap',
+          markerSeq: 96
+        })
+        await flushAsyncTicks(20)
+        expect(writtenData(pane)).toContain('windowed snapshot')
+        pane.terminal.write.mockClear()
+
+        // Inside the pending window (80, 96]: a draining backlog duplicate.
+        dataCallback('IN-WINDOW-DUP-16', { seq: 96, rawLength: 16 })
+        await flushAsyncTicks(8)
+        expect(writtenData(pane)).not.toContain('IN-WINDOW-DUP-16')
+
+        // Past the baseline: genuinely-new live output still flows.
+        dataCallback('PAST-BASELINE', { seq: 109, rawLength: 13 })
+        await flushAsyncTicks(8)
+        expect(writtenData(pane)).toContain('PAST-BASELINE')
+
+        // Below the pending window (≤ 80): main can never re-send these seqs,
+        // so this is a foreign seq domain — written, never silently dropped.
+        dataCallback('BELOW-WINDOW', { seq: 60, rawLength: 12 })
+        await flushAsyncTicks(8)
+        expect(writtenData(pane)).toContain('BELOW-WINDOW')
+      })
     })
-    transportFactoryQueue.push(transport)
-
-    const pane = createPane(1)
-    const manager = createManager(1)
-    const deps = createDeps({
-      isVisibleRef: { current: false }
-    })
-
-    connectPanePty(pane as never, manager as never, deps as never)
-    await flushAsyncTicks(6)
-
-    expect(capturedDataCallback.current).not.toBeNull()
-    vi.useFakeTimers()
-    try {
-      const hiddenTuiChunk = '\x1b[2J\x1b[H╭ table 😀 ╮\r\n'
-      capturedDataCallback.current?.(hiddenTuiChunk)
-
-      expect(pane.terminal.write).not.toHaveBeenCalledWith(hiddenTuiChunk)
-      vi.advanceTimersByTime(50)
-      expect(pane.terminal.write).toHaveBeenCalledWith(hiddenTuiChunk)
-      expect(window.api.pty.getMainBufferSnapshot).not.toHaveBeenCalled()
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it('keeps split hidden synchronized output frames on the live xterm path', async () => {
-    const { connectPanePty } = await import('./pty-connection')
-    const transport = createMockTransport('pty-id')
-    const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
-    transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
-      capturedDataCallback.current = callbacks.onData ?? null
-      return 'pty-id'
-    })
-    transportFactoryQueue.push(transport)
-
-    const pane = createPane(1)
-    const manager = createManager(1)
-    const deps = createDeps({
-      isVisibleRef: { current: false }
-    })
-
-    connectPanePty(pane as never, manager as never, deps as never)
-    await flushAsyncTicks(6)
-
-    expect(capturedDataCallback.current).not.toBeNull()
-    vi.useFakeTimers()
-    try {
-      const startChunk = '\x1b[?2026h'
-      const plainRowChunk = '| Sam Syntax | Compiler | Online |\r\n'
-      const endChunk = 'LONG_TABLE_SCROLL_RESTORE_marker\r\n\x1b[?2026l'
-
-      capturedDataCallback.current?.(startChunk)
-      capturedDataCallback.current?.(plainRowChunk)
-      capturedDataCallback.current?.(endChunk)
-
-      expect(pane.terminal.write).not.toHaveBeenCalledWith(plainRowChunk)
-      vi.advanceTimersByTime(50)
-      expect(pane.terminal.write).toHaveBeenCalledWith(`${startChunk}${plainRowChunk}${endChunk}`)
-      expect(window.api.pty.getMainBufferSnapshot).not.toHaveBeenCalled()
-    } finally {
-      vi.useRealTimers()
-    }
   })
 
   it('schedules WebGL atlas recovery after hidden synchronized output parses', async () => {
@@ -6233,7 +6759,7 @@ describe('connectPanePty', () => {
     binding.dispose()
   })
 
-  it('side-channel answers mode 2031 when hidden Codex output is snapshot-backed', async () => {
+  it('writes mode 2031 through hidden xterm instead of side-channel answering it', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport('pty-id')
     const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
@@ -6249,17 +6775,10 @@ describe('connectPanePty', () => {
 
     const pane = createPane(1)
     const manager = createManager(1)
-    const paneMode2031Ref = { current: new Map<number, boolean>() }
-    const paneLastThemeModeRef = { current: new Map<number, 'dark' | 'light'>() }
     const binding = connectPanePty(
       pane as never,
       manager as never,
-      createDeps({
-        isVisibleRef: { current: false },
-        paneMode2031Ref,
-        paneLastThemeModeRef,
-        startup: { command: 'codex' }
-      }) as never
+      createDeps({ isVisibleRef: { current: false } }) as never
     )
     await flushAsyncTicks(6)
 
@@ -6268,10 +6787,8 @@ describe('connectPanePty', () => {
       capturedDataCallback.current?.('\x1b[?2031h')
       vi.advanceTimersByTime(50)
 
-      expect(transport.sendInput).toHaveBeenCalledWith('\x1b[?997;2n')
-      expect(paneMode2031Ref.current.get(1)).toBe(true)
-      expect(paneLastThemeModeRef.current.get(1)).toBe('light')
-      expect(pane.terminal.write).not.toHaveBeenCalledWith('\x1b[?2031h')
+      expect(transport.sendInput).not.toHaveBeenCalled()
+      expect(pane.terminal.write).toHaveBeenCalledWith('\x1b[?2031h')
     } finally {
       vi.useRealTimers()
     }
@@ -7097,17 +7614,21 @@ describe('connectPanePty', () => {
     disposable.dispose()
   })
 
-  it('writes ordinary hidden remote runtime output live instead of restoring a snapshot', async () => {
+  it('restores overflowed hidden remote runtime output from its serialized snapshot', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport('remote:env-1@@terminal-1')
     const capturedDataCallback: {
       current: ((data: string, meta?: { seq?: number; rawLength?: number }) => void) | null
     } = { current: null }
+    // Why: with the skip grammar gone, the model restore for remote-runtime
+    // PTYs is latched by background-queue overflow, not per-chunk scanning.
+    const hidden = 'x'.repeat(2 * 1024 * 1024 + 1)
+    const live = 'visible remote output\r\n'
     transport.serializeBuffer = vi.fn().mockResolvedValue({
-      data: 'remote snapshot\r\n',
+      data: 'remote snapshot with hidden remote output\r\n',
       cols: 120,
       rows: 40,
-      seq: 40,
+      seq: hidden.length + live.length,
       source: 'headless'
     })
     transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
@@ -7125,26 +7646,27 @@ describe('connectPanePty', () => {
     const disposable = connectPanePty(pane as never, manager as never, deps as never)
     await flushAsyncTicks(6)
 
-    const hidden = 'hidden remote output\r\n'
-    const live = 'visible remote output\r\n'
     capturedDataCallback.current?.(hidden, { seq: hidden.length, rawLength: hidden.length })
     expect(pane.terminal.write).not.toHaveBeenCalledWith(hidden, expect.any(Function))
 
     ;(deps.isVisibleRef as { current: boolean }).current = true
     capturedDataCallback.current?.(live, {
-      seq: 40 + live.length,
+      seq: hidden.length + live.length,
       rawLength: live.length
     })
     await flushAsyncTicks(20)
 
     expect(getMainBufferSnapshot).not.toHaveBeenCalled()
-    expect(transport.serializeBuffer).not.toHaveBeenCalled()
-    expect(pane.terminal.write).toHaveBeenCalledWith(hidden)
-    expect(pane.terminal.write).toHaveBeenCalledWith(live, expect.any(Function))
+    expect(transport.serializeBuffer).toHaveBeenCalledWith({ scrollbackRows: 5000 })
+    expect(pane.terminal.write).not.toHaveBeenCalledWith(hidden)
+    expect(pane.terminal.write).toHaveBeenCalledWith(
+      expect.stringContaining('remote snapshot with hidden remote output'),
+      expect.any(Function)
+    )
     disposable.dispose()
   })
 
-  it('keeps inactive split-pane hidden output live instead of deferring snapshot restore', async () => {
+  it('defers inactive split-pane plain hidden output restore until the pane returns', async () => {
     const { resetHiddenOutputRestoreSchedulerForTests } =
       await import('./hidden-output-restore-scheduler')
     let disposable: { dispose: () => void } | null = null
@@ -7178,7 +7700,9 @@ describe('connectPanePty', () => {
       disposable = connectPanePty(pane as never, manager as never, deps as never)
       await flushAsyncTicks(6)
 
-      const hidden = 'hidden inactive output\r\n'
+      // Why: overflowing the background queue is what latches the model
+      // restore now — the per-chunk skip grammar is gone.
+      const hidden = 'x'.repeat(2 * 1024 * 1024 + 1)
       const live = 'visible inactive output\r\n'
       expect(capturedDataCallback.current).not.toBeNull()
       capturedDataCallback.current?.(hidden, { seq: hidden.length, rawLength: hidden.length })
@@ -7196,9 +7720,12 @@ describe('connectPanePty', () => {
       await new Promise((resolve) => setTimeout(resolve, 30))
       await flushAsyncTicks(20)
 
-      expect(getMainBufferSnapshot).not.toHaveBeenCalled()
-      expect(pane.terminal.write).toHaveBeenCalledWith(hidden)
-      expect(pane.terminal.write).toHaveBeenCalledWith(live, expect.any(Function))
+      expect(getMainBufferSnapshot).toHaveBeenCalledWith('pty-id', { scrollbackRows: 5000 })
+      expect(pane.terminal.write).not.toHaveBeenCalledWith(hidden)
+      expect(pane.terminal.write).toHaveBeenCalledWith(
+        expect.stringContaining('inactive snapshot'),
+        expect.any(Function)
+      )
     } finally {
       disposable?.dispose()
       resetHiddenOutputRestoreSchedulerForTests()
@@ -7239,7 +7766,8 @@ describe('connectPanePty', () => {
       disposable = connectPanePty(pane as never, manager as never, deps as never)
       await flushAsyncTicks(6)
 
-      const hidden = 'hidden inactive output\r\n'
+      // Why: overflow latches the model restore (no skip grammar remains).
+      const hidden = 'x'.repeat(2 * 1024 * 1024 + 1)
       const live = 'visible inactive output\r\n'
       expect(capturedDataCallback.current).not.toBeNull()
       capturedDataCallback.current?.(hidden, { seq: hidden.length, rawLength: hidden.length })
@@ -7263,7 +7791,7 @@ describe('connectPanePty', () => {
     }
   })
 
-  it('does not retry remote snapshots for ordinary hidden runtime output', async () => {
+  it('retries null remote snapshots for overflowed hidden runtime output', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport('remote:env-1@@terminal-1')
     const capturedDataCallback: {
@@ -7288,7 +7816,8 @@ describe('connectPanePty', () => {
     const disposable = connectPanePty(pane as never, manager as never, deps as never)
     await flushAsyncTicks(6)
 
-    const hidden = 'hidden remote output\r\n'
+    // Why: overflow latches the model restore (no skip grammar remains).
+    const hidden = 'x'.repeat(2 * 1024 * 1024 + 1)
     const firstLive = 'first visible output\r\n'
     capturedDataCallback.current?.(hidden, { seq: hidden.length, rawLength: hidden.length })
 
@@ -7299,7 +7828,7 @@ describe('connectPanePty', () => {
     })
     await flushAsyncTicks(20)
 
-    expect(transport.serializeBuffer).not.toHaveBeenCalled()
+    expect(transport.serializeBuffer).toHaveBeenCalledTimes(1)
     expect(pane.terminal.write).not.toHaveBeenCalledWith(
       expect.stringContaining('Orca skipped hidden terminal output'),
       expect.any(Function)
@@ -7312,11 +7841,17 @@ describe('connectPanePty', () => {
     await new Promise((resolve) => setTimeout(resolve, 80))
     await flushAsyncTicks(20)
 
-    expect(transport.serializeBuffer).not.toHaveBeenCalled()
-    expect(pane.terminal.write).toHaveBeenCalledWith(firstLive, expect.any(Function))
+    expect(transport.serializeBuffer).toHaveBeenCalledTimes(2)
+    expect(pane.terminal.write).toHaveBeenCalledWith(
+      expect.stringContaining('remote recovered snapshot'),
+      expect.any(Function)
+    )
     disposable.dispose()
   })
 
+  // Why: pins the entire switch-off hidden fallback chain — hidden bytes ride
+  // the background queue, the 2MB lossy cap drops the backlog and latches the
+  // restore, and reveal repaints from the model snapshot.
   it('restores hidden backlog overflow from the main terminal snapshot on foreground output', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport('pty-id')
@@ -8516,6 +9051,73 @@ describe('connectPanePty', () => {
       expect.any(Function)
     )
     expect(pane.terminal.write).not.toHaveBeenCalledWith(cleanedLive, expect.any(Function))
+    disposable.dispose()
+  })
+
+  it('replays rich headless snapshots as the future hidden TUI view source', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport('pty-id')
+    const capturedDataCallback: {
+      current: ((data: string, meta?: { seq?: number; rawLength?: number }) => void) | null
+    } = { current: null }
+    transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+      capturedDataCallback.current = callbacks.onData ?? null
+      return 'pty-id'
+    })
+    transportFactoryQueue.push(transport)
+    const getMainBufferSnapshot = window.api.pty.getMainBufferSnapshot as unknown as ReturnType<
+      typeof vi.fn
+    >
+    const hidden = 'x'.repeat(2 * 1024 * 1024 + 1)
+    const richSnapshot = [
+      '\x1b[?1049h',
+      '\x1b[2J\x1b[H',
+      '\x1b[?25l',
+      '\x1b[2;36m╭────────────────────────────╮\x1b[0m\r\n',
+      '\x1b[2;36m│ Codex rich restore 🟢 ███░ │\x1b[0m\r\n',
+      '\x1b[2;36m│ status streaming           │\x1b[0m\r\n',
+      '\x1b[2;36m╰────────────────────────────╯\x1b[0m',
+      '\x1b[6;4H\x1b[?25h'
+    ].join('')
+    const visibleTrigger = 'visible-trigger\r\n'
+    getMainBufferSnapshot.mockResolvedValue({
+      data: richSnapshot,
+      cols: 96,
+      rows: 18,
+      seq: hidden.length + visibleTrigger.length,
+      source: 'headless'
+    })
+
+    const pane = createPane(1)
+    const refresh = vi.fn()
+    const terminal = pane.terminal as typeof pane.terminal & {
+      _core?: { refresh: typeof refresh }
+    }
+    terminal._core = { refresh }
+    terminal.write = vi.fn((_data: string, callback?: () => void) => {
+      callback?.()
+    })
+    const manager = createManager(1)
+    const deps = createDeps({
+      isVisibleRef: { current: false }
+    })
+    const disposable = connectPanePty(pane as never, manager as never, deps as never)
+    await flushAsyncTicks(6)
+
+    capturedDataCallback.current?.(hidden, { seq: hidden.length, rawLength: hidden.length })
+    ;(deps.isVisibleRef as { current: boolean }).current = true
+    capturedDataCallback.current?.(visibleTrigger, {
+      seq: hidden.length + visibleTrigger.length,
+      rawLength: visibleTrigger.length
+    })
+    await flushAsyncTicks(20)
+
+    expect(getMainBufferSnapshot).toHaveBeenCalledWith('pty-id', { scrollbackRows: 5000 })
+    expect(pane.terminal.resize).toHaveBeenCalledWith(96, 18)
+    expect(pane.terminal.write).toHaveBeenCalledWith(richSnapshot, expect.any(Function))
+    expect(pane.terminal.write).not.toHaveBeenCalledWith(visibleTrigger, expect.any(Function))
+    expect(refresh).toHaveBeenCalledWith(0, 39, true)
+    expect(deps.replayingPanesRef.current.size).toBe(0)
     disposable.dispose()
   })
 
@@ -10033,6 +10635,452 @@ describe('connectPanePty', () => {
     expect(deps.markWorktreeUnread).toHaveBeenCalledTimes(1)
     expect(deps.markTerminalTabUnread).toHaveBeenCalledWith('tab-1')
     expect(deps.markTerminalPaneUnread).not.toHaveBeenCalled()
+  })
+
+  // ─── Main side-effect authority (terminal-side-effect-authority.md) ────
+  //
+  // With the kill switch on (the default), local/SSH transports must not
+  // register title/bell/agent byte parsers; the pane's policy callbacks are
+  // registered as the PTY's single pty:sideEffect fact consumer instead.
+  describe('with main side-effect authority on', () => {
+    const SIDE_EFFECT_PARSER_CALLBACKS = [
+      'onTitleChange',
+      'onBell',
+      'onAgentBecameIdle',
+      'onAgentBecameWorking',
+      'onAgentExited'
+    ] as const
+
+    function enableMainAuthority(): void {
+      mockStoreState.settings = {
+        ...mockStoreState.settings,
+        terminalMainSideEffectAuthority: true
+      }
+    }
+
+    it('omits byte-parser callbacks from the local transport options', async () => {
+      enableMainAuthority()
+      const { connectPanePty } = await import('./pty-connection')
+      const transport = createMockTransport()
+      transportFactoryQueue.push(transport)
+
+      connectPanePty(createPane(1) as never, createManager(1) as never, createDeps() as never)
+
+      expect(createdTransportOptions[0]).toBeDefined()
+      for (const callback of SIDE_EFFECT_PARSER_CALLBACKS) {
+        expect(createdTransportOptions[0]?.[callback]).toBeUndefined()
+      }
+      // The lifecycle callbacks stay on the transport — only side-effect
+      // parsing moves to the fact consumer.
+      expect(createdTransportOptions[0]?.onPtySpawn).toBeTypeOf('function')
+      expect(createdTransportOptions[0]?.onPtyExit).toBeTypeOf('function')
+    })
+
+    it('keeps byte-parser callbacks on remote-runtime transports', async () => {
+      enableMainAuthority()
+      enableActiveRuntimeEnvironment()
+      const { connectPanePty } = await import('./pty-connection')
+      const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+      const transport = createMockTransport()
+      transportFactoryQueue.push(transport)
+
+      connectPanePty(createPane(1) as never, createManager(1) as never, createDeps() as never)
+
+      expect(createRemoteRuntimePtyTransport).toHaveBeenCalledWith('env-1', expect.any(Object))
+      for (const callback of SIDE_EFFECT_PARSER_CALLBACKS) {
+        expect(createdTransportOptions[0]?.[callback]).toBeTypeOf('function')
+      }
+    })
+
+    it('consumes pty:sideEffect facts with the live-path policy after spawn', async () => {
+      enableMainAuthority()
+      const { connectPanePty } = await import('./pty-connection')
+      const handler = await import('./terminal-side-effect-facts-handler')
+      const transport = createMockTransport()
+      transportFactoryQueue.push(transport)
+      vi.useFakeTimers()
+
+      const pane = createPane(1)
+      const manager = createManager(1)
+      const deps = createDeps()
+      connectPanePty(pane as never, manager as never, deps as never)
+
+      const onPtySpawn = createdTransportOptions[0]?.onPtySpawn as (ptyId: string) => void
+      onPtySpawn('pty-fact-1')
+
+      handler._dispatchTerminalSideEffectBatchForTest({
+        ptyId: 'pty-fact-1',
+        seq: 10,
+        facts: [
+          { kind: 'title', normalizedTitle: 'Codex working', rawTitle: 'Codex working' },
+          { kind: 'bell' }
+        ]
+      })
+
+      expect(deps.setRuntimePaneTitle).toHaveBeenCalledWith('tab-1', 1, 'Codex working')
+      expect(deps.markWorktreeUnread).toHaveBeenCalledTimes(1)
+      expect(deps.markTerminalTabUnread).toHaveBeenCalledWith('tab-1')
+      expect(deps.dispatchNotification).not.toHaveBeenCalled()
+      vi.advanceTimersByTime(250)
+      expect(deps.dispatchNotification).toHaveBeenCalledWith(
+        expect.objectContaining({
+          source: 'terminal-bell',
+          paneKey: makePaneKey('tab-1', LEAF_1)
+        })
+      )
+    })
+
+    it('stops consuming facts after the pane binding is disposed', async () => {
+      enableMainAuthority()
+      const { connectPanePty } = await import('./pty-connection')
+      const handler = await import('./terminal-side-effect-facts-handler')
+      const transport = createMockTransport()
+      transportFactoryQueue.push(transport)
+
+      const deps = createDeps()
+      const binding = connectPanePty(
+        createPane(1) as never,
+        createManager(1) as never,
+        deps as never
+      )
+      const onPtySpawn = createdTransportOptions[0]?.onPtySpawn as (ptyId: string) => void
+      onPtySpawn('pty-fact-2')
+
+      binding.dispose()
+      handler._dispatchTerminalSideEffectBatchForTest({
+        ptyId: 'pty-fact-2',
+        seq: 1,
+        facts: [{ kind: 'bell' }]
+      })
+
+      expect(deps.markWorktreeUnread).not.toHaveBeenCalled()
+      expect(deps.markTerminalTabUnread).not.toHaveBeenCalled()
+    })
+
+    it('schedules the completion notification for genuine working→idle facts', async () => {
+      enableMainAuthority()
+      const { connectPanePty } = await import('./pty-connection')
+      const handler = await import('./terminal-side-effect-facts-handler')
+      const transport = createMockTransport()
+      transportFactoryQueue.push(transport)
+      vi.useFakeTimers()
+
+      const deps = createDeps()
+      connectPanePty(createPane(1) as never, createManager(1) as never, deps as never)
+      const onPtySpawn = createdTransportOptions[0]?.onPtySpawn as (ptyId: string) => void
+      onPtySpawn('pty-fact-genuine')
+
+      handler._dispatchTerminalSideEffectBatchForTest({
+        ptyId: 'pty-fact-genuine',
+        seq: 1,
+        facts: [
+          { kind: 'title', normalizedTitle: '⠋ Codex working', rawTitle: '⠋ Codex working' },
+          { kind: 'agent-working' }
+        ]
+      })
+      handler._dispatchTerminalSideEffectBatchForTest({
+        ptyId: 'pty-fact-genuine',
+        seq: 2,
+        facts: [
+          { kind: 'title', normalizedTitle: '* Codex done', rawTitle: '* Codex done' },
+          { kind: 'agent-idle', title: '* Codex done' }
+        ]
+      })
+      vi.advanceTimersByTime(AGENT_TASK_COMPLETE_NOTIFICATION_MAX_WAIT_MS)
+
+      expect(deps.dispatchNotification).toHaveBeenCalledWith(
+        expect.objectContaining({ source: 'agent-task-complete' })
+      )
+    })
+
+    it('clears state without completion attention for stale-derived facts', async () => {
+      enableMainAuthority()
+      const { connectPanePty } = await import('./pty-connection')
+      const handler = await import('./terminal-side-effect-facts-handler')
+      const transport = createMockTransport()
+      transportFactoryQueue.push(transport)
+      vi.useFakeTimers()
+
+      const deps = createDeps()
+      connectPanePty(createPane(1) as never, createManager(1) as never, deps as never)
+      const onPtySpawn = createdTransportOptions[0]?.onPtySpawn as (ptyId: string) => void
+      onPtySpawn('pty-fact-stale')
+
+      handler._dispatchTerminalSideEffectBatchForTest({
+        ptyId: 'pty-fact-stale',
+        seq: 1,
+        facts: [
+          { kind: 'title', normalizedTitle: '⠋ Codex working', rawTitle: '⠋ Codex working' },
+          { kind: 'agent-working' }
+        ]
+      })
+      // Main's unthrottled 3s stale-title rewrite for a merely-paused agent.
+      handler._dispatchTerminalSideEffectBatchForTest({
+        ptyId: 'pty-fact-stale',
+        seq: 2,
+        facts: [
+          {
+            kind: 'title',
+            normalizedTitle: 'Codex',
+            rawTitle: 'Codex',
+            staleWorkingTitleClear: true
+          },
+          { kind: 'agent-idle', title: 'Codex', staleWorkingTitleClear: true }
+        ]
+      })
+
+      // The cleared title still lands; the cache timer is cleared.
+      expect(deps.setRuntimePaneTitle).toHaveBeenLastCalledWith('tab-1', 1, 'Codex')
+      expect(deps.setCacheTimerStartedAt).toHaveBeenLastCalledWith(
+        makePaneKey('tab-1', LEAF_1),
+        null
+      )
+      // But no task-complete notification or unread attention is scheduled.
+      vi.advanceTimersByTime(AGENT_TASK_COMPLETE_NOTIFICATION_MAX_WAIT_MS * 2)
+      expect(deps.dispatchNotification).not.toHaveBeenCalled()
+      expect(deps.markWorktreeUnread).not.toHaveBeenCalled()
+      expect(deps.markTerminalPaneUnread).not.toHaveBeenCalled()
+    })
+
+    it('drops the agent status from a command-finished fact like the byte path did', async () => {
+      enableMainAuthority()
+      const { connectPanePty } = await import('./pty-connection')
+      const handler = await import('./terminal-side-effect-facts-handler')
+      const transport = createMockTransport()
+      transportFactoryQueue.push(transport)
+      const paneKey = makePaneKey('tab-1', LEAF_1)
+      mockStoreState.agentStatusByPaneKey = {
+        [paneKey]: {
+          paneKey,
+          state: 'done',
+          prompt: 'hi',
+          updatedAt: 1000,
+          stateStartedAt: 1000,
+          agentType: 'codex',
+          stateHistory: []
+        }
+      }
+
+      connectPanePty(createPane(1) as never, createManager(1) as never, createDeps() as never)
+      const onPtySpawn = createdTransportOptions[0]?.onPtySpawn as (ptyId: string) => void
+      onPtySpawn('pty-fact-133')
+
+      handler._dispatchTerminalSideEffectBatchForTest({
+        ptyId: 'pty-fact-133',
+        seq: 1,
+        facts: [{ kind: 'command-finished', exitCode: 130 }]
+      })
+
+      expect(mockStoreState.dropAgentStatus).toHaveBeenCalledWith(paneKey)
+      expect(mockStoreState.removeAgentStatus).not.toHaveBeenCalled()
+    })
+
+    it('routes pr-link facts to the worktree PR observer', async () => {
+      enableMainAuthority()
+      const { connectPanePty } = await import('./pty-connection')
+      const handler = await import('./terminal-side-effect-facts-handler')
+      const transport = createMockTransport()
+      transportFactoryQueue.push(transport)
+
+      connectPanePty(createPane(1) as never, createManager(1) as never, createDeps() as never)
+      const onPtySpawn = createdTransportOptions[0]?.onPtySpawn as (ptyId: string) => void
+      onPtySpawn('pty-fact-pr')
+
+      const link = {
+        url: 'https://github.com/acme/orca/pull/42',
+        slug: { owner: 'acme', repo: 'orca' },
+        number: 42
+      }
+      handler._dispatchTerminalSideEffectBatchForTest({
+        ptyId: 'pty-fact-pr',
+        seq: 1,
+        facts: [{ kind: 'pr-link', link }]
+      })
+
+      expect(mockStoreState.observeTerminalGitHubPullRequestLink).toHaveBeenCalledWith('wt-1', link)
+    })
+
+    it('does not byte-scan PR links or OSC 133 — facts are the only consumer', async () => {
+      enableMainAuthority()
+      const { connectPanePty } = await import('./pty-connection')
+      const transport = createMockTransport()
+      const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
+      transport.connect.mockImplementation(
+        async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+          capturedDataCallback.current = callbacks.onData ?? null
+          return 'pty-authority-bytes'
+        }
+      )
+      transportFactoryQueue.push(transport)
+      const paneKey = makePaneKey('tab-1', LEAF_1)
+      mockStoreState.agentStatusByPaneKey = {
+        [paneKey]: {
+          paneKey,
+          state: 'done',
+          prompt: 'hi',
+          updatedAt: 1000,
+          stateStartedAt: 1000,
+          agentType: 'codex',
+          stateHistory: []
+        }
+      }
+
+      connectPanePty(createPane(1) as never, createManager(1) as never, createDeps() as never)
+      await flushAsyncTicks()
+      expect(capturedDataCallback.current).not.toBeNull()
+
+      capturedDataCallback.current?.('Created https://github.com/acme/orca/pull/42\r\n')
+      capturedDataCallback.current?.('\x1b]133;D;130\x07prompt $ ')
+
+      expect(mockStoreState.observeTerminalGitHubPullRequestLink).not.toHaveBeenCalled()
+      expect(mockStoreState.dropAgentStatus).not.toHaveBeenCalled()
+    })
+
+    it('seeds and settles Command Code status from command-code facts', async () => {
+      enableMainAuthority()
+      const { connectPanePty } = await import('./pty-connection')
+      const handler = await import('./terminal-side-effect-facts-handler')
+      const transport = createMockTransport()
+      transportFactoryQueue.push(transport)
+      vi.useFakeTimers()
+      const paneKey = makePaneKey('tab-1', LEAF_1)
+
+      connectPanePty(createPane(1) as never, createManager(1) as never, createDeps() as never)
+      const onPtySpawn = createdTransportOptions[0]?.onPtySpawn as (ptyId: string) => void
+      onPtySpawn('pty-fact-cc')
+
+      handler._dispatchTerminalSideEffectBatchForTest({
+        ptyId: 'pty-fact-cc',
+        seq: 1,
+        facts: [{ kind: 'command-code-working', prompt: 'say hi' }]
+      })
+      expect(mockStoreState.agentStatusByPaneKey[paneKey]).toMatchObject({
+        state: 'working',
+        prompt: 'say hi',
+        agentType: 'command-code'
+      })
+
+      // Why: the done fact is a hint — the settle timer stays in the pane
+      // policy because it must consult the live status row before completing.
+      handler._dispatchTerminalSideEffectBatchForTest({
+        ptyId: 'pty-fact-cc',
+        seq: 2,
+        facts: [{ kind: 'command-code-done', prompt: 'say hi' }]
+      })
+      vi.advanceTimersByTime(1499)
+      expect(mockStoreState.agentStatusByPaneKey[paneKey]).toMatchObject({ state: 'working' })
+      vi.advanceTimersByTime(1)
+      expect(mockStoreState.agentStatusByPaneKey[paneKey]).toMatchObject({
+        state: 'done',
+        prompt: 'say hi',
+        agentType: 'command-code'
+      })
+    })
+
+    it('keeps Command Code working when a working fact lands before the done settles', async () => {
+      enableMainAuthority()
+      const { connectPanePty } = await import('./pty-connection')
+      const handler = await import('./terminal-side-effect-facts-handler')
+      const transport = createMockTransport()
+      transportFactoryQueue.push(transport)
+      vi.useFakeTimers()
+      const paneKey = makePaneKey('tab-1', LEAF_1)
+
+      connectPanePty(createPane(1) as never, createManager(1) as never, createDeps() as never)
+      const onPtySpawn = createdTransportOptions[0]?.onPtySpawn as (ptyId: string) => void
+      onPtySpawn('pty-fact-cc-repaint')
+
+      handler._dispatchTerminalSideEffectBatchForTest({
+        ptyId: 'pty-fact-cc-repaint',
+        seq: 1,
+        facts: [{ kind: 'command-code-working', prompt: 'Run a slow command' }]
+      })
+      handler._dispatchTerminalSideEffectBatchForTest({
+        ptyId: 'pty-fact-cc-repaint',
+        seq: 2,
+        facts: [{ kind: 'command-code-done', prompt: 'Run a slow command' }]
+      })
+      vi.advanceTimersByTime(1000)
+      // An active repaint within the settle window cancels the pending done.
+      handler._dispatchTerminalSideEffectBatchForTest({
+        ptyId: 'pty-fact-cc-repaint',
+        seq: 3,
+        facts: [{ kind: 'command-code-working', prompt: 'Run a slow command' }]
+      })
+      vi.advanceTimersByTime(2000)
+
+      expect(mockStoreState.agentStatusByPaneKey[paneKey]).toMatchObject({
+        state: 'working',
+        prompt: 'Run a slow command',
+        agentType: 'command-code'
+      })
+    })
+
+    it('does not byte-scan Command Code output — facts are the only consumer', async () => {
+      enableMainAuthority()
+      const { connectPanePty } = await import('./pty-connection')
+      const transport = createMockTransport()
+      const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
+      transport.connect.mockImplementation(
+        async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+          capturedDataCallback.current = callbacks.onData ?? null
+          return 'pty-authority-cc-bytes'
+        }
+      )
+      transportFactoryQueue.push(transport)
+
+      connectPanePty(
+        createPane(1) as never,
+        createManager(1) as never,
+        createDeps({ startup: { command: 'command-code --trust' } }) as never
+      )
+      await flushAsyncTicks()
+      expect(capturedDataCallback.current).not.toBeNull()
+
+      capturedDataCallback.current?.('# Command Code v0.27.2\r\n')
+      capturedDataCallback.current?.('❯ Fix the spinner\r\n\x1b[35m✻ Thinking...\x1b[0m')
+
+      expect(mockStoreState.setAgentStatus).not.toHaveBeenCalled()
+    })
+
+    it('honors the persisted kill switch for panes bound before settings hydrate', async () => {
+      // Pre-hydration: the store has no settings yet, but the user persisted
+      // the kill switch off. The pane must register byte parsers, not a fact
+      // consumer — and hydration must not produce a second consumer.
+      mockStoreState.settings = null
+      ;(window.api as unknown as Record<string, unknown>).settings = {
+        getSync: vi.fn(() => ({ terminalMainSideEffectAuthority: false }))
+      }
+      const { connectPanePty } = await import('./pty-connection')
+      const handler = await import('./terminal-side-effect-facts-handler')
+      const transport = createMockTransport()
+      transportFactoryQueue.push(transport)
+
+      const deps = createDeps()
+      connectPanePty(createPane(1) as never, createManager(1) as never, deps as never)
+
+      for (const callback of SIDE_EFFECT_PARSER_CALLBACKS) {
+        expect(createdTransportOptions[0]?.[callback]).toBeTypeOf('function')
+      }
+      const onPtySpawn = createdTransportOptions[0]?.onPtySpawn as (ptyId: string) => void
+      onPtySpawn('pty-prehydration')
+
+      // No fact consumer registered: channel batches are dropped.
+      handler._dispatchTerminalSideEffectBatchForTest({
+        ptyId: 'pty-prehydration',
+        seq: 1,
+        facts: [{ kind: 'bell' }]
+      })
+      expect(deps.markWorktreeUnread).not.toHaveBeenCalled()
+
+      // Hydration lands with the switch still off: byte parsing stays the
+      // single consumer — one BEL marks unread exactly once.
+      mockStoreState.settings = { terminalMainSideEffectAuthority: false }
+      notifyStoreSubscribers()
+      const onBell = createdTransportOptions[0]?.onBell as () => void
+      onBell()
+      expect(deps.markWorktreeUnread).toHaveBeenCalledTimes(1)
+    })
   })
 
   it('lets concurrent agent-complete notifications win over terminal bell notifications', async () => {

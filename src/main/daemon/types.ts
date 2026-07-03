@@ -41,6 +41,15 @@ export type TerminalModes = {
   sgrMousePixelsMode?: boolean
   applicationCursor: boolean
   alternateScreen: boolean
+  /** Kitty keyboard protocol flags (CSI = u pushes) for emulator re-seed
+   *  parity ONLY. Consumed by the daemon warm-reattach path: the spawn
+   *  result threads them into seedHeadlessTerminal, which re-applies them to
+   *  the fresh runtime emulator (HeadlessEmulator.applyKittyKeyboardFlags)
+   *  so hidden `CSI ? u` answers the real flags instead of ?0u.
+   *  rehydrateSequences must never push these into a renderer xterm —
+   *  POST_REPLAY_REATTACH_RESET's deliberate kitty reset stays authoritative
+   *  (terminal-query-authority.md §kitty). */
+  kittyKeyboardFlags?: number
 }
 
 // The on-disk checkpoint.json shape lives in daemon-checkpoint-file.ts (it
