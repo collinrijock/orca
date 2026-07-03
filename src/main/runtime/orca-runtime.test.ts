@@ -52,6 +52,7 @@ import {
   recentTerminalOutputIncludesPath,
   type RuntimeTerminalAgentStatusEvent
 } from './orca-runtime'
+import { HeadlessEmulator } from '../daemon/headless-emulator'
 import type { RuntimeMobileSessionTabsResult } from '../../shared/runtime-types'
 import {
   TERMINAL_INPUT_CHUNK_MAX_BYTES,
@@ -717,6 +718,64 @@ function syncSinglePty(
       }
     ]
   })
+}
+
+function makeDeferred(): { promise: Promise<void>; resolve: () => void } {
+  let resolve!: () => void
+  const promise = new Promise<void>((next) => {
+    resolve = next
+  })
+  return { promise, resolve }
+}
+
+function makeStatusFrame(index: number, first: boolean): string {
+  const pad = '·'.repeat(60)
+  const rows = [
+    `✻ 执行任务中… (esc to interrupt) [${index}] ${pad}`,
+    `  ⎿ 正在分析代码库结构与依赖关系，请稍候… ${pad}`,
+    `  ⎿ tokens: ${1000 + index * 137} · elapsed: ${index}s ${pad}`
+  ]
+  return `${first ? '' : '\x1b[2A'}\r${rows.map((row) => `\x1b[K${row}`).join('\r\n')}\r`
+}
+
+async function writeHeadless(emulator: HeadlessEmulator, data: string): Promise<void> {
+  await emulator.write(data)
+}
+
+function visibleNonEmptyLines(emulator: HeadlessEmulator): string[] {
+  return emulator.getVisibleLines().filter((line) => line.length > 0)
+}
+
+async function parseHeadlessSnapshotLines(
+  snapshot: { data: string; cols: number; rows: number },
+  display: { cols: number; rows: number }
+): Promise<string[]> {
+  const restored = new HeadlessEmulator({ cols: display.cols, rows: display.rows })
+  try {
+    restored.resize(snapshot.cols, snapshot.rows)
+    await writeHeadless(restored, `\x1b[2J\x1b[3J\x1b[H${snapshot.data}`)
+    restored.resize(display.cols, display.rows)
+    return visibleNonEmptyLines(restored)
+  } finally {
+    restored.dispose()
+  }
+}
+
+async function referenceStatusFrameLines(
+  spawn: { cols: number; rows: number },
+  resized: { cols: number; rows: number }
+): Promise<string[]> {
+  const truth = new HeadlessEmulator({ cols: spawn.cols, rows: spawn.rows })
+  try {
+    await writeHeadless(truth, 'user@host % claude\r\n')
+    truth.resize(resized.cols, resized.rows)
+    for (let index = 0; index < 5; index += 1) {
+      await writeHeadless(truth, makeStatusFrame(index, index === 0))
+    }
+    return visibleNonEmptyLines(truth)
+  } finally {
+    truth.dispose()
+  }
 }
 
 const TEST_WINDOW_ID = 1
@@ -5409,6 +5468,90 @@ describe('OrcaRuntimeService', () => {
       source: 'headless',
       lastTitle: 'Codex working'
     })
+  })
+
+  it('resizes the headless mirror after an accepted desktop PTY resize', async () => {
+    const spawn = { cols: 80, rows: 24 }
+    const resized = { cols: 120, rows: 30 }
+    let currentSize = spawn
+    const runtime = createRuntime()
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null,
+      getSize: () => currentSize
+    })
+    syncSinglePty(runtime, 'pty-1')
+
+    runtime.onPtyData('pty-1', 'user@host % claude\r\n', 100)
+    currentSize = resized
+    runtime.onExternalPtyResize('pty-1', resized.cols, resized.rows)
+    for (let index = 0; index < 5; index += 1) {
+      runtime.onPtyData('pty-1', makeStatusFrame(index, index === 0), 200 + index)
+    }
+
+    const snapshot = await runtime.serializeMainTerminalBuffer('pty-1', { scrollbackRows: 5000 })
+    expect(snapshot).toMatchObject({ cols: resized.cols, rows: resized.rows, source: 'headless' })
+    await expect(parseHeadlessSnapshotLines(snapshot!, resized)).resolves.toEqual(
+      await referenceStatusFrameLines(spawn, resized)
+    )
+  })
+
+  it('orders headless mirror resizes behind queued PTY writes', async () => {
+    const spawn = { cols: 80, rows: 10 }
+    const resized = { cols: 120, rows: 10 }
+    let currentSize = spawn
+    const runtime = createRuntime()
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null,
+      getSize: () => currentSize,
+      resize: () => {
+        currentSize = resized
+        return true
+      }
+    })
+    syncSinglePty(runtime, 'pty-1')
+    runtime.onPtyData('pty-1', 'prompt\r\n', 100)
+    await runtime.serializeMainTerminalBuffer('pty-1')
+
+    type HeadlessStateForTest = {
+      emulator: HeadlessEmulator
+      writeChain: Promise<void>
+    }
+    const headless = (
+      runtime as unknown as { headlessTerminals: Map<string, HeadlessStateForTest> }
+    ).headlessTerminals.get('pty-1')
+    expect(headless).toBeDefined()
+    const originalWrite = headless!.emulator.write.bind(headless!.emulator)
+    const queuedWriteStarted = makeDeferred()
+    const releaseQueuedWrite = makeDeferred()
+    headless!.emulator.write = async (data: string): Promise<void> => {
+      queuedWriteStarted.resolve()
+      await releaseQueuedWrite.promise
+      await originalWrite(data)
+    }
+
+    try {
+      runtime.onPtyData('pty-1', '\x1b[90GOLD', 200)
+      await queuedWriteStarted.promise
+      await runtime.updateDesktopViewport('pty-1', resized)
+      runtime.onPtyData('pty-1', '\r\nNEXT', 300)
+      releaseQueuedWrite.resolve()
+
+      const snapshot = await runtime.serializeMainTerminalBuffer('pty-1', { scrollbackRows: 100 })
+      expect(snapshot).toMatchObject({ cols: resized.cols, rows: resized.rows })
+      await expect(parseHeadlessSnapshotLines(snapshot!, resized)).resolves.toEqual([
+        'prompt',
+        '                                                                               O',
+        'LD',
+        'NEXT'
+      ])
+    } finally {
+      headless!.emulator.write = originalWrite
+      releaseQueuedWrite.resolve()
+    }
   })
 
   it('adopts renderer-seeded titles into headless main terminal snapshots', async () => {
@@ -10354,6 +10497,112 @@ describe('OrcaRuntimeService', () => {
     expect(read.tail).toEqual(['ready'])
   })
 
+  it('recovers exported ORCA_TERMINAL_HANDLE from discovered live PTY sessions', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    const writes: string[] = []
+    runtime.setPtyController({
+      write: (_ptyId, data) => {
+        writes.push(data)
+        return true
+      },
+      kill: () => true,
+      getForegroundProcess: async () => null,
+      listProcesses: async () => [
+        {
+          id: 'pty-1',
+          cwd: TEST_WORKTREE_PATH,
+          title: 'claude',
+          terminalHandle: 'term_exported'
+        }
+      ]
+    })
+
+    const listed = await runtime.listTerminals()
+    expect(listed.terminals[0]?.handle).toBe('term_exported')
+
+    runtime.onPtyData('pty-1', 'after restart\n', 100)
+    await expect(runtime.readTerminal('term_exported')).resolves.toMatchObject({
+      handle: 'term_exported',
+      tail: ['after restart']
+    })
+    await expect(
+      runtime.sendTerminal('term_exported', { text: 'still writable' })
+    ).resolves.toMatchObject({
+      handle: 'term_exported',
+      accepted: true
+    })
+    expect(writes).toEqual(['still writable'])
+  })
+
+  it('does not adopt a discovered terminal handle already bound to another live PTY', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    const writesByPty = new Map<string, string[]>()
+    runtime.setPtyController({
+      write: (ptyId, data) => {
+        writesByPty.set(ptyId, [...(writesByPty.get(ptyId) ?? []), data])
+        return true
+      },
+      kill: () => true,
+      getForegroundProcess: async () => null,
+      listProcesses: async () => [
+        {
+          id: 'pty-victim',
+          cwd: TEST_WORKTREE_PATH,
+          title: 'claude',
+          terminalHandle: 'term_victim'
+        },
+        {
+          id: 'pty-imposter',
+          cwd: TEST_WORKTREE_PATH,
+          title: 'claude',
+          terminalHandle: 'term_victim'
+        }
+      ]
+    })
+
+    const listed = await runtime.listTerminals()
+    const handles = listed.terminals.map((terminal) => terminal.handle)
+    expect(handles).toContain('term_victim')
+    expect(new Set(handles).size).toBe(handles.length)
+
+    await expect(
+      runtime.sendTerminal('term_victim', { text: 'for victim' })
+    ).resolves.toMatchObject({ accepted: true })
+    expect(writesByPty.get('pty-victim')).toEqual(['for victim'])
+    expect(writesByPty.has('pty-imposter')).toBe(false)
+  })
+
+  it('keeps an already-bound terminal handle when discovery reports a different exported one', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    const writes: string[] = []
+    runtime.setPtyController({
+      write: (_ptyId, data) => {
+        writes.push(data)
+        return true
+      },
+      kill: () => true,
+      getForegroundProcess: async () => null,
+      listProcesses: async () => [
+        {
+          id: 'pty-1',
+          cwd: TEST_WORKTREE_PATH,
+          title: 'claude',
+          terminalHandle: 'term_from_env'
+        }
+      ]
+    })
+    runtime.registerPreAllocatedHandleForPty('pty-1', 'term_already_bound')
+
+    const listed = await runtime.listTerminals()
+    expect(listed.terminals[0]?.handle).toBe('term_already_bound')
+    await expect(
+      runtime.sendTerminal('term_already_bound', { text: 'still routed' })
+    ).resolves.toMatchObject({ accepted: true })
+    expect(writes).toEqual(['still routed'])
+    // the reported-but-not-adopted handle must not resolve to the live pty
+    await expect(runtime.readTerminal('term_from_env')).rejects.toThrow()
+  })
+
   it('binds advertised URLs for renderer-restored PTYs that skip registerPty', () => {
     const runtime = new OrcaRuntimeService(store)
 
@@ -12011,6 +12260,303 @@ describe('OrcaRuntimeService', () => {
     runtime.onPtyData('pty-bg', '\x1b]0;OMP ready\x07delta\n', 400)
     await settleProbe()
     expect(getForegroundProcess).toHaveBeenCalledTimes(2)
+  })
+
+  it('normalizes Pi-compatible mobile session status to OMP for an unknown-launch foreground omp PTY', async () => {
+    const spawn = vi.fn().mockResolvedValue({ id: 'pty-typed-omp' })
+    const getForegroundProcess = vi.fn(async () => 'omp')
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      spawn,
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess
+    })
+    const terminal = await runtime.createTerminal(`id:${TEST_WORKTREE_ID}`, {
+      tabId: 'typed-omp-tab',
+      leafId: HEADLESS_LEAF_ID,
+      title: 'Terminal'
+    })
+
+    runtime.onPtyData('pty-typed-omp', '\x1b]0;Pi ready\x07', 123)
+    await new Promise<void>((resolve) => setImmediate(resolve))
+
+    const result = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
+
+    expect(getForegroundProcess).toHaveBeenCalledWith('pty-typed-omp')
+    expect(result.tabs[0]).toEqual(
+      expect.objectContaining({
+        type: 'terminal',
+        title: 'OMP ready',
+        agentStatus: expect.objectContaining({
+          state: 'done',
+          agentType: 'omp',
+          terminalHandle: terminal.handle,
+          terminalTitle: 'OMP ready'
+        })
+      })
+    )
+    expect(result.tabs[0]).not.toHaveProperty('launchAgent')
+  })
+
+  it('waits for unknown-launch foreground owner before publishing Pi-compatible mobile status', async () => {
+    const foregroundProcess = deferred<string | null>()
+    const spawn = vi.fn().mockResolvedValue({ id: 'pty-typed-omp' })
+    const getForegroundProcess = vi.fn(() => foregroundProcess.promise)
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      spawn,
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess
+    })
+    const terminal = await runtime.createTerminal(`id:${TEST_WORKTREE_ID}`, {
+      tabId: 'typed-omp-tab',
+      leafId: HEADLESS_LEAF_ID,
+      title: 'Terminal'
+    })
+    const events: RuntimeMobileSessionTabsResult[] = []
+    const unsubscribe = runtime.onMobileSessionTabsChanged((snapshot) => events.push(snapshot))
+
+    runtime.onPtyData('pty-typed-omp', '\x1b]0;Pi ready\x07', 123)
+    await new Promise<void>((resolve) => setImmediate(resolve))
+
+    expect(getForegroundProcess).toHaveBeenCalledWith('pty-typed-omp')
+    expect(events).toHaveLength(0)
+
+    foregroundProcess.resolve('omp')
+    await new Promise<void>((resolve) => setImmediate(resolve))
+
+    expect(events).toEqual([
+      expect.objectContaining({
+        tabs: [
+          expect.objectContaining({
+            type: 'terminal',
+            title: 'OMP ready',
+            agentStatus: expect.objectContaining({
+              state: 'done',
+              agentType: 'omp',
+              terminalHandle: terminal.handle,
+              terminalTitle: 'OMP ready'
+            })
+          })
+        ]
+      })
+    ])
+
+    unsubscribe()
+  })
+
+  it('keeps same-status Pi-compatible title changes queued behind the foreground owner probe', async () => {
+    const foregroundProcess = deferred<string | null>()
+    const spawn = vi.fn().mockResolvedValue({ id: 'pty-typed-omp' })
+    const getForegroundProcess = vi.fn(() => foregroundProcess.promise)
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      spawn,
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess
+    })
+    const terminal = await runtime.createTerminal(`id:${TEST_WORKTREE_ID}`, {
+      tabId: 'typed-omp-tab',
+      leafId: HEADLESS_LEAF_ID,
+      title: 'Terminal'
+    })
+    const events: RuntimeMobileSessionTabsResult[] = []
+    const unsubscribe = runtime.onMobileSessionTabsChanged((snapshot) => events.push(snapshot))
+
+    runtime.onPtyData('pty-typed-omp', '\x1b]0;Pi ready\x07', 123)
+    await new Promise<void>((resolve) => setImmediate(resolve))
+    runtime.onPtyData('pty-typed-omp', '\x1b]0;Pi idle\x07', 124)
+    await new Promise<void>((resolve) => setImmediate(resolve))
+
+    expect(getForegroundProcess).toHaveBeenCalledTimes(1)
+    expect(events).toHaveLength(0)
+
+    foregroundProcess.resolve('omp')
+    await new Promise<void>((resolve) => setImmediate(resolve))
+
+    expect(events).toEqual([
+      expect.objectContaining({
+        tabs: [
+          expect.objectContaining({
+            type: 'terminal',
+            title: 'OMP ready',
+            agentStatus: expect.objectContaining({
+              state: 'done',
+              agentType: 'omp',
+              terminalHandle: terminal.handle,
+              terminalTitle: 'OMP ready'
+            })
+          })
+        ]
+      })
+    ])
+
+    unsubscribe()
+  })
+
+  it('coalesces same-status title frames behind one post-title foreground probe', async () => {
+    const staleForegroundProcess = deferred<string | null>()
+    const freshForegroundProcess = deferred<string | null>()
+    const spawn = vi.fn().mockResolvedValue({ id: 'pty-typed-omp' })
+    const getForegroundProcess = vi
+      .fn()
+      .mockReturnValueOnce(staleForegroundProcess.promise)
+      .mockReturnValueOnce(freshForegroundProcess.promise)
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      spawn,
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess
+    })
+    const terminal = await runtime.createTerminal(`id:${TEST_WORKTREE_ID}`, {
+      tabId: 'typed-omp-tab',
+      leafId: HEADLESS_LEAF_ID,
+      title: 'Terminal'
+    })
+    const events: RuntimeMobileSessionTabsResult[] = []
+    const unsubscribe = runtime.onMobileSessionTabsChanged((snapshot) => events.push(snapshot))
+
+    runtime.onPtyData('pty-typed-omp', '\x1b]0;Pi ready\x07', 123)
+    await new Promise<void>((resolve) => setImmediate(resolve))
+    runtime.onPtyData('pty-typed-omp', '\x1b]0;Pi idle\x07', 124)
+    runtime.onPtyData('pty-typed-omp', '\x1b]0;Pi done\x07', 125)
+    await new Promise<void>((resolve) => setImmediate(resolve))
+
+    expect(getForegroundProcess).toHaveBeenCalledTimes(1)
+    expect(events).toHaveLength(0)
+
+    staleForegroundProcess.resolve(null)
+    await new Promise<void>((resolve) => setImmediate(resolve))
+
+    expect(getForegroundProcess).toHaveBeenCalledTimes(2)
+    expect(events).toHaveLength(0)
+
+    freshForegroundProcess.resolve('omp')
+    await new Promise<void>((resolve) => setImmediate(resolve))
+
+    expect(getForegroundProcess).toHaveBeenCalledTimes(2)
+    expect(events).toEqual([
+      expect.objectContaining({
+        tabs: [
+          expect.objectContaining({
+            type: 'terminal',
+            title: 'OMP ready',
+            agentStatus: expect.objectContaining({
+              state: 'done',
+              agentType: 'omp',
+              terminalHandle: terminal.handle,
+              terminalTitle: 'OMP ready'
+            })
+          })
+        ]
+      })
+    ])
+
+    unsubscribe()
+  })
+
+  it('starts a post-title foreground probe when an older pending probe finds no owner', async () => {
+    const staleForegroundProcess = deferred<string | null>()
+    const freshForegroundProcess = deferred<string | null>()
+    const spawn = vi.fn().mockResolvedValue({ id: 'pty-typed-omp' })
+    const getForegroundProcess = vi
+      .fn()
+      .mockReturnValueOnce(staleForegroundProcess.promise)
+      .mockReturnValueOnce(freshForegroundProcess.promise)
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      spawn,
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess
+    })
+    const terminal = await runtime.createTerminal(`id:${TEST_WORKTREE_ID}`, {
+      tabId: 'typed-omp-tab',
+      leafId: HEADLESS_LEAF_ID,
+      title: 'Terminal'
+    })
+    const events: RuntimeMobileSessionTabsResult[] = []
+    const unsubscribe = runtime.onMobileSessionTabsChanged((snapshot) => events.push(snapshot))
+
+    ;(
+      runtime as unknown as {
+        refreshPtyForegroundAgentFromController: (ptyId: string) => Promise<boolean>
+      }
+    ).refreshPtyForegroundAgentFromController('pty-typed-omp')
+    runtime.onPtyData('pty-typed-omp', '\x1b]0;Pi ready\x07', 123)
+    await new Promise<void>((resolve) => setImmediate(resolve))
+
+    expect(getForegroundProcess).toHaveBeenCalledTimes(1)
+    expect(events).toHaveLength(0)
+
+    staleForegroundProcess.resolve(null)
+    await new Promise<void>((resolve) => setImmediate(resolve))
+
+    expect(getForegroundProcess).toHaveBeenCalledTimes(2)
+    expect(events).toHaveLength(0)
+
+    freshForegroundProcess.resolve('omp')
+    await new Promise<void>((resolve) => setImmediate(resolve))
+
+    expect(events).toEqual([
+      expect.objectContaining({
+        tabs: [
+          expect.objectContaining({
+            type: 'terminal',
+            title: 'OMP ready',
+            agentStatus: expect.objectContaining({
+              state: 'done',
+              agentType: 'omp',
+              terminalHandle: terminal.handle,
+              terminalTitle: 'OMP ready'
+            })
+          })
+        ]
+      })
+    ])
+
+    unsubscribe()
+  })
+
+  it('keeps Pi-compatible mobile session status as Pi for an unknown-launch foreground pi PTY', async () => {
+    const spawn = vi.fn().mockResolvedValue({ id: 'pty-typed-pi' })
+    const getForegroundProcess = vi.fn(async () => 'pi')
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      spawn,
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess
+    })
+    const terminal = await runtime.createTerminal(`id:${TEST_WORKTREE_ID}`, {
+      tabId: 'typed-pi-tab',
+      leafId: HEADLESS_LEAF_ID,
+      title: 'Terminal'
+    })
+
+    runtime.onPtyData('pty-typed-pi', '\x1b]0;Pi ready\x07', 123)
+    await new Promise<void>((resolve) => setImmediate(resolve))
+
+    const result = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
+
+    expect(getForegroundProcess).toHaveBeenCalledWith('pty-typed-pi')
+    expect(result.tabs[0]).toEqual(
+      expect.objectContaining({
+        type: 'terminal',
+        title: 'Pi ready',
+        agentStatus: expect.objectContaining({
+          state: 'done',
+          agentType: 'pi',
+          terminalHandle: terminal.handle,
+          terminalTitle: 'Pi ready'
+        })
+      })
+    )
+    expect(result.tabs[0]).not.toHaveProperty('launchAgent')
   })
 
   it('keeps renderer-vetted mobile agent status for custom-titled terminals', async () => {
