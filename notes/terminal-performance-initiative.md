@@ -407,6 +407,25 @@ daemon is fixed — re-attribute after.
 
 Merge gate: revive branch merges only at ≥ blockedfix numbers.
 
+**RETRACTION (2026-07-03, later):** the daemon conviction above was a
+confounded measurement — the 39–48 MB/s ingest runs executed while a dev
+app was still running. On a quiet machine the revive branch ingests at
+**82–109 MB/s** (≈ pre-merge) and its HeadlessEmulator alone does 99.5 MB/s
+vs raw xterm 77.7. The daemon is innocent. Consequently the end-to-end
+revival delta (11.5 → 7.2/7.4 dev) is also UNTRUSTED — none of those runs
+were load-controlled, and unit benches show up to 2.6× machine-load
+variance. Scanner pre-filters landed anyway on revive (71c89da9b;
+strictly positive, 641 daemon tests green).
+
+**New measurement protocol (mandatory from here):** quiet machine (no dev
+apps or benches concurrent), paired A/B runs back-to-back alternating
+branches, n≥2 per side, report spread not just p50. The merge-gate
+comparison (blockedfix vs revive) must be redone under this protocol
+before any verdict. Next: run the controlled A/B; if the delta
+disappears, merge revive into orca-performance and proceed to flow
+control (#6); if it persists, resume attribution renderer-side (probe
+pty-connection dataCallback additions per chunk).
+
 ## Success criteria (baseline-relative; finalize after task 1)
 
 - DSR-under-load p90 in Orca within striking distance of iTerm2 on the same
