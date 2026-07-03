@@ -1,0 +1,72 @@
+{
+  "benchmark": "terminal-pipeline",
+  "label": "dev-revival-alloff",
+  "timestamp": "2026-07-03T05:56:27.660Z",
+  "terminal": {
+    "program": "Orca",
+    "version": "1.4.120-rc.2",
+    "term": "xterm-256color",
+    "cols": 282,
+    "rows": 80,
+    "tty": true
+  },
+  "machine": {
+    "platform": "darwin",
+    "arch": "arm64",
+    "cpu": "Apple M4",
+    "release": "25.2.0",
+    "node": "v26.0.0"
+  },
+  "config": {
+    "sizeMb": 3,
+    "iterations": 5,
+    "dsrCount": 200
+  },
+  "dsrIdle": {
+    "count": 200,
+    "p50": 1.1112910000001648,
+    "p90": 8.265584000000104,
+    "p99": 273.8627499999998,
+    "max": 308.59074999999984,
+    "timeouts": 0
+  },
+  "throughput": [
+    {
+      "fixture": "agent-tui",
+      "fixtureBytes": 3146560,
+      "wallMs": {
+        "count": 5,
+        "p50": 403.05020899999954,
+        "p90": 496.68045900000016,
+        "p99": 496.68045900000016,
+        "max": 496.68045900000016
+      },
+      "mbPerSec": {
+        "count": 5,
+        "p50": 7.445210026007587,
+        "p90": 8.396717778965604,
+        "p99": 8.396717778965604,
+        "max": 8.396717778965604
+      }
+    },
+    {
+      "fixture": "ascii-log",
+      "fixtureBytes": 3145851,
+      "wallMs": {
+        "count": 5,
+        "p50": 563.6112499999999,
+        "p90": 622.989208,
+        "p99": 622.989208,
+        "max": 622.989208
+      },
+      "mbPerSec": {
+        "count": 5,
+        "p50": 5.323025936655662,
+        "p90": 6.001830586664121,
+        "p99": 6.001830586664121,
+        "max": 6.001830586664121
+      }
+    }
+  ],
+  "dsrUnderLoad": null
+}

@@ -376,6 +376,37 @@ ticks + xterm 12ms slices), which flow control (#6) does not target;
 re-evaluate the "within 10× of Terminal.app" goal line after a prod
 measurement. Next: term-speed-2 revival (#4), then flow control (#6).
 
+### 2026-07-03 — term-speed-2 revival: merged, green, NOT yet mergeable (perf gate)
+
+`revive/term-speed-2` pushed (merge a5052c35f, tip 64b6f7abe): 144 files,
+typecheck clean, ~2,776 targeted tests green, all three of our fixes
+verified present, chain features present and kill-switched (subagent's
+six review risks recorded in its report). Bench verdict on the revived
+build (dev): DSR-load p50 ~19ms holds, but **throughput regressed ~35%
+unconditionally** (agent-tui 11.5 → 7.2–7.4 MB/s; all-switches-OFF round
+proved the kill switches are NOT the cost) and idle p50 doubled.
+
+Attribution so far: main exonerated (whole-method probe: onPtyData ~60ms/s
+≈ 6%); renderer reconcile + HP-first selection O(1)-checked; **daemon
+CONVICTED by unit bench — `Session` ingest 103 → 39.5/47.7 MB/s (2.2–2.6×)
+on the revive branch** (`session-ingest-throughput.bench.test.ts`,
+ORCA_TERMINAL_PERF_BENCH=1). Cause: the chain's headless-emulator
+restructure (scanner classes / query-reply forwarding / view-attribute
+responder) added per-byte cost to the daemon hot path. Chunks reaching
+main are now ~5.8KB vs ~650B (daemon emits slower, batches bigger).
+
+NEXT (fast inner loop — pure unit bench, no app restarts): on
+revive/term-speed-2, diff `headless-emulator.ts`/`session.ts` vs
+7839fb9db, find the per-chunk scanner cost, restore our bounded-parser
+fast paths (the daemon emulator must never pay per-byte JS scanning for
+bytes that contain no ESC — same pre-filter pattern as the blocked-check
+keyword bypass), verify with the ingest bench back at ~100 MB/s, then
+full dev bench expecting blockedfix parity (~11.5 MB/s), THEN merge to
+orca-performance. A residual renderer-side share is possible once the
+daemon is fixed — re-attribute after.
+
+Merge gate: revive branch merges only at ≥ blockedfix numbers.
+
 ## Success criteria (baseline-relative; finalize after task 1)
 
 - DSR-under-load p90 in Orca within striking distance of iTerm2 on the same
