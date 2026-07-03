@@ -301,6 +301,34 @@ next. The probe/bench cycle is mechanical: relaunch dev
 (`ELECTRON_ENABLE_LOGGING=1 pnpm dev`), `orca-dev terminal create --command
 "<bench> --label X --size-mb 3 --dsr-timeout-ms 120000"`, grep the log.
 
+### 2026-07-03 — post-fix attribution: `blockedCheck` is the remaining whale
+
+Post-windowed-tail probe run (dev build, agent-tui): `onPtyData` still
+~90% of main's event loop (~930 ms/s). Bucket split per second:
+**blockedCheck ≈ 700–790 ms (~85%)**, waitText ≈ 70, append ≈ 25 (windowed
+fix confirmed), normalize ≈ 7, preview ≈ 0.
+
+Mechanism (orca-runtime.ts:23128 `nextTailHasNewerBlockedReason` + its
+callers): per chunk, TWO full wait texts are built (`buildTerminalWaitText`
+joins the whole ≤256KB tail), then the check calls `.toLowerCase()` on both
+(another ~512KB of string allocation per chunk) and runs multi-pattern
+blocked/ready scans (`findTerminalWaitBlockedSignal`,
+`findKnownReadyPromptIndex` — lastIndexOf/regex passes over the full text)
+— all to timestamp `waitBlockedAt` for `terminal wait`.
+
+Fix design (next session): blocked/ready prompts are end-anchored — an
+actionable prompt is at the END of output. (1) Run the check on a bounded
+suffix of the wait text (last ~64 lines / 16KB) instead of the full tail;
+(2) cheap pre-filter: skip entirely unless the appended chunk (plus a small
+carry for split keywords) can contain a blocked keyword; (3) build the two
+wait texts only when the check runs. Verification mirrors the windowed-tail
+pattern: keep the full-text check as reference + differential fuzz over
+randomized tails/prompts (split-across-chunks cases included — the
+`appendCandidateSignal` ordering semantics at :23146 must be preserved),
+plus the terminal-wait contract tests. Expected effect: removes ~85% of
+remaining onPtyData cost; combined with the two landed fixes should
+finally unlock the pipeline toward the renderer's measured 27–117 MB/s.
+
 ## Success criteria (baseline-relative; finalize after task 1)
 
 - DSR-under-load p90 in Orca within striking distance of iTerm2 on the same
