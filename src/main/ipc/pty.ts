@@ -1445,7 +1445,11 @@ export function registerPtyHandlers(
   let flushTimer: ReturnType<typeof setTimeout> | null = null
   let rendererInFlightTotalChars = 0
   let pendingDroppedChars = 0
-  const PTY_BATCH_INTERVAL_MS = 8
+  // Why 2ms: pairs with the daemon stream batcher (see
+  // daemon-stream-data-batcher.ts) — both hops charged an expected
+  // half-window per chunk; 2ms keeps flood coalescing at negligible IPC
+  // overhead while cutting the pipeline's fixed latency tax.
+  const PTY_BATCH_INTERVAL_MS = 2
   const PTY_BATCH_DRAIN_CONTINUE_MS = 1
   const PTY_BATCH_FLUSH_CHUNK_CHARS = 16 * 1024
   const PTY_BATCH_FLUSH_MAX_WRITES = 2

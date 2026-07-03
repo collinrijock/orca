@@ -11,9 +11,12 @@ type PendingStreamDataBatch = {
   queuedChars: number
 }
 
-// Why: match main-process PTY IPC batching to avoid adding latency while
-// removing daemon socket writes and JSON framing during bursty output.
-const STREAM_DATA_BATCH_INTERVAL_MS = 8
+// Why 2ms: under continuous agent output every chunk waits an expected
+// half-window here AND again in main's PTY batch — at 8ms each that was
+// ~8ms of the measured ~19ms DSR-under-load latency. 2ms keeps burst
+// coalescing (~500 socket writes/s worst case, ~100B framing overhead per
+// write against MB/s payloads) while cutting the fixed latency tax 4x.
+const STREAM_DATA_BATCH_INTERVAL_MS = 2
 
 type EnqueueOptions = {
   flushImmediately?: boolean
