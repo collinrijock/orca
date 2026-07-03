@@ -1537,6 +1537,121 @@ describe('connectPanePty', () => {
     })
   })
 
+  it('does not complete a Codex row from transient stream-disconnect retry output', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
+    const transport = createMockTransport()
+    transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+      capturedDataCallback.current = callbacks.onData ?? null
+      return 'pty-codex'
+    })
+    transportFactoryQueue.push(transport)
+
+    const pane = createPane(1)
+    const paneKey = makePaneKey('tab-1', LEAF_1)
+    mockStoreState.agentStatusByPaneKey[paneKey] = {
+      paneKey,
+      state: 'working',
+      prompt: 'Keep generating',
+      agentType: 'codex',
+      updatedAt: Date.now(),
+      stateStartedAt: Date.now(),
+      stateHistory: []
+    }
+
+    connectPanePty(pane as never, createManager(1) as never, createDeps() as never)
+    await flushAsyncTicks()
+    expect(capturedDataCallback.current).not.toBeNull()
+
+    capturedDataCallback.current?.(
+      'stream error: stream disconnected before completion: temporary network failure; retrying 1/5 in 217ms\r\n'
+    )
+
+    expect(mockStoreState.setAgentStatus).not.toHaveBeenCalled()
+    expect(mockStoreState.agentStatusByPaneKey[paneKey]).toMatchObject({
+      state: 'working',
+      prompt: 'Keep generating',
+      agentType: 'codex'
+    })
+  })
+
+  it('does not complete a later Codex turn from a repainted stream-disconnect line', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
+    const transport = createMockTransport()
+    transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+      capturedDataCallback.current = callbacks.onData ?? null
+      return 'pty-codex'
+    })
+    transportFactoryQueue.push(transport)
+
+    const pane = createPane(1)
+    const paneKey = makePaneKey('tab-1', LEAF_1)
+    mockStoreState.agentStatusByPaneKey[paneKey] = {
+      paneKey,
+      state: 'working',
+      prompt: 'First turn',
+      agentType: 'codex',
+      updatedAt: Date.now(),
+      stateStartedAt: Date.now(),
+      stateHistory: []
+    }
+
+    connectPanePty(pane as never, createManager(1) as never, createDeps() as never)
+    await flushAsyncTicks()
+    expect(capturedDataCallback.current).not.toBeNull()
+
+    const fatalLine =
+      '■ stream disconnected before completion: error sending request for url (http://openclaw:2455/backend-api/codex/responses)\r\n'
+    capturedDataCallback.current?.(fatalLine)
+    expect(mockStoreState.agentStatusByPaneKey[paneKey]).toMatchObject({
+      state: 'done',
+      prompt: 'First turn',
+      agentType: 'codex'
+    })
+
+    mockStoreState.setAgentStatus.mockClear()
+    mockStoreState.agentStatusByPaneKey[paneKey] = {
+      paneKey,
+      state: 'working',
+      prompt: 'Second turn',
+      agentType: 'codex',
+      updatedAt: Date.now(),
+      stateStartedAt: Date.now(),
+      stateHistory: []
+    }
+
+    capturedDataCallback.current?.(fatalLine)
+
+    expect(mockStoreState.setAgentStatus).not.toHaveBeenCalled()
+    expect(mockStoreState.agentStatusByPaneKey[paneKey]).toMatchObject({
+      state: 'working',
+      prompt: 'Second turn',
+      agentType: 'codex'
+    })
+  })
+
+  it('does not run stream-disconnect completion for idle panes with no working Codex row', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
+    const transport = createMockTransport()
+    transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+      capturedDataCallback.current = callbacks.onData ?? null
+      return 'pty-codex'
+    })
+    transportFactoryQueue.push(transport)
+
+    connectPanePty(createPane(1) as never, createManager(1) as never, createDeps() as never)
+    await flushAsyncTicks()
+    expect(capturedDataCallback.current).not.toBeNull()
+
+    capturedDataCallback.current?.(
+      '■ stream disconnected before completion: error sending request for url (http://openclaw:2455/backend-api/codex/responses)\r\n'
+    )
+
+    expect(mockStoreState.setAgentStatus).not.toHaveBeenCalled()
+  })
+
   it('delivers terminal-paste startup commands through xterm before submitting', async () => {
     const pendingTimeouts: (() => void)[] = []
     const originalSetTimeout = globalThis.setTimeout
@@ -10265,6 +10380,116 @@ describe('connectPanePty', () => {
       source: 'agent-task-complete',
       terminalTitle: 'experimental-agent-observability',
       paneKey: makePaneKey('tab-1', LEAF_1)
+    })
+  })
+
+  it('repairs a working Codex row from a title completion before notification dedupe', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport('pty-codex')
+    transportFactoryQueue.push(transport)
+
+    vi.useFakeTimers()
+    const paneKey = makePaneKey('tab-1', LEAF_1)
+    mockStoreState.agentStatusByPaneKey[paneKey] = {
+      state: 'working',
+      prompt: 'Handle fatal Codex errors',
+      updatedAt: Date.now(),
+      stateStartedAt: Date.now(),
+      agentType: 'codex',
+      paneKey,
+      terminalTitle: 'Codex working',
+      stateHistory: [],
+      lastAssistantMessage: 'Usage limit reached.'
+    }
+    const pane = createPane(1)
+    const manager = createManager(1)
+    const deps = createDeps()
+
+    connectPanePty(pane as never, manager as never, deps as never)
+
+    const titleHandler = createdTransportOptions[0]?.onTitleChange as
+      | ((title: string, rawTitle: string) => void)
+      | undefined
+    if (!titleHandler) {
+      throw new Error('Expected onTitleChange to be registered')
+    }
+
+    titleHandler('Codex working', 'Codex working')
+    titleHandler('Codex done', 'Codex done')
+
+    expect(mockStoreState.agentStatusByPaneKey[paneKey]).toMatchObject({
+      state: 'done',
+      prompt: 'Handle fatal Codex errors',
+      agentType: 'codex',
+      lastAssistantMessage: 'Usage limit reached.'
+    })
+    vi.advanceTimersByTime(AGENT_TASK_COMPLETE_NOTIFICATION_GRACE_MS)
+
+    expect(deps.dispatchNotification).toHaveBeenCalledWith(
+      expect.objectContaining({
+        source: 'agent-task-complete',
+        terminalTitle: 'Codex done',
+        paneKey,
+        agentStatusSnapshot: expect.objectContaining({
+          state: 'done',
+          prompt: 'Handle fatal Codex errors',
+          agentType: 'codex',
+          lastAssistantMessage: 'Usage limit reached.'
+        })
+      })
+    )
+  })
+
+  it('repairs a working Codex row from the real process-exit backstop path', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport('pty-codex')
+    transportFactoryQueue.push(transport)
+
+    vi.useFakeTimers()
+    vi.spyOn(Math, 'random').mockReturnValue(0.5)
+    let foregroundProcess: string | null = 'codex'
+    const api = (
+      globalThis as unknown as {
+        window: {
+          api: {
+            pty: {
+              getForegroundProcess: ReturnType<typeof vi.fn>
+              hasChildProcesses: ReturnType<typeof vi.fn>
+            }
+          }
+        }
+      }
+    ).window.api
+    api.pty.getForegroundProcess.mockImplementation(async () => foregroundProcess)
+    api.pty.hasChildProcesses.mockImplementation(async () => foregroundProcess !== null)
+    const paneKey = makePaneKey('tab-1', LEAF_1)
+    mockStoreState.agentStatusByPaneKey[paneKey] = {
+      state: 'working',
+      prompt: 'Handle vanished Codex process',
+      updatedAt: Date.now(),
+      stateStartedAt: Date.now(),
+      agentType: 'codex',
+      paneKey,
+      terminalTitle: 'Codex working',
+      stateHistory: [],
+      lastAssistantMessage: 'Connection failed.'
+    }
+    const pane = createPane(1)
+    const manager = createManager(1)
+    const deps = createDeps()
+
+    connectPanePty(pane as never, manager as never, deps as never)
+    await flushAsyncTicks()
+    await vi.advanceTimersByTimeAsync(2_000)
+
+    foregroundProcess = null
+    await vi.advanceTimersByTimeAsync(1_500)
+
+    expect(mockStoreState.agentStatusByPaneKey[paneKey]).toMatchObject({
+      state: 'done',
+      prompt: 'Handle vanished Codex process',
+      agentType: 'codex',
+      lastAssistantMessage: 'Connection failed.'
     })
   })
 

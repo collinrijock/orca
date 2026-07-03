@@ -32,6 +32,87 @@ describe('Codex error output status detector', () => {
     )
   })
 
+  it('waits for the full line when the stream-disconnect error splits after the colon', () => {
+    const onStreamError = vi.fn()
+    const detector = createCodexErrorOutputStatusDetector({ onStreamError })
+
+    expect(detector.observe('■ stream disconnected before completion:')).toBe(false)
+    expect(onStreamError).not.toHaveBeenCalled()
+
+    expect(
+      detector.observe(
+        ' error sending request for url (http://openclaw:2455/backend-api/codex/responses)\r\n'
+      )
+    ).toBe(true)
+
+    expect(onStreamError).toHaveBeenCalledTimes(1)
+    expect(onStreamError).toHaveBeenCalledWith(
+      'stream disconnected before completion: error sending request for url (http://openclaw:2455/backend-api/codex/responses)'
+    )
+  })
+
+  it('detects a stream-disconnect error in the middle of a large PTY chunk', () => {
+    const onStreamError = vi.fn()
+    const detector = createCodexErrorOutputStatusDetector({ onStreamError })
+    const chunk =
+      `${'a'.repeat(8_000)}\r\n` +
+      '■ stream disconnected before completion: context window exceeded\r\n' +
+      `${'b'.repeat(8_000)}\r\n`
+
+    expect(detector.observe(chunk)).toBe(true)
+
+    expect(onStreamError).toHaveBeenCalledWith(
+      'stream disconnected before completion: context window exceeded'
+    )
+  })
+
+  it('does not complete transient Codex retry notices', () => {
+    const onStreamError = vi.fn()
+    const detector = createCodexErrorOutputStatusDetector({ onStreamError })
+
+    expect(
+      detector.observe(
+        'stream error: stream disconnected before completion: temporary network failure; retrying 1/5 in 217ms\r\n'
+      )
+    ).toBe(false)
+    expect(
+      detector.observe(
+        'stream disconnected before completion: temporary network failure; retrying 2/5 in 431ms\r\n'
+      )
+    ).toBe(false)
+
+    expect(onStreamError).not.toHaveBeenCalled()
+  })
+
+  it('keeps the lowercase Codex fatal marker invariant', () => {
+    const onStreamError = vi.fn()
+    const detector = createCodexErrorOutputStatusDetector({ onStreamError })
+
+    expect(
+      detector.observe('Stream disconnected before completion: status panel repaint\r\n')
+    ).toBe(false)
+
+    expect(onStreamError).not.toHaveBeenCalled()
+  })
+
+  it('does not complete quoted or grepped stream-disconnect text', () => {
+    const onStreamError = vi.fn()
+    const detector = createCodexErrorOutputStatusDetector({ onStreamError })
+
+    expect(
+      detector.observe(
+        'log.txt: stream disconnected before completion: old error from an earlier turn\r\n'
+      )
+    ).toBe(false)
+    expect(
+      detector.observe(
+        '"stream disconnected before completion: old error from an earlier turn"\r\n'
+      )
+    ).toBe(false)
+
+    expect(onStreamError).not.toHaveBeenCalled()
+  })
+
   it('strips terminal control sequences before reporting the error message', () => {
     const onStreamError = vi.fn()
     const detector = createCodexErrorOutputStatusDetector({ onStreamError })

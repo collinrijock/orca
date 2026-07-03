@@ -1,6 +1,6 @@
 /* oxlint-disable max-lines */
 import { detectAgentStatusFromTitle, type AgentStatus } from '../../../../shared/agent-detection'
-import type { ParsedAgentStatusPayload } from '../../../../shared/agent-status-types'
+import type { AgentType, ParsedAgentStatusPayload } from '../../../../shared/agent-status-types'
 import {
   isRecognizedAgentType,
   recognizeAgentProcess,
@@ -227,6 +227,14 @@ export function createAgentCompletionCoordinator(
     return null
   }
 
+  function resolveTitleCompletionAgentType(title: string): AgentType | undefined {
+    const titleAgentIdentity = titleCompletionAgentIdentity(title)
+    if (titleAgentIdentity) {
+      return titleAgentIdentity
+    }
+    return lastForegroundAgent?.agent
+  }
+
   function completionIdentityAlreadyNotified(
     completionIdentity: LastCompletionIdentity | null | undefined
   ): boolean {
@@ -247,6 +255,31 @@ export function createAgentCompletionCoordinator(
     )
   }
 
+  function repairCompletionStatus(
+    source: CompletionSource,
+    title: string,
+    optionsOverride: {
+      processExitAgent?: RecognizedAgentProcess
+    }
+  ): AgentCompletionStatusSnapshot | null | undefined {
+    if (source === 'process-exit' && optionsOverride.processExitAgent) {
+      return options.onCompletionStatusRepair?.({
+        source,
+        title,
+        agent: optionsOverride.processExitAgent
+      })
+    }
+    if (source !== 'title') {
+      return undefined
+    }
+    const agentType = resolveTitleCompletionAgentType(title)
+    return options.onCompletionStatusRepair?.({
+      source,
+      title,
+      ...(agentType ? { agentType } : {})
+    })
+  }
+
   function dispatchCompletion(
     source: CompletionSource,
     title: string,
@@ -257,6 +290,7 @@ export function createAgentCompletionCoordinator(
       processExitAgent?: RecognizedAgentProcess
     } = {}
   ): void {
+    const repairedAgentStatus = repairCompletionStatus(source, title, optionsOverride)
     if (source !== 'hook' && pendingHookDoneTimer !== null) {
       return
     }
@@ -282,11 +316,7 @@ export function createAgentCompletionCoordinator(
     if (optionsOverride.completionIdentity) {
       lastCompletionIdentityByPaneKey.set(options.paneKey, optionsOverride.completionIdentity)
     }
-    const agentStatus =
-      optionsOverride.agentStatus ??
-      (source === 'process-exit' && optionsOverride.processExitAgent
-        ? (options.onProcessExitCompletion?.(optionsOverride.processExitAgent) ?? undefined)
-        : undefined)
+    const agentStatus = optionsOverride.agentStatus ?? repairedAgentStatus
     if (optionsOverride.quietedHookDone === true || agentStatus) {
       options.dispatchCompletion(title, {
         source,

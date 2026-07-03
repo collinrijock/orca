@@ -1,5 +1,6 @@
 type CodexErrorOutputStatusDetector = {
   observe: (data: string) => boolean
+  reset: () => void
 }
 
 const ESC = String.fromCharCode(0x1b)
@@ -12,10 +13,10 @@ const INCOMPLETE_ANSI_ESCAPE_RE = new RegExp(
   `${ESC}(?:\\[[0-?]*[ -/]*|\\][^${BEL}${ESC}]*|\\S?)?$`,
   'g'
 )
-const RECENT_RAW_TEXT_LIMIT = 300
-const STATUS_SCAN_TEXT_LIMIT = 4096
 const CODEX_STREAM_DISCONNECTED_MARKER = 'stream disconnected before completion:'
-const CODEX_STREAM_DISCONNECTED_RE = /\bstream disconnected before completion:[^\r\n]*/
+const CODEX_STREAM_DISCONNECTED_CARRY_LENGTH = CODEX_STREAM_DISCONNECTED_MARKER.length - 1
+const MAX_PENDING_STREAM_ERROR_LINE_LENGTH = 8_000
+const RETRY_NOTICE_RE = /;\s*retrying\b/
 
 function terminalControlMayAffectText(data: string): boolean {
   for (let index = 0; index < data.length; index += 1) {
@@ -48,91 +49,138 @@ function stripTerminalControl(data: string): string {
   return output
 }
 
-function appendRecentRawText(previousRawText: string, data: string): string {
-  if (data.length >= RECENT_RAW_TEXT_LIMIT) {
-    return data.slice(-RECENT_RAW_TEXT_LIMIT)
+function appendMarkerCarry(carry: string, data: string): string {
+  if (data.length >= CODEX_STREAM_DISCONNECTED_CARRY_LENGTH) {
+    return data.slice(-CODEX_STREAM_DISCONNECTED_CARRY_LENGTH)
   }
-  return (previousRawText + data).slice(-RECENT_RAW_TEXT_LIMIT)
+  return (carry + data).slice(-CODEX_STREAM_DISCONNECTED_CARRY_LENGTH)
 }
 
-function buildStatusScanRawText(prefix: string, data: string): string {
-  const boundedPrefix =
-    prefix.length > RECENT_RAW_TEXT_LIMIT + 1 ? prefix.slice(-(RECENT_RAW_TEXT_LIMIT + 1)) : prefix
-  const dataBudget = STATUS_SCAN_TEXT_LIMIT - boundedPrefix.length
-
-  if (dataBudget <= 0) {
-    return boundedPrefix.slice(-STATUS_SCAN_TEXT_LIMIT)
-  }
-  if (data.length <= dataBudget) {
-    return boundedPrefix + data
-  }
-
-  const headBudget = Math.max(0, Math.floor((dataBudget - 1) / 2))
-  const tailBudget = Math.max(0, dataBudget - headBudget - 1)
-  const head = headBudget > 0 ? data.slice(0, headBudget) : ''
-  const tail = tailBudget > 0 ? data.slice(-tailBudget) : ''
-  // Why: PTY chunks can be large pastes or hidden-output restores; stream-error
-  // detection only needs chunk-boundary context plus the current edge windows.
-  return `${boundedPrefix}${head}\n${tail}`
+function updatePendingLine(pendingLine: string, data: string): string {
+  return (pendingLine + data).slice(0, MAX_PENDING_STREAM_ERROR_LINE_LENGTH)
 }
 
-function rawTextMayContainCodexStreamError(rawText: string): boolean {
-  // Why: Codex emits this error in lowercase; avoid allocating a lowercased
-  // copy for every ordinary PTY chunk on the no-match hot path.
-  return rawText.includes(CODEX_STREAM_DISCONNECTED_MARKER)
+function findLineEnd(value: string, start: number): number {
+  const carriageReturnIndex = value.indexOf('\r', start)
+  const newlineIndex = value.indexOf('\n', start)
+  if (carriageReturnIndex === -1) {
+    return newlineIndex
+  }
+  if (newlineIndex === -1) {
+    return carriageReturnIndex
+  }
+  return Math.min(carriageReturnIndex, newlineIndex)
 }
 
-function findOverlappingCodexStreamError(
-  scanText: string,
-  previousTextLength: number
-): RegExpMatchArray | null {
-  const re = new RegExp(CODEX_STREAM_DISCONNECTED_RE.source, 'g')
-  for (const match of scanText.matchAll(re)) {
-    const start = match.index ?? 0
-    if (start + match[0].length > previousTextLength) {
-      return match
+function findLineStart(value: string, markerIndex: number): number {
+  const previousCarriageReturn = value.lastIndexOf('\r', markerIndex)
+  const previousNewline = value.lastIndexOf('\n', markerIndex)
+  return Math.max(previousCarriageReturn, previousNewline) + 1
+}
+
+function isLikelyCodexFatalLinePrefix(prefix: string): boolean {
+  const trimmed = prefix.trim()
+  // Why: transient retry notices prefix the marker with words like
+  // "stream error:"; Codex's fatal TUI cell only has whitespace/glyph chrome.
+  return trimmed === '' || !/[A-Za-z0-9:/"'`|\\-]/.test(trimmed)
+}
+
+function normalizeStreamErrorLine(line: string): string | null {
+  const strippedLine = stripTerminalControl(line)
+  const markerIndex = strippedLine.indexOf(CODEX_STREAM_DISCONNECTED_MARKER)
+  if (markerIndex === -1) {
+    return null
+  }
+  if (!isLikelyCodexFatalLinePrefix(strippedLine.slice(0, markerIndex))) {
+    return null
+  }
+  const message = strippedLine.slice(markerIndex).replace(/\s+/g, ' ').trim()
+  if (!message || RETRY_NOTICE_RE.test(message)) {
+    return null
+  }
+  return message
+}
+
+function findCompletedStreamErrorLine(rawText: string): {
+  message: string | null
+  pendingLine: string | null
+} {
+  let searchStart = 0
+  while (searchStart < rawText.length) {
+    const markerIndex = rawText.indexOf(CODEX_STREAM_DISCONNECTED_MARKER, searchStart)
+    if (markerIndex === -1) {
+      return { message: null, pendingLine: null }
     }
-  }
-  return null
-}
+    const lineStart = findLineStart(rawText, markerIndex)
+    const lineEnd = findLineEnd(rawText, markerIndex)
+    if (lineEnd === -1) {
+      const pendingLine = rawText.slice(lineStart)
+      const message = normalizeStreamErrorLine(pendingLine)
+      return message
+        ? { message: null, pendingLine: pendingLine.slice(0, MAX_PENDING_STREAM_ERROR_LINE_LENGTH) }
+        : { message: null, pendingLine: null }
+    }
 
-function extractCodexStreamErrorMessage(scanText: string, match: RegExpMatchArray): string {
-  const start = match.index ?? 0
-  const lineEndCandidates = [scanText.indexOf('\r', start), scanText.indexOf('\n', start)].filter(
-    (index) => index >= 0
-  )
-  const lineEnd = lineEndCandidates.length > 0 ? Math.min(...lineEndCandidates) : scanText.length
-  return scanText.slice(start, lineEnd).replace(/\s+/g, ' ').trim()
+    const message = normalizeStreamErrorLine(rawText.slice(lineStart, lineEnd))
+    if (message) {
+      return { message, pendingLine: null }
+    }
+    searchStart = markerIndex + CODEX_STREAM_DISCONNECTED_MARKER.length
+  }
+  return { message: null, pendingLine: null }
 }
 
 export function createCodexErrorOutputStatusDetector(args: {
   onStreamError: (message: string) => void
 }): CodexErrorOutputStatusDetector {
-  let recentRawText = ''
+  let markerCarry = ''
+  let pendingLine: string | null = null
+
+  const reset = (): void => {
+    markerCarry = ''
+    pendingLine = null
+  }
 
   return {
     observe(data: string): boolean {
-      const previousRawText = recentRawText
-      recentRawText = appendRecentRawText(previousRawText, data)
-      const scanRawText = buildStatusScanRawText(previousRawText, data)
+      if (pendingLine !== null) {
+        pendingLine = updatePendingLine(pendingLine, data)
+        const lineEnd = findLineEnd(pendingLine, 0)
+        if (lineEnd === -1 && pendingLine.length < MAX_PENDING_STREAM_ERROR_LINE_LENGTH) {
+          markerCarry = appendMarkerCarry(markerCarry, data)
+          return false
+        }
+        const message = normalizeStreamErrorLine(
+          lineEnd === -1 ? pendingLine : pendingLine.slice(0, lineEnd)
+        )
+        pendingLine = null
+        markerCarry = appendMarkerCarry(markerCarry, data)
+        if (!message) {
+          return false
+        }
+        args.onStreamError(message)
+        return true
+      }
 
-      if (!rawTextMayContainCodexStreamError(scanRawText)) {
+      const seam = markerCarry + data.slice(0, CODEX_STREAM_DISCONNECTED_CARRY_LENGTH)
+      if (
+        !data.includes(CODEX_STREAM_DISCONNECTED_MARKER) &&
+        !seam.includes(CODEX_STREAM_DISCONNECTED_MARKER)
+      ) {
+        markerCarry = appendMarkerCarry(markerCarry, data)
         return false
       }
 
-      const scanText = stripTerminalControl(scanRawText)
-      const previousTextLength = previousRawText ? stripTerminalControl(previousRawText).length : 0
-      const match = findOverlappingCodexStreamError(scanText, previousTextLength)
-      if (!match) {
+      const rawText = data.includes(CODEX_STREAM_DISCONNECTED_MARKER) ? data : markerCarry + data
+      const result = findCompletedStreamErrorLine(rawText)
+      pendingLine = result.pendingLine
+      markerCarry = appendMarkerCarry(markerCarry, data)
+      if (!result.message) {
         return false
       }
-
-      const message = extractCodexStreamErrorMessage(scanText, match)
-      if (!message) {
-        return false
-      }
-      args.onStreamError(message)
+      args.onStreamError(result.message)
       return true
-    }
+    },
+    reset
   }
 }

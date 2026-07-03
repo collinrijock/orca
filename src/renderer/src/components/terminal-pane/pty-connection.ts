@@ -104,7 +104,10 @@ import {
   shouldSuppressCodexAutoApprovalSyntheticTitle,
   shouldSuppressCodexAutoApprovalStatus
 } from './codex-auto-approval-notification-suppression'
-import type { AgentCompletionStatusSnapshot } from './agent-completion-coordinator-types'
+import type {
+  AgentCompletionStatusRepairSignal,
+  AgentCompletionStatusSnapshot
+} from './agent-completion-coordinator-types'
 import {
   markTerminalBracketedPasteInterrupted,
   observeTerminalBracketedPasteModeOutput
@@ -164,10 +167,7 @@ import {
   beginAgentStartupDeliveryAttempt,
   releaseAgentStartupDeliveryAttempt
 } from '@/lib/agent-startup-delayed-delivery'
-import {
-  isExpectedAgentProcess,
-  type RecognizedAgentProcess
-} from '../../../../shared/agent-process-recognition'
+import { isExpectedAgentProcess } from '../../../../shared/agent-process-recognition'
 
 const pendingSpawnByPaneKey = new Map<string, Promise<string | null>>()
 const SSH_SESSION_EXPIRED_ERROR = 'SSH_SESSION_EXPIRED'
@@ -1477,21 +1477,24 @@ export function connectPanePty(
     delete pane.container.dataset.ptyId
   }
 
-  const completeWorkingStatusFromProcessExit = (
-    agent: RecognizedAgentProcess
+  const completeWorkingStatusFromCompletionSignal = (
+    signal: AgentCompletionStatusRepairSignal
   ): AgentCompletionStatusSnapshot | null => {
     const currentState = useAppStore.getState()
     const currentEntry = currentState.agentStatusByPaneKey[cacheKey]
     if (!currentEntry || currentEntry.state !== 'working') {
       return null
     }
-    const ownerAgent = getAuthoritativePaneAgent() ?? agent.agent
+    const signalAgent = signal.source === 'process-exit' ? signal.agent.agent : signal.agentType
+    const ownerAgent = getAuthoritativePaneAgent() ?? signalAgent ?? currentEntry.agentType
     const agentType = resolveCompatibleAgentTypeForOwner(
-      currentEntry.agentType ?? agent.agent,
+      currentEntry.agentType ?? signalAgent,
       ownerAgent
     )
-    const processAgentType = resolveCompatibleAgentTypeForOwner(agent.agent, ownerAgent)
-    if (!agentType || agentType !== processAgentType) {
+    const signalAgentType = signalAgent
+      ? resolveCompatibleAgentTypeForOwner(signalAgent, ownerAgent)
+      : undefined
+    if (!agentType || (signalAgentType && agentType !== signalAgentType)) {
       return null
     }
     const statusPayload = {
@@ -1505,8 +1508,8 @@ export function connectPanePty(
     const currentTitle =
       currentState.runtimePaneTitlesByTabId?.[deps.tabId]?.[pane.id] ?? currentEntry.terminalTitle
     const statusTitle = resolveAgentStatusTerminalTitle(statusPayload, currentTitle)
-    // Why: the foreground-process backstop can prove the TUI disappeared even
-    // when the agent missed its final hook; keep the explicit row in sync.
+    // Why: title/process completion can prove a turn ended even when the agent
+    // missed its final hook; keep the explicit row in sync before dedupe gates.
     currentState.setAgentStatus(cacheKey, statusPayload, statusTitle)
     const storedStatus = useAppStore.getState().agentStatusByPaneKey[cacheKey]
     return typeof storedStatus?.stateStartedAt === 'number'
@@ -1521,7 +1524,7 @@ export function connectPanePty(
     inspectProcess: inspectRuntimeTerminalProcess,
     dispatchCompletion: (title, meta) =>
       scheduleAgentTaskCompleteNotification(title, {
-        allowDoneDetailAfterGrace: meta?.quietedHookDone,
+        allowDoneDetailAfterGrace: meta?.quietedHookDone === true || Boolean(meta?.agentStatus),
         ...(meta?.agentStatus ? { agentStatusSnapshot: meta.agentStatus } : {})
       }),
     dispatchAttention: (title, meta) =>
@@ -1530,7 +1533,7 @@ export function connectPanePty(
       }),
     shouldPollProcessCadence: () =>
       isAgentTaskCompleteTrackingEnabled() && deps.isVisibleRef.current,
-    onProcessExitCompletion: completeWorkingStatusFromProcessExit,
+    onCompletionStatusRepair: completeWorkingStatusFromCompletionSignal,
     isLive: () => {
       if (disposed) {
         return false
@@ -1839,9 +1842,22 @@ export function connectPanePty(
     // Stop hook Orca normally uses to clear an explicit working row.
     currentState.setAgentStatus(cacheKey, statusPayload, statusTitle)
   }
+  const shouldObserveCodexStreamErrorOutput = (): boolean => {
+    const currentEntry = useAppStore.getState().agentStatusByPaneKey[cacheKey]
+    if (!currentEntry || currentEntry.state !== 'working') {
+      return false
+    }
+    const agentType = resolveCompatibleAgentTypeForOwner(
+      currentEntry.agentType ?? getAuthoritativePaneAgent(),
+      getAuthoritativePaneAgent()
+    )
+    return agentType === 'codex'
+  }
   const codexErrorOutputStatusDetector = createCodexErrorOutputStatusDetector({
     onStreamError: completeCodexOutputStreamErrorStatus
   })
+  let codexStreamErrorOutputDetectionArmed = false
+  let codexStreamErrorOutputFastPathConsumed = false
   const observeTerminalGitHubPRLink = createTerminalGitHubPRLinkDetector()
   const reportPanePtyVisibility = (ptyId: string | null | undefined, visible: boolean): void => {
     if (!ptyId || isRemoteRuntimePtyId(ptyId)) {
@@ -1857,6 +1873,11 @@ export function connectPanePty(
   ): void => {
     if (activePanePtyBinding && activePanePtyBinding !== ptyId) {
       reportPanePtyVisibility(activePanePtyBinding, false)
+    }
+    if (activePanePtyBinding !== ptyId) {
+      codexStreamErrorOutputDetectionArmed = false
+      codexStreamErrorOutputFastPathConsumed = false
+      codexErrorOutputStatusDetector.reset()
     }
     setPanePtyFitBinding(ptyId)
     activePanePtyBinding = ptyId
@@ -4476,7 +4497,17 @@ export function connectPanePty(
       for (const link of observeTerminalGitHubPRLink(data)) {
         useAppStore.getState().observeTerminalGitHubPullRequestLink(deps.worktreeId, link)
       }
-      codexErrorOutputStatusDetector.observe(data)
+      if (shouldObserveCodexStreamErrorOutput() && !codexStreamErrorOutputFastPathConsumed) {
+        codexStreamErrorOutputDetectionArmed = true
+        if (codexErrorOutputStatusDetector.observe(data)) {
+          codexStreamErrorOutputDetectionArmed = false
+          codexStreamErrorOutputFastPathConsumed = true
+          codexErrorOutputStatusDetector.reset()
+        }
+      } else if (codexStreamErrorOutputDetectionArmed) {
+        codexStreamErrorOutputDetectionArmed = false
+        codexErrorOutputStatusDetector.reset()
+      }
       commandCodeOutputStatusDetector.observe(data)
       commandLifecycle.handlePtyData(data)
       // Why: split-pane layouts have multiple visible-but-inactive panes whose
