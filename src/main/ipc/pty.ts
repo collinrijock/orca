@@ -87,6 +87,7 @@ import {
 import { parseWslPath } from '../wsl'
 import { mergePersistedWindowsPath } from '../pty/windows-environment-path'
 import { addOrcaWslInteropEnv } from '../pty/wsl-orca-env'
+import { PtyProducerFlowController } from './pty-producer-flow-control'
 import {
   clearHiddenRendererPtyDeliveryState,
   getHiddenRendererPtyDeliveryDebug,
@@ -136,6 +137,10 @@ type FreshLocalFallbackProvider = IPtyProvider & {
 }
 const sshProviders = new Map<string, IPtyProvider>()
 const SYNTHETIC_KILL_EXIT_DUPLICATE_WINDOW_MS = 30_000
+// Why: producer flow control changes terminal physics — a flooding shell now
+// blocks on write instead of buffering in main. Kill switch: flip this one
+// line to disable pause/resume entirely without untangling the wiring.
+const PRODUCER_FLOW_CONTROL_ENABLED = true
 // Why: PTY IDs are assigned at spawn time with a connectionId, but subsequent
 // write/resize/kill calls only carry the PTY ID. This map lets us route
 // post-spawn operations to the correct provider without the renderer needing
@@ -1471,6 +1476,24 @@ export function registerPtyHandlers(
   let peakMaxRendererInFlightCharsByPty = 0
   let ackGatedFlushSkipCount = 0
 
+  // Why: watermark-driven producer pause/resume (terminal-performance
+  // initiative §5). Signal source is per-PTY pendingData only — renderer
+  // in-flight is already bounded by the ACK window above, while pendingData
+  // is what grows without bound when the renderer cannot keep up. Providers
+  // without support (SSH, legacy daemon protocol) surface no pauseProducer
+  // and the call chain no-ops; the pending cap still bounds memory then.
+  const producerFlowControl = new PtyProducerFlowController({
+    pauseProducer: (id) => tryGetProviderForPty(id)?.pauseProducer?.(id),
+    resumeProducer: (id) => tryGetProviderForPty(id)?.resumeProducer?.(id)
+  })
+
+  function updateProducerFlowControl(id: string): void {
+    if (!PRODUCER_FLOW_CONTROL_ENABLED) {
+      return
+    }
+    producerFlowControl.update(id, pendingData.get(id)?.data.length ?? 0)
+  }
+
   function getMaxMapValue(values: Iterable<number>): number {
     let max = 0
     for (const value of values) {
@@ -1752,6 +1775,9 @@ export function registerPtyHandlers(
   function flushPendingData(): void {
     flushTimer = null
     if (mainWindow.isDestroyed()) {
+      // Why: the bookkeeping is being wiped, so no future drain can ever
+      // resume these producers — release them now or local shells wedge.
+      producerFlowControl.releaseAll()
       pendingData.clear()
       pendingOverflowMarkedPtys.clear()
       rendererInFlightCharsByPty.clear()
@@ -1770,6 +1796,7 @@ export function registerPtyHandlers(
       if (shouldDropHiddenRendererPtyData(id, settings)) {
         pendingData.delete(id)
         pendingOverflowMarkedPtys.delete(id)
+        updateProducerFlowControl(id)
         const drop = recordHiddenRendererPtyDataDrop(id, pending.data.length)
         if (drop.shouldEmitRestoreMarker) {
           sendModelRestoreNeededMarker(id, 'hidden-drop', runtime?.getPtyOutputSequence(id))
@@ -1781,6 +1808,7 @@ export function registerPtyHandlers(
       }
       pendingData.delete(id)
       if (pending.droppedOutput === true) {
+        updateProducerFlowControl(id)
         // Why: the buffered bytes were dropped at the pending cap; tell the
         // renderer so the pane repaints from the main-owned buffer snapshot
         // instead of continuing a stream with a silent gap.
@@ -1803,6 +1831,7 @@ export function registerPtyHandlers(
       } else {
         pendingOverflowMarkedPtys.delete(id)
       }
+      updateProducerFlowControl(id)
       sendPtyDataToRenderer(
         id,
         makePtyDataPayload(id, chunk, pending.startSeq, pending.containsBackgroundOutput)
@@ -1874,6 +1903,9 @@ export function registerPtyHandlers(
       )
       pendingData.delete(payload.id)
     }
+    // Why: exit drops this PTY's bookkeeping; resume (no-op on a dead PTY)
+    // rather than leave a stale paused mark behind for a reused id.
+    producerFlowControl.release(payload.id)
     pendingOverflowMarkedPtys.delete(payload.id)
     lastInputAtByPty.delete(payload.id)
     interactiveOutputCharsByPty.delete(payload.id)
@@ -1936,6 +1968,7 @@ export function registerPtyHandlers(
           clearTimeout(flushTimer)
           flushTimer = null
         }
+        producerFlowControl.releaseAll()
         pendingData.clear()
         pendingOverflowMarkedPtys.clear()
         rendererInFlightCharsByPty.clear()
@@ -1985,10 +2018,12 @@ export function registerPtyHandlers(
         // bounded, and the per-PTY cap still prevents an active TUI runaway.
         if (!canSendPtyDataToRenderer(payload.id, { interactive: true })) {
           pendingData.set(payload.id, pending)
+          updateProducerFlowControl(payload.id)
           recordPtyRendererDeliveryPressure()
           return
         }
         pendingData.delete(payload.id)
+        updateProducerFlowControl(payload.id)
         pendingOverflowMarkedPtys.delete(payload.id)
         clearFlushTimerIfIdle()
         // Why: agent TUIs redraw small prompt regions after every keystroke.
@@ -2004,6 +2039,7 @@ export function registerPtyHandlers(
         return
       }
       pendingData.set(payload.id, pending)
+      updateProducerFlowControl(payload.id)
       recordPtyRendererDeliveryPressure()
       if (!flushTimer) {
         schedulePendingDataFlush(PTY_BATCH_INTERVAL_MS)
@@ -3802,6 +3838,7 @@ export function registerPtyHandlers(
       const pending = pendingData.get(args.id)
       if (pending && shouldDropHiddenRendererPtyData(args.id, getSettings?.())) {
         pendingData.delete(args.id)
+        updateProducerFlowControl(args.id)
         pendingOverflowMarkedPtys.delete(args.id)
         const drop = recordHiddenRendererPtyDataDrop(args.id, pending.data.length)
         if (drop.shouldEmitRestoreMarker) {

@@ -347,6 +347,14 @@ export class DaemonServer {
         }
         return {}
 
+      case 'pausePty':
+        this.host.pauseProducer(request.payload.sessionId)
+        return {}
+
+      case 'resumePty':
+        this.host.resumeProducer(request.payload.sessionId)
+        return {}
+
       case 'kill':
         this.lastInputAtBySessionId.delete(request.payload.sessionId)
         this.host.kill(request.payload.sessionId, { immediate: request.payload.immediate })

@@ -88,6 +88,14 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
     this.providerFor(id).resize(id, cols, rows)
   }
 
+  pauseProducer(id: string): void {
+    this.providerFor(id).pauseProducer?.(id)
+  }
+
+  resumeProducer(id: string): void {
+    this.providerFor(id).resumeProducer?.(id)
+  }
+
   async shutdown(id: string, opts: { immediate?: boolean; keepHistory?: boolean }): Promise<void> {
     await this.providerFor(id).shutdown(id, opts)
     if (!opts.keepHistory) {

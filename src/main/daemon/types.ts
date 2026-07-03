@@ -7,9 +7,9 @@ import type { StartupCommandDelivery } from '../../shared/codex-startup-delivery
 // when daemon-baked behavior cannot be delivered by on-disk wrapper refresh.
 // Why: bump when adding daemon wire behavior so same-version old daemons do
 // not silently accept the handshake and then reject new RPCs.
-export const PROTOCOL_VERSION = 18
+export const PROTOCOL_VERSION = 19
 export const PREVIOUS_DAEMON_PROTOCOL_VERSIONS = [
-  1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17
+  1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18
 ] as const
 
 // ─── Session State Machine ──────────────────────────────────────────
@@ -130,6 +130,26 @@ export type ResizeRequest = {
     sessionId: string
     cols: number
     rows: number
+  }
+}
+
+// ─── Producer flow control (v19+) ───────────────────────────────────
+// Why fire-and-forget notifications (like write/resize): pause/resume ride the
+// hot data path and are best-effort — the daemon-side 5s failsafe, not an RPC
+// reply, is what guarantees a paused shell can never stay wedged.
+export type PausePtyRequest = {
+  id: string
+  type: 'pausePty'
+  payload: {
+    sessionId: string
+  }
+}
+
+export type ResumePtyRequest = {
+  id: string
+  type: 'resumePty'
+  payload: {
+    sessionId: string
   }
 }
 
@@ -276,6 +296,8 @@ export type DaemonRequest =
   | CancelCreateOrAttachRequest
   | WriteRequest
   | ResizeRequest
+  | PausePtyRequest
+  | ResumePtyRequest
   | KillRequest
   | SignalRequest
   | ListSessionsRequest
@@ -396,23 +418,10 @@ export const FRAME_MAX_PAYLOAD = 1024 * 1024 // 1MB
 export const NOTIFY_PREFIX = 'notify_'
 
 // ─── Error types ────────────────────────────────────────────────────
-export class TerminalAttachCanceledError extends Error {
-  constructor(sessionId: string) {
-    super(`Attach canceled for session ${sessionId}`)
-    this.name = 'TerminalAttachCanceledError'
-  }
-}
-
-export class DaemonProtocolError extends Error {
-  constructor(message: string) {
-    super(message)
-    this.name = 'DaemonProtocolError'
-  }
-}
-
-export class SessionNotFoundError extends Error {
-  constructor(sessionId: string) {
-    super(`Session not found: ${sessionId}`)
-    this.name = 'SessionNotFoundError'
-  }
-}
+// Re-exported so existing importers of `./types` keep working; the classes
+// live in daemon-errors.ts (this file is capped for wire-shape declarations).
+export {
+  TerminalAttachCanceledError,
+  DaemonProtocolError,
+  SessionNotFoundError
+} from './daemon-errors'

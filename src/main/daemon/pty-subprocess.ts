@@ -1023,6 +1023,30 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
         dead = true
       }
     },
+    // Why pause/resume work on Windows too: node-pty's base Terminal
+    // implements both as socket pause/resume (lib/terminal.js), and
+    // WindowsTerminal wires _socket to the ConPTY conout pipe — pausing stops
+    // conout reads so ConPTY's bounded buffer backpressures the child.
+    pause: () => {
+      if (dead) {
+        return
+      }
+      try {
+        proc.pause()
+      } catch {
+        /* native handle already torn down — flow control is best-effort */
+      }
+    },
+    resume: () => {
+      if (dead) {
+        return
+      }
+      try {
+        proc.resume()
+      } catch {
+        /* native handle already torn down — flow control is best-effort */
+      }
+    },
     kill: () => {
       if (dead) {
         return

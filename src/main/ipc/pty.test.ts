@@ -517,12 +517,16 @@ describe('registerPtyHandlers', () => {
       id: options.sessionId ?? 'daemon-pty'
     }))
     const write = vi.fn()
+    const pauseProducer = vi.fn()
+    const resumeProducer = vi.fn()
     let dataHandler: ((payload: { id: string; data: string }) => void) | null = null
     let exitHandler: ((payload: { id: string; code: number }) => void) | null = null
     setLocalPtyProvider({
       spawn,
       write,
       resize: vi.fn(),
+      pauseProducer,
+      resumeProducer,
       kill: vi.fn(),
       shutdown: vi.fn(),
       sendSignal: vi.fn(),
@@ -551,6 +555,8 @@ describe('registerPtyHandlers', () => {
     return {
       spawn,
       write,
+      pauseProducer,
+      resumeProducer,
       emitData: (id: string, data: string) => dataHandler?.({ id, data }),
       emitExit: (id: string, code = 0) => exitHandler?.({ id, code })
     }
@@ -7100,6 +7106,67 @@ describe('registerPtyHandlers', () => {
       })
     } finally {
       errorSpy.mockRestore()
+      vi.useRealTimers()
+    }
+  })
+
+  it('pauses the producer at the pending high watermark and resumes after drain', async () => {
+    vi.useFakeTimers()
+    try {
+      const provider = installObservableDaemonTestProvider()
+      registerPtyHandlers(mainWindow as never)
+      mainWindow.webContents.send.mockClear()
+
+      // Flood in 64KB chunks like a `yes`-style producer that honors pause —
+      // node-pty pause() stops the fd read, so a real producer stops emitting.
+      const chunk = 'x'.repeat(64 * 1024)
+      let chunks = 0
+      while (provider.pauseProducer.mock.calls.length === 0 && chunks < 100) {
+        provider.emitData('flood-pty', chunk)
+        chunks++
+      }
+
+      // Pause fires exactly once, on the first chunk past the 256KB high
+      // watermark (the 5th 64KB chunk), not once per chunk.
+      expect(provider.pauseProducer).toHaveBeenCalledTimes(1)
+      expect(provider.pauseProducer).toHaveBeenCalledWith('flood-pty')
+      expect(chunks).toBe(5)
+      // Bounded: main buffered at most HIGH + one chunk while paused.
+      expect(getPtyRendererDeliveryDebugSnapshot()).toMatchObject({
+        pendingPtyCount: 1,
+        pendingChars: 320 * 1024,
+        peakPendingChars: 320 * 1024
+      })
+
+      // Drain to the renderer. Resume must fire exactly once — when pending
+      // drops below the 32KB low watermark — with no pause/resume flapping
+      // while pending crosses the 32-256KB hysteresis band.
+      vi.runAllTimers()
+      expect(provider.resumeProducer).toHaveBeenCalledTimes(1)
+      expect(provider.resumeProducer).toHaveBeenCalledWith('flood-pty')
+      expect(provider.pauseProducer).toHaveBeenCalledTimes(1)
+      expect(getPtyRendererDeliveryDebugSnapshot()).toMatchObject({ pendingChars: 0 })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('resumes a paused producer when the PTY exits before draining', async () => {
+    vi.useFakeTimers()
+    try {
+      const provider = installObservableDaemonTestProvider()
+      registerPtyHandlers(mainWindow as never)
+      mainWindow.webContents.send.mockClear()
+
+      provider.emitData('flood-pty', 'x'.repeat(320 * 1024))
+      expect(provider.pauseProducer).toHaveBeenCalledTimes(1)
+
+      // Exit while pending is still above the low watermark: the exit path
+      // must release the pause instead of leaving a stale mark behind.
+      provider.emitExit('flood-pty', 0)
+      expect(provider.resumeProducer).toHaveBeenCalledTimes(1)
+      expect(provider.resumeProducer).toHaveBeenCalledWith('flood-pty')
+    } finally {
       vi.useRealTimers()
     }
   })

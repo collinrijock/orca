@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { mkdtempSync, mkdirSync, rmSync, existsSync, readFileSync, writeFileSync } from 'node:fs'
+import { DaemonClient } from './client'
 import { DaemonPtyAdapter } from './daemon-pty-adapter'
 import { DaemonServer } from './daemon-server'
 import { getHistorySessionDirName } from './history-paths'
@@ -29,6 +30,8 @@ function createTestDir(): string {
 }
 
 function createMockSubprocess(): SubprocessHandle & {
+  pause: ReturnType<typeof vi.fn<() => void>>
+  resume: ReturnType<typeof vi.fn<() => void>>
   _simulateData: (data: string) => void
   _simulateExit: (code: number) => void
 } {
@@ -41,6 +44,8 @@ function createMockSubprocess(): SubprocessHandle & {
     getForegroundProcess: vi.fn(() => null),
     write: vi.fn(),
     resize: vi.fn(),
+    pause: vi.fn<() => void>(),
+    resume: vi.fn<() => void>(),
     kill: vi.fn(() => setTimeout(() => onExitCb?.(0), 5)),
     forceKill: vi.fn(),
     signal: vi.fn(),
@@ -175,6 +180,75 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
 
       await new Promise((r) => setTimeout(r, 50))
       expect(lastSubprocess.resize).toHaveBeenCalledWith(120, 40)
+    })
+  })
+
+  describe('producer flow control', () => {
+    it('routes pausePty/resumePty notifications to the daemon session subprocess', async () => {
+      const { id } = await adapter.spawn({ cols: 80, rows: 24 })
+
+      adapter.pauseProducer(id)
+      await waitFor(() => lastSubprocess.pause.mock.calls.length > 0)
+
+      adapter.resumeProducer(id)
+      await waitFor(() => lastSubprocess.resume.mock.calls.length > 0)
+    })
+
+    it('sends pause/resume as fire-and-forget notifications on the current protocol', async () => {
+      const { id } = await adapter.spawn({ cols: 80, rows: 24 })
+      const notifySpy = vi.spyOn(DaemonClient.prototype, 'notify')
+      try {
+        adapter.pauseProducer(id)
+        adapter.resumeProducer(id)
+        expect(notifySpy).toHaveBeenCalledWith('pausePty', { sessionId: id })
+        expect(notifySpy).toHaveBeenCalledWith('resumePty', { sessionId: id })
+      } finally {
+        notifySpy.mockRestore()
+      }
+    })
+
+    it('never sends pause/resume notifications on a legacy protocol version', () => {
+      const notifySpy = vi.spyOn(DaemonClient.prototype, 'notify')
+      const legacy = new DaemonPtyAdapter({ socketPath, tokenPath, protocolVersion: 18 })
+      try {
+        legacy.pauseProducer('legacy-session')
+        legacy.resumeProducer('legacy-session')
+        expect(notifySpy).not.toHaveBeenCalled()
+      } finally {
+        legacy.dispose()
+        notifySpy.mockRestore()
+      }
+    })
+
+    it('owes paused sessions a resumePty on the next connect after a socket drop', async () => {
+      const { id } = await adapter.spawn({ cols: 80, rows: 24 })
+      adapter.pauseProducer(id)
+      await waitFor(() => lastSubprocess.pause.mock.calls.length > 0)
+
+      // Drop the daemon out from under the adapter: the in-flight pause has no
+      // matching resume anymore.
+      await server.shutdown()
+      await waitFor(() => !(adapter as unknown as { client: DaemonClient }).client.isConnected())
+
+      server = new DaemonServer({
+        socketPath,
+        tokenPath,
+        spawnSubprocess: (opts) => {
+          lastSpawnOpts = opts
+          lastSubprocess = createMockSubprocess()
+          return lastSubprocess
+        }
+      })
+      await server.start()
+
+      const notifySpy = vi.spyOn(DaemonClient.prototype, 'notify')
+      try {
+        // Any reconnecting operation must flush the owed resume first.
+        await adapter.listProcesses()
+        expect(notifySpy).toHaveBeenCalledWith('resumePty', { sessionId: id })
+      } finally {
+        notifySpy.mockRestore()
+      }
     })
   })
 

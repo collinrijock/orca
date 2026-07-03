@@ -111,6 +111,16 @@ export type IPtyProvider = {
   write(id: string, data: string): void
   resize(id: string, cols: number, rows: number): void
   /**
+   * Producer-side flow control: stop/restart reading the underlying PTY so a
+   * flooding child blocks on write (kernel backpressure) instead of growing
+   * main-process buffers. Best-effort and optional — providers that cannot
+   * pause (SSH relay, legacy daemon protocols) omit these or no-op silently,
+   * and callers must keep functioning without them (the pending-output cap
+   * still bounds memory when pause is unavailable).
+   */
+  pauseProducer?: (id: string) => void
+  resumeProducer?: (id: string) => void
+  /**
    * The size the PTY has ACTUALLY applied, not the last size requested.
    * resize() is fire-and-forget for remote providers (daemon/SSH `notify`),
    * so a resize can be silently dropped (session not yet alive, dead handle,

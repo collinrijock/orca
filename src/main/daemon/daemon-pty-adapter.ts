@@ -98,6 +98,14 @@ export class DaemonPtyAdapter implements IPtyProvider {
   // Why: incremental checkpoints require the takePendingOutput RPC (v13+).
   // Against older daemons the tick falls back to full-snapshot checkpoints.
   private supportsIncrementalCheckpoints: boolean
+  // Why: producer pause/resume notifications require v19+; legacy daemons
+  // must never see them, so gating makes them silent no-ops there.
+  private supportsProducerFlowControl: boolean
+  private pausedProducerSessionIds = new Set<string>()
+  // Why: a daemon that survives a socket drop can still hold a pause whose
+  // resume died with the connection. Owe those sessions a resume on the next
+  // connect; the daemon's 5s failsafe covers the window in between.
+  private producerResumesOwedOnReconnect = new Set<string>()
   private static CHECKPOINT_INTERVAL_MS = 5_000
   // Why: a streaming session (build logs, `yes`) re-triggers a full multi-MB
   // snapshot checkpoint on every 5s tick via pending-buffer overflow or the
@@ -122,6 +130,13 @@ export class DaemonPtyAdapter implements IPtyProvider {
     this.respawnFn = opts.respawn ?? null
     this.supportsCheckpoints = this.protocolVersion >= 4
     this.supportsIncrementalCheckpoints = this.protocolVersion >= 13
+    this.supportsProducerFlowControl = this.protocolVersion >= 19
+    this.client.onDisconnected(() => {
+      for (const id of this.pausedProducerSessionIds) {
+        this.producerResumesOwedOnReconnect.add(id)
+      }
+      this.pausedProducerSessionIds.clear()
+    })
   }
 
   getHistoryManager(): HistoryManager | null {
@@ -317,6 +332,23 @@ export class DaemonPtyAdapter implements IPtyProvider {
   resize(id: string, cols: number, rows: number): void {
     this.markSessionDirty(id)
     this.client.notify('resize', { sessionId: id, cols, rows })
+  }
+
+  pauseProducer(id: string): void {
+    if (!this.supportsProducerFlowControl) {
+      return
+    }
+    this.pausedProducerSessionIds.add(id)
+    this.client.notify('pausePty', { sessionId: id })
+  }
+
+  resumeProducer(id: string): void {
+    this.producerResumesOwedOnReconnect.delete(id)
+    if (!this.supportsProducerFlowControl) {
+      return
+    }
+    this.pausedProducerSessionIds.delete(id)
+    this.client.notify('resumePty', { sessionId: id })
   }
 
   async shutdown(id: string, opts: { immediate?: boolean; keepHistory?: boolean }): Promise<void> {
@@ -566,6 +598,8 @@ export class DaemonPtyAdapter implements IPtyProvider {
     this.dirtySessionVersions.clear()
     this.lastFullCheckpointAt.clear()
     this.sessionsNeedingFullCheckpoint.clear()
+    this.pausedProducerSessionIds.clear()
+    this.producerResumesOwedOnReconnect.clear()
     this.stopCheckpointTimer()
     for (const id of ids) {
       this.coldRestoreCache.delete(id)
@@ -627,6 +661,8 @@ export class DaemonPtyAdapter implements IPtyProvider {
     this.dirtySessionVersions.clear()
     this.lastFullCheckpointAt.clear()
     this.coldRestoreCache.clear()
+    this.pausedProducerSessionIds.clear()
+    this.producerResumesOwedOnReconnect.clear()
     this.removeEventListener?.()
     this.removeEventListener = null
     // Why: final checkpoints are written daemon-side in TerminalHost.dispose()
@@ -663,6 +699,13 @@ export class DaemonPtyAdapter implements IPtyProvider {
     this.dirtySessionVersions.clear()
     this.lastFullCheckpointAt.clear()
     this.coldRestoreCache.clear()
+    // Why: the detached daemon keeps these PTYs alive for warm reattach; a
+    // pause left behind would block their shells for a failsafe window.
+    for (const id of this.pausedProducerSessionIds) {
+      this.client.notify('resumePty', { sessionId: id })
+    }
+    this.pausedProducerSessionIds.clear()
+    this.producerResumesOwedOnReconnect.clear()
     this.removeEventListener?.()
     this.removeEventListener = null
     this.client.disconnect()
@@ -672,6 +715,19 @@ export class DaemonPtyAdapter implements IPtyProvider {
     await this.client.ensureConnected()
     this.setupEventRouting()
     this.scheduleCheckpointTimer()
+    this.flushOwedProducerResumes()
+  }
+
+  private flushOwedProducerResumes(): void {
+    if (this.producerResumesOwedOnReconnect.size === 0) {
+      return
+    }
+    for (const id of this.producerResumesOwedOnReconnect) {
+      // Why: resuming a session the fresh daemon doesn't know is a harmless
+      // no-op; leaving a survivor paused would waste 5s of failsafe latency.
+      this.client.notify('resumePty', { sessionId: id })
+    }
+    this.producerResumesOwedOnReconnect.clear()
   }
 
   private stopCheckpointTimer(): void {
@@ -1013,6 +1069,10 @@ export class DaemonPtyAdapter implements IPtyProvider {
       } else if (event.event === 'exit') {
         this.activeSessionIds.delete(event.sessionId)
         this.dirtySessionVersions.delete(event.sessionId)
+        // Why: an exited session must not be owed a resume on reconnect — a
+        // reused sessionId would receive a stray resumePty.
+        this.pausedProducerSessionIds.delete(event.sessionId)
+        this.producerResumesOwedOnReconnect.delete(event.sessionId)
         if (!this.sleepRestoreSessionIds.has(event.sessionId)) {
           this.coldRestoreCache.delete(event.sessionId)
         }

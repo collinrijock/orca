@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { Session } from './session'
+import { PRODUCER_PAUSE_FAILSAFE_MS, Session } from './session'
 import type { SessionState, ShellReadyState } from './types'
 
 // Stub the subprocess — Session talks to it via an interface, not child_process directly.
@@ -10,6 +10,8 @@ function createMockSubprocess() {
   let onExit: ((code: number) => void) | null = null
   let killed = false
   let pid = 12345
+  let pauseCalls = 0
+  let resumeCalls = 0
 
   return {
     written,
@@ -20,6 +22,12 @@ function createMockSubprocess() {
     get pid() {
       return pid
     },
+    get pauseCalls() {
+      return pauseCalls
+    },
+    get resumeCalls() {
+      return resumeCalls
+    },
     getForegroundProcess(): string | null {
       return null
     },
@@ -27,6 +35,12 @@ function createMockSubprocess() {
       written.push(data)
     },
     resize(_cols: number, _rows: number) {},
+    pause() {
+      pauseCalls++
+    },
+    resume() {
+      resumeCalls++
+    },
     kill() {
       killed = true
       // Simulate async exit
@@ -506,6 +520,105 @@ describe('Session', () => {
       createSession()
       session.dispose()
       expect(session.state).toBe('exited')
+    })
+  })
+
+  describe('producer flow control', () => {
+    it('pauses the subprocess and auto-resumes via the lost-resume failsafe', () => {
+      createSession()
+      session.pauseProducer()
+      expect(subprocess.pauseCalls).toBe(1)
+      expect(subprocess.resumeCalls).toBe(0)
+
+      vi.advanceTimersByTime(PRODUCER_PAUSE_FAILSAFE_MS - 1)
+      expect(subprocess.resumeCalls).toBe(0)
+      vi.advanceTimersByTime(1)
+      expect(subprocess.resumeCalls).toBe(1)
+    })
+
+    it('resumeProducer resumes once and cancels the failsafe timer', () => {
+      createSession()
+      session.pauseProducer()
+      session.resumeProducer()
+      expect(subprocess.resumeCalls).toBe(1)
+
+      vi.advanceTimersByTime(PRODUCER_PAUSE_FAILSAFE_MS * 2)
+      expect(subprocess.resumeCalls).toBe(1)
+    })
+
+    it('resumeProducer without a matching pause is a no-op', () => {
+      createSession()
+      session.resumeProducer()
+      expect(subprocess.resumeCalls).toBe(0)
+    })
+
+    it('re-pausing re-arms the failsafe window', () => {
+      createSession()
+      session.pauseProducer()
+      vi.advanceTimersByTime(PRODUCER_PAUSE_FAILSAFE_MS - 1_000)
+      session.pauseProducer()
+
+      vi.advanceTimersByTime(PRODUCER_PAUSE_FAILSAFE_MS - 1)
+      expect(subprocess.resumeCalls).toBe(0)
+      vi.advanceTimersByTime(1)
+      expect(subprocess.resumeCalls).toBe(1)
+    })
+
+    it('kill() resumes a paused producer before signalling the child', () => {
+      createSession()
+      session.pauseProducer()
+      session.kill()
+      expect(subprocess.resumeCalls).toBe(1)
+      expect(subprocess.killed).toBe(true)
+    })
+
+    it('dispose() resumes a paused producer and clears the failsafe', () => {
+      createSession()
+      session.pauseProducer()
+      session.dispose()
+      expect(subprocess.resumeCalls).toBe(1)
+      expect(vi.getTimerCount()).toBe(0)
+    })
+
+    it('subprocess exit clears the failsafe without resuming a reaped child', () => {
+      createSession()
+      session.pauseProducer()
+      subprocess.simulateExit(0)
+      vi.advanceTimersByTime(PRODUCER_PAUSE_FAILSAFE_MS * 2)
+      expect(subprocess.resumeCalls).toBe(0)
+    })
+
+    it('ignores pauseProducer on an exited session', () => {
+      createSession()
+      subprocess.simulateExit(0)
+      session.pauseProducer()
+      expect(subprocess.pauseCalls).toBe(0)
+      expect(vi.getTimerCount()).toBe(0)
+    })
+
+    it('detaching the last client resumes a paused producer', () => {
+      createSession()
+      const token = session.attachClient({ onData: () => {}, onExit: () => {} })
+      session.pauseProducer()
+      session.detachClient(token)
+      expect(subprocess.resumeCalls).toBe(1)
+    })
+
+    it('keeps the pause while another client is still attached', () => {
+      createSession()
+      const token = session.attachClient({ onData: () => {}, onExit: () => {} })
+      session.attachClient({ onData: () => {}, onExit: () => {} })
+      session.pauseProducer()
+      session.detachClient(token)
+      expect(subprocess.resumeCalls).toBe(0)
+    })
+
+    it('detachAllClients resumes a paused producer', () => {
+      createSession()
+      session.attachClient({ onData: () => {}, onExit: () => {} })
+      session.pauseProducer()
+      session.detachAllClients()
+      expect(subprocess.resumeCalls).toBe(1)
     })
   })
 })

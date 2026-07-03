@@ -71,6 +71,14 @@ export class DaemonPtyRouter implements IPtyProvider {
     this.adapterFor(id).resize(id, cols, rows)
   }
 
+  pauseProducer(id: string): void {
+    this.adapterFor(id).pauseProducer(id)
+  }
+
+  resumeProducer(id: string): void {
+    this.adapterFor(id).resumeProducer(id)
+  }
+
   async shutdown(id: string, opts: { immediate?: boolean; keepHistory?: boolean }): Promise<void> {
     await this.adapterFor(id).shutdown(id, opts)
     // Why: sleep passes keepHistory=true and re-spawns against the same

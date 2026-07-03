@@ -30,6 +30,11 @@ const KILL_TIMEOUT_MS = 5_000
 // Worst-case wire size for a full take is ~6x this (each control char
 // JSON-escapes to six bytes) and must stay under NDJSON_MAX_LINE_BYTES (16MB).
 const PENDING_OUTPUT_MAX_BYTES = 2 * 1024 * 1024
+// Why: producer pause is requested over a fire-and-forget notification, so the
+// matching resume can be lost (main crash, dropped socket). A lost resume must
+// never wedge a shell: auto-resume after this window; a still-flooded main
+// re-asserts the pause on its next watermark check.
+export const PRODUCER_PAUSE_FAILSAFE_MS = 5_000
 
 export type SubprocessHandle = {
   pid: number
@@ -41,6 +46,11 @@ export type SubprocessHandle = {
   startupCommandDeliveredInShellArgs?: boolean
   write(data: string): void
   resize(cols: number, rows: number): void
+  /** Stop reading the PTY fd (node-pty pause()) so the kernel/ConPTY buffer
+   *  fills and a flooding child blocks on write. Optional: handles that
+   *  cannot pause simply omit it and flow control degrades to a no-op. */
+  pause?(): void
+  resume?(): void
   kill(): void
   forceKill(): void
   signal(sig: string): void
@@ -94,6 +104,8 @@ export class Session {
   private pendingOutputBytes = 0
   private pendingOutputOverflowed = false
   private pendingOutputSeq = 0
+  private producerPaused = false
+  private producerPauseFailsafeTimer: ReturnType<typeof setTimeout> | null = null
 
   constructor(opts: SessionOptions) {
     this.sessionId = opts.sessionId
@@ -180,12 +192,52 @@ export class Session {
     this.subprocess.resize(cols, rows)
   }
 
+  /** Producer-side flow control: stop reading the PTY fd so the flooding
+   *  child blocks on write (kernel backpressure). Arms the lost-resume
+   *  failsafe; re-pausing re-arms it (main re-asserts during long floods). */
+  pauseProducer(): void {
+    if (this._state === 'exited' || this._disposed) {
+      return
+    }
+    this.producerPaused = true
+    this.subprocess.pause?.()
+    if (this.producerPauseFailsafeTimer) {
+      clearTimeout(this.producerPauseFailsafeTimer)
+    }
+    this.producerPauseFailsafeTimer = setTimeout(() => {
+      this.producerPauseFailsafeTimer = null
+      this.producerPaused = false
+      this.subprocess.resume?.()
+    }, PRODUCER_PAUSE_FAILSAFE_MS)
+  }
+
+  resumeProducer(): void {
+    this.releaseProducerPause({ resume: true })
+  }
+
+  private releaseProducerPause(opts: { resume: boolean }): void {
+    if (this.producerPauseFailsafeTimer) {
+      clearTimeout(this.producerPauseFailsafeTimer)
+      this.producerPauseFailsafeTimer = null
+    }
+    if (!this.producerPaused) {
+      return
+    }
+    this.producerPaused = false
+    if (opts.resume) {
+      this.subprocess.resume?.()
+    }
+  }
+
   kill(): void {
     if (this._state === 'exited' || this._isTerminating) {
       return
     }
     this._isTerminating = true
 
+    // Why: a paused child can be blocked inside write(); resume before
+    // signalling so it can run signal handlers and actually exit.
+    this.releaseProducerPause({ resume: true })
     this.subprocess.kill()
 
     this.killTimer = setTimeout(() => {
@@ -213,10 +265,16 @@ export class Session {
     if (idx !== -1) {
       this.attachedClients.splice(idx, 1)
     }
+    // Why: with no attached client, nobody will ever send resumePty — a
+    // paused shell would sit wedged until the failsafe. Resume eagerly.
+    if (this.attachedClients.length === 0) {
+      this.releaseProducerPause({ resume: true })
+    }
   }
 
   detachAllClients(): void {
     this.attachedClients.length = 0
+    this.releaseProducerPause({ resume: true })
   }
 
   getSnapshot(): TerminalSnapshot | null {
@@ -377,6 +435,9 @@ export class Session {
       return
     }
     this._disposed = true
+    // Why: never leave a paused fd behind on any teardown path — the handle's
+    // own dead-guard makes this a no-op when the child is already reaped.
+    this.releaseProducerPause({ resume: true })
     if (this.killTimer) {
       clearTimeout(this.killTimer)
       this.killTimer = null
@@ -460,6 +521,9 @@ export class Session {
 
     this._exitCode = code
     this._state = 'exited'
+    // Why resume:false — the child is reaped, so there is nothing to unblock;
+    // only the failsafe timer must not outlive the session.
+    this.releaseProducerPause({ resume: false })
     this.releaseHeldShellReadyBytes()
 
     if (this.killTimer) {

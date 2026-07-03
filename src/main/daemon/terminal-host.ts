@@ -183,6 +183,21 @@ export class TerminalHost {
     this.getAliveSession(sessionId).resize(cols, rows)
   }
 
+  // Why null-not-throw (unlike write/resize): pause/resume are best-effort
+  // flow-control hints; a session that exited while the notify was in flight
+  // must not surface an error or a synthetic exit.
+  pauseProducer(sessionId: string): void {
+    const session = this.sessions.get(sessionId)
+    if (!session || !session.isAlive) {
+      return
+    }
+    session.pauseProducer()
+  }
+
+  resumeProducer(sessionId: string): void {
+    this.sessions.get(sessionId)?.resumeProducer()
+  }
+
   kill(sessionId: string, opts: { immediate?: boolean } = {}): void {
     const session = this.getAliveSession(sessionId)
     this.recordTombstone(sessionId)
