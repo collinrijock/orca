@@ -133,6 +133,7 @@ export const styles = StyleSheet.create({
   cardMetaRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    flexWrap: 'wrap',
     gap: spacing.sm,
     marginTop: spacing.xs
   },
@@ -150,6 +151,22 @@ export const styles = StyleSheet.create({
     color: colors.accentBlue,
     fontSize: typography.metaSize,
     fontWeight: '600'
+  },
+  resumeButton: {
+    minHeight: 28,
+    minWidth: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 'auto',
+    paddingHorizontal: spacing.xs,
+    paddingVertical: spacing.xs,
+    borderRadius: radii.button
+  },
+  resumeButtonPressed: {
+    opacity: 0.78
+  },
+  resumeButtonDisabled: {
+    opacity: 0.45
   },
   preview: {
     marginTop: spacing.sm,
@@ -180,6 +197,17 @@ export const styles = StyleSheet.create({
   },
   noticeText: {
     color: colors.statusAmber,
+    fontSize: typography.metaSize
+  },
+  resumeBanner: {
+    marginHorizontal: spacing.md,
+    marginTop: spacing.sm,
+    padding: spacing.sm,
+    borderRadius: radii.input,
+    backgroundColor: colors.bgPanel
+  },
+  resumeBannerText: {
+    color: colors.textSecondary,
     fontSize: typography.metaSize
   },
   state: {

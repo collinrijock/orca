@@ -57,6 +57,7 @@ export type RuntimeStatus = {
   capabilities?: RuntimeCapability[]
   remoteControl?: RemoteRuntimeSharedConnectionDiagnostics | null
   hostPlatform?: NodeJS.Platform
+  terminalWindowsShell?: string | null
   // COMPAT(runtimeStatusMobileAliases): added 2026-05-15 for mobile builds
   // that still read these names; new desktop/CLI code uses the fields above.
   protocolVersion?: number
@@ -531,18 +532,25 @@ export type RuntimeWorktreePsSummary = {
   workspaceKind?: 'git' | 'folder-workspace'
   worktreeId: string
   repoId: string
+  hostId?: Worktree['hostId']
+  terminalPlatform?: NodeJS.Platform
   repo: string
   path: string
   branch: string
   isArchived: boolean
   isMainWorktree: boolean
   hasHostSidebarActivity: boolean
+  worktreeInstanceId?: string
+  lineageWorktreeInstanceId?: string
+  parentWorktreeInstanceId?: string
   parentWorktreeId: string | null
   childWorktreeIds: string[]
   displayName: string
   workspaceStatus: string
   sortOrder: number
   manualOrder?: number
+  lastActivityAt?: number
+  createdAt?: number
   linkedIssue: number | null
   linkedPR: { number: number; state: string } | null
   linkedLinearIssue: string | null

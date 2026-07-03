@@ -1235,6 +1235,18 @@ describe('OrcaRuntimeService', () => {
     expect(status.minCompatibleMobileVersion).toBeGreaterThanOrEqual(0)
   })
 
+  it('reports the configured Windows terminal shell on status', () => {
+    const runtime = new OrcaRuntimeService({
+      ...store,
+      getSettings: () => ({
+        ...store.getSettings(),
+        terminalWindowsShell: 'wsl.exe'
+      })
+    } as never)
+
+    expect(runtime.getStatus().terminalWindowsShell).toBe('wsl.exe')
+  })
+
   it('advertises browser screencast only when a renderer window is available', () => {
     const runtime = createRuntime()
     electronMocks.BrowserWindow.fromId.mockReturnValue({ isDestroyed: () => false } as never)
@@ -15832,6 +15844,88 @@ describe('OrcaRuntimeService', () => {
     expect(first.tab).toMatchObject({ parentTabId: 'tab-renderer' })
   })
 
+  it('returns the settled success for a retried clientMutationId whose response was lost', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setNotifier({
+      focusTerminal: vi.fn(),
+      worktreesChanged: vi.fn(),
+      reposChanged: vi.fn(),
+      activateWorktree: vi.fn(),
+      createTerminal: vi.fn(),
+      revealTerminalSession: vi.fn(),
+      splitTerminal: vi.fn(),
+      renameTerminal: vi.fn(),
+      closeTerminal: vi.fn(),
+      closeSessionTab: vi.fn(),
+      sleepWorktree: vi.fn(),
+      terminalFitOverrideChanged: vi.fn(),
+      terminalDriverChanged: vi.fn()
+    })
+    const send = vi.fn((_channel: string, payload: { requestId: string }) => {
+      runtime.syncWindowGraph(1, {
+        tabs: [],
+        leaves: [
+          {
+            tabId: 'tab-renderer',
+            worktreeId: TEST_WORKTREE_ID,
+            leafId: 'pane:1',
+            paneRuntimeId: 1,
+            ptyId: 'pty-renderer',
+            paneTitle: null
+          }
+        ],
+        mobileSessionTabs: [
+          {
+            worktree: TEST_WORKTREE_ID,
+            publicationEpoch: 'epoch-1',
+            snapshotVersion: 1,
+            activeGroupId: 'group-1',
+            activeTabId: null,
+            activeTabType: null,
+            tabs: [
+              {
+                type: 'terminal',
+                id: 'tab-renderer::pane:1',
+                parentTabId: 'tab-renderer',
+                leafId: 'pane:1',
+                title: 'Terminal',
+                isActive: false
+              }
+            ]
+          }
+        ]
+      })
+      ipcMain.emit(
+        'terminal:tabCreateReply',
+        {},
+        { requestId: payload.requestId, tabId: 'tab-renderer', title: 'Terminal' }
+      )
+    })
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+    electronMocks.BrowserWindow.fromId.mockReturnValue({
+      isDestroyed: () => false,
+      webContents: { send }
+    })
+
+    const first = await runtime.createMobileSessionTerminal(`id:${TEST_WORKTREE_ID}`, {
+      activate: false,
+      clientMutationId: 'mutation-lost-response'
+    })
+    // Why: the phone retries with the same key when the create response was
+    // lost in transit; within the retention window it must reuse the terminal.
+    const retried = await runtime.createMobileSessionTerminal(`id:${TEST_WORKTREE_ID}`, {
+      activate: false,
+      clientMutationId: 'mutation-lost-response'
+    })
+
+    const createRequests = send.mock.calls.filter(
+      ([channel]) => channel === 'terminal:requestTabCreate'
+    )
+    expect(createRequests).toHaveLength(1)
+    expect(retried).toBe(first)
+  })
+
   it('does not dedupe mobile terminal creates across worktrees with the same clientMutationId', async () => {
     const otherWorktreeId = `${TEST_REPO_ID}::/tmp/worktree-b`
     vi.mocked(listWorktrees).mockResolvedValue([
@@ -16642,6 +16736,7 @@ describe('OrcaRuntimeService', () => {
           workspaceKind: 'git',
           worktreeId: 'repo-1::/tmp/worktree-a',
           repoId: 'repo-1',
+          terminalPlatform: process.platform,
           repo: 'repo',
           path: '/tmp/worktree-a',
           branch: 'feature/foo',
@@ -16665,6 +16760,7 @@ describe('OrcaRuntimeService', () => {
           unread: false,
           liveTerminalCount: 1,
           hasAttachedPty: true,
+          lastActivityAt: 0,
           lastOutputAt: 321,
           preview: 'build green',
           agents: []
@@ -16695,6 +16791,58 @@ describe('OrcaRuntimeService', () => {
     const { worktrees } = await runtime.getWorktreePs()
     const summary = worktrees.find((w) => w.worktreeId === TEST_WORKTREE_ID)
     expect(summary?.linkedPR).toEqual({ number: 42, state: 'merged' })
+  })
+
+  it('carries persisted worktree host ownership in mobile summaries', async () => {
+    const metaById = {
+      [TEST_WORKTREE_ID]: {
+        ...store.getAllWorktreeMeta()[TEST_WORKTREE_ID],
+        hostId: 'runtime:owner-runtime' as const
+      }
+    }
+    const runtimeStore = {
+      ...store,
+      getAllWorktreeMeta: () => metaById,
+      getWorktreeMeta: (worktreeId: string) => metaById[worktreeId]
+    }
+    const runtime = new OrcaRuntimeService(runtimeStore as never)
+
+    const { worktrees } = await runtime.getWorktreePs()
+
+    expect(worktrees.find((worktree) => worktree.worktreeId === TEST_WORKTREE_ID)).toMatchObject({
+      repoId: TEST_REPO_ID,
+      hostId: 'runtime:owner-runtime'
+    })
+  })
+
+  it('reports the resolved terminal platform for WSL project mobile summaries', async () => {
+    await withPlatform('win32', async () => {
+      const runtime = new OrcaRuntimeService({
+        ...store,
+        getProjects: () => [
+          {
+            id: 'project-1',
+            displayName: 'repo',
+            badgeColor: 'blue',
+            sourceRepoIds: [TEST_REPO_ID],
+            localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' },
+            createdAt: 0,
+            updatedAt: 0
+          }
+        ],
+        getSettings: () => ({
+          ...store.getSettings(),
+          localWindowsRuntimeDefault: { kind: 'windows-host' }
+        })
+      } as never)
+
+      const { worktrees } = await runtime.getWorktreePs()
+
+      expect(worktrees.find((worktree) => worktree.worktreeId === TEST_WORKTREE_ID)).toMatchObject({
+        repoId: TEST_REPO_ID,
+        terminalPlatform: 'linux'
+      })
+    })
   })
 
   it('omits worktrees hidden by the host visibility policy from mobile summaries', async () => {

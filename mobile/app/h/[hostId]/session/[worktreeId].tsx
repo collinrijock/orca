@@ -37,9 +37,9 @@ import {
   GitBranch,
   Globe,
   Keyboard as KeyboardIcon,
-  ListChecks,
   MessageSquare,
   Monitor,
+  MoreHorizontal,
   Plus,
   RefreshCw,
   Send,
@@ -70,10 +70,13 @@ import {
   type ActivePanel,
   canDockSessionPanel,
   resolvePanelAction,
+  shouldShowSessionHeaderChecksAction,
   panelRouteDescriptor
 } from '../../../../src/session/session-panel-host'
 import { useMobilePrBranchContext } from '../../../../src/session/use-mobile-pr-branch-context'
 import { SessionDockColumn } from '../../../../src/session/SessionDockColumn'
+import { MobileSessionHeaderIconButton } from '../../../../src/session/MobileSessionHeaderIconButton'
+import { MobileSessionHeaderMoreActionsSheet } from '../../../../src/session/MobileSessionHeaderMoreActionsSheet'
 import type { ConnectionState, RpcFailure, RpcSuccess } from '../../../../src/transport/types'
 import { useMobileDictation } from '../../../../src/hooks/use-mobile-dictation'
 import {
@@ -897,8 +900,8 @@ export default function SessionScreen() {
       setActivePanel(null)
     }
   }, [canDockPanel, activePanel])
-  // Session-level PR context feeds the docked PR panel and gates the GitHub-only
-  // PR entry so GitLab/other providers do not open a GitHub RPC surface.
+  // Session-level PR context feeds the docked PR panel; the panel itself owns
+  // loading/blocked states for GitLab/other providers, so no auto-close here.
   const {
     branch: prBranch,
     headSha: prHeadSha,
@@ -911,11 +914,6 @@ export default function SessionScreen() {
     connState,
     worktreeId
   })
-  useEffect(() => {
-    if (prRepoContextLoaded && !prIsGithubRepo && activePanel === 'pr') {
-      setActivePanel(null)
-    }
-  }, [activePanel, prRepoContextLoaded, prIsGithubRepo])
   const initialCreateWarning = typeof createdWarning === 'string' ? createdWarning.trim() : ''
   const [terminals, setTerminals] = useState<Terminal[]>([])
   const terminalsRef = useRef<Terminal[]>([])
@@ -981,6 +979,7 @@ export default function SessionScreen() {
     useState<MobileNewTabAgentLoadState>('idle')
   const [createTabAgentOptions, setCreateTabAgentOptions] = useState<MobileNewTabAgentOption[]>([])
   const [showCreateBrowserModal, setShowCreateBrowserModal] = useState(false)
+  const [showHeaderMoreActions, setShowHeaderMoreActions] = useState(false)
   const [actionTarget, setActionTarget] = useState<Terminal | null>(null)
   const [markdownActionTarget, setMarkdownActionTarget] = useState<Extract<
     MobileSessionTab,
@@ -4562,6 +4561,14 @@ export default function SessionScreen() {
     })
   }
 
+  const openAgentSessionHistory = () => {
+    const params = new URLSearchParams({ name: worktreeName || '' })
+    router.push(`/h/${hostId}/agent-history/${encodeURIComponent(worktreeId)}?${params.toString()}`)
+  }
+  const showAgentSessionHistoryAction = !isFolderWorkspaceRoute
+  const showChecksAction = shouldShowSessionHeaderChecksAction({ isFolderWorkspaceRoute })
+  const showHeaderMoreButton = showAgentSessionHistoryAction || showChecksAction
+
   return (
     <View ref={setMobileSessionRootRef} style={styles.container}>
       <View style={styles.kavInner}>
@@ -4597,45 +4604,27 @@ export default function SessionScreen() {
                 </Text>
               </Pressable>
             </View>
-            <Pressable
-              style={({ pressed }) => [
-                styles.filesButton,
-                pressed && styles.filesButtonPressed,
-                activePanel === 'files' && styles.filesButtonActive
-              ]}
-              onPress={() => handlePanelTap('files')}
-              hitSlop={8}
+            <MobileSessionHeaderIconButton
+              active={activePanel === 'files'}
               accessibilityLabel="Open file explorer"
-            >
-              <Folder size={18} color={colors.textSecondary} strokeWidth={2.1} />
-            </Pressable>
+              icon={Folder}
+              onPress={() => handlePanelTap('files')}
+            />
             {!isFolderWorkspaceRoute && (
-              <Pressable
-                style={({ pressed }) => [
-                  styles.filesButton,
-                  pressed && styles.filesButtonPressed,
-                  activePanel === 'sourceControl' && styles.filesButtonActive
-                ]}
-                onPress={() => handlePanelTap('sourceControl')}
-                hitSlop={8}
+              <MobileSessionHeaderIconButton
+                active={activePanel === 'sourceControl'}
                 accessibilityLabel="Open source control"
-              >
-                <GitBranch size={18} color={colors.textSecondary} strokeWidth={2.1} />
-              </Pressable>
+                icon={GitBranch}
+                onPress={() => handlePanelTap('sourceControl')}
+              />
             )}
-            {prRepoContextLoaded && prIsGithubRepo ? (
-              <Pressable
-                style={({ pressed }) => [
-                  styles.filesButton,
-                  pressed && styles.filesButtonPressed,
-                  activePanel === 'pr' && styles.filesButtonActive
-                ]}
-                onPress={() => handlePanelTap('pr')}
-                hitSlop={8}
-                accessibilityLabel="Open pull request"
-              >
-                <ListChecks size={18} color={colors.textSecondary} strokeWidth={2.1} />
-              </Pressable>
+            {showHeaderMoreButton ? (
+              <MobileSessionHeaderIconButton
+                active={activePanel === 'pr'}
+                accessibilityLabel="More session actions"
+                icon={MoreHorizontal}
+                onPress={() => setShowHeaderMoreActions(true)}
+              />
             ) : null}
           </View>
 
@@ -5214,6 +5203,15 @@ export default function SessionScreen() {
           )}
         </View>
       </View>
+
+      <MobileSessionHeaderMoreActionsSheet
+        visible={showHeaderMoreActions}
+        showAgentSessionHistory={showAgentSessionHistoryAction}
+        showChecks={showChecksAction}
+        onOpenAgentSessionHistory={openAgentSessionHistory}
+        onOpenChecks={() => handlePanelTap('pr')}
+        onClose={() => setShowHeaderMoreActions(false)}
+      />
 
       <ActionSheetModal
         visible={showCreateTabDrawer}
