@@ -79,27 +79,10 @@ function twoPaneLayout(): TerminalLayoutSnapshot {
 }
 
 describe('resolveTabAgentFromSignals', () => {
-  it('uses a recognized foreground agent as the live local source of truth', () => {
-    expect(
-      resolveTabAgentFromSignals({
-        foreground: 'codex',
-        hasObservedAgentSignal: true,
-        shellForegroundAfterAgentSignal: false,
-        isRemote: false,
-        title: 'Terminal 1',
-        hookAgent: 'claude',
-        hasCompletedHook: false,
-        launchAgent: 'claude'
-      })
-    ).toBe('codex')
-  })
-
   it('keeps launch intent during the pre-start shell window', () => {
     expect(
       resolveTabAgentFromSignals({
-        foreground: null,
         hasObservedAgentSignal: false,
-        shellForegroundAfterAgentSignal: false,
         isRemote: false,
         title: 'Terminal 1',
         hookAgent: null,
@@ -109,27 +92,23 @@ describe('resolveTabAgentFromSignals', () => {
     ).toBe('claude')
   })
 
-  it('lets shell foreground clear stale identity even when the title still names an agent', () => {
+  it('trusts live hook identity at a shell title until the hook row is dropped', () => {
     expect(
       resolveTabAgentFromSignals({
-        foreground: null,
         hasObservedAgentSignal: true,
-        shellForegroundAfterAgentSignal: true,
         isRemote: false,
-        title: '✳ Claude Code',
+        title: 'zsh',
         hookAgent: 'claude',
         hasCompletedHook: false,
         launchAgent: 'claude'
       })
-    ).toBeNull()
+    ).toBe('claude')
   })
 
   it('maps OpenClaude titles to the distinct OpenClaude tab icon', () => {
     expect(
       resolveTabAgentFromSignals({
-        foreground: undefined,
         hasObservedAgentSignal: false,
-        shellForegroundAfterAgentSignal: false,
         isRemote: false,
         title: '⠋ OpenClaude',
         hookAgent: null,
@@ -142,9 +121,7 @@ describe('resolveTabAgentFromSignals', () => {
   it('keeps title fallback for real Gemini, MiMo, and Pi titles', () => {
     expect(
       resolveTabAgentFromSignals({
-        foreground: undefined,
         hasObservedAgentSignal: false,
-        shellForegroundAfterAgentSignal: false,
         isRemote: false,
         title: '✦ Gemini CLI',
         hookAgent: null,
@@ -155,9 +132,7 @@ describe('resolveTabAgentFromSignals', () => {
 
     expect(
       resolveTabAgentFromSignals({
-        foreground: undefined,
         hasObservedAgentSignal: false,
-        shellForegroundAfterAgentSignal: false,
         isRemote: false,
         title: 'MiMo Code',
         hookAgent: null,
@@ -168,9 +143,7 @@ describe('resolveTabAgentFromSignals', () => {
 
     expect(
       resolveTabAgentFromSignals({
-        foreground: undefined,
         hasObservedAgentSignal: false,
-        shellForegroundAfterAgentSignal: false,
         isRemote: false,
         title: 'π - my-project',
         hookAgent: null,
@@ -183,9 +156,7 @@ describe('resolveTabAgentFromSignals', () => {
   it("uses completed OpenClaude hook identity over Claude's generic task-title heuristic", () => {
     expect(
       resolveTabAgentFromSignals({
-        foreground: undefined,
         hasObservedAgentSignal: true,
-        shellForegroundAfterAgentSignal: false,
         isRemote: false,
         title: '✳ Say hi',
         hookAgent: null,
@@ -199,9 +170,7 @@ describe('resolveTabAgentFromSignals', () => {
   it('keeps launch identity over title identity while hooks have not arrived', () => {
     expect(
       resolveTabAgentFromSignals({
-        foreground: undefined,
         hasObservedAgentSignal: false,
-        shellForegroundAfterAgentSignal: false,
         isRemote: false,
         title: '✳ Say hi',
         hookAgent: null,
@@ -214,9 +183,7 @@ describe('resolveTabAgentFromSignals', () => {
   it("keeps Codex launch intent over Claude's generic spinner title fallback", () => {
     expect(
       resolveTabAgentFromSignals({
-        foreground: undefined,
         hasObservedAgentSignal: false,
-        shellForegroundAfterAgentSignal: false,
         isRemote: false,
         title: '⠸ codex-quarter-flash-202606191419',
         hookAgent: null,
@@ -229,9 +196,7 @@ describe('resolveTabAgentFromSignals', () => {
   it('does not infer Claude identity from a generic spinner title without context', () => {
     expect(
       resolveTabAgentFromSignals({
-        foreground: undefined,
         hasObservedAgentSignal: false,
-        shellForegroundAfterAgentSignal: false,
         isRemote: false,
         title: '⠸ investigating startup',
         hookAgent: null,
@@ -245,9 +210,7 @@ describe('resolveTabAgentFromSignals', () => {
     for (const title of ['. investigating startup', '* investigating startup', '✳ investigating']) {
       expect(
         resolveTabAgentFromSignals({
-          foreground: undefined,
           hasObservedAgentSignal: false,
-          shellForegroundAfterAgentSignal: false,
           isRemote: false,
           title,
           hookAgent: null,
@@ -261,9 +224,7 @@ describe('resolveTabAgentFromSignals', () => {
   it('keeps launch identity over explicit title identity until stronger signals arrive', () => {
     expect(
       resolveTabAgentFromSignals({
-        foreground: undefined,
         hasObservedAgentSignal: false,
-        shellForegroundAfterAgentSignal: false,
         isRemote: false,
         title: '⠸ Claude Code',
         hookAgent: null,
@@ -276,9 +237,7 @@ describe('resolveTabAgentFromSignals', () => {
   it("uses Codex hook identity over Claude's generic task-title heuristic", () => {
     expect(
       resolveTabAgentFromSignals({
-        foreground: undefined,
         hasObservedAgentSignal: true,
-        shellForegroundAfterAgentSignal: false,
         isRemote: false,
         title: '✳ improve-pr-actions-customization',
         hookAgent: 'codex',
@@ -288,12 +247,10 @@ describe('resolveTabAgentFromSignals', () => {
     ).toBe('codex')
   })
 
-  it('keeps launch identity over explicit Claude Code titles without hook or foreground evidence', () => {
+  it('keeps launch identity over explicit Claude Code titles without hook evidence', () => {
     expect(
       resolveTabAgentFromSignals({
-        foreground: undefined,
         hasObservedAgentSignal: false,
-        shellForegroundAfterAgentSignal: false,
         isRemote: false,
         title: '✳ Claude Code',
         hookAgent: null,
@@ -306,9 +263,7 @@ describe('resolveTabAgentFromSignals', () => {
   it('lets an explicit title override stale launch identity after the pane shows newer activity', () => {
     expect(
       resolveTabAgentFromSignals({
-        foreground: undefined,
         hasObservedAgentSignal: true,
-        shellForegroundAfterAgentSignal: false,
         isRemote: false,
         title: '✳ Claude Code',
         hookAgent: null,
@@ -321,9 +276,7 @@ describe('resolveTabAgentFromSignals', () => {
   it('does not let an explicit title override launch identity before any activity is observed', () => {
     expect(
       resolveTabAgentFromSignals({
-        foreground: undefined,
         hasObservedAgentSignal: false,
-        shellForegroundAfterAgentSignal: false,
         isRemote: false,
         title: '✳ Claude Code',
         hookAgent: null,
@@ -333,42 +286,10 @@ describe('resolveTabAgentFromSignals', () => {
     ).toBe('codex')
   })
 
-  it('lets shell foreground clear the icon after an agent was observed running', () => {
-    expect(
-      resolveTabAgentFromSignals({
-        foreground: null,
-        hasObservedAgentSignal: true,
-        shellForegroundAfterAgentSignal: true,
-        isRemote: false,
-        title: 'zsh',
-        hookAgent: 'claude',
-        hasCompletedHook: false,
-        launchAgent: 'claude'
-      })
-    ).toBeNull()
-  })
-
-  it('does not let a pre-start shell sample suppress a later hook signal', () => {
-    expect(
-      resolveTabAgentFromSignals({
-        foreground: null,
-        hasObservedAgentSignal: true,
-        shellForegroundAfterAgentSignal: false,
-        isRemote: false,
-        title: 'Terminal 1',
-        hookAgent: 'codex',
-        hasCompletedHook: false,
-        launchAgent: 'codex'
-      })
-    ).toBe('codex')
-  })
-
   it('prefers explicit hook identity over a conflicting title mention', () => {
     expect(
       resolveTabAgentFromSignals({
-        foreground: undefined,
         hasObservedAgentSignal: true,
-        shellForegroundAfterAgentSignal: false,
         isRemote: false,
         title: '✳ Gemini CLI',
         hookAgent: 'claude',
@@ -381,9 +302,7 @@ describe('resolveTabAgentFromSignals', () => {
   it('prefers explicit hook identity over ordinary non-Claude title identity', () => {
     expect(
       resolveTabAgentFromSignals({
-        foreground: undefined,
         hasObservedAgentSignal: true,
-        shellForegroundAfterAgentSignal: false,
         isRemote: false,
         title: '✦ Gemini CLI',
         hookAgent: 'claude',
@@ -396,9 +315,7 @@ describe('resolveTabAgentFromSignals', () => {
   it('lets focused-pane hook identity override launch metadata in split tabs', () => {
     expect(
       resolveTabAgentFromSignals({
-        foreground: undefined,
         hasObservedAgentSignal: true,
-        shellForegroundAfterAgentSignal: false,
         isRemote: false,
         title: 'Terminal 1',
         hookAgent: 'claude',
@@ -412,9 +329,7 @@ describe('resolveTabAgentFromSignals', () => {
   it('keeps unresolved launch metadata ahead of sibling-pane hook fallback', () => {
     expect(
       resolveTabAgentFromSignals({
-        foreground: undefined,
         hasObservedAgentSignal: false,
-        shellForegroundAfterAgentSignal: false,
         isRemote: false,
         title: 'Terminal 1',
         hookAgent: null,
@@ -428,9 +343,7 @@ describe('resolveTabAgentFromSignals', () => {
   it('uses sibling-pane hook fallback when no launch metadata exists', () => {
     expect(
       resolveTabAgentFromSignals({
-        foreground: undefined,
         hasObservedAgentSignal: false,
-        shellForegroundAfterAgentSignal: false,
         isRemote: false,
         title: 'Terminal 1',
         hookAgent: null,
@@ -441,12 +354,10 @@ describe('resolveTabAgentFromSignals', () => {
     ).toBe('claude')
   })
 
-  it('keeps launch identity over Claude-owned task text without hook or foreground evidence', () => {
+  it('keeps launch identity over Claude-owned task text without hook evidence', () => {
     expect(
       resolveTabAgentFromSignals({
-        foreground: undefined,
         hasObservedAgentSignal: false,
-        shellForegroundAfterAgentSignal: false,
         isRemote: false,
         title: '✳ Gemini CLI',
         hookAgent: null,
@@ -459,9 +370,7 @@ describe('resolveTabAgentFromSignals', () => {
   it('keeps launch identity over Claude-owned punctuation-prefixed task text', () => {
     expect(
       resolveTabAgentFromSignals({
-        foreground: undefined,
         hasObservedAgentSignal: false,
-        shellForegroundAfterAgentSignal: false,
         isRemote: false,
         title: '. Compare Opencode Vs Orca',
         hookAgent: null,
@@ -472,9 +381,7 @@ describe('resolveTabAgentFromSignals', () => {
 
     expect(
       resolveTabAgentFromSignals({
-        foreground: undefined,
         hasObservedAgentSignal: false,
-        shellForegroundAfterAgentSignal: false,
         isRemote: false,
         title: '* Review Codex behavior',
         hookAgent: null,
@@ -487,9 +394,7 @@ describe('resolveTabAgentFromSignals', () => {
   it('treats Claude-prefixed title text as Claude only when it names Claude', () => {
     expect(
       resolveTabAgentFromSignals({
-        foreground: undefined,
         hasObservedAgentSignal: false,
-        shellForegroundAfterAgentSignal: false,
         isRemote: false,
         title: '✳ Claude Code',
         hookAgent: null,
@@ -500,9 +405,7 @@ describe('resolveTabAgentFromSignals', () => {
 
     expect(
       resolveTabAgentFromSignals({
-        foreground: undefined,
         hasObservedAgentSignal: false,
-        shellForegroundAfterAgentSignal: false,
         isRemote: false,
         title: '. Claude Code compare Opencode',
         hookAgent: null,
@@ -512,12 +415,10 @@ describe('resolveTabAgentFromSignals', () => {
     ).toBe('claude')
   })
 
-  it('keeps local launch identity when only a shell title suggests exit', () => {
+  it('keeps launch identity at a shell title until hook evidence proves exit', () => {
     expect(
       resolveTabAgentFromSignals({
-        foreground: undefined,
         hasObservedAgentSignal: true,
-        shellForegroundAfterAgentSignal: false,
         isRemote: false,
         title: 'zsh',
         hookAgent: null,
@@ -527,12 +428,10 @@ describe('resolveTabAgentFromSignals', () => {
     ).toBe('codex')
   })
 
-  it('skips local foreground authority for remote worktrees', () => {
+  it('keeps hook identity for remote panes', () => {
     expect(
       resolveTabAgentFromSignals({
-        foreground: null,
         hasObservedAgentSignal: true,
-        shellForegroundAfterAgentSignal: true,
         isRemote: true,
         title: 'Terminal 1',
         hookAgent: 'codex',
@@ -545,9 +444,7 @@ describe('resolveTabAgentFromSignals', () => {
   it('keeps completed remote hook identity after the terminal title returns to a shell', () => {
     expect(
       resolveTabAgentFromSignals({
-        foreground: undefined,
         hasObservedAgentSignal: true,
-        shellForegroundAfterAgentSignal: false,
         isRemote: true,
         title: 'zsh',
         hookAgent: null,
@@ -558,19 +455,21 @@ describe('resolveTabAgentFromSignals', () => {
     ).toBe('codex')
   })
 
-  it('keeps local launch identity after a completed hook until foreground proves shell exit', () => {
+  it('clears local launch identity once a completed hook and shell title prove exit', () => {
+    // Why: without foreground probing, a completed hook plus the title back at
+    // a shell is the process-gone evidence — the same signals that clear the
+    // sidebar row — so stale launch identity must not keep painting the tab.
     expect(
       resolveTabAgentFromSignals({
-        foreground: undefined,
         hasObservedAgentSignal: true,
-        shellForegroundAfterAgentSignal: false,
         isRemote: false,
         title: 'zsh',
         hookAgent: null,
         hasCompletedHook: true,
+        completedHookAgent: 'claude',
         launchAgent: 'claude'
       })
-    ).toBe('claude')
+    ).toBeNull()
   })
 })
 
@@ -619,103 +518,86 @@ describe('useTabAgent', () => {
     window.api = originalApi
   })
 
-  it('uses unrecognized non-shell foreground as launch lifecycle evidence', async () => {
-    getForegroundProcess.mockResolvedValueOnce('node').mockResolvedValueOnce('zsh')
+  it('never probes the foreground process', async () => {
+    const paneKey = makePaneKey('tab-1', LEAF_ID)
+    useAppStore.setState({
+      terminalLayoutsByTabId: {
+        'tab-1': {
+          root: { type: 'leaf', leafId: LEAF_ID },
+          activeLeafId: LEAF_ID,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [LEAF_ID]: 'pty-1' }
+        }
+      },
+      agentStatusByPaneKey: {
+        [paneKey]: workingAgentStatus(paneKey)
+      }
+    })
+
+    const root = await renderHookProbe(baseTab)
+    await rerenderHookProbe(root, { ...baseTab, title: '✳ Codex' })
+    await rerenderHookProbe(root, { ...baseTab, title: 'zsh' })
+
+    expect(latestHookAgent).toBe('codex')
+    expect(getForegroundProcess).not.toHaveBeenCalled()
+  })
+
+  it('does not clear launch identity while the live hook row persists at a shell title', async () => {
+    const paneKey = makePaneKey('tab-1', LEAF_ID)
+    useAppStore.setState({
+      terminalLayoutsByTabId: {
+        'tab-1': {
+          root: { type: 'leaf', leafId: LEAF_ID },
+          activeLeafId: LEAF_ID,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [LEAF_ID]: 'pty-1' }
+        }
+      },
+      agentStatusByPaneKey: {
+        [paneKey]: workingAgentStatus(paneKey)
+      }
+    })
+
+    await renderHookProbe({ ...baseTab, title: 'zsh' })
+
+    expect(latestHookAgent).toBe('codex')
+    expect(clearTabLaunchAgent).not.toHaveBeenCalled()
+  })
+
+  it('clears launch identity when a previously observed hook row drops at a shell title', async () => {
+    const paneKey = makePaneKey('tab-1', LEAF_ID)
+    useAppStore.setState({
+      terminalLayoutsByTabId: {
+        'tab-1': {
+          root: { type: 'leaf', leafId: LEAF_ID },
+          activeLeafId: LEAF_ID,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [LEAF_ID]: 'pty-1' }
+        }
+      },
+      agentStatusByPaneKey: {
+        [paneKey]: workingAgentStatus(paneKey)
+      }
+    })
 
     const root = await renderHookProbe(baseTab)
 
     expect(latestHookAgent).toBe('codex')
     expect(clearTabLaunchAgent).not.toHaveBeenCalled()
 
+    // Why: crash/kill exits never fire a completed hook — the OSC 133
+    // command-finished machinery drops the live entry and the title returns
+    // to a shell. That already-computed evidence must clear launch intent.
+    await act(async () => {
+      useAppStore.setState({ agentStatusByPaneKey: {} })
+    })
     await rerenderHookProbe(root, { ...baseTab, title: 'zsh' })
 
-    expect(clearTabLaunchAgent).toHaveBeenCalledExactlyOnceWith('tab-1')
-    expect(latestHookAgent).toBeNull()
-    expect(getForegroundProcess).toHaveBeenCalledTimes(2)
-  })
-
-  it('retries helper foreground so daemon-derived agent beats stale launch identity', async () => {
-    vi.useFakeTimers()
-    getForegroundProcess.mockResolvedValueOnce('uv').mockResolvedValueOnce('claude')
-
-    try {
-      await renderHookProbe({ ...baseTab, launchAgent: 'opencode' })
-
-      expect(latestHookAgent).toBe('opencode')
-      expect(getForegroundProcess).toHaveBeenCalledExactlyOnceWith('pty-1')
-
-      await act(async () => {
-        await vi.advanceTimersByTimeAsync(250)
-      })
-      await flushHookEffects()
-
-      expect(getForegroundProcess).toHaveBeenCalledTimes(2)
-      expect(latestHookAgent).toBe('claude')
-    } finally {
-      vi.clearAllTimers()
-      vi.useRealTimers()
-    }
-  })
-
-  it('does not retry unknown helper foreground without launch intent', async () => {
-    vi.useFakeTimers()
-    getForegroundProcess.mockResolvedValue('uv')
-
-    try {
-      await renderHookProbe({ ...baseTab, launchAgent: undefined })
-
-      await act(async () => {
-        await vi.advanceTimersByTimeAsync(10_000)
-      })
-      await flushHookEffects()
-
-      expect(getForegroundProcess).toHaveBeenCalledExactlyOnceWith('pty-1')
-      expect(latestHookAgent).toBeNull()
-    } finally {
-      vi.clearAllTimers()
-      vi.useRealTimers()
-    }
-  })
-
-  it('keeps one post-throttle shell retry to observe daemon-derived launch identity', async () => {
-    vi.useFakeTimers()
-    getForegroundProcess
-      .mockResolvedValueOnce('zsh')
-      .mockResolvedValueOnce('zsh')
-      .mockResolvedValueOnce('zsh')
-      .mockResolvedValueOnce('zsh')
-      .mockResolvedValueOnce('claude')
-
-    try {
-      await renderHookProbe({ ...baseTab, launchAgent: 'opencode' })
-
-      expect(latestHookAgent).toBe('opencode')
-      expect(getForegroundProcess).toHaveBeenCalledExactlyOnceWith('pty-1')
-
-      await act(async () => {
-        await vi.advanceTimersByTimeAsync(250 + 1250 + 3500)
-      })
-      await flushHookEffects()
-
-      expect(getForegroundProcess).toHaveBeenCalledTimes(4)
-      expect(latestHookAgent).toBe('opencode')
-
-      await act(async () => {
-        await vi.advanceTimersByTimeAsync(750)
-      })
-      await flushHookEffects()
-
-      expect(getForegroundProcess).toHaveBeenCalledTimes(5)
-      expect(latestHookAgent).toBe('claude')
-    } finally {
-      vi.clearAllTimers()
-      vi.useRealTimers()
-    }
+    expect(clearTabLaunchAgent).toHaveBeenCalledWith('tab-1')
   })
 
   it('uses completed local hook status as launch lifecycle evidence after remount', async () => {
     const paneKey = makePaneKey('tab-1', LEAF_ID)
-    getForegroundProcess.mockResolvedValueOnce('zsh')
     useAppStore.setState({
       agentStatusByPaneKey: {
         [paneKey]: completedAgentStatus(paneKey)
@@ -724,9 +606,9 @@ describe('useTabAgent', () => {
 
     await renderHookProbe({ ...baseTab, title: 'zsh' })
 
-    expect(clearTabLaunchAgent).toHaveBeenCalledExactlyOnceWith('tab-1')
+    expect(clearTabLaunchAgent).toHaveBeenCalledWith('tab-1')
     expect(latestHookAgent).toBeNull()
-    expect(getForegroundProcess).toHaveBeenCalledExactlyOnceWith('pty-1')
+    expect(getForegroundProcess).not.toHaveBeenCalled()
   })
 
   it('treats paired runtime PTYs as remote-like for completed hook fallback', async () => {
@@ -771,7 +653,6 @@ describe('useTabAgent', () => {
 
   it('does not use completed sibling hook status as focused launch lifecycle evidence', async () => {
     const siblingPaneKey = makePaneKey('tab-1', SECOND_LEAF_ID)
-    getForegroundProcess.mockResolvedValueOnce('zsh')
     useAppStore.setState({
       ptyIdsByTabId: { 'tab-1': ['pty-focus', 'pty-sibling'] },
       terminalLayoutsByTabId: { 'tab-1': twoPaneLayout() },
@@ -789,6 +670,6 @@ describe('useTabAgent', () => {
 
     expect(latestHookAgent).toBe('claude')
     expect(clearTabLaunchAgent).not.toHaveBeenCalled()
-    expect(getForegroundProcess).toHaveBeenCalledExactlyOnceWith('pty-focus')
+    expect(getForegroundProcess).not.toHaveBeenCalled()
   })
 })

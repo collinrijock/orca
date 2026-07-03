@@ -5,10 +5,9 @@ import { agentTypeToIconAgent } from './agent-status'
 
 /**
  * Resolve a terminal tab's agent from hook-reported status. This is the
- * FALLBACK signal for the tab-bar icon — the live foreground process
- * (see useTabAgent) is the primary, dev-friendly source. Hook status is what
- * drives the icon for SSH/remote panes (where foreground polling is too
- * costly) and during the brief window before the first foreground poll lands.
+ * PRIMARY identity signal for the tab-bar icon (see useTabAgent) — the same
+ * already-computed state that drives the sidebar agent rows, kept live by the
+ * OSC 133 command-finished machinery that drops entries when a process exits.
  *
  * Prefers the focused pane's agent so a split tab's icon tracks the pane in
  * view; falls back to any agent pane in the tab. Returns null when no pane
