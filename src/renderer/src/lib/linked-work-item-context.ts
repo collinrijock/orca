@@ -65,7 +65,9 @@ export type LinearLaunchContextArgs = {
   linkedContext?: LinkedWorkItemContext | null
 }
 
-function isLinearWorkItemReference(
+// Why: exported so launch gates share this exact predicate — a launch that
+// generates the Linear source block must also classify it as untrusted.
+export function isLinearWorkItemReference(
   args:
     | {
         provider?: TaskProvider
@@ -135,6 +137,11 @@ function isLinkedContextControlCode(code: number): boolean {
   return (code >= 0x00 && code <= 0x1f) || (code >= 0x7f && code <= 0x9f)
 }
 
+// Why: any \p{Cf} character the fast ranges miss (e.g. U+FFF9 interlinear
+// anchors) is invisible and can spoof the block delimiters past the
+// trimStart() guard. The regex safety net only runs for rare codepoints.
+const UNICODE_FORMAT_CONTROL_PATTERN = /^\p{Cf}$/u
+
 function isLinkedContextFormatControlCode(code: number): boolean {
   return (
     code === 0x00ad ||
@@ -147,7 +154,8 @@ function isLinkedContextFormatControlCode(code: number): boolean {
     (code >= 0xfe00 && code <= 0xfe0f) ||
     code === 0xfeff ||
     (code >= 0xe0100 && code <= 0xe01ef) ||
-    (code >= 0xe0000 && code <= 0xe007f)
+    (code >= 0xe0000 && code <= 0xe007f) ||
+    (code >= 0x0600 && UNICODE_FORMAT_CONTROL_PATTERN.test(String.fromCodePoint(code)))
   )
 }
 

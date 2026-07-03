@@ -27,6 +27,9 @@ export type AgentStartupPlan = {
   launchConfig: SleepingAgentLaunchConfig
   launchToken?: string
   draftPrompt?: string | null
+  /** Why: a user-typed prompt is explicit run intent — the pasted draft is
+   *  submitted after paste; context-only drafts stay unsubmitted for review. */
+  draftPromptSubmit?: boolean
   env?: Record<string, string>
   startupCommandDelivery?: StartupCommandDelivery
 }
@@ -246,6 +249,14 @@ function inlineDraftPlanFitsPlatform(
   // Why: Windows CreateProcess/env blocks have tight length ceilings. Large
   // generated drafts should use the existing post-ready paste fallback.
   return plan.launchCommand.length + envChars <= WIN32_INLINE_DRAFT_LIMIT_CHARS
+}
+
+// Why: delivery gates must know when an agent normally receives drafts on
+// argv/env — pane-owned startup paste skips those agents, so launches that
+// deliberately avoid native prefill must force the paste path instead.
+export function tuiAgentUsesNativeDraftPrefill(agent: TuiAgent): boolean {
+  const config = TUI_AGENT_CONFIG[agent]
+  return Boolean(config?.draftPromptFlag || config?.draftPromptEnvVar)
 }
 
 export function buildAgentDraftLaunchPlan(args: {

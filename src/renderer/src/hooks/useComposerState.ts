@@ -1498,7 +1498,11 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     }
     const template = issueCommandTemplate.trim() || DEFAULT_ISSUE_COMMAND_TEMPLATE
     return renderIssueCommandTemplate(template, {
-      issueNumber: linkedWorkItem.type === 'issue' ? linkedWorkItem.number : null,
+      // Why: Linear issues carry a placeholder number 0; {{issue}} must render
+      // the string identifier (e.g. "ENG-123") instead.
+      issueNumber:
+        linkedWorkItem.linearIdentifier?.trim() ||
+        (linkedWorkItem.type === 'issue' ? linkedWorkItem.number : null),
       artifactUrl: linkedWorkItem.url
     })
   }, [issueCommandTemplate, linkedWorkItem, shouldApplyLinkedOnlyTemplate])
@@ -3399,8 +3403,11 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
           ? renderIssueCommandTemplate(
               issueCommandTemplate.trim() || DEFAULT_ISSUE_COMMAND_TEMPLATE,
               {
+                // Why: Linear issues carry a placeholder number 0; {{issue}}
+                // must render the string identifier (e.g. "ENG-123") instead.
                 issueNumber:
-                  submitLinkedWorkItem.type === 'issue' ? submitLinkedWorkItem.number : null,
+                  submitLinkedWorkItem.linearIdentifier?.trim() ||
+                  (submitLinkedWorkItem.type === 'issue' ? submitLinkedWorkItem.number : null),
                 artifactUrl: submitLinkedWorkItem.url
               }
             )
@@ -3492,12 +3499,19 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         isRemote: selectedRepoIsRemote,
         allowEmptyPromptLaunch: submitUsesDraftDelivery
       })
+      // Why: a user-typed prompt is explicit run intent — deliver as a paste
+      // (never argv, which would carry the untrusted block) and submit it.
+      // Context-only submits stay unsubmitted for review.
+      const submitDraftPromptSubmit = submitUsesDraftDelivery && agentPrompt.trim().length > 0
       if (startupPlan && submitUsesDraftDelivery) {
         startupPlan.draftPrompt = submitStartupPrompt
+        if (submitDraftPromptSubmit) {
+          startupPlan.draftPromptSubmit = true
+        }
       }
       const shouldSeedInitialAgentStatus =
         tuiAgent === 'command-code' &&
-        !submitUsesDraftDelivery &&
+        (!submitUsesDraftDelivery || submitDraftPromptSubmit) &&
         submitStartupPrompt.trim().length > 0
 
       // Why: backend startup is safe only when the launch command is
@@ -3597,6 +3611,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
                 ...(startupPlan.launchToken ? { launchToken: startupPlan.launchToken } : {}),
                 launchAgent: tuiAgent,
                 ...(startupPlan.draftPrompt ? { draftPrompt: startupPlan.draftPrompt } : {}),
+                ...(startupPlan.draftPromptSubmit ? { draftPromptSubmit: true } : {}),
                 ...(startupPlan.startupCommandDelivery
                   ? { startupCommandDelivery: startupPlan.startupCommandDelivery }
                   : {}),

@@ -5,8 +5,17 @@ import type {
   SkillDiscoveryTarget,
   SkillSourceKind
 } from '../../../shared/skills'
-import { ORCHESTRATION_SKILL_NAME } from '@/lib/agent-feature-install-commands'
 import { markOrchestrationSetupComplete } from '@/lib/orchestration-setup-state'
+import {
+  discoverInstalledAgentSkills,
+  getCachedSkillDiscovery,
+  getSkillDiscoveryErrorMessage,
+  getSkillDiscoveryTargetKey,
+  isOrchestrationSkillName,
+  isSuppressedSkillDiscoveryResult,
+  subscribeSkillDiscoveryBroadcasts,
+  waitForNextSkillDiscoveryBroadcast
+} from './installed-agent-skill-discovery'
 import { hasInstalledAgentSkillNamed, normalizeSkillName } from './installed-agent-skill-matching'
 import { useMountedRef } from './useMountedRef'
 
@@ -14,6 +23,10 @@ export {
   hasInstalledAgentSkill,
   hasInstalledAgentSkillNamed
 } from './installed-agent-skill-matching'
+export {
+  _installedAgentSkillDiscoveryInternalsForTests,
+  markAgentSkillInstallCommandCopied
+} from './installed-agent-skill-discovery'
 
 export const GLOBAL_AGENT_SKILL_SOURCE_KINDS = [
   'home'
@@ -25,150 +38,12 @@ type InstalledAgentSkillOptions = {
   sourceKinds?: readonly SkillSourceKind[]
 }
 
-let cachedDiscoveryByTarget = new Map<string, SkillDiscoveryResult>()
-let pendingDiscoveryByTarget = new Map<string, Promise<SkillDiscoveryResult>>()
-let pendingDiscoverySatisfiesForcedRefreshByTarget = new Map<string, boolean>()
-let discoveryCacheListeners = new Set<(key: string, result: SkillDiscoveryResult) => void>()
-let discoveryFailureListeners = new Set<(key: string, error: unknown) => void>()
-let suppressedDiscoveryPromises = new WeakSet<Promise<SkillDiscoveryResult>>()
-let suppressedDiscoveryResults = new WeakSet<SkillDiscoveryResult>()
-
-function isOrchestrationSkillName(skillName: string): boolean {
-  return normalizeSkillName(skillName) === ORCHESTRATION_SKILL_NAME
-}
-
-function getSkillDiscoveryErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : 'Could not scan installed skills.'
-}
-
 export type InstalledAgentSkillState = {
   installed: boolean
   loading: boolean
   error: string | null
   skills: readonly DiscoveredSkill[]
   refresh: () => Promise<boolean>
-}
-
-function normalizeSkillDiscoveryTarget(
-  target: SkillDiscoveryTarget | undefined
-): SkillDiscoveryTarget | undefined {
-  const projectRuntime = target?.projectRuntime
-  if (projectRuntime) {
-    if (projectRuntime.status === 'repair-required') {
-      return { projectRuntime }
-    }
-    if (projectRuntime.runtime.kind === 'wsl') {
-      return {
-        runtime: 'wsl',
-        wslDistro: projectRuntime.runtime.distro,
-        projectRuntime
-      }
-    }
-    return {
-      runtime: 'host',
-      projectRuntime
-    }
-  }
-
-  if (target?.runtime !== 'wsl') {
-    return undefined
-  }
-  return { runtime: 'wsl', wslDistro: target.wslDistro?.trim() || null }
-}
-
-function getSkillDiscoveryTargetKey(target: SkillDiscoveryTarget | undefined): string {
-  if (target?.projectRuntime) {
-    return target.projectRuntime.status === 'resolved'
-      ? target.projectRuntime.runtime.cacheKey
-      : target.projectRuntime.repair.cacheKey
-  }
-  const normalizedTarget = normalizeSkillDiscoveryTarget(target)
-  return normalizedTarget?.runtime === 'wsl' ? `wsl:${normalizedTarget.wslDistro ?? ''}` : 'host'
-}
-
-function startInstalledAgentSkillDiscovery(
-  force: boolean,
-  target: SkillDiscoveryTarget | undefined
-): Promise<SkillDiscoveryResult> {
-  const key = getSkillDiscoveryTargetKey(target)
-  const normalizedTarget = normalizeSkillDiscoveryTarget(target)
-  const discovery = window.api.skills
-    .discover(normalizedTarget)
-    .then((result) => {
-      cachedDiscoveryByTarget.set(key, result)
-      if (suppressedDiscoveryPromises.has(discovery)) {
-        suppressedDiscoveryResults.add(result)
-        return result
-      }
-      for (const listener of discoveryCacheListeners) {
-        listener(key, result)
-      }
-      return result
-    })
-    .catch((error) => {
-      if (!suppressedDiscoveryPromises.has(discovery)) {
-        for (const listener of discoveryFailureListeners) {
-          listener(key, error)
-        }
-      }
-      throw error
-    })
-    .finally(() => {
-      if (pendingDiscoveryByTarget.get(key) === discovery) {
-        pendingDiscoveryByTarget.delete(key)
-        pendingDiscoverySatisfiesForcedRefreshByTarget.delete(key)
-      }
-    })
-  pendingDiscoveryByTarget.set(key, discovery)
-  pendingDiscoverySatisfiesForcedRefreshByTarget.set(key, force)
-  return discovery
-}
-
-async function discoverInstalledAgentSkills(
-  force: boolean,
-  target?: SkillDiscoveryTarget,
-  readAfterPending = false
-): Promise<SkillDiscoveryResult> {
-  const key = getSkillDiscoveryTargetKey(target)
-  const cachedDiscovery = cachedDiscoveryByTarget.get(key)
-  if (!force && cachedDiscovery) {
-    return cachedDiscovery
-  }
-
-  const inFlightDiscovery = pendingDiscoveryByTarget.get(key)
-  if (inFlightDiscovery) {
-    if (!force || (!readAfterPending && pendingDiscoverySatisfiesForcedRefreshByTarget.get(key))) {
-      return inFlightDiscovery
-    }
-    suppressedDiscoveryPromises.add(inFlightDiscovery)
-    try {
-      await inFlightDiscovery
-    } catch {
-      // Why: an explicit re-check should still read current disk state even if
-      // the older background scan failed.
-    }
-    const nextPendingDiscovery = pendingDiscoveryByTarget.get(key)
-    if (nextPendingDiscovery && nextPendingDiscovery !== inFlightDiscovery) {
-      return nextPendingDiscovery
-    }
-  }
-
-  return startInstalledAgentSkillDiscovery(force, target)
-}
-
-export const _installedAgentSkillDiscoveryInternalsForTests = {
-  discoverInstalledAgentSkills,
-  getSkillDiscoveryTargetKey,
-  isOrchestrationSkillName,
-  reset(): void {
-    cachedDiscoveryByTarget = new Map()
-    pendingDiscoveryByTarget = new Map()
-    pendingDiscoverySatisfiesForcedRefreshByTarget = new Map()
-    discoveryCacheListeners = new Set()
-    discoveryFailureListeners = new Set()
-    suppressedDiscoveryPromises = new WeakSet()
-    suppressedDiscoveryResults = new WeakSet()
-  }
 }
 
 export function useInstalledAgentSkill(
@@ -186,7 +61,22 @@ export function useInstalledAgentSkillNames(
   const skillNamesKey = skillNames.map(normalizeSkillName).join('\n')
   const candidateSkillNames = useMemo(() => skillNamesKey.split('\n'), [skillNamesKey])
   const discoveryTargetKey = getSkillDiscoveryTargetKey(discoveryTarget)
-  const cachedDiscovery = cachedDiscoveryByTarget.get(discoveryTargetKey) ?? null
+  // Why: callers rebuild the target object every store churn; keying refresh on
+  // the object identity would turn each churn into a forced disk scan. Only the
+  // target KEY participates in identity — the ref carries the latest object.
+  const discoveryTargetRef = useRef(discoveryTarget)
+  discoveryTargetRef.current = discoveryTarget
+  const sourceKindsKey = sourceKinds ? sourceKinds.join('\n') : null
+  const stableSourceKinds = useMemo(
+    () =>
+      sourceKindsKey === null
+        ? undefined
+        : sourceKindsKey === ''
+          ? ([] as SkillSourceKind[])
+          : (sourceKindsKey.split('\n') as SkillSourceKind[]),
+    [sourceKindsKey]
+  )
+  const cachedDiscovery = getCachedSkillDiscovery(discoveryTargetKey)
   const [result, setResult] = useState<SkillDiscoveryResult | null>(cachedDiscovery)
   const [loading, setLoading] = useState(enabled && !cachedDiscovery)
   const [error, setError] = useState<string | null>(null)
@@ -204,7 +94,7 @@ export function useInstalledAgentSkillNames(
     stateResetInputRef.current.discoveryTargetKey !== discoveryTargetKey ||
     stateResetInputRef.current.enabled !== enabled
   ) {
-    const nextCachedDiscovery = cachedDiscoveryByTarget.get(discoveryTargetKey) ?? null
+    const nextCachedDiscovery = getCachedSkillDiscovery(discoveryTargetKey)
     const nextLoading = enabled && !nextCachedDiscovery
     stateResetInputRef.current = { discoveryTargetKey, enabled }
     resultForRender = nextCachedDiscovery
@@ -241,13 +131,23 @@ export function useInstalledAgentSkillNames(
       let installedAfterRefresh = false
       let suppressedResult = false
       try {
-        const next = await discoverInstalledAgentSkills(force, discoveryTarget, readAfterPending)
-        if (suppressedDiscoveryResults.has(next)) {
-          suppressedResult = true
-          return false
+        let next = await discoverInstalledAgentSkills(
+          force,
+          discoveryTargetRef.current,
+          readAfterPending
+        )
+        if (isSuppressedSkillDiscoveryResult(next)) {
+          // Why: a concurrent explicit re-check replaced this scan; resolving
+          // false here would misreport an installed skill to the caller.
+          const replacement = await waitForNextSkillDiscoveryBroadcast(requestDiscoveryTargetKey)
+          if (!replacement) {
+            suppressedResult = true
+            return false
+          }
+          next = replacement
         }
         installedAfterRefresh = hasInstalledAgentSkillNamed(next.skills, candidateSkillNames, {
-          sourceKinds
+          sourceKinds: stableSourceKinds
         })
         writeIfCurrent(() => {
           setResult(next)
@@ -266,7 +166,7 @@ export function useInstalledAgentSkillNames(
       }
       return installedAfterRefresh
     },
-    [candidateSkillNames, discoveryTarget, discoveryTargetKey, enabled, mountedRef, sourceKinds]
+    [candidateSkillNames, discoveryTargetKey, enabled, mountedRef, stableSourceKinds]
   )
 
   useEffect(() => {
@@ -280,7 +180,7 @@ export function useInstalledAgentSkillNames(
     }
     // Why: explicit refreshes can be initiated by a sibling setup panel while
     // setup-guide progress or settings nav badges are mounted elsewhere.
-    const listener = (key: string, next: SkillDiscoveryResult): void => {
+    const onResult = (key: string, next: SkillDiscoveryResult): void => {
       if (!mountedRef.current || key !== currentDiscoveryTargetKeyRef.current) {
         return
       }
@@ -288,19 +188,14 @@ export function useInstalledAgentSkillNames(
       setError(null)
       setLoading(false)
     }
-    discoveryCacheListeners.add(listener)
-    const failureListener = (key: string, refreshError: unknown): void => {
+    const onFailure = (key: string, refreshError: unknown): void => {
       if (!mountedRef.current || key !== currentDiscoveryTargetKeyRef.current) {
         return
       }
       setError(getSkillDiscoveryErrorMessage(refreshError))
       setLoading(false)
     }
-    discoveryFailureListeners.add(failureListener)
-    return () => {
-      discoveryCacheListeners.delete(listener)
-      discoveryFailureListeners.delete(failureListener)
-    }
+    return subscribeSkillDiscoveryBroadcasts(onResult, onFailure)
   }, [enabled, mountedRef])
 
   const skills = useMemo(
@@ -310,8 +205,12 @@ export function useInstalledAgentSkillNames(
 
   const installed = useMemo(
     () =>
-      enabled ? hasInstalledAgentSkillNamed(skills, candidateSkillNames, { sourceKinds }) : false,
-    [candidateSkillNames, enabled, skills, sourceKinds]
+      enabled
+        ? hasInstalledAgentSkillNamed(skills, candidateSkillNames, {
+            sourceKinds: stableSourceKinds
+          })
+        : false,
+    [candidateSkillNames, enabled, skills, stableSourceKinds]
   )
 
   useEffect(() => {

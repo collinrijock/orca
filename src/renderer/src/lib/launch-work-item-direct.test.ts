@@ -410,6 +410,91 @@ describe('launchWorkItemDirect', () => {
     })
   })
 
+  it('force-pastes generated Linear context for native-prefill agents in default draft delivery', async () => {
+    mocks.ensureDetectedAgents.mockResolvedValue(['claude'])
+    const { launchWorkItemDirect } = await import('./launch-work-item-direct')
+
+    await launchWorkItemDirect({
+      repoId: 'repo-1',
+      launchSource: 'task_page',
+      telemetrySource: 'sidebar',
+      openModalFallback: vi.fn(),
+      agentOverride: 'claude',
+      item: {
+        type: 'issue',
+        number: null,
+        title: 'Ship Linear parity',
+        url: 'https://linear.app/acme/issue/ENG-42/ship-linear-parity',
+        linearIdentifier: 'ENG-42',
+        linkedContext: {
+          provider: 'linear',
+          version: 1,
+          renderedText: [
+            'Linear issue context snapshot',
+            'Identifier: ENG-42',
+            'Description:',
+            'Actual Linear issue body with a distinctive direct launch detail.'
+          ].join('\n')
+        }
+      }
+    })
+
+    // Why: claude normally receives drafts via --prefill; with native prefill
+    // deliberately avoided for untrusted Linear context, only the forced
+    // sidecar paste can still deliver it.
+    expect(buildAgentDraftLaunchPlan).not.toHaveBeenCalled()
+    const startupCommand = mocks.activateAndRevealWorktree.mock.calls[0]?.[1]?.startup?.command
+    expect(startupCommand).not.toContain('--prefill')
+    expect(pasteDraftWhenAgentReady).toHaveBeenCalledWith({
+      tabId: 'tab-1',
+      content: expect.stringContaining(
+        'Actual Linear issue body with a distinctive direct launch detail.'
+      ),
+      agent: 'claude',
+      submit: false,
+      forcePaste: true,
+      onTimeout: expect.any(Function)
+    })
+  })
+
+  it('treats provider-only Linear references as generated context (no argv, no auto-submit)', async () => {
+    mocks.ensureDetectedAgents.mockResolvedValue(['claude'])
+    const { launchWorkItemDirect } = await import('./launch-work-item-direct')
+
+    await launchWorkItemDirect({
+      repoId: 'repo-1',
+      launchSource: 'task_page',
+      telemetrySource: 'sidebar',
+      openModalFallback: vi.fn(),
+      promptDelivery: 'submit-after-ready',
+      agentOverride: 'claude',
+      item: {
+        provider: 'linear',
+        type: 'issue',
+        number: null,
+        title: 'Ship Linear parity',
+        url: 'https://linear.app/acme/issue/eng-42-ship-linear-parity',
+        linkedContext: {
+          provider: 'linear',
+          version: 1,
+          renderedText: 'Actual Linear issue body with a distinctive direct launch detail.'
+        }
+      }
+    })
+
+    expect(buildAgentDraftLaunchPlan).not.toHaveBeenCalled()
+    expect(pasteDraftWhenAgentReady).toHaveBeenCalledWith({
+      tabId: 'tab-1',
+      content: expect.stringContaining(
+        'Actual Linear issue body with a distinctive direct launch detail.'
+      ),
+      agent: 'claude',
+      submit: false,
+      forcePaste: true,
+      onTimeout: expect.any(Function)
+    })
+  })
+
   it('preserves explicit Linear paste content submit-after-ready behavior', async () => {
     mocks.ensureDetectedAgents.mockResolvedValue(['claude'])
     const { launchWorkItemDirect } = await import('./launch-work-item-direct')

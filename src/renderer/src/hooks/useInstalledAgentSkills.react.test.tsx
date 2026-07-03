@@ -13,6 +13,7 @@ import {
   GLOBAL_AGENT_SKILL_SOURCE_KINDS,
   type InstalledAgentSkillState,
   _installedAgentSkillDiscoveryInternalsForTests,
+  markAgentSkillInstallCommandCopied,
   useInstalledAgentSkillNames
 } from './useInstalledAgentSkills'
 
@@ -302,6 +303,108 @@ describe('useInstalledAgentSkill', () => {
     expect(latestPrimaryState?.error).toBe('scan failed')
     expect(latestSiblingState?.error).toBe('scan failed')
     expect(discover).toHaveBeenCalledTimes(2)
+  })
+
+  it('rescans on the next window focus after an install command copy', async () => {
+    const discover = vi
+      .fn<(target?: SkillDiscoveryTarget) => Promise<SkillDiscoveryResult>>()
+      .mockResolvedValueOnce(discoveryResult([]))
+      .mockResolvedValueOnce(discoveryResult([skill({ name: 'linear-tickets' })]))
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: { skills: { discover } }
+    })
+
+    await renderProbe()
+    await act(async () => {
+      await Promise.resolve()
+    })
+    expect(discover).toHaveBeenCalledTimes(1)
+    expect(latestState?.installed).toBe(false)
+
+    markAgentSkillInstallCommandCopied()
+    await act(async () => {
+      window.dispatchEvent(new Event('focus'))
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    expect(discover).toHaveBeenCalledTimes(2)
+    expect(latestState?.installed).toBe(true)
+
+    // Why: only a copy arms the rescan — plain focus churn must stay scan-free.
+    await act(async () => {
+      window.dispatchEvent(new Event('focus'))
+      await Promise.resolve()
+    })
+    expect(discover).toHaveBeenCalledTimes(2)
+  })
+
+  it('does not rescan when a re-render passes a new same-key discovery target object', async () => {
+    const discover = vi
+      .fn<(target?: SkillDiscoveryTarget) => Promise<SkillDiscoveryResult>>()
+      .mockResolvedValue(discoveryResult([skill({ name: 'linear-tickets' })]))
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: { skills: { discover } }
+    })
+
+    await renderProbe({ runtime: 'wsl', wslDistro: 'Ubuntu' })
+    await act(async () => {
+      await Promise.resolve()
+    })
+    // Why: callers rebuild the target object on every store churn; only a KEY
+    // change may trigger another forced disk scan.
+    await renderProbe({ runtime: 'wsl', wslDistro: 'Ubuntu' })
+    await act(async () => {
+      await Promise.resolve()
+    })
+
+    expect(discover).toHaveBeenCalledTimes(1)
+    expect(latestState?.installed).toBe(true)
+  })
+
+  it('resolves a suppressed refresh from the replacement scan result', async () => {
+    const mountScan = deferred<SkillDiscoveryResult>()
+    const firstScan = deferred<SkillDiscoveryResult>()
+    const secondScan = deferred<SkillDiscoveryResult>()
+    const discover = vi
+      .fn<(target?: SkillDiscoveryTarget) => Promise<SkillDiscoveryResult>>()
+      .mockReturnValueOnce(mountScan.promise)
+      .mockReturnValueOnce(firstScan.promise)
+      .mockReturnValueOnce(secondScan.promise)
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: { skills: { discover } }
+    })
+
+    await renderProbe()
+    mountScan.resolve(discoveryResult([]))
+    await act(async () => {
+      await mountScan.promise
+    })
+
+    // Why: the first refresh starts scan #2; the second suppresses it and
+    // starts scan #3. Both callers must report scan #3's truth — the first
+    // previously resolved false and misreported an installed skill.
+    const firstRefresh = latestState?.refresh() ?? Promise.resolve(false)
+    const secondRefresh = latestState?.refresh() ?? Promise.resolve(false)
+
+    firstScan.resolve(discoveryResult([]))
+    await act(async () => {
+      await firstScan.promise
+      await Promise.resolve()
+    })
+
+    secondScan.resolve(discoveryResult([skill({ name: 'linear-tickets' })]))
+    await act(async () => {
+      await Promise.all([firstRefresh, secondRefresh])
+    })
+
+    await expect(firstRefresh).resolves.toBe(true)
+    await expect(secondRefresh).resolves.toBe(true)
+    expect(latestState?.installed).toBe(true)
+    expect(discover).toHaveBeenCalledTimes(3)
   })
 
   it('detects a legacy Linear install through WSL skill discovery', async () => {

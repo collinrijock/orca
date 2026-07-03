@@ -107,7 +107,9 @@ function getSetupConfigKind(
  */
 export function renderIssueCommandTemplate(
   template: string,
-  vars: { issueNumber: number | null; artifactUrl: string | null }
+  // Why: Linear issues have string identifiers (e.g. "ENG-123"), not numbers;
+  // their placeholder number 0 must never render into a repo template.
+  vars: { issueNumber: number | string | null; artifactUrl: string | null }
 ): string {
   const { issueNumber, artifactUrl } = vars
   let rendered = template
@@ -319,6 +321,9 @@ async function deliverAgentStartupToTerminal(
       ptyId,
       content: draftPrompt,
       agent: startup.agent,
+      // Why: a user-typed prompt carries explicit run intent — submit after
+      // paste; context-only drafts stay unsubmitted for review.
+      submit: startup.draftPromptSubmit === true,
       // Why: startup.draftPrompt is only attached after native draft launch
       // planning is unavailable, so this paste is the first delivery attempt.
       forcePaste: true

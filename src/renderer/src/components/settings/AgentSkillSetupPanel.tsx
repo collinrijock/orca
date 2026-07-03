@@ -5,6 +5,7 @@ import { IntegrationStatusPill } from '../integration-status-pill'
 import { OnboardingInlineCommandTerminal } from '../onboarding/OnboardingInlineCommandTerminal'
 import { Button } from '../ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
+import { markAgentSkillInstallCommandCopied } from '@/hooks/useInstalledAgentSkills'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { isOrcaCliAvailableOnPath } from '@/lib/agent-skill-cli-prerequisite'
 import { cn } from '@/lib/utils'
@@ -143,6 +144,9 @@ export function AgentSkillSetupPanel({
   const copyActiveCommand = async (): Promise<void> => {
     try {
       await window.api.ui.writeClipboardText(openTerminalCommand)
+      // Why: the copied command may run in a terminal Orca cannot observe; arm
+      // a one-shot rescan on the next window focus so the panel catches up.
+      markAgentSkillInstallCommandCopied()
       toast.success(
         translate('auto.components.settings.AgentSkillSetupPanel.copiedCommand', 'Copied command.')
       )

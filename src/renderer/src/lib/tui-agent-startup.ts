@@ -3,6 +3,7 @@ export {
   buildAgentDraftLaunchPlan,
   buildAgentStartupPlan,
   planAgentCliArgsSuffix,
+  tuiAgentUsesNativeDraftPrefill,
   isShellProcess,
   quoteStartupArg,
   resolveStartupShell

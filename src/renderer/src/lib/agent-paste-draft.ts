@@ -204,7 +204,9 @@ export async function sendBracketedPasteToRunningAgent(args: {
   return await sendBracketedPasteToAgent({ ptyId: args.ptyId, content: args.content, submit: true })
 }
 
-async function sendBracketedPasteToAgent(args: {
+// Why: exported so the pane-owned startup draft path shares the exact
+// paste→delayed-Enter submit semantics instead of duplicating them.
+export async function sendBracketedPasteToAgent(args: {
   settings?: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null
   ptyId: string
   content: string

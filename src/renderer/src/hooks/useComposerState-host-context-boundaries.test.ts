@@ -526,9 +526,7 @@ describe('useComposerState host-context boundaries', () => {
       'const promptLinkedWorkItem = agent === null ? null : submitLinkedWorkItem'
     )
     expect(quickSubmit).toContain('resolveQuickCreateLinkedWorkItemPrompt(promptLinkedWorkItem')
-    expect(quickSubmit).toContain(
-      'const quickUsesLinearSourceDraft = promptLinkedWorkItem'
-    )
+    expect(quickSubmit).toContain('const quickUsesLinearSourceDraft = promptLinkedWorkItem')
     expect(quickSubmit).toContain("getLinkedWorkItemProvider(promptLinkedWorkItem) === 'linear'")
     expect(quickSubmit).toContain(
       'agent === null || !quickDraftPrompt || quickUsesLinearSourceDraft'
@@ -566,7 +564,13 @@ describe('useComposerState host-context boundaries', () => {
     expect(fullSubmit).not.toContain('draft: submitStartupPrompt')
     expect(fullSubmit).toContain('allowEmptyPromptLaunch: submitUsesDraftDelivery')
     expect(fullSubmit).toContain('startupPlan.draftPrompt = submitStartupPrompt')
-    expect(fullSubmit).toContain('!submitUsesDraftDelivery &&')
+    // Why: a typed prompt is explicit run intent — the pasted draft submits;
+    // context-only submits stay unsubmitted for review.
+    expect(fullSubmit).toContain(
+      'const submitDraftPromptSubmit = submitUsesDraftDelivery && agentPrompt.trim().length > 0'
+    )
+    expect(fullSubmit).toContain('startupPlan.draftPromptSubmit = true')
+    expect(fullSubmit).toContain('(!submitUsesDraftDelivery || submitDraftPromptSubmit) &&')
     expect(fullSubmit).toContain(
       "submitLinkedWorkItemProvider !== 'linear' || issueCommandTemplate.trim().length > 0"
     )

@@ -13,6 +13,7 @@ import {
 import { BROWSER_USE_ENABLED_STORAGE_KEY } from '@/lib/browser-use-setup-state'
 import { e2eConfig } from '@/lib/e2e-config'
 import { showOrcaCliRegistrationPromptToast } from '@/lib/agent-skill-cli-prerequisite'
+import { markAgentSkillInstallCommandCopied } from '@/hooks/useInstalledAgentSkills'
 import {
   ORCHESTRATION_ENABLED_STORAGE_KEY,
   ORCHESTRATION_SETUP_DISMISSED_STORAGE_KEY,
@@ -287,6 +288,9 @@ async function copySkillCommands(
   }
   try {
     await deps.writeClipboardText(clipboardText)
+    // Why: the copied command may run in a terminal Orca cannot observe; arm
+    // a one-shot rescan on the next window focus so progress state catches up.
+    markAgentSkillInstallCommandCopied()
     return true
   } catch (error) {
     warnings.push({ featureId: 'skills', message: formatFeatureSetupError(error) })
