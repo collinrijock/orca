@@ -3,6 +3,7 @@ import { useAppStore } from '@/store'
 import { isShellProcess } from '../../../shared/agent-detection'
 import { worktreeUsesRemoteConnection } from '@/store/slices/terminals'
 import { parseRemoteRuntimePtyId } from '@/runtime/runtime-terminal-stream'
+import { isTerminalLeafId } from '../../../shared/stable-pane-id'
 import {
   resolveFocusedCompletedTabAgent,
   resolveFocusedTabAgent,
@@ -14,14 +15,48 @@ import type { TerminalTab, TuiAgent } from '../../../shared/types'
 
 export { resolveExplicitTerminalTitleAgentType as resolveTabAgentFromTitle } from '../../../shared/terminal-title-agent-type'
 
+// A shell name, or the tab's neutral default title — where Orca's
+// inferred-interrupt reset parks it. Blank titles are no evidence either way.
+function titleShowsNoAgent(title: string, defaultTitle?: string): boolean {
+  const trimmed = title.trim()
+  return trimmed.length > 0 && (isShellProcess(trimmed) || trimmed === defaultTitle?.trim())
+}
+
+/**
+ * Probe-free evidence that a launched agent exited: the title shows no agent,
+ * no live hook row remains in the tab, and either the hook completed or
+ * previously observed activity vanished. The vanished-activity disjunct is
+ * local-only: remote rows also drop on transport blips that say nothing about
+ * the process.
+ */
+export function resolveLaunchedAgentExitEvidence(args: {
+  title: string
+  defaultTitle?: string
+  isRemote: boolean
+  hasObservedAgentSignal: boolean
+  hookAgent: TuiAgent | null
+  siblingHookAgent?: TuiAgent | null
+  hasCompletedHook: boolean
+}): boolean {
+  if (
+    !titleShowsNoAgent(args.title, args.defaultTitle) ||
+    args.hookAgent ||
+    args.siblingHookAgent
+  ) {
+    return false
+  }
+  return args.hasCompletedHook || (!args.isRemote && args.hasObservedAgentSignal)
+}
+
 export function resolveTabAgentFromSignals(args: {
   hasObservedAgentSignal: boolean
   isRemote: boolean
   title: string
+  defaultTitle?: string
   hookAgent: TuiAgent | null
   siblingHookAgent?: TuiAgent | null
-  hasCompletedHook: boolean
-  completedHookAgent?: TuiAgent | null
+  focusedCompletedHookAgent?: TuiAgent | null
+  siblingCompletedHookAgent?: TuiAgent | null
   launchAgent?: TuiAgent
 }): TuiAgent | null {
   const launchAgent = args.launchAgent ?? null
@@ -40,17 +75,26 @@ export function resolveTabAgentFromSignals(args: {
     : launchAgent
       ? null
       : explicitTitleAgent
-  const titleLooksShell = isShellProcess(args.title)
+  const hasCompletedHook = (args.focusedCompletedHookAgent ?? null) !== null
+  const noAgentTitle = titleShowsNoAgent(args.title, args.defaultTitle)
   // Why: remote pane titles can lag their runtime, so keep the last completed
   // hook identity instead of flashing unknown when the title reads as a shell.
   const completedHookAgent =
-    !args.isRemote && titleLooksShell && args.hasCompletedHook ? null : args.completedHookAgent
+    !args.isRemote && noAgentTitle && hasCompletedHook
+      ? null
+      : (args.focusedCompletedHookAgent ?? args.siblingCompletedHookAgent ?? null)
   const focusedHookAgent = args.hookAgent ?? null
   const fallbackHookAgent = args.siblingHookAgent ?? completedHookAgent ?? null
-  // Why: a completed hook with the title back at a shell is this pipeline's
-  // process-gone evidence — the same signals that clear the sidebar row.
-  const completedHookAtShellTitle = titleLooksShell && args.hasCompletedHook
-  const activeLaunchAgent = completedHookAtShellTitle ? null : launchAgent
+  const launchedAgentExited = resolveLaunchedAgentExitEvidence({
+    title: args.title,
+    defaultTitle: args.defaultTitle,
+    isRemote: args.isRemote,
+    hasObservedAgentSignal: args.hasObservedAgentSignal,
+    hookAgent: focusedHookAgent,
+    siblingHookAgent: args.siblingHookAgent,
+    hasCompletedHook
+  })
+  const activeLaunchAgent = launchedAgentExited ? null : launchAgent
   // Why: titleAgent ranks ahead of launch/fallback hooks because, once the
   // pane has shown activity, a live explicit title is the freshest identity
   // signal — it beats a launchAgent gone stale through pane reuse. Before any
@@ -97,7 +141,6 @@ export function useTabAgent(tab: TerminalTab): TuiAgent | null {
       tab.id
     )
   )
-  const completedHookAgent = focusedCompletedHookAgent ?? siblingCompletedHookAgent
   const hasCompletedHook = focusedCompletedHookAgent !== null
   const clearTabLaunchAgent = useAppStore((s) => s.clearTabLaunchAgent)
 
@@ -113,6 +156,16 @@ export function useTabAgent(tab: TerminalTab): TuiAgent | null {
     const ptyIds = s.ptyIdsByTabId[tab.id] ?? []
     return ptyIds.length === 1 ? ptyIds[0]! : null
   })
+  // Why: with no layout to prove which pane a completed row belongs to, only a
+  // single-pane tab may treat it as focused-pane exit evidence — a sibling's
+  // done row must not clear another pane's launch identity.
+  const completedHookScopeKnown = useAppStore((s) => {
+    const layout = s.terminalLayoutsByTabId[tab.id]
+    if (layout?.activeLeafId && isTerminalLeafId(layout.activeLeafId)) {
+      return true
+    }
+    return (s.ptyIdsByTabId[tab.id] ?? []).length <= 1
+  })
   const hasRemoteRuntimePty = useAppStore((s) => {
     const layout = s.terminalLayoutsByTabId[tab.id]
     const ptyIds = new Set(s.ptyIdsByTabId[tab.id] ?? [])
@@ -126,41 +179,67 @@ export function useTabAgent(tab: TerminalTab): TuiAgent | null {
 
   const [hasObservedAgentSignal, setHasObservedAgentSignal] = useState(false)
   const hasObservedAgentSignalRef = useRef(false)
+  const signalGenerationRef = useRef<string | null>(null)
+  const completedHookEvidence = hasCompletedHook && completedHookScopeKnown
 
   useEffect(() => {
-    setHasObservedAgentSignal(false)
-    hasObservedAgentSignalRef.current = false
-  }, [ptyId, isRemoteLike])
-
-  useEffect(() => {
-    const fallbackAgentSignal =
-      !tab.launchAgent && (resolveExplicitTerminalTitleAgentType(tab.title) || siblingHookAgent)
-    if (focusedHookAgent || hasCompletedHook || fallbackAgentSignal) {
+    // Why: reset and re-seed in one effect so a pane respawn both invalidates
+    // the previous generation's signal and immediately re-observes a still-live
+    // hook row instead of leaving the signal stuck false.
+    const generation = `${ptyId ?? ''}|${String(isRemoteLike)}`
+    if (signalGenerationRef.current !== generation) {
+      signalGenerationRef.current = generation
+      hasObservedAgentSignalRef.current = false
+      setHasObservedAgentSignal(false)
+    }
+    const explicitTitleAgent = resolveExplicitTerminalTitleAgentType(tab.title)
+    // Why: for launched panes, only a title naming the launched agent counts as
+    // its activity — other-agent or sibling evidence must not arm exit clearing
+    // for an agent that never produced evidence of its own.
+    const fallbackAgentSignal = tab.launchAgent
+      ? explicitTitleAgent === tab.launchAgent
+      : Boolean(explicitTitleAgent || siblingHookAgent)
+    if (focusedHookAgent || completedHookEvidence || fallbackAgentSignal) {
       hasObservedAgentSignalRef.current = true
       setHasObservedAgentSignal(true)
     }
-  }, [focusedHookAgent, hasCompletedHook, siblingHookAgent, tab.launchAgent, tab.title])
+  }, [
+    ptyId,
+    isRemoteLike,
+    focusedHookAgent,
+    completedHookEvidence,
+    siblingHookAgent,
+    tab.launchAgent,
+    tab.title
+  ])
 
   useEffect(() => {
     if (!tab.launchAgent) {
       return
     }
-    const titleLooksShell = isShellProcess(tab.title)
-    // Why: launched-agent exit evidence without probing — either the hook
-    // completed, or the pane's live hook row was dropped by command-finished
-    // after the pane had shown agent activity, while the title reads as a
-    // shell again. Crash/kill paths land in the second disjunct because the
-    // OSC 133 drop removes the live entry without a completed hook.
-    const launchedAgentExited =
-      titleLooksShell && (hasCompletedHook || (hasObservedAgentSignal && !focusedHookAgent))
+    // Why: AND the state with the ref — the ref is generation-safe within this
+    // commit (the observe effect above already reset it), while the state can
+    // lag one render behind a pane focus/respawn switch.
+    const launchedAgentExited = resolveLaunchedAgentExitEvidence({
+      title: tab.title,
+      defaultTitle: tab.defaultTitle,
+      isRemote: isRemoteLike,
+      hasObservedAgentSignal: hasObservedAgentSignal && hasObservedAgentSignalRef.current,
+      hookAgent: focusedHookAgent,
+      siblingHookAgent,
+      hasCompletedHook: completedHookEvidence
+    })
     if (launchedAgentExited) {
       clearTabLaunchAgent(tab.id)
     }
   }, [
     clearTabLaunchAgent,
+    completedHookEvidence,
     focusedHookAgent,
-    hasCompletedHook,
+    siblingHookAgent,
     hasObservedAgentSignal,
+    isRemoteLike,
+    tab.defaultTitle,
     tab.id,
     tab.launchAgent,
     tab.title
@@ -170,10 +249,11 @@ export function useTabAgent(tab: TerminalTab): TuiAgent | null {
     hasObservedAgentSignal,
     isRemote: isRemoteLike,
     title: tab.title,
+    defaultTitle: tab.defaultTitle,
     hookAgent: focusedHookAgent,
     siblingHookAgent,
-    hasCompletedHook,
-    completedHookAgent,
+    focusedCompletedHookAgent,
+    siblingCompletedHookAgent,
     launchAgent: tab.launchAgent
   })
 }

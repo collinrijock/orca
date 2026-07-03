@@ -86,7 +86,6 @@ describe('resolveTabAgentFromSignals', () => {
         isRemote: false,
         title: 'Terminal 1',
         hookAgent: null,
-        hasCompletedHook: false,
         launchAgent: 'claude'
       })
     ).toBe('claude')
@@ -99,7 +98,6 @@ describe('resolveTabAgentFromSignals', () => {
         isRemote: false,
         title: 'zsh',
         hookAgent: 'claude',
-        hasCompletedHook: false,
         launchAgent: 'claude'
       })
     ).toBe('claude')
@@ -112,7 +110,6 @@ describe('resolveTabAgentFromSignals', () => {
         isRemote: false,
         title: '⠋ OpenClaude',
         hookAgent: null,
-        hasCompletedHook: false,
         launchAgent: undefined
       })
     ).toBe('openclaude')
@@ -125,7 +122,6 @@ describe('resolveTabAgentFromSignals', () => {
         isRemote: false,
         title: '✦ Gemini CLI',
         hookAgent: null,
-        hasCompletedHook: false,
         launchAgent: undefined
       })
     ).toBe('gemini')
@@ -136,7 +132,6 @@ describe('resolveTabAgentFromSignals', () => {
         isRemote: false,
         title: 'MiMo Code',
         hookAgent: null,
-        hasCompletedHook: false,
         launchAgent: undefined
       })
     ).toBe('mimo-code')
@@ -147,7 +142,6 @@ describe('resolveTabAgentFromSignals', () => {
         isRemote: false,
         title: 'π - my-project',
         hookAgent: null,
-        hasCompletedHook: false,
         launchAgent: undefined
       })
     ).toBe('pi')
@@ -160,8 +154,7 @@ describe('resolveTabAgentFromSignals', () => {
         isRemote: false,
         title: '✳ Say hi',
         hookAgent: null,
-        hasCompletedHook: true,
-        completedHookAgent: 'openclaude',
+        focusedCompletedHookAgent: 'openclaude',
         launchAgent: 'openclaude'
       })
     ).toBe('openclaude')
@@ -174,7 +167,6 @@ describe('resolveTabAgentFromSignals', () => {
         isRemote: false,
         title: '✳ Say hi',
         hookAgent: null,
-        hasCompletedHook: false,
         launchAgent: 'openclaude'
       })
     ).toBe('openclaude')
@@ -187,7 +179,6 @@ describe('resolveTabAgentFromSignals', () => {
         isRemote: false,
         title: '⠸ codex-quarter-flash-202606191419',
         hookAgent: null,
-        hasCompletedHook: false,
         launchAgent: 'codex'
       })
     ).toBe('codex')
@@ -200,7 +191,6 @@ describe('resolveTabAgentFromSignals', () => {
         isRemote: false,
         title: '⠸ investigating startup',
         hookAgent: null,
-        hasCompletedHook: false,
         launchAgent: undefined
       })
     ).toBeNull()
@@ -214,7 +204,6 @@ describe('resolveTabAgentFromSignals', () => {
           isRemote: false,
           title,
           hookAgent: null,
-          hasCompletedHook: false,
           launchAgent: undefined
         })
       ).toBeNull()
@@ -228,7 +217,6 @@ describe('resolveTabAgentFromSignals', () => {
         isRemote: false,
         title: '⠸ Claude Code',
         hookAgent: null,
-        hasCompletedHook: false,
         launchAgent: 'codex'
       })
     ).toBe('codex')
@@ -241,7 +229,6 @@ describe('resolveTabAgentFromSignals', () => {
         isRemote: false,
         title: '✳ improve-pr-actions-customization',
         hookAgent: 'codex',
-        hasCompletedHook: false,
         launchAgent: 'codex'
       })
     ).toBe('codex')
@@ -254,7 +241,6 @@ describe('resolveTabAgentFromSignals', () => {
         isRemote: false,
         title: '✳ Claude Code',
         hookAgent: null,
-        hasCompletedHook: false,
         launchAgent: 'openclaude'
       })
     ).toBe('openclaude')
@@ -267,7 +253,6 @@ describe('resolveTabAgentFromSignals', () => {
         isRemote: false,
         title: '✳ Claude Code',
         hookAgent: null,
-        hasCompletedHook: false,
         launchAgent: 'codex'
       })
     ).toBe('claude')
@@ -280,7 +265,6 @@ describe('resolveTabAgentFromSignals', () => {
         isRemote: false,
         title: '✳ Claude Code',
         hookAgent: null,
-        hasCompletedHook: false,
         launchAgent: 'codex'
       })
     ).toBe('codex')
@@ -293,7 +277,6 @@ describe('resolveTabAgentFromSignals', () => {
         isRemote: false,
         title: '✳ Gemini CLI',
         hookAgent: 'claude',
-        hasCompletedHook: false,
         launchAgent: 'claude'
       })
     ).toBe('claude')
@@ -306,7 +289,6 @@ describe('resolveTabAgentFromSignals', () => {
         isRemote: false,
         title: '✦ Gemini CLI',
         hookAgent: 'claude',
-        hasCompletedHook: false,
         launchAgent: 'gemini'
       })
     ).toBe('claude')
@@ -320,7 +302,6 @@ describe('resolveTabAgentFromSignals', () => {
         title: 'Terminal 1',
         hookAgent: 'claude',
         siblingHookAgent: 'gemini',
-        hasCompletedHook: false,
         launchAgent: 'codex'
       })
     ).toBe('claude')
@@ -334,7 +315,6 @@ describe('resolveTabAgentFromSignals', () => {
         title: 'Terminal 1',
         hookAgent: null,
         siblingHookAgent: 'claude',
-        hasCompletedHook: false,
         launchAgent: 'codex'
       })
     ).toBe('codex')
@@ -348,7 +328,6 @@ describe('resolveTabAgentFromSignals', () => {
         title: 'Terminal 1',
         hookAgent: null,
         siblingHookAgent: 'claude',
-        hasCompletedHook: false,
         launchAgent: undefined
       })
     ).toBe('claude')
@@ -361,7 +340,6 @@ describe('resolveTabAgentFromSignals', () => {
         isRemote: false,
         title: '✳ Gemini CLI',
         hookAgent: null,
-        hasCompletedHook: false,
         launchAgent: 'gemini'
       })
     ).toBe('gemini')
@@ -374,7 +352,6 @@ describe('resolveTabAgentFromSignals', () => {
         isRemote: false,
         title: '. Compare Opencode Vs Orca',
         hookAgent: null,
-        hasCompletedHook: false,
         launchAgent: 'opencode'
       })
     ).toBe('opencode')
@@ -385,7 +362,6 @@ describe('resolveTabAgentFromSignals', () => {
         isRemote: false,
         title: '* Review Codex behavior',
         hookAgent: null,
-        hasCompletedHook: false,
         launchAgent: 'codex'
       })
     ).toBe('codex')
@@ -398,7 +374,6 @@ describe('resolveTabAgentFromSignals', () => {
         isRemote: false,
         title: '✳ Claude Code',
         hookAgent: null,
-        hasCompletedHook: false,
         launchAgent: undefined
       })
     ).toBe('claude')
@@ -409,23 +384,64 @@ describe('resolveTabAgentFromSignals', () => {
         isRemote: false,
         title: '. Claude Code compare Opencode',
         hookAgent: null,
-        hasCompletedHook: false,
         launchAgent: undefined
       })
     ).toBe('claude')
   })
 
-  it('keeps launch identity at a shell title until hook evidence proves exit', () => {
+  it('clears local launch identity once observed activity vanishes at a shell title', () => {
+    // Why: matches the clear effect — the dropped hook row plus a shell title
+    // is the crash/kill exit evidence, so the resolver must not lag it.
     expect(
       resolveTabAgentFromSignals({
         hasObservedAgentSignal: true,
         isRemote: false,
         title: 'zsh',
         hookAgent: null,
-        hasCompletedHook: false,
         launchAgent: 'codex'
       })
-    ).toBe('codex')
+    ).toBeNull()
+  })
+
+  it('keeps launch identity at a shell title while a sibling hook row is live', () => {
+    expect(
+      resolveTabAgentFromSignals({
+        hasObservedAgentSignal: true,
+        isRemote: false,
+        title: 'zsh',
+        hookAgent: null,
+        siblingHookAgent: 'gemini',
+        launchAgent: 'claude'
+      })
+    ).toBe('claude')
+  })
+
+  it('keeps remote launch identity at a shell title without completed-hook evidence', () => {
+    // Why: remote hook rows also drop on transport blips, so vanished activity
+    // alone must not count as exit evidence for remote panes.
+    expect(
+      resolveTabAgentFromSignals({
+        hasObservedAgentSignal: true,
+        isRemote: true,
+        title: 'zsh',
+        hookAgent: null,
+        launchAgent: 'claude'
+      })
+    ).toBe('claude')
+  })
+
+  it('treats the neutral default title as exit evidence alongside shell titles', () => {
+    expect(
+      resolveTabAgentFromSignals({
+        hasObservedAgentSignal: true,
+        isRemote: false,
+        title: 'Terminal 2',
+        defaultTitle: 'Terminal 2',
+        hookAgent: null,
+        focusedCompletedHookAgent: 'claude',
+        launchAgent: 'claude'
+      })
+    ).toBeNull()
   })
 
   it('keeps hook identity for remote panes', () => {
@@ -435,7 +451,6 @@ describe('resolveTabAgentFromSignals', () => {
         isRemote: true,
         title: 'Terminal 1',
         hookAgent: 'codex',
-        hasCompletedHook: false,
         launchAgent: 'claude'
       })
     ).toBe('codex')
@@ -448,8 +463,7 @@ describe('resolveTabAgentFromSignals', () => {
         isRemote: true,
         title: 'zsh',
         hookAgent: null,
-        hasCompletedHook: true,
-        completedHookAgent: 'codex',
+        focusedCompletedHookAgent: 'codex',
         launchAgent: 'codex'
       })
     ).toBe('codex')
@@ -465,8 +479,7 @@ describe('resolveTabAgentFromSignals', () => {
         isRemote: false,
         title: 'zsh',
         hookAgent: null,
-        hasCompletedHook: true,
-        completedHookAgent: 'claude',
+        focusedCompletedHookAgent: 'claude',
         launchAgent: 'claude'
       })
     ).toBeNull()
@@ -585,9 +598,7 @@ describe('useTabAgent', () => {
     expect(latestHookAgent).toBe('codex')
     expect(clearTabLaunchAgent).not.toHaveBeenCalled()
 
-    // Why: crash/kill exits never fire a completed hook — the OSC 133
-    // command-finished machinery drops the live entry and the title returns
-    // to a shell. That already-computed evidence must clear launch intent.
+    // Why: crash/kill exits drop the live row without a completed hook.
     await act(async () => {
       useAppStore.setState({ agentStatusByPaneKey: {} })
     })
@@ -671,5 +682,143 @@ describe('useTabAgent', () => {
     expect(latestHookAgent).toBe('claude')
     expect(clearTabLaunchAgent).not.toHaveBeenCalled()
     expect(getForegroundProcess).not.toHaveBeenCalled()
+  })
+
+  it('does not clear remote launch identity when the hook row drops at a shell title', async () => {
+    const remotePtyId = 'remote:web-env-1@@terminal-1'
+    const paneKey = makePaneKey('tab-1', LEAF_ID)
+    useAppStore.setState({
+      ptyIdsByTabId: { 'tab-1': [remotePtyId] },
+      terminalLayoutsByTabId: {
+        'tab-1': {
+          root: { type: 'leaf', leafId: LEAF_ID },
+          activeLeafId: LEAF_ID,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [LEAF_ID]: remotePtyId }
+        }
+      },
+      agentStatusByPaneKey: {
+        [paneKey]: workingAgentStatus(paneKey)
+      }
+    })
+    const remoteTab = { ...baseTab, ptyId: remotePtyId, launchAgent: 'claude' as const }
+
+    const root = await renderHookProbe(remoteTab)
+
+    // Why: remote rows also drop on transport blips (reconnect, snapshot gaps)
+    // that say nothing about the process — only a completed hook may clear.
+    await act(async () => {
+      useAppStore.setState({ agentStatusByPaneKey: {} })
+    })
+    await rerenderHookProbe(root, { ...remoteTab, title: 'zsh' })
+
+    expect(clearTabLaunchAgent).not.toHaveBeenCalled()
+    expect(latestHookAgent).toBe('claude')
+  })
+
+  it('does not clear launch identity while a sibling hook row is still live', async () => {
+    const focusedPaneKey = makePaneKey('tab-1', LEAF_ID)
+    const siblingPaneKey = makePaneKey('tab-1', SECOND_LEAF_ID)
+    useAppStore.setState({
+      ptyIdsByTabId: { 'tab-1': ['pty-focus', 'pty-sibling'] },
+      terminalLayoutsByTabId: { 'tab-1': twoPaneLayout() },
+      agentStatusByPaneKey: {
+        [focusedPaneKey]: workingAgentStatus(focusedPaneKey),
+        [siblingPaneKey]: workingAgentStatus(siblingPaneKey)
+      }
+    })
+    const splitTab = { ...baseTab, ptyId: 'pty-focus', launchAgent: 'claude' as const }
+
+    const root = await renderHookProbe(splitTab)
+
+    // Focused row drops but the sibling agent still runs: no exit evidence yet.
+    await act(async () => {
+      useAppStore.setState({
+        agentStatusByPaneKey: { [siblingPaneKey]: workingAgentStatus(siblingPaneKey) }
+      })
+    })
+    await rerenderHookProbe(root, { ...splitTab, title: 'zsh' })
+    expect(clearTabLaunchAgent).not.toHaveBeenCalled()
+
+    await act(async () => {
+      useAppStore.setState({ agentStatusByPaneKey: {} })
+    })
+    await rerenderHookProbe(root, { ...splitTab, title: 'zsh' })
+    expect(clearTabLaunchAgent).toHaveBeenCalledWith('tab-1')
+  })
+
+  it('clears launch identity at the neutral default title after a completed hook', async () => {
+    const paneKey = makePaneKey('tab-1', LEAF_ID)
+    useAppStore.setState({
+      agentStatusByPaneKey: {
+        [paneKey]: completedAgentStatus(paneKey)
+      }
+    })
+
+    // Why: the inferred-interrupt flow resets titles to the tab's default
+    // ("Terminal N"), not a shell name — that must still count as exit.
+    await renderHookProbe({ ...baseTab, title: 'Terminal 3', defaultTitle: 'Terminal 3' })
+
+    expect(clearTabLaunchAgent).toHaveBeenCalledWith('tab-1')
+  })
+
+  it('clears hookless launch identity once its own title evidence ends at a shell', async () => {
+    const geminiTab = { ...baseTab, launchAgent: 'gemini' as const, title: '✦ Gemini CLI' }
+
+    // Why: agents without hook integration prove activity via a title naming
+    // the launched agent; the later shell title is then exit evidence.
+    const root = await renderHookProbe(geminiTab)
+    expect(clearTabLaunchAgent).not.toHaveBeenCalled()
+
+    await rerenderHookProbe(root, { ...geminiTab, title: 'zsh' })
+
+    expect(clearTabLaunchAgent).toHaveBeenCalledWith('tab-1')
+  })
+
+  it('does not treat a layout-less multi-pane completed row as focused exit evidence', async () => {
+    const siblingPaneKey = makePaneKey('tab-1', SECOND_LEAF_ID)
+    useAppStore.setState({
+      ptyIdsByTabId: { 'tab-1': ['pty-focus', 'pty-sibling'] },
+      terminalLayoutsByTabId: {},
+      agentStatusByPaneKey: {
+        [siblingPaneKey]: completedAgentStatus(siblingPaneKey)
+      }
+    })
+
+    await renderHookProbe({ ...baseTab, ptyId: 'pty-focus', title: 'zsh', launchAgent: 'claude' })
+
+    expect(clearTabLaunchAgent).not.toHaveBeenCalled()
+  })
+
+  it('does not clear launch identity on the commit that switches pane generations', async () => {
+    const paneKey = makePaneKey('tab-1', LEAF_ID)
+    const boundLayout = {
+      root: { type: 'leaf', leafId: LEAF_ID } as const,
+      activeLeafId: LEAF_ID,
+      expandedLeafId: null,
+      ptyIdsByLeafId: { [LEAF_ID]: 'pty-1' }
+    }
+    useAppStore.setState({
+      terminalLayoutsByTabId: { 'tab-1': boundLayout },
+      agentStatusByPaneKey: { [paneKey]: workingAgentStatus(paneKey) }
+    })
+
+    const root = await renderHookProbe(baseTab)
+    expect(latestHookAgent).toBe('codex')
+
+    // Why: a respawn/focus switch can land the new ptyId, the dropped row, and
+    // a shell title in one commit — the previous generation's observed signal
+    // must not clear the new generation's launch identity.
+    await act(async () => {
+      useAppStore.setState({
+        terminalLayoutsByTabId: {
+          'tab-1': { ...boundLayout, ptyIdsByLeafId: { [LEAF_ID]: 'pty-2' } }
+        },
+        agentStatusByPaneKey: {}
+      })
+    })
+    await rerenderHookProbe(root, { ...baseTab, title: 'zsh' })
+
+    expect(clearTabLaunchAgent).not.toHaveBeenCalled()
   })
 })
