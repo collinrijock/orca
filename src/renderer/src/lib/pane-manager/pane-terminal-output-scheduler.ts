@@ -77,7 +77,13 @@ const BACKGROUND_DRAIN_INTERVAL_MS = 16
 const HIGH_PRIORITY_DRAIN_INTERVAL_MS = 4
 const BACKGROUND_CHUNK_CHARS = 16 * 1024
 const MAX_WRITES_PER_DRAIN = 2
-const HIGH_PRIORITY_MAX_WRITES_PER_DRAIN = 2
+// Why 8: with the parse-clock pacer, high-priority ticks fire only after
+// xterm confirms the previous batch parsed, and Chromium clamps chained
+// timers to ~4ms — so per-tick volume (8 x 16KB = 128KB ≈ 1.3ms of parse)
+// sets the sustained ceiling (~30MB/s) while staying far inside
+// DRAIN_TIME_BUDGET_MS. At 2 the ceiling was 8MB/s against a ~100MB/s
+// parser (see pane-terminal-output-scheduler-throughput.bench.test.ts).
+const HIGH_PRIORITY_MAX_WRITES_PER_DRAIN = 8
 const DRAIN_TIME_BUDGET_MS = 8
 const LARGE_BACKLOG_CHARS = 512 * 1024
 const SYNC_FOREGROUND_FLUSH_CHARS = 256 * 1024
@@ -739,11 +745,47 @@ function takeNextDrainableEntry(): QueueEntry | null {
   return null
 }
 
+// Why: the parse-completion pacer re-arms a zero-delay drain as soon as xterm
+// reports the previous high-priority batch parsed. Without it, cadence is a
+// fixed 4/16ms nap per <=32KB batch — a ~2-8 MB/s drip against xterm's
+// ~100 MB/s parse rate (measured: scheduler-throughput bench + baseline-jul02).
+// Only high-priority (visible-pane) backlogs are pacer-clocked; background
+// panes keep the fixed cadence that protects the focused terminal.
+function makeParseClockPacer(): () => void {
+  return () => {
+    try {
+      if (queuedByTerminal.size > 0 && hasHighPriorityBacklog()) {
+        scheduleDrain(0)
+      }
+    } catch {
+      // Why: runs inside xterm's write-callback chain; a throw here would
+      // wedge the terminal (see xterm-write-callback-guard.ts).
+    }
+  }
+}
+
+function composeParsedCallback(
+  onParsed: TerminalOutputParsedCallback | undefined,
+  pacer: (() => void) | undefined
+): TerminalOutputParsedCallback | undefined {
+  if (!pacer) {
+    return onParsed
+  }
+  if (!onParsed) {
+    return pacer
+  }
+  return () => {
+    onParsed()
+    pacer()
+  }
+}
+
 function writeQueuedChunk(entry: QueueEntry): 'foreground' | 'background' | null {
   const queuedWrite = takeQueuedChunk(entry, BACKGROUND_CHUNK_CHARS)
   if (!queuedWrite) {
     return null
   }
+  const pacer = entry.highPriority ? makeParseClockPacer() : undefined
   try {
     entry.beforeWrite?.(queuedWrite.data)
     if (queuedWrite.foreground) {
@@ -755,11 +797,15 @@ function writeQueuedChunk(entry: QueueEntry): 'foreground' | 'background' | null
         {
           forceViewportRefresh: queuedWrite.forceForegroundRefresh,
           followupViewportRefresh: queuedWrite.followupForegroundRefresh,
-          onParsed: queuedWrite.onParsed
+          onParsed: composeParsedCallback(queuedWrite.onParsed, pacer)
         }
       )
     } else {
-      writeBackgroundTerminalChunk(entry.terminal, queuedWrite.data, queuedWrite.onParsed)
+      writeBackgroundTerminalChunk(
+        entry.terminal,
+        queuedWrite.data,
+        composeParsedCallback(queuedWrite.onParsed, pacer)
+      )
     }
   } catch {
     // Why: pane.terminal.dispose() can race with a queued late-arriving PTY ping;

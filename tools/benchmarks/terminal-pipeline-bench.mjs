@@ -47,7 +47,9 @@ const DSR_QUERY = `${ESC}[6n`
 // oxlint-disable-next-line no-control-regex -- the ESC byte is the payload: this parses the terminal's cursor-position reply
 const DSR_REPLY_RE = /\x1b\[(\d+);(\d+)R/
 const CHUNK_BYTES = 64 * 1024
-const DSR_TIMEOUT_MS = 15_000
+// Overridable: a dev-mode Electron terminal can hold >15s of parse backlog at
+// a fence, which is a measurement (slow), not a hang — don't die on it.
+let dsrTimeoutMs = 15_000
 
 function parseArgs(argv) {
   const args = {
@@ -80,6 +82,9 @@ function parseArgs(argv) {
         break
       case '--fixtures':
         args.fixtures = next().split(',')
+        break
+      case '--dsr-timeout-ms':
+        dsrTimeoutMs = Number(next())
         break
       case '--skip-load':
         args.skipLoad = true
@@ -263,7 +268,7 @@ function dsrRoundTrip() {
         dsrWaiters.splice(idx, 1)
       }
       reject(new Error('DSR reply timeout'))
-    }, DSR_TIMEOUT_MS)
+    }, dsrTimeoutMs)
     const waiter = {
       resolve: (endTs) => {
         clearTimeout(timer)
