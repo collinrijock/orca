@@ -3,15 +3,19 @@
 // Re-exported here so renderer consumers keep their '@/lib' import path.
 // normalizeGitHubLinkQuery stays renderer-side: its too-large guard is link-
 // picker input policy, not parsing.
+import type { GitHubIssueOrPRLink } from '../../../shared/github-links'
 import { parseGitHubIssueOrPRLink, parseGitHubIssueOrPRNumber } from '../../../shared/github-links'
 
 import { isWorkItemLinkQueryTooLarge } from './work-item-link-query-bounds'
 
 export * from '../../../shared/github-links'
 
+const HTTP_URL_PREFIX_RE = /^https?:\/\//i
+
 export type GitHubLinkQuery = {
   query: string
   directNumber: number | null
+  directLink?: GitHubIssueOrPRLink
   tooLarge?: boolean
 }
 
@@ -29,7 +33,7 @@ export function normalizeGitHubLinkQuery(raw: string): GitHubLinkQuery {
   }
 
   const direct = parseGitHubIssueOrPRNumber(trimmed)
-  if (direct !== null && !trimmed.startsWith('http')) {
+  if (direct !== null && !HTTP_URL_PREFIX_RE.test(trimmed)) {
     return { query: trimmed, directNumber: direct }
   }
 
@@ -43,6 +47,7 @@ export function normalizeGitHubLinkQuery(raw: string): GitHubLinkQuery {
   // slug differs from the origin remote.
   return {
     query: trimmed,
-    directNumber: link.number
+    directNumber: link.number,
+    directLink: link
   }
 }

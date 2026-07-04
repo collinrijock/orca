@@ -8,6 +8,12 @@ export type RepoSlug = {
   repo: string
 }
 
+export type GitHubIssueOrPRLink = {
+  slug: RepoSlug
+  number: number
+  type: 'issue' | 'pr'
+}
+
 export function buildGitHubRepoUrl(slug: RepoSlug | null | undefined): string | null {
   if (!slug?.owner || !slug.repo) {
     return null
@@ -62,11 +68,7 @@ export function parseGitHubIssueOrPRNumber(input: string): number | null {
  * Parses an owner/repo slug plus issue/PR number from a GitHub URL. Returns
  * null for anything that isn't a recognizable GitHub-shaped issue or pull URL.
  */
-export function parseGitHubIssueOrPRLink(input: string): {
-  slug: RepoSlug
-  number: number
-  type: 'issue' | 'pr'
-} | null {
+export function parseGitHubIssueOrPRLink(input: string): GitHubIssueOrPRLink | null {
   const trimmed = input.trim()
   if (!trimmed) {
     return null

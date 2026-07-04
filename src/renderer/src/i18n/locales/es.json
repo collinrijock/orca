@@ -4882,7 +4882,8 @@
           "d420c43729": "Se importaron {{value0}} cookies de {{value1}}{{value2}} a {{value3}}.",
           "b4c167764d": "Se importaron {{value0}} cookies desde un archivo a {{value1}}.",
           "a3f8c2d1e0b4": "Se importaron {{value0}} cookies de {{value1}} ({{value2}}) a {{value3}}.",
-          "b4e9d3f2a1c5": "Se importaron {{value0}} cookies de {{value1}} a {{value2}}."
+          "b4e9d3f2a1c5": "Se importaron {{value0}} cookies de {{value1}} a {{value2}}.",
+          "c5a273a809": "Desde {{value0}}"
         },
         "BrowserUseComputerUseNotice": {
           "15b5e680ba": "Abrir Computer Use",
@@ -4906,7 +4907,7 @@
           "be6df68384": "Desde archivo…",
           "e44c5d681e": "Desde ",
           "67d9a53f47": "Gestionar perfiles para logins separados",
-          "112f70adc4": "Última importación desde ",
+          "112f70adc4": "Última importación desde {{value0}}",
           "72d4815523": "Trae tus logins existentes a Orca para que los agents puedan acceder a páginas autenticadas. Importa al perfil predeterminado.",
           "2eb906706c": "Importar cookies del navegador",
           "af8c83ed61": "Importa cookies de Chrome, Edge u otros navegadores para que los agents puedan reutilizar tus logins.",
@@ -4928,7 +4929,8 @@
           "ad8cb0ee22": "Corregir PATH",
           "0289434ed6": "Activado",
           "8b3054dac7": "Registrando...",
-          "8f2675c2f3": "Se importaron {{value0}} cookies desde un archivo."
+          "8f2675c2f3": "Se importaron {{value0}} cookies desde un archivo.",
+          "5301857d88": "Desde {{value0}}"
         },
         "BrowserUseSkillStep": {
           "0871b6998d": "Permite a los agents navegar y verificar páginas en el navegador de Orca.",
@@ -9793,10 +9795,6 @@
             "a84d5677ff": "OpenCode",
             "2528586aa7": "Claudino"
           }
-        },
-        "PetOverlay": {
-          "de932b0e8f": "@keyframes pet-bob { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }",
-          "4712d196c6": "@keyframes pet-{{value0}} { from { background-position: {{value1}}px {{value2}}px; } to { background-position: {{value3}}px {{value4}}px; } }"
         }
       },
       "onboarding": {

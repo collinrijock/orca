@@ -4867,7 +4867,8 @@
           "d420c43729": "{{value1}}{{value2}}에서 {{value0}}개의 쿠키를 {{value3}}(으)로 가져왔습니다.",
           "b4c167764d": "파일에서 {{value0}}개의 쿠키를 {{value1}}에 가져왔습니다.",
           "a3f8c2d1e0b4": "{{value1}} ({{value2}})에서 {{value0}}개의 쿠키를 {{value3}}(으)로 가져왔습니다.",
-          "b4e9d3f2a1c5": "{{value1}}에서 {{value0}}개의 쿠키를 {{value2}}(으)로 가져왔습니다."
+          "b4e9d3f2a1c5": "{{value1}}에서 {{value0}}개의 쿠키를 {{value2}}(으)로 가져왔습니다.",
+          "c5a273a809": "{{value0}}에서"
         },
         "BrowserUseComputerUseNotice": {
           "15b5e680ba": "컴퓨터 사용 열기",
@@ -4891,7 +4892,7 @@
           "be6df68384": "파일에서…",
           "e44c5d681e": "에서",
           "67d9a53f47": "별도의 로그인을 위한 프로필 관리",
-          "112f70adc4": "마지막으로 가져온 위치",
+          "112f70adc4": "{{value0}}에서 마지막으로 가져옴",
           "72d4815523": "agents가 인증된 페이지에 접근할 수 있도록 기존 로그인을 Orca로 가져오세요. 기본 프로필로 가져옵니다.",
           "2eb906706c": "브라우저 쿠키 가져오기",
           "af8c83ed61": "agents가 로그인을 재사용할 수 있도록 Chrome, Edge 또는 기타 브라우저에서 쿠키를 가져옵니다.",
@@ -4913,7 +4914,8 @@
           "ad8cb0ee22": "경로 수정",
           "0289434ed6": "활성화됨",
           "8b3054dac7": "등록 중...",
-          "8f2675c2f3": "파일에서 {{value0}}개의 쿠키를 가져왔습니다."
+          "8f2675c2f3": "파일에서 {{value0}}개의 쿠키를 가져왔습니다.",
+          "5301857d88": "{{value0}}에서"
         },
         "BrowserUseSkillStep": {
           "0871b6998d": "agents가 Orca 브라우저에서 페이지를 탐색하고 확인할 수 있습니다.",
@@ -9793,10 +9795,6 @@
             "a84d5677ff": "OpenCode",
             "2528586aa7": "클라우디노"
           }
-        },
-        "PetOverlay": {
-          "de932b0e8f": "@keyframes pet-bob { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }",
-          "4712d196c6": "@keyframes pet-{{value0}} { from { background-position: {{value1}}px {{value2}}px; } to { background-position: {{value3}}px {{value4}}px; } }"
         }
       },
       "onboarding": {

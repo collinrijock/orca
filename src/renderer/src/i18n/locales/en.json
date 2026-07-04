@@ -4882,7 +4882,8 @@
           "d420c43729": "Imported {{value0}} cookies from {{value1}}{{value2}} into {{value3}}.",
           "b4c167764d": "Imported {{value0}} cookies from file into {{value1}}.",
           "a3f8c2d1e0b4": "Imported {{value0}} cookies from {{value1}} ({{value2}}) into {{value3}}.",
-          "b4e9d3f2a1c5": "Imported {{value0}} cookies from {{value1}} into {{value2}}."
+          "b4e9d3f2a1c5": "Imported {{value0}} cookies from {{value1}} into {{value2}}.",
+          "c5a273a809": "From {{value0}}"
         },
         "BrowserUseComputerUseNotice": {
           "15b5e680ba": "Open Computer Use",
@@ -4906,7 +4907,7 @@
           "be6df68384": "From File…",
           "e44c5d681e": "From",
           "67d9a53f47": "Manage profiles for separate logins",
-          "112f70adc4": "Last imported from",
+          "112f70adc4": "Last imported from {{value0}}",
           "72d4815523": "Bring your existing logins into Orca so agents can reach authenticated pages. Imports into the default profile.",
           "2eb906706c": "Import Browser Cookies",
           "af8c83ed61": "Import cookies from Chrome, Edge, or other browsers so agents can reuse your logins.",
@@ -4928,7 +4929,8 @@
           "ad8cb0ee22": "Fix PATH",
           "0289434ed6": "Enabled",
           "8b3054dac7": "Registering...",
-          "8f2675c2f3": "Imported {{value0}} cookies from file."
+          "8f2675c2f3": "Imported {{value0}} cookies from file.",
+          "5301857d88": "From {{value0}}"
         },
         "BrowserUseSkillStep": {
           "0871b6998d": "Enables agents to navigate and verify pages in Orca's browser.",
@@ -9793,10 +9795,6 @@
             "a84d5677ff": "OpenCode",
             "2528586aa7": "Claudino"
           }
-        },
-        "PetOverlay": {
-          "de932b0e8f": "@keyframes pet-bob { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }",
-          "4712d196c6": "@keyframes pet-{{value0}} { from { background-position: {{value1}}px {{value2}}px; } to { background-position: {{value3}}px {{value4}}px; } }"
         }
       },
       "onboarding": {

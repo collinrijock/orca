@@ -209,6 +209,8 @@ describe('useComposerState host-context boundaries', () => {
       'const applyLinkedWorkItem = useCallback'
     )
     expect(directLookup).toContain('sourceContext: selectedRepoGitHubSourceContext')
+    expect(directLookup).toContain('lookupGitHubWorkItemByOwnerRepoForSource')
+    expect(directLookup).toContain('type: normalizedLinkQuery.directLink.type')
 
     const submitLookup = sourceBetween(
       HOOK_SOURCE,
@@ -236,7 +238,11 @@ describe('useComposerState host-context boundaries', () => {
       'const intent = getSmartGitHubSubmitIntent(name)'
     )
     expect(selectedPrSubmitLookup).toContain('smartGitHubPrStartPointSelectionRef.current')
-    expect(selectedPrSubmitLookup).toContain("linkedWorkItem.type === 'pr'")
+    expect(selectedPrSubmitLookup).toContain("linkedWorkItemIdentity?.type === 'pr'")
+    expect(selectedPrSubmitLookup).toContain("startPointIdentity?.type === 'pr'")
+    expect(selectedPrSubmitLookup).toContain(
+      'startPointIdentity.number === linkedWorkItemIdentity.number'
+    )
     expect(selectedPrSubmitLookup).toContain('resolveGitHubPrStartPointForRepo')
     expect(selectedPrSubmitLookup.indexOf('resolveGitHubPrStartPointForRepo')).toBeLessThan(
       selectedPrSubmitLookup.indexOf("return { kind: 'none' }")
@@ -421,8 +427,12 @@ describe('useComposerState host-context boundaries', () => {
     )
     expect(projectGroupSmartHandlers).toContain('setLinkedGitLabIssue(null)')
     expect(projectGroupSmartHandlers).toContain('setLinkedGitLabMR(null)')
-    expect(projectGroupSmartHandlers).toContain("setLinkedIssue('')")
-    expect(projectGroupSmartHandlers).toContain('setLinkedPR(null)')
+    expect(projectGroupSmartHandlers).toContain(
+      "setLinkedIssue(identity.type === 'issue' ? String(identity.number) : '')"
+    )
+    expect(projectGroupSmartHandlers).toContain(
+      "setLinkedPR(identity.type === 'pr' ? identity.number : null)"
+    )
   })
 
   it('disables repo-backed folder smart lookup when a folder target has no source repos', () => {

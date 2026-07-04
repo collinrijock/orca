@@ -4867,7 +4867,8 @@
           "d420c43729": "{{value0}} Cookie を {{value1}}{{value2}} から {{value3}} にインポートしました。",
           "b4c167764d": "ファイルから {{value0}} 個の Cookie を {{value1}} にインポートしました。",
           "a3f8c2d1e0b4": "{{value1}} ({{value2}}) から {{value0}} 件の Cookie を {{value3}} にインポートしました。",
-          "b4e9d3f2a1c5": "{{value1}} から {{value0}} 件の Cookie を {{value2}} にインポートしました。"
+          "b4e9d3f2a1c5": "{{value1}} から {{value0}} 件の Cookie を {{value2}} にインポートしました。",
+          "c5a273a809": "{{value0}} から"
         },
         "BrowserUseComputerUseNotice": {
           "15b5e680ba": "Open Computer Use",
@@ -4891,7 +4892,7 @@
           "be6df68384": "ファイルから…",
           "e44c5d681e": "から",
           "67d9a53f47": "個別のログインのプロファイルを管理する",
-          "112f70adc4": "最後にインポートされたのは",
+          "112f70adc4": "{{value0}} から最後にインポート",
           "72d4815523": "既存のログインを Orca に取り込み、agents が認証されたページにアクセスできるようにします。デフォルトのプロファイルにインポートします。",
           "2eb906706c": "ブラウザの Cookie をインポートする",
           "af8c83ed61": "Chrome、Edge、またはその他のブラウザから Cookie をインポートすると、agents がログインを再利用できるようになります。",
@@ -4913,7 +4914,8 @@
           "ad8cb0ee22": "パスを修正する",
           "0289434ed6": "有効",
           "8b3054dac7": "登録中...",
-          "8f2675c2f3": "ファイルから {{value0}} 個の Cookie をインポートしました。"
+          "8f2675c2f3": "ファイルから {{value0}} 個の Cookie をインポートしました。",
+          "5301857d88": "{{value0}} から"
         },
         "BrowserUseSkillStep": {
           "0871b6998d": "agents が Orca のブラウザでページに移動して確認できるようにします。",
@@ -9793,10 +9795,6 @@
             "a84d5677ff": "OpenCode",
             "2528586aa7": "クラウディーノ"
           }
-        },
-        "PetOverlay": {
-          "de932b0e8f": "@keyframes ペットボブ { 0%,100% { 変換:translateY(0); } 50% { 変換:translateY(-4px); } }",
-          "4712d196c6": "@keyframes pet-{{value0}} { from { 背景位置: {{value1}}px {{value2}}px; } から { 背景位置: {{value3}}px {{value4}}px; } }"
         }
       },
       "onboarding": {
