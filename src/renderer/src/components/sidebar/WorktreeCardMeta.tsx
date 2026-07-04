@@ -262,7 +262,7 @@ export function WorktreeCardDetailsHover({
       >
         <SelectedTextCopyMenu className="space-y-3">
           {showIdentityHeader && (
-            <div className="min-w-0 border-l border-border/70 pl-2">
+            <div className="min-w-0">
               {/* Why: the closed card no longer carries a branch row; custom-titled
                   worktrees still need their git branch available in the hover. */}
               {identityOrder === 'branch-first' ? branchIdentity : workspaceIdentity}
