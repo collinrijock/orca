@@ -71,6 +71,8 @@ type BundleHeader = {
   readonly schema_version: 1
 }
 
+// Why: extra records are metrics riders, not span payload — a fixed 64 KiB
+// ceiling keeps them from crowding spans out of the 4 MiB bundle.
 const MAX_EXTRA_RECORD_BYTES = 64 * 1024
 
 function* readLinesNewestFirst(text: string): Iterable<string> {
@@ -250,7 +252,9 @@ function serializeExtraRecord(
     return serialized
   }
 
-  const truncated = JSON.stringify(redactValue(markExtraRecordTruncated(record), 'server'))
+  // Why: truncate the already-redacted value — truncating first could bisect
+  // a long secret so the redactor no longer pattern-matches the fragment.
+  const truncated = JSON.stringify(markExtraRecordTruncated(redacted))
   if (Buffer.byteLength(truncated) + 1 <= budget) {
     return truncated
   }

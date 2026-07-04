@@ -191,7 +191,10 @@ function narrowWorktree(value: unknown): [RendererPerfWorktreeMetrics, boolean] 
       scrollbackRowsTotal: clampRendererPerfCount(value.scrollbackRowsTotal),
       panes
     },
-    rawPanes.length > panes.length || label.length < String(value.worktreeLabel ?? '').length
+    // Compare against the trimmed input so whitespace padding does not
+    // count as truncation — `truncated` must mean data was dropped.
+    rawPanes.length > panes.length ||
+      (typeof value.worktreeLabel === 'string' && label.length < value.worktreeLabel.trim().length)
   ]
 }
 

@@ -255,6 +255,37 @@ describe('bundle — collection', () => {
     expect(bundle.payload).toContain('"name":"kept"')
   })
 
+  it('redacts secrets in oversized extra records before truncation can bisect them', () => {
+    writeFileSync(traceFile, makeNDJSON([makeSpan({ name: 'kept' })]))
+    // A secret placed past the 1024-char string-truncation boundary: if
+    // truncation ran before redaction, the sliced fragment would no longer
+    // pattern-match and partial key material could ride the upload.
+    const secret = `sk-ant-api03-${'a'.repeat(80)}`
+    const bundle = collectBundle({
+      traceFilePath: traceFile,
+      maxFiles: 10,
+      appVersion: '1',
+      platform: 'darwin',
+      arch: 'arm64',
+      osRelease: '24',
+      orcaChannel: 'dev',
+      extraRecords: [
+        {
+          type: 'renderer-perf',
+          note: `${'x'.repeat(1000)}${secret}`,
+          payload: 'y'.repeat(_internalsForTests.MAX_EXTRA_RECORD_BYTES * 2)
+        }
+      ]
+    })
+    expect(bundle.payload).not.toContain('sk-ant-api03-')
+    const extraLine = bundle.payload
+      .split('\n')
+      .filter(Boolean)
+      .map((line) => JSON.parse(line))[1]
+    expect(extraLine.type).toBe('renderer-perf')
+    expect(extraLine.truncated).toBe(true)
+  })
+
   it('does not append a span that would push the payload over the upload cap', () => {
     const giantSpan = makeSpan({
       attributes: {

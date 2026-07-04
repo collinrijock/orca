@@ -252,9 +252,11 @@ export function PrivacyDiagnosticsSection(): React.JSX.Element {
     setPerfDumpStage(null)
     try {
       const result = await window.api.diagnostics.capturePerfDump()
-      if (!mountedRef.current || 'canceled' in result) {
+      if ('canceled' in result) {
         return
       }
+      // Why: capture runs ~10+ s and the artifact is already on disk —
+      // report it (global toast + reveal) even if Settings unmounted.
       toast.success(
         translate(
           'auto.components.settings.PrivacyDiagnosticsSection.c4cd74809e',

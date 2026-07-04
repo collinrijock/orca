@@ -63,7 +63,7 @@ export const getPrivacyPaneSearchEntries = createLocalizedCatalog(() => [
       ...translateSearchKeyword('auto.components.settings.privacy.search.048b49260d', 'heap'),
       ...translateSearchKeyword('auto.components.settings.privacy.search.c1d94c8566', 'trace'),
       ...translateSearchKeyword('auto.components.settings.privacy.search.ec083fb9e1', 'slow'),
-      ...translateSearchKeyword('auto.components.settings.privacy.search.07241d4d1', 'lag')
+      ...translateSearchKeyword('auto.components.settings.privacy.search.900d529b12', 'lag')
     ]
   },
   {
