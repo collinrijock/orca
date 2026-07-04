@@ -755,6 +755,61 @@ describe('SshConnection', () => {
     expect(execMock).toHaveBeenCalledTimes(1)
   })
 
+  it('bounds an aborted exec to the close grace when ssh2 never invokes the open callback', async () => {
+    const conn = new SshConnection(createTarget(), createCallbacks())
+    await conn.connect()
+    execBehavior = 'pending'
+    const controller = new AbortController()
+
+    vi.useFakeTimers()
+    try {
+      const outcomePromise = conn
+        .exec('printf ready', { signal: controller.signal })
+        .then(() => 'opened')
+        .catch((error: Error) => error.name)
+
+      controller.abort()
+      // Why: a hung socket must not pin the aborted caller for the full 30s
+      // connect timeout — the abort settles at the 5s grace bound instead.
+      await vi.advanceTimersByTimeAsync(5_000)
+
+      await expect(outcomePromise).resolves.toBe('AbortError')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('rejects without waiting out the backoff when aborted during a session-limit retry delay', async () => {
+    const conn = new SshConnection(createTarget(), createCallbacks())
+    await conn.connect()
+    const controller = new AbortController()
+    const refusal = Object.assign(new Error('(SSH) Channel open failure: open failed'), {
+      reason: 2
+    })
+    const execMock = vi
+      .fn<(cmd: string, cb: (err: Error | undefined, ch: unknown) => void) => void>()
+      .mockImplementation((_cmd, cb) => cb(refusal, undefined))
+    clientInstances[0].exec = execMock as never
+
+    vi.useFakeTimers()
+    try {
+      const outcomePromise = conn
+        .exec('printf ready', { signal: controller.signal })
+        .then(() => 'opened')
+        .catch((error: Error) => error.name)
+
+      // Flush microtasks so the first refused attempt lands in the backoff.
+      await vi.advanceTimersByTimeAsync(0)
+      controller.abort()
+
+      // No timer advance: the abort alone must release the backoff delay.
+      await expect(outcomePromise).resolves.toBe('AbortError')
+      expect(execMock).toHaveBeenCalledTimes(1)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('settles an abort during channel open only after the late channel closes', async () => {
     const conn = new SshConnection(createTarget(), createCallbacks())
     await conn.connect()

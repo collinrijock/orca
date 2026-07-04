@@ -42,8 +42,9 @@ type SshRemoteFileOptions = {
   hostPlatform?: RemoteHostPlatform
 }
 
-// Upper bound on waiting for an aborted late-opened channel to finish closing
-// before rejecting anyway. Normal closes complete in one network round-trip.
+// Upper bound on waiting, after an abort, for the in-flight open callback or
+// for an aborted late-opened channel to finish closing before rejecting
+// anyway. Normal opens and closes complete in one network round-trip.
 const ABORTED_CHANNEL_CLOSE_GRACE_MS = 5_000
 
 // Why: on session-limited servers (MaxSessions), a channel open can be refused
@@ -180,7 +181,18 @@ export class SshConnection {
     let lastError: unknown
     for (let attempt = 0; attempt < SESSION_LIMIT_OPEN_RETRIES; attempt++) {
       if (attempt > 0) {
-        await new Promise((resolve) => setTimeout(resolve, SESSION_LIMIT_OPEN_RETRY_DELAY_MS))
+        // Why: an abort must release the backoff immediately, not after it.
+        if (!signal?.aborted) {
+          await new Promise<void>((resolve) => {
+            const onDelayDone = (): void => {
+              clearTimeout(delayTimer)
+              signal?.removeEventListener('abort', onDelayDone)
+              resolve()
+            }
+            const delayTimer = setTimeout(onDelayDone, SESSION_LIMIT_OPEN_RETRY_DELAY_MS)
+            signal?.addEventListener('abort', onDelayDone, { once: true })
+          })
+        }
         if (signal?.aborted) {
           throw createSshOperationAbortError()
         }
@@ -210,16 +222,25 @@ export class SshConnection {
       // a server-side session slot (MaxSessions). Mark the abort and settle
       // from the open callback, after the late resource has been closed.
       let abortRequested = false
+      let abortDeadlineTimer: NodeJS.Timeout | undefined
       const cleanup = (): void => {
         clearTimeout(timer)
+        clearTimeout(abortDeadlineTimer)
         signal?.removeEventListener('abort', onAbort)
       }
       const onAbort = (): void => {
         abortRequested = true
+        // Why: a hung socket may never invoke the open callback — bound the
+        // aborted caller's wait instead of pinning it for CONNECT_TIMEOUT_MS.
+        abortDeadlineTimer = setTimeout(() => {
+          settled = true
+          cleanup()
+          reject(createSshOperationAbortError())
+        }, ABORTED_CHANNEL_CLOSE_GRACE_MS)
       }
       const timer = setTimeout(() => {
         settled = true
-        signal?.removeEventListener('abort', onAbort)
+        cleanup()
         reject(abortRequested ? createSshOperationAbortError() : new Error(timeoutMessage))
       }, CONNECT_TIMEOUT_MS)
       const rejectAfterClose = (value: T): void => {
