@@ -144,6 +144,7 @@ import { createTerminalGitHubPRLinkDetector } from '../../../../shared/terminal-
 import { scheduleTerminalWebglAtlasRecovery } from './terminal-webgl-atlas-recovery'
 import {
   CONPTY_DA1_RESPONSE,
+  DEFAULT_DA1_RESPONSE,
   createTerminalPixelSizeQueryResponder,
   installTerminalCapabilityReplyHandlers,
   sendTerminalOscColorQueryReplies
@@ -4591,10 +4592,13 @@ export function connectPanePty(
 
     // Why: discarding queued flood bytes must never swallow terminal queries —
     // a lost DSR/CPR (or color/DA) reply hangs the querying program (the bench
-    // DSR timeout). The discarded CONTENT is owned by the snapshot repaint;
-    // the queries are re-played to xterm immediately so replies still flow.
-    // Only called for bytes that are being thrown away, so replies cannot
-    // double-fire against a later queue drain.
+    // DSR timeout). The discarded CONTENT is owned by the snapshot repaint.
+    // Replies are SYNTHESIZED directly (transport.sendInput) instead of
+    // replaying the queries into xterm: a drop always triggers a snapshot
+    // restore, whose replay guard swallows xterm auto-replies and whose
+    // discardTerminalOutput races away queued query writes — both killed the
+    // salvaged reply in practice. Only called for bytes being thrown away, so
+    // replies cannot double-fire against a later queue drain.
     function salvageRendererQueriesFromDiscardedRestoreData(data: string): void {
       if (!data || !data.includes('\x1b')) {
         return
@@ -4605,10 +4609,43 @@ export function connectPanePty(
           transport.sendInput(reply)
         )
       }
-      const queryData = extracted.statelessQueryData + extracted.statefulQueryData
-      if (queryData) {
-        writePtyOutputToXterm(queryData, true, { hiddenStartupRendererQuery: true })
+      let unansweredQueryData = ''
+      for (const sequence of splitCsiSequences(
+        extracted.statefulQueryData + extracted.statelessQueryData
+      )) {
+        if (sequence === '\x1b[6n') {
+          // CPR from the live buffer. Position may be mid-repaint stale — in a
+          // drop scenario positional accuracy is already forfeit; liveness is
+          // the contract (a blocked reader must unblock).
+          const buffer = pane.terminal.buffer.active
+          const row = Math.min(buffer.cursorY + 1, pane.terminal.rows)
+          const col = Math.min(buffer.cursorX + 1, pane.terminal.cols)
+          transport.sendInput(`\x1b[${row};${col}R`)
+        } else if (sequence === '\x1b[c' || sequence === '\x1b[0c') {
+          transport.sendInput(DEFAULT_DA1_RESPONSE)
+        } else {
+          unansweredQueryData += sequence
+        }
       }
+      if (unansweredQueryData) {
+        // Best-effort for the rarer queries (DECRQM, DA2, XTVERSION): replay
+        // into xterm and let its handlers answer when no replay is active.
+        writePtyOutputToXterm(unansweredQueryData, true, { hiddenStartupRendererQuery: true })
+      }
+    }
+
+    function splitCsiSequences(queryData: string): string[] {
+      const sequences: string[] = []
+      let offset = queryData.indexOf('\x1b[')
+      while (offset !== -1) {
+        const finalByteIndex = findCsiFinalByteIndex(queryData, offset + 2)
+        if (finalByteIndex === -1) {
+          break
+        }
+        sequences.push(queryData.slice(offset, finalByteIndex + 1))
+        offset = queryData.indexOf('\x1b[', finalByteIndex + 1)
+      }
+      return sequences
     }
 
     function queueLiveChunkDuringRestore(data: string, meta?: PtyDataMeta): void {

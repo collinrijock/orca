@@ -346,7 +346,8 @@ function createPane(paneId: number) {
     type: 'normal' as const,
     viewportY: 0,
     baseY: 0,
-    cursorY: 0
+    cursorY: 0,
+    cursorX: 0
   }
   return {
     id: paneId,
@@ -6693,6 +6694,7 @@ describe('connectPanePty', () => {
 
       async function startInFlightRestore(): Promise<{
         pane: ReturnType<typeof createPane>
+        transport: MockTransport
         dataCallback: (
           data: string,
           meta?: { seq?: number; rawLength?: number; droppedOutput?: boolean }
@@ -6707,7 +6709,7 @@ describe('connectPanePty', () => {
       }> {
         enableMainAuthority()
         const deps = createDeps({ isVisibleRef: { current: true } })
-        const { pane, dataCallback } = await connectHiddenPane(deps)
+        const { pane, transport, dataCallback } = await connectHiddenPane(deps)
         const transportOptions = createdTransportOptions.at(-1) as {
           onPtySpawn?: (ptyId: string) => void
         }
@@ -6735,6 +6737,7 @@ describe('connectPanePty', () => {
         expect(getMainBufferSnapshot).toHaveBeenCalledTimes(1)
         return {
           pane,
+          transport,
           dataCallback,
           getMainBufferSnapshot,
           resolveFirstSnapshot: (snapshot) => firstSnapshot.resolve(snapshot)
@@ -6779,11 +6782,12 @@ describe('connectPanePty', () => {
       })
 
       it('salvages stateful queries out of an overflowing restore queue', async () => {
-        const { pane, dataCallback } = await startInFlightRestore()
+        const { pane, transport, dataCallback } = await startInFlightRestore()
 
         // Queue 400KB, then a chunk that overflows the cap and carries a DSR
-        // probe. The content is discarded (snapshot owns it) but the query
-        // must reach xterm so its reply flows.
+        // probe. The content is discarded (snapshot owns it) but the probe's
+        // reply is SYNTHESIZED directly — replaying it into xterm would race
+        // the restore's discard and the replay guard's auto-reply swallow.
         dataCallback('a'.repeat(400 * 1024), { seq: 400 * 1024, rawLength: 400 * 1024 })
         dataCallback(`${'b'.repeat(200 * 1024)}\x1b[6n`, {
           seq: 600 * 1024 + 4,
@@ -6791,8 +6795,10 @@ describe('connectPanePty', () => {
         })
         await flushAsyncTicks(8)
 
+        const replies = transport.sendInput.mock.calls.map((call) => String(call[0]))
+        // oxlint-disable-next-line no-control-regex -- the ESC byte IS the payload: this matches the CPR reply
+        expect(replies.some((reply) => /^\u001b\[\d+;\d+R$/.test(reply))).toBe(true)
         const written = writtenFloodData(pane)
-        expect(written).toContain('\x1b[6n')
         expect(written).not.toContain('aaaa')
         expect(written).not.toContain('bbbb')
       })
