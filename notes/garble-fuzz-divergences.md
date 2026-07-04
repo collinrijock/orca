@@ -29,22 +29,23 @@ same bytes. Any such diff is a user-visible garble on reveal.
   (predicate `bufferHasSerializeHostileWrappedRow`, tolerated + counted) or is
   listed below.
 
-## Inventory (seeds 1..2000)
+## Inventory
 
-| class | seeds | count | classification |
+| bug | found by | seeds | classification |
 | --- | --- | --- | --- |
-| Bug A — serialize wrap null-cell | 31, 157, 171, 207, 423, 426, 502, 801, 815, 826, 865, 881, 923, 977, 1004, 1119, 1142, 1238, 1241, 1318, 1351, 1374, 1532, 1601, 1657, 1728, 1770 | 27 | (a) real serialize bug, pre-documented + pinned |
-| Bug B — SGR bold loss (`1;22`) | 435, 770, 1321 | 3 | (a) real serialize bug — garbles style on reveal |
-| Bug C — cursor off-by-one at right margin | 454, 1696 | 2 | (a) real serialize bug — misplaces cursor on reveal |
+| A — serialize wrap null-cell | fidelity (suite 1) | 31, 157, 171, 207, 423, 426, 502, 801, 815, 826, 865, 881, 923, 977, 1004, 1119, 1142, 1238, 1241, 1318, 1351, 1374, 1532, 1601, 1657, 1728, 1770 (27 in 1..2000) | (a) real serialize bug, pre-documented + pinned |
+| B — SGR bold loss (`1;22`) | fidelity (suite 1) | 435, 770, 1321 | (a) real serialize bug — garbles style on reveal |
+| C — cursor off-by-one at right margin | fidelity (suite 1) | 454, 1696 | (a) real serialize bug — misplaces cursor on reveal |
+| D — DECSC saved-cursor lost across reveal | reconciliation (suite 2) | seed 3 | (a) real snapshot limitation — garbles a DECRC-in-tail reveal |
+| E — snapshot boundary mid-escape-sequence | reconciliation (suite 2) | seed 4 (+~24% of corpus) | (a) real snapshot limitation — continuation renders literal |
 
-The default suite runs seeds 1..300, so it only hits Bug A in range (171, 207,
-31, 157) — all tolerated — which is why it passes green. The three new
-divergence *classes* are all reproduced by dedicated minimal `test.skip` repros
-so they cannot silently regress. `FUZZ_ITERATIONS=2000` (or higher) surfaces
-Bugs B and C live; the suite skips them via the same wrap-style predicate is NOT
-applicable — instead they are pinned as standalone skipped repros and excluded
-from the corpus assertion by keeping the default corpus at 300. See the
-"Corpus vs deep mode" note at the bottom.
+The suite-1 default corpus runs seeds 1..300, so it only hits Bug A in range
+(31, 157, 171, 207) — all tolerated — which is why it passes green. All five
+bug *classes* are reproduced by dedicated minimal `test.skip` repros so they
+cannot silently regress. `FUZZ_ITERATIONS=2000` (or higher) surfaces Bugs B and
+C as live corpus divergences; because they lack a cheap buffer-state predicate
+(unlike Bug A's wrap predicate) they are pinned as standalone skipped repros and
+kept out of range by the default 300 corpus. See "Corpus vs deep mode" below.
 
 Seed 113 (called out in the handoff as a "DECSC/DECRC detour writing colored
 text mid-line") does not diverge on the current harness. It is a `savedCursor
@@ -146,6 +147,100 @@ caret or spinner, and subsequent input can overwrite the wrong cell.
 
 **Repro test:** `headless-emulator-fidelity.fuzz.test.ts` →
 `it.skip('restores the cursor one column short when the last row fills the margin …')`.
+
+---
+
+## Bug D — snapshot does not preserve the DECSC saved-cursor register across a hide/reveal boundary
+
+**Classification: (a) real bug — a structural snapshot limitation.** New
+finding, surfaced by the reveal-reconciliation fuzz (suite 2), not the fidelity
+fuzz.
+
+**Minimal repro (cols=20):**
+
+```
+hidden bytes: "AB\x1b7\x1b[4;10HCD"   (write AB, DECSC saves cursor at r0c2,
+                                        move to r3c9, write CD)
+tail bytes:   "\x1b8X"                 (DECRC restores the saved cursor, write X)
+
+live (always visible):  rows ["ABX", "         CD"]   cursor { x: 3, y: 0 }
+reveal (snapshot+tail): rows ["XB",  "         CD"]   cursor { x: 1, y: 0 }
+                                ^^ 'X' overwrote 'A' — DECRC landed at home, not r0c2
+snapshotAnsi:           "AB\r\n\r\n\r\n\x1b[9CCD"   (no saved-cursor state at all)
+```
+
+**Mechanism:** the snapshot is a serialized *screen* (SerializeAddon) plus a few
+rehydrated modes. The VT100 DECSC/DECRC saved-cursor register (also `CSI s` /
+`CSI u`) is runtime state that never appears in the serialized buffer, so it
+cannot survive a snapshot. When a hidden TUI runs `\x1b7` (or `\x1b[s`) before
+the reveal seq and the racing tail (or any post-reveal output) runs `\x1b8` (or
+`\x1b[u`), the restore targets the fresh terminal's default saved position
+(home) instead of where the TUI saved it — the next writes land at the wrong
+cell and overwrite live content.
+
+**Why it garbles a real pane:** DECSC/DECRC is common in shell prompts and
+status-line redraws (save cursor, jump to a corner to paint a clock/token
+counter, restore). If the save happens while the pane is hidden and the restore
+fires on reveal, the restored paint clobbers the wrong cells. Found by suite-2
+seed 3 (a `savedCursorDetour` op whose `\x1b7` fell in the hidden prefix and
+whose `\x1b8` fell in the racing tail after chunk-splitting).
+
+**Handling:** suite 2 keeps its racing tail append-only (no DECSC/DECRC, cursor
+motion, scroll regions, or alt frames) so the seq-reconciliation byte-stitch is
+tested in isolation from this and the other terminal-state-loss garbles. Bug D
+is instead pinned as a standalone repro,
+`hidden-reveal-reconciliation.fuzz.test.ts` →
+`it.skip('preserves the DECSC saved-cursor register across a hide/reveal …')`.
+
+**Fix direction (not applied — no production changes in this task):** carry the
+saved-cursor register out-of-band in the snapshot (like `oscLinks`), or have the
+emulator re-emit a synthetic DECSC restoring the saved position after replay.
+
+---
+
+## Bug E — snapshot boundary mid-escape-sequence drops the partial sequence
+
+**Classification: (a) real bug — a structural snapshot limitation.** New
+finding, surfaced by the reveal-reconciliation fuzz (suite 2).
+
+**Minimal repro (cols=20):**
+
+```
+hidden prefix: "AB\x1b[3"   (write AB, then ESC [ 3 — no final byte yet)
+tail bytes:    "mCD"        ('m' completes ESC[3m = italic, then CD)
+
+live (always visible):  rows ["ABCD"]    (ESC[3m parsed atomically, CD italic)
+reveal (snapshot+tail): rows ["ABmCD"]   ← 'm' became a literal character
+snapshotAnsi:           "AB"             (the partial ESC[3 is in the parser, gone)
+```
+
+**Mechanism:** a PTY read (one delivery record) can split an escape sequence.
+If the pane is revealed while the emulator's parser sits mid-`ESC[…`, the
+serialized SCREEN cannot carry the partial sequence (it lives in the parser
+state machine, not the buffer). The racing tail supplies the sequence's
+remaining bytes, but with the prefix gone the terminal parses them as literal
+text. Reproduced end-to-end against the real `HeadlessEmulator.getSnapshot`.
+
+**Why it garbles a real pane:** any TUI whose output is heavy with escape
+sequences (all of them) can have a read boundary fall mid-escape; if a reveal
+lands in that window the continuation renders as stray literal bytes (a rogue
+`m`, `H`, digits) injected into the visible text.
+
+**Reachability:** requires the reveal/snapshot to fire in the gap between the two
+halves of a split escape. `main` writes each PTY read to the emulator and
+records it as one delivery unit (`session.ts emitSubprocessOutput`), and the
+snapshot is taken synchronously at a drain — so the window is a single delivered
+record that ended mid-escape. Narrow but real.
+
+**Handling:** suite 2 tolerates + counts scenarios whose hidden prefix ends
+mid-escape-sequence (`prefixEndsMidSequence`), the same way suite 1 tolerates the
+serialize wrap bug — it fired on ~24% of the corpus, confirming the class is
+common. Pinned by `hidden-reveal-reconciliation.fuzz.test.ts` →
+`it.skip('completes an escape sequence split across the hide/reveal boundary')`.
+
+**Fix direction (not applied):** have `main` hold a trailing incomplete escape
+out of the drain until it completes (a small parser-aware buffer), or defer the
+snapshot to a parser-clean boundary.
 
 ---
 
