@@ -3,7 +3,11 @@ import { Terminal } from '@xterm/headless'
 import { SerializeAddon } from '@xterm/addon-serialize'
 import { Unicode11Addon } from '@xterm/addon-unicode11'
 import { activateOrcaTerminalUnicodeProvider } from '../../shared/terminal-unicode-provider'
-import { serializeWithAbsoluteCursor } from '../../shared/terminal-serialize-absolute-cursor'
+import {
+  readSavedCursorRegister,
+  serializeWithAbsoluteCursor
+} from '../../shared/terminal-serialize-absolute-cursor'
+import { advancePartialEscapeTail } from '../../shared/terminal-partial-escape-tail'
 import type { TerminalViewAttributes } from '../../shared/terminal-view-attributes'
 import { collectHeadlessOscLinkRanges } from './headless-osc-link-ranges'
 import { buildRehydrateSequences } from './terminal-mode-rehydrate-sequences'
@@ -72,6 +76,11 @@ export class HeadlessEmulator {
   // with it, so seeds/snapshots and unsolicited core emissions (e.g. native
   // 997 pushes from option mutations) can never leak to the PTY.
   private queryReplyForwardingDepth = 0
+  // Why: a chunk ending mid-escape leaves the sequence in xterm's parser, not
+  // the buffer, so serialize() drops it and the next chunk's continuation
+  // renders literal after a restore (Bug E, notes/garble-fuzz-divergences.md).
+  // Committed alongside mouseModes: only after xterm parsed the same bytes.
+  private partialEscapeTail = ''
 
   constructor(opts: HeadlessEmulatorOptions) {
     this.pathFlavor = opts.pathFlavor
@@ -234,6 +243,7 @@ export class HeadlessEmulator {
         // Why: snapshots combine serialized xterm state with mirrored mouse
         // modes. Commit the mirror only after xterm has parsed the same bytes.
         this.mouseModes.scan(data)
+        this.partialEscapeTail = advancePartialEscapeTail(this.partialEscapeTail, data)
         resolve()
       })
     })
@@ -270,6 +280,7 @@ export class HeadlessEmulator {
       }
     }
     this.mouseModes.scan(data)
+    this.partialEscapeTail = advancePartialEscapeTail(this.partialEscapeTail, data)
     return true
   }
 
@@ -294,13 +305,18 @@ export class HeadlessEmulator {
     // Why serializeWithAbsoluteCursor: SerializeAddon's relative cursor
     // restore lands one column short after a margin-filling final row leaves
     // replay wrap-pending; the trailing CUP survives the alt-marker slice.
+    // The saved-cursor register rides along so a post-restore DECRC lands
+    // where the hidden TUI saved, not at home.
     const snapshotAnsi = this.normalizeSnapshotAnsiForModes(
-      serializeWithAbsoluteCursor(this.serializer, this.terminal, {
-        scrollback: opts.scrollbackRows
-      }),
+      serializeWithAbsoluteCursor(
+        this.serializer,
+        this.terminal,
+        { scrollback: opts.scrollbackRows },
+        readSavedCursorRegister(this.terminal)
+      ),
       modes
     )
-    return {
+    const snapshot: TerminalSnapshot = {
       snapshotAnsi,
       scrollbackAnsi: '',
       oscLinks: collectHeadlessOscLinkRanges(
@@ -316,6 +332,16 @@ export class HeadlessEmulator {
       scrollbackLines: this.terminal.buffer.normal.length - this.terminal.rows,
       lastTitle: this.oscText.lastTitle ?? undefined
     }
+    if (this.partialEscapeTail.length > 0) {
+      // Why a separate field, not part of snapshotAnsi: consumers write their
+      // own reset sequences after the snapshot body, and any ESC written after
+      // a dangling partial would abort it. The restorer must write this LAST,
+      // immediately before post-snapshot live chunks. Its bytes are already
+      // counted by the snapshot seq (they were ingested), so tail-slicing
+      // arithmetic is unchanged.
+      snapshot.pendingEscapeTailAnsi = this.partialEscapeTail
+    }
+    return snapshot
   }
 
   get isAlternateScreen(): boolean {

@@ -1198,6 +1198,9 @@ export type PreloadApi = {
       pendingDeliveryStartSeq?: number
       source?: 'headless' | 'renderer'
       alternateScreen?: boolean
+      /** Trailing incomplete escape the emulator ingested; the restorer must
+       *  write it after its post-replay resets, last before live chunks. */
+      pendingEscapeTailAnsi?: string
     } | null>
     getRendererDeliveryDebugSnapshot: () => Promise<{
       pendingPtyCount: number

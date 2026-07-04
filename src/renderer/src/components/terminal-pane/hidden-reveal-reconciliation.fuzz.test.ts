@@ -5,6 +5,7 @@ import {
   splitIntoRandomChunks,
   type AgentTuiStreamDims
 } from '../../../../shared/agent-tui-ansi-fuzz-stream'
+import { extractPartialEscapeTail } from '../../../../shared/terminal-partial-escape-tail'
 import {
   POST_REPLAY_LIVE_SNAPSHOT_RESET_PARITY,
   SNAPSHOT_REPLAY_PREAMBLE_ALT,
@@ -114,41 +115,6 @@ type RevealResult = {
   forcedFreshRestore: boolean
 }
 
-/** Bug E detector: does the hidden prefix (what the snapshot captured) end
- *  mid-escape-sequence? A PTY read (one delivery record) can split an escape;
- *  the emulator then holds partial parser state that the serialized SCREEN
- *  cannot carry, so the racing tail's continuation bytes render as literal text.
- *  Returns true when the prefix ends with a dangling ESC, ESC[…(no final byte),
- *  ESC](no ST/BEL), or a lone ESC-intermediate. */
-function prefixEndsMidSequence(prefix: string): boolean {
-  const esc = prefix.lastIndexOf('\x1b')
-  if (esc === -1) {
-    return false
-  }
-  const rest = prefix.slice(esc)
-  if (rest === '\x1b') {
-    return true // dangling ESC
-  }
-  const kind = rest[1]
-  if (kind === '[') {
-    // CSI: complete iff a final byte 0x40–0x7e appears after the params.
-    for (let i = 2; i < rest.length; i++) {
-      const code = rest.charCodeAt(i)
-      if (code >= 0x40 && code <= 0x7e) {
-        return false
-      }
-    }
-    return true
-  }
-  if (kind === ']') {
-    // OSC: complete iff terminated by BEL or ST (ESC \).
-    return !(rest.includes('\x07') || rest.includes('\x1b\\'))
-  }
-  // ESC 7 / ESC 8 / ESC-intermediate: two bytes complete it. Dangling iff only
-  // ESC was written (handled above) — a present kind byte means it completed.
-  return false
-}
-
 async function readScreen(
   term: ReturnType<typeof createRendererParityTerminal>
 ): Promise<RevealResult> {
@@ -178,10 +144,8 @@ async function revealFromSnapshot(
   const restored = createRendererParityTerminal(dims)
   try {
     // Snapshot source = every hidden chunk painted in order.
-    await writeChunksToTerminal(
-      source.terminal,
-      chunks.slice(0, revealIdx).map((c) => c.data)
-    )
+    const hiddenChunks = chunks.slice(0, revealIdx).map((c) => c.data)
+    await writeChunksToTerminal(source.terminal, hiddenChunks)
     // Snapshot seq = seq of the last hidden chunk that carried one (the seq the
     // emulator would report). undefined when the hidden prefix was unmetered.
     let snapshotSeq: number | undefined
@@ -193,12 +157,20 @@ async function revealFromSnapshot(
         break
       }
     }
-    const snapshot = buildParityMainBufferSnapshot(source, snapshotSeq ?? 0)
+    const snapshot = buildParityMainBufferSnapshot(source, snapshotSeq ?? 0, {
+      // Mirror of HeadlessEmulator's ingest tracker: the hidden stream's
+      // trailing incomplete escape rides the snapshot out-of-band (Bug E fix).
+      pendingEscapeTail: extractPartialEscapeTail(hiddenChunks.join(''))
+    })
     const alt = snapshot.alternateScreen
+    // Mirror of applyMainBufferSnapshot's write order: the pending escape tail
+    // is the FINAL replay write — any later ESC (e.g. the post-replay reset)
+    // would abort the dangling sequence before the racing tail completes it.
     await writeChunksToTerminal(restored.terminal, [
       alt ? SNAPSHOT_REPLAY_PREAMBLE_ALT : SNAPSHOT_REPLAY_PREAMBLE_NORMAL,
       snapshot.data,
-      POST_REPLAY_LIVE_SNAPSHOT_RESET_PARITY
+      POST_REPLAY_LIVE_SNAPSHOT_RESET_PARITY,
+      ...(snapshot.pendingEscapeTailAnsi ? [snapshot.pendingEscapeTailAnsi] : [])
     ])
 
     // Stitch the tail. A chunk in the snapshot's domain is sliced against the
@@ -434,16 +406,14 @@ describe('hidden reveal seq-reconciliation fuzz', () => {
     expect(revealAtC1.cursor).toEqual(control.cursor)
   })
 
-  // ── Bug D: DECSC saved-cursor register lost across the hide/reveal boundary ──
-  // The snapshot is a serialized screen; the VT100 saved-cursor register
-  // (DECSC ESC 7 / CSI s) is runtime state it cannot carry. When a hidden TUI
-  // saves the cursor before the reveal seq and the racing tail restores it
-  // (DECRC ESC 8 / CSI u), the restore lands at home instead — the next writes
-  // clobber the wrong cells. Found by fuzz seed 3 (a savedCursorDetour op split
-  // across the reveal boundary). See notes/garble-fuzz-divergences.md (Bug D).
-  // Fix direction: carry the saved-cursor out-of-band in the snapshot (like
-  // oscLinks) or re-emit a synthetic DECSC after replay. Unskip once landed.
-  it.skip('preserves the DECSC saved-cursor register across a hide/reveal boundary', async () => {
+  // ── Bug D regression guard: DECSC saved-cursor register across hide/reveal ──
+  // The serialized screen cannot carry the VT100 saved-cursor register, so a
+  // hidden DECSC followed by a post-reveal DECRC restored to home and the next
+  // writes clobbered the wrong cells. FIXED: the snapshot epilogue re-saves at
+  // the source's saved position before the final absolute CUP
+  // (serializeWithAbsoluteCursor + readSavedCursorRegister). Found by fuzz
+  // seed 3; mechanism in notes/garble-fuzz-divergences.md (Bug D).
+  it('preserves the DECSC saved-cursor register across a hide/reveal boundary', async () => {
     const dims = { cols: 20, rows: 4 }
     // Hidden: write 'AB', DECSC saves cursor at r0c2, move to r3c9, write 'CD'.
     const hidden: MeteredChunk = {
@@ -461,21 +431,20 @@ describe('hidden reveal seq-reconciliation fuzz', () => {
     }
     const reveal = await revealFromSnapshot(dims, [hidden, tail], 1)
     const live = await alwaysVisible(dims, [hidden, tail])
-    // Fails today: reveal shows 'XB' (DECRC landed at home) not live's 'ABX'.
+    // Pre-fix this showed 'XB' (DECRC landed at home) instead of live's 'ABX'.
     expect(reveal.rows).toEqual(live.rows)
     expect(reveal.cursor).toEqual(live.cursor)
   })
 
-  // ── Bug E: snapshot boundary mid-escape-sequence drops the partial sequence ──
-  // A PTY read (one delivery record) can split an escape. If the pane is
-  // revealed with the emulator parser mid-ESC[…, the serialized SCREEN cannot
-  // carry the partial sequence, so the racing tail's continuation bytes render
-  // as literal text. Found by fuzz seed 4 (a hidden prefix chunk that ended on
-  // ESC[3, tail supplied 'm'). See notes/garble-fuzz-divergences.md (Bug E).
-  // Fix direction: have main hold a trailing incomplete escape out of the drain
-  // until it completes, or snapshot only at a parser-clean boundary. Unskip once
-  // landed.
-  it.skip('completes an escape sequence split across the hide/reveal boundary', async () => {
+  // ── Bug E regression guard: snapshot boundary mid-escape-sequence ──
+  // A PTY read (one delivery record) can split an escape; the partial lives in
+  // the emulator's parser, not the serialized screen, so the racing tail's
+  // continuation rendered literal ('ABmCD'). FIXED: the emulator tracks the
+  // unparsed trailing partial (terminal-partial-escape-tail.ts) and the
+  // snapshot ships it out-of-band (pendingEscapeTailAnsi); the reveal replay
+  // re-arms it as the final write. Found by fuzz seed 4; mechanism in
+  // notes/garble-fuzz-divergences.md (Bug E).
+  it('completes an escape sequence split across the hide/reveal boundary', async () => {
     const dims = { cols: 20, rows: 3 }
     // Hidden prefix ends mid-escape: 'AB' then ESC[3 (no final byte).
     const hidden: MeteredChunk = { data: 'AB\x1b[3', seq: 5, rawLength: 5, domain: 0 }
@@ -483,7 +452,7 @@ describe('hidden reveal seq-reconciliation fuzz', () => {
     const tail: MeteredChunk = { data: 'mCD', seq: 8, rawLength: 3, domain: 0 }
     const reveal = await revealFromSnapshot(dims, [hidden, tail], 1)
     const live = await alwaysVisible(dims, [hidden, tail])
-    // Fails today: reveal shows 'ABmCD' (the 'm' became literal).
+    // Pre-fix the reveal showed 'ABmCD' (the 'm' became literal).
     expect(reveal.rows).toEqual(live.rows)
   })
 
@@ -491,22 +460,13 @@ describe('hidden reveal seq-reconciliation fuzz', () => {
     let statsCompared = 0
     let statsSkippedScrolled = 0
     let statsForcedFresh = 0
-    let statsMidSequenceBugE = 0
     for (let i = 0; i < ITERATIONS; i++) {
       const seed = FIXED_SEED ?? 1 + i
       const scenario = buildScenario(seed)
-      // Bug E: the snapshot boundary falls mid-escape-sequence (a PTY read
-      // split an escape). The partial sequence lives in the emulator parser,
-      // not the serialized screen, so the tail's continuation renders literal.
-      // Tolerated + counted; pinned by the skipped repro below.
-      const hiddenPrefix = scenario.chunks
-        .slice(0, scenario.revealIdx)
-        .map((c) => c.data)
-        .join('')
-      if (prefixEndsMidSequence(hiddenPrefix)) {
-        statsMidSequenceBugE += 1
-        continue
-      }
+      // Bug E (snapshot boundary mid-escape-sequence) is no longer tolerated:
+      // the snapshot now carries the trailing partial escape out-of-band and
+      // the reveal replay re-arms it last, so these scenarios must compare
+      // clean like any other — a regression fails the corpus loudly.
       // Primary control: a snapshot of the WHOLE stream. Sharing the snapshot
       // machinery isolates the seq-reconciliation tail-stitch from
       // snapshot-fidelity gaps (fidelity suite's Bugs B/C). If snapshot-at-S +
@@ -573,10 +533,6 @@ describe('hidden reveal seq-reconciliation fuzz', () => {
     // Guard against a degenerate corpus that skips its way to green: a healthy
     // fraction of scenarios must reach the full non-scrolled comparison.
     expect(statsCompared).toBeGreaterThan(ITERATIONS * 0.2)
-    // The mid-escape (Bug E) tolerance must not swallow the suite.
-    expect(statsMidSequenceBugE).toBeLessThan(Math.max(3, ITERATIONS * 0.5))
-    expect(
-      statsCompared + statsSkippedScrolled + statsForcedFresh + statsMidSequenceBugE
-    ).toBeLessThanOrEqual(ITERATIONS)
+    expect(statsCompared + statsSkippedScrolled + statsForcedFresh).toBeLessThanOrEqual(ITERATIONS)
   }, 120_000)
 })

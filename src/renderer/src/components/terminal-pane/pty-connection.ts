@@ -5103,6 +5103,7 @@ export function connectPanePty(
       rows: number
       seq?: number
       alternateScreen?: boolean
+      pendingEscapeTailAnsi?: string
     }): void {
       const scrollIntent = captureTerminalWriteScrollIntent(pane.terminal)
       const colsBeforeReplay = pane.terminal.cols
@@ -5143,6 +5144,13 @@ export function connectPanePty(
       }
       writeReplayData(snapshot.data)
       writeReplayData(POST_REPLAY_LIVE_SNAPSHOT_RESET)
+      if (snapshot.pendingEscapeTailAnsi) {
+        // Why last: the snapshot was taken with main's emulator mid-escape;
+        // re-arming the dangling sequence must be the FINAL replay write (any
+        // later ESC aborts it) so the racing tail's continuation bytes
+        // complete it exactly as live (Bug E fix).
+        writeReplayData(snapshot.pendingEscapeTailAnsi)
+      }
       hiddenRendererStateDirty = false
       recordRendererOrderedSeq(snapshot)
       resetHiddenRendererRiskState()

@@ -9,6 +9,10 @@ import { SerializeAddon } from '@xterm/addon-serialize'
 import { Unicode11Addon } from '@xterm/addon-unicode11'
 import { activateOrcaTerminalUnicodeProvider } from './terminal-unicode-provider'
 import { DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT } from './terminal-scrollback-policy'
+import {
+  readSavedCursorRegister,
+  serializeWithAbsoluteCursor
+} from './terminal-serialize-absolute-cursor'
 
 export type ParityTerminal = {
   terminal: Terminal
@@ -170,45 +174,6 @@ export function bufferHasSerializeHostileWrappedRow(terminal: Terminal): boolean
   return false
 }
 
-/** KNOWN UPSTREAM BUG predicate — Bug B (@xterm/addon-serialize 0.15.0-beta.287):
- *  serializing a dim cell followed by a bold-only cell emits `\x1b[1;22m`; SGR
- *  22 (normalIntensity) clears bold too, so the restored cell loses bold. The
- *  fuzz suites tolerate + count exactly the case where the serialized snapshot
- *  contains that self-cancelling transition. Minimal repro + mechanism in
- *  headless-emulator-fidelity.fuzz.test.ts and notes/garble-fuzz-divergences.md. */
-const SELF_CANCELLING_BOLD_RESET_RE = new RegExp(
-  // `1;22` in any SGR position: bold set then immediately reset in one CSI m.
-  `${String.fromCharCode(27)}\\[(?:[0-9;]*;)?1;22(?:;[0-9;]*)?m`
-)
-export function snapshotHasSelfCancellingBoldReset(snapshotAnsi: string): boolean {
-  return SELF_CANCELLING_BOLD_RESET_RE.test(snapshotAnsi)
-}
-
-/** KNOWN UPSTREAM BUG predicate — Bug C (@xterm/addon-serialize 0.15.0-beta.287):
- *  after a content row filled to exactly `cols`, xterm is wrap-pending and the
- *  serializer's relative cursor restore lands one column short. Tolerated +
- *  counted only when the live cursor is exactly one column right of the restored
- *  one AND some content row fills the full width (the wrap-pending trigger). */
-export function isMarginWrapPendingCursorOffByOne(control: Terminal, restored: Terminal): boolean {
-  const live = cursorPosition(control)
-  const back = cursorPosition(restored)
-  if (live.y !== back.y || live.x !== back.x + 1) {
-    return false
-  }
-  const buffer = control.buffer.active
-  for (let y = 0; y < buffer.length; y++) {
-    const line = buffer.getLine(y)
-    if (!line) {
-      continue
-    }
-    const lastCol = control.cols - 1
-    if ((line.getCell(lastCol)?.getChars() ?? '') !== '') {
-      return true
-    }
-  }
-  return false
-}
-
 /** Full normal-buffer text with trailing blank rows trimmed (SerializeAddon
  *  restores content rows; both sides may differ only in trailing blanks). */
 export function normalBufferRowsTrimmed(terminal: Terminal): string[] {
@@ -240,18 +205,28 @@ export type ParityMainSnapshot = {
   seq: number
   alternateScreen: boolean
   pendingDeliveryStartSeq?: number
+  /** Mirror of TerminalSnapshot.pendingEscapeTailAnsi: the trailing
+   *  incomplete escape of the hidden byte stream. The restorer writes it
+   *  LAST, after its post-replay resets (Bug E fix). */
+  pendingEscapeTailAnsi?: string
 }
 
 /** Mirror of the production main-buffer snapshot the renderer restore path
  *  consumes: HeadlessEmulator.getSnapshot (snapshotAnsi normalization +
- *  rehydrateSequences) composed exactly like
+ *  rehydrateSequences + absolute-cursor/DECSC epilogue) composed exactly like
  *  OrcaRuntime.serializeHeadlessTerminalBuffer (alt forces scrollback 0,
  *  data = rehydrateSequences + snapshotAnsi). The renderer fuzz cannot import
  *  HeadlessEmulator itself — tsconfig.tc.web.json excludes src/main/daemon. */
 export function buildParityMainBufferSnapshot(
   parity: ParityTerminal,
   seq: number,
-  opts: { pendingDeliveryStartSeq?: number; scrollbackRows?: number } = {}
+  opts: {
+    pendingDeliveryStartSeq?: number
+    scrollbackRows?: number
+    /** The hidden byte stream's trailing incomplete escape, exactly as the
+     *  emulator's ingest tracker would have accumulated it. */
+    pendingEscapeTail?: string
+  } = {}
 ): ParityMainSnapshot {
   const { terminal } = parity
   const alternateScreen = terminal.buffer.active.type === 'alternate'
@@ -260,7 +235,14 @@ export function buildParityMainBufferSnapshot(
   const scrollback = alternateScreen
     ? 0
     : (opts.scrollbackRows ?? DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT)
-  let snapshotAnsi = parity.serializeAddon.serialize({ scrollback })
+  // Same composition as HeadlessEmulator.getSnapshot: absolute-cursor CUP for
+  // the wrap-pending relative-restore defect plus the DECSC register epilogue.
+  let snapshotAnsi = serializeWithAbsoluteCursor(
+    parity.serializeAddon,
+    terminal,
+    { scrollback },
+    readSavedCursorRegister(terminal)
+  )
   if (alternateScreen) {
     // Why: HeadlessEmulator.normalizeSnapshotAnsiForModes drops the
     // serializer's duplicate ?1049h; rehydrateSequences re-enters alt.
@@ -294,6 +276,9 @@ export function buildParityMainBufferSnapshot(
   }
   if (opts.pendingDeliveryStartSeq !== undefined) {
     snapshot.pendingDeliveryStartSeq = opts.pendingDeliveryStartSeq
+  }
+  if (opts.pendingEscapeTail) {
+    snapshot.pendingEscapeTailAnsi = opts.pendingEscapeTail
   }
   return snapshot
 }

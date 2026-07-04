@@ -20,6 +20,13 @@ export type ShellReadyState = 'pending' | 'ready' | 'timed_out' | 'unsupported'
 // ─── Terminal Snapshot ──────────────────────────────────────────────
 export type TerminalSnapshot = {
   snapshotAnsi: string
+  /** Trailing incomplete escape sequence the emulator ingested but xterm's
+   *  parser is still holding (a PTY read ended mid-escape). Restorers must
+   *  write this LAST — after their own post-replay resets, immediately before
+   *  post-snapshot live chunks — so the continuation bytes complete it
+   *  exactly as live (Bug E, notes/garble-fuzz-divergences.md). Its bytes are
+   *  already counted by the snapshot seq. */
+  pendingEscapeTailAnsi?: string
   /** Scrollback portion only (rows above the visible viewport). Write this
    *  to preserve history without interfering with TUI repaints. */
   scrollbackAnsi: string

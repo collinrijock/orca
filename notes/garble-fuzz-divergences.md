@@ -33,11 +33,19 @@ same bytes. Any such diff is a user-visible garble on reveal.
 
 | bug | found by | seeds | classification |
 | --- | --- | --- | --- |
-| A — serialize wrap null-cell | fidelity (suite 1) | 31, 157, 171, 207, 423, 426, 502, 801, 815, 826, 865, 881, 923, 977, 1004, 1119, 1142, 1238, 1241, 1318, 1351, 1374, 1532, 1601, 1657, 1728, 1770 (27 in 1..2000) | (a) real serialize bug, pre-documented + pinned |
-| B — SGR bold loss (`1;22`) | fidelity (suite 1) | 435, 770, 1321 | (a) real serialize bug — garbles style on reveal |
-| C — cursor off-by-one at right margin | fidelity (suite 1) | 454, 1696 | (a) real serialize bug — misplaces cursor on reveal |
-| D — DECSC saved-cursor lost across reveal | reconciliation (suite 2) | seed 3 | (a) real snapshot limitation — garbles a DECRC-in-tail reveal |
-| E — snapshot boundary mid-escape-sequence | reconciliation (suite 2) | seed 4 (+~24% of corpus) | (a) real snapshot limitation — continuation renders literal |
+| A — serialize wrap null-cell | fidelity (suite 1) | 31, 157, 171, 207, 423, 426, 502, 801, 815, 826, 865, 881, 923, 977, 1004, 1119, 1142, 1238, 1241, 1318, 1351, 1374, 1532, 1601, 1657, 1728, 1770 (27 in 1..2000) | (a) real serialize bug, pre-documented + pinned — STILL OPEN |
+| B — SGR bold loss (`1;22`) | fidelity (suite 1) | 435, 770, 1321 | (a) real serialize bug — FIXED by the addon patch (intensity-group SGR reorder, config/patches) |
+| C — cursor off-by-one at right margin | fidelity (suite 1) | 454, 1696 | (a) real serialize bug — FIXED Orca-side (absolute-cursor epilogue, serializeWithAbsoluteCursor) |
+| D — DECSC saved-cursor lost across reveal | reconciliation (suite 2) | seed 3 | (a) real snapshot limitation — FIXED (snapshot re-saves the DECSC register, readSavedCursorRegister) |
+| E — snapshot boundary mid-escape-sequence | reconciliation (suite 2) | seed 4 (+~24% of corpus) | (a) real snapshot limitation — FIXED (pendingEscapeTailAnsi carried out-of-band, terminal-partial-escape-tail.ts) |
+
+Status update (fix/snapshot-decsc-midescape): B/C/D/E repros are UNSKIPPED and
+their corpus tolerances removed — only Bug A remains tolerated + counted. Bug D
+carries position only (saved SGR/charset are not re-established — the synthetic
+ESC 7 saves the serializer's final pen). Bug E's pending tail is a separate
+snapshot field written LAST by restorers because any later ESC (e.g. the
+post-replay reset) would abort the dangling sequence; its bytes are already
+counted by the snapshot seq, so tail-slice arithmetic is unchanged.
 
 All five bug classes are reproduced by dedicated minimal `test.skip` repros so
 they cannot silently regress, AND each is tolerated + counted by its suite's
@@ -202,9 +210,11 @@ is instead pinned as a standalone repro,
 `hidden-reveal-reconciliation.fuzz.test.ts` →
 `it.skip('preserves the DECSC saved-cursor register across a hide/reveal …')`.
 
-**Fix direction (not applied — no production changes in this task):** carry the
-saved-cursor register out-of-band in the snapshot (like `oscLinks`), or have the
-emulator re-emit a synthetic DECSC restoring the saved position after replay.
+**Fix (applied):** the snapshot epilogue re-establishes the register with
+`CUP(saved) + ESC 7 + CUP(actual)` composed in `serializeWithAbsoluteCursor`,
+reading the active buffer's core register via `readSavedCursorRegister`
+(alt screen yields its own register). Position-only: saved SGR/charset are not
+carried.
 
 ---
 
@@ -248,9 +258,12 @@ serialize wrap bug — it fired on ~24% of the corpus, confirming the class is
 common. Pinned by `hidden-reveal-reconciliation.fuzz.test.ts` →
 `it.skip('completes an escape sequence split across the hide/reveal boundary')`.
 
-**Fix direction (not applied):** have `main` hold a trailing incomplete escape
-out of the drain until it completes (a small parser-aware buffer), or defer the
-snapshot to a parser-clean boundary.
+**Fix (applied):** the emulator tracks the unparsed trailing partial escape at
+ingest (`terminal-partial-escape-tail.ts`, committed post-parse like the mouse
+mirror) and ships it as `TerminalSnapshot.pendingEscapeTailAnsi`; restorers
+write it LAST, after their post-replay resets, so the racing tail's
+continuation completes it exactly as live. Snapshot seq already counted those
+ingested bytes, so reconcile slicing is unchanged.
 
 ---
 

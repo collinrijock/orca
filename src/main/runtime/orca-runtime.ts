@@ -6124,6 +6124,7 @@ export class OrcaRuntimeService {
     source?: 'headless' | 'renderer'
     oscLinks?: TerminalOscLinkRange[]
     alternateScreen?: boolean
+    pendingEscapeTailAnsi?: string
   } | null> {
     const headlessSnapshot = await this.serializeHeadlessTerminalBuffer(ptyId, {
       ...opts,
@@ -6588,6 +6589,7 @@ export class OrcaRuntimeService {
     source?: 'headless'
     oscLinks?: TerminalOscLinkRange[]
     alternateScreen?: boolean
+    pendingEscapeTailAnsi?: string
   } | null> {
     const state = this.headlessTerminals.get(ptyId)
     if (!state) {
@@ -6619,7 +6621,11 @@ export class OrcaRuntimeService {
           // Why: lets the renderer skip the destructive scrollback clear when
           // restoring an alt-screen snapshot — clearing wipes xterm's own
           // history that the TUI relies on for scroll-up after a tab return.
-          alternateScreen: isAlternateScreen
+          alternateScreen: isAlternateScreen,
+          // Why NOT folded into data: the renderer writes its post-replay
+          // reset after data, and any ESC after a dangling partial aborts it.
+          // The restorer writes this last (Bug E fix).
+          pendingEscapeTailAnsi: snapshot.pendingEscapeTailAnsi
         })
       : null
   }
