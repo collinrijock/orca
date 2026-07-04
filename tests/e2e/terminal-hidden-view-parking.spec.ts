@@ -73,6 +73,53 @@ function writeParkedFrameScript(scriptPath: string, runId: string): void {
   )
 }
 
+// Deterministic static alt-screen frame for the park/reveal cycle test: rich
+// styling (box drawing, SGR colors, wide glyphs) that exercises the snapshot
+// restore, painted once and held so the on-screen content is stable across
+// cycles. No spinner/progress churn — the frame must be byte-identical every
+// reveal so drift is detectable.
+function cycleReferenceFrame(runId: string): string {
+  const rows = [
+    '╭──────────────────────────────────────────────────────────╮',
+    `│ Park/reveal cycle reference ${runId.slice(0, 8)} 🟢 你好世界 터미널  │`,
+    '├───────────────┬──────────────────────────────────────────┤',
+    `│ model         │ \x1b[1mcodex/opencode\x1b[22m stream +142 -37        │`,
+    `│ status        │ \x1b[38;5;204mrunning\x1b[0m\x1b[2;36m diff --git a/pty.ts esc↩     │`,
+    '╰───────────────┴──────────────────────────────────────────╯',
+    `CYCLE_REFERENCE_${runId}`
+  ]
+  return [
+    '\x1b[?1049h',
+    '\x1b[2J\x1b[H',
+    '\x1b[?25l',
+    rows.map((row) => `\x1b[2;36m${row}\x1b[0m`).join('\r\n'),
+    '\x1b[?25h'
+  ].join('')
+}
+
+function writeCycleReferenceScript(scriptPath: string, runId: string): void {
+  mkdirSync(path.dirname(scriptPath), { recursive: true })
+  // Paint the frame once, then hold the process open so the alt-screen TUI
+  // stays on screen (and the parkable PTY session stays alive) across cycles.
+  writeFileSync(
+    scriptPath,
+    `process.stdout.write(${JSON.stringify(cycleReferenceFrame(runId))}); setInterval(() => {}, 1000)\n`
+  )
+}
+
+// Why: serialize() re-emits the buffer with cursor-restore trailer sequences
+// (ESC[…H, ESC[?25h) and the exact CSI form can differ run-to-run without any
+// visible change. Compare the CONTENT rows, not the trailer — strip trailing
+// control sequences and normalize whitespace-only tail lines.
+function terminalContentRows(serialized: string): string[] {
+  // eslint-disable-next-line no-control-regex
+  const stripped = serialized.replace(/\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)/g, '')
+  return stripped
+    .split(/\r?\n/)
+    .map((line) => line.replace(/\s+$/, ''))
+    .filter((line) => line.length > 0)
+}
+
 async function readParkingWiring(
   page: Page
 ): Promise<{ present: boolean; parkDelayMs: number | null }> {
@@ -405,5 +452,101 @@ test.describe('Terminal hidden view parking', () => {
     const tabCState = await readTerminalTabViewState(orcaPage, tabCId)
     expect(tabCState.hasManager).toBe(true)
     expect(tabCState.paneCount).toBeGreaterThan(0)
+  })
+
+  // Drives 25 deterministic park→reveal cycles on a static rich TUI frame and
+  // asserts every reveal reproduces the SAME content the tab showed while it was
+  // continuously visible (the never-parked reference). This is the field-garble
+  // guard end-to-end: it exercises the real renderer teardown + HeadlessEmulator
+  // snapshot restore + PTY reattach path the fuzz suites model in isolation, and
+  // fails if any single cycle — or accumulated drift across 25 — garbles a cell.
+  test('reproduces a static frame byte-for-byte across 25 park/reveal cycles', async ({
+    orcaPage,
+    testRepoPath
+  }, testInfo: TestInfo) => {
+    test.setTimeout(180_000)
+    await waitForSessionReady(orcaPage)
+    const setup = await setUpParkableTabA(orcaPage)
+    const { worktreeId, tabAId, tabAPtyId } = setup
+
+    const runId = randomUUID()
+    const marker = `CYCLE_REFERENCE_${runId}`
+    const scriptPath = path.join(testRepoPath, `.orca-cycle-reference-${runId}.mjs`)
+    writeCycleReferenceScript(scriptPath, runId)
+    try {
+      await sendToTerminal(orcaPage, tabAPtyId, `node ${JSON.stringify(scriptPath)}\r`)
+      await expect
+        .poll(() => getTerminalContent(orcaPage, 12_000), {
+          timeout: 15_000,
+          message: 'cycle reference frame did not render while tab A was visible'
+        })
+        .toContain(marker)
+
+      // Tab B stays visible whenever tab A is parked; toggling the active tab
+      // between them is the deterministic hide/reveal driver.
+      const tabBId = await createActiveTerminalTab(orcaPage, worktreeId)
+
+      // One park/reveal cycle to run the frame through the snapshot restore for a
+      // baseline. Why not compare against the visible-before-park content: an
+      // alt-screen restore deliberately drops the normal-buffer scrollback
+      // (serializeHeadlessTerminalBuffer forces scrollback 0 under alt), so the
+      // pre-park serialize carries the shell command echo the restore correctly
+      // omits — that is contract, not garble. Baselining after one reveal makes
+      // both sides pass through identical machinery, so any later diff is drift.
+      const runOneParkRevealCycle = async (cycle: number): Promise<string[]> => {
+        await activateTerminalTab(orcaPage, tabBId)
+        await waitForTabParked(orcaPage, tabAId)
+        await activateTerminalTab(orcaPage, tabAId)
+        await waitForActiveTerminalManager(orcaPage, 30_000)
+        const revealed = await waitForPaneIdentitySnapshot(orcaPage, 1)
+        expect(revealed.panes[0]?.ptyId).toBe(tabAPtyId)
+        await expect
+          .poll(() => getTerminalContent(orcaPage, 12_000), {
+            timeout: 15_000,
+            message: `cycle ${cycle}: reference frame did not restore on reveal`
+          })
+          .toContain(marker)
+        const rows = terminalContentRows(await getTerminalContent(orcaPage, 12_000))
+        // Garble sentinel: the hidden-skip banner must never appear.
+        expect(rows.join('\n')).not.toContain('Orca skipped hidden terminal output')
+        return rows
+      }
+
+      const referenceRows = await runOneParkRevealCycle(0)
+      expect(referenceRows.join('\n')).toContain(marker)
+      expect(referenceRows.join('\n')).toContain('╭')
+
+      // waitForTabParked (inside runOneParkRevealCycle) throws if the tab never
+      // parked, so reaching here means the machinery ran every cycle — no
+      // separate premise guard needed for a vacuous-green check.
+      const CYCLES = 25
+      const mismatches: string[] = []
+      for (let cycle = 1; cycle < CYCLES; cycle++) {
+        const rows = await runOneParkRevealCycle(cycle)
+        if (JSON.stringify(rows) !== JSON.stringify(referenceRows)) {
+          mismatches.push(
+            `cycle ${cycle}:\n  expected: ${JSON.stringify(referenceRows)}\n  actual:   ${JSON.stringify(rows)}`
+          )
+        }
+      }
+
+      testInfo.annotations.push({
+        type: 'terminal-parking-cycles',
+        description: `cycles=${CYCLES} mismatches=${mismatches.length}`
+      })
+      expect(
+        mismatches,
+        `park/reveal drift across ${CYCLES} cycles:\n${mismatches.join('\n')}`
+      ).toEqual([])
+
+      const screenshotPath = testInfo.outputPath('park-reveal-25-cycles-final.png')
+      await orcaPage.screenshot({ path: screenshotPath, fullPage: true })
+      await testInfo.attach('park-reveal-25-cycles-final.png', {
+        path: screenshotPath,
+        contentType: 'image/png'
+      })
+    } finally {
+      rmSync(scriptPath, { force: true })
+    }
   })
 })
