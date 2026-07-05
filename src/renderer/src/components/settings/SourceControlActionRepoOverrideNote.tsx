@@ -16,19 +16,28 @@ type SourceControlActionRepoOverrideNoteProps = {
 const MAX_VISIBLE_REPOS = 5
 
 function getRecipeOverrideFieldLabel(field: SourceControlActionRecipeOverrideField): string {
-  if (field === 'agent') {
-    return translate('auto.components.settings.SourceControlActionRepoOverrideNote.agent', 'Agent')
+  switch (field) {
+    case 'agent':
+      return translate(
+        'auto.components.settings.SourceControlActionRepoOverrideNote.agent',
+        'Agent'
+      )
+    case 'agentArgs':
+      return translate(
+        'auto.components.settings.SourceControlActionRepoOverrideNote.agentArgs',
+        'CLI arguments'
+      )
+    case 'commandTemplate':
+      return translate(
+        'auto.components.settings.SourceControlActionRepoOverrideNote.commandTemplate',
+        'Command template'
+      )
+    default: {
+      // Fail at compile time if the override-field union grows a new variant.
+      const _exhaustive: never = field
+      return _exhaustive
+    }
   }
-  if (field === 'agentArgs') {
-    return translate(
-      'auto.components.settings.SourceControlActionRepoOverrideNote.agentArgs',
-      'CLI arguments'
-    )
-  }
-  return translate(
-    'auto.components.settings.SourceControlActionRepoOverrideNote.commandTemplate',
-    'Command template'
-  )
 }
 
 function getRecipeOverrideFieldSummary(fields: SourceControlActionRecipeOverrideField[]): string {

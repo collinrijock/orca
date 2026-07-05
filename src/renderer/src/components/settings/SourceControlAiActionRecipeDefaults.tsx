@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import type React from 'react'
 import { toast } from 'sonner'
 import type { GlobalSettings, TuiAgent } from '../../../../shared/types'
@@ -16,7 +17,10 @@ import {
 import { Label } from '../ui/label'
 import { useAppStore } from '@/store'
 import { useRepos } from '@/store/selectors'
-import { summarizeReposOverridingActionRecipe } from '@/lib/source-control-launch-agent-selection'
+import {
+  summarizeReposOverridingActionRecipe,
+  type SourceControlActionRecipeOverrideSummary
+} from '@/lib/source-control-launch-agent-selection'
 import { SearchableSetting } from './SearchableSetting'
 import { getRepositorySourceControlAiActionRecipeSectionId } from './repository-settings-targets'
 import { matchesSettingsSearch } from './settings-search'
@@ -90,7 +94,20 @@ export function SourceControlAiActionRecipeDefaults({
   searchQuery,
   writeConfig
 }: SourceControlAiActionRecipeDefaultsProps): React.JSX.Element | null {
-  const repos = useRepos().filter((repo) => !isFolderRepo(repo))
+  const allRepos = useRepos()
+  // Recomputes on every keystroke in the sibling recipe textareas otherwise, so
+  // memoize the filter and the O(actions × repos) override scan on `repos`.
+  const repos = useMemo(() => allRepos.filter((repo) => !isFolderRepo(repo)), [allRepos])
+  const overrideSummaries = useMemo(
+    () =>
+      Object.fromEntries(
+        SOURCE_CONTROL_ACTION_IDS.map((actionId) => [
+          actionId,
+          summarizeReposOverridingActionRecipe({ repos, actionId })
+        ])
+      ) as Record<SourceControlActionId, SourceControlActionRecipeOverrideSummary>,
+    [repos]
+  )
   const openSettingsPage = useAppStore((state) => state.openSettingsPage)
   const openSettingsTarget = useAppStore((state) => state.openSettingsTarget)
   const {
@@ -179,10 +196,7 @@ export function SourceControlAiActionRecipeDefaults({
         {SOURCE_CONTROL_ACTION_IDS.map((actionId) => {
           const recipe = config.actions?.[actionId]
           const selectedAgent = recipe?.agentId ?? null
-          const overrideSummary = summarizeReposOverridingActionRecipe({
-            repos,
-            actionId
-          })
+          const overrideSummary = overrideSummaries[actionId]
           return (
             <SourceControlActionRecipeRow
               key={actionId}

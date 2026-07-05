@@ -61,6 +61,29 @@ describe('SourceControlActionRepoOverrideNote', () => {
     expect(container.textContent).toContain('Review first')
   })
 
+  it('shows a "+N more" note when overrides exceed the visible limit', async () => {
+    renderNote({
+      count: 6,
+      overrides: Array.from({ length: 6 }, (_, index) => ({
+        repoId: `r${index}`,
+        repoName: `Repo ${index}`,
+        fields: ['commandTemplate']
+      }))
+    })
+
+    // The overflow note lives in the tooltip content, only mounted once Radix
+    // opens the tooltip — drive its pointer-move open path and flush the timer.
+    const trigger = container.querySelector('[data-slot="tooltip-trigger"]')
+    await act(async () => {
+      trigger?.dispatchEvent(
+        new PointerEvent('pointermove', { bubbles: true, pointerType: 'mouse' })
+      )
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    })
+
+    expect(document.body.textContent).toContain('+1 more')
+  })
+
   it('opens the first repo override from the review action', () => {
     const onReviewRepo = vi.fn()
     renderNote(
