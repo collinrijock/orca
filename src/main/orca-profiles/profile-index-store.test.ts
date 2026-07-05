@@ -153,4 +153,46 @@ describe('profile index store', () => {
 
     expect(() => setActiveOrcaProfile('missing-profile')).toThrow('unknown_orca_profile')
   })
+
+  it('recovers a corrupted profile index from the backup copy', async () => {
+    const store = await loadProfileIndexStore()
+    store.ensureActiveOrcaProfile()
+    const created = store.createLocalOrcaProfile({ name: 'Work' })
+    // Trigger one more write so the backup captures the two-profile index.
+    store.setActiveOrcaProfile(created.profile.id)
+
+    const indexPath = store.getOrcaProfileIndexPath()
+    expect(existsSync(`${indexPath}.bak`)).toBe(true)
+    writeFileSync(indexPath, '{ not json', 'utf-8')
+
+    const recovered = store.getOrcaProfileListState()
+    expect(recovered.profiles.map((profile) => profile.id)).toContain(created.profile.id)
+    expect(recovered.profiles.length).toBeGreaterThanOrEqual(2)
+  })
+
+  it('rejects profile ids that are not safe path segments', async () => {
+    const store = await loadProfileIndexStore()
+    const indexPath = store.getOrcaProfileIndexPath()
+    const index: OrcaProfileIndex = {
+      schemaVersion: ORCA_PROFILE_INDEX_SCHEMA_VERSION,
+      activeProfileId: '../../escape',
+      profiles: [
+        {
+          id: '../../escape',
+          name: 'Evil',
+          avatar: { kind: 'initials', initials: 'E', color: 'neutral' },
+          kind: 'local',
+          createdAt: 1,
+          updatedAt: 1,
+          lastOpenedAt: 1
+        }
+      ]
+    }
+    mkdirSync(testState.dir, { recursive: true })
+    writeFileSync(indexPath, JSON.stringify(index), 'utf-8')
+
+    // The tampered entry is filtered; startup falls back to a fresh default.
+    const state = store.ensureActiveOrcaProfile()
+    expect(state.profile.id).toBe(DEFAULT_LOCAL_ORCA_PROFILE_ID)
+  })
 })

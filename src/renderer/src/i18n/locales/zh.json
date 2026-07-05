@@ -244,9 +244,8 @@
           "6d3318e813": "导入存储库失败",
           "3be0f7df04": "无法在所选运行时打开文件夹",
           "15cf5319ec": "已在 {{hostName}} 上检查 {{path}}，但该主机未报告可用文件夹。",
-          "a8e4b3af5b": "项目已添加",
-          "6d3318e813": "导入存储库失败",
-          "2dcd706774": "Project also exists in another profile"
+          "2dcd706774": "该项目也存在于另一个配置文件中",
+          "presenceProfileOverflow": "{{names}} 及另外 {{count}} 个"
         },
         "settings": {
           "e12dab333b": "切换服务器失败",
@@ -261,6 +260,24 @@
         },
         "linear": {
           "37d36984d0": "Linear 连接已被新的请求取代。"
+        },
+        "orca": {
+          "profiles": {
+            "612f7f6861": "创建配置文件失败",
+            "319d7cf39b": "已创建云配置文件",
+            "d6e764e7db": "请重新连接此配置文件",
+            "f0c9e11a6d": "创建云配置文件失败",
+            "8b8fa73174": "未配置 Orca Cloud 登录",
+            "33290e88ed": "连接配置文件失败",
+            "9fcb07a796": "配置文件已连接",
+            "2f6c78a039": "刷新配置文件身份验证失败",
+            "a37b5e6d37": "已退出配置文件",
+            "83600521e7": "退出登录失败",
+            "76deec8f58": "切换组织失败",
+            "7d4bc516ee": "切换配置文件失败",
+            "f518e89aa5": "该项目已存在于那个配置文件中",
+            "f03ae7f27b": "转移项目失败"
+          }
         }
       }
     },
@@ -12316,84 +12333,91 @@
         "profiles": {
           "switcher": {
             "cloud": {
-              "unavailable": "Cloud sign-in unavailable"
+              "unavailable": "云登录不可用"
             },
-            "reconnect": "Reconnect profile",
-            "connect": "Connect profile",
-            "organization": "Organization",
+            "reconnect": "重新连接配置文件",
+            "connect": "连接配置文件",
+            "organization": "组织",
             "create": {
               "profile": {
                 "for": {
-                  "org": "Create profile for org"
+                  "org": "为组织创建配置文件"
                 }
               }
             },
-            "signout": "Sign out",
-            "16e3681072": "New local profile",
-            "e3b91a3d90": "Create an empty profile for separate projects and worktrees.",
-            "f322e1f4d6": "Profile name",
-            "cfa59f8ad1": "Create and Switch",
-            "b4f9d1125d": "Local",
-            "4815f7d163": "Switch profile",
-            "d00d853e2a": "Manage profiles",
-            "c106c674fe": "New local profile"
+            "signout": "退出登录",
+            "16e3681072": "新建本地配置文件",
+            "e3b91a3d90": "创建一个空配置文件，用于分开管理项目和工作树。",
+            "f322e1f4d6": "配置文件名称",
+            "cfa59f8ad1": "创建并切换",
+            "b4f9d1125d": "本地",
+            "4815f7d163": "切换配置文件",
+            "d00d853e2a": "管理配置文件",
+            "c106c674fe": "新建本地配置文件"
           },
           "management": {
-            "04e7bd2a23": "Transfer",
-            "128c7dfe64": "Copy to",
-            "df8b7d876b": "Move to",
-            "9aa26347b3": "Project moved",
-            "816ce624b6": "Project copied",
-            "2c45bda8d3": "Manage profiles",
-            "2db945e4a0": "Copy or move projects from the active profile to another local profile.",
-            "18dfc4a0f7": "{{count}} projects",
-            "8668cb2946": "No projects in this profile.",
-            "93034915ab": "Create another profile before copying projects."
+            "04e7bd2a23": "转移",
+            "128c7dfe64": "复制到",
+            "df8b7d876b": "移动到",
+            "9aa26347b3": "项目已移动",
+            "816ce624b6": "项目已复制",
+            "2c45bda8d3": "管理配置文件",
+            "2db945e4a0": "将项目从当前配置文件复制或移动到另一个本地配置文件。",
+            "8668cb2946": "此配置文件中没有项目。",
+            "93034915ab": "复制项目前，请先创建另一个配置文件。",
+            "projectCountSingular": "{{count}} 个项目",
+            "projectCountPlural": "{{count}} 个项目"
           },
           "project": {
             "transfer": {
               "confirm": {
-                "terminal": "{{count}} live terminal tabs",
-                "agent": "{{count}} active agents",
-                "browser": "{{count}} browser workspaces",
                 "move": {
-                  "title": "Move project?",
-                  "description": "Move {{repoName}} to {{targetName}}. Orca removes it from {{activeProfileName}}, keeps files in place, and relaunches into {{targetName}}.",
-                  "action": "Move project"
+                  "title": "移动项目？",
+                  "description": "将 {{repoName}} 移动到 {{targetName}}。Orca 会将其从 {{activeProfileName}} 中移除，保留文件原位，并重新启动进入 {{targetName}}。",
+                  "action": "移动项目"
                 },
                 "copy": {
-                  "title": "Copy project?",
-                  "description": "Copy {{repoName}} to {{targetName}}. Both profiles will point at the same files with separate Orca metadata.",
-                  "action": "Copy project"
+                  "title": "复制项目？",
+                  "description": "将 {{repoName}} 复制到 {{targetName}}。两个配置文件将指向相同的文件，但使用各自独立的 Orca 元数据。",
+                  "action": "复制项目"
                 },
                 "live": {
-                  "work": "Live work in this project"
+                  "work": "此项目中正在进行的工作"
                 },
-                "cancel": "Cancel"
+                "cancel": "取消",
+                "terminalSingular": "{{count}} 个正在运行的终端选项卡",
+                "terminalPlural": "{{count}} 个正在运行的终端选项卡",
+                "agentSingular": "{{count}} 个活动的智能体",
+                "agentPlural": "{{count}} 个活动的智能体",
+                "browserSingular": "{{count}} 个浏览器工作区",
+                "browserPlural": "{{count}} 个浏览器工作区"
               }
             }
           },
           "signout": {
             "confirm": {
-              "title": "Sign out?",
-              "description": "Sign out of {{profileName}} and keep its projects, worktrees, and local metadata on this device.",
-              "cancel": "Cancel",
-              "action": "Sign out"
+              "title": "退出登录？",
+              "description": "退出 {{profileName}}，并在此设备上保留其项目、工作树和本地元数据。",
+              "cancel": "取消",
+              "action": "退出登录"
             }
           },
           "switch": {
             "confirm": {
-              "terminal": "{{count}} live terminal tabs",
-              "agent": "{{count}} active agents",
-              "browser": "{{count}} browser workspaces",
-              "target": "the selected profile",
-              "title": "Switch profiles?",
-              "description": "Switching to {{targetName}} will relaunch Orca and reload the workspace for {{activeProfileName}}.",
+              "target": "所选配置文件",
+              "title": "切换配置文件？",
+              "description": "切换到 {{targetName}} 将重新启动 Orca 并重新加载 {{activeProfileName}} 的工作区。",
               "live": {
-                "work": "Live work in this profile"
+                "work": "此配置文件中正在进行的工作"
               },
-              "cancel": "Cancel",
-              "switch": "Switch profile"
+              "cancel": "取消",
+              "switch": "切换配置文件",
+              "terminalSingular": "{{count}} 个正在运行的终端选项卡",
+              "terminalPlural": "{{count}} 个正在运行的终端选项卡",
+              "agentSingular": "{{count}} 个活动的智能体",
+              "agentPlural": "{{count}} 个活动的智能体",
+              "browserSingular": "{{count}} 个浏览器工作区",
+              "browserPlural": "{{count}} 个浏览器工作区"
             }
           }
         }

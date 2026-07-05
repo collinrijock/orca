@@ -244,7 +244,8 @@
           "6d3318e813": "No se pudieron importar repositorios",
           "3be0f7df04": "No se puede abrir la carpeta en el host seleccionado",
           "15cf5319ec": "{{path}} se verificó en {{hostName}}, pero ese host no reportó ninguna carpeta utilizable.",
-          "2dcd706774": "Project also exists in another profile"
+          "2dcd706774": "El proyecto también existe en otro perfil",
+          "presenceProfileOverflow": "{{names}} y {{count}} más"
         },
         "settings": {
           "e12dab333b": "No se pudo cambiar de servidor",
@@ -259,6 +260,24 @@
         },
         "linear": {
           "37d36984d0": "La conexión de Linear fue reemplazada por una solicitud más reciente."
+        },
+        "orca": {
+          "profiles": {
+            "612f7f6861": "No se pudo crear el perfil",
+            "319d7cf39b": "Perfil en la nube creado",
+            "d6e764e7db": "Reconecta este perfil",
+            "f0c9e11a6d": "No se pudo crear el perfil en la nube",
+            "8b8fa73174": "El inicio de sesión de Orca Cloud no está configurado",
+            "33290e88ed": "No se pudo conectar el perfil",
+            "9fcb07a796": "Perfil conectado",
+            "2f6c78a039": "No se pudo actualizar la autenticación del perfil",
+            "a37b5e6d37": "Sesión cerrada en el perfil",
+            "83600521e7": "No se pudo cerrar la sesión",
+            "76deec8f58": "No se pudo cambiar de organización",
+            "7d4bc516ee": "No se pudo cambiar de perfil",
+            "f518e89aa5": "El proyecto ya existe en ese perfil",
+            "f03ae7f27b": "No se pudo transferir el proyecto"
+          }
         }
       }
     },
@@ -12314,84 +12333,91 @@
         "profiles": {
           "switcher": {
             "cloud": {
-              "unavailable": "Cloud sign-in unavailable"
+              "unavailable": "Inicio de sesión en la nube no disponible"
             },
-            "reconnect": "Reconnect profile",
-            "connect": "Connect profile",
-            "organization": "Organization",
+            "reconnect": "Reconectar perfil",
+            "connect": "Conectar perfil",
+            "organization": "Organización",
             "create": {
               "profile": {
                 "for": {
-                  "org": "Create profile for org"
+                  "org": "Crear perfil para la organización"
                 }
               }
             },
-            "signout": "Sign out",
-            "16e3681072": "New local profile",
-            "e3b91a3d90": "Create an empty profile for separate projects and worktrees.",
-            "f322e1f4d6": "Profile name",
-            "cfa59f8ad1": "Create and Switch",
+            "signout": "Cerrar sesión",
+            "16e3681072": "Nuevo perfil local",
+            "e3b91a3d90": "Crea un perfil vacío para proyectos y worktrees separados.",
+            "f322e1f4d6": "Nombre del perfil",
+            "cfa59f8ad1": "Crear y cambiar",
             "b4f9d1125d": "Local",
-            "4815f7d163": "Switch profile",
-            "d00d853e2a": "Manage profiles",
-            "c106c674fe": "New local profile"
+            "4815f7d163": "Cambiar de perfil",
+            "d00d853e2a": "Gestionar perfiles",
+            "c106c674fe": "Nuevo perfil local"
           },
           "management": {
-            "04e7bd2a23": "Transfer",
-            "128c7dfe64": "Copy to",
-            "df8b7d876b": "Move to",
-            "9aa26347b3": "Project moved",
-            "816ce624b6": "Project copied",
-            "2c45bda8d3": "Manage profiles",
-            "2db945e4a0": "Copy or move projects from the active profile to another local profile.",
-            "18dfc4a0f7": "{{count}} projects",
-            "8668cb2946": "No projects in this profile.",
-            "93034915ab": "Create another profile before copying projects."
+            "04e7bd2a23": "Transferir",
+            "128c7dfe64": "Copiar a",
+            "df8b7d876b": "Mover a",
+            "9aa26347b3": "Proyecto movido",
+            "816ce624b6": "Proyecto copiado",
+            "2c45bda8d3": "Gestionar perfiles",
+            "2db945e4a0": "Copia o mueve proyectos del perfil activo a otro perfil local.",
+            "8668cb2946": "No hay proyectos en este perfil.",
+            "93034915ab": "Crea otro perfil antes de copiar proyectos.",
+            "projectCountSingular": "{{count}} proyecto",
+            "projectCountPlural": "{{count}} proyectos"
           },
           "project": {
             "transfer": {
               "confirm": {
-                "terminal": "{{count}} live terminal tabs",
-                "agent": "{{count}} active agents",
-                "browser": "{{count}} browser workspaces",
                 "move": {
-                  "title": "Move project?",
-                  "description": "Move {{repoName}} to {{targetName}}. Orca removes it from {{activeProfileName}}, keeps files in place, and relaunches into {{targetName}}.",
-                  "action": "Move project"
+                  "title": "¿Mover el proyecto?",
+                  "description": "Mueve {{repoName}} a {{targetName}}. Orca lo quita de {{activeProfileName}}, mantiene los archivos en su lugar y se reinicia en {{targetName}}.",
+                  "action": "Mover proyecto"
                 },
                 "copy": {
-                  "title": "Copy project?",
-                  "description": "Copy {{repoName}} to {{targetName}}. Both profiles will point at the same files with separate Orca metadata.",
-                  "action": "Copy project"
+                  "title": "¿Copiar el proyecto?",
+                  "description": "Copia {{repoName}} a {{targetName}}. Ambos perfiles apuntarán a los mismos archivos con metadatos de Orca separados.",
+                  "action": "Copiar proyecto"
                 },
                 "live": {
-                  "work": "Live work in this project"
+                  "work": "Trabajo en curso en este proyecto"
                 },
-                "cancel": "Cancel"
+                "cancel": "Cancelar",
+                "terminalSingular": "{{count}} pestaña de terminal activa",
+                "terminalPlural": "{{count}} pestañas de terminal activas",
+                "agentSingular": "{{count}} agente activo",
+                "agentPlural": "{{count}} agentes activos",
+                "browserSingular": "{{count}} espacio de trabajo del navegador",
+                "browserPlural": "{{count}} espacios de trabajo del navegador"
               }
             }
           },
           "signout": {
             "confirm": {
-              "title": "Sign out?",
-              "description": "Sign out of {{profileName}} and keep its projects, worktrees, and local metadata on this device.",
-              "cancel": "Cancel",
-              "action": "Sign out"
+              "title": "¿Cerrar sesión?",
+              "description": "Cierra la sesión de {{profileName}} y conserva sus proyectos, worktrees y metadatos locales en este dispositivo.",
+              "cancel": "Cancelar",
+              "action": "Cerrar sesión"
             }
           },
           "switch": {
             "confirm": {
-              "terminal": "{{count}} live terminal tabs",
-              "agent": "{{count}} active agents",
-              "browser": "{{count}} browser workspaces",
-              "target": "the selected profile",
-              "title": "Switch profiles?",
-              "description": "Switching to {{targetName}} will relaunch Orca and reload the workspace for {{activeProfileName}}.",
+              "target": "el perfil seleccionado",
+              "title": "¿Cambiar de perfil?",
+              "description": "Al cambiar a {{targetName}}, Orca se reiniciará y volverá a cargar el espacio de trabajo de {{activeProfileName}}.",
               "live": {
-                "work": "Live work in this profile"
+                "work": "Trabajo en curso en este perfil"
               },
-              "cancel": "Cancel",
-              "switch": "Switch profile"
+              "cancel": "Cancelar",
+              "switch": "Cambiar de perfil",
+              "terminalSingular": "{{count}} pestaña de terminal activa",
+              "terminalPlural": "{{count}} pestañas de terminal activas",
+              "agentSingular": "{{count}} agente activo",
+              "agentPlural": "{{count}} agentes activos",
+              "browserSingular": "{{count}} espacio de trabajo del navegador",
+              "browserPlural": "{{count}} espacios de trabajo del navegador"
             }
           }
         }

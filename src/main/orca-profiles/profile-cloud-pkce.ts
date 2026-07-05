@@ -14,11 +14,7 @@ export type OrcaCloudAuthorizationCode = {
 const AUTH_TIMEOUT_MS = 5 * 60 * 1000
 
 function base64Url(buffer: Buffer): string {
-  return buffer
-    .toString('base64')
-    .replaceAll('+', '-')
-    .replaceAll('/', '_')
-    .replaceAll('=', '')
+  return buffer.toString('base64').replaceAll('+', '-').replaceAll('/', '_').replaceAll('=', '')
 }
 
 function createCodeVerifier(): string {
@@ -31,6 +27,9 @@ function createCodeChallenge(verifier: string): string {
 
 function closeServer(server: Server): void {
   try {
+    // Why: keep-alive sockets from the browser can delay 'close' (and the
+    // timeout cleanup) until the browser drops the connection.
+    server.closeAllConnections?.()
     server.close()
   } catch {
     // Already closed.
@@ -134,7 +133,9 @@ export function beginOrcaCloudPkceFlow(
       authorizeUrl.searchParams.set('code_challenge_method', 'S256')
       authorizeUrl.searchParams.set('local_profile_id', localProfileId)
       void shell.openExternal(authorizeUrl.toString()).catch((error) => {
-        rejectFlow(error instanceof Error ? error : new Error('orca_cloud_auth_browser_open_failed'))
+        rejectFlow(
+          error instanceof Error ? error : new Error('orca_cloud_auth_browser_open_failed')
+        )
       })
     })
   })

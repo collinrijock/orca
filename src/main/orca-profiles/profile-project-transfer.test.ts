@@ -213,6 +213,7 @@ describe('profile project transfer', () => {
                 id: 'browser-1',
                 worktreeId: sourceWorktreeId,
                 sessionProfileId: 'source-browser-profile',
+                sessionPartition: 'persist:orca-profile-personal-deadbeef-browser-default',
                 url: 'https://example.com',
                 title: 'Example',
                 loading: false,
@@ -258,7 +259,8 @@ describe('profile project transfer', () => {
     expect(target.sshTargets).toEqual([sshTarget])
     expect(target.workspaceSession.browserTabsByWorktree?.[sourceWorktreeId]?.[0]).toMatchObject({
       worktreeId: sourceWorktreeId,
-      sessionProfileId: null
+      sessionProfileId: null,
+      sessionPartition: null
     })
   })
 

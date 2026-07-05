@@ -8,6 +8,7 @@ import {
 } from 'node:fs'
 import { randomUUID } from 'node:crypto'
 import { dirname } from 'node:path'
+import type { GlobalSettings } from '../../shared/types'
 import {
   createDefaultLocalOrcaProfile,
   DEFAULT_LOCAL_ORCA_PROFILE_ID,
@@ -60,7 +61,9 @@ function isProfileSummary(value: unknown): value is OrcaProfileSummary {
   const cloud = value.cloud
   return (
     typeof value.id === 'string' &&
-    value.id.length > 0 &&
+    // Why: IDs from the on-disk index become filesystem path segments; a
+    // tampered index must not be able to escape the profiles directory.
+    /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/.test(value.id) &&
     typeof value.name === 'string' &&
     value.name.length > 0 &&
     (value.kind === 'local' || value.kind === 'cloud-linked') &&
@@ -100,7 +103,7 @@ function sanitizeProfileName(value: unknown): string {
   return trimmed.length > 0 ? trimmed.slice(0, 80) : 'New Profile'
 }
 
-export function readProfileIndex(indexPath: string): OrcaProfileIndex | null {
+function readProfileIndexFile(indexPath: string): OrcaProfileIndex | null {
   try {
     return normalizeProfileIndex(JSON.parse(readFileSync(indexPath, 'utf-8')))
   } catch {
@@ -108,8 +111,23 @@ export function readProfileIndex(indexPath: string): OrcaProfileIndex | null {
   }
 }
 
+export function readProfileIndex(indexPath: string): OrcaProfileIndex | null {
+  // Why: a torn/corrupt index must not silently reset the app to a single
+  // default profile — that would orphan every other profile's data directory.
+  return readProfileIndexFile(indexPath) ?? readProfileIndexFile(`${indexPath}.bak`)
+}
+
 export function writeProfileIndex(indexPath: string, index: OrcaProfileIndex): void {
   mkdirSync(dirname(indexPath), { recursive: true })
+  // Why: only a still-parseable current index may refresh the backup;
+  // copying a corrupt file over the backup would destroy the recovery copy.
+  if (existsSync(indexPath) && readProfileIndexFile(indexPath)) {
+    try {
+      copyFileSync(indexPath, `${indexPath}.bak`)
+    } catch {
+      // Best-effort backup; the primary write below still proceeds.
+    }
+  }
   const tmpPath = `${indexPath}.tmp`
   writeFileSync(tmpPath, JSON.stringify(index, null, 2), 'utf-8')
   renameSync(tmpPath, indexPath)
@@ -120,7 +138,11 @@ function copyIfPresent(source: string, target: string): void {
     return
   }
   mkdirSync(dirname(target), { recursive: true })
-  copyFileSync(source, target)
+  // Why: tmp+rename so a crash mid-copy cannot leave a truncated target that
+  // the exists() guard above would then treat as a completed migration.
+  const tmpTarget = `${target}.tmp`
+  copyFileSync(source, tmpTarget)
+  renameSync(tmpTarget, target)
 }
 
 function copyLegacyStateToProfile(userDataPath: string, profileId: string): void {
@@ -133,6 +155,28 @@ function copyLegacyStateToProfile(userDataPath: string, profileId: string): void
   for (let i = 0; i < LEGACY_BACKUP_COUNT; i++) {
     copyIfPresent(legacyBackupPath(userDataPath, i), profileBackupPath(profileDataFile, i))
   }
+}
+
+// Why: a brand-new profile has no data file, which the telemetry cohort
+// migration reads as a fresh install and defaults to opted-in. Copying the
+// active profile's consent block keeps an opted-out user opted out (and keeps
+// one installId per install) when they create additional profiles.
+export function seedNewOrcaProfileTelemetryConsent(
+  profileId: string,
+  telemetry: GlobalSettings['telemetry'],
+  userDataPath = getProfileUserDataPath()
+): void {
+  if (!telemetry) {
+    return
+  }
+  const dataFile = getOrcaProfileDataFile(profileId, userDataPath)
+  if (existsSync(dataFile)) {
+    return
+  }
+  mkdirSync(dirname(dataFile), { recursive: true })
+  const tmpPath = `${dataFile}.tmp`
+  writeFileSync(tmpPath, JSON.stringify({ settings: { telemetry } }, null, 2), 'utf-8')
+  renameSync(tmpPath, dataFile)
 }
 
 function createInitialProfileIndex(now = Date.now()): OrcaProfileIndex {

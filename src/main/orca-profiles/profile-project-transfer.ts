@@ -1,6 +1,6 @@
-import {
-  type TransferOrcaProfileProjectArgs,
-  type TransferOrcaProfileProjectResult
+import type {
+  TransferOrcaProfileProjectArgs,
+  TransferOrcaProfileProjectResult
 } from '../../shared/orca-profiles'
 import { getOrcaProfileListState } from './profile-index-store'
 import { readProfileState, writeProfileState } from './profile-project-state-file'

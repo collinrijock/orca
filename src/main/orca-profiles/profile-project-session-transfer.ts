@@ -170,7 +170,11 @@ function rekeyBrowserWorkspace(
   return {
     ...structuredClone(workspace),
     worktreeId: rekeyWorktreeId(oldRepoId, newRepoId, workspace.worktreeId),
-    sessionProfileId: null
+    // Why: both the session profile and the resolved partition string are
+    // source-profile-scoped; carrying either across would point the restored
+    // pane at a partition the target profile's allowlist rejects.
+    sessionProfileId: null,
+    sessionPartition: null
   }
 }
 

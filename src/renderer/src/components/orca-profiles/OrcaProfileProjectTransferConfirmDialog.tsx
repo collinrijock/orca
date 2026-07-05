@@ -30,8 +30,12 @@ function liveWorkLines(summary: OrcaProfileSwitchLiveWorkSummary): string[] {
   if (summary.liveTerminalTabCount > 0) {
     lines.push(
       translate(
-        'auto.components.orca.profiles.project.transfer.confirm.terminal',
-        '{{count}} live terminal tabs',
+        summary.liveTerminalTabCount === 1
+          ? 'auto.components.orca.profiles.project.transfer.confirm.terminalSingular'
+          : 'auto.components.orca.profiles.project.transfer.confirm.terminalPlural',
+        summary.liveTerminalTabCount === 1
+          ? '{{count}} live terminal tab'
+          : '{{count}} live terminal tabs',
         { count: summary.liveTerminalTabCount }
       )
     )
@@ -39,8 +43,10 @@ function liveWorkLines(summary: OrcaProfileSwitchLiveWorkSummary): string[] {
   if (summary.liveAgentCount > 0) {
     lines.push(
       translate(
-        'auto.components.orca.profiles.project.transfer.confirm.agent',
-        '{{count}} active agents',
+        summary.liveAgentCount === 1
+          ? 'auto.components.orca.profiles.project.transfer.confirm.agentSingular'
+          : 'auto.components.orca.profiles.project.transfer.confirm.agentPlural',
+        summary.liveAgentCount === 1 ? '{{count}} active agent' : '{{count}} active agents',
         { count: summary.liveAgentCount }
       )
     )
@@ -48,8 +54,12 @@ function liveWorkLines(summary: OrcaProfileSwitchLiveWorkSummary): string[] {
   if (summary.browserWorkspaceCount > 0) {
     lines.push(
       translate(
-        'auto.components.orca.profiles.project.transfer.confirm.browser',
-        '{{count}} browser workspaces',
+        summary.browserWorkspaceCount === 1
+          ? 'auto.components.orca.profiles.project.transfer.confirm.browserSingular'
+          : 'auto.components.orca.profiles.project.transfer.confirm.browserPlural',
+        summary.browserWorkspaceCount === 1
+          ? '{{count}} browser workspace'
+          : '{{count}} browser workspaces',
         { count: summary.browserWorkspaceCount }
       )
     )
@@ -131,10 +141,7 @@ export function OrcaProfileProjectTransferConfirmDialog({
 
         <DialogFooter>
           <Button variant="ghost" size="sm" onClick={onCancel} disabled={pending}>
-            {translate(
-              'auto.components.orca.profiles.project.transfer.confirm.cancel',
-              'Cancel'
-            )}
+            {translate('auto.components.orca.profiles.project.transfer.confirm.cancel', 'Cancel')}
           </Button>
           <Button size="sm" onClick={onConfirm} disabled={pending || !pendingTransfer}>
             {pending ? <Loader2 className="size-4 animate-spin" /> : null}

@@ -17,24 +17,36 @@ function liveWorkLines(summary: OrcaProfileSwitchLiveWorkSummary): string[] {
   if (summary.liveTerminalTabCount > 0) {
     lines.push(
       translate(
-        'auto.components.orca.profiles.switch.confirm.terminal',
-        '{{count}} live terminal tabs',
+        summary.liveTerminalTabCount === 1
+          ? 'auto.components.orca.profiles.switch.confirm.terminalSingular'
+          : 'auto.components.orca.profiles.switch.confirm.terminalPlural',
+        summary.liveTerminalTabCount === 1
+          ? '{{count}} live terminal tab'
+          : '{{count}} live terminal tabs',
         { count: summary.liveTerminalTabCount }
       )
     )
   }
   if (summary.liveAgentCount > 0) {
     lines.push(
-      translate('auto.components.orca.profiles.switch.confirm.agent', '{{count}} active agents', {
-        count: summary.liveAgentCount
-      })
+      translate(
+        summary.liveAgentCount === 1
+          ? 'auto.components.orca.profiles.switch.confirm.agentSingular'
+          : 'auto.components.orca.profiles.switch.confirm.agentPlural',
+        summary.liveAgentCount === 1 ? '{{count}} active agent' : '{{count}} active agents',
+        { count: summary.liveAgentCount }
+      )
     )
   }
   if (summary.browserWorkspaceCount > 0) {
     lines.push(
       translate(
-        'auto.components.orca.profiles.switch.confirm.browser',
-        '{{count}} browser workspaces',
+        summary.browserWorkspaceCount === 1
+          ? 'auto.components.orca.profiles.switch.confirm.browserSingular'
+          : 'auto.components.orca.profiles.switch.confirm.browserPlural',
+        summary.browserWorkspaceCount === 1
+          ? '{{count}} browser workspace'
+          : '{{count}} browser workspaces',
         { count: summary.browserWorkspaceCount }
       )
     )
@@ -70,10 +82,7 @@ export function OrcaProfileSwitchConfirmDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <AlertTriangle className="size-4 text-muted-foreground" />
-            {translate(
-              'auto.components.orca.profiles.switch.confirm.title',
-              'Switch profiles?'
-            )}
+            {translate('auto.components.orca.profiles.switch.confirm.title', 'Switch profiles?')}
           </DialogTitle>
           <DialogDescription>
             {translate(
@@ -101,15 +110,17 @@ export function OrcaProfileSwitchConfirmDialog({
         ) : null}
 
         <DialogFooter>
-          <Button variant="ghost" size="sm" onClick={() => onOpenChange(false)} disabled={switching}>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => onOpenChange(false)}
+            disabled={switching}
+          >
             {translate('auto.components.orca.profiles.switch.confirm.cancel', 'Cancel')}
           </Button>
           <Button size="sm" onClick={onConfirm} disabled={switching}>
             {switching ? <Loader2 className="size-4 animate-spin" /> : null}
-            {translate(
-              'auto.components.orca.profiles.switch.confirm.switch',
-              'Switch profile'
-            )}
+            {translate('auto.components.orca.profiles.switch.confirm.switch', 'Switch profile')}
           </Button>
         </DialogFooter>
       </DialogContent>

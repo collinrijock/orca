@@ -361,7 +361,10 @@ class BrowserSessionRegistry {
 
   resolveKnownPartition(profileId: string | null | undefined): string | null {
     if (!profileId) {
-      return ORCA_BROWSER_PARTITION
+      // Why: must track the active Orca profile's default partition, not the
+      // legacy constant, or non-default profiles would resolve local-default's
+      // cookie jar.
+      return this.defaultPartition
     }
     return this.profiles.get(profileId)?.partition ?? null
   }

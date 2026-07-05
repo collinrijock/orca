@@ -262,7 +262,11 @@ function formatProjectPresenceProfileNames(profileNames: readonly string[]): str
   if (names.length <= 3) {
     return names.join(', ')
   }
-  return `${names.slice(0, 3).join(', ')} +${names.length - 3} more`
+  // Why: the "+N more" overflow suffix is user-visible toast copy and must localize.
+  return translate('auto.store.slices.repos.presenceProfileOverflow', '{{names}} +{{count}} more', {
+    names: names.slice(0, 3).join(', '),
+    count: names.length - 3
+  })
 }
 
 async function warnIfProjectKnownInAnotherProfile(
@@ -270,7 +274,9 @@ async function warnIfProjectKnownInAnotherProfile(
   activeOrcaProfileId: string | null
 ): Promise<void> {
   const findProjectProfiles = window.api.orcaProfiles?.findProjectProfiles
-  if (!findProjectProfiles) {
+  // Why: without a loaded active profile ID the scan cannot exclude the
+  // current profile and would false-positive on the project just added.
+  if (!findProjectProfiles || !activeOrcaProfileId) {
     return
   }
   try {
@@ -287,10 +293,7 @@ async function warnIfProjectKnownInAnotherProfile(
       return
     }
     toast.warning(
-      translate(
-        'auto.store.slices.repos.2dcd706774',
-        'Project also exists in another profile'
-      ),
+      translate('auto.store.slices.repos.2dcd706774', 'Project also exists in another profile'),
       { description }
     )
   } catch (err) {
@@ -2110,9 +2113,9 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
             description: repo.displayName
           }
         )
-        if (target.kind === 'local') {
-          await warnIfProjectKnownInAnotherProfile(repo, get().activeOrcaProfileId)
-        }
+        // Why: the design requires the cross-profile advisory for SSH-added
+        // projects too — the presence lookup already keys on connection/host.
+        await warnIfProjectKnownInAnotherProfile(repo, get().activeOrcaProfileId)
       }
       return repo
     } catch (err) {

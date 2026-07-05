@@ -244,7 +244,8 @@
           "6d3318e813": "repos のインポートに失敗しました",
           "3be0f7df04": "選択したランタイムでフォルダーを開けません",
           "15cf5319ec": "{{path}} は {{hostName}} でチェックされましたが、そのホストは使用可能なフォルダーを報告しませんでした。",
-          "2dcd706774": "Project also exists in another profile"
+          "2dcd706774": "プロジェクトは別のプロファイルにも存在します",
+          "presenceProfileOverflow": "{{names}} 他 {{count}} 件"
         },
         "settings": {
           "e12dab333b": "サーバーの切り替えに失敗しました",
@@ -259,6 +260,24 @@
         },
         "linear": {
           "37d36984d0": "Linear 接続は新しいリクエストに置き換えられました。"
+        },
+        "orca": {
+          "profiles": {
+            "612f7f6861": "プロファイルの作成に失敗しました",
+            "319d7cf39b": "クラウド プロファイルが作成されました",
+            "d6e764e7db": "このプロファイルを再接続してください",
+            "f0c9e11a6d": "クラウド プロファイルの作成に失敗しました",
+            "8b8fa73174": "Orca Cloud のサインインが構成されていません",
+            "33290e88ed": "プロファイルの接続に失敗しました",
+            "9fcb07a796": "プロファイルが接続されました",
+            "2f6c78a039": "プロファイル認証の更新に失敗しました",
+            "a37b5e6d37": "プロファイルからサインアウトしました",
+            "83600521e7": "サインアウトに失敗しました",
+            "76deec8f58": "組織の切り替えに失敗しました",
+            "7d4bc516ee": "プロファイルの切り替えに失敗しました",
+            "f518e89aa5": "プロジェクトはそのプロファイルに既に存在します",
+            "f03ae7f27b": "プロジェクトの転送に失敗しました"
+          }
         }
       }
     },
@@ -12314,84 +12333,91 @@
         "profiles": {
           "switcher": {
             "cloud": {
-              "unavailable": "Cloud sign-in unavailable"
+              "unavailable": "クラウド サインインは利用できません"
             },
-            "reconnect": "Reconnect profile",
-            "connect": "Connect profile",
-            "organization": "Organization",
+            "reconnect": "プロファイルを再接続",
+            "connect": "プロファイルを接続",
+            "organization": "組織",
             "create": {
               "profile": {
                 "for": {
-                  "org": "Create profile for org"
+                  "org": "組織用のプロファイルを作成"
                 }
               }
             },
-            "signout": "Sign out",
-            "16e3681072": "New local profile",
-            "e3b91a3d90": "Create an empty profile for separate projects and worktrees.",
-            "f322e1f4d6": "Profile name",
-            "cfa59f8ad1": "Create and Switch",
-            "b4f9d1125d": "Local",
-            "4815f7d163": "Switch profile",
-            "d00d853e2a": "Manage profiles",
-            "c106c674fe": "New local profile"
+            "signout": "サインアウト",
+            "16e3681072": "新しいローカル プロファイル",
+            "e3b91a3d90": "プロジェクトとワークツリーを分けるための空のプロファイルを作成します。",
+            "f322e1f4d6": "プロファイル名",
+            "cfa59f8ad1": "作成して切り替え",
+            "b4f9d1125d": "ローカル",
+            "4815f7d163": "プロファイルを切り替え",
+            "d00d853e2a": "プロファイルを管理",
+            "c106c674fe": "新しいローカル プロファイル"
           },
           "management": {
-            "04e7bd2a23": "Transfer",
-            "128c7dfe64": "Copy to",
-            "df8b7d876b": "Move to",
-            "9aa26347b3": "Project moved",
-            "816ce624b6": "Project copied",
-            "2c45bda8d3": "Manage profiles",
-            "2db945e4a0": "Copy or move projects from the active profile to another local profile.",
-            "18dfc4a0f7": "{{count}} projects",
-            "8668cb2946": "No projects in this profile.",
-            "93034915ab": "Create another profile before copying projects."
+            "04e7bd2a23": "転送",
+            "128c7dfe64": "コピー先",
+            "df8b7d876b": "移動先",
+            "9aa26347b3": "プロジェクトを移動しました",
+            "816ce624b6": "プロジェクトをコピーしました",
+            "2c45bda8d3": "プロファイルを管理",
+            "2db945e4a0": "アクティブなプロファイルから別のローカル プロファイルへプロジェクトをコピーまたは移動します。",
+            "8668cb2946": "このプロファイルにはプロジェクトがありません。",
+            "93034915ab": "プロジェクトをコピーする前に、別のプロファイルを作成してください。",
+            "projectCountSingular": "{{count}} 件のプロジェクト",
+            "projectCountPlural": "{{count}} 件のプロジェクト"
           },
           "project": {
             "transfer": {
               "confirm": {
-                "terminal": "{{count}} live terminal tabs",
-                "agent": "{{count}} active agents",
-                "browser": "{{count}} browser workspaces",
                 "move": {
-                  "title": "Move project?",
-                  "description": "Move {{repoName}} to {{targetName}}. Orca removes it from {{activeProfileName}}, keeps files in place, and relaunches into {{targetName}}.",
-                  "action": "Move project"
+                  "title": "プロジェクトを移動しますか？",
+                  "description": "{{repoName}} を {{targetName}} に移動します。Orca は {{activeProfileName}} から削除し、ファイルはそのまま残して {{targetName}} で再起動します。",
+                  "action": "プロジェクトを移動"
                 },
                 "copy": {
-                  "title": "Copy project?",
-                  "description": "Copy {{repoName}} to {{targetName}}. Both profiles will point at the same files with separate Orca metadata.",
-                  "action": "Copy project"
+                  "title": "プロジェクトをコピーしますか？",
+                  "description": "{{repoName}} を {{targetName}} にコピーします。両方のプロファイルは同じファイルを参照し、Orca のメタデータは別々に保持されます。",
+                  "action": "プロジェクトをコピー"
                 },
                 "live": {
-                  "work": "Live work in this project"
+                  "work": "このプロジェクトで実行中の作業"
                 },
-                "cancel": "Cancel"
+                "cancel": "キャンセル",
+                "terminalSingular": "{{count}} 個の実行中ターミナル タブ",
+                "terminalPlural": "{{count}} 個の実行中ターミナル タブ",
+                "agentSingular": "{{count}} 個のアクティブなエージェント",
+                "agentPlural": "{{count}} 個のアクティブなエージェント",
+                "browserSingular": "{{count}} 個のブラウザ ワークスペース",
+                "browserPlural": "{{count}} 個のブラウザ ワークスペース"
               }
             }
           },
           "signout": {
             "confirm": {
-              "title": "Sign out?",
-              "description": "Sign out of {{profileName}} and keep its projects, worktrees, and local metadata on this device.",
-              "cancel": "Cancel",
-              "action": "Sign out"
+              "title": "サインアウトしますか？",
+              "description": "{{profileName}} からサインアウトし、そのプロジェクト、ワークツリー、ローカル メタデータはこのデバイスに保持します。",
+              "cancel": "キャンセル",
+              "action": "サインアウト"
             }
           },
           "switch": {
             "confirm": {
-              "terminal": "{{count}} live terminal tabs",
-              "agent": "{{count}} active agents",
-              "browser": "{{count}} browser workspaces",
-              "target": "the selected profile",
-              "title": "Switch profiles?",
-              "description": "Switching to {{targetName}} will relaunch Orca and reload the workspace for {{activeProfileName}}.",
+              "target": "選択したプロファイル",
+              "title": "プロファイルを切り替えますか？",
+              "description": "{{targetName}} に切り替えると、Orca が再起動し、{{activeProfileName}} のワークスペースが再読み込みされます。",
               "live": {
-                "work": "Live work in this profile"
+                "work": "このプロファイルで実行中の作業"
               },
-              "cancel": "Cancel",
-              "switch": "Switch profile"
+              "cancel": "キャンセル",
+              "switch": "プロファイルを切り替え",
+              "terminalSingular": "{{count}} 個の実行中ターミナル タブ",
+              "terminalPlural": "{{count}} 個の実行中ターミナル タブ",
+              "agentSingular": "{{count}} 個のアクティブなエージェント",
+              "agentPlural": "{{count}} 個のアクティブなエージェント",
+              "browserSingular": "{{count}} 個のブラウザ ワークスペース",
+              "browserPlural": "{{count}} 個のブラウザ ワークスペース"
             }
           }
         }

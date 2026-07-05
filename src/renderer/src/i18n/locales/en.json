@@ -244,7 +244,8 @@
           "6d3318e813": "Failed to import repositories",
           "3be0f7df04": "Cannot open folder on selected runtime",
           "15cf5319ec": "{{path}} was checked on {{hostName}}, but that host did not report a usable folder.",
-          "2dcd706774": "Project also exists in another profile"
+          "2dcd706774": "Project also exists in another profile",
+          "presenceProfileOverflow": "{{names}} +{{count}} more"
         },
         "settings": {
           "e12dab333b": "Failed to switch servers",
@@ -259,6 +260,24 @@
         },
         "linear": {
           "37d36984d0": "Linear connection was superseded by a newer request."
+        },
+        "orca": {
+          "profiles": {
+            "612f7f6861": "Failed to create profile",
+            "319d7cf39b": "Cloud profile created",
+            "d6e764e7db": "Reconnect this profile",
+            "f0c9e11a6d": "Failed to create cloud profile",
+            "8b8fa73174": "Orca Cloud sign-in is not configured",
+            "33290e88ed": "Failed to connect profile",
+            "9fcb07a796": "Profile connected",
+            "2f6c78a039": "Failed to refresh profile auth",
+            "a37b5e6d37": "Signed out of profile",
+            "83600521e7": "Failed to sign out",
+            "76deec8f58": "Failed to switch organization",
+            "7d4bc516ee": "Failed to switch profile",
+            "f518e89aa5": "Project already exists in that profile",
+            "f03ae7f27b": "Failed to transfer project"
+          }
         }
       }
     },
@@ -12344,16 +12363,14 @@
             "816ce624b6": "Project copied",
             "2c45bda8d3": "Manage profiles",
             "2db945e4a0": "Copy or move projects from the active profile to another local profile.",
-            "18dfc4a0f7": "{{count}} projects",
             "8668cb2946": "No projects in this profile.",
-            "93034915ab": "Create another profile before copying projects."
+            "93034915ab": "Create another profile before copying projects.",
+            "projectCountSingular": "{{count}} project",
+            "projectCountPlural": "{{count}} projects"
           },
           "project": {
             "transfer": {
               "confirm": {
-                "terminal": "{{count}} live terminal tabs",
-                "agent": "{{count}} active agents",
-                "browser": "{{count}} browser workspaces",
                 "move": {
                   "title": "Move project?",
                   "description": "Move {{repoName}} to {{targetName}}. Orca removes it from {{activeProfileName}}, keeps files in place, and relaunches into {{targetName}}.",
@@ -12367,7 +12384,13 @@
                 "live": {
                   "work": "Live work in this project"
                 },
-                "cancel": "Cancel"
+                "cancel": "Cancel",
+                "terminalSingular": "{{count}} live terminal tab",
+                "terminalPlural": "{{count}} live terminal tabs",
+                "agentSingular": "{{count}} active agent",
+                "agentPlural": "{{count}} active agents",
+                "browserSingular": "{{count}} browser workspace",
+                "browserPlural": "{{count}} browser workspaces"
               }
             }
           },
@@ -12381,9 +12404,6 @@
           },
           "switch": {
             "confirm": {
-              "terminal": "{{count}} live terminal tabs",
-              "agent": "{{count}} active agents",
-              "browser": "{{count}} browser workspaces",
               "target": "the selected profile",
               "title": "Switch profiles?",
               "description": "Switching to {{targetName}} will relaunch Orca and reload the workspace for {{activeProfileName}}.",
@@ -12391,7 +12411,13 @@
                 "work": "Live work in this profile"
               },
               "cancel": "Cancel",
-              "switch": "Switch profile"
+              "switch": "Switch profile",
+              "terminalSingular": "{{count}} live terminal tab",
+              "terminalPlural": "{{count}} live terminal tabs",
+              "agentSingular": "{{count}} active agent",
+              "agentPlural": "{{count}} active agents",
+              "browserSingular": "{{count}} browser workspace",
+              "browserPlural": "{{count}} browser workspaces"
             }
           }
         }

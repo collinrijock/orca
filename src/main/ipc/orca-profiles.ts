@@ -1,6 +1,5 @@
 import { app, ipcMain } from 'electron'
 import type { Store } from '../persistence'
-import { destroySystemTray } from '../tray/system-tray'
 import type {
   CreateLocalOrcaProfileArgs,
   CreateLocalOrcaProfileResult,
@@ -23,8 +22,10 @@ import type {
 import {
   createLocalOrcaProfile,
   getOrcaProfileListState,
+  seedNewOrcaProfileTelemetryConsent,
   setActiveOrcaProfile
 } from '../orca-profiles/profile-index-store'
+import { getProfileUserDataPath } from '../orca-profiles/profile-storage-paths'
 import { transferOrcaProfileProject } from '../orca-profiles/profile-project-transfer'
 import { findOrcaProfileProjectsByPath } from '../orca-profiles/profile-project-presence'
 import { normalizeExecutionHostId } from '../../shared/execution-host'
@@ -146,9 +147,11 @@ async function runBeforeProfileRelaunch(
 
 function scheduleProfileRelaunch(): void {
   setTimeout(() => {
-    destroySystemTray()
     app.relaunch()
-    app.exit(0)
+    // Why: app.quit() (not app.exit) so before-quit/will-quit still run —
+    // renderer scrollback capture, PTY kill, stats flush, and daemon final
+    // checkpoints must not be skipped on a profile switch.
+    app.quit()
   }, 150)
 }
 
@@ -158,14 +161,18 @@ export function registerOrcaProfileHandlers(
 ): void {
   ipcMain.handle('orcaProfiles:list', (): OrcaProfileListState => getOrcaProfileListState())
 
-  ipcMain.handle('orcaProfiles:authStatus', (): OrcaProfileAuthStatus =>
-    getCurrentOrcaProfileAuthStatus(app.getPath('userData'))
+  ipcMain.handle(
+    'orcaProfiles:authStatus',
+    (): OrcaProfileAuthStatus => getCurrentOrcaProfileAuthStatus(getProfileUserDataPath())
   )
 
   ipcMain.handle(
     'orcaProfiles:createLocal',
-    (_event, args?: CreateLocalOrcaProfileArgs): CreateLocalOrcaProfileResult =>
-      createLocalOrcaProfile(args)
+    (_event, args?: CreateLocalOrcaProfileArgs): CreateLocalOrcaProfileResult => {
+      const result = createLocalOrcaProfile(args)
+      seedNewOrcaProfileTelemetryConsent(result.profile.id, store.getSettings().telemetry)
+      return result
+    }
   )
 
   ipcMain.handle(
@@ -201,10 +208,16 @@ export function registerOrcaProfileHandlers(
         throw new Error('active_target_orca_profile_transfer_requires_relaunch')
       }
       if (args.mode === 'move' && args.sourceProfileId === current.activeProfileId) {
-        await runBeforeProfileRelaunch(options.onBeforeRelaunch)
+        // Why: transfer before any relaunch side effect so a duplicate-target
+        // or validation failure cannot strand the app in a quitting state.
+        // flush→transfer→freeze runs synchronously with no interleaving, and
+        // the freeze keeps late sync saves from resurrecting the moved
+        // project from stale memory before the relaunch.
         store.flush()
-        const result = transferOrcaProfileProject(args, app.getPath('userData'))
+        const result = transferOrcaProfileProject(args, getProfileUserDataPath())
         if (result.status === 'transferred') {
+          store.freezeWrites()
+          await runBeforeProfileRelaunch(options.onBeforeRelaunch)
           setActiveOrcaProfile(args.targetProfileId)
           scheduleProfileRelaunch()
           return { ...result, willRelaunch: true }
@@ -212,7 +225,7 @@ export function registerOrcaProfileHandlers(
         return result
       }
       store.flush()
-      return transferOrcaProfileProject(args, app.getPath('userData'))
+      return transferOrcaProfileProject(args, getProfileUserDataPath())
     }
   )
 
@@ -221,40 +234,48 @@ export function registerOrcaProfileHandlers(
     (_event, rawArgs: FindOrcaProfileProjectsByPathArgs): FindOrcaProfileProjectsByPathResult =>
       findOrcaProfileProjectsByPath(
         findProjectsByPathArgsFromUnknown(rawArgs),
-        app.getPath('userData')
+        getProfileUserDataPath()
       )
   )
 
   ipcMain.handle(
     'orcaProfiles:connectCurrent',
     async (): Promise<ConnectCurrentOrcaProfileResult> =>
-      connectCurrentOrcaProfile(app.getPath('userData'))
+      connectCurrentOrcaProfile(getProfileUserDataPath())
   )
 
   ipcMain.handle(
     'orcaProfiles:createCloudLinked',
-    async (_event, rawArgs?: CreateCloudLinkedOrcaProfileArgs): Promise<CreateCloudLinkedOrcaProfileResult> =>
-      createCloudLinkedOrcaProfile(
-        app.getPath('userData'),
+    async (
+      _event,
+      rawArgs?: CreateCloudLinkedOrcaProfileArgs
+    ): Promise<CreateCloudLinkedOrcaProfileResult> => {
+      const result = await createCloudLinkedOrcaProfile(
+        getProfileUserDataPath(),
         createCloudLinkedProfileArgsFromUnknown(rawArgs)
       )
+      if (result.status === 'created') {
+        seedNewOrcaProfileTelemetryConsent(result.profile.id, store.getSettings().telemetry)
+      }
+      return result
+    }
   )
 
   ipcMain.handle(
     'orcaProfiles:refreshAuth',
     async (): Promise<RefreshCurrentOrcaProfileAuthResult> =>
-      refreshCurrentOrcaProfileAuth(app.getPath('userData'))
+      refreshCurrentOrcaProfileAuth(getProfileUserDataPath())
   )
 
   ipcMain.handle(
     'orcaProfiles:signOutCurrent',
     async (): Promise<SignOutCurrentOrcaProfileResult> =>
-      signOutCurrentOrcaProfile(app.getPath('userData'))
+      signOutCurrentOrcaProfile(getProfileUserDataPath())
   )
 
   ipcMain.handle(
     'orcaProfiles:selectOrg',
     async (_event, rawArgs: SelectOrcaProfileOrgArgs): Promise<SelectOrcaProfileOrgResult> =>
-      selectCurrentOrcaProfileOrg(app.getPath('userData'), orgIdFromUnknown(rawArgs))
+      selectCurrentOrcaProfileOrg(getProfileUserDataPath(), orgIdFromUnknown(rawArgs))
   )
 }

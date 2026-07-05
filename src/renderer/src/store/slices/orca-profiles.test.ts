@@ -154,6 +154,19 @@ describe('orca profile slice', () => {
     expect(store.getState().orcaProfileSwitching).toBe(true)
   })
 
+  it('releases switching state when main reports the profile is already active', async () => {
+    // Why: a stale renderer activeOrcaProfileId must not lock the switcher
+    // forever when no relaunch is actually coming.
+    orcaProfilesApi.switchProfile.mockResolvedValue({ status: 'already-active' })
+    const store = createTestStore()
+    store.setState({ activeOrcaProfileId: 'local-default' })
+
+    const result = await store.getState().switchOrcaProfile('local-work')
+
+    expect(result).toEqual({ status: 'already-active' })
+    expect(store.getState().orcaProfileSwitching).toBe(false)
+  })
+
   it('does not call main when switching to the active profile', async () => {
     const store = createTestStore()
     store.setState({ activeOrcaProfileId: 'local-default' })

@@ -150,18 +150,21 @@ function normalizeSessionResponse(value: unknown): OrcaCloudSessionExchangeRespo
   }
 }
 
-async function postJson<T>(
-  url: string,
-  body: unknown,
-  accessToken?: string
-): Promise<T> {
+const CLOUD_REQUEST_TIMEOUT_MS = 30_000
+
+async function postJson<T>(url: string, body: unknown, accessToken?: string): Promise<T> {
   const response = await fetch(url, {
     method: 'POST',
     headers: {
       'content-type': 'application/json',
       ...(accessToken ? { authorization: `Bearer ${accessToken}` } : {})
     },
-    body: JSON.stringify(body)
+    body: JSON.stringify(body),
+    // Why: these are fixed first-party token endpoints; following a redirect
+    // would re-send refresh tokens/code verifiers to another origin, and a
+    // stalled server must not hang the renderer's awaited IPC call forever.
+    redirect: 'error',
+    signal: AbortSignal.timeout(CLOUD_REQUEST_TIMEOUT_MS)
   })
   if (!response.ok) {
     throw new OrcaCloudRequestError(response.status)
@@ -193,11 +196,7 @@ export async function refreshOrcaCloudCapabilities(
     cloud?: unknown
     organizations?: unknown
     capabilities: unknown
-  }>(
-    config.capabilitiesEndpoint,
-    {},
-    session.accessToken
-  )
+  }>(config.capabilitiesEndpoint, {}, session.accessToken)
   return {
     cloud: response.cloud === undefined ? undefined : normalizeCloudSummary(response.cloud),
     organizations: normalizeOrganizations(response.organizations),
@@ -242,11 +241,7 @@ export async function selectOrcaCloudOrg(
     cloud: unknown
     organizations?: unknown
     capabilities: unknown
-  }>(
-    config.orgEndpoint,
-    { orgId },
-    session.accessToken
-  )
+  }>(config.orgEndpoint, { orgId }, session.accessToken)
   return {
     cloud: normalizeCloudSummary(response.cloud),
     organizations: normalizeOrganizations(response.organizations),

@@ -853,7 +853,10 @@ function App(): React.JSX.Element {
       const startupStartedAt = performance.now()
       logRendererStartupDiagnostic('startup-chain-start')
       try {
-        await actions.fetchOrcaProfiles()
+        // Why: profile state only feeds the switcher and the add-project
+        // advisory — nothing in the hydration chain reads it synchronously,
+        // so it must not add a serial IPC round-trip before fetchSettings.
+        void actions.fetchOrcaProfiles()
         // Why: repo/worktree hydration routes through settings.activeRuntimeEnvironmentId.
         // Load settings first so a persisted remote runtime does not boot against
         // the local filesystem and then hydrate stale local workspace state.

@@ -2564,6 +2564,10 @@ export class Store {
   private writeTimer: ReturnType<typeof setTimeout> | null = null
   private pendingWrite: Promise<void> | null = null
   private writeGeneration = 0
+  // Why: after a profile transfer rewrites this store's file on disk behind
+  // its back, the stale in-memory state must never be persisted again — a
+  // late sync flush before the relaunch would resurrect the moved project.
+  private writesFrozen = false
   // Why: hash of the plaintext state as of the last successful write. Saves
   // triggered by mutations that net out to identical state skip the full
   // 1.6MB pretty-print + tmp write + rename. Hashing plaintext (not the
@@ -3594,6 +3598,9 @@ export class Store {
   // Why: async writes avoid blocking the main Electron thread on every
   // debounced save during active use.
   private async writeToDiskAsync(): Promise<void> {
+    if (this.writesFrozen) {
+      return
+    }
     const gen = this.writeGeneration
     const stateHash = this.computeStateHash()
     // Why: a mutation burst that nets out to already-persisted state (or a
@@ -3647,6 +3654,9 @@ export class Store {
   // Why: synchronous variant kept only for flush() at shutdown, where the
   // process may exit before an async write completes.
   private writeToDiskSync(opts: { force?: boolean } = {}): void {
+    if (this.writesFrozen) {
+      return
+    }
     const stateHash = this.computeStateHash()
     // Why: skipping is safe under flushOrThrow's durability contract — a
     // matching hash means this exact state is already the file's content.
@@ -6145,6 +6155,17 @@ export class Store {
       console.error('[persistence] Failed to flush state:', err)
     }
     this.writeGithubCacheSnapshotSync()
+  }
+
+  // Why: called after a project move rewrote this store's data file directly.
+  // From that point until relaunch, the in-memory state is stale and any
+  // write (debounced, sync, or shutdown flush) would undo the transfer.
+  freezeWrites(): void {
+    this.writesFrozen = true
+    if (this.writeTimer) {
+      clearTimeout(this.writeTimer)
+      this.writeTimer = null
+    }
   }
 
   // Why best-effort: the sidecar is a refetchable cache — a failed write only

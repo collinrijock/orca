@@ -205,8 +205,10 @@ export function OrcaProfileManagementDialog({
               <div className="truncate text-sm font-medium">{activeProfile.name}</div>
               <div className="truncate text-xs text-muted-foreground">
                 {translate(
-                  'auto.components.orca.profiles.management.18dfc4a0f7',
-                  '{{count}} projects',
+                  repos.length === 1
+                    ? 'auto.components.orca.profiles.management.projectCountSingular'
+                    : 'auto.components.orca.profiles.management.projectCountPlural',
+                  repos.length === 1 ? '{{count}} project' : '{{count}} projects',
                   { count: repos.length }
                 )}
               </div>

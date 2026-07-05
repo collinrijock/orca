@@ -3,19 +3,23 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 const {
   handlers,
   appExitMock,
+  appQuitMock,
   appRelaunchMock,
   destroySystemTrayMock,
   createLocalOrcaProfileMock,
   getOrcaProfileListStateMock,
+  seedNewOrcaProfileTelemetryConsentMock,
   setActiveOrcaProfileMock,
   transferOrcaProfileProjectMock
 } = vi.hoisted(() => ({
   handlers: new Map<string, (_event: unknown, args?: unknown) => unknown>(),
   appExitMock: vi.fn(),
+  appQuitMock: vi.fn(),
   appRelaunchMock: vi.fn(),
   destroySystemTrayMock: vi.fn(),
   createLocalOrcaProfileMock: vi.fn(),
   getOrcaProfileListStateMock: vi.fn(),
+  seedNewOrcaProfileTelemetryConsentMock: vi.fn(),
   setActiveOrcaProfileMock: vi.fn(),
   transferOrcaProfileProjectMock: vi.fn()
 }))
@@ -23,6 +27,7 @@ const {
 vi.mock('electron', () => ({
   app: {
     exit: appExitMock,
+    quit: appQuitMock,
     relaunch: appRelaunchMock,
     getPath: () => '/tmp/orca-user-data'
   },
@@ -40,8 +45,17 @@ vi.mock('../tray/system-tray', () => ({
 vi.mock('../orca-profiles/profile-index-store', () => ({
   createLocalOrcaProfile: createLocalOrcaProfileMock,
   getOrcaProfileListState: getOrcaProfileListStateMock,
+  seedNewOrcaProfileTelemetryConsent: seedNewOrcaProfileTelemetryConsentMock,
   setActiveOrcaProfile: setActiveOrcaProfileMock
 }))
+
+function makeStoreMock(flush = vi.fn()): {
+  flush: typeof flush
+  freezeWrites: ReturnType<typeof vi.fn>
+  getSettings: () => Record<string, never>
+} {
+  return { flush, freezeWrites: vi.fn(), getSettings: () => ({}) }
+}
 
 vi.mock('../orca-profiles/profile-project-transfer', () => ({
   transferOrcaProfileProject: transferOrcaProfileProjectMock
@@ -54,10 +68,12 @@ describe('registerOrcaProfileHandlers', () => {
     vi.useFakeTimers()
     handlers.clear()
     appExitMock.mockReset()
+    appQuitMock.mockReset()
     appRelaunchMock.mockReset()
     destroySystemTrayMock.mockReset()
     createLocalOrcaProfileMock.mockReset()
     getOrcaProfileListStateMock.mockReset()
+    seedNewOrcaProfileTelemetryConsentMock.mockReset()
     setActiveOrcaProfileMock.mockReset()
     transferOrcaProfileProjectMock.mockReset()
   })
@@ -78,7 +94,7 @@ describe('registerOrcaProfileHandlers', () => {
     getOrcaProfileListStateMock.mockReturnValue(listState)
     createLocalOrcaProfileMock.mockReturnValue(createState)
 
-    registerOrcaProfileHandlers({ flush: vi.fn() } as never)
+    registerOrcaProfileHandlers(makeStoreMock() as never)
 
     await expect(Promise.resolve(handlers.get('orcaProfiles:list')?.(null))).resolves.toBe(
       listState
@@ -100,7 +116,7 @@ describe('registerOrcaProfileHandlers', () => {
       activeProfileId: 'local-work',
       profiles: []
     })
-    registerOrcaProfileHandlers({ flush } as never, { onBeforeRelaunch })
+    registerOrcaProfileHandlers(makeStoreMock(flush) as never, { onBeforeRelaunch })
 
     const resultPromise = Promise.resolve(
       handlers.get('orcaProfiles:switch')?.(null, { profileId: 'local-work' })
@@ -117,9 +133,11 @@ describe('registerOrcaProfileHandlers', () => {
 
     await vi.advanceTimersByTimeAsync(150)
 
-    expect(destroySystemTrayMock).toHaveBeenCalledOnce()
     expect(appRelaunchMock).toHaveBeenCalledOnce()
-    expect(appExitMock).toHaveBeenCalledWith(0)
+    // Why quit, not exit: before-quit/will-quit teardown (scrollback capture,
+    // PTY kill, daemon checkpoints) must run on a profile switch.
+    expect(appQuitMock).toHaveBeenCalledOnce()
+    expect(appExitMock).not.toHaveBeenCalled()
   })
 
   it('does not mark a profile active when current profile flush fails', async () => {
@@ -130,7 +148,7 @@ describe('registerOrcaProfileHandlers', () => {
       activeProfileId: 'local-default',
       profiles: []
     })
-    registerOrcaProfileHandlers({ flush } as never)
+    registerOrcaProfileHandlers(makeStoreMock(flush) as never)
 
     await expect(
       Promise.resolve(handlers.get('orcaProfiles:switch')?.(null, { profileId: 'local-work' }))
@@ -145,7 +163,7 @@ describe('registerOrcaProfileHandlers', () => {
       activeProfileId: 'local-default',
       profiles: []
     })
-    registerOrcaProfileHandlers({ flush: vi.fn() } as never)
+    registerOrcaProfileHandlers(makeStoreMock() as never)
 
     await expect(
       Promise.resolve(handlers.get('orcaProfiles:switch')?.(null, { profileId: 'local-default' }))
@@ -156,7 +174,7 @@ describe('registerOrcaProfileHandlers', () => {
   })
 
   it('rejects invalid profile ids', async () => {
-    registerOrcaProfileHandlers({ flush: vi.fn() } as never)
+    registerOrcaProfileHandlers(makeStoreMock() as never)
 
     await expect(
       Promise.resolve(handlers.get('orcaProfiles:switch')?.(null, { profileId: ' ' }))
@@ -179,7 +197,7 @@ describe('registerOrcaProfileHandlers', () => {
       profiles: []
     })
     transferOrcaProfileProjectMock.mockReturnValue(result)
-    registerOrcaProfileHandlers({ flush } as never)
+    registerOrcaProfileHandlers(makeStoreMock(flush) as never)
 
     await expect(
       Promise.resolve(
@@ -221,7 +239,7 @@ describe('registerOrcaProfileHandlers', () => {
       profiles: []
     })
     transferOrcaProfileProjectMock.mockReturnValue(result)
-    registerOrcaProfileHandlers({ flush } as never, { onBeforeRelaunch })
+    registerOrcaProfileHandlers(makeStoreMock(flush) as never, { onBeforeRelaunch })
 
     await expect(
       Promise.resolve(
@@ -250,9 +268,9 @@ describe('registerOrcaProfileHandlers', () => {
 
     await vi.advanceTimersByTimeAsync(150)
 
-    expect(destroySystemTrayMock).toHaveBeenCalledOnce()
     expect(appRelaunchMock).toHaveBeenCalledOnce()
-    expect(appExitMock).toHaveBeenCalledWith(0)
+    expect(appQuitMock).toHaveBeenCalledOnce()
+    expect(appExitMock).not.toHaveBeenCalled()
   })
 
   it('rejects transfers that would mutate the active target profile offline', async () => {
@@ -260,7 +278,7 @@ describe('registerOrcaProfileHandlers', () => {
       activeProfileId: 'work',
       profiles: []
     })
-    registerOrcaProfileHandlers({ flush: vi.fn() } as never)
+    registerOrcaProfileHandlers(makeStoreMock() as never)
 
     await expect(
       Promise.resolve(

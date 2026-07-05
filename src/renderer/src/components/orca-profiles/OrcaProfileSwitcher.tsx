@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Check, ChevronDown, Cloud, Laptop, Loader2, Plus, Settings2 } from 'lucide-react'
 import { useShallow } from 'zustand/react/shallow'
 import { Button } from '@/components/ui/button'
@@ -22,6 +22,10 @@ import { OrcaProfileManagementDialog } from './OrcaProfileManagementDialog'
 import { OrcaProfileSignOutConfirmDialog } from './OrcaProfileSignOutConfirmDialog'
 import { OrcaProfileSwitchConfirmDialog } from './OrcaProfileSwitchConfirmDialog'
 import { getOrcaProfileSwitchLiveWorkSummary } from './orca-profile-switch-liveness'
+
+function isWebClient(): boolean {
+  return Boolean((window as unknown as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__)
+}
 
 function getProfileSubtitle(profile: OrcaProfileSummary): string {
   if (profile.cloud?.activeOrgName) {
@@ -69,13 +73,20 @@ export function OrcaProfileSwitcher({
     [pendingSwitchProfileId, profiles]
   )
 
+  // Why: one attempt per mount — retrying on every loading toggle would spin
+  // an unbounded IPC loop when the list call persistently fails.
+  const fetchAttemptedRef = useRef(false)
   useEffect(() => {
-    if (profiles.length === 0 && !loading) {
+    if (profiles.length === 0 && !loading && !fetchAttemptedRef.current) {
+      fetchAttemptedRef.current = true
       void fetchProfiles()
     }
   }, [fetchProfiles, loading, profiles.length])
 
-  if (!activeProfile) {
+  // Why: paired web/mobile clients only see the desktop stub's fabricated
+  // profile list; showing a switcher there would misreport the active profile
+  // and none of its actions can work remotely.
+  if (isWebClient() || !activeProfile) {
     return null
   }
 

@@ -38,6 +38,7 @@ vi.mock('../tray/system-tray', () => ({
 vi.mock('../orca-profiles/profile-index-store', () => ({
   createLocalOrcaProfile: vi.fn(),
   getOrcaProfileListState: vi.fn(),
+  seedNewOrcaProfileTelemetryConsent: vi.fn(),
   setActiveOrcaProfile: vi.fn()
 }))
 
@@ -75,7 +76,11 @@ describe('registerOrcaProfileHandlers auth channels', () => {
       persistence: 'none'
     }
     getCurrentOrcaProfileAuthStatusMock.mockReturnValue(status)
-    registerOrcaProfileHandlers({ flush: vi.fn() } as never)
+    registerOrcaProfileHandlers({
+      flush: vi.fn(),
+      freezeWrites: vi.fn(),
+      getSettings: () => ({})
+    } as never)
 
     await expect(Promise.resolve(handlers.get('orcaProfiles:authStatus')?.(null))).resolves.toBe(
       status
@@ -88,7 +93,11 @@ describe('registerOrcaProfileHandlers auth channels', () => {
     const signOutResult = { status: 'signed-out', auth: { activeProfileId: 'local-default' } }
     connectCurrentOrcaProfileMock.mockResolvedValue(connectResult)
     signOutCurrentOrcaProfileMock.mockResolvedValue(signOutResult)
-    registerOrcaProfileHandlers({ flush: vi.fn() } as never)
+    registerOrcaProfileHandlers({
+      flush: vi.fn(),
+      freezeWrites: vi.fn(),
+      getSettings: () => ({})
+    } as never)
 
     await expect(
       Promise.resolve(handlers.get('orcaProfiles:connectCurrent')?.(null))
@@ -103,18 +112,26 @@ describe('registerOrcaProfileHandlers auth channels', () => {
   it('refreshes profile auth through the cloud service', async () => {
     const refreshResult = { status: 'refreshed', auth: { activeProfileId: 'local-default' } }
     refreshCurrentOrcaProfileAuthMock.mockResolvedValue(refreshResult)
-    registerOrcaProfileHandlers({ flush: vi.fn() } as never)
+    registerOrcaProfileHandlers({
+      flush: vi.fn(),
+      freezeWrites: vi.fn(),
+      getSettings: () => ({})
+    } as never)
 
-    await expect(
-      Promise.resolve(handlers.get('orcaProfiles:refreshAuth')?.(null))
-    ).resolves.toBe(refreshResult)
+    await expect(Promise.resolve(handlers.get('orcaProfiles:refreshAuth')?.(null))).resolves.toBe(
+      refreshResult
+    )
     expect(refreshCurrentOrcaProfileAuthMock).toHaveBeenCalledWith('/tmp/orca-user-data')
   })
 
   it('validates organization selection before calling the cloud service', async () => {
     const selectResult = { status: 'selected', auth: { activeProfileId: 'local-default' } }
     selectCurrentOrcaProfileOrgMock.mockResolvedValue(selectResult)
-    registerOrcaProfileHandlers({ flush: vi.fn() } as never)
+    registerOrcaProfileHandlers({
+      flush: vi.fn(),
+      freezeWrites: vi.fn(),
+      getSettings: () => ({})
+    } as never)
 
     await expect(
       Promise.resolve(handlers.get('orcaProfiles:selectOrg')?.(null, { orgId: ' org-1 ' }))
@@ -135,13 +152,15 @@ describe('registerOrcaProfileHandlers auth channels', () => {
       profile: { id: 'cloud-1' }
     }
     createCloudLinkedOrcaProfileMock.mockResolvedValue(createResult)
-    registerOrcaProfileHandlers({ flush: vi.fn() } as never)
+    registerOrcaProfileHandlers({
+      flush: vi.fn(),
+      freezeWrites: vi.fn(),
+      getSettings: () => ({})
+    } as never)
 
     await expect(
       Promise.resolve(
-        handlers
-          .get('orcaProfiles:createCloudLinked')
-          ?.(null, { orgId: ' org-1 ', name: ' Acme ' })
+        handlers.get('orcaProfiles:createCloudLinked')?.(null, { orgId: ' org-1 ', name: ' Acme ' })
       )
     ).resolves.toBe(createResult)
     expect(createCloudLinkedOrcaProfileMock).toHaveBeenCalledWith('/tmp/orca-user-data', {
