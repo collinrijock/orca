@@ -89,24 +89,31 @@ describe('github owner/repo resolution', () => {
     expect(parseGitHubOwnerRepo('https://ghe.acme.internal/acme/orca.git')).toBeNull()
   })
 
-  it('keeps getOwnerRepo origin-based', async () => {
-    gitExecFileAsyncMock.mockResolvedValueOnce({
-      stdout: 'git@github.com:fork/orca.git\n'
-    })
+  it('resolves getOwnerRepo upstream-first', async () => {
+    // upstream missing → falls back to origin
+    gitExecFileAsyncMock
+      .mockRejectedValueOnce(new Error('not found'))
+      .mockResolvedValueOnce({ stdout: 'git@github.com:fork/orca.git\n' })
 
     await expect(getOwnerRepo('/repo')).resolves.toEqual({ owner: 'fork', repo: 'orca' })
-    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['remote', 'get-url', 'origin'], {
+    expect(gitExecFileAsyncMock).toHaveBeenNthCalledWith(1, ['remote', 'get-url', 'upstream'], {
+      cwd: '/repo'
+    })
+    expect(gitExecFileAsyncMock).toHaveBeenNthCalledWith(2, ['remote', 'get-url', 'origin'], {
       cwd: '/repo'
     })
   })
 
-  it('resolves GitHub HTTPS origin remotes with user info and a default port', async () => {
-    gitExecFileAsyncMock.mockResolvedValueOnce({
-      stdout: 'https://alice@github.com:443/acme/widgets.git\n'
-    })
+  it('resolves GitHub HTTPS origin remotes through upstream-first fallback', async () => {
+    gitExecFileAsyncMock
+      .mockRejectedValueOnce(new Error('not found'))
+      .mockResolvedValueOnce({ stdout: 'https://alice@github.com:443/acme/widgets.git\n' })
 
     await expect(getOwnerRepo('/repo')).resolves.toEqual({ owner: 'acme', repo: 'widgets' })
-    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['remote', 'get-url', 'origin'], {
+    expect(gitExecFileAsyncMock).toHaveBeenNthCalledWith(1, ['remote', 'get-url', 'upstream'], {
+      cwd: '/repo'
+    })
+    expect(gitExecFileAsyncMock).toHaveBeenNthCalledWith(2, ['remote', 'get-url', 'origin'], {
       cwd: '/repo'
     })
   })
@@ -137,11 +144,12 @@ describe('github owner/repo resolution', () => {
   })
 
   it('does not mix origin and upstream cache entries for the same repo path', async () => {
+    // getOwnerRepo and getIssueOwnerRepo both resolve upstream-first now
     gitExecFileAsyncMock
-      .mockResolvedValueOnce({ stdout: 'git@github.com:fork/orca.git\n' })
+      .mockResolvedValueOnce({ stdout: 'git@github.com:stablyai/orca.git\n' })
       .mockResolvedValueOnce({ stdout: 'git@github.com:stablyai/orca.git\n' })
 
-    await expect(getOwnerRepo('/repo')).resolves.toEqual({ owner: 'fork', repo: 'orca' })
+    await expect(getOwnerRepo('/repo')).resolves.toEqual({ owner: 'stablyai', repo: 'orca' })
     await expect(getIssueOwnerRepo('/repo')).resolves.toEqual({ owner: 'stablyai', repo: 'orca' })
   })
 
@@ -171,7 +179,10 @@ describe('github owner/repo resolution', () => {
 
   it('resolves SSH repo remotes through the registered SSH git provider', async () => {
     const sshProvider = {
-      exec: vi.fn().mockResolvedValue({ stdout: 'git@github.com:stablyai/orca.git\n', stderr: '' })
+      exec: vi
+        .fn()
+        .mockRejectedValueOnce(new Error('not found'))
+        .mockResolvedValueOnce({ stdout: 'git@github.com:stablyai/orca.git\n', stderr: '' })
     }
     getSshGitProviderMock.mockReturnValue(sshProvider)
 
@@ -182,7 +193,13 @@ describe('github owner/repo resolution', () => {
 
     expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
     expect(getSshGitProviderMock).toHaveBeenCalledWith('openclaw-2')
-    expect(sshProvider.exec).toHaveBeenCalledWith(
+    expect(sshProvider.exec).toHaveBeenNthCalledWith(
+      1,
+      ['remote', 'get-url', 'upstream'],
+      '/home/user/orca'
+    )
+    expect(sshProvider.exec).toHaveBeenNthCalledWith(
+      2,
       ['remote', 'get-url', 'origin'],
       '/home/user/orca'
     )
@@ -200,8 +217,11 @@ describe('github owner/repo resolution', () => {
   })
 
   it('keeps local host and local WSL owner/repo cache entries separate for the same path', async () => {
+    // upstream-first: each getOwnerRepo call tries upstream then origin
     gitExecFileAsyncMock
+      .mockRejectedValueOnce(new Error('not found'))
       .mockResolvedValueOnce({ stdout: 'git@github.com:host/orca.git\n' })
+      .mockRejectedValueOnce(new Error('not found'))
       .mockResolvedValueOnce({ stdout: 'git@github.com:wsl/orca.git\n' })
 
     await expect(getOwnerRepo('/repo')).resolves.toEqual({ owner: 'host', repo: 'orca' })
@@ -209,16 +229,23 @@ describe('github owner/repo resolution', () => {
       owner: 'wsl',
       repo: 'orca'
     })
+    // cached hit
     await expect(getOwnerRepo('/repo', null, { wslDistro: 'Ubuntu' })).resolves.toEqual({
       owner: 'wsl',
       repo: 'orca'
     })
 
-    expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(2)
-    expect(gitExecFileAsyncMock).toHaveBeenNthCalledWith(1, ['remote', 'get-url', 'origin'], {
+    expect(gitExecFileAsyncMock).toHaveBeenNthCalledWith(1, ['remote', 'get-url', 'upstream'], {
       cwd: '/repo'
     })
     expect(gitExecFileAsyncMock).toHaveBeenNthCalledWith(2, ['remote', 'get-url', 'origin'], {
+      cwd: '/repo'
+    })
+    expect(gitExecFileAsyncMock).toHaveBeenNthCalledWith(3, ['remote', 'get-url', 'upstream'], {
+      cwd: '/repo',
+      wslDistro: 'Ubuntu'
+    })
+    expect(gitExecFileAsyncMock).toHaveBeenNthCalledWith(4, ['remote', 'get-url', 'origin'], {
       cwd: '/repo',
       wslDistro: 'Ubuntu'
     })

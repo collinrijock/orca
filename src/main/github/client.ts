@@ -51,6 +51,7 @@ import {
   release,
   getOwnerRepo,
   getIssueOwnerRepo,
+  getOriginOwnerRepo,
   getOwnerRepoForRemote,
   resolvePRRepositoryCandidates,
   resolveIssueSource,
@@ -1540,7 +1541,7 @@ export async function getRepoUpstream(
 ): Promise<OwnerRepo | null> {
   const localGitArgs = hostedReviewLocalGitOptionArgs(options)
   const localGitOptions = localGitArgs[0] ?? {}
-  const origin = await getOwnerRepo(repoPath, connectionId, ...localGitArgs)
+  const origin = await getOriginOwnerRepo(repoPath, connectionId, ...localGitArgs)
   if (!origin) {
     return null
   }
@@ -1737,7 +1738,7 @@ export async function createGitHubPullRequest(
     }
   }
 
-  const ownerRepo = await getOwnerRepo(
+  const ownerRepo = await getOriginOwnerRepo(
     repoPath,
     connectionId,
     ...hostedReviewLocalGitOptionArgs(options)

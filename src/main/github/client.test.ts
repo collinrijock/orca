@@ -10,6 +10,7 @@ const {
   ghExecFileAsyncMock,
   getOwnerRepoMock,
   getIssueOwnerRepoMock,
+  getOriginOwnerRepoMock,
   getOwnerRepoForRemoteMock,
   resolvePRRepositoryCandidatesMock,
   getRemoteUrlForRepoMock,
@@ -28,6 +29,7 @@ const {
   ghExecFileAsyncMock: vi.fn(),
   getOwnerRepoMock: vi.fn(),
   getIssueOwnerRepoMock: vi.fn(),
+  getOriginOwnerRepoMock: vi.fn(),
   getOwnerRepoForRemoteMock: vi.fn(),
   resolvePRRepositoryCandidatesMock: vi.fn(),
   getRemoteUrlForRepoMock: vi.fn(),
@@ -58,6 +60,7 @@ vi.mock('./gh-utils', () => ({
   execFileAsync: execFileAsyncMock,
   ghExecFileAsync: ghExecFileAsyncMock,
   getOwnerRepo: getOwnerRepoMock,
+  getOriginOwnerRepo: getOriginOwnerRepoMock,
   getIssueOwnerRepo: getIssueOwnerRepoMock,
   getOwnerRepoForRemote: getOwnerRepoForRemoteMock,
   resolvePRRepositoryCandidates: resolvePRRepositoryCandidatesMock,
@@ -2975,7 +2978,7 @@ describe('getPRForBranch', () => {
   })
 
   it('resolves a distinct upstream remote as the repo upstream', async () => {
-    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'tmchow', repo: 'orca' })
+    getOriginOwnerRepoMock.mockResolvedValueOnce({ owner: 'tmchow', repo: 'orca' })
     getOwnerRepoForRemoteMock.mockResolvedValueOnce({ owner: 'stablyai', repo: 'orca' })
 
     await expect(getRepoUpstream('/repo-root')).resolves.toEqual({
@@ -2987,7 +2990,7 @@ describe('getPRForBranch', () => {
   })
 
   it('does not treat a same-repository upstream remote as a fork', async () => {
-    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'StablyAI', repo: 'Orca' })
+    getOriginOwnerRepoMock.mockResolvedValueOnce({ owner: 'StablyAI', repo: 'Orca' })
     getOwnerRepoForRemoteMock.mockResolvedValueOnce({ owner: 'stablyai', repo: 'orca' })
     ghExecFileAsyncMock.mockResolvedValueOnce({
       stdout: JSON.stringify({ isFork: false, parent: null })
@@ -3002,7 +3005,7 @@ describe('getPRForBranch', () => {
   })
 
   it('does not mark an upstream-only GitHub remote as a fork', async () => {
-    getOwnerRepoMock.mockResolvedValueOnce(null)
+    getOriginOwnerRepoMock.mockResolvedValueOnce(null)
 
     await expect(getRepoUpstream('/repo-root')).resolves.toBeNull()
 
@@ -3011,7 +3014,7 @@ describe('getPRForBranch', () => {
   })
 
   it('falls back to the GitHub parent when no upstream remote is configured', async () => {
-    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'tmchow', repo: 'orca' })
+    getOriginOwnerRepoMock.mockResolvedValueOnce({ owner: 'tmchow', repo: 'orca' })
     getOwnerRepoForRemoteMock.mockResolvedValueOnce(null)
     ghExecFileAsyncMock.mockResolvedValueOnce({
       stdout: JSON.stringify({

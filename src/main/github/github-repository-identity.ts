@@ -208,19 +208,31 @@ export async function getOwnerRepo(
   connectionId?: string | null,
   localGitOptions: LocalGitExecOptions = {}
 ): Promise<OwnerRepo | null> {
-  return getOwnerRepoForRemote(repoPath, 'origin', connectionId, localGitOptions)
-}
-
-export async function getIssueOwnerRepo(
-  repoPath: string,
-  connectionId?: string | null,
-  localGitOptions: LocalGitExecOptions = {}
-): Promise<OwnerRepo | null> {
   const upstream = await getOwnerRepoForRemote(repoPath, 'upstream', connectionId, localGitOptions)
   if (upstream) {
     return upstream
   }
   return getOwnerRepoForRemote(repoPath, 'origin', connectionId, localGitOptions)
+}
+
+// Why: a few callers (createGitHubPullRequest, getRepoUpstream) specifically
+// need the fork's origin remote, not the upstream canonical repo.
+export async function getOriginOwnerRepo(
+  repoPath: string,
+  connectionId?: string | null,
+  localGitOptions: LocalGitExecOptions = {}
+): Promise<OwnerRepo | null> {
+  return getOwnerRepoForRemote(repoPath, 'origin', connectionId, localGitOptions)
+}
+
+// Why: kept for backwards compatibility; behaviour is identical to getOwnerRepo
+// since both now resolve upstream-first.
+export async function getIssueOwnerRepo(
+  repoPath: string,
+  connectionId?: string | null,
+  localGitOptions: LocalGitExecOptions = {}
+): Promise<OwnerRepo | null> {
+  return getOwnerRepo(repoPath, connectionId, localGitOptions)
 }
 
 export type PRRepositoryCandidates = {

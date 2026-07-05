@@ -5,14 +5,14 @@ import { readFile } from 'node:fs/promises'
 
 const {
   ghExecFileAsyncMock,
-  getOwnerRepoMock,
+  getOriginOwnerRepoMock,
   extractExecErrorMock,
   acquireMock,
   releaseMock,
   getSshFilesystemProviderMock
 } = vi.hoisted(() => ({
   ghExecFileAsyncMock: vi.fn(),
-  getOwnerRepoMock: vi.fn(),
+  getOriginOwnerRepoMock: vi.fn(),
   extractExecErrorMock: vi.fn((error: unknown) => {
     const value = error as { stderr?: string; stdout?: string; message?: string }
     return {
@@ -32,7 +32,7 @@ vi.mock('../providers/ssh-filesystem-dispatch', () => ({
 vi.mock('./gh-utils', () => ({
   execFileAsync: vi.fn(),
   ghExecFileAsync: ghExecFileAsyncMock,
-  getOwnerRepo: getOwnerRepoMock,
+  getOriginOwnerRepo: getOriginOwnerRepoMock,
   getIssueOwnerRepo: vi.fn(),
   getOwnerRepoForRemote: vi.fn(),
   githubRepoContext: vi.fn((repoPath: string, connectionId?: string | null) => ({
@@ -59,7 +59,7 @@ import { createGitHubPullRequest } from './client'
 describe('createGitHubPullRequest', () => {
   beforeEach(() => {
     ghExecFileAsyncMock.mockReset()
-    getOwnerRepoMock.mockReset()
+    getOriginOwnerRepoMock.mockReset()
     extractExecErrorMock.mockClear()
     acquireMock.mockReset()
     releaseMock.mockReset()
@@ -68,7 +68,7 @@ describe('createGitHubPullRequest', () => {
   })
 
   it('creates a GitHub pull request with normalized refs and a body file', async () => {
-    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
+    getOriginOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
     ghExecFileAsyncMock.mockResolvedValueOnce({
       stdout: JSON.stringify({
         number: 42,
@@ -118,7 +118,7 @@ describe('createGitHubPullRequest', () => {
   })
 
   it('runs local WSL project pull request creation through the selected distro', async () => {
-    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
+    getOriginOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
     ghExecFileAsyncMock.mockResolvedValueOnce({
       stdout: JSON.stringify({
         number: 43,
@@ -154,7 +154,7 @@ describe('createGitHubPullRequest', () => {
   })
 
   it('creates SSH-backed pull requests without using the remote path as a local cwd', async () => {
-    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
+    getOriginOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
     ghExecFileAsyncMock.mockResolvedValueOnce({
       stdout: JSON.stringify({
         number: 45,
@@ -179,7 +179,7 @@ describe('createGitHubPullRequest', () => {
       url: 'https://github.com/acme/widgets/pull/45'
     })
 
-    expect(getOwnerRepoMock).toHaveBeenCalledWith('/remote/repo-root', 'ssh-1')
+    expect(getOriginOwnerRepoMock).toHaveBeenCalledWith('/remote/repo-root', 'ssh-1')
     const [args, options] = ghExecFileAsyncMock.mock.calls[0]
     expect(args).toEqual(
       expect.arrayContaining([
@@ -231,7 +231,7 @@ describe('createGitHubPullRequest', () => {
         throw new Error('missing template')
       })
       getSshFilesystemProviderMock.mockReturnValue({ readFile: readRemoteFile })
-      getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
+      getOriginOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
       const writtenBodies: string[] = []
       ghExecFileAsyncMock.mockImplementationOnce(async (args: string[]) => {
         const bodyPath = args[args.indexOf('--body-file') + 1]
@@ -271,7 +271,7 @@ describe('createGitHubPullRequest', () => {
   )
 
   it('falls back to parsing the PR URL for older gh output', async () => {
-    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
+    getOriginOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
     ghExecFileAsyncMock.mockResolvedValueOnce({
       stdout: 'https://github.com/acme/widgets/pull/43\n'
     })
@@ -291,7 +291,7 @@ describe('createGitHubPullRequest', () => {
   })
 
   it('returns the existing PR when gh reports an already-open pull request', async () => {
-    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
+    getOriginOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
     ghExecFileAsyncMock
       .mockRejectedValueOnce({ stderr: 'a pull request already exists for feature/existing' })
       .mockResolvedValueOnce({
@@ -342,7 +342,7 @@ describe('createGitHubPullRequest', () => {
   })
 
   it('validates base, head, and title before invoking gh', async () => {
-    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
+    getOriginOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
 
     await expect(
       createGitHubPullRequest('/repo-root', {

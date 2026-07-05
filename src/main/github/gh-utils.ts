@@ -11,6 +11,7 @@ export {
   _getOwnerRepoCacheSize,
   _resetOwnerRepoCache,
   getIssueOwnerRepo,
+  getOriginOwnerRepo,
   getOwnerRepo,
   getOwnerRepoForRemote,
   getRemoteUrlForRepo,
