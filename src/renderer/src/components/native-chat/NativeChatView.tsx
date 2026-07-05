@@ -47,6 +47,7 @@ import {
   resolveNativeChatFileLink,
   resolveNativeChatFileLinkContext
 } from './native-chat-file-link'
+import { selectNativeChatRuntimeEnvironmentId } from './native-chat-runtime-owner'
 import type { CommentMarkdownLinkClickHandler } from '@/components/sidebar/CommentMarkdown'
 import { openDetectedFilePath } from '@/components/terminal-pane/terminal-file-open-routing'
 
@@ -155,7 +156,18 @@ function NativeChatResolvedView({
   onSwitchToTerminal?: () => void
   contextMenuActions?: Omit<NativeChatContextMenuActions, 'onPaste'>
 }): React.JSX.Element {
-  const session = useNativeChatLiveSession({ paneKey, agent, sessionId, transcriptPath })
+  // Primitive owner selection (no useShallow): routes the pane's read/subscribe to
+  // the remote runtime host for a runtime-owned pane; null keeps the local path.
+  const runtimeEnvironmentId = useAppStore((s) =>
+    selectNativeChatRuntimeEnvironmentId(s, terminalTabId)
+  )
+  const session = useNativeChatLiveSession({
+    paneKey,
+    agent,
+    sessionId,
+    transcriptPath,
+    runtimeEnvironmentId
+  })
   // Live hook state for this pane, selected directly so the working indicator
   // flips the instant the agent reports 'working' — even when switching to chat
   // mid-turn before the transcript merge has caught up.

@@ -75,7 +75,10 @@ function createRuntimeNativeChatTransport(environmentId: string): NativeChatSess
           },
           {
             onResponse: (response) => {
-              if (cancelled || response.ok === false) {
+              if (cancelled) {
+                return
+              }
+              if (response.ok === false) {
                 return
               }
               const frame = response.result as {
