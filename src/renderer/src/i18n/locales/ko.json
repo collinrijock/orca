@@ -8710,6 +8710,18 @@
         "ephemeralVmsExperimentalSetting": {
           "description": "repo 소유 온디맨드 환경에 대한 설정 제어 및 워크스페이스 실행 대상을 표시합니다.",
           "toggleLabel": "워크스페이스별 환경 전환"
+        },
+        "SourceControlActionRepoOverrideNote": {
+          "agent": "Agent",
+          "agentArgs": "CLI arguments",
+          "commandTemplate": "Command template",
+          "more": "+{{count}} more",
+          "plural": "Global saves won't change {{count}} repositories with their own recipes.",
+          "recipe": "Recipe",
+          "review": "Review",
+          "reviewFirst": "Review first",
+          "singular": "Global saves won't change 1 repository with its own recipe.",
+          "tooltipTitle": "Repository overrides"
         }
       },
       "right": {
@@ -9207,7 +9219,8 @@
             "ea4788705e": "취소",
             "b0da3a4d3e": "실행 레시피가 이미 저장되었습니다",
             "bff4795a6d": "저장된 레시피를 업데이트하려면 agent, 인수 또는 프롬프트 템플릿을 변경하세요.",
-            "5c75b24735": "Orca가 시작하기 전에 agent가 받을 내용을 사용자 지정합니다."
+            "5c75b24735": "Orca가 시작하기 전에 agent가 받을 내용을 사용자 지정합니다.",
+            "repoAgentOverrideNote": "This repository overrides your global default ({{global}}) and currently runs {{effective}}. Save to this repository to change what runs here."
           },
           "SourceControlTextGenerationDialog": {
             "c5b7fa7cb6": "전역 기본값으로 저장",

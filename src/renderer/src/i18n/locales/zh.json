@@ -8710,6 +8710,18 @@
         "ephemeralVmsExperimentalSetting": {
           "description": "显示仓库自带按需环境的设置控件和工作区运行目标。",
           "toggleLabel": "切换工作区专属环境"
+        },
+        "SourceControlActionRepoOverrideNote": {
+          "agent": "Agent",
+          "agentArgs": "CLI arguments",
+          "commandTemplate": "Command template",
+          "more": "+{{count}} more",
+          "plural": "Global saves won't change {{count}} repositories with their own recipes.",
+          "recipe": "Recipe",
+          "review": "Review",
+          "reviewFirst": "Review first",
+          "singular": "Global saves won't change 1 repository with its own recipe.",
+          "tooltipTitle": "Repository overrides"
         }
       },
       "right": {
@@ -9207,7 +9219,8 @@
             "ea4788705e": "取消",
             "b0da3a4d3e": "启动预设已保存",
             "bff4795a6d": "更改智能体、参数或提示词模板以更新已保存的预设。",
-            "5c75b24735": "自定义 Orca 启动智能体前发送给它的内容。"
+            "5c75b24735": "自定义 Orca 启动智能体前发送给它的内容。",
+            "repoAgentOverrideNote": "此仓库会覆盖你的全局默认值（{{global}}），当前运行 {{effective}}。保存到此仓库以更改这里运行的内容。"
           },
           "SourceControlTextGenerationDialog": {
             "c5b7fa7cb6": "保存为全局默认值",
