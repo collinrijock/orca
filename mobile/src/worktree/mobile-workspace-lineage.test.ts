@@ -61,7 +61,7 @@ describe('applyMobileWorkspaceLineage', () => {
     const parent = worktree({ worktreeId: 'parent' })
     const child = worktree({ worktreeId: 'child', parentWorktreeId: 'parent' })
 
-    const rows = applyMobileWorkspaceLineage([child, parent], new Set(['workspace-lineage:parent']))
+    const rows = applyMobileWorkspaceLineage([child, parent], new Set(['lineage:parent']))
 
     expect(rows.map((row) => row.worktreeId)).toEqual(['parent'])
     expect(rows[0]?.lineageChildCount).toBe(1)

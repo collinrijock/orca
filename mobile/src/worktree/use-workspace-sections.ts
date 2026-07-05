@@ -1,4 +1,5 @@
 import { useMemo } from 'react'
+import type { RuntimeWorkspaceListModelResult } from '../../../src/shared/runtime-types'
 import type { WorkspaceStatusDefinition } from '../../../src/shared/types'
 import type { MobileGroupMode, MobileSortMode } from './workspace-view-settings'
 import {
@@ -7,6 +8,7 @@ import {
   type Section,
   type Worktree
 } from './workspace-list-sections'
+import { buildMobileSectionsFromWorkspaceListModel } from './shared-workspace-list-model-sections'
 import { repoColor } from './repo-color'
 
 export type WorkspaceSectionRepo = {
@@ -26,6 +28,7 @@ export function useWorkspaceSections(args: {
   repoColorsByName: Map<string, string>
   collapsedGroups: Set<string>
   workspaceStatuses: readonly WorkspaceStatusDefinition[]
+  workspaceListModel?: RuntimeWorkspaceListModelResult | null
 }): {
   sections: Section[]
   rawSections: Section[]
@@ -42,7 +45,8 @@ export function useWorkspaceSections(args: {
     repoIdsByName,
     repoColorsByName,
     collapsedGroups,
-    workspaceStatuses
+    workspaceStatuses,
+    workspaceListModel
   } = args
 
   const uniqueRepos = useMemo(() => {
@@ -63,20 +67,15 @@ export function useWorkspaceSections(args: {
     [uniqueRepos]
   )
 
-  const rawSections = useMemo(
-    () =>
-      buildSections(
+  const rawSections = useMemo(() => {
+    if (workspaceListModel) {
+      return buildMobileSectionsFromWorkspaceListModel({
+        model: workspaceListModel,
         displayWorktrees,
-        sortMode,
-        filters,
-        search,
-        groupMode,
-        pinnedIds,
-        repoIdsByName,
-        workspaceStatuses,
-        collapsedGroups
-      ),
-    [
+        search
+      })
+    }
+    return buildSections(
       displayWorktrees,
       sortMode,
       filters,
@@ -86,8 +85,19 @@ export function useWorkspaceSections(args: {
       repoIdsByName,
       workspaceStatuses,
       collapsedGroups
-    ]
-  )
+    )
+  }, [
+    displayWorktrees,
+    sortMode,
+    filters,
+    search,
+    groupMode,
+    pinnedIds,
+    repoIdsByName,
+    workspaceStatuses,
+    collapsedGroups,
+    workspaceListModel
+  ])
 
   const sections = useMemo(
     () =>

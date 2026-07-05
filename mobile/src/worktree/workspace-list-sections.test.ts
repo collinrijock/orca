@@ -687,7 +687,7 @@ describe('buildSections', () => {
       new Set(),
       new Map(),
       DEFAULT_MOBILE_WORKSPACE_STATUSES,
-      new Set(['workspace-lineage:parent'])
+      new Set(['lineage:parent'])
     )
 
     expect(sections[0]?.data.map((worktree) => worktree.worktreeId)).toEqual(['parent'])

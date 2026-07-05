@@ -9,6 +9,7 @@ import {
   WorktreeDetectedListParams,
   WorktreeActivate,
   WorktreeForceDeleteBranch,
+  WorktreeListModelParams,
   WorktreeListParams,
   WorktreePrefetchCreateBase,
   WorktreePsParams,
@@ -25,6 +26,11 @@ export const WORKTREE_METHODS: RpcMethod[] = [
     name: 'worktree.ps',
     params: WorktreePsParams,
     handler: async (params, { runtime }) => runtime.getWorktreePs(params.limit)
+  }),
+  defineMethod({
+    name: 'worktree.listModel',
+    params: WorktreeListModelParams,
+    handler: async (params, { runtime }) => runtime.getWorkspaceListModel(params.limit)
   }),
   defineMethod({
     name: 'worktree.list',

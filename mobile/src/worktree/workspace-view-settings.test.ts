@@ -5,6 +5,7 @@ import {
   groupModeFromDesktop,
   groupModeToDesktop,
   sortModeFromDesktop,
+  normalizeCollapsedGroups,
   type MobileViewState,
   type WorkspaceViewSettings
 } from './workspace-view-settings'
@@ -81,5 +82,13 @@ describe('applyDesktopViewSettings', () => {
   it('ignores an unrecognized groupBy rather than blanking the mode', () => {
     const next = applyDesktopViewSettings(base, { groupBy: 'mystery' as never })
     expect(next.groupMode).toBe('repo')
+  })
+})
+
+describe('normalizeCollapsedGroups', () => {
+  it('keeps legacy mobile lineage collapse keys working with shared desktop keys', () => {
+    expect(
+      normalizeCollapsedGroups(['workspace-lineage:repo-1%3A%3A%2Ftmp%2Fworktree-a', 'repo:repo-1'])
+    ).toEqual(['lineage:repo-1::/tmp/worktree-a', 'repo:repo-1'])
   })
 })

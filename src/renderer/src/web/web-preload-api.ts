@@ -77,7 +77,11 @@ import { normalizeTerminalCustomThemes } from '../../../shared/terminal-custom-t
 import { normalizeUiLanguage } from '../../../shared/ui-language'
 import { normalizeUsagePercentageDisplay } from '../../../shared/usage-percentage-display'
 import type { RateLimitState } from '../../../shared/rate-limit-types'
-import type { RuntimeStatus, RuntimeSyncWindowGraph } from '../../../shared/runtime-types'
+import type {
+  RuntimeStatus,
+  RuntimeSyncWindowGraph,
+  RuntimeWorkspaceListModelResult
+} from '../../../shared/runtime-types'
 import {
   findKeybindingConflicts,
   formatKeybindingList,
@@ -1344,6 +1348,10 @@ function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees']> {
           limit: WEB_RUNTIME_WORKTREE_LIST_LIMIT
         })
       ).worktrees,
+    listModel: async (args = {}) =>
+      callRuntimeResult<RuntimeWorkspaceListModelResult>('worktree.listModel', {
+        limit: args.limit
+      }),
     listDetected: async ({ repoId }) => callRuntimeDetectedWorktrees(repoId),
     listAll: () => listAllRuntimeWorktrees(),
     create: async (args) => {

@@ -24,6 +24,7 @@ import {
 } from '../../shared/terminal-stream-protocol'
 import { decrypt, deriveSharedKey, encrypt, generateKeyPair } from './rpc/e2ee-crypto'
 import { DeviceRegistry } from './device-registry'
+import { getDefaultUIState, getDefaultWorkspaceSession } from '../../shared/constants'
 
 vi.mock('../git/worktree', () => ({
   listWorktrees: vi.fn().mockResolvedValue([
@@ -3028,6 +3029,97 @@ describe('OrcaRuntimeRpcServer', () => {
         ],
         totalCount: 1,
         truncated: false
+      }
+    })
+
+    await server.stop()
+  })
+
+  it('serves worktree.listModel and limits after shared row derivation', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    const runtime = new OrcaRuntimeService(makeStore({ isUnread: true }) as never)
+    const server = new OrcaRuntimeRpcServer({ runtime, userDataPath })
+
+    await server.start()
+
+    const metadata = readRuntimeMetadata(userDataPath)
+    const listModelResponse = await sendRequest(metadata!.transports[0]!.endpoint, {
+      id: 'req_list_model',
+      authToken: metadata!.authToken,
+      method: 'worktree.listModel',
+      params: {
+        limit: 1
+      }
+    })
+
+    expect(listModelResponse).toMatchObject({
+      id: 'req_list_model',
+      ok: true,
+      result: {
+        modelVersion: 1,
+        sortedWorktreeIds: ['repo-1::/tmp/worktree-a'],
+        visibleWorktreeIds: ['repo-1::/tmp/worktree-a'],
+        totalRowCount: 2,
+        truncated: true,
+        rows: [{ type: 'header' }]
+      }
+    })
+
+    const legacyPsResponse = await sendRequest(metadata!.transports[0]!.endpoint, {
+      id: 'req_ps_limit',
+      authToken: metadata!.authToken,
+      method: 'worktree.ps',
+      params: {
+        limit: 1
+      }
+    })
+
+    expect(legacyPsResponse).toMatchObject({
+      id: 'req_ps_limit',
+      ok: true,
+      result: {
+        totalCount: 1,
+        truncated: false,
+        worktrees: [{ worktreeId: 'repo-1::/tmp/worktree-a' }]
+      }
+    })
+
+    await server.stop()
+  })
+
+  it('keeps browser-only workspaces in worktree.listModel when sleeping workspaces are hidden', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    const baseStore = makeStore()
+    const runtime = new OrcaRuntimeService({
+      ...baseStore,
+      getUI: () => ({
+        ...getDefaultUIState(),
+        showSleepingWorkspaces: false,
+        hideSleepingWorkspaces: true
+      }),
+      getWorkspaceSession: () => ({
+        ...getDefaultWorkspaceSession(),
+        browserTabsByWorktree: {
+          'repo-1::/tmp/worktree-a': [{ id: 'browser-page-1' }]
+        }
+      })
+    } as never)
+    const server = new OrcaRuntimeRpcServer({ runtime, userDataPath })
+
+    await server.start()
+
+    const metadata = readRuntimeMetadata(userDataPath)
+    const response = await sendRequest(metadata!.transports[0]!.endpoint, {
+      id: 'req_list_model_browser_only',
+      authToken: metadata!.authToken,
+      method: 'worktree.listModel'
+    })
+
+    expect(response).toMatchObject({
+      id: 'req_list_model_browser_only',
+      ok: true,
+      result: {
+        visibleWorktreeIds: ['repo-1::/tmp/worktree-a']
       }
     })
 

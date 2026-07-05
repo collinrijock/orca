@@ -1951,6 +1951,58 @@ describe('web worktree preload API', () => {
     ])
   })
 
+  it('routes workspace list model requests through the shared model RPC', async () => {
+    const runtimeCalls: { method: string; params: unknown }[] = []
+    vi.doMock('./web-runtime-client', () => ({
+      WebRuntimeClient: class {
+        call(method: string, params?: unknown): Promise<RuntimeRpcResponse<unknown>> {
+          runtimeCalls.push({ method, params })
+          return Promise.resolve({
+            id: `call-${runtimeCalls.length}`,
+            ok: true,
+            result: {
+              modelVersion: 1,
+              generatedAt: 123,
+              preferences: {
+                groupBy: 'repo',
+                sortBy: 'smart',
+                projectOrderBy: 'manual',
+                collapsedGroups: [],
+                filterRepoIds: [],
+                showSleepingWorkspaces: true,
+                hideDefaultBranchWorkspace: false,
+                hideAutomationGeneratedWorkspaces: false,
+                workspaceHostScope: 'all',
+                visibleWorkspaceHostIds: null,
+                workspaceHostOrder: []
+              },
+              sortedWorktreeIds: ['wt-1'],
+              visibleWorktreeIds: ['wt-1'],
+              rows: [],
+              totalRowCount: 0,
+              agentsByWorktreeId: {},
+              sourceCompletenessWarnings: [],
+              truncated: false
+            },
+            _meta: { runtimeId: 'runtime-1' }
+          })
+        }
+
+        close(): void {}
+      }
+    }))
+
+    const globals = installBrowserGlobals('Linux')
+    writeStoredRuntimeEnvironment(globals.storage)
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+
+    const result = await globals.window.api.worktrees.listModel?.({ limit: 25 })
+
+    expect(result).toMatchObject({ modelVersion: 1, sortedWorktreeIds: ['wt-1'] })
+    expect(runtimeCalls).toEqual([{ method: 'worktree.listModel', params: { limit: 25 } }])
+  })
+
   it('forwards review compare-base fields through runtime worktree calls', async () => {
     const runtimeCalls: { method: string; params: unknown }[] = []
     vi.doMock('./web-runtime-client', () => ({

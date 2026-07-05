@@ -44,6 +44,10 @@ export const WorktreePsParams = z.object({
   limit: OptionalFiniteNumber
 })
 
+export const WorktreeListModelParams = z.object({
+  limit: OptionalFiniteNumber
+})
+
 export const WorktreeSortOrder = z.object({
   orderedIds: z.array(z.string())
 })

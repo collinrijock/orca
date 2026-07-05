@@ -1,7 +1,9 @@
 import type { Worktree } from './workspace-list-types'
 
 export function getMobileWorkspaceLineageGroupKey(worktreeId: string): string {
-  return `workspace-lineage:${encodeURIComponent(worktreeId)}`
+  // Why: mobile writes collapsedGroups through the shared desktop UI store, so
+  // lineage keys must match the shared workspace-list derivation exactly.
+  return `lineage:${worktreeId}`
 }
 
 function hasValidLineageParent(worktree: Worktree, parent: Worktree): boolean {

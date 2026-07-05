@@ -54,4 +54,4 @@ export type FilterState = {
   hideDefaultBranch: boolean
 }
 
-export type Section = { key: string; title: string; icon?: 'pin'; data: Worktree[] }
+export type Section = { key: string; title: string; icon?: 'pin'; count?: number; data: Worktree[] }
