@@ -258,7 +258,10 @@ describe('launchWorktreeBackgroundTerminals', () => {
       }
     })
 
-    expect(mockCloseTab).toHaveBeenCalledWith('tab-1', { recordInteraction: false })
+    expect(mockCloseTab).toHaveBeenCalledWith('tab-1', {
+      recordInteraction: false,
+      captureRecentlyClosed: false
+    })
     expect(mockSpawn).toHaveBeenCalledTimes(3)
     expect(mockSpawn).toHaveBeenNthCalledWith(
       3,

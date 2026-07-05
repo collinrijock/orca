@@ -399,7 +399,10 @@ describe('launchAgentBackgroundSession', () => {
       })
     ).rejects.toThrow('spawn failed')
 
-    expect(mockCloseTab).toHaveBeenCalledWith('tab-1', { recordInteraction: false })
+    expect(mockCloseTab).toHaveBeenCalledWith('tab-1', {
+      recordInteraction: false,
+      captureRecentlyClosed: false
+    })
     expect(mockUpdateTabPtyId).not.toHaveBeenCalled()
   })
 
