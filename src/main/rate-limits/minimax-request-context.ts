@@ -83,7 +83,8 @@ export function redactMiniMaxSecret(value: string): string {
   for (const name of SENSITIVE_COOKIE_NAMES) {
     redacted = redacted
       .replace(new RegExp(`${name}=([^;\\s]+)`, 'g'), `${name}=[REDACTED]`)
-      .replace(new RegExp(`${name}:["'][^"']+["']`, 'g'), `${name}:[REDACTED]`)
+      // Match parseCookiePairs' `\s*:\s*` tolerance so `name : "secret"` is redacted too.
+      .replace(new RegExp(`${name}\\s*:\\s*["'][^"']+["']`, 'g'), `${name}:[REDACTED]`)
   }
   return redacted
 }

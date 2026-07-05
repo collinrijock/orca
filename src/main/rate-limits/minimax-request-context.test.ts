@@ -108,6 +108,12 @@ describe('redactMiniMaxSecret', () => {
     expect(redacted).not.toContain('x.y')
   })
 
+  it('redacts quoted values with whitespace around the colon', () => {
+    const redacted = redactMiniMaxSecret('_token : "spaced.secret"')
+    expect(redacted).not.toContain('spaced.secret')
+    expect(redacted).toContain('_token:[REDACTED]')
+  })
+
   it('redacts minimax_group_id_v2', () => {
     expect(redactMiniMaxSecret('minimax_group_id_v2=99999 trailing')).not.toContain('99999')
   })
