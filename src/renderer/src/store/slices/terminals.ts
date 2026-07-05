@@ -35,6 +35,7 @@ import type { AgentStartedTelemetry } from '../../lib/worktree-activation'
 import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
 import { forgetAgentHibernationTabOutput } from '@/lib/agent-hibernation-output-activity'
 import { clearTransientTerminalState, emptyLayoutSnapshot } from './terminal-helpers'
+import { pushClosedTerminalTabSnapshot, pushRecentlyClosedTabKind } from './recently-closed-tabs'
 import { isClaudeAgent, detectAgentStatusFromTitle } from '@/lib/agent-status'
 import { buildOrphanTerminalCleanupPatch, getOrphanTerminalIds } from './terminal-orphan-helpers'
 import {
@@ -474,7 +475,10 @@ export type TerminalSlice = {
     }
   ) => TerminalTab
   openNewTerminalTabInActiveWorkspace: (groupId: string) => Promise<void>
-  closeTab: (tabId: string, opts?: { recordInteraction?: boolean }) => void
+  closeTab: (
+    tabId: string,
+    opts?: { recordInteraction?: boolean; captureRecentlyClosed?: boolean }
+  ) => void
   reorderTabs: (worktreeId: string, tabIds: string[]) => void
   setTabBarOrder: (worktreeId: string, order: string[]) => void
   setActiveTab: (tabId: string) => void
@@ -1032,16 +1036,33 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
     set((s) => {
       const next = { ...s.tabsByWorktree }
       let closingPtyId: string | null = null
+      let closedTab: TerminalTab | null = null
+      let closedWorktreeId: string | null = null
       for (const wId of Object.keys(next)) {
         const before = next[wId]
-        if (!closingPtyId) {
-          closingPtyId = before.find((t) => t.id === tabId)?.ptyId ?? null
+        const closing = before.find((t) => t.id === tabId)
+        if (closing && !closedTab) {
+          closedTab = closing
+          closedWorktreeId = wId
+          closingPtyId = closing.ptyId ?? null
         }
         const after = before.filter((t) => t.id !== tabId)
         if (after.length !== before.length) {
           next[wId] = after
         }
       }
+      // Why: only explicit user closes feed the Cmd+Shift+T reopen stack.
+      // System closes (pty exit, launch cleanup, onboarding, floating panel)
+      // pass captureRecentlyClosed: false so they can't pollute it.
+      const capturedSnapshot =
+        opts?.captureRecentlyClosed !== false && closedTab && closedWorktreeId
+          ? {
+              ...(closedTab.startupCwd ? { startupCwd: closedTab.startupCwd } : {}),
+              ...(closedTab.shellOverride ? { shellOverride: closedTab.shellOverride } : {}),
+              ...(closedTab.customTitle ? { customTitle: closedTab.customTitle } : {}),
+              ...(closedTab.color ? { color: closedTab.color } : {})
+            }
+          : null
       const nextExpanded = { ...s.expandedPaneByTabId }
       delete nextExpanded[tabId]
       const nextCanExpand = { ...s.canExpandPaneByTabId }
@@ -1174,7 +1195,21 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         cacheTimerByKey: nextCacheTimer,
         tabBarOrderByWorktree: nextTabBarOrderByWorktree,
         pendingSnapshotByPtyId: nextSnapshots,
-        pendingColdRestoreByPtyId: nextColdRestores
+        pendingColdRestoreByPtyId: nextColdRestores,
+        ...(capturedSnapshot && closedWorktreeId
+          ? {
+              recentlyClosedTerminalTabsByWorktree: pushClosedTerminalTabSnapshot(
+                s.recentlyClosedTerminalTabsByWorktree,
+                closedWorktreeId,
+                capturedSnapshot
+              ),
+              recentlyClosedTabKindsByWorktree: pushRecentlyClosedTabKind(
+                s.recentlyClosedTabKindsByWorktree,
+                closedWorktreeId,
+                'terminal'
+              )
+            }
+          : {})
       }
     })
     // Why: sweep live AND retained agent-status entries for this tab — closing

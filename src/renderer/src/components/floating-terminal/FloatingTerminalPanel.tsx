@@ -766,7 +766,7 @@ export function FloatingTerminalPanel({
       const dirtyEditorFileIds: string[] = []
       for (const item of items) {
         if (item.contentType === 'terminal') {
-          closeTab(item.entityId)
+          closeTab(item.entityId, { captureRecentlyClosed: false })
         } else if (item.contentType === 'browser') {
           destroyWorkspaceWebviews(state.browserPagesByWorkspace, item.entityId)
           closeBrowserTab(item.entityId)
@@ -1537,7 +1537,7 @@ export function FloatingTerminalPanel({
                       // atlas to corrupt) while hidden, and the resume on
                       // reopen rebuilds the renderer from scratch.
                       isVisible={isActive && open}
-                      onPtyExit={() => closeTab(tab.id)}
+                      onPtyExit={() => closeTab(tab.id, { captureRecentlyClosed: false })}
                       onCloseTab={() => closeFloatingItem(tab.id)}
                     />
                   </div>

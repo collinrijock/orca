@@ -58,7 +58,7 @@ type TerminalOverlaySlotProps = {
   activityTerminalPortal: ActivityTerminalPortalTarget | null
   onFocusOwningGroup: ((groupId: string) => void) | undefined
   consumeSuppressedPtyExit: (ptyId: string) => boolean
-  closeTab: (tabId: string) => void
+  closeTab: (tabId: string, opts?: { captureRecentlyClosed?: boolean }) => void
   leaveWorktreeIfEmpty: () => void
 }
 
@@ -237,7 +237,7 @@ const TerminalOverlaySlot = memo(function TerminalOverlaySlot({
         if (consumeSuppressedPtyExit(ptyId)) {
           return
         }
-        closeTab(terminalTabId)
+        closeTab(terminalTabId, { captureRecentlyClosed: false })
         leaveWorktreeIfEmpty()
       }}
       onCloseTab={() => {

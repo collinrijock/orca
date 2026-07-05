@@ -59,7 +59,7 @@ function removeStaleLocalAgentTabsForWebHostLaunch(worktreeId: string): void {
   const state = useAppStore.getState()
   for (const tab of state.tabsByWorktree[worktreeId] ?? []) {
     if (tab.launchAgent && !isWebTerminalSurfaceTabId(tab.id)) {
-      state.closeTab(tab.id)
+      state.closeTab(tab.id, { captureRecentlyClosed: false })
     }
   }
 }

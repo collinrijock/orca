@@ -5,7 +5,6 @@ import { reconcileTabOrder } from '../tab-bar/reconcile-order'
 import {
   activateWebRuntimeSessionTab,
   closeWebRuntimeSessionTab,
-  createWebRuntimeSessionTerminal,
   isWebRuntimeSessionActive,
   toHostSessionTabId
 } from '@/runtime/web-runtime-session'
@@ -65,12 +64,19 @@ function getWorktreeTerminalTabIds(state: TerminalTabActionState, worktreeId: st
   return [...ids]
 }
 
-function closeLocalTerminalTabState(terminalTabId: string): void {
+function closeLocalTerminalTabState(
+  terminalTabId: string,
+  opts?: { captureRecentlyClosed?: boolean }
+): void {
   const state = useAppStore.getState()
   if (
     Object.values(state.tabsByWorktree).some((tabs) => tabs.some((tab) => tab.id === terminalTabId))
   ) {
-    state.closeTab(terminalTabId)
+    if (opts) {
+      state.closeTab(terminalTabId, opts)
+    } else {
+      state.closeTab(terminalTabId)
+    }
     return
   }
 
@@ -99,63 +105,20 @@ function isPinnedVisibleTab(
   )
 }
 
-export function createNewTerminalTab(
-  activeWorktreeId: string | null,
-  shellOverride?: string,
-  options?: { startupCwd?: string }
+export function closeTerminalTab(
+  tabId: string,
+  options?: { force?: boolean; captureRecentlyClosed?: boolean }
 ): void {
-  if (!activeWorktreeId) {
-    return
-  }
-  const state = useAppStore.getState()
-  const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(state, activeWorktreeId)
-  if (isWebRuntimeSessionActive(runtimeEnvironmentId)) {
-    // Why: paired web clients receive host-owned terminal tabs through
-    // session.tabs. Creating a local tab first races the host snapshot and can
-    // leave stale remote handles in the web store.
-    void createWebRuntimeSessionTerminal({
-      worktreeId: activeWorktreeId,
-      environmentId: runtimeEnvironmentId,
-      command: shellOverride,
-      ...(options?.startupCwd ? { cwd: options.startupCwd } : {}),
-      activate: true
-    })
-    return
-  }
-  const newTab = state.createTab(
-    activeWorktreeId,
-    undefined,
-    shellOverride,
-    options?.startupCwd ? { startupCwd: options.startupCwd } : undefined
-  )
-  state.setActiveTabType('terminal')
-  // Why: persist the tab bar order with the new terminal at the end of the
-  // current visual order. Without this, reconcileTabOrder falls back to
-  // terminals-first when tabBarOrderByWorktree is unset, causing a new
-  // terminal to jump to index 0 instead of appending after editor tabs.
-  const freshState = useAppStore.getState()
-  const termIds = (freshState.tabsByWorktree[activeWorktreeId] ?? []).map((t) => t.id)
-  const editorIds = freshState.openFiles
-    .filter((f) => f.worktreeId === activeWorktreeId)
-    .map((f) => f.id)
-  const base = reconcileTabOrder(
-    freshState.tabBarOrderByWorktree[activeWorktreeId],
-    termIds,
-    editorIds
-  )
-  // The new tab is already in base via termIds; move it to the end
-  const order = base.filter((id) => id !== newTab.id)
-  order.push(newTab.id)
-  state.setTabBarOrder(activeWorktreeId, order)
-}
-
-export function closeTerminalTab(tabId: string, options?: { force?: boolean }): void {
   const state = useAppStore.getState()
   const target = resolveCloseTerminalTabTarget(state, tabId)
   if (!target) {
     return
   }
   const { worktreeId: owningWorktreeId, terminalTabId } = target
+  const captureOpts =
+    options?.captureRecentlyClosed === undefined
+      ? undefined
+      : { captureRecentlyClosed: options.captureRecentlyClosed }
 
   // Why: a pinned tab routes through the confirmation guard instead of closing
   // outright. `force` is the post-confirmation re-entry, which skips the guard.
@@ -163,7 +126,7 @@ export function closeTerminalTab(tabId: string, options?: { force?: boolean }): 
     guardPinnedTabClose({
       isPinned: true,
       tabLabel: resolvePinnedTabLabel(state, owningWorktreeId, terminalTabId),
-      onClose: () => closeTerminalTab(tabId, { force: true })
+      onClose: () => closeTerminalTab(tabId, { ...captureOpts, force: true })
     })
     return
   }
@@ -187,7 +150,7 @@ export function closeTerminalTab(tabId: string, options?: { force?: boolean }): 
       }) ?? toHostSessionTabId(terminalTabId)
     // Why: prune local mirrors immediately so close feels responsive while the
     // host session snapshot catches up.
-    closeLocalTerminalTabState(terminalTabId)
+    closeLocalTerminalTabState(terminalTabId, captureOpts)
     void closeWebRuntimeSessionTab({
       worktreeId: owningWorktreeId,
       tabId: hostBackedTabId,
@@ -198,7 +161,7 @@ export function closeTerminalTab(tabId: string, options?: { force?: boolean }): 
 
   const currentTerminalTabIds = getWorktreeTerminalTabIds(state, owningWorktreeId)
   if (currentTerminalTabIds.length <= 1) {
-    closeLocalTerminalTabState(terminalTabId)
+    closeLocalTerminalTabState(terminalTabId, captureOpts)
     if (state.activeWorktreeId === owningWorktreeId) {
       // Why: only deactivate the worktree when no tabs of any kind remain.
       // Editor files are a separate tab type; closing the last terminal tab
@@ -229,7 +192,7 @@ export function closeTerminalTab(tabId: string, options?: { force?: boolean }): 
     }
   }
 
-  closeLocalTerminalTabState(terminalTabId)
+  closeLocalTerminalTabState(terminalTabId, captureOpts)
 }
 
 export function closeOtherTerminalTabs(tabId: string, activeWorktreeId: string | null): void {

@@ -221,7 +221,7 @@ export async function launchAgentBackgroundSession(
       }
     }
   } catch (error) {
-    store.closeTab(tab.id, { recordInteraction: false })
+    store.closeTab(tab.id, { recordInteraction: false, captureRecentlyClosed: false })
     throw error
   }
   store.updateTabPtyId(tab.id, ptyId)

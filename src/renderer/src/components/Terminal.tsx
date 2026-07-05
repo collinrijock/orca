@@ -1068,9 +1068,12 @@ function Terminal(): React.JSX.Element | null {
       if (consumeSuppressedPtyExit(ptyId)) {
         return
       }
-      handleCloseTab(tabId)
+      // Why: a pty exiting on its own is not a user close — it must not join
+      // the Cmd+Shift+T reopen stack (mirrors TerminalPaneOverlayLayer's
+      // pty-exit/user-close split).
+      closeTerminalTab(tabId, { captureRecentlyClosed: false })
     },
-    [consumeSuppressedPtyExit, handleCloseTab]
+    [consumeSuppressedPtyExit]
   )
 
   const handleCloseOthers = useCallback(
@@ -1357,20 +1360,13 @@ function Terminal(): React.JSX.Element | null {
         }
       }
 
-      // Cmd/Ctrl+Shift+T — reopen closed browser tab when browser is active,
-      // otherwise reopen the most recently closed editor tab.
+      // Cmd/Ctrl+Shift+T — reopen the most recently closed tab of any kind
+      // (terminal, browser, or editor), Chrome/Ghostty-style. Repeated presses
+      // walk back through the close history.
       if (!e.repeat && matchShortcut('tab.reopenClosed')) {
         e.preventDefault()
         notifyTerminalCapture('tab.reopenClosed')
-        const state = useAppStore.getState()
-        if (state.activeTabType === 'browser') {
-          const restored = state.reopenClosedBrowserTab(activeWorktreeId)
-          if (restored === null) {
-            state.reopenClosedEditorTab(activeWorktreeId)
-          }
-        } else {
-          state.reopenClosedEditorTab(activeWorktreeId)
-        }
+        useAppStore.getState().reopenClosedTab(activeWorktreeId)
         return
       }
 

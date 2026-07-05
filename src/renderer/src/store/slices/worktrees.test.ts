@@ -6330,6 +6330,10 @@ describe('migrateWorktreeIdentity', () => {
       lastVisitedAtByWorktreeId: { [OLD]: 123 },
       defaultTerminalTabsAppliedByWorktreeId: { [OLD]: true },
       recentlyClosedEditorTabsByWorktree: { [OLD]: [{ id: 'f1', worktreeId: OLD }] },
+      recentlyClosedTerminalTabsByWorktree: {
+        [OLD]: [{ startupCwd: '/ws/cunner/packages/app' }, { startupCwd: '/elsewhere/dir' }]
+      },
+      recentlyClosedTabKindsByWorktree: { [OLD]: ['terminal', 'editor'] },
       remoteStatusesByWorktree: { [OLD]: { ahead: 1 } },
       everActivatedWorktreeIds: new Set([OLD]),
       openFiles: [{ id: 'f1', worktreeId: OLD }],
@@ -6376,6 +6380,15 @@ describe('migrateWorktreeIdentity', () => {
     expect(s.defaultTerminalTabsAppliedByWorktreeId[NEW]).toBe(true)
     // The two maps absent from the purge list are still re-keyed.
     expect(s.recentlyClosedEditorTabsByWorktree[NEW]).toEqual([{ id: 'f1', worktreeId: NEW }])
+    // Terminal reopen snapshots re-key AND remap startupCwd under the old
+    // worktree path; paths outside the renamed folder stay as-is.
+    expect(s.recentlyClosedTerminalTabsByWorktree[OLD]).toBeUndefined()
+    expect(s.recentlyClosedTerminalTabsByWorktree[NEW]).toEqual([
+      { startupCwd: '/ws/worktree-creation-spinner/packages/app' },
+      { startupCwd: '/elsewhere/dir' }
+    ])
+    expect(s.recentlyClosedTabKindsByWorktree[OLD]).toBeUndefined()
+    expect(s.recentlyClosedTabKindsByWorktree[NEW]).toEqual(['terminal', 'editor'])
     expect(s.remoteStatusesByWorktree[NEW]).toEqual({ ahead: 1 })
     expect(s.everActivatedWorktreeIds.has(NEW)).toBe(true)
     expect(s.everActivatedWorktreeIds.has(OLD)).toBe(false)
