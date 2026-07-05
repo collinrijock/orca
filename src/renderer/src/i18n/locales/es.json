@@ -8709,6 +8709,18 @@
         "ephemeralVmsExperimentalSetting": {
           "description": "Muestra controles de configuración y objetivos de ejecución del espacio de trabajo para entornos bajo demanda de propiedad de repos.",
           "toggleLabel": "Alternar entornos por espacio de trabajo"
+        },
+        "SourceControlActionRepoOverrideNote": {
+          "agent": "Agent",
+          "agentArgs": "CLI arguments",
+          "commandTemplate": "Command template",
+          "more": "+{{count}} more",
+          "plural": "Global saves won't change {{count}} repositories with their own recipes.",
+          "recipe": "Recipe",
+          "review": "Review",
+          "reviewFirst": "Review first",
+          "singular": "Global saves won't change 1 repository with its own recipe.",
+          "tooltipTitle": "Repository overrides"
         }
       },
       "right": {
@@ -9206,7 +9218,8 @@
             "c7ff8cef11": "Detectando agents...",
             "b0da3a4d3e": "La receta de lanzamiento ya está guardada",
             "bff4795a6d": "Cambia el agente, los argumentos o la plantilla del prompt para actualizar la receta guardada.",
-            "5c75b24735": "Personaliza lo que recibe el agente antes de que Orca lo inicie."
+            "5c75b24735": "Personaliza lo que recibe el agente antes de que Orca lo inicie.",
+            "repoAgentOverrideNote": "This repository overrides your global default ({{global}}) and currently runs {{effective}}. Save to this repository to change what runs here."
           },
           "SourceControlTextGenerationDialog": {
             "c5b7fa7cb6": "Guardar como valor predeterminado global",
