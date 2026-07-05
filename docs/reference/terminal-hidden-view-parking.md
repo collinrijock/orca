@@ -1,8 +1,10 @@
 # Terminal Hidden View Parking
 
-Status: Shipped standalone (byte mode only, extracted from PR #7214), kill
-switch `terminalHiddenViewParking` **default on** — set it to `false` to
-disable parking entirely. The companion doc
+Status: Shipped standalone (byte mode only, extracted from PR #7214) as an
+**experimental opt-in**, `terminalHiddenViewParking` **default off** — surfaced
+under Settings → Experimental. Gates read `=== true`, so absent/null settings
+stay off; PR #7214 later graduates it to a default-on kill switch. The companion
+doc
 `terminal-model-view-contract.md` (invariants this design extends and the full
 phase list) ships with PR #7214 together with the fact-mode main emitter; in
 this build `terminalMainSideEffectAuthority` must stay `false` (see

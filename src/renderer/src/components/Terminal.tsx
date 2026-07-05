@@ -250,7 +250,9 @@ function Terminal(): React.JSX.Element | null {
   const activeView = useAppStore((s) => s.activeView)
   const tabsByWorktree = useAppStore((s) => s.tabsByWorktree)
   const pendingStartupByTabId = useAppStore((s) => s.pendingStartupByTabId)
-  const terminalParkingEnabled = useAppStore((s) => s.settings?.terminalHiddenViewParking !== false)
+  // Experimental opt-in, default-off: `=== true` keeps parking off for absent/
+  // null settings (e.g. pre-hydration). #7214 reconcile: restore `!== false`.
+  const terminalParkingEnabled = useAppStore((s) => s.settings?.terminalHiddenViewParking === true)
   const activeTabId = useAppStore((s) => s.activeTabId)
   const createTab = useAppStore((s) => s.createTab)
   const closeTab = useAppStore((s) => s.closeTab)

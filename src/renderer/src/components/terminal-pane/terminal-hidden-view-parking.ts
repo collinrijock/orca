@@ -67,8 +67,8 @@ export function canParkTerminalWorktreeRenderers(args: {
   worktreeId: string
   terminalTabs: readonly ColdParkableTerminalTab[]
   pendingStartupByTabId: Readonly<Record<string, unknown>>
-  // Why: callers pass settings.terminalHiddenViewParking !== false — the
-  // design-doc kill switch that disables parking entirely.
+  // Why: callers pass settings.terminalHiddenViewParking === true — the
+  // experimental opt-in that enables parking (default-off).
   parkingEnabled: boolean
   isVisible: boolean
   shouldMeasureHiddenWorktree: boolean

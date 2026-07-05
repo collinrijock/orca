@@ -64,8 +64,10 @@ export function useTerminalTabColdParking(args: {
     activityTerminalPortals
   } = args
   const pendingStartupByTabId = useAppStore((state) => state.pendingStartupByTabId)
+  // Experimental opt-in, default-off: `=== true` keeps parking off for absent/
+  // null settings (e.g. pre-hydration). #7214 reconcile: restore `!== false`.
   const terminalParkingEnabled = useAppStore(
-    (state) => state.settings?.terminalHiddenViewParking !== false
+    (state) => state.settings?.terminalHiddenViewParking === true
   )
   const terminalTabHiddenSinceRef = useRef(new Map<string, number>())
   const terminalTabParkingTimersRef = useRef(new Map<string, number>())

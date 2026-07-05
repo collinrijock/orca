@@ -310,9 +310,10 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     // MUST stay in byte mode (authority/gate/query-authority false) or parked
     // panes would silently lose bell/title/completion notifications.
     // When #7214 lands its emitter, reconcile by taking its `true` values.
-    // Parking itself ships default-ON (byte mode); the kill switch (`false`)
-    // disables it entirely.
-    terminalHiddenViewParking: true,
+    // Parking ships as an EXPERIMENTAL opt-in, default-OFF: gates read
+    // `=== true`, so this default (and any absent/null settings) keep it off.
+    // #7214 reconcile: graduate to default-on by taking its `!== false` gates.
+    terminalHiddenViewParking: false,
     terminalMainSideEffectAuthority: false,
     terminalHiddenDeliveryGate: false,
     terminalModelQueryAuthority: false,

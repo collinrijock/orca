@@ -2711,10 +2711,12 @@ export type GlobalSettings = {
    *  does not surface commands from other worktrees. Defaults to true.
    *  Disable to revert to shared global shell history. */
   terminalScopeHistoryByWorktree: boolean
-  /** Kill switch for hidden terminal view parking — unmounting long-hidden
-   *  terminal panes while a pane-less watcher keeps PTY side effects alive.
-   *  `false` disables parking entirely. This build ships it default-ON in byte
-   *  mode (see constants.ts; PR #7214 later adds the main-process emitter).
+  /** Experimental opt-in for hidden terminal view parking — unmounting
+   *  long-hidden terminal panes while a pane-less watcher keeps PTY side
+   *  effects alive. Ships **default-OFF**; gates read `=== true`, so only an
+   *  explicit opt-in enables it (absent/null settings stay off). Byte mode
+   *  only in this build; PR #7214 later adds the main-process emitter and
+   *  graduates this to a default-on kill switch.
    *  See docs/reference/terminal-hidden-view-parking.md. */
   terminalHiddenViewParking?: boolean
   /** Kill switch for main-process terminal side-effect authority: when true,

@@ -9,6 +9,7 @@ import { NumberField, SettingsSwitch } from './SettingsFormControls'
 import { translate } from '@/i18n/i18n'
 import { NativeChatExperimentalSetting } from './NativeChatExperimentalSetting'
 import { EphemeralVmsExperimentalSetting } from './EphemeralVmsExperimentalSetting'
+import { TerminalParkingExperimentalSetting } from './TerminalParkingExperimentalSetting'
 import {
   MAX_AGENT_HIBERNATION_IDLE_MS,
   MIN_AGENT_HIBERNATION_IDLE_MS,
@@ -42,6 +43,9 @@ export function ExperimentalPane({
   ])
   const showTerminalAttention = matchesSettingsSearch(searchQuery, [
     getExperimentalSearchEntry().terminalAttention
+  ])
+  const showTerminalParking = matchesSettingsSearch(searchQuery, [
+    getExperimentalSearchEntry().terminalParking
   ])
   const showWorktreeSymlinks = matchesSettingsSearch(searchQuery, [
     getExperimentalSearchEntry().symlinksOnWorktrees
@@ -204,6 +208,10 @@ export function ExperimentalPane({
             </button>
           </div>
         </SearchableSetting>
+      ) : null}
+
+      {showTerminalParking ? (
+        <TerminalParkingExperimentalSetting settings={settings} updateSettings={updateSettings} />
       ) : null}
 
       {showAgentHibernation ? (
