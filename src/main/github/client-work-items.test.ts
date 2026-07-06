@@ -50,6 +50,9 @@ vi.mock('./gh-utils', () => ({
       ? {}
       : { cwd: context.repoPath, ...(context.wslDistro ? { wslDistro: context.wslDistro } : {}) },
   getOwnerRepo: getOwnerRepoMock,
+  // Why: resolvePrWorkItemSource resolves the raw origin candidate via
+  // getOriginOwnerRepo; map it to the same mock these tests use for origin.
+  getOriginOwnerRepo: getOwnerRepoMock,
   getIssueOwnerRepo: getIssueOwnerRepoMock,
   getOwnerRepoForRemote: getOwnerRepoForRemoteMock,
   resolveIssueSource: resolveIssueSourceMock,

@@ -36,6 +36,10 @@ vi.mock('./gh-utils', async () => {
     execFileAsync: execFileAsyncMock,
     ghExecFileAsync: ghExecFileAsyncMock,
     getOwnerRepo: getOwnerRepoMock,
+    // Why: resolvePrWorkItemSource resolves the raw origin candidate via
+    // getOriginOwnerRepo; map it to the same mock these tests use for the
+    // origin PR repo.
+    getOriginOwnerRepo: getOwnerRepoMock,
     getIssueOwnerRepo: getIssueOwnerRepoMock,
     getOwnerRepoForRemote: getOwnerRepoForRemoteMock,
     resolveIssueSource: resolveIssueSourceMock,
