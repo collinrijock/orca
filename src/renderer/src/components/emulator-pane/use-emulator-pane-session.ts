@@ -57,6 +57,7 @@ export function useEmulatorPaneSession({
   const liveTargetRef = useRef<string | null>(prelaunchedState.liveTarget)
   const deviceRefreshErrorRef = useRef<unknown>(null)
   const suppressAutoAttachRef = useRef(false)
+  const refreshStreamKey = useCallback(() => setStreamKey(String(Date.now())), [])
   const {
     sendTap,
     sendButton,
@@ -64,7 +65,7 @@ export function useEmulatorPaneSession({
     sendRotate,
     visualOrientation,
     resetVisualOrientation
-  } = useEmulatorPaneControls(worktreeId)
+  } = useEmulatorPaneControls(worktreeId, refreshStreamKey)
 
   const refreshDevices = useCallback(async (bootedTarget?: string | null) => {
     try {
@@ -106,6 +107,9 @@ export function useEmulatorPaneSession({
       if (attached && rows !== deviceRows) {
         setDevices(rows)
       }
+      if (attached && target && target !== liveTargetRef.current) {
+        resetVisualOrientation()
+      }
       const row = rows.find((d) => d.udid === target || d.name === target)
       const displayName = row?.name || deviceLabel(info)
       const enriched = { ...info, displayName, state: attached ? 'Booted' : info?.state }
@@ -126,7 +130,7 @@ export function useEmulatorPaneSession({
         useAppStore.getState().setTabLabel(tabId, displayName)
       }
     },
-    [devices, tabId]
+    [devices, resetVisualOrientation, tabId]
   )
 
   const clearSessionAfterShutdown = useCallback(
