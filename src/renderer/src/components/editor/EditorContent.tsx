@@ -33,6 +33,7 @@ import {
 import { getDiffContentSignature } from './diff-content-signature'
 import { translate } from '@/i18n/i18n'
 import { CheckRunDetailsPanel } from './CheckRunDetailsPanel'
+import { ExternalFileChangeBanner } from './ExternalFileChangeBanner'
 
 const MonacoEditor = lazy(() => import('./MonacoEditor'))
 const DiffViewer = lazy(() => import('./DiffViewer'))
@@ -777,8 +778,12 @@ export function EditorContent({
         </div>
       )
     }
+    const externalChangeBanner =
+      activeFile.externalMutation === 'changed' ? (
+        <ExternalFileChangeBanner file={activeFile} reloadFileContent={reloadFileContent} />
+      ) : null
     if (isChangesMode) {
-      return (
+      const changesView = (
         <ChangesModeView
           activeFile={activeFile}
           dc={diffContents[activeFile.id]}
@@ -792,9 +797,19 @@ export function EditorContent({
           onSave={isMarkdown ? md.mdSave : handleSave}
         />
       )
+      if (!externalChangeBanner) {
+        return changesView
+      }
+      return (
+        <div className="flex flex-1 min-h-0 flex-col">
+          {externalChangeBanner}
+          <div className="min-h-0 flex-1">{changesView}</div>
+        </div>
+      )
     }
     return (
       <div className="flex flex-1 min-h-0 flex-col">
+        {externalChangeBanner}
         {activeFile.conflict && (
           <ConflictBanner
             file={activeFile}

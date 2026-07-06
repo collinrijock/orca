@@ -8,7 +8,11 @@ import {
   ORCA_EDITOR_PREPARE_HOT_EXIT_EVENT,
   ORCA_EDITOR_SAVE_DIRTY_FILES_EVENT
 } from '../../../../shared/editor-save-events'
-import { requestEditorFileSave, requestEditorSaveQuiesce } from './editor-autosave'
+import {
+  ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT,
+  requestEditorFileSave,
+  requestEditorSaveQuiesce
+} from './editor-autosave'
 import { attachEditorAutosaveController } from './editor-autosave-controller'
 import { registerPendingEditorFlush } from './editor-pending-flush'
 import { __clearSelfWriteRegistryForTests, hasRecentSelfWrite } from './editor-self-write-registry'
@@ -616,6 +620,136 @@ describe('attachEditorAutosaveController', () => {
     try {
       await expect(requestEditorFileSave({ fileId: '/repo/file.md' })).rejects.toThrow('disk full')
       expect(hasRecentSelfWrite('/repo/file.md')).toBe(false)
+    } finally {
+      cleanup()
+    }
+  })
+
+  it('preserves dirty drafts and marks the tab changed-on-disk on external file change', () => {
+    const writeFile = vi.fn().mockResolvedValue(undefined)
+    const eventTarget = new EventTarget()
+    vi.stubGlobal('window', {
+      addEventListener: eventTarget.addEventListener.bind(eventTarget),
+      removeEventListener: eventTarget.removeEventListener.bind(eventTarget),
+      dispatchEvent: eventTarget.dispatchEvent.bind(eventTarget),
+      setTimeout: globalThis.setTimeout.bind(globalThis),
+      clearTimeout: globalThis.clearTimeout.bind(globalThis),
+      api: {
+        fs: {
+          writeFile
+        }
+      }
+    } satisfies WindowStub)
+
+    const store = createEditorStore()
+    store.getState().openFile({
+      filePath: '/repo/file.ts',
+      relativePath: 'file.ts',
+      worktreeId: 'wt-1',
+      language: 'typescript',
+      mode: 'edit'
+    })
+    store.getState().setEditorDraft('/repo/file.ts', 'unsaved edit')
+    store.getState().markFileDirty('/repo/file.ts', true)
+
+    const cleanup = attachEditorAutosaveController(store)
+    try {
+      window.dispatchEvent(
+        new CustomEvent(ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT, {
+          detail: { worktreeId: 'wt-1', worktreePath: '/repo', relativePath: 'file.ts' }
+        })
+      )
+
+      const file = store.getState().openFiles[0]
+      expect(file?.isDirty).toBe(true)
+      expect(file?.externalMutation).toBe('changed')
+      expect(store.getState().editorDrafts['/repo/file.ts']).toBe('unsaved edit')
+    } finally {
+      cleanup()
+    }
+  })
+
+  it('clears drafts and a stale changed-on-disk mark for clean tabs on external file change', () => {
+    const writeFile = vi.fn().mockResolvedValue(undefined)
+    const eventTarget = new EventTarget()
+    vi.stubGlobal('window', {
+      addEventListener: eventTarget.addEventListener.bind(eventTarget),
+      removeEventListener: eventTarget.removeEventListener.bind(eventTarget),
+      dispatchEvent: eventTarget.dispatchEvent.bind(eventTarget),
+      setTimeout: globalThis.setTimeout.bind(globalThis),
+      clearTimeout: globalThis.clearTimeout.bind(globalThis),
+      api: {
+        fs: {
+          writeFile
+        }
+      }
+    } satisfies WindowStub)
+
+    const store = createEditorStore()
+    store.getState().openFile({
+      filePath: '/repo/file.ts',
+      relativePath: 'file.ts',
+      worktreeId: 'wt-1',
+      language: 'typescript',
+      mode: 'edit'
+    })
+    store.getState().setExternalMutation('/repo/file.ts', 'changed')
+
+    const cleanup = attachEditorAutosaveController(store)
+    try {
+      window.dispatchEvent(
+        new CustomEvent(ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT, {
+          detail: { worktreeId: 'wt-1', worktreePath: '/repo', relativePath: 'file.ts' }
+        })
+      )
+
+      const file = store.getState().openFiles[0]
+      expect(file?.isDirty).toBe(false)
+      expect(file?.externalMutation).toBeUndefined()
+    } finally {
+      cleanup()
+    }
+  })
+
+  it('clears the changed-on-disk mark after a successful save', async () => {
+    const writeFile = vi.fn().mockResolvedValue(undefined)
+    const eventTarget = new EventTarget()
+    vi.stubGlobal('window', {
+      addEventListener: eventTarget.addEventListener.bind(eventTarget),
+      removeEventListener: eventTarget.removeEventListener.bind(eventTarget),
+      dispatchEvent: eventTarget.dispatchEvent.bind(eventTarget),
+      setTimeout: globalThis.setTimeout.bind(globalThis),
+      clearTimeout: globalThis.clearTimeout.bind(globalThis),
+      api: {
+        fs: {
+          writeFile
+        }
+      }
+    } satisfies WindowStub)
+
+    const store = createEditorStore()
+    store.getState().openFile({
+      filePath: '/repo/file.ts',
+      relativePath: 'file.ts',
+      worktreeId: 'wt-1',
+      language: 'typescript',
+      mode: 'edit'
+    })
+    store.getState().setEditorDraft('/repo/file.ts', 'user version')
+    store.getState().markFileDirty('/repo/file.ts', true)
+    store.getState().setExternalMutation('/repo/file.ts', 'changed')
+
+    const cleanup = attachEditorAutosaveController(store)
+    try {
+      await requestEditorFileSave({ fileId: '/repo/file.ts' })
+
+      expect(writeFile).toHaveBeenCalledWith({
+        filePath: '/repo/file.ts',
+        content: 'user version'
+      })
+      const file = store.getState().openFiles[0]
+      expect(file?.isDirty).toBe(false)
+      expect(file?.externalMutation).toBeUndefined()
     } finally {
       cleanup()
     }

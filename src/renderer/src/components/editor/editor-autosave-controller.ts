@@ -122,6 +122,14 @@ export function attachEditorAutosaveController(store: AppStoreApi): () => void {
         if (!stillDirty) {
           nextState.clearEditorDraft(file.id)
         }
+        // Why: the write just made disk match the buffer, resolving any
+        // changed-on-disk conflict in favor of the user's content. The banner
+        // warned before this point; keeping the mark would show a stale
+        // conflict for a file that no longer diverges.
+        const savedFile = nextState.openFiles.find((openFile) => openFile.id === file.id)
+        if (savedFile?.externalMutation === 'changed') {
+          nextState.setExternalMutation(file.id, null)
+        }
 
         window.dispatchEvent(
           new CustomEvent<EditorFileSavedDetail>(ORCA_EDITOR_FILE_SAVED_EVENT, {
@@ -377,12 +385,28 @@ export function attachEditorAutosaveController(store: AppStoreApi): () => void {
       return
     }
 
+    // Why: dirty files must keep their draft — destroying unsaved edits on an
+    // external write is the data-loss half of issue #7265. Mark them
+    // changed-on-disk instead (backstop for tabs that became dirty during the
+    // notify debounce; the watch hook marks the ones dirty at event time).
+    const reloadingFiles = matchingFiles.filter((file) => !file.isDirty)
     for (const file of matchingFiles) {
+      if (file.isDirty) {
+        if (file.mode === 'edit') {
+          state.setExternalMutation(file.id, 'changed')
+        }
+        continue
+      }
       clearAutoSaveTimer(file.id)
       bumpSaveGeneration(file.id)
       state.markFileDirty(file.id, false)
+      // Why: this file is about to reload fresh disk content, so a stale
+      // changed-on-disk mark (set while it was dirty) is resolved.
+      if (file.externalMutation === 'changed') {
+        state.setExternalMutation(file.id, null)
+      }
     }
-    state.clearEditorDrafts(matchingFiles.map((file) => file.id))
+    state.clearEditorDrafts(reloadingFiles.map((file) => file.id))
   }
 
   // Why: the root store subscriber fires for every terminal title/focus tick.

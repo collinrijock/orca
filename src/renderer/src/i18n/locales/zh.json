@@ -11515,6 +11515,11 @@
           "3e6c9a2b71": "等待中",
           "4f7d0c3e88": "步骤失败",
           "5a8e1d4f23": " · "
+        },
+        "ExternalFileChangeBanner": {
+          "7c41e90d12": "This file changed on disk while you have unsaved edits. Saving will overwrite the newer disk content.",
+          "3fa2b8d417": "Reload from Disk",
+          "a95d02c644": "Keep My Edits"
         }
       },
       "diff": {

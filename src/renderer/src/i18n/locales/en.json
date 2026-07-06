@@ -11515,6 +11515,11 @@
         },
         "richMarkdownLargeTextPaste": {
           "tooLarge": "Paste is too large."
+        },
+        "ExternalFileChangeBanner": {
+          "7c41e90d12": "This file changed on disk while you have unsaved edits. Saving will overwrite the newer disk content.",
+          "3fa2b8d417": "Reload from Disk",
+          "a95d02c644": "Keep My Edits"
         }
       },
       "diff": {

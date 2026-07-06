@@ -247,8 +247,11 @@ export type OpenFile = {
   // disk while it's open, we keep the tab around so the user can still see
   // (and potentially save) their in-memory content. The tab surfaces this as
   // a strikethrough label plus a "deleted"/"renamed" suffix. Cleared if the
-  // file reappears on disk at its original path.
-  externalMutation?: 'deleted' | 'renamed'
+  // file reappears on disk at its original path. 'changed' means the file was
+  // rewritten on disk while this tab held unsaved edits (issue #7265): the
+  // buffer is preserved and the editor shows a changed-on-disk banner instead
+  // of tab strikethrough.
+  externalMutation?: 'deleted' | 'renamed' | 'changed'
   /** Why: diff bodies are cached in EditorPanel. Re-selecting an existing diff
    * tab from the tree bumps this so the panel refetches instead of reusing a
    * stale snapshot. */
@@ -493,7 +496,7 @@ export type EditorSlice = {
   setActiveFile: (fileId: string) => void
   reorderFiles: (fileIds: string[]) => void
   markFileDirty: (fileId: string, dirty: boolean) => void
-  setExternalMutation: (fileId: string, mutation: 'deleted' | 'renamed' | null) => void
+  setExternalMutation: (fileId: string, mutation: 'deleted' | 'renamed' | 'changed' | null) => void
   clearUntitled: (fileId: string) => void
   openDiff: (
     worktreeId: string,

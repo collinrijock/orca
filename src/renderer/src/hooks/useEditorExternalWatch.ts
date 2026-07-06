@@ -545,7 +545,10 @@ export function createExternalWatchEventHandler(
     // Why: if a previously-deleted file reappears at the same path (e.g.
     // the user ran `git checkout`), clear the tombstone so the tab returns
     // to its normal state and any non-dirty content gets reloaded below.
-    // `createOrUpdatePaths` was collected above.
+    // `createOrUpdatePaths` was collected above. Scoped to deleted/renamed:
+    // a 'changed' mark means the file was rewritten while the tab was dirty,
+    // so a further update event must not clear it — it resolves via reload,
+    // save, or the reload path below.
     if (createOrUpdatePaths.size > 0) {
       const state = useAppStore.getState()
       for (const file of state.openFiles) {
@@ -553,7 +556,7 @@ export function createExternalWatchEventHandler(
           file.worktreeId === target.worktreeId &&
           openFileRuntimeOwner(file) === target.runtimeEnvironmentId &&
           (file.mode === 'edit' || file.mode === 'markdown-preview') &&
-          file.externalMutation &&
+          (file.externalMutation === 'deleted' || file.externalMutation === 'renamed') &&
           createOrUpdatePaths.has(normalizeRuntimePathForComparison(file.filePath))
         ) {
           state.setExternalMutation(file.id, null)
@@ -637,11 +640,26 @@ export function createExternalWatchEventHandler(
         }
         continue
       }
-      if (matching.some((f) => f.isDirty)) {
-        if (hasCombinedDiffConsumer) {
-          scheduleDebouncedExternalReload(notification)
+      const dirtyMatches = matching.filter((f) => f.isDirty)
+      if (dirtyMatches.length > 0) {
+        // Why: an external write landing on a dirty tab must not vanish
+        // silently (issue #7265) — the user was left with a stale tab and a
+        // save that clobbered the newer disk content. Mark the tab so the
+        // editor shows a changed-on-disk banner with an explicit reload path.
+        const setExternalMutation = useAppStore.getState().setExternalMutation
+        for (const dirtyFile of dirtyMatches) {
+          if (dirtyFile.mode === 'edit') {
+            setExternalMutation(dirtyFile.id, 'changed')
+          }
         }
-        continue
+        if (dirtyMatches.length === matching.length) {
+          if (hasCombinedDiffConsumer) {
+            scheduleDebouncedExternalReload(notification)
+          }
+          continue
+        }
+        // Clean sibling tabs (e.g. an unstaged diff of the same path) still
+        // reload below; every notification consumer skips dirty files.
       }
       const absolutePath = joinPath(notification.worktreePath, notification.relativePath)
       const recentSelfWrite = getRecentSelfWrite(absolutePath, target.runtimeEnvironmentId)
@@ -706,7 +724,9 @@ function scheduleSelfWriteAwareExternalReload(
 
 function hasCleanExternalReloadTarget(notification: ExternalWatchNotification): boolean {
   const matching = getOpenFilesForExternalFileChange(useAppStore.getState().openFiles, notification)
-  return matching.length > 0 && matching.every((file) => !file.isDirty)
+  // Why: one clean target is enough — every notification consumer skips dirty
+  // files per-file, so a dirty sibling tab no longer vetoes the reload.
+  return matching.some((file) => !file.isDirty)
 }
 
 export function getOverflowExternalReloadTargets(
