@@ -20,7 +20,9 @@ import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } fro
 // exactly as it does in real agent sessions.
 const KEY_LATENCY_SAMPLES = 'abcdefghijklmnop'
 const MAX_MEDIAN_KEY_LATENCY_MS = 250
-const MAX_WORST_KEY_LATENCY_MS = 1_000
+// Why: median is the responsiveness guard (and the #5096 signal); worst-of-16 is a
+// CI-scheduling/5s-checkpoint spike proxy, so it only backstops a catastrophic hang.
+const MAX_WORST_KEY_LATENCY_MS = 3_000
 const FILL_DONE_TIMEOUT_MS = 240_000
 const FILL_PHASES = [10_000, 40_000] as const
 
