@@ -3,7 +3,7 @@
 Agent-facing map of every optimization on this branch: what it does, why it exists,
 where it lives, and the invariants you must not break when adding to it. The
 chronological evidence trail (benchmarks, retractions, A/B protocols) is in
-`notes/terminal-performance-initiative.md`; this doc is the *current-state* view.
+`notes/terminal-performance-initiative.md`; this doc is the _current-state_ view.
 
 **Context**: Orca's terminal was ~300× slower than Terminal.app under agent load
 (DSR-under-load p50 134ms, p99 292ms on v1.4.91; agent-TUI throughput 2.0 MB/s).
@@ -21,13 +21,14 @@ shell → pty → daemon (persistence, headless model) → unix socket
 
 Main is on the hot path for every byte (unlike VS Code's ptyHost→renderer
 MessagePort). The daemon owns sessions so they survive app restarts; it also runs
-a headless xterm emulator per pty — the *model* — which is the source of truth
-for screen contents. The renderer terminal is a *view* that can be discarded and
+a headless xterm emulator per pty — the _model_ — which is the source of truth
+for screen contents. The renderer terminal is a _view_ that can be discarded and
 rebuilt from model snapshots.
 
 ## Optimization inventory
 
 ### 1. Renderer parse-path fixes (the original 16× on agent TUIs)
+
 - **Parse-clocked scheduler drains** (`pane-terminal-output-scheduler.ts`): drain
   cadence follows xterm's actual parse completion instead of fixed timers, so the
   queue never outruns the parser.
@@ -40,8 +41,10 @@ rebuilt from model snapshots.
   per-chunk cost.
 
 ### 2. term-speed-2 chain (model/view contract — the architecture)
+
 Revived from ~38 never-merged branches; kill-switched, default ON. Docs:
 `docs/reference/terminal-model-view-contract.md`.
+
 - **Hidden view parking**: hidden tabs tear down their xterm view entirely
   (memory: parked panes cost ~0).
 - **Hidden delivery gate** (main): renderer-bound bytes for hidden ptys are
@@ -55,6 +58,7 @@ Revived from ~38 never-merged branches; kill-switched, default ON. Docs:
   reconciliation drops duplicates already covered by the snapshot baseline.
 
 ### 3. Batching & scheduling cadence
+
 - **Batch windows 8ms → 2ms** in both `daemon-stream-data-batcher.ts`
   (`STREAM_DATA_BATCH_INTERVAL_MS`) and `ipc/pty.ts` (`PTY_BATCH_INTERVAL_MS`).
   At 9% utilization there is no queue — latency was literally the sum of fixed
@@ -67,9 +71,11 @@ Revived from ~38 never-merged branches; kill-switched, default ON. Docs:
   instead of queuing macrotask-per-keystroke.
 
 ### 4. Backpressure (the correctness spine — read before touching delivery)
+
 Three cooperating layers, innermost first:
+
 - **ACK at parse-drain** (`deliverPtyDataWithDeferredAck`, scheduler
-  `ackCredit`): the renderer credits a chunk when xterm has *parsed* it (or the
+  `ackCredit`): the renderer credits a chunk when xterm has _parsed_ it (or the
   chunk is legitimately discarded), not when IPC delivered it.
   **INVARIANT: every delivered chunk credits exactly once — parsed or
   discarded.** Every scheduler/pty-connection discard path (backlog replacement,
@@ -92,15 +98,32 @@ Three cooperating layers, innermost first:
   push listeners + pull restore markers through the modelRestoreNeeded router.
   E2e blackhole harness: `__terminalDeliveryWatchdog`,
   `terminal-push-delivery-loss-recovery.spec.ts`.
+- **Stale-visibility proof for the hidden gate** (`stale-document-visibility.ts`
+  and the `shouldWritePtyOutputForeground` fallthrough in pty-connection.ts):
+  recovers the field-confirmed wedge where macOS occlusion tracking pins
+  `document.visibilityState` at `'hidden'` after display sleep and never fires
+  another visibilitychange (v1.4.124-rc.2.perf snapshot: 78MB hidden-gate
+  dropped across 2 pane-level-visible ptys, transport healthy). Real user
+  input (keydown/pointerdown/window focus) while the document claims hidden is
+  a physical contradiction — it latches an override, runs each pane's existing
+  visibilitychange resync (gate unhide + hidden-output restore), and a genuine
+  visibilitychange hands authority back. No timers; recovery is purely
+  event-proven, and the failure bias is safe (a wrong override only restores
+  pre-gate delivery cost, never drops bytes). Hot-path cost: zero when
+  visible (same single comparison); one property read per user-interaction
+  event. E2e: `terminal-stuck-occlusion-recovery.spec.ts` (pins both the
+  freeze repro and the keystroke recovery, plus the
+  `hiddenDeliveryGatedVisiblePtyCount` field discriminator).
 - **Producer flow control** (protocol v19 `pausePty`/`resumePty`, 256KB pause /
   32KB resume watermarks, keyed off **pendingData only** — never renderer
   counters; kill switch `PRODUCER_FLOW_CONTROL_ENABLED`, ipc/pty.ts): when main's
-  buffer grows, the *shell* blocks. For main-hosted ptys pause is synchronous
+  buffer grows, the _shell_ blocks. For main-hosted ptys pause is synchronous
   (drops impossible); for daemon ptys the pause notify has ~20-30ms socket
   latency, so wire-speed bursts can still cross the 2MB cap (known follow-up:
   daemon-side self-pacing watermark).
 
 ### 5. Flood resilience (why bulk output can't wedge or lie anymore)
+
 - **Restore-loop cut** (pty-connection.ts): the hidden-output-restore loop
   abandons immediately when a foreground pane's live-chunk queue overflows
   (3-iteration hard cap), and a 2s flood-suppression window stops main's own
@@ -110,20 +133,23 @@ Three cooperating layers, innermost first:
   drop re-arms restore) that caused multi-second renderer stalls.
 - **Query survival**: if the 2MB cap ever drops bulk output, embedded terminal
   queries are extracted (`terminal-reply-query-extraction.ts`) and answered by
-  *synthesizing replies on the input path* (CPR from live buffer, DA1 canned,
+  _synthesizing replies on the input path_ (CPR from live buffer, DA1 canned,
   OSC via direct responder) — probes and TUIs never hang on a dropped reply.
 - Drops are downstream of the model: the daemon ingests every byte, so the
   post-flood repaint restores complete, correct content.
 
 ### 6. Wake/sleep recovery
+
 - powerMonitor resume → `system:resumed` IPC → renderer wake recovery (fixes
   WebGL-latch blank-after-sleep that DOM focus/visibilitychange missed).
 - Cumulative ACKs make the historical "lost ACKs across suspend pin the global
   window forever" wedge (BMW user bug) structurally impossible.
 
 ### 7. Snapshot fidelity (the garble fixes — all fuzz-pinned)
+
 Reveal-from-snapshot multiplied exposure of serializer defects ~1000×. Five bugs
 found by differential fuzzing; four fixed, one tolerated:
+
 - **B: SGR intensity ordering** — upstream `@xterm/addon-serialize` emitted
   `1;22` (22 clears the bold 1 just set). Patched via pnpm patch
   (`config/patches/@xterm__addon-serialize@*.patch`): clear-before-set for the
@@ -143,6 +169,7 @@ found by differential fuzzing; four fixed, one tolerated:
   `bufferHasSerializeHostileWrappedRow`, the only remaining tolerance.
 
 ## Correctness infrastructure (run these before merging delivery/restore changes)
+
 - `headless-emulator-fidelity.fuzz.test.ts` — differential: HeadlessEmulator vs
   reference xterm, seeded TUI streams. `FUZZ_ITERATIONS=2000` for deep,
   `FUZZ_SEED=n` to replay.
@@ -158,8 +185,9 @@ found by differential fuzzing; four fixed, one tolerated:
   (pane-manager / terminal-pane suites).
 
 ## Benchmarking protocol (hard-won rules)
+
 - Rig: `tools/benchmarks/terminal-pipeline-bench.mjs` — DSR idle + DSR under
-  1MB/s agent-TUI load + DSR-fenced throughput on 4 fixtures. Run *inside* the
+  1MB/s agent-TUI load + DSR-fenced throughput on 4 fixtures. Run _inside_ the
   terminal under test.
 - **Bench at 10MB** (`--size-mb 10`). The ACK-at-parse bug shipped because dev
   benches used 3MB and never tripped the cap.
@@ -170,8 +198,9 @@ found by differential fuzzing; four fixed, one tolerated:
 - Packaged builds are truth; dev has ~2× overhead.
 
 ## Release mechanics
+
 - Perf RCs: `release-cut.yml` workflow_dispatch, `kind=rc ref=orca-performance
-  version_suffix=perf` → tags like `v1.4.122-rc.1.perf`. The suffix sorts above
+version_suffix=perf` → tags like `v1.4.122-rc.1.perf`. The suffix sorts above
   its base rc.N but below rc.N+1 (never hijacks the RC channel). The rc counter
   (`release-rc-history.mjs`), telemetry identity classifier, and build guard are
   all suffix-aware — a suffixed rc classifies as `rc`.
@@ -205,6 +234,7 @@ Conflict pattern, established over ~6 syncs:
    before the next RC cut.
 
 ## Known limits / next levers (in rough priority order)
+
 1. Daemon self-pacing: daemon-hosted ptys can cross the 2MB cap for ~20-30ms at
    wire speed before `pausePty` bites. Fix: daemon enforces its own watermark
    locally (VS Code does this server-side for remotes).
@@ -218,12 +248,13 @@ Conflict pattern, established over ~6 syncs:
    is open against main separately.
 
 ## Guardrails for future agents
+
 - The chunk-credit invariant (§4) is the load-bearing one. If you add ANY path
   that receives, defers, drops, or splits pty data in the renderer, prove it
   credits exactly once. The credit-invariant unit tests are the gate.
 - Flow control keys off `pendingData` only. Do not couple it to renderer
   counters; the two layers compose because they are independent.
-- Snapshot changes must keep seq semantics: a snapshot covers *exactly* bytes
+- Snapshot changes must keep seq semantics: a snapshot covers _exactly_ bytes
   ≤ its seq (Bug E made this true; don't regress it). Chunks after restore are
   reconciled by seq — off-by-N re-triggers duplicate-drop garble.
 - Hidden panes must receive nothing (delivery gate) but side-effects and query

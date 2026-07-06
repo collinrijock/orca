@@ -50,6 +50,10 @@ import { reconcilePtySizeAcrossFrames, type PtySizeReconcileHandle } from './pty
 import { createPtySizeReassertion } from './pty-size-reassertion'
 import { isPaneReplaying, replayIntoTerminal, replayIntoTerminalAsync } from './replay-guard'
 import {
+  isDocumentVisibilityProvenStale,
+  registerStaleDocumentVisibilityRecovery
+} from './stale-document-visibility'
+import {
   nativeWindowsRewriteNeedsFollowupRenderRefresh,
   terminalOutputPrefersRenderRefresh,
   terminalRewriteOutputRenderRefreshDecision,
@@ -766,7 +770,13 @@ function shouldWritePtyOutputForeground(isPaneVisible: boolean): boolean {
   // Why: Electron can keep visible panes mounted while the whole app is
   // backgrounded. Treat hidden documents like background tabs so Chromium
   // timer throttling cannot pin terminal writes on the renderer foreground path.
-  return document.visibilityState === 'visible'
+  if (document.visibilityState === 'visible') {
+    return true
+  }
+  // Why: macOS occlusion tracking can wedge visibilityState at 'hidden' after
+  // display sleep; proven-stale means real user input contradicted it, so the
+  // hidden-delivery gate must not keep dropping a watched pane's bytes.
+  return isDocumentVisibilityProvenStale()
 }
 
 function containsSynchronizedOutputStart(data: string): boolean {
@@ -5582,8 +5592,17 @@ export function connectPanePty(
         }
       }
       document.addEventListener('visibilitychange', onDocumentVisibilityChange)
-      unregisterDocumentVisibilityRecovery = () =>
+      // Why: when user input proves visibilityState is wedged at 'hidden'
+      // (stale macOS occlusion), run the same resync — no visibilitychange
+      // will ever fire in that state, and the gate would drop watched bytes
+      // forever.
+      const unregisterStaleVisibilityRecovery = registerStaleDocumentVisibilityRecovery(
+        onDocumentVisibilityChange
+      )
+      unregisterDocumentVisibilityRecovery = () => {
         document.removeEventListener('visibilitychange', onDocumentVisibilityChange)
+        unregisterStaleVisibilityRecovery()
+      }
     }
 
     const dataCallback = (data: string, meta?: PtyDataMeta): void => {

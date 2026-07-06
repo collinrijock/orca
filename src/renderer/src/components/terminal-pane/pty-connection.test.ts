@@ -8652,12 +8652,21 @@ describe('connectPanePty', () => {
   })
 
   it('does not apply stale background Codex query chunks after hidden snapshot restore', async () => {
-    const visibilityChangeHandler: { current: (() => void) | null } = { current: null }
+    // Fire-all like a real event target: the pane resync handler and the
+    // stale-visibility trust handler both listen for visibilitychange.
+    const visibilityChangeListeners: (() => void)[] = []
+    const visibilityChangeHandler = {
+      current: (): void => {
+        for (const listener of visibilityChangeListeners) {
+          listener()
+        }
+      }
+    }
     ;(globalThis as { document?: Document }).document = {
       visibilityState: 'visible',
       addEventListener: vi.fn((type: string, listener: EventListenerOrEventListenerObject) => {
         if (type === 'visibilitychange') {
-          visibilityChangeHandler.current = listener as () => void
+          visibilityChangeListeners.push(listener as () => void)
         }
       }),
       removeEventListener: vi.fn()
@@ -9959,14 +9968,23 @@ describe('connectPanePty', () => {
 
   it('keeps recovery pending when hidden output arrives during an in-flight snapshot', async () => {
     let visibilityState: DocumentVisibilityState = 'visible'
-    const visibilityChangeHandler: { current: (() => void) | null } = { current: null }
+    // Fire-all like a real event target: the pane resync handler and the
+    // stale-visibility trust handler both listen for visibilitychange.
+    const visibilityChangeListeners: (() => void)[] = []
+    const visibilityChangeHandler = {
+      current: (): void => {
+        for (const listener of visibilityChangeListeners) {
+          listener()
+        }
+      }
+    }
     ;(globalThis as { document?: Document }).document = {
       get visibilityState() {
         return visibilityState
       },
       addEventListener: vi.fn((type: string, listener: EventListenerOrEventListenerObject) => {
         if (type === 'visibilitychange') {
-          visibilityChangeHandler.current = listener as () => void
+          visibilityChangeListeners.push(listener as () => void)
         }
       }),
       removeEventListener: vi.fn()
