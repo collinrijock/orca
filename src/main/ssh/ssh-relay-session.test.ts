@@ -230,6 +230,39 @@ describe('SshRelaySession', () => {
     expect(sftp.end).toHaveBeenCalledTimes(1)
   })
 
+  it('does not mutate remote config when the session is disposed while SFTP opens', async () => {
+    process.env.ORCA_FEATURE_REMOTE_AGENT_HOOKS = '1'
+    let resolvePresence!: (value: { presence: { claude: { state: 'found' } } }) => void
+    const presencePromise = new Promise<{ presence: { claude: { state: 'found' } } }>((resolve) => {
+      resolvePresence = resolve
+    })
+    muxRequestMock.mockImplementation(async (method: string) => {
+      if (method === REMOTE_AGENT_HOOK_CLI_PRESENCE_METHOD) {
+        return await presencePromise
+      }
+      if (method === 'session.resolveHome') {
+        return { resolvedPath: '/home/orca' }
+      }
+      return { ok: true }
+    })
+    const sftp = { end: vi.fn() }
+    const { mockStore, mockPortForward, getMainWindow } = createMockDeps()
+    let session!: SshRelaySession
+    const mockConn = {
+      sftp: vi.fn().mockImplementation(async () => {
+        session.dispose()
+        return sftp
+      })
+    } as unknown as SshConnection
+    session = new SshRelaySession('target-1', getMainWindow, mockStore, mockPortForward)
+
+    await session.establish(mockConn)
+    resolvePresence({ presence: { claude: { state: 'found' } } })
+
+    await vi.waitFor(() => expect(sftp.end).toHaveBeenCalledTimes(1))
+    expect(installRemoteManagedAgentHooksMock).not.toHaveBeenCalled()
+  })
+
   it('keeps SSH providers registered when remote CLI presence is unavailable', async () => {
     process.env.ORCA_FEATURE_REMOTE_AGENT_HOOKS = '1'
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})

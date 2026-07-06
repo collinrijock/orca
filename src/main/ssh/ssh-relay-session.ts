@@ -717,6 +717,11 @@ export class SshRelaySession {
     let sftp: Awaited<ReturnType<SshConnection['sftp']>> | null = null
     try {
       sftp = await this.requireReadyConnection().sftp()
+      // Why: the session can be disposed or replaced while sftp() is in
+      // flight; re-check before mutating remote agent config.
+      if (shouldContinue && !shouldContinue()) {
+        return
+      }
       await installRemoteManagedAgentHooks(sftp, remoteHome, presenceByAgent)
     } catch (error) {
       console.warn(

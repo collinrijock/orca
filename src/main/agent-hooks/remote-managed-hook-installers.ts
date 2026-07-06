@@ -65,14 +65,17 @@ export async function installRemoteManagedAgentHooks(
     }
     const presence = presenceByAgent[agent]
     if (presence?.state !== 'found') {
+      // Why: an omitted entry means the relay never reported a result, not
+      // that the CLI was positively absent — only 'missing' is a real miss.
+      const cliMissing = presence?.state === 'missing'
       results.push(
         skippedStatus(
           agent,
           remoteHome,
-          presence?.state === 'unknown' ? 'remote_presence_unavailable' : 'cli_not_found',
-          presence?.state === 'unknown'
-            ? 'Remote CLI presence unknown; managed hook install skipped.'
-            : 'Remote CLI not found; managed hook install skipped.'
+          cliMissing ? 'cli_not_found' : 'remote_presence_unavailable',
+          cliMissing
+            ? 'Remote CLI not found; managed hook install skipped.'
+            : 'Remote CLI presence unavailable; managed hook install skipped.'
         )
       )
       continue

@@ -102,6 +102,23 @@ describe('detectLocalManagedAgentCliPresence', () => {
     expect(probe).toHaveBeenCalledWith('/home/orca/bin/codex')
   })
 
+  it('reports relative override paths as unknown instead of probing the process CWD', async () => {
+    const probe = vi.fn(async () => true)
+    const result = await detectLocalManagedAgentCliPresence(
+      [codexTarget],
+      { agentCmdOverrides: { codex: 'bin/codex --profile work' } },
+      {
+        pathEnv: '',
+        pathDelimiter: ':',
+        fileProbe: { isExecutableFile: probe },
+        platform: 'linux'
+      }
+    )
+
+    expect(result.codex).toEqual({ state: 'unknown' })
+    expect(probe).not.toHaveBeenCalled()
+  })
+
   it('honors PATHEXT for Windows PATH candidates', async () => {
     const probe = vi.fn(async (filePath: string) => filePath === 'C:\\Tools/codex.CMD')
     const result = await detectLocalManagedAgentCliPresence(

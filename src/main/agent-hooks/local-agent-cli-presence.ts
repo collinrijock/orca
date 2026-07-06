@@ -131,13 +131,8 @@ async function probePathCandidate(
   return false
 }
 
-async function probeOverridePath(
-  token: string,
-  platform: NodeJS.Platform,
-  homeDir: string,
-  fileProbe: FileProbe
-): Promise<boolean> {
-  return await fileProbe.isExecutableFile(expandHomePathToken(token, platform, homeDir))
+function isPlatformAbsolutePath(candidate: string, platform: NodeJS.Platform): boolean {
+  return platform === 'win32' ? path.win32.isAbsolute(candidate) : path.posix.isAbsolute(candidate)
 }
 
 async function maybeHydrateShellPath(options: DetectOptions): Promise<void> {
@@ -189,7 +184,15 @@ export async function detectLocalManagedAgentCliPresence(
   for (const target of targets) {
     const overrideToken = overrideTokenForAgent(settings, target, platform)
     if (overrideToken && hasPathSeparatorToken(overrideToken)) {
-      result[target.agent] = (await probeOverridePath(overrideToken, platform, homeDir, fileProbe))
+      const expandedOverride = expandHomePathToken(overrideToken, platform, homeDir)
+      // Why: a relative override resolves against whichever CWD the agent is
+      // later launched from, so probing it against the main process's CWD
+      // would report presence for an unrelated directory.
+      if (!isPlatformAbsolutePath(expandedOverride, platform)) {
+        result[target.agent] = { state: 'unknown' }
+        continue
+      }
+      result[target.agent] = (await fileProbe.isExecutableFile(expandedOverride))
         ? { state: 'found' }
         : { state: 'missing' }
       continue

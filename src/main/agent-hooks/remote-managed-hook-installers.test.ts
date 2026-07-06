@@ -73,6 +73,21 @@ describe('remote managed hook installers', () => {
     ])
   })
 
+  it('reports agents omitted from the presence map as unavailable, not missing', async () => {
+    const results = await installRemoteManagedAgentHooks({} as never, '/home/orca', {
+      codex: { state: 'found' }
+    })
+
+    expect(installClaudeRemote).not.toHaveBeenCalled()
+    expect(results).toContainEqual(
+      expect.objectContaining({
+        agent: 'claude',
+        state: 'skipped',
+        skipReason: 'remote_presence_unavailable'
+      })
+    )
+  })
+
   it('skips unknown presence without mutating remote config', async () => {
     const results = await installRemoteManagedAgentHooks({} as never, '/home/orca', {
       codex: { state: 'unknown' }
