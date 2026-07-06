@@ -99,6 +99,7 @@ import {
   clearHiddenRendererPtyDeliveryState,
   getHiddenRendererPtyDeliveryDebug,
   isHiddenPtyDeliveryGateEnabled,
+  isHiddenRendererPty,
   markHiddenRendererPty,
   recordHiddenRendererPtyDataDrop,
   resetHiddenRendererPtyDeliveryDebugCounters,
@@ -1202,6 +1203,11 @@ export type PtyRendererDeliveryDebugSnapshot = {
   peakMaxRendererInFlightCharsByPty: number
   ackGatedFlushSkipCount: number
   hiddenDeliveryGatedPtyCount: number
+  /** Hidden-gated ptys the renderer ALSO reports visible/active — a
+   *  contradiction that should be zero; nonzero means the user may be staring
+   *  at a pane main is deliberately starving (v1.4.124-rc.2.perf field lead). */
+  hiddenDeliveryGatedVisiblePtyCount: number
+  hiddenDeliveryGatedActivePtyCount: number
   deliveryInterestPtyCount: number
   hiddenDeliveryDroppedChars: number
   hiddenDeliveryDroppedChunks: number
@@ -1223,6 +1229,8 @@ const EMPTY_PTY_RENDERER_DELIVERY_DEBUG_SNAPSHOT: PtyRendererDeliveryDebugSnapsh
   peakMaxRendererInFlightCharsByPty: 0,
   ackGatedFlushSkipCount: 0,
   hiddenDeliveryGatedPtyCount: 0,
+  hiddenDeliveryGatedVisiblePtyCount: 0,
+  hiddenDeliveryGatedActivePtyCount: 0,
   deliveryInterestPtyCount: 0,
   hiddenDeliveryDroppedChars: 0,
   hiddenDeliveryDroppedChunks: 0,
@@ -1559,6 +1567,21 @@ export function registerPtyHandlers(
       }
       maxRendererInFlightCharsByPty = Math.max(maxRendererInFlightCharsByPty, inFlight)
     }
+    // Why: the two renderer visibility signals must agree; a pty both
+    // hidden-gated and reported visible means main is starving a pane the
+    // user can see (v1.4.124-rc.2.perf blank-terminal field lead).
+    let hiddenDeliveryGatedVisiblePtyCount = 0
+    for (const id of visibleRendererPtys) {
+      if (isHiddenRendererPty(id)) {
+        hiddenDeliveryGatedVisiblePtyCount++
+      }
+    }
+    let hiddenDeliveryGatedActivePtyCount = 0
+    for (const id of activeRendererPtys) {
+      if (isHiddenRendererPty(id)) {
+        hiddenDeliveryGatedActivePtyCount++
+      }
+    }
     return {
       pendingPtyCount: pendingData.size,
       pendingChars,
@@ -1574,8 +1597,31 @@ export function registerPtyHandlers(
       peakMaxRendererInFlightCharsByPty,
       ackGatedFlushSkipCount,
       ...hiddenDeliveryDebug,
+      hiddenDeliveryGatedVisiblePtyCount,
+      hiddenDeliveryGatedActivePtyCount,
       pendingDroppedChars
     }
+  }
+
+  // Why rate-limited: the contradiction persists chunk after chunk while
+  // latched; one line per minute keeps field logs readable but present.
+  let lastHiddenDropContradictionWarnAtMs = 0
+  function warnIfDroppingHiddenBytesForVisiblePty(id: string, droppedChars: number): void {
+    if (!visibleRendererPtys.has(id) && !activeRendererPtys.has(id)) {
+      return
+    }
+    const now = Date.now()
+    if (now - lastHiddenDropContradictionWarnAtMs < 60_000) {
+      return
+    }
+    lastHiddenDropContradictionWarnAtMs = now
+    console.warn('[pty] hidden-delivery gate is dropping bytes for a visible/active pty', {
+      id,
+      droppedChars,
+      visible: visibleRendererPtys.has(id),
+      active: activeRendererPtys.has(id),
+      ...readCurrentPtyRendererDeliveryDebugSnapshot()
+    })
   }
 
   function recordPtyRendererDeliveryPressure(): void {
@@ -2002,6 +2048,7 @@ export function registerPtyHandlers(
         pendingOverflowMarkedPtys.delete(id)
         updateProducerFlowControl(id)
         const drop = recordHiddenRendererPtyDataDrop(id, pending.data.length)
+        warnIfDroppingHiddenBytesForVisiblePty(id, pending.data.length)
         if (drop.shouldEmitRestoreMarker) {
           sendModelRestoreNeededMarker(id, 'hidden-drop', runtime?.getPtyOutputSequence(id))
         }
@@ -2192,6 +2239,7 @@ export function registerPtyHandlers(
       // the immediate nor the batched renderer path.
       if (shouldDropHiddenRendererPtyData(payload.id, settings)) {
         const drop = recordHiddenRendererPtyDataDrop(payload.id, payload.data.length)
+        warnIfDroppingHiddenBytesForVisiblePty(payload.id, payload.data.length)
         if (drop.shouldEmitRestoreMarker) {
           sendModelRestoreNeededMarker(payload.id, 'hidden-drop', outputSeq)
         }

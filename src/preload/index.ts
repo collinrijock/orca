@@ -928,6 +928,8 @@ const api = {
       peakMaxRendererInFlightCharsByPty: number
       ackGatedFlushSkipCount: number
       hiddenDeliveryGatedPtyCount: number
+      hiddenDeliveryGatedVisiblePtyCount: number
+      hiddenDeliveryGatedActivePtyCount: number
       deliveryInterestPtyCount: number
       hiddenDeliveryDroppedChars: number
       hiddenDeliveryDroppedChunks: number

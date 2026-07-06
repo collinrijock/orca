@@ -8221,12 +8221,61 @@ describe('registerPtyHandlers', () => {
         expect(mainWindow.webContents.send).toHaveBeenCalledTimes(1)
         expect(getPtyRendererDeliveryDebugSnapshot()).toMatchObject({
           hiddenDeliveryGatedPtyCount: 1,
+          hiddenDeliveryGatedVisiblePtyCount: 0,
+          hiddenDeliveryGatedActivePtyCount: 0,
           hiddenDeliveryDroppedChars: 'hidden output'.length + 'more hidden output'.length,
           hiddenDeliveryDroppedChunks: 2,
           pendingPtyCount: 0,
           rendererInFlightChars: 0
         })
       } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('surfaces the hidden-yet-visible contradiction in the snapshot and warns on drop', async () => {
+      // Why: v1.4.124-rc.2.perf field snapshot — blank terminal with 2 ptys
+      // hidden-gated and 78MB dropped. The aggregate counts could not say
+      // whether the pane the user was staring at was one of them; this
+      // overlap counter + warn makes the next occurrence decisive.
+      vi.useFakeTimers()
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      const daemon = installObservableDaemonTestProvider()
+      try {
+        registerPtyHandlers(mainWindow as never)
+        const result = (await handlers.get('pty:spawn')!(null, {
+          cols: 80,
+          rows: 24,
+          sessionId: 'daemon-session'
+        })) as { id: string }
+        const setHidden = getPtySetHiddenRendererPtyListener()
+        const setVisible = getPtySetRendererPtyVisibleListener()
+
+        // The two renderer visibility signals contradict: the pane reports
+        // itself visible while the hidden-delivery gate still holds it.
+        setVisible(null, { id: result.id, visible: true })
+        setHidden(null, { id: result.id, hidden: true })
+        daemon.emitData(result.id, 'starved visible output')
+        vi.advanceTimersByTime(50)
+
+        expect(getPtyRendererDeliveryDebugSnapshot()).toMatchObject({
+          hiddenDeliveryGatedPtyCount: 1,
+          hiddenDeliveryGatedVisiblePtyCount: 1,
+          hiddenDeliveryDroppedChars: 'starved visible output'.length
+        })
+        expect(warnSpy).toHaveBeenCalledWith(
+          '[pty] hidden-delivery gate is dropping bytes for a visible/active pty',
+          expect.objectContaining({ id: result.id, visible: true })
+        )
+
+        // Unhiding resolves the contradiction.
+        setHidden(null, { id: result.id, hidden: false })
+        expect(getPtyRendererDeliveryDebugSnapshot()).toMatchObject({
+          hiddenDeliveryGatedPtyCount: 0,
+          hiddenDeliveryGatedVisiblePtyCount: 0
+        })
+      } finally {
+        warnSpy.mockRestore()
         vi.useRealTimers()
       }
     })

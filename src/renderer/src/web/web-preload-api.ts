@@ -2604,6 +2604,8 @@ function createPtyApi(): NonNullable<Partial<PreloadApi>['pty']> {
         peakMaxRendererInFlightCharsByPty: 0,
         ackGatedFlushSkipCount: 0,
         hiddenDeliveryGatedPtyCount: 0,
+        hiddenDeliveryGatedVisiblePtyCount: 0,
+        hiddenDeliveryGatedActivePtyCount: 0,
         deliveryInterestPtyCount: 0,
         hiddenDeliveryDroppedChars: 0,
         hiddenDeliveryDroppedChunks: 0,
