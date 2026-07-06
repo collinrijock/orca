@@ -4,11 +4,11 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { parseAgentSessionFile } from './session-scanner-agent-parser'
 import {
-  allIncrementalAgentFixtures,
   CODEX_FIXTURE_SESSION_ID,
   codexFixture,
   codexWorkerFixtureLines
-} from './session-scanner-incremental-fixtures'
+} from './session-scanner-codex-fixtures'
+import { allIncrementalAgentFixtures } from './session-scanner-incremental-fixtures'
 import {
   createSessionParseStats,
   parseAgentSessionFileCached,
