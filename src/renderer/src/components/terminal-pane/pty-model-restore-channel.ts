@@ -49,6 +49,17 @@ export function registerPtyModelRestoreNeededHandler(
   }
 }
 
+/** Deliver markers fetched over invoke by the delivery watchdog. Same routing
+ *  as the push channel — needed because a delivery-heal fires precisely when
+ *  `pty:modelRestoreNeeded` push events cannot reach this renderer. */
+export function deliverPulledPtyModelRestoreMarkers(
+  events: readonly PtyModelRestoreNeededEvent[]
+): void {
+  for (const event of events) {
+    dispatchPtyModelRestoreNeeded(event)
+  }
+}
+
 /** Test seam: deliver a marker as if it arrived on the channel. */
 export function _dispatchPtyModelRestoreNeededForTest(event: PtyModelRestoreNeededEvent): void {
   dispatchPtyModelRestoreNeeded(event)

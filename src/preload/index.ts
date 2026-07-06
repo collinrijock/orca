@@ -53,6 +53,10 @@ import type {
   WorktreeRemoteBranchConflictEvent
 } from '../shared/types'
 import type { PtyModelRestoreNeededEvent } from '../shared/pty-model-restore-marker'
+import type {
+  PtyRendererDeliveryHealthReply,
+  PtyRendererDeliveryStateReport
+} from '../shared/pty-renderer-delivery-health'
 import type { TerminalViewAttributes } from '../shared/terminal-view-attributes'
 import type {
   WarpThemeImportPreview,
@@ -852,6 +856,16 @@ const api = {
     }): void => {
       ipcRenderer.send('pty:deliveryResyncResponse', payload)
     },
+    /** Renderer-initiated delivery health/heal lane. Rides invoke because the
+     *  field wedge (v1.4.121-rc.0 snapshot) kills main→renderer push events
+     *  while invoke stays alive — push-initiated recovery can't reach it. */
+    reportRendererDeliveryState: (
+      report: PtyRendererDeliveryStateReport
+    ): Promise<PtyRendererDeliveryHealthReply> =>
+      ipcRenderer.invoke('pty:reportRendererDeliveryState', report),
+    /** Sync count of live pty:data listeners on this preload's emitter — the
+     *  watchdog's "listener detached" vs "channel dead" discriminator. */
+    getPtyDataListenerCount: (): number => ipcRenderer.listenerCount('pty:data'),
     setActiveRendererPty: (id: string, active: boolean): void => {
       ipcRenderer.send('pty:setActiveRendererPty', { id, active })
     },

@@ -7680,6 +7680,188 @@ describe('registerPtyHandlers', () => {
     }
   })
 
+  // ── Renderer-initiated delivery health/heal (pty:reportRendererDeliveryState) ──
+  // Field wedge repro (v1.4.121-rc.0 snapshot): push delivery dead, invoke
+  // alive. The solicited-resync probe above rides push and can never be
+  // answered in that state; this invoke lane is the recovery that can.
+
+  function reportRendererDeliveryState(args: {
+    receivedCharsByPty: Record<string, number>
+    processedCharsByPty: Record<string, number>
+    heal?: boolean
+    rendererPtyDataListenerCount?: number | null
+  }): {
+    inFlightTotalChars: number
+    inFlightPtyCount: number
+    msSinceLastAck: number | null
+    writtenOff?: { id: string; markerSeq?: number; writtenOffChars: number }[]
+  } {
+    const handler = handlers.get('pty:reportRendererDeliveryState')
+    if (!handler) {
+      throw new Error('missing pty:reportRendererDeliveryState handler')
+    }
+    return handler(null, args) as ReturnType<typeof reportRendererDeliveryState>
+  }
+
+  it('reports delivery health over invoke without mutating any delivery state', async () => {
+    vi.useFakeTimers()
+    const mockProc = createMockProc()
+    spawnMock.mockReturnValue(mockProc.proc)
+
+    try {
+      await spawnAndSaturateRendererDeliveryGate(mockProc)
+
+      // The field wedge in miniature: renderer received nothing, no ACK ever.
+      const health = reportRendererDeliveryState({
+        receivedCharsByPty: {},
+        processedCharsByPty: {}
+      })
+
+      expect(health).toMatchObject({
+        inFlightTotalChars: 512 * 1024,
+        inFlightPtyCount: 1,
+        msSinceLastAck: null
+      })
+      expect(health.writtenOff).toBeUndefined()
+      expect(getPtyRendererDeliveryDebugSnapshot()).toMatchObject({
+        rendererInFlightChars: 512 * 1024,
+        pendingChars: 88 * 1024
+      })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('merges cumulative processed totals from a health report as a repair lane', async () => {
+    vi.useFakeTimers()
+    const mockProc = createMockProc()
+    spawnMock.mockReturnValue(mockProc.proc)
+
+    try {
+      const spawnResult = await spawnAndSaturateRendererDeliveryGate(mockProc)
+
+      // Lost-ACK variant: renderer processed everything; only the ACK
+      // messages vanished. A plain report (no heal) must drain the debt.
+      const health = reportRendererDeliveryState({
+        receivedCharsByPty: { [spawnResult.id]: 512 * 1024 },
+        processedCharsByPty: { [spawnResult.id]: 512 * 1024 }
+      })
+
+      expect(health).toMatchObject({ inFlightTotalChars: 0, inFlightPtyCount: 0 })
+      expect(health.writtenOff).toBeUndefined()
+      // Fully reopened gate drains one 16K slice per batcher tick (0/1/2 ms).
+      vi.advanceTimersByTime(2)
+      expect(getPtyDataSendCalls()).toHaveLength(35)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('heals a dead push channel: writes off unreceived bytes and returns restore markers', async () => {
+    vi.useFakeTimers()
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const mockProc = createMockProc()
+    spawnMock.mockReturnValue(mockProc.proc)
+
+    try {
+      const spawnResult = await spawnAndSaturateRendererDeliveryGate(mockProc)
+
+      const healed = reportRendererDeliveryState({
+        receivedCharsByPty: {},
+        processedCharsByPty: {},
+        heal: true,
+        rendererPtyDataListenerCount: 1
+      })
+
+      // The 512 KiB the renderer provably never received is written off; the
+      // 88 KiB still pending is dropped because the snapshot restore covers
+      // everything at or before the marker (hidden-drop parity).
+      expect(healed.writtenOff).toEqual([{ id: spawnResult.id, writtenOffChars: 512 * 1024 }])
+      expect(healed).toMatchObject({ inFlightTotalChars: 0, inFlightPtyCount: 0 })
+      expect(getPtyRendererDeliveryDebugSnapshot()).toMatchObject({
+        rendererInFlightChars: 0,
+        pendingChars: 0,
+        pendingDroppedChars: 88 * 1024
+      })
+      expect(warnSpy).toHaveBeenCalledWith(
+        '[pty] delivery heal: wrote off renderer-bound bytes lost in push channel',
+        expect.objectContaining({ rendererPtyDataListenerCount: 1 })
+      )
+
+      // Delivery is unwedged: fresh output flows to the renderer again.
+      mockProc.emitData('after-heal')
+      vi.advanceTimersByTime(2)
+      expect(getPtyDataSendCalls()).toHaveLength(33)
+    } finally {
+      warnSpy.mockRestore()
+      vi.useRealTimers()
+    }
+  })
+
+  it('never writes off bytes the renderer received but has not parsed yet', async () => {
+    vi.useFakeTimers()
+    const mockProc = createMockProc()
+    spawnMock.mockReturnValue(mockProc.proc)
+
+    try {
+      const spawnResult = await spawnAndSaturateRendererDeliveryGate(mockProc)
+
+      // Parse backpressure, not a wedge: every byte arrived, ACK credit is
+      // deferred to the scheduler consume point and will still repay this.
+      const health = reportRendererDeliveryState({
+        receivedCharsByPty: { [spawnResult.id]: 512 * 1024 },
+        processedCharsByPty: {},
+        heal: true,
+        rendererPtyDataListenerCount: 1
+      })
+
+      expect(health.writtenOff).toBeUndefined()
+      expect(getPtyRendererDeliveryDebugSnapshot()).toMatchObject({
+        rendererInFlightChars: 512 * 1024,
+        pendingChars: 88 * 1024
+      })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('refuses a heal while main has seen a recent ACK', async () => {
+    vi.useFakeTimers()
+    const mockProc = createMockProc()
+    spawnMock.mockReturnValue(mockProc.proc)
+
+    try {
+      const spawnResult = await spawnAndSaturateRendererDeliveryGate(mockProc)
+      const ackData = getPtyAckDataListener()
+      ackData(null, { id: spawnResult.id, processedChars: 16 * 1024 })
+
+      // Some pty still round-trips ACKs — whatever the renderer thinks, the
+      // channel is not dead, so a heal request must not destroy accounting.
+      const blocked = reportRendererDeliveryState({
+        receivedCharsByPty: {},
+        processedCharsByPty: {},
+        heal: true
+      })
+      expect(blocked.writtenOff).toBeUndefined()
+      expect(getPtyRendererDeliveryDebugSnapshot()).toMatchObject({
+        rendererInFlightChars: 496 * 1024
+      })
+
+      // Once main-side ACK silence crosses the floor, the same heal proceeds.
+      // (The ACK freed a 16K window slot, so one more pending slice shipped
+      // during the advance — the write-off covers 512K un-received again.)
+      vi.advanceTimersByTime(10_000)
+      const healed = reportRendererDeliveryState({
+        receivedCharsByPty: {},
+        processedCharsByPty: {},
+        heal: true
+      })
+      expect(healed.writtenOff).toEqual([{ id: spawnResult.id, writtenOffChars: 512 * 1024 }])
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('zeroes renderer in-flight delivery counters when the renderer lifecycle resets', async () => {
     vi.useFakeTimers()
     const mockProc = createMockProc()

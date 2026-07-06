@@ -178,6 +178,10 @@ import type {
   WorkspaceSessionState
 } from '../shared/types'
 import type { PtyModelRestoreNeededEvent } from '../shared/pty-model-restore-marker'
+import type {
+  PtyRendererDeliveryHealthReply,
+  PtyRendererDeliveryStateReport
+} from '../shared/pty-renderer-delivery-health'
 import type { TerminalViewAttributes } from '../shared/terminal-view-attributes'
 import type {
   WarpThemeImportPreview,
@@ -1168,6 +1172,14 @@ export type PreloadApi = {
       requestId: number
       processedCharsByPty: Record<string, number>
     }) => void
+    /** Renderer-initiated delivery health/heal lane over invoke — reaches main
+     *  even when every main→renderer push channel is dead (field wedge). */
+    reportRendererDeliveryState: (
+      report: PtyRendererDeliveryStateReport
+    ) => Promise<PtyRendererDeliveryHealthReply>
+    /** Live pty:data listener count on the preload emitter (sync) — heal-time
+     *  discriminator between a detached listener and a dead channel. */
+    getPtyDataListenerCount: () => number
     setActiveRendererPty: (id: string, active: boolean) => void
     setRendererPtyVisible: (id: string, visible: boolean) => void
     /** Hidden-delivery gate (Phase 4): hidden=true lets main drop renderer

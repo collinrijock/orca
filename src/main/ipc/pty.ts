@@ -18,6 +18,11 @@ import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type { Store } from '../persistence'
 import type { GlobalSettings, TuiAgent } from '../../shared/types'
 import { terminalOutputBacklogCapChars } from '../../shared/terminal-scrollback-policy'
+import type {
+  PtyDeliveryWriteOff,
+  PtyRendererDeliveryHealthReply,
+  PtyRendererDeliveryStateReport
+} from '../../shared/pty-renderer-delivery-health'
 import { extractHiddenStartupRendererQueryData } from '../../shared/terminal-reply-query-extraction'
 import { recordCrashBreadcrumb } from '../crash-reporting/crash-breadcrumb-store'
 import type { SleepingAgentLaunchConfig } from '../../shared/agent-session-resume'
@@ -1359,6 +1364,7 @@ export function registerPtyHandlers(
   ipcMain.removeHandler('pty:sideEffectSnapshot')
   ipcMain.removeHandler('pty:getRendererDeliveryDebugSnapshot')
   ipcMain.removeHandler('pty:resetRendererDeliveryDebug')
+  ipcMain.removeHandler('pty:reportRendererDeliveryState')
   ipcMain.removeHandler('pty:writeAccepted')
   ipcMain.removeAllListeners('pty:write')
   ipcMain.removeAllListeners('pty:ackColdRestore')
@@ -1496,6 +1502,10 @@ export function registerPtyHandlers(
   // state. It clears the outstanding-probe flag so a later gated arrival can
   // probe again, and logs once per silent streak for field diagnosis.
   const PTY_DELIVERY_RESYNC_TIMEOUT_MS = 5_000
+  // Why: a heal write-off destroys delivery accounting; require main to have
+  // seen zero ACKs for this long too, independent of the renderer's own
+  // two-silent-ticks evidence, before believing the channel is dead.
+  const PTY_DELIVERY_HEAL_MIN_ACK_SILENCE_MS = 10_000
   // Why: keep the immediate path bounded to keystroke-sized TUI redraws;
   // large output and non-interactive output must still use the batcher.
   const INTERACTIVE_OUTPUT_WINDOW_MS = 100
@@ -1724,6 +1734,62 @@ export function registerPtyHandlers(
     rendererDeliveryAccountingByPty.clear()
     rendererInFlightTotalChars = 0
     recordPtyRendererDeliveryPressure()
+  }
+
+  // Why: bytes sent but never counted received by the renderer after a
+  // confirmed wedge are gone — no ACK message can ever repay them (unlike a
+  // lost ACK, which any later cumulative total heals). Write the debt off and
+  // hand back restore markers so panes repaint from the main-owned snapshot;
+  // the caller routes them locally because push markers cannot arrive.
+  function writeOffLostRendererDelivery(
+    report: PtyRendererDeliveryStateReport
+  ): PtyDeliveryWriteOff[] {
+    const writtenOff: PtyDeliveryWriteOff[] = []
+    for (const [id, accounting] of rendererDeliveryAccountingByPty) {
+      if (accounting.sentChars - accounting.ackedChars <= 0) {
+        continue
+      }
+      const received = report.receivedCharsByPty?.[id]
+      const receivedChars =
+        typeof received === 'number' && Number.isFinite(received) ? Math.max(0, received) : 0
+      // Why skip a parse-pending window: received-but-unparsed bytes sit alive
+      // in the renderer write queue; their deferred ACK still repays this debt.
+      if (receivedChars > accounting.ackedChars) {
+        continue
+      }
+      const acknowledged = applyCumulativeAck(id, accounting.sentChars)
+      if (acknowledged <= 0) {
+        continue
+      }
+      tryGetProviderForPty(id)?.acknowledgeDataEvent(id, acknowledged)
+      // Why drop pending: everything at or before markerSeq comes from the
+      // snapshot (hidden-drop parity); flushing pre-marker bytes afterward
+      // would double-paint what the restore already covers.
+      const pending = pendingData.get(id)
+      if (pending) {
+        pendingDroppedChars += pending.data.length
+        pendingData.delete(id)
+        pendingOverflowMarkedPtys.delete(id)
+        updateProducerFlowControl(id)
+      }
+      const markerSeq = runtime?.getPtyOutputSequence(id)
+      writtenOff.push({
+        id,
+        ...(typeof markerSeq === 'number' ? { markerSeq } : {}),
+        writtenOffChars: acknowledged
+      })
+    }
+    if (writtenOff.length > 0) {
+      clearDeliveryResyncProbe()
+      deliveryResyncUnansweredWarnLogged = false
+      console.warn('[pty] delivery heal: wrote off renderer-bound bytes lost in push channel', {
+        rendererPtyDataListenerCount: report.rendererPtyDataListenerCount ?? null,
+        msSinceLastAck: lastAckReceivedAtMs === null ? null : Date.now() - lastAckReceivedAtMs,
+        writtenOffByPty: writtenOff.map(({ id, writtenOffChars }) => ({ id, writtenOffChars })),
+        ...readCurrentPtyRendererDeliveryDebugSnapshot()
+      })
+    }
+    return writtenOff
   }
 
   function sendPtyDataToRenderer(id: string, payload: PtyDataPayload): void {
@@ -3997,6 +4063,56 @@ export function registerPtyHandlers(
       recordPtyRendererDeliveryPressure()
       if (pendingData.size > 0 && !flushTimer) {
         schedulePendingDataFlush(0)
+      }
+    }
+  )
+
+  // Why invoke + renderer-initiated: the field wedge (v1.4.121-rc.0 snapshot,
+  // 2026-07-06) kills every main→renderer push channel while invoke stays
+  // alive, so the solicited-resync probe above can never be answered there.
+  // This is the same reconcile, ridden over the direction proven to work, plus
+  // a write-off lane for bytes the renderer provably never received.
+  ipcMain.handle(
+    'pty:reportRendererDeliveryState',
+    (_event, args: PtyRendererDeliveryStateReport): PtyRendererDeliveryHealthReply => {
+      // Extra repair lane for the lost-ACK variant: identical max-merge to the
+      // resync response, so a heal is only reached when merging cannot drain.
+      for (const [id, processedChars] of Object.entries(args?.processedCharsByPty ?? {})) {
+        if (typeof processedChars !== 'number' || !Number.isFinite(processedChars)) {
+          continue
+        }
+        const acknowledged = applyCumulativeAck(id, Math.max(0, processedChars))
+        if (acknowledged > 0) {
+          tryGetProviderForPty(id)?.acknowledgeDataEvent(id, acknowledged)
+        }
+      }
+      let writtenOff: PtyDeliveryWriteOff[] = []
+      // Why the main-side ACK-silence check: the renderer's two silent ticks
+      // already argue for a wedge; requiring main to have seen no ACK either
+      // keeps a buggy/foreign caller from writing off live delivery.
+      if (
+        args?.heal === true &&
+        rendererInFlightTotalChars > 0 &&
+        (lastAckReceivedAtMs === null ||
+          Date.now() - lastAckReceivedAtMs >= PTY_DELIVERY_HEAL_MIN_ACK_SILENCE_MS)
+      ) {
+        writtenOff = writeOffLostRendererDelivery(args)
+      }
+      recordPtyRendererDeliveryPressure()
+      if (pendingData.size > 0 && !flushTimer) {
+        schedulePendingDataFlush(0)
+      }
+      let inFlightPtyCount = 0
+      for (const accounting of rendererDeliveryAccountingByPty.values()) {
+        if (accounting.sentChars - accounting.ackedChars > 0) {
+          inFlightPtyCount++
+        }
+      }
+      return {
+        inFlightTotalChars: rendererInFlightTotalChars,
+        inFlightPtyCount,
+        msSinceLastAck: lastAckReceivedAtMs === null ? null : Date.now() - lastAckReceivedAtMs,
+        ...(writtenOff.length > 0 ? { writtenOff } : {})
       }
     }
   )

@@ -2565,6 +2565,11 @@ function createPtyApi(): NonNullable<Partial<PreloadApi>['pty']> {
     ackData: () => {},
     onDeliveryResyncRequest: () => noopUnsubscribe,
     respondDeliveryResync: () => {},
+    // Why healthy stub: web terminals ride the remote-runtime transport, not
+    // main's delivery gate — a zero-in-flight reply keeps the watchdog idle.
+    reportRendererDeliveryState: () =>
+      Promise.resolve({ inFlightTotalChars: 0, inFlightPtyCount: 0, msSinceLastAck: null }),
+    getPtyDataListenerCount: () => 0,
     setActiveRendererPty: () => {},
     setRendererPtyVisible: () => {},
     setHiddenRendererPty: () => {},

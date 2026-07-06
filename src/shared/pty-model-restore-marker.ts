@@ -8,7 +8,7 @@
  * marker is delivery machinery, not PTY data — remote-runtime transports
  * never see it.
  */
-export type PtyModelRestoreReason = 'hidden-drop' | 'unhide' | 'pending-cap'
+export type PtyModelRestoreReason = 'hidden-drop' | 'unhide' | 'pending-cap' | 'delivery-heal'
 
 export type PtyModelRestoreNeededEvent = {
   id: string
