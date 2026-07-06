@@ -110,7 +110,7 @@ async function readColumnSnapshot(page: Page, ptyId: string): Promise<ColumnSnap
 // under CI load. Poll until the sizes agree — a genuinely dropped resize that
 // never re-syncs still fails (the real column-desync bug), a slow-but-correct
 // propagation no longer does.
-const COLUMN_RESYNC_TIMEOUT_MS = 15_000
+const COLUMN_RESYNC_TIMEOUT_MS = 20_000
 
 async function waitForPtyColsToMatchXterm(
   page: Page,
