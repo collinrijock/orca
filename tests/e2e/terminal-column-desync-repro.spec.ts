@@ -105,6 +105,57 @@ async function readColumnSnapshot(page: Page, ptyId: string): Promise<ColumnSnap
   return { xtermCols, ptyCols }
 }
 
+// Why: the PTY re-sync after a resize is async (renderer fit → pty:resize →
+// daemon → ioctl); a fixed wait then exact check samples mid-flight and flakes
+// under CI load. Poll until the sizes agree — a genuinely dropped resize that
+// never re-syncs still fails (the real column-desync bug), a slow-but-correct
+// propagation no longer does.
+const COLUMN_RESYNC_TIMEOUT_MS = 15_000
+
+async function waitForPtyColsToMatchXterm(
+  page: Page,
+  ptyId: string,
+  label: string,
+  timeoutMs = COLUMN_RESYNC_TIMEOUT_MS
+): Promise<void> {
+  const deadline = Date.now() + timeoutMs
+  let snapshot: ColumnSnapshot = { xtermCols: -1, ptyCols: -1 }
+  do {
+    snapshot = await readColumnSnapshot(page, ptyId)
+    if (snapshot.ptyCols === snapshot.xtermCols) {
+      return
+    }
+    await page.waitForTimeout(500)
+  } while (Date.now() < deadline)
+  throw new Error(
+    `${label}: PTY cols (${snapshot.ptyCols}) never re-synced to xterm cols (${snapshot.xtermCols}) ` +
+      `within ${timeoutMs}ms; a stale PTY width that never re-syncs is the column-desync bug`
+  )
+}
+
+async function waitForReportedColsToMatchPty(
+  page: Page,
+  ptyId: string,
+  timeoutMs = COLUMN_RESYNC_TIMEOUT_MS
+): Promise<void> {
+  const deadline = Date.now() + timeoutMs
+  let reportedCols = -1
+  let ptyCols = -1
+  do {
+    ptyCols = await readPtyCols(page, ptyId)
+    reportedCols = await readReportedPtyCols(page, ptyId)
+    if (reportedCols === ptyCols) {
+      return
+    }
+    await page.waitForTimeout(500)
+  } while (Date.now() < deadline)
+  throw new Error(
+    `pty:getSize reported ${reportedCols} but the PTY's process.stdout.columns is ${ptyCols} and ` +
+      `never re-synced within ${timeoutMs}ms; getSize must reflect the APPLIED size so the ` +
+      `drift-check can detect a dropped resize`
+  )
+}
+
 async function closeRightSidebarAndFeatureTips(page: Page): Promise<void> {
   await page.evaluate(() => {
     const store = window.__store
@@ -144,20 +195,10 @@ test.describe('Terminal column desync repro', () => {
     // Shrink the window while the terminal is visible, then widen it. xterm
     // reflows via the ResizeObserver; the PTY must follow.
     await orcaPage.setViewportSize({ width: 760, height: 800 })
-    await orcaPage.waitForTimeout(400)
-    const narrow = await readColumnSnapshot(orcaPage, ptyId)
-    expect(
-      narrow.ptyCols,
-      `after shrink, PTY cols (${narrow.ptyCols}) should equal xterm cols (${narrow.xtermCols})`
-    ).toBe(narrow.xtermCols)
+    await waitForPtyColsToMatchXterm(orcaPage, ptyId, 'after shrink')
 
     await orcaPage.setViewportSize({ width: 1280, height: 800 })
-    await orcaPage.waitForTimeout(400)
-    const wide = await readColumnSnapshot(orcaPage, ptyId)
-    expect(
-      wide.ptyCols,
-      `after widen, PTY cols (${wide.ptyCols}) should equal xterm cols (${wide.xtermCols})`
-    ).toBe(wide.xtermCols)
+    await waitForPtyColsToMatchXterm(orcaPage, ptyId, 'after widen')
   })
 
   // Why: guards the applied-size IPC contract the desync fix relies on. The
@@ -175,15 +216,8 @@ test.describe('Terminal column desync repro', () => {
     const ptyId = await settleTerminal(orcaPage)
 
     await orcaPage.setViewportSize({ width: 900, height: 800 })
-    await orcaPage.waitForTimeout(500)
 
-    const ptyCols = await readPtyCols(orcaPage, ptyId)
-    const reportedCols = await readReportedPtyCols(orcaPage, ptyId)
-    expect(
-      reportedCols,
-      `pty:getSize reported ${reportedCols} but the PTY's process.stdout.columns is ${ptyCols}; ` +
-        `getSize must reflect the APPLIED size so the drift-check can detect a dropped resize`
-    ).toBe(ptyCols)
+    await waitForReportedColsToMatchPty(orcaPage, ptyId)
   })
 
   test('PTY columns re-sync after the terminal is resized while hidden', async ({ orcaPage }) => {
