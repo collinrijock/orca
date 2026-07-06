@@ -62,7 +62,11 @@ describe('wrapChildProcessApi', () => {
       }
     })
     const wrapped = wrapChildProcessApi(original)
-    await expect(promisify(wrapped)('powershell.exe', ['-NoProfile'])).resolves.toBe('done')
+    // The wrapper's static type is `(...args: unknown[]) => unknown`, which
+    // makes promisify pick its zero-arg callback overload; the custom-symbol
+    // impl copied at runtime is variadic, so type the result to match.
+    const promisified = promisify(wrapped) as (...args: unknown[]) => Promise<unknown>
+    await expect(promisified('powershell.exe', ['-NoProfile'])).resolves.toBe('done')
     expect(seen[2]).toEqual({ windowsHide: true })
   })
 })
