@@ -102,6 +102,28 @@ describe('computePaneMountPolicy', () => {
     expect(result.evictTabIds.size).toBe(0)
   })
 
+  it('parked panes do not consume warm-budget rank slots', () => {
+    // A parked pane is always classified 'evict' regardless of rank, so letting
+    // it into the ranking pool would silently steal a warm slot from a live
+    // hidden pane, evicting it earlier than warmBudget intends.
+    const result = computePaneMountPolicy(
+      policy(
+        [
+          candidate({ tabId: 'parked', isParked: true, lastVisibleAt: NOW - 1_000 }),
+          candidate({ tabId: 'a', lastVisibleAt: NOW - 2_000 }),
+          candidate({ tabId: 'b', lastVisibleAt: NOW - 3_000 }),
+          candidate({ tabId: 'c', lastVisibleAt: NOW - 4_000 })
+        ],
+        { warmBudget: 3 }
+      )
+    )
+    expect(result.classifications.get('parked')).toBe('evict')
+    // All three live hidden panes keep their warm slots.
+    expect(result.classifications.get('a')).toBe('warm')
+    expect(result.classifications.get('b')).toBe('warm')
+    expect(result.classifications.get('c')).toBe('warm')
+  })
+
   it('exempts newborn (unbound), dead, and wake-hint panes', () => {
     const result = computePaneMountPolicy(
       policy(

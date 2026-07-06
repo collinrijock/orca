@@ -37,8 +37,8 @@ function clamp(value: number, min: number, max: number): number {
 
 /**
  * Why: older persisted settings objects predate these keys. `?? default`
- * hydration (STA-5082 lesson) keeps them behaving as default-on rather than
- * disabled, and clamps out-of-range persisted values.
+ * hydration (STA-5082 lesson) keeps them on the documented defaults (eviction
+ * OFF, warm budget 12, dwell 5 min), and clamps out-of-range persisted values.
  */
 export function isTerminalPaneEvictionEnabled(settings: EvictionSettingsInput | null): boolean {
   return settings?.experimentalTerminalPaneEviction ?? TERMINAL_PANE_EVICTION_DEFAULT_ENABLED

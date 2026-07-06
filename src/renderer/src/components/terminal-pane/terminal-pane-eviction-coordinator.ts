@@ -48,13 +48,18 @@ let selfDisableUnsubscribe: (() => void) | null = null
 let lastInputSignature = ''
 
 function scheduleIdle(callback: () => void): () => void {
-  const idle = (globalThis as { requestIdleCallback?: (cb: () => void) => number })
-    .requestIdleCallback
-  const cancelIdle = (globalThis as { cancelIdleCallback?: (id: number) => void })
-    .cancelIdleCallback
-  if (typeof idle === 'function' && typeof cancelIdle === 'function') {
-    const id = idle(callback)
-    return () => cancelIdle(id)
+  // Why: requestIdleCallback is this-sensitive — an extracted unbound reference
+  // throws "Illegal invocation" in Chromium, so always invoke as a method.
+  const target = globalThis as {
+    requestIdleCallback?: (cb: () => void) => number
+    cancelIdleCallback?: (id: number) => void
+  }
+  if (
+    typeof target.requestIdleCallback === 'function' &&
+    typeof target.cancelIdleCallback === 'function'
+  ) {
+    const id = target.requestIdleCallback(callback)
+    return () => target.cancelIdleCallback?.(id)
   }
   const timer = setTimeout(callback, 0)
   return () => clearTimeout(timer)

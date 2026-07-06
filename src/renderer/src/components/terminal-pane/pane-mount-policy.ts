@@ -58,8 +58,16 @@ export type PaneMountPolicyResult = {
 }
 
 function isEvictionEligible(candidate: PaneMountCandidate): boolean {
-  // Only live, hidden, non-wake-hint panes are candidates for the LRU.
-  return !candidate.isVisible && candidate.ptyState === 'live' && !candidate.hasWakeHint
+  // Only live, hidden, non-wake-hint panes are candidates for the LRU. Parked
+  // panes are excluded: they are always classified 'evict' regardless of rank,
+  // so letting them into the ranking pool would silently consume warm-budget
+  // slots and evict live hidden panes earlier than warmBudget intends.
+  return (
+    !candidate.isVisible &&
+    !candidate.isParked &&
+    candidate.ptyState === 'live' &&
+    !candidate.hasWakeHint
+  )
 }
 
 function classifyCandidate(
