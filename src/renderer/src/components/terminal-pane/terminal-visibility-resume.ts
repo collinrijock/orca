@@ -40,6 +40,7 @@ type HideTerminalVisibilityResult = {
 type RecoverVisibleTerminalWindowWakeArgs = {
   manager: PaneManager
   isActive: boolean
+  clearGlyphAtlases: boolean
 }
 
 export function resumeTerminalVisibility({
@@ -123,7 +124,8 @@ export function hideTerminalVisibility({
 
 export function recoverVisibleTerminalWindowWake({
   manager,
-  isActive
+  isActive,
+  clearGlyphAtlases
 }: RecoverVisibleTerminalWindowWakeArgs): void {
   // Why: macOS screensaver/display wake can leave xterm visible but with a
   // stale renderer/input surface; Orca's own hidden-state resume never runs.
@@ -138,7 +140,14 @@ export function recoverVisibleTerminalWindowWake({
     fitPanes(manager)
   }
   enforceTerminalViewportIntents(manager)
-  resetAndRefreshAllTerminalWebglAtlases()
+  if (clearGlyphAtlases) {
+    // Why: only a genuine wake may wipe the shared glyph atlas. The wipe makes
+    // every same-config pane re-rasterize at once, and xterm's atlas page-merge
+    // clear-model flag is consumed by one renderer (xterm.js #4480), so panes
+    // that lose that race paint garbled glyphs mid-stream. A plain refocus
+    // keeps the warm atlas and relies on the reveal repaint below.
+    resetAndRefreshAllTerminalWebglAtlases()
+  }
   manager.scheduleRevealRepaint()
 }
 

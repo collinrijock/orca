@@ -83,9 +83,44 @@ describe('resumeTerminalVisibility reveal repaint', () => {
     const manager = createManager()
     recoverVisibleTerminalWindowWake({
       manager: manager as never as PaneManager,
-      isActive: false
+      isActive: false,
+      clearGlyphAtlases: true
     })
 
+    expect(manager.scheduleRevealRepaint).toHaveBeenCalledTimes(1)
+  })
+
+  it('clears shared glyph atlases only on genuine wake recovery', async () => {
+    const { resetAndRefreshAllTerminalWebglAtlases } = vi.mocked(
+      await import('@/lib/pane-manager/pane-manager-registry')
+    )
+    const manager = createManager()
+    recoverVisibleTerminalWindowWake({
+      manager: manager as never as PaneManager,
+      isActive: false,
+      clearGlyphAtlases: true
+    })
+
+    expect(resetAndRefreshAllTerminalWebglAtlases).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps the warm glyph atlas on plain-refocus recovery', async () => {
+    // Deliberate reversal of the #6354 focus-clear: wiping the shared atlas on
+    // every refocus forces a mass re-rasterization that can hit xterm's atlas
+    // page-merge race (#4480) and garble streaming panes. Focus recovery must
+    // still resume rendering and schedule the pane-scoped repaint.
+    const { resetAndRefreshAllTerminalWebglAtlases } = vi.mocked(
+      await import('@/lib/pane-manager/pane-manager-registry')
+    )
+    const manager = createManager()
+    recoverVisibleTerminalWindowWake({
+      manager: manager as never as PaneManager,
+      isActive: false,
+      clearGlyphAtlases: false
+    })
+
+    expect(resetAndRefreshAllTerminalWebglAtlases).not.toHaveBeenCalled()
+    expect(manager.resumeRendering).toHaveBeenCalledTimes(1)
     expect(manager.scheduleRevealRepaint).toHaveBeenCalledTimes(1)
   })
 })
