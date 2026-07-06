@@ -105,7 +105,7 @@ describe('ensureRelocatedNodePtyNativeRuntime', () => {
     expect(readFileSync(join(destDir!, 'conpty.node'), 'utf8')).toBe('binding')
   })
 
-  it('removes stale version dirs but keeps the current one', () => {
+  it('preserves prior version dirs so a surviving daemon keeps its runtime', () => {
     const sourceDir = join(tempDir, 'source')
     seedSourceDir(sourceDir)
     const destRoot = join(tempDir, 'dest')
@@ -114,7 +114,11 @@ describe('ensureRelocatedNodePtyNativeRuntime', () => {
     const destDir = ensureRelocatedNodePtyNativeRuntime({ sourceDir, destRoot, version: '2.0.0' })
 
     expect(destDir).toBe(join(destRoot, '2.0.0'))
-    expect(existsSync(join(destRoot, '1.0.0'))).toBe(false)
+    // Why: a daemon adopted from the previous app version still loads
+    // conpty.dll/OpenConsole.exe from its own version dir; deleting it out
+    // from under the live daemon breaks its next conpty spawn. The prior
+    // version dir must survive the new version's relocation.
+    expect(existsSync(join(destRoot, '1.0.0', 'conpty.node'))).toBe(true)
     expect(existsSync(join(destRoot, '2.0.0', 'conpty.node'))).toBe(true)
   })
 

@@ -1,12 +1,4 @@
-import {
-  copyFileSync,
-  existsSync,
-  mkdirSync,
-  readdirSync,
-  renameSync,
-  rmSync,
-  writeFileSync
-} from 'node:fs'
+import { copyFileSync, existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
 import { app } from 'electron'
@@ -55,31 +47,6 @@ function copyRuntimeTree(sourceDir: string, destDir: string): void {
   }
 }
 
-function removeStaleRuntimeVersions(destRoot: string, keepVersion: string): void {
-  let entries
-  try {
-    entries = readdirSync(destRoot, { withFileTypes: true })
-  } catch {
-    return
-  }
-  for (const entry of entries) {
-    if (!entry.isDirectory() || entry.name === keepVersion) {
-      continue
-    }
-    // Why: an adopted daemon from a previous version may still run (or later
-    // respawn) binaries out of its own version dir. Renaming a directory
-    // fails on Windows while anything inside is open, so a successful rename
-    // proves the dir is unused and safe to delete.
-    const doomedPath = join(destRoot, `${entry.name}.stale`)
-    try {
-      renameSync(join(destRoot, entry.name), doomedPath)
-      rmSync(doomedPath, { recursive: true, force: true })
-    } catch {
-      // Still in use (or already being cleaned) — retry on a future launch.
-    }
-  }
-}
-
 export function ensureRelocatedNodePtyNativeRuntime(options: {
   sourceDir: string
   destRoot: string
@@ -95,7 +62,14 @@ export function ensureRelocatedNodePtyNativeRuntime(options: {
       copyRuntimeTree(sourceDir, destDir)
       writeFileSync(join(destDir, RELOCATION_COMPLETE_MARKER), '')
     }
-    removeStaleRuntimeVersions(destRoot, version)
+    // Why: stale per-version dirs are deliberately NOT deleted here. A
+    // surviving daemon adopted from a previous app version still loads
+    // conpty.dll/OpenConsole.exe out of its own version dir; on Windows the
+    // running .exe/.dll images open with FILE_SHARE_DELETE, so a rename+delete
+    // would succeed and pull the runtime out from under that live daemon,
+    // breaking its next conpty spawn (ERROR_PATH_NOT_FOUND). Leaving old dirs
+    // in place is safe — they are small and only cleaned once it's provably
+    // safe (see follow-up daemon-version plumbing).
     return destDir
   } catch {
     // Fail open: node-pty keeps loading from the install dir, which is the
