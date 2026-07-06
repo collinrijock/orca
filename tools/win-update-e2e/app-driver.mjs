@@ -28,7 +28,7 @@ const SORTABLE_TAB = '[data-testid="sortable-tab"]'
 // Why: the layout mounts hidden duplicate panes; only the visible one is the
 // live terminal, so target `:visible` to avoid focusing/measuring a hidden copy.
 const TERMINAL_SURFACE_VISIBLE = '[data-terminal-tab-id]:visible'
-const XTERM_CONTAINER = '.xterm'
+const XTERM_CONTAINER_VISIBLE = '.xterm:visible'
 const XTERM_INPUT = '.xterm-helper-textarea'
 
 /**
@@ -118,7 +118,10 @@ export async function waitForTerminalReady(page, timeoutMs = 60_000) {
     .locator(TERMINAL_SURFACE_VISIBLE)
     .first()
     .waitFor({ state: 'visible', timeout: timeoutMs })
-  await page.locator(XTERM_CONTAINER).first().waitFor({ state: 'visible', timeout: timeoutMs })
+  await page
+    .locator(XTERM_CONTAINER_VISIBLE)
+    .first()
+    .waitFor({ state: 'visible', timeout: timeoutMs })
 }
 
 /**
