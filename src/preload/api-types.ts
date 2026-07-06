@@ -19,7 +19,7 @@ import type {
   ConnectCurrentOrcaProfileResult,
   FindOrcaProfileProjectsByPathArgs,
   FindOrcaProfileProjectsByPathResult,
-  OrcaProfileListState,
+  OrcaProfileListResult,
   OrcaProfileAuthStatus,
   RefreshCurrentOrcaProfileAuthResult,
   SelectOrcaProfileOrgArgs,
@@ -28,7 +28,14 @@ import type {
   SwitchOrcaProfileArgs,
   SwitchOrcaProfileResult,
   TransferOrcaProfileProjectArgs,
-  TransferOrcaProfileProjectResult
+  TransferOrcaProfileProjectResult,
+  OrcaProfileOrgInviteRevokeArgs,
+  OrcaProfileOrgMemberChangeRoleArgs,
+  OrcaProfileOrgMemberInviteArgs,
+  OrcaProfileOrgMemberMutationResult,
+  OrcaProfileOrgMemberRemoveArgs,
+  OrcaProfileOrgMembersListArgs,
+  OrcaProfileOrgMembersListResult
 } from '../shared/orca-profiles'
 import type { TerminalPaneSplitSource } from '../shared/feature-education-telemetry'
 import type { TaskSourceContext } from '../shared/task-source-context'
@@ -860,7 +867,7 @@ export type AppApi = {
 export type PreloadApi = {
   app: AppApi
   orcaProfiles: {
-    list: () => Promise<OrcaProfileListState>
+    list: () => Promise<OrcaProfileListResult>
     authStatus: () => Promise<OrcaProfileAuthStatus>
     createLocal: (args?: CreateLocalOrcaProfileArgs) => Promise<CreateLocalOrcaProfileResult>
     createCloudLinked: (
@@ -877,6 +884,21 @@ export type PreloadApi = {
     refreshAuth: () => Promise<RefreshCurrentOrcaProfileAuthResult>
     signOutCurrent: () => Promise<SignOutCurrentOrcaProfileResult>
     selectOrg: (args: SelectOrcaProfileOrgArgs) => Promise<SelectOrcaProfileOrgResult>
+    orgMembersList: (
+      args: OrcaProfileOrgMembersListArgs
+    ) => Promise<OrcaProfileOrgMembersListResult>
+    orgMemberInvite: (
+      args: OrcaProfileOrgMemberInviteArgs
+    ) => Promise<OrcaProfileOrgMemberMutationResult>
+    orgInviteRevoke: (
+      args: OrcaProfileOrgInviteRevokeArgs
+    ) => Promise<OrcaProfileOrgMemberMutationResult>
+    orgMemberChangeRole: (
+      args: OrcaProfileOrgMemberChangeRoleArgs
+    ) => Promise<OrcaProfileOrgMemberMutationResult>
+    orgMemberRemove: (
+      args: OrcaProfileOrgMemberRemoveArgs
+    ) => Promise<OrcaProfileOrgMemberMutationResult>
   }
   platform: {
     get: () => {

@@ -12353,7 +12353,11 @@
             "b4f9d1125d": "本地",
             "4815f7d163": "切换配置文件",
             "d00d853e2a": "管理配置文件",
-            "c106c674fe": "新建本地配置文件"
+            "c106c674fe": "新建本地配置文件",
+            "account": "帐户",
+            "org": {
+              "members": "组织成员"
+            }
           },
           "management": {
             "04e7bd2a23": "转移",
@@ -12418,6 +12422,61 @@
               "agentPlural": "{{count}} 个活动的智能体",
               "browserSingular": "{{count}} 个浏览器工作区",
               "browserPlural": "{{count}} 个浏览器工作区"
+            }
+          },
+          "org": {
+            "members": {
+              "role": {
+                "label": "角色",
+                "owner": "所有者",
+                "admin": "管理员",
+                "member": "成员"
+              },
+              "not": {
+                "signed": {
+                  "in": "他们尚未登录 Orca。"
+                }
+              },
+              "remove": {
+                "confirm": "移除",
+                "cancel": "取消",
+                "label": "移除成员"
+              },
+              "title": "组织成员",
+              "load": {
+                "error": "无法加载组织成员。"
+              },
+              "retry": "重试",
+              "pending": {
+                "title": "待处理的邀请",
+                "revoke": "撤销"
+              },
+              "invite": {
+                "title": "邀请",
+                "placeholder": "teammate@example.com",
+                "role": "邀请角色",
+                "submit": "发送"
+              },
+              "error": {
+                "forbidden": "你的角色无法执行此操作。",
+                "conflict": "已是成员或已被邀请。",
+                "remove": {
+                  "self": "无法移除你自己。"
+                },
+                "own": {
+                  "role": "无法更改你自己的角色。"
+                },
+                "not": {
+                  "found": "该成员已不在此组织中。"
+                },
+                "reconnect": "请重新连接你的配置文件以管理成员。",
+                "unconfigured": "此版本不支持组织管理。",
+                "failed": "出现问题。请重试。"
+              },
+              "subtitle": {
+                "named": "{{orgName}} 中可以协作使用 Orca 的成员。",
+                "default": "你的组织中可以协作使用 Orca 的成员。"
+              }
             }
           }
         }

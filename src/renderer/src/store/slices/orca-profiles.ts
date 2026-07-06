@@ -18,6 +18,7 @@ export type OrcaProfilesSlice = OrcaProfilesAuthActions & {
   orcaProfiles: OrcaProfileSummary[]
   activeOrcaProfileId: string | null
   orcaProfileAuthStatus: OrcaProfileAuthStatus | null
+  orcaProfilesMultiProfileUi: boolean
   orcaProfilesLoading: boolean
   orcaProfileSwitching: boolean
   orcaProfileConnecting: boolean
@@ -38,6 +39,7 @@ export const createOrcaProfilesSlice: StateCreator<AppState, [], [], OrcaProfile
   orcaProfiles: [],
   activeOrcaProfileId: null,
   orcaProfileAuthStatus: null,
+  orcaProfilesMultiProfileUi: false,
   orcaProfilesLoading: false,
   orcaProfileSwitching: false,
   orcaProfileConnecting: false,
@@ -52,6 +54,7 @@ export const createOrcaProfilesSlice: StateCreator<AppState, [], [], OrcaProfile
       set({
         activeOrcaProfileId: state.activeProfileId,
         orcaProfiles: state.profiles,
+        orcaProfilesMultiProfileUi: state.multiProfileUi,
         orcaProfileAuthStatus: authStatus,
         orcaProfilesLoading: false
       })

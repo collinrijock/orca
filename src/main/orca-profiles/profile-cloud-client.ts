@@ -34,7 +34,13 @@ type CapabilityRefreshResponse = {
 }
 
 export class OrcaCloudRequestError extends Error {
-  constructor(public readonly statusCode: number) {
+  // Why: `errorCode` carries the server's JSON `{error}` discriminator (e.g.
+  // 'already_member', 'cannot_remove_self') so callers can distinguish the
+  // precise 4xx cause without re-reading the response body.
+  constructor(
+    public readonly statusCode: number,
+    public readonly errorCode?: string
+  ) {
     super(`orca_cloud_request_failed_${statusCode}`)
     this.name = 'OrcaCloudRequestError'
   }

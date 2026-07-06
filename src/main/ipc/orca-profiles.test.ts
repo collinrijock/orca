@@ -96,13 +96,38 @@ describe('registerOrcaProfileHandlers', () => {
 
     registerOrcaProfileHandlers(makeStoreMock() as never)
 
-    await expect(Promise.resolve(handlers.get('orcaProfiles:list')?.(null))).resolves.toBe(
-      listState
-    )
+    await expect(Promise.resolve(handlers.get('orcaProfiles:list')?.(null))).resolves.toEqual({
+      ...listState,
+      multiProfileUi: false
+    })
     await expect(
       Promise.resolve(handlers.get('orcaProfiles:createLocal')?.(null, { name: 'Work' }))
     ).resolves.toBe(createState)
     expect(createLocalOrcaProfileMock).toHaveBeenCalledWith({ name: 'Work' })
+  })
+
+  it('reports multiProfileUi when the env flag is set', async () => {
+    const previous = process.env.ORCA_MULTI_PROFILE_UI
+    process.env.ORCA_MULTI_PROFILE_UI = '1'
+    try {
+      getOrcaProfileListStateMock.mockReturnValue({
+        activeProfileId: 'local-default',
+        profiles: []
+      })
+      registerOrcaProfileHandlers(makeStoreMock() as never)
+
+      await expect(Promise.resolve(handlers.get('orcaProfiles:list')?.(null))).resolves.toEqual({
+        activeProfileId: 'local-default',
+        profiles: [],
+        multiProfileUi: true
+      })
+    } finally {
+      if (previous === undefined) {
+        delete process.env.ORCA_MULTI_PROFILE_UI
+      } else {
+        process.env.ORCA_MULTI_PROFILE_UI = previous
+      }
+    }
   })
 
   it('marks the target profile active, flushes, and relaunches', async () => {

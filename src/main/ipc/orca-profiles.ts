@@ -7,7 +7,7 @@ import type {
   CreateCloudLinkedOrcaProfileResult,
   FindOrcaProfileProjectsByPathArgs,
   FindOrcaProfileProjectsByPathResult,
-  OrcaProfileListState,
+  OrcaProfileListResult,
   RefreshCurrentOrcaProfileAuthResult,
   SwitchOrcaProfileArgs,
   SwitchOrcaProfileResult,
@@ -26,6 +26,7 @@ import {
   setActiveOrcaProfile
 } from '../orca-profiles/profile-index-store'
 import { getProfileUserDataPath } from '../orca-profiles/profile-storage-paths'
+import { isMultiProfileUiEnabled } from '../orca-profiles/profile-ui-scope'
 import { transferOrcaProfileProject } from '../orca-profiles/profile-project-transfer'
 import { findOrcaProfileProjectsByPath } from '../orca-profiles/profile-project-presence'
 import { normalizeExecutionHostId } from '../../shared/execution-host'
@@ -37,6 +38,7 @@ import {
   selectCurrentOrcaProfileOrg,
   signOutCurrentOrcaProfile
 } from '../orca-profiles/profile-cloud-service'
+import { registerOrcaProfileOrgMemberHandlers } from './orca-profile-org-members-handlers'
 
 type RegisterOrcaProfileHandlersOptions = {
   onBeforeRelaunch?: () => void | Promise<void>
@@ -159,7 +161,13 @@ export function registerOrcaProfileHandlers(
   store: Store,
   options: RegisterOrcaProfileHandlersOptions = {}
 ): void {
-  ipcMain.handle('orcaProfiles:list', (): OrcaProfileListState => getOrcaProfileListState())
+  ipcMain.handle(
+    'orcaProfiles:list',
+    (): OrcaProfileListResult => ({
+      ...getOrcaProfileListState(),
+      multiProfileUi: isMultiProfileUiEnabled()
+    })
+  )
 
   ipcMain.handle(
     'orcaProfiles:authStatus',
@@ -278,4 +286,6 @@ export function registerOrcaProfileHandlers(
     async (_event, rawArgs: SelectOrcaProfileOrgArgs): Promise<SelectOrcaProfileOrgResult> =>
       selectCurrentOrcaProfileOrg(getProfileUserDataPath(), orgIdFromUnknown(rawArgs))
   )
+
+  registerOrcaProfileOrgMemberHandlers()
 }

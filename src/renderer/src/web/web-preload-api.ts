@@ -510,7 +510,8 @@ function createWebPreloadApi(): Partial<PreloadApi> {
       list: () =>
         Promise.resolve({
           activeProfileId: DEFAULT_LOCAL_ORCA_PROFILE_ID,
-          profiles: [createDefaultLocalOrcaProfile(0)]
+          profiles: [createDefaultLocalOrcaProfile(0)],
+          multiProfileUi: false
         }),
       authStatus: webOrcaProfileAuthStatus,
       createLocal: () =>
@@ -550,7 +551,12 @@ function createWebPreloadApi(): Partial<PreloadApi> {
       selectOrg: async () => ({
         status: 'unconfigured',
         auth: await webOrcaProfileAuthStatus()
-      })
+      }),
+      orgMembersList: async () => ({ status: 'unconfigured' }),
+      orgMemberInvite: async () => ({ status: 'unconfigured' }),
+      orgInviteRevoke: async () => ({ status: 'unconfigured' }),
+      orgMemberChangeRole: async () => ({ status: 'unconfigured' }),
+      orgMemberRemove: async () => ({ status: 'unconfigured' })
     },
     e2e: {
       getConfig: () => createE2EConfig({})

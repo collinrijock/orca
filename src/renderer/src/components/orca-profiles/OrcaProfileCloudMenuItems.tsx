@@ -32,6 +32,7 @@ export function OrcaProfileCloudMenuItems({
   authStatus,
   connecting,
   profileActionDisabled,
+  allowProfileCreation,
   onConnect,
   onCreateProfileForOrg,
   onSelectOrg,
@@ -41,6 +42,7 @@ export function OrcaProfileCloudMenuItems({
   authStatus: OrcaProfileAuthStatus | null
   connecting: boolean
   profileActionDisabled: boolean
+  allowProfileCreation: boolean
   onConnect: () => void
   onCreateProfileForOrg: (organization: OrcaCloudOrgSummary) => void
   onSelectOrg: (orgId: string) => void
@@ -49,8 +51,10 @@ export function OrcaProfileCloudMenuItems({
   const cloudConfigured = authStatus?.configured === true
   const organizations = authStatus?.organizations ?? []
   const showOrganizationChoices = activeProfile.kind === 'cloud-linked' && organizations.length > 1
+  // Why: profile creation is hidden in the downscoped account menu, so the
+  // "Create profile for org" submenu only appears when multi-profile UI is on.
   const showCloudProfileCreation =
-    activeProfile.kind === 'cloud-linked' && organizations.length > 0
+    allowProfileCreation && activeProfile.kind === 'cloud-linked' && organizations.length > 0
   const orgActionDisabled = profileActionDisabled || authStatus?.state !== 'connected'
   const activeOrgId = activeProfile.cloud?.activeOrgId
 

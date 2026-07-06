@@ -12353,7 +12353,11 @@
             "b4f9d1125d": "로컬",
             "4815f7d163": "프로필 전환",
             "d00d853e2a": "프로필 관리",
-            "c106c674fe": "새 로컬 프로필"
+            "c106c674fe": "새 로컬 프로필",
+            "account": "계정",
+            "org": {
+              "members": "조직 구성원"
+            }
           },
           "management": {
             "04e7bd2a23": "전송",
@@ -12418,6 +12422,61 @@
               "agentPlural": "{{count}}개의 활성 에이전트",
               "browserSingular": "{{count}}개의 브라우저 워크스페이스",
               "browserPlural": "{{count}}개의 브라우저 워크스페이스"
+            }
+          },
+          "org": {
+            "members": {
+              "role": {
+                "label": "역할",
+                "owner": "소유자",
+                "admin": "관리자",
+                "member": "구성원"
+              },
+              "not": {
+                "signed": {
+                  "in": "아직 Orca에 로그인하지 않았습니다."
+                }
+              },
+              "remove": {
+                "confirm": "삭제",
+                "cancel": "취소",
+                "label": "구성원 삭제"
+              },
+              "title": "조직 구성원",
+              "load": {
+                "error": "조직 구성원을 불러오지 못했습니다."
+              },
+              "retry": "다시 시도",
+              "pending": {
+                "title": "대기 중인 초대",
+                "revoke": "철회"
+              },
+              "invite": {
+                "title": "초대",
+                "placeholder": "teammate@example.com",
+                "role": "초대 역할",
+                "submit": "보내기"
+              },
+              "error": {
+                "forbidden": "현재 역할로는 이 작업을 수행할 수 없습니다.",
+                "conflict": "이미 구성원이거나 초대되었습니다.",
+                "remove": {
+                  "self": "자신은 삭제할 수 없습니다."
+                },
+                "own": {
+                  "role": "자신의 역할은 변경할 수 없습니다."
+                },
+                "not": {
+                  "found": "해당 구성원이 더 이상 이 조직에 없습니다."
+                },
+                "reconnect": "구성원을 관리하려면 프로필을 다시 연결하세요.",
+                "unconfigured": "이 빌드에서는 조직 관리를 사용할 수 없습니다.",
+                "failed": "문제가 발생했습니다. 다시 시도하세요."
+              },
+              "subtitle": {
+                "named": "{{orgName}}에서 Orca로 협업할 수 있는 사용자입니다.",
+                "default": "조직에서 Orca로 협업할 수 있는 사용자입니다."
+              }
             }
           }
         }

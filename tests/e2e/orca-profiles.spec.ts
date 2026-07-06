@@ -1,5 +1,9 @@
 import { test, expect } from './helpers/orca-app'
 
+// Why: the multi-profile switcher UI is downscoped behind ORCA_MULTI_PROFILE_UI;
+// these specs exercise that full UI, so opt the whole file into the flag.
+test.use({ launchEnv: { ORCA_MULTI_PROFILE_UI: '1' } })
+
 test('opens the profile switcher and profile dialogs', async ({ orcaPage }) => {
   const switcher = orcaPage.getByRole('button', { name: /^Switch profile$/ })
   await expect(switcher).toBeVisible()
@@ -48,12 +52,23 @@ test('places the profile switcher in sidebar footer and full-page titlebar', asy
   expect(sidebarSwitchBox!.y).toBeGreaterThan(viewport.height - 64)
 
   await settingsButton.click()
-  await expect.poll(() => orcaPage.evaluate(() => window.__store?.getState().activeView)).toBe(
-    'settings'
-  )
+  await expect
+    .poll(() => orcaPage.evaluate(() => window.__store?.getState().activeView))
+    .toBe('settings')
 
   const titlebarSwitchBox = await switcher.boundingBox()
   expect(titlebarSwitchBox).not.toBeNull()
   expect(titlebarSwitchBox!.x).toBeGreaterThan(viewport.width - 260)
   expect(titlebarSwitchBox!.y).toBeLessThan(48)
+})
+
+test.describe('default single-profile mode', () => {
+  // Why: no flag — the default build shows no account trigger on a local-only
+  // (cloud-unconfigured) install.
+  test.use({ launchEnv: {} })
+
+  test('hides the account trigger when cloud is unconfigured', async ({ orcaPage }) => {
+    await expect(orcaPage.getByRole('button', { name: /^Switch profile$/ })).toHaveCount(0)
+    await expect(orcaPage.getByRole('button', { name: /^Account$/ })).toHaveCount(0)
+  })
 })

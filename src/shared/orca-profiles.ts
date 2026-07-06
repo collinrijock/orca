@@ -39,11 +39,7 @@ export type OrcaCloudCapabilities = {
 
 export type OrcaCloudSessionPersistence = 'none' | 'encrypted' | 'memory-only' | 'dev-plaintext'
 
-export type OrcaProfileAuthState =
-  | 'local'
-  | 'unconfigured'
-  | 'connected'
-  | 'reconnect-required'
+export type OrcaProfileAuthState = 'local' | 'unconfigured' | 'connected' | 'reconnect-required'
 
 export type OrcaProfileAuthStatus = {
   activeProfileId: string
@@ -77,6 +73,12 @@ export type OrcaProfileIndex = {
 export type OrcaProfileListState = {
   activeProfileId: string
   profiles: OrcaProfileSummary[]
+}
+
+export type OrcaProfileListResult = OrcaProfileListState & {
+  // Why: gates the full multi-profile switcher UI; default builds show a
+  // single-profile account menu instead.
+  multiProfileUi: boolean
 }
 
 export type CreateLocalOrcaProfileArgs = {
@@ -230,6 +232,73 @@ export type RefreshCurrentOrcaProfileAuthResult =
       auth: OrcaProfileAuthStatus
       error: string
     }
+
+// Why: organization roles are a fixed server-side enum; the desktop UI mirrors
+// exactly these three so role selects can't drift from what the API accepts.
+export type OrcaOrgRole = 'owner' | 'admin' | 'member'
+
+export type OrcaOrgMember = {
+  // Why: null for teammates provisioned server-side who never signed into Orca;
+  // mutation actions are disabled for them since the API keys on a real userId.
+  userId: string | null
+  email: string
+  displayName?: string
+  role: OrcaOrgRole
+}
+
+export type OrcaOrgPendingInvite = {
+  email: string
+  role: OrcaOrgRole
+  createdAt: number
+}
+
+export type OrcaOrgMembersRoster = {
+  members: OrcaOrgMember[]
+  pendingInvites: OrcaOrgPendingInvite[]
+  viewerRole: OrcaOrgRole
+  canManageMembers: boolean
+}
+
+export type OrcaProfileOrgMembersListArgs = {
+  orgId: string
+}
+
+export type OrcaProfileOrgMemberInviteArgs = {
+  orgId: string
+  email: string
+  role: OrcaOrgRole
+}
+
+export type OrcaProfileOrgInviteRevokeArgs = {
+  orgId: string
+  email: string
+}
+
+export type OrcaProfileOrgMemberChangeRoleArgs = {
+  orgId: string
+  userId: string
+  role: OrcaOrgRole
+}
+
+export type OrcaProfileOrgMemberRemoveArgs = {
+  orgId: string
+  userId: string
+}
+
+export type OrcaProfileOrgMembersListResult =
+  | { status: 'ok'; roster: OrcaOrgMembersRoster }
+  | { status: 'unconfigured' | 'reconnect-required' }
+  | { status: 'failed'; error: string }
+
+export type OrcaOrgInviteConflictReason = 'already_member' | 'already_invited'
+export type OrcaOrgMutationInvalidReason = 'cannot_change_own_role' | 'cannot_remove_self'
+
+export type OrcaProfileOrgMemberMutationResult =
+  | { status: 'ok' }
+  | { status: 'unconfigured' | 'reconnect-required' | 'forbidden' | 'not-found' }
+  | { status: 'conflict'; reason: OrcaOrgInviteConflictReason }
+  | { status: 'invalid'; reason: OrcaOrgMutationInvalidReason }
+  | { status: 'failed'; error: string }
 
 export function createDefaultLocalOrcaProfile(now: number): OrcaProfileSummary {
   return {

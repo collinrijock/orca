@@ -3,7 +3,7 @@ import { createTestStore } from './store-test-helpers'
 import type {
   CreateLocalOrcaProfileResult,
   OrcaProfileAuthStatus,
-  OrcaProfileListState,
+  OrcaProfileListResult,
   TransferOrcaProfileProjectResult
 } from '../../../../shared/orca-profiles'
 
@@ -20,8 +20,9 @@ vi.mock('sonner', () => ({
   }
 }))
 
-const listState: OrcaProfileListState = {
+const listState: OrcaProfileListResult = {
   activeProfileId: 'local-default',
+  multiProfileUi: false,
   profiles: [
     {
       id: 'local-default',
@@ -118,7 +119,17 @@ describe('orca profile slice', () => {
     expect(store.getState().activeOrcaProfileId).toBe('local-default')
     expect(store.getState().orcaProfiles).toEqual(listState.profiles)
     expect(store.getState().orcaProfileAuthStatus).toEqual(localAuthStatus)
+    expect(store.getState().orcaProfilesMultiProfileUi).toBe(false)
     expect(store.getState().orcaProfilesLoading).toBe(false)
+  })
+
+  it('stores the multi-profile UI flag from the list result', async () => {
+    orcaProfilesApi.list.mockResolvedValue({ ...listState, multiProfileUi: true })
+    const store = createTestStore()
+
+    await store.getState().fetchOrcaProfiles()
+
+    expect(store.getState().orcaProfilesMultiProfileUi).toBe(true)
   })
 
   it('creates a local profile and returns the created summary', async () => {

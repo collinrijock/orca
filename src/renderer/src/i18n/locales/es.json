@@ -12353,7 +12353,11 @@
             "b4f9d1125d": "Local",
             "4815f7d163": "Cambiar de perfil",
             "d00d853e2a": "Gestionar perfiles",
-            "c106c674fe": "Nuevo perfil local"
+            "c106c674fe": "Nuevo perfil local",
+            "account": "Cuenta",
+            "org": {
+              "members": "Miembros de la organización"
+            }
           },
           "management": {
             "04e7bd2a23": "Transferir",
@@ -12418,6 +12422,61 @@
               "agentPlural": "{{count}} agentes activos",
               "browserSingular": "{{count}} espacio de trabajo del navegador",
               "browserPlural": "{{count}} espacios de trabajo del navegador"
+            }
+          },
+          "org": {
+            "members": {
+              "role": {
+                "label": "Rol",
+                "owner": "Propietario",
+                "admin": "Administrador",
+                "member": "Miembro"
+              },
+              "not": {
+                "signed": {
+                  "in": "Todavía no han iniciado sesión en Orca."
+                }
+              },
+              "remove": {
+                "confirm": "Eliminar",
+                "cancel": "Cancelar",
+                "label": "Eliminar compañero"
+              },
+              "title": "Miembros de la organización",
+              "load": {
+                "error": "No se pudieron cargar los miembros de la organización."
+              },
+              "retry": "Reintentar",
+              "pending": {
+                "title": "Invitaciones pendientes",
+                "revoke": "Revocar"
+              },
+              "invite": {
+                "title": "Invitar",
+                "placeholder": "companero@ejemplo.com",
+                "role": "Rol de invitación",
+                "submit": "Enviar"
+              },
+              "error": {
+                "forbidden": "Tu rol no permite hacer eso.",
+                "conflict": "Ya es miembro o ya fue invitado.",
+                "remove": {
+                  "self": "No puedes eliminarte a ti mismo."
+                },
+                "own": {
+                  "role": "No puedes cambiar tu propio rol."
+                },
+                "not": {
+                  "found": "Ese compañero ya no está en esta organización."
+                },
+                "reconnect": "Vuelve a conectar tu perfil para gestionar miembros.",
+                "unconfigured": "La gestión de la organización no está disponible en esta versión.",
+                "failed": "Algo salió mal. Inténtalo de nuevo."
+              },
+              "subtitle": {
+                "named": "Personas de {{orgName}} que pueden colaborar en Orca.",
+                "default": "Personas de tu organización que pueden colaborar en Orca."
+              }
             }
           }
         }

@@ -12353,7 +12353,11 @@
             "b4f9d1125d": "ローカル",
             "4815f7d163": "プロファイルを切り替え",
             "d00d853e2a": "プロファイルを管理",
-            "c106c674fe": "新しいローカル プロファイル"
+            "c106c674fe": "新しいローカル プロファイル",
+            "account": "アカウント",
+            "org": {
+              "members": "組織のメンバー"
+            }
           },
           "management": {
             "04e7bd2a23": "転送",
@@ -12418,6 +12422,61 @@
               "agentPlural": "{{count}} 個のアクティブなエージェント",
               "browserSingular": "{{count}} 個のブラウザ ワークスペース",
               "browserPlural": "{{count}} 個のブラウザ ワークスペース"
+            }
+          },
+          "org": {
+            "members": {
+              "role": {
+                "label": "ロール",
+                "owner": "オーナー",
+                "admin": "管理者",
+                "member": "メンバー"
+              },
+              "not": {
+                "signed": {
+                  "in": "まだ Orca にサインインしていません。"
+                }
+              },
+              "remove": {
+                "confirm": "削除",
+                "cancel": "キャンセル",
+                "label": "メンバーを削除"
+              },
+              "title": "組織のメンバー",
+              "load": {
+                "error": "組織のメンバーを読み込めませんでした。"
+              },
+              "retry": "再試行",
+              "pending": {
+                "title": "保留中の招待",
+                "revoke": "取り消す"
+              },
+              "invite": {
+                "title": "招待",
+                "placeholder": "teammate@example.com",
+                "role": "招待するロール",
+                "submit": "送信"
+              },
+              "error": {
+                "forbidden": "あなたのロールではこの操作を実行できません。",
+                "conflict": "すでにメンバーまたは招待済みです。",
+                "remove": {
+                  "self": "自分自身を削除することはできません。"
+                },
+                "own": {
+                  "role": "自分のロールは変更できません。"
+                },
+                "not": {
+                  "found": "そのメンバーはこの組織に存在しません。"
+                },
+                "reconnect": "メンバーを管理するにはプロファイルを再接続してください。",
+                "unconfigured": "このビルドでは組織の管理を利用できません。",
+                "failed": "問題が発生しました。もう一度お試しください。"
+              },
+              "subtitle": {
+                "named": "{{orgName}} で Orca を共同利用できるメンバーです。",
+                "default": "組織内で Orca を共同利用できるメンバーです。"
+              }
             }
           }
         }

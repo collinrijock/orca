@@ -12335,6 +12335,7 @@
             "cloud": {
               "unavailable": "Cloud sign-in unavailable"
             },
+            "account": "Account",
             "reconnect": "Reconnect profile",
             "connect": "Connect profile",
             "organization": "Organization",
@@ -12353,7 +12354,10 @@
             "b4f9d1125d": "Local",
             "4815f7d163": "Switch profile",
             "d00d853e2a": "Manage profiles",
-            "c106c674fe": "New local profile"
+            "c106c674fe": "New local profile",
+            "org": {
+              "members": "Organization members"
+            }
           },
           "management": {
             "04e7bd2a23": "Transfer",
@@ -12418,6 +12422,61 @@
               "agentPlural": "{{count}} active agents",
               "browserSingular": "{{count}} browser workspace",
               "browserPlural": "{{count}} browser workspaces"
+            }
+          },
+          "org": {
+            "members": {
+              "role": {
+                "label": "Role",
+                "owner": "Owner",
+                "admin": "Admin",
+                "member": "Member"
+              },
+              "not": {
+                "signed": {
+                  "in": "They haven't signed in to Orca yet."
+                }
+              },
+              "remove": {
+                "confirm": "Remove",
+                "cancel": "Cancel",
+                "label": "Remove teammate"
+              },
+              "title": "Organization members",
+              "load": {
+                "error": "Couldn't load organization members."
+              },
+              "retry": "Try again",
+              "pending": {
+                "title": "Pending invites",
+                "revoke": "Revoke"
+              },
+              "invite": {
+                "title": "Invite",
+                "placeholder": "teammate@example.com",
+                "role": "Invite role",
+                "submit": "Send"
+              },
+              "error": {
+                "forbidden": "Your role can't do that.",
+                "conflict": "Already a member or invited.",
+                "remove": {
+                  "self": "You can't remove yourself."
+                },
+                "own": {
+                  "role": "You can't change your own role."
+                },
+                "not": {
+                  "found": "That teammate is no longer in this organization."
+                },
+                "reconnect": "Reconnect your profile to manage members.",
+                "unconfigured": "Organization management is unavailable in this build.",
+                "failed": "Something went wrong. Please try again."
+              },
+              "subtitle": {
+                "named": "People in {{orgName}} who can collaborate on Orca.",
+                "default": "People in your organization who can collaborate on Orca."
+              }
             }
           }
         }

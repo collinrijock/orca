@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Check, ChevronDown, Cloud, Laptop, Loader2, Plus, Settings2 } from 'lucide-react'
+import { Check, ChevronDown, Cloud, Laptop, Loader2, Plus, Settings2, Users } from 'lucide-react'
 import { useShallow } from 'zustand/react/shallow'
 import { Button } from '@/components/ui/button'
 import {
@@ -18,6 +18,7 @@ import type { OrcaCloudOrgSummary, OrcaProfileSummary } from '../../../../shared
 import { OrcaProfileAvatar } from './OrcaProfileAvatar'
 import { OrcaProfileCloudMenuItems } from './OrcaProfileCloudMenuItems'
 import { OrcaProfileCreateDialog } from './OrcaProfileCreateDialog'
+import { OrcaProfileOrgMembersDialog } from './OrcaProfileOrgMembersDialog'
 import { OrcaProfileManagementDialog } from './OrcaProfileManagementDialog'
 import { OrcaProfileSignOutConfirmDialog } from './OrcaProfileSignOutConfirmDialog'
 import { OrcaProfileSwitchConfirmDialog } from './OrcaProfileSwitchConfirmDialog'
@@ -48,6 +49,7 @@ export function OrcaProfileSwitcher({
   const switching = useAppStore((s) => s.orcaProfileSwitching)
   const connecting = useAppStore((s) => s.orcaProfileConnecting)
   const authStatus = useAppStore((s) => s.orcaProfileAuthStatus)
+  const multiProfileUi = useAppStore((s) => s.orcaProfilesMultiProfileUi)
   const fetchProfiles = useAppStore((s) => s.fetchOrcaProfiles)
   const createLocalProfile = useAppStore((s) => s.createLocalOrcaProfile)
   const createCloudLinkedProfile = useAppStore((s) => s.createCloudLinkedOrcaProfile)
@@ -63,6 +65,7 @@ export function OrcaProfileSwitcher({
   const [creatingCloudProfile, setCreatingCloudProfile] = useState(false)
   const [signOutConfirmOpen, setSignOutConfirmOpen] = useState(false)
   const [signingOut, setSigningOut] = useState(false)
+  const [orgMembersOpen, setOrgMembersOpen] = useState(false)
   const [pendingSwitchProfileId, setPendingSwitchProfileId] = useState<string | null>(null)
   const activeProfile = useMemo(
     () => profiles.find((profile) => profile.id === activeProfileId) ?? profiles[0] ?? null,
@@ -87,6 +90,12 @@ export function OrcaProfileSwitcher({
   // profile list; showing a switcher there would misreport the active profile
   // and none of its actions can work remotely.
   if (isWebClient() || !activeProfile) {
+    return null
+  }
+
+  // Why: with multi-profile UI downscoped, local-only builds (no cloud
+  // configured) have nothing to offer in an account menu — show no trigger.
+  if (!multiProfileUi && authStatus?.configured !== true) {
     return null
   }
 
@@ -164,7 +173,18 @@ export function OrcaProfileSwitcher({
 
   const profileActionDisabled =
     switching || creating || creatingCloudProfile || connecting || signingOut
+  // Why: teammate management needs a connected cloud profile scoped to an org;
+  // the server enforces role permissions, and the dialog adapts via
+  // canManageMembers, so cloud-linked + org + connected is enough to reveal it.
+  const activeOrgId = activeProfile.cloud?.activeOrgId
+  const showOrgMembers =
+    activeProfile.kind === 'cloud-linked' &&
+    Boolean(activeOrgId) &&
+    authStatus?.state === 'connected'
   const sidebarPlacement = placement === 'sidebar'
+  const triggerLabel = multiProfileUi
+    ? translate('auto.components.orca.profiles.switcher.4815f7d163', 'Switch profile')
+    : translate('auto.components.orca.profiles.switcher.account', 'Account')
 
   return (
     <>
@@ -180,10 +200,7 @@ export function OrcaProfileSwitcher({
                   sidebarPlacement ? 'px-0' : 'mr-2 max-w-[180px] gap-1.5 px-1.5'
                 )}
                 disabled={profileActionDisabled}
-                aria-label={translate(
-                  'auto.components.orca.profiles.switcher.4815f7d163',
-                  'Switch profile'
-                )}
+                aria-label={triggerLabel}
               >
                 {sidebarPlacement && switching ? (
                   <Loader2 className="size-3 animate-spin" />
@@ -209,7 +226,7 @@ export function OrcaProfileSwitcher({
             </DropdownMenuTrigger>
           </TooltipTrigger>
           <TooltipContent side={sidebarPlacement ? 'top' : 'bottom'} sideOffset={6}>
-            {translate('auto.components.orca.profiles.switcher.4815f7d163', 'Switch profile')}
+            {triggerLabel}
           </TooltipContent>
         </Tooltip>
         <DropdownMenuContent
@@ -232,32 +249,50 @@ export function OrcaProfileSwitcher({
             </div>
           </DropdownMenuLabel>
           <DropdownMenuSeparator />
-          {profiles.map((profile) => {
-            const active = profile.id === activeProfileId
-            return (
+          {multiProfileUi
+            ? profiles.map((profile) => {
+                const active = profile.id === activeProfileId
+                return (
+                  <DropdownMenuItem
+                    key={profile.id}
+                    disabled={profileActionDisabled}
+                    onSelect={() => handleSwitchProfile(profile.id)}
+                    className="min-w-0"
+                  >
+                    <OrcaProfileAvatar profile={profile} />
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate">{profile.name}</span>
+                      <span className="block truncate text-[11px] font-normal text-muted-foreground">
+                        {getProfileSubtitle(profile)}
+                      </span>
+                    </span>
+                    {profile.kind === 'cloud-linked' ? <Cloud className="size-3.5" /> : <Laptop />}
+                    {active && <Check className="size-3.5 text-foreground" />}
+                  </DropdownMenuItem>
+                )
+              })
+            : null}
+          {showOrgMembers ? (
+            <>
+              <DropdownMenuSeparator />
               <DropdownMenuItem
-                key={profile.id}
                 disabled={profileActionDisabled}
-                onSelect={() => handleSwitchProfile(profile.id)}
-                className="min-w-0"
+                onSelect={() => setOrgMembersOpen(true)}
               >
-                <OrcaProfileAvatar profile={profile} />
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate">{profile.name}</span>
-                  <span className="block truncate text-[11px] font-normal text-muted-foreground">
-                    {getProfileSubtitle(profile)}
-                  </span>
-                </span>
-                {profile.kind === 'cloud-linked' ? <Cloud className="size-3.5" /> : <Laptop />}
-                {active && <Check className="size-3.5 text-foreground" />}
+                <Users />
+                {translate(
+                  'auto.components.orca.profiles.switcher.org.members',
+                  'Organization members'
+                )}
               </DropdownMenuItem>
-            )
-          })}
+            </>
+          ) : null}
           <OrcaProfileCloudMenuItems
             activeProfile={activeProfile}
             authStatus={authStatus}
             connecting={connecting}
             profileActionDisabled={profileActionDisabled}
+            allowProfileCreation={multiProfileUi}
             onConnect={() => {
               void connectCurrentProfile()
             }}
@@ -269,43 +304,63 @@ export function OrcaProfileSwitcher({
             }}
             onRequestSignOut={() => setSignOutConfirmOpen(true)}
           />
-          <DropdownMenuSeparator />
-          <DropdownMenuItem
-            disabled={profileActionDisabled}
-            onSelect={() => {
-              setManagementOpen(true)
-            }}
-          >
-            <Settings2 />
-            {translate('auto.components.orca.profiles.switcher.d00d853e2a', 'Manage profiles')}
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            disabled={profileActionDisabled}
-            onSelect={() => {
-              setDialogOpen(true)
-            }}
-          >
-            <Plus />
-            {translate('auto.components.orca.profiles.switcher.c106c674fe', 'New local profile')}
-          </DropdownMenuItem>
+          {multiProfileUi ? (
+            <>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                disabled={profileActionDisabled}
+                onSelect={() => {
+                  setManagementOpen(true)
+                }}
+              >
+                <Settings2 />
+                {translate('auto.components.orca.profiles.switcher.d00d853e2a', 'Manage profiles')}
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                disabled={profileActionDisabled}
+                onSelect={() => {
+                  setDialogOpen(true)
+                }}
+              >
+                <Plus />
+                {translate(
+                  'auto.components.orca.profiles.switcher.c106c674fe',
+                  'New local profile'
+                )}
+              </DropdownMenuItem>
+            </>
+          ) : null}
         </DropdownMenuContent>
       </DropdownMenu>
 
-      <OrcaProfileCreateDialog
-        open={dialogOpen}
-        onOpenChange={setDialogOpen}
-        name={newProfileName}
-        onNameChange={setNewProfileName}
-        creating={creating}
-        switching={switching}
-        onSubmit={handleCreateProfile}
-      />
-      <OrcaProfileManagementDialog
-        open={managementOpen}
-        onOpenChange={setManagementOpen}
-        activeProfile={activeProfile}
-        profiles={profiles}
-      />
+      {multiProfileUi ? (
+        <>
+          <OrcaProfileCreateDialog
+            open={dialogOpen}
+            onOpenChange={setDialogOpen}
+            name={newProfileName}
+            onNameChange={setNewProfileName}
+            creating={creating}
+            switching={switching}
+            onSubmit={handleCreateProfile}
+          />
+          <OrcaProfileManagementDialog
+            open={managementOpen}
+            onOpenChange={setManagementOpen}
+            activeProfile={activeProfile}
+            profiles={profiles}
+          />
+        </>
+      ) : null}
+      {showOrgMembers && activeOrgId ? (
+        <OrcaProfileOrgMembersDialog
+          open={orgMembersOpen}
+          onOpenChange={setOrgMembersOpen}
+          orgId={activeOrgId}
+          orgName={activeProfile.cloud?.activeOrgName}
+          viewerUserId={activeProfile.cloud?.userId}
+        />
+      ) : null}
       <OrcaProfileSignOutConfirmDialog
         open={signOutConfirmOpen}
         onOpenChange={(open) => {
@@ -319,19 +374,21 @@ export function OrcaProfileSwitcher({
         profileName={activeProfile.name}
         signingOut={signingOut}
       />
-      <OrcaProfileSwitchConfirmDialog
-        open={Boolean(pendingSwitchProfileId)}
-        onOpenChange={(open) => {
-          if (!open && !switching) {
-            setPendingSwitchProfileId(null)
-          }
-        }}
-        onConfirm={handleConfirmSwitchProfile}
-        activeProfileName={activeProfile.name}
-        targetProfile={pendingSwitchProfile}
-        liveWorkSummary={liveWorkSummary}
-        switching={switching}
-      />
+      {multiProfileUi ? (
+        <OrcaProfileSwitchConfirmDialog
+          open={Boolean(pendingSwitchProfileId)}
+          onOpenChange={(open) => {
+            if (!open && !switching) {
+              setPendingSwitchProfileId(null)
+            }
+          }}
+          onConfirm={handleConfirmSwitchProfile}
+          activeProfileName={activeProfile.name}
+          targetProfile={pendingSwitchProfile}
+          liveWorkSummary={liveWorkSummary}
+          switching={switching}
+        />
+      ) : null}
     </>
   )
 }
