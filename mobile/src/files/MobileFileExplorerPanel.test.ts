@@ -224,4 +224,68 @@ describe('MobileFileExplorerPanel', () => {
     expect(renderedText(renderer)).toContain('README.md')
     expect(renderedText(renderer)).not.toContain('Waiting for desktop...')
   })
+
+  it('refreshes the root in the background after reconnect without blanking the tree', async () => {
+    const client = createMockClient({
+      '': [entry('src', true), entry('README.md')]
+    })
+    mockTransport.client = client
+
+    const renderer = await renderExplorer()
+    expect(renderedText(renderer)).toContain('README.md')
+
+    mockTransport.client = null
+    mockTransport.connectionState = 'disconnected'
+    await updateExplorer(renderer)
+
+    let resolveReload: ((response: RpcResponse) => void) | undefined
+    const reconnectedClient: MockClient = {
+      sendRequest: vi.fn(
+        () =>
+          new Promise<RpcResponse>((resolve) => {
+            resolveReload = resolve
+          })
+      )
+    }
+    mockTransport.client = reconnectedClient
+    mockTransport.connectionState = 'connected'
+    await updateExplorer(renderer)
+
+    expect(reconnectedClient.sendRequest).toHaveBeenCalledTimes(1)
+    expect(renderedText(renderer)).toContain('src')
+    expect(renderedText(renderer)).toContain('README.md')
+
+    await act(async () => {
+      resolveReload?.(ok([entry('src', true), entry('README.md'), entry('CHANGELOG.md')]))
+    })
+    expect(renderedText(renderer)).toContain('CHANGELOG.md')
+  })
+
+  it('keeps the cached tree when a post-reconnect root refresh fails', async () => {
+    const client = createMockClient({
+      '': [entry('src', true), entry('README.md')]
+    })
+    mockTransport.client = client
+
+    const renderer = await renderExplorer()
+    expect(renderedText(renderer)).toContain('README.md')
+
+    mockTransport.client = null
+    mockTransport.connectionState = 'disconnected'
+    await updateExplorer(renderer)
+
+    const failingClient: MockClient = {
+      sendRequest: vi.fn(async () => {
+        throw new Error('refresh failed')
+      })
+    }
+    mockTransport.client = failingClient
+    mockTransport.connectionState = 'connected'
+    await updateExplorer(renderer)
+
+    expect(failingClient.sendRequest).toHaveBeenCalledTimes(1)
+    expect(renderedText(renderer)).toContain('src')
+    expect(renderedText(renderer)).toContain('README.md')
+    expect(renderedText(renderer)).not.toContain('refresh failed')
+  })
 })

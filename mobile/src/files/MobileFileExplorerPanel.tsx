@@ -82,8 +82,14 @@ export function MobileFileExplorerPanel(props: {
         return
       }
 
+      const hadLoadedRoot =
+        rootLoad && (getDirectoryCacheState(directoryCacheRef.current, '')?.entries.length ?? 0) > 0
       if (rootLoad) {
-        setLoading(true)
+        // Why: a reconnect refresh must not blank an already browsable tree —
+        // the full-screen spinner unmounts the list and resets scroll.
+        if (!hadLoadedRoot) {
+          setLoading(true)
+        }
         setError(null)
       }
       setDirectoryCache((prev) => ({
@@ -120,7 +126,9 @@ export function MobileFileExplorerPanel(props: {
         }
         const message = err instanceof Error ? err.message : 'Unable to load files'
         if (rootLoad) {
-          setError(message)
+          // Why: a failed background refresh keeps the cached tree browsable;
+          // only a cold load surfaces the full-screen error.
+          setError(hadLoadedRoot ? null : message)
         } else {
           setDirectoryCache((prev) => ({
             ...prev,
