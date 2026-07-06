@@ -10,6 +10,8 @@ import {
   resolvePrivateKey,
   resolveUnencryptedExplicitPrivateKey
 } from './ssh-auth-resolution'
+import { resolveSshConfigHomePath } from './ssh-config-path-expansion'
+import { getSshConfigFilePathOverride } from './ssh-config-file-path'
 
 export { findDefaultKeyFile, resolveAgentSocket } from './ssh-auth-resolution'
 
@@ -222,6 +224,21 @@ function getShellSpawnConfig(command: string): { file: string; args: string[] } 
   return { file: '/bin/sh', args: ['-c', command] }
 }
 
+// Why: emit `-F <path>` only when a config-path override is set so default users
+// get byte-identical argv; a bastion alias defined only in a custom config file
+// must resolve here just as `ssh -G` (seam 2) already resolved it.
+export function buildProxyJumpSshArgs(
+  host: string,
+  port: number,
+  jumpHost: string,
+  overridePath = getSshConfigFilePathOverride()
+): string[] {
+  if (overridePath) {
+    return ['-W', `${host}:${port}`, '-F', resolveSshConfigHomePath(overridePath), '--', jumpHost]
+  }
+  return ['-W', `${host}:${port}`, '--', jumpHost]
+}
+
 export function spawnProxyCommand(
   proxy: EffectiveProxy,
   host: string,
@@ -232,7 +249,7 @@ export function spawnProxyCommand(
     proxy.kind === 'jump-host'
       ? // Why: ProxyJump is structured input, not a shell snippet. Spawn ssh
         // directly so jump-host values cannot escape through shell parsing.
-        spawn('ssh', ['-W', `${host}:${port}`, '--', proxy.jumpHost], {
+        spawn('ssh', buildProxyJumpSshArgs(host, port, proxy.jumpHost), {
           stdio: ['pipe', 'pipe', 'pipe']
         })
       : (() => {

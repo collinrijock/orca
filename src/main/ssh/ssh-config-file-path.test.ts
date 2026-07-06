@@ -1,0 +1,49 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { join } from 'node:path'
+import {
+  getSshConfigFilePath,
+  getSshConfigFilePathOverride,
+  setSshConfigFilePathOverride
+} from './ssh-config-file-path'
+
+vi.mock('os', () => ({
+  homedir: () => '/home/testuser'
+}))
+
+const TEST_HOME = '/home/testuser'
+
+// Why: the override is module-level state; reset it around each test so cases
+// never leak into one another.
+beforeEach(() => {
+  setSshConfigFilePathOverride(undefined)
+})
+afterEach(() => {
+  setSshConfigFilePathOverride(undefined)
+})
+
+describe('ssh-config-file-path override', () => {
+  it('defaults to ~/.ssh/config when unset', () => {
+    expect(getSshConfigFilePathOverride()).toBeUndefined()
+    expect(getSshConfigFilePath()).toBe(join(TEST_HOME, '.ssh', 'config'))
+  })
+
+  it('trims surrounding whitespace on the raw override', () => {
+    setSshConfigFilePathOverride('  /etc/ssh/custom_config  ')
+    expect(getSshConfigFilePathOverride()).toBe('/etc/ssh/custom_config')
+    expect(getSshConfigFilePath()).toBe('/etc/ssh/custom_config')
+  })
+
+  it('treats empty / whitespace-only as unset', () => {
+    setSshConfigFilePathOverride('   ')
+    expect(getSshConfigFilePathOverride()).toBeUndefined()
+    expect(getSshConfigFilePath()).toBe(join(TEST_HOME, '.ssh', 'config'))
+
+    setSshConfigFilePathOverride('')
+    expect(getSshConfigFilePathOverride()).toBeUndefined()
+  })
+
+  it('expands a ~-prefixed override path', () => {
+    setSshConfigFilePathOverride('~/work/ssh_config')
+    expect(getSshConfigFilePath()).toBe(join(TEST_HOME, 'work', 'ssh_config'))
+  })
+})
