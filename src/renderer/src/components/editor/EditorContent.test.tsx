@@ -68,6 +68,7 @@ describe('EditorContent', () => {
         handleSave={vi.fn()}
         handleSaveForFile={vi.fn()}
         reloadFileContent={vi.fn()}
+        reloadDiffContent={vi.fn()}
       />
     )
 

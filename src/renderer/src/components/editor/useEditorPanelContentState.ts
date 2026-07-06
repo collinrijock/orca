@@ -52,6 +52,7 @@ type UseEditorPanelContentStateResult = {
   fileContents: Record<string, FileContent>
   diffContents: Record<string, DiffContent>
   reloadFileContent: (file: OpenFile) => void
+  reloadDiffContent: (file: OpenFile) => void
 }
 
 function inFlightReadKey(connectionId: string | undefined, filePath: string): string {
@@ -322,6 +323,23 @@ export function useEditorPanelContentState({
     [loadFileContent]
   )
 
+  // Why: the changed-on-disk banner's explicit reload on an unstaged diff tab
+  // must refetch the diff body, not the plain file content.
+  const reloadDiffContent = useCallback(
+    (file: OpenFile): void => {
+      setDiffContents((prev) => {
+        if (!prev[file.id]) {
+          return prev
+        }
+        const next = { ...prev }
+        delete next[file.id]
+        return next
+      })
+      void loadDiffContent(file, { force: true })
+    },
+    [loadDiffContent]
+  )
+
   useEffect(() => {
     if (activeFile?.mode === 'conflict-review' && !selectedConflictReviewFile) {
       const snapshotEntries = activeFile.conflictReview?.entries ?? []
@@ -507,5 +525,5 @@ export function useEditorPanelContentState({
     setDiffContents
   )
 
-  return { fileContents, diffContents, reloadFileContent }
+  return { fileContents, diffContents, reloadFileContent, reloadDiffContent }
 }

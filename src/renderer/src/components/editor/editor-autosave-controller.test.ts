@@ -711,6 +711,51 @@ describe('attachEditorAutosaveController', () => {
     }
   })
 
+  it('suspends autosave while a tab is marked changed-on-disk and resumes when cleared', async () => {
+    const writeFile = vi.fn().mockResolvedValue(undefined)
+    const eventTarget = new EventTarget()
+    vi.stubGlobal('window', {
+      addEventListener: eventTarget.addEventListener.bind(eventTarget),
+      removeEventListener: eventTarget.removeEventListener.bind(eventTarget),
+      dispatchEvent: eventTarget.dispatchEvent.bind(eventTarget),
+      setTimeout: globalThis.setTimeout.bind(globalThis),
+      clearTimeout: globalThis.clearTimeout.bind(globalThis),
+      api: {
+        fs: {
+          writeFile
+        }
+      }
+    } satisfies WindowStub)
+
+    const store = createEditorStore()
+    store.getState().openFile({
+      filePath: '/repo/file.ts',
+      relativePath: 'file.ts',
+      worktreeId: 'wt-1',
+      language: 'typescript',
+      mode: 'edit'
+    })
+    store.getState().setEditorDraft('/repo/file.ts', 'user edit')
+    store.getState().markFileDirty('/repo/file.ts', true)
+    store.getState().setExternalMutation('/repo/file.ts', 'changed')
+
+    const cleanup = attachEditorAutosaveController(store)
+    try {
+      await vi.advanceTimersByTimeAsync(1500)
+      expect(writeFile).not.toHaveBeenCalled()
+
+      // Keep My Edits clears the mark — autosave resumes and overwrites.
+      store.getState().setExternalMutation('/repo/file.ts', null)
+      await vi.advanceTimersByTimeAsync(1500)
+      expect(writeFile).toHaveBeenCalledWith({
+        filePath: '/repo/file.ts',
+        content: 'user edit'
+      })
+    } finally {
+      cleanup()
+    }
+  })
+
   it('clears the changed-on-disk mark after a successful save', async () => {
     const writeFile = vi.fn().mockResolvedValue(undefined)
     const eventTarget = new EventTarget()

@@ -8,6 +8,7 @@ import { basename, joinPath } from '@/lib/path'
 import { getExternalFileChangeRelativePath } from '@/components/right-sidebar/useFileExplorerWatch'
 import { normalizeRuntimePathForComparison } from '../../../shared/cross-platform-path'
 import {
+  canAutoSaveOpenFile,
   getOpenFilesForExternalFileChange,
   isExternalReloadableEditorTab,
   isWorkingTreeCombinedDiffTab,
@@ -646,12 +647,13 @@ export function createExternalWatchEventHandler(
         // silently (issue #7265) — the user was left with a stale tab and a
         // save that clobbered the newer disk content. Mark the tab so the
         // editor shows a changed-on-disk banner with an explicit reload path.
-        const setExternalMutation = useAppStore.getState().setExternalMutation
-        for (const dirtyFile of dirtyMatches) {
-          if (dirtyFile.mode === 'edit') {
-            setExternalMutation(dirtyFile.id, 'changed')
-          }
-        }
+        scheduleChangedOnDiskMark(
+          target,
+          notification,
+          // Why: canAutoSaveOpenFile is exactly the set of tabs that can hold
+          // unsaved edits (edit + unstaged diff) — the tabs the banner serves.
+          dirtyMatches.filter((dirtyFile) => canAutoSaveOpenFile(dirtyFile)).map((f) => f.id)
+        )
         if (dirtyMatches.length === matching.length) {
           if (hasCombinedDiffConsumer) {
             scheduleDebouncedExternalReload(notification)
@@ -681,6 +683,56 @@ export function createExternalWatchEventHandler(
   }
 
   return { handleFsChanged, dispose }
+}
+
+function markTabsChangedOnDisk(fileIds: string[]): void {
+  const state = useAppStore.getState()
+  for (const fileId of fileIds) {
+    const file = state.openFiles.find((f) => f.id === fileId)
+    // Why: echo verification resolves async — a save or reload may already
+    // have resolved the conflict, so only still-dirty tabs get marked.
+    if (file && file.isDirty && canAutoSaveOpenFile(file)) {
+      state.setExternalMutation(fileId, 'changed')
+    }
+  }
+}
+
+function scheduleChangedOnDiskMark(
+  target: WatchedTarget,
+  notification: ExternalWatchNotification,
+  fileIds: string[]
+): void {
+  if (fileIds.length === 0) {
+    return
+  }
+  const absolutePath = joinPath(notification.worktreePath, notification.relativePath)
+  const recentSelfWrite = getRecentSelfWrite(absolutePath, target.runtimeEnvironmentId)
+  // Why: the fs event may be the echo of Orca's own save racing keystrokes
+  // typed during the write. Marking on the echo would show a false "changed
+  // on disk" banner, so verify disk really differs from our last write.
+  if (!recentSelfWrite || recentSelfWrite.content === null) {
+    markTabsChangedOnDisk(fileIds)
+    return
+  }
+  void readRuntimeFileContent({
+    settings: target.runtimeEnvironmentId
+      ? { activeRuntimeEnvironmentId: target.runtimeEnvironmentId }
+      : null,
+    filePath: absolutePath,
+    relativePath: notification.relativePath,
+    worktreeId: notification.worktreeId,
+    connectionId: target.connectionId
+  })
+    .then((result) => {
+      if (result.isBinary || result.content !== recentSelfWrite.content) {
+        markTabsChangedOnDisk(fileIds)
+      }
+    })
+    .catch(() => {
+      // Why: unreadable disk state can't disprove an external change — keep
+      // the conflict visible rather than risk a silent overwrite.
+      markTabsChangedOnDisk(fileIds)
+    })
 }
 
 function scheduleSelfWriteAwareExternalReload(

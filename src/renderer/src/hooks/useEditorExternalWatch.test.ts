@@ -576,6 +576,76 @@ describe('createExternalWatchEventHandler tombstone coalescing', () => {
     dispose()
   })
 
+  it('does not mark a dirty tab for the echo of Orca’s own save', async () => {
+    const dirtyFile = {
+      ...fileNotes,
+      isDirty: true
+    }
+    vi.mocked(useAppStore.getState).mockReturnValue({
+      openFiles: [dirtyFile],
+      setExternalMutation
+    } as never)
+    vi.mocked(getOpenFilesForExternalFileChange).mockReturnValue([dirtyFile] as never)
+    const readFile = vi.fn().mockResolvedValue({ content: 'orca save', isBinary: false })
+    vi.stubGlobal('window', { api: { fs: { readFile } } })
+    const { handleFsChanged, dispose } = createExternalWatchEventHandler(findTarget)
+
+    recordSelfWrite('/repo/notes.md', 'orca save')
+    handleFsChanged(payload([{ kind: 'update', absolutePath: '/repo/notes.md' }]))
+    await vi.advanceTimersByTimeAsync(100)
+
+    expect(setExternalMutation).not.toHaveBeenCalledWith('file-notes', 'changed')
+    dispose()
+  })
+
+  it('marks a dirty tab when a genuine external write lands inside the self-write TTL', async () => {
+    const dirtyFile = {
+      ...fileNotes,
+      isDirty: true
+    }
+    vi.mocked(useAppStore.getState).mockReturnValue({
+      openFiles: [dirtyFile],
+      setExternalMutation
+    } as never)
+    vi.mocked(getOpenFilesForExternalFileChange).mockReturnValue([dirtyFile] as never)
+    const readFile = vi.fn().mockResolvedValue({ content: 'agent content', isBinary: false })
+    vi.stubGlobal('window', { api: { fs: { readFile } } })
+    const { handleFsChanged, dispose } = createExternalWatchEventHandler(findTarget)
+
+    recordSelfWrite('/repo/notes.md', 'orca save')
+    handleFsChanged(payload([{ kind: 'update', absolutePath: '/repo/notes.md' }]))
+    await vi.advanceTimersByTimeAsync(100)
+
+    expect(setExternalMutation).toHaveBeenCalledWith('file-notes', 'changed')
+    dispose()
+  })
+
+  it('marks a lone dirty unstaged-diff tab changed-on-disk', () => {
+    const dirtyDiffTab = {
+      id: 'diff-notes',
+      worktreeId: 'wt-1',
+      worktreePath: '/repo',
+      filePath: '/repo/notes.md',
+      relativePath: 'notes.md',
+      mode: 'diff' as const,
+      diffSource: 'unstaged' as const,
+      isDirty: true
+    }
+    vi.mocked(useAppStore.getState).mockReturnValue({
+      openFiles: [dirtyDiffTab],
+      setExternalMutation
+    } as never)
+    vi.mocked(getOpenFilesForExternalFileChange).mockReturnValue([dirtyDiffTab] as never)
+    const { handleFsChanged, dispose } = createExternalWatchEventHandler(findTarget)
+
+    handleFsChanged(payload([{ kind: 'update', absolutePath: '/repo/notes.md' }]))
+    vi.advanceTimersByTime(200)
+
+    expect(setExternalMutation).toHaveBeenCalledWith('diff-notes', 'changed')
+    expect(notifyEditorExternalFileChange).not.toHaveBeenCalled()
+    dispose()
+  })
+
   it('does not let an update event clear a changed-on-disk mark while the tab stays dirty', () => {
     const dirtyChangedFile = {
       ...fileNotes,

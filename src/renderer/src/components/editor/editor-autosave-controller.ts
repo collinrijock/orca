@@ -62,7 +62,11 @@ export function attachEditorAutosaveController(store: AppStoreApi): () => void {
     saveGeneration.set(fileId, (saveGeneration.get(fileId) ?? 0) + 1)
   }
 
-  const queueSave = (file: OpenFile, fallbackContent: string): Promise<void> => {
+  const queueSave = (
+    file: OpenFile,
+    fallbackContent: string,
+    trigger: 'autosave' | 'user' = 'user'
+  ): Promise<void> => {
     clearAutoSaveTimer(file.id)
     const queuedGeneration = saveGeneration.get(file.id) ?? 0
 
@@ -77,6 +81,14 @@ export function attachEditorAutosaveController(store: AppStoreApi): () => void {
         const state = store.getState()
         const liveFile = state.openFiles.find((openFile) => openFile.id === file.id) ?? null
         if (!liveFile) {
+          return
+        }
+
+        // Why: autosave is suspended while the tab is marked changed-on-disk —
+        // an unattended timer must not resolve the conflict by overwriting the
+        // newer external content. Explicit user saves proceed (the banner
+        // warned) and clear the mark below.
+        if (trigger === 'autosave' && liveFile.externalMutation === 'changed') {
           return
         }
 
@@ -179,6 +191,9 @@ export function attachEditorAutosaveController(store: AppStoreApi): () => void {
         file &&
         file.isDirty &&
         canAutoSaveOpenFile(file) &&
+        // Why: a changed-on-disk mark suspends autosave until the user picks a
+        // side via the banner (or saves manually) — see the queueSave guard.
+        file.externalMutation !== 'changed' &&
         draft !== undefined
       if (!shouldKeepTimer) {
         clearAutoSaveTimer(fileId)
@@ -192,7 +207,12 @@ export function attachEditorAutosaveController(store: AppStoreApi): () => void {
     const autoSaveDelayMs = normalizeAutoSaveDelayMs(state.settings.editorAutoSaveDelayMs)
     for (const file of state.openFiles) {
       const draft = state.editorDrafts[file.id]
-      if (!file.isDirty || draft === undefined || !canAutoSaveOpenFile(file)) {
+      if (
+        !file.isDirty ||
+        draft === undefined ||
+        !canAutoSaveOpenFile(file) ||
+        file.externalMutation === 'changed'
+      ) {
         clearAutoSaveTimer(file.id)
         continue
       }
@@ -206,7 +226,7 @@ export function attachEditorAutosaveController(store: AppStoreApi): () => void {
       const timerId = window.setTimeout(() => {
         autoSaveTimers.delete(file.id)
         autoSaveScheduledContent.delete(file.id)
-        void queueSave(file, draft)
+        void queueSave(file, draft, 'autosave')
       }, autoSaveDelayMs)
       autoSaveTimers.set(file.id, timerId)
     }
@@ -392,7 +412,9 @@ export function attachEditorAutosaveController(store: AppStoreApi): () => void {
     const reloadingFiles = matchingFiles.filter((file) => !file.isDirty)
     for (const file of matchingFiles) {
       if (file.isDirty) {
-        if (file.mode === 'edit') {
+        // Why: canAutoSaveOpenFile is exactly the set of tabs that can hold
+        // unsaved edits (edit + unstaged diff) — the tabs the banner serves.
+        if (canAutoSaveOpenFile(file)) {
           state.setExternalMutation(file.id, 'changed')
         }
         continue

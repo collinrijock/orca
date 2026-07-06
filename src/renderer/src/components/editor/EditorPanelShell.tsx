@@ -47,6 +47,7 @@ type EditorPanelShellProps = {
   onSave: (content: string) => Promise<void>
   onSaveForFile: (file: OpenFile, content: string) => Promise<void>
   onReloadFileContent: (file: OpenFile) => void
+  onReloadDiffContent: (file: OpenFile) => void
   onCloseMarkdownTableOfContents: () => void
   onCloseRenameDialog: () => void
   onRenameConfirm: (newRelPath: string) => Promise<void>
@@ -87,6 +88,7 @@ export function EditorPanelShell({
   onSave,
   onSaveForFile,
   onReloadFileContent,
+  onReloadDiffContent,
   onCloseMarkdownTableOfContents,
   onCloseRenameDialog,
   onRenameConfirm,
@@ -153,6 +155,7 @@ export function EditorPanelShell({
           handleSave={onSave}
           handleSaveForFile={onSaveForFile}
           reloadFileContent={onReloadFileContent}
+          reloadDiffContent={onReloadDiffContent}
           showMarkdownTableOfContents={showMarkdownTableOfContents}
           showMarkdownFrontmatter={markdownFrontmatterVisible}
           onCloseMarkdownTableOfContents={onCloseMarkdownTableOfContents}

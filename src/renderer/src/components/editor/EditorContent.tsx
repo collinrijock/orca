@@ -140,7 +140,8 @@ export function EditorContent({
   handleDirtyStateHint,
   handleSave,
   handleSaveForFile,
-  reloadFileContent
+  reloadFileContent,
+  reloadDiffContent
 }: {
   activeFile: OpenFile
   viewStateScopeId: string
@@ -168,6 +169,7 @@ export function EditorContent({
   handleSave: (content: string) => Promise<void>
   handleSaveForFile: (file: OpenFile, content: string) => Promise<void>
   reloadFileContent: (file: OpenFile) => void
+  reloadDiffContent: (file: OpenFile) => void
 }): React.JSX.Element {
   const editorViewStateKey =
     viewStateScopeId === activeFile.id
@@ -780,7 +782,7 @@ export function EditorContent({
     }
     const externalChangeBanner =
       activeFile.externalMutation === 'changed' ? (
-        <ExternalFileChangeBanner file={activeFile} reloadFileContent={reloadFileContent} />
+        <ExternalFileChangeBanner file={activeFile} reloadContent={reloadFileContent} />
       ) : null
     if (isChangesMode) {
       const changesView = (
@@ -942,7 +944,7 @@ export function EditorContent({
   const diffReloadNonce = activeFile.diffContentReloadNonce ?? 0
   const originalModelKey = `${diffViewStateKey}:original:${getDiffContentSignature(dc.originalContent)}`
   const modifiedModelKey = `${diffViewStateKey}:modified:${getDiffContentSignature(dc.modifiedContent)}:${diffReloadNonce}`
-  return (
+  const diffViewer = (
     <DiffViewer
       key={`${viewStateScopeId}:${diffReloadNonce}:${getDiffContentSignature(dc.modifiedContent)}`}
       modelKey={diffViewStateKey}
@@ -961,6 +963,18 @@ export function EditorContent({
       onContentChange={isEditable ? handleContentChange : undefined}
       onSave={isEditable ? (isMarkdown ? md.mdSave : handleSave) : undefined}
     />
+  )
+  // Why: editable unstaged diffs can hold unsaved edits, so they get the same
+  // changed-on-disk recovery banner as edit tabs; its reload refetches the
+  // diff body rather than plain file content.
+  if (activeFile.externalMutation !== 'changed') {
+    return diffViewer
+  }
+  return (
+    <div className="flex flex-1 min-h-0 flex-col">
+      <ExternalFileChangeBanner file={activeFile} reloadContent={reloadDiffContent} />
+      <div className="min-h-0 flex-1">{diffViewer}</div>
+    </div>
   )
 }
 
