@@ -10,10 +10,20 @@ import { startDaemon, type DaemonHandle } from './daemon-main'
 import { createPtySubprocess } from './pty-subprocess'
 import { warmWindowsConptyOnce } from './windows-conpty-warmup'
 import { warmPwshAvailabilityCache } from '../pwsh'
+import { createDaemonFileLog, createNoopDaemonFileLog } from './daemon-file-log'
+import { PROTOCOL_VERSION } from './types'
 
-export function parseArgs(argv: string[]): { socketPath: string; tokenPath: string } {
+export type ParsedDaemonArgs = {
+  socketPath: string
+  tokenPath: string
+  /** Optional — absent for adopted old daemons and tests, which log nothing. */
+  logFilePath?: string
+}
+
+export function parseArgs(argv: string[]): ParsedDaemonArgs {
   let socketPath = ''
   let tokenPath = ''
+  let logFilePath = ''
 
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === '--socket' && argv[i + 1]) {
@@ -22,18 +32,24 @@ export function parseArgs(argv: string[]): { socketPath: string; tokenPath: stri
     } else if (argv[i] === '--token' && argv[i + 1]) {
       tokenPath = argv[i + 1]
       i++
+    } else if (argv[i] === '--log-file' && argv[i + 1]) {
+      logFilePath = argv[i + 1]
+      i++
     }
   }
 
   if (!socketPath || !tokenPath) {
-    throw new Error('Usage: daemon-entry --socket <path> --token <path>')
+    throw new Error('Usage: daemon-entry --socket <path> --token <path> [--log-file <path>]')
   }
 
-  return { socketPath, tokenPath }
+  return logFilePath ? { socketPath, tokenPath, logFilePath } : { socketPath, tokenPath }
 }
 
 async function main(): Promise<void> {
-  const { socketPath, tokenPath } = parseArgs(process.argv.slice(2))
+  const { socketPath, tokenPath, logFilePath } = parseArgs(process.argv.slice(2))
+  // Fail-open: a broken log path must never block daemon startup.
+  const daemonLog = logFilePath ? createDaemonFileLog(logFilePath) : createNoopDaemonFileLog()
+  daemonLog.log('startup', { protocolVersion: PROTOCOL_VERSION, socketPath })
   void warmPwshAvailabilityCache()
 
   // Why: node-pty can throw a C++ Napi::Error that escapes all JS try/catch
@@ -55,29 +71,34 @@ async function main(): Promise<void> {
         msg.includes('EBADF') ||
         msg.includes('ENXIO'))
     if (isNativeError) {
+      daemonLog.log('uncaught-exception-suppressed', { name: err?.name, message: msg })
       console.error('[daemon] Native PTY exception (suppressed):', err)
       return
     }
+    daemonLog.log('uncaught-exception-fatal', { name: err?.name, message: msg })
     console.error('[daemon] Uncaught exception (fatal):', err)
     throw err
   })
 
   let daemon: DaemonHandle | null = null
 
-  const shutdown = async (): Promise<void> => {
+  const shutdown = async (reason: string): Promise<void> => {
+    daemonLog.log('shutdown', { reason })
     if (daemon) {
       await daemon.shutdown()
       daemon = null
     }
+    daemonLog.close()
     process.exit(0)
   }
 
-  process.on('SIGTERM', () => void shutdown())
-  process.on('SIGINT', () => void shutdown())
+  process.on('SIGTERM', () => void shutdown('SIGTERM'))
+  process.on('SIGINT', () => void shutdown('SIGINT'))
 
   daemon = await startDaemon({
     socketPath,
     tokenPath,
+    log: daemonLog,
     spawnSubprocess: (opts) => createPtySubprocess(opts)
   })
 
@@ -85,6 +106,7 @@ async function main(): Promise<void> {
   if (process.send) {
     process.send({ type: 'ready' })
   }
+  daemonLog.log('ready')
 
   warmWindowsConptyOnce()
 }
