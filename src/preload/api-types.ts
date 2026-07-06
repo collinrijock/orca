@@ -194,6 +194,7 @@ import type {
   WarpThemeImportSource
 } from '../shared/terminal-custom-themes'
 import type { SetupScriptImportCandidate } from '../shared/setup-script-imports'
+import type { WorktreeMetaPrecondition } from '../shared/worktree-meta-precondition'
 import type { GitHistoryOptions, GitHistoryResult } from '../shared/git-history'
 import type { PublicKnownRuntimeEnvironment } from '../shared/runtime-environments'
 import type {
@@ -1064,7 +1065,11 @@ export type PreloadApi = {
       branchName: string
       expectedHead: string
     }) => Promise<ForceDeleteWorktreeBranchResult>
-    updateMeta: (args: { worktreeId: string; updates: Partial<WorktreeMeta> }) => Promise<Worktree>
+    updateMeta: (args: {
+      worktreeId: string
+      updates: Partial<WorktreeMeta>
+      precondition?: WorktreeMetaPrecondition
+    }) => Promise<{ applied: boolean }>
     listLineage: () => Promise<{
       lineage: Record<string, WorktreeLineage>
       workspaceLineage?: Record<string, WorkspaceLineage>
