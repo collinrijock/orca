@@ -16,6 +16,7 @@ import {
   LINEAR_RELATIONS_CAP,
   clampLinearIssueDepth
 } from '../../shared/linear-agent-access'
+import { extractLinearInlineMedia } from '../../shared/linear-inline-media'
 import type { ResolvedIssue } from './issue-context-client'
 import { getRequiredEntry, withLinearRead } from './issue-context-client'
 import { getPublicFileUrlClient } from './client'
@@ -130,10 +131,14 @@ async function readComments(resolved: ResolvedIssue): Promise<{
   const nodes = response.nodes
   const items = nodes.slice(0, LINEAR_COMMENTS_CAP).map((comment) => {
     const body = comment.body ?? ''
+    // Extract media from the full body before truncating so screenshots past
+    // the body cap are still surfaced.
+    const inlineMedia = extractLinearInlineMedia(body, 'comment', comment.id)
     return {
       id: comment.id,
       body: body.slice(0, LINEAR_COMMENT_BODY_CAP),
       bodyTruncated: body.length > LINEAR_COMMENT_BODY_CAP,
+      ...(inlineMedia.length > 0 ? { inlineMedia } : {}),
       createdAt: comment.createdAt,
       updatedAt: comment.updatedAt,
       parentId: comment.parent?.id ?? null,

@@ -201,6 +201,44 @@ describe('Linear issue context includes', () => {
     })
   })
 
+  it('extracts comment media past the body truncation cap', async () => {
+    const url = 'https://uploads.linear.app/w/file/late?sig=1'
+    const body = `${'x'.repeat(20_001)}\n![late](${url})`
+    rawRequest.mockResolvedValueOnce({
+      data: {
+        issue: {
+          comments: {
+            nodes: [{ id: 'comment-1', body }],
+            pageInfo: { hasNextPage: false }
+          }
+        }
+      }
+    })
+    const { readOptionalIncludes } = await import('./issue-context-includes')
+    const output = result()
+
+    await readOptionalIncludes(
+      resolvedIssue(),
+      requestWithComments(),
+      output,
+      [],
+      output.meta.sections
+    )
+
+    expect(output.comments?.[0]?.bodyTruncated).toBe(true)
+    expect(output.comments?.[0]?.body).not.toContain(url)
+    expect(output.comments?.[0]?.inlineMedia).toEqual([
+      {
+        source: 'comment',
+        sourceId: 'comment-1',
+        url,
+        altText: 'late',
+        fileName: 'late',
+        linearUpload: true
+      }
+    ])
+  })
+
   it('reads comment and child bodies through the signed public-file-url client', async () => {
     // Guards STA-1246: reverting to the plain entry client would return unsigned
     // uploads.linear.app URLs that 401 for agents.

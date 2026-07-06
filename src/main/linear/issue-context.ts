@@ -108,8 +108,11 @@ export function collectInlineMedia(
 ): LinearIssueContextResult['inlineMedia'] {
   const media = [
     ...extractLinearInlineMedia(result.issue.description, 'description'),
-    ...(result.comments ?? []).flatMap((comment) =>
-      extractLinearInlineMedia(comment.body, 'comment', comment.id)
+    ...(result.comments ?? []).flatMap(
+      // Prefer media pre-extracted from the full (untruncated) comment body;
+      // fall back to the stored body for callers that did not pre-extract.
+      (comment) =>
+        comment.inlineMedia ?? extractLinearInlineMedia(comment.body, 'comment', comment.id)
     ),
     ...(result.children ?? []).flatMap((child) => collectChildInlineMedia(child))
   ]
