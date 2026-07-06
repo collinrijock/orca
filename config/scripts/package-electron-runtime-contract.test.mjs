@@ -178,6 +178,9 @@ describe('Electron runtime package contract', () => {
       'dist/win-unpacked/resources/node_modules/node-pty/build/Release'
     )
     expect(steps[verifyNodePtyIndex].run).toContain('conpty/conpty.dll')
+    // The daemon-host node.exe must be staged alongside the node-pty runtime so
+    // the terminal daemon can be forked from outside the install-dir kill zone.
+    expect(steps[verifyNodePtyIndex].run).toContain('resources/daemon-host/node.exe')
 
     const uploadThroughDownloadScript = steps
       .slice(uploadIndex, downloadIndex + 1)
@@ -194,6 +197,10 @@ describe('Electron runtime package contract', () => {
 
     expect(installStep.if).toBe("matrix.platform == 'win'")
     expect(installStep.shell).toBe('pwsh')
+    expect(installRun).toContain(
+      'if ($null -eq (Get-PSRepository -Name PSGallery -ErrorAction SilentlyContinue))'
+    )
+    expect(installRun).toContain('Register-PSRepository -Default -InstallationPolicy Trusted')
     expect(installRun).toContain('Set-PSRepository -Name PSGallery -InstallationPolicy Trusted')
     expect(installRun).toMatch(/\$env:PSModulePath -split \[System\.IO\.Path\]::PathSeparator/)
     expect(installRun).toContain(
@@ -215,6 +222,23 @@ describe('Electron runtime package contract', () => {
     )
     expect(installRun).toMatch(/if \(\$attempt -eq 3\) {\s+throw\s+}/)
     expect(installRun).not.toMatch(/throw\s+\$_/)
+  })
+
+  it('temporarily allows publishing Windows after verifying the signed installer only', () => {
+    const releaseWorkflow = readFileSync(
+      join(projectDir, '.github/workflows/release-cut.yml'),
+      'utf8'
+    )
+    const parsedWorkflow = parse(releaseWorkflow)
+    const steps = parsedWorkflow.jobs.build.steps
+    const stepNames = steps.map((step) => step.name)
+    const outerVerifyIndex = stepNames.indexOf('Verify signed Windows installer')
+    const innerVerifyIndex = stepNames.indexOf('Verify signed Windows inner executable')
+    const publishIndex = stepNames.indexOf('Publish signed Windows release artifacts')
+
+    expect(outerVerifyIndex).toBeGreaterThan(-1)
+    expect(innerVerifyIndex).toBe(-1)
+    expect(publishIndex).toBe(outerVerifyIndex + 1)
   })
 
   it('publishes both Linux release matrix entries', () => {

@@ -1,23 +1,8 @@
 import { resetAndRefreshAllTerminalWebglAtlases } from '@/lib/pane-manager/pane-manager-registry'
-import { e2eConfig } from '@/lib/e2e-config'
 
 const ATLAS_RECOVERY_DELAYS_MS = [120, 500]
 
 let terminalOutputRecoveryScheduled = false
-let terminalVisibilityFrameRecoveryScheduled = false
-let terminalVisibilityDelayedRecoveryScheduled = false
-
-type TerminalRecoveryTestWindow = Window & {
-  __terminalTabOverlapSuppressVisibilityRecovery?: boolean
-}
-
-function isVisibilityRecoverySuppressedForTest(): boolean {
-  return (
-    e2eConfig.exposeStore &&
-    typeof window !== 'undefined' &&
-    Boolean((window as TerminalRecoveryTestWindow).__terminalTabOverlapSuppressVisibilityRecovery)
-  )
-}
 
 function scheduleNextFrame(callback: () => void): void {
   if (typeof globalThis.requestAnimationFrame === 'function') {
@@ -37,21 +22,13 @@ function resetAtlasesAndRefreshPanes(): void {
   }
 }
 
-type AtlasRecoveryBurstCallbacks = {
-  onComplete?: () => void
-  onFirstReset?: () => void
-}
-
-function scheduleAtlasRecoveryBurst(callbacks: AtlasRecoveryBurstCallbacks = {}): void {
-  scheduleNextFrame(() => {
-    resetAtlasesAndRefreshPanes()
-    callbacks.onFirstReset?.()
-  })
+function scheduleAtlasRecoveryBurst(onComplete?: () => void): void {
+  scheduleNextFrame(() => resetAtlasesAndRefreshPanes())
   for (const [index, delayMs] of ATLAS_RECOVERY_DELAYS_MS.entries()) {
     globalThis.setTimeout(() => {
       resetAtlasesAndRefreshPanes()
       if (index === ATLAS_RECOVERY_DELAYS_MS.length - 1) {
-        callbacks.onComplete?.()
+        onComplete?.()
       }
     }, delayMs)
   }
@@ -70,39 +47,7 @@ export function scheduleTerminalWebglAtlasRecovery(): void {
   terminalOutputRecoveryScheduled = true
   // Why: TUI redraw bursts can corrupt xterm's shared WebGL glyph atlas without
   // a context-loss event; coalesce resets so output storms do not queue timers.
-  scheduleAtlasRecoveryBurst({
-    onComplete: () => {
-      terminalOutputRecoveryScheduled = false
-    }
+  scheduleAtlasRecoveryBurst(() => {
+    terminalOutputRecoveryScheduled = false
   })
-}
-
-export function scheduleTerminalVisibilityWebglRecovery(): void {
-  if (isVisibilityRecoverySuppressedForTest()) {
-    return
-  }
-  if (terminalVisibilityFrameRecoveryScheduled) {
-    return
-  }
-  terminalVisibilityFrameRecoveryScheduled = true
-  // Why: tab reveal is a separate repaint boundary from hidden-output parsing,
-  // so an in-flight output recovery must not suppress the returned tab's repaint.
-  // The first-frame repaint is per reveal, while the delayed tail is coalesced
-  // so rapid tab cycling does not queue unbounded global refresh bursts.
-  scheduleNextFrame(() => {
-    resetAtlasesAndRefreshPanes()
-    terminalVisibilityFrameRecoveryScheduled = false
-  })
-  if (terminalVisibilityDelayedRecoveryScheduled) {
-    return
-  }
-  terminalVisibilityDelayedRecoveryScheduled = true
-  for (const [index, delayMs] of ATLAS_RECOVERY_DELAYS_MS.entries()) {
-    globalThis.setTimeout(() => {
-      resetAtlasesAndRefreshPanes()
-      if (index === ATLAS_RECOVERY_DELAYS_MS.length - 1) {
-        terminalVisibilityDelayedRecoveryScheduled = false
-      }
-    }, delayMs)
-  }
 }

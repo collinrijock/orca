@@ -1,106 +1,85 @@
-import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { resumeTerminalVisibility } from './terminal-visibility-resume'
-
-const mocks = vi.hoisted(() => ({
-  enforceTerminalCurrentScrollIntent: vi.fn(),
-  fitAndFocusPanes: vi.fn(),
-  fitPanes: vi.fn(),
-  flushTerminalOutput: vi.fn(),
-  focusActivePane: vi.fn(),
-  requestTerminalBacklogRecovery: vi.fn(),
-  resetAndRefreshAllTerminalWebglAtlases: vi.fn(),
-  scheduleTerminalVisibilityWebglRecovery: vi.fn()
-}))
+import type { PaneManager } from '@/lib/pane-manager/pane-manager'
+import {
+  recoverVisibleTerminalWindowWake,
+  resumeTerminalVisibility
+} from './terminal-visibility-resume'
 
 vi.mock('@/lib/pane-manager/pane-manager-registry', () => ({
-  resetAndRefreshAllTerminalWebglAtlases: mocks.resetAndRefreshAllTerminalWebglAtlases
+  resetAndRefreshAllTerminalWebglAtlases: vi.fn()
 }))
-
 vi.mock('@/lib/pane-manager/pane-terminal-output-scheduler', () => ({
-  flushTerminalOutput: mocks.flushTerminalOutput,
-  requestTerminalBacklogRecovery: mocks.requestTerminalBacklogRecovery
+  flushTerminalOutput: vi.fn(),
+  requestTerminalBacklogRecovery: vi.fn()
 }))
-
 vi.mock('@/lib/pane-manager/terminal-scroll-intent', () => ({
-  enforceTerminalCurrentScrollIntent: mocks.enforceTerminalCurrentScrollIntent
+  enforceTerminalCurrentScrollIntent: vi.fn()
 }))
-
 vi.mock('./pane-helpers', () => ({
-  fitAndFocusPanes: mocks.fitAndFocusPanes,
-  fitPanes: mocks.fitPanes,
-  focusActivePane: mocks.focusActivePane
+  fitAndFocusPanes: vi.fn(),
+  fitPanes: vi.fn(),
+  focusActivePane: vi.fn()
 }))
-
 vi.mock('./terminal-webgl-atlas-recovery', () => ({
-  scheduleTerminalVisibilityWebglRecovery: mocks.scheduleTerminalVisibilityWebglRecovery
+  scheduleTerminalWebglAtlasRecovery: vi.fn()
 }))
 
-describe('resumeTerminalVisibility', () => {
+type FakeManager = {
+  getPanes: ReturnType<typeof vi.fn>
+  resumeRendering: ReturnType<typeof vi.fn>
+  scheduleRevealRepaint: ReturnType<typeof vi.fn>
+}
+
+function createManager(order: string[] = []): FakeManager {
+  return {
+    getPanes: vi.fn(() => []),
+    resumeRendering: vi.fn(() => order.push('resume-rendering')),
+    scheduleRevealRepaint: vi.fn(() => order.push('reveal-repaint'))
+  }
+}
+
+function resumeArgs(manager: FakeManager, shouldUseLightTabResume: boolean) {
+  return {
+    manager: manager as never as PaneManager,
+    isActive: true,
+    wasVisible: false,
+    shouldUseLightTabResume,
+    captureViewportPositions: vi.fn(() => new Map()),
+    withSuppressedScrollTracking: (callback: () => void) => callback()
+  }
+}
+
+describe('resumeTerminalVisibility reveal repaint', () => {
   beforeEach(() => {
     vi.clearAllMocks()
   })
 
-  function createManager(): PaneManager {
-    return {
-      getPanes: vi.fn(() => [{ terminal: 'first-terminal' }, { terminal: 'second-terminal' }]),
-      resumeRendering: vi.fn()
-    } as unknown as PaneManager
-  }
-
-  function resume(
-    options: {
-      isActive?: boolean
-      shouldUseLightTabResume?: boolean
-      wasVisible?: boolean
-    } = {}
-  ): {
-    captureViewportPositions: ReturnType<typeof vi.fn>
-    manager: PaneManager
-    withSuppressedScrollTracking: ReturnType<typeof vi.fn>
-  } {
+  it('schedules a pane-scoped repaint on a light tab reveal', () => {
+    // The light path is the "click the tab that was not open" gesture: it has
+    // no rendering resume or fit, so without this repaint a hidden-while-
+    // working pane keeps compositing pre-hide pixels.
     const manager = createManager()
-    const captureViewportPositions = vi.fn(() => new Map())
-    const withSuppressedScrollTracking = vi.fn((callback: () => void) => callback())
+    resumeTerminalVisibility(resumeArgs(manager, true))
 
-    resumeTerminalVisibility({
-      manager,
-      isActive: options.isActive ?? true,
-      wasVisible: options.wasVisible ?? false,
-      shouldUseLightTabResume: options.shouldUseLightTabResume ?? true,
-      captureViewportPositions,
-      withSuppressedScrollTracking
-    })
-
-    return { captureViewportPositions, manager, withSuppressedScrollTracking }
-  }
-
-  it('uses visibility-owned WebGL recovery on light regular-tab resume', () => {
-    const { captureViewportPositions, manager, withSuppressedScrollTracking } = resume()
-
-    expect(captureViewportPositions).toHaveBeenCalledWith(true)
-    expect(withSuppressedScrollTracking).toHaveBeenCalledTimes(1)
-    expect(mocks.requestTerminalBacklogRecovery).toHaveBeenCalledWith('first-terminal')
-    expect(mocks.requestTerminalBacklogRecovery).toHaveBeenCalledWith('second-terminal')
-    expect(mocks.flushTerminalOutput).not.toHaveBeenCalled()
+    expect(manager.scheduleRevealRepaint).toHaveBeenCalledTimes(1)
     expect(manager.resumeRendering).not.toHaveBeenCalled()
-    expect(mocks.fitAndFocusPanes).not.toHaveBeenCalled()
-    expect(mocks.fitPanes).not.toHaveBeenCalled()
-    expect(mocks.scheduleTerminalVisibilityWebglRecovery).toHaveBeenCalledTimes(1)
-    expect(mocks.resetAndRefreshAllTerminalWebglAtlases).not.toHaveBeenCalled()
-    expect(mocks.focusActivePane).toHaveBeenCalledWith(manager)
-    expect(mocks.enforceTerminalCurrentScrollIntent).toHaveBeenCalledTimes(2)
   })
 
-  it('preserves direct reset and refresh on heavy visibility resume', () => {
-    const { manager } = resume({ shouldUseLightTabResume: false })
+  it('schedules the repaint after rendering resumes on a heavy reveal', () => {
+    const order: string[] = []
+    const manager = createManager(order)
+    resumeTerminalVisibility(resumeArgs(manager, false))
 
-    expect(mocks.scheduleTerminalVisibilityWebglRecovery).not.toHaveBeenCalled()
-    expect(mocks.requestTerminalBacklogRecovery).toHaveBeenCalledTimes(2)
-    expect(mocks.flushTerminalOutput).toHaveBeenCalledTimes(2)
-    expect(manager.resumeRendering).toHaveBeenCalledTimes(1)
-    expect(mocks.fitAndFocusPanes).toHaveBeenCalledWith(manager)
-    expect(mocks.resetAndRefreshAllTerminalWebglAtlases).toHaveBeenCalledTimes(1)
-    expect(mocks.enforceTerminalCurrentScrollIntent).toHaveBeenCalledTimes(2)
+    expect(order).toEqual(['resume-rendering', 'reveal-repaint'])
+  })
+
+  it('schedules the repaint on window-wake recovery', () => {
+    const manager = createManager()
+    recoverVisibleTerminalWindowWake({
+      manager: manager as never as PaneManager,
+      isActive: false
+    })
+
+    expect(manager.scheduleRevealRepaint).toHaveBeenCalledTimes(1)
   })
 })
