@@ -275,12 +275,16 @@ export async function sendCtrlC(page) {
 }
 
 /**
- * Run a PowerShell command inside the active terminal, shell-agnostically:
- * invoking powershell.exe works whether the pty's shell is cmd, pwsh,
- * PowerShell, or a POSIX shell on Windows. Used to write sentinel files.
+ * Run a PowerShell command inside the active terminal by invoking a nested
+ * powershell.exe. The command is wrapped in double quotes for the OUTER
+ * interactive shell (also pwsh), which would otherwise expand `$var`, `$(...)`
+ * and consume backticks before the nested shell sees them — so escape backticks,
+ * quotes, and `$`. Without the `$` escape, `while($true)` reaches the nested
+ * shell as `while(True)` and never runs (the bug that silently broke every
+ * loop/heartbeat probe while simple `$`-free commands worked).
  */
 export async function runShellCommand(page, psCommand) {
-  const escaped = psCommand.replace(/"/g, '`"')
+  const escaped = psCommand.replace(/`/g, '``').replace(/"/g, '`"').replace(/\$/g, '`$')
   await typeLine(page, `powershell.exe -NoProfile -NonInteractive -Command "${escaped}"`)
 }
 
