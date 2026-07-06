@@ -288,4 +288,50 @@ describe('MobileFileExplorerPanel', () => {
     expect(renderedText(renderer)).toContain('README.md')
     expect(renderedText(renderer)).not.toContain('refresh failed')
   })
+
+  it('falls back to the capped files.list against desktops without files.readDir', async () => {
+    const legacyClient: MockClient = {
+      sendRequest: vi.fn(async (method: string): Promise<RpcResponse> => {
+        if (method === 'files.readDir') {
+          return {
+            id: 'response-id',
+            ok: false,
+            error: {
+              code: 'forbidden',
+              message: "Method 'files.readDir' is not available to mobile clients"
+            },
+            _meta: { runtimeId: 'runtime-id' }
+          }
+        }
+        return {
+          id: 'response-id',
+          ok: true,
+          result: {
+            files: [
+              { relativePath: 'src/app.ts', basename: 'app.ts', kind: 'text' },
+              { relativePath: 'README.md', basename: 'README.md', kind: 'text' }
+            ],
+            totalCount: 2,
+            truncated: false
+          },
+          _meta: { runtimeId: 'runtime-id' }
+        }
+      })
+    }
+    mockTransport.client = legacyClient
+
+    const renderer = await renderExplorer()
+
+    expect(legacyClient.sendRequest).toHaveBeenCalledWith('files.list', {
+      worktree: 'id:worktree-a'
+    })
+    expect(renderedText(renderer)).toContain('src')
+    expect(renderedText(renderer)).toContain('README.md')
+
+    await pressByLabel(renderer, 'Open folder src')
+    expect(renderedText(renderer)).toContain('app.ts')
+    // Every directory comes from the synthesized cache: one readDir attempt
+    // plus one files.list call total, no per-directory RPCs afterwards.
+    expect(legacyClient.sendRequest).toHaveBeenCalledTimes(2)
+  })
 })

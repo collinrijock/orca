@@ -28,6 +28,11 @@ import {
   resetDirectoryLoadRevisions,
   type DirectoryLoadRevisions
 } from './directory-load-revisions'
+import {
+  directoryCacheFromFileList,
+  isMobileMethodUnavailableError,
+  type LegacyFilesListResult
+} from './file-list-fallback'
 import { fileExplorerStyles as styles } from './mobile-file-explorer-styles'
 import { MobileFileExplorerRow } from './mobile-file-explorer-row'
 import { navigateToMobileFilePreview } from './mobile-file-preview-navigation'
@@ -106,6 +111,31 @@ export function MobileFileExplorerPanel(props: {
           relativePath
         })
         if (!response.ok) {
+          // Why: desktops that predate the files.readDir mobile allowlist
+          // entry still serve the capped files.list; fall back so the Files
+          // tab keeps working until the desktop updates.
+          if (
+            rootLoad &&
+            isMobileMethodUnavailableError(response.error?.code, response.error?.message)
+          ) {
+            const legacy = await client.sendRequest('files.list', {
+              worktree: `id:${worktreeId}`
+            })
+            if (legacy.ok) {
+              if (
+                !isCurrentDirectoryLoad(
+                  directoryLoadRevisionsRef.current,
+                  scopeRef.current,
+                  loadToken
+                )
+              ) {
+                return
+              }
+              const legacyResult = (legacy as RpcSuccess).result as LegacyFilesListResult
+              setDirectoryCache(directoryCacheFromFileList(legacyResult.files))
+              return
+            }
+          }
           throw new Error(response.error?.message || 'Unable to load files')
         }
         if (
