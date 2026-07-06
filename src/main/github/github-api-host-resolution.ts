@@ -10,10 +10,16 @@ import { getRemoteUrlForRepo, githubRepoContext } from './github-repository-iden
 const REPO_HOST_CACHE_TTL_MS = 30_000
 
 const repoHostCache = new Map<string, { value: string | null; expiresAt: number }>()
+// Why: on cold project open several callers (view table, view list, mutations,
+// auth diagnose) resolve the host concurrently before the cache is warm. An
+// in-flight map collapses that burst into a single git-remote lookup instead
+// of one `git remote get-url` fan-out per caller, mirroring ownerRepoInFlight.
+const repoHostInFlight = new Map<string, Promise<string | null>>()
 
 /** @internal - exposed for tests only */
 export function _resetRepoHostCache(): void {
   repoHostCache.clear()
+  repoHostInFlight.clear()
 }
 
 // Why (issue #1715): in multi-host setups gh must target the repo's own host.
@@ -33,31 +39,39 @@ export async function getGitHubApiHostForRepo(
     repoHostCache.delete(cacheKey)
   }
 
-  let fallback: string | null = null
-  for (const remoteName of ['upstream', 'origin']) {
-    try {
-      const remoteUrl = await getRemoteUrlForRepo(context, remoteName)
-      const identity = remoteUrl ? parseGitHubRemoteIdentity(remoteUrl) : null
-      const host = identity ? normalizeGitHubApiHost(identity.host) : null
-      if (!host) {
-        continue
-      }
-      if (preferredGitHubApiHost(host)) {
-        repoHostCache.set(cacheKey, {
-          value: host,
-          expiresAt: Date.now() + REPO_HOST_CACHE_TTL_MS
-        })
-        return host
-      }
-      fallback ??= host
-    } catch {
-      // ignore missing remotes or non-git paths
-    }
+  const inFlight = repoHostInFlight.get(cacheKey)
+  if (inFlight) {
+    return inFlight
   }
 
-  repoHostCache.set(cacheKey, {
-    value: fallback,
-    expiresAt: Date.now() + REPO_HOST_CACHE_TTL_MS
-  })
-  return fallback
+  const promise = (async () => {
+    let fallback: string | null = null
+    for (const remoteName of ['upstream', 'origin']) {
+      try {
+        const remoteUrl = await getRemoteUrlForRepo(context, remoteName)
+        const identity = remoteUrl ? parseGitHubRemoteIdentity(remoteUrl) : null
+        const host = identity ? normalizeGitHubApiHost(identity.host) : null
+        if (!host) {
+          continue
+        }
+        if (preferredGitHubApiHost(host)) {
+          return host
+        }
+        fallback ??= host
+      } catch {
+        // ignore missing remotes or non-git paths
+      }
+    }
+    return fallback
+  })()
+    .then((value) => {
+      repoHostCache.set(cacheKey, { value, expiresAt: Date.now() + REPO_HOST_CACHE_TTL_MS })
+      return value
+    })
+    .finally(() => {
+      repoHostInFlight.delete(cacheKey)
+    })
+
+  repoHostInFlight.set(cacheKey, promise)
+  return promise
 }

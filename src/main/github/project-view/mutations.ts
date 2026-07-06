@@ -681,6 +681,7 @@ export async function updateIssueTypeBySlug(
   // Why: `updateIssueIssueType` is the dedicated mutation; passing null for
   // `issueTypeId` clears the type. We resolve the issue id via a lightweight
   // GraphQL lookup because the REST endpoint doesn't accept issue types.
+  const route = await targetToGhApiRoute(args)
   const lookup = await runGraphql<{
     repository?: { issue?: { id?: string } | null } | null
   }>(
@@ -688,7 +689,7 @@ export async function updateIssueTypeBySlug(
        repository(owner:$owner, name:$repo) { issue(number:$num) { id } }
      }`,
     { owner: args.owner, repo: args.repo, num: args.number },
-    await targetToGhApiRoute(args)
+    route
   )
   if (!lookup.ok) {
     return { ok: false, error: lookup.error }
@@ -718,7 +719,7 @@ export async function updateIssueTypeBySlug(
   const vars: GraphqlVars = args.issueTypeId
     ? { issueId, issueTypeId: args.issueTypeId }
     : { issueId }
-  const res = await runGraphql<unknown>(query, vars, await targetToGhApiRoute(args))
+  const res = await runGraphql<unknown>(query, vars, route)
   if (!res.ok) {
     return { ok: false, error: res.error }
   }

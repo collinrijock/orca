@@ -112,6 +112,29 @@ describe('github owner/repo resolution', () => {
     await expect(getGitHubApiHostForRepo('/repo')).resolves.toBeNull()
   })
 
+  it('collapses concurrent host lookups into a single git-remote fan-out', async () => {
+    // Why (issue #1715): several project callers resolve the host at once on
+    // cold open; without in-flight dedup each would spawn its own git remote
+    // lookups. Two concurrent calls must share one upstream+origin fan-out,
+    // and a subsequent call must be served from cache with no extra spawns.
+    gitExecFileAsyncMock
+      .mockRejectedValueOnce(new Error('upstream missing'))
+      .mockResolvedValueOnce({ stdout: 'https://ghe.acme.internal/acme/orca.git\n' })
+
+    const [a, b] = await Promise.all([
+      getGitHubApiHostForRepo('/repo'),
+      getGitHubApiHostForRepo('/repo')
+    ])
+    expect(a).toBe('ghe.acme.internal')
+    expect(b).toBe('ghe.acme.internal')
+    // Only the single shared resolution ran git: upstream (reject) + origin.
+    expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(2)
+
+    await expect(getGitHubApiHostForRepo('/repo')).resolves.toBe('ghe.acme.internal')
+    // Cached — no further git spawns.
+    expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(2)
+  })
+
   it('keeps getOwnerRepo origin-based', async () => {
     gitExecFileAsyncMock.mockResolvedValueOnce({
       stdout: 'git@github.com:fork/orca.git\n'
