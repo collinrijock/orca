@@ -17957,6 +17957,29 @@ describe('OrcaRuntimeService', () => {
     }
   })
 
+  // Why: the five #7587 mobile-create tests need an identical full notifier where
+  // only closeTerminal is observed; one factory keeps notifier-interface changes
+  // in a single place.
+  function createMobileCreateTestNotifier(
+    closeTerminal: (tabId: string, paneRuntimeId?: number) => void
+  ) {
+    return {
+      focusTerminal: vi.fn(),
+      worktreesChanged: vi.fn(),
+      reposChanged: vi.fn(),
+      activateWorktree: vi.fn(),
+      createTerminal: vi.fn(),
+      revealTerminalSession: vi.fn(),
+      splitTerminal: vi.fn(),
+      renameTerminal: vi.fn(),
+      closeTerminal,
+      closeSessionTab: vi.fn(),
+      sleepWorktree: vi.fn(),
+      terminalFitOverrideChanged: vi.fn(),
+      terminalDriverChanged: vi.fn()
+    }
+  }
+
   it('rolls back a mobile create when the materialize spawn fails and no live PTY backs the tab', async () => {
     vi.useFakeTimers()
     try {
@@ -17974,21 +17997,7 @@ describe('OrcaRuntimeService', () => {
         kill: () => true,
         getForegroundProcess: async () => null
       })
-      runtime.setNotifier({
-        focusTerminal: vi.fn(),
-        worktreesChanged: vi.fn(),
-        reposChanged: vi.fn(),
-        activateWorktree: vi.fn(),
-        createTerminal: vi.fn(),
-        revealTerminalSession: vi.fn(),
-        splitTerminal: vi.fn(),
-        renameTerminal: vi.fn(),
-        closeTerminal,
-        closeSessionTab: vi.fn(),
-        sleepWorktree: vi.fn(),
-        terminalFitOverrideChanged: vi.fn(),
-        terminalDriverChanged: vi.fn()
-      })
+      runtime.setNotifier(createMobileCreateTestNotifier(closeTerminal))
       const webContents = { send: vi.fn() }
       const send = vi.fn((_channel: string, payload: { requestId: string }) => {
         ipcMain.emit(
@@ -18057,21 +18066,7 @@ describe('OrcaRuntimeService', () => {
       const leafId = '44444444-4444-4444-8444-444444444444'
       const closeTerminal = vi.fn()
       const runtime = new OrcaRuntimeService(store)
-      runtime.setNotifier({
-        focusTerminal: vi.fn(),
-        worktreesChanged: vi.fn(),
-        reposChanged: vi.fn(),
-        activateWorktree: vi.fn(),
-        createTerminal: vi.fn(),
-        revealTerminalSession: vi.fn(),
-        splitTerminal: vi.fn(),
-        renameTerminal: vi.fn(),
-        closeTerminal,
-        closeSessionTab: vi.fn(),
-        sleepWorktree: vi.fn(),
-        terminalFitOverrideChanged: vi.fn(),
-        terminalDriverChanged: vi.fn()
-      })
+      runtime.setNotifier(createMobileCreateTestNotifier(closeTerminal))
       // Why: reply with a tabId but NEVER sync a matching mobileSessionTabs graph,
       // reproducing a throttled/hidden renderer that spawns the PTY yet stalls its
       // graph-sync publication past the surface timeout (#7587).
@@ -18131,21 +18126,7 @@ describe('OrcaRuntimeService', () => {
       const leafId = '55555555-5555-4555-8555-555555555555'
       const closeTerminal = vi.fn()
       const runtime = new OrcaRuntimeService(store)
-      runtime.setNotifier({
-        focusTerminal: vi.fn(),
-        worktreesChanged: vi.fn(),
-        reposChanged: vi.fn(),
-        activateWorktree: vi.fn(),
-        createTerminal: vi.fn(),
-        revealTerminalSession: vi.fn(),
-        splitTerminal: vi.fn(),
-        renameTerminal: vi.fn(),
-        closeTerminal,
-        closeSessionTab: vi.fn(),
-        sleepWorktree: vi.fn(),
-        terminalFitOverrideChanged: vi.fn(),
-        terminalDriverChanged: vi.fn()
-      })
+      runtime.setNotifier(createMobileCreateTestNotifier(closeTerminal))
       // Why: the spawn and the tabCreate reply travel independent IPC channels;
       // here the renderer registers the live PTY before it replies, so only the
       // create's immediate pre-wait check can resolve it — asserting it settles
@@ -18204,21 +18185,7 @@ describe('OrcaRuntimeService', () => {
       const leafId = '66666666-6666-4666-8666-666666666666'
       const closeTerminal = vi.fn()
       const runtime = new OrcaRuntimeService(store)
-      runtime.setNotifier({
-        focusTerminal: vi.fn(),
-        worktreesChanged: vi.fn(),
-        reposChanged: vi.fn(),
-        activateWorktree: vi.fn(),
-        createTerminal: vi.fn(),
-        revealTerminalSession: vi.fn(),
-        splitTerminal: vi.fn(),
-        renameTerminal: vi.fn(),
-        closeTerminal,
-        closeSessionTab: vi.fn(),
-        sleepWorktree: vi.fn(),
-        terminalFitOverrideChanged: vi.fn(),
-        terminalDriverChanged: vi.fn()
-      })
+      runtime.setNotifier(createMobileCreateTestNotifier(closeTerminal))
       const webContents = { send: vi.fn() }
       const send = vi.fn((_channel: string, payload: { requestId: string }) => {
         ipcMain.emit(
@@ -18325,21 +18292,7 @@ describe('OrcaRuntimeService', () => {
       const leafId = '77777777-7777-4777-8777-777777777777'
       const closeTerminal = vi.fn()
       const runtime = new OrcaRuntimeService(store)
-      runtime.setNotifier({
-        focusTerminal: vi.fn(),
-        worktreesChanged: vi.fn(),
-        reposChanged: vi.fn(),
-        activateWorktree: vi.fn(),
-        createTerminal: vi.fn(),
-        revealTerminalSession: vi.fn(),
-        splitTerminal: vi.fn(),
-        renameTerminal: vi.fn(),
-        closeTerminal,
-        closeSessionTab: vi.fn(),
-        sleepWorktree: vi.fn(),
-        terminalFitOverrideChanged: vi.fn(),
-        terminalDriverChanged: vi.fn()
-      })
+      runtime.setNotifier(createMobileCreateTestNotifier(closeTerminal))
       // Why: the renderer pane identity can reach the runtime via leaf graph-sync
       // (recordPtyWorktree) without registerPty, and leaf-sync never calls the
       // pty-backed rescue; so when the mobileSessionTabs publication stalls past

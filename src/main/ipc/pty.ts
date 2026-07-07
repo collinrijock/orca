@@ -2311,9 +2311,8 @@ export function registerPtyHandlers(
             typeof args.tabId === 'string' &&
               isValidTerminalTabId(args.tabId) &&
               args.tabId.length <= 512 &&
-              typeof args.leafId === 'string' &&
-              isTerminalLeafId(args.leafId)
-              ? { tabId: args.tabId, leafId: args.leafId }
+              metadataLeafId !== null
+              ? { tabId: args.tabId, leafId: metadataLeafId }
               : undefined
           )
         }
