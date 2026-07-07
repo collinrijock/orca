@@ -108,6 +108,7 @@ import {
   type SourceControlEntryGroups,
   type SourceControlSectionArea
 } from './source-control-section-order'
+import { SourceControlVirtualFileList } from './source-control-virtual-file-list'
 import {
   buildActiveOpenFileSignature,
   buildActiveOpenRowKeys
@@ -795,6 +796,10 @@ export function clearRemoteActionErrorsForCompletedConflictOperations({
 
 function SourceControlInner(): React.JSX.Element {
   const sourceControlRef = useRef<HTMLDivElement | null>(null)
+  // Why: the changed-file sections virtualize against the panel's shared
+  // scroller rather than owning a nested scroll container. State (not a ref)
+  // so the lists re-render and start observing once the element attaches.
+  const [fileListScrollElement, setFileListScrollElement] = useState<HTMLDivElement | null>(null)
   const isMac = useMemo(() => navigator.userAgent.includes('Mac'), [])
   const pendingCommentEditorRevealFrameIdsRef = useRef<number[]>([])
   // Why: React setState is async, so a rapid double-click on the Commit
@@ -5627,6 +5632,7 @@ function SourceControlInner(): React.JSX.Element {
         )}
 
         <div
+          ref={setFileListScrollElement}
           className="relative flex flex-1 flex-col overflow-auto scrollbar-sleek pt-1"
           style={{ paddingBottom: selectedKeys.size > 0 ? 50 : undefined }}
         >
@@ -5957,8 +5963,12 @@ function SourceControlInner(): React.JSX.Element {
                       }
                     />
                     {!isCollapsed &&
-                      (sourceControlViewMode === 'tree'
-                        ? (visibleTreeRowsBySection[id] ?? []).map((node) => {
+                      (sourceControlViewMode === 'tree' ? (
+                        <SourceControlVirtualFileList
+                          rows={visibleTreeRowsBySection[id] ?? []}
+                          scrollElement={fileListScrollElement}
+                          getRowKey={(node) => node.key}
+                          renderRow={(node) => {
                             if (node.type === 'submodule-placeholder') {
                               return (
                                 <SubmodulePlaceholderRow
@@ -6022,8 +6032,18 @@ function SourceControlInner(): React.JSX.Element {
                                 submoduleExpansion={submoduleExpansion}
                               />
                             )
-                          })
-                        : (visibleListRowsBySection[id] ?? []).map((row) => {
+                          }}
+                        />
+                      ) : (
+                        <SourceControlVirtualFileList
+                          rows={visibleListRowsBySection[id] ?? []}
+                          scrollElement={fileListScrollElement}
+                          getRowKey={(row) =>
+                            row.type === 'submodule-placeholder'
+                              ? row.key
+                              : `${row.entry.area}::${row.entry.path}`
+                          }
+                          renderRow={(row) => {
                             if (row.type === 'submodule-placeholder') {
                               return (
                                 <SubmodulePlaceholderRow
@@ -6066,7 +6086,9 @@ function SourceControlInner(): React.JSX.Element {
                                 submoduleExpansion={submoduleExpansion}
                               />
                             )
-                          }))}
+                          }}
+                        />
+                      ))}
                   </div>
                 )
               })}
@@ -6117,8 +6139,12 @@ function SourceControlInner(): React.JSX.Element {
                 }
               />
               {!collapsedSections.has('branch') &&
-                (sourceControlViewMode === 'tree'
-                  ? visibleBranchTreeRows.map((node) => {
+                (sourceControlViewMode === 'tree' ? (
+                  <SourceControlVirtualFileList
+                    rows={visibleBranchTreeRows}
+                    scrollElement={fileListScrollElement}
+                    getRowKey={(node) => node.key}
+                    renderRow={(node) => {
                       if (node.type === 'directory') {
                         return (
                           <SourceControlBranchTreeDirectoryRow
@@ -6143,8 +6169,14 @@ function SourceControlInner(): React.JSX.Element {
                           showPathHint={false}
                         />
                       )
-                    })
-                  : filteredBranchEntries.map((entry) => (
+                    }}
+                  />
+                ) : (
+                  <SourceControlVirtualFileList
+                    rows={filteredBranchEntries}
+                    scrollElement={fileListScrollElement}
+                    getRowKey={(entry) => `branch:${entry.path}`}
+                    renderRow={(entry) => (
                       <BranchEntryRow
                         key={`branch:${entry.path}`}
                         entry={entry}
@@ -6155,7 +6187,9 @@ function SourceControlInner(): React.JSX.Element {
                         onOpen={(event) => openCommittedDiff(entry, event)}
                         commentCount={diffCommentCountByPath.get(entry.path) ?? 0}
                       />
-                    )))}
+                    )}
+                  />
+                ))}
             </div>
           )}
 
