@@ -11,8 +11,8 @@ const PEEK_REFERENCES_PREVIEW_OPTIONS: Monaco.editor.IEditorOptions = {
 
 type ReferenceWidgetInstance = {
   _preview?: PeekPreviewEditor
-  _fillBody: (containerElement: HTMLElement) => void
-  _revealReference: (...args: unknown[]) => Promise<unknown>
+  _fillBody?: (containerElement: HTMLElement) => void
+  _revealReference?: (...args: unknown[]) => Promise<unknown>
 }
 
 type ReferenceWidgetConstructor = {
@@ -37,6 +37,11 @@ export function installMonacoPeekReferencesPreviewOptions(
 
   const originalFillBody = prototype._fillBody
   const originalRevealReference = prototype._revealReference
+  // Why: these are private Monaco members with no stability guarantee; if an
+  // upgrade removes either, skip patching so Peek keeps Monaco's defaults.
+  if (typeof originalFillBody !== 'function' || typeof originalRevealReference !== 'function') {
+    return
+  }
 
   prototype._fillBody = function fillBodyWithPeekPreviewOptions(
     this: ReferenceWidgetInstance,

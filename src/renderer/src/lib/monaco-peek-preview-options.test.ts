@@ -8,14 +8,17 @@ type FakePreviewEditor = Pick<Monaco.editor.ICodeEditor, 'updateOptions'>
 
 type FakeReferenceWidgetInstance = {
   _preview?: FakePreviewEditor
-  _fillBody: (containerElement: HTMLElement) => void
-  _revealReference: (...args: unknown[]) => Promise<unknown>
+  _fillBody?: (containerElement: HTMLElement) => void
+  _revealReference?: (...args: unknown[]) => Promise<unknown>
 }
 
 function createReferenceWidgetConstructor(hooks: {
   fillBody?: (instance: FakeReferenceWidgetInstance) => void
   revealReference?: (instance: FakeReferenceWidgetInstance) => Promise<unknown>
-}): { prototype: FakeReferenceWidgetInstance } {
+}): {
+  prototype: FakeReferenceWidgetInstance &
+    Required<Pick<FakeReferenceWidgetInstance, '_fillBody' | '_revealReference'>>
+} {
   return {
     prototype: {
       _fillBody(this: FakeReferenceWidgetInstance): void {
@@ -70,6 +73,15 @@ describe('installMonacoPeekReferencesPreviewOptions', () => {
 
     expect(calls).toEqual(['updateOptions', 'revealReference', 'updateOptions'])
     expect(preview.updateOptions).toHaveBeenCalledWith(peekPreviewOptions)
+  })
+
+  it('skips patching when the private Monaco hooks are missing', () => {
+    const referenceWidget: { prototype: FakeReferenceWidgetInstance } = { prototype: {} }
+
+    installMonacoPeekReferencesPreviewOptions(referenceWidget)
+
+    expect(referenceWidget.prototype._fillBody).toBeUndefined()
+    expect(referenceWidget.prototype._revealReference).toBeUndefined()
   })
 
   it('does not wrap ReferenceWidget more than once', async () => {
