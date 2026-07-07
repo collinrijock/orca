@@ -1378,7 +1378,8 @@ const editorExternalChangeConflictShownSchema = z
 const editorExternalChangeConflictActionSchema = z
   .object({
     action: z.enum(['reload', 'keep', 'compare', 'undo_reload', 'save_overwrite']),
-    surface: z.enum(['edit', 'unstaged-diff'])
+    surface: z.enum(['edit', 'unstaged-diff']),
+    transport: z.enum(['local', 'ssh', 'runtime'])
   })
   .strict()
 

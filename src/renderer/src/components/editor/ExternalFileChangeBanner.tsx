@@ -43,9 +43,12 @@ export function reloadTabContentFromDisk(
         label: translate('auto.components.editor.ExternalFileChangeBanner.d1e830fa22', 'Undo'),
         onClick: () => {
           const current = useAppStore.getState()
+          const liveFile = current.openFiles.find((openFile) => openFile.id === file.id)
           // Why: the tab may have closed while the toast was up; restoring a
-          // draft for a dead fileId would strand an orphan buffer.
-          if (!current.openFiles.some((openFile) => openFile.id === file.id)) {
+          // draft for a dead fileId would strand an orphan buffer. And if the
+          // user already typed or saved after the reload, that newer work
+          // wins — undoing over it would be a second silent discard.
+          if (!liveFile || liveFile.isDirty || current.editorDrafts[file.id] !== undefined) {
             return
           }
           current.setEditorDraft(file.id, discardedDraft)

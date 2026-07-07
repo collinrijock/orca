@@ -10,7 +10,7 @@ import {
 } from '@/lib/connection-context'
 import { joinPath } from '@/lib/path'
 import { useAppStore } from '@/store'
-import { getDiffContentSignature } from './diff-content-signature'
+import { getDiskBaselineSignature } from './diff-content-signature'
 import { getRuntimeFileReadScope, readRuntimeFileContent } from '@/runtime/runtime-file-client'
 import { settingsForRuntimeOwner } from '@/runtime/runtime-rpc-client'
 import {
@@ -68,7 +68,7 @@ function stampCleanTabDiskBaseline(id: string, result: FileContent): void {
     const state = useAppStore.getState()
     const loadedFile = state.openFiles.find((file) => file.id === id)
     if (loadedFile && !loadedFile.isDirty) {
-      state.setLastKnownDiskSignature(id, getDiffContentSignature(result.content))
+      state.setLastKnownDiskSignature(id, getDiskBaselineSignature(result.content))
     }
   } catch (err) {
     console.warn('[editor] failed to stamp disk baseline', err)

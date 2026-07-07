@@ -34,7 +34,7 @@ import {
   recordSelfWrite,
   SELF_WRITE_REMOTE_TTL_MS
 } from './editor-self-write-registry'
-import { getDiffContentSignature } from './diff-content-signature'
+import { getDiskBaselineSignature } from './diff-content-signature'
 import {
   trackExternalChangeConflictAction,
   trackExternalChangeConflictShown
@@ -96,9 +96,13 @@ export function attachEditorAutosaveController(store: AppStoreApi): () => void {
 
         // Why: autosave is suspended while the tab is marked changed-on-disk —
         // an unattended timer must not resolve the conflict by overwriting the
-        // newer external content. Explicit user saves proceed (the banner
-        // warned) and clear the mark below.
-        if (trigger === 'autosave' && liveFile.externalMutation === 'changed') {
+        // newer external content — and while a restored tab's baseline is
+        // still unverified (the conflict may simply not be marked YET).
+        // Explicit user saves proceed (the banner warned) and clear both.
+        if (
+          trigger === 'autosave' &&
+          (liveFile.externalMutation === 'changed' || liveFile.pendingDiskBaselineVerification)
+        ) {
           return
         }
 
@@ -152,8 +156,11 @@ export function attachEditorAutosaveController(store: AppStoreApi): () => void {
           nextState.clearEditorDraft(file.id)
         }
         // Why: disk now holds contentToSave — future edits baseline on it, and
-        // a restore must not flag our own save as an external change.
-        nextState.setLastKnownDiskSignature(file.id, getDiffContentSignature(contentToSave))
+        // a restore must not flag our own save as an external change. An
+        // explicit save also settles any pending baseline verification: the
+        // user chose to write, so there is nothing left to verify against.
+        nextState.setLastKnownDiskSignature(file.id, getDiskBaselineSignature(contentToSave))
+        nextState.clearPendingDiskBaselineVerification(file.id)
         // Why: the write just made disk match the buffer, resolving any
         // changed-on-disk conflict in favor of the user's content. The banner
         // warned before this point; keeping the mark would show a stale
@@ -214,7 +221,9 @@ export function attachEditorAutosaveController(store: AppStoreApi): () => void {
         canAutoSaveOpenFile(file) &&
         // Why: a changed-on-disk mark suspends autosave until the user picks a
         // side via the banner (or saves manually) — see the queueSave guard.
+        // Same for a restored tab whose disk baseline is not yet verified.
         file.externalMutation !== 'changed' &&
+        !file.pendingDiskBaselineVerification &&
         draft !== undefined
       if (!shouldKeepTimer) {
         clearAutoSaveTimer(fileId)
@@ -232,7 +241,8 @@ export function attachEditorAutosaveController(store: AppStoreApi): () => void {
         !file.isDirty ||
         draft === undefined ||
         !canAutoSaveOpenFile(file) ||
-        file.externalMutation === 'changed'
+        file.externalMutation === 'changed' ||
+        file.pendingDiskBaselineVerification
       ) {
         clearAutoSaveTimer(file.id)
         continue

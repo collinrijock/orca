@@ -3,6 +3,7 @@
 // actions cannot drift on enum values. Measures false-banner rates per
 // transport and which resolution users actually pick.
 import { track } from '@/lib/telemetry'
+import { getConnectionIdForFile } from '@/lib/connection-context'
 import type { OpenFile } from '@/store/slices/editor'
 
 type ConflictSurface = 'edit' | 'unstaged-diff'
@@ -44,11 +45,18 @@ export function trackExternalChangeConflictShown(
 }
 
 export function trackExternalChangeConflictAction(
-  file: Pick<OpenFile, 'mode'>,
+  file: Pick<OpenFile, 'mode' | 'worktreeId' | 'filePath' | 'runtimeEnvironmentId'>,
   action: ExternalChangeConflictAction
 ): void {
   track('editor_external_change_conflict_action', {
     action,
-    surface: conflictSurface(file)
+    surface: conflictSurface(file),
+    // Why: shown-vs-action cross-tabs per transport are the point of the
+    // metric — false-banner detection needs to see WHICH transports' banners
+    // users dismiss versus act on.
+    transport: conflictTransport(
+      getConnectionIdForFile(file.worktreeId, file.filePath) ?? undefined,
+      file.runtimeEnvironmentId
+    )
   })
 }

@@ -257,6 +257,11 @@ export type OpenFile = {
    * changed-on-disk conflict from ground truth — an agent write that landed
    * while the app was closed must not be clobbered by a resumed autosave. */
   lastKnownDiskSignature?: string
+  /** Why: set at hydration for restored dirty tabs; suspends autosave until
+   * the restored-tab conflict scan has compared disk against the baseline.
+   * Without this hard gate the scan's async read merely races the autosave
+   * timer, and a slow (SSH/runtime) read loses the race. Not persisted. */
+  pendingDiskBaselineVerification?: boolean
   /** Why: diff bodies are cached in EditorPanel. Re-selecting an existing diff
    * tab from the tree bumps this so the panel refetches instead of reusing a
    * stale snapshot. */
@@ -503,6 +508,7 @@ export type EditorSlice = {
   markFileDirty: (fileId: string, dirty: boolean) => void
   setExternalMutation: (fileId: string, mutation: 'deleted' | 'renamed' | 'changed' | null) => void
   setLastKnownDiskSignature: (fileId: string, signature: string) => void
+  clearPendingDiskBaselineVerification: (fileId: string) => void
   clearUntitled: (fileId: string) => void
   openDiff: (
     worktreeId: string,
@@ -2484,6 +2490,19 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       }
     }),
 
+  clearPendingDiskBaselineVerification: (fileId) =>
+    set((s) => {
+      const file = s.openFiles.find((f) => f.id === fileId)
+      if (!file?.pendingDiskBaselineVerification) {
+        return s
+      }
+      return {
+        openFiles: s.openFiles.map((f) =>
+          f.id === fileId ? { ...f, pendingDiskBaselineVerification: undefined } : f
+        )
+      }
+    }),
+
   clearUntitled: (fileId) =>
     set((s) => ({
       openFiles: s.openFiles.map((f) => (f.id === fileId ? { ...f, isUntitled: undefined } : f))
@@ -4315,6 +4334,14 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
             isPreview: pf.isPreview,
             runtimeEnvironmentId: pf.runtimeEnvironmentId,
             lastKnownDiskSignature: pf.lastKnownDiskSignature,
+            // Why: hard-suspends autosave until the restored-tab conflict scan
+            // verifies disk against the baseline — an async race would let a
+            // slow remote read lose to the autosave timer and clobber an
+            // offline agent write.
+            pendingDiskBaselineVerification:
+              pf.dirtyDraftContent !== undefined && pf.lastKnownDiskSignature !== undefined
+                ? true
+                : undefined,
             mode: 'edit'
           })
         }

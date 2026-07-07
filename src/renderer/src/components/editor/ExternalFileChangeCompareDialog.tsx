@@ -88,8 +88,8 @@ export function ExternalFileChangeCompareDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex h-[80vh] w-[90vw] max-w-5xl flex-col overflow-hidden sm:max-w-5xl">
-        <DialogHeader>
+      <DialogContent className="flex h-[80vh] w-[90vw] max-w-5xl flex-col gap-0 overflow-hidden p-0 sm:max-w-5xl">
+        <DialogHeader className="border-b border-border/60 p-4">
           <DialogTitle>
             {translate(
               'auto.components.editor.ExternalFileChangeCompareDialog.4b8de20a11',
@@ -128,7 +128,19 @@ export function ExternalFileChangeCompareDialog({
               )}
             </div>
           ) : (
-            <Suspense fallback={null}>
+            <Suspense
+              // Why: the DiffViewer chunk loads lazily after the disk read —
+              // without a fallback the 80vh body flashes blank in between.
+              fallback={
+                <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+                  <Loader2 className="mr-2 size-4 animate-spin" />
+                  {translate(
+                    'auto.components.editor.ExternalFileChangeCompareDialog.2c8f1e07b9',
+                    'Loading comparison...'
+                  )}
+                </div>
+              }
+            >
               <div className="flex h-full min-h-0 flex-col">
                 <DiffViewer
                   modelKey={`external-change-compare:${file.id}`}
@@ -143,7 +155,7 @@ export function ExternalFileChangeCompareDialog({
             </Suspense>
           )}
         </div>
-        <DialogFooter>
+        <DialogFooter className="border-t border-border/60 p-4">
           <Button
             type="button"
             size="sm"

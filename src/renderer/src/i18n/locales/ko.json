@@ -11531,7 +11531,8 @@
           "e2b1cd0393": "Could not read the file from disk: {{value0}}",
           "b6cf20d514": "The file on disk is binary — no text comparison available.",
           "3fa2b8d417": "Reload from Disk",
-          "a95d02c644": "Keep My Edits"
+          "a95d02c644": "Keep My Edits",
+          "2c8f1e07b9": "Loading comparison..."
         }
       },
       "diff": {

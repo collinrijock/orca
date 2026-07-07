@@ -97,7 +97,9 @@ describe('ExternalFileChangeBanner', () => {
       action: { label: string; onClick: () => void }
     }
     vi.clearAllMocks()
-    mockStoreState({})
+    // Why: after a real reload the tab is clean with no draft — the undo
+    // guard only restores over that untouched state.
+    mockStoreState({}, [{ ...file, isDirty: false, externalMutation: undefined } as OpenFile])
 
     options.action.onClick()
 
@@ -123,6 +125,27 @@ describe('ExternalFileChangeBanner', () => {
 
     expect(setEditorDraft).not.toHaveBeenCalled()
     expect(markFileDirty).not.toHaveBeenCalled()
+    expect(setExternalMutation).not.toHaveBeenCalled()
+  })
+
+  it('undo is a no-op when the user typed or saved after the reload', () => {
+    mockStoreState({ 'file-1': 'discarded draft' })
+
+    reloadTabContentFromDisk(file, vi.fn())
+
+    const options = toastMock.mock.calls[0][1] as {
+      action: { label: string; onClick: () => void }
+    }
+    vi.clearAllMocks()
+    // Why: post-reload edits are newer intent than the discarded draft —
+    // undoing over them would be a second silent discard.
+    mockStoreState({ 'file-1': 'newer post-reload edits' }, [
+      { ...file, isDirty: true, externalMutation: undefined } as OpenFile
+    ])
+
+    options.action.onClick()
+
+    expect(setEditorDraft).not.toHaveBeenCalled()
     expect(setExternalMutation).not.toHaveBeenCalled()
   })
 

@@ -3,7 +3,7 @@ import { createStore, type StoreApi } from 'zustand/vanilla'
 import { createEditorSlice } from '@/store/slices/editor'
 import type { AppState } from '@/store'
 import { attachRestoredTabConflictScan } from './editor-restored-tab-conflict-scan'
-import { getDiffContentSignature } from './diff-content-signature'
+import { getDiskBaselineSignature } from './diff-content-signature'
 
 const mocks = vi.hoisted(() => ({
   readRuntimeFileContent: vi.fn(),
@@ -42,7 +42,15 @@ function openRestoredDirtyTab(
   })
   store.getState().setEditorDraft(filePath, 'restored draft')
   store.getState().markFileDirty(filePath, true)
-  store.getState().setLastKnownDiskSignature(filePath, getDiffContentSignature(baselineContent))
+  store.getState().setLastKnownDiskSignature(filePath, getDiskBaselineSignature(baselineContent))
+  // Why: hydration flags restored dirty tabs for verification; tests mimic it.
+  store.setState({
+    openFiles: store
+      .getState()
+      .openFiles.map((f) =>
+        f.id === filePath ? { ...f, pendingDiskBaselineVerification: true } : f
+      )
+  } as never)
 }
 
 describe('attachRestoredTabConflictScan', () => {
@@ -134,6 +142,59 @@ describe('attachRestoredTabConflictScan', () => {
       expect(store.getState().openFiles[0]?.externalMutation).toBeUndefined()
       await vi.advanceTimersByTimeAsync(2_100)
       expect(store.getState().openFiles[0]?.externalMutation).toBe('changed')
+    } finally {
+      detach()
+    }
+  })
+
+  it('clears the pending-verification flag on both verification outcomes', async () => {
+    mocks.readRuntimeFileContent.mockResolvedValue({
+      content: 'original baseline',
+      isBinary: false
+    })
+    const store = createEditorStore()
+    openRestoredDirtyTab(store, '/repo/match.ts', 'original baseline')
+
+    const detach = attachRestoredTabConflictScan(store)
+    try {
+      await vi.advanceTimersByTimeAsync(10)
+      // Why: the flag suspends autosave — leaving it set after a clean
+      // verification would strand the tab's autosave forever.
+      expect(store.getState().openFiles[0]?.pendingDiskBaselineVerification).toBeUndefined()
+
+      mocks.readRuntimeFileContent.mockResolvedValue({
+        content: 'agent rewrote this offline',
+        isBinary: false
+      })
+      openRestoredDirtyTab(store, '/repo/mismatch.ts', 'original baseline')
+      await vi.advanceTimersByTimeAsync(10)
+      const mismatchTab = store.getState().openFiles.find((f) => f.id === '/repo/mismatch.ts')
+      expect(mismatchTab?.externalMutation).toBe('changed')
+      expect(mismatchTab?.pendingDiskBaselineVerification).toBeUndefined()
+    } finally {
+      detach()
+    }
+  })
+
+  it('does not re-verify live dirty tabs that were never flagged at hydration', async () => {
+    const store = createEditorStore()
+    store.getState().openFile({
+      filePath: '/repo/live.ts',
+      relativePath: 'live.ts',
+      worktreeId: 'wt-1',
+      language: 'typescript',
+      mode: 'edit'
+    })
+    store.getState().setEditorDraft('/repo/live.ts', 'live edits')
+    store.getState().markFileDirty('/repo/live.ts', true)
+    store.getState().setLastKnownDiskSignature('/repo/live.ts', getDiskBaselineSignature('base'))
+
+    const detach = attachRestoredTabConflictScan(store)
+    try {
+      await vi.advanceTimersByTimeAsync(10)
+      // Why: in-session drift is the live watcher's job; re-reading here would
+      // turn the scan into a poller and skew the 'restore' telemetry origin.
+      expect(mocks.readRuntimeFileContent).not.toHaveBeenCalled()
     } finally {
       detach()
     }

@@ -808,6 +808,59 @@ describe('attachEditorAutosaveController', () => {
     }
   })
 
+  it('suspends autosave while a restored tab awaits disk baseline verification', async () => {
+    const writeFile = vi.fn().mockResolvedValue(undefined)
+    const eventTarget = new EventTarget()
+    vi.stubGlobal('window', {
+      addEventListener: eventTarget.addEventListener.bind(eventTarget),
+      removeEventListener: eventTarget.removeEventListener.bind(eventTarget),
+      dispatchEvent: eventTarget.dispatchEvent.bind(eventTarget),
+      setTimeout: globalThis.setTimeout.bind(globalThis),
+      clearTimeout: globalThis.clearTimeout.bind(globalThis),
+      api: {
+        fs: {
+          writeFile
+        }
+      }
+    } satisfies WindowStub)
+
+    const store = createEditorStore()
+    store.getState().openFile({
+      filePath: '/repo/file.ts',
+      relativePath: 'file.ts',
+      worktreeId: 'wt-1',
+      language: 'typescript',
+      mode: 'edit'
+    })
+    store.getState().setEditorDraft('/repo/file.ts', 'restored draft')
+    store.getState().markFileDirty('/repo/file.ts', true)
+    // Why: mimic hydration — the scan has not yet compared disk against the
+    // persisted baseline, so autosave must hold off (a slow remote read must
+    // not lose a race to this timer).
+    store.setState({
+      openFiles: store
+        .getState()
+        .openFiles.map((f) =>
+          f.id === '/repo/file.ts' ? { ...f, pendingDiskBaselineVerification: true } : f
+        )
+    } as never)
+
+    const cleanup = attachEditorAutosaveController(store)
+    try {
+      await vi.advanceTimersByTimeAsync(1500)
+      expect(writeFile).not.toHaveBeenCalled()
+
+      store.getState().clearPendingDiskBaselineVerification('/repo/file.ts')
+      await vi.advanceTimersByTimeAsync(1500)
+      expect(writeFile).toHaveBeenCalledWith({
+        filePath: '/repo/file.ts',
+        content: 'restored draft'
+      })
+    } finally {
+      cleanup()
+    }
+  })
+
   it('clears the changed-on-disk mark after a successful save', async () => {
     const writeFile = vi.fn().mockResolvedValue(undefined)
     const eventTarget = new EventTarget()
