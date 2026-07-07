@@ -459,6 +459,97 @@
       "demotionRule": "Cannot promote while it only checks visual rendering."
     },
     {
+      "id": "terminal-scroll.intent-preservation",
+      "title": "Scrollbar drag intent survives tab and visibility resume",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "terminal-rendering",
+      "layer": "renderer-unit",
+      "surfaces": [
+        "terminal lifecycle",
+        "hidden-to-visible resume",
+        "tab switching",
+        "xterm scrollbar DOM",
+        "scrollback"
+      ],
+      "platforms": [
+        "macos",
+        "linux",
+        "windows"
+      ],
+      "providers": [
+        "local",
+        "daemon",
+        "ssh",
+        "wsl",
+        "remote-runtime"
+      ],
+      "coveredPlatforms": [
+        "macos"
+      ],
+      "coveredProviders": [],
+      "coverageNotes": "Renderer-unit coverage proves the shared xterm DOM intent path. Live Electron evidence is PR validation evidence for local macOS only until the flow has stable automation; live SSH, WSL, Linux, and Windows paths remain unproved.",
+      "motivatingLinks": [
+        "STA-1341"
+      ],
+      "invariant": "A user-driven xterm scrollbar thumb or track scroll updates the live terminal scroll intent before tab, visibility, or layout resume enforces intent, so resume preserves the latest dragged viewport instead of an older pinned line.",
+      "oracle": "Pointerdown on .xterm-scrollbar or .xterm-slider followed by xterm viewport movement records the new pinned viewport, and enforcing current intent restores that dragged line instead of stale top intent.",
+      "commands": [
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/pane-manager/terminal-scroll-intent.test.ts"
+      ],
+      "testFiles": [
+        "src/renderer/src/lib/pane-manager/terminal-scroll-intent.test.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/renderer/src/lib/pane-manager/terminal-scroll-intent.test.ts",
+          "assertions": [
+            "pointer-driven .xterm-scrollbar and .xterm-slider scrolls update terminal scroll intent",
+            "a scrollbar-dragged viewport is restored instead of stale top intent",
+            "terminal body pointer activity is not treated as scrollbar intent"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-07-05",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/pane-manager/terminal-scroll-intent.test.ts",
+          "result": "passed",
+          "durationSeconds": 0.3,
+          "summary": "1 test file(s) passed, 17 tests passed in this worktree."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 10,
+        "scope": "focused renderer unit test"
+      },
+      "flakeHistory": {
+        "status": "unknown",
+        "evidence": "New experimental gate; needs soak history before promotion."
+      },
+      "redGreenEvidence": {
+        "status": "partial",
+        "evidence": "The new scrollbar DOM target assertions fail when only .xterm-viewport pointerdown is recognized. Needs saved CI/intentional-break artifact before blocking promotion."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "Runtime fix is limited to constant-time class/closest checks on pointerdown. It must not add polling, output parsing, PTY listing, hidden-pane wakeups, resize calls, or startup awaits."
+      },
+      "promotionCriteria": [
+        "Collect stable CI soak history for the renderer-unit gate.",
+        "Add stable live Electron automation for the scrollbar drag plus tab-switch repro.",
+        "Attach red/green evidence for stale intent restoring the wrong viewport."
+      ],
+      "knownGaps": [
+        "Manifest command is deterministic renderer-unit coverage, not a live Electron scrollbar drag.",
+        "Live daemon, SSH, WSL, remote-runtime, Linux, and Windows validation is not covered by this gate.",
+        "Future xterm scrollbar DOM class changes are only caught if they break the currently modeled class contract."
+      ],
+      "demotionRule": "Demote or quarantine if the unit gate flakes without a product bug or harness bug filed to the owner."
+    },
+    {
       "id": "startup-upgrade.persisted-session-corpus",
       "title": "Current Orca preserves or recovers old production persisted sessions",
       "maturity": "experimental",

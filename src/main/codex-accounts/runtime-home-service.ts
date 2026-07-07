@@ -40,6 +40,7 @@ import {
   syncSystemCodexResourcesIntoManagedHome
 } from '../codex/codex-home-paths'
 import { startSystemCodexSessionBridgeInBackground } from '../codex/codex-session-bridge'
+import { startWslCodexSessionBridgeInBackground } from '../codex/wsl-codex-session-bridge'
 import {
   prepareSystemConfigForFreshRuntimeMirror,
   syncSystemConfigIntoManagedCodexHome
@@ -134,10 +135,11 @@ export class CodexRuntimeHomeService {
   prepareForCodexLaunch(target?: CodexAccountSelectionTarget): string | null {
     if (target?.runtime === 'wsl') {
       const wslTarget = this.resolveWslDefaultTarget(target)
-      return (
+      const runtimeHomePath =
         this.syncWslRuntimeForCurrentSelection(wslTarget) ??
         this.getWslSystemCodexHomePath(wslTarget)
-      )
+      this.startWslSessionBridgeForLaunch(wslTarget, runtimeHomePath)
+      return runtimeHomePath
     }
     this.syncForCurrentSelection()
     syncSystemCodexResourcesIntoManagedHome()
@@ -146,6 +148,34 @@ export class CodexRuntimeHomeService {
     // setup so starting a fresh Codex TUI never waits on a full tree walk.
     void startSystemCodexSessionBridgeInBackground()
     return this.getRuntimeHomePath()
+  }
+
+  private startWslSessionBridgeForLaunch(
+    target: CodexAccountSelectionTarget,
+    runtimeHomePath: string | null
+  ): void {
+    if (process.platform !== 'win32' || !runtimeHomePath) {
+      return
+    }
+    const runtimeHomeWsl = parseWslUncPath(runtimeHomePath)
+    const distro = target.wslDistro?.trim() || runtimeHomeWsl?.distro || getDefaultWslDistro()
+    if (!distro) {
+      return
+    }
+    const systemCodexHomePath = this.getWslSystemCodexHomePath({
+      runtime: 'wsl',
+      wslDistro: distro
+    })
+    if (!systemCodexHomePath || systemCodexHomePath === runtimeHomePath) {
+      return
+    }
+    // Why: WSL history must be hardlinked inside the distro; host-side links
+    // cannot bridge Windows and WSL filesystems in a resume-visible way.
+    void startWslCodexSessionBridgeInBackground({
+      distro,
+      systemCodexHomePath,
+      managedCodexHomePath: runtimeHomePath
+    })
   }
 
   getHostRuntimeHomePath(): string {

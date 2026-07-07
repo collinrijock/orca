@@ -41,6 +41,10 @@ export type FileWithMtime = {
   path: string
   mtimeMs: number
   modifiedAt: string
+  // Present when discovery statted the file; lets the parse cache detect
+  // unchanged/truncated files without a second stat. Synthetic candidates
+  // (OpenCode SQLite rows, remote files) omit it.
+  sizeBytes?: number
 }
 
 export type SessionFileCandidate = {
@@ -58,6 +62,26 @@ export type SessionFileDiscovery = {
 export type SessionParseResult = {
   session: AiVaultSession | null
   issue: AiVaultScanIssue | null
+}
+
+export type ResumableParseFinalizeOptions = {
+  executionHostId?: ExecutionHostId
+  executionHostPlatform?: NodeJS.Platform | null
+}
+
+// One in-progress parse of an append-only transcript, resumable across scans.
+// The parse cache stores a state per file and feeds it only newly appended
+// lines; `clone` must deep-copy anything `consumeLine` mutates so a failed
+// read or a display-only trailing line can never corrupt the cached fold.
+export type ResumableSessionParseState = {
+  consumeLine(line: string): void
+  clone(): ResumableSessionParseState
+  // Refresh per-scan file metadata (mtime display string) without re-parsing.
+  touchFile(file: FileWithMtime): void
+  finalize(
+    platform: NodeJS.Platform,
+    options?: ResumableParseFinalizeOptions
+  ): Promise<AiVaultSession | null> | AiVaultSession | null
 }
 
 export type SessionAccumulator = {
