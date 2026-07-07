@@ -76,7 +76,12 @@ export function openTerminal(pane: ManagedPaneInternal): void {
   // Why: without run-joining, Arabic/Hebrew output renders as disconnected
   // letters in reversed order (#5262). Registered up front so restored
   // scrollback and reattach replays shape correctly, not just live output.
-  pane.arabicShapingJoinerCleanup = registerArabicShapingJoiner(terminal)
+  // Joining tracks the live WebGL renderer: the DOM fallback misrenders
+  // joined spans (see registerArabicShapingJoiner), so it stays per-cell.
+  pane.arabicShapingJoinerCleanup = registerArabicShapingJoiner(
+    terminal,
+    () => pane.webglAddon != null
+  )
 
   // Why: the OS reads the focused textarea's screen rect at compositionstart to
   // decide where to display the IME candidate window. xterm positions that

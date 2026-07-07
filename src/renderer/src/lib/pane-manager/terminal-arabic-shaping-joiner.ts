@@ -45,6 +45,15 @@ function isRunNeutralCharCode(charCode: number): boolean {
   return charCode === 0xa0
 }
 
+// ZWNJ/ZWJ shape within a word (mandatory in Persian/Kurdish orthography) and
+// RLM asserts RTL context — breaking the run on them would split one word into
+// two joined chunks laid out in swapped visual order. Transparent: allowed
+// inside a run without extending or counting toward it. LRM (U+200E) is strong
+// LTR and intentionally still breaks the run.
+function isRtlRunTransparentCodePoint(codePoint: number): boolean {
+  return codePoint === 0x200c || codePoint === 0x200d || codePoint === 0x200f
+}
+
 /**
  * Character-joiner handler for xterm's registerCharacterJoiner API. Receives
  * one attribute-homogeneous segment of a row and returns [start, end) string
@@ -105,7 +114,7 @@ export function findRtlJoinRanges(text: string): [number, number][] {
       }
       runEnd = i + codeUnitLength
       runRtlCount++
-    } else if (runStart !== -1) {
+    } else if (runStart !== -1 && !isRtlRunTransparentCodePoint(codePoint)) {
       // Non-RTL above the floor (box drawing, CJK, emoji, …) breaks the run
       // so TUI borders and East Asian text keep per-cell rendering.
       closeRun()
@@ -121,9 +130,18 @@ export function findRtlJoinRanges(text: string): [number, number][] {
  *  character joiners, so disposePane() must call this to avoid leaking the
  *  registration (xtermjs/xterm.js#3289). */
 export function registerArabicShapingJoiner(
-  terminal: Pick<Terminal, 'registerCharacterJoiner' | 'deregisterCharacterJoiner'>
+  terminal: Pick<Terminal, 'registerCharacterJoiner' | 'deregisterCharacterJoiner'>,
+  isShapingActive: () => boolean
 ): () => void {
-  const joinerId = terminal.registerCharacterJoiner(findRtlJoinRanges)
+  // Why: the DOM renderer sizes a joined span with one letter-spacing value
+  // that the browser applies after every character, so a joined run whose
+  // shaped width differs from its cell budget blows out the whole row's grid
+  // alignment. Join only while the WebGL renderer is live (checked per render
+  // call, so context-loss/GPU-setting fallbacks revert to per-cell rendering
+  // on their own refresh); DOM-rendered panes keep xterm's unshaped default.
+  const joinerId = terminal.registerCharacterJoiner((text) =>
+    isShapingActive() ? findRtlJoinRanges(text) : []
+  )
   return () => {
     terminal.deregisterCharacterJoiner(joinerId)
   }

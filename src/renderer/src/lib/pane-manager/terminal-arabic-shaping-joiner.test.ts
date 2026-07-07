@@ -119,27 +119,91 @@ describe('findRtlJoinRanges', () => {
     const text = 'שָׁלוֹם עוֹלָם'
     expect(findRtlJoinRanges(text)).toEqual([[0, text.length]])
   })
+
+  // Escapes, not literals: these controls are invisible in source.
+  const ZWNJ = '\u200c'
+  const ZWJ = '\u200d'
+  const RLM = '\u200f'
+  const LRM = '\u200e'
+
+  it('tunnels through ZWNJ inside a Persian word without splitting the run', () => {
+    // می‌خواهم — splitting at the ZWNJ would render the word halves in
+    // swapped visual order.
+    const text = `می${ZWNJ}خواهم`
+    expect(findRtlJoinRanges(text)).toEqual([[0, text.length]])
+  })
+
+  it('tunnels through ZWJ and RLM inside an RTL run', () => {
+    const zwjText = `مر${ZWJ}حب`
+    expect(findRtlJoinRanges(zwjText)).toEqual([[0, zwjText.length]])
+    const rlmText = `سلام${RLM}عليكم`
+    expect(findRtlJoinRanges(rlmText)).toEqual([[0, rlmText.length]])
+  })
+
+  it('excludes a trailing ZWNJ from the joined range', () => {
+    expect(findRtlJoinRanges(`مرحبا${ZWNJ}`)).toEqual([[0, 5]])
+  })
+
+  it('does not let ZWNJ start a run or bridge into LTR text', () => {
+    expect(findRtlJoinRanges(`${ZWNJ}abc`)).toEqual([])
+    expect(findRtlJoinRanges(`مرحبا${ZWNJ}abc`)).toEqual([[0, 5]])
+  })
+
+  it('still breaks the run on LRM (strong LTR)', () => {
+    expect(findRtlJoinRanges(`مرحبا${LRM}بكم`)).toEqual([
+      [0, 5],
+      [6, 9]
+    ])
+  })
 })
 
 describe('registerArabicShapingJoiner', () => {
-  it('registers the range finder and returns a cleanup that deregisters it', () => {
+  function createJoinerHost(): {
+    terminal: Parameters<typeof registerArabicShapingJoiner>[0]
+    getRegistered: () => ((text: string) => [number, number][]) | null
+    getDeregistered: () => number | null
+  } {
     let registered: ((text: string) => [number, number][]) | null = null
     let deregistered: number | null = null
-    const terminal = {
-      registerCharacterJoiner(handler: (text: string) => [number, number][]): number {
-        registered = handler
-        return 7
+    return {
+      terminal: {
+        registerCharacterJoiner(handler: (text: string) => [number, number][]): number {
+          registered = handler
+          return 7
+        },
+        deregisterCharacterJoiner(joinerId: number): void {
+          deregistered = joinerId
+        }
       },
-      deregisterCharacterJoiner(joinerId: number): void {
-        deregistered = joinerId
-      }
+      getRegistered: () => registered,
+      getDeregistered: () => deregistered
     }
-    const cleanup = registerArabicShapingJoiner(terminal)
-    expect(registered).toBe(findRtlJoinRanges)
-    expect(deregistered).toBeNull()
+  }
+
+  it('registers a joining handler and returns a cleanup that deregisters it', () => {
+    const host = createJoinerHost()
+    const cleanup = registerArabicShapingJoiner(host.terminal, () => true)
+    const text = 'مرحبا'
+    expect(host.getRegistered()!(text)).toEqual([[0, text.length]])
+    expect(host.getDeregistered()).toBeNull()
 
     // terminal.dispose() does not deregister joiners, so cleanup must.
     cleanup()
-    expect(deregistered).toBe(7)
+    expect(host.getDeregistered()).toBe(7)
+  })
+
+  it('returns no ranges while shaping is inactive (DOM renderer misrenders joined spans)', () => {
+    const host = createJoinerHost()
+    let webglLive = false
+    registerArabicShapingJoiner(host.terminal, () => webglLive)
+    const handler = host.getRegistered()!
+
+    const inactive = handler('مرحبا')
+    expect(inactive).toEqual([])
+    // Fresh array each call — xterm mutates the handler's result in place.
+    expect(handler('مرحبا')).not.toBe(inactive)
+
+    webglLive = true
+    expect(handler('مرحبا')).toEqual([[0, 5]])
   })
 })
