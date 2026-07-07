@@ -65,6 +65,12 @@ import { parseOsc7 } from './parse-osc7'
 import { resolveTerminalJisYenInput } from './terminal-jis-yen-input'
 import { installTerminalImeCompositionTracker } from './terminal-ime-composition-tracker'
 import {
+  createTerminalImePendingCandidateKeyRelease,
+  shouldApplyTerminalImePendingCandidateKeyRelease,
+  shouldClearTerminalImePendingCandidateKeyRelease,
+  type TerminalImePendingCandidateKeyRelease
+} from './terminal-ime-candidate-key-release-guard'
+import {
   DISABLED_MAC_NATIVE_TEXT_INPUT_SOURCE_FEATURES,
   getMacNativeTextInputSourceTracker
 } from './terminal-ime-input-source'
@@ -72,6 +78,7 @@ import { installTerminalImeNativeTextForwarder } from './terminal-ime-native-tex
 import {
   shouldBypassXtermKeyboardEvent,
   shouldHandleTerminalInterruptKeyboardEvent,
+  shouldPreventDefaultTerminalImeCandidateKey,
   shouldSuppressTerminalImeKeyboardEvent,
   shouldSuppressTerminalInterruptKeyup,
   shouldSuppressTerminalModifierKeyboardEvent,
@@ -842,7 +849,10 @@ export function useTerminalPaneLifecycle({
         // encoder runs, letting the browser and Electron paths fire normally.
         // See xterm-bypass-policy.ts for the rule derivation.
         let pendingTerminalInterruptKeyup = false
+        let pendingTerminalImeCandidateKeyRelease: TerminalImePendingCandidateKeyRelease | null =
+          null
         const isMac = navigator.userAgent.includes('Mac')
+        const isLinux = !isMac && navigator.userAgent.includes('Linux')
         const macNativeTextInputSourceTracker = isMac ? getMacNativeTextInputSourceTracker() : null
         const imeCompositionTracker = installTerminalImeCompositionTracker(pane.terminal.element)
         imeCompositionDisposablesRef.current.set(pane.id, imeCompositionTracker)
@@ -864,13 +874,47 @@ export function useTerminalPaneLifecycle({
             }
         imeNativeTextForwarderDisposablesRef.current.set(pane.id, imeNativeTextForwarder)
         pane.terminal.attachCustomKeyEventHandler((e) => {
-          if (
-            shouldSuppressTerminalImeKeyboardEvent(e, {
-              compositionActive: imeCompositionTracker.isActive(),
-              isMac
-            })
-          ) {
+          const now = Date.now()
+          const pendingCandidateReleaseGuardActive = shouldApplyTerminalImePendingCandidateKeyRelease(
+            e,
+            pendingTerminalImeCandidateKeyRelease,
+            now
+          )
+          const imeKeyboardOptions = {
+            compositionActive: imeCompositionTracker.isActive(),
+            candidateKeyGuardActive:
+              imeCompositionTracker.isCandidateKeyGuardActive() ||
+              pendingCandidateReleaseGuardActive,
+            isMac,
+            isLinux
+          }
+          if (shouldSuppressTerminalImeKeyboardEvent(e, imeKeyboardOptions)) {
+            if (shouldPreventDefaultTerminalImeCandidateKey(e, imeKeyboardOptions)) {
+              // Why: without preventDefault the suppressed candidate keydown
+              // still fires a keypress and mutates the helper textarea.
+              e.preventDefault()
+              pendingTerminalImeCandidateKeyRelease = createTerminalImePendingCandidateKeyRelease(
+                e,
+                now
+              )
+            }
+            if (
+              shouldClearTerminalImePendingCandidateKeyRelease(
+                e,
+                pendingTerminalImeCandidateKeyRelease
+              )
+            ) {
+              pendingTerminalImeCandidateKeyRelease = null
+            }
             return false
+          }
+          if (
+            shouldClearTerminalImePendingCandidateKeyRelease(
+              e,
+              pendingTerminalImeCandidateKeyRelease
+            )
+          ) {
+            pendingTerminalImeCandidateKeyRelease = null
           }
           if (pendingTerminalInterruptKeyup && shouldSuppressTerminalInterruptKeyup(e)) {
             pendingTerminalInterruptKeyup = false

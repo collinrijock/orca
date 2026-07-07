@@ -320,6 +320,47 @@ async function dispatchImeProcessKey(session: CDPSession, code: string): Promise
   })
 }
 
+async function dispatchCandidateSelectionKey(
+  session: CDPSession,
+  candidate: { key: string; code: string; keyCode: number },
+  commitBetweenKeys?: () => Promise<void>
+): Promise<void> {
+  // Why: #7543 proves Sogou can forward candidate selectors as plain key
+  // events, not Process/229. `text` is set so keyDown produces the natural
+  // keypress — rawKeyDown generates none and would prove nothing about leaks.
+  await session.send('Input.dispatchKeyEvent', {
+    type: 'keyDown',
+    key: candidate.key,
+    code: candidate.code,
+    windowsVirtualKeyCode: candidate.keyCode,
+    nativeVirtualKeyCode: candidate.keyCode,
+    text: candidate.key,
+    unmodifiedText: candidate.key
+  })
+  // Why: committing between keyDown and keyUp keeps xterm's _keyDownSeen set,
+  // matching the trace shape where an insertText commit is actually at risk.
+  await commitBetweenKeys?.()
+  await session.send('Input.dispatchKeyEvent', {
+    type: 'keyUp',
+    key: candidate.key,
+    code: candidate.code,
+    windowsVirtualKeyCode: candidate.keyCode,
+    nativeVirtualKeyCode: candidate.keyCode
+  })
+}
+
+async function dispatchSogouEmptyCompositionUpdate(page: Page): Promise<void> {
+  // Why: Sogou/fcitx emits empty compositionupdate data while its candidate
+  // popup is still open (#6765); Orca's tracker must not flip inactive on it.
+  await page.evaluate(() => {
+    const active = document.activeElement
+    if (!(active instanceof HTMLTextAreaElement)) {
+      throw new Error('xterm helper textarea is not focused')
+    }
+    active.dispatchEvent(new CompositionEvent('compositionupdate', { data: '', bubbles: true }))
+  })
+}
+
 async function composeAndCommitChineseText(
   session: CDPSession,
   page: Page,
@@ -467,6 +508,79 @@ test.describe('Chinese IME terminal chat input repro', () => {
       ).toBe(2)
     } finally {
       await attachImeEvidence(orcaPage, testInfo, 'final-ime-evidence').catch(() => undefined)
+      await session.detach().catch(() => undefined)
+      await sendToTerminal(orcaPage, ptyId, '\x03').catch(() => undefined)
+      rmSync(scriptPath, { force: true })
+    }
+  })
+
+  test('keeps Sogou-style candidate selection keys out of the PTY while committing Chinese text', async ({
+    orcaPage,
+    testRepoPath
+  }, testInfo) => {
+    await waitForSessionReady(orcaPage)
+    await waitForActiveWorktree(orcaPage)
+    await ensureTerminalVisible(orcaPage)
+    await waitForActiveTerminalManager(orcaPage, 30_000)
+
+    const ptyId = await waitForActivePanePtyId(orcaPage)
+    const runId = randomUUID()
+    const scriptPath = path.join(testRepoPath, `.orca-sogou-ime-harness-${runId}.cjs`)
+    writeFileSync(scriptPath, terminalImeHarnessScript(runId))
+    const session = await orcaPage.context().newCDPSession(orcaPage)
+
+    try {
+      await sendToTerminal(orcaPage, ptyId, `node ${JSON.stringify(scriptPath)}\r`)
+      await waitForTerminalOutput(orcaPage, `IME_HARNESS_READY_${runId}`, 10_000, 20_000)
+      await focusActiveTerminalInput(orcaPage)
+      await installImeEventProbe(orcaPage)
+
+      // Space selects the first candidate. Sogou keeps emitting empty
+      // compositionupdate frames while the popup is open, and the plain Space
+      // press arrives around the commit rather than as a Process/229 key.
+      await setImeComposition(session, 'n')
+      await orcaPage.waitForTimeout(80)
+      await setImeComposition(session, 'ni')
+      await orcaPage.waitForTimeout(80)
+      await dispatchSogouEmptyCompositionUpdate(orcaPage)
+      await dispatchCandidateSelectionKey(session, { key: ' ', code: 'Space', keyCode: 32 }, () =>
+        commitImeText(session, '你')
+      )
+      await waitForLivePrompt(orcaPage, '你')
+      await attachImeEvidence(orcaPage, testInfo, 'sogou-after-space-commit')
+      await orcaPage.keyboard.press('Enter')
+      await expect
+        .poll(async () => (await readPromptState(orcaPage))?.submitted.at(-1) ?? null, {
+          timeout: 5_000,
+          message: 'space-selected candidate did not submit the committed Chinese character'
+        })
+        .toBe('你')
+
+      // Digit selects a non-first candidate for a word/phrase commit — the
+      // #7543 shape where only the number used to reach the TUI.
+      await setImeComposition(session, 'nihao')
+      await orcaPage.waitForTimeout(80)
+      await dispatchSogouEmptyCompositionUpdate(orcaPage)
+      await dispatchCandidateSelectionKey(session, { key: '2', code: 'Digit2', keyCode: 50 }, () =>
+        commitImeText(session, '你好')
+      )
+      await waitForLivePrompt(orcaPage, '你好')
+      await attachImeEvidence(orcaPage, testInfo, 'sogou-after-digit-commit')
+      await orcaPage.keyboard.press('Enter')
+      await expect
+        .poll(async () => (await readPromptState(orcaPage))?.submitted.at(-1) ?? null, {
+          timeout: 5_000,
+          message: 'digit-selected candidate did not submit the committed Chinese phrase'
+        })
+        .toBe('你好')
+
+      const promptState = await readPromptState(orcaPage)
+      expect(
+        promptState?.submitted,
+        'candidate Space/digit selectors and pinyin preedit must not leak into the PTY'
+      ).toEqual(['你', '你好'])
+    } finally {
+      await attachImeEvidence(orcaPage, testInfo, 'sogou-final-ime-evidence').catch(() => undefined)
       await session.detach().catch(() => undefined)
       await sendToTerminal(orcaPage, ptyId, '\x03').catch(() => undefined)
       rmSync(scriptPath, { force: true })

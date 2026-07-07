@@ -164,8 +164,18 @@ describe('shouldBypassXtermKeyboardEvent — macOS', () => {
 })
 
 describe('shouldSuppressTerminalImeKeyboardEvent — macOS', () => {
-  const idle = { isMac: true, compositionActive: false }
-  const composing = { isMac: true, compositionActive: true }
+  const idle = {
+    isMac: true,
+    isLinux: false,
+    compositionActive: false,
+    candidateKeyGuardActive: false
+  }
+  const composing = {
+    isMac: true,
+    isLinux: false,
+    compositionActive: true,
+    candidateKeyGuardActive: true
+  }
 
   it('suppresses keyboard events while Chromium reports active IME composition', () => {
     expect(
