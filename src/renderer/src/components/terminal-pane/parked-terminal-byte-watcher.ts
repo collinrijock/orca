@@ -29,6 +29,7 @@ import {
   isAgentTaskCompleteTrackingEnabledFromState
 } from './agent-task-complete-policy'
 import { startParkedTerminalMode2031Responder } from './parked-terminal-mode2031-responder'
+import { clearPreHandlerPtyData } from './pty-pre-handler-buffer'
 import { subscribeToPtyData } from './pty-data-sidecar-subscriptions'
 import { createPtyOutputProcessor } from './pty-transport'
 import { isRendererHiddenPtyDeliveryGateEnabled } from './terminal-hidden-delivery-gate'
@@ -324,6 +325,14 @@ export function startParkedTerminalByteWatcher(
     stopMode2031Responder?.()
     unsubscribeByteParsers?.()
     unregisterFactConsumer?.()
+    // Why: while parked (no primary handler) the dispatcher buffered every
+    // chunk this watcher already consumed, and the reveal's snapshot restore
+    // repaints that content anyway — draining the backlog through the live
+    // processor would double-fire bell/completion side effects and waste a
+    // large xterm write the snapshot immediately wipes. Bytes arriving after
+    // this dispose still buffer and drain normally (the watcher never saw
+    // them, so the live path correctly owns their side effects).
+    clearPreHandlerPtyData(ptyId)
     // Why: cancels the deferred side-effect drain, stale-title timer, and
     // tracker/bell-detector state so the watcher cannot fire after the
     // revealed pane's live parsers take over.

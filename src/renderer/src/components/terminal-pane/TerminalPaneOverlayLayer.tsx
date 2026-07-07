@@ -240,8 +240,8 @@ const TerminalOverlaySlot = memo(function TerminalOverlaySlot({
           return
         }
         // Why: a parked multi-leaf tab has no PaneManager to promote split
-        // siblings, so closing the tab here would kill them; the reveal
-        // remount handles dead PTYs per leaf instead.
+        // siblings, so closing the tab here would kill them; on reveal the
+        // dead leaf respawns as a fresh shell (app-restart restore semantics).
         if (shouldDeferParkedPtyExitTabClose(terminalTabId, ptyId)) {
           return
         }

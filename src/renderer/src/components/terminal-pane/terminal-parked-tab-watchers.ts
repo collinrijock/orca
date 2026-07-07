@@ -200,10 +200,12 @@ function startParkedTabWatchers(worktreeId: string, tab: ParkableTerminalTabMode
  * Hosts call this from their onPtyExit handlers before closing the tab.
  * Returns true when the close must be deferred: a parked tab has no
  * PaneManager to promote split siblings, so the live exit path degenerates to
- * "close the whole tab" — which would kill the surviving sibling panes. The
- * reveal remount handles dead PTYs per leaf instead. Single-leaf parked tabs
- * return false so exit→closeTab parity is preserved. Also clears the dead
- * leaf's runtime-title slot so a stale title cannot pin worktree status.
+ * "close the whole tab" — which would kill the surviving sibling panes.
+ * On reveal the dead leaf's stale binding fails reattach and comes back as a
+ * fresh shell (app-restart restore semantics), unlike a mounted pane whose
+ * exit closes the leaf. Single-leaf parked tabs return false so exit→closeTab
+ * parity is preserved. Also clears the dead leaf's runtime-title slot so a
+ * stale title cannot pin worktree status.
  */
 export function shouldDeferParkedPtyExitTabClose(tabId: string, ptyId: string): boolean {
   const entry = parkedWatchersByTabId.get(tabId)

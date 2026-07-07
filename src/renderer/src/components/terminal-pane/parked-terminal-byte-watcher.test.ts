@@ -422,6 +422,36 @@ describe('startParkedTerminalByteWatcher', () => {
     expect(mockStoreState.clearRuntimePaneTitle).not.toHaveBeenCalled()
   })
 
+  it('buffers parked bytes in the pre-handler buffer while active (harness parity)', async () => {
+    // Why: pins the dispatcher behavior the dispose-time clear depends on —
+    // with no primary handler, parked chunks land in the pre-handler buffer.
+    const { dispose } = await startWatcher()
+    const { drainPreHandlerPtyData } = await import('./pty-pre-handler-buffer')
+
+    emit(`output while parked${IDLE_TITLE_OSC}`)
+
+    const drained: string[] = []
+    drainPreHandlerPtyData(PTY_ID, (data) => drained.push(data))
+    expect(drained).toEqual([`output while parked${IDLE_TITLE_OSC}`])
+    dispose()
+  })
+
+  it('clears the buffered parked backlog on dispose so reveal cannot replay it', async () => {
+    // Why: the watcher already fired side effects for these bytes and the
+    // reveal's snapshot restore repaints their content; if dispose left them
+    // buffered, the remounted pane's drain would double-fire bell/completion.
+    const { dispose } = await startWatcher()
+    const { drainPreHandlerPtyData } = await import('./pty-pre-handler-buffer')
+
+    emit(`output while parked${IDLE_TITLE_OSC}`)
+    flushSideEffects()
+    dispose()
+
+    const drained: string[] = []
+    drainPreHandlerPtyData(PTY_ID, (data) => drained.push(data))
+    expect(drained).toEqual([])
+  })
+
   it('shutdown dispose cancels the armed completion timer and silences the final flush', async () => {
     const { dispose } = await startWatcher()
 
