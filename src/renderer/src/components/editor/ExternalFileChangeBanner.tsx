@@ -46,9 +46,11 @@ export function reloadTabContentFromDisk(
           const liveFile = current.openFiles.find((openFile) => openFile.id === file.id)
           // Why: the tab may have closed while the toast was up; restoring a
           // draft for a dead fileId would strand an orphan buffer. And if the
-          // user already typed or saved after the reload, that newer work
-          // wins — undoing over it would be a second silent discard.
-          if (!liveFile || liveFile.isDirty || current.editorDrafts[file.id] !== undefined) {
+          // user already typed after the reload (dirty), that newer work wins
+          // — undoing over it would be a second silent discard. isDirty is the
+          // signal: the editor content-sync repopulates editorDrafts with the
+          // reloaded content itself, so draft existence proves nothing.
+          if (!liveFile || liveFile.isDirty) {
             return
           }
           current.setEditorDraft(file.id, discardedDraft)
