@@ -1284,7 +1284,7 @@
       "oracle": "The current renderer-unit slice asserts native text commits route to the intended PTY once, composition/preedit bookkeeping does not leak premature text, input-source classification handles synthetic/native paths, paste/runtime forwarding avoids duplicate terminal payloads for covered fixtures, and Linux/Sogou candidate Space/digit selectors do not leak keydown/keypress/keyup while ordinary post-IME typing remains available. The Electron/CDP live-PTY repro verifies Sogou-style Space and digit candidate selectors submit only the committed Chinese text. Real IME paths and the full CJK/Vietnamese/Arabic/JIS-yen matrix run in follow-up platform soak where automation is possible.",
       "commands": [
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/terminal-ime-native-text-forwarder.test.ts src/renderer/src/components/terminal-pane/terminal-ime-input-source.test.ts src/renderer/src/components/terminal-pane/terminal-paste-runtime.test.ts src/renderer/src/components/terminal-pane/terminal-ime-composition-tracker.test.ts src/renderer/src/components/terminal-pane/terminal-ime-candidate-key-release-guard.test.ts src/renderer/src/components/terminal-pane/xterm-bypass-policy-non-mac.test.ts src/renderer/src/components/terminal-pane/xterm-bypass-policy.test.ts",
-        "pnpm run test:e2e -- tests/e2e/chinese-ime-chat-input-repro.spec.ts --grep \"keeps Sogou-style candidate selection keys\""
+        "pnpm run test:e2e -- tests/e2e/chinese-ime-chat-input-repro.spec.ts"
       ],
       "testFiles": [
         "src/renderer/src/components/terminal-pane/terminal-ime-native-text-forwarder.test.ts",
@@ -1354,15 +1354,6 @@
       ],
       "evidenceRuns": [
         {
-          "date": "2026-07-03",
-          "runner": "local",
-          "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/terminal-ime-native-text-forwarder.test.ts src/renderer/src/components/terminal-pane/terminal-ime-input-source.test.ts src/renderer/src/components/terminal-pane/terminal-paste-runtime.test.ts",
-          "result": "passed",
-          "durationSeconds": 0.9,
-          "summary": "3 test file(s) passed, 63 tests passed on main@1282f5c2d in a clean checkout."
-        },
-        {
           "date": "2026-07-07",
           "runner": "local",
           "platform": "macos",
@@ -1375,7 +1366,7 @@
           "date": "2026-07-07",
           "runner": "local",
           "platform": "macos",
-          "command": "pnpm run test:e2e -- tests/e2e/chinese-ime-chat-input-repro.spec.ts --grep \"keeps Sogou-style candidate selection keys\"",
+          "command": "pnpm run test:e2e -- tests/e2e/chinese-ime-chat-input-repro.spec.ts",
           "result": "passed",
           "durationSeconds": 42.5,
           "summary": "Electron/CDP IME repro passed: Sogou candidate selection test and existing Chinese IME harness passed; real Codex IME test was skipped behind ORCA_E2E_REAL_CODEX_IME."
