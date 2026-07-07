@@ -13,7 +13,6 @@ const RECENT_RUNTIME_COMPATIBILITY_FAILURE_TTL_MS = 60_000
 type RuntimeCompatibilityCacheEntry = {
   check: Promise<void>
   failedAt: number | null
-  reuseFailure: boolean
 }
 
 const runtimeCompatibilityChecks = new Map<string, RuntimeCompatibilityCacheEntry>()
@@ -105,8 +104,7 @@ async function ensureRuntimeEnvironmentCompatible(
   }
   const entry: RuntimeCompatibilityCacheEntry = {
     check: Promise.resolve(),
-    failedAt: null,
-    reuseFailure: options.reuseRecentCompatibilityFailure === true
+    failedAt: null
   }
   const check = (async () => {
     const response = await window.api.runtimeEnvironments.call({
@@ -148,10 +146,7 @@ function getCachedRuntimeCompatibilityCheck(
     runtimeCompatibilityChecks.delete(environmentId)
     return null
   }
-  if (
-    cached.failedAt !== null &&
-    (!cached.reuseFailure || options.reuseRecentCompatibilityFailure !== true)
-  ) {
+  if (cached.failedAt !== null && options.reuseRecentCompatibilityFailure !== true) {
     return null
   }
   runtimeCompatibilityChecks.delete(environmentId)
@@ -192,8 +187,7 @@ export function markRuntimeEnvironmentCompatible(environmentId: string): void {
   }
   rememberRuntimeEnvironmentCompatibility(trimmed, {
     check: Promise.resolve(),
-    failedAt: null,
-    reuseFailure: false
+    failedAt: null
   })
 }
 

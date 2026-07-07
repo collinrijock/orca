@@ -132,6 +132,7 @@ function createTestStore() {
         openModal: vi.fn(),
         shutdownWorktreeTerminals: vi.fn().mockResolvedValue(undefined),
         shutdownWorktreeBrowsers: vi.fn().mockResolvedValue(undefined),
+        ptyIdsByTabId: {},
         tabsByWorktree: {},
         tabBarOrderByWorktree: {},
         pendingReconnectTabByWorktree: {},
@@ -5809,6 +5810,48 @@ describe('fetchAllWorktrees hydration-time purge (design §4.4)', () => {
     expect(maxActiveScans).toBeLessThanOrEqual(WORKTREE_REFRESH_CONCURRENCY)
     expect(mockApi.worktrees.list).toHaveBeenCalledTimes(repos.length)
     expect(store.getState().hasHydratedWorktreePurge).toBe(true)
+  })
+
+  it('reuses an offline runtime preflight across hydrated all-worktree refresh repos', async () => {
+    const store = createTestStore()
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const repos = Array.from({ length: WORKTREE_REFRESH_CONCURRENCY + 2 }, (_, index) => ({
+      id: `runtime-repo-${index}`,
+      path: `/remote/repos/${index}`,
+      displayName: `runtime-repo-${index}`,
+      badgeColor: '#000',
+      addedAt: 0,
+      executionHostId: 'runtime:env-offline'
+    }))
+
+    runtimeEnvironmentTransportCall.mockImplementation((args: RuntimeEnvironmentCallRequest) => {
+      if (args.method === 'status.get') {
+        return Promise.resolve({
+          id: 'status',
+          ok: false,
+          error: { code: 'runtime_unavailable', message: 'offline' },
+          _meta: { runtimeId: 'runtime-offline' }
+        })
+      }
+      return runtimeEnvironmentCall(args)
+    })
+
+    try {
+      store.setState({
+        hasHydratedWorktreePurge: true,
+        repos
+      } as unknown as Partial<AppState>)
+
+      await store.getState().fetchAllWorktrees()
+    } finally {
+      consoleError.mockRestore()
+    }
+
+    expect(runtimeEnvironmentTransportCall.mock.calls.map((call) => call[0].method)).toEqual([
+      'status.get'
+    ])
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+    expect(mockApi.worktrees.listDetected).not.toHaveBeenCalled()
   })
 
   it('preserves floating workspace state while purging a real stale worktree', async () => {

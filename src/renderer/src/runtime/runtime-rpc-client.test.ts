@@ -263,6 +263,25 @@ describe('runtime RPC client routing', () => {
     ])
   })
 
+  it('lets background compatibility checks reuse a recent foreground failure', async () => {
+    runtimeEnvironmentCall.mockResolvedValue({
+      id: 'status',
+      ok: false,
+      error: { code: 'runtime_unavailable', message: 'offline' },
+      _meta: { runtimeId: 'remote-runtime' }
+    })
+    const target = { kind: 'environment', environmentId: 'env-offline' } as const
+
+    await expect(callRuntimeRpc(target, 'git.status')).rejects.toThrow('offline')
+    await expect(
+      callRuntimeRpc(target, 'repo.list', undefined, {
+        reuseRecentCompatibilityFailure: true
+      })
+    ).rejects.toThrow('offline')
+
+    expect(runtimeEnvironmentCall.mock.calls.map((call) => call[0].method)).toEqual(['status.get'])
+  })
+
   it('checks advertised runtime capabilities after protocol compatibility', async () => {
     runtimeEnvironmentCall.mockResolvedValue({
       id: 'status',
