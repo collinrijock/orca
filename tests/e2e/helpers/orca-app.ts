@@ -306,18 +306,22 @@ export const test = base.extend<OrcaTestFixtures, OrcaWorkerFixtures>({
       )
       .toBe(true)
 
-    // Wait for the repo to appear and fetch its worktrees
-    await page.evaluate(async () => {
-      const store = window.__store
-      if (!store) {
-        return
-      }
+    // Wait for the repo to appear and fetch its worktrees. Best-effort: the
+    // renderer can re-navigate during hydration and destroy this evaluate's
+    // execution context; the authoritative poll below recovers.
+    await page
+      .evaluate(async () => {
+        const store = window.__store
+        if (!store) {
+          return
+        }
 
-      const repos = store.getState().repos
-      for (const repo of repos) {
-        await store.getState().fetchWorktrees(repo.id)
-      }
-    })
+        const repos = store.getState().repos
+        for (const repo of repos) {
+          await store.getState().fetchWorktrees(repo.id)
+        }
+      })
+      .catch(() => false)
 
     // Why: parallel specs mutate real git worktrees in the shared fixture repo.
     // A first scan can briefly return no rows while git holds a worktree lock,

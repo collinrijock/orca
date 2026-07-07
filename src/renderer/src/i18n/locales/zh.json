@@ -5144,6 +5144,11 @@
             "defaultViewLabel": "默认原生聊天视图",
             "defaultViewTerminal": "终端聊天",
             "defaultViewNative": "原生聊天"
+          },
+          "terminalParking": {
+            "title": "Park hidden terminals",
+            "copy": "For people running many heavy agent sessions at once: reclaims renderer memory by unmounting terminal panes that have been hidden for a while; a lightweight watcher keeps bell, title, and agent-completion notifications alive, and panes restore when you reopen the worktree. Excludes SSH and remote terminals.",
+            "toggleLabel": "Toggle hidden terminal parking"
           }
         },
         "FloatingWorkspacePane": {
@@ -7296,6 +7301,10 @@
             "nativeChat": {
               "title": "原生聊天",
               "description": "预览 Claude 和 Codex 终端会话的桌面聊天界面。"
+            },
+            "terminalParking": {
+              "title": "Park hidden terminals",
+              "description": "Free renderer memory by unmounting terminal panes hidden for a while; they restore when you reopen the worktree."
             }
           }
         },

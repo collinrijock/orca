@@ -5159,6 +5159,11 @@
             "defaultViewLabel": "Default native chat view",
             "defaultViewTerminal": "Terminal chat",
             "defaultViewNative": "Native chat"
+          },
+          "terminalParking": {
+            "title": "Park hidden terminals",
+            "copy": "For people running many heavy agent sessions at once: reclaims renderer memory by unmounting terminal panes that have been hidden for a while; a lightweight watcher keeps bell, title, and agent-completion notifications alive, and panes restore when you reopen the worktree. Excludes SSH and remote terminals.",
+            "toggleLabel": "Toggle hidden terminal parking"
           }
         },
         "FloatingWorkspacePane": {
@@ -7348,6 +7353,10 @@
             "nativeChat": {
               "title": "Native chat",
               "description": "Preview the desktop chat surface for Claude and Codex terminal sessions."
+            },
+            "terminalParking": {
+              "title": "Park hidden terminals",
+              "description": "Free renderer memory by unmounting terminal panes hidden for a while; they restore when you reopen the worktree."
             }
           }
         },

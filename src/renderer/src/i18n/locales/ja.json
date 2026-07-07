@@ -5144,6 +5144,11 @@
             "defaultViewLabel": "デフォルトのネイティブ チャット ビュー",
             "defaultViewTerminal": "Terminal チャット",
             "defaultViewNative": "ネイティブチャット"
+          },
+          "terminalParking": {
+            "title": "Park hidden terminals",
+            "copy": "For people running many heavy agent sessions at once: reclaims renderer memory by unmounting terminal panes that have been hidden for a while; a lightweight watcher keeps bell, title, and agent-completion notifications alive, and panes restore when you reopen the worktree. Excludes SSH and remote terminals.",
+            "toggleLabel": "Toggle hidden terminal parking"
           }
         },
         "FloatingWorkspacePane": {
@@ -7333,6 +7338,10 @@
             "nativeChat": {
               "title": "ネイティブチャット",
               "description": "Claude と Codex の terminal セッションのデスクトップ チャット サーフェスをプレビューします。"
+            },
+            "terminalParking": {
+              "title": "Park hidden terminals",
+              "description": "Free renderer memory by unmounting terminal panes hidden for a while; they restore when you reopen the worktree."
             }
           }
         },
