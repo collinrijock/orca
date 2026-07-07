@@ -81,15 +81,35 @@ async function main(): Promise<void> {
   })
 
   let daemon: DaemonHandle | null = null
+  let shuttingDown = false
+  // Bound the wait so a wedged native shutdown can't leave the daemon running
+  // forever on SIGTERM/SIGINT (it would then survive a real quit, not just updates).
+  const SHUTDOWN_TIMEOUT_MS = 5000
 
   const shutdown = async (reason: string): Promise<void> => {
-    daemonLog.log('shutdown', { reason })
-    if (daemon) {
-      await daemon.shutdown()
-      daemon = null
+    // SIGTERM and SIGINT can both fire; guard against a double daemon.shutdown().
+    if (shuttingDown) {
+      return
     }
-    daemonLog.close()
-    process.exit(0)
+    shuttingDown = true
+    daemonLog.log('shutdown', { reason })
+    try {
+      if (daemon) {
+        await Promise.race([
+          daemon.shutdown(),
+          new Promise((_, reject) =>
+            setTimeout(() => reject(new Error('shutdown timeout')), SHUTDOWN_TIMEOUT_MS)
+          )
+        ])
+        daemon = null
+      }
+    } catch (err) {
+      // Never let a rejected shutdown() escape as an unhandled rejection and skip exit.
+      daemonLog.log('shutdown-error', { message: (err as Error)?.message })
+    } finally {
+      daemonLog.close()
+      process.exit(0)
+    }
   }
 
   process.on('SIGTERM', () => void shutdown('SIGTERM'))

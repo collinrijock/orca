@@ -133,13 +133,21 @@ function collectDaemonHostSources(): DaemonHostSources | null {
   }
 }
 
-// node-pty ships debug symbols (.pdb) and prebuilds for other CPU arches; the
-// run-as-node daemon loads neither (verified against the live daemon's loaded
-// module list), so they are filtered out of the copy — the bulk of node-pty's
-// on-disk size — leaving only the arch-native binaries the host actually loads.
+// node-pty ships debug symbols (.pdb) and a win32 prebuild dir per CPU arch; the
+// run-as-node daemon loads neither the symbols nor any non-host-arch prebuild
+// (verified against the live daemon's loaded module list), so they are filtered
+// out of the copy — the bulk of node-pty's on-disk size. Keyed on the host arch
+// rather than dropping arm64 outright so a future Windows-arm64 build keeps the
+// `win32-arm64` prebuild it actually needs and prunes `win32-x64` instead.
+const HOST_WIN_PREBUILD_DIR = `win32-${process.arch}`.toLowerCase()
 function isRuntimeNodePtyPath(sourcePath: string): boolean {
   const p = sourcePath.toLowerCase()
-  return !p.endsWith('.pdb') && !p.includes('win32-arm64')
+  if (p.endsWith('.pdb')) {
+    return false
+  }
+  // Keep only the host arch's win32 prebuild; drop any other win32-<arch> dir.
+  const prebuild = p.match(/prebuilds[\\/](win32-[^\\/]+)/)
+  return !prebuild || prebuild[1] === HOST_WIN_PREBUILD_DIR
 }
 
 /**

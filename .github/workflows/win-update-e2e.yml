@@ -75,6 +75,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+        with:
+          # This job only reads the repo and downloads a release; it never pushes.
+          persist-credentials: false
 
       - name: Setup Node.js
         uses: actions/setup-node@v6

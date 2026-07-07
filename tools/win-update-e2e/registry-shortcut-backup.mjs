@@ -168,6 +168,7 @@ export function restoreInstallState(manifest) {
   const result = {
     imported: [],
     deleted: [],
+    failures: [],
     shortcutsRestored: [],
     shortcutsDeleted: [],
     verified: false
@@ -177,27 +178,39 @@ export function restoreInstallState(manifest) {
   if (manifest.uninstall) {
     if (regImport(manifest.uninstall.regFile)) {
       result.imported.push(manifest.uninstall.path)
+    } else {
+      result.failures.push(`Failed to import ${manifest.uninstall.regFile}`)
     }
   } else if (current.uninstallKey) {
     if (regDelete(current.uninstallKey)) {
       result.deleted.push(current.uninstallKey)
+    } else {
+      result.failures.push(`Failed to delete ${current.uninstallKey}`)
     }
   }
 
   if (manifest.app) {
     if (regImport(manifest.app.regFile)) {
       result.imported.push(manifest.app.path)
+    } else {
+      result.failures.push(`Failed to import ${manifest.app.regFile}`)
     }
   } else if (current.appKey) {
     if (regDelete(current.appKey)) {
       result.deleted.push(current.appKey)
+    } else {
+      result.failures.push(`Failed to delete ${current.appKey}`)
     }
   }
 
   restoreShortcuts(manifest, result)
 
   const after = discoverInstallRegistryState()
-  result.verified = normLoc(manifest.installLocation) === normLoc(after.installLocation)
+  // A silently-failed import/delete can leave stale keys while InstallLocation
+  // still matches, so restore isn't "verified" unless every op also succeeded.
+  result.verified =
+    result.failures.length === 0 &&
+    normLoc(manifest.installLocation) === normLoc(after.installLocation)
   if (!result.verified) {
     printMismatchWarning(manifest, manifest.installLocation, after.installLocation)
   }

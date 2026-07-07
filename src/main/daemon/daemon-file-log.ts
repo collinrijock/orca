@@ -70,6 +70,12 @@ export function createDaemonFileLog(
   // file. Any failure disables logging rather than risking a partial-rotation
   // loop that keeps throwing on every subsequent line.
   function rotate(): void {
+    // With no rotated slots there is nothing to cascade; return without the
+    // `currentBytes = 0` reset below, which would otherwise falsely report the
+    // still-growing active file as empty and defeat the overflow check forever.
+    if (maxRotatedFiles < 1) {
+      return
+    }
     try {
       for (let i = maxRotatedFiles; i >= 1; i--) {
         const src = i === 1 ? filePath : `${filePath}.${i - 1}`

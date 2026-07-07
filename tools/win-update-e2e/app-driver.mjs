@@ -256,7 +256,9 @@ export async function focusActiveTerminal(page) {
   }
   const surface = page.locator(TERMINAL_SURFACE_VISIBLE).first()
   await surface.click({ position: { x: 24, y: 24 }, timeout: 15_000 }).catch(() => {})
-  const input = page.locator(XTERM_INPUT).last()
+  // Scope the helper textarea to the visible surface so focus can't land on a
+  // hidden duplicate pane's textarea (which would silently swallow keystrokes).
+  const input = surface.locator(XTERM_INPUT).last()
   await input.focus().catch(() => {})
   return input
 }

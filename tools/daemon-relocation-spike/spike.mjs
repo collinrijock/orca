@@ -227,6 +227,9 @@ async function runLaunch(opts) {
     console.log('pty echo diagnostics:')
     printEchoDiagnostics(echo.diagnostics)
   } catch (err) {
+    // Recover the handle from a pre-ready rejection so `finally` can stop a
+    // daemon that started but never signaled ready.
+    child = child ?? err?.child ?? null
     report.error = err instanceof Error ? err.message : String(err)
     console.error(`\nFAILURE: ${report.error}`)
     if (err && err.diagnostics) {

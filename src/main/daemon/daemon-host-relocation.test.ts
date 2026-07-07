@@ -66,11 +66,18 @@ function buildInstallFixture(root: string): void {
   writeFileSync(join(nativeDir, 'conpty.pdb'), 'debug-symbols')
   mkdirSync(join(nativeDir, 'conpty'), { recursive: true })
   writeFileSync(join(nativeDir, 'conpty', 'conpty.dll'), 'conpty-dll')
-  // Other-arch prebuild the x64 host never loads — must be filtered from the copy.
-  const arm64Dir = join(root, 'resources', 'node_modules', 'node-pty', 'prebuilds', 'win32-arm64')
-  mkdirSync(arm64Dir, { recursive: true })
-  writeFileSync(join(arm64Dir, 'pty.node'), 'arm64-prebuild')
+  // Both win32 prebuilds exist in the packaged tree (build-time prune keeps the
+  // `win32-` prefix); the copy filter keeps the host arch's and drops the other.
+  const prebuildsRoot = join(root, 'resources', 'node_modules', 'node-pty', 'prebuilds')
+  for (const arch of ['win32-x64', 'win32-arm64']) {
+    mkdirSync(join(prebuildsRoot, arch), { recursive: true })
+    writeFileSync(join(prebuildsRoot, arch, 'pty.node'), `${arch}-prebuild`)
+  }
 }
+
+// The win32 prebuild dir the running host arch loads vs. the one that is pruned.
+const HOST_PREBUILD = `win32-${process.arch}`
+const OTHER_PREBUILD = HOST_PREBUILD === 'win32-arm64' ? 'win32-x64' : 'win32-arm64'
 
 beforeEach(() => {
   tempDir = mkdtempSync(join(os.tmpdir(), 'daemon-host-relocation-'))
@@ -130,12 +137,13 @@ describe('buildDaemonHostManifest', () => {
     // Daemon bundle + node-pty mirrored at their real resources-relative paths.
     expect(byDest.get('resources/app.asar.unpacked/out/main/daemon-entry.js')?.kind).toBe('file')
     expect(byDest.get('resources/app.asar.unpacked/out/main/chunks')?.kind).toBe('dir')
-    // node-pty is copied with a filter dropping .pdb + other-arch prebuilds.
+    // node-pty is copied with a filter dropping .pdb + non-host-arch prebuilds.
     const nodePtyOp = byDest.get('resources/node_modules/node-pty')
     expect(nodePtyOp?.kind).toBe('dir')
     expect(nodePtyOp?.filter?.('node-pty/build/Release/conpty.node')).toBe(true)
     expect(nodePtyOp?.filter?.('node-pty/build/Release/conpty.pdb')).toBe(false)
-    expect(nodePtyOp?.filter?.('node-pty/prebuilds/win32-arm64/pty.node')).toBe(false)
+    expect(nodePtyOp?.filter?.(`node-pty/prebuilds/${HOST_PREBUILD}/pty.node`)).toBe(true)
+    expect(nodePtyOp?.filter?.(`node-pty/prebuilds/${OTHER_PREBUILD}/pty.node`)).toBe(false)
   })
 })
 
@@ -159,7 +167,8 @@ describe('materializeRelocatedDaemonHost', () => {
     expect(
       existsSync(join(dest, 'resources', 'app.asar.unpacked', 'out', 'main', 'chunks', 'a.js'))
     ).toBe(true)
-    // Trim: GPU DLLs, .pdb debug symbols, and other-arch prebuilds are excluded.
+    // Trim: GPU DLLs, .pdb debug symbols, and non-host-arch prebuilds excluded;
+    // the host arch's prebuild is retained so node-pty resolves its native addon.
     expect(existsSync(join(dest, 'ffmpeg.dll'))).toBe(false)
     expect(existsSync(join(dest, 'libEGL.dll'))).toBe(false)
     expect(
@@ -167,11 +176,9 @@ describe('materializeRelocatedDaemonHost', () => {
         join(dest, 'resources', 'node_modules', 'node-pty', 'build', 'Release', 'conpty.pdb')
       )
     ).toBe(false)
-    expect(
-      existsSync(
-        join(dest, 'resources', 'node_modules', 'node-pty', 'prebuilds', 'win32-arm64', 'pty.node')
-      )
-    ).toBe(false)
+    const prebuildsDest = join(dest, 'resources', 'node_modules', 'node-pty', 'prebuilds')
+    expect(existsSync(join(prebuildsDest, HOST_PREBUILD, 'pty.node'))).toBe(true)
+    expect(existsSync(join(prebuildsDest, OTHER_PREBUILD, 'pty.node'))).toBe(false)
     // Marker records the version + entry rel path, written into the published dir.
     const marker = JSON.parse(readFileSync(join(dest, '.materialized.json'), 'utf8'))
     expect(marker.version).toBe('9.9.9')

@@ -179,6 +179,10 @@ async function runProof(ctx, args) {
   })
   log('install-base', `installing ${fromInstaller}`)
   const base = silentInstall(fromInstaller, { installDir })
+  // Track the install now (not only after the update at L238) so a failure
+  // anywhere before the update still tears down the base install this harness
+  // created, instead of orphaning it and blocking the next run's preflight.
+  ctx.installedExePath = base.exePath
   log('install-base', `installed ${base.exePath} (version ${base.version})`)
 
   // Seed a fresh profile (onboarding dismissed + one throwaway git repo as a

@@ -28,7 +28,15 @@ export function findAppProcesses() {
     `  [pscustomobject]@{ pid = $_.ProcessId; path = $_.ExecutablePath; commandLine = $_.CommandLine } })`,
     `ConvertTo-Json -InputObject @{ processes = $out } -Depth 4 -Compress`
   ].join('\n')
-  const { stdout } = runCommandSync(command)
+  // Fail closed: this guard protects the user's real processes, so a failed
+  // query must abort the run rather than look like "no Orca is running".
+  const { stdout, stderr, code, error } = runCommandSync(command)
+  if (error) {
+    throw new Error(`Failed to query Orca app processes: ${error.message}`)
+  }
+  if (code !== 0) {
+    throw new Error(`Failed to query Orca app processes (exit ${code}): ${stderr || stdout}`)
+  }
   const trimmed = stdout.trim()
   if (!trimmed) {
     return []
@@ -37,8 +45,11 @@ export function findAppProcesses() {
     const parsed = JSON.parse(trimmed)
     const arr = parsed.processes
     return Array.isArray(arr) ? arr : arr ? [arr] : []
-  } catch {
-    return []
+  } catch (parseError) {
+    throw new Error(
+      `Orca app process query returned invalid JSON: ${parseError.message}\n` +
+        `stdout:\n${trimmed}\nstderr:\n${stderr}`
+    )
   }
 }
 

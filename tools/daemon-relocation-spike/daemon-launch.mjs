@@ -72,6 +72,9 @@ export function launchDaemonHost(options) {
       child.off('error', onError)
       child.off('exit', onExit)
       if (err) {
+        // Expose the still-running detached child so the caller can stop it;
+        // otherwise a ready-timeout leaks the daemon with no handle to kill it.
+        err.child = child
         reject(err)
       } else {
         resolve({ child, pid: child.pid })

@@ -996,7 +996,14 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     )
     expect(forkMock).toHaveBeenCalledWith(
       FAKE_DAEMON_ENTRY_PATH,
-      expect.arrayContaining(['--socket', '/fake/socket', '--token', '/fake/token', '--log-file']),
+      expect.arrayContaining([
+        '--socket',
+        '/fake/socket',
+        '--token',
+        '/fake/token',
+        '--log-file',
+        join(FAKE_USER_DATA_PATH, 'logs', 'daemon.log')
+      ]),
       expect.objectContaining({ cwd: '/fake/userData', detached: true })
     )
   })
@@ -1122,7 +1129,14 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     )
     expect(forkMock).toHaveBeenCalledWith(
       FAKE_DAEMON_ENTRY_PATH,
-      expect.arrayContaining(['--socket', '/fake/socket', '--token', '/fake/token', '--log-file']),
+      expect.arrayContaining([
+        '--socket',
+        '/fake/socket',
+        '--token',
+        '/fake/token',
+        '--log-file',
+        join(FAKE_USER_DATA_PATH, 'logs', 'daemon.log')
+      ]),
       expect.objectContaining({ cwd: '/fake/userData', detached: true })
     )
   })
@@ -1239,7 +1253,14 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
 
     expect(forkMock).toHaveBeenCalledWith(
       FAKE_DAEMON_ENTRY_PATH,
-      expect.arrayContaining(['--socket', '/fake/socket', '--token', '/fake/token', '--log-file']),
+      expect.arrayContaining([
+        '--socket',
+        '/fake/socket',
+        '--token',
+        '/fake/token',
+        '--log-file',
+        join(FAKE_USER_DATA_PATH, 'logs', 'daemon.log')
+      ]),
       expect.objectContaining({ detached: true })
     )
   })
@@ -1499,7 +1520,14 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     )
     expect(forkMock).toHaveBeenCalledWith(
       FAKE_DAEMON_ENTRY_PATH,
-      expect.arrayContaining(['--socket', '/fake/socket', '--token', '/fake/token', '--log-file']),
+      expect.arrayContaining([
+        '--socket',
+        '/fake/socket',
+        '--token',
+        '/fake/token',
+        '--log-file',
+        join(FAKE_USER_DATA_PATH, 'logs', 'daemon.log')
+      ]),
       expect.objectContaining({ detached: true })
     )
   })
@@ -1584,7 +1612,14 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     )
     expect(forkMock).toHaveBeenCalledWith(
       FAKE_DAEMON_ENTRY_PATH,
-      expect.arrayContaining(['--socket', '/fake/socket', '--token', '/fake/token', '--log-file']),
+      expect.arrayContaining([
+        '--socket',
+        '/fake/socket',
+        '--token',
+        '/fake/token',
+        '--log-file',
+        join(FAKE_USER_DATA_PATH, 'logs', 'daemon.log')
+      ]),
       expect.objectContaining({ detached: true })
     )
   })

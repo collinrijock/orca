@@ -3,15 +3,18 @@
 // NSIS update and defeat the relocation.
 
 import { spawnSync } from 'node:child_process'
-import { join, normalize, sep } from 'node:path'
+import { join, win32 } from 'node:path'
 
 const HERE = import.meta.dirname
 const POWERSHELL = 'powershell.exe'
 const PS_ARGS = ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass']
 
-// Case-insensitive, separator-normalized containment test for Windows paths.
+// Case-insensitive, separator-normalized containment test. The inputs are always
+// Windows module paths, so use win32 semantics explicitly — otherwise --selftest
+// on a non-Windows host would treat `\` as a literal and every check would fail.
 function normalizeForCompare(p) {
-  return normalize(p)
+  return win32
+    .normalize(p)
     .replace(/[\\/]+$/, '')
     .toLowerCase()
 }
@@ -23,7 +26,7 @@ function normalizeForCompare(p) {
  */
 export function findAppDirResidentModules(modulePaths, appDir) {
   const needle = normalizeForCompare(appDir)
-  const prefix = `${needle}${sep}`
+  const prefix = `${needle}${win32.sep}`
   return modulePaths.filter((raw) => {
     const candidate = normalizeForCompare(raw)
     return candidate === needle || candidate.startsWith(prefix)
@@ -42,6 +45,11 @@ export function probeLoadedModules(pid) {
   })
   if (result.error) {
     throw new Error(`failed to spawn PowerShell probe: ${result.error.message}`)
+  }
+  // Check exit status before parsing: a non-zero exit that still wrote to stdout
+  // would otherwise surface as a bare JSON SyntaxError instead of the real error.
+  if (result.status !== 0) {
+    throw new Error(`loaded-modules.ps1 exited with status ${result.status}: ${result.stderr}`)
   }
   const trimmed = (result.stdout ?? '').trim()
   if (!trimmed) {

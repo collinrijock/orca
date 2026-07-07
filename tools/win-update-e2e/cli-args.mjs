@@ -74,7 +74,9 @@ export function parseArgs(argv) {
     usage: USAGE
   }
 
-  const errors = validate(opts)
+  // Distinguish "--install-dir omitted" from "--install-dir with no value": the
+  // latter must fail rather than silently fall back to a non-isolated install.
+  const errors = validate(opts, argv.includes('--install-dir'))
   return { ...opts, errors }
 }
 
@@ -136,8 +138,14 @@ export function validateInstallDir(installDir) {
     let entries = []
     try {
       entries = readdirSync(installDir)
-    } catch {
-      /* unreadable — treat as empty below */
+    } catch (err) {
+      // Fail closed: an unreadable existing directory must not be treated as
+      // empty/safe to overwrite.
+      errors.push(
+        `--install-dir "${installDir}" could not be read (${err.message}). ` +
+          `Refusing to treat an unreadable directory as safe to overwrite.`
+      )
+      return errors
     }
     if (entries.length > 0 && !looksLikeHarnessInstall(installDir)) {
       errors.push(
@@ -150,7 +158,7 @@ export function validateInstallDir(installDir) {
   return errors
 }
 
-function validate(opts) {
+function validate(opts, installDirFlagPresent) {
   const errors = []
   if (!opts.from && !opts.fromRelease) {
     errors.push('Missing base installer: pass --from <path> or --from-release <tag>')
@@ -172,7 +180,9 @@ function validate(opts) {
   if (!Number.isFinite(opts.soakSeconds) || opts.soakSeconds < 0) {
     errors.push('--soak-seconds must be a non-negative number')
   }
-  if (opts.installDir !== undefined) {
+  if (installDirFlagPresent && opts.installDir === undefined) {
+    errors.push('--install-dir requires a path value')
+  } else if (opts.installDir !== undefined) {
     errors.push(...validateInstallDir(opts.installDir))
   }
   return errors

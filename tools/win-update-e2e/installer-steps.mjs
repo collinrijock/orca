@@ -92,7 +92,11 @@ export function silentInstall(setupExe, { timeoutMs = 180_000, installDir = null
     throw new Error(`Failed to launch installer ${setupExe}: ${proc.error.message}`)
   }
 
-  const exePath = waitForInstalledExe(timeoutMs, installDir)
+  // On update runs the old Orca.exe already exists, so wait for the exe whose
+  // version matches this installer — not just any exe the installer hasn't yet
+  // overwritten — to avoid reading the pre-update binary mid-copy.
+  const targetVersion = getExeVersion(setupExe)
+  const exePath = waitForInstalledExe(timeoutMs, installDir, targetVersion)
   if (!exePath) {
     const where = installDir ?? programsRoot()
     throw new Error(`Installed ${EXE_NAME} did not appear under ${where} within ${timeoutMs}ms`)
@@ -100,11 +104,11 @@ export function silentInstall(setupExe, { timeoutMs = 180_000, installDir = null
   return { exePath, version: getExeVersion(exePath) }
 }
 
-function waitForInstalledExe(timeoutMs, installDir = null) {
+function waitForInstalledExe(timeoutMs, installDir = null, expectedVersion = null) {
   const deadline = Date.now() + timeoutMs
   while (Date.now() < deadline) {
     const exe = locateInstalledExe(installDir)
-    if (exe) {
+    if (exe && (!expectedVersion || getExeVersion(exe) === expectedVersion)) {
       return exe
     }
     sleepSync(1000)

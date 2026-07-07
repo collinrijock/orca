@@ -9,6 +9,9 @@ import { spawn, spawnSync } from 'node:child_process'
 
 const POWERSHELL = 'powershell.exe'
 const BASE_ARGS = ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass']
+// Cap sync probes so a wedged PowerShell call can't block the harness until the
+// whole CI job times out. Callers can override via opts.timeout.
+const DEFAULT_SYNC_TIMEOUT_MS = 60_000
 
 /**
  * Run a .ps1 file synchronously and return { code, stdout, stderr }.
@@ -18,6 +21,7 @@ export function runScriptFileSync(scriptPath, scriptArgs = [], opts = {}) {
   const result = spawnSync(POWERSHELL, [...BASE_ARGS, '-File', scriptPath, ...scriptArgs], {
     encoding: 'utf8',
     maxBuffer: 64 * 1024 * 1024,
+    timeout: DEFAULT_SYNC_TIMEOUT_MS,
     ...opts
   })
   return {
@@ -71,6 +75,7 @@ export function runCommandSync(command, opts = {}) {
   const result = spawnSync(POWERSHELL, [...BASE_ARGS, '-Command', command], {
     encoding: 'utf8',
     maxBuffer: 64 * 1024 * 1024,
+    timeout: DEFAULT_SYNC_TIMEOUT_MS,
     ...opts
   })
   return {

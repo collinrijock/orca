@@ -78,13 +78,16 @@ export function readDaemonPidFiles(userDataDir = defaultUserDataDir()) {
       continue
     }
     const filePath = path.join(daemonDir, entry)
+    // Read once: a PID file can vanish between readdir and here, and re-reading
+    // it in the catch path would crash discovery on a single stale file.
+    let raw = ''
     try {
-      const raw = readFileSync(filePath, 'utf8').trim()
+      raw = readFileSync(filePath, 'utf8').trim()
       const parsed = JSON.parse(raw)
       records.push({ file: filePath, ...parsed })
     } catch {
       // Legacy/partial pid files may hold a bare integer.
-      const pid = Number(readFileSync(filePath, 'utf8').trim())
+      const pid = Number(raw)
       if (Number.isInteger(pid)) {
         records.push({ file: filePath, pid })
       }
