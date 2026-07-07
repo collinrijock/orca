@@ -208,6 +208,7 @@ async function runProof(ctx, args) {
   const preDaemon = resolveScopedDaemon(userDataDir)
   preDaemon.pids.forEach((p) => created.daemonPids.add(p))
   log('daemon', `pre-update daemon pid=${preDaemon.pid} appVersion=${preDaemon.appVersion}`)
+  log('daemon', `pre-update daemon exe: ${preDaemon.exePath ?? '(unknown)'}`)
 
   const preScrollback = await readTerminalTextBestEffort(session.page)
 
@@ -279,6 +280,19 @@ async function gatherEvidence(args) {
   const postDaemon = resolveScopedDaemon(userDataDir)
 
   if (profile === 'survival') {
+    // The decisive survival signals: did the SPECIFIC pre-update daemon process
+    // live through the update, and is the new app running that same relocated
+    // exe or a fresh in-dir fork? Log both regardless of the assertion outcome.
+    const preDaemonAliveAfter = preDaemon.pid != null && isPidAlive(preDaemon.pid)
+    log(
+      'daemon',
+      `post-update daemon pid=${postDaemon.pid} exe: ${postDaemon.exePath ?? '(unknown)'}`
+    )
+    log(
+      'daemon',
+      `pre-update daemon pid=${preDaemon.pid} still alive after update: ${preDaemonAliveAfter}`
+    )
+    dumpDaemonLog(userDataDir)
     const heartbeatBefore = fileMtimeMs(heartbeatFile)
     const heartbeatAdvancedAfterUpdate = await heartbeatAdvancedSince(
       heartbeatFile,
@@ -288,6 +302,7 @@ async function gatherEvidence(args) {
     const ctrlCInterrupted = await probeCtrlCInterruptsMarker(page, runDir, heartbeatFile)
     return {
       preDaemonPid: preDaemon.pid,
+      preDaemonAliveAfter,
       postDaemonPid: postDaemon.pid,
       postDaemonAlive: postDaemon.pid != null && isPidAlive(postDaemon.pid),
       postDaemon,
@@ -336,12 +351,47 @@ function resolveScopedDaemon(userDataDir) {
     }
   }
   const primary = pidFiles.find((r) => typeof r.pid === 'number')
+  const pid = primary?.pid ?? scan[0]?.pid ?? null
+  const scanEntry = scan.find((p) => p.pid === pid) ?? scan[0]
   return {
-    pid: primary?.pid ?? scan[0]?.pid ?? null,
+    pid,
     appVersion: primary?.appVersion ?? null,
     startedAtMs: primary?.startedAtMs ?? null,
+    // Why: the daemon's exe path (first token of its command line) tells us
+    // whether it was forked from the relocated userData/daemon-host copy or the
+    // install-dir Orca.exe — the key survival signal.
+    exePath: daemonExePath(scanEntry?.commandLine),
     pids: [...pids]
   }
+}
+
+/** Print the daemon's lifecycle log (Phase 0) so its startup/session events are
+ *  visible in the CI log before teardown removes the userData dir. */
+function dumpDaemonLog(userDataDir) {
+  const logPath = path.join(userDataDir, 'logs', 'daemon.log')
+  try {
+    const lines = readFileSync(logPath, 'utf8').trim().split('\n')
+    log('daemon-log', `${logPath} (${lines.length} lines):`)
+    for (const line of lines.slice(-40)) {
+      console.log(`    ${line}`)
+    }
+  } catch {
+    log('daemon-log', `${logPath} (unavailable)`)
+  }
+}
+
+/** Extract the host exe path (first token) from a daemon command line. */
+function daemonExePath(commandLine) {
+  if (typeof commandLine !== 'string') {
+    return null
+  }
+  const trimmed = commandLine.trim()
+  if (trimmed.startsWith('"')) {
+    const end = trimmed.indexOf('"', 1)
+    return end > 0 ? trimmed.slice(1, end) : null
+  }
+  const space = trimmed.indexOf(' ')
+  return space > 0 ? trimmed.slice(0, space) : trimmed
 }
 
 function isMarkerAlive(runDir) {
