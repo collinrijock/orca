@@ -9,7 +9,7 @@ import {
   rmSync,
   writeFileSync
 } from 'node:fs'
-import { dirname, join, relative, sep } from 'node:path'
+import { dirname, join, win32 as winPath } from 'node:path'
 import { app } from 'electron'
 import { parseDaemonPidFile, startTimeMatches } from './daemon-health'
 
@@ -79,8 +79,11 @@ type MaterializeMarker = {
   entryRelPath: string
 }
 
+// Uses win32 path semantics so Windows layout paths (drive letters, `\`)
+// decompose correctly regardless of host OS — needed for cross-platform unit
+// tests; production runs this on win32 only.
 function toPosixRelative(fromDir: string, absPath: string): string {
-  return relative(fromDir, absPath).split(sep).join('/')
+  return winPath.relative(fromDir, absPath).split(winPath.sep).join('/')
 }
 
 function destPath(root: string, destRel: string): string {
@@ -109,7 +112,7 @@ function collectDaemonHostSources(): DaemonHostSources | null {
     return null
   }
   const execPath = process.execPath
-  const appDir = dirname(execPath)
+  const appDir = winPath.dirname(execPath)
   const entrySourcePath = resolveEntrySourcePath(resourcesPath)
   return {
     appDir,
@@ -158,7 +161,7 @@ export function buildDaemonHostManifest(
   // Daemon bundle: entry + its sibling chunks/ + the unpacked out/package.json
   // (CJS/ESM loader resolution), mirrored verbatim.
   ops.push({ sourcePath: entrySourcePath, destRel: entryRelPath, kind: 'file' })
-  const chunksDir = join(dirname(entrySourcePath), 'chunks')
+  const chunksDir = join(winPath.dirname(entrySourcePath), 'chunks')
   ops.push({
     sourcePath: chunksDir,
     destRel: toPosixRelative(appDir, chunksDir),
