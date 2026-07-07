@@ -141,6 +141,7 @@ describe('agent completion no-evidence inspection cadence', () => {
     const inspectProcess = vi.fn(async () => processResult('codex'))
     const { coordinator } = createCoordinator(inspectProcess)
 
+    coordinator.startProcessTracking()
     coordinator.observeTitle('Codex working')
     await vi.advanceTimersByTimeAsync(60_000)
 

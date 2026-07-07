@@ -119,6 +119,9 @@ export function createAgentCompletionCoordinator(
   let inspectionInFlight = false
   let inspectionGeneration = 0
   let consecutiveInspectionErrors = 0
+  // Why: output/title activity can arrive before async PTY bind; it should
+  // only re-arm cadence after the bind path starts process tracking.
+  let pollTrackingStarted = false
   // Why: tracks which cadence tier the armed poll timer was scheduled at, so a
   // tier change toward a faster cadence (hidden→visible flip, no-evidence pane
   // gaining activity or evidence) re-arms promptly instead of waiting out the
@@ -621,7 +624,7 @@ export function createAgentCompletionCoordinator(
   }
 
   function scheduleNextPoll(): void {
-    if (disposed || !options.isLive() || pendingTitle) {
+    if (disposed || !pollTrackingStarted || !options.isLive() || pendingTitle) {
       return
     }
     const tier = currentPollTier()
@@ -856,6 +859,7 @@ export function createAgentCompletionCoordinator(
   }
 
   function startProcessTracking(): void {
+    pollTrackingStarted = true
     scheduleNextPoll()
   }
 
