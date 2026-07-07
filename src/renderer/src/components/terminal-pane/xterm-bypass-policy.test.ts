@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   shouldBypassXtermKeyboardEvent,
+  shouldPreventDefaultTerminalImeCandidateKey,
   shouldSuppressTerminalImeKeyboardEvent,
   type XtermBypassEvent
 } from './xterm-bypass-policy'
@@ -168,13 +169,15 @@ describe('shouldSuppressTerminalImeKeyboardEvent — macOS', () => {
     isMac: true,
     isLinux: false,
     compositionActive: false,
-    candidateKeyGuardActive: false
+    candidateKeyGuardActive: false,
+    pendingCandidateKeyReleaseActive: false
   }
   const composing = {
     isMac: true,
     isLinux: false,
     compositionActive: true,
-    candidateKeyGuardActive: true
+    candidateKeyGuardActive: true,
+    pendingCandidateKeyReleaseActive: false
   }
 
   it('suppresses keyboard events while Chromium reports active IME composition', () => {
@@ -246,6 +249,21 @@ describe('shouldSuppressTerminalImeKeyboardEvent — macOS', () => {
         event({ type: 'keypress', key: '中', code: '', isComposing: true }),
         idle
       )
+    ).toBe(false)
+  })
+
+  it('does not apply the Linux/Sogou candidate guard to macOS', () => {
+    expect(
+      shouldSuppressTerminalImeKeyboardEvent(event({ key: ' ', code: 'Space' }), composing)
+    ).toBe(false)
+    expect(
+      shouldSuppressTerminalImeKeyboardEvent(
+        event({ type: 'keypress', key: '2', code: 'Digit2' }),
+        composing
+      )
+    ).toBe(false)
+    expect(
+      shouldPreventDefaultTerminalImeCandidateKey(event({ key: ' ', code: 'Space' }), composing)
     ).toBe(false)
   })
 })

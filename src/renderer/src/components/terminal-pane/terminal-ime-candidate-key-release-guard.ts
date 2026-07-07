@@ -1,10 +1,10 @@
 import type { XtermBypassEvent } from './xterm-bypass-policy'
 import { TERMINAL_IME_CANDIDATE_GUARD_POST_COMPOSITION_MS } from './terminal-ime-composition-tracker'
 
-export type TerminalImePendingCandidateKeyRelease = {
-  key: string
-  expiresAt: number
-}
+// Why: candidate keys can overlap (a second selector keydown before the first
+// keyup), so pending releases are tracked per key rather than in one slot;
+// otherwise an overwritten key's keyup can no longer clear its own guard.
+export type TerminalImePendingCandidateKeyReleases = Map<string, number>
 
 // Why: Sogou/fcitx can deliver candidate-selection keys as plain key events
 // (#7543: digit selection inserts only the digit). While the IME owns them,
@@ -23,44 +23,62 @@ const TERMINAL_IME_CANDIDATE_SELECTION_KEYS = new Set([
   '9'
 ])
 
-export function isTerminalImeCandidateSelectionKeyEvent(event: XtermBypassEvent): boolean {
-  // Modified chords (e.g. Ctrl+Space IME toggle) are never candidate selectors.
-  if (event.ctrlKey || event.metaKey || event.altKey) {
-    return false
-  }
-  return TERMINAL_IME_CANDIDATE_SELECTION_KEYS.has(event.key)
+function isTerminalImeCandidateSelectionKey(key: string): boolean {
+  return TERMINAL_IME_CANDIDATE_SELECTION_KEYS.has(key)
 }
 
-export function createTerminalImePendingCandidateKeyRelease(
+export function isTerminalImeCandidateSelectionKeyEvent(event: XtermBypassEvent): boolean {
+  // Modified chords are never candidate selectors: Ctrl/Meta/Alt are IME
+  // toggles, and Shift+Space is fcitx's full-/half-width width toggle.
+  if (event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) {
+    return false
+  }
+  return isTerminalImeCandidateSelectionKey(event.key)
+}
+
+export function createTerminalImePendingCandidateKeyReleases(): TerminalImePendingCandidateKeyReleases {
+  return new Map()
+}
+
+export function armTerminalImePendingCandidateKeyRelease(
+  releases: TerminalImePendingCandidateKeyReleases,
   event: XtermBypassEvent,
   now: number
-): TerminalImePendingCandidateKeyRelease | null {
+): void {
   if (event.type !== 'keydown' || !isTerminalImeCandidateSelectionKeyEvent(event)) {
-    return null
+    return
   }
-  return {
-    key: event.key,
-    expiresAt: now + TERMINAL_IME_CANDIDATE_GUARD_POST_COMPOSITION_MS
-  }
+  releases.set(event.key, now + TERMINAL_IME_CANDIDATE_GUARD_POST_COMPOSITION_MS)
 }
 
 export function shouldApplyTerminalImePendingCandidateKeyRelease(
   event: XtermBypassEvent,
-  pending: TerminalImePendingCandidateKeyRelease | null,
+  releases: TerminalImePendingCandidateKeyReleases,
   now: number
 ): boolean {
-  return (
-    pending !== null &&
-    event.type !== 'keydown' &&
-    now <= pending.expiresAt &&
-    event.key === pending.key &&
-    isTerminalImeCandidateSelectionKeyEvent(event)
-  )
+  if (event.type === 'keydown') {
+    return false
+  }
+  if (event.type === 'keyup') {
+    // Why: keyup modifier flags can reflect keys pressed after the original
+    // selector keydown, so release suppression matches only the pending key.
+    return isTerminalImeCandidateSelectionKey(event.key) && releases.has(event.key)
+  }
+  if (!isTerminalImeCandidateSelectionKeyEvent(event)) {
+    return false
+  }
+  const expiresAt = releases.get(event.key)
+  if (expiresAt === undefined) {
+    return false
+  }
+  return now <= expiresAt
 }
 
-export function shouldClearTerminalImePendingCandidateKeyRelease(
-  event: XtermBypassEvent,
-  pending: TerminalImePendingCandidateKeyRelease | null
-): boolean {
-  return pending !== null && event.type === 'keyup' && event.key === pending.key
+export function clearTerminalImePendingCandidateKeyRelease(
+  releases: TerminalImePendingCandidateKeyReleases,
+  event: XtermBypassEvent
+): void {
+  if (event.type === 'keyup') {
+    releases.delete(event.key)
+  }
 }

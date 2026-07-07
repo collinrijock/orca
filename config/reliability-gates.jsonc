@@ -1348,7 +1348,8 @@
           "file": "tests/e2e/chinese-ime-chat-input-repro.spec.ts",
           "assertions": [
             "Sogou-style Space candidate selection submits only the committed Chinese character",
-            "Sogou-style digit candidate selection submits only the committed Chinese phrase"
+            "Sogou-style digit candidate selection submits only the committed Chinese phrase",
+            "Post-composition Sogou-style digit selection stays out of the PTY after compositionend"
           ]
         }
       ],
@@ -1359,8 +1360,8 @@
           "platform": "macos",
           "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/terminal-ime-native-text-forwarder.test.ts src/renderer/src/components/terminal-pane/terminal-ime-input-source.test.ts src/renderer/src/components/terminal-pane/terminal-paste-runtime.test.ts src/renderer/src/components/terminal-pane/terminal-ime-composition-tracker.test.ts src/renderer/src/components/terminal-pane/terminal-ime-candidate-key-release-guard.test.ts src/renderer/src/components/terminal-pane/xterm-bypass-policy-non-mac.test.ts src/renderer/src/components/terminal-pane/xterm-bypass-policy.test.ts",
           "result": "passed",
-          "durationSeconds": 0.4,
-          "summary": "7 test file(s) passed, 136 tests passed on the Linux/Sogou candidate-key branch."
+          "durationSeconds": 0.7,
+          "summary": "7 test file(s) passed, 141 tests passed on the Linux/Sogou candidate-key branch."
         },
         {
           "date": "2026-07-07",
@@ -1368,12 +1369,12 @@
           "platform": "macos",
           "command": "pnpm run test:e2e -- tests/e2e/chinese-ime-chat-input-repro.spec.ts",
           "result": "passed",
-          "durationSeconds": 42.5,
-          "summary": "Electron/CDP IME repro passed: Sogou candidate selection test and existing Chinese IME harness passed; real Codex IME test was skipped behind ORCA_E2E_REAL_CODEX_IME."
+          "durationSeconds": 72.0,
+          "summary": "Electron/CDP IME repro passed: Sogou candidate selection, post-composition candidate selection, and existing Chinese IME harness passed; real Codex IME test was skipped behind ORCA_E2E_REAL_CODEX_IME."
         }
       ],
       "runtimeBudget": {
-        "p95Seconds": 60,
+        "p95Seconds": 90,
         "scope": "renderer unit plus focused Electron/CDP IME repro"
       },
       "flakeHistory": {
@@ -1385,8 +1386,8 @@
         "evidence": "Focused tests cover existing native-text, input-source, paste/runtime forwarding, Linux/Sogou candidate selector, post-composition guard contracts, and live-PTY Sogou-style candidate commits. Needs intentional-break proof for duplicate native text forwarding and composition preedit leakage, plus the broader language/platform matrix."
       },
       "performanceBudget": {
-        "required": false,
-        "evidence": "Required if input forwarding adds polling, repeated event listeners, or renderer hot-path work."
+        "required": true,
+        "evidence": "Terminal IME hot-path audit clean on 2026-07-07: candidate guard adds O(1) boolean checks plus a bounded Space/digit release map; composition listeners are disposed with pane lifecycle; no polling, IPC fan-out, subprocess work, or SSH/remote transport cost added."
       },
       "promotionCriteria": [
         "Cover deterministic byte/cell oracles first.",

@@ -65,10 +65,10 @@ import { parseOsc7 } from './parse-osc7'
 import { resolveTerminalJisYenInput } from './terminal-jis-yen-input'
 import { installTerminalImeCompositionTracker } from './terminal-ime-composition-tracker'
 import {
-  createTerminalImePendingCandidateKeyRelease,
-  shouldApplyTerminalImePendingCandidateKeyRelease,
-  shouldClearTerminalImePendingCandidateKeyRelease,
-  type TerminalImePendingCandidateKeyRelease
+  armTerminalImePendingCandidateKeyRelease,
+  clearTerminalImePendingCandidateKeyRelease,
+  createTerminalImePendingCandidateKeyReleases,
+  shouldApplyTerminalImePendingCandidateKeyRelease
 } from './terminal-ime-candidate-key-release-guard'
 import {
   DISABLED_MAC_NATIVE_TEXT_INPUT_SOURCE_FEATURES,
@@ -849,8 +849,8 @@ export function useTerminalPaneLifecycle({
         // encoder runs, letting the browser and Electron paths fire normally.
         // See xterm-bypass-policy.ts for the rule derivation.
         let pendingTerminalInterruptKeyup = false
-        let pendingTerminalImeCandidateKeyRelease: TerminalImePendingCandidateKeyRelease | null =
-          null
+        const pendingTerminalImeCandidateKeyReleases =
+          createTerminalImePendingCandidateKeyReleases()
         const isMac = navigator.userAgent.includes('Mac')
         const isLinux = !isMac && navigator.userAgent.includes('Linux')
         const macNativeTextInputSourceTracker = isMac ? getMacNativeTextInputSourceTracker() : null
@@ -877,7 +877,7 @@ export function useTerminalPaneLifecycle({
           const now = Date.now()
           const pendingCandidateReleaseGuardActive = shouldApplyTerminalImePendingCandidateKeyRelease(
             e,
-            pendingTerminalImeCandidateKeyRelease,
+            pendingTerminalImeCandidateKeyReleases,
             now
           )
           const imeKeyboardOptions = {
@@ -885,6 +885,7 @@ export function useTerminalPaneLifecycle({
             candidateKeyGuardActive:
               imeCompositionTracker.isCandidateKeyGuardActive() ||
               pendingCandidateReleaseGuardActive,
+            pendingCandidateKeyReleaseActive: pendingCandidateReleaseGuardActive,
             isMac,
             isLinux
           }
@@ -893,29 +894,16 @@ export function useTerminalPaneLifecycle({
               // Why: without preventDefault the suppressed candidate keydown
               // still fires a keypress and mutates the helper textarea.
               e.preventDefault()
-              pendingTerminalImeCandidateKeyRelease = createTerminalImePendingCandidateKeyRelease(
+              armTerminalImePendingCandidateKeyRelease(
+                pendingTerminalImeCandidateKeyReleases,
                 e,
                 now
               )
             }
-            if (
-              shouldClearTerminalImePendingCandidateKeyRelease(
-                e,
-                pendingTerminalImeCandidateKeyRelease
-              )
-            ) {
-              pendingTerminalImeCandidateKeyRelease = null
-            }
+            clearTerminalImePendingCandidateKeyRelease(pendingTerminalImeCandidateKeyReleases, e)
             return false
           }
-          if (
-            shouldClearTerminalImePendingCandidateKeyRelease(
-              e,
-              pendingTerminalImeCandidateKeyRelease
-            )
-          ) {
-            pendingTerminalImeCandidateKeyRelease = null
-          }
+          clearTerminalImePendingCandidateKeyRelease(pendingTerminalImeCandidateKeyReleases, e)
           if (pendingTerminalInterruptKeyup && shouldSuppressTerminalInterruptKeyup(e)) {
             pendingTerminalInterruptKeyup = false
             return false

@@ -166,18 +166,21 @@ describe('shouldSuppressTerminalImeKeyboardEvent — Windows/Linux', () => {
     isMac: false,
     isLinux: false,
     compositionActive: false,
-    candidateKeyGuardActive: false
+    candidateKeyGuardActive: false,
+    pendingCandidateKeyReleaseActive: false
   }
   const linuxIdle = {
     isMac: false,
     isLinux: true,
     compositionActive: false,
-    candidateKeyGuardActive: false
+    candidateKeyGuardActive: false,
+    pendingCandidateKeyReleaseActive: false
   }
   const linuxComposing = { ...linuxIdle, compositionActive: true, candidateKeyGuardActive: true }
   // Post-compositionend guard: the tracker is already inactive but the
   // committing key's trailing press/release must still be absorbed.
   const linuxPostCompositionGuard = { ...linuxIdle, candidateKeyGuardActive: true }
+  const windowsComposing = { ...windowsIdle, compositionActive: true, candidateKeyGuardActive: true }
 
   it('suppresses keyboard events while Chromium reports active IME composition', () => {
     for (const options of [windowsIdle, linuxIdle]) {
@@ -335,6 +338,34 @@ describe('shouldSuppressTerminalImeKeyboardEvent — Windows/Linux', () => {
         )
       ).toBe(false)
     })
+
+    it('does not apply the Linux/Sogou candidate guard to Windows', () => {
+      expect(
+        shouldSuppressTerminalImeKeyboardEvent(
+          event({ key: ' ', code: 'Space' }),
+          windowsComposing
+        )
+      ).toBe(false)
+      expect(
+        shouldSuppressTerminalImeKeyboardEvent(
+          event({ type: 'keypress', key: '2', code: 'Digit2' }),
+          windowsComposing
+        )
+      ).toBe(false)
+    })
+
+    it('suppresses a pending Linux candidate release even if modifier state changed after keydown', () => {
+      expect(
+        shouldSuppressTerminalImeKeyboardEvent(
+          event({ type: 'keyup', key: '2', code: 'Digit2', shiftKey: true }),
+          {
+            ...linuxIdle,
+            candidateKeyGuardActive: true,
+            pendingCandidateKeyReleaseActive: true
+          }
+        )
+      ).toBe(true)
+    })
   })
 
   describe('shouldPreventDefaultTerminalImeCandidateKey', () => {
@@ -365,6 +396,12 @@ describe('shouldSuppressTerminalImeKeyboardEvent — Windows/Linux', () => {
       ).toBe(false)
       expect(
         shouldPreventDefaultTerminalImeCandidateKey(event({ key: 'a', code: 'KeyA' }), linuxComposing)
+      ).toBe(false)
+      expect(
+        shouldPreventDefaultTerminalImeCandidateKey(
+          event({ key: ' ', code: 'Space' }),
+          windowsComposing
+        )
       ).toBe(false)
     })
   })

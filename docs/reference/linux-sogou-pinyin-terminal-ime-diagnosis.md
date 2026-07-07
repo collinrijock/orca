@@ -65,8 +65,8 @@ The important ordering is in xterm:
   runs), so a keydown-preceded `insertText` commit is silently dropped.
 - Returning `false` from `attachCustomKeyEventHandler` does not
   `preventDefault()`. A printable suppressed keydown still fires a native
-  `keypress`, and `_keyPress` forwards the character to the PTY.
-  `shouldSuppressTerminalImeKeyboardEvent` never inspects keypress events.
+  `keypress`, and `_keyPress` forwards the character to the PTY. Before this
+  fix, `shouldSuppressTerminalImeKeyboardEvent` did not inspect keypress events.
 
 Relevant code:
 
@@ -361,20 +361,33 @@ Pass criteria:
 
 ## Current Evidence
 
-Focused tests on the current tree pass, which proves only the existing contracts:
+Focused tests on this branch now cover the Linux/Sogou candidate-key policy and
+the existing native-text/input-source/paste contracts:
 
 ```sh
-pnpm exec vitest run \
-  src/renderer/src/components/terminal-pane/xterm-bypass-policy-non-mac.test.ts \
-  src/renderer/src/components/terminal-pane/xterm-bypass-policy.test.ts \
+pnpm exec vitest run --config config/vitest.config.ts \
   src/renderer/src/components/terminal-pane/terminal-ime-native-text-forwarder.test.ts \
-  --config config/vitest.config.ts
+  src/renderer/src/components/terminal-pane/terminal-ime-input-source.test.ts \
+  src/renderer/src/components/terminal-pane/terminal-paste-runtime.test.ts \
+  src/renderer/src/components/terminal-pane/terminal-ime-composition-tracker.test.ts \
+  src/renderer/src/components/terminal-pane/terminal-ime-candidate-key-release-guard.test.ts \
+  src/renderer/src/components/terminal-pane/xterm-bypass-policy-non-mac.test.ts \
+  src/renderer/src/components/terminal-pane/xterm-bypass-policy.test.ts
 ```
 
-Result on 2026-07-06: 3 files passed, 80 tests passed.
+Result on 2026-07-07: 7 files passed, 141 tests passed.
 
-That green result is part of the diagnosis: the existing coverage encodes the
-current Mac/non-Mac split and does not cover Linux Sogou candidate commit.
+The Electron/CDP live-PTY repro also passes:
+
+```sh
+pnpm run test:e2e -- tests/e2e/chinese-ime-chat-input-repro.spec.ts
+```
+
+Result on 2026-07-07: 2 tests passed, 1 real-Codex IME test skipped behind
+`ORCA_E2E_REAL_CODEX_IME`.
+
+This proves Orca's event routing for the Sogou-style Space/digit selector class,
+but it is not a replacement for real Ubuntu 22.04 + Sogou Pinyin soak evidence.
 
 ## Risk Notes
 

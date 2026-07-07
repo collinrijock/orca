@@ -36,10 +36,11 @@ export type XtermBypassOptions = {
 
 export type XtermImeKeyboardOptions = {
   compositionActive: boolean
-  /** True while candidate-selection keys (Space/digits) are IME-owned: live
-   *  composition plus a short post-compositionend window (see
-   *  terminal-ime-composition-tracker.ts). */
+  /** True while Linux/Sogou candidate-selection keys (Space/digits) are
+   *  IME-owned: live composition plus a short post-compositionend window. */
   candidateKeyGuardActive: boolean
+  /** True when the pending-release guard already matched this specific event. */
+  pendingCandidateKeyReleaseActive: boolean
   // Required so no caller silently falls back to non-mac 229 suppression,
   // which re-swallows the first key after a macOS IME input-source switch.
   isMac: boolean
@@ -83,9 +84,17 @@ export function shouldSuppressTerminalImeKeyboardEvent(
   event: XtermBypassEvent,
   options: XtermImeKeyboardOptions
 ): boolean {
-  const { compositionActive, candidateKeyGuardActive, isMac, isLinux } = options
+  const {
+    compositionActive,
+    candidateKeyGuardActive,
+    pendingCandidateKeyReleaseActive,
+    isMac,
+    isLinux
+  } = options
   const suppressCandidateKey =
-    candidateKeyGuardActive && isTerminalImeCandidateSelectionKeyEvent(event)
+    isLinux &&
+    (pendingCandidateKeyReleaseActive ||
+      (candidateKeyGuardActive && isTerminalImeCandidateSelectionKeyEvent(event)))
   if (event.type === 'keypress') {
     // Why: a suppressed candidate keydown is not preventDefault-ed by xterm,
     // so its native keypress still fires and _keyPress would forward the
@@ -121,6 +130,7 @@ export function shouldPreventDefaultTerminalImeCandidateKey(
   // leaked selector to the PTY.
   return (
     event.type === 'keydown' &&
+    options.isLinux &&
     options.candidateKeyGuardActive &&
     isTerminalImeCandidateSelectionKeyEvent(event)
   )
