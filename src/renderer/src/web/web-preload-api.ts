@@ -2502,8 +2502,7 @@ function createNotificationsApi(): NonNullable<Partial<PreloadApi>['notification
     openSystemSettings: () => Promise.resolve(),
     getPermissionStatus: () =>
       Promise.resolve({ supported: false, platform: getBrowserPlatform(), requested: false }),
-    requestPermission: () =>
-      Promise.resolve({ supported: false, platform: getBrowserPlatform(), requested: false }),
+    probeDelivery: () => Promise.resolve({ state: 'unsupported' as const }),
     playSound: () => Promise.resolve({ played: false, reason: 'missing-path' })
   }
 }

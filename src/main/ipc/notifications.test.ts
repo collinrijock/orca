@@ -1260,6 +1260,153 @@ describe('registerNotificationHandlers', () => {
   })
 })
 
+describe('notifications:probeDelivery', () => {
+  const originalPlatform = process.platform
+
+  function getProbeDeliveryHandler(): (event: unknown, args?: { force?: boolean }) => unknown {
+    const call = handleMock.mock.calls.find(
+      (c: unknown[]) => c[0] === 'notifications:probeDelivery'
+    )
+    if (!call) {
+      throw new Error('notifications:probeDelivery handler not registered')
+    }
+    return call[1] as (event: unknown, args?: { force?: boolean }) => unknown
+  }
+
+  function getProbeOnceEventHandler(eventName: string): (...args: unknown[]) => void {
+    // Why: findLast — a test may run several probes, and only the newest
+    // probe's listeners can settle the pending promise.
+    const call = notificationOnceMock.mock.calls.findLast((c: unknown[]) => c[0] === eventName)
+    if (!call) {
+      throw new Error(`Probe notification ${eventName} once handler not registered`)
+    }
+    return call[1] as (...args: unknown[]) => void
+  }
+
+  function createStore(ui: Record<string, unknown> = {}): {
+    getSettings: () => unknown
+    getUI: () => Record<string, unknown>
+    updateUI: ReturnType<typeof vi.fn>
+  } {
+    const state = { ...ui }
+    return {
+      getSettings: () => ({
+        notifications: {
+          enabled: true,
+          agentTaskComplete: true,
+          terminalBell: true,
+          suppressWhenFocused: false
+        }
+      }),
+      getUI: () => state,
+      updateUI: vi.fn((updates: Record<string, unknown>) => {
+        Object.assign(state, updates)
+      })
+    }
+  }
+
+  beforeEach(() => {
+    vi.useFakeTimers()
+    handleMock.mockReset()
+    removeHandlerMock.mockReset()
+    notificationCtorMock.mockClear()
+    notificationShowMock.mockClear()
+    notificationCloseMock.mockClear()
+    notificationOnMock.mockClear()
+    notificationOnceMock.mockClear()
+    notificationRemoveListenerMock.mockClear()
+    notificationIsSupportedMock.mockReset()
+    notificationIsSupportedMock.mockReturnValue(true)
+    Object.defineProperty(process, 'platform', { value: 'darwin', configurable: true })
+  })
+
+  afterEach(() => {
+    Object.defineProperty(process, 'platform', { value: originalPlatform, configurable: true })
+  })
+
+  it('reports unsupported on non-darwin platforms without probing', () => {
+    Object.defineProperty(process, 'platform', { value: 'linux', configurable: true })
+    const store = createStore()
+    registerNotificationHandlers(store as never)
+
+    expect(getProbeDeliveryHandler()({})).toEqual({ state: 'unsupported' })
+    expect(notificationCtorMock).not.toHaveBeenCalled()
+    expect(store.updateUI).not.toHaveBeenCalled()
+  })
+
+  it('marks the one-shot permission registration as done so startup cannot re-prompt', async () => {
+    const store = createStore()
+    registerNotificationHandlers(store as never)
+
+    const result = getProbeDeliveryHandler()({}) as Promise<unknown>
+    expect(store.updateUI).toHaveBeenCalledWith({ notificationPermissionRequested: true })
+
+    getProbeOnceEventHandler('failed')({}, 'not allowed')
+    await expect(result).resolves.toEqual({ state: 'blocked' })
+  })
+
+  it('resolves delivered when the probe show event fires and persists confirmation', async () => {
+    const store = createStore()
+    registerNotificationHandlers(store as never)
+
+    const result = getProbeDeliveryHandler()({}) as Promise<unknown>
+    expect(notificationShowMock).toHaveBeenCalledTimes(1)
+
+    getProbeOnceEventHandler('show')()
+    await expect(result).resolves.toEqual({ state: 'delivered' })
+    expect(store.updateUI).toHaveBeenCalledWith({ notificationDeliveryConfirmed: true })
+  })
+
+  it('short-circuits to delivered from the persisted confirmation without probing', () => {
+    const store = createStore({ notificationDeliveryConfirmed: true })
+    registerNotificationHandlers(store as never)
+
+    expect(getProbeDeliveryHandler()({})).toEqual({ state: 'delivered' })
+    expect(notificationCtorMock).not.toHaveBeenCalled()
+  })
+
+  it('prefers fresh session failure evidence over the persisted confirmation', async () => {
+    const store = createStore({ notificationDeliveryConfirmed: true })
+    registerNotificationHandlers(store as never)
+    const handler = getProbeDeliveryHandler()
+
+    const probeResult = handler({}, { force: true }) as Promise<unknown>
+    getProbeOnceEventHandler('failed')({}, 'Notifications are not allowed for this application')
+    await expect(probeResult).resolves.toEqual({ state: 'blocked' })
+
+    expect(handler({})).toEqual({ state: 'blocked' })
+    expect(notificationCtorMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('force bypasses cached evidence and probes again', async () => {
+    const store = createStore({ notificationDeliveryConfirmed: true })
+    registerNotificationHandlers(store as never)
+    const handler = getProbeDeliveryHandler()
+
+    const probeResult = handler({}, { force: true }) as Promise<unknown>
+    expect(notificationCtorMock).toHaveBeenCalledTimes(1)
+    getProbeOnceEventHandler('show')()
+    await expect(probeResult).resolves.toEqual({ state: 'delivered' })
+  })
+
+  it('resolves blocked on timeout without recording a definitive failure', async () => {
+    const store = createStore()
+    registerNotificationHandlers(store as never)
+    const handler = getProbeDeliveryHandler()
+
+    const probeResult = handler({}) as Promise<unknown>
+    await vi.advanceTimersByTimeAsync(3001)
+    await expect(probeResult).resolves.toEqual({ state: 'blocked' })
+    expect(notificationCloseMock).toHaveBeenCalledTimes(1)
+
+    // A timeout is ambiguous evidence, so the next non-force call probes again.
+    const secondResult = handler({}) as Promise<unknown>
+    expect(notificationCtorMock).toHaveBeenCalledTimes(2)
+    getProbeOnceEventHandler('show')()
+    await expect(secondResult).resolves.toEqual({ state: 'delivered' })
+  })
+})
+
 describe('triggerStartupNotificationRegistration', () => {
   const originalPlatform = process.platform
 

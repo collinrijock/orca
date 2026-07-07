@@ -3106,6 +3106,13 @@ export type NotificationPermissionStatusResult = {
   requested: boolean
 }
 
+/** Outcome of a macOS notification delivery probe. Electron exposes no API to
+ *  read UNUserNotificationCenter authorization, so delivery of a silent probe
+ *  notification is the only reliable granted/blocked signal. */
+export type NotificationDeliveryProbeResult = {
+  state: 'delivered' | 'blocked' | 'unsupported'
+}
+
 export type WorktreeCardProperty =
   | 'status'
   | 'unread'
@@ -3264,6 +3271,10 @@ export type PersistedUIState = {
    *  permission dialog via a startup notification. Prevents re-firing on
    *  every launch. */
   notificationPermissionRequested?: boolean
+  /** Set once a notification is confirmed delivered by the OS, so later
+   *  onboarding/setup visits can show "enabled" without re-probing (a probe
+   *  briefly flashes a banner when permission is granted). */
+  notificationDeliveryConfirmed?: boolean
   /** Once the user has seen the "your sessions won't be interrupted"
    *  reassurance card, we never show it again. */
   updateReassuranceSeen?: boolean

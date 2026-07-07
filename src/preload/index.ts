@@ -36,6 +36,7 @@ import type {
   MemorySnapshot,
   NotificationDismissResult,
   NotificationDispatchResult,
+  NotificationDeliveryProbeResult,
   NotificationPermissionStatusResult,
   NotificationSoundDataResult,
   NotificationSoundPathResult,
@@ -1877,8 +1878,8 @@ const api = {
     openSystemSettings: (): Promise<void> => ipcRenderer.invoke('notifications:openSystemSettings'),
     getPermissionStatus: (): Promise<NotificationPermissionStatusResult> =>
       ipcRenderer.invoke('notifications:getPermissionStatus'),
-    requestPermission: (): Promise<NotificationPermissionStatusResult> =>
-      ipcRenderer.invoke('notifications:requestPermission'),
+    probeDelivery: (args?: { force?: boolean }): Promise<NotificationDeliveryProbeResult> =>
+      ipcRenderer.invoke('notifications:probeDelivery', args),
     playSound: async (options?: {
       force?: boolean
       volume?: number

@@ -9940,7 +9940,15 @@
           "3cd5374e22": "Notification settings are still loading",
           "b6a994e36e": "Notification sound could not be played",
           "c0692baa52": "Choose Custom File",
-          "ac80d97e02": "Change Custom File"
+          "ac80d97e02": "Change Custom File",
+          "56b836215c": "Checking notification permission…",
+          "fd84d3e9b8": "Notifications are enabled",
+          "4f7bce5644": "macOS will alert you when agents finish or terminals need attention.",
+          "95d99b52fa": "Allow notifications for Orca",
+          "94562ba367": "macOS is asking for permission. Click Allow in the dialog and this step updates automatically.",
+          "4f6a1da718": "Open System Settings",
+          "90b5d2e363": "macOS is not delivering Orca notifications",
+          "2c47f5465f": "Turn on Allow notifications for Orca in System Settings. This step updates automatically once enabled."
         },
         "OnboardingFlow": {
           "1b5e182e9f": "Welcome to Orca",

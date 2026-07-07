@@ -9940,7 +9940,15 @@
           "3cd5374e22": "La configuración de notificaciones aún se está cargando",
           "b6a994e36e": "No se pudo reproducir el sonido de notificación",
           "c0692baa52": "Elija un archivo personalizado",
-          "ac80d97e02": "Cambiar archivo personalizado"
+          "ac80d97e02": "Cambiar archivo personalizado",
+          "56b836215c": "Comprobando el permiso de notificaciones…",
+          "fd84d3e9b8": "Las notificaciones están activadas",
+          "4f7bce5644": "macOS te avisará cuando los agentes terminen o los terminales necesiten atención.",
+          "95d99b52fa": "Permitir notificaciones de Orca",
+          "94562ba367": "macOS está pidiendo permiso. Haz clic en Permitir en el diálogo y este paso se actualizará automáticamente.",
+          "4f6a1da718": "Abrir Configuración del sistema",
+          "90b5d2e363": "macOS no está entregando las notificaciones de Orca",
+          "2c47f5465f": "Activa Permitir notificaciones para Orca en Configuración del sistema. Este paso se actualizará automáticamente cuando estén activadas."
         },
         "OnboardingFlow": {
           "1b5e182e9f": "Bienvenido a Orca",

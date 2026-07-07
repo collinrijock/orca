@@ -126,6 +126,7 @@ import type {
   GetRateLimitResult,
   NotificationDispatchRequest,
   NotificationDispatchResult,
+  NotificationDeliveryProbeResult,
   NotificationDismissResult,
   NotificationPermissionStatusResult,
   NotificationSoundResult,
@@ -1993,7 +1994,7 @@ export type PreloadApi = {
     dismiss: (ids: string[]) => Promise<NotificationDismissResult>
     openSystemSettings: () => Promise<void>
     getPermissionStatus: () => Promise<NotificationPermissionStatusResult>
-    requestPermission: () => Promise<NotificationPermissionStatusResult>
+    probeDelivery: (args?: { force?: boolean }) => Promise<NotificationDeliveryProbeResult>
     playSound: (options?: { force?: boolean; volume?: number }) => Promise<NotificationSoundResult>
   }
   onboarding: {
