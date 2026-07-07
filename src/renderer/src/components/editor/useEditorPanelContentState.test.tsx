@@ -47,6 +47,7 @@ vi.mock('@/store', () => ({
 }))
 
 import { useEditorPanelContentState } from './useEditorPanelContentState'
+import { getDiskBaselineSignature } from './diff-content-signature'
 import { ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT } from './editor-autosave'
 
 type Deferred<T> = {
@@ -567,5 +568,54 @@ describe('useEditorPanelContentState', () => {
       await staleDiff.promise
     })
     expect(latestDiffContents[activeFile.id]?.modifiedContent).toBe('fresh diff content')
+  })
+
+  it('stamps the disk baseline when a clean tab load resolves', async () => {
+    const activeFile = createOpenFile()
+    const setLastKnownDiskSignature = vi.fn()
+    mocks.getState.mockReturnValue({
+      settings: null,
+      openFiles: [activeFile],
+      setLastKnownDiskSignature
+    })
+    mocks.readRuntimeFileContent.mockResolvedValue({ content: 'disk content', isBinary: false })
+
+    container = document.createElement('div')
+    document.body.appendChild(container)
+    root = createRoot(container)
+    await act(async () => {
+      root?.render(<HookProbe activeFile={activeFile} openFiles={[activeFile]} />)
+    })
+
+    await vi.waitFor(() =>
+      expect(setLastKnownDiskSignature).toHaveBeenCalledWith(
+        activeFile.id,
+        getDiskBaselineSignature('disk content')
+      )
+    )
+  })
+
+  it('keeps a dirty tab baseline untouched by content loads', async () => {
+    // Why: a dirty tab's draft still derives from the OLD content — moving
+    // the baseline on load would hide the conflict its restore check exists
+    // to catch.
+    const activeFile = createOpenFile({ isDirty: true })
+    const setLastKnownDiskSignature = vi.fn()
+    mocks.getState.mockReturnValue({
+      settings: null,
+      openFiles: [activeFile],
+      setLastKnownDiskSignature
+    })
+    mocks.readRuntimeFileContent.mockResolvedValue({ content: 'disk content', isBinary: false })
+
+    container = document.createElement('div')
+    document.body.appendChild(container)
+    root = createRoot(container)
+    await act(async () => {
+      root?.render(<HookProbe activeFile={activeFile} openFiles={[activeFile]} />)
+    })
+
+    await vi.waitFor(() => expect(latestFileContents[activeFile.id]?.content).toBe('disk content'))
+    expect(setLastKnownDiskSignature).not.toHaveBeenCalled()
   })
 })

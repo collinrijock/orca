@@ -37,6 +37,10 @@ export function attachRestoredTabConflictScan(store: AppStoreApi): () => void {
   let disposed = false
 
   const verify = async (file: OpenFile): Promise<void> => {
+    // Why: OpenFile ids are file paths — a marker left behind by an early
+    // exit would silently skip every future verification of a reopened
+    // same-path tab. Only a scheduled retry may keep the marker set.
+    let retryScheduled = false
     try {
       const state = store.getState()
       const result = await readRuntimeFileContent({
@@ -79,6 +83,7 @@ export function attachRestoredTabConflictScan(store: AppStoreApi): () => void {
       }
       const attempts = (attemptsByFileId.get(file.id) ?? 0) + 1
       attemptsByFileId.set(file.id, attempts)
+      retryScheduled = true
       const timer = setTimeout(
         () => {
           retryTimers.delete(timer)
@@ -88,9 +93,11 @@ export function attachRestoredTabConflictScan(store: AppStoreApi): () => void {
         attempts < VERIFY_FAST_ATTEMPTS ? VERIFY_RETRY_MS : VERIFY_SLOW_RETRY_MS
       )
       retryTimers.add(timer)
-      return
+    } finally {
+      if (!retryScheduled) {
+        inFlightFileIds.delete(file.id)
+      }
     }
-    inFlightFileIds.delete(file.id)
   }
 
   const scan = (): void => {
