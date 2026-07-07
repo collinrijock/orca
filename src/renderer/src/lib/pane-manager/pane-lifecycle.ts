@@ -76,7 +76,7 @@ export function openTerminal(pane: ManagedPaneInternal): void {
   // Why: without run-joining, Arabic/Hebrew output renders as disconnected
   // letters in reversed order (#5262). Registered up front so restored
   // scrollback and reattach replays shape correctly, not just live output.
-  registerArabicShapingJoiner(terminal)
+  pane.arabicShapingJoinerCleanup = registerArabicShapingJoiner(terminal)
 
   // Why: the OS reads the focused textarea's screen rect at compositionstart to
   // decide where to display the IME candidate window. xterm positions that
@@ -230,6 +230,13 @@ export function disposePane(
   pane.focusClassSyncCleanup = null
   pane.terminalScrollIntentDisposable?.dispose()
   pane.terminalScrollIntentDisposable = null
+  // Deregister the RTL shaping joiner: terminal.dispose() below does not.
+  try {
+    pane.arabicShapingJoinerCleanup?.()
+  } catch {
+    /* ignore */
+  }
+  pane.arabicShapingJoinerCleanup = null
   if (pane.compositionHandler) {
     pane.terminal.element?.removeEventListener('compositionstart', pane.compositionHandler)
     pane.terminal.element?.removeEventListener('compositionupdate', pane.compositionHandler)

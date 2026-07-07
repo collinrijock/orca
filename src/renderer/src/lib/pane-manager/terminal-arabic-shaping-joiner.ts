@@ -116,10 +116,15 @@ export function findRtlJoinRanges(text: string): [number, number][] {
   return ranges
 }
 
-/** Register the RTL shaping joiner on a terminal. Registration is per
- *  terminal instance and is torn down with the terminal itself. */
+/** Register the RTL shaping joiner on a terminal. Returns a cleanup that
+ *  deregisters the joiner — `Terminal.dispose()` does not remove registered
+ *  character joiners, so disposePane() must call this to avoid leaking the
+ *  registration (xtermjs/xterm.js#3289). */
 export function registerArabicShapingJoiner(
-  terminal: Pick<Terminal, 'registerCharacterJoiner'>
-): number {
-  return terminal.registerCharacterJoiner(findRtlJoinRanges)
+  terminal: Pick<Terminal, 'registerCharacterJoiner' | 'deregisterCharacterJoiner'>
+): () => void {
+  const joinerId = terminal.registerCharacterJoiner(findRtlJoinRanges)
+  return () => {
+    terminal.deregisterCharacterJoiner(joinerId)
+  }
 }

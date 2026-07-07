@@ -122,15 +122,24 @@ describe('findRtlJoinRanges', () => {
 })
 
 describe('registerArabicShapingJoiner', () => {
-  it('registers the range finder with the terminal and returns the joiner id', () => {
+  it('registers the range finder and returns a cleanup that deregisters it', () => {
     let registered: ((text: string) => [number, number][]) | null = null
+    let deregistered: number | null = null
     const terminal = {
       registerCharacterJoiner(handler: (text: string) => [number, number][]): number {
         registered = handler
         return 7
+      },
+      deregisterCharacterJoiner(joinerId: number): void {
+        deregistered = joinerId
       }
     }
-    expect(registerArabicShapingJoiner(terminal)).toBe(7)
+    const cleanup = registerArabicShapingJoiner(terminal)
     expect(registered).toBe(findRtlJoinRanges)
+    expect(deregistered).toBeNull()
+
+    // terminal.dispose() does not deregister joiners, so cleanup must.
+    cleanup()
+    expect(deregistered).toBe(7)
   })
 })
