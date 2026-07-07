@@ -136,7 +136,8 @@ export function buildAiVaultResumeStartupForWorktree(args: {
       cwd: args.session.cwd,
       platform,
       commandOverride: args.commandOverride,
-      codexHome
+      codexHome,
+      shell: queuedShell
     })
   }
 }

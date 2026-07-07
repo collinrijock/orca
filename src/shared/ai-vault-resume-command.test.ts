@@ -55,6 +55,21 @@ describe('buildAiVaultResumeCommand', () => {
     )
   })
 
+  it('quotes queued OMP resume paths for the provided Windows shell', () => {
+    expect(
+      buildAiVaultResumeCommand({
+        agent: 'omp',
+        sessionId: '019f27cd-4268-7000-96e7-62f42a55c144',
+        resumeFilePath: 'C:\\Users\\Ada Lovelace\\.omp\\agent\\sessions\\repo\\sess.jsonl',
+        cwd: 'C:\\Users\\Ada Lovelace\\repo',
+        platform: 'win32',
+        shell: 'powershell'
+      })
+    ).toBe(
+      "Set-Location -LiteralPath 'C:\\Users\\Ada Lovelace\\repo'; omp --resume 'C:\\Users\\Ada Lovelace\\.omp\\agent\\sessions\\repo\\sess.jsonl'"
+    )
+  })
+
   it('falls back to the session id when no OMP transcript path is known', () => {
     expect(
       buildAiVaultResumeCommand({

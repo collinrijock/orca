@@ -105,18 +105,22 @@ export function buildAiVaultResumeCommand(args: {
   commandOverride?: string | null
   codexHome?: string | null
   resumeFilePath?: string | null
+  shell?: AgentStartupShell
 }): string {
-  const { agent, sessionId, cwd, platform, commandOverride, codexHome, resumeFilePath } = args
+  const { agent, sessionId, cwd, platform, commandOverride, codexHome, resumeFilePath, shell } =
+    args
   const baseCommand = commandOverride?.trim() || defaultAiVaultResumeCommandBase(agent)
   // Why: OMP's `--resume` accepts an absolute transcript path, which resolves
   // regardless of which session-dir root (custom OMP_CODING_AGENT_DIR / WSL
   // home) the file was discovered under, where an id-prefix lookup scoped to
   // the default store would miss it. Falls back to the id if no path is known.
   const resumeTarget = agent === 'omp' && resumeFilePath?.trim() ? resumeFilePath.trim() : sessionId
-  const sessionArg = quoteShellArg(resumeTarget, platform)
+  const sessionArg = shell
+    ? quoteStartupArg(resumeTarget, shell)
+    : quoteShellArg(resumeTarget, platform)
   const resumeCommand = buildAgentResumeInvocation(agent, baseCommand, sessionArg)
 
-  return buildAiVaultResumeShellCommand({ resumeCommand, cwd, platform, codexHome })
+  return buildAiVaultResumeShellCommand({ resumeCommand, cwd, platform, codexHome, shell })
 }
 
 export function buildAiVaultResumeShellCommand(args: {
