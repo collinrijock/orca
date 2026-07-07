@@ -10,6 +10,7 @@ import {
 } from '@/lib/connection-context'
 import { joinPath } from '@/lib/path'
 import { useAppStore } from '@/store'
+import { getDiffContentSignature } from './diff-content-signature'
 import { getRuntimeFileReadScope, readRuntimeFileContent } from '@/runtime/runtime-file-client'
 import { settingsForRuntimeOwner } from '@/runtime/runtime-rpc-client'
 import {
@@ -53,6 +54,25 @@ type UseEditorPanelContentStateResult = {
   diffContents: Record<string, DiffContent>
   reloadFileContent: (file: OpenFile) => void
   reloadDiffContent: (file: OpenFile) => void
+}
+
+// Why: a clean load re-baselines what this tab's future edits are based on; a
+// dirty tab keeps its baseline (its draft still derives from the older content
+// the signature was taken over). Best-effort metadata — a failure here must
+// not convert an already-delivered load into an error view, hence the guard.
+function stampCleanTabDiskBaseline(id: string, result: FileContent): void {
+  if (result.isBinary || result.loadError) {
+    return
+  }
+  try {
+    const state = useAppStore.getState()
+    const loadedFile = state.openFiles.find((file) => file.id === id)
+    if (loadedFile && !loadedFile.isDirty) {
+      state.setLastKnownDiskSignature(id, getDiffContentSignature(result.content))
+    }
+  } catch (err) {
+    console.warn('[editor] failed to stamp disk baseline', err)
+  }
 }
 
 function inFlightReadKey(connectionId: string | undefined, filePath: string): string {
@@ -172,6 +192,7 @@ export function useEditorPanelContentState({
         }
         delete fileLoadRetryAttemptsRef.current[id]
         setFileContents((prev) => ({ ...prev, [id]: result }))
+        stampCleanTabDiskBaseline(id, result)
       } catch (err) {
         if (fileReadGenerationRef.current[id] !== generation) {
           return

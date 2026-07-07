@@ -135,7 +135,11 @@ describe('useEditorPanelContentState', () => {
     mocks.isWorktreeConnectionResolved.mockReset()
     mocks.isWorktreeConnectionResolved.mockReturnValue(true)
     mocks.getState.mockReset()
-    mocks.getState.mockReturnValue({ settings: null })
+    mocks.getState.mockReturnValue({
+      settings: null,
+      openFiles: [],
+      setLastKnownDiskSignature: vi.fn()
+    })
   })
 
   afterEach(() => {

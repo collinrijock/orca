@@ -1,9 +1,12 @@
-import React from 'react'
+import React, { useState } from 'react'
 import { TriangleAlert } from 'lucide-react'
+import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 import type { OpenFile } from '@/store/slices/editor'
+import { ExternalFileChangeCompareDialog } from './ExternalFileChangeCompareDialog'
+import { trackExternalChangeConflictAction } from './editor-external-change-telemetry'
 
 // Why: when an external process (usually an agent) rewrites a file while the
 // tab holds unsaved edits, the reload pipeline preserves the buffer and marks
@@ -11,11 +14,14 @@ import type { OpenFile } from '@/store/slices/editor'
 // recovery path — without it the tab is silently stale until close/reopen and
 // the next save clobbers the newer disk content unannounced.
 
+const RELOAD_UNDO_TOAST_DURATION_MS = 8_000
+
 export function reloadTabContentFromDisk(
   file: OpenFile,
   reloadContent: (file: OpenFile) => void
 ): void {
   const state = useAppStore.getState()
+  const discardedDraft = state.editorDrafts[file.id]
   // Why: drop the draft before reloading — the buffer shadows loaded content
   // (editBuffers ?? fileContents), so a reload alone would keep showing the
   // stale unsaved text.
@@ -23,6 +29,35 @@ export function reloadTabContentFromDisk(
   state.markFileDirty(file.id, false)
   state.setExternalMutation(file.id, null)
   reloadContent(file)
+  if (discardedDraft === undefined) {
+    return
+  }
+  // Why: on diff tabs the reload rotates the Monaco model, destroying the undo
+  // stack — without this toast a mistaken click is an unrecoverable discard.
+  toast(
+    translate('auto.components.editor.ExternalFileChangeBanner.5c02de9b31', 'Reloaded from disk'),
+    {
+      description: file.relativePath,
+      duration: RELOAD_UNDO_TOAST_DURATION_MS,
+      action: {
+        label: translate('auto.components.editor.ExternalFileChangeBanner.d1e830fa22', 'Undo'),
+        onClick: () => {
+          const current = useAppStore.getState()
+          // Why: the tab may have closed while the toast was up; restoring a
+          // draft for a dead fileId would strand an orphan buffer.
+          if (!current.openFiles.some((openFile) => openFile.id === file.id)) {
+            return
+          }
+          current.setEditorDraft(file.id, discardedDraft)
+          current.markFileDirty(file.id, true)
+          // Why: the disk still differs from the restored draft, so the
+          // conflict (and its autosave suspension) must come back with it.
+          current.setExternalMutation(file.id, 'changed')
+          trackExternalChangeConflictAction(file, 'undo_reload')
+        }
+      }
+    }
+  )
 }
 
 export function keepTabEditsOverExternalChange(fileId: string): void {
@@ -31,15 +66,30 @@ export function keepTabEditsOverExternalChange(fileId: string): void {
 
 export function ExternalFileChangeBanner({
   file,
+  currentContent,
   reloadContent
 }: {
   file: OpenFile
+  /** The tab's live buffer (draft if dirty) — what "Keep My Edits" keeps. */
+  currentContent: string
   /** Refetches the tab's content — file body for edit tabs, diff body for
    *  unstaged diff tabs. */
   reloadContent: (file: OpenFile) => void
 }): React.JSX.Element {
-  const handleReload = (): void => reloadTabContentFromDisk(file, reloadContent)
-  const handleKeepEdits = (): void => keepTabEditsOverExternalChange(file.id)
+  const [compareOpen, setCompareOpen] = useState(false)
+
+  const handleReload = (): void => {
+    trackExternalChangeConflictAction(file, 'reload')
+    reloadTabContentFromDisk(file, reloadContent)
+  }
+  const handleKeepEdits = (): void => {
+    trackExternalChangeConflictAction(file, 'keep')
+    keepTabEditsOverExternalChange(file.id)
+  }
+  const handleCompare = (): void => {
+    trackExternalChangeConflictAction(file, 'compare')
+    setCompareOpen(true)
+  }
 
   return (
     // Why: role=alert because the banner appears asynchronously (an agent
@@ -58,6 +108,9 @@ export function ExternalFileChangeBanner({
           </span>
         </div>
         <div className="flex shrink-0 items-center gap-1">
+          <Button type="button" size="xs" variant="outline" onClick={handleCompare}>
+            {translate('auto.components.editor.ExternalFileChangeBanner.90b2ce7d43', 'Compare')}
+          </Button>
           <Button type="button" size="xs" variant="outline" onClick={handleReload}>
             {translate(
               'auto.components.editor.ExternalFileChangeBanner.3fa2b8d417',
@@ -72,6 +125,22 @@ export function ExternalFileChangeBanner({
           </Button>
         </div>
       </div>
+      {compareOpen && (
+        <ExternalFileChangeCompareDialog
+          file={file}
+          currentContent={currentContent}
+          open={compareOpen}
+          onOpenChange={setCompareOpen}
+          onReload={() => {
+            trackExternalChangeConflictAction(file, 'reload')
+            reloadTabContentFromDisk(file, reloadContent)
+          }}
+          onKeepEdits={() => {
+            trackExternalChangeConflictAction(file, 'keep')
+            keepTabEditsOverExternalChange(file.id)
+          }}
+        />
+      )}
     </div>
   )
 }

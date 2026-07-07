@@ -11519,6 +11519,18 @@
         "ExternalFileChangeBanner": {
           "7c41e90d12": "This file changed on disk while you have unsaved edits. Saving will overwrite the newer disk content.",
           "3fa2b8d417": "Reload from Disk",
+          "a95d02c644": "Keep My Edits",
+          "5c02de9b31": "Reloaded from disk",
+          "d1e830fa22": "Undo",
+          "90b2ce7d43": "Compare"
+        },
+        "ExternalFileChangeCompareDialog": {
+          "4b8de20a11": "File changed on disk",
+          "90cc31e4d7": "Disk version on the left, your unsaved edits on the right.",
+          "8fe30ab254": "Reading file from disk...",
+          "e2b1cd0393": "Could not read the file from disk: {{value0}}",
+          "b6cf20d514": "The file on disk is binary — no text comparison available.",
+          "3fa2b8d417": "Reload from Disk",
           "a95d02c644": "Keep My Edits"
         }
       },

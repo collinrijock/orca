@@ -28,7 +28,17 @@ import {
   type EditorSaveQuiesceDetail
 } from './editor-autosave'
 import { flushPendingEditorChange } from './editor-pending-flush'
-import { clearSelfWrite, hasRecentSelfWrite, recordSelfWrite } from './editor-self-write-registry'
+import {
+  clearSelfWrite,
+  hasRecentSelfWrite,
+  recordSelfWrite,
+  SELF_WRITE_REMOTE_TTL_MS
+} from './editor-self-write-registry'
+import { getDiffContentSignature } from './diff-content-signature'
+import {
+  trackExternalChangeConflictAction,
+  trackExternalChangeConflictShown
+} from './editor-external-change-telemetry'
 import {
   autosaveSubscriberInputsEqual,
   getAutosaveSubscriberInputs,
@@ -103,7 +113,14 @@ export function attachEditorAutosaveController(store: AppStoreApi): () => void {
         // round-tripping back into a setContent that jumps the cursor to the
         // end (and, under round-trip drift, can drop keystrokes typed in the
         // debounce window). See editor-self-write-registry.
-        recordSelfWrite(liveFile.filePath, contentToSave, liveFile.runtimeEnvironmentId)
+        recordSelfWrite(
+          liveFile.filePath,
+          contentToSave,
+          liveFile.runtimeEnvironmentId,
+          connectionId || liveFile.runtimeEnvironmentId?.trim()
+            ? SELF_WRITE_REMOTE_TTL_MS
+            : undefined
+        )
         try {
           await writeRuntimeFile(
             {
@@ -134,12 +151,16 @@ export function attachEditorAutosaveController(store: AppStoreApi): () => void {
         if (!stillDirty) {
           nextState.clearEditorDraft(file.id)
         }
+        // Why: disk now holds contentToSave — future edits baseline on it, and
+        // a restore must not flag our own save as an external change.
+        nextState.setLastKnownDiskSignature(file.id, getDiffContentSignature(contentToSave))
         // Why: the write just made disk match the buffer, resolving any
         // changed-on-disk conflict in favor of the user's content. The banner
         // warned before this point; keeping the mark would show a stale
         // conflict for a file that no longer diverges.
         const savedFile = nextState.openFiles.find((openFile) => openFile.id === file.id)
         if (savedFile?.externalMutation === 'changed') {
+          trackExternalChangeConflictAction(savedFile, 'save_overwrite')
           nextState.setExternalMutation(file.id, null)
         }
 
@@ -422,6 +443,12 @@ export function attachEditorAutosaveController(store: AppStoreApi): () => void {
           canAutoSaveOpenFile(file) &&
           !hasRecentSelfWrite(file.filePath, file.runtimeEnvironmentId)
         ) {
+          if (file.externalMutation !== 'changed') {
+            trackExternalChangeConflictShown(file, {
+              connectionId: getConnectionIdForFile(file.worktreeId, file.filePath) ?? undefined,
+              origin: 'live'
+            })
+          }
           state.setExternalMutation(file.id, 'changed')
         }
         continue

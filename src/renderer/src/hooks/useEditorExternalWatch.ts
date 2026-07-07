@@ -29,6 +29,7 @@ import {
   type WorktreeFileChangeEventDetail
 } from './worktree-file-change-event'
 import { isGitRepoKind } from '../../../shared/repo-kind'
+import { trackExternalChangeConflictShown } from '@/components/editor/editor-external-change-telemetry'
 
 // Why: atomic-write patterns (Claude Code's Edit tool, editors like vim,
 // VSCode) land as a short burst of `update` events — or `delete + create` on
@@ -685,13 +686,16 @@ export function createExternalWatchEventHandler(
   return { handleFsChanged, dispose }
 }
 
-function markTabsChangedOnDisk(fileIds: string[]): void {
+function markTabsChangedOnDisk(fileIds: string[], connectionId: string | undefined): void {
   const state = useAppStore.getState()
   for (const fileId of fileIds) {
     const file = state.openFiles.find((f) => f.id === fileId)
     // Why: echo verification resolves async — a save or reload may already
     // have resolved the conflict, so only still-dirty tabs get marked.
     if (file && file.isDirty && canAutoSaveOpenFile(file)) {
+      if (file.externalMutation !== 'changed') {
+        trackExternalChangeConflictShown(file, { connectionId, origin: 'live' })
+      }
       state.setExternalMutation(fileId, 'changed')
     }
   }
@@ -711,7 +715,7 @@ function scheduleChangedOnDiskMark(
   // typed during the write. Marking on the echo would show a false "changed
   // on disk" banner, so verify disk really differs from our last write.
   if (!recentSelfWrite || recentSelfWrite.content === null) {
-    markTabsChangedOnDisk(fileIds)
+    markTabsChangedOnDisk(fileIds, target.connectionId)
     return
   }
   void readRuntimeFileContent({
@@ -725,13 +729,13 @@ function scheduleChangedOnDiskMark(
   })
     .then((result) => {
       if (result.isBinary || result.content !== recentSelfWrite.content) {
-        markTabsChangedOnDisk(fileIds)
+        markTabsChangedOnDisk(fileIds, target.connectionId)
       }
     })
     .catch(() => {
       // Why: unreadable disk state can't disprove an external change — keep
       // the conflict visible rather than risk a silent overwrite.
-      markTabsChangedOnDisk(fileIds)
+      markTabsChangedOnDisk(fileIds, target.connectionId)
     })
 }
 

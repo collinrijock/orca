@@ -1022,6 +1022,9 @@ export type PersistedOpenFile = {
   runtimeEnvironmentId?: string | null
   /** Unsaved editor buffer captured for hot exit; presence restores the tab dirty. */
   dirtyDraftContent?: string
+  /** Signature of the disk content the dirty draft is based on; lets restore
+   *  re-derive a changed-on-disk conflict from ground truth. */
+  lastKnownDiskSignature?: string
 }
 
 export type WorkspaceSessionState = {

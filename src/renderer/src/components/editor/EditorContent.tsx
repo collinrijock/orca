@@ -782,7 +782,11 @@ export function EditorContent({
     }
     const externalChangeBanner =
       activeFile.externalMutation === 'changed' ? (
-        <ExternalFileChangeBanner file={activeFile} reloadContent={reloadFileContent} />
+        <ExternalFileChangeBanner
+          file={activeFile}
+          currentContent={editBuffers[activeFile.id] ?? fc.content}
+          reloadContent={reloadFileContent}
+        />
       ) : null
     if (isChangesMode) {
       const changesView = (
@@ -911,7 +915,11 @@ export function EditorContent({
   // so a dirty markdown diff in preview mode surfaces the conflict too.
   const diffExternalChangeBanner =
     activeFile.externalMutation === 'changed' ? (
-      <ExternalFileChangeBanner file={activeFile} reloadContent={reloadDiffContent} />
+      <ExternalFileChangeBanner
+        file={activeFile}
+        currentContent={modifiedDiffContent}
+        reloadContent={reloadDiffContent}
+      />
     ) : null
   if (isMarkdown && mdViewMode === 'preview' && dc.largeDiffRenderLimit?.limited !== true) {
     return (
