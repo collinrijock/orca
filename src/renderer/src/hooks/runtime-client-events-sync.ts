@@ -169,13 +169,19 @@ export function createRuntimeClientEventsSync(
         .catch((error) => {
           pending.delete(environmentId)
           if (subscribeGeneration === generation) {
-            consecutiveFailures.set(
-              environmentId,
-              (consecutiveFailures.get(environmentId) ?? 0) + 1
-            )
             console.warn('[runtime-client-events] failed to subscribe:', error)
+            // Why: only track a failure when we will actually retry this env.
+            // A failure that lands after the env left the desired set must not
+            // leave a stale count that makes its first retry after re-entry skip
+            // the base delay.
             if (deps.getDesiredEnvironmentIds().includes(environmentId)) {
+              consecutiveFailures.set(
+                environmentId,
+                (consecutiveFailures.get(environmentId) ?? 0) + 1
+              )
               scheduleRetry(environmentId, subscribeGeneration)
+            } else {
+              consecutiveFailures.delete(environmentId)
             }
           }
         })

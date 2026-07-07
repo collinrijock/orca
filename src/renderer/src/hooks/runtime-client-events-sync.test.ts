@@ -306,4 +306,63 @@ describe('createRuntimeClientEventsSync', () => {
       vi.useRealTimers()
     }
   })
+
+  it('does not carry a stale failure count when a rejection lands after the env left the set', async () => {
+    vi.useFakeTimers()
+    try {
+      // 'B' stays pending forever so the desired set is never empty and the
+      // generation never bumps — this is what lets A's late rejection still be
+      // observed by its .catch (the exact leave-while-in-flight race).
+      let desired = ['A', 'B']
+      const aRejecters: ((error: Error) => void)[] = []
+      let aAttempts = 0
+      const subscribe = vi.fn(
+        (environmentId: string): Promise<RuntimeClientEventSubscriptionHandle> => {
+          if (environmentId === 'B') {
+            return new Promise(() => {})
+          }
+          aAttempts += 1
+          return new Promise((_resolve, reject) => {
+            aRejecters.push(reject)
+          })
+        }
+      )
+      const sync = createRuntimeClientEventsSync({
+        getDesiredEnvironmentIds: () => desired,
+        subscribe,
+        onEvent: vi.fn(),
+        retryDelayMs: 10,
+        random: () => 1
+      })
+
+      sync.sync()
+      expect(aAttempts).toBe(1)
+
+      // A leaves the desired set while its subscribe is still in flight.
+      desired = ['B']
+      sync.sync()
+
+      // A's in-flight subscribe rejects now, after it is no longer desired.
+      aRejecters[0](new Error('unreachable'))
+      await vi.advanceTimersByTimeAsync(0)
+
+      // A re-enters and its fresh subscribe (attempt 2) also fails.
+      desired = ['A', 'B']
+      sync.sync()
+      await vi.advanceTimersByTimeAsync(0)
+      expect(aAttempts).toBe(2)
+      aRejecters[1](new Error('unreachable'))
+      await vi.advanceTimersByTimeAsync(0)
+
+      // The first retry after re-entry must use the base delay (10ms). A stale
+      // count from the discarded rejection would have doubled it to 20ms.
+      await vi.advanceTimersByTimeAsync(9)
+      expect(aAttempts).toBe(2)
+      await vi.advanceTimersByTimeAsync(1)
+      await Promise.resolve()
+      expect(aAttempts).toBe(3)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
 })
