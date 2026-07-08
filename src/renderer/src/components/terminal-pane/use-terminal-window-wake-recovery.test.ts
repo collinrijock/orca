@@ -12,6 +12,10 @@ vi.mock('./terminal-visibility-resume', () => ({
 }))
 
 import { useTerminalWindowWakeRecovery } from './use-terminal-window-wake-recovery'
+import {
+  getTerminalFreezeBreadcrumbs,
+  resetTerminalFreezeBreadcrumbsForTesting
+} from './terminal-freeze-breadcrumbs'
 
 describe('useTerminalWindowWakeRecovery', () => {
   const manager = {} as PaneManager
@@ -27,6 +31,7 @@ describe('useTerminalWindowWakeRecovery', () => {
     recoverVisibleTerminalWindowWakeMock.mockClear()
     unsubscribeSystemResumed.mockClear()
     onSystemResumed.mockClear()
+    resetTerminalFreezeBreadcrumbsForTesting()
     // Why: without requestAnimationFrame the hook skips its settled-frame
     // follow-up, so every trigger maps to exactly one synchronous recovery.
     vi.stubGlobal('requestAnimationFrame', undefined)
@@ -72,6 +77,24 @@ describe('useTerminalWindowWakeRecovery', () => {
       isActive: true,
       clearGlyphAtlases: true
     })
+  })
+
+  it('records a wake-recovery breadcrumb with the trigger source and atlas decision', () => {
+    // Why: a post-wake garble report attributes to the trigger that ran (or its
+    // absence). Pin that focus records source=focus/atlas=false and system
+    // resume records source=system-resumed/atlas=true.
+    renderWakeRecoveryHook()
+
+    window.dispatchEvent(new Event('focus'))
+    systemResumedCallback?.()
+
+    const wakeCrumbs = getTerminalFreezeBreadcrumbs().filter((crumb) =>
+      crumb.kind.startsWith('wake-recovery:')
+    )
+    expect(wakeCrumbs.map((crumb) => [crumb.kind, crumb.detail])).toEqual([
+      ['wake-recovery:focus', { clearGlyphAtlases: false }],
+      ['wake-recovery:system-resumed', { clearGlyphAtlases: true }]
+    ])
   })
 
   it('unsubscribes from the system resume event on cleanup', () => {

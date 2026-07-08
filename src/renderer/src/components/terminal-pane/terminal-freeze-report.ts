@@ -7,6 +7,7 @@
 import { getTerminalFreezeBreadcrumbs } from './terminal-freeze-breadcrumbs'
 import { getTerminalDeliveryWatchdogDiagnostics } from './terminal-delivery-watchdog'
 import { isDocumentVisibilityProvenStale } from './stale-document-visibility'
+import { getAllPaneRenderingDiagnostics } from '@/lib/pane-manager/pane-manager-registry'
 
 export type TerminalFreezeReport = {
   capturedAt: string
@@ -16,6 +17,9 @@ export type TerminalFreezeReport = {
     documentVisibilityProvenStale: boolean
     ptyDataListenerCount: number | null
     watchdog: ReturnType<typeof getTerminalDeliveryWatchdogDiagnostics>
+    // Why: per-pane WebGL state distinguishes a stale post-wake surface from a
+    // context-loss fallback — the missing signal for the garble-after-sleep class.
+    paneRendering: ReturnType<typeof getAllPaneRenderingDiagnostics>
     breadcrumbs: ReturnType<typeof getTerminalFreezeBreadcrumbs>
   }
   main: unknown
@@ -36,6 +40,7 @@ export async function buildTerminalFreezeReport(): Promise<TerminalFreezeReport>
       documentVisibilityProvenStale: isDocumentVisibilityProvenStale(),
       ptyDataListenerCount: window.api?.pty?.getPtyDataListenerCount?.() ?? null,
       watchdog: getTerminalDeliveryWatchdogDiagnostics(),
+      paneRendering: getAllPaneRenderingDiagnostics(),
       breadcrumbs: getTerminalFreezeBreadcrumbs()
     },
     main: main ?? null
