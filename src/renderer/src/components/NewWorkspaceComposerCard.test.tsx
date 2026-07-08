@@ -3,7 +3,7 @@
 import React from 'react'
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import NewWorkspaceComposerCard from './NewWorkspaceComposerCard'
 import type { NewWorkspaceProjectOption } from '@/lib/new-workspace-project-options'
 import type { ProjectHostSetupOption } from '@/lib/project-host-setup-options'
@@ -12,20 +12,34 @@ const storeMocks = vi.hoisted(() => ({
   closeModal: vi.fn(),
   openModal: vi.fn(),
   openSettingsPage: vi.fn(),
-  openSettingsTarget: vi.fn()
+  openSettingsTarget: vi.fn(),
+  setRuntimeEnvironmentStatus: vi.fn()
+}))
+
+const apiMocks = vi.hoisted(() => ({
+  runtimeGetStatus: vi.fn(),
+  sshConnect: vi.fn()
 }))
 
 vi.mock('@/store', () => ({
-  useAppStore: (selector: (state: unknown) => unknown) =>
-    selector({
-      closeModal: storeMocks.closeModal,
-      openModal: storeMocks.openModal,
-      openSettingsPage: storeMocks.openSettingsPage,
-      openSettingsTarget: storeMocks.openSettingsTarget,
-      activeModal: 'none',
-      settings: { defaultTuiAgent: null, disabledTuiAgents: [] },
-      updateSettings: vi.fn()
-    })
+  useAppStore: Object.assign(
+    (selector: (state: unknown) => unknown) =>
+      selector({
+        closeModal: storeMocks.closeModal,
+        openModal: storeMocks.openModal,
+        openSettingsPage: storeMocks.openSettingsPage,
+        openSettingsTarget: storeMocks.openSettingsTarget,
+        setRuntimeEnvironmentStatus: storeMocks.setRuntimeEnvironmentStatus,
+        activeModal: 'none',
+        settings: { defaultTuiAgent: null, disabledTuiAgents: [] },
+        updateSettings: vi.fn()
+      }),
+    {
+      getState: () => ({
+        setRuntimeEnvironmentStatus: storeMocks.setRuntimeEnvironmentStatus
+      })
+    }
+  )
 }))
 
 vi.mock('@/components/contextual-tours/use-contextual-tour', () => ({
@@ -137,6 +151,17 @@ const devboxNeedsSetupHostOption: ProjectHostSetupOption = {
   isAvailable: true
 }
 
+const disconnectedDevboxNeedsSetupHostOption: ProjectHostSetupOption = {
+  kind: 'needs-setup',
+  id: 'needs-setup:ssh:devbox',
+  projectId: 'project-group:platform',
+  hostId: 'ssh:devbox',
+  label: 'Devbox',
+  detail: 'Connect this host to set up projects',
+  isAvailable: false,
+  connectAction: { kind: 'ssh', targetId: 'devbox' }
+}
+
 function renderCard(
   overrides: Partial<React.ComponentProps<typeof NewWorkspaceComposerCard>> = {}
 ) {
@@ -242,6 +267,31 @@ function findRunTargetItem(label: string): HTMLElement | undefined {
 let current: { container: HTMLDivElement; root: Root } | null = null
 
 describe('NewWorkspaceComposerCard folder task source mode', () => {
+  beforeEach(() => {
+    ;(window as unknown as { api: unknown }).api = {
+      runtimeEnvironments: {
+        getStatus: apiMocks.runtimeGetStatus
+      },
+      ssh: {
+        connect: apiMocks.sshConnect
+      }
+    }
+    apiMocks.runtimeGetStatus.mockResolvedValue({
+      id: 'status',
+      ok: true,
+      result: {
+        runtimeId: 'runtime-devbox',
+        rendererGraphEpoch: 1,
+        graphStatus: 'ready',
+        authoritativeWindowId: null,
+        liveTabCount: 0,
+        liveLeafCount: 0
+      },
+      _meta: { runtimeId: 'runtime-devbox' }
+    })
+    apiMocks.sshConnect.mockResolvedValue(undefined)
+  })
+
   afterEach(() => {
     act(() => current?.root.unmount())
     current?.container.remove()
@@ -506,6 +556,33 @@ describe('NewWorkspaceComposerCard folder task source mode', () => {
     expect(devboxItem).toBeTruthy()
     act(() => devboxItem?.click())
 
+    expect(hostChanges).toEqual([])
+  })
+
+  it('connects disconnected setup-needed SSH hosts without selecting them', async () => {
+    const hostChanges: string[] = []
+    current = renderCard({
+      projectHostSetupOptions: [localReadyHostOption, disconnectedDevboxNeedsSetupHostOption],
+      selectedProjectHostSetupId: 'setup-local',
+      onProjectHostSetupChange: (setupId) => hostChanges.push(setupId)
+    })
+
+    openRunTargetPicker(current.container)
+    const devboxItem = findRunTargetItem('Devbox')
+    expect(
+      devboxItem?.getAttribute('aria-disabled') === 'true' ||
+        devboxItem?.hasAttribute('data-disabled')
+    ).toBe(true)
+    const connectButton = [...(devboxItem?.querySelectorAll('button') ?? [])].find((button) =>
+      button.textContent?.includes('Connect')
+    )
+    expect(connectButton).toBeTruthy()
+
+    await act(async () => {
+      connectButton?.click()
+    })
+
+    expect(apiMocks.sshConnect).toHaveBeenCalledWith({ targetId: 'devbox' })
     expect(hostChanges).toEqual([])
   })
 

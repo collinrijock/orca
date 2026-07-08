@@ -57,12 +57,15 @@ import ProjectCombobox from '@/components/new-workspace/ProjectCombobox'
 import type { SetupConfig } from '@/lib/new-workspace'
 import type { NewWorkspaceProjectOption } from '@/lib/new-workspace-project-options'
 import type {
+  NeedsSetupProjectHostOption,
   ProjectHostSetupOption,
   ReadyProjectHostSetupOption
 } from '@/lib/project-host-setup-options'
 import type { WorkspaceCreateErrorDisplay } from '@/lib/workspace-create-error-format'
 import type { SshConnectionStatus } from '../../../shared/ssh-types'
 import type { TaskSourceContext } from '../../../shared/task-source-context'
+import type { RuntimeStatus } from '../../../shared/runtime-types'
+import { unwrapRuntimeRpcResult } from '@/runtime/runtime-rpc-client'
 import { translate } from '@/i18n/i18n'
 
 type RepoOption = React.ComponentProps<typeof RepoCombobox>['repos'][number]
@@ -231,6 +234,7 @@ type WorkspaceRunTargetComboboxProps = {
   onRecipeChange?: (recipeId: string | null) => void
   onAddRemoteServer?: () => void
   onAddSshHost?: () => void
+  onConnectHost?: (option: NeedsSetupProjectHostOption) => Promise<void> | void
 }
 
 function WorkspaceRunTargetCombobox({
@@ -241,11 +245,14 @@ function WorkspaceRunTargetCombobox({
   recipeValue,
   onRecipeChange,
   onAddRemoteServer,
-  onAddSshHost
+  onAddSshHost,
+  onConnectHost
 }: WorkspaceRunTargetComboboxProps): React.JSX.Element {
   const [open, setOpen] = React.useState(false)
   const [vmRecipesOpen, setVmRecipesOpen] = React.useState(false)
   const [hostActionsOpen, setHostActionsOpen] = React.useState(false)
+  const [connectingHostId, setConnectingHostId] = React.useState<string | null>(null)
+  const mountedRef = React.useRef(true)
   const readyHostOptions = React.useMemo(
     () =>
       hostOptions.filter(
@@ -265,6 +272,12 @@ function WorkspaceRunTargetCombobox({
     'auto.components.NewWorkspaceComposerCard.ephemeralVm',
     'Per-Workspace Environment'
   )
+
+  React.useEffect(() => {
+    return () => {
+      mountedRef.current = false
+    }
+  }, [])
 
   const handleHostSelect = React.useCallback(
     (setupId: string): void => {
@@ -288,6 +301,23 @@ function WorkspaceRunTargetCombobox({
       setOpen(false)
     },
     [onRecipeChange, recipes]
+  )
+
+  const connectHost = React.useCallback(
+    async (option: NeedsSetupProjectHostOption): Promise<void> => {
+      if (!option.connectAction || !onConnectHost || connectingHostId !== null) {
+        return
+      }
+      setConnectingHostId(option.hostId)
+      try {
+        await onConnectHost(option)
+      } finally {
+        if (mountedRef.current) {
+          setConnectingHostId((current) => (current === option.hostId ? null : current))
+        }
+      }
+    },
+    [connectingHostId, onConnectHost]
   )
 
   const handleAddSshHost = React.useCallback((): void => {
@@ -378,20 +408,39 @@ function WorkspaceRunTargetCombobox({
                   key={option.id}
                   value={option.id}
                   disabled
-                  className="items-center gap-2 px-3 py-2"
+                  className="items-center gap-2 px-3 py-2 data-[disabled=true]:pointer-events-auto data-[disabled=true]:opacity-100"
                 >
-                  <Check className="size-4 opacity-0" />
-                  {option.isAvailable ? (
-                    <Server className="size-3.5 shrink-0 text-muted-foreground" />
-                  ) : (
-                    <AlertTriangle className="size-3.5 shrink-0 text-muted-foreground" />
-                  )}
-                  <div className="min-w-0 flex-1">
-                    <div className="truncate text-sm">{option.label}</div>
-                    <div className="mt-0.5 truncate text-[11px] text-muted-foreground">
-                      {option.detail}
+                  <div className="flex min-w-0 flex-1 items-center gap-2 opacity-50">
+                    <Check className="size-4 opacity-0" />
+                    {option.isAvailable ? (
+                      <Server className="size-3.5 shrink-0 text-muted-foreground" />
+                    ) : (
+                      <AlertTriangle className="size-3.5 shrink-0 text-muted-foreground" />
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-sm">{option.label}</div>
+                      <div className="mt-0.5 truncate text-[11px] text-muted-foreground">
+                        {option.detail}
+                      </div>
                     </div>
                   </div>
+                  {option.connectAction && onConnectHost ? (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="xs"
+                      className="ml-1 shrink-0 text-muted-foreground hover:text-foreground"
+                      disabled={connectingHostId !== null}
+                      onPointerDown={(event) => event.stopPropagation()}
+                      onClick={(event) => {
+                        event.preventDefault()
+                        event.stopPropagation()
+                        void connectHost(option)
+                      }}
+                    >
+                      {translate('auto.components.NewWorkspaceComposerCard.connectHost', 'Connect')}
+                    </Button>
+                  ) : null}
                 </CommandItem>
               )
             )}
@@ -876,6 +925,48 @@ export default function NewWorkspaceComposerCard({
   const handleAddRemoteServer = React.useCallback((): void => {
     openHostSettingsTarget('add-remote-orca-server')
   }, [openHostSettingsTarget])
+  const handleConnectRunTargetHost = React.useCallback(
+    async (option: NeedsSetupProjectHostOption): Promise<void> => {
+      const action = option.connectAction
+      if (!action) {
+        return
+      }
+      try {
+        if (action.kind === 'ssh') {
+          await window.api.ssh.connect({ targetId: action.targetId })
+          return
+        }
+
+        const response = await window.api.runtimeEnvironments.getStatus({
+          selector: action.environmentId,
+          timeoutMs: 15_000
+        })
+        const runtimeStatus = unwrapRuntimeRpcResult<RuntimeStatus>(response)
+        // Why: the composer button is only a reachability retry; the separate
+        // project setup flow remains a follow-up once the host is online.
+        useAppStore.getState().setRuntimeEnvironmentStatus(action.environmentId, {
+          status: runtimeStatus,
+          checkedAt: Date.now()
+        })
+      } catch (error) {
+        if (action.kind === 'runtime') {
+          useAppStore.getState().setRuntimeEnvironmentStatus(action.environmentId, {
+            status: null,
+            checkedAt: Date.now()
+          })
+        }
+        toast.error(
+          error instanceof Error
+            ? error.message
+            : translate(
+                'auto.components.NewWorkspaceComposerCard.hostConnectionFailed',
+                'Connection failed'
+              )
+        )
+      }
+    },
+    []
+  )
   const handleNotePaste = React.useCallback((event: React.ClipboardEvent<HTMLTextAreaElement>) => {
     const text = event.clipboardData.getData('text/plain')
     const byteLengthMeasurement = measureTextControlPasteByteLength(text, {
@@ -1031,6 +1122,7 @@ export default function NewWorkspaceComposerCard({
                 onRecipeChange={onEphemeralVmRecipeChange}
                 onAddSshHost={handleAddSshHost}
                 onAddRemoteServer={handleAddRemoteServer}
+                onConnectHost={handleConnectRunTargetHost}
               />
               {ephemeralVmRecipeError ? (
                 <p className="whitespace-pre-line text-[11px] text-destructive">
