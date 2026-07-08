@@ -49,11 +49,19 @@ describe('useTerminalWindowWakeRecovery', () => {
     )
   }
 
-  it('runs the same wake recovery for system resume as for window focus', () => {
+  it('clears the glyph atlas on system resume but not on plain window focus', () => {
+    // Why: wiping the shared WebGL glyph atlas on a plain refocus provokes
+    // xterm's page-merge race and paints garbled glyphs (#7604). Only a genuine
+    // OS resume — which can leave a stale renderer surface — clears the atlas.
     renderWakeRecoveryHook()
 
     window.dispatchEvent(new Event('focus'))
     expect(recoverVisibleTerminalWindowWakeMock).toHaveBeenCalledTimes(1)
+    expect(recoverVisibleTerminalWindowWakeMock).toHaveBeenNthCalledWith(1, {
+      manager,
+      isActive: true,
+      clearGlyphAtlases: false
+    })
 
     expect(systemResumedCallback).toBeTypeOf('function')
     systemResumedCallback?.()
@@ -61,11 +69,9 @@ describe('useTerminalWindowWakeRecovery', () => {
     expect(recoverVisibleTerminalWindowWakeMock).toHaveBeenCalledTimes(2)
     expect(recoverVisibleTerminalWindowWakeMock).toHaveBeenNthCalledWith(2, {
       manager,
-      isActive: true
+      isActive: true,
+      clearGlyphAtlases: true
     })
-    expect(recoverVisibleTerminalWindowWakeMock.mock.calls[1]).toEqual(
-      recoverVisibleTerminalWindowWakeMock.mock.calls[0]
-    )
   })
 
   it('unsubscribes from the system resume event on cleanup', () => {

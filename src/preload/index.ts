@@ -528,6 +528,8 @@ const api = {
 
     remove: (args) => ipcRenderer.invoke('repos:remove', args),
 
+    removeForHost: (args) => ipcRenderer.invoke('repos:removeForHost', args),
+
     reorder: (args) => ipcRenderer.invoke('repos:reorder', args),
 
     update: (args) => ipcRenderer.invoke('repos:update', args),
@@ -659,6 +661,8 @@ const api = {
     resolveMrBase: (args) => ipcRenderer.invoke('worktrees:resolveMrBase', args),
 
     remove: (args) => ipcRenderer.invoke('worktrees:remove', args),
+
+    forgetLocal: (args) => ipcRenderer.invoke('worktrees:forgetLocal', args),
 
     forceDeletePreservedBranch: (args) =>
       ipcRenderer.invoke('worktrees:forceDeletePreservedBranch', args),
@@ -2743,7 +2747,10 @@ const api = {
       rootPath: string
       connectionId?: string
       excludePaths?: string[]
+      requestToken?: string
     }): Promise<string[]> => ipcRenderer.invoke('fs:listFiles', args),
+    cancelListFiles: (args: { requestToken: string }): Promise<void> =>
+      ipcRenderer.invoke('fs:cancelListFiles', args),
     search: (args: {
       query: string
       rootPath: string
@@ -3935,6 +3942,9 @@ const api = {
 
   ssh: {
     listTargets: (): Promise<SshTarget[]> => ipcRenderer.invoke('ssh:listTargets'),
+
+    listRemovedTargetLabels: (): Promise<Record<string, string>> =>
+      ipcRenderer.invoke('ssh:listRemovedTargetLabels'),
 
     addTarget: (args: { target: Omit<SshTarget, 'id'> }): Promise<SshTarget> =>
       ipcRenderer.invoke('ssh:addTarget', args),

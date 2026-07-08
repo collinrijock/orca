@@ -9,6 +9,7 @@ import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
 import { useAppStore } from '@/store'
 import { getWorktreeMapFromState } from '@/store/selectors'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
+import { isRuntimeOwnedSshTargetId } from '../../../../shared/execution-host'
 import { createTerminalZeroDimensionsMessage } from '../../../../shared/terminal-zero-dimensions-diagnostic'
 import { parseTerminalOscColorQuery } from '../../../../shared/terminal-osc-color-reply'
 import {
@@ -22,6 +23,7 @@ import {
 } from '../../../../shared/terminal-reply-query-extraction'
 import { takeCurrentPtyDeliveryAckCredit } from './terminal-pty-ack-gate'
 import { serializeWithAbsoluteCursor } from '../../../../shared/terminal-serialize-absolute-cursor'
+import { isTerminalQueryReply } from '../../../../shared/terminal-query-reply'
 import type { PtyBufferSnapshot, PtyConnectResult } from './pty-transport'
 import { createIpcPtyTransport } from './pty-transport'
 import { createRemoteRuntimePtyTransport } from './remote-runtime-pty-transport'
@@ -2827,7 +2829,9 @@ export function connectPanePty(
       useAppStore.getState().settings,
       getSystemPrefersDark()
     )
-    transport.sendInput(mode2031SequenceFor(mode))
+    // Why immediate: a mode-2031 query reply must beat the remote input debounce
+    // or it can miss the querying program's read window (#7329).
+    transport.sendInputImmediate(mode2031SequenceFor(mode))
     // Why: register the subscription exactly like the xterm CSI handler
     // would — without the registry entry, later theme flips never push the
     // CSI 997 update and the TUI keeps a stale theme after reveal.
@@ -2838,13 +2842,16 @@ export function connectPanePty(
   const terminalCapabilityRepliesDisposable = installTerminalCapabilityReplyHandlers({
     terminal: pane.terminal,
     parser: pane.terminal.parser,
-    sendInput: (data) => transport.sendInput(data),
+    // Why: OSC 10/11 + DA1 replies must beat the querying program's raw-mode
+    // read window; the remote transport's input debounce would corrupt them
+    // (#7329), so send immediately.
+    sendInput: (data) => transport.sendInputImmediate(data),
     isReplaying: () => isPaneReplaying(deps.replayingPanesRef, pane.id),
     ...(isNativeWindowsConpty ? { da1Response: CONPTY_DA1_RESPONSE } : {})
   })
   const respondToTerminalPixelSizeQueries = createTerminalPixelSizeQueryResponder(
     pane.terminal,
-    (data) => transport.sendInput(data)
+    (data) => transport.sendInputImmediate(data)
   )
 
   const onDataDisposable = pane.terminal.onData((data) => {
@@ -2880,6 +2887,19 @@ export function connectPanePty(
     // explicit Take back action owns restoring desktop input and dimensions.
     if (currentPtyId && isPtyLocked(currentPtyId)) {
       clearPendingTerminalInputIntent()
+      return
+    }
+    // Why: xterm answers CPR/DSR/DA queries natively through this same onData
+    // stream (mixed with keystrokes). Those replies are latency-critical — a
+    // querying program reads them in raw mode with a short timeout — so send
+    // them immediately, skipping the remote input debounce that would corrupt
+    // them (#7329). They are not user input, so they bypass intent inference and
+    // activity recording below. No pending-intent guard: the only intents are
+    // plain-escape (`\x1b`) and ctrl-c (`\x03`), neither of which can satisfy
+    // isTerminalQueryReply (it requires length >= 3 and a full reply grammar),
+    // so a real keystroke never reaches this branch.
+    if (isTerminalQueryReply(data)) {
+      transport.sendInputImmediate(data)
       return
     }
     const intent = pendingTerminalInputIntent
@@ -4037,13 +4057,14 @@ export function connectPanePty(
     type PendingReplayData = {
       data: string
       clearBeforeReplay: boolean
+      pendingEscapeTailAnsi?: string
     }
 
     let pendingReplayData: PendingReplayData | null = null
     let replayDrainQueued = false
     const drainReplayDataQueue = async (): Promise<void> => {
       while (pendingReplayData !== null) {
-        const { data, clearBeforeReplay } = pendingReplayData
+        const { data, clearBeforeReplay, pendingEscapeTailAnsi } = pendingReplayData
         pendingReplayData = null
         // Relay replay buffers may overlap with content already rendered in
         // xterm. Local eager replay decides this earlier so metadata-only frames
@@ -4061,6 +4082,14 @@ export function connectPanePty(
           await writeReplayDataAsync(reattachReplayResetSequence())
           sendFocusedReattachFocusInAfterReplay()
         }
+        // Why: the daemon could not serialize a PTY read that ended mid-escape,
+        // so the emulator shipped the dangling partial separately. Write it LAST
+        // — after the reset, whose ESC would otherwise abort it — so the next
+        // live chunk completes the sequence instead of rendering literally
+        // (#7329). Guarded so a later ESC cannot leave the parser wedged.
+        if (pendingEscapeTailAnsi) {
+          await writeReplayDataAsync(pendingEscapeTailAnsi)
+        }
         if (disposed) {
           pendingReplayData = null
           return
@@ -4071,10 +4100,14 @@ export function connectPanePty(
         manager.rebuildPaneWebgl(pane.id)
       }
     }
-    const replayDataCallback = (data: string, meta: { clearBeforeReplay?: boolean } = {}): void => {
+    const replayDataCallback = (
+      data: string,
+      meta: { clearBeforeReplay?: boolean; pendingEscapeTailAnsi?: string } = {}
+    ): void => {
       pendingReplayData = {
         data,
-        clearBeforeReplay: meta.clearBeforeReplay !== false
+        clearBeforeReplay: meta.clearBeforeReplay !== false,
+        ...(meta.pendingEscapeTailAnsi ? { pendingEscapeTailAnsi: meta.pendingEscapeTailAnsi } : {})
       }
       if (replayDrainQueued) {
         return
@@ -4087,7 +4120,10 @@ export function connectPanePty(
           replayDrainQueued = false
           if (pendingReplayData !== null) {
             replayDataCallback(pendingReplayData.data, {
-              clearBeforeReplay: pendingReplayData.clearBeforeReplay
+              clearBeforeReplay: pendingReplayData.clearBeforeReplay,
+              ...(pendingReplayData.pendingEscapeTailAnsi
+                ? { pendingEscapeTailAnsi: pendingReplayData.pendingEscapeTailAnsi }
+                : {})
             })
           }
         })
@@ -4700,9 +4736,10 @@ export function connectPanePty(
       hiddenStartupRendererQueryPending = extracted.pending
       if (extracted.oscColorQueryData) {
         // Why: Codex's startup palette probe has a 100 ms budget. Answer
-        // hidden color queries directly so renderer scheduling cannot miss it.
+        // hidden color queries directly and immediately so neither renderer
+        // scheduling nor the remote input debounce (#7329) can miss it.
         sendTerminalOscColorQueryReplies(extracted.oscColorQueryData, pane.terminal, (reply) =>
-          transport.sendInput(reply)
+          transport.sendInputImmediate(reply)
         )
       }
       if (extracted.statelessQueryData) {
@@ -5399,8 +5436,9 @@ export function connectPanePty(
       if (snapshot.pendingEscapeTailAnsi) {
         // Why last: the snapshot was taken with main's emulator mid-escape;
         // re-arming the dangling sequence must be the FINAL replay write (any
-        // later ESC aborts it) so the racing tail's continuation bytes
-        // complete it exactly as live (Bug E fix).
+        // later ESC — including the reset above — aborts it) so the racing
+        // live tail's continuation completes it exactly as live, instead of
+        // rendering literally (Bug E fix / #7329).
         writeReplayData(snapshot.pendingEscapeTailAnsi)
       }
       hiddenRendererStateDirty = false
@@ -5772,7 +5810,9 @@ export function connectPanePty(
         sendTerminalOscColorQueryReplies(
           pendingForegroundQuery.oscColorQueryData,
           pane.terminal,
-          (reply) => transport.sendInput(reply)
+          // Why: OSC color reply — immediate so the remote debounce cannot delay
+          // it past the querying program's read window (#7329).
+          (reply) => transport.sendInputImmediate(reply)
         )
       }
       const restoreAppliesToCurrentPty =
@@ -5913,12 +5953,45 @@ export function connectPanePty(
       // and only the freshest source belongs on screen.
       if (connectResult?.snapshot) {
         rememberReattachPayloadAgentSignal(connectResult.snapshot, { fullScreenReplay: true })
+        // Why: the daemon serializes its grid with soft-wrapped lines as
+        // continuous text. Replaying that at a different column count rewraps
+        // rows one cell early/late (bug #7279). Replay at the snapshot's own
+        // dimensions first; safeFit below fits the pane back and resizes the
+        // remote PTY. Suppress the xterm->PTY forward so this layout-only
+        // resize does not SIGWINCH the live remote TUI. Mirrors
+        // applyMainBufferSnapshot.
+        const snapshotCols = connectResult.snapshotCols
+        const snapshotRows = connectResult.snapshotRows
+        const hasSnapshotDimensions =
+          typeof snapshotCols === 'number' &&
+          typeof snapshotRows === 'number' &&
+          Number.isFinite(snapshotCols) &&
+          Number.isFinite(snapshotRows) &&
+          snapshotCols > 0 &&
+          snapshotRows > 0
+        if (
+          hasSnapshotDimensions &&
+          (pane.terminal.cols !== snapshotCols || pane.terminal.rows !== snapshotRows)
+        ) {
+          suppressSnapshotReplayPtyResize = true
+          try {
+            pane.terminal.resize(snapshotCols, snapshotRows)
+          } finally {
+            suppressSnapshotReplayPtyResize = false
+          }
+        }
         writeReplayData('\x1b[2J\x1b[3J\x1b[H')
         writeReplayData(connectResult.snapshot)
         // Snapshot reattach keeps a live session, so avoid the broader mode
         // reset. We only drop renderer-owned state that should not leak from
         // replay bytes into the restored renderer terminal.
         writeReplayData(reattachReplayResetSequence())
+        if (connectResult.pendingEscapeTailAnsi) {
+          // Why last: re-arm the daemon's dangling mid-escape sequence AFTER the
+          // reset (whose ESC would abort it) so the racing live continuation
+          // completes it instead of rendering literally (#7329).
+          writeReplayData(connectResult.pendingEscapeTailAnsi)
+        }
         sendFocusedReattachFocusInAfterReplay()
         if (connectResult.coldRestore) {
           // Snapshot superseded the cold-restore payload — ack it so the
@@ -5999,6 +6072,21 @@ export function connectPanePty(
     // because the SSH provider isn't registered until after connect succeeds.
     if (connectionId) {
       const storeState = useAppStore.getState()
+      // Why: the SSH target was removed entirely (a ghost workspace). Reattaching
+      // can only fail with "SSH target not found", which surfaces a red "file an
+      // issue" banner for what is an expected user action. Skip reattach — the
+      // terminal overlay already shows a "host removed" state with a remove
+      // action. Runtime-owned targets aren't user-managed, so they're exempt.
+      // A target map that exists but omits this id means the target was removed.
+      // (Guard the map's presence for minimal test stubs that omit it; an absent
+      // map is "not hydrated", not "target gone".)
+      if (
+        !isRuntimeOwnedSshTargetId(connectionId) &&
+        storeState.sshTargetLabels instanceof Map &&
+        !storeState.sshTargetLabels.has(connectionId)
+      ) {
+        return
+      }
       const restoredLeafSessionId =
         deps.restoredLeafId && deps.restoredPtyIdByLeafId
           ? (deps.restoredPtyIdByLeafId[deps.restoredLeafId] ?? null)

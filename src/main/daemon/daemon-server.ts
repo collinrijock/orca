@@ -21,6 +21,7 @@ import {
 import { readCurrentProcessMacSystemResolverHealth } from '../network/macos-system-resolver-health'
 import type { SubprocessHandle } from './session'
 import { checkPtySpawnHealth } from './pty-subprocess'
+import { createNoopDaemonFileLog, type DaemonFileLog } from './daemon-file-log'
 import {
   PROTOCOL_VERSION,
   NOTIFY_PREFIX,
@@ -33,6 +34,7 @@ export type DaemonServerOptions = {
   socketPath: string
   tokenPath: string
   ptySpawnHealthCheck?: () => Promise<void>
+  log?: DaemonFileLog
   spawnSubprocess: (opts: {
     sessionId: string
     cols: number
@@ -57,6 +59,7 @@ export class DaemonServer {
   private socketPath: string
   private tokenPath: string
   private ptySpawnHealthCheck: () => Promise<void>
+  private log: DaemonFileLog
 
   private clients = new Map<string, ConnectedClient>()
   private streamDataBatcher = new DaemonStreamDataBatcher(
@@ -115,6 +118,7 @@ export class DaemonServer {
       })),
       backgroundedSessionIdSuffixes: this.transientFactRelay.backgroundedSessionIdSuffixes()
     }))
+    this.log = opts.log ?? createNoopDaemonFileLog()
   }
 
   async start(): Promise<void> {
@@ -190,23 +194,30 @@ export class DaemonServer {
   ): void {
     const hello = msg as HelloMessage
     if (hello.type !== 'hello') {
+      this.log.log('client-hello-rejected', { reason: 'expected-hello' })
       socket.write(encodeNdjson({ type: 'hello', ok: false, error: 'Expected hello' }))
       socket.destroy()
       return
     }
 
     if (hello.version !== PROTOCOL_VERSION) {
+      this.log.log('client-hello-rejected', {
+        reason: 'protocol-mismatch',
+        clientVersion: hello.version
+      })
       socket.write(encodeNdjson({ type: 'hello', ok: false, error: 'Protocol version mismatch' }))
       socket.destroy()
       return
     }
 
     if (hello.token !== this.token) {
+      this.log.log('client-hello-rejected', { reason: 'invalid-token', role: hello.role })
       socket.write(encodeNdjson({ type: 'hello', ok: false, error: 'Invalid token' }))
       socket.destroy()
       return
     }
 
+    this.log.log('client-hello-accepted', { role: hello.role, clientId: hello.clientId })
     socket.write(encodeNdjson({ type: 'hello', ok: true }))
 
     if (hello.role === 'control') {
@@ -355,6 +366,7 @@ export class DaemonServer {
             onExit: (code) => {
               // Why: exit tears down renderer handlers; flush final output first
               // so the last few milliseconds of PTY data are not stranded.
+              this.log.log('session-exited', { sessionId: p.sessionId, code })
               this.streamDataBatcher.flush(clientId)
               recordDaemonStreamBacklogEvent('sessionExit', {
                 sessionIdSuffix: p.sessionId.slice(-10)
@@ -387,6 +399,10 @@ export class DaemonServer {
             payload: { background: true }
           })
         }
+        this.log.log(result.isNew ? 'session-created' : 'session-attached', {
+          sessionId: p.sessionId,
+          pid: result.pid
+        })
         return {
           isNew: result.isNew,
           snapshot: result.snapshot,
@@ -474,6 +490,10 @@ export class DaemonServer {
 
       case 'kill':
         this.lastInputAtBySessionId.delete(request.payload.sessionId)
+        this.log.log('session-killed', {
+          sessionId: request.payload.sessionId,
+          immediate: request.payload.immediate === true
+        })
         this.host.kill(request.payload.sessionId, { immediate: request.payload.immediate })
         return {}
 
@@ -484,6 +504,7 @@ export class DaemonServer {
       case 'detach':
         // Note: detach token handling is simplified here — full implementation
         // would track tokens per client
+        this.log.log('session-detached', { sessionId: request.payload.sessionId })
         return {}
 
       case 'getCwd':
@@ -540,6 +561,10 @@ export class DaemonServer {
         return { healthy: true }
 
       case 'shutdown':
+        this.log.log('shutdown', {
+          reason: 'rpc',
+          killSessions: request.payload.killSessions === true
+        })
         if (request.payload.killSessions) {
           this.host.dispose()
         }

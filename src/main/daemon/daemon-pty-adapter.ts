@@ -343,7 +343,13 @@ export class DaemonPtyAdapter implements IPtyProvider {
         ? { snapshotKittyKeyboardFlags: kittyKeyboardFlags }
         : {}),
       isReattach: true,
-      isAlternateScreen: isAltScreen
+      isAlternateScreen: isAltScreen,
+      // Why: carry the mid-escape tail so the renderer can write it after the
+      // reattach reset — without it the local daemon reattach path renders a
+      // split escape's continuation literally, unlike the remote path (#7329).
+      ...(result.snapshot.pendingEscapeTailAnsi
+        ? { pendingEscapeTailAnsi: result.snapshot.pendingEscapeTailAnsi }
+        : {})
     }
   }
 

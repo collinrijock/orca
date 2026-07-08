@@ -21,6 +21,11 @@ function stubRuntime(overrides: Partial<OrcaRuntimeService> = {}): OrcaRuntimeSe
     // Why: every multiplex stream registers as a remote view subscriber for
     // Phase-5 query-authority suppression (terminal-query-authority.md).
     registerRemoteTerminalViewSubscriber: () => () => {},
+    // Why: the multiplex subscribe path resolves handles via
+    // resolveLiveLeafForHandle (#7718). Default to a live pty so tests that
+    // only stub the legacy resolveLeafForHandle still bind; tests that need a
+    // null/stale leaf override this explicitly.
+    resolveLiveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
     ...overrides
   } as OrcaRuntimeService
 }
@@ -44,7 +49,7 @@ describe('terminal multiplex RPC', () => {
         current?: (data: string, meta?: { seq?: number; rawLength?: number }) => void
       } = {}
       const runtime = stubRuntime({
-        resolveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
+        resolveLiveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
         readTerminal: vi.fn().mockResolvedValue({ tail: [], truncated: false }),
         serializeTerminalBuffer: vi.fn().mockResolvedValue({
           data: 'snapshot',
@@ -261,7 +266,7 @@ describe('terminal multiplex RPC', () => {
       | undefined
     const restreamResolves: ((value: { data: string; cols: number; rows: number }) => void)[] = []
     const runtime = stubRuntime({
-      resolveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
+      resolveLiveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
       readTerminal: vi.fn().mockResolvedValue({ tail: [], truncated: false }),
       serializeTerminalBuffer: vi
         .fn()
@@ -374,7 +379,7 @@ describe('terminal multiplex RPC', () => {
         current?: (data: string, meta?: { seq?: number; rawLength?: number }) => void
       } = {}
       const runtime = stubRuntime({
-        resolveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
+        resolveLiveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
         readTerminal: vi.fn().mockResolvedValue({ tail: [], truncated: false }),
         serializeTerminalBuffer: vi.fn().mockResolvedValue({
           data: 'snapshot',
@@ -627,6 +632,9 @@ describe('terminal multiplex RPC', () => {
     >()
     const runtime = stubRuntime({
       resolveLeafForHandle: vi.fn((terminal: string) => ({
+        ptyId: terminal.replace('terminal-', 'pty-')
+      })),
+      resolveLiveLeafForHandle: vi.fn((terminal: string) => ({
         ptyId: terminal.replace('terminal-', 'pty-')
       })),
       readTerminal: vi.fn().mockResolvedValue({ tail: [], truncated: false }),
@@ -1171,7 +1179,7 @@ describe('terminal multiplex RPC', () => {
     >()
     const cleanups = new Map<string, () => void>()
     const runtime = stubRuntime({
-      resolveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
+      resolveLiveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
       readTerminal: vi
         .fn()
         .mockResolvedValue({ tail: ['line 120'], truncated: false, limited: true }),
@@ -1267,7 +1275,7 @@ describe('terminal multiplex RPC', () => {
     >()
     const cleanups = new Map<string, () => void>()
     const runtime = stubRuntime({
-      resolveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
+      resolveLiveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
       readTerminal: vi.fn().mockResolvedValue({ tail: [], truncated: false }),
       serializeTerminalBuffer: vi
         .fn()
@@ -1375,7 +1383,7 @@ describe('terminal multiplex RPC', () => {
     >()
     const cleanups = new Map<string, () => void>()
     const runtime = stubRuntime({
-      resolveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
+      resolveLiveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
       readTerminal: vi.fn().mockResolvedValue({ tail: [], truncated: false }),
       serializeTerminalBuffer: vi.fn().mockResolvedValue(null),
       getTerminalSize: vi.fn().mockReturnValue({ cols: 120, rows: 40 }),
@@ -1475,7 +1483,7 @@ describe('terminal multiplex RPC', () => {
     >()
     const cleanups = new Map<string, () => void>()
     const runtime = stubRuntime({
-      resolveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
+      resolveLiveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
       readTerminal: vi.fn().mockResolvedValue({ tail: [], truncated: false }),
       serializeTerminalBuffer: vi.fn().mockResolvedValue(null),
       getTerminalSize: vi.fn().mockReturnValue({ cols: 120, rows: 40 }),
@@ -1999,7 +2007,7 @@ describe('terminal multiplex RPC', () => {
     >()
     const cleanups = new Map<string, () => void>()
     const runtime = stubRuntime({
-      resolveLeafForHandle: vi.fn().mockReturnValue({ ptyId: null }),
+      resolveLiveLeafForHandle: vi.fn().mockReturnValue({ ptyId: null }),
       waitForLeafPtyId: vi.fn(
         (_handle: string, _timeoutMs?: number, signal?: AbortSignal) =>
           new Promise<string>((_resolve, reject) => {
@@ -2079,8 +2087,13 @@ describe('terminal multiplex RPC', () => {
     let viewSubscriberCount = 0
     let leafResolved = false
     let resolveFirstWait: (ptyId: string) => void = () => {}
+    // Why: the multiplex subscribe path resolves via resolveLiveLeafForHandle
+    // (#7718); null makes subscribe A block in waitForLeafPtyId until B resolves.
+    const resolveLeaf = (): { ptyId: string | null } =>
+      leafResolved ? { ptyId: 'pty-1' } : { ptyId: null }
     const runtime = stubRuntime({
-      resolveLeafForHandle: vi.fn(() => (leafResolved ? { ptyId: 'pty-1' } : { ptyId: null })),
+      resolveLeafForHandle: vi.fn(resolveLeaf),
+      resolveLiveLeafForHandle: vi.fn(resolveLeaf),
       waitForLeafPtyId: vi.fn(
         () =>
           new Promise<string>((resolve) => {
@@ -2197,6 +2210,9 @@ describe('terminal multiplex RPC', () => {
     }[] = []
     const runtime = stubRuntime({
       resolveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
+      // Why: the multiplex subscribe path resolves the leaf via
+      // resolveLiveLeafForHandle (#7718), so it must return a live pty here.
+      resolveLiveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
       registerRemoteTerminalViewSubscriber: vi.fn(() => {
         viewSubscriberCount += 1
         let released = false
@@ -2286,6 +2302,78 @@ describe('terminal multiplex RPC', () => {
     expect(viewSubscriberCount).toBe(0)
   })
 
+  it('rejects a stale terminal handle with terminal_handle_stale instead of binding the wrong PTY', async () => {
+    // Why: after a reconnect a client can resubscribe with a handle whose
+    // pane now hosts a different PTY. Binding the stream anyway would mirror
+    // (and type into) the wrong terminal (#7718); the client recovers from
+    // terminal_handle_stale by re-deriving the handle from the next snapshot.
+    const messages: string[] = []
+    const binaryFrames: Uint8Array<ArrayBufferLike>[] = []
+    const handlers = new Map<
+      number,
+      (frame: NonNullable<ReturnType<typeof decodeTerminalStreamFrame>>) => void
+    >()
+    const cleanups = new Map<string, () => void>()
+    const runtime = stubRuntime({
+      resolveLiveLeafForHandle: vi.fn(() => {
+        throw new Error('terminal_handle_stale')
+      }),
+      subscribeToTerminalData: vi.fn().mockReturnValue(vi.fn()),
+      registerSubscriptionCleanup: vi.fn((id: string, cleanup: () => void) => {
+        cleanups.set(id, cleanup)
+      })
+    })
+    const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
+
+    const dispatchPromise = dispatcher.dispatchStreaming(
+      makeRequest('terminal.multiplex', {}),
+      (msg) => messages.push(msg),
+      {
+        connectionId: 'conn-stale-handle',
+        sendBinary: (bytes) => binaryFrames.push(bytes),
+        registerBinaryStreamHandler: (streamId, handler) => {
+          handlers.set(streamId, handler)
+          return () => handlers.delete(streamId)
+        }
+      }
+    )
+
+    await vi.waitFor(() =>
+      expect(messages.some((msg) => JSON.parse(msg).result?.type === 'ready')).toBe(true)
+    )
+    handlers.get(0)?.(
+      decodeTerminalStreamFrame(
+        encodeTerminalStreamFrame({
+          opcode: TerminalStreamOpcode.Subscribe,
+          streamId: 0,
+          seq: 1,
+          payload: encodeTerminalStreamJson({
+            streamId: 9,
+            terminal: 'stale-terminal',
+            client: { id: 'desktop-1', type: 'desktop' }
+          })
+        })
+      )!
+    )
+
+    await vi.waitFor(() =>
+      expect(
+        messages
+          .map((msg) => JSON.parse(msg).result)
+          .some((result) => result?.type === 'end' && result.streamId === 9)
+      ).toBe(true)
+    )
+    const errorFrame = binaryFrames
+      .map((frame) => decodeTerminalStreamFrame(frame))
+      .find((frame) => frame?.opcode === TerminalStreamOpcode.Error)
+    expect(errorFrame && decodeTerminalStreamText(errorFrame.payload)).toBe('terminal_handle_stale')
+    // The stream must never have bound to any PTY.
+    expect(runtime.subscribeToTerminalData).not.toHaveBeenCalled()
+
+    cleanups.get('terminal-multiplex:conn-stale-handle')?.()
+    await dispatchPromise
+  })
+
   it('bounds live output queued while a multiplex snapshot is loading', async () => {
     vi.useFakeTimers()
     try {
@@ -2299,7 +2387,7 @@ describe('terminal multiplex RPC', () => {
       const dataListenerRef: { current?: (data: string) => void } = {}
       const snapshotResolves: ((value: { data: string; cols: number; rows: number }) => void)[] = []
       const runtime = stubRuntime({
-        resolveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
+        resolveLiveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
         readTerminal: vi.fn().mockResolvedValue({ tail: [], truncated: false }),
         serializeTerminalBuffer: vi.fn(
           () =>
@@ -2408,7 +2496,7 @@ describe('terminal multiplex RPC', () => {
       const dataListenerRef: { current?: (data: string) => void } = {}
       const snapshotResolves: ((value: { data: string; cols: number; rows: number }) => void)[] = []
       const runtime = stubRuntime({
-        resolveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
+        resolveLiveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
         readTerminal: vi.fn().mockResolvedValue({ tail: [], truncated: false }),
         serializeTerminalBuffer: vi.fn(
           () =>
@@ -2521,7 +2609,7 @@ describe('terminal multiplex RPC', () => {
         rows: number
       }) => void = () => {}
       const runtime = stubRuntime({
-        resolveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
+        resolveLiveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
         readTerminal: vi.fn().mockResolvedValue({ tail: [], truncated: false }),
         serializeTerminalBuffer: vi
           .fn()

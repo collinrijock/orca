@@ -28,7 +28,6 @@ import {
 import { useAiVaultSessionLaunchActions } from './ai-vault-session-launch-actions'
 import { useAiVaultSessionWorktreeMap } from './ai-vault-session-worktree'
 import { useAiVaultOriginalPaneActions } from './ai-vault-original-pane-actions'
-import { getAiVaultResumeWorkspaceTargetStatus } from '@/lib/ai-vault-resume-target'
 import {
   AI_VAULT_AGENTS,
   type AiVaultAgent,
@@ -41,7 +40,11 @@ import { translate } from '@/i18n/i18n'
 import { AiVaultPanelHeader } from './AiVaultPanelHeader'
 import { AiVaultSessionVirtualList } from './AiVaultSessionVirtualList'
 import { useAiVaultSessionRefresh } from './ai-vault-session-refresh'
-import { useAiVaultExecutionHostScope } from './ai-vault-host-scope'
+import {
+  buildAiVaultHostScopeOptions,
+  buildRuntimeAiVaultHostScopeOptions,
+  useAiVaultExecutionHostScope
+} from './ai-vault-host-scope'
 
 export default function AiVaultPanel(): React.JSX.Element {
   const activeWorktreeId = useActiveWorktreeId()
@@ -59,6 +62,7 @@ export default function AiVaultPanel(): React.JSX.Element {
     }))
   )
   const settings = useAppStore((s) => s.settings)
+  const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
   const agentCmdOverrides = settings?.agentCmdOverrides
   const { getOriginalPaneTarget, jumpToOriginalPane, jumpToWorktree } =
     useAiVaultOriginalPaneActions()
@@ -72,17 +76,28 @@ export default function AiVaultPanel(): React.JSX.Element {
   const userChangedScopeRef = useRef(false)
   const preferredScopeRef = useRef<AiVaultScope>(DEFAULT_AI_VAULT_SCOPE)
 
-  const isRuntimeWorktree = useMemo(
-    () =>
-      getAiVaultResumeWorkspaceTargetStatus(resumeTargetState, activeWorktreeId ?? null) ===
-      'runtime',
-    [activeWorktreeId, resumeTargetState]
+  const runtimeHostOptions = useMemo(
+    () => buildRuntimeAiVaultHostScopeOptions(runtimeEnvironments),
+    [runtimeEnvironments]
   )
-  const { executionHostScope, activeSshExecutionHostScope, onExecutionHostScopeChange } =
+  const availableExecutionHostScopes = useMemo(
+    () => runtimeHostOptions.map((option) => option.id),
+    [runtimeHostOptions]
+  )
+  const { executionHostScope, activeExecutionHostScope, onExecutionHostScopeChange } =
     useAiVaultExecutionHostScope({
       activeWorktreeId: activeWorktreeId ?? null,
-      resumeTargetState
+      resumeTargetState,
+      availableExecutionHostScopes
     })
+  const hostScopeOptions = useMemo(
+    () =>
+      buildAiVaultHostScopeOptions({
+        activeExecutionHostScope,
+        runtimeHostOptions
+      }),
+    [activeExecutionHostScope, runtimeHostOptions]
+  )
   const activeWorktreePath = activeWorktree?.path ?? null
   // Why: AI Vault ownership is cwd-based, so we must consider live worktrees across all repos.
   const activeWorktreePaths = useMemo(
@@ -306,7 +321,7 @@ export default function AiVaultPanel(): React.JSX.Element {
         activeProjectKey={activeProjectKey}
         scope={scope}
         executionHostScope={executionHostScope}
-        activeSshExecutionHostScope={activeSshExecutionHostScope}
+        hostScopeOptions={hostScopeOptions}
         agents={agents}
         sort={sort}
         group={group}
@@ -322,15 +337,6 @@ export default function AiVaultPanel(): React.JSX.Element {
         onReset={resetViewOptions}
         onRefresh={() => void refresh({ force: true })}
       />
-
-      {isRuntimeWorktree ? (
-        <div className="border-b border-sidebar-border px-3 py-2 text-[11px] leading-4 text-muted-foreground">
-          {translate(
-            'auto.components.right.sidebar.AiVaultPanel.runtimeBrowseLocalHistory',
-            'Runtime-hosted workspaces can browse local history. Resume actions are available in local and SSH workspaces.'
-          )}
-        </div>
-      ) : null}
 
       {error ? (
         <div className="border-b border-sidebar-border px-3 py-2 text-xs text-destructive">

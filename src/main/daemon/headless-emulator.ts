@@ -62,6 +62,11 @@ const CONPTY_DA1_RESPONSE = '\x1b[?61;4c'
 export class HeadlessEmulator {
   private terminal: Terminal
   private serializer: SerializeAddon
+  // Why: our restructure owns cwd/title via TerminalOscCwdTitleScanner and the
+  // DECSET mouse modes via TerminalMouseModeMirror (functionally identical to
+  // main's inline cwd/lastTitle/oscScanTail + TerminalPrivateModeTracker, which
+  // only tracks the same mouse modes). restoredOscLinks/disposed/partialEscapeTail
+  // are declared below.
   private oscText: TerminalOscCwdTitleScanner
   private mouseModes = new TerminalMouseModeMirror()
   private readonly pathFlavor?: 'posix' | 'win32'
@@ -330,7 +335,13 @@ export class HeadlessEmulator {
       cols: this.terminal.cols,
       rows: this.terminal.rows,
       scrollbackLines: this.terminal.buffer.normal.length - this.terminal.rows,
-      lastTitle: this.oscText.lastTitle ?? undefined
+      lastTitle: this.oscText.lastTitle ?? undefined,
+      // Why: written LAST by the restorer (after any reset) so the next live
+      // chunk completes this dangling sequence instead of rendering it literally
+      // (Bug E / #7329). Its bytes are already counted by the snapshot seq.
+      ...(this.partialEscapeTail.length > 0
+        ? { pendingEscapeTailAnsi: this.partialEscapeTail }
+        : {})
     }
     if (this.partialEscapeTail.length > 0) {
       // Why a separate field, not part of snapshotAnsi: consumers write their

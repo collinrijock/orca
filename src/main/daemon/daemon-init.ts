@@ -37,6 +37,11 @@ import {
   killStaleDaemon,
   parseDaemonPidFile
 } from './daemon-health'
+import {
+  collectPinnedDaemonVersions,
+  materializeRelocatedDaemonHost,
+  pruneOldDaemonHosts
+} from './daemon-host-relocation'
 import { DegradedDaemonPtyProvider } from './degraded-daemon-pty-provider'
 import {
   getLocalPtyProvider,
@@ -45,6 +50,7 @@ import {
   rebindLocalProviderListeners
 } from '../ipc/pty'
 import { isStartupDiagnosticsEnabled, logStartupDiagnostic } from '../startup/startup-diagnostics'
+import { getDaemonLogFilePath } from '../observability/logs-directory'
 import {
   confirmSeededClaudeLivePtys,
   hasSeededUnconfirmedClaudePtys
@@ -92,6 +98,18 @@ function getDaemonEntryPath(): string {
     return directEntryPath
   }
   return join(basePath, 'out', 'main', 'daemon-entry.js')
+}
+
+// Why: the detached daemon writes lifecycle events to a rotated file so field
+// failures are diagnosable from a bundle. Honor the same hard privacy switch
+// the local trace sink honors (ORCA_DIAGNOSTICS_DISABLED); absence of the arg
+// is fully supported, so gating it off is safe and adoption-neutral.
+function daemonLogArgs(): string[] {
+  const disabled = (process.env.ORCA_DIAGNOSTICS_DISABLED ?? '').trim().toLowerCase()
+  if (disabled === '1' || disabled === 'true') {
+    return []
+  }
+  return ['--log-file', getDaemonLogFilePath()]
 }
 
 // Why: before spawning a new daemon, check if an existing one is alive by
@@ -277,27 +295,43 @@ function createOutOfProcessLauncher(runtimeDir: string): DaemonLauncher {
     await killStaleDaemon(runtimeDir, socketPath, tokenPath)
 
     const userDataPath = app.getPath('userData')
-    const child = fork(entryPath, ['--socket', socketPath, '--token', tokenPath], {
-      // Why: detached daemons can outlive dev worktrees. Starting from
-      // userData keeps process.cwd() valid after a repo/worktree is deleted.
-      cwd: userDataPath,
-      // Why: detached + unref lets the daemon outlive the Electron process.
-      // stdio 'ignore' prevents the child from holding the parent's stdout
-      // open, which would prevent Electron from exiting cleanly.
-      detached: true,
-      stdio: ['ignore', 'ignore', 'ignore', 'ipc'],
-      // Why: ELECTRON_RUN_AS_NODE makes the forked process run as a plain
-      // Node.js process instead of an Electron renderer/main process. Without
-      // it, Electron's GPU/display initialization can interfere with native
-      // module operations like node-pty's posix_spawn of the spawn-helper.
-      env: {
-        ...process.env,
-        ELECTRON_RUN_AS_NODE: '1',
-        // Why: the detached daemon is plain Node and cannot call Electron's
-        // app.getPath(), but shell-ready rcfiles must live outside swept tmp.
-        ORCA_USER_DATA_PATH: userDataPath
+    // Why: on win32 packaged, fork from a copy of the Electron runtime staged
+    // in userData so the daemon's image + loaded modules escape the install dir
+    // the NSIS updater deletes and force-closes. Staged here (not at app start)
+    // so the one-time copy stays off the first-paint path and is skipped on
+    // launches that adopt a live daemon. Fail-open: null → in-dir host, below.
+    const relocatedHost = materializeRelocatedDaemonHost()
+    // Fork the relocated entry when available; otherwise the install-dir entry.
+    const forkEntryPath = relocatedHost ? relocatedHost.entryPath : entryPath
+    const child = fork(
+      forkEntryPath,
+      ['--socket', socketPath, '--token', tokenPath, ...daemonLogArgs()],
+      {
+        // Why: detached daemons can outlive dev worktrees. Starting from
+        // userData keeps process.cwd() valid after a repo/worktree is deleted.
+        cwd: userDataPath,
+        // Why: detached + unref lets the daemon outlive the Electron process.
+        // stdio 'ignore' prevents the child from holding the parent's stdout
+        // open, which would prevent Electron from exiting cleanly.
+        detached: true,
+        stdio: ['ignore', 'ignore', 'ignore', 'ipc'],
+        // Why: run the relocated Orca.exe copy instead of the install-dir one.
+        // It is byte-identical, so run-as-node behavior is unchanged; only the
+        // image path moves out of the updater's kill zone.
+        ...(relocatedHost ? { execPath: relocatedHost.execPath } : {}),
+        // Why: ELECTRON_RUN_AS_NODE makes the forked process run as a plain
+        // Node.js process instead of an Electron renderer/main process. Without
+        // it, Electron's GPU/display initialization can interfere with native
+        // module operations like node-pty's posix_spawn of the spawn-helper.
+        env: {
+          ...process.env,
+          ELECTRON_RUN_AS_NODE: '1',
+          // Why: the detached daemon is plain Node and cannot call Electron's
+          // app.getPath(), but shell-ready rcfiles must live outside swept tmp.
+          ORCA_USER_DATA_PATH: userDataPath
+        }
       }
-    })
+    )
 
     // Wait for the daemon to signal readiness via IPC
     await new Promise<void>((resolve, reject) => {
@@ -419,6 +453,10 @@ export async function initDaemonPtyProvider(signal?: AbortSignal): Promise<void>
   // throws, a stale spawner would prevent shutdownDaemon() from cleaning up
   // correctly on retry.
   const info = await newSpawner.ensureRunning()
+  // Reclaim superseded daemon-host copies on EVERY launch, not just on a fresh
+  // spawn: surviving daemons make spawns rare, so a spawn-only sweep would let
+  // old-version copies accumulate. Current + live-daemon-pinned versions stay.
+  pruneOldDaemonHosts(collectPinnedDaemonVersions(runtimeDir))
   const launchMode = newSpawner.getHandle()?.mode
   logDaemonMilestone('daemon-current-ready')
   if (signal?.aborted) {

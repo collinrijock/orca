@@ -1,3 +1,4 @@
+import { app } from 'electron'
 import { registerAppHandlers } from './app'
 import { registerCliHandlers } from './cli'
 import { registerPreflightHandlers } from './preflight'
@@ -69,6 +70,10 @@ import type { AutomationService } from '../automations/service'
 import type { AgentAwakeService } from '../agent-awake-service'
 import type { CrashReportStore } from '../crash-reporting/crash-report-store'
 import type { KeybindingService } from '../keybindings/keybinding-service'
+import {
+  getSavedRuntimeAiVaultHostInfos,
+  scanRuntimeAiVaultSessions
+} from '../ai-vault/runtime-session-scanner'
 
 let registered = false
 
@@ -171,7 +176,11 @@ export function registerCoreHandlers(
   registerRuntimeEnvironmentHandlers(store)
   registerEphemeralVmHandlers(store)
   registerAiVaultHandlers({
-    getAdditionalCodexHomePaths: lifecycleOptions.getAdditionalAiVaultCodexHomePaths
+    getAdditionalCodexHomePaths: lifecycleOptions.getAdditionalAiVaultCodexHomePaths,
+    getActiveRuntimeAiVaultHostInfos: () =>
+      getSavedRuntimeAiVaultHostInfos(app.getPath('userData')),
+    scanRuntimeAiVaultSessions: async (environmentId, args, options) =>
+      scanRuntimeAiVaultSessions(app.getPath('userData'), environmentId, args, options)
   })
   registerNativeChatHandlers()
   registerClipboardHandlers(store)

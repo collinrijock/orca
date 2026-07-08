@@ -26,7 +26,7 @@ export type PtyBufferSnapshot = {
   /** Trailing incomplete escape sequence main's emulator ingested (a PTY read
    *  ended mid-escape). Must be written LAST — after post-replay resets, right
    *  before post-snapshot live chunks — so the continuation completes it
-   *  exactly as live instead of rendering literal (Bug E). */
+   *  exactly as live instead of rendering literal (Bug E / #7329). */
   pendingEscapeTailAnsi?: string
 }
 
@@ -42,13 +42,20 @@ export type PtyConnectResult = {
   sessionExpired?: boolean
   coldRestore?: { scrollback: string; cwd: string }
   replay?: string
+  /** Trailing partial escape the daemon emulator held mid-parse; the reattach
+   *  replay writes it LAST (after the reset) so a racing live continuation
+   *  completes it instead of rendering literally (#7329). */
+  pendingEscapeTailAnsi?: string
 }
 
 type PtyCallbacks = {
   onConnect?: () => void
   onDisconnect?: () => void
   onData?: (data: string, meta?: PtyDataMeta) => void
-  onReplayData?: (data: string, meta?: { clearBeforeReplay?: boolean }) => void
+  onReplayData?: (
+    data: string,
+    meta?: { clearBeforeReplay?: boolean; pendingEscapeTailAnsi?: string }
+  ) => void
   onStatus?: (shell: string) => void
   onError?: (message: string, errors?: string[]) => void
   onExit?: (code: number) => void
@@ -82,6 +89,13 @@ export type PtyTransport = {
   }) => void
   disconnect: () => void
   sendInput: (data: string) => boolean
+  // Why: latency-critical terminal query replies (CPR/DSR/DA/OSC color/pixel
+  // size) must skip input coalescing — a querying program reads them in raw
+  // mode with a short timeout, so a debounced reply lands on the shell prompt
+  // and corrupts input (#7329). Local transports already write promptly, so
+  // this is `sendInput` for them; the remote transport flushes pending input
+  // (preserving order) and sends the reply immediately.
+  sendInputImmediate: (data: string) => boolean
   sendInputAccepted?: (data: string) => Promise<boolean>
   resize: (
     cols: number,

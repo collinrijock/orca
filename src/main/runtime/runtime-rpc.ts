@@ -308,6 +308,8 @@ const MOBILE_RPC_METHOD_ALLOWLIST = new Set([
   'settings.update',
   'ssh.connect',
   'ssh.getState',
+  'ssh.listRemovedTargetLabels',
+  'ssh.listTargets',
   'speech.dictation.cancel',
   'speech.dictation.chunk',
   'speech.dictation.finish',

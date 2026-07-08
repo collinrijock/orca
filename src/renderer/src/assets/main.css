@@ -1971,6 +1971,16 @@
   pointer-events: auto;
 }
 
+/* Why: Monaco leaves the peek preview container `inline-block` and only sizes the
+   editor child, so the container shrink-wraps the child in BOTH axes while the
+   inherited automaticLayout ResizeObserver measures the container — a feedback
+   loop that ratchets the preview to blank at fractional zoom/DPI (issue #7405).
+   Pinning both dimensions to the splitview slot severs the loop. */
+.monaco-editor .reference-zone-widget .preview.inline {
+  height: 100%;
+  width: 100%;
+}
+
 /* ── Git conflict decorations ───────────────────────────────────── */
 
 .monaco-editor .orca-conflict-marker-line {
