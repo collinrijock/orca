@@ -1183,6 +1183,10 @@ const RECENT_PTY_PATH_CANDIDATE_LIMIT = 1024
 const RECENT_PTY_PATH_CANDIDATE_MAX_BYTES = 4 * 1024
 const RECENT_PTY_PATH_CANDIDATE_TOTAL_BYTES = 64 * 1024
 
+function isClientDisconnectedError(error: unknown): boolean {
+  return error instanceof Error && error.message === 'client_disconnected'
+}
+
 function createTerminalRevealWarning(handle: string, error?: unknown): string {
   const reason =
     error instanceof Error && error.message.trim().length > 0
@@ -16282,6 +16286,7 @@ export class OrcaRuntimeService {
       launchAgent?: TuiAgent
       activate?: boolean
       clientMutationId?: string
+      signal?: AbortSignal
     } = {}
   ): Promise<RuntimeMobileSessionCreateTerminalResult> {
     const mutationId = opts.clientMutationId
@@ -16323,6 +16328,7 @@ export class OrcaRuntimeService {
       launchAgent?: TuiAgent
       activate?: boolean
       clientMutationId?: string
+      signal?: AbortSignal
     } = {}
   ): Promise<RuntimeMobileSessionCreateTerminalResult> {
     this.assertGraphReady()
@@ -16362,8 +16368,16 @@ export class OrcaRuntimeService {
     const reply = await new Promise<{ tabId: string; title: string }>((resolve, reject) => {
       const timer = setTimeout(() => {
         ipcMain.removeListener('terminal:tabCreateReply', handler)
+        opts.signal?.removeEventListener('abort', onAbort)
         reject(new Error('Terminal creation timed out'))
       }, 10_000)
+      // Why: a dead client connection cancels the wait; the renderer tab (and
+      // its shell) stays alive for the host and mirrors on reconnect (#7718).
+      const onAbort = (): void => {
+        clearTimeout(timer)
+        ipcMain.removeListener('terminal:tabCreateReply', handler)
+        reject(new Error('client_disconnected'))
+      }
 
       const handler = (
         event: Electron.IpcMainEvent,
@@ -16374,12 +16388,14 @@ export class OrcaRuntimeService {
         }
         clearTimeout(timer)
         ipcMain.removeListener('terminal:tabCreateReply', handler)
+        opts.signal?.removeEventListener('abort', onAbort)
         if (r.error) {
           reject(new Error(r.error))
         } else {
           resolve({ tabId: r.tabId!, title: r.title ?? '' })
         }
       }
+      opts.signal?.addEventListener('abort', onAbort, { once: true })
       ipcMain.on('terminal:tabCreateReply', handler)
       win.webContents.send('terminal:requestTabCreate', {
         requestId,
@@ -16417,17 +16433,24 @@ export class OrcaRuntimeService {
       // wait resolves without depending on a graph sync.
       this.ensurePtyBackedMobileSurfaceForRendererTab(worktreeId, reply.tabId)
       const surface = await this.waitForMobileTerminalSurface(worktreeId, reply.tabId, {
-        timeoutMs: MOBILE_TERMINAL_SURFACE_TIMEOUT_MS
+        timeoutMs: MOBILE_TERMINAL_SURFACE_TIMEOUT_MS,
+        signal: opts.signal
       })
       if (this.isReadyMobileTerminalSurface(surface)) {
         return surface
       }
       const readySurface = await this.waitForMobileTerminalSurface(worktreeId, reply.tabId, {
         timeoutMs: MOBILE_TERMINAL_READY_FALLBACK_MS,
-        requireReady: true
+        requireReady: true,
+        signal: opts.signal
       }).catch(() => null)
       if (readySurface) {
         return readySurface
+      }
+      if (opts.signal?.aborted) {
+        // Why: nobody is waiting for this create anymore; do not materialize
+        // or roll back — the renderer's own publication settles the tab.
+        throw new Error('client_disconnected')
       }
       const pendingSurface = this.findMobileTerminalSurface(worktreeId, reply.tabId)
       if (!pendingSurface) {
@@ -16461,6 +16484,16 @@ export class OrcaRuntimeService {
         if (rescued) {
           return rescued
         }
+      }
+      // Why: don't roll back when (a) the client connection died — the wait
+      // was cancelled, not the spawn — or (b) a live shell already backs the
+      // tab (its pane key may simply not be registered yet). Killing a real
+      // terminal the host user can see is the "tab dies after ~10s" bug (#7718).
+      if (
+        isClientDisconnectedError(error) ||
+        this.hasLiveShellForRendererTab(worktreeId, reply.tabId)
+      ) {
+        throw error
       }
       // Why: the renderer created the tab but no live PTY backs it (true PTY
       // spawn/handle failure). Roll the half-created tab back via the renderer
@@ -16681,33 +16714,44 @@ export class OrcaRuntimeService {
   private waitForMobileTerminalSurface(
     worktreeId: string,
     parentTabId: string,
-    options: { timeoutMs?: number; requireReady?: boolean } = {}
+    options: { timeoutMs?: number; requireReady?: boolean; signal?: AbortSignal } = {}
   ): Promise<RuntimeMobileSessionCreateTerminalResult> {
     const timeoutMs = options.timeoutMs ?? MOBILE_TERMINAL_SURFACE_TIMEOUT_MS
     const existing = this.findMobileTerminalSurface(worktreeId, parentTabId, options)
     if (existing) {
       return Promise.resolve(existing)
     }
+    if (options.signal?.aborted) {
+      return Promise.reject(new Error('client_disconnected'))
+    }
 
     return new Promise<RuntimeMobileSessionCreateTerminalResult>((resolve, reject) => {
-      const timer = setTimeout(() => {
+      const cleanup = (): void => {
+        clearTimeout(timer)
+        options.signal?.removeEventListener('abort', onAbort)
         const idx = this.graphSyncCallbacks.indexOf(check)
         if (idx !== -1) {
           this.graphSyncCallbacks.splice(idx, 1)
         }
+      }
+      const timer = setTimeout(() => {
+        cleanup()
         reject(new Error('Timed out waiting for terminal surface after creation'))
       }, timeoutMs)
+      // Why: a dead client connection cancels the wait immediately instead of
+      // running down the timeout and triggering rollback (#7718).
+      const onAbort = (): void => {
+        cleanup()
+        reject(new Error('client_disconnected'))
+      }
+      options.signal?.addEventListener('abort', onAbort, { once: true })
 
       const check = (): void => {
         const next = this.findMobileTerminalSurface(worktreeId, parentTabId, options)
         if (!next) {
           return
         }
-        clearTimeout(timer)
-        const idx = this.graphSyncCallbacks.indexOf(check)
-        if (idx !== -1) {
-          this.graphSyncCallbacks.splice(idx, 1)
-        }
+        cleanup()
         resolve(next)
       }
       this.graphSyncCallbacks.push(check)
@@ -16795,6 +16839,18 @@ export class OrcaRuntimeService {
       }
     }
     return null
+  }
+
+  // Why: rollback guard, looser than findLiveRegisteredPtyForRendererTab — a
+  // shell whose pane key hasn't registered yet can't be surface-rescued, but
+  // it is still a real terminal the create timeout must not kill (#7718).
+  private hasLiveShellForRendererTab(worktreeId: string, tabId: string): boolean {
+    for (const pty of this.ptysById.values()) {
+      if (pty.worktreeId === worktreeId && pty.tabId === tabId && pty.connected) {
+        return true
+      }
+    }
+    return false
   }
 
   private isReadyMobileTerminalSurface(
