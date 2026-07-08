@@ -26,6 +26,9 @@ function stubRuntime(overrides: Partial<OrcaRuntimeService> = {}): OrcaRuntimeSe
     // only stub the legacy resolveLeafForHandle still bind; tests that need a
     // null/stale leaf override this explicitly.
     resolveLiveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
+    updateRemoteDesktopViewer: vi.fn().mockResolvedValue(true),
+    unregisterRemoteDesktopViewer: vi.fn().mockResolvedValue(true),
+    isPtyResizeDrivenRemotely: vi.fn().mockReturnValue(false),
     ...overrides
   } as OrcaRuntimeService
 }
@@ -82,8 +85,7 @@ describe('terminal multiplex RPC', () => {
           cleanup?.()
         }),
         waitForTerminal: vi.fn(() => new Promise<RuntimeTerminalWait>(() => {})),
-        sendTerminal: vi.fn().mockResolvedValue({ accepted: true }),
-        updateDesktopViewport: vi.fn().mockResolvedValue(true)
+        sendTerminal: vi.fn().mockResolvedValue({ accepted: true })
       })
       const dispatcher = new RpcDispatcher({
         runtime,
@@ -143,10 +145,13 @@ describe('terminal multiplex RPC', () => {
           })
         ])
       )
-      expect(runtime.updateDesktopViewport).toHaveBeenCalledWith('pty-1', {
-        cols: 300,
-        rows: 150
-      })
+      expect(runtime.updateRemoteDesktopViewer).toHaveBeenCalledWith(
+        'pty-1',
+        'multiplex:5',
+        'desktop-1',
+        300,
+        150
+      )
       expect(handlers.has(5)).toBe(true)
 
       dataListenerRef.current?.('a')
@@ -189,10 +194,13 @@ describe('terminal multiplex RPC', () => {
         )!
       )
       await vi.waitFor(() =>
-        expect(runtime.updateDesktopViewport).toHaveBeenLastCalledWith('pty-1', {
-          cols: 100,
-          rows: 30
-        })
+        expect(runtime.updateRemoteDesktopViewer).toHaveBeenLastCalledWith(
+          'pty-1',
+          'multiplex:5',
+          'desktop-1',
+          100,
+          30
+        )
       )
 
       const snapshotStartFrame = binaryFrames

@@ -88,6 +88,12 @@ type TerminalMultiplexStream = {
   isMobile: boolean
   ackOutput: boolean
   ackInFlightBytes: number
+  // Why: whether THIS stream registered a remote-desktop width driver, so
+  // detach only unregisters what it registered — a passive (viewport-less)
+  // stream sharing a client id must not release another stream's width floor.
+  registeredRemoteDesktopDriver: boolean
+  remoteDesktopSubscriptionKey: string
+  pendingRemoteDesktopViewport: { cols: number; rows: number } | null
   buffering: boolean
   ackPendingOutput: TerminalOutputFrameChunk[]
   ackPendingOutputBytes: number
@@ -631,6 +637,7 @@ async function sendMobileResizeRestream(
 async function updateViewportForClient(
   runtime: OrcaRuntimeService,
   ptyId: string,
+  subscriptionKey: string,
   client: TerminalViewportClient,
   viewport: { cols: number; rows: number },
   defaultType: 'mobile' | 'desktop'
@@ -639,7 +646,16 @@ async function updateViewportForClient(
   if (type === 'mobile') {
     return runtime.updateMobileViewport(ptyId, client.id, viewport)
   }
-  const updated = await runtime.updateDesktopViewport(ptyId, viewport)
+  // Why: a remote desktop viewer's viewport drives the source PTY to the
+  // smallest attached viewer (tmux "smallest client wins") and registers it as
+  // a width owner so the host's fit cascade stops fighting it.
+  const updated = await runtime.updateRemoteDesktopViewer(
+    ptyId,
+    subscriptionKey,
+    client.id,
+    viewport.cols,
+    viewport.rows
+  )
   return { updated, applied: updated }
 }
 
@@ -1280,6 +1296,7 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
       const viewportUpdate = await updateViewportForClient(
         runtime,
         leaf.ptyId,
+        `viewport:${params.client.id}`,
         params.client,
         params.viewport,
         'mobile'
@@ -1506,6 +1523,11 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
         stream.exitWaiterAbort.abort()
         if (stream.isMobile && stream.client?.id) {
           runtime.handleMobileUnsubscribe(stream.ptyId, stream.client.id)
+        } else if (stream.registeredRemoteDesktopDriver && stream.client?.id) {
+          // Why: release the remote-desktop width floor so the host can reclaim
+          // its own width once the last remote viewer leaves — but only if THIS
+          // stream took it (a passive stream must not release a peer's floor).
+          runtime.unregisterRemoteDesktopViewer(stream.ptyId, stream.remoteDesktopSubscriptionKey)
         }
         if (emitEnd) {
           emit({ type: 'end', streamId })
@@ -1567,9 +1589,20 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
           if (!viewport || typeof viewport.cols !== 'number' || typeof viewport.rows !== 'number') {
             return
           }
+          // Why: a desktop viewport update registers this stream as a width
+          // owner (even if it had no initial viewport at subscribe), so detach
+          // must later release it.
+          if (!stream.isMobile && stream.client?.id) {
+            stream.registeredRemoteDesktopDriver = true
+            if (stream.buffering) {
+              stream.pendingRemoteDesktopViewport = { cols: viewport.cols, rows: viewport.rows }
+              return
+            }
+          }
           void updateViewportForClient(
             runtime,
             stream.ptyId,
+            stream.remoteDesktopSubscriptionKey,
             stream.client,
             { cols: viewport.cols, rows: viewport.rows },
             stream.isMobile ? 'mobile' : 'desktop'
@@ -1730,6 +1763,9 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
           isMobile,
           ackOutput: request.capabilities?.ackOutput === 1,
           ackInFlightBytes: 0,
+          registeredRemoteDesktopDriver: false,
+          remoteDesktopSubscriptionKey: `multiplex:${request.streamId}`,
+          pendingRemoteDesktopViewport: null,
           buffering: true,
           ackPendingOutput: [],
           ackPendingOutputBytes: 0,
@@ -1788,12 +1824,29 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
 
           if (isMobile && request.client?.id) {
             await runtime.handleMobileSubscribe(ptyId, request.client.id, request.viewport)
-          } else if (request.viewport && request.client) {
+          } else if (request.client?.id && request.viewport) {
+            // Why: a remote desktop viewer that reports a viewport is driving
+            // the PTY width, so the runtime registers it as a
+            // width owner (host fit cascade suppressed) and sizes the PTY to the
+            // smallest attached viewer. A viewport-less subscriber is a passive
+            // watcher and must NOT lock host resize.
+            stream.registeredRemoteDesktopDriver = true
+            stream.pendingRemoteDesktopViewport = request.viewport
+          }
+          if (
+            !isMobile &&
+            request.client?.id &&
+            stream.registeredRemoteDesktopDriver &&
+            stream.pendingRemoteDesktopViewport
+          ) {
+            const viewport = stream.pendingRemoteDesktopViewport
+            stream.pendingRemoteDesktopViewport = null
             await updateViewportForClient(
               runtime,
               ptyId,
+              stream.remoteDesktopSubscriptionKey,
               request.client,
-              request.viewport,
+              viewport,
               'desktop'
             )
           }
@@ -1906,6 +1959,23 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
           stream.pendingOutputBytes = 0
           stream.pendingOutputOverflowed = false
           stream.outputBatcher.flush()
+          if (
+            !stream.isMobile &&
+            stream.client?.id &&
+            stream.registeredRemoteDesktopDriver &&
+            stream.pendingRemoteDesktopViewport
+          ) {
+            const viewport = stream.pendingRemoteDesktopViewport
+            stream.pendingRemoteDesktopViewport = null
+            void updateViewportForClient(
+              runtime,
+              ptyId,
+              stream.remoteDesktopSubscriptionKey,
+              stream.client,
+              viewport,
+              'desktop'
+            ).catch(() => {})
+          }
 
           stream.unsubscribeResize = runtime.subscribeToTerminalResize(ptyId, (event) => {
             stream.outputBatcher.flush()
@@ -2047,6 +2117,9 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
 
       const ptyId = leaf.ptyId
       const clientId = params.client?.id
+      // Why: only unregister the width floor this subscription took (see the
+      // multiplex stream's registeredRemoteDesktopDriver note).
+      let registeredRemoteDesktopDriver = false
       if (!useBinaryStream) {
         const read = await runtime.readTerminal(params.terminal)
         const serialized = await serializeBudgetedMobileSnapshot(runtime, ptyId, false)
@@ -2124,9 +2197,11 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
       }
 
       const streamId = nextTerminalStreamId++
+      const remoteDesktopSubscriptionKey = `stream:${streamId}`
       let cursor = 0
       let closed = false
       let buffering = true
+      let pendingRemoteDesktopViewport: { cols: number; rows: number } | null = null
       // Why: the cols the mobile client last rewrapped to; gate the
       // resize re-stream so it only fires on an actual width change.
       let lastResizeCols: number | undefined
@@ -2159,6 +2234,8 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
           unregisterBinaryHandler()
           if (isMobile && clientId) {
             runtime.handleMobileUnsubscribe(ptyId, clientId)
+          } else if (registeredRemoteDesktopDriver && clientId) {
+            runtime.unregisterRemoteDesktopViewer(ptyId, remoteDesktopSubscriptionKey)
           }
           emit({ type: 'end' })
           resolveStream()
@@ -2227,9 +2304,17 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
             ) {
               return
             }
+            if (clientId) {
+              registeredRemoteDesktopDriver = true
+              if (buffering) {
+                pendingRemoteDesktopViewport = { cols: viewport.cols, rows: viewport.rows }
+                return
+              }
+            }
             void updateViewportForClient(
               runtime,
               ptyId,
+              remoteDesktopSubscriptionKey,
               params.client,
               { cols: viewport.cols, rows: viewport.rows },
               'desktop'
@@ -2240,6 +2325,12 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
       try {
         if (isMobile && clientId) {
           await runtime.handleMobileSubscribe(ptyId, clientId, params.viewport)
+        } else if (clientId && params.viewport) {
+          // Why: legacy remote desktop viewers that report a viewport also take
+          // the width floor (host fit cascade suppressed) and size the PTY to
+          // the smallest attached viewer. Viewport-less watchers do not lock.
+          registeredRemoteDesktopDriver = true
+          pendingRemoteDesktopViewport = params.viewport
         }
         if (closed) {
           return
@@ -2273,6 +2364,27 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
         unsubscribeData = () => {
           releaseViewSubscriber()
           unsubscribeStreamData()
+        }
+
+        if (
+          clientId &&
+          params.client &&
+          registeredRemoteDesktopDriver &&
+          pendingRemoteDesktopViewport
+        ) {
+          const viewport = pendingRemoteDesktopViewport
+          pendingRemoteDesktopViewport = null
+          await updateViewportForClient(
+            runtime,
+            ptyId,
+            remoteDesktopSubscriptionKey,
+            params.client,
+            viewport,
+            'desktop'
+          )
+        }
+        if (closed) {
+          return
         }
 
         let read = await runtime.readTerminal(params.terminal)
@@ -2405,6 +2517,23 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
         }
         pendingOutputBytes = 0
         outputBatcher.flush()
+        if (
+          clientId &&
+          params.client &&
+          registeredRemoteDesktopDriver &&
+          pendingRemoteDesktopViewport
+        ) {
+          const viewport = pendingRemoteDesktopViewport
+          pendingRemoteDesktopViewport = null
+          void updateViewportForClient(
+            runtime,
+            ptyId,
+            remoteDesktopSubscriptionKey,
+            params.client,
+            viewport,
+            'desktop'
+          ).catch(() => {})
+        }
 
         const sendResizedFrame = (event: {
           cols: number

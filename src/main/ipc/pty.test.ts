@@ -4170,10 +4170,12 @@ describe('registerPtyHandlers', () => {
         createPreAllocatedTerminalHandle: vi.fn(() => null),
         registerPty: vi.fn(),
         getDriver: vi.fn(() => ({ kind: 'host' })),
+        isPtyResizeDrivenRemotely: vi.fn(() => false),
         isResizeSuppressed: vi.fn(() => false),
         onPtySpawned: vi.fn(),
         onPtyExit: vi.fn(),
         onPtyData: vi.fn(),
+        recordRemoteDesktopHostReclaimTarget: vi.fn(),
         onExternalPtyResize: vi.fn()
       }
       handlers.clear()
@@ -4202,10 +4204,12 @@ describe('registerPtyHandlers', () => {
         createPreAllocatedTerminalHandle: vi.fn(() => null),
         registerPty: vi.fn(),
         getDriver: vi.fn(() => ({ kind: 'host' })),
+        isPtyResizeDrivenRemotely: vi.fn(() => false),
         isResizeSuppressed: vi.fn(() => false),
         onPtySpawned: vi.fn(),
         onPtyExit: vi.fn(),
         onPtyData: vi.fn(),
+        recordRemoteDesktopHostReclaimTarget: vi.fn(),
         onExternalPtyResize: vi.fn()
       }
       handlers.clear()
@@ -4215,6 +4219,39 @@ describe('registerPtyHandlers', () => {
 
       resizeListener()(mainWindowIpcEvent, { id, cols: 120, rows: 30 })
 
+      expect(runtime.onExternalPtyResize).not.toHaveBeenCalled()
+    })
+
+    it('suppresses the host fit cascade while a remote viewer drives the width', async () => {
+      const resizeSpy = vi.fn()
+      setupProviderWithAppliedSize({ applied: { cols: 80, rows: 24 }, resize: resizeSpy })
+      const runtime = {
+        setPtyController: vi.fn(),
+        createPreAllocatedTerminalHandle: vi.fn(() => null),
+        registerPty: vi.fn(),
+        getDriver: vi.fn(() => ({ kind: 'idle' })),
+        // The whole point of the fix: a PTY with a remote viewer reports true,
+        // even though the presence-lock driver state stays idle/desktop.
+        isPtyResizeDrivenRemotely: vi.fn(() => true),
+        isResizeSuppressed: vi.fn(() => false),
+        onPtySpawned: vi.fn(),
+        onPtyExit: vi.fn(),
+        onPtyData: vi.fn(),
+        recordRemoteDesktopHostReclaimTarget: vi.fn(),
+        onExternalPtyResize: vi.fn()
+      }
+      handlers.clear()
+      registerPtyHandlers(mainWindow as never, runtime as never)
+      const spawn = await handlers.get('pty:spawn')!(null, { cols: 80, rows: 24, env: {} })
+      const id = (spawn as { id: string }).id
+      resizeSpy.mockClear()
+
+      // Host's own safeFit tries to widen the viewed PTY back to its window.
+      resizeListener()(mainWindowIpcEvent, { id, cols: 125, rows: 48 })
+
+      // It must not reach the PTY while the viewer owns the width.
+      expect(resizeSpy).not.toHaveBeenCalled()
+      expect(runtime.recordRemoteDesktopHostReclaimTarget).toHaveBeenCalledWith(id, 125, 48)
       expect(runtime.onExternalPtyResize).not.toHaveBeenCalled()
     })
   })
@@ -4289,6 +4326,7 @@ describe('registerPtyHandlers', () => {
       registerPreAllocatedHandleForPty: vi.fn(),
       registerPty: vi.fn(),
       getDriver: vi.fn(() => ({ kind: 'host' })),
+      isPtyResizeDrivenRemotely: vi.fn(() => false),
       onPtySpawned: vi.fn(),
       onPtyExit: vi.fn(),
       onPtyData: vi.fn()
@@ -4368,6 +4406,7 @@ describe('registerPtyHandlers', () => {
       registerPreAllocatedHandleForPty: vi.fn(),
       registerPty: vi.fn(),
       getDriver: vi.fn(() => ({ kind: 'host' })),
+      isPtyResizeDrivenRemotely: vi.fn(() => false),
       onPtySpawned: vi.fn(),
       onPtyExit: vi.fn(),
       onPtyData: vi.fn()
@@ -4399,6 +4438,7 @@ describe('registerPtyHandlers', () => {
       registerPreAllocatedHandleForPty: vi.fn(),
       registerPty: vi.fn(),
       getDriver: vi.fn(() => ({ kind: 'host' })),
+      isPtyResizeDrivenRemotely: vi.fn(() => false),
       onPtySpawned: vi.fn(),
       onPtyExit: vi.fn(),
       onPtyData: vi.fn()
@@ -4436,6 +4476,7 @@ describe('registerPtyHandlers', () => {
       registerPreAllocatedHandleForPty: vi.fn(),
       registerPty: vi.fn(),
       getDriver: vi.fn(() => ({ kind: 'host' })),
+      isPtyResizeDrivenRemotely: vi.fn(() => false),
       onPtySpawned: vi.fn(),
       onPtyExit: vi.fn(),
       onPtyData: vi.fn()
@@ -4533,6 +4574,7 @@ describe('registerPtyHandlers', () => {
       registerPty: vi.fn(),
       noteTerminalSpawnCommand: vi.fn(),
       getDriver: vi.fn(() => ({ kind: 'host' })),
+      isPtyResizeDrivenRemotely: vi.fn(() => false),
       onPtySpawned: vi.fn(),
       onPtyExit: vi.fn(),
       onPtyData: vi.fn()
@@ -4585,6 +4627,7 @@ describe('registerPtyHandlers', () => {
       registerPty: vi.fn(),
       noteTerminalSpawnCommand: vi.fn(),
       getDriver: vi.fn(() => ({ kind: 'host' })),
+      isPtyResizeDrivenRemotely: vi.fn(() => false),
       onPtySpawned: vi.fn(),
       onPtyExit: vi.fn(),
       onPtyData: vi.fn()
@@ -5073,6 +5116,7 @@ describe('registerPtyHandlers', () => {
       registerPty: vi.fn(),
       noteTerminalSpawnCommand: vi.fn(),
       getDriver: vi.fn(() => ({ kind: 'host' })),
+      isPtyResizeDrivenRemotely: vi.fn(() => false),
       onPtySpawned: vi.fn(),
       onPtyExit: vi.fn(),
       onPtyData: vi.fn()
@@ -5330,6 +5374,7 @@ describe('registerPtyHandlers', () => {
       registerPty: vi.fn(),
       noteTerminalSpawnCommand: vi.fn(),
       getDriver: vi.fn(() => ({ kind: 'host' })),
+      isPtyResizeDrivenRemotely: vi.fn(() => false),
       onPtySpawned: vi.fn(),
       onPtyExit: vi.fn(),
       onPtyData: vi.fn()
@@ -5439,6 +5484,7 @@ describe('registerPtyHandlers', () => {
       registerPty: vi.fn(),
       noteTerminalSpawnCommand: vi.fn(),
       getDriver: vi.fn(() => ({ kind: 'host' })),
+      isPtyResizeDrivenRemotely: vi.fn(() => false),
       onPtySpawned: vi.fn(),
       onPtyExit: vi.fn(),
       onPtyData: vi.fn()
@@ -5533,6 +5579,7 @@ describe('registerPtyHandlers', () => {
       registerPty: vi.fn(),
       noteTerminalSpawnCommand: vi.fn(),
       getDriver: vi.fn(() => ({ kind: 'host' })),
+      isPtyResizeDrivenRemotely: vi.fn(() => false),
       onPtySpawned: vi.fn(),
       onPtyExit: vi.fn(),
       onPtyData: vi.fn()
@@ -5637,6 +5684,7 @@ describe('registerPtyHandlers', () => {
       registerPreAllocatedHandleForPty: vi.fn(),
       registerPty: vi.fn(),
       getDriver: vi.fn(() => ({ kind: 'host' })),
+      isPtyResizeDrivenRemotely: vi.fn(() => false),
       onPtySpawned: vi.fn(),
       onPtyExit: vi.fn(),
       onPtyData: vi.fn()
