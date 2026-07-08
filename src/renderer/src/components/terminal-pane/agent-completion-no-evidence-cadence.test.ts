@@ -138,6 +138,20 @@ describe('agent completion no-evidence inspection cadence', () => {
     expect(inspectProcess).toHaveBeenCalledTimes(8)
   })
 
+  it('does not accelerate the relaxed cadence when inspections keep erroring', async () => {
+    const inspectProcess = vi.fn(async () => {
+      throw new Error('scan failed')
+    })
+    const { coordinator } = createCoordinator(inspectProcess)
+
+    coordinator.startProcessTracking()
+    await vi.advanceTimersByTimeAsync(60_000)
+
+    // The error backoff ceiling (10s) must not undercut the 15s tier: erroring
+    // scans would otherwise poll MORE often than healthy ones (15s → 10s).
+    expect(inspectProcess).toHaveBeenCalledTimes(4)
+  })
+
   it('keeps a recognized agent on the full active cadence on a costly host', async () => {
     const inspectProcess = vi.fn(async () => processResult('codex'))
     const { coordinator } = createCoordinator(inspectProcess)
