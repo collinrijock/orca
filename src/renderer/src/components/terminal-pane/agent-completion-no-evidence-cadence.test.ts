@@ -138,6 +138,25 @@ describe('agent completion no-evidence inspection cadence', () => {
     expect(inspectProcess).toHaveBeenCalledTimes(8)
   })
 
+  it('keeps cadence disarmed and the done quiet window intact when tracking never starts', async () => {
+    // Why: the hook-notification coordinator (agent-hook-completion-notifications)
+    // never calls startProcessTracking. Pre-gate, hook evidence armed stub polls
+    // whose null inspections cleared workingStatusObserved ~2s later, silently
+    // bypassing the designed done quiet window. The gate makes hook-only
+    // coordinators purely push-driven: no polls, quiet window preserved.
+    const inspectProcess = vi.fn(async () => processResult(null, false))
+    const { coordinator, dispatchCompletion } = createCoordinator(inspectProcess)
+
+    coordinator.observeHookStatus({ state: 'working', prompt: '', agentType: 'codex' })
+    await vi.advanceTimersByTimeAsync(5_000)
+    expect(inspectProcess).not.toHaveBeenCalled()
+
+    coordinator.observeHookStatus({ state: 'done', prompt: '', agentType: 'codex' })
+    expect(dispatchCompletion).not.toHaveBeenCalled()
+    await vi.advanceTimersByTimeAsync(1_500)
+    expect(dispatchCompletion).toHaveBeenCalledTimes(1)
+  })
+
   it('does not accelerate the relaxed cadence when inspections keep erroring', async () => {
     const inspectProcess = vi.fn(async () => {
       throw new Error('scan failed')
