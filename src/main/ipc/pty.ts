@@ -5103,6 +5103,15 @@ export function registerPtyHandlers(
     const ownedConnectionId = ptyOwnership.get(args.id)
     const parsedSshId = ownedConnectionId === undefined ? parseAppSshPtyId(args.id) : null
     const connectionId = ownedConnectionId ?? parsedSshId?.connectionId
+    // Why: local kills must wait for the daemon provider swap like pty:spawn.
+    // A cold-start kill resolved against the pre-daemon LocalPtyProvider,
+    // whose shutdown silently no-ops on daemon session ids — the live session
+    // survived while the synthetic exit below cleared the renderer's binding,
+    // permanently orphaning the PTY (#7742).
+    const startupPromise = getLocalPtyStartupPromise(connectionId)
+    if (startupPromise) {
+      await startupPromise
+    }
     const provider = connectionId ? sshProviders.get(connectionId) : tryGetProviderForPty(args.id)
     if (!provider && connectionId) {
       // Why: detached SSH PTYs intentionally keep ownership after their

@@ -437,6 +437,23 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       expect(lastSubprocess.kill).not.toHaveBeenCalled()
       expect(lastSubprocess.forceKill).toHaveBeenCalled()
     })
+
+    // Why: shutdown() was the only session op that skipped ensureConnected().
+    // After a renderer/app restart the adapter's client connects lazily, so the
+    // first PTY op can be a kill (startup sleep sweeps, closing a restored tab);
+    // it must connect like spawn/attach instead of throwing "Not connected" and
+    // leaving the live daemon session running detached (#7742).
+    it('kills a live session from a fresh adapter that has not connected yet', async () => {
+      const { id } = await adapter.spawn({ cols: 80, rows: 24 })
+
+      const freshAdapter = new DaemonPtyAdapter({ socketPath, tokenPath })
+      try {
+        await freshAdapter.shutdown(id, { immediate: true })
+      } finally {
+        freshAdapter.dispose()
+      }
+      expect(lastSubprocess.forceKill).toHaveBeenCalled()
+    })
   })
 
   describe('sessionsNeedingFullCheckpoint cleanup (leak regression)', () => {

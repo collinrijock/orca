@@ -3595,6 +3595,40 @@ describe('registerPtyHandlers', () => {
     expect(spawnMock).not.toHaveBeenCalled()
   })
 
+  // Why: pty:kill had no startup barrier while pty:spawn did. A cold-start kill
+  // issued before the daemon provider swap resolved against the pre-daemon
+  // LocalPtyProvider, whose shutdown silently no-ops on unknown ids — the live
+  // daemon session survived while the handler's synthetic exit made the
+  // renderer clear its binding, permanently orphaning the PTY (#7742).
+  it('waits for the desktop startup barrier before renderer local kills resolve the provider', async () => {
+    const barrier = makeDeferred()
+    registerPtyHandlers(
+      mainWindow as never,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      {
+        awaitLocalPtyStartup: () => barrier.promise
+      }
+    )
+
+    const daemonSessionId = 'wt-1@@11111111-1111-1111-1111-111111111111'
+    const pendingKill = handlers.get('pty:kill')!(null, { id: daemonSessionId }) as Promise<void>
+
+    await Promise.resolve()
+    const daemon = installObservableDaemonTestProvider()
+    barrier.resolve()
+    await pendingKill
+
+    expect(daemon.spawn).not.toHaveBeenCalled()
+    expect(getLocalPtyProvider().shutdown).toHaveBeenCalledWith(
+      daemonSessionId,
+      expect.objectContaining({ immediate: true })
+    )
+  })
+
   it('rebinds local data and exit listeners after a late daemon provider install', async () => {
     vi.useFakeTimers()
     const barrier = makeDeferred()
