@@ -640,7 +640,11 @@ async function updateViewportForClient(
   subscriptionKey: string,
   client: TerminalViewportClient,
   viewport: { cols: number; rows: number },
-  defaultType: 'mobile' | 'desktop'
+  defaultType: 'mobile' | 'desktop',
+  // Why: the one-shot `terminal.updateViewport` RPC has no disconnect hook, so
+  // it must only refresh a floor the client already owns via its stream (never
+  // create a leak-prone standalone one). Stream paths that own cleanup register.
+  registration: 'register' | 'refresh' = 'register'
 ): Promise<{ updated: boolean; applied: boolean }> {
   const type = client.type ?? defaultType
   if (type === 'mobile') {
@@ -649,13 +653,16 @@ async function updateViewportForClient(
   // Why: a remote desktop viewer's viewport drives the source PTY to the
   // smallest attached viewer (tmux "smallest client wins") and registers it as
   // a width owner so the host's fit cascade stops fighting it.
-  const updated = await runtime.updateRemoteDesktopViewer(
-    ptyId,
-    subscriptionKey,
-    client.id,
-    viewport.cols,
-    viewport.rows
-  )
+  const updated =
+    registration === 'refresh'
+      ? await runtime.refreshRemoteDesktopViewer(ptyId, client.id, viewport.cols, viewport.rows)
+      : await runtime.updateRemoteDesktopViewer(
+          ptyId,
+          subscriptionKey,
+          client.id,
+          viewport.cols,
+          viewport.rows
+        )
   return { updated, applied: updated }
 }
 
@@ -1299,7 +1306,10 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
         `viewport:${params.client.id}`,
         params.client,
         params.viewport,
-        'mobile'
+        'mobile',
+        // Why: one-shot RPC with no disconnect hook — refresh the client's
+        // existing stream-owned floor only, never create a leak-prone one.
+        'refresh'
       )
       return { ...viewportUpdate, seq: runtime.getLayout(leaf.ptyId)?.seq }
     }
@@ -1702,6 +1712,26 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
             stream.pendingOutputBytes = 0
             stream.pendingOutputOverflowed = false
             stream.outputBatcher.flush()
+            // Why: a viewer resize that arrived during the snapshot buffering
+            // window is parked in pendingRemoteDesktopViewport; apply it now or
+            // it is silently dropped until the viewer's next resize.
+            if (
+              !stream.isMobile &&
+              stream.client?.id &&
+              stream.registeredRemoteDesktopDriver &&
+              stream.pendingRemoteDesktopViewport
+            ) {
+              const viewport = stream.pendingRemoteDesktopViewport
+              stream.pendingRemoteDesktopViewport = null
+              void updateViewportForClient(
+                runtime,
+                stream.ptyId,
+                stream.remoteDesktopSubscriptionKey,
+                stream.client,
+                viewport,
+                'desktop'
+              ).catch(() => {})
+            }
           }
         }
       }
@@ -1764,7 +1794,11 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
           ackOutput: request.capabilities?.ackOutput === 1,
           ackInFlightBytes: 0,
           registeredRemoteDesktopDriver: false,
-          remoteDesktopSubscriptionKey: `multiplex:${request.streamId}`,
+          // Why: streamId is client-local, so two remote connections can both
+          // use stream 1 for the same PTY. Scope the width-floor key by
+          // connectionId (guaranteed present above) so they can't
+          // overwrite/release each other's floor.
+          remoteDesktopSubscriptionKey: `multiplex:${connectionId}:${request.streamId}`,
           pendingRemoteDesktopViewport: null,
           buffering: true,
           ackPendingOutput: [],
