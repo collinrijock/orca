@@ -31,9 +31,12 @@ function baseProps(overrides: Partial<PrimaryActionInputs> = {}) {
     commitMessage: 'feat: add commit area',
     commitError: null as string | null,
     commitFailureRecoveryPrompt: null as string | null,
+    pushFailureRawError: null as string | null,
+    pushFailureRecoveryPrompt: null as string | null,
     remoteActionError: null as string | null,
     isCommitting: inputs.isCommitting,
     isFixingCommitFailureWithAI: false,
+    isFixingPushFailureWithAI: false,
     sourceControlAiActionsVisible: true,
     aiEnabled: false,
     aiAgentConfigured: false,
@@ -50,6 +53,7 @@ function baseProps(overrides: Partial<PrimaryActionInputs> = {}) {
     onGenerate: vi.fn(),
     onCancelGenerate: vi.fn(),
     onFixCommitFailureWithAI: vi.fn(),
+    onFixPushFailureWithAI: vi.fn(),
     onPrimaryAction: vi.fn(),
     onDropdownAction: vi.fn() as (kind: DropdownActionKind) => void
   }
@@ -240,6 +244,35 @@ describe('CommitArea', () => {
     })
     expect(markup).toContain('Fetch failed. network timeout')
     expect(markup).toContain('commit-area-remote-error')
+  })
+
+  it('shows a compact push hook summary and AI fix action when push fails on a hook', () => {
+    const raw =
+      "error: failed to push some refs to 'origin'\nhusky - pre-push hook exited with code 1\neslint found 2 errors"
+    const markup = renderCommitArea({
+      ...baseProps(),
+      pushFailureRawError: raw,
+      pushFailureRecoveryPrompt: 'Fix this push failure.'
+    })
+
+    expect(markup).toContain('id="commit-area-push-error"')
+    expect(markup).toContain('Push blocked')
+    expect(markup).toContain('Lint failed during push.')
+    expect(markup).not.toContain('eslint found 2 errors')
+    expect(markup).toContain('aria-label="Fix push failure with AI"')
+    expect(markup).toContain('Details')
+  })
+
+  it('hides push failure AI actions when Source Control AI actions are hidden', () => {
+    const markup = renderCommitArea({
+      ...baseProps(),
+      pushFailureRawError: 'husky - pre-push hook failed',
+      pushFailureRecoveryPrompt: 'Fix this push failure.',
+      sourceControlAiActionsVisible: false
+    })
+
+    expect(markup).not.toContain('Fix push failure with AI')
+    expect(markup).toContain('Push blocked')
   })
 
   it('formats pull policy errors with command options', () => {

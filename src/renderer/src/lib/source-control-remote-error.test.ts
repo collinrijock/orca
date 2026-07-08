@@ -15,6 +15,16 @@ describe('source-control remote error formatting', () => {
     )
   })
 
+  it('maps pre-push hook failures to a hook-specific message instead of remote access guidance', () => {
+    const error = new Error(
+      "git push failed: Command failed: git push origin main\nerror: failed to push some refs to 'origin'\nhusky - pre-push hook exited with code 1\neslint found 2 errors"
+    )
+
+    expect(resolveRemoteOperationErrorMessage(error, { isPush: true })).toBe(
+      'Push blocked — lint failed during push.'
+    )
+  })
+
   it('extracts publish details from newline-heavy output without full line-array splitting', () => {
     const splitSpy = vi.spyOn(String.prototype, 'split')
     const replaceSpy = vi.spyOn(String.prototype, 'replace')

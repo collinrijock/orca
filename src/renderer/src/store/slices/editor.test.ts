@@ -3498,6 +3498,20 @@ describe('createEditorSlice remote branch actions', () => {
     expect(store.getState().isRemoteOperationActive).toBe(false)
   })
 
+  it('maps pre-push hook failures to hook-specific guidance instead of remote access', async () => {
+    const store = createEditorStore()
+    const pushError = new Error(
+      "git push failed: Command failed: git push origin main\nerror: failed to push some refs to 'origin'\nhusky - pre-push hook exited with code 1\neslint found 2 errors"
+    )
+    gitPushMock.mockRejectedValueOnce(pushError)
+
+    await expect(store.getState().pushBranch('wt-1', '/repo', false)).rejects.toThrow(
+      pushError.message
+    )
+
+    expect(toastErrorMock).toHaveBeenCalledWith('Push blocked — lint failed during push.')
+  })
+
   it('uses a fallback message for generic push errors', async () => {
     const store = createEditorStore()
     const pushError = new Error('network timeout')

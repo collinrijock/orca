@@ -227,6 +227,11 @@ import {
 } from './commit-failure-dialog-state'
 import { hasExpandedCommitFailureDetails, summarizeCommitFailure } from './commit-failure-summary'
 import {
+  hasExpandedPushFailureDetails,
+  isPushHookFailure,
+  summarizePushFailure
+} from './push-failure-summary'
+import {
   isSourceControlSplitOpenModifier,
   shouldOpenSourceControlRowAsPreview,
   toPermanentSourceControlRowOpenEvent,
@@ -306,8 +311,11 @@ import {
 
 export {
   appendCommitFailureCustomInstruction,
+  appendPushFailureCustomInstruction,
   buildCommitFailureAgentCommandInput,
   buildFixCommitFailurePrompt,
+  buildFixPushFailurePrompt,
+  buildPushFailureAgentCommandInput,
   buildResolveConflictsPrompt,
   buildResolvePullRequestConflictsPrompt
 } from './source-control-ai-prompts'
@@ -321,6 +329,7 @@ type AbortActionErrorKind = 'abort_merge' | 'abort_rebase'
 export type SourceControlActionError = {
   kind: RemoteOpKind | AbortActionErrorKind
   message: string
+  rawError?: string
 }
 type SourceControlOperationTarget = RuntimeGitContext & {
   worktreeId: string
@@ -1901,12 +1910,15 @@ function SourceControlInner(): React.JSX.Element {
     openCommitGenerationDialog,
     openPullRequestGenerationDialog,
     isLaunchingCommitFailureAgent,
+    isLaunchingPushFailureAgent,
     resolveConflictsPrompt,
     commitFailureRecoveryPrompt,
+    pushFailureRecoveryPrompt,
     getLaunchActionRecipe,
     saveLaunchActionDefault,
     handleResolveConflictsWithAI,
     handleFixCommitFailureWithAI,
+    handleFixPushFailureWithAI,
     handleSaveCommitMessageGenerationDefaults,
     handleSavePullRequestGenerationDefaults,
     openSourceControlAiSettings
@@ -1923,6 +1935,17 @@ function SourceControlInner(): React.JSX.Element {
     worktreePath,
     commitMessage,
     commitError,
+    pushFailureRawError:
+      remoteActionError &&
+      isPushHookFailure(remoteActionError.rawError ?? remoteActionError.message) &&
+      (remoteActionError.kind === 'push' ||
+        remoteActionError.kind === 'publish' ||
+        remoteActionError.kind === 'force_push' ||
+        remoteActionError.kind === 'sync')
+        ? (remoteActionError.rawError ?? remoteActionError.message)
+        : null,
+    pushFailureEntries: [...grouped.staged, ...grouped.unstaged, ...grouped.untracked],
+    branchName: branchName || null,
     updateSettings,
     updateRepo,
     openSettingsTarget,
@@ -2556,7 +2579,8 @@ function SourceControlInner(): React.JSX.Element {
           ...prev,
           [target.worktreeId]: {
             kind,
-            message: resolveRemoteActionError(kind, error)
+            message: resolveRemoteActionError(kind, error),
+            rawError: error instanceof Error ? error.message : String(error)
           }
         }))
         return false
@@ -5772,10 +5796,31 @@ function SourceControlInner(): React.JSX.Element {
                 commitMessage={commitMessage}
                 commitError={commitError}
                 commitFailureRecoveryPrompt={commitFailureRecoveryPrompt}
-                remoteActionError={remoteActionError?.message ?? null}
+                pushFailureRawError={
+                  remoteActionError &&
+                  isPushHookFailure(remoteActionError.rawError ?? remoteActionError.message) &&
+                  (remoteActionError.kind === 'push' ||
+                    remoteActionError.kind === 'publish' ||
+                    remoteActionError.kind === 'force_push' ||
+                    remoteActionError.kind === 'sync')
+                    ? (remoteActionError.rawError ?? remoteActionError.message)
+                    : null
+                }
+                pushFailureRecoveryPrompt={pushFailureRecoveryPrompt}
+                remoteActionError={
+                  remoteActionError &&
+                  isPushHookFailure(remoteActionError.rawError ?? remoteActionError.message) &&
+                  (remoteActionError.kind === 'push' ||
+                    remoteActionError.kind === 'publish' ||
+                    remoteActionError.kind === 'force_push' ||
+                    remoteActionError.kind === 'sync')
+                    ? null
+                    : (remoteActionError?.message ?? null)
+                }
                 createPrIntentNotice={createPrIntentNotice}
                 isCommitting={isCommitting}
                 isFixingCommitFailureWithAI={isLaunchingCommitFailureAgent}
+                isFixingPushFailureWithAI={isLaunchingPushFailureAgent}
                 isCreatingPr={isCreatingPr || isCreatePrIntentInFlight}
                 isCreatePrIntentInFlight={isCreatePrIntentInFlight}
                 groupId={activeGroupId ?? activeWorktreeId}
@@ -5793,6 +5838,7 @@ function SourceControlInner(): React.JSX.Element {
                 primaryAction={primaryAction}
                 dropdownItems={dropdownItems}
                 fixCommitFailureRecipe={getLaunchActionRecipe('fixCommitFailure')}
+                fixPushFailureRecipe={getLaunchActionRecipe('fixPushFailure')}
                 onCommitMessageChange={(value) => {
                   if (!activeWorktreeId) {
                     return
@@ -5806,6 +5852,7 @@ function SourceControlInner(): React.JSX.Element {
                 onSaveLaunchActionDefault={saveLaunchActionDefault}
                 onOpenSourceControlAiSettings={openSourceControlAiSettings}
                 onFixCommitFailureWithAI={handleFixCommitFailureWithAI}
+                onFixPushFailureWithAI={handleFixPushFailureWithAI}
                 onPrimaryAction={handlePrimaryClick}
                 onDropdownAction={handleActionInvoke}
               />
@@ -6365,7 +6412,8 @@ function SourceControlInner(): React.JSX.Element {
 const SourceControl = React.memo(SourceControlInner)
 export default SourceControl
 
-type CommitFailureFixSplitButtonProps = {
+type SourceControlRecoveryFixSplitButtonProps = {
+  recoveryKind: 'commit' | 'push'
   label: string
   worktreeId: string | null
   groupId: string | null
@@ -6392,7 +6440,8 @@ type CommitFailureFixSplitButtonProps = {
   onPromptDelivered: () => void
 }
 
-function CommitFailureFixSplitButton({
+function SourceControlRecoveryFixSplitButton({
+  recoveryKind,
   label,
   worktreeId,
   groupId,
@@ -6413,10 +6462,74 @@ function CommitFailureFixSplitButton({
   onOpenSettings,
   onFixWithDefaultAgent,
   onPromptDelivered
-}: CommitFailureFixSplitButtonProps): React.JSX.Element {
+}: SourceControlRecoveryFixSplitButtonProps): React.JSX.Element {
   const [composerOpen, setComposerOpen] = useState(false)
   const canLaunch = Boolean(worktreeId && groupId && prompt)
   const dividerClass = variant === 'default' ? 'border-primary-foreground/20' : 'border-border'
+  const actionId: SourceControlLaunchActionId =
+    recoveryKind === 'push' ? 'fixPushFailure' : 'fixCommitFailure'
+  const copy =
+    recoveryKind === 'push'
+      ? {
+          defaultAgentTitle: translate(
+            'auto.components.right.sidebar.SourceControl.pushRecovery.4b37ae99b0',
+            'Start the default AI agent to fix this push failure'
+          ),
+          fixAriaLabel: translate(
+            'auto.components.right.sidebar.SourceControl.pushRecovery.30b8d4f181',
+            'Fix push failure with AI'
+          ),
+          chooseAgentTitle: translate(
+            'auto.components.right.sidebar.SourceControl.pushRecovery.dd43c47089',
+            'Choose an agent for this push failure'
+          ),
+          chooseAgentAriaLabel: translate(
+            'auto.components.right.sidebar.SourceControl.pushRecovery.ec7bfced55',
+            'Choose agent to fix push failure'
+          ),
+          contextUnavailable: translate(
+            'auto.components.right.sidebar.SourceControl.pushRecovery.9e5ccd00aa',
+            'Push failure context unavailable'
+          ),
+          dialogTitle: translate(
+            'auto.components.right.sidebar.SourceControl.pushRecovery.054ead86b1',
+            'Fix Push Failure With AI'
+          ),
+          dialogDescription: translate(
+            'auto.components.right.sidebar.SourceControl.pushRecovery.15b7f210d7',
+            'Choose the agent and edit the full command input before launch.'
+          )
+        }
+      : {
+          defaultAgentTitle: translate(
+            'auto.components.right.sidebar.SourceControl.4b37ae99b0',
+            'Start the default AI agent to fix this commit failure'
+          ),
+          fixAriaLabel: translate(
+            'auto.components.right.sidebar.SourceControl.30b8d4f181',
+            'Fix commit failure with AI'
+          ),
+          chooseAgentTitle: translate(
+            'auto.components.right.sidebar.SourceControl.dd43c47089',
+            'Choose an agent for this commit failure'
+          ),
+          chooseAgentAriaLabel: translate(
+            'auto.components.right.sidebar.SourceControl.ec7bfced55',
+            'Choose agent to fix commit failure'
+          ),
+          contextUnavailable: translate(
+            'auto.components.right.sidebar.SourceControl.9e5ccd00aa',
+            'Commit failure context unavailable'
+          ),
+          dialogTitle: translate(
+            'auto.components.right.sidebar.SourceControl.054ead86b1',
+            'Fix Commit Failure With AI'
+          ),
+          dialogDescription: translate(
+            'auto.components.right.sidebar.SourceControl.15b7f210d7',
+            'Choose the agent and edit the full command input before launch.'
+          )
+        }
 
   return (
     <>
@@ -6429,14 +6542,8 @@ function CommitFailureFixSplitButton({
             className={cn('rounded-r-none', primaryClassName)}
             disabled={isLaunching || !canLaunch}
             onClick={() => void onFixWithDefaultAgent()}
-            title={translate(
-              'auto.components.right.sidebar.SourceControl.4b37ae99b0',
-              'Start the default AI agent to fix this commit failure'
-            )}
-            aria-label={translate(
-              'auto.components.right.sidebar.SourceControl.30b8d4f181',
-              'Fix commit failure with AI'
-            )}
+            title={copy.defaultAgentTitle}
+            aria-label={copy.fixAriaLabel}
           >
             {isLaunching ? (
               <RefreshCw className={cn(iconClassName, 'animate-spin')} />
@@ -6452,14 +6559,8 @@ function CommitFailureFixSplitButton({
               size={size}
               className={cn('rounded-l-none border-l', dividerClass, chevronClassName)}
               disabled={isLaunching || !canLaunch}
-              title={translate(
-                'auto.components.right.sidebar.SourceControl.dd43c47089',
-                'Choose an agent for this commit failure'
-              )}
-              aria-label={translate(
-                'auto.components.right.sidebar.SourceControl.ec7bfced55',
-                'Choose agent to fix commit failure'
-              )}
+              title={copy.chooseAgentTitle}
+              aria-label={copy.chooseAgentAriaLabel}
             >
               <ChevronDown className={iconClassName} />
             </Button>
@@ -6478,12 +6579,7 @@ function CommitFailureFixSplitButton({
               )}
             </DropdownMenuItem>
           ) : (
-            <DropdownMenuItem disabled>
-              {translate(
-                'auto.components.right.sidebar.SourceControl.9e5ccd00aa',
-                'Commit failure context unavailable'
-              )}
-            </DropdownMenuItem>
+            <DropdownMenuItem disabled>{copy.contextUnavailable}</DropdownMenuItem>
           )}
         </DropdownMenuContent>
       </DropdownMenu>
@@ -6491,15 +6587,9 @@ function CommitFailureFixSplitButton({
         <SourceControlAgentActionDialog
           open={composerOpen}
           onOpenChange={setComposerOpen}
-          actionId="fixCommitFailure"
-          title={translate(
-            'auto.components.right.sidebar.SourceControl.054ead86b1',
-            'Fix Commit Failure With AI'
-          )}
-          description={translate(
-            'auto.components.right.sidebar.SourceControl.15b7f210d7',
-            'Choose the agent and edit the full command input before launch.'
-          )}
+          actionId={actionId}
+          title={copy.dialogTitle}
+          description={copy.dialogDescription}
           baseCommandInput={prompt}
           worktreeId={worktreeId}
           groupId={groupId}
@@ -6520,12 +6610,12 @@ function CommitFailureFixSplitButton({
   )
 }
 
-function getCommitFailureKindLabel(summary: string): string | null {
+function getRecoveryFailureKindLabel(summary: string): string | null {
   if (/\blint\b/i.test(summary)) {
     return 'Lint'
   }
 
-  if (/\bhook\b|\bpre-commit\b/i.test(summary)) {
+  if (/\bhook\b|\bpre-commit\b|\bpre-push\b/i.test(summary)) {
     return 'Hook'
   }
 
@@ -6541,10 +6631,13 @@ type CommitAreaProps = {
   commitMessage: string
   commitError: string | null
   commitFailureRecoveryPrompt: string | null
+  pushFailureRawError: string | null
+  pushFailureRecoveryPrompt: string | null
   remoteActionError: string | null
   createPrIntentNotice?: CreatePrIntentNotice | null
   isCommitting: boolean
   isFixingCommitFailureWithAI: boolean
+  isFixingPushFailureWithAI: boolean
   isCreatingPr?: boolean
   isCreatePrIntentInFlight?: boolean
   showComposer?: boolean
@@ -6561,6 +6654,7 @@ type CommitAreaProps = {
   primaryAction: PrimaryAction
   dropdownItems: DropdownEntry[]
   fixCommitFailureRecipe?: SourceControlActionRecipe
+  fixPushFailureRecipe?: SourceControlActionRecipe
   onCommitMessageChange: (message: string) => void
   onGenerate: () => void
   onCancelGenerate: () => void
@@ -6571,6 +6665,7 @@ type CommitAreaProps = {
   ) => void | Promise<void>
   onOpenSourceControlAiSettings?: () => void
   onFixCommitFailureWithAI: (promptOverride?: string) => Promise<boolean> | boolean
+  onFixPushFailureWithAI: (promptOverride?: string) => Promise<boolean> | boolean
   onPrimaryAction: () => void
   onDropdownAction: (kind: DropdownActionKind) => void
 }
@@ -6584,10 +6679,13 @@ export function CommitArea({
   commitMessage,
   commitError,
   commitFailureRecoveryPrompt,
+  pushFailureRawError,
+  pushFailureRecoveryPrompt,
   remoteActionError,
   createPrIntentNotice,
   isCommitting,
   isFixingCommitFailureWithAI,
+  isFixingPushFailureWithAI,
   isCreatingPr = false,
   isCreatePrIntentInFlight = false,
   showComposer = true,
@@ -6604,12 +6702,14 @@ export function CommitArea({
   primaryAction,
   dropdownItems,
   fixCommitFailureRecipe,
+  fixPushFailureRecipe,
   onCommitMessageChange,
   onGenerate,
   onCancelGenerate,
   onSaveLaunchActionDefault,
   onOpenSourceControlAiSettings,
   onFixCommitFailureWithAI,
+  onFixPushFailureWithAI,
   onPrimaryAction,
   onDropdownAction
 }: CommitAreaProps): React.JSX.Element {
@@ -6649,8 +6749,23 @@ export function CommitArea({
     [commitError]
   )
   const commitFailureKindLabel = useMemo(
-    () => (commitFailureSummary ? getCommitFailureKindLabel(commitFailureSummary) : null),
+    () => (commitFailureSummary ? getRecoveryFailureKindLabel(commitFailureSummary) : null),
     [commitFailureSummary]
+  )
+  const pushFailureSummary = useMemo(
+    () => (pushFailureRawError ? summarizePushFailure(pushFailureRawError) : null),
+    [pushFailureRawError]
+  )
+  const pushFailureKindLabel = useMemo(
+    () => (pushFailureSummary ? getRecoveryFailureKindLabel(pushFailureSummary) : null),
+    [pushFailureSummary]
+  )
+  const hasPushFailureDetails = useMemo(
+    () =>
+      pushFailureRawError && pushFailureSummary
+        ? hasExpandedPushFailureDetails(pushFailureRawError, pushFailureSummary)
+        : false,
+    [pushFailureRawError, pushFailureSummary]
   )
   const hasCommitFailureDetails = useMemo(
     () =>
@@ -6691,12 +6806,46 @@ export function CommitArea({
   const handleCommitFailureAgentPromptDelivered = useCallback(() => {
     setCommitFailureDialogOpen(false)
   }, [setCommitFailureDialogOpen])
+  const pushFailureWorktreeKey = getCommitFailureDialogWorktreeKey(worktreeId)
+  const [pushFailureDialogState, setPushFailureDialogState] = useState<CommitFailureDialogState>({
+    worktreeKey: pushFailureWorktreeKey,
+    open: false
+  })
+  const isPushFailureDialogOpen = shouldShowCommitFailureDialog(
+    pushFailureDialogState,
+    pushFailureWorktreeKey,
+    hasPushFailureDetails
+  )
+  const setPushFailureDialogOpen = useCallback(
+    (open: boolean) => {
+      setPushFailureDialogState({ worktreeKey: pushFailureWorktreeKey, open })
+    },
+    [pushFailureWorktreeKey]
+  )
+  const handleFixPushFailureWithAI = useCallback(
+    async (promptOverride?: string): Promise<boolean> => {
+      const launched = await onFixPushFailureWithAI(promptOverride)
+      if (launched) {
+        setPushFailureDialogOpen(false)
+      }
+      return launched
+    },
+    [onFixPushFailureWithAI, setPushFailureDialogOpen]
+  )
+  const handlePushFailureAgentPromptDelivered = useCallback(() => {
+    setPushFailureDialogOpen(false)
+  }, [setPushFailureDialogOpen])
 
   useEffect(() => {
     setCommitFailureDialogState((current) =>
       syncCommitFailureDialogState(current, commitFailureWorktreeKey, hasCommitFailureDetails)
     )
   }, [commitFailureWorktreeKey, hasCommitFailureDetails])
+  useEffect(() => {
+    setPushFailureDialogState((current) =>
+      syncCommitFailureDialogState(current, pushFailureWorktreeKey, hasPushFailureDetails)
+    )
+  }, [pushFailureWorktreeKey, hasPushFailureDetails])
 
   // Why: most primary-kind labels are anchored by a directional icon so
   // the affirmative Commit (✓) reads distinctly from the remote-state
@@ -6718,6 +6867,7 @@ export function CommitArea({
   })
   const describedBy = [
     commitError ? 'commit-area-error' : null,
+    pushFailureRawError ? 'commit-area-push-error' : null,
     remoteActionError ? 'commit-area-remote-error' : null,
     createPrIntentNotice ? 'commit-area-create-pr-intent' : null,
     generateError ? 'commit-area-generate-error' : null
@@ -7012,7 +7162,8 @@ export function CommitArea({
             </div>
             <div className="ml-[1.375rem] flex min-w-0 items-center gap-1.5">
               {sourceControlAiActionsVisible ? (
-                <CommitFailureFixSplitButton
+                <SourceControlRecoveryFixSplitButton
+                  recoveryKind="commit"
                   label={translate(
                     'auto.components.right.sidebar.SourceControl.60bd988f0b',
                     'AI Fix'
@@ -7074,7 +7225,8 @@ export function CommitArea({
             </pre>
             <DialogFooter>
               {sourceControlAiActionsVisible ? (
-                <CommitFailureFixSplitButton
+                <SourceControlRecoveryFixSplitButton
+                  recoveryKind="commit"
                   label={translate(
                     'auto.components.right.sidebar.SourceControl.834cb3f23d',
                     'Fix with AI'
@@ -7103,6 +7255,143 @@ export function CommitArea({
               <DialogClose asChild>
                 <Button type="button" variant="outline" size="sm">
                   {translate('auto.components.right.sidebar.SourceControl.783a808870', 'Close')}
+                </Button>
+              </DialogClose>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
+      {pushFailureRawError && (
+        <div
+          id="commit-area-push-error"
+          role="alert"
+          aria-live="polite"
+          className="mt-2 min-w-0 overflow-hidden rounded-lg border border-destructive/20 bg-card text-card-foreground shadow-xs"
+        >
+          <div className="h-0.5 bg-destructive/70" aria-hidden="true" />
+          <div className="grid min-w-0 gap-2 px-2.5 py-2.5">
+            <div className="grid min-w-0 grid-cols-[1rem_minmax(0,1fr)] gap-1.5">
+              <span className="mt-px inline-flex size-4 shrink-0 items-center justify-center rounded-full bg-destructive/10 text-destructive">
+                <TriangleAlert className="size-3" aria-hidden="true" />
+              </span>
+              <div className="flex min-w-0 items-center gap-1.5">
+                <span className="text-xs font-semibold text-foreground">
+                  {translate(
+                    'auto.components.right.sidebar.SourceControl.pushRecovery.011f9713fc',
+                    'Push blocked'
+                  )}
+                </span>
+                {pushFailureKindLabel ? (
+                  <span className="shrink-0 rounded-full bg-destructive/10 px-1.5 py-px text-[10px] leading-4 font-semibold text-destructive">
+                    {pushFailureKindLabel}
+                  </span>
+                ) : null}
+              </div>
+              <p className="col-start-2 mt-0.5 line-clamp-3 min-w-0 font-mono text-[11px] leading-4 break-words text-muted-foreground [overflow-wrap:anywhere]">
+                {pushFailureSummary}
+              </p>
+            </div>
+            <div className="ml-[1.375rem] flex min-w-0 items-center gap-1.5">
+              {sourceControlAiActionsVisible ? (
+                <SourceControlRecoveryFixSplitButton
+                  recoveryKind="push"
+                  label={translate(
+                    'auto.components.right.sidebar.SourceControl.pushRecovery.60bd988f0b',
+                    'AI Fix'
+                  )}
+                  worktreeId={worktreeId}
+                  groupId={groupId}
+                  connectionId={connectionId}
+                  repoId={repoId}
+                  launchPlatform={launchPlatform}
+                  prompt={pushFailureRecoveryPrompt}
+                  isLaunching={isFixingPushFailureWithAI}
+                  variant="secondary"
+                  size="xs"
+                  iconClassName="size-3"
+                  primaryClassName="h-6 px-2 text-[11px]"
+                  chevronClassName="h-6 px-1.5"
+                  savedAgentId={readSourceControlLaunchRecipeAgentId(fixPushFailureRecipe)}
+                  savedCommandInputTemplate={fixPushFailureRecipe?.commandInputTemplate ?? null}
+                  savedAgentArgs={fixPushFailureRecipe?.agentArgs ?? null}
+                  onSaveAgentDefault={onSaveLaunchActionDefault}
+                  onOpenSettings={onOpenSourceControlAiSettings}
+                  onFixWithDefaultAgent={handleFixPushFailureWithAI}
+                  onPromptDelivered={handlePushFailureAgentPromptDelivered}
+                />
+              ) : null}
+              {hasPushFailureDetails && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="xs"
+                  className="h-6 shrink-0 border-foreground/25 px-2 text-[11px] font-semibold"
+                  onClick={() => setPushFailureDialogOpen(true)}
+                >
+                  {translate(
+                    'auto.components.right.sidebar.SourceControl.pushRecovery.03d238218c',
+                    'Details'
+                  )}
+                </Button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+      {pushFailureRawError && pushFailureSummary && hasPushFailureDetails && (
+        <Dialog
+          key={`push-${pushFailureWorktreeKey}`}
+          open={isPushFailureDialogOpen}
+          onOpenChange={setPushFailureDialogOpen}
+        >
+          <DialogContent className="sm:max-w-2xl">
+            <DialogHeader>
+              <DialogTitle>
+                {translate(
+                  'auto.components.right.sidebar.SourceControl.pushRecovery.a9bf7c171a',
+                  'Push Failed'
+                )}
+              </DialogTitle>
+              <DialogDescription>{pushFailureSummary}</DialogDescription>
+            </DialogHeader>
+            <pre className="max-h-[60vh] overflow-auto rounded-md border border-border bg-muted/40 p-3 font-mono text-xs whitespace-pre-wrap text-foreground scrollbar-sleek">
+              {pushFailureRawError}
+            </pre>
+            <DialogFooter>
+              {sourceControlAiActionsVisible ? (
+                <SourceControlRecoveryFixSplitButton
+                  recoveryKind="push"
+                  label={translate(
+                    'auto.components.right.sidebar.SourceControl.pushRecovery.834cb3f23d',
+                    'Fix with AI'
+                  )}
+                  worktreeId={worktreeId}
+                  groupId={groupId}
+                  connectionId={connectionId}
+                  repoId={repoId}
+                  launchPlatform={launchPlatform}
+                  prompt={pushFailureRecoveryPrompt}
+                  isLaunching={isFixingPushFailureWithAI}
+                  variant="default"
+                  size="sm"
+                  iconClassName="size-4"
+                  primaryClassName="rounded-r-none"
+                  chevronClassName="rounded-l-none border-l border-primary-foreground/20 px-2"
+                  savedAgentId={readSourceControlLaunchRecipeAgentId(fixPushFailureRecipe)}
+                  savedCommandInputTemplate={fixPushFailureRecipe?.commandInputTemplate ?? null}
+                  savedAgentArgs={fixPushFailureRecipe?.agentArgs ?? null}
+                  onSaveAgentDefault={onSaveLaunchActionDefault}
+                  onOpenSettings={onOpenSourceControlAiSettings}
+                  onFixWithDefaultAgent={handleFixPushFailureWithAI}
+                  onPromptDelivered={handlePushFailureAgentPromptDelivered}
+                />
+              ) : null}
+              <DialogClose asChild>
+                <Button type="button" variant="outline" size="sm">
+                  {translate(
+                    'auto.components.right.sidebar.SourceControl.pushRecovery.783a808870',
+                    'Close'
+                  )}
                 </Button>
               </DialogClose>
             </DialogFooter>

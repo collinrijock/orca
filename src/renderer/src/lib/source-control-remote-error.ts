@@ -2,6 +2,10 @@ import {
   formatSubmodulePushFailureDetail,
   stripCredentialsFromMessage
 } from '../../../shared/git-remote-error'
+import {
+  isPushHookFailure,
+  summarizePushFailure
+} from '../../../shared/source-control-push-failure'
 
 const REMOTE_OPERATION_FAILED_MESSAGE = 'Remote operation failed'
 const REMOTE_OPERATION_DETAIL_MAX_LENGTH = 200
@@ -139,6 +143,21 @@ export function resolveRemoteOperationErrorMessage(
     if (submoduleMessage) {
       return submoduleMessage
     }
+  }
+
+  if (
+    (options?.isPush || options?.isForcePush || options?.publish || options?.isSync) &&
+    isPushHookFailure(error.message)
+  ) {
+    const summary = summarizePushFailure(error.message)
+    const operationLabel = options?.publish
+      ? 'Publish Branch'
+      : options?.isSync
+        ? 'Sync'
+        : options?.isForcePush
+          ? 'Force Push'
+          : 'Push'
+    return `${operationLabel} blocked — ${summary.charAt(0).toLowerCase()}${summary.slice(1)}`
   }
 
   // Why: under sync, the inner push runs *after* a successful pull, so a

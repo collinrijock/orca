@@ -24,6 +24,9 @@ export type SourceControlAiControllerParams = {
   worktreePath: string | null
   commitMessage: string
   commitError: string | null
+  pushFailureRawError: string | null
+  pushFailureEntries: Pick<GitStatusEntry, 'path' | 'status' | 'area'>[]
+  branchName: string | null
   updateSettings: AppState['updateSettings']
   updateRepo: AppState['updateRepo']
   openSettingsTarget: AppState['openSettingsTarget']
