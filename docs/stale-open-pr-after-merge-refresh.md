@@ -90,14 +90,18 @@ In `src/renderer/src/store/slices/github.ts`:
 - That preserve branch does **not** check PR state. It preserves **any** state, including `open` / `draft`.
 - `applyPRCacheResult(..., preserveExisting: true)` leaves `prCache` untouched.
 - `fetchPRForBranch` then returns the old cached PR object to Checks.
+- **Mirrored sibling bug (confirmed, not hypothetical)**: `syncHostedReviewCacheFromGitHubPRResult` (same file) has its own preserve-on-fallback-miss branch with the identical predicate (no `linkedPRNumber`, matching `fallbackPRNumber`, source ≠ `hosted-review`) and the same missing state check. The preserved open `hostedReviewCache` row is what worktree cards render, and `githubHostedReviewFallbackPRNumber` re-derives the stale fallback number from it — so the open row self-perpetuates.
+- Coupling: `shouldWritePRCacheForHostedReviewSync` only accepts the `prCache` null write when the hosted sync accepted. If only the `prCache` preserve is fixed, the entry is **deleted** (accepted=false) instead of written `{ data: null, fetchedAt }`, the hosted row stays open, and `hasAmbiguousGitHubHostedReviewForChecksPanel` (null `prCache` entry + GitHub hosted row) flips the Checks empty state to ambiguous copy instead of the create-PR surface.
+- The same preserve pair also runs on the coordinator background path: `applyGitHubPRRefreshEvent` → `applyGitHubPRResultToCaches` → `applyPRCacheResult`.
 
-Unit test encoding of the bug-as-feature:
+Unit tests encoding the bug-as-feature:
 
 - `src/renderer/src/store/slices/github.test.ts` — `"preserves visible cached PR data when a fallback refresh misses"`
   - seeds an **open** cached PR
   - force-refreshes with matching `fallbackPRNumber`
   - main returns `no-pr`
-  - expects the open cache to remain
+  - expects the open cache to remain — **and** asserts the open hosted-review row is preserved too
+- Same file — `"preserves visible cached PR data when a fallback refresh event misses"` encodes the identical preserve for the coordinator event path (`applyGitHubPRRefreshEvent`).
 
 ### 5. Flakes already take a different path
 
@@ -110,17 +114,18 @@ Unit test encoding of the bug-as-feature:
 | Hide merged branch PR when HEAD diverged and no durable linked PR | **Intentional** (`shouldHideMergedImplicitPR` / `hideMergedImplicitPR`) | Continued work on the branch should be free to open a new PR; historical merged PR is not current review state. |
 | Preserve merged cache when HEAD still matches (or is confirmed-contained) | **Intentional** (`preservesMergedPRForCurrentHead`) | Keep merged visibility at the exact merge commit / contained head. Cards also gate via `isCachedMergedBranchPRCurrentForWorktree`. |
 | Keep last-good cache on `upstream-error` | **Intentional** | Transient gh/network failures must not blank review state. |
-| Preserve **open/draft** cache when fallback refresh returns authoritative `no-pr` | **Bug** | Treats a definitive “no current PR for this branch/fallback” as weaker than a stale open cache entry, so Checks never leaves OPEN + merge CTA. |
+| Preserve **open/draft** cache when fallback refresh returns authoritative `no-pr` | **Bug** | Treats a definitive “no current PR for this branch/fallback” as weaker than a stale open cache entry, so Checks never leaves OPEN + merge CTA. The defect exists twice: `prCache` preserve and the mirrored `hostedReviewCache` preserve in `syncHostedReviewCacheFromGitHubPRResult`. |
 
 ## Design
 
 ### Primary fix (product-aligned, required)
 
-**Stop preserving non-terminal (`open` / `draft`) PR cache entries on authoritative `no-pr` via fallback number.**
+**Stop preserving non-terminal (`open` / `draft`) PR cache entries on authoritative `no-pr` via fallback number — in both caches.**
 
-Change center of gravity:
+Change center of gravity (both in `src/renderer/src/store/slices/github.ts`):
 
-- `shouldPreserveExistingPRForFallbackMiss` in `src/renderer/src/store/slices/github.ts`
+- `shouldPreserveExistingPRForFallbackMiss` (prCache preserve)
+- `syncHostedReviewCacheFromGitHubPRResult` (mirrored hosted-review preserve — same non-terminal state gate; required, see below)
 
 Recommended shape:
 
@@ -128,20 +133,21 @@ Recommended shape:
 2. Narrow or remove the open-ended `preservesFallbackPR` branch:
    - Do **not** preserve when `currentPR.state` is `open` or `draft` (and similarly any non-terminal state used by the product).
    - Optionally still preserve closed/merged only under the existing head-match path (prefer relying on `preservesMergedPRForCurrentHead` rather than a second vague fallback rule).
-3. Ensure both write sites honor the same predicate:
-   - `setGitHubPRResultCaches` → `applyPRCacheResult`
-   - `applyGitHubPRResultToCaches` → `applyPRCacheResult`
+3. Ensure all write sites honor the same predicate:
+   - `setGitHubPRResultCaches` → `applyPRCacheResult` (fetch path)
+   - `applyGitHubPRResultToCaches` → `applyPRCacheResult` (coordinator event path via `applyGitHubPRRefreshEvent`)
    - the post-write return path in `fetchPRForBranch` that re-checks `shouldPreserveExistingPRForFallbackMiss` and returns cached data
-4. When preserve is false and outcome is `no-pr`:
-   - write `prCache[cacheKey] = { data: null, fetchedAt }` (or equivalent accepted null write already used for true misses)
-   - allow hosted-review sync to clear/invalidate the matching GitHub hosted-review cache entry so Checks does not re-surface open state from the sibling cache
+4. Gate the mirrored hosted-review preserve with the same non-terminal predicate. This is **required**, not optional:
+   - `shouldWritePRCacheForHostedReviewSync` only accepts the `prCache` null write when the hosted sync accepted; without the hosted-sync gate, the `prCache` entry is deleted instead of written `{ data: null, fetchedAt }` (OPEN still clears in Checks, but no negative cache and the doc’d null write never happens).
+   - a preserved open hosted row keeps the worktree card stale, keeps `githubHostedReviewFallbackPRNumber` re-supplying the stale fallback number, and makes `hasAmbiguousGitHubHostedReviewForChecksPanel` degrade the Checks empty state to ambiguous copy instead of the create-PR surface.
+   - once gated, GitHub rows fall through to `shouldClearHostedReviewForNoGitHubPR` (true for GitHub rows) and the accepted null write clears both caches.
+   - manual ↻ later calls `refreshHostedReviewCard`, which can overwrite the hosted row, but the coordinator event path has no second write — fix the sync, don’t rely on the follow-up fetch.
 5. Leave ChecksPanel `fallbackPRNumber` wiring alone for this fix. Passing the previously visible number is still useful for exact lifecycle probes; the bug is accepting open state after those probes authoritatively miss.
 
 Files expected to change for primary fix:
 
-- `src/renderer/src/store/slices/github.ts` — `shouldPreserveExistingPRForFallbackMiss` (+ any shared helper if the state gate needs a named predicate)
-- `src/renderer/src/store/slices/github.test.ts` — reverse/replace open preserve test; add clear-on-no-pr coverage
-- Possibly hosted-review sync helpers colocated in the github slice if null writes currently leave open hosted-review rows
+- `src/renderer/src/store/slices/github.ts` — `shouldPreserveExistingPRForFallbackMiss` and the fallback-miss preserve branch in `syncHostedReviewCacheFromGitHubPRResult` (+ a shared named predicate for the state gate)
+- `src/renderer/src/store/slices/github.test.ts` — reverse/replace open preserve tests (fetch path **and** event path); add clear-on-no-pr coverage for both caches
 
 Files that explain the flow but likely do **not** need primary-fix code:
 
@@ -188,9 +194,9 @@ Do not implement optional step unless product confirms; primary fix already rest
 ### After primary fix
 
 1–6 same as above through authoritative `no-pr`.
-7. Preserve predicate false for open/draft.
-8. Cache writes `null` (and hosted-review sibling clears as needed).
-9. Checks shows empty / create PR (no merge CTA for a non-existent open PR).
+7. Both preserve predicates false for open/draft.
+8. Hosted-review row clears; the accepted sync lets `prCache` write `{ data: null, fetchedAt }`.
+9. Checks shows empty / create PR (no merge CTA); worktree card stops advertising the merged PR as open.
 
 ### Preserved intentional paths after fix
 
@@ -218,17 +224,17 @@ Do not implement optional step unless product confirms; primary fix already rest
 ### Renderer unit (`src/renderer/src/store/slices/github.test.ts`)
 
 1. **Reverse/replace** `"preserves visible cached PR data when a fallback refresh misses"`:
-   - seed open cached PR #12
+   - seed open cached PR #12 (the existing test also seeds and asserts the open hosted-review row — reverse both assertions)
    - force refresh with `fallbackPRNumber: 12`
    - main returns `no-pr`
-   - expect cache to become null / cleared (not preserved open)
+   - expect `prCache` to hold an accepted null (not preserved open) and the hosted-review row to clear
    - expect function return value to be null (not the old open PR)
-2. **Add** explicit case: force `no-pr` clears **draft** the same way.
-3. **Keep** `"preserves cached merged PR data when a forced no-PR refresh matches the worktree head"`.
-4. **Keep** confirmed-contained merged preserve test.
-5. **Keep** `"preserves cached PR data when a forced coordinator refresh errors"` (`upstream-error` keeps last good).
-6. **Add** regression: open cache + force found merged (if main returns found merged while head still matches) writes merged, not preserve-open.
-7. **Add** if hosted-review sibling is involved: open hosted-review entry also clears/invalidates when GitHub PR cache accepts null after fallback miss.
+2. **Reverse/replace** the event-path twin `"preserves visible cached PR data when a fallback refresh event misses"` (`applyGitHubPRRefreshEvent` → `applyGitHubPRResultToCaches`) the same way.
+3. **Add** explicit case: force `no-pr` clears **draft** the same way.
+4. **Keep** `"preserves cached merged PR data when a forced no-PR refresh matches the worktree head"` and its event-path twin `"preserves cached merged PR data when a no-PR refresh event matches the worktree head"`.
+5. **Keep** confirmed-contained merged preserve test (`"preserves cached merged PR data when the worktree head is a confirmed PR commit"`).
+6. **Keep** `"preserves cached PR data when a forced coordinator refresh errors"` (`upstream-error` keeps last good).
+7. **Add** regression: open cache + force found merged (if main returns found merged while head still matches) writes merged, not preserve-open.
 
 ### Main unit (no behavior change expected for primary fix)
 
@@ -245,7 +251,7 @@ Do not implement optional step unless product confirms; primary fix already rest
 
 1. Open a worktree whose PR was squash-merged and HEAD has new commits past the PR head.
 2. Checks shows sticky OPEN before the fix (repro).
-3. After fix, ↻ clears OPEN; no Squash and merge CTA.
+3. After fix, ↻ clears OPEN; no Squash and merge CTA; empty state shows the create-PR surface (not ambiguous copy); the sidebar worktree card also drops the stale open PR.
 4. Checkout the merge commit / PR head and confirm merged state can still appear when head-matched.
 5. Airplane-mode / forced upstream error still keeps last good open/merged rather than blanking.
 
@@ -254,8 +260,9 @@ Do not implement optional step unless product confirms; primary fix already rest
 ### PR 1 — Primary sticky-OPEN fix (ship this)
 
 - Narrow `shouldPreserveExistingPRForFallbackMiss` so open/draft are not preserved on authoritative `no-pr` fallback misses.
-- Update github slice unit tests (reverse open preserve; keep merged head-match + upstream-error).
-- Smoke Checks ↻ after merge + diverge.
+- Gate the mirrored fallback-miss preserve in `syncHostedReviewCacheFromGitHubPRResult` with the same non-terminal predicate.
+- Update github slice unit tests (reverse open preserve on fetch **and** event paths; keep merged head-match, confirmed-contained, and upstream-error).
+- Smoke Checks ↻ after merge + diverge; confirm the worktree card also drops the stale open PR.
 
 ### PR 2 — Optional MERGED-after-diverge visibility (product gate)
 
@@ -265,7 +272,7 @@ Do not implement optional step unless product confirms; primary fix already rest
 
 ## Lightweight Eng Review
 
-- **Scope**: one renderer preserve predicate (+ tests); main hide-merged-on-diverge stays intentional.
+- **Scope**: two colocated renderer preserve branches — `prCache` predicate + mirrored hosted-review sync (+ tests); main hide-merged-on-diverge stays intentional.
 - **Architecture**: preserve force-fetch and fallback-number probing; fix acceptance of null outcomes for non-terminal cache.
 - **Failure modes**:
   - sticky OPEN after merge+diverge: fixed by not preserving open/draft on `no-pr`
@@ -273,7 +280,7 @@ Do not implement optional step unless product confirms; primary fix already rest
   - merged-at-head: still preserved via head/contained match
 - **Blast radius**: low; risk is over-clearing if any legitimate open path returns `no-pr` spuriously. Mitigate by only changing preserve-on-`no-pr` for non-terminal states, not by changing main lookup success criteria.
 - **Residual risks**:
-  - Hosted-review sibling cache may need explicit null sync if it can rehydrate open UI after `prCache` clears.
+  - The hosted-review sync gate is part of the primary fix (not residual): skipping it deletes the `prCache` entry instead of null-writing it, leaves the worktree card stale-open, and degrades the Checks empty state via the ambiguous-hosted-review path.
   - Optional MERGED-after-diverge remains a product decision; primary fix prefers empty/create PR, matching intentional hide-merged-on-diverge.
 
 ## Rollout
