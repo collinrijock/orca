@@ -221,7 +221,16 @@ two fixes:
    can pinpoint any residual drop. The full host chain is pinned by a live integration
    test (real bundle over real child stdio through the real manager into a real
    `ingestRemote`).
-2. **Codex reads a redirected home.** Orca launches WSL Codex with `CODEX_HOME` pointed at
+2. **(Round 2) The renderer's SSH-era ownership gate dropped `wsl:*` events.** With the
+   link fixed, envelopes reached `ingestRemote` and the durable cache, but
+   `useIpcEvents.applyAgentStatus` compares the stamped connectionId against the owning
+   repo's — `"wsl:<distro>" !== null` for a local repo, so every WSL-relayed status died
+   before `setAgentStatus`/notifications. Fix: `wsl:*` ids are transport provenance, not
+   ownership — the gate normalizes them to local (null) via
+   `isWslHookRelayConnectionId`, while still rejecting WSL-stamped events against
+   SSH-owned repos. Provenance stays stamped (it made the drop diagnosable in the first
+   place).
+3. **Codex reads a redirected home.** Orca launches WSL Codex with `CODEX_HOME` pointed at
    the managed runtime home (`~/.local/share/orca/codex-runtime-home/home`), so installing
    hooks to `~/.codex` left Codex dark. The installers now accept an explicit codex home;
    the trust write into `config.toml` is deferred while that file doesn't exist (the

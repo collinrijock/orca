@@ -6,6 +6,7 @@ import type { ChildProcessWithoutNullStreams } from 'node:child_process'
 
 import type { SshChannelMultiplexer } from '../ssh/ssh-channel-multiplexer'
 import { AGENT_HOOK_NOTIFICATION_METHOD } from '../../shared/agent-hook-relay'
+import { wslHookRelayConnectionId } from '../../shared/wsl-hook-relay-contract'
 
 export type WslRelayLinkOptions = {
   mux: SshChannelMultiplexer
@@ -22,7 +23,7 @@ export type WslRelayLinkOptions = {
 
 export function wireWslRelayLink(options: WslRelayLinkOptions): void {
   const { mux, child, distro, ingest, warn, onDead } = options
-  const connectionId = `wsl:${distro}`
+  const connectionId = wslHookRelayConnectionId(distro)
 
   mux.onNotification((method, params) => {
     if (method !== AGENT_HOOK_NOTIFICATION_METHOD) {
