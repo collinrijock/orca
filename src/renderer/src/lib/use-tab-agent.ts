@@ -120,9 +120,13 @@ export function resolveTabAgentFromSignals(args: {
   const idleFocusedIdentity = idleIdentitySuppressed
     ? null
     : resolveSignalAgentForLaunchOwner(args.focusedCompletedHookAgent, owner)
-  const idleSiblingIdentity = idleIdentitySuppressed
-    ? null
-    : resolveSignalAgentForLaunchOwner(args.siblingCompletedHookAgent, launchAgent)
+  // Why: `idleIdentitySuppressed` is the FOCUSED pane's own exit evidence, so it
+  // must not clear a sibling split-pane's idle identity — a focused pane back at
+  // its shell says nothing about whether the sibling's agent has exited.
+  const idleSiblingIdentity = resolveSignalAgentForLaunchOwner(
+    args.siblingCompletedHookAgent,
+    launchAgent
+  )
 
   // The title carries identity in only two roles: (a) a reuse override — it
   // names a DIFFERENT-group agent than the pane's known identity, proving the

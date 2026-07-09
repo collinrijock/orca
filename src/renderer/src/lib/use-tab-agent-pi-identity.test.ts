@@ -222,6 +222,46 @@ describe('resolveTabAgentFromSignals — identity vs liveness', () => {
     ).toBe('claude')
   })
 
+  it('keeps a launchAgent-less pane with a live Pi hook stable on Pi', () => {
+    // A launchless pane whose live hook reports Pi resolves to Pi and stays Pi
+    // when the hook clears (the completed record is Pi too) — no flip to OMP.
+    expect(
+      resolveTabAgentFromSignals({
+        hasObservedAgentSignal: true,
+        isRemote: true,
+        title: '⠋ Pi',
+        hookAgent: 'pi',
+        launchAgent: undefined
+      })
+    ).toBe('pi')
+    expect(
+      resolveTabAgentFromSignals({
+        hasObservedAgentSignal: true,
+        isRemote: true,
+        title: '⠋ Pi',
+        hookAgent: null,
+        focusedCompletedHookAgent: 'pi',
+        launchAgent: undefined
+      })
+    ).toBe('pi')
+  })
+
+  it('keeps a sibling idle identity when the focused pane returns to its shell', () => {
+    // Focused pane's local shell-exit evidence must not clear the sibling's idle
+    // identity — the sibling agent is still there.
+    expect(
+      resolveTabAgentFromSignals({
+        hasObservedAgentSignal: true,
+        isRemote: false,
+        title: 'zsh',
+        hookAgent: null,
+        focusedCompletedHookAgent: 'claude',
+        siblingCompletedHookAgent: 'gemini',
+        launchAgent: undefined
+      })
+    ).toBe('gemini')
+  })
+
   it('does not let a sibling pane re-own the focused pane ambiguous Pi title', () => {
     // A split-pane sibling running OMP says nothing about which Pi-variant the
     // focused pane runs; the focused pane's own Pi title must stay Pi.
