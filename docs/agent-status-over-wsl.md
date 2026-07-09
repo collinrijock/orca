@@ -1,6 +1,7 @@
 # Agent Status over WSL (STA-1515)
 
-Status: design + full implementation context. Owner: brennanb2025. Linear: STA-1515.
+Status: implemented (relay + WSL-side installers; see Implementation map below).
+Owner: brennanb2025. Linear: STA-1515.
 Precedent this mirrors: the SSH agent-hook relay (`src/relay/agent-hook-server.ts`,
 `src/shared/agent-hook-relay.ts`, ingest at `agentHookServer.ingestRemote` in
 `src/main/agent-hooks/server.ts`).
@@ -50,7 +51,10 @@ The env coordinates DO cross correctly (`src/main/pty/wsl-orca-env.ts`
 `src/main/daemon/pty-subprocess.ts`). The address is simply unreachable.
 
 Opt-in **mirrored** networking (Win11, `.wslconfig`) shares loopback and makes plain fetch
-work — the fix must be inert there. Detect with `wslinfo --networking-mode`.
+work — the fix must not fight it. No `wslinfo` probing is needed: under mirrored mode the
+relay's preferred-port bind collides with the Windows listener and the `EADDRINUSE`
+fallback (below) handles it, while clients that go straight to the shared loopback reach
+the Windows listener directly. Both delivery paths stay valid.
 
 ### Gap B — installation
 
@@ -112,8 +116,30 @@ boundary: `agentHookServer.ingestRemote` (`src/main/agent-hooks/server.ts`), env
 shape `src/shared/agent-hook-relay.ts` — identical to the SSH relay, which runs a
 loopback-only receiver on the remote box and forwards over the SSH control channel.
 
-Lifecycle: one relay per distro; start on first WSL PTY spawn; restart if WSL restarts;
-token still validated at ingest; inert under mirrored networking and on non-WSL platforms.
+**Port binding.** Bind the inherited `$ORCA_AGENT_HOOK_PORT` first — it keeps every
+already-crossed coordinate (env and the `/p`-translated endpoint file) truthful with zero
+divergence. On `EADDRINUSE` inside the guest, fall back to the SSH relay's own pattern:
+bind `127.0.0.1:0`, write a **WSL-side endpoint file**, and point WSL PTYs'
+`ORCA_AGENT_HOOK_ENDPOINT` at it (clients already prefer endpoint-file coords over env).
+The relay writes that WSL-side endpoint file in **both** modes so restart re-coordination
+never depends on `/mnt/c` translation being readable.
+
+Lifecycle: one relay per distro **per Orca instance** (concurrent instances have distinct
+ports, so guest listeners never collide); **ensure** — not just start — whenever a WSL PTY
+exists: first spawn *and* daemon-PTY reattach after an Orca restart (WSL PTYs survive in
+the daemon; the new instance has a new port + token and must respawn the relay before
+surviving agents re-coordinate). The relay **exits when its stdin closes**: a lingering
+guest listener would let WSL's own Windows→WSL forwarder grab the freed Windows-side port
+and blackhole stale Windows-side hook posts. Restart if WSL restarts; token still
+validated at the relay's HTTP receiver; harmless under mirrored networking (bind
+fallback) and inert on non-WSL platforms (ensure only fires from WSL PTY spawns).
+
+Reliability contract (invariant class `agent-session.hook-transport`): hook clients are
+fail-open silent, so the relay must not be — spawn failures, `EADDRINUSE` fallback, and
+forward errors each leave a diagnosable breadcrumb; the `wsl.exe` "Catastrophic failure
+(E_UNEXPECTED)" retry is **bounded** with backoff, never a spawn loop. Oracle: provider-
+contract tests with fault injection (stdin close → exit, occupied port → fallback + file
+rewrite, envelope round-trip to `ingestRemote`) rather than end-to-end flows only.
 
 Design notes from a survey of comparable WSL-capable tools (kept nameless per policy):
 - Guest-resident component + host-owned channel + guest-side installation, explicitly
@@ -176,7 +202,28 @@ On a default-config Windows 11 + WSL2 **NAT** machine: launch **Codex or Claude*
 (explicitly not OMP) in a WSL worktree → live hook-driven worktree-card row with status
 transitions and a completion notification; hook listener still bound to Windows loopback
 only; zero per-client transport changes; hooks installed WSL-side automatically (no manual
-config); inert under mirrored networking and on non-WSL platforms.
+config); harmless under mirrored networking and inert on non-WSL platforms. After an Orca
+restart with the WSL agent still running (daemon-surviving PTY), status events resume
+without relaunching the agent.
+
+## Implementation map
+
+- Guest: `src/relay/wsl-agent-hook-relay.ts` (entry; exits on stdin close),
+  `src/relay/wsl-hook-fs-bridge.ts` (home-scoped fs RPCs for installs),
+  `src/relay/agent-hook-server.ts` (`token`/`preferredPort` options + `EADDRINUSE`
+  fallback). Bundled by `config/scripts/build-relay.mjs` → `out/relay/wsl/`.
+- Host: `src/main/agent-hooks/wsl-hook-relay-manager.ts` (per-distro state machine),
+  `wsl-hook-relay-launch.ts` (bundle resolve, guest launch/install scripts, sentinel wait),
+  `wsl-hook-relay-deps.ts` (DI seam), `wsl-hook-fs-adapter.ts` (SFTP-shaped adapter so the
+  unchanged `installRemoteManagedAgentHooks` writes into the guest home).
+- Wiring: `buildPtyHostEnv` (`src/main/ipc/pty.ts`) ensures the relay on every WSL spawn
+  and repoints `ORCA_AGENT_HOOK_ENDPOINT` at the guest endpoint file once known;
+  `src/main/pty/wsl-orca-env.ts` picks `/u` vs `/p` by value shape.
+- Contract shared by both sides: `src/shared/wsl-hook-relay-contract.ts`.
+- Oracles: `src/relay/wsl-agent-hook-relay.test.ts`,
+  `src/main/agent-hooks/wsl-hook-relay-manager.test.ts` (fault injection: stale-42
+  reinstall, no-node-43 cooldown, bounded E_UNEXPECTED retry, exit re-ensure gating, and a
+  full installer run against an in-memory guest).
 
 ## References
 

@@ -84,6 +84,15 @@ export type RelayHookServerOptions = {
   /** Env tag forwarded into hook payloads. Defaults to "remote", a relay
    *  location marker that main excludes from dev-vs-prod mismatch warnings. */
   env?: string
+  /** Fixed auth token. The WSL relay passes the host-issued token that
+   *  already crossed into guest env via WSLENV, so unmodified hook clients
+   *  authenticate without any re-coordination. Defaults to a fresh UUID. */
+  token?: string
+  /** Preferred bind port. The WSL relay passes the Windows listener's port —
+   *  free inside the guest under NAT, so env-sourced client coords stay
+   *  truthful. Occupied (e.g. mirrored networking) → fall back to :0 and rely
+   *  on the endpoint file for re-coordination. Defaults to :0. */
+  preferredPort?: number
   /** Called once per parsed payload. The relay wires this to
    *  `dispatcher.notify('agent.hook', envelope)`. */
   forward: RelayHookForward
@@ -115,11 +124,16 @@ export class RelayAgentHookServer {
   > = new Map()
   private assistantMessageRetryTimers = new Map<string, ReturnType<typeof setTimeout>>()
   private forward: RelayHookForward
+  private fixedToken: string | undefined
+  private preferredPort: number
+  private portFallbackApplied = false
 
   constructor(options: RelayHookServerOptions) {
     this.env = options.env ?? REMOTE_AGENT_HOOK_ENV
     this.endpointDir = options.endpointDir ?? defaultEndpointDir()
     this.endpointFilePath = join(this.endpointDir, getEndpointFileName())
+    this.fixedToken = options.token
+    this.preferredPort = options.preferredPort ?? 0
     this.forward = options.forward
   }
 
@@ -127,10 +141,37 @@ export class RelayAgentHookServer {
     if (this.server) {
       return
     }
-    this.token = randomUUID()
+    this.token = this.fixedToken ?? randomUUID()
     this.endpointFileWritten = false
+    this.portFallbackApplied = false
+    try {
+      await this.listenOn(this.preferredPort)
+    } catch (err) {
+      // Why: the preferred port is best-effort (WSL relay: the Windows
+      // listener's port — occupied under mirrored networking, or by an
+      // unrelated guest process). Fall back to an ephemeral port; clients
+      // re-coordinate through the endpoint file.
+      if (this.preferredPort > 0 && (err as NodeJS.ErrnoException)?.code === 'EADDRINUSE') {
+        this.portFallbackApplied = true
+        await this.listenOn(0)
+      } else {
+        throw err
+      }
+    }
+    if (options.publishEndpoint !== false) {
+      this.publishEndpointFile()
+    }
+  }
+
+  /** True when the preferred port was occupied and the server fell back to
+   *  an ephemeral bind — diagnostics for the host-side relay manager. */
+  get usedPortFallback(): boolean {
+    return this.portFallbackApplied
+  }
+
+  private listenOn(port: number): Promise<void> {
     this.server = createServer((req, res) => this.handleRequest(req, res))
-    await new Promise<void>((resolve, reject) => {
+    return new Promise<void>((resolve, reject) => {
       const onStartupError = (err: Error): void => {
         this.server?.off('listening', onListening)
         // Why: null the server reference on bind failure so a subsequent
@@ -149,16 +190,12 @@ export class RelayAgentHookServer {
         if (address && typeof address === 'object') {
           this.port = address.port
         }
-        if (options.publishEndpoint !== false) {
-          this.publishEndpointFile()
-        }
         resolve()
       }
       this.server!.once('error', onStartupError)
-      // Why: bind 127.0.0.1:0 so the OS assigns a free port. Loopback only —
-      // the agent CLI inside the same remote box reaches us via curl
-      // 127.0.0.1:PORT; nobody outside the box can.
-      this.server!.listen(0, '127.0.0.1', onListening)
+      // Why: loopback only — the agent CLI inside the same remote box reaches
+      // us via curl 127.0.0.1:PORT; nobody outside the box can.
+      this.server!.listen(port, '127.0.0.1', onListening)
     })
   }
 
