@@ -1,4 +1,4 @@
-# Windows inner-binary signing rehearsal.
+﻿# Windows inner-binary signing rehearsal.
 #
 # Why: SignPath cannot deep-sign inside NSIS installers, so shipping signed
 # inner binaries (Orca.exe, node-pty *.node, DLLs — see issue #7785) requires
@@ -35,14 +35,14 @@ on:
         type: string
         default: windows-inner-binaries-zip
 
-# Trigger nonce: 2 (retry after artifact configuration fix: max-matches=unbounded)
+# Trigger nonce: 3 (stage 3: production release-signing rehearsal)
 
 jobs:
   rehearse:
     # Why: SignPath origin verification requires GitHub-hosted runners, and
     # windows-2022 matches the real release job's build environment.
     runs-on: windows-2022
-    timeout-minutes: 180
+    timeout-minutes: 360
     permissions:
       actions: read
       contents: read
@@ -172,7 +172,7 @@ jobs:
           api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
           organization-id: c37aa192-a27a-4377-9c90-5d6c95912dc0
           project-slug: orca
-          signing-policy-slug: ${{ inputs.signing-policy-slug || 'test-signing' }}
+          signing-policy-slug: ${{ inputs.signing-policy-slug || 'release-signing' }}
           artifact-configuration-slug: ${{ inputs.inner-artifact-configuration-slug || 'windows-inner-binaries-zip' }}
           github-artifact-id: ${{ steps.upload-unsigned-inner.outputs.artifact-id }}
           wait-for-completion: false
@@ -188,7 +188,8 @@ jobs:
             -OrganizationId 'c37aa192-a27a-4377-9c90-5d6c95912dc0' `
             -SigningRequestId $env:SIGNPATH_REQUEST_ID `
             -OutputArtifactPath signed-inner.zip `
-            -Force
+            -Force `
+            -WaitForCompletionTimeoutInSeconds 14400
           New-Item -ItemType Directory -Path signed-inner -Force
           Expand-Archive -Path signed-inner.zip -DestinationPath signed-inner -Force
 
@@ -245,7 +246,7 @@ jobs:
           api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
           organization-id: c37aa192-a27a-4377-9c90-5d6c95912dc0
           project-slug: orca
-          signing-policy-slug: ${{ inputs.signing-policy-slug || 'test-signing' }}
+          signing-policy-slug: ${{ inputs.signing-policy-slug || 'release-signing' }}
           artifact-configuration-slug: github-actions-windows-installer
           github-artifact-id: ${{ steps.upload-unsigned-installer.outputs.artifact-id }}
           wait-for-completion: false
@@ -261,7 +262,8 @@ jobs:
             -OrganizationId 'c37aa192-a27a-4377-9c90-5d6c95912dc0' `
             -SigningRequestId $env:SIGNPATH_REQUEST_ID `
             -OutputArtifactPath signed-windows.zip `
-            -Force
+            -Force `
+            -WaitForCompletionTimeoutInSeconds 14400
           New-Item -ItemType Directory -Path signed-windows -Force
           Expand-Archive -Path signed-windows.zip -DestinationPath signed-windows -Force
 
@@ -304,7 +306,7 @@ jobs:
       - name: Verify signatures end to end
         shell: pwsh
         env:
-          SIGNING_POLICY: ${{ inputs.signing-policy-slug || 'test-signing' }}
+          SIGNING_POLICY: ${{ inputs.signing-policy-slug || 'release-signing' }}
         run: |
           $report = New-Object System.Collections.Generic.List[string]
           $failures = New-Object System.Collections.Generic.List[string]
@@ -354,7 +356,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: windows-signing-rehearsal-${{ inputs.signing-policy-slug || 'test-signing' }}-${{ github.run_id }}
+          name: windows-signing-rehearsal-${{ inputs.signing-policy-slug || 'release-signing' }}-${{ github.run_id }}
           path: |
             signing-evidence.txt
             inner-signing-list.txt
