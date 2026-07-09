@@ -7,6 +7,7 @@ import type { AgentHookTarget } from '../shared/agent-hook-types'
 import {
   getManagedAgentHookTarget,
   isManagedAgentHookTarget,
+  type AgentCliPresenceState,
   type AgentHookCliPresenceRequest,
   type AgentHookCliPresenceResponse,
   type ManagedAgentHookTarget
@@ -186,9 +187,16 @@ async function detectTarget(
   target: ManagedAgentHookTarget,
   dirs: readonly string[],
   overrideToken: string | undefined
-): Promise<boolean> {
+): Promise<AgentCliPresenceState> {
   if (overrideToken && hasPathSeparatorToken(overrideToken)) {
-    return await isExecutableFile(expandHomePathToken(overrideToken))
+    const expanded = expandHomePathToken(overrideToken)
+    // Why: a relative override resolves against the agent's launch CWD, not the
+    // relay process CWD — probing it here would report presence for an unrelated
+    // directory, so mirror the local detector and report unknown instead.
+    if (!path.isAbsolute(expanded)) {
+      return 'unknown'
+    }
+    return (await isExecutableFile(expanded)) ? 'found' : 'missing'
   }
   const candidates = [...target.executableCandidates, ...(overrideToken ? [overrideToken] : [])]
   for (const candidate of candidates) {
@@ -196,10 +204,10 @@ async function detectTarget(
       continue
     }
     if (await probePathCandidate(candidate, dirs)) {
-      return true
+      return 'found'
     }
   }
-  return false
+  return 'missing'
 }
 
 export async function detectAgentHookCliPresence(
@@ -221,9 +229,9 @@ export async function detectAgentHookCliPresence(
       presence[agent] = { state: 'missing' }
       continue
     }
-    presence[agent] = (await detectTarget(target, dirs, request.overrideExecutableTokens?.[agent]))
-      ? { state: 'found' }
-      : { state: 'missing' }
+    presence[agent] = {
+      state: await detectTarget(target, dirs, request.overrideExecutableTokens?.[agent])
+    }
   }
   return { presence }
 }

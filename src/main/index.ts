@@ -692,14 +692,13 @@ async function startServeAgentHookServer(): Promise<void> {
   }
 }
 
-async function prepareCodexRuntimeHomeForLaunch(
-  target?: CodexAccountSelectionTarget
-): Promise<string | null> {
-  const runtimeHomePath = codexRuntimeHome!.prepareForCodexLaunch(target)
+// Why: per-launch Codex hook upkeep also promotes runtime `/hooks` approvals to
+// the system home (#7896), so it must keep running on every Codex launch. Shared
+// so both the awaited commit-message path and the fire-and-forget sync PTY launch
+// path run it; enabled installs stay presence-gated per the persisted off switch.
+async function maintainCodexLaunchHooks(): Promise<void> {
   const hooksEnabled = isAgentStatusHooksEnabled(store?.getSettings())
   try {
-    // Why: launch prep is reachable after startup via PTY/runtime paths; honor
-    // the persisted off switch so those launches cannot reinstall removed hooks.
     const statuses = hooksEnabled
       ? await installManagedAgentHooks(store?.getSettings(), {
           shouldHydrateShellPath: app.isPackaged && process.platform !== 'win32',
@@ -726,11 +725,23 @@ async function prepareCodexRuntimeHomeForLaunch(
       error
     )
   }
+}
+
+async function prepareCodexRuntimeHomeForLaunch(
+  target?: CodexAccountSelectionTarget
+): Promise<string | null> {
+  const runtimeHomePath = codexRuntimeHome!.prepareForCodexLaunch(target)
+  await maintainCodexLaunchHooks()
   return runtimeHomePath
 }
 
 function getSelectedCodexHomePath(target?: CodexAccountSelectionTarget): string | null {
-  return codexRuntimeHome!.prepareForCodexLaunch(target)
+  const runtimeHomePath = codexRuntimeHome!.prepareForCodexLaunch(target)
+  // Why: the sync PTY spawn path can't await; run per-launch hook upkeep in the
+  // background so #7896 approval promotion and user-hook refresh keep happening
+  // on every Codex launch without blocking spawn.
+  void maintainCodexLaunchHooks()
+  return runtimeHomePath
 }
 
 // Why: tray "Open Orca" / left-click restores the window the close handler may

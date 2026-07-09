@@ -94,6 +94,23 @@ describe('detectAgentHookCliPresence', () => {
     }
   )
 
+  it.runIf(process.platform !== 'win32')(
+    'reports unknown for a relative override path instead of probing the relay CWD',
+    async () => {
+      // Why: a relative override resolves against the agent's launch CWD, not
+      // the relay process CWD, so probing it here could falsely report presence
+      // for an unrelated directory — mirror the local detector and skip it.
+      process.env.PATH = ''
+
+      const response = await detectAgentHookCliPresence({
+        agents: ['codex'],
+        overrideExecutableTokens: { codex: 'bin/codex' }
+      })
+
+      expect(response.presence.codex?.state).toBe('unknown')
+    }
+  )
+
   it('rejects unknown agent ids', async () => {
     await expect(detectAgentHookCliPresence({ agents: ['codex', 'not-real'] })).rejects.toThrow(
       'unknown_agent'
