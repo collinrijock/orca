@@ -1345,7 +1345,7 @@ describe('notifications:probeDelivery', () => {
     await expect(result).resolves.toEqual({ state: 'blocked' })
   })
 
-  it('resolves delivered when the probe show event fires and persists confirmation', async () => {
+  it('resolves delivered when the probe show event fires', async () => {
     const store = createStore()
     registerNotificationHandlers(store as never)
 
@@ -1354,19 +1354,33 @@ describe('notifications:probeDelivery', () => {
 
     getProbeOnceEventHandler('show')()
     await expect(result).resolves.toEqual({ state: 'delivered' })
-    expect(store.updateUI).toHaveBeenCalledWith({ notificationDeliveryConfirmed: true })
+    // No persisted confirmation on purpose: OS permission changes between runs.
+    expect(store.updateUI).not.toHaveBeenCalledWith({ notificationDeliveryConfirmed: true })
   })
 
-  it('short-circuits to delivered from the persisted confirmation without probing', () => {
-    const store = createStore({ notificationDeliveryConfirmed: true })
+  it('serves session evidence without probing again until forced', async () => {
+    const store = createStore()
     registerNotificationHandlers(store as never)
+    const handler = getProbeDeliveryHandler()
 
-    expect(getProbeDeliveryHandler()({})).toEqual({ state: 'delivered' })
-    expect(notificationCtorMock).not.toHaveBeenCalled()
+    const probeResult = handler({}) as Promise<unknown>
+    getProbeOnceEventHandler('show')()
+    await expect(probeResult).resolves.toEqual({ state: 'delivered' })
+    expect(notificationCtorMock).toHaveBeenCalledTimes(1)
+
+    // Cached session evidence answers non-force calls with no new probe.
+    expect(handler({})).toEqual({ state: 'delivered' })
+    expect(notificationCtorMock).toHaveBeenCalledTimes(1)
+
+    // Force bypasses the cache and schedules a fresh probe.
+    const forced = handler({}, { force: true }) as Promise<unknown>
+    expect(notificationCtorMock).toHaveBeenCalledTimes(2)
+    getProbeOnceEventHandler('show')()
+    await expect(forced).resolves.toEqual({ state: 'delivered' })
   })
 
-  it('prefers fresh session failure evidence over the persisted confirmation', async () => {
-    const store = createStore({ notificationDeliveryConfirmed: true })
+  it('serves cached failure evidence after a rejected probe', async () => {
+    const store = createStore()
     registerNotificationHandlers(store as never)
     const handler = getProbeDeliveryHandler()
 
@@ -1376,17 +1390,6 @@ describe('notifications:probeDelivery', () => {
 
     expect(handler({})).toEqual({ state: 'blocked' })
     expect(notificationCtorMock).toHaveBeenCalledTimes(1)
-  })
-
-  it('force bypasses cached evidence and probes again', async () => {
-    const store = createStore({ notificationDeliveryConfirmed: true })
-    registerNotificationHandlers(store as never)
-    const handler = getProbeDeliveryHandler()
-
-    const probeResult = handler({}, { force: true }) as Promise<unknown>
-    expect(notificationCtorMock).toHaveBeenCalledTimes(1)
-    getProbeOnceEventHandler('show')()
-    await expect(probeResult).resolves.toEqual({ state: 'delivered' })
   })
 
   it('resolves blocked on timeout without recording a definitive failure', async () => {

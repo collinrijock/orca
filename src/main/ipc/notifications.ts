@@ -101,29 +101,26 @@ const NOTIFICATION_PROBE_RESULT_TIMEOUT_MS = 3000
 const NOTIFICATION_PROBE_BANNER_CLOSE_DELAY_MS = 4000
 
 // Why: Electron has no API to read macOS UNUserNotificationCenter
-// authorization, so the freshest signal we have is whether the last
-// notification we scheduled was accepted ('show') or rejected ('failed').
-// Session-scoped on purpose: OS-level permission can change between runs.
+// authorization, so the freshest signal we have is what happened to the last
+// notification we scheduled. Session-scoped on purpose: OS-level permission
+// can change between runs, and a stale positive renders a false green card.
 let lastObservedDeliveryOutcome: 'delivered' | 'failed' | null = null
 let deliveryProbeInFlight: Promise<NotificationDeliveryProbeResult> | null = null
 
-function recordDeliveryOutcome(store: Store, outcome: 'delivered' | 'failed'): void {
-  lastObservedDeliveryOutcome = outcome
-  if (outcome === 'delivered' && store.getUI().notificationDeliveryConfirmed !== true) {
-    store.updateUI({ notificationDeliveryConfirmed: true })
-  }
-}
-
 /**
- * Schedules a silent probe notification and reports whether macOS accepted it.
+ * Schedules a silent probe notification and reports whether macOS accepted
+ * it. 'failed' means the request was rejected (permission denied, or an
+ * unsigned build). On a fresh install the probe also instantiates Electron's
+ * notification presenter, which is what makes macOS pop the "Allow
+ * notifications?" dialog.
  *
- * Why: scheduling is the only permission signal Electron exposes — 'show'
- * means the notification was accepted (permission granted), 'failed' means it
- * was rejected (denied, or undeliverable e.g. unsigned build). On a fresh
- * install the probe also instantiates Electron's notification presenter,
- * which is what makes macOS pop the "Allow notifications?" dialog.
+ * Known ambiguity with no public API to resolve it (verified on macOS 26):
+ * while the dialog is unanswered — and when notifications are toggled off in
+ * System Settings after being authorized — macOS still accepts requests and
+ * silently swallows them, so 'delivered' can over-report. 'failed' fires for
+ * hard rejections (unsigned builds, dialog-level denial).
  */
-function probeNotificationDelivery(store: Store): Promise<NotificationDeliveryProbeResult> {
+function probeNotificationDelivery(): Promise<NotificationDeliveryProbeResult> {
   if (deliveryProbeInFlight) {
     return deliveryProbeInFlight
   }
@@ -155,15 +152,15 @@ function probeNotificationDelivery(store: Store): Promise<NotificationDeliveryPr
         clearTimeout(timeoutTimer)
         timeoutTimer = null
       }
-      recordDeliveryOutcome(store, state === 'delivered' ? 'delivered' : 'failed')
+      lastObservedDeliveryOutcome = state === 'delivered' ? 'delivered' : 'failed'
       resolve({ state })
     }
 
     function onShow(): void {
       settle('delivered')
-      // Why: when permission is granted the probe banner is visible, so it
-      // doubles as the user-facing confirmation — let it linger briefly
-      // instead of vanishing the instant it appears.
+      // Why: when delivery works the probe banner is visible, so it doubles
+      // as the user-facing confirmation — let it linger briefly instead of
+      // vanishing the instant it appears.
       const closeTimer = setTimeout(releaseProbe, NOTIFICATION_PROBE_BANNER_CLOSE_DELAY_MS)
       if (typeof closeTimer.unref === 'function') {
         closeTimer.unref()
@@ -350,20 +347,13 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
       if (store.getUI().notificationPermissionRequested !== true) {
         store.updateUI({ notificationPermissionRequested: true })
       }
-      if (!args?.force) {
-        // Session evidence outranks the persisted confirmation: a real
-        // notification failing this session means permission was revoked.
-        if (lastObservedDeliveryOutcome === 'failed') {
-          return { state: 'blocked' }
-        }
-        if (
-          lastObservedDeliveryOutcome === 'delivered' ||
-          store.getUI().notificationDeliveryConfirmed === true
-        ) {
-          return { state: 'delivered' }
-        }
+      // Why: no persisted cache on purpose — OS-level permission changes
+      // between sessions, and a stale "delivered" here shows a false green
+      // card. Session evidence is enough to avoid repeat probe banners.
+      if (!args?.force && lastObservedDeliveryOutcome !== null) {
+        return { state: lastObservedDeliveryOutcome === 'delivered' ? 'delivered' : 'blocked' }
       }
-      return probeNotificationDelivery(store)
+      return probeNotificationDelivery()
     }
   )
 
@@ -474,7 +464,6 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
       // handler) while it's still visible in macOS Notification Center.
       let clickHandler: (() => void) | null = null
       let failedHandler: ((_event: unknown, error?: string) => void) | null = null
-      let shownHandler: (() => void) | null = null
       const entryForId: { notification: Notification; release: () => void } | null =
         args.notificationId ? { notification, release: () => {} } : null
       const release = retainNotificationUntilRelease(notification, () => {
@@ -485,10 +474,6 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
         if (failedHandler) {
           notification.removeListener('failed', failedHandler)
           failedHandler = null
-        }
-        if (shownHandler) {
-          notification.removeListener('show', shownHandler)
-          shownHandler = null
         }
         if (
           args.notificationId &&
@@ -507,14 +492,11 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
         // apps and native delivery errors here; release immediately instead
         // of retaining a dead notification until the fallback timer.
         logNativeNotificationFailure(args.source, error)
-        recordDeliveryOutcome(store, 'failed')
+        // A definitive rejection — feeds the permission card's evidence.
+        lastObservedDeliveryOutcome = 'failed'
         release()
       }
       notification.on('failed', failedHandler)
-      // Why: keep the passive permission signal fresh — every accepted
-      // notification proves delivery still works this session.
-      shownHandler = () => recordDeliveryOutcome(store, 'delivered')
-      notification.on('show', shownHandler)
 
       // Why: clicking a notification should bring Orca to the foreground and
       // switch to the worktree/pane that triggered it. Worktree activation owns
@@ -569,6 +551,7 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
             release()
             return { delivered: false, reason: 'not-displayed' }
           }
+          lastObservedDeliveryOutcome = 'delivered'
           return { delivered: true }
         })
       }
@@ -698,7 +681,6 @@ export function triggerStartupNotificationRegistration(store: Store): void {
   }
 
   function onShow(): void {
-    recordDeliveryOutcome(store, 'delivered')
     // Why: close after a short delay so the notification doesn't linger in
     // Notification Center. The macOS permission dialog is a system-level sheet
     // that appears independently and is not dismissed by closing this notification.
@@ -712,7 +694,7 @@ export function triggerStartupNotificationRegistration(store: Store): void {
     // Why: Electron 42 requires code-signed macOS apps for UNNotification
     // delivery. Unsigned builds fail here instead of producing the permission UI.
     logNativeNotificationFailure('startup registration', error)
-    recordDeliveryOutcome(store, 'failed')
+    lastObservedDeliveryOutcome = 'failed'
     cleanup()
   }
 
