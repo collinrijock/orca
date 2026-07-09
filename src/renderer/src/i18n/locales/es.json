@@ -8387,7 +8387,8 @@
                   "customCommand": "Comando personalizado",
                   "supportedAgents": "Agentes compatibles con esta receta: {{value0}}.",
                   "unsupportedSavedAgent": "{{value0}} no puede ejecutar esta acción de generación de texto. Elige uno de los agentes compatibles a continuación.",
-                  "resolveComments": "Inicia un agente a partir de comentarios de PR o MR sin resolver seleccionados."
+                  "resolveComments": "Inicia un agente a partir de comentarios de PR o MR sin resolver seleccionados.",
+                  "fixPushFailure": "Start an agent when a pre-push hook or git push fails."
                 }
               }
             }
@@ -9281,7 +9282,22 @@
             "d2b9g4f315": "{{value0}} commits por detrás de {{value1}}",
             "e9c2a5d416": "A la par con {{value0}}",
             "4b4a7de138": "Abrir página de revisión en el navegador",
-            "createPrIntentCommitBlockedSummary": "Commit bloqueado: {{value0}} Corrige el problema y vuelve a intentar Crear PR."
+            "createPrIntentCommitBlockedSummary": "Commit bloqueado: {{value0}} Corrige el problema y vuelve a intentar Crear PR.",
+            "pushRecovery": {
+              "4b37ae99b0": "Start the default AI agent to fix this push failure",
+              "30b8d4f181": "Fix push failure with AI",
+              "dd43c47089": "Choose an agent for this push failure",
+              "ec7bfced55": "Choose agent to fix push failure",
+              "9e5ccd00aa": "Push failure context unavailable",
+              "054ead86b1": "Fix Push Failure With AI",
+              "15b7f210d7": "Choose the agent and edit the full command input before launch.",
+              "011f9713fc": "Push blocked",
+              "60bd988f0b": "AI Fix",
+              "03d238218c": "Details",
+              "a9bf7c171a": "Push Failed",
+              "834cb3f23d": "Fix with AI",
+              "783a808870": "Close"
+            }
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "No se pudo iniciar el agente seleccionado.",
@@ -9530,6 +9546,35 @@
                       "216f762bd7": "No se puede resolver la conexión del espacio de trabajo."
                     }
                   }
+                },
+                "push": {
+                  "failure": {
+                    "launch": {
+                      "216f762bd7": "Unable to resolve the workspace connection.",
+                      "4f4e0418a0": "Could not build the agent prompt.",
+                      "f2b47026e8": "Push failure prompt is empty. Update Source Control AI settings.",
+                      "d481ab22f9": "Saved AI agent is unavailable. Use Customize launch to choose another agent.",
+                      "9bbd9077a2": "No enabled AI agents. Configure agents in Settings.",
+                      "5540ff50cc": "Could not build the agent launch command.",
+                      "a8b97d2318": "Started an AI agent for the push failure."
+                    }
+                  }
+                },
+                "recovery": {
+                  "launch": {
+                    "4f4e0418a0": "Could not build the agent prompt.",
+                    "push": {
+                      "empty": "Push failure prompt is empty. Update Source Control AI settings."
+                    },
+                    "commit": {
+                      "empty": "Commit failure prompt is empty. Update Source Control AI settings."
+                    },
+                    "d481ab22f9": "Saved AI agent is unavailable. Use Customize launch to choose another agent.",
+                    "9bbd9077a2": "No enabled AI agents. Configure agents in Settings.",
+                    "5540ff50cc": "Could not build the agent launch command.",
+                    "216f762bd7": "Unable to resolve the workspace connection.",
+                    "success": "Started an AI agent for the {{value0}} failure."
+                  }
                 }
               },
               "discard": {
@@ -9765,7 +9810,13 @@
             "sessionRole": "Sesión",
             "jumpToOriginalPane": "Saltar al panel original",
             "worktree": "Worktree",
-            "jumpToWorktree": "Saltar al worktree"
+            "jumpToWorktree": "Saltar al worktree",
+            "conversationNotSaved": "Conversación no guardada",
+            "recoverableEmptyDetail": "Esta sesión no tiene conversación guardada, pero quedan {{value0}} elemento(s) recuperable(s).",
+            "recoverableEmptyOpenLogHint": "Abre el registro para recuperarlos.",
+            "emptyConversationDetail": "Esta sesión no tiene conversación guardada y no se puede reanudar.",
+            "queuedMessages": "{{value0}} mensaje(s) en cola",
+            "subagentTranscripts": "{{value0}} transcripción(es) de subagente"
           },
           "AiVaultSessionRow": {
             "resumeAgentSession": "Reanudar sesión de {{value0}}",
@@ -9791,7 +9842,8 @@
             "systemRole": "Sistema",
             "sessionRole": "Sesión",
             "jumpToOriginalPane": "Saltar al panel original",
-            "jumpToWorktree": "Saltar al worktree"
+            "jumpToWorktree": "Saltar al worktree",
+            "recoverableBadge": "No guardada"
           },
           "FileExplorerNameFilter": {
             "26fb73c6e3": "Buscar archivos",
@@ -10410,6 +10462,7 @@
           },
           "FloatingTerminalToggleButton": {
             "3b04b065b5": "Mostrar espacio de trabajo flotante",
+            "4cb418b991": "Show floating workspace, new activity",
             "5785dd9148": "Minimizar el espacio de trabajo flotante",
             "bfe7809a70": "{{value0}} espacio de trabajo flotante ({{value1}})"
           },
@@ -12471,7 +12524,10 @@
         "noSkills": "Sin habilidades coincidentes",
         "localAttachmentUnsupported": "Los archivos adjuntos locales no están disponibles para sesiones remotas.",
         "removeAttachment": "Quitar archivo adjunto",
-        "pastedImageLabel": "Imagen pegada"
+        "pastedImageLabel": "Imagen pegada",
+        "imagePasteFailed": "Image paste failed.",
+        "worktreeNotReady": "Worktree not ready — try again in a moment.",
+        "uploadingAttachments": "Uploading {{value0}} file{{value1}} to remote…"
       },
       "tool": {
         "running": "Ejecutando…",
