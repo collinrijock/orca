@@ -5,7 +5,8 @@ import {
   extractLastOscTitle,
   detectAgentStatusFromTitle,
   isClaudeManagementTitle,
-  isShellProcess
+  isShellProcess,
+  normalizeTerminalTitle
 } from '../../shared/agent-detection'
 import { extractOscTitleScanTail } from '../../shared/osc-title-scan-tail'
 import { extractLastOsc7Uri, extractOscScanTail } from '../daemon/osc7-uri-extraction'
@@ -5336,8 +5337,15 @@ export class OrcaRuntimeService {
     // strips the escape sequences. Agent CLIs (Claude Code, Gemini, etc.)
     // announce status via OSC 0/1/2 title sequences — this is the same
     // detection path the renderer uses for notifications and sidebar badges.
-    const oscTitle = this.extractLastOscTitleForPty(ptyId, data)
-    const agentStatus = oscTitle ? detectAgentStatusFromTitle(oscTitle) : null
+    const rawOscTitle = this.extractLastOscTitleForPty(ptyId, data)
+    // Why: collapse high-churn agent titles (Grok/Pi spinner frames, Gemini
+    // per-keystroke updates) once at the observation boundary so lastOscTitle —
+    // and the mobile session-tab titles/snapshots derived from it — stays
+    // stable instead of changing every animation frame. Status is detected
+    // from the raw title (mirroring the renderer's tracker) so working/idle
+    // transitions are unaffected by normalization.
+    const oscTitle = rawOscTitle === null ? null : normalizeTerminalTitle(rawOscTitle)
+    const agentStatus = rawOscTitle ? detectAgentStatusFromTitle(rawOscTitle) : null
 
     const pty = this.getOrCreatePtyWorktreeRecord(ptyId)
     let shouldTouchPtyBackedSessionTabs = false
@@ -5975,18 +5983,22 @@ export class OrcaRuntimeService {
       return
     }
     const status = detectAgentStatusFromTitle(title)
+    // Why: live observations store normalized titles, so seeds must match —
+    // otherwise the first live frame after hydration compares unequal and
+    // touches session tabs once for no visible change.
+    const seededTitle = normalizeTerminalTitle(title)
     const pty = this.ptysById.get(ptyId)
     if (pty) {
       const observedAt = this.nextTitleObservationSequence()
-      pty.lastOscTitle = title
+      pty.lastOscTitle = seededTitle
       pty.lastOscTitleAt = observedAt
-      this.setPtyManagementTitleFromObservedTitle(pty, title, observedAt)
+      this.setPtyManagementTitleFromObservedTitle(pty, seededTitle, observedAt)
     }
     for (const leaf of this.getLeavesForPty(ptyId)) {
       // Why: seed lastOscTitle even when the seeded title doesn't classify
       // as an agent state, so worktree.ps recomputes status from the live
       // title rather than treating the leaf as agentless.
-      leaf.lastOscTitle = title
+      leaf.lastOscTitle = seededTitle
       leaf.lastOscTitleAt = this.nextTitleObservationSequence()
       if (status !== null) {
         leaf.lastAgentStatus = status

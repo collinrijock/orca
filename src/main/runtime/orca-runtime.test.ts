@@ -21,7 +21,7 @@ import type {
   WorkspaceSessionState
 } from '../../shared/types'
 import { AGENT_STATUS_STALE_AFTER_MS } from '../../shared/agent-status-types'
-import { MAX_OSC_TITLE_CHARS } from '../../shared/agent-detection'
+import { detectAgentStatusFromTitle, MAX_OSC_TITLE_CHARS } from '../../shared/agent-detection'
 import {
   addWorktree,
   assertWorktreeCleanForRemoval,
@@ -11270,6 +11270,122 @@ describe('OrcaRuntimeService', () => {
     ).ptysById.get('pty-1')
     expect(pty?.lastOscTitle).toBe('Codex done')
     expect(pty?.lastAgentStatus).toBe('idle')
+  })
+
+  it('normalizes rotating Grok working-frame OSC titles to one stable stored title', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    syncSinglePty(runtime)
+
+    runtime.onPtyData('pty-1', '\x1b]0;⠋ - Waiting for response… - grok\x07', 100)
+    const pty = (
+      runtime as unknown as {
+        ptysById: Map<string, { lastOscTitle: string | null; lastAgentStatus: string | null }>
+      }
+    ).ptysById.get('pty-1')
+    expect(pty?.lastOscTitle).toBe('⠋ Grok')
+    expect(pty?.lastAgentStatus).toBe('working')
+
+    // A different rotating frame must store an identical title — title
+    // equality is what stops per-frame session-tab and mobile-snapshot touch.
+    runtime.onPtyData('pty-1', '\x1b]0;⠴ - Thinking - grok\x07', 101)
+    expect(pty?.lastOscTitle).toBe('⠋ Grok')
+    expect(pty?.lastAgentStatus).toBe('working')
+  })
+
+  it('does not republish mobile session tabs for same-status Grok title frames', async () => {
+    const spawn = vi.fn().mockResolvedValue({ id: 'laptop-created-pty' })
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      spawn,
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    const events: RuntimeMobileSessionTabsResult[] = []
+    const unsubscribe = runtime.onMobileSessionTabsChanged((snapshot) => events.push(snapshot))
+
+    await runtime.createTerminal(`id:${TEST_WORKTREE_ID}`, {
+      tabId: 'laptop-tab',
+      leafId: HEADLESS_LEAF_ID
+    })
+    events.length = 0
+
+    runtime.onPtyData('laptop-created-pty', '\x1b]0;⠋ - Waiting for response… - grok\x07', 100)
+    runtime.onPtyData('laptop-created-pty', '\x1b]0;⠴ - Thinking - grok\x07', 101)
+    runtime.onPtyData('laptop-created-pty', '\x1b]0;⠙ - Responding - grok\x07', 102)
+
+    expect(events).toHaveLength(1)
+    expect(events[0]?.tabs[0]).toEqual(
+      expect.objectContaining({
+        type: 'terminal',
+        title: '⠋ Grok',
+        agentStatus: expect.objectContaining({ state: 'working' })
+      })
+    )
+
+    unsubscribe()
+  })
+
+  it('stores normalized Pi idle OSC titles that still classify as idle', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    syncSinglePty(runtime)
+
+    runtime.onPtyData('pty-1', '\x1b]0;π - my-project\x07', 100)
+    const pty = (
+      runtime as unknown as {
+        ptysById: Map<string, { lastOscTitle: string | null; lastAgentStatus: string | null }>
+      }
+    ).ptysById.get('pty-1')
+    expect(pty?.lastOscTitle).toBe('Pi')
+    expect(pty?.lastAgentStatus).toBe('idle')
+    // Why: worktree.ps / mobile re-detect from stored lastOscTitle, not the
+    // raw OSC frame. Bare "Pi" must still classify as idle after normalize.
+    expect(detectAgentStatusFromTitle(pty?.lastOscTitle ?? '')).toBe('idle')
+  })
+
+  it('normalizes hydration-seeded Grok and Pi titles the same as live OSC frames', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    syncSinglePty(runtime)
+
+    ;(
+      runtime as unknown as {
+        applySeededAgentStatus: (ptyId: string, title: string) => void
+      }
+    ).applySeededAgentStatus('pty-1', '⠴ - Thinking - grok')
+    const pty = (
+      runtime as unknown as {
+        ptysById: Map<string, { lastOscTitle: string | null; lastAgentStatus: string | null }>
+      }
+    ).ptysById.get('pty-1')
+    expect(pty?.lastOscTitle).toBe('⠋ Grok')
+    // Seed writes leaf status only; re-detect from the stored title must still
+    // report working so later live frames compare equal and do not thrash.
+    expect(detectAgentStatusFromTitle(pty?.lastOscTitle ?? '')).toBe('working')
+
+    ;(
+      runtime as unknown as {
+        applySeededAgentStatus: (ptyId: string, title: string) => void
+      }
+    ).applySeededAgentStatus('pty-1', 'π - my-project')
+    expect(pty?.lastOscTitle).toBe('Pi')
+    expect(detectAgentStatusFromTitle(pty?.lastOscTitle ?? '')).toBe('idle')
+  })
+
+  it('stores other-agent OSC titles that merely end in grok unchanged', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    syncSinglePty(runtime)
+
+    runtime.onPtyData('pty-1', '\x1b]0;⠋ wire up grok\x07', 100)
+    const pty = (
+      runtime as unknown as {
+        ptysById: Map<string, { lastOscTitle: string | null }>
+      }
+    ).ptysById.get('pty-1')
+    expect(pty?.lastOscTitle).toBe('⠋ wire up grok')
+
+    // Claude/Codex braille + task ending " - grok" is not a Grok frame shape.
+    runtime.onPtyData('pty-1', '\x1b]0;⠋ fix the flaky suite - grok\x07', 101)
+    expect(pty?.lastOscTitle).toBe('⠋ fix the flaky suite - grok')
   })
 
   it('seeds newly synced leaves from PTY pending ANSI state', async () => {
