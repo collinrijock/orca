@@ -247,7 +247,7 @@ branch refs/heads/main
     ])
   })
 
-  it('passes --force before the worktree path when forced removal is requested', async () => {
+  it('passes double --force before the worktree path when forced removal is requested', async () => {
     mockGitCommands({
       'git worktree list --porcelain': {
         stdout: `worktree /repo
@@ -269,7 +269,7 @@ branch refs/heads/main
 
     await removeWorktree('/repo', '/repo-feature', true)
 
-    expect(getGitCalls()).toContain('git worktree remove --force /repo-feature')
+    expect(getGitCalls()).toContain('git worktree remove --force --force /repo-feature')
   })
 
   it('matches Windows worktree paths before deleting the branch', async () => {
@@ -1070,7 +1070,7 @@ branch refs/heads/main
         'git sparse-checkout init --cone',
         'git sparse-checkout set -- packages/web',
         'git config --local --unset-all branch.feature/test.base',
-        'git worktree remove --force /repo-feature',
+        'git worktree remove --force --force /repo-feature',
         'git branch -D -- feature/test'
       ])
     )
@@ -1078,11 +1078,11 @@ branch refs/heads/main
     expectGitCallOrder(
       calls,
       'git sparse-checkout set -- packages/web',
-      'git worktree remove --force /repo-feature'
+      'git worktree remove --force --force /repo-feature'
     )
     expectGitCallOrder(
       calls,
-      'git worktree remove --force /repo-feature',
+      'git worktree remove --force --force /repo-feature',
       'git branch -D -- feature/test'
     )
   })

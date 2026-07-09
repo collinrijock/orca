@@ -1076,7 +1076,9 @@ async function performRemoveWorktree(
 
   const args = ['worktree', 'remove']
   if (force) {
-    args.push('--force')
+    // Why: Git requires force twice to remove a locked worktree; Orca's
+    // force path already passed the explicit destructive confirmation gate.
+    args.push('--force', '--force')
   }
   args.push(worktreePath)
   await gitExecFileAsync(args, gitExecOptions(repoPath, options))

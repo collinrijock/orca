@@ -324,6 +324,33 @@ describe('removeWorktree cascade', () => {
     })
   })
 
+  it('offers force delete for locked worktree removal errors', async () => {
+    const store = createTestStore()
+    const worktreeId = 'repo1::/workspace/feature-wt'
+    const error =
+      "fatal: cannot remove a locked working tree, lock reason: claude session\nuse 'remove -f -f' to override or unlock first"
+
+    mockApi.worktrees.remove.mockRejectedValueOnce(new Error(error))
+
+    seedStore(store, {
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: worktreeId, repoId: 'repo1' })]
+      },
+      tabsByWorktree: {},
+      ptyIdsByTabId: {},
+      terminalLayoutsByTabId: {}
+    })
+
+    const result = await store.getState().removeWorktree(worktreeId)
+
+    expect(result).toEqual({ ok: false, error })
+    expect(store.getState().deleteStateByWorktreeId[worktreeId]).toEqual({
+      isDeleting: false,
+      error,
+      canForceDelete: true
+    })
+  })
+
   it('offers force delete when Git already removed an unregistered worktree', async () => {
     const store = createTestStore()
     const worktreeId = 'repo1::/workspace/deleted-wt'

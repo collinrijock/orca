@@ -175,7 +175,9 @@ export async function removeWorktreeOp(
 
   const args = ['worktree', 'remove']
   if (force) {
-    args.push('--force')
+    // Why: mirror local deletion semantics; Git requires force twice to
+    // override worktree locks after the user confirmed destructive removal.
+    args.push('--force', '--force')
   }
   args.push(worktreePath)
   await git(args, repoPath)

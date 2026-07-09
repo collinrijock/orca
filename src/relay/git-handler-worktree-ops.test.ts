@@ -224,6 +224,10 @@ describe('removeWorktreeOp', () => {
       forceBranchDelete: true
     })
 
+    expect(git).toHaveBeenCalledWith(
+      ['worktree', 'remove', '--force', '--force', '/repo-feature'],
+      expect.any(String)
+    )
     expect(git).toHaveBeenCalledWith(['branch', '-D', '--', 'feature/test'], expect.any(String))
     expect(git).not.toHaveBeenCalledWith(['branch', '-d', '--', 'feature/test'], expect.any(String))
   })
