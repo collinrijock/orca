@@ -254,6 +254,7 @@ describe('Electron runtime package contract', () => {
       'Notify Slack that inner-binary signing is waiting for approval',
       'Download signed inner binaries from SignPath',
       'Restore signed inner binaries into unpacked app',
+      'Replace cached elevate.exe with the signed copy',
       'Rebuild NSIS installer from signed unpacked app'
     ]
     for (const stepName of innerChainStepNames) {
