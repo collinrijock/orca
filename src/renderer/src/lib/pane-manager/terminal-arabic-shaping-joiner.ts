@@ -92,6 +92,12 @@ function canOpenRtlRun(codePoint: number): boolean {
  * standalone width-0 cell (e.g. RLM at line start) makes xterm's
  * CharacterJoinerService skip the cell without advancing its string index,
  * shifting the run's cell range by one — fix belongs upstream in xterm.js.
+ *
+ * Known upstream limitation #2: the WebGL renderer un-joins a range for the
+ * cursor or a partial selection but not for decorations, so a search-match
+ * highlight inside a joined run renders all-or-nothing — the whole run when
+ * the match covers the run's first cell, otherwise not at all. Same class as
+ * ligatures today, extended here to phrase-length runs.
  */
 export function findRtlJoinRanges(text: string): [number, number][] {
   const length = text.length
