@@ -638,7 +638,8 @@ describe('NewWorkspaceComposerCard folder task source mode', () => {
 
     expect(apiMocks.sshConnect).toHaveBeenCalledWith({ targetId: 'devbox' })
     expect(hostChanges).toEqual([])
-    expect(findRunTargetItem('Devbox')).toBeUndefined()
+    // The picker stays open so the connecting state is visible; the row is not auto-selected.
+    expect(findRunTargetItem('Devbox')).toBeTruthy()
   })
 
   it('keeps other hosts connectable while one connect is still in flight', async () => {
@@ -660,12 +661,14 @@ describe('NewWorkspaceComposerCard folder task source mode', () => {
       findConnectButton('Devbox')?.click()
     })
 
-    // Clicking Connect closes the popover; reopen to inspect the still-open connect state.
-    openRunTargetPicker(current.container)
-    // Devbox is mid-connect (disabled), but Bastion stays clickable.
-    expect(findConnectButton('Devbox')?.disabled).toBe(true)
+    // The picker stays open through the connect, so the state is inspectable in place.
+    // Devbox is mid-connect: disabled, showing the connecting indicator; Bastion stays clickable.
+    const devboxButton = findConnectButton('Devbox')
+    expect(devboxButton?.disabled).toBe(true)
+    expect(devboxButton?.textContent).toContain('Connecting')
     const bastionButton = findConnectButton('Bastion')
     expect(bastionButton?.disabled).toBe(false)
+    expect(bastionButton?.textContent).toContain('Connect')
 
     await act(async () => {
       bastionButton?.click()

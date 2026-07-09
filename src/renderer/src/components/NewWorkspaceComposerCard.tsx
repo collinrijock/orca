@@ -494,9 +494,12 @@ function WorkspaceRunTargetCombobox({
                   >
                     <div className="flex min-w-0 flex-1 items-center gap-2 opacity-60">
                       <Check className="size-4 opacity-0" />
-                      {/* Why: reserve the alarm glyph for a genuine connection error; a dormant
-                          disconnected host gets the neutral server icon. */}
-                      {option.attention ? (
+                      {/* Why: show a spinner while connecting; otherwise reserve the alarm glyph for
+                          a genuine connection error and give a dormant disconnected host the neutral
+                          server icon. */}
+                      {connectingHostIds.has(option.hostId) ? (
+                        <LoaderCircle className="size-3.5 shrink-0 animate-spin text-muted-foreground" />
+                      ) : option.attention ? (
                         <AlertTriangle className="size-3.5 shrink-0 text-muted-foreground" />
                       ) : (
                         <Server className="size-3.5 shrink-0 text-muted-foreground" />
@@ -513,7 +516,7 @@ function WorkspaceRunTargetCombobox({
                         type="button"
                         variant="ghost"
                         size="xs"
-                        className="ml-1 shrink-0 text-muted-foreground/50 hover:text-muted-foreground"
+                        className="ml-1 shrink-0 gap-1 text-muted-foreground/50 hover:text-muted-foreground"
                         // Why: only disable the row being connected — not every row — so one
                         // stuck/slow connect can't lock out connecting to the other hosts.
                         disabled={connectingHostIds.has(option.hostId)}
@@ -524,13 +527,24 @@ function WorkspaceRunTargetCombobox({
                         onClick={(event) => {
                           event.preventDefault()
                           event.stopPropagation()
-                          setOpen(false)
+                          // Why: keep the picker open so the connecting state stays visible; the
+                          // row updates in place from store SSH state once the connect resolves.
                           void connectHost(option)
                         }}
                       >
-                        {translate(
-                          'auto.components.NewWorkspaceComposerCard.connectHost',
-                          'Connect'
+                        {connectingHostIds.has(option.hostId) ? (
+                          <>
+                            <LoaderCircle className="size-3 animate-spin" />
+                            {translate(
+                              'auto.components.NewWorkspaceComposerCard.connectingHost',
+                              'Connecting…'
+                            )}
+                          </>
+                        ) : (
+                          translate(
+                            'auto.components.NewWorkspaceComposerCard.connectHost',
+                            'Connect'
+                          )
                         )}
                       </Button>
                     ) : null}
