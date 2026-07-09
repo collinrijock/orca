@@ -4109,6 +4109,25 @@ export class OrcaRuntimeService {
         const targetGroupId = snapshot?.tabGroups?.find((group) =>
           group.tabOrder.includes(tab.parentTabId)
         )?.id
+        // Why: a pending agent tab may exist without its startup command ever
+        // having been delivered (the create's renderer stalled, #7587), so a
+        // bare materialize would put a plain shell under the agent icon.
+        // Re-resolve the launch like the create path; providers skip startup
+        // commands when attaching to live sessions, so this cannot double-launch.
+        let agentStartup: Awaited<
+          ReturnType<OrcaRuntimeService['resolveMobileSessionTerminalCommand']>
+        > = {}
+        if (tab.launchAgent) {
+          try {
+            const workspace = await this.resolveTerminalWorkspaceLaunchScope(`id:${worktreeId}`)
+            agentStartup = await this.resolveMobileSessionTerminalCommand(workspace, {
+              agent: tab.launchAgent
+            })
+          } catch {
+            // Why: a disabled or unresolvable agent must not make the tab
+            // untappable; fall back to the plain-shell materialize.
+          }
+        }
         try {
           await this.createHeadlessMobileSessionTerminal(worktreeId, true, undefined, {
             identity: {
@@ -4117,6 +4136,10 @@ export class OrcaRuntimeService {
               sessionId
             },
             cwd: tab.startupCwd,
+            command: agentStartup.command,
+            env: agentStartup.env,
+            startupCommandDelivery: agentStartup.startupCommandDelivery,
+            launchConfig: agentStartup.launchConfig,
             launchAgent: tab.launchAgent,
             targetGroupId
           })
