@@ -70,7 +70,7 @@ export default function AiVaultPanel(): React.JSX.Element {
   const [scope, setScope] = useState<AiVaultScope>(DEFAULT_AI_VAULT_SCOPE)
   const [sort, setSort] = useState<AiVaultSort>('updated')
   const [group, setGroup] = useState<AiVaultGroup>('project')
-  const [hideEmptySessions, setHideEmptySessions] = useState(true)
+  const [hideEmptySessions, setHideEmptySessions] = useState(false)
   const [agents, setAgents] = useState<AiVaultAgent[]>([...AI_VAULT_AGENTS])
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(() => new Set())
   const userChangedScopeRef = useRef(false)
@@ -160,7 +160,7 @@ export default function AiVaultPanel(): React.JSX.Element {
     (hasAllAgentsSelected ? 0 : 1) +
     (sort === 'updated' ? 0 : 1) +
     (group === 'project' ? 0 : 1) +
-    (hideEmptySessions ? 0 : 1)
+    (hideEmptySessions ? 1 : 0)
 
   // Workspace is the preferred default, but unavailable context still falls back to All.
   useEffect(() => {
