@@ -382,7 +382,9 @@ describe('remote runtime terminal multiplex ACK gate', () => {
     }
 
     injectSnapshot({ kind: 'scrollback', cols: 120, rows: 40, truncated: false }, 'initial state')
-    expect(onSnapshot).toHaveBeenCalledWith('initial state')
+    expect(onSnapshot).toHaveBeenCalledWith('initial state', {
+      pendingEscapeTailAnsi: undefined
+    })
     expect(onSubscribed).toHaveBeenCalledTimes(1)
 
     injectSnapshot(
@@ -398,7 +400,9 @@ describe('remote runtime terminal multiplex ACK gate', () => {
     // Why: an unsolicited recovery snapshot replaces terminal state, so it
     // clears screen and scrollback first and must not replay the subscribe
     // lifecycle.
-    expect(onSnapshot).toHaveBeenCalledWith(`\x1b[2J\x1b[3J\x1b[H${'recovered state'}`)
+    expect(onSnapshot).toHaveBeenCalledWith(`\x1b[2J\x1b[3J\x1b[H${'recovered state'}`, {
+      pendingEscapeTailAnsi: undefined
+    })
     expect(onSubscribed).toHaveBeenCalledTimes(1)
 
     // Why: an empty recovery snapshot means the model terminal is blank, so
@@ -413,7 +417,9 @@ describe('remote runtime terminal multiplex ACK gate', () => {
       },
       ''
     )
-    expect(onSnapshot).toHaveBeenCalledWith('\x1b[2J\x1b[3J\x1b[H')
+    expect(onSnapshot).toHaveBeenCalledWith('\x1b[2J\x1b[3J\x1b[H', {
+      pendingEscapeTailAnsi: undefined
+    })
     expect(onSubscribed).toHaveBeenCalledTimes(1)
 
     stream.close()
