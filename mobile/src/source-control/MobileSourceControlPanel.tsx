@@ -43,8 +43,40 @@ export function MobileSourceControlPanel({
   onOpenedFileDiff
 }: MobileSourceControlPanelProps) {
   const [activeTab, setActiveTab] = useState<SourceControlHubTab>(initialTab)
-  const openHistoryTab = useCallback(() => setActiveTab('history'), [])
-  const openPrTab = useCallback(() => setActiveTab('pr'), [])
+  // Track first visit so PR/History keep their fetch + scroll state across segment
+  // switches without paying the mount cost until the user actually opens them.
+  const [visitedTabs, setVisitedTabs] = useState<ReadonlySet<SourceControlHubTab>>(
+    () => new Set<SourceControlHubTab>([initialTab])
+  )
+  const [historyRefreshNonce, setHistoryRefreshNonce] = useState(0)
+
+  // Deep-link / push with a different `tab` param should adopt the new segment
+  // (expo-router can reuse the screen instance when only query params change).
+  useEffect(() => {
+    setActiveTab(initialTab)
+    setVisitedTabs((prev) => {
+      if (prev.has(initialTab)) {
+        return prev
+      }
+      const next = new Set(prev)
+      next.add(initialTab)
+      return next
+    })
+  }, [initialTab])
+
+  const selectTab = useCallback((tab: SourceControlHubTab) => {
+    setActiveTab(tab)
+    setVisitedTabs((prev) => {
+      if (prev.has(tab)) {
+        return prev
+      }
+      const next = new Set(prev)
+      next.add(tab)
+      return next
+    })
+  }, [])
+  const openHistoryTab = useCallback(() => selectTab('history'), [selectTab])
+  const openPrTab = useCallback(() => selectTab('pr'), [selectTab])
 
   const state = useMobileSourceControlState({
     hostId,
@@ -115,6 +147,18 @@ export function MobileSourceControlPanel({
     return buildMobilePrChipSummary(prController.prSidebarState, commentCount)
   }, [isHostedRepo, prController.prSidebarState])
 
+  const onRefresh = useCallback(() => {
+    void loadStatus()
+    // Chip + PR segment share the controller; always refresh when hosted so the
+    // branch card stays in sync even while the Changes segment is active.
+    if (isHostedRepo) {
+      void refetchPr()
+    }
+    if (visitedTabs.has('history')) {
+      setHistoryRefreshNonce((n) => n + 1)
+    }
+  }, [isHostedRepo, loadStatus, refetchPr, visitedTabs])
+
   // Embedded mode docks beside the terminal: close the dock instead of popping
   // a route, and skip the full-screen safe-area chrome (the dock column owns it).
   const onBack = embedded ? (onRequestClose ?? (() => router.back())) : () => router.back()
@@ -124,9 +168,46 @@ export function MobileSourceControlPanel({
       worktreeLabel={worktreeLabel}
       ioBusy={ioBusy}
       onBack={onBack}
-      onRefresh={() => void loadStatus()}
+      onRefresh={onRefresh}
     />
   )
+
+  const statusGate =
+    screenState.kind === 'loading' ? (
+      <View style={styles.state}>
+        <ActivityIndicator size="small" color={colors.textSecondary} />
+      </View>
+    ) : screenState.kind === 'error' || screenState.kind === 'unavailable' ? (
+      <View style={styles.state}>
+        <Text style={styles.stateTitle}>
+          {screenState.kind === 'unavailable' ? 'Source Control Unavailable' : 'Unable to Load'}
+        </Text>
+        <Text style={styles.stateText}>{screenState.message}</Text>
+        {screenState.kind === 'error' ? (
+          <Pressable
+            style={styles.retryButton}
+            onPress={() => {
+              // Why: retrying the request is useless while the transport's
+              // reconnect loop is parked at its give-up cap — revive the
+              // connection instead (issue #5049). loadStatus re-runs via
+              // its connState effect once the new client connects.
+              if (connState !== 'connected' && hostId) {
+                void forceReconnect(hostId)
+                return
+              }
+              void loadStatus()
+            }}
+          >
+            <Text style={styles.retryText}>Retry</Text>
+          </Pressable>
+        ) : null}
+      </View>
+    ) : null
+
+  // History only needs the RPC client — do not block it behind git.status.
+  // Changes/PR need status (branch, file list, head SHA), so they stay gated.
+  const showHistory = activeTab === 'history' || visitedTabs.has('history')
+  const showPr = ready && (activeTab === 'pr' || visitedTabs.has('pr'))
 
   return (
     <View ref={setRootRef} style={styles.container}>
@@ -138,79 +219,63 @@ export function MobileSourceControlPanel({
         </SafeAreaView>
       )}
 
-      <MobileSourceControlSegments active={activeTab} onSelect={setActiveTab} />
+      <MobileSourceControlSegments active={activeTab} onSelect={selectTab} />
 
-      {screenState.kind === 'loading' ? (
-        <View style={styles.state}>
-          <ActivityIndicator size="small" color={colors.textSecondary} />
-        </View>
-      ) : screenState.kind === 'error' || screenState.kind === 'unavailable' ? (
-        <View style={styles.state}>
-          <Text style={styles.stateTitle}>
-            {screenState.kind === 'unavailable' ? 'Source Control Unavailable' : 'Unable to Load'}
-          </Text>
-          <Text style={styles.stateText}>{screenState.message}</Text>
-          {screenState.kind === 'error' ? (
-            <Pressable
-              style={styles.retryButton}
-              onPress={() => {
-                // Why: retrying the request is useless while the transport's
-                // reconnect loop is parked at its give-up cap — revive the
-                // connection instead (issue #5049). loadStatus re-runs via
-                // its connState effect once the new client connects.
-                if (connState !== 'connected' && hostId) {
-                  void forceReconnect(hostId)
-                  return
-                }
-                void loadStatus()
-              }}
-            >
-              <Text style={styles.retryText}>Retry</Text>
-            </Pressable>
-          ) : null}
-        </View>
-      ) : (
-        <>
-          <MobileSourceControlBranchCard
-            branchLabel={branchLabel}
-            syncLabel={syncLabel}
-            unstagedCount={unstagedCount}
-            stagedCount={stagedCount}
-            branchCount={branchEntries.length}
-            conflictOperation={status?.conflictOperation ?? null}
-            conflictBusy={busyAction !== null}
-            onAbortConflict={(operation) => void abortConflictOperation(operation)}
-            prChip={prChip}
-            onOpenPr={openPrTab}
+      {ready ? (
+        <MobileSourceControlBranchCard
+          branchLabel={branchLabel}
+          syncLabel={syncLabel}
+          unstagedCount={unstagedCount}
+          stagedCount={stagedCount}
+          branchCount={branchEntries.length}
+          conflictOperation={status?.conflictOperation ?? null}
+          conflictBusy={busyAction !== null}
+          onAbortConflict={(operation) => void abortConflictOperation(operation)}
+          prChip={prChip}
+          onOpenPr={openPrTab}
+        />
+      ) : null}
+
+      {activeTab === 'changes' ? (
+        ready ? (
+          <MobileSourceControlContent state={state} />
+        ) : (
+          statusGate
+        )
+      ) : null}
+
+      {showPr ? (
+        <View style={activeTab === 'pr' ? hubStyles.tabBody : hubStyles.tabBodyHidden}>
+          <MobilePrViewPanelBody
+            client={client}
+            connState={connState}
+            worktreeId={worktreeId}
+            branch={prBranch}
+            headSha={prHeadSha}
+            gitStatus={status}
+            isGithubRepo={isHostedRepo}
+            branchContextLoaded={ready}
+            controller={prController}
+            chromeless
+            autoLoad={false}
           />
-          {activeTab === 'changes' ? (
-            <MobileSourceControlContent state={state} />
-          ) : activeTab === 'pr' ? (
-            <MobilePrViewPanelBody
-              client={client}
-              connState={connState}
-              worktreeId={worktreeId}
-              branch={prBranch}
-              headSha={prHeadSha}
-              gitStatus={status}
-              isGithubRepo={isHostedRepo}
-              branchContextLoaded={ready}
-              controller={prController}
-              chromeless
-              autoLoad={false}
-            />
-          ) : (
-            <View style={hubStyles.tabBody}>
-              <MobileGitHistoryList
-                client={client}
-                connState={connState}
-                worktreeId={worktreeId}
-                bottomInset={insets.bottom}
-              />
-            </View>
-          )}
-        </>
-      )}
+        </View>
+      ) : activeTab === 'pr' ? (
+        statusGate
+      ) : null}
+
+      {showHistory ? (
+        <View style={activeTab === 'history' ? hubStyles.tabBody : hubStyles.tabBodyHidden}>
+          <MobileGitHistoryList
+            client={client}
+            connState={connState}
+            worktreeId={worktreeId}
+            hostId={hostId}
+            bottomInset={insets.bottom}
+            refreshNonce={historyRefreshNonce}
+          />
+        </View>
+      ) : null}
 
       <MobileSourceControlModals state={state} actionSheetActions={actionSheetActions} />
     </View>

@@ -61,7 +61,7 @@ export function MobileSourceControlPrChip({ summary, onPress }: Props) {
             </Text>
           </View>
           <ChipRollup rollup={summary.rollup} />
-          {summary.commentCount && summary.commentCount > 0 ? (
+          {summary.commentCount != null && summary.commentCount > 0 ? (
             <View style={hubStyles.comment}>
               <MessageSquare size={13} color={colors.textSecondary} strokeWidth={2.1} />
               <Text style={hubStyles.commentText}>{summary.commentCount}</Text>
@@ -112,10 +112,10 @@ function chipAccessibilityLabel(summary: MobilePrChipSummary): string {
       return `Pull request unavailable: ${summary.message}`
     case 'ready': {
       const comments =
-        summary.commentCount && summary.commentCount > 0
+        summary.commentCount != null && summary.commentCount > 0
           ? `, ${summary.commentCount} unresolved comments`
           : ''
-      return `Pull request ${summary.number}, ${summary.stateLabel}, ${summary.rollup.text}${comments}. Open pull request.`
+      return `Pull request #${summary.number}, ${summary.stateLabel}, ${summary.rollup.text}${comments}. Open pull request.`
     }
   }
 }

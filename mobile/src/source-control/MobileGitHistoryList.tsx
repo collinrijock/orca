@@ -1,40 +1,68 @@
 import { useCallback, useEffect, useState } from 'react'
 import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from 'react-native'
 import { ChevronDown, ChevronRight } from 'lucide-react-native'
-import { colors, spacing, typography } from '../theme/mobile-theme'
+import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 import type { ConnectionState, RpcSuccess } from '../transport/types'
 import type { RpcClient } from '../transport/rpc-client'
+import { useForceReconnect } from '../transport/client-context'
 import {
   fetchMobileGitHistory,
   mapMobileCommitRows,
   type MobileCommitRow
 } from './mobile-git-history'
+import { resolveMobileHistoryScreenView } from './mobile-history-screen-state'
 import type { GitBranchChangeEntry } from '../../../src/shared/types'
 
 type Props = {
   client: RpcClient | null
   connState: ConnectionState
   worktreeId: string
+  // Needed so Retry can revive a parked reconnect loop (STA-1511 / #5049).
+  hostId: string
   bottomInset: number
+  // Bumped by the hub header refresh so History reloads without remounting.
+  refreshNonce?: number
 }
 
 // Headerless commit-history list. Extracted from the /history route so the hub's
 // History segment and the standalone route render the same body over one code path.
-export function MobileGitHistoryList({ client, connState, worktreeId, bottomInset }: Props) {
+export function MobileGitHistoryList({
+  client,
+  connState,
+  worktreeId,
+  hostId,
+  bottomInset,
+  refreshNonce = 0
+}: Props) {
+  const forceReconnect = useForceReconnect()
   const [rows, setRows] = useState<MobileCommitRow[] | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [reloadNonce, setReloadNonce] = useState(0)
   const [expanded, setExpanded] = useState<string | null>(null)
   const [filesById, setFilesById] = useState<Record<string, GitBranchChangeEntry[] | 'loading'>>({})
+
+  // Worktree identity change must wipe history immediately — even while
+  // disconnected — so a kept-mounted hub segment never shows another tree's commits.
+  useEffect(() => {
+    setRows(null)
+    setError(null)
+    setExpanded(null)
+    setFilesById({})
+  }, [worktreeId])
 
   useEffect(() => {
     let active = true
     if (!client || connState !== 'connected' || !worktreeId) {
+      // Why: leave already-loaded rows (and expand state) alone across a drop —
+      // resolveMobileHistoryScreenView keeps them visible (STA-1511).
       return
     }
     // Reset prior error/rows so a successful retry doesn't stay stuck behind a
     // stale error (error wins render precedence).
     setError(null)
     setRows(null)
+    setExpanded(null)
+    setFilesById({})
     void (async () => {
       try {
         const result = await fetchMobileGitHistory(client, worktreeId)
@@ -50,7 +78,20 @@ export function MobileGitHistoryList({ client, connState, worktreeId, bottomInse
     return () => {
       active = false
     }
-  }, [client, connState, worktreeId])
+  }, [client, connState, reloadNonce, refreshNonce, worktreeId])
+
+  const retry = useCallback(() => {
+    setError(null)
+    // Why: retrying the fetch is useless while the transport's reconnect loop
+    // is parked at its backoff cap — revive the connection instead (mirrors
+    // MobileSourceControlPanel / issue #5049). The load effect re-runs via
+    // connState once the fresh client connects.
+    if (connState !== 'connected' && hostId) {
+      void forceReconnect(hostId)
+      return
+    }
+    setReloadNonce((n) => n + 1)
+  }, [connState, forceReconnect, hostId])
 
   const toggleCommit = useCallback(
     (row: MobileCommitRow) => {
@@ -64,9 +105,22 @@ export function MobileGitHistoryList({ client, connState, worktreeId, bottomInse
             const entries = response.ok
               ? ((response as RpcSuccess).result as { entries: GitBranchChangeEntry[] }).entries
               : []
-            setFilesById((prev) => ({ ...prev, [row.id]: entries }))
+            setFilesById((prev) => {
+              // Drop stale responses if the row is no longer loading (collapsed + re-opened).
+              if (prev[row.id] !== 'loading') {
+                return prev
+              }
+              return { ...prev, [row.id]: entries }
+            })
           })
-          .catch(() => setFilesById((prev) => ({ ...prev, [row.id]: [] })))
+          .catch(() =>
+            setFilesById((prev) => {
+              if (prev[row.id] !== 'loading') {
+                return prev
+              }
+              return { ...prev, [row.id]: [] }
+            })
+          )
       }
     },
     [client, expanded, filesById, worktreeId]
@@ -123,21 +177,32 @@ export function MobileGitHistoryList({ client, connState, worktreeId, bottomInse
     [expanded, filesById, toggleCommit]
   )
 
-  if (error) {
+  const view = resolveMobileHistoryScreenView({
+    connected: client !== null && connState === 'connected',
+    rows,
+    error
+  })
+
+  if (view.kind === 'error' || view.kind === 'waiting') {
     return (
       <View style={styles.state}>
-        <Text style={styles.stateText}>{error}</Text>
+        <Text style={styles.stateText}>
+          {view.kind === 'waiting' ? 'Waiting for desktop...' : view.message}
+        </Text>
+        <Pressable style={styles.retryButton} onPress={retry} accessibilityLabel="Retry">
+          <Text style={styles.retryText}>Retry</Text>
+        </Pressable>
       </View>
     )
   }
-  if (rows === null) {
+  if (view.kind === 'loading') {
     return (
       <View style={styles.state}>
         <ActivityIndicator color={colors.textSecondary} />
       </View>
     )
   }
-  if (rows.length === 0) {
+  if (view.kind === 'empty') {
     return (
       <View style={styles.state}>
         <Text style={styles.stateText}>No commits.</Text>
@@ -146,7 +211,7 @@ export function MobileGitHistoryList({ client, connState, worktreeId, bottomInse
   }
   return (
     <FlatList
-      data={rows}
+      data={view.rows}
       renderItem={renderCommit}
       keyExtractor={(row) => row.id}
       contentContainerStyle={{ paddingBottom: spacing.lg + bottomInset }}
@@ -157,6 +222,14 @@ export function MobileGitHistoryList({ client, connState, worktreeId, bottomInse
 const styles = StyleSheet.create({
   state: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing.lg },
   stateText: { color: colors.textMuted, fontSize: typography.bodySize },
+  retryButton: {
+    marginTop: spacing.md,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    borderRadius: radii.button,
+    backgroundColor: colors.bgRaised
+  },
+  retryText: { color: colors.textPrimary, fontSize: typography.bodySize, fontWeight: '600' },
   commit: { borderBottomWidth: 1, borderBottomColor: colors.borderSubtle },
   commitHeader: {
     flexDirection: 'row',

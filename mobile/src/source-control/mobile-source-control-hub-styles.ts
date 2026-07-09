@@ -117,5 +117,10 @@ export const hubStyles = StyleSheet.create({
   // scroll view (SectionList / PR sidebar / history list) expands and scrolls.
   tabBody: {
     flex: 1
+  },
+  // Keep a previously-visited segment mounted (scroll + fetch state) without
+  // participating in layout while another segment is active.
+  tabBodyHidden: {
+    display: 'none'
   }
 })

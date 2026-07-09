@@ -252,17 +252,21 @@ export function useMobileSourceControlRunners(params: Params) {
   const openHistory = useCallback(() => {
     setShowActionSheet(false)
     // Inside the hub, History is a segment — switch to it rather than pushing a
-    // route. The standalone/dock usage (no override) keeps pushing the route.
+    // route. Fallback pushes the hub with `tab=history` (not the redirecting
+    // /history route) so deep links land in one hop.
     if (onOpenHistory) {
       onOpenHistory()
       return
     }
     if (hostId && worktreeId) {
-      router.push(
-        `/h/${hostId}/history/${encodeURIComponent(worktreeId)}` as Parameters<
-          typeof router.push
-        >[0]
-      )
+      router.push({
+        pathname: '/h/[hostId]/source-control/[worktreeId]',
+        params: {
+          hostId,
+          worktreeId,
+          tab: 'history'
+        }
+      } as Parameters<typeof router.push>[0])
     }
   }, [hostId, onOpenHistory, router, setShowActionSheet, worktreeId])
 
