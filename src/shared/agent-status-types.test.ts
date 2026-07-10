@@ -85,6 +85,39 @@ describe('parseAgentStatusPayload', () => {
     expect(result!.prompt).toHaveLength(AGENT_STATUS_MAX_FIELD_LENGTH)
   })
 
+  // Why: real dispatch preambles bury the task body after multi-KB CLI text. A
+  // naive head-truncation would keep only lifecycle boilerplate in the 200-char
+  // prompt field and drop the fallback label the UI needs before orchestration
+  // metadata arrives.
+  it('compacts Orca dispatch preambles so the task body survives 200-char truncation', () => {
+    const longCliNoise = Array.from(
+      { length: 50 },
+      (_, i) => `orca orchestration send --to term_parent --type heartbeat --phase step-${i}`
+    ).join('\n')
+    const result = parseAgentStatusPayload(
+      JSON.stringify({
+        state: 'working',
+        prompt: `You are working inside Orca, a multi-agent IDE. You are a dispatched worker.
+Your task ID is: task_compact_1
+
+=== CLI COMMANDS ===
+${longCliNoise}
+
+=== TASK ===
+Fix dispatch fallback preview for normalized status prompts`
+      })
+    )
+    expect(result).not.toBeNull()
+    expect(result!.prompt.length).toBeLessThanOrEqual(AGENT_STATUS_MAX_FIELD_LENGTH)
+    expect(result!.prompt.includes('\n')).toBe(false)
+    expect(result!.prompt.startsWith('You are working inside Orca, a multi-agent IDE.')).toBe(true)
+    expect(result!.prompt).toContain('Your task ID is: task_compact_1')
+    expect(result!.prompt).toContain('=== TASK ===')
+    expect(result!.prompt).toContain('Fix dispatch fallback preview')
+    expect(result!.prompt).not.toContain('CLI COMMANDS')
+    expect(result!.prompt).not.toContain('heartbeat')
+  })
+
   it('defaults missing prompt to empty string', () => {
     const result = parseAgentStatusPayload('{"state":"done"}')
     expect(result!.prompt).toBe('')

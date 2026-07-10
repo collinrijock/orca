@@ -6,6 +6,10 @@
 // terminal titles anywhere in the data flow.
 
 import type { AgentProviderSessionMetadata } from './agent-session-resume'
+import {
+  compactDispatchPromptForStatus,
+  isOrcaDispatchStatusPrompt
+} from './orca-dispatch-status-prompt'
 
 export const AGENT_STATUS_STATES = ['working', 'blocked', 'waiting', 'done'] as const
 export type AgentStatusState = (typeof AGENT_STATUS_STATES)[number]
@@ -258,6 +262,21 @@ function normalizeField(value: unknown, maxLength: number = AGENT_STATUS_MAX_FIE
   return normalizeSingleLinePreview(value, maxLength)
 }
 
+/** Normalize the agent prompt field, compacting Orca dispatch preambles. */
+function normalizePromptField(value: unknown): string {
+  if (typeof value !== 'string') {
+    return ''
+  }
+  if (isOrcaDispatchStatusPrompt(value)) {
+    return compactDispatchPromptForStatus(
+      value,
+      AGENT_STATUS_MAX_FIELD_LENGTH,
+      normalizeSingleLinePreview
+    )
+  }
+  return normalizeSingleLinePreview(value, AGENT_STATUS_MAX_FIELD_LENGTH)
+}
+
 function normalizeSingleLinePreview(value: string, maxLength: number): string {
   // Why: hook prompt/tool fields are previews. Bound the source scan before
   // folding line breaks so paste-sized status text cannot run a full regex
@@ -432,7 +451,7 @@ function normalizeAgentStatusObject(parsed: unknown): ParsedAgentStatusPayload |
   }
   return {
     state: state as AgentStatusState,
-    prompt: normalizeField(obj.prompt),
+    prompt: normalizePromptField(obj.prompt),
     // Why: route through normalizeOptionalField so agentType gets the same
     // trim / collapse-newlines / truncate / empty→undefined treatment as the
     // other single-line string fields (toolName, toolInput, prompt). Inline
