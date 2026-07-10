@@ -16,6 +16,7 @@ type RuntimeCompatibilityCacheEntry = {
   // True only once status.get settled and proved compatible. Stays false while
   // the probe is in flight, so a recovery clear can drop a doomed pending probe.
   provenCompatible: boolean
+  status: RuntimeStatus | null
 }
 
 const runtimeCompatibilityChecks = new Map<string, RuntimeCompatibilityCacheEntry>()
@@ -108,7 +109,8 @@ async function ensureRuntimeEnvironmentCompatible(
   const entry: RuntimeCompatibilityCacheEntry = {
     check: Promise.resolve(),
     failedAt: null,
-    provenCompatible: false
+    provenCompatible: false,
+    status: null
   }
   const check = (async () => {
     const response = await window.api.runtimeEnvironments.call({
@@ -120,6 +122,7 @@ async function ensureRuntimeEnvironmentCompatible(
       response as RuntimeRpcResponse<RuntimeStatus>
     )
     assertRuntimeStatusCompatible(status)
+    entry.status = status
   })()
   entry.check = check
   rememberRuntimeEnvironmentCompatibility(environmentId, entry)
@@ -211,7 +214,8 @@ export function markRuntimeEnvironmentCompatible(environmentId: string): void {
   rememberRuntimeEnvironmentCompatibility(trimmed, {
     check: Promise.resolve(),
     failedAt: null,
-    provenCompatible: true
+    provenCompatible: true,
+    status: null
   })
 }
 
@@ -228,8 +232,30 @@ export async function getRuntimeEnvironmentStatus(
     response as RuntimeRpcResponse<RuntimeStatus>
   )
   assertRuntimeStatusCompatible(status)
-  markRuntimeEnvironmentCompatible(environmentId)
+  rememberRuntimeEnvironmentCompatibility(environmentId.trim(), {
+    check: Promise.resolve(),
+    failedAt: null,
+    provenCompatible: true,
+    status
+  })
   return status
+}
+
+export async function runtimeEnvironmentSupportsCapability(
+  environmentId: string,
+  capability: RuntimeCapability,
+  timeoutMs?: number
+): Promise<boolean> {
+  const trimmed = environmentId.trim()
+  const cached = runtimeCompatibilityChecks.get(trimmed)
+  if (cached) {
+    await cached.check
+    if (cached.status) {
+      return cached.status.capabilities?.includes(capability) === true
+    }
+  }
+  const status = await getRuntimeEnvironmentStatus(trimmed, timeoutMs)
+  return status.capabilities?.includes(capability) === true
 }
 
 export async function assertRuntimeEnvironmentCapability(
