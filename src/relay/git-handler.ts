@@ -39,7 +39,8 @@ import {
 } from './git-handler-worktree-ops'
 import { forceDeletePreservedRelayBranch } from './git-handler-branch-cleanup'
 import { refreshLocalBaseRefForWorktreeCreateOp } from './git-handler-local-base-ref-refresh'
-import { checkIgnoredPathsOp, detectConflictOperation, getStatusOp } from './git-handler-status-ops'
+import { detectConflictOperation, getStatusOp } from './git-handler-status-ops'
+import { checkIgnoredPathsOp } from './git-handler-check-ignore'
 import { resolveRelayPushTarget } from './git-handler-push-target'
 import { isNoUpstreamError, normalizeGitErrorMessage } from '../shared/git-remote-error'
 import { upstreamOnlyCommitsArePatchEquivalent } from '../shared/git-upstream-status'
@@ -304,6 +305,7 @@ export class GitHandler {
       signal?: AbortSignal
       nonInteractive?: boolean
       stdin?: string
+      timeout?: number
     }
   ): Promise<{ stdout: string; stderr: string }> {
     const env = buildRelayGitEnv()
@@ -321,6 +323,7 @@ export class GitHandler {
       env,
       encoding: 'utf-8',
       maxBuffer: opts?.maxBuffer ?? MAX_GIT_BUFFER,
+      timeout: opts?.timeout,
       signal: opts?.signal
     } satisfies ExecFileOptions
     if (opts?.stdin !== undefined) {
