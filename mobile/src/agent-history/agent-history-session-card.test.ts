@@ -35,6 +35,7 @@ function session(overrides: Partial<AiVaultSession> = {}): AiVaultSession {
     queuedMessageCount: 0,
     subagentTranscriptCount: 0,
     resumeCommand: '',
+    subagent: null,
     ...overrides
   }
 }

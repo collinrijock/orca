@@ -50,7 +50,8 @@ function makeSession(): AiVaultSession {
     previewMessages: [],
     queuedMessageCount: 0,
     subagentTranscriptCount: 0,
-    resumeCommand: 'claude --resume sess-1'
+    resumeCommand: 'claude --resume sess-1',
+    subagent: null
   }
 }
 
