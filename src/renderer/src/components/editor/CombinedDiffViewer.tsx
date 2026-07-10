@@ -18,8 +18,7 @@ import { createProgrammaticScrollMarks } from '@/hooks/programmatic-scroll-marks
 import { joinPath } from '@/lib/path'
 import { detectLanguage } from '@/lib/language-detect'
 import { setWithLRU } from '@/lib/scroll-cache'
-import { getConnectionIdForFile } from '@/lib/connection-context'
-import { getCombinedDiffSectionConnectionId } from './combined-diff-section-connection'
+import { getConnectionId, getConnectionIdForFile } from '@/lib/connection-context'
 import { findWorktreeById } from '@/store/slices/worktree-helpers'
 import { writeRuntimeFile } from '@/runtime/runtime-file-client'
 import { settingsForRuntimeOwner } from '@/runtime/runtime-rpc-client'
@@ -623,11 +622,7 @@ export default function CombinedDiffViewer({
       let result: GitDiffResult
       let error: string | undefined
       try {
-        const connectionId = getCombinedDiffSectionConnectionId(
-          file.worktreeId,
-          file.filePath,
-          entry.path
-        )
+        const connectionId = getConnectionId(file.worktreeId) ?? undefined
         const state = useAppStore.getState()
         const fileSettings = settingsForRuntimeOwner(state.settings, file.runtimeEnvironmentId)
         if ((isBranchMode || (isAllMode && !('area' in entry))) && branchCompare) {
