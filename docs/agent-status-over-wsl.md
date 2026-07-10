@@ -1,11 +1,16 @@
 # Agent Status over WSL (STA-1515)
 
-Status: implemented and rig-validated (2026-07-09 round 3, Windows 11 + WSL2 NAT):
-Claude end-to-end live — provisioning, working→done in the store, completion toast,
-loopback-only posture, and restart resume over a daemon-surviving PTY with the
-instance-keyed endpoint dir reused across restarts. Residual: Codex's done/Stop leg
-unproven live (rig had no real Codex credentials; the CLI's auth-error path emits no
-Stop) — everything that fired behaved correctly; confirm on an authed rig.
+Status: implemented and rig-validated (2026-07-09 round 3 + 2026-07-10 round-4 re-run
+pinned to the hardened build, Windows 11 + WSL2 NAT): Claude end-to-end live —
+provisioning, working→done in the store, completion toast, loopback-only posture, and
+restart resume over a daemon-surviving PTY with the instance-keyed endpoint dir reused
+across restarts. The round-4 re-run also proved the `--exec` spawn form live (host
+process table) and the stale-exit reinstall upgrading the guest to the new bundle
+version in place. Residual: Codex's done/Stop leg unproven live — env-blocked on the
+rig (no dev-profile Codex credentials AND the model backend is unreachable from the
+guest under NAT); everything that fired behaved correctly. Confirm on a credentialed
+rig with a guest-reachable backend, ideally on a fresh distro to also observe the
+deferred Codex trust entries landing after config.toml is seeded.
 Owner: brennanb2025. Linear: STA-1515.
 Precedent this mirrors: the SSH agent-hook relay (`src/relay/agent-hook-server.ts`,
 `src/shared/agent-hook-relay.ts`, ingest at `agentHookServer.ingestRemote` in
