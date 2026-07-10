@@ -935,12 +935,10 @@ export function useIpcEvents(): void {
         // stream and is allowed through this helper separately.
         return
       }
-      const existedBeforeFetch = Boolean(useAppStore.getState().getKnownWorktreeById(worktreeId))
       // Why: fetch worktrees first so the activation helper can resolve
       // the CLI-created worktree via findWorktreeById — it arrived from
       // the main process and is not yet in the renderer state.
       await useAppStore.getState().fetchWorktrees(repoId)
-      const existsAfterFetch = Boolean(useAppStore.getState().getKnownWorktreeById(worktreeId))
       // Why: route through activateAndRevealWorktree so CLI-created
       // worktrees share the canonical activation path with UI-created
       // ones. This records the visit in the back/forward history stack
@@ -950,7 +948,6 @@ export function useIpcEvents(): void {
         ...(setup ? { setup } : {}),
         ...(startup ? { startup } : {}),
         ...(defaultTabs ? { defaultTabs } : {}),
-        ...(!existedBeforeFetch && existsAfterFetch ? { sidebarRevealBehavior: 'auto' } : {}),
         // Why: this activation already came from the host runtime event stream.
         // Echoing it back as worktree.activate can create a selection loop.
         notifyHostRuntime: false
