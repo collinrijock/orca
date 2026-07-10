@@ -46,6 +46,7 @@ import {
 } from '../providers/ssh-pty-provider'
 import { parseAppSshPtyId, toAppSshPtyId, toRelaySshPtyId } from '../providers/ssh-pty-id'
 import { createPtySpawnTiming } from './pty-spawn-timing'
+import { PtyPendingOutputBuffer } from './pty-pending-output-buffer'
 import { mintPtySessionId, isSafePtySessionId } from '../daemon/pty-session-id'
 import { addNodePtyRecoveryHint } from '../daemon/node-pty-error-hints'
 import type { ClaudeRuntimeAuthPreparation } from '../claude-accounts/runtime-auth-service'
@@ -1430,15 +1431,7 @@ export function registerPtyHandlers(
   // reduces IPC round-trips from hundreds/sec to ~120/sec under high
   // throughput. Keystroke echo/redraws bypass this below because agent TUIs
   // already spend tens of ms producing their redraw.
-  type PendingPtyData = {
-    data: string
-    startSeq?: number
-    containsBackgroundOutput?: boolean
-    /** Set once this pty's unsent backlog was trimmed past the cap; rides the
-     *  next payload so the renderer rebuilds the dropped span from the main
-     *  headless snapshot (see appendPendingPtyData / dataCallback). */
-    droppedBacklog?: boolean
-  }
+  type PendingPtyData = PtyPendingOutputBuffer
 
   type PtyDataPayload = {
     id: string
@@ -1514,7 +1507,7 @@ export function registerPtyHandlers(
     let pendingChars = 0
     let maxPendingCharsByPty = 0
     for (const pending of pendingData.values()) {
-      const chars = pending.data.length
+      const chars = pending.length
       pendingChars += chars
       maxPendingCharsByPty = Math.max(maxPendingCharsByPty, chars)
     }
@@ -1548,7 +1541,7 @@ export function registerPtyHandlers(
     let pendingChars = 0
     let maxPendingCharsByPty = 0
     for (const pending of pendingData.values()) {
-      const chars = pending.data.length
+      const chars = pending.length
       pendingChars += chars
       maxPendingCharsByPty = Math.max(maxPendingCharsByPty, chars)
     }
@@ -1593,32 +1586,37 @@ export function registerPtyHandlers(
   // hoisted fn, so this bridge assignment can precede its definition).
   clearRendererDispatcherReadyWatchdog = clearDispatcherReadyWatchdog
 
-  function isLikelyInteractiveRedraw(data: string): boolean {
-    if (data.length <= INTERACTIVE_OUTPUT_MAX_CHARS) {
+  function isLikelyInteractiveRedraw(dataLength: number, containsAnsiRedraw: boolean): boolean {
+    if (dataLength <= INTERACTIVE_OUTPUT_MAX_CHARS) {
       return true
     }
     // Why: Codex-style TUIs can repaint more than 1 KB per keypress. ANSI
     // control redraws are still latency-sensitive, while plain command output
     // should stay on the throughput batch path.
-    return data.length <= INTERACTIVE_REDRAW_MAX_CHARS && data.includes('\x1b[')
+    return dataLength <= INTERACTIVE_REDRAW_MAX_CHARS && containsAnsiRedraw
   }
 
-  function shouldSendInteractiveOutputNow(id: string, data: string, now: number): boolean {
+  function shouldSendInteractiveOutputNow(
+    id: string,
+    dataLength: number,
+    containsAnsiRedraw: boolean,
+    now: number
+  ): boolean {
     const lastInputAt = lastInputAtByPty.get(id)
     if (lastInputAt === undefined || now - lastInputAt > INTERACTIVE_OUTPUT_WINDOW_MS) {
       interactiveOutputCharsByPty.delete(id)
       return false
     }
-    if (!isLikelyInteractiveRedraw(data)) {
+    if (!isLikelyInteractiveRedraw(dataLength, containsAnsiRedraw)) {
       interactiveOutputCharsByPty.set(id, INTERACTIVE_OUTPUT_BUDGET_CHARS)
       return false
     }
     const usedChars = interactiveOutputCharsByPty.get(id) ?? 0
-    if (usedChars + data.length > INTERACTIVE_OUTPUT_BUDGET_CHARS) {
+    if (usedChars + dataLength > INTERACTIVE_OUTPUT_BUDGET_CHARS) {
       interactiveOutputCharsByPty.set(id, INTERACTIVE_OUTPUT_BUDGET_CHARS)
       return false
     }
-    interactiveOutputCharsByPty.set(id, usedChars + data.length)
+    interactiveOutputCharsByPty.set(id, usedChars + dataLength)
     return true
   }
 
@@ -1715,28 +1713,6 @@ export function registerPtyHandlers(
     return [...active, ...background]
   }
 
-  // Why: bound the unsent backlog to the most-recent PENDING_DATA_MAX_CHARS,
-  // advancing startSeq by the dropped-char count (same arithmetic flushPendingData
-  // uses when it slices) so the remaining tail's seq stays correct. Flags
-  // droppedBacklog so the next payload tells the renderer to rebuild the dropped
-  // span from the main headless snapshot. A no-op when under the cap (the common
-  // case: the renderer is ACKing and pendingData stays tiny).
-  function capPendingPtyData(pending: PendingPtyData): PendingPtyData {
-    if (pending.data.length <= PENDING_DATA_MAX_CHARS) {
-      return pending
-    }
-    const trimmed = pending.data.slice(pending.data.length - PENDING_DATA_MAX_CHARS)
-    const droppedChars = pending.data.length - trimmed.length
-    const next: PendingPtyData = { data: trimmed, droppedBacklog: true }
-    if (typeof pending.startSeq === 'number') {
-      next.startSeq = pending.startSeq + droppedChars
-    }
-    if (pending.containsBackgroundOutput === true) {
-      next.containsBackgroundOutput = true
-    }
-    return next
-  }
-
   function appendPendingPtyData(
     existing: PendingPtyData | undefined,
     data: string,
@@ -1744,31 +1720,11 @@ export function registerPtyHandlers(
     preservesSeq: boolean,
     containsBackgroundOutput: boolean
   ): PendingPtyData {
-    const nextContainsBackgroundOutput =
-      existing?.containsBackgroundOutput === true || containsBackgroundOutput
-    // Carry a prior drop flag forward until it actually rides an outgoing payload.
-    const inheritedDropped = existing?.droppedBacklog === true
-    const base: PendingPtyData = { data: '' }
-    if (!preservesSeq) {
-      base.data = (existing?.data ?? '') + data
-    } else if (!existing) {
-      base.data = data
-      if (typeof startSeq === 'number') {
-        base.startSeq = startSeq
-      }
-    } else {
-      base.data = existing.data + data
-      if (typeof existing.startSeq === 'number') {
-        base.startSeq = existing.startSeq
-      }
-    }
-    if (nextContainsBackgroundOutput) {
-      base.containsBackgroundOutput = true
-    }
-    if (inheritedDropped) {
-      base.droppedBacklog = true
-    }
-    return capPendingPtyData(base)
+    const pending = existing ?? new PtyPendingOutputBuffer(PENDING_DATA_MAX_CHARS)
+    // Why: a frozen renderer can leave this queue at the 2 MB cap for many
+    // chunks. Append to the chunk queue instead of rebuilding that whole tail.
+    pending.append({ data, startSeq, preservesSeq, containsBackgroundOutput })
+    return pending
   }
 
   function schedulePendingDataFlush(delayMs: number): void {
@@ -1831,30 +1787,20 @@ export function registerPtyHandlers(
         continue
       }
       pendingData.delete(id)
-      const { data } = pending
-      const chunk = data.slice(0, PTY_BATCH_FLUSH_CHUNK_CHARS)
-      const remaining = data.slice(PTY_BATCH_FLUSH_CHUNK_CHARS)
-      if (remaining) {
-        const nextPending: PendingPtyData = { data: remaining }
-        if (typeof pending.startSeq === 'number') {
-          nextPending.startSeq = pending.startSeq + chunk.length
-        }
-        if (pending.containsBackgroundOutput === true) {
-          nextPending.containsBackgroundOutput = true
-        }
-        pendingData.set(id, nextPending)
+      const outgoing = pending.takePrefix(PTY_BATCH_FLUSH_CHUNK_CHARS)
+      if (pending.length > 0) {
+        pendingData.set(id, pending)
       }
       // Why: the drop flag rides the first emitted chunk (renderer restore is
-      // idempotent) and is intentionally not copied onto `remaining` above, so a
-      // single backlog trim signals the renderer exactly once.
+      // idempotent), so a single backlog trim signals the renderer exactly once.
       sendPtyDataToRenderer(
         id,
         makePtyDataPayload(
           id,
-          chunk,
-          pending.startSeq,
-          pending.containsBackgroundOutput,
-          pending.droppedBacklog
+          outgoing.data,
+          outgoing.startSeq,
+          outgoing.containsBackgroundOutput,
+          outgoing.droppedBacklog
         )
       )
       writes++
@@ -1913,14 +1859,15 @@ export function registerPtyHandlers(
     // tears down the terminal on pty:exit before the batch timer fires.
     const remaining = pendingData.get(payload.id)
     if (remaining) {
+      const outgoing = remaining.takeAll()
       sendPtyDataToRenderer(
         payload.id,
         makePtyDataPayload(
           payload.id,
-          remaining.data,
-          remaining.startSeq,
-          remaining.containsBackgroundOutput,
-          remaining.droppedBacklog
+          outgoing.data,
+          outgoing.startSeq,
+          outgoing.containsBackgroundOutput,
+          outgoing.droppedBacklog
         )
       )
       pendingData.delete(payload.id)
@@ -2009,11 +1956,22 @@ export function registerPtyHandlers(
         preservesSeq,
         containsBackgroundOutput
       )
-      const nextData = pending.data
+      const pendingLength = pending.length
+      const now = performance.now()
+      const lastInputAt = lastInputAtByPty.get(payload.id)
+      // Why: ANSI classification matters only for recent-input redraws inside
+      // 16 KiB; never join an ordinary or multi-megabyte stalled backlog for it.
+      const containsAnsiRedraw =
+        pendingLength > INTERACTIVE_OUTPUT_MAX_CHARS &&
+        pendingLength <= INTERACTIVE_REDRAW_MAX_CHARS &&
+        lastInputAt !== undefined &&
+        now - lastInputAt <= INTERACTIVE_OUTPUT_WINDOW_MS &&
+        pending.toString().includes('\x1b[')
       const isInteractiveOutput = shouldSendInteractiveOutputNow(
         payload.id,
-        nextData,
-        performance.now()
+        pendingLength,
+        containsAnsiRedraw,
+        now
       )
       // Why: gate the interactive fast path on the dispatcher handshake too, so
       // boot-window keystroke echo accrues in pendingData instead of being sent
@@ -2029,17 +1987,19 @@ export function registerPtyHandlers(
         }
         pendingData.delete(payload.id)
         clearFlushTimerIfIdle()
+        const outgoing = pending.takeAll()
         // Why: agent TUIs redraw small prompt regions after every keystroke.
         // Waiting for the throughput batch timer adds visible input latency.
-        sendPtyDataToRenderer(payload.id, {
-          id: payload.id,
-          data: nextData,
-          ...(typeof pending.startSeq === 'number'
-            ? { seq: pending.startSeq + nextData.length, rawLength: nextData.length }
-            : {}),
-          ...(pending.containsBackgroundOutput === true ? { background: true } : {}),
-          ...(pending.droppedBacklog === true ? { droppedBacklog: true } : {})
-        })
+        sendPtyDataToRenderer(
+          payload.id,
+          makePtyDataPayload(
+            payload.id,
+            outgoing.data,
+            outgoing.startSeq,
+            outgoing.containsBackgroundOutput,
+            outgoing.droppedBacklog
+          )
+        )
         return
       }
       pendingData.set(payload.id, pending)

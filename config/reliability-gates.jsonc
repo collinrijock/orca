@@ -1197,7 +1197,7 @@
         "macos"
       ],
       "coveredProviders": [],
-      "coverageNotes": "Local macOS evidence over the main-process pending-output caps that exist on main@1282f5c2d. Daemon stream write(false)/drain contracts, cross-session drain priority, and bounded queued tails arrive with the pending perf slice; live flood/latency artifacts remain gaps.",
+      "coverageNotes": "Local macOS evidence covers the main-process pending-output caps and the chunk-queued retained tail. Daemon stream write(false)/drain contracts, cross-session drain priority, and bounded queued tails have deterministic contract coverage; live flood/latency artifacts remain gaps.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/pull/6836",
         "https://github.com/stablyai/orca/pull/6858",
@@ -1205,14 +1205,24 @@
         "https://github.com/stablyai/orca/pull/7054"
       ],
       "invariant": "High-volume terminal output must stay bounded across daemon socket writes, main-to-renderer in-flight bytes, renderer scheduler queues, and hidden-output restore without starving focused input.",
-      "oracle": "The current executable slice injects daemon socket backpressure and main-process renderer backlog pressure, then asserts write(false)/drain ordering, bounded queued daemon bytes, per-PTY and total pending-output caps, preserved sequenced-tail metadata, active-pending protection ahead of background trimming, and ACK-gated in-flight bounds. The live Electron perf oracle adds hidden-output floods, renderer scheduler queue depth, dropped-output-zero normal scenarios, and active key latency budgets before promotion.",
+      "oracle": "The current executable slice injects daemon socket backpressure and main-process renderer backlog pressure, then asserts write(false)/drain ordering, bounded queued daemon bytes, per-PTY and total pending-output caps, repeated capped appends without prior-tail rebuilding, preserved sequenced-tail metadata, active-pending protection ahead of background trimming, and ACK-gated in-flight bounds. The live Electron perf oracle adds hidden-output floods, renderer scheduler queue depth, dropped-output-zero normal scenarios, and active key latency budgets before promotion.",
       "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/pty.test.ts"
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/pty-pending-output-buffer.test.ts src/main/ipc/pty.test.ts"
       ],
       "testFiles": [
+        "src/main/ipc/pty-pending-output-buffer.test.ts",
         "src/main/ipc/pty.test.ts"
       ],
       "assertionRefs": [
+        {
+          "file": "src/main/ipc/pty-pending-output-buffer.test.ts",
+          "assertions": [
+            "avoids rebuilding a capped backlog across repeated small appends",
+            "advances through one oversized chunk without changing the newest tail",
+            "retains the newest tail and emits the drop flag only once",
+            "drops sequence metadata after transformed output breaks raw offsets"
+          ]
+        },
         {
           "file": "src/main/ipc/pty.test.ts",
           "assertions": [
@@ -1224,13 +1234,13 @@
       ],
       "evidenceRuns": [
         {
-          "date": "2026-07-03",
+          "date": "2026-07-10",
           "runner": "local",
           "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/pty.test.ts",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/pty-pending-output-buffer.test.ts src/main/ipc/pty.test.ts",
           "result": "passed",
-          "durationSeconds": 1.5,
-          "summary": "1 test file(s) passed, 209 tests passed on main@1282f5c2d in a clean checkout."
+          "durationSeconds": 1.1,
+          "summary": "2 test files passed, 238 tests passed on the exact rebased tree based on main@96d1fa1d62."
         }
       ],
       "runtimeBudget": {
@@ -1243,11 +1253,11 @@
       },
       "redGreenEvidence": {
         "status": "partial",
-        "evidence": "Tests assert daemon stream writes pause after socket write(false), later stream data queues behind the pressured socket, flush-immediate output from another session is prioritized ahead of unrelated queued background backlog on drain while preserving per-session order, queued lines resume on drain, global cleanup clears clients that only have backpressured writes, queued daemon stream bytes are bounded by keeping priority output and the newest tail under sustained pressure, main pending renderer output is capped per PTY and in total, total-pressure trimming prefers background pending output before active pending output, trimmed pending tails preserve seq/rawLength metadata, and ACK-gated in-flight output remains bounded. Existing renderer tests cover replay/backlog slices. Needs intentional-break proof and broader hidden-output/input-latency perf artifacts before promotion."
+        "evidence": "Tests assert daemon stream writes pause after socket write(false), later stream data queues behind the pressured socket, flush-immediate output from another session is prioritized ahead of unrelated queued background backlog on drain while preserving per-session order, queued lines resume on drain, global cleanup clears clients that only have backpressured writes, queued daemon stream bytes are bounded by keeping priority output and the newest tail under sustained pressure, main pending renderer output is capped per PTY and in total, 4,096 capped 1 KiB appends and an oversized single-chunk head preserve the newest 2 MiB tail without reconstructing the retained tail per append, total-pressure trimming prefers background pending output before active pending output, trimmed pending tails preserve seq/rawLength metadata, and ACK-gated in-flight output remains bounded. Existing renderer tests cover replay/backlog slices. Needs broader intentional-break proof and hidden-output/input-latency perf artifacts before promotion."
       },
       "performanceBudget": {
         "required": true,
-        "evidence": "Suggested ceilings: renderer in-flight <=8MB total, <=512KB per PTY plus active reserve, renderer queued chars <=2MB, dropped backlogs 0, hidden restore <=1000ms, active key median/worst <=75ms/300ms in perf scenarios."
+        "evidence": "Suggested ceilings: renderer in-flight <=8MB total, <=512KB per PTY plus active reserve, renderer queued chars <=2MB, dropped backlogs 0, hidden restore <=1000ms, active key median/worst <=75ms/300ms in perf scenarios. A local exact-shape run at the 2 MiB cap reduced 4,096/8,192/16,384 append time from 366.13/1,114.18/2,601.32ms to 0.52/0.55/0.61ms, with one 0.25-0.46ms drain join. Starting from one oversized chunk and then appending 4,096 1 KiB chunks reduced append time from 770.10ms to 0.07ms with the same retained tail."
       },
       "promotionCriteria": [
         "Split daemon stream backpressure into a deterministic provider/IPC contract if full E2E is flaky.",
