@@ -1,39 +1,31 @@
 import type { GitWorktreeInfo } from './types'
 
 export const LOCKED_WORKTREE_REMOVAL_PREFIX = 'Worktree is locked by Git.'
-export const LOCK_OVERRIDE_REQUIRES_FORCE_MESSAGE =
-  'Worktree lock override requires force deletion permission.'
 
-export type WorktreeForceDeleteReason =
-  | 'dirty'
-  | 'locked'
-  | 'orphan-directory'
-  | 'missing-registration'
+export type WorktreeForceDeleteReason = 'dirty' | 'orphan-directory' | 'missing-registration'
 
 export function createLockedWorktreeRemovalError(lockReason?: string): Error {
   const reason = lockReason?.trim()
   return new Error(
     reason
-      ? `${LOCKED_WORKTREE_REMOVAL_PREFIX} Lock reason: ${reason}. Use Force Delete to remove it anyway.`
-      : `${LOCKED_WORKTREE_REMOVAL_PREFIX} Use Force Delete to remove it anyway.`
+      ? `${LOCKED_WORKTREE_REMOVAL_PREFIX} Lock reason: ${reason}. Unlock it manually with git worktree unlock before deleting it.`
+      : `${LOCKED_WORKTREE_REMOVAL_PREFIX} Unlock it manually with git worktree unlock before deleting it.`
   )
 }
 
 export function assertWorktreeUnlockedForRemoval(
-  worktree: Pick<GitWorktreeInfo, 'locked' | 'lockReason'> | undefined,
-  overrideLock = false
+  worktree: Pick<GitWorktreeInfo, 'locked' | 'lockReason'> | undefined
 ): void {
-  if (!overrideLock && worktree?.locked) {
+  if (worktree?.locked) {
     throw createLockedWorktreeRemovalError(worktree.lockReason)
   }
 }
 
-export function assertWorktreeRemovalForcePermissions(force = false, overrideLock = false): void {
-  if (overrideLock && !force) {
-    // Why: Git's second force also discards dirty files, so lock override must
-    // never grant a permission the caller did not explicitly provide.
-    throw new Error(LOCK_OVERRIDE_REQUIRES_FORCE_MESSAGE)
-  }
+export function isLockedWorktreeRemovalError(error: string): boolean {
+  return (
+    error.includes(LOCKED_WORKTREE_REMOVAL_PREFIX) ||
+    error.includes('cannot remove a locked working tree')
+  )
 }
 
 export function getLockedWorktreeRemovalReason(error: string): string | null {
@@ -42,7 +34,7 @@ export function getLockedWorktreeRemovalReason(error: string): string | null {
     return null
   }
   const reasonStart = prefixIndex + `${LOCKED_WORKTREE_REMOVAL_PREFIX} Lock reason: `.length
-  const recoverySuffix = '. Use Force Delete to remove it anyway.'
+  const recoverySuffix = '. Unlock it manually with git worktree unlock before deleting it.'
   const suffixIndex = error.indexOf(recoverySuffix, reasonStart)
   const reason = error.slice(reasonStart, suffixIndex === -1 ? undefined : suffixIndex).trim()
   return reason || null
@@ -53,19 +45,12 @@ const FORMATTED_DIRTY_WORKTREE_REMOVAL_PATTERN =
 
 export function classifyWorktreeForceDeleteReason(
   error: string,
-  force = false,
-  overrideLock = false
+  force = false
 ): WorktreeForceDeleteReason | null {
-  if (overrideLock) {
+  if (isLockedWorktreeRemovalError(error)) {
+    // Why: a Git lock can represent an external safety contract. It must be
+    // unlocked explicitly rather than folded into Orca's dirty-file force path.
     return null
-  }
-  if (
-    error.includes(LOCKED_WORKTREE_REMOVAL_PREFIX) ||
-    error.includes('cannot remove a locked working tree')
-  ) {
-    // Why: raw Git matching keeps force recovery available with older relays;
-    // current runtimes emit the locale-independent app-owned prefix above.
-    return 'locked'
   }
   if (force) {
     return null

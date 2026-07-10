@@ -4096,14 +4096,12 @@ describe('OrcaRuntimeService', () => {
     const runtime = new OrcaRuntimeService(remoteStore as never)
 
     try {
-      await runtime.removeManagedWorktree('path:/remote/feature', true, false, true)
+      await runtime.removeManagedWorktree('path:/remote/feature', true, false)
     } finally {
       unregisterSshGitProvider('ssh-1')
     }
 
-    expect(gitProvider.removeWorktree).toHaveBeenCalledWith('/remote/feature', true, {
-      overrideLock: true
-    })
+    expect(gitProvider.removeWorktree).toHaveBeenCalledWith('/remote/feature', true)
     expect(removeWorktree).not.toHaveBeenCalled()
     expect(listWorktrees).not.toHaveBeenCalled()
     expect(deleteWorktreeHistoryDirMock).toHaveBeenCalledWith(`${TEST_REPO_ID}::/remote/feature`)
@@ -26000,7 +25998,7 @@ describe('OrcaRuntimeService', () => {
     }
   })
 
-  it('removes a locked missing runtime registration only with explicit lock override', async () => {
+  it('preserves a locked missing runtime registration even with force', async () => {
     setPlatform('win32')
     const missingWorktreePath = 'C:\\workspace\\locked-already-removed'
     const worktreeId = `${TEST_REPO_ID}::${missingWorktreePath}`
@@ -26017,21 +26015,15 @@ describe('OrcaRuntimeService', () => {
         lockReason: 'active agent session'
       }
     ]
-    vi.mocked(listWorktreesStrict).mockResolvedValueOnce(registeredWorktrees).mockResolvedValue([])
+    vi.mocked(listWorktreesStrict).mockResolvedValue(registeredWorktrees)
     vi.mocked(removeWorktree).mockResolvedValue({})
 
-    await runtime.removeManagedWorktree(worktreeId, true, false, true)
-
-    expect(removeWorktree).toHaveBeenCalledWith(
-      TEST_REPO_PATH,
-      missingWorktreePath,
-      true,
-      expect.objectContaining({
-        overrideLock: true,
-        knownRemovedWorktree: expect.objectContaining({ locked: true })
-      })
+    await expect(runtime.removeManagedWorktree(worktreeId, true, false)).rejects.toThrow(
+      'Worktree is locked by Git. Lock reason: active agent session'
     )
-    expect(removeWorktreeMeta).toHaveBeenCalledWith(worktreeId)
+
+    expect(removeWorktree).not.toHaveBeenCalled()
+    expect(removeWorktreeMeta).not.toHaveBeenCalled()
   })
 
   it('routes runtime worktree removal through the selected WSL project runtime', async () => {
@@ -26760,21 +26752,6 @@ describe('OrcaRuntimeService', () => {
 
     expect(killSpy).not.toHaveBeenCalled()
     expect(removeWorktree).not.toHaveBeenCalled()
-  })
-
-  it('rejects lock override without dirty-file force before any removal work', async () => {
-    const runtime = new OrcaRuntimeService(store)
-    const listCallCount = vi.mocked(listWorktreesStrict).mock.calls.length
-    const hookCallCount = vi.mocked(runHook).mock.calls.length
-    const removeCallCount = vi.mocked(removeWorktree).mock.calls.length
-
-    await expect(
-      runtime.removeManagedWorktree(TEST_WORKTREE_ID, false, false, true)
-    ).rejects.toThrow('Worktree lock override requires force deletion permission.')
-
-    expect(vi.mocked(listWorktreesStrict).mock.calls).toHaveLength(listCallCount)
-    expect(vi.mocked(runHook).mock.calls).toHaveLength(hookCallCount)
-    expect(vi.mocked(removeWorktree).mock.calls).toHaveLength(removeCallCount)
   })
 
   it('fails locked dirty-force deletes before hooks, link cleanup, or PTY teardown', async () => {

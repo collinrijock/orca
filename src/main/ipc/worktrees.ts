@@ -29,10 +29,7 @@ import type {
   Worktree,
   WorktreeMeta
 } from '../../shared/types'
-import {
-  assertWorktreeRemovalForcePermissions,
-  assertWorktreeUnlockedForRemoval
-} from '../../shared/worktree-removal'
+import { assertWorktreeUnlockedForRemoval } from '../../shared/worktree-removal'
 import {
   buildKnownOrcaWorkspaceLayouts,
   isLegacyRepoForExternalWorktreeVisibility,
@@ -298,15 +295,10 @@ function gitStatusErrorMeansNotRepository(error: unknown): boolean {
   return /not a git repository/i.test(`${message}\n${stderr}`)
 }
 
-function getWorktreeRemovalOptionsKey(args: {
-  force?: boolean
-  overrideLock?: boolean
-  skipArchive?: boolean
-}): string {
+function getWorktreeRemovalOptionsKey(args: { force?: boolean; skipArchive?: boolean }): string {
   const forceKey = args.force === true ? 'force' : 'normal'
-  const lockKey = args.overrideLock === true ? 'override-lock' : 'respect-lock'
   const archiveKey = args.skipArchive === true ? 'skip-archive' : 'run-archive'
-  return `${forceKey}:${lockKey}:${archiveKey}`
+  return `${forceKey}:${archiveKey}`
 }
 
 async function getArchiveHooksForRemoval(repo: Repo): Promise<OrcaHooks | null> {
@@ -1359,11 +1351,9 @@ export function registerWorktreeHandlers(
       args: {
         worktreeId: string
         force?: boolean
-        overrideLock?: boolean
         skipArchive?: boolean
       }
     ) => {
-      assertWorktreeRemovalForcePermissions(args.force === true, args.overrideLock === true)
       const optionsKey = getWorktreeRemovalOptionsKey(args)
       const inFlightRemoval = worktreeRemovalsInFlight.get(args.worktreeId)
       if (inFlightRemoval) {
@@ -1566,7 +1556,7 @@ export function registerWorktreeHandlers(
         // Why: a Git lock must block before archive hooks or linked-path cleanup
         // mutate the workspace; dirty-file force is a separate permission.
         try {
-          assertWorktreeUnlockedForRemoval(registeredWorktree, args.overrideLock ?? false)
+          assertWorktreeUnlockedForRemoval(registeredWorktree)
         } catch (error) {
           throw new Error(
             formatWorktreeRemovalError(error, canonicalWorktreePath, args.force ?? false)
@@ -1589,8 +1579,7 @@ export function registerWorktreeHandlers(
             repoPath: repo.path,
             localWorktreeGitOptions,
             registeredWorktree,
-            deleteBranch,
-            overrideLock: args.overrideLock === true
+            deleteBranch
           })
           await cleanupUnusedWorktreePushTargetRemote(
             repo.path,
@@ -1646,10 +1635,7 @@ export function registerWorktreeHandlers(
             }
           }
 
-          const remoteRemoveOptions = {
-            ...(!deleteBranch ? { deleteBranch } : {}),
-            ...(args.overrideLock ? { overrideLock: true } : {})
-          }
+          const remoteRemoveOptions = !deleteBranch ? { deleteBranch } : {}
           const rawRemovalResult = await (Object.keys(remoteRemoveOptions).length > 0
             ? provider!.removeWorktree(canonicalWorktreePath, args.force, remoteRemoveOptions)
             : provider!.removeWorktree(canonicalWorktreePath, args.force))
@@ -1692,7 +1678,7 @@ export function registerWorktreeHandlers(
         try {
           // Why: an archive hook can race another Git client that locks the row;
           // recheck before linked-path, watcher, or terminal teardown side effects.
-          assertWorktreeUnlockedForRemoval(refreshedRegisteredWorktree, args.overrideLock ?? false)
+          assertWorktreeUnlockedForRemoval(refreshedRegisteredWorktree)
         } catch (error) {
           throw new Error(
             formatWorktreeRemovalError(error, canonicalWorktreePath, args.force ?? false)
@@ -1753,7 +1739,6 @@ export function registerWorktreeHandlers(
         try {
           const removeOptions = {
             ...(!deleteBranch ? { deleteBranch } : {}),
-            ...(args.overrideLock ? { overrideLock: true } : {}),
             // Why: this handler already paid for an authoritative worktree
             // list to validate the target; reuse it instead of rescanning
             // every sibling worktree during the hot delete path.
@@ -1780,7 +1765,6 @@ export function registerWorktreeHandlers(
             localWorktreeGitOptions,
             registeredWorktree: refreshedRegisteredWorktree,
             deleteBranch,
-            overrideLock: args.overrideLock === true,
             closeWatcher: closeLocalWatcherForRemoval
           })
           if (recoveredRemovalResult) {

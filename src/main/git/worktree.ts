@@ -13,10 +13,7 @@ import type {
   LocalBaseRefUpdateSuggestion,
   RemoveWorktreeResult
 } from '../../shared/types'
-import {
-  assertWorktreeRemovalForcePermissions,
-  assertWorktreeUnlockedForRemoval
-} from '../../shared/worktree-removal'
+import { assertWorktreeUnlockedForRemoval } from '../../shared/worktree-removal'
 import { decodeGitCQuotedPath } from '../../shared/git-cquoted-path'
 import { parseGitRevListAheadBehindCounts } from '../../shared/git-rev-list-output'
 import { parseWslUncPath } from '../../shared/wsl-paths'
@@ -51,7 +48,6 @@ export type AddWorktreeOptions = GitWorktreeExecOptions & {
 export type RemoveWorktreeOptions = GitWorktreeExecOptions & {
   deleteBranch?: boolean
   forceBranchDelete?: boolean
-  overrideLock?: boolean
   knownRemovedWorktree?: Pick<GitWorktreeInfo, 'branch' | 'head' | 'locked' | 'lockReason'>
 }
 
@@ -1080,7 +1076,6 @@ async function performRemoveWorktree(
   force = false,
   options: RemoveWorktreeOptions = {}
 ): Promise<RemoveWorktreeResult> {
-  assertWorktreeRemovalForcePermissions(force, options.overrideLock)
   const removedWorktree =
     options.knownRemovedWorktree ??
     (await listWorktrees(repoPath, options)).find((worktree) =>
@@ -1091,14 +1086,10 @@ async function performRemoveWorktree(
 
   // Why: callers outside the IPC/runtime preflight must not bypass Git's lock
   // contract or depend on localized stderr to discover it after side effects.
-  assertWorktreeUnlockedForRemoval(removedWorktree, options.overrideLock)
+  assertWorktreeUnlockedForRemoval(removedWorktree)
 
   const args = ['worktree', 'remove']
-  if (options.overrideLock) {
-    // Why: Git reserves the second force for explicitly overriding a lock;
-    // ordinary dirty-file confirmation must not silently break that lock.
-    args.push('--force', '--force')
-  } else if (force) {
+  if (force) {
     args.push('--force')
   }
   args.push(worktreePath)

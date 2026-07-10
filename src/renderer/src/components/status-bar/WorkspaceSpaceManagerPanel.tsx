@@ -83,7 +83,6 @@ import {
   type WorkspaceSpaceSortKey
 } from './workspace-space-presentation'
 import { translate } from '@/i18n/i18n'
-import { forceDeleteWorkspaceFromSpace } from './workspace-space-force-delete'
 import type { WorktreeForceDeleteReason } from '../../../../shared/worktree-removal'
 
 const TREEMAP_FILLS = [
@@ -1601,9 +1600,7 @@ export function WorkspaceSpaceManagerPanel(): React.JSX.Element {
       // Why: Space keeps normal deletes non-force so uncommitted work is not
       // discarded silently; a failed row gets this explicit recovery path.
       const commitFocus = prepareActiveWorktreeFocusAfterDelete(worktree.worktreeId)
-      const forceDeleteReason =
-        deleteStateByWorktreeId[worktree.worktreeId]?.forceDeleteReason ?? null
-      void forceDeleteWorkspaceFromSpace(removeWorktree, worktree.worktreeId, forceDeleteReason)
+      void removeWorktree(worktree.worktreeId, true)
         .then((result) => {
           if (!result.ok) {
             toast.error(
@@ -1632,7 +1629,7 @@ export function WorkspaceSpaceManagerPanel(): React.JSX.Element {
           )
         })
     },
-    [deleteStateByWorktreeId, handleDeletedWorktrees, removeWorktree]
+    [handleDeletedWorktrees, removeWorktree]
   )
 
   const deleteSelected = (): void => {

@@ -187,7 +187,6 @@ export type WorktreeSlice = {
     // renderer-side teardown/purge as a normal remove.
     options?: {
       mode?: 'remove' | 'forget-local'
-      overrideLock?: boolean
       suppressPreservedBranchToast?: boolean
     }
   ) => Promise<({ ok: true } & RemoveWorktreeResult) | { ok: false; error: string }>

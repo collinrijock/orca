@@ -25,7 +25,7 @@ const mocks = vi.hoisted(() => {
         isDeleting: boolean
         error: string | null
         canForceDelete: boolean
-        forceDeleteReason: 'dirty' | 'locked' | 'orphan-directory' | 'missing-registration' | null
+        forceDeleteReason: 'dirty' | 'orphan-directory' | 'missing-registration' | null
         lockReason?: string | null
       }
     >
@@ -262,7 +262,7 @@ describe('DeleteWorktreeDialog lineage copy', () => {
     expect(markup).not.toContain('Also delete local branch')
   })
 
-  it('shows locked and known dirty details and overrides the lock only on recovery', async () => {
+  it('shows locked and known dirty details without offering a lock override', async () => {
     const workspace = makeWorktree('Locked workspace', '/workspaces/locked')
     mocks.state.modalData = { worktreeId: workspace.id }
     mocks.state.allWorktrees.mockReturnValue([workspace])
@@ -273,8 +273,8 @@ describe('DeleteWorktreeDialog lineage copy', () => {
       [workspace.id]: {
         isDeleting: false,
         error: 'Worktree is locked by Git. Lock reason: active agent session.',
-        canForceDelete: true,
-        forceDeleteReason: 'locked',
+        canForceDelete: false,
+        forceDeleteReason: null,
         lockReason: 'active agent session'
       }
     }
@@ -283,18 +283,9 @@ describe('DeleteWorktreeDialog lineage copy', () => {
     const markup = renderToStaticMarkup(<DeleteWorktreeDialog />)
 
     expect(markup).toContain('Worktree is locked by Git. Lock reason: active agent session.')
-    expect(markup).toContain('Force Delete')
+    expect(markup).not.toContain('Force Delete')
     expect(markup).toContain('1 uncommitted or untracked change')
-
-    mocks.state.removeWorktree.mockResolvedValue({ ok: true })
-    const forceButton = mocks.buttonProps.find((props) =>
-      buttonText(props).includes('Force Delete')
-    )
-    ;(forceButton as { onClick?: () => void } | undefined)?.onClick?.()
-
-    expect(mocks.state.removeWorktree).toHaveBeenCalledWith(workspace.id, true, {
-      overrideLock: true
-    })
+    expect(mocks.state.removeWorktree).not.toHaveBeenCalled()
   })
 
   it('notifies the dialog caller after a toast force delete succeeds', async () => {

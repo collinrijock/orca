@@ -1,9 +1,6 @@
 import * as path from 'node:path'
 import type { RemoveWorktreeResult } from '../shared/types'
-import {
-  assertWorktreeRemovalForcePermissions,
-  assertWorktreeUnlockedForRemoval
-} from '../shared/worktree-removal'
+import { assertWorktreeUnlockedForRemoval } from '../shared/worktree-removal'
 import { deleteAlreadyMergedRelayBranchAfterSafeDeleteFailure } from './git-handler-branch-cleanup'
 import type { GitExec } from './git-handler-ops'
 import { isUnsupportedWorktreeListZError, parseWorktreeList } from './git-handler-utils'
@@ -160,10 +157,8 @@ export async function removeWorktreeOp(
 ): Promise<RemoveWorktreeResult> {
   const worktreePath = params.worktreePath as string
   const force = params.force as boolean | undefined
-  const overrideLock = params.overrideLock === true
   const deleteBranch = params.deleteBranch !== false
   const forceBranchDelete = params.forceBranchDelete === true
-  assertWorktreeRemovalForcePermissions(force === true, overrideLock)
 
   let repoPath = worktreePath
   try {
@@ -183,14 +178,10 @@ export async function removeWorktreeOp(
   const branchName = normalizeLocalBranchRef(removedWorktree?.branch ?? '')
   const branchHead = removedWorktree?.head ?? ''
 
-  assertWorktreeUnlockedForRemoval(removedWorktree, overrideLock)
+  assertWorktreeUnlockedForRemoval(removedWorktree)
 
   const args = ['worktree', 'remove']
-  if (overrideLock) {
-    // Why: mirror local deletion semantics; a second force is reserved for
-    // the explicit lock-recovery action, not ordinary dirty-file deletion.
-    args.push('--force', '--force')
-  } else if (force) {
+  if (force) {
     args.push('--force')
   }
   args.push(worktreePath)

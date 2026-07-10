@@ -440,8 +440,8 @@ describe('removeWorktree cascade', () => {
     expect(store.getState().deleteStateByWorktreeId[worktreeId]).toEqual({
       isDeleting: false,
       error,
-      canForceDelete: true,
-      forceDeleteReason: 'locked',
+      canForceDelete: false,
+      forceDeleteReason: null,
       lockReason: null
     })
   })

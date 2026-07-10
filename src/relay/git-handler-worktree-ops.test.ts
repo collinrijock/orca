@@ -258,7 +258,7 @@ describe('removeWorktreeOp', () => {
     expect(git).not.toHaveBeenCalledWith(['branch', '-d', '--', 'feature/test'], expect.any(String))
   })
 
-  it('uses double force only when the SSH request explicitly overrides a lock', async () => {
+  it('does not let force override a locked SSH worktree', async () => {
     const git = vi.fn<GitExec>(async (args) => {
       if (args[0] === 'rev-parse') {
         return { stdout: '/repo/.git\n', stderr: '' }
@@ -275,26 +275,14 @@ describe('removeWorktreeOp', () => {
       return { stdout: '', stderr: '' }
     })
 
-    await removeWorktreeOp(git, {
-      worktreePath: '/repo-feature',
-      force: true,
-      overrideLock: true
-    })
+    await expect(
+      removeWorktreeOp(git, { worktreePath: '/repo-feature', force: true })
+    ).rejects.toThrow('Worktree is locked by Git. Lock reason: remote agent')
 
-    expect(git).toHaveBeenCalledWith(
-      ['worktree', 'remove', '--force', '--force', '/repo-feature'],
+    expect(git).not.toHaveBeenCalledWith(
+      ['worktree', 'remove', '--force', '/repo-feature'],
       expect.any(String)
     )
-  })
-
-  it('rejects SSH lock override without dirty-file force before invoking Git', async () => {
-    const git = vi.fn<GitExec>()
-
-    await expect(
-      removeWorktreeOp(git, { worktreePath: '/repo-feature', overrideLock: true })
-    ).rejects.toThrow('Worktree lock override requires force deletion permission.')
-
-    expect(git).not.toHaveBeenCalled()
   })
 
   it('skips branch deletion entirely when deleteBranch is false', async () => {

@@ -6402,7 +6402,7 @@ describe('registerWorktreeHandlers', () => {
     expect(store.removeWorktreeMeta).toHaveBeenCalledWith(worktreeId)
   })
 
-  it('removes a locked missing registration only with explicit lock override', async () => {
+  it('preserves a locked missing registration even with force', async () => {
     setPlatform('win32')
     const missingWorktreePath = 'C:\\workspace\\locked-already-removed'
     const worktreeId = `repo-1::${missingWorktreePath}`
@@ -6424,26 +6424,16 @@ describe('registerWorktreeHandlers', () => {
         lockReason: 'active agent session'
       }
     ]
-    listWorktreesMock.mockResolvedValueOnce(registeredWorktrees).mockResolvedValue([])
+    listWorktreesMock.mockResolvedValue(registeredWorktrees)
     store.getWorktreeMeta.mockReturnValue(makeWorktreeMeta())
     removeWorktreeMock.mockResolvedValue({})
 
-    await handlers['worktrees:remove'](null, {
-      worktreeId,
-      force: true,
-      overrideLock: true
-    })
-
-    expect(removeWorktreeMock).toHaveBeenCalledWith(
-      '/workspace/repo',
-      missingWorktreePath,
-      true,
-      expect.objectContaining({
-        overrideLock: true,
-        knownRemovedWorktree: expect.objectContaining({ locked: true })
-      })
+    await expect(handlers['worktrees:remove'](null, { worktreeId, force: true })).rejects.toThrow(
+      'Worktree is locked by Git. Lock reason: active agent session'
     )
-    expect(store.removeWorktreeMeta).toHaveBeenCalledWith(worktreeId)
+
+    expect(removeWorktreeMock).not.toHaveBeenCalled()
+    expect(store.removeWorktreeMeta).not.toHaveBeenCalled()
   })
 
   it('refuses to delete the root workspace for folder-mode repos', async () => {
@@ -6748,14 +6738,11 @@ describe('registerWorktreeHandlers', () => {
 
     await handlers['worktrees:remove'](null, {
       worktreeId: 'repo-ssh::/remote/feature-wt',
-      force: true,
-      overrideLock: true
+      force: true
     })
 
     expect(provider.worktreeIsClean).not.toHaveBeenCalled()
-    expect(provider.removeWorktree).toHaveBeenCalledWith('/remote/feature-wt', true, {
-      overrideLock: true
-    })
+    expect(provider.removeWorktree).toHaveBeenCalledWith('/remote/feature-wt', true)
   })
 
   it('continues SSH worktree removal when the archive hook fails', async () => {
@@ -7795,19 +7782,6 @@ describe('registerWorktreeHandlers', () => {
     ).rejects.toThrow('Failed to delete worktree at /workspace/feature-wt. ?? scratch.txt')
 
     expect(killAllProcessesForWorktreeMock).not.toHaveBeenCalled()
-    expect(removeWorktreeMock).not.toHaveBeenCalled()
-  })
-
-  it('rejects lock override without dirty-file force before any removal work', async () => {
-    await expect(
-      handlers['worktrees:remove'](null, {
-        worktreeId: 'repo-1::/workspace/feature-wt',
-        overrideLock: true
-      })
-    ).rejects.toThrow('Worktree lock override requires force deletion permission.')
-
-    expect(listWorktreesMock).not.toHaveBeenCalled()
-    expect(runHookMock).not.toHaveBeenCalled()
     expect(removeWorktreeMock).not.toHaveBeenCalled()
   })
 

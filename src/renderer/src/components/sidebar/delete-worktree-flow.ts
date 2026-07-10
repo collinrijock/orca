@@ -161,10 +161,7 @@ export function runWorktreeDeleteWithToast(
           // while the failed-delete toast was open, so focus only hands off
           // when this is still the workspace they are viewing.
           const commitForceFocus = prepareActiveWorktreeFocusAfterDelete(worktreeId)
-          const forceRemoval =
-            state?.forceDeleteReason === 'locked'
-              ? useAppStore.getState().removeWorktree(worktreeId, true, { overrideLock: true })
-              : useAppStore.getState().removeWorktree(worktreeId, true)
+          const forceRemoval = useAppStore.getState().removeWorktree(worktreeId, true)
           forceRemoval
             .then((forceResult) => {
               if (!forceResult.ok) {

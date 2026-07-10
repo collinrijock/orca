@@ -68,7 +68,8 @@ import {
 import { folderWorkspaceToWorktree } from '../../../../shared/folder-workspace-worktree'
 import {
   classifyWorktreeForceDeleteReason,
-  getLockedWorktreeRemovalReason
+  getLockedWorktreeRemovalReason,
+  isLockedWorktreeRemovalError
 } from '../../../../shared/worktree-removal'
 export type { WorktreeSlice, WorktreeDeleteState } from './worktree-helpers'
 
@@ -3160,7 +3161,6 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
           ? window.api.worktrees.remove({
               worktreeId,
               force,
-              overrideLock: options?.overrideLock,
               skipArchive
             })
           : callRuntimeRpc<RemoveWorktreeResult>(
@@ -3169,7 +3169,6 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
               {
                 worktree: toRuntimeWorktreeSelector(worktreeId),
                 force,
-                overrideLock: options?.overrideLock,
                 runHooks: !skipArchive
               },
               { timeoutMs: 60_000 }
@@ -3512,11 +3511,8 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       // handled user decision point surfaced by the delete toast, not an app error.
       console.warn('Failed to remove worktree:', err)
       const error = err instanceof Error ? err.message : String(err)
-      const forceDeleteReason = classifyWorktreeForceDeleteReason(
-        error,
-        force,
-        options?.overrideLock === true
-      )
+      const forceDeleteReason = classifyWorktreeForceDeleteReason(error, force)
+      const locked = isLockedWorktreeRemovalError(error)
       set((s) => ({
         deleteStateByWorktreeId: {
           ...s.deleteStateByWorktreeId,
@@ -3525,9 +3521,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
             error,
             canForceDelete: forceDeleteReason !== null,
             forceDeleteReason,
-            ...(forceDeleteReason === 'locked'
-              ? { lockReason: getLockedWorktreeRemovalReason(error) }
-              : {})
+            ...(locked ? { lockReason: getLockedWorktreeRemovalReason(error) } : {})
           }
         }
       }))

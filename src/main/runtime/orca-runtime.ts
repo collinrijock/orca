@@ -127,10 +127,7 @@ import type {
   WorkspaceSessionState,
   DirEntry
 } from '../../shared/types'
-import {
-  assertWorktreeRemovalForcePermissions,
-  assertWorktreeUnlockedForRemoval
-} from '../../shared/worktree-removal'
+import { assertWorktreeUnlockedForRemoval } from '../../shared/worktree-removal'
 import {
   getRepoExecutionHostId,
   parseExecutionHostId,
@@ -1427,12 +1424,8 @@ type PreservedBranchCleanupTarget = {
   pushTarget?: GitPushTarget
 }
 
-function getRuntimeWorktreeRemovalOptionsKey(
-  force: boolean,
-  runHooks: boolean,
-  overrideLock: boolean
-): string {
-  return `${force ? 'force' : 'normal'}:${overrideLock ? 'override-lock' : 'respect-lock'}:${runHooks ? 'run-hooks' : 'skip-hooks'}`
+function getRuntimeWorktreeRemovalOptionsKey(force: boolean, runHooks: boolean): string {
+  return `${force ? 'force' : 'normal'}:${runHooks ? 'run-hooks' : 'skip-hooks'}`
 }
 
 function getRuntimeFolderWorkspaceRootId(repo: Repo): string {
@@ -15534,16 +15527,14 @@ export class OrcaRuntimeService {
   async removeManagedWorktree(
     worktreeSelector: string,
     force = false,
-    runHooks = false,
-    overrideLock = false
+    runHooks = false
   ): Promise<RemoveWorktreeResult & { warning?: string }> {
     if (!this.store) {
       throw new Error('runtime_unavailable')
     }
-    assertWorktreeRemovalForcePermissions(force, overrideLock)
     const store = this.store
     const removalTarget = await this.resolveWorktreeRemovalTarget(worktreeSelector)
-    const optionsKey = getRuntimeWorktreeRemovalOptionsKey(force, runHooks, overrideLock)
+    const optionsKey = getRuntimeWorktreeRemovalOptionsKey(force, runHooks)
     const inFlightRemoval = this.removeManagedWorktreeInFlight.get(removalTarget.id)
     if (inFlightRemoval) {
       if (inFlightRemoval.optionsKey === optionsKey) {
@@ -15746,7 +15737,7 @@ export class OrcaRuntimeService {
       // Why: a Git lock must block before archive hooks or linked-path cleanup
       // mutate the workspace; dirty-file force is a separate permission.
       try {
-        assertWorktreeUnlockedForRemoval(registeredWorktree, overrideLock)
+        assertWorktreeUnlockedForRemoval(registeredWorktree)
       } catch (error) {
         throw new Error(formatWorktreeRemovalError(error, canonicalWorktreePath, force))
       }
@@ -15766,8 +15757,7 @@ export class OrcaRuntimeService {
           repoPath: repo.path,
           localWorktreeGitOptions,
           registeredWorktree,
-          deleteBranch,
-          overrideLock
+          deleteBranch
         })
         await cleanupUnusedWorktreePushTargetRemote(
           repo.path,
@@ -15790,10 +15780,7 @@ export class OrcaRuntimeService {
         return removalResult ?? {}
       }
       if (repo.connectionId) {
-        const remoteRemoveOptions = {
-          ...(!deleteBranch ? { deleteBranch } : {}),
-          ...(overrideLock ? { overrideLock: true } : {})
-        }
+        const remoteRemoveOptions = !deleteBranch ? { deleteBranch } : {}
         const rawRemovalResult = await (Object.keys(remoteRemoveOptions).length > 0
           ? provider!.removeWorktree(canonicalWorktreePath, force, remoteRemoveOptions)
           : provider!.removeWorktree(canonicalWorktreePath, force))
@@ -15857,7 +15844,7 @@ export class OrcaRuntimeService {
       try {
         // Why: an archive hook can race another Git client that locks the row;
         // recheck before linked-path, watcher, or terminal teardown side effects.
-        assertWorktreeUnlockedForRemoval(refreshedRegisteredWorktree, overrideLock)
+        assertWorktreeUnlockedForRemoval(refreshedRegisteredWorktree)
       } catch (error) {
         throw new Error(formatWorktreeRemovalError(error, canonicalWorktreePath, force))
       }
@@ -15914,7 +15901,6 @@ export class OrcaRuntimeService {
       try {
         const removeOptions = {
           ...(!deleteBranch ? { deleteBranch } : {}),
-          ...(overrideLock ? { overrideLock: true } : {}),
           // Why: removal already validated the Git row under the selected
           // project runtime; keep branch cleanup on that same canonical row.
           knownRemovedWorktree: refreshedRegisteredWorktree,
@@ -15935,7 +15921,6 @@ export class OrcaRuntimeService {
           localWorktreeGitOptions,
           registeredWorktree: refreshedRegisteredWorktree,
           deleteBranch,
-          overrideLock,
           closeWatcher: (worktreePath) =>
             closeLocalWatcherForWorktreePath(worktreePath).catch((err) => {
               console.warn(`[filesystem-watcher] failed to close ${worktreePath}:`, err)

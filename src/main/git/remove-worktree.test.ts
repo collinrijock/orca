@@ -272,40 +272,6 @@ branch refs/heads/main
     expect(getGitCalls()).toContain('git worktree remove --force /repo-feature')
   })
 
-  it('rejects lock override without dirty-file force before invoking Git', async () => {
-    await expect(
-      removeWorktree('/repo', '/repo-feature', false, { overrideLock: true })
-    ).rejects.toThrow('Worktree lock override requires force deletion permission.')
-
-    expect(getGitCalls()).toEqual([])
-  })
-
-  it('passes double --force only for explicit lock override', async () => {
-    mockGitCommands({
-      'git worktree list --porcelain': {
-        stdout: `worktree /repo
-HEAD abc123
-branch refs/heads/main
-
-worktree /repo-feature
-HEAD def456
-branch refs/heads/feature/test
-locked active agent session
-`
-      },
-      'git worktree list --porcelain#2': {
-        stdout: `worktree /repo
-HEAD abc123
-branch refs/heads/main
-`
-      }
-    })
-
-    await removeWorktree('/repo', '/repo-feature', true, { overrideLock: true })
-
-    expect(getGitCalls()).toContain('git worktree remove --force --force /repo-feature')
-  })
-
   it('rejects a locked worktree with stable app-owned copy before invoking remove', async () => {
     mockGitCommands({
       'git worktree list --porcelain': {
@@ -321,7 +287,7 @@ locked active agent session
       }
     })
 
-    await expect(removeWorktree('/repo', '/repo-feature')).rejects.toThrow(
+    await expect(removeWorktree('/repo', '/repo-feature', true)).rejects.toThrow(
       'Worktree is locked by Git. Lock reason: active agent session.'
     )
     expect(getGitCalls()).not.toContain('git worktree remove /repo-feature')

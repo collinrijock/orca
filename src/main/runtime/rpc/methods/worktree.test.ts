@@ -67,7 +67,7 @@ describe('worktree RPC methods', () => {
     })
   })
 
-  it('routes an explicit lock override separately from dirty-file force', async () => {
+  it('routes dirty-file force to the runtime server', async () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',
       removeManagedWorktree: vi.fn().mockResolvedValue({})
@@ -78,12 +78,11 @@ describe('worktree RPC methods', () => {
       makeRequest('worktree.rm', {
         worktree: 'id:wt-1',
         force: true,
-        overrideLock: true,
         runHooks: false
       })
     )
 
-    expect(runtime.removeManagedWorktree).toHaveBeenCalledWith('id:wt-1', true, false, true)
+    expect(runtime.removeManagedWorktree).toHaveBeenCalledWith('id:wt-1', true, false)
     expect(response).toMatchObject({ ok: true, result: { removed: true } })
   })
 

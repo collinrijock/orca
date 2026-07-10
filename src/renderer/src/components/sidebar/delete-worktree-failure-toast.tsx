@@ -2,7 +2,10 @@ import { toast } from 'sonner'
 import { Button } from '../ui/button'
 import { getDeleteWorktreeToastCopy } from './delete-worktree-toast'
 import { translate } from '@/i18n/i18n'
-import type { WorktreeForceDeleteReason } from '../../../../shared/worktree-removal'
+import {
+  isLockedWorktreeRemovalError,
+  type WorktreeForceDeleteReason
+} from '../../../../shared/worktree-removal'
 
 type DeleteWorktreeFailureToastOptions = {
   error: string
@@ -93,7 +96,7 @@ export function showDeleteWorktreeFailureToast({
       <DeleteWorktreeFailureToastBody
         description={toastCopy.description}
         canForceDelete={canForceDelete}
-        showViewChanges={forceDeleteReason !== 'locked' || hasKnownChanges === true}
+        showViewChanges={!isLockedWorktreeRemovalError(error) || hasKnownChanges === true}
         onViewChanges={onViewChanges}
         onForceDelete={onForceDelete}
         toastId={id}

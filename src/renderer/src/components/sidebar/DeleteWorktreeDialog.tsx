@@ -266,10 +266,7 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
         // the shared toast wrapper. Close immediately because workspace cards
         // already show the deleting state while the retry runs.
         const commitFocus = prepareActiveWorktreeFocusAfterDelete(worktreeId)
-        const deletePromise =
-          deleteState?.forceDeleteReason === 'locked'
-            ? removeWorktree(worktreeId, true, { overrideLock: true })
-            : removeWorktree(worktreeId, true)
+        const deletePromise = removeWorktree(worktreeId, true)
         closeModal()
         deletePromise
           .then((result) => {
@@ -325,7 +322,6 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
       onDeleted,
       persistDontAskAgainPreference,
       removeWorktree,
-      deleteState?.forceDeleteReason,
       worktreeIds.length,
       worktreeId,
       worktrees

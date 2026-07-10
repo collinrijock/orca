@@ -119,13 +119,13 @@ describe('showDeleteWorktreeFailureToast', () => {
     expect(onViewChanges).toHaveBeenCalled()
   })
 
-  it('offers force delete without View for a locked workspace', () => {
+  it('offers neither force delete nor View for a locked workspace', () => {
     const onViewChanges = vi.fn()
 
     showDeleteWorktreeFailureToast({
       error: 'Worktree is locked by Git.',
-      canForceDelete: true,
-      forceDeleteReason: 'locked',
+      canForceDelete: false,
+      forceDeleteReason: null,
       onViewChanges,
       onForceDelete: vi.fn(),
       worktreeId: 'wt-locked',
@@ -134,7 +134,8 @@ describe('showDeleteWorktreeFailureToast', () => {
 
     const body = renderToastBody('info')
     expect(body.textContent).toContain('This workspace is locked by Git.')
-    expect(body.textContent).toContain('Force Delete')
+    expect(body.textContent).toContain('Unlock it manually with git worktree unlock')
+    expect(body.textContent).not.toContain('Force Delete')
     expect(body.textContent).not.toContain('View')
     expect(onViewChanges).not.toHaveBeenCalled()
   })
@@ -142,8 +143,8 @@ describe('showDeleteWorktreeFailureToast', () => {
   it('keeps View for a locked workspace when changed files are known', () => {
     showDeleteWorktreeFailureToast({
       error: 'Worktree is locked by Git.',
-      canForceDelete: true,
-      forceDeleteReason: 'locked',
+      canForceDelete: false,
+      forceDeleteReason: null,
       lockReason: 'active agent session',
       hasKnownChanges: true,
       onViewChanges: vi.fn(),

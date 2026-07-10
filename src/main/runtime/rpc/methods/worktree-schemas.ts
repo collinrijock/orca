@@ -224,7 +224,6 @@ export const WorktreeSet = WorktreeSelector.extend({
 
 export const WorktreeRemove = WorktreeSelector.extend({
   force: OptionalBoolean,
-  overrideLock: OptionalBoolean,
   runHooks: OptionalBoolean
 })
 

@@ -1725,7 +1725,6 @@ describe('web worktree preload API', () => {
     await globals.window.api.worktrees.remove({
       worktreeId: 'repo-1::/workspace/locked',
       force: true,
-      overrideLock: true,
       skipArchive: false
     })
     await globals.window.api.worktrees.remove({
@@ -1740,7 +1739,6 @@ describe('web worktree preload API', () => {
         params: {
           worktree: 'id:repo-1::/workspace/locked',
           force: true,
-          overrideLock: true,
           runHooks: true
         }
       },
@@ -1749,7 +1747,6 @@ describe('web worktree preload API', () => {
         params: {
           worktree: 'id:repo-1::/workspace/dirty',
           force: true,
-          overrideLock: undefined,
           runHooks: false
         }
       }

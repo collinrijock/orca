@@ -6,7 +6,7 @@ import {
   isWindowsLongPathWorktreeRemovalError
 } from './ipc/worktree-logic'
 import { gitExecFileAsync } from './git/runner'
-import { listWorktreesStrict, removeWorktree, type GitWorktreeExecOptions } from './git/worktree'
+import { listWorktreesStrict, type GitWorktreeExecOptions } from './git/worktree'
 import { removeLocalWorktreePath } from './local-worktree-filesystem'
 
 type LocalWindowsRemovalRecoveryArgs = {
@@ -17,7 +17,6 @@ type LocalWindowsRemovalRecoveryArgs = {
   localWorktreeGitOptions: GitWorktreeExecOptions
   registeredWorktree: Pick<GitWorktreeInfo, 'branch' | 'head' | 'locked' | 'lockReason'>
   deleteBranch: boolean
-  overrideLock: boolean
   closeWatcher: (worktreePath: string) => Promise<void>
 }
 
@@ -79,27 +78,16 @@ async function removeRequiredGitWorktreeRegistration(
   args: StaleLocalWorktreeRegistrationArgs,
   forceForError = true
 ): Promise<RemoveWorktreeResult> {
-  assertWorktreeUnlockedForRemoval(args.registeredWorktree, args.overrideLock)
+  assertWorktreeUnlockedForRemoval(args.registeredWorktree)
 
   let result: RemoveWorktreeResult | undefined
   let removalError: unknown
   try {
-    if (args.registeredWorktree.locked && args.overrideLock) {
-      // Why: prune intentionally retains locked rows; Git's second force is the
-      // explicit recovery mechanism that can remove the missing registration.
-      result = await removeWorktree(args.repoPath, args.canonicalWorktreePath, true, {
-        ...args.localWorktreeGitOptions,
-        deleteBranch: args.deleteBranch,
-        overrideLock: true,
-        knownRemovedWorktree: args.registeredWorktree
-      })
-    } else {
-      await gitExecFileAsync(['worktree', 'prune'], {
-        cwd: args.repoPath,
-        ...args.localWorktreeGitOptions
-      })
-      result = preservedBranchResult(args.registeredWorktree, args.deleteBranch)
-    }
+    await gitExecFileAsync(['worktree', 'prune'], {
+      cwd: args.repoPath,
+      ...args.localWorktreeGitOptions
+    })
+    result = preservedBranchResult(args.registeredWorktree, args.deleteBranch)
   } catch (error) {
     removalError = error
   }

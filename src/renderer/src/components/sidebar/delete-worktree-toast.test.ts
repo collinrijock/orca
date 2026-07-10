@@ -48,20 +48,26 @@ describe('getDeleteWorktreeToastCopy', () => {
   })
 
   it('uses lock-specific guidance', () => {
-    expect(getDeleteWorktreeToastCopy('feature/foo', 'locked', 'raw lock error')).toEqual({
+    expect(getDeleteWorktreeToastCopy('feature/foo', null, 'Worktree is locked by Git.')).toEqual({
       title: 'Failed to delete workspace feature/foo',
-      description: 'This workspace is locked by Git. Use Force Delete to remove it anyway.',
+      description:
+        'This workspace is locked by Git. Unlock it manually with git worktree unlock before deleting it.',
       isDestructive: false
     })
   })
 
   it('includes the structured Git lock reason in localized recovery copy', () => {
     expect(
-      getDeleteWorktreeToastCopy('feature/foo', 'locked', 'raw lock error', 'active agent session')
+      getDeleteWorktreeToastCopy(
+        'feature/foo',
+        null,
+        'Worktree is locked by Git. Lock reason: active agent session.',
+        'active agent session'
+      )
     ).toEqual({
       title: 'Failed to delete workspace feature/foo',
       description:
-        'This workspace is locked by Git. Git reported: active agent session. Use Force Delete to remove it anyway.',
+        'This workspace is locked by Git. Git reported: active agent session. Unlock it manually with git worktree unlock before deleting it.',
       isDestructive: false
     })
   })
