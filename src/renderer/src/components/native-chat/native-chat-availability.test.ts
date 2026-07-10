@@ -73,9 +73,8 @@ describe('canToggleNativeChat', () => {
         experimentalNativeChatEnabled: true,
         contentType: 'terminal',
         launchAgent: 'grok',
-        nativeChatTranscriptIsLocalReadable: isNativeChatTranscriptLocalReadable(
-          'runtime-ssh-env-1'
-        )
+        nativeChatTranscriptIsLocalReadable:
+          isNativeChatTranscriptLocalReadable('runtime-ssh-env-1')
       })
     ).toBe(true)
   })
