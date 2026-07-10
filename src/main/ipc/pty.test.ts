@@ -344,7 +344,7 @@ describe('registerPtyHandlers', () => {
     // the gate via did-start-loading and re-open it with an explicit handshake.
     onMock.mockImplementation((channel: string, listener: (...args: unknown[]) => void) => {
       if (channel === 'pty:rendererDispatcherReady') {
-        listener()
+        listener(mainWindowIpcEvent)
         // Drain the empty flush the handshake schedules so it can't fire later
         // (once real output is pending) and perturb send-timing assertions.
         if (vi.isFakeTimers()) {
@@ -624,7 +624,10 @@ describe('registerPtyHandlers', () => {
     if (!readyCall) {
       throw new Error('missing pty:rendererDispatcherReady listener')
     }
-    return readyCall[1] as () => void
+    const listener = readyCall[1] as (event: unknown) => void
+    // Why: the production handler sender-guards its destructive reconcile, so
+    // tests must present as the main window.
+    return () => listener(mainWindowIpcEvent)
   }
 
   function getMainWindowWebContentsListener(eventName: string): (...args: unknown[]) => void {
@@ -7252,6 +7255,52 @@ describe('registerPtyHandlers', () => {
       expect(getPtyRendererDeliveryDebugSnapshot()).toMatchObject({
         rendererPtyDispatcherReady: true,
         rendererDispatcherReadyForcedCount: 1
+      })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('ignores a dispatcher-ready handshake from a sender other than the main window', async () => {
+    vi.useFakeTimers()
+    const mockProc = createMockProc()
+    spawnMock.mockReturnValue(mockProc.proc)
+
+    try {
+      registerPtyHandlers(mainWindow as never)
+      const spawnResult = (await handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24,
+        cwd: '/tmp'
+      })) as { id: string }
+      const handleRendererLoading = getMainWindowWebContentsListener('did-start-loading')
+      const readyCall = onMock.mock.calls.find(
+        (call: unknown[]) => call[0] === 'pty:rendererDispatcherReady'
+      )!
+      const rawReadyListener = readyCall[1] as (event: unknown) => void
+      vi.advanceTimersByTime(1)
+
+      // Why: a straggler handshake from a dying window's webContents must not
+      // reopen the gate (or trigger the destructive reconcile) for the new page.
+      handleRendererLoading()
+      mainWindow.webContents.send.mockClear()
+      rawReadyListener({ sender: { isDestroyed: () => false } })
+      mockProc.emitData('post-reload output')
+      vi.advanceTimersByTime(8)
+      expect(mainWindow.webContents.send).not.toHaveBeenCalled()
+      expect(getPtyRendererDeliveryDebugSnapshot()).toMatchObject({
+        rendererPtyDispatcherReady: false
+      })
+
+      // The genuine main-window handshake still opens the gate and drains.
+      rawReadyListener({ sender: mainWindow.webContents })
+      vi.advanceTimersByTime(8)
+      expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:data', {
+        id: spawnResult.id,
+        data: 'post-reload output'
+      })
+      expect(getPtyRendererDeliveryDebugSnapshot()).toMatchObject({
+        rendererPtyDispatcherReady: true
       })
     } finally {
       vi.useRealTimers()

@@ -3790,7 +3790,12 @@ export function registerPtyHandlers(
   // drop into a listener-less page and pin the delivery gate; on arrival, flush
   // the backlog that accrued during the boot window.
   ipcMain.removeAllListeners('pty:rendererDispatcherReady')
-  ipcMain.on('pty:rendererDispatcherReady', () => {
+  ipcMain.on('pty:rendererDispatcherReady', (event) => {
+    // Why: the reconcile below destructively clears delivery accounting, so a
+    // straggler handshake from a dying window must not reset the new window.
+    if (!isPtyWriteEventFromMainWindow(event, mainWindow.webContents)) {
+      return
+    }
     // Why: the handshake is one-shot per page load, so receiving it while the gate
     // is already open means a fresh page loaded but its lifecycle reset was missed —
     // a main-frame reload overlapped by an in-page subframe load emits no
