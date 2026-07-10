@@ -133,17 +133,21 @@ describe('reopenClosedTerminalTab', () => {
   })
 
   it('skips local reopen on a remote-runtime worktree (host owns the terminal)', () => {
-    const store = makeSeededStore()
-    const tab = store
-      .getState()
-      .createTab(WT, undefined, undefined, { startupCwd: '/path/wt1/api' })
-    store.getState().closeTab(tab.id)
-    expect(store.getState().recentlyClosedTerminalTabsByWorktree[WT]).toHaveLength(1)
-
-    // Why: an active runtime environment makes the worktree host-owned; a local
-    // createTab would leave an unbacked phantom tab, so reopen must bail.
+    // Why: a `runtime:` host id makes the worktree host-owned; a local createTab
+    // would leave an unbacked phantom tab, so reopen must bail and let the
+    // cross-type dispatcher fall through to browser/editor.
+    const store = createTestStore()
+    seedStore(store, {
+      worktreesByRepo: {
+        repo1: [
+          makeWorktree({ id: WT, repoId: 'repo1', path: '/path/wt1', hostId: 'runtime:env-1' })
+        ]
+      },
+      activeWorktreeId: WT
+    })
     store.setState({
-      settings: { ...store.getState().settings, activeRuntimeEnvironmentId: 'runtime-env-1' }
+      recentlyClosedTerminalTabsByWorktree: { [WT]: [{ startupCwd: '/path/wt1/api' }] },
+      recentlyClosedTabKindsByWorktree: { [WT]: ['terminal'] }
     })
 
     expect(store.getState().reopenClosedTerminalTab(WT)).toBe(false)
