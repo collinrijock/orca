@@ -48,10 +48,15 @@ export function runVirtualizedScrollAnchorRestore<
     ? anchor.key
     : anchor.fallbackKeys?.find((key) => rowIndexByKey.has(key))
   if (!resolvedKey) {
+    // Why: an unresolvable anchor has nothing to converge; rows that make it
+    // resolvable again always arrive via a signal change, so leaving the arm
+    // set would re-run restore on every measurement tick.
+    pendingRestoreRef.current = false
     return
   }
   const index = rowIndexByKey.get(resolvedKey)
   if (index === undefined) {
+    pendingRestoreRef.current = false
     return
   }
   const offset = resolvedKey === anchor.key ? anchor.offset : 0

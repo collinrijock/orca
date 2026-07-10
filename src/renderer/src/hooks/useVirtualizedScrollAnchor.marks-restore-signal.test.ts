@@ -320,6 +320,47 @@ describe('useVirtualizedScrollAnchor with marks + restoreSignal', () => {
     expect(el.querySelectorAll).toHaveBeenCalled()
   })
 
+  it('does not stay armed when the anchor row and all fallbacks are gone', async () => {
+    const { harness, useVirtualizedScrollAnchor } = await loadHook()
+    const { el } = createScrollElement({
+      rowElements: [anchoredRowElement('row-1', -3_358)],
+      scrollTop: 746
+    })
+    const anchorRef = { current: { key: 'row-gone', offset: 3_358, scrollTop: 746 } }
+    const virtualizer = virtualizerWithRow1()
+
+    const render = (rows: readonly string[], totalSize: number) => {
+      harness.beginRender()
+      // oxlint-disable-next-line react-hooks/rules-of-hooks -- test harness mocks React's hook dispatcher directly.
+      useVirtualizedScrollAnchor({
+        anchorRef,
+        getItemElementKey: (element: FakeRowElement) => element.key,
+        getRowKey: (row: string) => row,
+        itemElementSelector: '[data-row]',
+        programmaticScrollMarks: createProgrammaticScrollMarks(),
+        recordAnchorOnScroll: false,
+        restoreSignal: 'signal-a',
+        rows,
+        scrollElementRef: { current: el },
+        scrollOffsetRef: { current: 746 },
+        totalSize,
+        virtualizer
+      } as never)
+      harness.effects[1]?.effect()
+    }
+
+    // Signal change arms a restore, but the anchor resolves to no row.
+    render(['row-0', 'row-2'], 30_000)
+    expect(el.querySelectorAll).not.toHaveBeenCalled()
+
+    // The arm must not leak: a later measurement tick with an unchanged
+    // signal stays out of restore even though the anchor is now resolvable
+    // (in production, resolvability changes always change the signal too).
+    render(['row-0', 'row-gone'], 31_000)
+    expect(el.querySelectorAll).not.toHaveBeenCalled()
+    expect(virtualizer.scrollToIndex).not.toHaveBeenCalled()
+  })
+
   it('does not treat a browser clamp during the mount restore as user takeover', async () => {
     const { harness, useVirtualizedScrollAnchor } = await loadHook()
     const marks = createProgrammaticScrollMarks()
