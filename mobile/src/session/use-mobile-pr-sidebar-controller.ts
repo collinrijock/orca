@@ -70,7 +70,11 @@ export function useMobilePrSidebarController(input: PrSidebarControllerInput) {
   stateRef.current = state
   const headShaRef = useRef(headSha)
 
-  const ready = client !== null && connState === 'connected' && !!branch
+  // Repo eligibility (a GitHub remote) is independent of the branch, so the probe
+  // must not require one: a detached HEAD / mid-rebase worktree (branch === null)
+  // would otherwise never set repoProbeLoaded, stranding the PR segment on a
+  // forever spinner instead of the "Current branch unavailable" state.
+  const probeReady = client !== null && connState === 'connected'
   const identity = buildMobilePrSidebarIdentity({ worktreeId, branch })
 
   const buildDeps = useCallback((): PrSidebarLoadDeps | null => {
@@ -96,7 +100,7 @@ export function useMobilePrSidebarController(input: PrSidebarControllerInput) {
 
   useEffect(() => {
     let cancelled = false
-    if (!ready || !client) {
+    if (!probeReady || !client) {
       return
     }
     void fetchGithubRepoSlug(client, worktreeId).then((outcome) => {
@@ -108,7 +112,7 @@ export function useMobilePrSidebarController(input: PrSidebarControllerInput) {
     return () => {
       cancelled = true
     }
-  }, [ready, client, worktreeId])
+  }, [probeReady, client, worktreeId])
 
   useEffect(() => {
     if (!identity) {

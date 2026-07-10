@@ -200,7 +200,10 @@ export function MobileSourceControlPanel({
   }, [activeTab, isHostedRepo, prBranch, prSidebarKind, prDetailsMissingFor])
 
   const prChip = useMemo(() => {
-    if (!isHostedRepo) {
+    // No branch (detached HEAD / mid-rebase) never runs a PR load, so the shared
+    // state stays 'hidden' — which the chip would render as a forever spinner.
+    // Hide the chip instead; the Pull Request segment shows "branch unavailable".
+    if (!isHostedRepo || !prBranch) {
       return null
     }
     const commentCount =
@@ -208,7 +211,7 @@ export function MobileSourceControlPanel({
         ? countUnresolvedReviewThreads(prController.prSidebarState.data.details?.comments)
         : null
     return buildMobilePrChipSummary(prController.prSidebarState, commentCount)
-  }, [isHostedRepo, prController.prSidebarState])
+  }, [isHostedRepo, prBranch, prController.prSidebarState])
 
   // Design: refresh the active segment's body work, plus git.status for the shared
   // branch card (counts/sync stay honest even while on History). Preserve ready
