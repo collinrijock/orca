@@ -14,7 +14,7 @@ export function getZshEnvTemplate(zshDir: string, headerPrefix = ''): string {
 # file is generated with a Windows path but sourced via /mnt/c, so the baked
 # literal is unusable there and ZDOTDIR must be restored from this value.
 _orca_wrapper_zdotdir_self="\${ZDOTDIR:-}"
-while [[ "\${_orca_wrapper_zdotdir_self}" == */ ]]; do
+while [[ "\${_orca_wrapper_zdotdir_self:-}" == */ ]]; do
   _orca_wrapper_zdotdir_self="\${_orca_wrapper_zdotdir_self%/}"
 done
 _orca_spawn_orig_zdotdir="\${ORCA_ORIG_ZDOTDIR:-}"
@@ -74,8 +74,10 @@ case "\${ORCA_ORIG_ZDOTDIR}" in
   ""|*/shell-ready/zsh) export ORCA_ORIG_ZDOTDIR="$HOME" ;;
 esac
 
+# Why: use :- after user .zshenv — a pathological unset under set -u must not
+# abort the wrapper; empty falls through to the baked-literal branch.
 if [[ -n "\${_orca_wrapper_zdotdir_self:-}" && -f "\${_orca_wrapper_zdotdir_self:-}/.zshenv" ]]; then
-  export ZDOTDIR="\${_orca_wrapper_zdotdir_self}"
+  export ZDOTDIR="\${_orca_wrapper_zdotdir_self:-}"
 else
   export ZDOTDIR=${quotePosixSingle(zshDir)}
 fi

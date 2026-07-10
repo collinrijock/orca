@@ -739,9 +739,10 @@ describePosix('local PTY shell-ready launch config', () => {
     // otherwise the generation-time literal remains as the fallback.
     expect(zshenv).toContain(
       'if [[ -n "${_orca_wrapper_zdotdir_self:-}" && -f "${_orca_wrapper_zdotdir_self:-}/.zshenv" ]]; then\n' +
-        '  export ZDOTDIR="${_orca_wrapper_zdotdir_self}"\n' +
+        '  export ZDOTDIR="${_orca_wrapper_zdotdir_self:-}"\n' +
         'else\n' +
-        `  export ZDOTDIR='${join(userDataPath, 'shell-ready', 'zsh')}'`
+        `  export ZDOTDIR='${join(userDataPath, 'shell-ready', 'zsh')}'\n` +
+        'fi'
     )
     // Capture must happen before the wrapper unsets ZDOTDIR to source user files.
     expect(zshenv.indexOf('_orca_wrapper_zdotdir_self="${ZDOTDIR:-}"')).toBeLessThan(
@@ -863,13 +864,15 @@ path=(/custom/bin $path)
 
         // Production WSL launches a login shell (`exec zsh -l`); also cover the
         // non-login flow used by local panes so both restore paths stay pinned.
-        for (const args of [['-i'], ['-l', '-i']]) {
+        // Login must still load user .zshrc (via wrapper .zshrc after .zprofile)
+        // and leave final ZDOTDIR at the user home after .zlogin restore.
+        for (const args of [['-i'], ['-l', '-i']] as const) {
           const result = spawnSync(
             'zsh',
             [
               ...args,
               '-c',
-              'echo "USER_ZSHRC_LOADED=${USER_ZSHRC_LOADED:-no}" && echo "FINAL_ZDOTDIR=${ZDOTDIR:-unset}"'
+              'echo "USER_ZSHRC_LOADED=${USER_ZSHRC_LOADED:-no}" && echo "FINAL_ZDOTDIR=${ZDOTDIR:-unset}" && echo "IS_LOGIN=$([[ -o login ]] && echo yes || echo no)"'
             ],
             {
               env: cleanEnv as NodeJS.ProcessEnv,
@@ -877,9 +880,10 @@ path=(/custom/bin $path)
             }
           )
 
-          expect(result.status).toBe(0)
+          expect(result.status, `zsh ${args.join(' ')} failed: ${result.stderr}`).toBe(0)
           expect(result.stdout).toContain('USER_ZSHRC_LOADED=yes')
           expect(result.stdout).toContain(`FINAL_ZDOTDIR=${testHome}`)
+          expect(result.stdout).toContain(args.includes('-l') ? 'IS_LOGIN=yes' : 'IS_LOGIN=no')
         }
       } finally {
         rmSync(movedUserData, { recursive: true, force: true })
