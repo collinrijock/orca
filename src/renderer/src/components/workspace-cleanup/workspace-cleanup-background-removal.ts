@@ -12,6 +12,15 @@ import type {
 import { translate } from '@/i18n/i18n'
 
 const DEFAULT_WORKSPACE_CLEANUP_REMOVAL_TIMEOUT_MS = 120_000
+const DEFAULT_WORKSPACE_CLEANUP_SETTLEMENT_GRACE_MS = 5_000
+
+type WorkspaceCleanupRemovalSettlement =
+  | { status: 'fulfilled'; result: WorkspaceCleanupRemoveResult }
+  | { status: 'rejected'; error: unknown }
+
+type WorkspaceCleanupRemovalWaitResult =
+  | WorkspaceCleanupRemovalSettlement
+  | { status: 'unresolved' }
 
 export type WorkspaceCleanupRemovalProgress = {
   totalCount: number
@@ -34,6 +43,7 @@ export type WorkspaceCleanupBackgroundRemovalArgs = {
   // instead of waiting for the whole batch to settle.
   onRowFailed?: (failure: WorkspaceCleanupFailure) => void
   removalTimeoutMs?: number
+  removalSettlementGraceMs?: number
 }
 
 export function startWorkspaceCleanupBackgroundRemoval({
@@ -43,7 +53,8 @@ export function startWorkspaceCleanupBackgroundRemoval({
   onResult,
   onError,
   onRowFailed,
-  removalTimeoutMs = DEFAULT_WORKSPACE_CLEANUP_REMOVAL_TIMEOUT_MS
+  removalTimeoutMs = DEFAULT_WORKSPACE_CLEANUP_REMOVAL_TIMEOUT_MS,
+  removalSettlementGraceMs = DEFAULT_WORKSPACE_CLEANUP_SETTLEMENT_GRACE_MS
 }: WorkspaceCleanupBackgroundRemovalArgs): void {
   if (candidates.length === 0) {
     try {
@@ -112,7 +123,8 @@ export function startWorkspaceCleanupBackgroundRemoval({
         const result = await withWorkspaceCleanupRemovalTimeout(
           removeCandidates([candidate.worktreeId], { approvedCandidates: [candidate] }),
           candidate,
-          removalTimeoutMs
+          removalTimeoutMs,
+          removalSettlementGraceMs
         )
         removedIds.push(...result.removedIds)
         reportFailures(result.failures)
@@ -184,30 +196,59 @@ export function startWorkspaceCleanupBackgroundRemoval({
 async function withWorkspaceCleanupRemovalTimeout(
   promise: Promise<WorkspaceCleanupRemoveResult>,
   candidate: WorkspaceCleanupCandidate,
-  timeoutMs: number
+  timeoutMs: number,
+  settlementGraceMs: number
 ): Promise<WorkspaceCleanupRemoveResult> {
   if (timeoutMs <= 0 || !Number.isFinite(timeoutMs)) {
     return promise
   }
 
+  // Why: a timeout does not cancel renderer IPC. Preserve the eventual outcome
+  // so a confirmation racing the deadline remains authoritative.
+  const settlement = promise.then<
+    WorkspaceCleanupRemovalSettlement,
+    WorkspaceCleanupRemovalSettlement
+  >(
+    (result) => ({ status: 'fulfilled', result }),
+    (error: unknown) => ({ status: 'rejected', error })
+  )
+  const initialOutcome = await waitForWorkspaceCleanupRemoval(settlement, timeoutMs)
+  const outcome =
+    initialOutcome.status === 'unresolved' &&
+    settlementGraceMs > 0 &&
+    Number.isFinite(settlementGraceMs)
+      ? await waitForWorkspaceCleanupRemoval(settlement, settlementGraceMs)
+      : initialOutcome
+
+  if (outcome.status === 'fulfilled') {
+    return outcome.result
+  }
+  if (outcome.status === 'rejected') {
+    throw outcome.error
+  }
+
+  // Why: only an operation still unresolved after the bounded confirmation
+  // window blocks ancestor deletion; a confirmed late success proceeds safely.
+  throw new Error(
+    translate(
+      'auto.components.workspace.cleanup.backgroundRemoval.timedOut',
+      'Removing {{value0}} is taking longer than expected. It will keep running in the background.',
+      { value0: candidate.displayName }
+    )
+  )
+}
+
+async function waitForWorkspaceCleanupRemoval(
+  settlement: Promise<WorkspaceCleanupRemovalSettlement>,
+  timeoutMs: number
+): Promise<WorkspaceCleanupRemovalWaitResult> {
   let timeout: ReturnType<typeof setTimeout> | null = null
   try {
     return await Promise.race([
-      promise,
-      new Promise<WorkspaceCleanupRemoveResult>((_resolve, reject) => {
+      settlement,
+      new Promise<{ status: 'unresolved' }>((resolve) => {
         timeout = setTimeout(() => {
-          // Why: the underlying removal cannot be cancelled from the renderer,
-          // so the row stays "Deleting" and this message must not claim the
-          // removal stopped.
-          reject(
-            new Error(
-              translate(
-                'auto.components.workspace.cleanup.backgroundRemoval.timedOut',
-                'Removing {{value0}} is taking longer than expected. It will keep running in the background.',
-                { value0: candidate.displayName }
-              )
-            )
-          )
+          resolve({ status: 'unresolved' })
         }, timeoutMs)
       })
     ])
