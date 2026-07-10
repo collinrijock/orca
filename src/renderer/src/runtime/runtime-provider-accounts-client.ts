@@ -41,6 +41,19 @@ export type ProviderAccountsWatcher = {
   close: () => void
 }
 
+function emptyClaudeAccountsState(): ClaudeRateLimitAccountsState {
+  return { accounts: [], activeAccountId: null, activeAccountIdsByRuntime: { host: null, wsl: {} } }
+}
+
+function emptyCodexAccountsState(): CodexRateLimitAccountsState {
+  return { accounts: [], activeAccountId: null, activeAccountIdsByRuntime: { host: null, wsl: {} } }
+}
+
+function providerAccountsLoadError(provider: 'Claude' | 'Codex', cause: unknown): Error {
+  const message = String((cause as Error)?.message ?? cause)
+  return new Error(`Could not load ${provider} accounts: ${message}`)
+}
+
 // Watches the provider-account snapshot for whichever runtime owns accounts.
 // Local: one-shot reads of the desktop services (they have no push channel
 // here; the pane refetches after each mutation). Remote: a live
@@ -58,17 +71,39 @@ export function watchProviderAccounts(
   const target = getActiveRuntimeTarget(settings)
   if (target.kind === 'local') {
     let closed = false
-    void Promise.all([window.api.claudeAccounts.list(), window.api.codexAccounts.list()])
-      .then(([claude, codex]) => {
-        if (!closed) {
-          handlers.onSnapshot({ claude, codex, rateLimits: null })
-        }
+    void Promise.allSettled([
+      window.api.claudeAccounts.list(),
+      window.api.codexAccounts.list()
+    ]).then(([claudeResult, codexResult]) => {
+      if (closed) {
+        return
+      }
+
+      const errors = [
+        ...(claudeResult.status === 'rejected'
+          ? [providerAccountsLoadError('Claude', claudeResult.reason)]
+          : []),
+        ...(codexResult.status === 'rejected'
+          ? [providerAccountsLoadError('Codex', codexResult.reason)]
+          : [])
+      ]
+      if (errors.length === 2) {
+        handlers.onError(new AggregateError(errors, errors.map((error) => error.message).join(' ')))
+        return
+      }
+
+      handlers.onSnapshot({
+        claude:
+          claudeResult.status === 'fulfilled' ? claudeResult.value : emptyClaudeAccountsState(),
+        codex: codexResult.status === 'fulfilled' ? codexResult.value : emptyCodexAccountsState(),
+        rateLimits: null
       })
-      .catch((error: unknown) => {
-        if (!closed) {
-          handlers.onError(error)
-        }
-      })
+      // Why: publish the healthy provider first so one-shot consumers keep it,
+      // while the long-lived Accounts pane still receives a source-specific error.
+      for (const error of errors) {
+        handlers.onError(error)
+      }
+    })
     return {
       close: () => {
         closed = true

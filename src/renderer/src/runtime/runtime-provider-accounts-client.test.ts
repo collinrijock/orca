@@ -155,6 +155,32 @@ describe('watchProviderAccounts', () => {
     expect(snapshots).toHaveLength(0)
   })
 
+  it('keeps a healthy local provider snapshot when the other provider fails', async () => {
+    const codexState = { ...emptyCodexState(), activeAccountId: 'codex-local' }
+    claudeListLocal.mockRejectedValue(new Error('Claude keychain unavailable'))
+    codexListLocal.mockResolvedValue(codexState)
+    const snapshots: ProviderAccountsSnapshot[] = []
+    const errors: unknown[] = []
+
+    watchProviderAccounts(LOCAL, {
+      onSnapshot: (snapshot) => snapshots.push(snapshot),
+      onError: (error) => errors.push(error)
+    })
+    await flushMicrotasks()
+
+    expect(snapshots).toEqual([
+      {
+        claude: emptyClaudeState(),
+        codex: codexState,
+        rateLimits: null
+      }
+    ])
+    expect(errors).toHaveLength(1)
+    expect((errors[0] as Error).message).toBe(
+      'Could not load Claude accounts: Claude keychain unavailable'
+    )
+  })
+
   it('streams remote snapshots from accounts.subscribe and unsubscribes on close', async () => {
     const snapshots: ProviderAccountsSnapshot[] = []
     const watcher = watchProviderAccounts(REMOTE, {

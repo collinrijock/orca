@@ -62,6 +62,7 @@ import {
   DialogTitle
 } from '../ui/dialog'
 import { getCodexAccountAuthWarning } from './codex-account-auth-warning'
+import { providerAccountMatchesView } from './provider-account-visibility'
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
 import {
@@ -146,6 +147,7 @@ type AccountsPaneProps = {
   wslAvailable?: boolean
   wslDistros?: string[]
   wslCapabilitiesLoading?: boolean
+  accountOwnerPlatform?: NodeJS.Platform | null
 }
 
 function getHostRuntimeLabel(): string {
@@ -288,26 +290,6 @@ type LocalAccountRuntime = {
   label: string
 }
 
-function accountMatchesRuntime(
-  account:
-    | CodexRateLimitAccountsState['accounts'][number]
-    | ClaudeRateLimitAccountsState['accounts'][number],
-  runtime: LocalAccountRuntime
-): boolean {
-  const accountRuntime =
-    'authMethod' in account
-      ? (account.managedAuthRuntime ?? 'host')
-      : (account.managedHomeRuntime ?? 'host')
-  const accountDistro = account.wslDistro ?? null
-  if (runtime.runtime === 'host') {
-    return accountRuntime !== 'wsl'
-  }
-  if (accountRuntime !== 'wsl') {
-    return false
-  }
-  return runtime.wslDistro ? accountDistro === runtime.wslDistro : true
-}
-
 function getSelectedAccountRuntime(
   settings: GlobalSettings,
   wslSupportedPlatform: boolean,
@@ -344,7 +326,8 @@ export function AccountsPane({
   wslSupportedPlatform = false,
   wslAvailable = false,
   wslDistros = EMPTY_WSL_DISTROS,
-  wslCapabilitiesLoading = false
+  wslCapabilitiesLoading = false,
+  accountOwnerPlatform = null
 }: AccountsPaneProps): React.JSX.Element {
   const searchQuery = useAppStore((s) => s.settingsSearchQuery)
   const codexRateLimits = useAppStore((s) => s.rateLimits.codex)
@@ -407,11 +390,15 @@ export function AccountsPane({
   >('idle')
   const [removeAccountId, setRemoveAccountId] = useState<string | null>(null)
   const [removeClaudeAccountId, setRemoveClaudeAccountId] = useState<string | null>(null)
+  const accountVisibilityOptions = {
+    remoteOwner: isRemoteAccountScope,
+    ownerPlatform: accountOwnerPlatform
+  }
   const visibleClaudeAccounts = claudeAccounts.accounts.filter((account) =>
-    accountMatchesRuntime(account, accountRuntime)
+    providerAccountMatchesView(account, accountRuntime, accountVisibilityOptions)
   )
   const visibleCodexAccounts = codexAccounts.accounts.filter((account) =>
-    accountMatchesRuntime(account, accountRuntime)
+    providerAccountMatchesView(account, accountRuntime, accountVisibilityOptions)
   )
   const activeCodexAccountId = getActiveCodexAccountIdForRuntime(codexAccounts, accountRuntime)
   const activeClaudeAccountId = getActiveClaudeAccountIdForRuntime(claudeAccounts, accountRuntime)
