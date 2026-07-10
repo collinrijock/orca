@@ -615,7 +615,7 @@ describe('generateCommitMessageFromContext', () => {
     })
   })
 
-  it('does not expose unstructured raw CLI failure output', async () => {
+  it('exposes raw CLI failure output only after path sanitization', async () => {
     const result = await generateCommitMessageFromContext(
       {
         branch: 'main',
@@ -642,7 +642,7 @@ describe('generateCommitMessageFromContext', () => {
 
     expect(result).toEqual({
       success: false,
-      error: 'agent CLI command failed with code 1.'
+      error: 'agent CLI command failed with code 1: raw failure output with [path]'
     })
   })
 
@@ -673,7 +673,7 @@ describe('generateCommitMessageFromContext', () => {
 
     expect(result).toEqual({
       success: false,
-      error: 'agent CLI command failed: fatal: [path] failed'
+      error: 'agent CLI command failed with code 1: ERROR: fatal: [path] failed'
     })
   })
 
@@ -704,11 +704,11 @@ describe('generateCommitMessageFromContext', () => {
 
     expect(result).toEqual({
       success: false,
-      error: 'agent CLI command failed: failed at [path]'
+      error: 'agent CLI command failed with code 1: ERROR: failed at [path]'
     })
   })
 
-  it('treats empty stdout plus stderr on exit 0 as an agent CLI failure', async () => {
+  it('reports an empty result with the stderr excerpt when exit 0 produces no stdout', async () => {
     const result = await generateCommitMessageFromContext(
       {
         branch: 'main',
@@ -735,7 +735,7 @@ describe('generateCommitMessageFromContext', () => {
 
     expect(result).toEqual({
       success: false,
-      error: 'agent CLI command failed: No payment method'
+      error: 'agent returned an empty message. CLI output: Error: No payment method'
     })
   })
 
@@ -772,7 +772,7 @@ describe('generateCommitMessageFromContext', () => {
     expect(result).toEqual({
       success: false,
       error:
-        'Pi CLI command failed: No API key found for github-copilot. Use /login to log into a provider via OAuth or API key.'
+        'Pi CLI command failed with code 1: No API key found for github-copilot. Use /login to log into a provider via OAuth or API key. See: … [path]'
     })
   })
 
@@ -803,7 +803,7 @@ describe('generateCommitMessageFromContext', () => {
 
     expect(result).toEqual({
       success: false,
-      error: 'agent CLI command failed: run /login then check [path]'
+      error: 'agent CLI command failed with code 1: ERROR: run /login then check [path]'
     })
   })
 
@@ -833,7 +833,7 @@ describe('generateCommitMessageFromContext', () => {
 
     expect(result).toEqual({
       success: false,
-      error: 'Pi CLI command failed: 401: Invalid key loaded from [path]'
+      error: 'Pi CLI command failed with code 1: 401: {"message":"Invalid key loaded from [path]"}'
     })
   })
 
@@ -863,7 +863,7 @@ describe('generateCommitMessageFromContext', () => {
 
     expect(result).toEqual({
       success: false,
-      error: 'Pi CLI command failed: 401: rejected credential_path=[path]'
+      error: 'Pi CLI command failed with code 1: 401: {"message":"rejected credential_path=[path]"}'
     })
   })
 
@@ -871,12 +871,12 @@ describe('generateCommitMessageFromContext', () => {
     [
       'comma-prefixed list path',
       '401: {"message":"candidate list a,/Users/name/creds rejected"}',
-      'Pi CLI command failed: 401: candidate list a,[path] rejected'
+      'Pi CLI command failed with code 1: 401: {"message":"candidate list a,[path] rejected"}'
     ],
     [
       'non-drive colon-prefixed path',
       '401: {"message":"slot 1:/Users/name/alt failed"}',
-      'Pi CLI command failed: 401: slot 1:[path] failed'
+      'Pi CLI command failed with code 1: 401: {"message":"slot 1:[path] failed"}'
     ]
   ])('redacts a %s in provider bodies', async (_shape, stderr, expected) => {
     const result = await generateCommitMessageFromContext(
@@ -930,11 +930,16 @@ describe('generateCommitMessageFromContext', () => {
       }
     )
 
-    expect(result).toEqual({
-      success: false,
-      error:
-        'Pi CLI command failed: 400: Third-party apps now draw from your extra usage, not your plan limits. Add more at claude.ai/settings/usage and keep going.'
-    })
+    expect(result.success).toBe(false)
+    if (result.success) {
+      throw new Error('expected a failure result')
+    }
+    expect(result.error.startsWith('Pi CLI command failed with code 1: 400 {"type":"error"')).toBe(
+      true
+    )
+    // The bare domain link survives path redaction so the remedy stays usable.
+    expect(result.error).toContain('claude.ai/settings/usage')
+    expect(result.error.length).toBeLessThanOrEqual(300)
   })
 
   it('preserves the structured subject and body when formatting the final response', async () => {

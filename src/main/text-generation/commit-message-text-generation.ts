@@ -17,7 +17,7 @@ import {
 } from '../../shared/pull-request-generation'
 import {
   cleanGeneratedCommitMessage,
-  extractAgentErrorMessage
+  excerptAgentFailureOutput
 } from '../../shared/commit-message-prompt'
 import {
   buildBranchNamePrompt,
@@ -150,9 +150,9 @@ function formatAgentCliFailureMessage(
   exitCode: number | null,
   options?: { includeLocalMacDnsHint?: boolean }
 ): string {
-  const detail = sanitizeAgentFailureDetail(extractAgentErrorMessage(stdout, stderr))
+  const detail = sanitizeAgentFailureDetail(excerptAgentFailureOutput(stdout, stderr))
   const message = detail
-    ? `${label} CLI command failed: ${detail}`
+    ? `${label} CLI command failed with code ${exitCode}: ${detail}`
     : `${label} CLI command failed with code ${exitCode}.`
   return options?.includeLocalMacDnsHint === false
     ? message
@@ -160,8 +160,10 @@ function formatAgentCliFailureMessage(
 }
 
 function sanitizeAgentFailureDetail(detail: string | null): string | null {
+  // Cf covers bidi overrides (U+202E etc.) that could visually reorder the
+  // persisted, client-synced detail.
   const trimmed = detail
-    ?.replace(/\p{Cc}+/gu, ' ')
+    ?.replace(/[\p{Cc}\p{Cf}]+/gu, ' ')
     .replace(/\s+/g, ' ')
     .trim()
   if (!trimmed) {
@@ -711,23 +713,24 @@ function finalizeFromAgentOutput(args: {
   }
   const cleaned = cleanGeneratedCommitMessage(stdout)
   if (!cleaned) {
-    const detail = sanitizeAgentFailureDetail(extractAgentErrorMessage(stdout, stderr))
+    // stdout is the (empty) result here, not diagnostics, so only stderr is
+    // excerpted. The run exited 0, so this stays "returned an empty result"
+    // rather than misreporting a command failure.
+    const detail = sanitizeAgentFailureDetail(excerptAgentFailureOutput('', stderr))
     if (detail) {
-      console.error('[commit-message] Generator returned no stdout but reported an error:', {
+      console.error('[commit-message] Generator returned no stdout but wrote to stderr:', {
         label,
         exitCode: code,
         stdout,
         stderr
       })
-      finalize({
-        success: false,
-        error: formatAgentCliFailureMessage(label, stdout, stderr, code, {
-          includeLocalMacDnsHint
-        })
-      })
-      return
     }
-    finalize({ success: false, error: `${label} returned an empty ${emptyResultName}.` })
+    finalize({
+      success: false,
+      error: detail
+        ? `${label} returned an empty ${emptyResultName}. CLI output: ${detail}`
+        : `${label} returned an empty ${emptyResultName}.`
+    })
     return
   }
   finalize({
