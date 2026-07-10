@@ -28,6 +28,7 @@ import {
   resolveTextGenerationParams
 } from '../text-generation/commit-message-text-generation'
 import type { CommitMessageAgentEnvironmentResolvers } from '../text-generation/commit-message-agent-environment'
+import type { AgentGenerationFailureOutput } from '../text-generation/agent-failure-output'
 import { resolveGenerationTarget } from './first-work-generation-target'
 
 export type FirstWorkBranchRenameEvent = {
@@ -58,8 +59,14 @@ export type FirstWorkBranchRenameDeps = {
   /** Align the on-disk folder with the new branch leaf (best-effort, local-only). */
   renameWorktreeFolder?: (worktreeId: string, newLeaf: string) => Promise<boolean>
   /** Record (or clear with null) a user-facing auto-rename generation failure
-   *  so the sidebar can show a "rename failed" badge instead of silent retries. */
-  setRenameError: (worktreeId: string, error: string | null) => void
+   *  so the sidebar can show a "rename failed" badge instead of silent retries.
+   *  `failureOutput` carries the bounded full CLI output for local on-demand
+   *  display; omitted/null replaces any stale capture. */
+  setRenameError: (
+    worktreeId: string,
+    error: string | null,
+    failureOutput?: AgentGenerationFailureOutput | null
+  ) => void
   /** Authoritative tab→worktree resolution from the session's tab map. */
   resolveWorktreeIdForTab: (tabId: string) => string | undefined
   /** Invalidate caches + notify the renderer so the new branch name surfaces. */
@@ -238,7 +245,7 @@ async function runAutoRename(
     // event retry rather than permanently leaving the creature name.
     // A user-canceled generation isn't a failure to surface, so skip the badge.
     if (!generated.canceled) {
-      deps.setRenameError(worktreeId, generated.error)
+      deps.setRenameError(worktreeId, generated.error, generated.failureOutput ?? null)
     }
     return retry(`generation failed: ${generated.error}`)
   }
@@ -369,7 +376,7 @@ async function runFolderWorkspaceTitleAutoRename(
   )
   if (!generated.success) {
     if (!generated.canceled) {
-      deps.setRenameError(worktreeId, generated.error)
+      deps.setRenameError(worktreeId, generated.error, generated.failureOutput ?? null)
     }
     return retry(`generation failed: ${generated.error}`)
   }

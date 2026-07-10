@@ -1695,7 +1695,40 @@ describe('generateBranchNameFromContext', () => {
 
     expect(result).toEqual({
       success: false,
-      error: 'Generated branch name was empty after sanitization.'
+      error: 'Generated branch name was empty after sanitization.',
+      failureOutput: { label: 'agent', exitCode: 0, stdout: '!!! ___', stderr: '' }
+    })
+  })
+
+  it('carries the full CLI output on failures for the local on-demand view', async () => {
+    const result = await generateBranchNameFromContext(
+      { firstPrompt: 'Fix login flow' },
+      {
+        agentId: 'pi',
+        model: 'github-copilot/gpt-5.5'
+      },
+      {
+        kind: 'remote',
+        cwd: '/repo',
+        missingBinaryLocation: 'remote PATH',
+        execute: async () => ({
+          stdout: 'partial',
+          stderr: 'No API key found for github-copilot.',
+          exitCode: 1,
+          timedOut: false
+        })
+      }
+    )
+
+    expect(result.success).toBe(false)
+    if (result.success) {
+      throw new Error('expected a failure result')
+    }
+    expect(result.failureOutput).toEqual({
+      label: 'Pi',
+      exitCode: 1,
+      stdout: 'partial',
+      stderr: 'No API key found for github-copilot.'
     })
   })
 

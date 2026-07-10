@@ -1447,6 +1447,9 @@ function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees']> {
     persistSortOrder: async ({ orderedIds }) => {
       await callRuntimeResult('worktree.persistSortOrder', { orderedIds })
     },
+    // Why: the capture lives in desktop main memory and is not exposed over
+    // pairing; the dialog falls back to the persisted excerpt on web clients.
+    getBranchRenameFailureOutput: async () => null,
     onChanged: () => noopUnsubscribe,
     onBaseStatus: () => noopUnsubscribe,
     onRemoteBranchConflict: () => noopUnsubscribe

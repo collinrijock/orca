@@ -20,6 +20,10 @@ import {
   excerptAgentFailureOutput
 } from '../../shared/commit-message-prompt'
 import {
+  captureAgentGenerationFailureOutput,
+  type AgentGenerationFailureOutput
+} from './agent-failure-output'
+import {
   buildBranchNamePrompt,
   sanitizeBranchSlug,
   type BranchNameWorkContext
@@ -108,7 +112,14 @@ type ResolveCommitMessageSettingsResult =
 
 type InternalTextGenerationResult =
   | { success: true; rawOutput: string; agentLabel?: string }
-  | { success: false; error: string; canceled?: boolean }
+  | {
+      success: false
+      error: string
+      canceled?: boolean
+      /** Bounded full CLI output for on-demand local display. Stripped from
+       *  every renderer-bound result so it never crosses IPC wholesale. */
+      failureOutput?: AgentGenerationFailureOutput
+    }
 
 export type CommitMessageModelDiscoveryLocalOptions = {
   cwd?: string
@@ -707,7 +718,8 @@ function finalizeFromAgentOutput(args: {
       success: false,
       error: formatAgentCliFailureMessage(label, stdout, stderr, code, {
         includeLocalMacDnsHint
-      })
+      }),
+      failureOutput: captureAgentGenerationFailureOutput(label, code, stdout, stderr) ?? undefined
     })
     return
   }
@@ -729,7 +741,8 @@ function finalizeFromAgentOutput(args: {
       success: false,
       error: detail
         ? `${label} returned an empty ${emptyResultName}. CLI output: ${detail}`
-        : `${label} returned an empty ${emptyResultName}.`
+        : `${label} returned an empty ${emptyResultName}.`,
+      failureOutput: captureAgentGenerationFailureOutput(label, code, stdout, stderr) ?? undefined
     })
     return
   }
@@ -804,7 +817,8 @@ function formatCommitMessageGenerationResult(
   result: InternalTextGenerationResult
 ): GenerateCommitMessageResult {
   if (!result.success) {
-    return result
+    // Keep the bulky local-only capture off the renderer-bound payload.
+    return { success: false, error: result.error, canceled: result.canceled }
   }
   let commitMessage: GeneratedCommitMessage
   try {
@@ -862,8 +876,11 @@ function formatPullRequestFieldsGenerationResult(
   context: PullRequestDraftContext
 ): GeneratePullRequestFieldsResult {
   if (!result.success) {
+    // Keep the bulky local-only capture off the renderer-bound payload.
     return {
-      ...result,
+      success: false,
+      error: result.error,
+      canceled: result.canceled,
       branchChangedByPreparation: context.branchChangedByPreparation
     }
   }
@@ -927,7 +944,12 @@ export async function generatePullRequestFieldsFromContext(
 
 export type GenerateBranchNameResult =
   | { success: true; slug: string; agentLabel?: string }
-  | { success: false; error: string; canceled?: boolean }
+  | {
+      success: false
+      error: string
+      canceled?: boolean
+      failureOutput?: AgentGenerationFailureOutput
+    }
 
 /**
  * Generate a short kebab-case branch name from the work the agent is starting.
@@ -969,7 +991,14 @@ export async function generateBranchNameFromContext(
   }
   const slug = sanitizeBranchSlug(internalResult.rawOutput)
   if (!slug) {
-    return { success: false, error: 'Generated branch name was empty after sanitization.' }
+    return {
+      success: false,
+      error: 'Generated branch name was empty after sanitization.',
+      // What the model actually returned is the whole diagnosis here.
+      failureOutput:
+        captureAgentGenerationFailureOutput(planned.plan.label, 0, internalResult.rawOutput, '') ??
+        undefined
+    }
   }
   return { success: true, slug, agentLabel: internalResult.agentLabel }
 }

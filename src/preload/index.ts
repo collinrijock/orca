@@ -688,6 +688,9 @@ const api = {
 
     persistSortOrder: (args) => ipcRenderer.invoke('worktrees:persistSortOrder', args),
 
+    getBranchRenameFailureOutput: (args) =>
+      ipcRenderer.invoke('worktrees:getBranchRenameFailureOutput', args),
+
     onChanged: (
       callback: (data: {
         repoId: string

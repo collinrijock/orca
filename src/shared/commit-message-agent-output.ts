@@ -88,7 +88,7 @@ function isCommitFenceInfoCharacter(code: number): boolean {
   )
 }
 
-function stripAnsiControlSequences(value: string): string {
+export function stripAnsiControlSequences(value: string): string {
   const esc = String.fromCharCode(27)
   const bel = String.fromCharCode(7)
   // CSI (colors/cursor) and OSC (titles/hyperlinks) both appear in raw CLI
