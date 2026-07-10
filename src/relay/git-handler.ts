@@ -61,6 +61,7 @@ import { getGitCloneFailureMessage } from '../shared/git-clone-failure-message'
 import { syncForkDefaultBranch, validateGitForkSyncExpectedUpstream } from '../shared/git-fork-sync'
 import { InFlightPromiseDedupe, stableInFlightKey } from '../shared/in-flight-promise-dedupe'
 import { GIT_FETCH_SKIP_AUTO_MAINTENANCE_CONFIG_ARGS } from '../shared/git-fetch-auto-maintenance'
+import { GitCapabilityCache } from '../shared/git-capability-cache'
 
 const execFileAsync = promisify(execFile)
 const MAX_GIT_BUFFER = 10 * 1024 * 1024
@@ -171,6 +172,7 @@ function execFileWithStdin(
 export class GitHandler {
   private dispatcher: RelayDispatcher
   private readonly gitDiffReadDedupe = new InFlightPromiseDedupe<unknown>()
+  private readonly gitCapabilities = new GitCapabilityCache()
 
   // Why: configured submodule paths change rarely; an instance-level TTL cache
   // avoids re-reading `.gitmodules` on every diff click over SSH, and being
@@ -1223,23 +1225,29 @@ export class GitHandler {
 
   private async readRepoLocation(repoPath: string): Promise<RelayRepoLocation | undefined> {
     try {
-      const { stdout } = await this.git(
-        ['rev-parse', '--path-format=absolute', '--show-toplevel', '--git-common-dir'],
-        repoPath
+      return await this.gitCapabilities.runWithFallback(
+        'rev-parse-path-format',
+        async () => {
+          const { stdout } = await this.git(
+            ['rev-parse', '--path-format=absolute', '--show-toplevel', '--git-common-dir'],
+            repoPath
+          )
+          if (stdout.split(/\r?\n/).some((line) => line.startsWith('--path-format'))) {
+            // Why: some old Git versions echo the unknown option and exit zero;
+            // remember that signal even though the trailing paths remain usable.
+            this.gitCapabilities.rememberUnsupported('rev-parse-path-format')
+          }
+          return parseRelayRepoLocation(repoPath, stdout)
+        },
+        async () => {
+          const { stdout } = await this.git(
+            ['rev-parse', '--show-toplevel', '--git-common-dir'],
+            repoPath
+          )
+          return parseRelayRepoLocation(repoPath, stdout)
+        },
+        isUnsupportedRevParsePathFormatError
       )
-      return parseRelayRepoLocation(repoPath, stdout)
-    } catch (error) {
-      if (!isUnsupportedRevParsePathFormatError(error)) {
-        return undefined
-      }
-    }
-
-    try {
-      const { stdout } = await this.git(
-        ['rev-parse', '--show-toplevel', '--git-common-dir'],
-        repoPath
-      )
-      return parseRelayRepoLocation(repoPath, stdout)
     } catch {
       return undefined
     }
@@ -1279,30 +1287,33 @@ export class GitHandler {
 
   private async listWorktrees(params: Record<string, unknown>, context?: RequestContext) {
     const repoPath = params.repoPath as string
-    try {
-      const { stdout } = await this.git(['worktree', 'list', '--porcelain', '-z'], repoPath, {
-        signal: context?.signal
-      })
-      return this.normalizeMainWorktreePath(
-        repoPath,
-        parseWorktreeList(stdout, { nulDelimited: true })
+    return this.gitCapabilities
+      .runWithFallback(
+        'worktree-list-z',
+        async () => {
+          const { stdout } = await this.git(['worktree', 'list', '--porcelain', '-z'], repoPath, {
+            signal: context?.signal
+          })
+          return this.normalizeMainWorktreePath(
+            repoPath,
+            parseWorktreeList(stdout, { nulDelimited: true })
+          )
+        },
+        async () => {
+          // Why: `-z` keeps newline-containing SSH worktree paths intact, but
+          // Git <2.36 requires the line-block parser.
+          try {
+            const { stdout } = await this.git(['worktree', 'list', '--porcelain'], repoPath, {
+              signal: context?.signal
+            })
+            return this.normalizeMainWorktreePath(repoPath, parseWorktreeList(stdout))
+          } catch {
+            return []
+          }
+        },
+        isUnsupportedWorktreeListZError
       )
-    } catch (error) {
-      if (!isUnsupportedWorktreeListZError(error)) {
-        return []
-      }
-    }
-
-    // Why: `-z` keeps newline-containing SSH worktree paths intact, but older
-    // Git rejects it. Fall back to the original line-block parser there.
-    try {
-      const { stdout } = await this.git(['worktree', 'list', '--porcelain'], repoPath, {
-        signal: context?.signal
-      })
-      return this.normalizeMainWorktreePath(repoPath, parseWorktreeList(stdout))
-    } catch {
-      return []
-    }
+      .catch(() => [])
   }
 
   private async addWorktree(params: Record<string, unknown>) {
@@ -1310,7 +1321,9 @@ export class GitHandler {
   }
 
   private async removeWorktree(params: Record<string, unknown>) {
-    return this.runWithDiffDedupeClear(() => removeWorktreeOp(this.git.bind(this), params))
+    return this.runWithDiffDedupeClear(() =>
+      removeWorktreeOp(this.git.bind(this), params, this.gitCapabilities)
+    )
   }
 
   private async worktreeIsClean(params: Record<string, unknown>) {
@@ -1319,7 +1332,7 @@ export class GitHandler {
 
   private async refreshLocalBaseRefForWorktreeCreate(params: Record<string, unknown>) {
     return this.runWithDiffDedupeClear(() =>
-      refreshLocalBaseRefForWorktreeCreateOp(this.git.bind(this), params)
+      refreshLocalBaseRefForWorktreeCreateOp(this.git.bind(this), params, this.gitCapabilities)
     )
   }
 }

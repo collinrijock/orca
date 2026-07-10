@@ -18,6 +18,8 @@ vi.mock('./runner', () => ({
   translateWslOutputPaths: translateWslOutputPathsMock
 }))
 
+import { clearGitCapabilityStateForTests } from './git-capability-state'
+
 import {
   addSparseWorktree,
   addWorktree,
@@ -28,6 +30,10 @@ import {
   removeWorktree,
   WORKTREE_ADD_TIMEOUT_MS
 } from './worktree'
+
+beforeEach(() => {
+  clearGitCapabilityStateForTests()
+})
 
 describe('listWorktrees in-flight sharing', () => {
   beforeEach(() => {

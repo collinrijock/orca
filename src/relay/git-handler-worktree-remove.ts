@@ -3,6 +3,7 @@ import type { RemoveWorktreeResult } from '../shared/types'
 import { deleteAlreadyMergedRelayBranchAfterSafeDeleteFailure } from './git-handler-branch-cleanup'
 import type { GitExec } from './git-handler-ops'
 import { isUnsupportedWorktreeListZError, parseWorktreeList } from './git-handler-utils'
+import { GitCapabilityCache } from '../shared/git-capability-cache'
 
 type RelayWorktreeInfo = {
   path: string
@@ -84,24 +85,33 @@ function normalizeRelayWorktrees(worktrees: Record<string, unknown>[]): RelayWor
     .filter((worktree) => worktree.path.length > 0)
 }
 
-async function readRelayWorktreeList(git: GitExec, repoPath: string): Promise<RelayWorktreeInfo[]> {
-  try {
-    const { stdout } = await git(['worktree', 'list', '--porcelain', '-z'], repoPath)
-    return normalizeRelayWorktrees(parseWorktreeList(stdout, { nulDelimited: true }))
-  } catch (error) {
-    if (!isUnsupportedWorktreeListZError(error)) {
-      throw error
-    }
-  }
-
-  // Why: `-z` preserves newlines; fallback keeps Git <2.36 compatible.
-  const { stdout } = await git(['worktree', 'list', '--porcelain'], repoPath)
-  return normalizeRelayWorktrees(parseWorktreeList(stdout))
+async function readRelayWorktreeList(
+  git: GitExec,
+  repoPath: string,
+  capabilities: GitCapabilityCache
+): Promise<RelayWorktreeInfo[]> {
+  return capabilities.runWithFallback(
+    'worktree-list-z',
+    async () => {
+      const { stdout } = await git(['worktree', 'list', '--porcelain', '-z'], repoPath)
+      return normalizeRelayWorktrees(parseWorktreeList(stdout, { nulDelimited: true }))
+    },
+    async () => {
+      // Why: `-z` preserves newlines; fallback keeps Git <2.36 compatible.
+      const { stdout } = await git(['worktree', 'list', '--porcelain'], repoPath)
+      return normalizeRelayWorktrees(parseWorktreeList(stdout))
+    },
+    isUnsupportedWorktreeListZError
+  )
 }
 
-async function listRelayWorktreesForRemoval(git: GitExec, repoPath: string) {
+async function listRelayWorktreesForRemoval(
+  git: GitExec,
+  repoPath: string,
+  capabilities: GitCapabilityCache
+) {
   try {
-    return await readRelayWorktreeList(git, repoPath)
+    return await readRelayWorktreeList(git, repoPath, capabilities)
   } catch {
     return []
   }
@@ -148,7 +158,8 @@ async function deleteRelayBranchAfterWorktreeRemoval(
 
 export async function removeWorktreeOp(
   git: GitExec,
-  params: Record<string, unknown>
+  params: Record<string, unknown>,
+  capabilities = new GitCapabilityCache()
 ): Promise<RemoveWorktreeResult> {
   const worktreePath = params.worktreePath as string
   const force = params.force as boolean | undefined
@@ -166,7 +177,7 @@ export async function removeWorktreeOp(
     // fall through with worktreePath as repo
   }
 
-  const worktreesBeforeRemoval = await listRelayWorktreesForRemoval(git, repoPath)
+  const worktreesBeforeRemoval = await listRelayWorktreesForRemoval(git, repoPath, capabilities)
   const removedWorktree = worktreesBeforeRemoval.find((worktree) =>
     areRelayWorktreePathsEqual(worktree.path, worktreePath)
   )
@@ -210,7 +221,8 @@ export async function removeWorktreeOp(
             git,
             repoPath,
             branchName,
-            branchHead
+            branchHead,
+            capabilities
           )
         ) {
           return {}

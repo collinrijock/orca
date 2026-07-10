@@ -32,6 +32,8 @@ vi.mock('fs/promises', async () => {
   return { ...actual, stat: statMock }
 })
 
+import { clearGitCapabilityStateForTests } from './git-capability-state'
+
 import {
   addSparseWorktree,
   assertWorktreeCleanForRemoval,
@@ -39,6 +41,10 @@ import {
   listWorktrees,
   removeWorktree
 } from './worktree'
+
+beforeEach(() => {
+  clearGitCapabilityStateForTests()
+})
 
 type MockResult = {
   error?: Error

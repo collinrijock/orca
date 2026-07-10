@@ -601,6 +601,7 @@ import {
 import { hasCommitObjectViaGitExec } from '../git/commit-object-ref'
 import { hasWorktreeBaseCommitRef } from '../git/worktree-base-ref-probe'
 import { resolveLocalGitUsername } from '../git/git-username'
+import { getSshGitCapabilityCache } from '../git/git-capability-state'
 import {
   listWorktrees,
   listWorktreesStrict,
@@ -10997,32 +10998,33 @@ export class OrcaRuntimeService {
         .split('\n')
         .map((line) => line.trim())
         .filter(Boolean)
+      const capabilities = getSshGitCapabilityCache(provider)
       const runSearch = async (patternGroup?: 'segmented' | 'branchRoot'): Promise<string> => {
-        try {
-          return (
-            await provider.exec(
-              buildSearchBaseRefsArgv(normalizedQuery, limit, {
-                remoteNames: remotes,
-                patternGroup
-              }),
-              repo.path
-            )
-          ).stdout
-        } catch (err) {
-          if (!isForEachRefExcludeUnsupportedError(err)) {
-            throw err
-          }
-          return (
-            await provider.exec(
-              buildSearchBaseRefsArgv(normalizedQuery, limit, {
-                excludeRemoteHead: false,
-                remoteNames: remotes,
-                patternGroup
-              }),
-              repo.path
-            )
-          ).stdout
-        }
+        return capabilities.runWithFallback(
+          'for-each-ref-exclude',
+          async () =>
+            (
+              await provider.exec(
+                buildSearchBaseRefsArgv(normalizedQuery, limit, {
+                  remoteNames: remotes,
+                  patternGroup
+                }),
+                repo.path
+              )
+            ).stdout,
+          async () =>
+            (
+              await provider.exec(
+                buildSearchBaseRefsArgv(normalizedQuery, limit, {
+                  excludeRemoteHead: false,
+                  remoteNames: remotes,
+                  patternGroup
+                }),
+                repo.path
+              )
+            ).stdout,
+          isForEachRefExcludeUnsupportedError
+        )
       }
       const searchTokens = normalizedQuery.split('/').filter((token) => token.length > 0)
       if (searchTokens.length > 1) {

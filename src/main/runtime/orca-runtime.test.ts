@@ -21059,19 +21059,22 @@ describe('OrcaRuntimeService', () => {
     const runtime = new OrcaRuntimeService(runtimeStore as never)
 
     const result = await runtime.searchRepoRefs('id:remote-repo', '', 1)
+    const repeatedResult = await runtime.searchRepoRefs('id:remote-repo', '', 1)
 
     expect(result).toEqual({
       refs: ['origin/main'],
       refDetails: [{ refName: 'origin/main', localBranchName: 'main' }],
       truncated: true
     })
+    expect(repeatedResult).toEqual(result)
     const forEachRefCalls = provider.exec.mock.calls.filter(
       (call) => (call[0] as string[])[0] === 'for-each-ref'
     )
-    expect(forEachRefCalls).toHaveLength(2)
+    expect(forEachRefCalls).toHaveLength(3)
     expect(forEachRefCalls[0][0]).toContain('--exclude=refs/remotes/**/HEAD')
     expect(forEachRefCalls[1][0]).not.toContain('--exclude=refs/remotes/**/HEAD')
     expect(forEachRefCalls[1][0]).toContain('--count=108')
+    expect(forEachRefCalls[2][0]).not.toContain('--exclude=refs/remotes/**/HEAD')
   })
 
   it('resolves SSH worktrees when manually updating lineage', async () => {

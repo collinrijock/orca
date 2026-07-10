@@ -8,6 +8,7 @@ import { normalizeRuntimePathSeparators } from '../../shared/cross-platform-path
 import { parseWslUncPath } from '../../shared/wsl-paths'
 import { toWindowsWslPath } from '../wsl'
 import { buildHostedRemoteCommitUrl, buildHostedRemoteFileUrl } from './hosted-remote-url'
+import { getLocalGitCapabilityCache } from './git-capability-state'
 
 type LocalGitExecOptions = {
   wslDistro?: string
@@ -788,27 +789,27 @@ async function runSearchBaseRefsGit(
   limit: number,
   options: { remoteNames: readonly string[]; patternGroup?: RefSearchPatternGroup }
 ): Promise<{ stdout: string }> {
-  try {
-    return await gitExecFileAsync(
-      buildSearchBaseRefsArgv(normalizedQuery, limit, {
-        remoteNames: options.remoteNames,
-        patternGroup: options.patternGroup
-      }),
-      { cwd: path }
-    )
-  } catch (err) {
-    if (!isForEachRefExcludeUnsupportedError(err)) {
-      throw err
-    }
-    return gitExecFileAsync(
-      buildSearchBaseRefsArgv(normalizedQuery, limit, {
-        excludeRemoteHead: false,
-        remoteNames: options.remoteNames,
-        patternGroup: options.patternGroup
-      }),
-      { cwd: path }
-    )
-  }
+  return getLocalGitCapabilityCache({ cwd: path }).runWithFallback(
+    'for-each-ref-exclude',
+    () =>
+      gitExecFileAsync(
+        buildSearchBaseRefsArgv(normalizedQuery, limit, {
+          remoteNames: options.remoteNames,
+          patternGroup: options.patternGroup
+        }),
+        { cwd: path }
+      ),
+    () =>
+      gitExecFileAsync(
+        buildSearchBaseRefsArgv(normalizedQuery, limit, {
+          excludeRemoteHead: false,
+          remoteNames: options.remoteNames,
+          patternGroup: options.patternGroup
+        }),
+        { cwd: path }
+      ),
+    isForEachRefExcludeUnsupportedError
+  )
 }
 
 export function mergeBaseRefSearchResultGroups(

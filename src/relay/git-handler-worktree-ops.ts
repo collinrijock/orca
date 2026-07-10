@@ -2,6 +2,7 @@ import * as path from 'node:path'
 import { resolveWorktreeAddBaseRef } from '../shared/worktree-base-ref'
 import type { GitExec } from './git-handler-ops'
 import { isUnsupportedWorktreeListZError, parseWorktreeList } from './git-handler-utils'
+import { GitCapabilityCache } from '../shared/git-capability-cache'
 export { removeWorktreeOp } from './git-handler-worktree-remove'
 
 async function persistRelayWorktreeCreationBase(
@@ -119,20 +120,22 @@ type RelayWorktreeInfo = {
 
 export async function readRelayWorktreeList(
   git: GitExec,
-  repoPath: string
+  repoPath: string,
+  capabilities = new GitCapabilityCache()
 ): Promise<RelayWorktreeInfo[]> {
-  try {
-    const { stdout } = await git(['worktree', 'list', '--porcelain', '-z'], repoPath)
-    return normalizeRelayWorktrees(parseWorktreeList(stdout, { nulDelimited: true }))
-  } catch (error) {
-    if (!isUnsupportedWorktreeListZError(error)) {
-      throw error
-    }
-  }
-
-  // Why: `-z` preserves newlines; fallback keeps Git <2.36 compatible.
-  const { stdout } = await git(['worktree', 'list', '--porcelain'], repoPath)
-  return normalizeRelayWorktrees(parseWorktreeList(stdout))
+  return capabilities.runWithFallback(
+    'worktree-list-z',
+    async () => {
+      const { stdout } = await git(['worktree', 'list', '--porcelain', '-z'], repoPath)
+      return normalizeRelayWorktrees(parseWorktreeList(stdout, { nulDelimited: true }))
+    },
+    async () => {
+      // Why: `-z` preserves newlines; fallback keeps Git <2.36 compatible.
+      const { stdout } = await git(['worktree', 'list', '--porcelain'], repoPath)
+      return normalizeRelayWorktrees(parseWorktreeList(stdout))
+    },
+    isUnsupportedWorktreeListZError
+  )
 }
 
 function normalizeRelayWorktrees(worktrees: Record<string, unknown>[]): RelayWorktreeInfo[] {
