@@ -83,18 +83,22 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
   )
 
   useEffect(() => {
+    // Microphone events are a hot path; reuse this wiring instead of allocating
+    // a queue object and release predicate for every audio chunk.
+    const audioChunkQueue = {
+      pendingChunks: pendingChunksRef.current,
+      pendingAudioBudget: pendingAudioBudgetRef.current,
+      shouldReleaseBudget: (id: string) =>
+        activeIdRef.current === id || finishingIdRef.current === id,
+      failActiveDictation
+    }
     const sub = addExpoTwoWayAudioEventListener('onMicrophoneData', (event) => {
       const client = clientRef.current
       const dictationId = activeIdRef.current
       if (!client || !dictationId || !enabledRef.current || !acceptingChunksRef.current) {
         return
       }
-      enqueueMobileDictationAudioChunk(client, dictationId, event, {
-        pendingChunks: pendingChunksRef.current,
-        pendingAudioBudget: pendingAudioBudgetRef.current,
-        shouldReleaseBudget: (id) => activeIdRef.current === id || finishingIdRef.current === id,
-        failActiveDictation
-      })
+      enqueueMobileDictationAudioChunk(client, dictationId, event, audioChunkQueue)
     })
     return () => sub.remove()
   }, [failActiveDictation, reportError])

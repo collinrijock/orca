@@ -68,6 +68,17 @@ describe('useMobileDictation source invariants', () => {
     expect(source).toContain('enqueueMobileDictationAudioChunk(client, dictationId, event')
   })
 
+  it('reuses audio chunk queue wiring across microphone events', () => {
+    const queueIndex = source.indexOf('const audioChunkQueue =')
+    const listenerIndex = source.indexOf("addExpoTwoWayAudioEventListener('onMicrophoneData'")
+
+    expect(queueIndex).toBeGreaterThanOrEqual(0)
+    expect(queueIndex).toBeLessThan(listenerIndex)
+    expect(source).toContain(
+      'enqueueMobileDictationAudioChunk(client, dictationId, event, audioChunkQueue)'
+    )
+  })
+
   it('resets pending audio bytes whenever pending chunk tracking is cleared', () => {
     const pendingChunkClears = source.match(/pendingChunksRef\.current\.clear\(\)/g) ?? []
     const pendingAudioResets = source.match(/pendingAudioBudgetRef\.current\.reset\(\)/g) ?? []
@@ -150,7 +161,7 @@ describe('useMobileDictation source invariants', () => {
     expect(acquireFailurePath).toContain('isCurrentStart(options)')
     expect(acquireFailurePath).toContain('return')
     expect(acquireFailurePath).toContain('options.clearActiveId(dictationId)')
-    expect(acquireFailurePath).toContain('setIdle()')
+    expect(acquireFailurePath).toContain('setIdleIfGenerationCurrent(options)')
     expect(acquireFailurePath).toContain('throw err')
     expect(acquireFailurePath).not.toContain('keepAwakeOwner.release')
   })
@@ -207,14 +218,13 @@ describe('useMobileDictation source invariants', () => {
     expect(keepAwakeSource).toContain(
       '`${MOBILE_DICTATION_KEEP_AWAKE_TAG_PREFIX}:${this.ownerId}:${dictationId}`'
     )
-    expect(keepAwakeSource).toContain('private operation: Promise<void> = Promise.resolve()')
-    expect(keepAwakeSource.match(/this\.operation\.then/g)).toHaveLength(2)
-    expect(
-      keepAwakeSource.match(/this\.operation = operation\.catch\(\(\) => undefined\)/g)
-    ).toHaveLength(2)
+    expect(keepAwakeSource).toContain('let keepAwakeOperation: Promise<void> = Promise.resolve()')
+    expect(keepAwakeSource).toContain('const pendingCleanupTags = new Set<string>()')
+    expect(keepAwakeSource.match(/enqueueKeepAwakeOperation/g)?.length).toBeGreaterThanOrEqual(3)
     expect(keepAwakeSource).toContain(
       'const targetTag = dictationId ? this.createTag(dictationId) : null'
     )
     expect(keepAwakeSource).toContain('if (!tag || (targetTag && tag !== targetTag))')
+    expect(keepAwakeSource).toContain('await cleanupPendingTags()')
   })
 })

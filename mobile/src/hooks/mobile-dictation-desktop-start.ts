@@ -24,10 +24,20 @@ function isCurrentStart(options: StartMobileDictationDesktopSessionOptions): boo
   )
 }
 
+function canReportStartFailure(options: StartMobileDictationDesktopSessionOptions): boolean {
+  return options.getCurrentGeneration() === options.generation && options.getEnabled()
+}
+
+function setIdleIfGenerationCurrent(options: StartMobileDictationDesktopSessionOptions): void {
+  if (options.getCurrentGeneration() === options.generation) {
+    options.setIdle()
+  }
+}
+
 export async function startMobileDictationDesktopSession(
   options: StartMobileDictationDesktopSessionOptions
 ): Promise<boolean> {
-  const { client, dictationId, keepAwakeOwner, setIdle } = options
+  const { client, dictationId, keepAwakeOwner } = options
 
   try {
     const response = await client.sendRequest('speech.dictation.start', { dictationId })
@@ -35,16 +45,23 @@ export async function startMobileDictationDesktopSession(
       throw new Error(response.error.message)
     }
   } catch (err) {
+    const wasCurrent = isCurrentStart(options)
     options.clearActiveId(dictationId)
     await client.sendRequest('speech.dictation.cancel', { dictationId }).catch(() => undefined)
-    setIdle()
+    // Awaited cleanup may overlap a newer start; stale work must not reset or
+    // report over the replacement session.
+    const shouldReport = wasCurrent && canReportStartFailure(options)
+    setIdleIfGenerationCurrent(options)
+    if (!shouldReport) {
+      return false
+    }
     throw err
   }
 
   if (!isCurrentStart(options)) {
     await client.sendRequest('speech.dictation.cancel', { dictationId }).catch(() => undefined)
     options.clearActiveId(dictationId)
-    setIdle()
+    setIdleIfGenerationCurrent(options)
     return false
   }
 
@@ -54,11 +71,16 @@ export async function startMobileDictationDesktopSession(
     await keepAwakeOwner.acquire(dictationId)
   } catch (err) {
     if (!isCurrentStart(options)) {
+      setIdleIfGenerationCurrent(options)
       return false
     }
     options.clearActiveId(dictationId)
     await client.sendRequest('speech.dictation.cancel', { dictationId }).catch(() => undefined)
-    setIdle()
+    const shouldReport = canReportStartFailure(options)
+    setIdleIfGenerationCurrent(options)
+    if (!shouldReport) {
+      return false
+    }
     throw err
   }
 
@@ -66,7 +88,7 @@ export async function startMobileDictationDesktopSession(
     await keepAwakeOwner.release(dictationId).catch(() => undefined)
     await client.sendRequest('speech.dictation.cancel', { dictationId }).catch(() => undefined)
     options.clearActiveId(dictationId)
-    setIdle()
+    setIdleIfGenerationCurrent(options)
     return false
   }
 
