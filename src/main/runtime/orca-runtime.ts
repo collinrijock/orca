@@ -14621,6 +14621,7 @@ export class OrcaRuntimeService {
       if (this.getFreshFetchCompletedAt(key) !== null) {
         return { ok: true }
       }
+      // Why: this exact refresh gates worktree create; ordinary fetches still own maintenance.
       return gitExecFileAsync(
         [
           ...GIT_FETCH_SKIP_AUTO_MAINTENANCE_CONFIG_ARGS,
