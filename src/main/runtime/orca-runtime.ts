@@ -10666,6 +10666,10 @@ export class OrcaRuntimeService {
       try {
         proc = wslAwareSpawn('git', ['clone', '--progress', '--', trimmedUrl, clonePath], {
           cwd: trimmedDestination,
+          // Why: getGitCloneFailureMessage matches `fatal:`/`error:` lines,
+          // which a gettext-enabled git translates under a non-English locale
+          // (issue #7808). Locale only — clone auth behavior stays unchanged.
+          env: { ...process.env, LC_ALL: 'C' },
           stdio: ['ignore', 'ignore', 'pipe']
         })
       } catch (err) {

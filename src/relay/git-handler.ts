@@ -255,6 +255,10 @@ export class GitHandler {
     }
   ): Promise<{ stdout: string; stderr: string }> {
     const env = buildRelayCommandEnv()
+    // Why: callers parse git's stderr diagnostics and progress lines; a
+    // gettext-enabled git under a non-English remote locale translates them
+    // and breaks the parsers (issue #7808). Relay git is machine-driven only.
+    env.LC_ALL = 'C'
     if (opts?.disableOptionalLocks) {
       env.GIT_OPTIONAL_LOCKS = '0'
     }
@@ -281,7 +285,7 @@ export class GitHandler {
   private async gitBuffer(args: string[], cwd: string): Promise<Buffer> {
     const { stdout } = (await execFileAsync('git', args, {
       cwd,
-      env: buildRelayCommandEnv(),
+      env: { ...buildRelayCommandEnv(), LC_ALL: 'C' },
       encoding: 'buffer',
       maxBuffer: MAX_GIT_BUFFER
     })) as { stdout: Buffer }
@@ -1097,7 +1101,8 @@ export class GitHandler {
     return await new Promise((resolve, reject) => {
       const child = spawn('git', args, {
         cwd: expandTilde(cwd),
-        env: buildRelayCommandEnv(),
+        // LC_ALL=C: the progress regex below only matches untranslated lines.
+        env: { ...buildRelayCommandEnv(), LC_ALL: 'C' },
         stdio: ['ignore', 'pipe', 'pipe']
       })
       let stdout = ''

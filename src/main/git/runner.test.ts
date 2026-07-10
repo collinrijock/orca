@@ -218,3 +218,17 @@ describe('nonInteractiveGitEnv credential-interactivity disable (STA-1292)', () 
     expect(env.GIT_SSH_COMMAND).toBe('ssh -o BatchMode=yes')
   })
 })
+
+describe('git env forces untranslated diagnostics (issue #7808)', () => {
+  it('overrides an inherited non-English locale so stderr parsers keep working', () => {
+    // A gettext-enabled git under de_DE translates even the `fatal:` prefix,
+    // breaking isNoUpstreamError and every other stderr phrase match.
+    const env = promptGuardGitEnv({ PATH: '/usr/bin', LC_ALL: 'de_DE.UTF-8' })
+    expect(env.LC_ALL).toBe('C')
+  })
+
+  it('applies to nonInteractiveGitEnv as well', () => {
+    const env = nonInteractiveGitEnv({ PATH: '/usr/bin', LANG: 'fr_FR.UTF-8' })
+    expect(env.LC_ALL).toBe('C')
+  })
+})

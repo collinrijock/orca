@@ -564,6 +564,11 @@ export function promptGuardGitEnv(env: NodeJS.ProcessEnv = process.env): NodeJS.
   return appendGitConfigEnv(
     {
       ...env,
+      // Why: Orca parses git's stderr diagnostics (isNoUpstreamError & friends);
+      // a gettext-enabled git under a non-English locale translates even the
+      // `fatal:` prefix and silently breaks those parsers (issue #7808). Force
+      // the C locale for Orca-spawned git only — terminal git is untouched.
+      LC_ALL: 'C',
       GIT_TERMINAL_PROMPT: '0',
       GIT_ASKPASS: env.GIT_ASKPASS ?? '',
       SSH_ASKPASS: env.SSH_ASKPASS ?? '',

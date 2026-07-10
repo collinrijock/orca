@@ -2253,6 +2253,10 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
           try {
             proc = gitSpawn(['clone', '--progress', '--', args.url, clonePath], {
               cwd: args.destination,
+              // Why: emitCloneProgressFromText and getGitCloneFailureMessage
+              // parse untranslated progress/`fatal:` lines, which a gettext
+              // git localizes (issue #7808). Locale only — auth is unchanged.
+              env: { ...process.env, LC_ALL: 'C' },
               stdio: ['ignore', 'ignore', 'pipe']
             })
           } catch (err) {
