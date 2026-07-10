@@ -1,6 +1,9 @@
 const SCROLL_MARK_MATCH_EPSILON = 2
 // Why: a bounded queue is the staleness limit. Wall-clock expiry would
-// reintroduce the timing assumptions this module exists to remove.
+// reintroduce the timing assumptions this module exists to remove. Known
+// accepted window: a marked no-op write emits no scroll event, so its target
+// can linger and claim a later user scroll within the epsilon; the bound and
+// splice-on-match keep that window narrow.
 const MAX_PENDING_SCROLL_MARKS = 16
 
 export type ProgrammaticScrollMarks = {

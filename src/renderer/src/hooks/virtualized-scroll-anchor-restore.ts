@@ -55,6 +55,7 @@ export function runVirtualizedScrollAnchorRestore<
     return
   }
   const offset = resolvedKey === anchor.key ? anchor.offset : 0
+  const canConfirmFromDom = Boolean(itemElementSelector && getItemElementKey)
 
   const restoreFromDomElement = (): boolean => {
     if (!itemElementSelector || !getItemElementKey) {
@@ -102,7 +103,9 @@ export function runVirtualizedScrollAnchorRestore<
     // transitional, so recording here can replace the target with a wrong row.
     scrollOffsetRef.current = el.scrollTop
     anchor.scrollTop = el.scrollTop
-    pendingRestoreRef.current = true
+    // Why: without a DOM selector there is no later confirmation step; the
+    // measured landing is final, so don't re-arm restore ticks forever.
+    pendingRestoreRef.current = canConfirmFromDom
     return true
   }
 
@@ -127,6 +130,11 @@ export function runVirtualizedScrollAnchorRestore<
   virtualizer.scrollToIndex(index, { align: 'start' })
   anchor.scrollTop = el.scrollTop
   const frameId = window.requestAnimationFrame(() => {
+    if (!pendingRestoreRef.current) {
+      // Why: an unmarked (user) scroll disarmed the restore between the
+      // effect and this frame; writing now would fight their input.
+      return
+    }
     if (!restoreFromDomElement()) {
       restoreFromMeasuredItem()
     }

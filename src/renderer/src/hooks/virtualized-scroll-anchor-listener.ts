@@ -7,6 +7,11 @@ type CreateVirtualizedScrollAnchorListenerArgs<TScrollElement extends Element> =
   getHasDirectScrollInput: () => (() => boolean) | undefined
   getMarks: () => ProgrammaticScrollMarks | undefined
   getRecordAnchorOnScroll: () => boolean
+  // Why: our own writes (virtualizer size adjustments, restore nudges) move
+  // the viewport; the owner must sync its bookkeeping (scrollOffset, anchor
+  // scrollTop) or a later divergence check reads the moved offset as user
+  // input and drops a due restore.
+  onProgrammaticScroll: (scrollTop: number) => void
   pendingRestoreRef: MutableRefObject<boolean>
   recordCurrentAnchor: () => void
   recordUserScroll: (scrollTop: number) => void
@@ -26,13 +31,17 @@ export function createVirtualizedScrollAnchorListener<TScrollElement extends Ele
   getHasDirectScrollInput,
   getMarks,
   getRecordAnchorOnScroll,
+  onProgrammaticScroll,
   pendingRestoreRef,
   recordCurrentAnchor,
   recordUserScroll,
   targetOffset,
   scrollOffsetRef
 }: CreateVirtualizedScrollAnchorListenerArgs<TScrollElement>): (event: Event) => void {
-  let restoring = targetOffset > 0
+  // Why: a write to the current position emits no scroll event, so an armed
+  // restore would never complete and would snap later marked writes back to
+  // this stale target. Nothing to restore — don't arm.
+  let restoring = targetOffset > 0 && el.scrollTop !== targetOffset
   if (restoring) {
     getMarks()?.mark(targetOffset)
     el.scrollTop = targetOffset
@@ -57,13 +66,22 @@ export function createVirtualizedScrollAnchorListener<TScrollElement extends Ele
           return
         }
         if (!isProgrammatic) {
-          // Why: an unmarked scroll is the user taking control of the
-          // viewport (marks classify our writes and their clamped landings);
-          // their position wins over the persisted offset.
-          restoring = false
-          pendingRestoreRef.current = false
-          recordCurrentAnchor()
-          return
+          const maxScrollOffset = el.scrollHeight - el.clientHeight
+          // Why: an unmarked landing pinned at a max the target can't reach
+          // is the browser clamping after content shrank, not user input;
+          // keep waiting for the range to catch up instead of persisting the
+          // clamped position. Direct input still takes over immediately.
+          const clampExplainsLanding =
+            targetOffset > maxScrollOffset && el.scrollTop >= maxScrollOffset - 2
+          if (!clampExplainsLanding || getHasDirectScrollInput()?.() === true) {
+            // Why: an unmarked scroll no clamp explains is the user taking
+            // control of the viewport (marks classify our writes and their
+            // clamped landings); their position wins over the persisted offset.
+            restoring = false
+            pendingRestoreRef.current = false
+            recordCurrentAnchor()
+            return
+          }
         }
         if (el.scrollHeight - el.clientHeight >= targetOffset) {
           marks.mark(targetOffset)
@@ -74,10 +92,12 @@ export function createVirtualizedScrollAnchorListener<TScrollElement extends Ele
         }
         return
       }
-      if (!isProgrammatic) {
-        pendingRestoreRef.current = false
+      if (isProgrammatic) {
+        onProgrammaticScroll(el.scrollTop)
+        return
       }
-      if (!getRecordAnchorOnScroll() || isProgrammatic) {
+      pendingRestoreRef.current = false
+      if (!getRecordAnchorOnScroll()) {
         return
       }
       recordUserScroll(el.scrollTop)

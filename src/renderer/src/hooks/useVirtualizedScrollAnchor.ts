@@ -203,6 +203,16 @@ export function useVirtualizedScrollAnchor<
       getHasDirectScrollInput: () => hasDirectScrollInputRef.current,
       getMarks: () => programmaticScrollMarksRef.current,
       getRecordAnchorOnScroll: () => recordAnchorOnScrollRef.current,
+      onProgrammaticScroll: (scrollTop) => {
+        // Why: our own settled writes must keep the divergence bookkeeping in
+        // sync, or the restore gate reads them as user scrolling and drops
+        // the next structural restore.
+        scrollOffsetRef.current = scrollTop
+        const anchor = anchorRef.current
+        if (anchor && anchor.scrollTop !== undefined) {
+          anchor.scrollTop = scrollTop
+        }
+      },
       pendingRestoreRef,
       recordCurrentAnchor,
       recordUserScroll: (scrollTop) => {
@@ -225,7 +235,9 @@ export function useVirtualizedScrollAnchor<
       el.removeEventListener(VIRTUALIZED_SCROLL_ANCHOR_RECORD_EVENT, recordCurrentAnchor)
       el.removeEventListener('scroll', onScroll)
     }
-  }, [scrollElementRef, scrollOffsetRef])
+    // Why: only stable refs may appear here; row-derived values would rerun
+    // cleanup after a delete and overwrite the pre-delete anchor.
+  }, [anchorRef, scrollElementRef, scrollOffsetRef])
 
   useLayoutEffect(() => {
     const anchor = anchorRef.current
@@ -254,6 +266,11 @@ export function useVirtualizedScrollAnchor<
           return
         }
       }
+      // Why: armed before the skip guards below, so a restore owed to a
+      // signal change survives being skipped during active input and retries
+      // on the next tick instead of being silently consumed. User scrolls
+      // disarm it via the scroll listener.
+      pendingRestoreRef.current = true
     }
     if (virtualizer.isScrolling && hasDirectScrollInputRef.current?.() === true) {
       // Why: remeasurement during wheel scrolling can change totalSize. Restoring

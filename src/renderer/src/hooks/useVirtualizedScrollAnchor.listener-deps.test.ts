@@ -69,7 +69,8 @@ describe('useVirtualizedScrollAnchor listener effect dependencies', () => {
 
     // Why: cleanup records the current anchor. If rows are dependencies, a
     // delete reruns cleanup after mutation and overwrites the pre-delete anchor.
-    expect(initialDeps).toEqual([scrollElementRef, scrollOffsetRef])
+    // Only stable refs are allowed here.
+    expect(initialDeps).toEqual([anchorRef, scrollElementRef, scrollOffsetRef])
     expect(nextDeps).toEqual(initialDeps)
   })
 

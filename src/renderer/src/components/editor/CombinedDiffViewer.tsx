@@ -851,7 +851,12 @@ export default function CombinedDiffViewer({
     // corrections) must be marked so scroll events can be attributed to the
     // user only when this code didn't cause them.
     scrollToFn: (offset, options, instance) => {
-      programmaticScrollMarks.mark(offset + (options.adjustments ?? 0))
+      const target = offset + (options.adjustments ?? 0)
+      // Why: a write to the current position emits no scroll event; marking
+      // it would leave a stale mark that can claim a later user scroll.
+      if (instance.scrollElement?.scrollTop !== target) {
+        programmaticScrollMarks.mark(target)
+      }
       elementScroll(offset, options, instance)
     },
     getItemKey: (index) => {
@@ -1384,10 +1389,12 @@ export default function CombinedDiffViewer({
         updateCombinedDiffScrollbar()
         return
       }
-      if (shrank && scrollTop >= maxScrollTop - 1) {
-        // Why: pinned at a max that just shrank is the browser clamping the
-        // viewport, not user input; ask the anchor restore to re-pin instead
-        // of recording the clamped position as intentional.
+      if (shrank && scrollTop >= maxScrollTop - 1 && scrollOffsetRef.current > maxScrollTop + 1) {
+        // Why: pinned at a max that just shrank, coming from an offset the new
+        // range can't reach, is the browser clamping the viewport, not user
+        // input (a user scroll to the bottom starts from an in-range offset);
+        // ask the anchor restore to re-pin instead of recording the clamped
+        // position as intentional.
         setClampRestoreCount((count) => count + 1)
         updateCombinedDiffScrollbar()
         return
