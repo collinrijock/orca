@@ -3733,7 +3733,8 @@ describe('registerWorktreeHandlers', () => {
       '/remote/repo',
       'origin',
       'master',
-      'refs/remotes/origin/master'
+      'refs/remotes/origin/master',
+      { skipAutoMaintenance: true }
     )
   })
 
@@ -3800,7 +3801,8 @@ describe('registerWorktreeHandlers', () => {
       '/remote/repo',
       'origin',
       'main',
-      'refs/remotes/origin/main'
+      'refs/remotes/origin/main',
+      { skipAutoMaintenance: true }
     )
     expect(provider.addWorktree).toHaveBeenCalledWith(
       '/remote/repo',
@@ -4032,7 +4034,8 @@ describe('registerWorktreeHandlers', () => {
       '/remote/repo',
       'origin',
       'main',
-      'refs/remotes/origin/main'
+      'refs/remotes/origin/main',
+      { skipAutoMaintenance: true }
     )
     expect(provider.addWorktree).toHaveBeenCalledTimes(2)
   })

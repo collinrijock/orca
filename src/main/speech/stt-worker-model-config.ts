@@ -1,4 +1,5 @@
 import { readdirSync } from 'node:fs'
+import { join } from 'node:path'
 
 // Why: different models name their ONNX files differently (e.g.
 // encoder.int8.onnx vs tiny-encoder.onnx vs encoder-epoch-99-avg-1.onnx).
@@ -14,7 +15,7 @@ export function resolveFile(
   if (!match) {
     throw new Error(`No *${role}*${ext} found in model files: ${files.join(', ')}`)
   }
-  return `${modelDir}/${match}`
+  return join(modelDir, match)
 }
 
 export function resolveTokens(files: string[], modelDir: string): string {
@@ -22,7 +23,7 @@ export function resolveTokens(files: string[], modelDir: string): string {
   if (!match) {
     throw new Error(`No *tokens.txt found in model files: ${files.join(', ')}`)
   }
-  return `${modelDir}/${match}`
+  return join(modelDir, match)
 }
 
 // Why: BPE models need a vocab file for hotwords token matching. The file
@@ -32,7 +33,7 @@ function discoverBpeVocab(modelDir: string): string | undefined {
   try {
     const entries = readdirSync(modelDir)
     const vocabFile = entries.find((f) => f.endsWith('.vocab'))
-    return vocabFile ? `${modelDir}/${vocabFile}` : undefined
+    return vocabFile ? join(modelDir, vocabFile) : undefined
   } catch {
     return undefined
   }

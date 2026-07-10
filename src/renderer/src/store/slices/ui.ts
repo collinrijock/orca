@@ -113,12 +113,14 @@ import { translate } from '@/i18n/i18n'
 
 export type PendingSidebarWorktreeReveal = {
   worktreeId: string
+  behavior: 'auto' | 'smooth'
   highlight?: boolean
   beginRename?: boolean
 }
 
 export type PendingSidebarRowReveal = {
   rowKey: string
+  behavior: 'auto' | 'smooth'
   highlight?: boolean
 }
 
@@ -263,6 +265,7 @@ function migrateStatusBarItems(items: readonly string[] | undefined): StatusBarI
 const DEFAULT_ON_PORTS_STATUS_BAR_ITEM: StatusBarItem = 'ports'
 const DEFAULT_ON_KIMI_STATUS_BAR_ITEM: StatusBarItem = 'kimi'
 const DEFAULT_ON_MINIMAX_STATUS_BAR_ITEM: StatusBarItem = 'minimax'
+const DEFAULT_ON_ANTIGRAVITY_STATUS_BAR_ITEM: StatusBarItem = 'antigravity'
 const DEFAULT_ON_GROK_STATUS_BAR_ITEM: StatusBarItem = 'grok'
 
 function normalizeHydratedVisibleWorkspaceHostIds(ui: PersistedUIState): VisibleWorkspaceHostIds {
@@ -896,6 +899,7 @@ export type UISlice = {
   revealWorktreeInSidebar: (
     worktreeId: string,
     options?: {
+      behavior?: PendingSidebarWorktreeReveal['behavior']
       highlight?: boolean
       beginRename?: boolean
     }
@@ -903,6 +907,7 @@ export type UISlice = {
   revealSidebarRow: (
     rowKey: string,
     options?: {
+      behavior?: PendingSidebarRowReveal['behavior']
       highlight?: boolean
     }
   ) => void
@@ -986,7 +991,7 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
       targets.some((target) => target.status === 'eligible') &&
       (previousMode?.id !== args.id || previousMode.worktreeId !== args.worktreeId)
     ) {
-      get().revealWorktreeInSidebar(args.worktreeId, { highlight: true })
+      get().revealWorktreeInSidebar(args.worktreeId, { behavior: 'auto', highlight: true })
     }
   },
   closeAgentSendPopoverTargetMode: (id, instanceId) =>
@@ -2202,6 +2207,7 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
     set({
       pendingRevealWorktree: {
         worktreeId,
+        behavior: options?.behavior ?? 'smooth',
         ...(options?.highlight ? { highlight: true } : {}),
         ...(options?.beginRename ? { beginRename: true } : {})
       }
@@ -2210,6 +2216,7 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
     set({
       pendingRevealSidebarRow: {
         rowKey,
+        behavior: options?.behavior ?? 'smooth',
         ...(options?.highlight === false ? {} : { highlight: true })
       }
     }),
@@ -2258,14 +2265,19 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         ui._minimaxStatusBarDefaultAdded || statusBarItems.includes('minimax')
           ? statusBarItems
           : [...statusBarItems, DEFAULT_ON_MINIMAX_STATUS_BAR_ITEM]
-      const statusBarItemsWithGrok =
-        ui._grokStatusBarDefaultAdded || statusBarItemsWithMiniMax.includes('grok')
+      const statusBarItemsWithAntigravity =
+        ui._antigravityStatusBarDefaultAdded || statusBarItemsWithMiniMax.includes('antigravity')
           ? statusBarItemsWithMiniMax
-          : [...statusBarItemsWithMiniMax, DEFAULT_ON_GROK_STATUS_BAR_ITEM]
+          : [...statusBarItemsWithMiniMax, DEFAULT_ON_ANTIGRAVITY_STATUS_BAR_ITEM]
+      const statusBarItemsWithGrok =
+        ui._grokStatusBarDefaultAdded || statusBarItemsWithAntigravity.includes('grok')
+          ? statusBarItemsWithAntigravity
+          : [...statusBarItemsWithAntigravity, DEFAULT_ON_GROK_STATUS_BAR_ITEM]
       if (
         (!ui._portsStatusBarDefaultAdded ||
           !ui._kimiStatusBarDefaultAdded ||
           !ui._minimaxStatusBarDefaultAdded ||
+          !ui._antigravityStatusBarDefaultAdded ||
           !ui._grokStatusBarDefaultAdded) &&
         typeof window !== 'undefined'
       ) {
@@ -2275,6 +2287,7 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
             _portsStatusBarDefaultAdded: true,
             _kimiStatusBarDefaultAdded: true,
             _minimaxStatusBarDefaultAdded: true,
+            _antigravityStatusBarDefaultAdded: true,
             _grokStatusBarDefaultAdded: true
           })
           .catch(console.error)

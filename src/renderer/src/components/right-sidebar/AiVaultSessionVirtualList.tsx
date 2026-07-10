@@ -1,5 +1,6 @@
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { useCallback, useMemo, useRef, useState } from 'react'
+import type { AgentStatusState } from '../../../../shared/agent-status-types'
 import type { AiVaultScope, AiVaultSession } from '../../../../shared/ai-vault-types'
 import type { AiVaultResumeStartup } from '@/lib/ai-vault-resume-command'
 import { cn } from '@/lib/utils'
@@ -45,6 +46,7 @@ export function AiVaultSessionVirtualList({
   vaultScope,
   buildResumeStartup,
   getOriginalPaneTarget,
+  getSessionLiveState,
   getWorktreeInfo,
   getSessionResumeState,
   getSessionResumeActions,
@@ -68,6 +70,7 @@ export function AiVaultSessionVirtualList({
   vaultScope: AiVaultScope
   buildResumeStartup: (session: AiVaultSession, worktreeId?: string | null) => AiVaultResumeStartup
   getOriginalPaneTarget: (session: AiVaultSession) => AiVaultOriginalPaneTarget | null
+  getSessionLiveState: (session: AiVaultSession) => AgentStatusState | null
   getWorktreeInfo: (session: AiVaultSession) => AiVaultSessionWorktreeInfo | null
   getSessionResumeState: (session: AiVaultSession) => AiVaultSessionResumeState
   getSessionResumeActions: (session: AiVaultSession) => AiVaultSessionResumeActions
@@ -194,6 +197,7 @@ export function AiVaultSessionVirtualList({
               vaultScope={vaultScope}
               buildResumeStartup={buildResumeStartup}
               getOriginalPaneTarget={getOriginalPaneTarget}
+              getSessionLiveState={getSessionLiveState}
               getWorktreeInfo={getWorktreeInfo}
               getSessionResumeState={getSessionResumeState}
               getSessionResumeActions={getSessionResumeActions}
@@ -227,6 +231,7 @@ function AiVaultVirtualRow({
   vaultScope,
   buildResumeStartup,
   getOriginalPaneTarget,
+  getSessionLiveState,
   getWorktreeInfo,
   getSessionResumeState,
   getSessionResumeActions,
@@ -252,6 +257,7 @@ function AiVaultVirtualRow({
   vaultScope: AiVaultScope
   buildResumeStartup: (session: AiVaultSession, worktreeId?: string | null) => AiVaultResumeStartup
   getOriginalPaneTarget: (session: AiVaultSession) => AiVaultOriginalPaneTarget | null
+  getSessionLiveState: (session: AiVaultSession) => AgentStatusState | null
   getWorktreeInfo: (session: AiVaultSession) => AiVaultSessionWorktreeInfo | null
   getSessionResumeState: (session: AiVaultSession) => AiVaultSessionResumeState
   getSessionResumeActions: (session: AiVaultSession) => AiVaultSessionResumeActions
@@ -312,6 +318,7 @@ function AiVaultVirtualRow({
       ) : (
         <VaultSessionRow
           session={row.session}
+          liveState={getSessionLiveState(row.session)}
           resumeStartup={buildResumeStartup(row.session, resumeState?.worktreeId)}
           worktreeInfo={worktreeInfo}
           vaultScope={vaultScope}
