@@ -1731,7 +1731,10 @@
         "searchIssues": "Search issues",
         "useIssueNumber": "Use issue #{{value0}}",
         "noMatchingIssuesLoaded": "No matching issues loaded.",
-        "editReviewersWithCurrent": "Edit reviewers: {{value0}}"
+        "editReviewersWithCurrent": "Edit reviewers: {{value0}}",
+        "linearEmptyAttributeFilter": "No issues match the selected filters. Clear a filter or try different criteria.",
+        "linearEmptyUnfilteredScope": "No issues in this workspace scope. Try searching or adjusting teams.",
+        "linearFetchMore": "Fetch more"
       },
       "Terminal": {
         "73768427cf": "Close",
@@ -4644,7 +4647,17 @@
           "87412c2a68": "Killed {{value0}} session.",
           "a2f040ac1c": "Killed {{value0}} sessions.",
           "63520148e2": "{{value0}} session refused to exit.",
-          "cc0a26cb14": "{{value0}} sessions refused to exit."
+          "cc0a26cb14": "{{value0}} sessions refused to exit.",
+          "71a8d342b0": "Terminal tabs absent: {{value0}}/{{value1}}. Failed close attempts: {{value2}}. Exact PTY shutdown requests accepted: {{value3}}; failed: {{value4}}.",
+          "2e57c1a940": "The daemon shutdown result is unverified because its management request failed.",
+          "993af6052c": "Daemon management reported exited: {{value0}}/{{value1}}; still present before exact cleanup: {{value2}}.",
+          "1f0d8ac762": "Terminal cleanup finished with errors.",
+          "80b6ea14cf": "Terminal cleanup finished with warnings.",
+          "47cd2a50e9": "No sessions or terminal tabs were reported.",
+          "c34fb1098d": "Terminal tabs closed and shutdown requested.",
+          "d9657ac204": "Terminal session shutdown requested.",
+          "e8f25bd903": "Couldn’t finish terminal cleanup.",
+          "a702d4196e": "This closes every terminal tab across all workspaces and requests shutdown for its current terminal sessions. Any unsaved terminal work is lost. The daemon itself keeps running, and new terminals can be opened immediately. This can't be undone."
         }
       },
       "setup": {
@@ -12756,6 +12769,29 @@
             }
           }
         }
+      },
+      "linear-issue-attribute-filter-dropdowns": {
+        "removeFilter": "Remove {{value0}} filter",
+        "teamRequired": "Select a team to load status, assignees, and labels for this workspace.",
+        "filters": "Filters",
+        "allWorkspacesTitle": "Select one workspace",
+        "allWorkspacesBody": "Status, assignee, and label filters use ids from a single Linear workspace. Choose one workspace to filter by those attributes.",
+        "optionsFromTeam": "Options from {{team}}",
+        "clearAll": "Clear all filters"
+      },
+      "linear-issue-attribute-filter-sections": {
+        "status": "Status",
+        "priority": "Priority",
+        "assignee": "Assignee",
+        "unassigned": "Unassigned",
+        "labels": "Labels",
+        "countSelected": "{{count}} selected",
+        "selected": "selected",
+        "searchPriority": "Filter priority…",
+        "searchStatus": "Filter status…",
+        "searchLabels": "Filter labels…",
+        "searchAssignee": "Filter assignee…",
+        "back": "Back"
       }
     },
     "i18n": {
