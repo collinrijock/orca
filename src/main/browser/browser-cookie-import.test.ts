@@ -47,7 +47,7 @@ import {
   createChromiumCookieTestDatabase,
   encryptMacChromiumCookie
 } from './browser-cookie-import-test-database'
-import { existsSync, writeFileSync, mkdtempSync, readdirSync, rmSync } from 'node:fs'
+import { existsSync, writeFileSync, mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 
@@ -404,8 +404,8 @@ describe('importCookiesFromBrowser Chromium', () => {
   it('imports from a live Chromium source DB into a Network/Cookies target profile', async () => {
     const sourceCookiesPath = join(tmpDir, 'Chrome', 'Default', 'Network', 'Cookies')
     const targetCookiesPath = join(tmpDir, 'userData', 'Partitions', 'test', 'Network', 'Cookies')
-    // Why: keeping the WAL writer open proves import reads Chromium's live SQLite
-    // state instead of relying on a closed-file snapshot.
+    // Why: keeping the writer open leaves the committed row in WAL, matching a
+    // running Chromium profile whose latest auth cookies are not checkpointed.
     const sourceDb = createChromiumCookieTestDatabase(
       sourceCookiesPath,
       [{ name: 'sid', value: 'source-value' }],
@@ -418,6 +418,9 @@ describe('importCookiesFromBrowser Chromium', () => {
     const platformSpy = vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin')
     try {
       expect(existsSync(`${sourceCookiesPath}-wal`)).toBe(true)
+      const sourceFilesBefore = ['', '-wal', '-shm'].map((suffix) =>
+        readFileSync(sourceCookiesPath + suffix)
+      )
 
       const result = await importCookiesFromBrowser(
         chromeBrowser(sourceCookiesPath),
@@ -434,8 +437,14 @@ describe('importCookiesFromBrowser Chromium', () => {
       )
       expect(execFileSyncMock.mock.calls.some(([command]) => command === 'security')).toBe(false)
       expect(copyFileSyncMock.mock.calls.some(([source]) => source === sourceCookiesPath)).toBe(
-        false
+        true
       )
+      expect(
+        copyFileSyncMock.mock.calls.some(([source]) => source === `${sourceCookiesPath}-wal`)
+      ).toBe(true)
+      expect(
+        ['', '-wal', '-shm'].map((suffix) => readFileSync(sourceCookiesPath + suffix))
+      ).toEqual(sourceFilesBefore)
       expect(cookiesRemoveMock).not.toHaveBeenCalled()
       expect(clearStorageDataMock).toHaveBeenCalledWith({ storages: ['cookies'] })
     } finally {
