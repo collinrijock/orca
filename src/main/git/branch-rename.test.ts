@@ -66,6 +66,20 @@ describe('probeBranchUpstream', () => {
     })
   })
 
+  it('scrubs credential-bearing URLs from the probe-failed message', async () => {
+    // The message surfaces on the worktree card, so an embedded remote URL
+    // must not leak a token or password into the UI.
+    const exec: GitExec = vi
+      .fn()
+      .mockRejectedValue(
+        new Error('fatal: unable to access https://user:hunter2@example.com/repo.git/: timed out')
+      )
+    expect(await probeBranchUpstream(exec)).toEqual({
+      outcome: 'probe-failed',
+      message: 'fatal: unable to access https://example.com/repo.git/: timed out'
+    })
+  })
+
   it('reports probe-failed, not has-upstream, for localized git diagnostics (issue #7808)', async () => {
     // A gettext-enabled git under de_DE translates even the `fatal:` prefix.
     const exec: GitExec = vi.fn(async (args: string[]) => {

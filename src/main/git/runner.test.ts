@@ -9,7 +9,8 @@ import {
   nonInteractiveGitEnv,
   parseRetryAfterMs,
   promptGuardGitEnv,
-  redirectPortedHostnameToEnv
+  redirectPortedHostnameToEnv,
+  untranslatedGitOutputEnv
 } from './runner'
 
 // Reads git config injected via the GIT_CONFIG_COUNT/KEY/VALUE env protocol
@@ -224,11 +225,19 @@ describe('git env forces untranslated diagnostics (issue #7808)', () => {
     // A gettext-enabled git under de_DE translates even the `fatal:` prefix,
     // breaking isNoUpstreamError and every other stderr phrase match.
     const env = promptGuardGitEnv({ PATH: '/usr/bin', LC_ALL: 'de_DE.UTF-8' })
-    expect(env.LC_ALL).toBe('C')
+    expect(env.LC_ALL).toBe('en_US.UTF-8')
+    expect(env.LANG).toBe('en_US.UTF-8')
+  })
+
+  it('pins LANGUAGE, which outranks LC_ALL in gettext lookups', () => {
+    const env = untranslatedGitOutputEnv({ PATH: '/usr/bin', LANGUAGE: 'de:en' })
+    expect(env.LANGUAGE).toBe('en')
+    expect(env.LC_ALL).toBe('en_US.UTF-8')
   })
 
   it('applies to nonInteractiveGitEnv as well', () => {
     const env = nonInteractiveGitEnv({ PATH: '/usr/bin', LANG: 'fr_FR.UTF-8' })
-    expect(env.LC_ALL).toBe('C')
+    expect(env.LC_ALL).toBe('en_US.UTF-8')
+    expect(env.LANGUAGE).toBe('en')
   })
 })

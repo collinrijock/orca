@@ -1,4 +1,4 @@
-import { isNoUpstreamError } from '../../shared/git-remote-error'
+import { isNoUpstreamError, stripCredentialsFromMessage } from '../../shared/git-remote-error'
 import {
   resolveEffectiveGitUpstream,
   type GitCommandRunner
@@ -31,9 +31,10 @@ export async function probeBranchUpstream(exec: GitExec): Promise<BranchUpstream
     }
     // Why: an unexpected failure is not proof either way — report it as its own
     // outcome so callers skip the rename but stay retryable (issue #7808).
+    // The message surfaces in the UI, so scrub credential-bearing remote URLs.
     return {
       outcome: 'probe-failed',
-      message: error instanceof Error ? error.message : String(error)
+      message: stripCredentialsFromMessage(error instanceof Error ? error.message : String(error))
     }
   }
 }

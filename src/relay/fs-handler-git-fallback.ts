@@ -19,7 +19,7 @@ import {
   ingestGitGrepLine,
   SEARCH_TIMEOUT_MS
 } from '../shared/text-search'
-import { buildRelayCommandEnv } from './relay-command-env'
+import { buildRelayGitEnv } from './relay-command-env'
 
 /**
  * List files using `git ls-files`. Fallback when rg is not installed.
@@ -61,7 +61,7 @@ export function listFilesWithGit(
 
       const child = spawn('git', ['ls-files', ...args], {
         cwd: rootPath,
-        env: buildRelayCommandEnv(),
+        env: buildRelayGitEnv(),
         stdio: ['ignore', 'pipe', 'pipe']
       })
       let timer: ReturnType<typeof setTimeout> | null = null
@@ -209,7 +209,7 @@ export function searchWithGitGrep(
 
     const child = spawn('git', gitArgs, {
       cwd: rootPath,
-      env: buildRelayCommandEnv(),
+      env: buildRelayGitEnv(),
       stdio: ['ignore', 'pipe', 'pipe']
     })
     let killTimeout: ReturnType<typeof setTimeout>
