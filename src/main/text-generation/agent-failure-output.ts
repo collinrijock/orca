@@ -37,9 +37,12 @@ function boundStream(value: string): string {
     return value
   }
   const omitted = value.length - STREAM_HEAD_LIMIT - STREAM_TAIL_LIMIT
-  return `${value.slice(0, STREAM_HEAD_LIMIT)}\n… (${omitted} characters omitted) …\n${value.slice(
+  const bounded = `${value.slice(0, STREAM_HEAD_LIMIT)}\n… (${omitted} characters omitted) …\n${value.slice(
     value.length - STREAM_TAIL_LIMIT
   )}`
+  // Why: V8 otherwise retains the multi-megabyte parent through sliced strings
+  // stored in the capture map; this no-op replacement materializes a flat copy.
+  return bounded.replace(/$/u, '')
 }
 
 /** Renders the capture as one copyable text block: a header line, then the

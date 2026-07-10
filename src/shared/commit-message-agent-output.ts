@@ -94,7 +94,10 @@ export function stripAnsiControlSequences(value: string): string {
   // CSI (colors/cursor) and OSC (titles/hyperlinks) both appear in raw CLI
   // failure output once it is shown verbatim instead of parsed.
   return value.replace(
-    new RegExp(`${esc}(?:\\[[0-?]*[ -/]*[@-~]|\\][^${bel}${esc}]*(?:${bel}|${esc}\\\\)?)`, 'g'),
+    new RegExp(
+      `${esc}(?:\\[[0-?]*[ -/]*[@-~]|\\][^${bel}${esc}\\r\\n]*(?:${bel}|${esc}\\\\))`,
+      'g'
+    ),
     ''
   )
 }

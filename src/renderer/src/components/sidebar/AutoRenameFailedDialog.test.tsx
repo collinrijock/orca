@@ -33,7 +33,7 @@ afterEach(() => {
 
 const EXCERPT_ERROR = 'Pi CLI command failed with code 1: No API key found for github-copilot.'
 
-async function renderDialog(): Promise<void> {
+async function renderDialog(error = EXCERPT_ERROR): Promise<void> {
   await act(async () => {
     root.render(
       <AutoRenameFailedDialog
@@ -41,7 +41,7 @@ async function renderDialog(): Promise<void> {
         onOpenChange={() => {}}
         worktreeId="wt-1"
         worktreeName="staghorn"
-        error={EXCERPT_ERROR}
+        error={error}
       />
     )
   })
@@ -68,5 +68,18 @@ describe('AutoRenameFailedDialog full output', () => {
     getBranchRenameFailureOutput.mockRejectedValueOnce(new Error('ipc unavailable'))
     await renderDialog()
     expect(document.body.textContent).toContain(EXCERPT_ERROR)
+  })
+
+  it('refetches full output when a retry changes the persisted error', async () => {
+    getBranchRenameFailureOutput.mockResolvedValueOnce('first run full output')
+    await renderDialog('first run excerpt')
+    expect(document.body.textContent).toContain('first run full output')
+
+    getBranchRenameFailureOutput.mockResolvedValueOnce('second run full output')
+    await renderDialog('second run excerpt')
+
+    expect(getBranchRenameFailureOutput).toHaveBeenCalledTimes(2)
+    expect(document.body.textContent).toContain('second run full output')
+    expect(document.body.textContent).not.toContain('first run full output')
   })
 })

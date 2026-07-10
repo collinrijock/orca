@@ -62,4 +62,14 @@ describe('formatAgentGenerationFailureOutputForDisplay', () => {
     })
     expect(text).toBe('Pi exited with code 1.\n\n[stderr]\nline one\nsafe evil tail\nline three')
   })
+
+  it('keeps later diagnostics when an OSC sequence is unterminated', () => {
+    const text = formatAgentGenerationFailureOutputForDisplay({
+      label: 'Pi',
+      exitCode: 1,
+      stdout: '',
+      stderr: `${ESC}]0;unfinished title\nNo API key found.\nUse /login to log in.`
+    })
+    expect(text).toContain('No API key found.\nUse /login to log in.')
+  })
 })

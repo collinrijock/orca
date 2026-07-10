@@ -52,6 +52,7 @@ export function AutoRenameFailedDialog({
       return
     }
     let stale = false
+    setFullOutput(null)
     window.api.worktrees
       .getBranchRenameFailureOutput({ worktreeId })
       .then((output) => {
@@ -60,12 +61,14 @@ export function AutoRenameFailedDialog({
         }
       })
       .catch(() => {
-        // Excerpt-only fallback; the persisted error is always available.
+        if (!stale) {
+          setFullOutput(null)
+        }
       })
     return () => {
       stale = true
     }
-  }, [open, worktreeId])
+  }, [error, open, worktreeId])
 
   const detailText = fullOutput ?? error
 

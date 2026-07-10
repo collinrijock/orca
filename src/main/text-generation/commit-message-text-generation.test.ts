@@ -1732,6 +1732,65 @@ describe('generateBranchNameFromContext', () => {
     })
   })
 
+  it('does not persist stdout-only branch failure detail that may echo the prompt', async () => {
+    const result = await generateBranchNameFromContext(
+      { firstPrompt: 'Customer secret in the first prompt' },
+      {
+        agentId: 'custom',
+        model: '',
+        customAgentCommand: 'agent'
+      },
+      {
+        kind: 'remote',
+        cwd: '/repo',
+        missingBinaryLocation: 'remote PATH',
+        execute: async () => ({
+          stdout: 'Customer secret in the first prompt',
+          stderr: '',
+          exitCode: 1,
+          timedOut: false
+        })
+      }
+    )
+
+    expect(result).toEqual({
+      success: false,
+      error: 'agent CLI command failed with code 1.',
+      failureOutput: {
+        label: 'agent',
+        exitCode: 1,
+        stdout: 'Customer secret in the first prompt',
+        stderr: ''
+      }
+    })
+  })
+
+  it('describes a signal-terminated generator without a null exit code', async () => {
+    const result = await generateBranchNameFromContext(
+      { firstPrompt: 'Fix login flow' },
+      {
+        agentId: 'pi',
+        model: 'github-copilot/gpt-5.5'
+      },
+      {
+        kind: 'remote',
+        cwd: '/repo',
+        missingBinaryLocation: 'remote PATH',
+        execute: async () => ({
+          stdout: '',
+          stderr: 'Process killed by host',
+          exitCode: null,
+          timedOut: false
+        })
+      }
+    )
+
+    expect(result).toMatchObject({
+      success: false,
+      error: 'Pi CLI command was terminated before exiting: Process killed by host'
+    })
+  })
+
   it('includes the branch-name custom prompt in the generated prompt', async () => {
     let prompt = ''
     await generateBranchNameFromContext(

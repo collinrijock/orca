@@ -159,12 +159,19 @@ function formatAgentCliFailureMessage(
   stdout: string,
   stderr: string,
   exitCode: number | null,
-  options?: { includeLocalMacDnsHint?: boolean }
+  options?: { includeLocalMacDnsHint?: boolean; includeStdoutDetail?: boolean }
 ): string {
-  const detail = sanitizeAgentFailureDetail(excerptAgentFailureOutput(stdout, stderr))
-  const message = detail
-    ? `${label} CLI command failed with code ${exitCode}: ${detail}`
-    : `${label} CLI command failed with code ${exitCode}.`
+  const detail = sanitizeAgentFailureDetail(
+    excerptAgentFailureOutput(options?.includeStdoutDetail === false ? '' : stdout, stderr)
+  )
+  const message =
+    exitCode === null
+      ? detail
+        ? `${label} CLI command was terminated before exiting: ${detail}`
+        : `${label} CLI command was terminated before exiting.`
+      : detail
+        ? `${label} CLI command failed with code ${exitCode}: ${detail}`
+        : `${label} CLI command failed with code ${exitCode}.`
   return options?.includeLocalMacDnsHint === false
     ? message
     : withMacTailscaleDnsHint(message, detail)
@@ -680,7 +687,15 @@ async function runLocalPlan(
         })
         return
       }
-      finalizeFromAgentOutput({ code, stdout, stderr, label, emptyResultName, finalize })
+      finalizeFromAgentOutput({
+        code,
+        stdout,
+        stderr,
+        label,
+        emptyResultName,
+        finalize,
+        includeStdoutDetail: operation !== 'branch-name'
+      })
     }
     child.stdout?.on('data', onStdoutData)
     child.stderr?.on('data', onStderrData)
@@ -705,8 +720,18 @@ function finalizeFromAgentOutput(args: {
   emptyResultName: string
   finalize: (result: InternalTextGenerationResult) => void
   includeLocalMacDnsHint?: boolean
+  includeStdoutDetail?: boolean
 }): void {
-  const { code, stdout, stderr, label, emptyResultName, finalize, includeLocalMacDnsHint } = args
+  const {
+    code,
+    stdout,
+    stderr,
+    label,
+    emptyResultName,
+    finalize,
+    includeLocalMacDnsHint,
+    includeStdoutDetail
+  } = args
   if (code !== 0) {
     console.error('[commit-message] Generator failed:', {
       label,
@@ -717,7 +742,8 @@ function finalizeFromAgentOutput(args: {
     finalize({
       success: false,
       error: formatAgentCliFailureMessage(label, stdout, stderr, code, {
-        includeLocalMacDnsHint
+        includeLocalMacDnsHint,
+        includeStdoutDetail
       }),
       failureOutput: captureAgentGenerationFailureOutput(label, code, stdout, stderr) ?? undefined
     })
@@ -808,7 +834,9 @@ async function runRemotePlan(
       emptyResultName,
       finalize: resolve,
       // Why: remote agent output reflects the SSH target, not this Mac's DNS.
-      includeLocalMacDnsHint: false
+      includeLocalMacDnsHint: false,
+      // Branch failures persist into synced metadata; stdout may echo the prompt.
+      includeStdoutDetail: operation !== 'branch-name'
     })
   })
 }
