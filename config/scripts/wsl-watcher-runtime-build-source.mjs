@@ -199,8 +199,10 @@ async function activeLeaseVersions(buildsDir, names, operations, options) {
     let owner
     let modifiedAt = 0
     try {
-      owner = JSON.parse(await operations.readFile(join(leasePath, 'owner.json'), 'utf8'))
       modifiedAt = (await operations.stat(leasePath)).mtimeMs
+    } catch {}
+    try {
+      owner = JSON.parse(await operations.readFile(join(leasePath, 'owner.json'), 'utf8'))
     } catch {}
     const alive = Number.isSafeInteger(owner?.pid) ? await options.ownerIsAlive(owner) : null
     if (

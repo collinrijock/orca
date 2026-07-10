@@ -51,29 +51,31 @@ function currentProcessStartToken() {
   try {
     if (process.platform === 'linux') {
       const contents = readFileSync(`/proc/${process.pid}/stat`, 'utf8')
-      cachedProcessStartToken = contents.slice(contents.lastIndexOf(') ') + 2).split(' ')[19]
+      cachedProcessStartToken =
+        contents.slice(contents.lastIndexOf(') ') + 2).split(' ')[19] || null
     } else if (process.platform === 'win32') {
-      cachedProcessStartToken = execFileSync(
-        'powershell.exe',
-        [
-          '-NoProfile',
-          '-NonInteractive',
-          '-Command',
-          `(Get-Process -Id ${process.pid} -ErrorAction Stop).StartTime.ToUniversalTime().Ticks`
-        ],
-        { encoding: 'utf8', timeout: 2_000, windowsHide: true }
-      ).trim()
+      cachedProcessStartToken =
+        execFileSync(
+          'powershell.exe',
+          [
+            '-NoProfile',
+            '-NonInteractive',
+            '-Command',
+            `(Get-Process -Id ${process.pid} -ErrorAction Stop).StartTime.ToUniversalTime().Ticks`
+          ],
+          { encoding: 'utf8', timeout: 2_000, windowsHide: true }
+        ).trim() || null
     } else {
-      cachedProcessStartToken = execFileSync(
-        'ps',
-        ['-o', 'lstart=', '-p', String(process.pid)],
-        { encoding: 'utf8', timeout: 2_000 }
-      ).trim()
+      cachedProcessStartToken =
+        execFileSync('ps', ['-o', 'lstart=', '-p', String(process.pid)], {
+          encoding: 'utf8',
+          timeout: 2_000
+        }).trim() || null
     }
   } catch {
     cachedProcessStartToken = null
   }
-  return cachedProcessStartToken || null
+  return cachedProcessStartToken
 }
 
 function parseWslRuntimeBuildSource(output) {
@@ -83,8 +85,7 @@ function parseWslRuntimeBuildSource(output) {
 function parseWslRuntimePreparationOutput(output) {
   const text = Buffer.isBuffer(output) ? output.toString('utf8') : String(output ?? '')
   const lines = text.split(/\r?\n/)
-  const value = (name) =>
-    lines.find((line) => line.startsWith(`${name}=`))?.slice(name.length + 1)
+  const value = (name) => lines.find((line) => line.startsWith(`${name}=`))?.slice(name.length + 1)
   const source = value('ORCA_WSL_WATCHER_BUILD_SOURCE')
   const lease = value('ORCA_WSL_WATCHER_BUILD_LEASE')
   if (!source || !lease) {

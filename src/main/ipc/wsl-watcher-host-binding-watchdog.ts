@@ -7,6 +7,7 @@ export function createWatcherBindingWatchdog(
   timeoutMs: number
 ): WatcherBindingWatchdog {
   let recycling = false
+  // Why: concurrent native timeouts must trigger only one host recycle.
   const recycleHost = (operation: string): void => {
     if (recycling) {
       return

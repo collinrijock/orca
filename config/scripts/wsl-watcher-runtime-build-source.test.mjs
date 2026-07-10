@@ -14,6 +14,43 @@ import {
 const execFileAsync = promisify(execFile)
 
 describe('immutable WSL runtime build retention', () => {
+  it('preserves a fresh lease while its owner metadata is being published', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-wsl-build-pending-lease-'))
+    const output = join(root, 'out', 'wsl-watcher')
+    const version = 'b'.repeat(20)
+    const buildsDir = `${output}.builds`
+    const build = join(buildsDir, version)
+    const lease = join(buildsDir, `${version}.lease-pending`)
+    try {
+      await mkdir(build, { recursive: true })
+      await mkdir(lease)
+      await utimes(lease, new Date(99_500), new Date(99_500))
+
+      await pruneImmutableRuntimeBuilds(output, {
+        maxCompletedBuilds: 0,
+        minRecentBuilds: 0,
+        maxBuildAgeMs: 0,
+        unknownLeaseAgeMs: 1_000,
+        now: () => 100_000
+      })
+      expect(await readdir(buildsDir)).toEqual(
+        expect.arrayContaining([version, `${version}.lease-pending`])
+      )
+
+      await pruneImmutableRuntimeBuilds(output, {
+        maxCompletedBuilds: 0,
+        minRecentBuilds: 0,
+        maxBuildAgeMs: 0,
+        unknownLeaseAgeMs: 1_000,
+        now: () => 101_000
+      })
+      expect(await readdir(buildsDir)).not.toContain(version)
+      expect(await readdir(buildsDir)).not.toContain(`${version}.lease-pending`)
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+
   it('preserves current, recent, and actively leased builds while bounding completed versions', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-wsl-build-retention-'))
     const output = join(root, 'out', 'wsl-watcher')

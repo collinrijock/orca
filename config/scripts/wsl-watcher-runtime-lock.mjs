@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { execFile } from 'node:child_process'
 import { mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises'
+import { join } from 'node:path'
 import { promisify } from 'node:util'
 
 const DEFAULT_HEARTBEAT_INTERVAL_MS = 1_000
@@ -21,7 +22,7 @@ function delay(milliseconds) {
 
 async function readOwner(lockPath, operations) {
   try {
-    const parsed = JSON.parse(await operations.readFile(`${lockPath}/owner.json`, 'utf8'))
+    const parsed = JSON.parse(await operations.readFile(join(lockPath, 'owner.json'), 'utf8'))
     return typeof parsed?.token === 'string' && Number.isSafeInteger(parsed.pid) ? parsed : null
   } catch {
     return null
@@ -78,7 +79,7 @@ async function defaultOwnerIsAlive(owner) {
 
 async function heartbeatIsStale(lockPath, operations, now, staleMs) {
   try {
-    const heartbeat = await operations.stat(`${lockPath}/heartbeat`)
+    const heartbeat = await operations.stat(join(lockPath, 'heartbeat'))
     return now() - heartbeat.mtimeMs >= staleMs
   } catch {
     try {
@@ -125,7 +126,7 @@ function startHeartbeat(lockPath, owner, operations, intervalMs) {
   const tick = async () => {
     const current = await readOwner(lockPath, operations)
     if (current?.token === owner.token) {
-      await operations.writeFile(`${lockPath}/heartbeat`, owner.token).catch(() => undefined)
+      await operations.writeFile(join(lockPath, 'heartbeat'), owner.token).catch(() => undefined)
     }
   }
   const timer = setInterval(() => void tick(), intervalMs)
@@ -163,8 +164,8 @@ export async function withRuntimePublicationLock(
     try {
       await operations.mkdir(lockPath)
       try {
-        await operations.writeFile(`${lockPath}/owner.json`, JSON.stringify(owner))
-        await operations.writeFile(`${lockPath}/heartbeat`, token)
+        await operations.writeFile(join(lockPath, 'owner.json'), JSON.stringify(owner))
+        await operations.writeFile(join(lockPath, 'heartbeat'), token)
       } catch (error) {
         await operations.rm(lockPath, { recursive: true, force: true })
         throw error
