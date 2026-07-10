@@ -111,7 +111,7 @@ describe('canonicalizeWslLinuxPath', () => {
     expect(execFileMock).toHaveBeenCalledTimes(2)
   })
 
-  it('invalidates a cached path when revalidation later fails', () => {
+  it('keeps the last known-good cache when revalidation later fails', () => {
     setPlatform('win32')
     _internals.canonicalizeWslLinuxPath('Ubuntu', '/home/alias')
     const firstCallback = execFileMock.mock.calls[0][3] as (
@@ -130,8 +130,11 @@ describe('canonicalizeWslLinuxPath', () => {
     ) => void
     secondCallback(new Error('path disappeared'), '')
 
+    // Why: a cold or wedged distro times out without proving the path changed.
+    // Dropping the cache would force the next launch onto /mnt/... and rewrite
+    // trust under a path Codex will not use when automount is customized.
     expect(settled).toHaveBeenCalledWith(null)
-    expect(_internals.canonicalizeWslLinuxPath('Ubuntu', '/home/alias')).toBeNull()
+    expect(_internals.canonicalizeWslLinuxPath('Ubuntu', '/home/alias')).toBe('/home/alice')
   })
 
   it('replaces a cached path when its canonical identity changes', () => {

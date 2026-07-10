@@ -1,6 +1,6 @@
 /* eslint-disable max-lines -- Why: getStatus + install + remove all share the managed-command and trust-key derivation. Splitting would hide that the three operations must agree on group index, event label, and command bytes. */
 import { existsSync, readFileSync, unlinkSync } from 'node:fs'
-import { join, win32 as pathWin32 } from 'node:path'
+import { join } from 'node:path'
 import type { SFTPWrapper } from 'ssh2'
 import type { AgentHookInstallState, AgentHookInstallStatus } from '../../shared/agent-hook-types'
 import {
@@ -985,6 +985,20 @@ function refreshWslRuntimeUserHooks(plan: CodexWslRuntimeHookInstallPlan): Agent
   }
 }
 
+// Why: settle callbacks must not treat a failed recheck as proof the previous
+// identity is wrong. Only a successful, different path may rewrite trust.
+function shouldReinstallWslHooksAfterCanonicalSettle(args: {
+  canonicalPath: string | null
+  isCurrentGeneration: boolean
+  installedTrustConfigPath: string | null
+  resolvedTrustConfigPath: string | null
+}): boolean {
+  if (!args.canonicalPath || !args.isCurrentGeneration || !args.resolvedTrustConfigPath) {
+    return false
+  }
+  return args.resolvedTrustConfigPath !== args.installedTrustConfigPath
+}
+
 export class CodexHookService {
   private readonly wslReconciliationGeneration = new Map<string, number>()
 
@@ -1003,38 +1017,32 @@ export class CodexHookService {
     target?: CodexWslRuntimeHookTarget
   ): AgentHookInstallStatus | null {
     const generation = this.supersedeWslReconciliation(runtimeHomePath)
+    let installedTrustConfigPath: string | null = null
     const onCanonicalPathSettled = (canonicalPath: string | null): void => {
       if (!runtimeHomePath) {
         return
       }
       const key = process.platform === 'win32' ? runtimeHomePath.toLowerCase() : runtimeHomePath
-      // Why: hook settings or account selection can change while wsl.exe is
-      // running; only the newest request may install or revoke runtime trust.
-      if (this.wslReconciliationGeneration.get(key) !== generation) {
+      const resolvedPlan = canonicalPath
+        ? createCodexWslRuntimeHookInstallPlan(runtimeHomePath, target, () => canonicalPath)
+        : null
+      if (
+        !shouldReinstallWslHooksAfterCanonicalSettle({
+          canonicalPath,
+          isCurrentGeneration: this.wslReconciliationGeneration.get(key) === generation,
+          installedTrustConfigPath,
+          resolvedTrustConfigPath: resolvedPlan?.trustConfigPath ?? null
+        }) ||
+        !resolvedPlan
+      ) {
         return
       }
-      if (!canonicalPath) {
-        try {
-          removeStaleWslRuntimeManagedHookTrustEntries(
-            pathWin32.join(runtimeHomePath, 'config.toml'),
-            []
-          )
-        } catch (error) {
-          console.warn('[codex-hook-service] failed to revoke stale WSL hook trust', error)
-        }
+      const status = installManagedHooksIntoWslRuntime(resolvedPlan)
+      if (status.state === 'error') {
+        console.warn('[codex-hook-service] failed to reconcile WSL hook path', status.detail)
         return
       }
-      const resolvedPlan = createCodexWslRuntimeHookInstallPlan(
-        runtimeHomePath,
-        target,
-        () => canonicalPath
-      )
-      if (resolvedPlan) {
-        const status = installManagedHooksIntoWslRuntime(resolvedPlan)
-        if (status.state === 'error') {
-          console.warn('[codex-hook-service] failed to reconcile WSL hook path', status.detail)
-        }
-      }
+      installedTrustConfigPath = resolvedPlan.trustConfigPath
     }
     const wslPlan = createCodexWslRuntimeHookInstallPlan(
       runtimeHomePath,
@@ -1042,6 +1050,7 @@ export class CodexHookService {
       undefined,
       onCanonicalPathSettled
     )
+    installedTrustConfigPath = wslPlan?.trustConfigPath ?? null
     return wslPlan ? installManagedHooksIntoWslRuntime(wslPlan) : null
   }
 
@@ -1520,5 +1529,6 @@ export const _internals = {
   getManagedScript,
   installManagedHooksIntoWslRuntime,
   refreshWslRuntimeUserHooks,
-  removeStaleWslRuntimeManagedHookTrustEntries
+  removeStaleWslRuntimeManagedHookTrustEntries,
+  shouldReinstallWslHooksAfterCanonicalSettle
 }

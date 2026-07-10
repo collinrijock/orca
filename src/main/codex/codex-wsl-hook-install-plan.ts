@@ -91,11 +91,10 @@ function scheduleWslLinuxPathCanonicalization(
       const resolvedPath = !error && canonicalPath.startsWith('/') ? canonicalPath : null
       if (resolvedPath) {
         canonicalWslPathCache.set(key, canonicalPath)
-      } else {
-        // Why: availability and mount configuration can change after launch;
-        // a failed recheck must revoke the last trusted canonical identity.
-        canonicalWslPathCache.delete(key)
       }
+      // Why: keep the last known-good cache on timeout/transient WSL failures.
+      // Dropping it forces the next launch onto the logical `/mnt/...` guess,
+      // which is wrong under custom automount roots and rewrites trust keys.
       const settledListeners = inFlightWslCanonicalizations.get(key) ?? new Set()
       inFlightWslCanonicalizations.delete(key)
       for (const listener of settledListeners) {

@@ -150,7 +150,9 @@ describe('Codex WSL runtime hook install', () => {
     expect(trustEntries.has(newKey)).toBe(true)
   })
 
-  it('revokes managed trust when WSL canonicalization later fails', () => {
+  it('sweeps all managed WSL trust when the desired set is empty (disable path)', () => {
+    // Why: refresh/disable intentionally passes []. Transient canonicalize
+    // failures must NOT use this path — they leave last known-good trust alone.
     const plan = createTestPlan()
     writeFileSync(plan.configPath, '{"hooks":{}}\n', 'utf-8')
     writeFileSync(plan.tomlPath, '', 'utf-8')
@@ -159,6 +161,44 @@ describe('Codex WSL runtime hook install', () => {
     _internals.removeStaleWslRuntimeManagedHookTrustEntries(plan.tomlPath, [])
 
     expect(readHookTrustEntries(plan.tomlPath).size).toBe(0)
+  })
+
+  it('does not reinstall after a failed or unchanged WSL path settle', () => {
+    expect(
+      _internals.shouldReinstallWslHooksAfterCanonicalSettle({
+        canonicalPath: null,
+        isCurrentGeneration: true,
+        installedTrustConfigPath: '/mnt/d/home/hooks.json',
+        resolvedTrustConfigPath: null
+      })
+    ).toBe(false)
+
+    expect(
+      _internals.shouldReinstallWslHooksAfterCanonicalSettle({
+        canonicalPath: '/windows/d/home',
+        isCurrentGeneration: false,
+        installedTrustConfigPath: '/mnt/d/home/hooks.json',
+        resolvedTrustConfigPath: '/windows/d/home/hooks.json'
+      })
+    ).toBe(false)
+
+    expect(
+      _internals.shouldReinstallWslHooksAfterCanonicalSettle({
+        canonicalPath: '/windows/d/home',
+        isCurrentGeneration: true,
+        installedTrustConfigPath: '/windows/d/home/hooks.json',
+        resolvedTrustConfigPath: '/windows/d/home/hooks.json'
+      })
+    ).toBe(false)
+
+    expect(
+      _internals.shouldReinstallWslHooksAfterCanonicalSettle({
+        canonicalPath: '/windows/d/home',
+        isCurrentGeneration: true,
+        installedTrustConfigPath: '/mnt/d/home/hooks.json',
+        resolvedTrustConfigPath: '/windows/d/home/hooks.json'
+      })
+    ).toBe(true)
   })
 
   it('generates a POSIX hook that bridges WSL loopback failures through Windows curl', () => {
