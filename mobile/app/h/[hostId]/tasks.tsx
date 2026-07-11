@@ -8668,6 +8668,7 @@ export default function MobileTasksScreen() {
           : provider === 'gitlab'
             ? 'No GitLab tasks'
             : 'No Linear tasks'
+  const isGithubProjectSearch = provider === 'github' && githubMode === 'project'
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -9049,25 +9050,22 @@ export default function MobileTasksScreen() {
           !linearConnected ? null : (
           <View style={styles.searchBar}>
             <MobileSearchField
-              value={
-                provider === 'github' && githubMode === 'project' ? githubProjectSearch : query
-              }
-              onChangeText={
-                provider === 'github' && githubMode === 'project'
-                  ? setGithubProjectSearch
-                  : setQuery
-              }
+              value={isGithubProjectSearch ? githubProjectSearch : query}
+              onChangeText={isGithubProjectSearch ? setGithubProjectSearch : setQuery}
               placeholder={
-                provider === 'github' && githubMode === 'project'
+                isGithubProjectSearch
                   ? 'Search project view...'
                   : `Search ${providerLabel} tasks...`
               }
               // Why: GitHub items seed the field with a preset query, so a bare
-              // value.length check would always show clear. Project view can also
-              // keep an applied filter after the draft is emptied.
+              // value.length check would always show clear. Project mode shows clear
+              // for draft text or a non-empty applied override — not for applied ''
+              // (explicit unfiltered after clear), or the button sticks forever.
               showClear={
-                provider === 'github' && githubMode === 'project'
-                  ? githubProjectSearch.length > 0 || appliedGithubProjectSearch !== undefined
+                isGithubProjectSearch
+                  ? githubProjectSearch.length > 0 ||
+                    (appliedGithubProjectSearch !== undefined &&
+                      appliedGithubProjectSearch.length > 0)
                   : provider === 'github'
                     ? query.trim() !== getTaskPresetQuery(githubPreset).trim()
                     : undefined
@@ -9077,7 +9075,7 @@ export default function MobileTasksScreen() {
                 if (!taskUiReady) {
                   return
                 }
-                if (provider === 'github' && githubMode === 'project') {
+                if (isGithubProjectSearch) {
                   applyGitHubProjectSearch()
                   return
                 }
@@ -9096,14 +9094,18 @@ export default function MobileTasksScreen() {
                 }
               }}
               onBlur={() => {
-                if (provider === 'github' && githubMode === 'project') {
+                if (isGithubProjectSearch) {
                   applyGitHubProjectSearch()
                 }
               }}
+              // Why: Project clear means unfiltered results ('' override when the view
+              // has a default filter), not restore view default. GitHub items clear
+              // restores the preset query. Linear clears and persists empty resume.
               onClear={() => {
-                if (provider === 'github' && githubMode === 'project') {
+                if (isGithubProjectSearch) {
                   const viewFilter = githubProjectTable?.selectedView.filter ?? ''
                   setGithubProjectSearch('')
+                  // Why: undefined = use view default; '' = explicit unfiltered override.
                   setAppliedGithubProjectSearch(viewFilter ? '' : undefined)
                   return
                 }
