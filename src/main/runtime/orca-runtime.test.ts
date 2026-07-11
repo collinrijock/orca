@@ -874,6 +874,32 @@ function antigravityPromptBeforeModelReadyScreen(model = 'Gemini 3.5 Flash (High
   ].join('\n')
 }
 
+// Why: verbatim shape of a real cursor-agent 2026.07 idle screen. The fresh
+// input prompt is "→ Plan, search, build anything" (not "→ Add a follow-up",
+// which only appears after the first turn), so the matcher keys on the "→"
+// glyph, not a specific placeholder.
+function cursorReadyScreen(): string {
+  return [
+    'Cursor Agent',
+    'v2026.07.09-a3815c0',
+    'Tip: Use /plan to plan execution and reach the right outcome faster.',
+    '→ Plan, search, build anything',
+    'Composer 2.5 Fast                                          Run Everything',
+    '~/Documents/projects/AutoGenie · main'
+  ].join('\n')
+}
+
+function cursorBusyScreen(): string {
+  return [
+    'Cursor Agent',
+    'v2026.07.09-a3815c0',
+    '⠰⠳ Thinking  28.61k tokens',
+    '→ Plan, search, build anything',
+    'Composer 2.5 Fast                                          Run Everything',
+    '~/Documents/projects/AutoGenie · main'
+  ].join('\n')
+}
+
 // Why: these runtime feature tests only need message-queue semantics; using
 // SQLite here makes them fail on unrelated native runtime ABI drift.
 class InMemoryOrchestrationMessages {
@@ -10523,6 +10549,67 @@ describe('OrcaRuntimeService', () => {
       status: 'running',
       blockedReason: 'codex-trust-workspace'
     })
+  })
+
+  it('resolves tui-idle for an idle Cursor lane past its dismissed trust dialog (#8210)', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => 'cursor-agent'
+    })
+    const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`)
+    // Cursor's dismissed trust dialog stays in the scrollback tail; the idle
+    // ready prompt after it must both clear the stale trust hit and satisfy idle.
+    runtime.onPtyData(
+      'pty-bg',
+      [
+        '⚠ Workspace Trust Required\n',
+        'Do you trust the contents of this directory?\n',
+        '  ▶ [a] Trust this workspace\n',
+        '    [q] Quit\n',
+        cursorReadyScreen()
+      ].join(''),
+      Date.now()
+    )
+
+    await expect(
+      runtime.waitForTerminal(handle, { condition: 'tui-idle', timeoutMs: 1_000 })
+    ).resolves.toMatchObject({
+      handle,
+      condition: 'tui-idle',
+      satisfied: true,
+      status: 'running'
+    })
+  })
+
+  it('does not block a mid-run Cursor lane on its dismissed trust dialog (#8210)', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => 'cursor-agent'
+    })
+    const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`)
+    runtime.onPtyData(
+      'pty-bg',
+      [
+        '⚠ Workspace Trust Required\n',
+        'Do you trust the contents of this directory?\n',
+        '  ▶ [a] Trust this workspace\n',
+        '    [q] Quit\n',
+        cursorBusyScreen()
+      ].join(''),
+      Date.now()
+    )
+
+    // Busy Cursor is neither blocked nor idle: the wait must keep polling, then
+    // time out honestly rather than return a stale trust block.
+    await expect(
+      runtime.waitForTerminal(handle, { condition: 'tui-idle', timeoutMs: 200 })
+    ).rejects.toThrow('timeout')
   })
 
   it('returns a blocked wait result for Codex cwd selection prompts', async () => {

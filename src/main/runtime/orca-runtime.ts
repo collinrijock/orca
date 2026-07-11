@@ -25550,18 +25550,62 @@ function findActionableTerminalWaitBlockedSignal(
   if (blockedSignal === null) {
     return null
   }
-  const readyIndex = findKnownReadyPromptIndex(normalized)
+  const dismissedModalIndex = findDismissedStartupModalIndex(normalized)
   // Why: retained terminal tails can include stale startup modals. If a known
-  // ready prompt appears after that modal, the latest signal is ready.
-  return readyIndex !== null && readyIndex > blockedSignal.index ? null : blockedSignal
+  // agent's live prompt appears after that modal, the modal was dismissed and
+  // the signal is no longer actionable — even if the agent is still mid-run
+  // (Cursor never reports idle via OSC title, so its busy prompt clears too).
+  return dismissedModalIndex !== null && dismissedModalIndex > blockedSignal.index
+    ? null
+    : blockedSignal
+}
+
+// Why: a recognized agent's live prompt (idle OR busy) proves its startup modal
+// was dismissed. Broader than the idle-only ready set so a mid-run Cursor lane
+// stops reporting a stale trust hit for the rest of the session.
+function findDismissedStartupModalIndex(normalized: string): number | null {
+  const indexes = [
+    findCodexReadyPromptIndex(normalized),
+    findAntigravityReadyPromptIndex(normalized),
+    findCursorActivePromptIndex(normalized)
+  ].filter((index): index is number => index !== null)
+  return indexes.length > 0 ? Math.max(...indexes) : null
 }
 
 function findKnownReadyPromptIndex(normalized: string): number | null {
   const indexes = [
     findCodexReadyPromptIndex(normalized),
-    findAntigravityReadyPromptIndex(normalized)
+    findAntigravityReadyPromptIndex(normalized),
+    findCursorReadyPromptIndex(normalized)
   ].filter((index): index is number => index !== null)
   return indexes.length > 0 ? Math.max(...indexes) : null
+}
+
+// Why: cursor-agent keeps a persistent TUI — a printed "Cursor Agent" banner and
+// a "→" input-prompt line appear once its trust dialog is dismissed, in both
+// busy and idle states. The banner is matched by its last occurrence so the
+// trust dialog's own "Cursor Agent" body text (which precedes the banner) does
+// not win. The "→" glyph is cursor-agent's input prompt marker ("→ Plan,
+// search, build anything" fresh, "→ Add a follow-up" after the first turn).
+function findCursorActivePromptIndex(normalized: string): number | null {
+  const headerIndex = normalized.lastIndexOf('cursor agent')
+  if (headerIndex === -1) {
+    return null
+  }
+  return normalized.includes('→', headerIndex) ? headerIndex : null
+}
+
+// Why: cursor-agent never emits an idle OSC title (its bare title is dropped),
+// so tui-idle can only resolve from the tail. Busy frames draw a braille
+// spinner in the on-screen status line; its absence past the banner is idle.
+const CURSOR_BUSY_SPINNER_RE = /[⠁-⣿]/
+
+function findCursorReadyPromptIndex(normalized: string): number | null {
+  const activeIndex = findCursorActivePromptIndex(normalized)
+  if (activeIndex === null) {
+    return null
+  }
+  return CURSOR_BUSY_SPINNER_RE.test(normalized.slice(activeIndex)) ? null : activeIndex
 }
 
 function findCodexReadyPromptIndex(normalized: string): number | null {
