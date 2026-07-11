@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useMemo, useRef } from 'react'
-import { View, Text, StyleSheet, Pressable, FlatList } from 'react-native'
+import { View, Text, StyleSheet, Pressable, FlatList, Alert } from 'react-native'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useRouter, useFocusEffect } from 'expo-router'
 import {
@@ -711,12 +711,16 @@ export default function HomeScreen() {
     if (!confirmRemove) {
       return
     }
+    const hostToRemove = confirmRemove
     try {
-      await removeHostAndCloseClient(confirmRemove.id, closeHostClient)
+      await removeHostAndCloseClient(hostToRemove.id, closeHostClient)
       setConfirmRemove(null)
       setHosts(await loadHosts())
     } catch {
-      setConfirmRemove(null)
+      // Why: ConfirmModal closes on confirm; re-open for retry and surface the
+      // failure instead of silently leaving the host listed.
+      setConfirmRemove(hostToRemove)
+      Alert.alert('Could not remove host', 'Please try again.')
     }
   }
 

@@ -1,5 +1,13 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
-import { View, Text, StyleSheet, SectionList, Pressable, ActivityIndicator } from 'react-native'
+import {
+  View,
+  Text,
+  StyleSheet,
+  SectionList,
+  Pressable,
+  ActivityIndicator,
+  Alert
+} from 'react-native'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useFocusEffect, useLocalSearchParams, usePathname, useRouter } from 'expo-router'
 import {
@@ -690,7 +698,9 @@ export function HostScreen({
       leaveHost()
     } catch {
       // Why: metadata commit can fail while the host is still paired; keep the
-      // screen mounted so the user can retry instead of navigating away empty.
+      // screen mounted and re-open confirm (ConfirmModal closes on confirm).
+      setConfirmRemoveHost(true)
+      Alert.alert('Could not remove host', 'Please try again.')
     }
   }, [hostId, leaveHost, closeHostClient])
 
