@@ -1827,7 +1827,7 @@
       "motivatingLinks": [
         "https://github.com/stablyai/orca/issues/7226"
       ],
-      "invariant": "Injected orchestration task prompts and working-coordinator lifecycle wakes for recognized agent CLIs must send the prompt body inside one bracketed-paste frame, sanitize embedded ESC bytes, preserve chunk boundaries without losing the frame, and send Enter only after the paste frame completes. A lifecycle message must choose exactly one delivery path: a matching compatibility waiter, a submitted agent prompt, or a concurrent check read — never more than one, including reads issued during the in-flight claim window. Wake submits verify a live recognized agent (a shell foreground process is definitive negative evidence) and withhold the delayed Enter when a permission state appears mid-submit.",
+      "invariant": "Injected orchestration task prompts and working-coordinator lifecycle wakes for recognized agent CLIs must send the prompt body inside one bracketed-paste frame, sanitize embedded ESC bytes, preserve chunk boundaries without losing the frame, and send Enter only after the paste frame completes. A lifecycle message must choose exactly one delivery path: a matching delivery-owning waiter, a submitted agent prompt, or a concurrent check read — never more than one, including reads issued during any in-flight claim window (wake submits and the idle-path delayed Enter both claim their rows). Wake submits verify a live recognized agent before the first paste byte and again before the delayed Enter (a shell foreground process is definitive negative evidence); a permission state appearing mid-submit withholds the Enter and stamps the already-pasted rows delivered so they are not replayed. Failed submits release their claims and wake any matching blocked waiter. Group sends never wake-inject; passive thread waiters (ask) never suppress wake delivery; worker exits fail the dispatch and escalate for leaf-backed and pty-only workers alike, preferring a live coordinator handle.",
       "oracle": "Runtime tests assert the exact PTY write sequence and failure cleanup; lifecycle tests assert one pushed prompt for a working coordinator, waiter deduplication, serialized concurrent completions, and persisted fallback for unsafe prompt owners; orchestration tests assert dispatch/coordinator use the agent prompt path and classify only worker_done, escalation, and decision_gate as wake messages. The live CLI harness dispatches a 32KB task to a fake Codex-like TUI and requires marker present, bracketed paste present, zero unframed line breaks, and submit observed.",
       "commands": [
         "pnpm exec vitest run --config config/vitest.config.ts src/shared/agent-prompt-injection.test.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/rpc/methods/orchestration.test.ts src/main/runtime/orchestration/coordinator.test.ts",
@@ -1862,10 +1862,15 @@
             "permission, shell, Cursor, and automated-coordinator prompts retain persisted fallback",
             "push-on-idle defers while a wake submit is in flight instead of double-delivering",
             "a stale working title with a shell foreground process keeps messages queued",
-            "a permission prompt appearing in the paste-settle window withholds the Enter",
+            "a permission state at submit start aborts before any paste byte",
+            "a permission prompt appearing in the paste-settle window withholds the Enter and stamps the pasted rows delivered",
             "pty-backed handles without renderer leaves receive wake delivery",
+            "a pty-only coordinator idle transition retries skipped wake delivery",
             "wake rows are claimed during submit and released after delivery",
-            "worker exits escalate to the persisted dispatching coordinator with a wake",
+            "idle-path delayed-Enter rows are claimed until the Enter lands",
+            "a failed wake submit wakes a check --wait that registered during the claim window",
+            "an in-flight ask does not suppress wake delivery to the asking terminal",
+            "worker exits escalate for leaf-backed and pty-only workers, preferring a live coordinator handle",
             "deliverOrchestrationMessage routes an insert to exactly one delivery path"
           ]
         },
@@ -1876,6 +1881,8 @@
             "raw terminal.send is not called for injected task prompts",
             "failed prompt injection rolls back the active dispatch",
             "worker_done, escalation, and decision_gate request coordinator wakes while status and heartbeat do not",
+            "group sends deliver without wake injection",
+            "reply routes through the shared delivery entry point",
             "wake-claimed rows are hidden from concurrent unread checks but not from the audit view",
             "dispatch persists the coordinating terminal for worker-exit escalation"
           ]
@@ -1930,7 +1937,7 @@
       },
       "performanceBudget": {
         "required": true,
-        "evidence": "Agent prompt dispatch remains O(prompt bytes), uses the existing 16KB terminal input chunking and one existing 500ms submit delay. Lifecycle delivery adds one handle/waiter lookup and one unread-message query on the message-arrival event, serializes overlap with bounded handle sets, and adds no polling, retry loop, provider listing, subprocess churn, hidden-pane wakeups, or renderer work."
+        "evidence": "Agent prompt dispatch remains O(prompt bytes), uses the existing 16KB terminal input chunking and one existing 500ms submit delay. Lifecycle delivery adds one handle/waiter lookup and one unread-message query on the message-arrival event, serializes overlap with bounded handle sets, and adds no polling, retry loop, provider listing, hidden-pane wakeups, or renderer work. Each wake submit runs the target-safety probe exactly twice (before the first paste byte and before the delayed Enter); local probes share the 500ms process-table snapshot cache, and SSH probes are two bounded relay round-trips per submit, not per chunk."
       },
       "promotionCriteria": [
         "Run the live harness in soak with a self-starting dev runtime or provider-contract fixture.",
@@ -1940,7 +1947,7 @@
       "knownGaps": [
         "Live harness command currently expects an already-running dev runtime and generated out/bin/orca-dev wrapper.",
         "No Windows ConPTY, Linux PTY, SSH, daemon, or remote-runtime live evidence yet.",
-        "Non-submitting push-on-idle banners remain outside this gate; lifecycle wake coverage applies to working coordinators that use the submitted agent-prompt path.",
+        "Push-on-idle banner content and non-wake message types remain outside this gate, though the idle path's delayed-Enter window now shares the wake claim machinery.",
         "Foreground-process verification before wake submits is best-effort: providers without process inspection fall back to title evidence, so a stale working title there is not blocked."
       ],
       "demotionRule": "Demote or quarantine if the live harness flakes without a product bug or harness bug filed to the terminal-input owner."

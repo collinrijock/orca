@@ -6,6 +6,9 @@ import { reconcileLifecycleMessage } from './lifecycle-reconciliation'
 
 export type CoordinatorRuntime = {
   sendTerminalAgentPrompt(handle: string, prompt: string): Promise<unknown>
+  // Why: a wake submit may be mid paste-settle when a run starts; rows it
+  // claimed must not also be consumed by this loop.
+  isMessageClaimedForWakeDelivery(messageId: string): boolean
   listTerminals(
     worktreeSelector?: string,
     limit?: number
@@ -242,7 +245,9 @@ export class Coordinator {
   }
 
   private processMessages(): void {
-    const messages = this.db.getUnreadMessages(this.opts.coordinatorHandle)
+    const messages = this.db
+      .getUnreadMessages(this.opts.coordinatorHandle)
+      .filter((m) => !this.runtime.isMessageClaimedForWakeDelivery(m.id))
     if (messages.length === 0) {
       return
     }

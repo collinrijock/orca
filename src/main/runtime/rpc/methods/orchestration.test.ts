@@ -242,6 +242,29 @@ describe('orchestration RPC methods', () => {
       expect(recipients).toEqual(['term_b', 'term_c'])
     })
 
+    it('delivers group escalations without wake injection', async () => {
+      setupWithTerminals([makeSummary('term_a'), makeSummary('term_b'), makeSummary('term_c')])
+      const deliver = vi
+        .spyOn(runtime, 'deliverPendingMessagesForHandle')
+        .mockImplementation(() => {})
+
+      await call('orchestration.send', {
+        from: 'term_a',
+        to: '@all',
+        subject: 'attention',
+        type: 'escalation'
+      })
+
+      // One group send must never auto-submit into every working recipient's
+      // turn; group traffic stays push-on-idle.
+      expect(deliver).toHaveBeenCalledWith('term_b')
+      expect(deliver).toHaveBeenCalledWith('term_c')
+      expect(deliver).not.toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ wakeAgent: true })
+      )
+    })
+
     it('continues to fan out status messages to groups', async () => {
       setupWithTerminals([makeSummary('term_a'), makeSummary('term_b'), makeSummary('term_c')])
 
@@ -906,6 +929,22 @@ describe('orchestration RPC methods', () => {
         'Message not found'
       )
     })
+
+    it('routes the reply through the shared delivery entry point', async () => {
+      setup()
+      const original = db.insertMessage({ from: 'a', to: 'b', subject: 'question' })
+      const deliver = vi
+        .spyOn(runtime, 'deliverPendingMessagesForHandle')
+        .mockImplementation(() => {})
+      const notify = vi.spyOn(runtime, 'notifyMessageArrived').mockImplementation(() => {})
+
+      await call('orchestration.reply', { id: original.id, body: 'answer', from: 'b' })
+
+      // Why this matters: notify alone strands the reply for an already-idle
+      // recipient — delivery must be attempted like any other insert.
+      expect(deliver).toHaveBeenCalledWith('a')
+      expect(notify).toHaveBeenCalledWith('a', 'status')
+    })
   })
 
   describe('orchestration.inbox', () => {
@@ -1433,7 +1472,7 @@ describe('orchestration RPC methods', () => {
         .spyOn(runtime, 'deliverPendingMessagesForHandle')
         .mockImplementation(() => {})
       vi.spyOn(runtime, 'notifyMessageArrived').mockImplementation(() => {})
-      vi.spyOn(runtime, 'waitForMessage').mockImplementation(async () => {
+      const waitForMessage = vi.spyOn(runtime, 'waitForMessage').mockImplementation(async () => {
         // Simulate coordinator replying in the thread during the wait
         const outbound = db.getInbox(10).find((m) => m.type === 'decision_gate')
         if (outbound) {
@@ -1476,6 +1515,12 @@ describe('orchestration RPC methods', () => {
         wakeAgent: true,
         messageType: 'decision_gate'
       })
+      // The ask waiter only reads its own thread, so it must register as a
+      // passive waiter that never suppresses wake pushes to the asker.
+      expect(waitForMessage).toHaveBeenCalledWith(
+        'term_worker',
+        expect.objectContaining({ ownsDelivery: false })
+      )
     })
 
     it('returns timedOut when no reply arrives in the window', async () => {

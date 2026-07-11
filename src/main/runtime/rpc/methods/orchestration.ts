@@ -235,7 +235,10 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
         })
       )
       for (const message of messages) {
-        deliverOrchestrationMessage(runtime, message)
+        // Why: a group escalation/decision_gate would otherwise wake-inject
+        // into every working recipient, hijacking N in-flight worker turns
+        // from one send. Group traffic stays push-on-idle.
+        deliverOrchestrationMessage(runtime, message, { allowWake: false })
       }
 
       return { messages, recipients: handles.length }
@@ -340,7 +343,10 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
         threadId: original.thread_id ?? original.id
       })
 
-      runtime.notifyMessageArrived(original.from_handle, reply.type)
+      // Why: notify alone strands the reply for an already-idle recipient (no
+      // waiter to resolve, no future idle transition to push on); route it
+      // through the shared delivery entry point like every other insert.
+      deliverOrchestrationMessage(runtime, reply)
       return { message: reply }
     }
   }),
@@ -618,7 +624,13 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
         }
         // Why: if the asking client disconnects, release the waiter immediately
         // while leaving the already-sent decision gate visible to the recipient.
-        await runtime.waitForMessage(from, { timeoutMs: remainingMs, signal })
+        // ownsDelivery: false — this waiter only reads its own thread, so it
+        // must not suppress wake pushes of unrelated lifecycle messages.
+        await runtime.waitForMessage(from, {
+          timeoutMs: remainingMs,
+          signal,
+          ownsDelivery: false
+        })
       }
     }
   }),

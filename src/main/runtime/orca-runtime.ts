@@ -1361,6 +1361,9 @@ type TerminalWaiter = {
 type MessageWaiter = {
   handle: string
   typeFilter: string[] | undefined
+  // Why: ask-style waiters only consume replies in their own thread, so they
+  // must not count as the delivery owner that suppresses wake pushes.
+  ownsDelivery: boolean
   resolve: (result: void) => void
   timeout: NodeJS.Timeout | null
   abortCleanup: (() => void) | null
@@ -1369,6 +1372,10 @@ type MessageWaiter = {
 function messageWaiterMatchesType(waiter: MessageWaiter, messageType?: string): boolean {
   return !messageType || !waiter.typeFilter || waiter.typeFilter.includes(messageType)
 }
+
+// Why: distinguishes "Enter withheld after a completed paste" from a failed
+// paste — the pasted rows must be stamped delivered, not replayed.
+const WAKE_ENTER_WITHHELD_AFTER_PASTE = 'wake_enter_withheld_after_paste'
 
 type PendingMessageDeliveryOptions = {
   wakeAgent?: boolean
@@ -5491,6 +5498,17 @@ export class OrcaRuntimeService {
           prevTitle !== oscTitle || prevStatus !== pty.lastAgentStatus
         if (agentStatus === 'idle' && prevStatus !== 'idle') {
           this.resolvePtyTuiIdleWaiters(pty, ptyId)
+          // Why: headless/daemon coordinators have no renderer leaf, so this
+          // transition is their only redelivery event — a wake that was
+          // skipped or failed while the agent was busy retries here.
+          const ptyHandle = this.handleByPtyId.get(ptyId)
+          if (ptyHandle && this.getLeavesForPty(ptyId).length === 0) {
+            try {
+              this.deliverPendingWakeMessagesForPtyHandle(ptyHandle)
+            } catch {
+              // Delivery must never break output processing; rows stay queued.
+            }
+          }
         }
         const shouldDelayMobileSnapshot =
           shouldTouchPtyBackedSessionTabs &&
@@ -7324,6 +7342,14 @@ export class OrcaRuntimeService {
       this.resolveExitWaiters(leaf)
       this.failActiveDispatchOnExit(leaf, exitCode)
     }
+    // Why: daemon/headless workers have no renderer leaf, so the loop above
+    // never sees them — without this route a crashed pty-only worker leaves
+    // its dispatch active forever and the coordinator is never escalated.
+    // Safe to run alongside the leaf loop: a dispatch is failed at most once.
+    const exitedPtyHandle = this.handleByPtyId.get(ptyId)
+    if (exitedPtyHandle) {
+      this.failActiveDispatchForHandleOnExit(exitedPtyHandle, exitCode)
+    }
     this.pruneDisconnectedPtyRecords()
   }
 
@@ -8489,12 +8515,24 @@ export class OrcaRuntimeService {
   // next poll cycle. This catches agent crashes and unexpected exits within
   // milliseconds. The task is set back to 'pending' so it can be re-dispatched.
   private failActiveDispatchOnExit(leaf: RuntimeLeafRecord, exitCode: number): void {
-    if (!this._orchestrationDb) {
-      return
-    }
-
     const handle = this.handleByLeafKey.get(this.getLeafKey(leaf.tabId, leaf.leafId))
     if (!handle) {
+      return
+    }
+    this.failActiveDispatchForHandleOnExit(handle, exitCode)
+  }
+
+  private isHandleDeliverable(handle: string): boolean {
+    try {
+      this.getLiveLeafForHandle(handle)
+      return true
+    } catch {
+      return this.getLivePtyForHandle(handle)?.pty.connected === true
+    }
+  }
+
+  private failActiveDispatchForHandleOnExit(handle: string, exitCode: number): void {
+    if (!this._orchestrationDb) {
       return
     }
 
@@ -8508,12 +8546,15 @@ export class OrcaRuntimeService {
 
     // Why: a crashed worker never sends worker_done, and event-driven
     // coordinators no longer poll — the exit escalation is the only signal
-    // they get. Route it to whoever dispatched this context (the persisted
-    // handle covers manual coordinators; the active run covers automated
-    // ones and pre-migration rows) and push it like any lifecycle message.
+    // they get. Prefer a coordinator handle that is still deliverable so the
+    // escalation is not dead-lettered to a closed terminal.
+    const persisted = dispatch.coordinator_handle
+    const activeRun = this._orchestrationDb.getActiveCoordinatorRun()?.coordinator_handle
     const coordinatorHandle =
-      dispatch.coordinator_handle ??
-      this._orchestrationDb.getActiveCoordinatorRun()?.coordinator_handle
+      (persisted && this.isHandleDeliverable(persisted) ? persisted : null) ??
+      (activeRun && this.isHandleDeliverable(activeRun) ? activeRun : null) ??
+      persisted ??
+      activeRun
     if (!coordinatorHandle) {
       return
     }
@@ -9448,7 +9489,13 @@ export class OrcaRuntimeService {
       const chunks = iterateTerminalInputChunks(pastePayload)
       let chunk = chunks.next()
       while (!chunk.done) {
-        await options.beforeWrite?.(ptyId)
+        // Why: guard the paste start and the delayed Enter, not every 16KB
+        // chunk — per-chunk re-checks add a status/foreground probe round per
+        // chunk (relay RPCs on SSH) with only a millisecond-scale gap between
+        // chunks to protect.
+        if (!wrotePasteBytes) {
+          await options.beforeWrite?.(ptyId)
+        }
         const wrote = this.ptyController?.write(ptyId, chunk.value) ?? false
         if (!wrote) {
           throw new Error('terminal_not_writable')
@@ -20052,7 +20099,9 @@ export class OrcaRuntimeService {
       const { leaf } = this.getLiveLeafForHandle(handle)
       if (leaf.lastAgentStatus === 'idle') {
         this.deliverPendingMessages(leaf)
-      } else if (options.wakeAgent && leaf.lastAgentStatus === 'working') {
+      } else if (options.wakeAgent && leaf.lastAgentStatus !== 'permission') {
+        // Why: unknown status (title never classified) still gets a wake
+        // attempt; the pre-write safety assert is the real gate.
         this.deliverPendingMessages(leaf, { wakeAgent: true })
       }
       return
@@ -20086,7 +20135,10 @@ export class OrcaRuntimeService {
     if (!pty || !pty.connected) {
       return
     }
-    if (pty.lastAgentStatus !== 'working' && pty.lastAgentStatus !== 'idle') {
+    // Why: unknown status (e.g. tmux swallowing OSC titles) falls through to
+    // the pre-write safety assert instead of stranding the message; only a
+    // known permission state is a hard stop here.
+    if (pty.lastAgentStatus === 'permission') {
       return
     }
     if (this.orchestrationWakeDeliveryInFlightHandles.has(handle)) {
@@ -20103,7 +20155,28 @@ export class OrcaRuntimeService {
     if (unread.length === 0) {
       return
     }
-    this.submitWakeMessagesToAgent(handle, unread)
+    this.submitWakeMessagesRespectingWaiters(handle, unread)
+  }
+
+  // Why: a blocked check --wait registered during a settle window owns its
+  // matching rows; wake it and submit only rows no waiter is watching, so one
+  // message never reaches both the waiter and the PTY.
+  private submitWakeMessagesRespectingWaiters(handle: string, unread: MessageRow[]): void {
+    const waiterOwnedTypes = new Set<MessageType>()
+    const toSubmit: MessageRow[] = []
+    for (const row of unread) {
+      if (this.hasMatchingMessageWaiter(handle, row.type)) {
+        waiterOwnedTypes.add(row.type)
+      } else {
+        toSubmit.push(row)
+      }
+    }
+    for (const type of waiterOwnedTypes) {
+      this.notifyMessageArrived(handle, type)
+    }
+    if (toSubmit.length > 0) {
+      this.submitWakeMessagesToAgent(handle, toSubmit)
+    }
   }
 
   private hasMatchingMessageWaiter(handle: string, messageType?: MessageType): boolean {
@@ -20111,7 +20184,9 @@ export class OrcaRuntimeService {
     if (!waiters || waiters.size === 0) {
       return false
     }
-    return [...waiters].some((waiter) => messageWaiterMatchesType(waiter, messageType))
+    return [...waiters].some(
+      (waiter) => waiter.ownsDelivery && messageWaiterMatchesType(waiter, messageType)
+    )
   }
 
   // Why: after a message is inserted for a recipient, any blocking
@@ -20134,14 +20209,22 @@ export class OrcaRuntimeService {
 
   waitForMessage(
     handle: string,
-    options?: { typeFilter?: string[]; timeoutMs?: number; signal?: AbortSignal }
+    options?: {
+      typeFilter?: string[]
+      timeoutMs?: number
+      signal?: AbortSignal
+      ownsDelivery?: boolean
+    }
   ): Promise<void> {
     return new Promise((resolve) => {
       const timeoutMs = options?.timeoutMs ?? MESSAGE_WAIT_DEFAULT_TIMEOUT_MS
 
       const waiter: MessageWaiter = {
         handle,
-        typeFilter: options?.typeFilter,
+        // Why: DB reads treat an empty types list as "no filter"; normalize so
+        // waiter matching agrees instead of matching nothing.
+        typeFilter: options?.typeFilter?.length ? options.typeFilter : undefined,
+        ownsDelivery: options?.ownsDelivery ?? true,
         resolve,
         timeout: null,
         abortCleanup: null
@@ -20717,7 +20800,7 @@ export class OrcaRuntimeService {
     }
 
     if (options.wakeAgent) {
-      this.submitWakeMessagesToAgent(handle, unread)
+      this.submitWakeMessagesRespectingWaiters(handle, unread)
       return
     }
 
@@ -20752,30 +20835,42 @@ export class OrcaRuntimeService {
     // consumed this message." Flipping `read` on push-on-idle would hide the
     // message from the coordinator's next `check --unread`, which is the
     // exact bug feedback #2 reported. The two bits must stay independent.
+    //
+    // Why claim: this delayed-Enter window is an in-flight delivery like a
+    // wake submit — without the claim, a concurrent check or a second
+    // arrival would re-read the not-yet-stamped rows.
+    this.orchestrationWakeDeliveryInFlightHandles.add(handle)
+    for (const m of unread) {
+      this.orchestrationWakeDeliveryClaimedMessageIds.add(m.id)
+    }
     const ptyId = leaf.ptyId
     setTimeout(() => {
       try {
-        if (!leaf.writable) {
-          return
-        }
-        const submitted = this.ptyController?.write(ptyId, '\r') ?? false
-        if (submitted) {
-          this._orchestrationDb?.markAsDelivered(unread.map((m) => m.id))
+        if (leaf.writable) {
+          const submitted = this.ptyController?.write(ptyId, '\r') ?? false
+          if (submitted) {
+            this._orchestrationDb?.markAsDelivered(unread.map((m) => m.id))
+          }
         }
       } catch {
         // Terminal may have closed during the delay — messages stay queued
         // (delivered_at still NULL) and will be re-delivered on the next
         // idle transition.
+      } finally {
+        for (const m of unread) {
+          this.orchestrationWakeDeliveryClaimedMessageIds.delete(m.id)
+        }
+        this.orchestrationWakeDeliveryInFlightHandles.delete(handle)
+        if (this.orchestrationWakeDeliveryPendingHandles.delete(handle)) {
+          this.drainPendingWakeDelivery(handle)
+        }
       }
     }, 500)
   }
 
-  // Why: `lastAgentStatus` mirrors the newest observed title, which survives an
-  // agent crash in shells that never repaint the OSC title (#1437). A live
+  // Why: a stale 'working' title can survive an agent crash (#1437), so a live
   // shell foreground process is definitive negative evidence, and a permission
-  // state means the delayed Enter could approve a pending request — both must
-  // abort the submit. Also used as the beforeWrite re-check so the Enter is
-  // withheld when the state changes inside the paste-settle window.
+  // state means the delayed Enter could approve a pending request.
   private async assertWakeDeliveryTargetSafe(handle: string): Promise<void> {
     const status = await this.getTerminalAgentStatus(handle)
     if (!status.isRunningAgent || status.status === 'permission') {
@@ -20793,27 +20888,43 @@ export class OrcaRuntimeService {
     for (const id of messageIds) {
       this.orchestrationWakeDeliveryClaimedMessageIds.add(id)
     }
-    void this.assertWakeDeliveryTargetSafe(handle)
-      .then(() =>
-        this.sendTerminalAgentPrompt(handle, payload, {
-          beforeWrite: () => this.assertWakeDeliveryTargetSafe(handle)
+    const stampDelivered = (): void => {
+      try {
+        this._orchestrationDb?.markAsDelivered(messageIds)
+      } catch (err) {
+        // The prompt reached the terminal but the stamp failed (DB swapped or
+        // closed mid-flight); the rows will replay on the next delivery
+        // event, so leave a diagnosable trace for that duplicate.
+        console.warn('[orchestration] failed to stamp delivered_at after wake submit', {
+          handle,
+          messageIds,
+          err
         })
-      )
+      }
+    }
+    let settled = false
+    void this.sendTerminalAgentPrompt(handle, payload, {
+      beforeWrite: () => this.assertWakeDeliveryTargetSafe(handle),
+      suffixFailureError: WAKE_ENTER_WITHHELD_AFTER_PASTE
+    })
       .then(() => {
-        try {
-          this._orchestrationDb?.markAsDelivered(messageIds)
-        } catch (err) {
-          // The prompt was submitted but the stamp failed (DB swapped or
-          // closed mid-flight); the rows will replay on the next delivery
-          // event, so leave a diagnosable trace for that duplicate.
-          console.warn('[orchestration] failed to stamp delivered_at after wake submit', {
-            handle,
-            messageIds,
-            err
-          })
-        }
+        settled = true
+        stampDelivered()
       })
       .catch((err) => {
+        if (err instanceof Error && err.message === WAKE_ENTER_WITHHELD_AFTER_PASTE) {
+          // Why: the banner is already sitting in the agent's composer.
+          // Replaying the row would paste it a second time, so stamp it
+          // delivered — it stays unread and check-visible, and the pasted
+          // text submits with the agent's next Enter.
+          settled = true
+          stampDelivered()
+          console.warn('[orchestration] wake Enter withheld; pasted rows stamped delivered', {
+            handle,
+            messageIds
+          })
+          return
+        }
         // Failed submits leave the rows queued for a future delivery event.
         console.warn('[orchestration] working-agent wake delivery failed; messages stay queued', {
           handle,
@@ -20825,7 +20936,23 @@ export class OrcaRuntimeService {
           this.orchestrationWakeDeliveryClaimedMessageIds.delete(id)
         }
         this.orchestrationWakeDeliveryInFlightHandles.delete(handle)
-        if (!this.orchestrationWakeDeliveryPendingHandles.delete(handle)) {
+        const drainRequested = this.orchestrationWakeDeliveryPendingHandles.delete(handle)
+        if (!settled) {
+          // Why: a check --wait that registered during the claim window saw
+          // these rows filtered; wake it now that they are released, or the
+          // long-poll burns its whole timeout on an already-available row.
+          const releasedTypes = new Set(unread.map((m) => m.type))
+          const notifyTypes = [...releasedTypes].filter((type) =>
+            this.hasMatchingMessageWaiter(handle, type)
+          )
+          if (notifyTypes.length > 0) {
+            for (const type of notifyTypes) {
+              this.notifyMessageArrived(handle, type)
+            }
+            return
+          }
+        }
+        if (!drainRequested) {
           return
         }
         // Drain even when this submit failed: the deferred arrival was a real
@@ -20842,7 +20969,7 @@ export class OrcaRuntimeService {
       const { leaf } = this.getLiveLeafForHandle(handle)
       if (leaf.lastAgentStatus === 'idle') {
         this.deliverPendingMessages(leaf)
-      } else if (leaf.lastAgentStatus === 'working') {
+      } else if (leaf.lastAgentStatus !== 'permission') {
         this.deliverPendingMessages(leaf, { wakeAgent: true })
       }
       return

@@ -27,9 +27,12 @@ export type OrchestrationMessageDeliverer = {
 // waiter, so the reversed order would make both paths observe the message.
 export function deliverOrchestrationMessage(
   runtime: OrchestrationMessageDeliverer,
-  message: Pick<MessageRow, 'to_handle' | 'type'>
+  message: Pick<MessageRow, 'to_handle' | 'type'>,
+  // Why: group fan-out must not steer working agents — a single group send
+  // would auto-submit into every busy recipient's turn.
+  options: { allowWake?: boolean } = {}
 ): void {
-  if (shouldWakeCoordinatorForMessage(message.type)) {
+  if ((options.allowWake ?? true) && shouldWakeCoordinatorForMessage(message.type)) {
     runtime.deliverPendingMessagesForHandle(message.to_handle, {
       wakeAgent: true,
       messageType: message.type

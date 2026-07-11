@@ -44,6 +44,9 @@ function createMockRuntime(): CoordinatorRuntime & {
       mock.sentMessages.push({ handle, text: prompt })
       return { handle, accepted: true, bytesWritten: 0 }
     },
+    isMessageClaimedForWakeDelivery() {
+      return false
+    },
     async listTerminals() {
       return { terminals: mock.terminals }
     },
@@ -169,6 +172,42 @@ describe('Coordinator', () => {
 
     expect(result.status).toBe('completed')
     expect(result.completedTasks).toContain(task.id)
+  })
+
+  it('skips messages claimed by an in-flight wake delivery', async () => {
+    db = new OrchestrationDb(':memory:')
+    const runtime = createMockRuntime()
+
+    const task = db.createTask({ spec: 'claimed row stays unread' })
+    const dispatch = db.createDispatchContext(task.id, 'term_a')
+    const done = db.insertMessage({
+      from: 'term_a',
+      to: 'coord',
+      subject: 'Done',
+      type: 'worker_done',
+      payload: JSON.stringify({ taskId: task.id, dispatchId: dispatch.id })
+    })
+    reconcileLifecycleMessage(db, done)
+    const claimed = db.insertMessage({
+      from: 'term_b',
+      to: 'coord',
+      subject: 'mid wake submit',
+      type: 'worker_done'
+    })
+    runtime.isMessageClaimedForWakeDelivery = (id: string) => id === claimed.id
+
+    const coordinator = new Coordinator(db, runtime, {
+      spec: 'go',
+      coordinatorHandle: 'coord',
+      pollIntervalMs: 20
+    })
+    const result = await coordinator.run()
+
+    expect(result.status).toBe('completed')
+    // The claimed row must not be consumed by the loop while a wake submit
+    // is pasting it into the coordinator terminal.
+    const unread = db.getUnreadMessages('coord')
+    expect(unread.map((m) => m.id)).toEqual([claimed.id])
   })
 
   it('does not duplicate completedTasks for repeated completed worker_done messages', async () => {
