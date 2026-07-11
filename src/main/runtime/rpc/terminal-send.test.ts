@@ -5,6 +5,10 @@ import type { OrcaRuntimeService } from '../orca-runtime'
 import { TERMINAL_METHODS } from './methods/terminal'
 import { CLIPBOARD_TEXT_MEASURE_YIELD_CODE_UNITS } from '../../../shared/clipboard-text'
 import {
+  RUNTIME_CAPABILITIES,
+  TERMINAL_QUERY_REPLY_INPUT_RUNTIME_CAPABILITY
+} from '../../../shared/protocol-version'
+import {
   TERMINAL_INPUT_MAX_BYTES,
   TERMINAL_INPUT_TOO_LARGE_ERROR
 } from '../../../shared/terminal-input'
@@ -576,5 +580,10 @@ describe('terminal send RPC', () => {
     }
     expect(response.result).toEqual({ restored: true })
     expect(runtime.reclaimTerminalForDesktop).toHaveBeenCalledWith('pty-1')
+  })
+  // Why: mobile gates reply forwarding on this static capability; removing it
+  // would silently re-break mobile query answering against current hosts.
+  it('advertises query-reply input support to mobile clients', () => {
+    expect(RUNTIME_CAPABILITIES).toContain(TERMINAL_QUERY_REPLY_INPUT_RUNTIME_CAPABILITY)
   })
 })

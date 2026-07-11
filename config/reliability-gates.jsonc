@@ -2876,7 +2876,8 @@
       "knownGaps": [
         "No live iOS or Android WebView run is registered.",
         "No real SSH, WSL, daemon, or two-device provider-contract run is registered.",
-        "New mobile talking to an older desktop host writes the reply but the old host strips inputKind and may treat it as floor-taking input."
+        "Mixed-version pairing is gated by the terminal.query-reply-input.v1 capability (mobile drops replies unless the host advertises it), but no live old-binary pairing run is registered.",
+        "A desktop-to-mobile driver handoff has a bounded double-reply window: the server elects the mobile responder synchronously while the desktop renderer's cached driver map updates via an async event, so an in-flight query can be answered by both until the driver-change event lands."
       ],
       "demotionRule": "Keep experimental or disable mobile forwarding if the gate flakes without a product bug, live WebView input isolation regresses, or duplicate replies appear under multi-mobile use."
     },

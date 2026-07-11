@@ -113,6 +113,7 @@ import { dismissTerminalKeyboard } from '../../../../src/terminal/terminal-keybo
 import type { TerminalLiveInputSender } from '../../../../src/terminal/terminal-live-input-sender'
 import { isTerminalSendRpcAccepted } from '../../../../src/terminal/terminal-send-rpc-response'
 import { sendMobileTerminalQueryReply } from '../../../../src/terminal/mobile-terminal-query-reply'
+import { TERMINAL_QUERY_REPLY_INPUT_RUNTIME_CAPABILITY } from '../../../../../src/shared/protocol-version'
 import { useTerminalLiveInputCommit } from '../../../../src/terminal/use-terminal-live-input-commit'
 import {
   getTerminalCommandKeyboardType,
@@ -2425,10 +2426,13 @@ export default function SessionScreen() {
     terminalGestureInputInFlightRef.current.clear()
   }, [connState])
 
+  const hostQueryReplyInputSupportedRef = useRef(false)
+
   useEffect(() => {
     if (!client || connState !== 'connected') {
       setBrowserScreencastSupported(null)
       setAgentSessionHistorySupported(null)
+      hostQueryReplyInputSupportedRef.current = false
       return
     }
     let stale = false
@@ -2445,11 +2449,16 @@ export default function SessionScreen() {
         setAgentSessionHistorySupported(
           status.capabilities?.includes(MOBILE_AI_VAULT_CAPABILITY) === true
         )
+        // Why: hosts without this capability strip inputKind from terminal.send,
+        // so a forwarded xterm reply would become floor-stealing shell input.
+        hostQueryReplyInputSupportedRef.current =
+          status.capabilities?.includes(TERMINAL_QUERY_REPLY_INPUT_RUNTIME_CAPABILITY) === true
       })
       .catch(() => {
         if (!stale) {
           setBrowserScreencastSupported(false)
           setAgentSessionHistorySupported(false)
+          hostQueryReplyInputSupportedRef.current = false
         }
       })
     return () => {
@@ -3539,6 +3548,7 @@ export default function SessionScreen() {
       clientId: deviceTokenRef.current,
       connected: connStateRef.current === 'connected',
       handle,
+      hostSupportsQueryReplyInput: hostQueryReplyInputSupportedRef.current,
       subscribedTerminals: terminalUnsubsRef.current
     })
   }, [])

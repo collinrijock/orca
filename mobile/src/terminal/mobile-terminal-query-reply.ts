@@ -12,6 +12,7 @@ type MobileTerminalQueryReplyOptions = {
   clientId: string | null
   connected: boolean
   handle: string
+  hostSupportsQueryReplyInput: boolean
   subscribedTerminals: TerminalSubscriptionRegistry
 }
 
@@ -21,11 +22,20 @@ export function sendMobileTerminalQueryReply({
   clientId,
   connected,
   handle,
+  hostSupportsQueryReplyInput,
   subscribedTerminals
 }: MobileTerminalQueryReplyOptions): Promise<boolean> {
   // Why: every subscribed mobile xterm suppresses main's responder, including
   // hidden panes, so ownership follows the subscription rather than focus.
-  if (!client || !connected || !subscribedTerminals.has(handle) || !isTerminalQueryReply(bytes)) {
+  // Hosts without terminal.query-reply-input.v1 strip inputKind and would take
+  // reply bytes as floor-stealing shell input, so drop (pre-fix behavior).
+  if (
+    !client ||
+    !connected ||
+    !hostSupportsQueryReplyInput ||
+    !subscribedTerminals.has(handle) ||
+    !isTerminalQueryReply(bytes)
+  ) {
     return Promise.resolve(false)
   }
 

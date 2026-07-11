@@ -24,6 +24,7 @@ describe('sendMobileTerminalQueryReply', () => {
         clientId: 'mobile-1',
         connected: true,
         handle: 'terminal-1',
+        hostSupportsQueryReplyInput: true,
         subscribedTerminals: new Set(['terminal-1'])
       })
     ).resolves.toBe(true)
@@ -52,7 +53,27 @@ describe('sendMobileTerminalQueryReply', () => {
         clientId: 'mobile-1',
         connected,
         handle,
+        hostSupportsQueryReplyInput: true,
         subscribedTerminals
+      })
+    ).resolves.toBe(false)
+    expect(client.sendRequest).not.toHaveBeenCalled()
+  })
+
+  // Why: hosts without terminal.query-reply-input.v1 strip inputKind (zod drops
+  // unknown keys) and would treat the reply as floor-taking shell input.
+  it('does not send to a host that has not advertised query-reply input support', async () => {
+    const client = createClient()
+
+    await expect(
+      sendMobileTerminalQueryReply({
+        bytes: '\x1b[3;4R',
+        client,
+        clientId: 'mobile-1',
+        connected: true,
+        handle: 'terminal-1',
+        hostSupportsQueryReplyInput: false,
+        subscribedTerminals: new Set(['terminal-1'])
       })
     ).resolves.toBe(false)
     expect(client.sendRequest).not.toHaveBeenCalled()

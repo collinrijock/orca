@@ -109,6 +109,12 @@ is determined by preserved `subscribedAt`, so a soft-leave resubscribe does not
 change reply ownership; passive desktop-mode watchers are excluded. Peer phones
 are rejected, the next subscriber is promoted on unsubscribe, and desktop
 parser and capability handlers stay silent until desktop retakes the driver.
+Mixed versions: hosts advertise `terminal.query-reply-input.v1`; a mobile
+client never forwards replies to a host that lacks it, because such hosts
+strip `inputKind` and would treat the bytes as floor-taking shell input.
+Residual: a desktop→mobile driver handoff has a bounded double-reply window
+until the async driver-change event reaches the desktop renderer's cached
+driver map (`isPtyLocked`).
 
 Everything the emulator emits outside a forwarding window is discarded, which
 also swallows unsolicited core emissions (e.g. native 997 color-scheme pushes
