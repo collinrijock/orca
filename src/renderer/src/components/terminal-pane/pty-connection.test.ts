@@ -12,6 +12,7 @@ import {
   RESET_TERMINAL_CURSOR_STYLE
 } from './layout-serialization'
 import { buildFreshShellViewportBlankingSequence } from './terminal-restored-viewport'
+import { DEFAULT_DA1_RESPONSE } from './terminal-capability-replies'
 import { TERMINAL_PASTE_DIRECT_MAX_BYTES } from './terminal-paste-coordinator'
 import { resolveWindowsShiftEnterEncodingForPane } from './terminal-windows-shift-enter'
 import type * as UseNotificationDispatchModule from './use-notification-dispatch'
@@ -8344,23 +8345,24 @@ describe('connectPanePty', () => {
         }
       })
 
-      it('salvages stateful queries out of an overflowing restore queue', async () => {
+      it('sends salvaged queries immediately from an overflowing restore queue', async () => {
         const { pane, transport, dataCallback } = await startInFlightRestore()
 
-        // Queue 400KB, then a chunk that overflows the cap and carries a DSR
-        // probe. The content is discarded (snapshot owns it) but the probe's
-        // reply is SYNTHESIZED directly — replaying it into xterm would race
-        // the restore's discard and the replay guard's auto-reply swallow.
+        // Queue 400KB, then overflow with color, CPR, and DA probes. The
+        // discarded probes need direct replies before their read windows close.
         dataCallback('a'.repeat(400 * 1024), { seq: 400 * 1024, rawLength: 400 * 1024 })
-        dataCallback(`${'b'.repeat(200 * 1024)}\x1b[6n`, {
-          seq: 600 * 1024 + 4,
-          rawLength: 200 * 1024 + 4
+        const queries = '\x1b]11;?\x1b\\\x1b[6n\x1b[c'
+        dataCallback(`${'b'.repeat(200 * 1024)}${queries}`, {
+          seq: 600 * 1024 + queries.length,
+          rawLength: 200 * 1024 + queries.length
         })
         await flushAsyncTicks(8)
 
-        const replies = transport.sendInput.mock.calls.map((call) => String(call[0]))
+        const replies = transport.sendInputImmediate.mock.calls.map((call) => String(call[0]))
+        expect(replies.some((reply) => reply.startsWith('\x1b]11;rgb:'))).toBe(true)
         // oxlint-disable-next-line no-control-regex -- the ESC byte IS the payload: this matches the CPR reply
         expect(replies.some((reply) => /^\u001b\[\d+;\d+R$/.test(reply))).toBe(true)
+        expect(replies).toContain(DEFAULT_DA1_RESPONSE)
         const written = writtenFloodData(pane)
         expect(written).not.toContain('aaaa')
         expect(written).not.toContain('bbbb')
@@ -9232,7 +9234,7 @@ describe('connectPanePty', () => {
     isVisibleRef.current = true
     capturedDataCallback.current?.('31h')
 
-    expect(transport.sendInput).toHaveBeenCalledWith('\x1b[?997;2n')
+    expect(transport.sendInputImmediate).toHaveBeenCalledWith('\x1b[?997;2n')
     expect(paneMode2031Ref.current.get(1)).toBe(true)
     expect(paneLastThemeModeRef.current.get(1)).toBe('light')
     expect(pane.terminal.write).not.toHaveBeenCalledWith('31h', expect.any(Function))

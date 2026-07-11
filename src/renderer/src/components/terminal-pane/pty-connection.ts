@@ -5029,10 +5029,9 @@ export function connectPanePty(
       const settings = useAppStore.getState().settings
       const mode = resolveTerminalColorSchemeMode(settings, getSystemPrefersDark())
       // Why: hidden snapshot-backed panes skip xterm.write for PTY bytes. Answer
-      // mode 2031 out-of-band so TUIs still render the snapshot with the same
-      // theme-dependent styling they would have used in a visible pane.
+      // immediately so the reply cannot outlive the program's read window.
       deps.paneMode2031Ref.current.set(pane.id, true)
-      transport.sendInput(mode2031SequenceFor(mode))
+      transport.sendInputImmediate(mode2031SequenceFor(mode))
       deps.paneLastThemeModeRef.current.set(pane.id, mode)
       recordHiddenMode2031Reply()
     }
@@ -5311,7 +5310,7 @@ export function connectPanePty(
     // Why: discarding queued flood bytes must never swallow terminal queries —
     // a lost DSR/CPR (or color/DA) reply hangs the querying program (the bench
     // DSR timeout). The discarded CONTENT is owned by the snapshot repaint.
-    // Replies are SYNTHESIZED directly (transport.sendInput) instead of
+    // Replies are synthesized through the immediate input path instead of
     // replaying the queries into xterm: a drop always triggers a snapshot
     // restore, whose replay guard swallows xterm auto-replies and whose
     // discardTerminalOutput races away queued query writes — both killed the
@@ -5324,7 +5323,7 @@ export function connectPanePty(
       const extracted = extractHiddenStartupRendererQueryData(data, '')
       if (extracted.oscColorQueryData) {
         sendTerminalOscColorQueryReplies(extracted.oscColorQueryData, pane.terminal, (reply) =>
-          transport.sendInput(reply)
+          transport.sendInputImmediate(reply)
         )
       }
       let unansweredQueryData = ''
@@ -5338,9 +5337,9 @@ export function connectPanePty(
           const buffer = pane.terminal.buffer.active
           const row = Math.min(buffer.cursorY + 1, pane.terminal.rows)
           const col = Math.min(buffer.cursorX + 1, pane.terminal.cols)
-          transport.sendInput(`\x1b[${row};${col}R`)
+          transport.sendInputImmediate(`\x1b[${row};${col}R`)
         } else if (sequence === '\x1b[c' || sequence === '\x1b[0c') {
-          transport.sendInput(DEFAULT_DA1_RESPONSE)
+          transport.sendInputImmediate(DEFAULT_DA1_RESPONSE)
         } else {
           unansweredQueryData += sequence
         }
