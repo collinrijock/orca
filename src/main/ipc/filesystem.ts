@@ -1,10 +1,10 @@
 /* eslint-disable max-lines */
 import { BrowserWindow, dialog, ipcMain, shell } from 'electron'
-import { readdir, readFile, writeFile, stat, lstat, open, rename, rm } from 'fs/promises'
-import type { FileHandle } from 'fs/promises'
-import { randomUUID } from 'crypto'
-import { dirname, extname, join, resolve } from 'path'
-import type { ChildProcess } from 'child_process'
+import { readdir, readFile, writeFile, stat, lstat, open, rename, rm } from 'node:fs/promises'
+import type { FileHandle } from 'node:fs/promises'
+import { randomUUID } from 'node:crypto'
+import { dirname, extname, join, resolve } from 'node:path'
+import type { ChildProcess } from 'node:child_process'
 import { gitExecFileAsync, wslAwareSpawn } from '../git/runner'
 import { parseWslPath, toWindowsWslPath } from '../wsl'
 import { tryDeleteWslUncPath } from '../wsl-unc-delete'
@@ -115,9 +115,13 @@ import {
   type CommitMessageAgentEnvironmentResolvers
 } from '../text-generation/commit-message-agent-environment'
 import { listRepoWorktrees } from '../repo-worktrees'
+import { recordCrashBreadcrumb } from '../crash-reporting/crash-breadcrumb-store'
+import { buildReadDirErrorBreadcrumb, type ReadDirThrowSite } from './readdir-error-diagnostics'
 import { splitWorktreeId } from '../../shared/worktree-id'
 import { getRuntimePathBasename } from '../../shared/cross-platform-path'
 import type { LocalProjectWorktreeGitOptions } from '../project-runtime-git-options'
+import { registerLocalLogTailHandlers } from './local-log-tail'
+import { localLogFileIdentity } from '../ai-vault/local-log-tail-reader'
 
 // Why: Monaco has large-file optimizations like VS Code; blocking at 5MB makes
 // ordinary JSON/log files inaccessible before the editor can degrade features.
@@ -145,6 +149,38 @@ const PREVIEWABLE_BINARY_MIME_TYPES: Record<string, string> = {
 }
 const WINDOWS_RESERVED_LOCAL_BASENAME = /^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\..*)?$/i
 const LOCAL_FILENAME_REPLACEMENT_CHARS = new Set(['<', '>', ':', '"', '/', '\\', '|', '?', '*'])
+
+async function readLocalLogSnapshot(filePath: string): Promise<{
+  content: string
+  isBinary: boolean
+  fileIdentity?: string
+}> {
+  const handle = await open(filePath, 'r')
+  try {
+    const stats = await handle.stat()
+    if (stats.size > MAX_TEXT_FILE_SIZE) {
+      throw new Error(
+        `File too large: ${(stats.size / 1024 / 1024).toFixed(1)}MB exceeds ${MAX_TEXT_FILE_SIZE / 1024 / 1024}MB limit`
+      )
+    }
+    const buffer = await handle.readFile()
+    if (buffer.byteLength > MAX_TEXT_FILE_SIZE) {
+      throw new Error(
+        `File too large: ${(buffer.byteLength / 1024 / 1024).toFixed(1)}MB exceeds ${MAX_TEXT_FILE_SIZE / 1024 / 1024}MB limit`
+      )
+    }
+    if (isBinaryBuffer(buffer)) {
+      return { content: '', isBinary: true }
+    }
+    return {
+      content: buffer.toString('utf8'),
+      isBinary: false,
+      fileIdentity: localLogFileIdentity(stats)
+    }
+  } finally {
+    await handle.close()
+  }
+}
 
 type DownloadFileResult = { canceled: true } | { canceled: false; destinationPath: string }
 
@@ -483,27 +519,48 @@ export function registerFilesystemHandlers(
   ipcMain.handle(
     'fs:readDir',
     async (_event, args: { dirPath: string; connectionId?: string }): Promise<DirEntry[]> => {
-      if (args.connectionId) {
-        const provider = requireSshFilesystemProvider(args.connectionId)
-        return provider.readDir(args.dirPath)
-      }
-      const dirPath = await resolveAuthorizedPath(args.dirPath, store)
-      const entries = await readdir(dirPath, { withFileTypes: true })
-      const mapped = await Promise.all(
-        entries.map(async (entry) => ({
-          name: entry.name,
-          isDirectory: await isDirectoryEntry(dirPath, entry, (entryPath) =>
-            resolveAuthorizedPath(entryPath, store)
-          ),
-          isSymlink: entry.isSymbolicLink()
-        }))
-      )
-      return mapped.sort((a, b) => {
-        if (a.isDirectory !== b.isDirectory) {
-          return a.isDirectory ? -1 : 1
+      // Why: a thrown fs:readDir reaches the renderer as the opaque "Error
+      // invoking remote method 'fs:readDir'" (Windows WSL/UNC realpath/readdir
+      // failures, dropped SSH providers). Record which throw site fired plus a
+      // redacted path shape so these are diagnosable without the raw path.
+      let throwSite: ReadDirThrowSite = 'authorize'
+      try {
+        if (args.connectionId) {
+          throwSite = 'ssh-provider'
+          const provider = requireSshFilesystemProvider(args.connectionId)
+          return await provider.readDir(args.dirPath)
         }
-        return a.name.localeCompare(b.name)
-      })
+        throwSite = 'authorize'
+        const dirPath = await resolveAuthorizedPath(args.dirPath, store)
+        throwSite = 'readdir'
+        const entries = await readdir(dirPath, { withFileTypes: true })
+        const mapped = await Promise.all(
+          entries.map(async (entry) => ({
+            name: entry.name,
+            isDirectory: await isDirectoryEntry(dirPath, entry, (entryPath) =>
+              resolveAuthorizedPath(entryPath, store)
+            ),
+            isSymlink: entry.isSymbolicLink()
+          }))
+        )
+        return mapped.sort((a, b) => {
+          if (a.isDirectory !== b.isDirectory) {
+            return a.isDirectory ? -1 : 1
+          }
+          return a.name.localeCompare(b.name)
+        })
+      } catch (error: unknown) {
+        recordCrashBreadcrumb(
+          'fs_readdir_error',
+          buildReadDirErrorBreadcrumb({
+            dirPath: args.dirPath,
+            connectionId: args.connectionId,
+            throwSite,
+            error
+          })
+        )
+        throw error
+      }
     }
   )
 
@@ -511,13 +568,22 @@ export function registerFilesystemHandlers(
     'fs:readFile',
     async (
       _event,
-      args: { filePath: string; connectionId?: string }
-    ): Promise<{ content: string; isBinary: boolean; isImage?: boolean; mimeType?: string }> => {
+      args: { filePath: string; connectionId?: string; includeLocalLogMetadata?: boolean }
+    ): Promise<{
+      content: string
+      isBinary: boolean
+      isImage?: boolean
+      mimeType?: string
+      fileIdentity?: string
+    }> => {
       if (args.connectionId) {
         const provider = requireSshFilesystemProvider(args.connectionId)
         return provider.readFile(args.filePath)
       }
       const filePath = await resolveAuthorizedPath(args.filePath, store)
+      if (args.includeLocalLogMetadata === true) {
+        return readLocalLogSnapshot(filePath)
+      }
       const stats = await stat(filePath)
       const mimeType = PREVIEWABLE_BINARY_MIME_TYPES[extname(filePath).toLowerCase()]
       const sizeLimit = mimeType ? MAX_PREVIEWABLE_BINARY_SIZE : MAX_TEXT_FILE_SIZE
@@ -1003,29 +1069,56 @@ export function registerFilesystemHandlers(
   )
 
   // ─── List all files (for quick-open) ─────────────────────
+  // Why #7721: keyed by renderer-generated token so a workspace switch can
+  // abort the previous workspace's full-tree scan (SSH relays otherwise stack
+  // scans that starve interactive fs.readDir/fs.stat past their 30s timeout).
+  const listFilesCancellations = new Map<string, AbortController>()
   ipcMain.handle(
     'fs:listFiles',
     async (
       _event,
-      args: { rootPath: string; connectionId?: string; excludePaths?: string[] }
-    ): Promise<string[]> => {
-      if (args.connectionId) {
-        const provider = getSshFilesystemProvider(args.connectionId)
-        // Why: when the SSH connection is not yet established (cold start) or
-        // temporarily disconnected, return [] so quick-open shows "No matching
-        // files" instead of an error banner. The file list will repopulate when
-        // the user re-opens quick-open after the connection is restored.
-        if (!provider) {
-          return []
-        }
-        // Why: forward excludePaths through to the remote provider.
-        // Dropping it here would silently double-scan nested linked worktrees
-        // over SSH and contribute to timeout-induced partial results.
-        return provider.listFiles(args.rootPath, { excludePaths: args.excludePaths })
+      args: {
+        rootPath: string
+        connectionId?: string
+        excludePaths?: string[]
+        requestToken?: string
       }
-      return listQuickOpenFiles(args.rootPath, store, args.excludePaths)
+    ): Promise<string[]> => {
+      const controller = args.requestToken ? new AbortController() : null
+      if (controller && args.requestToken) {
+        listFilesCancellations.set(args.requestToken, controller)
+      }
+      try {
+        if (args.connectionId) {
+          const provider = getSshFilesystemProvider(args.connectionId)
+          // Why: when the SSH connection is not yet established (cold start) or
+          // temporarily disconnected, return [] so quick-open shows "No matching
+          // files" instead of an error banner. The file list will repopulate when
+          // the user re-opens quick-open after the connection is restored.
+          if (!provider) {
+            return []
+          }
+          // Why: forward excludePaths through to the remote provider.
+          // Dropping it here would silently double-scan nested linked worktrees
+          // over SSH and contribute to timeout-induced partial results.
+          return await provider.listFiles(args.rootPath, {
+            excludePaths: args.excludePaths,
+            signal: controller?.signal
+          })
+        }
+        return await listQuickOpenFiles(args.rootPath, store, args.excludePaths, controller?.signal)
+      } finally {
+        if (args.requestToken) {
+          listFilesCancellations.delete(args.requestToken)
+        }
+      }
     }
   )
+
+  ipcMain.handle('fs:cancelListFiles', (_event, args: { requestToken: string }): void => {
+    // Why: best-effort — the entry is gone once the listing settles.
+    listFilesCancellations.get(args.requestToken)?.abort()
+  })
 
   // ─── Git operations ─────────────────────────────────────
   ipcMain.handle(
@@ -2166,4 +2259,6 @@ export function registerFilesystemHandlers(
       return getRemoteCommitUrl(worktreePath, sha)
     }
   )
+
+  registerLocalLogTailHandlers(store)
 }

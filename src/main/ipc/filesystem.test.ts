@@ -1,5 +1,5 @@
 /* eslint-disable max-lines -- Why: filesystem authorization and git/file IPC invariants are exercised end-to-end here, so the scenarios stay together to keep the security boundary readable. */
-import path from 'path'
+import path from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const handlers = new Map<string, (_event: unknown, args: unknown) => Promise<unknown> | unknown>()
@@ -42,7 +42,8 @@ const {
   cancelGeneratePullRequestFieldsLocalMock,
   getSshFilesystemProviderMock,
   getSshGitProviderMock,
-  tryDeleteWslUncPathMock
+  tryDeleteWslUncPathMock,
+  recordCrashBreadcrumbMock
 } = vi.hoisted(() => ({
   handleMock: vi.fn(),
   showSaveDialogMock: vi.fn(),
@@ -82,7 +83,8 @@ const {
   cancelGeneratePullRequestFieldsLocalMock: vi.fn(),
   getSshFilesystemProviderMock: vi.fn(),
   getSshGitProviderMock: vi.fn(),
-  tryDeleteWslUncPathMock: vi.fn()
+  tryDeleteWslUncPathMock: vi.fn(),
+  recordCrashBreadcrumbMock: vi.fn()
 }))
 
 vi.mock('electron', () => ({
@@ -114,6 +116,10 @@ vi.mock('fs/promises', () => ({
 
 vi.mock('../wsl-unc-delete', () => ({
   tryDeleteWslUncPath: tryDeleteWslUncPathMock
+}))
+
+vi.mock('../crash-reporting/crash-breadcrumb-store', () => ({
+  recordCrashBreadcrumb: recordCrashBreadcrumbMock
 }))
 
 vi.mock('../git/status', () => ({
@@ -247,6 +253,7 @@ describe('registerFilesystemHandlers', () => {
       rmMock,
       realpathMock,
       lstatMock,
+      recordCrashBreadcrumbMock,
       commitChangesMock,
       getStatusMock,
       abortMergeMock,
@@ -323,6 +330,70 @@ describe('registerFilesystemHandlers', () => {
     ).rejects.toThrow(
       'Remote connection dropped. Click Reconnect on the SSH target before retrying.'
     )
+  })
+
+  // Why: handler-level WSL UNC authorization depends on native Windows path
+  // resolution; path-shape classification has separate cross-platform coverage.
+  it.runIf(process.platform === 'win32')(
+    'records a redacted breadcrumb when fs:readDir throws on a WSL UNC path',
+    async () => {
+      registerFilesystemHandlers(store as never)
+      const wslPath = path.win32.join('\\\\wsl.localhost\\Ubuntu', 'home', 'user', 'repo')
+      // resolveAuthorizedPath authorizes the path, then readdir fails (distro stopped).
+      realpathMock.mockResolvedValue(wslPath)
+      registerWorktreeRootsForRepo(store as never, 'repo-1', [wslPath])
+      readdirMock.mockRejectedValue(Object.assign(new Error('EIO: i/o error'), { code: 'EIO' }))
+
+      await expect(handlers.get('fs:readDir')!(null, { dirPath: wslPath })).rejects.toThrow(/EIO/)
+
+      expect(recordCrashBreadcrumbMock).toHaveBeenCalledWith('fs_readdir_error', {
+        throwSite: 'readdir',
+        errorName: 'Error',
+        errorCode: 'EIO',
+        hasConnectionId: false,
+        isUNC: true,
+        isWsl: true
+      })
+      // The raw path must never appear in the breadcrumb payload.
+      const [, breadcrumbData] = recordCrashBreadcrumbMock.mock.calls[0]
+      expect(JSON.stringify(breadcrumbData)).not.toContain('user')
+    }
+  )
+
+  it('records a breadcrumb tagged ssh-provider when the SSH provider is gone', async () => {
+    registerFilesystemHandlers(store as never)
+    getSshFilesystemProviderMock.mockReturnValue(undefined)
+
+    await expect(
+      handlers.get('fs:readDir')!(null, { dirPath: '/remote/repo', connectionId: 'ssh-1' })
+    ).rejects.toThrow()
+
+    expect(recordCrashBreadcrumbMock).toHaveBeenCalledWith(
+      'fs_readdir_error',
+      expect.objectContaining({ throwSite: 'ssh-provider', hasConnectionId: true })
+    )
+  })
+
+  it('records a breadcrumb tagged authorize when the path is denied', async () => {
+    registerFilesystemHandlers(store as never)
+
+    await expect(
+      handlers.get('fs:readDir')!(null, { dirPath: path.resolve('/etc/passwd') })
+    ).rejects.toThrow()
+
+    expect(recordCrashBreadcrumbMock).toHaveBeenCalledWith(
+      'fs_readdir_error',
+      expect.objectContaining({ throwSite: 'authorize', hasConnectionId: false })
+    )
+  })
+
+  it('does not record a breadcrumb when fs:readDir succeeds', async () => {
+    registerFilesystemHandlers(store as never)
+    readdirMock.mockResolvedValue([dirEntry({ name: 'file.ts', file: true })])
+
+    await handlers.get('fs:readDir')!(null, { dirPath: REPO_PATH })
+
+    expect(recordCrashBreadcrumbMock).not.toHaveBeenCalled()
   })
 
   it('rejects remote downloads with missing required arguments', async () => {
@@ -834,6 +905,35 @@ describe('registerFilesystemHandlers', () => {
       content,
       isBinary: false
     })
+  })
+
+  it('returns stable byte metadata only for opted-in local log snapshots', async () => {
+    const content = Buffer.from('first\npartial')
+    const close = vi.fn()
+    openMock.mockResolvedValue({
+      stat: vi.fn().mockResolvedValue({
+        size: content.byteLength,
+        dev: 1,
+        ino: 2,
+        birthtimeMs: 3
+      }),
+      readFile: vi.fn().mockResolvedValue(content),
+      close
+    })
+    registerFilesystemHandlers(store as never)
+
+    await expect(
+      handlers.get('fs:readFile')!(null, {
+        filePath: path.resolve('/workspace/repo/session.jsonl'),
+        includeLocalLogMetadata: true
+      })
+    ).resolves.toEqual({
+      content: 'first\npartial',
+      isBinary: false,
+      fileIdentity: '1:2:3'
+    })
+    expect(close).toHaveBeenCalledTimes(1)
+    expect(readFileMock).not.toHaveBeenCalled()
   })
 
   it('rejects text files beyond the editor read budget', async () => {
@@ -2244,5 +2344,40 @@ describe('registerFilesystemHandlers', () => {
     expect(listFilesMock).toHaveBeenCalledWith('/home/user/repo', {
       excludePaths: ['/home/user/repo/worktrees/feature']
     })
+  })
+
+  // Why #7721: without a cancel path, every workspace switch left the previous
+  // workspace's full-tree SSH scan running, stacking scans on the relay until
+  // interactive fs.readDir/fs.stat starved past their 30s timeout.
+  it('fs:cancelListFiles aborts an in-flight SSH listing by request token (#7721)', async () => {
+    let capturedSignal: AbortSignal | undefined
+    const listFilesMock = vi.fn(
+      (_rootPath: string, options: { signal?: AbortSignal }) =>
+        new Promise<string[]>((_resolve, reject) => {
+          capturedSignal = options.signal
+          options.signal?.addEventListener('abort', () => reject(new Error('listing cancelled')), {
+            once: true
+          })
+        })
+    )
+    getSshFilesystemProviderMock.mockReturnValue({ listFiles: listFilesMock })
+
+    registerFilesystemHandlers(store as never)
+
+    const pending = handlers.get('fs:listFiles')!(null, {
+      rootPath: '/home/user/repo',
+      connectionId: 'conn-1',
+      requestToken: 'token-1'
+    }) as Promise<string[]>
+
+    expect(capturedSignal?.aborted).toBe(false)
+    await handlers.get('fs:cancelListFiles')!(null, { requestToken: 'token-1' })
+    expect(capturedSignal?.aborted).toBe(true)
+    await expect(pending).rejects.toThrow('listing cancelled')
+
+    // Unknown or already-settled tokens are a no-op, not an error.
+    expect(() =>
+      handlers.get('fs:cancelListFiles')!(null, { requestToken: 'unknown' })
+    ).not.toThrow()
   })
 })

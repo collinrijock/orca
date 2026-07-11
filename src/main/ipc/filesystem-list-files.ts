@@ -1,5 +1,5 @@
-import { sep } from 'path'
-import type { ChildProcess } from 'child_process'
+import { sep } from 'node:path'
+import type { ChildProcess } from 'node:child_process'
 import type { Store } from '../persistence'
 import { resolveAuthorizedPath } from './filesystem-auth'
 import { checkRgAvailable } from './rg-availability'
@@ -19,7 +19,8 @@ import { listFilesWithGit } from './filesystem-list-files-git-fallback'
 export async function listQuickOpenFiles(
   rootPath: string,
   store: Store,
-  excludePaths?: string[]
+  excludePaths?: string[],
+  signal?: AbortSignal
 ): Promise<string[]> {
   const authorizedRootPath = await resolveAuthorizedPath(rootPath, store)
   const localGitOptions = getLocalGitOptionsForRegisteredWorktree(
@@ -40,7 +41,7 @@ export async function listQuickOpenFiles(
   // can run.
   const rgAvailable = await checkRgAvailable(authorizedRootPath, localGitOptions.wslDistro)
   if (!rgAvailable) {
-    return listFilesWithGit(authorizedRootPath, excludePathPrefixes, localGitOptions)
+    return listFilesWithGit(authorizedRootPath, excludePathPrefixes, localGitOptions, signal)
   }
 
   const files = new Set<string>()
