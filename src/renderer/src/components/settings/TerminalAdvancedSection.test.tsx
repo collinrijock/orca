@@ -36,6 +36,7 @@ describe('TerminalAdvancedSection scrollback rows', () => {
           setScrollbackMode={vi.fn()}
           searchQuery=""
           showWindowsPowerShellImplementation={false}
+          showWindowsGitCredentialGuard={false}
           isMac={false}
         />
       )

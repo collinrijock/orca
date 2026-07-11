@@ -29,6 +29,7 @@ import {
   notifyGhPrimaryRateLimit
 } from './gh-rate-limit-breaker'
 import { getDefaultWslDistro, parseWslPath, toWindowsWslPath, type WslPathInfo } from '../wsl'
+import { addWslEnvKeys } from '../wsl-env'
 import { getSpawnArgsForWindows, isWindowsBatchScript, resolveWindowsCommand } from '../win32-utils'
 import {
   buildWslLoginShellCommand,
@@ -560,8 +561,13 @@ export function appendGitConfigEnv(
   return next
 }
 
-export function promptGuardGitEnv(env: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
-  return appendGitConfigEnv(
+const GIT_CONFIG_WSLENV_KEY_RE = /^GIT_CONFIG_(?:COUNT|KEY_\d+|VALUE_\d+)$/
+
+export function promptGuardGitEnv(
+  env: NodeJS.ProcessEnv = process.env,
+  platform: NodeJS.Platform = process.platform
+): NodeJS.ProcessEnv {
+  const next = appendGitConfigEnv(
     {
       ...env,
       GIT_TERMINAL_PROMPT: '0',
@@ -580,6 +586,19 @@ export function promptGuardGitEnv(env: NodeJS.ProcessEnv = process.env): NodeJS.
       ['credential.guiPrompt', 'false']
     ]
   )
+  if (platform === 'win32') {
+    // Why: wsl.exe only imports env vars named in WSLENV, so WSL-routed git
+    // would never see the guard — and WSL setups commonly use the Windows
+    // credential manager as git's helper, which pops the same OAuth window
+    // (issue #7652). Askpass vars are deliberately not forwarded: a Windows
+    // askpass path is meaningless inside the distro.
+    addWslEnvKeys(next, [
+      'GIT_TERMINAL_PROMPT',
+      'GCM_INTERACTIVE',
+      ...Object.keys(next).filter((key) => GIT_CONFIG_WSLENV_KEY_RE.test(key))
+    ])
+  }
+  return next
 }
 
 /**
@@ -597,10 +616,19 @@ export function promptGuardGitEnv(env: NodeJS.ProcessEnv = process.env): NodeJS.
  *   (an unknown host still errors, it just won't hang). Only added when the
  *   caller hasn't set its own GIT_SSH_COMMAND.
  */
-export function nonInteractiveGitEnv(env: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
-  const next = promptGuardGitEnv(env)
+export function nonInteractiveGitEnv(
+  env: NodeJS.ProcessEnv = process.env,
+  platform: NodeJS.Platform = process.platform
+): NodeJS.ProcessEnv {
+  const next = promptGuardGitEnv(env, platform)
   if (!next.GIT_SSH_COMMAND) {
     next.GIT_SSH_COMMAND = 'ssh -o BatchMode=yes'
+    if (platform === 'win32') {
+      // Why: forward across the WSL boundary only when we set the value —
+      // plain `ssh` resolves inside the distro, whereas a caller's
+      // Windows-specific GIT_SSH_COMMAND must not leak into Linux git.
+      addWslEnvKeys(next, ['GIT_SSH_COMMAND'])
+    }
   }
   return next
 }

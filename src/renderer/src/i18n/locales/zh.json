@@ -6626,7 +6626,8 @@
             "fastDescription": "按住修饰键滚动时的额外倍数。",
             "tui": "TUI",
             "tuiDescription": "面向全屏终端应用的离散滚轮报告。"
-          }
+          },
+          "3fab0f2239": "Stop git in user terminals from opening Git Credential Manager sign-in windows. Saved credentials still work; git fails fast instead of prompting. Applies to new terminals."
         },
         "TerminalSettingsPreview": {
           "a63953a48a": "预览 {{value0}} 主题",
@@ -8345,7 +8346,9 @@
               "6cd20b9e64": "指令",
               "7c7056940a": "shell",
               "713c4a2f92": "为 Windows 上的新终端窗格选择默认 Shell。",
-              "13715f9d23": "默认 Shell"
+              "13715f9d23": "默认 Shell",
+              "8630676830": "Block Git Credential Popups",
+              "9d8b09bc09": "Stop git in terminals from opening Git Credential Manager sign-in windows."
             }
           }
         },

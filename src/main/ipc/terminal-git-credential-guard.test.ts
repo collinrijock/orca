@@ -7,32 +7,67 @@ function isGuarded(env: Record<string, string>): boolean {
 }
 
 describe('applyTerminalGitCredentialPromptGuard', () => {
-  it('guards an agent terminal even when user-terminal suppression is off', () => {
-    const env: Record<string, string> = { PATH: '/usr/bin' }
-    applyTerminalGitCredentialPromptGuard(env, {
-      launchCommand: 'claude',
-      suppressUserTerminalPrompt: false
-    })
-    expect(isGuarded(env)).toBe(true)
-    // Never empties the credential helper — cached auth must keep working.
-    expect(env.GIT_CONFIG_COUNT).toBeDefined()
-    expect(Object.values(env)).not.toContain('credential.helper')
+  it('guards an agent terminal on every platform, even when user-terminal suppression is off', () => {
+    for (const platform of ['win32', 'darwin', 'linux'] as const) {
+      const env: Record<string, string> = { PATH: '/usr/bin' }
+      applyTerminalGitCredentialPromptGuard(env, {
+        launchCommand: 'claude',
+        suppressUserTerminalPrompt: false,
+        platform
+      })
+      expect(isGuarded(env), platform).toBe(true)
+      // Never empties the credential helper — cached auth must keep working.
+      expect(env.GIT_CONFIG_COUNT).toBeDefined()
+      expect(Object.values(env)).not.toContain('credential.helper')
+    }
   })
 
-  it('guards a plain user terminal by default (suppression on)', () => {
+  it('guards a plain user terminal by default on a Windows host', () => {
     const env: Record<string, string> = { PATH: '/usr/bin' }
     applyTerminalGitCredentialPromptGuard(env, {
       launchCommand: undefined,
-      suppressUserTerminalPrompt: true
+      suppressUserTerminalPrompt: true,
+      platform: 'win32'
     })
     expect(isGuarded(env)).toBe(true)
   })
 
-  it('leaves a plain user terminal untouched when the user opts out', () => {
+  it('registers the guard in WSLENV on Windows so WSL-routed git sees it too', () => {
+    const env: Record<string, string> = { PATH: '/usr/bin' }
+    applyTerminalGitCredentialPromptGuard(env, {
+      launchCommand: undefined,
+      suppressUserTerminalPrompt: true,
+      platform: 'win32'
+    })
+    const wslenvKeys = (env.WSLENV ?? '').split(':')
+    expect(wslenvKeys).toContain('GIT_TERMINAL_PROMPT')
+    expect(wslenvKeys).toContain('GCM_INTERACTIVE')
+    expect(wslenvKeys).toContain('GIT_CONFIG_COUNT')
+    expect(wslenvKeys).toContain('GIT_CONFIG_KEY_0')
+    expect(wslenvKeys).toContain('GIT_CONFIG_VALUE_0')
+    // Windows askpass paths are meaningless inside a distro.
+    expect(wslenvKeys).not.toContain('GIT_ASKPASS')
+    expect(wslenvKeys).not.toContain('SSH_ASKPASS')
+  })
+
+  it('leaves a user terminal untouched on non-Windows hosts — no popup exists there, only working tty prompts', () => {
+    for (const platform of ['darwin', 'linux'] as const) {
+      const env: Record<string, string> = { PATH: '/usr/bin' }
+      applyTerminalGitCredentialPromptGuard(env, {
+        launchCommand: '/bin/zsh',
+        suppressUserTerminalPrompt: true,
+        platform
+      })
+      expect(env, platform).toEqual({ PATH: '/usr/bin' })
+    }
+  })
+
+  it('leaves a Windows user terminal untouched when the user opts out', () => {
     const env: Record<string, string> = { PATH: '/usr/bin' }
     applyTerminalGitCredentialPromptGuard(env, {
       launchCommand: '/bin/zsh',
-      suppressUserTerminalPrompt: false
+      suppressUserTerminalPrompt: false,
+      platform: 'win32'
     })
     expect(env.GIT_TERMINAL_PROMPT).toBeUndefined()
     expect(env.GCM_INTERACTIVE).toBeUndefined()

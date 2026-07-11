@@ -6678,7 +6678,8 @@
             "fastDescription": "Extra multiplier while scrolling with a modifier key.",
             "tui": "TUI",
             "tuiDescription": "Discrete wheel reports for full-screen terminal apps."
-          }
+          },
+          "3fab0f2239": "Stop git in user terminals from opening Git Credential Manager sign-in windows. Saved credentials still work; git fails fast instead of prompting. Applies to new terminals."
         },
         "TerminalSettingsPreview": {
           "a63953a48a": "Preview {{value0}} theme",
@@ -8397,7 +8398,9 @@
               "6cd20b9e64": "cmd",
               "7c7056940a": "shell",
               "713c4a2f92": "Choose the default shell for new terminal panes on Windows.",
-              "13715f9d23": "Default Shell"
+              "13715f9d23": "Default Shell",
+              "8630676830": "Block Git Credential Popups",
+              "9d8b09bc09": "Stop git in terminals from opening Git Credential Manager sign-in windows."
             }
           }
         },

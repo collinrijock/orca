@@ -10,20 +10,29 @@ import { recognizeAgentProcessFromCommandLine } from '../../shared/agent-process
  *
  * The credential *helper* is kept, so cached-token auth still works; only the
  * interactive fallback prompt is suppressed. Agent terminals are always guarded
- * (they can't dismiss a GUI popup); user terminals are guarded unless the user
- * opted out via settings.
+ * on every platform (an agent can't answer a prompt, so failing fast beats
+ * hanging). User terminals are only guarded on Windows terminal hosts — the
+ * popup is a Windows credential-manager behavior, and on other platforms the
+ * guard would only take working tty prompts away from an interactive user —
+ * and the user can opt out via settings.
  *
  * Mutates `env` in place to match how the PTY host assembles its environment.
  */
 export function applyTerminalGitCredentialPromptGuard(
   env: Record<string, string>,
-  opts: { launchCommand?: string | null; suppressUserTerminalPrompt: boolean }
+  opts: {
+    launchCommand?: string | null
+    suppressUserTerminalPrompt: boolean
+    /** Injectable for tests; defaults to the spawning host's platform. */
+    platform?: NodeJS.Platform
+  }
 ): void {
   const isAgentTerminal = Boolean(recognizeAgentProcessFromCommandLine(opts.launchCommand))
-  if (!isAgentTerminal && !opts.suppressUserTerminalPrompt) {
+  const platform = opts.platform ?? process.platform
+  if (!isAgentTerminal && (!opts.suppressUserTerminalPrompt || platform !== 'win32')) {
     return
   }
-  for (const [key, value] of Object.entries(promptGuardGitEnv(env))) {
+  for (const [key, value] of Object.entries(promptGuardGitEnv(env, platform))) {
     if (typeof value === 'string') {
       env[key] = value
     }

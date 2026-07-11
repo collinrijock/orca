@@ -6641,7 +6641,8 @@
             "fastDescription": "Multiplicador adicional al desplazarse con una tecla modificadora.",
             "tui": "TUI",
             "tuiDescription": "Eventos discretos de rueda para apps de terminal de pantalla completa."
-          }
+          },
+          "3fab0f2239": "Stop git in user terminals from opening Git Credential Manager sign-in windows. Saved credentials still work; git fails fast instead of prompting. Applies to new terminals."
         },
         "TerminalSettingsPreview": {
           "a63953a48a": "Vista previa del tema {{value0}}",
@@ -8360,7 +8361,9 @@
               "6cd20b9e64": "cmd",
               "7c7056940a": "shell",
               "713c4a2f92": "Elija el shell predeterminado para los nuevos paneles de terminal en Windows.",
-              "13715f9d23": "Shell predeterminado"
+              "13715f9d23": "Shell predeterminado",
+              "8630676830": "Block Git Credential Popups",
+              "9d8b09bc09": "Stop git in terminals from opening Git Credential Manager sign-in windows."
             }
           }
         },

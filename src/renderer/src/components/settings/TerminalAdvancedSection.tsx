@@ -10,12 +10,16 @@ import { ToggleGroup, ToggleGroupItem } from '../ui/toggle-group'
 import {
   SettingsRow,
   SettingsSegmentedControl,
-  SettingsSubsectionHeader
+  SettingsSubsectionHeader,
+  SettingsSwitchRow
 } from './SettingsFormControls'
 import { SCROLLBACK_PRESETS_ROWS } from './SettingsConstants'
 import { SearchableSetting } from './SearchableSetting'
 import { matchesSettingsSearch } from './settings-search'
-import { getTerminalWindowsPowershellImplementationSearchEntry } from './terminal-windows-search'
+import {
+  getTerminalGitCredentialPopupSearchEntry,
+  getTerminalWindowsPowershellImplementationSearchEntry
+} from './terminal-windows-search'
 import { TerminalMacKeyboardSection } from './TerminalMacKeyboardSection'
 import { translate } from '@/i18n/i18n'
 
@@ -26,6 +30,9 @@ type TerminalAdvancedSectionProps = {
   setScrollbackMode: (mode: 'preset' | 'custom') => void
   searchQuery: string
   showWindowsPowerShellImplementation: boolean
+  /** Windows terminal hosts only — the popup this guards against is a Windows
+   *  credential-manager behavior (issue #7652). */
+  showWindowsGitCredentialGuard: boolean
   pwshAvailable?: boolean
   isMac: boolean
 }
@@ -41,6 +48,7 @@ export function TerminalAdvancedSection({
   setScrollbackMode,
   searchQuery,
   showWindowsPowerShellImplementation,
+  showWindowsGitCredentialGuard,
   pwshAvailable,
   isMac
 }: TerminalAdvancedSectionProps): React.JSX.Element {
@@ -291,6 +299,40 @@ export function TerminalAdvancedSection({
                     }
                   ]}
                 />
+              }
+            />
+          </SearchableSetting>
+        ) : null}
+
+        {showWindowsGitCredentialGuard &&
+        matchesSettingsSearch(searchQuery, getTerminalGitCredentialPopupSearchEntry()) ? (
+          <SearchableSetting
+            title={translate(
+              'auto.components.settings.terminal.windows.search.8630676830',
+              'Block Git Credential Popups'
+            )}
+            description={translate(
+              'auto.components.settings.terminal.windows.search.9d8b09bc09',
+              'Stop git in terminals from opening Git Credential Manager sign-in windows.'
+            )}
+            keywords={['git', 'credential', 'popup', 'oauth', 'github', 'sign in', 'gcm', 'prompt']}
+          >
+            <SettingsSwitchRow
+              label={translate(
+                'auto.components.settings.terminal.windows.search.8630676830',
+                'Block Git Credential Popups'
+              )}
+              description={translate(
+                'auto.components.settings.TerminalPane.3fab0f2239',
+                'Stop git in user terminals from opening Git Credential Manager sign-in windows. Saved credentials still work; git fails fast instead of prompting. Applies to new terminals.'
+              )}
+              checked={settings.terminalSuppressGitCredentialPrompt ?? true}
+              onChange={() =>
+                updateSettings({
+                  terminalSuppressGitCredentialPrompt: !(
+                    settings.terminalSuppressGitCredentialPrompt ?? true
+                  )
+                })
               }
             />
           </SearchableSetting>

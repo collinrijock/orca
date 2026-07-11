@@ -511,9 +511,10 @@ export type BuildPtyHostEnvOptions = {
   isWsl?: boolean
   agentStatusHooksEnabled: boolean
   networkProxySettings?: NetworkProxySettings
-  /** When true (the default at the call sites), a user terminal's git cannot
-   *  pop the OS credential helper's interactive OAuth window (issue #7652).
-   *  Agent terminals are always guarded regardless of this flag. */
+  /** When true (the default at the call sites), a user terminal's git on a
+   *  Windows host cannot pop Git Credential Manager's interactive OAuth window
+   *  (issue #7652). No effect on non-Windows hosts; agent terminals are always
+   *  guarded on every platform regardless of this flag. */
   suppressUserTerminalGitCredentialPrompt?: boolean
 }
 

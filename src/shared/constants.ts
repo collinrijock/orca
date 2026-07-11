@@ -252,9 +252,9 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     // is installed, with a safe fallback to the inbox Windows PowerShell.
     terminalWindowsPowerShellImplementation: 'auto',
     terminalMouseHideWhileTyping: false,
-    // Default on: suppress the OS credential helper's interactive OAuth popup
-    // for git in user terminals (issue #7652). Agent/automated contexts are
-    // guarded regardless of this setting.
+    // Default on: suppress Git Credential Manager's interactive OAuth popup
+    // for git in user terminals on Windows hosts (issue #7652). No effect on
+    // other platforms; agent/automated contexts are guarded regardless.
     terminalSuppressGitCredentialPrompt: true,
     terminalQuickCommands: getDefaultTerminalQuickCommands(),
     // Default false: opt-in only (matches Ghostty's default). Existing users
