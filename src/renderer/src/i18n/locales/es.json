@@ -11595,7 +11595,8 @@
           "1c99b726e0": "Quitar enlace",
           "cdfe166f6f": "Editar enlace",
           "bfc813e909": "Abrir enlace",
-          "7b0b945fdc": "Pega o escribe un enlace…"
+          "7b0b945fdc": "Pega o escribe un enlace…",
+          "copyLink": "Copiar enlace"
         },
         "RichMarkdownReviewNoteLayer": {
           "f3ef92952b": "Esta nota",
@@ -11622,7 +11623,8 @@
           "68d090241d": "Coincidir con toda la palabra",
           "fd97c7e585": "Reemplazar",
           "44682b4159": "Reemplazar en el editor de markdown enriquecido",
-          "c2884f5e95": "Reemplazar todo"
+          "c2884f5e95": "Reemplazar todo",
+          "preservedRichContentReadOnly": "El contenido enriquecido conservado es de solo lectura en el modo enriquecido."
         },
         "RichMarkdownSlashMenu": {
           "82c6816ff8": "No se encontraron bloques",
@@ -11839,6 +11841,24 @@
           "3fa2b8d417": "Recargar desde disco",
           "a95d02c644": "Mantener mis ediciones",
           "2c8f1e07b9": "Cargando comparación..."
+        },
+        "RichMarkdownEditor": {
+          "citationLinkAvailable": "{{value0}}, enlace a {{value1}}. Pulsa Intro para abrirlo o Tab para las acciones del enlace.",
+          "citationFallbackLabel": "Cita",
+          "citationLinkUnavailable": "{{value0}}, enlace de cita no disponible. {{value1}}",
+          "tabForCitationActions": "Pulsa Tab para ver las acciones disponibles.",
+          "noCitationActions": "No hay acciones de enlace disponibles."
+        },
+        "richMarkdownHtmlSuperscriptLink": {
+          "availableAriaLabel": "{{value0}}, enlace a {{value1}}",
+          "unavailableAriaLabel": "{{value0}}, enlace de cita no disponible"
+        },
+        "richMarkdownLinkClipboard": {
+          "copiedLink": "Enlace copiado",
+          "copyLinkFailed": "No se pudo copiar el enlace"
+        },
+        "richMarkdownSourceOwningCutFeedback": {
+          "selectLessContent": "Selecciona menos contenido o usa el modo de código para cortar citas HTML conservadas."
         }
       },
       "diff": {

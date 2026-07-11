@@ -10,7 +10,7 @@ import { Table } from '@tiptap/extension-table'
 import { TableCell } from '@tiptap/extension-table-cell'
 import { TableHeader } from '@tiptap/extension-table-header'
 import { TableRow } from '@tiptap/extension-table-row'
-import { Markdown } from '@tiptap/markdown'
+import { createIsolatedMarkdownExtensionForTests } from './isolated-markdown-extension-for-tests'
 import { handleRichMarkdownCut } from './rich-markdown-cut-handler'
 import { normalizeEmptyListItems, normalizeSoftBreaks } from './rich-markdown-normalize'
 
@@ -25,7 +25,7 @@ const testExtensions = [
   TableRow,
   TableHeader,
   TableCell,
-  Markdown.configure({ markedOptions: { gfm: true } })
+  createIsolatedMarkdownExtensionForTests()
 ]
 
 function createEditor(markdown: string): Editor {

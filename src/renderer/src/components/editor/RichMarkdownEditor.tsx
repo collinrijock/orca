@@ -3,7 +3,6 @@ import type { Editor } from '@tiptap/react'
 import type { DiffComment, MarkdownDocument } from '../../../../shared/types'
 import { useAppStore } from '@/store'
 import { selectWorktreeDiffComments } from '@/store/worktree-diff-comments-selector'
-import { getIndexedWorktreeById } from '@/store/worktree-repo-index'
 import { useLocalImagePick } from './useLocalImagePick'
 import { useRichMarkdownSearch } from './useRichMarkdownSearch'
 import type { LinkBubbleState } from './RichMarkdownLinkBubble'
@@ -25,6 +24,11 @@ import {
   runRichMarkdownContextCommand
 } from './rich-markdown-context-command-routing'
 import { useRichMarkdownSpellcheckAttribute } from './rich-markdown-spellcheck'
+import { useRichMarkdownSuperscriptLinkSetup } from './useRichMarkdownSuperscriptLinkSetup'
+import {
+  formatSelectedHtmlSuperscriptLinkStatus,
+  getSelectedHtmlSuperscriptLinkStatus
+} from './rich-markdown-selected-link-actions'
 
 type RichMarkdownEditorProps = {
   fileId: string
@@ -86,9 +90,11 @@ export default function RichMarkdownEditor({
   const allDiffComments = useAppStore((s): DiffComment[] | undefined =>
     selectWorktreeDiffComments(s, worktreeId)
   )
-  const worktreeRoot = useAppStore(
-    (s) => getIndexedWorktreeById(s.worktreesByRepo, worktreeId)?.path ?? null
-  )
+  const { codec, htmlSuperscriptLinkContext, worktreeRoot } = useRichMarkdownSuperscriptLinkSetup({
+    filePath,
+    runtimeEnvironmentId,
+    worktreeId
+  })
   const scrollContainerRef = useRef<HTMLDivElement | null>(null)
   const menu = useRichMarkdownMenuController({ markdownDocuments })
   const isMac = navigator.userAgent.includes('Mac')
@@ -196,6 +202,8 @@ export default function RichMarkdownEditor({
   )
 
   const editor = useRichMarkdownEditorInstance({
+    codec,
+    htmlSuperscriptLinkContext,
     content,
     filePath,
     worktreeId,
@@ -240,6 +248,10 @@ export default function RichMarkdownEditor({
     setSlashMenu: menu.setSlashMenu,
     setDocLinkMenu: menu.setDocLinkMenu
   })
+  const selectedCitationStatus = getSelectedHtmlSuperscriptLinkStatus(
+    editor,
+    htmlSuperscriptLinkContext
+  )
   useRichMarkdownSpellcheckAttribute(editor, richMarkdownSpellcheckEnabled)
 
   // Why: use useLayoutEffect (synchronous cleanup) so the pending serialization
@@ -265,6 +277,7 @@ export default function RichMarkdownEditor({
   })
 
   useRichMarkdownProgrammaticSync({
+    codec,
     content,
     docLinkMenuSetter: menu.setDocLinkMenu,
     editor,
@@ -289,12 +302,14 @@ export default function RichMarkdownEditor({
     handleLinkRemove,
     handleLinkEditCancel,
     handleLinkOpen,
+    handleLinkCopy,
     toggleLinkFromToolbar
   } = useLinkBubble(editor, rootRef, linkBubble, setLinkBubble, setIsEditingLink, {
     sourceFilePath: filePath,
     worktreeId,
     worktreeRoot,
-    runtimeEnvironmentId
+    runtimeEnvironmentId,
+    htmlSuperscriptLinkContext
   })
 
   useEffect(() => {
@@ -370,6 +385,12 @@ export default function RichMarkdownEditor({
       showTableOfContents={showTableOfContents}
       searchState={searchState}
       searchActions={searchActions}
+      citationStatus={
+        selectedCitationStatus
+          ? formatSelectedHtmlSuperscriptLinkStatus(selectedCitationStatus)
+          : ''
+      }
+      linkBubbleOwnerId={codec.transport.key}
       linkBubbleActions={{
         dismissLinkBubble: () => {
           setLinkBubble(null)
@@ -379,6 +400,7 @@ export default function RichMarkdownEditor({
         handleLinkRemove,
         handleLinkEditCancel,
         handleLinkOpen,
+        handleLinkCopy,
         setIsEditingLink
       }}
       onToggleLink={toggleLinkFromToolbar}

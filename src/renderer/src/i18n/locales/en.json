@@ -11595,7 +11595,8 @@
           "1c99b726e0": "Remove link",
           "cdfe166f6f": "Edit link",
           "bfc813e909": "Open link",
-          "7b0b945fdc": "Paste or type a link…"
+          "7b0b945fdc": "Paste or type a link…",
+          "copyLink": "Copy link"
         },
         "RichMarkdownReviewNoteLayer": {
           "f3ef92952b": "This note",
@@ -11622,7 +11623,8 @@
           "68d090241d": "Match whole word",
           "fd97c7e585": "Replace",
           "44682b4159": "Replace in rich markdown editor",
-          "c2884f5e95": "Replace all"
+          "c2884f5e95": "Replace all",
+          "preservedRichContentReadOnly": "Preserved rich content is read-only in rich mode."
         },
         "RichMarkdownSlashMenu": {
           "82c6816ff8": "No blocks found",
@@ -11839,6 +11841,24 @@
           "3fa2b8d417": "Reload from Disk",
           "a95d02c644": "Keep My Edits",
           "2c8f1e07b9": "Loading comparison..."
+        },
+        "RichMarkdownEditor": {
+          "citationLinkAvailable": "{{value0}}, link to {{value1}}. Press Enter to open or Tab for link actions.",
+          "citationFallbackLabel": "Citation",
+          "citationLinkUnavailable": "{{value0}}, citation link unavailable. {{value1}}",
+          "tabForCitationActions": "Tab for available actions.",
+          "noCitationActions": "No link actions are available."
+        },
+        "richMarkdownHtmlSuperscriptLink": {
+          "availableAriaLabel": "{{value0}}, link to {{value1}}",
+          "unavailableAriaLabel": "{{value0}}, citation link unavailable"
+        },
+        "richMarkdownLinkClipboard": {
+          "copiedLink": "Copied link",
+          "copyLinkFailed": "Failed to copy link"
+        },
+        "richMarkdownSourceOwningCutFeedback": {
+          "selectLessContent": "Select less content or use code mode to cut preserved HTML citations."
         }
       },
       "diff": {

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { Editor } from '@tiptap/core'
 import StarterKit from '@tiptap/starter-kit'
-import { Markdown } from '@tiptap/markdown'
+import { createIsolatedMarkdownExtensionForTests } from './isolated-markdown-extension-for-tests'
 import {
   collapseEmptyListContinuationParagraph,
   commitEmptyOrderedListMarkerAsText,
@@ -10,7 +10,7 @@ import {
   isSingleEmptyTopLevelOrderedList
 } from './rich-markdown-list-continuation'
 
-const extensions = [StarterKit, Markdown.configure({ markedOptions: { gfm: true } })]
+const extensions = [StarterKit, createIsolatedMarkdownExtensionForTests()]
 
 function createEditor(content: object): Editor {
   return new Editor({

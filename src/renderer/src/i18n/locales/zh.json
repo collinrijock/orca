@@ -11595,7 +11595,8 @@
           "1c99b726e0": "删除链接",
           "cdfe166f6f": "编辑链接",
           "bfc813e909": "打开链接",
-          "7b0b945fdc": "粘贴或输入链接..."
+          "7b0b945fdc": "粘贴或输入链接...",
+          "copyLink": "复制链接"
         },
         "RichMarkdownReviewNoteLayer": {
           "f3ef92952b": "此注",
@@ -11622,7 +11623,8 @@
           "68d090241d": "匹配整个单词",
           "fd97c7e585": "替换",
           "44682b4159": "在 Markdown 编辑器中替换",
-          "c2884f5e95": "全部替换"
+          "c2884f5e95": "全部替换",
+          "preservedRichContentReadOnly": "保留的富文本内容在富文本模式下为只读。"
         },
         "RichMarkdownSlashMenu": {
           "82c6816ff8": "没有找到块",
@@ -11839,6 +11841,24 @@
           "3fa2b8d417": "从磁盘重新加载",
           "a95d02c644": "保留我的编辑",
           "2c8f1e07b9": "正在加载比较..."
+        },
+        "RichMarkdownEditor": {
+          "citationLinkAvailable": "{{value0}}，链接到 {{value1}}。按 Enter 打开，或按 Tab 移至链接操作。",
+          "citationFallbackLabel": "引用",
+          "citationLinkUnavailable": "{{value0}}，引用链接不可用。{{value1}}",
+          "tabForCitationActions": "按 Tab 移至可用操作。",
+          "noCitationActions": "没有可用的链接操作。"
+        },
+        "richMarkdownHtmlSuperscriptLink": {
+          "availableAriaLabel": "{{value0}}，链接到 {{value1}}",
+          "unavailableAriaLabel": "{{value0}}，引用链接不可用"
+        },
+        "richMarkdownLinkClipboard": {
+          "copiedLink": "已复制链接",
+          "copyLinkFailed": "复制链接失败"
+        },
+        "richMarkdownSourceOwningCutFeedback": {
+          "selectLessContent": "请选择较少的内容，或使用代码模式剪切保留的 HTML 引用。"
         }
       },
       "diff": {

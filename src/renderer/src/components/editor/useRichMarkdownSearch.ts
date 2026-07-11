@@ -66,6 +66,7 @@ export function useRichMarkdownSearch({
   }, [editor, isSearchOpen, searchRequestQuery, searchRevision, matchCase, wholeWord])
 
   const matchCount = matches.length
+  const replaceDisabled = matches.some((match) => match.touchesReadOnlyAtom)
 
   const getLiveMatches = useCallback(() => {
     if (
@@ -160,7 +161,7 @@ export function useRichMarkdownSearch({
     const liveActiveMatchIndex =
       activeMatchIndex >= 0 && activeMatchIndex < liveMatches.length ? activeMatchIndex : 0
     const match = liveMatches[liveActiveMatchIndex]
-    if (!match) {
+    if (!match || liveMatches.some((candidate) => candidate.touchesReadOnlyAtom)) {
       return
     }
     // Why: removing the active match shifts the next match into the same index,
@@ -173,7 +174,10 @@ export function useRichMarkdownSearch({
       return
     }
     const liveMatches = getLiveMatches()
-    if (liveMatches.length === 0) {
+    if (
+      liveMatches.length === 0 ||
+      liveMatches.some((candidate) => candidate.touchesReadOnlyAtom)
+    ) {
       return
     }
     const tr = editor.state.tr
@@ -344,6 +348,7 @@ export function useRichMarkdownSearch({
       matchCase,
       matchCount,
       replaceQuery,
+      replaceDisabled,
       searchQuery,
       searchInputRef,
       wholeWord

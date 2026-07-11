@@ -1,6 +1,9 @@
-import { DOMSerializer } from '@tiptap/pm/model'
 import { TextSelection } from '@tiptap/pm/state'
 import type { EditorView } from '@tiptap/pm/view'
+import { createRichMarkdownVisibleTextMap } from './rich-markdown-visible-text-map'
+import { inspectRichMarkdownSourceOwningSlice } from './rich-markdown-source-owning-slice'
+import { serializeRichMarkdownSliceForClipboard } from './rich-markdown-clipboard-serialization'
+import { showRichMarkdownSourceOwningCutLimitError } from './rich-markdown-source-owning-cut-feedback'
 
 /**
  * Why: a paragraph that word-wraps across multiple screen lines should be cut
@@ -85,14 +88,27 @@ export function cutVisualLine(
   }
   event.preventDefault()
 
-  const lineText = view.state.doc.textBetween(lineRange.from, lineRange.to, '')
+  const lineText = createRichMarkdownVisibleTextMap(
+    view.state.doc,
+    lineRange.from,
+    lineRange.to
+  ).text
   const slice = view.state.doc.slice(lineRange.from, lineRange.to)
-  const serializer = DOMSerializer.fromSchema(view.state.schema)
-  const fragment = serializer.serializeFragment(slice.content)
-  const div = document.createElement('div')
-  div.appendChild(fragment)
-  clipboardEvent.clipboardData.setData('text/html', div.innerHTML)
+  const status = inspectRichMarkdownSourceOwningSlice(slice)
+  if (status.containsSourceOwningNode && !status.canPreserve) {
+    showRichMarkdownSourceOwningCutLimitError()
+    return true
+  }
+  const serialized = serializeRichMarkdownSliceForClipboard(view, slice)
+  clipboardEvent.clipboardData.setData('text/html', serialized.html)
   clipboardEvent.clipboardData.setData('text/plain', lineText)
+  if (
+    typeof clipboardEvent.clipboardData.getData === 'function' &&
+    (clipboardEvent.clipboardData.getData('text/html') !== serialized.html ||
+      clipboardEvent.clipboardData.getData('text/plain') !== lineText)
+  ) {
+    return true
+  }
 
   let tr = view.state.tr.delete(lineRange.from, lineRange.to)
   const clampedPos = Math.max(0, Math.min(lineRange.from, tr.doc.content.size))

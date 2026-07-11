@@ -11595,7 +11595,8 @@
           "1c99b726e0": "リンクを削除する",
           "cdfe166f6f": "リンクを編集",
           "bfc813e909": "リンクを開く",
-          "7b0b945fdc": "リンクを貼り付けるか入力してください…"
+          "7b0b945fdc": "リンクを貼り付けるか入力してください…",
+          "copyLink": "リンクをコピー"
         },
         "RichMarkdownReviewNoteLayer": {
           "f3ef92952b": "このメモ",
@@ -11622,7 +11623,8 @@
           "68d090241d": "単語全体に一致",
           "fd97c7e585": "置換",
           "44682b4159": "リッチ markdown エディタで置換",
-          "c2884f5e95": "すべて置換"
+          "c2884f5e95": "すべて置換",
+          "preservedRichContentReadOnly": "保持されたリッチコンテンツはリッチモードでは読み取り専用です。"
         },
         "RichMarkdownSlashMenu": {
           "82c6816ff8": "ブロックが見つかりませんでした",
@@ -11839,6 +11841,24 @@
           "3fa2b8d417": "ディスクから再読み込み",
           "a95d02c644": "編集内容を保持",
           "2c8f1e07b9": "比較を読み込み中..."
+        },
+        "RichMarkdownEditor": {
+          "citationLinkAvailable": "{{value0}}、{{value1}}へのリンク。Enterキーで開くか、Tabキーでリンク操作に移動します。",
+          "citationFallbackLabel": "引用",
+          "citationLinkUnavailable": "{{value0}}、引用リンクは利用できません。{{value1}}",
+          "tabForCitationActions": "Tabキーで利用可能な操作に移動します。",
+          "noCitationActions": "利用できるリンク操作はありません。"
+        },
+        "richMarkdownHtmlSuperscriptLink": {
+          "availableAriaLabel": "{{value0}}、{{value1}}へのリンク",
+          "unavailableAriaLabel": "{{value0}}、引用リンクは利用できません"
+        },
+        "richMarkdownLinkClipboard": {
+          "copiedLink": "リンクをコピーしました",
+          "copyLinkFailed": "リンクをコピーできませんでした"
+        },
+        "richMarkdownSourceOwningCutFeedback": {
+          "selectLessContent": "保持されたHTML引用を切り取るには、選択範囲を小さくするかコードモードを使用してください。"
         }
       },
       "diff": {

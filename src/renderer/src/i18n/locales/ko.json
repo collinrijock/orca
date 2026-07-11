@@ -11595,7 +11595,8 @@
           "1c99b726e0": "링크 삭제",
           "cdfe166f6f": "링크 수정",
           "bfc813e909": "링크 열기",
-          "7b0b945fdc": "링크를 붙여넣거나 입력하세요…"
+          "7b0b945fdc": "링크를 붙여넣거나 입력하세요…",
+          "copyLink": "링크 복사"
         },
         "RichMarkdownReviewNoteLayer": {
           "f3ef92952b": "이 메모",
@@ -11622,7 +11623,8 @@
           "68d090241d": "전체 단어 일치",
           "fd97c7e585": "바꾸기",
           "44682b4159": "리치 markdown 편집기에서 바꾸기",
-          "c2884f5e95": "모두 바꾸기"
+          "c2884f5e95": "모두 바꾸기",
+          "preservedRichContentReadOnly": "보존된 리치 콘텐츠는 리치 모드에서 읽기 전용입니다."
         },
         "RichMarkdownSlashMenu": {
           "82c6816ff8": "블록을 찾을 수 없습니다.",
@@ -11839,6 +11841,24 @@
           "3fa2b8d417": "디스크에서 다시 로드",
           "a95d02c644": "편집 내용 유지",
           "2c8f1e07b9": "비교 로딩 중..."
+        },
+        "RichMarkdownEditor": {
+          "citationLinkAvailable": "{{value0}}, {{value1}} 링크. Enter 키로 열거나 Tab 키로 링크 작업으로 이동하세요.",
+          "citationFallbackLabel": "인용",
+          "citationLinkUnavailable": "{{value0}}, 인용 링크를 사용할 수 없습니다. {{value1}}",
+          "tabForCitationActions": "Tab 키로 사용 가능한 작업으로 이동하세요.",
+          "noCitationActions": "사용 가능한 링크 작업이 없습니다."
+        },
+        "richMarkdownHtmlSuperscriptLink": {
+          "availableAriaLabel": "{{value0}}, {{value1}} 링크",
+          "unavailableAriaLabel": "{{value0}}, 인용 링크를 사용할 수 없음"
+        },
+        "richMarkdownLinkClipboard": {
+          "copiedLink": "링크를 복사했습니다",
+          "copyLinkFailed": "링크를 복사하지 못했습니다"
+        },
+        "richMarkdownSourceOwningCutFeedback": {
+          "selectLessContent": "보존된 HTML 인용을 잘라내려면 더 적은 콘텐츠를 선택하거나 코드 모드를 사용하세요."
         }
       },
       "diff": {
