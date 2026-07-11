@@ -1630,6 +1630,19 @@ export function connectPanePty(
     // and PTY byte injection, so only exact/status titles count here.
     return detectAgentStatusFromTitle(title) !== null || isCursorAgentNativeTitle(title)
   }
+  const hasFreshLiveAgentSnapshotSignal = (): boolean => {
+    // Why: the hidden-output snapshot restore has no post-parse viewport veto
+    // to recover a false positive (unlike the reattach drain path), so a stale
+    // or already-`done` status row must NOT suppress the ?25h re-show. Gate the
+    // status-entry test on freshness here: a leftover row from a dead TUI whose
+    // snapshot ended with ?25l would otherwise leave the restored shell with a
+    // permanently invisible cursor.
+    if (isFreshActivePaneAgentEntry(useAppStore.getState().agentStatusByPaneKey[cacheKey])) {
+      return true
+    }
+    const title = getCurrentTerminalTitle() ?? ''
+    return detectAgentStatusFromTitle(title) !== null || isCursorAgentNativeTitle(title)
+  }
   const hasLiveAgentReattachSignal = (): boolean => {
     return hasLiveAgentReattachStatusOrTitleSignal() || reattachReplayPayloadHasCursorAgentSignal
   }
@@ -5061,7 +5074,7 @@ export function connectPanePty(
       // ?1004l here would silence focus events until the agent restarts, since
       // agents only enable focus reporting at startup).
       writeReplayData(
-        hasLiveAgentReattachStatusOrTitleSignal()
+        hasFreshLiveAgentSnapshotSignal()
           ? POST_REPLAY_LIVE_AGENT_SNAPSHOT_RESET
           : POST_REPLAY_LIVE_SNAPSHOT_RESET
       )
