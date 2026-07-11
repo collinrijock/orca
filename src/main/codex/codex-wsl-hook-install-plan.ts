@@ -1,4 +1,4 @@
-import { execFileSync } from 'node:child_process'
+import { execFile } from 'node:child_process'
 import { win32 as pathWin32 } from 'node:path'
 import { parseWslUncPath } from '../../shared/wsl-paths'
 
@@ -29,24 +29,43 @@ function toDefaultWslLinuxPath(windowsPath: string): string {
   return `/mnt/${driveMatch[1].toLowerCase()}/${driveMatch[2].replace(/\\/g, '/')}`
 }
 
+const WSL_CANONICALIZE_TIMEOUT_MS = 5000
+
+// Why: `readlink -f` over wsl.exe stalls up to the timeout on a cold or wedged
+// distro. Running it synchronously (execFileSync) on the Electron main process
+// froze the UI on every Codex WSL launch, so resolve it off-thread and return
+// the cached result synchronously (null until the first resolution lands).
+const canonicalWslPathCache = new Map<string, string>()
+const inFlightWslCanonicalizations = new Set<string>()
+
+function wslCanonicalizeCacheKey(distro: string, linuxPath: string): string {
+  return `${distro}\x00${linuxPath}`
+}
+
 function canonicalizeWslLinuxPath(distro: string, linuxPath: string): string | null {
   if (process.platform !== 'win32') {
     return linuxPath
   }
-  try {
-    const canonicalPath = execFileSync(
+  const key = wslCanonicalizeCacheKey(distro, linuxPath)
+  if (!inFlightWslCanonicalizations.has(key)) {
+    inFlightWslCanonicalizations.add(key)
+    execFile(
       'wsl.exe',
       ['-d', distro, '--', 'readlink', '-f', '--', linuxPath],
-      {
-        encoding: 'utf-8',
-        stdio: ['ignore', 'pipe', 'ignore'],
-        timeout: 5000
+      { encoding: 'utf-8', timeout: WSL_CANONICALIZE_TIMEOUT_MS, windowsHide: true },
+      (error, stdout) => {
+        inFlightWslCanonicalizations.delete(key)
+        const canonicalPath = stdout.trim()
+        if (!error && canonicalPath.startsWith('/')) {
+          canonicalWslPathCache.set(key, canonicalPath)
+        }
       }
-    ).trim()
-    return canonicalPath.startsWith('/') ? canonicalPath : null
-  } catch {
-    return null
+    )
   }
+  // Why: return the cached canonical path (or null on the first launch, which
+  // falls back to the logical path) so plan building stays synchronous without
+  // blocking the main thread on the wsl.exe subprocess.
+  return canonicalWslPathCache.get(key) ?? null
 }
 
 export function createCodexWslRuntimeHookInstallPlan(
