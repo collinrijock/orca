@@ -13,7 +13,13 @@ type MarkdownDocumentListRequestOptions = {
   requireFresh?: boolean
 }
 
-const inFlightMarkdownDocumentLists = new Map<string, Promise<MarkdownDocument[]>>()
+type InFlightMarkdownDocumentList = {
+  request: Promise<MarkdownDocument[]>
+  startedAt: number
+}
+
+const MARKDOWN_DOCUMENT_LIST_JOIN_WINDOW_MS = 30_000
+const inFlightMarkdownDocumentLists = new Map<string, InFlightMarkdownDocumentList>()
 
 export function getMarkdownDocumentListRequestKey(
   context: RuntimeFileOperationArgs,
@@ -36,17 +42,25 @@ export function requestSharedMarkdownDocumentList(
 ): Promise<MarkdownDocument[]> {
   const key = getMarkdownDocumentListRequestKey(context, rootPath)
   const existing = inFlightMarkdownDocumentLists.get(key)
-  if (existing && !options.requireFresh) {
-    return existing
+  const existingAge = existing ? performance.now() - existing.startedAt : null
+  if (
+    existing &&
+    !options.requireFresh &&
+    existingAge !== null &&
+    existingAge < MARKDOWN_DOCUMENT_LIST_JOIN_WINDOW_MS
+  ) {
+    return existing.request
   }
 
   // Why: split Markdown panes mount together and otherwise launch identical
   // whole-worktree local/SSH scans; mutation refreshes bypass older snapshots.
   const request = load(context, rootPath).finally(() => {
-    if (inFlightMarkdownDocumentLists.get(key) === request) {
+    if (inFlightMarkdownDocumentLists.get(key)?.request === request) {
       inFlightMarkdownDocumentLists.delete(key)
     }
   })
-  inFlightMarkdownDocumentLists.set(key, request)
+  // Why: local and UNC filesystem calls have no timeout, so an abandoned scan
+  // must not suppress every ordinary retry for the renderer's lifetime.
+  inFlightMarkdownDocumentLists.set(key, { request, startedAt: performance.now() })
   return request
 }

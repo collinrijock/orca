@@ -79,11 +79,36 @@ describe('shared Markdown document list requests', () => {
     await expect(initialRequest).resolves.toBe(staleDocuments)
   })
 
+  it('allows an ordinary retry after an older scan stops settling', async () => {
+    const stale = deferred<MarkdownDocument[]>()
+    const retry = deferred<MarkdownDocument[]>()
+    const load = vi.fn().mockReturnValueOnce(stale.promise).mockReturnValueOnce(retry.promise)
+    const now = vi.spyOn(performance, 'now').mockReturnValue(1_000)
+
+    try {
+      const initialRequest = requestSharedMarkdownDocumentList(context(), '/stuck', {}, load)
+      now.mockReturnValue(31_001)
+      const retryRequest = requestSharedMarkdownDocumentList(context(), '/stuck', {}, load)
+
+      expect(load).toHaveBeenCalledTimes(2)
+      expect(retryRequest).not.toBe(initialRequest)
+
+      retry.resolve([])
+      stale.resolve([])
+      await expect(retryRequest).resolves.toEqual([])
+      await expect(initialRequest).resolves.toEqual([])
+    } finally {
+      now.mockRestore()
+    }
+  })
+
   it('keeps runtime routes isolated and encodes unusual paths losslessly', () => {
     const local = context()
     const ssh = context({ connectionId: 'ssh-1' })
     const runtime = context({ settings: { activeRuntimeEnvironmentId: ' runtime-1 ' } })
     const unusualRoot = '/repo\nwith-newline'
+    const windowsRoot = 'C:\\repo\\docs'
+    const uncRoot = '\\\\server\\share\\repo'
 
     expect(getMarkdownDocumentListRequestKey(local, unusualRoot)).not.toBe(
       getMarkdownDocumentListRequestKey(ssh, unusualRoot)
@@ -94,6 +119,10 @@ describe('shared Markdown document list requests', () => {
     expect(JSON.parse(getMarkdownDocumentListRequestKey(local, unusualRoot)).at(-1)).toBe(
       unusualRoot
     )
+    expect(JSON.parse(getMarkdownDocumentListRequestKey(local, windowsRoot)).at(-1)).toBe(
+      windowsRoot
+    )
+    expect(JSON.parse(getMarkdownDocumentListRequestKey(local, uncRoot)).at(-1)).toBe(uncRoot)
   })
 
   it('clears rejected requests so a retry can run', async () => {
