@@ -25,7 +25,8 @@ import {
   UsageBar
 } from '../src/components/AccountUsage'
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import { loadHosts, removeHost, renameHost } from '../src/transport/host-store'
+import { loadHosts, renameHost } from '../src/transport/host-store'
+import { removeHostAndCloseClient } from '../src/transport/host-removal-lifecycle'
 import { pickResumeWorktree } from '../src/worktree/resume-worktree'
 import type { RpcClient } from '../src/transport/rpc-client'
 import {
@@ -711,10 +712,7 @@ export default function HomeScreen() {
       return
     }
     try {
-      // Why: close the shared client first so the WebSocket is gone
-      // before the host record disappears from loadHosts().
-      closeHostClient(confirmRemove.id)
-      await removeHost(confirmRemove.id)
+      await removeHostAndCloseClient(confirmRemove.id, closeHostClient)
       setConfirmRemove(null)
       setHosts(await loadHosts())
     } catch {

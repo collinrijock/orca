@@ -20,7 +20,8 @@ import {
   PanelLeftClose
 } from 'lucide-react-native'
 import type { RpcClient } from '../../../src/transport/rpc-client'
-import { loadHosts, updateLastConnected, removeHost } from '../../../src/transport/host-store'
+import { loadHosts, updateLastConnected } from '../../../src/transport/host-store'
+import { removeHostAndCloseClient } from '../../../src/transport/host-removal-lifecycle'
 import {
   useHostClient,
   useCloseHost,
@@ -684,13 +685,13 @@ export function HostScreen({
     if (!hostId) {
       return
     }
-    // Why: close the shared client first so its WebSocket is gone before
-    // the host record disappears; otherwise the next loadHosts() the
-    // provider does (e.g. on remount) wouldn't find this host but the
-    // socket would still be open, leaking state.
-    closeHostClient(hostId)
-    await removeHost(hostId)
-    leaveHost()
+    try {
+      await removeHostAndCloseClient(hostId, closeHostClient)
+      leaveHost()
+    } catch {
+      // Why: metadata commit can fail while the host is still paired; keep the
+      // screen mounted so the user can retry instead of navigating away empty.
+    }
   }, [hostId, leaveHost, closeHostClient])
 
   const navigateFromHostList = useCallback(
