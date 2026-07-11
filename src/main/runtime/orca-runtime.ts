@@ -8196,42 +8196,35 @@ export class OrcaRuntimeService {
   }
 
   // Why: invoked from `runtime:restoreTerminalFit` IPC (the desktop "Take
-  // back" / "Restore" button). Forces the PTY back to desktop dims and
-  // flips the driver to `desktop`, suppressing further mobile-driven dim
-  // changes until a mobile actor takes the floor again. Two cases:
-  //   1. Active mobile subscriber: route through applyMobileDisplayMode so
-  //      the existing 'resized' event reaches the phone.
-  //   2. Held with no mobile subscriber (post-indefinite-hold): no inner
-  //      subscriber to notify; resolve restore target and enqueueLayout
-  //      directly. applyLayout is the SOLE writer of terminalFitOverrides on
-  //      the normal path, so the held branch defers the mutation to it — the
-  //      one exception is the dead-pty orphan cleanup below, which mirrors
-  //      onPtyExit's sanctioned delete. See docs/mobile-fit-hold.md.
+  // back" / "Restore" button). Forces the PTY back to desktop dims and flips
+  // the driver to `desktop`, suppressing further mobile-driven dim changes
+  // until a mobile actor takes the floor again. Three cases, each ending in
+  // releaseDesktopTakeBack:
+  //   1. Active mobile subscriber: route through applyMobileDisplayMode so the
+  //      existing 'resized' event reaches the phone.
+  //   2. Held override, no subscriber (post-indefinite-hold): resolve the
+  //      restore target and enqueueLayout directly.
+  //   3. Stale mobile driver, no subscriber and no override: nothing to resize,
+  //      just drop the lock. See docs/mobile-fit-hold.md.
   //
-  // Returns `true` only when the pty ends converged (no fit-override held);
-  // `false` when a restore was attempted but the resize failed (#7588), or
-  // when there was nothing to reclaim. On a failed-restore `false`, driver/mode
-  // are left unchanged so a driving phone keeps its lock and the modal
-  // truthfully stays — the user can retry.
+  // Why: explicit desktop take-back is a user command to reclaim input control
+  // NOW. Unlike the auto-restore timer and phone-initiated setDisplayMode paths
+  // (which keep the lock when a resize can't converge, #7588), this gesture
+  // ALWAYS drops the presence lock and banner. "Take back all terminals"
+  // reclaims several PTYs at once; a background pane whose desktop resize can't
+  // converge must not strand its banner on the other terminals. The resize is
+  // best-effort — the desktop renderer refits the PTY on its next settled
+  // frame. Returns `true` whenever there was a lock to reclaim, `false` only
+  // when there was nothing to reclaim.
   async reclaimTerminalForDesktop(ptyId: string): Promise<boolean> {
     if (this.isMobileSubscriberActive(ptyId)) {
-      // Why (#7588): capture the prior mode so a failed restore can roll the
-      // routing-only 'desktop' write back — driver/mode transitions must be
-      // gated on convergence, not committed before we know the resize took.
-      const priorMode = this.getMobileDisplayMode(ptyId)
       this.setMobileDisplayMode(ptyId, 'desktop')
-      const converged = await this.applyMobileDisplayMode(ptyId)
-      if (!converged) {
-        // Resize failed — override still held. Leave the driver on its mobile
-        // lock and undo the mode write so nothing is left lying at 'desktop'.
-        this.setMobileDisplayMode(ptyId, priorMode)
-        return false
-      }
-      this.setDriver(ptyId, { kind: 'desktop' })
-      // Why: a desktop-initiated reclaim is "I'm taking over right now",
-      // not a sticky preference. The next mobile subscribe (e.g. user
-      // switches back to the terminal tab on the phone) must default to
-      // phone-fit again, not stay in passive desktop-watch mode.
+      await this.applyMobileDisplayMode(ptyId)
+      this.releaseDesktopTakeBack(ptyId)
+      // Why: a desktop-initiated reclaim is "I'm taking over right now", not a
+      // sticky preference. The next mobile subscribe (e.g. user switches back to
+      // the terminal tab on the phone) must default to phone-fit again, not stay
+      // in passive desktop-watch mode.
       this.setMobileDisplayMode(ptyId, 'auto')
       return true
     }
@@ -8250,34 +8243,36 @@ export class OrcaRuntimeService {
       const renderer = this.lastRendererSizes.get(ptyId)
       const cols = renderer?.cols ?? heldOverride.previousCols ?? fallback.cols
       const rows = renderer?.rows ?? heldOverride.previousRows ?? fallback.rows
-      const result = await this.enqueueLayout(ptyId, { kind: 'desktop', cols, rows })
-      if (result.ok) {
-        this.setDriver(ptyId, { kind: 'desktop' })
-        // Why: a desktop-initiated reclaim is "I'm taking over right now",
-        // not a sticky preference. Reset to auto so the next mobile subscribe
-        // re-enters phone-fit. (Held-PTY branch may not have an entry, but
-        // calling setMobileDisplayMode('auto') is a no-op deletion in that
-        // case — safe and idempotent.)
-        this.setMobileDisplayMode(ptyId, 'auto')
-        return true
-      }
-      // Why (#7588): the layout entry is gone (pty exited) but the override is
-      // still held — unreachable via public APIs today (onPtyExit deletes both
-      // in lockstep), but reporting success while stranding the override would
-      // re-show the modal on the next hydrate. Run the same cleanup onPtyExit
-      // does (delete override + paired desktop-fit 0×0) so the renderer
-      // converges; nothing to resize on a dead pty.
-      if (result.reason === 'pty-exited' && this.terminalFitOverrides.has(ptyId)) {
-        this.terminalFitOverrides.delete(ptyId)
-        this.notifier?.terminalFitOverrideChanged(ptyId, 'desktop-fit', 0, 0)
-        this.notifyFitOverrideListeners(ptyId, 'desktop-fit', 0, 0)
-        return true
-      }
-      // resize-failed: the override remains held; report the truth so the
-      // modal correctly stays and the user can retry. Driver/mode untouched.
-      return false
+      await this.enqueueLayout(ptyId, { kind: 'desktop', cols, rows })
+      this.releaseDesktopTakeBack(ptyId)
+      this.setMobileDisplayMode(ptyId, 'auto')
+      return true
+    }
+    // Why: a stale lock — driver still reads mobile with no active subscriber
+    // and no held override (e.g. reclaimed inside the soft-leave grace, or a
+    // subscriber that dropped without a clean unsubscribe). Release it so the
+    // banner can't linger; there is nothing to resize.
+    if (this.getDriver(ptyId).kind === 'mobile') {
+      this.releaseDesktopTakeBack(ptyId)
+      return true
     }
     return false
+  }
+
+  // Why: the shared "banner must be gone now" step for an explicit desktop
+  // take-back. Releases the presence lock (driver → desktop) and, if the
+  // best-effort resize left a fit-override held (resize didn't converge),
+  // clears it optimistically with a paired desktop-fit 0×0 — the same signal
+  // onPtyExit emits — so neither the presence-lock banner nor the held-fit
+  // banner can survive the reclaim. The desktop renderer refits the PTY to real
+  // dims on its next settled frame.
+  private releaseDesktopTakeBack(ptyId: string): void {
+    this.setDriver(ptyId, { kind: 'desktop' })
+    if (this.terminalFitOverrides.has(ptyId)) {
+      this.terminalFitOverrides.delete(ptyId)
+      this.notifier?.terminalFitOverrideChanged(ptyId, 'desktop-fit', 0, 0)
+      this.notifyFitOverrideListeners(ptyId, 'desktop-fit', 0, 0)
+    }
   }
 
   // Why: read-side clamp for mobileAutoRestoreFitMs. `null` means
