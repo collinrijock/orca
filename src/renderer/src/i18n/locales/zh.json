@@ -4085,7 +4085,7 @@
           "3e65e11cc6": "工作区元数据",
           "c7fa72ead0": "编辑笔记",
           "93cbea12c2": "笔记",
-          "eace1d2cf6": "中立",
+          "eace1d2cf6": "中性",
           "dbe2d18972": "更多 {{value0}} 操作",
           "ae76907ca6": "取消链接 {{value0}}",
           "ad25c3ff05": "在 {{value0}} 上查看",
@@ -4648,7 +4648,7 @@
         "ForgetSshWorkspaceDialog": {
           "reconnectFailed": "重新连接失败",
           "forgetBody": "仅从 Orca 中移除此工作区。文件、Git 工作树和 {{host}} 上的分支保持不变。",
-          "title": "删除“{{name}}”？",
+          "title": "从 Orca 中移除“{{name}}”？",
           "disconnectedBody": "此工作区的 SSH 主机未连接。重新连接以同时在远程删除，或仅从 Orca 中移除。",
           "ghostBody": "{{host}} 不再是已保存的 SSH 主机，因此此工作区不再连接到活跃主机。只能从 Orca 中移除 — 远程文件和分支保持不变。",
           "cancel": "取消",
@@ -9532,7 +9532,7 @@
             "bar": {
               "buttons": {
                 "1fd284e931": "更多侧边栏选项卡",
-                "f1132ea95d": "中立"
+                "f1132ea95d": "中性"
               }
             }
           },
@@ -9997,7 +9997,7 @@
             "recoverableEmptyOpenLogHint": "打开日志以恢复它们。",
             "emptyConversationDetail": "此会话没有已保存的对话，无法恢复。",
             "queuedMessages": "{{value0}} 条排队消息",
-            "subagentTranscripts": "{{value0}} 个子代理记录"
+            "subagentTranscripts": "{{value0}} 个子智能体记录"
           },
           "AiVaultSessionRow": {
             "resumeAgentSession": "恢复 {{value0}} 会话",

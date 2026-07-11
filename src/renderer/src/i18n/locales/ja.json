@@ -10025,8 +10025,8 @@
             "jumpToOriginalPane": "元のペインにジャンプ",
             "jumpToWorktree": "ワークツリーにジャンプ",
             "recoverableBadge": "未保存",
-            "subagentCountSingular": "1つのサブエージェント",
-            "subagentCountPlural": "{{value0}}つのサブエージェント"
+            "subagentCountSingular": "1 件のサブエージェント",
+            "subagentCountPlural": "{{value0}} 件のサブエージェント"
           },
           "FileExplorerNameFilter": {
             "26fb73c6e3": "ファイルを検索",

@@ -4290,8 +4290,8 @@
               "ead7b8ee15": "파일이 변경되었습니다. 어쨌든 삭제하려면 강제 삭제를 사용하세요.",
               "905fc8efac": "Git은 이미 이 워크스페이스를 제거했습니다. 강제 삭제를 사용하여 Orca에서 삭제합니다.",
               "0899ebdb28": "Git은 이미 이 워크스페이스를 잊어버렸지만 해당 디렉토리는 여전히 디스크에 있습니다. 강제 삭제를 사용하여 분리된 디렉터리를 제거합니다.",
-              "locked": "이 작업 공간은 Git에 의해 잠겨 있습니다. 저장소에서 git worktree unlock <worktree-path>을 실행한 후 삭제를 다시 시도하세요.",
-              "lockedReason": "이 작업 공간은 Git에 의해 잠겨 있습니다. Git 보고: {{value0}}. 저장소에서 git worktree unlock <worktree-path>을 실행한 후 삭제를 다시 시도하세요."
+              "locked": "이 워크트리는 Git에 의해 잠겨 있습니다. 저장소에서 git worktree unlock <worktree-path>을 실행한 후 삭제를 다시 시도하세요.",
+              "lockedReason": "이 워크트리는 Git에 의해 잠겨 있습니다. Git 보고: {{value0}}. 저장소에서 git worktree unlock <worktree-path>을 실행한 후 삭제를 다시 시도하세요."
             }
           }
         },
@@ -4523,9 +4523,9 @@
           "6f7a8b9c0d": "취소",
           "7a8b9c0d1e": "설정 열기",
           "8b9c0d1e2f": "호스트 제거",
-          "workspacesFailed": "이 호스트의 {{count}} 개 워크트리를 제거할 수 없었습니다. 재시도할 수 있도록 호스트가 유지되었습니다.",
+          "workspacesFailed": "이 호스트에서 워크트리 {{count}}개를 제거할 수 없었습니다. 재시도할 수 있도록 호스트가 유지되었습니다.",
           "oneWorkspace": "워크트리 1개",
-          "manyWorkspaces": "{{count}} 개 워크트리",
+          "manyWorkspaces": "워크트리 {{count}}개",
           "hostHasWorkspacesDefault": "이 컴퓨터에서 {{value0}}과(와) 해당 자격 증명을 제거합니다. {{value1}}은(는) Orca에 남아 있습니다 — 원격 파일은 변경되지 않습니다.",
           "alsoDeleteRemote": "{{value1}}에서 이러한 {{value0}}도 삭제",
           "alsoForgetLocal": "Orca에서 이러한 {{value0}}도 제거",
@@ -10025,8 +10025,8 @@
             "jumpToOriginalPane": "원래 창으로 이동",
             "jumpToWorktree": "작업 트리로 이동",
             "recoverableBadge": "저장 안 됨",
-            "subagentCountSingular": "1개 하위 에이전트",
-            "subagentCountPlural": "{{value0}}개 하위 에이전트"
+            "subagentCountSingular": "서브에이전트 1개",
+            "subagentCountPlural": "서브에이전트 {{value0}}개"
           },
           "FileExplorerNameFilter": {
             "26fb73c6e3": "파일 찾기",
@@ -10083,7 +10083,7 @@
             "noActiveWorktreeTarget": "사용 가능한 활성 작업 트리가 없습니다."
           },
           "AiVaultSessionSubagents": {
-            "subagentsCount": "하위 에이전트 ({{value0}})",
+            "subagentsCount": "서브에이전트 ({{value0}})",
             "messageCount": "{{value0}}개 메시지",
             "viewLog": "로그 보기"
           }
@@ -12729,7 +12729,7 @@
               "confirm": {
                 "move": {
                   "title": "프로젝트를 이동하시겠습니까?",
-                  "description": "{{repoName}}을(를) {{targetName}}(으)로 이동합니다. Orca가 {{activeProfileName}}에서 제거하고 파일을 유지한 후 {{targetName}}(으)로 다시 시작합니다.",
+                  "description": "{{repoName}}을(를) {{targetName}}(으)로 이동합니다. Orca가 {{repoName}}을(를) {{activeProfileName}}에서 제거한 뒤 파일은 유지하고 {{targetName}}(으)로 다시 시작합니다.",
                   "action": "프로젝트 이동"
                 },
                 "copy": {
@@ -12741,12 +12741,12 @@
                   "work": "이 프로젝트의 활성 작업"
                 },
                 "cancel": "취소",
-                "terminalSingular": "{{count}}개 활성 터미널 탭",
-                "terminalPlural": "{{count}}개 활성 터미널 탭",
-                "agentSingular": "{{count}}개 활성 에이전트",
-                "agentPlural": "{{count}}개 활성 에이전트",
-                "browserSingular": "{{count}}개 브라우저 작업 공간",
-                "browserPlural": "{{count}}개 브라우저 작업 공간"
+                "terminalSingular": "활성 터미널 탭 {{count}}개",
+                "terminalPlural": "활성 터미널 탭 {{count}}개",
+                "agentSingular": "활성 에이전트 {{count}}개",
+                "agentPlural": "활성 에이전트 {{count}}개",
+                "browserSingular": "브라우저 작업 공간 {{count}}개",
+                "browserPlural": "브라우저 작업 공간 {{count}}개"
               }
             }
           },
@@ -12768,12 +12768,12 @@
               },
               "cancel": "취소",
               "switch": "프로필 전환",
-              "terminalSingular": "{{count}}개 활성 터미널 탭",
-              "terminalPlural": "{{count}}개 활성 터미널 탭",
-              "agentSingular": "{{count}}개 활성 에이전트",
-              "agentPlural": "{{count}}개 활성 에이전트",
-              "browserSingular": "{{count}}개 브라우저 작업 공간",
-              "browserPlural": "{{count}}개 브라우저 작업 공간"
+              "terminalSingular": "활성 터미널 탭 {{count}}개",
+              "terminalPlural": "활성 터미널 탭 {{count}}개",
+              "agentSingular": "활성 에이전트 {{count}}개",
+              "agentPlural": "활성 에이전트 {{count}}개",
+              "browserSingular": "브라우저 작업 공간 {{count}}개",
+              "browserPlural": "브라우저 작업 공간 {{count}}개"
             }
           },
           "org": {
@@ -12810,7 +12810,7 @@
                 "submit": "보내기"
               },
               "error": {
-                "forbidden": "해당 역할은 수행할 수 없습니다.",
+                "forbidden": "이 작업을 수행할 권한이 없습니다.",
                 "conflict": "이미 구성원이거나 초대되었습니다.",
                 "remove": {
                   "self": "자신을 제거할 수 없습니다."
