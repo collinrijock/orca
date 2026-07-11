@@ -1,17 +1,23 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import {
   bufferPreHandlerPtyData,
+  bufferPreHandlerPtyExit,
   clearPreHandlerPtyState,
-  drainPreHandlerPtyData
+  drainPreHandlerPtyData,
+  drainPreHandlerPtyExit
 } from './pty-pre-handler-buffer'
 
 const RESCAN_PTY_ID = 'pty-pre-handler-rescan'
 const TRIM_PTY_ID = 'pty-pre-handler-trim'
+const EXIT_PTY_IDS = Array.from({ length: 65 }, (_, index) => `pty-pre-handler-exit-${index}`)
 
 describe('pre-handler PTY buffer', () => {
   afterEach(() => {
     clearPreHandlerPtyState(RESCAN_PTY_ID)
     clearPreHandlerPtyState(TRIM_PTY_ID)
+    for (const ptyId of EXIT_PTY_IDS) {
+      clearPreHandlerPtyState(ptyId)
+    }
   })
 
   it('does not rescan historical chunks while buffering small startup output', () => {
@@ -70,5 +76,23 @@ describe('pre-handler PTY buffer', () => {
     drainPreHandlerPtyData(TRIM_PTY_ID, (data) => drained.push(data))
     expect(drained).toHaveLength(512)
     expect(drained.join('')).toHaveLength(512 * 1_024)
+  })
+
+  it('bounds exits that arrive before any handler is registered', () => {
+    for (let index = 0; index < EXIT_PTY_IDS.length; index += 1) {
+      bufferPreHandlerPtyExit(EXIT_PTY_IDS[index], index)
+    }
+
+    let oldestExit: number | null = null
+    drainPreHandlerPtyExit(EXIT_PTY_IDS[0], (code) => {
+      oldestExit = code
+    })
+    let newestExit: number | null = null
+    drainPreHandlerPtyExit(EXIT_PTY_IDS.at(-1)!, (code) => {
+      newestExit = code
+    })
+
+    expect(oldestExit).toBeNull()
+    expect(newestExit).toBe(64)
   })
 })
