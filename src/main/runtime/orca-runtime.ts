@@ -56,8 +56,12 @@ import { isAbsolute, join, resolve } from 'node:path'
 import { mkdir, readFile, readdir, rm, stat } from 'node:fs/promises'
 import { resolveWorktreeCreateBase } from '../worktree-create-base'
 import { resolveWorktreeAddBaseRef } from '../../shared/worktree-base-ref'
-import { OrchestrationDb } from './orchestration/db'
+import { OrchestrationDb, type MessageRow, type MessageType } from './orchestration/db'
 import { formatMessagesForInjection } from './orchestration/formatter'
+import {
+  COORDINATOR_WAKE_MESSAGE_TYPES,
+  deliverOrchestrationMessage
+} from './orchestration/lifecycle-delivery'
 import type {
   Automation,
   AutomationCreateInput,
@@ -1362,6 +1366,15 @@ type MessageWaiter = {
   abortCleanup: (() => void) | null
 }
 
+function messageWaiterMatchesType(waiter: MessageWaiter, messageType?: string): boolean {
+  return !messageType || !waiter.typeFilter || waiter.typeFilter.includes(messageType)
+}
+
+type PendingMessageDeliveryOptions = {
+  wakeAgent?: boolean
+  messageType?: MessageType
+}
+
 function omitUndefinedProperties<T extends Record<string, unknown>>(value: T): Partial<T> {
   return Object.fromEntries(
     Object.entries(value).filter(([, entry]) => entry !== undefined)
@@ -2106,6 +2119,11 @@ export class OrcaRuntimeService {
   private ptyDelayedForegroundSnapshotTitleObservations = new Map<string, number>()
   private _orchestrationDb: OrchestrationDb | null = null
   private messageWaitersByHandle = new Map<string, Set<MessageWaiter>>()
+  // Why: agent prompt submission has a short paste-settle delay. Serialize
+  // concurrent completions so one message cannot be injected twice in that gap.
+  private orchestrationWakeDeliveryInFlightHandles = new Set<string>()
+  private orchestrationWakeDeliveryPendingHandles = new Set<string>()
+  private orchestrationWakeDeliveryClaimedMessageIds = new Set<string>()
   // Why: mobile clients subscribe to terminal output via terminal.subscribe.
   // These listeners fire on every onPtyData call, enabling real-time streaming
   // without polling. Keyed by ptyId for O(1) lookup per data event.
@@ -8488,24 +8506,31 @@ export class OrcaRuntimeService {
     const errorContext = `Agent exited with code ${exitCode}`
     this._orchestrationDb.failDispatch(dispatch.id, errorContext)
 
-    // Why: create an escalation message so the coordinator is notified about
-    // the unexpected exit on its next check cycle, even if the circuit breaker
-    // hasn't tripped yet.
-    const run = this._orchestrationDb.getActiveCoordinatorRun()
-    if (run) {
-      this._orchestrationDb.insertMessage({
-        from: handle,
-        to: run.coordinator_handle,
-        subject: `Agent exited unexpectedly (code ${exitCode})`,
-        type: 'escalation',
-        priority: 'high',
-        payload: JSON.stringify({
-          taskId: dispatch.task_id,
-          exitCode,
-          handle
-        })
-      })
+    // Why: a crashed worker never sends worker_done, and event-driven
+    // coordinators no longer poll — the exit escalation is the only signal
+    // they get. Route it to whoever dispatched this context (the persisted
+    // handle covers manual coordinators; the active run covers automated
+    // ones and pre-migration rows) and push it like any lifecycle message.
+    const coordinatorHandle =
+      dispatch.coordinator_handle ??
+      this._orchestrationDb.getActiveCoordinatorRun()?.coordinator_handle
+    if (!coordinatorHandle) {
+      return
     }
+    const escalation = this._orchestrationDb.insertMessage({
+      from: handle,
+      to: coordinatorHandle,
+      subject: `Agent exited unexpectedly (code ${exitCode})`,
+      type: 'escalation',
+      priority: 'high',
+      payload: JSON.stringify({
+        taskId: dispatch.task_id,
+        dispatchId: dispatch.id,
+        exitCode,
+        handle
+      })
+    })
+    deliverOrchestrationMessage(this, escalation)
   }
 
   async listTerminals(
@@ -20016,16 +20041,77 @@ export class OrcaRuntimeService {
     return this.getLeavesForPty(ptyId)[0] ?? null
   }
 
-  deliverPendingMessagesForHandle(handle: string): void {
+  deliverPendingMessagesForHandle(
+    handle: string,
+    options: PendingMessageDeliveryOptions = {}
+  ): void {
+    if (options.wakeAgent && this.hasMatchingMessageWaiter(handle, options.messageType)) {
+      return
+    }
     try {
       const { leaf } = this.getLiveLeafForHandle(handle)
       if (leaf.lastAgentStatus === 'idle') {
         this.deliverPendingMessages(leaf)
+      } else if (options.wakeAgent && leaf.lastAgentStatus === 'working') {
+        this.deliverPendingMessages(leaf, { wakeAgent: true })
       }
+      return
+    } catch {
+      // Renderer-graph leaf resolution fails for daemon/headless terminals;
+      // fall through to the runtime-owned PTY handle route below.
+    }
+    if (!options.wakeAgent) {
+      // Non-actionable messages never steer a terminal; the persisted row
+      // remains available via explicit check or future idle delivery.
+      return
+    }
+    try {
+      this.deliverPendingWakeMessagesForPtyHandle(handle)
     } catch {
       // Unknown or stale handles cannot be pushed immediately; the persisted
       // message remains available via explicit check or future idle delivery.
     }
+  }
+
+  // Why: daemon/headless coordinators have no renderer-graph leaf, but their
+  // PTY handles are fully writable through sendTerminalAgentPrompt. Without
+  // this route those coordinators would follow the no-polling guidance, end
+  // their turn, and never be re-engaged.
+  private deliverPendingWakeMessagesForPtyHandle(handle: string): void {
+    const db = this._orchestrationDb
+    if (!db) {
+      return
+    }
+    const pty = this.getLivePtyForHandle(handle)?.pty
+    if (!pty || !pty.connected) {
+      return
+    }
+    if (pty.lastAgentStatus !== 'working' && pty.lastAgentStatus !== 'idle') {
+      return
+    }
+    if (this.orchestrationWakeDeliveryInFlightHandles.has(handle)) {
+      this.orchestrationWakeDeliveryPendingHandles.add(handle)
+      return
+    }
+    if (db.getActiveCoordinatorRun()?.coordinator_handle === handle) {
+      return
+    }
+    if ([pty.lastOscTitle, pty.title].some(isCursorAgentTitle)) {
+      return
+    }
+    const unread = db.getUndeliveredUnreadMessages(handle, COORDINATOR_WAKE_MESSAGE_TYPES)
+    if (unread.length === 0) {
+      return
+    }
+    this.submitWakeMessagesToAgent(handle, unread)
+  }
+
+  private hasMatchingMessageWaiter(handle: string, messageType?: MessageType): boolean {
+    const waiters = this.messageWaitersByHandle.get(handle)
+    if (!waiters || waiters.size === 0) {
+      return false
+    }
+    return [...waiters].some((waiter) => messageWaiterMatchesType(waiter, messageType))
   }
 
   // Why: after a message is inserted for a recipient, any blocking
@@ -20039,7 +20125,7 @@ export class OrcaRuntimeService {
     for (const waiter of [...waiters]) {
       // Why: a coordinator waiting for worker_done/escalation should not be
       // woken by worker heartbeat noise and mistake that empty read for idleness.
-      if (messageType && waiter.typeFilter && !waiter.typeFilter.includes(messageType)) {
+      if (!messageWaiterMatchesType(waiter, messageType)) {
         continue
       }
       this.resolveMessageWaiter(waiter)
@@ -20585,11 +20671,12 @@ export class OrcaRuntimeService {
     return null
   }
 
-  // Why: push-on-idle delivery — when an agent transitions working→idle, check
-  // for unread orchestration messages addressed to that terminal and inject them
-  // into the PTY. This is event-driven (no polling) because the runtime owns
-  // both the message store and terminal status detection.
-  private deliverPendingMessages(leaf: RuntimeLeafRecord): void {
+  // Why: the runtime owns message insertion and terminal status events, so both
+  // idle delivery and actionable working-agent wakes can stay event-driven.
+  private deliverPendingMessages(
+    leaf: RuntimeLeafRecord,
+    options: { wakeAgent?: boolean } = {}
+  ): void {
     if (!this._orchestrationDb) {
       return
     }
@@ -20599,12 +20686,38 @@ export class OrcaRuntimeService {
       return
     }
 
-    const unread = this._orchestrationDb.getUndeliveredUnreadMessages(handle)
+    // Why: a wake submit may be mid paste-settle for this handle. Any delivery
+    // that reads the store now (including push-on-idle after a working→idle
+    // transition) would replay the not-yet-stamped rows; defer to the drain.
+    if (this.orchestrationWakeDeliveryInFlightHandles.has(handle)) {
+      this.orchestrationWakeDeliveryPendingHandles.add(handle)
+      return
+    }
+
+    const unread = this._orchestrationDb.getUndeliveredUnreadMessages(
+      handle,
+      options.wakeAgent ? COORDINATOR_WAKE_MESSAGE_TYPES : undefined
+    )
     if (unread.length === 0) {
       return
     }
 
     if (!leaf.writable || !leaf.ptyId) {
+      return
+    }
+
+    const tabTitle = this.tabs.get(leaf.tabId)?.title
+    const activeCoordinatorOwnsPrompt =
+      this._orchestrationDb.getActiveCoordinatorRun()?.coordinator_handle === handle
+    const cursorOwnsPrompt = isCursorAgentOrchestrationTarget(leaf, tabTitle)
+    if (options.wakeAgent && (activeCoordinatorOwnsPrompt || cursorOwnsPrompt)) {
+      // Working prompts owned by an automated coordinator or Cursor stay
+      // untouched; their persisted inbox is the safe delivery fallback.
+      return
+    }
+
+    if (options.wakeAgent) {
+      this.submitWakeMessagesToAgent(handle, unread)
       return
     }
 
@@ -20615,13 +20728,12 @@ export class OrcaRuntimeService {
     }
 
     // The active coordinator prompt is user-owned input, so push-on-idle must not synthesize Enter.
-    if (this._orchestrationDb.getActiveCoordinatorRun()?.coordinator_handle === handle) {
+    if (activeCoordinatorOwnsPrompt) {
       this._orchestrationDb.markAsDelivered(unread.map((m) => m.id))
       return
     }
 
-    const tabTitle = this.tabs.get(leaf.tabId)?.title
-    if (isCursorAgentOrchestrationTarget(leaf, tabTitle)) {
+    if (cursorOwnsPrompt) {
       // Why: Cursor Agent treats injected PTY text as editable prompt input.
       // Push-on-idle may surface the message, but submitting it must stay
       // under user control.
@@ -20656,6 +20768,99 @@ export class OrcaRuntimeService {
         // idle transition.
       }
     }, 500)
+  }
+
+  // Why: `lastAgentStatus` mirrors the newest observed title, which survives an
+  // agent crash in shells that never repaint the OSC title (#1437). A live
+  // shell foreground process is definitive negative evidence, and a permission
+  // state means the delayed Enter could approve a pending request — both must
+  // abort the submit. Also used as the beforeWrite re-check so the Enter is
+  // withheld when the state changes inside the paste-settle window.
+  private async assertWakeDeliveryTargetSafe(handle: string): Promise<void> {
+    const status = await this.getTerminalAgentStatus(handle)
+    if (!status.isRunningAgent || status.status === 'permission') {
+      throw new Error('wake_target_not_safe_agent')
+    }
+    if (await this.terminalHasShellForegroundProcess(handle)) {
+      throw new Error('wake_target_foreground_shell')
+    }
+  }
+
+  private submitWakeMessagesToAgent(handle: string, unread: MessageRow[]): void {
+    const payload = formatMessagesForInjection(unread)
+    const messageIds = unread.map((message) => message.id)
+    this.orchestrationWakeDeliveryInFlightHandles.add(handle)
+    for (const id of messageIds) {
+      this.orchestrationWakeDeliveryClaimedMessageIds.add(id)
+    }
+    void this.assertWakeDeliveryTargetSafe(handle)
+      .then(() =>
+        this.sendTerminalAgentPrompt(handle, payload, {
+          beforeWrite: () => this.assertWakeDeliveryTargetSafe(handle)
+        })
+      )
+      .then(() => {
+        try {
+          this._orchestrationDb?.markAsDelivered(messageIds)
+        } catch (err) {
+          // The prompt was submitted but the stamp failed (DB swapped or
+          // closed mid-flight); the rows will replay on the next delivery
+          // event, so leave a diagnosable trace for that duplicate.
+          console.warn('[orchestration] failed to stamp delivered_at after wake submit', {
+            handle,
+            messageIds,
+            err
+          })
+        }
+      })
+      .catch((err) => {
+        // Failed submits leave the rows queued for a future delivery event.
+        console.warn('[orchestration] working-agent wake delivery failed; messages stay queued', {
+          handle,
+          err
+        })
+      })
+      .finally(() => {
+        for (const id of messageIds) {
+          this.orchestrationWakeDeliveryClaimedMessageIds.delete(id)
+        }
+        this.orchestrationWakeDeliveryInFlightHandles.delete(handle)
+        if (!this.orchestrationWakeDeliveryPendingHandles.delete(handle)) {
+          return
+        }
+        // Drain even when this submit failed: the deferred arrival was a real
+        // delivery event and gets exactly one attempt, not a retry loop.
+        this.drainPendingWakeDelivery(handle)
+      })
+  }
+
+  // Why: the drain re-derives the delivery mode from the CURRENT terminal
+  // state — a completion may have flipped working→idle while the prior submit
+  // was settling.
+  private drainPendingWakeDelivery(handle: string): void {
+    try {
+      const { leaf } = this.getLiveLeafForHandle(handle)
+      if (leaf.lastAgentStatus === 'idle') {
+        this.deliverPendingMessages(leaf)
+      } else if (leaf.lastAgentStatus === 'working') {
+        this.deliverPendingMessages(leaf, { wakeAgent: true })
+      }
+      return
+    } catch {
+      // Leaf gone or renderer graph unavailable; try the PTY-handle route.
+    }
+    try {
+      this.deliverPendingWakeMessagesForPtyHandle(handle)
+    } catch {
+      // The terminal closed after submit; pending rows remain persisted.
+    }
+  }
+
+  // Why: orchestration.check must not hand a caller a row that an in-flight
+  // working-agent wake is about to submit — the sub-second claim window is
+  // the only gap where both delivery paths could observe the same message.
+  isMessageClaimedForWakeDelivery(messageId: string): boolean {
+    return this.orchestrationWakeDeliveryClaimedMessageIds.has(messageId)
   }
 
   private resolveWaiter(waiter: TerminalWaiter, result: RuntimeTerminalWait): void {

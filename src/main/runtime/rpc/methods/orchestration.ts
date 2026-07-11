@@ -7,6 +7,7 @@ import { buildDispatchPreamble } from '../../orchestration/preamble'
 import { formatMessageBanner } from '../../orchestration/formatter'
 import { isGroupAddress, resolveGroupAddress } from '../../orchestration/groups'
 import { reconcileLifecycleMessage } from '../../orchestration/lifecycle-reconciliation'
+import { deliverOrchestrationMessage } from '../../orchestration/lifecycle-delivery'
 import { ORCHESTRATION_GATE_METHODS } from './orchestration-gates'
 
 const MESSAGE_TYPES: MessageType[] = [
@@ -204,8 +205,7 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
         if (msg.type === 'worker_done' || msg.type === 'heartbeat') {
           reconcileLifecycleMessage(db, msg)
         }
-        runtime.deliverPendingMessagesForHandle(params.to)
-        runtime.notifyMessageArrived(params.to, msg.type)
+        deliverOrchestrationMessage(runtime, msg)
         return { message: msg }
       }
 
@@ -235,8 +235,7 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
         })
       )
       for (const message of messages) {
-        runtime.deliverPendingMessagesForHandle(message.to_handle)
-        runtime.notifyMessageArrived(message.to_handle, message.type)
+        deliverOrchestrationMessage(runtime, message)
       }
 
       return { messages, recipients: handles.length }
@@ -268,8 +267,13 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
       const showUnread = !showAll
 
       const readAndReturn = () => {
+        // Why: rows a working-agent wake is mid-submit for must not also be
+        // handed to a concurrent check — exactly one immediate delivery path.
+        // The audit view (--all) still shows everything.
         const messages = showUnread
-          ? db.getUnreadMessages(handle, typeFilter)
+          ? db
+              .getUnreadMessages(handle, typeFilter)
+              .filter((m) => !runtime.isMessageClaimedForWakeDelivery(m.id))
           : db.getAllMessagesForHandle(handle, undefined, typeFilter)
 
         if (showUnread && messages.length > 0) {
@@ -475,7 +479,9 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
         }
       }
 
-      const ctx = db.createDispatchContext(params.task, to)
+      // Why: the dispatching coordinator is persisted so a worker exit can be
+      // escalated to it even when no automated coordinator run is active.
+      const ctx = db.createDispatchContext(params.task, to, params.from ?? null)
 
       // Why: preamble is built here (not before ctx) so `dispatchId` can be
       // the real ctx.id — the preamble-hardening PR made dispatchId required
@@ -580,8 +586,7 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
         type: 'decision_gate',
         payload
       })
-      runtime.deliverPendingMessagesForHandle(params.to)
-      runtime.notifyMessageArrived(params.to, outbound.type)
+      deliverOrchestrationMessage(runtime, outbound)
 
       const threadId = outbound.id
       const deadline = Date.now() + timeoutMs

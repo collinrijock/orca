@@ -3,7 +3,7 @@ name: orchestration
 description: >-
   Use Orca orchestration for structured multi-agent coordination: threaded
   messages, blocking ask/reply flows, task dispatch, worker_done/escalation
-  waits, task DAGs, decision gates, coordinator loops, or decomposing work
+  delivery, task DAGs, decision gates, coordinator loops, or decomposing work
   across agents. Use `orca-cli` instead for full ownership handoffs, including
   requests phrased as "hand off", "handoff", "handover", "give this to another
   agent", or "another worktree" when the user did not explicitly ask to
@@ -38,7 +38,7 @@ If the work was accidentally run outside Orca orchestration, say so plainly. To 
 ## When To Use
 
 - Send/reply/ask between agent terminals with persistent messages.
-- Dispatch structured tasks to workers and wait for `worker_done` or `escalation`.
+- Dispatch structured tasks to workers and react to pushed `worker_done` or `escalation` messages.
 - Track task DAGs with dependencies.
 - Run coordinator loops or decision gates.
 
@@ -57,7 +57,7 @@ Orchestration messages and tasks are runtime-global. Completion authority comes 
 
 Classify inherited context before sending lifecycle messages:
 
-- Coordinated subtask: a live coordinator owns the DAG and waits on this dispatch. Follow the preamble exactly, including `worker_done`, heartbeat/status, `ask`, and `escalation`.
+- Coordinated subtask: a live coordinator owns the DAG and expects pushed results from this dispatch. Follow the preamble exactly, including `worker_done`, heartbeat/status, `ask`, and `escalation`.
 - Full handoff means ownership transfer, not supervised dispatch. The original actor is not monitoring a DAG, so do not create lifecycle obligations unless the user explicitly asks you to supervise.
 - Classify requests containing "hand off", "handoff", "handover", "give this to another agent", "give this to another worktree", "another agent", or "another worktree" as full handoffs by default, even when the user names a custom model or reasoning effort.
 - Use supervised orchestration only when the user explicitly asks you to "supervise", "monitor", "wait", "track completion", "wait for worker_done", return results, coordinate a DAG, use a decision gate, or manage ask/reply flow.
@@ -88,11 +88,13 @@ orca orchestration inbox [--limit <n>] [--json]
 Rules:
 
 - Omit `--from` unless impersonating another terminal; Orca auto-resolves it from the current terminal.
-- While supervising workers manually, use `check --wait --types worker_done,escalation,decision_gate --timeout-ms <n>` instead of sleep/poll loops. Reply to `decision_gate` messages with `orca orchestration reply --id <msg_id> --body <answer> --json`, then keep waiting.
-- Treat a `check --wait` timeout or `{count:0}` as a checkpoint, not a worker failure. Long coding tasks routinely run 15-60 minutes; keep using rolling waits unless you receive `worker_done`/`escalation`, the terminal exits or disappears, or the user explicitly asks you to stop.
+- Do not call `orca orchestration check --wait` after dispatching supervised work.
+- Orca pushes `worker_done`, `escalation`, and `decision_gate` messages into the coordinator agent input as soon as they arrive. Finish any independent coordinator work already in progress, then end the turn and let Orca re-engage the coordinator.
+- Reply to a pushed `decision_gate` with `orca orchestration reply --id <msg_id> --body <answer> --json`. Use a non-waiting `check` only for explicit inbox recovery or auditing, not as a supervision loop.
 - Heartbeats and visible terminal activity mean the worker is alive, not done. Do not stop, close, kill, or restart a worker just because it has not produced a completion message yet.
+- If a worker terminal exits while its dispatch is active, Orca fails the dispatch and pushes an `escalation` to the dispatching coordinator, so crashes also arrive without polling.
 - Use `ask` when a worker needs a blocking answer from the coordinator; it waits for the reply and returns the answer directly.
-- `check --wait` returns one message at a time. If N workers may finish together, loop N times and dispatch newly ready tasks after each completion.
+- If several workers finish together, Orca queues their pushed messages and submits them to the coordinator without requiring one wait call per worker.
 - Group addresses include `@all`, `@idle`, `@claude`, `@codex`, `@opencode`, `@gemini`, `@droid`, and `@worktree:<id>`.
 - Message types include `status`, `dispatch`, `worker_done`, `merge_ready`, `escalation`, `handoff`, `decision_gate`, and `heartbeat`.
 - Use group addresses only for messages that are genuinely useful to many terminals, such as `status` broadcasts or intentional fan-out questions. Do not send dispatch lifecycle messages to groups.
@@ -210,7 +212,7 @@ orca terminal send --terminal <handle> --text <text> --enter --json
 
 If an older CLI rejects `worktree create --agent`, create the worktree normally, then run `orca terminal create --worktree <selector> --command "codex" --json` or `--command "claude"`.
 
-Wait for `tui-idle` before dispatching. Always pass `--timeout-ms`; real coding tasks can take 15-60 minutes. During supervision, use rolling `check --wait` windows. If a window returns no matching message, inspect `task-list`, `terminal read`, or `terminal wait --for tui-idle` as a liveness checkpoint; if the terminal is still working or producing activity, keep waiting instead of retrying the task.
+Wait for `tui-idle` before dispatching so the initial prompt is not lost. After dispatch, continue useful coordinator work or end the turn; lifecycle messages wake the coordinator automatically. Use `task-list`, `terminal read`, or a non-waiting `check` only for explicit diagnosis or recovery, not periodic liveness checks.
 
 ## Agent Guidance
 
@@ -231,11 +233,11 @@ orca terminal create --worktree active --title login-css-worker --command "claud
 orca terminal wait --terminal <handle> --for tui-idle --timeout-ms 60000 --json
 orca orchestration task-create --spec "Fix the login button CSS" --json
 orca orchestration dispatch --task <task_id> --to <handle> --inject --json
-orca orchestration check --wait --types worker_done,escalation,decision_gate --timeout-ms 900000 --json
+# Continue independent work or end the turn. Orca pushes lifecycle messages here.
 ```
 
 ## Next Action
 
-Coordinator: confirm `orca status --json`, inspect `task-list`/`dispatch-show` if inheriting state, then choose either a manual loop (`task-create` -> worker -> `dispatch --inject` -> `check --wait`) or `orchestration run`.
+Coordinator: confirm `orca status --json`, inspect `task-list`/`dispatch-show` if inheriting state, then choose manual dispatch (`task-create` -> worker -> `dispatch --inject`) or `orchestration run`. Do not add a wait loop after dispatch; react when Orca pushes lifecycle input.
 
 Worker: if the current prompt contains a live dispatch preamble, do the task, use `ask` for blocking questions, and send `worker_done` once with the required payload. If the preamble is stale or absent, do not send lifecycle messages; inspect state or treat the prompt as an ordinary handoff.

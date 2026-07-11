@@ -41,15 +41,19 @@ describe('orchestration skill guidance', () => {
     )
   })
 
-  it('treats long-running worker waits as liveness checkpoints, not failures', () => {
+  it('uses pushed lifecycle delivery instead of coordinator polling', () => {
     const skill = readSkill()
 
-    expect(skill).toContain('Treat a `check --wait` timeout or `{count:0}` as a checkpoint')
-    expect(skill).toContain('Do not stop, close, kill, or restart a worker')
-    expect(skill).toContain('keep waiting instead of retrying the task')
-    expect(skill).not.toContain(
-      'If `check --wait` times out with no `worker_done` or `escalation`, fall back to `terminal wait --for tui-idle`, then `terminal read`.'
+    expect(skill).toContain(
+      'Do not call `orca orchestration check --wait` after dispatching supervised work.'
     )
+    expect(skill).toContain(
+      'Orca pushes `worker_done`, `escalation`, and `decision_gate` messages into the coordinator agent input'
+    )
+    expect(skill).toContain('end the turn and let Orca re-engage the coordinator')
+    expect(skill).not.toContain('keep using rolling waits')
+    expect(skill).not.toContain('During supervision, use rolling `check --wait` windows.')
+    expect(skill).not.toContain('orca orchestration check --wait --types')
   })
 
   it('keeps full handoffs out of dispatch lifecycle and off the active branch base', () => {

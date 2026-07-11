@@ -52,6 +52,7 @@ export type DispatchContextRow = {
   id: string
   task_id: string
   assignee_handle: string | null
+  coordinator_handle: string | null
   status: DispatchStatus
   failure_count: number
   last_failure: string | null

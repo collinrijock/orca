@@ -314,8 +314,18 @@ describe('OrchestrationDb', () => {
       expect(ctx.id).toMatch(/^ctx_/)
       expect(ctx.task_id).toBe(task.id)
       expect(ctx.assignee_handle).toBe('term_worker')
+      expect(ctx.coordinator_handle).toBeNull()
       expect(ctx.status).toBe('dispatched')
       expect(d.getTask(task.id)?.status).toBe('dispatched')
+    })
+
+    it('persists the dispatching coordinator so worker exits can be escalated', () => {
+      const d = createDb()
+      const task = d.createTask({ spec: 'work' })
+      const ctx = d.createDispatchContext(task.id, 'term_worker', 'term_coord')
+
+      expect(ctx.coordinator_handle).toBe('term_coord')
+      expect(d.getDispatchContextById(ctx.id)?.coordinator_handle).toBe('term_coord')
     })
 
     it('rejects dispatch for non-ready tasks', () => {

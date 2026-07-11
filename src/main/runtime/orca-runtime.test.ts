@@ -43,6 +43,7 @@ import {
 } from '../hooks'
 import { getBranchConflictKind, getDefaultBaseRef } from '../git/repo'
 import type { OrchestrationDb } from './orchestration/db'
+import { deliverOrchestrationMessage } from './orchestration/lifecycle-delivery'
 import type { MessagePriority, MessageRow, MessageType } from './orchestration/types'
 import {
   appendNormalizedToTailBuffer,
@@ -867,6 +868,15 @@ function antigravityPromptBeforeModelReadyScreen(model = 'Gemini 3.5 Flash (High
 
 // Why: these runtime feature tests only need message-queue semantics; using
 // SQLite here makes them fail on unrelated native runtime ABI drift.
+type InMemoryDispatchContext = {
+  id: string
+  task_id: string
+  assignee_handle: string | null
+  coordinator_handle: string | null
+  status: string
+  last_failure: string | null
+}
+
 class InMemoryOrchestrationMessages {
   private sequence = 0
 
@@ -925,6 +935,42 @@ class InMemoryOrchestrationMessages {
 
   getActiveCoordinatorRun(): { coordinator_handle: string } | null {
     return this.activeCoordinatorRun
+  }
+
+  markAsRead(ids: string[]): void {
+    const readIds = new Set(ids)
+    for (const message of this.messages) {
+      if (readIds.has(message.id)) {
+        message.read = 1
+      }
+    }
+  }
+
+  private dispatches: InMemoryDispatchContext[] = []
+
+  setDispatch(dispatch: InMemoryDispatchContext): void {
+    this.dispatches.push(dispatch)
+  }
+
+  getDispatch(id: string): InMemoryDispatchContext | undefined {
+    return this.dispatches.find((dispatch) => dispatch.id === id)
+  }
+
+  getActiveDispatchForTerminal(handle: string): InMemoryDispatchContext | undefined {
+    return this.dispatches.find(
+      (dispatch) =>
+        dispatch.assignee_handle === handle &&
+        (dispatch.status === 'pending' || dispatch.status === 'dispatched')
+    )
+  }
+
+  failDispatch(id: string, error: string): InMemoryDispatchContext | undefined {
+    const dispatch = this.getDispatch(id)
+    if (dispatch) {
+      dispatch.status = 'failed'
+      dispatch.last_failure = error
+    }
+    return dispatch
   }
 
   markAsDelivered(ids: string[]): void {
@@ -11661,6 +11707,20 @@ describe('OrcaRuntimeService', () => {
     expect(preview.nextCursor).toBe('2000')
   })
 
+  function setupOrchestrationDeliveryRuntime() {
+    const runtime = new OrcaRuntimeService(store)
+    const db = new InMemoryOrchestrationMessages()
+    const write = vi.fn().mockReturnValue(true)
+    setInMemoryOrchestrationMessages(runtime, db)
+    runtime.setPtyController({
+      write,
+      kill: vi.fn(),
+      getForegroundProcess: async () => null
+    })
+    syncSinglePty(runtime)
+    return { runtime, db, write }
+  }
+
   it('delivers pending orchestration messages to an already-idle agent', async () => {
     vi.useFakeTimers()
     try {
@@ -11698,6 +11758,428 @@ describe('OrcaRuntimeService', () => {
       expect(unread).toHaveLength(1)
       expect(unread[0].read).toBe(0)
       expect(unread[0].delivered_at).not.toBeNull()
+      db.close()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('pushes a lifecycle message directly to a working coordinator agent', async () => {
+    vi.useFakeTimers()
+    try {
+      const { runtime, db, write } = setupOrchestrationDeliveryRuntime()
+
+      const [terminal] = (await runtime.listTerminals()).terminals
+      runtime.onPtyData('pty-1', '\x1b]0;Codex working\x07', 100)
+      db.insertMessage({
+        from: 'term_worker',
+        to: terminal.handle,
+        subject: 'implementation complete',
+        type: 'worker_done'
+      })
+
+      runtime.deliverPendingMessagesForHandle(terminal.handle, {
+        wakeAgent: true,
+        messageType: 'worker_done'
+      })
+
+      await vi.advanceTimersByTimeAsync(0)
+      expect(write).toHaveBeenCalledTimes(1)
+      expect(write).toHaveBeenCalledWith(
+        'pty-1',
+        expect.stringContaining('Subject: implementation complete')
+      )
+      await vi.advanceTimersByTimeAsync(500)
+      expect(write).toHaveBeenCalledTimes(2)
+      expect(write).toHaveBeenLastCalledWith('pty-1', '\r')
+      expect(db.getUnreadMessages(terminal.handle)[0].delivered_at).not.toBeNull()
+      db.close()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('lets a matching legacy waiter consume a lifecycle message without PTY injection', async () => {
+    vi.useFakeTimers()
+    try {
+      const { runtime, db, write } = setupOrchestrationDeliveryRuntime()
+
+      const [terminal] = (await runtime.listTerminals()).terminals
+      runtime.onPtyData('pty-1', '\x1b]0;Codex working\x07', 100)
+      const waiter = runtime.waitForMessage(terminal.handle, {
+        typeFilter: ['worker_done'],
+        timeoutMs: 60_000
+      })
+      db.insertMessage({
+        from: 'term_worker',
+        to: terminal.handle,
+        subject: 'legacy completion',
+        type: 'worker_done'
+      })
+
+      runtime.deliverPendingMessagesForHandle(terminal.handle, {
+        wakeAgent: true,
+        messageType: 'worker_done'
+      })
+      runtime.notifyMessageArrived(terminal.handle, 'worker_done')
+      await waiter
+
+      expect(write).not.toHaveBeenCalled()
+      expect(db.getUnreadMessages(terminal.handle)[0].delivered_at).toBeNull()
+      db.close()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('serializes lifecycle messages that arrive during agent prompt submission', async () => {
+    vi.useFakeTimers()
+    try {
+      const { runtime, db, write } = setupOrchestrationDeliveryRuntime()
+
+      const [terminal] = (await runtime.listTerminals()).terminals
+      runtime.onPtyData('pty-1', '\x1b]0;Codex working\x07', 100)
+      db.insertMessage({
+        from: 'term_worker_1',
+        to: terminal.handle,
+        subject: 'first completion',
+        type: 'worker_done'
+      })
+      runtime.deliverPendingMessagesForHandle(terminal.handle, {
+        wakeAgent: true,
+        messageType: 'worker_done'
+      })
+      await vi.advanceTimersByTimeAsync(0)
+
+      db.insertMessage({
+        from: 'term_worker_2',
+        to: terminal.handle,
+        subject: 'second completion',
+        type: 'worker_done'
+      })
+      runtime.deliverPendingMessagesForHandle(terminal.handle, {
+        wakeAgent: true,
+        messageType: 'worker_done'
+      })
+
+      expect(write.mock.calls.filter(([, text]) => text.includes('first completion'))).toHaveLength(
+        1
+      )
+      expect(
+        write.mock.calls.filter(([, text]) => text.includes('second completion'))
+      ).toHaveLength(0)
+
+      await vi.advanceTimersByTimeAsync(500)
+      expect(
+        write.mock.calls.filter(([, text]) => text.includes('second completion'))
+      ).toHaveLength(1)
+      await vi.advanceTimersByTimeAsync(500)
+      expect(write.mock.calls.filter(([, text]) => text === '\r')).toHaveLength(2)
+      expect(db.getUnreadMessages(terminal.handle).every((message) => message.delivered_at)).toBe(
+        true
+      )
+      db.close()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it.each([
+    ['permission prompt', 'Codex waiting for permission', false],
+    ['bare shell', 'zsh', false],
+    ['Cursor Agent', '\u280b Cursor Agent', false],
+    ['automated coordinator', 'Codex working', true]
+  ])(
+    'keeps lifecycle messages queued when the recipient is a %s',
+    async (_name, title, activeRun) => {
+      vi.useFakeTimers()
+      try {
+        const { runtime, db, write } = setupOrchestrationDeliveryRuntime()
+
+        const [terminal] = (await runtime.listTerminals()).terminals
+        runtime.onPtyData('pty-1', `\x1b]0;${title}\x07`, 100)
+        if (activeRun) {
+          db.setActiveCoordinatorRun({ coordinator_handle: terminal.handle })
+        }
+        db.insertMessage({
+          from: 'term_worker',
+          to: terminal.handle,
+          subject: 'queued completion',
+          type: 'worker_done'
+        })
+
+        runtime.deliverPendingMessagesForHandle(terminal.handle, {
+          wakeAgent: true,
+          messageType: 'worker_done'
+        })
+        await vi.advanceTimersByTimeAsync(500)
+
+        expect(write).not.toHaveBeenCalled()
+        expect(db.getUnreadMessages(terminal.handle)[0].delivered_at).toBeNull()
+        db.close()
+      } finally {
+        vi.useRealTimers()
+      }
+    }
+  )
+
+  it('defers push-on-idle while a wake submit is in flight instead of double-delivering', async () => {
+    vi.useFakeTimers()
+    try {
+      const { runtime, db, write } = setupOrchestrationDeliveryRuntime()
+
+      const [terminal] = (await runtime.listTerminals()).terminals
+      runtime.onPtyData('pty-1', '\x1b]0;Codex working\x07', 100)
+      db.insertMessage({
+        from: 'term_worker',
+        to: terminal.handle,
+        subject: 'finished mid-turn',
+        type: 'worker_done'
+      })
+      runtime.deliverPendingMessagesForHandle(terminal.handle, {
+        wakeAgent: true,
+        messageType: 'worker_done'
+      })
+      await vi.advanceTimersByTimeAsync(0)
+      expect(
+        write.mock.calls.filter(([, text]) => text.includes('finished mid-turn'))
+      ).toHaveLength(1)
+
+      // The coordinator's turn ends inside the paste-settle window. The idle
+      // transition must defer to the in-flight submit, not re-read the
+      // still-unstamped row and paste it a second time.
+      runtime.onPtyData('pty-1', '\x1b]0;Codex done\x07', 200)
+      await vi.advanceTimersByTimeAsync(500)
+
+      expect(
+        write.mock.calls.filter(([, text]) => text.includes('finished mid-turn'))
+      ).toHaveLength(1)
+      expect(write.mock.calls.filter(([, text]) => text === '\r')).toHaveLength(1)
+      expect(db.getUnreadMessages(terminal.handle)[0].delivered_at).not.toBeNull()
+      db.close()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('keeps lifecycle messages queued when a stale working title hides a shell foreground', async () => {
+    vi.useFakeTimers()
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      const runtime = new OrcaRuntimeService(store)
+      const db = new InMemoryOrchestrationMessages()
+      const write = vi.fn().mockReturnValue(true)
+      setInMemoryOrchestrationMessages(runtime, db)
+      runtime.setPtyController({
+        write,
+        kill: vi.fn(),
+        // The agent crashed and the shell took over without repainting the
+        // OSC title, so lastAgentStatus is a stale 'working'.
+        getForegroundProcess: async () => '/bin/zsh'
+      })
+      syncSinglePty(runtime)
+
+      const [terminal] = (await runtime.listTerminals()).terminals
+      runtime.onPtyData('pty-1', '\x1b]0;Codex working\x07', 100)
+      db.insertMessage({
+        from: 'term_worker',
+        to: terminal.handle,
+        subject: 'shell must not run this',
+        type: 'worker_done'
+      })
+
+      runtime.deliverPendingMessagesForHandle(terminal.handle, {
+        wakeAgent: true,
+        messageType: 'worker_done'
+      })
+      await vi.advanceTimersByTimeAsync(500)
+
+      expect(write).not.toHaveBeenCalled()
+      expect(db.getUnreadMessages(terminal.handle)[0].delivered_at).toBeNull()
+      db.close()
+    } finally {
+      warn.mockRestore()
+      vi.useRealTimers()
+    }
+  })
+
+  it('withholds the wake Enter when a permission prompt appears in the paste-settle window', async () => {
+    vi.useFakeTimers()
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      const { runtime, db, write } = setupOrchestrationDeliveryRuntime()
+
+      const [terminal] = (await runtime.listTerminals()).terminals
+      runtime.onPtyData('pty-1', '\x1b]0;Codex working\x07', 100)
+      db.insertMessage({
+        from: 'term_worker',
+        to: terminal.handle,
+        subject: 'racing a permission prompt',
+        type: 'worker_done'
+      })
+      runtime.deliverPendingMessagesForHandle(terminal.handle, {
+        wakeAgent: true,
+        messageType: 'worker_done'
+      })
+      await vi.advanceTimersByTimeAsync(0)
+      expect(
+        write.mock.calls.filter(([, text]) => text.includes('racing a permission prompt'))
+      ).toHaveLength(1)
+
+      // The agent raises a permission dialog before the delayed Enter fires;
+      // sending \r now could approve the pending request.
+      runtime.onPtyData('pty-1', '\x1b]0;Codex waiting for permission\x07', 200)
+      await vi.advanceTimersByTimeAsync(500)
+
+      expect(write.mock.calls.filter(([, text]) => text === '\r')).toHaveLength(0)
+      expect(db.getUnreadMessages(terminal.handle)[0].delivered_at).toBeNull()
+      db.close()
+    } finally {
+      warn.mockRestore()
+      vi.useRealTimers()
+    }
+  })
+
+  it('claims wake rows during submit and releases them after delivery', async () => {
+    vi.useFakeTimers()
+    try {
+      const { runtime, db } = setupOrchestrationDeliveryRuntime()
+
+      const [terminal] = (await runtime.listTerminals()).terminals
+      runtime.onPtyData('pty-1', '\x1b]0;Codex working\x07', 100)
+      const message = db.insertMessage({
+        from: 'term_worker',
+        to: terminal.handle,
+        subject: 'claimed while submitting',
+        type: 'worker_done'
+      })
+      runtime.deliverPendingMessagesForHandle(terminal.handle, {
+        wakeAgent: true,
+        messageType: 'worker_done'
+      })
+      await vi.advanceTimersByTimeAsync(0)
+
+      expect(runtime.isMessageClaimedForWakeDelivery(message.id)).toBe(true)
+      await vi.advanceTimersByTimeAsync(500)
+      expect(runtime.isMessageClaimedForWakeDelivery(message.id)).toBe(false)
+      expect(db.getUnreadMessages(terminal.handle)[0].delivered_at).not.toBeNull()
+      db.close()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('pushes lifecycle messages to a pty-backed handle with no renderer leaf', async () => {
+    vi.useFakeTimers()
+    try {
+      const { runtime, db, write } = setupOrchestrationDeliveryRuntime()
+      runtime.registerPty('pty-9', TEST_WORKTREE_ID)
+      runtime.onPtyData('pty-9', '\x1b]0;Codex working\x07', 100)
+
+      const { terminals } = await runtime.listTerminals()
+      const ptyTerminal = terminals.find((terminal) => terminal.tabId === 'pty:pty-9')
+      expect(ptyTerminal).toBeDefined()
+
+      db.insertMessage({
+        from: 'term_worker',
+        to: ptyTerminal!.handle,
+        subject: 'headless coordinator wake',
+        type: 'worker_done'
+      })
+      runtime.deliverPendingMessagesForHandle(ptyTerminal!.handle, {
+        wakeAgent: true,
+        messageType: 'worker_done'
+      })
+      await vi.advanceTimersByTimeAsync(0)
+      expect(
+        write.mock.calls.filter(
+          ([ptyId, text]) => ptyId === 'pty-9' && text.includes('headless coordinator wake')
+        )
+      ).toHaveLength(1)
+      await vi.advanceTimersByTimeAsync(500)
+      expect(
+        write.mock.calls.filter(([ptyId, text]) => ptyId === 'pty-9' && text === '\r')
+      ).toHaveLength(1)
+      expect(db.getUnreadMessages(ptyTerminal!.handle)[0].delivered_at).not.toBeNull()
+      db.close()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('escalates a worker exit to the persisted dispatching coordinator', async () => {
+    const { runtime, db } = setupOrchestrationDeliveryRuntime()
+
+    const [terminal] = (await runtime.listTerminals()).terminals
+    db.setDispatch({
+      id: 'ctx_test',
+      task_id: 'task_test',
+      assignee_handle: terminal.handle,
+      coordinator_handle: 'term_manual_coordinator',
+      status: 'dispatched',
+      last_failure: null
+    })
+    const deliver = vi
+      .spyOn(runtime, 'deliverPendingMessagesForHandle')
+      .mockImplementation(() => {})
+    const notify = vi.spyOn(runtime, 'notifyMessageArrived').mockImplementation(() => {})
+
+    runtime.onPtyExit('pty-1', 137)
+
+    expect(db.getDispatch('ctx_test')?.status).toBe('failed')
+    const [escalation] = db.getUnreadMessages('term_manual_coordinator')
+    expect(escalation).toBeDefined()
+    expect(escalation.type).toBe('escalation')
+    expect(JSON.parse(escalation.payload ?? '{}')).toMatchObject({
+      taskId: 'task_test',
+      dispatchId: 'ctx_test',
+      exitCode: 137
+    })
+    expect(deliver).toHaveBeenCalledWith('term_manual_coordinator', {
+      wakeAgent: true,
+      messageType: 'escalation'
+    })
+    expect(notify).toHaveBeenCalledWith('term_manual_coordinator', 'escalation')
+    db.close()
+  })
+
+  it('routes an insert through deliverOrchestrationMessage to exactly one delivery path', async () => {
+    vi.useFakeTimers()
+    try {
+      const { runtime, db, write } = setupOrchestrationDeliveryRuntime()
+
+      const [terminal] = (await runtime.listTerminals()).terminals
+      runtime.onPtyData('pty-1', '\x1b]0;Codex working\x07', 100)
+
+      // A blocked matching waiter owns delivery: no PTY injection.
+      const waiter = runtime.waitForMessage(terminal.handle, {
+        typeFilter: ['worker_done'],
+        timeoutMs: 60_000
+      })
+      const first = db.insertMessage({
+        from: 'term_worker_1',
+        to: terminal.handle,
+        subject: 'first done',
+        type: 'worker_done'
+      })
+      deliverOrchestrationMessage(runtime, first)
+      await waiter
+      await vi.advanceTimersByTimeAsync(500)
+      expect(write).not.toHaveBeenCalled()
+      db.markAsRead([first.id])
+
+      // No waiter: exactly one pushed prompt plus one Enter.
+      const second = db.insertMessage({
+        from: 'term_worker_2',
+        to: terminal.handle,
+        subject: 'second done',
+        type: 'worker_done'
+      })
+      deliverOrchestrationMessage(runtime, second)
+      await vi.advanceTimersByTimeAsync(0)
+      expect(write.mock.calls.filter(([, text]) => text.includes('second done'))).toHaveLength(1)
+      await vi.advanceTimersByTimeAsync(500)
+      expect(write.mock.calls.filter(([, text]) => text === '\r')).toHaveLength(1)
       db.close()
     } finally {
       vi.useRealTimers()

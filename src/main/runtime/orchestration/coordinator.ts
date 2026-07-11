@@ -461,7 +461,11 @@ export class Coordinator {
       }
     }
 
-    const dispatch = this.db.createDispatchContext(task.id, targetHandle)
+    const dispatch = this.db.createDispatchContext(
+      task.id,
+      targetHandle,
+      this.opts.coordinatorHandle
+    )
 
     // Why: agents dispatched by the coordinator must use orca-dev in dev mode
     // so they talk to the dev runtime's socket, not production (Section 6.4).

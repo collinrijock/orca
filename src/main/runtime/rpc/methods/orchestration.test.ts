@@ -90,6 +90,28 @@ describe('orchestration RPC methods', () => {
       expect(runtime.deliverPendingMessagesForHandle).toHaveBeenCalledWith('term_b')
     })
 
+    it.each(['worker_done', 'escalation', 'decision_gate'] as const)(
+      'requests a coordinator wake for %s messages',
+      async (type) => {
+        setup()
+        const deliver = vi
+          .spyOn(runtime, 'deliverPendingMessagesForHandle')
+          .mockImplementation(() => {})
+
+        await call('orchestration.send', {
+          from: 'term_worker',
+          to: 'term_coord',
+          subject: 'attention needed',
+          type
+        })
+
+        expect(deliver).toHaveBeenCalledWith('term_coord', {
+          wakeAgent: true,
+          messageType: type
+        })
+      }
+    )
+
     it('rejects missing --to', () => {
       const method = findMethod('orchestration.send')
       expect(() => method.params!.parse({ subject: 'hi' })).toThrow()
@@ -406,7 +428,9 @@ describe('orchestration RPC methods', () => {
       setup()
       const task = db.createTask({ spec: 'heartbeat work' })
       const dispatch = db.createDispatchContext(task.id, 'term_worker')
-      vi.spyOn(runtime, 'deliverPendingMessagesForHandle').mockImplementation(() => {})
+      const deliver = vi
+        .spyOn(runtime, 'deliverPendingMessagesForHandle')
+        .mockImplementation(() => {})
 
       await call('orchestration.send', {
         from: 'term_worker',
@@ -420,6 +444,7 @@ describe('orchestration RPC methods', () => {
       expect(db.getDispatchContextById(dispatch.id)?.status).toBe('dispatched')
       expect(db.getDispatchContextById(dispatch.id)?.last_heartbeat_at).toBeTruthy()
       expect(db.getActiveDispatchForTerminal('term_worker')).toBeDefined()
+      expect(deliver).toHaveBeenCalledWith('term_coord')
     })
 
     it('does not release dispatch lock for non-lifecycle sends', async () => {
@@ -512,6 +537,32 @@ describe('orchestration RPC methods', () => {
       })) as { count: number }
 
       expect(result.count).toBe(1)
+    })
+
+    it('does not hand a wake-claimed message to a concurrent unread check', async () => {
+      setup()
+      const claimed = db.insertMessage({
+        from: 'term_worker',
+        to: 'term_coord',
+        subject: 'mid-submit',
+        type: 'worker_done'
+      })
+      vi.spyOn(runtime, 'isMessageClaimedForWakeDelivery').mockImplementation(
+        (id) => id === claimed.id
+      )
+
+      const unread = (await call('orchestration.check', { terminal: 'term_coord' })) as {
+        count: number
+      }
+      expect(unread.count).toBe(0)
+      // The claimed row stays unread so the wake path keeps sole ownership.
+      expect(db.getUnreadMessages('term_coord')).toHaveLength(1)
+
+      // The audit view is unaffected by claims.
+      const all = (await call('orchestration.check', { terminal: 'term_coord', all: true })) as {
+        count: number
+      }
+      expect(all.count).toBe(1)
     })
 
     it('reconciles worker_done returned by a waiting manual check', async () => {
@@ -1050,6 +1101,19 @@ describe('orchestration RPC methods', () => {
       expect(result.dispatch.status).toBe('dispatched')
     })
 
+    it('persists the dispatching coordinator on the dispatch context', async () => {
+      setup()
+      const task = db.createTask({ spec: 'work' })
+
+      const result = (await call('orchestration.dispatch', {
+        task: task.id,
+        to: 'term_worker',
+        from: 'term_coord'
+      })) as { dispatch: { coordinator_handle: string | null } }
+
+      expect(result.dispatch.coordinator_handle).toBe('term_coord')
+    })
+
     it('rejects dispatch for a pending task', async () => {
       setup()
       const parent = db.createTask({ spec: 'parent' })
@@ -1365,7 +1429,9 @@ describe('orchestration RPC methods', () => {
   describe('orchestration.ask', () => {
     it('sends a decision_gate and returns the first thread reply', async () => {
       setup()
-      vi.spyOn(runtime, 'deliverPendingMessagesForHandle').mockImplementation(() => {})
+      const deliver = vi
+        .spyOn(runtime, 'deliverPendingMessagesForHandle')
+        .mockImplementation(() => {})
       vi.spyOn(runtime, 'notifyMessageArrived').mockImplementation(() => {})
       vi.spyOn(runtime, 'waitForMessage').mockImplementation(async () => {
         // Simulate coordinator replying in the thread during the wait
@@ -1406,6 +1472,10 @@ describe('orchestration RPC methods', () => {
       const payload = JSON.parse(outbound!.payload ?? '{}')
       expect(payload.question).toBe('proceed?')
       expect(payload.options).toEqual(['yes', 'no'])
+      expect(deliver).toHaveBeenCalledWith('term_coord', {
+        wakeAgent: true,
+        messageType: 'decision_gate'
+      })
     })
 
     it('returns timedOut when no reply arrives in the window', async () => {

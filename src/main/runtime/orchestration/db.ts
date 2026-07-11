@@ -41,7 +41,10 @@ function generateId(prefix: string): string {
 // the terminal that created a task so task-record worktree creation can infer
 // the parent workspace even when no dispatch context exists. v4 → v5 adds
 // explicit task_title/display_name fields for orchestration worker UI labels.
-const SCHEMA_VERSION = 5
+// v5 → v6 records the dispatching coordinator on dispatch contexts so a
+// worker exit can be escalated to a manual coordinator, not only an active
+// automated run.
+const SCHEMA_VERSION = 6
 
 export class OrchestrationDb {
   private db: Database.Database
@@ -107,6 +110,7 @@ export class OrchestrationDb {
         id                  TEXT PRIMARY KEY,
         task_id             TEXT NOT NULL,
         assignee_handle     TEXT,
+        coordinator_handle  TEXT,
         status              TEXT NOT NULL DEFAULT 'pending'
           CHECK(status IN ('pending', 'dispatched', 'completed', 'failed', 'circuit_broken')),
         failure_count       INTEGER NOT NULL DEFAULT 0,
@@ -244,6 +248,11 @@ export class OrchestrationDb {
         }
         if (!this.hasColumn('tasks', 'display_name')) {
           this.db.exec(`ALTER TABLE tasks ADD COLUMN display_name TEXT`)
+        }
+      }
+      if (current < 6) {
+        if (!this.hasColumn('dispatch_contexts', 'coordinator_handle')) {
+          this.db.exec(`ALTER TABLE dispatch_contexts ADD COLUMN coordinator_handle TEXT`)
         }
       }
       this.createUndeliveredInboxIndexIfPossible()
@@ -568,7 +577,11 @@ export class OrchestrationDb {
 
   // ── Dispatch Contexts ──
 
-  createDispatchContext(taskId: string, assigneeHandle: string): DispatchContextRow {
+  createDispatchContext(
+    taskId: string,
+    assigneeHandle: string,
+    coordinatorHandle: string | null = null
+  ): DispatchContextRow {
     const task = this.getTask(taskId)
     if (!task) {
       throw new Error(`Task not found: ${taskId}`)
@@ -599,10 +612,10 @@ export class OrchestrationDb {
     const id = generateId('ctx')
     this.db
       .prepare(
-        `INSERT INTO dispatch_contexts (id, task_id, assignee_handle, status, failure_count, dispatched_at)
-         VALUES (?, ?, ?, 'dispatched', ?, datetime('now'))`
+        `INSERT INTO dispatch_contexts (id, task_id, assignee_handle, coordinator_handle, status, failure_count, dispatched_at)
+         VALUES (?, ?, ?, ?, 'dispatched', ?, datetime('now'))`
       )
-      .run(id, taskId, assigneeHandle, priorFailures)
+      .run(id, taskId, assigneeHandle, coordinatorHandle, priorFailures)
 
     this.db.prepare("UPDATE tasks SET status = 'dispatched' WHERE id = ?").run(taskId)
 
