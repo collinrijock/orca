@@ -720,16 +720,23 @@ export class RateLimitService {
   }
 
   private getActiveProviderState(): ActiveProviderState[] {
-    return [
-      { provider: 'claude', limits: this.state.claude },
-      { provider: 'codex', limits: this.state.codex },
-      { provider: 'gemini', limits: this.state.gemini },
-      { provider: 'opencode-go', limits: this.state.opencodeGo },
-      { provider: 'kimi', limits: this.state.kimi },
-      { provider: 'minimax', limits: this.state.minimax },
-      { provider: 'grok', limits: this.state.grok },
-      { provider: 'antigravity', limits: this.state.antigravity }
-    ]
+    // Why: key by provider so a newly added provider is compile-forced to have
+    // an active-refresh entry — a missing one silently never recovers from a
+    // startup error (antigravity was omitted once and needed a fix-up).
+    const byProvider: Record<ActiveRateLimitProvider, ProviderRateLimits | null> = {
+      claude: this.state.claude,
+      codex: this.state.codex,
+      gemini: this.state.gemini,
+      'opencode-go': this.state.opencodeGo,
+      kimi: this.state.kimi,
+      minimax: this.state.minimax,
+      grok: this.state.grok,
+      antigravity: this.state.antigravity
+    }
+    return Object.entries(byProvider).map(([provider, limits]) => ({
+      provider: provider as ActiveRateLimitProvider,
+      limits
+    }))
   }
 
   private getActiveWindowRefreshPlan(now: number): ActiveWindowRefreshPlan {
