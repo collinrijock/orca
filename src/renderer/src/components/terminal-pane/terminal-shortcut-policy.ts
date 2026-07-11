@@ -11,6 +11,10 @@ export type TerminalShortcutEvent = {
   repeat?: boolean
 }
 
+type TerminalShortcutCompanionEvent = Pick<TerminalShortcutEvent, 'key' | 'code'> & {
+  type: string
+}
+
 export type MacOptionAsAlt = 'true' | 'false' | 'left' | 'right'
 
 // Why: macOS composition replaces event.key for punctuation, so we map
@@ -42,6 +46,30 @@ export type TerminalShortcutAction =
   | { type: 'splitActivePane'; direction: 'vertical' | 'horizontal' }
   | { type: 'scrollViewport'; position: 'top' | 'bottom' }
   | { type: 'sendInput'; data: string }
+  | { type: 'switchInputSource' }
+
+export function getTerminalShortcutKeyIdentity(
+  event: Pick<TerminalShortcutEvent, 'key' | 'code'>
+): string {
+  return event.code || event.key
+}
+
+export function consumeNativeOnlyTerminalShortcutCompanion(
+  event: TerminalShortcutCompanionEvent,
+  pendingKeys: Set<string>
+): boolean {
+  if (event.type !== 'keypress' && event.type !== 'keyup') {
+    return false
+  }
+  const identity = getTerminalShortcutKeyIdentity(event)
+  if (!pendingKeys.has(identity)) {
+    return false
+  }
+  if (event.type === 'keyup') {
+    pendingKeys.delete(identity)
+  }
+  return true
+}
 
 /** Kitty keyboard protocol modifier field: 1 + shift(1) + alt(2). */
 function kittyAltModifiers(shiftKey: boolean): number {
@@ -96,6 +124,13 @@ export function resolveTerminalShortcutAction(
   isWindowsTerminalHost: () => boolean = () => isWindows
 ): TerminalShortcutAction | null {
   const platform: NodeJS.Platform = isMac ? 'darwin' : isWindows ? 'win32' : 'linux'
+
+  // Why: native-only chords must be captured even on repeat without blocking
+  // the OS default that performs the input-source switch.
+  if (keybindingMatchesAction('terminal.switchInputSource', event, platform, keybindings)) {
+    return { type: 'switchInputSource' }
+  }
+
   if (!event.repeat) {
     if (keybindingMatchesAction('terminal.copySelection', event, platform, keybindings)) {
       return { type: 'copySelection' }

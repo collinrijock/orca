@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
+  consumeNativeOnlyTerminalShortcutCompanion,
+  getTerminalShortcutKeyIdentity,
   resolveTerminalShortcutAction,
   type TerminalShortcutEvent
 } from './terminal-shortcut-policy'
@@ -673,6 +675,60 @@ describe('resolveTerminalShortcutAction', () => {
         true
       )
     ).toEqual({ type: 'splitActivePane', direction: 'horizontal' })
+  })
+
+  it('resolves terminal.switchInputSource via explicit override (for OS input-source chords)', () => {
+    // Why: the configured chord must route to the native-only handler rather
+    // than the terminal shortcut paths that cancel the browser default.
+    const overrides = { 'terminal.switchInputSource': ['Shift+Space'] }
+    expect(
+      resolveTerminalShortcutAction(
+        event({ key: ' ', code: 'Space', shiftKey: true }),
+        true,
+        'false',
+        0,
+        false,
+        overrides
+      )
+    ).toEqual({ type: 'switchInputSource' })
+
+    const otherChord = { 'terminal.switchInputSource': ['Ctrl+Space'] }
+    expect(
+      resolveTerminalShortcutAction(
+        event({ key: ' ', code: 'Space', ctrlKey: true }),
+        false,
+        'false',
+        0,
+        false,
+        otherChord
+      )
+    ).toEqual({ type: 'switchInputSource' })
+  })
+
+  it('does not resolve switchInputSource for ordinary chords without override', () => {
+    expect(
+      resolveTerminalShortcutAction(event({ key: ' ', code: 'Space', shiftKey: true }), true)
+    ).toBeNull()
+  })
+
+  it('suppresses the full companion event sequence for a native-only shortcut', () => {
+    const pendingKeys = new Set([
+      getTerminalShortcutKeyIdentity(event({ key: ' ', code: 'Space', shiftKey: true }))
+    ])
+
+    expect(
+      consumeNativeOnlyTerminalShortcutCompanion(
+        { type: 'keypress', key: ' ', code: 'Space' },
+        pendingKeys
+      )
+    ).toBe(true)
+    expect(
+      consumeNativeOnlyTerminalShortcutCompanion(
+        { type: 'keyup', key: ' ', code: 'Space' },
+        pendingKeys
+      )
+    ).toBe(true)
+    expect(pendingKeys.size).toBe(0)
   })
 })
 

@@ -6,7 +6,11 @@ import type { IDisposable } from '@xterm/xterm'
 import type { ManagedPane, PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { PtyTransport } from './pty-transport'
 import { safeFind } from '../terminal-search-safe-find'
-import { resolveTerminalShortcutAction } from './terminal-shortcut-policy'
+import {
+  consumeNativeOnlyTerminalShortcutCompanion,
+  getTerminalShortcutKeyIdentity,
+  resolveTerminalShortcutAction
+} from './terminal-shortcut-policy'
 import type { MacOptionAsAlt } from './terminal-shortcut-policy'
 import {
   keybindingMatchesAction,
@@ -260,6 +264,7 @@ export function useTerminalKeyboardShortcuts({
     // held. To distinguish left vs right Option, we record the Option key's
     // location from its own keydown event and clear it on keyup.
     let optionKeyLocation = 0
+    const pendingNativeOnlyShortcutKeys = new Set<string>()
     const onModifierDown = (e: KeyboardEvent): void => {
       if (e.key === 'Alt') {
         optionKeyLocation = e.location
@@ -300,6 +305,8 @@ export function useTerminalKeyboardShortcuts({
     }
 
     const onKeyDown = (e: KeyboardEvent): void => {
+      const shortcutKeyIdentity = getTerminalShortcutKeyIdentity(e)
+      pendingNativeOnlyShortcutKeys.delete(shortcutKeyIdentity)
       const manager = managerRef.current
       if (!manager) {
         return
@@ -395,6 +402,14 @@ export function useTerminalKeyboardShortcuts({
         isActivePaneWindowsTerminalHost
       )
       if (!action) {
+        return
+      }
+
+      if (action.type === 'switchInputSource') {
+        // Why: the OS must receive its default action, while xterm must receive
+        // none of the keydown, keypress, or keyup sequence.
+        pendingNativeOnlyShortcutKeys.add(shortcutKeyIdentity)
+        e.stopImmediatePropagation()
         return
       }
 
@@ -607,13 +622,28 @@ export function useTerminalKeyboardShortcuts({
       }
     }
 
+    const onNativeOnlyShortcutCompanion = (e: KeyboardEvent): void => {
+      if (consumeNativeOnlyTerminalShortcutCompanion(e, pendingNativeOnlyShortcutKeys)) {
+        // Why: canceling only the companion keypress prevents Chromium's text
+        // insertion without canceling the keydown default used by the OS switch.
+        if (e.type === 'keypress') {
+          e.preventDefault()
+        }
+        e.stopImmediatePropagation()
+      }
+    }
+
     window.addEventListener('keydown', onModifierDown, { capture: true })
     window.addEventListener('keyup', onModifierUp, { capture: true })
     window.addEventListener('keydown', onKeyDown, { capture: true })
+    window.addEventListener('keypress', onNativeOnlyShortcutCompanion, { capture: true })
+    window.addEventListener('keyup', onNativeOnlyShortcutCompanion, { capture: true })
     return () => {
       window.removeEventListener('keydown', onModifierDown, { capture: true })
       window.removeEventListener('keyup', onModifierUp, { capture: true })
       window.removeEventListener('keydown', onKeyDown, { capture: true })
+      window.removeEventListener('keypress', onNativeOnlyShortcutCompanion, { capture: true })
+      window.removeEventListener('keyup', onNativeOnlyShortcutCompanion, { capture: true })
     }
   }, [
     isActive,

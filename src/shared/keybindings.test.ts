@@ -78,6 +78,22 @@ describe('keybindings', () => {
     })
   })
 
+  it('allows Shift-only chords only for native input-source switching', () => {
+    const shiftSpace = {
+      key: ' ',
+      code: 'Space',
+      control: false,
+      meta: false,
+      alt: false,
+      shift: true
+    }
+
+    expect(keybindingFromInput(shiftSpace, 'darwin')).toMatchObject({ ok: false })
+    expect(
+      keybindingFromInputForAction('terminal.switchInputSource', shiftSpace, 'darwin')
+    ).toEqual({ ok: true, value: 'Shift+Space' })
+  })
+
   it('captures key events into canonical editable shortcuts', () => {
     expect(
       keybindingFromInput(
