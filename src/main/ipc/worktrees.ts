@@ -972,6 +972,7 @@ export function registerWorktreeHandlers(
   ipcMain.removeHandler('worktrees:listLineage')
   ipcMain.removeHandler('worktrees:updateLineage')
   ipcMain.removeHandler('worktrees:persistSortOrder')
+  ipcMain.removeHandler('worktrees:getBranchRenameFailureOutput')
   ipcMain.removeHandler('hooks:check')
   ipcMain.removeHandler('hooks:inspectSetupScriptImports')
   ipcMain.removeHandler('hooks:createIssueCommandRunner')
