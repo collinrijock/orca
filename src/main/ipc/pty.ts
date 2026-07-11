@@ -477,7 +477,11 @@ function normalizeNodePtySpawnError(err: unknown): Error {
 
 function isPtyAlreadyGoneError(err: unknown): boolean {
   const message = err instanceof Error ? err.message : String(err)
-  return isSshPtyNotFoundError(err) || /Session not found/i.test(message)
+  return (
+    isSshPtyNotFoundError(err) ||
+    /Session not found/i.test(message) ||
+    /Signals not supported on windows/i.test(message)
+  )
 }
 
 function delay(ms: number): Promise<void> {

@@ -732,7 +732,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
 
         // If destroyed while spawn was in flight, kill the new pty and bail
         if (destroyed) {
-          window.api.pty.kill(spawnResult.id)
+          window.api.pty.kill(spawnResult.id).catch(() => {})
           return
         }
 
@@ -918,7 +918,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
       inputWriteQueue.clear()
       if (ptyId) {
         const id = ptyId
-        window.api.pty.kill(id)
+        window.api.pty.kill(id).catch(() => {})
         connected = false
         ptyId = null
         unregisterPtyHandlers(id)

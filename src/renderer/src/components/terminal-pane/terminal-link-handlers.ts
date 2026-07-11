@@ -231,6 +231,9 @@ export function createFilePathLinkProvider(
         }
         callback(links.length > 0 ? links : undefined)
       })
+      .catch(() => {
+        callback(undefined)
+      })
     }
   }
 }
