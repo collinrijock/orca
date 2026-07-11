@@ -523,6 +523,16 @@ ipcMain.handle('app:awaitFirstWindowStartupServices', async () => {
   await firstWindowStartupServicesReady
 })
 
+ipcMain.handle(
+  'app:startupDiagnostic',
+  (_event, event: string, details?: Record<string, unknown>) => {
+    if (!startupDiagnosticsEnabled || !event.startsWith('renderer-')) {
+      return
+    }
+    logStartupMilestone(event, details && typeof details === 'object' ? details : {})
+  }
+)
+
 function startDesktopFirstWindowStartupServices(): Promise<void> {
   const startupServices = startFirstWindowStartupServices({
     // Why: the persistent-terminal daemon is desktop-only. Headless `orca serve`
