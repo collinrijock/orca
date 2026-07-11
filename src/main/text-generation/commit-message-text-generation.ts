@@ -194,8 +194,11 @@ function sanitizeAgentFailureDetail(detail: string | null): string | null {
       /\\\\[^\s"'`<>\\]+\\(?:[^\s"'`<>\\]+(?:\s+[^\s"'`<>\\]+)*(?=\\)\\)*[^\s"'`<>\\]+/g,
       '[path]'
     )
+    // Only backslashes may repeat: JSON provider bodies double them
+    // (`C:\\Users\\name\\…`), while a URL's `://` must stay single so remedy
+    // links like `https://…` survive redaction.
     .replace(
-      /[A-Za-z]:[\\/](?:[^\s"'`<>\\/|:*?]+(?:\s+[^\s"'`<>\\/|:*?]+)*(?=[\\/])[\\/])*[^\s"'`<>\\/|:*?]+/g,
+      /[A-Za-z]:(?:\\+|\/)(?:[^\s"'`<>\\/|:*?]+(?:\s+[^\s"'`<>\\/|:*?]+)*(?=[\\/])(?:\\+|\/))*[^\s"'`<>\\/|:*?]+/g,
       '[path]'
     )
     // Why: require ≥2 segments (one internal `/`) so provider remedy tokens like

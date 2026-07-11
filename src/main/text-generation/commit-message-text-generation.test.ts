@@ -837,6 +837,68 @@ describe('generateCommitMessageFromContext', () => {
     })
   })
 
+  it('redacts a Windows drive path with JSON-escaped backslashes in a payload', async () => {
+    const result = await generateCommitMessageFromContext(
+      {
+        branch: 'main',
+        stagedSummary: 'M\tREADME.md',
+        stagedPatch: '+hello'
+      },
+      {
+        agentId: 'pi',
+        model: 'github-copilot/gpt-5.5'
+      },
+      {
+        kind: 'remote',
+        cwd: '/repo',
+        missingBinaryLocation: 'remote PATH',
+        execute: async () => ({
+          stdout: '',
+          stderr: '401: {"message":"Invalid key loaded from C:\\\\Users\\\\name\\\\auth.json"}',
+          exitCode: 1,
+          timedOut: false
+        })
+      }
+    )
+
+    expect(result).toEqual({
+      success: false,
+      error: 'Pi CLI command failed with code 1: 401: {"message":"Invalid key loaded from [path]"}'
+    })
+  })
+
+  it('keeps a scheme:// remedy URL intact while still redacting paths', async () => {
+    const result = await generateCommitMessageFromContext(
+      {
+        branch: 'main',
+        stagedSummary: 'M\tREADME.md',
+        stagedPatch: '+hello'
+      },
+      {
+        agentId: 'pi',
+        model: 'github-copilot/gpt-5.5'
+      },
+      {
+        kind: 'remote',
+        cwd: '/repo',
+        missingBinaryLocation: 'remote PATH',
+        execute: async () => ({
+          stdout: '',
+          stderr:
+            '401: Visit https://console.anthropic.com/settings/keys then check /Users/name/.config/pi/auth.json',
+          exitCode: 1,
+          timedOut: false
+        })
+      }
+    )
+
+    expect(result).toEqual({
+      success: false,
+      error:
+        'Pi CLI command failed with code 1: 401: Visit https://console.anthropic.com/settings/keys then check [path]'
+    })
+  })
+
   it('redacts key=/path shapes in provider bodies', async () => {
     const result = await generateCommitMessageFromContext(
       {
