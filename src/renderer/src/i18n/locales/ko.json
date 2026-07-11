@@ -12773,7 +12773,7 @@
         "teamRequired": "이 워크트리의 상태, 담당자, 레이블을 로드하려면 팀을 선택하세요.",
         "filters": "필터",
         "allWorkspacesTitle": "워크트리 선택",
-        "allWorkspacesBody": "상태, 담당자, 레이블 필터는 단일 Linear �크트리의 ID를 사용합니다. 필터링할 워크트리를 선택하세요.",
+        "allWorkspacesBody": "상태, 담당자, 레이블 필터는 단일 Linear 워크트리의 ID를 사용합니다. 필터링할 워크트리를 선택하세요.",
         "optionsFromTeam": "{{team}}의 옵션",
         "clearAll": "모든 필터 지우기"
       },
