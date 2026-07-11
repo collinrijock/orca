@@ -4,6 +4,7 @@ import type { AppState } from '../types'
 import {
   AGENT_STATUS_STALE_AFTER_MS,
   AGENT_STATE_HISTORY_MAX,
+  agentSubagentsEqual,
   type AgentStateHistoryEntry,
   type AgentStatusEntry,
   type AgentStatusOrchestrationContext,
@@ -601,6 +602,34 @@ export function collectHibernatedCompletionEvidenceForWorktree(
     retained.push(retainedAgentEntryFromLive(state, worktreeId, entry, agentType))
   }
   return retained
+}
+
+// Why: the periodic resume-record capture re-runs on an interval; comparing
+// everything except capturedAt lets an unchanged agent skip the store write
+// entirely, so idle ticks never dirty the session persistence pipeline.
+function sleepingRecordsEquivalentIgnoringCaptureTime(
+  existing: SleepingAgentSessionRecord | undefined,
+  next: SleepingAgentSessionRecord
+): boolean {
+  if (!existing) {
+    return false
+  }
+  return (
+    existing.paneKey === next.paneKey &&
+    existing.tabId === next.tabId &&
+    existing.worktreeId === next.worktreeId &&
+    existing.agent === next.agent &&
+    existing.providerSession.key === next.providerSession.key &&
+    existing.providerSession.id === next.providerSession.id &&
+    existing.prompt === next.prompt &&
+    existing.state === next.state &&
+    existing.updatedAt === next.updatedAt &&
+    existing.terminalTitle === next.terminalTitle &&
+    existing.lastAssistantMessage === next.lastAssistantMessage &&
+    existing.interrupted === next.interrupted &&
+    existing.origin === next.origin &&
+    launchConfigsEqual(existing.launchConfig, next.launchConfig)
+  )
 }
 
 function recoveryRecordMatches(
@@ -1295,6 +1324,12 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
           // metadata expires. Only final done rows keep the previous lineage
           // fallback so completed children stay grouped.
           orchestration,
+          // Why: reuse the previous array reference when the roster is
+          // unchanged so subscribers comparing by identity skip re-renders on
+          // high-frequency same-roster pings.
+          subagents: agentSubagentsEqual(existing?.subagents, payload.subagents)
+            ? existing?.subagents
+            : payload.subagents,
           ...(providerSession ? { providerSession } : {}),
           // Why: interrupted lives on `done` only. parseAgentStatusPayload
           // already clamps it to `undefined` for non-done states, so writing
@@ -1342,6 +1377,7 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
             entry.toolInput !== existing.toolInput ||
             entry.lastAssistantMessage !== existing.lastAssistantMessage ||
             entry.orchestration !== existing.orchestration ||
+            entry.subagents !== existing.subagents ||
             entry.providerSession !== existing.providerSession ||
             entry.interrupted !== existing.interrupted)
         const retentionRelevantChange = sortRelevantChange || doneRetentionFieldsChanged
@@ -2203,7 +2239,10 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
             launchConfig: getLaunchConfigForEntry(s, entry),
             origin: 'quit'
           })
-          if (record && next[record.paneKey] !== record) {
+          if (
+            record &&
+            !sleepingRecordsEquivalentIgnoringCaptureTime(next[record.paneKey], record)
+          ) {
             next[record.paneKey] = record
             changed = true
           }

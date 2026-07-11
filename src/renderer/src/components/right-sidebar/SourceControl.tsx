@@ -30,6 +30,7 @@ import {
   type LucideIcon
 } from 'lucide-react'
 import { useAppStore } from '@/store'
+import { selectWorktreeDiffCommentsOrEmpty } from '@/store/worktree-diff-comments-selector'
 import {
   isSyncPushStageError,
   resolveRemoteOperationErrorMessage
@@ -110,6 +111,7 @@ import {
   type SourceControlSectionArea
 } from './source-control-section-order'
 import { SourceControlVirtualFileList } from './source-control-virtual-file-list'
+import { selectReviewCacheData, selectReviewCacheEntry } from './review-cache-entry-selection'
 import {
   buildActiveOpenFileSignature,
   buildActiveOpenRowKeys
@@ -819,6 +821,9 @@ function SourceControlInner(): React.JSX.Element {
   const worktreeMap = useWorktreeMap()
   const rightSidebarTab = useAppStore((s) => s.rightSidebarTab)
   const activeRepo = useRepoById(activeWorktree?.repoId ?? null)
+  const gitIdentityDisplay = activeWorktree ? getWorktreeGitIdentityDisplay(activeWorktree) : null
+  const detachedHeadDisplay = gitIdentityDisplay?.kind === 'detached' ? gitIdentityDisplay : null
+  const branchName = gitIdentityDisplay?.kind === 'branch' ? gitIdentityDisplay.branchName : ''
   const entries = useAppStore((s) =>
     activeWorktreeId
       ? (s.gitStatusByWorktree[activeWorktreeId] ?? EMPTY_GIT_STATUS_ENTRIES)
@@ -850,6 +855,37 @@ function SourceControlInner(): React.JSX.Element {
   const isRemoteOperationActive = useAppStore((s) => s.isRemoteOperationActive)
   const inFlightRemoteOpKind = useAppStore((s) => s.inFlightRemoteOpKind)
   const settings = useAppStore((s) => s.settings)
+  const hostedReviewCacheKey =
+    activeRepo && branchName
+      ? getHostedReviewCacheKey(
+          activeRepo.path,
+          branchName,
+          settings,
+          activeRepo.id,
+          activeRepo.connectionId,
+          activeRepo.executionHostId,
+          true
+        )
+      : null
+  const activePrCacheKey =
+    activeRepo && branchName
+      ? getGitHubPRCacheKey(
+          activeRepo.path,
+          activeRepo.id,
+          branchName,
+          settings,
+          activeRepo.connectionId,
+          activeRepo.executionHostId,
+          true
+        )
+      : null
+  // Why: background worktree review refreshes replace both cache maps; this
+  // large panel only needs the entries for its active repo and branch.
+  const hostedReviewEntry = useAppStore((s) =>
+    selectReviewCacheEntry(s.hostedReviewCache, hostedReviewCacheKey)
+  )
+  const hostedReviewEntryData = hostedReviewEntry?.data ?? null
+  const activePrFromQueue = useAppStore((s) => selectReviewCacheData(s.prCache, activePrCacheKey))
   // Why: git/file mutations and repo metadata requests belong to the repo
   // OWNER host, not the currently focused host in the sidebar.
   const activeRepoSettings = useMemo(
@@ -859,7 +895,6 @@ function SourceControlInner(): React.JSX.Element {
   const updateSettings = useAppStore((s) => s.updateSettings)
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
-  const hostedReviewCache = useAppStore((s) => s.hostedReviewCache)
   const fetchHostedReviewForBranch = useAppStore((s) => s.fetchHostedReviewForBranch)
   const getHostedReviewCreationEligibility = useAppStore(
     (s) => s.getHostedReviewCreationEligibility
@@ -867,7 +902,6 @@ function SourceControlInner(): React.JSX.Element {
   const createHostedReview = useAppStore((s) => s.createHostedReview)
   const updateWorktreeMeta = useAppStore((s) => s.updateWorktreeMeta)
   const fetchPRForBranch = useAppStore((s) => s.fetchPRForBranch)
-  const prCache = useAppStore((s) => s.prCache)
   const enqueueGitHubPRRefresh = useAppStore((s) => s.enqueueGitHubPRRefresh)
   const updateRepo = useAppStore((s) => s.updateRepo)
   const setGitStatus = useAppStore((s) => s.setGitStatus)
@@ -906,11 +940,13 @@ function SourceControlInner(): React.JSX.Element {
   const setRightSidebarOpen = useAppStore((s) => s.setRightSidebarOpen)
   const setRightSidebarTab = useAppStore((s) => s.setRightSidebarTab)
   // Why: pass activeWorktreeId directly (even when null/undefined) so the
-  // slice's getDiffComments returns its stable EMPTY_COMMENTS sentinel. An
+  // selector returns its stable empty sentinel. An
   // inline `[]` fallback would allocate a new array each store update, break
   // Zustand's Object.is equality, and cause this component plus the
   // diffCommentCountByPath memo to churn on every unrelated store change.
-  const diffCommentsForActive = useAppStore((s) => s.getDiffComments(activeWorktreeId))
+  const diffCommentsForActive = useAppStore((s) =>
+    selectWorktreeDiffCommentsOrEmpty(s, activeWorktreeId)
+  )
   const diffCommentCount = diffCommentsForActive.length
   // Why: per-file counts are fed into each UncommittedEntryRow so a comment
   // badge can appear next to the status letter. Compute once per render so
@@ -1211,9 +1247,6 @@ function SourceControlInner(): React.JSX.Element {
       ? undefined
       : getLocalProjectExecutionRuntimeContext(useAppStore.getState(), activeWorktreeId)
   })
-  const gitIdentityDisplay = activeWorktree ? getWorktreeGitIdentityDisplay(activeWorktree) : null
-  const detachedHeadDisplay = gitIdentityDisplay?.kind === 'detached' ? gitIdentityDisplay : null
-  const branchName = gitIdentityDisplay?.kind === 'branch' ? gitIdentityDisplay.branchName : ''
   const activePullRequestGenerationKey = getPullRequestGenerationRecordKey({
     worktreeId: activeWorktreeId,
     worktreePath,
@@ -1418,35 +1451,6 @@ function SourceControlInner(): React.JSX.Element {
     hostedReviewCreation?.provider
   )
   const hostedReviewCreateCopy = localizedHostedReviewCopy(hostedReviewCreateProvider)
-  const hostedReviewCacheKey =
-    activeRepo && branchName
-      ? getHostedReviewCacheKey(
-          activeRepo.path,
-          branchName,
-          settings,
-          activeRepo.id,
-          activeRepo.connectionId,
-          activeRepo.executionHostId,
-          true
-        )
-      : null
-  const hostedReviewEntry = hostedReviewCacheKey
-    ? hostedReviewCache[hostedReviewCacheKey]
-    : undefined
-  const activePrCacheKey =
-    activeRepo && branchName
-      ? getGitHubPRCacheKey(
-          activeRepo.path,
-          activeRepo.id,
-          branchName,
-          settings,
-          activeRepo.connectionId,
-          activeRepo.executionHostId,
-          true
-        )
-      : null
-  const activePrFromQueue = activePrCacheKey ? (prCache[activePrCacheKey]?.data ?? null) : null
-  const hostedReviewEntryData = hostedReviewEntry?.data ?? null
   const hostedReview: HostedReviewInfo | null = useMemo(() => {
     if (!hostedReviewCacheKey) {
       return null
@@ -1672,7 +1676,8 @@ function SourceControlInner(): React.JSX.Element {
   const canUseHostedReviewPushTarget = hasUsableHostedReviewPushTarget({
     pushTarget: activeWorktree?.pushTarget,
     upstreamStatus: remoteStatus,
-    hasResolvableHostedReviewPushTargetLink: hasResolvableReviewPushTargetLink
+    hasResolvableHostedReviewPushTargetLink: hasResolvableReviewPushTargetLink,
+    branchName
   })
   const hostedReviewStateForActions = resolveHostedReviewStateForActions({
     hostedReviewState: hostedReview?.state ?? null,

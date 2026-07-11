@@ -30,6 +30,7 @@ import {
   usePruneClosedEditorContent
 } from './useEditorPanelExternalContentEvents'
 import { useEditorPanelFileLoadRetry } from './useEditorPanelFileLoadRetry'
+import { useLocalLogTail } from './useLocalLogTail'
 
 const inFlightFileReads = new Map<string, Promise<FileContent>>()
 const inFlightDiffReads = new Map<string, Promise<DiffContent>>()
@@ -41,7 +42,7 @@ type UseEditorPanelContentStateParams = {
   activeFile: OpenFile | null
   isChangesMode: boolean
   openFiles: OpenFile[]
-  gitStatusByWorktree: GitStatusByWorktree
+  gitStatusEntries: GitStatusByWorktree[string] | undefined
   editorViewMode: EditorViewModeByFile
 }
 
@@ -94,7 +95,7 @@ export function useEditorPanelContentState({
   activeFile,
   isChangesMode,
   openFiles,
-  gitStatusByWorktree,
+  gitStatusEntries,
   editorViewMode
 }: UseEditorPanelContentStateParams): UseEditorPanelContentStateResult {
   const [fileContents, setFileContents] = useState<Record<string, FileContent>>({})
@@ -172,7 +173,9 @@ export function useEditorPanelContentState({
             filePath,
             relativePath: restoredOpenFile?.relativePath ?? relativePath,
             worktreeId,
-            connectionId
+            connectionId,
+            includeLocalLogMetadata:
+              restoredOpenFile?.readOnly === true && restoredOpenFile.liveTail === true
           }) as Promise<FileContent>
           inFlightFileReads.set(key, pending)
           queueMicrotask(() => {
@@ -354,6 +357,8 @@ export function useEditorPanelContentState({
     [loadDiffContent, loadFileContent]
   )
 
+  useLocalLogTail({ openFiles, fileContents, setFileContents, reloadContent })
+
   useEffect(() => {
     if (activeFile?.mode === 'conflict-review' && !selectedConflictReviewFile) {
       const snapshotEntries = activeFile.conflictReview?.entries ?? []
@@ -362,7 +367,7 @@ export function useEditorPanelContentState({
       }
 
       const snapshotPaths = new Set(snapshotEntries.map((entry) => entry.path))
-      const liveEntries = gitStatusByWorktree[activeFile.worktreeId] ?? []
+      const liveEntries = gitStatusEntries ?? []
       for (const entry of liveEntries) {
         if (
           !snapshotPaths.has(entry.path) ||
@@ -411,7 +416,7 @@ export function useEditorPanelContentState({
     activeFile?.conflictReview?.snapshotTimestamp,
     selectedConflictReviewFile?.id,
     isChangesMode,
-    gitStatusByWorktree
+    gitStatusEntries
   ])
 
   useEditorPanelFileLoadRetry({
@@ -423,9 +428,7 @@ export function useEditorPanelContentState({
     setFileContents
   })
 
-  const changesStatusEntries = activeFile?.worktreeId
-    ? gitStatusByWorktree[activeFile.worktreeId]
-    : undefined
+  const changesStatusEntries = activeFile?.worktreeId ? gitStatusEntries : undefined
   const activeFileGitStatusEntries = useMemo(() => {
     if (!activeFile?.relativePath || !changesStatusEntries) {
       return undefined
