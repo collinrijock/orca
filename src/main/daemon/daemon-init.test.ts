@@ -845,6 +845,53 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     expect(killStaleDaemonMock).not.toHaveBeenCalled()
   })
 
+  it('bounds an unresponsive legacy session query and fail-safe adopts the daemon', async () => {
+    vi.useFakeTimers()
+    try {
+      const mod = await importFresh()
+      probeSocketExistsMock.mockImplementation(
+        (p?: string) => p?.endsWith('daemon-v9.sock') ?? false
+      )
+      netConnectMock.mockImplementation(() => {
+        const handlers: Record<string, (() => void)[]> = { connect: [], error: [] }
+        return {
+          on(event: string, cb: () => void) {
+            handlers[event]?.push(cb)
+            if (event === 'connect') {
+              queueMicrotask(() => cb())
+            }
+            return this
+          },
+          removeListener(event: string, cb: () => void) {
+            handlers[event] = handlers[event]?.filter((handler) => handler !== cb) ?? []
+            return this
+          },
+          destroy() {}
+        }
+      })
+      const disconnectMock = vi.fn()
+      daemonClientMock.mockImplementationOnce(function MockHungLegacyDaemonClient() {
+        return {
+          ensureConnected: vi.fn(async () => {}),
+          request: vi.fn(() => new Promise<never>(() => {})),
+          disconnect: disconnectMock
+        }
+      })
+
+      const initPromise = mod.initDaemonPtyProvider()
+      await vi.advanceTimersByTimeAsync(1000)
+      await initPromise
+
+      const { DaemonPtyRouter } = await import('./daemon-pty-router')
+      expect(mod.getDaemonProvider()).toBeInstanceOf(DaemonPtyRouter)
+      expect(adapterInstances.some((instance) => instance.protocolVersion === 9)).toBe(true)
+      expect(disconnectMock).toHaveBeenCalledOnce()
+      expect(killStaleDaemonMock).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('restart path with no legacy adapters yields a bare DaemonPtyAdapter (not wrapped in a router)', async () => {
     const mod = await importFresh()
     await mod.initDaemonPtyProvider()
