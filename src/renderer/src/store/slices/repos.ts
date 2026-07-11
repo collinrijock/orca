@@ -2814,7 +2814,7 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
           for (const ptyId of get().ptyIdsByTabId[tab.id] ?? []) {
             killedPtyIds.add(ptyId)
             if (!ptyId.startsWith('remote:')) {
-              window.api.pty.kill(ptyId)
+              window.api.pty.kill(ptyId).catch(() => {})
             }
           }
         }
