@@ -12,6 +12,9 @@ export type ProviderAccountsSnapshot = {
   claude: ClaudeRateLimitAccountsState
   codex: CodexRateLimitAccountsState
   rateLimits: RateLimitState | null
+  // Why: a partial local load substitutes an empty state for the failed
+  // provider; consumers must not treat that half as an authoritative roster.
+  failedProviders?: ('claude' | 'codex')[]
 }
 
 type ProviderAccountSelection = {
@@ -41,11 +44,11 @@ export type ProviderAccountsWatcher = {
   close: () => void
 }
 
-function emptyClaudeAccountsState(): ClaudeRateLimitAccountsState {
+export function emptyClaudeAccountsState(): ClaudeRateLimitAccountsState {
   return { accounts: [], activeAccountId: null, activeAccountIdsByRuntime: { host: null, wsl: {} } }
 }
 
-function emptyCodexAccountsState(): CodexRateLimitAccountsState {
+export function emptyCodexAccountsState(): CodexRateLimitAccountsState {
   return { accounts: [], activeAccountId: null, activeAccountIdsByRuntime: { host: null, wsl: {} } }
 }
 
@@ -79,29 +82,40 @@ export function watchProviderAccounts(
         return
       }
 
-      const errors = [
-        ...(claudeResult.status === 'rejected'
-          ? [providerAccountsLoadError('Claude', claudeResult.reason)]
-          : []),
-        ...(codexResult.status === 'rejected'
-          ? [providerAccountsLoadError('Codex', codexResult.reason)]
-          : [])
-      ]
-      if (errors.length === 2) {
+      const claudeError =
+        claudeResult.status === 'rejected'
+          ? providerAccountsLoadError('Claude', claudeResult.reason)
+          : null
+      const codexError =
+        codexResult.status === 'rejected'
+          ? providerAccountsLoadError('Codex', codexResult.reason)
+          : null
+      if (claudeError && codexError) {
+        const errors = [claudeError, codexError]
         handlers.onError(new AggregateError(errors, errors.map((error) => error.message).join(' ')))
         return
       }
 
+      const failedProviders: ('claude' | 'codex')[] = []
+      if (claudeError) {
+        failedProviders.push('claude')
+      }
+      if (codexError) {
+        failedProviders.push('codex')
+      }
       handlers.onSnapshot({
         claude:
           claudeResult.status === 'fulfilled' ? claudeResult.value : emptyClaudeAccountsState(),
         codex: codexResult.status === 'fulfilled' ? codexResult.value : emptyCodexAccountsState(),
-        rateLimits: null
+        rateLimits: null,
+        ...(failedProviders.length > 0 ? { failedProviders } : {})
       })
       // Why: publish the healthy provider first so one-shot consumers keep it,
-      // while the long-lived Accounts pane still receives a source-specific error.
-      for (const error of errors) {
-        handlers.onError(error)
+      // but re-check closed since an onSnapshot handler may close the watcher.
+      for (const error of [claudeError, codexError]) {
+        if (error && !closed) {
+          handlers.onError(error)
+        }
       }
     })
     return {

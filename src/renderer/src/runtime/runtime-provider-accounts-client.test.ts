@@ -172,7 +172,8 @@ describe('watchProviderAccounts', () => {
       {
         claude: emptyClaudeState(),
         codex: codexState,
-        rateLimits: null
+        rateLimits: null,
+        failedProviders: ['claude']
       }
     ])
     expect(errors).toHaveLength(1)
@@ -198,7 +199,8 @@ describe('watchProviderAccounts', () => {
       {
         claude: claudeState,
         codex: emptyCodexState(),
-        rateLimits: null
+        rateLimits: null,
+        failedProviders: ['codex']
       }
     ])
     expect(errors).toHaveLength(1)
@@ -309,12 +311,12 @@ describe('fetchProviderAccountsSnapshot', () => {
     codexListLocal.mockResolvedValue(codexState)
 
     // Why: one-shot consumers (status bar menus) must keep the healthy provider
-    // even when the sibling list rejects; the trailing onError must not reject
-    // the already-resolved promise.
+    // even when the sibling list rejects instead of seeing a rejected promise.
     await expect(fetchProviderAccountsSnapshot(LOCAL)).resolves.toEqual({
       claude: emptyClaudeState(),
       codex: codexState,
-      rateLimits: null
+      rateLimits: null,
+      failedProviders: ['claude']
     })
   })
 })

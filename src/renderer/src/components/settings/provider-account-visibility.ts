@@ -1,5 +1,7 @@
 import type {
+  ClaudeManagedAccountRuntimeSelection,
   ClaudeRateLimitAccountsState,
+  CodexManagedAccountRuntimeSelection,
   CodexRateLimitAccountsState
 } from '../../../../shared/types'
 
@@ -9,10 +11,9 @@ type ProviderAccount =
 
 type ProviderAccountSelection = {
   activeAccountId: string | null
-  activeAccountIdsByRuntime?: {
-    host: string | null
-    wsl: Record<string, string | null>
-  }
+  activeAccountIdsByRuntime?:
+    | ClaudeManagedAccountRuntimeSelection
+    | CodexManagedAccountRuntimeSelection
 }
 
 export type ProviderAccountRuntimeView = {

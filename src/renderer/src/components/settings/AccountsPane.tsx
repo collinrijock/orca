@@ -73,6 +73,8 @@ import {
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
 import {
+  emptyClaudeAccountsState,
+  emptyCodexAccountsState,
   hasRemoteProviderAccountOwner,
   removeClaudeProviderAccount,
   removeCodexProviderAccount,
@@ -338,25 +340,27 @@ export function AccountsPane({
       ? `${localAccountRuntime.label.charAt(0).toLocaleLowerCase()}${localAccountRuntime.label.slice(1)}`
       : localAccountRuntime.label
 
-  const [codexAccounts, setCodexAccounts] = useState<CodexRateLimitAccountsState>({
-    accounts: [],
-    activeAccountId: null,
-    activeAccountIdsByRuntime: { host: null, wsl: {} }
-  })
+  const [codexAccounts, setCodexAccounts] =
+    useState<CodexRateLimitAccountsState>(emptyCodexAccountsState)
   const [codexAccountsLoaded, setCodexAccountsLoaded] = useState(false)
   const [codexAction, setCodexAction] = useState<
     'idle' | 'adding' | `reauth:${string}` | `remove:${string}` | `select:${string | 'system'}`
   >('idle')
-  const [claudeAccounts, setClaudeAccounts] = useState<ClaudeRateLimitAccountsState>({
-    accounts: [],
-    activeAccountId: null,
-    activeAccountIdsByRuntime: { host: null, wsl: {} }
-  })
+  const [claudeAccounts, setClaudeAccounts] =
+    useState<ClaudeRateLimitAccountsState>(emptyClaudeAccountsState)
   const [claudeAction, setClaudeAction] = useState<
     'idle' | 'adding' | `reauth:${string}` | `remove:${string}` | `select:${string | 'system'}`
   >('idle')
-  const [removeAccountId, setRemoveAccountId] = useState<string | null>(null)
-  const [removeClaudeAccountId, setRemoveClaudeAccountId] = useState<string | null>(null)
+  // Why: capture the account's runtime slot when the dialog opens; the roster
+  // can change underneath an open dialog and lose the slot to diff for restarts.
+  const [removeCodexTarget, setRemoveCodexTarget] = useState<{
+    id: string
+    runtime: ProviderAccountRuntimeView
+  } | null>(null)
+  const [removeClaudeTarget, setRemoveClaudeTarget] = useState<{
+    id: string
+    runtime: ProviderAccountRuntimeView
+  } | null>(null)
   const accountVisibilityOptions = {
     remoteOwner: isRemoteAccountScope,
     ownerPlatform: accountOwnerPlatform
@@ -368,15 +372,18 @@ export function AccountsPane({
     providerAccountMatchesView(account, accountRuntime, accountVisibilityOptions)
   )
   const activeCodexAccountId = getProviderAccountActiveIdForView(codexAccounts, accountRuntime)
-  const accountActiveOptions = { remoteOwner: isRemoteAccountScope }
-  // Why: under remote WSL flattening a WSL account can be active while the host
-  // default id is still null, so the forced-host activeAccountId would light up
-  // the System default row alongside it; defer that row to any active account row.
-  const systemCodexActive = !visibleCodexAccounts.some((account) =>
-    providerAccountIsActiveInView(account, codexAccounts, accountRuntime, accountActiveOptions)
+  // Why: System default lights only when no account row is active; while a remote
+  // owner's platform is unknown WSL rows hide fail-closed, so check the full roster.
+  const ownerPlatformUnknown = isRemoteAccountScope && accountOwnerPlatform === null
+  const systemCodexActive = !(
+    ownerPlatformUnknown ? codexAccounts.accounts : visibleCodexAccounts
+  ).some((account) =>
+    providerAccountIsActiveInView(account, codexAccounts, accountRuntime, accountVisibilityOptions)
   )
-  const systemClaudeActive = !visibleClaudeAccounts.some((account) =>
-    providerAccountIsActiveInView(account, claudeAccounts, accountRuntime, accountActiveOptions)
+  const systemClaudeActive = !(
+    ownerPlatformUnknown ? claudeAccounts.accounts : visibleClaudeAccounts
+  ).some((account) =>
+    providerAccountIsActiveInView(account, claudeAccounts, accountRuntime, accountVisibilityOptions)
   )
   // Why: the auth warning is derived from the desktop's own rate-limit poll;
   // with a remote owner it would misattribute local auth state to the server.
@@ -481,9 +488,15 @@ export function AccountsPane({
       { activeRuntimeEnvironmentId },
       {
         onSnapshot: (snapshot) => {
-          setCodexAccounts(snapshot.codex)
-          setClaudeAccounts(snapshot.claude)
-          setCodexAccountsLoaded(true)
+          // Why: a failed provider's half is a substituted empty roster, not
+          // authoritative data; keep prior state and leave the loaded gate shut.
+          if (!snapshot.failedProviders?.includes('codex')) {
+            setCodexAccounts(snapshot.codex)
+            setCodexAccountsLoaded(true)
+          }
+          if (!snapshot.failedProviders?.includes('claude')) {
+            setClaudeAccounts(snapshot.claude)
+          }
         },
         onError: (error) => {
           toast.error(
@@ -872,7 +885,7 @@ export function AccountsPane({
                   account,
                   claudeAccounts,
                   accountRuntime,
-                  accountActiveOptions
+                  accountVisibilityOptions
                 )
                 const isReauthing = claudeAction === `reauth:${account.id}`
                 const isBusy = claudeAction !== 'idle' || accountRuntimeUnavailable
@@ -889,18 +902,18 @@ export function AccountsPane({
                     <div className="flex w-full items-center justify-between gap-3 max-md:flex-col max-md:items-start">
                       <button
                         type="button"
-                        onClick={() =>
+                        onClick={() => {
+                          const accountRuntimeView = getProviderAccountRuntime(account)
                           void runClaudeAccountAction(
                             `select:${account.id}`,
                             () =>
                               selectClaudeProviderAccount(settings, {
                                 accountId: account.id,
-                                runtime: account.managedAuthRuntime ?? 'host',
-                                wslDistro: account.wslDistro ?? null
+                                ...accountRuntimeView
                               }),
-                            getProviderAccountRuntime(account)
+                            accountRuntimeView
                           )
-                        }
+                        }}
                         disabled={isBusy}
                         className="flex min-w-0 flex-1 flex-col gap-0.5 text-left disabled:cursor-default"
                       >
@@ -936,8 +949,13 @@ export function AccountsPane({
                           size="xs"
                           onClick={(event) => {
                             event.stopPropagation()
-                            void runClaudeAccountAction(`reauth:${account.id}`, () =>
-                              window.api.claudeAccounts.reauthenticate({ accountId: account.id })
+                            void runClaudeAccountAction(
+                              `reauth:${account.id}`,
+                              () =>
+                                window.api.claudeAccounts.reauthenticate({
+                                  accountId: account.id
+                                }),
+                              getProviderAccountRuntime(account)
                             )
                           }}
                           disabled={isRemoteAccountScope || isBusy}
@@ -958,7 +976,10 @@ export function AccountsPane({
                           size="xs"
                           onClick={(event) => {
                             event.stopPropagation()
-                            setRemoveClaudeAccountId(account.id)
+                            setRemoveClaudeTarget({
+                              id: account.id,
+                              runtime: getProviderAccountRuntime(account)
+                            })
                           }}
                           disabled={isBusy}
                           className="h-6 px-2 text-muted-foreground hover:text-destructive"
@@ -1179,7 +1200,7 @@ export function AccountsPane({
                   account,
                   codexAccounts,
                   accountRuntime,
-                  accountActiveOptions
+                  accountVisibilityOptions
                 )
                 // Why: same remote gate as the section-level warning — the
                 // desktop's rate-limit poll says nothing about server accounts.
@@ -1211,18 +1232,18 @@ export function AccountsPane({
                     <div className="flex w-full items-center justify-between gap-3 max-md:flex-col max-md:items-start">
                       <button
                         type="button"
-                        onClick={() =>
+                        onClick={() => {
+                          const accountRuntimeView = getProviderAccountRuntime(account)
                           void runCodexAccountAction(
                             `select:${account.id}`,
                             () =>
                               selectCodexProviderAccount(settings, {
                                 accountId: account.id,
-                                runtime: account.managedHomeRuntime ?? 'host',
-                                wslDistro: account.wslDistro ?? null
+                                ...accountRuntimeView
                               }),
-                            getProviderAccountRuntime(account)
+                            accountRuntimeView
                           )
-                        }
+                        }}
                         disabled={isBusy}
                         className="flex min-w-0 flex-1 flex-col gap-0.5 text-left disabled:cursor-default"
                       >
@@ -1290,8 +1311,13 @@ export function AccountsPane({
                           size="xs"
                           onClick={(event) => {
                             event.stopPropagation()
-                            void runCodexAccountAction(`reauth:${account.id}`, () =>
-                              window.api.codexAccounts.reauthenticate({ accountId: account.id })
+                            void runCodexAccountAction(
+                              `reauth:${account.id}`,
+                              () =>
+                                window.api.codexAccounts.reauthenticate({
+                                  accountId: account.id
+                                }),
+                              getProviderAccountRuntime(account)
                             )
                           }}
                           disabled={isRemoteAccountScope || isBusy}
@@ -1312,7 +1338,10 @@ export function AccountsPane({
                           size="xs"
                           onClick={(event) => {
                             event.stopPropagation()
-                            setRemoveAccountId(account.id)
+                            setRemoveCodexTarget({
+                              id: account.id,
+                              runtime: getProviderAccountRuntime(account)
+                            })
                           }}
                           disabled={isBusy}
                           className="h-6 px-2 text-muted-foreground hover:text-destructive"
@@ -1787,8 +1816,8 @@ export function AccountsPane({
   return (
     <div className="space-y-8">
       <Dialog
-        open={removeAccountId !== null}
-        onOpenChange={(open) => !open && setRemoveAccountId(null)}
+        open={removeCodexTarget !== null}
+        onOpenChange={(open) => !open && setRemoveCodexTarget(null)}
       >
         <DialogContent showCloseButton={false}>
           <DialogHeader>
@@ -1806,22 +1835,21 @@ export function AccountsPane({
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setRemoveAccountId(null)}>
+            <Button variant="outline" onClick={() => setRemoveCodexTarget(null)}>
               {translate('auto.components.settings.AccountsPane.dbb9626ed1', 'Cancel')}
             </Button>
             <Button
               variant="destructive"
               onClick={() => {
-                const accountId = removeAccountId
-                if (!accountId) {
+                const target = removeCodexTarget
+                if (!target) {
                   return
                 }
-                const account = codexAccounts.accounts.find((entry) => entry.id === accountId)
-                setRemoveAccountId(null)
+                setRemoveCodexTarget(null)
                 void runCodexAccountAction(
-                  `remove:${accountId}`,
-                  () => removeCodexProviderAccount(settings, accountId),
-                  account ? getProviderAccountRuntime(account) : accountRuntime
+                  `remove:${target.id}`,
+                  () => removeCodexProviderAccount(settings, target.id),
+                  target.runtime
                 )
               }}
             >
@@ -1831,8 +1859,8 @@ export function AccountsPane({
         </DialogContent>
       </Dialog>
       <Dialog
-        open={removeClaudeAccountId !== null}
-        onOpenChange={(open) => !open && setRemoveClaudeAccountId(null)}
+        open={removeClaudeTarget !== null}
+        onOpenChange={(open) => !open && setRemoveClaudeTarget(null)}
       >
         <DialogContent showCloseButton={false}>
           <DialogHeader>
@@ -1850,22 +1878,21 @@ export function AccountsPane({
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setRemoveClaudeAccountId(null)}>
+            <Button variant="outline" onClick={() => setRemoveClaudeTarget(null)}>
               {translate('auto.components.settings.AccountsPane.dbb9626ed1', 'Cancel')}
             </Button>
             <Button
               variant="destructive"
               onClick={() => {
-                const accountId = removeClaudeAccountId
-                if (!accountId) {
+                const target = removeClaudeTarget
+                if (!target) {
                   return
                 }
-                const account = claudeAccounts.accounts.find((entry) => entry.id === accountId)
-                setRemoveClaudeAccountId(null)
+                setRemoveClaudeTarget(null)
                 void runClaudeAccountAction(
-                  `remove:${accountId}`,
-                  () => removeClaudeProviderAccount(settings, accountId),
-                  account ? getProviderAccountRuntime(account) : accountRuntime
+                  `remove:${target.id}`,
+                  () => removeClaudeProviderAccount(settings, target.id),
+                  target.runtime
                 )
               }}
             >
