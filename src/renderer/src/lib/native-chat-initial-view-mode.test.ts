@@ -65,8 +65,7 @@ describe('decideInitialAgentTabViewMode', () => {
         experimentalNativeChat: true,
         openAgentTabsInChatByDefault: true,
         agent: 'grok',
-        nativeChatTranscriptIsLocalReadable:
-          isNativeChatTranscriptLocalReadable(connectionId)
+        nativeChatTranscriptIsLocalReadable: isNativeChatTranscriptLocalReadable(connectionId)
       })
     ).toBe('chat')
   })
@@ -77,8 +76,7 @@ describe('decideInitialAgentTabViewMode', () => {
         experimentalNativeChat: true,
         openAgentTabsInChatByDefault: true,
         agent: 'grok',
-        nativeChatTranscriptIsLocalReadable:
-          isNativeChatTranscriptLocalReadable('ssh-target-1')
+        nativeChatTranscriptIsLocalReadable: isNativeChatTranscriptLocalReadable('ssh-target-1')
       })
     ).toBeUndefined()
     expect(

@@ -44,7 +44,15 @@ export type UsageRateLimitMetadata = {
 }
 
 export type ProviderRateLimits = {
-  provider: 'claude' | 'codex' | 'gemini' | 'opencode-go' | 'kimi' | 'minimax' | 'grok' | 'antigravity'
+  provider:
+    | 'claude'
+    | 'codex'
+    | 'gemini'
+    | 'opencode-go'
+    | 'kimi'
+    | 'minimax'
+    | 'grok'
+    | 'antigravity'
   /** 5-hour session window, null if not available. */
   session: RateLimitWindow | null
   /** 7-day weekly window, null if not available. */

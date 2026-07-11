@@ -1626,6 +1626,318 @@ describe('OrcaRuntimeService', () => {
     })
   })
 
+  it('drops a stale leaf when a woken agent PTY is re-keyed to a new leaf on renderer reload', async () => {
+    const runtime = createRuntime()
+    const tabId = 'tab-1'
+    // Why: the agent holds a pre-allocated ORCA_TERMINAL_HANDLE, so its PTY has a
+    // handleByPtyId entry — the exact condition the reload preservation loop keys on.
+    runtime.preAllocateHandleForPty('pty-agent')
+    runtime.attachWindow(TEST_WINDOW_ID)
+    runtime.syncWindowGraph(TEST_WINDOW_ID, {
+      tabs: [
+        {
+          tabId,
+          worktreeId: TEST_WORKTREE_ID,
+          title: 'Claude',
+          activeLeafId: 'leaf-old',
+          layout: null
+        }
+      ],
+      leaves: [
+        {
+          tabId,
+          worktreeId: TEST_WORKTREE_ID,
+          leafId: 'leaf-old',
+          paneRuntimeId: 1,
+          ptyId: 'pty-agent'
+        }
+      ]
+    })
+    const before = await runtime.listTerminals(`id:${TEST_WORKTREE_ID}`)
+    expect(before.terminals).toHaveLength(1)
+
+    // Simulate agent sleep + mobile wake: the renderer reloads and cold-restores
+    // the pane under a NEW leafId while the SAME agent PTY stays live.
+    runtime.markRendererReloading(TEST_WINDOW_ID)
+    runtime.syncWindowGraph(TEST_WINDOW_ID, {
+      tabs: [
+        {
+          tabId,
+          worktreeId: TEST_WORKTREE_ID,
+          title: 'Claude',
+          activeLeafId: 'leaf-new',
+          layout: null
+        }
+      ],
+      leaves: [
+        {
+          tabId,
+          worktreeId: TEST_WORKTREE_ID,
+          leafId: 'leaf-new',
+          paneRuntimeId: 2,
+          ptyId: 'pty-agent'
+        }
+      ]
+    })
+
+    const after = await runtime.listTerminals(`id:${TEST_WORKTREE_ID}`)
+    // Before the fix the stale leaf-old survived beside leaf-new — two leaves on
+    // ONE PTY — so both adopted the same ptyId-keyed handle and paired clients
+    // crashed with a duplicate React key (`term_…`). Now only the live leaf remains.
+    expect(after.terminals).toHaveLength(1)
+    expect(after.terminals[0].ptyId).toBe('pty-agent')
+    // The shared handle must NOT have been invalidated — it belongs to leaf-new now.
+    await expect(runtime.showTerminal(after.terminals[0].handle)).resolves.toMatchObject({
+      ptyId: 'pty-agent'
+    })
+  })
+
+  it('still preserves a CLI agent leaf when the reloaded renderer has not rebound its PTY', async () => {
+    const runtime = createRuntime()
+    const tabId = 'tab-1'
+    runtime.preAllocateHandleForPty('pty-agent')
+    runtime.attachWindow(TEST_WINDOW_ID)
+    runtime.syncWindowGraph(TEST_WINDOW_ID, {
+      tabs: [
+        {
+          tabId,
+          worktreeId: TEST_WORKTREE_ID,
+          title: 'Claude',
+          activeLeafId: 'leaf-old',
+          layout: null
+        }
+      ],
+      leaves: [
+        {
+          tabId,
+          worktreeId: TEST_WORKTREE_ID,
+          leafId: 'leaf-old',
+          paneRuntimeId: 1,
+          ptyId: 'pty-agent'
+        }
+      ]
+    })
+    expect((await runtime.listTerminals(`id:${TEST_WORKTREE_ID}`)).terminals).toHaveLength(1)
+
+    // Renderer reloads but has NOT yet rebound the pane (empty graph). The live
+    // CLI agent PTY + exported handle must survive (the original preserve intent).
+    runtime.markRendererReloading(TEST_WINDOW_ID)
+    runtime.syncWindowGraph(TEST_WINDOW_ID, { tabs: [], leaves: [] })
+
+    const after = await runtime.listTerminals(`id:${TEST_WORKTREE_ID}`)
+    expect(after.terminals).toHaveLength(1)
+    expect(after.terminals[0].ptyId).toBe('pty-agent')
+  })
+
+  it('invalidates a re-keyed leaf-unique handle so in-flight waiters fail fast', async () => {
+    const runtime = createRuntime()
+    const tabId = 'tab-1'
+    // No preAllocateHandleForPty: a plain terminal's handle is leaf-unique, so a
+    // re-key leaves it with no next owner and it must go stale immediately.
+    runtime.attachWindow(TEST_WINDOW_ID)
+    runtime.syncWindowGraph(TEST_WINDOW_ID, {
+      tabs: [
+        {
+          tabId,
+          worktreeId: TEST_WORKTREE_ID,
+          title: 'Shell',
+          activeLeafId: 'leaf-old',
+          layout: null
+        }
+      ],
+      leaves: [
+        {
+          tabId,
+          worktreeId: TEST_WORKTREE_ID,
+          leafId: 'leaf-old',
+          paneRuntimeId: 1,
+          ptyId: 'pty-plain'
+        }
+      ]
+    })
+    const before = await runtime.listTerminals(`id:${TEST_WORKTREE_ID}`)
+    expect(before.terminals).toHaveLength(1)
+    const staleHandle = before.terminals[0].handle
+    const waiting = runtime.waitForTerminal(staleHandle, { condition: 'exit', timeoutMs: 30_000 })
+
+    // Re-key WITHOUT a renderer reload (e.g. a pane moved across tabs) while the
+    // same PTY stays live under a new leaf.
+    runtime.syncWindowGraph(TEST_WINDOW_ID, {
+      tabs: [
+        {
+          tabId,
+          worktreeId: TEST_WORKTREE_ID,
+          title: 'Shell',
+          activeLeafId: 'leaf-new',
+          layout: null
+        }
+      ],
+      leaves: [
+        {
+          tabId,
+          worktreeId: TEST_WORKTREE_ID,
+          leafId: 'leaf-new',
+          paneRuntimeId: 2,
+          ptyId: 'pty-plain'
+        }
+      ]
+    })
+
+    // The waiter must fail fast, not hang until timeout on a dead leaf.
+    await expect(waiting).rejects.toThrow('terminal_handle_stale')
+    const after = await runtime.listTerminals(`id:${TEST_WORKTREE_ID}`)
+    expect(after.terminals).toHaveLength(1)
+    expect(after.terminals[0].handle).not.toBe(staleHandle)
+  })
+
+  it('keeps a live CLI waiter pending when a re-keyed shared handle transfers to the live leaf', async () => {
+    const runtime = createRuntime()
+    const tabId = 'tab-1'
+    // The counterpart to the leaf-unique case above: a pre-allocated
+    // ORCA_TERMINAL_HANDLE is ptyId-keyed and shared, so re-keying its live PTY to
+    // a new leaf (a pane moved across tabs, no renderer reload) must hand the
+    // handle to the live leaf WITHOUT rejecting the agent's in-flight waiter. This
+    // pins the shared-handle branch so collapsing it into a blanket
+    // invalidateLeafHandle can't silently strand a CLI `terminal wait`. (A renderer
+    // reload is a separate path — markRendererReloading stales every waiter itself.)
+    runtime.preAllocateHandleForPty('pty-agent')
+    runtime.attachWindow(TEST_WINDOW_ID)
+    runtime.syncWindowGraph(TEST_WINDOW_ID, {
+      tabs: [
+        {
+          tabId,
+          worktreeId: TEST_WORKTREE_ID,
+          title: 'Claude',
+          activeLeafId: 'leaf-old',
+          layout: null
+        }
+      ],
+      leaves: [
+        {
+          tabId,
+          worktreeId: TEST_WORKTREE_ID,
+          leafId: 'leaf-old',
+          paneRuntimeId: 1,
+          ptyId: 'pty-agent'
+        }
+      ]
+    })
+    const before = await runtime.listTerminals(`id:${TEST_WORKTREE_ID}`)
+    const sharedHandle = before.terminals[0].handle
+    const abort = new AbortController()
+    let settled: 'resolved' | 'rejected' | null = null
+    const waiting = runtime
+      .waitForTerminal(sharedHandle, {
+        condition: 'exit',
+        timeoutMs: 30_000,
+        signal: abort.signal
+      })
+      .then(
+        () => {
+          settled = 'resolved'
+        },
+        () => {
+          settled = 'rejected'
+        }
+      )
+
+    // Re-key WITHOUT a renderer reload while the same agent PTY stays live under a
+    // new leaf.
+    runtime.syncWindowGraph(TEST_WINDOW_ID, {
+      tabs: [
+        {
+          tabId,
+          worktreeId: TEST_WORKTREE_ID,
+          title: 'Claude',
+          activeLeafId: 'leaf-new',
+          layout: null
+        }
+      ],
+      leaves: [
+        {
+          tabId,
+          worktreeId: TEST_WORKTREE_ID,
+          leafId: 'leaf-new',
+          paneRuntimeId: 2,
+          ptyId: 'pty-agent'
+        }
+      ]
+    })
+
+    // Let any synchronous stale-handle rejection propagate.
+    await new Promise<void>((resolve) => setImmediate(resolve))
+    // The shared handle belongs to leaf-new now, so the CLI's live waiter must stay
+    // pending — a blanket invalidateLeafHandle would reject it here as stale.
+    expect(settled).toBeNull()
+    // The same handle still resolves to the live PTY under the new leaf.
+    await expect(runtime.showTerminal(sharedHandle)).resolves.toMatchObject({
+      ptyId: 'pty-agent'
+    })
+
+    // Abort only for teardown; the assertion above already proved it was pending.
+    abort.abort()
+    await waiting
+    expect(settled).toBe('rejected')
+  })
+
+  it('emits one mobile session terminal tab per live PTY even if two tabs resolve to it', () => {
+    const runtime = createRuntime()
+    const internals = runtime as unknown as {
+      recordPtyWorktree: (
+        ptyId: string,
+        worktreeId: string,
+        state?: Record<string, unknown>
+      ) => void
+      mobileSessionTabsByWorktree: Map<string, unknown>
+      getMobileSessionTabsForWorktree: (worktreeId: string) => {
+        tabs: { type: string; terminal?: string | null }[]
+      }
+    }
+    // Two unclaimed live PTYs on the worktree; the worktree-only fallback binds
+    // either to a leafless tab that references it.
+    internals.recordPtyWorktree('pty-shared', TEST_WORKTREE_ID, { connected: true })
+    internals.recordPtyWorktree('pty-other', TEST_WORKTREE_ID, { connected: true })
+
+    const terminalTab = (leafId: string, ptyId: string) => ({
+      type: 'terminal' as const,
+      id: `term_dup::${leafId}`,
+      parentTabId: 'term_dup',
+      leafId,
+      ptyId,
+      title: 'Agent',
+      isActive: leafId === 'leaf-new'
+    })
+
+    // Two records (a stale headless leaf + the live leaf) that both resolve to
+    // the SAME live PTY — the renderer-graph origin the leaf fix can't reach.
+    internals.mobileSessionTabsByWorktree.set(TEST_WORKTREE_ID, {
+      worktree: TEST_WORKTREE_ID,
+      publicationEpoch: 'renderer:test:1',
+      snapshotVersion: 1,
+      activeGroupId: null,
+      activeTabId: 'term_dup::leaf-new',
+      activeTabType: 'terminal',
+      tabs: [terminalTab('leaf-new', 'pty-shared'), terminalTab('leaf-old', 'pty-shared')]
+    })
+    const deduped = internals.getMobileSessionTabsForWorktree(TEST_WORKTREE_ID)
+    const dedupedTerminals = deduped.tabs.filter((tab) => tab.type === 'terminal')
+    expect(dedupedTerminals).toHaveLength(1)
+    expect(dedupedTerminals[0].terminal).toBeTruthy()
+
+    // Split siblings own DISTINCT PTYs, so they must never be collapsed.
+    internals.mobileSessionTabsByWorktree.set(TEST_WORKTREE_ID, {
+      worktree: TEST_WORKTREE_ID,
+      publicationEpoch: 'renderer:test:2',
+      snapshotVersion: 2,
+      activeGroupId: null,
+      activeTabId: 'term_dup::leaf-new',
+      activeTabType: 'terminal',
+      tabs: [terminalTab('leaf-new', 'pty-shared'), terminalTab('leaf-old', 'pty-other')]
+    })
+    const split = internals.getMobileSessionTabsForWorktree(TEST_WORKTREE_ID)
+    expect(split.tabs.filter((tab) => tab.type === 'terminal')).toHaveLength(2)
+  })
+
   it('keeps targeted terminal lists from adopting controller PTYs for other worktrees', async () => {
     vi.mocked(listWorktrees).mockResolvedValue([
       ...MOCK_GIT_WORKTREES,
