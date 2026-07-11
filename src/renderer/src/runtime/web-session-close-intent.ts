@@ -1,145 +1,177 @@
-// Why: closing a remote tab prunes the local mirror immediately for
-// responsiveness, then asks the host to close it. But an in-flight host snapshot
-// (published before the host processed the close, or the close RPC's own
-// pre-close subscribe replay) can arrive AFTER the local prune and still contain
-// the tab — the reconcile then re-materializes the just-closed tab, which the
-// host's real post-close snapshot removes again a beat later. That round trip is
-// the close "flash and reappear".
-//
-// The client records its own close intent here (host tab id pending removal).
-// The reconcile drops any host tab matching a pending intent until a snapshot
-// confirms the removal (tab absent), then clears it — mirroring the focus-intent
-// mechanism. A TTL guards against a never-confirmed close (e.g. failed RPC)
-// permanently hiding a tab that legitimately still exists host-side.
+import {
+  getWebSessionPublicationEpoch,
+  webSessionIntentEnvironmentPrefix,
+  webSessionIntentScopeKey,
+  type WebSessionIntentScope
+} from './web-session-intent-scope'
 
-const CLOSE_INTENT_TTL_MS = 10_000
-export const MAX_WEB_SESSION_CLOSE_INTENT_WORKTREES = 256
+// Why: closing a remote tab prunes the local mirror immediately, but an
+// in-flight pre-close host snapshot can otherwise make the tab flash back.
+// Lifecycle cleanup and caps bound retention without expiring a valid intent
+// during a slow reconnect.
+export const MAX_WEB_SESSION_CLOSE_INTENT_SCOPES = 256
+export const MAX_WEB_SESSION_CLOSE_INTENTS_PER_SCOPE = 256
 
-type CloseIntent = { recordedAt: number }
+type CloseIntent = {
+  token: number
+  publicationEpoch: string | null
+}
 
-// worktreeId -> (hostTabId -> intent)
-const pendingCloseByWorktree = new Map<string, Map<string, CloseIntent>>()
+// host/runtime + worktree -> (host tab id -> intent)
+const pendingCloseByScope = new Map<string, Map<string, CloseIntent>>()
+let nextCloseIntentToken = 0
 
-function deleteEmptyCloseIntentWorktree(worktreeId: string, byTab: Map<string, CloseIntent>): void {
+function deleteEmptyCloseIntentScope(scopeKey: string, byTab: Map<string, CloseIntent>): void {
   if (byTab.size === 0) {
-    pendingCloseByWorktree.delete(worktreeId)
+    pendingCloseByScope.delete(scopeKey)
   }
 }
 
-function refreshCloseIntentWorktree(worktreeId: string, byTab: Map<string, CloseIntent>): void {
-  pendingCloseByWorktree.delete(worktreeId)
-  pendingCloseByWorktree.set(worktreeId, byTab)
+function refreshCloseIntentScope(scopeKey: string, byTab: Map<string, CloseIntent>): void {
+  pendingCloseByScope.delete(scopeKey)
+  pendingCloseByScope.set(scopeKey, byTab)
 }
 
-function pruneExpiredWebSessionCloseIntents(now: number): void {
-  for (const [worktreeId, byTab] of pendingCloseByWorktree) {
-    for (const [hostTabId, intent] of byTab) {
-      if (now - intent.recordedAt > CLOSE_INTENT_TTL_MS) {
-        byTab.delete(hostTabId)
-      }
-    }
-    deleteEmptyCloseIntentWorktree(worktreeId, byTab)
-  }
-}
-
-function trimWebSessionCloseIntentWorktrees(): void {
-  while (pendingCloseByWorktree.size > MAX_WEB_SESSION_CLOSE_INTENT_WORKTREES) {
-    const oldestWorktreeId = pendingCloseByWorktree.keys().next().value
-    if (oldestWorktreeId === undefined) {
+function trimWebSessionCloseIntentScopes(): void {
+  while (pendingCloseByScope.size > MAX_WEB_SESSION_CLOSE_INTENT_SCOPES) {
+    const oldestScopeKey = pendingCloseByScope.keys().next().value
+    if (oldestScopeKey === undefined) {
       break
     }
-    pendingCloseByWorktree.delete(oldestWorktreeId)
+    pendingCloseByScope.delete(oldestScopeKey)
+  }
+}
+
+function trimWebSessionCloseIntents(byTab: Map<string, CloseIntent>): void {
+  while (byTab.size > MAX_WEB_SESSION_CLOSE_INTENTS_PER_SCOPE) {
+    const oldestHostTabId = byTab.keys().next().value
+    if (oldestHostTabId === undefined) {
+      break
+    }
+    byTab.delete(oldestHostTabId)
   }
 }
 
 export function recordWebSessionCloseIntent(
-  worktreeId: string,
+  scope: WebSessionIntentScope,
   hostTabId: string,
-  now: number
-): void {
-  const trimmed = hostTabId.trim()
-  if (!worktreeId || !trimmed) {
-    return
+  _now: number,
+  publicationEpoch = getWebSessionPublicationEpoch(scope)
+): number | null {
+  const scopeKey = webSessionIntentScopeKey(scope)
+  const trimmedHostTabId = hostTabId.trim()
+  if (!scopeKey || !trimmedHostTabId) {
+    return null
   }
-  // Why: close intents already expire; prune all worktrees on new writes so
-  // removed worktrees that never reconcile again do not retain stale tab ids.
-  pruneExpiredWebSessionCloseIntents(now)
-  let byTab = pendingCloseByWorktree.get(worktreeId)
-  if (!byTab) {
-    byTab = new Map()
-  }
-  refreshCloseIntentWorktree(worktreeId, byTab)
-  byTab.set(trimmed, { recordedAt: now })
-  trimWebSessionCloseIntentWorktrees()
+  const byTab = pendingCloseByScope.get(scopeKey) ?? new Map<string, CloseIntent>()
+  refreshCloseIntentScope(scopeKey, byTab)
+  const token = ++nextCloseIntentToken
+  byTab.delete(trimmedHostTabId)
+  byTab.set(trimmedHostTabId, { token, publicationEpoch })
+  trimWebSessionCloseIntents(byTab)
+  trimWebSessionCloseIntentScopes()
+  return token
 }
 
-/**
- * Whether a host tab should be hidden because the client is closing it. Expired
- * intents are dropped (the close never confirmed — let the tab reappear rather
- * than hide it forever).
- */
-export function isWebSessionCloseIntentPending(
-  worktreeId: string,
-  hostTabId: string,
-  now: number
+function intentMatchesSnapshotGeneration(
+  intent: CloseIntent,
+  snapshotPublicationEpoch: string
 ): boolean {
-  const byTab = pendingCloseByWorktree.get(worktreeId)
-  if (!byTab) {
+  if (intent.publicationEpoch === null) {
+    intent.publicationEpoch = snapshotPublicationEpoch
+  }
+  return intent.publicationEpoch === snapshotPublicationEpoch
+}
+
+export function isWebSessionCloseIntentPending(
+  scope: WebSessionIntentScope,
+  hostTabId: string,
+  _now: number,
+  snapshotPublicationEpoch: string
+): boolean {
+  const scopeKey = webSessionIntentScopeKey(scope)
+  const byTab = scopeKey ? pendingCloseByScope.get(scopeKey) : undefined
+  const intent = byTab?.get(hostTabId)
+  if (!scopeKey || !byTab || !intent) {
     return false
   }
-  const intent = byTab.get(hostTabId)
-  if (!intent) {
+  if (!intentMatchesSnapshotGeneration(intent, snapshotPublicationEpoch)) {
     return false
   }
-  if (now - intent.recordedAt > CLOSE_INTENT_TTL_MS) {
-    byTab.delete(hostTabId)
-    deleteEmptyCloseIntentWorktree(worktreeId, byTab)
-    return false
-  }
-  refreshCloseIntentWorktree(worktreeId, byTab)
+  refreshCloseIntentScope(scopeKey, byTab)
   return true
 }
 
-/**
- * Clear close intents the host snapshot has confirmed: any pending host tab id
- * NOT in `presentHostTabIds` has been removed host-side, so the intent is done.
- */
 export function reconcileWebSessionCloseIntents(
-  worktreeId: string,
-  presentHostTabIds: ReadonlySet<string>
+  scope: WebSessionIntentScope,
+  presentHostTabIds: ReadonlySet<string>,
+  _now: number,
+  snapshotPublicationEpoch: string
 ): void {
-  const byTab = pendingCloseByWorktree.get(worktreeId)
-  if (!byTab) {
+  const scopeKey = webSessionIntentScopeKey(scope)
+  const byTab = scopeKey ? pendingCloseByScope.get(scopeKey) : undefined
+  if (!scopeKey || !byTab) {
     return
   }
-  const confirmed: string[] = []
-  for (const hostTabId of byTab.keys()) {
-    if (!presentHostTabIds.has(hostTabId)) {
-      confirmed.push(hostTabId)
+  for (const [hostTabId, intent] of byTab) {
+    const sameGeneration = intentMatchesSnapshotGeneration(intent, snapshotPublicationEpoch)
+    if (sameGeneration && !presentHostTabIds.has(hostTabId)) {
+      byTab.delete(hostTabId)
     }
   }
-  for (const hostTabId of confirmed) {
-    byTab.delete(hostTabId)
-  }
   if (byTab.size > 0) {
-    refreshCloseIntentWorktree(worktreeId, byTab)
+    refreshCloseIntentScope(scopeKey, byTab)
     return
   }
-  pendingCloseByWorktree.delete(worktreeId)
+  pendingCloseByScope.delete(scopeKey)
 }
 
-export function clearWebSessionCloseIntentsForWorktree(worktreeId: string): void {
-  pendingCloseByWorktree.delete(worktreeId)
+export function clearWebSessionCloseIntent(
+  scope: WebSessionIntentScope,
+  hostTabId: string,
+  token: number
+): void {
+  const scopeKey = webSessionIntentScopeKey(scope)
+  const byTab = scopeKey ? pendingCloseByScope.get(scopeKey) : undefined
+  if (!scopeKey || !byTab) {
+    return
+  }
+  const trimmedHostTabId = hostTabId.trim()
+  if (byTab.get(trimmedHostTabId)?.token !== token) {
+    return
+  }
+  byTab.delete(trimmedHostTabId)
+  deleteEmptyCloseIntentScope(scopeKey, byTab)
+}
+
+export function clearWebSessionCloseIntentsForWorktree(scope: WebSessionIntentScope): void {
+  const scopeKey = webSessionIntentScopeKey(scope)
+  if (scopeKey) {
+    pendingCloseByScope.delete(scopeKey)
+  }
+}
+
+export function clearWebSessionCloseIntentsForEnvironment(environmentId: string): void {
+  const prefix = webSessionIntentEnvironmentPrefix(environmentId)
+  if (!prefix) {
+    return
+  }
+  for (const key of pendingCloseByScope.keys()) {
+    if (key.startsWith(prefix)) {
+      pendingCloseByScope.delete(key)
+    }
+  }
 }
 
 export function resetWebSessionCloseIntentForTests(): void {
-  pendingCloseByWorktree.clear()
+  pendingCloseByScope.clear()
+  nextCloseIntentToken = 0
 }
 
-export function getWebSessionCloseIntentCountsForTests(): { worktrees: number; tabs: number } {
+export function getWebSessionCloseIntentCountsForTests(): { scopes: number; tabs: number } {
   let tabs = 0
-  for (const byTab of pendingCloseByWorktree.values()) {
+  for (const byTab of pendingCloseByScope.values()) {
     tabs += byTab.size
   }
-  return { worktrees: pendingCloseByWorktree.size, tabs }
+  return { scopes: pendingCloseByScope.size, tabs }
 }
