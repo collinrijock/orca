@@ -105,17 +105,19 @@ export function restorePtyDataHandlersAfterFailedShutdown(
   snapshots: readonly PtyDataHandlerShutdownSnapshot[]
 ): void {
   for (const snapshot of snapshots) {
-    if (snapshot.dataHandler) {
-      ptyDataHandlers.set(snapshot.ptyId, snapshot.dataHandler)
+    const authoritativeDataHandler = ptyDataHandlers.get(snapshot.ptyId) ?? snapshot.dataHandler
+    if (authoritativeDataHandler) {
+      if (!ptyDataHandlers.has(snapshot.ptyId)) {
+        ptyDataHandlers.set(snapshot.ptyId, authoritativeDataHandler)
+      }
       // Why: a kill failure can restore this handler after main already sent
-      // a final data burst into the pre-handler buffer. Replay it before later
-      // live data so failure recovery neither leaks nor reorders output.
-      drainPreHandlerPtyData(snapshot.ptyId, snapshot.dataHandler)
+      // a final data burst. A newer remount owns delivery if it registered first.
+      drainPreHandlerPtyData(snapshot.ptyId, authoritativeDataHandler)
     }
-    if (snapshot.replayHandler) {
+    if (snapshot.replayHandler && !ptyReplayHandlers.has(snapshot.ptyId)) {
       ptyReplayHandlers.set(snapshot.ptyId, snapshot.replayHandler)
     }
-    if (snapshot.teardownHandler) {
+    if (snapshot.teardownHandler && !ptyTeardownHandlers.has(snapshot.ptyId)) {
       ptyTeardownHandlers.set(snapshot.ptyId, snapshot.teardownHandler)
     }
   }
@@ -298,7 +300,11 @@ export function subscribeToPtyExit(ptyId: string, watcher: (code: number) => voi
 // (prompt, MOTD) arrives via pty:data before xterm exists. These helpers buffer
 // that output so transport.attach() can replay it when the pane finally mounts.
 
-export type EagerPtyHandle = { flush: () => string; dispose: () => void }
+export type EagerPtyHandle = {
+  flush: () => string
+  dispose: () => void
+  stopObservingData?: () => void
+}
 const eagerPtyHandles = new Map<string, EagerPtyHandle>()
 
 export function getEagerPtyBufferHandle(ptyId: string): EagerPtyHandle | undefined {
@@ -310,18 +316,11 @@ export function getEagerPtyBufferHandle(ptyId: string): EagerPtyHandle | undefin
 // runs a long-lived command (e.g. tail -f) in a worktree the user never opens.
 const EAGER_BUFFER_MAX_BYTES = TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT
 
-export function captureEagerPtyBufferRegistration(): typeof registerEagerPtyBuffer {
-  // Why: pty:exit is not boot-gated like pty:data. Attach the singleton before
-  // spawn so a first-use background PTY cannot exit into a listener-less page.
-  ensurePtyDispatcher()
-  const afterCursor = capturePreHandlerPtyEventCursor()
-  return (ptyId, onExit) => registerEagerPtyBuffer(ptyId, onExit, afterCursor)
-}
-
 export function registerEagerPtyBuffer(
   ptyId: string,
   onExit: (ptyId: string, code: number) => void,
-  afterCursor?: number
+  afterCursor?: number,
+  observePreSubscriptionData?: (data: string) => void
 ): EagerPtyHandle {
   ensurePtyDispatcher()
   // Why: a head index instead of Array.shift() — shift() is O(n), making
@@ -336,6 +335,7 @@ export function registerEagerPtyBuffer(
     const chunk = clampUtf8Tail(data, EAGER_BUFFER_MAX_BYTES)
     chunks.push(chunk)
     bufferBytes += chunk.bytes
+    observePreSubscriptionData?.(data)
     // Drop whole leading chunks (keeping the prompt-bearing tail) until within cap.
     while (bufferBytes > EAGER_BUFFER_MAX_BYTES && head < chunks.length - 1) {
       bufferBytes -= chunks[head].bytes
@@ -375,6 +375,9 @@ export function registerEagerPtyBuffer(
       head = 0
       bufferBytes = 0
       return data
+    },
+    stopObservingData() {
+      observePreSubscriptionData = undefined
     },
     dispose() {
       // Why: dispose runs at pane attach (mount completed) — the pane's own

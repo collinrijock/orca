@@ -753,8 +753,9 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
           onPtySpawn?.(spawnResult.id)
         }
 
-        const afterCursor =
-          spawnResult.isReattach || spawnResult.coldRestore ? undefined : freshSpawnCursor
+        // Why: cold restore may start a new daemon generation with a reused id.
+        // Only explicit live reattach has authority to consume pre-spawn backlog.
+        const afterCursor = spawnResult.isReattach ? undefined : freshSpawnCursor
         registerPtyDataHandler(spawnResult.id, afterCursor)
         registerPtyExitHandler(spawnResult.id, afterCursor)
         if (!connected || ptyId !== spawnResult.id) {

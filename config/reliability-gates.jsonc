@@ -3223,7 +3223,8 @@
         "PTY startup",
         "background terminal launch",
         "handler registration",
-        "failed shutdown recovery"
+        "failed shutdown recovery",
+        "daemon cold restore"
       ],
       "platforms": [
         "macos",
@@ -3247,8 +3248,8 @@
       "motivatingLinks": [
         "https://github.com/stablyai/orca/pull/7695"
       ],
-      "invariant": "Before a PTY handler mounts, the singleton dispatcher is already listening and retained data, exit, and warning identities remain capped; data drains before exit; a fresh provider-reused PTY id cannot consume an older lifecycle's events; explicit reattach keeps its current backlog; and failed shutdown restore drains detached data before later live output.",
-      "oracle": "Drive first-use background exit-before-spawn-resolution, more than 64 exit-before-handler identities, warning-producing data churn, duplicate/reused ids, fresh-spawn and explicit-reattach ordering, handler registration at cap, and failed-shutdown restoration; assert listener-first capture, bounded eviction, exact latest-code delivery once, fresh-generation filtering, data-before-exit order, and detached-before-live output.",
+      "invariant": "Before a PTY handler mounts, the singleton dispatcher is already listening and retained data, exit, and warning identities remain capped; pre-spawn bytes reach background side-effect observers exactly once before live-sidecar handoff; data drains before exit; a fresh provider-reused PTY id or new-generation cold restore cannot consume an older lifecycle's events; explicit live reattach keeps its current backlog; and failed shutdown restore drains detached data before later live output without overwriting a newer remount handler.",
+      "oracle": "Drive first-use background data/exit before spawn resolution, real observer-to-sidecar handoff and handler replacement, more than 64 exit-before-handler identities, warning-producing data churn, duplicate/reused ids, fresh spawn, failed-reattach fallback, new-generation cold restore, explicit live reattach, handler registration at cap, and failed-shutdown restoration after a newer remount; assert listener-first capture, exactly-once observer handoff, bounded eviction, exact latest-code delivery once, fresh-generation filtering with restore payload preservation, data-before-exit order, and detached-before-live output routed to current authority.",
       "commands": [
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/pty-pre-handler-buffer.test.ts src/renderer/src/components/terminal-pane/pty-transport.test.ts src/renderer/src/components/terminal-pane/pty-dispatcher-pi-routing.test.ts src/renderer/src/lib/launch-agent-background-session.test.ts src/renderer/src/lib/launch-worktree-background-terminals.test.ts"
       ],
@@ -3272,15 +3273,15 @@
           "file": "src/renderer/src/components/terminal-pane/pty-dispatcher-pi-routing.test.ts",
           "assertions": [
             "pre-handler data drains before its exit",
-            "fresh PTY-id reuse and failed-reattach fresh fallback filter old lifecycle events while explicit daemon reattach preserves pre-connect backlog",
-            "first-use eager registration attaches the singleton dispatcher before a fast background PTY can emit data or exit",
+            "fresh PTY-id reuse, failed-reattach fallback, and new-generation cold restore filter old lifecycle events while explicit daemon reattach preserves pre-connect backlog",
+            "first-use eager registration attaches the singleton dispatcher before a fast background PTY emits data or exit, routes retained bytes through its side-effect observer exactly once, and preserves a replacement handler",
             "a registered exit handler remains authoritative while 65 orphan exits churn through the bounded buffer"
           ]
         },
         {
           "file": "src/renderer/src/components/terminal-pane/pty-transport.test.ts",
           "assertions": [
-            "failed intentional shutdown restoration drains data received while detached before later live data"
+            "failed intentional shutdown restoration drains detached data before later live data to a newer remount handler without overwriting its data, replay, or teardown authority"
           ]
         }
       ],
@@ -3292,7 +3293,7 @@
           "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/pty-pre-handler-buffer.test.ts src/renderer/src/components/terminal-pane/pty-transport.test.ts src/renderer/src/components/terminal-pane/pty-dispatcher-pi-routing.test.ts src/renderer/src/lib/launch-agent-background-session.test.ts src/renderer/src/lib/launch-worktree-background-terminals.test.ts",
           "result": "passed",
           "durationSeconds": 1,
-          "summary": "5 test files passed, 115 tests passed on main@20ebe858af plus the #7695 candidate. Main@20ebe858af retained the 65th oldest exit (received code 0 instead of eviction); the bounded candidate evicts it and preserves listener-first and ordering/reuse cases."
+          "summary": "5 test files and 120 tests passed on main@dcfa91919f plus the #7695 candidate. The red repro on main@20ebe858af retained the 65th oldest exit (received code 0 instead of eviction); the candidate evicts it and preserves listener-first, exactly-once side-effect handoff, ordering/reuse, and new-generation cold-restore cases."
         }
       ],
       "runtimeBudget": {

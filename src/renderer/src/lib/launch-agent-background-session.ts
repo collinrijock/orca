@@ -18,11 +18,8 @@ import {
 import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
 import { repoIsRemote } from '../../../shared/agent-launch-remote'
 import { makePaneKey } from '../../../shared/stable-pane-id'
-import {
-  captureEagerPtyBufferRegistration,
-  subscribeToPtyExit,
-  type EagerPtyHandle
-} from '@/components/terminal-pane/pty-dispatcher'
+import { subscribeToPtyExit, type EagerPtyHandle } from '@/components/terminal-pane/pty-dispatcher'
+import { captureEagerPtyBufferRegistration } from '@/components/terminal-pane/pty-eager-buffer-registration'
 import { subscribeToPtyData } from '@/components/terminal-pane/pty-data-sidecar-subscriptions'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import { getSettingsForWorktreeRuntimeOwner } from '@/lib/worktree-runtime-owner'
@@ -62,7 +59,6 @@ export async function launchAgentBackgroundSession(
       // Best-effort: continue with launch. The user can still accept the trust menu.
     }
   }
-  const agentArgs = resolveTuiAgentLaunchArgs(agent, store.settings?.agentDefaultArgs)
   const agentEnv = resolveTuiAgentLaunchEnv(agent, store.settings?.agentDefaultEnv)
   const launchPlatform = repo
     ? getAgentLaunchPlatformForRepo(
@@ -87,7 +83,7 @@ export async function launchAgentBackgroundSession(
     agent,
     prompt: hasPrompt && !isFollowupPath ? trimmedPrompt : '',
     cmdOverrides: store.settings?.agentCmdOverrides ?? {},
-    agentArgs,
+    agentArgs: resolveTuiAgentLaunchArgs(agent, store.settings?.agentDefaultArgs),
     agentEnv,
     platform: launchPlatform,
     shell: startupShell,
@@ -212,7 +208,9 @@ export async function launchAgentBackgroundSession(
       runtimeTerminalHandle = created.terminal.handle
       ptyId = toRemoteRuntimePtyId(runtimeTerminalHandle, runtimeTarget.environmentId)
     } else {
-      const registerEagerPtyBuffer = captureEagerPtyBufferRegistration()
+      // Why: bytes emitted before spawn resolves must reach automation/status
+      // observers as well as the pane buffer, without duplicating later sidecar data.
+      const registerEagerPtyBuffer = captureEagerPtyBufferRegistration(handleData)
       const result = await window.api.pty.spawn({
         cols: 120,
         rows: 40,
@@ -284,6 +282,7 @@ export async function launchAgentBackgroundSession(
         .then((result) => handleExit(ptyId, result.wait.exitCode ?? 0))
         .catch(() => {})
     } else {
+      eagerPtyBuffer?.stopObservingData?.()
       unsubscribeData = subscribeToPtyData(ptyId, handleData)
       // Why: opening the workspace attaches a real terminal transport and disposes
       // the eager exit handler. This sidecar keeps automation completion tracking
