@@ -41,7 +41,13 @@ export function beginHugeRepoWarningProbe(
 ): HugeRepoWarningProbe {
   const instanceId = worktree.instanceId ?? ''
   let state = hugeRepoWarningStateByWorktreeId.get(worktree.id)
-  if (!state || state.instanceId !== instanceId) {
+  if (state && state.instanceId === '' && instanceId !== '') {
+    // Why: a freshly-discovered external worktree has no persisted instanceId
+    // yet; a later authoritative scan backfills it for the same logical
+    // worktree. Carry the dismissal forward instead of treating the hydration
+    // as a recreation and re-toasting the once-per-worktree warning.
+    state.instanceId = instanceId
+  } else if (!state || state.instanceId !== instanceId) {
     state = { instanceId, lifecycleToken: Symbol(worktree.id), dismissed: false }
   }
   refreshHugeRepoWarningState(worktree.id, state)

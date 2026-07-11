@@ -44,6 +44,20 @@ describe('source-control huge repo warning dismissals', () => {
     expect(hasDismissedHugeRepoWarning(probe(`worktree-${churnCount - 1}`))).toBe(true)
   })
 
+  it('keeps a dismissal when a discovered worktree backfills its instanceId', () => {
+    // A freshly-discovered external worktree has no persisted instanceId yet.
+    const discoveredProbe = beginHugeRepoWarningProbe({ id: 'repo::/discovered' })
+    expect(markHugeRepoWarningDismissed(discoveredProbe)).toBe(true)
+
+    // A later authoritative scan backfills the real instanceId for the same
+    // logical worktree; the once-per-worktree dismissal must survive.
+    const hydratedProbe = beginHugeRepoWarningProbe({
+      id: 'repo::/discovered',
+      instanceId: 'backfilled-instance'
+    })
+    expect(hasDismissedHugeRepoWarning(hydratedProbe)).toBe(true)
+  })
+
   it('does not count duplicate dismissals as new worktree entries', () => {
     const repeatedProbe = probe('worktree-a')
     expect(markHugeRepoWarningDismissed(repeatedProbe)).toBe(true)
