@@ -26344,6 +26344,7 @@ describe('OrcaRuntimeService', () => {
       })
       expect(gitSpy).toHaveBeenCalledWith(['symbolic-ref', '--quiet', 'refs/remotes/origin/HEAD'], {
         cwd: TEST_REPO_PATH,
+        timeout: 15_000,
         wslDistro: 'Ubuntu'
       })
       expect(gitSpy).toHaveBeenCalledWith(
@@ -27011,6 +27012,7 @@ describe('OrcaRuntimeService', () => {
       })
       expect(gitSpy).toHaveBeenCalledWith(['symbolic-ref', '--quiet', 'refs/remotes/origin/HEAD'], {
         cwd: TEST_REPO_PATH,
+        timeout: 15_000,
         wslDistro: 'Ubuntu'
       })
       expect(getBranchConflictKind).toHaveBeenCalledWith(

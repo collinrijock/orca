@@ -609,6 +609,7 @@ import {
   parseAndFilterSearchRefDetails,
   parseRemoteCount,
   resolveDefaultBaseRefViaExec,
+  resolveDefaultBaseRefWithLocalGit,
   buildSearchBaseRefsArgv,
   isForEachRefExcludeUnsupportedError,
   mergeBaseRefSearchResultGroups,
@@ -14247,7 +14248,7 @@ export class OrcaRuntimeService {
       repoWorktreeBaseRef: repo.worktreeBaseRef,
       resolveDefaultBaseRef: () =>
         hasLocalWorktreeGitOptions
-          ? resolveDefaultBaseRefViaExec((argv) => gitExecFileAsync(argv, localGitExecOptions))
+          ? resolveDefaultBaseRefWithLocalGit(localGitExecOptions)
           : getBaseRefDefault(repo.path),
       isBaseUsable: async (baseBranchCandidate) => {
         const remoteTrackingBase = await this.resolveRemoteTrackingBase(

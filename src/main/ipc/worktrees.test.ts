@@ -29,6 +29,7 @@ const {
   forceDeleteLocalBranchMock,
   resolveLocalGitUsernameMock,
   getBaseRefDefaultMock,
+  resolveDefaultBaseRefWithLocalGitMock,
   resolveDefaultBaseRefViaExecMock,
   getDefaultRemoteMock,
   getBranchConflictKindMock,
@@ -78,6 +79,7 @@ const {
   forceDeleteLocalBranchMock: vi.fn(),
   resolveLocalGitUsernameMock: vi.fn(),
   getBaseRefDefaultMock: vi.fn(),
+  resolveDefaultBaseRefWithLocalGitMock: vi.fn(),
   resolveDefaultBaseRefViaExecMock: vi.fn(),
   getDefaultRemoteMock: vi.fn(),
   getBranchConflictKindMock: vi.fn(),
@@ -131,6 +133,7 @@ vi.mock('../git/runner', () => ({
 
 vi.mock('../git/repo', () => ({
   getBaseRefDefault: getBaseRefDefaultMock,
+  resolveDefaultBaseRefWithLocalGit: resolveDefaultBaseRefWithLocalGitMock,
   resolveDefaultBaseRefViaExec: resolveDefaultBaseRefViaExecMock,
   getDefaultRemote: getDefaultRemoteMock,
   getBranchConflictKind: getBranchConflictKindMock
@@ -300,6 +303,7 @@ describe('registerWorktreeHandlers', () => {
       forceDeleteLocalBranchMock,
       resolveLocalGitUsernameMock,
       getBaseRefDefaultMock,
+      resolveDefaultBaseRefWithLocalGitMock,
       resolveDefaultBaseRefViaExecMock,
       getDefaultRemoteMock,
       getBranchConflictKindMock,
@@ -401,6 +405,7 @@ describe('registerWorktreeHandlers', () => {
     store.getAllWorktreeLineage.mockReturnValue({})
     resolveLocalGitUsernameMock.mockResolvedValue('')
     getBaseRefDefaultMock.mockResolvedValue('origin/main')
+    resolveDefaultBaseRefWithLocalGitMock.mockResolvedValue('origin/main')
     resolveDefaultBaseRefViaExecMock.mockResolvedValue('origin/main')
     getDefaultRemoteMock.mockResolvedValue('origin')
     getBranchConflictKindMock.mockResolvedValue(null)
@@ -2023,12 +2028,6 @@ describe('registerWorktreeHandlers', () => {
 
   it('routes local worktree creation through the selected WSL project runtime', async () => {
     mockSelectedWslProjectRuntime()
-    resolveDefaultBaseRefViaExecMock.mockImplementation(
-      async (exec: (args: string[]) => Promise<{ stdout: string }>) => {
-        await exec(['symbolic-ref', '--quiet', 'refs/remotes/origin/HEAD'])
-        return 'origin/main'
-      }
-    )
     listWorktreesMock.mockResolvedValue([
       {
         path: '/workspace/repo',
@@ -2060,10 +2059,10 @@ describe('registerWorktreeHandlers', () => {
       false,
       { wslDistro: 'Ubuntu' }
     )
-    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
-      ['symbolic-ref', '--quiet', 'refs/remotes/origin/HEAD'],
-      { cwd: '/workspace/repo', wslDistro: 'Ubuntu' }
-    )
+    expect(resolveDefaultBaseRefWithLocalGitMock).toHaveBeenCalledWith({
+      cwd: '/workspace/repo',
+      wslDistro: 'Ubuntu'
+    })
     expect(getBranchConflictKindMock).toHaveBeenCalledWith(
       '/workspace/repo',
       'improve-dashboard',
@@ -4940,7 +4939,7 @@ describe('registerWorktreeHandlers', () => {
     // no origin/main, no origin/master, and no local main/master), we must
     // fail loudly with a message that prompts the user to pick a base
     // branch, not hand a non-existent ref to `git worktree add`.
-    resolveDefaultBaseRefViaExecMock.mockResolvedValue(null)
+    resolveDefaultBaseRefWithLocalGitMock.mockResolvedValue(null)
     store.getRepo.mockReturnValue({
       id: 'repo-1',
       path: '/workspace/repo',
