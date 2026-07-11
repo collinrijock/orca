@@ -514,6 +514,22 @@ describe('importCookiesFromBrowser Chromium', () => {
       platformSpy.mockRestore()
     }
   })
+
+  it('removes partial staging data when the target database copy fails', async () => {
+    const sourceCookiesPath = join(tmpDir, 'Chrome', 'Default', 'Network', 'Cookies')
+    const targetCookiesPath = join(tmpDir, 'userData', 'Partitions', 'test', 'Network', 'Cookies')
+    createChromiumCookieTestDatabase(sourceCookiesPath, []).close()
+    createChromiumCookieTestDatabase(targetCookiesPath, []).close()
+    copyFileSyncMock.mockImplementationOnce((_source: string, destination: string) => {
+      writeFileSync(destination, 'partial cookie database')
+      throw new Error('simulated copy failure')
+    })
+
+    const result = await importCookiesFromBrowser(chromeBrowser(sourceCookiesPath), 'persist:test')
+
+    expect(result).toEqual({ ok: false, reason: 'Could not create staging cookie database.' })
+    expect(readdirSync(join(tmpDir, 'userData', 'cookie-import-staging'))).toEqual([])
+  })
 })
 
 describe('detectInstalledBrowsers', () => {

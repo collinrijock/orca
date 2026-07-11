@@ -1508,6 +1508,13 @@ export async function importCookiesFromBrowser(
     mkdirSync(stagingDir, { recursive: true })
     copyFileSync(liveCookiesPath, stagingCookiesPath)
   } catch {
+    // Why: copyFile is not atomic and can leave a partial database after an
+    // I/O failure, so failed imports must not retain sensitive cookie data.
+    try {
+      unlinkSync(stagingCookiesPath)
+    } catch {
+      /* best-effort */
+    }
     return { ok: false, reason: 'Could not create staging cookie database.' }
   }
 
