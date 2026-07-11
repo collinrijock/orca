@@ -3,11 +3,7 @@
    make the hook coordination harder to audit. */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { OpenFile } from '@/store/slices/editor'
-import {
-  getConnectionId,
-  getConnectionIdForFile,
-  isWorktreeConnectionResolved
-} from '@/lib/connection-context'
+import { getConnectionIdForFile, isWorktreeConnectionResolved } from '@/lib/connection-context'
 import { joinPath } from '@/lib/path'
 import { useAppStore } from '@/store'
 import { getDiskBaselineSignature } from './diff-content-signature'
@@ -45,7 +41,7 @@ type UseEditorPanelContentStateParams = {
   activeFile: OpenFile | null
   isChangesMode: boolean
   openFiles: OpenFile[]
-  gitStatusByWorktree: GitStatusByWorktree
+  gitStatusEntries: GitStatusByWorktree[string] | undefined
   editorViewMode: EditorViewModeByFile
 }
 
@@ -98,7 +94,7 @@ export function useEditorPanelContentState({
   activeFile,
   isChangesMode,
   openFiles,
-  gitStatusByWorktree,
+  gitStatusEntries,
   editorViewMode
 }: UseEditorPanelContentStateParams): UseEditorPanelContentStateResult {
   const [fileContents, setFileContents] = useState<Record<string, FileContent>>({})
@@ -224,7 +220,7 @@ export function useEditorPanelContentState({
             ? file.branchCompare
             : null
         const commitCompare = file.commitCompare?.commitOid ? file.commitCompare : null
-        const connectionId = getConnectionId(file.worktreeId) ?? undefined
+        const connectionId = getConnectionIdForFile(file.worktreeId, file.filePath) ?? undefined
         const activeSettings = useAppStore.getState().settings
         const fileSettings = settingsForRuntimeOwner(activeSettings, file.runtimeEnvironmentId)
         const gitScope = getRuntimeGitScope(fileSettings, connectionId)
@@ -366,7 +362,7 @@ export function useEditorPanelContentState({
       }
 
       const snapshotPaths = new Set(snapshotEntries.map((entry) => entry.path))
-      const liveEntries = gitStatusByWorktree[activeFile.worktreeId] ?? []
+      const liveEntries = gitStatusEntries ?? []
       for (const entry of liveEntries) {
         if (
           !snapshotPaths.has(entry.path) ||
@@ -415,7 +411,7 @@ export function useEditorPanelContentState({
     activeFile?.conflictReview?.snapshotTimestamp,
     selectedConflictReviewFile?.id,
     isChangesMode,
-    gitStatusByWorktree
+    gitStatusEntries
   ])
 
   useEditorPanelFileLoadRetry({
@@ -427,9 +423,7 @@ export function useEditorPanelContentState({
     setFileContents
   })
 
-  const changesStatusEntries = activeFile?.worktreeId
-    ? gitStatusByWorktree[activeFile.worktreeId]
-    : undefined
+  const changesStatusEntries = activeFile?.worktreeId ? gitStatusEntries : undefined
   const activeFileGitStatusEntries = useMemo(() => {
     if (!activeFile?.relativePath || !changesStatusEntries) {
       return undefined

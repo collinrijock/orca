@@ -203,6 +203,7 @@ import {
   normalizeTuiAgentEnvRecord
 } from '../shared/tui-agent-launch-defaults'
 import { normalizeTerminalCursorStyleDefault } from '../shared/terminal-cursor-style-settings'
+import { normalizeTerminalLineHeight } from '../shared/terminal-line-height-settings'
 import { normalizeUiLanguage } from '../shared/ui-language'
 import { normalizeBrowserPageZoomLevel } from '../shared/browser-page-zoom'
 import { persistedUIValuesEqual } from '../shared/persisted-ui-equality'
@@ -1348,10 +1349,6 @@ function resolveSetupGuideSidebarDismissedOnLoad(
   // Why: the sidebar checklist is a new-user prompt. Once onboarding is
   // closed, persisted false is just the old default value, not a user opt-in.
   return onboarding.closedAt !== null || persistedDismissed === true
-}
-
-function shouldDefaultNewWorktreeCardStyleOn(onboarding: OnboardingState): boolean {
-  return onboarding.closedAt === null
 }
 
 // Why: read a settings field that was removed from GlobalSettings but can
@@ -2991,6 +2988,15 @@ export class Store {
           parsed.settings
         )
         const migratedTerminalCursorStyle = normalizeTerminalCursorStyleDefault(parsed.settings)
+        const migratedTerminalLineHeight = normalizeTerminalLineHeight(
+          parsed.settings?.terminalLineHeight
+        )
+        if (
+          parsed.settings?.terminalLineHeight !== undefined &&
+          parsed.settings.terminalLineHeight !== migratedTerminalLineHeight
+        ) {
+          this.loadNeedsSave = true
+        }
         const rawTaskProviderSettings = normalizeTaskProviderSettings({
           visibleTaskProviders: parsed.settings?.visibleTaskProviders,
           defaultTaskSource: parsed.settings?.defaultTaskSource
@@ -3067,16 +3073,6 @@ export class Store {
         if (!parsed.onboarding) {
           this.loadNeedsSave = true
         }
-        const defaultNewWorktreeCardStyle =
-          shouldDefaultNewWorktreeCardStyleOn(normalizedOnboarding)
-        const migratedExperimentalNewWorktreeCardStyle =
-          parsed.settings?.experimentalNewWorktreeCardStyle ?? defaultNewWorktreeCardStyle
-        if (
-          parsed.settings?.experimentalNewWorktreeCardStyle === undefined &&
-          defaultNewWorktreeCardStyle
-        ) {
-          this.loadNeedsSave = true
-        }
         const normalizedProjectGroups = normalizeProjectGroups(parsed.projectGroups)
         const loadedCompactWorktreeCards =
           parsed.settings?.compactWorktreeCards ??
@@ -3108,6 +3104,12 @@ export class Store {
           ),
           settings: {
             ...defaults.settings,
+            // Why (#7977): a persisted experimentalNewWorktreeCardStyle:true is
+            // kept even though the default is now false. The v1.4.130 open-
+            // onboarding auto-default wrote the same plain boolean as a real
+            // opt-in, so a rollback migration would also revert genuine opt-ins;
+            // product intent was only to change the default, and the setting
+            // stays user-toggleable.
             ...stripLegacyTerminalScrollbackBytes(parsed.settings),
             // Why: v1.3.42 renamed the cosmetic sidekick setting to pet. Carry
             // the old persisted flag forward once so enabled users don't lose it.
@@ -3127,12 +3129,10 @@ export class Store {
               primarySelectionDefaultedForTerminalDefaults || stampPrimarySelectionTerminalDefaults,
             ...migratedAutoRenameBranchFromWork,
             ...migratedTerminalCursorStyle,
+            terminalLineHeight: migratedTerminalLineHeight,
             ...migratedTerminalTuiScrollSensitivity.settings,
             experimentalActivity: migratedExperimentalActivity,
             experimentalActivityDefaultedOffForAllUsers: true,
-            // Why: open first-run onboarding is the local fresh-install signal;
-            // closed/backfilled onboarding identifies existing profiles.
-            experimentalNewWorktreeCardStyle: migratedExperimentalNewWorktreeCardStyle,
             // Why: compact worktree cards graduated from Experimental; preserve
             // the old opt-in for profiles written during the rollout.
             compactWorktreeCards: loadedCompactWorktreeCards,
@@ -3417,18 +3417,7 @@ export class Store {
     }
 
     if (result === null) {
-      const defaults = getDefaultPersistedState(homedir())
-      const isFreshDefaultProfile =
-        !fileExistedOnLoad && shouldDefaultNewWorktreeCardStyleOn(defaults.onboarding)
-      result = {
-        ...defaults,
-        settings: {
-          ...defaults.settings,
-          // Why: a corrupt existing data file also falls back to defaults; only
-          // the absent-file path is a true fresh install.
-          experimentalNewWorktreeCardStyle: isFreshDefaultProfile
-        }
-      }
+      result = getDefaultPersistedState(homedir())
     }
 
     const workspaceSession = pruneWorkspaceSessionBrowserHistory(
