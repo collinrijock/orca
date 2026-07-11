@@ -14,6 +14,7 @@ type GitCapabilityProbeOutcome = 'supported' | 'unsupported' | 'unknown'
 export class GitCapabilityCache {
   private readonly retryAfterByCapability = new Map<GitCapability, number>()
   private readonly probesByCapability = new Map<GitCapability, Promise<GitCapabilityProbeOutcome>>()
+  private readonly supportedCapabilities = new Set<GitCapability>()
 
   shouldTry(capability: GitCapability, nowMs = Date.now()): boolean {
     const retryAfterMs = this.retryAfterByCapability.get(capability)
@@ -30,6 +31,7 @@ export class GitCapabilityCache {
   rememberUnsupported(capability: GitCapability, nowMs = Date.now()): void {
     // Why: optimistic probes preserve newer Git behavior, but repeating a
     // known failure on every poll/search wastes subprocesses and trace space.
+    this.supportedCapabilities.delete(capability)
     this.retryAfterByCapability.set(capability, nowMs + GIT_CAPABILITY_RETRY_INTERVAL_MS)
   }
 
@@ -39,6 +41,11 @@ export class GitCapabilityCache {
     runFallback: () => Promise<T>,
     isUnsupportedError: (error: unknown) => boolean
   ): Promise<T> {
+    if (this.supportedCapabilities.has(capability)) {
+      // Why: supported commands are real work, not disposable probes. Let
+      // sibling repo/SSH calls retain their intended concurrency.
+      return this.runPreferredOrFallback(capability, runPreferred, runFallback, isUnsupportedError)
+    }
     if (!this.shouldTry(capability)) {
       return runFallback()
     }
@@ -75,6 +82,7 @@ export class GitCapabilityCache {
   clear(): void {
     this.retryAfterByCapability.clear()
     this.probesByCapability.clear()
+    this.supportedCapabilities.clear()
   }
 
   private async runPreferredOrFallback<T>(
@@ -86,7 +94,13 @@ export class GitCapabilityCache {
   ): Promise<T> {
     try {
       const result = await runPreferred()
-      settleProbe?.('supported')
+      // A preferred callback can detect old Git's exit-zero option echo and
+      // remember it as unsupported, so do not overwrite that stronger signal.
+      const outcome = this.retryAfterByCapability.has(capability) ? 'unsupported' : 'supported'
+      if (outcome === 'supported') {
+        this.supportedCapabilities.add(capability)
+      }
+      settleProbe?.(outcome)
       return result
     } catch (error) {
       if (!isUnsupportedError(error)) {

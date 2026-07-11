@@ -562,7 +562,9 @@ describe('removeWorktree cascade', () => {
       seedStore(store, {
         settings: { ...getDefaultSettings('/tmp'), activeRuntimeEnvironmentId: 'env-1' },
         worktreesByRepo: {
-          repo1: [makeWorktree({ id: worktreeId, repoId: 'repo1' })]
+          // Why: this scenario exercises the remote transport path, so bind the
+          // workspace owner explicitly instead of relying on the focused host.
+          repo1: [makeWorktree({ id: worktreeId, repoId: 'repo1', hostId: 'runtime:env-1' })]
         },
         tabsByWorktree: {},
         ptyIdsByTabId: {},
