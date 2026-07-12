@@ -316,13 +316,18 @@ export class SshFilesystemProvider implements IFilesystemProvider {
     })) as string[]
   }
 
-  async watch(rootPath: string, callback: (events: FsChangeEvent[]) => void): Promise<() => void> {
+  async watch(
+    rootPath: string,
+    callback: (events: FsChangeEvent[]) => void,
+    options?: { signal?: AbortSignal }
+  ): Promise<() => void> {
     return registerSshFilesystemWatch({
       mux: this.mux,
       disposed: () => this.disposed,
       registrations: this.watchListeners,
       rootPath,
-      callback
+      callback,
+      signal: options?.signal
     })
   }
 }

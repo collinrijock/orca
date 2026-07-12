@@ -542,6 +542,50 @@ describe('SshFilesystemProvider', () => {
       expect(typeof unsub).toBe('function')
     })
 
+    it('forwards the cancellation signal to the mux fs.watch request', async () => {
+      mux.request.mockResolvedValue(undefined)
+      const controller = new AbortController()
+      const callback = vi.fn()
+
+      await provider.watch('/home/user/project', callback, { signal: controller.signal })
+
+      expect(mux.request).toHaveBeenCalledWith(
+        'fs.watch',
+        { rootPath: '/home/user/project' },
+        { signal: controller.signal }
+      )
+    })
+
+    it('rejects promptly when the watch signal aborts during setup', async () => {
+      let resolveWatch: () => void = () => {}
+      mux.request.mockImplementationOnce(
+        (_method, _params, options?: { signal?: AbortSignal }) =>
+          new Promise<void>((resolve, reject) => {
+            resolveWatch = resolve
+            options?.signal?.addEventListener(
+              'abort',
+              () => {
+                const error = new Error('Request "fs.watch" was cancelled') as Error & {
+                  name: string
+                }
+                error.name = 'AbortError'
+                reject(error)
+              },
+              { once: true }
+            )
+          })
+      )
+      const controller = new AbortController()
+      const pendingWatch = provider.watch('/home/user/project', vi.fn(), {
+        signal: controller.signal
+      })
+
+      controller.abort()
+
+      await expect(pendingWatch).rejects.toMatchObject({ name: 'AbortError' })
+      resolveWatch()
+    })
+
     it('forwards fs.changed notifications to watch callback', async () => {
       const callback = vi.fn()
       await provider.watch('/home/user/project', callback)

@@ -4,14 +4,19 @@ import type * as FsPromises from 'node:fs/promises'
 import type * as FilesystemAuth from '../ipc/filesystem-auth'
 import type { FsChangeEvent } from '../../shared/types'
 
-const { resolveAuthorizedPathMock, statMock, watchMock, watchInWatcherProcessMock } = vi.hoisted(
-  () => ({
-    resolveAuthorizedPathMock: vi.fn(),
-    statMock: vi.fn(),
-    watchMock: vi.fn(),
-    watchInWatcherProcessMock: vi.fn()
-  })
-)
+const {
+  resolveAuthorizedPathMock,
+  statMock,
+  watchMock,
+  watchInWatcherProcessMock,
+  getSshFilesystemProviderMock
+} = vi.hoisted(() => ({
+  resolveAuthorizedPathMock: vi.fn(),
+  statMock: vi.fn(),
+  watchMock: vi.fn(),
+  watchInWatcherProcessMock: vi.fn(),
+  getSshFilesystemProviderMock: vi.fn()
+}))
 
 vi.mock('fs', async () => {
   const actual = await vi.importActual<typeof Fs>('fs')
@@ -41,6 +46,10 @@ vi.mock('../ipc/filesystem-auth', async () => {
     resolveAuthorizedPath: resolveAuthorizedPathMock
   }
 })
+
+vi.mock('../providers/ssh-filesystem-dispatch', () => ({
+  getSshFilesystemProvider: getSshFilesystemProviderMock
+}))
 
 import { awaitRuntimeFileWatcherUnsubscribes, RuntimeFileCommands } from './orca-runtime-files'
 
@@ -78,6 +87,7 @@ describe('RuntimeFileCommands file watching', () => {
     statMock.mockReset()
     watchMock.mockReset()
     watchInWatcherProcessMock.mockReset()
+    getSshFilesystemProviderMock.mockReset()
     Object.defineProperty(process, 'platform', {
       configurable: true,
       value: originalPlatform
@@ -215,5 +225,38 @@ describe('RuntimeFileCommands file watching', () => {
     resolveDispose()
     await drainPromise
     expect(drained).toBe(true)
+  })
+
+  it('forwards the abort signal into SSH-backed file explorer watches', async () => {
+    const watch = vi.fn(async () => () => {})
+    getSshFilesystemProviderMock.mockReturnValue({ watch })
+    const store = { getRepo: vi.fn(() => ({ connectionId: 'ssh-1' })) }
+    const commands = new RuntimeFileCommands({
+      getRuntimeId: () => 'runtime-1',
+      requireStore: () => store,
+      resolveWorktreeSelector: vi.fn(async () => ({
+        id: 'wt-1',
+        repoId: 'repo-1',
+        path: '/remote/repo'
+      })),
+      resolveRuntimeFileTarget: vi.fn(async () => ({
+        worktree: {
+          id: 'wt-1',
+          repoId: 'repo-1',
+          path: '/remote/repo'
+        },
+        connectionId: 'ssh-1'
+      })),
+      resolveRuntimeGitTarget: vi.fn(),
+      openFile: vi.fn()
+    } as never)
+    const controller = new AbortController()
+
+    await commands.watchFileExplorer('id:wt-1', vi.fn(), vi.fn(), controller.signal)
+
+    expect(watch).toHaveBeenCalledWith('/remote/repo', expect.any(Function), {
+      signal: controller.signal
+    })
+    expect(watchInWatcherProcessMock).not.toHaveBeenCalled()
   })
 })

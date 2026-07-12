@@ -931,7 +931,9 @@ export class RuntimeFileCommands {
       if (!provider) {
         throw new Error(SSH_FILESYSTEM_PROVIDER_UNAVAILABLE_MESSAGE)
       }
-      return provider.watch(target.path, callback)
+      // Why: the RPC layer already threads AbortSignal for local watches; SSH
+      // must cancel the remote fs.watch request instead of waiting it out.
+      return provider.watch(target.path, callback, { signal })
     }
 
     const rootPath = await resolveAuthorizedPath(target.path, this.host.requireStore())

@@ -70,6 +70,8 @@ export function subscribeThroughWatcherSupervisor({
       )
     )
   }
+  // Why: under Vitest we cannot fork a real watcher child, so exercise the
+  // subscription path in-process (against mocked @parcel/watcher) instead.
   if (process.env.VITEST) {
     return subscribeWithInProcessWatcher(dir, callback, opts, hooks)
   }

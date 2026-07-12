@@ -216,6 +216,35 @@ describe('RuntimeWatcherProcessPool', () => {
     expect(supervisors).toHaveLength(2)
   })
 
+  it('clears fused quarantine history when forgetRoot runs without an assignment', async () => {
+    pool = new RuntimeWatcherProcessPool({
+      maxSharedSupervisors: 1,
+      createSupervisor: () => {
+        const supervisor = new FakeSupervisor()
+        supervisors.push(supervisor)
+        return supervisor
+      }
+    })
+    const failure = new WatcherProcessFailure(
+      'file watcher process crashed repeatedly',
+      'supervisor',
+      'supervisor_crash_fuse'
+    )
+    await pool.subscribe('/unstable', vi.fn(), {}, {})
+    supervisors[0].subscriptions[0].hooks.onTerminalError?.(failure)
+    await pool.subscribe('/unstable', vi.fn(), {}, {})
+    supervisors[1].subscriptions[0].hooks.onTerminalError?.(failure)
+
+    await expect(pool.subscribe('/unstable', vi.fn(), {}, {})).rejects.toThrow(
+      'failed again in quarantine'
+    )
+
+    pool.forgetRoot('/unstable')
+
+    await expect(pool.subscribe('/unstable', vi.fn(), {}, {})).resolves.toBeDefined()
+    expect(supervisors).toHaveLength(3)
+  })
+
   it('disposes every supervisor and clears isolation on reset', async () => {
     await pool.subscribe('/a', vi.fn(), {}, {})
     await pool.subscribe('/b', vi.fn(), {}, {})

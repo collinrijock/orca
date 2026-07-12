@@ -147,11 +147,24 @@ function markOverflowWithoutUncStat(root: WatchedRoot): void {
   root.batch.overflowed = true
 }
 
+function createWslWatcherAbortError(): Error {
+  const error = new Error('WSL watcher subscription aborted') as Error & { name: string }
+  error.name = 'AbortError'
+  return error
+}
+
 export async function createWslWatcher(
   rootKey: string,
   worktreePath: string,
-  deps: WslWatcherDeps
+  deps: WslWatcherDeps,
+  signal?: AbortSignal
 ): Promise<WatchedRoot> {
+  // Why: cancelled local installs pass the same abort controller used for
+  // native Parcel subscribe; honor it before spawning a WSL snapshot process.
+  if (signal?.aborted) {
+    throw createWslWatcherAbortError()
+  }
+
   const wsl = parseWslUncPath(worktreePath)
   if (!wsl) {
     throw new Error(`Not a WSL path: ${worktreePath}`)
@@ -257,6 +270,12 @@ export async function createWslWatcher(
     throw error instanceof Error ? error : new Error(String(error))
   }
 
+  const onAbort = (): void => {
+    settleInitial(createWslWatcherAbortError())
+    child.kill()
+  }
+  signal?.addEventListener('abort', onAbort, { once: true })
+
   const startupTimer = setTimeout(() => {
     settleInitial(new Error(`Timed out starting WSL watcher for ${worktreePath}`))
     child.kill()
@@ -321,7 +340,12 @@ export async function createWslWatcher(
 
   child.stdin.end(buildSnapshotScript(deps.ignoreDirs))
 
-  await initialSnapshotReady.finally(() => clearTimeout(startupTimer))
+  try {
+    await initialSnapshotReady
+  } finally {
+    clearTimeout(startupTimer)
+    signal?.removeEventListener('abort', onAbort)
+  }
 
   root.subscription = {
     unsubscribe: async () => {

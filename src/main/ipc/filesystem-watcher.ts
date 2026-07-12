@@ -97,6 +97,9 @@ function cleanupInFlightLocalInstallsForSender(senderId: number): void {
     token.listeners.delete(senderId)
     if (token.listeners.size === 0) {
       token.cancelled = true
+      // Why: match closeLocalWatcherForWorktreePath / closeAllWatchers — abort
+      // so a pending native/forked subscription stops early, not at completion.
+      token.abortController.abort()
     }
   }
 }
@@ -519,11 +522,16 @@ async function doInstallLocalWatcher(
     // Why: WSL paths use one snapshot subprocess inside the Linux distro so
     // `wsl --shutdown` can kill it; native Windows paths use @parcel/watcher.
     root = isWslPath(worktreePath)
-      ? await createWslWatcher(rootKey, worktreePath, {
-          ignoreDirs: WATCHER_IGNORE_DIRS,
-          scheduleBatchFlush,
-          watchedRoots
-        })
+      ? await createWslWatcher(
+          rootKey,
+          worktreePath,
+          {
+            ignoreDirs: WATCHER_IGNORE_DIRS,
+            scheduleBatchFlush,
+            watchedRoots
+          },
+          cancelToken.abortController.signal
+        )
       : await createWatcher(rootKey, rootKey, cancelToken.abortController.signal)
   } catch {
     // Why: createWatcher / createWslWatcher already logged the error. Swallow
@@ -564,6 +572,11 @@ function unsubscribe(worktreePath: string, senderId: number): void {
   if (inFlight) {
     inFlight.listeners.delete(senderId)
     inFlight.cancelled = inFlight.listeners.size === 0
+    // Why: same early-cancel as closeLocalWatcherForWorktreePath — last normal
+    // disconnect must abort the pending native/forked install, not let it finish.
+    if (inFlight.cancelled) {
+      inFlight.abortController.abort()
+    }
   }
 
   const root = watchedRoots.get(rootKey)
