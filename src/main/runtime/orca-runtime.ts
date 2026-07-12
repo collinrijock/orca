@@ -20251,13 +20251,6 @@ export class OrcaRuntimeService {
     missingRuntimeWorktreeIds: Set<string>,
     runtimeWorktreeId: string
   ): RuntimeWorktreePsSummary | null {
-    if (runtimeWorktreeId.includes('repeated-miss')) {
-      console.error(
-        'repeat-debug',
-        missingRuntimeWorktreeIds.size,
-        missingRuntimeWorktreeIds.has(runtimeWorktreeId)
-      )
-    }
     const exact = summaries.get(runtimeWorktreeId)
     if (exact) {
       return exact
