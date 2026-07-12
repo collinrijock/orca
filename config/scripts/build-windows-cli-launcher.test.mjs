@@ -33,7 +33,7 @@ describe('Windows CLI launcher', () => {
         ['config/scripts/build-windows-cli-launcher.mjs', '--output', launcherPath],
         { cwd: projectRoot, encoding: 'utf8' }
       )
-      expect(build.status, build.stderr).toBe(0)
+      expect(build.status, `${build.stdout}\n${build.stderr}`).toBe(0)
 
       const body = 'paragraph one line one\nparagraph one line two\n\nparagraph two'
       const powershell = spawnSync(

@@ -20,15 +20,7 @@ if (!compilerPath) {
 mkdirSync(dirname(outputPath), { recursive: true })
 const result = spawnSync(
   compilerPath,
-  [
-    '/nologo',
-    '/target:exe',
-    '/optimize+',
-    '/deterministic+',
-    '/warnaserror+',
-    `/out:${outputPath}`,
-    sourcePath
-  ],
+  ['/nologo', '/target:exe', '/optimize+', '/warnaserror+', `/out:${outputPath}`, sourcePath],
   { cwd: repoRoot, stdio: 'inherit' }
 )
 
