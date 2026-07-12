@@ -737,15 +737,16 @@ export class PtyHandler {
             process.stderr.write(
               `[pty-handler] stale-spawn fallback kill failed: ${error instanceof Error ? error.message : String(error)}\n`
             )
-          } finally {
-            // Why: stale-spawn cleanup has no client who will ever attach. Even
-            // a repeated native throw must release ownership without escaping
-            // the timer into relay.ts uncaughtException process termination.
-            this.notifyExitListener(still)
-            disposeManagedPty(still)
-            this.ptys.delete(id)
-            this.clearPtyFlowState(id)
+            // Why: a thrown native kill is not proof of close. Retain the only
+            // managed handle so relay disposal can retry instead of orphaning
+            // an untracked PTY/ConPTY process.
+            still.killTimer = undefined
+            return
           }
+          this.notifyExitListener(still)
+          disposeManagedPty(still)
+          this.ptys.delete(id)
+          this.clearPtyFlowState(id)
         }
       }, 5000)
       // Why: arm fallback ownership before native shutdown. node-pty can throw
@@ -862,6 +863,16 @@ export class PtyHandler {
     const managed = this.ptys.get(id)
     if (!managed) {
       return
+    }
+    const mismatch = attachIdentityMismatches(
+      {
+        paneKey: typeof params.expectedPaneKey === 'string' ? params.expectedPaneKey : undefined,
+        tabId: typeof params.expectedTabId === 'string' ? params.expectedTabId : undefined
+      },
+      managed.attachIdentity ?? { paneKey: managed.paneKey, tabId: managed.tabId }
+    )
+    if (mismatch) {
+      throw new Error(`PTY "${id}" not found (identity mismatch)`)
     }
 
     if (immediate) {

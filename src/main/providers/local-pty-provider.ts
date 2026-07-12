@@ -21,7 +21,13 @@ import {
   updateHistFileForFallback,
   logHistoryInjection
 } from '../terminal-history'
-import type { IPtyProvider, PtyProcessInfo, PtySpawnOptions, PtySpawnResult } from './types'
+import type {
+  IPtyProvider,
+  PtyProcessInfo,
+  PtyShutdownOptions,
+  PtySpawnOptions,
+  PtySpawnResult
+} from './types'
 import {
   ensureNodePtySpawnHelperExecutable,
   validateWorkingDirectory,
@@ -882,7 +888,7 @@ export class LocalPtyProvider implements IPtyProvider {
     return { cols: proc.cols, rows: proc.rows }
   }
 
-  async shutdown(id: string, _opts: { immediate?: boolean; keepHistory?: boolean }): Promise<void> {
+  async shutdown(id: string, _opts: PtyShutdownOptions): Promise<void> {
     const proc = ptyProcesses.get(id)
     if (!proc) {
       return

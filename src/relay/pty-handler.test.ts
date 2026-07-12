@@ -712,10 +712,15 @@ describe('PtyHandler', () => {
     expect(handler.activePtyCount).toBe(0)
   })
 
-  it('contains repeated stale-spawn native kill throws and still releases ownership', async () => {
-    const killSpy = vi.fn(() => {
-      throw new Error('native ConPTY kill failed')
-    })
+  it('contains repeated stale-spawn throws and retains ownership until a proven retry', async () => {
+    const killSpy = vi
+      .fn()
+      .mockImplementationOnce(() => {
+        throw new Error('native ConPTY kill failed')
+      })
+      .mockImplementationOnce(() => {
+        throw new Error('native ConPTY kill failed')
+      })
     const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
     const term = { ...mockPtyInstance, kill: killSpy, onData: vi.fn(), onExit: vi.fn() }
     mockPtySpawn.mockReturnValue(term)
@@ -726,10 +731,13 @@ describe('PtyHandler', () => {
       ).rejects.toThrow('native ConPTY kill failed')
       expect(() => vi.advanceTimersByTime(5000)).not.toThrow()
       expect(killSpy).toHaveBeenCalledTimes(2)
-      expect(handler.activePtyCount).toBe(0)
+      expect(handler.activePtyCount).toBe(1)
       expect(stderr).toHaveBeenCalledWith(
         expect.stringContaining('stale-spawn fallback kill failed')
       )
+      await dispatcher.callRequest('pty.shutdown', { id: 'pty-1', immediate: true })
+      expect(killSpy).toHaveBeenNthCalledWith(3, 'SIGKILL')
+      expect(handler.activePtyCount).toBe(0)
     } finally {
       stderr.mockRestore()
     }
@@ -1914,6 +1922,39 @@ describe('PtyHandler', () => {
 
     expect(mockKill).toHaveBeenCalledWith('SIGKILL')
     expect(exits).toEqual([{ id: 'pty-1', paneKey: 'tab-shutdown:0' }])
+    expect(handler.activePtyCount).toBe(0)
+  })
+
+  it('rejects shutdown when a recycled id belongs to another pane generation', async () => {
+    const mockKill = vi.fn()
+    mockPtySpawn.mockReturnValue({
+      ...mockPtyInstance,
+      kill: mockKill,
+      onData: vi.fn(),
+      onExit: vi.fn()
+    })
+    await dispatcher.callRequest('pty.spawn', {
+      paneKey: 'tab-new:leaf-new',
+      tabId: 'tab-new'
+    })
+
+    await expect(
+      dispatcher.callRequest('pty.shutdown', {
+        id: 'pty-1',
+        immediate: true,
+        expectedPaneKey: 'tab-old:leaf-old',
+        expectedTabId: 'tab-old'
+      })
+    ).rejects.toThrow('identity mismatch')
+    expect(mockKill).not.toHaveBeenCalled()
+    expect(handler.activePtyCount).toBe(1)
+
+    await dispatcher.callRequest('pty.shutdown', {
+      id: 'pty-1',
+      immediate: true,
+      expectedPaneKey: 'tab-new:leaf-new',
+      expectedTabId: 'tab-new'
+    })
     expect(handler.activePtyCount).toBe(0)
   })
 

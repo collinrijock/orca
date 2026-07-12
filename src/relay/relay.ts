@@ -20,6 +20,7 @@
 // SSH channel's stdin/stdout to the existing relay's socket.
 
 import { createServer, createConnection, type Socket, type Server } from 'node:net'
+import { randomUUID } from 'node:crypto'
 import { homedir } from 'node:os'
 import { resolve, join } from 'node:path'
 import { unlinkSync, existsSync, statSync } from 'node:fs'
@@ -669,6 +670,9 @@ async function main(): Promise<void> {
   let socketServer: Server | null = null
   const launchVersion = readLaunchVersion()
   const startedAt = Date.now()
+  // Why: relay-local pty-N counters reset at process start. Thread this stable
+  // boot identity into app PTY ids so delayed exits cannot hit a recycled id.
+  const instanceId = randomUUID()
   let acceptedSocketConnections = 0
   let hasAcceptedSocketClient = false
   let graceDeadlineAt: number | null = null
@@ -676,6 +680,7 @@ async function main(): Promise<void> {
 
   dispatcher.onRequest('relay.status', async () => ({
     pid: process.pid,
+    instanceId,
     uptimeMs: Date.now() - startedAt,
     detached,
     stdoutAlive,

@@ -671,7 +671,23 @@ export class SshRelaySession {
 
     this.wireUpRemoteOrcaCli(mux)
 
-    const ptyProvider = new SshPtyProvider(this.targetId, mux, this.remoteCliBridgeEnv ?? undefined)
+    let relayInstanceId: string | undefined
+    try {
+      const status = (await mux.request('relay.status', {})) as { instanceId?: unknown }
+      relayInstanceId =
+        typeof status.instanceId === 'string' && status.instanceId.length > 0
+          ? status.instanceId
+          : undefined
+    } catch {
+      // Why: older relays lack boot identity. Attach/shutdown identity checks
+      // remain the compatibility guard until the versioned deploy upgrades it.
+    }
+    const ptyProvider = new SshPtyProvider(
+      this.targetId,
+      mux,
+      this.remoteCliBridgeEnv ?? undefined,
+      relayInstanceId
+    )
     registerSshPtyProvider(this.targetId, ptyProvider)
 
     const fsProvider = new SshFilesystemProvider(

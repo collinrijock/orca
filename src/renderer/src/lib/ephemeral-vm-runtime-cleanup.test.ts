@@ -76,4 +76,15 @@ describe('cleanupEphemeralVmRuntimesForDeleted', () => {
       cleanupEphemeralVmRuntimesForDeleted({ workspaceIds: ['wt-1'], throwOnError: true })
     ).rejects.toBe(error)
   })
+
+  it('does not report a target destroyed when cleanup rejects', async () => {
+    listRuntimes.mockResolvedValue([
+      runtime({ id: 'rt-1', workspaceId: 'wt-1', sshTargetId: 'runtime-ssh-a' })
+    ])
+    cleanup.mockRejectedValueOnce(new Error('cleanup failed'))
+
+    await expect(cleanupEphemeralVmRuntimesForDeleted({ workspaceIds: ['wt-1'] })).resolves.toEqual(
+      []
+    )
+  })
 })

@@ -144,6 +144,14 @@ export type PtySpawnResult = {
   }
 }
 
+export type PtyShutdownOptions = {
+  immediate?: boolean
+  keepHistory?: boolean
+  /** Relay generations can recycle pty-N; identity prevents stale shutdown. */
+  expectedPaneKey?: string
+  expectedTabId?: string
+}
+
 export type PtyProcessInfo = {
   id: string
   cwd: string
@@ -201,7 +209,7 @@ export type IPtyProvider = {
    */
   getAppliedSize?: (id: string) => Promise<{ cols: number; rows: number } | null>
 
-  shutdown(id: string, opts: { immediate?: boolean; keepHistory?: boolean }): Promise<void>
+  shutdown(id: string, opts: PtyShutdownOptions): Promise<void>
   sendSignal(id: string, signal: string): Promise<void>
   getCwd(id: string): Promise<string>
   getInitialCwd(id: string): Promise<string>

@@ -1,8 +1,10 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   bufferPreHandlerPtyData,
+  bufferPreHandlerPtyExit,
   clearPreHandlerPtyState,
-  drainPreHandlerPtyData
+  drainPreHandlerPtyData,
+  drainPreHandlerPtyExit
 } from './pty-pre-handler-buffer'
 
 const RESCAN_PTY_ID = 'pty-pre-handler-rescan'
@@ -12,6 +14,9 @@ describe('pre-handler PTY buffer', () => {
   afterEach(() => {
     clearPreHandlerPtyState(RESCAN_PTY_ID)
     clearPreHandlerPtyState(TRIM_PTY_ID)
+    for (let index = 0; index <= 64; index += 1) {
+      clearPreHandlerPtyState(`pty-exit-${index}`)
+    }
   })
 
   it('does not rescan historical chunks while buffering small startup output', () => {
@@ -70,5 +75,19 @@ describe('pre-handler PTY buffer', () => {
     drainPreHandlerPtyData(TRIM_PTY_ID, (data) => drained.push(data))
     expect(drained).toHaveLength(512)
     expect(drained.join('')).toHaveLength(512 * 1_024)
+  })
+
+  it('bounds exits that arrive after their owner unregistered', () => {
+    for (let index = 0; index <= 64; index += 1) {
+      bufferPreHandlerPtyExit(`pty-exit-${index}`, index)
+    }
+    const oldest = vi.fn()
+    const newest = vi.fn()
+
+    drainPreHandlerPtyExit('pty-exit-0', oldest)
+    drainPreHandlerPtyExit('pty-exit-64', newest)
+
+    expect(oldest).not.toHaveBeenCalled()
+    expect(newest).toHaveBeenCalledWith(64)
   })
 })

@@ -54,7 +54,12 @@ import { piTitlebarExtensionService } from '../pi/titlebar-extension-service'
 import { detectPiAgentKindFromCommand, type PiAgentKind } from '../../shared/pi-agent-kind'
 import { isPwshAvailable } from '../pwsh'
 import { LocalPtyProvider } from '../providers/local-pty-provider'
-import type { IPtyProvider, PtySpawnOptions, PtySpawnResult } from '../providers/types'
+import type {
+  IPtyProvider,
+  PtyShutdownOptions,
+  PtySpawnOptions,
+  PtySpawnResult
+} from '../providers/types'
 import type { StartupCommandDelivery } from '../../shared/codex-startup-delivery'
 import {
   SSH_SESSION_EXPIRED_ERROR,
@@ -2542,7 +2547,7 @@ export function registerPtyHandlers(
   async function shutdownProviderAndDetectExit(
     provider: IPtyProvider,
     id: string,
-    opts: { immediate?: boolean; keepHistory?: boolean }
+    opts: PtyShutdownOptions
   ): Promise<boolean> {
     let providerExitObserved = false
     const unsubscribe = provider.onExit((payload) => {
@@ -4938,46 +4943,59 @@ export function registerPtyHandlers(
     runtime?.clearHeadlessTerminalBuffer(args.id).catch(() => {})
   })
 
-  ipcMain.handle('pty:kill', async (_event, args: { id: string; keepHistory?: boolean }) => {
-    const ownedConnectionId = ptyOwnership.get(args.id)
-    const parsedSshId = ownedConnectionId === undefined ? parseAppSshPtyId(args.id) : null
-    const connectionId = ownedConnectionId ?? parsedSshId?.connectionId
-    const provider = connectionId ? sshProviders.get(connectionId) : tryGetProviderForPty(args.id)
-    if (!provider && connectionId) {
-      // Why: detached SSH PTYs intentionally keep ownership after their
-      // provider is unregistered; hydrated app-scoped ids can also arrive
-      // before ownership is rebuilt. Tombstone instead of falling back local.
-      finishPtyShutdown(args.id, connectionId, store)
-      runtime?.onPtyExit(args.id, -1)
-      rememberSyntheticKillExit(args.id)
-      sendPtyExitToRenderer({ id: args.id, code: -1 })
-      return
-    }
-    const shutdownProvider = provider ?? getProviderForPty(args.id)
-    let providerExitObserved = false
-    try {
-      providerExitObserved = await shutdownProviderAndDetectExit(shutdownProvider, args.id, {
-        immediate: true,
-        keepHistory: args.keepHistory ?? false
-      })
-    } catch (err) {
-      if (!isPtyAlreadyGoneError(err)) {
-        // Why: a failed SSH shutdown can leave the remote process alive in
-        // the relay grace window; daemon failures have the same risk locally.
-        // Keep ownership/lease state so the user can retry.
-        throw err
+  ipcMain.handle(
+    'pty:kill',
+    async (
+      _event,
+      args: {
+        id: string
+        keepHistory?: boolean
+        expectedPaneKey?: string
+        expectedTabId?: string
       }
-      /* session already dead — cleanup below handles the rest */
+    ) => {
+      const ownedConnectionId = ptyOwnership.get(args.id)
+      const parsedSshId = ownedConnectionId === undefined ? parseAppSshPtyId(args.id) : null
+      const connectionId = ownedConnectionId ?? parsedSshId?.connectionId
+      const provider = connectionId ? sshProviders.get(connectionId) : tryGetProviderForPty(args.id)
+      if (!provider && connectionId) {
+        // Why: detached SSH PTYs intentionally keep ownership after their
+        // provider is unregistered; hydrated app-scoped ids can also arrive
+        // before ownership is rebuilt. Tombstone instead of falling back local.
+        finishPtyShutdown(args.id, connectionId, store)
+        runtime?.onPtyExit(args.id, -1)
+        rememberSyntheticKillExit(args.id)
+        sendPtyExitToRenderer({ id: args.id, code: -1 })
+        return
+      }
+      const shutdownProvider = provider ?? getProviderForPty(args.id)
+      let providerExitObserved = false
+      try {
+        providerExitObserved = await shutdownProviderAndDetectExit(shutdownProvider, args.id, {
+          immediate: true,
+          keepHistory: args.keepHistory ?? false,
+          ...(args.expectedPaneKey ? { expectedPaneKey: args.expectedPaneKey } : {}),
+          ...(args.expectedTabId ? { expectedTabId: args.expectedTabId } : {})
+        })
+      } catch (err) {
+        if (!isPtyAlreadyGoneError(err)) {
+          // Why: a failed SSH shutdown can leave the remote process alive in
+          // the relay grace window; daemon failures have the same risk locally.
+          // Keep ownership/lease state so the user can retry.
+          throw err
+        }
+        /* session already dead — cleanup below handles the rest */
+      }
+      // Why: some shutdown paths do not emit onExit through the provider listener.
+      // Explicit cleanup is idempotent and covers already-dead PTYs.
+      finishPtyShutdown(args.id, connectionId, store)
+      if (!providerExitObserved) {
+        runtime?.onPtyExit(args.id, -1)
+        rememberSyntheticKillExit(args.id)
+        sendPtyExitToRenderer({ id: args.id, code: -1 })
+      }
     }
-    // Why: some shutdown paths do not emit onExit through the provider listener.
-    // Explicit cleanup is idempotent and covers already-dead PTYs.
-    finishPtyShutdown(args.id, connectionId, store)
-    if (!providerExitObserved) {
-      runtime?.onPtyExit(args.id, -1)
-      rememberSyntheticKillExit(args.id)
-      sendPtyExitToRenderer({ id: args.id, code: -1 })
-    }
-  })
+  )
 
   ipcMain.handle(
     'pty:listSessions',

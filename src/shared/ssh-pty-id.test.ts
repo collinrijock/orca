@@ -17,6 +17,21 @@ describe('ssh pty id routing', () => {
     expect(toAppSshPtyId(CONNECTION, APP_ID)).toBe(APP_ID)
   })
 
+  it('scopes recycled relay ids to the relay process generation', () => {
+    const first = toAppSshPtyId(CONNECTION, 'pty-1', 'relay-a')
+    const second = toAppSshPtyId(CONNECTION, 'pty-1', 'relay-b')
+
+    expect(first).toBe(`ssh:${CONNECTION}@@relay-a@@pty-1`)
+    expect(second).not.toBe(first)
+    expect(parseAppSshPtyId(first)).toEqual({
+      connectionId: CONNECTION,
+      relayInstanceId: 'relay-a',
+      relayPtyId: 'pty-1'
+    })
+    expect(toRelaySshPtyId(CONNECTION, first)).toBe('pty-1')
+    expect(toAppSshPtyId(CONNECTION, first, 'relay-b')).toBe(second)
+  })
+
   // Why: reconnect/restore callers may pass the execution-host id form
   // ("ssh:<targetId>") from a workspace `hostId`; it names the same connection
   // as the bare id embedded in the app pty id and must not throw or misencode.

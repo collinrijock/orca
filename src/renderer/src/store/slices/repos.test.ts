@@ -744,7 +744,7 @@ describe('repo slice runtime routing', () => {
       params: { worktree: `id:${worktreeId}` },
       timeoutMs: 15_000
     })
-    expect(ptyKill).toHaveBeenCalledWith('pty-local-stale')
+    expect(ptyKill).toHaveBeenCalledWith('pty-local-stale', { expectedTabId: 'tab-1' })
     expect(ptyKill).not.toHaveBeenCalledWith('remote:term-1')
   })
 
@@ -834,7 +834,7 @@ describe('repo slice runtime routing', () => {
     expect(store.getState().detectedWorktreesByRepo[localRepo.id]).toBeUndefined()
     expect(store.getState().tabsByWorktree[hiddenWorktree.id]).toBeUndefined()
     expect(store.getState().activeWorktreeId).toBeNull()
-    expect(ptyKill).toHaveBeenCalledWith('pty-hidden')
+    expect(ptyKill).toHaveBeenCalledWith('pty-hidden', { expectedTabId: 'tab-hidden' })
   })
 
   it('reorders repos through the active remote runtime environment', async () => {

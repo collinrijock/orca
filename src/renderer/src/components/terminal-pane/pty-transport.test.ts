@@ -1383,7 +1383,11 @@ describe('createIpcPtyTransport', () => {
     } as unknown as typeof window
 
     try {
-      const transport = createIpcPtyTransport({ onPtySpawn })
+      const transport = createIpcPtyTransport({
+        onPtySpawn,
+        tabId: 'tab-late',
+        leafId: '11111111-1111-4111-8111-111111111111'
+      })
       const connectPromise = transport.connect({
         url: '',
         callbacks: {}
@@ -1397,7 +1401,10 @@ describe('createIpcPtyTransport', () => {
       await connectPromise
       await flushPtySideEffects()
 
-      expect(killMock).toHaveBeenCalledWith('pty-late')
+      expect(killMock).toHaveBeenCalledWith('pty-late', {
+        expectedPaneKey: 'tab-late:11111111-1111-4111-8111-111111111111',
+        expectedTabId: 'tab-late'
+      })
       expect(warn).toHaveBeenCalledWith(
         '[pty] Failed to stop PTY spawned after transport teardown',
         killError
@@ -1409,7 +1416,10 @@ describe('createIpcPtyTransport', () => {
       spawnMock.mockResolvedValueOnce({ id: 'pty-next' })
       await createIpcPtyTransport().connect({ url: '', callbacks: {} })
       await flushPtySideEffects()
-      expect(killMock).toHaveBeenNthCalledWith(2, 'pty-late')
+      expect(killMock).toHaveBeenNthCalledWith(2, 'pty-late', {
+        expectedPaneKey: 'tab-late:11111111-1111-4111-8111-111111111111',
+        expectedTabId: 'tab-late'
+      })
     } finally {
       warn.mockRestore()
     }

@@ -38,6 +38,7 @@ import {
 import { extractIpcErrorMessage } from '@/lib/ipc-error'
 import { isTuiAgent } from '../../../../shared/tui-agent-config'
 import { killPtyRetainingRetryOwnership } from '@/lib/pty-kill-retry-ownership'
+import { makePaneKey } from '../../../../shared/stable-pane-id'
 
 // Re-export public API so existing consumers keep working.
 export {
@@ -542,6 +543,12 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
     onAgentStatus
   })
   let storedCallbacks: Parameters<PtyTransport['connect']>[0]['callbacks'] = {}
+  const shutdownIdentity = tabId
+    ? {
+        ...(leafId ? { expectedPaneKey: makePaneKey(tabId, leafId) } : {}),
+        expectedTabId: tabId
+      }
+    : undefined
 
   // Why: pane->tab detach / split-group moves rehome the React subtree, so a
   // NEW TerminalPane can attach to the same ptyId before the OLD instance's
@@ -735,7 +742,8 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
         if (destroyed) {
           void killPtyRetainingRetryOwnership(
             spawnResult.id,
-            '[pty] Failed to stop PTY spawned after transport teardown'
+            '[pty] Failed to stop PTY spawned after transport teardown',
+            shutdownIdentity
           ).catch(() => {})
           return
         }
@@ -922,9 +930,11 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
       inputWriteQueue.clear()
       if (ptyId) {
         const id = ptyId
-        void killPtyRetainingRetryOwnership(id, '[pty] Failed to stop disconnected PTY').catch(
-          () => {}
-        )
+        void killPtyRetainingRetryOwnership(
+          id,
+          '[pty] Failed to stop disconnected PTY',
+          shutdownIdentity
+        ).catch(() => {})
         connected = false
         ptyId = null
         unregisterPtyHandlers(id)

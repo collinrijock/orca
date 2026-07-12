@@ -1263,7 +1263,14 @@ export type PreloadApi = {
     reportGeometry: (id: string, cols: number, rows: number) => void
     signal: (id: string, signal: string) => void
     clearBuffer: (id: string) => void
-    kill: (id: string, opts?: { keepHistory?: boolean }) => Promise<void>
+    kill: (
+      id: string,
+      opts?: {
+        keepHistory?: boolean
+        expectedPaneKey?: string
+        expectedTabId?: string
+      }
+    ) => Promise<void>
     ackColdRestore: (id: string) => void
     ackData: (id: string, charCount: number, processedChars?: number) => void
     onDeliveryResyncRequest: (callback: (payload: { requestId: number }) => void) => () => void

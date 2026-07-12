@@ -17,6 +17,7 @@ function normalizeConnectionId(connectionId: string): string {
 // needs the target id embedded so two relays cannot collide after restore.
 export type ParsedSshPtyId = {
   connectionId: string
+  relayInstanceId?: string
   relayPtyId: string
 }
 
@@ -29,13 +30,23 @@ export function parseAppSshPtyId(ptyId: string): ParsedSshPtyId | null {
     return null
   }
   const encodedConnectionId = ptyId.slice(SSH_PTY_ID_PREFIX.length, separatorIndex)
-  const relayPtyId = ptyId.slice(separatorIndex + SSH_PTY_ID_SEPARATOR.length)
+  const relayIdentity = ptyId.slice(separatorIndex + SSH_PTY_ID_SEPARATOR.length)
+  const generationSeparatorIndex = relayIdentity.indexOf(SSH_PTY_ID_SEPARATOR)
+  const encodedRelayInstanceId =
+    generationSeparatorIndex === -1 ? null : relayIdentity.slice(0, generationSeparatorIndex)
+  const relayPtyId =
+    generationSeparatorIndex === -1
+      ? relayIdentity
+      : relayIdentity.slice(generationSeparatorIndex + SSH_PTY_ID_SEPARATOR.length)
   if (!encodedConnectionId || !relayPtyId) {
     return null
   }
   try {
     return {
       connectionId: decodeURIComponent(encodedConnectionId),
+      ...(encodedRelayInstanceId
+        ? { relayInstanceId: decodeURIComponent(encodedRelayInstanceId) }
+        : {}),
       relayPtyId
     }
   } catch {
@@ -43,16 +54,26 @@ export function parseAppSshPtyId(ptyId: string): ParsedSshPtyId | null {
   }
 }
 
-export function toAppSshPtyId(connectionId: string, relayPtyId: string): string {
+export function toAppSshPtyId(
+  connectionId: string,
+  relayPtyId: string,
+  relayInstanceId?: string
+): string {
   const normalizedConnectionId = normalizeConnectionId(connectionId)
   const parsed = parseAppSshPtyId(relayPtyId)
   if (parsed) {
     if (parsed.connectionId !== normalizedConnectionId) {
       throw new Error(`PTY ${relayPtyId} belongs to SSH connection "${parsed.connectionId}"`)
     }
-    return relayPtyId
+    if (!relayInstanceId || parsed.relayInstanceId === relayInstanceId) {
+      return relayPtyId
+    }
+    relayPtyId = parsed.relayPtyId
   }
-  return `${SSH_PTY_ID_PREFIX}${encodeURIComponent(normalizedConnectionId)}${SSH_PTY_ID_SEPARATOR}${relayPtyId}`
+  const generationSegment = relayInstanceId
+    ? `${encodeURIComponent(relayInstanceId)}${SSH_PTY_ID_SEPARATOR}`
+    : ''
+  return `${SSH_PTY_ID_PREFIX}${encodeURIComponent(normalizedConnectionId)}${SSH_PTY_ID_SEPARATOR}${generationSegment}${relayPtyId}`
 }
 
 export function toRelaySshPtyId(connectionId: string, ptyId: string): string {

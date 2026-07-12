@@ -279,9 +279,7 @@ export const CLIENT_UI_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'settings.updatePRBotAuthorOverride',
     params: PRBotAuthorOverrideUpdate,
-    handler: (params, { runtime }) => ({
-      settings: runtime.updateClientPRBotAuthorOverride(params)
-    })
+    handler: (params, { runtime }) => ({ settings: runtime.updateClientPRBotAuthorOverride(params) })
   }),
   defineMethod({
     name: 'ui.get',

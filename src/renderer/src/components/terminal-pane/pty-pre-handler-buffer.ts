@@ -21,6 +21,7 @@ const preHandlerPtyExit = new Map<string, number>()
 // and dropping the first setup-script bytes.
 const PRE_HANDLER_PTY_DATA_MAX_BYTES = 512 * 1024
 const PRE_HANDLER_PTY_DATA_MAX_PTYS = 64
+const PRE_HANDLER_PTY_EXIT_MAX_PTYS = 64
 // Why: legit pre-attach windows drain within milliseconds and hold little
 // data. Sustained accumulation means a pane lost its data handler (the
 // frozen-pane detach/attach race) — leave a breadcrumb for trace capture.
@@ -36,6 +37,7 @@ export function bufferPreHandlerPtyData(ptyId: string, data: string, meta?: PtyD
     const oldestPtyId = preHandlerPtyData.keys().next().value
     if (typeof oldestPtyId === 'string') {
       preHandlerPtyData.delete(oldestPtyId)
+      warnedLostHandlerPtyIds.delete(oldestPtyId)
     }
   }
   const bufferedMeta =
@@ -90,6 +92,12 @@ export function drainPreHandlerPtyData(
 }
 
 export function bufferPreHandlerPtyExit(ptyId: string, code: number): void {
+  if (!preHandlerPtyExit.has(ptyId) && preHandlerPtyExit.size >= PRE_HANDLER_PTY_EXIT_MAX_PTYS) {
+    const oldestPtyId = preHandlerPtyExit.keys().next().value
+    if (typeof oldestPtyId === 'string') {
+      preHandlerPtyExit.delete(oldestPtyId)
+    }
+  }
   preHandlerPtyExit.set(ptyId, code)
 }
 

@@ -22205,7 +22205,14 @@ describe('OrcaRuntimeService', () => {
   it('awaits provider shutdown and verifies liveness before terminal.stop returns', async () => {
     const runtime = new OrcaRuntimeService(store)
     const stopped: string[] = []
-    const processLists = [[{ id: 'pty-1', cwd: '/tmp/worktree-a', title: 'Shell' }], []]
+    const processLists = [
+      [
+        { id: 'pty-1', cwd: '/tmp/worktree-a', title: 'Shell' },
+        { id: 'pty-unrelated', cwd: '/tmp/unrelated', title: 'Other' }
+      ],
+      [{ id: 'pty-unrelated', cwd: '/tmp/unrelated', title: 'Other' }]
+    ]
+    const getForegroundProcess = vi.fn().mockResolvedValue(null)
     runtime.setPtyController({
       write: () => true,
       kill: () => false,
@@ -22214,7 +22221,7 @@ describe('OrcaRuntimeService', () => {
         runtime.onPtyExit(ptyId, -1)
         return true
       },
-      getForegroundProcess: async () => null,
+      getForegroundProcess,
       listProcesses: async () => processLists.shift() ?? []
     })
     syncSinglePty(runtime, 'pty-1')
@@ -22223,6 +22230,40 @@ describe('OrcaRuntimeService', () => {
       stopped: 1
     })
     expect(stopped).toEqual(['pty-1'])
+    expect(getForegroundProcess).not.toHaveBeenCalledWith('pty-unrelated')
+  })
+
+  it('blocks paired terminal admission until project stop and removal are atomic', async () => {
+    const removeProject = vi.fn()
+    const runtime = new OrcaRuntimeService({ ...store, removeProject } as never)
+    const stop = deferred<boolean>()
+    const spawn = vi.fn().mockResolvedValue({ id: 'pty-late' })
+    const processLists = [[{ id: 'pty-1', cwd: '/tmp/worktree-a', title: 'Shell' }], []]
+    runtime.setPtyController({
+      spawn,
+      write: () => true,
+      kill: () => false,
+      stopAndWait: () => stop.promise,
+      getForegroundProcess: async () => null,
+      listProcesses: async () => processLists.shift() ?? []
+    })
+    syncSinglePty(runtime, 'pty-1')
+
+    const removal = runtime.removeProject(`id:${TEST_REPO_ID}`)
+    await vi.waitFor(() => expect(stop.promise).toBeDefined())
+    await vi.waitFor(() => {
+      expect(processLists).toHaveLength(1)
+    })
+
+    await expect(runtime.createTerminal(`id:${TEST_WORKTREE_ID}`)).rejects.toThrow(
+      'terminal_admission_blocked_for_project_removal'
+    )
+    expect(spawn).not.toHaveBeenCalled()
+
+    runtime.onPtyExit('pty-1', -1)
+    stop.resolve(true)
+    await expect(removal).resolves.toEqual({ removed: true })
+    expect(removeProject).toHaveBeenCalledWith(TEST_REPO_ID)
   })
 
   it('rejects terminal.stop when provider shutdown is not accepted', async () => {

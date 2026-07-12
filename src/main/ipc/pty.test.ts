@@ -3966,11 +3966,17 @@ describe('registerPtyHandlers', () => {
       store as never
     )
 
-    await handlers.get('pty:kill')!(null, { id: 'ssh:ssh-1@@relay-pty' })
+    await handlers.get('pty:kill')!(null, {
+      id: 'ssh:ssh-1@@relay-pty',
+      expectedPaneKey: 'tab-a:leaf-a',
+      expectedTabId: 'tab-a'
+    })
 
     expect(sshShutdown).toHaveBeenCalledWith('ssh:ssh-1@@relay-pty', {
       immediate: true,
-      keepHistory: false
+      keepHistory: false,
+      expectedPaneKey: 'tab-a:leaf-a',
+      expectedTabId: 'tab-a'
     })
     expect(localShutdown).not.toHaveBeenCalled()
     expect(store.markSshRemotePtyLease).toHaveBeenCalledWith('ssh-1', 'relay-pty', 'terminated')

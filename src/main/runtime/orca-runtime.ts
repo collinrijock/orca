@@ -2224,6 +2224,9 @@ export class OrcaRuntimeService {
   // iterates them all. Listeners are cleaned up via subscriptionCleanups.
   private notificationListeners = new Set<(event: MobileNotificationEvent) => void>()
   private ptysById = new Map<string, RuntimePtyWorktreeRecord>()
+  // Why: repo removal must make verified stop + metadata removal atomic with
+  // respect to paired/mobile terminal creation, or a late spawn is orphaned.
+  private terminalAdmissionBlockedWorktreeIds = new Set<string>()
   private titleObservationSequence = 0
   private headlessTerminals = new Map<string, RuntimeHeadlessTerminal>()
   private ptyOutputSequenceById = new Map<string, number>()
@@ -12202,11 +12205,31 @@ export class OrcaRuntimeService {
       throw new Error('runtime_unavailable')
     }
     const repo = await this.resolveRepoSelector(repoSelector)
-    this.store.removeProject(repo.id)
-    this.invalidateResolvedWorktreeCache()
-    invalidateAuthorizedRootsCache()
-    this.notifyReposChanged()
-    return { removed: true }
+    const worktreeIds = (await this.listResolvedWorktrees())
+      .filter((worktree) => worktree.repoId === repo.id)
+      .map((worktree) => worktree.id)
+    if (worktreeIds.some((id) => this.terminalAdmissionBlockedWorktreeIds.has(id))) {
+      throw new Error('project_removal_in_progress')
+    }
+    for (const id of worktreeIds) {
+      this.terminalAdmissionBlockedWorktreeIds.add(id)
+    }
+    try {
+      // Why: hold admission closed across both the fresh liveness proof and
+      // repo mutation. A separate terminal.stop RPC leaves an inter-call gap.
+      for (const id of worktreeIds) {
+        await this.stopTerminalsForWorktree(`id:${id}`)
+      }
+      this.store.removeProject(repo.id)
+      this.invalidateResolvedWorktreeCache()
+      invalidateAuthorizedRootsCache()
+      this.notifyReposChanged()
+      return { removed: true }
+    } finally {
+      for (const id of worktreeIds) {
+        this.terminalAdmissionBlockedWorktreeIds.delete(id)
+      }
+    }
   }
 
   async inspectTerminalProcess(
@@ -17482,6 +17505,9 @@ export class OrcaRuntimeService {
         throw new Error('runtime_unavailable')
       }
       const workspace = await this.resolveTerminalWorkspaceLaunchScope(worktreeSelector)
+      if (this.terminalAdmissionBlockedWorktreeIds.has(workspace.id)) {
+        throw new Error('terminal_admission_blocked_for_project_removal')
+      }
       const launchOpts = await this.resolveAgentTerminalCreateOptions(workspace, opts)
       const cwd =
         this.resolveWorkspaceTerminalStartupCwd(workspace, launchOpts.cwd) ?? workspace.path
@@ -17571,6 +17597,9 @@ export class OrcaRuntimeService {
         tabId,
         agentTeamsPlan?.env
       )
+      if (this.terminalAdmissionBlockedWorktreeIds.has(workspace.id)) {
+        throw new Error('terminal_admission_blocked_for_project_removal')
+      }
       const result = await this.ptyController.spawn({
         cols: 120,
         rows: 40,
@@ -17672,6 +17701,9 @@ export class OrcaRuntimeService {
     const workspace = worktreeSelector
       ? await this.resolveTerminalWorkspaceLaunchScope(worktreeSelector)
       : null
+    if (workspace && this.terminalAdmissionBlockedWorktreeIds.has(workspace.id)) {
+      throw new Error('terminal_admission_blocked_for_project_removal')
+    }
     const launchOpts = workspace
       ? await this.resolveAgentTerminalCreateOptions(workspace, opts)
       : opts
@@ -17680,6 +17712,9 @@ export class OrcaRuntimeService {
       ? this.resolveWorkspaceTerminalStartupCwd(workspace, launchOpts.cwd)
       : launchOpts.cwd
     const requestId = randomUUID()
+    if (workspace && this.terminalAdmissionBlockedWorktreeIds.has(workspace.id)) {
+      throw new Error('terminal_admission_blocked_for_project_removal')
+    }
 
     // Why: terminal creation is a renderer-side Zustand store operation (like
     // browser tab creation). The main process sends a request, the renderer
@@ -18597,9 +18632,15 @@ export class OrcaRuntimeService {
     }
     const direction = opts.direction ?? 'horizontal'
     const workspace = await this.resolveTerminalWorkspaceLaunchScope(`id:${pty.worktreeId}`)
+    if (this.terminalAdmissionBlockedWorktreeIds.has(workspace.id)) {
+      throw new Error('terminal_admission_blocked_for_project_removal')
+    }
     const leafId = randomUUID()
     const preAllocatedHandle = this.createPreAllocatedTerminalHandle()
     const paneKey = makePaneKey(parentTabId, leafId)
+    if (this.terminalAdmissionBlockedWorktreeIds.has(workspace.id)) {
+      throw new Error('terminal_admission_blocked_for_project_removal')
+    }
     const result = await this.ptyController.spawn({
       cols: 120,
       rows: 40,
@@ -18754,8 +18795,10 @@ export class OrcaRuntimeService {
     this.assertStableReadyGraph(graphEpoch)
     const resolvedWorktrees = [...(await this.getResolvedWorktreeMap()).values()]
     this.assertStableReadyGraph(graphEpoch)
-    const refreshedPtyLiveness =
-      await this.refreshPtyWorktreeRecordsFromController(resolvedWorktrees)
+    const refreshedPtyLiveness = await this.refreshPtyWorktreeRecordsFromController(
+      resolvedWorktrees,
+      worktree.id
+    )
     if (!refreshedPtyLiveness) {
       throw new Error('terminal_liveness_unavailable')
     }
@@ -18774,7 +18817,10 @@ export class OrcaRuntimeService {
       }
       stoppedPtyIds.push(ptyId)
     }
-    const postStopLiveness = await this.refreshPtyWorktreeRecordsFromController(resolvedWorktrees)
+    const postStopLiveness = await this.refreshPtyWorktreeRecordsFromController(
+      resolvedWorktrees,
+      worktree.id
+    )
     if (!postStopLiveness) {
       throw new Error('terminal_stop_postcheck_unavailable')
     }

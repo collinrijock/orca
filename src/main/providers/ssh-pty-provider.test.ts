@@ -49,6 +49,15 @@ describe('SshPtyProvider', () => {
       expect(result).toEqual({ id: scopedPty1 })
     })
 
+    it('includes relay boot identity so recycled counters cannot collide', async () => {
+      provider = new SshPtyProvider('conn-1', mux as never, undefined, 'relay-generation-2')
+      mux.request.mockResolvedValue({ id: 'pty-1' })
+
+      const result = await provider.spawn({ cols: 80, rows: 24 })
+
+      expect(result.id).toBe('ssh:conn-1@@relay-generation-2@@pty-1')
+    })
+
     it('passes cwd and env through', async () => {
       mux.request.mockResolvedValue({ id: 'pty-2' })
 
@@ -434,6 +443,21 @@ describe('SshPtyProvider', () => {
     })
   })
 
+  it('shutdown forwards pane identity to reject recycled relay ids', async () => {
+    await provider.shutdown(scopedPty1, {
+      immediate: true,
+      expectedPaneKey: 'tab-a:leaf-a',
+      expectedTabId: 'tab-a'
+    })
+    expect(mux.request).toHaveBeenCalledWith('pty.shutdown', {
+      id: 'pty-1',
+      immediate: true,
+      keepHistory: false,
+      expectedPaneKey: 'tab-a:leaf-a',
+      expectedTabId: 'tab-a'
+    })
+  })
+
   it('sendSignal sends pty.sendSignal request', async () => {
     await provider.sendSignal(scopedPty1, 'SIGINT')
     expect(mux.request).toHaveBeenCalledWith('pty.sendSignal', { id: 'pty-1', signal: 'SIGINT' })
@@ -483,6 +507,15 @@ describe('SshPtyProvider', () => {
     await expect(provider.shutdown('ssh:conn-2@@pty-1', { immediate: true })).rejects.toThrow(
       'belongs to SSH connection "conn-2"'
     )
+  })
+
+  it('rejects a recycled id from an older relay generation before shutdown', async () => {
+    provider = new SshPtyProvider('conn-1', mux as never, undefined, 'relay-new')
+
+    await expect(
+      provider.shutdown('ssh:conn-1@@relay-old@@pty-1', { immediate: true })
+    ).rejects.toThrow('relay generation mismatch')
+    expect(mux.request).not.toHaveBeenCalled()
   })
 
   it('listProcesses returns process list', async () => {

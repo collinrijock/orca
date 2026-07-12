@@ -421,14 +421,18 @@ describe('Subprocess: Relay entry point', () => {
     expect(resp.error).toBeUndefined()
     const status = resp.result as {
       pid: number
+      instanceId: string
       memory: { rss: number }
       ptys: { active: number }
       socket: { owned: boolean; listening: boolean; clients: number }
     }
     expect(status.pid).toBeGreaterThan(0)
+    expect(status.instanceId).toMatch(/^[0-9a-f-]{36}$/)
     expect(status.memory.rss).toBeGreaterThan(0)
     expect(status.ptys.active).toBe(0)
     expect(status.socket).toMatchObject({ owned: true, listening: true, clients: 0 })
+    const next = await relay.waitForResponse(relay.send('relay.status'))
+    expect((next.result as { instanceId: string }).instanceId).toBe(status.instanceId)
   }, 10_000)
 
   it('session.registerRoot request returns ok acknowledgment', async () => {

@@ -3600,16 +3600,17 @@
       "providers": ["ssh", "remote-runtime"],
       "coveredPlatforms": ["macos"],
       "coveredProviders": ["ssh"],
-      "coverageNotes": "A macOS unit harness loads the installed patched node-pty WindowsTerminal prototype without constructing native state, proving pre-ready kill/destroy dispatch immediately. A relay artifact harness reproduces vanilla npm node-pty retaining one deferred kill with zero native close calls, then proves both Windows relay artifacts hash, ship, apply, include the local ConPTY console-list fallback, and idempotently verify the fix. Relay tests simulate win32 shutdown, repeated stale-spawn native failure, one-shot ownership, and retry after native failure. Renderer tests retain exact local/SSH kill identity across rejection and retry, while project removal keeps local or remote ownership state until provider-verified shutdown and VM cleanup succeed. Runtime tests prove terminal.stop awaits stopAndWait plus a fresh post-stop liveness check. The same relay contract serves paired web/mobile clients; no live Windows ConPTY or Windows-over-SSH run is recorded yet.",
+      "coverageNotes": "A macOS unit harness loads the installed patched node-pty WindowsTerminal prototype without constructing native state, proving pre-ready kill/destroy dispatch immediately. A relay artifact harness reproduces vanilla npm node-pty retaining one deferred kill with zero native close calls, then proves both Windows relay artifacts hash, ship, apply, include the local ConPTY console-list fallback, and idempotently verify the fix. Relay tests simulate win32 shutdown, repeated stale-spawn native failure, one-shot ownership, and retry after native failure without deleting the only handle before close is proven. Relay boot UUIDs scope recycled pty-N counters, while pane identity protects older relay shutdown. Renderer pre-handler exits and retained shutdown retries are capped at 64, and lifecycle retry performs at most one attempt with backoff. Project removal keeps local or remote ownership until provider-verified shutdown and successful VM cleanup; runtime repo removal holds terminal admission closed across fresh liveness, stop, and metadata mutation. Targeted terminal.stop probes skip unrelated sessions. The same relay contract serves paired web/mobile clients; no live Windows ConPTY or Windows-over-SSH run is recorded yet.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/issues/8260",
         "https://github.com/stablyai/orca/pull/8279"
       ],
-      "invariant": "A Windows relay PTY closed before its first output executes exactly one no-argument node-pty shutdown immediately; Orca does not delete ownership for a native kill failure, and a later retry can still target the same managed PTY.",
+      "invariant": "A Windows relay PTY closed before its first output executes exactly one no-argument node-pty shutdown immediately; Orca does not delete ownership for a native kill failure, and a later retry can target only the same relay generation and pane while project removal fences new terminal admission.",
       "oracle": "Load the installed patched WindowsTerminal prototype in a pre-ready state and assert kill and destroy each close the terminal and native agent once with zero deferred work, while signal arguments still throw. Build both Windows SSH relay artifacts, reproduce vanilla npm node-pty with close=0/native-kill=0/deferred=1, apply the shipped patch, and assert close=1/native-kill=1/deferred=0, AttachConsole failure falls back to the shell pid, and the artifact version derives from all patch bytes. Assert remote npm install executes patch enforcement before its runtime probe and never finalizes a failed patch. In the relay, assert immediate, graceful, stale-spawn fallback, and handler-dispose paths preserve ownership through native throw and issue at most one successful no-argument shutdown. In the renderer, reject the first kill, retain exact identity, and assert the next lifecycle/removal retry succeeds before ownership state is purged.",
       "commands": [
         "pnpm exec vitest run --config config/vitest.config.ts config/scripts/build-relay-windows-node-pty-patch.test.mjs src/main/ssh/ssh-relay-native-deps-install.test.ts src/relay/node-pty-windows-pre-ready-shutdown.test.ts src/relay/pty-handler.test.ts src/renderer/src/components/terminal-pane/pty-transport.test.ts src/renderer/src/store/slices/repos-remove-project-purge-leak.test.ts src/renderer/src/store/slices/repos.test.ts src/renderer/src/store/slices/repos-runtime-vm-removal.test.ts src/renderer/src/lib/ephemeral-vm-runtime-cleanup.test.ts",
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime.test.ts"
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/shared/ssh-pty-id.test.ts src/main/providers/ssh-pty-provider.test.ts src/main/ssh/ssh-relay-session.test.ts src/relay/pty-handler.test.ts src/relay/subprocess.test.ts src/renderer/src/components/terminal-pane/pty-transport.test.ts src/renderer/src/components/terminal-pane/pty-pre-handler-buffer.test.ts src/renderer/src/lib/pty-kill-retry-ownership.test.ts src/renderer/src/lib/ephemeral-vm-runtime-cleanup.test.ts src/renderer/src/store/slices/repos.test.ts src/main/runtime/orca-runtime.test.ts src/main/ipc/pty.test.ts"
       ],
       "testFiles": [
         "config/scripts/build-relay-windows-node-pty-patch.test.mjs",
@@ -3621,7 +3622,14 @@
         "src/renderer/src/store/slices/repos.test.ts",
         "src/renderer/src/store/slices/repos-runtime-vm-removal.test.ts",
         "src/renderer/src/lib/ephemeral-vm-runtime-cleanup.test.ts",
-        "src/main/runtime/orca-runtime.test.ts"
+        "src/main/runtime/orca-runtime.test.ts",
+        "src/shared/ssh-pty-id.test.ts",
+        "src/main/providers/ssh-pty-provider.test.ts",
+        "src/main/ssh/ssh-relay-session.test.ts",
+        "src/relay/subprocess.test.ts",
+        "src/renderer/src/components/terminal-pane/pty-pre-handler-buffer.test.ts",
+        "src/renderer/src/lib/pty-kill-retry-ownership.test.ts",
+        "src/main/ipc/pty.test.ts"
       ],
       "assertionRefs": [
         {
@@ -3688,7 +3696,45 @@
           "file": "src/main/runtime/orca-runtime.test.ts",
           "assertions": [
             "terminal.stop awaits stopAndWait and fresh post-stop liveness before acknowledging provider shutdown",
-            "provider shutdown rejection fails terminal.stop closed"
+            "provider shutdown rejection fails terminal.stop closed",
+            "project removal fences paired terminal admission through provider stop and repo mutation",
+            "targeted terminal stop omits foreground probes for unrelated sessions"
+          ]
+        },
+        {
+          "file": "src/shared/ssh-pty-id.test.ts",
+          "assertions": [
+            "the same relay counter in two boot generations produces distinct app PTY ids"
+          ]
+        },
+        {
+          "file": "src/main/providers/ssh-pty-provider.test.ts",
+          "assertions": [
+            "SSH shutdown forwards pane identity and rejects an older relay generation before RPC"
+          ]
+        },
+        {
+          "file": "src/relay/subprocess.test.ts",
+          "assertions": [
+            "relay.status publishes one stable UUID for the relay process lifetime"
+          ]
+        },
+        {
+          "file": "src/renderer/src/components/terminal-pane/pty-pre-handler-buffer.test.ts",
+          "assertions": [
+            "ownerless pre-handler exits evict oldest state at the 64-id bound"
+          ]
+        },
+        {
+          "file": "src/renderer/src/lib/pty-kill-retry-ownership.test.ts",
+          "assertions": [
+            "retained shutdown ids are capped at 64 and one lifecycle retries at most one id"
+          ]
+        },
+        {
+          "file": "src/main/ipc/pty.test.ts",
+          "assertions": [
+            "renderer pane identity reaches SSH provider shutdown"
           ]
         }
       ],
@@ -3710,10 +3756,19 @@
           "result": "passed",
           "durationSeconds": 10,
           "summary": "662 runtime tests passed, including provider-verified terminal.stop acceptance and post-stop liveness coverage."
+        },
+        {
+          "date": "2026-07-12",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/shared/ssh-pty-id.test.ts src/main/providers/ssh-pty-provider.test.ts src/main/ssh/ssh-relay-session.test.ts src/relay/pty-handler.test.ts src/relay/subprocess.test.ts src/renderer/src/components/terminal-pane/pty-transport.test.ts src/renderer/src/components/terminal-pane/pty-pre-handler-buffer.test.ts src/renderer/src/lib/pty-kill-retry-ownership.test.ts src/renderer/src/lib/ephemeral-vm-runtime-cleanup.test.ts src/renderer/src/store/slices/repos.test.ts src/main/runtime/orca-runtime.test.ts src/main/ipc/pty.test.ts",
+          "result": "passed",
+          "durationSeconds": 12,
+          "summary": "1236 tests passed with relay-generation identity, stale-spawn retained ownership, bounded renderer maps/retry work, VM cleanup success ordering, atomic runtime removal admission, and targeted liveness probes."
         }
       ],
       "runtimeBudget": {
-        "p95Seconds": 5,
+        "p95Seconds": 20,
         "scope": "dependency and relay unit tests"
       },
       "flakeHistory": {
@@ -3726,7 +3781,7 @@
       },
       "performanceBudget": {
         "required": true,
-        "evidence": "Shutdown removes indefinite deferred retention and preserves at most one in-flight native kill plus one existing graceful timer per PTY request. Failed renderer kills retain a bounded exact-id entry and retry only on a later PTY lifecycle event; no polling, new permanent listener, startup await, or steady-state work is added."
+        "evidence": "Shutdown removes indefinite deferred retention and preserves at most one in-flight native kill plus one existing graceful timer per PTY request. Failed renderer kills retain at most 64 generation-scoped ids; one lifecycle event attempts at most one retry with exponential backoff. Pre-handler exits are capped at 64. Targeted runtime stop still performs one provider verification per target PTY plus two liveness snapshots, while foreground probes are limited to the target worktree."
       },
       "promotionCriteria": [
         "Run the deterministic command across the required CI platforms without flakes.",

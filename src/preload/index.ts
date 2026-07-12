@@ -940,8 +940,10 @@ const api = {
       ipcRenderer.send('pty:terminalViewAttributes', attributes)
     },
 
-    kill: (id: string, opts?: { keepHistory?: boolean }): Promise<void> =>
-      ipcRenderer.invoke('pty:kill', { id, keepHistory: opts?.keepHistory ?? false }),
+    kill: (
+      id: string,
+      opts?: { keepHistory?: boolean; expectedPaneKey?: string; expectedTabId?: string }
+    ): Promise<void> => ipcRenderer.invoke('pty:kill', { id, ...opts }),
 
     listSessions: (): Promise<{ id: string; cwd: string; title: string }[]> =>
       ipcRenderer.invoke('pty:listSessions'),

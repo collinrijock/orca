@@ -2793,7 +2793,8 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
               localPtyKills.push(
                 killPtyRetainingRetryOwnership(
                   ptyId,
-                  '[pty] Failed to stop PTY while removing project'
+                  '[pty] Failed to stop PTY while removing project',
+                  { expectedTabId: tab.id }
                 )
               )
             }
