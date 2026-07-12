@@ -309,6 +309,7 @@ const SORT_SETTLE_MS = 3_000
 const USER_SCROLL_MEASUREMENT_ADJUSTMENT_SUPPRESS_MS = 500
 const EMPTY_PROJECT_GROUPS: readonly ProjectGroup[] = []
 const EMPTY_AGENT_STATUS_BY_PANE_KEY: AppState['agentStatusByPaneKey'] = {}
+const EMPTY_WORKTREE_ID_SET: ReadonlySet<string> = new Set()
 const EMPTY_TABS_BY_WORKTREE: AppState['tabsByWorktree'] = {}
 const EMPTY_TERMINAL_LAYOUTS_BY_TAB_ID: AppState['terminalLayoutsByTabId'] = {}
 const EMPTY_PTY_IDS_BY_TAB_ID: AppState['ptyIdsByTabId'] = {}
@@ -5184,6 +5185,7 @@ const WorktreeList = React.memo(function WorktreeList({
   const setSortBy = useAppStore((s) => s.setSortBy)
   const projectOrderBy = useAppStore((s) => s.projectOrderBy)
   const showSleepingWorkspaces = useAppStore((s) => s.showSleepingWorkspaces)
+  const agentStatusEpoch = useAppStore((s) => (!showSleepingWorkspaces ? s.agentStatusEpoch : 0))
   const hideDefaultBranchWorkspace = useAppStore((s) => s.hideDefaultBranchWorkspace)
   const hideAutomationGeneratedWorkspaces = useAppStore((s) => s.hideAutomationGeneratedWorkspaces)
   const filterRepoIds = useAppStore((s) => s.filterRepoIds)
@@ -5538,20 +5540,22 @@ const WorktreeList = React.memo(function WorktreeList({
   // Flatten, filter, and apply stable sort order via the shared utility so
   // the card order always matches the Cmd+1–9 shortcut numbering.
   const visibleWorktrees = useMemo(() => {
+    void agentStatusEpoch
     const ids = computeVisibleWorktreeIds(worktreesByRepo, sortedIds, {
       filterRepoIds,
       showSleepingWorkspaces,
       tabsByWorktree,
       ptyIdsByTabId,
       browserTabsByWorktree,
-      // Why snapshot (not a subscribed selector): agent-status changes bump
-      // sortEpoch, so this memo already recomputes through `sortedIds` when a
-      // worktree gains/loses a running agent — reading getState() here keeps
-      // the sidebar off the full-map subscription its perf design avoids. #7197
-      worktreeIdsWithLiveAgent: getWorktreeIdsWithLiveAgent(
-        useAppStore.getState().agentStatusByPaneKey,
-        tabsByWorktree
-      ),
+      // Why snapshot on agentStatusEpoch: membership must update immediately,
+      // while subscribing to the full map would repaint on every hook ping.
+      worktreeIdsWithLiveAgent: showSleepingWorkspaces
+        ? EMPTY_WORKTREE_ID_SET
+        : getWorktreeIdsWithLiveAgent(
+            useAppStore.getState().agentStatusByPaneKey,
+            tabsByWorktree,
+            Date.now()
+          ),
       hideDefaultBranchWorkspace,
       hideAutomationGeneratedWorkspaces,
       repoMap,
@@ -5573,6 +5577,7 @@ const WorktreeList = React.memo(function WorktreeList({
     return ids.map((id) => worktreeMap.get(id)).filter((w): w is Worktree => w != null)
   }, [
     agentSendTargetWorktreeId,
+    agentStatusEpoch,
     filterRepoIds,
     showSleepingWorkspaces,
     hideDefaultBranchWorkspace,

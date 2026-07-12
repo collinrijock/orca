@@ -95,6 +95,8 @@ export type AgentStatusSlice = {
   migrationUnsupportedByPtyId: Record<string, MigrationUnsupportedPtyEntry>
   /** Monotonic tick that advances when agent-status freshness boundaries pass. */
   agentStatusEpoch: number
+  /** Arm the shared freshness timer after an external mirror writes live rows. */
+  scheduleAgentStatusFreshness: () => void
 
   /** Retained "done" entries — snapshots of agents that have disappeared from
    *  `agentStatusByPaneKey`. Keyed by paneKey so re-appearance of the same pane
@@ -821,6 +823,7 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
     agentLaunchConfigByPaneKey: {},
     retentionSuppressedPaneKeys: {},
     recentlyClosedAgentStatusTabIds: {},
+    scheduleAgentStatusFreshness: () => freshness.schedule(),
 
     setRuntimeAgentOrchestrationByPaneKey: (entries) => {
       set((s) => {
@@ -1180,6 +1183,10 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
         //      stale.
         const wasFresh =
           !!existing && isExplicitAgentStatusFresh(existing, updatedAt, AGENT_STATUS_STALE_AFTER_MS)
+        // Why attribution is aggregate state: a late main-process stamp can
+        // change which workspace remains visible without changing agent state.
+        const attributionChanged =
+          existing?.worktreeId !== entry.worktreeId || existing?.tabId !== entry.tabId
         const sortRelevantChange = !existing || existing.state !== payload.state || !wasFresh
         const doneRetentionFieldsChanged =
           existing?.state === 'done' &&
@@ -1195,7 +1202,8 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
             entry.orchestration !== existing.orchestration ||
             entry.providerSession !== existing.providerSession ||
             entry.interrupted !== existing.interrupted)
-        const retentionRelevantChange = sortRelevantChange || doneRetentionFieldsChanged
+        const retentionRelevantChange =
+          sortRelevantChange || attributionChanged || doneRetentionFieldsChanged
         // Why: a new status event means the agent is live again — lift any
         // one-shot retention suppressor so the row can be retained normally
         // on its next disappearance. setAgentStatus fires on every PTY status

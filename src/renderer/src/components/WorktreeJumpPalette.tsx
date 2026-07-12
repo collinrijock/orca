@@ -30,7 +30,7 @@ import {
   isAutomationGeneratedWorkspace,
   isDefaultBranchWorkspace
 } from '@/components/sidebar/visible-worktrees'
-import { getWorktreeIdsWithLiveAgent, isInactiveWorkspace } from '@/lib/worktree-activity-state'
+import { getLiveAgentStatusByWorktreeId, isInactiveWorkspace } from '@/lib/worktree-activity-state'
 import { orderEmptyQueryWorktrees } from '@/lib/order-empty-query-worktrees'
 import StatusIndicator from '@/components/sidebar/StatusIndicator'
 import { cn } from '@/lib/utils'
@@ -352,6 +352,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
   const prCache = useAppStore((s) => s.prCache)
   const issueCache = useAppStore((s) => s.issueCache)
   const agentStatusByPaneKey = useAppStore((s) => s.agentStatusByPaneKey)
+  const agentStatusEpoch = useAppStore((s) => (visible ? s.agentStatusEpoch : 0))
   const migrationUnsupportedByPtyId = useAppStore((s) => s.migrationUnsupportedByPtyId)
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
   const activeTabType = useAppStore((s) => s.activeTabType)
@@ -438,10 +439,16 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
 
   // Why: keep running-agent workspaces visible under "Hide sleeping" even when
   // their live PTY is momentarily absent, matching the sidebar filter. #7197
-  const worktreeIdsWithLiveAgent = useMemo(
-    () => getWorktreeIdsWithLiveAgent(agentStatusByPaneKey, tabsByWorktree),
-    [agentStatusByPaneKey, tabsByWorktree]
-  )
+  const liveAgentActivity = useMemo(() => {
+    void agentStatusEpoch
+    const statusByWorktreeId = getLiveAgentStatusByWorktreeId(
+      agentStatusByPaneKey,
+      tabsByWorktree,
+      Date.now()
+    )
+    return { statusByWorktreeId, worktreeIds: new Set(statusByWorktreeId.keys()) }
+  }, [agentStatusByPaneKey, agentStatusEpoch, tabsByWorktree])
+  const worktreeIdsWithLiveAgent = liveAgentActivity.worktreeIds
 
   // Why: the empty-query palette mirrors sidebar filters so opening Search
   // starts from the same quiet list. Typed search switches to the global
@@ -1810,7 +1817,8 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
                   tabsByWorktree[worktree.id] ?? [],
                   browserTabsByWorktree[worktree.id] ?? [],
                   ptyIdsByTabId,
-                  runtimePaneTitlesByTabId
+                  runtimePaneTitlesByTabId,
+                  { liveAgentStatus: liveAgentActivity.statusByWorktreeId.get(worktree.id) }
                 )
                 const statusLabel = getWorktreeStatusLabel(status)
                 const isCurrentWorktree = activeWorktreeId === worktree.id

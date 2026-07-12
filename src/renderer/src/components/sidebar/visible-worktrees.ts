@@ -110,10 +110,8 @@ export function computeVisibleWorktreeIds(
     tabsByWorktree: Record<string, Pick<TerminalTab, 'id'>[]> | null
     ptyIdsByTabId: Record<string, string[]> | null
     browserTabsByWorktree?: Record<string, { id: string }[]> | null
-    // Why required: the sleeping filter must keep a workspace with a running
-    // agent visible even when its live PTY is momentarily absent. Making the
-    // field required stops a future caller silently dropping the signal.
-    // Build it with getWorktreeIdsWithLiveAgent. #7197
+    // Why required: every filter caller must preserve running agents through
+    // temporary PTY gaps instead of silently reverting #7197.
     worktreeIdsWithLiveAgent: ReadonlySet<string>
     // Why required: every caller (WorktreeList, getVisibleWorktreeIds
     // fallback, tests) reads the flag from the UI store. Making the field
@@ -313,7 +311,8 @@ export function getVisibleWorktreeIds(): string[] {
     browserTabsByWorktree: state.browserTabsByWorktree,
     worktreeIdsWithLiveAgent: getWorktreeIdsWithLiveAgent(
       state.agentStatusByPaneKey,
-      state.tabsByWorktree
+      state.tabsByWorktree,
+      Date.now()
     ),
     hideDefaultBranchWorkspace: state.hideDefaultBranchWorkspace,
     hideAutomationGeneratedWorkspaces: state.hideAutomationGeneratedWorkspaces,

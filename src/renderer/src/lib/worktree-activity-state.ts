@@ -1,7 +1,10 @@
 import { tabHasLivePty } from '@/lib/tab-has-live-pty'
 import type { TerminalTab } from '../../../shared/types'
-import type { AgentStatusEntry } from '../../../shared/agent-status-types'
-import { parsePaneKey } from '../../../shared/stable-pane-id'
+import {
+  isFreshNonDoneAgentStatus,
+  type AgentStatusEntry
+} from '../../../shared/agent-status-types'
+import { resolveAgentStatusWorktreeId } from './agent-status-worktree-attribution'
 
 type TerminalLikeTab = Pick<TerminalTab, 'id'>
 type BrowserLikeTab = { id: string }
@@ -9,26 +12,33 @@ type BrowserLikeTab = { id: string }
 type TabsByWorktree = Record<string, readonly TerminalLikeTab[]>
 type PtyIdsByTabId = Record<string, string[]>
 type BrowserTabsByWorktree = Record<string, readonly BrowserLikeTab[]>
+export type LiveAgentWorktreeStatus = 'working' | 'permission'
 
 /**
  * Worktree ids that currently have a live agent session, derived from the
  * live `agentStatusByPaneKey` map.
  *
- * Why presence is a reliable liveness signal: entries live in this map only
- * while an agent is attached — sleep and teardown drop every entry attributed
- * to the worktree via `dropAgentStatusByWorktree` (completed rows move to the
- * separate `retainedAgentsByPaneKey`), so a lingering entry never resurrects a
- * slept/hibernated workspace. Each entry is attributed by its main-stamped
- * `worktreeId`, falling back to the paneKey's tabId — orchestration workers can
- * report status before their terminal tab is mirrored in the renderer.
+ * Why only fresh in-progress rows: disconnected SSH and completed headless
+ * agents can retain status entries without an open session.
  */
 export function getWorktreeIdsWithLiveAgent(
   agentStatusByPaneKey: Record<string, AgentStatusEntry> | null | undefined,
-  tabsByWorktree: TabsByWorktree | null | undefined
+  tabsByWorktree: TabsByWorktree | null | undefined,
+  now: number
 ): Set<string> {
-  const entries = Object.values(agentStatusByPaneKey ?? {})
+  return new Set(getLiveAgentStatusByWorktreeId(agentStatusByPaneKey, tabsByWorktree, now).keys())
+}
+
+export function getLiveAgentStatusByWorktreeId(
+  agentStatusByPaneKey: Record<string, AgentStatusEntry> | null | undefined,
+  tabsByWorktree: TabsByWorktree | null | undefined,
+  now: number
+): Map<string, LiveAgentWorktreeStatus> {
+  const entries = Object.values(agentStatusByPaneKey ?? {}).filter((entry) =>
+    isFreshNonDoneAgentStatus(entry, now)
+  )
   if (entries.length === 0) {
-    return new Set()
+    return new Map()
   }
   const worktreeIdByTabId = new Map<string, string>()
   for (const [worktreeId, tabs] of Object.entries(tabsByWorktree ?? {})) {
@@ -36,12 +46,14 @@ export function getWorktreeIdsWithLiveAgent(
       worktreeIdByTabId.set(tab.id, worktreeId)
     }
   }
-  const result = new Set<string>()
+  const result = new Map<string, LiveAgentWorktreeStatus>()
   for (const entry of entries) {
-    const worktreeId =
-      entry.worktreeId ?? worktreeIdByTabId.get(parsePaneKey(entry.paneKey)?.tabId ?? '')
+    const worktreeId = resolveAgentStatusWorktreeId(entry, worktreeIdByTabId)
     if (worktreeId) {
-      result.add(worktreeId)
+      const status = entry.state === 'working' ? 'working' : 'permission'
+      if (status === 'permission' || !result.has(worktreeId)) {
+        result.set(worktreeId, status)
+      }
     }
   }
   return result
@@ -52,16 +64,15 @@ export function hasActiveWorkspaceActivity(
   tabsByWorktree: TabsByWorktree | null | undefined,
   ptyIdsByTabId: PtyIdsByTabId | null | undefined,
   browserTabsByWorktree: BrowserTabsByWorktree | null | undefined,
-  worktreeIdsWithLiveAgent?: ReadonlySet<string> | null
+  worktreeIdsWithLiveAgent: ReadonlySet<string>
 ): boolean {
   const tabs = tabsByWorktree?.[worktreeId] ?? []
   const hasLiveTerminal =
     ptyIdsByTabId != null && tabs.some((tab) => tabHasLivePty(ptyIdsByTabId, tab.id))
   const hasBrowser = (browserTabsByWorktree?.[worktreeId] ?? []).length > 0
-  // Why: a running agent session keeps the workspace visible under "Hide
-  // sleeping" even when its live-PTY entry is momentarily absent (SSH reconnect
-  // grace, an unmounted pane, a remote surface not yet `ready`). #7197
-  const hasLiveAgent = worktreeIdsWithLiveAgent?.has(worktreeId) ?? false
+  // Why: a running agent keeps the workspace visible through brief PTY gaps
+  // such as an SSH reconnect or an unmounted remote pane. #7197
+  const hasLiveAgent = worktreeIdsWithLiveAgent.has(worktreeId)
   return hasLiveTerminal || hasBrowser || hasLiveAgent
 }
 
@@ -70,7 +81,7 @@ export function isInactiveWorkspace(
   tabsByWorktree: TabsByWorktree | null | undefined,
   ptyIdsByTabId: PtyIdsByTabId | null | undefined,
   browserTabsByWorktree: BrowserTabsByWorktree | null | undefined,
-  worktreeIdsWithLiveAgent?: ReadonlySet<string> | null
+  worktreeIdsWithLiveAgent: ReadonlySet<string>
 ): boolean {
   return !hasActiveWorkspaceActivity(
     worktreeId,

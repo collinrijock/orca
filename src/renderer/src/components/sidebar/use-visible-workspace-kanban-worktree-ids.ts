@@ -1,5 +1,4 @@
 import { useMemo } from 'react'
-import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
 import type { Repo, Worktree } from '../../../../shared/types'
 import { computeVisibleWorktreeIds } from './visible-worktrees'
@@ -11,9 +10,7 @@ type UseVisibleWorkspaceKanbanWorktreeIdsParams = {
   repoMap: Map<string, Repo>
 }
 
-// Why module-level: a stable empty array keeps the useShallow selector from
-// allocating a fresh reference each render when Hide sleeping is off.
-const EMPTY_LIVE_AGENT_LIST: string[] = []
+const EMPTY_WORKTREE_ID_SET: ReadonlySet<string> = new Set()
 
 export function useVisibleWorkspaceKanbanWorktreeIds({
   allWorktrees,
@@ -32,20 +29,19 @@ export function useVisibleWorkspaceKanbanWorktreeIds({
   const browserTabsByWorktree = useAppStore((s) =>
     !showSleepingWorkspaces ? s.browserTabsByWorktree : null
   )
-  // Why useShallow over a sorted id list: the board must keep running-agent
-  // workspaces visible under Hide sleeping, but agent-status pings change the
-  // raw map constantly — gating re-renders on set membership avoids churn. #7197
-  const worktreeIdsWithLiveAgentList = useAppStore(
-    useShallow((s) =>
-      !showSleepingWorkspaces
-        ? [...getWorktreeIdsWithLiveAgent(s.agentStatusByPaneKey, s.tabsByWorktree)].sort()
-        : EMPTY_LIVE_AGENT_LIST
-    )
-  )
-  const worktreeIdsWithLiveAgent = useMemo(
-    () => new Set(worktreeIdsWithLiveAgentList),
-    [worktreeIdsWithLiveAgentList]
-  )
+  const agentStatusEpoch = useAppStore((s) => (!showSleepingWorkspaces ? s.agentStatusEpoch : 0))
+  // Why snapshot on the epoch: the always-mounted drawer must not scan every
+  // agent on unrelated store writes; membership changes advance this tick.
+  const worktreeIdsWithLiveAgent = useMemo(() => {
+    void agentStatusEpoch
+    return !showSleepingWorkspaces
+      ? getWorktreeIdsWithLiveAgent(
+          useAppStore.getState().agentStatusByPaneKey,
+          tabsByWorktree,
+          Date.now()
+        )
+      : EMPTY_WORKTREE_ID_SET
+  }, [agentStatusEpoch, showSleepingWorkspaces, tabsByWorktree])
 
   return useMemo(() => {
     // Why: the board has its own status ordering, but visibility must match
