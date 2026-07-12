@@ -26461,9 +26461,14 @@ function buildRuntimeWorktreeSummaryPathIndex(
 function runtimeWorktreeSummaryPathKey(repoId: string, worktreePath: string): string | null {
   const isAbsolutePosix = worktreePath.startsWith('/') && !worktreePath.startsWith('//')
   const hasDotSegment = /(^|[\\/])\.{1,2}([\\/]|$)/.test(worktreePath)
+  const hasPosixLiteralBackslash = isAbsolutePosix && worktreePath.includes('\\')
   // Why: malformed relative or dotted paths need pair-aware comparison;
   // separator normalization can otherwise conflate distinct POSIX paths.
-  if ((!isAbsolutePosix && !isWindowsAbsolutePathLike(worktreePath)) || hasDotSegment) {
+  if (
+    (!isAbsolutePosix && !isWindowsAbsolutePathLike(worktreePath)) ||
+    hasDotSegment ||
+    hasPosixLiteralBackslash
+  ) {
     return null
   }
   return `${repoId}\0${normalizeRuntimePathForComparison(worktreePath)}`

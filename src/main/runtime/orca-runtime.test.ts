@@ -22127,67 +22127,73 @@ describe('OrcaRuntimeService', () => {
     expect(summaries.worktrees[0]?.agents).toHaveLength(100)
   })
 
-  it('keeps relative POSIX backslashes distinct when projecting mobile agents', async () => {
-    const remoteRepo = {
-      id: 'repo-relative-ssh',
-      path: 'project',
-      displayName: 'relative-vm',
-      badgeColor: 'blue',
-      addedAt: 1,
-      connectionId: 'ssh-relative'
-    }
-    const backslashWorktree = {
-      path: 'feature\\name',
-      head: 'abc',
-      branch: 'refs/heads/backslash',
-      isBare: false,
-      isMainWorktree: false
-    }
-    const slashWorktree = {
-      ...backslashWorktree,
-      path: 'feature/name',
-      branch: 'refs/heads/slash'
-    }
-    const runtimeStore = {
-      ...store,
-      getRepos: () => [remoteRepo],
-      getRepo: (id: string) => (id === remoteRepo.id ? remoteRepo : undefined),
-      getAllWorktreeMeta: () => ({}),
-      getWorktreeMeta: () => undefined
-    }
-    registerSshGitProvider('ssh-relative', {
-      listWorktrees: vi.fn().mockResolvedValue([backslashWorktree, slashWorktree])
-    } as never)
+  it.each([
+    ['relative', 'feature\\name', 'feature/name'],
+    ['absolute', '/remote/feature\\name', '/remote/feature/name']
+  ] as const)(
+    'keeps %s POSIX backslashes distinct when projecting mobile agents',
+    async (_kind, backslashPath, slashPath) => {
+      const remoteRepo = {
+        id: 'repo-relative-ssh',
+        path: 'project',
+        displayName: 'relative-vm',
+        badgeColor: 'blue',
+        addedAt: 1,
+        connectionId: 'ssh-relative'
+      }
+      const backslashWorktree = {
+        path: backslashPath,
+        head: 'abc',
+        branch: 'refs/heads/backslash',
+        isBare: false,
+        isMainWorktree: false
+      }
+      const slashWorktree = {
+        ...backslashWorktree,
+        path: slashPath,
+        branch: 'refs/heads/slash'
+      }
+      const runtimeStore = {
+        ...store,
+        getRepos: () => [remoteRepo],
+        getRepo: (id: string) => (id === remoteRepo.id ? remoteRepo : undefined),
+        getAllWorktreeMeta: () => ({}),
+        getWorktreeMeta: () => undefined
+      }
+      registerSshGitProvider('ssh-relative', {
+        listWorktrees: vi.fn().mockResolvedValue([backslashWorktree, slashWorktree])
+      } as never)
 
-    const now = Date.now()
-    const runtime = new OrcaRuntimeService(runtimeStore as never, undefined, {
-      getAgentStatusSnapshot: () => [
-        {
-          paneKey: 'relative-tab:55555555-5555-4555-8555-555555555555',
-          worktreeId: `${remoteRepo.id}::${backslashWorktree.path}/`,
-          tabId: 'relative-tab',
-          state: 'working',
-          prompt: 'relative path agent',
-          agentType: 'codex',
-          connectionId: 'ssh-relative',
-          receivedAt: now,
-          stateStartedAt: now - 100
-        }
-      ]
-    })
+      const now = Date.now()
+      const runtime = new OrcaRuntimeService(runtimeStore as never, undefined, {
+        getAgentStatusSnapshot: () => [
+          {
+            paneKey: 'relative-tab:55555555-5555-4555-8555-555555555555',
+            worktreeId: `${remoteRepo.id}::${backslashWorktree.path}/`,
+            tabId: 'relative-tab',
+            state: 'working',
+            prompt: 'relative path agent',
+            agentType: 'codex',
+            connectionId: 'ssh-relative',
+            receivedAt: now,
+            stateStartedAt: now - 100
+          }
+        ]
+      })
 
-    const summaries = await runtime.getWorktreePs()
-    const backslashSummary = summaries.worktrees.find(
-      (worktree) => worktree.path === backslashWorktree.path
-    )
-    const slashSummary = summaries.worktrees.find(
-      (worktree) => worktree.path === slashWorktree.path
-    )
+      const summaries = await runtime.getWorktreePs()
+      const backslashSummary = summaries.worktrees.find(
+        (worktree) => worktree.path === backslashWorktree.path
+      )
+      const slashSummary = summaries.worktrees.find(
+        (worktree) => worktree.path === slashWorktree.path
+      )
 
-    expect(backslashSummary).toMatchObject({ hasHostSidebarActivity: true, status: 'working' })
-    expect(backslashSummary?.agents).toHaveLength(1)
-    expect(slashSummary?.agents).toEqual([])
-  })
+      expect(backslashSummary).toMatchObject({ hasHostSidebarActivity: true, status: 'working' })
+      expect(backslashSummary?.agents).toHaveLength(1)
+      expect(slashSummary?.agents).toEqual([])
+    }
+  )
 
   it('keeps no-PTY agent worktrees in the truncated mobile summary', async () => {
     const remoteRepo = {
