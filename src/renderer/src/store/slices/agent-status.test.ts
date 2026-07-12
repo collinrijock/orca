@@ -644,7 +644,7 @@ describe('agent status tool + assistant fields', () => {
       )
 
     expect(store.getState().agentStatusEpoch).toBe(firstEpoch + 1)
-    expect(store.getState().sortEpoch).toBe(firstSortEpoch)
+    expect(store.getState().sortEpoch).toBe(firstSortEpoch + 1)
   })
 
   it('bumps the status epoch, not sort epoch, for same-state done updates', () => {

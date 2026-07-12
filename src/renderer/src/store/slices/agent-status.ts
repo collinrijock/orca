@@ -1401,7 +1401,8 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
         // change which workspace remains visible without changing agent state.
         const attributionChanged =
           existing?.worktreeId !== entry.worktreeId || existing?.tabId !== entry.tabId
-        const sortRelevantChange = !existing || existing.state !== payload.state || !wasFresh
+        const sortRelevantChange =
+          !existing || existing.state !== payload.state || !wasFresh || attributionChanged
         const doneRetentionFieldsChanged =
           existing?.state === 'done' &&
           entry.state === 'done' &&

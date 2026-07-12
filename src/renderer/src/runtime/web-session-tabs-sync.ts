@@ -714,13 +714,15 @@ function buildMirroredAgentStatusPatch(
     }
     nextAgentStatusByPaneKey[paneKey] = entry
     changed = true
+    const entryAttributionChanged =
+      existing?.worktreeId !== entry.worktreeId || existing?.tabId !== entry.tabId
     const entrySortRelevantChange =
-      !existing || existing.state !== entry.state || !isAgentStatusFresh(existing, now)
+      !existing ||
+      existing.state !== entry.state ||
+      !isAgentStatusFresh(existing, now) ||
+      entryAttributionChanged
     aggregateRelevantChange =
-      aggregateRelevantChange ||
-      entrySortRelevantChange ||
-      existing?.worktreeId !== entry.worktreeId ||
-      existing?.tabId !== entry.tabId
+      aggregateRelevantChange || entrySortRelevantChange || entryAttributionChanged
     sortRelevantChange = sortRelevantChange || entrySortRelevantChange
   }
 

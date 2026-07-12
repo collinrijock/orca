@@ -1702,7 +1702,7 @@ describe('applyWebSessionTabsSnapshot', () => {
     ) as Partial<WebSessionTabsSyncState>
 
     expect(patch.agentStatusEpoch).toBe(8)
-    expect(patch.sortEpoch).toBe(11)
+    expect(patch.sortEpoch).toBe(12)
   })
 
   it('keeps mirrored OMP tabs from repainting to Pi-compatible titles', () => {

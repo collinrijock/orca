@@ -226,6 +226,24 @@ export function buildExplicitEntriesByTabId(
   return byTab
 }
 
+function buildExplicitEntriesByWorktreeId(
+  agentStatusByPaneKey: Record<string, AgentStatusEntry> | undefined
+): Map<string, AgentStatusEntry[]> {
+  const byWorktree = new Map<string, AgentStatusEntry[]>()
+  for (const entry of Object.values(agentStatusByPaneKey ?? {})) {
+    if (!entry.worktreeId || !parsePaneKey(entry.paneKey)) {
+      continue
+    }
+    const bucket = byWorktree.get(entry.worktreeId)
+    if (bucket) {
+      bucket.push(entry)
+    } else {
+      byWorktree.set(entry.worktreeId, [entry])
+    }
+  }
+  return byWorktree
+}
+
 /**
  * Extract the stable leaf id from a `${tabId}:${leafId}` paneKey. Used for
  * per-pane authority: we need to know which leaves already have a fresh hook
@@ -258,15 +276,24 @@ export function buildAttentionByWorktree(
   terminalLayoutsByTabId?: Record<string, TerminalLayoutSnapshot>
 ): Map<string, WorktreeAttention> {
   const byTab = buildExplicitEntriesByTabId(agentStatusByPaneKey, migrationUnsupportedByPtyId)
+  const byAttributedWorktree = buildExplicitEntriesByWorktreeId(agentStatusByPaneKey)
   const result = new Map<string, WorktreeAttention>()
 
   for (const worktree of worktrees) {
-    const tabs = tabsByWorktree?.[worktree.id]
-    if (!tabs || tabs.length === 0) {
-      result.set(worktree.id, IDLE)
+    const tabs = tabsByWorktree?.[worktree.id] ?? []
+    const tabIds = new Set(tabs.map((tab) => tab.id))
+    // Why: hook stamps can arrive before the renderer mirrors a headless or
+    // remote tab. Attribution must still promote the visible worktree in Smart.
+    const panes: PaneInput[] = (byAttributedWorktree.get(worktree.id) ?? [])
+      .filter((entry) => {
+        const parsed = parsePaneKey(entry.paneKey)
+        return parsed !== null && !tabIds.has(parsed.tabId)
+      })
+      .map((entry) => ({ kind: 'hook' as const, entry }))
+    if (tabs.length === 0) {
+      result.set(worktree.id, resolveAttention(panes, now))
       continue
     }
-    const panes: PaneInput[] = []
     for (const tab of tabs) {
       const hookEntries = byTab.get(tab.id)
       // Why: leaf ids covered by a hook entry skip the title fallback so we

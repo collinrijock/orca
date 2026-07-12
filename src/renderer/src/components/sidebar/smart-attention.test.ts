@@ -56,6 +56,8 @@ function makeEntry(overrides: Partial<AgentStatusEntry> & { paneKey: string }): 
     stateStartedAt: overrides.stateStartedAt ?? overrides.updatedAt ?? NOW - 30_000,
     agentType: overrides.agentType ?? 'codex',
     paneKey: overrides.paneKey,
+    worktreeId: overrides.worktreeId,
+    tabId: overrides.tabId,
     terminalTitle: overrides.terminalTitle,
     stateHistory: overrides.stateHistory ?? [],
     interrupted: overrides.interrupted
@@ -400,6 +402,27 @@ describe('buildAttentionByWorktree', () => {
     const w = makeWorktree('wt-1')
     const map = buildAttentionByWorktree([w], {}, {}, {}, {}, NOW)
     expect(map.get(w.id)).toEqual(IDLE)
+  })
+
+  it('uses fresh worktree attribution before a headless tab is mirrored', () => {
+    const w = makeWorktree('wt-1')
+    const key = paneKey('headless-tab', LEAF_1)
+    const entries = {
+      [key]: makeEntry({
+        paneKey: key,
+        worktreeId: w.id,
+        tabId: 'headless-tab',
+        state: 'blocked',
+        stateStartedAt: NOW - 5_000,
+        updatedAt: NOW - 1_000
+      })
+    }
+
+    expect(buildAttentionByWorktree([w], {}, entries, {}, {}, NOW).get(w.id)).toEqual({
+      cls: 1,
+      attentionTimestamp: NOW - 5_000,
+      cause: 'blocked'
+    })
   })
 
   it('aggregates entries across multiple panes on the same tab', () => {
