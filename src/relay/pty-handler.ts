@@ -728,7 +728,6 @@ export class PtyHandler {
       // response is discarded and no renderer can own this PTY. Shut it down
       // immediately so it does not linger as an unreachable remote shell.
       this.releaseStartupCommand(managed)
-      killPtyForShutdown(managed, 'SIGTERM')
       managed.killTimer = setTimeout(() => {
         const still = this.ptys.get(id)
         if (still && !still.disposed) {
@@ -742,6 +741,10 @@ export class PtyHandler {
           this.ptys.delete(id)
         }
       }, 5000)
+      // Why: arm fallback ownership before native shutdown. node-pty can throw
+      // synchronously, especially during ConPTY startup, and the orphan still
+      // needs a later force-close owner even when this request rejects.
+      killPtyForShutdown(managed, 'SIGTERM')
     } else if (managed.startupCommand) {
       this.scheduleStartupCommandDelivery(
         managed,

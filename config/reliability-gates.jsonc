@@ -3600,21 +3600,24 @@
       "providers": ["ssh", "remote-runtime"],
       "coveredPlatforms": ["macos"],
       "coveredProviders": ["ssh"],
-      "coverageNotes": "A macOS unit harness loads the installed patched node-pty WindowsTerminal prototype without constructing native state, proving pre-ready kill/destroy dispatch immediately. A relay artifact harness reproduces vanilla npm node-pty retaining one deferred kill with zero native close calls, then proves both Windows relay artifacts hash, ship, apply, and idempotently verify the fix. Relay tests simulate win32 shutdown, one-shot ownership, and retry after native failure. The same relay contract serves paired web/mobile clients; no live Windows ConPTY or Windows-over-SSH run is recorded yet.",
+      "coverageNotes": "A macOS unit harness loads the installed patched node-pty WindowsTerminal prototype without constructing native state, proving pre-ready kill/destroy dispatch immediately. A relay artifact harness reproduces vanilla npm node-pty retaining one deferred kill with zero native close calls, then proves both Windows relay artifacts hash, ship, apply, include the local ConPTY console-list fallback, and idempotently verify the fix. Relay tests simulate win32 shutdown, stale-spawn fallback ownership, one-shot ownership, and retry after native failure. Renderer tests retain exact local/SSH kill identity across rejection and retry, while project removal keeps local or remote ownership state until provider shutdown succeeds. The same relay contract serves paired web/mobile clients; no live Windows ConPTY or Windows-over-SSH run is recorded yet.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/issues/8260",
         "https://github.com/stablyai/orca/pull/8279"
       ],
       "invariant": "A Windows relay PTY closed before its first output executes exactly one no-argument node-pty shutdown immediately; Orca does not delete ownership for a native kill failure, and a later retry can still target the same managed PTY.",
-      "oracle": "Load the installed patched WindowsTerminal prototype in a pre-ready state and assert kill and destroy each close the terminal and native agent once with zero deferred work, while signal arguments still throw. Build both Windows SSH relay artifacts, reproduce vanilla npm node-pty with close=0/native-kill=0/deferred=1, apply the shipped patch, and assert close=1/native-kill=1/deferred=0 plus an artifact version derived from the patch bytes. Assert remote npm install executes patch enforcement before its runtime probe and never finalizes a failed patch. In the relay, assert immediate, graceful, fallback, and handler-dispose paths issue at most one no-argument kill per request; injected native failures retain one managed PTY, and a successful retry clears it.",
+      "oracle": "Load the installed patched WindowsTerminal prototype in a pre-ready state and assert kill and destroy each close the terminal and native agent once with zero deferred work, while signal arguments still throw. Build both Windows SSH relay artifacts, reproduce vanilla npm node-pty with close=0/native-kill=0/deferred=1, apply the shipped patch, and assert close=1/native-kill=1/deferred=0, AttachConsole failure falls back to the shell pid, and the artifact version derives from all patch bytes. Assert remote npm install executes patch enforcement before its runtime probe and never finalizes a failed patch. In the relay, assert immediate, graceful, stale-spawn fallback, and handler-dispose paths preserve ownership through native throw and issue at most one successful no-argument shutdown. In the renderer, reject the first kill, retain exact identity, and assert the next lifecycle/removal retry succeeds before ownership state is purged.",
       "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts config/scripts/build-relay-windows-node-pty-patch.test.mjs src/main/ssh/ssh-relay-native-deps-install.test.ts src/relay/node-pty-windows-pre-ready-shutdown.test.ts src/relay/pty-handler.test.ts"
+        "pnpm exec vitest run --config config/vitest.config.ts config/scripts/build-relay-windows-node-pty-patch.test.mjs src/main/ssh/ssh-relay-native-deps-install.test.ts src/relay/node-pty-windows-pre-ready-shutdown.test.ts src/relay/pty-handler.test.ts src/renderer/src/components/terminal-pane/pty-transport.test.ts src/renderer/src/store/slices/repos-remove-project-purge-leak.test.ts src/renderer/src/store/slices/repos.test.ts"
       ],
       "testFiles": [
         "config/scripts/build-relay-windows-node-pty-patch.test.mjs",
         "src/main/ssh/ssh-relay-native-deps-install.test.ts",
         "src/relay/node-pty-windows-pre-ready-shutdown.test.ts",
-        "src/relay/pty-handler.test.ts"
+        "src/relay/pty-handler.test.ts",
+        "src/renderer/src/components/terminal-pane/pty-transport.test.ts",
+        "src/renderer/src/store/slices/repos-remove-project-purge-leak.test.ts",
+        "src/renderer/src/store/slices/repos.test.ts"
       ],
       "assertionRefs": [
         {
@@ -3622,6 +3625,7 @@
           "assertions": [
             "both Windows artifacts contain the strict patcher and derive their version hash from its bytes",
             "vanilla npm node-pty defers pre-ready kill, while the shipped patch executes one native close immediately and clears deferred work",
+            "the shipped relay patch preserves the local ConPTY console-list shell-pid fallback",
             "patch application and dependency verification are idempotent"
           ]
         },
@@ -3643,7 +3647,25 @@
           "file": "src/relay/pty-handler.test.ts",
           "assertions": [
             "Windows immediate, graceful/fallback, and relay-dispose shutdown issue one no-argument kill",
-            "a native kill failure retains one managed PTY and a later successful retry clears it"
+            "stale spawn and explicit shutdown native failures retain one managed PTY and a later successful retry clears it"
+          ]
+        },
+        {
+          "file": "src/renderer/src/components/terminal-pane/pty-transport.test.ts",
+          "assertions": [
+            "a rejected teardown kill retains exact PTY identity and retries on the next lifecycle event"
+          ]
+        },
+        {
+          "file": "src/renderer/src/store/slices/repos-remove-project-purge-leak.test.ts",
+          "assertions": [
+            "project removal preserves PTY lookup ownership after provider rejection and purges only after retry succeeds"
+          ]
+        },
+        {
+          "file": "src/renderer/src/store/slices/repos.test.ts",
+          "assertions": [
+            "remote-runtime project removal retains terminal ownership after stop rejection and purges after retry succeeds"
           ]
         }
       ],
@@ -3652,10 +3674,10 @@
           "date": "2026-07-12",
           "runner": "local",
           "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts config/scripts/build-relay-windows-node-pty-patch.test.mjs src/main/ssh/ssh-relay-native-deps-install.test.ts src/relay/node-pty-windows-pre-ready-shutdown.test.ts src/relay/pty-handler.test.ts",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts config/scripts/build-relay-windows-node-pty-patch.test.mjs src/main/ssh/ssh-relay-native-deps-install.test.ts src/relay/node-pty-windows-pre-ready-shutdown.test.ts src/relay/pty-handler.test.ts src/renderer/src/components/terminal-pane/pty-transport.test.ts src/renderer/src/store/slices/repos-remove-project-purge-leak.test.ts src/renderer/src/store/slices/repos.test.ts",
           "result": "passed",
           "durationSeconds": 2,
-          "summary": "97 tests passed, including the built Windows relay artifact red/green harness, strict remote install ordering/failure/upgrade-repair handling, three installed-dependency pre-ready assertions, and relay shutdown/retry call-count coverage."
+          "summary": "193 tests passed, including built Windows relay red/green and ConPTY fallback parity, strict remote install ordering/failure/upgrade-repair handling, installed-dependency pre-ready assertions, stale-spawn fallback ownership, renderer retained retry identity, and local/remote project removal fail-closed ownership coverage."
         }
       ],
       "runtimeBudget": {
@@ -3672,7 +3694,7 @@
       },
       "performanceBudget": {
         "required": true,
-        "evidence": "Shutdown removes indefinite deferred retention and preserves at most one native kill and one existing graceful timer per PTY request; it adds no polling, listener, startup await, or steady-state work."
+        "evidence": "Shutdown removes indefinite deferred retention and preserves at most one in-flight native kill plus one existing graceful timer per PTY request. Failed renderer kills retain a bounded exact-id entry and retry only on a later PTY lifecycle event; no polling, new permanent listener, startup await, or steady-state work is added."
       },
       "promotionCriteria": [
         "Run the deterministic command across the required CI platforms without flakes.",

@@ -30,6 +30,15 @@ const PATCHED_KILL = `    WindowsTerminal.prototype.kill = function (signal) {
         this._close();
         this._agent.kill();
     };`
+const VANILLA_CONPTY_CONSOLE_LIST = `var consoleProcessList = getConsoleProcessList(shellPid);`
+const PATCHED_CONPTY_CONSOLE_LIST = `var consoleProcessList;
+try {
+    consoleProcessList = getConsoleProcessList(shellPid);
+}
+catch (_a) {
+    // Orca: AttachConsole can fail after the shell exits; preserve the root pid fallback.
+    consoleProcessList = [shellPid];
+}`
 
 function replaceExactlyOnce(source, before, after, label) {
   const first = source.indexOf(before)
@@ -51,20 +60,45 @@ function patchWindowsTerminal(source) {
   return replaceExactlyOnce(withDestroy, VANILLA_KILL, PATCHED_KILL, 'kill()')
 }
 
-function applyPatch(rootDir = process.cwd()) {
-  const target = join(rootDir, 'node_modules', 'node-pty', 'lib', 'windowsTerminal.js')
-  const source = readFileSync(target, 'utf8')
-  const patched = patchWindowsTerminal(source)
-  if (patched !== source) {
-    const pendingTarget = `${target}.orca-patch-pending`
-    try {
-      writeFileSync(pendingTarget, patched, 'utf8')
-      renameSync(pendingTarget, target)
-    } finally {
-      rmSync(pendingTarget, { force: true })
-    }
+function patchConptyConsoleListAgent(source) {
+  if (source.includes(PATCHED_CONPTY_CONSOLE_LIST)) {
+    return source
   }
-  return target
+  return replaceExactlyOnce(
+    source,
+    VANILLA_CONPTY_CONSOLE_LIST,
+    PATCHED_CONPTY_CONSOLE_LIST,
+    'ConPTY console-list fallback'
+  )
+}
+
+function writeAtomicallyIfChanged(target, source, patched) {
+  if (patched === source) {
+    return
+  }
+  const pendingTarget = `${target}.orca-patch-pending`
+  try {
+    writeFileSync(pendingTarget, patched, 'utf8')
+    renameSync(pendingTarget, target)
+  } finally {
+    rmSync(pendingTarget, { force: true })
+  }
+}
+
+function applyPatch(rootDir = process.cwd()) {
+  const moduleRoot = join(rootDir, 'node_modules', 'node-pty', 'lib')
+  const terminalTarget = join(moduleRoot, 'windowsTerminal.js')
+  const terminalSource = readFileSync(terminalTarget, 'utf8')
+  writeAtomicallyIfChanged(terminalTarget, terminalSource, patchWindowsTerminal(terminalSource))
+
+  const consoleListTarget = join(moduleRoot, 'conpty_console_list_agent.js')
+  const consoleListSource = readFileSync(consoleListTarget, 'utf8')
+  writeAtomicallyIfChanged(
+    consoleListTarget,
+    consoleListSource,
+    patchConptyConsoleListAgent(consoleListSource)
+  )
+  return terminalTarget
 }
 
 function checkNativeDeps(rootDir = process.cwd()) {
@@ -72,6 +106,16 @@ function checkNativeDeps(rootDir = process.cwd()) {
   const source = readFileSync(target, 'utf8')
   if (!source.includes(PATCHED_DESTROY) || !source.includes(PATCHED_KILL)) {
     throw new Error('node-pty Windows pre-ready shutdown patch is missing')
+  }
+  const consoleListTarget = join(
+    rootDir,
+    'node_modules',
+    'node-pty',
+    'lib',
+    'conpty_console_list_agent.js'
+  )
+  if (!readFileSync(consoleListTarget, 'utf8').includes(PATCHED_CONPTY_CONSOLE_LIST)) {
+    throw new Error('node-pty ConPTY console-list fallback patch is missing')
   }
   require.resolve('@parcel/watcher', { paths: [rootDir] })
   return target
@@ -91,4 +135,10 @@ if (require.main === module) {
   }
 }
 
-module.exports = { PATCH_MARKER, applyPatch, checkNativeDeps, patchWindowsTerminal }
+module.exports = {
+  PATCH_MARKER,
+  applyPatch,
+  checkNativeDeps,
+  patchConptyConsoleListAgent,
+  patchWindowsTerminal
+}

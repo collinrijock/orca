@@ -748,6 +748,53 @@ describe('repo slice runtime routing', () => {
     expect(ptyKill).not.toHaveBeenCalledWith('remote:term-1')
   })
 
+  it('retains remote terminal ownership until runtime stop retry succeeds', async () => {
+    let stopAttempts = 0
+    runtimeEnvironmentCall.mockImplementation(async (request: { method: string }) => {
+      if (request.method === 'terminal.stop' && stopAttempts++ === 0) {
+        throw new Error('runtime disconnected')
+      }
+      return {
+        id: 'rpc-remote-retry',
+        ok: true,
+        result: { ok: true },
+        _meta: { runtimeId: 'runtime-remote' }
+      }
+    })
+    const store = createTestStore()
+    const worktreeId = `${remoteRepo.id}::/remote/wt`
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
+      repos: [remoteRepo],
+      worktreesByRepo: {
+        [remoteRepo.id]: [makeWorktree({ id: worktreeId, repoId: remoteRepo.id })]
+      },
+      tabsByWorktree: {
+        [worktreeId]: [{ id: 'tab-1', worktreeId } as never]
+      },
+      ptyIdsByTabId: {
+        'tab-1': ['remote:term-1']
+      }
+    })
+
+    await store.getState().removeProject(remoteRepo.id)
+
+    expect(store.getState().repos).toEqual([remoteRepo])
+    expect(store.getState().ptyIdsByTabId['tab-1']).toEqual(['remote:term-1'])
+    expect(
+      runtimeEnvironmentCall.mock.calls.filter(([request]) => request.method === 'repo.rm')
+    ).toHaveLength(0)
+
+    await store.getState().removeProject(remoteRepo.id)
+
+    expect(stopAttempts).toBe(2)
+    expect(
+      runtimeEnvironmentCall.mock.calls.filter(([request]) => request.method === 'repo.rm')
+    ).toHaveLength(1)
+    expect(store.getState().repos).toEqual([])
+    expect(store.getState().ptyIdsByTabId['tab-1']).toBeUndefined()
+  })
+
   it('cleans up hidden detected worktree state when removing a repo', async () => {
     const store = createTestStore()
     const hiddenWorktree = makeWorktree({

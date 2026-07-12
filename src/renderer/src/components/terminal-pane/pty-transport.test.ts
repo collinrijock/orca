@@ -1355,7 +1355,7 @@ describe('createIpcPtyTransport', () => {
     })
     const spawnMock = vi.fn().mockReturnValue(spawnPromise)
     const killError = new Error('remote connection dropped')
-    const killMock = vi.fn().mockRejectedValue(killError)
+    const killMock = vi.fn().mockRejectedValueOnce(killError).mockResolvedValue(undefined)
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const onPtySpawn = vi.fn()
 
@@ -1404,6 +1404,12 @@ describe('createIpcPtyTransport', () => {
       )
       expect(onPtySpawn).not.toHaveBeenCalled()
       expect(transport.getPtyId()).toBeNull()
+
+      // A later transport lifecycle event retries the retained exact id.
+      spawnMock.mockResolvedValueOnce({ id: 'pty-next' })
+      await createIpcPtyTransport().connect({ url: '', callbacks: {} })
+      await flushPtySideEffects()
+      expect(killMock).toHaveBeenNthCalledWith(2, 'pty-late')
     } finally {
       warn.mockRestore()
     }
@@ -1412,7 +1418,7 @@ describe('createIpcPtyTransport', () => {
   it('settles and diagnoses a rejected PTY kill after transport teardown', async () => {
     const { createIpcPtyTransport } = await import('./pty-transport')
     const killError = new Error('remote connection dropped')
-    const kill = vi.fn().mockRejectedValue(killError)
+    const kill = vi.fn().mockRejectedValueOnce(killError).mockResolvedValue(undefined)
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     window.api.pty.kill = kill
     const transport = createIpcPtyTransport()
@@ -1423,6 +1429,9 @@ describe('createIpcPtyTransport', () => {
       await flushPtySideEffects()
 
       expect(warn).toHaveBeenCalledWith('[pty] Failed to stop disconnected PTY', killError)
+      await createIpcPtyTransport().connect({ url: '', callbacks: {} })
+      await flushPtySideEffects()
+      expect(kill).toHaveBeenNthCalledWith(2, 'pty-1')
     } finally {
       warn.mockRestore()
     }

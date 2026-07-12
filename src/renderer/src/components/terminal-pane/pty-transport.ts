@@ -37,6 +37,7 @@ import {
 } from '../../../../shared/agent-status-osc'
 import { extractIpcErrorMessage } from '@/lib/ipc-error'
 import { isTuiAgent } from '../../../../shared/tui-agent-config'
+import { killPtyRetainingRetryOwnership } from '@/lib/pty-kill-retry-ownership'
 
 // Re-export public API so existing consumers keep working.
 export {
@@ -732,9 +733,10 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
 
         // If destroyed while spawn was in flight, kill the new pty and bail
         if (destroyed) {
-          void window.api.pty.kill(spawnResult.id).catch((error) => {
-            console.warn('[pty] Failed to stop PTY spawned after transport teardown', error)
-          })
+          void killPtyRetainingRetryOwnership(
+            spawnResult.id,
+            '[pty] Failed to stop PTY spawned after transport teardown'
+          ).catch(() => {})
           return
         }
 
@@ -920,9 +922,9 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
       inputWriteQueue.clear()
       if (ptyId) {
         const id = ptyId
-        void window.api.pty.kill(id).catch((error) => {
-          console.warn('[pty] Failed to stop disconnected PTY', error)
-        })
+        void killPtyRetainingRetryOwnership(id, '[pty] Failed to stop disconnected PTY').catch(
+          () => {}
+        )
         connected = false
         ptyId = null
         unregisterPtyHandlers(id)

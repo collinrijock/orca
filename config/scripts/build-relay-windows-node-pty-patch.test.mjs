@@ -4,6 +4,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
+import { runInNewContext } from 'node:vm'
 import { describe, expect, it } from 'vitest'
 
 const projectRoot = resolve(import.meta.dirname, '../..')
@@ -36,6 +37,14 @@ WindowsTerminal.prototype._deferNoArgs = function (deferredFn) {
     this._deferreds.push({ run: function () { return deferredFn.call(_this); } });
 };
 exports.WindowsTerminal = WindowsTerminal;
+`
+const vanillaConptyConsoleListAgent = `'use strict';
+var utils_1 = require("./utils");
+var getConsoleProcessList = utils_1.loadNativeModule('conpty_console_list').module.getConsoleProcessList;
+var shellPid = parseInt(process.argv[2], 10);
+var consoleProcessList = getConsoleProcessList(shellPid);
+process.send({ consoleProcessList: consoleProcessList });
+process.exit(0);
 `
 
 function loadHarness(modulePath) {
@@ -92,9 +101,17 @@ describe('packaged Windows SSH relay node-pty patch', () => {
     try {
       const modulePath = join(tempRoot, 'node_modules', 'node-pty', 'lib', 'windowsTerminal.js')
       const watcherPath = join(tempRoot, 'node_modules', '@parcel', 'watcher', 'index.js')
+      const consoleListPath = join(
+        tempRoot,
+        'node_modules',
+        'node-pty',
+        'lib',
+        'conpty_console_list_agent.js'
+      )
       mkdirSync(dirname(modulePath), { recursive: true })
       mkdirSync(dirname(watcherPath), { recursive: true })
       writeFileSync(modulePath, vanillaWindowsTerminal, 'utf8')
+      writeFileSync(consoleListPath, vanillaConptyConsoleListAgent, 'utf8')
       writeFileSync(watcherPath, 'module.exports = {}\n', 'utf8')
 
       expect(loadHarness(modulePath)).toEqual({
@@ -102,7 +119,6 @@ describe('packaged Windows SSH relay node-pty patch', () => {
         nativeKillCount: 0,
         deferredCount: 1
       })
-
       const patch = spawnSync(
         process.execPath,
         [join(projectRoot, 'out', 'relay', 'win32-x64', patchName), '--apply', tempRoot],
@@ -115,6 +131,24 @@ describe('packaged Windows SSH relay node-pty patch', () => {
         nativeKillCount: 1,
         deferredCount: 0
       })
+      const sent = []
+      runInNewContext(readFileSync(consoleListPath, 'utf8'), {
+        require: () => ({
+          loadNativeModule: () => ({
+            module: {
+              getConsoleProcessList: () => {
+                throw new Error('AttachConsole failed')
+              }
+            }
+          })
+        }),
+        process: {
+          argv: ['node', consoleListPath, '42'],
+          exit: () => {},
+          send: (message) => sent.push(message)
+        }
+      })
+      expect(sent).toEqual([{ consoleProcessList: [42] }])
 
       const secondPatch = spawnSync(
         process.execPath,

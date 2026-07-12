@@ -75,6 +75,7 @@ import { markOnboardingProjectAdded } from '@/lib/onboarding-project-checklist'
 import { filterSetupScriptPromptDismissalsToValidRepos } from '@/lib/setup-script-prompt'
 import { notifyInstalledAgentSkillsChanged } from '@/hooks/useInstalledAgentSkills'
 import { translate } from '@/i18n/i18n'
+import { killPtyRetainingRetryOwnership } from '@/lib/pty-kill-retry-ownership'
 import {
   getRepoExecutionHostId,
   isRuntimeOwnedSshTargetId,
@@ -2754,16 +2755,6 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
         return
       }
       const ownerHostId = getRepoExecutionHostId(ownerRepo)
-      // Why: an SSH-mode per-workspace-env's workspace is the repo's main worktree, so deleting it
-      // routes here (project removal) rather than through removeWorktree. Tear down the backing
-      // ephemeral runtime (Docker/VM + hidden SSH target) first so it doesn't leak when the project
-      // is removed. Matches on the repo's runtime-owned connectionId and its known worktree ids.
-      if (isRuntimeOwnedSshTargetId(ownerRepo.connectionId)) {
-        await cleanupEphemeralVmRuntimesForDeleted({
-          workspaceIds: getKnownRepoWorktreeIds(get(), projectId, ownerHostId),
-          runtimeOwnedSshTargetIds: [ownerRepo.connectionId as string]
-        })
-      }
       // Why: derive the runtime target from the owner's own settings, passing the
       // explicit options.hostId so a duplicate repo id across hosts resolves to the
       // intended row. settingsForRepoOwner clears the focused runtime for SSH/local
@@ -2777,6 +2768,56 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
       const idExistsOnOtherHost = get().repos.some(
         (repo) => repo.id === projectId && getRepoExecutionHostId(repo) !== ownerHostId
       )
+      // Kill PTYs for all worktrees belonging to this repo
+      const worktreeIds = getKnownRepoWorktreeIds(get(), projectId, ownerHostId)
+      const killedTabIds = new Set<string>()
+      const killedPtyIds = new Set<string>()
+      if (target.kind === 'environment') {
+        await Promise.all(
+          worktreeIds.map((worktreeId) =>
+            callRuntimeRpc(
+              target,
+              'terminal.stop',
+              { worktree: toRuntimeWorktreeSelector(worktreeId) },
+              { timeoutMs: 15_000 }
+            )
+          )
+        )
+      }
+      const localPtyKills: Promise<void>[] = []
+      for (const wId of worktreeIds) {
+        const tabs = get().tabsByWorktree[wId] ?? []
+        for (const tab of tabs) {
+          killedTabIds.add(tab.id)
+          for (const ptyId of get().ptyIdsByTabId[tab.id] ?? []) {
+            killedPtyIds.add(ptyId)
+            if (!ptyId.startsWith('remote:')) {
+              localPtyKills.push(
+                killPtyRetainingRetryOwnership(
+                  ptyId,
+                  '[pty] Failed to stop PTY while removing project'
+                )
+              )
+            }
+          }
+        }
+      }
+      // Why: purge deletes the last renderer lookup path for these exact ids.
+      // Fail closed so a provider rejection keeps state available for retry.
+      await Promise.all(localPtyKills)
+
+      // Why: an SSH-mode per-workspace-env's workspace is the repo's main worktree.
+      // Stop its PTYs before tearing down the backing VM/hidden SSH target so a
+      // provider failure retains a reachable process and exact retry identity.
+      if (isRuntimeOwnedSshTargetId(ownerRepo.connectionId)) {
+        await cleanupEphemeralVmRuntimesForDeleted({
+          workspaceIds: worktreeIds,
+          runtimeOwnedSshTargetIds: [ownerRepo.connectionId as string]
+        })
+      }
+
+      // Why: provider shutdown must succeed before deleting the repo remotely.
+      // Otherwise a retry can be blocked by a non-idempotent repo.rm response.
       await (target.kind === 'local'
         ? idExistsOnOtherHost
           ? window.api.repos.removeForHost({ repoId: projectId, hostId: ownerHostId })
@@ -2790,37 +2831,6 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
       get().evictGitHubRepoCaches(projectId, repoPath)
       const { clearRepoSlugCacheEntry } = await import('../../lib/repo-slug-index')
       clearRepoSlugCacheEntry(projectId)
-
-      // Kill PTYs for all worktrees belonging to this repo
-      const worktreeIds = getKnownRepoWorktreeIds(get(), projectId, ownerHostId)
-      const killedTabIds = new Set<string>()
-      const killedPtyIds = new Set<string>()
-      if (target.kind === 'environment') {
-        await Promise.allSettled(
-          worktreeIds.map((worktreeId) =>
-            callRuntimeRpc(
-              target,
-              'terminal.stop',
-              { worktree: toRuntimeWorktreeSelector(worktreeId) },
-              { timeoutMs: 15_000 }
-            )
-          )
-        )
-      }
-      for (const wId of worktreeIds) {
-        const tabs = get().tabsByWorktree[wId] ?? []
-        for (const tab of tabs) {
-          killedTabIds.add(tab.id)
-          for (const ptyId of get().ptyIdsByTabId[tab.id] ?? []) {
-            killedPtyIds.add(ptyId)
-            if (!ptyId.startsWith('remote:')) {
-              void Promise.resolve(window.api.pty.kill(ptyId)).catch((error) => {
-                console.warn('[pty] Failed to stop PTY while removing project', error)
-              })
-            }
-          }
-        }
-      }
 
       // Why: route project removal through the canonical per-worktree purge so all
       // ~30 worktree-scoped maps are evicted. removeProject previously hand-deleted

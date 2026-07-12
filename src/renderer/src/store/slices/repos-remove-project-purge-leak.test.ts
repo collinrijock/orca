@@ -85,7 +85,7 @@ describe('removeProject purges per-worktree state (leak regression)', () => {
     expect(s.everActivatedWorktreeIds.has(W2)).toBe(true)
   })
 
-  it('purges project state after a rejected best-effort PTY kill', async () => {
+  it('retains project PTY ownership after kill rejection and purges after retry', async () => {
     const store = createTestStore()
     seedTwoProjects(store)
     store.setState({
@@ -99,8 +99,18 @@ describe('removeProject purges per-worktree state (leak regression)', () => {
     try {
       await store.getState().removeProject(repo1.id)
 
-      expect(store.getState().unifiedTabsByWorktree[W1]).toBeUndefined()
+      expect(store.getState().unifiedTabsByWorktree[W1]).toBeDefined()
+      expect(store.getState().ptyIdsByTabId['tab-1']).toEqual(['pty-1'])
+      expect(reposRemove).not.toHaveBeenCalled()
       expect(warn).toHaveBeenCalledWith('[pty] Failed to stop PTY while removing project', error)
+
+      ptyKill.mockResolvedValue(undefined)
+      await store.getState().removeProject(repo1.id)
+
+      expect(ptyKill).toHaveBeenCalledTimes(2)
+      expect(reposRemove).toHaveBeenCalledTimes(1)
+      expect(store.getState().unifiedTabsByWorktree[W1]).toBeUndefined()
+      expect(store.getState().ptyIdsByTabId['tab-1']).toBeUndefined()
     } finally {
       warn.mockRestore()
     }
