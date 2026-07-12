@@ -289,17 +289,20 @@ export function buildAttentionByWorktree(
 ): Map<string, WorktreeAttention> {
   const byTab = buildExplicitEntriesByTabId(agentStatusByPaneKey, migrationUnsupportedByPtyId)
   const byAttributedWorktree = buildExplicitEntriesByWorktreeId(agentStatusByPaneKey)
+  const mirroredTabIds = new Set(
+    Object.values(tabsByWorktree ?? {}).flatMap((tabs) => tabs.map((tab) => tab.id))
+  )
   const result = new Map<string, WorktreeAttention>()
 
   for (const worktree of worktrees) {
     const tabs = tabsByWorktree?.[worktree.id] ?? []
-    const tabIds = new Set(tabs.map((tab) => tab.id))
     // Why: hook stamps can arrive before the renderer mirrors a headless or
-    // remote tab. Attribution must still promote the visible worktree in Smart.
+    // remote tab. Once mirrored anywhere, live tab ownership is authoritative
+    // over a stale worktree stamp and must not promote both worktrees.
     const panes: PaneInput[] = (byAttributedWorktree.get(worktree.id) ?? [])
       .filter((entry) => {
         const parsed = parsePaneKey(entry.paneKey)
-        return parsed !== null && !tabIds.has(parsed.tabId)
+        return parsed !== null && !mirroredTabIds.has(parsed.tabId)
       })
       .map((entry) => ({ kind: 'hook' as const, entry }))
     if (tabs.length === 0) {

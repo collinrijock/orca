@@ -425,6 +425,39 @@ describe('buildAttentionByWorktree', () => {
     })
   })
 
+  it('prefers mirrored tab ownership over a stale worktree stamp', () => {
+    const stale = makeWorktree('stale-worktree')
+    const current = makeWorktree('current-worktree')
+    const tab = makeTab('tab-1', current.id)
+    const key = paneKey(tab.id, LEAF_1)
+    const entries = {
+      [key]: makeEntry({
+        paneKey: key,
+        worktreeId: stale.id,
+        tabId: tab.id,
+        state: 'blocked',
+        stateStartedAt: NOW - 5_000,
+        updatedAt: NOW - 1_000
+      })
+    }
+
+    const attention = buildAttentionByWorktree(
+      [stale, current],
+      { [current.id]: [tab] },
+      entries,
+      {},
+      ptyMap([tab.id]),
+      NOW
+    )
+
+    expect(attention.get(stale.id)).toEqual(IDLE)
+    expect(attention.get(current.id)).toEqual({
+      cls: 1,
+      attentionTimestamp: NOW - 5_000,
+      cause: 'blocked'
+    })
+  })
+
   it('aggregates entries across multiple panes on the same tab', () => {
     const w = makeWorktree('wt-1')
     const tab = makeTab('tab-1', w.id)
