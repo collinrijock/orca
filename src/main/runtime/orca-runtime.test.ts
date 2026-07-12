@@ -22028,6 +22028,76 @@ describe('OrcaRuntimeService', () => {
     expect(summary).toMatchObject({ hasHostSidebarActivity: true, status: 'working' })
   })
 
+  it('uses mirrored tab ownership after a workspace rename instead of stale hook attribution', async () => {
+    const renamedPath = '/tmp/worktree-renamed'
+    const renamedWorktreeId = `${TEST_REPO_ID}::${renamedPath}`
+    vi.mocked(listWorktrees).mockResolvedValue([
+      ...MOCK_GIT_WORKTREES,
+      {
+        path: renamedPath,
+        head: 'def',
+        branch: 'feature/renamed',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+    const metaById = {
+      ...store.getAllWorktreeMeta(),
+      [renamedWorktreeId]: makeWorktreeMeta({ displayName: 'renamed' })
+    }
+    const session = makeWorkspaceSessionWithHeadlessTerminal({
+      activeWorktreeId: renamedWorktreeId,
+      activeTabIdByWorktree: { [renamedWorktreeId]: 'host-tab' },
+      tabsByWorktree: {
+        [renamedWorktreeId]: [
+          {
+            id: 'host-tab',
+            ptyId: null,
+            worktreeId: renamedWorktreeId,
+            title: 'Codex',
+            customTitle: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1
+          }
+        ]
+      }
+    })
+    const runtimeStore = {
+      ...store,
+      getAllWorktreeMeta: () => metaById,
+      getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
+      getWorkspaceSession: () => session
+    }
+    const now = Date.now()
+    const runtime = new OrcaRuntimeService(runtimeStore as never, undefined, {
+      getAgentStatusSnapshot: () => [
+        {
+          paneKey: `host-tab:${HEADLESS_LEAF_ID}`,
+          tabId: 'host-tab',
+          worktreeId: TEST_WORKTREE_ID,
+          state: 'working',
+          prompt: 'continue after rename',
+          agentType: 'codex',
+          connectionId: null,
+          receivedAt: now,
+          stateStartedAt: now - 100
+        }
+      ]
+    })
+
+    const { worktrees } = await runtime.getWorktreePs()
+    const oldSummary = worktrees.find((worktree) => worktree.worktreeId === TEST_WORKTREE_ID)
+    const renamedSummary = worktrees.find((worktree) => worktree.worktreeId === renamedWorktreeId)
+
+    expect(oldSummary?.agents).toEqual([])
+    expect(renamedSummary).toMatchObject({
+      hasHostSidebarActivity: true,
+      status: 'working',
+      agents: [expect.objectContaining({ prompt: 'continue after rename' })]
+    })
+  })
+
   it('keeps a fresh OSC row when the cached hook row for the same pane is older', async () => {
     const now = Date.now()
     const leafId = '44444444-4444-4444-8444-444444444444'

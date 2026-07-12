@@ -11191,10 +11191,25 @@ export class OrcaRuntimeService {
       }
     }
 
+    const mirroredWorktreeIdByTabId = new Map<string, string>()
+    for (const [worktreeId, tabs] of Object.entries(session?.tabsByWorktree ?? {})) {
+      for (const tab of tabs) {
+        mirroredWorktreeIdByTabId.set(tab.id, worktreeId)
+      }
+    }
+    // Why: a live renderer graph may precede persistence, but persisted tab
+    // ownership wins when an automatic workspace rename has already rekeyed it.
+    for (const [tabId, tab] of this.tabs) {
+      if (!mirroredWorktreeIdByTabId.has(tabId)) {
+        mirroredWorktreeIdByTabId.set(tabId, tab.worktreeId)
+      }
+    }
+
     this.attachAgentRowsToSummaries(
       summaries,
       runtimeWorktreeSummaryPathIndex,
-      missingRuntimeWorktreeIds
+      missingRuntimeWorktreeIds,
+      mirroredWorktreeIdByTabId
     )
 
     const sorted = [...summaries.values()].sort(compareWorktreePs)
@@ -11212,7 +11227,8 @@ export class OrcaRuntimeService {
   private attachAgentRowsToSummaries(
     summaries: Map<string, RuntimeWorktreePsSummary>,
     runtimeWorktreeSummaryPathIndex: RuntimeWorktreeSummaryPathIndex,
-    missingRuntimeWorktreeIds: Set<string>
+    missingRuntimeWorktreeIds: Set<string>,
+    mirroredWorktreeIdByTabId: ReadonlyMap<string, string>
   ): void {
     // Why: most agents report via hooks (agent-hooks/server), not OSC, so the
     // hook snapshot is the primary source — same one the desktop sidebar reads.
@@ -11221,6 +11237,7 @@ export class OrcaRuntimeService {
       string,
       {
         paneKey: string
+        tabId?: string
         worktreeId?: string
         state: ParsedAgentStatusPayload['state']
         agentType: string | null
@@ -11237,6 +11254,7 @@ export class OrcaRuntimeService {
       const { payload } = snapshot
       rowSources.set(snapshot.paneKey, {
         paneKey: snapshot.paneKey,
+        tabId: snapshot.tabId,
         worktreeId: snapshot.worktreeId,
         state: payload.state,
         agentType: payload.agentType ?? null,
@@ -11258,6 +11276,7 @@ export class OrcaRuntimeService {
       }
       rowSources.set(entry.paneKey, {
         paneKey: entry.paneKey,
+        tabId: entry.tabId,
         worktreeId: entry.worktreeId,
         state: entry.state,
         agentType: entry.agentType ?? null,
@@ -11277,7 +11296,10 @@ export class OrcaRuntimeService {
     const rowsByWorktree = new Map<string, RuntimeWorktreeAgentRow[]>()
     const now = Date.now()
     for (const src of rowSources.values()) {
-      const worktreeId = src.worktreeId
+      // Why: hooks retain launch-time attribution across automatic workspace
+      // renames; the tab's current mirrored owner is authoritative when present.
+      const worktreeId =
+        (src.tabId ? mirroredWorktreeIdByTabId.get(src.tabId) : undefined) ?? src.worktreeId
       if (!worktreeId) {
         continue
       }
