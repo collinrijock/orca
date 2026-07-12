@@ -164,6 +164,7 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
       ['worktree', 'remove'],
       ['worktree', 'delete']
     ],
+    destructive: true,
     summary: 'Remove a worktree from Orca and git',
     usage: 'orca worktree rm --worktree <selector> [--force] [--run-hooks] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'worktree', 'force', 'run-hooks'],
