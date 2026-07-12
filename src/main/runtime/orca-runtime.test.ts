@@ -22266,6 +22266,41 @@ describe('OrcaRuntimeService', () => {
     expect(removeProject).toHaveBeenCalledWith(TEST_REPO_ID)
   })
 
+  it('drains a create-first spawn before project removal snapshots liveness', async () => {
+    const removeProject = vi.fn()
+    const runtime = new OrcaRuntimeService({ ...store, removeProject } as never)
+    const spawnResult = deferred<{ id: string }>()
+    const stopAndWait = vi.fn(async (ptyId: string) => {
+      runtime.onPtyExit(ptyId, -1)
+      return true
+    })
+    const processLists = [[{ id: 'pty-late', cwd: '/tmp/worktree-a', title: 'Shell' }], []]
+    const spawn = vi.fn(() => spawnResult.promise)
+    runtime.setPtyController({
+      spawn,
+      write: () => true,
+      kill: () => false,
+      stopAndWait,
+      getForegroundProcess: async () => null,
+      listProcesses: async () => processLists.shift() ?? []
+    })
+    syncSinglePty(runtime, 'pty-late')
+
+    const create = runtime.createTerminal(`id:${TEST_WORKTREE_ID}`)
+    await vi.waitFor(() => expect(spawn).toHaveBeenCalledOnce())
+    const removal = runtime.removeProject(`id:${TEST_REPO_ID}`)
+    await Promise.resolve()
+    expect(removeProject).not.toHaveBeenCalled()
+    expect(processLists).toHaveLength(2)
+
+    spawnResult.resolve({ id: 'pty-late' })
+    await expect(create).resolves.toMatchObject({ ptyId: 'pty-late' })
+    await expect(removal).resolves.toEqual({ removed: true })
+
+    expect(stopAndWait).toHaveBeenCalledWith('pty-late')
+    expect(removeProject).toHaveBeenCalledWith(TEST_REPO_ID)
+  })
+
   it('rejects terminal.stop when provider shutdown is not accepted', async () => {
     const runtime = new OrcaRuntimeService(store)
     runtime.setPtyController({

@@ -2227,6 +2227,7 @@ export class OrcaRuntimeService {
   // Why: repo removal must make verified stop + metadata removal atomic with
   // respect to paired/mobile terminal creation, or a late spawn is orphaned.
   private terminalAdmissionBlockedWorktreeIds = new Set<string>()
+  private terminalAdmissionsByWorktreeId = new Map<string, Set<Promise<void>>>()
   private titleObservationSequence = 0
   private headlessTerminals = new Map<string, RuntimeHeadlessTerminal>()
   private ptyOutputSequenceById = new Map<string, number>()
@@ -12200,6 +12201,47 @@ export class OrcaRuntimeService {
     return updated
   }
 
+  private beginTerminalAdmission(worktreeId: string): () => void {
+    if (this.terminalAdmissionBlockedWorktreeIds.has(worktreeId)) {
+      throw new Error('terminal_admission_blocked_for_project_removal')
+    }
+    let resolveDone = (): void => {}
+    const done = new Promise<void>((resolve) => {
+      resolveDone = resolve
+    })
+    const admissions = this.terminalAdmissionsByWorktreeId.get(worktreeId) ?? new Set()
+    admissions.add(done)
+    this.terminalAdmissionsByWorktreeId.set(worktreeId, admissions)
+    let released = false
+    return () => {
+      if (released) {
+        return
+      }
+      released = true
+      admissions.delete(done)
+      if (admissions.size === 0) {
+        this.terminalAdmissionsByWorktreeId.delete(worktreeId)
+      }
+      resolveDone()
+    }
+  }
+
+  private async drainTerminalAdmissions(worktreeIds: readonly string[]): Promise<void> {
+    const pending = worktreeIds.flatMap((id) => [
+      ...(this.terminalAdmissionsByWorktreeId.get(id) ?? [])
+    ])
+    await Promise.all(pending)
+  }
+
+  private async withTerminalAdmission<T>(worktreeId: string, action: () => Promise<T>): Promise<T> {
+    const release = this.beginTerminalAdmission(worktreeId)
+    try {
+      return await action()
+    } finally {
+      release()
+    }
+  }
+
   async removeProject(repoSelector: string): Promise<{ removed: true }> {
     if (!this.store?.removeProject) {
       throw new Error('runtime_unavailable')
@@ -12215,6 +12257,10 @@ export class OrcaRuntimeService {
       this.terminalAdmissionBlockedWorktreeIds.add(id)
     }
     try {
+      // Why: a create that passed admission before the block can still have a
+      // provider spawn in flight. Let it register first so the fresh stop
+      // snapshot sees and terminates it.
+      await this.drainTerminalAdmissions(worktreeIds)
       // Why: hold admission closed across both the fresh liveness proof and
       // repo mutation. A separate terminal.stop RPC leaves an inter-call gap.
       for (const id of worktreeIds) {
@@ -17597,31 +17643,31 @@ export class OrcaRuntimeService {
         tabId,
         agentTeamsPlan?.env
       )
-      if (this.terminalAdmissionBlockedWorktreeIds.has(workspace.id)) {
-        throw new Error('terminal_admission_blocked_for_project_removal')
-      }
-      const result = await this.ptyController.spawn({
-        cols: 120,
-        rows: 40,
-        cwd,
-        command: sequencedStartupCommand
-          ? launchOpts.command
-          : (agentTeamsPlan?.command ?? launchOpts.command),
-        commandDelivery: 'provider',
-        startupCommandDelivery: launchOpts.startupCommandDelivery,
-        env,
-        envToDelete: agentTeamsPlan?.envToDelete,
-        telemetry: launchOpts.telemetry,
-        connectionId: workspace.connectionId,
-        worktreeId: workspace.id,
-        preAllocatedHandle,
-        tabId,
-        leafId,
-        ...(launchOpts.sessionId ? { sessionId: launchOpts.sessionId } : {}),
-        ...(launchOpts.persistHostSessionBinding ? { persistHostSessionBinding: true } : {})
+      const result = await this.withTerminalAdmission(workspace.id, async () => {
+        const spawned = await this.ptyController!.spawn!({
+          cols: 120,
+          rows: 40,
+          cwd,
+          command: sequencedStartupCommand
+            ? launchOpts.command
+            : (agentTeamsPlan?.command ?? launchOpts.command),
+          commandDelivery: 'provider',
+          startupCommandDelivery: launchOpts.startupCommandDelivery,
+          env,
+          envToDelete: agentTeamsPlan?.envToDelete,
+          telemetry: launchOpts.telemetry,
+          connectionId: workspace.connectionId,
+          worktreeId: workspace.id,
+          preAllocatedHandle,
+          tabId,
+          leafId,
+          ...(launchOpts.sessionId ? { sessionId: launchOpts.sessionId } : {}),
+          ...(launchOpts.persistHostSessionBinding ? { persistHostSessionBinding: true } : {})
+        })
+        this.registerPreAllocatedHandleForPty(spawned.id, preAllocatedHandle)
+        this.registerPty(spawned.id, workspace.id, workspace.connectionId)
+        return spawned
       })
-      this.registerPreAllocatedHandleForPty(result.id, preAllocatedHandle)
-      this.registerPty(result.id, workspace.id, workspace.connectionId)
       const pty = this.getOrCreatePtyWorktreeRecord(result.id)
       if (pty) {
         if (launchOpts.title) {
@@ -17719,48 +17765,55 @@ export class OrcaRuntimeService {
     // Why: terminal creation is a renderer-side Zustand store operation (like
     // browser tab creation). The main process sends a request, the renderer
     // creates the tab and replies with the tabId so we can resolve the handle.
-    const reply = await new Promise<{ tabId: string; title: string }>((resolve, reject) => {
-      const timer = setTimeout(() => {
-        ipcMain.removeListener('terminal:tabCreateReply', handler)
-        reject(new Error('Terminal creation timed out'))
-      }, 10_000)
+    const createRendererTerminal = async (): Promise<{
+      reply: { tabId: string; title: string }
+      handle: string
+    }> => {
+      const reply = await new Promise<{ tabId: string; title: string }>((resolve, reject) => {
+        const timer = setTimeout(() => {
+          ipcMain.removeListener('terminal:tabCreateReply', handler)
+          reject(new Error('Terminal creation timed out'))
+        }, 10_000)
 
-      const handler = (
-        event: Electron.IpcMainEvent,
-        r: { requestId: string; tabId?: string; title?: string; error?: string }
-      ): void => {
-        if (event.sender !== win.webContents || r.requestId !== requestId) {
-          return
+        const handler = (
+          event: Electron.IpcMainEvent,
+          r: { requestId: string; tabId?: string; title?: string; error?: string }
+        ): void => {
+          if (event.sender !== win.webContents || r.requestId !== requestId) {
+            return
+          }
+          clearTimeout(timer)
+          ipcMain.removeListener('terminal:tabCreateReply', handler)
+          if (r.error) {
+            reject(new Error(r.error))
+          } else {
+            resolve({ tabId: r.tabId!, title: r.title ?? launchOpts.title ?? '' })
+          }
         }
-        clearTimeout(timer)
-        ipcMain.removeListener('terminal:tabCreateReply', handler)
-        if (r.error) {
-          reject(new Error(r.error))
-        } else {
-          resolve({ tabId: r.tabId!, title: r.title ?? launchOpts.title ?? '' })
-        }
-      }
-      ipcMain.on('terminal:tabCreateReply', handler)
-      win.webContents.send('terminal:requestTabCreate', {
-        requestId,
-        worktreeId,
-        command: launchOpts.command,
-        cwd,
-        ...(launchOpts.env ? { env: launchOpts.env } : {}),
-        ...(launchOpts.launchConfig ? { launchConfig: launchOpts.launchConfig } : {}),
-        ...(launchOpts.launchToken ? { launchToken: launchOpts.launchToken } : {}),
-        ...(launchOpts.launchAgent ? { launchAgent: launchOpts.launchAgent } : {}),
-        startupCommandDelivery: launchOpts.startupCommandDelivery,
-        title: launchOpts.title,
-        activate: presentation === 'focused',
-        ...(presentation ? { presentation } : {})
+        ipcMain.on('terminal:tabCreateReply', handler)
+        win.webContents.send('terminal:requestTabCreate', {
+          requestId,
+          worktreeId,
+          command: launchOpts.command,
+          cwd,
+          ...(launchOpts.env ? { env: launchOpts.env } : {}),
+          ...(launchOpts.launchConfig ? { launchConfig: launchOpts.launchConfig } : {}),
+          ...(launchOpts.launchToken ? { launchToken: launchOpts.launchToken } : {}),
+          ...(launchOpts.launchAgent ? { launchAgent: launchOpts.launchAgent } : {}),
+          startupCommandDelivery: launchOpts.startupCommandDelivery,
+          title: launchOpts.title,
+          activate: presentation === 'focused',
+          ...(presentation ? { presentation } : {})
+        })
       })
-    })
 
-    // Why: the renderer created the tab immediately, but the graph sync that
-    // populates this.leaves may not have arrived yet. Wait for the leaf to
-    // appear so we can return a valid handle the caller can use right away.
-    const handle = await this.waitForTerminalHandle(reply.tabId)
+      // Why: keep admission active until graph sync publishes the created PTY;
+      // project removal can then drain this create before its liveness snapshot.
+      return { reply, handle: await this.waitForTerminalHandle(reply.tabId) }
+    }
+    const { reply, handle } = workspace
+      ? await this.withTerminalAdmission(workspace.id, createRendererTerminal)
+      : await createRendererTerminal()
     return {
       handle,
       tabId: reply.tabId,
@@ -18638,23 +18691,23 @@ export class OrcaRuntimeService {
     const leafId = randomUUID()
     const preAllocatedHandle = this.createPreAllocatedTerminalHandle()
     const paneKey = makePaneKey(parentTabId, leafId)
-    if (this.terminalAdmissionBlockedWorktreeIds.has(workspace.id)) {
-      throw new Error('terminal_admission_blocked_for_project_removal')
-    }
-    const result = await this.ptyController.spawn({
-      cols: 120,
-      rows: 40,
-      cwd: workspace.path,
-      command: opts.command,
-      commandDelivery: 'provider',
-      env: this.buildTerminalWorkspaceEnv(workspace, opts.env ?? {}, paneKey, parentTabId),
-      envToDelete: opts.envToDelete,
-      connectionId: workspace.connectionId,
-      worktreeId: workspace.id,
-      preAllocatedHandle
+    const result = await this.withTerminalAdmission(workspace.id, async () => {
+      const spawned = await this.ptyController!.spawn!({
+        cols: 120,
+        rows: 40,
+        cwd: workspace.path,
+        command: opts.command,
+        commandDelivery: 'provider',
+        env: this.buildTerminalWorkspaceEnv(workspace, opts.env ?? {}, paneKey, parentTabId),
+        envToDelete: opts.envToDelete,
+        connectionId: workspace.connectionId,
+        worktreeId: workspace.id,
+        preAllocatedHandle
+      })
+      this.registerPreAllocatedHandleForPty(spawned.id, preAllocatedHandle)
+      this.registerPty(spawned.id, workspace.id, workspace.connectionId)
+      return spawned
     })
-    this.registerPreAllocatedHandleForPty(result.id, preAllocatedHandle)
-    this.registerPty(result.id, workspace.id, workspace.connectionId)
     const createdPty = this.getOrCreatePtyWorktreeRecord(result.id)
     if (createdPty) {
       createdPty.tabId = parentTabId

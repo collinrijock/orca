@@ -3698,6 +3698,7 @@
             "terminal.stop awaits stopAndWait and fresh post-stop liveness before acknowledging provider shutdown",
             "provider shutdown rejection fails terminal.stop closed",
             "project removal fences paired terminal admission through provider stop and repo mutation",
+            "project removal drains create-first in-flight admissions before its liveness snapshot",
             "targeted terminal stop omits foreground probes for unrelated sessions"
           ]
         },
@@ -3765,6 +3766,15 @@
           "result": "passed",
           "durationSeconds": 12,
           "summary": "1236 tests passed with relay-generation identity, stale-spawn retained ownership, bounded renderer maps/retry work, VM cleanup success ordering, atomic runtime removal admission, and targeted liveness probes."
+        },
+        {
+          "date": "2026-07-12",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime.test.ts",
+          "result": "passed",
+          "durationSeconds": 18,
+          "summary": "664 runtime tests passed, including removal-first rejection and create-first admission drain before provider liveness snapshots."
         }
       ],
       "runtimeBudget": {
