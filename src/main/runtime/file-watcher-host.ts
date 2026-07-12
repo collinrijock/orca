@@ -14,6 +14,7 @@ import {
 
 const RUNTIME_FILE_WATCH_IGNORE_OPTIONS = buildParcelWatcherIgnoreOptions(WATCHER_IGNORE_DIRS)
 const RUNTIME_FILE_WATCH_EVENT_LIMIT = 200
+const RUNTIME_FILE_WATCH_CRAWL_TIMEOUT_MS = 60_000
 
 type RuntimeFileWatchSubscriber = {
   onEvents: (events: FsChangeEvent[]) => void
@@ -126,6 +127,9 @@ function subscribeRuntimeRootWatch(root: RuntimeRootWatch): Promise<void> {
       onInterruption: emitOverflow,
       onOverflow: emitOverflow,
       onTerminalError: (error) => recoverRuntimeRootWatch(root, generation, error),
+      // Why: the transport bounds initial setup at 15 seconds, but a later
+      // crash-resubscribe has no request deadline and must not freeze its shard forever.
+      subscribeTimeoutMs: RUNTIME_FILE_WATCH_CRAWL_TIMEOUT_MS,
       signal: root.abortController.signal
     }
   ).then(async (subscription) => {

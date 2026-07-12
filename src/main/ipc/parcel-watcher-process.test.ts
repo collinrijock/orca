@@ -376,6 +376,48 @@ describe('subscribeViaWatcherProcess', () => {
     }
   })
 
+  it('ends a root whose crash resubscription crawl exceeds its deadline', async () => {
+    vi.useFakeTimers()
+    try {
+      const supervisor = createWatcherProcessSupervisor()
+      const onTerminalError = vi.fn()
+      const initial = supervisor.subscribe(
+        '/slow-recovery',
+        vi.fn(),
+        {},
+        {
+          onTerminalError,
+          subscribeTimeoutMs: 100
+        }
+      )
+      const first = currentChild()
+      ackSubscribe(first)
+      await initial
+
+      first.connected = false
+      first.emit('exit', null, 'SIGSEGV')
+      const replacement = currentChild()
+      replacement.emit('message', {
+        op: 'subscribe-started',
+        id: replacement.sent[0].id
+      })
+
+      await vi.advanceTimersByTimeAsync(100)
+
+      expect(onTerminalError).toHaveBeenCalledWith(
+        expect.objectContaining({
+          code: 'subscribe_timeout',
+          message: 'file watcher resubscription timed out after 100ms'
+        })
+      )
+      expect(replacement.kill).toHaveBeenCalledTimes(1)
+      expect(forkMock).toHaveBeenCalledTimes(2)
+      supervisor.dispose()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('starts the setup timeout only when the child begins that crawl', async () => {
     vi.useFakeTimers()
     try {

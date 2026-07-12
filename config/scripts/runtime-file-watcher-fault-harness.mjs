@@ -73,6 +73,7 @@ async function main() {
   let rootPath
   let supervisor
   let subscription
+  let watcherCanaryDir
   let eventListener = () => undefined
   let rejectWatcherError
   const watcherError = new Promise((_, reject) => {
@@ -114,6 +115,7 @@ async function main() {
         onInterruption: () => resolveInterruption()
       }
     )
+    watcherCanaryDir = supervisor.canaryDir
 
     const beforeEvent = nextMatchingEvent(
       (listener) => {
@@ -157,17 +159,21 @@ async function main() {
       })
     )
   } finally {
-    await subscription?.unsubscribe()
-    supervisor?.dispose()
-    await Promise.all([
-      createdRootPath
-        ? rm(createdRootPath, { recursive: true, force: true })
-        : Promise.resolve(),
-      rootPath && rootPath !== createdRootPath
-        ? rm(rootPath, { recursive: true, force: true })
-        : Promise.resolve(),
-      bundleDir ? rm(bundleDir, { recursive: true, force: true }) : Promise.resolve()
-    ])
+    try {
+      await subscription?.unsubscribe()
+    } finally {
+      supervisor?.dispose()
+      await Promise.all([
+        createdRootPath ? rm(createdRootPath, { recursive: true, force: true }) : Promise.resolve(),
+        rootPath && rootPath !== createdRootPath
+          ? rm(rootPath, { recursive: true, force: true })
+          : Promise.resolve(),
+        bundleDir ? rm(bundleDir, { recursive: true, force: true }) : Promise.resolve()
+      ])
+    }
+  }
+  if (watcherCanaryDir && existsSync(watcherCanaryDir)) {
+    throw new Error(`Watcher supervisor leaked its canary directory: ${watcherCanaryDir}`)
   }
 }
 

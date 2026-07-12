@@ -30,5 +30,6 @@ export type WatcherProcessSubscriptionRecord = {
   hooks: WatcherProcessHooks
   interrupted: boolean
   crawlStarted: boolean
+  resubscribeTimer?: ReturnType<typeof setTimeout>
   pendingSubscribe?: PendingWatcherProcessSubscribe
 }

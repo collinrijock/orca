@@ -538,11 +538,15 @@ describe('SshFilesystemProvider', () => {
       const callback = vi.fn()
       const unsub = await provider.watch('/home/user/project', callback)
 
-      expect(mux.request).toHaveBeenCalledWith('fs.watch', { rootPath: '/home/user/project' })
+      expect(mux.request).toHaveBeenCalledWith(
+        'fs.watch',
+        { rootPath: '/home/user/project' },
+        { signal: expect.any(AbortSignal) }
+      )
       expect(typeof unsub).toBe('function')
     })
 
-    it('forwards the cancellation signal to the mux fs.watch request', async () => {
+    it('uses a registration-owned cancellation signal for the mux fs.watch request', async () => {
       mux.request.mockResolvedValue(undefined)
       const controller = new AbortController()
       const callback = vi.fn()
@@ -552,8 +556,11 @@ describe('SshFilesystemProvider', () => {
       expect(mux.request).toHaveBeenCalledWith(
         'fs.watch',
         { rootPath: '/home/user/project' },
-        { signal: controller.signal }
+        { signal: expect.any(AbortSignal) }
       )
+      const physicalSignal = mux.request.mock.calls[0][2]?.signal
+      expect(physicalSignal).not.toBe(controller.signal)
+      expect(physicalSignal?.aborted).toBe(false)
     })
 
     it('rejects promptly when the watch signal aborts during setup', async () => {
@@ -583,7 +590,45 @@ describe('SshFilesystemProvider', () => {
       controller.abort()
 
       await expect(pendingWatch).rejects.toMatchObject({ name: 'AbortError' })
+      expect(mux.request.mock.calls[0][2]?.signal?.aborted).toBe(true)
       resolveWatch()
+    })
+
+    it('keeps shared setup alive when only its first caller aborts', async () => {
+      let resolveWatch: () => void = () => {}
+      let physicalSignal: AbortSignal | undefined
+      mux.request.mockImplementationOnce(
+        (_method, _params, options?: { signal?: AbortSignal }) =>
+          new Promise<void>((resolve) => {
+            resolveWatch = resolve
+            physicalSignal = options?.signal
+          })
+      )
+      const firstController = new AbortController()
+      const first = vi.fn()
+      const second = vi.fn()
+
+      const firstWatch = provider.watch('/home/user/project', first, {
+        signal: firstController.signal
+      })
+      const secondWatch = provider.watch('/home/user/project', second)
+      firstController.abort()
+
+      await expect(firstWatch).rejects.toMatchObject({ name: 'AbortError' })
+      expect(physicalSignal?.aborted).toBe(false)
+
+      resolveWatch()
+      const unsubscribeSecond = await secondWatch
+      const notifHandler = mux.onNotification.mock.calls[0][0]
+      const events = [{ kind: 'update', absolutePath: '/home/user/project/file.ts' }]
+      notifHandler('fs.changed', { events })
+
+      expect(first).not.toHaveBeenCalled()
+      expect(second).toHaveBeenCalledWith(events)
+      unsubscribeSecond()
+      expect(mux.notify).toHaveBeenCalledWith('fs.unwatch', {
+        rootPath: '/home/user/project'
+      })
     })
 
     it('forwards fs.changed notifications to watch callback', async () => {
@@ -604,7 +649,11 @@ describe('SshFilesystemProvider', () => {
       const unsubSecond = await provider.watch('/home/user/project', second)
 
       expect(mux.request).toHaveBeenCalledTimes(1)
-      expect(mux.request).toHaveBeenCalledWith('fs.watch', { rootPath: '/home/user/project' })
+      expect(mux.request).toHaveBeenCalledWith(
+        'fs.watch',
+        { rootPath: '/home/user/project' },
+        { signal: expect.any(AbortSignal) }
+      )
 
       const notifHandler = mux.onNotification.mock.calls[0][0]
       const events = [{ kind: 'update', absolutePath: '/home/user/project/file.ts' }]

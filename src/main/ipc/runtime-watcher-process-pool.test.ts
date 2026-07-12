@@ -162,6 +162,23 @@ describe('RuntimeWatcherProcessPool', () => {
     expect(supervisors[1].subscriptions.map(({ dir }) => dir)).toEqual(['/slow'])
   })
 
+  it('moves a live root into quarantine when crash resubscription times out', async () => {
+    const timeout = new WatcherProcessFailure(
+      'file watcher resubscription timed out',
+      'subscription',
+      'subscribe_timeout'
+    )
+    const onTerminalError = vi.fn()
+    await pool.subscribe('/slow-recovery', vi.fn(), {}, { onTerminalError })
+
+    supervisors[0].subscriptions[0].hooks.onTerminalError?.(timeout)
+    await pool.subscribe('/slow-recovery', vi.fn(), {}, {})
+
+    expect(onTerminalError).toHaveBeenCalledWith(timeout)
+    expect(supervisors).toHaveLength(2)
+    expect(supervisors[1].subscriptions.map(({ dir }) => dir)).toEqual(['/slow-recovery'])
+  })
+
   it('keeps healthy shard assignments after a root-specific failure', async () => {
     pool = new RuntimeWatcherProcessPool({
       maxSharedSupervisors: 1,

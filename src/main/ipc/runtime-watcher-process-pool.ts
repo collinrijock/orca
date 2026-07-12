@@ -78,6 +78,9 @@ export class RuntimeWatcherProcessPool {
         this.retireSlot(slot)
       } else {
         releaseAssignment()
+        if (isWatcherProcessFailure(error) && error.code === 'subscribe_timeout') {
+          this.isolatedRoots.add(dir)
+        }
       }
       hooks.onTerminalError?.(error)
     }

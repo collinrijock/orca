@@ -12,6 +12,7 @@ import {
 } from './parcel-watcher-host-subscriptions'
 import {
   resetPendingSubscribeAttempt,
+  startInterruptedSubscribeTimeout,
   startPendingSubscribeTimeout,
   takePendingSubscribe
 } from './parcel-watcher-pending-subscribe'
@@ -78,6 +79,7 @@ export class WatcherProcessSupervisor {
       'supervisor_disposed'
     )
     for (const record of this.records.values()) {
+      resetPendingSubscribeAttempt(record)
       const pending = takePendingSubscribe(record)
       pending?.reject(error)
     }
@@ -132,6 +134,9 @@ export class WatcherProcessSupervisor {
       const record = this.records.get(message.id)
       if (record) {
         startPendingSubscribeTimeout(record, (error) => this.cancelPendingSubscribe(record, error))
+        startInterruptedSubscribeTimeout(record, (error) =>
+          this.cancelInterruptedSubscribe(record, error)
+        )
       }
       return
     }
@@ -244,6 +249,20 @@ export class WatcherProcessSupervisor {
     }
     this.cancelledSubscribesAwaitingChild.add(record.id)
     this.sendToChild(proc, { op: 'cancel-subscribe', id: record.id })
+  }
+
+  private cancelInterruptedSubscribe(
+    record: WatcherProcessSubscriptionRecord,
+    error: WatcherProcessFailure
+  ): void {
+    if (!record.interrupted || record.pendingSubscribe || !this.records.delete(record.id)) {
+      return
+    }
+    resetPendingSubscribeAttempt(record)
+    // Why: one slow recovery root must not pin every healthy root in its shard.
+    // End that subscription so the runtime pool can retry it in quarantine.
+    reportWatcherTerminalError(record, error)
+    this.restartAfterCancelledSubscribe()
   }
 
   private restartAfterCancelledSubscribe(): void {

@@ -147,12 +147,6 @@ function markOverflowWithoutUncStat(root: WatchedRoot): void {
   root.batch.overflowed = true
 }
 
-function createWslWatcherAbortError(): Error {
-  const error = new Error('WSL watcher subscription aborted') as Error & { name: string }
-  error.name = 'AbortError'
-  return error
-}
-
 export async function createWslWatcher(
   rootKey: string,
   worktreePath: string,
@@ -162,7 +156,7 @@ export async function createWslWatcher(
   // Why: cancelled local installs pass the same abort controller used for
   // native Parcel subscribe; honor it before spawning a WSL snapshot process.
   if (signal?.aborted) {
-    throw createWslWatcherAbortError()
+    throw new DOMException('WSL watcher subscription aborted', 'AbortError')
   }
 
   const wsl = parseWslUncPath(worktreePath)
@@ -271,7 +265,7 @@ export async function createWslWatcher(
   }
 
   const onAbort = (): void => {
-    settleInitial(createWslWatcherAbortError())
+    settleInitial(new DOMException('WSL watcher subscription aborted', 'AbortError'))
     child.kill()
   }
   signal?.addEventListener('abort', onAbort, { once: true })

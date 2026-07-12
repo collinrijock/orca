@@ -1,5 +1,8 @@
 import type { ChildProcess } from 'node:child_process'
-import { takePendingSubscribe } from './parcel-watcher-pending-subscribe'
+import {
+  resetPendingSubscribeAttempt,
+  takePendingSubscribe
+} from './parcel-watcher-pending-subscribe'
 import { WatcherProcessFailure } from './parcel-watcher-process-failure'
 import type { HostToWatcherMessage, WatcherToHostMessage } from './parcel-watcher-process-protocol'
 import type {
@@ -28,6 +31,7 @@ export function handleWatcherHostMessage(
     return
   }
   if (message.op === 'subscribed') {
+    resetPendingSubscribeAttempt(record)
     takePendingSubscribe(record)?.resolve()
     if (record.interrupted) {
       record.interrupted = false
@@ -37,6 +41,7 @@ export function handleWatcherHostMessage(
   }
   if (message.op === 'subscribe-failed') {
     records.delete(message.id)
+    resetPendingSubscribeAttempt(record)
     const pending = takePendingSubscribe(record)
     const error = new WatcherProcessFailure(message.message, 'subscription', 'subscribe_failed')
     if (pending) {
@@ -74,6 +79,7 @@ export function failAllWatcherSubscriptions(
   error: Error
 ): void {
   for (const record of records.values()) {
+    resetPendingSubscribeAttempt(record)
     const pending = takePendingSubscribe(record)
     if (pending) {
       pending.reject(error)
@@ -115,6 +121,7 @@ export function createHostWatcherSubscription({
       if (!records.delete(record.id)) {
         return Promise.resolve()
       }
+      resetPendingSubscribeAttempt(record)
       const child = getChild()
       if (!child?.connected) {
         return Promise.resolve()

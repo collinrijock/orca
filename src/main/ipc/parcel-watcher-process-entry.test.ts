@@ -351,6 +351,46 @@ describe('parcel watcher process canary', () => {
     expect(statMock).toHaveBeenCalledTimes(2)
   })
 
+  it('reports an FSEvents overflow and keeps delivering later events', async () => {
+    let callback:
+      | ((err: Error | null, events: { type: string; path: string }[]) => void)
+      | undefined
+    subscribeMock
+      .mockResolvedValueOnce({ unsubscribe: vi.fn() })
+      .mockImplementationOnce(async (_dir, nextCallback) => {
+        callback = nextCallback
+        return { unsubscribe: vi.fn() }
+      })
+    const sendMock = vi.fn()
+    process.send = sendMock
+
+    await import('./parcel-watcher-process-entry')
+    await vi.advanceTimersByTimeAsync(0)
+    process.emit('message', { op: 'subscribe', id: 1, dir: '/repo', opts: {} })
+    await vi.advanceTimersByTimeAsync(0)
+
+    callback?.(
+      new Error('Events were dropped by the FSEvents client. File system must be re-scanned.'),
+      []
+    )
+    callback?.(null, [{ type: 'update', path: '/repo/after-overflow.txt' }])
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(sendMock).toHaveBeenCalledWith({
+      op: 'watch-error',
+      id: 1,
+      message: 'Events were dropped by the FSEvents client. File system must be re-scanned.'
+    })
+    expect(sendMock).toHaveBeenCalledWith(
+      {
+        op: 'events',
+        id: 1,
+        events: [{ type: 'update', path: '/repo/after-overflow.txt' }]
+      },
+      expect.any(Function)
+    )
+  })
+
   it('bounds pending event batches while child IPC reports backpressure', async () => {
     let callback:
       | ((err: Error | null, events: { type: string; path: string }[]) => void)

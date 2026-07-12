@@ -49,8 +49,37 @@ export function startPendingSubscribeTimeout(
   pending.timer.unref?.()
 }
 
+export function startInterruptedSubscribeTimeout(
+  record: WatcherProcessSubscriptionRecord,
+  cancel: (error: WatcherProcessFailure) => void
+): void {
+  if (
+    !record.interrupted ||
+    record.pendingSubscribe ||
+    record.resubscribeTimer ||
+    record.hooks.subscribeTimeoutMs === undefined
+  ) {
+    return
+  }
+  record.crawlStarted = true
+  record.resubscribeTimer = setTimeout(() => {
+    cancel(
+      new WatcherProcessFailure(
+        `file watcher resubscription timed out after ${record.hooks.subscribeTimeoutMs}ms`,
+        'subscription',
+        'subscribe_timeout'
+      )
+    )
+  }, record.hooks.subscribeTimeoutMs)
+  record.resubscribeTimer.unref?.()
+}
+
 export function resetPendingSubscribeAttempt(record: WatcherProcessSubscriptionRecord): void {
   record.crawlStarted = false
+  if (record.resubscribeTimer) {
+    clearTimeout(record.resubscribeTimer)
+    record.resubscribeTimer = undefined
+  }
   const pending = record.pendingSubscribe
   if (pending?.timer) {
     clearTimeout(pending.timer)

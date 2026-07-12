@@ -8,8 +8,8 @@ import {
   type SshRawTransferOptions
 } from './ssh-filesystem-file-upload'
 import {
-  notifySshFilesystemUnwatch,
   registerSshFilesystemWatch,
+  stopSshFilesystemWatchRegistration,
   type WatchRegistration
 } from './ssh-filesystem-provider-watch'
 import type {
@@ -66,8 +66,8 @@ export class SshFilesystemProvider implements IFilesystemProvider {
       this.unsubscribeNotifications()
       this.unsubscribeNotifications = null
     }
-    for (const rootPath of this.watchListeners.keys()) {
-      notifySshFilesystemUnwatch(this.mux, rootPath)
+    for (const [rootPath, registration] of this.watchListeners) {
+      stopSshFilesystemWatchRegistration(this.mux, rootPath, registration)
     }
     this.watchListeners.clear()
   }
