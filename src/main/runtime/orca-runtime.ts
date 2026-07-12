@@ -10927,9 +10927,17 @@ export class OrcaRuntimeService {
     // host-owned imported-worktree visibility gate as worktree.list/desktop.
     await this.refreshPtyWorktreeRecordsFromController(resolvedWorktrees)
     const repoById = new Map((this.store?.getRepos() ?? []).map((repo) => [repo.id, repo]))
-    const platformByRepoId = new Map(
-      [...repoById.values()].map((repo) => [repo.id, this.getAgentLaunchPlatformForRepo(repo)])
-    )
+    const platformByRepoId = new Map<string, NodeJS.Platform>()
+    for (const worktree of resolvedWorktrees) {
+      if (platformByRepoId.has(worktree.repoId)) {
+        continue
+      }
+      const repo = repoById.get(worktree.repoId)
+      platformByRepoId.set(
+        worktree.repoId,
+        repo ? this.getAgentLaunchPlatformForRepo(repo) : process.platform
+      )
+    }
     const summaries = new Map<string, RuntimeWorktreePsSummary>()
 
     // Why: the GitHub cache is keyed by `repoPath::branch` (no refs/heads/ prefix),

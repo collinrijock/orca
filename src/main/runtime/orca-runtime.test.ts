@@ -21694,8 +21694,9 @@ describe('OrcaRuntimeService', () => {
     })
   })
 
-  it('reports the resolved terminal platform for WSL project mobile summaries', async () => {
+  it('resolves WSL platforms only for repos represented in mobile summaries', async () => {
     await withPlatform('win32', async () => {
+      let repos = store.getRepos()
       const getProjects = vi.fn(() => [
         {
           id: 'project-1',
@@ -21709,6 +21710,7 @@ describe('OrcaRuntimeService', () => {
       ])
       const runtime = new OrcaRuntimeService({
         ...store,
+        getRepos: () => repos,
         getProjects,
         getSettings: () => ({
           ...store.getSettings(),
@@ -21725,6 +21727,23 @@ describe('OrcaRuntimeService', () => {
       // Why: worktree resolution performs one project read; summary projection
       // and its path index must share the only additional per-repo read.
       expect(getProjects).toHaveBeenCalledTimes(2)
+
+      getProjects.mockClear()
+      repos = [
+        ...repos,
+        ...Array.from({ length: 2_000 }, (_, index) => ({
+          ...repos[0]!,
+          id: `repo-unresolved-${index}`,
+          path: `C:\\repo-unresolved-${index}`,
+          displayName: `repo-unresolved-${index}`
+        }))
+      ]
+
+      await runtime.getWorktreePs()
+
+      // Why: the resolved-worktree cache can exclude newly persisted or hidden
+      // repos; a mobile poll must not rescan project runtime settings for them.
+      expect(getProjects).toHaveBeenCalledTimes(1)
     })
   })
 
