@@ -22202,6 +22202,45 @@ describe('OrcaRuntimeService', () => {
     expect(killed).toBe(false)
   })
 
+  it('awaits provider shutdown and verifies liveness before terminal.stop returns', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    const stopped: string[] = []
+    const processLists = [[{ id: 'pty-1', cwd: '/tmp/worktree-a', title: 'Shell' }], []]
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => false,
+      stopAndWait: async (ptyId) => {
+        stopped.push(ptyId)
+        runtime.onPtyExit(ptyId, -1)
+        return true
+      },
+      getForegroundProcess: async () => null,
+      listProcesses: async () => processLists.shift() ?? []
+    })
+    syncSinglePty(runtime, 'pty-1')
+
+    await expect(runtime.stopTerminalsForWorktree('id:repo-1::/tmp/worktree-a')).resolves.toEqual({
+      stopped: 1
+    })
+    expect(stopped).toEqual(['pty-1'])
+  })
+
+  it('rejects terminal.stop when provider shutdown is not accepted', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => false,
+      stopAndWait: async () => false,
+      getForegroundProcess: async () => null,
+      listProcesses: async () => [{ id: 'pty-1', cwd: '/tmp/worktree-a', title: 'Shell' }]
+    })
+    syncSinglePty(runtime, 'pty-1')
+
+    await expect(runtime.stopTerminalsForWorktree('id:repo-1::/tmp/worktree-a')).rejects.toThrow(
+      'terminal_verified_stop_failed'
+    )
+  })
+
   it('stops exactly the expected live PTYs for a worktree', async () => {
     const runtime = new OrcaRuntimeService(store)
     const stopped: string[] = []
@@ -29226,7 +29265,8 @@ describe('OrcaRuntimeService', () => {
 
     it('RPC-initiated delete kills matching PTYs before git', async () => {
       // Seed the runtime with a live leaf whose worktreeId matches the target.
-      const killSpy = vi.fn().mockReturnValue(true)
+      const stopSpy = vi.fn().mockResolvedValue(true)
+      const processLists = [[{ id: 'pty-1', cwd: TEST_WORKTREE_PATH, title: 'Shell' }], []]
       const localProvider = createProviderStub(async () => [])
       const callOrder: string[] = []
       vi.mocked(assertWorktreeCleanForRemoval).mockImplementation(async () => {
@@ -29245,21 +29285,23 @@ describe('OrcaRuntimeService', () => {
       })
       runtime.setPtyController({
         write: () => true,
-        kill: (id) => {
-          callOrder.push(`kill:${id}`)
-          return killSpy(id) as boolean
+        kill: () => false,
+        stopAndWait: async (id) => {
+          callOrder.push(`stop:${id}`)
+          return stopSpy(id) as Promise<boolean>
         },
-        getForegroundProcess: async () => null
+        getForegroundProcess: async () => null,
+        listProcesses: async () => processLists.shift() ?? []
       })
       syncSinglePty(runtime, 'pty-1')
 
       await runtime.removeManagedWorktree(TEST_WORKTREE_ID)
 
-      expect(killSpy).toHaveBeenCalledWith('pty-1')
+      expect(stopSpy).toHaveBeenCalledWith('pty-1')
       // The provider-prefix sweep and the git removal must happen AFTER the
       // runtime-graph kill. Git removal must NOT happen before any kill.
       const preflightIdx = callOrder.indexOf('preflight')
-      const killIdx = callOrder.indexOf('kill:pty-1')
+      const killIdx = callOrder.indexOf('stop:pty-1')
       const gitIdx = callOrder.indexOf('git-removeWorktree')
       expect(preflightIdx).toBeGreaterThanOrEqual(0)
       expect(killIdx).toBeGreaterThan(preflightIdx)

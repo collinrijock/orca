@@ -18734,25 +18734,39 @@ export class OrcaRuntimeService {
     const graphEpoch = this.captureReadyGraphEpoch()
     const worktree = await this.resolveWorktreeSelector(worktreeSelector)
     this.assertStableReadyGraph(graphEpoch)
-    const ptyIds = new Set<string>()
-    for (const leaf of this.leaves.values()) {
-      if (leaf.worktreeId === worktree.id && leaf.ptyId) {
-        ptyIds.add(leaf.ptyId)
-      }
+    const resolvedWorktrees = [...(await this.getResolvedWorktreeMap()).values()]
+    this.assertStableReadyGraph(graphEpoch)
+    const refreshedPtyLiveness =
+      await this.refreshPtyWorktreeRecordsFromController(resolvedWorktrees)
+    if (!refreshedPtyLiveness) {
+      throw new Error('terminal_liveness_unavailable')
     }
-    for (const pty of this.ptysById.values()) {
-      if (pty.worktreeId === worktree.id && pty.connected) {
-        ptyIds.add(pty.ptyId)
-      }
+    const ptyIds = this.getLivePtyIdsForWorktree(worktree.id, refreshedPtyLiveness)
+    if (ptyIds.size === 0) {
+      return { stopped: 0 }
+    }
+    if (!this.ptyController?.stopAndWait) {
+      throw new Error('terminal_verified_stop_unavailable')
     }
 
-    let stopped = 0
-    for (const ptyId of ptyIds) {
-      if (this.ptyController?.kill(ptyId)) {
-        stopped += 1
+    const stoppedPtyIds: string[] = []
+    for (const ptyId of [...ptyIds].sort()) {
+      if (!(await this.ptyController.stopAndWait(ptyId))) {
+        throw Object.assign(new Error('terminal_verified_stop_failed'), { ptyId })
       }
+      stoppedPtyIds.push(ptyId)
     }
-    return { stopped }
+    const postStopLiveness = await this.refreshPtyWorktreeRecordsFromController(resolvedWorktrees)
+    if (!postStopLiveness) {
+      throw new Error('terminal_stop_postcheck_unavailable')
+    }
+    const remainingLivePtyIds = this.getLivePtyIdsForWorktree(worktree.id, postStopLiveness)
+    if (remainingLivePtyIds.size > 0) {
+      throw Object.assign(new Error('terminal_stop_still_live'), {
+        remainingLivePtyIds: [...remainingLivePtyIds].sort()
+      })
+    }
+    return { stopped: stoppedPtyIds.length }
   }
 
   async stopExactTerminalsForWorktree(

@@ -731,14 +731,21 @@ export class PtyHandler {
       managed.killTimer = setTimeout(() => {
         const still = this.ptys.get(id)
         if (still && !still.disposed) {
-          killPtyForShutdown(still, 'SIGKILL')
-          // Why: stale-spawn cleanup has no client who will ever attach. If
-          // SIGKILL's onExit is missed (kernel edge case, uninterruptible
-          // sleep), the managed entry + ptmx fd would leak forever. Dispose
-          // synchronously so the entry is gone regardless of onExit timing.
-          this.notifyExitListener(still)
-          disposeManagedPty(still)
-          this.ptys.delete(id)
+          try {
+            killPtyForShutdown(still, 'SIGKILL')
+          } catch (error) {
+            process.stderr.write(
+              `[pty-handler] stale-spawn fallback kill failed: ${error instanceof Error ? error.message : String(error)}\n`
+            )
+          } finally {
+            // Why: stale-spawn cleanup has no client who will ever attach. Even
+            // a repeated native throw must release ownership without escaping
+            // the timer into relay.ts uncaughtException process termination.
+            this.notifyExitListener(still)
+            disposeManagedPty(still)
+            this.ptys.delete(id)
+            this.clearPtyFlowState(id)
+          }
         }
       }, 5000)
       // Why: arm fallback ownership before native shutdown. node-pty can throw

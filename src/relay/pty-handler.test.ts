@@ -712,6 +712,29 @@ describe('PtyHandler', () => {
     expect(handler.activePtyCount).toBe(0)
   })
 
+  it('contains repeated stale-spawn native kill throws and still releases ownership', async () => {
+    const killSpy = vi.fn(() => {
+      throw new Error('native ConPTY kill failed')
+    })
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
+    const term = { ...mockPtyInstance, kill: killSpy, onData: vi.fn(), onExit: vi.fn() }
+    mockPtySpawn.mockReturnValue(term)
+
+    try {
+      await expect(
+        dispatcher.callRequest('pty.spawn', {}, { isStale: () => true })
+      ).rejects.toThrow('native ConPTY kill failed')
+      expect(() => vi.advanceTimersByTime(5000)).not.toThrow()
+      expect(killSpy).toHaveBeenCalledTimes(2)
+      expect(handler.activePtyCount).toBe(0)
+      expect(stderr).toHaveBeenCalledWith(
+        expect.stringContaining('stale-spawn fallback kill failed')
+      )
+    } finally {
+      stderr.mockRestore()
+    }
+  })
+
   it('does not submit provider-delivered commands for stale spawn responses', async () => {
     const killSpy = vi.fn()
     const term = { ...mockPtyInstance, kill: killSpy, onData: vi.fn(), onExit: vi.fn() }

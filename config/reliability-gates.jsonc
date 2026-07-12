@@ -3600,7 +3600,7 @@
       "providers": ["ssh", "remote-runtime"],
       "coveredPlatforms": ["macos"],
       "coveredProviders": ["ssh"],
-      "coverageNotes": "A macOS unit harness loads the installed patched node-pty WindowsTerminal prototype without constructing native state, proving pre-ready kill/destroy dispatch immediately. A relay artifact harness reproduces vanilla npm node-pty retaining one deferred kill with zero native close calls, then proves both Windows relay artifacts hash, ship, apply, include the local ConPTY console-list fallback, and idempotently verify the fix. Relay tests simulate win32 shutdown, stale-spawn fallback ownership, one-shot ownership, and retry after native failure. Renderer tests retain exact local/SSH kill identity across rejection and retry, while project removal keeps local or remote ownership state until provider shutdown succeeds. The same relay contract serves paired web/mobile clients; no live Windows ConPTY or Windows-over-SSH run is recorded yet.",
+      "coverageNotes": "A macOS unit harness loads the installed patched node-pty WindowsTerminal prototype without constructing native state, proving pre-ready kill/destroy dispatch immediately. A relay artifact harness reproduces vanilla npm node-pty retaining one deferred kill with zero native close calls, then proves both Windows relay artifacts hash, ship, apply, include the local ConPTY console-list fallback, and idempotently verify the fix. Relay tests simulate win32 shutdown, repeated stale-spawn native failure, one-shot ownership, and retry after native failure. Renderer tests retain exact local/SSH kill identity across rejection and retry, while project removal keeps local or remote ownership state until provider-verified shutdown and VM cleanup succeed. Runtime tests prove terminal.stop awaits stopAndWait plus a fresh post-stop liveness check. The same relay contract serves paired web/mobile clients; no live Windows ConPTY or Windows-over-SSH run is recorded yet.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/issues/8260",
         "https://github.com/stablyai/orca/pull/8279"
@@ -3608,7 +3608,8 @@
       "invariant": "A Windows relay PTY closed before its first output executes exactly one no-argument node-pty shutdown immediately; Orca does not delete ownership for a native kill failure, and a later retry can still target the same managed PTY.",
       "oracle": "Load the installed patched WindowsTerminal prototype in a pre-ready state and assert kill and destroy each close the terminal and native agent once with zero deferred work, while signal arguments still throw. Build both Windows SSH relay artifacts, reproduce vanilla npm node-pty with close=0/native-kill=0/deferred=1, apply the shipped patch, and assert close=1/native-kill=1/deferred=0, AttachConsole failure falls back to the shell pid, and the artifact version derives from all patch bytes. Assert remote npm install executes patch enforcement before its runtime probe and never finalizes a failed patch. In the relay, assert immediate, graceful, stale-spawn fallback, and handler-dispose paths preserve ownership through native throw and issue at most one successful no-argument shutdown. In the renderer, reject the first kill, retain exact identity, and assert the next lifecycle/removal retry succeeds before ownership state is purged.",
       "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts config/scripts/build-relay-windows-node-pty-patch.test.mjs src/main/ssh/ssh-relay-native-deps-install.test.ts src/relay/node-pty-windows-pre-ready-shutdown.test.ts src/relay/pty-handler.test.ts src/renderer/src/components/terminal-pane/pty-transport.test.ts src/renderer/src/store/slices/repos-remove-project-purge-leak.test.ts src/renderer/src/store/slices/repos.test.ts"
+        "pnpm exec vitest run --config config/vitest.config.ts config/scripts/build-relay-windows-node-pty-patch.test.mjs src/main/ssh/ssh-relay-native-deps-install.test.ts src/relay/node-pty-windows-pre-ready-shutdown.test.ts src/relay/pty-handler.test.ts src/renderer/src/components/terminal-pane/pty-transport.test.ts src/renderer/src/store/slices/repos-remove-project-purge-leak.test.ts src/renderer/src/store/slices/repos.test.ts src/renderer/src/store/slices/repos-runtime-vm-removal.test.ts src/renderer/src/lib/ephemeral-vm-runtime-cleanup.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime.test.ts"
       ],
       "testFiles": [
         "config/scripts/build-relay-windows-node-pty-patch.test.mjs",
@@ -3617,7 +3618,10 @@
         "src/relay/pty-handler.test.ts",
         "src/renderer/src/components/terminal-pane/pty-transport.test.ts",
         "src/renderer/src/store/slices/repos-remove-project-purge-leak.test.ts",
-        "src/renderer/src/store/slices/repos.test.ts"
+        "src/renderer/src/store/slices/repos.test.ts",
+        "src/renderer/src/store/slices/repos-runtime-vm-removal.test.ts",
+        "src/renderer/src/lib/ephemeral-vm-runtime-cleanup.test.ts",
+        "src/main/runtime/orca-runtime.test.ts"
       ],
       "assertionRefs": [
         {
@@ -3667,6 +3671,25 @@
           "assertions": [
             "remote-runtime project removal retains terminal ownership after stop rejection and purges after retry succeeds"
           ]
+        },
+        {
+          "file": "src/renderer/src/store/slices/repos-runtime-vm-removal.test.ts",
+          "assertions": [
+            "runtime-owned SSH project removal retains the project when VM cleanup fails"
+          ]
+        },
+        {
+          "file": "src/renderer/src/lib/ephemeral-vm-runtime-cleanup.test.ts",
+          "assertions": [
+            "project-removal cleanup propagates VM teardown failure instead of orphaning a hidden runtime"
+          ]
+        },
+        {
+          "file": "src/main/runtime/orca-runtime.test.ts",
+          "assertions": [
+            "terminal.stop awaits stopAndWait and fresh post-stop liveness before acknowledging provider shutdown",
+            "provider shutdown rejection fails terminal.stop closed"
+          ]
         }
       ],
       "evidenceRuns": [
@@ -3674,10 +3697,19 @@
           "date": "2026-07-12",
           "runner": "local",
           "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts config/scripts/build-relay-windows-node-pty-patch.test.mjs src/main/ssh/ssh-relay-native-deps-install.test.ts src/relay/node-pty-windows-pre-ready-shutdown.test.ts src/relay/pty-handler.test.ts src/renderer/src/components/terminal-pane/pty-transport.test.ts src/renderer/src/store/slices/repos-remove-project-purge-leak.test.ts src/renderer/src/store/slices/repos.test.ts",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts config/scripts/build-relay-windows-node-pty-patch.test.mjs src/main/ssh/ssh-relay-native-deps-install.test.ts src/relay/node-pty-windows-pre-ready-shutdown.test.ts src/relay/pty-handler.test.ts src/renderer/src/components/terminal-pane/pty-transport.test.ts src/renderer/src/store/slices/repos-remove-project-purge-leak.test.ts src/renderer/src/store/slices/repos.test.ts src/renderer/src/store/slices/repos-runtime-vm-removal.test.ts src/renderer/src/lib/ephemeral-vm-runtime-cleanup.test.ts",
           "result": "passed",
           "durationSeconds": 2,
-          "summary": "193 tests passed, including built Windows relay red/green and ConPTY fallback parity, strict remote install ordering/failure/upgrade-repair handling, installed-dependency pre-ready assertions, stale-spawn fallback ownership, renderer retained retry identity, and local/remote project removal fail-closed ownership coverage."
+          "summary": "200 tests passed, including built Windows relay red/green and ConPTY fallback parity, repeated stale-spawn throw containment, renderer retained retry identity, local/remote project removal fail-closed ownership, and VM cleanup propagation."
+        },
+        {
+          "date": "2026-07-12",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime.test.ts",
+          "result": "passed",
+          "durationSeconds": 10,
+          "summary": "662 runtime tests passed, including provider-verified terminal.stop acceptance and post-stop liveness coverage."
         }
       ],
       "runtimeBudget": {

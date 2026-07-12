@@ -2812,7 +2812,8 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
       if (isRuntimeOwnedSshTargetId(ownerRepo.connectionId)) {
         await cleanupEphemeralVmRuntimesForDeleted({
           workspaceIds: worktreeIds,
-          runtimeOwnedSshTargetIds: [ownerRepo.connectionId as string]
+          runtimeOwnedSshTargetIds: [ownerRepo.connectionId as string],
+          throwOnError: true
         })
       }
 

@@ -67,4 +67,13 @@ describe('cleanupEphemeralVmRuntimesForDeleted', () => {
       []
     )
   })
+
+  it('fails closed when project removal requests cleanup ownership', async () => {
+    const error = new Error('VM cleanup unavailable')
+    listRuntimes.mockRejectedValue(error)
+
+    await expect(
+      cleanupEphemeralVmRuntimesForDeleted({ workspaceIds: ['wt-1'], throwOnError: true })
+    ).rejects.toBe(error)
+  })
 })
