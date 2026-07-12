@@ -17,6 +17,7 @@ import {
   computeTrustedHash,
   escapeTomlString,
   getCodexCanonicalTrustPath,
+  normalizeCodexProjectPathForLookup,
   parseTrustKey,
   readHookTrustEntries,
   removeHookTrustEntries,
@@ -1149,6 +1150,28 @@ describe('upsertProjectTrustLevel', () => {
     expect(updated).toContain('trust_level = "trusted"')
   })
 
+  it('keeps case-distinct WSL Linux project paths as separate trust blocks', () => {
+    // Why: the \\wsl$\<distro> share is case-insensitive on Windows, but the
+    // Linux path underneath is not — .../Repo and .../repo are two projects.
+    const original = [
+      '[projects."\\\\wsl$\\Ubuntu\\home\\u\\Repo"]',
+      'trust_level = "untrusted"',
+      ''
+    ].join('\n')
+
+    const updated = upsertProjectTrustLevelInContent(
+      original,
+      '\\\\wsl$\\Ubuntu\\home\\u\\repo',
+      'trusted',
+      { alreadyCanonical: true }
+    )
+
+    expect(updated.match(/\[projects\./g)).toHaveLength(2)
+    expect(updated).toContain('[projects."\\\\wsl$\\Ubuntu\\home\\u\\Repo"]')
+    expect(updated).toContain('trust_level = "untrusted"')
+    expect(updated).toContain('trust_level = "trusted"')
+  })
+
   it('matches a literal-string POSIX project path containing a quote and backslash', () => {
     const projectPath = '/tmp/with"quote\\and-backslash'
     const original = [`[projects.'${projectPath}']`, 'trust_level = "untrusted"', ''].join('\n')
@@ -1183,6 +1206,47 @@ describe('upsertProjectTrustLevel', () => {
 
     expect(readFileSync(configPath, 'utf-8')).toBe(firstWrite)
     expect(existsSync(`${configPath}.bak`)).toBe(false)
+  })
+})
+
+describe('normalizeCodexProjectPathForLookup', () => {
+  it('dedupes drive-letter casing and separators for true Windows paths', () => {
+    expect(normalizeCodexProjectPathForLookup('C:\\repo')).toBe(
+      normalizeCodexProjectPathForLookup('c:/repo')
+    )
+  })
+
+  it('keeps case-distinct WSL Linux paths distinct', () => {
+    expect(normalizeCodexProjectPathForLookup('\\\\wsl$\\Ubuntu\\home\\u\\Repo')).not.toBe(
+      normalizeCodexProjectPathForLookup('\\\\wsl$\\Ubuntu\\home\\u\\repo')
+    )
+  })
+
+  it('merges separator and distro-casing variants of the same WSL path', () => {
+    // Why: separators and the case-insensitive \\wsl$\<distro> share may drift,
+    // but the same Linux path must still resolve to one trust key.
+    expect(normalizeCodexProjectPathForLookup('\\\\wsl$\\Ubuntu\\home\\u\\proj')).toBe(
+      normalizeCodexProjectPathForLookup('//WSL$/ubuntu/home/u/proj')
+    )
+  })
+
+  it('treats wsl.localhost like the wsl$ share for the case-sensitive tail', () => {
+    expect(
+      normalizeCodexProjectPathForLookup('\\\\wsl.localhost\\Ubuntu\\home\\u\\Repo')
+    ).not.toBe(normalizeCodexProjectPathForLookup('\\\\wsl.localhost\\Ubuntu\\home\\u\\repo'))
+    expect(normalizeCodexProjectPathForLookup('\\\\WSL.LOCALHOST\\Ubuntu\\home\\u\\proj')).toBe(
+      normalizeCodexProjectPathForLookup('//wsl.localhost/ubuntu/home/u/proj')
+    )
+  })
+
+  it('still case-folds normal UNC shares', () => {
+    expect(normalizeCodexProjectPathForLookup('\\\\server\\share\\Proj')).toBe(
+      normalizeCodexProjectPathForLookup('//SERVER/share/proj')
+    )
+  })
+
+  it('leaves POSIX paths untouched', () => {
+    expect(normalizeCodexProjectPathForLookup('/home/u/Repo')).toBe('/home/u/Repo')
   })
 })
 

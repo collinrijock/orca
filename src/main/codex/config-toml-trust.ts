@@ -211,9 +211,32 @@ function usesWindowsPathSeparators(sourcePath: string): boolean {
 // Why: Codex and Orca can disagree on quote style, separators, and casing for
 // the same Windows project, including when the caller targets a remote host.
 export function normalizeCodexProjectPathForLookup(projectPath: string): string {
-  return usesWindowsPathSeparators(projectPath)
-    ? normalizeWindowsPathSeparators(projectPath).toLowerCase()
-    : projectPath
+  if (!usesWindowsPathSeparators(projectPath)) {
+    return projectPath
+  }
+  const slashed = normalizeWindowsPathSeparators(projectPath)
+  const wsl = matchWslUncSharePrefix(slashed)
+  if (wsl) {
+    // Why: the \\wsl$\<distro> (and \\wsl.localhost\<distro>) share prefix is
+    // matched case-insensitively by Windows, but the Linux path underneath is
+    // case-sensitive — lowercasing it would conflate two distinct project dirs
+    // (e.g. .../Repo vs .../repo) onto one trust key.
+    return `${wsl.sharePrefix.toLowerCase()}${wsl.linuxPath}`
+  }
+  return slashed.toLowerCase()
+}
+
+// Why: split a forward-slashed WSL UNC path into its case-insensitive Windows
+// share prefix (\\wsl$\<distro> or \\wsl.localhost\<distro>) and the
+// case-sensitive Linux path that follows.
+function matchWslUncSharePrefix(
+  slashedPath: string
+): { sharePrefix: string; linuxPath: string } | null {
+  const match = /^\/\/(?:wsl\$|wsl\.localhost)\/[^/]+/i.exec(slashedPath)
+  if (!match) {
+    return null
+  }
+  return { sharePrefix: match[0], linuxPath: slashedPath.slice(match[0].length) }
 }
 
 export function parseTrustKey(key: string): {
