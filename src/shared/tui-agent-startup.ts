@@ -2,87 +2,34 @@ import { isShellProcess } from './agent-detection'
 import {
   getAgentResumeArgv,
   type AgentProviderSessionMetadata,
-  type ResumableTuiAgent
+  type ResumableTuiAgent,
+  type SleepingAgentLaunchConfig
 } from './agent-session-resume'
-import { tokenizeCustomCommandTemplate } from './commit-message-prompt'
+import {
+  clearEnvCommand,
+  commandSeparator,
+  planAgentCliArgsSuffix,
+  quoteStartupArg,
+  resolveStartupShell,
+  type AgentStartupShell
+} from './tui-agent-startup-shell'
 import { getTuiAgentLaunchCommand, TUI_AGENT_CONFIG } from './tui-agent-config'
 import type { StartupCommandDelivery } from './codex-startup-delivery'
+import { buildSleepingAgentLaunchConfig } from './sleeping-agent-launch-config'
+import { planHermesStartupQuery } from './hermes-startup-query'
+import { inlineAgentDraftFitsPlatform } from './agent-draft-platform-limit'
 import type { TuiAgent } from './types'
-
-const WIN32_INLINE_DRAFT_LIMIT_CHARS = 24_000
 
 export type AgentStartupPlan = {
   agent: TuiAgent
   launchCommand: string
   expectedProcess: string
   followupPrompt: string | null
+  launchConfig: SleepingAgentLaunchConfig
+  launchToken?: string
   draftPrompt?: string | null
   env?: Record<string, string>
   startupCommandDelivery?: StartupCommandDelivery
-}
-
-export type AgentStartupShell = 'posix' | 'powershell' | 'cmd'
-
-export function resolveStartupShell(
-  platform: NodeJS.Platform,
-  shell?: AgentStartupShell
-): AgentStartupShell {
-  return shell ?? (platform === 'win32' ? 'powershell' : 'posix')
-}
-
-export function quoteStartupArg(value: string, shell: AgentStartupShell): string {
-  if (shell === 'powershell') {
-    return `'${value.replace(/'/g, "''")}'`
-  }
-  if (shell === 'cmd') {
-    return `"${value.replace(/([\^&|<>()%!"])/g, '^$1')}"`
-  }
-  return `'${value.replace(/'/g, `'\\''`)}'`
-}
-
-export function buildShellCommandFromArgv(
-  args: readonly string[],
-  shell: AgentStartupShell
-): string {
-  const command = args.map((arg) => quoteStartupArg(arg, shell)).join(' ')
-  if (shell === 'powershell' && command) {
-    return `& ${command}`
-  }
-  return command
-}
-
-function clearEnvCommand(name: string, shell: AgentStartupShell): string {
-  if (shell === 'powershell') {
-    return `Remove-Item Env:${name} -ErrorAction SilentlyContinue`
-  }
-  if (shell === 'cmd') {
-    return `set "${name}="`
-  }
-  return `unset ${name}`
-}
-
-function commandSeparator(shell: AgentStartupShell): string {
-  return shell === 'cmd' ? ' & ' : '; '
-}
-
-export type AgentCliArgsPlan = { ok: true; suffix: string } | { ok: false; error: string }
-
-export function planAgentCliArgsSuffix(
-  agentArgs: string | null | undefined,
-  shell: AgentStartupShell
-): AgentCliArgsPlan {
-  const trimmed = agentArgs?.trim()
-  if (!trimmed) {
-    return { ok: true, suffix: '' }
-  }
-  const tokenized = tokenizeCustomCommandTemplate(trimmed)
-  if (!tokenized.ok) {
-    return { ok: false, error: `CLI arguments are invalid: ${tokenized.error}` }
-  }
-  return {
-    ok: true,
-    suffix: tokenized.tokens.map((token) => quoteStartupArg(token, shell)).join(' ')
-  }
 }
 
 function resolveBaseCommand(args: {
@@ -91,9 +38,14 @@ function resolveBaseCommand(args: {
   platform: NodeJS.Platform
   shell: AgentStartupShell
   agentArgs?: string | null
+  isRemote?: boolean
 }): { ok: true; command: string } | { ok: false; error: string } {
   const override = args.cmdOverrides[args.agent]
-  const command = override || getTuiAgentLaunchCommand(TUI_AGENT_CONFIG[args.agent], args.platform)
+  const command =
+    override ||
+    getTuiAgentLaunchCommand(TUI_AGENT_CONFIG[args.agent], args.platform, {
+      isRemote: args.isRemote
+    })
   const suffix = planAgentCliArgsSuffix(args.agentArgs, args.shell)
   if (!suffix.ok) {
     return suffix
@@ -112,21 +64,30 @@ export function buildAgentStartupPlan(args: {
   allowEmptyPromptLaunch?: boolean
   agentArgs?: string | null
   agentEnv?: Record<string, string> | null
+  /** Why: SSH remotes deploy the CLI shim as plain `orca`, so the Linux-only
+   * `orca-ide` rename must be skipped for remote launches. */
+  isRemote?: boolean
 }): AgentStartupPlan | null {
   const { agent, prompt, cmdOverrides, platform, allowEmptyPromptLaunch = false } = args
   const shell = resolveStartupShell(platform, args.shell)
   const trimmedPrompt = prompt.trim()
   const config = TUI_AGENT_CONFIG[agent]
+  const usesQuery = config.promptInjectionMode === 'hermes-query' && Boolean(trimmedPrompt)
   const baseCommand = resolveBaseCommand({
     agent,
     cmdOverrides,
     platform,
     shell,
-    agentArgs: args.agentArgs
+    agentArgs: usesQuery ? null : args.agentArgs,
+    isRemote: args.isRemote
   })
   if (!baseCommand.ok) {
     return null
   }
+  const launchConfig = buildSleepingAgentLaunchConfig({
+    ...args,
+    agentCommand: baseCommand.command
+  })
 
   if (!trimmedPrompt) {
     if (!allowEmptyPromptLaunch) {
@@ -137,6 +98,7 @@ export function buildAgentStartupPlan(args: {
       launchCommand: baseCommand.command,
       expectedProcess: config.expectedProcess,
       followupPrompt: null,
+      launchConfig,
       ...(args.agentEnv ? { env: { ...args.agentEnv } } : {})
     }
   }
@@ -144,11 +106,13 @@ export function buildAgentStartupPlan(args: {
   const quotedPrompt = quoteStartupArg(trimmedPrompt, shell)
 
   if (config.promptInjectionMode === 'argv') {
+    const promptSeparator = config.argvPromptSeparator ? ` ${config.argvPromptSeparator}` : ''
     return {
       agent,
-      launchCommand: `${baseCommand.command} ${quotedPrompt}`,
+      launchCommand: `${baseCommand.command}${promptSeparator} ${quotedPrompt}`,
       expectedProcess: config.expectedProcess,
       followupPrompt: null,
+      launchConfig,
       ...(agent === 'codex' ? { startupCommandDelivery: 'shell-ready' as const } : {}),
       ...(args.agentEnv ? { env: { ...args.agentEnv } } : {})
     }
@@ -160,7 +124,33 @@ export function buildAgentStartupPlan(args: {
       launchCommand: `${baseCommand.command} --prompt ${quotedPrompt}`,
       expectedProcess: config.expectedProcess,
       followupPrompt: null,
+      launchConfig,
       ...(args.agentEnv ? { env: { ...args.agentEnv } } : {})
+    }
+  }
+
+  if (config.promptInjectionMode === 'hermes-query') {
+    const queryPlan = planHermesStartupQuery({
+      baseCommand: baseCommand.command,
+      agentArgs: args.agentArgs,
+      prompt: trimmedPrompt,
+      agentEnv: args.agentEnv,
+      platform,
+      shell,
+      isRemote: args.isRemote
+    })
+    if (!queryPlan) {
+      return null
+    }
+    return {
+      agent,
+      // Why: Hermes owns readiness and submission for `chat --query`; Orca
+      // only bounds and quotes the native invocation before starting the TUI.
+      launchCommand: queryPlan.command,
+      expectedProcess: config.expectedProcess,
+      followupPrompt: null,
+      launchConfig,
+      ...(queryPlan.env ? { env: queryPlan.env } : {})
     }
   }
 
@@ -170,6 +160,7 @@ export function buildAgentStartupPlan(args: {
       launchCommand: `${baseCommand.command} --prompt-interactive ${quotedPrompt}`,
       expectedProcess: config.expectedProcess,
       followupPrompt: null,
+      launchConfig,
       ...(args.agentEnv ? { env: { ...args.agentEnv } } : {})
     }
   }
@@ -180,6 +171,7 @@ export function buildAgentStartupPlan(args: {
       launchCommand: `${baseCommand.command} -i ${quotedPrompt}`,
       expectedProcess: config.expectedProcess,
       followupPrompt: null,
+      launchConfig,
       ...(args.agentEnv ? { env: { ...args.agentEnv } } : {})
     }
   }
@@ -189,6 +181,7 @@ export function buildAgentStartupPlan(args: {
     launchCommand: baseCommand.command,
     expectedProcess: config.expectedProcess,
     followupPrompt: trimmedPrompt,
+    launchConfig,
     ...(args.agentEnv ? { env: { ...args.agentEnv } } : {})
   }
 }
@@ -201,6 +194,9 @@ export function buildAgentResumeStartupPlan(args: {
   shell?: AgentStartupShell
   agentArgs?: string | null
   agentEnv?: Record<string, string> | null
+  agentCommand?: string | null
+  /** Why: see buildAgentStartupPlan — remote launches use the plain `orca` shim. */
+  isRemote?: boolean
 }): AgentStartupPlan | null {
   const argv = getAgentResumeArgv(args.agent, args.providerSession)
   if (!argv) {
@@ -208,16 +204,24 @@ export function buildAgentResumeStartupPlan(args: {
   }
   const shell = resolveStartupShell(args.platform, args.shell)
   const config = TUI_AGENT_CONFIG[args.agent]
-  const baseCommand = resolveBaseCommand({
-    agent: args.agent,
-    cmdOverrides: args.cmdOverrides,
-    platform: args.platform,
-    shell,
-    agentArgs: args.agentArgs
-  })
+  const resolvedAgentCommand = args.agentCommand?.trim()
+  const baseCommand = resolvedAgentCommand
+    ? ({ ok: true, command: resolvedAgentCommand } as const)
+    : resolveBaseCommand({
+        agent: args.agent,
+        cmdOverrides: args.cmdOverrides,
+        platform: args.platform,
+        shell,
+        agentArgs: args.agentArgs,
+        isRemote: args.isRemote
+      })
   if (!baseCommand.ok) {
     return null
   }
+  const launchConfig = buildSleepingAgentLaunchConfig({
+    ...args,
+    agentCommand: baseCommand.command
+  })
   const resumeArgs = argv
     .slice(1)
     .map((arg) => quoteStartupArg(arg, shell))
@@ -228,6 +232,7 @@ export function buildAgentResumeStartupPlan(args: {
     launchCommand,
     expectedProcess: config.expectedProcess,
     followupPrompt: null,
+    launchConfig,
     ...(args.agentEnv ? { env: { ...args.agentEnv } } : {})
   }
 }
@@ -236,24 +241,9 @@ export type AgentDraftLaunchPlan = {
   agent: TuiAgent
   launchCommand: string
   expectedProcess: string
+  launchConfig: SleepingAgentLaunchConfig
   env?: Record<string, string>
   startupCommandDelivery?: StartupCommandDelivery
-}
-
-function inlineDraftPlanFitsPlatform(
-  plan: AgentDraftLaunchPlan,
-  platform: NodeJS.Platform
-): boolean {
-  if (platform !== 'win32') {
-    return true
-  }
-  const envChars = Object.entries(plan.env ?? {}).reduce(
-    (total, [key, value]) => total + key.length + value.length,
-    0
-  )
-  // Why: Windows CreateProcess/env blocks have tight length ceilings. Large
-  // generated drafts should use the existing post-ready paste fallback.
-  return plan.launchCommand.length + envChars <= WIN32_INLINE_DRAFT_LIMIT_CHARS
 }
 
 export function buildAgentDraftLaunchPlan(args: {
@@ -264,6 +254,8 @@ export function buildAgentDraftLaunchPlan(args: {
   shell?: AgentStartupShell
   agentArgs?: string | null
   agentEnv?: Record<string, string> | null
+  /** Why: see buildAgentStartupPlan — remote launches use the plain `orca` shim. */
+  isRemote?: boolean
 }): AgentDraftLaunchPlan | null {
   const { agent, draft, cmdOverrides, platform } = args
   const shell = resolveStartupShell(platform, args.shell)
@@ -277,11 +269,16 @@ export function buildAgentDraftLaunchPlan(args: {
     cmdOverrides,
     platform,
     shell,
-    agentArgs: args.agentArgs
+    agentArgs: args.agentArgs,
+    isRemote: args.isRemote
   })
   if (!baseCommand.ok) {
     return null
   }
+  const launchConfig = buildSleepingAgentLaunchConfig({
+    ...args,
+    agentCommand: baseCommand.command
+  })
   let plan: AgentDraftLaunchPlan | null = null
   if (config.draftPromptFlag) {
     const quoted = quoteStartupArg(trimmed, shell)
@@ -289,6 +286,7 @@ export function buildAgentDraftLaunchPlan(args: {
       agent,
       launchCommand: `${baseCommand.command} ${config.draftPromptFlag} ${quoted}`,
       expectedProcess: config.expectedProcess,
+      launchConfig,
       // Why: native draft flags carry user text on argv and must survive rc-file startup.
       ...(agent === 'codex' ? { startupCommandDelivery: 'shell-ready' as const } : {}),
       ...(args.agentEnv ? { env: { ...args.agentEnv } } : {})
@@ -299,13 +297,24 @@ export function buildAgentDraftLaunchPlan(args: {
       agent,
       launchCommand: `${baseCommand.command}${commandSeparator(shell)}${clearVar}`,
       expectedProcess: config.expectedProcess,
+      launchConfig,
       env: { ...args.agentEnv, [config.draftPromptEnvVar]: trimmed }
     }
   }
-  if (!plan || !inlineDraftPlanFitsPlatform(plan, platform)) {
+  if (
+    !plan ||
+    !inlineAgentDraftFitsPlatform({ command: plan.launchCommand, env: plan.env, platform })
+  ) {
     return null
   }
   return plan
 }
 
 export { isShellProcess }
+export {
+  buildShellCommandFromArgv,
+  planAgentCliArgsSuffix,
+  quoteStartupArg,
+  resolveStartupShell
+} from './tui-agent-startup-shell'
+export type { AgentCliArgsPlan, AgentStartupShell } from './tui-agent-startup-shell'

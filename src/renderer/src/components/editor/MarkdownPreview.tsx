@@ -38,7 +38,8 @@ import { Input } from '@/components/ui/input'
 import { useAppStore } from '@/store'
 import { toast } from 'sonner'
 import { computeEditorFontSize } from '@/lib/editor-font-zoom'
-import { getConnectionId } from '@/lib/connection-context'
+import { getConnectionIdForFile } from '@/lib/connection-context'
+import { createConnectionIdForFileSelector } from '@/lib/connection-owner-resolution'
 import { scrollTopCache, setWithLRU } from '@/lib/scroll-cache'
 import { detectLanguage } from '@/lib/language-detect'
 import type { DiffComment, MarkdownDocument, Worktree } from '../../../../shared/types'
@@ -68,14 +69,15 @@ import {
   setActiveMarkdownPreviewSearchMatch
 } from './markdown-preview-search'
 import { usePreserveSectionDuringExternalEdit } from './usePreserveSectionDuringExternalEdit'
-import { openHttpLink } from '@/lib/http-link-routing'
+import { openHttpLink, type HttpLinkSourceOwner } from '@/lib/http-link-routing'
 import { getShortcutPlatform } from '@/lib/shortcut-platform'
 import { isLocalPathOpenBlocked, showLocalPathOpenBlockedToast } from '@/lib/local-path-open-guard'
 import { markdownPreviewUrlTransform } from './markdown-preview-url-transform'
+import { prewarmMarkdownPreviewLocalImages } from './markdown-preview-local-images'
 import { settingsForRuntimeOwner } from '@/runtime/runtime-rpc-client'
 import { statRuntimePath } from '@/runtime/runtime-file-client'
 import { useMountedRef } from '@/hooks/useMountedRef'
-import { buildMarkdownTableOfContents } from './markdown-table-of-contents'
+import { selectMarkdownTableOfContents } from './markdown-toc-visibility-gate'
 import { MarkdownTableOfContentsPanel } from './MarkdownTableOfContentsPanel'
 import { isMarkdownComment } from '@/lib/diff-comment-compat'
 import { DiffCommentCard } from '../diff-comments/DiffCommentCard'
@@ -389,14 +391,18 @@ export function deriveMarkdownPreviewSourceRoot(
 
 function findWorktreeForMarkdownPreviewPath(
   worktreesByRepo: Record<string, Worktree[]>,
-  absolutePath: string
+  absolutePath: string,
+  acceptsWorktree: (worktree: Worktree) => boolean = () => true
 ): Worktree | null {
   let bestMatch: Worktree | null = null
   let bestMatchLength = -1
 
   for (const worktrees of Object.values(worktreesByRepo)) {
     for (const worktree of worktrees) {
-      if (relativePathInsideRoot(worktree.path, absolutePath) !== null) {
+      if (
+        acceptsWorktree(worktree) &&
+        relativePathInsideRoot(worktree.path, absolutePath) !== null
+      ) {
         const normalizedWorktreePathLength = normalizeMarkdownPreviewAbsolutePath(
           worktree.path
         ).length
@@ -409,6 +415,27 @@ function findWorktreeForMarkdownPreviewPath(
   }
 
   return bestMatch
+}
+
+function findMarkdownPreviewTargetWorktree(
+  worktreesByRepo: Record<string, Worktree[]>,
+  absolutePath: string,
+  sourceWorktree: Worktree | null,
+  sourceOwner: HttpLinkSourceOwner
+): Worktree | null {
+  if (sourceWorktree && relativePathInsideRoot(sourceWorktree.path, absolutePath) !== null) {
+    return sourceWorktree
+  }
+  return findWorktreeForMarkdownPreviewPath(worktreesByRepo, absolutePath, (worktree) => {
+    const connectionId = getConnectionIdForFile(worktree.id, absolutePath)
+    if (sourceOwner.kind === 'local') {
+      return connectionId === null
+    }
+    if (sourceOwner.kind === 'ssh') {
+      return connectionId === sourceOwner.connectionId
+    }
+    return false
+  })
 }
 
 export function resolveMarkdownPreviewSourceWorktree(
@@ -497,9 +524,26 @@ export default function MarkdownPreview({
   )
   const allDiffComments = sourceWorktree?.diffComments
   const sourceRoutingWorktreeId = sourceWorktree?.id ?? resolvedSourceWorktreeId
-  const sourceConnectionId = sourceRoutingWorktreeId
-    ? (getConnectionId(sourceRoutingWorktreeId) ?? null)
-    : null
+  const runtimeOwnerId = resolvedSourceRuntimeEnvironmentId?.trim()
+  const sourceConnectionIdSelector = useMemo(
+    () =>
+      createConnectionIdForFileSelector(sourceRoutingWorktreeId, filePath, {
+        skip: Boolean(runtimeOwnerId)
+      }),
+    [filePath, runtimeOwnerId, sourceRoutingWorktreeId]
+  )
+  const sourceConnectionId = useAppStore(sourceConnectionIdSelector)
+  const sourceOwner = useMemo<HttpLinkSourceOwner>(
+    () =>
+      runtimeOwnerId
+        ? { kind: 'runtime', runtimeEnvironmentId: runtimeOwnerId }
+        : sourceConnectionId === undefined
+          ? { kind: 'unknown' }
+          : sourceConnectionId === null
+            ? { kind: 'local' }
+            : { kind: 'ssh', connectionId: sourceConnectionId },
+    [runtimeOwnerId, sourceConnectionId]
+  )
   const worktreeRoot =
     sourceWorktree?.path ??
     (sourceRoutingWorktreeId
@@ -545,10 +589,22 @@ export default function MarkdownPreview({
 
   const renderedContent = usePreserveSectionDuringExternalEdit(content, bodyRef)
 
+  useEffect(() => {
+    const prewarm = prewarmMarkdownPreviewLocalImages(renderedContent, filePath, {
+      runtimeContext: imageRuntimeContext
+    })
+    return prewarm.cancel
+  }, [renderedContent, filePath, imageRuntimeContext])
+
   const frontMatter = useMemo(() => extractFrontMatter(renderedContent), [renderedContent])
+  // Why: building the table of contents runs a full-document remark parse on
+  // every content change, and the preview's content churns on streamed/external
+  // file writes. The result is only used while the panel is open (closed by
+  // default), so gate the parse on visibility; showTableOfContents in the deps
+  // rebuilds the outline the moment it opens.
   const tableOfContentsItems = useMemo(
-    () => buildMarkdownTableOfContents(renderedContent),
-    [renderedContent]
+    () => selectMarkdownTableOfContents(showTableOfContents, renderedContent),
+    [renderedContent, showTableOfContents]
   )
   const markdownDocumentIndex = useMemo(
     () => createMarkdownDocumentIndex(markdownDocuments),
@@ -1241,6 +1297,9 @@ export default function MarkdownPreview({
           // dangling in-worktree .md, pre-check existence so the user sees a
           // toast instead of the silent no-op from shell.openFileUri.
           if (isMarkdownPreviewSystemBrowserModifier(event, isMac)) {
+            if (sourceOwner.kind === 'unknown') {
+              return
+            }
             const osTarget = getMarkdownPreviewLinkTarget(href, filePath)
             if (!osTarget) {
               return
@@ -1254,7 +1313,12 @@ export default function MarkdownPreview({
             if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
               openHttpLink(
                 parsed.toString(),
-                resolveMarkdownPreviewHttpOpenOptions(event, isMac, sourceRoutingWorktreeId)
+                resolveMarkdownPreviewHttpOpenOptions(
+                  event,
+                  isMac,
+                  sourceRoutingWorktreeId,
+                  sourceOwner
+                )
               )
               return
             }
@@ -1313,7 +1377,12 @@ export default function MarkdownPreview({
             // handled above; this path only sees non-escape-hatch clicks.)
             openHttpLink(
               target.toString(),
-              resolveMarkdownPreviewHttpOpenOptions(event, isMac, sourceRoutingWorktreeId)
+              resolveMarkdownPreviewHttpOpenOptions(
+                event,
+                isMac,
+                sourceRoutingWorktreeId,
+                sourceOwner
+              )
             )
             return
           }
@@ -1334,12 +1403,25 @@ export default function MarkdownPreview({
               ? { line: classifiedFileTarget.line, column: classifiedFileTarget.column }
               : parseLineTarget(target.hash)
 
+          // Why: same-file anchors need no ownership/filesystem resolution (e.g.
+          // `./README.md#heading` when this file is README.md). Run before the
+          // unknown-ownership guard so ambiguous folder-workspace ownership still
+          // scrolls within the open document.
           if (absolutePath === filePath && target.hash && !lineTarget) {
             void scrollToAnchor(target.hash.slice(1))
             return
           }
 
-          const targetWorktree = findWorktreeForMarkdownPreviewPath(worktreesByRepo, absolutePath)
+          if (sourceOwner.kind === 'unknown') {
+            return
+          }
+
+          const targetWorktree = findMarkdownPreviewTargetWorktree(
+            worktreesByRepo,
+            absolutePath,
+            sourceWorktree,
+            sourceOwner
+          )
           if (!targetWorktree) {
             if (sourceRoutingWorktreeId && worktreeRoot) {
               // Why: floating markdown files are owned by a synthetic workspace,
@@ -1349,7 +1431,8 @@ export default function MarkdownPreview({
                 sourceFilePath: filePath,
                 worktreeId: sourceRoutingWorktreeId,
                 worktreeRoot,
-                runtimeEnvironmentId: resolvedSourceRuntimeEnvironmentId
+                runtimeEnvironmentId: resolvedSourceRuntimeEnvironmentId,
+                sourceOwner
               })
               return
             }
@@ -1371,8 +1454,15 @@ export default function MarkdownPreview({
             return
           }
 
-          const relativePath = absolutePath.slice(targetWorktree.path.length + 1)
+          const relativePath = relativePathInsideRoot(targetWorktree.path, absolutePath)
+          if (relativePath === null) {
+            return
+          }
           const language = detectLanguage(absolutePath)
+          const targetConnectionId = getConnectionIdForFile(targetWorktree.id, absolutePath)
+          if (targetConnectionId === undefined) {
+            return
+          }
           try {
             const stats = await statRuntimePath(
               {
@@ -1382,7 +1472,7 @@ export default function MarkdownPreview({
                 ),
                 worktreeId: targetWorktree.id,
                 worktreePath: targetWorktree.path,
-                connectionId: getConnectionId(targetWorktree.id) ?? undefined
+                connectionId: targetConnectionId ?? undefined
               },
               absolutePath
             )
@@ -1499,7 +1589,8 @@ export default function MarkdownPreview({
             sourceFilePath: filePath,
             worktreeId: sourceRoutingWorktreeId,
             worktreeRoot,
-            runtimeEnvironmentId: resolvedSourceRuntimeEnvironmentId
+            runtimeEnvironmentId: resolvedSourceRuntimeEnvironmentId,
+            sourceOwner
           })
         }
 
@@ -1660,6 +1751,8 @@ export default function MarkdownPreview({
     setMarkdownViewMode,
     setPendingEditorReveal,
     sourceConnectionId,
+    sourceOwner,
+    sourceWorktree,
     resolvedSourceRuntimeEnvironmentId,
     sourceRoutingWorktreeId,
     worktreeRoot,

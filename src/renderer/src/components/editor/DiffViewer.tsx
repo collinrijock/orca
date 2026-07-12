@@ -6,7 +6,7 @@ import { diffViewStateCache, setWithLRU } from '@/lib/scroll-cache'
 import { monaco } from '@/lib/monaco-setup'
 import { computeDiffEditorFontSize } from '@/lib/editor-font-zoom'
 import { useContextualCopySetup } from './useContextualCopySetup'
-import { findWorktreeById } from '@/store/slices/worktree-helpers'
+import { selectWorktreeDiffComments } from '@/store/worktree-diff-comments-selector'
 import { useDiffCommentDecorator } from '../diff-comments/useDiffCommentDecorator'
 import { DiffCommentPopover } from '../diff-comments/DiffCommentPopover'
 import {
@@ -16,13 +16,14 @@ import {
 import { applyDiffEditorLineNumberOptions } from './diff-editor-line-number-options'
 import type { DiffComment } from '../../../../shared/types'
 import { isDiffComment } from '@/lib/diff-comment-compat'
-import { installEditorSaveShortcut } from './editor-shortcuts'
+import { installEditorSaveShortcut, installMonacoEditorFindShortcut } from './editor-shortcuts'
 import { diffEditorScrollbarOptions } from './diff-editor-scrollbar-options'
 import { LargeDiffFallback } from './LargeDiffFallback'
 import { getLargeDiffRenderLimit } from './large-diff-render-limit'
 import { useDiffViewerLargeDiffLifecycle } from './useDiffViewerLargeDiffLifecycle'
 import { getDiffViewerLargeDiffSaveAction } from './diff-viewer-large-diff-save-action'
 import type { DiffViewerProps } from './diff-viewer-props'
+import { buildDiffEditorWordWrapOptions } from './diff-editor-word-wrap-options'
 
 export default function DiffViewer({
   modelKey,
@@ -56,7 +57,7 @@ export default function DiffViewer({
   // identity only changes when diffComments actually changes on this worktree.
   // Filtering by relativePath happens in a memo below.
   const allDiffComments = useAppStore((s): DiffComment[] | undefined =>
-    worktreeId ? findWorktreeById(s.worktreesByRepo, worktreeId)?.diffComments : undefined
+    selectWorktreeDiffComments(s, worktreeId)
   )
   const diffComments = useMemo(
     () => (allDiffComments ?? []).filter((c) => c.filePath === relativePath && isDiffComment(c)),
@@ -335,15 +336,19 @@ export default function DiffViewer({
             onSaveRef.current?.(modifiedEditor.getValue())
           }
         )
+        const cleanupOriginalFindShortcut = installMonacoEditorFindShortcut(originalEditor)
+        const cleanupModifiedFindShortcut = installMonacoEditorFindShortcut(modifiedEditor)
 
         // Track changes
         const modelContentSub = modifiedEditor.onDidChangeModelContent(() => {
           onContentChangeRef.current?.(modifiedEditor.getValue())
         })
         modifiedEditor.onDidDispose(() => {
-          // Why: editable diff views own both the save shortcut and
-          // model-change subscription for this Monaco editor instance.
+          // Why: editable diff views own both panes' shortcut bridges and the
+          // model subscription for the lifetime of this Monaco diff instance.
           cleanupSaveShortcut()
+          cleanupOriginalFindShortcut()
+          cleanupModifiedFindShortcut()
           modelContentSub.dispose()
         })
 
@@ -450,6 +455,7 @@ export default function DiffViewer({
               fontSize: diffEditorFontSize,
               fontFamily: settings?.terminalFontFamily || 'monospace',
               lineNumbers: 'on',
+              ...buildDiffEditorWordWrapOptions(settings?.diffWordWrap),
               automaticLayout: true,
               renderOverviewRuler: true,
               scrollbar: diffEditorScrollbarOptions,

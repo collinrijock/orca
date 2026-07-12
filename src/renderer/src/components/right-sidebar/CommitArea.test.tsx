@@ -7,6 +7,7 @@ import {
 } from './source-control-primary-action'
 import { resolveDropdownItems, type DropdownActionKind } from './source-control-dropdown-items'
 import { TooltipProvider } from '@/components/ui/tooltip'
+import { deriveSourceControlPushRecovery } from './source-control-push-recovery'
 
 function buildInputs(overrides: Partial<PrimaryActionInputs> = {}): PrimaryActionInputs {
   return {
@@ -31,9 +32,12 @@ function baseProps(overrides: Partial<PrimaryActionInputs> = {}) {
     commitMessage: 'feat: add commit area',
     commitError: null as string | null,
     commitFailureRecoveryPrompt: null as string | null,
+    pushRecovery: null as ReturnType<typeof deriveSourceControlPushRecovery>,
     remoteActionError: null as string | null,
     isCommitting: inputs.isCommitting,
     isFixingCommitFailureWithAI: false,
+    isFixingPushFailureWithAI: false,
+    sourceControlAiActionsVisible: true,
     aiEnabled: false,
     aiAgentConfigured: false,
     isGenerating: false,
@@ -49,9 +53,33 @@ function baseProps(overrides: Partial<PrimaryActionInputs> = {}) {
     onGenerate: vi.fn(),
     onCancelGenerate: vi.fn(),
     onFixCommitFailureWithAI: vi.fn(),
+    onFixPushFailureWithAI: vi.fn(),
     onPrimaryAction: vi.fn(),
     onDropdownAction: vi.fn() as (kind: DropdownActionKind) => void
   }
+}
+
+function buildPushRecovery(
+  rawError: string
+): NonNullable<ReturnType<typeof deriveSourceControlPushRecovery>> {
+  const recovery = deriveSourceControlPushRecovery({
+    actionError: {
+      kind: 'push',
+      message: 'Push blocked',
+      rawError,
+      branchName: 'main',
+      worktreePath: '/repo',
+      entriesSnapshot: [],
+      entriesSnapshotTotalCount: 0,
+      sequence: 1
+    },
+    currentBranchName: 'main',
+    currentSequence: 1
+  })
+  if (!recovery) {
+    throw new Error('push recovery was not derived')
+  }
+  return recovery
 }
 
 function renderCommitArea(props: Parameters<typeof CommitArea>[0]): string {
@@ -197,6 +225,19 @@ describe('CommitArea', () => {
     expect(button).toContain('animate-spin')
   })
 
+  it('hides commit failure AI actions when Source Control AI actions are hidden', () => {
+    const markup = renderCommitArea({
+      ...baseProps(),
+      commitError: 'husky - pre-commit hook failed',
+      commitFailureRecoveryPrompt: 'Fix this commit failure.',
+      sourceControlAiActionsVisible: false
+    })
+
+    expect(markup).not.toContain('AI Fix')
+    expect(markup).not.toContain('Fix commit failure with AI')
+    expect(markup).toContain('Commit blocked')
+  })
+
   it('enables the agent picker when commit failure context is available', () => {
     const markup = renderCommitArea({
       ...baseProps(),
@@ -226,6 +267,33 @@ describe('CommitArea', () => {
     })
     expect(markup).toContain('Fetch failed. network timeout')
     expect(markup).toContain('commit-area-remote-error')
+  })
+
+  it('shows a compact push hook summary and AI fix action when push fails on a hook', () => {
+    const raw =
+      "error: failed to push some refs to 'origin'\nhusky - pre-push hook exited with code 1\neslint found 2 errors"
+    const markup = renderCommitArea({
+      ...baseProps(),
+      pushRecovery: buildPushRecovery(raw)
+    })
+
+    expect(markup).toContain('id="commit-area-push-error"')
+    expect(markup).toContain('Push blocked')
+    expect(markup).toContain('Lint failed during push.')
+    expect(markup).not.toContain('eslint found 2 errors')
+    expect(markup).toContain('aria-label="Fix push failure with AI"')
+    expect(markup).toContain('Details')
+  })
+
+  it('hides push failure AI actions when Source Control AI actions are hidden', () => {
+    const markup = renderCommitArea({
+      ...baseProps(),
+      pushRecovery: buildPushRecovery('husky - pre-push hook failed'),
+      sourceControlAiActionsVisible: false
+    })
+
+    expect(markup).not.toContain('Fix push failure with AI')
+    expect(markup).toContain('Push blocked')
   })
 
   it('formats pull policy errors with command options', () => {
@@ -457,6 +525,9 @@ describe('CommitArea', () => {
     expect(markup).toContain('id="commit-area-create-pr-intent"')
     expect(markup).toContain('role="alert"')
     expect(markup).toContain('Create PR failed: push this branch first.')
+    const notice = markup.match(/id="commit-area-create-pr-intent"[\s\S]*?<\/div>/)?.[0] ?? ''
+    expect(notice).toContain('break-words')
+    expect(notice).not.toContain('truncate')
   })
 })
 
@@ -466,6 +537,7 @@ describe('ConflictSummaryCard', () => {
       <ConflictSummaryCard
         conflictOperation="rebase"
         unresolvedCount={1}
+        sourceControlAiActionsVisible={true}
         isResolvingWithAI={false}
         onResolveWithAI={vi.fn()}
         onReview={vi.fn()}
@@ -480,6 +552,7 @@ describe('ConflictSummaryCard', () => {
       <ConflictSummaryCard
         conflictOperation="merge"
         unresolvedCount={1}
+        sourceControlAiActionsVisible={true}
         isResolvingWithAI={false}
         onAbortOperation={vi.fn()}
         onResolveWithAI={vi.fn()}
@@ -490,6 +563,7 @@ describe('ConflictSummaryCard', () => {
       <ConflictSummaryCard
         conflictOperation="rebase"
         unresolvedCount={1}
+        sourceControlAiActionsVisible={true}
         isResolvingWithAI={false}
         onAbortOperation={vi.fn()}
         onResolveWithAI={vi.fn()}
@@ -500,6 +574,7 @@ describe('ConflictSummaryCard', () => {
       <ConflictSummaryCard
         conflictOperation="cherry-pick"
         unresolvedCount={1}
+        sourceControlAiActionsVisible={true}
         isResolvingWithAI={false}
         onAbortOperation={vi.fn()}
         onResolveWithAI={vi.fn()}
@@ -520,6 +595,7 @@ describe('ConflictSummaryCard', () => {
       <ConflictSummaryCard
         conflictOperation="merge"
         unresolvedCount={1}
+        sourceControlAiActionsVisible={true}
         isResolvingWithAI={false}
         onAbortOperation={vi.fn()}
         onResolveWithAI={vi.fn()}
@@ -530,6 +606,7 @@ describe('ConflictSummaryCard', () => {
       <ConflictSummaryCard
         conflictOperation="rebase"
         unresolvedCount={1}
+        sourceControlAiActionsVisible={true}
         isResolvingWithAI={false}
         onAbortOperation={vi.fn()}
         onResolveWithAI={vi.fn()}
@@ -548,6 +625,7 @@ describe('ConflictSummaryCard', () => {
       <ConflictSummaryCard
         conflictOperation="merge"
         unresolvedCount={2}
+        sourceControlAiActionsVisible={true}
         isResolvingWithAI={false}
         onResolveWithAI={vi.fn()}
         onReview={vi.fn()}
@@ -557,6 +635,22 @@ describe('ConflictSummaryCard', () => {
     expect(markup).toContain('Resolve with AI')
     expect(markup).toContain('lucide-sparkles')
     expect(markup).not.toMatch(/\blucide-sparkle(?!s)\b/)
+  })
+
+  it('hides Resolve with AI when Source Control AI actions are hidden', () => {
+    const markup = renderToStaticMarkup(
+      <ConflictSummaryCard
+        conflictOperation="merge"
+        unresolvedCount={2}
+        sourceControlAiActionsVisible={false}
+        isResolvingWithAI={false}
+        onResolveWithAI={vi.fn()}
+        onReview={vi.fn()}
+      />
+    )
+
+    expect(markup).not.toContain('Resolve with AI')
+    expect(markup).toContain('Review conflicts')
   })
 })
 

@@ -97,7 +97,10 @@ export async function diagnoseAuth(): Promise<GitLabAuthDiagnostic> {
       ? 'GLAB_TOKEN'
       : null
   try {
-    const { stdout, stderr } = await glabExecFileAsync(['auth', 'status'])
+    // Why: a host-global diagnostic must not wake an unrelated default WSL distro.
+    const { stdout, stderr } = await glabExecFileAsync(['auth', 'status'], {
+      allowDefaultWslFallback: false
+    })
     const output = `${stdout}\n${stderr}`
     const hosts = parseGlabAuthStatusHosts(output)
     return {
@@ -245,7 +248,7 @@ export async function getProjectSlug(
   connectionId?: string | null,
   options: HostedReviewExecutionOptions = {}
 ): Promise<ProjectRef | null> {
-  const knownHosts = await getGlabKnownHosts()
+  const knownHosts = await getGlabKnownHosts(connectionId)
   return getProjectRef(
     repoPath,
     knownHosts,
@@ -265,7 +268,7 @@ export async function getMergeRequest(
   connectionId?: string | null,
   options: HostedReviewExecutionOptions = {}
 ): Promise<MRInfo | null> {
-  const knownHosts = await getGlabKnownHosts()
+  const knownHosts = await getGlabKnownHosts(connectionId)
   const localGitArgs = hostedReviewLocalGitOptionArgs(options)
   const localGitOptions = localGitArgs[0] ?? {}
   const projectRef = await getProjectRef(repoPath, knownHosts, connectionId, ...localGitArgs)
@@ -316,7 +319,7 @@ export async function getMergeRequestForBranch(
   if (!branchName && linkedMRIid == null) {
     return null
   }
-  const knownHosts = await getGlabKnownHosts()
+  const knownHosts = await getGlabKnownHosts(connectionId)
   const localGitArgs = hostedReviewLocalGitOptionArgs(options)
   const localGitOptions = localGitArgs[0] ?? {}
   const projectRef = await getProjectRef(repoPath, knownHosts, connectionId, ...localGitArgs)
@@ -400,7 +403,7 @@ export async function listMergeRequests(
   connectionId?: string | null,
   localGitOptions: LocalGitExecOptions = {}
 ): Promise<ListMergeRequestsResult> {
-  const knownHosts = await getGlabKnownHosts()
+  const knownHosts = await getGlabKnownHosts(connectionId)
   // Why: MRs sit on `origin` in the fork model (the user's fork is where
   // they push branches and submit MRs). Mirror github's `getOwnerRepo`
   // call site by going through the upstream/origin preference resolver
@@ -429,10 +432,14 @@ export async function listMergeRequests(
       }
     }
     // Why: fallback — let glab infer project from cwd, same as listIssues.
-    // Used when the repo's remote host is not in getGlabKnownHosts()
+    // Used when the repo's remote host is not in getGlabKnownHosts(connectionId)
     // (e.g. a fresh self-hosted instance), but glab itself can still
     // resolve it from the local git config.
     const stateFlag = mrListStateFlags(state)
+    // Why: the cwd-inferred fallback must honor the same search the API path
+    // does, otherwise typing a query against a self-hosted / unresolved-projectRef
+    // repo silently returns the unfiltered list (the original #6263 symptom).
+    const searchFlag = query?.trim() ? ['--search', query.trim()] : []
     await acquire()
     try {
       const { stdout } = await glabExecFileAsync(
@@ -449,7 +456,8 @@ export async function listMergeRequests(
           'updated_at',
           '--sort',
           'desc',
-          ...stateFlag
+          ...stateFlag,
+          ...searchFlag
         ],
         glabRepoExecOptions(repoPath, connectionId, localGitOptions)
       )
@@ -593,7 +601,7 @@ export async function listWorkItems(
   localGitOptions: LocalGitExecOptions = {}
 ): Promise<GitLabPagedResult<GitLabWorkItem>> {
   const issueState = mrStateToIssueState(state)
-  const knownHosts = await getGlabKnownHosts()
+  const knownHosts = await getGlabKnownHosts(connectionId)
   const { source: projectRef } = await resolveIssueSource(
     repoPath,
     preference,
@@ -729,7 +737,7 @@ export async function listTodos(
 ): Promise<GitLabTodo[]> {
   const projectRef = await getProjectRef(
     repoPath,
-    await getGlabKnownHosts(),
+    await getGlabKnownHosts(connectionId),
     connectionId,
     localGitOptions
   )
@@ -808,7 +816,7 @@ async function withProjectRef<T>(
       await resolveIssueSource(
         repoPath,
         preference,
-        await getGlabKnownHosts(),
+        await getGlabKnownHosts(connectionId),
         connectionId,
         localGitOptions
       )
@@ -1210,7 +1218,7 @@ export async function updateMRReviewers(
       try {
         const fields =
           reviewerIds.length > 0
-            ? reviewerIds.map((id) => ['-f', `reviewer_ids[]=${id}`]).flat()
+            ? reviewerIds.flatMap((id) => ['-f', `reviewer_ids[]=${id}`])
             : ['-f', 'reviewer_ids=']
         const { stdout } = await glabExecFileAsync(
           [

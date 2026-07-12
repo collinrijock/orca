@@ -24,7 +24,7 @@ The underlying serve-sim helper captures the real simulator framebuffer (via pri
 - The agent should use Orca's preview pane instead of external Simulator.app or raw serve-sim URLs.
 
 **When NOT to use**
-- Android emulators → use adb / scrcpy tooling (future `orca emulator` Android backend may appear under the same namespace).
+- Android emulators → use the `orca-emulator-android` skill (same `orca emulator` namespace, cross-platform via adb/emulator).
 - Building or installing the app itself → use `xcodebuild`, `xcrun simctl install`, `expo run:ios`, etc. (launch the app, then use `orca emulator` to drive it).
 - In-app debugging (state, network, views) → use the app's own tools or the browser pane if it's a webview.
 - Remote/SSH worktrees for emulator control (currently out of scope / unsupported; simulator hardware is local to a Mac).
@@ -107,7 +107,7 @@ Most support `--worktree <selector>` and explicit `--device <udid|name>` or `--e
 ## Targeting devices & worktrees
 
 - Default: current worktree's active emulator (resolved from shell cwd or Orca context).
-- Explicit worktree: `--worktree id:abc123` or `--worktree active`.
+- Explicit worktree: `--worktree id:<fullWorktreeId>` or `--worktree active`. The full id is the exact `<repo-id>::<path>` value returned by `orca worktree list --json`; a bare repo id is not valid here.
 - Explicit device: `--device "iPhone 16 Pro"` or `--device <udid>` (after `list`).
 - Orca-generated emulator id (for stability, like browserPageId): use `--emulator <id>` returned by list (recommended for scripts that persist ids).
 

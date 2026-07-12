@@ -1,5 +1,14 @@
 /* eslint-disable max-lines */
-import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react'
+import {
+  lazy,
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type MutableRefObject
+} from 'react'
 import { toast } from 'sonner'
 import type { GlobalSettings, OrcaHooks } from '../../../../shared/types'
 import type { SpeechModelState } from '../../../../shared/speech-types'
@@ -14,7 +23,11 @@ import { useSystemPrefersDark } from '@/components/terminal-pane/use-system-pref
 import { isMacUserAgent, isWindowsUserAgent } from '@/components/terminal-pane/pane-helpers'
 import { applyDocumentTheme } from '@/lib/document-theme'
 import { useConfirmationDialog } from '@/components/confirmation-dialog'
-import { SCROLLBACK_PRESETS_MB, getFallbackTerminalFonts } from './SettingsConstants'
+import {
+  SCROLLBACK_PRESETS_ROWS,
+  getFallbackTerminalFonts,
+  mergeFontSuggestions
+} from './SettingsConstants'
 import { DEFAULT_APP_FONT_FAMILY, getDefaultVoiceSettings } from '../../../../shared/constants'
 import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import { GeneralPane } from './GeneralPane'
@@ -51,7 +64,8 @@ import { AdvancedPane } from './AdvancedPane'
 import { SettingsSidebar } from './SettingsSidebar'
 import { SettingsSetupGuidePane } from './SettingsSetupGuidePane'
 import { ActiveSettingsSectionProvider, SettingsSection } from './SettingsSection'
-import { matchesSettingsSearch } from './settings-search'
+import { getSettingsSectionSearchEntries, rankSettingsSearchItems } from './settings-search'
+import { resolveAppearanceAccordionDeepLink } from './appearance-usage-percentage-search'
 import { cn } from '@/lib/utils'
 import { isIntentionalAppRestartInProgress } from '@/lib/updater-beforeunload'
 import { registerWindowCloseGuard } from '../window-close-request-coordinator'
@@ -91,6 +105,10 @@ import {
 import { translate } from '@/i18n/i18n'
 import { getProjectHostSetupProjectionFromState } from '../../store/selectors'
 
+const DevToolsPane = import.meta.env.DEV
+  ? lazy(() => import('./DevToolsPane').then((module) => ({ default: module.DevToolsPane })))
+  : null
+
 const SETTINGS_NAV_GROUPS = [
   {
     id: 'capabilities',
@@ -114,11 +132,6 @@ const SETTINGS_NAV_GROUPS = [
     titleDefault: 'Remote Hosts'
   },
   {
-    id: 'mobile',
-    titleKey: 'auto.components.settings.Settings.mobile_group',
-    titleDefault: 'Mobile'
-  },
-  {
     id: 'security',
     titleKey: 'auto.components.settings.Settings.084d8fac5b',
     titleDefault: 'Privacy & Security'
@@ -135,6 +148,12 @@ const SETTINGS_NAV_GROUPS = [
   }
 ] as const
 
+type SettingsNavGroupDefinition = (typeof SETTINGS_NAV_GROUPS)[number]
+
+const SETTINGS_NAV_GROUP_BY_ID = new Map<string, SettingsNavGroupDefinition>(
+  SETTINGS_NAV_GROUPS.map((group) => [group.id, group])
+)
+
 const SHORTCUTS_ESCAPE_CONFIRM_TOAST_ID = 'shortcuts-escape-confirm'
 const SHORTCUTS_ESCAPE_CONFIRM_WINDOW_MS = 2200
 
@@ -147,6 +166,27 @@ function getSettingsSectionId(pane: SettingsNavTarget, repoId: string | null): s
 
 function getFallbackVisibleSection(sections: SettingsNavSection[]): SettingsNavSection | undefined {
   return sections.at(0)
+}
+
+function getSettingsNavGroupDefinitionsForSearch(
+  sections: readonly SettingsNavSection[],
+  query: string
+): readonly SettingsNavGroupDefinition[] {
+  if (query.trim() === '') {
+    return SETTINGS_NAV_GROUPS
+  }
+  const seenGroupIds = new Set<string>()
+  return sections.flatMap((section) => {
+    if (section.id.startsWith('repo-') || seenGroupIds.has(section.group)) {
+      return []
+    }
+    const group = SETTINGS_NAV_GROUP_BY_ID.get(section.group)
+    if (!group) {
+      return []
+    }
+    seenGroupIds.add(section.group)
+    return [group]
+  })
 }
 
 function getSkillNavInstallStatus(skill: {
@@ -272,13 +312,13 @@ function Settings(): React.JSX.Element {
   // sidebar. We trim platform-only entries on other platforms so search never
   // reveals controls that the renderer will intentionally hide.
   const [scrollbackMode, setScrollbackMode] = useState<'preset' | 'custom'>('preset')
-  const [prevScrollbackBytes, setPrevScrollbackBytes] = useState(settings?.terminalScrollbackBytes)
+  const [prevScrollbackRows, setPrevScrollbackRows] = useState(settings?.terminalScrollbackRows)
   // Why: Appearance owns terminal visual controls, but the Ghostty import flow
   // still needs Settings-level state so the modal survives section remounts.
   const ghostty = useGhosttyImport(updateSettings, settings)
   const warpThemes = useWarpThemeImport(updateSettings, settings)
   const [fontSuggestions, setFontSuggestions] = useState<string[]>(
-    Array.from(new Set([DEFAULT_APP_FONT_FAMILY, ...getFallbackTerminalFonts()]))
+    mergeFontSuggestions([], getFallbackTerminalFonts())
   )
   const terminalFontSuggestions = useMemo(
     () => fontSuggestions.filter((font) => font !== DEFAULT_APP_FONT_FAMILY),
@@ -301,7 +341,9 @@ function Settings(): React.JSX.Element {
   const [hiddenExperimentalUnlocked, setHiddenExperimentalUnlocked] = useState(false)
   const contentScrollRef = useRef<HTMLDivElement | null>(null)
   const searchInputRef = useRef<HTMLInputElement | null>(null)
-  const terminalFontsLoadedRef = useRef(false)
+  const installedFontsLoadedRef = useRef(false)
+  const installedFontsLoadPromiseRef = useRef<Promise<void> | null>(null)
+  const settingsMountedRef = useRef(true)
   const pendingNavSectionRef = useRef<string | null>(null)
   const pendingScrollTargetRef = useRef<string | null>(null)
   const pendingSubsectionScrollFrameRef = useRef<number | null>(null)
@@ -357,6 +399,42 @@ function Settings(): React.JSX.Element {
     // Why: pending subsection jumps are scoped to the scroll container; cancel
     // them with the container so a stale deep-link frame cannot run after close.
     cancelPendingSettingsSubsectionScrollFrame(pendingSubsectionScrollFrameRef)
+  }, [])
+
+  useEffect(() => {
+    // Why: React dev StrictMode replays mount effects; async font requests
+    // should still commit while the Settings view is actually mounted.
+    settingsMountedRef.current = true
+    return () => {
+      settingsMountedRef.current = false
+    }
+  }, [])
+
+  const requestFontSuggestions = useCallback((): void => {
+    if (installedFontsLoadedRef.current || installedFontsLoadPromiseRef.current) {
+      return
+    }
+
+    installedFontsLoadPromiseRef.current = window.api.settings
+      .listFonts()
+      .then((fonts) => {
+        if (!settingsMountedRef.current) {
+          return
+        }
+        // Latch after the first successful attempt even when empty, so a font-less
+        // system doesn't reissue listFonts() on every picker interaction.
+        installedFontsLoadedRef.current = true
+        if (fonts.length === 0) {
+          return
+        }
+        setFontSuggestions((prev) => mergeFontSuggestions(fonts, prev))
+      })
+      .catch(() => {
+        // Fall back to curated cross-platform suggestions.
+      })
+      .finally(() => {
+        installedFontsLoadPromiseRef.current = null
+      })
   }, [])
 
   // Pure "discard and leave?" prompt — no side effects. Why separate from the
@@ -541,6 +619,14 @@ function Settings(): React.JSX.Element {
     )
     pendingNavSectionRef.current = paneSectionId
     pendingScrollTargetRef.current = settingsNavigationTarget.sectionId ?? paneSectionId
+    // Why: Appearance nests status-bar controls under a collapsed accordion;
+    // force that accordion open before scrolling so the row is actually visible.
+    if (settingsNavigationTarget.pane === 'appearance') {
+      const accordion = resolveAppearanceAccordionDeepLink(settingsNavigationTarget.sectionId)
+      if (accordion) {
+        useAppStore.getState().setAppearanceAccordionDeepLink(accordion)
+      }
+    }
     if (settingsNavigationTarget.intent === 'add-quick-command') {
       setQuickCommandAddIntentSignal((signal) => signal + 1)
     }
@@ -556,14 +642,15 @@ function Settings(): React.JSX.Element {
     clearSettingsTarget()
   }, [clearSettingsTarget, settings, settingsNavigationTarget])
 
-  // Why: only recompute scrollback mode when the byte value actually changes,
+  // Why: only recompute scrollback mode when the row value actually changes,
   // not on every unrelated settings mutation.
-  if (settings?.terminalScrollbackBytes !== prevScrollbackBytes) {
-    setPrevScrollbackBytes(settings?.terminalScrollbackBytes)
+  if (settings?.terminalScrollbackRows !== prevScrollbackRows) {
+    setPrevScrollbackRows(settings?.terminalScrollbackRows)
     if (settings) {
-      const scrollbackMb = Math.max(1, Math.round(settings.terminalScrollbackBytes / 1_000_000))
       setScrollbackMode(
-        SCROLLBACK_PRESETS_MB.includes(scrollbackMb as (typeof SCROLLBACK_PRESETS_MB)[number])
+        SCROLLBACK_PRESETS_ROWS.includes(
+          settings.terminalScrollbackRows as (typeof SCROLLBACK_PRESETS_ROWS)[number]
+        )
           ? 'preset'
           : 'custom'
       )
@@ -632,21 +719,26 @@ function Settings(): React.JSX.Element {
     () => new Map(navSections.map((section) => [section.id, section] as const)),
     [navSections]
   )
-  const getSectionSearchEntries = (sectionId: string) =>
-    navSectionById.get(sectionId)?.searchEntries ?? []
+  const getSectionSearchEntries = (sectionId: string) => {
+    const section = navSectionById.get(sectionId)
+    return section ? getSettingsSectionSearchEntries(section) : []
+  }
 
-  const visibleNavSections = useMemo(
-    () =>
-      navSections.filter((section) =>
-        section.id === 'git' && hasUnsavedSourceControlAiPromptChanges
-          ? true
-          : matchesSettingsSearch(settingsSearchQuery, [
-              { title: section.title, description: section.description },
-              ...section.searchEntries
-            ])
-      ),
-    [hasUnsavedSourceControlAiPromptChanges, navSections, settingsSearchQuery]
-  )
+  const visibleNavSections = useMemo(() => {
+    const rankedSections = rankSettingsSearchItems(
+      settingsSearchQuery,
+      navSections,
+      getSettingsSectionSearchEntries
+    ).map(({ item }) => item)
+    if (
+      !hasUnsavedSourceControlAiPromptChanges ||
+      rankedSections.some((section) => section.id === 'git')
+    ) {
+      return rankedSections
+    }
+    const gitSection = navSectionById.get('git')
+    return gitSection ? [...rankedSections, gitSection] : rankedSections
+  }, [hasUnsavedSourceControlAiPromptChanges, navSectionById, navSections, settingsSearchQuery])
   const visibleSectionIds = useMemo(
     () => new Set(visibleNavSections.map((section) => section.id)),
     [visibleNavSections]
@@ -712,35 +804,6 @@ function Settings(): React.JSX.Element {
     // needed sections during render so panes do not wait for a follow-up Effect.
     setMountedSectionIds(neededSectionIds)
   }
-
-  useEffect(() => {
-    if (!neededSectionIds.has('appearance') && !neededSectionIds.has('terminal')) {
-      return
-    }
-    if (terminalFontsLoadedRef.current) {
-      return
-    }
-
-    let stale = false
-    const loadFontSuggestions = async (): Promise<void> => {
-      try {
-        const fonts = await window.api.settings.listFonts()
-        if (stale || fonts.length === 0) {
-          return
-        }
-        terminalFontsLoadedRef.current = true
-        setFontSuggestions((prev) =>
-          Array.from(new Set([DEFAULT_APP_FONT_FAMILY, ...fonts, ...prev])).slice(0, 320)
-        )
-      } catch {
-        // Fall back to curated cross-platform suggestions.
-      }
-    }
-    void loadFontSuggestions()
-    return () => {
-      stale = true
-    }
-  }, [neededSectionIds])
 
   const neededRepoIds = useMemo(
     () => deriveNeededRepoIds(repos, neededSectionIds),
@@ -838,7 +901,16 @@ function Settings(): React.JSX.Element {
     const scrollTargetId = pendingScrollTargetRef.current
     const pendingNavSectionId = pendingNavSectionRef.current
 
-    if (scrollTargetId && pendingNavSectionId && settingsSearchQuery.trim() !== '') {
+    // Why: subsection deep links (scrollTarget ≠ pane id) must not keep a
+    // leftover search filter that can hide the target row. Pane-level deep
+    // links may intentionally pair with a filter (e.g. Appearance + "Usage
+    // percentages") so accordion sections force-open to the matching control.
+    if (
+      scrollTargetId &&
+      pendingNavSectionId &&
+      scrollTargetId !== pendingNavSectionId &&
+      settingsSearchQuery.trim() !== ''
+    ) {
       setSettingsSearchQuery('')
       return
     }
@@ -964,11 +1036,17 @@ function Settings(): React.JSX.Element {
   }
 
   const generalNavSections = visibleNavSections.filter((section) => !section.id.startsWith('repo-'))
-  const generalNavGroups: SettingsNavGroup[] = SETTINGS_NAV_GROUPS.map((group) => ({
-    id: group.id,
-    title: translate(group.titleKey, group.titleDefault),
-    sections: generalNavSections.filter((section) => section.group === group.id)
-  })).filter((group) => group.sections.length > 0 || group.id === 'setup')
+  const generalNavGroupDefinitions = getSettingsNavGroupDefinitionsForSearch(
+    visibleNavSections,
+    settingsSearchQuery
+  )
+  const generalNavGroups: SettingsNavGroup[] = generalNavGroupDefinitions
+    .map((group) => ({
+      id: group.id,
+      title: translate(group.titleKey, group.titleDefault),
+      sections: generalNavSections.filter((section) => section.group === group.id)
+    }))
+    .filter((group) => group.sections.length > 0 || group.id === 'setup')
   const repoNavSections = visibleNavSections
     .filter((section) => section.id.startsWith('repo-'))
     .map((section) => {
@@ -1076,6 +1154,7 @@ function Settings(): React.JSX.Element {
                       wslAvailable={windowsTerminalCapabilities.wslAvailable}
                       wslDistros={windowsTerminalCapabilities.wslDistros}
                       wslCapabilitiesLoading={windowsTerminalCapabilities.isLoading}
+                      accountOwnerPlatform={windowsTerminalCapabilities.hostPlatform}
                     />
                   ) : null}
                 </SettingsSection>
@@ -1174,6 +1253,21 @@ function Settings(): React.JSX.Element {
                 >
                   {isSectionMounted('integrations') ? <IntegrationsPane /> : null}
                 </SettingsSection>
+
+                {showDesktopOnlySettings ? (
+                  <SettingsSection
+                    id="mobile"
+                    title={translate('auto.components.settings.Settings.c40dadaac8', 'Mobile')}
+                    badge="Beta"
+                    description={translate(
+                      'auto.components.settings.Settings.c6c01ac209',
+                      'Control terminals and agents from your phone.'
+                    )}
+                    searchEntries={getSectionSearchEntries('mobile')}
+                  >
+                    {isSectionMounted('mobile') ? <MobileSettingsPane /> : null}
+                  </SettingsSection>
+                ) : null}
 
                 <SettingsSection
                   id="git"
@@ -1293,7 +1387,7 @@ function Settings(): React.JSX.Element {
                   </SettingsSection>
                 ) : null}
 
-                {showDesktopOnlySettings && isMac ? (
+                {showDesktopOnlySettings ? (
                   <SettingsSection
                     id="mobile-emulator"
                     title={translate(
@@ -1348,6 +1442,7 @@ function Settings(): React.JSX.Element {
                       applyTheme={applyTheme}
                       fontSuggestions={fontSuggestions}
                       terminalFontSuggestions={terminalFontSuggestions}
+                      onRequestFontSuggestions={requestFontSuggestions}
                       systemPrefersDark={systemPrefersDark}
                       ghostty={ghostty}
                       warpThemes={warpThemes}
@@ -1414,7 +1509,7 @@ function Settings(): React.JSX.Element {
                   title={translate('auto.components.settings.Settings.954a8f5aef', 'Stats & Usage')}
                   description={translate(
                     'auto.components.settings.Settings.8acf3f22e0',
-                    'Orca stats plus Claude, Codex, and OpenCode usage analytics.'
+                    'Orca stats plus Claude, Codex, OpenCode token analytics and Grok subscription usage.'
                   )}
                   searchEntries={getSectionSearchEntries('stats')}
                 >
@@ -1452,34 +1547,17 @@ function Settings(): React.JSX.Element {
                 </SettingsSection>
 
                 {showDesktopOnlySettings ? (
-                  <>
-                    <SettingsSection
-                      id="ssh"
-                      title={translate('auto.components.settings.Settings.9b02492d1f', 'SSH Hosts')}
-                      description={translate(
-                        'auto.components.settings.Settings.c2ee313198',
-                        'Use existing machines over SSH for files, terminals, Git, and workspaces.'
-                      )}
-                      searchEntries={getSectionSearchEntries('ssh')}
-                    >
-                      {isSectionMounted('ssh') ? <SshPane /> : null}
-                    </SettingsSection>
-
-                    <SettingsSection
-                      id="mobile"
-                      title={translate('auto.components.settings.Settings.c40dadaac8', 'Mobile')}
-                      badge="Beta"
-                      description={translate(
-                        'auto.components.settings.Settings.c6c01ac209',
-                        'Control terminals and agents from your phone.'
-                      )}
-                      searchEntries={getSectionSearchEntries('mobile')}
-                    >
-                      {isSectionMounted('mobile') ? (
-                        <MobileSettingsPane settings={settings} updateSettings={updateSettings} />
-                      ) : null}
-                    </SettingsSection>
-                  </>
+                  <SettingsSection
+                    id="ssh"
+                    title={translate('auto.components.settings.Settings.9b02492d1f', 'SSH Hosts')}
+                    description={translate(
+                      'auto.components.settings.Settings.c2ee313198',
+                      'Use existing machines over SSH for files, terminals, Git, and workspaces.'
+                    )}
+                    searchEntries={getSectionSearchEntries('ssh')}
+                  >
+                    {isSectionMounted('ssh') ? <SshPane /> : null}
+                  </SettingsSection>
                 ) : null}
 
                 {showDesktopOnlySettings && isMac ? (
@@ -1528,6 +1606,24 @@ function Settings(): React.JSX.Element {
                   >
                     {isSectionMounted('advanced') ? (
                       <AdvancedPane settings={settings} updateSettings={updateSettings} />
+                    ) : null}
+                  </SettingsSection>
+                ) : null}
+
+                {showDesktopOnlySettings && import.meta.env.DEV ? (
+                  <SettingsSection
+                    id="dev"
+                    title={translate('auto.components.settings.Settings.dev', 'Dev Tools')}
+                    description={translate(
+                      'auto.components.settings.Settings.devDescription',
+                      'Dev-only tools for exercising UI states.'
+                    )}
+                    searchEntries={getSectionSearchEntries('dev')}
+                  >
+                    {DevToolsPane && isSectionMounted('dev') ? (
+                      <Suspense fallback={null}>
+                        <DevToolsPane />
+                      </Suspense>
                     ) : null}
                   </SettingsSection>
                 ) : null}

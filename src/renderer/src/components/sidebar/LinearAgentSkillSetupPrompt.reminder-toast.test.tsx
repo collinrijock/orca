@@ -5,10 +5,16 @@ import { createRoot, type Root } from 'react-dom/client'
 import { toast } from 'sonner'
 import type { CliInstallStatus } from '../../../../shared/cli-install-types'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { LINEAR_AGENT_SKILL_NAMES } from '@/lib/agent-feature-install-commands'
 import {
   LinearAgentSkillSetupPrompt,
   _linearAgentSkillSetupPromptInternalsForTests
 } from './LinearAgentSkillSetupPrompt'
+import {
+  dismissLinearAgentSkillSetupReminderToast,
+  resetLinearAgentSkillSetupReminderToastForRuntime
+} from './linear-agent-skill-setup-reminder-toast'
+import { getExistingLinearAgentSkillSetupReminderState } from './linear-agent-skill-setup-reminders'
 
 const HOST_DISMISS_STORAGE_KEY = 'orca.linearTicketsSkill.setupDismissed.host'
 
@@ -17,9 +23,10 @@ const mocks = vi.hoisted(() => ({
     installed: false,
     loading: false,
     error: null as string | null,
+    skills: [],
     refresh: vi.fn(async () => {})
   },
-  useInstalledAgentSkill: vi.fn(),
+  useInstalledAgentSkillNames: vi.fn(),
   getCliStatus: vi.fn(),
   getWslCliStatus: vi.fn(),
   ensureCli: vi.fn(async () => null as CliInstallStatus | null),
@@ -36,9 +43,9 @@ vi.mock('sonner', () => ({
   }
 }))
 
-vi.mock('@/hooks/useInstalledAgentSkills', () => ({
-  GLOBAL_AGENT_SKILL_SOURCE_KINDS: ['home'],
-  useInstalledAgentSkill: mocks.useInstalledAgentSkill
+vi.mock('@/hooks/useInstalledAgentSkills', async (importOriginal) => ({
+  ...(await importOriginal()),
+  useInstalledAgentSkillNames: mocks.useInstalledAgentSkillNames
 }))
 
 vi.mock('@/lib/agent-skill-cli-prerequisite', () => ({
@@ -147,15 +154,21 @@ type ReminderToastAction = {
   onClick?: () => void
 }
 
+type ReminderToastCallbacks = {
+  onAutoClose?: () => void
+  onDismiss?: () => void
+}
+
 describe('LinearAgentSkillSetupPrompt reminder toast', () => {
   beforeEach(() => {
     mocks.skillState.installed = false
     mocks.skillState.loading = false
     mocks.skillState.error = null
+    mocks.skillState.skills = []
     mocks.skillState.refresh.mockReset()
     mocks.skillState.refresh.mockImplementation(async () => {})
-    mocks.useInstalledAgentSkill.mockReset()
-    mocks.useInstalledAgentSkill.mockReturnValue(mocks.skillState)
+    mocks.useInstalledAgentSkillNames.mockReset()
+    mocks.useInstalledAgentSkillNames.mockReturnValue(mocks.skillState)
     mocks.getCliStatus.mockReset()
     mocks.getCliStatus.mockResolvedValue(
       cliStatus({ state: 'not_installed', pathConfigured: false })
@@ -194,6 +207,10 @@ describe('LinearAgentSkillSetupPrompt reminder toast', () => {
     await snoozeInitialModal({ linked: true, remote: false, surface: 'modal' })
     await renderPrompt({ linked: true, remote: false, surface: 'modal' })
 
+    expect(mocks.useInstalledAgentSkillNames).toHaveBeenCalledWith(
+      LINEAR_AGENT_SKILL_NAMES,
+      expect.objectContaining({ enabled: true, sourceKinds: ['home'] })
+    )
     expect(document.body.textContent).not.toContain(
       'Enable agents to read and edit the attached Linear ticket.'
     )
@@ -282,6 +299,38 @@ describe('LinearAgentSkillSetupPrompt reminder toast', () => {
     )
   })
 
+  it.each(['onAutoClose', 'onDismiss'] as const)(
+    'clears active reminder state after %s',
+    async (callbackName) => {
+      await snoozeInitialModal({ linked: true, remote: false, surface: 'modal' })
+      await renderPrompt({ linked: true, remote: false, surface: 'modal' })
+
+      const callbacks = vi.mocked(toast.warning).mock.calls.at(-1)?.[1] as
+        | ReminderToastCallbacks
+        | undefined
+      callbacks?.[callbackName]?.()
+
+      expect(
+        getExistingLinearAgentSkillSetupReminderState(HOST_DISMISS_STORAGE_KEY)?.activeToastId
+      ).toBeUndefined()
+    }
+  )
+
+  it('does not recreate missing reminder state during toast cleanup', () => {
+    dismissLinearAgentSkillSetupReminderToast(HOST_DISMISS_STORAGE_KEY)
+
+    expect(getExistingLinearAgentSkillSetupReminderState(HOST_DISMISS_STORAGE_KEY)).toBeUndefined()
+    expect(toast.dismiss).toHaveBeenCalledWith(
+      'linear-agent-skill-setup-orca.linearTicketsSkill.setupDismissed.host'
+    )
+  })
+
+  it('does not create missing reminder state when resetting a runtime', () => {
+    resetLinearAgentSkillSetupReminderToastForRuntime(HOST_DISMISS_STORAGE_KEY)
+
+    expect(getExistingLinearAgentSkillSetupReminderState(HOST_DISMISS_STORAGE_KEY)).toBeUndefined()
+  })
+
   it('dismisses an active reminder toast on permanent dismissal', async () => {
     await snoozeInitialModal({ linked: true, remote: false, surface: 'modal' })
     await renderPrompt({ linked: true, remote: false, surface: 'modal' })
@@ -298,6 +347,8 @@ describe('LinearAgentSkillSetupPrompt reminder toast', () => {
     })
 
     expect(window.localStorage.getItem(HOST_DISMISS_STORAGE_KEY)).toBe('1')
-    expect(toast.dismiss).not.toHaveBeenCalled()
+    expect(toast.dismiss).toHaveBeenCalledWith(
+      'linear-agent-skill-setup-orca.linearTicketsSkill.setupDismissed.host'
+    )
   })
 })

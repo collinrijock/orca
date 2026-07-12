@@ -142,13 +142,12 @@ export const TERMINAL_HANDLERS: Record<string, CommandHandler> = {
       // path for browser-side features, but CLI creates must stay backgrounded
       // unless the caller explicitly asks for focus.
       focus,
+      ...(focus ? { presentation: 'focused' } : {}),
       ...(useRendererBackedInteractiveTerminal ? { rendererBacked: true, activate: focus } : {})
     })
     printResult(result, json, formatTerminalCreate)
   },
-  // Why: `focus` and `switch` are aliases — register the same handler under
-  // both keys so the dispatch table stays a plain command-path lookup.
-  'terminal focus': terminalFocusHandler,
+  // `focus` resolves to this canonical path via CommandSpec.aliases before dispatch.
   'terminal switch': terminalFocusHandler,
   'terminal close': async ({ flags, client, cwd, json }) => {
     const result = await client.call<{ close: RuntimeTerminalClose }>('terminal.close', {

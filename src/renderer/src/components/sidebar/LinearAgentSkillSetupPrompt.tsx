@@ -5,13 +5,13 @@ import type { ProjectExecutionRuntimeResolution } from '../../../../shared/proje
 import { Button } from '@/components/ui/button'
 import {
   GLOBAL_AGENT_SKILL_SOURCE_KINDS,
-  useInstalledAgentSkill
+  useInstalledAgentSkillNames
 } from '@/hooks/useInstalledAgentSkills'
 import {
-  LINEAR_TICKETS_SKILL_INSTALL_COMMAND,
-  LINEAR_TICKETS_SKILL_NAME,
-  LINEAR_TICKETS_SKILL_UPDATE_COMMAND
+  LINEAR_AGENT_SKILL_NAMES,
+  ORCA_LINEAR_SKILL_INSTALL_COMMAND
 } from '@/lib/agent-feature-install-commands'
+import { getLinearAgentSkillUpdateCommand } from '@/lib/linear-agent-skill-update-command'
 import {
   ensureOrcaCliAvailableForAgentSkillTerminal,
   isOrcaCliAvailableOnPath
@@ -105,18 +105,22 @@ export function LinearAgentSkillSetupPrompt({
   const [localDismissed, setLocalDismissed] = useState(() =>
     readLocalDismissed(localDismissStorageKey)
   )
-  const skill = useInstalledAgentSkill(LINEAR_TICKETS_SKILL_NAME, {
+  const skill = useInstalledAgentSkillNames(LINEAR_AGENT_SKILL_NAMES, {
     enabled: linked,
     discoveryTarget: skillDiscoveryTarget,
     sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS
   })
   const command = useMemo(
-    () => buildSkillCommandForRuntime(LINEAR_TICKETS_SKILL_INSTALL_COMMAND, agentRuntime),
+    () => buildSkillCommandForRuntime(ORCA_LINEAR_SKILL_INSTALL_COMMAND, agentRuntime),
     [agentRuntime]
   )
   const installedCommand = useMemo(
-    () => buildSkillCommandForRuntime(LINEAR_TICKETS_SKILL_UPDATE_COMMAND, agentRuntime),
-    [agentRuntime]
+    () =>
+      buildSkillCommandForRuntime(
+        getLinearAgentSkillUpdateCommand(skill.skills, skill.installed),
+        agentRuntime
+      ),
+    [agentRuntime, skill.installed, skill.skills]
   )
   const terminalShellOverride = getLinearPromptTerminalShellOverride(
     currentPlatform,

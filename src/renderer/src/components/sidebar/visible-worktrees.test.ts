@@ -1,4 +1,3 @@
-/* eslint-disable max-lines */
 import { describe, expect, it } from 'vitest'
 import {
   computeClearFilterActions,
@@ -98,6 +97,7 @@ function filterState(overrides: Partial<FilterState> = {}): FilterState {
     filterRepoIds: [],
     hideDefaultBranchWorkspace: false,
     hideAutomationGeneratedWorkspaces: false,
+    workspaceHostScope: 'all',
     ...overrides
   }
 }
@@ -615,6 +615,16 @@ describe('computeClearFilterActions', () => {
     expect(actions.resetHideDefaultBranchWorkspace).toBe(false)
     expect(actions.resetShowSleepingWorkspaces).toBe(false)
     expect(actions.resetFilterRepoIds).toBe(true)
+  })
+
+  it('flags legacy single-host scope for reset even without visible host ids', () => {
+    expect(computeClearFilterActions(filterState({ workspaceHostScope: 'ssh:host-1' }))).toEqual({
+      resetShowSleepingWorkspaces: false,
+      resetFilterRepoIds: false,
+      resetHideDefaultBranchWorkspace: false,
+      resetHideAutomationGeneratedWorkspaces: false,
+      resetVisibleWorkspaceHostIds: true
+    })
   })
 
   it('flags every active filter simultaneously', () => {

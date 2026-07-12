@@ -75,6 +75,7 @@ export const AGENT_KIND_VALUES = [
   'codex',
   'autohand',
   'opencode',
+  'mimo-code',
   'pi',
   'omp',
   'gemini',
@@ -292,11 +293,13 @@ export const SETTINGS_CHANGED_WHITELIST = [
   'openLinksInApp',
   'experimentalMobile',
   'experimentalPet',
+  'experimentalNativeChat',
   'experimentalActivity',
   'experimentalTerminalAttention',
   'experimentalAgentHibernation',
-  'experimentalWorktreeSymlinks',
-  'geminiCliOAuthEnabled'
+  'experimentalEphemeralVms',
+  'geminiCliOAuthEnabled',
+  'openAgentTabsInChatByDefault'
 ] as const satisfies readonly BooleanGlobalSettingsKey[]
 export const settingsChangedKeySchema = z.enum(SETTINGS_CHANGED_WHITELIST)
 export type SettingsChangedKey = z.infer<typeof settingsChangedKeySchema>
@@ -432,10 +435,39 @@ const agentErrorSchema = z
   })
   .strict()
 
+// Why: emitted when the terminal daemon cannot start and terminals fall back to
+// the (non-persistent) local provider. Enum-only `error_class` — the raw daemon
+// stderr tail stays in local logs and never reaches the wire (paths/usernames).
+// A spike in this event is the fleet-wide signal for a daemon outage like
+// v1.4.129-rc.1, which was otherwise invisible until users filed bug reports.
+const daemonStartFailedSchema = z.object({ error_class: errorClassSchema }).strict()
+
 const settingsChangedSchema = z
   .object({
     setting_key: settingsChangedKeySchema,
     value_kind: z.enum(['bool', 'enum'])
+  })
+  .strict()
+
+// Native chat view (per-tab terminal⇄chat toggle) adoption signals.
+// `agent_kind` reuses the shared closed enum so dashboards can slice adoption
+// by agent. The view-mode enum mirrors `Tab.viewMode` in shared/types.ts.
+const nativeChatViewModeSchema = z.enum(['terminal', 'chat'])
+const nativeChatToggledSchema = z
+  .object({
+    from_mode: nativeChatViewModeSchema,
+    to_mode: nativeChatViewModeSchema,
+    agent_kind: agentKindSchema
+  })
+  .strict()
+// `runtime` records whether the agent PTY runs locally or over an SSH/remote
+// runtime; `'unknown'` when the owning runtime cannot be resolved at send time.
+const nativeChatRuntimeSchema = z.enum(['local', 'remote', 'unknown'])
+export type NativeChatRuntime = z.infer<typeof nativeChatRuntimeSchema>
+const nativeChatMessageSentSchema = z
+  .object({
+    agent_kind: agentKindSchema,
+    runtime: nativeChatRuntimeSchema
   })
   .strict()
 
@@ -1338,6 +1370,25 @@ const terminalPaneSplitSchema = z
   })
   .strict()
 
+// Why: measures the changed-on-disk conflict flow (issue #7265) — how often
+// conflicts surface per transport (false-banner detection on ssh/runtime
+// echoes) and which resolution users pick. Deliberately path-free.
+const editorExternalChangeConflictShownSchema = z
+  .object({
+    surface: z.enum(['edit', 'unstaged-diff']),
+    transport: z.enum(['local', 'ssh', 'runtime']),
+    origin: z.enum(['live', 'restore'])
+  })
+  .strict()
+
+const editorExternalChangeConflictActionSchema = z
+  .object({
+    action: z.enum(['reload', 'keep', 'compare', 'undo_reload', 'save_overwrite']),
+    surface: z.enum(['edit', 'unstaged-diff']),
+    transport: z.enum(['local', 'ssh', 'runtime'])
+  })
+  .strict()
+
 // ── Event registry: the one record the validator consumes ───────────────
 //
 // The validator does `eventSchemas[name].safeParse(props)`. `EventMap` is
@@ -1375,7 +1426,12 @@ export const eventSchemas = {
   agent_hook_install_failed: agentHookInstallFailedSchema,
   agent_hook_unattributed: agentHookUnattributedSchema,
 
+  daemon_start_failed: daemonStartFailedSchema,
+
   settings_changed: settingsChangedSchema,
+
+  native_chat_toggled: nativeChatToggledSchema,
+  native_chat_message_sent: nativeChatMessageSentSchema,
 
   telemetry_opted_in: telemetryOptedInSchema,
   telemetry_opted_out: telemetryOptedOutSchema,
@@ -1421,6 +1477,9 @@ export const eventSchemas = {
   setup_guide_closed: setupGuideClosedSchema,
   setup_guide_step_completed: setupGuideStepCompletedSchema,
   terminal_pane_split: terminalPaneSplitSchema,
+
+  editor_external_change_conflict_shown: editorExternalChangeConflictShownSchema,
+  editor_external_change_conflict_action: editorExternalChangeConflictActionSchema,
 
   smart_sort_class_distribution: smartSortClassDistributionSchema,
   smart_sort_class_1_promotion: smartSortClass1PromotionSchema,

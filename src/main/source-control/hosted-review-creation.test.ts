@@ -1,4 +1,3 @@
-/* eslint-disable max-lines -- Why: hosted review creation permutations share large mocks; splitting would hide branch-specific expectations. */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {
@@ -582,6 +581,28 @@ describe('getHostedReviewCreationEligibility', () => {
         base: 'main',
         hasUncommittedChanges: true,
         hasUpstream: true,
+        ahead: 0,
+        behind: 0
+      })
+    ).resolves.toMatchObject({
+      provider: 'github',
+      canCreate: false,
+      blockedReason: 'dirty',
+      nextAction: 'commit',
+      head: 'feature/create-pr'
+    })
+  })
+
+  it('keeps dirty feature branches eligible for PR preparation when review lookup fails', async () => {
+    getHostedReviewForBranchMock.mockRejectedValueOnce(new Error('gh lookup failed'))
+
+    await expect(
+      getHostedReviewCreationEligibility({
+        repoPath: '/repo',
+        branch: 'feature/create-pr',
+        base: 'main',
+        hasUncommittedChanges: true,
+        hasUpstream: false,
         ahead: 0,
         behind: 0
       })

@@ -1,10 +1,9 @@
-/* oxlint-disable max-lines */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { Session, type SubprocessHandle } from './session'
 import { TerminalHost } from './terminal-host'
-import type { SubprocessHandle } from './session'
 
 function createMockSubprocess(
-  options: { startupCommandDeliveredInShellArgs?: boolean } = {}
+  options: { startupCommandDeliveredInShellArgs?: boolean; shellPath?: string } = {}
 ): SubprocessHandle {
   let onDataCb: ((data: string) => void) | null = null
   let onExitCb: ((code: number) => void) | null = null
@@ -13,6 +12,7 @@ function createMockSubprocess(
     ...(options.startupCommandDeliveredInShellArgs
       ? { startupCommandDeliveredInShellArgs: true }
       : {}),
+    ...(options.shellPath ? { shellPath: options.shellPath } : {}),
     getForegroundProcess: vi.fn(() => null),
     write: vi.fn(),
     resize: vi.fn(),
@@ -167,6 +167,113 @@ describe('TerminalHost', () => {
       expect(lastSubprocess.write).toHaveBeenCalledWith(
         process.platform === 'win32' ? 'echo hello\r' : 'echo hello\n'
       )
+    })
+
+    it('uses the short daemon settle path when marker and prompt arrive together', async () => {
+      vi.useFakeTimers()
+      try {
+        await host.createOrAttach({
+          sessionId: 'session-1',
+          cols: 80,
+          rows: 24,
+          command: 'echo hello',
+          shellReadySupported: true,
+          streamClient: { onData: vi.fn(), onExit: vi.fn() }
+        })
+
+        lastSubprocess._onDataCb?.('\x1b]777;orca-shell-ready\x07\r\nuser@host $ ')
+        vi.advanceTimersByTime(29)
+        expect(lastSubprocess.write).not.toHaveBeenCalled()
+
+        vi.advanceTimersByTime(1)
+        expect(lastSubprocess.write).toHaveBeenCalledWith(
+          process.platform === 'win32' ? 'echo hello\r' : 'echo hello\n'
+        )
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('delivers startup commands immediately when the spawned shell cannot emit the ready marker', async () => {
+      spawnFn = vi.fn(() => {
+        const sub = createMockSubprocess({ shellPath: '/bin/sh' }) as ReturnType<
+          typeof createMockSubprocess
+        > & {
+          _onDataCb: ((data: string) => void) | null
+          _onExitCb: ((code: number) => void) | null
+        }
+        lastSubprocess = sub
+        return sub
+      })
+      host.dispose()
+      host = new TerminalHost({ spawnSubprocess: spawnFn as MockSpawnFn })
+
+      await host.createOrAttach({
+        sessionId: 'session-1',
+        cols: 80,
+        rows: 24,
+        command: 'echo hello',
+        shellReadySupported: true,
+        streamClient: { onData: vi.fn(), onExit: vi.fn() }
+      })
+
+      expect(lastSubprocess.write).toHaveBeenCalledWith(
+        process.platform === 'win32' ? 'echo hello\r' : 'echo hello\n'
+      )
+    })
+
+    it('does not bracketed-paste-wrap multiline commands for a fallback shell without paste mode', async () => {
+      spawnFn = vi.fn(() => {
+        const sub = createMockSubprocess({ shellPath: '/bin/sh' }) as ReturnType<
+          typeof createMockSubprocess
+        > & {
+          _onDataCb: ((data: string) => void) | null
+          _onExitCb: ((code: number) => void) | null
+        }
+        lastSubprocess = sub
+        return sub
+      })
+      host.dispose()
+      host = new TerminalHost({ spawnSubprocess: spawnFn as MockSpawnFn })
+
+      await host.createOrAttach({
+        sessionId: 'session-1',
+        cols: 80,
+        rows: 24,
+        command: 'claude "line one\nline two"',
+        shellReadySupported: true,
+        streamClient: { onData: vi.fn(), onExit: vi.fn() }
+      })
+
+      const written = (lastSubprocess.write as ReturnType<typeof vi.fn>).mock.calls[0]?.[0]
+      expect(written).not.toContain('\x1b[200~')
+      expect(written).toContain('line one\nline two')
+    })
+
+    it('keeps the shell-ready barrier when the spawned shell supports the marker', async () => {
+      spawnFn = vi.fn(() => {
+        const sub = createMockSubprocess({ shellPath: '/bin/bash' }) as ReturnType<
+          typeof createMockSubprocess
+        > & {
+          _onDataCb: ((data: string) => void) | null
+          _onExitCb: ((code: number) => void) | null
+        }
+        lastSubprocess = sub
+        return sub
+      })
+      host.dispose()
+      host = new TerminalHost({ spawnSubprocess: spawnFn as MockSpawnFn })
+
+      await host.createOrAttach({
+        sessionId: 'session-1',
+        cols: 80,
+        rows: 24,
+        command: 'echo hello',
+        shellReadySupported: true,
+        streamClient: { onData: vi.fn(), onExit: vi.fn() }
+      })
+
+      expect(lastSubprocess.write).not.toHaveBeenCalled()
     })
 
     it('does not write startup commands already embedded in shell args', async () => {
@@ -326,6 +433,25 @@ describe('TerminalHost', () => {
       expect(sessions).toHaveLength(2)
       expect(sessions.map((s) => s.sessionId).sort()).toEqual(['session-1', 'session-2'])
     })
+
+    it('uses applied size without serializing terminal snapshots', async () => {
+      await host.createOrAttach({
+        sessionId: 'session-1',
+        cols: 80,
+        rows: 24,
+        streamClient: { onData: vi.fn(), onExit: vi.fn() }
+      })
+      host.resize('session-1', 132, 43)
+
+      const getSnapshot = vi.spyOn(Session.prototype, 'getSnapshot')
+
+      expect(host.listSessions()[0]).toMatchObject({
+        sessionId: 'session-1',
+        cols: 132,
+        rows: 43
+      })
+      expect(getSnapshot).not.toHaveBeenCalled()
+    })
   })
 
   describe('detach', () => {
@@ -384,6 +510,29 @@ describe('TerminalHost', () => {
       // below). See docs/fix-pty-fd-leak.md.
       expect(lastSubprocess.forceKill).toHaveBeenCalled()
       expect(lastSubprocess.dispose).toHaveBeenCalled()
+    })
+
+    it('releases held shell-ready marker prefixes before final checkpoint', async () => {
+      host.dispose()
+      const onFinalCheckpoint = vi.fn()
+      host = new TerminalHost({
+        spawnSubprocess: spawnFn as MockSpawnFn,
+        onFinalCheckpoint
+      })
+      await host.createOrAttach({
+        sessionId: 'session-1',
+        cols: 80,
+        rows: 24,
+        shellReadySupported: true,
+        streamClient: { onData: vi.fn(), onExit: vi.fn() }
+      })
+
+      lastSubprocess._onDataCb?.('\x1b]777;orca-shell-ready')
+      host.dispose()
+
+      expect(onFinalCheckpoint).toHaveBeenCalledWith('session-1', expect.any(Object), [
+        { kind: 'output', data: '\x1b]777;orca-shell-ready' }
+      ])
     })
 
     it('does not list exited sessions', async () => {

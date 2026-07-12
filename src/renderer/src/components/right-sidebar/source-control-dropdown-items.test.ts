@@ -1,6 +1,13 @@
-/* eslint-disable max-lines -- Why: the dropdown priority table is easier to audit when the row-state cases live together. */
 import { describe, expect, it } from 'vitest'
-import { resolveDropdownItems, type DropdownActionInputs } from './source-control-dropdown-items'
+import {
+  resolveDropdownItems,
+  type DropdownActionInputs,
+  type DropdownItem
+} from './source-control-dropdown-items'
+import {
+  hasUsableHostedReviewPushTarget,
+  resolveHostedReviewActionUpstreamStatus
+} from './source-control-hosted-review-push-target'
 
 // Why: a shared defaults object keeps each case row terse while making the
 // "this is the one knob that differs from the baseline" intent obvious.
@@ -59,7 +66,7 @@ describe('resolveDropdownItems', () => {
     expect(byKind.commit_sync.disabled).toBe(true)
   })
 
-  it('disables commit actions when staged files also have unstaged changes', () => {
+  it('enables commit actions when staged files also have unstaged changes', () => {
     const items = resolveDropdownItems(
       inputs({
         stagedCount: 1,
@@ -72,13 +79,13 @@ describe('resolveDropdownItems', () => {
     const byKind = Object.fromEntries(
       items.filter((e) => e.kind !== 'separator').map((e) => [e.kind, e])
     )
-    expect(byKind.commit.disabled).toBe(true)
-    expect(byKind.commit_push.disabled).toBe(true)
-    expect(byKind.commit_sync.disabled).toBe(true)
-    expect(byKind.commit.title).toBe('Stage all changes before committing partially staged files')
+    expect(byKind.commit.disabled).toBe(false)
+    expect(byKind.commit_push.disabled).toBe(false)
+    expect(byKind.commit_sync.disabled).toBe(false)
+    expect(byKind.commit.title).toBe('Commit staged changes')
   })
 
-  it('disables push actions but keeps Fetch enabled when branch has no upstream', () => {
+  it('enables explicit push actions and keeps Fetch enabled when branch has no upstream', () => {
     const items = resolveDropdownItems(
       inputs({
         stagedCount: 1,
@@ -89,7 +96,8 @@ describe('resolveDropdownItems', () => {
     const byKind = Object.fromEntries(
       items.filter((e) => e.kind !== 'separator').map((e) => [e.kind, e])
     )
-    expect(byKind.push.disabled).toBe(true)
+    expect(byKind.push.disabled).toBe(false)
+    expect(byKind.force_push.disabled).toBe(false)
     expect(byKind.commit_push.disabled).toBe(true)
     expect(byKind.publish.disabled).toBe(false)
     expect(byKind.fetch.disabled).toBe(false)
@@ -137,7 +145,7 @@ describe('resolveDropdownItems', () => {
     expect(byKind.sync.label).toBe('Sync (↓2 ↑3)')
   })
 
-  it('disables push-only actions on diverged branches so users sync first', () => {
+  it('keeps push-only actions clickable on diverged branches', () => {
     const items = resolveDropdownItems(
       inputs({
         stagedCount: 1,
@@ -149,10 +157,10 @@ describe('resolveDropdownItems', () => {
       items.filter((e) => e.kind !== 'separator').map((e) => [e.kind, e])
     )
 
-    expect(byKind.push.disabled).toBe(true)
-    expect(byKind.push.title).toBe('Sync first to pull remote changes before pushing')
-    expect(byKind.commit_push.disabled).toBe(true)
-    expect(byKind.commit_push.title).toBe('Use Commit & Sync to pull remote changes before pushing')
+    expect(byKind.push.disabled).toBe(false)
+    expect(byKind.push.title).toBe('Push local commits; git may require syncing first')
+    expect(byKind.commit_push.disabled).toBe(false)
+    expect(byKind.commit_push.title).toBe('Commit staged changes and try to push')
     expect(byKind.sync.disabled).toBe(false)
     expect(byKind.commit_sync.disabled).toBe(false)
   })
@@ -184,8 +192,8 @@ describe('resolveDropdownItems', () => {
     )
 
     expect(byKind.push.label).toBe('Push (14)')
-    expect(byKind.push.disabled).toBe(true)
-    expect(byKind.push.title).toBe('Use Force Push — remote only has older copies of local commits')
+    expect(byKind.push.disabled).toBe(false)
+    expect(byKind.push.title).toBe('Try a regular push; git may require force push')
     expect(byKind.force_push.label).toBe('Force Push (4)')
     expect(byKind.force_push.disabled).toBe(false)
     expect(byKind.force_push.title).toBe(
@@ -194,11 +202,11 @@ describe('resolveDropdownItems', () => {
     expect(byKind.commit_push.label).toBe('Commit & Force Push')
     expect(byKind.commit_push.disabled).toBe(false)
     expect(byKind.commit_push.title).toBe('Commit staged changes and force push with lease')
-    expect(byKind.pull.disabled).toBe(true)
+    expect(byKind.pull.disabled).toBe(false)
     expect(byKind.pull.title).toBe(
       'Nothing new to pull — remote only has older copies of local commits'
     )
-    expect(byKind.fast_forward.disabled).toBe(true)
+    expect(byKind.fast_forward.disabled).toBe(false)
     expect(byKind.fast_forward.title).toBe(
       'Nothing new to fast-forward — remote only has older copies of local commits'
     )
@@ -249,6 +257,11 @@ describe('resolveDropdownItems', () => {
     expect(byKind.force_push.label).toBe('Force Push')
     expect(byKind.pull.label).toBe('Pull')
     expect(byKind.sync.label).toBe('Sync')
+    expect(byKind.push.disabled).toBe(false)
+    expect(byKind.force_push.disabled).toBe(false)
+    expect(byKind.pull.disabled).toBe(false)
+    expect(byKind.fast_forward.disabled).toBe(false)
+    expect(byKind.sync.disabled).toBe(false)
   })
 
   it('locks every item while a remote op is running', () => {
@@ -360,10 +373,11 @@ describe('resolveDropdownItems', () => {
     }
   })
 
-  it('disables remote rows with a loading tooltip when upstreamStatus is undefined', () => {
+  it('keeps explicit push rows available while upstreamStatus is undefined', () => {
     // Why: mirrors the primary-action guard — while fetchUpstreamStatus is in
     // flight we must not let the user click Publish on an already-tracked
-    // branch (which would re-run `git push -u` and clobber the upstream).
+    // branch, but explicit Push/Force Push resolve their git target at click
+    // time and should remain available.
     const items = resolveDropdownItems(
       inputs({ stagedCount: 1, hasMessage: true, upstreamStatus: undefined })
     )
@@ -373,12 +387,9 @@ describe('resolveDropdownItems', () => {
     const loadingBlocked = [
       'commit_push',
       'commit_sync',
-      'push',
-      'force_push',
       'pull',
       'fast_forward',
       'sync',
-      'fetch',
       'publish'
     ] as const
     for (const kind of loadingBlocked) {
@@ -388,19 +399,36 @@ describe('resolveDropdownItems', () => {
     // Commit itself does not depend on upstream — it remains enabled when
     // staged + message are present and no commit is in flight.
     expect(byKind.commit.disabled).toBe(false)
+    expect(byKind.push.disabled).toBe(false)
+    expect(byKind.push.title).toBe('Push this branch and set an upstream if needed')
+    expect(byKind.force_push.disabled).toBe(false)
+    expect(byKind.force_push.title).toBe(
+      'Force push this branch with lease and set an upstream if needed.'
+    )
+    expect(byKind.fetch.disabled).toBe(false)
+    expect(byKind.fetch.title).toBe('Fetch from remote without merging')
   })
 
-  it('keeps Fetch enabled and surfaces publish-first tooltips when upstream is absent', () => {
+  it('keeps explicit push rows enabled and surfaces publish-first tooltips elsewhere', () => {
     // Why: sibling to the upstreamStatus=undefined test above. Once the fetch
-    // resolves to hasUpstream=false, the dropdown should explain that the
-    // user needs to publish first (rather than leaving the loading copy).
+    // resolves to hasUpstream=false, only pull/sync rows need publish-first
+    // copy; explicit push rows can set the upstream themselves.
     const items = resolveDropdownItems(
-      inputs({ upstreamStatus: { hasUpstream: false, ahead: 0, behind: 0 } })
+      inputs({
+        upstreamStatus: { hasUpstream: false, ahead: 0, behind: 0 },
+        branchCommitsAhead: 2
+      })
     )
     const byKind = Object.fromEntries(
       items.filter((e) => e.kind !== 'separator').map((e) => [e.kind, e])
     )
-    expect(byKind.push.title).toBe('Publish the branch first to push commits')
+    expect(byKind.push.title).toBe('Push this branch and set an upstream if needed')
+    expect(byKind.push.disabled).toBe(false)
+    expect(byKind.force_push.label).toBe('Force Push (2)')
+    expect(byKind.force_push.title).toBe(
+      'Force push 2 branch commits with lease and set an upstream if needed.'
+    )
+    expect(byKind.force_push.disabled).toBe(false)
     expect(byKind.pull.title).toBe('Publish the branch first to pull commits')
     expect(byKind.fast_forward.title).toBe('Publish the branch first to fast-forward')
     expect(byKind.sync.title).toBe('Publish the branch first to sync commits')
@@ -428,7 +456,7 @@ describe('resolveDropdownItems', () => {
     expect(byKind.rebase_base.disabled).toBe(false)
   })
 
-  it('disables rebase from base while local changes are present', () => {
+  it('keeps rebase from base clickable while local changes are present', () => {
     const items = resolveDropdownItems(
       inputs({
         hasUnstagedChanges: true,
@@ -440,11 +468,13 @@ describe('resolveDropdownItems', () => {
       items.filter((e) => e.kind !== 'separator').map((e) => [e.kind, e])
     )
 
-    expect(byKind.rebase_base.disabled).toBe(true)
-    expect(byKind.rebase_base.title).toBe('Commit or stash local changes before rebasing')
+    expect(byKind.rebase_base.disabled).toBe(false)
+    expect(byKind.rebase_base.title).toBe(
+      'Try rebasing; git may require committing or stashing local changes first'
+    )
   })
 
-  it('does not show Publish Branch when an unpublished branch has no commits ahead', () => {
+  it('shows Publish Branch when an unpublished branch has no commits ahead', () => {
     const items = resolveDropdownItems(
       inputs({
         upstreamStatus: { hasUpstream: false, ahead: 0, behind: 0 },
@@ -454,12 +484,12 @@ describe('resolveDropdownItems', () => {
     const byKind = Object.fromEntries(
       items.filter((e) => e.kind !== 'separator').map((e) => [e.kind, e])
     )
-    expect(byKind.publish.label).toBe('No Branch Changes')
-    expect(byKind.publish.title).toBe('Nothing to publish')
-    expect(byKind.publish.disabled).toBe(true)
+    expect(byKind.publish.label).toBe('Publish Branch')
+    expect(byKind.publish.title).toBe('Publish this branch to origin')
+    expect(byKind.publish.disabled).toBe(false)
   })
 
-  it('points an unpublished dirty branch with no commits at committing first', () => {
+  it('keeps Publish Branch available for an unpublished dirty branch with no commits', () => {
     const items = resolveDropdownItems(
       inputs({
         stagedCount: 1,
@@ -470,12 +500,12 @@ describe('resolveDropdownItems', () => {
     const byKind = Object.fromEntries(
       items.filter((e) => e.kind !== 'separator').map((e) => [e.kind, e])
     )
-    expect(byKind.publish.label).toBe('Commit Changes First')
-    expect(byKind.publish.title).toBe('Commit changes before publishing the branch')
-    expect(byKind.publish.disabled).toBe(true)
+    expect(byKind.publish.label).toBe('Publish Branch')
+    expect(byKind.publish.title).toBe('Publish this branch to origin')
+    expect(byKind.publish.disabled).toBe(false)
   })
 
-  it('does not mention Publish Branch when the linked PR is already merged', () => {
+  it('keeps explicit push rows available when the linked PR is already merged', () => {
     const items = resolveDropdownItems(
       inputs({
         upstreamStatus: { hasUpstream: false, ahead: 0, behind: 0 },
@@ -485,7 +515,12 @@ describe('resolveDropdownItems', () => {
     const byKind = Object.fromEntries(
       items.filter((e) => e.kind !== 'separator').map((e) => [e.kind, e])
     )
-    expect(byKind.push.title).toBe('PR is already merged')
+    expect(byKind.push.title).toBe('Push this branch and set an upstream if needed')
+    expect(byKind.push.disabled).toBe(false)
+    expect(byKind.force_push.title).toBe(
+      'Force push this branch with lease and set an upstream if needed.'
+    )
+    expect(byKind.force_push.disabled).toBe(false)
     expect(byKind.pull.title).toBe('PR is already merged')
     expect(byKind.fast_forward.title).toBe('PR is already merged')
     expect(byKind.sync.title).toBe('PR is already merged')
@@ -502,8 +537,7 @@ describe('resolveDropdownItems', () => {
         upstreamStatus: { hasUpstream: false, ahead: 0, behind: 0 },
         branchCommitsAhead: 1,
         prState: 'open',
-        hasExplicitPushTarget: true,
-        remoteActionsRequireExplicitPushTarget: true
+        canPushLinkedReviewWithoutUpstream: true
       })
     )
     const byKind = Object.fromEntries(
@@ -512,12 +546,40 @@ describe('resolveDropdownItems', () => {
     expect(byKind.commit_push.disabled).toBe(false)
     expect(byKind.push.title).toBe('Push updates to the linked review branch')
     expect(byKind.push.disabled).toBe(false)
+    expect(byKind.force_push.label).toBe('Force Push (1)')
+    expect(byKind.force_push.disabled).toBe(false)
     expect(byKind.publish.label).toBe('Linked Review')
     expect(byKind.publish.title).toBe('Linked review branch already exists')
     expect(byKind.publish.disabled).toBe(true)
   })
 
-  it('blocks Push when an open linked review has no upstream and no branch target', () => {
+  it('keeps explicit Push available for a linked review with a usable target and no commits ahead', () => {
+    // Why: branchCommitsAhead === 0 must not be confused with a missing review
+    // head. Primary Push stays enabled; dropdown Push/Force Push match that.
+    const items = resolveDropdownItems(
+      inputs({
+        stagedCount: 1,
+        hasMessage: true,
+        upstreamStatus: { hasUpstream: false, ahead: 0, behind: 0 },
+        branchCommitsAhead: 0,
+        prState: 'open',
+        canPushLinkedReviewWithoutUpstream: true
+      })
+    )
+    const byKind = Object.fromEntries(
+      items.filter((e) => e.kind !== 'separator').map((e) => [e.kind, e])
+    )
+    expect(byKind.push.disabled).toBe(false)
+    expect(byKind.push.title).toBe('Push this branch and set an upstream if needed')
+    expect(byKind.force_push.disabled).toBe(false)
+    expect(byKind.commit_push.disabled).toBe(false)
+    expect(byKind.publish.disabled).toBe(true)
+  })
+
+  it('blocks Push when an open linked review has no branch target', () => {
+    // Why: faked hasUpstream=false for an unusable review head must not re-open
+    // push against an unrelated configured upstream. Primary already blocks
+    // this; the always-allow Push rows keep the same target-safety gate.
     const items = resolveDropdownItems(
       inputs({
         stagedCount: 1,
@@ -534,65 +596,11 @@ describe('resolveDropdownItems', () => {
     expect(byKind.commit_push.title).toBe('Linked review branch target is unavailable')
     expect(byKind.push.title).toBe('Linked review branch target is unavailable')
     expect(byKind.push.disabled).toBe(true)
+    expect(byKind.force_push.title).toBe('Linked review branch target is unavailable')
+    expect(byKind.force_push.disabled).toBe(true)
     expect(byKind.publish.label).toBe('Linked Review')
     expect(byKind.publish.title).toBe('Linked review branch target is unavailable')
     expect(byKind.publish.disabled).toBe(true)
-  })
-
-  it('blocks linked review remote actions when the local upstream is not the review target', () => {
-    const items = resolveDropdownItems(
-      inputs({
-        stagedCount: 1,
-        hasMessage: true,
-        upstreamStatus: {
-          hasUpstream: true,
-          upstreamName: 'origin/helper-review-checkout',
-          ahead: 2,
-          behind: 1
-        },
-        prState: 'open',
-        remoteActionsRequireExplicitPushTarget: true
-      })
-    )
-    const byKind = Object.fromEntries(
-      items.filter((e) => e.kind !== 'separator').map((e) => [e.kind, e])
-    )
-    for (const kind of [
-      'commit_push',
-      'commit_sync',
-      'push',
-      'force_push',
-      'pull',
-      'fast_forward',
-      'sync',
-      'fetch',
-      'publish'
-    ] as const) {
-      expect(byKind[kind].title).toBe('Linked review branch target is unavailable')
-      expect(byKind[kind].disabled).toBe(true)
-    }
-    expect(byKind.publish.label).toBe('Linked Review')
-  })
-
-  it('uses the normal upstream for open reviews that do not require an explicit push target', () => {
-    const items = resolveDropdownItems(
-      inputs({
-        upstreamStatus: {
-          hasUpstream: true,
-          upstreamName: 'origin/feature',
-          ahead: 2,
-          behind: 0
-        },
-        prState: 'open'
-      })
-    )
-    const byKind = Object.fromEntries(
-      items.filter((e) => e.kind !== 'separator').map((e) => [e.kind, e])
-    )
-    expect(byKind.push.title).toBe('Push 2 commits')
-    expect(byKind.push.disabled).toBe(false)
-    expect(byKind.fetch.title).toBe('Fetch from remote without merging')
-    expect(byKind.fetch.disabled).toBe(false)
   })
 
   it('waits for linked PR state before showing a publish prompt', () => {
@@ -631,7 +639,7 @@ describe('resolveDropdownItems', () => {
     expect(byKind.sync.label).toBe('Sync (↓3 ↑2)')
   })
 
-  it('enables fast-forward only when the branch is behind with no local commits', () => {
+  it('keeps fast-forward clickable even when git may reject the branch shape', () => {
     const behindOnly = resolveDropdownItems(
       inputs({ upstreamStatus: { hasUpstream: true, ahead: 0, behind: 2 } })
     )
@@ -648,8 +656,10 @@ describe('resolveDropdownItems', () => {
     expect(behindOnlyByKind.fast_forward.label).toBe('Fast-forward (2)')
     expect(behindOnlyByKind.fast_forward.title).toBe('Fast-forward 2 commits')
     expect(behindOnlyByKind.fast_forward.disabled).toBe(false)
-    expect(divergedByKind.fast_forward.disabled).toBe(true)
-    expect(divergedByKind.fast_forward.title).toBe('Local commits prevent a fast-forward pull')
+    expect(divergedByKind.fast_forward.disabled).toBe(false)
+    expect(divergedByKind.fast_forward.title).toBe(
+      'Try a fast-forward pull; git may reject local commits'
+    )
   })
 
   it('enables the push-before-PR recovery action when review creation is only blocked by unpushed commits', () => {
@@ -668,7 +678,7 @@ describe('resolveDropdownItems', () => {
     const byKind = Object.fromEntries(
       items.filter((e) => e.kind !== 'separator').map((e) => [e.kind, e])
     )
-    expect(byKind.create_pr.disabled).toBe(true)
+    expect(byKind.create_pr.disabled).toBe(false)
     expect(byKind.create_pr.hint).toBe('Push first')
     expect(byKind.push_create_pr.label).toBe('Push before PR')
     expect(byKind.push_create_pr.disabled).toBe(false)
@@ -692,6 +702,7 @@ describe('resolveDropdownItems', () => {
     )
     expect(byKind.create_pr.label).toBe('Create MR')
     expect(byKind.create_pr.hint).toBe('Push first')
+    expect(byKind.create_pr.disabled).toBe(false)
     expect(byKind.push_create_pr.label).toBe('Push before MR')
     expect(byKind.push_create_pr.title).toBe('Push local commits before creating a merge request')
     expect(byKind.push_create_pr.disabled).toBe(false)
@@ -717,6 +728,7 @@ describe('resolveDropdownItems', () => {
       )
       expect(byKind.create_pr.label).toBe('Create PR')
       expect(byKind.create_pr.hint).toBe('Push first')
+      expect(byKind.create_pr.disabled).toBe(false)
       expect(byKind.push_create_pr.label).toBe('Push before PR')
       expect(byKind.push_create_pr.title).toBe('Push local commits before creating a pull request')
       expect(byKind.push_create_pr.disabled).toBe(false)
@@ -762,5 +774,75 @@ describe('resolveDropdownItems', () => {
       items.filter((e) => e.kind !== 'separator').map((e) => [e.kind, e])
     )
     expect(byKind.create_pr.hint).toBe('Run glab auth login in this environment')
+  })
+})
+
+// Why: PR #8196 — drive the real push-target resolution the component uses so
+// the whole chain stays regression-proof.
+describe('resolveDropdownItems with an unhydrated linked-review push target', () => {
+  function pipeline(args: {
+    branchName: string
+    upstreamStatus: DropdownActionInputs['upstreamStatus']
+  }): Record<string, DropdownItem> {
+    const canUseHostedReviewPushTarget = hasUsableHostedReviewPushTarget({
+      // pushTarget intentionally omitted: the resolver has not hydrated it yet.
+      hasResolvableHostedReviewPushTargetLink: true,
+      branchName: args.branchName,
+      upstreamStatus: args.upstreamStatus
+    })
+    const upstreamStatus = resolveHostedReviewActionUpstreamStatus({
+      hasHostedReviewLink: true,
+      hasResolvableHostedReviewPushTargetLink: true,
+      hostedReviewState: 'open',
+      isHostedReviewStateLoading: false,
+      canUseHostedReviewPushTarget,
+      upstreamStatus: args.upstreamStatus
+    })
+    const items = resolveDropdownItems(
+      inputs({
+        stagedCount: 1,
+        hasMessage: true,
+        branchCommitsAhead: 7,
+        prState: 'open',
+        upstreamStatus,
+        canPushLinkedReviewWithoutUpstream: canUseHostedReviewPushTarget
+      })
+    )
+    return Object.fromEntries(
+      items.filter((e): e is DropdownItem => e.kind !== 'separator').map((e) => [e.kind, e])
+    )
+  }
+
+  it('enables Push and Force Push when the real upstream is the same-repo review head', () => {
+    const byKind = pipeline({
+      branchName: 'mobile-resume-suspected-fixes',
+      upstreamStatus: {
+        hasUpstream: true,
+        upstreamName: 'origin/mobile-resume-suspected-fixes',
+        ahead: 7,
+        behind: 2
+      }
+    })
+    expect(byKind.push.disabled).toBe(false)
+    expect(byKind.push.title).not.toBe('Linked review branch target is unavailable')
+    expect(byKind.force_push.disabled).toBe(false)
+    expect(byKind.pull.disabled).toBe(false)
+    expect(byKind.sync.disabled).toBe(false)
+    expect(byKind.publish.disabled).toBe(true)
+  })
+
+  it('still blocks Push when the real upstream is an unrelated fork/helper head', () => {
+    const byKind = pipeline({
+      branchName: 'mobile-resume-suspected-fixes',
+      upstreamStatus: {
+        hasUpstream: true,
+        upstreamName: 'origin/helper-branch',
+        ahead: 1,
+        behind: 0
+      }
+    })
+    expect(byKind.push.disabled).toBe(true)
+    expect(byKind.push.title).toBe('Linked review branch target is unavailable')
+    expect(byKind.force_push.disabled).toBe(true)
   })
 })

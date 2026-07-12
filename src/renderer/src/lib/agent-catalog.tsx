@@ -9,6 +9,7 @@ import {
   CopilotIcon,
   KiloIcon,
   OmpIcon,
+  OpenCodeIcon,
   PiIcon
 } from './agent-icon-glyphs'
 import { translate } from '@/i18n/i18n'
@@ -86,8 +87,14 @@ export const getAgentCatalog = createLocalizedCatalog((): AgentCatalogEntry[] =>
     id: 'opencode',
     label: translate('auto.lib.agent.catalog.e7a4ca5103', 'OpenCode'),
     cmd: 'opencode',
-    faviconDomain: 'opencode.ai',
     homepageUrl: 'https://opencode.ai/docs/cli/'
+  },
+  {
+    id: 'mimo-code',
+    label: translate('auto.lib.agent.catalog.mimo_code_label', 'MiMo Code'),
+    cmd: 'mimo',
+    faviconDomain: 'mimo.xiaomi.com',
+    homepageUrl: 'https://mimo.xiaomi.com/coder'
   },
   {
     id: 'ante',
@@ -247,7 +254,9 @@ export const getAgentCatalog = createLocalizedCatalog((): AgentCatalogEntry[] =>
   {
     id: 'qwen-code',
     label: translate('auto.lib.agent.catalog.bee242fe3d', 'Qwen Code'),
-    cmd: 'qwen-code',
+    // Why: QwenLM/qwen-code installs its CLI executable as `qwen`; the package
+    // name is not the binary users put on PATH. Keep `id` for stable identity.
+    cmd: 'qwen',
     faviconDomain: 'qwenlm.github.io',
     homepageUrl: 'https://github.com/QwenLM/qwen-code'
   },
@@ -326,6 +335,9 @@ export function AgentIcon({
   }
   if (agent === 'copilot') {
     return <CopilotIcon size={size} />
+  }
+  if (agent === 'opencode') {
+    return <OpenCodeIcon size={size} />
   }
   const catalogEntry = getAgentCatalog().find((a) => a.id === agent)
   if (catalogEntry?.iconUrl) {

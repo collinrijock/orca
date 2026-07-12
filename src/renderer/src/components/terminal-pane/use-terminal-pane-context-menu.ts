@@ -5,11 +5,11 @@ import { toast } from 'sonner'
 import type { ManagedPane, PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { PtyTransport } from './pty-transport'
 import { getConnectionId } from '@/lib/connection-context'
-import { resolveSplitCwd, type PaneCwdMap } from './resolve-split-cwd'
+import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import type { PaneCwdMap } from './resolve-split-cwd'
 import type { TerminalQuickCommand } from '../../../../shared/types'
 import { isTerminalAgentQuickCommand } from '../../../../shared/terminal-quick-commands'
 import { sendTerminalQuickCommandToPane } from './terminal-quick-command-dispatch'
-import { splitWebRuntimeTerminal } from '@/runtime/web-runtime-session'
 import { pasteTerminalText } from './terminal-bracketed-paste'
 import { pasteTerminalClipboard } from './terminal-clipboard-paste'
 import {
@@ -23,7 +23,7 @@ import { resolveTerminalPasteRuntime } from './terminal-paste-runtime'
 import { getTerminalPasteSshRemotePlatform } from './terminal-paste-ssh-platform'
 import { isTerminalPanePasteTargetCurrent } from './terminal-paste-target-state'
 import { writeTerminalPastePtyInput } from './terminal-pty-paste-writer'
-import { scheduleImagePasteWebglAtlasRecovery } from './terminal-webgl-paste-recovery'
+import { scheduleImagePasteWebglAtlasRecovery } from './terminal-webgl-atlas-recovery'
 import {
   REQUEST_ACTIVE_TERMINAL_PANE_SPLIT_EVENT,
   type RequestActiveTerminalPaneSplitDetail
@@ -31,10 +31,12 @@ import {
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { runQuickCommandInNewTab } from '@/lib/run-quick-command-in-new-tab'
 import {
+  copyAgentSessionContextFromPane,
   prepareAgentSessionForkFromPane,
   type PreparedAgentSessionFork
 } from './terminal-agent-session-fork'
 import { recordCreatedTerminalPaneSplit } from './terminal-pane-split-completion'
+import { splitTerminalPaneWithInheritedCwd } from './terminal-pane-split-with-inherited-cwd'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 import { recordTerminalUserInputForLeaf } from './terminal-input-activity'
@@ -56,6 +58,7 @@ type UseTerminalPaneContextMenuDeps = {
   managerRef: React.RefObject<PaneManager | null>
   paneTransportsRef: React.RefObject<Map<number, PtyTransport>>
   paneCwdRef: React.RefObject<PaneCwdMap>
+  containerRef: React.RefObject<HTMLDivElement | null>
   tabId: string
   worktreeId: string
   groupId: string | null
@@ -64,6 +67,7 @@ type UseTerminalPaneContextMenuDeps = {
   onRequestClosePane: (paneId: number) => void
   onClearPaneScrollback: (pane: ManagedPane) => void
   onSetTitle: (paneId: number) => void
+  onClearPaneTitle: (paneId: number) => void
   onPasteError: (message: string) => void
   onAgentSessionForkReady: (fork: PreparedAgentSessionFork) => void
   forceBracketedMultilineTextPaste: boolean
@@ -78,6 +82,7 @@ type TerminalMenuState = {
   paneCount: number
   menuPaneId: number | null
   onContextMenuCapture: (event: React.MouseEvent<HTMLDivElement>) => void
+  onPaneTitleContextMenu: (event: React.MouseEvent<HTMLElement>, paneId: number) => void
   onCopy: () => Promise<void>
   onCopyTerminalId: () => Promise<void>
   onCopyPaneId: () => Promise<void>
@@ -88,15 +93,19 @@ type TerminalMenuState = {
   onClosePane: () => void
   onClearScreen: () => void
   onForkAgentSession: () => Promise<void>
+  onCopyAgentSessionContext: () => Promise<void>
   onQuickCommand: (command: TerminalQuickCommand) => void
   onToggleExpand: () => void
   onSetTitle: () => void
+  onClearPaneTitle: () => void
+  runForPane: <Result>(paneId: number, action: () => Result) => Result
 }
 
 export function useTerminalPaneContextMenu({
   managerRef,
   paneTransportsRef,
   paneCwdRef,
+  containerRef,
   tabId,
   worktreeId,
   groupId,
@@ -105,6 +114,7 @@ export function useTerminalPaneContextMenu({
   onRequestClosePane,
   onClearPaneScrollback,
   onSetTitle,
+  onClearPaneTitle,
   onPasteError,
   onAgentSessionForkReady,
   forceBracketedMultilineTextPaste,
@@ -283,10 +293,15 @@ export function useTerminalPaneContextMenu({
       return
     }
     const connectionId = getConnectionId(worktreeId) ?? null
+    const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(
+      useAppStore.getState(),
+      worktreeId
+    )
     const result = await pasteTerminalClipboard({
       readClipboardText: window.api.ui.readClipboardText,
       saveClipboardImageAsTempFile: window.api.ui.saveClipboardImageAsTempFile,
       connectionId,
+      runtimeEnvironmentId,
       forceBracketedMultilineTextPaste,
       pasteText: (text, options) => executeMenuPasteText(pane, source, text, options),
       onTextPasteError: () =>
@@ -307,39 +322,26 @@ export function useTerminalPaneContextMenu({
 
   const onPaste = async (): Promise<void> => pasteResolvedPane('context-menu')
 
-  // Split-pane CWD inheritance (docs/ssh-split-pane-inherit-cwd.md):
-  // mirror the Cmd+D path — sync split on confirmed OSC 7 cache hit,
-  // otherwise fall back to async resolveSplitCwd.
   const splitWithInheritedCwd = useCallback(
     (
       direction: 'vertical' | 'horizontal',
       source: 'contextual_tour' | 'context_menu' = 'context_menu'
     ): void => {
       const pane = resolveMenuPane()
-      if (!pane) {
+      const manager = managerRef.current
+      if (!pane || !manager) {
         return
       }
-      const ptyId = paneTransportsRef.current.get(pane.id)?.getPtyId() ?? null
-      if (splitWebRuntimeTerminal(ptyId, direction, source)) {
-        return
-      }
-      const cached = paneCwdRef.current.get(pane.id)
-      if (cached?.confirmed && cached.cwd) {
-        const createdPane = managerRef.current?.splitPane(pane.id, direction, { cwd: cached.cwd })
-        recordContextMenuCreatedTerminalPaneSplit(createdPane, { source, direction })
-        return
-      }
-      const paneId = pane.id
-      void (async () => {
-        const cwd = await resolveSplitCwd({
-          paneCwdMap: paneCwdRef.current,
-          sourcePaneId: paneId,
-          sourcePtyId: ptyId,
-          fallbackCwd
-        })
-        const createdPane = managerRef.current?.splitPane(paneId, direction, { cwd })
-        recordContextMenuCreatedTerminalPaneSplit(createdPane, { source, direction })
-      })()
+      splitTerminalPaneWithInheritedCwd({
+        manager,
+        getManager: () => managerRef.current,
+        paneTransports: paneTransportsRef.current,
+        paneCwdMap: paneCwdRef.current,
+        fallbackCwd,
+        pane,
+        direction,
+        source
+      })
     },
     [fallbackCwd, managerRef, paneCwdRef, paneTransportsRef, resolveMenuPane]
   )
@@ -398,6 +400,17 @@ export function useTerminalPaneContextMenu({
     }
   }
 
+  // Why: the captured session transcript is often wanted on its own — to paste
+  // into another tool — so copy the bounded transcript directly, without the
+  // fork prompt's framing or the fork dialog detour (issue #5020).
+  const onCopyAgentSessionContext = async (): Promise<void> => {
+    const pane = resolveMenuPane()
+    if (!pane) {
+      return
+    }
+    await copyAgentSessionContextFromPane(pane)
+  }
+
   const onQuickCommand = (command: TerminalQuickCommand): void => {
     if (isTerminalAgentQuickCommand(command)) {
       runQuickCommandInNewTab({ command, worktreeId, groupId })
@@ -423,6 +436,7 @@ export function useTerminalPaneContextMenu({
     }
   }
 
+  /** Routes title edits through the resolved menu pane instead of active pane. */
   const handleSetTitle = (): void => {
     const pane = resolveMenuPane()
     if (pane) {
@@ -430,7 +444,29 @@ export function useTerminalPaneContextMenu({
     }
   }
 
-  const onContextMenuCapture = (event: React.MouseEvent<HTMLDivElement>): void => {
+  /** Clears the title for the pane that opened the context menu. */
+  const handleClearPaneTitle = (): void => {
+    const pane = resolveMenuPane()
+    if (pane) {
+      onClearPaneTitle(pane.id)
+    }
+  }
+
+  const runForPane = <Result>(paneId: number, action: () => Result): Result => {
+    const previousPaneId = contextPaneIdRef.current
+    contextPaneIdRef.current = paneId
+    try {
+      return action()
+    } finally {
+      contextPaneIdRef.current = previousPaneId
+    }
+  }
+
+  const openContextMenu = (
+    event: React.MouseEvent<HTMLElement>,
+    clickedPaneId: number | null,
+    boundsElement: HTMLElement
+  ): void => {
     event.preventDefault()
     window.dispatchEvent(new Event(CLOSE_ALL_CONTEXT_MENUS_EVENT))
     const manager = managerRef.current
@@ -438,18 +474,14 @@ export function useTerminalPaneContextMenu({
       contextPaneIdRef.current = null
       return
     }
-    const target = event.target
-    if (!(target instanceof Node)) {
-      contextPaneIdRef.current = null
-      return
-    }
-    const clickedPane = manager.getPanes().find((pane) => pane.container.contains(target)) ?? null
+    const clickedPane =
+      clickedPaneId !== null
+        ? (manager.getPanes().find((pane) => pane.id === clickedPaneId) ?? null)
+        : null
     contextPaneIdRef.current = clickedPane?.id ?? null
 
-    // Why: Windows terminals treat right-click as copy-or-paste depending on
-    // whether text is selected. With a selection, right-click copies it and
-    // clears the selection; without one, it pastes. Ctrl+right-click still
-    // reaches the app menu so the menu remains discoverable.
+    // Why: when users opt into terminal-style right-click, a selection copies
+    // and no selection pastes. Ctrl+right-click keeps the app menu reachable.
     if (rightClickToPaste && !event.ctrlKey) {
       event.stopPropagation()
       if (!clickedPane) {
@@ -466,9 +498,35 @@ export function useTerminalPaneContextMenu({
     }
 
     menuOpenedAtRef.current = Date.now()
-    const bounds = event.currentTarget.getBoundingClientRect()
+    const bounds = boundsElement.getBoundingClientRect()
     setPoint({ x: event.clientX - bounds.left, y: event.clientY - bounds.top })
     setOpen(true)
+  }
+
+  const onContextMenuCapture = (event: React.MouseEvent<HTMLDivElement>): void => {
+    const manager = managerRef.current
+    if (!manager) {
+      event.preventDefault()
+      contextPaneIdRef.current = null
+      return
+    }
+    const target = event.target
+    if (!(target instanceof Node)) {
+      event.preventDefault()
+      contextPaneIdRef.current = null
+      return
+    }
+    const clickedPane = manager.getPanes().find((pane) => pane.container.contains(target)) ?? null
+    openContextMenu(event, clickedPane?.id ?? null, event.currentTarget)
+  }
+
+  const onPaneTitleContextMenu = (event: React.MouseEvent<HTMLElement>, paneId: number): void => {
+    const boundsElement = containerRef.current
+    if (!boundsElement) {
+      event.preventDefault()
+      return
+    }
+    openContextMenu(event, paneId, boundsElement)
   }
 
   // Why: PaneManager.getPanes() allocates public pane wrappers. Closed menus
@@ -485,6 +543,7 @@ export function useTerminalPaneContextMenu({
     paneCount,
     menuPaneId,
     onContextMenuCapture,
+    onPaneTitleContextMenu,
     onCopy,
     onCopyTerminalId,
     onCopyPaneId,
@@ -495,9 +554,12 @@ export function useTerminalPaneContextMenu({
     onClosePane,
     onClearScreen,
     onForkAgentSession,
+    onCopyAgentSessionContext,
     onQuickCommand,
     onToggleExpand,
-    onSetTitle: handleSetTitle
+    onSetTitle: handleSetTitle,
+    onClearPaneTitle: handleClearPaneTitle,
+    runForPane
   }
 }
 

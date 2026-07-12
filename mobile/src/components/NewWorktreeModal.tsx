@@ -7,7 +7,8 @@ import {
   Switch,
   StyleSheet,
   Platform,
-  ActivityIndicator
+  ActivityIndicator,
+  Keyboard
 } from 'react-native'
 import { ChevronDown, ChevronUp, Check } from 'lucide-react-native'
 import type { RpcClient } from '../transport/rpc-client'
@@ -16,6 +17,7 @@ import { colors, spacing, radii, typography } from '../theme/mobile-theme'
 import { BottomDrawer } from './BottomDrawer'
 import { PickerListDrawer } from './PickerListDrawer'
 import { MobileAgentIcon } from './MobileAgentIcon'
+import { MobileWorkspaceNameInput } from './MobileWorkspaceNameInput'
 import { getSuggestedCreatureName } from './worktree-name-suggestion'
 import { deriveWorkspaceSshGate, workspaceSshStatusLabel } from '../tasks/workspace-ssh-gate'
 import { WORKTREE_CREATE_TIMEOUT_MS } from '../tasks/workspace-create-timeout'
@@ -41,6 +43,12 @@ import {
   type NewWorktreeAgentOption as AgentOption
 } from './new-worktree-agent-selection'
 import { getCachedRepos, setCachedRepos } from '../cache/repo-cache'
+import { useLastVisitedWorktreeRepoId } from '../worktree/use-last-visited-worktree-repo'
+import {
+  getMobileNewWorkspaceDialogEligibleRepos,
+  refreshMobileNewWorkspaceDialogSelectedRepo,
+  resolveMobileNewWorkspaceDialogRepoId
+} from '../worktree/new-workspace-dialog-repo-selection'
 
 type Repo = {
   id: string
@@ -165,10 +173,9 @@ function NewWorktreeModalContent({
 }: Props) {
   const [initialRepos] = useState(() => (hostId ? (getCachedRepos(hostId) as Repo[] | null) : null))
   const [repos, setRepos] = useState<Repo[]>(initialRepos ?? [])
-  const [selectedRepo, setSelectedRepo] = useState<Repo | null>(
-    initialRepos?.length === 1 ? initialRepos[0]! : null
-  )
+  const [selectedRepo, setSelectedRepo] = useState<Repo | null>(null)
   const [showRepoPicker, setShowRepoPicker] = useState(false)
+  const [nameAutoFocusEnabled, setNameAutoFocusEnabled] = useState(true)
   const [selectedAgentState, setSelectedAgent] = useState<AgentOption>(AGENT_OPTIONS[0]!)
   const [runtimeSettings, setRuntimeSettings] = useState<RuntimeSettings | null>(null)
   const [detectedAgentIdsState, setDetectedAgentIdsState] = useState<DetectedAgentIdsState | null>(
@@ -192,6 +199,7 @@ function NewWorktreeModalContent({
   const [creating, setCreating] = useState(false)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(initialRepos == null)
+  const lastVisitedRepo = useLastVisitedWorktreeRepoId(hostId, visible)
 
   // Why: matches the desktop UI — the input shows a generic "Workspace name"
   // placeholder, not the suggested creature. The creature name is only used
@@ -235,6 +243,21 @@ function NewWorktreeModalContent({
   const selectedAgent = selectedAgentResolution.selectedAgent
 
   useEffect(() => {
+    if (!visible || !lastVisitedRepo.loaded || selectedRepo || repos.length === 0) {
+      return
+    }
+    const eligibleRepos = getMobileNewWorkspaceDialogEligibleRepos(repos)
+    const preferredRepoId = resolveMobileNewWorkspaceDialogRepoId({
+      eligibleRepos,
+      activeRepoId: lastVisitedRepo.repoId
+    })
+    const preferredRepo = repos.find((repo) => repo.id === preferredRepoId) ?? null
+    if (preferredRepo) {
+      setSelectedRepo(preferredRepo)
+    }
+  }, [lastVisitedRepo.loaded, lastVisitedRepo.repoId, repos, selectedRepo, visible])
+
+  useEffect(() => {
     if (!visible || !client) {
       return
     }
@@ -257,10 +280,9 @@ function NewWorktreeModalContent({
             setCachedRepos(hostId, result.repos)
           }
           setSelectedRepo((current) => {
-            if (current) {
-              return result.repos.find((repo) => repo.id === current.id) ?? current
-            }
-            return result.repos.length === 1 ? result.repos[0]! : null
+            // Why: the optimistic cache can include repos removed before the
+            // fresh repo.list returns; never create against a stale repo id.
+            return refreshMobileNewWorkspaceDialogSelectedRepo(result.repos, current)
           })
         }
       })
@@ -647,6 +669,13 @@ function NewWorktreeModalContent({
     [repos]
   )
 
+  function prepareSelectionPickerOpen(): void {
+    // Why: picker taps can beat the delayed name-field focus; suppressing it
+    // prevents the keyboard from reopening under the picker drawer.
+    setNameAutoFocusEnabled(false)
+    Keyboard.dismiss()
+  }
+
   return (
     <>
       <BottomDrawer visible={visible} onClose={onClose}>
@@ -669,7 +698,13 @@ function NewWorktreeModalContent({
           <>
             <View style={styles.field}>
               <Text style={styles.label}>Repository</Text>
-              <Pressable style={styles.fieldButton} onPress={() => setShowRepoPicker(true)}>
+              <Pressable
+                style={styles.fieldButton}
+                onPress={() => {
+                  prepareSelectionPickerOpen()
+                  setShowRepoPicker(true)
+                }}
+              >
                 {selectedRepo ? (
                   <View
                     style={[styles.repoDot, { backgroundColor: repoBadgeColor(selectedRepo) }]}
@@ -732,18 +767,15 @@ function NewWorktreeModalContent({
               <Text style={styles.label}>
                 Workspace Name <Text style={styles.labelHint}>[Optional]</Text>
               </Text>
-              <TextInput
+              <MobileWorkspaceNameInput
                 style={styles.input}
                 value={name}
                 onChangeText={(t) => {
                   setName(t)
                   setError('')
                 }}
-                placeholder="Workspace name"
                 placeholderTextColor={colors.textMuted}
-                autoCapitalize="none"
-                autoCorrect={false}
-                autoFocus={repos.length <= 1}
+                shouldAutoFocus={nameAutoFocusEnabled && visible && !loading && repos.length > 0}
                 returnKeyType="done"
                 onSubmitEditing={() => {
                   if (canCreate) {
@@ -758,7 +790,10 @@ function NewWorktreeModalContent({
               <Pressable
                 style={[styles.fieldButton, sshGate.requiresConnection && styles.disabled]}
                 disabled={sshGate.requiresConnection}
-                onPress={() => setShowAgentPicker(true)}
+                onPress={() => {
+                  prepareSelectionPickerOpen()
+                  setShowAgentPicker(true)
+                }}
               >
                 <MobileAgentIcon agentId={selectedAgent.id} size={16} />
                 <Text style={styles.fieldButtonText} numberOfLines={1}>

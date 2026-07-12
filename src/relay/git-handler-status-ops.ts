@@ -4,17 +4,15 @@
  * Why: oxlint max-lines (300) requires splitting large files.
  * These functions are pure data operations on git state — no class coupling.
  */
-import * as path from 'path'
-import { existsSync } from 'fs'
-import { readFile } from 'fs/promises'
+import * as path from 'node:path'
+import { existsSync } from 'node:fs'
+import { readFile } from 'node:fs/promises'
 import { parseUnmergedEntry } from './git-handler-utils'
 import { parseStatusOutput } from './git-status-output-parser'
 import type { GitExec } from './git-handler-ops'
 import type { GitUpstreamStatus } from '../shared/types'
-import {
-  getEffectiveGitUpstreamStatus,
-  splitRemoteBranchName
-} from '../shared/git-effective-upstream'
+import { splitRemoteBranchName } from '../shared/git-effective-upstream'
+import { readOrProbeNoEffectiveUpstreamStatus } from './git-status-upstream-negative-cache'
 import {
   applyLineStats,
   collectUntrackedAdditions,
@@ -133,11 +131,20 @@ export async function getStatusOp(
 
     if (!didHitLimit) {
       if (shouldProbeEffectiveUpstreamStatus(branch, upstreamStatus?.upstreamName)) {
-        try {
-          upstreamStatus = await getEffectiveGitUpstreamStatus((args) => git(args, worktreePath))
-        } catch {
-          // Why: status polling should keep returning working-tree entries even
-          // if the richer upstream probe hits a transient SSH/git ref error.
+        const branchName = getShortBranchName(branch)
+        if (branchName) {
+          try {
+            upstreamStatus = await readOrProbeNoEffectiveUpstreamStatus(
+              { worktreePath, branchName, upstreamName: upstreamStatus?.upstreamName },
+              (args) => git(args, worktreePath),
+              {
+                bypassCache: params.bypassEffectiveUpstreamNegativeCache === true
+              }
+            )
+          } catch {
+            // Why: status polling should keep returning working-tree entries even
+            // if the richer upstream probe hits a transient SSH/git ref error.
+          }
         }
       }
 
@@ -241,35 +248,4 @@ function shouldProbeEffectiveUpstreamStatus(
   }
   const parsed = splitRemoteBranchName(upstreamName)
   return parsed?.remoteName === 'origin' && parsed.branchName !== branchName
-}
-
-function parseCheckIgnoreOutput(stdout: string): string[] {
-  return stdout.split(/\r?\n/).filter(Boolean)
-}
-
-export async function checkIgnoredPathsOp(
-  git: GitExec,
-  params: Record<string, unknown>
-): Promise<string[]> {
-  const worktreePath = params.worktreePath as string
-  const paths = Array.isArray(params.paths)
-    ? params.paths.filter((path): path is string => typeof path === 'string' && path.length > 0)
-    : []
-  if (paths.length === 0) {
-    return []
-  }
-
-  try {
-    const { stdout } = await git(
-      ['-c', 'core.quotePath=false', 'check-ignore', '--', ...paths],
-      worktreePath
-    )
-    return parseCheckIgnoreOutput(stdout)
-  } catch (error) {
-    const gitError = error as Error & { code?: number | string; stdout?: string }
-    if (gitError.code === 1) {
-      return parseCheckIgnoreOutput(gitError.stdout ?? '')
-    }
-    throw error
-  }
 }

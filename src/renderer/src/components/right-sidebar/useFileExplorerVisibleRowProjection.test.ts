@@ -2,9 +2,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { DirCache, TreeNode } from './file-explorer-types'
 import {
   createVisibleFileExplorerRowProjection,
-  getEffectiveFileExplorerIgnoredPaths,
   getFileExplorerIgnoredQueryRelativePaths
 } from './useFileExplorerVisibleRowProjection'
+import { getEffectiveFileExplorerIgnoredPaths } from './use-file-explorer-ignored-paths'
 import {
   FILE_EXPLORER_NAME_FILTER_QUERY_MAX_BYTES,
   getFileExplorerNameFilterExpandedPaths,
@@ -168,6 +168,31 @@ describe('file explorer visible row projection', () => {
     ])
   })
 
+  it('hides descendants under collapsed folders while a file-name filter is active', () => {
+    const projection = createVisibleFileExplorerRowProjection(
+      input({
+        '/repo': [row('docs', true, 0), row('src', true, 0)]
+      }),
+      {
+        ignoredSet: new Set(),
+        nameFilter: {
+          query: 'ts',
+          relativePaths: ['docs/guide.ts', 'src/components/FileExplorer.tsx', 'src/index.ts']
+        },
+        nameFilterCollapsedPaths: new Set(['/repo/src']),
+        showDotfiles: true,
+        showGitIgnoredFiles: true
+      }
+    )
+
+    expect(projection.getVisibleSlice(0, 10).map((entry) => entry.relativePath)).toEqual([
+      'docs',
+      'docs/guide.ts',
+      'src'
+    ])
+    expect([...getFileExplorerNameFilterExpandedPaths(projection, 'ts')]).toEqual(['/repo/docs'])
+  })
+
   it('does not fall back to the partial cached tree while recursive file filtering is loading', () => {
     const projection = createVisibleFileExplorerRowProjection(
       input(
@@ -311,8 +336,6 @@ describe('file explorer visible row projection', () => {
   })
 
   it('keeps same-worktree ignored paths while an expanded-folder query is loading', () => {
-    const previousRelativePaths = ['out', 'src']
-
     expect(
       getEffectiveFileExplorerIgnoredPaths({
         activeWorktreeId: 'worktree-1',
@@ -320,7 +343,6 @@ describe('file explorer visible row projection', () => {
         ignoredPathResult: {
           activeWorktreeId: 'worktree-1',
           paths: ['out'],
-          relativePaths: previousRelativePaths,
           worktreePath: '/repo'
         },
         worktreePath: '/repo'
@@ -347,7 +369,6 @@ describe('file explorer visible row projection', () => {
         ignoredPathResult: {
           activeWorktreeId: 'worktree-1',
           paths: ['out'],
-          relativePaths: ['out'],
           worktreePath: '/repo'
         },
         worktreePath: '/repo'
@@ -361,7 +382,6 @@ describe('file explorer visible row projection', () => {
         ignoredPathResult: {
           activeWorktreeId: 'worktree-1',
           paths: ['out'],
-          relativePaths: ['out'],
           worktreePath: '/repo'
         },
         worktreePath: '/other-repo'

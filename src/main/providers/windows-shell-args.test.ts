@@ -1,4 +1,7 @@
-import { describe, expect, it } from 'vitest'
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
   encodePowerShellCommand,
   getPowerShellOsc133Bootstrap
@@ -7,6 +10,7 @@ import {
   buildWslInteractiveLoginShellCommand,
   escapeWslShCommandForWindows
 } from '../../shared/wsl-login-shell-command'
+import { resolveSetupRunnerCommand } from '../../shared/setup-runner-command'
 import { resolveWindowsShellLaunchArgs } from './windows-shell-args'
 
 function expectedWslArgs(linuxCwd: string, distro?: string): string[] {
@@ -16,6 +20,24 @@ function expectedWslArgs(linuxCwd: string, distro?: string): string[] {
 }
 
 describe('resolveWindowsShellLaunchArgs', () => {
+  let previousUserDataPath: string | undefined
+  let userDataPath: string
+
+  beforeEach(() => {
+    previousUserDataPath = process.env.ORCA_USER_DATA_PATH
+    userDataPath = mkdtempSync(join(tmpdir(), 'windows-shell-args-test-'))
+    process.env.ORCA_USER_DATA_PATH = userDataPath
+  })
+
+  afterEach(() => {
+    if (previousUserDataPath === undefined) {
+      delete process.env.ORCA_USER_DATA_PATH
+    } else {
+      process.env.ORCA_USER_DATA_PATH = previousUserDataPath
+    }
+    rmSync(userDataPath, { recursive: true, force: true })
+  })
+
   it('returns cmd.exe args with chcp 65001 for UTF-8 output', () => {
     const result = resolveWindowsShellLaunchArgs('cmd.exe', 'C:\\Users\\alice', 'C:\\Users\\alice')
     expect(result.shellArgs).toEqual(['/K', 'chcp 65001 > nul'])
@@ -34,6 +56,20 @@ describe('resolveWindowsShellLaunchArgs', () => {
     )
     expect(result.shellArgs).toEqual(['/K', 'chcp 65001 > nul & codex --no-alt-screen'])
     expect(result.startupCommandDeliveredInShellArgs).toBe(true)
+  })
+
+  it('keeps quoted cmd.exe startup commands on stdin delivery', () => {
+    // Why: direct queued cmd commands need normal quotes, which node-pty's
+    // C-runtime argv escaping corrupts when delivered through `/K`.
+    const result = resolveWindowsShellLaunchArgs(
+      'cmd.exe',
+      'C:\\Users\\alice\\repo',
+      'C:\\Users\\alice',
+      undefined,
+      'cd /d "C:\\Users\\alice\\repo" && claude "--resume" "session one"'
+    )
+    expect(result.shellArgs).toEqual(['/K', 'chcp 65001 > nul'])
+    expect(result.startupCommandDeliveredInShellArgs).toBeUndefined()
   })
 
   it('keeps large cmd.exe startup commands on stdin delivery', () => {
@@ -87,6 +123,17 @@ describe('resolveWindowsShellLaunchArgs', () => {
     expect(command).toContain(')]133;D;$fakeExitCode$(')
     expect(command).toContain(')]133;C$(')
     expect(command).not.toContain('`e]133')
+  })
+
+  it('normalizes MSYS drive cwd before spawning native PowerShell', () => {
+    const result = resolveWindowsShellLaunchArgs(
+      'powershell.exe',
+      '/c/Users/alice/project',
+      'C:\\Users\\alice'
+    )
+
+    expect(result.effectiveCwd).toBe('C:\\Users\\alice\\project')
+    expect(result.validationCwd).toBe('C:\\Users\\alice\\project')
   })
 
   it('embeds short PowerShell startup commands after the OSC 133 bootstrap', () => {
@@ -189,6 +236,54 @@ describe('resolveWindowsShellLaunchArgs', () => {
     expect(result.validationCwd).toBe('C:\\Users\\alice\\code')
   })
 
+  it('materializes shell-ready wrappers before building WSL shell args', () => {
+    const result = resolveWindowsShellLaunchArgs(
+      'wsl.exe',
+      'C:\\Users\\alice\\code',
+      'C:\\Users\\alice'
+    )
+
+    expect(result.shellArgs).toEqual(expectedWslArgs('/mnt/c/Users/alice/code'))
+    expect(existsSync(join(userDataPath, 'shell-ready', 'bash', 'rcfile'))).toBe(true)
+    expect(existsSync(join(userDataPath, 'shell-ready', 'zsh', '.zshenv'))).toBe(true)
+
+    // Why: the point of materializing wrappers for WSL is that a typed `omp`
+    // picks up Orca's status extension; pin that shim end to end.
+    const bashRcfile = readFileSync(join(userDataPath, 'shell-ready', 'bash', 'rcfile'), 'utf8')
+    const zshLogin = readFileSync(join(userDataPath, 'shell-ready', 'zsh', '.zlogin'), 'utf8')
+    for (const wrapperFile of [bashRcfile, zshLogin]) {
+      expect(wrapperFile).toContain('command omp --extension "${ORCA_OMP_STATUS_EXTENSION}" "$@"')
+      expect(wrapperFile).toContain('omp() { __orca_omp "$@"; }')
+    }
+  })
+
+  it('translates MSYS drive cwd to /mnt/<drive>/... for wsl.exe', () => {
+    const result = resolveWindowsShellLaunchArgs(
+      'wsl.exe',
+      '/c/Users/alice/project',
+      'C:\\Users\\alice',
+      undefined,
+      'codex'
+    )
+
+    expect(result.shellArgs).toEqual(expectedWslArgs('/mnt/c/Users/alice/project'))
+    expect(result.effectiveCwd).toBe('C:\\Users\\alice')
+    expect(result.validationCwd).toBe('C:\\Users\\alice\\project')
+  })
+
+  it('does not treat MSYS drive cwd as a WSL POSIX cwd', () => {
+    const result = resolveWindowsShellLaunchArgs(
+      'wsl.exe',
+      '/c/Users/alice/project',
+      'C:\\Users\\alice',
+      { distro: 'Ubuntu', treatPosixCwdAsWsl: true }
+    )
+
+    expect(result.shellArgs).toEqual(expectedWslArgs('/mnt/c/Users/alice/project', 'Ubuntu'))
+    expect(result.effectiveCwd).toBe('C:\\Users\\alice')
+    expect(result.validationCwd).toBe('C:\\Users\\alice\\project')
+  })
+
   it('escapes single quotes when translating a WSL cwd', () => {
     const result = resolveWindowsShellLaunchArgs('wsl.exe', "C:\\weird'path", 'C:\\Users\\alice')
     // The injected sh cmd must not break out of the surrounding single quotes
@@ -260,5 +355,44 @@ describe('resolveWindowsShellLaunchArgs', () => {
       '-EncodedCommand',
       encodePowerShellCommand(getPowerShellOsc133Bootstrap())
     ])
+  })
+})
+
+// Regression guard for issue #7236: a worktree Setup Script runs through a
+// generated `.cmd` runner invoked as `cmd.exe /c "<runner>"`. When PowerShell
+// received that command as raw typed stdin, a dropped/unbalanced quote surfaced
+// as a "missing terminator" parser error. Delivering it via -EncodedCommand
+// (base64 UTF-16) keeps the quotes balanced and the text verbatim, so it can
+// never be re-parsed as an open string.
+describe('issue #7236: PowerShell setup-runner command delivery', () => {
+  // git rev-parse hands back a forward-slash Windows-absolute path for the runner.
+  const runnerPath = 'C:/Users/alice/repo/.git/orca/setup-runner.cmd'
+
+  it('wraps the setup runner in balanced double quotes', () => {
+    const { command } = resolveSetupRunnerCommand(runnerPath, 'windows')
+    expect(command).toBe(`cmd.exe /c "${runnerPath}"`)
+    expect((command.match(/"/g) ?? []).length % 2).toBe(0)
+  })
+
+  it('delivers the setup-runner command through -EncodedCommand, never raw stdin', () => {
+    const { command } = resolveSetupRunnerCommand(runnerPath, 'windows')
+    const result = resolveWindowsShellLaunchArgs(
+      'powershell.exe',
+      'C:\\Users\\alice\\repo',
+      'C:\\Users\\alice',
+      undefined,
+      command
+    )
+
+    // The flag tells the daemon/provider NOT to also type the command over
+    // stdin — raw stdin delivery is the pre-encoded path that broke in #7236.
+    expect(result.startupCommandDeliveredInShellArgs).toBe(true)
+    expect(result.shellArgs.slice(0, 3)).toEqual(['-NoLogo', '-NoExit', '-EncodedCommand'])
+
+    const decoded = Buffer.from(result.shellArgs[3] ?? '', 'base64').toString('utf16le')
+    expect(decoded).toContain(`\n${command}`)
+    expect(decoded.trimEnd().endsWith(command)).toBe(true)
+    // Quotes survive encoding intact, so PowerShell parses one balanced string.
+    expect((decoded.slice(decoded.lastIndexOf(command)).match(/"/g) ?? []).length % 2).toBe(0)
   })
 })

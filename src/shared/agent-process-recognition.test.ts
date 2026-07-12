@@ -25,6 +25,13 @@ describe('agent process recognition', () => {
     expect(isExpectedAgentProcess('/usr/local/bin/openclaude', 'claude')).toBe(false)
   })
 
+  it('recognizes the Droid foreground process on Windows', () => {
+    expect(recognizeAgentProcess(String.raw`C:\Users\dev\AppData\Roaming\npm\droid.cmd`)).toEqual({
+      agent: 'droid',
+      processName: 'droid'
+    })
+  })
+
   it('matches expected agents from platform-specific foreground process paths', () => {
     expect(recognizeAgentProcess('claude')).toEqual({
       agent: 'claude',
@@ -133,6 +140,19 @@ describe('agent process recognition', () => {
       processName: 'mistral-vibe'
     })
     expect(isRecognizedAgentType('vibe')).toBe(true)
+  })
+
+  it('recognizes Qwen Code by its installed qwen executable', () => {
+    expect(recognizeAgentProcess('/home/dev/.local/bin/qwen')).toEqual({
+      agent: 'qwen-code',
+      processName: 'qwen'
+    })
+    expect(recognizeAgentProcess(String.raw`C:\Users\dev\AppData\Roaming\npm\qwen.cmd`)).toEqual({
+      agent: 'qwen-code',
+      processName: 'qwen'
+    })
+    expect(isExpectedAgentProcess('/usr/local/bin/qwen', 'qwen')).toBe(true)
+    expect(isRecognizedAgentType('qwen')).toBe(true)
   })
 
   it('recognizes agent CLIs launched through interpreter wrappers', () => {
