@@ -21696,26 +21696,39 @@ describe('OrcaRuntimeService', () => {
 
   it('resolves WSL platforms only for repos represented in mobile summaries', async () => {
     await withPlatform('win32', async () => {
-      let repos = store.getRepos()
-      const getProjects = vi.fn(() => [
-        {
-          id: 'project-1',
-          displayName: 'repo',
+      const primaryRepo = store.getRepos()[0]!
+      let repos = [
+        primaryRepo,
+        ...Array.from({ length: 100 }, (_, index) => ({
+          ...primaryRepo,
+          id: `repo-represented-${index}`,
+          path: `C:\\repo-represented-${index}`,
+          displayName: `repo-represented-${index}`
+        }))
+      ]
+      const getProjects = vi.fn(() =>
+        repos.slice(0, 101).map((repo, index) => ({
+          id: `project-${index}`,
+          displayName: repo.displayName,
           badgeColor: 'blue',
-          sourceRepoIds: [TEST_REPO_ID],
-          localWindowsRuntimePreference: { kind: 'wsl' as const, distro: 'Ubuntu' },
+          sourceRepoIds: [repo.id],
+          localWindowsRuntimePreference:
+            index === 0
+              ? ({ kind: 'wsl' as const, distro: 'Ubuntu' } as const)
+              : ({ kind: 'windows-host' as const } as const),
           createdAt: 0,
           updatedAt: 0
-        }
-      ])
+        }))
+      )
+      const getSettings = vi.fn(() => ({
+        ...store.getSettings(),
+        localWindowsRuntimeDefault: { kind: 'windows-host' as const }
+      }))
       const runtime = new OrcaRuntimeService({
         ...store,
         getRepos: () => repos,
         getProjects,
-        getSettings: () => ({
-          ...store.getSettings(),
-          localWindowsRuntimeDefault: { kind: 'windows-host' }
-        })
+        getSettings
       } as never)
 
       const { worktrees } = await runtime.getWorktreePs()
@@ -21724,11 +21737,8 @@ describe('OrcaRuntimeService', () => {
         repoId: TEST_REPO_ID,
         terminalPlatform: 'linux'
       })
-      // Why: worktree resolution performs one project read; summary projection
-      // and its path index must share the only additional per-repo read.
-      expect(getProjects).toHaveBeenCalledTimes(2)
-
       getProjects.mockClear()
+      getSettings.mockClear()
       repos = [
         ...repos,
         ...Array.from({ length: 2_000 }, (_, index) => ({
@@ -21741,9 +21751,10 @@ describe('OrcaRuntimeService', () => {
 
       await runtime.getWorktreePs()
 
-      // Why: the resolved-worktree cache can exclude newly persisted or hidden
-      // repos; a mobile poll must not rescan project runtime settings for them.
+      // Why: the cache now contains 101 represented repos and excludes 2,000
+      // new repos; projection must index project settings once for both groups.
       expect(getProjects).toHaveBeenCalledTimes(1)
+      expect(getSettings).toHaveBeenCalledTimes(2)
     })
   })
 

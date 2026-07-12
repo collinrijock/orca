@@ -464,7 +464,8 @@ import {
 import {
   getLocalProjectGitExecOptions,
   getLocalProjectWorktreeGitOptions,
-  resolveLocalProjectRuntimeForRepo
+  resolveLocalProjectRuntimeForRepo,
+  resolveLocalProjectRuntimesForRepos
 } from '../project-runtime-git-options'
 import type { ProjectExecutionRuntimeResolution } from '../../shared/project-execution-runtime'
 import {
@@ -10945,17 +10946,28 @@ export class OrcaRuntimeService {
     // host-owned imported-worktree visibility gate as worktree.list/desktop.
     await this.refreshPtyWorktreeRecordsFromController(resolvedWorktrees)
     const repoById = new Map((this.store?.getRepos() ?? []).map((repo) => [repo.id, repo]))
-    const platformByRepoId = new Map<string, NodeJS.Platform>()
+    const representedRepos: Repo[] = []
+    const representedRepoIds = new Set<string>()
     for (const worktree of resolvedWorktrees) {
-      if (platformByRepoId.has(worktree.repoId)) {
+      if (representedRepoIds.has(worktree.repoId)) {
         continue
       }
       const repo = repoById.get(worktree.repoId)
-      platformByRepoId.set(
-        worktree.repoId,
-        repo ? this.getAgentLaunchPlatformForRepo(repo) : process.platform
-      )
+      if (repo) {
+        representedRepoIds.add(repo.id)
+        representedRepos.push(repo)
+      }
     }
+    const projectRuntimeByRepoId = resolveLocalProjectRuntimesForRepos(
+      this.requireStore(),
+      representedRepos
+    )
+    const platformByRepoId = new Map(
+      representedRepos.map((repo) => [
+        repo.id,
+        getAgentLaunchPlatformForRepo(repo, projectRuntimeByRepoId.get(repo.id))
+      ])
+    )
     const summaries = new Map<string, RuntimeWorktreePsSummary>()
 
     // Why: the GitHub cache is keyed by `repoPath::branch` (no refs/heads/ prefix),

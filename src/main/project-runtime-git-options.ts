@@ -2,7 +2,10 @@ import type { Store } from './persistence'
 import type { Repo } from '../shared/types'
 import { resolveLocalProjectRuntimeForRepo } from './local-project-runtime-resolution'
 
-export { resolveLocalProjectRuntimeForRepo } from './local-project-runtime-resolution'
+export {
+  resolveLocalProjectRuntimeForRepo,
+  resolveLocalProjectRuntimesForRepos
+} from './local-project-runtime-resolution'
 
 export type LocalProjectGitExecOptions = {
   cwd: string
