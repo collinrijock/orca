@@ -10927,6 +10927,9 @@ export class OrcaRuntimeService {
     // host-owned imported-worktree visibility gate as worktree.list/desktop.
     await this.refreshPtyWorktreeRecordsFromController(resolvedWorktrees)
     const repoById = new Map((this.store?.getRepos() ?? []).map((repo) => [repo.id, repo]))
+    const platformByRepoId = new Map(
+      [...repoById.values()].map((repo) => [repo.id, this.getAgentLaunchPlatformForRepo(repo)])
+    )
     const summaries = new Map<string, RuntimeWorktreePsSummary>()
 
     // Why: the GitHub cache is keyed by `repoPath::branch` (no refs/heads/ prefix),
@@ -10955,7 +10958,7 @@ export class OrcaRuntimeService {
       if (!linkedPR && meta?.linkedPR != null) {
         linkedPR = { number: meta.linkedPR, state: 'unknown' }
       }
-      const terminalPlatform = repo ? this.getAgentLaunchPlatformForRepo(repo) : process.platform
+      const terminalPlatform = platformByRepoId.get(worktree.repoId) ?? process.platform
       // Why: use the instance-validated lineage from attachLineageToResolvedWorktrees,
       // not the raw store entry — shipped mobile clients trust parentWorktreeId as-is,
       // so a stale same-path entry would nest replacement checkouts under old parents.
@@ -11055,9 +11058,6 @@ export class OrcaRuntimeService {
       })
     }
 
-    const platformByRepoId = new Map(
-      [...repoById.values()].map((repo) => [repo.id, this.getAgentLaunchPlatformForRepo(repo)])
-    )
     const runtimeWorktreeSummaryPathIndex = buildRuntimeWorktreeSummaryPathIndex(
       summaries,
       resolvedWorktrees,
@@ -20251,6 +20251,13 @@ export class OrcaRuntimeService {
     missingRuntimeWorktreeIds: Set<string>,
     runtimeWorktreeId: string
   ): RuntimeWorktreePsSummary | null {
+    if (runtimeWorktreeId.includes('repeated-miss')) {
+      console.error(
+        'repeat-debug',
+        missingRuntimeWorktreeIds.size,
+        missingRuntimeWorktreeIds.has(runtimeWorktreeId)
+      )
+    }
     const exact = summaries.get(runtimeWorktreeId)
     if (exact) {
       return exact

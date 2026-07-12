@@ -21696,19 +21696,20 @@ describe('OrcaRuntimeService', () => {
 
   it('reports the resolved terminal platform for WSL project mobile summaries', async () => {
     await withPlatform('win32', async () => {
+      const getProjects = vi.fn(() => [
+        {
+          id: 'project-1',
+          displayName: 'repo',
+          badgeColor: 'blue',
+          sourceRepoIds: [TEST_REPO_ID],
+          localWindowsRuntimePreference: { kind: 'wsl' as const, distro: 'Ubuntu' },
+          createdAt: 0,
+          updatedAt: 0
+        }
+      ])
       const runtime = new OrcaRuntimeService({
         ...store,
-        getProjects: () => [
-          {
-            id: 'project-1',
-            displayName: 'repo',
-            badgeColor: 'blue',
-            sourceRepoIds: [TEST_REPO_ID],
-            localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' },
-            createdAt: 0,
-            updatedAt: 0
-          }
-        ],
+        getProjects,
         getSettings: () => ({
           ...store.getSettings(),
           localWindowsRuntimeDefault: { kind: 'windows-host' }
@@ -21721,6 +21722,9 @@ describe('OrcaRuntimeService', () => {
         repoId: TEST_REPO_ID,
         terminalPlatform: 'linux'
       })
+      // Why: worktree resolution performs one project read; summary projection
+      // and its path index must share the only additional per-repo read.
+      expect(getProjects).toHaveBeenCalledTimes(2)
     })
   })
 
@@ -22336,6 +22340,61 @@ describe('OrcaRuntimeService', () => {
     // Why: the prior fallback read every worktree path for every distinct miss,
     // exceeding the three-second worktree.ps polling interval at this scale.
     expect(pathReadCount).toBeLessThan(40_000)
+  })
+
+  it('caches repeated malformed path misses before normalizing them again', async () => {
+    const remoteRepo = {
+      id: 'repo-repeated-miss',
+      path: '/remote',
+      displayName: 'repeated-miss-vm',
+      badgeColor: 'blue',
+      addedAt: 1,
+      connectionId: 'ssh-repeated-miss'
+    }
+    const remoteWorktree = {
+      path: '/remote/existing',
+      head: 'head-existing',
+      branch: 'refs/heads/existing',
+      isBare: false,
+      isMainWorktree: false
+    }
+    const runtimeStore = {
+      ...store,
+      getRepos: () => [remoteRepo],
+      getRepo: (id: string) => (id === remoteRepo.id ? remoteRepo : undefined),
+      getAllWorktreeMeta: () => ({}),
+      getWorktreeMeta: () => undefined
+    }
+    registerSshGitProvider('ssh-repeated-miss', {
+      listWorktrees: vi.fn().mockResolvedValue([remoteWorktree])
+    } as never)
+    const now = Date.now()
+    const runtime = new OrcaRuntimeService(runtimeStore as never, undefined, {
+      getAgentStatusSnapshot: () =>
+        Array.from({ length: 2_000 }, (_, index) => ({
+          paneKey: `repeated-miss-tab:${String(index).padStart(8, '0')}-bbbb-4bbb-8bbb-bbbbbbbbbbbb`,
+          worktreeId: `${remoteRepo.id}::relative/./missing\\leaf`,
+          tabId: 'repeated-miss-tab',
+          state: 'working' as const,
+          prompt: `repeated missing agent ${index}`,
+          agentType: 'codex',
+          connectionId: 'ssh-repeated-miss',
+          receivedAt: now,
+          stateStartedAt: now - 100
+        }))
+    })
+    const cwdSpy = vi.spyOn(process, 'cwd')
+
+    try {
+      const summaries = await runtime.getWorktreePs()
+
+      expect(summaries.worktrees[0]?.agents).toEqual([])
+      // Why: resolving a relative comparison key consults cwd. A raw miss must
+      // do that once per poll, not once for every agent row carrying the ID.
+      expect(cwdSpy.mock.calls.length).toBeLessThan(50)
+    } finally {
+      cwdSpy.mockRestore()
+    }
   })
 
   it('keeps no-PTY agent worktrees in the truncated mobile summary', async () => {
