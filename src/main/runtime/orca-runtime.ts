@@ -11055,7 +11055,7 @@ export class OrcaRuntimeService {
       })
     }
 
-    const summaryByRuntimeWorktreePath = buildRuntimeWorktreeSummaryPathIndex(
+    const runtimeWorktreeSummaryPathIndex = buildRuntimeWorktreeSummaryPathIndex(
       summaries,
       resolvedWorktrees,
       new Map(
@@ -11067,8 +11067,7 @@ export class OrcaRuntimeService {
     for (const leaf of this.leaves.values()) {
       const summary = this.getSummaryForRuntimeWorktreeId(
         summaries,
-        resolvedWorktrees,
-        summaryByRuntimeWorktreePath,
+        runtimeWorktreeSummaryPathIndex,
         fallbackSummaryByRuntimeWorktreeId,
         leaf.worktreeId
       )
@@ -11103,8 +11102,7 @@ export class OrcaRuntimeService {
       }
       const summary = this.getSummaryForRuntimeWorktreeId(
         summaries,
-        resolvedWorktrees,
-        summaryByRuntimeWorktreePath,
+        runtimeWorktreeSummaryPathIndex,
         fallbackSummaryByRuntimeWorktreeId,
         pty.worktreeId
       )
@@ -11131,8 +11129,7 @@ export class OrcaRuntimeService {
       }
       const summary = this.getSummaryForRuntimeWorktreeId(
         summaries,
-        resolvedWorktrees,
-        summaryByRuntimeWorktreePath,
+        runtimeWorktreeSummaryPathIndex,
         fallbackSummaryByRuntimeWorktreeId,
         worktreeId
       )
@@ -11161,8 +11158,7 @@ export class OrcaRuntimeService {
     if (session?.activeWorktreeId) {
       const activeSummary = this.getSummaryForRuntimeWorktreeId(
         summaries,
-        resolvedWorktrees,
-        summaryByRuntimeWorktreePath,
+        runtimeWorktreeSummaryPathIndex,
         fallbackSummaryByRuntimeWorktreeId,
         session.activeWorktreeId
       )
@@ -11173,8 +11169,7 @@ export class OrcaRuntimeService {
 
     this.attachAgentRowsToSummaries(
       summaries,
-      resolvedWorktrees,
-      summaryByRuntimeWorktreePath,
+      runtimeWorktreeSummaryPathIndex,
       fallbackSummaryByRuntimeWorktreeId
     )
 
@@ -11192,8 +11187,7 @@ export class OrcaRuntimeService {
   // hierarchy is pane-level state tracked separately from terminal output.
   private attachAgentRowsToSummaries(
     summaries: Map<string, RuntimeWorktreePsSummary>,
-    resolvedWorktrees: ResolvedWorktree[],
-    summaryByRuntimeWorktreePath: ReadonlyMap<string, RuntimeWorktreePsSummary>,
+    runtimeWorktreeSummaryPathIndex: RuntimeWorktreeSummaryPathIndex,
     fallbackSummaryByRuntimeWorktreeId: Map<string, RuntimeWorktreePsSummary | null>
   ): void {
     // Why: most agents report via hooks (agent-hooks/server), not OSC, so the
@@ -11265,8 +11259,7 @@ export class OrcaRuntimeService {
       }
       const summary = this.getSummaryForRuntimeWorktreeId(
         summaries,
-        resolvedWorktrees,
-        summaryByRuntimeWorktreePath,
+        runtimeWorktreeSummaryPathIndex,
         fallbackSummaryByRuntimeWorktreeId,
         worktreeId
       )
@@ -20253,8 +20246,7 @@ export class OrcaRuntimeService {
 
   private getSummaryForRuntimeWorktreeId(
     summaries: Map<string, RuntimeWorktreePsSummary>,
-    resolvedWorktrees: ResolvedWorktree[],
-    summaryByRuntimeWorktreePath: ReadonlyMap<string, RuntimeWorktreePsSummary>,
+    runtimeWorktreeSummaryPathIndex: RuntimeWorktreeSummaryPathIndex,
     fallbackSummaryByRuntimeWorktreeId: Map<string, RuntimeWorktreePsSummary | null>,
     runtimeWorktreeId: string
   ): RuntimeWorktreePsSummary | null {
@@ -20268,28 +20260,20 @@ export class OrcaRuntimeService {
     }
     const repo = this.store?.getRepo(parsed.repoId)
     const comparisonPlatform = repo ? this.getAgentLaunchPlatformForRepo(repo) : process.platform
-    const pathKey = runtimeWorktreeSummaryPathKey(
+    const indexed = findRuntimeWorktreeSummaryByPath(
+      runtimeWorktreeSummaryPathIndex,
       parsed.repoId,
       parsed.worktreePath,
       comparisonPlatform
     )
-    const indexed = summaryByRuntimeWorktreePath.get(pathKey)
     if (indexed) {
       return indexed
     }
     if (fallbackSummaryByRuntimeWorktreeId.has(runtimeWorktreeId)) {
       return fallbackSummaryByRuntimeWorktreeId.get(runtimeWorktreeId) ?? null
     }
-    // Why: malformed legacy relative paths can require pair-aware comparison;
-    // keep the compatibility fallback off the normal indexed absolute path.
-    const resolved = resolvedWorktrees.find(
-      (worktree) =>
-        worktree.repoId === parsed.repoId &&
-        areWorktreePathsEqual(worktree.path, parsed.worktreePath, comparisonPlatform)
-    )
-    const fallback = resolved ? (summaries.get(resolved.id) ?? null) : null
-    fallbackSummaryByRuntimeWorktreeId.set(runtimeWorktreeId, fallback)
-    return fallback
+    fallbackSummaryByRuntimeWorktreeId.set(runtimeWorktreeId, null)
+    return null
   }
 
   private buildTerminalSummary(
@@ -26471,24 +26455,106 @@ function parseRuntimeWorktreeId(
   return parsed
 }
 
+type RuntimeWorktreeSummaryPathCandidate = {
+  summary: RuntimeWorktreePsSummary
+  order: number
+}
+
+type RuntimeWorktreeSummaryPathIndex = {
+  posixAbsolute: Map<string, RuntimeWorktreeSummaryPathCandidate>
+  posixRelative: Map<string, RuntimeWorktreeSummaryPathCandidate>
+  windows: Map<string, RuntimeWorktreeSummaryPathCandidate>
+  windowsAbsolute: Map<string, RuntimeWorktreeSummaryPathCandidate>
+}
+
 function buildRuntimeWorktreeSummaryPathIndex(
   summaries: ReadonlyMap<string, RuntimeWorktreePsSummary>,
   resolvedWorktrees: readonly ResolvedWorktree[],
   platformByRepoId: ReadonlyMap<string, NodeJS.Platform>
-): Map<string, RuntimeWorktreePsSummary> {
-  const index = new Map<string, RuntimeWorktreePsSummary>()
-  for (const worktree of resolvedWorktrees) {
+): RuntimeWorktreeSummaryPathIndex {
+  const index: RuntimeWorktreeSummaryPathIndex = {
+    posixAbsolute: new Map(),
+    posixRelative: new Map(),
+    windows: new Map(),
+    windowsAbsolute: new Map()
+  }
+  for (const [order, worktree] of resolvedWorktrees.entries()) {
     const summary = summaries.get(worktree.id)
-    const pathKey = runtimeWorktreeSummaryPathKey(
-      worktree.repoId,
-      worktree.path,
-      platformByRepoId.get(worktree.repoId) ?? process.platform
-    )
-    if (summary) {
-      index.set(pathKey, summary)
+    if (!summary) {
+      continue
+    }
+    const platform = platformByRepoId.get(worktree.repoId) ?? process.platform
+    const candidate = { summary, order }
+    if (isPosixAbsoluteRuntimeWorktreePath(worktree.path)) {
+      setFirstRuntimeWorktreePathCandidate(
+        index.posixAbsolute,
+        runtimeWorktreeSummaryPathKey(worktree.repoId, worktree.path, platform),
+        candidate
+      )
+      continue
+    }
+
+    const windowsKey = runtimeWorktreeSummaryPathKey(worktree.repoId, worktree.path, 'win32')
+    setFirstRuntimeWorktreePathCandidate(index.windows, windowsKey, candidate)
+    if (isWindowsAbsolutePathLike(worktree.path)) {
+      setFirstRuntimeWorktreePathCandidate(index.windowsAbsolute, windowsKey, candidate)
+    } else if (platform !== 'win32') {
+      setFirstRuntimeWorktreePathCandidate(
+        index.posixRelative,
+        runtimeWorktreeSummaryPathKey(worktree.repoId, worktree.path, platform),
+        candidate
+      )
     }
   }
   return index
+}
+
+function findRuntimeWorktreeSummaryByPath(
+  index: RuntimeWorktreeSummaryPathIndex,
+  repoId: string,
+  worktreePath: string,
+  platform: NodeJS.Platform
+): RuntimeWorktreePsSummary | null {
+  if (isPosixAbsoluteRuntimeWorktreePath(worktreePath)) {
+    return (
+      index.posixAbsolute.get(runtimeWorktreeSummaryPathKey(repoId, worktreePath, platform))
+        ?.summary ?? null
+    )
+  }
+
+  const windowsKey = runtimeWorktreeSummaryPathKey(repoId, worktreePath, 'win32')
+  if (platform === 'win32' || isWindowsAbsolutePathLike(worktreePath)) {
+    return index.windows.get(windowsKey)?.summary ?? null
+  }
+
+  const posixCandidate = index.posixRelative.get(
+    runtimeWorktreeSummaryPathKey(repoId, worktreePath, platform)
+  )
+  const windowsCandidate = index.windowsAbsolute.get(windowsKey)
+  // Why: a malformed relative path can compare as POSIX against another
+  // relative path or as Windows against an absolute Windows path. Preserve the
+  // old pairwise scan's first-match result without rescanning every worktree.
+  if (!posixCandidate) {
+    return windowsCandidate?.summary ?? null
+  }
+  if (!windowsCandidate || posixCandidate.order < windowsCandidate.order) {
+    return posixCandidate.summary
+  }
+  return windowsCandidate.summary
+}
+
+function setFirstRuntimeWorktreePathCandidate(
+  candidates: Map<string, RuntimeWorktreeSummaryPathCandidate>,
+  key: string,
+  candidate: RuntimeWorktreeSummaryPathCandidate
+): void {
+  if (!candidates.has(key)) {
+    candidates.set(key, candidate)
+  }
+}
+
+function isPosixAbsoluteRuntimeWorktreePath(worktreePath: string): boolean {
+  return worktreePath.startsWith('/') && !worktreePath.startsWith('//')
 }
 
 function runtimeWorktreeSummaryPathKey(
