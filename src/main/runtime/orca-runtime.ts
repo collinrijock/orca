@@ -11298,8 +11298,9 @@ export class OrcaRuntimeService {
     for (const src of rowSources.values()) {
       // Why: hooks retain launch-time attribution across automatic workspace
       // renames; the tab's current mirrored owner is authoritative when present.
+      const tabId = src.tabId ?? parsePaneKey(src.paneKey)?.tabId
       const worktreeId =
-        (src.tabId ? mirroredWorktreeIdByTabId.get(src.tabId) : undefined) ?? src.worktreeId
+        (tabId ? mirroredWorktreeIdByTabId.get(tabId) : undefined) ?? src.worktreeId
       if (!worktreeId) {
         continue
       }

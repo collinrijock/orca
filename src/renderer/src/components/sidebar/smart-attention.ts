@@ -59,13 +59,27 @@ export const IDLE: WorktreeAttention = { cls: 4, attentionTimestamp: 0 }
 
 export function hasFreshAttributedAgentStatus(
   agentStatusByPaneKey: Record<string, AgentStatusEntry> | undefined,
-  now: number
+  now: number,
+  tabsByWorktree: Record<string, TerminalTab[]>
 ): boolean {
-  return Object.values(agentStatusByPaneKey ?? {}).some(
-    (entry) =>
-      !!entry.worktreeId &&
-      !!parsePaneKey(entry.paneKey) &&
-      isExplicitAgentStatusFresh(entry, now, AGENT_STATUS_STALE_AFTER_MS)
+  const freshUnstampedTabIds = new Set<string>()
+  for (const entry of Object.values(agentStatusByPaneKey ?? {})) {
+    const parsed = parsePaneKey(entry.paneKey)
+    if (parsed === null || !isExplicitAgentStatusFresh(entry, now, AGENT_STATUS_STALE_AFTER_MS)) {
+      continue
+    }
+    if (entry.worktreeId) {
+      return true
+    }
+    // Why: hook rows can omit the redundant stamp while paneKey still maps to
+    // a mirrored tab, which is enough to end the Smart cold-start fallback.
+    freshUnstampedTabIds.add(parsed.tabId)
+  }
+  if (freshUnstampedTabIds.size === 0) {
+    return false
+  }
+  return Object.values(tabsByWorktree).some((tabs) =>
+    tabs.some((tab) => freshUnstampedTabIds.has(tab.id))
   )
 }
 

@@ -22074,7 +22074,6 @@ describe('OrcaRuntimeService', () => {
       getAgentStatusSnapshot: () => [
         {
           paneKey: `host-tab:${HEADLESS_LEAF_ID}`,
-          tabId: 'host-tab',
           worktreeId: TEST_WORKTREE_ID,
           state: 'working',
           prompt: 'continue after rename',

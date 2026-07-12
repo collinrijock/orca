@@ -483,6 +483,38 @@ describe('sortWorktreesSmart — cold start fallback', () => {
     expect(sorted.map((worktree) => worktree.id)).toEqual(['blocked', 'persisted-first'])
   })
 
+  it('uses a fresh agent resolved through its mirrored tab without a worktree stamp', () => {
+    const blocked = makeWorktree({ id: 'blocked', displayName: 'Blocked', sortOrder: 0 })
+    const persistedFirst = makeWorktree({
+      id: 'persisted-first',
+      displayName: 'Persisted first',
+      sortOrder: 100
+    })
+    const key = paneKey('mirrored-tab')
+    const tabsByWorktree = {
+      [blocked.id]: [makeTab({ id: 'mirrored-tab', worktreeId: blocked.id })]
+    }
+    const entries = {
+      [key]: makeEntry({
+        paneKey: key,
+        state: 'blocked',
+        stateStartedAt: Date.now() - 1_000,
+        updatedAt: Date.now()
+      })
+    }
+
+    const sorted = sortWorktreesSmart(
+      [persistedFirst, blocked],
+      tabsByWorktree,
+      repoMap,
+      entries,
+      {},
+      {}
+    )
+
+    expect(sorted.map((worktree) => worktree.id)).toEqual(['blocked', 'persisted-first'])
+  })
+
   it('falls back to the path label when a persisted worktree has no displayName', () => {
     const missingDisplayName = {
       ...makeWorktree({

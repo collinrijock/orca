@@ -5370,7 +5370,10 @@ const WorktreeList = React.memo(function WorktreeList({
       const hasAnyLivePty = Object.values(state.tabsByWorktree)
         .flat()
         .some((tab) => tabHasLivePty(state.ptyIdsByTabId, tab.id))
-      if (hasAnyLivePty || hasFreshAttributedAgentStatus(state.agentStatusByPaneKey, now)) {
+      if (
+        hasAnyLivePty ||
+        hasFreshAttributedAgentStatus(state.agentStatusByPaneKey, now, state.tabsByWorktree)
+      ) {
         sessionHasHadLiveSmartSignal.current = true
       } else {
         nonArchivedWorktrees.sort(

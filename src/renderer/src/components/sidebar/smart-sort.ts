@@ -167,7 +167,7 @@ export function sortWorktreesSmart(
     .some((tab) => tabHasLivePty(ptyIdsByTabId, tab.id))
 
   const now = Date.now()
-  if (!hasAnyLivePty && !hasFreshAttributedAgentStatus(agentStatusByPaneKey, now)) {
+  if (!hasAnyLivePty && !hasFreshAttributedAgentStatus(agentStatusByPaneKey, now, tabsByWorktree)) {
     // Cold start: use persisted sortOrder snapshot until the agent-status
     // snapshot lands and a warm sort runs.
     return [...worktrees].sort(
