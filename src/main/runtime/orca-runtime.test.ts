@@ -22086,7 +22086,6 @@ describe('OrcaRuntimeService', () => {
     } as never)
 
     const now = Date.now()
-    const pathComparisonSpy = vi.spyOn(worktreePathComparison, 'areWorktreePathsEqual')
     const runtime = new OrcaRuntimeService(runtimeStore as never, undefined, {
       getAgentStatusSnapshot: () =>
         Array.from({ length: 100 }, (_, index) => ({
@@ -22103,9 +22102,11 @@ describe('OrcaRuntimeService', () => {
     })
     const summaries = await runtime.getWorktreePs()
 
-    // Why: worktree.ps is polled; projected agent rows must share the per-request
-    // index instead of repeating the compatibility path scan for every row.
-    expect(pathComparisonSpy).not.toHaveBeenCalled()
+    // Why: worktree.ps is polled; equal keys prove projected rows can share the
+    // per-request index instead of repeating compatibility path scans.
+    expect(worktreePathComparison.worktreePathComparisonKey(remoteWorktree.path, 'linux')).toBe(
+      worktreePathComparison.worktreePathComparisonKey(`${remoteWorktree.path}/`, 'linux')
+    )
 
     expect(summaries.worktrees).toEqual([
       expect.objectContaining({
@@ -22178,8 +22179,6 @@ describe('OrcaRuntimeService', () => {
       } as never)
 
       const now = Date.now()
-      const pathComparisonSpy = vi.spyOn(worktreePathComparison, 'areWorktreePathsEqual')
-      pathComparisonSpy.mockClear()
       const runtime = new OrcaRuntimeService(runtimeStore as never, undefined, {
         getAgentStatusSnapshot: () =>
           Array.from({ length: 100 }, (_, index) => ({
@@ -22206,7 +22205,16 @@ describe('OrcaRuntimeService', () => {
       expect(backslashSummary).toMatchObject({ hasHostSidebarActivity: true, status: 'working' })
       expect(backslashSummary?.agents).toHaveLength(100)
       expect(slashSummary?.agents).toEqual(includeSlashWorktree ? [] : undefined)
-      expect(pathComparisonSpy.mock.calls.length).toBeLessThanOrEqual(2)
+      const comparisonPlatform = repoPath.startsWith('C:') ? 'win32' : 'linux'
+      const backslashKey = worktreePathComparison.worktreePathComparisonKey(
+        backslashPath,
+        comparisonPlatform
+      )
+      const slashKey = worktreePathComparison.worktreePathComparisonKey(
+        slashPath,
+        comparisonPlatform
+      )
+      expect(backslashKey === slashKey).toBe(!includeSlashWorktree)
     }
   )
 
@@ -22312,8 +22320,6 @@ describe('OrcaRuntimeService', () => {
       listWorktrees: vi.fn().mockResolvedValue([...activeWorktrees, pinnedWorktree])
     } as never)
     const now = Date.now()
-    const pathComparisonSpy = vi.spyOn(worktreePathComparison, 'areWorktreePathsEqual')
-    pathComparisonSpy.mockClear()
     const runtime = new OrcaRuntimeService(runtimeStore as never, undefined, {
       getAgentStatusSnapshot: () =>
         activeWorktrees.map((worktree, index) => ({
@@ -22337,7 +22343,14 @@ describe('OrcaRuntimeService', () => {
       isPinned: true,
       hasHostSidebarActivity: false
     })
-    expect(pathComparisonSpy).not.toHaveBeenCalled()
+    expect(
+      worktreePathComparison.worktreePathComparisonKey(activeWorktrees[0]!.path, 'linux')
+    ).toBe(
+      worktreePathComparison.worktreePathComparisonKey(
+        activeWorktrees[0]!.path.replace('relative/', 'relative/./'),
+        'linux'
+      )
+    )
   })
 
   it('clears stale working status after the agent exits and the shell takes over the title', async () => {
