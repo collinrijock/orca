@@ -112,7 +112,9 @@ export class RuntimeWatcherProcessPool {
 
   /** Kill every pooled watcher child (production shutdown or test reset). */
   dispose(): void {
-    for (const slot of [...this.allSlots]) {
+    // disposeSlot deletes the current slot from allSlots; deleting the
+    // in-progress element during Set iteration is safe, so no snapshot needed.
+    for (const slot of this.allSlots) {
       this.disposeSlot(slot)
     }
     this.activeSlots.clear()
