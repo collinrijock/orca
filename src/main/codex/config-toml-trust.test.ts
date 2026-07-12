@@ -1151,22 +1151,23 @@ describe('upsertProjectTrustLevel', () => {
   it('keeps case-distinct WSL Linux project paths as separate trust blocks', () => {
     // Why: the \\wsl$\<distro> share is case-insensitive on Windows, but the
     // Linux path underneath is not — .../Repo and .../repo are two projects.
+    const existingPath = '\\\\wsl$\\Ubuntu\\home\\u\\Repo'
+    const incomingPath = '\\\\wsl$\\Ubuntu\\home\\u\\repo'
     const original = [
-      "[projects.'\\\\wsl$\\Ubuntu\\home\\u\\Repo']",
+      `[projects.'${existingPath}']`,
       'trust_level = "untrusted"',
       ''
     ].join('\n')
 
-    const updated = upsertProjectTrustLevelInContent(
-      original,
-      '\\\\wsl$\\Ubuntu\\home\\u\\repo',
-      'trusted',
-      { alreadyCanonical: true }
-    )
+    const updated = upsertProjectTrustLevelInContent(original, incomingPath, 'trusted', {
+      alreadyCanonical: true
+    })
 
     expect(updated.match(/\[projects\./g)).toHaveLength(2)
-    expect(updated).toContain("[projects.'\\\\wsl$\\Ubuntu\\home\\u\\Repo']")
-    expect(updated).toContain('[projects."\\\\\\\\wsl$\\\\Ubuntu\\\\home\\\\u\\\\repo"]')
+    expect(updated).toContain(`[projects.'${existingPath}']`)
+    // Why: serializer writes basic-string headers via escapeTomlString; assert
+    // that form so the fixture can't drift from real header matching.
+    expect(updated).toContain(`[projects."${escapeTomlString(incomingPath)}"]`)
     expect(updated).toContain('trust_level = "untrusted"')
     expect(updated).toContain('trust_level = "trusted"')
   })
