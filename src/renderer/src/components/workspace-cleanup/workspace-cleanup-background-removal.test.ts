@@ -441,12 +441,15 @@ describe('startWorkspaceCleanupBackgroundRemoval', () => {
       path: '/repo/parent/child'
     })
     let resolveChild: (result: { removedIds: string[]; failures: [] }) => void = () => {}
-    const removeCandidates = vi.fn(
-      () =>
-        new Promise<{ removedIds: string[]; failures: [] }>((resolve) => {
-          resolveChild = resolve
-        })
-    )
+    const removeCandidates = vi
+      .fn()
+      .mockImplementationOnce(
+        () =>
+          new Promise<{ removedIds: string[]; failures: [] }>((resolve) => {
+            resolveChild = resolve
+          })
+      )
+      .mockResolvedValueOnce({ removedIds: [parent.worktreeId], failures: [] })
     const onProgress = vi.fn()
     const onResult = vi.fn()
     const onLateResult = vi.fn()
@@ -501,13 +504,69 @@ describe('startWorkspaceCleanupBackgroundRemoval', () => {
     resolveChild({ removedIds: [child.worktreeId], failures: [] })
     await settleBackgroundRemoval()
 
-    expect(removeCandidates).toHaveBeenCalledTimes(1)
+    // Why: post-batch child success must reclassify the provisional parent skip
+    // and retry the parent so rowFailures do not keep the stale skip message.
+    expect(removeCandidates).toHaveBeenNthCalledWith(2, [parent.worktreeId], {
+      approvedCandidates: [parent]
+    })
     expect(onResult).toHaveBeenCalledTimes(1)
     expect(onLateResult).toHaveBeenCalledWith({
-      removedIds: [child.worktreeId],
+      removedIds: [child.worktreeId, parent.worktreeId],
       failures: []
     })
-    expect(toast.success).toHaveBeenLastCalledWith('Removed workspaces: 1')
+    expect(toast.success).toHaveBeenLastCalledWith('Removed workspaces: 2')
+  })
+
+  it('hardens a provisional parent skip after the child late-fails post-batch', async () => {
+    vi.useFakeTimers()
+    const parent = makeCandidate({
+      worktreeId: 'repo-1::/repo/parent',
+      displayName: 'parent',
+      branch: 'parent',
+      path: '/repo/parent'
+    })
+    const child = makeCandidate({
+      worktreeId: 'repo-1::/repo/parent/child',
+      displayName: 'child',
+      branch: 'child',
+      path: '/repo/parent/child'
+    })
+    let rejectChild: (error: Error) => void = () => {}
+    const onLateResult = vi.fn()
+
+    startWorkspaceCleanupBackgroundRemoval({
+      candidates: [parent, child],
+      removeCandidates: vi.fn(
+        () =>
+          new Promise<{ removedIds: string[]; failures: [] }>((_resolve, reject) => {
+            rejectChild = reject
+          })
+      ),
+      onProgress: vi.fn(),
+      onResult: vi.fn(),
+      onLateResult,
+      removalTimeoutMs: 5,
+      removalSettlementGraceMs: 5
+    })
+
+    await vi.advanceTimersByTimeAsync(10)
+    await settleBackgroundRemoval()
+    rejectChild(new Error('remote removal failed'))
+    await settleBackgroundRemoval()
+
+    expect(onLateResult).toHaveBeenCalledWith({
+      removedIds: [],
+      failures: [
+        expect.objectContaining({
+          worktreeId: child.worktreeId,
+          message: 'remote removal failed'
+        }),
+        expect.objectContaining({
+          worktreeId: parent.worktreeId,
+          message: 'Skipped because a nested workspace could not be removed.'
+        })
+      ]
+    })
   })
 
   it('retries a skipped parent after its blocking child succeeds mid-batch', async () => {

@@ -11,12 +11,14 @@ import {
   isStrictWorkspaceCleanupDescendant,
   type SkippedWorkspaceCleanupAncestor
 } from './workspace-cleanup-ancestor-skips'
+import { reconcilePostBatchLateSettlement } from './workspace-cleanup-post-batch-late-settlement'
 import {
   getWorkspaceCleanupTimeoutFailure,
   trackWorkspaceCleanupLateSettlement,
   waitForWorkspaceCleanupRemovalWithTimeout
 } from './workspace-cleanup-removal-settlement'
 import { showWorkspaceCleanupRemovalResultToasts } from './workspace-cleanup-removal-toasts'
+import { reclassifySkippedWorkspaceCleanupAncestors } from './workspace-cleanup-skipped-ancestor-reclassification'
 
 const DEFAULT_WORKSPACE_CLEANUP_REMOVAL_TIMEOUT_MS = 120_000
 const DEFAULT_WORKSPACE_CLEANUP_SETTLEMENT_GRACE_MS = 5_000
@@ -78,6 +80,9 @@ export function startWorkspaceCleanupBackgroundRemoval({
   const provisionallyBlocked = new Set<WorkspaceCleanupCandidate>()
   const pendingSettlementFailures = new Set<WorkspaceCleanupFailure>()
   const skippedAncestors: SkippedWorkspaceCleanupAncestor[] = []
+  // Why: serialize post-batch late reconciles so concurrent child settlements
+  // do not interleave ancestor reclassification and retries.
+  let postBatchLateReconcileChain: Promise<void> = Promise.resolve()
   let processedCount = 0
 
   const emitProgress = (): void => {
@@ -143,37 +148,42 @@ export function startWorkspaceCleanupBackgroundRemoval({
   // ancestors; re-derive each skip from the current blocker set so the batch
   // never reports "could not be removed" for a row whose blocker succeeded.
   const resettleSkippedAncestors = (): void => {
-    let changed = true
-    while (changed) {
-      changed = false
-      let index = 0
-      while (index < skippedAncestors.length) {
-        const entry = skippedAncestors[index]
-        const blockers = findBlockingDescendants(entry.candidate)
-        if (blockers.length === 0) {
-          skippedAncestors.splice(index, 1)
-          removeArrayEntry(failedCandidates, entry.candidate)
-          removeArrayEntry(failures, entry.failure)
-          provisionallyBlocked.delete(entry.candidate)
-          processedCount -= 1
-          queue.push(entry.candidate)
-          changed = true
-          continue
-        }
-        const provisional = blockers.every((blocker) => provisionallyBlocked.has(blocker))
-        if (provisional !== entry.provisional) {
-          entry.provisional = provisional
-          entry.failure.message = getSkippedAncestorMessage(provisional)
-          if (provisional) {
-            provisionallyBlocked.add(entry.candidate)
-          } else {
-            provisionallyBlocked.delete(entry.candidate)
-          }
-          changed = true
-        }
-        index += 1
-      }
+    const { unblocked } = reclassifySkippedWorkspaceCleanupAncestors({
+      skippedAncestors,
+      findBlockingDescendants,
+      provisionallyBlocked,
+      failedCandidates,
+      failures
+    })
+    for (const candidate of unblocked) {
+      processedCount -= 1
+      queue.push(candidate)
     }
+  }
+
+  const enqueuePostBatchLateSettlement = (
+    settledCandidate: WorkspaceCleanupCandidate,
+    timeoutFailure: WorkspaceCleanupFailure,
+    lateResult: WorkspaceCleanupRemoveResult
+  ): void => {
+    postBatchLateReconcileChain = postBatchLateReconcileChain
+      .then(async () => {
+        const reconciled = await reconcilePostBatchLateSettlement({
+          lateResult,
+          settledCandidate,
+          timeoutFailure,
+          skippedAncestors,
+          failedCandidates,
+          failures,
+          provisionallyBlocked,
+          pendingSettlementFailures,
+          removeCandidates
+        })
+        reportLateWorkspaceCleanupResult(reconciled, onLateResult)
+      })
+      .catch((error: unknown) => {
+        console.error('Workspace cleanup post-batch late settlement failed', error)
+      })
   }
 
   void (async () => {
@@ -204,6 +214,8 @@ export function startWorkspaceCleanupBackgroundRemoval({
           reportFailures([timeoutFailure])
           // Why: renderer IPC cannot be cancelled at the timeout boundary; keep
           // its authoritative settlement without unblocking ancestors early.
+          // After the batch ends, detach switches to the post-batch path which
+          // still holds skip state so ancestors can reclassify.
           detachLateResultReconcilers.push(
             trackWorkspaceCleanupLateSettlement(
               outcome.settlement,
@@ -220,7 +232,9 @@ export function startWorkspaceCleanupBackgroundRemoval({
                 resettleSkippedAncestors()
                 emitProgress()
               },
-              (lateResult) => reportLateWorkspaceCleanupResult(lateResult, onLateResult)
+              (lateResult) => {
+                enqueuePostBatchLateSettlement(candidate, timeoutFailure, lateResult)
+              }
             )
           )
           continue
