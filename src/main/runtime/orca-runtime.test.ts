@@ -18472,6 +18472,7 @@ describe('OrcaRuntimeService', () => {
     // worktree.ps reads the hook snapshot so mobile surfaces those agents too.
     const leafId = '33333333-3333-4333-8333-333333333333'
     const paneKey = `tab-1:${leafId}`
+    const now = Date.now()
     const runtime = new OrcaRuntimeService(store, undefined, {
       getAgentStatusSnapshot: () => [
         {
@@ -18483,8 +18484,8 @@ describe('OrcaRuntimeService', () => {
           agentType: 'claude',
           lastAssistantMessage: 'on it',
           connectionId: null,
-          receivedAt: 1000,
-          stateStartedAt: 900
+          receivedAt: now,
+          stateStartedAt: now - 100
         }
       ]
     })
@@ -18542,11 +18543,46 @@ describe('OrcaRuntimeService', () => {
         taskTitle: 'Dispatch prompt work',
         displayName: 'Review dispatch prompts and make worker labels distinct',
         lastAssistantMessage: 'on it',
-        stateStartedAt: 900,
-        updatedAt: 1000
+        stateStartedAt: now - 100,
+        updatedAt: now
       })
     ])
+    expect(summary).toMatchObject({ hasHostSidebarActivity: true, status: 'working' })
   })
+
+  it.each([
+    ['blocked', 0, true, 'permission'],
+    ['waiting', 0, true, 'permission'],
+    ['done', 0, false, 'inactive'],
+    ['working', -AGENT_STATUS_STALE_AFTER_MS - 1, false, 'inactive']
+  ] as const)(
+    'projects %s agent activity to mobile at freshness offset %s',
+    async (state, updatedAtOffset, hasHostSidebarActivity, status) => {
+      const now = Date.now()
+      const runtime = new OrcaRuntimeService(store, undefined, {
+        getAgentStatusSnapshot: () => [
+          {
+            paneKey: 'tab-1:33333333-3333-4333-8333-333333333333',
+            worktreeId: TEST_WORKTREE_ID,
+            tabId: 'tab-1',
+            state,
+            prompt: 'mobile parity',
+            agentType: 'codex',
+            connectionId: null,
+            receivedAt: now + updatedAtOffset,
+            stateStartedAt: now - 100
+          }
+        ]
+      })
+
+      const { worktrees } = await runtime.getWorktreePs()
+
+      expect(worktrees.find((worktree) => worktree.worktreeId === TEST_WORKTREE_ID)).toMatchObject({
+        hasHostSidebarActivity,
+        status
+      })
+    }
+  )
 
   it('marks the desktop-active worktree as isActive', async () => {
     const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(

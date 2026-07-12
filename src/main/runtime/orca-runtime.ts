@@ -14,6 +14,7 @@ import type { AgentStatus } from '../../shared/agent-detection'
 import type { TerminalOscLinkRange } from '../../shared/terminal-osc-link-ranges'
 import {
   AGENT_STATUS_STALE_AFTER_MS,
+  isFreshNonDoneAgentStatus,
   type AgentStatusIpcPayload,
   type ParsedAgentStatusPayload,
   type AgentStatusOrchestrationContext,
@@ -9583,6 +9584,7 @@ export class OrcaRuntimeService {
     }
     const orchestrationByPaneKey = this.buildAgentOrchestrationByPaneKey()
     const rowsByWorktree = new Map<string, RuntimeWorktreeAgentRow[]>()
+    const now = Date.now()
     for (const src of rowSources.values()) {
       const worktreeId = src.worktreeId
       if (!worktreeId || !summaries.has(worktreeId)) {
@@ -9618,6 +9620,18 @@ export class OrcaRuntimeService {
       const summary = summaries.get(worktreeId)
       if (summary) {
         summary.agents = rows
+        for (const row of rows) {
+          if (!isFreshNonDoneAgentStatus(row, now)) {
+            continue
+          }
+          // Why: worktree.ps is mobile's host-sidebar parity source, so a live
+          // agent must survive the same temporary PTY gaps as desktop.
+          summary.hasHostSidebarActivity = true
+          summary.status = mergeWorktreeStatus(
+            summary.status,
+            row.state === 'working' ? 'working' : 'permission'
+          )
+        }
       }
     }
   }
