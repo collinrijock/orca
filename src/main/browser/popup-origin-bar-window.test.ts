@@ -253,6 +253,23 @@ describe('openPopupWithOriginBar', () => {
     expect(lastWindow().setTitle).toHaveBeenCalledWith('http://phish.example.net')
   })
 
+  it('shows the page title in the native title bar but resets to origin on navigation', () => {
+    const adopted = createFakeWebContents()
+    openPopupWithOriginBar(
+      { webContents: adopted as never },
+      'https://accounts.example.com/oauth?code=SECRET'
+    )
+    // Until the page supplies a title, the window title is the origin.
+    expect(lastWindow().options.title).toBe('https://accounts.example.com')
+
+    adopted.emit('page-title-updated', {}, 'Sign in to Example')
+    expect(lastWindow().setTitle).toHaveBeenLastCalledWith('Sign in to Example')
+
+    // A stale title must not survive a cross-origin navigation.
+    adopted.emit('did-navigate', {}, 'https://evil.example.net/')
+    expect(lastWindow().setTitle).toHaveBeenLastCalledWith('https://evil.example.net')
+  })
+
   it('closes the window when the popup content is destroyed', () => {
     const adopted = createFakeWebContents()
     openPopupWithOriginBar({ webContents: adopted as never }, 'https://example.com/')

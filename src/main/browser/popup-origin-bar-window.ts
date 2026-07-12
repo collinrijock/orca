@@ -139,6 +139,10 @@ export function openPopupWithOriginBar(
   let currentUrl = initialUrl
   const renderOrigin = (): void => {
     const { label, insecure } = describePopupOrigin(currentUrl)
+    // Why: origin is the title only until the page supplies one — the bar
+    // below stays the trust surface, so the native title bar can show the
+    // page title (Chrome popup behavior) instead of doubling the origin.
+    // Re-asserting on navigation stops a stale title outliving its origin.
     if (!window.isDestroyed()) {
       window.setTitle(label)
     }
@@ -161,6 +165,12 @@ export function openPopupWithOriginBar(
     renderOrigin()
   }
   contentWebContents.on('did-navigate', handleDidNavigate)
+  const handlePageTitleUpdated = (_event: Electron.Event, title: string): void => {
+    if (!window.isDestroyed() && title) {
+      window.setTitle(title)
+    }
+  }
+  contentWebContents.on('page-title-updated', handlePageTitleUpdated)
 
   // Why: with no adopted contents there is no Chromium-driven navigation for
   // this popup, so load the target ourselves (opener handle is already gone).
@@ -179,6 +189,7 @@ export function openPopupWithOriginBar(
     if (!contentWebContents.isDestroyed()) {
       contentWebContents.off('destroyed', handleContentDestroyed)
       contentWebContents.off('did-navigate', handleDidNavigate)
+      contentWebContents.off('page-title-updated', handlePageTitleUpdated)
       // Why: close() (not destroy) so the page's unload handlers run — OAuth
       // pages often notify the opener from unload.
       contentWebContents.close()
