@@ -16,6 +16,7 @@ type FakeWebContents = {
 const { fakeElectron } = vi.hoisted(() => {
   function createFakeWebContents(): FakeWebContents {
     const handlers = new Map<string, Handler[]>()
+    let destroyed = false
     const add = (event: string, handler: Handler): void => {
       handlers.set(event, [...(handlers.get(event) ?? []), handler])
     }
@@ -31,8 +32,13 @@ const { fakeElectron } = vi.hoisted(() => {
       executeJavaScript: vi.fn(() => Promise.resolve()),
       loadURL: vi.fn(() => Promise.resolve()),
       close: vi.fn(),
-      isDestroyed: vi.fn(() => false),
+      // Mirrors real Electron: isDestroyed() is already true inside a
+      // 'destroyed' handler, which is what the double-close guard relies on.
+      isDestroyed: vi.fn(() => destroyed),
       emit: (event: string, ...args: unknown[]) => {
+        if (event === 'destroyed') {
+          destroyed = true
+        }
         // off() replaces the stored array, so iterating the fetched one is safe.
         for (const handler of handlers.get(event) ?? []) {
           handler(...args)
@@ -270,13 +276,44 @@ describe('openPopupWithOriginBar', () => {
     expect(lastWindow().setTitle).toHaveBeenLastCalledWith('https://evil.example.net')
   })
 
-  it('closes the window when the popup content is destroyed', () => {
+  it('closes the window when the popup content is destroyed, without re-closing the contents', () => {
     const adopted = createFakeWebContents()
     openPopupWithOriginBar({ webContents: adopted as never }, 'https://example.com/')
 
     adopted.emit('destroyed')
 
     expect(lastWindow().close).toHaveBeenCalled()
+    // The window's closed handler must not call close() on already-destroyed
+    // contents — that throws in real Electron.
+    expect(adopted.close).not.toHaveBeenCalled()
+  })
+
+  it('re-asserts the origin when the popup finishes loading', () => {
+    const adopted = createFakeWebContents()
+    openPopupWithOriginBar({ webContents: adopted as never }, 'https://example.com/login')
+    const { bar } = lastViews()
+    bar.webContents.emit('did-finish-load')
+    bar.webContents.executeJavaScript.mockClear()
+
+    adopted.emit('did-finish-load')
+
+    expect(bar.webContents.executeJavaScript).toHaveBeenCalledTimes(1)
+    expect(bar.webContents.executeJavaScript.mock.calls[0][0]).toContain('"https://example.com"')
+  })
+
+  it('elides the start of long origins so the registrable domain stays visible', () => {
+    openPopupWithOriginBar(
+      { webContents: createFakeWebContents() as never },
+      'https://example.com/'
+    )
+    const { bar } = lastViews()
+    const dataUrl = bar.webContents.loadURL.mock.calls[0][0] as string
+    const html = decodeURIComponent(dataUrl.replace('data:text/html;charset=utf-8,', ''))
+    // rtl clip container ellipsizes the left; the isolated ltr bdi keeps the
+    // origin's own characters (host, port) in normal order.
+    expect(html).toContain('<bdi id="origin">')
+    expect(html).toMatch(/#origin-clip\s*{[^}]*direction:\s*rtl/)
+    expect(html).toMatch(/#origin\s*{[^}]*direction:\s*ltr/)
   })
 
   it('closes the popup content and notifies listeners when the window closes', () => {

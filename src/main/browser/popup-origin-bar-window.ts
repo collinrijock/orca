@@ -67,12 +67,16 @@ const ORIGIN_BAR_HTML = `<!doctype html><html><head><meta charset="utf-8"><style
   }
   #insecure { display: none; color: #e40014; font-weight: 600; }
   body.insecure #insecure { display: inline; }
-  #origin { overflow: hidden; text-overflow: ellipsis; }
+  /* Elide the START of long origins so the registrable domain stays visible
+     (Chrome elides the same side): rtl container puts clip+ellipsis on the
+     left; the bdi keeps the ASCII origin itself rendering LTR. */
+  #origin-clip { overflow: hidden; text-overflow: ellipsis; direction: rtl; }
+  #origin { unicode-bidi: isolate; direction: ltr; }
   @media (prefers-color-scheme: dark) {
     body { background: #0a0a0a; color: #fafafa; border-bottom-color: rgb(255 255 255 / 0.07); }
     #insecure { color: #ff6568; }
   }
-</style></head><body><span id="insecure">Not secure</span><span id="origin"></span></body></html>`
+</style></head><body><span id="insecure">Not secure</span><span id="origin-clip"><bdi id="origin"></bdi></span></body></html>`
 
 function clampPopupContentSize(options: PopupChildWindowOptions): {
   width: number
@@ -133,6 +137,11 @@ export function openPopupWithOriginBar(
     })
   }
   window.on('resize', layoutViews)
+  // Why: HTML5 fullscreen makes the whole window fullscreen. resize covers
+  // this on macOS, but re-pin on the explicit events too so the origin bar
+  // provably stays above fullscreen content on every platform.
+  window.on('enter-full-screen', layoutViews)
+  window.on('leave-full-screen', layoutViews)
   layoutViews()
 
   const contentWebContents = contentView.webContents
@@ -165,6 +174,10 @@ export function openPopupWithOriginBar(
     renderOrigin()
   }
   contentWebContents.on('did-navigate', handleDidNavigate)
+  // Why: origin writes fail silently if the bar is mid-load; re-asserting at
+  // load completion means a dropped write can never leave a stale origin up
+  // for the lifetime of the page.
+  contentWebContents.on('did-finish-load', renderOrigin)
   const handlePageTitleUpdated = (_event: Electron.Event, title: string): void => {
     if (!window.isDestroyed() && title) {
       window.setTitle(title)
@@ -189,6 +202,7 @@ export function openPopupWithOriginBar(
     if (!contentWebContents.isDestroyed()) {
       contentWebContents.off('destroyed', handleContentDestroyed)
       contentWebContents.off('did-navigate', handleDidNavigate)
+      contentWebContents.off('did-finish-load', renderOrigin)
       contentWebContents.off('page-title-updated', handlePageTitleUpdated)
       // Why: close() (not destroy) so the page's unload handlers run — OAuth
       // pages often notify the opener from unload.
