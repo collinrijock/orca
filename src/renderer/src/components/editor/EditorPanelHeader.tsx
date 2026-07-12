@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { ChevronDown, ChevronUp, Columns2, Eye, FileText, ListTree, Rows2 } from 'lucide-react'
+import { ArrowDown, ArrowUp, Columns2, Eye, FileText, ListTree, Rows2 } from 'lucide-react'
 import { useAppStore } from '@/store'
 import type { OpenFile } from '@/store/slices/editor'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
@@ -216,7 +216,7 @@ export function EditorPanelHeader({
                 )}
                 disabled={changeCount === 0}
               >
-                <ChevronUp size={14} />
+                <ArrowUp size={14} />
               </button>
             </TooltipTrigger>
             <TooltipContent side="bottom" sideOffset={4}>
@@ -239,7 +239,7 @@ export function EditorPanelHeader({
                 )}
                 disabled={changeCount === 0}
               >
-                <ChevronDown size={14} />
+                <ArrowDown size={14} />
               </button>
             </TooltipTrigger>
             <TooltipContent side="bottom" sideOffset={4}>
