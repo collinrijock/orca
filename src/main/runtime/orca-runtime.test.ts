@@ -21947,6 +21947,61 @@ describe('OrcaRuntimeService', () => {
     expect(summary).toMatchObject({ hasHostSidebarActivity: true, status: 'working' })
   })
 
+  it('keeps a fresh OSC row when the cached hook row for the same pane is older', async () => {
+    const now = Date.now()
+    const leafId = '44444444-4444-4444-8444-444444444444'
+    const paneKey = `tab-1:${leafId}`
+    const runtime = new OrcaRuntimeService(store, undefined, {
+      getAgentStatusSnapshot: () => [
+        {
+          paneKey,
+          worktreeId: TEST_WORKTREE_ID,
+          tabId: 'tab-1',
+          state: 'working',
+          prompt: 'stale hook row',
+          agentType: 'claude',
+          connectionId: null,
+          receivedAt: now - AGENT_STATUS_STALE_AFTER_MS - 1,
+          stateStartedAt: now - AGENT_STATUS_STALE_AFTER_MS - 100
+        }
+      ]
+    })
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, {
+      tabs: [
+        {
+          tabId: 'tab-1',
+          worktreeId: TEST_WORKTREE_ID,
+          title: 'Codex',
+          activeLeafId: leafId,
+          layout: null
+        }
+      ],
+      leaves: [
+        {
+          tabId: 'tab-1',
+          worktreeId: TEST_WORKTREE_ID,
+          leafId,
+          paneRuntimeId: 1,
+          ptyId: 'pty-1'
+        }
+      ]
+    })
+    runtime.onPtyData(
+      'pty-1',
+      '\x1b]9999;{"state":"working","prompt":"fresh OSC row","agentType":"codex"}\x07',
+      321
+    )
+
+    const { worktrees } = await runtime.getWorktreePs()
+    const summary = worktrees.find((worktree) => worktree.worktreeId === TEST_WORKTREE_ID)
+
+    expect(summary).toMatchObject({ hasHostSidebarActivity: true, status: 'working' })
+    expect(summary?.agents).toEqual([
+      expect.objectContaining({ paneKey, prompt: 'fresh OSC row', agentType: 'codex' })
+    ])
+  })
+
   it.each([
     ['blocked', 0, true, 'permission'],
     ['waiting', 0, true, 'permission'],

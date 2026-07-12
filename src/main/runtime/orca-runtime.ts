@@ -11201,6 +11201,12 @@ export class OrcaRuntimeService {
       })
     }
     for (const entry of this.getAgentStatusSnapshotFn?.() ?? []) {
+      const existing = rowSources.get(entry.paneKey)
+      // Why: hook rows win ties, but an older cached hook must not replace a
+      // fresh OSC status and make a running mobile workspace look inactive.
+      if (existing && existing.updatedAt > entry.receivedAt) {
+        continue
+      }
       rowSources.set(entry.paneKey, {
         paneKey: entry.paneKey,
         worktreeId: entry.worktreeId,
