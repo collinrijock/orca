@@ -943,7 +943,8 @@ class InMemoryOrchestrationMessages {
       read: 0,
       sequence: this.sequence,
       created_at: '1970-01-01 00:00:00',
-      delivered_at: null
+      delivered_at: null,
+      sender_pane_key: null
     }
     this.messages.push(row)
     return row

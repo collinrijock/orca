@@ -90,6 +90,21 @@ describe('orchestration RPC methods', () => {
       expect(runtime.deliverPendingMessagesForHandle).toHaveBeenCalledWith('term_b')
     })
 
+    it('stores the sender pane key on the message row', async () => {
+      setup()
+      vi.spyOn(runtime, 'deliverPendingMessagesForHandle').mockImplementation(() => {})
+      vi.spyOn(runtime, 'notifyMessageArrived').mockImplementation(() => {})
+
+      const result = (await call('orchestration.send', {
+        from: 'term_a',
+        to: 'term_b',
+        subject: 'hello',
+        senderPaneKey: 'tab_a:leaf_a'
+      })) as { message: { id: string } }
+
+      expect(db.getMessageById(result.message.id)?.sender_pane_key).toBe('tab_a:leaf_a')
+    })
+
     it('does not wake waiters for a heartbeat suppressed at send time', async () => {
       setup()
       const task = db.createTask({ spec: 'work' })
@@ -1073,6 +1088,24 @@ describe('orchestration RPC methods', () => {
     })
   })
 
+  describe('orchestration.taskList --brief', () => {
+    it('abbreviates specs server-side so full text never crosses the wire', async () => {
+      setup()
+      db.createTask({ spec: `First line\n${'detail '.repeat(40)}` })
+      db.createTask({ spec: 'Short task' })
+
+      const result = (await call('orchestration.taskList', { brief: true })) as {
+        tasks: { spec: string; spec_truncated: boolean }[]
+      }
+
+      const [long, short] = result.tasks
+      expect(long.spec).toHaveLength(160)
+      expect(long.spec_truncated).toBe(true)
+      expect(short.spec).toBe('Short task')
+      expect(short.spec_truncated).toBe(false)
+    })
+  })
+
   describe('orchestration.taskUpdate', () => {
     it('updates task status', async () => {
       setup()
@@ -1121,6 +1154,20 @@ describe('orchestration RPC methods', () => {
 
       expect(result.dispatch.task_id).toBe(task.id)
       expect(result.dispatch.status).toBe('dispatched')
+    })
+
+    it('records the assignee pane key on the dispatch context', async () => {
+      setup()
+      vi.spyOn(runtime, 'getTerminalPaneKey').mockReturnValue('tab_w:leaf_w')
+      const task = db.createTask({ spec: 'work' })
+
+      const result = (await call('orchestration.dispatch', {
+        task: task.id,
+        to: 'term_a'
+      })) as { dispatch: { id: string } }
+
+      expect(runtime.getTerminalPaneKey).toHaveBeenCalledWith('term_a')
+      expect(db.getDispatchContextById(result.dispatch.id)?.assignee_pane_key).toBe('tab_w:leaf_w')
     })
 
     it('rejects dispatch for a pending task', async () => {

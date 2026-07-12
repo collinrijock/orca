@@ -822,6 +822,25 @@ describe('OrchestrationDb', () => {
       expect(d.getMessageById('msg_v1')?.subject).toBe('pre-migration')
     })
 
+    it('adds pane-identity columns (v6) and persists them', () => {
+      const path = createV1Snapshot()
+      const d = new OrchestrationDb(path)
+      db = d
+
+      const task = d.createTask({ spec: 'work' })
+      const ctx = d.createDispatchContext(task.id, 'term_a', 'tab_1:leaf_1')
+      expect(d.getDispatchContextById(ctx.id)?.assignee_pane_key).toBe('tab_1:leaf_1')
+
+      const msg = d.insertMessage({
+        from: 'w',
+        to: 'c',
+        subject: 'done',
+        type: 'worker_done',
+        senderPaneKey: 'tab_1:leaf_1'
+      })
+      expect(d.getMessageById(msg.id)?.sender_pane_key).toBe('tab_1:leaf_1')
+    })
+
     it('is idempotent: opening an already-migrated DB is a no-op', () => {
       const path = createV1Snapshot()
       const first = new OrchestrationDb(path)

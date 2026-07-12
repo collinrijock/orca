@@ -8,7 +8,7 @@ import {
 } from '../flags'
 import { RuntimeClientError } from '../runtime-client'
 import { getTerminalHandle } from '../selectors'
-import { abbreviateOrchestrationTasks } from '../orchestration-task-summary'
+import { abbreviateOrchestrationTasks } from '../../shared/orchestration-task-summary'
 
 // Why: 15 s is well under Claude Code's empirical ~2 min Bash-tool silence
 // budget and generates only ~40 lines per 10 min wait — enough to assure the
@@ -365,6 +365,9 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
       priority: getOptionalStringFlag(flags, 'priority'),
       threadId: getOptionalStringFlag(flags, 'thread-id'),
       payload: getOptionalStructuredMessagePayload(flags),
+      // Why: the pane key is the remint-stable sender identity the runtime
+      // verifies lifecycle ownership against; older runtimes strip it.
+      senderPaneKey: process.env.ORCA_PANE_KEY || undefined,
       devMode: isDevCliInvocation()
     })
     printResult(result, json, (r) => {
@@ -423,8 +426,9 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
       stopKeepalive?.()
     }
     if (peek) {
+      const rawRowCount = result.result.messages.length
       const unreadOnly = result.result.messages.filter((m) => m.read !== 1)
-      const removedReadRows = unreadOnly.length !== result.result.messages.length
+      const removedReadRows = unreadOnly.length !== rawRowCount
       // Why: read rows in a peek response are the pre-peek-runtime signature
       // (its schema stripped `peek` and it ran the all mode). Such a runtime
       // returned instead of blocking, so honoring --wait is impossible —
@@ -433,6 +437,14 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
         throw new RuntimeClientError(
           'peek_wait_unsupported',
           'The connected runtime does not support --peek with --wait; upgrade the runtime or use --wait without --peek.'
+        )
+      }
+      // Why: pre-peek runtimes cap the all mode at the newest 100 rows, so a
+      // full page means older unread messages may have been cut off. Warn on
+      // stderr so stdout stays a single JSON payload.
+      if (removedReadRows && rawRowCount >= 100) {
+        console.error(
+          'Warning: this runtime returned only its newest 100 messages for --peek; older unread messages may be missing. Upgrade the runtime for exact peek results.'
         )
       }
       result = {
@@ -521,6 +533,7 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
   },
 
   'orchestration task-list': async ({ flags, client, json }) => {
+    const brief = flags.has('brief')
     const result = await client.call<{
       tasks: {
         id: string
@@ -530,13 +543,20 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
         status: string
         assignee_handle?: string | null
         dispatch_id?: string | null
+        spec_truncated?: boolean
       }[]
       count: number
     }>('orchestration.taskList', {
       status: getOptionalStringFlag(flags, 'status'),
-      ready: flags.has('ready') ? true : undefined
+      ready: flags.has('ready') ? true : undefined,
+      brief: brief ? true : undefined
     })
-    const output = flags.has('brief')
+    // Why: current runtimes abbreviate server-side (rows carry
+    // spec_truncated) so full specs never cross the wire; older runtimes
+    // strip the brief param and need the client-side fallback.
+    const needsClientAbbreviation =
+      brief && result.result.tasks.some((task) => task.spec_truncated === undefined)
+    const output = needsClientAbbreviation
       ? {
           ...result,
           result: { ...result.result, tasks: abbreviateOrchestrationTasks(result.result.tasks) }

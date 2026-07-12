@@ -7,6 +7,7 @@ import { buildDispatchPreamble } from '../../orchestration/preamble'
 import { formatMessageBanner } from '../../orchestration/formatter'
 import { isGroupAddress, resolveGroupAddress } from '../../orchestration/groups'
 import { reconcileLifecycleMessage } from '../../orchestration/lifecycle-reconciliation'
+import { abbreviateOrchestrationTasks } from '../../../../shared/orchestration-task-summary'
 import { ORCHESTRATION_GATE_METHODS } from './orchestration-gates'
 
 const MESSAGE_TYPES: MessageType[] = [
@@ -54,6 +55,9 @@ const SendParams = z
     priority: z.enum(['normal', 'high', 'urgent']).optional(),
     threadId: OptionalString,
     payload: OptionalString,
+    // Why: the sender's pane key is the remint-stable identity used to verify
+    // worker_done/heartbeat ownership; the from handle stays routing metadata.
+    senderPaneKey: OptionalString,
     devMode: OptionalBoolean
   })
   .superRefine((params, ctx) => {
@@ -128,7 +132,10 @@ const TaskCreateParams = z.object({
 
 const TaskListParams = z.object({
   status: z.enum(['pending', 'ready', 'dispatched', 'completed', 'failed', 'blocked']).optional(),
-  ready: OptionalBoolean
+  ready: OptionalBoolean,
+  // Why: truncating specs server-side keeps `--brief` cheap over SSH/relay
+  // transports instead of shipping full specs the CLI then throws away.
+  brief: OptionalBoolean
 })
 
 const TaskUpdateParams = z.object({
@@ -213,7 +220,8 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
           type: params.type as MessageType,
           priority: params.priority as MessagePriority,
           threadId: params.threadId,
-          payload: params.payload
+          payload: params.payload,
+          senderPaneKey: params.senderPaneKey
         })
         // Why: worker_done/heartbeat sent via `send` must release the dispatch
         // lock before waking recipients — a coordinator woken by delivery may
@@ -254,7 +262,8 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
           type: params.type as MessageType,
           priority: params.priority as MessagePriority,
           threadId,
-          payload: params.payload
+          payload: params.payload,
+          senderPaneKey: params.senderPaneKey
         })
       )
       for (const message of messages) {
@@ -429,7 +438,10 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
         }
         return base
       })
-      return { tasks, count: tasks.length }
+      return {
+        tasks: params.brief ? abbreviateOrchestrationTasks(tasks) : tasks,
+        count: tasks.length
+      }
     }
   }),
 
@@ -498,7 +510,11 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
         }
       }
 
-      const ctx = db.createDispatchContext(params.task, to)
+      const ctx = db.createDispatchContext(
+        params.task,
+        to,
+        runtime.getTerminalPaneKey(to) ?? undefined
+      )
 
       // Why: preamble is built here (not before ctx) so `dispatchId` can be
       // the real ctx.id — the preamble-hardening PR made dispatchId required

@@ -265,6 +265,24 @@ describe('orchestration send structured payload flags', () => {
     }
   )
 
+  it('passes ORCA_PANE_KEY as the sender pane identity', async () => {
+    process.env.ORCA_TERMINAL_HANDLE = 'term_worker_env'
+    process.env.ORCA_PANE_KEY = 'tab_worker:leaf_worker'
+
+    await invokeSend(
+      new Map<string, string | boolean>([
+        ['to', 'term_coord'],
+        ['subject', 'done'],
+        ['type', 'worker_done']
+      ])
+    )
+
+    expect(callMock).toHaveBeenCalledWith(
+      'orchestration.send',
+      expect.objectContaining({ senderPaneKey: 'tab_worker:leaf_worker' })
+    )
+  })
+
   it('reports sender resolution failure instead of raw no_active_terminal', async () => {
     getTerminalHandleMock.mockRejectedValue(
       new RuntimeClientError('no_active_terminal', 'no_active_terminal')
@@ -728,6 +746,23 @@ describe('orchestration timeout flag validation', () => {
     expect(callMock).not.toHaveBeenCalled()
   })
 
+  it('warns when a pre-peek runtime returned a full 100-row page', async () => {
+    process.env.ORCA_TERMINAL_HANDLE = 'term_worker'
+    const rows = Array.from({ length: 100 }, (_, i) => ({
+      id: `msg_${i}`,
+      from_handle: 'a',
+      subject: `s${i}`,
+      read: i === 0 ? 0 : 1
+    }))
+    callMock.mockResolvedValue({ result: { messages: rows, count: 100 } })
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    await invokeCheck(new Map<string, string | boolean>([['peek', true]]))
+
+    expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('newest 100 messages'))
+    errorSpy.mockRestore()
+  })
+
   it('fails --peek --wait against a runtime that returned only read rows', async () => {
     process.env.ORCA_TERMINAL_HANDLE = 'term_worker'
     callMock.mockResolvedValue({
@@ -793,9 +828,10 @@ describe('orchestration timeout flag validation', () => {
 })
 
 describe('orchestration task-list brief output', () => {
-  it('abbreviates task specs in the JSON response', async () => {
+  it('requests server-side brief and falls back client-side for older runtimes', async () => {
     callMock.mockReset().mockResolvedValue({
       result: {
+        // No spec_truncated field — the pre-brief-runtime signature.
         tasks: [{ id: 'task_1', spec: `First line\n${'detail '.repeat(40)}`, status: 'ready' }],
         count: 1
       }
@@ -808,10 +844,35 @@ describe('orchestration task-list brief output', () => {
       json: true
     } as never)
 
+    expect(callMock).toHaveBeenCalledWith(
+      'orchestration.taskList',
+      expect.objectContaining({ brief: true })
+    )
     const response = vi.mocked(printResult).mock.calls[0]?.[0] as {
       result: { tasks: { spec: string; spec_truncated: boolean }[] }
     }
     expect(response.result.tasks[0].spec).toHaveLength(160)
     expect(response.result.tasks[0].spec_truncated).toBe(true)
+  })
+
+  it('passes server-abbreviated rows through untouched', async () => {
+    const serverTasks = [
+      { id: 'task_1', spec: 'already brief…', status: 'ready', spec_truncated: true }
+    ]
+    callMock.mockReset().mockResolvedValue({ result: { tasks: serverTasks, count: 1 } })
+    vi.mocked(printResult).mockClear()
+
+    await ORCHESTRATION_HANDLERS['orchestration task-list']({
+      flags: new Map([['brief', true]]),
+      client: { call: callMock },
+      json: true
+    } as never)
+
+    const response = vi.mocked(printResult).mock.calls[0]?.[0] as {
+      result: { tasks: { spec: string; spec_truncated: boolean }[] }
+    }
+    // Why: re-abbreviating a server-truncated spec would flip spec_truncated
+    // back to false (the truncated text fits the cap).
+    expect(response.result.tasks).toBe(serverTasks)
   })
 })

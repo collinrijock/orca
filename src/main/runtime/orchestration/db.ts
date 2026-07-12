@@ -41,7 +41,10 @@ function generateId(prefix: string): string {
 // the terminal that created a task so task-record worktree creation can infer
 // the parent workspace even when no dispatch context exists. v4 → v5 adds
 // explicit task_title/display_name fields for orchestration worker UI labels.
-const SCHEMA_VERSION = 5
+// v5 → v6 adds pane-identity columns (dispatch_contexts.assignee_pane_key,
+// messages.sender_pane_key) so worker_done ownership survives terminal handle
+// remints without accepting completions from unrelated panes.
+const SCHEMA_VERSION = 6
 
 export class OrchestrationDb {
   private db: Database.Database
@@ -75,7 +78,8 @@ export class OrchestrationDb {
         read          INTEGER NOT NULL DEFAULT 0,
         sequence      INTEGER PRIMARY KEY AUTOINCREMENT,
         created_at    TEXT NOT NULL DEFAULT (datetime('now')),
-        delivered_at  TEXT
+        delivered_at  TEXT,
+        sender_pane_key TEXT
       );
 
       CREATE UNIQUE INDEX IF NOT EXISTS idx_messages_id ON messages(id);
@@ -107,6 +111,7 @@ export class OrchestrationDb {
         id                  TEXT PRIMARY KEY,
         task_id             TEXT NOT NULL,
         assignee_handle     TEXT,
+        assignee_pane_key   TEXT,
         status              TEXT NOT NULL DEFAULT 'pending'
           CHECK(status IN ('pending', 'dispatched', 'completed', 'failed', 'circuit_broken')),
         failure_count       INTEGER NOT NULL DEFAULT 0,
@@ -246,6 +251,14 @@ export class OrchestrationDb {
           this.db.exec(`ALTER TABLE tasks ADD COLUMN display_name TEXT`)
         }
       }
+      if (current < 6) {
+        if (!this.hasColumn('dispatch_contexts', 'assignee_pane_key')) {
+          this.db.exec(`ALTER TABLE dispatch_contexts ADD COLUMN assignee_pane_key TEXT`)
+        }
+        if (!this.hasColumn('messages', 'sender_pane_key')) {
+          this.db.exec(`ALTER TABLE messages ADD COLUMN sender_pane_key TEXT`)
+        }
+      }
       this.createUndeliveredInboxIndexIfPossible()
 
       this.db.pragma(`user_version = ${SCHEMA_VERSION}`)
@@ -293,11 +306,12 @@ export class OrchestrationDb {
     priority?: MessagePriority
     threadId?: string
     payload?: string
+    senderPaneKey?: string
   }): MessageRow {
     const id = generateId('msg')
     const stmt = this.db.prepare(`
-      INSERT INTO messages (id, from_handle, to_handle, subject, body, type, priority, thread_id, payload)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO messages (id, from_handle, to_handle, subject, body, type, priority, thread_id, payload, sender_pane_key)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `)
     stmt.run(
       id,
@@ -308,7 +322,8 @@ export class OrchestrationDb {
       msg.type ?? 'status',
       msg.priority ?? 'normal',
       msg.threadId ?? null,
-      msg.payload ?? null
+      msg.payload ?? null,
+      msg.senderPaneKey ?? null
     )
     return this.db.prepare('SELECT * FROM messages WHERE id = ?').get(id) as MessageRow
   }
@@ -582,7 +597,14 @@ export class OrchestrationDb {
 
   // ── Dispatch Contexts ──
 
-  createDispatchContext(taskId: string, assigneeHandle: string): DispatchContextRow {
+  createDispatchContext(
+    taskId: string,
+    assigneeHandle: string,
+    // Why: the pane key is the remint-stable identity behind the handle;
+    // recording it at dispatch time lets worker_done ownership survive
+    // restarts that reissue the handle.
+    assigneePaneKey?: string
+  ): DispatchContextRow {
     const task = this.getTask(taskId)
     if (!task) {
       throw new Error(`Task not found: ${taskId}`)
@@ -613,10 +635,10 @@ export class OrchestrationDb {
     const id = generateId('ctx')
     this.db
       .prepare(
-        `INSERT INTO dispatch_contexts (id, task_id, assignee_handle, status, failure_count, dispatched_at)
-         VALUES (?, ?, ?, 'dispatched', ?, datetime('now'))`
+        `INSERT INTO dispatch_contexts (id, task_id, assignee_handle, assignee_pane_key, status, failure_count, dispatched_at)
+         VALUES (?, ?, ?, ?, 'dispatched', ?, datetime('now'))`
       )
-      .run(id, taskId, assigneeHandle, priorFailures)
+      .run(id, taskId, assigneeHandle, assigneePaneKey ?? null, priorFailures)
 
     this.db.prepare("UPDATE tasks SET status = 'dispatched' WHERE id = ?").run(taskId)
 

@@ -26,7 +26,7 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
     notes: [
       'On Windows PowerShell, quote group addresses such as --to "@all" or --to "@worktree:<id>".',
       'worker_done and heartbeat must target a concrete coordinator terminal handle; use status for broadcast updates.',
-      'A worker_done with the active task/dispatch IDs completes that task automatically; on older runtimes the sender must still match the dispatch assignee handle, so avoid overriding --from.',
+      'A worker_done with the active task/dispatch IDs completes that task when sent from the dispatched pane (or when pane identity is unavailable); on older runtimes the sender must match the dispatch assignee handle, so avoid overriding --from.',
       'Prefer --task-id/--dispatch-id/etc. over raw --payload JSON in worker commands; PowerShell strips JSON quotes easily.'
     ]
   },

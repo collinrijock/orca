@@ -144,6 +144,31 @@ describe('Coordinator', () => {
     expect(runtime.sentMessages.length).toBeGreaterThan(0)
   })
 
+  it('records the assignee pane key when the runtime can resolve one', async () => {
+    db = new OrchestrationDb(':memory:')
+    const runtime = createMockRuntime()
+    runtime.terminals = [{ handle: 'term_a', worktreeId: 'wt1', connected: true, writable: true }]
+    const withPaneLookup = Object.assign(runtime, {
+      getTerminalPaneKey: (handle: string) => (handle === 'term_a' ? 'tab_a:leaf_a' : null)
+    })
+
+    const task = db.createTask({ spec: 'implement feature' })
+    const coordinator = new Coordinator(db, withPaneLookup, {
+      spec: 'build it',
+      coordinatorHandle: 'coord',
+      pollIntervalMs: 50
+    })
+    const runPromise = coordinator.run()
+    await new Promise((r) => {
+      setTimeout(r, 100)
+    })
+
+    expect(db.getDispatchContext(task.id)?.assignee_pane_key).toBe('tab_a:leaf_a')
+
+    insertWorkerDone(db, { taskId: task.id })
+    await runPromise
+  })
+
   it('records completedTasks when send reconciled worker_done before coordinator read', async () => {
     db = new OrchestrationDb(':memory:')
     const runtime = createMockRuntime()

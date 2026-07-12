@@ -1,5 +1,19 @@
 import type { OrchestrationDb } from './db'
 import type { MessageRow } from './types'
+import { parsePaneKey } from '../../../shared/stable-pane-id'
+
+// Why: the tab half of a pane key changes when a pane is broken out into its
+// own tab, so only the leaf UUID is identity. Reject only when both keys
+// parse and name different leaves; an unparseable (e.g. legacy numeric) key
+// degrades to payload authority rather than stranding a completion.
+function isForeignPane(assigneePaneKey: string, senderPaneKey: string): boolean {
+  if (assigneePaneKey === senderPaneKey) {
+    return false
+  }
+  const assigneeLeaf = parsePaneKey(assigneePaneKey)?.leafId
+  const senderLeaf = parsePaneKey(senderPaneKey)?.leafId
+  return Boolean(assigneeLeaf && senderLeaf && assigneeLeaf !== senderLeaf)
+}
 
 export type LifecycleReconciliationResult =
   | { action: 'ignored' }
@@ -76,6 +90,19 @@ function reconcileHeartbeatMessage(
     return { action: 'suppressed' }
   }
 
+  if (
+    dispatch.assignee_pane_key &&
+    msg.sender_pane_key &&
+    isForeignPane(dispatch.assignee_pane_key, msg.sender_pane_key)
+  ) {
+    // Why: a wrong-pane heartbeat must not refresh liveness — it would mask
+    // a hung assignee behind another agent's timer.
+    onLog(
+      `Heartbeat for dispatch ${dispatchId} came from pane ${msg.sender_pane_key}, expected pane ${dispatch.assignee_pane_key}; ignored`
+    )
+    return { action: 'ignored' }
+  }
+
   // Why: dispatchId-specific writes let the DB ignore late heartbeats for
   // completed/failed retries without masking a newer hung dispatch.
   db.recordHeartbeat(dispatchId, msg.created_at)
@@ -125,6 +152,22 @@ function reconcileWorkerDoneMessage(
     return { action: 'ignored' }
   }
   if (dispatch.assignee_handle !== msg.from_handle) {
+    // Why: pane leaves are the remint-stable identity behind handles. When
+    // both sides carry one, a foreign leaf is a different pane completing
+    // someone else's task — reject it; the same leaf is the same pane after
+    // a handle remint or tab break-out. Without pane data (older CLI,
+    // sessions without ORCA_PANE_KEY) payload IDs stay the completion
+    // authority.
+    if (
+      dispatch.assignee_pane_key &&
+      msg.sender_pane_key &&
+      isForeignPane(dispatch.assignee_pane_key, msg.sender_pane_key)
+    ) {
+      onLog(
+        `Warning: worker_done for dispatch ${dispatchId} came from pane ${msg.sender_pane_key}, expected pane ${dispatch.assignee_pane_key}; ignored`
+      )
+      return { action: 'ignored' }
+    }
     onLog(
       `Warning: worker_done for dispatch ${dispatchId} came from ${msg.from_handle}, expected ${dispatch.assignee_handle ?? '<unknown>'}; accepting payload provenance`
     )

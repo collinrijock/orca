@@ -10081,6 +10081,13 @@ export class OrcaRuntimeService {
     throw new Error('no_active_terminal')
   }
 
+  // Why: orchestration records the pane key as the remint-stable assignee
+  // identity at dispatch time; null (best-effort) rather than throwing so
+  // dispatch still works for handles without a resolvable pane.
+  getTerminalPaneKey(handle: string): string | null {
+    return this.getPaneKeyForTerminalHandle(handle)
+  }
+
   resolveTerminalPane(paneKey: string): RuntimeTerminalResolvePane {
     // Why: the renderer context menu only knows the stable pane key; main owns
     // the runtime terminal handle that agents and CLI commands can address.
