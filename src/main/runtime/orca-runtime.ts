@@ -688,6 +688,7 @@ import {
   shouldSetDisplayName,
   areWorktreePathsEqual
 } from '../ipc/worktree-logic'
+import { worktreePathComparisonKey } from '../ipc/worktree-path-comparison'
 import {
   assertWorktreeDoesNotContainRegisteredWorktree,
   canCleanupUnregisteredOrcaLeftoverDirectory,
@@ -11056,7 +11057,10 @@ export class OrcaRuntimeService {
 
     const summaryByRuntimeWorktreePath = buildRuntimeWorktreeSummaryPathIndex(
       summaries,
-      resolvedWorktrees
+      resolvedWorktrees,
+      new Map(
+        [...repoById.values()].map((repo) => [repo.id, this.getAgentLaunchPlatformForRepo(repo)])
+      )
     )
     const fallbackSummaryByRuntimeWorktreeId = new Map<string, RuntimeWorktreePsSummary | null>()
     const countedPtyIds = new Set<string>()
@@ -20262,8 +20266,14 @@ export class OrcaRuntimeService {
     if (!parsed) {
       return null
     }
-    const pathKey = runtimeWorktreeSummaryPathKey(parsed.repoId, parsed.worktreePath)
-    const indexed = pathKey ? summaryByRuntimeWorktreePath.get(pathKey) : undefined
+    const repo = this.store?.getRepo(parsed.repoId)
+    const comparisonPlatform = repo ? this.getAgentLaunchPlatformForRepo(repo) : process.platform
+    const pathKey = runtimeWorktreeSummaryPathKey(
+      parsed.repoId,
+      parsed.worktreePath,
+      comparisonPlatform
+    )
+    const indexed = summaryByRuntimeWorktreePath.get(pathKey)
     if (indexed) {
       return indexed
     }
@@ -20272,9 +20282,6 @@ export class OrcaRuntimeService {
     }
     // Why: malformed legacy relative paths can require pair-aware comparison;
     // keep the compatibility fallback off the normal indexed absolute path.
-    const comparisonPlatform = this.store?.getRepo(parsed.repoId)?.connectionId
-      ? 'linux'
-      : process.platform
     const resolved = resolvedWorktrees.find(
       (worktree) =>
         worktree.repoId === parsed.repoId &&
@@ -26466,33 +26473,30 @@ function parseRuntimeWorktreeId(
 
 function buildRuntimeWorktreeSummaryPathIndex(
   summaries: ReadonlyMap<string, RuntimeWorktreePsSummary>,
-  resolvedWorktrees: readonly ResolvedWorktree[]
+  resolvedWorktrees: readonly ResolvedWorktree[],
+  platformByRepoId: ReadonlyMap<string, NodeJS.Platform>
 ): Map<string, RuntimeWorktreePsSummary> {
   const index = new Map<string, RuntimeWorktreePsSummary>()
   for (const worktree of resolvedWorktrees) {
     const summary = summaries.get(worktree.id)
-    const pathKey = runtimeWorktreeSummaryPathKey(worktree.repoId, worktree.path)
-    if (summary && pathKey) {
+    const pathKey = runtimeWorktreeSummaryPathKey(
+      worktree.repoId,
+      worktree.path,
+      platformByRepoId.get(worktree.repoId) ?? process.platform
+    )
+    if (summary) {
       index.set(pathKey, summary)
     }
   }
   return index
 }
 
-function runtimeWorktreeSummaryPathKey(repoId: string, worktreePath: string): string | null {
-  const isAbsolutePosix = worktreePath.startsWith('/') && !worktreePath.startsWith('//')
-  const hasDotSegment = /(^|[\\/])\.{1,2}([\\/]|$)/.test(worktreePath)
-  const hasPosixLiteralBackslash = isAbsolutePosix && worktreePath.includes('\\')
-  // Why: malformed relative or dotted paths need pair-aware comparison;
-  // separator normalization can otherwise conflate distinct POSIX paths.
-  if (
-    (!isAbsolutePosix && !isWindowsAbsolutePathLike(worktreePath)) ||
-    hasDotSegment ||
-    hasPosixLiteralBackslash
-  ) {
-    return null
-  }
-  return `${repoId}\0${normalizeRuntimePathForComparison(worktreePath)}`
+function runtimeWorktreeSummaryPathKey(
+  repoId: string,
+  worktreePath: string,
+  platform: NodeJS.Platform
+): string {
+  return `${repoId}\0${worktreePathComparisonKey(worktreePath, platform)}`
 }
 
 function includeTargetResolvedWorktree(

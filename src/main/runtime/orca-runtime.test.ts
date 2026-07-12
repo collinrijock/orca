@@ -22128,15 +22128,23 @@ describe('OrcaRuntimeService', () => {
   })
 
   it.each([
-    ['relative', 'feature\\name', 'feature/name'],
-    ['absolute', '/remote/feature\\name', '/remote/feature/name']
+    ['relative', 'project', 'feature\\name', 'feature/name', 'feature\\name', true],
+    [
+      'absolute',
+      'C:\\remote',
+      '/remote/feature\\name',
+      '/remote/feature/name',
+      '/remote/feature\\name',
+      true
+    ],
+    ['Windows SSH alias', 'C:\\remote', 'feature\\name', 'feature/name', 'feature/name', false]
   ] as const)(
-    'keeps %s POSIX backslashes distinct when projecting mobile agents',
-    async (_kind, backslashPath, slashPath) => {
+    'handles %s worktree paths when projecting mobile agents',
+    async (_kind, repoPath, backslashPath, slashPath, projectedPath, includeSlashWorktree) => {
       setPlatform('win32')
       const remoteRepo = {
         id: 'repo-relative-ssh',
-        path: 'project',
+        path: repoPath,
         displayName: 'relative-vm',
         badgeColor: 'blue',
         addedAt: 1,
@@ -22162,7 +22170,11 @@ describe('OrcaRuntimeService', () => {
         getWorktreeMeta: () => undefined
       }
       registerSshGitProvider('ssh-relative', {
-        listWorktrees: vi.fn().mockResolvedValue([backslashWorktree, slashWorktree])
+        listWorktrees: vi
+          .fn()
+          .mockResolvedValue(
+            includeSlashWorktree ? [backslashWorktree, slashWorktree] : [backslashWorktree]
+          )
       } as never)
 
       const now = Date.now()
@@ -22172,7 +22184,7 @@ describe('OrcaRuntimeService', () => {
         getAgentStatusSnapshot: () =>
           Array.from({ length: 100 }, (_, index) => ({
             paneKey: `relative-tab:${String(index).padStart(8, '0')}-5555-4555-8555-555555555555`,
-            worktreeId: `${remoteRepo.id}::${backslashWorktree.path}/`,
+            worktreeId: `${remoteRepo.id}::${projectedPath}/`,
             tabId: 'relative-tab',
             state: 'working',
             prompt: 'relative path agent',
@@ -22193,7 +22205,7 @@ describe('OrcaRuntimeService', () => {
 
       expect(backslashSummary).toMatchObject({ hasHostSidebarActivity: true, status: 'working' })
       expect(backslashSummary?.agents).toHaveLength(100)
-      expect(slashSummary?.agents).toEqual([])
+      expect(slashSummary?.agents).toEqual(includeSlashWorktree ? [] : undefined)
       expect(pathComparisonSpy.mock.calls.length).toBeLessThanOrEqual(2)
     }
   )
@@ -22261,6 +22273,7 @@ describe('OrcaRuntimeService', () => {
   })
 
   it('keeps pinned worktrees when active rows fill the mobile summary limit', async () => {
+    setPlatform('win32')
     const remoteRepo = {
       id: 'repo-pinned-limit',
       path: '/remote',
@@ -22270,13 +22283,13 @@ describe('OrcaRuntimeService', () => {
       connectionId: 'ssh-pinned-limit'
     }
     const activeWorktrees = Array.from({ length: 200 }, (_, index) => ({
-      path: `/remote/active-${String(index).padStart(3, '0')}`,
+      path: `relative/active-${String(index).padStart(3, '0')}`,
       head: `head-${index}`,
       branch: `refs/heads/active-${index}`,
       isBare: false,
       isMainWorktree: false
     }))
-    const pinnedPath = '/remote/zzz-pinned'
+    const pinnedPath = 'relative/zzz-pinned'
     const pinnedWorktree = {
       path: pinnedPath,
       head: 'pinned',
@@ -22299,11 +22312,13 @@ describe('OrcaRuntimeService', () => {
       listWorktrees: vi.fn().mockResolvedValue([...activeWorktrees, pinnedWorktree])
     } as never)
     const now = Date.now()
+    const pathComparisonSpy = vi.spyOn(worktreePathComparison, 'areWorktreePathsEqual')
+    pathComparisonSpy.mockClear()
     const runtime = new OrcaRuntimeService(runtimeStore as never, undefined, {
       getAgentStatusSnapshot: () =>
         activeWorktrees.map((worktree, index) => ({
           paneKey: `active-tab:${String(index).padStart(8, '0')}-8888-4888-8888-888888888888`,
-          worktreeId: `${remoteRepo.id}::${worktree.path}`,
+          worktreeId: `${remoteRepo.id}::${worktree.path.replace('relative/', 'relative/./')}`,
           tabId: 'active-tab',
           state: 'working' as const,
           prompt: 'active row',
@@ -22322,6 +22337,7 @@ describe('OrcaRuntimeService', () => {
       isPinned: true,
       hasHostSidebarActivity: false
     })
+    expect(pathComparisonSpy).not.toHaveBeenCalled()
   })
 
   it('clears stale working status after the agent exits and the shell takes over the title', async () => {
