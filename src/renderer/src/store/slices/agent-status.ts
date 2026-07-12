@@ -1419,8 +1419,24 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
         //      stale.
         const wasFresh =
           !!existing && isExplicitAgentStatusFresh(existing, updatedAt, AGENT_STATUS_STALE_AFTER_MS)
+        // Why: main is authoritative on stateStartedAt and only advances it on a
+        // real turn boundary (state transition or a Command Code new turn). If the
+        // renderer-local `commandCodeNewTurn` misses it — e.g. a transcript-read
+        // failure left `existing.promptInteractionKey` undefined so the key-change
+        // is invisible here — main's reset still arrives via `timing.stateStartedAt`.
+        // Treat a same-state stateStartedAt advance as sort-relevant so smart sort
+        // never goes stale. Non-Command-Code agents never advance stateStartedAt
+        // while the state is unchanged, so this stays effectively CC-scoped.
+        const sameStateStateStartedAtChanged =
+          !!existing &&
+          existing.state === payload.state &&
+          entry.stateStartedAt !== existing.stateStartedAt
         const sortRelevantChange =
-          !existing || existing.state !== payload.state || !wasFresh || commandCodeNewTurn
+          !existing ||
+          existing.state !== payload.state ||
+          !wasFresh ||
+          commandCodeNewTurn ||
+          sameStateStateStartedAtChanged
         const doneRetentionFieldsChanged =
           existing?.state === 'done' &&
           entry.state === 'done' &&
