@@ -34,7 +34,11 @@ import {
   parsePaneKey
 } from '../../../../shared/stable-pane-id'
 import { isValidHostTerminalTabId, isValidTerminalTabId } from '../../../../shared/terminal-tab-id'
-import { getRepoIdFromWorktreeId, splitWorktreeId } from '../../../../shared/worktree-id'
+import {
+  getRepoIdFromWorktreeId,
+  splitWorktreeId,
+  splitWorktreeIdForFilesystem
+} from '../../../../shared/worktree-id'
 import { isWslUncPath } from '../../../../shared/wsl-paths'
 import type { ProjectExecutionRuntimeResolution } from '../../../../shared/project-execution-runtime'
 import type { StartupCommandDelivery } from '../../../../shared/codex-startup-delivery'
@@ -172,6 +176,18 @@ function buildRuntimeSessionPlaceholders({
     if (!parsed) {
       continue
     }
+    // Why (#8283): folder (non-git) workspace instances keep the runtime shape
+    // `folder-workspace:<pgid>::<folderPath>::workspace:<uuid>` and carry no
+    // `worktree:`/`folder:` prefix, so the folder guard above misses them and
+    // splitWorktreeId (first `::`) leaves the `::workspace:<uuid>` suffix on the
+    // path. That synthetic, nonexistent path reaches Git as a cwd and fails with
+    // a continuous `spawn git ENOENT` on every status poll. Resolve the real
+    // folder path and tag the placeholder as a folder repo so the
+    // isGitRepoKind-gated status poll never spawns Git for it. The suffix-strip
+    // itself (not a substring match) is the folder-instance signal.
+    const worktreePath =
+      splitWorktreeIdForFilesystem(worktreeId)?.worktreePath ?? parsed.worktreePath
+    const isFolderWorkspace = worktreePath !== parsed.worktreePath
     const existingRepo = nextRepos.some((repo) => repo.id === parsed.repoId)
     if (!existingRepo) {
       // Why: remote catalogs load after hydration, but host-split session
@@ -181,12 +197,13 @@ function buildRuntimeSessionPlaceholders({
         ...nextRepos,
         {
           id: parsed.repoId,
-          path: parsed.worktreePath,
-          displayName: getPathDisplayName(parsed.worktreePath, parsed.repoId),
+          path: worktreePath,
+          displayName: getPathDisplayName(worktreePath, parsed.repoId),
           badgeColor: DEFAULT_REPO_BADGE_COLOR,
           addedAt: 0,
           connectionId: null,
-          executionHostId: hostId
+          executionHostId: hostId,
+          ...(isFolderWorkspace ? { kind: 'folder' as const } : {})
         }
       ]
     }
@@ -198,7 +215,7 @@ function buildRuntimeSessionPlaceholders({
       id: worktreeId,
       repoId: parsed.repoId,
       hostId,
-      displayName: getPathDisplayName(parsed.worktreePath, parsed.repoId),
+      displayName: getPathDisplayName(worktreePath, parsed.repoId),
       comment: '',
       linkedIssue: null,
       linkedPR: null,
@@ -210,7 +227,7 @@ function buildRuntimeSessionPlaceholders({
       isPinned: false,
       sortOrder: 0,
       lastActivityAt: 0,
-      path: parsed.worktreePath,
+      path: worktreePath,
       head: '',
       branch: '',
       isBare: false,

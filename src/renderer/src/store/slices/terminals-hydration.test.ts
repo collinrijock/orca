@@ -97,6 +97,8 @@ import {
   getDefaultWorkspaceSession
 } from '../../../../shared/constants'
 import { folderWorkspaceKey, worktreeWorkspaceKey } from '../../../../shared/workspace-scope'
+import { isGitRepoKind } from '../../../../shared/repo-kind'
+import { FOLDER_WORKSPACE_INSTANCE_SEPARATOR } from '../../../../shared/worktree-id'
 import {
   createTestStore,
   makeLayout,
@@ -286,6 +288,46 @@ describe('hydrateWorkspaceSession', () => {
     expect(store.getState().restoredRuntimeHostIdByWorkspaceSessionKey).toEqual({
       [folderKey]: 'runtime:env-1'
     })
+  })
+
+  it('does not synthesize a git placeholder from a runtime folder-workspace instance id (#8283)', () => {
+    const store = createTestStore()
+    // A folder (non-git) project's workspace-instance id keeps the runtime
+    // shape `folder-workspace:<pgid>::<folderPath>::workspace:<uuid>`. Since it
+    // carries no `worktree:`/`folder:` prefix, the placeholder builder's folder
+    // guard misses it, and splitWorktreeId (first `::`) leaves the
+    // `::workspace:<uuid>` suffix on the derived path.
+    const folderRepoId = 'folder-workspace:pg1'
+    const folderPath = '/home/user'
+    const worktreeId = `${folderRepoId}::${folderPath}${FOLDER_WORKSPACE_INSTANCE_SEPARATOR}11111111-1111-1111-1111-111111111111`
+    const session: WorkspaceSessionState = {
+      ...getDefaultWorkspaceSession(),
+      activeRepoId: folderRepoId,
+      activeWorktreeId: worktreeId,
+      activeTabId: 'folder-instance-tab',
+      tabsByWorktree: {
+        [worktreeId]: [
+          makeTab({ id: 'folder-instance-tab', worktreeId, ptyId: 'folder-instance-session' })
+        ]
+      }
+    }
+
+    store.getState().hydrateWorkspaceSession(session, {
+      runtimeHostIdByWorkspaceSessionKey: { [worktreeId]: 'runtime:env-1' }
+    })
+
+    // The synthetic `::workspace:<uuid>` suffix is not a filesystem path; if it
+    // reaches a worktree path it becomes a Git cwd and fails with a continuous
+    // `spawn git ENOENT` on every status poll (#8283).
+    for (const worktree of store.getState().worktreesByRepo[folderRepoId] ?? []) {
+      expect(worktree.path).not.toContain(FOLDER_WORKSPACE_INSTANCE_SEPARATOR)
+    }
+    // The placeholder repo must be classified as a folder repo so the
+    // isGitRepoKind-gated status poll never spawns Git for it.
+    const placeholderRepo = store.getState().repos.find((repo) => repo.id === folderRepoId)
+    if (placeholderRepo) {
+      expect(isGitRepoKind(placeholderRepo)).toBe(false)
+    }
   })
 
   it('moves restored active focus from a dead split leaf to a pty-backed sibling', () => {
