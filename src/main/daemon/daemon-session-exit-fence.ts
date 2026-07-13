@@ -64,7 +64,14 @@ export class DaemonSessionExitFence {
 
   isStaleGeneration(sessionId: string, generation: string | undefined): boolean {
     const current = this.sessionGenerations.get(sessionId)
-    return generation !== undefined && current !== undefined && generation !== current
+    // Why: a replacement can exit before its create reply publishes the new
+    // generation; admission completion decides whether that queued exit won.
+    return (
+      !this.admissions.has(sessionId) &&
+      generation !== undefined &&
+      current !== undefined &&
+      generation !== current
+    )
   }
 
   snapshot(sessionId: string): number | undefined {

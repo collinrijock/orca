@@ -1479,9 +1479,10 @@ export class DaemonPtyAdapter implements IPtyProvider {
     // that stale exit from deleting the replacement's same-id ownership.
     const readback = await this.readAppliedSize(sessionId)
     if (readback.status === 'alive') {
-      if (this.exitFence.isStable(sessionId, fenceSnapshot)) {
-        this.exitFence.rememberGeneration(sessionId, readback.sessionGeneration)
+      if (!this.exitFence.isStable(sessionId, fenceSnapshot)) {
+        return
       }
+      this.exitFence.rememberGeneration(sessionId, readback.sessionGeneration)
       this.exitFence.clearPending(sessionId)
       return
     }

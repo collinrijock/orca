@@ -20,6 +20,18 @@ describe('DaemonSessionExitFence', () => {
     })
   })
 
+  it('defers generation mismatch classification while admission is active', () => {
+    const fence = new DaemonSessionExitFence()
+    fence.rememberGeneration('same-id', 'old-generation')
+
+    const admission = fence.beginAdmission('same-id')
+    expect(fence.isStaleGeneration('same-id', 'replacement-generation')).toBe(false)
+
+    fence.rememberGeneration('same-id', 'replacement-generation', admission)
+    admission.complete()
+    expect(fence.isStaleGeneration('same-id', 'old-generation')).toBe(true)
+  })
+
   it('releases every per-session map after repeated exit finalization', () => {
     const fence = new DaemonSessionExitFence()
     for (let i = 0; i < 2_000; i++) {

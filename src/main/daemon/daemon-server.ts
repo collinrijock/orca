@@ -54,6 +54,10 @@ type ConnectedClient = {
   streamSocket: Socket | null
 }
 
+type SessionStreamRoute = {
+  clientId: string
+}
+
 export class DaemonServer {
   private server: Server | null = null
   private token: string
@@ -86,9 +90,9 @@ export class DaemonServer {
   // them (a fact jumping the queue could arrive after the reveal snapshot
   // that already reflects it).
   private transientFactRelay = new BackgroundTransientFactRelay((sessionId, fact) => {
-    const clientId = this.streamClientIdBySessionId.get(sessionId)
-    if (clientId) {
-      this.streamDataBatcher.enqueueControlEvent(clientId, sessionId, {
+    const route = this.streamRouteBySessionId.get(sessionId)
+    if (route) {
+      this.streamDataBatcher.enqueueControlEvent(route.clientId, sessionId, {
         type: 'event',
         event: 'transientFact',
         sessionId,
@@ -96,7 +100,7 @@ export class DaemonServer {
       })
     }
   })
-  private streamClientIdBySessionId = new Map<string, string>()
+  private streamRouteBySessionId = new Map<string, SessionStreamRoute>()
   private lastInputAtBySessionId = new Map<string, number>()
   private stopStreamBacklogProbe: () => void = () => {}
 
@@ -346,7 +350,12 @@ export class DaemonServer {
     switch (request.type) {
       case 'createOrAttach': {
         const p = request.payload
-        const result = await this.host.createOrAttach({
+        const streamRoute: SessionStreamRoute = { clientId }
+        const previousStreamRoute = this.streamRouteBySessionId.get(p.sessionId)
+        // Why before host subscription: node-pty may flush data and exit
+        // synchronously, so routing ownership must exist before callbacks run.
+        this.streamRouteBySessionId.set(p.sessionId, streamRoute)
+        const pendingResult = this.host.createOrAttach({
           sessionId: p.sessionId,
           cols: p.cols,
           rows: p.rows,
@@ -399,12 +408,25 @@ export class DaemonServer {
                 sessionIdSuffix: p.sessionId.slice(-10)
               })
               this.transientFactRelay.onSessionExit(p.sessionId)
-              this.streamClientIdBySessionId.delete(p.sessionId)
+              if (this.streamRouteBySessionId.get(p.sessionId) === streamRoute) {
+                this.streamRouteBySessionId.delete(p.sessionId)
+              }
               this.lastInputAtBySessionId.delete(p.sessionId)
             }
           }
         })
-        this.streamClientIdBySessionId.set(p.sessionId, clientId)
+        const result = await pendingResult.catch((error: unknown) => {
+          // Why identity-fenced rollback: a failed older attach must not
+          // erase a newer concurrent route for the reused session id.
+          if (this.streamRouteBySessionId.get(p.sessionId) === streamRoute) {
+            if (previousStreamRoute) {
+              this.streamRouteBySessionId.set(p.sessionId, previousStreamRoute)
+            } else {
+              this.streamRouteBySessionId.delete(p.sessionId)
+            }
+          }
+          throw error
+        })
         // Why an attach-time marker: the adapter resyncs the background set on
         // a fresh connection, which can precede this attach — main's scan
         // suppression must still start at the head of the new stream.
@@ -485,8 +507,8 @@ export class DaemonServer {
             this.host.getPartialEscapeTailAnsi(sessionId)
           )
         }
-        const streamClientId = this.streamClientIdBySessionId.get(sessionId)
-        if (!streamClientId) {
+        const streamRoute = this.streamRouteBySessionId.get(sessionId)
+        if (!streamRoute) {
           // Not attached yet — the attach-time marker covers the handoff.
           return {}
         }
@@ -496,7 +518,7 @@ export class DaemonServer {
         // and the normal flush/drain loop delivers them within milliseconds
         // (bounded ≤ the keep-tail drop cap), in order, ahead of the marker.
         const scanSeedAnsi = background ? '' : this.host.getPartialEscapeTailAnsi(sessionId)
-        this.streamDataBatcher.enqueueControlEvent(streamClientId, sessionId, {
+        this.streamDataBatcher.enqueueControlEvent(streamRoute.clientId, sessionId, {
           type: 'event',
           event: 'sessionBackgroundMarker',
           sessionId,

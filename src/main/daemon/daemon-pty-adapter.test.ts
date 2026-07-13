@@ -599,6 +599,96 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       expect(exits).toEqual([])
     })
 
+    it('retains a replacement exit emitted before admission publishes its generation', async () => {
+      const exits: { id: string; code: number }[] = []
+      adapter.onExit((payload) => exits.push(payload))
+      const { id } = await adapter.spawn({ sessionId: 'pre-reply-exit', cols: 80, rows: 24 })
+      const internals = adapter as unknown as {
+        readAppliedSize(sessionId: string): Promise<{ status: 'alive' | 'absent' | 'unknown' }>
+        handleExitEvent(sessionId: string, code: number, sessionGeneration?: string): Promise<void>
+        reconcilePendingExitAfterAdmission(sessionId: string): Promise<void>
+        exitFence: {
+          beginAdmission(sessionId: string): {
+            complete(): void
+          }
+          rememberGeneration(
+            sessionId: string,
+            generation: string,
+            admission?: { complete(): void }
+          ): boolean
+          getPending(sessionId: string): { code: number; sessionGeneration?: string } | undefined
+        }
+      }
+      const admission = internals.exitFence.beginAdmission(id)
+      vi.spyOn(internals, 'readAppliedSize').mockResolvedValue({ status: 'absent' })
+
+      await internals.handleExitEvent(id, 9, 'replacement-generation')
+
+      expect(internals.exitFence.getPending(id)).toEqual({
+        code: 9,
+        sessionGeneration: 'replacement-generation'
+      })
+      internals.exitFence.rememberGeneration(id, 'replacement-generation', admission)
+      admission.complete()
+      await internals.reconcilePendingExitAfterAdmission(id)
+
+      expect(adapter.hasPty(id)).toBe(false)
+      expect(exits).toEqual([{ id, code: 9 }])
+    })
+
+    it('does not let an older alive readback erase a newer deferred exit', async () => {
+      const exits: { id: string; code: number }[] = []
+      adapter.onExit((payload) => exits.push(payload))
+      const { id } = await adapter.spawn({ sessionId: 'overlapping-readback', cols: 80, rows: 24 })
+      let resolveOlderReadback!: (value: { status: 'alive'; sessionGeneration: string }) => void
+      const olderReadback = new Promise<{
+        status: 'alive'
+        sessionGeneration: string
+      }>((resolve) => {
+        resolveOlderReadback = resolve
+      })
+      const internals = adapter as unknown as {
+        readAppliedSize(sessionId: string): Promise<{
+          status: 'alive' | 'absent' | 'unknown'
+          sessionGeneration?: string
+        }>
+        handleExitEvent(sessionId: string, code: number, sessionGeneration?: string): Promise<void>
+        reconcilePendingExitAfterAdmission(sessionId: string): Promise<void>
+        exitFence: {
+          beginAdmission(sessionId: string): { complete(): void }
+          rememberGeneration(
+            sessionId: string,
+            generation: string,
+            admission?: { complete(): void }
+          ): boolean
+          getPending(sessionId: string): { code: number; sessionGeneration?: string } | undefined
+        }
+      }
+      const readback = vi
+        .spyOn(internals, 'readAppliedSize')
+        .mockImplementationOnce(() => olderReadback)
+        .mockResolvedValue({ status: 'unknown' })
+      const olderExit = internals.handleExitEvent(id, 0)
+      await waitFor(() => readback.mock.calls.length === 1)
+
+      const admission = internals.exitFence.beginAdmission(id)
+      await internals.handleExitEvent(id, 11, 'replacement-generation')
+      resolveOlderReadback({ status: 'alive', sessionGeneration: 'old-generation' })
+      await olderExit
+
+      expect(internals.exitFence.getPending(id)).toEqual({
+        code: 11,
+        sessionGeneration: 'replacement-generation'
+      })
+      internals.exitFence.rememberGeneration(id, 'replacement-generation', admission)
+      admission.complete()
+      readback.mockResolvedValue({ status: 'absent' })
+      await internals.reconcilePendingExitAfterAdmission(id)
+
+      expect(adapter.hasPty(id)).toBe(false)
+      expect(exits).toEqual([{ id, code: 11 }])
+    })
+
     it('retains an unknown exit until authoritative listing reconciles it', async () => {
       const exits: { id: string; code: number }[] = []
       adapter.onExit((payload) => exits.push(payload))

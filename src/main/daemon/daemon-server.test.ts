@@ -51,6 +51,7 @@ function createMockSubprocess(): SubprocessHandle & {
 type DaemonServerPrivate = {
   server: Server | null
   host: TerminalHost
+  streamRouteBySessionId: Map<string, { clientId: string }>
   clients: Map<
     string,
     {
@@ -179,6 +180,55 @@ describe('DaemonServer', () => {
         pid: 55555,
         sessionGeneration: expect.any(String)
       })
+    })
+
+    it('does not retain routes when subscription flushes output and exit synchronously', async () => {
+      server = new DaemonServer({
+        socketPath,
+        tokenPath,
+        spawnSubprocess: () => {
+          const subprocess = createMockSubprocess()
+          subprocess.onData = vi.fn((callback) => callback('BOOT'))
+          subprocess.onExit = vi.fn((callback) => callback(0))
+          return subprocess
+        }
+      })
+      await server.start()
+      const c = await connectClient()
+      const daemon = server as unknown as DaemonServerPrivate
+
+      for (let index = 0; index < 100; index++) {
+        await c.request('createOrAttach', {
+          sessionId: `synchronous-exit-${index}`,
+          cols: 80,
+          rows: 24
+        })
+        expect(daemon.streamRouteBySessionId.size).toBe(0)
+        expect(daemon.host.listSessions()).toHaveLength(0)
+      }
+    })
+
+    it('restores the prior route when a new attach fails before taking ownership', async () => {
+      server = new DaemonServer({
+        socketPath,
+        tokenPath,
+        spawnSubprocess: () => {
+          throw new Error('spawn failed')
+        }
+      })
+      const daemon = server as unknown as DaemonServerPrivate
+      const previousRoute = { clientId: 'previous-client' }
+      daemon.streamRouteBySessionId.set('failed-attach', previousRoute)
+
+      await expect(
+        daemon.routeRequest('replacement-client', {
+          id: 'failed-request',
+          type: 'createOrAttach',
+          payload: { sessionId: 'failed-attach', cols: 80, rows: 24 }
+        })
+      ).rejects.toThrow('spawn failed')
+
+      expect(daemon.streamRouteBySessionId.get('failed-attach')).toBe(previousRoute)
     })
 
     it('carries one immutable session generation through create, list, size, and exit', async () => {
