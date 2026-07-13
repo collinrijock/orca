@@ -16,6 +16,10 @@ import {
   waitForActiveTerminalManager,
   waitForPaneIdentitySnapshot
 } from './helpers/terminal'
+import {
+  parkHiddenTabBehindDecoy,
+  waitForTabParked
+} from './helpers/terminal-hidden-parking'
 
 // Why: the parking wiring registers this handle (dev/exposeStore builds only)
 // so tests can detect that hidden-view parking is compiled in and which delay
@@ -160,33 +164,6 @@ async function readTerminalTabViewState(page: Page, tabId: string): Promise<Term
   }, tabId)
 }
 
-// Why: TerminalPane unmount deletes its entry from window.__paneManagers, so a
-// missing manager is the observable signal that the tab's xterm was parked.
-async function waitForTabParked(page: Page, tabId: string): Promise<number> {
-  const parkWaitStartedAt = Date.now()
-  await expect
-    .poll(async () => (await readTerminalTabViewState(page, tabId)).hasManager, {
-      timeout: Math.max(20_000, PARKING_DELAY_MS * 10),
-      message: `terminal tab ${tabId} did not park (pane manager still mounted)`
-    })
-    .toBe(false)
-  return Date.now() - parkWaitStartedAt
-}
-
-// Why: #8262 exempts the single most-recently-hidden tab from cold-park to keep
-// the just-left view instantly warm, so a lone hidden tab never parks. Opening
-// one more tab hides the current view (which then holds that exemption) and
-// leaves the older `targetTabId` free to cold-park. Returns waitForTabParked's
-// elapsed-ms so callers keep their parking annotations.
-async function parkHiddenTabBehindDecoy(
-  page: Page,
-  worktreeId: string,
-  targetTabId: string
-): Promise<number> {
-  await createActiveTerminalTab(page, worktreeId)
-  return waitForTabParked(page, targetTabId)
-}
-
 async function activateTerminalTab(page: Page, tabId: string): Promise<void> {
   await page.evaluate((targetTabId) => {
     const store = window.__store
@@ -320,7 +297,9 @@ test.describe('Terminal hidden view parking', () => {
         .toContain(finalMarker)
 
       const tabBId = await createActiveTerminalTab(orcaPage, worktreeId)
-      const parkDetectedAfterMs = await parkHiddenTabBehindDecoy(orcaPage, worktreeId, tabAId)
+      const parkDetectedAfterMs = await parkHiddenTabBehindDecoy(orcaPage, worktreeId, tabAId, {
+        parkDelayMs: PARKING_DELAY_MS
+      })
       const wiring = await readParkingWiring(orcaPage)
       testInfo.annotations.push({
         type: 'terminal-parking',
@@ -385,7 +364,9 @@ test.describe('Terminal hidden view parking', () => {
     const { worktreeId, tabAId, tabAPtyId } = setup
 
     await createActiveTerminalTab(orcaPage, worktreeId)
-    await parkHiddenTabBehindDecoy(orcaPage, worktreeId, tabAId)
+    await parkHiddenTabBehindDecoy(orcaPage, worktreeId, tabAId, {
+      parkDelayMs: PARKING_DELAY_MS
+    })
 
     const runId = randomUUID()
     const parkedTitle = `Parked side effects ${runId}`
@@ -461,7 +442,9 @@ test.describe('Terminal hidden view parking', () => {
     // instance, so the tab C assertion below is not vacuously green. A decoy
     // takes the #8262 last-active exemption (tab C is excluded, not a candidate)
     // so tab A is the one that cold-parks.
-    await parkHiddenTabBehindDecoy(orcaPage, worktreeId, tabAId)
+    await parkHiddenTabBehindDecoy(orcaPage, worktreeId, tabAId, {
+      parkDelayMs: PARKING_DELAY_MS
+    })
     await orcaPage.waitForTimeout(PARKING_DELAY_MS * 3)
 
     // Premise guard: nothing consumed the pending startup while hidden.
@@ -517,7 +500,7 @@ test.describe('Terminal hidden view parking', () => {
         await activateTerminalTab(orcaPage, tabBId)
         // Hide tab B behind the decoy so B (not A) holds the #8262 exemption.
         await activateTerminalTab(orcaPage, decoyTabId)
-        await waitForTabParked(orcaPage, tabAId)
+        await waitForTabParked(orcaPage, tabAId, { parkDelayMs: PARKING_DELAY_MS })
         await activateTerminalTab(orcaPage, tabAId)
         await waitForActiveTerminalManager(orcaPage, 30_000)
         const revealed = await waitForPaneIdentitySnapshot(orcaPage, 1)

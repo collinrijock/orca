@@ -12,6 +12,7 @@ import {
   waitForActiveTerminalManager,
   waitForPaneIdentitySnapshot
 } from './helpers/terminal'
+import { parkHiddenTabBehindDecoy } from './helpers/terminal-hidden-parking'
 
 /**
  * Repro hunt for the "ghost blank pane" field incident: a split pane whose PTY
@@ -210,30 +211,6 @@ async function activateTerminalTab(page: Page, tabId: string): Promise<void> {
     .toBe(tabId)
 }
 
-// Why: TerminalPane unmount deletes its __paneManagers entry — that absence is
-// the observable "parked" signal (same detection as the parking spec).
-async function waitForTabParked(page: Page, tabId: string): Promise<void> {
-  await expect
-    .poll(async () => page.evaluate((id) => window.__paneManagers?.get(id) !== undefined, tabId), {
-      timeout: Math.max(20_000, PARKING_DELAY_MS * 10),
-      message: `terminal tab ${tabId} did not park (pane manager still mounted)`
-    })
-    .toBe(false)
-}
-
-// Why: #8262 exempts the single most-recently-hidden tab from cold-park to keep
-// the just-left view warm, so a lone hidden tab never parks. Opening one more
-// tab hides the current view (which then holds that exemption) and leaves the
-// older `targetTabId` free to cold-park.
-async function parkHiddenTabBehindDecoy(
-  page: Page,
-  worktreeId: string,
-  targetTabId: string
-): Promise<void> {
-  await createActiveTerminalTab(page, worktreeId)
-  await waitForTabParked(page, targetTabId)
-}
-
 async function waitForTabRemounted(page: Page, tabId: string): Promise<void> {
   await expect
     .poll(async () => page.evaluate((id) => window.__paneManagers?.get(id) !== undefined, tabId), {
@@ -311,7 +288,9 @@ test.describe('terminal pane close vs hidden/park lifecycle keeps layout consist
     const { worktreeId, tabId } = await setUpSplitTab(orcaPage)
     await createActiveTerminalTab(orcaPage, worktreeId)
     await closeLastPaneOnTab(orcaPage, tabId)
-    await parkHiddenTabBehindDecoy(orcaPage, worktreeId, tabId)
+    await parkHiddenTabBehindDecoy(orcaPage, worktreeId, tabId, {
+      parkDelayMs: PARKING_DELAY_MS
+    })
     await activateTerminalTab(orcaPage, tabId)
     await waitForTabRemounted(orcaPage, tabId)
     await expectLayoutConsistent(orcaPage, tabId, 1, 'close-while-hidden-mounted')
@@ -320,7 +299,9 @@ test.describe('terminal pane close vs hidden/park lifecycle keeps layout consist
   test('close immediately after reveal remount, before panes settle', async ({ orcaPage }) => {
     const { worktreeId, tabId } = await setUpSplitTab(orcaPage)
     await createActiveTerminalTab(orcaPage, worktreeId)
-    await parkHiddenTabBehindDecoy(orcaPage, worktreeId, tabId)
+    await parkHiddenTabBehindDecoy(orcaPage, worktreeId, tabId, {
+      parkDelayMs: PARKING_DELAY_MS
+    })
     await activateTerminalTab(orcaPage, tabId)
     await waitForTabRemounted(orcaPage, tabId)
     // Close as soon as the manager exists — panes may still be attaching.
@@ -339,7 +320,9 @@ test.describe('terminal pane close vs hidden/park lifecycle keeps layout consist
     await closeLastPaneOnTab(orcaPage, tabId)
     await expectLayoutConsistent(orcaPage, tabId, 1, 'pre-park close')
     await createActiveTerminalTab(orcaPage, worktreeId)
-    await parkHiddenTabBehindDecoy(orcaPage, worktreeId, tabId)
+    await parkHiddenTabBehindDecoy(orcaPage, worktreeId, tabId, {
+      parkDelayMs: PARKING_DELAY_MS
+    })
     await activateTerminalTab(orcaPage, tabId)
     await waitForTabRemounted(orcaPage, tabId)
     await expectLayoutConsistent(orcaPage, tabId, 1, 'post-park-reveal')
@@ -360,7 +343,9 @@ test.describe('terminal pane close vs hidden/park lifecycle keeps layout consist
   test('split pane shell exits while the tab is parked', async ({ orcaPage }) => {
     const { worktreeId, tabId, splitPtyId } = await setUpSplitTab(orcaPage)
     await createActiveTerminalTab(orcaPage, worktreeId)
-    await parkHiddenTabBehindDecoy(orcaPage, worktreeId, tabId)
+    await parkHiddenTabBehindDecoy(orcaPage, worktreeId, tabId, {
+      parkDelayMs: PARKING_DELAY_MS
+    })
     await sendToTerminal(orcaPage, splitPtyId, 'exit\r')
     await orcaPage.waitForTimeout(PARKING_DELAY_MS)
     await activateTerminalTab(orcaPage, tabId)
