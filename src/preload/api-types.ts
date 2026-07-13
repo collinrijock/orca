@@ -55,6 +55,7 @@ import type {
 } from '../shared/plugins/plugin-panel-bridge'
 import type { PluginConsentRequest } from '../shared/plugins/plugin-consent-request'
 import type { PluginThemeRegistration } from '../shared/plugins/plugin-theme-artifact'
+import type { PluginLanguagePackRegistration } from '../shared/plugins/plugin-language-pack-artifact'
 import type {
   LocalhostWorktreeLabelResult,
   LocalhostWorktreeLabelRoute
@@ -3174,6 +3175,7 @@ export type PreloadApi = {
   plugins: {
     list: () => Promise<PluginHostListEntry[]>
     listThemes: () => Promise<PluginThemeRegistration[]>
+    listLanguagePacks: () => Promise<PluginLanguagePackRegistration[]>
     /** Records the consent-dialog answer; approval is keyed to the plugin's
      *  current capability and trusted-worker fingerprint. */
     consent: (args: PluginConsentRequest) => Promise<PluginHostListEntry[]>

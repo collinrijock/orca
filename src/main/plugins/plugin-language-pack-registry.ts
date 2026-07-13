@@ -1,31 +1,34 @@
-import type { PluginThemeRegistration } from '../../shared/plugins/plugin-theme-artifact'
-import { parsePluginAppThemeArtifact } from '../../shared/plugins/plugin-theme-artifact'
+import {
+  parsePluginLanguagePackArtifact,
+  pluginLanguageResourceId,
+  type PluginLanguagePackRegistration
+} from '../../shared/plugins/plugin-language-pack-artifact'
+import {
+  PLUGIN_LANGUAGE_PACK_MAX_BYTES,
+  readContainedPluginArtifactText
+} from './plugin-artifact-validation'
+import type { PluginContentVerifier } from './plugin-content-integrity'
+import { mapPluginContentWithConcurrency } from './plugin-content-load-pool'
 import {
   isInvalidDiscoveredPlugin,
   type DiscoveredPlugin,
   type ValidDiscoveredPlugin
 } from './plugin-discovery'
-import {
-  PLUGIN_THEME_MAX_BYTES,
-  readContainedPluginArtifactText
-} from './plugin-artifact-validation'
-import type { PluginContentVerifier } from './plugin-content-integrity'
-import { mapPluginContentWithConcurrency } from './plugin-content-load-pool'
 
-const THEME_LOAD_CONCURRENCY = 4
+const LANGUAGE_PACK_LOAD_CONCURRENCY = 4
 
-type ThemeLoadResult =
-  | { pluginKey: string; themes: PluginThemeRegistration[] }
+type LanguageLoadResult =
+  | { pluginKey: string; packs: PluginLanguagePackRegistration[] }
   | { pluginKey: string; error: string }
 
-export class PluginThemeRegistry {
-  private themes: PluginThemeRegistration[] = []
+export class PluginLanguagePackRegistry {
+  private packs: PluginLanguagePackRegistration[] = []
   private readonly errors = new Map<string, string>()
 
   constructor(private readonly contentVerifier: PluginContentVerifier) {}
 
-  list(): readonly PluginThemeRegistration[] {
-    return this.themes
+  list(): readonly PluginLanguagePackRegistration[] {
+    return this.packs
   }
 
   error(pluginKey: string): string | null {
@@ -41,38 +44,39 @@ export class PluginThemeRegistry {
       if (
         !isInvalidDiscoveredPlugin(plugin) &&
         isApproved(plugin) &&
-        plugin.manifest.contributes.themes.length > 0
+        plugin.manifest.contributes.languagePacks.length > 0
       ) {
         candidates.push(plugin)
       }
     }
     const results = await mapPluginContentWithConcurrency(
       candidates,
-      THEME_LOAD_CONCURRENCY,
-      async (plugin): Promise<ThemeLoadResult> => {
+      LANGUAGE_PACK_LOAD_CONCURRENCY,
+      async (plugin): Promise<LanguageLoadResult> => {
         try {
           await this.contentVerifier.verify(plugin)
-          const themes = await Promise.all(
-            plugin.manifest.contributes.themes.map(async (contribution) => {
+          const packs = await Promise.all(
+            plugin.manifest.contributes.languagePacks.map(async (contribution) => {
               const text = await readContainedPluginArtifactText(
                 plugin.rootDir,
                 contribution.path,
-                PLUGIN_THEME_MAX_BYTES
+                PLUGIN_LANGUAGE_PACK_MAX_BYTES
               )
-              const parsed = parsePluginAppThemeArtifact(text)
+              const parsed = parsePluginLanguagePackArtifact(text)
               if (!parsed.ok) {
-                throw new Error(`theme "${contribution.id}" ${parsed.error}`)
+                throw new Error(`language pack "${contribution.locale}" ${parsed.error}`)
               }
+              const id = `plugin:${plugin.pluginKey}/${contribution.locale}` as const
               return {
-                id: `plugin:${plugin.pluginKey}/${contribution.id}` as const,
+                id,
+                resourceLanguage: pluginLanguageResourceId(id),
                 pluginKey: plugin.pluginKey,
-                contributionId: contribution.id,
-                label: contribution.label,
-                ...parsed.theme
+                locale: contribution.locale,
+                catalog: parsed.catalog
               }
             })
           )
-          return { pluginKey: plugin.pluginKey, themes }
+          return { pluginKey: plugin.pluginKey, packs }
         } catch (error) {
           return {
             pluginKey: plugin.pluginKey,
@@ -81,8 +85,7 @@ export class PluginThemeRegistry {
         }
       }
     )
-
-    this.themes = results.flatMap((result) => ('themes' in result ? result.themes : []))
+    this.packs = results.flatMap((result) => ('packs' in result ? result.packs : []))
     this.errors.clear()
     for (const result of results) {
       if ('error' in result) {

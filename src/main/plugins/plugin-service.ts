@@ -33,7 +33,7 @@ import { PluginServiceHousekeeping } from './plugin-service-housekeeping'
 import { collectApprovedWorkerSpecs } from './plugin-worker-reconciliation'
 import type { PluginRunState } from './plugin-supervisor'
 import { isPluginApproved, snapshotPluginConsentLists } from './plugin-activation-policy'
-import { PluginThemeRegistry } from './plugin-theme-registry'
+import { PluginContentPackRegistry } from './plugin-content-pack-registry'
 
 export type { PluginRuntimeDelegate } from './plugin-host-service-bindings'
 export type { PluginLogLine } from './plugin-log-buffer'
@@ -59,7 +59,7 @@ export class PluginService {
   private readonly workerController: PluginWorkerController
   private readonly logBuffer = new PluginLogBuffer()
   private readonly contentVerifier = new PluginContentVerifier()
-  readonly themes = new PluginThemeRegistry(this.contentVerifier)
+  readonly contentPacks = new PluginContentPackRegistry(this.contentVerifier)
   readonly panels: PluginPanelController
   private readonly changeListeners = new Set<() => void>()
   private readonly housekeeping = new PluginServiceHousekeeping()
@@ -166,7 +166,9 @@ export class PluginService {
     )
     // Publish identity before shutdown so triggers cannot restart old code.
     this.discovered = next
-    await this.themes.reconcile(next, (plugin) => isPluginApproved(enabled, plugin, consentLists))
+    await this.contentPacks.reconcile(next, (plugin) =>
+      isPluginApproved(enabled, plugin, consentLists)
+    )
     // Notify before slow shutdown so feature-off unmounts panels immediately.
     this.notifyChanged()
     await this.workerController.reconcile(nextSpecs)
@@ -216,7 +218,7 @@ export class PluginService {
   }
 
   activationError(pluginKey: string): string | null {
-    return this.themes.error(pluginKey) ?? this.workerController.activationError(pluginKey)
+    return this.contentPacks.error(pluginKey) ?? this.workerController.activationError(pluginKey)
   }
 
   /** Consented capability kinds for an approved plugin; null otherwise so
@@ -310,7 +312,7 @@ export class PluginService {
   /** Reconciles live workers and client projections after consent or
    * enablement changes without re-reading plugin files or starting workers. */
   async reconcileActivationState(): Promise<void> {
-    await this.themes.reconcile(this.discovered, (plugin) => {
+    await this.contentPacks.reconcile(this.discovered, (plugin) => {
       return this.activationState(plugin) === 'approved'
     })
     const nextSpecs = collectApprovedWorkerSpecs(

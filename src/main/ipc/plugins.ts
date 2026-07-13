@@ -105,7 +105,11 @@ export function registerPluginHandlers(
   ipcMain.handle('plugins:list', async () => listPluginsForClients(pluginService))
   ipcMain.handle('plugins:listThemes', async () => {
     await pluginService.whenReady()
-    return pluginService.themes.list()
+    return pluginService.contentPacks.themes.list()
+  })
+  ipcMain.handle('plugins:listLanguagePacks', async () => {
+    await pluginService.whenReady()
+    return pluginService.contentPacks.languagePacks.list()
   })
 
   ipcMain.handle('plugins:consent', async (event, args: unknown) => {
