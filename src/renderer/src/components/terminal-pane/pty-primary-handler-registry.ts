@@ -1,6 +1,7 @@
-import { clearPreHandlerPtyState } from './pty-pre-handler-buffer'
+import { clearPreHandlerPtyState, drainPreHandlerPtyData } from './pty-pre-handler-buffer'
 import {
   getPtyPrimaryExitHandlerOwner,
+  isPtyPrimaryDataHandlerOwnerCurrent,
   isPtyPrimaryExitHandlerOwnerCurrent,
   restorePtyPrimaryDataHandlerOwner,
   suspendPtyPrimaryDataHandlerOwner
@@ -66,6 +67,14 @@ export function restorePtyDataHandlersAfterFailedShutdown(
       }
       if (snapshot.replayHandler) {
         ptyReplayHandlers.set(snapshot.ptyId, snapshot.replayHandler)
+      }
+      if (snapshot.dataHandler) {
+        drainPreHandlerPtyData(snapshot.ptyId, snapshot.dataHandler, () => {
+          return (
+            isPtyPrimaryDataHandlerOwnerCurrent(snapshot.ptyId, snapshot.dataOwner) &&
+            ptyDataHandlers.get(snapshot.ptyId) === snapshot.dataHandler
+          )
+        })
       }
     }
     if (

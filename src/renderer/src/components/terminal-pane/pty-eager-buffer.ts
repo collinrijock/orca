@@ -61,7 +61,9 @@ export function registerEagerPtyBufferState(
     ptyExitHandlers.delete(ptyId)
     revokePtyPrimaryDataHandlerOwner(ptyId, dataOwner)
     revokePtyPrimaryExitHandlerOwner(ptyId, exitOwner)
-    eagerPtyHandles.delete(ptyId)
+    if (eagerPtyHandles.get(ptyId) === handle) {
+      eagerPtyHandles.delete(ptyId)
+    }
     onExit(ptyId, code)
   }
 
@@ -92,7 +94,9 @@ export function registerEagerPtyBufferState(
       }
       revokePtyPrimaryDataHandlerOwner(ptyId, dataOwner)
       revokePtyPrimaryExitHandlerOwner(ptyId, exitOwner)
-      eagerPtyHandles.delete(ptyId)
+      if (eagerPtyHandles.get(ptyId) === handle) {
+        eagerPtyHandles.delete(ptyId)
+      }
     }
   }
 

@@ -115,6 +115,40 @@ describe('pre-handler PTY buffer', () => {
     expect(handler).toHaveBeenCalledWith(-1)
   })
 
+  it('retires an older overflow probe when a concrete exit is drained', async () => {
+    const target = 'pty-concrete-exit-replaces-overflow'
+    const fillerPrefix = 'pty-concrete-exit-filler-'
+    let resolveProbe: ((alive: boolean | null) => void) | undefined
+    const hasPty = vi.fn(
+      () =>
+        new Promise<boolean | null>((resolve) => {
+          resolveProbe = resolve
+        })
+    )
+    const handler = vi.fn()
+    try {
+      bufferPreHandlerPtyExit(target, 1)
+      for (let index = 0; index < 64; index += 1) {
+        bufferPreHandlerPtyExit(`${fillerPrefix}${index}`, index)
+      }
+      reconcilePreHandlerPtyExitAfterOverflow(target, hasPty, handler, () => true)
+      bufferPreHandlerPtyExit(target, 2)
+      expect(drainPreHandlerPtyExit(target, handler)).toBe(true)
+      resolveProbe?.(false)
+      await Promise.resolve()
+      await Promise.resolve()
+      await Promise.resolve()
+
+      expect(handler.mock.calls.map(([code]) => code)).toEqual([2])
+      expect(hasPty).toHaveBeenCalledOnce()
+    } finally {
+      clearPreHandlerPtyState(target)
+      for (let index = 0; index < 64; index += 1) {
+        clearPreHandlerPtyState(`${fillerPrefix}${index}`)
+      }
+    }
+  })
+
   it('retains an evicted exit through unknown liveness and retries authoritative proof', async () => {
     for (let index = 0; index <= 64; index += 1) {
       bufferPreHandlerPtyExit(`pty-exit-${index}`, index)

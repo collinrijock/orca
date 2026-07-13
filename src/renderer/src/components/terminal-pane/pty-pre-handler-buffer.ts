@@ -140,6 +140,11 @@ export function drainPreHandlerPtyExit(ptyId: string, handler: (code: number) =>
     return false
   }
   preHandlerPtyExit.delete(ptyId)
+  // Why: a concrete buffered exit supersedes any older overflow tombstone;
+  // leaving its probe alive can synthesize a duplicate -1 exit afterward.
+  preHandlerPtyEvictedExitIds.delete(ptyId)
+  preHandlerPtyEvictedExitProbes.delete(ptyId)
+  pendingPreHandlerPtyEvictedExitProbes.delete(ptyId)
   handler(code)
   return true
 }

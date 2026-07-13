@@ -546,6 +546,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
   let connected = false
   let destroyed = false
   let ptyId: string | null = null
+  let bindingGeneration = 0
   // Why: eager PTY buffers contain output produced before the pane attached —
   // often from the previous app session. We still replay that data so titles
   // and scrollback restore correctly, but it must not produce fresh bells,
@@ -840,6 +841,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
 
         ptyId = spawnResult.id
         connected = true
+        const currentBindingGeneration = ++bindingGeneration
 
         // Why: for deferred reattach (Option 2), the daemon returns snapshot/
         // coldRestore data from createOrAttach. Skip onPtySpawn for reattach —
@@ -856,8 +858,10 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
           exitRegistration
         )
         if (!handlersCurrent || !connected || ptyId !== spawnResult.id) {
-          connected = false
-          ptyId = null
+          if (bindingGeneration === currentBindingGeneration) {
+            connected = false
+            ptyId = null
+          }
           return undefined
         }
 
@@ -965,14 +969,17 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
       const id = options.existingPtyId
       ptyId = id
       connected = true
+      const currentBindingGeneration = ++bindingGeneration
       // Why: skip onPtySpawn — it would reset lastActivityAt and destroy the
       // recency sort order that reconnectPersistedTerminals preserved.
       const dataRegistration = registerPtyDataHandler(id)
       const exitRegistration = registerPtyExitHandler(id)
       const handlersCurrent = drainRegisteredPtyHandlers(id, dataRegistration, exitRegistration)
       if (!handlersCurrent || !connected || ptyId !== id) {
-        connected = false
-        ptyId = null
+        if (bindingGeneration === currentBindingGeneration) {
+          connected = false
+          ptyId = null
+        }
         return
       }
 

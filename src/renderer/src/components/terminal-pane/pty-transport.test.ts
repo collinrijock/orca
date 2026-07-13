@@ -463,14 +463,13 @@ describe('createIpcPtyTransport', () => {
     const outerExit = vi.fn()
     const replacementData = vi.fn()
     const replacementExit = vi.fn()
-    const outerTransport = createIpcPtyTransport()
-    const replacementTransport = createIpcPtyTransport()
-    outerTransport.attach({
+    const transport = createIpcPtyTransport()
+    transport.attach({
       existingPtyId: 'same-id',
       callbacks: {
         onData: (data) => {
           outerData.push(data)
-          replacementTransport.attach({
+          transport.attach({
             existingPtyId: 'same-id',
             callbacks: { onData: replacementData, onExit: replacementExit }
           })
@@ -480,15 +479,15 @@ describe('createIpcPtyTransport', () => {
     })
 
     onData?.({ id: 'same-id', data: 'live replacement data' })
-    onExit?.({ id: 'same-id', code: 7 })
 
     expect(outerData).toEqual(['first buffered chunk'])
-    expect(outerTransport.isConnected()).toBe(false)
     expect(replacementData).toHaveBeenCalledWith('second buffered chunk')
     expect(replacementData).toHaveBeenCalledWith('live replacement data')
     expect(outerExit).not.toHaveBeenCalled()
+    expect(transport.isConnected()).toBe(true)
+    onExit?.({ id: 'same-id', code: 7 })
     expect(replacementExit).toHaveBeenCalledWith(7)
-    expect(replacementTransport.isConnected()).toBe(false)
+    expect(transport.isConnected()).toBe(false)
   })
 
   it('keeps reentrant replacement ownership atomic while connect drains buffered data', async () => {
@@ -502,15 +501,14 @@ describe('createIpcPtyTransport', () => {
     const outerExit = vi.fn()
     const replacementData = vi.fn()
     const replacementExit = vi.fn()
-    const outerTransport = createIpcPtyTransport()
-    const replacementTransport = createIpcPtyTransport()
+    const transport = createIpcPtyTransport()
 
-    const result = await outerTransport.connect({
+    const result = await transport.connect({
       url: '',
       callbacks: {
         onData: (data) => {
           outerData.push(data)
-          replacementTransport.attach({
+          transport.attach({
             existingPtyId: 'same-id',
             callbacks: { onData: replacementData, onExit: replacementExit }
           })
@@ -518,14 +516,15 @@ describe('createIpcPtyTransport', () => {
         onExit: outerExit
       }
     })
-    onExit?.({ id: 'same-id', code: 8 })
 
     expect(result).toBeUndefined()
     expect(outerData).toEqual(['first buffered chunk'])
-    expect(outerTransport.isConnected()).toBe(false)
     expect(replacementData).toHaveBeenCalledWith('second buffered chunk')
     expect(outerExit).not.toHaveBeenCalled()
+    expect(transport.isConnected()).toBe(true)
+    onExit?.({ id: 'same-id', code: 8 })
     expect(replacementExit).toHaveBeenCalledWith(8)
+    expect(transport.isConnected()).toBe(false)
   })
 
   it('ignores a stale exit for a previous PTY after reconnecting the same transport', async () => {
@@ -1332,6 +1331,19 @@ describe('createIpcPtyTransport', () => {
     expect(flushed.endsWith('TAIL$')).toBe(true)
   })
 
+  it('keeps a replacement eager handle when the stale handle disposes', async () => {
+    const { getEagerPtyBufferHandle, registerEagerPtyBuffer } = await import('./pty-transport')
+    const staleHandle = registerEagerPtyBuffer('pty-restored', vi.fn())
+    const replacementHandle = registerEagerPtyBuffer('pty-restored', vi.fn())
+    onData?.({ id: 'pty-restored', data: 'replacement startup output' })
+
+    staleHandle.dispose()
+
+    expect(getEagerPtyBufferHandle('pty-restored')).toBe(replacementHandle)
+    expect(replacementHandle.flush()).toBe('replacement startup output')
+    replacementHandle.dispose()
+  })
+
   it('drains pre-handler data and exit into eager buffers for fast background PTYs', async () => {
     const { ensurePtyDispatcher, registerEagerPtyBuffer } = await import('./pty-transport')
     const onEagerExit = vi.fn()
@@ -2041,7 +2053,10 @@ describe('createIpcPtyTransport', () => {
     restorePtyDataHandlersAfterFailedShutdown(snapshots)
     onData?.({ id: 'pty-1', data: 'live again' })
 
-    expect(onDataCallback).toHaveBeenCalledWith('live again')
+    expect(onDataCallback.mock.calls.map(([data]) => data)).toEqual([
+      'final burst while detached',
+      'live again'
+    ])
   })
 
   it('does not restore failed-shutdown handlers over a replacement pane', async () => {

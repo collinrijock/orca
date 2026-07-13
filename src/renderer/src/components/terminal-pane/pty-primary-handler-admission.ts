@@ -91,6 +91,13 @@ export function restorePtyPrimaryDataHandlerOwner(
   return true
 }
 
+export function isPtyPrimaryDataHandlerOwnerCurrent(
+  ptyId: string,
+  owner: PtyPrimaryHandlerOwner | undefined
+): boolean {
+  return Boolean(owner?.active && primaryDataHandlerOwners.get(ptyId) === owner)
+}
+
 export function publishPtyPrimaryExitHandlerOwner(
   ptyId: string,
   owner: PtyPrimaryHandlerOwner
