@@ -20,13 +20,23 @@ import { readWsFallbackPort, writeWsFallbackPort } from './rpc/ws-fallback-port-
 import type { WebSocket } from 'ws'
 import { DeviceRegistry, type DeviceScope } from './device-registry'
 import { loadOrCreateE2EEKeypair, type E2EEKeypair } from './e2ee-keypair'
-import { MobileSocketWiring } from './rpc/mobile-socket-wiring'
+import {
+  MobileSocketWiring,
+  type AuthenticatedMobileSocket,
+  type MobileSocketTransportMetadata
+} from './rpc/mobile-socket-wiring'
 import type { PairingRelay } from '../../shared/mobile-relay-pairing-offer'
 import {
   RelayRevokeOutbox,
   type RelayDeviceBinding,
   type RelayRevokeOutboxItem
 } from './relay/relay-revoke-outbox'
+import type {
+  DeviceCredentialInstalled,
+  PairingGetEndpointsParams,
+  PairingGetEndpointsResult,
+  PairingProvisionRelayParams
+} from '../../shared/mobile-relay-credential-contract'
 import { encodePairingOffer, PAIRING_OFFER_VERSION } from '../../shared/pairing'
 import {
   decodeTerminalStreamFrame,
@@ -56,7 +66,21 @@ type MobileRelayPairingProvider = {
     relayDeviceId: string
   ): Promise<{ relay: PairingRelay; binding: RelayDeviceBinding }>
   onDeviceRevokeQueued(item: RelayRevokeOutboxItem): void
+  getEndpoints(
+    context: MobilePairingConnectionContext,
+    params: PairingGetEndpointsParams
+  ): Promise<PairingGetEndpointsResult>
+  provisionRelay(
+    context: MobilePairingConnectionContext,
+    params: PairingProvisionRelayParams
+  ): Promise<DeviceCredentialInstalled>
 }
+
+export type MobilePairingConnectionContext = Readonly<{
+  deviceId: string
+  connectionId: string
+  transport: MobileSocketTransportMetadata
+}>
 
 // Why: after 10 s of a pending dispatch we emit a tiny `{"_keepalive":true}`
 // frame every 10 s until the handler resolves. Each write resets both the
@@ -294,6 +318,8 @@ const MOBILE_RPC_METHOD_ALLOWLIST = new Set([
   'markdown.saveTab',
   'notifications.subscribe',
   'notifications.unsubscribe',
+  'pairing.getEndpoints',
+  'pairing.provisionRelay',
   'preflight.check',
   'preflight.detectAgents',
   'preflight.detectRemoteAgents',
@@ -484,6 +510,23 @@ export class OrcaRuntimeRpcServer {
 
   getRelayRevokeOutbox(): RelayRevokeOutbox {
     return this.relayRevokeOutbox
+  }
+
+  setMobileRelayBinding(deviceId: string, binding: RelayDeviceBinding): boolean {
+    const current = this.deviceRegistry?.getDevice(deviceId)
+    if (current?.scope !== 'mobile') {
+      return false
+    }
+    if (
+      current.relayBinding &&
+      (current.relayBinding.relayHostId !== binding.relayHostId ||
+        current.relayBinding.ownerIdentityKey !== binding.ownerIdentityKey)
+    ) {
+      // Why: switching the account/host that owns this local pairing cannot
+      // strand the old cloud credential family even if that account is offline.
+      this.queueRelayDeviceRevoke(current.relayBinding)
+    }
+    return this.deviceRegistry?.setRelayBinding(deviceId, binding) ?? false
   }
 
   setMobileRelayPairingProvider(provider: MobileRelayPairingProvider | null): void {
@@ -801,7 +844,8 @@ export class OrcaRuntimeRpcServer {
               sendBinary,
               undefined,
               socket.ws,
-              socket.device.deviceToken
+              socket.device.deviceToken,
+              socket
             )
           },
           onBinary: (socket, bytes) => this.handleWebSocketBinaryMessage(bytes, socket.ws),
@@ -958,7 +1002,8 @@ export class OrcaRuntimeRpcServer {
     sendBinary: (response: Uint8Array<ArrayBufferLike>) => boolean | void,
     wsTransport?: WebSocketTransport,
     ws?: WebSocket,
-    authenticatedDeviceToken?: string | null
+    authenticatedDeviceToken?: string | null,
+    authenticatedSocket?: AuthenticatedMobileSocket
   ): Promise<void> {
     let request: RpcRequest
     try {
@@ -1043,6 +1088,30 @@ export class OrcaRuntimeRpcServer {
         : reply
 
     const connectionId = ws ? this.mobileSocketWiring?.getConnectionId(ws) : undefined
+    const pairingProvider = this.mobileRelayPairingProvider
+    const pairingContext =
+      pairingProvider && authenticatedSocket
+        ? {
+            getEndpoints: (params: PairingGetEndpointsParams) =>
+              pairingProvider.getEndpoints(
+                {
+                  deviceId: authenticatedSocket.device.deviceId,
+                  connectionId: authenticatedSocket.connectionId,
+                  transport: authenticatedSocket.transport
+                },
+                params
+              ),
+            provisionRelay: (params: PairingProvisionRelayParams) =>
+              pairingProvider.provisionRelay(
+                {
+                  deviceId: authenticatedSocket.device.deviceId,
+                  connectionId: authenticatedSocket.connectionId,
+                  transport: authenticatedSocket.transport
+                },
+                params
+              )
+          }
+        : undefined
     try {
       await this.dispatcher.dispatchStreaming(request, replyForRequest, {
         connectionId,
@@ -1050,6 +1119,7 @@ export class OrcaRuntimeRpcServer {
         // Why: gates the mobile-only payload diet (native-chat char clipping) so
         // full-screen web/desktop runtime clients aren't truncated.
         clientKind: device.scope,
+        pairing: pairingContext,
         signal: abortRegistration?.signal,
         sendBinary,
         registerBinaryStreamHandler: (streamId, handler) =>

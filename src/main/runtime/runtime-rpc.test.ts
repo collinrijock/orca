@@ -528,7 +528,9 @@ describe('OrcaRuntimeRpcServer', () => {
           ownerIdentityKey: 'user\0profile\0org'
         }
       }),
-      onDeviceRevokeQueued: vi.fn()
+      onDeviceRevokeQueued: vi.fn(),
+      getEndpoints: vi.fn(),
+      provisionRelay: vi.fn()
     })
 
     await server.start()
@@ -566,7 +568,9 @@ describe('OrcaRuntimeRpcServer', () => {
     })
     server.setMobileRelayPairingProvider({
       createPairingRelay: vi.fn().mockRejectedValue(new Error('relay offline')),
-      onDeviceRevokeQueued: vi.fn()
+      onDeviceRevokeQueued: vi.fn(),
+      getEndpoints: vi.fn(),
+      provisionRelay: vi.fn()
     })
 
     await server.start()
@@ -615,7 +619,9 @@ describe('OrcaRuntimeRpcServer', () => {
       }),
       onDeviceRevokeQueued: (item) => {
         registryPresence.push(server.getDeviceRegistry()?.getDevice(item.relayDeviceId) !== null)
-      }
+      },
+      getEndpoints: vi.fn(),
+      provisionRelay: vi.fn()
     })
 
     await server.start()
@@ -637,6 +643,76 @@ describe('OrcaRuntimeRpcServer', () => {
       await expect(server.revokeMobileDevice(second.deviceId)).resolves.toBe(true)
       expect(server.getDeviceRegistry()?.getDevice(second.deviceId)).toBeNull()
       expect(registryPresence).toEqual([true, true])
+    } finally {
+      await server.stop()
+    }
+  })
+
+  it('binds pairing RPC providers to the immutable authenticated socket context', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    const server = new OrcaRuntimeRpcServer({
+      runtime: new OrcaRuntimeService(),
+      userDataPath,
+      enableWebSocket: true,
+      wsPort: 0
+    })
+    const getEndpoints = vi.fn().mockResolvedValue({ v: 1, relay: null })
+    const provisionRelay = vi.fn().mockResolvedValue({
+      v: 1,
+      reqId: 'install-1',
+      authorizationMode: 'authenticated-direct',
+      currentVersion: 1,
+      resumeExpiresAt: Date.now() + 60_000
+    })
+    server.setMobileRelayPairingProvider({
+      createPairingRelay: vi.fn(),
+      onDeviceRevokeQueued: vi.fn(),
+      getEndpoints,
+      provisionRelay
+    })
+
+    await server.start()
+    try {
+      const offer = server.createPairingOffer({
+        address: '127.0.0.1',
+        scope: 'mobile'
+      })
+      expect(offer.available).toBe(true)
+      if (!offer.available) {
+        throw new Error('WebSocket pairing unavailable')
+      }
+      const session = await authenticateMobileWsSession(offer.pairingUrl)
+      const responses = createEncryptedWsResponseReader(session)
+      sendEncryptedWsRequest(session, {
+        id: 'endpoints-1',
+        method: 'pairing.getEndpoints',
+        params: { installReqId: 'status-1' }
+      })
+      await expect(responses.next('endpoints-1')).resolves.toMatchObject({
+        ok: true,
+        result: { v: 1, relay: null }
+      })
+      sendEncryptedWsRequest(session, {
+        id: 'provision-1',
+        method: 'pairing.provisionRelay',
+        params: { reqId: 'install-1', newResumeTokenHash: 'A'.repeat(43) }
+      })
+      await expect(responses.next('provision-1')).resolves.toMatchObject({ ok: true })
+
+      const [endpointContext, endpointParams] = getEndpoints.mock.calls[0]!
+      expect(endpointContext).toEqual({
+        deviceId: offer.deviceId,
+        connectionId: expect.any(String),
+        transport: { transport: 'direct' }
+      })
+      expect(endpointParams).toEqual({ installReqId: 'status-1' })
+      expect(provisionRelay).toHaveBeenCalledWith(endpointContext, {
+        reqId: 'install-1',
+        newResumeTokenHash: 'A'.repeat(43)
+      })
+      responses.dispose()
+      session.ws.close()
+      await waitForWsClose(session.ws)
     } finally {
       await server.stop()
     }
