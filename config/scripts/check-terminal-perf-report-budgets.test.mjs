@@ -107,12 +107,20 @@ describe('check-terminal-perf-report-budgets', () => {
     expect(result.stderr).toContain('renderer dropped backlogs 1 exceeded budget 0')
   })
 
-  it('applies the under-load timer-drift budget to multi-pane redraw scenarios', () => {
+  // Why: covers every isUnderLoadTimerDriftScenario branch (two exact + two
+  // prefix matches) so a predicate regression cannot silently re-apply the
+  // unloaded 150ms ceiling to multi-pane redraw rows.
+  it.each([
+    'opencode-same-workspace-typing',
+    'opencode-cross-workspace-typing',
+    'opencode-scale-same-workspace-50',
+    'opencode-scale-cross-workspace-50'
+  ])('applies the under-load timer-drift budget to %s', (scenario) => {
     const passPath = writeReport(
       ['panes=50', 'frames=60', 'median=12.0ms', 'worst=40.0ms', 'maxTimerDrift=1510.0ms'].join(
         ' '
       ),
-      'opencode-scale-same-workspace-50'
+      scenario
     )
 
     const passOutput = execFileSync(process.execPath, [scriptPath, passPath], {
@@ -120,7 +128,9 @@ describe('check-terminal-perf-report-budgets', () => {
       encoding: 'utf8'
     })
     expect(passOutput).toContain('Terminal perf budget check passed for 1 annotation row(s).')
+  })
 
+  it('fails multi-pane redraw scenarios that exceed the under-load timer-drift budget', () => {
     const failPath = writeReport(
       ['panes=50', 'frames=60', 'median=12.0ms', 'worst=40.0ms', 'maxTimerDrift=2501.0ms'].join(
         ' '
