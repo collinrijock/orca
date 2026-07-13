@@ -109,10 +109,21 @@ describe('claude-subagent-roster', () => {
     expect(readClaudeBackgroundAgentTasks({ background_tasks: 'nope' }).present).toBe(false)
   })
 
+  it('marks a background task inventory truncated after the snapshot cap', () => {
+    const tasks = Array.from({ length: AGENT_STATUS_MAX_SUBAGENTS + 1 }, (_, index) => ({
+      id: `a${index}`,
+      type: 'subagent',
+      status: 'running'
+    }))
+    const result = readClaudeBackgroundAgentTasks({ background_tasks: tasks })
+    expect(result.tasks).toHaveLength(AGENT_STATUS_MAX_SUBAGENTS)
+    expect(result.truncated).toBe(true)
+  })
+
   it('folds background_tasks in without trusting ambiguous entries', () => {
     const roster: ClaudeSubagentRoster = new Map()
     upsertWorkingClaudeSubagent(roster, 'a1', {}, 100)
-    upsertWorkingClaudeSubagent(roster, 'ateam-xyz', { agentType: 'team' }, 150)
+    upsertWorkingClaudeSubagent(roster, 'ateam-6d3cb5b5', { agentType: 'security-reviewer' }, 150)
 
     foldClaudeBackgroundTasksIntoRoster(
       roster,
@@ -142,7 +153,10 @@ describe('claude-subagent-roster', () => {
     expect(roster.get('a1')).toMatchObject({ state: 'working', description: 'review loop' })
     // Why: the working lifecycle-tracked teammate is not listed by id, but
     // omission proves nothing for teammates — it must survive the fold.
-    expect(roster.get('ateam-xyz')).toMatchObject({ state: 'working', agentType: 'team' })
+    expect(roster.get('ateam-6d3cb5b5')).toMatchObject({
+      state: 'working',
+      agentType: 'security-reviewer'
+    })
   })
 
   it('removes an id-matched task reported not running', () => {
@@ -170,6 +184,23 @@ describe('claude-subagent-roster', () => {
       200
     )
     expect(roster.size).toBe(0)
+  })
+
+  it('retains an unlisted live child when the background task inventory was truncated', () => {
+    const roster: ClaudeSubagentRoster = new Map()
+    upsertWorkingClaudeSubagent(roster, 'alive-after-cap', {}, 100)
+    const parsed = readClaudeBackgroundAgentTasks({
+      background_tasks: Array.from({ length: AGENT_STATUS_MAX_SUBAGENTS + 1 }, (_, index) => ({
+        id: index === AGENT_STATUS_MAX_SUBAGENTS ? 'alive-after-cap' : `a${index}`,
+        type: 'subagent',
+        status: 'running'
+      }))
+    })
+
+    foldClaudeBackgroundTasksIntoRoster(roster, parsed.tasks, 200, {
+      inventoryComplete: !parsed.truncated
+    })
+    expect(roster.has('alive-after-cap')).toBe(true)
   })
 
   it('recreates unmatched running one-shot subagents after a listener restart', () => {
@@ -213,7 +244,7 @@ describe('claude-subagent-roster', () => {
       startedAt: 100,
       backgroundTasksAuthoritative: true
     })
-    upsertWorkingClaudeSubagent(roster, 'ateam-xyz', { agentType: 'team' }, 150)
+    upsertWorkingClaudeSubagent(roster, 'ateam-6d3cb5b5', { agentType: 'security-reviewer' }, 150)
 
     foldClaudeBackgroundTasksIntoRoster(
       roster,
@@ -223,7 +254,7 @@ describe('claude-subagent-roster', () => {
       200
     )
     expect(roster.has('a-phantom')).toBe(false)
-    expect(roster.get('ateam-xyz')).toMatchObject({ state: 'working' })
+    expect(roster.get('ateam-6d3cb5b5')).toMatchObject({ state: 'working' })
   })
 
   it('demotes a seeded teammate phantom missing from a present list to idle', () => {

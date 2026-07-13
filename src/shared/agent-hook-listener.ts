@@ -40,6 +40,7 @@ import {
   claudeTeammateIdMatchesName,
   finishClaudeSubagent,
   foldClaudeBackgroundTasksIntoRoster,
+  isClaudeTeammateLifecycleId,
   markClaudeTeammateIdleByName,
   readClaudeBackgroundAgentTasks,
   upsertWorkingClaudeSubagent,
@@ -2449,12 +2450,9 @@ export function seedClaudeSubagentRosterFromSnapshots(
       startedAt: snapshot.startedAt,
       agentType: snapshot.agentType,
       description: snapshot.description,
-      // Why: re-derive teammate-ness from the persisted id/agentType so a
-      // seeded teammate keeps its idle row instead of being removed as a
-      // finished one-shot by the next fold.
-      ...(snapshot.agentType && claudeTeammateIdMatchesName(snapshot.id, snapshot.agentType)
-        ? { teammate: true as const }
-        : {}),
+      // Why: teammate name and agent type can differ, but the provider id
+      // shape survives persistence and keeps the row across restart folds.
+      ...(isClaudeTeammateLifecycleId(snapshot.id) ? { teammate: true as const } : {}),
       // Why: the seed can be a phantom (child finished while Orca was down,
       // its SubagentStop lost). Let a PRESENT background_tasks list that
       // omits the id remove it (or demote a teammate) instead of gating the
@@ -2616,7 +2614,8 @@ function normalizeClaudeEvent(
       foldClaudeBackgroundTasksIntoRoster(
         getOrCreateClaudeSubagentRoster(state, paneKey),
         backgroundTasks.tasks,
-        Date.now()
+        Date.now(),
+        { inventoryComplete: !backgroundTasks.truncated }
       )
     }
   }

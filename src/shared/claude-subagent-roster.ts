@@ -42,6 +42,14 @@ export type ClaudeBackgroundAgentTask = {
   teammate: boolean
 }
 
+/** Agent-team lifecycle ids are `a<teammate-name>-<hex>`. The teammate name
+ *  and agent type are independent spawn fields, so the id shape is the only
+ *  reliable discriminator available on SubagentStart/SubagentStop hooks. */
+export function isClaudeTeammateLifecycleId(id: string): boolean {
+  const separator = id.lastIndexOf('-')
+  return separator > 1 && id.startsWith('a') && /^[0-9a-f]+$/i.test(id.slice(separator + 1))
+}
+
 export function upsertWorkingClaudeSubagent(
   roster: ClaudeSubagentRoster,
   id: string,
@@ -51,10 +59,7 @@ export function upsertWorkingClaudeSubagent(
   if (id.length === 0 || id.length > CLAUDE_SUBAGENT_ID_MAX_LENGTH) {
     return
   }
-  // Why: teammate SubagentStart carries agent_type = teammate name and the id
-  // embeds it; one-shot ids are hyphen-free hex so they can never match.
-  const teammate =
-    fields.agentType !== undefined && claudeTeammateIdMatchesName(id, fields.agentType)
+  const teammate = isClaudeTeammateLifecycleId(id)
   const existing = roster.get(id)
   if (existing) {
     existing.state = 'working'
@@ -119,12 +124,14 @@ export function finishClaudeSubagent(roster: ClaudeSubagentRoster, id: string): 
 export function readClaudeBackgroundAgentTasks(hookPayload: Record<string, unknown>): {
   present: boolean
   tasks: ClaudeBackgroundAgentTask[]
+  truncated: boolean
 } {
   const raw = hookPayload['background_tasks']
   if (!Array.isArray(raw)) {
-    return { present: false, tasks: [] }
+    return { present: false, tasks: [], truncated: false }
   }
   const tasks: ClaudeBackgroundAgentTask[] = []
+  let truncated = false
   for (const item of raw) {
     if (typeof item !== 'object' || item === null) {
       continue
@@ -136,6 +143,12 @@ export function readClaudeBackgroundAgentTasks(hookPayload: Record<string, unkno
     if (typeof obj.id !== 'string' || obj.id.trim().length === 0) {
       continue
     }
+    if (tasks.length >= AGENT_STATUS_MAX_SUBAGENTS) {
+      // Why: a capped inventory cannot prove a tracked id is absent; callers
+      // must retain unlisted rows rather than deleting live overflow tasks.
+      truncated = true
+      break
+    }
     tasks.push({
       id: obj.id,
       agentType: typeof obj.agent_type === 'string' ? obj.agent_type : undefined,
@@ -143,11 +156,8 @@ export function readClaudeBackgroundAgentTasks(hookPayload: Record<string, unkno
       running: obj.status === 'running',
       teammate: obj.type === 'teammate'
     })
-    if (tasks.length >= AGENT_STATUS_MAX_SUBAGENTS) {
-      break
-    }
   }
-  return { present: true, tasks }
+  return { present: true, tasks, truncated }
 }
 
 /** Fold a lead Stop's `background_tasks` into the lifecycle-tracked roster.
@@ -172,10 +182,13 @@ export function readClaudeBackgroundAgentTasks(hookPayload: Record<string, unkno
 export function foldClaudeBackgroundTasksIntoRoster(
   roster: ClaudeSubagentRoster,
   tasks: ClaudeBackgroundAgentTask[],
-  now: number
+  now: number,
+  options?: { inventoryComplete?: boolean }
 ): void {
   if (tasks.length === 0) {
-    roster.clear()
+    if (options?.inventoryComplete !== false) {
+      roster.clear()
+    }
     return
   }
   const listedIds = new Set<string>()
@@ -205,6 +218,9 @@ export function foldClaudeBackgroundTasksIntoRoster(
     if (created) {
       created.backgroundTasksAuthoritative = true
     }
+  }
+  if (options?.inventoryComplete === false) {
+    return
   }
   for (const [id, tracked] of roster) {
     if (listedIds.has(id)) {

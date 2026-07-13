@@ -26,6 +26,7 @@ import {
   clearGrokSessionPathLookupCacheForTests,
   findGrokChatHistoryBySessionId
 } from './grok-session-paths'
+import { AGENT_STATUS_MAX_SUBAGENTS } from './agent-status-types'
 import { makePaneKey } from './stable-pane-id'
 
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
@@ -2408,6 +2409,35 @@ describe('shared agent-hook-listener', () => {
       ])
     })
 
+    it('keeps a teammate whose name differs from its configured agent type', () => {
+      claudeEvent({ hook_event_name: 'UserPromptSubmit', prompt: 'spawn reviewer' })
+      claudeEvent({
+        hook_event_name: 'SubagentStart',
+        agent_id: 'areviewer-6d3cb5b52120b7bf',
+        agent_type: 'security-reviewer'
+      })
+
+      // Why: teammate name and agent type are separate Agent-tool inputs; the
+      // lifecycle id embeds the former while the hook reports the latter.
+      claudeEvent({
+        hook_event_name: 'SubagentStop',
+        agent_id: 'areviewer-6d3cb5b52120b7bf',
+        agent_type: 'security-reviewer'
+      })
+      const idled = claudeEvent({
+        hook_event_name: 'TeammateIdle',
+        teammate_name: 'reviewer',
+        team_name: 'session-x'
+      })
+      expect(idled?.payload.subagents).toEqual([
+        expect.objectContaining({
+          id: 'areviewer-6d3cb5b52120b7bf',
+          agentType: 'security-reviewer',
+          state: 'idle'
+        })
+      ])
+    })
+
     it('scopes subagent rosters per pane', () => {
       claudeEvent(
         { hook_event_name: 'SubagentStart', agent_id: 'a1', agent_type: 'general-purpose' },
@@ -2587,6 +2617,29 @@ describe('shared agent-hook-listener', () => {
       ])
     })
 
+    it('keeps a live child omitted by the background task snapshot cap', () => {
+      claudeEvent({
+        hook_event_name: 'SubagentStart',
+        agent_id: 'alive-after-cap',
+        agent_type: 'general-purpose'
+      })
+      const stop = claudeEvent({
+        hook_event_name: 'Stop',
+        background_tasks: Array.from({ length: AGENT_STATUS_MAX_SUBAGENTS + 1 }, (_, index) => ({
+          id: index === AGENT_STATUS_MAX_SUBAGENTS ? 'alive-after-cap' : `a${index}`,
+          type: 'subagent',
+          status: 'running'
+        }))
+      })
+
+      // Why: the inventory was capped before this id, so omission cannot
+      // prove the lifecycle-tracked child finished or was killed.
+      expect(stop?.payload.subagents).toContainEqual(
+        expect.objectContaining({ id: 'alive-after-cap', state: 'working' })
+      )
+      expect(stop?.payload.state).toBe('working')
+    })
+
     it('does not adopt a known child turn-boundary event as the lead state', () => {
       claudeEvent({ hook_event_name: 'UserPromptSubmit', prompt: 'go' })
       claudeEvent({
@@ -2652,7 +2705,12 @@ describe('shared agent-hook-listener', () => {
 
     it('seeds the roster from persisted snapshots so a teammate-bearing Stop keeps child rows', () => {
       seedClaudeSubagentRosterFromSnapshots(state, PANE_KEY, [
-        { id: 'aprobe2-abc', state: 'idle', startedAt: 1000, agentType: 'probe2' }
+        {
+          id: 'aprobe2-6d3cb5b52120b7bf',
+          state: 'idle',
+          startedAt: 1000,
+          agentType: 'security-reviewer'
+        }
       ])
       claudeEvent({ hook_event_name: 'UserPromptSubmit', prompt: 'after restart' })
       const stop = claudeEvent({
@@ -2663,7 +2721,11 @@ describe('shared agent-hook-listener', () => {
       })
       expect(stop?.payload.state).toBe('done')
       expect(stop?.payload.subagents).toEqual([
-        expect.objectContaining({ id: 'aprobe2-abc', state: 'idle' })
+        expect.objectContaining({
+          id: 'aprobe2-6d3cb5b52120b7bf',
+          agentType: 'security-reviewer',
+          state: 'idle'
+        })
       ])
     })
 

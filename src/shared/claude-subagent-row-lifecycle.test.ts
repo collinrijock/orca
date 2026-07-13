@@ -113,7 +113,7 @@ describe('claude subagent sidebar row lifecycle', () => {
     claudeEvent({
       hook_event_name: 'SubagentStart',
       agent_id: 'areviewer-6d3cb5b52120b7bf',
-      agent_type: 'reviewer'
+      agent_type: 'security-reviewer'
     })
     claudeEvent({
       hook_event_name: 'SubagentStart',
@@ -125,7 +125,7 @@ describe('claude subagent sidebar row lifecycle', () => {
     claudeEvent({
       hook_event_name: 'SubagentStop',
       agent_id: 'areviewer-6d3cb5b52120b7bf',
-      agent_type: 'reviewer'
+      agent_type: 'security-reviewer'
     })
     const idled = claudeEvent({
       hook_event_name: 'TeammateIdle',
