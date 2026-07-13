@@ -25,6 +25,7 @@ import { subscribeConnectionRevivalTriggers } from './connection-revival-trigger
 import { HostClientOpenRegistry } from './host-client-open-registry'
 import { loadHosts } from './host-store'
 import { openHostLogicalClient } from './host-logical-client'
+import type { MobileConnectionPath, StableLogicalRpcClient } from './stable-logical-rpc-client'
 import type { ConnectionState, HostProfile } from './types'
 
 type StoreEntry = {
@@ -34,7 +35,7 @@ type StoreEntry = {
   unsubState: () => void
 }
 
-type ContextValue = {
+export type RpcClientContextValue = {
   acquire: (hostId: string, host?: HostProfile) => RpcClient | null
   release: (hostId: string) => void
   forceReconnect: (hostId: string) => Promise<void>
@@ -46,6 +47,7 @@ type ContextValue = {
   // Used by the UI to escalate "Reconnecting…" into a "host appears
   // unreachable, re-pair?" prompt.
   getLastConnectedAt: (hostId: string) => number | null
+  getActivePath: (hostId: string) => MobileConnectionPath
   subscribeHostState: (hostId: string, listener: (state: ConnectionState) => void) => () => void
   getAllClients: () => Array<{ hostId: string; client: RpcClient }>
   subscribeAllHosts: (listener: () => void) => () => void
@@ -55,7 +57,7 @@ type ContextValue = {
   primeHosts: (hosts: HostProfile[]) => void
 }
 
-const Ctx = createContext<ContextValue | null>(null)
+const Ctx = createContext<RpcClientContextValue | null>(null)
 
 export function RpcClientProvider({ children }: { children: ReactNode }) {
   // Why: entries live in a ref so updates don't force re-renders of the
@@ -275,6 +277,10 @@ export function RpcClientProvider({ children }: { children: ReactNode }) {
     return storeRef.current.get(hostId)?.client.getLastConnectedAt() ?? null
   }, [])
 
+  const getActivePath = useCallback((hostId: string): MobileConnectionPath => {
+    return clientActivePath(storeRef.current.get(hostId)?.client)
+  }, [])
+
   const subscribeHostState = useCallback(
     (hostId: string, listener: (state: ConnectionState) => void) => {
       let set = stateListenersRef.current.get(hostId)
@@ -344,7 +350,7 @@ export function RpcClientProvider({ children }: { children: ReactNode }) {
     })
   }, [])
 
-  const value = useMemo<ContextValue>(
+  const value = useMemo<RpcClientContextValue>(
     () => ({
       acquire,
       release,
@@ -353,6 +359,7 @@ export function RpcClientProvider({ children }: { children: ReactNode }) {
       getState,
       getReconnectAttempt,
       getLastConnectedAt,
+      getActivePath,
       subscribeHostState,
       getAllClients,
       subscribeAllHosts,
@@ -366,6 +373,7 @@ export function RpcClientProvider({ children }: { children: ReactNode }) {
       getState,
       getReconnectAttempt,
       getLastConnectedAt,
+      getActivePath,
       subscribeHostState,
       getAllClients,
       subscribeAllHosts,
@@ -376,7 +384,7 @@ export function RpcClientProvider({ children }: { children: ReactNode }) {
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>
 }
 
-function useCtx(): ContextValue {
+export function useRpcClientContext(): RpcClientContextValue {
   const ctx = useContext(Ctx)
   if (!ctx) {
     throw new Error('useHostClient must be used inside <RpcClientProvider>')
@@ -391,7 +399,7 @@ export function useHostClient(hostId: string | undefined): {
   client: RpcClient | null
   state: ConnectionState
 } {
-  const ctx = useCtx()
+  const ctx = useRpcClientContext()
   const [, force] = useState(0)
   const [state, setState] = useState<ConnectionState>(() =>
     hostId ? ctx.getState(hostId) : 'disconnected'
@@ -449,8 +457,9 @@ export function useAllHostClients(hostIds: string[]): Array<{
   hostId: string
   client: RpcClient
   state: ConnectionState
+  path: MobileConnectionPath
 }> {
-  const ctx = useCtx()
+  const ctx = useRpcClientContext()
   // Stable key so we don't tear down on every render of the array.
   const key = useMemo(() => [...hostIds].sort().join(','), [hostIds])
   const [tick, setTick] = useState(0)
@@ -479,11 +488,21 @@ export function useAllHostClients(hostIds: string[]): Array<{
   }, [key])
 
   return useMemo(() => {
-    const out: Array<{ hostId: string; client: RpcClient; state: ConnectionState }> = []
+    const out: Array<{
+      hostId: string
+      client: RpcClient
+      state: ConnectionState
+      path: MobileConnectionPath
+    }> = []
     for (const id of hostIds) {
       const all = ctx.getAllClients().find((entry) => entry.hostId === id)
       if (all) {
-        out.push({ hostId: id, client: all.client, state: ctx.getState(id) })
+        out.push({
+          hostId: id,
+          client: all.client,
+          state: ctx.getState(id),
+          path: ctx.getActivePath(id)
+        })
       }
     }
     return out
@@ -495,13 +514,13 @@ export function useAllHostClients(hostIds: string[]): Array<{
 // host-store has no React-side handle. Expose a hook that lets callers
 // close a host after removal.
 export function useCloseHost(): (hostId: string) => void {
-  const ctx = useCtx()
+  const ctx = useRpcClientContext()
   return ctx.closeHost
 }
 
 // Why: future-proof "Connection issues — try again" affordance.
 export function useForceReconnect(): (hostId: string) => Promise<void> {
-  const ctx = useCtx()
+  const ctx = useRpcClientContext()
   return ctx.forceReconnect
 }
 
@@ -509,41 +528,11 @@ export function useForceReconnect(): (hostId: string) => Promise<void> {
 // provider can skip its own loadHosts() pass when it eventually opens
 // each host — collapses two serial Keychain reads on cold-start into one.
 export function usePrimeHosts(): (hosts: HostProfile[]) => void {
-  const ctx = useCtx()
+  const ctx = useRpcClientContext()
   return ctx.primeHosts
 }
 
-// Why: lets the home/host-detail UI escalate "Reconnecting…" to a more
-// alarming "Can't connect" once the rpc-client has cycled enough times to
-// indicate something's actually wrong (wrong port, server down, network
-// loss). Reads through the context so it stays in sync with the live
-// rpc-client instance even after forceReconnect swaps the underlying
-// client.
-export function useReconnectAttempt(hostId: string | undefined): number {
-  const ctx = useCtx()
-  const [, force] = useState(0)
-  useEffect(() => {
-    if (!hostId) {
-      return
-    }
-    return ctx.subscribeHostState(hostId, () => force((n) => n + 1))
-  }, [ctx, hostId])
-  return hostId ? ctx.getReconnectAttempt(hostId) : 0
-}
-
-// Why: timestamp of last successful connect for this host, or null if
-// the client has never connected. Combined with reconnectAttempt this
-// distinguishes "transient blip" (recently connected) from "host
-// appears unreachable" (never connected, or hasn't connected in N
-// seconds despite many retry attempts).
-export function useLastConnectedAt(hostId: string | undefined): number | null {
-  const ctx = useCtx()
-  const [, force] = useState(0)
-  useEffect(() => {
-    if (!hostId) {
-      return
-    }
-    return ctx.subscribeHostState(hostId, () => force((n) => n + 1))
-  }, [ctx, hostId])
-  return hostId ? ctx.getLastConnectedAt(hostId) : null
+function clientActivePath(client: RpcClient | undefined): MobileConnectionPath {
+  const logical = client as Partial<StableLogicalRpcClient> | undefined
+  return typeof logical?.getActivePath === 'function' ? logical.getActivePath() : 'lan'
 }
