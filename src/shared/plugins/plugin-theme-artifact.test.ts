@@ -29,6 +29,7 @@ describe('plugin app theme artifacts', () => {
 
   it('keeps destructive security chrome outside the public theme token set', () => {
     expect(PLUGIN_APP_THEME_TOKENS).not.toContain('--destructive')
+    expect(PLUGIN_APP_THEME_TOKENS).not.toContain('--orca-security-background')
     expect(
       parsePluginAppThemeArtifact(
         JSON.stringify({ base: 'dark', tokens: { '--destructive': '#000' } })

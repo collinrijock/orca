@@ -9302,13 +9302,19 @@
           "refreshLabel": "{{value0}} を更新",
           "removeLabel": "{{value0}} を削除",
           "done": "完了",
-          "urlPlaceholder": "https://git.example.com/team/plugins.git"
+          "urlPlaceholder": "https://git.example.com/team/plugins.git",
+          "official": "公式"
         },
         "PluginRollbackDialog": {
           "title": "プラグインをロールバックしますか？",
           "description": "{{value0}} を無効化し、以前の不変バージョンを復元します。そのバージョンが異なるアクセス権または指示コンテンツを要求する場合、Orca は再レビューを求めます。",
           "cancel": "キャンセル",
           "confirm": "プラグインをロールバック"
+        },
+        "PluginSkillConsentPreview": {
+          "heading": "エージェントスキルの指示",
+          "instructionsLabel": "{{value0}} スキルの指示",
+          "loadError": "Orca はすべてのスキル指示を読み取れませんでした。このプラグインは無効のままにし、パッケージを修正してからもう一度確認してください。"
         }
       },
       "right": {

@@ -44,6 +44,7 @@ export function PluginMarketplaceBrowser({
   const [actionError, setActionError] = useState<string | null>(null)
   const mountedRef = useRef(false)
   const requestRef = useRef(0)
+  const previewRequestRef = useRef(0)
 
   const loadMarketplaceData = useCallback(async (): Promise<void> => {
     const requestId = ++requestRef.current
@@ -82,6 +83,7 @@ export function PluginMarketplaceBrowser({
     return () => {
       mountedRef.current = false
       requestRef.current += 1
+      previewRequestRef.current += 1
     }
   }, [loadMarketplaceData])
 
@@ -134,6 +136,7 @@ export function PluginMarketplaceBrowser({
     listing: PluginMarketplaceHostListing,
     update: boolean
   ): Promise<void> => {
+    const requestId = ++previewRequestRef.current
     setPreviewBusyKey(listing.pluginKey)
     setActionError(null)
     setError(null)
@@ -144,12 +147,12 @@ export function PluginMarketplaceBrowser({
             marketplaceSourceId: listing.marketplaceSourceId,
             pluginKey: listing.pluginKey
           })
-      if (mountedRef.current) {
+      if (mountedRef.current && requestId === previewRequestRef.current) {
         setPreviewMode(update ? 'update' : 'install')
         setPreview(nextPreview)
       }
     } catch (cause) {
-      if (mountedRef.current) {
+      if (mountedRef.current && requestId === previewRequestRef.current) {
         setError(
           marketplaceError(
             cause,
@@ -161,7 +164,7 @@ export function PluginMarketplaceBrowser({
         )
       }
     } finally {
-      if (mountedRef.current) {
+      if (mountedRef.current && requestId === previewRequestRef.current) {
         setPreviewBusyKey(null)
       }
     }

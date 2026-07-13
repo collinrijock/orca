@@ -14,6 +14,13 @@ import {
   isOfficialOrganizationGitSource,
   isOfficialPluginIdentity
 } from '../../shared/plugins/plugin-marketplace'
+import {
+  readPluginSkillConsentPreviews,
+  type PluginSkillConsentPreview
+} from './plugin-skill-consent-preview'
+import { mapPluginContentWithConcurrency } from './plugin-content-load-pool'
+
+const PLUGIN_LIST_PROJECTION_CONCURRENCY = 4
 
 /**
  * Wire projection of installed plugins for the renderer and serve RPC.
@@ -63,6 +70,8 @@ export type PluginListEntry = {
   }[]
   hasWorker: boolean
   hasSkills: boolean
+  skills: PluginSkillConsentPreview[]
+  skillPreviewError?: string
   vmRecipes: {
     id: string
     name: string
@@ -80,145 +89,166 @@ export type PluginListEntry = {
   }
 }
 
-export function buildPluginList(service: PluginService, lock: PluginLockfile): PluginListEntry[] {
+export async function buildPluginList(
+  service: PluginService,
+  lock: PluginLockfile
+): Promise<PluginListEntry[]> {
   const consents = {
     pluginConsents: service.options.getPluginConsents(),
     disabledPlugins: service.options.getDisabledPlugins()
   }
-  return service.getDiscovered().map((plugin, index) => {
-    if (isInvalidDiscoveredPlugin(plugin)) {
-      // Why: invalid dev paths can contain private absolute desktop paths;
-      // never project those as identity over desktop/serve transports.
-      const fallbackKey = plugin.pluginKey ?? `invalid-development-plugin-${index + 1}`
+  return mapPluginContentWithConcurrency(
+    service.getDiscovered().map((plugin, index) => ({ plugin, index })),
+    PLUGIN_LIST_PROJECTION_CONCURRENCY,
+    async ({ plugin, index }): Promise<PluginListEntry> => {
+      if (isInvalidDiscoveredPlugin(plugin)) {
+        // Why: invalid dev paths can contain private absolute desktop paths;
+        // never project those as identity over desktop/serve transports.
+        const fallbackKey = plugin.pluginKey ?? `invalid-development-plugin-${index + 1}`
+        return {
+          pluginKey: fallbackKey,
+          consentFingerprint: null,
+          name: fallbackKey,
+          version: '0.0.0',
+          publisher: '',
+          status: 'invalid' as const,
+          needsReconsent: false,
+          error: plugin.error,
+          isDev: plugin.isDev,
+          official: false,
+          bundled: false,
+          capabilities: [],
+          panels: [],
+          commands: [],
+          hasWorker: false,
+          hasSkills: false,
+          skills: [],
+          vmRecipes: [],
+          restarts: 0
+        }
+      }
+      const activation = service.activationState(plugin)
+      const worker = service.workerState(plugin.pluginKey)
+      const activationError = service.activationError(plugin.pluginKey)
+      const killListEntry = service.options.getPluginKillListEntry?.(plugin.pluginKey) ?? null
+      let status: PluginListStatus
+      if (activation === 'disabled') {
+        status = 'disabled'
+      } else if (activation === 'pending') {
+        status = 'pending'
+      } else if (worker.state === 'errored' || activationError) {
+        status = 'errored'
+      } else if (worker.state === 'restarting') {
+        status = 'restarting'
+      } else {
+        status = worker.state === 'running' ? 'running' : 'idle'
+      }
+      const candidateLockEntry = lock.plugins[plugin.pluginKey]
+      // Why: never show provenance for bytes other than the current executable
+      // identity. Dev overrides execute outside the immutable installed tree and
+      // must never inherit the shadowed install's pinned-source attribution.
+      const lockEntry =
+        candidateLockEntry &&
+        !plugin.isDev &&
+        plugin.contentHash !== null &&
+        candidateLockEntry.contentHash === plugin.contentHash
+          ? candidateLockEntry
+          : undefined
+      const bundled = lockEntry?.source.kind === 'bundled'
+      const official =
+        bundled ||
+        (lockEntry?.source.kind === 'marketplace' &&
+          isOfficialPluginIdentity(plugin.pluginKey) &&
+          isOfficialMarketplaceGitSource(lockEntry.source.marketplace.url) &&
+          isOfficialOrganizationGitSource(lockEntry.source.plugin.url))
+      let skills: PluginSkillConsentPreview[] = []
+      let skillPreviewError: string | undefined
+      if (plugin.manifest.contributes.skills.length > 0) {
+        try {
+          skills = await readPluginSkillConsentPreviews(plugin)
+        } catch {
+          // Why: package-reader errors can contain private desktop paths;
+          // clients only need a fail-closed signal, not host filesystem detail.
+          skillPreviewError = 'skill instructions could not be read'
+        }
+      }
       return {
-        pluginKey: fallbackKey,
-        consentFingerprint: null,
-        name: fallbackKey,
-        version: '0.0.0',
-        publisher: '',
-        status: 'invalid' as const,
-        needsReconsent: false,
-        error: plugin.error,
+        pluginKey: plugin.pluginKey,
+        consentFingerprint: plugin.consentFingerprint,
+        name: plugin.manifest.name,
+        version: plugin.manifest.version,
+        publisher: plugin.manifest.publisher,
+        ...(plugin.manifest.description ? { description: plugin.manifest.description } : {}),
+        status,
+        needsReconsent: needsReconsent(plugin.pluginKey, plugin.consentFingerprint, consents),
+        ...(status === 'errored'
+          ? { error: activationError ?? 'plugin worker crashed repeatedly' }
+          : {}),
         isDev: plugin.isDev,
-        official: false,
-        bundled: false,
-        capabilities: [],
-        panels: [],
-        commands: [],
-        hasWorker: false,
-        hasSkills: false,
-        vmRecipes: [],
-        restarts: 0
+        official,
+        bundled,
+        capabilities: plugin.manifest.capabilities.map((capability) => ({
+          kind: capability.kind,
+          description: PLUGIN_CAPABILITY_DESCRIPTIONS[capability.kind]
+        })),
+        panels: plugin.manifest.contributes.panels.map((panel) => ({
+          id: panel.id,
+          title: panel.title,
+          ...(panel.icon ? { icon: panel.icon } : {}),
+          tabKey: pluginPanelTabKey(plugin.pluginKey, panel.id)
+        })),
+        commands: service.contentPacks.commands.preview(plugin.pluginKey).map((command) => ({
+          id: command.id,
+          title: command.title,
+          context: command.context,
+          handler: command.handler,
+          keybindings: command.keybindings
+        })),
+        hasWorker: Boolean(plugin.manifest.main),
+        hasSkills: plugin.manifest.contributes.skills.length > 0,
+        skills,
+        ...(skillPreviewError ? { skillPreviewError } : {}),
+        vmRecipes: service.contentPacks.vmRecipes.preview(plugin.pluginKey).map(({ recipe }) => ({
+          id: recipe.id,
+          name: recipe.name,
+          ...(recipe.description ? { description: recipe.description } : {}),
+          commands: listPluginVmRecipeCommands(recipe)
+        })),
+        restarts: worker.restarts,
+        ...(killListEntry
+          ? {
+              blockedByKillList: {
+                reason: killListEntry.reason,
+                ...(killListEntry.advisoryUrl ? { advisoryUrl: killListEntry.advisoryUrl } : {})
+              }
+            }
+          : {}),
+        ...(lockEntry
+          ? {
+              source: {
+                kind: lockEntry.source.kind,
+                reference:
+                  lockEntry.source.kind === 'local-path'
+                    ? lockEntry.source.path
+                    : lockEntry.source.kind === 'git'
+                      ? lockEntry.source.url
+                      : lockEntry.source.kind === 'marketplace'
+                        ? lockEntry.source.plugin.url
+                        : `bundled:${lockEntry.source.bundleId}`,
+                resolvedCommit: lockEntry.resolvedCommit,
+                contentHash: lockEntry.contentHash,
+                ...(lockEntry.source.kind === 'marketplace'
+                  ? {
+                      marketplace: {
+                        reference: lockEntry.source.marketplace.url,
+                        resolvedCommit: lockEntry.source.marketplace.resolvedCommit
+                      }
+                    }
+                  : {})
+              }
+            }
+          : {})
       }
     }
-    const activation = service.activationState(plugin)
-    const worker = service.workerState(plugin.pluginKey)
-    const activationError = service.activationError(plugin.pluginKey)
-    const killListEntry = service.options.getPluginKillListEntry?.(plugin.pluginKey) ?? null
-    let status: PluginListStatus
-    if (activation === 'disabled') {
-      status = 'disabled'
-    } else if (activation === 'pending') {
-      status = 'pending'
-    } else if (worker.state === 'errored' || activationError) {
-      status = 'errored'
-    } else if (worker.state === 'restarting') {
-      status = 'restarting'
-    } else {
-      status = worker.state === 'running' ? 'running' : 'idle'
-    }
-    const candidateLockEntry = lock.plugins[plugin.pluginKey]
-    // Why: never show provenance for bytes other than the current executable
-    // identity. Dev overrides execute outside the immutable installed tree and
-    // must never inherit the shadowed install's pinned-source attribution.
-    const lockEntry =
-      candidateLockEntry &&
-      !plugin.isDev &&
-      plugin.contentHash !== null &&
-      candidateLockEntry.contentHash === plugin.contentHash
-        ? candidateLockEntry
-        : undefined
-    const bundled = lockEntry?.source.kind === 'bundled'
-    const official =
-      bundled ||
-      (lockEntry?.source.kind === 'marketplace' &&
-        isOfficialPluginIdentity(plugin.pluginKey) &&
-        isOfficialMarketplaceGitSource(lockEntry.source.marketplace.url) &&
-        isOfficialOrganizationGitSource(lockEntry.source.plugin.url))
-    return {
-      pluginKey: plugin.pluginKey,
-      consentFingerprint: plugin.consentFingerprint,
-      name: plugin.manifest.name,
-      version: plugin.manifest.version,
-      publisher: plugin.manifest.publisher,
-      ...(plugin.manifest.description ? { description: plugin.manifest.description } : {}),
-      status,
-      needsReconsent: needsReconsent(plugin.pluginKey, plugin.consentFingerprint, consents),
-      ...(status === 'errored'
-        ? { error: activationError ?? 'plugin worker crashed repeatedly' }
-        : {}),
-      isDev: plugin.isDev,
-      official,
-      bundled,
-      capabilities: plugin.manifest.capabilities.map((capability) => ({
-        kind: capability.kind,
-        description: PLUGIN_CAPABILITY_DESCRIPTIONS[capability.kind]
-      })),
-      panels: plugin.manifest.contributes.panels.map((panel) => ({
-        id: panel.id,
-        title: panel.title,
-        ...(panel.icon ? { icon: panel.icon } : {}),
-        tabKey: pluginPanelTabKey(plugin.pluginKey, panel.id)
-      })),
-      commands: service.contentPacks.commands.preview(plugin.pluginKey).map((command) => ({
-        id: command.id,
-        title: command.title,
-        context: command.context,
-        handler: command.handler,
-        keybindings: command.keybindings
-      })),
-      hasWorker: Boolean(plugin.manifest.main),
-      hasSkills: plugin.manifest.contributes.skills.length > 0,
-      vmRecipes: service.contentPacks.vmRecipes.preview(plugin.pluginKey).map(({ recipe }) => ({
-        id: recipe.id,
-        name: recipe.name,
-        ...(recipe.description ? { description: recipe.description } : {}),
-        commands: listPluginVmRecipeCommands(recipe)
-      })),
-      restarts: worker.restarts,
-      ...(killListEntry
-        ? {
-            blockedByKillList: {
-              reason: killListEntry.reason,
-              ...(killListEntry.advisoryUrl ? { advisoryUrl: killListEntry.advisoryUrl } : {})
-            }
-          }
-        : {}),
-      ...(lockEntry
-        ? {
-            source: {
-              kind: lockEntry.source.kind,
-              reference:
-                lockEntry.source.kind === 'local-path'
-                  ? lockEntry.source.path
-                  : lockEntry.source.kind === 'git'
-                    ? lockEntry.source.url
-                    : lockEntry.source.kind === 'marketplace'
-                      ? lockEntry.source.plugin.url
-                      : `bundled:${lockEntry.source.bundleId}`,
-              resolvedCommit: lockEntry.resolvedCommit,
-              contentHash: lockEntry.contentHash,
-              ...(lockEntry.source.kind === 'marketplace'
-                ? {
-                    marketplace: {
-                      reference: lockEntry.source.marketplace.url,
-                      resolvedCommit: lockEntry.source.marketplace.resolvedCommit
-                    }
-                  }
-                : {})
-            }
-          }
-        : {})
-    }
-  })
+  )
 }

@@ -100,6 +100,7 @@ describe('PluginConsentDialog', () => {
     expect(document.body.textContent).toContain(
       'full access to your files, network, and other processes'
     )
+    expect(document.querySelector('[role="dialog"]')?.classList).toContain('plugin-security-chrome')
     expect(document.activeElement?.textContent).toContain('Keep Disabled')
   })
 
@@ -122,11 +123,41 @@ describe('PluginConsentDialog', () => {
   })
 
   it('discloses that contributed skills run as agent instructions', async () => {
-    await renderConsent({ ...plugin, hasSkills: true }, vi.fn().mockResolvedValue(undefined))
+    await renderConsent(
+      {
+        ...plugin,
+        hasSkills: true,
+        skills: [
+          {
+            name: 'review-changes',
+            instructions: '# Review changes\n\nInspect every diff before approving it.'
+          }
+        ]
+      },
+      vi.fn().mockResolvedValue(undefined)
+    )
 
     expect(document.body.textContent).toContain(
       'Agents read those instructions and may act on them with the full authority you give the agent.'
     )
+    expect(document.body.textContent).toContain('review-changes')
+    expect(document.body.textContent).toContain('Inspect every diff before approving it.')
+    expect(document.querySelector('pre')?.getAttribute('aria-label')).toBe(
+      'review-changes skill instructions'
+    )
+  })
+
+  it('keeps enablement blocked when every skill instruction cannot be reviewed', async () => {
+    await renderConsent(
+      { ...plugin, hasSkills: true, skillPreviewError: 'SKILL.md changed while reading' },
+      vi.fn().mockResolvedValue(undefined)
+    )
+
+    expect(document.body.textContent).toContain('could not read every skill instruction')
+    const enable = Array.from(document.querySelectorAll('button')).find(
+      (button) => button.textContent?.trim() === 'Enable plugin'
+    )
+    expect(enable?.disabled).toBe(true)
   })
 
   it('shows every VM recipe lifecycle command verbatim', async () => {

@@ -6,8 +6,14 @@ const PROTECTED_TRANSLATION_PREFIXES = [
   'auto.components.settings.PluginConsentDialog',
   'auto.components.settings.PluginInstallDialog',
   'auto.components.settings.PluginKeybindingConsentPreview',
+  'auto.components.settings.PluginMarketplaceBrowser',
+  'auto.components.settings.PluginMarketplaceListingRow',
+  'auto.components.settings.PluginMarketplacePreviewDialog',
+  'auto.components.settings.PluginMarketplaceSourceDialog',
   'auto.components.settings.PluginRemoveDialog',
+  'auto.components.settings.PluginRollbackDialog',
   'auto.components.settings.PluginSettingsRow',
+  'auto.components.settings.PluginSkillConsentPreview',
   'auto.components.settings.PluginVmRecipeConsentPreview',
   'auto.components.settings.PluginsSettingsSection'
 ]

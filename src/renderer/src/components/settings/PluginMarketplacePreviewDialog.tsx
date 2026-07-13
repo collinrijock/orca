@@ -149,7 +149,7 @@ export function PluginMarketplacePreviewDialog({
   const blocked = preview?.blockedByKillList
   return (
     <Dialog open={Boolean(preview)} onOpenChange={(open) => !open && !busy && onClose()}>
-      <DialogContent className="max-h-[calc(100vh-3rem)] overflow-y-auto scrollbar-sleek sm:max-w-xl">
+      <DialogContent className="plugin-security-chrome max-h-[calc(100vh-3rem)] overflow-y-auto scrollbar-sleek sm:max-w-xl">
         {preview ? (
           <>
             <DialogHeader>

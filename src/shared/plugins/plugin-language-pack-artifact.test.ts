@@ -36,6 +36,10 @@ describe('plugin language-pack artifacts', () => {
   it.each([
     'PluginConsentDialog',
     'PluginKeybindingConsentPreview',
+    'PluginMarketplaceListingRow',
+    'PluginMarketplacePreviewDialog',
+    'PluginMarketplaceSourceDialog',
+    'PluginSkillConsentPreview',
     'PluginVmRecipeConsentPreview'
   ])('prevents language packs from rewriting %s security copy', (component) => {
     expect(

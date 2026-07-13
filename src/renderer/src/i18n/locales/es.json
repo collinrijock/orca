@@ -9302,13 +9302,19 @@
           "refreshLabel": "Actualizar {{value0}}",
           "removeLabel": "Eliminar {{value0}}",
           "done": "Listo",
-          "urlPlaceholder": "https://git.example.com/team/plugins.git"
+          "urlPlaceholder": "https://git.example.com/team/plugins.git",
+          "official": "Oficial"
         },
         "PluginRollbackDialog": {
           "title": "¿Revertir el plugin?",
           "description": "Esto desactiva {{value0}} y restaura su versión inmutable anterior. Si esa versión solicita otro acceso o contenido instructivo, Orca requerirá una nueva revisión.",
           "cancel": "Cancelar",
           "confirm": "Revertir plugin"
+        },
+        "PluginSkillConsentPreview": {
+          "heading": "Instrucciones de habilidades del agente",
+          "instructionsLabel": "Instrucciones de la habilidad {{value0}}",
+          "loadError": "Orca no pudo leer todas las instrucciones de las habilidades. Mantén este plugin desactivado y revísalo de nuevo después de corregir el paquete."
         }
       },
       "right": {

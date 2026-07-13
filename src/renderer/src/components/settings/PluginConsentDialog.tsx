@@ -6,6 +6,7 @@ import { pluginConsentErrorMessage } from './plugin-error-presentation'
 import { Button } from '../ui/button'
 import { PluginVmRecipeConsentPreview } from './PluginVmRecipeConsentPreview'
 import { PluginKeybindingConsentPreview } from './PluginKeybindingConsentPreview'
+import { PluginSkillConsentPreview } from './PluginSkillConsentPreview'
 import { pluginCapabilityDescription } from './plugin-capability-presentation'
 import {
   Dialog,
@@ -77,6 +78,7 @@ export function PluginConsentDialog({
   const keepDisabledRef = useRef<HTMLButtonElement>(null)
   const [busyDecision, setBusyDecision] = useState<'approve' | 'keep-disabled' | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const skillPreviewBlocked = Boolean(plugin?.hasSkills && plugin.skillPreviewError)
 
   const decide = async (decision: 'approve' | 'keep-disabled'): Promise<void> => {
     if (!plugin?.consentFingerprint || busyDecision) {
@@ -105,7 +107,7 @@ export function PluginConsentDialog({
       }}
     >
       <DialogContent
-        className="max-h-[calc(100vh-3rem)] overflow-y-auto scrollbar-sleek sm:max-w-lg"
+        className="plugin-security-chrome max-h-[calc(100vh-3rem)] overflow-y-auto scrollbar-sleek sm:max-w-lg"
         onOpenAutoFocus={(event) => {
           // Why: dismissal is the safety-preserving path, so it receives initial focus.
           event.preventDefault()
@@ -214,6 +216,10 @@ export function PluginConsentDialog({
                 </span>
               </div>
             ) : null}
+            <PluginSkillConsentPreview
+              skills={plugin.skills ?? []}
+              error={plugin.skillPreviewError}
+            />
             <PluginKeybindingConsentPreview commands={plugin.commands} />
             <PluginVmRecipeConsentPreview recipes={plugin.vmRecipes ?? []} />
             {error ? <p className="text-xs text-destructive">{error}</p> : null}
@@ -221,7 +227,7 @@ export function PluginConsentDialog({
               <Button
                 variant="outline"
                 size="sm"
-                disabled={Boolean(busyDecision)}
+                disabled={Boolean(busyDecision) || skillPreviewBlocked}
                 onClick={() => void decide('approve')}
               >
                 {busyDecision === 'approve' ? <Loader2 className="animate-spin" /> : null}

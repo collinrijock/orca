@@ -11,6 +11,14 @@ import type {
 } from '../../../../preload/api-types'
 import { PluginMarketplaceBrowser } from './PluginMarketplaceBrowser'
 
+function deferred<T>(): {
+  promise: Promise<T>
+  resolve: (value: T) => void
+} {
+  let resolve!: (value: T) => void
+  return { promise: new Promise<T>((done) => (resolve = done)), resolve }
+}
+
 const SOURCE_ID = 'a'.repeat(32)
 const MARKETPLACE_COMMIT = 'b'.repeat(40)
 const PLUGIN_COMMIT = 'c'.repeat(40)
@@ -25,7 +33,8 @@ const source: PluginMarketplaceHostSourceState = {
     resolvedCommit: MARKETPLACE_COMMIT,
     fetchedAt: 2
   },
-  stale: false
+  stale: false,
+  official: false
 }
 
 const listing: PluginMarketplaceHostListing = {
@@ -177,6 +186,7 @@ describe('PluginMarketplaceBrowser', () => {
       'Read the name, branch, and terminal list of your focused worktree'
     )
     expect(document.body.textContent).toContain('full access to your files, network')
+    expect(document.querySelector('[role="dialog"]')?.classList).toContain('plugin-security-chrome')
 
     await act(async () => button('Install plugin').click())
 
@@ -217,6 +227,47 @@ describe('PluginMarketplaceBrowser', () => {
     })
     expect(document.body.textContent).toContain('This exact plugin content is already installed.')
     expect(button('Update plugin').disabled).toBe(true)
+    act(() => root.unmount())
+  })
+
+  it('does not let an older preview response replace the latest selection', async () => {
+    const first = deferred<PluginMarketplaceHostInstallPreview>()
+    const second = deferred<PluginMarketplaceHostInstallPreview>()
+    const otherListing: PluginMarketplaceHostListing = {
+      ...listing,
+      pluginKey: 'example.tasks',
+      description: 'Tasks for active worktrees.'
+    }
+    const previewRequest = vi
+      .fn()
+      .mockReturnValueOnce(first.promise)
+      .mockReturnValueOnce(second.promise)
+    installApi({
+      listMarketplacePlugins: vi.fn().mockResolvedValue([listing, otherListing]),
+      previewMarketplacePlugin: previewRequest
+    })
+    const { root } = await renderBrowser()
+
+    await act(async () => {
+      const reviews = Array.from(document.querySelectorAll('button')).filter(
+        (candidate) => candidate.textContent?.trim() === 'Review'
+      )
+      reviews[0]?.click()
+      reviews[1]?.click()
+    })
+    await act(async () => {
+      second.resolve({
+        ...preview,
+        ...otherListing,
+        manifest: { ...preview.manifest, id: 'tasks', name: 'Worktree Tasks' }
+      })
+    })
+    expect(document.body.textContent).toContain('Worktree Tasks')
+
+    await act(async () => first.resolve(preview))
+
+    expect(document.body.textContent).toContain('Worktree Tasks')
+    expect(document.body.textContent).not.toContain('Worktree Notes')
     act(() => root.unmount())
   })
 })

@@ -23,7 +23,10 @@ export function PluginMarketplaceListingRow({
   const blocked = listing.blockedByKillList
   const canCheckUpdate = installed?.source?.kind === 'marketplace'
   return (
-    <div className="flex flex-wrap items-start gap-3 px-4 py-3 [&+&]:border-t [&+&]:border-border/60">
+    <div
+      className="flex flex-wrap items-start gap-3 px-4 py-3 [&+&]:border-t [&+&]:border-border/60"
+      data-marketplace-plugin-key={listing.pluginKey}
+    >
       <div className="mt-0.5 rounded-md bg-muted p-2 text-muted-foreground">
         <Package className="size-4" />
       </div>
@@ -31,7 +34,7 @@ export function PluginMarketplaceListingRow({
         <div className="flex flex-wrap items-center gap-1.5">
           <span className="font-mono text-sm font-medium">{listing.pluginKey}</span>
           {listing.official ? (
-            <Badge variant="outline">
+            <Badge variant="outline" className="plugin-security-chrome">
               {translate(
                 'auto.components.settings.PluginMarketplaceListingRow.official',
                 'Official'
@@ -72,7 +75,7 @@ export function PluginMarketplaceListingRow({
           </div>
         ) : null}
         {blocked ? (
-          <p className="mt-2 flex items-start gap-1.5 text-xs leading-5 text-destructive">
+          <p className="plugin-security-chrome mt-2 flex items-start gap-1.5 text-xs leading-5 text-destructive">
             <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
             <span>
               {translate(

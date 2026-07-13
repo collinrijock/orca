@@ -3,6 +3,7 @@ import { Loader2, RefreshCw, Trash2 } from 'lucide-react'
 import type { PluginMarketplaceHostSourceState } from '../../../../preload/api-types'
 import { translate } from '@/i18n/i18n'
 import { Button } from '../ui/button'
+import { Badge } from '../ui/badge'
 import {
   Dialog,
   DialogContent,
@@ -120,7 +121,7 @@ export function PluginMarketplaceSourceDialog({
   return (
     <Dialog open={open} onOpenChange={(nextOpen) => !busyAction && onOpenChange(nextOpen)}>
       <DialogContent
-        className="max-h-[calc(100vh-3rem)] overflow-y-auto scrollbar-sleek sm:max-w-xl"
+        className="plugin-security-chrome max-h-[calc(100vh-3rem)] overflow-y-auto scrollbar-sleek sm:max-w-xl"
         onOpenAutoFocus={(event) => {
           event.preventDefault()
           urlRef.current?.focus()
@@ -237,6 +238,14 @@ export function PluginMarketplaceSourceDialog({
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-medium">
                         {source.marketplace?.name ?? source.source.url}
+                        {source.official ? (
+                          <Badge variant="outline" className="ml-2 align-middle">
+                            {translate(
+                              'auto.components.settings.PluginMarketplaceSourceDialog.official',
+                              'Official'
+                            )}
+                          </Badge>
+                        ) : null}
                       </p>
                       {source.marketplace ? (
                         <p className="text-xs text-muted-foreground">
@@ -281,23 +290,25 @@ export function PluginMarketplaceSourceDialog({
                     >
                       <RefreshCw className={refreshing ? 'animate-spin' : undefined} />
                     </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon-xs"
-                      disabled={Boolean(busyAction)}
-                      aria-label={translate(
-                        'auto.components.settings.PluginMarketplaceSourceDialog.removeLabel',
-                        'Remove {{value0}}',
-                        { value0: source.marketplace?.name ?? source.source.url }
-                      )}
-                      onClick={() => void remove(source.id)}
-                    >
-                      {removing ? (
-                        <Loader2 className="animate-spin" />
-                      ) : (
-                        <Trash2 className="text-destructive" />
-                      )}
-                    </Button>
+                    {!source.official ? (
+                      <Button
+                        variant="ghost"
+                        size="icon-xs"
+                        disabled={Boolean(busyAction)}
+                        aria-label={translate(
+                          'auto.components.settings.PluginMarketplaceSourceDialog.removeLabel',
+                          'Remove {{value0}}',
+                          { value0: source.marketplace?.name ?? source.source.url }
+                        )}
+                        onClick={() => void remove(source.id)}
+                      >
+                        {removing ? (
+                          <Loader2 className="animate-spin" />
+                        ) : (
+                          <Trash2 className="text-destructive" />
+                        )}
+                      </Button>
+                    ) : null}
                   </div>
                 )
               })}

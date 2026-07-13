@@ -9302,13 +9302,19 @@
           "refreshLabel": "{{value0}} 새로 고침",
           "removeLabel": "{{value0}} 제거",
           "done": "완료",
-          "urlPlaceholder": "https://git.example.com/team/plugins.git"
+          "urlPlaceholder": "https://git.example.com/team/plugins.git",
+          "official": "공식"
         },
         "PluginRollbackDialog": {
           "title": "플러그인을 롤백할까요?",
           "description": "{{value0}}을(를) 비활성화하고 이전 불변 버전을 복원합니다. 해당 버전에서 다른 접근 권한이나 지시형 콘텐츠를 요청하면 Orca가 다시 검토하도록 요구합니다.",
           "cancel": "취소",
           "confirm": "플러그인 롤백"
+        },
+        "PluginSkillConsentPreview": {
+          "heading": "에이전트 스킬 지침",
+          "instructionsLabel": "{{value0}} 스킬 지침",
+          "loadError": "Orca가 모든 스킬 지침을 읽지 못했습니다. 이 플러그인을 비활성화 상태로 유지하고 패키지를 수정한 후 다시 검토하세요."
         }
       },
       "right": {

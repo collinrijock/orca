@@ -9302,13 +9302,19 @@
           "refreshLabel": "Refresh {{value0}}",
           "removeLabel": "Remove {{value0}}",
           "done": "Done",
-          "urlPlaceholder": "https://git.example.com/team/plugins.git"
+          "urlPlaceholder": "https://git.example.com/team/plugins.git",
+          "official": "Official"
         },
         "PluginRollbackDialog": {
           "title": "Roll back plugin?",
           "description": "This deactivates {{value0}} and restores its previous immutable version. If that version requests different access or instructional content, Orca will require another review.",
           "cancel": "Cancel",
           "confirm": "Roll back plugin"
+        },
+        "PluginSkillConsentPreview": {
+          "heading": "Agent skill instructions",
+          "instructionsLabel": "{{value0}} skill instructions",
+          "loadError": "Orca could not read every skill instruction. Keep this plugin disabled and review it again after fixing the package."
         }
       },
       "right": {

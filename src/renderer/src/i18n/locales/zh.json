@@ -9302,13 +9302,19 @@
           "refreshLabel": "刷新 {{value0}}",
           "removeLabel": "移除 {{value0}}",
           "done": "完成",
-          "urlPlaceholder": "https://git.example.com/team/plugins.git"
+          "urlPlaceholder": "https://git.example.com/team/plugins.git",
+          "official": "官方"
         },
         "PluginRollbackDialog": {
           "title": "回滚插件？",
           "description": "这会停用 {{value0}} 并恢复其上一个不可变版本。如果该版本请求不同的访问权限或指令内容，Orca 将要求再次审核。",
           "cancel": "取消",
           "confirm": "回滚插件"
+        },
+        "PluginSkillConsentPreview": {
+          "heading": "智能体技能指令",
+          "instructionsLabel": "{{value0}} 技能指令",
+          "loadError": "Orca 无法读取所有技能指令。请保持此插件为禁用状态，并在修复软件包后重新审核。"
         }
       },
       "right": {

@@ -962,6 +962,8 @@ export type PluginHostListEntry = {
   }[]
   hasWorker: boolean
   hasSkills?: boolean
+  skills?: { name: string; instructions: string }[]
+  skillPreviewError?: string
   vmRecipes?: {
     id: string
     name: string
@@ -1010,6 +1012,7 @@ export type PluginMarketplaceHostSourceState = {
     fetchedAt: number
   } | null
   stale: boolean
+  official: boolean
   error?: string
 }
 

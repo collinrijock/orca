@@ -16,7 +16,8 @@ const source: PluginMarketplaceHostSourceState = {
     resolvedCommit: 'b'.repeat(40),
     fetchedAt: 2
   },
-  stale: false
+  stale: false,
+  official: false
 }
 
 function installApi(): void {
@@ -99,6 +100,7 @@ describe('PluginMarketplaceSourceDialog', () => {
         />
       )
     })
+    expect(document.querySelector('[role="dialog"]')?.classList).toContain('plugin-security-chrome')
 
     await act(async () =>
       document.querySelector<HTMLButtonElement>('[aria-label="Refresh Team plugins"]')?.click()
