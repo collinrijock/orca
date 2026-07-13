@@ -63,11 +63,6 @@ export class RelayAuthCoordinator {
     this.options.onStatus('offline')
   }
 
-  restart(): void {
-    this.fenceAndCloseNow()
-    this.reconcile()
-  }
-
   getActiveBroker(): CoordinatedRelayBroker | null {
     return this.ownership?.valid ? this.ownership.broker : null
   }

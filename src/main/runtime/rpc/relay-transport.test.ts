@@ -39,6 +39,7 @@ describe('CloudRelayTransport', () => {
       server.once('connection', (socket, request) => resolve({ socket, path: request.url ?? '' }))
     })
     let clientSocket: WebSocketClient | null = null
+    const onConnectionClosed = vi.fn()
     const transport = new CloudRelayTransport({
       cellUrl: `http://127.0.0.1:${address.port}`,
       relayHostId: 'AbCdEf0123_-xyZ9',
@@ -46,7 +47,8 @@ describe('CloudRelayTransport', () => {
       createSocket: (url) => {
         clientSocket = new WebSocketClient(url, { perMessageDeflate: false })
         return clientSocket
-      }
+      },
+      onConnectionClosed
     })
     transports.push(transport)
     const received: (string | Uint8Array<ArrayBufferLike>)[] = []
@@ -87,6 +89,8 @@ describe('CloudRelayTransport', () => {
       basisConnId: 'conn/with spaces',
       credentialKind: 'resume'
     })
+    socket.close()
+    await vi.waitFor(() => expect(onConnectionClosed).toHaveBeenCalledWith('conn/with spaces'))
   })
 
   it('rejects non-origin cell URLs before opening a socket', () => {

@@ -106,6 +106,10 @@ export class RelayControlClient {
     })
   }
 
+  get pendingRequestCount(): number {
+    return this.requests.size
+  }
+
   refreshAuthorization(relayJwt: string): void {
     this.sendActive({ type: 'auth-refresh', relayJwt })
   }

@@ -6,8 +6,6 @@ import type {
   MobileRelayEndpoint,
   PairingProvisionRelayParams
 } from '../../../shared/mobile-relay-credential-contract'
-import { CloudRelayTransport } from '../rpc/relay-transport'
-import { RelayControlClient } from './relay-control-client'
 import type { DeviceCredentialInstallAuthorization } from './relay-control-requests'
 import {
   deriveRelayHostId,
@@ -16,6 +14,7 @@ import {
   type RelayAuthorization,
   type RelayAssignment
 } from './relay-http-client'
+import { RelayOriginPool } from './relay-origin-pool'
 import type { RelayBrokerStatus, RelaySessionBrokerOptions } from './relay-session-broker-contract'
 
 export type { RelayBrokerStatus } from './relay-session-broker-contract'
@@ -29,16 +28,29 @@ export class StaleRelayBrokerError extends Error {
 export class RelaySessionBroker {
   private readonly options: RelaySessionBrokerOptions
   private readonly relayHostId: string
-  private control: RelayControlClient | null = null
-  private transport: CloudRelayTransport | null = null
+  private readonly originPool: RelayOriginPool
   private authorization: RelayAuthorization | null = null
-  private assignment: RelayAssignment | null = null
   private refreshTimer: ReturnType<typeof setTimeout> | null = null
   private closed = false
 
   private constructor(options: RelaySessionBrokerOptions) {
     this.options = options
     this.relayHostId = deriveRelayHostId(options.keypair.publicKey)
+    this.originPool = new RelayOriginPool({
+      directorUrl: options.authConfig.relayDirectorUrl,
+      relayHostId: this.relayHostId,
+      identity: options.identity,
+      keypair: options.keypair,
+      appVersion: options.appVersion,
+      mobileSocketWiring: options.mobileSocketWiring,
+      isCurrent: () => this.isCurrent(),
+      onStatus: (status) => this.publishStatus(status),
+      fetch: options.fetch,
+      createControlSocket: options.createControlSocket,
+      createDataSocket: options.createDataSocket,
+      random: options.random,
+      now: options.now
+    })
   }
 
   static async connect(options: RelaySessionBrokerOptions): Promise<RelaySessionBroker> {
@@ -57,7 +69,7 @@ export class RelaySessionBroker {
   }
 
   get currentAssignment(): RelayAssignment | null {
-    return this.assignment
+    return this.originPool.activeAssignment
   }
 
   get ownerIdentityKey(): string {
@@ -66,7 +78,7 @@ export class RelaySessionBroker {
   }
 
   get endpoint(): MobileRelayEndpoint | null {
-    const assignment = this.assignment
+    const assignment = this.originPool.activeAssignment
     if (!assignment) {
       return null
     }
@@ -80,19 +92,21 @@ export class RelaySessionBroker {
     }
   }
 
-  createInvite(relayDeviceId: string): ReturnType<RelayControlClient['createInvite']> {
-    if (!this.control) {
+  createInvite(relayDeviceId: string) {
+    const control = this.originPool.activeControl
+    if (!control) {
       return Promise.reject(new Error('relay_control_not_active'))
     }
-    return this.control.createInvite(relayDeviceId)
+    return control.createInvite(relayDeviceId)
   }
 
   async createPairingRelay(relayDeviceId: string): Promise<PairingRelay> {
-    const assignment = this.assignment
-    if (!assignment || !this.control) {
+    const assignment = this.originPool.activeAssignment
+    const control = this.originPool.activeControl
+    if (!assignment || !control) {
       throw new Error('relay_control_not_active')
     }
-    const invite = await this.control.createInvite(relayDeviceId)
+    const invite = await control.createInvite(relayDeviceId)
     this.assertCurrent()
     return {
       v: 1,
@@ -107,10 +121,11 @@ export class RelaySessionBroker {
   }
 
   revokeDevice(relayDeviceId: string, reqId?: string): Promise<void> {
-    if (!this.control) {
+    const control = this.originPool.activeControl
+    if (!control) {
       return Promise.reject(new Error('relay_control_not_active'))
     }
-    return this.control.revokeDevice(relayDeviceId, reqId)
+    return control.revokeDevice(relayDeviceId, reqId)
   }
 
   async installCredential(
@@ -118,10 +133,14 @@ export class RelaySessionBroker {
     params: PairingProvisionRelayParams,
     authorization: DeviceCredentialInstallAuthorization
   ): Promise<DeviceCredentialInstalled> {
-    if (!this.control) {
+    const control =
+      authorization.mode === 'relay-basis'
+        ? this.originPool.controlForBasis(authorization.basisConnId)
+        : this.originPool.activeControl
+    if (!control) {
       throw new Error('relay_control_not_active')
     }
-    const message = await this.control.installCredential({
+    const message = await control.installCredential({
       relayDeviceId,
       authorization,
       ...params
@@ -135,20 +154,22 @@ export class RelaySessionBroker {
     relayDeviceId: string,
     reqId: string
   ): Promise<DeviceCredentialInstallStatusResult> {
-    if (!this.control) {
+    const control = this.originPool.activeControl
+    if (!control) {
       throw new Error('relay_control_not_active')
     }
-    const message = await this.control.credentialInstallStatus(relayDeviceId, reqId)
+    const message = await control.credentialInstallStatus(relayDeviceId, reqId)
     this.assertCurrent()
     const { type: _type, ...result } = message
     return result
   }
 
   async confirmResume(basisConnId: string, reqId: string): Promise<DeviceResumeConfirmed> {
-    if (!this.control) {
-      throw new Error('relay_control_not_active')
+    const control = this.originPool.controlForBasis(basisConnId)
+    if (!control) {
+      throw new Error('relay_basis_origin_not_found')
     }
-    const message = await this.control.confirmResume(basisConnId, reqId)
+    const message = await control.confirmResume(basisConnId, reqId)
     this.assertCurrent()
     const { type: _type, ...result } = message
     return result
@@ -164,10 +185,7 @@ export class RelaySessionBroker {
       clearTimeout(this.refreshTimer)
       this.refreshTimer = null
     }
-    this.control?.closeNow()
-    this.control = null
-    void this.transport?.stop()
-    this.transport = null
+    this.originPool.closeNow()
     if (publishOffline) {
       this.options.onStatus('offline')
     }
@@ -189,56 +207,16 @@ export class RelaySessionBroker {
       fetch: this.options.fetch
     })
     this.assertCurrent()
-    const transport = new CloudRelayTransport({
-      cellUrl: assignment.cellUrl,
-      relayHostId: this.relayHostId,
-      generation: 0,
-      createSocket: this.options.createDataSocket
-    })
-    // Why: stale-epoch cleanup must own partially opened resources before the
-    // next await, even though the broker is not externally active yet.
-    this.transport = transport
-    this.options.mobileSocketWiring.attachTransport(transport, (ws) => transport.metadataFor(ws))
-    await transport.start()
-    this.assertCurrent()
-    const control = new RelayControlClient({
-      cellUrl: assignment.cellUrl,
-      relayJwt: authorization.relayToken,
-      relayHostId: this.relayHostId,
-      assignmentEpoch: assignment.assignmentEpoch,
-      identity: this.options.identity,
-      keypair: this.options.keypair,
-      appVersion: this.options.appVersion,
-      onConnectionOpen: (message) => {
-        if (this.isCurrent()) {
-          void transport.openConnection(message).catch(() => {})
-        }
-      },
-      onDrain: () => {
-        if (!this.isCurrent()) {
-          return
-        }
-        this.publishStatus('draining')
-        // Why: the data plane never chooses recovery targets; every drain
-        // returns to the configured stable director.
-        this.options.onResolveDirector()
-      },
-      onClose: () => {
-        if (this.isCurrent()) {
-          this.publishStatus('offline')
-        }
-      },
-      createSocket: this.options.createControlSocket
-    })
-    this.control = control
-    const ack = await control.connect()
-    this.assertCurrent()
-    if (ack.generation <= 0) {
-      throw new Error('invalid_relay_generation')
+    try {
+      await this.originPool.openInitial(assignment, authorization.relayToken)
+    } catch (error) {
+      if (!this.isCurrent()) {
+        throw new StaleRelayBrokerError()
+      }
+      throw error
     }
-    transport.setGeneration(ack.generation)
+    this.assertCurrent()
     this.authorization = authorization
-    this.assignment = assignment
     this.publishStatus('registered')
     this.scheduleRefresh()
   }
@@ -271,7 +249,7 @@ export class RelaySessionBroker {
         fetch: this.options.fetch
       })
       this.assertCurrent()
-      this.control?.refreshAuthorization(authorization.relayToken)
+      this.originPool.refreshAuthorization(authorization.relayToken)
       this.authorization = authorization
       this.scheduleRefresh()
     } catch {

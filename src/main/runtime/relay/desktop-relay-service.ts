@@ -65,8 +65,7 @@ export class DesktopRelayService {
           mobileSocketWiring,
           isCurrent,
           refreshAccessToken,
-          onStatus: options.onStatus,
-          onResolveDirector: () => this.coordinator.restart()
+          onStatus: options.onStatus
         })
         void this.flushRevokeOutbox(broker)
         return broker

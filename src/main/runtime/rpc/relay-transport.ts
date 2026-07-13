@@ -19,6 +19,7 @@ type CloudRelayTransportOptions = {
   relayHostId: string
   generation: number
   createSocket?: (url: string) => WebSocket
+  onConnectionClosed?: (connectionId: string) => void
 }
 
 function relayWebSocketOrigin(cellUrl: string): string {
@@ -41,6 +42,7 @@ export class CloudRelayTransport implements RpcTransport, MobileSocketTransport 
   private readonly relayHostId: string
   private generation: number
   private readonly createSocket: (url: string) => WebSocket
+  private readonly onConnectionClosed: ((connectionId: string) => void) | undefined
   private readonly socketsByConnectionId = new Map<string, WebSocket>()
   private readonly metadataBySocket = new Map<WebSocket, MobileSocketTransportMetadata>()
   private readonly clientIds = new Map<WebSocket, string>()
@@ -52,6 +54,7 @@ export class CloudRelayTransport implements RpcTransport, MobileSocketTransport 
     this.cellWebSocketOrigin = relayWebSocketOrigin(options.cellUrl)
     this.relayHostId = options.relayHostId
     this.generation = options.generation
+    this.onConnectionClosed = options.onConnectionClosed
     this.createSocket =
       options.createSocket ??
       ((url) =>
@@ -81,6 +84,9 @@ export class CloudRelayTransport implements RpcTransport, MobileSocketTransport 
   }
 
   setGeneration(generation: number): void {
+    if (generation === this.generation) {
+      return
+    }
     if (
       this.socketsByConnectionId.size > 0 ||
       !Number.isSafeInteger(generation) ||
@@ -153,6 +159,7 @@ export class CloudRelayTransport implements RpcTransport, MobileSocketTransport 
         this.metadataBySocket.delete(socket)
         const clientId = this.clientIds.get(socket) ?? null
         this.clientIds.delete(socket)
+        this.onConnectionClosed?.(connection.connId)
         const hasOtherConnections =
           clientId !== null && [...this.clientIds.values()].includes(clientId)
         this.closeHandler?.(clientId, socket, hasOtherConnections)

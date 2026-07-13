@@ -25,6 +25,10 @@ export type DeviceCredentialInstallAuthorization =
 export class RelayControlRequests {
   private readonly pending = new Map<string, PendingRequest>()
 
+  get size(): number {
+    return this.pending.size
+  }
+
   createInvite(
     reqId: string,
     relayDeviceId: string,
