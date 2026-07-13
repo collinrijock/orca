@@ -118,7 +118,38 @@ describe('lifecycle reconciliation', () => {
       dispatchId: dispatch.id,
       _orcaLifecycleRejection: { code: 'sender_not_assignee' }
     })
-    expect(persisted && reconcileLifecycleMessage(db, persisted)).toEqual({ action: 'ignored' })
+    expect(persisted && reconcileLifecycleMessage(db, persisted)).toMatchObject({
+      action: 'rejected',
+      code: 'sender_not_assignee'
+    })
+  })
+
+  it('does not let a caller-supplied rejection marker turn completion into success', () => {
+    db = new OrchestrationDb(':memory:')
+    const task = db.createTask({ spec: 'work' })
+    const dispatch = db.createDispatchContext(task.id, 'term_worker', `tab_w:${LEAF_A}`)
+    const message = db.insertMessage({
+      from: 'term_worker',
+      to: 'term_coordinator',
+      subject: 'Done',
+      type: 'worker_done',
+      payload: JSON.stringify({
+        taskId: task.id,
+        dispatchId: dispatch.id,
+        _orcaLifecycleRejection: {
+          code: 'sender_not_assignee',
+          reason: 'caller supplied'
+        }
+      }),
+      senderPaneKey: `tab_w:${LEAF_A}`
+    })
+
+    expect(reconcileLifecycleMessage(db, message)).toEqual({
+      action: 'rejected',
+      code: 'sender_not_assignee',
+      reason: 'caller supplied'
+    })
+    expect(db.getTask(task.id)?.status).toBe('dispatched')
   })
 
   it('rejects a coordinator completion for a pane-bound dispatch', () => {

@@ -219,6 +219,121 @@ describe('runRemoteOrcaCli', () => {
     }
   })
 
+  it('preserves structured lifecycle payload flags through the legacy fallback', async () => {
+    const db = new OrchestrationDb(':memory:')
+    const runtime = new OrcaRuntimeService()
+    runtime.setOrchestrationDb(db)
+    vi.spyOn(runtime, 'deliverPendingMessagesForHandle').mockImplementation(() => {})
+    vi.spyOn(runtime, 'notifyMessageArrived').mockImplementation(() => {})
+    const task = db.createTask({ spec: 'remote work' })
+    const dispatch = db.createDispatchContext(task.id, 'term_ssh', 'tab_owner:leaf_owner')
+
+    try {
+      const result = await runRemoteOrcaCli(
+        runtime,
+        {
+          argv: [
+            'orchestration',
+            'send',
+            '--to',
+            'term_coord',
+            '--subject',
+            'Done',
+            '--type',
+            'worker_done',
+            '--task-id',
+            task.id,
+            '--dispatch-id',
+            dispatch.id,
+            '--files-modified',
+            'src/a.ts, src/b.ts',
+            '--json'
+          ],
+          cwd: '/home/alice/repo',
+          env: {
+            ORCA_TERMINAL_HANDLE: 'term_ssh',
+            ORCA_PANE_KEY: 'tab_owner:leaf_owner'
+          }
+        },
+        LEGACY_FALLBACK_OPTIONS
+      )
+
+      expect(result.exitCode).toBe(0)
+      expect(db.getTask(task.id)).toMatchObject({
+        status: 'completed',
+        result: expect.stringContaining('src/a.ts')
+      })
+    } finally {
+      db.close()
+    }
+  })
+
+  it('rejects identity-less lifecycle sends in the legacy fallback', async () => {
+    const { runtime, db } = createRuntime()
+
+    const result = await runRemoteOrcaCli(
+      runtime,
+      {
+        argv: [
+          'orchestration',
+          'send',
+          '--to',
+          'term_coord',
+          '--subject',
+          'Done',
+          '--type',
+          'worker_done',
+          '--json'
+        ],
+        cwd: '/home/alice/repo',
+        env: {}
+      },
+      LEGACY_FALLBACK_OPTIONS
+    )
+
+    expect(result.exitCode).toBe(1)
+    expect(JSON.parse(result.stdout)).toMatchObject({
+      ok: false,
+      error: { code: 'no_active_sender_terminal' }
+    })
+    expect(db.insertMessage).not.toHaveBeenCalled()
+  })
+
+  it('rejects mixed raw and structured payload flags in the legacy fallback', async () => {
+    const { runtime, db } = createRuntime()
+
+    const result = await runRemoteOrcaCli(
+      runtime,
+      {
+        argv: [
+          'orchestration',
+          'send',
+          '--from',
+          'term_ssh',
+          '--to',
+          'term_coord',
+          '--subject',
+          'Done',
+          '--payload',
+          '{"taskId":"task_1"}',
+          '--task-id',
+          'task_1',
+          '--json'
+        ],
+        cwd: '/home/alice/repo',
+        env: {}
+      },
+      LEGACY_FALLBACK_OPTIONS
+    )
+
+    expect(result.exitCode).toBe(1)
+    expect(JSON.parse(result.stdout)).toMatchObject({
+      ok: false,
+      error: { code: 'invalid_argument', message: expect.stringContaining('structured payload') }
+    })
+    expect(db.insertMessage).not.toHaveBeenCalled()
+  })
+
   it('accepts equals-style orchestration flags in the remote shim', async () => {
     const { runtime, db } = createRuntime()
 

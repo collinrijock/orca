@@ -61,9 +61,25 @@ function parseObjectPayload(msg: MessageRow, onInvalidJson: () => void): Record<
   }
 }
 
-function hasPersistedLifecycleRejection(payload: Record<string, unknown>): boolean {
+function getPersistedLifecycleRejection(
+  payload: Record<string, unknown>
+): LifecycleRejectionResult | undefined {
   const rejection = payload._orcaLifecycleRejection
-  return Boolean(rejection) && typeof rejection === 'object'
+  if (
+    !rejection ||
+    typeof rejection !== 'object' ||
+    (rejection as { code?: unknown }).code !== 'sender_not_assignee' ||
+    typeof (rejection as { reason?: unknown }).reason !== 'string'
+  ) {
+    return undefined
+  }
+  // Why: the marker is reserved persistence state; treating it as a rejection
+  // also prevents caller-supplied markers from turning lifecycle sends into success.
+  return {
+    action: 'rejected',
+    code: 'sender_not_assignee',
+    reason: (rejection as { reason: string }).reason
+  }
 }
 
 export function reconcileLifecycleMessage(
@@ -99,8 +115,9 @@ function reconcileHeartbeatMessage(
   const payload = parseObjectPayload(msg, () => {
     onLog(`Heartbeat from ${msg.from_handle} has invalid JSON payload; ignored`)
   })
-  if (hasPersistedLifecycleRejection(payload)) {
-    return { action: 'ignored' }
+  const persistedRejection = getPersistedLifecycleRejection(payload)
+  if (persistedRejection) {
+    return persistedRejection
   }
   const dispatchId = payload.dispatchId
   if (typeof dispatchId !== 'string' || dispatchId.length === 0) {
@@ -142,8 +159,9 @@ function reconcileWorkerDoneMessage(
   const payload = parseObjectPayload(msg, () => {
     onLog(`Warning: invalid payload in worker_done from ${msg.from_handle}`)
   })
-  if (hasPersistedLifecycleRejection(payload)) {
-    return { action: 'ignored' }
+  const persistedRejection = getPersistedLifecycleRejection(payload)
+  if (persistedRejection) {
+    return persistedRejection
   }
 
   const taskId = payload.taskId

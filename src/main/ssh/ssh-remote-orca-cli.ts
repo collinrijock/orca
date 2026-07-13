@@ -10,18 +10,15 @@ import {
   type RemoteOrcaCliRequest,
   type RemoteOrcaCliResult
 } from './ssh-remote-cli-host-passthrough'
+import { RemoteCliArgumentError, type ParsedRemoteCli } from './ssh-remote-cli-argument-error'
+import { getRemoteLinearHelp, tryDispatchRemoteLinearCli } from './ssh-remote-linear-cli'
 import {
-  RemoteCliArgumentError,
-  getRemoteLinearHelp,
-  tryDispatchRemoteLinearCli
-} from './ssh-remote-linear-cli'
+  getRemoteOrchestrationPayload,
+  hasRemoteLifecycleRejection,
+  resolveRemoteOrchestrationSender
+} from './ssh-remote-orchestration-send'
 
 export type { RemoteOrcaCliRequest, RemoteOrcaCliResult } from './ssh-remote-cli-host-passthrough'
-
-type ParsedRemoteCli = {
-  commandPath: string[]
-  flags: Map<string, string | boolean>
-}
 
 // Why: these commands run a foreground/interactive process attached to the
 // caller's TTY (or a local tmux pane), which a buffered one-shot relay bridge
@@ -118,7 +115,7 @@ async function runLegacyRemoteOrcaCli(
       stderr: formatted.stderr,
       // Why: the legacy SSH bridge bypasses the local CLI handler that turns
       // a persisted lifecycle rejection into an unsuccessful command.
-      exitCode: response.ok && !hasLifecycleRejection(response.result) ? 0 : 1
+      exitCode: response.ok && !hasRemoteLifecycleRejection(response.result) ? 0 : 1
     }
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
@@ -139,14 +136,6 @@ async function runLegacyRemoteOrcaCli(
     }
     return { stdout: '', stderr: `${message}\n`, exitCode: 1 }
   }
-}
-
-function hasLifecycleRejection(result: unknown): boolean {
-  if (!result || typeof result !== 'object') {
-    return false
-  }
-  const lifecycle = (result as { lifecycle?: unknown }).lifecycle
-  return typeof lifecycle === 'object' && (lifecycle as { action?: unknown }).action === 'rejected'
 }
 
 async function dispatchRemoteCli(
@@ -184,20 +173,22 @@ async function dispatchRemoteCli(
         worktree: optionalString(parsed.flags, 'worktree'),
         limit: optionalNumber(parsed.flags, 'limit')
       })
-    case 'orchestration send':
+    case 'orchestration send': {
+      const type = optionalString(parsed.flags, 'type')
       return await call(dispatcher, 'orchestration.send', {
-        from: resolveHandle(parsed.flags, env, 'from'),
+        from: resolveRemoteOrchestrationSender(parsed.flags, env, type),
         to: requiredString(parsed.flags, 'to'),
         subject: requiredString(parsed.flags, 'subject'),
         body: optionalString(parsed.flags, 'body'),
-        type: optionalString(parsed.flags, 'type'),
+        type,
         priority: optionalString(parsed.flags, 'priority'),
         threadId: optionalString(parsed.flags, 'thread-id'),
-        payload: optionalString(parsed.flags, 'payload'),
+        payload: getRemoteOrchestrationPayload(parsed.flags),
         // Why: the legacy in-process bridge must preserve the same pane
         // authority as the full host CLI passthrough.
         senderPaneKey: env.ORCA_PANE_KEY || undefined
       })
+    }
     case 'orchestration check':
       return await call(dispatcher, 'orchestration.check', {
         terminal: resolveHandle(parsed.flags, env, 'terminal'),
