@@ -58,18 +58,15 @@ describe('repo slice skipped-onboarding folder startup', () => {
       {
         sidebarRevealBehavior: 'auto',
         startup: {
-          command:
-            "codex '-m' 'gpt-5.6-sol' '-c' 'model_reasoning_effort=medium' '--dangerously-bypass-approvals-and-sandbox'",
-          env: {},
+          // Identity-only: the host resolves command/args/env at spawn via the
+          // agentLaunch boundary; the client no longer assembles the launch.
+          command: '',
           launchAgent: 'codex',
-          launchConfig: {
-            agentCommand: "codex '--dangerously-bypass-approvals-and-sandbox'",
-            agentArgs: '--dangerously-bypass-approvals-and-sandbox',
-            agentEnv: {}
+          agentLaunch: {
+            selection: { kind: 'default' },
+            allowEmptyPromptLaunch: true
           },
-          sessionOptions: { model: 'gpt-5.6-sol', effort: 'medium' },
           telemetry: {
-            agent_kind: 'codex',
             launch_source: 'onboarding',
             request_kind: 'new'
           }
