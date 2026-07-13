@@ -2608,6 +2608,10 @@ function createSkillsApi(): NonNullable<Partial<PreloadApi>['skills']> {
     replace: () => Promise.reject(new Error('Skill management is unavailable in the web client.')),
     updateManaged: () =>
       Promise.reject(new Error('Skill management is unavailable in the web client.')),
+    // Why: auto-update is a silent background batch, so the web client
+    // declines with the same empty result the desktop uses when unavailable.
+    autoUpdateManaged: () =>
+      Promise.resolve({ updatedSkillNames: [], failedSkillNames: [], inventory: null }),
     recordOrcaInstall: () =>
       Promise.reject(new Error('Skill management is unavailable in the web client.'))
   }
