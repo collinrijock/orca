@@ -1684,16 +1684,20 @@ export function useIpcEvents(): void {
           if (shouldActivate) {
             activateTerminalInitiatedWorktree(store, worktreeId)
           }
+          // Why: the paired launch client already resolved the initial mode, so
+          // its explicit choice must win over this host renderer's local default.
           const tabOptions = data.launchAgent
             ? {
                 ...(shouldActivate ? {} : { activate: false, recordInteraction: false }),
                 launchAgent: data.launchAgent,
-                ...initialAgentTabViewModeProps(store.settings, {
-                  agent: data.launchAgent,
-                  nativeChatTranscriptIsLocalReadable: isNativeChatTranscriptLocalReadable(
-                    getConnectionIdFromState(store, worktreeId)
-                  )
-                }),
+                ...(data.viewMode
+                  ? { viewMode: data.viewMode }
+                  : initialAgentTabViewModeProps(store.settings, {
+                      agent: data.launchAgent,
+                      nativeChatTranscriptIsLocalReadable: isNativeChatTranscriptLocalReadable(
+                        getConnectionIdFromState(store, worktreeId)
+                      )
+                    })),
                 ...(data.cwd ? { startupCwd: data.cwd } : {})
               }
             : shouldActivate

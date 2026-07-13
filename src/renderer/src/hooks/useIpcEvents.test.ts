@@ -1760,6 +1760,7 @@ describe('useIpcEvents updater integration', () => {
             cwd?: string
             launchConfig?: SleepingAgentLaunchConfig
             launchAgent?: TuiAgent
+            viewMode?: 'terminal' | 'chat'
             title?: string
             activate?: boolean
             presentation?: 'background' | 'focused'
@@ -1906,6 +1907,7 @@ describe('useIpcEvents updater integration', () => {
               cwd?: string
               launchConfig?: SleepingAgentLaunchConfig
               launchAgent?: TuiAgent
+              viewMode?: 'terminal' | 'chat'
               title?: string
               activate?: boolean
               presentation?: 'background' | 'focused'
@@ -2223,11 +2225,16 @@ describe('useIpcEvents updater integration', () => {
       targetGroupId: 'group-left',
       title: 'Runtime Terminal',
       command: 'codex',
+      launchAgent: 'codex',
+      viewMode: 'terminal',
       activate: true,
       source: 'runtime-session'
     })
 
-    expect(createTab).toHaveBeenCalledWith('wt-2', 'group-left', undefined, undefined)
+    expect(createTab).toHaveBeenCalledWith('wt-2', 'group-left', undefined, {
+      launchAgent: 'codex',
+      viewMode: 'terminal'
+    })
     expect(replyTerminalCreate).toHaveBeenCalledWith({
       requestId: 'req-runtime-session',
       tabId: 'tab-new',

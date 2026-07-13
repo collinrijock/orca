@@ -17074,7 +17074,9 @@ describe('OrcaRuntimeService', () => {
     })
     runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
 
-    const result = await runtime.createMobileSessionTerminal(`id:${TEST_WORKTREE_ID}`)
+    const result = await runtime.createMobileSessionTerminal(`id:${TEST_WORKTREE_ID}`, {
+      viewMode: 'chat'
+    })
 
     expect(spawn).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -17090,6 +17092,7 @@ describe('OrcaRuntimeService', () => {
       type: 'terminal',
       status: 'ready',
       terminal: expect.stringMatching(/^term_/),
+      viewMode: 'chat',
       isActive: true
     })
 
@@ -20138,7 +20141,8 @@ describe('OrcaRuntimeService', () => {
     })
 
     const result = await runtime.createMobileSessionTerminal(`id:${TEST_WORKTREE_ID}`, {
-      activate: false
+      activate: false,
+      viewMode: 'chat'
     })
 
     expect(send).toHaveBeenCalledWith(
@@ -20146,7 +20150,8 @@ describe('OrcaRuntimeService', () => {
       expect.objectContaining({
         worktreeId: TEST_WORKTREE_ID,
         activate: false,
-        source: 'runtime-session'
+        source: 'runtime-session',
+        viewMode: 'chat'
       })
     )
     expect(focusTerminal).not.toHaveBeenCalled()

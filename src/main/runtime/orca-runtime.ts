@@ -17869,6 +17869,7 @@ export class OrcaRuntimeService {
       agent?: TuiAgent
       launchConfig?: SleepingAgentLaunchConfig
       launchAgent?: TuiAgent
+      viewMode?: 'terminal' | 'chat'
       activate?: boolean
       clientMutationId?: string
       signal?: AbortSignal
@@ -17913,6 +17914,7 @@ export class OrcaRuntimeService {
       agent?: TuiAgent
       launchConfig?: SleepingAgentLaunchConfig
       launchAgent?: TuiAgent
+      viewMode?: 'terminal' | 'chat'
       activate?: boolean
       clientMutationId?: string
       signal?: AbortSignal
@@ -17946,6 +17948,7 @@ export class OrcaRuntimeService {
           env: startupCommand.env,
           startupCommandDelivery: startupCommand.startupCommandDelivery,
           launchAgent: startupCommand.launchAgent,
+          viewMode: opts.viewMode,
           targetGroupId: opts.targetGroupId,
           launchConfig: startupCommand.launchConfig
         }
@@ -17994,6 +17997,7 @@ export class OrcaRuntimeService {
         ...(startupCommand.env ? { env: startupCommand.env } : {}),
         ...(startupCommand.launchConfig ? { launchConfig: startupCommand.launchConfig } : {}),
         ...(startupCommand.launchAgent ? { launchAgent: startupCommand.launchAgent } : {}),
+        ...(opts.viewMode ? { viewMode: opts.viewMode } : {}),
         startupCommandDelivery: startupCommand.startupCommandDelivery,
         source: 'runtime-session',
         activate: opts.activate
@@ -18057,6 +18061,7 @@ export class OrcaRuntimeService {
           startupCommandDelivery: startupCommand.startupCommandDelivery,
           identity: { tabId: pendingSurface.tab.parentTabId, leafId: pendingSurface.tab.leafId },
           launchAgent: startupCommand.launchAgent,
+          viewMode: opts.viewMode,
           targetGroupId: opts.targetGroupId,
           launchConfig: startupCommand.launchConfig
         }
@@ -18180,6 +18185,7 @@ export class OrcaRuntimeService {
       startupCommandDelivery?: WorktreeStartupLaunch['startupCommandDelivery']
       identity?: { tabId: string; leafId: string; sessionId?: string }
       launchAgent?: TuiAgent
+      viewMode?: 'terminal' | 'chat'
       targetGroupId?: string
       launchConfig?: SleepingAgentLaunchConfig
     } = {}
@@ -18240,6 +18246,7 @@ export class OrcaRuntimeService {
       title: terminal.title ?? livePty.pty.title ?? 'Terminal',
       ...(cwd ? { startupCwd: cwd } : {}),
       ...(opts.launchAgent ? { launchAgent: opts.launchAgent } : {}),
+      ...(opts.viewMode ? { viewMode: opts.viewMode } : {}),
       parentLayout,
       isActive: activate
     }
