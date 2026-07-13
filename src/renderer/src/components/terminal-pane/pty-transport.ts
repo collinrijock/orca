@@ -694,7 +694,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
         id,
         window.api.pty.hasPty,
         exitHandler,
-        () => ownedExitHandlers.get(id) === exitHandler
+        () => ownedExitHandlers.get(id) === exitHandler && ptyExitHandlers.get(id) === exitHandler
       )
     }
   }

@@ -1030,6 +1030,58 @@ describe('createIpcPtyTransport', () => {
     expect(onEagerExit).toHaveBeenCalledWith('pty-overflow-0', -1)
   })
 
+  it('ignores a stale overflow probe after the same PTY id is reused', async () => {
+    const { createIpcPtyTransport } = await import('./pty-transport')
+    const { bufferPreHandlerPtyExit, clearPreHandlerPtyState } =
+      await import('./pty-pre-handler-buffer')
+    const hasPty = window.api.pty.hasPty as unknown as ReturnType<typeof vi.fn>
+    let resolveOldProbe: ((alive: boolean) => void) | undefined
+    hasPty.mockImplementationOnce(
+      () =>
+        new Promise<boolean>((resolve) => {
+          resolveOldProbe = resolve
+        })
+    )
+    const ptyId = 'pty-overflow-reused'
+    const oldExit = vi.fn()
+    const replacementExit = vi.fn()
+    const oldTransport = createIpcPtyTransport()
+    const replacementTransport = createIpcPtyTransport()
+
+    bufferPreHandlerPtyExit(ptyId, 1)
+    for (let index = 0; index < 64; index += 1) {
+      bufferPreHandlerPtyExit(`pty-old-overflow-${index}`, index)
+    }
+    oldTransport.attach({ existingPtyId: ptyId, callbacks: { onExit: oldExit } })
+    await vi.waitFor(() => expect(resolveOldProbe).toBeTypeOf('function'))
+
+    clearPreHandlerPtyState(ptyId)
+    replacementTransport.attach({
+      existingPtyId: ptyId,
+      callbacks: { onExit: replacementExit }
+    })
+    bufferPreHandlerPtyExit(ptyId, 2)
+    for (let index = 0; index < 64; index += 1) {
+      bufferPreHandlerPtyExit(`pty-new-overflow-${index}`, index)
+    }
+
+    resolveOldProbe?.(false)
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(oldExit).not.toHaveBeenCalled()
+    expect(replacementExit).not.toHaveBeenCalled()
+    expect(replacementTransport.isConnected()).toBe(true)
+
+    oldTransport.disconnect()
+    replacementTransport.disconnect()
+    clearPreHandlerPtyState(ptyId)
+    for (let index = 0; index < 64; index += 1) {
+      clearPreHandlerPtyState(`pty-old-overflow-${index}`)
+      clearPreHandlerPtyState(`pty-new-overflow-${index}`)
+    }
+  })
+
   it('enforces the eager buffer cap in UTF-8 bytes for multi-byte output', async () => {
     const { registerEagerPtyBuffer } = await import('./pty-transport')
     const cap = 512 * 1024
