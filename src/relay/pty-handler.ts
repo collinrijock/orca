@@ -148,7 +148,7 @@ const INTERACTIVE_OUTPUT_BUDGET_CHARS = 32 * 1024
 const STARTUP_COMMAND_WRITE_DELAY_MS = 50
 const STARTUP_COMMAND_SHELL_READY_FALLBACK_MS = 1500
 const STALE_SPAWN_KILL_RETRY_MS = 5000
-const STALE_SPAWN_KILL_RETRY_LIMIT = 8
+const RETAINED_KILL_LOG_MILESTONE = 8
 const ALLOWED_SIGNALS = new Set([
   'SIGINT',
   'SIGTERM',
@@ -508,6 +508,42 @@ export class PtyHandler {
     return true
   }
 
+  private scheduleManagedPtyForceShutdown(
+    managed: ManagedPty,
+    state: { forceKillAccepted: boolean; failedAttempts: number; label: string }
+  ): void {
+    if (managed.disposed || managed.killTimer || this.ptys.get(managed.id) !== managed) {
+      return
+    }
+    managed.killTimer = setTimeout(() => {
+      const still = this.ptys.get(managed.id)
+      if (!still || still.disposed) {
+        return
+      }
+      still.killTimer = undefined
+      if (!state.forceKillAccepted || process.platform === 'win32') {
+        try {
+          killPtyForShutdown(still, 'SIGKILL')
+          state.forceKillAccepted = true
+        } catch (error) {
+          state.failedAttempts += 1
+          if (state.failedAttempts <= 2 || state.failedAttempts === RETAINED_KILL_LOG_MILESTONE) {
+            process.stderr.write(
+              `[pty-handler] ${state.label} force kill failed: ${error instanceof Error ? error.message : String(error)}\n`
+            )
+          }
+          this.scheduleManagedPtyForceShutdown(still, state)
+          return
+        }
+      }
+      if (!this.reapManagedPtyIfProvablyExited(still)) {
+        // Why: a stale spawn has no caller left to retry, and a graceful timer
+        // must never throw into relay-global uncaughtException. Keep one owner.
+        this.scheduleManagedPtyForceShutdown(still, state)
+      }
+    }, STALE_SPAWN_KILL_RETRY_MS)
+  }
+
   private registerHandlers(): void {
     this.dispatcher.onRequest('pty.spawn', (p, context) => this.spawn(p, context))
     this.dispatcher.onRequest('pty.attach', (p) => this.attach(p))
@@ -752,40 +788,11 @@ export class PtyHandler {
       // response is discarded and no renderer can own this PTY. Shut it down
       // immediately so it does not linger as an unreachable remote shell.
       this.releaseStartupCommand(managed)
-      let fallbackAttempts = 0
-      const scheduleFallback = (): void => {
-        managed.killTimer = setTimeout(() => {
-          const still = this.ptys.get(id)
-          if (still && !still.disposed) {
-            still.killTimer = undefined
-            try {
-              killPtyForShutdown(still, 'SIGKILL')
-            } catch (error) {
-              fallbackAttempts += 1
-              if (fallbackAttempts <= 2 || fallbackAttempts === STALE_SPAWN_KILL_RETRY_LIMIT) {
-                process.stderr.write(
-                  `[pty-handler] stale-spawn fallback kill failed: ${error instanceof Error ? error.message : String(error)}\n`
-                )
-              }
-              // Why: the stale caller can never retry an id it did not receive.
-              // Keep bounded automatic ownership before relay disposal takes over.
-              if (fallbackAttempts < STALE_SPAWN_KILL_RETRY_LIMIT) {
-                scheduleFallback()
-              } else {
-                still.killTimer = undefined
-              }
-              return
-            }
-            if (!this.reapManagedPtyIfProvablyExited(still)) {
-              fallbackAttempts += 1
-              if (fallbackAttempts < STALE_SPAWN_KILL_RETRY_LIMIT) {
-                scheduleFallback()
-              }
-            }
-          }
-        }, STALE_SPAWN_KILL_RETRY_MS)
-      }
-      scheduleFallback()
+      this.scheduleManagedPtyForceShutdown(managed, {
+        forceKillAccepted: false,
+        failedAttempts: 0,
+        label: 'stale-spawn'
+      })
       // Why: arm fallback ownership before native shutdown. node-pty can throw
       // synchronously, especially during ConPTY startup, and the orphan still
       // needs a later force-close owner even when this request rejects.
@@ -932,14 +939,11 @@ export class PtyHandler {
       // collapses the graceful-shutdown window and risks interrupting shell
       // EXIT traps. Fd release happens via onExit (natural exit) or via the
       // killTimer → SIGKILL → disposeManagedPty chain below.
-      managed.killTimer = setTimeout(() => {
-        const still = this.ptys.get(id)
-        if (still && !still.disposed) {
-          still.killTimer = undefined
-          killPtyForShutdown(still, 'SIGKILL')
-          this.reapManagedPtyIfProvablyExited(still)
-        }
-      }, 5000)
+      this.scheduleManagedPtyForceShutdown(managed, {
+        forceKillAccepted: false,
+        failedAttempts: 0,
+        label: 'graceful-shutdown'
+      })
     }
   }
 

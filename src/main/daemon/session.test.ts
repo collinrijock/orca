@@ -57,6 +57,10 @@ function createMockSubprocess() {
     forceKill() {
       killed = true
     },
+    hasExited() {
+      return killed
+    },
+    retryForceKillUntilExit: false,
     signal(sig: string) {
       signals.push(sig)
     },
@@ -422,7 +426,7 @@ describe('Session', () => {
       expect(exitCodes).toEqual([0])
     })
 
-    it('force-disposes after 5s if subprocess does not exit', () => {
+    it('uses OS exit proof after the force-kill fallback', () => {
       createSession()
       // Override kill to NOT trigger exit
       subprocess.kill = () => {}
@@ -434,6 +438,61 @@ describe('Session', () => {
       vi.advanceTimersByTime(5_000)
       expect(session.state).toBe('exited')
       expect(forceKillSpy).toHaveBeenCalled()
+    })
+
+    it('retains the session after accepted force kill until exit is proved', () => {
+      createSession()
+      subprocess.kill = () => {}
+      subprocess.hasExited = () => false
+
+      session.kill()
+      vi.advanceTimersByTime(5_000)
+
+      expect(session.state).not.toBe('exited')
+      expect(vi.getTimerCount()).toBeGreaterThan(0)
+      subprocess.simulateExit(137)
+      expect(session.state).toBe('exited')
+    })
+
+    it('retries Windows force kill while physical exit remains unproved', () => {
+      createSession()
+      subprocess.kill = () => {}
+      subprocess.hasExited = () => false
+      subprocess.retryForceKillUntilExit = true
+      const forceKillSpy = vi.spyOn(subprocess, 'forceKill')
+
+      session.kill()
+      vi.advanceTimersByTime(5_000)
+      vi.advanceTimersByTime(5_000)
+
+      expect(forceKillSpy).toHaveBeenCalledTimes(2)
+      expect(session.state).not.toBe('exited')
+      subprocess.simulateExit(137)
+      expect(vi.getTimerCount()).toBe(0)
+    })
+
+    it('retains one retry timer after more than eight force-kill failures', () => {
+      createSession()
+      subprocess.kill = () => {}
+      subprocess.hasExited = () => false
+      const forceKillSpy = vi.spyOn(subprocess, 'forceKill').mockImplementation(() => {
+        throw new Error('native force kill failed')
+      })
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+      try {
+        session.kill()
+        vi.advanceTimersByTime(45_000)
+
+        expect(forceKillSpy).toHaveBeenCalledTimes(9)
+        expect(warn).toHaveBeenCalledTimes(3)
+        expect(session.state).not.toBe('exited')
+        expect(vi.getTimerCount()).toBe(1)
+        subprocess.simulateExit(137)
+        expect(vi.getTimerCount()).toBe(0)
+      } finally {
+        warn.mockRestore()
+      }
     })
 
     it('ignores late data and exit after force-dispose', () => {

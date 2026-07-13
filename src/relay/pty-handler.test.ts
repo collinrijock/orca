@@ -752,12 +752,46 @@ describe('PtyHandler', () => {
       expect(() => vi.advanceTimersByTime(5000)).not.toThrow()
       expect(killSpy).toHaveBeenCalledTimes(2)
       expect(handler.activePtyCount).toBe(1)
-      expect(stderr).toHaveBeenCalledWith(
-        expect.stringContaining('stale-spawn fallback kill failed')
-      )
+      expect(stderr).toHaveBeenCalledWith(expect.stringContaining('stale-spawn force kill failed'))
       expect(() => vi.advanceTimersByTime(5000)).not.toThrow()
       expect(killSpy).toHaveBeenNthCalledWith(3, 'SIGKILL')
       expect(handler.activePtyCount).toBe(0)
+    } finally {
+      stderr.mockRestore()
+    }
+  })
+
+  it('retains stale-spawn ownership beyond the eighth native failure', async () => {
+    let onExitCb: ((event: { exitCode: number }) => void) | null = null
+    const killSpy = vi.fn()
+    for (let attempt = 0; attempt < 9; attempt += 1) {
+      killSpy.mockImplementationOnce(() => {
+        throw new Error('native ConPTY kill failed')
+      })
+    }
+    killSpy.mockImplementationOnce(() => onExitCb?.({ exitCode: 137 }))
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
+    mockPtySpawn.mockReturnValue({
+      ...mockPtyInstance,
+      kill: killSpy,
+      onData: vi.fn(),
+      onExit: vi.fn((cb: (event: { exitCode: number }) => void) => {
+        onExitCb = cb
+      })
+    })
+
+    try {
+      await expect(
+        dispatcher.callRequest('pty.spawn', {}, { isStale: () => true })
+      ).rejects.toThrow('native ConPTY kill failed')
+      vi.advanceTimersByTime(40_000)
+      expect(handler.activePtyCount).toBe(1)
+      expect(killSpy).toHaveBeenCalledTimes(9)
+
+      vi.advanceTimersByTime(5_000)
+      expect(killSpy).toHaveBeenCalledTimes(10)
+      expect(handler.activePtyCount).toBe(0)
+      expect(stderr).toHaveBeenCalledTimes(3)
     } finally {
       stderr.mockRestore()
     }
@@ -1367,6 +1401,44 @@ describe('PtyHandler', () => {
       expect(mockKill.mock.calls).toEqual([[], [], []])
       expect(handler.activePtyCount).toBe(0)
     } finally {
+      if (platformDescriptor) {
+        Object.defineProperty(process, 'platform', platformDescriptor)
+      }
+    }
+  })
+
+  it('contains a Windows graceful fallback throw and re-arms the retained owner', async () => {
+    const platformDescriptor = Object.getOwnPropertyDescriptor(process, 'platform')
+    let onExitCb: ((event: { exitCode: number }) => void) | null = null
+    const mockKill = vi
+      .fn()
+      .mockImplementationOnce(() => {})
+      .mockImplementationOnce(() => {
+        throw new Error('fallback ConPTY kill failed')
+      })
+      .mockImplementationOnce(() => onExitCb?.({ exitCode: 137 }))
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
+    mockPtySpawn.mockReturnValue({
+      ...mockPtyInstance,
+      kill: mockKill,
+      onData: vi.fn(),
+      onExit: vi.fn((cb: (event: { exitCode: number }) => void) => {
+        onExitCb = cb
+      })
+    })
+
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    try {
+      await dispatcher.callRequest('pty.spawn', {})
+      await dispatcher.callRequest('pty.shutdown', { id: 'pty-1', immediate: false })
+
+      expect(() => vi.advanceTimersByTime(5000)).not.toThrow()
+      expect(handler.activePtyCount).toBe(1)
+      expect(() => vi.advanceTimersByTime(5000)).not.toThrow()
+      expect(mockKill.mock.calls).toEqual([[], [], []])
+      expect(handler.activePtyCount).toBe(0)
+    } finally {
+      stderr.mockRestore()
       if (platformDescriptor) {
         Object.defineProperty(process, 'platform', platformDescriptor)
       }

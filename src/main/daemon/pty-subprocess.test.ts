@@ -1251,6 +1251,26 @@ describe('createPtySubprocess', () => {
     killSpy.mockRestore()
   })
 
+  it('propagates force-kill failure while OS liveness still proves the child exists', () => {
+    const proc = mockPtyProcess(77)
+    proc.kill.mockImplementation(() => {
+      throw new Error('native kill failed')
+    })
+    spawnMock.mockReturnValue(proc)
+    const killSpy = vi.spyOn(process, 'kill').mockImplementation((_pid, signal) => {
+      if (signal === 0) {
+        return true
+      }
+      throw new Error('signal kill failed')
+    })
+
+    const handle = createPtySubprocess({ sessionId: 'test', cols: 80, rows: 24 })
+
+    expect(() => handle.forceKill()).toThrow('native kill failed')
+    expect(handle.hasExited?.()).toBe(false)
+    killSpy.mockRestore()
+  })
+
   it('routes onData events', () => {
     const proc = mockPtyProcess()
     spawnMock.mockReturnValue(proc)
@@ -2604,7 +2624,7 @@ describe('createPtySubprocess', () => {
       }
     })
 
-    it('does not issue a second Windows ConPTY kill when force follows graceful kill', () => {
+    it('retries Windows ConPTY kill when force follows an unproved graceful kill', () => {
       const proc = mockPtyProcess(123456) as ReturnType<typeof mockPtyProcess> & {
         destroy: ReturnType<typeof vi.fn>
       }
@@ -2621,7 +2641,8 @@ describe('createPtySubprocess', () => {
         handle.forceKill()
         handle.dispose()
 
-        expect(proc.kill).toHaveBeenCalledOnce()
+        expect(proc.kill).toHaveBeenCalledTimes(2)
+        expect(proc.kill.mock.calls).toEqual([[], []])
         expect(killSpy).not.toHaveBeenCalled()
         expect(proc.destroy).not.toHaveBeenCalled()
       } finally {
@@ -2630,7 +2651,7 @@ describe('createPtySubprocess', () => {
       }
     })
 
-    it('dispose() on Windows skips destroy after forceKill falls back to node-pty kill()', () => {
+    it('dispose() on Windows skips destroy after signal-free forceKill', () => {
       const proc = mockPtyProcess(123456) as ReturnType<typeof mockPtyProcess> & {
         destroy: ReturnType<typeof vi.fn>
       }
@@ -2645,8 +2666,9 @@ describe('createPtySubprocess', () => {
         const handle = createPtySubprocess({ sessionId: 'test', cols: 80, rows: 24 })
         handle.forceKill()
         handle.dispose()
-        expect(killSpy).toHaveBeenCalledWith(123456, 'SIGKILL')
+        expect(killSpy).not.toHaveBeenCalled()
         expect(proc.kill).toHaveBeenCalledOnce()
+        expect(proc.kill).toHaveBeenCalledWith()
         expect(proc.destroy).not.toHaveBeenCalled()
       } finally {
         killSpy.mockRestore()

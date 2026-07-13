@@ -75,6 +75,7 @@ export class TerminalKilledError extends Error {
 }
 
 export class DaemonPtyAdapter implements IPtyProvider {
+  readonly requiresShutdownExitProof = true
   readonly protocolVersion: number
   private socketPath: string
   private tokenPath: string
@@ -551,21 +552,12 @@ export class DaemonPtyAdapter implements IPtyProvider {
       expectedPaneKey: opts.expectedPaneKey,
       expectedTabId: opts.expectedTabId
     })
-    this.activeSessionIds.delete(id)
-    this.dirtySessionVersions.delete(id)
+    // Why: RPC success is only kill acceptance. Exit events or listProcesses
+    // readback own cache cleanup so retries cannot lose a still-live session.
     if (!opts.keepHistory) {
       this.coldRestoreCache.delete(id)
       this.sleepRestoreSessionIds.delete(id)
-      this.paneIdentityBySessionId.delete(id)
     }
-    // Why: the !keepHistory close path doesn't take a final checkpoint, so a
-    // session stranded in sessionsNeedingFullCheckpoint would never be cleared.
-    // (Under keepHistory the final checkpoint above already cleared the flag, so
-    // this is a harmless no-op there — kept unconditional to cover both paths.)
-    this.sessionsNeedingFullCheckpoint.delete(id)
-    this.lastFullCheckpointAt.delete(id)
-    this.stopCheckpointTimerIfIdle()
-    this.initialCwds.delete(id)
     // Why: history removal is for the "user explicitly closed this terminal"
     // path. Sleep also calls shutdown but expects scrollback to survive — wake
     // re-spawns and the cold-restore reader needs the dir intact. Caller

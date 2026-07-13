@@ -49,7 +49,7 @@ function createMockSubprocess(dataOnSubscribe?: string): SubprocessHandle & {
     pause: vi.fn<() => void>(),
     resume: vi.fn<() => void>(),
     kill: vi.fn(() => setTimeout(() => onExitCb?.(0), 5)),
-    forceKill: vi.fn(),
+    forceKill: vi.fn(() => setTimeout(() => onExitCb?.(-1), 5)),
     signal: vi.fn(),
     onData(cb) {
       onDataCb = cb

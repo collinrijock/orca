@@ -23,6 +23,7 @@ const SHELL_READY_TIMEOUT_MS = 15_000
 // older daemon/local paths that still report shell-ready support for Codex.
 export const CODEX_SHELL_READY_TIMEOUT_MS = 300
 const KILL_TIMEOUT_MS = 5_000
+const EXIT_PROOF_POLL_MS = 1_000
 // Why: pending records exist so the 5s checkpoint can persist increments
 // instead of re-serializing the whole buffer. If no client drains them (main
 // process gone, history disabled), memory must stay bounded — past the cap we
@@ -65,12 +66,16 @@ export type SubprocessHandle = {
   clear?(): void
   kill(): void
   forceKill(): void
+  /** Conservative OS/onExit proof; false includes unknown and still alive. */
+  hasExited?(): boolean
+  /** Windows ConPTY may accept a pre-ready close before it can act on it. */
+  retryForceKillUntilExit?: boolean
   signal(sig: string): void
   onData(cb: (data: string) => void): void
   onExit(cb: (code: number) => void): void
   /** Release the native PTY handle via node-pty's own destroy() path.
    *  Idempotent. Safe to call after exit. Called by Session on every teardown
-   *  path (natural exit, kill, force-kill, native throw, session dispose). */
+   *  path after physical exit proof, or during whole-session disposal. */
   dispose(): void
 }
 
@@ -120,6 +125,8 @@ export class Session {
   private shellReadyScanState: ShellReadyScanState | null = null
   private shellReadyTimer: ReturnType<typeof setTimeout> | null = null
   private killTimer: ReturnType<typeof setTimeout> | null = null
+  private forceKillAccepted = false
+  private forceKillFailureCount = 0
   private postReadyFlushGate: PostReadyFlushGate
   private pendingOutputRecords: PendingOutputRecord[] = []
   private pendingOutputBytes = 0
@@ -273,13 +280,30 @@ export class Session {
     // Why: a paused child can be blocked inside write(); resume before
     // signalling so it can run signal handlers and actually exit.
     this.releaseProducerPause({ resume: true })
-    this.subprocess.kill()
+    try {
+      this.subprocess.kill()
+    } catch (error) {
+      this._isTerminating = false
+      throw error
+    }
 
-    this.killTimer = setTimeout(() => {
-      if (this._state !== 'exited') {
-        this.forceDispose()
-      }
-    }, KILL_TIMEOUT_MS)
+    this.scheduleForceShutdownCheck(KILL_TIMEOUT_MS)
+  }
+
+  /** Request immediate shutdown while retaining the session until exit proof. */
+  requestImmediateShutdown(): void {
+    if (this._state === 'exited' || this.forceKillAccepted) {
+      return
+    }
+    this._isTerminating = true
+    this.releaseProducerPause({ resume: true })
+    try {
+      this.issueForceShutdown()
+    } catch (error) {
+      this._isTerminating = false
+      throw error
+    }
+    this.scheduleForceShutdownCheck(this.nextForceShutdownCheckDelay())
   }
 
   signal(sig: string): void {
@@ -557,7 +581,7 @@ export class Session {
   }
 
   private handleSubprocessData(data: string): void {
-    if (this._disposed) {
+    if (this._disposed || this._state === 'exited') {
       return
     }
 
@@ -594,7 +618,7 @@ export class Session {
   }
 
   private handleSubprocessExit(code: number): void {
-    if (this._disposed) {
+    if (this._disposed || this._state === 'exited') {
       return
     }
 
@@ -682,40 +706,72 @@ export class Session {
     }
   }
 
-  private forceDispose(): void {
+  private issueForceShutdown(): void {
     if (this._state === 'exited') {
       return
     }
-    // Why: forceKill BEFORE #teardownSubprocess. Order is load-bearing — the
-    // helper's subprocess.dispose() neutralizes proc.kill on POSIX (to defuse
-    // the SIGHUP-to-recycled-pid hazard inside node-pty). forceKill uses
-    // process.kill(pid, 'SIGKILL') directly and is unaffected by that
-    // neutralization. Must NOT flip `_disposed` here before #teardownSubprocess
-    // runs, or the helper would early-return and skip subprocess.dispose() —
-    // the ptmx fd would leak on every kill-timeout (this whole doc's target).
-    try {
-      this.subprocess.forceKill()
-    } catch {
-      /* already dead */
+    this.subprocess.forceKill()
+    if (!this.isAlive) {
+      return
     }
-    this._exitCode = -1
-    this._isTerminating = false
-
-    this.#teardownSubprocess()
-    this._state = 'exited'
-
-    const clients = this.attachedClients
-    this.attachedClients = []
-    this.preReadyStdinQueue = []
-    this.postReadyFlushGate.clear()
-    this.emulator.dispose()
-
-    for (const client of clients) {
-      client.onExit(-1)
+    this.forceKillAccepted = true
+    this.forceKillFailureCount = 0
+    if (this.subprocess.hasExited?.() === true) {
+      this.handleSubprocessExit(-1)
     }
+  }
 
-    // Why: reap from the host map on the kill-timeout path too (emulator already
-    // disposed above; reapSession's dispose() call is a no-op and just drops it).
-    this.onSessionExit?.(-1)
+  private scheduleForceShutdownCheck(delayMs: number): void {
+    if (this.killTimer || this._state === 'exited') {
+      return
+    }
+    this.killTimer = setTimeout(() => {
+      this.killTimer = null
+      if (this._state === 'exited') {
+        return
+      }
+      if (this.forceKillAccepted) {
+        if (this.subprocess.hasExited?.() === true) {
+          this.handleSubprocessExit(-1)
+          return
+        }
+        if (this.subprocess.retryForceKillUntilExit) {
+          try {
+            this.subprocess.forceKill()
+          } catch (error) {
+            this.forceKillFailureCount += 1
+            if (this.forceKillFailureCount <= 2 || this.forceKillFailureCount === 8) {
+              console.warn('[Session] retained force shutdown failed:', error)
+            }
+          }
+        }
+        if (!this.isAlive) {
+          return
+        }
+        if (this.subprocess.hasExited?.() === true) {
+          this.handleSubprocessExit(-1)
+          return
+        }
+        this.scheduleForceShutdownCheck(this.nextForceShutdownCheckDelay())
+        return
+      }
+      try {
+        this.issueForceShutdown()
+      } catch (error) {
+        this.forceKillFailureCount += 1
+        if (this.forceKillFailureCount <= 2 || this.forceKillFailureCount === 8) {
+          console.warn('[Session] retained force shutdown failed:', error)
+        }
+      }
+      if (this.isAlive) {
+        this.scheduleForceShutdownCheck(this.nextForceShutdownCheckDelay())
+      }
+    }, delayMs)
+  }
+
+  private nextForceShutdownCheckDelay(): number {
+    return this.forceKillAccepted && !this.subprocess.retryForceKillUntilExit
+      ? EXIT_PROOF_POLL_MS
+      : KILL_TIMEOUT_MS
   }
 }

@@ -426,12 +426,37 @@ describe('TerminalHost', () => {
         streamClient: { onData: vi.fn(), onExit: vi.fn() }
       })
 
+      ;(lastSubprocess.forceKill as ReturnType<typeof vi.fn>).mockImplementation(() =>
+        lastSubprocess._onExitCb?.(-1)
+      )
       host.kill('session-1', { immediate: true })
 
       expect(lastSubprocess.kill).not.toHaveBeenCalled()
       expect(lastSubprocess.forceKill).toHaveBeenCalled()
       expect(lastSubprocess.dispose).toHaveBeenCalled()
       expect(host.isKilled('session-1')).toBe(true)
+    })
+
+    it('retains immediate shutdown ownership when native force kill throws', async () => {
+      await host.createOrAttach({
+        sessionId: 'session-1',
+        cols: 80,
+        rows: 24,
+        streamClient: { onData: vi.fn(), onExit: vi.fn() }
+      })
+      ;(lastSubprocess.forceKill as ReturnType<typeof vi.fn>).mockImplementationOnce(() => {
+        throw new Error('native force kill failed')
+      })
+
+      expect(() => host.kill('session-1', { immediate: true })).toThrow('native force kill failed')
+      expect(host.listSessions()).toHaveLength(1)
+      expect(lastSubprocess.dispose).not.toHaveBeenCalled()
+
+      ;(lastSubprocess.forceKill as ReturnType<typeof vi.fn>).mockImplementation(() =>
+        lastSubprocess._onExitCb?.(-1)
+      )
+      host.kill('session-1', { immediate: true })
+      expect(host.listSessions()).toHaveLength(0)
     })
 
     it('throws for non-existent session', () => {

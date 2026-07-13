@@ -209,11 +209,9 @@ export class TerminalHost {
     assertPtyPaneIdentity(sessionId, { paneKey: session.paneKey, tabId: session.tabId }, opts)
     this.recordTombstone(sessionId)
     if (opts.immediate) {
-      session.forceKillAndDisposeSubprocess()
-      // Why: the immediate path tears down synchronously without firing the
-      // session's onExit hook, so reap it here. The graceful path below funnels
-      // through Session.handleSubprocessExit -> onExit -> reapSession.
-      this.reapSession(sessionId)
+      // Why: native force-kill acceptance is not physical-exit proof. The
+      // Session stays listed until onExit or conservative OS readback reaps it.
+      session.requestImmediateShutdown()
       return
     }
     session.kill()
