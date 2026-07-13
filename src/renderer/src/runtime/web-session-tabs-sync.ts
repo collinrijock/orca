@@ -720,9 +720,9 @@ function buildMirroredAgentStatusPatch(
       !existing ||
       existing.state !== entry.state ||
       !isAgentStatusFresh(existing, now) ||
-      entryAttributionChanged
-    aggregateRelevantChange =
-      aggregateRelevantChange || entrySortRelevantChange || entryAttributionChanged
+      entryAttributionChanged ||
+      isMirroredCommandCodeTurnBump(existing, entry)
+    aggregateRelevantChange = aggregateRelevantChange || entrySortRelevantChange
     sortRelevantChange = sortRelevantChange || entrySortRelevantChange
   }
 
@@ -1306,12 +1306,26 @@ function agentStatusEntryEqual(a: AgentStatusEntry | undefined, b: AgentStatusEn
     a.interactivePrompt === b.interactivePrompt &&
     a.lastAssistantMessage === b.lastAssistantMessage &&
     a.interrupted === b.interrupted &&
+    a.promptInteractionKey === b.promptInteractionKey &&
     sameAgentStateHistory(a.stateHistory, b.stateHistory)
   )
 }
 
 function isAgentStatusFresh(entry: Pick<AgentStatusEntry, 'updatedAt'>, now: number): boolean {
   return now - entry.updatedAt <= AGENT_STATUS_STALE_AFTER_MS
+}
+
+function isMirroredCommandCodeTurnBump(
+  existing: AgentStatusEntry | undefined,
+  entry: AgentStatusEntry
+): boolean {
+  return (
+    existing?.agentType === 'command-code' &&
+    entry.agentType === 'command-code' &&
+    existing.state === 'working' &&
+    entry.state === 'working' &&
+    entry.stateStartedAt > existing.stateStartedAt
+  )
 }
 
 function sameStringRecord(
