@@ -1018,6 +1018,28 @@ describe('PtyHandler', () => {
     expect(mockKill).toHaveBeenCalledWith('SIGTERM')
   })
 
+  it('kills PTY on shutdown without a signal on Windows', async () => {
+    // Why: node-pty's Windows agent throws "Signals not supported on windows."
+    // for any signal argument; shutdown must fall back to a bare kill().
+    const originalPlatform = process.platform
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    const mockKill = vi.fn()
+    mockPtySpawn.mockReturnValue({
+      ...mockPtyInstance,
+      kill: mockKill,
+      onData: vi.fn(),
+      onExit: vi.fn()
+    })
+    try {
+      await dispatcher.callRequest('pty.spawn', {})
+      await dispatcher.callRequest('pty.shutdown', { id: 'pty-1', immediate: false })
+      expect(mockKill).toHaveBeenCalledWith()
+      expect(mockKill).not.toHaveBeenCalledWith('SIGTERM')
+    } finally {
+      Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform })
+    }
+  })
+
   it('flushes pending PTY output before immediate shutdown cleanup', async () => {
     let dataCallback: ((data: string) => void) | undefined
     const mockKill = vi.fn()
