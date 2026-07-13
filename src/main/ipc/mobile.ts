@@ -1,4 +1,4 @@
-import { ipcMain } from 'electron'
+import { app, ipcMain, shell, type IpcMainInvokeEvent } from 'electron'
 import { networkInterfaces } from 'node:os'
 import QRCode from 'qrcode'
 import type { RuntimeAccessGrant } from '../../shared/runtime-access-grants'
@@ -6,6 +6,12 @@ import { isTailnetIPv4Address } from '../../shared/tailnet-address'
 import type { DeviceEntry } from '../runtime/device-registry'
 import type { OrcaRuntimeRpcServer } from '../runtime/runtime-rpc'
 import type { RelayBrokerStatus } from '../runtime/relay/relay-session-broker'
+import {
+  getWebSocketPort,
+  inspectWindowsMobileFirewall,
+  repairWindowsMobileFirewall,
+  type WindowsMobileFirewallEnvironment
+} from '../runtime/windows-mobile-firewall'
 
 export type NetworkInterface = {
   name: string
@@ -52,10 +58,22 @@ function toRuntimeAccessGrant(device: DeviceEntry): RuntimeAccessGrant {
 // device management, and WebSocket readiness status. They depend on the
 // OrcaRuntimeRpcServer because it owns the device registry and TLS state.
 
+export type MobileHandlerDependencies = {
+  firewallEnvironment?: WindowsMobileFirewallEnvironment
+  openWindowsNetworkSettings?: () => Promise<void>
+  getRelayStatus?: () => RelayBrokerStatus
+}
+
 export function registerMobileHandlers(
   rpcServer: OrcaRuntimeRpcServer,
-  options: { getRelayStatus?: () => RelayBrokerStatus } = {}
+  dependencies: MobileHandlerDependencies = {}
 ): void {
+  const firewallEnvironment = dependencies.firewallEnvironment ?? {
+    platform: process.platform,
+    isPackaged: app.isPackaged,
+    executablePath: process.execPath,
+    systemRoot: process.env.SystemRoot
+  }
   ipcMain.handle('mobile:listNetworkInterfaces', (): { interfaces: NetworkInterface[] } => ({
     interfaces: getNetworkInterfaces()
   }))
@@ -193,7 +211,36 @@ export function registerMobileHandlers(
     }
   })
 
+  ipcMain.handle('mobile:getWindowsFirewallStatus', (_event, args?: { address?: string }) => {
+    const port = getWebSocketPort(rpcServer.getWebSocketEndpoint())
+    return inspectWindowsMobileFirewall(port, args?.address, firewallEnvironment)
+  })
+
+  ipcMain.handle('mobile:repairWindowsFirewall', (event: IpcMainInvokeEvent) => {
+    if (!isWindowRenderer(event)) {
+      return { ok: false as const, reason: 'unsupported' as const }
+    }
+    // Why: elevated inputs come from the running runtime, never the renderer.
+    const port = getWebSocketPort(rpcServer.getWebSocketEndpoint())
+    return repairWindowsMobileFirewall(port, firewallEnvironment)
+  })
+
+  ipcMain.handle('mobile:openWindowsNetworkSettings', async (event: IpcMainInvokeEvent) => {
+    if (!isWindowRenderer(event) || firewallEnvironment.platform !== 'win32') {
+      return false
+    }
+    const openSettings =
+      dependencies.openWindowsNetworkSettings ??
+      (() => shell.openExternal('ms-settings:network-status'))
+    await openSettings()
+    return true
+  })
+
   ipcMain.handle('mobile:getRelayStatus', () => ({
-    status: options.getRelayStatus?.() ?? 'offline'
+    status: dependencies.getRelayStatus?.() ?? 'offline'
   }))
+}
+
+function isWindowRenderer(event: IpcMainInvokeEvent): boolean {
+  return !event.sender.isDestroyed() && event.sender.getType() === 'window'
 }
