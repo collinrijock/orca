@@ -9060,7 +9060,8 @@
             "secrets": "プラグイン専用の暗号化保管庫にシークレットを保存し、読み取る",
             "eventsSubscribe": "ワークツリーの作成・削除やエージェント状態の変更時に通知を受け取る",
             "settingsOwn": "プラグイン自身の設定を読み取り、変更する"
-          }
+          },
+          "skillWarning": "このプラグインは指示を含むスキルをインストールします。エージェントはその指示を読み、付与されたすべての権限で操作する場合があります。"
         },
         "PluginDevelopmentSection": {
           "pathRequired": "プラグインフォルダーのパスを入力してください。",
@@ -9122,7 +9123,8 @@
           "restarting": "再起動中",
           "invalidPluginError": "プラグインのマニフェストまたはインストール済みファイルが無効です。修正してから更新してください。",
           "runtimeError": "有効化またはワーカーのエラー後にプラグインが停止しました。",
-          "disableLabel": "{{value0}}を無効にする"
+          "disableLabel": "{{value0}}を無効にする",
+          "configureSkills": "スキルを設定"
         },
         "PluginsSettingsSection": {
           "loadFailed": "プラグインを読み込めませんでした。",
@@ -9169,6 +9171,19 @@
             "description": "有効な Orca プラグインのテーマを適用します。",
             "builtIn": "組み込みテーマを使用"
           }
+        },
+        "PluginSkillMappingDialog": {
+          "agentSkillsProvider": "共有エージェントスキル",
+          "loadFailed": "スキルのインストール設定を読み込めませんでした。",
+          "saveFailed": "スキルのインストール設定を更新できませんでした。",
+          "title": "スキルのインストール先を選択",
+          "description": "ユーザースキルはすべてのプロジェクトで利用できます。リポジトリスキルは登録済みのローカルプロジェクトにのみコピーされます。SSH 同期は後のフェーズで対応します。",
+          "loading": "スキル設定を読み込み中…",
+          "noSkills": "スキルを設定する前にこのプラグインを有効にしてください。",
+          "userScope": "ユーザープロファイル",
+          "disabled": "インストールしない",
+          "cancel": "キャンセル",
+          "save": "保存"
         }
       },
       "right": {

@@ -209,6 +209,17 @@ export function PluginConsentDialog({
                     )}
               </span>
             </div>
+            {plugin.hasSkills ? (
+              <div className="flex items-start gap-2 rounded-md border border-border bg-muted/50 px-3.5 py-3 text-sm leading-6">
+                <AlertTriangle className="mt-1 size-4 shrink-0" />
+                <span>
+                  {translate(
+                    'auto.components.settings.PluginConsentDialog.skillWarning',
+                    'This plugin installs instructional skills. Agents read those instructions and may act on them with the full authority you give the agent.'
+                  )}
+                </span>
+              </div>
+            ) : null}
             {error ? <p className="text-xs text-destructive">{error}</p> : null}
             <DialogFooter>
               <Button

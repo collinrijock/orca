@@ -9060,7 +9060,8 @@
             "secrets": "Store and read secrets in the plugin's own encrypted vault",
             "eventsSubscribe": "Get notified when worktrees are created or removed and when agent status changes",
             "settingsOwn": "Read and change the plugin's own settings"
-          }
+          },
+          "skillWarning": "This plugin installs instructional skills. Agents read those instructions and may act on them with the full authority you give the agent."
         },
         "PluginDevelopmentSection": {
           "pathRequired": "Enter a plugin folder path.",
@@ -9122,7 +9123,8 @@
           "restarting": "Restarting",
           "invalidPluginError": "The plugin manifest or installed files are invalid. Fix the plugin, then refresh.",
           "runtimeError": "The plugin stopped after an activation or worker error.",
-          "disableLabel": "Disable {{value0}}"
+          "disableLabel": "Disable {{value0}}",
+          "configureSkills": "Configure skills"
         },
         "PluginsSettingsSection": {
           "loadFailed": "Could not load plugins.",
@@ -9169,6 +9171,19 @@
             "description": "Apply a theme from an enabled Orca plugin.",
             "builtIn": "Use built-in theme"
           }
+        },
+        "PluginSkillMappingDialog": {
+          "agentSkillsProvider": "Shared agent skills",
+          "loadFailed": "Could not load skill installation settings.",
+          "saveFailed": "Could not update skill installation settings.",
+          "title": "Choose where skills are installed",
+          "description": "User skills are available across projects. Repository skills are copied only into a registered local project; SSH synchronization arrives in a later phase.",
+          "loading": "Loading skill settings…",
+          "noSkills": "Enable this plugin before configuring its skills.",
+          "userScope": "User profile",
+          "disabled": "Do not install",
+          "cancel": "Cancel",
+          "save": "Save"
         }
       },
       "right": {

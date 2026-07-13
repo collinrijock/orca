@@ -9060,7 +9060,8 @@
             "secrets": "Guardar y leer secretos en la bóveda cifrada propia del plugin",
             "eventsSubscribe": "Recibir avisos cuando se creen o eliminen worktrees y cuando cambie el estado de un agente",
             "settingsOwn": "Leer y cambiar la configuración propia del plugin"
-          }
+          },
+          "skillWarning": "Este plugin instala habilidades con instrucciones. Los agentes leen esas instrucciones y pueden actuar con toda la autoridad que les concedas."
         },
         "PluginDevelopmentSection": {
           "pathRequired": "Introduce la ruta de una carpeta de plugin.",
@@ -9122,7 +9123,8 @@
           "restarting": "Reiniciando",
           "invalidPluginError": "El manifiesto o los archivos instalados del plugin no son válidos. Corrige el plugin y actualiza.",
           "runtimeError": "El plugin se detuvo tras un error de activación o del proceso.",
-          "disableLabel": "Desactivar {{value0}}"
+          "disableLabel": "Desactivar {{value0}}",
+          "configureSkills": "Configurar habilidades"
         },
         "PluginsSettingsSection": {
           "loadFailed": "No se pudieron cargar los plugins.",
@@ -9169,6 +9171,19 @@
             "description": "Aplica un tema de un plugin de Orca habilitado.",
             "builtIn": "Usar tema integrado"
           }
+        },
+        "PluginSkillMappingDialog": {
+          "agentSkillsProvider": "Habilidades compartidas de agentes",
+          "loadFailed": "No se pudo cargar la configuración de instalación de habilidades.",
+          "saveFailed": "No se pudo actualizar la configuración de instalación de habilidades.",
+          "title": "Elige dónde instalar las habilidades",
+          "description": "Las habilidades de usuario están disponibles en todos los proyectos. Las habilidades de repositorio se copian solo en un proyecto local registrado; la sincronización por SSH llegará en una fase posterior.",
+          "loading": "Cargando la configuración de habilidades…",
+          "noSkills": "Activa este plugin antes de configurar sus habilidades.",
+          "userScope": "Perfil de usuario",
+          "disabled": "No instalar",
+          "cancel": "Cancelar",
+          "save": "Guardar"
         }
       },
       "right": {

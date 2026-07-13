@@ -57,6 +57,10 @@ import type { PluginConsentRequest } from '../shared/plugins/plugin-consent-requ
 import type { PluginThemeRegistration } from '../shared/plugins/plugin-theme-artifact'
 import type { PluginLanguagePackRegistration } from '../shared/plugins/plugin-language-pack-artifact'
 import type {
+  PluginSkillContributionMapping,
+  PluginSkillStoreSnapshot
+} from '../shared/plugins/plugin-skill-store'
+import type {
   LocalhostWorktreeLabelResult,
   LocalhostWorktreeLabelRoute
 } from '../shared/localhost-worktree-labels'
@@ -941,6 +945,7 @@ export type PluginHostListEntry = {
   panels: PluginHostPanel[]
   commands: { id: string; title: string }[]
   hasWorker: boolean
+  hasSkills?: boolean
   restarts: number
   source?: {
     kind: 'local-path' | 'git'
@@ -3176,6 +3181,8 @@ export type PreloadApi = {
     list: () => Promise<PluginHostListEntry[]>
     listThemes: () => Promise<PluginThemeRegistration[]>
     listLanguagePacks: () => Promise<PluginLanguagePackRegistration[]>
+    listSkillStore: () => Promise<PluginSkillStoreSnapshot>
+    setSkillMapping: (mapping: PluginSkillContributionMapping) => Promise<PluginSkillStoreSnapshot>
     /** Records the consent-dialog answer; approval is keyed to the plugin's
      *  current capability and trusted-worker fingerprint. */
     consent: (args: PluginConsentRequest) => Promise<PluginHostListEntry[]>

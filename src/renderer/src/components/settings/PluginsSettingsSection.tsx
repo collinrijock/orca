@@ -11,9 +11,10 @@ import { Button } from '../ui/button'
 import { PluginConsentDialog } from './PluginConsentDialog'
 import { PluginInstallDialog } from './PluginInstallDialog'
 import { PluginRemoveDialog } from './PluginRemoveDialog'
+import { PluginSkillMappingDialog } from './PluginSkillMappingDialog'
 import { PluginSettingsOverview } from './PluginSettingsOverview'
 import type { PluginLogsState } from './PluginSettingsRow'
-import { getPluginsPaneSearchEntries } from './plugins-search'
+import { getPluginsSectionPresentation } from './plugins-search'
 import { SettingsSection } from './SettingsSection'
 
 type PluginsSettingsSectionProps = {
@@ -38,6 +39,7 @@ export function PluginsSettingsSection({
   const [installOpen, setInstallOpen] = useState(false)
   const [consentPluginId, setConsentPluginId] = useState<string | null>(null)
   const [removePluginId, setRemovePluginId] = useState<string | null>(null)
+  const [skillPluginId, setSkillPluginId] = useState<string | null>(null)
   const [busyPluginKeys, setBusyPluginKeys] = useState<Set<string>>(() => new Set())
   const [featureBusy, setFeatureBusy] = useState(false)
   const [refreshBusy, setRefreshBusy] = useState(false)
@@ -57,6 +59,7 @@ export function PluginsSettingsSection({
     // Why: accepted discovery results own installed-plugin identity and invalidate stale UI state.
     setConsentPluginId((current) => (current && installedPluginKeys.has(current) ? current : null))
     setRemovePluginId((current) => (current && installedPluginKeys.has(current) ? current : null))
+    setSkillPluginId((current) => (current && installedPluginKeys.has(current) ? current : null))
     setBusyPluginKeys(
       (current) => new Set([...current].filter((pluginKey) => installedPluginKeys.has(pluginKey)))
     )
@@ -126,6 +129,7 @@ export function PluginsSettingsSection({
       setInstallOpen(false)
       setConsentPluginId(null)
       setRemovePluginId(null)
+      setSkillPluginId(null)
       setBusyPluginKeys(new Set())
       setFeatureBusy(false)
       setRefreshBusy(false)
@@ -162,18 +166,7 @@ export function PluginsSettingsSection({
     }
   }, [mounted, settings.pluginSystemEnabled])
 
-  const sectionPresentation = {
-    title: translate('auto.components.settings.PluginsSettingsSection.title', 'Plugins'),
-    badge: translate(
-      'auto.components.settings.PluginsSettingsSection.experimental',
-      'Experimental'
-    ),
-    description: translate(
-      'auto.components.settings.PluginsSettingsSection.description',
-      'Install and manage Orca plugins. Plugins run on this computer, even for SSH workspaces.'
-    ),
-    searchEntries: getPluginsPaneSearchEntries()
-  }
+  const sectionPresentation = getPluginsSectionPresentation()
 
   if (!mounted) {
     return <SettingsSection id="plugins" {...sectionPresentation} />
@@ -183,6 +176,7 @@ export function PluginsSettingsSection({
     plugins.find((plugin) => plugin.pluginKey === consentPluginId) ?? null
   const consentPlugin = selectedConsentPlugin?.consentFingerprint ? selectedConsentPlugin : null
   const removePlugin = plugins.find((plugin) => plugin.pluginKey === removePluginId) ?? null
+  const skillPlugin = plugins.find((plugin) => plugin.pluginKey === skillPluginId) ?? null
 
   const toggleFeature = async (): Promise<void> => {
     setFeatureBusy(true)
@@ -406,6 +400,7 @@ export function PluginsSettingsSection({
         onReview={setConsentPluginId}
         onToggleEnabled={(entry) => void toggleEnabled(entry)}
         onToggleLogs={toggleLogs}
+        onConfigureSkills={setSkillPluginId}
         onRemoveRequest={setRemovePluginId}
         onUpdateDevPaths={updateDevPaths}
       />
@@ -421,6 +416,7 @@ export function PluginsSettingsSection({
         onCancel={() => setRemovePluginId(null)}
         onConfirm={(pluginKey) => void remove(pluginKey)}
       />
+      <PluginSkillMappingDialog plugin={skillPlugin} onClose={() => setSkillPluginId(null)} />
     </SettingsSection>
   )
 }

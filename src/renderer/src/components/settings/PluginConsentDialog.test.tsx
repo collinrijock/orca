@@ -119,6 +119,14 @@ describe('PluginConsentDialog', () => {
     expect(document.body.textContent).not.toContain('full access to your files')
   })
 
+  it('discloses that contributed skills run as agent instructions', async () => {
+    await renderConsent({ ...plugin, hasSkills: true }, vi.fn().mockResolvedValue(undefined))
+
+    expect(document.body.textContent).toContain(
+      'Agents read those instructions and may act on them with the full authority you give the agent.'
+    )
+  })
+
   it('records Keep Disabled when Escape dismisses the dialog', async () => {
     const onDecision = vi.fn().mockResolvedValue(undefined)
     await renderConsent(plugin, onDecision)

@@ -9060,7 +9060,8 @@
             "secrets": "在插件自己的加密保管库中保存和读取机密信息",
             "eventsSubscribe": "在创建或移除工作树以及智能体状态变化时接收通知",
             "settingsOwn": "读取和更改插件自己的设置"
-          }
+          },
+          "skillWarning": "此插件会安装包含指令的技能。智能体会读取这些指令，并可能使用你授予智能体的全部权限执行操作。"
         },
         "PluginDevelopmentSection": {
           "pathRequired": "请输入插件文件夹路径。",
@@ -9122,7 +9123,8 @@
           "restarting": "正在重新启动",
           "invalidPluginError": "插件清单或已安装文件无效。请修复插件后刷新。",
           "runtimeError": "插件在激活或工作进程出错后停止。",
-          "disableLabel": "停用 {{value0}}"
+          "disableLabel": "停用 {{value0}}",
+          "configureSkills": "配置技能"
         },
         "PluginsSettingsSection": {
           "loadFailed": "无法加载插件。",
@@ -9169,6 +9171,19 @@
             "description": "应用已启用的 Orca 插件所提供的主题。",
             "builtIn": "使用内置主题"
           }
+        },
+        "PluginSkillMappingDialog": {
+          "agentSkillsProvider": "共享智能体技能",
+          "loadFailed": "无法加载技能安装设置。",
+          "saveFailed": "无法更新技能安装设置。",
+          "title": "选择技能安装位置",
+          "description": "用户技能可用于所有项目。仓库技能只会复制到已注册的本地项目中；SSH 同步将在后续阶段提供。",
+          "loading": "正在加载技能设置…",
+          "noSkills": "请先启用此插件，再配置其技能。",
+          "userScope": "用户配置",
+          "disabled": "不安装",
+          "cancel": "取消",
+          "save": "保存"
         }
       },
       "right": {

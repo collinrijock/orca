@@ -561,6 +561,8 @@ const api = {
     list: (): Promise<PluginHostListEntry[]> => ipcRenderer.invoke('plugins:list'),
     listThemes: () => ipcRenderer.invoke('plugins:listThemes'),
     listLanguagePacks: () => ipcRenderer.invoke('plugins:listLanguagePacks'),
+    listSkillStore: () => ipcRenderer.invoke('plugins:listSkillStore'),
+    setSkillMapping: (mapping) => ipcRenderer.invoke('plugins:setSkillMapping', mapping),
     consent: (args: PluginConsentRequest): Promise<PluginHostListEntry[]> =>
       ipcRenderer.invoke('plugins:consent', args),
     setEnabled: (args: { pluginKey: string; enabled: boolean }): Promise<PluginHostListEntry[]> =>

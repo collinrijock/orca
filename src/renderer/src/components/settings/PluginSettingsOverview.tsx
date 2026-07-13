@@ -24,6 +24,7 @@ type PluginSettingsOverviewProps = {
   onReview: (pluginKey: string) => void
   onToggleEnabled: (plugin: PluginHostListEntry) => void
   onToggleLogs: (pluginKey: string) => void
+  onConfigureSkills: (pluginKey: string) => void
   onRemoveRequest: (pluginKey: string) => void
   onUpdateDevPaths: (paths: string[]) => Promise<void>
 }
@@ -46,6 +47,7 @@ export function PluginSettingsOverview({
   onReview,
   onToggleEnabled,
   onToggleLogs,
+  onConfigureSkills,
   onRemoveRequest,
   onUpdateDevPaths
 }: PluginSettingsOverviewProps): React.JSX.Element {
@@ -122,6 +124,7 @@ export function PluginSettingsOverview({
                   onReview={onReview}
                   onToggleEnabled={onToggleEnabled}
                   onToggleLogs={onToggleLogs}
+                  onConfigureSkills={onConfigureSkills}
                   onRemoveRequest={onRemoveRequest}
                 />
               ))}

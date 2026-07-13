@@ -20,7 +20,6 @@ import {
   type DiscoveredPlugin,
   type ValidDiscoveredPlugin
 } from './plugin-discovery'
-import type { PluginWorkerFactory } from './plugin-worker-manager'
 import { PluginEventBus } from './plugin-event-bus'
 import { PluginAuditLog } from './plugin-audit-log'
 import { executePluginHostCallRequest } from './plugin-host-call-adapter'
@@ -34,22 +33,11 @@ import { collectApprovedWorkerSpecs } from './plugin-worker-reconciliation'
 import type { PluginRunState } from './plugin-supervisor'
 import { isPluginApproved, snapshotPluginConsentLists } from './plugin-activation-policy'
 import { PluginContentPackRegistry } from './plugin-content-pack-registry'
+import type { PluginServiceOptions } from './plugin-service-options'
 
 export type { PluginRuntimeDelegate } from './plugin-host-service-bindings'
 export type { PluginLogLine } from './plugin-log-buffer'
-
-export type PluginServiceOptions = {
-  userDataPath: string
-  hostVersion: string
-  isPluginSystemEnabled: () => boolean
-  getDisabledPlugins: () => string[]
-  getPluginConsents: () => Record<string, string>
-  getDevPluginPaths: () => string[]
-  hostEntryPath?: string
-  workerFactory?: PluginWorkerFactory
-  maxActiveWorkers?: number
-  idleReapMs?: number
-}
+export type { PluginServiceOptions } from './plugin-service-options'
 
 export class PluginService {
   readonly options: PluginServiceOptions
@@ -59,7 +47,7 @@ export class PluginService {
   private readonly workerController: PluginWorkerController
   private readonly logBuffer = new PluginLogBuffer()
   private readonly contentVerifier = new PluginContentVerifier()
-  readonly contentPacks = new PluginContentPackRegistry(this.contentVerifier)
+  readonly contentPacks: PluginContentPackRegistry
   readonly panels: PluginPanelController
   private readonly changeListeners = new Set<() => void>()
   private readonly housekeeping = new PluginServiceHousekeeping()
@@ -71,6 +59,10 @@ export class PluginService {
 
   constructor(options: PluginServiceOptions) {
     this.options = options
+    this.contentPacks = new PluginContentPackRegistry(this.contentVerifier, {
+      pluginsDataDir: getPluginsDataDir(options.userDataPath),
+      homeDirectory: options.homeDirectory
+    })
     this.audit = new PluginAuditLog(getPluginsDataDir(options.userDataPath))
     this.panels = new PluginPanelController({
       resolveApprovedPlugin: (pluginKey) => {

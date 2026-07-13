@@ -17,3 +17,18 @@ export const getPluginsPaneSearchEntries = createLocalizedCatalog((): SettingsSe
     ]
   }
 ])
+
+export function getPluginsSectionPresentation() {
+  return {
+    title: translate('auto.components.settings.PluginsSettingsSection.title', 'Plugins'),
+    badge: translate(
+      'auto.components.settings.PluginsSettingsSection.experimental',
+      'Experimental'
+    ),
+    description: translate(
+      'auto.components.settings.PluginsSettingsSection.description',
+      'Install and manage Orca plugins. Plugins run on this computer, even for SSH workspaces.'
+    ),
+    searchEntries: getPluginsPaneSearchEntries()
+  }
+}

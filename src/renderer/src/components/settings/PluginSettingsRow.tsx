@@ -1,4 +1,4 @@
-import { AlertTriangle, FileText, Loader2, MoreHorizontal, Trash2 } from 'lucide-react'
+import { AlertTriangle, BookOpen, FileText, Loader2, MoreHorizontal, Trash2 } from 'lucide-react'
 import type { PluginHostListEntry, PluginHostLogLine } from '../../../../preload/api-types'
 import { translate } from '@/i18n/i18n'
 import { invalidPluginErrorMessage } from './plugin-error-presentation'
@@ -26,6 +26,7 @@ type PluginSettingsRowProps = {
   onReview: (pluginKey: string) => void
   onToggleEnabled: (plugin: PluginHostListEntry) => void
   onToggleLogs: (pluginKey: string) => void
+  onConfigureSkills: (pluginKey: string) => void
   onRemoveRequest: (pluginKey: string) => void
 }
 
@@ -132,6 +133,7 @@ export function PluginSettingsRow({
   onReview,
   onToggleEnabled,
   onToggleLogs,
+  onConfigureSkills,
   onRemoveRequest
 }: PluginSettingsRowProps): React.JSX.Element {
   const status = statusPresentation(plugin)
@@ -238,6 +240,15 @@ export function PluginSettingsRow({
                   ? translate('auto.components.settings.PluginSettingsRow.hideLogs', 'Hide logs')
                   : translate('auto.components.settings.PluginSettingsRow.viewLogs', 'View logs')}
               </DropdownMenuItem>
+              {plugin.hasSkills ? (
+                <DropdownMenuItem onSelect={() => onConfigureSkills(plugin.pluginKey)}>
+                  <BookOpen />
+                  {translate(
+                    'auto.components.settings.PluginSettingsRow.configureSkills',
+                    'Configure skills'
+                  )}
+                </DropdownMenuItem>
+              ) : null}
               {!plugin.isDev ? (
                 <DropdownMenuItem
                   variant="destructive"

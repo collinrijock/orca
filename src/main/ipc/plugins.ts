@@ -21,6 +21,8 @@ import { isQualifiedPluginKey } from '../../shared/plugins/plugin-manifest'
 import { pluginConsentRequestSchema } from '../../shared/plugins/plugin-consent-request'
 import { normalizePluginIdList } from '../../shared/plugins/plugin-consent-state'
 import { isAllowedPluginGitUrl } from '../../shared/plugins/plugin-install-lockfile'
+import type { PluginSkillStoreSnapshot } from '../../shared/plugins/plugin-skill-store'
+import { authorizePluginSkillMapping } from '../plugins/plugin-skill-mapping-authority'
 
 export function parsePluginConsentArgs(args: unknown): z.infer<typeof pluginConsentRequestSchema> {
   return pluginConsentRequestSchema.parse(args)
@@ -69,6 +71,15 @@ export async function listPluginsForClients(
   return buildPluginList(pluginService, lock)
 }
 
+async function pluginSkillStoreSnapshot(
+  pluginService: PluginService
+): Promise<PluginSkillStoreSnapshot> {
+  return {
+    registrations: [...pluginService.contentPacks.skills.list()],
+    mappings: [...(await pluginService.contentPacks.skills.mappings.list())]
+  }
+}
+
 export function canRemoveInstalledPlugin(pluginService: PluginService, pluginKey: string): boolean {
   return pluginService
     .getDiscovered()
@@ -110,6 +121,21 @@ export function registerPluginHandlers(
   ipcMain.handle('plugins:listLanguagePacks', async () => {
     await pluginService.whenReady()
     return pluginService.contentPacks.languagePacks.list()
+  })
+  ipcMain.handle('plugins:listSkillStore', async () => {
+    await pluginService.whenReady()
+    return pluginSkillStoreSnapshot(pluginService)
+  })
+  ipcMain.handle('plugins:setSkillMapping', async (_event, args: unknown) => {
+    await pluginService.whenReady()
+    const mapping = authorizePluginSkillMapping(
+      args,
+      pluginService.getDiscovered(),
+      store.getRepos()
+    )
+    await pluginService.contentPacks.skills.setMapping(mapping)
+    await pluginService.reconcileActivationState()
+    return pluginSkillStoreSnapshot(pluginService)
   })
 
   ipcMain.handle('plugins:consent', async (event, args: unknown) => {

@@ -50,12 +50,19 @@ function isWithinDepth(rootPath: string, childPath: string, maxDepth: number): b
   return rel.split(sep).length <= maxDepth
 }
 
-function sourceKindForSkill(root: SkillScanRoot, skillFilePath: string): SkillSourceKind {
+function sourceKindForSkill(
+  root: SkillScanRoot,
+  skillFilePath: string,
+  materializedByPlugin: boolean
+): SkillSourceKind {
   if (
     root.sourceKind === 'home' &&
     relative(root.path, skillFilePath).split(sep)[0] === '.system'
   ) {
     return 'bundled'
+  }
+  if (materializedByPlugin) {
+    return 'plugin'
   }
   return root.sourceKind
 }
@@ -210,7 +217,11 @@ async function scanRoot(root: SkillScanRoot): Promise<DiscoveredSkill[]> {
     skillFiles.map(async (skillFilePath) => {
       const directoryPath = dirname(skillFilePath)
       const summary = await readSkillSummary(skillFilePath)
-      const sourceKind = sourceKindForSkill(root, skillFilePath)
+      const sourceKind = sourceKindForSkill(
+        root,
+        skillFilePath,
+        await pathExists(join(directoryPath, '.orca-plugin-owner.json'))
+      )
       return {
         id: stablePathId(skillFilePath),
         name: summary.name ?? basename(directoryPath),

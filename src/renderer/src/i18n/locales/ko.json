@@ -9060,7 +9060,8 @@
             "secrets": "플러그인 전용 암호화 보관소에서 비밀 정보 저장 및 읽기",
             "eventsSubscribe": "워크트리가 생성 또는 제거되거나 에이전트 상태가 변경될 때 알림 받기",
             "settingsOwn": "플러그인 자체 설정 읽기 및 변경"
-          }
+          },
+          "skillWarning": "이 플러그인은 지침이 포함된 스킬을 설치합니다. 에이전트는 해당 지침을 읽고 사용자가 부여한 모든 권한으로 작업할 수 있습니다."
         },
         "PluginDevelopmentSection": {
           "pathRequired": "플러그인 폴더 경로를 입력하세요.",
@@ -9122,7 +9123,8 @@
           "restarting": "다시 시작 중",
           "invalidPluginError": "플러그인 매니페스트 또는 설치된 파일이 올바르지 않습니다. 수정한 후 새로 고치세요.",
           "runtimeError": "활성화 또는 워커 오류 후 플러그인이 중지되었습니다.",
-          "disableLabel": "{{value0}} 비활성화"
+          "disableLabel": "{{value0}} 비활성화",
+          "configureSkills": "스킬 구성"
         },
         "PluginsSettingsSection": {
           "loadFailed": "플러그인을 불러올 수 없습니다.",
@@ -9169,6 +9171,19 @@
             "description": "활성화된 Orca 플러그인의 테마를 적용합니다.",
             "builtIn": "기본 제공 테마 사용"
           }
+        },
+        "PluginSkillMappingDialog": {
+          "agentSkillsProvider": "공유 에이전트 스킬",
+          "loadFailed": "스킬 설치 설정을 불러올 수 없습니다.",
+          "saveFailed": "스킬 설치 설정을 업데이트할 수 없습니다.",
+          "title": "스킬 설치 위치 선택",
+          "description": "사용자 스킬은 모든 프로젝트에서 사용할 수 있습니다. 저장소 스킬은 등록된 로컬 프로젝트에만 복사되며 SSH 동기화는 이후 단계에서 제공됩니다.",
+          "loading": "스킬 설정 불러오는 중…",
+          "noSkills": "스킬을 구성하기 전에 이 플러그인을 활성화하세요.",
+          "userScope": "사용자 프로필",
+          "disabled": "설치하지 않음",
+          "cancel": "취소",
+          "save": "저장"
         }
       },
       "right": {

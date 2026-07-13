@@ -47,6 +47,7 @@ export type PluginListEntry = {
   panels: PluginListPanelEntry[]
   commands: { id: string; title: string }[]
   hasWorker: boolean
+  hasSkills: boolean
   restarts: number
   source?: {
     kind: 'local-path' | 'git'
@@ -80,6 +81,7 @@ export function buildPluginList(service: PluginService, lock: PluginLockfile): P
         panels: [],
         commands: [],
         hasWorker: false,
+        hasSkills: false,
         restarts: 0
       }
     }
@@ -137,6 +139,7 @@ export function buildPluginList(service: PluginService, lock: PluginLockfile): P
         title: command.title
       })),
       hasWorker: Boolean(plugin.manifest.main),
+      hasSkills: plugin.manifest.contributes.skills.length > 0,
       restarts: worker.restarts,
       ...(lockEntry
         ? {
