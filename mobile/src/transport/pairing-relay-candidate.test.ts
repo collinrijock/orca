@@ -107,6 +107,7 @@ describe('recovering pairing relay candidate', () => {
     ['wrong cell', new RelayOuterError(4409)],
     ['planned drain', new RelayOuterError(4503)],
     ['opaque close', new RelayOuterError(1006)],
+    ['HTTP 502', new Error('HTTP 502')],
     ['HTTP 503', new Error('HTTP 503')],
     ['HTTP 504', new Error('HTTP 504')],
     ['transport failure', new Error('relay transport error')]

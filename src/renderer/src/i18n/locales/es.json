@@ -9039,12 +9039,13 @@
           "reconnecting": "Reconnecting",
           "offline": "Offline",
           "title": "Orca Relay",
-          "automatic": "Connect from anywhere automatically",
+          "automatic": "Connect from anywhere when a phone is paired",
           "signInPrompt": "Sign in on this desktop to connect from anywhere",
           "directStillAvailable": "LAN and Tailscale connections remain available.",
           "directNeedsNoAccount": "LAN and Tailscale pairing still work without an account.",
           "signIn": "Sign in",
-          "unavailable": "Unavailable"
+          "unavailable": "Unavailable",
+          "standby": "Standby — no relay devices"
         }
       },
       "right": {

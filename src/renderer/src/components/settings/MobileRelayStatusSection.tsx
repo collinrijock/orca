@@ -13,6 +13,12 @@ function relayStatusLabel(status: MobileRelayStatus): string {
   if (status === 'connecting') {
     return translate('auto.components.settings.MobileRelayStatusSection.connecting', 'Connecting')
   }
+  if (status === 'standby') {
+    return translate(
+      'auto.components.settings.MobileRelayStatusSection.standby',
+      'Standby — no relay devices'
+    )
+  }
   if (status === 'draining') {
     return translate(
       'auto.components.settings.MobileRelayStatusSection.reconnecting',
@@ -64,7 +70,7 @@ export function MobileRelayStatusSection(): React.JSX.Element {
             {signedIn
               ? translate(
                   'auto.components.settings.MobileRelayStatusSection.automatic',
-                  'Connect from anywhere automatically'
+                  'Connect from anywhere when a phone is paired'
                 )
               : translate(
                   'auto.components.settings.MobileRelayStatusSection.signInPrompt',

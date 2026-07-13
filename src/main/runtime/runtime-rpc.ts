@@ -66,6 +66,7 @@ type MobileRelayPairingProvider = {
     relayDeviceId: string
   ): Promise<{ relay: PairingRelay; binding: RelayDeviceBinding }>
   onDeviceRevokeQueued(item: RelayRevokeOutboxItem): void
+  onDemandStateChanged?(): void
   getEndpoints(
     context: MobilePairingConnectionContext,
     params: PairingGetEndpointsParams
@@ -526,7 +527,11 @@ export class OrcaRuntimeRpcServer {
       // strand the old cloud credential family even if that account is offline.
       this.queueRelayDeviceRevoke(current.relayBinding)
     }
-    return this.deviceRegistry?.setRelayBinding(deviceId, binding) ?? false
+    const updated = this.deviceRegistry?.setRelayBinding(deviceId, binding) ?? false
+    if (updated) {
+      this.mobileRelayPairingProvider?.onDemandStateChanged?.()
+    }
+    return updated
   }
 
   setMobileRelayPairingProvider(provider: MobileRelayPairingProvider | null): void {
@@ -544,6 +549,7 @@ export class OrcaRuntimeRpcServer {
     if (!this.deviceRegistry?.removeDevice(deviceId)) {
       return false
     }
+    this.mobileRelayPairingProvider?.onDemandStateChanged?.()
     this.mobileSocketWiring?.terminateDeviceConnections(device.token)
     return true
   }
@@ -632,6 +638,7 @@ export class OrcaRuntimeRpcServer {
       if (!this.deviceRegistry?.setRelayBinding(device.deviceId, relayPairing.binding)) {
         return direct
       }
+      this.mobileRelayPairingProvider.onDemandStateChanged?.()
       return {
         ...direct,
         pairingUrl: encodePairingOffer({
@@ -849,6 +856,7 @@ export class OrcaRuntimeRpcServer {
             )
           },
           onBinary: (socket, bytes) => this.handleWebSocketBinaryMessage(bytes, socket.ws),
+          onReady: () => this.mobileRelayPairingProvider?.onDemandStateChanged?.(),
           onClose: (socket, hasOtherConnections) => {
             if (!socket) {
               return

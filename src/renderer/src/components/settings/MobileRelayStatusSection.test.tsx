@@ -87,6 +87,8 @@ describe('MobileRelayStatusSection', () => {
     await waitFor(() => expect(screen.getByText('Registered')).toBeVisible())
     statusListener?.('offline')
     await waitFor(() => expect(screen.getByText('Offline')).toBeVisible())
+    statusListener?.('standby')
+    await waitFor(() => expect(screen.getByText('Standby — no relay devices')).toBeVisible())
     expect(screen.queryByRole('button', { name: 'Sign in' })).not.toBeInTheDocument()
   })
 })

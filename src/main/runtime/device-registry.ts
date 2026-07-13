@@ -33,7 +33,10 @@ function validRelayBinding(value: unknown, deviceId: string): RelayDeviceBinding
     ? {
         relayHostId: binding.relayHostId,
         relayDeviceId: binding.relayDeviceId,
-        ownerIdentityKey: binding.ownerIdentityKey
+        ownerIdentityKey: binding.ownerIdentityKey,
+        ...(typeof binding.inviteExpiresAt === 'number' && Number.isFinite(binding.inviteExpiresAt)
+          ? { inviteExpiresAt: binding.inviteExpiresAt }
+          : {})
       }
     : undefined
 }

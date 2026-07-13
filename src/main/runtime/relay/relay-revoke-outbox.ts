@@ -7,6 +7,7 @@ export type RelayDeviceBinding = {
   relayHostId: string
   relayDeviceId: string
   ownerIdentityKey: string
+  inviteExpiresAt?: number
 }
 
 export type RelayRevokeOutboxItem = RelayDeviceBinding & {
@@ -26,6 +27,8 @@ function isItem(value: unknown): value is RelayRevokeOutboxItem {
     typeof item.relayHostId === 'string' &&
     typeof item.relayDeviceId === 'string' &&
     typeof item.ownerIdentityKey === 'string' &&
+    (item.inviteExpiresAt === undefined ||
+      (typeof item.inviteExpiresAt === 'number' && Number.isFinite(item.inviteExpiresAt))) &&
     typeof item.createdAt === 'number' &&
     Number.isFinite(item.createdAt)
   )

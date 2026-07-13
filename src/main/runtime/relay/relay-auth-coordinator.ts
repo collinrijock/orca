@@ -18,12 +18,14 @@ export type CoordinatedRelayBroker = {
 
 type RelayAuthCoordinatorOptions = {
   readContext: () => Promise<RelayAuthContext | null>
+  hasDemand?: (context: RelayAuthContext) => boolean
   openBroker: (input: {
     context: RelayAuthContext
     isCurrent: () => boolean
     refreshAccessToken: () => Promise<string | null>
   }) => Promise<CoordinatedRelayBroker>
   onStatus: (status: RelayBrokerStatus) => void
+  lingerMs?: number
 }
 
 type BrokerOwnership = {
@@ -41,6 +43,8 @@ export class RelayAuthCoordinator {
   private authEpoch = 0
   private ownership: BrokerOwnership | null = null
   private readonly pendingOwnerships = new Set<BrokerOwnership>()
+  private latestReconcile: Promise<void> = Promise.resolve()
+  private lingerTimer: ReturnType<typeof setTimeout> | null = null
   private stopped = false
 
   constructor(options: RelayAuthCoordinatorOptions) {
@@ -53,11 +57,14 @@ export class RelayAuthCoordinator {
     }
     const epoch = ++this.authEpoch
     this.invalidatePendingOwnerships()
-    void this.reconcileEpoch(epoch)
+    const reconcile = this.reconcileEpoch(epoch)
+    this.latestReconcile = reconcile
+    void reconcile
   }
 
   fenceAndCloseNow(): void {
     ++this.authEpoch
+    this.cancelLinger()
     this.invalidatePendingOwnerships()
     this.invalidateOwnership()
     this.options.onStatus('offline')
@@ -65,6 +72,21 @@ export class RelayAuthCoordinator {
 
   getActiveBroker(): CoordinatedRelayBroker | null {
     return this.ownership?.valid ? this.ownership.broker : null
+  }
+
+  async waitForActiveBroker(): Promise<CoordinatedRelayBroker | null> {
+    while (!this.stopped) {
+      const broker = this.getActiveBroker()
+      if (broker) {
+        return broker
+      }
+      const pending = this.latestReconcile
+      await pending
+      if (pending === this.latestReconcile) {
+        return this.getActiveBroker()
+      }
+    }
+    return null
   }
 
   stop(): void {
@@ -79,12 +101,25 @@ export class RelayAuthCoordinator {
         return
       }
       if (!context || !context.relayEntitled) {
+        this.cancelLinger()
         this.invalidateOwnership()
         this.options.onStatus('offline')
         return
       }
       const nextIdentityKey = identityKey(context.identity)
+      if (!(this.options.hasDemand?.(context) ?? true)) {
+        if (this.ownership?.valid && this.ownership.identityKey !== nextIdentityKey) {
+          this.cancelLinger()
+          this.invalidateOwnership()
+        } else if (this.ownership?.valid) {
+          this.scheduleLinger(context, this.ownership)
+        }
+        this.options.onStatus('standby')
+        return
+      }
+      this.cancelLinger()
       if (this.ownership?.valid && this.ownership.identityKey === nextIdentityKey) {
+        this.options.onStatus('registered')
         return
       }
       this.invalidateOwnership()
@@ -149,6 +184,31 @@ export class RelayAuthCoordinator {
     if (ownership) {
       ownership.valid = false
       ownership.broker?.closeNow()
+    }
+  }
+
+  private scheduleLinger(context: RelayAuthContext, ownership: BrokerOwnership): void {
+    if (this.lingerTimer) {
+      return
+    }
+    const lingerMs = this.options.lingerMs ?? 10 * 60_000
+    this.lingerTimer = setTimeout(() => {
+      this.lingerTimer = null
+      if (
+        this.ownership === ownership &&
+        ownership.valid &&
+        !(this.options.hasDemand?.(context) ?? true)
+      ) {
+        this.invalidateOwnership()
+        this.options.onStatus('standby')
+      }
+    }, lingerMs)
+  }
+
+  private cancelLinger(): void {
+    if (this.lingerTimer) {
+      clearTimeout(this.lingerTimer)
+      this.lingerTimer = null
     }
   }
 

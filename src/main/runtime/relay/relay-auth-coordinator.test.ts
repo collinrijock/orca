@@ -16,6 +16,82 @@ const context: RelayAuthContext = {
 }
 
 describe('RelayAuthCoordinator', () => {
+  it('stays signed-in but does not open a broker without relay demand', async () => {
+    const openBroker = vi.fn()
+    const statuses: string[] = []
+    const coordinator = new RelayAuthCoordinator({
+      readContext: async () => context,
+      hasDemand: () => false,
+      openBroker,
+      onStatus: (status) => statuses.push(status)
+    })
+    coordinator.reconcile()
+    await coordinator.waitForActiveBroker()
+    expect(openBroker).not.toHaveBeenCalled()
+    expect(statuses.at(-1)).toBe('standby')
+  })
+
+  it('opens on demand and lingers before closing the last control', async () => {
+    let demanded = false
+    const broker = { closeNow: vi.fn() }
+    const statuses: string[] = []
+    const coordinator = new RelayAuthCoordinator({
+      readContext: async () => context,
+      hasDemand: () => demanded,
+      openBroker: async () => broker,
+      onStatus: (status) => statuses.push(status),
+      lingerMs: 250
+    })
+    coordinator.reconcile()
+    await coordinator.waitForActiveBroker()
+    demanded = true
+    coordinator.reconcile()
+    await expect(coordinator.waitForActiveBroker()).resolves.toBe(broker)
+    demanded = false
+    coordinator.reconcile()
+    await vi.waitFor(() => expect(statuses.at(-1)).toBe('standby'))
+    expect(broker.closeNow).not.toHaveBeenCalled()
+    await vi.waitFor(() => expect(broker.closeNow).toHaveBeenCalledOnce())
+  })
+
+  it('cancels linger when demand returns', async () => {
+    let demanded = true
+    const broker = { closeNow: vi.fn() }
+    const coordinator = new RelayAuthCoordinator({
+      readContext: async () => context,
+      hasDemand: () => demanded,
+      openBroker: async () => broker,
+      onStatus: vi.fn(),
+      lingerMs: 20
+    })
+    coordinator.reconcile()
+    await expect(coordinator.waitForActiveBroker()).resolves.toBe(broker)
+    demanded = false
+    coordinator.reconcile()
+    demanded = true
+    coordinator.reconcile()
+    await new Promise((resolve) => setTimeout(resolve, 30))
+    expect(broker.closeNow).not.toHaveBeenCalled()
+  })
+
+  it('does not carry old-profile demand through an identity switch', async () => {
+    let current = context
+    const broker = { closeNow: vi.fn() }
+    const coordinator = new RelayAuthCoordinator({
+      readContext: async () => current,
+      hasDemand: ({ identity }) => identity.profileId === 'profile-1',
+      openBroker: async () => broker,
+      onStatus: vi.fn(),
+      lingerMs: 10_000
+    })
+    coordinator.reconcile()
+    await expect(coordinator.waitForActiveBroker()).resolves.toBe(broker)
+    current = { ...context, identity: { ...context.identity, profileId: 'profile-2' } }
+    coordinator.reconcile()
+    await coordinator.waitForActiveBroker()
+    expect(broker.closeNow).toHaveBeenCalledOnce()
+  })
+
   it('fences a session read that finishes after sign-out', async () => {
     const read = deferred<RelayAuthContext | null>()
     const openBroker = vi.fn()
