@@ -11,6 +11,7 @@ import { MobileNetworkInterfaceSection } from './MobileNetworkInterfaceSection'
 import { MobilePairingQrSection } from './MobilePairingQrSection'
 import { MobilePairedDevicesSection, type PairedDevice } from './MobilePairedDevicesSection'
 import { MobileAutoRestoreFitSection } from './MobileAutoRestoreFitSection'
+import { MobileRelayStatusSection } from './MobileRelayStatusSection'
 import { translate } from '@/i18n/i18n'
 export { getMobilePaneSearchEntries } from './mobile-pane-search'
 
@@ -160,6 +161,8 @@ export function MobilePane(): React.JSX.Element {
 
   return (
     <div className="space-y-6">
+      <MobileRelayStatusSection />
+
       <MobileNetworkInterfaceSection
         networkInterfaces={networkInterfaces}
         selectedAddress={selectedAddress}

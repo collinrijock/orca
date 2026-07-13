@@ -8,6 +8,7 @@ import type {
   MobileRelayEndpoint,
   PairingProvisionRelayParams
 } from '../../../shared/mobile-relay-credential-contract'
+import type { MobileRelayStatus } from '../../../shared/mobile-relay-status'
 import type { E2EEKeypair } from '../e2ee-keypair'
 import type { MobileSocketWiring } from '../rpc/mobile-socket-wiring'
 import { CloudRelayTransport } from '../rpc/relay-transport'
@@ -21,7 +22,7 @@ import {
   type RelayAssignment
 } from './relay-http-client'
 
-export type RelayBrokerStatus = 'connecting' | 'registered' | 'draining' | 'offline'
+export type RelayBrokerStatus = MobileRelayStatus
 
 type RelayIdentity = {
   userId: string

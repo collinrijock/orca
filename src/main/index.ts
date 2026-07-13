@@ -2158,6 +2158,7 @@ app.whenReady().then(async () => {
         runtimeRpc,
         onStatus: (status) => {
           desktopRelayStatus = status
+          mainWindow?.webContents.send('mobile:relayStatusChanged', status)
         }
       })
       desktopRelayService = relayService
