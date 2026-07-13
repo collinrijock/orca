@@ -12874,8 +12874,8 @@
           },
           "signout": {
             "confirm": {
-              "title": "Sign out?",
-              "description": "Sign out of {{profileName}} and keep its projects, worktrees, and local metadata on this device.",
+              "title": "Sign out of Orca?",
+              "description": "You'll be signed out of Orca on this device. Your local projects and worktrees won't be affected.",
               "cancel": "Cancel",
               "action": "Sign out"
             }

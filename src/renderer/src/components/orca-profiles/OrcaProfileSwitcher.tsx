@@ -402,7 +402,6 @@ export function OrcaProfileSwitcher({
         onConfirm={() => {
           void handleConfirmSignOut()
         }}
-        profileName={activeProfile.name}
         signingOut={signingOut}
       />
       {multiProfileUi ? (
