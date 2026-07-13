@@ -1,85 +1,118 @@
-import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs'
+import {
+  appendFileSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  renameSync,
+  unlinkSync,
+  writeFileSync
+} from 'node:fs'
 import { dirname, join } from 'node:path'
-import { z } from 'zod'
 import type { PersistedState } from '../shared/types'
+import {
+  terminalTeardownIntentJournalRecordSchema,
+  terminalTeardownIntentSnapshotSchema
+} from './terminal-teardown-intent-records'
+import type {
+  TerminalTeardownIntentJournalRecord,
+  TerminalTeardownIntentMutation,
+  TerminalTeardownIntentSnapshot
+} from './terminal-teardown-intent-records'
 
-const nonEmptyString = z.string().min(1)
-const timestamp = z.number().finite().nonnegative()
-const terminalTeardownIntentSnapshotSchema = z
-  .object({
-    version: z.literal(1),
-    revision: z.number().int().nonnegative(),
-    pendingLocalPtyShutdowns: z.array(
-      z
-        .object({
-          ptyId: nonEmptyString,
-          expectedPaneKey: nonEmptyString.optional(),
-          expectedTabId: nonEmptyString.optional(),
-          requestedAt: timestamp
-        })
-        .strict()
-    ),
-    pendingRuntimeTerminalCloses: z.array(
-      z
-        .object({
-          environmentId: nonEmptyString,
-          handle: nonEmptyString,
-          runtimeId: nonEmptyString.optional(),
-          requestedAt: timestamp
-        })
-        .strict()
-    ),
-    pendingSshPtyShutdowns: z.array(
-      z
-        .object({
-          targetId: nonEmptyString,
-          ptyId: nonEmptyString,
-          relayInstanceId: nonEmptyString.optional(),
-          shutdownRequestedAt: timestamp
-        })
-        .strict()
-    )
-  })
-  .strict()
-
-type TerminalTeardownIntentSnapshot = z.infer<typeof terminalTeardownIntentSnapshotSchema>
+export type { TerminalTeardownIntentMutation } from './terminal-teardown-intent-records'
 
 function getSnapshotFile(dataFile: string): string {
   return join(dirname(dataFile), 'orca-terminal-teardown-intents.json')
 }
 
-function readSnapshot(dataFile: string): TerminalTeardownIntentSnapshot | null {
-  const snapshotFile = getSnapshotFile(dataFile)
-  if (!existsSync(snapshotFile)) {
-    return null
-  }
-  try {
-    return terminalTeardownIntentSnapshotSchema.parse(
-      JSON.parse(readFileSync(snapshotFile, 'utf-8'))
-    )
-  } catch (error) {
-    console.warn('[persistence] Ignoring invalid terminal teardown intent snapshot:', error)
-    return null
+function pendingSshShutdowns(
+  state: PersistedState
+): TerminalTeardownIntentSnapshot['pendingSshPtyShutdowns'] {
+  return (state.sshRemotePtyLeases ?? []).flatMap((lease) =>
+    lease.shutdownRequestedAt === undefined
+      ? []
+      : [
+          {
+            targetId: lease.targetId,
+            ptyId: lease.ptyId,
+            ...(lease.relayInstanceId ? { relayInstanceId: lease.relayInstanceId } : {}),
+            shutdownRequestedAt: lease.shutdownRequestedAt
+          }
+        ]
+  )
+}
+
+function checkpointForState(
+  state: PersistedState
+): Omit<Extract<TerminalTeardownIntentJournalRecord, { kind: 'checkpoint' }>, 'version'> {
+  return {
+    kind: 'checkpoint',
+    revision: state.terminalTeardownIntentRevision ?? 0,
+    pendingLocalPtyShutdowns: state.pendingLocalPtyShutdowns ?? [],
+    pendingRuntimeTerminalCloses: state.pendingRuntimeTerminalCloses ?? [],
+    pendingSshPtyShutdowns: pendingSshShutdowns(state)
   }
 }
 
-export function applyTerminalTeardownIntentSnapshot(state: PersistedState, dataFile: string): void {
-  const snapshot = readSnapshot(dataFile)
-  if (!snapshot) {
-    return
+function readRecords(dataFile: string): {
+  records: (TerminalTeardownIntentSnapshot | TerminalTeardownIntentJournalRecord)[]
+  journalReady: boolean
+} {
+  const snapshotFile = getSnapshotFile(dataFile)
+  if (!existsSync(snapshotFile)) {
+    return { records: [], journalReady: false }
   }
-  // Why: a failed sidecar replacement falls back to a synchronous full-store
-  // write. An older valid sidecar must not override that newer durable state.
-  if (snapshot.revision < (state.terminalTeardownIntentRevision ?? 0)) {
-    return
+  try {
+    const raw = readFileSync(snapshotFile, 'utf-8')
+    try {
+      const parsed = JSON.parse(raw) as unknown
+      const legacy = terminalTeardownIntentSnapshotSchema.safeParse(parsed)
+      if (legacy.success) {
+        return { records: [legacy.data], journalReady: false }
+      }
+      const journal = terminalTeardownIntentJournalRecordSchema.safeParse(parsed)
+      if (journal.success) {
+        return { records: [journal.data], journalReady: true }
+      }
+    } catch {
+      // Multi-record journals are newline-delimited rather than one JSON value.
+    }
+    const records: TerminalTeardownIntentJournalRecord[] = []
+    for (const line of raw.split('\n')) {
+      if (!line.trim()) {
+        continue
+      }
+      let value: unknown
+      try {
+        value = JSON.parse(line)
+      } catch {
+        console.warn('[persistence] Ignoring truncated terminal teardown intent journal tail')
+        break
+      }
+      const parsed = terminalTeardownIntentJournalRecordSchema.safeParse(value)
+      if (!parsed.success) {
+        // Why: a crash can tear only the final append. Earlier complete records
+        // remain durable, while replaying past corruption could invent state.
+        console.warn('[persistence] Ignoring truncated terminal teardown intent journal tail')
+        break
+      }
+      records.push(parsed.data)
+    }
+    return { records, journalReady: records.length > 0 }
+  } catch (error) {
+    console.warn('[persistence] Ignoring invalid terminal teardown intent snapshot:', error)
+    return { records: [], journalReady: false }
   }
-  state.terminalTeardownIntentRevision = snapshot.revision
-  state.pendingLocalPtyShutdowns = snapshot.pendingLocalPtyShutdowns
-  state.pendingRuntimeTerminalCloses = snapshot.pendingRuntimeTerminalCloses
+}
+
+function applySshShutdowns(
+  state: PersistedState,
+  pendingSshPtyShutdowns: TerminalTeardownIntentSnapshot['pendingSshPtyShutdowns']
+): void {
   for (const lease of state.sshRemotePtyLeases ?? []) {
     delete lease.shutdownRequestedAt
   }
-  for (const pending of snapshot.pendingSshPtyShutdowns) {
+  for (const pending of pendingSshPtyShutdowns) {
     const lease = state.sshRemotePtyLeases?.find(
       (candidate) =>
         candidate.targetId === pending.targetId &&
@@ -93,31 +126,99 @@ export function applyTerminalTeardownIntentSnapshot(state: PersistedState, dataF
   }
 }
 
-export function writeTerminalTeardownIntentSnapshot(state: PersistedState, dataFile: string): void {
-  const snapshot: TerminalTeardownIntentSnapshot = {
-    version: 1,
-    revision: state.terminalTeardownIntentRevision ?? 0,
-    pendingLocalPtyShutdowns: state.pendingLocalPtyShutdowns ?? [],
-    pendingRuntimeTerminalCloses: state.pendingRuntimeTerminalCloses ?? [],
-    pendingSshPtyShutdowns: (state.sshRemotePtyLeases ?? []).flatMap((lease) =>
-      lease.shutdownRequestedAt === undefined
-        ? []
-        : [
-            {
-              targetId: lease.targetId,
-              ptyId: lease.ptyId,
-              ...(lease.relayInstanceId ? { relayInstanceId: lease.relayInstanceId } : {}),
-              shutdownRequestedAt: lease.shutdownRequestedAt
-            }
-          ]
-    )
+function applyJournalRecord(
+  state: PersistedState,
+  record: TerminalTeardownIntentJournalRecord
+): void {
+  switch (record.kind) {
+    case 'checkpoint':
+      state.pendingLocalPtyShutdowns = record.pendingLocalPtyShutdowns
+      state.pendingRuntimeTerminalCloses = record.pendingRuntimeTerminalCloses
+      applySshShutdowns(state, record.pendingSshPtyShutdowns)
+      return
+    case 'local-upsert': {
+      state.pendingLocalPtyShutdowns ??= []
+      const index = state.pendingLocalPtyShutdowns.findIndex(
+        (entry) => entry.ptyId === record.request.ptyId
+      )
+      if (index >= 0) {
+        state.pendingLocalPtyShutdowns[index] = record.request
+      } else {
+        state.pendingLocalPtyShutdowns.push(record.request)
+      }
+      return
+    }
+    case 'local-remove':
+      state.pendingLocalPtyShutdowns = (state.pendingLocalPtyShutdowns ?? []).filter(
+        (entry) => entry.ptyId !== record.ptyId
+      )
+      return
+    case 'runtime-upsert': {
+      state.pendingRuntimeTerminalCloses ??= []
+      const index = state.pendingRuntimeTerminalCloses.findIndex(
+        (entry) =>
+          entry.environmentId === record.request.environmentId &&
+          entry.handle === record.request.handle
+      )
+      if (index >= 0) {
+        state.pendingRuntimeTerminalCloses[index] = record.request
+      } else {
+        state.pendingRuntimeTerminalCloses.push(record.request)
+      }
+      return
+    }
+    case 'runtime-remove':
+      state.pendingRuntimeTerminalCloses = (state.pendingRuntimeTerminalCloses ?? []).filter(
+        (entry) => entry.environmentId !== record.environmentId || entry.handle !== record.handle
+      )
+      return
+    case 'runtime-remove-environment':
+      state.pendingRuntimeTerminalCloses = (state.pendingRuntimeTerminalCloses ?? []).filter(
+        (entry) => entry.environmentId !== record.environmentId
+      )
+      return
+    case 'ssh-replace':
+      applySshShutdowns(state, record.pendingSshPtyShutdowns)
   }
+}
+
+export function applyTerminalTeardownIntentSnapshot(
+  state: PersistedState,
+  dataFile: string
+): boolean {
+  const { records, journalReady } = readRecords(dataFile)
+  for (const record of records) {
+    // Why: a failed journal append falls back to a synchronous full-store
+    // write. Older valid records must not override that newer durable state.
+    const durableRevision = state.terminalTeardownIntentRevision ?? 0
+    if (
+      record.revision < durableRevision ||
+      (record.version === 2 && record.revision === durableRevision)
+    ) {
+      continue
+    }
+    if (record.version === 1) {
+      state.pendingLocalPtyShutdowns = record.pendingLocalPtyShutdowns
+      state.pendingRuntimeTerminalCloses = record.pendingRuntimeTerminalCloses
+      applySshShutdowns(state, record.pendingSshPtyShutdowns)
+    } else {
+      applyJournalRecord(state, record)
+    }
+    state.terminalTeardownIntentRevision = record.revision
+  }
+  return journalReady
+}
+
+function writeRecordAtomically(
+  record: TerminalTeardownIntentJournalRecord,
+  dataFile: string
+): void {
   const snapshotFile = getSnapshotFile(dataFile)
   const tmpFile = `${snapshotFile}.${process.pid}.${Date.now()}.${Math.random().toString(16).slice(2)}.tmp`
   mkdirSync(dirname(snapshotFile), { recursive: true })
   let renamed = false
   try {
-    writeFileSync(tmpFile, JSON.stringify(snapshot), 'utf-8')
+    writeFileSync(tmpFile, `${JSON.stringify(record)}\n`, 'utf-8')
     renameSync(tmpFile, snapshotFile)
     renamed = true
   } finally {
@@ -129,4 +230,31 @@ export function writeTerminalTeardownIntentSnapshot(state: PersistedState, dataF
       }
     }
   }
+}
+
+export function writeTerminalTeardownIntentSnapshot(state: PersistedState, dataFile: string): void {
+  writeRecordAtomically({ version: 2, ...checkpointForState(state) }, dataFile)
+}
+
+export function appendTerminalTeardownIntentMutation(
+  state: PersistedState,
+  dataFile: string,
+  mutation: TerminalTeardownIntentMutation,
+  journalReady: boolean
+): void {
+  if (!journalReady) {
+    writeTerminalTeardownIntentSnapshot(state, dataFile)
+    return
+  }
+  const revision = state.terminalTeardownIntentRevision ?? 0
+  const record: TerminalTeardownIntentJournalRecord =
+    mutation.kind === 'ssh-replace'
+      ? {
+          version: 2,
+          revision,
+          kind: 'ssh-replace',
+          pendingSshPtyShutdowns: pendingSshShutdowns(state)
+        }
+      : { version: 2, revision, ...mutation }
+  appendFileSync(getSnapshotFile(dataFile), `${JSON.stringify(record)}\n`, 'utf-8')
 }

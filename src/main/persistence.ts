@@ -18,9 +18,11 @@ import { join, dirname, isAbsolute, resolve, sep } from 'node:path'
 import { homedir } from 'node:os'
 import { createHash, randomUUID } from 'node:crypto'
 import {
+  appendTerminalTeardownIntentMutation,
   applyTerminalTeardownIntentSnapshot,
   writeTerminalTeardownIntentSnapshot
 } from './terminal-teardown-intent-snapshot'
+import type { TerminalTeardownIntentMutation } from './terminal-teardown-intent-snapshot'
 import type {
   Automation,
   AutomationCreateInput,
@@ -2665,6 +2667,7 @@ export class Store {
   private lastWrittenStateHash: string | null = null
   private firstPendingSaveAt: number | null = null
   private githubCacheDirty = false
+  private terminalTeardownIntentJournalReady = false
   private gitUsernameCache = new Map<string, string>()
   private loadNeedsSave = false
   private settingsChangeListeners = new Set<
@@ -2687,7 +2690,10 @@ export class Store {
       fallbackSnapshotRoot: legacySnapshotRoot === profileSnapshotRoot ? null : legacySnapshotRoot
     }
     const loaded = this.load()
-    applyTerminalTeardownIntentSnapshot(loaded, this.dataFile)
+    this.terminalTeardownIntentJournalReady = applyTerminalTeardownIntentSnapshot(
+      loaded,
+      this.dataFile
+    )
     const normalized = normalizePersistedPaneIdentityState(loaded)
     this.state = normalized.state
     const adaptedProjectGroups = this.adaptFlatFolderScanProjectGroups()
@@ -3782,6 +3788,7 @@ export class Store {
       // is not what the file holds.
       if (this.writeGeneration === gen) {
         this.lastWrittenStateHash = stateHash
+        this.compactTerminalTeardownIntentJournal()
       }
     } finally {
       if (!renamed) {
@@ -3832,6 +3839,7 @@ export class Store {
       renameSync(tmpFile, dataFile)
       renamed = true
       this.lastWrittenStateHash = stateHash
+      this.compactTerminalTeardownIntentJournal()
     } finally {
       if (!renamed) {
         try {
@@ -3859,6 +3867,19 @@ export class Store {
     this.writeGeneration++
     this.pendingWrite = null
     this.writeToDiskSync({ force: asyncWriteWasInFlight })
+  }
+
+  private compactTerminalTeardownIntentJournal(): void {
+    try {
+      // Why: per-owner appends stay O(1); each successful full-state save
+      // bounds replay and disk growth to one current checkpoint.
+      writeTerminalTeardownIntentSnapshot(this.state, this.dataFile)
+      this.terminalTeardownIntentJournalReady = true
+    } catch (error) {
+      // The full store already contains this revision, so stale journal records
+      // are fenced on reload and compaction can safely retry on the next save.
+      console.warn('[persistence] Failed to compact terminal teardown intent journal:', error)
+    }
   }
 
   // ── Repos ──────────────────────────────────────────────────────────
@@ -6381,7 +6402,7 @@ export class Store {
     } else {
       this.state.pendingLocalPtyShutdowns.push(request)
     }
-    this.persistTerminalTeardownIntents()
+    this.persistTerminalTeardownIntents({ kind: 'local-upsert', request })
   }
 
   removePendingLocalPtyShutdown(ptyId: string): void {
@@ -6390,7 +6411,7 @@ export class Store {
       (entry) => entry.ptyId !== ptyId
     )
     if (this.state.pendingLocalPtyShutdowns.length !== before) {
-      this.persistTerminalTeardownIntents()
+      this.persistTerminalTeardownIntents({ kind: 'local-remove', ptyId })
     }
   }
 
@@ -6408,7 +6429,7 @@ export class Store {
     } else {
       this.state.pendingRuntimeTerminalCloses.push(request)
     }
-    this.persistTerminalTeardownIntents()
+    this.persistTerminalTeardownIntents({ kind: 'runtime-upsert', request })
   }
 
   removePendingRuntimeTerminalClose(environmentId: string, handle: string): void {
@@ -6417,7 +6438,11 @@ export class Store {
       this.state.pendingRuntimeTerminalCloses ?? []
     ).filter((entry) => entry.environmentId !== environmentId || entry.handle !== handle)
     if (this.state.pendingRuntimeTerminalCloses.length !== before) {
-      this.persistTerminalTeardownIntents()
+      this.persistTerminalTeardownIntents({
+        kind: 'runtime-remove',
+        environmentId,
+        handle
+      })
     }
   }
 
@@ -6427,7 +6452,10 @@ export class Store {
       this.state.pendingRuntimeTerminalCloses ?? []
     ).filter((entry) => entry.environmentId !== environmentId)
     if (this.state.pendingRuntimeTerminalCloses.length !== before) {
-      this.persistTerminalTeardownIntents()
+      this.persistTerminalTeardownIntents({
+        kind: 'runtime-remove-environment',
+        environmentId
+      })
     }
   }
 
@@ -6469,7 +6497,7 @@ export class Store {
       this.state.sshRemotePtyLeases.push(next)
     }
     this.flush()
-    this.persistTerminalTeardownIntents()
+    this.persistTerminalTeardownIntents({ kind: 'ssh-replace' })
   }
 
   markSshRemotePtyLeases(targetId: string, state: SshRemotePtyLease['state']): void {
@@ -6508,7 +6536,7 @@ export class Store {
       : false
     if (changed || bindingsChanged) {
       if (shouldClearBindings) {
-        this.persistTerminalTeardownIntents()
+        this.persistTerminalTeardownIntents({ kind: 'ssh-replace' })
       } else {
         this.scheduleSave()
       }
@@ -6541,7 +6569,7 @@ export class Store {
       const bindingsChanged =
         shouldClearBindings && this.clearSshRemotePtyBindingsForLeases(targetId, [lease])
       if (bindingsChanged || intentChanged) {
-        this.persistTerminalTeardownIntents()
+        this.persistTerminalTeardownIntents({ kind: 'ssh-replace' })
       }
       return true
     }
@@ -6555,7 +6583,7 @@ export class Store {
     }
     if (shouldClearBindings) {
       this.clearSshRemotePtyBindingsForLeases(targetId, [lease])
-      this.persistTerminalTeardownIntents()
+      this.persistTerminalTeardownIntents({ kind: 'ssh-replace' })
     } else {
       this.scheduleSave()
     }
@@ -6576,7 +6604,7 @@ export class Store {
     }
     lease.shutdownRequestedAt = Date.now()
     lease.updatedAt = lease.shutdownRequestedAt
-    this.persistTerminalTeardownIntents()
+    this.persistTerminalTeardownIntents({ kind: 'ssh-replace' })
     return true
   }
 
@@ -6598,7 +6626,7 @@ export class Store {
         lease.relayInstanceId !== requestedGeneration
     )
     if (this.state.sshRemotePtyLeases.length !== before) {
-      this.persistTerminalTeardownIntents()
+      this.persistTerminalTeardownIntents({ kind: 'ssh-replace' })
     }
   }
 
@@ -6610,7 +6638,7 @@ export class Store {
       (lease) => lease.targetId !== targetId
     )
     if (this.state.sshRemotePtyLeases.length !== before) {
-      this.persistTerminalTeardownIntents()
+      this.persistTerminalTeardownIntents({ kind: 'ssh-replace' })
     }
   }
 
@@ -6681,16 +6709,21 @@ export class Store {
 
   // ── Flush (for shutdown) ───────────────────────────────────────────
 
-  private persistTerminalTeardownIntents(): void {
+  private persistTerminalTeardownIntents(mutation: TerminalTeardownIntentMutation): void {
     if (this.writesFrozen) {
       return
     }
-    this.state.terminalTeardownIntentRevision =
-      (this.state.terminalTeardownIntentRevision ?? 0) + 1
+    this.state.terminalTeardownIntentRevision = (this.state.terminalTeardownIntentRevision ?? 0) + 1
     try {
-      // Why: teardown intent must survive a crash, but serializing the full
-      // multi-MB store per owner creates shutdown-time main-thread stalls.
-      writeTerminalTeardownIntentSnapshot(this.state, this.dataFile)
+      // Why: crash durability is per owner, but an O(1) journal append avoids
+      // rewriting every retained owner and three filesystem calls per mutation.
+      appendTerminalTeardownIntentMutation(
+        this.state,
+        this.dataFile,
+        mutation,
+        this.terminalTeardownIntentJournalReady
+      )
+      this.terminalTeardownIntentJournalReady = true
       this.scheduleSave()
     } catch (error) {
       console.warn('[persistence] Failed to write terminal teardown intent snapshot:', error)

@@ -2,13 +2,7 @@
   "schemaVersion": 1,
   "updatedAt": "2026-07-12",
   "policy": {
-    "maturityLevels": [
-      "experimental",
-      "soak",
-      "blocking",
-      "accepted-gap",
-      "deprecated"
-    ],
+    "maturityLevels": ["experimental", "soak", "blocking", "accepted-gap", "deprecated"],
     "blockingPromotion": {
       "minimumSoakRuns": 100,
       "minimumSoakDays": 14,
@@ -23,7 +17,11 @@
       "protection": "partial",
       "owner": "editor-runtime",
       "layer": "renderer-electron-contract",
-      "surfaces": ["Agent Session History View Log", "Monaco external-content reconciliation", "renderer crash containment"],
+      "surfaces": [
+        "Agent Session History View Log",
+        "Monaco external-content reconciliation",
+        "renderer crash containment"
+      ],
       "platforms": ["macos", "linux", "windows"],
       "providers": ["local"],
       "coveredPlatforms": ["macos"],
@@ -59,11 +57,15 @@
         },
         {
           "file": "src/renderer/src/components/editor/EditorContent.monaco-lifecycle.test.tsx",
-          "assertions": ["a same-pane path switch unmounts the prior outer Monaco before real mount reconciliation refreshes the stale target; the prior retained model content and undo sentinel remain untouched"]
+          "assertions": [
+            "a same-pane path switch unmounts the prior outer Monaco before real mount reconciliation refreshes the stale target; the prior retained model content and undo sentinel remain untouched"
+          ]
         },
         {
           "file": "src/renderer/src/components/editor/monaco-content-sync.bench.ts",
-          "assertions": ["with forced GC and deterministic settlement between every arm, fresh real-Monaco 9 MiB and 50 MiB models alternate 30 append and 30 replacement samples after five warmups; append p95 stays below 50/100ms and at least 2x faster"]
+          "assertions": [
+            "with forced GC and deterministic settlement between every arm, fresh real-Monaco 9 MiB and 50 MiB models alternate 30 append and 30 replacement samples after five warmups; append p95 stays below 50/100ms and at least 2x faster"
+          ]
         },
         {
           "file": "tests/e2e/agent-session-log-tail-stability.spec.ts",
@@ -104,17 +106,27 @@
           "summary": "The production View Log journey alternated retained e2e-only legacy-red controls with fixed appends from restored equivalent state; every control detected instability while the fixed path retained viewport, selection, complete Find state, renderer liveness, and normalized forced-GC/native memory budgets."
         }
       ],
-      "runtimeBudget": { "p95Seconds": 600, "scope": "local focused renderer tests plus one Electron production-journey scenario" },
-      "flakeHistory": { "status": "unknown", "evidence": "New deterministic gate with local macOS passes; CI soak history is not yet available." },
-      "redGreenEvidence": { "status": "complete", "evidence": "The retained Electron gate itself executes the former read-only wrapper setValue behavior behind MODE=e2e at fixed 900x720, 13px, 1x zoom, the full 9 MiB model length loaded (with a generous content-height floor, since word-wrap pixel geometry is runner-dependent), and five-second cadence. The control retains a flat incoming value like the former controlled IPC prop. Each legacy arm must disrupt selection, Find active-match state, visible range, or scroll anchor, then restore identical model length/tail/geometry and anchor state before the fixed watcher arm; every fixed arm must preserve them. Production builds never install the control. The original exact-file dev repro also recorded renderer exit code 5." },
-      "performanceBudget": { "required": true, "evidence": "Every update retrieves the model value once and performs at most one equality-or-prefix comparison; a matching append submits only the suffix. The registered Node command requires --expose-gc and --pool=threads so worker GC is available; alternating fresh real-Monaco arms force GC and deterministic event-loop settlement after every operation. Observed p95 ranges: 9 MiB append 4.02-5.51ms versus replacement 81.42-83.76ms; 50 MiB append 22.72-26.60ms versus replacement 445.11-449.21ms. Electron alternates each legacy replacement control and fixed watcher suffix from equivalent restored model state/geometry, samples forced-GC JS heap plus app.getAppMetrics renderer working set and OS private memory before/after/settled, asserts retained memory within max(20MiB,10%), and requires suffix peak deltas for jsHeapMb, workingSetMb, and privateMb not exceed the paired legacy controls." },
+      "runtimeBudget": {
+        "p95Seconds": 600,
+        "scope": "local focused renderer tests plus one Electron production-journey scenario"
+      },
+      "flakeHistory": {
+        "status": "unknown",
+        "evidence": "New deterministic gate with local macOS passes; CI soak history is not yet available."
+      },
+      "redGreenEvidence": {
+        "status": "complete",
+        "evidence": "The retained Electron gate itself executes the former read-only wrapper setValue behavior behind MODE=e2e at fixed 900x720, 13px, 1x zoom, the full 9 MiB model length loaded (with a generous content-height floor, since word-wrap pixel geometry is runner-dependent), and five-second cadence. The control retains a flat incoming value like the former controlled IPC prop. Each legacy arm must disrupt selection, Find active-match state, visible range, or scroll anchor, then restore identical model length/tail/geometry and anchor state before the fixed watcher arm; every fixed arm must preserve them. Production builds never install the control. The original exact-file dev repro also recorded renderer exit code 5."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "Every update retrieves the model value once and performs at most one equality-or-prefix comparison; a matching append submits only the suffix. The registered Node command requires --expose-gc and --pool=threads so worker GC is available; alternating fresh real-Monaco arms force GC and deterministic event-loop settlement after every operation. Observed p95 ranges: 9 MiB append 4.02-5.51ms versus replacement 81.42-83.76ms; 50 MiB append 22.72-26.60ms versus replacement 445.11-449.21ms. Electron alternates each legacy replacement control and fixed watcher suffix from equivalent restored model state/geometry, samples forced-GC JS heap plus app.getAppMetrics renderer working set and OS private memory before/after/settled, asserts retained memory within max(20MiB,10%), and requires suffix peak deltas for jsHeapMb, workingSetMb, and privateMb not exceed the paired legacy controls."
+      },
       "promotionCriteria": [
         "Collect stable soak history on macOS, Linux, and Windows.",
         "Accumulate 100 consecutive deterministic gate passes or 14 days without unexplained flakes."
       ],
-      "knownGaps": [
-        "No live Windows or Linux View Log evidence yet."
-      ],
+      "knownGaps": ["No live Windows or Linux View Log evidence yet."],
       "demotionRule": "Quarantine the Electron scenario if it flakes without a product or harness bug; demote if viewport/Find drift, renderer loss, p95 regression, or memory retention exceeds the registered budgets."
     },
     {
@@ -124,23 +136,10 @@
       "protection": "partial",
       "owner": "terminal-runtime",
       "layer": "renderer-unit",
-      "surfaces": [
-        "terminal lifecycle",
-        "dead-session reconciliation",
-        "tab creation"
-      ],
-      "platforms": [
-        "macos",
-        "linux",
-        "windows"
-      ],
-      "providers": [
-        "local",
-        "daemon"
-      ],
-      "coveredPlatforms": [
-        "macos"
-      ],
+      "surfaces": ["terminal lifecycle", "dead-session reconciliation", "tab creation"],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["local", "daemon"],
+      "coveredPlatforms": ["macos"],
       "coveredProviders": [],
       "coverageNotes": "Local macOS evidence over the reconcile guards that exist on main@1282f5c2d. Broader targeted-hasPty resume paths, no-hot listing counts, and live Electron survival arrive with the pending reliability stack.",
       "motivatingLinks": [
@@ -220,31 +219,12 @@
         "Manage Sessions",
         "Resource Manager"
       ],
-      "platforms": [
-        "macos",
-        "linux",
-        "windows"
-      ],
-      "providers": [
-        "local",
-        "daemon",
-        "ssh",
-        "wsl",
-        "remote-runtime",
-        "mobile-relay"
-      ],
-      "coveredPlatforms": [
-        "macos"
-      ],
-      "coveredProviders": [
-        "local",
-        "daemon",
-        "ssh"
-      ],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["local", "daemon", "ssh", "wsl", "remote-runtime", "mobile-relay"],
+      "coveredPlatforms": ["macos"],
+      "coveredProviders": ["local", "daemon", "ssh"],
       "coverageNotes": "Local macOS deterministic evidence covers the renderer snapshot/coordinator, exact local and SSH-shaped PTY request settlement, active-last and pinned terminal-tab routing, component-unmount continuation, and the existing current/legacy daemon management contract. Windows Electron process absence, live SSH/WSL behavior, and remote-runtime/mobile host completion remain explicit gaps.",
-      "motivatingLinks": [
-        "https://github.com/stablyai/orca/issues/8001"
-      ],
+      "motivatingLinks": ["https://github.com/stablyai/orca/issues/8001"],
       "invariant": "Every terminal surface confirmed in the invoking renderer is force-closed exactly once after daemon management settles, later-created surfaces and non-terminal tabs survive, and exact shutdown requests are limited to deduplicated current non-runtime PTY bindings of the confirmed surfaces.",
       "oracle": "Snapshot terminal entity IDs before the first await; mutate ownership, active selection, bindings, and tab presence while daemon management is pending; then assert only the immutable targets disappear from both terminal stores, active targets close last with valid editor/browser/deactivated post-state, every captured exact PTY promise settles before callbacks, and no provider inventory sweep or late-tab kill occurs.",
       "commands": [
@@ -341,33 +321,11 @@
       "protection": "partial",
       "owner": "terminal-runtime",
       "layer": "shared-main-renderer-contract",
-      "surfaces": [
-        "terminal lifecycle",
-        "tab creation",
-        "PTY spawn",
-        "startup cwd persistence"
-      ],
-      "platforms": [
-        "macos",
-        "linux",
-        "windows",
-        "mobile"
-      ],
-      "providers": [
-        "local",
-        "daemon",
-        "ssh",
-        "wsl",
-        "remote-runtime"
-      ],
-      "coveredPlatforms": [
-        "macos"
-      ],
-      "coveredProviders": [
-        "local",
-        "ssh",
-        "remote-runtime"
-      ],
+      "surfaces": ["terminal lifecycle", "tab creation", "PTY spawn", "startup cwd persistence"],
+      "platforms": ["macos", "linux", "windows", "mobile"],
+      "providers": ["local", "daemon", "ssh", "wsl", "remote-runtime"],
+      "coveredPlatforms": ["macos"],
+      "coveredProviders": ["local", "ssh", "remote-runtime"],
       "coverageNotes": "Local macOS evidence covers the shared missing-dir fallback policy, main pty:spawn recovery and metadata, no-flag and reattach strictness, renderer IPC flag routing, SSH-tagged and remote-runtime omission, and the visibility-gated terminal notice. Daemon shares the same pre-provider main cwd decision but lacks a live daemon-provider run; WSL UNC paths are exempt from the probe by design and lack a live run; Linux/Windows and mobile/API strictness are gaps.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/issues/7239",
@@ -504,21 +462,9 @@
         "runtime reload and session replacement",
         "loopback restart and stall recovery"
       ],
-      "platforms": [
-        "macos",
-        "linux",
-        "windows"
-      ],
-      "providers": [
-        "local",
-        "daemon",
-        "ssh",
-        "wsl",
-        "remote-runtime"
-      ],
-      "coveredPlatforms": [
-        "macos"
-      ],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["local", "daemon", "ssh", "wsl", "remote-runtime"],
+      "coveredPlatforms": ["macos"],
       "coveredProviders": [],
       "coverageNotes": "Local macOS execution of the generated Pi/OMP extension plus the shared hook normalizer. WSL fallback behavior is covered with mocked native-fetch failure and Windows curl handoff. Daemon PTYs use the same generated extension without a distinct delivery path. SSH/relay ingest uses the shared normalizer, but no live remote Pi process is exercised.",
       "motivatingLinks": [
@@ -608,21 +554,9 @@
         "provider session dedupe",
         "sidebar and mobile identity"
       ],
-      "platforms": [
-        "macos",
-        "linux",
-        "windows"
-      ],
-      "providers": [
-        "local",
-        "daemon",
-        "ssh",
-        "wsl",
-        "remote-runtime"
-      ],
-      "coveredPlatforms": [
-        "macos"
-      ],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["local", "daemon", "ssh", "wsl", "remote-runtime"],
+      "coveredPlatforms": ["macos"],
       "coveredProviders": [],
       "coverageNotes": "Local macOS evidence over the ownership/dedupe suite on main@1282f5c2d. Queued/pending resume-claim indexing, same-session and wrong-session hook proofs, and Electron repeat-activation coverage arrive with the pending stack (#7008).",
       "motivatingLinks": [
@@ -636,9 +570,7 @@
       "commands": [
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/resume-sleeping-agent-session.test.ts"
       ],
-      "testFiles": [
-        "src/renderer/src/lib/resume-sleeping-agent-session.test.ts"
-      ],
+      "testFiles": ["src/renderer/src/lib/resume-sleeping-agent-session.test.ts"],
       "assertionRefs": [
         {
           "file": "src/renderer/src/lib/resume-sleeping-agent-session.test.ts",
@@ -696,26 +628,10 @@
       "protection": "partial",
       "owner": "terminal-rendering",
       "layer": "renderer-provider-contract",
-      "surfaces": [
-        "PTY sizing",
-        "split layout",
-        "restore",
-        "hidden-to-visible transitions"
-      ],
-      "platforms": [
-        "macos",
-        "linux",
-        "windows"
-      ],
-      "providers": [
-        "local",
-        "daemon",
-        "ssh",
-        "remote-runtime"
-      ],
-      "coveredPlatforms": [
-        "macos"
-      ],
+      "surfaces": ["PTY sizing", "split layout", "restore", "hidden-to-visible transitions"],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["local", "daemon", "ssh", "remote-runtime"],
+      "coveredPlatforms": ["macos"],
       "coveredProviders": [],
       "coverageNotes": "Local macOS evidence on main@1282f5c2d, including #7192's runtime-mirror geometry authority slice. Shell-visible size, SSH/remote geometry, Windows ConPTY readback, and resume-time reassertion coverage arrive with the pending stack and #7006.",
       "motivatingLinks": [
@@ -817,27 +733,10 @@
       "protection": "partial",
       "owner": "terminal-rendering",
       "layer": "renderer-unit",
-      "surfaces": [
-        "terminal search",
-        "links",
-        "WebGL",
-        "decorations",
-        "keyboard navigation"
-      ],
-      "platforms": [
-        "macos",
-        "linux",
-        "windows"
-      ],
-      "providers": [
-        "local",
-        "daemon",
-        "ssh",
-        "remote-runtime"
-      ],
-      "coveredPlatforms": [
-        "macos"
-      ],
+      "surfaces": ["terminal search", "links", "WebGL", "decorations", "keyboard navigation"],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["local", "daemon", "ssh", "remote-runtime"],
+      "coveredPlatforms": ["macos"],
       "coveredProviders": [],
       "coverageNotes": "Local macOS evidence over the WebGL/link/search containment suites on main@1282f5c2d, adopting the #6949 atlas-recovery rename and #7133's reveal hardening tests. Core addon-load throw containment and live typed-input survival arrive with #7004 and a live follow-up.",
       "motivatingLinks": [
@@ -961,34 +860,18 @@
         "xterm scrollbar DOM",
         "scrollback"
       ],
-      "platforms": [
-        "macos",
-        "linux",
-        "windows"
-      ],
-      "providers": [
-        "local",
-        "daemon",
-        "ssh",
-        "wsl",
-        "remote-runtime"
-      ],
-      "coveredPlatforms": [
-        "macos"
-      ],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["local", "daemon", "ssh", "wsl", "remote-runtime"],
+      "coveredPlatforms": ["macos"],
       "coveredProviders": [],
       "coverageNotes": "Renderer-unit coverage proves the shared xterm DOM intent path. Live Electron evidence is PR validation evidence for local macOS only until the flow has stable automation; live SSH, WSL, Linux, and Windows paths remain unproved.",
-      "motivatingLinks": [
-        "STA-1341"
-      ],
+      "motivatingLinks": ["STA-1341"],
       "invariant": "A user-driven xterm scrollbar thumb or track scroll updates the live terminal scroll intent before tab, visibility, or layout resume enforces intent, so resume preserves the latest dragged viewport instead of an older pinned line.",
       "oracle": "Pointerdown on .xterm-scrollbar or .xterm-slider followed by xterm viewport movement records the new pinned viewport, and enforcing current intent restores that dragged line instead of stale top intent.",
       "commands": [
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/pane-manager/terminal-scroll-intent.test.ts"
       ],
-      "testFiles": [
-        "src/renderer/src/lib/pane-manager/terminal-scroll-intent.test.ts"
-      ],
+      "testFiles": ["src/renderer/src/lib/pane-manager/terminal-scroll-intent.test.ts"],
       "assertionRefs": [
         {
           "file": "src/renderer/src/lib/pane-manager/terminal-scroll-intent.test.ts",
@@ -1045,23 +928,9 @@
       "protection": "none",
       "owner": "startup-persistence",
       "layer": "upgrade-fixture",
-      "surfaces": [
-        "startup",
-        "upgrade",
-        "session restore",
-        "daemon restore"
-      ],
-      "platforms": [
-        "macos",
-        "linux",
-        "windows"
-      ],
-      "providers": [
-        "local",
-        "daemon",
-        "ssh",
-        "wsl"
-      ],
+      "surfaces": ["startup", "upgrade", "session restore", "daemon restore"],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["local", "daemon", "ssh", "wsl"],
       "coveredPlatforms": [],
       "coveredProviders": [],
       "coverageNotes": "Registered gap only; no executable coverage is wired yet.",
@@ -1097,9 +966,7 @@
         "Run second restart after current code writes upgraded state.",
         "Record startup timing and failure artifact."
       ],
-      "knownGaps": [
-        "No fixture corpus or command yet."
-      ],
+      "knownGaps": ["No fixture corpus or command yet."],
       "demotionRule": "Cannot promote without old production fixture provenance."
     },
     {
@@ -1118,13 +985,8 @@
         "resize",
         "exit cleanup"
       ],
-      "platforms": [
-        "linux",
-        "macos"
-      ],
-      "providers": [
-        "local"
-      ],
+      "platforms": ["linux", "macos"],
+      "providers": ["local"],
       "coveredPlatforms": [],
       "coveredProviders": [],
       "coverageNotes": "Registered gap on main. The live Electron Playwright slice exists only on the pending reliability stack. It registers here with its owning split PR.",
@@ -1183,20 +1045,10 @@
         "CJK repaint",
         "cursor and resize"
       ],
-      "platforms": [
-        "windows"
-      ],
-      "providers": [
-        "local",
-        "daemon",
-        "wsl"
-      ],
-      "coveredPlatforms": [
-        "windows"
-      ],
-      "coveredProviders": [
-        "daemon"
-      ],
+      "platforms": ["windows"],
+      "providers": ["local", "daemon", "wsl"],
+      "coveredPlatforms": ["windows"],
+      "coveredProviders": ["daemon"],
       "coverageNotes": "Issue #8048 now has deterministic wrapper and cold-restore re-anchor tests plus a Windows PR-CI harness that drives the built daemon through 25 real ConPTY workspace-close races while an unrelated witness PTY stays alive. Keyboard reset, CJK repaint, WSL, and full visible Electron coverage remain gaps.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/pull/6541",
@@ -1294,18 +1146,8 @@
         "resize",
         "render"
       ],
-      "platforms": [
-        "macos",
-        "linux",
-        "windows"
-      ],
-      "providers": [
-        "local",
-        "daemon",
-        "ssh",
-        "wsl",
-        "remote-runtime"
-      ],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["local", "daemon", "ssh", "wsl", "remote-runtime"],
       "coveredPlatforms": [],
       "coveredProviders": [],
       "coverageNotes": "Registered gap on main. The targeted-hasPty product hardening and no-hot count assertions exist only on the pending reliability stack. It registers here with its owning split PR.",
@@ -1361,18 +1203,8 @@
         "provider ownership",
         "diagnostics bundle"
       ],
-      "platforms": [
-        "macos",
-        "linux",
-        "windows"
-      ],
-      "providers": [
-        "local",
-        "daemon",
-        "ssh",
-        "wsl",
-        "remote-runtime"
-      ],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["local", "daemon", "ssh", "wsl", "remote-runtime"],
       "coveredPlatforms": [],
       "coveredProviders": [],
       "coverageNotes": "Registered gap on main. The crash-breadcrumb recording and its test exist only on the pending reliability stack. It registers here with its owning split PR.",
@@ -1432,20 +1264,9 @@
         "xterm scheduler",
         "hidden output"
       ],
-      "platforms": [
-        "macos",
-        "linux",
-        "windows"
-      ],
-      "providers": [
-        "local",
-        "daemon",
-        "ssh",
-        "remote-runtime"
-      ],
-      "coveredPlatforms": [
-        "macos"
-      ],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["local", "daemon", "ssh", "remote-runtime"],
+      "coveredPlatforms": ["macos"],
       "coveredProviders": [],
       "coverageNotes": "Local macOS evidence covers the existing main-process pending-output caps plus deterministic runtime path-provenance history reuse, idle-path serve-sim detection, and saturated-tail wait detection. Daemon stream write(false)/drain contracts, cross-session drain priority, and bounded queued tails arrive with the pending perf slice; live flood/latency artifacts remain gaps.",
       "motivatingLinks": [
@@ -1593,15 +1414,8 @@
         "provider ownership",
         "startup restore"
       ],
-      "platforms": [
-        "macos",
-        "linux",
-        "windows"
-      ],
-      "providers": [
-        "daemon",
-        "local"
-      ],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["daemon", "local"],
       "coveredPlatforms": [],
       "coveredProviders": [],
       "coverageNotes": "Registered gap on main. The fail-closed degraded-daemon hardening and its contracts exist only on the pending reliability stack. It registers here with its owning split PR.",
@@ -1658,16 +1472,8 @@
         "reattach",
         "unknown liveness"
       ],
-      "platforms": [
-        "macos",
-        "linux",
-        "windows"
-      ],
-      "providers": [
-        "ssh",
-        "remote-runtime",
-        "wsl"
-      ],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["ssh", "remote-runtime", "wsl"],
       "coveredPlatforms": [],
       "coveredProviders": [],
       "coverageNotes": "Registered gap on main. The SSH unknown-liveness hardening and deferred-reattach contracts exist only on the pending reliability stack. It registers here with its owning split PR.",
@@ -1729,12 +1535,8 @@
         "provider liveness",
         "restore"
       ],
-      "platforms": [
-        "windows"
-      ],
-      "providers": [
-        "wsl"
-      ],
+      "platforms": ["windows"],
+      "providers": ["wsl"],
       "coveredPlatforms": [],
       "coveredProviders": [],
       "coverageNotes": "Registered gap only; no executable coverage is wired yet.",
@@ -1792,17 +1594,8 @@
         "metadata-only replay",
         "WebGL recovery"
       ],
-      "platforms": [
-        "macos",
-        "linux",
-        "windows"
-      ],
-      "providers": [
-        "local",
-        "daemon",
-        "ssh",
-        "remote-runtime"
-      ],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["local", "daemon", "ssh", "remote-runtime"],
       "coveredPlatforms": [],
       "coveredProviders": [],
       "coverageNotes": "Registered gap on main. The replay FIFO/burst coalescing product change and its tests exist only on the pending reliability stack; main still uses a single pendingReplayData slot. It registers here with its owning split PR.",
@@ -1861,21 +1654,9 @@
         "keyboard bypass",
         "JIS yen"
       ],
-      "platforms": [
-        "macos",
-        "linux",
-        "windows"
-      ],
-      "providers": [
-        "local",
-        "daemon",
-        "ssh",
-        "remote-runtime"
-      ],
-      "coveredPlatforms": [
-        "macos",
-        "linux"
-      ],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["local", "daemon", "ssh", "remote-runtime"],
+      "coveredPlatforms": ["macos", "linux"],
       "coveredProviders": [],
       "coverageNotes": "Local macOS and containerized Linux evidence, deterministic renderer-unit coverage for the Linux/Sogou candidate-key policy including the legacy orphaned-keyup fallback, and Electron/CDP live-PTY Sogou-style repros. Real Linux/Sogou OS IME automation, Windows ConPTY post-agent reset, and the CJK/Vietnamese/Arabic matrix remain registered gaps.",
       "motivatingLinks": [
@@ -1918,9 +1699,7 @@
         },
         {
           "file": "src/renderer/src/components/terminal-pane/terminal-paste-runtime.test.ts",
-          "assertions": [
-            "paste/runtime forwarding avoids duplicate terminal payloads"
-          ]
+          "assertions": ["paste/runtime forwarding avoids duplicate terminal payloads"]
         },
         {
           "file": "src/renderer/src/components/terminal-pane/terminal-ime-composition-tracker.test.ts",
@@ -2057,14 +1836,8 @@
         "TUI exit",
         "standard key input"
       ],
-      "platforms": [
-        "windows"
-      ],
-      "providers": [
-        "local",
-        "daemon",
-        "wsl"
-      ],
+      "platforms": ["windows"],
+      "providers": ["local", "daemon", "wsl"],
       "coveredPlatforms": [],
       "coveredProviders": [],
       "coverageNotes": "Registered gap only; no executable coverage is wired yet.",
@@ -2121,21 +1894,9 @@
         "WSL",
         "remote runtime"
       ],
-      "platforms": [
-        "macos",
-        "linux",
-        "windows"
-      ],
-      "providers": [
-        "local",
-        "daemon",
-        "ssh",
-        "wsl",
-        "remote-runtime"
-      ],
-      "coveredPlatforms": [
-        "macos"
-      ],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["local", "daemon", "ssh", "wsl", "remote-runtime"],
+      "coveredPlatforms": ["macos"],
       "coveredProviders": [],
       "coverageNotes": "Deterministic main/renderer tests run on macOS and exercise simulated Windows plus POSIX/Linux process-confirmation behavior. They cover exact local-ConPTY membership, detached-child rejection, SSH and paired-runtime host-platform routing including legacy runtime PTY IDs, active-PTY ownership after worktree host changes, Windows-to-WSL routing, unknown-metadata fallback, production handler composition, KKP authorization on every host, process-confirmed Droid routing and launch-triggered confirmation, typed-alias and forged-OSC isolation, shells without OSC 133, split/detach ownership with preserved shell classification, stale PTY exit/rebind rejection, command-generation revocation, daemon v21 warm-reattach identity, unavailable inspection, and lazy subprocess/RPC callback counts. A live linux-arm64 Docker target additionally proved real relay deployment, SSH PTY host detection, and exact inactive/active KKP bytes. The Electron byte test runs only on Windows; live Windows evidence remains uncollected. Test failures report exact expected bytes; no product telemetry or raw terminal logging is added.",
       "motivatingLinks": [
@@ -2396,29 +2157,12 @@
         "PTY identity",
         "foreground process confirmation"
       ],
-      "platforms": [
-        "macos",
-        "linux",
-        "windows"
-      ],
-      "providers": [
-        "local",
-        "daemon",
-        "ssh",
-        "wsl",
-        "remote-runtime"
-      ],
-      "coveredPlatforms": [
-        "macos"
-      ],
-      "coveredProviders": [
-        "local",
-        "daemon"
-      ],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["local", "daemon", "ssh", "wsl", "remote-runtime"],
+      "coveredPlatforms": ["macos"],
+      "coveredProviders": ["local", "daemon"],
       "coverageNotes": "Runtime and provider-contract tests on macOS cover exact-PTY authorization, local/daemon fresh confirmation, exact ConPTY membership, and unsupported-provider fail-closed behavior. Physical Windows, live Linux, SSH, WSL, and remote-runtime validation remain explicit gaps; providers without confirmation preserve conservative refusal on a shell conflict.",
-      "motivatingLinks": [
-        "https://github.com/stablyai/orca/issues/8303"
-      ],
+      "motivatingLinks": ["https://github.com/stablyai/orca/issues/8303"],
       "invariant": "A guarded note send writes only to the exact PTY binding checked by the guard and only while permission/wait evidence allows input; fresh hook state conflicting with an ordinary shell foreground requires fresh provider confirmation of a recognized agent in that PTY.",
       "oracle": "Fresh explicit state plus ordinary PowerShell plus confirmed recognized agent is sendable on the same PTY. Confirmed shell/non-agent, unavailable confirmation, PTY exit, handle rebind, or a callback PTY mismatch returns a refusal or not-writable result and writes zero bytes.",
       "commands": [
@@ -2470,9 +2214,7 @@
         },
         {
           "file": "src/main/providers/local-pty-provider.test.ts",
-          "assertions": [
-            "fresh confirmation is discarded when its owning local PTY exits"
-          ]
+          "assertions": ["fresh confirmation is discarded when its owning local PTY exits"]
         },
         {
           "file": "src/main/providers/windows-conpty-process-membership.test.ts",
@@ -2495,9 +2237,7 @@
         },
         {
           "file": "src/renderer/src/lib/active-agent-note-send.test.ts",
-          "assertions": [
-            "selected active-agent note sends retain guarded paste and submit routing"
-          ]
+          "assertions": ["selected active-agent note sends retain guarded paste and submit routing"]
         },
         {
           "file": "src/renderer/src/components/browser-pane/BrowserAnnotationSendMenuContent.test.tsx",
@@ -2561,27 +2301,12 @@
         "PTY writes",
         "bracketed paste"
       ],
-      "platforms": [
-        "macos",
-        "linux",
-        "windows"
-      ],
-      "providers": [
-        "local",
-        "daemon",
-        "ssh",
-        "remote-runtime"
-      ],
-      "coveredPlatforms": [
-        "macos"
-      ],
-      "coveredProviders": [
-        "local"
-      ],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["local", "daemon", "ssh", "remote-runtime"],
+      "coveredPlatforms": ["macos"],
+      "coveredProviders": ["local"],
       "coverageNotes": "Local macOS evidence covers the runtime PTY write contract and a live dev-runtime CLI repro. SSH, daemon, remote-runtime, Linux, and Windows remain provider/platform gaps; the product path stays provider-owned and does not add local filesystem or process assumptions.",
-      "motivatingLinks": [
-        "https://github.com/stablyai/orca/issues/7226"
-      ],
+      "motivatingLinks": ["https://github.com/stablyai/orca/issues/7226"],
       "invariant": "Injected orchestration task prompts for recognized agent CLIs must send the prompt body inside one bracketed-paste frame, sanitize embedded ESC bytes, preserve chunk boundaries without losing the frame, and send Enter only after the paste frame completes.",
       "oracle": "Runtime tests assert the exact PTY write sequence and failure cleanup; orchestration tests assert dispatch/coordinator use the agent prompt path; the live CLI harness dispatches a 32KB task to a fake Codex-like TUI and requires marker present, bracketed paste present, zero unframed line breaks, and submit observed.",
       "commands": [
@@ -2700,14 +2425,8 @@
         "cursor repaint",
         "rewrite output"
       ],
-      "platforms": [
-        "windows"
-      ],
-      "providers": [
-        "local",
-        "daemon",
-        "wsl"
-      ],
+      "platforms": ["windows"],
+      "providers": ["local", "daemon", "wsl"],
       "coveredPlatforms": [],
       "coveredProviders": [],
       "coverageNotes": "Registered gap only; no executable coverage is wired yet.",
@@ -2743,10 +2462,7 @@
         "Keep stress cases non-blocking until Windows runtime history is stable.",
         "Fail promotion on silent Windows environment skips."
       ],
-      "knownGaps": [
-        "No manifest command yet.",
-        "No Windows CJK/emoji repaint command is wired."
-      ],
+      "knownGaps": ["No manifest command yet.", "No Windows CJK/emoji repaint command is wired."],
       "demotionRule": "Cannot promote if the oracle is screenshot-only or environment-skipped."
     },
     {
@@ -2764,14 +2480,8 @@
         "local provider",
         "daemon provider"
       ],
-      "platforms": [
-        "windows"
-      ],
-      "providers": [
-        "local",
-        "daemon",
-        "wsl"
-      ],
+      "platforms": ["windows"],
+      "providers": ["local", "daemon", "wsl"],
       "coveredPlatforms": [],
       "coveredProviders": [],
       "coverageNotes": "Registered gap only; no executable coverage is wired yet.",
@@ -2826,17 +2536,8 @@
         "renderer CPU",
         "resize churn"
       ],
-      "platforms": [
-        "macos",
-        "linux",
-        "windows"
-      ],
-      "providers": [
-        "local",
-        "daemon",
-        "ssh",
-        "remote-runtime"
-      ],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["local", "daemon", "ssh", "remote-runtime"],
       "coveredPlatforms": [],
       "coveredProviders": [],
       "coverageNotes": "Registered gap only; no executable coverage is wired yet.",
@@ -2884,21 +2585,9 @@
       "protection": "none",
       "owner": "terminal-performance",
       "layer": "daemon-provider-contract",
-      "surfaces": [
-        "daemon stream",
-        "socket write",
-        "drain",
-        "hidden output",
-        "input starvation"
-      ],
-      "platforms": [
-        "macos",
-        "linux",
-        "windows"
-      ],
-      "providers": [
-        "daemon"
-      ],
+      "surfaces": ["daemon stream", "socket write", "drain", "hidden output", "input starvation"],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["daemon"],
       "coveredPlatforms": [],
       "coveredProviders": [],
       "coverageNotes": "Registered gap on main. The daemon batcher write(false)/drain contracts exist only on the pending reliability stack. It registers here with its owning split PR.",
@@ -2956,23 +2645,12 @@
         "workspace switch",
         "agent status"
       ],
-      "platforms": [
-        "macos",
-        "linux",
-        "windows"
-      ],
-      "providers": [
-        "local",
-        "daemon",
-        "ssh",
-        "remote-runtime"
-      ],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["local", "daemon", "ssh", "remote-runtime"],
       "coveredPlatforms": [],
       "coveredProviders": [],
       "coverageNotes": "Registered gap on main. The boot-hydration counters and their tests exist only on the pending reliability stack. It registers here with its owning split PR.",
-      "motivatingLinks": [
-        "https://github.com/stablyai/orca/pull/7002"
-      ],
+      "motivatingLinks": ["https://github.com/stablyai/orca/pull/7002"],
       "invariant": "Terminal typing, focus, resize, tab/workspace switch, and agent/session restore must not trigger unbounded store projection, git status, provider listing, or per-pane polling work.",
       "oracle": "The current executable slice instruments boot-time local PTY registry hydration with repo counts, local-vs-remote repo skips, worktree enumeration counts, adapter/session listing counts, registration/skipped-session counts, duration, and failure phase. The broader oracle still needs instrumentation that counts store selector recomputes, git status requests, provider listings, and session scans during scripted hot interactions with many worktrees and terminal panes.",
       "commands": [],
@@ -3021,20 +2699,9 @@
         "metadata-only replay",
         "clear semantics"
       ],
-      "platforms": [
-        "macos",
-        "linux",
-        "windows"
-      ],
-      "providers": [
-        "local",
-        "daemon",
-        "ssh",
-        "remote-runtime"
-      ],
-      "coveredPlatforms": [
-        "macos"
-      ],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["local", "daemon", "ssh", "remote-runtime"],
+      "coveredPlatforms": ["macos"],
       "coveredProviders": [],
       "coverageNotes": "Local macOS evidence over the merged #7133/#7173 restore and hidden-output ordering tests on main@1282f5c2d. The dirty-state exactness contract, normal-buffer clear semantics, and metadata-only replay remain pending-stack work.",
       "motivatingLinks": [
@@ -3049,9 +2716,7 @@
       "commands": [
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/pty-connection.test.ts"
       ],
-      "testFiles": [
-        "src/renderer/src/components/terminal-pane/pty-connection.test.ts"
-      ],
+      "testFiles": ["src/renderer/src/components/terminal-pane/pty-connection.test.ts"],
       "assertionRefs": [
         {
           "file": "src/renderer/src/components/terminal-pane/pty-connection.test.ts",
@@ -3119,23 +2784,12 @@
         "renderer stream",
         "terminal colors"
       ],
-      "platforms": [
-        "macos",
-        "linux",
-        "windows"
-      ],
-      "providers": [
-        "local",
-        "daemon",
-        "ssh",
-        "remote-runtime"
-      ],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["local", "daemon", "ssh", "remote-runtime"],
       "coveredPlatforms": [],
       "coveredProviders": [],
       "coverageNotes": "Registered gap only; no executable coverage is wired yet.",
-      "motivatingLinks": [
-        "https://github.com/stablyai/orca/pull/6949"
-      ],
+      "motivatingLinks": ["https://github.com/stablyai/orca/pull/6949"],
       "invariant": "Startup OSC 10/11 color queries are answered out of band at startup only, never leak into shell/provider output streams, and ordinary runtime OSC color queries remain renderer-handled.",
       "oracle": "A provider-contract fixture records startup query replies, shell-visible bytes, renderer-visible bytes, and later runtime OSC behavior to prove no query leakage or color deadlock.",
       "commands": [],
@@ -3163,10 +2817,7 @@
         "Cover startup-only and runtime OSC paths separately.",
         "Keep screenshot evidence diagnostic only."
       ],
-      "knownGaps": [
-        "No manifest command yet.",
-        "No startup color-query contract is wired."
-      ],
+      "knownGaps": ["No manifest command yet.", "No startup color-query contract is wired."],
       "demotionRule": "Cannot promote if success is based only on absence of visible artifacts."
     },
     {
@@ -3183,21 +2834,9 @@
         "mobile subscription replay",
         "multi-mobile input floor"
       ],
-      "platforms": [
-        "macos",
-        "linux",
-        "windows",
-        "mobile"
-      ],
-      "providers": [
-        "local",
-        "daemon",
-        "ssh",
-        "remote-runtime"
-      ],
-      "coveredPlatforms": [
-        "macos"
-      ],
+      "platforms": ["macos", "linux", "windows", "mobile"],
+      "providers": ["local", "daemon", "ssh", "remote-runtime"],
+      "coveredPlatforms": ["macos"],
       "coveredProviders": [],
       "coverageNotes": "Deterministic local tests execute the exact injected mobile replay/generation gate, the React Native query classifier, stale-subscription sender, server-side single-responder election, query-reply RPC semantics, and live-output capture during async mobile fit. The provider write path is shared, but no live iOS/Android, SSH, WSL, or multi-device run is registered yet.",
       "motivatingLinks": [
@@ -3328,21 +2967,9 @@
         "JSON subscribe fallback",
         "snapshot buffering"
       ],
-      "platforms": [
-        "macos",
-        "linux",
-        "windows",
-        "mobile"
-      ],
-      "providers": [
-        "remote-runtime",
-        "ssh",
-        "local",
-        "daemon"
-      ],
-      "coveredPlatforms": [
-        "macos"
-      ],
+      "platforms": ["macos", "linux", "windows", "mobile"],
+      "providers": ["remote-runtime", "ssh", "local", "daemon"],
+      "coveredPlatforms": ["macos"],
       "coveredProviders": [],
       "coverageNotes": "Local macOS evidence over the runtime-RPC stream budgets on main@1282f5c2d. The pending stack adds byte-exact 512KB/2MB/256KB/48KB budget assertions; legacy JSON subscribe parity remains undecided.",
       "motivatingLinks": [
@@ -3438,20 +3065,9 @@
         "unicode width",
         "parser configuration"
       ],
-      "platforms": [
-        "macos",
-        "linux",
-        "windows"
-      ],
-      "providers": [
-        "local",
-        "daemon",
-        "ssh",
-        "remote-runtime"
-      ],
-      "coveredPlatforms": [
-        "macos"
-      ],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["local", "daemon", "ssh", "remote-runtime"],
+      "coveredPlatforms": ["macos"],
       "coveredProviders": [],
       "coverageNotes": "Local macOS evidence over #7148's width-parity oracle on main@1282f5c2d. A broader byte corpus, a shared parser-construction assertion over terminal-unicode-provider.ts/pane-terminal-options.ts, and recorded agent-session corpora remain gaps.",
       "motivatingLinks": [
@@ -3463,9 +3079,7 @@
       "commands": [
         "pnpm exec vitest run --config config/vitest.config.ts src/main/daemon/headless-emulator-unicode-width.test.ts"
       ],
-      "testFiles": [
-        "src/main/daemon/headless-emulator-unicode-width.test.ts"
-      ],
+      "testFiles": ["src/main/daemon/headless-emulator-unicode-width.test.ts"],
       "assertionRefs": [
         {
           "file": "src/main/daemon/headless-emulator-unicode-width.test.ts",
@@ -3522,23 +3136,9 @@
       "protection": "none",
       "owner": "terminal-rendering",
       "layer": "renderer-observability",
-      "surfaces": [
-        "hidden-output restore",
-        "snapshot replay",
-        "anomaly breadcrumbs",
-        "telemetry"
-      ],
-      "platforms": [
-        "macos",
-        "linux",
-        "windows"
-      ],
-      "providers": [
-        "local",
-        "daemon",
-        "ssh",
-        "remote-runtime"
-      ],
+      "surfaces": ["hidden-output restore", "snapshot replay", "anomaly breadcrumbs", "telemetry"],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["local", "daemon", "ssh", "remote-runtime"],
       "coveredPlatforms": [],
       "coveredProviders": [],
       "coverageNotes": "Registered gap only; the anomaly-breadcrumb machinery exists in this branch but no convergence probe is implemented.",
@@ -3595,15 +3195,8 @@
         "window wake",
         "render model"
       ],
-      "platforms": [
-        "macos",
-        "linux",
-        "windows"
-      ],
-      "providers": [
-        "local",
-        "daemon"
-      ],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["local", "daemon"],
       "coveredPlatforms": [],
       "coveredProviders": [],
       "coverageNotes": "Registered gap only; the live repro harness with a refresh-repair oracle exists but is not productized into the release-blocking terminal-rendering-golden suite.",
@@ -3657,18 +3250,9 @@
         "renderer reload / crash recovery",
         "surviving daemon and local PTYs"
       ],
-      "platforms": [
-        "macos",
-        "linux",
-        "windows"
-      ],
-      "providers": [
-        "local",
-        "daemon"
-      ],
-      "coveredPlatforms": [
-        "macos"
-      ],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["local", "daemon"],
+      "coveredPlatforms": ["macos"],
       "coveredProviders": [],
       "coverageNotes": "Local macOS unit evidence over the shared main-process delivery pipeline in registerPtyHandlers. The oracle drives a local mock PTY, but the in-flight/pending accounting is provider-agnostic and daemon PTYs ride the identical pipeline (the manual dev repro that proved the freeze was daemon-backed). SSH is a separate relay/credit path and never enters these counters; mobile/relay ride unaffected paths; WSL terminals ride this same local/daemon pipeline and are covered by the same accounting (no dedicated provider-contract test yet). Motivated by a production incident on v1.4.131 (three frozen/broken terminal panes in one desktop session) diagnosed to leaked in-flight/pending accounting across a renderer reload (rendererGraphEpoch 3). Live validation of the fix on a rebuilt dev instance surfaced a second leak mode (the boot window): after the reset ran, main resumed flushing a flooding PTY into the still-booting page before its pty:data listener re-registered, so those sends were dropped yet counted and re-pinned rendererInFlightChars at 524288. The gate now also covers holding sends until the renderer's pty:rendererDispatcherReady handshake. A watchdog self-heals a lost handshake: on each reset a one-shot ~10s timer arms and, if the handshake never arrives, force-opens the gate (rendererDispatcherReadyForcedCount increments) so a dropped handshake degrades to pre-handshake behavior instead of a permanent hold; the real handshake or a re-registration cancels it. Two new diagnostics — rendererPtyDispatcherReady and rendererDispatcherReadyForcedCount — expose the otherwise-invisible boot-window hold, which early-returns before ackGatedFlushSkipCount increments.",
       "motivatingLinks": [
@@ -3755,23 +3339,18 @@
       "protection": "partial",
       "owner": "terminal-runtime",
       "layer": "dependency-contract",
-      "surfaces": [
-        "terminal shutdown",
-        "Windows ConPTY",
-        "SSH relay",
-        "renderer teardown"
-      ],
+      "surfaces": ["terminal shutdown", "Windows ConPTY", "SSH relay", "renderer teardown"],
       "platforms": ["macos", "windows"],
       "providers": ["local", "daemon", "ssh", "remote-runtime"],
       "coveredPlatforms": ["macos"],
       "coveredProviders": ["local", "ssh"],
-      "coverageNotes": "A macOS unit harness loads the installed patched node-pty WindowsTerminal prototype without constructing native state, proving pre-ready kill/destroy dispatch immediately. A relay artifact harness reproduces vanilla npm node-pty retaining one deferred kill with zero native close calls, then proves both Windows relay artifacts hash, ship, apply, include the local ConPTY console-list fallback, and idempotently verify the fix. Relay tests simulate win32 shutdown, repeated stale-spawn native failure, one-shot ownership, and retry after native failure without deleting the only handle before close is proven. Relay boot UUIDs scope recycled pty-N counters through initial spawn, durable-lease persistence, reattach, and SSH target-id migration; mismatched generations expire before raw attach, while pane identity protects legacy leases. Main-process retry owners persist local daemon and remote-runtime teardown intent across renderer and app restarts, coalesce by exact provider identity, use one shared one-shot timer per owner, and fence SSH relay plus remote-runtime generation reuse before close. Local Windows shutdown retains provider records and listeners after native throw unless onExit independently proves death. A disconnected SSH provider rejects shutdown without tombstoning its attachable lease. Paired/mobile headless close refuses to depersist a terminal until the controller accepts durable retry ownership. Project removal keeps local or remote ownership until provider-verified shutdown and successful VM cleanup; runtime repo removal drains create-first worktree creation plus headless, renderer-backed mobile, renderer split, and selector-less renderer terminal admissions before fresh ownership/liveness snapshots, stop, and metadata mutation. Desktop and duplicate-host repo removal route through the same transaction; legacy worktree creation, renderer PTY spawn, and every local/SSH/folder worktree removal outcome—including Windows stale registration and orphan-compatible fallback—are fenced and verified before destructive mutation or metadata purge. Hidden local/SSH and remote-runtime background-launch cleanup retain exact PTY/handle retry ownership with bounded one-shot scheduling. Crash-durable teardown intent uses a compact revision-fenced atomic snapshot instead of synchronously serializing and flushing the full store for every owner. Targeted terminal.stop probes skip unrelated sessions. The same relay contract serves paired web/mobile clients; no live Windows ConPTY or Windows-over-SSH run is recorded yet.",
+      "coverageNotes": "A macOS unit harness loads the installed patched node-pty WindowsTerminal prototype without constructing native state, proving pre-ready kill/destroy dispatch immediately. A relay artifact harness reproduces vanilla npm node-pty retaining one deferred kill with zero native close calls, then proves both Windows relay artifacts hash, ship, apply, include the local ConPTY console-list fallback, and idempotently verify the fix. Relay tests simulate win32 shutdown, repeated stale-spawn native failure, one-shot ownership, and retry after native failure without deleting the only handle before close is proven. Relay boot UUIDs scope recycled pty-N counters through initial spawn, durable-lease persistence, reattach, and SSH target-id migration; mismatched generations expire before raw attach, while pane identity protects legacy leases. Main-process retry owners persist local daemon and remote-runtime teardown intent across renderer and app restarts, coalesce by exact provider identity, use one shared one-shot timer per owner, and fence SSH relay plus remote-runtime generation reuse before close. Local Windows shutdown retains provider records and listeners after native throw unless onExit independently proves death. A disconnected SSH provider rejects shutdown without tombstoning its attachable lease. Paired/mobile headless close refuses to depersist a terminal until the controller accepts durable retry ownership. Project removal keeps local or remote ownership until provider-verified shutdown and successful VM cleanup; runtime repo removal drains pre-spawn trust/team/command preparation plus create-first worktree creation, headless, renderer-backed mobile, renderer split, and selector-less renderer terminal admissions before fresh ownership/liveness snapshots, stop, and metadata mutation. Desktop and duplicate-host repo removal route through the same transaction; legacy worktree creation, renderer PTY spawn, and every local/SSH/folder worktree removal outcome—including Windows stale registration and orphan-compatible fallback—are fenced and verified before destructive mutation or metadata purge. Hidden local/SSH and remote-runtime background-launch cleanup retain exact PTY/handle retry ownership with bounded one-shot scheduling. Crash-durable teardown intent uses an O(1) revisioned append journal, compacted to one checkpoint after a successful full-state save, instead of synchronously serializing every retained owner for each mutation. Targeted terminal.stop probes skip unrelated sessions. The same relay contract serves paired web/mobile clients; no live Windows ConPTY or Windows-over-SSH run is recorded yet.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/issues/8260",
         "https://github.com/stablyai/orca/pull/8279"
       ],
       "invariant": "A Windows PTY closed before its first output executes exactly one no-argument node-pty shutdown immediately; Orca never deletes ownership without accepted native shutdown or an observed exit, and a later retry can target only the same relay generation and pane while project removal fences both worktree and terminal creation.",
-      "oracle": "Load the installed patched WindowsTerminal prototype in a pre-ready state and assert kill and destroy each close the terminal and native agent once with zero deferred work, while signal arguments still throw. Build both Windows SSH relay artifacts, reproduce vanilla npm node-pty with close=0/native-kill=0/deferred=1, apply the shipped patch, and assert close=1/native-kill=1/deferred=0, AttachConsole failure falls back to the shell pid, and the artifact version derives from all patch bytes. Assert remote npm install executes patch enforcement before its runtime probe and never finalizes a failed patch. In local and relay providers, assert native throws retain exact ownership/listeners and retry succeeds, while a synchronous onExit is accepted as independent death proof; provider absence must retain the SSH lease and reject shutdown. Persist relay generation with every durable lease, expire mismatches before attach, and preserve generation through target migration. Reject local daemon and remote-runtime teardown, reload the durable store, wait for the startup provider before replay, replace an in-flight provider, and prove the same caller re-drives the replacement before settling, stronger coalesced shutdown options persist, and capped retries drain exact identities with zero final retry timers; persisted close intent for an already-removed runtime must drain without an unhandled rejection or retry wake loop. A generationless SSH id must not mutate or tombstone a generation-qualified replacement lease. Paired/mobile headless close must preserve persisted UI state when controller ownership is rejected. Create and clear 65 local plus 65 remote-runtime owners, reload immediately at both boundaries, and assert the compact snapshot is revision-fenced while synchronous full-store flush count remains zero; an older valid sidecar must lose to a newer full-store fallback revision. Replace SSH relay and remote-runtime generations while a retry is retained and prove the new owner is never closed. Start worktree and terminal creation surfaces before whole-project and host-scoped project removal and assert removal performs no ownership/liveness snapshot until they publish; host-scoped liveness must query only its selected provider so an unrelated SSH outage cannot veto removal. Removal-first and failed/concurrent admissions must reject or release without deadlock. Start a real worktree removal, pause its preflight, and assert a late renderer terminal admission is rejected; assert every successful registered, orphaned, leftover, already-missing, and stale-registration removal path verifies shutdown before mutation or metadata purge; assert desktop repo removal, worktree create/remove, and PTY spawn handlers all enter their runtime-owned transactions before mutation or provider work.",
+      "oracle": "Load the installed patched WindowsTerminal prototype in a pre-ready state and assert kill and destroy each close the terminal and native agent once with zero deferred work, while signal arguments still throw. Build both Windows SSH relay artifacts, reproduce vanilla npm node-pty with close=0/native-kill=0/deferred=1, apply the shipped patch, and assert close=1/native-kill=1/deferred=0, AttachConsole failure falls back to the shell pid, and the artifact version derives from all patch bytes. Assert remote npm install executes patch enforcement before its runtime probe and never finalizes a failed patch. In local and relay providers, assert native throws retain exact ownership/listeners and retry succeeds, while a synchronous onExit is accepted as independent death proof; provider absence must retain the SSH lease and reject shutdown. Persist relay generation with every durable lease, expire mismatches before attach, and preserve generation through target migration. Reject local daemon and remote-runtime teardown, reload the durable store, wait for the startup provider before replay, replace an in-flight provider, and prove the same caller re-drives the replacement before settling, stronger coalesced shutdown options persist, and capped retries drain exact identities with zero final retry timers; persisted close intent for an already-removed runtime must drain without an unhandled rejection or retry wake loop. A generationless SSH id must not mutate or tombstone a generation-qualified replacement lease. Paired/mobile headless close must preserve persisted UI state when controller ownership is rejected. Create and clear 65 local plus 65 remote-runtime owners, reload immediately at both boundaries, and assert 260 O(1) journal records stay below 100 KiB with a 1 KiB per-record cap, synchronous full-store flush count remains zero, a torn final append preserves all complete records, and the next full-state save compacts the journal to one revision-fenced checkpoint; an older valid sidecar must lose to a newer full-store fallback revision. Replace SSH relay and remote-runtime generations while a retry is retained and prove the new owner is never closed. Start pre-spawn trust/team preparation plus worktree and terminal creation surfaces before whole-project and host-scoped project removal and assert removal performs no ownership/liveness snapshot until they publish; host-scoped liveness must query only its selected provider so an unrelated SSH outage cannot veto removal. Removal-first and failed/concurrent admissions must reject or release without deadlock. Start a real worktree removal, pause its preflight, and assert a late renderer terminal admission is rejected; assert every successful registered, orphaned, leftover, already-missing, and stale-registration removal path verifies shutdown before mutation or metadata purge; assert desktop repo removal, worktree create/remove, and PTY spawn handlers all enter their runtime-owned transactions before mutation or provider work.",
       "commands": [
         "pnpm exec vitest run --config config/vitest.config.ts config/scripts/build-relay-windows-node-pty-patch.test.mjs src/main/ssh/ssh-relay-native-deps-install.test.ts src/relay/node-pty-windows-pre-ready-shutdown.test.ts src/relay/pty-handler.test.ts src/renderer/src/components/terminal-pane/pty-transport.test.ts src/renderer/src/store/slices/repos-remove-project-purge-leak.test.ts src/renderer/src/store/slices/repos.test.ts src/renderer/src/store/slices/repos-runtime-vm-removal.test.ts src/renderer/src/lib/ephemeral-vm-runtime-cleanup.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime.test.ts",
@@ -3922,7 +3501,7 @@
             "durable SSH leases store raw relay ids together with their relay generation",
             "offline SSH shutdown intent persists on the exact durable lease",
             "generationless SSH ids cannot mutate a generation-qualified replacement lease",
-            "65 local plus 65 remote-runtime owners survive immediate reload and clear with zero synchronous full-store flushes",
+            "65 local plus 65 remote-runtime owners survive immediate reload and clear through sub-1-KiB O(1) records, then compact to one checkpoint with zero synchronous full-store flushes",
             "a stale compact snapshot cannot override a newer full-store fallback revision"
           ]
         },
@@ -3941,15 +3520,11 @@
         },
         {
           "file": "src/relay/subprocess.test.ts",
-          "assertions": [
-            "relay.status publishes one stable UUID for the relay process lifetime"
-          ]
+          "assertions": ["relay.status publishes one stable UUID for the relay process lifetime"]
         },
         {
           "file": "src/renderer/src/components/terminal-pane/pty-pre-handler-buffer.test.ts",
-          "assertions": [
-            "ownerless pre-handler exits evict oldest state at the 64-id bound"
-          ]
+          "assertions": ["ownerless pre-handler exits evict oldest state at the 64-id bound"]
         },
         {
           "file": "src/renderer/src/lib/pty-kill-retry-ownership.test.ts",
@@ -4199,7 +3774,7 @@
       },
       "performanceBudget": {
         "required": true,
-        "evidence": "Shutdown removes indefinite deferred retention and preserves at most one in-flight native kill plus one existing graceful timer per PTY request. Failed local and SSH kills coalesce in main by exact live PTY id, while failed remote-runtime closes coalesce by environment, runtime generation, and handle: distinct durable records correspond one-for-one with still-unconfirmed provider resources and survive renderer/app restart. Each main-owned retry map owns one shared one-shot timer for its earliest deadline, retries all due owners, caps backoff at 30 seconds, and logs only attempts 1, 2, and 8 to prevent outage backpressure. Successful SSH-target and runtime-environment removal release unreachable records and cancel the last retry timer; provider replacement rebinds the same generation but relay/runtime generation replacement drops stale intent before touching a reused id. The deterministic 65-local plus 65-remote-runtime burst performs zero synchronous full-store flushes while its small atomic snapshot survives immediate add/remove reloads; a monotonic revision fences the rare full-store I/O-failure fallback against an older sidecar. Remote-runtime close adds one generation status probe per teardown attempt and is not on input, output, render, polling, or startup-visible paths. Pre-handler exits remain capped at 64. Worktree-create, worktree-removal, whole-project, and host-scoped admissions retain one promise only per active operation; removal drains only the target worktree's current admissions. Targeted runtime stop performs two liveness snapshots against only the selected provider, while foreground probes are limited to the target worktree; whole-project inventory retains the all-provider fanout."
+        "evidence": "Shutdown removes indefinite deferred retention and preserves at most one in-flight native kill plus one existing graceful timer per PTY request. Failed local and SSH kills coalesce in main by exact live PTY id, while failed remote-runtime closes coalesce by environment, runtime generation, and handle: distinct durable records correspond one-for-one with still-unconfirmed provider resources and survive renderer/app restart. Each main-owned retry map owns one shared one-shot timer for its earliest deadline, retries all due owners, caps backoff at 30 seconds, and logs only attempts 1, 2, and 8 to prevent outage backpressure. Successful SSH-target and runtime-environment removal release unreachable records and cancel the last retry timer; provider replacement rebinds the same generation but relay/runtime generation replacement drops stale intent before touching a reused id. The deterministic 65-local plus 65-remote-runtime burst performs zero synchronous full-store flushes: 260 O(1) append records stay below 100 KiB and 1 KiB each, survive immediate add/remove reloads and a torn final record, then compact to one checkpoint after the full-state save; a monotonic revision fences the rare full-store I/O-failure fallback against older journal records. Remote-runtime close adds one generation status probe per teardown attempt and is not on input, output, render, polling, or startup-visible paths. Pre-handler exits remain capped at 64. Worktree-create, worktree-removal, whole-project, and host-scoped admissions retain one promise only per active operation, including pre-spawn asynchronous trust/team/command preparation; removal drains only the target worktree's current admissions. Targeted runtime stop performs two liveness snapshots against only the selected provider, while foreground probes are limited to the target worktree; whole-project inventory retains the all-provider fanout."
       },
       "promotionCriteria": [
         "Run the deterministic command across the required CI platforms without flakes.",
@@ -4225,24 +3800,10 @@
         "desktop filesystem watcher",
         "SSH relay filesystem watcher and live PTYs"
       ],
-      "platforms": [
-        "macos",
-        "linux",
-        "windows"
-      ],
-      "providers": [
-        "local",
-        "remote-runtime",
-        "ssh"
-      ],
-      "coveredPlatforms": [
-        "macos"
-      ],
-      "coveredProviders": [
-        "local",
-        "remote-runtime",
-        "ssh"
-      ],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["local", "remote-runtime", "ssh"],
+      "coveredPlatforms": ["macos"],
+      "coveredProviders": ["local", "remote-runtime", "ssh"],
       "coverageNotes": "Deterministic tests cover a four-child healthy runtime pool plus at most four bounded quarantine children, one quarantine attempt per watch lifetime, queue-aware cancellation, bounded initial and crash-resubscribe crawls, physical desktop-install abort, stale-generation rejection, per-child stat bounds, final-overflow RPC delivery, and renderer eviction before terminal callbacks can retry. A built-entry macOS harness drives the real supervisor, kills its child with SIGSEGV, then requires automatic resubscription and a later event. SSH now bundles the same child boundary beside relay.js, requires both artifacts for install completeness, and preserves registration-owned same-root cancellation. A built-relay harness kills that child and requires the original relay PID and existing PTY to survive before overflow and precise events resume.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/issues/5308",
@@ -4388,9 +3949,7 @@
         },
         {
           "file": "config/scripts/package-electron-runtime-contract.test.mjs",
-          "assertions": [
-            "every release platform packages and gates the hashed watcher child"
-          ]
+          "assertions": ["every release platform packages and gates the hashed watcher child"]
         },
         {
           "file": "config/scripts/runtime-file-watcher-fault-harness.mjs",

@@ -3145,10 +3145,7 @@ describe('registerPtyHandlers', () => {
         expect(controller.kill('remote-pty')).toBe(true)
 
         expect(store.markSshRemotePtyLease).not.toHaveBeenCalled()
-        expect(store.markSshRemotePtyShutdownRequested).toHaveBeenCalledWith(
-          'ssh-1',
-          'remote-pty'
-        )
+        expect(store.markSshRemotePtyShutdownRequested).toHaveBeenCalledWith('ssh-1', 'remote-pty')
         expect(runtime.onPtyExit).not.toHaveBeenCalled()
       })
 

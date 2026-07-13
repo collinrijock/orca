@@ -3,6 +3,7 @@ migration, mutation, and flush behavior in one file so schema changes are
 reviewed against the full storage contract instead of being scattered. */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import {
+  appendFileSync,
   writeFileSync,
   readFileSync,
   rmSync,
@@ -155,6 +156,13 @@ function dataFile(): string {
 
 function terminalTeardownIntentFile(): string {
   return join(testState.dir, 'orca-terminal-teardown-intents.json')
+}
+
+function readTerminalTeardownIntentJournal(): Record<string, unknown>[] {
+  return readFileSync(terminalTeardownIntentFile(), 'utf-8')
+    .trim()
+    .split('\n')
+    .map((line) => JSON.parse(line) as Record<string, unknown>)
 }
 
 function writeDataFile(data: unknown): void {
@@ -8901,16 +8909,10 @@ describe('Store', () => {
     const reloaded = await createStore()
     expect(reloaded.getPendingLocalPtyShutdowns()).toHaveLength(65)
     expect(reloaded.getPendingRuntimeTerminalCloses()).toHaveLength(65)
-    expect(JSON.parse(readFileSync(terminalTeardownIntentFile(), 'utf-8'))).toEqual(
-      expect.objectContaining({
-        revision: 130,
-        pendingLocalPtyShutdowns: expect.arrayContaining([
-          expect.objectContaining({ ptyId: 'local-64' })
-        ]),
-        pendingRuntimeTerminalCloses: expect.arrayContaining([
-          expect.objectContaining({ handle: 'terminal-64' })
-        ])
-      })
+    const retainedJournal = readTerminalTeardownIntentJournal()
+    expect(retainedJournal).toHaveLength(130)
+    expect(retainedJournal.at(-1)).toEqual(
+      expect.objectContaining({ revision: 130, kind: 'runtime-upsert' })
     )
     for (let index = 0; index < 65; index += 1) {
       store.removePendingLocalPtyShutdown(`local-${index}`)
@@ -8920,18 +8922,44 @@ describe('Store', () => {
 
     expect(cleared.getPendingLocalPtyShutdowns()).toEqual([])
     expect(cleared.getPendingRuntimeTerminalCloses()).toEqual([])
-    expect(JSON.parse(readFileSync(terminalTeardownIntentFile(), 'utf-8'))).toEqual(
+    const clearedJournal = readTerminalTeardownIntentJournal()
+    expect(clearedJournal).toHaveLength(260)
+    expect(clearedJournal.at(-1)).toEqual(
+      expect.objectContaining({ revision: 260, kind: 'runtime-remove' })
+    )
+    expect(Math.max(...clearedJournal.map((record) => JSON.stringify(record).length))).toBeLessThan(
+      1_024
+    )
+    expect(readFileSync(terminalTeardownIntentFile(), 'utf-8').length).toBeLessThan(100_000)
+    expect(flushSpy).not.toHaveBeenCalled()
+    flushSpy.mockRestore()
+    reloaded.flush()
+    cleared.flush()
+    store.flush()
+    expect(readTerminalTeardownIntentJournal()).toEqual([
       expect.objectContaining({
+        version: 2,
         revision: 260,
+        kind: 'checkpoint',
         pendingLocalPtyShutdowns: [],
         pendingRuntimeTerminalCloses: []
       })
-    )
-    expect(flushSpy).not.toHaveBeenCalled()
-    flushSpy.mockRestore()
+    ])
+  })
+
+  it('replays complete teardown journal records before a truncated crash tail', async () => {
+    const store = await createStore()
+    store.upsertPendingLocalPtyShutdown({ ptyId: 'local-a', requestedAt: 1 })
+    store.upsertPendingLocalPtyShutdown({ ptyId: 'local-b', requestedAt: 2 })
+    appendFileSync(terminalTeardownIntentFile(), '{"version":2,"revision":3', 'utf-8')
+
+    const reloaded = await createStore()
+    expect(reloaded.getPendingLocalPtyShutdowns()).toEqual([
+      { ptyId: 'local-a', requestedAt: 1 },
+      { ptyId: 'local-b', requestedAt: 2 }
+    ])
     store.flush()
     reloaded.flush()
-    cleared.flush()
   })
 
   it('ignores an older sidecar after the full-store fallback persisted a newer revision', async () => {
@@ -9017,12 +9045,8 @@ describe('Store', () => {
       state: 'attached'
     })
 
-    expect(
-      store.markSshRemotePtyShutdownRequested('ssh-1', 'ssh:ssh-1@@remote-pty')
-    ).toBe(false)
-    expect(store.markSshRemotePtyLease('ssh-1', 'ssh:ssh-1@@remote-pty', 'terminated')).toBe(
-      false
-    )
+    expect(store.markSshRemotePtyShutdownRequested('ssh-1', 'ssh:ssh-1@@remote-pty')).toBe(false)
+    expect(store.markSshRemotePtyLease('ssh-1', 'ssh:ssh-1@@remote-pty', 'terminated')).toBe(false)
 
     expect(store.getSshRemotePtyLeases('ssh-1')).toEqual([
       expect.objectContaining({

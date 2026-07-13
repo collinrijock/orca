@@ -22532,6 +22532,50 @@ describe('OrcaRuntimeService', () => {
     expect(removeProject).toHaveBeenCalledWith(TEST_REPO_ID)
   })
 
+  it('drains pre-spawn agent preparation before project removal can finish', async () => {
+    const removeProject = vi.fn()
+    const runtime = new OrcaRuntimeService({ ...store, removeProject } as never)
+    const preparation = deferred<Record<string, never>>()
+    const runtimeWithPreparation = runtime as unknown as {
+      resolveAgentTerminalCreateOptions: () => Promise<Record<string, never>>
+    }
+    vi.spyOn(runtimeWithPreparation, 'resolveAgentTerminalCreateOptions').mockReturnValue(
+      preparation.promise
+    )
+    const processLists = [
+      [{ id: 'pty-after-preparation', cwd: TEST_WORKTREE_PATH, title: 'Shell' }],
+      []
+    ]
+    const stopAndWait = vi.fn(async (ptyId: string) => {
+      runtime.onPtyExit(ptyId, -1)
+      return true
+    })
+    const spawn = vi.fn().mockResolvedValue({ id: 'pty-after-preparation' })
+    runtime.setPtyController({
+      spawn,
+      write: () => true,
+      kill: () => false,
+      stopAndWait,
+      getForegroundProcess: async () => null,
+      listProcesses: async () => processLists.shift() ?? []
+    })
+
+    const create = runtime.createTerminal(`id:${TEST_WORKTREE_ID}`)
+    await vi.waitFor(() =>
+      expect(runtimeWithPreparation.resolveAgentTerminalCreateOptions).toHaveBeenCalledOnce()
+    )
+    const removal = runtime.removeProject(`id:${TEST_REPO_ID}`)
+    await Promise.resolve()
+    expect(spawn).not.toHaveBeenCalled()
+    expect(removeProject).not.toHaveBeenCalled()
+
+    preparation.resolve({})
+    await expect(create).resolves.toMatchObject({ ptyId: 'pty-after-preparation' })
+    await expect(removal).resolves.toEqual({ removed: true })
+    expect(stopAndWait).toHaveBeenCalledWith('pty-after-preparation')
+    expect(removeProject).toHaveBeenCalledWith(TEST_REPO_ID)
+  })
+
   it('drains a create-first managed worktree before project removal snapshots ownership', async () => {
     const removeProject = vi.fn()
     const runtime = new OrcaRuntimeService({ ...store, removeProject } as never)

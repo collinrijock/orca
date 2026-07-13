@@ -311,23 +311,19 @@ export async function launchAgentBackgroundSession(
     // Why: terminal creation and stream subscription are separate remote calls.
     // A failure between them must not strand an invisible runtime terminal.
     exitHandled = true
-    backgroundCleanup.runBestEffortAgentBackgroundCleanups(unsubscribeExit, unsubscribeData)
-    backgroundCleanup.runBestEffortAgentBackgroundCleanups(() => eagerPtyBuffer?.dispose())
-    backgroundCleanup.runBestEffortAgentBackgroundCleanups(() => sshStartupDelivery.clear())
-    backgroundCleanup.runBestEffortAgentBackgroundCleanups(() => store.clearTabPtyId(tab.id, ptyId))
-    backgroundCleanup.runBestEffortAgentBackgroundCleanups(() => store.clearAgentLaunchConfig(paneKey))
-    if (ptyId) {
-      try {
-        if (runtimeTarget.kind === 'environment' && runtimeTerminalHandle) {
-          await backgroundCleanup.closeFailedAgentBackgroundRuntimeTerminal(runtimeTarget.environmentId, runtimeTerminalHandle)
-        } else if (runtimeTarget.kind === 'local') {
-          await backgroundCleanup.killFailedAgentBackgroundPty(ptyId, tab.id)
-        }
-      } catch {
-        // Best-effort close; retiring the invalid hidden tab must still proceed.
-      }
-    }
-    backgroundCleanup.runBestEffortAgentBackgroundCleanups(() => store.closeTab(tab.id, { recordInteraction: false }))
+    await backgroundCleanup.cleanupFailedAgentBackgroundSession({
+      unsubscribeExit,
+      unsubscribeData,
+      disposeEagerBuffer: () => eagerPtyBuffer?.dispose(),
+      clearStartupDelivery: () => sshStartupDelivery.clear(),
+      clearTabPtyId: () => store.clearTabPtyId(tab.id, ptyId),
+      clearLaunchConfig: () => store.clearAgentLaunchConfig(paneKey),
+      closeTab: () => store.closeTab(tab.id, { recordInteraction: false }),
+      ptyId,
+      tabId: tab.id,
+      runtimeTarget,
+      runtimeTerminalHandle
+    })
     throw error
   }
 }
