@@ -53,6 +53,22 @@ describe('startup ordering', () => {
     expect(barrier).not.toContain('managedWslCliReconciliationReady')
   })
 
+  it('exposes managed WSL reconciliation status to headless serve clients and diagnostics', () => {
+    const source = readFileSync(join(process.cwd(), 'src/main/index.ts'), 'utf8')
+
+    // Why: the barrier fails open, so the serve-ready payload must carry the
+    // reconciliation state and the bounded wait must be traceable via a milestone.
+    const readyStart = source.indexOf("type: 'orca_server_ready'")
+    const readyEnd = source.indexOf('pairing: pairing.available', readyStart)
+    const readyPayload = source.slice(readyStart, readyEnd)
+    expect(readyPayload).toContain('managedWslCliReconciliation: managedWslCliReconciliationStatus')
+
+    expect(source).toContain("managedWslCliReconciliationStatus = 'pending'")
+    expect(source).toContain("managedWslCliReconciliationStatus = 'settled'")
+    expect(source).toContain("managedWslCliReconciliationStatus = 'failed'")
+    expect(source).toContain("logStartupMilestone('wsl-cli-barrier-resolved'")
+  })
+
   it('does not run the rate-limit quota fetch before the first window can show results', () => {
     const source = readFileSync(join(process.cwd(), 'src/main/index.ts'), 'utf8')
     const attachIndex = source.indexOf('rateLimits.attach(window)')
