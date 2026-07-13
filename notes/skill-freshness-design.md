@@ -183,11 +183,13 @@ Slimmed:
 3. Run the pointer-compliance spike against the released guide-serving binary, not a checkout
    artifact. The binary must be publicly released before a stub PR merges because the skills
    CLI installs from repository main, independently of Orca's desktop release train.
-4. Convert only `orca-cli` to a first-generation hybrid stub. This bumps its registry revision
-   like any content change. Existing users see an `outdated` exact snapshot and may run the
-   targeted global update; users of pre-guide binaries retain the hybrid bootstrap.
-5. Observe a release cycle. Thin the stub only if compliance, task success, old-binary
-   behavior, and token cost pass their gates; then convert the remaining skills gradually.
+4. In one PR, convert only `orca-cli` to a first-generation hybrid stub and keep any final
+   thinning of that stub in the same change. This bumps its registry revision like any content
+   change. Existing users see an `outdated` exact snapshot and may run the targeted global
+   update; users of pre-guide binaries retain the hybrid bootstrap.
+5. Cut an RC before the stable release and use that validation window to measure compliance,
+   task success, old-binary behavior, and token cost. Ship the thin form in stable only if those
+   gates pass; otherwise retain the hybrid. Convert the remaining skills gradually in later PRs.
    Users who ignore the nudge keep working with their existing fat skills.
 
 ## Spike gate (before any stub ships)
