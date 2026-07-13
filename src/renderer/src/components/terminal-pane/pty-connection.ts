@@ -3939,6 +3939,7 @@ export function connectPanePty(
     let startupDraftReadinessArmed = false
     let startupDraftPasteSettled = !ownsStartupDraftPaste
     let startupDraftPasteInFlight = false
+    let startupDraftInputRecorded = false
     let startupDraftQuietTimer: ReturnType<typeof setTimeout> | null = null
     let startupDraftHardTimer: ReturnType<typeof setTimeout> | null = null
     const clearStartupDraftPasteTimers = (): void => {
@@ -3984,9 +3985,16 @@ export function connectPanePty(
       const settings = getSettingsForWorktreeRuntimeOwner(useAppStore.getState(), deps.worktreeId)
       // Why: xterm focus reports share this transport queue. Bypassing it can
       // race CSI I against the draft on ConPTY and expose a literal `[I` prefix.
-      void sendAgentDraftPasteContent(settings, ptyId, startupDraftPrompt, (data) =>
-        writeTerminalPastePtyInput(transport, data)
-      )
+      void sendAgentDraftPasteContent(settings, ptyId, startupDraftPrompt, async (data) => {
+        const accepted = await writeTerminalPastePtyInput(transport, data)
+        if (accepted && !startupDraftInputRecorded) {
+          // Why: this transport write bypasses xterm's user-input signal; keep
+          // the composed draft from being discarded by later hibernation.
+          startupDraftInputRecorded = true
+          recordTerminalInputForHibernation()
+        }
+        return accepted
+      })
         .catch(() => false)
         .finally(() => {
           startupDraftPasteInFlight = false

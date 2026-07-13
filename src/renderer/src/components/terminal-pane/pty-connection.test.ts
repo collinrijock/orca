@@ -4633,6 +4633,7 @@ describe('connectPanePty', () => {
         mock: { calls: [(data: string) => void][] }
       }
     ).mock.calls[0]?.[0]('\x1b[I')
+    ;(mockStoreState.recordTerminalInput as ReturnType<typeof vi.fn>).mockClear()
     capturedDataCallback.current?.('\x1b[?2004h\x1b[2K› ')
     await flushAsyncTicks()
 
@@ -4644,6 +4645,8 @@ describe('connectPanePty', () => {
       '\x1b[200~https://github.com/stablyai/orca/issues/42\x1b[201~'
     ])
     expect(window.api.pty.writeAccepted).not.toHaveBeenCalled()
+    expect(mockStoreState.recordTerminalInput).toHaveBeenCalledOnce()
+    expect(mockStoreState.recordTerminalInput).toHaveBeenCalledWith(makePaneKey('tab-1', LEAF_1))
   })
 
   it('does not consume startup draft delivery before deferred connect starts', async () => {
