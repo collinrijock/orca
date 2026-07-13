@@ -60,7 +60,6 @@ function createMockSubprocess() {
     hasExited() {
       return killed
     },
-    retryForceKillUntilExit: false,
     signal(sig: string) {
       signals.push(sig)
     },
@@ -454,18 +453,17 @@ describe('Session', () => {
       expect(session.state).toBe('exited')
     })
 
-    it('retries Windows force kill while physical exit remains unproved', () => {
+    it('does not reissue an accepted Windows force kill while exit remains unproved', () => {
       createSession()
       subprocess.kill = () => {}
       subprocess.hasExited = () => false
-      subprocess.retryForceKillUntilExit = true
       const forceKillSpy = vi.spyOn(subprocess, 'forceKill')
 
       session.kill()
       vi.advanceTimersByTime(5_000)
       vi.advanceTimersByTime(5_000)
 
-      expect(forceKillSpy).toHaveBeenCalledTimes(2)
+      expect(forceKillSpy).toHaveBeenCalledOnce()
       expect(session.state).not.toBe('exited')
       subprocess.simulateExit(137)
       expect(vi.getTimerCount()).toBe(0)

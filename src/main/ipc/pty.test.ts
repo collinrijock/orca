@@ -3542,7 +3542,7 @@ describe('registerPtyHandlers', () => {
     expect(removePendingLocalPtyShutdown).not.toHaveBeenCalled()
     await vi.advanceTimersByTimeAsync(250)
 
-    expect(shutdown).toHaveBeenCalledTimes(2)
+    expect(shutdown).toHaveBeenCalledOnce()
     expect(removePendingLocalPtyShutdown).toHaveBeenCalledWith('local-pty')
     vi.useRealTimers()
   })

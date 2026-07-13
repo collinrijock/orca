@@ -1240,7 +1240,6 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
       }
     },
     hasExited,
-    retryForceKillUntilExit: process.platform === 'win32',
     signal: (sig) => {
       // Why: same recycled-pid hazard as forceKill. Once dead, silently drop
       // the signal rather than risk sending it to an unrelated process.

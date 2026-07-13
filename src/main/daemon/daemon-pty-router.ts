@@ -1,10 +1,10 @@
 import type { DaemonPtyAdapter } from './daemon-pty-adapter'
 import {
   appendProviderReconciliationIds,
-  bindProviderRoute,
-  deleteProviderRoute,
   discoverProviderSessionsAndBindRoutes,
+  forwardProviderRouteExit,
   listProviderProcessesAndReconcileRoutes,
+  ProviderRouteSpawnExitFence,
   reconcileProviderRoutesOnStartup,
   type ProviderRoute
 } from './pty-provider-route-reconciliation'
@@ -23,6 +23,14 @@ export class DaemonPtyRouter implements IPtyProvider {
   private current: DaemonPtyAdapter
   private legacy: DaemonPtyAdapter[]
   private sessionAdapters = new Map<string, ProviderRoute<DaemonPtyAdapter>>()
+  private spawnExitFence = new ProviderRouteSpawnExitFence(this.sessionAdapters, (deferred) =>
+    forwardProviderRouteExit(
+      this.sessionAdapters,
+      deferred.provider,
+      deferred.payload,
+      this.exitListeners
+    )
+  )
   private unsubscribers: (() => void)[] = []
   private dataListeners: ((payload: {
     id: string
@@ -43,18 +51,10 @@ export class DaemonPtyRouter implements IPtyProvider {
           }
         }),
         adapter.onExit((payload) => {
-          // Why: a late exit from a legacy daemon must not delete a route that
-          // has already been rebound to a replacement provider generation.
-          const route = this.sessionAdapters.get(payload.id)
-          if (route && route.provider !== adapter) {
+          if (this.spawnExitFence.deferExit(adapter, payload)) {
             return
           }
-          if (route?.provider === adapter) {
-            deleteProviderRoute(this.sessionAdapters, payload.id, route)
-          }
-          for (const listener of this.exitListeners) {
-            listener(payload)
-          }
+          forwardProviderRouteExit(this.sessionAdapters, adapter, payload, this.exitListeners)
         })
       )
     }
@@ -73,9 +73,7 @@ export class DaemonPtyRouter implements IPtyProvider {
   async spawn(opts: PtySpawnOptions): Promise<PtySpawnResult> {
     const adapter = opts.sessionId ? this.sessionAdapters.get(opts.sessionId)?.provider : undefined
     const target = adapter ?? this.current
-    const result = await target.spawn(opts)
-    bindProviderRoute(this.sessionAdapters, result.id, target)
-    return result
+    return this.spawnExitFence.spawn(opts.sessionId, target, () => target.spawn(opts))
   }
 
   async attach(id: string): Promise<void> {
@@ -260,6 +258,7 @@ export class DaemonPtyRouter implements IPtyProvider {
   // Without this, each restart leaked a router instance pinned by the legacy
   // adapters' listener arrays (one pair per adapter per restart).
   disposeRouterOnly(): void {
+    this.spawnExitFence.clear()
     for (const unsubscribe of this.unsubscribers.splice(0)) {
       unsubscribe()
     }

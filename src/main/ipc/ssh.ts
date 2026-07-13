@@ -14,7 +14,8 @@ import type {
   SshRepoReadoption,
   SshTarget,
   SshConnectionStatus,
-  SshConnectionState
+  SshConnectionState,
+  SshRemotePtyLease
 } from '../../shared/ssh-types'
 import { SSH_TERMINATE_RECONNECT_REQUIRED } from '../../shared/constants'
 import { isRuntimeOwnedSshTargetId } from '../../shared/execution-host'
@@ -39,6 +40,7 @@ import {
   shutdownPtyWithRetainedOwnership
 } from './pty'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
+import { isTerminalLeafId, makePaneKey } from '../../shared/stable-pane-id'
 
 let sshStore: SshConnectionStore | null = null
 let connectionManager: SshConnectionManager | null = null
@@ -144,25 +146,63 @@ export async function removeRegisteredSshTarget(targetId: string): Promise<void>
   sshStore.removeTarget(targetId)
 }
 
-function getRegisteredSshTargetPtyIds(
-  targetId: string
-): { relayPtyId: string; appPtyId: string }[] {
-  const ptyIdsByRelayId = new Map<string, string>()
+type RegisteredSshTargetPty = {
+  relayPtyId: string
+  appPtyId: string
+  options: {
+    immediate: true
+    keepHistory: false
+    expectedPaneKey?: string
+    expectedTabId?: string
+  }
+}
+
+function getRegisteredSshTargetPtyIds(targetId: string): RegisteredSshTargetPty[] {
+  const ptysByAppId = new Map<string, RegisteredSshTargetPty>()
   for (const ptyId of getPtyIdsForConnection(targetId)) {
     const relayPtyId = toRelaySshPtyId(targetId, ptyId)
-    ptyIdsByRelayId.set(relayPtyId, toAppSshPtyId(targetId, ptyId))
+    const appPtyId = toAppSshPtyId(targetId, ptyId)
+    ptysByAppId.set(appPtyId, {
+      relayPtyId,
+      appPtyId,
+      options: { immediate: true, keepHistory: false }
+    })
   }
   for (const lease of persistedStore?.getSshRemotePtyLeases(targetId) ?? []) {
     if (lease.state === 'terminated' || lease.state === 'expired') {
       continue
     }
     const relayPtyId = toRelaySshPtyId(targetId, lease.ptyId)
-    ptyIdsByRelayId.set(
+    const appPtyId = toAppSshPtyId(targetId, lease.ptyId, lease.relayInstanceId)
+    const options = sshLeaseShutdownOptions(lease)
+    ptysByAppId.set(appPtyId, {
       relayPtyId,
-      ptyIdsByRelayId.get(relayPtyId) ?? toAppSshPtyId(targetId, lease.ptyId)
-    )
+      appPtyId,
+      options: { ...ptysByAppId.get(appPtyId)?.options, ...options }
+    })
   }
-  return Array.from(ptyIdsByRelayId, ([relayPtyId, appPtyId]) => ({ relayPtyId, appPtyId }))
+  return [...ptysByAppId.values()]
+}
+
+function sshLeaseShutdownOptions(lease: SshRemotePtyLease): {
+  immediate: true
+  keepHistory: false
+  expectedPaneKey?: string
+  expectedTabId?: string
+} {
+  const expectedTabId = lease.tabId && !lease.tabId.includes(':') ? lease.tabId : undefined
+  const expectedPaneKey =
+    expectedTabId && lease.leafId && isTerminalLeafId(lease.leafId)
+      ? makePaneKey(expectedTabId, lease.leafId)
+      : undefined
+  // Why: persisted identity must survive bulk teardown so a delayed retry
+  // cannot cross into a replacement pane that reused the same relay id.
+  return {
+    immediate: true,
+    keepHistory: false,
+    ...(expectedPaneKey ? { expectedPaneKey } : {}),
+    ...(expectedTabId ? { expectedTabId } : {})
+  }
 }
 
 async function terminateRegisteredSshTargetPtys(targetId: string): Promise<void> {
@@ -177,12 +217,12 @@ async function terminateRegisteredSshTargetPtys(targetId: string): Promise<void>
     return
   }
   const results = await Promise.allSettled(
-    ptyIds.map(({ appPtyId }) =>
+    ptyIds.map(({ appPtyId, options }) =>
       shutdownPtyWithRetainedOwnership({
         id: appPtyId,
         connectionId: targetId,
         provider,
-        options: { immediate: true, keepHistory: false }
+        options
       })
     )
   )

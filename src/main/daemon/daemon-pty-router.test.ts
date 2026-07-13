@@ -157,6 +157,54 @@ describe('DaemonPtyRouter', () => {
     expect(exit).not.toHaveBeenCalled()
   })
 
+  it('defers a same-provider old exit until replacement spawn proves the id live', async () => {
+    const sessions: string[] = []
+    const current = createAdapter('current', sessions)
+    const router = new DaemonPtyRouter({ current, legacy: [] })
+    const exit = vi.fn()
+    router.onExit(exit)
+    await router.spawn({ sessionId: 'same-id', cols: 80, rows: 24 })
+    await router.shutdown('same-id', { immediate: true })
+    await router.listProcesses()
+
+    let resolveSpawn!: (result: PtySpawnResult) => void
+    vi.mocked(current.spawn).mockImplementationOnce(
+      () => new Promise((resolve) => (resolveSpawn = resolve))
+    )
+    const replacement = router.spawn({ sessionId: 'same-id', cols: 80, rows: 24 })
+    await vi.waitFor(() => expect(current.spawn).toHaveBeenCalledTimes(2))
+    current.emitExit('same-id', 7)
+    expect(exit).not.toHaveBeenCalled()
+
+    sessions.push('same-id')
+    resolveSpawn({ id: 'same-id' })
+    await replacement
+    router.write('same-id', 'replacement')
+
+    expect(exit).not.toHaveBeenCalled()
+    expect(current.write).toHaveBeenCalledWith('same-id', 'replacement')
+  })
+
+  it('delivers a deferred exit when replacement spawn fails with no live id', async () => {
+    const sessions: string[] = []
+    const current = createAdapter('current', sessions)
+    const router = new DaemonPtyRouter({ current, legacy: [] })
+    const exit = vi.fn()
+    router.onExit(exit)
+    let rejectSpawn!: (error: Error) => void
+    vi.mocked(current.spawn).mockImplementationOnce(
+      () => new Promise((_resolve, reject) => (rejectSpawn = reject))
+    )
+
+    const replacement = router.spawn({ sessionId: 'same-id', cols: 80, rows: 24 })
+    await vi.waitFor(() => expect(current.spawn).toHaveBeenCalledOnce())
+    current.emitExit('same-id', 7)
+    rejectSpawn(new Error('spawn failed'))
+
+    await expect(replacement).rejects.toThrow('spawn failed')
+    expect(exit).toHaveBeenCalledWith({ id: 'same-id', code: 7 })
+  })
+
   it('retains a same-adapter replacement across an older process listing', async () => {
     const current = createAdapter('current')
     const legacy = createAdapter('legacy', ['shared-session'])

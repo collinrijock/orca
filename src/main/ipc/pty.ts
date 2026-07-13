@@ -182,6 +182,7 @@ type RetainedPtyShutdown = {
   store: Store | null
   durable: boolean
   attempts: number
+  shutdownAccepted: boolean
   nextRetryAt: number
   inFlight: Promise<void> | null
   lastError: Error | null
@@ -655,25 +656,43 @@ function attemptRetainedPtyShutdown(retained: RetainedPtyShutdown): Promise<void
   }
   retained.provider = currentProvider
   retained.lastError = null
-  const attempt = shutdownProviderAndDetectExit(currentProvider, retained.id, retained.options)
-    .then(async (providerExitObserved) => {
-      // Why: provider replacement can finish while an older shutdown is in flight.
+  const attempt = (async () => {
+    if (retained.shutdownAccepted) {
+      const stopped = await verifyPtyStopped(currentProvider, retained.id, retained.options)
       if (retained.provider !== currentProvider) {
         return
       }
-      if (currentProvider.requiresShutdownExitProof && !providerExitObserved) {
-        const stopped = await verifyPtyStopped(currentProvider, retained.id, retained.options)
-        // Why: provider replacement can also occur during the async liveness
-        // readback; only the provider that still owns this retry may settle it.
-        if (retained.provider !== currentProvider) {
-          return
-        }
-        if (!stopped) {
-          throw new Error('PTY shutdown accepted but process exit is not yet confirmed')
-        }
+      if (!stopped) {
+        throw new Error('PTY shutdown accepted but process exit is not yet confirmed')
       }
-      completeRetainedPtyShutdown(retained, providerExitObserved)
-    })
+      completeRetainedPtyShutdown(retained, false)
+      return
+    }
+    const providerExitObserved = await shutdownProviderAndDetectExit(
+      currentProvider,
+      retained.id,
+      retained.options
+    )
+    // Why: provider replacement can finish while an older shutdown is in flight.
+    if (retained.provider !== currentProvider) {
+      return
+    }
+    if (currentProvider.requiresShutdownExitProof && !providerExitObserved) {
+      // Why: native Windows close is not idempotent. Once accepted, retry
+      // only the liveness proof; a second close can corrupt the ConPTY heap.
+      retained.shutdownAccepted = true
+      const stopped = await verifyPtyStopped(currentProvider, retained.id, retained.options)
+      // Why: provider replacement can also occur during the async liveness
+      // readback; only the provider that still owns this retry may settle it.
+      if (retained.provider !== currentProvider) {
+        return
+      }
+      if (!stopped) {
+        throw new Error('PTY shutdown accepted but process exit is not yet confirmed')
+      }
+    }
+    completeRetainedPtyShutdown(retained, providerExitObserved)
+  })()
     .catch((error: unknown) => {
       const ownerMap = retained.connectionId
         ? pendingSshShutdownRetries
@@ -808,6 +827,7 @@ function retainLocalPtyShutdown(
       store: activePtyStore,
       durable: true,
       attempts,
+      shutdownAccepted: false,
       nextRetryAt: deferUntilProviderReady
         ? Number.POSITIVE_INFINITY
         : attempts === 0
@@ -854,6 +874,7 @@ function retainSshPtyShutdown(
       store: activePtyStore,
       durable: persisted,
       attempts: 0,
+      shutdownAccepted: false,
       nextRetryAt: provider ? 0 : Number.POSITIVE_INFINITY,
       inFlight: null,
       lastError: null
@@ -864,6 +885,7 @@ function retainSshPtyShutdown(
     retained.options = mergePtyShutdownOptions(retained.options, options)
     if (retained.provider !== provider) {
       retained.provider = provider
+      retained.shutdownAccepted = false
       retained.nextRetryAt = provider ? 0 : Number.POSITIVE_INFINITY
     }
   }
@@ -1439,6 +1461,7 @@ export function registerSshPtyProvider(connectionId: string, provider: IPtyProvi
       continue
     }
     retained.provider = provider
+    retained.shutdownAccepted = false
     retained.nextRetryAt = 0
     if (!retained.inFlight) {
       void attemptRetainedPtyShutdown(retained)
@@ -1457,6 +1480,7 @@ export function unregisterSshPtyProvider(connectionId: string): void {
       // Why: provider teardown is often a reconnect, not proof the remote PTY
       // exited. Keep even lease-less accepted kills for the replacement owner.
       retained.provider = null
+      retained.shutdownAccepted = false
       retained.nextRetryAt = Number.POSITIVE_INFINITY
     }
   }
@@ -1516,6 +1540,7 @@ function retryPersistedSshShutdowns(connectionId: string, provider: IPtyProvider
         store,
         durable: true,
         attempts: 0,
+        shutdownAccepted: false,
         nextRetryAt: 0,
         inFlight: null,
         lastError: null,
@@ -1528,6 +1553,7 @@ function retryPersistedSshShutdowns(connectionId: string, provider: IPtyProvider
       if (retained.provider !== provider) {
         // Why: reconnect replaces the transport owner for the same generation-qualified id.
         retained.provider = provider
+        retained.shutdownAccepted = false
         retained.nextRetryAt = 0
       }
     }
@@ -1561,6 +1587,7 @@ export function setLocalPtyProvider(provider: IPtyProvider): void {
   // forever to the temporary in-process fallback.
   for (const retained of pendingLocalShutdownRetries.values()) {
     retained.provider = null
+    retained.shutdownAccepted = false
     retained.nextRetryAt = 0
     if (!retained.inFlight) {
       void attemptRetainedPtyShutdown(retained)

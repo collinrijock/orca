@@ -149,6 +149,55 @@ describe('DegradedDaemonPtyProvider', () => {
     expect(fallback.write).not.toHaveBeenCalledWith('shared-session', 'replacement')
   })
 
+  it('defers a fallback old exit until replacement spawn proves the id live', async () => {
+    const fallbackSessions: string[] = []
+    const current = createDaemonAdapter('daemon')
+    const fallback = createProvider('fallback', fallbackSessions)
+    const provider = new DegradedDaemonPtyProvider({ current, legacy: [], fallback })
+    const exit = vi.fn()
+    provider.onExit(exit)
+    await provider.spawn({ sessionId: 'same-id', cols: 80, rows: 24 })
+    await provider.shutdown('same-id', { immediate: true })
+    await provider.listProcesses()
+
+    let resolveSpawn!: (result: PtySpawnResult) => void
+    vi.mocked(fallback.spawn).mockImplementationOnce(
+      () => new Promise((resolve) => (resolveSpawn = resolve))
+    )
+    const replacement = provider.spawn({ sessionId: 'same-id', cols: 80, rows: 24 })
+    await vi.waitFor(() => expect(fallback.spawn).toHaveBeenCalledTimes(2))
+    fallback.emitExit('same-id', 7)
+    expect(exit).not.toHaveBeenCalled()
+
+    fallbackSessions.push('same-id')
+    resolveSpawn({ id: 'same-id' })
+    await replacement
+    provider.write('same-id', 'replacement')
+
+    expect(exit).not.toHaveBeenCalled()
+    expect(fallback.write).toHaveBeenCalledWith('same-id', 'replacement')
+  })
+
+  it('delivers a deferred fallback exit when replacement spawn fails with no live id', async () => {
+    const current = createDaemonAdapter('daemon')
+    const fallback = createProvider('fallback')
+    const provider = new DegradedDaemonPtyProvider({ current, legacy: [], fallback })
+    const exit = vi.fn()
+    provider.onExit(exit)
+    let rejectSpawn!: (error: Error) => void
+    vi.mocked(fallback.spawn).mockImplementationOnce(
+      () => new Promise((_resolve, reject) => (rejectSpawn = reject))
+    )
+
+    const replacement = provider.spawn({ sessionId: 'same-id', cols: 80, rows: 24 })
+    await vi.waitFor(() => expect(fallback.spawn).toHaveBeenCalledOnce())
+    fallback.emitExit('same-id', 7)
+    rejectSpawn(new Error('spawn failed'))
+
+    await expect(replacement).rejects.toThrow('spawn failed')
+    expect(exit).toHaveBeenCalledWith({ id: 'same-id', code: 7 })
+  })
+
   it('routes fresh foreground confirmation to the session owner', async () => {
     const current = createDaemonAdapter('daemon', ['daemon-session'])
     const fallback = createProvider('fallback')

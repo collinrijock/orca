@@ -71,7 +71,6 @@ export type SubprocessHandle = {
   /** Conservative OS/onExit proof; false includes unknown and still alive. */
   hasExited?(): boolean
   /** Windows ConPTY may accept a pre-ready close before it can act on it. */
-  retryForceKillUntilExit?: boolean
   signal(sig: string): void
   onData(cb: (data: string) => void): void
   onExit(cb: (code: number) => void): void
@@ -765,20 +764,8 @@ export class Session {
           this.handleSubprocessExit(-1)
           return
         }
-        if (this.subprocess.retryForceKillUntilExit) {
-          try {
-            this.subprocess.forceKill()
-          } catch (error) {
-            this.recordForceKillFailure(error)
-          }
-        }
-        if (!this.isAlive) {
-          return
-        }
-        if (this.subprocess.hasExited?.() === true) {
-          this.handleSubprocessExit(-1)
-          return
-        }
+        // Why: a successful Windows native close is one-shot. Poll for the
+        // exit event/proof without closing the same ConPTY handle twice.
         this.scheduleForceShutdownCheck(this.nextForceShutdownCheckDelay())
         return
       }
@@ -794,9 +781,7 @@ export class Session {
   }
 
   private nextForceShutdownCheckDelay(): number {
-    return this.forceKillAccepted && !this.subprocess.retryForceKillUntilExit
-      ? EXIT_PROOF_POLL_MS
-      : this.forceKillRetryDelayMs
+    return this.forceKillAccepted ? EXIT_PROOF_POLL_MS : this.forceKillRetryDelayMs
   }
 
   private recordForceKillFailure(error: unknown): void {

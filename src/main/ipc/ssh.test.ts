@@ -1251,8 +1251,16 @@ describe('SSH IPC handlers', () => {
       error: null,
       reconnectAttempt: 0
     })
+    const leaseLeafId = '11111111-1111-4111-8111-111111111111'
     mockStore.getSshRemotePtyLeases.mockReturnValue([
-      { targetId: 'ssh-1', ptyId: 'pty-lease', state: 'detached' }
+      {
+        targetId: 'ssh-1',
+        ptyId: 'pty-lease',
+        relayInstanceId: 'boot-a',
+        tabId: 'tab-lease',
+        leafId: leaseLeafId,
+        state: 'detached'
+      }
     ])
     vi.mocked(getSshPtyProvider).mockReturnValue(mockPtyProvider as never)
     vi.mocked(getPtyIdsForConnection).mockReturnValue(['ssh:ssh-1@@pty-live'])
@@ -1265,14 +1273,16 @@ describe('SSH IPC handlers', () => {
       immediate: true,
       keepHistory: false
     })
-    expect(mockPtyProvider.shutdown).toHaveBeenCalledWith('ssh:ssh-1@@pty-lease', {
+    expect(mockPtyProvider.shutdown).toHaveBeenCalledWith('ssh:ssh-1@@boot-a@@pty-lease', {
       immediate: true,
-      keepHistory: false
+      keepHistory: false,
+      expectedPaneKey: `tab-lease:${leaseLeafId}`,
+      expectedTabId: 'tab-lease'
     })
     expect(clearProviderPtyState).toHaveBeenCalledWith('ssh:ssh-1@@pty-live')
-    expect(clearProviderPtyState).toHaveBeenCalledWith('ssh:ssh-1@@pty-lease')
+    expect(clearProviderPtyState).toHaveBeenCalledWith('ssh:ssh-1@@boot-a@@pty-lease')
     expect(deletePtyOwnership).toHaveBeenCalledWith('ssh:ssh-1@@pty-live')
-    expect(deletePtyOwnership).toHaveBeenCalledWith('ssh:ssh-1@@pty-lease')
+    expect(deletePtyOwnership).toHaveBeenCalledWith('ssh:ssh-1@@boot-a@@pty-lease')
     expect(mockStore.markSshRemotePtyLease).toHaveBeenCalledWith(
       'ssh-1',
       'ssh:ssh-1@@pty-live',
@@ -1280,7 +1290,7 @@ describe('SSH IPC handlers', () => {
     )
     expect(mockStore.markSshRemotePtyLease).toHaveBeenCalledWith(
       'ssh-1',
-      'ssh:ssh-1@@pty-lease',
+      'ssh:ssh-1@@boot-a@@pty-lease',
       'terminated'
     )
   })

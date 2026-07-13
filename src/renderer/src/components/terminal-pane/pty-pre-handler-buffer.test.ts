@@ -114,4 +114,35 @@ describe('pre-handler PTY buffer', () => {
     expect(hasPty).toHaveBeenCalledWith('pty-exit-0')
     expect(handler).toHaveBeenCalledWith(-1)
   })
+
+  it('caps eviction tombstones at exactly 1024 ids without probing unrelated PTYs', async () => {
+    const prefix = 'pty-exact-tombstone-cap-'
+    const hasPty = vi.fn(async () => false)
+    const handler = vi.fn()
+    try {
+      // 64 payload slots + 1,024 tombstones + 1 eviction of the oldest tombstone.
+      for (let index = 0; index <= 1_088; index += 1) {
+        bufferPreHandlerPtyExit(`${prefix}${index}`, index)
+      }
+
+      reconcilePreHandlerPtyExitAfterOverflow(`${prefix}0`, hasPty, handler, () => true)
+      reconcilePreHandlerPtyExitAfterOverflow(`${prefix}1`, hasPty, handler, () => true)
+      reconcilePreHandlerPtyExitAfterOverflow(
+        'unrelated-after-exact-cap',
+        hasPty,
+        handler,
+        () => true
+      )
+      await Promise.resolve()
+
+      expect(hasPty).toHaveBeenCalledOnce()
+      expect(hasPty).toHaveBeenCalledWith(`${prefix}1`)
+      expect(handler).toHaveBeenCalledOnce()
+    } finally {
+      for (let index = 0; index <= 1_088; index += 1) {
+        clearPreHandlerPtyState(`${prefix}${index}`)
+      }
+      clearPreHandlerPtyState('unrelated-after-exact-cap')
+    }
+  })
 })

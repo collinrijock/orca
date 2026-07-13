@@ -29,6 +29,11 @@ function killPtyForShutdown(managed: ManagedPty, signal: 'SIGTERM' | 'SIGKILL'):
   // Why: node-pty's Windows backend rejects signal arguments; its no-arg kill
   // is the equivalent shutdown operation for ConPTY.
   if (process.platform === 'win32') {
+    // Why: the native ConPTY close is one-shot and survives client reconnects.
+    // A successful prior call must be polled, never issued against the handle again.
+    if (managed.windowsShutdownKillIssued) {
+      return
+    }
     managed.windowsShutdownKillIssued = true
     try {
       managed.pty.kill()
@@ -538,7 +543,7 @@ export class PtyHandler {
         return
       }
       still.killTimer = undefined
-      if (!state.forceKillAccepted || process.platform === 'win32') {
+      if (!state.forceKillAccepted) {
         try {
           killPtyForShutdown(still, 'SIGKILL')
           state.forceKillAccepted = true
@@ -815,15 +820,19 @@ export class PtyHandler {
       // response is discarded and no renderer can own this PTY. Shut it down
       // immediately so it does not linger as an unreachable remote shell.
       this.releaseStartupCommand(managed)
-      this.scheduleManagedPtyForceShutdown(managed, {
+      const shutdownState = {
         forceKillAccepted: false,
         failedAttempts: 0,
         label: 'stale-spawn'
-      })
+      }
+      this.scheduleManagedPtyForceShutdown(managed, shutdownState)
       // Why: arm fallback ownership before native shutdown. node-pty can throw
       // synchronously, especially during ConPTY startup, and the orphan still
       // needs a later force-close owner even when this request rejects.
       killPtyForShutdown(managed, 'SIGTERM')
+      if (process.platform === 'win32') {
+        shutdownState.forceKillAccepted = true
+      }
     } else if (managed.startupCommand) {
       this.scheduleStartupCommandDelivery(
         managed,
@@ -982,7 +991,9 @@ export class PtyHandler {
       // EXIT traps. Fd release happens via onExit (natural exit) or via the
       // killTimer → SIGKILL → disposeManagedPty chain below.
       this.scheduleManagedPtyForceShutdown(managed, {
-        forceKillAccepted: false,
+        // Why: Windows maps graceful and force shutdown to the same one-shot
+        // native close. POSIX still needs its distinct SIGKILL escalation.
+        forceKillAccepted: process.platform === 'win32',
         failedAttempts: 0,
         label: 'graceful-shutdown'
       })
