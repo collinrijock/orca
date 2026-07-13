@@ -1018,26 +1018,86 @@ describe('PtyHandler', () => {
     expect(mockKill).toHaveBeenCalledWith('SIGTERM')
   })
 
-  it('kills PTY on shutdown without a signal on Windows', async () => {
-    // Why: node-pty's Windows agent throws "Signals not supported on windows."
-    // for any signal argument; shutdown must fall back to a bare kill().
-    const originalPlatform = process.platform
-    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
-    const mockKill = vi.fn()
-    mockPtySpawn.mockReturnValue({
-      ...mockPtyInstance,
-      kill: mockKill,
-      onData: vi.fn(),
-      onExit: vi.fn()
-    })
-    try {
-      await dispatcher.callRequest('pty.spawn', {})
-      await dispatcher.callRequest('pty.shutdown', { id: 'pty-1', immediate: false })
-      expect(mockKill).toHaveBeenCalledWith()
-      expect(mockKill).not.toHaveBeenCalledWith('SIGTERM')
-    } finally {
-      Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform })
+  // Why: node-pty's Windows agent throws "Signals not supported on windows."
+  // for any signal argument. killPtyProcess drops the signal on win32 — cover
+  // every call site so a future regression cannot reintroduce signal args.
+  describe('kills PTY without a signal on Windows', () => {
+    async function withWindowsPlatform(fn: () => Promise<void>): Promise<void> {
+      const originalPlatform = process.platform
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+      try {
+        await fn()
+      } finally {
+        Object.defineProperty(process, 'platform', {
+          configurable: true,
+          value: originalPlatform
+        })
+      }
     }
+
+    function mockKillablePty(): ReturnType<typeof vi.fn> {
+      const mockKill = vi.fn()
+      mockPtySpawn.mockReturnValue({
+        ...mockPtyInstance,
+        kill: mockKill,
+        onData: vi.fn(),
+        onExit: vi.fn()
+      })
+      return mockKill
+    }
+
+    function expectBareKills(mockKill: ReturnType<typeof vi.fn>, times: number): void {
+      expect(mockKill).toHaveBeenCalledTimes(times)
+      expect(mockKill.mock.calls.every((args) => args.length === 0)).toBe(true)
+    }
+
+    it('on graceful shutdown', async () => {
+      await withWindowsPlatform(async () => {
+        const mockKill = mockKillablePty()
+        await dispatcher.callRequest('pty.spawn', {})
+        await dispatcher.callRequest('pty.shutdown', { id: 'pty-1', immediate: false })
+        expectBareKills(mockKill, 1)
+      })
+    })
+
+    it('on immediate shutdown', async () => {
+      await withWindowsPlatform(async () => {
+        const mockKill = mockKillablePty()
+        await dispatcher.callRequest('pty.spawn', {})
+        await dispatcher.callRequest('pty.shutdown', { id: 'pty-1', immediate: true })
+        expectBareKills(mockKill, 1)
+      })
+    })
+
+    it('on stale-spawn cleanup including the SIGKILL fallback', async () => {
+      await withWindowsPlatform(async () => {
+        const mockKill = mockKillablePty()
+        await dispatcher.callRequest('pty.spawn', {}, { isStale: () => true })
+        expectBareKills(mockKill, 1)
+        vi.advanceTimersByTime(5000)
+        expectBareKills(mockKill, 2)
+      })
+    })
+
+    it('on graceful-shutdown SIGKILL fallback', async () => {
+      await withWindowsPlatform(async () => {
+        const mockKill = mockKillablePty()
+        await dispatcher.callRequest('pty.spawn', {})
+        await dispatcher.callRequest('pty.shutdown', { id: 'pty-1', immediate: false })
+        expectBareKills(mockKill, 1)
+        vi.advanceTimersByTime(5000)
+        expectBareKills(mockKill, 2)
+      })
+    })
+
+    it('on dispose', async () => {
+      await withWindowsPlatform(async () => {
+        const mockKill = mockKillablePty()
+        await dispatcher.callRequest('pty.spawn', {})
+        handler.dispose()
+        expectBareKills(mockKill, 1)
+      })
+    })
   })
 
   it('flushes pending PTY output before immediate shutdown cleanup', async () => {
