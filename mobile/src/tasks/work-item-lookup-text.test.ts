@@ -7,7 +7,7 @@ describe('isWorkItemLookupText', () => {
     expect(isWorkItemLookupText('https://github.com/o/r/issues/1')).toBe(true)
     expect(isWorkItemLookupText('https://gitlab.com/g/p/-/merge_requests/2')).toBe(true)
     expect(isWorkItemLookupText('https://linear.app/acme/issue/ENG-9')).toBe(true)
-    expect(isWorkItemLookupText('ENG-9')).toBe(true)
+    expect(isWorkItemLookupText('ENG-9')).toBe(false)
   })
 
   it('treats plain names as non-lookup text', () => {

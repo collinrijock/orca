@@ -1,17 +1,14 @@
 import type { GitHubWorkItem, GitLabWorkItem, LinearIssue } from '../../../src/shared/types'
+import { getLinearIssueWorkspaceName } from '../../../src/shared/workspace-name'
 import {
-  getLinearIssueWorkspaceName,
-  getLinkedWorkItemSuggestedName,
-  getLinkedWorkItemWorkspaceName
-} from '../../../src/shared/workspace-name'
-import { getLinearOrganizationUrlKeyFromIssueUrl } from '../../../src/shared/linear-links'
-import { isWorkItemLookupText } from './work-item-lookup-text'
-import {
-  isBranchCheckedOutInWorktrees,
-  resolveComposerBranchReuse,
-  resolveComposerBranchSelection,
-  resolveComposerReuseOverride
-} from '../../../src/shared/composer-branch-selection'
+  buildGitHubWorkspaceSource,
+  buildGitLabWorkspaceSource,
+  buildLinearWorkspaceSource,
+  buildWorkspaceSourceSelection,
+  getWorkspaceSourceName,
+  shouldApplyWorkspaceSourceAutoName
+} from '../../../src/shared/new-workspace/workspace-source'
+import { resolveComposerBranchPick as resolveSharedComposerBranchPick } from '../../../src/shared/composer-branch-selection'
 import type {
   MobileComposerCreateSelection,
   MobileLinkedWorkItem,
@@ -26,14 +23,7 @@ export function buildGitHubLinkedWorkItem(item: {
   url: string
   repoId: string
 }): MobileLinkedWorkItem {
-  return {
-    provider: 'github',
-    type: item.type,
-    number: item.number,
-    title: item.title,
-    url: item.url,
-    repoId: item.repoId
-  }
+  return buildGitHubWorkspaceSource(item)
 }
 
 export function buildGitLabLinkedWorkItem(item: {
@@ -43,14 +33,7 @@ export function buildGitLabLinkedWorkItem(item: {
   url: string
   repoId: string
 }): MobileLinkedWorkItem {
-  return {
-    provider: 'gitlab',
-    type: item.type,
-    number: item.number,
-    title: item.title,
-    url: item.url,
-    repoId: item.repoId
-  }
+  return buildGitLabWorkspaceSource(item)
 }
 
 export function buildLinearLinkedWorkItem(issue: {
@@ -59,28 +42,14 @@ export function buildLinearLinkedWorkItem(issue: {
   url: string
   workspaceId?: string
 }): MobileLinkedWorkItem {
-  const orgUrlKey = getLinearOrganizationUrlKeyFromIssueUrl(issue.url)
-  return {
-    provider: 'linear',
-    type: 'issue',
-    number: 0,
-    title: issue.title,
-    url: issue.url,
-    linearIdentifier: issue.identifier,
-    ...(issue.workspaceId ? { linearWorkspaceId: issue.workspaceId } : {}),
-    ...(orgUrlKey ? { linearOrganizationUrlKey: orgUrlKey } : {})
-  }
+  return buildLinearWorkspaceSource(issue)
 }
 
 // Faithful port of desktop applyLinkedWorkItem's name gate: the derived name
 // replaces the current field only when it's empty, still the last auto-name, or
 // a lookup query — never a name the user deliberately typed.
 export function shouldApplyAutoName(args: { currentName: string; lastAutoName: string }): boolean {
-  return (
-    !args.currentName.trim() ||
-    args.currentName === args.lastAutoName ||
-    isWorkItemLookupText(args.currentName)
-  )
+  return shouldApplyWorkspaceSourceAutoName(args)
 }
 
 export function resolveWorkItemAutoName(item: {
@@ -90,7 +59,7 @@ export function resolveWorkItemAutoName(item: {
   provider: 'github' | 'gitlab' | 'linear'
   linearIdentifier?: string
 }): string {
-  return getLinkedWorkItemWorkspaceName(item)?.seedName ?? getLinkedWorkItemSuggestedName(item)
+  return getWorkspaceSourceName({ ...item, url: '' }).seedName
 }
 
 export function resolveLinearAutoName(issue: { identifier: string; title: string }): string {
@@ -103,31 +72,7 @@ export function buildSmartNameSelection(args: {
   linkedWorkItem: MobileLinkedWorkItem | null
   baseBranch: string | undefined
 }): SmartNameSelection | null {
-  const { linkedWorkItem, baseBranch } = args
-  if (linkedWorkItem) {
-    const isLinear = linkedWorkItem.provider === 'linear'
-    const kind: SmartNameSelection['kind'] = isLinear
-      ? 'linear'
-      : linkedWorkItem.provider === 'gitlab'
-        ? linkedWorkItem.type === 'mr'
-          ? 'gitlab-mr'
-          : 'gitlab-issue'
-        : linkedWorkItem.type === 'pr'
-          ? 'github-pr'
-          : 'github-issue'
-    return {
-      kind,
-      label:
-        isLinear || linkedWorkItem.number === 0
-          ? linkedWorkItem.title
-          : `#${linkedWorkItem.number} ${linkedWorkItem.title}`,
-      url: linkedWorkItem.url
-    }
-  }
-  if (baseBranch) {
-    return { kind: 'branch', label: baseBranch }
-  }
-  return null
+  return buildWorkspaceSourceSelection(args) as SmartNameSelection | null
 }
 
 // Derives the create-time selection from composer state: a linked work item wins
@@ -191,33 +136,14 @@ export function resolveComposerBranchPick(args: {
   lastAutoName: string
   worktreeBranches: readonly string[]
 }): ComposerBranchPick {
-  const { refName, localBranchName } = args
-  const selection = resolveComposerBranchSelection({
-    refName,
-    localBranchName,
-    currentName: args.currentName,
-    lastAutoName: args.lastAutoName
-  })
-  const branchCheckedOutElsewhere = isBranchCheckedOutInWorktrees(
-    localBranchName,
-    args.worktreeBranches
-  )
-  const { reuseEligibleBranch, defaultReuse } = resolveComposerBranchReuse({
-    refName,
-    localBranchName,
-    selectionProducedOverride: selection.branchNameOverride !== undefined,
-    branchCheckedOutElsewhere
-  })
-  const effectiveOverride = resolveComposerReuseOverride({
-    refName,
-    localBranchName,
-    branchNameOverride: selection.branchNameOverride,
-    branchCheckedOutElsewhere
-  })
+  const selection = resolveSharedComposerBranchPick(args)
   return {
-    base: { baseBranch: selection.baseBranch, branchNameOverride: effectiveOverride },
-    reuseEligibleBranch,
-    reuseSelectedBranch: defaultReuse,
+    base: {
+      baseBranch: selection.baseBranch,
+      branchNameOverride: selection.branchNameOverride
+    },
+    reuseEligibleBranch: selection.reuseEligibleBranch,
+    reuseSelectedBranch: selection.defaultReuse,
     ...(selection.name !== undefined && selection.lastAutoName !== undefined
       ? { name: selection.name, lastAutoName: selection.lastAutoName }
       : {})

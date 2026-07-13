@@ -1,15 +1,13 @@
 import type { RpcClient } from '../transport/rpc-client'
 import type { RpcSuccess } from '../transport/types'
-import type { WorkspaceCreateGitPushTarget } from './workspace-create-params'
+import type { GitHubPrStartPoint } from '../../../src/shared/types'
 
 // The resolved start point for a linked PR/MR: the base branch to create from
 // plus the optional review-compare ref, push target, and exact branch name.
-export type ComposerHostedBase = {
-  baseBranch: string
-  compareBaseRef?: string
-  pushTarget?: WorkspaceCreateGitPushTarget
-  branchNameOverride?: string
-}
+export type ComposerHostedBase = Pick<
+  GitHubPrStartPoint,
+  'baseBranch' | 'compareBaseRef' | 'pushTarget' | 'branchNameOverride' | 'maintainerCanModify'
+>
 
 type HostedBaseResult = ComposerHostedBase | { error: string }
 
@@ -23,7 +21,7 @@ export async function resolveComposerPrBase(args: {
   headRefName?: string
   baseRefName?: string
   isCrossRepository?: boolean
-}): Promise<ComposerHostedBase> {
+}): Promise<GitHubPrStartPoint> {
   const { client, repoId, prNumber, headRefName, baseRefName, isCrossRepository } = args
   const response = await client.sendRequest(
     'worktree.resolvePrBase',
@@ -39,7 +37,7 @@ export async function resolveComposerPrBase(args: {
   if (!response.ok) {
     throw new Error(response.error.message)
   }
-  const result = (response as RpcSuccess).result as HostedBaseResult
+  const result = (response as RpcSuccess).result as GitHubPrStartPoint | { error: string }
   if ('error' in result) {
     throw new Error(result.error)
   }

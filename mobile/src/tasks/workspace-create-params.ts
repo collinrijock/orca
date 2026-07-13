@@ -1,19 +1,16 @@
-import type { TuiAgent } from '../../../src/shared/types'
+import type {
+  CreateSparseCheckoutRequest,
+  GitPushTarget,
+  SetupDecision,
+  TuiAgent
+} from '../../../src/shared/types'
+import { getWorkspaceSourceName } from '../../../src/shared/new-workspace/workspace-source'
 import { resolveMobileWorkspaceCreateName } from './mobile-workspace-name'
 import type { WorkspaceAgentChoice } from './workspace-agent-selection'
 
-export type WorkspaceCreateSetupDecision = 'inherit' | 'run' | 'skip'
-
-export type WorkspaceCreateSparseCheckout = {
-  directories: string[]
-  presetId?: string
-}
-
-export type WorkspaceCreateGitPushTarget = {
-  remoteName: string
-  branchName: string
-  remoteUrl?: string
-}
+export type WorkspaceCreateSetupDecision = SetupDecision
+export type WorkspaceCreateSparseCheckout = CreateSparseCheckoutRequest
+export type WorkspaceCreateGitPushTarget = GitPushTarget
 
 export type WorkspaceCreateHostedStartPoint = {
   baseBranch: string
@@ -97,7 +94,18 @@ export function buildTaskWorkspaceCreateParams(args: {
   const selectedPushTarget = pushTarget ?? hostedStartPoint?.pushTarget
   // Why: desktop only sends displayName while the name is still auto-derived; a
   // user-edited name suppresses it so the runtime keeps the user's chosen name.
-  const displayName = nameIsAutoManaged ? { displayName: item.source.title } : {}
+  const sourceName =
+    item.provider === 'linear'
+      ? getWorkspaceSourceName({
+          provider: 'linear',
+          type: 'issue',
+          number: 0,
+          title: item.source.title,
+          url: item.source.url,
+          linearIdentifier: item.source.identifier
+        })
+      : getWorkspaceSourceName({ provider: item.provider, ...item.source })
+  const displayName = nameIsAutoManaged ? { displayName: sourceName.displayName } : {}
   const common = {
     setupDecision,
     activate: true,

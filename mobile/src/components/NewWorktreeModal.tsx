@@ -14,7 +14,7 @@ import { ChevronDown, ChevronUp } from 'lucide-react-native'
 import type { RpcClient } from '../transport/rpc-client'
 import type { RpcResponse, RpcSuccess } from '../transport/types'
 import { colors, spacing, radii, typography } from '../theme/mobile-theme'
-import { BottomDrawer } from './BottomDrawer'
+import { BottomDrawer, BOTTOM_DRAWER_HIDE_DURATION_MS } from './BottomDrawer'
 import { PickerListDrawer } from './PickerListDrawer'
 import { MobileAgentIcon } from './MobileAgentIcon'
 import { getSuggestedCreatureName } from './worktree-name-suggestion'
@@ -59,6 +59,8 @@ import {
 import { useMobileComposerSource } from '../tasks/use-mobile-composer-source'
 import type { SmartModeAvailabilityInput } from '../tasks/mobile-smart-source-modes'
 import { deriveRepoSlug, type PasteRepoCandidate } from '../tasks/smart-source-paste-intent'
+import { shouldPreserveWorkspaceSourceOnRepoChange } from '../../../src/shared/new-workspace/workspace-source'
+import { getComposerRepoWorktreeBranches } from '../../../src/shared/composer-branch-selection'
 import { SmartWorkspaceSourceField } from './SmartWorkspaceSourceField'
 import { SmartWorkspaceSourceDrawer } from './SmartWorkspaceSourceDrawer'
 import { SmartWorkspaceAdvancedFields } from './SmartWorkspaceAdvancedFields'
@@ -108,6 +110,12 @@ type CreateOptions = {
   approvedSetupContentHash?: string
 }
 
+type NewWorktreeDrawerView = 'form' | 'transition' | 'source' | 'repo' | 'agent' | 'trust'
+
+// Why: iOS cannot reliably present a second native modal until the first drawer's
+// exit commits; one extra frame keeps transitions sequential on slower devices.
+const NEW_WORKTREE_DRAWER_TRANSITION_MS = BOTTOM_DRAWER_HIDE_DURATION_MS + 16
+
 function repoColor(name: string): string {
   const palette = ['#f97316', '#8b5cf6', '#06b6d4', '#ec4899', '#84cc16', '#f59e0b', '#6366f1']
   let hash = 0
@@ -133,6 +141,7 @@ type Props = {
   // on the on-disk directory basename, so paths (not displayNames) are
   // what the suggestion logic must dedupe against.
   existingWorktreePaths?: readonly string[]
+  existingWorktrees?: readonly { repoId: string; branch: string }[]
   onCreated: (worktreeId: string, name: string) => void
   onClose: () => void
 }
@@ -142,6 +151,7 @@ export function NewWorktreeModal({
   client,
   hostId,
   existingWorktreePaths,
+  existingWorktrees,
   onCreated,
   onClose
 }: Props) {
@@ -166,6 +176,7 @@ export function NewWorktreeModal({
       client={client}
       hostId={hostId}
       existingWorktreePaths={existingWorktreePaths}
+      existingWorktrees={existingWorktrees}
       onCreated={onCreated}
       onClose={onClose}
     />
@@ -177,21 +188,21 @@ function NewWorktreeModalContent({
   client,
   hostId,
   existingWorktreePaths,
+  existingWorktrees,
   onCreated,
   onClose
 }: Props) {
   const [initialRepos] = useState(() => (hostId ? (getCachedRepos(hostId) as Repo[] | null) : null))
   const [repos, setRepos] = useState<Repo[]>(initialRepos ?? [])
   const [selectedRepo, setSelectedRepo] = useState<Repo | null>(null)
-  const [showRepoPicker, setShowRepoPicker] = useState(false)
-  const [showSourceDrawer, setShowSourceDrawer] = useState(false)
+  const [drawerView, setDrawerView] = useState<NewWorktreeDrawerView>('form')
+  const drawerTransitionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [selectedAgentState, setSelectedAgent] = useState<AgentOption>(AGENT_OPTIONS[0]!)
   const [runtimeSettings, setRuntimeSettings] = useState<RuntimeSettings | null>(null)
   const [detectedAgentIdsState, setDetectedAgentIdsState] = useState<DetectedAgentIdsState | null>(
     null
   )
   const [agentOverriddenState, setAgentOverridden] = useState(false)
-  const [showAgentPicker, setShowAgentPicker] = useState(false)
   const [sshState, setSshState] = useState<SshConnectionState | null>(null)
   const [sshConnectingTargetId, setSshConnectingTargetId] = useState<string | null>(null)
   const [note, setNote] = useState('')
@@ -210,6 +221,29 @@ function NewWorktreeModalContent({
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(initialRepos == null)
   const lastVisitedRepo = useLastVisitedWorktreeRepoId(hostId, visible)
+  const selectedRepoWorktreeBranches = useMemo(
+    () => getComposerRepoWorktreeBranches(existingWorktrees ?? [], selectedRepo?.id ?? null),
+    [existingWorktrees, selectedRepo]
+  )
+
+  useEffect(() => {
+    return () => {
+      if (drawerTransitionTimerRef.current) {
+        clearTimeout(drawerTransitionTimerRef.current)
+      }
+    }
+  }, [])
+
+  function transitionDrawer(nextView: Exclude<NewWorktreeDrawerView, 'transition'>): void {
+    if (drawerTransitionTimerRef.current) {
+      clearTimeout(drawerTransitionTimerRef.current)
+    }
+    setDrawerView('transition')
+    drawerTransitionTimerRef.current = setTimeout(() => {
+      drawerTransitionTimerRef.current = null
+      setDrawerView(nextView)
+    }, NEW_WORKTREE_DRAWER_TRANSITION_MS)
+  }
 
   // The Smart source picker owns the workspace name AND the linked-source
   // selection: typing names the workspace and drives source search, and picking
@@ -218,6 +252,7 @@ function NewWorktreeModalContent({
   const composer = useMobileComposerSource({
     client,
     selectedRepoId: selectedRepo?.id ?? null,
+    worktreeBranches: selectedRepoWorktreeBranches,
     onError: setError
   })
 
@@ -661,6 +696,7 @@ function NewWorktreeModalContent({
           contentHash: setupTrust.contentHash,
           previouslyApproved: wasSetupHookPreviouslyApproved(trustedOrcaHooks, selectedRepo.id)
         })
+        transitionDrawer('trust')
         return
       }
 
@@ -737,9 +773,9 @@ function NewWorktreeModalContent({
   function handleRepoSelected(repo: Repo): void {
     const repoChanged = repo.id !== selectedRepo?.id
     setSelectedRepo(repo)
-    // Branch and GitHub/GitLab sources are tied to the repo they were searched
-    // from; switching repos invalidates them, so clear the selection.
-    if (repoChanged) {
+    // Branch and provider-backed sources are repo-scoped; Linear/Jira are global
+    // work context and survive choosing a different implementation repo.
+    if (repoChanged && !shouldPreserveWorkspaceSourceOnRepoChange(composer.linkedWorkItem)) {
       composer.handleClearSmartNameSelection()
     }
   }
@@ -756,6 +792,7 @@ function NewWorktreeModalContent({
       )
       const approvedHash = setupTrustPrompt.contentHash
       setSetupTrustPrompt(null)
+      transitionDrawer('form')
       await handleCreate({ setupOverride: 'run', approvedSetupContentHash: approvedHash })
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to trust setup script.')
@@ -764,7 +801,7 @@ function NewWorktreeModalContent({
 
   return (
     <>
-      <BottomDrawer visible={visible} onClose={onClose}>
+      <BottomDrawer visible={visible && drawerView === 'form'} onClose={onClose}>
         <View style={styles.header}>
           <Text style={styles.title}>Create Workspace</Text>
           <Text style={styles.subtitle}>
@@ -788,7 +825,7 @@ function NewWorktreeModalContent({
                 style={styles.fieldButton}
                 onPress={() => {
                   prepareSelectionPickerOpen()
-                  setShowRepoPicker(true)
+                  transitionDrawer('repo')
                 }}
               >
                 {selectedRepo ? (
@@ -811,8 +848,12 @@ function NewWorktreeModalContent({
               label={selectedRepoIsGit ? "Name or 'Create From'" : 'Workspace name'}
               disabled={sshGate.requiresConnection}
               onBeforeOpen={() => setError('')}
-              onOpenDrawer={() => setShowSourceDrawer(true)}
+              onOpenDrawer={() => transitionDrawer('source')}
             />
+
+            {composer.forkPushWarning ? (
+              <Text style={styles.sourceWarning}>{composer.forkPushWarning}</Text>
+            ) : null}
 
             {selectedRepoConnectionId ? (
               <View style={styles.field}>
@@ -864,7 +905,7 @@ function NewWorktreeModalContent({
                 disabled={sshGate.requiresConnection}
                 onPress={() => {
                   prepareSelectionPickerOpen()
-                  setShowAgentPicker(true)
+                  transitionDrawer('agent')
                 }}
               >
                 <MobileAgentIcon agentId={selectedAgent.id} size={16} />
@@ -980,10 +1021,10 @@ function NewWorktreeModalContent({
         )}
       </BottomDrawer>
 
-      {/* Why: list drawers must be siblings of the form drawer so their virtualized
-          lists are not nested inside the form's vertical ScrollView. */}
+      {/* Why: list drawers stay outside the form's ScrollView, and the transition
+          state prevents overlapping native modals from swallowing iOS taps. */}
       <SmartWorkspaceSourceDrawer
-        visible={visible && showSourceDrawer}
+        visible={visible && drawerView === 'source'}
         client={client}
         composer={composer}
         availability={sourceAvailability}
@@ -996,23 +1037,23 @@ function NewWorktreeModalContent({
             setSelectedRepo(nextRepo)
           }
         }}
-        onClose={() => setShowSourceDrawer(false)}
+        onClose={() => transitionDrawer('form')}
       />
 
       <PickerListDrawer
-        visible={visible && showRepoPicker}
+        visible={visible && drawerView === 'repo'}
         title="Repository"
         items={repoPickerItems}
         selectedId={selectedRepo?.id ?? ''}
         onSelect={(item) => handleRepoSelected(item.repo)}
-        onClose={() => setShowRepoPicker(false)}
+        onClose={() => transitionDrawer('form')}
         renderIcon={(item) => {
           return <View style={[styles.repoDot, { backgroundColor: repoBadgeColor(item.repo) }]} />
         }}
       />
 
       <PickerListDrawer
-        visible={visible && showAgentPicker}
+        visible={visible && drawerView === 'agent'}
         title="Agent"
         items={pickerAgentOptions}
         selectedId={selectedAgent.id}
@@ -1020,21 +1061,25 @@ function NewWorktreeModalContent({
           setAgentOverridden(true)
           setSelectedAgent(agent)
         }}
-        onClose={() => setShowAgentPicker(false)}
+        onClose={() => transitionDrawer('form')}
         renderIcon={(agent) => <MobileAgentIcon agentId={agent.id} size={18} />}
       />
 
       <SetupHookTrustDrawer
-        visible={visible && setupTrustPrompt != null}
+        visible={visible && drawerView === 'trust' && setupTrustPrompt != null}
         prompt={setupTrustPrompt}
         busy={creating}
         onRunOnce={() => void approveSetupTrust(false)}
         onAlwaysTrust={() => void approveSetupTrust(true)}
         onDontRun={() => {
           setSetupTrustPrompt(null)
+          transitionDrawer('form')
           void handleCreate({ setupOverride: 'skip' })
         }}
-        onClose={() => setSetupTrustPrompt(null)}
+        onClose={() => {
+          setSetupTrustPrompt(null)
+          transitionDrawer('form')
+        }}
       />
     </>
   )
@@ -1175,6 +1220,12 @@ const styles = StyleSheet.create({
     color: colors.statusRed,
     fontSize: 13,
     marginBottom: spacing.md
+  },
+  sourceWarning: {
+    marginTop: -spacing.sm,
+    marginBottom: spacing.md,
+    fontSize: 12,
+    color: colors.statusAmber
   },
   advancedToggle: {
     flexDirection: 'row',

@@ -10,7 +10,7 @@ import type { RpcClient } from '../transport/rpc-client'
 import { fanOutSmartSearch, type SmartFanOutResult } from './smart-source-fan-out'
 import type { MrStateFilter } from './mobile-composer-source-types'
 import {
-  findRepoMatchingSlug,
+  findRepoMatchingSlugForPaste,
   lookupGitHubItemByNumber,
   lookupGitHubItemByOwnerRepo,
   lookupGitLabItemByPath,
@@ -73,6 +73,7 @@ export function useSmartWorkspaceSource(args: UseSmartWorkspaceSourceArgs) {
   // the mode/repo changes so one provider's rows never render under another tab.
   const scopeRef = useRef('')
   const dismissedPasteRef = useRef<string>('')
+  const repoSlugCacheRef = useRef<Map<string, { owner: string; repo: string } | null>>(new Map())
 
   useEffect(() => {
     if (!client || !enabled || mode === 'text') {
@@ -104,7 +105,8 @@ export function useSmartWorkspaceSource(args: UseSmartWorkspaceSourceArgs) {
         mrStateFilter,
         linearWorkspaceId,
         repos,
-        dismissedPasteRef
+        dismissedPasteRef,
+        repoSlugCache: repoSlugCacheRef.current
       })
         .then((result) => {
           if (stale) {
@@ -183,12 +185,13 @@ async function runSmartSearch(args: {
   linearWorkspaceId: string | null | undefined
   repos: readonly PasteRepoCandidate[]
   dismissedPasteRef: { current: string }
+  repoSlugCache: Map<string, { owner: string; repo: string } | null>
 }): Promise<{
   fan: SmartFanOutResult
   paste: PasteResolved
   crossRepoPrompt: SmartCrossRepoPrompt | null
 }> {
-  const { client, mode, query, repoId, repos, dismissedPasteRef } = args
+  const { client, mode, query, repoId, repos, dismissedPasteRef, repoSlugCache } = args
   const fan = await fanOutSmartSearch(args)
   const paste: PasteResolved = { github: null, gitlab: null }
   let crossRepoPrompt: SmartCrossRepoPrompt | null = null
@@ -202,7 +205,12 @@ async function runSmartSearch(args: {
       if (intent.kind === 'github-number') {
         paste.github = await lookupGitHubItemByNumber(client, repoId, intent.number)
       } else if (intent.kind === 'github-link') {
-        const matchingRepo = findRepoMatchingSlug(repos, intent.link.slug)
+        const matchingRepo = await findRepoMatchingSlugForPaste(
+          client,
+          repos,
+          intent.link.slug,
+          repoSlugCache
+        )
         if (matchingRepo && matchingRepo.id !== repoId) {
           crossRepoPrompt = { link: intent.link, matchingRepo }
         } else {

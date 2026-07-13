@@ -6,6 +6,7 @@ import {
   type RepoSlug
 } from '../../../src/shared/new-workspace/github-links'
 import { parseGitLabIssueOrMRLink } from '../../../src/shared/new-workspace/gitlab-links'
+import { isSmartWorkspaceSourceQueryWithinLimit } from '../../../src/shared/new-workspace/smart-workspace-source-results'
 import type { RpcClient } from '../transport/rpc-client'
 import type { RpcSuccess } from '../transport/types'
 
@@ -32,6 +33,9 @@ export type PasteIntent = GitHubPasteIntent | GitLabPasteIntent | null
 // GitHub URL becomes 'github-link'; a bare "#123"/number becomes 'github-number';
 // a GitLab issue/MR URL becomes 'gitlab-link'.
 export function resolvePasteIntent(query: string): PasteIntent {
+  if (!isSmartWorkspaceSourceQueryWithinLimit(query)) {
+    return null
+  }
   const trimmed = query.trim()
   if (!trimmed) {
     return null
@@ -82,6 +86,36 @@ export function findRepoMatchingSlug(
   slug: RepoSlug
 ): PasteRepoCandidate | null {
   return repos.find((repo) => slugsEqual(repo.slug, slug)) ?? null
+}
+
+export async function findRepoMatchingSlugForPaste(
+  client: RpcClient,
+  repos: readonly PasteRepoCandidate[],
+  slug: RepoSlug,
+  cache: Map<string, RepoSlug | null>
+): Promise<PasteRepoCandidate | null> {
+  const projected = findRepoMatchingSlug(repos, slug)
+  if (projected) {
+    return projected
+  }
+  // Why: projected remote metadata is incomplete for SSH and GitHub Enterprise;
+  // ask each repo's owning runtime instead of assuming github.com URL syntax.
+  for (const repo of repos) {
+    let resolved = cache.get(repo.id)
+    if (!cache.has(repo.id)) {
+      try {
+        const response = await client.sendRequest('github.repoSlug', { repo: `id:${repo.id}` })
+        resolved = response.ok ? ((response as RpcSuccess).result as RepoSlug | null) : null
+      } catch {
+        resolved = null
+      }
+      cache.set(repo.id, resolved ?? null)
+    }
+    if (slugsEqual(resolved ?? null, slug)) {
+      return repo
+    }
+  }
+  return null
 }
 
 export async function lookupGitHubItemByNumber(

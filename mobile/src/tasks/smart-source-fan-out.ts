@@ -4,7 +4,10 @@ import type {
   GitLabWorkItem,
   LinearIssue
 } from '../../../src/shared/types'
-import type { SmartNameMode } from '../../../src/shared/new-workspace/smart-workspace-source-results'
+import {
+  isSmartWorkspaceSourceQueryWithinLimit,
+  type SmartNameMode
+} from '../../../src/shared/new-workspace/smart-workspace-source-results'
 import type { RpcClient } from '../transport/rpc-client'
 import { isGitHubWorkItemsSshRemoteRequiredError } from './mobile-work-items'
 import type { MrStateFilter } from './mobile-composer-source-types'
@@ -64,6 +67,11 @@ type FanOutArgs = {
 // modes surface the failure. No cross-provider ranking/dedup — the shared row
 // builder concatenates in provider order.
 export async function fanOutSmartSearch(args: FanOutArgs): Promise<SmartFanOutResult> {
+  if (!isSmartWorkspaceSourceQueryWithinLimit(args.query)) {
+    // Why: the source limit is an outbound-request boundary, not only a render
+    // limit; pasted payloads must never fan out to provider CLIs or SSH hosts.
+    return { ...EMPTY, needsGitHubRemote: false, error: '' }
+  }
   const {
     client,
     mode,

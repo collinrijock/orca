@@ -58,9 +58,9 @@ describe('shouldApplyAutoName', () => {
     expect(shouldApplyAutoName({ currentName: 'fix-bug', lastAutoName: 'fix-bug' })).toBe(true)
   })
 
-  it('applies when the name is a lookup query (URL / #N / linear id)', () => {
+  it('applies when the name is a lookup query (URL / #N)', () => {
     expect(shouldApplyAutoName({ currentName: '#42', lastAutoName: 'x' })).toBe(true)
-    expect(shouldApplyAutoName({ currentName: 'ENG-9', lastAutoName: 'x' })).toBe(true)
+    expect(shouldApplyAutoName({ currentName: 'ENG-9', lastAutoName: 'x' })).toBe(false)
   })
 
   it('keeps a deliberately typed name', () => {

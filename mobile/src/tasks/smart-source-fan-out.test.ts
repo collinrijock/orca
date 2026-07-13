@@ -96,4 +96,17 @@ describe('fanOutSmartSearch', () => {
     await fanOutSmartSearch({ ...smartArgs, githubAvailable: false, client })
     expect(calls.map((c) => c.method)).not.toContain('github.listWorkItems')
   })
+
+  it('does not send oversized source queries to any provider', async () => {
+    const calls: Call[] = []
+    const client = fakeClient({}, calls)
+    const result = await fanOutSmartSearch({ ...smartArgs, query: 'x'.repeat(2049), client })
+    expect(calls).toEqual([])
+    expect(result).toMatchObject({
+      githubItems: [],
+      gitlabItems: [],
+      linearIssues: [],
+      branches: []
+    })
+  })
 })

@@ -2,9 +2,11 @@ import { describe, expect, it } from 'vitest'
 import {
   deriveRepoSlug,
   findRepoMatchingSlug,
+  findRepoMatchingSlugForPaste,
   resolvePasteIntent,
   type PasteRepoCandidate
 } from './smart-source-paste-intent'
+import type { RpcClient } from '../transport/rpc-client'
 
 describe('resolvePasteIntent', () => {
   it('classifies a GitHub issue/PR URL as a github-link', () => {
@@ -28,6 +30,12 @@ describe('resolvePasteIntent', () => {
 
   it('returns null for plain search text', () => {
     expect(resolvePasteIntent('login bug')).toBeNull()
+  })
+
+  it('rejects oversized paste intents before any exact lookup', () => {
+    expect(
+      resolvePasteIntent(`https://github.com/acme/widgets/issues/12/${'x'.repeat(2048)}`)
+    ).toBeNull()
   })
 })
 
@@ -68,5 +76,63 @@ describe('findRepoMatchingSlug', () => {
 
   it('returns null when no repo matches', () => {
     expect(findRepoMatchingSlug(repos, { owner: 'other', repo: 'thing' })).toBeNull()
+  })
+
+  it('falls back to the host-aware repo slug RPC for SSH and enterprise repos', async () => {
+    const calls: string[] = []
+    const client = {
+      sendRequest: async (_method: string, params: unknown) => {
+        const repo = (params as { repo: string }).repo
+        calls.push(repo)
+        return {
+          ok: true,
+          result: repo === 'id:b' ? { owner: 'enterprise', repo: 'widgets' } : null
+        }
+      }
+    } as unknown as RpcClient
+    await expect(
+      findRepoMatchingSlugForPaste(
+        client,
+        repos,
+        { owner: 'enterprise', repo: 'widgets' },
+        new Map()
+      )
+    ).resolves.toMatchObject({ id: 'b' })
+    expect(calls).toEqual(['id:a', 'id:b'])
+  })
+
+  it('keeps local matching usable when an older desktop lacks the repo slug RPC', async () => {
+    const client = {
+      sendRequest: async () => ({
+        ok: false,
+        error: { code: 'method_not_found', message: 'Unknown method: github.repoSlug' }
+      })
+    } as unknown as RpcClient
+
+    await expect(
+      findRepoMatchingSlugForPaste(
+        client,
+        repos,
+        { owner: 'enterprise', repo: 'widgets' },
+        new Map()
+      )
+    ).resolves.toBeNull()
+  })
+
+  it('keeps local matching usable when the optional repo slug lookup rejects', async () => {
+    const client = {
+      sendRequest: async () => {
+        throw new Error('connection closed')
+      }
+    } as unknown as RpcClient
+
+    await expect(
+      findRepoMatchingSlugForPaste(
+        client,
+        repos,
+        { owner: 'enterprise', repo: 'widgets' },
+        new Map()
+      )
+    ).resolves.toBeNull()
   })
 })

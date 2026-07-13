@@ -1,5 +1,10 @@
 import type { RpcClient } from '../transport/rpc-client'
 import type { RpcSuccess } from '../transport/types'
+import {
+  CLIENT_WORKTREE_CREATE_MAX_ATTEMPTS,
+  getClientWorktreeCreateCandidate,
+  isRetryableWorktreeCreateConflict
+} from '../../../src/shared/new-workspace/worktree-create-retry-policy'
 import { WORKTREE_CREATE_TIMEOUT_MS } from './workspace-create-timeout'
 
 // Why: server-side collision checks (branch already exists locally / on a remote
@@ -7,17 +12,6 @@ import { WORKTREE_CREATE_TIMEOUT_MS } from './workspace-create-timeout'
 // branches outlive worktrees in git, and remote branches/PRs aren't visible from
 // worktree.ps. Retry by appending -2, -3, ... mirroring the desktop createWorktree
 // loop in src/renderer/src/store/slices/worktrees.ts.
-export const WORKTREE_NAME_COLLISION_PATTERNS = [
-  /already exists locally/i,
-  /already exists on a remote/i,
-  /already has pr #\d+/i,
-  // Older runtimes emit a bare `Branch "x" already exists.`; mirrors the desktop
-  // createWorktree loop (src/renderer/src/store/slices/worktrees.ts).
-  /^Branch ".+" already exists\./i
-]
-
-const MAX_NAME_ATTEMPTS = 25
-
 export type WorktreeCreateResult = { worktreeId: string; name: string } | { error: string }
 
 // Creates a worktree, retrying with a numeric suffix on a name-collision error.
@@ -32,10 +26,10 @@ export async function createWorktreeWithNameRetry(args: {
   maxAttempts?: number
 }): Promise<WorktreeCreateResult> {
   const { client, baseName, buildParams } = args
-  const maxAttempts = args.maxAttempts ?? MAX_NAME_ATTEMPTS
+  const maxAttempts = args.maxAttempts ?? CLIENT_WORKTREE_CREATE_MAX_ATTEMPTS
   let lastError: string | null = null
   for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
-    const candidateName = attempt === 0 ? baseName : `${baseName}-${attempt + 1}`
+    const candidateName = getClientWorktreeCreateCandidate(baseName, attempt)
     const response = await client.sendRequest('worktree.create', buildParams(candidateName), {
       timeoutMs: WORKTREE_CREATE_TIMEOUT_MS
     })
@@ -44,7 +38,7 @@ export async function createWorktreeWithNameRetry(args: {
       return { worktreeId: result.worktree.id, name: candidateName }
     }
     lastError = response.error.message
-    if (!WORKTREE_NAME_COLLISION_PATTERNS.some((pattern) => pattern.test(lastError ?? ''))) {
+    if (!isRetryableWorktreeCreateConflict(lastError ?? '')) {
       break
     }
   }

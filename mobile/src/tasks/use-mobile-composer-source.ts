@@ -2,6 +2,7 @@ import { useCallback, useMemo, useRef, useState } from 'react'
 import type { GitHubWorkItem, GitLabWorkItem, LinearIssue } from '../../../src/shared/types'
 import { resolveComposerManualBranchNameChange } from '../../../src/shared/composer-branch-selection'
 import { resolveGitHubWorkItemIdentity } from '../../../src/shared/new-workspace/github-work-item-identity'
+import { getForkPushWarning } from '../../../src/shared/new-workspace/fork-push-warning'
 import type { RpcClient } from '../transport/rpc-client'
 import {
   buildGitHubLinkedWorkItem,
@@ -20,19 +21,11 @@ import {
   type ComposerHostedBase
 } from './composer-source-base-resolve'
 import type {
+  ComposerBaseState,
   MobileComposerCreateSelection,
   MobileLinkedWorkItem,
   SmartNameSelection
 } from './mobile-composer-source-types'
-import type { WorkspaceCreateGitPushTarget } from './workspace-create-params'
-
-type ComposerBaseState = {
-  baseBranch?: string
-  compareBaseRef?: string
-  pushTarget?: WorkspaceCreateGitPushTarget
-  branchNameOverride?: string
-}
-
 const EMPTY_BASE: ComposerBaseState = {}
 
 export type UseMobileComposerSourceArgs = {
@@ -98,6 +91,7 @@ export function useMobileComposerSource(args: UseMobileComposerSourceArgs) {
             pushTarget: result.pushTarget,
             branchNameOverride: result.branchNameOverride
           })
+          setForkPushWarning(getForkPushWarning(result))
         })
         .catch((error: unknown) => {
           if (resolveTokenRef.current !== token) {
@@ -270,20 +264,22 @@ export function useMobileComposerSource(args: UseMobileComposerSourceArgs) {
     }
   }, [clearBaseAndBranch, name])
 
-  const handleBranchNameOverrideChange = useCallback((value: string) => {
-    setBase((prev) => {
+  const handleBranchNameOverrideChange = useCallback(
+    (value: string) => {
       const next = resolveComposerManualBranchNameChange({
         value,
-        pushTarget: prev.pushTarget,
-        forkPushWarning: null
+        pushTarget: base.pushTarget,
+        forkPushWarning
       })
-      return {
-        ...prev,
+      setBase({
+        ...base,
         branchNameOverride: next.branchNameOverride,
         pushTarget: next.pushTarget
-      }
-    })
-  }, [])
+      })
+      setForkPushWarning(next.forkPushWarning)
+    },
+    [base, forkPushWarning]
+  )
 
   const smartNameSelection = useMemo<SmartNameSelection | null>(
     () => buildSmartNameSelection({ linkedWorkItem, baseBranch: base.baseBranch }),
