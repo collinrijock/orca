@@ -78,11 +78,10 @@ export function registerMobileHandlers(
       // `rotate: true` (explicit "Regenerate" intent because the prior token
       // may have been exposed), we discard any pending token and mint a fresh
       // one so the new QR carries a different credential.
-      const offer = rpcServer.createPairingOffer({
+      const offer = await rpcServer.createMobilePairingOffer({
         address: ip,
         rotate: args?.rotate,
-        name: `Mobile ${new Date().toLocaleDateString()}`,
-        scope: 'mobile'
+        name: `Mobile ${new Date().toLocaleDateString()}`
       })
       if (!offer.available) {
         return { available: false as const }
@@ -171,12 +170,12 @@ export function registerMobileHandlers(
     }
   })
 
-  ipcMain.handle('mobile:revokeDevice', (_event, args: { deviceId: string }) => {
+  ipcMain.handle('mobile:revokeDevice', async (_event, args: { deviceId: string }) => {
     const registry = rpcServer.getDeviceRegistry()
     if (!registry) {
       return { revoked: false }
     }
-    return { revoked: rpcServer.revokeMobileDevice(args.deviceId) }
+    return { revoked: await rpcServer.revokeMobileDevice(args.deviceId) }
   })
 
   ipcMain.handle('mobile:revokeRuntimeAccess', (_event, args: { deviceId: string }) => {

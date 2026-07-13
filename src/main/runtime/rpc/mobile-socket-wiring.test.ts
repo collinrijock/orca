@@ -67,6 +67,31 @@ function registryFor(deviceId: string, token: string): DeviceRegistry {
 }
 
 describe('MobileSocketWiring', () => {
+  it('terminates a revoked device across every attached transport', () => {
+    const direct = new FakeTransport()
+    const relay = new FakeTransport()
+    direct.terminateClientConnections.mockReturnValue(1)
+    relay.terminateClientConnections.mockReturnValue(2)
+    const desktop = generateKeyPair()
+    const wiring = new MobileSocketWiring({
+      deviceRegistry: registryFor('device-1', 'valid-token'),
+      e2eeKeypair: {
+        publicKey: desktop.publicKey,
+        secretKey: desktop.secretKey,
+        publicKeyB64: Buffer.from(desktop.publicKey).toString('base64')
+      },
+      onText: vi.fn(),
+      onBinary: vi.fn(),
+      onClose: vi.fn()
+    })
+    wiring.attachTransport(direct)
+    wiring.attachTransport(relay)
+
+    expect(wiring.terminateDeviceConnections('valid-token')).toBe(3)
+    expect(direct.terminateClientConnections).toHaveBeenCalledWith('valid-token')
+    expect(relay.terminateClientConnections).toHaveBeenCalledWith('valid-token')
+  })
+
   it('preserves the legacy direct handshake, identity, and close cleanup', () => {
     const desktop = generateKeyPair()
     const phone = generateKeyPair()

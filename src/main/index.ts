@@ -2151,7 +2151,7 @@ app.whenReady().then(async () => {
   const cloudAuth = getOrcaCloudAuthConfig()
   if (cloudAuth.configured) {
     try {
-      desktopRelayService = new DesktopRelayService({
+      const relayService = new DesktopRelayService({
         authConfig: cloudAuth.config,
         userDataPath: getProfileUserDataPath(),
         appVersion: app.getVersion(),
@@ -2160,7 +2160,12 @@ app.whenReady().then(async () => {
           desktopRelayStatus = status
         }
       })
-      desktopRelayService.start()
+      desktopRelayService = relayService
+      runtimeRpc.setMobileRelayPairingProvider({
+        createPairingRelay: (relayDeviceId) => relayService.createPairingRelay(relayDeviceId),
+        onDeviceRevokeQueued: (item) => relayService.onDeviceRevokeQueued(item)
+      })
+      relayService.start()
     } catch (error) {
       console.warn(
         '[relay] Desktop relay startup unavailable:',
@@ -2203,6 +2208,7 @@ app.on('before-quit', () => {
   }
   isQuitting = true
   desktopRelayService?.fenceAndCloseNow()
+  runtimeRpc?.setMobileRelayPairingProvider(null)
   unsubscribeSystemResumeBroadcast?.()
   unsubscribeSystemResumeBroadcast = null
   unsubscribeAgentAwakeStatusChanges?.()

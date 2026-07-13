@@ -21,6 +21,12 @@ import type { WebSocket } from 'ws'
 import { DeviceRegistry, type DeviceScope } from './device-registry'
 import { loadOrCreateE2EEKeypair, type E2EEKeypair } from './e2ee-keypair'
 import { MobileSocketWiring } from './rpc/mobile-socket-wiring'
+import type { PairingRelay } from '../../shared/mobile-relay-pairing-offer'
+import {
+  RelayRevokeOutbox,
+  type RelayDeviceBinding,
+  type RelayRevokeOutboxItem
+} from './relay/relay-revoke-outbox'
 import { encodePairingOffer, PAIRING_OFFER_VERSION } from '../../shared/pairing'
 import {
   decodeTerminalStreamFrame,
@@ -43,6 +49,13 @@ type OrcaRuntimeRpcServerOptions = {
   // fence or flood the socket with keepalive frames.
   keepaliveIntervalMs?: number
   longPollCap?: number
+}
+
+type MobileRelayPairingProvider = {
+  createPairingRelay(
+    relayDeviceId: string
+  ): Promise<{ relay: PairingRelay; binding: RelayDeviceBinding }>
+  onDeviceRevokeQueued(item: RelayRevokeOutboxItem): void
 }
 
 // Why: after 10 s of a pending dispatch we emit a tiny `{"_keepalive":true}`
@@ -404,12 +417,14 @@ export class OrcaRuntimeRpcServer {
   private readonly authToken = randomBytes(24).toString('hex')
   private readonly keepaliveIntervalMs: number
   private readonly longPollCap: number
+  private readonly relayRevokeOutbox: RelayRevokeOutbox
   private deviceRegistry: DeviceRegistry | null = null
   private e2eeKeypair: E2EEKeypair | null = null
   private tlsFingerprint: string | null = null
   private activeTransports: RpcTransport[] = []
   private transports: RuntimeTransportMetadata[] = []
   private mobileSocketWiring: MobileSocketWiring | null = null
+  private mobileRelayPairingProvider: MobileRelayPairingProvider | null = null
   private readonly binaryStreamHandlers = new Map<
     string,
     Map<number, (frame: TerminalStreamFrame) => void>
@@ -444,6 +459,7 @@ export class OrcaRuntimeRpcServer {
     this.webClientRoot = webClientRoot
     this.keepaliveIntervalMs = keepaliveIntervalMs
     this.longPollCap = longPollCap
+    this.relayRevokeOutbox = new RelayRevokeOutbox(userDataPath)
   }
 
   getDeviceRegistry(): DeviceRegistry | null {
@@ -466,9 +482,23 @@ export class OrcaRuntimeRpcServer {
     return this.mobileSocketWiring
   }
 
-  revokeMobileDevice(deviceId: string): boolean {
+  getRelayRevokeOutbox(): RelayRevokeOutbox {
+    return this.relayRevokeOutbox
+  }
+
+  setMobileRelayPairingProvider(provider: MobileRelayPairingProvider | null): void {
+    this.mobileRelayPairingProvider = provider
+  }
+
+  async revokeMobileDevice(deviceId: string): Promise<boolean> {
     const device = this.deviceRegistry?.getDevice(deviceId)
-    if (device?.scope !== 'mobile' || !this.deviceRegistry?.removeDevice(deviceId)) {
+    if (device?.scope !== 'mobile') {
+      return false
+    }
+    if (device.relayBinding) {
+      this.queueRelayDeviceRevoke(device.relayBinding)
+    }
+    if (!this.deviceRegistry?.removeDevice(deviceId)) {
       return false
     }
     this.mobileSocketWiring?.terminateDeviceConnections(device.token)
@@ -530,6 +560,56 @@ export class OrcaRuntimeRpcServer {
       webClientUrl:
         this.webClientRoot && scope === 'runtime' ? createWebClientUrl(endpoint, pairingUrl) : null
     }
+  }
+
+  async createMobilePairingOffer(args: {
+    address?: string | null
+    name?: string
+    rotate?: boolean
+  }): Promise<ReturnType<OrcaRuntimeRpcServer['createPairingOffer']>> {
+    if (args.rotate) {
+      const pending = this.deviceRegistry?.getPendingDevice('mobile')
+      if (pending?.relayBinding) {
+        // Why: the durable cloud revoke is recorded before rotating the local
+        // token, so a previously displayed relay invite cannot outlive the QR.
+        this.queueRelayDeviceRevoke(pending.relayBinding)
+      }
+    }
+    const direct = this.createPairingOffer({ ...args, scope: 'mobile' })
+    if (!direct.available || !this.mobileRelayPairingProvider) {
+      return direct
+    }
+    const device = this.deviceRegistry?.getDevice(direct.deviceId)
+    const publicKeyB64 = this.getE2EEPublicKey()
+    if (!device || !publicKeyB64) {
+      return direct
+    }
+    try {
+      const relayPairing = await this.mobileRelayPairingProvider.createPairingRelay(device.deviceId)
+      if (!this.deviceRegistry?.setRelayBinding(device.deviceId, relayPairing.binding)) {
+        return direct
+      }
+      return {
+        ...direct,
+        pairingUrl: encodePairingOffer({
+          v: PAIRING_OFFER_VERSION,
+          endpoint: direct.endpoint,
+          deviceToken: device.token,
+          publicKeyB64,
+          scope: 'mobile',
+          relay: relayPairing.relay
+        })
+      }
+    } catch {
+      // Why: relay is additive. A transient auth/director/control outage must
+      // still yield the valid LAN/Tailscale pairing offer.
+      return direct
+    }
+  }
+
+  private queueRelayDeviceRevoke(binding: RelayDeviceBinding): void {
+    const item = this.relayRevokeOutbox.enqueue(binding)
+    this.mobileRelayPairingProvider?.onDeviceRevokeQueued(item)
   }
 
   private registerBinaryStreamHandler(
