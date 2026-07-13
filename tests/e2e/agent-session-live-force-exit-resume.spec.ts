@@ -16,6 +16,7 @@ import {
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import { attachRepoAndOpenTerminal, createRestartSession } from './helpers/orca-restart'
 import { PROTOCOL_VERSION } from '../../src/main/daemon/types'
+import { DEFAULT_LOCAL_ORCA_PROFILE_ID } from '../../src/shared/orca-profiles'
 
 const PROVIDER_SESSION_ID = 'e2e-live-force-exit-session'
 
@@ -41,7 +42,8 @@ type PersistedData = {
 }
 
 function dataFilePath(userDataDir: string): string {
-  return path.join(userDataDir, 'orca-data.json')
+  // Fresh sessions migrate the seeded legacy file, then persist only here.
+  return path.join(userDataDir, 'profiles', DEFAULT_LOCAL_ORCA_PROFILE_ID, 'orca-data.json')
 }
 
 function readPersistedData(userDataDir: string): PersistedData {
@@ -205,9 +207,8 @@ test('resumes a live agent record after force-exit restart when pane PTY ownersh
       }
     )
 
-    // Drive the product's own quit-capture path (what the 60s timer / beforeunload
-    // run). Its origin:'quit' record differs from the live one, forcing a store
-    // change that triggers the (now hydration-gated) writer before the poll below.
+    // Exercise quit capture: origin:'quit' changes the live record, triggering the
+    // hydration-gated writer before polling persisted state.
     await page.evaluate(() => window.__store?.getState().captureAllSleepingAgentSessions())
 
     await expect
