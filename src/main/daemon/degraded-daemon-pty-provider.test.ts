@@ -375,7 +375,7 @@ describe('DegradedDaemonPtyProvider', () => {
     expect(provider.hasPty(fresh.id)).toBe(false)
   })
 
-  it('is best-effort: counts only successful shutdowns and never throws (keeps restart alive)', async () => {
+  it('blocks provider replacement when a fallback shutdown rejects', async () => {
     const current = createDaemonAdapter('daemon')
     const fallback = createProvider('fallback')
     const provider = new DegradedDaemonPtyProvider({ current, legacy: [], fallback })
@@ -388,16 +388,57 @@ describe('DegradedDaemonPtyProvider', () => {
       }
     })
 
-    // Why: a single un-killable local PTY must not abort the daemon restart.
-    const killedCount = await provider.shutdownFallbackSessions()
+    await expect(provider.shutdownFallbackSessions()).rejects.toThrow(
+      'Cannot restart daemon while local fallback PTY exit remains unconfirmed'
+    )
 
-    // Best-effort: the one that shut down is counted, the stuck one is not, and
-    // crucially it does not throw — so the daemon restart sequence proceeds.
-    expect(killedCount).toBe(1)
     expect(warn).toHaveBeenCalled()
     expect(fallback.shutdown).toHaveBeenCalledWith('stuck', { immediate: true })
     expect(fallback.shutdown).toHaveBeenCalledWith('ok', { immediate: true })
+    expect(provider.hasPty('stuck')).toBe(true)
     warn.mockRestore()
+  })
+
+  it('blocks provider replacement after accepted fallback shutdown without exit proof', async () => {
+    const fallbackSessions: string[] = []
+    const current = createDaemonAdapter('daemon')
+    const fallback = createProvider('fallback', fallbackSessions)
+    Object.defineProperty(fallback, 'requiresShutdownExitProof', { value: true })
+    vi.mocked(fallback.shutdown).mockResolvedValue(undefined)
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const provider = new DegradedDaemonPtyProvider({ current, legacy: [], fallback })
+    await provider.spawn({ sessionId: 'still-live-a', cols: 80, rows: 24 })
+    await provider.spawn({ sessionId: 'still-live-b', cols: 80, rows: 24 })
+
+    await expect(provider.shutdownFallbackSessions()).rejects.toThrow(
+      'Cannot restart daemon while local fallback PTY exit remains unconfirmed'
+    )
+
+    expect(fallback.shutdown).toHaveBeenCalledTimes(2)
+    expect(fallback.listProcesses).toHaveBeenCalledOnce()
+    expect(provider.hasPty('still-live-a')).toBe(true)
+    expect(provider.hasPty('still-live-b')).toBe(true)
+    provider.write('still-live-a', 'route-retained')
+    expect(fallback.write).toHaveBeenCalledWith('still-live-a', 'route-retained')
+    warn.mockRestore()
+  })
+
+  it('allows replacement when inventory proves death after fallback shutdown throws', async () => {
+    const fallbackSessions: string[] = []
+    const current = createDaemonAdapter('daemon')
+    const fallback = createProvider('fallback', fallbackSessions)
+    Object.defineProperty(fallback, 'requiresShutdownExitProof', { value: true })
+    vi.mocked(fallback.shutdown).mockImplementation(async (id: string) => {
+      fallbackSessions.splice(fallbackSessions.indexOf(id), 1)
+      throw new Error('native close threw after process exit')
+    })
+    const provider = new DegradedDaemonPtyProvider({ current, legacy: [], fallback })
+    await provider.spawn({ sessionId: 'proved-dead', cols: 80, rows: 24 })
+
+    await expect(provider.shutdownFallbackSessions()).resolves.toBe(1)
+
+    expect(fallback.listProcesses).toHaveBeenCalledOnce()
+    expect(provider.hasPty('proved-dead')).toBe(false)
   })
 
   it('fans synthetic exits for discovered current-daemon sessions only', async () => {

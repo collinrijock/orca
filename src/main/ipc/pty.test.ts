@@ -204,7 +204,8 @@ import {
   unregisterSshPtyProvider,
   releasePendingSshShutdownsForTarget,
   getLocalPtyProvider,
-  shutdownPtyWithRetainedOwnership
+  shutdownPtyWithRetainedOwnership,
+  _resetRetainedPtyShutdownsForTests
 } from './pty'
 import {
   _resetHiddenRendererPtyDeliveryGateForTest,
@@ -429,6 +430,9 @@ describe('registerPtyHandlers', () => {
 
   afterEach(() => {
     _resetWslCachesForTests()
+    // Why: retained shutdowns deliberately survive renderer loss in production;
+    // tests that prove that retention must not re-drive against the next case.
+    _resetRetainedPtyShutdownsForTests()
     vi.useRealTimers()
     // Why: sshProviders is module-level state; any id left registered leaks
     // into later tests (pty:listSessions sweeps every registered provider).
@@ -2968,11 +2972,16 @@ describe('registerPtyHandlers', () => {
         await expect(controller.stopAndWait('local-pty', { keepHistory: true })).resolves.toBe(
           false
         )
+        await expect(controller.stopAndWait('local-pty', { keepHistory: true })).resolves.toBe(
+          false
+        )
 
+        expect(shutdown).toHaveBeenCalledOnce()
         expect(shutdown).toHaveBeenCalledWith('local-pty', {
           immediate: true,
           keepHistory: true
         })
+        expect(listProcesses).toHaveBeenCalledTimes(2)
         expect(runtime.onPtyExit).not.toHaveBeenCalled()
       })
 
@@ -4573,6 +4582,40 @@ describe('registerPtyHandlers', () => {
     } as never)
 
     await expect(handlers.get('pty:hasPty')!(null, { id: 'maybe-pty' })).resolves.toBe(null)
+  })
+
+  it('uses one SSH inventory when targeted liveness is unavailable', async () => {
+    const listProcesses = vi.fn(async () => [{ id: 'ssh-live', cwd: '/remote', title: 'shell' }])
+    registerSshPtyProvider('ssh-overflow', {
+      spawn: vi.fn(),
+      write: vi.fn(),
+      resize: vi.fn(),
+      shutdown: vi.fn(),
+      sendSignal: vi.fn(),
+      getCwd: vi.fn(),
+      getInitialCwd: vi.fn(),
+      clearBuffer: vi.fn(),
+      acknowledgeDataEvent: vi.fn(),
+      hasChildProcesses: vi.fn(),
+      getForegroundProcess: vi.fn(),
+      serialize: vi.fn(),
+      revive: vi.fn(),
+      onData: vi.fn(() => () => {}),
+      onReplay: vi.fn(() => () => {}),
+      onExit: vi.fn(() => () => {}),
+      listProcesses,
+      attach: vi.fn(),
+      getDefaultShell: vi.fn(),
+      getProfiles: vi.fn()
+    } as never)
+    setPtyOwnership('ssh-live', 'ssh-overflow')
+    setPtyOwnership('ssh-dead', 'ssh-overflow')
+    registerPtyHandlers(mainWindow as never)
+
+    await expect(handlers.get('pty:hasPty')!(null, { id: 'ssh-live' })).resolves.toBe(true)
+    await expect(handlers.get('pty:hasPty')!(null, { id: 'ssh-dead' })).resolves.toBe(false)
+
+    expect(listProcesses).toHaveBeenCalledTimes(2)
   })
 
   it('lists duplicate SSH relay session ids as distinct app sessions', async () => {

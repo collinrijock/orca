@@ -184,6 +184,7 @@ type RetainedPtyShutdown = {
   durable: boolean
   attempts: number
   shutdownAccepted: boolean
+  requireExitProof: boolean
   nextRetryAt: number
   inFlight: Promise<void> | null
   lastError: Error | null
@@ -682,16 +683,32 @@ function attemptRetainedPtyShutdown(retained: RetainedPtyShutdown): Promise<void
       completeRetainedPtyShutdown(retained, false)
       return
     }
-    const providerExitObserved = await shutdownProviderAndDetectExit(
-      currentProvider,
-      retained.id,
-      retained.options
-    )
+    let providerExitObserved = false
+    let providerAlreadyGone = false
+    try {
+      providerExitObserved = await shutdownProviderAndDetectExit(
+        currentProvider,
+        retained.id,
+        retained.options
+      )
+    } catch (error) {
+      if (!isPtyAlreadyGoneError(error)) {
+        throw error
+      }
+      providerAlreadyGone = true
+    }
     // Why: provider replacement can finish while an older shutdown is in flight.
     if (retained.provider !== currentProvider) {
       return
     }
-    if (currentProvider.requiresShutdownExitProof && !providerExitObserved) {
+    if (providerAlreadyGone) {
+      completeRetainedPtyShutdown(retained, false)
+      return
+    }
+    if (
+      (currentProvider.requiresShutdownExitProof || retained.requireExitProof) &&
+      !providerExitObserved
+    ) {
       // Why: native Windows close is not idempotent. Once accepted, retry
       // only the liveness proof; a second close can corrupt the ConPTY heap.
       retained.shutdownAccepted = true
@@ -773,6 +790,7 @@ export async function shutdownPtyWithRetainedOwnership(args: {
   connectionId?: string | null
   provider: IPtyProvider
   options: PtyShutdownOptions
+  requireExitProof?: boolean
 }): Promise<void> {
   const retained = args.connectionId
     ? retainSshPtyShutdown(args.id, args.connectionId, args.provider, args.options)
@@ -780,6 +798,7 @@ export async function shutdownPtyWithRetainedOwnership(args: {
   if (!retained) {
     throw new Error('PTY shutdown could not retain ownership')
   }
+  retained.requireExitProof ||= args.requireExitProof === true
   await attemptRetainedPtyShutdownForCaller(retained)
 }
 
@@ -842,6 +861,7 @@ function retainLocalPtyShutdown(
       durable: true,
       attempts,
       shutdownAccepted: false,
+      requireExitProof: false,
       nextRetryAt: deferUntilProviderReady
         ? Number.POSITIVE_INFINITY
         : attempts === 0
@@ -889,6 +909,7 @@ function retainSshPtyShutdown(
       durable: persisted,
       attempts: 0,
       shutdownAccepted: false,
+      requireExitProof: false,
       nextRetryAt: provider ? 0 : Number.POSITIVE_INFINITY,
       inFlight: null,
       lastError: null
@@ -1517,6 +1538,15 @@ export function releasePendingSshShutdown(id: string): void {
   scheduleRetainedShutdownRetries()
 }
 
+export function _resetRetainedPtyShutdownsForTests(): void {
+  pendingLocalShutdownRetries.clear()
+  pendingSshShutdownRetries.clear()
+  if (retainedShutdownRetryTimer) {
+    clearTimeout(retainedShutdownRetryTimer)
+    retainedShutdownRetryTimer = null
+  }
+}
+
 function retryPersistedSshShutdowns(connectionId: string, provider: IPtyProvider): void {
   const store = activePtyStore
   if (!store || typeof store.getSshRemotePtyLeases !== 'function') {
@@ -1555,6 +1585,7 @@ function retryPersistedSshShutdowns(connectionId: string, provider: IPtyProvider
         durable: true,
         attempts: 0,
         shutdownAccepted: false,
+        requireExitProof: false,
         nextRetryAt: 0,
         inFlight: null,
         lastError: null,
@@ -3923,37 +3954,22 @@ export function registerPtyHandlers(
         // Retain ownership and fail closed so reconnect can verify and retry.
         return false
       }
-      let providerExitObserved = false
       try {
-        providerExitObserved = await shutdownProviderAndDetectExit(provider, ptyId, {
-          immediate: true,
-          keepHistory: opts?.keepHistory ?? false
+        await shutdownPtyWithRetainedOwnership({
+          id: ptyId,
+          connectionId,
+          provider,
+          requireExitProof: true,
+          options: {
+            immediate: true,
+            keepHistory: opts?.keepHistory ?? false
+          }
         })
       } catch (err) {
-        if (!isPtyAlreadyGoneError(err)) {
-          console.warn(
-            `[pty] Failed to stop PTY ${ptyId}: ${err instanceof Error ? err.message : String(err)}`
-          )
-          return false
-        }
-      }
-      try {
-        if (!(await verifyPtyStopped(provider, ptyId, opts))) {
-          return false
-        }
-      } catch (err) {
         console.warn(
-          `[pty] Failed to verify PTY ${ptyId} stopped: ${
-            err instanceof Error ? err.message : String(err)
-          }`
+          `[pty] Failed to stop PTY ${ptyId}: ${err instanceof Error ? err.message : String(err)}`
         )
         return false
-      }
-      finishPtyShutdown(ptyId, connectionId, store)
-      if (!providerExitObserved) {
-        runtime?.onPtyExit(ptyId, -1)
-        rememberSyntheticKillExit(ptyId)
-        sendPtyExitToRenderer({ id: ptyId, code: -1 })
       }
       return true
     },
@@ -5617,11 +5633,20 @@ export function registerPtyHandlers(
     const provider = parsedSshId
       ? sshProviders.get(parsedSshId.connectionId)
       : tryGetProviderForPty(args.id)
-    if (!provider?.hasPty) {
+    if (!provider) {
       return null
     }
     try {
-      return provider.hasPty(args.id)
+      if (provider.hasPty) {
+        return provider.hasPty(args.id)
+      }
+      if (!parsedSshId && typeof ownedConnectionId !== 'string') {
+        return null
+      }
+      // Why: overflow recovery is a one-shot exceptional path. SSH has no
+      // synchronous hasPty API, so its generation-qualified inventory is the
+      // authoritative fallback instead of discarding a real pre-handler exit.
+      return (await provider.listProcesses()).some((session) => session.id === args.id)
     } catch {
       // Why: liveness is only allowed to close panes on an authoritative false.
       return null

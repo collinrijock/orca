@@ -46,6 +46,7 @@ function killPtyForShutdown(managed: ManagedPty, signal: 'SIGTERM' | 'SIGKILL'):
   } else {
     managed.pty.kill(signal)
   }
+  managed.shutdownKillAccepted = true
 }
 
 // Why: node-pty is a native addon that may not be installed on the remote.
@@ -82,6 +83,7 @@ type ManagedPty = {
   /** Timer for SIGKILL fallback after a graceful SIGTERM shutdown. */
   killTimer?: ReturnType<typeof setTimeout>
   windowsShutdownKillIssued?: boolean
+  shutdownKillAccepted?: boolean
   /** True once disposeManagedPty has run. Prevents double-dispose (onExit + an
    *  explicit shutdown can both fire for the same PTY) and converts post-dispose
    *  entry-point calls into a clean "not found" error instead of a silent no-op
@@ -1063,6 +1065,9 @@ export class PtyHandler {
   private async listProcesses(): Promise<PtyProcessSummary[]> {
     const results: PtyProcessSummary[] = []
     for (const [id, managed] of this.ptys) {
+      if (managed.shutdownKillAccepted && this.reapManagedPtyIfProvablyExited(managed)) {
+        continue
+      }
       const title =
         (await getForegroundProcessName(managed.pty.pid, managed.pty.process || null)) || 'shell'
       results.push({

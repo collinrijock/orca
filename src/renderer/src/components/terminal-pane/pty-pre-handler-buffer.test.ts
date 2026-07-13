@@ -115,6 +115,28 @@ describe('pre-handler PTY buffer', () => {
     expect(handler).toHaveBeenCalledWith(-1)
   })
 
+  it('retains an evicted exit through unknown liveness and retries authoritative proof', async () => {
+    for (let index = 0; index <= 64; index += 1) {
+      bufferPreHandlerPtyExit(`pty-exit-${index}`, index)
+    }
+    const handler = vi.fn()
+    const hasPty = vi.fn().mockResolvedValueOnce(null).mockResolvedValueOnce(false)
+
+    reconcilePreHandlerPtyExitAfterOverflow('pty-exit-0', hasPty, handler, () => true)
+    await Promise.resolve()
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(handler).not.toHaveBeenCalled()
+
+    reconcilePreHandlerPtyExitAfterOverflow('pty-exit-0', hasPty, handler, () => true)
+    await Promise.resolve()
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(hasPty).toHaveBeenCalledTimes(2)
+    expect(handler).toHaveBeenCalledWith(-1)
+  })
+
   it('caps eviction tombstones at exactly 1024 ids without probing unrelated PTYs', async () => {
     const prefix = 'pty-exact-tombstone-cap-'
     const hasPty = vi.fn(async () => false)

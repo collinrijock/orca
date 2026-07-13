@@ -1242,6 +1242,28 @@ describe('LocalPtyProvider', () => {
       expect(newEntries[0]).toHaveProperty('id')
       expect(newEntries[0]).toHaveProperty('title', 'zsh')
     })
+
+    it('reaps delayed OS death without reissuing an accepted Windows close', async () => {
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+      const kill = vi.fn()
+      const destroy = vi.fn(() => kill())
+      const exits = vi.fn()
+      spawnMock.mockReturnValue({ ...mockProc, kill, destroy })
+      isLocalPtyProcessProvablyExitedMock.mockReturnValueOnce(false).mockReturnValueOnce(true)
+      provider.onExit(exits)
+      const { id } = await provider.spawn({ cols: 80, rows: 24 })
+
+      await provider.shutdown(id, { immediate: true })
+      expect(provider.hasPty(id)).toBe(true)
+      await expect(provider.listProcesses()).resolves.not.toEqual(
+        expect.arrayContaining([expect.objectContaining({ id })])
+      )
+
+      expect(provider.hasPty(id)).toBe(false)
+      expect(kill).toHaveBeenCalledOnce()
+      expect(destroy).not.toHaveBeenCalled()
+      expect(exits).toHaveBeenCalledWith({ id, code: -1 })
+    })
   })
 
   describe('getDefaultShell', () => {

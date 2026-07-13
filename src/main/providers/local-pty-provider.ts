@@ -154,6 +154,7 @@ function disposePtyListeners(id: string): void {
 
 const ptyShutdownInProgress = new Set<string>()
 const ptyExitDuringShutdown = new Map<string, number>()
+const ptyShutdownAcceptedAwaitingExit = new Set<string>()
 
 function runPtyCleanup(id: string): void {
   const cleanup = ptyCleanupCallbacks.get(id)
@@ -202,6 +203,7 @@ function clearPtyState(id: string, expectedProc?: pty.IPty): boolean {
   ptyLoadGeneration.delete(id)
   ptyShutdownInProgress.delete(id)
   ptyExitDuringShutdown.delete(id)
+  ptyShutdownAcceptedAwaitingExit.delete(id)
   return true
 }
 
@@ -960,6 +962,9 @@ export class LocalPtyProvider implements IPtyProvider {
     if (!exitObserved) {
       exitObserved = isLocalPtyProcessProvablyExited(proc.pid)
     }
+    if (nativeKillAccepted && !exitObserved) {
+      ptyShutdownAcceptedAwaitingExit.add(id)
+    }
     // Why: kill returning is request acceptance, not process-death proof. Keep
     // the native entry and listeners until onExit (possibly async) confirms it.
     runPtyCleanup(id)
@@ -972,6 +977,21 @@ export class LocalPtyProvider implements IPtyProvider {
         cb({ id, code: exitCode })
       }
     }
+  }
+
+  private reapTrackedPtyIfProvablyExited(id: string, proc: pty.IPty): boolean {
+    if (ptyProcesses.get(id) !== proc || !isLocalPtyProcessProvablyExited(proc.pid)) {
+      return false
+    }
+    // Why: node-pty can omit onExit after an accepted close. Inventory is an
+    // authoritative retry probe, so ESRCH must perform the same exact cleanup.
+    clearPtyState(id, proc)
+    destroyPtyProcess(proc, { alreadyKilled: true })
+    this.opts.onExit?.(id, -1)
+    for (const cb of exitListeners) {
+      cb({ id, code: -1 })
+    }
+    return true
   }
 
   async sendSignal(id: string, signal: string): Promise<void> {
@@ -1097,12 +1117,22 @@ export class LocalPtyProvider implements IPtyProvider {
   }
 
   async listProcesses(): Promise<PtyProcessInfo[]> {
-    return Array.from(ptyProcesses.entries()).map(([id, proc]) => ({
-      id,
-      cwd: '',
-      title: proc.process || ptyShellName.get(id) || 'shell',
-      ...(ptyTerminalHandle.get(id) ? { terminalHandle: ptyTerminalHandle.get(id) } : {})
-    }))
+    const processes: PtyProcessInfo[] = []
+    for (const [id, proc] of ptyProcesses) {
+      if (
+        ptyShutdownAcceptedAwaitingExit.has(id) &&
+        this.reapTrackedPtyIfProvablyExited(id, proc)
+      ) {
+        continue
+      }
+      processes.push({
+        id,
+        cwd: '',
+        title: proc.process || ptyShellName.get(id) || 'shell',
+        ...(ptyTerminalHandle.get(id) ? { terminalHandle: ptyTerminalHandle.get(id) } : {})
+      })
+    }
+    return processes
   }
 
   async getDefaultShell(): Promise<string> {

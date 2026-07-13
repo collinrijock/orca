@@ -26,6 +26,7 @@ const PRE_HANDLER_PTY_EXIT_MAX_PTYS = 64
 // window avoids turning one overflow into liveness IPC for unrelated panes.
 const PRE_HANDLER_PTY_EVICTED_EXIT_MAX_PTYS = 1_024
 const preHandlerPtyEvictedExitIds = new Set<string>()
+const preHandlerPtyEvictedExitProbes = new Set<string>()
 // Why: legit pre-attach windows drain within milliseconds and hold little
 // data. Sustained accumulation means a pane lost its data handler (the
 // frozen-pane detach/attach race) — leave a breadcrumb for trace capture.
@@ -105,6 +106,7 @@ export function bufferPreHandlerPtyExit(ptyId: string, code: number): void {
         const oldestEvictedId = preHandlerPtyEvictedExitIds.values().next().value
         if (typeof oldestEvictedId === 'string') {
           preHandlerPtyEvictedExitIds.delete(oldestEvictedId)
+          preHandlerPtyEvictedExitProbes.delete(oldestEvictedId)
         }
       }
     }
@@ -128,18 +130,30 @@ export function reconcilePreHandlerPtyExitAfterOverflow(
   handler: (code: number) => void,
   isCurrent: () => boolean
 ): void {
-  if (!preHandlerPtyEvictedExitIds.delete(ptyId) || !hasPty) {
+  if (
+    !preHandlerPtyEvictedExitIds.has(ptyId) ||
+    !hasPty ||
+    preHandlerPtyEvictedExitProbes.has(ptyId)
+  ) {
     return
   }
+  preHandlerPtyEvictedExitProbes.add(ptyId)
   // Why: the bounded exit buffer may evict a legitimate pre-registration exit.
-  // One targeted readback after overflow recovers truth without retaining IDs.
+  // Keep its tombstone through unknown liveness so reconnect can retry proof.
   void hasPty(ptyId)
     .then((alive) => {
-      if (alive === false && isCurrent()) {
+      if (!isCurrent() || !preHandlerPtyEvictedExitIds.has(ptyId) || alive === null) {
+        return
+      }
+      preHandlerPtyEvictedExitIds.delete(ptyId)
+      if (alive === false) {
         handler(-1)
       }
     })
     .catch(() => {})
+    .finally(() => {
+      preHandlerPtyEvictedExitProbes.delete(ptyId)
+    })
 }
 
 export function clearPreHandlerPtyData(ptyId: string): void {
@@ -151,5 +165,6 @@ export function clearPreHandlerPtyState(ptyId: string): void {
   preHandlerPtyData.delete(ptyId)
   preHandlerPtyExit.delete(ptyId)
   preHandlerPtyEvictedExitIds.delete(ptyId)
+  preHandlerPtyEvictedExitProbes.delete(ptyId)
   warnedLostHandlerPtyIds.delete(ptyId)
 }

@@ -1364,6 +1364,39 @@ describe('PtyHandler', () => {
     }
   })
 
+  it('reaps delayed OS death from inventory without reissuing an accepted Windows close', async () => {
+    const platformDescriptor = Object.getOwnPropertyDescriptor(process, 'platform')
+    const mockKill = vi.fn()
+    const destroy = vi.fn(() => mockKill())
+    const proc = {
+      ...mockPtyInstance,
+      pid: process.pid,
+      kill: mockKill,
+      destroy,
+      onData: vi.fn(),
+      onExit: vi.fn()
+    }
+    mockPtySpawn.mockReturnValue(proc)
+
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    try {
+      await dispatcher.callRequest('pty.spawn', {})
+      await dispatcher.callRequest('pty.shutdown', { id: 'pty-1', immediate: true })
+      expect(handler.activePtyCount).toBe(1)
+
+      proc.pid = 2_147_483_647
+      await expect(dispatcher.callRequest('pty.listProcesses')).resolves.toEqual([])
+
+      expect(handler.activePtyCount).toBe(0)
+      expect(mockKill).toHaveBeenCalledOnce()
+      expect(destroy).not.toHaveBeenCalled()
+    } finally {
+      if (platformDescriptor) {
+        Object.defineProperty(process, 'platform', platformDescriptor)
+      }
+    }
+  })
+
   it('does not reissue an accepted Windows graceful shutdown', async () => {
     const platformDescriptor = Object.getOwnPropertyDescriptor(process, 'platform')
     let onExitCb: ((event: { exitCode: number }) => void) | null = null
