@@ -87,6 +87,14 @@ function bottomBarTuiScript(runId: string): string {
   // Why: redraw ONLY on SIGWINCH, like an idle Claude Code session. Periodic
   // output would trigger the foreground grid-drift check, which heals the
   // desync and masks the bug the field reports hit while idle.
+  //
+  // The bar is illustrative, NOT the assertion target: this spec asserts on
+  // pty:getSize converging to xterm's grid. Do not assert on the bar's printed
+  // cols — Node's `process.stdout.on('resize')` is unreliable under Windows
+  // ConPTY (no SIGWINCH; a long-lived process can miss the notification while
+  // the OS PTY is in fact resized), so a bar-content check flakes there even
+  // though delivery succeeded (confirmed via base-vs-fix A/B + fresh-process
+  // console read on Windows).
   return [
     'const draw = () => {',
     '  const rows = process.stdout.rows || 24',
