@@ -14,14 +14,13 @@ import {
   iterateTerminalInputChunks
 } from '../../../../shared/terminal-input'
 import { isRuntimeOwnedSshTargetId } from '../../../../shared/execution-host'
+import { ensurePtyDispatcher, getEagerPtyBufferHandle } from './pty-dispatcher'
 import {
   ptyDataHandlers,
-  ptyReplayHandlers,
   ptyExitHandlers,
-  ptyTeardownHandlers,
-  ensurePtyDispatcher,
-  getEagerPtyBufferHandle
-} from './pty-dispatcher'
+  ptyReplayHandlers,
+  ptyTeardownHandlers
+} from './pty-primary-handler-registry'
 import {
   clearPreHandlerPtyState,
   drainPreHandlerPtyData,
