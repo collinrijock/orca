@@ -15,6 +15,7 @@ import {
   type RelayInviteCreatedMessage
 } from './relay-control-protocol'
 import { RelayControlRequests } from './relay-control-requests'
+import type { DeviceCredentialInstallAuthorization } from './relay-control-requests'
 import { answerRelayHostChallenge } from './relay-host-proof'
 
 type RelayControlState = 'idle' | 'opening' | 'proving' | 'active' | 'draining' | 'closed'
@@ -118,6 +119,33 @@ export class RelayControlClient {
 
   revokeDevice(relayDeviceId: string, reqId: string = randomUUID()): Promise<void> {
     return this.requests.revokeDevice(reqId, relayDeviceId, (payload) => this.sendActive(payload))
+  }
+
+  installCredential(input: {
+    reqId: string
+    relayDeviceId: string
+    newResumeTokenHash: string
+    expectedCurrentHash?: string
+    authorization: DeviceCredentialInstallAuthorization
+  }): ReturnType<RelayControlRequests['installCredential']> {
+    const { reqId, ...request } = input
+    return this.requests.installCredential(reqId, request, (payload) => this.sendActive(payload))
+  }
+
+  credentialInstallStatus(
+    relayDeviceId: string,
+    reqId: string
+  ): ReturnType<RelayControlRequests['credentialInstallStatus']> {
+    return this.requests.credentialInstallStatus(reqId, relayDeviceId, (payload) =>
+      this.sendActive(payload)
+    )
+  }
+
+  confirmResume(
+    basisConnId: string,
+    reqId: string
+  ): ReturnType<RelayControlRequests['confirmResume']> {
+    return this.requests.confirmResume(reqId, basisConnId, (payload) => this.sendActive(payload))
   }
 
   closeNow(): void {

@@ -1,5 +1,9 @@
 import { z } from 'zod'
 import type { RawData } from 'ws'
+import {
+  DeviceCredentialInstalledSchema,
+  DeviceResumeConfirmedSchema
+} from '../../../shared/mobile-relay-credential-contract'
 
 const OpaqueIdSchema = z.string().min(1).max(128)
 const Base64Url32ByteSchema = z.string().regex(/^[A-Za-z0-9_-]{43}$/)
@@ -79,6 +83,34 @@ export const RelayDeviceRevokedMessageSchema = z
   .object({ type: z.literal('device-revoked'), reqId: OpaqueIdSchema })
   .strict()
 
+export const RelayDeviceCredentialInstalledMessageSchema = DeviceCredentialInstalledSchema.extend({
+  type: z.literal('device-credential-installed')
+}).strict()
+
+export const RelayDeviceCredentialInstallStatusResultMessageSchema = z.union([
+  z
+    .object({
+      type: z.literal('device-credential-install-status-result'),
+      v: z.literal(1),
+      reqId: OpaqueIdSchema,
+      state: z.literal('not-found')
+    })
+    .strict(),
+  z
+    .object({
+      type: z.literal('device-credential-install-status-result'),
+      v: z.literal(1),
+      reqId: OpaqueIdSchema,
+      state: z.literal('committed'),
+      result: DeviceCredentialInstalledSchema
+    })
+    .strict()
+])
+
+export const RelayDeviceResumeConfirmedMessageSchema = DeviceResumeConfirmedSchema.extend({
+  type: z.literal('device-resume-confirmed')
+}).strict()
+
 export const RelayControlErrorMessageSchema = z
   .object({
     type: z.literal('control-error'),
@@ -92,6 +124,15 @@ export type RelayHostHelloAckMessage = z.infer<typeof RelayHostHelloAckMessageSc
 export type RelayConnectionOpenMessage = z.infer<typeof RelayConnectionOpenMessageSchema>
 export type RelayDrainMessage = z.infer<typeof RelayDrainMessageSchema>
 export type RelayInviteCreatedMessage = z.infer<typeof RelayInviteCreatedMessageSchema>
+export type RelayDeviceCredentialInstalledMessage = z.infer<
+  typeof RelayDeviceCredentialInstalledMessageSchema
+>
+export type RelayDeviceCredentialInstallStatusResultMessage = z.infer<
+  typeof RelayDeviceCredentialInstallStatusResultMessageSchema
+>
+export type RelayDeviceResumeConfirmedMessage = z.infer<
+  typeof RelayDeviceResumeConfirmedMessageSchema
+>
 
 export function parseRelayControlMessage(raw: RawData): Record<string, unknown> | null {
   try {

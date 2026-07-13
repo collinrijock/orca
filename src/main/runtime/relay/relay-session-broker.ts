@@ -1,10 +1,18 @@
 import type WebSocket from 'ws'
 import type { OrcaCloudAuthConfig } from '../../orca-profiles/profile-cloud-auth-config'
 import type { PairingRelay } from '../../../shared/mobile-relay-pairing-offer'
+import type {
+  DeviceCredentialInstalled,
+  DeviceCredentialInstallStatusResult,
+  DeviceResumeConfirmed,
+  MobileRelayEndpoint,
+  PairingProvisionRelayParams
+} from '../../../shared/mobile-relay-credential-contract'
 import type { E2EEKeypair } from '../e2ee-keypair'
 import type { MobileSocketWiring } from '../rpc/mobile-socket-wiring'
 import { CloudRelayTransport } from '../rpc/relay-transport'
 import { RelayControlClient } from './relay-control-client'
+import type { DeviceCredentialInstallAuthorization } from './relay-control-requests'
 import {
   deriveRelayHostId,
   exchangeRelayAuthorization,
@@ -84,6 +92,21 @@ export class RelaySessionBroker {
     return `${identity.userId}\0${identity.profileId}\0${identity.organizationId}`
   }
 
+  get endpoint(): MobileRelayEndpoint | null {
+    const assignment = this.assignment
+    if (!assignment) {
+      return null
+    }
+    return {
+      v: 1,
+      directorUrl: this.options.authConfig.relayDirectorUrl,
+      cellUrl: assignment.cellUrl,
+      assignmentEpoch: assignment.assignmentEpoch,
+      relayHostId: this.relayHostId,
+      e2eeFraming: 2
+    }
+  }
+
   createInvite(relayDeviceId: string): ReturnType<RelayControlClient['createInvite']> {
     if (!this.control) {
       return Promise.reject(new Error('relay_control_not_active'))
@@ -115,6 +138,47 @@ export class RelaySessionBroker {
       return Promise.reject(new Error('relay_control_not_active'))
     }
     return this.control.revokeDevice(relayDeviceId, reqId)
+  }
+
+  async installCredential(
+    relayDeviceId: string,
+    params: PairingProvisionRelayParams,
+    authorization: DeviceCredentialInstallAuthorization
+  ): Promise<DeviceCredentialInstalled> {
+    if (!this.control) {
+      throw new Error('relay_control_not_active')
+    }
+    const message = await this.control.installCredential({
+      relayDeviceId,
+      authorization,
+      ...params
+    })
+    this.assertCurrent()
+    const { type: _type, ...result } = message
+    return result
+  }
+
+  async credentialInstallStatus(
+    relayDeviceId: string,
+    reqId: string
+  ): Promise<DeviceCredentialInstallStatusResult> {
+    if (!this.control) {
+      throw new Error('relay_control_not_active')
+    }
+    const message = await this.control.credentialInstallStatus(relayDeviceId, reqId)
+    this.assertCurrent()
+    const { type: _type, ...result } = message
+    return result
+  }
+
+  async confirmResume(basisConnId: string, reqId: string): Promise<DeviceResumeConfirmed> {
+    if (!this.control) {
+      throw new Error('relay_control_not_active')
+    }
+    const message = await this.control.confirmResume(basisConnId, reqId)
+    this.assertCurrent()
+    const { type: _type, ...result } = message
+    return result
   }
 
   closeNow(): void {

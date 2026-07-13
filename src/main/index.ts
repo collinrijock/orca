@@ -2207,7 +2207,9 @@ app.whenReady().then(async () => {
       desktopRelayService = relayService
       runtimeRpc.setMobileRelayPairingProvider({
         createPairingRelay: (relayDeviceId) => relayService.createPairingRelay(relayDeviceId),
-        onDeviceRevokeQueued: (item) => relayService.onDeviceRevokeQueued(item)
+        onDeviceRevokeQueued: (item) => relayService.onDeviceRevokeQueued(item),
+        getEndpoints: (context, params) => relayService.getEndpoints(context, params),
+        provisionRelay: (context, params) => relayService.provisionRelay(context, params)
       })
       relayService.start()
     } catch (error) {

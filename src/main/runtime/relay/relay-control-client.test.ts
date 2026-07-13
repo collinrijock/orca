@@ -242,6 +242,72 @@ describe('RelayControlClient', () => {
     )
     await expect(invitePromise).resolves.toMatchObject({ reqId: 'invite-req' })
 
+    const installRequest = nextJson(socket)
+    const installPromise = client.installCredential({
+      reqId: 'install-req',
+      relayDeviceId: 'device-1',
+      newResumeTokenHash: 'A'.repeat(43),
+      authorization: { mode: 'relay-basis', basisConnId: 'conn-1' }
+    })
+    await expect(installRequest).resolves.toEqual({
+      type: 'device-credential-install',
+      v: 1,
+      reqId: 'install-req',
+      relayDeviceId: 'device-1',
+      newResumeTokenHash: 'A'.repeat(43),
+      authorization: { mode: 'relay-basis', basisConnId: 'conn-1' }
+    })
+    socket.send(
+      JSON.stringify({
+        type: 'device-credential-installed',
+        v: 1,
+        reqId: 'install-req',
+        authorizationMode: 'relay-basis',
+        currentVersion: 1,
+        resumeExpiresAt: Date.now() + 60_000
+      })
+    )
+    await expect(installPromise).resolves.toMatchObject({ currentVersion: 1 })
+
+    const statusRequest = nextJson(socket)
+    const statusPromise = client.credentialInstallStatus('device-1', 'install-req')
+    await expect(statusRequest).resolves.toEqual({
+      type: 'device-credential-install-status',
+      v: 1,
+      reqId: 'install-req',
+      relayDeviceId: 'device-1'
+    })
+    socket.send(
+      JSON.stringify({
+        type: 'device-credential-install-status-result',
+        v: 1,
+        reqId: 'install-req',
+        state: 'not-found'
+      })
+    )
+    await expect(statusPromise).resolves.toMatchObject({ state: 'not-found' })
+
+    const confirmationRequest = nextJson(socket)
+    const confirmationPromise = client.confirmResume('conn-2', 'confirm-req')
+    await expect(confirmationRequest).resolves.toEqual({
+      type: 'device-resume-confirm',
+      v: 1,
+      reqId: 'confirm-req',
+      basisConnId: 'conn-2'
+    })
+    socket.send(
+      JSON.stringify({
+        type: 'device-resume-confirmed',
+        v: 1,
+        reqId: 'confirm-req',
+        currentVersion: 1,
+        acceptedAs: 'current',
+        renewed: true,
+        resumeExpiresAt: Date.now() + 60_000
+      })
+    )
+    await expect(confirmationPromise).resolves.toMatchObject({ renewed: true })
+
     socket.send(JSON.stringify({ type: 'drain', graceMs: 5_000, recovery: 'resolve-director' }))
     await vi.waitFor(() => expect(onDrain).toHaveBeenCalledOnce())
   })
