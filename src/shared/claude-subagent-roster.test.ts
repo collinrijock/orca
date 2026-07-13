@@ -32,6 +32,83 @@ describe('claude-subagent-roster', () => {
     expect(roster.get('aprobe1-6d3cb5b5')).toMatchObject({ state: 'idle', teammate: true })
   })
 
+  it('removes a finished workflow lane despite its teammate-shaped id when task-listed', () => {
+    const roster: ClaudeSubagentRoster = new Map()
+    // Why: workflow lanes get name-embedding ids (afinder-C-<hex>) like
+    // teammates, but their SubagentStop payload lists them id-exact as a
+    // subagent task — real teammate lifecycle ids never appear there.
+    upsertWorkingClaudeSubagent(
+      roster,
+      'afinder-C-5d713c0781b7f8d2',
+      { agentType: 'finder-C' },
+      100
+    )
+    finishClaudeSubagent(roster, 'afinder-C-5d713c0781b7f8d2', { listedAsSubagentTask: true })
+    expect(roster.size).toBe(0)
+  })
+
+  it('reclassifies a task-listed teammate-shaped entry as a one-shot', () => {
+    const roster: ClaudeSubagentRoster = new Map()
+    upsertWorkingClaudeSubagent(
+      roster,
+      'av1-streaming-0b1c2d3e',
+      { agentType: 'v1-streaming' },
+      100
+    )
+    foldClaudeBackgroundTasksIntoRoster(
+      roster,
+      [
+        {
+          id: 'av1-streaming-0b1c2d3e',
+          agentType: 'v1-streaming',
+          description: undefined,
+          running: true,
+          teammate: false
+        },
+        {
+          id: 'tteam1',
+          agentType: undefined,
+          description: undefined,
+          running: true,
+          teammate: true
+        }
+      ],
+      200
+    )
+    // A later stop without its own inventory still removes it: the fold
+    // already proved the id is a task id, not a teammate.
+    finishClaudeSubagent(roster, 'av1-streaming-0b1c2d3e')
+    expect(roster.has('av1-streaming-0b1c2d3e')).toBe(false)
+  })
+
+  it('removes teammate-shaped leftovers when a complete inventory lists no teammates', () => {
+    const roster: ClaudeSubagentRoster = new Map()
+    upsertWorkingClaudeSubagent(roster, 'acr-triage-1-c5a0588e', { agentType: 'cr-triage-1' }, 100)
+    finishClaudeSubagent(roster, 'acr-triage-1-c5a0588e')
+    expect(roster.get('acr-triage-1-c5a0588e')).toMatchObject({ state: 'idle' })
+    upsertWorkingClaudeSubagent(roster, 'afix-main-11223344', { agentType: 'fix-main' }, 150)
+
+    // Why: a teams session lists its teammates (even idle) as teammate-typed
+    // tasks; an inventory with none proves these name-shaped rows are dead
+    // workflow lanes, not resumable teammates.
+    foldClaudeBackgroundTasksIntoRoster(
+      roster,
+      [
+        {
+          id: 'aunrelated0000001',
+          agentType: 'general-purpose',
+          description: undefined,
+          running: true,
+          teammate: false
+        }
+      ],
+      200
+    )
+    expect(roster.has('acr-triage-1-c5a0588e')).toBe(false)
+    expect(roster.has('afix-main-11223344')).toBe(false)
+    expect(roster.has('aunrelated0000001')).toBe(true)
+  })
+
   it('re-marks an idle teammate working without resetting startedAt', () => {
     const roster: ClaudeSubagentRoster = new Map()
     upsertWorkingClaudeSubagent(roster, 'aprobe1-6d3cb5b5', { agentType: 'probe1' }, 100)

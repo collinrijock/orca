@@ -149,6 +149,65 @@ describe('claude subagent sidebar row lifecycle', () => {
     ])
   })
 
+  it('drops named workflow lanes instead of retaining them as phantom idle teammates', () => {
+    // Regression for the live-observed 32-row pile: workflow lanes report
+    // name-embedding ids (afinder-C-<hex>, agent_type = the label), which
+    // share the teammate id shape but are one-shots.
+    claudeEvent({ hook_event_name: 'UserPromptSubmit', prompt: 'native chat review (ultracode)' })
+    claudeEvent({
+      hook_event_name: 'SubagentStart',
+      agent_id: 'afinder-C-5d713c0781b7f8d2',
+      agent_type: 'finder-C'
+    })
+    claudeEvent({
+      hook_event_name: 'SubagentStart',
+      agent_id: 'acr-triage-1-c5a0588e7a2e4151',
+      agent_type: 'cr-triage-1'
+    })
+
+    // finder-C finishes; its SubagentStop carries the task inventory that
+    // lists it id-exact as a subagent — proof it is not a teammate.
+    const stopped = claudeEvent({
+      hook_event_name: 'SubagentStop',
+      agent_id: 'afinder-C-5d713c0781b7f8d2',
+      agent_type: 'finder-C',
+      background_tasks: [
+        {
+          id: 'afinder-C-5d713c0781b7f8d2',
+          type: 'subagent',
+          status: 'running',
+          agent_type: 'finder-C'
+        },
+        {
+          id: 'acr-triage-1-c5a0588e7a2e4151',
+          type: 'subagent',
+          status: 'running',
+          agent_type: 'cr-triage-1'
+        }
+      ]
+    })
+    expect(stopped?.payload.subagents).toEqual([
+      expect.objectContaining({ id: 'acr-triage-1-c5a0588e7a2e4151', state: 'working' })
+    ])
+
+    // cr-triage-1 is killed (SubagentStop lost). The lead Stop's complete
+    // inventory lists no teammate-typed task, so the leftover is removed.
+    const stop = claudeEvent({
+      hook_event_name: 'Stop',
+      background_tasks: [
+        {
+          id: 'awf0000000000000zz',
+          type: 'subagent',
+          status: 'running',
+          agent_type: 'general-purpose'
+        }
+      ]
+    })
+    expect(stop?.payload.subagents).toEqual([
+      expect.objectContaining({ id: 'awf0000000000000zz', state: 'working' })
+    ])
+  })
+
   it('removes aborted subagents on the interrupt Stop so the pane can resolve', () => {
     claudeEvent({ hook_event_name: 'UserPromptSubmit', prompt: 'long batch' })
     claudeEvent({

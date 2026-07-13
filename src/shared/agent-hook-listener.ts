@@ -2412,7 +2412,14 @@ function normalizeClaudeSubagentLifecycleEvent(
         Date.now()
       )
     } else {
-      finishClaudeSubagent(roster, agentId)
+      // Why: SubagentStop carries the session's task inventory; a stopping
+      // agent listed id-exact as a subagent task is a workflow/named one-shot
+      // (teammate lifecycle ids never appear there), not a resumable teammate.
+      const stopTasks = readClaudeBackgroundAgentTasks(hookPayload)
+      finishClaudeSubagent(roster, agentId, {
+        listedAsSubagentTask:
+          stopTasks.present && stopTasks.tasks.some((task) => !task.teammate && task.id === agentId)
+      })
       // Why: a blocked child that dies (killed, errored) without another tool
       // event would otherwise pin its permission/question wait on the pane
       // forever — nothing else references that agent again.
