@@ -60,15 +60,18 @@ async function isGitHubAuthenticated(
   connectionId?: string | null,
   options: HostedReviewExecutionOptions = {}
 ): Promise<boolean> {
-  // Why: a GHES repo authenticates against its own custom host, so a hardcoded
-  // github.com probe reports "not authenticated" for Enterprise users (#8312).
-  // Resolve the repo's actual GitHub host, defaulting to github.com.
-  const enterprise = await getEnterpriseGitHubRepoSlug(repoPath, connectionId, options)
-  const hostname = enterprise?.host ?? 'github.com'
+  // Why: a GHES remote is only routed to the GitHub provider once detection has
+  // confirmed gh is authenticated to its enterprise host, so a non-null slug
+  // already means authenticated — skip a redundant, rate-limited gh probe.
+  // Reaching the github.com check below therefore means the remote is github.com
+  // (its own custom host would have resolved above) (#8312).
+  if (await getEnterpriseGitHubRepoSlug(repoPath, connectionId, options)) {
+    return true
+  }
   await acquire()
   try {
     await ghExecFileAsync(
-      ['auth', 'status', '--hostname', hostname],
+      ['auth', 'status', '--hostname', 'github.com'],
       connectionId ? {} : { cwd: repoPath, ...getHostedReviewLocalGitOptions(options) }
     )
     return true

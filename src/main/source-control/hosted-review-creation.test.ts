@@ -388,11 +388,9 @@ describe('createHostedReview', () => {
       url: 'https://github.com/acme/orca/pull/12'
     })
 
-    // The auth probe must target the GHES host, not the hardcoded github.com.
-    expect(ghExecFileAsyncMock).toHaveBeenCalledWith(
-      ['auth', 'status', '--hostname', 'github.acme-corp.com'],
-      { cwd: '/repo' }
-    )
+    // Detection already confirmed gh is authed to the GHES host, so the auth
+    // gate must not fire a second (rate-limited) gh probe.
+    expect(ghExecFileAsyncMock).not.toHaveBeenCalled()
     expect(createGitHubPullRequestMock).toHaveBeenCalled()
     expect(createGiteaPullRequestMock).not.toHaveBeenCalled()
   })
@@ -704,11 +702,9 @@ describe('getHostedReviewCreationEligibility', () => {
       nextAction: null
     })
 
-    // The auth gate must probe the GHES host, not the hardcoded github.com.
-    expect(ghExecFileAsyncMock).toHaveBeenCalledWith(
-      ['auth', 'status', '--hostname', 'github.acme-corp.com'],
-      { cwd: '/repo' }
-    )
+    // Enterprise auth was already confirmed during detection; the gate must not
+    // fire a redundant gh probe.
+    expect(ghExecFileAsyncMock).not.toHaveBeenCalled()
   })
 
   it('resolves remote eligibility through SSH repo metadata without generating PR copy', async () => {
