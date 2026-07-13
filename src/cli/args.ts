@@ -14,7 +14,7 @@ export type CommandSpec = {
   aliases?: string[][]
   argumentMode?: 'parsed' | 'passthrough'
   // Why: commands that remove user state/configuration or terminate a workload
-  // must not be suggested from a benign mistake via agent nextSteps. #6303
+  // must never be emitted through agent-facing typo recovery. #6303
   destructive?: boolean
   summary: string
   usage: string

@@ -65,6 +65,12 @@ const destructiveProductionPaths = [
   'worktree rm'
 ]
 
+const destructiveProductionSuggestions = new Set(
+  COMMAND_SPECS.filter((spec) => spec.destructive)
+    .flatMap((spec) => [spec.path, ...(spec.aliases ?? [])])
+    .map((path) => path.join(' '))
+)
+
 describe('levenshtein', () => {
   it('returns 0 for identical strings', () => {
     expect(levenshtein('rm', 'rm')).toBe(0)
@@ -81,16 +87,6 @@ describe('levenshtein', () => {
 })
 
 describe('suggestCommands', () => {
-  it('suggests the closest command for a near-miss verb', () => {
-    expect(suggestCommands(specs, ['worktree', 'remov'])).toContain('worktree rm')
-  })
-
-  it('includes alias paths among suggestions', () => {
-    // `worktree remove` is the alias; a typo near it should surface it (an exact
-    // match would resolve as a real command, not trigger a suggestion).
-    expect(suggestCommands(specs, ['worktree', 'remov'])).toContain('worktree remove')
-  })
-
   it('returns nothing for a wildly-off token', () => {
     expect(suggestCommands(specs, ['worktree', 'zzzzz'])).toEqual([])
   })
@@ -108,51 +104,13 @@ describe('suggestCommands', () => {
     expect(result[0]).toBe('terminal send')
   })
 
-  it('never suggests a destructive command for a benign non-destructive typo', () => {
-    // `worktree move` sits distance 2 from `worktree remove`; without the
-    // guard it would sole-suggest an irreversible delete on blind retry. #6303
-    const result = suggestCommands(specs, ['worktree', 'move'])
-    expect(result).not.toContain('worktree remove')
-    expect(result).not.toContain('worktree rm')
-    expect(result).not.toContain('worktree delete')
-  })
-
-  it('still suggests remove for a near-miss of a destructive verb', () => {
-    const result = suggestCommands(specs, ['worktree', 'remov'])
-    expect(result).toContain('worktree rm')
-    expect(result).toContain('worktree remove')
-  })
-
-  it('still suggests delete for a near-miss of the delete alias', () => {
-    expect(suggestCommands(specs, ['worktree', 'delet'])).toContain('worktree delete')
-  })
-
-  it('guards destructive commands outside the delete-family via the spec flag', () => {
-    // `emulator ball` is a benign token, distance 2 from the flagged `emulator
-    // kill` — close enough to otherwise rank, so the guard must exclude it.
-    expect(suggestCommands(specs, ['emulator', 'ball'])).not.toContain('emulator kill')
-    // A genuine near-miss of the destructive verb still recovers.
-    expect(suggestCommands(specs, ['emulator', 'kil'])).toContain('emulator kill')
-  })
-
-  it('does not unlock one destructive command with a typo of another destructive verb', () => {
-    expect(suggestCommands(specs, ['worktree', 'kll'])).not.toContain('worktree rm')
-  })
-
-  it('does not treat a benign one-character substitution as destructive intent', () => {
-    expect(suggestCommands(specs, ['emulator', 'fill'])).not.toContain('emulator kill')
-  })
-
-  it('does not infer destructive intent from a one-character abbreviation', () => {
-    expect(suggestCommands(specs, ['worktree', 'r'])).not.toContain('worktree rm')
-  })
-
-  it('recovers a misspelled parent when the destructive verb is exact', () => {
-    expect(suggestCommands(specs, ['emulato', 'kill'])).toContain('emulator kill')
-  })
-
-  it('recovers a repeated trailing character in a destructive verb', () => {
-    expect(suggestCommands(specs, ['emulator', 'killl'])).toContain('emulator kill')
+  it.each([
+    ['worktree', 'remov'],
+    ['worktree', 'delet'],
+    ['emulator', 'kil'],
+    ['emulato', 'kill']
+  ])('never suggests destructive commands for %s %s', (...commandPath) => {
+    expect(suggestCommands(specs, commandPath)).toEqual([])
   })
 
   it('still recovers non-destructive near-misses', () => {
@@ -166,32 +124,23 @@ describe('production destructive command registry', () => {
     expect(spec?.destructive).toBe(true)
   })
 
-  it('does not suggest orchestration reset for a benign typo', () => {
-    expect(suggestCommands(COMMAND_SPECS, ['orchestration', 'result'])).not.toContain(
-      'orchestration reset'
-    )
-  })
-
-  it('does not suggest emulator kill for a benign typo', () => {
-    expect(suggestCommands(COMMAND_SPECS, ['emulator', 'ball'])).not.toContain('emulator kill')
-    expect(suggestCommands(COMMAND_SPECS, ['emulator', 'fill'])).not.toContain('emulator kill')
-  })
-
-  it('does not unlock worktree removal with a typo of emulator kill', () => {
-    expect(suggestCommands(COMMAND_SPECS, ['worktree', 'kll'])).not.toContain('worktree rm')
-  })
-
-  it('still suggests a destructive command for a near-miss of its verb', () => {
-    expect(suggestCommands(COMMAND_SPECS, ['emulator', 'kil'])).toContain('emulator kill')
+  it.each([
+    ['worktree', 'remov'],
+    ['emulator', 'kil'],
+    ['orchestration', 'rese']
+  ])('never suggests a production destructive command for %s %s', (...commandPath) => {
+    for (const suggestion of suggestCommands(COMMAND_SPECS, commandPath)) {
+      expect(destructiveProductionSuggestions).not.toContain(suggestion)
+    }
   })
 })
 
 describe('unknownCommandData', () => {
-  it('produces a human nextSteps line when a suggestion exists', () => {
-    const data = unknownCommandData(specs, ['worktree', 'remov'])
-    expect(data.suggestions).toContain('worktree rm')
+  it('produces a human nextSteps line for a safe suggestion', () => {
+    const data = unknownCommandData(specs, ['worktree', 'lst'])
+    expect(data.suggestions).toContain('worktree list')
     expect(data.nextSteps[0]).toContain('Did you mean')
-    expect(data.nextSteps[0]).toContain('orca worktree rm')
+    expect(data.nextSteps[0]).toContain('orca worktree list')
   })
 
   it('produces empty nextSteps when nothing is close', () => {
@@ -200,9 +149,9 @@ describe('unknownCommandData', () => {
     expect(data.nextSteps).toEqual([])
   })
 
-  it('does not route a benign typo into a destructive nextStep', () => {
-    const data = unknownCommandData(specs, ['worktree', 'move'])
-    expect(data.suggestions).not.toContain('worktree remove')
-    expect(data.nextSteps.join(' ')).not.toContain('remove')
+  it('does not emit nextSteps for a destructive typo', () => {
+    const data = unknownCommandData(specs, ['worktree', 'remov'])
+    expect(data.suggestions).toEqual([])
+    expect(data.nextSteps).toEqual([])
   })
 })

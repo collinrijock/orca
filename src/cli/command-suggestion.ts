@@ -6,34 +6,6 @@ import { specPaths } from './args'
 const SUGGESTION_THRESHOLD = 3
 const MAX_SUGGESTIONS = 3
 
-function finalToken(path: string[]): string {
-  return path.at(-1) ?? ''
-}
-
-function confidentlyMatchesDestructiveVerb(inputToken: string, verb: string): boolean {
-  if (inputToken === verb) {
-    return true
-  }
-  // Why: substitutions can turn benign verbs into dangerous ones (`fill`→`kill`),
-  // and tiny prefixes like `r` do not establish intent for terse verbs like `rm`.
-  if (Math.min(inputToken.length, verb.length) < 3) {
-    return false
-  }
-  // Why: destructive recovery only tolerates a clearly truncated/repeated suffix.
-  return (
-    (verb.startsWith(inputToken) && verb.length === inputToken.length + 1) ||
-    (inputToken.startsWith(verb) && inputToken.length === verb.length + 1)
-  )
-}
-
-// Why: intent for one destructive command must not unlock another command whose
-// short path happens to rank nearby (for example, `kill` must not unlock `rm`).
-function intendsDestructiveSpec(inputToken: string, spec: CommandSpec): boolean {
-  return specPaths(spec).some((path) =>
-    confidentlyMatchesDestructiveVerb(inputToken, finalToken(path))
-  )
-}
-
 export type CommandErrorData = {
   suggestions: string[]
   nextSteps: string[]
@@ -75,13 +47,12 @@ function rankByDistance(scored: { label: string; distance: number }[]): string[]
 // Why: same-depth matching avoids suggesting parent groups or unrelated commands.
 export function suggestCommands(specs: CommandSpec[], commandPath: string[]): string[] {
   const input = commandPath.join(' ')
-  const inputToken = finalToken(commandPath)
   const seen = new Set<string>()
   const scored: { label: string; distance: number }[] = []
   for (const spec of specs) {
-    // Why: only surface this destructive command when the user actually reached
-    // for its verb; suggestions are also emitted to agents as next steps. #6303
-    if (spec.destructive && !intendsDestructiveSpec(inputToken, spec)) {
+    // Why: destructive typo recovery has asymmetric risk because agents may run
+    // nextSteps blindly; exact commands still resolve through the normal path.
+    if (spec.destructive) {
       continue
     }
     const candidates = specPaths(spec).map((path) =>

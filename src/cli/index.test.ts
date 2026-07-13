@@ -237,12 +237,21 @@ describe('unknown command surfaces a suggestion', () => {
   })
 
   it('prints did-you-mean for a near-miss command and exits non-zero', async () => {
+    await main(['worktree', 'lst'], '/tmp/repo')
+
+    expect(process.exitCode).toBe(1)
+    const stderr = errorSpy.mock.calls.map((call) => String(call[0])).join('\n')
+    expect(stderr).toContain('Unknown command: worktree lst')
+    expect(stderr).toContain('orca worktree list')
+  })
+
+  it('does not print did-you-mean for a destructive near-miss', async () => {
     await main(['worktree', 'remov'], '/tmp/repo')
 
     expect(process.exitCode).toBe(1)
     const stderr = errorSpy.mock.calls.map((call) => String(call[0])).join('\n')
     expect(stderr).toContain('Unknown command: worktree remov')
-    expect(stderr).toContain('orca worktree')
+    expect(stderr).not.toContain('Did you mean')
   })
 
   it('reports a mistyped pre-command flag without swallowing the command', async () => {
@@ -293,15 +302,15 @@ describe('unknown command surfaces a suggestion', () => {
 
 describe('unknown help command surfaces a suggestion', () => {
   it.each([
-    ['help prefix', ['help', 'worktree', 'remov']],
-    ['help flag', ['worktree', 'remov', '--help']]
+    ['help prefix', ['help', 'worktree', 'lst']],
+    ['help flag', ['worktree', 'lst', '--help']]
   ])('prints did-you-mean for the %s form', async (_label, argv) => {
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
 
     await main(argv, '/tmp/repo')
 
     expect(process.exitCode).toBe(1)
-    expect(logSpy.mock.calls.flat().join('\n')).toContain('Did you mean: orca worktree')
+    expect(logSpy.mock.calls.flat().join('\n')).toContain('Did you mean: orca worktree list')
     logSpy.mockRestore()
     process.exitCode = 0
   })
