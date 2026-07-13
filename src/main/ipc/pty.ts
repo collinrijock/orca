@@ -647,6 +647,9 @@ function attemptRetainedPtyShutdown(retained: RetainedPtyShutdown): Promise<void
       if (ownerMap.get(retained.id) !== retained) {
         return
       }
+      if (retained.provider !== currentProvider) {
+        return
+      }
       if (isPtyAlreadyGoneError(error)) {
         completeRetainedPtyShutdown(retained, false)
         return
@@ -5243,9 +5246,15 @@ export function registerPtyHandlers(
       const ownedConnectionId = ptyOwnership.get(args.id)
       const parsedSshId = ownedConnectionId === undefined ? parseAppSshPtyId(args.id) : null
       const connectionId = ownedConnectionId ?? parsedSshId?.connectionId
-      const retainedRetry = pendingSshShutdownRetries.get(args.id)
+      const retainedRetry = connectionId
+        ? pendingSshShutdownRetries.get(args.id)
+        : pendingLocalShutdownRetries.get(args.id)
       if (retainedRetry?.inFlight) {
         await retainedRetry.inFlight
+        const ownerMap = connectionId ? pendingSshShutdownRetries : pendingLocalShutdownRetries
+        if (ownerMap.get(args.id) === retainedRetry) {
+          throw new Error('PTY shutdown still pending')
+        }
         return
       }
       const provider = connectionId ? sshProviders.get(connectionId) : tryGetProviderForPty(args.id)
