@@ -89,7 +89,7 @@ import {
   registerWorktreeRootsForRepo
 } from './filesystem-auth'
 import { closeLocalWatcherForWorktreePath } from './filesystem-watcher'
-import type { OrcaRuntimeService } from '../runtime/orca-runtime'
+import type { OrcaRuntimeService, RuntimeWorktreeLifecycleEvent } from '../runtime/orca-runtime'
 import { killAllProcessesForWorktree } from '../runtime/worktree-teardown'
 import { clearProviderPtyState, getLocalPtyProvider } from './pty'
 import { removeWorktreeLinkedPaths } from './worktree-symlinks'
@@ -969,7 +969,8 @@ function buildDisconnectedDetectedWorktrees(
 export function registerWorktreeHandlers(
   mainWindow: BrowserWindow,
   store: Store,
-  runtime: OrcaRuntimeService
+  runtime: OrcaRuntimeService,
+  options?: { onWorktreeLifecycle?: (event: RuntimeWorktreeLifecycleEvent) => void }
 ): void {
   // Remove any previously registered handlers so we can re-register them
   // (e.g. when macOS re-activates the app and creates a new window).
@@ -1291,6 +1292,13 @@ export function registerWorktreeHandlers(
         if (isFolderRepo(repo)) {
           notifyWorktreesChanged(mainWindow, repo.id)
         }
+
+        options?.onWorktreeLifecycle?.({
+          kind: 'created',
+          worktreeId: result.worktree.id,
+          path: result.worktree.path,
+          branch: result.worktree.branch
+        })
 
         return result
       })
@@ -1888,7 +1896,13 @@ export function registerWorktreeHandlers(
       })()
       worktreeRemovalsInFlight.set(inFlightKey, { optionsKey, promise: removal })
       try {
-        return await removal
+        const result = await removal
+        options?.onWorktreeLifecycle?.({
+          kind: 'removed',
+          worktreeId: args.worktreeId,
+          path: parseWorktreeId(args.worktreeId).worktreePath
+        })
+        return result
       } finally {
         if (worktreeRemovalsInFlight.get(inFlightKey)?.promise === removal) {
           worktreeRemovalsInFlight.delete(inFlightKey)

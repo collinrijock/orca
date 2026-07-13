@@ -50,6 +50,11 @@ import type { ProjectExecutionRuntimeResolution } from '../shared/project-execut
 import type { StartupCommandDelivery } from '../shared/codex-startup-delivery'
 import type { SleepingAgentLaunchConfig } from '../shared/agent-session-resume'
 import type {
+  PluginPanelActionOutcome,
+  PluginPanelEntry
+} from '../shared/plugins/plugin-panel-bridge'
+import type { PluginConsentRequest } from '../shared/plugins/plugin-consent-request'
+import type {
   LocalhostWorktreeLabelResult,
   LocalhostWorktreeLabelRoute
 } from '../shared/localhost-worktree-labels'
@@ -895,6 +900,70 @@ export type AppApi = {
    *  for Floating Workspace markdown file creation. */
   pickFloatingWorkspaceDirectory: () => Promise<string | null>
 }
+
+/** Panel contribution as surfaced by the main-process plugin service. */
+export type PluginHostPanel = {
+  id: string
+  title: string
+  /** Lucide icon name declared in the plugin manifest. */
+  icon?: string
+  tabKey: `plugin:${string}`
+}
+
+/** `pending` = awaiting (re-)consent; `idle` = enabled, worker not running
+ *  (lazy); `restarting` = waiting for supervised backoff; `errored` = crashed past the restart budget or failed to start;
+ *  `invalid` = unreadable manifest. */
+export type PluginHostStatus =
+  | 'running'
+  | 'restarting'
+  | 'idle'
+  | 'pending'
+  | 'disabled'
+  | 'errored'
+  | 'invalid'
+
+/** Wire shape of plugins:list — must stay assignable from the main-process
+ *  projection in src/main/plugins/plugin-list-projection.ts. */
+export type PluginHostListEntry = {
+  pluginKey: string
+  consentFingerprint: string | null
+  name: string
+  version: string
+  publisher: string
+  description?: string
+  status: PluginHostStatus
+  needsReconsent: boolean
+  error?: string
+  isDev: boolean
+  capabilities: { kind: string; description: string }[]
+  panels: PluginHostPanel[]
+  commands: { id: string; title: string }[]
+  hasWorker: boolean
+  restarts: number
+  source?: {
+    kind: 'local-path' | 'git'
+    reference: string
+    resolvedCommit: string | null
+    contentHash: string
+  }
+}
+
+export type PluginHostLogLine = { ts: number; level: 'info' | 'warn' | 'error'; line: string }
+
+export type PluginHostInstallSource =
+  | { kind: 'local-path'; path: string }
+  | { kind: 'git'; url: string; ref: string }
+
+export type PluginHostInstallResult =
+  | {
+      ok: true
+      pluginKey: string
+      version: string
+      contentHash: string
+      consentFingerprint: string
+      resolvedCommit: string | null
+    }
+  | { ok: false; error: string }
 
 export type PreloadApi = {
   app: AppApi
@@ -3100,6 +3169,38 @@ export type PreloadApi = {
   }
   gitBash: {
     isAvailable: () => Promise<boolean>
+  }
+  plugins: {
+    list: () => Promise<PluginHostListEntry[]>
+    /** Records the consent-dialog answer; approval is keyed to the plugin's
+     *  current capability and trusted-worker fingerprint. */
+    consent: (args: PluginConsentRequest) => Promise<PluginHostListEntry[]>
+    setEnabled: (args: { pluginKey: string; enabled: boolean }) => Promise<PluginHostListEntry[]>
+    /** Returns the panel's CSP-wrapped HTML, or null when the plugin or
+     *  panel is missing/disabled. Rendered only inside a sandboxed iframe. */
+    readPanelEntry: (args: {
+      pluginKey: string
+      panelId: string
+    }) => Promise<PluginPanelEntry | null>
+    invokeCommand: (args: {
+      pluginKey: string
+      commandId: string
+      args?: unknown
+    }) => Promise<unknown>
+    /** Relays a sandboxed panel's bridge request to main, which enforces the
+     *  plugin's consented capabilities before executing. */
+    panelAction: (args: {
+      sessionToken: string
+      action: string
+      params?: unknown
+    }) => Promise<PluginPanelActionOutcome>
+    install: (source: PluginHostInstallSource) => Promise<PluginHostInstallResult>
+    remove: (args: { pluginKey: string }) => Promise<PluginHostListEntry[]>
+    getLogs: (args: { pluginKey: string }) => Promise<PluginHostLogLine[]>
+    /** Re-discovers after settings edits (feature flag, dev paths). */
+    refresh: () => Promise<PluginHostListEntry[]>
+    /** Fires whenever installed plugins, worker states, or panels change. */
+    onChanged: (callback: () => void) => () => void
   }
   agentStatus: {
     /** Listen for agent status updates forwarded from native hook receivers. */

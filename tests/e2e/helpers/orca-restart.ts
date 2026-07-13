@@ -30,7 +30,7 @@ type LaunchedOrca = {
 
 type RestartSession = {
   userDataDir: string
-  launch: () => Promise<LaunchedOrca>
+  launch: (onLaunched?: (app: ElectronApplication) => void) => Promise<LaunchedOrca>
   /** Gracefully close a launch, letting beforeunload flush session state. */
   close: (app: ElectronApplication) => Promise<void>
   /** Remove the shared userDataDir after the test is done. */
@@ -64,13 +64,18 @@ function shouldLaunchHeadful(testInfo: TestInfo): boolean {
   return testInfo.project.metadata.orcaHeadful === true
 }
 
-function launchEnv(userDataDir: string, headful: boolean): NodeJS.ProcessEnv {
+function launchEnv(
+  userDataDir: string,
+  headful: boolean,
+  extraEnv: NodeJS.ProcessEnv
+): NodeJS.ProcessEnv {
   const { ELECTRON_RUN_AS_NODE: _unused, ...cleanEnv } = process.env
   void _unused
   return {
     ...cleanEnv,
     NODE_ENV: 'development',
     ORCA_E2E_USER_DATA_DIR: userDataDir,
+    ...extraEnv,
     ...(headful ? { ORCA_E2E_HEADFUL: '1' } : { ORCA_E2E_HEADLESS: '1' })
   }
 }
@@ -82,7 +87,10 @@ function launchEnv(userDataDir: string, headful: boolean): NodeJS.ProcessEnv {
  * env stripping, headful toggle) so behavior differences between fixtures
  * don't leak in as false positives for persistence bugs.
  */
-export function createRestartSession(testInfo: TestInfo): RestartSession {
+export function createRestartSession(
+  testInfo: TestInfo,
+  options: { extraEnv?: NodeJS.ProcessEnv } = {}
+): RestartSession {
   const mainPath = path.join(process.cwd(), 'out', 'main', 'index.js')
   const userDataDir = mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-restart-'))
   const headful = shouldLaunchHeadful(testInfo)
@@ -95,11 +103,12 @@ export function createRestartSession(testInfo: TestInfo): RestartSession {
     `${JSON.stringify(getE2ECompletedOnboardingProfile(), null, 2)}\n`
   )
 
-  const launch = async (): Promise<LaunchedOrca> => {
+  const launch = async (onLaunched?: (app: ElectronApplication) => void): Promise<LaunchedOrca> => {
     const app = await electron.launch({
       args: getOrcaElectronLaunchArgs(mainPath, headful),
-      env: launchEnv(userDataDir, headful)
+      env: launchEnv(userDataDir, headful, options.extraEnv ?? {})
     })
+    onLaunched?.(app)
     const page = await app.firstWindow({ timeout: 120_000 })
     await page.waitForLoadState('domcontentloaded')
     await page.waitForFunction(() => Boolean(window.__store), null, { timeout: 30_000 })

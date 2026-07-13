@@ -1,0 +1,154 @@
+import {
+  PLUGIN_CAPABILITY_DESCRIPTIONS,
+  type PluginCapabilityKind
+} from '../../shared/plugins/plugin-capabilities'
+import { needsReconsent } from '../../shared/plugins/plugin-consent-state'
+import { pluginPanelTabKey } from '../../shared/plugins/plugin-manifest'
+import type { PluginLockfile } from '../../shared/plugins/plugin-install-lockfile'
+import { isInvalidDiscoveredPlugin } from './plugin-discovery'
+import type { PluginService } from './plugin-service'
+
+/**
+ * Wire projection of installed plugins for the renderer and serve RPC.
+ * `invalid` = unreadable/failed manifest; `pending` = awaiting (re-)consent;
+ * `idle` = enabled with no worker running (lazy); `restarting` = waiting for
+ * supervised backoff; `errored` = crashed past the budget or failed to activate.
+ */
+
+export type PluginListPanelEntry = {
+  id: string
+  title: string
+  icon?: string
+  tabKey: `plugin:${string}`
+}
+
+export type PluginListStatus =
+  | 'running'
+  | 'restarting'
+  | 'idle'
+  | 'pending'
+  | 'disabled'
+  | 'errored'
+  | 'invalid'
+
+export type PluginListEntry = {
+  pluginKey: string
+  /** Opaque identity of the exact capabilities and worker tier shown for review. */
+  consentFingerprint: string | null
+  name: string
+  version: string
+  publisher: string
+  description?: string
+  status: PluginListStatus
+  needsReconsent: boolean
+  error?: string
+  isDev: boolean
+  capabilities: { kind: PluginCapabilityKind; description: string }[]
+  panels: PluginListPanelEntry[]
+  commands: { id: string; title: string }[]
+  hasWorker: boolean
+  restarts: number
+  source?: {
+    kind: 'local-path' | 'git'
+    reference: string
+    resolvedCommit: string | null
+    contentHash: string
+  }
+}
+
+export function buildPluginList(service: PluginService, lock: PluginLockfile): PluginListEntry[] {
+  const consents = {
+    pluginConsents: service.options.getPluginConsents(),
+    disabledPlugins: service.options.getDisabledPlugins()
+  }
+  return service.getDiscovered().map((plugin, index) => {
+    if (isInvalidDiscoveredPlugin(plugin)) {
+      // Why: invalid dev paths can contain private absolute desktop paths;
+      // never project those as identity over desktop/serve transports.
+      const fallbackKey = plugin.pluginKey ?? `invalid-development-plugin-${index + 1}`
+      return {
+        pluginKey: fallbackKey,
+        consentFingerprint: null,
+        name: fallbackKey,
+        version: '0.0.0',
+        publisher: '',
+        status: 'invalid' as const,
+        needsReconsent: false,
+        error: plugin.error,
+        isDev: plugin.isDev,
+        capabilities: [],
+        panels: [],
+        commands: [],
+        hasWorker: false,
+        restarts: 0
+      }
+    }
+    const activation = service.activationState(plugin)
+    const worker = service.workerState(plugin.pluginKey)
+    const activationError = service.activationError(plugin.pluginKey)
+    let status: PluginListStatus
+    if (activation === 'disabled') {
+      status = 'disabled'
+    } else if (activation === 'pending') {
+      status = 'pending'
+    } else if (worker.state === 'errored' || activationError) {
+      status = 'errored'
+    } else if (worker.state === 'restarting') {
+      status = 'restarting'
+    } else {
+      status = worker.state === 'running' ? 'running' : 'idle'
+    }
+    const candidateLockEntry = lock.plugins[plugin.pluginKey]
+    // Why: never show provenance for bytes other than the current executable
+    // identity. Dev overrides execute outside the immutable installed tree and
+    // must never inherit the shadowed install's pinned-source attribution.
+    const lockEntry =
+      candidateLockEntry &&
+      !plugin.isDev &&
+      plugin.contentHash !== null &&
+      candidateLockEntry.contentHash === plugin.contentHash
+        ? candidateLockEntry
+        : undefined
+    return {
+      pluginKey: plugin.pluginKey,
+      consentFingerprint: plugin.consentFingerprint,
+      name: plugin.manifest.name,
+      version: plugin.manifest.version,
+      publisher: plugin.manifest.publisher,
+      ...(plugin.manifest.description ? { description: plugin.manifest.description } : {}),
+      status,
+      needsReconsent: needsReconsent(plugin.pluginKey, plugin.consentFingerprint, consents),
+      ...(status === 'errored'
+        ? { error: activationError ?? 'plugin worker crashed repeatedly' }
+        : {}),
+      isDev: plugin.isDev,
+      capabilities: plugin.manifest.capabilities.map((capability) => ({
+        kind: capability.kind,
+        description: PLUGIN_CAPABILITY_DESCRIPTIONS[capability.kind]
+      })),
+      panels: plugin.manifest.contributes.panels.map((panel) => ({
+        id: panel.id,
+        title: panel.title,
+        ...(panel.icon ? { icon: panel.icon } : {}),
+        tabKey: pluginPanelTabKey(plugin.pluginKey, panel.id)
+      })),
+      commands: plugin.manifest.contributes.commands.map((command) => ({
+        id: command.id,
+        title: command.title
+      })),
+      hasWorker: Boolean(plugin.manifest.main),
+      restarts: worker.restarts,
+      ...(lockEntry
+        ? {
+            source: {
+              kind: lockEntry.source.kind,
+              reference:
+                lockEntry.source.kind === 'git' ? lockEntry.source.url : lockEntry.source.path,
+              resolvedCommit: lockEntry.resolvedCommit,
+              contentHash: lockEntry.contentHash
+            }
+          }
+        : {})
+    }
+  })
+}

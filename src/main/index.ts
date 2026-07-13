@@ -39,7 +39,7 @@ import { initCohortClassifier } from './telemetry/cohort-classifier'
 import { initOnboardingCohortClassifier } from './telemetry/onboarding-cohort-classifier'
 import { resolveConsent } from './telemetry/consent'
 import { triggerStartupNotificationRegistration } from './ipc/notifications'
-import { OrcaRuntimeService } from './runtime/orca-runtime'
+import { OrcaRuntimeService, type RuntimeWorktreeLifecycleEvent } from './runtime/orca-runtime'
 import { OrcaRuntimeRpcServer } from './runtime/runtime-rpc'
 import { awaitRuntimeFileWatcherUnsubscribes } from './runtime/orca-runtime-files'
 import { clearRuntimeMetadataIfOwned } from './runtime/runtime-metadata'
@@ -159,6 +159,14 @@ import { createHeadlessAutomationOutputSnapshotBuffer } from './automations/head
 import { buildHeadlessAutomationWorktreeCreateArgs } from './automations/headless-workspace-create'
 import { AgentAwakeService } from './agent-awake-service'
 import { registerSystemResumeBroadcast } from './system-resume-broadcast'
+import { PluginService } from './plugins/plugin-service'
+import { resolvePluginHostEntryPath } from './plugins/plugin-host-process'
+import { applyPluginConsent, applyPluginEnablement } from './plugins/plugin-enablement'
+import { setPluginServiceForRpc } from './runtime/rpc/methods/plugins'
+import {
+  normalizePluginConsents,
+  normalizePluginIdList
+} from '../shared/plugins/plugin-consent-state'
 import {
   recordCoalescedCrashBreadcrumb,
   recordCrashBreadcrumb
@@ -220,7 +228,17 @@ let unsubscribeSystemResumeBroadcast: (() => void) | null = null
 let watcherShutdownPromise: Promise<void> | null = null
 let watcherShutdownDone = false
 let automations: AutomationService | null = null
+let pluginService: PluginService | null = null
 let keybindings: KeybindingService | null = null
+
+function emitPluginWorktreeLifecycle(event: RuntimeWorktreeLifecycleEvent): void {
+  pluginService?.emitEvent(
+    event.kind === 'created' ? 'worktree.created' : 'worktree.removed',
+    event.kind === 'created'
+      ? { worktreeId: event.worktreeId, path: event.path, branch: event.branch }
+      : { worktreeId: event.worktreeId, path: event.path }
+  )
+}
 // Why: a reload/teardown intent set for one renderer must not leak to a later load.
 // The recovery reload re-fires did-finish-load, so its flag lets the local-PTY orphan
 // sweep spare live sessions across that one reload (#5787).
@@ -953,7 +971,8 @@ function openMainWindow(): BrowserWindow {
         isQuitting = true
         await preserveAgentAuthBeforeRestart({ codexRuntimeHome, claudeRuntimeAuth, store })
       }
-    }
+    },
+    pluginService ?? undefined
   )
   automations.setWebContents(window.webContents)
   automations.start()
@@ -975,7 +994,8 @@ function openMainWindow(): BrowserWindow {
       // that re-fires did-finish-load, so live local sessions survive it (#5787).
       isRecoveryReloadInFlight,
       onBeforeUpdateQuit: () =>
-        preserveAgentAuthBeforeRestart({ codexRuntimeHome, claudeRuntimeAuth, store })
+        preserveAgentAuthBeforeRestart({ codexRuntimeHome, claudeRuntimeAuth, store }),
+      onWorktreeLifecycle: emitPluginWorktreeLifecycle
     }
   )
   rateLimits.attach(window)
@@ -1909,6 +1929,60 @@ app.whenReady().then(async () => {
     prepareForCodexLaunch: prepareCodexRuntimeHomeForLaunch,
     prepareForClaudeLaunch: (target) => claudeRuntimeAuth!.prepareForClaudeLaunch(target)
   })
+  pluginService = new PluginService({
+    userDataPath: app.getPath('userData'),
+    hostVersion: app.getVersion(),
+    // Feature flag: with the setting off, discovery returns nothing and no
+    // plugin code path runs at all.
+    isPluginSystemEnabled: () => store?.getSettings().pluginSystemEnabled === true,
+    getDisabledPlugins: () => normalizePluginIdList(store?.getSettings().disabledPlugins),
+    getPluginConsents: () => normalizePluginConsents(store?.getSettings().pluginConsents),
+    getDevPluginPaths: () => normalizePluginIdList(store?.getSettings().devPluginPaths),
+    hostEntryPath: resolvePluginHostEntryPath(app.getAppPath(), app.isPackaged)
+  })
+  // Why: headless `orca serve` clients reach plugins through the runtime RPC
+  // methods, which resolve the service via this module-level setter. Consent
+  // over RPC uses the same hash-keyed write path as the desktop dialog.
+  setPluginServiceForRpc(pluginService, {
+    applyConsent: (request) =>
+      applyPluginConsent({ store: store!, pluginService: pluginService!, ...request }),
+    applyEnablement: (pluginKey, enabled) =>
+      applyPluginEnablement({ store: store!, pluginService: pluginService!, pluginKey, enabled })
+  })
+  // Lazy kernel: initialize() only discovers manifests — no worker forks, no
+  // panel reads. Zero plugin code runs before an explicit trigger.
+  const pluginSystemStartupStartedAt = performance.now()
+  void pluginService
+    .initialize()
+    .then(() => {
+      logStartupMilestone('plugin-system-initialized', {
+        durationMs: Number((performance.now() - pluginSystemStartupStartedAt).toFixed(2)),
+        installedPlugins: pluginService?.getDiscovered().length ?? 0
+      })
+    })
+    .catch((error) => {
+      console.warn('[plugins] failed to initialize plugin service:', error)
+    })
+  pluginService.onChanged(() => {
+    for (const window of BrowserWindow.getAllWindows()) {
+      if (!window.isDestroyed()) {
+        window.webContents.send('plugins:changed')
+      }
+    }
+  })
+  // v0 plugin event seams: agent status (hook pipeline tap) + worktree
+  // lifecycle (runtime tap). Server-side filtered per plugin subscription.
+  agentHookServer.subscribeEnrichedStatus((enriched) => {
+    pluginService?.emitEvent('agent.status.changed', {
+      worktreeId: enriched.worktreeId ?? null,
+      paneKey: enriched.paneKey,
+      state: enriched.payload.state,
+      receivedAt: enriched.receivedAt
+    })
+  })
+  runtimeService.onWorktreeLifecycle((event) => {
+    emitPluginWorktreeLifecycle(event)
+  })
   starNag = new StarNagService(store, stats)
   starNag.start()
   starNag.registerIpcHandlers()
@@ -2254,6 +2328,13 @@ app.on('will-quit', (e) => {
   // agent_start events with no matching stops.
   starNag?.stop()
   automations?.stop()
+  // Why: plugin hosts are forked children; dispose sends shutdown and
+  // escalates to SIGKILL so they cannot outlive the app. The promise joins
+  // the allSettled barrier below — quitting before it resolves would let
+  // Electron exit first and orphan the hosts.
+  setPluginServiceForRpc(null)
+  const pluginHostShutdown = pluginService?.dispose() ?? Promise.resolve()
+  pluginService = null
   setUnreadDockBadgeCount(0)
   agentHookServer.stop()
   // Why: cancels relay restart/reinstall timers and kills wsl.exe children
@@ -2318,7 +2399,13 @@ app.on('will-quit', (e) => {
     // Why: normal quits preserve the detached daemon for warm reattach, but a
     // dev parent dying means the temp/dev profile has no owner left to reattach.
     const daemonTeardown = isDevParentShutdownRequested() ? shutdownDaemon() : disconnectDaemon()
-    Promise.allSettled([daemonTeardown, rpcStopAndClear, watcherShutdown, emulatorShutdown])
+    Promise.allSettled([
+      daemonTeardown,
+      rpcStopAndClear,
+      watcherShutdown,
+      emulatorShutdown,
+      pluginHostShutdown
+    ])
       .then(() => shutdownTelemetry())
       .then(() => shutdownObservability())
       .catch(() => {
