@@ -18913,17 +18913,29 @@ export class OrcaRuntimeService {
 
   async closeTerminal(handle: string): Promise<RuntimeTerminalClose> {
     const pty = this.getLivePtyForHandle(handle)
-    this.claudeAgentTeams.removeTeamForLeaderHandle(handle)
     if (pty) {
-      const ptyKilled = this.ptyController?.kill(pty.pty.ptyId) ?? false
-      return { handle, tabId: pty.pty.tabId ?? pty.record.tabId, ptyKilled }
+      if (!this.ptyController?.stopAndWait) {
+        throw new Error('terminal_verified_stop_unavailable')
+      }
+      if (!(await this.ptyController.stopAndWait(pty.pty.ptyId))) {
+        throw new Error('terminal_verified_stop_failed')
+      }
+      this.claudeAgentTeams.removeTeamForLeaderHandle(handle)
+      return { handle, tabId: pty.pty.tabId ?? pty.record.tabId, ptyKilled: true }
     }
     this.assertGraphReady()
     const { leaf } = this.getLiveLeafForHandle(handle)
     let ptyKilled = false
     if (leaf.ptyId) {
-      ptyKilled = this.ptyController?.kill(leaf.ptyId) ?? false
+      if (!this.ptyController?.stopAndWait) {
+        throw new Error('terminal_verified_stop_unavailable')
+      }
+      ptyKilled = await this.ptyController.stopAndWait(leaf.ptyId)
+      if (!ptyKilled) {
+        throw new Error('terminal_verified_stop_failed')
+      }
     }
+    this.claudeAgentTeams.removeTeamForLeaderHandle(handle)
     // Why: killing the PTY in a multi-pane tab is sufficient — the renderer's
     // PTY exit handler already calls PaneManager.closePane() for split layouts.
     // Sending an additional IPC close would race with the exit handler and

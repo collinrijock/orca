@@ -17690,12 +17690,13 @@ describe('OrcaRuntimeService', () => {
 
   it('operates PTY-backed mobile session terminals without a renderer graph', async () => {
     const spawn = vi.fn().mockResolvedValue({ id: 'laptop-created-pty' })
-    const kill = vi.fn(() => true)
+    const stopAndWait = vi.fn(async () => true)
     const runtime = new OrcaRuntimeService(store)
     runtime.setPtyController({
       spawn,
       write: () => true,
-      kill,
+      kill: () => false,
+      stopAndWait,
       getForegroundProcess: async () => null
     })
 
@@ -17719,7 +17720,29 @@ describe('OrcaRuntimeService', () => {
       tabId: 'laptop-tab',
       ptyKilled: true
     })
-    expect(kill).toHaveBeenCalledWith('laptop-created-pty')
+    expect(stopAndWait).toHaveBeenCalledWith('laptop-created-pty')
+  })
+
+  it('rejects remote terminal close until provider shutdown is verified', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      spawn: vi.fn().mockResolvedValue({ id: 'laptop-created-pty' }),
+      write: () => true,
+      kill: () => true,
+      stopAndWait: async () => false,
+      getForegroundProcess: async () => null
+    })
+    const terminal = await runtime.createTerminal(`id:${TEST_WORKTREE_ID}`, {
+      tabId: 'laptop-tab',
+      leafId: HEADLESS_LEAF_ID
+    })
+
+    await expect(runtime.closeTerminal(terminal.handle)).rejects.toThrow(
+      'terminal_verified_stop_failed'
+    )
+    await expect(runtime.readTerminal(terminal.handle)).resolves.toMatchObject({
+      status: 'running'
+    })
   })
 
   it('lists PTY-backed mobile session terminals without a renderer graph', async () => {

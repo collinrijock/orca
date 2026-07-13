@@ -3883,6 +3883,7 @@
           "file": "src/main/runtime/orca-runtime.test.ts",
           "assertions": [
             "terminal.stop awaits stopAndWait and fresh post-stop liveness before acknowledging provider shutdown",
+            "remote terminal.close rejects until provider stopAndWait verifies shutdown",
             "provider shutdown rejection fails terminal.stop closed",
             "project removal fences paired terminal admission through provider stop and repo mutation",
             "project removal drains create-first headless, renderer-backed mobile, renderer split, and selector-less renderer admissions before its liveness snapshot",
