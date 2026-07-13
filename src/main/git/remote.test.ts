@@ -363,6 +363,45 @@ describe('git remote operations', () => {
     ])
   })
 
+  it('retries a divergent pull as a merge when no strategy is configured', async () => {
+    const divergentError = new Error(
+      'Command failed: git pull\n' + 'fatal: Need to specify how to reconcile divergent branches.'
+    )
+    gitExecFileAsyncMock
+      // First attempt: plain pull rejects with git's reconciliation error.
+      .mockResolvedValueOnce({ stdout: 'feature\n', stderr: '' })
+      .mockResolvedValueOnce({ stdout: 'origin/feature\n', stderr: '' })
+      .mockRejectedValueOnce(divergentError)
+      // Fallback attempt: pull --no-rebase (merge) succeeds.
+      .mockResolvedValueOnce({ stdout: 'feature\n', stderr: '' })
+      .mockResolvedValueOnce({ stdout: 'origin/feature\n', stderr: '' })
+      .mockResolvedValueOnce({ stdout: '', stderr: '' })
+
+    await gitPull('/repo')
+
+    expect(gitExecFileAsyncMock.mock.calls).toEqual([
+      [['symbolic-ref', '--quiet', '--short', 'HEAD'], { cwd: '/repo' }],
+      [['rev-parse', '--abbrev-ref', 'HEAD@{u}'], { cwd: '/repo' }],
+      [['pull'], { cwd: '/repo' }],
+      [['symbolic-ref', '--quiet', '--short', 'HEAD'], { cwd: '/repo' }],
+      [['rev-parse', '--abbrev-ref', 'HEAD@{u}'], { cwd: '/repo' }],
+      [['pull', '--no-rebase'], { cwd: '/repo' }]
+    ])
+  })
+
+  it('does not retry a fast-forward-only pull that fails on divergence', async () => {
+    gitExecFileAsyncMock
+      .mockResolvedValueOnce({ stdout: 'feature\n', stderr: '' })
+      .mockResolvedValueOnce({ stdout: 'origin/feature\n', stderr: '' })
+      .mockRejectedValueOnce(
+        new Error('Command failed: git pull\nfatal: Not possible to fast-forward, aborting.')
+      )
+
+    await expect(gitFastForward('/repo')).rejects.toThrow('Not possible to fast-forward')
+    // No fallback attempt: only the three probe/pull calls ran.
+    expect(gitExecFileAsyncMock.mock.calls).toHaveLength(3)
+  })
+
   it('pulls the same-name origin branch for legacy base-tracking worktrees', async () => {
     gitExecFileAsyncMock
       .mockResolvedValueOnce({ stdout: 'feature\n', stderr: '' })

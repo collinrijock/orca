@@ -1,8 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   formatSubmodulePushFailureDetail,
+  isDivergentPullReconciliationError,
   isNoUpstreamError,
-  normalizeGitErrorMessage
+  normalizeGitErrorMessage,
+  pullArgsSpecifyReconciliation
 } from './git-remote-error'
 
 afterEach(() => {
@@ -145,5 +147,44 @@ describe('isNoUpstreamError', () => {
     )
 
     expect(isNoUpstreamError(error)).toBe(false)
+  })
+})
+
+describe('isDivergentPullReconciliationError', () => {
+  it('detects git 2.27+ divergent-branch reconciliation failures', () => {
+    const error = new Error(
+      'Command failed: git pull\n' +
+        'hint: You have divergent branches and need to specify how to reconcile them.\n' +
+        'fatal: Need to specify how to reconcile divergent branches.'
+    )
+
+    expect(isDivergentPullReconciliationError(error)).toBe(true)
+  })
+
+  it('does not match a fast-forward-only abort on divergent branches', () => {
+    const error = new Error(
+      'Command failed: git pull\nfatal: Not possible to fast-forward, aborting.'
+    )
+
+    expect(isDivergentPullReconciliationError(error)).toBe(false)
+  })
+
+  it('returns false for non-Error values', () => {
+    expect(isDivergentPullReconciliationError('divergent branches')).toBe(false)
+  })
+})
+
+describe('pullArgsSpecifyReconciliation', () => {
+  it('is false when no strategy flag is present', () => {
+    expect(pullArgsSpecifyReconciliation([])).toBe(false)
+    expect(pullArgsSpecifyReconciliation(['origin', 'main'])).toBe(false)
+  })
+
+  it('is true for any explicit reconciliation flag', () => {
+    expect(pullArgsSpecifyReconciliation(['--ff-only'])).toBe(true)
+    expect(pullArgsSpecifyReconciliation(['--rebase'])).toBe(true)
+    expect(pullArgsSpecifyReconciliation(['--no-rebase'])).toBe(true)
+    expect(pullArgsSpecifyReconciliation(['--rebase=interactive'])).toBe(true)
+    expect(pullArgsSpecifyReconciliation(['-r'])).toBe(true)
   })
 })

@@ -44,7 +44,13 @@ import { gitExecMutatesRepository } from '../shared/git-exec-mutation'
 import { detectConflictOperation, getStatusOp } from './git-handler-status-ops'
 import { checkIgnoredPathsOp } from './git-handler-check-ignore'
 import { resolveRelayPushTarget } from './git-handler-push-target'
-import { isNoUpstreamError, normalizeGitErrorMessage } from '../shared/git-remote-error'
+import {
+  MERGE_RECONCILIATION_PULL_ARGS,
+  isDivergentPullReconciliationError,
+  isNoUpstreamError,
+  normalizeGitErrorMessage,
+  pullArgsSpecifyReconciliation
+} from '../shared/git-remote-error'
 import { upstreamOnlyCommitsArePatchEquivalent } from '../shared/git-upstream-status'
 import { assertGitPushTargetShape } from '../shared/git-push-target-validation'
 import { getPublishTargetStatus, type GitCommandRunner } from '../shared/git-publish-target-status'
@@ -1021,29 +1027,48 @@ export class GitHandler {
   private async pullWithArgs(params: Record<string, unknown>, pullArgs: string[]) {
     this.clearGitMutationReadCaches()
     const worktreePath = params.worktreePath as string
+    const runPull = async (effectiveArgs: string[]): Promise<void> => {
+      if (params.pushTarget !== undefined) {
+        assertGitPushTargetShape(params.pushTarget)
+        const pushTarget = params.pushTarget as GitPushTarget
+        await this.git(['check-ref-format', '--branch', pushTarget.branchName], worktreePath)
+        await this.git(
+          ['pull', ...effectiveArgs, pushTarget.remoteName, pushTarget.branchName],
+          worktreePath
+        )
+        return
+      }
+      const upstream = await resolveEffectiveGitUpstream((args) => this.git(args, worktreePath))
+      if (upstream && !upstream.isConfiguredUpstream) {
+        // Why: legacy Orca branches may still track origin/main while pushes
+        // target origin/<branch>. Pull the same effective branch the UI reports.
+        await this.git(
+          ['pull', ...effectiveArgs, upstream.remoteName, upstream.branchName],
+          worktreePath
+        )
+        return
+      }
+      await this.git(['pull', ...effectiveArgs], worktreePath)
+    }
+
     try {
       try {
-        if (params.pushTarget !== undefined) {
-          assertGitPushTargetShape(params.pushTarget)
-          const pushTarget = params.pushTarget as GitPushTarget
-          await this.git(['check-ref-format', '--branch', pushTarget.branchName], worktreePath)
-          await this.git(
-            ['pull', ...pullArgs, pushTarget.remoteName, pushTarget.branchName],
-            worktreePath
-          )
-          return
+        try {
+          await runPull(pullArgs)
+        } catch (error) {
+          // Why: on hosts with no pull.rebase/pull.ff policy, Git 2.27+ refuses
+          // to reconcile divergent branches. Retry as a merge (Git's historical
+          // default) so SSH pulls succeed out of the box; forced strategies and
+          // rebase-configured users never reach this fallback.
+          if (
+            !pullArgsSpecifyReconciliation(pullArgs) &&
+            isDivergentPullReconciliationError(error)
+          ) {
+            await runPull([...MERGE_RECONCILIATION_PULL_ARGS, ...pullArgs])
+            return
+          }
+          throw error
         }
-        const upstream = await resolveEffectiveGitUpstream((args) => this.git(args, worktreePath))
-        if (upstream && !upstream.isConfiguredUpstream) {
-          // Why: legacy Orca branches may still track origin/main while pushes
-          // target origin/<branch>. Pull the same effective branch the UI reports.
-          await this.git(
-            ['pull', ...pullArgs, upstream.remoteName, upstream.branchName],
-            worktreePath
-          )
-          return
-        }
-        await this.git(['pull', ...pullArgs], worktreePath)
       } catch (error) {
         // Why: mirror the local gitPull normalization so SSH users see the same
         // actionable messages instead of raw git stderr.

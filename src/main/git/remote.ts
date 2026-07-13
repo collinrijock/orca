@@ -1,4 +1,9 @@
-import { normalizeGitErrorMessage } from '../../shared/git-remote-error'
+import {
+  MERGE_RECONCILIATION_PULL_ARGS,
+  isDivergentPullReconciliationError,
+  normalizeGitErrorMessage,
+  pullArgsSpecifyReconciliation
+} from '../../shared/git-remote-error'
 import { resolveEffectiveGitUpstream } from '../../shared/git-effective-upstream'
 import { gitRefTargetsBranchOnRemote } from '../../shared/git-remote-branch-name'
 import { resolveGitRemoteRebaseSource } from '../../shared/git-rebase-source'
@@ -214,11 +219,11 @@ async function gitPullWithArgs(
   pushTarget?: GitPushTarget,
   options: GitRuntimeOptions = {}
 ): Promise<void> {
-  try {
+  const runPull = async (effectiveArgs: string[]): Promise<void> => {
     if (pushTarget) {
       const target = await validateGitPushTarget(worktreePath, pushTarget, options)
       await gitExecFileAsync(
-        ['pull', ...pullArgs, target.remoteName, target.branchName],
+        ['pull', ...effectiveArgs, target.remoteName, target.branchName],
         gitOptionsForWorktree(worktreePath, options)
       )
       return
@@ -230,13 +235,29 @@ async function gitPullWithArgs(
       // Why: legacy Orca branches may still track origin/main while pushes
       // target origin/<branch>. Pull the same effective branch the UI reports.
       await gitExecFileAsync(
-        ['pull', ...pullArgs, upstream.remoteName, upstream.branchName],
+        ['pull', ...effectiveArgs, upstream.remoteName, upstream.branchName],
         gitOptionsForWorktree(worktreePath, options)
       )
       return
     }
 
-    await gitExecFileAsync(['pull', ...pullArgs], gitOptionsForWorktree(worktreePath, options))
+    await gitExecFileAsync(['pull', ...effectiveArgs], gitOptionsForWorktree(worktreePath, options))
+  }
+
+  try {
+    try {
+      await runPull(pullArgs)
+    } catch (error) {
+      // Why: on hosts with no pull.rebase/pull.ff policy, Git 2.27+ refuses to
+      // reconcile divergent branches. Retry as a merge (Git's historical
+      // default) so pulls succeed out of the box; callers that already forced a
+      // strategy — or users who configured rebase — never reach this fallback.
+      if (!pullArgsSpecifyReconciliation(pullArgs) && isDivergentPullReconciliationError(error)) {
+        await runPull([...MERGE_RECONCILIATION_PULL_ARGS, ...pullArgs])
+        return
+      }
+      throw error
+    }
   } catch (error) {
     throw new Error(normalizeGitErrorMessage(error, 'pull'))
   }
