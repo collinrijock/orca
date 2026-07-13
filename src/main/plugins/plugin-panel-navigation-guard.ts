@@ -71,5 +71,5 @@ export function registerPluginPanelNavigationGuard(webContents: WebContents): vo
       event.preventDefault()
     }
   })
-  webContents.once('destroyed', () => registry.clear())
+  webContents.on('destroyed', () => registry.clear())
 }
