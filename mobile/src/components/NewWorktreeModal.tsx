@@ -60,6 +60,7 @@ import { useMobileComposerSource } from '../tasks/use-mobile-composer-source'
 import type { SmartModeAvailabilityInput } from '../tasks/mobile-smart-source-modes'
 import { deriveRepoSlug, type PasteRepoCandidate } from '../tasks/smart-source-paste-intent'
 import { SmartWorkspaceSourceField } from './SmartWorkspaceSourceField'
+import { SmartWorkspaceSourceDrawer } from './SmartWorkspaceSourceDrawer'
 import { SmartWorkspaceAdvancedFields } from './SmartWorkspaceAdvancedFields'
 import { SetupHookTrustDrawer, type SetupTrustPrompt } from './SetupHookTrustDrawer'
 
@@ -183,6 +184,7 @@ function NewWorktreeModalContent({
   const [repos, setRepos] = useState<Repo[]>(initialRepos ?? [])
   const [selectedRepo, setSelectedRepo] = useState<Repo | null>(null)
   const [showRepoPicker, setShowRepoPicker] = useState(false)
+  const [showSourceDrawer, setShowSourceDrawer] = useState(false)
   const [selectedAgentState, setSelectedAgent] = useState<AgentOption>(AGENT_OPTIONS[0]!)
   const [runtimeSettings, setRuntimeSettings] = useState<RuntimeSettings | null>(null)
   const [detectedAgentIdsState, setDetectedAgentIdsState] = useState<DetectedAgentIdsState | null>(
@@ -805,22 +807,11 @@ function NewWorktreeModalContent({
             </View>
 
             <SmartWorkspaceSourceField
-              visible={visible}
               composer={composer}
-              client={client}
-              availability={sourceAvailability}
-              repoId={selectedRepo?.id ?? null}
-              repos={pasteRepos}
-              sshReady={!sshGate.requiresConnection}
-              label={selectedRepoIsGit ? 'Name or Create From' : 'Workspace name'}
+              label={selectedRepoIsGit ? "Name or 'Create From'" : 'Workspace name'}
               disabled={sshGate.requiresConnection}
-              onRepoChange={(repoId) => {
-                const nextRepo = repos.find((repo) => repo.id === repoId)
-                if (nextRepo) {
-                  setSelectedRepo(nextRepo)
-                }
-              }}
               onBeforeOpen={() => setError('')}
+              onOpenDrawer={() => setShowSourceDrawer(true)}
             />
 
             {selectedRepoConnectionId ? (
@@ -989,8 +980,25 @@ function NewWorktreeModalContent({
         )}
       </BottomDrawer>
 
-      {/* Sub-modals for pickers — rendered outside the main modal so they
-          layer on top and scroll without touch conflicts. */}
+      {/* Why: list drawers must be siblings of the form drawer so their virtualized
+          lists are not nested inside the form's vertical ScrollView. */}
+      <SmartWorkspaceSourceDrawer
+        visible={visible && showSourceDrawer}
+        client={client}
+        composer={composer}
+        availability={sourceAvailability}
+        repoId={selectedRepo?.id ?? null}
+        repos={pasteRepos}
+        sshReady={!sshGate.requiresConnection}
+        onRepoChange={(repoId) => {
+          const nextRepo = repos.find((repo) => repo.id === repoId)
+          if (nextRepo) {
+            setSelectedRepo(nextRepo)
+          }
+        }}
+        onClose={() => setShowSourceDrawer(false)}
+      />
+
       <PickerListDrawer
         visible={visible && showRepoPicker}
         title="Repository"

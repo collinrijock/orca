@@ -162,7 +162,7 @@ export function SmartWorkspaceSourceDrawer({
       contentScrollable={false}
     >
       <View style={styles.header}>
-        <Text style={styles.title}>Name or Create From</Text>
+        <Text style={styles.title}>Name or 'Create From'</Text>
         <Pressable onPress={closeSoon} hitSlop={8}>
           <Text style={styles.done}>Done</Text>
         </Pressable>

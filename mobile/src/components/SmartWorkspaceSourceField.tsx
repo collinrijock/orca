@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import { Linking, Pressable, StyleSheet, Text, View } from 'react-native'
 import {
   CircleDot,
@@ -8,28 +7,17 @@ import {
   GitPullRequest,
   X
 } from 'lucide-react-native'
-import type { RpcClient } from '../transport/rpc-client'
 import type { SmartNameSelection } from '../tasks/mobile-composer-source-types'
-import type { SmartModeAvailabilityInput } from '../tasks/mobile-smart-source-modes'
-import type { PasteRepoCandidate } from '../tasks/smart-source-paste-intent'
 import type { MobileComposerSource } from '../tasks/use-mobile-composer-source'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
-import { SmartWorkspaceSourceDrawer } from './SmartWorkspaceSourceDrawer'
 import { TaskProviderLogo } from './TaskProviderLogo'
 
 type Props = {
-  visible: boolean
   composer: MobileComposerSource
-  client: RpcClient | null
-  availability: SmartModeAvailabilityInput
-  repoId: string | null
-  repos: readonly PasteRepoCandidate[]
-  linearWorkspaceId?: string | null
-  sshReady: boolean
   label: string
   disabled?: boolean
-  onRepoChange: (repoId: string) => void
   onBeforeOpen?: () => void
+  onOpenDrawer: () => void
 }
 
 function SelectionIcon({ kind }: { kind: SmartNameSelection['kind'] }) {
@@ -49,20 +37,12 @@ function SelectionIcon({ kind }: { kind: SmartNameSelection['kind'] }) {
 }
 
 export function SmartWorkspaceSourceField({
-  visible,
   composer,
-  client,
-  availability,
-  repoId,
-  repos,
-  linearWorkspaceId,
-  sshReady,
   label,
   disabled,
-  onRepoChange,
-  onBeforeOpen
+  onBeforeOpen,
+  onOpenDrawer
 }: Props) {
-  const [showDrawer, setShowDrawer] = useState(false)
   const selection = composer.smartNameSelection
 
   function openDrawer(): void {
@@ -70,7 +50,7 @@ export function SmartWorkspaceSourceField({
       return
     }
     onBeforeOpen?.()
-    setShowDrawer(true)
+    onOpenDrawer()
   }
 
   return (
@@ -110,19 +90,6 @@ export function SmartWorkspaceSourceField({
           </Text>
         </Pressable>
       )}
-
-      <SmartWorkspaceSourceDrawer
-        visible={visible && showDrawer}
-        client={client}
-        composer={composer}
-        availability={availability}
-        repoId={repoId}
-        repos={repos}
-        linearWorkspaceId={linearWorkspaceId}
-        sshReady={sshReady}
-        onRepoChange={onRepoChange}
-        onClose={() => setShowDrawer(false)}
-      />
     </View>
   )
 }
