@@ -4094,6 +4094,33 @@
           "result": "passed",
           "durationSeconds": 26,
           "summary": "1232 tests passed across desktop/runtime teardown boundaries, exceptional cleanup outcomes, offline SSH retention, and local plus remote hidden-session retry ownership."
+        },
+        {
+          "date": "2026-07-12",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts config/scripts/build-relay-windows-node-pty-patch.test.mjs src/main/ssh/ssh-relay-native-deps-install.test.ts src/relay/node-pty-windows-pre-ready-shutdown.test.ts src/relay/pty-handler.test.ts src/renderer/src/components/terminal-pane/pty-transport.test.ts src/renderer/src/store/slices/repos-remove-project-purge-leak.test.ts src/renderer/src/store/slices/repos.test.ts src/renderer/src/store/slices/repos-runtime-vm-removal.test.ts src/renderer/src/lib/ephemeral-vm-runtime-cleanup.test.ts",
+          "result": "passed",
+          "durationSeconds": 2,
+          "summary": "203 exact-head tests preserved the vanilla close=0/native-kill=0/deferred=1 red oracle and patched close=1/native-kill=1/deferred=0 result after latest-main integration."
+        },
+        {
+          "date": "2026-07-12",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/shared/ssh-pty-id.test.ts src/shared/ssh-types.test.ts src/main/providers/local-pty-provider.test.ts src/main/providers/ssh-pty-provider.test.ts src/main/persistence.test.ts src/main/ssh/ssh-relay-session.test.ts src/main/ssh/ssh-relay-generation-reattach.test.ts src/main/ssh/ssh-target-id-migration.test.ts src/relay/pty-handler.test.ts src/relay/subprocess.test.ts src/renderer/src/components/terminal-pane/pty-transport.test.ts src/renderer/src/components/terminal-pane/pty-pre-handler-buffer.test.ts src/renderer/src/lib/pty-kill-retry-ownership.test.ts src/renderer/src/lib/runtime-terminal-close-retry-ownership.test.ts src/renderer/src/lib/ephemeral-vm-runtime-cleanup.test.ts src/renderer/src/lib/launch-agent-background-session.test.ts src/renderer/src/store/slices/repos.test.ts src/renderer/src/store/slices/repos-host-identity-routing.test.ts src/main/runtime/orca-runtime.test.ts src/main/ipc/pty.test.ts",
+          "result": "passed",
+          "durationSeconds": 11,
+          "summary": "1720 exact-head tests passed with bounded retained retry ownership plus execution-host-isolated admissions and PTY liveness."
+        },
+        {
+          "date": "2026-07-12",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime.test.ts src/main/ipc/worktrees.test.ts src/main/ipc/pty.test.ts src/renderer/src/store/slices/worktrees.test.ts",
+          "result": "passed",
+          "durationSeconds": 10,
+          "summary": "1356 exact-head tests proved duplicate local/SSH IDs isolate create, removal, renderer spawn, and PTY liveness ownership while whole-project removal drains every host scope."
         }
       ],
       "runtimeBudget": {
