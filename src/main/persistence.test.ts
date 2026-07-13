@@ -9000,6 +9000,40 @@ describe('Store', () => {
     secondReload.flush()
   })
 
+  it('checkpoints after an append and full-store fallback both fail', async () => {
+    const store = await createStore()
+    store.upsertPendingLocalPtyShutdown({ ptyId: 'local-a', requestedAt: 1 })
+    store.flush()
+    const persistedState = readFileSync(dataFile(), 'utf-8')
+
+    rmSync(terminalTeardownIntentFile(), { force: true })
+    mkdirSync(terminalTeardownIntentFile())
+    rmSync(dataFile(), { force: true })
+    mkdirSync(dataFile())
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    expect(() =>
+      store.upsertPendingLocalPtyShutdown({ ptyId: 'local-b', requestedAt: 2 })
+    ).toThrow()
+
+    rmSync(terminalTeardownIntentFile(), { recursive: true, force: true })
+    writeFileSync(terminalTeardownIntentFile(), '{"version":2,"revision":2', 'utf-8')
+    rmSync(dataFile(), { recursive: true, force: true })
+    writeFileSync(dataFile(), persistedState, 'utf-8')
+    store.upsertPendingLocalPtyShutdown({ ptyId: 'local-c', requestedAt: 3 })
+
+    const reloaded = await createStore()
+    expect(reloaded.getPendingLocalPtyShutdowns()).toEqual([
+      { ptyId: 'local-a', requestedAt: 1 },
+      { ptyId: 'local-b', requestedAt: 2 },
+      { ptyId: 'local-c', requestedAt: 3 }
+    ])
+    expect(readTerminalTeardownIntentJournal()).toEqual([
+      expect.objectContaining({ kind: 'checkpoint', revision: 3 })
+    ])
+    store.flush()
+    reloaded.flush()
+  })
+
   it('keeps the 50-PTY SSH shutdown journal within the constant-record budget', async () => {
     const store = await createStore()
     const owners = Array.from({ length: 50 }, (_, index) => ({

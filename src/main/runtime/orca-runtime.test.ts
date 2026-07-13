@@ -22576,6 +22576,54 @@ describe('OrcaRuntimeService', () => {
     expect(removeProject).toHaveBeenCalledWith(TEST_REPO_ID)
   })
 
+  it('drains workspace resolution before worktree removal and rejects the stale create', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    const resolution = deferred<{
+      id: string
+      path: string
+      hostId: 'local'
+      connectionId: null
+      repo: ReturnType<typeof store.getRepo>
+      folderWorkspace: null
+    }>()
+    const runtimeWithResolver = runtime as unknown as {
+      resolveTerminalWorkspaceLaunchScope: () => typeof resolution.promise
+    }
+    const resolveSpy = vi
+      .spyOn(runtimeWithResolver, 'resolveTerminalWorkspaceLaunchScope')
+      .mockReturnValue(resolution.promise)
+    const spawn = vi.fn().mockResolvedValue({ id: 'pty-too-late' })
+    runtime.setPtyController({
+      spawn,
+      write: () => true,
+      kill: () => false,
+      getForegroundProcess: async () => null,
+      listProcesses: async () => []
+    })
+
+    const create = runtime.createTerminal(`id:${TEST_WORKTREE_ID}`)
+    await vi.waitFor(() => expect(resolveSpy).toHaveBeenCalledOnce())
+    const remove = vi.fn()
+    const removal = runtime.runWithWorktreeRemovalAdmission(TEST_WORKTREE_ID, async () => {
+      remove()
+    })
+    await Promise.resolve()
+    expect(remove).not.toHaveBeenCalled()
+
+    resolution.resolve({
+      id: TEST_WORKTREE_ID,
+      path: TEST_WORKTREE_PATH,
+      hostId: 'local',
+      connectionId: null,
+      repo: store.getRepo(TEST_REPO_ID),
+      folderWorkspace: null
+    })
+    await expect(create).rejects.toThrow('terminal_admission_blocked_for_project_removal')
+    await expect(removal).resolves.toBeUndefined()
+    expect(remove).toHaveBeenCalledOnce()
+    expect(spawn).not.toHaveBeenCalled()
+  })
+
   it('drains a create-first managed worktree before project removal snapshots ownership', async () => {
     const removeProject = vi.fn()
     const runtime = new OrcaRuntimeService({ ...store, removeProject } as never)

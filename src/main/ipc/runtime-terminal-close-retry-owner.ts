@@ -27,6 +27,13 @@ function key(environmentId: string, handle: string): string {
   return `${environmentId}\0${handle}`
 }
 
+function isCurrentOwner(close: RetainedTerminalClose): boolean {
+  return (
+    close.generation === ownerGeneration &&
+    retainedCloses.get(key(close.environmentId, close.handle)) === close
+  )
+}
+
 function schedule(): void {
   if (retryTimer) {
     clearTimeout(retryTimer)
@@ -72,7 +79,7 @@ function attempt(close: RetainedTerminalClose): Promise<RuntimeRpcResponse<unkno
   })
   const request = getRuntimeEnvironmentStatus(userDataPath, close.environmentId)
     .then((status) => {
-      if (close.generation !== ownerGeneration) {
+      if (!isCurrentOwner(close)) {
         return noOpResponse(status._meta?.runtimeId)
       }
       if (!status.ok) {
@@ -104,7 +111,7 @@ function attempt(close: RetainedTerminalClose): Promise<RuntimeRpcResponse<unkno
       })
     })
     .then((response) => {
-      if (close.generation !== ownerGeneration) {
+      if (!isCurrentOwner(close)) {
         return noOpResponse(response._meta?.runtimeId)
       }
       if (!response.ok) {
@@ -128,7 +135,7 @@ function attempt(close: RetainedTerminalClose): Promise<RuntimeRpcResponse<unkno
       return response
     })
     .catch((error: unknown) => {
-      if (close.generation !== ownerGeneration) {
+      if (!isCurrentOwner(close)) {
         return noOpResponse()
       }
       if (error instanceof RuntimeEnvironmentStoreError && error.code === 'invalid_argument') {
@@ -150,7 +157,7 @@ function attempt(close: RetainedTerminalClose): Promise<RuntimeRpcResponse<unkno
       throw error
     })
     .finally(() => {
-      if (close.generation !== ownerGeneration) {
+      if (!isCurrentOwner(close)) {
         return
       }
       if (close.inFlight === request) {
@@ -168,13 +175,19 @@ function retain(
   runtimeId?: string | null
 ): RetainedTerminalClose {
   const closeKey = key(environmentId, handle)
+  const incomingRuntimeId = runtimeId ?? null
   let close = retainedCloses.get(closeKey)
-  if (!close) {
+  const replacesRuntime = Boolean(
+    close?.runtimeId && incomingRuntimeId && close.runtimeId !== incomingRuntimeId
+  )
+  if (!close || replacesRuntime) {
+    // Why: handles can be reused after a remote runtime restart. A late
+    // completion from the prior runtime must not settle the replacement owner.
     close = {
       generation: ownerGeneration,
       environmentId,
       handle,
-      runtimeId: runtimeId ?? null,
+      runtimeId: incomingRuntimeId,
       attempts: 0,
       nextRetryAt: 0,
       inFlight: null
@@ -188,8 +201,14 @@ function retain(
         requestedAt: Date.now()
       })
     }
-  } else if (!close.runtimeId && runtimeId) {
-    close.runtimeId = runtimeId
+  } else if (!close.runtimeId && incomingRuntimeId) {
+    close.runtimeId = incomingRuntimeId
+    store?.upsertPendingRuntimeTerminalClose?.({
+      environmentId,
+      handle,
+      runtimeId: incomingRuntimeId,
+      requestedAt: Date.now()
+    })
   }
   return close
 }

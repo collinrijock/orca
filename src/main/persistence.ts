@@ -6746,6 +6746,9 @@ export class Store {
       this.scheduleSave()
     } catch (error) {
       console.warn('[persistence] Failed to write terminal teardown intent snapshot:', error)
+      // Why: an append may have left a partial record. If the full-store
+      // fallback also fails, the next mutation must checkpoint, never append.
+      this.terminalTeardownIntentJournalReady = false
       // The full-store sync path is an expensive but durable I/O-failure fallback.
       this.flushOrThrow()
     }

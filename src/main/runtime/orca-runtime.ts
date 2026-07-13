@@ -12345,6 +12345,24 @@ export class OrcaRuntimeService {
     )
   }
 
+  private async resolveTerminalCreateWorkspaceWithAdmission(
+    selector: string,
+    hostId?: ExecutionHostId | null
+  ): Promise<{ workspace: TerminalWorkspaceLaunchScope; release: () => void }> {
+    // Why: workspace resolution can await SSH/runtime discovery. Keep removal
+    // aware of the unresolved create, then transfer ownership without a gap.
+    const releaseResolutionAdmission = this.beginTerminalAdmission(GLOBAL_TERMINAL_ADMISSION_KEY)
+    try {
+      const workspace = await this.resolveTerminalWorkspaceLaunchScope(selector, hostId)
+      const releaseWorkspaceAdmission = this.beginTerminalAdmission(workspace.id, workspace.hostId)
+      releaseResolutionAdmission()
+      return { workspace, release: releaseWorkspaceAdmission }
+    } catch (error) {
+      releaseResolutionAdmission()
+      throw error
+    }
+  }
+
   private async withTerminalAdmission<T>(
     worktreeId: string,
     action: () => Promise<T>,
@@ -12434,7 +12452,10 @@ export class OrcaRuntimeService {
     const scopeKey = this.admissionScopeKey(worktreeId, hostId)
     this.terminalAdmissionBlockedWorktreeIds.add(scopeKey)
     try {
-      await this.drainTerminalAdmissions([worktreeId], hostId)
+      await Promise.all([
+        this.drainTerminalAdmissions([GLOBAL_TERMINAL_ADMISSION_KEY]),
+        this.drainTerminalAdmissions([worktreeId], hostId)
+      ])
       return await action()
     } finally {
       this.terminalAdmissionBlockedWorktreeIds.delete(scopeKey)
@@ -17842,13 +17863,8 @@ export class OrcaRuntimeService {
       if (!this.ptyController?.spawn) {
         throw new Error('runtime_unavailable')
       }
-      const workspace = await this.resolveTerminalWorkspaceLaunchScope(worktreeSelector)
-      // Why: project removal must drain trust/team preparation as well as the
-      // eventual spawn; otherwise a stale resolved workspace can spawn after removal.
-      const releasePreparationAdmission = this.beginTerminalAdmission(
-        workspace.id,
-        workspace.hostId
-      )
+      const { workspace, release: releasePreparationAdmission } =
+        await this.resolveTerminalCreateWorkspaceWithAdmission(worktreeSelector)
       try {
         if (
           this.isAdmissionBlocked(
@@ -18058,14 +18074,13 @@ export class OrcaRuntimeService {
     const win = rendererWindow ?? this.getAuthoritativeWindow()
     // Why: mirrors browserTabCreate — when no worktree is specified, pass
     // undefined so the renderer uses its current active worktree.
-    const workspace = worktreeSelector
-      ? await this.resolveTerminalWorkspaceLaunchScope(worktreeSelector)
+    const admittedWorkspace = worktreeSelector
+      ? await this.resolveTerminalCreateWorkspaceWithAdmission(worktreeSelector)
       : null
+    const workspace = admittedWorkspace?.workspace ?? null
     // Why: renderer-backed agent preparation can await remote trust before the
     // tab request; keep project removal fenced across that entire interval.
-    const releasePreparationAdmission = workspace
-      ? this.beginTerminalAdmission(workspace.id, workspace.hostId)
-      : null
+    const releasePreparationAdmission = admittedWorkspace?.release ?? null
     try {
       if (
         workspace &&
@@ -18248,10 +18263,8 @@ export class OrcaRuntimeService {
     } = {}
   ): Promise<RuntimeMobileSessionCreateTerminalResult> {
     this.assertGraphReady()
-    const workspace = await this.resolveTerminalWorkspaceLaunchScope(worktreeSelector)
-    // Why: mobile command/trust preparation happens before renderer or
-    // headless creation; project removal must drain that preparation too.
-    const releasePreparationAdmission = this.beginTerminalAdmission(workspace.id, workspace.hostId)
+    const { workspace, release: releasePreparationAdmission } =
+      await this.resolveTerminalCreateWorkspaceWithAdmission(worktreeSelector)
     try {
       const worktreeId = workspace.id
       const cwd = this.resolveWorkspaceTerminalStartupCwd(workspace, opts.cwd)
@@ -19065,13 +19078,8 @@ export class OrcaRuntimeService {
     const ptyHostId = pty.connectionId
       ? toSshExecutionHostId(pty.connectionId)
       : LOCAL_EXECUTION_HOST_ID
-    const workspace = await this.resolveTerminalWorkspaceLaunchScope(
-      `id:${pty.worktreeId}`,
-      ptyHostId
-    )
-    // Why: a project removal that finishes while workspace resolution is in
-    // flight must still drain the split before it can publish a new PTY.
-    const releasePreparationAdmission = this.beginTerminalAdmission(workspace.id, workspace.hostId)
+    const { workspace, release: releasePreparationAdmission } =
+      await this.resolveTerminalCreateWorkspaceWithAdmission(`id:${pty.worktreeId}`, ptyHostId)
     try {
       if (
         this.isAdmissionBlocked(

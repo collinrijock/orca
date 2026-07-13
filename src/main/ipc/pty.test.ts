@@ -3549,6 +3549,58 @@ describe('registerPtyHandlers', () => {
     vi.useRealTimers()
   })
 
+  it('keeps a replacement pane retry owner when the prior local kill settles late', async () => {
+    vi.useFakeTimers()
+    const shutdownA = makeDeferred()
+    const shutdownB = makeDeferred()
+    const shutdown = vi.fn((_id: string, options: { expectedPaneKey?: string }) =>
+      options.expectedPaneKey === 'tab-a:leaf-a' ? shutdownA.promise : shutdownB.promise
+    )
+    const removePendingLocalPtyShutdown = vi.fn()
+    const upsertPendingLocalPtyShutdown = vi.fn()
+    setLocalPtyProvider({
+      shutdown,
+      onData: vi.fn(() => () => {}),
+      onReplay: vi.fn(() => () => {}),
+      onExit: vi.fn(() => () => {})
+    } as never)
+    handlers.clear()
+    registerPtyHandlers(mainWindow as never, undefined, undefined, undefined, undefined, {
+      getPendingLocalPtyShutdowns: () => [],
+      upsertPendingLocalPtyShutdown,
+      removePendingLocalPtyShutdown
+    } as never)
+
+    const first = handlers.get('pty:kill')!(null, {
+      id: 'reused-daemon-pty',
+      expectedPaneKey: 'tab-a:leaf-a',
+      expectedTabId: 'tab-a'
+    }) as Promise<void>
+    const replacement = handlers.get('pty:kill')!(null, {
+      id: 'reused-daemon-pty',
+      expectedPaneKey: 'tab-b:leaf-b',
+      expectedTabId: 'tab-b'
+    }) as Promise<void>
+    expect(shutdown).toHaveBeenCalledTimes(2)
+
+    shutdownA.resolve()
+    await expect(first).resolves.toBeUndefined()
+    expect(removePendingLocalPtyShutdown).not.toHaveBeenCalled()
+
+    shutdownB.resolve()
+    await expect(replacement).resolves.toBeUndefined()
+    expect(upsertPendingLocalPtyShutdown).toHaveBeenLastCalledWith({
+      ptyId: 'reused-daemon-pty',
+      expectedPaneKey: 'tab-b:leaf-b',
+      expectedTabId: 'tab-b',
+      requestedAt: expect.any(Number)
+    })
+    expect(removePendingLocalPtyShutdown).toHaveBeenCalledOnce()
+    await vi.advanceTimersByTimeAsync(30_000)
+    expect(vi.getTimerCount()).toBe(0)
+    vi.useRealTimers()
+  })
+
   it('re-drives a direct SSH kill when its provider is replaced in flight', async () => {
     vi.useFakeTimers()
     const oldShutdown = makeDeferred()

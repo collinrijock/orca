@@ -719,6 +719,30 @@ function mergePtyShutdownOptions(
   }
 }
 
+function ptyShutdownTabIds(options: PtyShutdownOptions): string[] {
+  const paneDelimiter = options.expectedPaneKey?.indexOf(':') ?? -1
+  return [
+    options.expectedTabId,
+    paneDelimiter > 0 ? options.expectedPaneKey?.slice(0, paneDelimiter) : undefined
+  ].filter((value): value is string => Boolean(value))
+}
+
+function ptyShutdownIdentityConflicts(
+  current: PtyShutdownOptions,
+  incoming: PtyShutdownOptions
+): boolean {
+  const currentTabIds = ptyShutdownTabIds(current)
+  const incomingTabIds = ptyShutdownTabIds(incoming)
+  return Boolean(
+    (current.expectedPaneKey &&
+      incoming.expectedPaneKey &&
+      current.expectedPaneKey !== incoming.expectedPaneKey) ||
+    currentTabIds.some((currentTabId) =>
+      incomingTabIds.some((incomingTabId) => currentTabId !== incomingTabId)
+    )
+  )
+}
+
 function retainLocalPtyShutdown(
   id: string,
   options: PtyShutdownOptions,
@@ -726,7 +750,9 @@ function retainLocalPtyShutdown(
   deferUntilProviderReady = false
 ): RetainedPtyShutdown {
   let retained = pendingLocalShutdownRetries.get(id)
-  if (!retained) {
+  if (!retained || ptyShutdownIdentityConflicts(retained.options, options)) {
+    // Why: a daemon can reuse a PTY id for a replacement pane. Its teardown
+    // must own a distinct object so the prior pane's completion is fenced.
     retained = {
       id,
       connectionId: null,
@@ -771,7 +797,7 @@ function retainSshPtyShutdown(
     return null
   }
   let retained = pendingSshShutdownRetries.get(id)
-  if (!retained) {
+  if (!retained || ptyShutdownIdentityConflicts(retained.options, options)) {
     retained = {
       id,
       connectionId,
