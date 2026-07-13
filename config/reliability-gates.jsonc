@@ -3625,7 +3625,8 @@
       "commands": [
         "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/parcel-watcher-process.test.ts src/main/ipc/runtime-watcher-process-pool.test.ts src/main/ipc/parcel-watcher-process-entry.test.ts src/main/ipc/parcel-watcher-event-delivery.test.ts src/main/ipc/filesystem-watcher-local-unsubscribe.test.ts src/main/ipc/filesystem-watcher-wsl.test.ts src/main/runtime/file-watcher-host.test.ts src/main/runtime/rpc/methods/files.test.ts src/main/providers/ssh-filesystem-provider.test.ts src/renderer/src/runtime/runtime-file-client.test.ts",
         "pnpm run build:electron-vite",
-        "node config/scripts/runtime-file-watcher-fault-harness.mjs"
+        "node config/scripts/runtime-file-watcher-fault-harness.mjs",
+        "ELECTRON_RUN_AS_NODE=1 pnpm exec electron config/scripts/runtime-file-watcher-fault-harness.mjs"
       ],
       "testFiles": [
         "src/main/ipc/parcel-watcher-process.test.ts",
