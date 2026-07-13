@@ -68,6 +68,10 @@ export class RelayAuthCoordinator {
     this.reconcile()
   }
 
+  getActiveBroker(): CoordinatedRelayBroker | null {
+    return this.ownership?.valid ? this.ownership.broker : null
+  }
+
   stop(): void {
     this.stopped = true
     this.fenceAndCloseNow()

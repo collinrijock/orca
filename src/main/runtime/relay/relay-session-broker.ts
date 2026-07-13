@@ -1,5 +1,6 @@
 import type WebSocket from 'ws'
 import type { OrcaCloudAuthConfig } from '../../orca-profiles/profile-cloud-auth-config'
+import type { PairingRelay } from '../../../shared/mobile-relay-pairing-offer'
 import type { E2EEKeypair } from '../e2ee-keypair'
 import type { MobileSocketWiring } from '../rpc/mobile-socket-wiring'
 import { CloudRelayTransport } from '../rpc/relay-transport'
@@ -78,6 +79,11 @@ export class RelaySessionBroker {
     return this.assignment
   }
 
+  get ownerIdentityKey(): string {
+    const identity = this.options.identity
+    return `${identity.userId}\0${identity.profileId}\0${identity.organizationId}`
+  }
+
   createInvite(relayDeviceId: string): ReturnType<RelayControlClient['createInvite']> {
     if (!this.control) {
       return Promise.reject(new Error('relay_control_not_active'))
@@ -85,11 +91,30 @@ export class RelaySessionBroker {
     return this.control.createInvite(relayDeviceId)
   }
 
-  revokeDevice(relayDeviceId: string): Promise<void> {
+  async createPairingRelay(relayDeviceId: string): Promise<PairingRelay> {
+    const assignment = this.assignment
+    if (!assignment || !this.control) {
+      throw new Error('relay_control_not_active')
+    }
+    const invite = await this.control.createInvite(relayDeviceId)
+    this.assertCurrent()
+    return {
+      v: 1,
+      directorUrl: this.options.authConfig.relayDirectorUrl,
+      cellUrl: assignment.cellUrl,
+      assignmentEpoch: assignment.assignmentEpoch,
+      relayHostId: this.relayHostId,
+      inviteToken: invite.inviteToken,
+      inviteExpiresAt: invite.expiresAt,
+      e2eeFraming: 2
+    }
+  }
+
+  revokeDevice(relayDeviceId: string, reqId?: string): Promise<void> {
     if (!this.control) {
       return Promise.reject(new Error('relay_control_not_active'))
     }
-    return this.control.revokeDevice(relayDeviceId)
+    return this.control.revokeDevice(relayDeviceId, reqId)
   }
 
   closeNow(): void {
