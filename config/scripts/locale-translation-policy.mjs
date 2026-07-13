@@ -343,6 +343,7 @@ const TRANSLATABLE_VALUE_CONTEXTS = new Map([
 ])
 
 function translatableContextKeyForValue(enValue) {
+  // Why: the cache is value-only; any registered key for the value grants the same translatable policy.
   for (const [key, value] of TRANSLATABLE_VALUE_CONTEXTS) {
     if (value === enValue) {
       return key
