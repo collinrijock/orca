@@ -171,6 +171,8 @@ import { AutomationService } from './automations/service'
 import { createHeadlessAutomationOutputSnapshotBuffer } from './automations/headless-dispatch'
 import { buildHeadlessAutomationWorktreeCreateArgs } from './automations/headless-workspace-create'
 import { AgentAwakeService } from './agent-awake-service'
+import { initHostAgentLaunchOperationStorePersistence } from './agent-launch/agent-launch-operation-store-persistence'
+import { initHostAgentSessionRecordStorePersistence } from './agent-launch/agent-session-record-store-persistence'
 import { registerSystemResumeBroadcast } from './system-resume-broadcast'
 import {
   recordCoalescedCrashBreadcrumb,
@@ -1770,6 +1772,15 @@ app.whenReady().then(async () => {
       syncMacMenuBarIcon(settings.showMenuBarIcon !== false)
     }
   })
+  // Rehydrate the host-private launch-operation ledger + pending snapshots and
+  // attach the durable sink now that the user data dir is stable, so a launch
+  // that outlives a crash stays reconcilable by token. Runs before any launch
+  // surface (IPC/runtime) can mutate the store.
+  initHostAgentLaunchOperationStorePersistence(app.getPath('userData'))
+  // Rehydrate the host-private session resume records (immutable launch snapshots
+  // + legacy replay config, encrypted at rest) so a slept session survives a
+  // restart and resumes by its ownership key. Same lifecycle as the ledger above.
+  initHostAgentSessionRecordStorePersistence(app.getPath('userData'))
   // Why: must run before ClaudeRuntimeAuthService's constructor sync — a Claude
   // CLI that survived the restart inside the daemon still holds the current
   // single-use refresh token, and an unguarded early refresh would rotate it
@@ -1902,6 +1913,10 @@ app.whenReady().then(async () => {
       .map((account) => ({ id: account.id, managedHomePath: account.managedHomePath }))
   })
   const runtimeService = new OrcaRuntimeService(store, stats, {
+    // Why: the concrete Store backs the shared agent-catalog service used by both
+    // the runtime RPC surface and the local IPC handlers registered on this same
+    // instance, keeping repair tokens and reference scanners in agreement.
+    agentCatalogStore: store ?? undefined,
     // Why: resolve the PTY provider lazily. initDaemonPtyProvider() runs later
     // inside attachMainWindowServices and calls setLocalPtyProvider(routedAdapter)
     // to swap the in-process provider for the daemon-routed one. Capturing the
@@ -1932,7 +1947,13 @@ app.whenReady().then(async () => {
     getAdditionalAiVaultCodexHomePaths: () =>
       codexRuntimeHome ? [codexRuntimeHome.getHostRuntimeHomePath()] : [],
     buildAgentHookPtyEnv: () =>
-      isAgentStatusHooksEnabled(store?.getSettings()) ? agentHookServer.buildPtyEnv() : {}
+      isAgentStatusHooksEnabled(store?.getSettings()) ? agentHookServer.buildPtyEnv() : {},
+    // Why: sourced lazily — runtimeRpc (and its DeviceRegistry) is constructed after
+    // this service. The revoked-principal forget override reads the paired-device
+    // scopes to prove a remote principal is explicitly revoked (no device remains),
+    // not merely disconnected (plan :498).
+    getPairedDeviceScopes: () =>
+      runtimeRpc?.getDeviceRegistry()?.listDevices().map((device) => device.scope) ?? []
   })
   runtime = runtimeService
   browserManager.setBrowserGuestStateChangedListener((worktreeId) => {
@@ -1944,6 +1965,11 @@ app.whenReady().then(async () => {
     // Why: desktop clients may mirror remote-host automations, but only a
     // server process should execute schedules owned by `remote_host_service`.
     allowRemoteHostScheduling: isServeMode,
+    // U6: resolve-only classification of the automation's agent BEFORE dispatch,
+    // so a deleted/disabled/unbuildable agent records a structured failure and
+    // spawns no terminal (both dispatch paths and both workspace modes).
+    classifyAgentLaunch: (automation, run, target) =>
+      runtimeService.classifyAgentLaunchForAutomation(automation.agentId, target.repo, run.id),
     headlessDispatcher: isServeMode
       ? async ({ automation, run, target }) => {
           const terminalSnapshotLimit = 2_000
