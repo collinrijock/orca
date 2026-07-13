@@ -61,6 +61,9 @@ function dependencies(client: RpcClient, events: string[]) {
   return {
     connectDirect: vi.fn(() => (events.push('connect'), client)),
     connectRelay: vi.fn(() => unavailableRelay),
+    resolveInviteDirector: vi.fn(async () => {
+      throw new Error('director unavailable')
+    }),
     getNextHostName: vi.fn(async () => 'Blue Whale'),
     saveHost: vi.fn(async (_host: HostProfile) => {
       events.push('save-host')

@@ -26,6 +26,8 @@ import {
   type PairingCandidateClient
 } from './mobile-relay-physical-client'
 import { racePairingCandidates, type PairingCandidate } from './pairing-candidate-race'
+import { resolvePairingInviteThroughDirector } from './mobile-relay-invite-director'
+import { createRecoveringPairingRelayCandidate } from './pairing-relay-candidate'
 
 export type PreProfilePairingAttempt = {
   readonly result: Promise<{ hostId: string }>
@@ -36,6 +38,7 @@ export type PreProfilePairingAttempt = {
 type Dependencies = {
   connectDirect: typeof connect
   connectRelay: typeof connectMobileRelayForPairing
+  resolveInviteDirector: typeof resolvePairingInviteThroughDirector
   getNextHostName: typeof getNextHostName
   saveHost: typeof saveHost
   saveJournal: typeof saveMobileRelayPairingJournal
@@ -49,6 +52,7 @@ type Dependencies = {
 const defaultDependencies: Dependencies = {
   connectDirect: connect,
   connectRelay: connectMobileRelayForPairing,
+  resolveInviteDirector: resolvePairingInviteThroughDirector,
   getNextHostName,
   saveHost,
   saveJournal: saveMobileRelayPairingJournal,
@@ -150,10 +154,30 @@ async function runPairing(
   clients.add(directClient)
   const candidates: PairingCandidate[] = [{ path: 'direct', client: directClient }]
   if (journal) {
-    const relayClient = dependencies.connectRelay({
-      relay: offer.relay!,
-      deviceToken: offer.deviceToken,
-      desktopPublicKeyB64: offer.publicKeyB64
+    const relayClient = createRecoveringPairingRelayCandidate({
+      journal,
+      connect: (relay) =>
+        dependencies.connectRelay({
+          relay,
+          deviceToken: offer.deviceToken,
+          desktopPublicKeyB64: offer.publicKeyB64
+        }),
+      resolveDirector: (relay) => dependencies.resolveInviteDirector({ relay }),
+      persistMove: async (relay) => {
+        journal = {
+          ...journal!,
+          metadata: {
+            ...journal!.metadata,
+            relay: {
+              ...journal!.metadata.relay,
+              cellUrl: relay.cellUrl,
+              assignmentEpoch: relay.assignmentEpoch
+            }
+          }
+        }
+        await dependencies.updateJournal(journal.metadata.journalId, () => journal!.metadata)
+      },
+      now: dependencies.now
     })
     clients.add(relayClient)
     candidates.push({ path: 'relay', client: relayClient })
