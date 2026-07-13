@@ -1,4 +1,5 @@
 import { fork, type ChildProcess } from 'node:child_process'
+import { writeFileSync } from 'node:fs'
 import {
   createWatcherCanaryDirectory,
   removeWatcherCanaryDirectory
@@ -32,6 +33,16 @@ export function launchWatcherChild(
     removeWatcherCanaryDirectory(canaryDir)
     console.error('[parcel-watcher-process] failed to fork watcher process:', error)
     return null
+  }
+  const faultHarnessPidFile = process.env.ORCA_WATCHER_CHILD_PID_FILE
+  if (faultHarnessPidFile && child.pid) {
+    try {
+      // Why: the real fault harness must target only the native watcher child,
+      // including on Windows hosts where portable process-tree discovery is unavailable.
+      writeFileSync(faultHarnessPidFile, String(child.pid))
+    } catch {
+      // Fault-injection observability must never affect watcher availability.
+    }
   }
   child.stderr?.on('data', (chunk: Buffer) => {
     console.error('[parcel-watcher-process]', String(chunk).trimEnd())
