@@ -698,7 +698,9 @@
         "devSearchKeywordToast": "toast",
         "devSearchKeywordSonner": "sonner",
         "devSearchKeywordError": "error",
-        "devSearchKeywordNotification": "notification"
+        "devSearchKeywordNotification": "notification",
+        "pluginsTitle": "プラグイン",
+        "pluginsDescription": "試験的な Orca プラグインをインストールして管理します。"
       },
       "useAppMenuPaste": {
         "pasteTooLarge": "貼り付け内容が大きすぎます。"
@@ -9032,6 +9034,118 @@
         "TerminalInteractionSection": {
           "567633ff50": "Right-click pastes the clipboard into the terminal. Control-click to open the context menu.",
           "c64497148a": "Right-click pastes the clipboard. Control-click opens the context menu."
+        },
+        "PluginConsentDialog": {
+          "workerTrust": "バックグラウンドワーカー — 独自のプロセスで実行",
+          "panelTrust": "パネルのみ — ワーカープロセスなし",
+          "decisionFailed": "権限の選択を保存できませんでした。",
+          "title": "権限を確認",
+          "subtitle": "{{value0}} v{{value1}} · {{value2}}",
+          "reconsent": "前回このプラグインを確認してから、権限またはワーカーの信頼レベルが変更されました。実行する前にもう一度確認してください。",
+          "source": "ソース",
+          "unknownSource": "利用不可",
+          "commit": "コミット",
+          "localCommit": "利用不可（ローカルフォルダー）",
+          "trust": "信頼レベル",
+          "capabilities": "このプラグインに許可する操作",
+          "warning": "これらの権限は、プラグインによる Orca API の使用を制限します。ただしワーカーはコンピューター上の通常のプロセスとして実行され、ファイル、ネットワーク、ほかのプロセスに完全にアクセスできます。",
+          "enable": "プラグインを有効化",
+          "keepDisabled": "無効のままにする",
+          "panelWarning": "これらの権限は、プラグインによる Orca API の使用を制限します。このプラグインにはワーカープロセスがありません。",
+          "capability": {
+            "workspaceRead": "選択中のワークツリーの名前、ブランチ、ターミナル一覧を読み取る",
+            "terminalSend": "表示中の特定のターミナルにテキストを入力する",
+            "notificationsShow": "プラグイン名を付けたデスクトップ通知を表示する",
+            "storage": "プラグイン専用の保存フォルダーにデータを保存する",
+            "secrets": "プラグイン専用の暗号化保管庫にシークレットを保存し、読み取る",
+            "eventsSubscribe": "ワークツリーの作成・削除やエージェント状態の変更時に通知を受け取る",
+            "settingsOwn": "プラグイン自身の設定を読み取り、変更する"
+          }
+        },
+        "PluginDevelopmentSection": {
+          "pathRequired": "プラグインフォルダーのパスを入力してください。",
+          "title": "開発",
+          "help": "開発中のプラグインを、このコンピューター上のフォルダーから直接読み込みます。開発用プラグインにも権限の確認が必要です。ワーカーはこのデスクトップホストで実行され、SSH ワークスペースの操作は Orca 経由で処理されるため、ここにはデスクトップ側のパスを指定します。",
+          "remove": "削除",
+          "placeholder": "/Users/you/plugins/my-plugin or C:\\Users\\you\\plugins\\my-plugin",
+          "add": "パスを追加",
+          "saveFailed": "開発用プラグインのパスを保存できませんでした。"
+        },
+        "PluginInstallDialog": {
+          "localRequired": "プラグインフォルダーのパスを入力してください。",
+          "gitUrlRequired": "リポジトリ URL を入力してください。",
+          "gitRefRequired": "インストールを固定するため、明示的な #ref（タグまたはコミット）を追加してください。例: #v0.1.0。",
+          "installFailed": "プラグインのインストールに失敗しました。",
+          "title": "プラグインをインストール",
+          "description": "インストールするとプラグインが Orca にコピーされ、確認する権限が表示されます。有効にするまでプラグインのコードは実行されません。",
+          "source": "インストール元",
+          "localTab": "ローカルフォルダー",
+          "gitTab": "Git URL",
+          "localLabel": "プラグインフォルダーのパス",
+          "localPlaceholder": "/Users/you/plugins/my-plugin or C:\\Users\\you\\plugins\\my-plugin",
+          "localHelp": "このコンピューター上で orca-plugin.json を含むフォルダーへのフルパスです。入力したパスがそのまま使用されます。",
+          "gitLabel": "#ref 付きリポジトリ URL",
+          "gitPlaceholder": "https://git.example/acme/orca-notes#v0.1.0",
+          "gitHelp": "明示的な #ref（タグまたはコミット）を付けてインストールを固定します。GitHub、GitLab、その他の Git ホストに対応しています。",
+          "cancel": "キャンセル",
+          "installing": "インストール中…",
+          "install": "インストール",
+          "gitUrlInvalid": "HTTPS または SSH の Git URL を使用してください。実行可能な Git ヘルパープロトコルは使用できません。"
+        },
+        "PluginRemoveDialog": {
+          "title": "プラグインを削除しますか？",
+          "description": "{{value0}} と、このコンピューターに保存されたプラグインデータを削除します。後で再インストールできます。",
+          "cancel": "キャンセル",
+          "remove": "プラグインを削除"
+        },
+        "PluginSettingsRow": {
+          "needsReview": "確認が必要",
+          "invalid": "無効",
+          "error": "エラー",
+          "disabled": "無効",
+          "running": "実行中",
+          "enabled": "有効",
+          "workerTier": "バックグラウンドワーカー",
+          "panelTier": "パネルのみ",
+          "loadingLogs": "ログを読み込み中…",
+          "noLogs": "記録されたログ行はありません。",
+          "logCount": "保持されている最大 200 行のうち最新 {{value0}} 行",
+          "dev": "開発",
+          "review": "権限を確認",
+          "moreActions": "{{value0}} のその他の操作",
+          "hideLogs": "ログを非表示",
+          "viewLogs": "ログを表示",
+          "remove": "削除",
+          "enableLabel": "{{value0}} を有効化",
+          "restartCount": " · {{value0}} 回再起動",
+          "restarting": "再起動中"
+        },
+        "PluginsSettingsSection": {
+          "loadFailed": "プラグインを読み込めませんでした。",
+          "logsFailed": "プラグインのログを読み込めませんでした。",
+          "title": "プラグイン",
+          "experimental": "試験的",
+          "description": "Orca プラグインをインストールして管理します。SSH ワークスペースの場合も、プラグインはこのコンピューターで実行されます。",
+          "install": "プラグインをインストール",
+          "systemLabel": "プラグインシステム",
+          "systemDescription": "インストール済みプラグインを検出し、個別に有効化できます。確認して有効にするまでは何も実行されません。ワーカーは常にこのコンピューターで実行され、SSH ワークスペースの操作は Orca 経由で処理されます。",
+          "featureOff": "インストール済みプラグインを表示・管理するには、プラグインシステムを有効にしてください。すでにインストールされているものはディスクに残り、システムがオフの間は無効のままです。",
+          "loading": "プラグインを読み込み中…",
+          "installed": "インストール済み",
+          "refresh": "更新",
+          "tryAgain": "再試行",
+          "empty": "プラグインはインストールされていません。「プラグインをインストール」から、ローカルフォルダーまたは固定された Git ref を追加してください。",
+          "settingsUpdateFailed": "プラグイン設定を保存できませんでした。"
+        },
+        "plugins": {
+          "search": {
+            "title": "プラグイン",
+            "description": "試験的な Orca プラグインをインストールして管理します。",
+            "install": "プラグインをインストール",
+            "permissions": "プラグインの権限",
+            "logs": "プラグインのログ",
+            "development": "開発用プラグイン"
+          }
         }
       },
       "right": {
@@ -10139,6 +10253,12 @@
             "workspaceGone": "Couldn't open log — workspace is no longer available.",
             "notAuthorized": "Couldn't open log — path not authorized.",
             "alreadyEditable": "Log is already open for editing."
+          },
+          "PluginPanel": {
+            "loading": "プラグインパネルを読み込み中...",
+            "unavailable": "このプラグインパネルは利用できなくなりました。",
+            "loadFailed": "プラグインパネルを読み込めませんでした。",
+            "unresponsive": "プラグインパネルが応答しなくなったため停止しました。"
           }
         }
       },
@@ -12687,6 +12807,11 @@
             "noPr": "PR なし",
             "unavailable": "利用不可"
           }
+        },
+        "pluginPanelBridgeHost": {
+          "actionsUnavailable": "このクライアントではプラグイン操作を利用できません。",
+          "messageTooLarge": "メッセージがサイズ制限を超えています。",
+          "tooManyRequests": "リクエストが多すぎます。"
         }
       },
       "link": {
@@ -12991,7 +13116,7 @@
         "pastedImageLabel": "貼り付けた画像",
         "imagePasteFailed": "画像の貼り付けに失敗しました。",
         "worktreeNotReady": "Worktreeが準備できていません — しばらくしてから再試行してください。",
-        "uploadingAttachments": "{{value0}}個のファイルをリモートにアップロード中…"
+        "uploadingAttachments": "Uploading {{value0}} file(s) to remote…"
       },
       "tool": {
         "running": "実行中…",

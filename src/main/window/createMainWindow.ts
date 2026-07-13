@@ -49,6 +49,7 @@ import { getMainE2EConfig } from '../e2e-config'
 import { buildEditableContextMenuTemplate } from './editable-context-menu'
 import { clearTrustedUIRendererWebContentsId, setTrustedUIRendererWebContentsId } from '../ipc/ui'
 import { resolveWindowCloseAction } from './window-close-decision'
+import { registerPluginPanelNavigationGuard } from '../plugins/plugin-panel-navigation-guard'
 
 function forceRepaint(window: BrowserWindow): void {
   if (window.isDestroyed()) {
@@ -557,6 +558,8 @@ export function createMainWindow(
 
     event.preventDefault()
   })
+
+  registerPluginPanelNavigationGuard(mainWindow.webContents)
 
   // Why: mirrors the renderer's markdown-editor focus state so the main-process
   // before-input-event handler can skip Cmd/Ctrl+B interception while TipTap

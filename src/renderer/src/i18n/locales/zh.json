@@ -698,7 +698,9 @@
         "devSearchKeywordToast": "toast",
         "devSearchKeywordSonner": "sonner",
         "devSearchKeywordError": "error",
-        "devSearchKeywordNotification": "notification"
+        "devSearchKeywordNotification": "notification",
+        "pluginsTitle": "插件",
+        "pluginsDescription": "安装和管理实验性 Orca 插件。"
       },
       "useAppMenuPaste": {
         "pasteTooLarge": "粘贴内容过大。"
@@ -9032,6 +9034,118 @@
         "TerminalInteractionSection": {
           "567633ff50": "Right-click pastes the clipboard into the terminal. Control-click to open the context menu.",
           "c64497148a": "Right-click pastes the clipboard. Control-click opens the context menu."
+        },
+        "PluginConsentDialog": {
+          "workerTrust": "后台工作进程 — 在独立进程中运行",
+          "panelTrust": "仅面板 — 无工作进程",
+          "decisionFailed": "无法保存权限决定。",
+          "title": "检查权限",
+          "subtitle": "{{value0}} v{{value1}} · {{value2}}",
+          "reconsent": "自你上次检查此插件以来，权限或工作进程信任级别已更改。请在运行前重新检查。",
+          "source": "来源",
+          "unknownSource": "不可用",
+          "commit": "提交",
+          "localCommit": "不可用（本地文件夹）",
+          "trust": "信任级别",
+          "capabilities": "此插件可以",
+          "warning": "这些权限限制插件使用 Orca API 的方式。其工作进程仍作为普通进程在你的计算机上运行，可以完全访问文件、网络和其他进程。",
+          "enable": "启用插件",
+          "keepDisabled": "保持禁用",
+          "panelWarning": "这些权限限制插件使用 Orca API 的方式。此插件没有工作进程。",
+          "capability": {
+            "workspaceRead": "读取当前工作树的名称、分支和终端列表",
+            "terminalSend": "在可见的指定终端中输入文本",
+            "notificationsShow": "显示带有插件名称的桌面通知",
+            "storage": "在插件自己的存储文件夹中保存数据",
+            "secrets": "在插件自己的加密保管库中保存和读取机密信息",
+            "eventsSubscribe": "在创建或移除工作树以及智能体状态变化时接收通知",
+            "settingsOwn": "读取和更改插件自己的设置"
+          }
+        },
+        "PluginDevelopmentSection": {
+          "pathRequired": "请输入插件文件夹路径。",
+          "title": "开发",
+          "help": "开发插件时，可直接从此计算机上的文件夹加载。开发插件仍需检查权限。工作进程在此桌面主机上运行；SSH 工作区操作通过 Orca 路由，因此这里填写桌面端路径。",
+          "remove": "移除",
+          "placeholder": "/Users/you/plugins/my-plugin or C:\\Users\\you\\plugins\\my-plugin",
+          "add": "添加路径",
+          "saveFailed": "无法保存开发插件路径。"
+        },
+        "PluginInstallDialog": {
+          "localRequired": "请输入插件文件夹路径。",
+          "gitUrlRequired": "请输入仓库 URL。",
+          "gitRefRequired": "请添加明确的 #ref（标签或提交）以固定安装版本，例如 #v0.1.0。",
+          "installFailed": "插件安装失败。",
+          "title": "安装插件",
+          "description": "安装会将插件复制到 Orca，并显示其权限供你检查。启用插件之前，不会运行任何插件代码。",
+          "source": "安装来源",
+          "localTab": "本地文件夹",
+          "gitTab": "Git URL",
+          "localLabel": "插件文件夹路径",
+          "localPlaceholder": "/Users/you/plugins/my-plugin or C:\\Users\\you\\plugins\\my-plugin",
+          "localHelp": "此计算机上包含 orca-plugin.json 的文件夹完整路径。系统会完全按输入内容使用该路径。",
+          "gitLabel": "带 #ref 的仓库 URL",
+          "gitPlaceholder": "https://git.example/acme/orca-notes#v0.1.0",
+          "gitHelp": "附加明确的 #ref（标签或提交）以固定安装版本。适用于 GitHub、GitLab 和任何 Git 主机。",
+          "cancel": "取消",
+          "installing": "正在安装…",
+          "install": "安装",
+          "gitUrlInvalid": "请使用 HTTPS 或 SSH Git URL。不允许使用可执行的 Git 辅助协议。"
+        },
+        "PluginRemoveDialog": {
+          "title": "移除插件？",
+          "description": "这会从此计算机中移除 {{value0}} 及其保存的插件数据。你可以稍后重新安装。",
+          "cancel": "取消",
+          "remove": "移除插件"
+        },
+        "PluginSettingsRow": {
+          "needsReview": "需要检查",
+          "invalid": "无效",
+          "error": "错误",
+          "disabled": "已禁用",
+          "running": "正在运行",
+          "enabled": "已启用",
+          "workerTier": "后台工作进程",
+          "panelTier": "仅面板",
+          "loadingLogs": "正在加载日志…",
+          "noLogs": "没有记录日志行。",
+          "logCount": "最多保留 200 行，显示最近 {{value0}} 行",
+          "dev": "开发",
+          "review": "检查权限",
+          "moreActions": "{{value0}} 的更多操作",
+          "hideLogs": "隐藏日志",
+          "viewLogs": "查看日志",
+          "remove": "移除",
+          "enableLabel": "启用 {{value0}}",
+          "restartCount": " · 重启 {{value0}} 次",
+          "restarting": "正在重新启动"
+        },
+        "PluginsSettingsSection": {
+          "loadFailed": "无法加载插件。",
+          "logsFailed": "无法加载插件日志。",
+          "title": "插件",
+          "experimental": "实验性",
+          "description": "安装和管理 Orca 插件。即使使用 SSH 工作区，插件也在此计算机上运行。",
+          "install": "安装插件",
+          "systemLabel": "插件系统",
+          "systemDescription": "发现已安装的插件，并允许逐个启用。检查并启用之前不会运行任何内容。工作进程始终在此计算机上运行；SSH 工作区操作通过 Orca 路由。",
+          "featureOff": "开启插件系统以查看和管理已安装的插件。已安装的内容会保留在磁盘上，并在系统关闭时保持禁用。",
+          "loading": "正在加载插件…",
+          "installed": "已安装",
+          "refresh": "刷新",
+          "tryAgain": "重试",
+          "empty": "尚未安装插件。使用“安装插件”从本地文件夹或固定的 Git ref 添加插件。",
+          "settingsUpdateFailed": "无法保存插件设置。"
+        },
+        "plugins": {
+          "search": {
+            "title": "插件",
+            "description": "安装和管理实验性 Orca 插件。",
+            "install": "安装插件",
+            "permissions": "插件权限",
+            "logs": "插件日志",
+            "development": "开发插件"
+          }
         }
       },
       "right": {
@@ -10139,6 +10253,12 @@
             "workspaceGone": "Couldn't open log — workspace is no longer available.",
             "notAuthorized": "Couldn't open log — path not authorized.",
             "alreadyEditable": "Log is already open for editing."
+          },
+          "PluginPanel": {
+            "loading": "正在加载插件面板...",
+            "unavailable": "此插件面板已不可用。",
+            "loadFailed": "无法加载插件面板。",
+            "unresponsive": "插件面板停止响应，已被暂停。"
           }
         }
       },
@@ -12687,6 +12807,11 @@
             "noPr": "无 PR",
             "unavailable": "不可用"
           }
+        },
+        "pluginPanelBridgeHost": {
+          "actionsUnavailable": "此客户端不支持插件操作。",
+          "messageTooLarge": "消息超过大小限制。",
+          "tooManyRequests": "请求过多。"
         }
       },
       "link": {
@@ -12991,7 +13116,7 @@
         "pastedImageLabel": "粘贴的图片",
         "imagePasteFailed": "图片粘贴失败。",
         "worktreeNotReady": "Worktree 未就绪 — 请稍后重试。",
-        "uploadingAttachments": "正在上传 {{value0}} 个文件到远程…"
+        "uploadingAttachments": "Uploading {{value0}} file(s) to remote…"
       },
       "tool": {
         "running": "正在运行…",

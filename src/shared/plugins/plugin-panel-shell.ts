@@ -47,6 +47,7 @@ export const PANEL_DESIGN_TOKEN_ALLOWLIST = [
   '--accent',
   '--accent-foreground',
   '--destructive',
+  '--destructive-foreground',
   '--border',
   '--input',
   '--ring',

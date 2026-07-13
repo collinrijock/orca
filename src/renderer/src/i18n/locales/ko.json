@@ -698,7 +698,9 @@
         "devSearchKeywordToast": "toast",
         "devSearchKeywordSonner": "sonner",
         "devSearchKeywordError": "error",
-        "devSearchKeywordNotification": "notification"
+        "devSearchKeywordNotification": "notification",
+        "pluginsTitle": "플러그인",
+        "pluginsDescription": "실험적인 Orca 플러그인을 설치하고 관리합니다."
       },
       "useAppMenuPaste": {
         "pasteTooLarge": "붙여넣기 내용이 너무 큽니다."
@@ -9032,6 +9034,118 @@
         "TerminalInteractionSection": {
           "567633ff50": "Right-click pastes the clipboard into the terminal. Control-click to open the context menu.",
           "c64497148a": "Right-click pastes the clipboard. Control-click opens the context menu."
+        },
+        "PluginConsentDialog": {
+          "workerTrust": "백그라운드 워커 — 별도 프로세스에서 실행",
+          "panelTrust": "패널 전용 — 워커 프로세스 없음",
+          "decisionFailed": "권한 결정을 저장할 수 없습니다.",
+          "title": "권한 검토",
+          "subtitle": "{{value0}} v{{value1}} · {{value2}}",
+          "reconsent": "이 플러그인을 마지막으로 검토한 후 권한 또는 워커 신뢰 수준이 변경되었습니다. 실행하기 전에 다시 검토하세요.",
+          "source": "소스",
+          "unknownSource": "사용할 수 없음",
+          "commit": "커밋",
+          "localCommit": "사용할 수 없음(로컬 폴더)",
+          "trust": "신뢰 수준",
+          "capabilities": "이 플러그인이 할 수 있는 작업",
+          "warning": "이 권한은 플러그인이 Orca API를 사용하는 방식을 제한합니다. 워커는 컴퓨터에서 일반 프로세스로 실행되므로 파일, 네트워크 및 다른 프로세스에 모두 접근할 수 있습니다.",
+          "enable": "플러그인 활성화",
+          "keepDisabled": "비활성화 유지",
+          "panelWarning": "이 권한은 플러그인이 Orca API를 사용하는 방식을 제한합니다. 이 플러그인에는 워커 프로세스가 없습니다.",
+          "capability": {
+            "workspaceRead": "선택한 워크트리의 이름, 브랜치 및 터미널 목록 읽기",
+            "terminalSend": "표시된 특정 터미널에 텍스트 입력",
+            "notificationsShow": "플러그인 이름이 표시된 데스크톱 알림 보기",
+            "storage": "플러그인 전용 저장소 폴더에 데이터 저장",
+            "secrets": "플러그인 전용 암호화 보관소에서 비밀 정보 저장 및 읽기",
+            "eventsSubscribe": "워크트리가 생성 또는 제거되거나 에이전트 상태가 변경될 때 알림 받기",
+            "settingsOwn": "플러그인 자체 설정 읽기 및 변경"
+          }
+        },
+        "PluginDevelopmentSection": {
+          "pathRequired": "플러그인 폴더 경로를 입력하세요.",
+          "title": "개발",
+          "help": "개발하는 동안 이 컴퓨터의 폴더에서 플러그인을 직접 불러옵니다. 개발용 플러그인도 권한 검토가 필요합니다. 워커는 이 데스크톱 호스트에서 실행되고 SSH 워크스페이스 작업은 Orca를 통해 라우팅되므로 여기에 데스크톱 경로를 입력하세요.",
+          "remove": "제거",
+          "placeholder": "/Users/you/plugins/my-plugin or C:\\Users\\you\\plugins\\my-plugin",
+          "add": "경로 추가",
+          "saveFailed": "개발용 플러그인 경로를 저장할 수 없습니다."
+        },
+        "PluginInstallDialog": {
+          "localRequired": "플러그인 폴더 경로를 입력하세요.",
+          "gitUrlRequired": "저장소 URL을 입력하세요.",
+          "gitRefRequired": "설치를 고정하려면 명시적인 #ref(태그 또는 커밋)를 추가하세요. 예: #v0.1.0.",
+          "installFailed": "플러그인 설치에 실패했습니다.",
+          "title": "플러그인 설치",
+          "description": "설치하면 플러그인이 Orca에 복사되고 검토할 권한이 표시됩니다. 활성화하기 전에는 플러그인 코드가 실행되지 않습니다.",
+          "source": "설치 소스",
+          "localTab": "로컬 폴더",
+          "gitTab": "Git URL",
+          "localLabel": "플러그인 폴더 경로",
+          "localPlaceholder": "/Users/you/plugins/my-plugin or C:\\Users\\you\\plugins\\my-plugin",
+          "localHelp": "이 컴퓨터에서 orca-plugin.json이 들어 있는 폴더의 전체 경로입니다. 입력한 경로를 그대로 사용합니다.",
+          "gitLabel": "#ref가 포함된 저장소 URL",
+          "gitPlaceholder": "https://git.example/acme/orca-notes#v0.1.0",
+          "gitHelp": "명시적인 #ref(태그 또는 커밋)를 추가해 설치를 고정하세요. GitHub, GitLab 및 모든 Git 호스트에서 사용할 수 있습니다.",
+          "cancel": "취소",
+          "installing": "설치 중…",
+          "install": "설치",
+          "gitUrlInvalid": "HTTPS 또는 SSH Git URL을 사용하세요. 실행 가능한 Git 도우미 프로토콜은 허용되지 않습니다."
+        },
+        "PluginRemoveDialog": {
+          "title": "플러그인을 제거하시겠습니까?",
+          "description": "{{value0}} 및 이 컴퓨터에 저장된 플러그인 데이터를 제거합니다. 나중에 다시 설치할 수 있습니다.",
+          "cancel": "취소",
+          "remove": "플러그인 제거"
+        },
+        "PluginSettingsRow": {
+          "needsReview": "검토 필요",
+          "invalid": "유효하지 않음",
+          "error": "오류",
+          "disabled": "비활성화됨",
+          "running": "실행 중",
+          "enabled": "활성화됨",
+          "workerTier": "백그라운드 워커",
+          "panelTier": "패널 전용",
+          "loadingLogs": "로그 불러오는 중…",
+          "noLogs": "기록된 로그 줄이 없습니다.",
+          "logCount": "보관된 최대 200줄 중 최근 {{value0}}줄",
+          "dev": "개발",
+          "review": "권한 검토",
+          "moreActions": "{{value0}}의 추가 작업",
+          "hideLogs": "로그 숨기기",
+          "viewLogs": "로그 보기",
+          "remove": "제거",
+          "enableLabel": "{{value0}} 활성화",
+          "restartCount": " · {{value0}}회 다시 시작",
+          "restarting": "다시 시작 중"
+        },
+        "PluginsSettingsSection": {
+          "loadFailed": "플러그인을 불러올 수 없습니다.",
+          "logsFailed": "플러그인 로그를 불러올 수 없습니다.",
+          "title": "플러그인",
+          "experimental": "실험적",
+          "description": "Orca 플러그인을 설치하고 관리합니다. SSH 워크스페이스에서도 플러그인은 이 컴퓨터에서 실행됩니다.",
+          "install": "플러그인 설치",
+          "systemLabel": "플러그인 시스템",
+          "systemDescription": "설치된 플러그인을 찾아 개별적으로 활성화할 수 있습니다. 검토하고 활성화하기 전에는 아무것도 실행되지 않습니다. 워커는 항상 이 컴퓨터에서 실행되고 SSH 워크스페이스 작업은 Orca를 통해 라우팅됩니다.",
+          "featureOff": "플러그인 시스템을 켜서 설치된 플러그인을 보고 관리하세요. 이미 설치된 항목은 디스크에 남으며 시스템이 꺼져 있는 동안 비활성화 상태를 유지합니다.",
+          "loading": "플러그인 불러오는 중…",
+          "installed": "설치됨",
+          "refresh": "새로 고침",
+          "tryAgain": "다시 시도",
+          "empty": "설치된 플러그인이 없습니다. 플러그인 설치를 사용해 로컬 폴더 또는 고정된 Git ref에서 추가하세요.",
+          "settingsUpdateFailed": "플러그인 설정을 저장할 수 없습니다."
+        },
+        "plugins": {
+          "search": {
+            "title": "플러그인",
+            "description": "실험적인 Orca 플러그인을 설치하고 관리합니다.",
+            "install": "플러그인 설치",
+            "permissions": "플러그인 권한",
+            "logs": "플러그인 로그",
+            "development": "개발용 플러그인"
+          }
         }
       },
       "right": {
@@ -10139,6 +10253,12 @@
             "workspaceGone": "Couldn't open log — workspace is no longer available.",
             "notAuthorized": "Couldn't open log — path not authorized.",
             "alreadyEditable": "Log is already open for editing."
+          },
+          "PluginPanel": {
+            "loading": "플러그인 패널 불러오는 중...",
+            "unavailable": "이 플러그인 패널은 더 이상 사용할 수 없습니다.",
+            "loadFailed": "플러그인 패널을 불러올 수 없습니다.",
+            "unresponsive": "플러그인 패널이 응답하지 않아 일시 중단되었습니다."
           }
         }
       },
@@ -12687,6 +12807,11 @@
             "noPr": "PR 없음",
             "unavailable": "사용 불가"
           }
+        },
+        "pluginPanelBridgeHost": {
+          "actionsUnavailable": "이 클라이언트에서는 플러그인 작업을 사용할 수 없습니다.",
+          "messageTooLarge": "메시지가 크기 제한을 초과합니다.",
+          "tooManyRequests": "요청이 너무 많습니다."
         }
       },
       "link": {
@@ -12991,7 +13116,7 @@
         "pastedImageLabel": "붙여넣은 이미지",
         "imagePasteFailed": "이미지 붙여넣기 실패.",
         "worktreeNotReady": "워크트리가 준비되지 않았습니다 — 잠시 후 다시 시도하세요.",
-        "uploadingAttachments": "{{value0}}개 파일을 원격으로 업로드 중…"
+        "uploadingAttachments": "Uploading {{value0}} file(s) to remote…"
       },
       "tool": {
         "running": "실행 중…",
