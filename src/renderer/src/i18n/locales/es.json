@@ -12800,7 +12800,7 @@
         "profiles": {
           "switcher": {
             "cloud": {
-              "unavailable": "Inicio de sesión en la nube no disponible"
+              "unavailable": "Inicio de sesión en Orca no disponible"
             },
             "account": "Cuenta",
             "reconnect": "Reconectar perfil",
@@ -12824,7 +12824,14 @@
             "c106c674fe": "Nuevo perfil local",
             "org": {
               "members": "Miembros de la organización"
-            }
+            },
+            "signInWaiting": "Esperando el inicio de sesión…",
+            "signInAgain": "Volver a iniciar sesión",
+            "signIn": "Iniciar sesión en Orca",
+            "accountTitle": "Cuenta de Orca",
+            "accountSignedIn": "Sesión iniciada",
+            "accountSignInRequired": "Inicio de sesión requerido",
+            "accountSignedOut": "Sesión cerrada"
           },
           "management": {
             "04e7bd2a23": "Transferir",

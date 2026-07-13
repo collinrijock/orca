@@ -12800,7 +12800,7 @@
         "profiles": {
           "switcher": {
             "cloud": {
-              "unavailable": "云登录不可用"
+              "unavailable": "Orca 登录不可用"
             },
             "reconnect": "重新连接配置文件",
             "connect": "连接配置文件",
@@ -12824,7 +12824,14 @@
             "account": "帐户",
             "org": {
               "members": "组织成员"
-            }
+            },
+            "signInWaiting": "正在等待登录…",
+            "signInAgain": "重新登录",
+            "signIn": "登录 Orca",
+            "accountTitle": "Orca 帐户",
+            "accountSignedIn": "已登录",
+            "accountSignInRequired": "需要登录",
+            "accountSignedOut": "已退出登录"
           },
           "management": {
             "04e7bd2a23": "转移",

@@ -12800,7 +12800,7 @@
         "profiles": {
           "switcher": {
             "cloud": {
-              "unavailable": "クラウドログインを利用できません"
+              "unavailable": "Orcaへのサインインは利用できません"
             },
             "reconnect": "プロファイルを再接続",
             "connect": "プロファイルを接続",
@@ -12824,7 +12824,14 @@
             "account": "アカウント",
             "org": {
               "members": "組織メンバー"
-            }
+            },
+            "signInWaiting": "サインインを待機中…",
+            "signInAgain": "もう一度サインイン",
+            "signIn": "Orcaにサインイン",
+            "accountTitle": "Orcaアカウント",
+            "accountSignedIn": "サインイン済み",
+            "accountSignInRequired": "サインインが必要です",
+            "accountSignedOut": "サインアウト済み"
           },
           "management": {
             "04e7bd2a23": "転送",

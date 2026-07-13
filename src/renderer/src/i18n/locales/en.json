@@ -12800,7 +12800,7 @@
         "profiles": {
           "switcher": {
             "cloud": {
-              "unavailable": "Cloud sign-in unavailable"
+              "unavailable": "Orca sign-in unavailable"
             },
             "account": "Account",
             "reconnect": "Reconnect profile",
@@ -12824,7 +12824,14 @@
             "c106c674fe": "New local profile",
             "org": {
               "members": "Organization members"
-            }
+            },
+            "signInWaiting": "Waiting for sign-in…",
+            "signInAgain": "Sign in again",
+            "signIn": "Sign in to Orca",
+            "accountTitle": "Orca account",
+            "accountSignedIn": "Signed in",
+            "accountSignInRequired": "Sign-in required",
+            "accountSignedOut": "Signed out"
           },
           "management": {
             "04e7bd2a23": "Transfer",

@@ -12800,7 +12800,7 @@
         "profiles": {
           "switcher": {
             "cloud": {
-              "unavailable": "클라우드 로그인 사용 불가"
+              "unavailable": "Orca 로그인 사용 불가"
             },
             "reconnect": "프로필 다시 연결",
             "connect": "프로필 연결",
@@ -12824,7 +12824,14 @@
             "account": "계정",
             "org": {
               "members": "조직 구성원"
-            }
+            },
+            "signInWaiting": "로그인 대기 중…",
+            "signInAgain": "다시 로그인",
+            "signIn": "Orca에 로그인",
+            "accountTitle": "Orca 계정",
+            "accountSignedIn": "로그인됨",
+            "accountSignInRequired": "로그인 필요",
+            "accountSignedOut": "로그아웃됨"
           },
           "management": {
             "04e7bd2a23": "전송",
