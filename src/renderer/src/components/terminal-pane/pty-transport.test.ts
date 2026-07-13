@@ -147,6 +147,52 @@ describe('createIpcPtyTransport', () => {
     expect(onDataCallback).not.toHaveBeenCalledWith('dead generation output')
   })
 
+  it('preserves replacement startup events while an older same-id admission rejects', async () => {
+    const { createIpcPtyTransport } = await import('./pty-transport')
+    const spawn = window.api.pty.spawn as unknown as ReturnType<typeof vi.fn>
+    let rejectFirstSpawn: ((error: Error) => void) | undefined
+    let resolveReplacementSpawn: ((result: { id: string }) => void) | undefined
+    spawn
+      .mockImplementationOnce(
+        () =>
+          new Promise((_resolve, reject) => {
+            rejectFirstSpawn = reject
+          })
+      )
+      .mockImplementationOnce(() => {
+        onData?.({ id: 'same-id', data: 'replacement startup output' })
+        onExit?.({ id: 'same-id', code: 23 })
+        return new Promise<{ id: string }>((resolve) => {
+          resolveReplacementSpawn = resolve
+        })
+      })
+    const firstTransport = createIpcPtyTransport({})
+    const replacementData = vi.fn()
+    const replacementExit = vi.fn()
+    const replacementTransport = createIpcPtyTransport({})
+
+    const firstConnect = firstTransport.connect({
+      url: '',
+      sessionId: 'same-id',
+      callbacks: {}
+    })
+    const replacementConnect = replacementTransport.connect({
+      url: '',
+      sessionId: 'same-id',
+      callbacks: { onData: replacementData, onExit: replacementExit }
+    })
+    await vi.waitFor(() => expect(rejectFirstSpawn).toBeTypeOf('function'))
+
+    rejectFirstSpawn?.(new Error('Daemon PTY exited during admission for "same-id"'))
+    await firstConnect
+    await vi.waitFor(() => expect(spawn).toHaveBeenCalledTimes(2))
+    resolveReplacementSpawn?.({ id: 'same-id' })
+    await replacementConnect
+
+    expect(replacementData).toHaveBeenCalledWith('replacement startup output')
+    expect(replacementExit).toHaveBeenCalledWith(23)
+  })
+
   it('ignores a stale exit for a previous PTY after reconnecting the same transport', async () => {
     const { createIpcPtyTransport } = await import('./pty-transport')
     const spawn = window.api.pty.spawn as unknown as ReturnType<typeof vi.fn>

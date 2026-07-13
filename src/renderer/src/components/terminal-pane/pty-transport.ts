@@ -29,6 +29,7 @@ import {
   reconcilePreHandlerPtyExitAfterOverflow
 } from './pty-pre-handler-buffer'
 import { createPtyInputWriteQueue } from './pty-input-write-queue'
+import { acquirePtySessionConnectAdmission } from './pty-session-connect-admission'
 import type { PtyDataMeta } from './pty-dispatcher'
 import type { IpcPtyTransportOptions, PtyConnectResult, PtyTransport } from './pty-transport-types'
 import { createBellDetector } from '../../../../shared/terminal-bell-detector'
@@ -700,14 +701,18 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
 
   return {
     async connect(options) {
-      storedCallbacks = options.callbacks
       ensurePtyDispatcher()
-
-      if (destroyed) {
-        return
-      }
-
+      // Why: rejected-generation cleanup is ID-scoped, so a replacement with
+      // the same session ID must not publish until its predecessor releases.
+      const releaseSessionAdmission = options.sessionId
+        ? await acquirePtySessionConnectAdmission(options.sessionId)
+        : undefined
       try {
+        storedCallbacks = options.callbacks
+        if (destroyed) {
+          return
+        }
+
         // Why: missing-cwd recovery is only valid for fresh local spawns —
         // reattach must keep the session's exact cwd and SSH-tagged transports
         // resolve cwd on the remote host.
@@ -856,6 +861,8 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
           storedCallbacks.onError?.(msg)
         }
         return undefined
+      } finally {
+        releaseSessionAdmission?.()
       }
     },
 
