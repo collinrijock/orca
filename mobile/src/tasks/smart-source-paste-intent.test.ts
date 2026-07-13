@@ -102,21 +102,25 @@ describe('findRepoMatchingSlug', () => {
   })
 
   it('keeps local matching usable when an older desktop lacks the repo slug RPC', async () => {
+    let calls = 0
     const client = {
-      sendRequest: async () => ({
-        ok: false,
-        error: { code: 'method_not_found', message: 'Unknown method: github.repoSlug' }
-      })
+      sendRequest: async () => {
+        calls += 1
+        return {
+          ok: false,
+          error: { code: 'method_not_found', message: 'Unknown method: github.repoSlug' }
+        }
+      }
     } as unknown as RpcClient
+    const cache = new Map<string, { owner: string; repo: string } | null>()
 
     await expect(
-      findRepoMatchingSlugForPaste(
-        client,
-        repos,
-        { owner: 'enterprise', repo: 'widgets' },
-        new Map()
-      )
+      findRepoMatchingSlugForPaste(client, repos, { owner: 'enterprise', repo: 'widgets' }, cache)
     ).resolves.toBeNull()
+    await expect(
+      findRepoMatchingSlugForPaste(client, repos, { owner: 'enterprise', repo: 'other' }, cache)
+    ).resolves.toBeNull()
+    expect(calls).toBe(1)
   })
 
   it('keeps local matching usable when the optional repo slug lookup rejects', async () => {

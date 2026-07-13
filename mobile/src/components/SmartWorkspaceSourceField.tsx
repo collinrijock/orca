@@ -67,7 +67,7 @@ export function SmartWorkspaceSourceField({
           {selection.url ? (
             <Pressable
               hitSlop={6}
-              onPress={() => selection.url && void Linking.openURL(selection.url)}
+              onPress={() => selection.url && void Linking.openURL(selection.url).catch(() => {})}
             >
               <ExternalLink size={15} color={colors.textMuted} />
             </Pressable>

@@ -13,5 +13,6 @@ describe('isWorkItemLookupText', () => {
   it('treats plain names as non-lookup text', () => {
     expect(isWorkItemLookupText('')).toBe(false)
     expect(isWorkItemLookupText('fix the login bug')).toBe(false)
+    expect(isWorkItemLookupText('https://linear.app/acme/project/mobile')).toBe(false)
   })
 })

@@ -22,7 +22,7 @@ import { deriveWorkspaceSshGate, workspaceSshStatusLabel } from '../tasks/worksp
 import {
   isSetupHookTrusted,
   normalizeSetupHookTrust,
-  trustedOrcaHooksWithSetupApproval,
+  persistSetupHookTrustApproval,
   wasSetupHookPreviouslyApproved,
   type SetupHookTrust
 } from '../tasks/setup-hook-trust'
@@ -197,6 +197,8 @@ function NewWorktreeModalContent({
   const [selectedRepo, setSelectedRepo] = useState<Repo | null>(null)
   const [drawerView, setDrawerView] = useState<NewWorktreeDrawerView>('form')
   const drawerTransitionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const createInFlightRef = useRef(false)
+  const setupTrustActionInFlightRef = useRef(false)
   const [selectedAgentState, setSelectedAgent] = useState<AgentOption>(AGENT_OPTIONS[0]!)
   const [runtimeSettings, setRuntimeSettings] = useState<RuntimeSettings | null>(null)
   const [detectedAgentIdsState, setDetectedAgentIdsState] = useState<DetectedAgentIdsState | null>(
@@ -595,31 +597,11 @@ function NewWorktreeModalContent({
     }
   }
 
-  async function persistSetupHookTrust(
-    repoId: string,
-    contentHash: string,
-    alwaysTrust: boolean
-  ): Promise<void> {
-    if (!client) {
-      return
-    }
-    const next = trustedOrcaHooksWithSetupApproval({
-      trust: trustedOrcaHooks,
-      repoId,
-      contentHash,
-      alwaysTrust
-    })
-    const response = await client.sendRequest('ui.set', { trustedOrcaHooks: next })
-    if (!response.ok) {
-      throw new Error(response.error.message)
-    }
-    setTrustedOrcaHooks(next)
-  }
-
   async function handleCreate(options: CreateOptions = {}) {
-    if (!client || !selectedRepo) {
+    if (!client || !selectedRepo || createInFlightRef.current) {
       return
     }
+    createInFlightRef.current = true
     setCreating(true)
     setError('')
 
@@ -735,6 +717,7 @@ function NewWorktreeModalContent({
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to create workspace')
     } finally {
+      createInFlightRef.current = false
       setCreating(false)
     }
   }
@@ -781,22 +764,53 @@ function NewWorktreeModalContent({
   }
 
   async function approveSetupTrust(alwaysTrust: boolean): Promise<void> {
-    if (!setupTrustPrompt) {
+    if (
+      !client ||
+      !setupTrustPrompt ||
+      setupTrustActionInFlightRef.current ||
+      createInFlightRef.current
+    ) {
       return
     }
+    setupTrustActionInFlightRef.current = true
+    setCreating(true)
     try {
-      await persistSetupHookTrust(
-        setupTrustPrompt.repoId,
-        setupTrustPrompt.contentHash,
+      const nextTrust = await persistSetupHookTrustApproval({
+        client,
+        trust: trustedOrcaHooks,
+        repoId: setupTrustPrompt.repoId,
+        contentHash: setupTrustPrompt.contentHash,
         alwaysTrust
-      )
+      })
+      setTrustedOrcaHooks(nextTrust)
       const approvedHash = setupTrustPrompt.contentHash
       setSetupTrustPrompt(null)
       transitionDrawer('form')
       await handleCreate({ setupOverride: 'run', approvedSetupContentHash: approvedHash })
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to trust setup script.')
+    } finally {
+      setupTrustActionInFlightRef.current = false
+      if (!createInFlightRef.current) {
+        setCreating(false)
+      }
     }
+  }
+
+  function closeSetupTrust(): void {
+    if (setupTrustActionInFlightRef.current || createInFlightRef.current) {
+      return
+    }
+    setSetupTrustPrompt(null)
+    transitionDrawer('form')
+  }
+
+  function skipSetupTrust(): void {
+    if (setupTrustActionInFlightRef.current || createInFlightRef.current) {
+      return
+    }
+    closeSetupTrust()
+    void handleCreate({ setupOverride: 'skip' })
   }
 
   return (
@@ -1071,15 +1085,8 @@ function NewWorktreeModalContent({
         busy={creating}
         onRunOnce={() => void approveSetupTrust(false)}
         onAlwaysTrust={() => void approveSetupTrust(true)}
-        onDontRun={() => {
-          setSetupTrustPrompt(null)
-          transitionDrawer('form')
-          void handleCreate({ setupOverride: 'skip' })
-        }}
-        onClose={() => {
-          setSetupTrustPrompt(null)
-          transitionDrawer('form')
-        }}
+        onDontRun={skipSetupTrust}
+        onClose={closeSetupTrust}
       />
     </>
   )

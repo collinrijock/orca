@@ -1,7 +1,7 @@
 import { parseGitHubIssueOrPRLink, parseGitHubIssueOrPRNumber } from './github-links'
 import { parseGitLabIssueOrMRLink } from './gitlab-links'
 
-const LINEAR_ISSUE_URL_RE = /^https?:\/\/(?:www\.)?linear\.app\/\S+/i
+const LINEAR_ISSUE_URL_RE = /^https?:\/\/(?:www\.)?linear\.app\/[^/\s]+\/issue\/[^/\s]+(?:\/\S*)?$/i
 const GITHUB_ITEM_URL_IN_TEXT_RE =
   /https?:\/\/[^\s/]+\/[^\s/]+\/[^\s/]+\/(?:issues|pull)\/\d+[^\s]*/i
 const TRAILING_URL_PUNCTUATION_RE = /[),.;:!?]+$/

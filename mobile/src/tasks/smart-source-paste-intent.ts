@@ -105,6 +105,12 @@ export async function findRepoMatchingSlugForPaste(
     if (!cache.has(repo.id)) {
       try {
         const response = await client.sendRequest('github.repoSlug', { repo: `id:${repo.id}` })
+        if (!response.ok && response.error.code === 'method_not_found') {
+          // Why: RPC availability is host-wide; avoid repeating an unsupported
+          // probe for every repo or on the next paste attempt.
+          repos.forEach((candidate) => cache.set(candidate.id, null))
+          return null
+        }
         resolved = response.ok ? ((response as RpcSuccess).result as RepoSlug | null) : null
       } catch {
         resolved = null
