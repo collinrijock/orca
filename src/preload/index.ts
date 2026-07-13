@@ -17,6 +17,7 @@ import type {
   PluginPanelEntry
 } from '../shared/plugins/plugin-panel-bridge'
 import type { PluginConsentRequest } from '../shared/plugins/plugin-consent-request'
+import type { PluginChangeEvent } from '../shared/plugins/plugin-change-event'
 import type {
   BaseRefSearchResult,
   BaseRefDefaultResult,
@@ -561,6 +562,9 @@ const api = {
     list: (): Promise<PluginHostListEntry[]> => ipcRenderer.invoke('plugins:list'),
     listThemes: () => ipcRenderer.invoke('plugins:listThemes'),
     listLanguagePacks: () => ipcRenderer.invoke('plugins:listLanguagePacks'),
+    listIconThemes: () => ipcRenderer.invoke('plugins:listIconThemes'),
+    loadIconTheme: (id) => ipcRenderer.invoke('plugins:loadIconTheme', id),
+    listTerminalThemes: () => ipcRenderer.invoke('plugins:listTerminalThemes'),
     listSkillStore: () => ipcRenderer.invoke('plugins:listSkillStore'),
     setSkillMapping: (mapping) => ipcRenderer.invoke('plugins:setSkillMapping', mapping),
     consent: (args: PluginConsentRequest): Promise<PluginHostListEntry[]> =>
@@ -588,8 +592,9 @@ const api = {
     getLogs: (args: { pluginKey: string }): Promise<PluginHostLogLine[]> =>
       ipcRenderer.invoke('plugins:getLogs', args),
     refresh: (): Promise<PluginHostListEntry[]> => ipcRenderer.invoke('plugins:refresh'),
-    onChanged: (callback: () => void): (() => void) => {
-      const listener = (): void => callback()
+    onChanged: (callback): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, change: PluginChangeEvent): void =>
+        callback(change)
       ipcRenderer.on('plugins:changed', listener)
       return () => {
         ipcRenderer.removeListener('plugins:changed', listener)

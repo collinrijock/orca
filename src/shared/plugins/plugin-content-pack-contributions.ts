@@ -8,6 +8,7 @@ import {
 
 export const PLUGIN_THEME_LIMIT = 64
 export const PLUGIN_ICON_THEME_LIMIT = 32
+export const PLUGIN_TERMINAL_THEME_LIMIT = 64
 export const PLUGIN_LANGUAGE_PACK_LIMIT = 16
 export const PLUGIN_SKILL_LIMIT = 128
 export const PLUGIN_KEYBINDING_LIMIT = 256
@@ -26,6 +27,14 @@ export const pluginIconThemeContributionSchema = z
   .object({
     id: pluginIdSchema,
     label: z.string().min(1).max(128).optional(),
+    path: pluginRelativePathSchema
+  })
+  .strict()
+
+export const pluginTerminalThemeContributionSchema = z
+  .object({
+    id: pluginIdSchema,
+    label: z.string().min(1).max(128),
     path: pluginRelativePathSchema
   })
   .strict()
@@ -76,6 +85,7 @@ export const pluginAgentProfileContributionSchema = z
 
 export type PluginThemeContribution = z.infer<typeof pluginThemeContributionSchema>
 export type PluginIconThemeContribution = z.infer<typeof pluginIconThemeContributionSchema>
+export type PluginTerminalThemeContribution = z.infer<typeof pluginTerminalThemeContributionSchema>
 export type PluginLanguagePackContribution = z.infer<typeof pluginLanguagePackContributionSchema>
 export type PluginSkillContribution = z.infer<typeof pluginSkillContributionSchema>
 export type PluginKeybindingContribution = z.infer<typeof pluginKeybindingContributionSchema>

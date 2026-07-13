@@ -6,7 +6,8 @@ import { fingerprintPluginConsent } from '../../shared/plugins/plugin-consent-fi
 import { pluginManifestSchema, type PluginManifest } from '../../shared/plugins/plugin-manifest'
 import {
   PLUGIN_PANEL_ENTRY_MAX_BYTES,
-  validateDeclaredPluginArtifacts
+  validateDeclaredPluginArtifacts,
+  validatePluginInstallContent
 } from './plugin-artifact-validation'
 import { hashPluginTree } from './plugin-content-hash'
 import { verifyHashAddressedPluginContent } from './plugin-content-integrity'
@@ -162,6 +163,32 @@ describe('declared plugin artifacts', () => {
     await expect(validateDeclaredPluginArtifacts(root, pluginManifest)).resolves.toMatchObject({
       ok: false,
       error: expect.stringContaining('artifact limit')
+    })
+  })
+
+  it('sanitizes every icon-theme SVG at the install boundary', async () => {
+    const root = await tempRoot()
+    await mkdir(join(root, 'icons'))
+    await writeFile(
+      join(root, 'icons', 'theme.json'),
+      JSON.stringify({ schemaVersion: 1, icons: { file: 'icons/file.svg' } })
+    )
+    await writeFile(
+      join(root, 'icons', 'file.svg'),
+      '<svg><path fill="&#x75;rl(https://example.com/x)"/></svg>'
+    )
+    const pluginManifest = manifest({
+      contributes: {
+        iconThemes: [{ id: 'hostile', label: 'Hostile', path: 'icons/theme.json' }]
+      }
+    })
+
+    await expect(validateDeclaredPluginArtifacts(root, pluginManifest)).resolves.toEqual({
+      ok: true
+    })
+    await expect(validatePluginInstallContent(root, pluginManifest)).resolves.toMatchObject({
+      ok: false,
+      error: expect.stringContaining('active or external content')
     })
   })
 })

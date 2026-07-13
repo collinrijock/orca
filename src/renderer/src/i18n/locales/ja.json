@@ -6430,7 +6430,9 @@
           "search_terminal_themes": "terminal テーマを検索",
           "cb330ef7f8": "{{value0}}の",
           "c822571b2e": "「{{value0}}」に一致",
-          "3119c012a5": "文字列"
+          "3119c012a5": "文字列",
+          "plugin_themes": "プラグインテーマ",
+          "contributed_by": "{{value0}} による提供"
         },
         "SettingsSidebar": {
           "e0900f83e7": "SSH",
@@ -9170,6 +9172,11 @@
             "title": "プラグインテーマ",
             "description": "有効な Orca プラグインのテーマを適用します。",
             "builtIn": "組み込みテーマを使用"
+          },
+          "pluginIconTheme": {
+            "title": "アイコンテーマ",
+            "description": "有効な Orca プラグインのファイル、フォルダー、サイドバー、エージェント用アイコンを使用します。",
+            "builtIn": "組み込みアイコンを使用"
           }
         },
         "PluginSkillMappingDialog": {

@@ -15,6 +15,7 @@ import { PREVIEW_BUFFER } from './terminal-preview-content'
 import { SettingsSwitch } from './SettingsFormControls'
 import type { GlobalSettings } from '../../../../shared/types'
 import { translate } from '@/i18n/i18n'
+import { usePluginTerminalThemeStore } from '@/store/plugin-terminal-themes'
 
 // Why: pin cols/rows so PREVIEW_BUFFER never wraps. Sized so the longest
 // line (the def total signature, 32 chars) plus a few cols of margin fits
@@ -90,6 +91,7 @@ export function TerminalSettingsPreview({
     resolveAppMode(settings, systemPrefersDark)
   )
   const [previewPaneDividerVisible, setPreviewPaneDividerVisible] = useState(false)
+  const pluginTerminalThemes = usePluginTerminalThemeStore.getState().themes
 
   // Why: precedence — modeOverride pins the mode; otherwise the in-header
   // toggle drives it; otherwise follow whatever the app is set to right
@@ -117,6 +119,7 @@ export function TerminalSettingsPreview({
       settings.terminalUseSeparateLightTheme,
       settings.terminalDividerColorDark,
       settings.terminalDividerColorLight,
+      pluginTerminalThemes,
       systemPrefersDark
     ]
   )

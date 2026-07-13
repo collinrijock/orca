@@ -1,13 +1,22 @@
 import type { PluginContentVerifier } from './plugin-content-integrity'
-import type { DiscoveredPlugin, ValidDiscoveredPlugin } from './plugin-discovery'
+import {
+  isInvalidDiscoveredPlugin,
+  type DiscoveredPlugin,
+  type ValidDiscoveredPlugin
+} from './plugin-discovery'
 import { PluginLanguagePackRegistry } from './plugin-language-pack-registry'
+import { PluginIconThemeRegistry } from './plugin-icon-theme-registry'
 import { PluginSkillRegistry } from './plugin-skill-registry'
 import { PluginThemeRegistry } from './plugin-theme-registry'
+import { PluginTerminalThemeRegistry } from './plugin-terminal-theme-registry'
 
 export class PluginContentPackRegistry {
   readonly themes: PluginThemeRegistry
   readonly languagePacks: PluginLanguagePackRegistry
+  readonly iconThemes: PluginIconThemeRegistry
+  readonly terminalThemes: PluginTerminalThemeRegistry
   readonly skills: PluginSkillRegistry
+  private readonly activationErrors = new Map<string, string>()
 
   constructor(
     contentVerifier: PluginContentVerifier,
@@ -15,6 +24,8 @@ export class PluginContentPackRegistry {
   ) {
     this.themes = new PluginThemeRegistry(contentVerifier)
     this.languagePacks = new PluginLanguagePackRegistry(contentVerifier)
+    this.iconThemes = new PluginIconThemeRegistry(contentVerifier)
+    this.terminalThemes = new PluginTerminalThemeRegistry(contentVerifier)
     this.skills = new PluginSkillRegistry(
       contentVerifier,
       options.pluginsDataDir,
@@ -26,17 +37,51 @@ export class PluginContentPackRegistry {
     discovered: readonly DiscoveredPlugin[],
     isApproved: (plugin: ValidDiscoveredPlugin) => boolean
   ): Promise<void> {
-    await Promise.all([
-      this.themes.reconcile(discovered, isApproved),
-      this.languagePacks.reconcile(discovered, isApproved),
-      this.skills.reconcile(discovered, isApproved)
-    ])
+    const approvedKeys = new Set(
+      discovered
+        .filter((plugin): plugin is ValidDiscoveredPlugin => !isInvalidDiscoveredPlugin(plugin))
+        .filter(isApproved)
+        .map((plugin) => plugin.pluginKey)
+    )
+    const excluded = new Set<string>()
+    this.activationErrors.clear()
+
+    while (true) {
+      const approveAtomically = (plugin: ValidDiscoveredPlugin): boolean =>
+        approvedKeys.has(plugin.pluginKey) && !excluded.has(plugin.pluginKey)
+      await Promise.all([
+        this.themes.reconcile(discovered, approveAtomically),
+        this.languagePacks.reconcile(discovered, approveAtomically),
+        this.iconThemes.reconcile(discovered, approveAtomically),
+        this.terminalThemes.reconcile(discovered, approveAtomically),
+        this.skills.reconcile(discovered, approveAtomically)
+      ])
+
+      let foundNewError = false
+      for (const pluginKey of approvedKeys) {
+        const error = this.registryError(pluginKey)
+        if (error && !excluded.has(pluginKey)) {
+          excluded.add(pluginKey)
+          this.activationErrors.set(pluginKey, error)
+          foundNewError = true
+        }
+      }
+      if (!foundNewError) {
+        break
+      }
+    }
   }
 
   error(pluginKey: string): string | null {
+    return this.activationErrors.get(pluginKey) ?? this.registryError(pluginKey)
+  }
+
+  private registryError(pluginKey: string): string | null {
     return (
       this.themes.error(pluginKey) ??
       this.languagePacks.error(pluginKey) ??
+      this.iconThemes.error(pluginKey) ??
+      this.terminalThemes.error(pluginKey) ??
       this.skills.error(pluginKey)
     )
   }

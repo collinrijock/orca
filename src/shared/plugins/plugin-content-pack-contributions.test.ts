@@ -21,6 +21,9 @@ describe('content-pack manifest contributions', () => {
       manifest({
         themes: [{ id: 'nord', label: 'Nord', path: 'themes/nord.json' }],
         iconThemes: [{ id: 'minimal', path: 'icons/minimal.json' }],
+        terminalThemes: [
+          { id: 'nord-terminal', label: 'Nord Terminal', path: 'terminal/nord.json' }
+        ],
         languagePacks: [{ locale: 'pt-BR', path: 'locales/pt-BR.json' }],
         skills: [{ path: 'skills/', providers: ['codex', 'claude'] }],
         commands: [
@@ -51,6 +54,7 @@ describe('content-pack manifest contributions', () => {
       events: [],
       themes: [],
       iconThemes: [],
+      terminalThemes: [],
       languagePacks: [],
       skills: [],
       keybindings: [],

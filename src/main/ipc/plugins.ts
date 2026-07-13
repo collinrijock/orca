@@ -122,6 +122,20 @@ export function registerPluginHandlers(
     await pluginService.whenReady()
     return pluginService.contentPacks.languagePacks.list()
   })
+  ipcMain.handle('plugins:listIconThemes', async () => {
+    await pluginService.whenReady()
+    return pluginService.contentPacks.iconThemes.list()
+  })
+  ipcMain.handle('plugins:loadIconTheme', async (_event, id: unknown) => {
+    await pluginService.whenReady()
+    return pluginService.contentPacks.iconThemes.load(
+      z.string().startsWith('plugin:').max(256).parse(id)
+    )
+  })
+  ipcMain.handle('plugins:listTerminalThemes', async () => {
+    await pluginService.whenReady()
+    return pluginService.contentPacks.terminalThemes.list()
+  })
   ipcMain.handle('plugins:listSkillStore', async () => {
     await pluginService.whenReady()
     return pluginSkillStoreSnapshot(pluginService)

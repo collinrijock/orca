@@ -1963,13 +1963,16 @@ app.whenReady().then(async () => {
     .catch((error) => {
       console.warn('[plugins] failed to initialize plugin service:', error)
     })
-  pluginService.onChanged(() => {
-    if (setMainPluginLanguagePacks(pluginService?.contentPacks.languagePacks.list() ?? [])) {
+  pluginService.onChanged((event) => {
+    if (
+      event.contentPacksChanged &&
+      setMainPluginLanguagePacks(pluginService?.contentPacks.languagePacks.list() ?? [])
+    ) {
       void setMainUiLanguage(store!.getSettings().uiLanguage).then(() => rebuildAppMenu())
     }
     for (const window of BrowserWindow.getAllWindows()) {
       if (!window.isDestroyed()) {
-        window.webContents.send('plugins:changed')
+        window.webContents.send('plugins:changed', event)
       }
     }
   })

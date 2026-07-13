@@ -7,6 +7,7 @@ import {
   PLUGIN_LANGUAGE_PACK_LIMIT,
   PLUGIN_SKILL_LIMIT,
   PLUGIN_THEME_LIMIT,
+  PLUGIN_TERMINAL_THEME_LIMIT,
   PLUGIN_VM_RECIPE_LIMIT,
   pluginAgentProfileContributionSchema,
   pluginIconThemeContributionSchema,
@@ -14,6 +15,7 @@ import {
   pluginLanguagePackContributionSchema,
   pluginSkillContributionSchema,
   pluginThemeContributionSchema,
+  pluginTerminalThemeContributionSchema,
   pluginVmRecipeContributionSchema
 } from './plugin-content-pack-contributions'
 import {
@@ -112,6 +114,10 @@ export const pluginManifestSchema = z
           .array(pluginIconThemeContributionSchema)
           .max(PLUGIN_ICON_THEME_LIMIT)
           .default([]),
+        terminalThemes: z
+          .array(pluginTerminalThemeContributionSchema)
+          .max(PLUGIN_TERMINAL_THEME_LIMIT)
+          .default([]),
         languagePacks: z
           .array(pluginLanguagePackContributionSchema)
           .max(PLUGIN_LANGUAGE_PACK_LIMIT)
@@ -136,6 +142,7 @@ export const pluginManifestSchema = z
         events: [],
         themes: [],
         iconThemes: [],
+        terminalThemes: [],
         languagePacks: [],
         skills: [],
         keybindings: [],

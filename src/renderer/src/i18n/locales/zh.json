@@ -6393,7 +6393,9 @@
           "builtin_themes": "内置",
           "imported_from": "从 {{value0}} 导入",
           "imported_themes": "已导入",
-          "search_terminal_themes": "搜索终端主题"
+          "search_terminal_themes": "搜索终端主题",
+          "plugin_themes": "插件主题",
+          "contributed_by": "由 {{value0}} 提供"
         },
         "SettingsSidebar": {
           "e0900f83e7": "SSH",
@@ -9170,6 +9172,11 @@
             "title": "插件主题",
             "description": "应用已启用的 Orca 插件所提供的主题。",
             "builtIn": "使用内置主题"
+          },
+          "pluginIconTheme": {
+            "title": "图标主题",
+            "description": "使用已启用 Orca 插件提供的文件、文件夹、侧边栏和智能体图标。",
+            "builtIn": "使用内置图标"
           }
         },
         "PluginSkillMappingDialog": {

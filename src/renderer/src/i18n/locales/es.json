@@ -6408,7 +6408,9 @@
           "builtin_themes": "Integrados",
           "imported_from": "Importado desde {{value0}}",
           "imported_themes": "Importados",
-          "search_terminal_themes": "Buscar temas de terminal"
+          "search_terminal_themes": "Buscar temas de terminal",
+          "plugin_themes": "Temas de plugins",
+          "contributed_by": "Aportado por {{value0}}"
         },
         "SettingsSidebar": {
           "e0900f83e7": "SSH",
@@ -9170,6 +9172,11 @@
             "title": "Tema de plugin",
             "description": "Aplica un tema de un plugin de Orca habilitado.",
             "builtIn": "Usar tema integrado"
+          },
+          "pluginIconTheme": {
+            "title": "Tema de iconos",
+            "description": "Usa iconos de archivos, carpetas, barra lateral y agentes de un plugin de Orca habilitado.",
+            "builtIn": "Usar iconos integrados"
           }
         },
         "PluginSkillMappingDialog": {

@@ -34,6 +34,8 @@ import type { PluginRunState } from './plugin-supervisor'
 import { isPluginApproved, snapshotPluginConsentLists } from './plugin-activation-policy'
 import { PluginContentPackRegistry } from './plugin-content-pack-registry'
 import type { PluginServiceOptions } from './plugin-service-options'
+import type { PluginChangeEvent } from '../../shared/plugins/plugin-change-event'
+import { waitForPluginRefreshSettlement } from './plugin-refresh-settlement'
 
 export type { PluginRuntimeDelegate } from './plugin-host-service-bindings'
 export type { PluginLogLine } from './plugin-log-buffer'
@@ -49,7 +51,7 @@ export class PluginService {
   private readonly contentVerifier = new PluginContentVerifier()
   readonly contentPacks: PluginContentPackRegistry
   readonly panels: PluginPanelController
-  private readonly changeListeners = new Set<() => void>()
+  private readonly changeListeners = new Set<(event: PluginChangeEvent) => void>()
   private readonly housekeeping = new PluginServiceHousekeeping()
   private discovered: DiscoveredPlugin[] = []
   private runtimeDelegate: PluginRuntimeDelegate | null = null
@@ -89,7 +91,7 @@ export class PluginService {
       executeHostCall: (pluginKey, method, params) =>
         this.executeHostCall(pluginKey, method, params, { viaPanel: false }),
       log: (pluginKey, level, line) => this.logBuffer.append(pluginKey, level, line),
-      onStateChanged: () => this.notifyChanged(),
+      onStateChanged: () => this.notifyChanged(false),
       onWorkerGone: (pluginKey) => this.eventBus.clear(pluginKey)
     })
   }
@@ -98,14 +100,14 @@ export class PluginService {
     this.runtimeDelegate = delegate
   }
 
-  onChanged(listener: () => void): () => void {
+  onChanged(listener: (event: PluginChangeEvent) => void): () => void {
     this.changeListeners.add(listener)
     return () => this.changeListeners.delete(listener)
   }
 
-  private notifyChanged(): void {
+  private notifyChanged(contentPacksChanged: boolean): void {
     for (const listener of this.changeListeners) {
-      listener()
+      listener({ contentPacksChanged })
     }
   }
 
@@ -116,6 +118,9 @@ export class PluginService {
 
   async whenReady(): Promise<void> {
     await (this.initPromise ?? Promise.resolve()).catch(() => undefined)
+    // Client reads wait for the complete transaction so rollback-based content
+    // validation cannot expose a partially activated plugin between passes.
+    await waitForPluginRefreshSettlement(() => this.refreshChain)
   }
 
   refresh(): Promise<void> {
@@ -162,7 +167,7 @@ export class PluginService {
       isPluginApproved(enabled, plugin, consentLists)
     )
     // Notify before slow shutdown so feature-off unmounts panels immediately.
-    this.notifyChanged()
+    this.notifyChanged(true)
     await this.workerController.reconcile(nextSpecs)
     if (this.disposed) {
       return
@@ -173,7 +178,7 @@ export class PluginService {
       reapIdle: () => this.workerController.reapIdle(),
       refresh: () => void this.refresh()
     })
-    this.notifyChanged()
+    this.notifyChanged(false)
   }
 
   getDiscovered(): readonly DiscoveredPlugin[] {
@@ -298,12 +303,18 @@ export class PluginService {
 
   async deactivatePlugin(pluginKey: string): Promise<void> {
     await this.workerController.deactivate(pluginKey)
-    this.notifyChanged()
+    this.notifyChanged(false)
   }
 
   /** Reconciles live workers and client projections after consent or
    * enablement changes without re-reading plugin files or starting workers. */
   async reconcileActivationState(): Promise<void> {
+    const reconcile = this.refreshChain.then(() => this.performActivationStateReconciliation())
+    this.refreshChain = reconcile.catch(() => undefined)
+    return reconcile
+  }
+
+  private async performActivationStateReconciliation(): Promise<void> {
     await this.contentPacks.reconcile(this.discovered, (plugin) => {
       return this.activationState(plugin) === 'approved'
     })
@@ -312,7 +323,7 @@ export class PluginService {
       (plugin) => this.activationState(plugin) === 'approved'
     )
     await this.workerController.reconcile(nextSpecs)
-    this.notifyChanged()
+    this.notifyChanged(true)
   }
 
   async dispose(): Promise<void> {

@@ -6393,7 +6393,9 @@
           "builtin_themes": "기본 제공",
           "imported_from": "{{value0}}에서 가져옴",
           "imported_themes": "가져옴",
-          "search_terminal_themes": "terminal 테마 검색"
+          "search_terminal_themes": "terminal 테마 검색",
+          "plugin_themes": "플러그인 테마",
+          "contributed_by": "{{value0}}에서 제공"
         },
         "SettingsSidebar": {
           "e0900f83e7": "SSH",
@@ -9170,6 +9172,11 @@
             "title": "플러그인 테마",
             "description": "활성화된 Orca 플러그인의 테마를 적용합니다.",
             "builtIn": "기본 제공 테마 사용"
+          },
+          "pluginIconTheme": {
+            "title": "아이콘 테마",
+            "description": "활성화된 Orca 플러그인의 파일, 폴더, 사이드바 및 에이전트 아이콘을 사용합니다.",
+            "builtIn": "기본 제공 아이콘 사용"
           }
         },
         "PluginSkillMappingDialog": {

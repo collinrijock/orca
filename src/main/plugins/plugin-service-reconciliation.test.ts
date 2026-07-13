@@ -256,4 +256,67 @@ describe('PluginService worker reconciliation', () => {
     expect(vi.getTimerCount()).toBe(1)
     expect(harness.factory).not.toHaveBeenCalled()
   })
+
+  it('serializes activation reconciliation so the latest disabled state wins', async () => {
+    const root = await pluginRoot()
+    const harness = createHarness(root)
+    await harness.service.initialize()
+
+    const originalReconcile = harness.service.contentPacks.reconcile.bind(
+      harness.service.contentPacks
+    )
+    let releaseFirst!: () => void
+    const firstGate = new Promise<void>((resolve) => {
+      releaseFirst = resolve
+    })
+    let firstStarted!: () => void
+    const firstStartedPromise = new Promise<void>((resolve) => {
+      firstStarted = resolve
+    })
+    let activeReconciliations = 0
+    let maximumConcurrentReconciliations = 0
+    let callCount = 0
+    const reconcile = vi
+      .spyOn(harness.service.contentPacks, 'reconcile')
+      .mockImplementation(async (...args) => {
+        callCount += 1
+        activeReconciliations += 1
+        maximumConcurrentReconciliations = Math.max(
+          maximumConcurrentReconciliations,
+          activeReconciliations
+        )
+        try {
+          if (callCount === 1) {
+            firstStarted()
+            await firstGate
+          }
+          await originalReconcile(...args)
+        } finally {
+          activeReconciliations -= 1
+        }
+      })
+
+    const first = harness.service.reconcileActivationState()
+    await firstStartedPromise
+    harness.setDisabled([pluginKey])
+    const second = harness.service.reconcileActivationState()
+    let clientsReleased = false
+    const clientsReady = harness.service.whenReady().then(() => {
+      clientsReleased = true
+    })
+
+    await Promise.resolve()
+    expect(reconcile).toHaveBeenCalledTimes(1)
+    expect(clientsReleased).toBe(false)
+    releaseFirst()
+    await Promise.all([first, second, clientsReady])
+
+    expect(maximumConcurrentReconciliations).toBe(1)
+    expect(clientsReleased).toBe(true)
+    expect(reconcile).toHaveBeenCalledTimes(2)
+    expect(harness.service.activationState(harness.service.findValidPlugin(pluginKey)!)).toBe(
+      'disabled'
+    )
+    expect(harness.service.workerState(pluginKey).state).toBe('inactive')
+  })
 })

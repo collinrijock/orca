@@ -61,6 +61,12 @@ import type {
   PluginSkillStoreSnapshot
 } from '../shared/plugins/plugin-skill-store'
 import type {
+  PluginIconThemeMetadata,
+  PluginIconThemeRegistration
+} from '../shared/plugins/plugin-icon-theme-artifact'
+import type { PluginTerminalThemeRegistration } from '../shared/plugins/plugin-terminal-theme-artifact'
+import type { PluginChangeEvent } from '../shared/plugins/plugin-change-event'
+import type {
   LocalhostWorktreeLabelResult,
   LocalhostWorktreeLabelRoute
 } from '../shared/localhost-worktree-labels'
@@ -3181,6 +3187,9 @@ export type PreloadApi = {
     list: () => Promise<PluginHostListEntry[]>
     listThemes: () => Promise<PluginThemeRegistration[]>
     listLanguagePacks: () => Promise<PluginLanguagePackRegistration[]>
+    listIconThemes: () => Promise<PluginIconThemeMetadata[]>
+    loadIconTheme: (id: string) => Promise<PluginIconThemeRegistration | null>
+    listTerminalThemes: () => Promise<PluginTerminalThemeRegistration[]>
     listSkillStore: () => Promise<PluginSkillStoreSnapshot>
     setSkillMapping: (mapping: PluginSkillContributionMapping) => Promise<PluginSkillStoreSnapshot>
     /** Records the consent-dialog answer; approval is keyed to the plugin's
@@ -3210,8 +3219,8 @@ export type PreloadApi = {
     getLogs: (args: { pluginKey: string }) => Promise<PluginHostLogLine[]>
     /** Re-discovers after settings edits (feature flag, dev paths). */
     refresh: () => Promise<PluginHostListEntry[]>
-    /** Fires whenever installed plugins, worker states, or panels change. */
-    onChanged: (callback: () => void) => () => void
+    /** Fires whenever installed plugins, worker states, panels, or content packs change. */
+    onChanged: (callback: (event: PluginChangeEvent) => void) => () => void
   }
   agentStatus: {
     /** Listen for agent status updates forwarded from native hook receivers. */

@@ -11,6 +11,7 @@ type ContributionValidationManifest = {
     events: { on: string }[]
     themes: IdentifiedContribution[]
     iconThemes: IdentifiedContribution[]
+    terminalThemes: IdentifiedContribution[]
     languagePacks: { locale: string }[]
     skills: PathContribution[]
     keybindings: { command: string; key: string }[]
@@ -45,7 +46,7 @@ export function validatePluginManifestContributions(
   manifest: ContributionValidationManifest,
   ctx: RefinementCtx
 ): void {
-  for (const path of ['panels', 'commands', 'themes', 'iconThemes'] as const) {
+  for (const path of ['panels', 'commands', 'themes', 'iconThemes', 'terminalThemes'] as const) {
     rejectDuplicateValues(
       manifest.contributes[path],
       (entry) => (entry as IdentifiedContribution).id,

@@ -43,7 +43,11 @@ export function ensurePluginLanguagePacksLoaded(): void {
   }
   if (!changeSubscriptionStarted && window.api?.plugins?.onChanged) {
     changeSubscriptionStarted = true
-    window.api.plugins.onChanged(() => void usePluginLanguagePackStore.getState().fetchPacks())
+    window.api.plugins.onChanged((event) => {
+      if (event?.contentPacksChanged ?? true) {
+        void usePluginLanguagePackStore.getState().fetchPacks()
+      }
+    })
   }
 }
 

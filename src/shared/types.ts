@@ -2515,6 +2515,8 @@ export type GlobalSettings = {
   theme: 'system' | 'dark' | 'light'
   /** Qualified plugin theme id layered over the built-in light/dark preference. */
   pluginAppTheme?: `plugin:${string}` | null
+  /** Qualified plugin icon-theme id; missing contributions fall back to built-in icons. */
+  pluginIconTheme?: `plugin:${string}` | null
   /** Controls the left sidebar surface without changing terminal brightness. */
   leftSidebarAppearanceMode: LeftSidebarAppearanceMode
   leftSidebarTintColor?: string

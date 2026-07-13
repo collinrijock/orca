@@ -43,7 +43,11 @@ export function ensurePluginThemesLoaded(): void {
   }
   if (!changeSubscriptionStarted && window.api?.plugins?.onChanged) {
     changeSubscriptionStarted = true
-    window.api.plugins.onChanged(() => void usePluginThemeStore.getState().fetchThemes())
+    window.api.plugins.onChanged((event) => {
+      if (event?.contentPacksChanged ?? true) {
+        void usePluginThemeStore.getState().fetchThemes()
+      }
+    })
   }
 }
 

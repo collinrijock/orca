@@ -1,28 +1,21 @@
 import { execFile } from 'node:child_process'
-import { cp, mkdir, mkdtemp, realpath, rename, rm } from 'node:fs/promises'
+import { mkdtemp, realpath, rm } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { promisify } from 'node:util'
 import {
   PLUGIN_MANIFEST_FILENAME,
-  isQualifiedPluginKey,
-  parsePluginManifest,
-  qualifiedPluginKey,
-  satisfiesOrcaEngineRange
+  isQualifiedPluginKey
 } from '../../shared/plugins/plugin-manifest'
-import { fingerprintPluginConsent } from '../../shared/plugins/plugin-consent-fingerprint'
 import {
   isAllowedPluginGitUrl,
-  removePluginLock,
-  type PluginInstallSource,
-  type PluginLockEntry
+  removePluginLock
 } from '../../shared/plugins/plugin-install-lockfile'
-import { hashPluginTree } from './plugin-content-hash'
-import { validateDeclaredPluginArtifacts } from './plugin-artifact-validation'
-import { readPluginManifestText } from './plugin-manifest-file'
 import { readPluginLockfile, writePluginLockfile } from './plugin-install-lockfile-store'
-import { publishPluginInstall } from './plugin-install-publication'
+import { installStagedPluginTree, type PluginInstallResult } from './plugin-install-staging'
+
+export type { PluginInstallResult } from './plugin-install-staging'
 
 export {
   PLUGIN_LOCKFILE_MAX_BYTES,
@@ -65,139 +58,6 @@ async function serializePluginMutation<T>(
   }
 }
 
-export type PluginInstallResult =
-  | {
-      ok: true
-      pluginKey: string
-      version: string
-      contentHash: string
-      consentFingerprint: string
-      resolvedCommit: string | null
-    }
-  | { ok: false; error: string }
-
-/** Installs a validated staging tree into the hash-addressed layout. */
-async function installStagedTree(input: {
-  pluginsDir: string
-  stagingDir: string
-  hostVersion: string
-  source: PluginInstallSource
-  resolvedCommit: string | null
-}): Promise<PluginInstallResult> {
-  let manifestRaw: unknown
-  try {
-    manifestRaw = JSON.parse(await readPluginManifestText(input.stagingDir))
-  } catch (error) {
-    return {
-      ok: false,
-      error: `unreadable ${PLUGIN_MANIFEST_FILENAME}: ${error instanceof Error ? error.message : String(error)}`
-    }
-  }
-  const parsed = parsePluginManifest(manifestRaw)
-  if (!parsed.ok) {
-    return { ok: false, error: `invalid manifest: ${parsed.error}` }
-  }
-  const manifest = parsed.manifest
-  if (!satisfiesOrcaEngineRange(input.hostVersion, manifest.engines.orca)) {
-    return {
-      ok: false,
-      error: `plugin requires Orca ${manifest.engines.orca} (this is ${input.hostVersion})`
-    }
-  }
-  const declaredArtifacts = await validateDeclaredPluginArtifacts(input.stagingDir, manifest)
-  if (!declaredArtifacts.ok) {
-    return { ok: false, error: `invalid declared artifact: ${declaredArtifacts.error}` }
-  }
-  // Hash before copy: also enforces the symlink/entry-count/size limits.
-  const treeHash = await hashPluginTree(input.stagingDir)
-  if (!treeHash.ok) {
-    return { ok: false, error: treeHash.error }
-  }
-  const pluginKey = qualifiedPluginKey(manifest)
-  const pluginDir = join(input.pluginsDir, pluginKey)
-  const versionDir = join(pluginDir, treeHash.hash)
-  if (!existsSync(versionDir)) {
-    const stagedVersionDir = `${versionDir}.staging`
-    try {
-      await rm(stagedVersionDir, { recursive: true, force: true })
-      await mkdir(pluginDir, { recursive: true })
-      // Source trees can change while copying. Hashing the destination closes
-      // that race before the immutable directory becomes current.
-      const stagingRoot = resolve(input.stagingDir)
-      await cp(stagingRoot, stagedVersionDir, {
-        recursive: true,
-        verbatimSymlinks: true,
-        // Source-control metadata is not plugin content. Skip it at the copy
-        // boundary so a large local repository cannot bypass install limits.
-        filter: (source) => {
-          const fromRoot = relative(stagingRoot, resolve(source))
-          return fromRoot !== '.git' && !fromRoot.startsWith(`.git${sep}`)
-        }
-      })
-      const copiedHash = await hashPluginTree(stagedVersionDir)
-      if (!copiedHash.ok || copiedHash.hash !== treeHash.hash) {
-        return {
-          ok: false,
-          error: copiedHash.ok
-            ? 'plugin content changed while it was being copied'
-            : copiedHash.error
-        }
-      }
-      const copiedArtifacts = await validateDeclaredPluginArtifacts(stagedVersionDir, manifest)
-      if (!copiedArtifacts.ok) {
-        return { ok: false, error: `copied artifact validation failed: ${copiedArtifacts.error}` }
-      }
-      await rename(stagedVersionDir, versionDir)
-    } catch (error) {
-      return { ok: false, error: error instanceof Error ? error.message : String(error) }
-    } finally {
-      await rm(stagedVersionDir, { recursive: true, force: true })
-    }
-  } else {
-    // Never repoint at an existing hash directory without proving its bytes;
-    // a previous partial/tampered install must not be revived by reinstall.
-    const existingHash = await hashPluginTree(versionDir)
-    if (!existingHash.ok || existingHash.hash !== treeHash.hash) {
-      return {
-        ok: false,
-        error: existingHash.ok
-          ? 'existing plugin content failed integrity verification'
-          : existingHash.error
-      }
-    }
-    const existingArtifacts = await validateDeclaredPluginArtifacts(versionDir, manifest)
-    if (!existingArtifacts.ok) {
-      return {
-        ok: false,
-        error: `installed artifact validation failed: ${existingArtifacts.error}`
-      }
-    }
-  }
-  const consentFingerprint = fingerprintPluginConsent(manifest)
-  const entry: PluginLockEntry = {
-    pluginKey,
-    version: manifest.version,
-    source: input.source,
-    resolvedCommit: input.resolvedCommit,
-    contentHash: treeHash.hash,
-    consentFingerprint,
-    installedAt: Date.now()
-  }
-  try {
-    await publishPluginInstall({ pluginsDir: input.pluginsDir, pluginDir, entry })
-  } catch (error) {
-    return { ok: false, error: error instanceof Error ? error.message : String(error) }
-  }
-  return {
-    ok: true,
-    pluginKey,
-    version: manifest.version,
-    contentHash: treeHash.hash,
-    consentFingerprint,
-    resolvedCommit: input.resolvedCommit
-  }
-}
-
 export async function installPluginFromLocalPath(input: {
   pluginsDir: string
   sourcePath: string
@@ -207,7 +67,7 @@ export async function installPluginFromLocalPath(input: {
     if (!existsSync(join(input.sourcePath, PLUGIN_MANIFEST_FILENAME))) {
       return { ok: false, error: `no ${PLUGIN_MANIFEST_FILENAME} found in ${input.sourcePath}` }
     }
-    return installStagedTree({
+    return installStagedPluginTree({
       pluginsDir: input.pluginsDir,
       stagingDir: input.sourcePath,
       hostVersion: input.hostVersion,
@@ -260,7 +120,7 @@ export async function installPluginFromGit(input: {
         await runGit(args, tmpdir())
       }
       const resolvedCommit = await runGit(['rev-parse', 'HEAD'], stagingDir)
-      return await installStagedTree({
+      return await installStagedPluginTree({
         pluginsDir: input.pluginsDir,
         stagingDir,
         hostVersion: input.hostVersion,
