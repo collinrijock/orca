@@ -211,8 +211,8 @@ describe('removeProject cascade', () => {
     expect(s.activeTabId).toBeNull()
 
     // PTYs were killed
-    expect(mockApi.pty.kill).toHaveBeenCalledWith('pty1')
-    expect(mockApi.pty.kill).toHaveBeenCalledWith('pty2')
+    expect(mockApi.pty.kill).toHaveBeenCalledWith('pty1', { expectedTabId: 'tab1' })
+    expect(mockApi.pty.kill).toHaveBeenCalledWith('pty2', { expectedTabId: 'tab2' })
 
     // The tabs are gone before async exit events can close them, so retaining
     // their one-shot guards would leak ephemeral PTY ids for the renderer session.

@@ -30,6 +30,10 @@ import {
 } from './pty-pre-handler-buffer'
 import { createPtyInputWriteQueue } from './pty-input-write-queue'
 import { acquirePtySessionConnectAdmission } from './pty-session-connect-admission'
+import {
+  restorePtyPrimaryHandlersAfterFailedAdmission,
+  suspendPtyPrimaryHandlersForAdmission
+} from './pty-primary-handler-admission'
 import type { PtyDataMeta } from './pty-dispatcher'
 import type { IpcPtyTransportOptions, PtyConnectResult, PtyTransport } from './pty-transport-types'
 import { createBellDetector } from '../../../../shared/terminal-bell-detector'
@@ -75,6 +79,15 @@ const SSH_SESSION_EXPIRED_ERROR = 'SSH_SESSION_EXPIRED'
 const SSH_PTY_CONNECTION_MISMATCH_MARKER = 'belongs to SSH connection'
 const STALE_TITLE_TIMEOUT = 3000 // ms before stale working title is cleared
 const MAX_PTY_SIDE_EFFECTS_PER_DRAIN = 64
+
+const ptyPrimaryHandlerAdmissionRegistry = {
+  dataHandlers: ptyDataHandlers,
+  replayHandlers: ptyReplayHandlers,
+  exitHandlers: ptyExitHandlers,
+  teardownHandlers: ptyTeardownHandlers,
+  drainData: drainPreHandlerPtyData,
+  drainExit: drainPreHandlerPtyExit
+}
 
 // Why: onAgentStatus callback added to IpcPtyTransportOptions in pty-dispatcher
 // so the OSC 9999 status payloads can be forwarded to the store.
@@ -707,6 +720,13 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
       const releaseSessionAdmission = options.sessionId
         ? await acquirePtySessionConnectAdmission(options.sessionId)
         : undefined
+      const suspendedHandlers = options.sessionId
+        ? suspendPtyPrimaryHandlersForAdmission(
+            ptyPrimaryHandlerAdmissionRegistry,
+            options.sessionId
+          )
+        : undefined
+      let restoreSuspendedHandlers = suspendedHandlers !== undefined
       try {
         if (options.sessionId) {
           // Why: admission starts a new renderer generation; buffered events
@@ -756,6 +776,9 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
           ...(terminalColorQueryReplies ? { terminalColorQueryReplies } : {}),
           ...(telemetry ? { telemetry } : {})
         })
+        // The host accepted a new generation; the prior primary handlers must
+        // never be restored even if this transport is destroyed before binding.
+        restoreSuspendedHandlers = false
         const spawnResult = result as PtyConnectResult & { isReattach?: boolean }
         const resultLaunchAgent = isTuiAgent(spawnResult.launchAgent)
           ? spawnResult.launchAgent
@@ -819,6 +842,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
       } catch (err) {
         const msg = extractIpcErrorMessage(err, err instanceof Error ? err.message : String(err))
         if (options.sessionId && msg.includes(DAEMON_PTY_EXITED_DURING_ADMISSION)) {
+          restoreSuspendedHandlers = false
           // Why: this exit belongs to the rejected generation; retaining its
           // bytes or exit would tear down a later successful same-id spawn.
           clearPreHandlerPtyState(options.sessionId)
@@ -829,6 +853,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
           (msg.includes(SSH_SESSION_EXPIRED_ERROR) ||
             msg.includes(SSH_PTY_CONNECTION_MISMATCH_MARKER))
         ) {
+          restoreSuspendedHandlers = false
           return {
             id: options.sessionId,
             sessionExpired: true
@@ -848,6 +873,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
         // error type (see src/main/daemon/daemon-pty-adapter.ts), so a
         // substring match is safe.
         if (msg.includes('was explicitly killed')) {
+          restoreSuspendedHandlers = false
           return undefined
         }
         // Why: on cold start, SSH provider isn't registered yet so pty:spawn
@@ -867,6 +893,12 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
         }
         return undefined
       } finally {
+        if (restoreSuspendedHandlers && suspendedHandlers) {
+          restorePtyPrimaryHandlersAfterFailedAdmission(
+            ptyPrimaryHandlerAdmissionRegistry,
+            suspendedHandlers
+          )
+        }
         releaseSessionAdmission?.()
       }
     },
