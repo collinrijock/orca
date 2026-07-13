@@ -72,3 +72,28 @@ describe('plugin panel serve RPC identity', () => {
     })
   })
 })
+
+describe('plugin consent preview serve RPC parity', () => {
+  it('requires a reviewed fingerprint and fails closed for unknown plugins', async () => {
+    expect(
+      method('plugins.previewConsent').params?.safeParse({
+        pluginKey: 'orca-samples.missing'
+      }).success
+    ).toBe(false)
+    const service = {
+      whenReady: vi.fn().mockResolvedValue(undefined),
+      findValidPlugin: vi.fn().mockReturnValue(null)
+    } as unknown as PluginService
+    setPluginServiceForRpc(service)
+
+    await expect(
+      method('plugins.previewConsent').handler(
+        {
+          pluginKey: 'orca-samples.missing',
+          reviewedFingerprint: 'sha256-reviewed'
+        },
+        context('connection-one')
+      )
+    ).resolves.toEqual({ ok: false, error: 'plugin consent preview unavailable' })
+  })
+})

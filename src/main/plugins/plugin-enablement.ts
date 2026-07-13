@@ -6,7 +6,7 @@ import type { Store } from '../persistence'
 import type { PluginService } from './plugin-service'
 import type { PluginConsentRequest } from '../../shared/plugins/plugin-consent-request'
 import { verifyInstructionalPluginContent } from './plugin-instructional-content-integrity'
-import { readPluginSkillConsentPreviews } from './plugin-skill-consent-preview'
+import { previewPluginConsent } from './plugin-skill-consent-preview'
 
 /**
  * Single write path for consent + enablement. Consent is recorded as
@@ -41,9 +41,16 @@ export async function applyPluginConsent(input: {
   if (input.decision === 'approve') {
     // Why: IPC and serve callers can bypass the renderer dialog, so main must
     // prove every instructional byte is still reviewable before enabling it.
-    await verifyInstructionalPluginContent(plugin)
     if (plugin.manifest.contributes.skills.length > 0) {
-      await readPluginSkillConsentPreviews(plugin)
+      const preview = await previewPluginConsent(pluginService, {
+        pluginKey,
+        reviewedFingerprint: input.reviewedFingerprint
+      })
+      if (!preview.ok) {
+        throw new Error(`plugin ${pluginKey} consent preview is unavailable`)
+      }
+    } else {
+      await verifyInstructionalPluginContent(plugin)
     }
   }
   const settings = store.getSettings()

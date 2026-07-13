@@ -151,4 +151,29 @@ describe('plugin settings lifecycle authority', () => {
 
     expect(service.refresh).toHaveBeenCalledOnce()
   })
+
+  it('registers a lazy consent preview that fails closed for unknown plugins', async () => {
+    const store = {
+      onSettingsChanged: vi.fn()
+    } as unknown as Store
+    const service = {
+      setRuntimeDelegate: vi.fn(),
+      whenReady: vi.fn().mockResolvedValue(undefined),
+      findValidPlugin: vi.fn().mockReturnValue(null)
+    } as unknown as PluginService
+    registerPluginHandlers(store, service, null)
+    const registration = electronMocks.handle.mock.calls.find(
+      ([channel]) => channel === 'plugins:previewConsent'
+    )
+
+    await expect(
+      registration?.[1](
+        { sender: { id: 17 } },
+        {
+          pluginKey: 'orca-samples.missing',
+          reviewedFingerprint: 'sha256-reviewed'
+        }
+      )
+    ).resolves.toEqual({ ok: false, error: 'plugin consent preview unavailable' })
+  })
 })

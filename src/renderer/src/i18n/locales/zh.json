@@ -9314,7 +9314,8 @@
         "PluginSkillConsentPreview": {
           "heading": "智能体技能指令",
           "instructionsLabel": "{{value0}} 技能指令",
-          "loadError": "Orca 无法读取所有技能指令。请保持此插件为禁用状态，并在修复软件包后重新审核。"
+          "loadError": "Orca 无法读取所有技能指令。请保持此插件为禁用状态，并在修复软件包后重新审核。",
+          "loading": "正在加载技能说明…"
         }
       },
       "right": {

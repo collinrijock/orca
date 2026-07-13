@@ -1,4 +1,3 @@
-import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
@@ -223,64 +222,27 @@ describe('buildPluginList consent identity', () => {
     ])
   })
 
-  it('projects each skill name and exact SKILL.md instructions for consent', async () => {
-    const rootDir = await mkdtemp(join(tmpdir(), 'orca-plugin-skill-consent-'))
-    try {
-      await mkdir(join(rootDir, 'skills', 'review'), { recursive: true })
-      await writeFile(
-        join(rootDir, 'skills', 'review', 'SKILL.md'),
-        '# Review\n\nInspect the complete patch.'
-      )
-      const skillManifest = pluginManifestSchema.parse({
-        ...manifest,
-        contributes: { skills: [{ path: 'skills' }] }
-      })
-      const plugin: ValidDiscoveredPlugin = {
-        pluginKey: 'orca-samples.demo',
-        rootDir,
-        manifest: skillManifest,
-        consentFingerprint: 'sha256-current',
-        consentContentHash: 'a'.repeat(64),
-        contentHash: null,
-        isDev: true
-      }
-
-      expect(
-        (await buildPluginList(serviceWith(plugin), emptyPluginLockfile()))[0]?.skills
-      ).toEqual([
-        {
-          name: 'review',
-          instructions: '# Review\n\nInspect the complete patch.'
-        }
-      ])
-    } finally {
-      await rm(rootDir, { recursive: true, force: true })
+  it('keeps skill instructions out of the bounded list projection', async () => {
+    const rootDir = join(tmpdir(), 'private', 'skill-pack')
+    const skillManifest = pluginManifestSchema.parse({
+      ...manifest,
+      contributes: { skills: [{ path: 'private-skills' }] }
+    })
+    const plugin: ValidDiscoveredPlugin = {
+      pluginKey: 'orca-samples.demo',
+      rootDir,
+      manifest: skillManifest,
+      consentFingerprint: 'sha256-current',
+      consentContentHash: 'a'.repeat(64),
+      contentHash: null,
+      isDev: true
     }
-  })
 
-  it('does not expose host paths when a skill preview cannot be read', async () => {
-    const rootDir = await mkdtemp(join(tmpdir(), 'orca-private-skill-consent-'))
-    try {
-      const skillManifest = pluginManifestSchema.parse({
-        ...manifest,
-        contributes: { skills: [{ path: 'private-skills' }] }
-      })
-      const plugin: ValidDiscoveredPlugin = {
-        pluginKey: 'orca-samples.demo',
-        rootDir,
-        manifest: skillManifest,
-        consentFingerprint: 'sha256-current',
-        consentContentHash: 'a'.repeat(64),
-        contentHash: null,
-        isDev: true
-      }
+    const projected = (await buildPluginList(serviceWith(plugin), emptyPluginLockfile()))[0]!
 
-      const projected = (await buildPluginList(serviceWith(plugin), emptyPluginLockfile()))[0]!
-
-      expect(projected.skillPreviewError).toBe('skill instructions could not be read')
-      expect(JSON.stringify(projected)).not.toContain(rootDir)
-    } finally {
-      await rm(rootDir, { recursive: true, force: true })
-    }
+    expect(projected.hasSkills).toBe(true)
+    expect(projected).not.toHaveProperty('skills')
+    expect(projected).not.toHaveProperty('skillPreviewError')
+    expect(JSON.stringify(projected)).not.toContain(rootDir)
   })
 })

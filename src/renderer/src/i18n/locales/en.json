@@ -9314,7 +9314,8 @@
         "PluginSkillConsentPreview": {
           "heading": "Agent skill instructions",
           "instructionsLabel": "{{value0}} skill instructions",
-          "loadError": "Orca could not read every skill instruction. Keep this plugin disabled and review it again after fixing the package."
+          "loadError": "Orca could not read every skill instruction. Keep this plugin disabled and review it again after fixing the package.",
+          "loading": "Loading skill instructions…"
         }
       },
       "right": {

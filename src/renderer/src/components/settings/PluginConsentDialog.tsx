@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { AlertTriangle, Check, Loader2 } from 'lucide-react'
 import type { PluginHostListEntry } from '../../../../preload/api-types'
 import { translate } from '@/i18n/i18n'
@@ -25,6 +25,11 @@ type PluginConsentDialogProps = {
     decision: 'approve' | 'keep-disabled'
   ) => Promise<void>
 }
+
+type SkillPreviewState =
+  | { status: 'loading'; skills: [] }
+  | { status: 'ready'; skills: { name: string; instructions: string }[] }
+  | { status: 'error'; skills: [] }
 
 function trustTier(plugin: PluginHostListEntry): string {
   if (plugin.hasWorker) {
@@ -78,10 +83,45 @@ export function PluginConsentDialog({
   const keepDisabledRef = useRef<HTMLButtonElement>(null)
   const [busyDecision, setBusyDecision] = useState<'approve' | 'keep-disabled' | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const skillPreviewBlocked = Boolean(plugin?.hasSkills && plugin.skillPreviewError)
+  const [skillPreview, setSkillPreview] = useState<SkillPreviewState>(() =>
+    plugin?.hasSkills ? { status: 'loading', skills: [] } : { status: 'ready', skills: [] }
+  )
+  const skillPreviewBlocked = Boolean(plugin?.hasSkills && skillPreview.status !== 'ready')
+
+  useEffect(() => {
+    if (!plugin?.hasSkills || !plugin.consentFingerprint) {
+      return
+    }
+    let current = true
+    void window.api.plugins
+      .previewConsent({
+        pluginKey: plugin.pluginKey,
+        reviewedFingerprint: plugin.consentFingerprint
+      })
+      .then((result) => {
+        if (!current) {
+          return
+        }
+        setSkillPreview(
+          result.ok ? { status: 'ready', skills: result.skills } : { status: 'error', skills: [] }
+        )
+      })
+      .catch(() => {
+        if (current) {
+          setSkillPreview({ status: 'error', skills: [] })
+        }
+      })
+    return () => {
+      current = false
+    }
+  }, [plugin])
 
   const decide = async (decision: 'approve' | 'keep-disabled'): Promise<void> => {
-    if (!plugin?.consentFingerprint || busyDecision) {
+    if (
+      !plugin?.consentFingerprint ||
+      busyDecision ||
+      (decision === 'approve' && skillPreviewBlocked)
+    ) {
       return
     }
     setBusyDecision(decision)
@@ -217,8 +257,9 @@ export function PluginConsentDialog({
               </div>
             ) : null}
             <PluginSkillConsentPreview
-              skills={plugin.skills ?? []}
-              error={plugin.skillPreviewError}
+              skills={skillPreview.skills}
+              loading={skillPreview.status === 'loading'}
+              error={skillPreview.status === 'error'}
             />
             <PluginKeybindingConsentPreview commands={plugin.commands} />
             <PluginVmRecipeConsentPreview recipes={plugin.vmRecipes ?? []} />

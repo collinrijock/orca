@@ -9314,7 +9314,8 @@
         "PluginSkillConsentPreview": {
           "heading": "에이전트 스킬 지침",
           "instructionsLabel": "{{value0}} 스킬 지침",
-          "loadError": "Orca가 모든 스킬 지침을 읽지 못했습니다. 이 플러그인을 비활성화 상태로 유지하고 패키지를 수정한 후 다시 검토하세요."
+          "loadError": "Orca가 모든 스킬 지침을 읽지 못했습니다. 이 플러그인을 비활성화 상태로 유지하고 패키지를 수정한 후 다시 검토하세요.",
+          "loading": "스킬 지침을 불러오는 중…"
         }
       },
       "right": {

@@ -14,10 +14,6 @@ import {
   isOfficialOrganizationGitSource,
   isOfficialPluginIdentity
 } from '../../shared/plugins/plugin-marketplace'
-import {
-  readPluginSkillConsentPreviews,
-  type PluginSkillConsentPreview
-} from './plugin-skill-consent-preview'
 import { mapPluginContentWithConcurrency } from './plugin-content-load-pool'
 
 const PLUGIN_LIST_PROJECTION_CONCURRENCY = 4
@@ -70,8 +66,6 @@ export type PluginListEntry = {
   }[]
   hasWorker: boolean
   hasSkills: boolean
-  skills: PluginSkillConsentPreview[]
-  skillPreviewError?: string
   vmRecipes: {
     id: string
     name: string
@@ -122,7 +116,6 @@ export async function buildPluginList(
           commands: [],
           hasWorker: false,
           hasSkills: false,
-          skills: [],
           vmRecipes: [],
           restarts: 0
         }
@@ -161,17 +154,6 @@ export async function buildPluginList(
           isOfficialPluginIdentity(plugin.pluginKey) &&
           isOfficialMarketplaceGitSource(lockEntry.source.marketplace.url) &&
           isOfficialOrganizationGitSource(lockEntry.source.plugin.url))
-      let skills: PluginSkillConsentPreview[] = []
-      let skillPreviewError: string | undefined
-      if (plugin.manifest.contributes.skills.length > 0) {
-        try {
-          skills = await readPluginSkillConsentPreviews(plugin)
-        } catch {
-          // Why: package-reader errors can contain private desktop paths;
-          // clients only need a fail-closed signal, not host filesystem detail.
-          skillPreviewError = 'skill instructions could not be read'
-        }
-      }
       return {
         pluginKey: plugin.pluginKey,
         consentFingerprint: plugin.consentFingerprint,
@@ -206,8 +188,6 @@ export async function buildPluginList(
         })),
         hasWorker: Boolean(plugin.manifest.main),
         hasSkills: plugin.manifest.contributes.skills.length > 0,
-        skills,
-        ...(skillPreviewError ? { skillPreviewError } : {}),
         vmRecipes: service.contentPacks.vmRecipes.preview(plugin.pluginKey).map(({ recipe }) => ({
           id: recipe.id,
           name: recipe.name,

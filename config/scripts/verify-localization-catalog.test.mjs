@@ -80,7 +80,7 @@ describe('verify-localization-catalog', () => {
     expect(readJson(path.join(localesDir, 'en.json'))).toEqual({})
   })
 
-  it('reports partial plugin catalog gaps without failing the plugin author', async () => {
+  it('reports partial plugin catalog gaps but rejects malformed interpolation', async () => {
     const { root } = makeProject({
       sourceText: 'export {}\n',
       enCatalog: {
@@ -102,7 +102,7 @@ describe('verify-localization-catalog', () => {
           fix: false,
           pluginCatalogs: [pluginCatalogPath]
         })
-      ).resolves.toBe(0)
+      ).resolves.toBe(1)
       expect(report).toHaveBeenCalledWith(expect.stringContaining('0/2 core keys'))
       expect(report).toHaveBeenCalledWith(expect.stringContaining('interpolation mismatch'))
     } finally {

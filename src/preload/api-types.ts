@@ -54,6 +54,10 @@ import type {
   PluginPanelEntry
 } from '../shared/plugins/plugin-panel-bridge'
 import type { PluginConsentRequest } from '../shared/plugins/plugin-consent-request'
+import type {
+  PluginConsentPreviewRequest,
+  PluginConsentPreviewResult
+} from '../shared/plugins/plugin-consent-preview'
 import type { PluginThemeRegistration } from '../shared/plugins/plugin-theme-artifact'
 import type { PluginLanguagePackRegistration } from '../shared/plugins/plugin-language-pack-artifact'
 import type {
@@ -962,8 +966,6 @@ export type PluginHostListEntry = {
   }[]
   hasWorker: boolean
   hasSkills?: boolean
-  skills?: { name: string; instructions: string }[]
-  skillPreviewError?: string
   vmRecipes?: {
     id: string
     name: string
@@ -3253,6 +3255,7 @@ export type PreloadApi = {
   }
   plugins: {
     list: () => Promise<PluginHostListEntry[]>
+    previewConsent: (args: PluginConsentPreviewRequest) => Promise<PluginConsentPreviewResult>
     listThemes: () => Promise<PluginThemeRegistration[]>
     listLanguagePacks: () => Promise<PluginLanguagePackRegistration[]>
     listIconThemes: () => Promise<PluginIconThemeMetadata[]>

@@ -10,7 +10,7 @@ const SKILL_DIRECTORY_DEPTH_LIMIT = 16
 const SKILL_PACKAGE_MAX_BYTES = 10 * 1024 * 1024
 const SKILL_CONTRIBUTION_MAX_BYTES = 50 * 1024 * 1024
 const SKILL_PACKAGES_PER_CONTRIBUTION_LIMIT = 128
-const SKILL_MARKDOWN_MAX_BYTES = 256 * 1024
+export const PLUGIN_SKILL_MARKDOWN_MAX_BYTES = 256 * 1024
 
 export type PluginSkillPackageFile = {
   relativePath: string
@@ -107,8 +107,8 @@ async function collectPackageFiles(packageRoot: string): Promise<PluginSkillPack
   if (!skillMarkdown) {
     throw new Error(`skill package ${basename(packageRoot)} is missing SKILL.md`)
   }
-  if (skillMarkdown.content.byteLength > SKILL_MARKDOWN_MAX_BYTES) {
-    throw new Error(`SKILL.md exceeds the ${SKILL_MARKDOWN_MAX_BYTES}-byte limit`)
+  if (skillMarkdown.content.byteLength > PLUGIN_SKILL_MARKDOWN_MAX_BYTES) {
+    throw new Error(`SKILL.md exceeds the ${PLUGIN_SKILL_MARKDOWN_MAX_BYTES}-byte limit`)
   }
   return files
 }
@@ -160,7 +160,10 @@ export async function readPluginSkillInstruction(
   if (!instruction?.isFile()) {
     throw new Error(`skill package ${packageRoot.skillName} is missing SKILL.md`)
   }
-  return readRegularFile(join(packageRoot.rootDir, instruction.name), SKILL_MARKDOWN_MAX_BYTES)
+  return readRegularFile(
+    join(packageRoot.rootDir, instruction.name),
+    PLUGIN_SKILL_MARKDOWN_MAX_BYTES
+  )
 }
 
 export async function readPluginSkillPackages(

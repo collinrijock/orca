@@ -9,6 +9,8 @@ import {
   type PluginConsentRequest
 } from '../../../../shared/plugins/plugin-consent-request'
 import { isQualifiedPluginKey } from '../../../../shared/plugins/plugin-manifest'
+import { pluginConsentPreviewRequestSchema } from '../../../../shared/plugins/plugin-consent-preview'
+import { previewPluginConsentForClient } from '../../../plugins/plugin-consent-preview-controller'
 
 /**
  * Serve/headless parity surface: the same consent, enablement, panel-action,
@@ -82,6 +84,18 @@ export const PLUGIN_METHODS: readonly RpcMethod[] = [
     name: 'plugins.list',
     params: null,
     handler: async () => listForRpc()
+  }),
+  defineMethod({
+    name: 'plugins.previewConsent',
+    params: pluginConsentPreviewRequestSchema,
+    handler: async (params, context) => {
+      const service = requirePluginService()
+      await service.whenReady()
+      return previewPluginConsentForClient(service, params, {
+        ownerKey: rpcPanelOwner(context),
+        signal: context.signal
+      })
+    }
   }),
   defineMethod({
     // Why: headless serve has no consent dialog — an explicit consent call is

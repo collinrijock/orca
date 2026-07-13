@@ -17,6 +17,10 @@ import type {
   PluginPanelEntry
 } from '../shared/plugins/plugin-panel-bridge'
 import type { PluginConsentRequest } from '../shared/plugins/plugin-consent-request'
+import type {
+  PluginConsentPreviewRequest,
+  PluginConsentPreviewResult
+} from '../shared/plugins/plugin-consent-preview'
 import type { PluginChangeEvent } from '../shared/plugins/plugin-change-event'
 import type {
   BaseRefSearchResult,
@@ -560,6 +564,8 @@ const api = {
 
   plugins: {
     list: (): Promise<PluginHostListEntry[]> => ipcRenderer.invoke('plugins:list'),
+    previewConsent: (args: PluginConsentPreviewRequest): Promise<PluginConsentPreviewResult> =>
+      ipcRenderer.invoke('plugins:previewConsent', args),
     listThemes: () => ipcRenderer.invoke('plugins:listThemes'),
     listLanguagePacks: () => ipcRenderer.invoke('plugins:listLanguagePacks'),
     listIconThemes: () => ipcRenderer.invoke('plugins:listIconThemes'),

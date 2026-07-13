@@ -11,8 +11,9 @@ import type { PluginMarketplaceFetchResult } from './plugin-marketplace-fetch'
 import { PluginMarketplaceService } from './plugin-marketplace-service'
 import {
   marketplaceSourceId,
-  type PluginMarketplaceRegisteredSource,
-  type PluginMarketplaceStore
+  PLUGIN_MARKETPLACE_SOURCE_LIMIT,
+  PluginMarketplaceStore,
+  type PluginMarketplaceRegisteredSource
 } from './plugin-marketplace-store'
 
 const roots: string[] = []
@@ -254,6 +255,34 @@ describe('PluginMarketplaceService', () => {
       marketplace: { name: 'Orca Plugins' },
       official: true
     })
+  })
+
+  it('recovers the managed source after a full existing store frees a slot', async () => {
+    const root = await tempRoot()
+    const store = new PluginMarketplaceStore(root)
+    const registrations = await Promise.all(
+      Array.from({ length: PLUGIN_MARKETPLACE_SOURCE_LIMIT }, (_, index) =>
+        store.addSource(source(`https://example.com/community-${index}.git`), index + 1)
+      )
+    )
+    const officialMarketplace = marketplace(
+      'Orca Plugins',
+      'stablyai.orca-theme',
+      'https://github.com/stablyai/orca-theme.git'
+    )
+    officialMarketplace.owner = 'stablyai'
+    const service = new PluginMarketplaceService({
+      pluginsDataDir: root,
+      store,
+      fetcher: async () => fetched(officialMarketplace)
+    })
+
+    await expect(service.seedOfficialSource()).rejects.toThrow('source limit')
+    await expect(service.removeSource(registrations[0]!.id)).resolves.toBe(true)
+
+    const sources = await service.listSources()
+    expect(sources).toHaveLength(PLUGIN_MARKETPLACE_SOURCE_LIMIT)
+    expect(sources).toContainEqual(expect.objectContaining({ official: true }))
   })
 
   it('removes source metadata and browse listings together', async () => {

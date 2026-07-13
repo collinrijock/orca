@@ -21,37 +21,85 @@ type MarketplaceFixture = {
   gitEnvironment: NodeJS.ProcessEnv
 }
 
-async function runGit(cwd: string, args: string[]): Promise<void> {
-  await execFileAsync('git', args, { cwd })
+function isolatedGitProcessEnv(gitEnvironment: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+  return {
+    ...Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith('GIT_'))),
+    ...gitEnvironment
+  }
 }
 
-async function commitRepository(repository: string): Promise<void> {
-  await runGit(repository, ['init', '--quiet'])
-  await runGit(repository, ['checkout', '--quiet', '-b', 'main'])
-  await runGit(repository, ['add', '--all'])
-  await runGit(repository, [
-    '-c',
-    'user.name=Orca Test',
-    '-c',
-    'user.email=orca-test@example.invalid',
-    'commit',
-    '--quiet',
-    '-m',
-    'fixture'
-  ])
-  await runGit(repository, ['tag', 'v1.0.0'])
+async function runGit(
+  cwd: string,
+  args: string[],
+  gitEnvironment: NodeJS.ProcessEnv
+): Promise<void> {
+  await execFileAsync('git', args, { cwd, env: isolatedGitProcessEnv(gitEnvironment) })
+}
+
+async function commitRepository(
+  repository: string,
+  gitEnvironment: NodeJS.ProcessEnv
+): Promise<void> {
+  await runGit(repository, ['init', '--quiet'], gitEnvironment)
+  await runGit(repository, ['checkout', '--quiet', '-b', 'main'], gitEnvironment)
+  await runGit(repository, ['add', '--all'], gitEnvironment)
+  await runGit(
+    repository,
+    [
+      '-c',
+      'user.name=Orca Test',
+      '-c',
+      'user.email=orca-test@example.invalid',
+      'commit',
+      '--quiet',
+      '-m',
+      'fixture'
+    ],
+    gitEnvironment
+  )
+  await runGit(repository, ['tag', 'v1.0.0'], gitEnvironment)
 }
 
 async function copyLaunchPlugin(
   repositories: string,
   repositoryName: string,
-  launchDirectory: string
+  launchDirectory: string,
+  gitEnvironment: NodeJS.ProcessEnv
 ): Promise<void> {
   const repository = join(repositories, `${repositoryName}.git`)
   await cp(join(process.cwd(), 'resources', 'plugins', 'launch', launchDirectory), repository, {
     recursive: true
   })
-  await commitRepository(repository)
+  await commitRepository(repository, gitEnvironment)
+}
+
+async function configureFixtureGit(home: string, repositories: string): Promise<NodeJS.ProcessEnv> {
+  const hooksDirectory = join(home, 'hooks')
+  const xdgConfigHome = join(home, 'xdg')
+  const configPath = join(home, '.gitconfig')
+  await Promise.all([
+    mkdir(hooksDirectory, { recursive: true }),
+    mkdir(xdgConfigHome, { recursive: true })
+  ])
+  const gitEnvironment: NodeJS.ProcessEnv = {
+    HOME: home,
+    USERPROFILE: home,
+    XDG_CONFIG_HOME: xdgConfigHome,
+    GIT_CONFIG_NOSYSTEM: '1',
+    GIT_TERMINAL_PROMPT: '0'
+  }
+  const repositoryBaseUrl = pathToFileURL(`${repositories}${sep}`).href
+  const entries = [
+    [`url.${repositoryBaseUrl}.insteadOf`, 'https://github.com/stablyai/'],
+    ['protocol.file.allow', 'always'],
+    ['commit.gpgSign', 'false'],
+    ['tag.gpgSign', 'false'],
+    ['core.hooksPath', hooksDirectory]
+  ] as const
+  for (const [key, value] of entries) {
+    await runGit(home, ['config', '--file', configPath, key, value], gitEnvironment)
+  }
+  return gitEnvironment
 }
 
 async function createMarketplaceFixture(): Promise<MarketplaceFixture> {
@@ -60,8 +108,19 @@ async function createMarketplaceFixture(): Promise<MarketplaceFixture> {
   const home = join(root, 'home')
   await mkdir(repositories, { recursive: true })
   await mkdir(home, { recursive: true })
-  await copyLaunchPlugin(repositories, 'orca-nord-theme', 'stablyai.orca-nord-theme')
-  await copyLaunchPlugin(repositories, 'orca-portuguese', 'stablyai.orca-portuguese')
+  const gitEnvironment = await configureFixtureGit(home, repositories)
+  await copyLaunchPlugin(
+    repositories,
+    'orca-nord-theme',
+    'stablyai.orca-nord-theme',
+    gitEnvironment
+  )
+  await copyLaunchPlugin(
+    repositories,
+    'orca-portuguese',
+    'stablyai.orca-portuguese',
+    gitEnvironment
+  )
 
   const skillRepository = join(repositories, 'orca-e2e-skills.git')
   await cp(
@@ -78,7 +137,7 @@ async function createMarketplaceFixture(): Promise<MarketplaceFixture> {
   skillManifest.name = 'Orca E2E Skills'
   skillManifest.repository = 'https://github.com/stablyai/orca-e2e-skills'
   await writeFile(skillManifestPath, `${JSON.stringify(skillManifest, null, 2)}\n`)
-  await commitRepository(skillRepository)
+  await commitRepository(skillRepository, gitEnvironment)
 
   const marketplaceRepository = join(repositories, 'orca-plugins.git')
   await mkdir(marketplaceRepository, { recursive: true })
@@ -106,19 +165,12 @@ async function createMarketplaceFixture(): Promise<MarketplaceFixture> {
       2
     )}\n`
   )
-  await commitRepository(marketplaceRepository)
+  await commitRepository(marketplaceRepository, gitEnvironment)
 
-  const repositoryBaseUrl = pathToFileURL(`${repositories}${sep}`).href
   return {
     root,
     home,
-    gitEnvironment: {
-      GIT_CONFIG_COUNT: '2',
-      GIT_CONFIG_KEY_0: `url.${repositoryBaseUrl}.insteadOf`,
-      GIT_CONFIG_VALUE_0: 'https://github.com/stablyai/',
-      GIT_CONFIG_KEY_1: 'protocol.file.allow',
-      GIT_CONFIG_VALUE_1: 'always'
-    }
+    gitEnvironment
   }
 }
 
@@ -240,9 +292,7 @@ test('installs and applies official Phase 1 content from a fresh profile', async
   const fixture = await createMarketplaceFixture()
   const session = createRestartSession(testInfo as TestInfo, {
     extraEnv: {
-      ...fixture.gitEnvironment,
-      HOME: fixture.home,
-      USERPROFILE: fixture.home
+      ...fixture.gitEnvironment
     }
   })
   let launched: Awaited<ReturnType<typeof session.launch>> | null = null

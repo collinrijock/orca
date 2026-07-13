@@ -21,35 +21,14 @@ import {
 import type { PluginKillListEntry } from '../../shared/plugins/plugin-kill-list'
 import { validateMarketplaceProvenance } from './plugin-marketplace-provenance'
 import { pluginMarketplaceErrorMessage } from './plugin-marketplace-error-message'
-
-export type PluginMarketplaceSourceState = {
-  id: string
-  source: PluginMarketplaceGitSource
-  addedAt: number
-  marketplace: {
-    name: string
-    owner: string
-    resolvedCommit: string
-    fetchedAt: number
-  } | null
-  stale: boolean
-  official: boolean
-  error?: string
-}
-
-export type PluginMarketplaceListing = {
-  marketplaceSourceId: string
-  marketplaceName: string
-  marketplaceOwner: string
-  marketplaceCommit: string
-  pluginKey: string
-  source: PluginMarketplaceEntry['source']
-  description?: string
-  categories: string[]
-  official: boolean
-  bundled: boolean
-  blockedByKillList?: { reason: string; advisoryUrl?: string }
-}
+import type {
+  PluginMarketplaceListing,
+  PluginMarketplaceSourceState
+} from './plugin-marketplace-projection'
+export type {
+  PluginMarketplaceListing,
+  PluginMarketplaceSourceState
+} from './plugin-marketplace-projection'
 
 type MarketplaceFetcher = (
   source: PluginMarketplaceRegisteredSource
@@ -62,6 +41,7 @@ export class PluginMarketplaceService {
   private readonly refreshChains = new Map<string, Promise<PluginMarketplaceSourceState>>()
   private readonly sourceErrors = new Map<string, string>()
   private officialSeedPromise: Promise<PluginMarketplaceSourceState> | null = null
+  private officialSeedRequested = false
 
   constructor(options: {
     pluginsDataDir: string
@@ -125,11 +105,17 @@ export class PluginMarketplaceService {
     const removed = await this.store.removeSource(sourceId)
     if (removed) {
       this.sourceErrors.delete(sourceId)
+      if (this.officialSeedRequested) {
+        // Why: an existing profile may already occupy every source slot. Once
+        // the user frees one, recover the managed source without a restart.
+        await this.seedOfficialSource().catch(() => undefined)
+      }
     }
     return removed
   }
 
   seedOfficialSource(): Promise<PluginMarketplaceSourceState> {
+    this.officialSeedRequested = true
     if (!this.officialSeedPromise) {
       const seed = this.performOfficialSeed()
       this.officialSeedPromise = seed

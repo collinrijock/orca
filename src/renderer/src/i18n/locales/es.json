@@ -9314,7 +9314,8 @@
         "PluginSkillConsentPreview": {
           "heading": "Instrucciones de habilidades del agente",
           "instructionsLabel": "Instrucciones de la habilidad {{value0}}",
-          "loadError": "Orca no pudo leer todas las instrucciones de las habilidades. Mantén este plugin desactivado y revísalo de nuevo después de corregir el paquete."
+          "loadError": "Orca no pudo leer todas las instrucciones de las habilidades. Mantén este plugin desactivado y revísalo de nuevo después de corregir el paquete.",
+          "loading": "Cargando instrucciones de habilidades…"
         }
       },
       "right": {

@@ -1,15 +1,18 @@
 import { translate } from '@/i18n/i18n'
+import { Loader2 } from 'lucide-react'
 
 type PluginSkillConsentPreviewProps = {
   skills: readonly { name: string; instructions: string }[]
-  error?: string
+  loading: boolean
+  error: boolean
 }
 
 export function PluginSkillConsentPreview({
   skills,
+  loading,
   error
 }: PluginSkillConsentPreviewProps): React.JSX.Element | null {
-  if (skills.length === 0 && !error) {
+  if (skills.length === 0 && !loading && !error) {
     return null
   }
   return (
@@ -20,6 +23,15 @@ export function PluginSkillConsentPreview({
           'Agent skill instructions'
         )}
       </p>
+      {loading ? (
+        <p aria-live="polite" className="flex items-center gap-2 text-sm leading-6">
+          <Loader2 className="size-4 animate-spin text-muted-foreground" />
+          {translate(
+            'auto.components.settings.PluginSkillConsentPreview.loading',
+            'Loading skill instructions…'
+          )}
+        </p>
+      ) : null}
       {skills.map((skill) => (
         <section key={skill.name} className="space-y-2 rounded-md border border-border p-3">
           <p className="font-mono text-xs font-medium">{skill.name}</p>

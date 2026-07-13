@@ -2,7 +2,7 @@
 
 import { act, useState } from 'react'
 import { createRoot } from 'react-dom/client'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { PluginHostListEntry } from '../../../../preload/api-types'
 import { PluginConsentDialog } from './PluginConsentDialog'
 
@@ -30,8 +30,19 @@ const plugin: PluginHostListEntry = {
   }
 }
 
+const previewConsent = vi.fn()
+
+beforeEach(() => {
+  previewConsent.mockReset().mockResolvedValue({ ok: true, skills: [] })
+  Object.defineProperty(window, 'api', {
+    configurable: true,
+    value: { plugins: { previewConsent } }
+  })
+})
+
 afterEach(() => {
   document.body.innerHTML = ''
+  Reflect.deleteProperty(window, 'api')
 })
 
 async function renderConsent(
@@ -58,6 +69,7 @@ async function renderConsent(
     )
   }
   await act(async () => root.render(<Harness />))
+  await act(() => new Promise<void>((resolve) => queueMicrotask(resolve)))
 }
 
 describe('PluginConsentDialog', () => {
@@ -123,16 +135,19 @@ describe('PluginConsentDialog', () => {
   })
 
   it('discloses that contributed skills run as agent instructions', async () => {
+    previewConsent.mockResolvedValue({
+      ok: true,
+      skills: [
+        {
+          name: 'review-changes',
+          instructions: '# Review changes\n\nInspect every diff before approving it.'
+        }
+      ]
+    })
     await renderConsent(
       {
         ...plugin,
-        hasSkills: true,
-        skills: [
-          {
-            name: 'review-changes',
-            instructions: '# Review changes\n\nInspect every diff before approving it.'
-          }
-        ]
+        hasSkills: true
       },
       vi.fn().mockResolvedValue(undefined)
     )
@@ -145,15 +160,31 @@ describe('PluginConsentDialog', () => {
     expect(document.querySelector('pre')?.getAttribute('aria-label')).toBe(
       'review-changes skill instructions'
     )
+    expect(previewConsent).toHaveBeenCalledWith({
+      pluginKey: plugin.pluginKey,
+      reviewedFingerprint: plugin.consentFingerprint
+    })
   })
 
   it('keeps enablement blocked when every skill instruction cannot be reviewed', async () => {
-    await renderConsent(
-      { ...plugin, hasSkills: true, skillPreviewError: 'SKILL.md changed while reading' },
-      vi.fn().mockResolvedValue(undefined)
-    )
+    previewConsent.mockResolvedValue({
+      ok: false,
+      error: 'plugin consent preview unavailable'
+    })
+    await renderConsent({ ...plugin, hasSkills: true }, vi.fn().mockResolvedValue(undefined))
 
     expect(document.body.textContent).toContain('could not read every skill instruction')
+    const enable = Array.from(document.querySelectorAll('button')).find(
+      (button) => button.textContent?.trim() === 'Enable plugin'
+    )
+    expect(enable?.disabled).toBe(true)
+  })
+
+  it('keeps enablement blocked while skill instructions are loading', async () => {
+    previewConsent.mockReturnValue(new Promise(() => {}))
+    await renderConsent({ ...plugin, hasSkills: true }, vi.fn().mockResolvedValue(undefined))
+
+    expect(document.body.textContent).toContain('Loading skill instructions…')
     const enable = Array.from(document.querySelectorAll('button')).find(
       (button) => button.textContent?.trim() === 'Enable plugin'
     )

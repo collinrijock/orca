@@ -435,9 +435,9 @@ async function reportPluginCatalog(root, catalog, pluginCatalogPath) {
   if (interpolationMismatches.length > 0) {
     console.log(formatMissingKeys('interpolation mismatch', interpolationMismatches.slice(0, 20)))
   }
-  // Why: contributed language packs may intentionally be partial and fall
-  // back to English, so coverage gaps are a report rather than a CI failure.
-  return 0
+  // Why: absent plugin translations safely fall back to English, but a present
+  // value with different variables can render broken or misleading UI.
+  return interpolationMismatches.length > 0 ? 1 : 0
 }
 
 export async function main(root = process.cwd(), options = parseArgs(process.argv.slice(2))) {
