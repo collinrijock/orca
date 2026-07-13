@@ -1,9 +1,7 @@
-import { execFile } from 'node:child_process'
 import { mkdtemp, realpath, rm } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { isAbsolute, join, relative, resolve, sep } from 'node:path'
-import { promisify } from 'node:util'
 import {
   PLUGIN_MANIFEST_FILENAME,
   isQualifiedPluginKey
@@ -14,6 +12,7 @@ import {
 } from '../../shared/plugins/plugin-install-lockfile'
 import { readPluginLockfile, writePluginLockfile } from './plugin-install-lockfile-store'
 import { installStagedPluginTree, type PluginInstallResult } from './plugin-install-staging'
+import { checkoutPluginGitSource } from './plugin-git-repository'
 
 export type { PluginInstallResult } from './plugin-install-staging'
 
@@ -34,8 +33,6 @@ export {
  * swap; the previous version dir is kept for one-step rollback.
  */
 
-const execFileAsync = promisify(execFile)
-const GIT_TIMEOUT_MS = 120_000
 const pluginMutationChains = new Map<string, Promise<void>>()
 
 async function serializePluginMutation<T>(
@@ -77,20 +74,6 @@ export async function installPluginFromLocalPath(input: {
   })
 }
 
-async function runGit(args: string[], cwd: string): Promise<string> {
-  const { stdout } = await execFileAsync('git', args, {
-    cwd,
-    timeout: GIT_TIMEOUT_MS,
-    windowsHide: true,
-    env: {
-      ...process.env,
-      // Never block an install on an interactive credential/host prompt.
-      GIT_TERMINAL_PROMPT: '0'
-    }
-  })
-  return stdout.trim()
-}
-
 export async function installPluginFromGit(input: {
   pluginsDir: string
   url: string
@@ -105,21 +88,12 @@ export async function installPluginFromGit(input: {
     const stagingDir = await mkdtemp(join(tmpdir(), 'orca-plugin-install-'))
     try {
       const ref = input.ref.trim()
-      if (/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/.test(ref)) {
-        // Exact commit: shallow-fetch just that object.
-        await runGit(['init', '--quiet', stagingDir], tmpdir())
-        await runGit(['remote', 'add', 'origin', input.url], stagingDir)
-        await runGit(['fetch', '--quiet', '--depth', '1', 'origin', ref], stagingDir)
-        await runGit(['checkout', '--quiet', 'FETCH_HEAD'], stagingDir)
-      } else {
-        const args = ['clone', '--quiet', '--depth', '1']
-        if (ref.length > 0) {
-          args.push('--branch', ref)
-        }
-        args.push('--', input.url, stagingDir)
-        await runGit(args, tmpdir())
-      }
-      const resolvedCommit = await runGit(['rev-parse', 'HEAD'], stagingDir)
+      const resolvedCommit = await checkoutPluginGitSource({
+        url: input.url,
+        ref,
+        destination: stagingDir,
+        workingDirectory: tmpdir()
+      })
       return await installStagedPluginTree({
         pluginsDir: input.pluginsDir,
         stagingDir,
