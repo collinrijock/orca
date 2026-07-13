@@ -472,7 +472,9 @@ import {
   resolveLocalProjectRuntimeForRepo,
   resolveLocalProjectRuntimesForRepos
 } from '../project-runtime-git-options'
+import { resolveLocalProjectRuntimeForWorktreeId } from '../local-project-runtime-resolution'
 import type { ProjectExecutionRuntimeResolution } from '../../shared/project-execution-runtime'
+import { resolveTerminalOrchestrationCliCommand } from './orchestration/cli-command'
 import {
   getLocalWorktreePathAccess,
   removeLocalWorktreePath,
@@ -980,6 +982,9 @@ type RuntimePtyWorktreeRecord = {
   ptyId: string
   worktreeId: string
   connectionId: string | null
+  // Why: a Windows host can own both native and WSL panes; preamble command
+  // selection must follow the pane that executes it, not process.platform.
+  isWsl: boolean | null
   // Why: background CLI PTYs can outlive a failed renderer reveal. Preserve the
   // spawn-time tab/pane identity so later reveals can adopt under the env key.
   tabId: string | null
@@ -5592,7 +5597,8 @@ export class OrcaRuntimeService {
     ptyId: string,
     worktreeId: string,
     connectionId: string | null = null,
-    binding?: { tabId: string; leafId: string }
+    binding?: { tabId: string; leafId: string },
+    isWsl?: boolean
   ): void {
     // Why: record the renderer pane identity at spawn time so a stalled graph
     // sync can't hide that a live PTY already backs a pending mobile create.
@@ -5603,6 +5609,7 @@ export class OrcaRuntimeService {
     this.recordPtyWorktree(ptyId, worktreeId, {
       connected: true,
       connectionId,
+      ...(isWsl !== undefined ? { isWsl } : {}),
       ...(binding && paneKey ? { tabId: binding.tabId, paneKey } : {})
     })
     // Why: the renderer's own PTY spawn is the reliable signal that the pending
@@ -7295,6 +7302,27 @@ export class OrcaRuntimeService {
     const ptyId = this.resolveLeafForHandle(handle)?.ptyId
     const pty = ptyId ? this.ptysById.get(ptyId) : null
     return pty ? { worktreeId: pty.worktreeId, connectionId: pty.connectionId } : null
+  }
+
+  getTerminalOrchestrationCliCommand(handle: string): 'orca' | 'orca-ide' {
+    let pty: RuntimePtyWorktreeRecord | null = null
+    try {
+      const ptyId = this.resolveLeafForHandle(handle)?.ptyId
+      pty = ptyId ? (this.ptysById.get(ptyId) ?? null) : null
+    } catch {
+      return 'orca'
+    }
+    if (!pty) {
+      return 'orca'
+    }
+    return resolveTerminalOrchestrationCliCommand({
+      connectionId: pty.connectionId,
+      isWsl: pty.isWsl,
+      worktreeId: pty.worktreeId,
+      projectRuntime: this.store
+        ? resolveLocalProjectRuntimeForWorktreeId(this.requireStore(), pty.worktreeId)
+        : undefined
+    })
   }
 
   hasRecentTerminalOutputPath(handle: string, pathText: string, absolutePath: string): boolean {
@@ -20723,7 +20751,14 @@ export class OrcaRuntimeService {
     state: Partial<
       Pick<
         RuntimePtyWorktreeRecord,
-        'connected' | 'lastOutputAt' | 'preview' | 'tabId' | 'paneKey' | 'title' | 'connectionId'
+        | 'connected'
+        | 'lastOutputAt'
+        | 'preview'
+        | 'tabId'
+        | 'paneKey'
+        | 'title'
+        | 'connectionId'
+        | 'isWsl'
       >
     > = {}
   ): RuntimePtyWorktreeRecord {
@@ -20734,6 +20769,7 @@ export class OrcaRuntimeService {
         ptyId,
         worktreeId,
         connectionId: state.connectionId ?? parseAppSshPtyId(ptyId)?.connectionId ?? null,
+        isWsl: state.isWsl ?? null,
         tabId: state.tabId ?? null,
         paneKey: state.paneKey ?? null,
         launchConfig: null,
@@ -20774,6 +20810,9 @@ export class OrcaRuntimeService {
     pty.worktreeId = worktreeId
     if (state.connectionId !== undefined) {
       pty.connectionId = state.connectionId
+    }
+    if (state.isWsl !== undefined) {
+      pty.isWsl = state.isWsl
     }
     if (state.tabId !== undefined) {
       pty.tabId = state.tabId
