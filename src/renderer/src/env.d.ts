@@ -3,7 +3,7 @@
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { OnboardingFeatureSetupDeps } from '@/components/onboarding/onboarding-feature-setup'
 import type { languages } from 'monaco-editor'
-import type { MonacoE2ESnapshot } from './components/editor/monaco-e2e-probe'
+import type { MonacoE2EProbe } from './components/editor/monaco-e2e-probe'
 
 declare module 'monaco-editor/esm/vs/basic-languages/python/python.js' {
   export const conf: languages.LanguageConfiguration
@@ -72,13 +72,7 @@ declare global {
       parkDelayMs: number
       parkedTabIds: () => string[]
     }
-    __monacoEditorE2E?: {
-      filePath: string
-      restoreLegacySetValueControl: () => void
-      restoreScrollTop: (scrollTop: number) => void
-      runLegacySetValueAppend: (suffix: string) => void
-      snapshot: () => MonacoE2ESnapshot
-    }
+    __monacoEditorE2E?: MonacoE2EProbe
   }
 }
 

@@ -15,6 +15,14 @@ export type MonacoE2ESnapshot = {
   }
 }
 
+export type MonacoE2EProbe = {
+  filePath: string
+  restoreLegacySetValueControl: () => void
+  restoreScrollTop: (scrollTop: number) => void
+  runLegacySetValueAppend: (suffix: string) => void
+  snapshot: () => MonacoE2ESnapshot
+}
+
 export function installMonacoE2EProbe(
   editorInstance: editor.IStandaloneCodeEditor,
   filePath: string
@@ -24,7 +32,7 @@ export function installMonacoE2EProbe(
   }
   let legacyControlOriginalValue: string | null = null
   let legacyControlIncomingValue: string | null = null
-  const probe = {
+  const probe: MonacoE2EProbe = {
     filePath,
     runLegacySetValueAppend: (suffix: string): void => {
       if (legacyControlOriginalValue !== null) {
