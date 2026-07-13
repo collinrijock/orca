@@ -40,6 +40,7 @@ function createRejectableDeferred<T>(): {
 }
 
 const HOOK_DONE_QUIET_MS = 1_500
+const CODEX_ATTENTION_QUIET_MS = 1_500
 
 describe('agent completion coordinator', () => {
   beforeEach(() => {
@@ -1636,6 +1637,114 @@ describe('agent completion coordinator', () => {
 
     expect(dispatchAttention).toHaveBeenCalledTimes(1)
     expect(dispatchCompletion).toHaveBeenCalledTimes(1)
+  })
+
+  it('cancels the debounced Codex attention notification when work resumes in the quiet window', () => {
+    // Why: Codex fires PermissionRequest at the human-input boundary *before* the
+    // approval decision. Under "Approve for me" the review agent approves and
+    // Codex resumes within the quiet window, so the OS notification must be
+    // debounced and canceled — no false "approval required" banner (issue #8387).
+    const dispatchAttention = vi.fn()
+    const dispatchHookLifecycle = vi.fn()
+    const coordinator = createAgentCompletionCoordinator({
+      paneKey: 'tab-1:leaf-1',
+      getPtyId: () => 'pty-1',
+      getSettings: () => null,
+      inspectProcess: vi.fn(),
+      dispatchCompletion: vi.fn(),
+      dispatchAttention,
+      dispatchHookLifecycle,
+      isLive: () => true
+    })
+
+    const turn = { prompt: 'fix the bug', agentType: 'codex' as const }
+    coordinator.observeHookStatus({ state: 'working', ...turn })
+    coordinator.observeHookStatus({
+      state: 'waiting',
+      ...turn,
+      toolName: 'exec_command',
+      toolInput: 'git status'
+    })
+
+    // Visual status still updates immediately even though the notification waits.
+    expect(dispatchHookLifecycle).toHaveBeenCalledWith(
+      expect.objectContaining({ state: 'waiting', agentType: 'codex' })
+    )
+    expect(dispatchAttention).not.toHaveBeenCalled()
+
+    coordinator.observeHookStatus({
+      state: 'working',
+      ...turn,
+      toolName: 'exec_command',
+      toolInput: 'git status'
+    })
+    vi.advanceTimersByTime(CODEX_ATTENTION_QUIET_MS)
+
+    expect(dispatchAttention).not.toHaveBeenCalled()
+  })
+
+  it('dispatches the debounced Codex attention notification after the quiet window elapses', () => {
+    const dispatchAttention = vi.fn()
+    const coordinator = createAgentCompletionCoordinator({
+      paneKey: 'tab-1:leaf-1',
+      getPtyId: () => 'pty-1',
+      getSettings: () => null,
+      inspectProcess: vi.fn(),
+      dispatchCompletion: vi.fn(),
+      dispatchAttention,
+      isLive: () => true
+    })
+
+    const turn = { prompt: 'fix the bug', agentType: 'codex' as const }
+    coordinator.observeHookStatus({ state: 'working', ...turn })
+    coordinator.observeHookStatus({
+      state: 'waiting',
+      ...turn,
+      toolName: 'exec_command',
+      toolInput: 'apply patch'
+    })
+    expect(dispatchAttention).not.toHaveBeenCalled()
+
+    vi.advanceTimersByTime(CODEX_ATTENTION_QUIET_MS)
+
+    expect(dispatchAttention).toHaveBeenCalledTimes(1)
+    expect(dispatchAttention).toHaveBeenCalledWith(
+      'codex',
+      expect.objectContaining({
+        source: 'hook',
+        agentStatus: expect.objectContaining({
+          state: 'waiting',
+          agentType: 'codex',
+          toolInput: 'apply patch'
+        })
+      })
+    )
+  })
+
+  it('dispatches a non-Codex attention notification immediately without debounce', () => {
+    const dispatchAttention = vi.fn()
+    const coordinator = createAgentCompletionCoordinator({
+      paneKey: 'tab-1:leaf-1',
+      getPtyId: () => 'pty-1',
+      getSettings: () => null,
+      inspectProcess: vi.fn(),
+      dispatchCompletion: vi.fn(),
+      dispatchAttention,
+      isLive: () => true
+    })
+
+    const turn = { prompt: 'fix the bug', agentType: 'cursor' as const }
+    coordinator.observeHookStatus({ state: 'working', ...turn })
+    coordinator.observeHookStatus({
+      state: 'waiting',
+      ...turn,
+      toolName: 'Shell',
+      toolInput: 'pnpm test'
+    })
+
+    expect(dispatchAttention).toHaveBeenCalledTimes(1)
+    // Non-Codex attention must not arm the debounce timer at all.
+    expect(vi.getTimerCount()).toBe(0)
   })
 
   it('keeps a generic title completion pending long enough for the first remote inspection', async () => {
