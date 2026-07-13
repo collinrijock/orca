@@ -8,10 +8,8 @@ import type {
 import { assertManagedSkillParentTopology } from './skill-installation-topology'
 import type { PublicationCallbacks } from './skill-package-publication'
 import { assertManagedDestinationUnchanged } from './skill-published-destination-authority'
-import {
-  writeSkillTransactionMarker,
-  type SkillTransactionMarker
-} from './skill-transaction-marker'
+import type { SkillTransactionMarker } from './skill-transaction-marker'
+import { writeSkillTransactionMarker } from './skill-transaction-marker-write'
 import { assertTransactionOwnedState } from './skill-transaction-owned-state'
 import type { SkillPublicationState } from './skill-transaction-publication-state'
 import {

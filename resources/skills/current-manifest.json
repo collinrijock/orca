@@ -139,7 +139,7 @@
       "name": "orchestration",
       "sourcePath": "skills/orchestration",
       "appVersion": "1.4.138-rc.2",
-      "releaseRevision": 23,
+      "releaseRevision": 25,
       "packageDigest": "dab5cc1bf87b12838a53dda90f1f4f35d1f77da66bcc63840574531eff600d2b",
       "gitTreeSha": "f7a017f3e1f14dafed0c59717bec37c022075be2",
       "files": [

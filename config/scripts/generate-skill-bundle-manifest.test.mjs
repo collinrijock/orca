@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
+  assertReleaseMappingProvenance,
   classifyFile,
   collectPackageFiles,
   gitTreeSha,
@@ -94,5 +95,44 @@ describe('skill bundle manifest generator', () => {
 
     const files = await collectPackageFiles(packageRoot)
     expect(gitTreeSha(files)).toMatch(/^[a-f0-9]{40}$/)
+  })
+
+  it('rejects a released revision that differs from the tagged package', () => {
+    const digest = 'a'.repeat(64)
+    const artifacts = {
+      snapshotRegistry: {
+        skills: {
+          orchestration: [{ releaseRevision: 2, packageDigest: digest }]
+        }
+      },
+      releaseMapping: {
+        releases: [{ appVersion: '1.2.3', skills: { orchestration: 2 } }]
+      }
+    }
+
+    expect(() =>
+      assertReleaseMappingProvenance(artifacts, {
+        refExists: () => true,
+        digestAtRef: () => 'b'.repeat(64)
+      })
+    ).toThrow('does not match shipped orchestration revision 2')
+  })
+
+  it('allows only the in-progress release cut to precede its tag', () => {
+    const artifacts = {
+      snapshotRegistry: { skills: { 'orca-cli': [{ releaseRevision: 1, packageDigest: 'a' }] } },
+      releaseMapping: { releases: [{ appVersion: '1.2.4', skills: { 'orca-cli': 1 } }] }
+    }
+    const options = { refExists: () => false, digestAtRef: () => 'a' }
+
+    expect(() => assertReleaseMappingProvenance(artifacts, options)).toThrow(
+      'references missing tag v1.2.4'
+    )
+    expect(() =>
+      assertReleaseMappingProvenance(artifacts, {
+        ...options,
+        allowUnreleasedAppVersion: '1.2.4'
+      })
+    ).not.toThrow()
   })
 })

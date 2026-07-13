@@ -3702,7 +3702,8 @@
         {
           "file": "src/main/skills/skill-management-inventory.test.ts",
           "assertions": [
-            "oversized and access-denied candidates fail closed without hiding healthy siblings"
+            "oversized and access-denied candidates fail closed without hiding healthy siblings",
+            "candidate filesystem classification never exceeds four concurrent tasks"
           ]
         }
       ],
@@ -3714,7 +3715,7 @@
           "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/skills/skill-package-observation-limits.test.ts src/main/skills/skill-management-inventory.test.ts",
           "result": "passed",
           "durationSeconds": 0.183,
-          "summary": "15 deterministic bounded-observation and sibling-isolation tests passed."
+          "summary": "16 deterministic bounded-observation, concurrency, and sibling-isolation tests passed."
         }
       ],
       "runtimeBudget": { "p95Seconds": 10, "scope": "local main-process unit tests" },
@@ -3728,7 +3729,7 @@
       },
       "performanceBudget": {
         "required": true,
-        "evidence": "Production observation is capped at depth 16, 2,048 entries, 512 files, 4 MiB per file, and 32 MiB aggregate per candidate with no polling or subprocesses."
+        "evidence": "Production observation is capped at four concurrent candidates, depth 16, 2,048 entries, 512 files, 4 MiB per file, and 32 MiB aggregate per candidate with no polling or subprocesses."
       },
       "promotionCriteria": [
         "Accumulate the required soak runs across macOS, Linux, and Windows.",

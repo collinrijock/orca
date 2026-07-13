@@ -68,7 +68,7 @@ describe('managed skill inventory', () => {
   it('suppresses only the explicitly dismissed destination snapshot tuple', async () => {
     const home = await createHome()
     await installSkill(home, '.agents', 'orca-cli')
-    await installSkill(home, '.agents', 'orchestration')
+    await installSkill(home, '.agents', 'computer-use')
     const initial = await inventoryManagedSkills({
       ledger: emptySkillManagementLedger(),
       hostId: 'local',
@@ -99,7 +99,7 @@ describe('managed skill inventory', () => {
     expect(next.installations.find((entry) => entry.name === 'orca-cli')).toMatchObject({
       adoptionPromptEligible: false
     })
-    expect(next.installations.find((entry) => entry.name === 'orchestration')).toMatchObject({
+    expect(next.installations.find((entry) => entry.name === 'computer-use')).toMatchObject({
       adoptionPromptEligible: true
     })
   })
@@ -240,7 +240,7 @@ describe('managed skill inventory', () => {
   it('bounds one oversized candidate without hiding healthy siblings', async () => {
     const home = await createHome()
     const oversized = await installSkill(home, '.agents', 'orca-cli')
-    await installSkill(home, '.agents', 'orchestration')
+    await installSkill(home, '.agents', 'computer-use')
     const oversizedFile = join(oversized, 'oversized.bin')
     await writeFile(oversizedFile, '')
     await truncate(oversizedFile, 4 * 1024 * 1024 + 1)
@@ -256,7 +256,7 @@ describe('managed skill inventory', () => {
       status: 'unknown',
       errorCategory: 'skill-package-file-size-limit'
     })
-    expect(inventory.installations.find((entry) => entry.name === 'orchestration')).toMatchObject({
+    expect(inventory.installations.find((entry) => entry.name === 'computer-use')).toMatchObject({
       status: 'known-current',
       eligible: true
     })
@@ -319,6 +319,29 @@ describe('managed skill inventory', () => {
         (entry) => entry.name === 'orca-cli' && entry.status === 'known-current'
       )
     ).toBeTruthy()
+  })
+
+  it('caps concurrent candidate filesystem observations', async () => {
+    const home = await createHome()
+    let active = 0
+    let peak = 0
+
+    await inventoryManagedSkills({
+      ledger: emptySkillManagementLedger(),
+      hostId: 'local',
+      homeDir: home,
+      resourceRoot,
+      candidateLstat: async () => {
+        active += 1
+        peak = Math.max(peak, active)
+        await new Promise<void>((resolve) => queueMicrotask(resolve))
+        active -= 1
+        throw Object.assign(new Error('missing'), { code: 'ENOENT' })
+      }
+    })
+
+    expect(peak).toBeGreaterThan(1)
+    expect(peak).toBeLessThanOrEqual(4)
   })
 
   it.runIf(process.platform !== 'win32')(

@@ -24,9 +24,9 @@ import {
 import { sweepOrphanedSkillTransactions } from './skill-orphan-transaction-sweep'
 import {
   parseSkillTransactionMarker,
-  writeSkillTransactionMarker,
   type SkillTransactionMarker
 } from './skill-transaction-marker'
+import { writeSkillTransactionMarker } from './skill-transaction-marker-write'
 import { emptySkillManagementLedger } from './skill-management-ledger'
 
 const temporaryRoots: string[] = []
@@ -547,12 +547,49 @@ describe('skill transaction recovery', () => {
     await mkdir(lockRoot)
     await writeFile(
       join(lockRoot, 'owner.json'),
-      JSON.stringify({ schemaVersion: 1, pid: 2_147_483_647 })
+      JSON.stringify({
+        schemaVersion: 1,
+        pid: 2_147_483_647,
+        lockId: '00000000-0000-4000-8000-000000000000',
+        createdAt: 1,
+        physicalIdentity: skillPhysicalIdentity(lockRoot, await stat(lockRoot))
+      })
     )
 
     const release = await acquireSkillDestinationLock(lockRoot)
     expect(JSON.parse(await readFile(join(lockRoot, 'owner.json'), 'utf8')).pid).toBe(process.pid)
     await release()
+  })
+
+  it('does not release a lock whose exact ownership marker changed', async () => {
+    const { root } = await fixture()
+    const lockRoot = join(root, 'lock')
+    const release = await acquireSkillDestinationLock(lockRoot)
+    const owner = JSON.parse(await readFile(join(lockRoot, 'owner.json'), 'utf8'))
+    await writeFile(
+      join(lockRoot, 'owner.json'),
+      JSON.stringify({ ...owner, lockId: '11111111-1111-4111-8111-111111111111' })
+    )
+
+    await expect(release()).rejects.toThrow('skill-update-lock-changed')
+    expect(await lstat(lockRoot)).toBeTruthy()
+  })
+
+  it('removes its exact unmarked lock when authority fails during acquisition', async () => {
+    const { root } = await fixture()
+    const lockRoot = join(root, 'lock')
+    let authorityChecks = 0
+
+    await expect(
+      acquireSkillDestinationLock(lockRoot, async () => {
+        authorityChecks += 1
+        if (authorityChecks === 2) {
+          throw new Error('skill-topology-changed')
+        }
+      })
+    ).rejects.toThrow('skill-topology-changed')
+
+    expect(await lstat(lockRoot).catch(() => null)).toBeNull()
   })
 
   it('restores a self-contained orphan before inventory has loaded a ledger', async () => {
@@ -594,6 +631,17 @@ describe('skill transaction recovery', () => {
       parseSkillTransactionMarker(await readFile(join(transaction, 'transaction.json'), 'utf8'))
     ).not.toBeNull()
     await release()
+  })
+
+  it('does not sweep the reserved location for a different mount topology', async () => {
+    const { root, record, snapshot } = await fixture()
+    const transaction = join(root, 'skills', '.orca-skill-transactions', 'wrong-workspace')
+    await mkdir(transaction, { recursive: true })
+    await writeSkillTransactionMarker(transaction, marker(record, snapshot, 'staging'))
+
+    await sweepOrphanedSkillTransactions(join(root, 'skills'), emptySkillManagementLedger())
+
+    expect(await readFile(join(transaction, 'transaction.json'), 'utf8')).toBeTruthy()
   })
 
   it('ignores a valid marker whose destination is outside the approved root', async () => {

@@ -1,18 +1,19 @@
 import { lstat, mkdir, readFile, readdir, realpath, rm } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
 import type { SkillManagementLedger } from '../../shared/skill-management'
-import { normalizedSkillIdentityPath } from './skill-installation-topology'
+import { normalizedSkillIdentityPath, skillPhysicalIdentity } from './skill-installation-topology'
 import {
   parseSkillTransactionMarker,
   type SkillTransactionMarker
 } from './skill-transaction-marker'
-import { RESERVED_SKILL_TRANSACTION_DIRECTORY } from './skill-transaction-paths'
 import { acquireSkillDestinationLock } from './skill-transaction-recovery'
 import { recoverTransactionToPrior } from './skill-transaction-restore'
+import { skillTransactionReservedRoot } from './skill-transaction-workspace'
 
 async function assertApprovedDestinationParent(
   marker: SkillTransactionMarker,
-  rootIdentity: string
+  rootIdentity: string,
+  rootPhysicalIdentity: string
 ): Promise<void> {
   if (normalizedSkillIdentityPath(dirname(resolve(marker.destinationPath))) !== rootIdentity) {
     throw new Error('skill-transaction-destination-outside-root')
@@ -21,7 +22,11 @@ async function assertApprovedDestinationParent(
     lstat(dirname(marker.destinationPath)),
     realpath(dirname(marker.destinationPath)).then(normalizedSkillIdentityPath)
   ])
-  if (parentStat.isSymbolicLink() || parentIdentity !== rootIdentity) {
+  if (
+    parentStat.isSymbolicLink() ||
+    parentIdentity !== rootIdentity ||
+    skillPhysicalIdentity(dirname(marker.destinationPath), parentStat) !== rootPhysicalIdentity
+  ) {
     throw new Error('skill-transaction-destination-outside-root')
   }
 }
@@ -30,19 +35,32 @@ export async function sweepOrphanedSkillTransactions(
   approvedSkillsRoot: string,
   ledger: SkillManagementLedger
 ): Promise<void> {
-  const linkedRoot = await Promise.all([
+  const roots = await Promise.all([
     lstat(approvedSkillsRoot),
-    lstat(dirname(approvedSkillsRoot))
-  ])
-    .then((entries) => entries.some((entry) => entry.isSymbolicLink()))
-    .catch(() => true)
-  if (linkedRoot) {
+    lstat(dirname(approvedSkillsRoot)),
+    realpath(approvedSkillsRoot),
+    realpath(dirname(approvedSkillsRoot))
+  ]).catch(() => null)
+  if (
+    !roots ||
+    roots[0].isSymbolicLink() ||
+    roots[1].isSymbolicLink() ||
+    normalizedSkillIdentityPath(dirname(roots[2])) !== normalizedSkillIdentityPath(roots[3])
+  ) {
     return
   }
-  const rootIdentity = normalizedSkillIdentityPath(await realpath(approvedSkillsRoot))
+  const [skillsRootStat, parentRootStat, resolvedSkillsRoot] = roots
+  const rootIdentity = normalizedSkillIdentityPath(resolvedSkillsRoot)
+  const rootPhysicalIdentity = skillPhysicalIdentity(approvedSkillsRoot, skillsRootStat)
+  // Why: mount changes invalidate the old workspace authority; sweeping both
+  // possible locations could mutate a directory Orca did not reserve now.
   const reservedRoots = [
-    join(dirname(approvedSkillsRoot), RESERVED_SKILL_TRANSACTION_DIRECTORY),
-    join(approvedSkillsRoot, RESERVED_SKILL_TRANSACTION_DIRECTORY)
+    skillTransactionReservedRoot({
+      skillsRoot: approvedSkillsRoot,
+      skillsRootDevice: skillsRootStat.dev,
+      parentRoot: dirname(approvedSkillsRoot),
+      parentRootDevice: parentRootStat.dev
+    })
   ]
   for (const reservedRoot of reservedRoots) {
     const reservedRootSafe = await lstat(reservedRoot)
@@ -64,7 +82,7 @@ export async function sweepOrphanedSkillTransactions(
         continue
       }
       try {
-        await assertApprovedDestinationParent(marker, rootIdentity)
+        await assertApprovedDestinationParent(marker, rootIdentity, rootPhysicalIdentity)
       } catch {
         continue
       }
@@ -90,7 +108,8 @@ export async function sweepOrphanedSkillTransactions(
         await recoverTransactionToPrior({
           transactionRoot,
           marker,
-          assertParentAuthority: () => assertApprovedDestinationParent(marker, rootIdentity),
+          assertParentAuthority: () =>
+            assertApprovedDestinationParent(marker, rootIdentity, rootPhysicalIdentity),
           currentDisposition: committed ? 'committed' : 'restore'
         })
         await rm(transactionRoot, { recursive: true, force: true })

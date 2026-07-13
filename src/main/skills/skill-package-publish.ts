@@ -1,4 +1,4 @@
-import { mkdir, rm, stat } from 'node:fs/promises'
+import { mkdir, readFile, rm, stat } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import type {
   ManagedSkillDestination,
@@ -17,6 +17,7 @@ import {
 import { destinationUsesCrlf, replaceSkillPackage } from './skill-package-publication'
 import type { SkillRenameRuntime } from './skill-transaction-rename'
 import { createSkillTransactionContext } from './skill-package-transaction-context'
+import { parseSkillTransactionMarker } from './skill-transaction-marker'
 import {
   assertManagedDestinationUnchanged,
   assertPublishedDestinationOwned
@@ -58,6 +59,7 @@ export async function publishBundledSkill(args: {
   )
   let retainTransaction = false
   let publicationStarted = false
+  let durableCommitCompleted = false
   try {
     await transaction.assertAuthority(true)
     await recoverMarkedSkillTransactions({
@@ -141,6 +143,7 @@ export async function publishBundledSkill(args: {
       marker: verifiedMarker
     })
     await args.commit(destination)
+    durableCommitCompleted = true
     return destination
   } catch (error) {
     try {
@@ -160,9 +163,27 @@ export async function publishBundledSkill(args: {
       .then(() => true)
       .catch(() => false)
     if (workspaceSafe && !retainTransaction) {
-      await rm(transaction.paths.transactionRoot, { recursive: true, force: true }).catch(
-        () => undefined
+      const cleanupMarker = await readFile(
+        join(transaction.paths.transactionRoot, 'transaction.json'),
+        'utf8'
       )
+        .then(parseSkillTransactionMarker)
+        .catch(() => null)
+      if (cleanupMarker?.transactionId === transaction.marker('staging').transactionId) {
+        try {
+          // Why: cleanup repeats recovery from the durable marker immediately
+          // before recursive removal, including after an ambiguous rollback.
+          await recoverTransactionToPrior({
+            transactionRoot: transaction.paths.transactionRoot,
+            marker: cleanupMarker,
+            assertParentAuthority: transaction.assertParentAuthority,
+            currentDisposition: durableCommitCompleted ? 'committed' : 'restore'
+          })
+          await rm(transaction.paths.transactionRoot, { recursive: true, force: true })
+        } catch {
+          retainTransaction = true
+        }
+      }
     }
     if (workspaceSafe) {
       await releaseLock().catch(() => undefined)

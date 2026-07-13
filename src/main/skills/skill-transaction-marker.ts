@@ -1,6 +1,4 @@
-import { randomUUID } from 'node:crypto'
-import { rename, rm, writeFile } from 'node:fs/promises'
-import { basename, isAbsolute, join, posix } from 'node:path'
+import { basename, isAbsolute, posix } from 'node:path'
 import { normalizeExecutionHostId, type ExecutionHostId } from '../../shared/execution-host'
 import type { SkillReleasedSnapshot } from '../../shared/skill-management'
 import { normalizedSkillIdentityPath } from './skill-installation-topology'
@@ -257,35 +255,5 @@ export function parseSkillTransactionMarker(value: string): SkillTransactionMark
     return validated
   } catch {
     return null
-  }
-}
-
-export async function writeSkillTransactionMarker(
-  transactionRoot: string,
-  marker: SkillTransactionMarker,
-  beforeMutation: () => Promise<void> = async () => undefined
-): Promise<void> {
-  const markerPath = join(transactionRoot, 'transaction.json')
-  const temporaryPath = join(transactionRoot, `.transaction-${randomUUID()}.tmp`)
-  const serialized = JSON.stringify(marker)
-  if (!parseSkillTransactionMarker(serialized)) {
-    throw new Error('skill-transaction-marker-invalid')
-  }
-  try {
-    await beforeMutation()
-    await writeFile(temporaryPath, serialized)
-    // Why: recovery must observe either the old or new phase, never a torn
-    // marker that could discard the only verified rollback package.
-    await beforeMutation()
-    await rename(temporaryPath, markerPath)
-  } finally {
-    // Why: a redirected transaction path is no longer Orca-owned cleanup.
-    if (
-      await beforeMutation()
-        .then(() => true)
-        .catch(() => false)
-    ) {
-      await rm(temporaryPath, { force: true }).catch(() => undefined)
-    }
   }
 }

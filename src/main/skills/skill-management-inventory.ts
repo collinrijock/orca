@@ -7,8 +7,7 @@ import type {
   SkillCurrentBundleEntry,
   SkillManagementInstallation,
   SkillManagementInventory,
-  SkillManagementLedger,
-  SkillManagementStatus
+  SkillManagementLedger
 } from '../../shared/skill-management'
 import { buildSkillDiscoverySources, type SkillScanRoot } from './skill-discovery-sources'
 import { loadSkillBundleArtifacts, type SkillBundleArtifacts } from './skill-bundle-artifacts'
@@ -26,6 +25,8 @@ import {
   skillTopologyPriority
 } from './skill-installation-topology'
 import { readOfficialSkillsCliLockEntries } from './skills-cli-lock-provenance'
+import { runSkillCandidateTasks } from './skill-candidate-concurrency'
+import { knownSkillManagementStatus } from './skill-management-status'
 
 type CandidateLstat = (path: string) => Promise<Stats>
 type CandidateTopology = (
@@ -33,20 +34,6 @@ type CandidateTopology = (
   unresolvedPath: string,
   canonicalRootPath: string
 ) => Promise<ClassifiedSkillTopology>
-
-function knownStatus(
-  managed: boolean,
-  installedRevision: number,
-  currentRevision: number
-): SkillManagementStatus {
-  if (installedRevision > currentRevision) {
-    return 'newer-known'
-  }
-  if (installedRevision < currentRevision) {
-    return managed ? 'managed-update-available' : 'known-update-available'
-  }
-  return managed ? 'managed-current' : 'known-current'
-}
 
 async function classifyCandidate(args: {
   root: SkillScanRoot
@@ -161,7 +148,11 @@ async function classifyCandidate(args: {
         status: match
           ? managed && managedRecord?.lastOutcome === 'failed'
             ? 'update-failed'
-            : knownStatus(managed, match.releaseRevision, args.current.releaseRevision)
+            : knownSkillManagementStatus(
+                managed,
+                match.releaseRevision,
+                args.current.releaseRevision
+              )
           : managedRecord
             ? 'modified'
             : 'unknown',
@@ -222,9 +213,9 @@ export async function inventoryManagedSkills(args: {
           : null
         : args.xdgStateHome
   })
-  const candidates = await Promise.all(
-    artifacts.manifest.skills.flatMap((current) =>
-      roots.map((root) =>
+  const candidateTasks = artifacts.manifest.skills.flatMap((current) =>
+    roots.map(
+      (root) => () =>
         classifyCandidate({
           root,
           name: current.name,
@@ -239,9 +230,11 @@ export async function inventoryManagedSkills(args: {
           candidateLstat: args.candidateLstat ?? ((path) => lstat(path)),
           classifyTopology: args.classifyTopology ?? classifySkillInstallationTopology
         })
-      )
     )
   )
+  // Why: each candidate may retain up to the package byte ceiling while it is
+  // hashed, so mounted/focus inventory must not fan out across every root.
+  const candidates = await runSkillCandidateTasks(candidateTasks)
 
   const deduped = new Map<string, SkillManagementInstallation>()
   for (const candidate of candidates) {

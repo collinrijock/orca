@@ -287,6 +287,49 @@ function readJsonAtRef(ref, relativePath) {
   }
 }
 
+function gitRefExists(ref) {
+  try {
+    execFileSync('git', ['rev-parse', '--verify', '--quiet', `${ref}^{commit}`], {
+      stdio: 'ignore'
+    })
+    return true
+  } catch {
+    return false
+  }
+}
+
+function assertReleaseMappingProvenance(
+  artifacts,
+  {
+    allowUnreleasedAppVersion = null,
+    refExists = gitRefExists,
+    digestAtRef = (ref, name) => packageDigest(collectGitPackageFiles(ref, name))
+  } = {}
+) {
+  for (const release of artifacts.releaseMapping.releases) {
+    const releaseRef = `v${release.appVersion}`
+    if (!refExists(releaseRef)) {
+      if (release.appVersion === allowUnreleasedAppVersion) {
+        continue
+      }
+      throw new Error(`Skill release mapping references missing tag ${releaseRef}`)
+    }
+    for (const [name, revision] of Object.entries(release.skills)) {
+      const snapshot = (artifacts.snapshotRegistry.skills[name] ?? []).find(
+        (entry) => entry.releaseRevision === revision
+      )
+      if (!snapshot) {
+        throw new Error(`Skill release mapping references unknown ${name} revision ${revision}`)
+      }
+      if (digestAtRef(releaseRef, name) !== snapshot.packageDigest) {
+        throw new Error(
+          `Skill release mapping for ${releaseRef} does not match shipped ${name} revision ${revision}`
+        )
+      }
+    }
+  }
+}
+
 function assertBaseHistoryPreserved(baseRef, artifacts) {
   if (!baseRef) {
     return
@@ -442,6 +485,11 @@ async function main() {
     recordRelease,
     bootstrapHistory
   })
+  // Why: a package version can remain unchanged while main advances; only
+  // tag bytes prove that a historical revision actually shipped.
+  assertReleaseMappingProvenance(artifacts, {
+    allowUnreleasedAppVersion: recordRelease ? packageJson.version : null
+  })
   assertBaseHistoryPreserved(baseRef, artifacts)
   await (write ? writeArtifacts : verifyArtifacts)(artifacts)
 }
@@ -454,6 +502,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === import.meta.filename) {
 }
 
 export {
+  assertReleaseMappingProvenance,
   buildArtifacts,
   classifyFile,
   collectPackageFiles,

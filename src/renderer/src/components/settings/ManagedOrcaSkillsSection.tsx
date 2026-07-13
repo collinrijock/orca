@@ -19,7 +19,7 @@ import {
   DialogTitle
 } from '../ui/dialog'
 import { SettingsBadge, SettingsSubsectionHeader } from './SettingsFormControls'
-import { managedSkillStatusCopy } from './managed-skill-status-copy'
+import { managedSkillDiagnosticCopy, managedSkillStatusCopy } from './managed-skill-status-copy'
 
 function statusTone(
   status: SkillManagementStatus
@@ -39,14 +39,6 @@ function statusTone(
     case 'update-failed':
       return 'muted'
   }
-}
-
-function diagnosticCopy(installation: SkillManagementInstallation): string {
-  const revision = installation.installedReleaseRevision
-    ? `r${installation.installedReleaseRevision}`
-    : translate('auto.components.settings.ManagedOrcaSkills.unverified', 'unverified')
-  const digest = installation.installedPackageDigest?.slice(0, 8) ?? '—'
-  return `${revision} · Orca ${installation.installedAppVersion ?? installation.currentAppVersion} · ${digest}`
 }
 
 function missingVisibilityCopy(installation: SkillManagementInstallation): string | null {
@@ -210,7 +202,7 @@ export function ManagedOrcaSkillsSection(): React.JSX.Element {
                     </SettingsBadge>
                   </div>
                   <p className="font-mono text-[11px] text-muted-foreground">
-                    {diagnosticCopy(installation)}
+                    {managedSkillDiagnosticCopy(installation)}
                   </p>
                   {installation.description ? (
                     <p className="text-xs text-muted-foreground">{installation.description}</p>

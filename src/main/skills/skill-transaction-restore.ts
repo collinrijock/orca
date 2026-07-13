@@ -8,10 +8,8 @@ import {
   clearSkillPublicationTemporary,
   rollbackSkillPackageInPlace
 } from './skill-package-rollback'
-import {
-  writeSkillTransactionMarker,
-  type SkillTransactionMarker
-} from './skill-transaction-marker'
+import type { SkillTransactionMarker } from './skill-transaction-marker'
+import { writeSkillTransactionMarker } from './skill-transaction-marker-write'
 import { assertTransactionOwnedState } from './skill-transaction-owned-state'
 import { assertSkillTransactionPackageBuild } from './skill-transaction-package-build'
 import {

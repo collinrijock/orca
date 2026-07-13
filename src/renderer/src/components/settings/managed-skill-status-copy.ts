@@ -1,4 +1,7 @@
-import type { SkillManagementStatus } from '../../../../shared/skill-management'
+import type {
+  SkillManagementInstallation,
+  SkillManagementStatus
+} from '../../../../shared/skill-management'
 import { translate } from '@/i18n/i18n'
 
 export function managedSkillStatusCopy(status: SkillManagementStatus): string {
@@ -33,4 +36,19 @@ export function managedSkillStatusCopy(status: SkillManagementStatus): string {
     case 'update-failed':
       return translate('auto.components.settings.ManagedOrcaSkills.failed', 'Update failed')
   }
+}
+
+export function managedSkillDiagnosticCopy(
+  installation: Pick<
+    SkillManagementInstallation,
+    'installedReleaseRevision' | 'installedAppVersion' | 'installedPackageDigest'
+  >
+): string {
+  const digest = installation.installedPackageDigest?.slice(0, 8) ?? '—'
+  if (installation.installedReleaseRevision === null || installation.installedAppVersion === null) {
+    // Why: the current app version says nothing about which release produced
+    // unknown bytes, so diagnostic copy must not invent provenance.
+    return `${translate('auto.components.settings.ManagedOrcaSkills.unverified', 'unverified')} · ${digest}`
+  }
+  return `r${installation.installedReleaseRevision} · Orca ${installation.installedAppVersion} · ${digest}`
 }
