@@ -462,6 +462,10 @@ export class OrcaRuntimeRpcServer {
     return this.e2eeKeypair
   }
 
+  getMobileSocketWiring(): MobileSocketWiring | null {
+    return this.mobileSocketWiring
+  }
+
   revokeMobileDevice(deviceId: string): boolean {
     const device = this.deviceRegistry?.getDevice(deviceId)
     if (device?.scope !== 'mobile' || !this.deviceRegistry?.removeDevice(deviceId)) {

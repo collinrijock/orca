@@ -5,6 +5,7 @@ import type { RuntimeAccessGrant } from '../../shared/runtime-access-grants'
 import { isTailnetIPv4Address } from '../../shared/tailnet-address'
 import type { DeviceEntry } from '../runtime/device-registry'
 import type { OrcaRuntimeRpcServer } from '../runtime/runtime-rpc'
+import type { RelayBrokerStatus } from '../runtime/relay/relay-session-broker'
 
 export type NetworkInterface = {
   name: string
@@ -51,7 +52,10 @@ function toRuntimeAccessGrant(device: DeviceEntry): RuntimeAccessGrant {
 // device management, and WebSocket readiness status. They depend on the
 // OrcaRuntimeRpcServer because it owns the device registry and TLS state.
 
-export function registerMobileHandlers(rpcServer: OrcaRuntimeRpcServer): void {
+export function registerMobileHandlers(
+  rpcServer: OrcaRuntimeRpcServer,
+  options: { getRelayStatus?: () => RelayBrokerStatus } = {}
+): void {
   ipcMain.handle('mobile:listNetworkInterfaces', (): { interfaces: NetworkInterface[] } => ({
     interfaces: getNetworkInterfaces()
   }))
@@ -189,4 +193,8 @@ export function registerMobileHandlers(rpcServer: OrcaRuntimeRpcServer): void {
       endpoint: rpcServer.getWebSocketEndpoint()
     }
   })
+
+  ipcMain.handle('mobile:getRelayStatus', () => ({
+    status: options.getRelayStatus?.() ?? 'offline'
+  }))
 }

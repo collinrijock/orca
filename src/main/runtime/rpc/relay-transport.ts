@@ -39,7 +39,7 @@ function relayWebSocketOrigin(cellUrl: string): string {
 export class CloudRelayTransport implements RpcTransport, MobileSocketTransport {
   private readonly cellWebSocketOrigin: string
   private readonly relayHostId: string
-  private readonly generation: number
+  private generation: number
   private readonly createSocket: (url: string) => WebSocket
   private readonly socketsByConnectionId = new Map<string, WebSocket>()
   private readonly metadataBySocket = new Map<WebSocket, MobileSocketTransportMetadata>()
@@ -78,6 +78,17 @@ export class CloudRelayTransport implements RpcTransport, MobileSocketTransport 
     if (this.metadataBySocket.has(ws)) {
       this.clientIds.set(ws, clientId)
     }
+  }
+
+  setGeneration(generation: number): void {
+    if (
+      this.socketsByConnectionId.size > 0 ||
+      !Number.isSafeInteger(generation) ||
+      generation <= 0
+    ) {
+      throw new Error('invalid_relay_generation_transition')
+    }
+    this.generation = generation
   }
 
   terminateClientConnections(clientId: string): number {

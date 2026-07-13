@@ -42,6 +42,8 @@ import { registerOrcaProfileOrgMemberHandlers } from './orca-profile-org-members
 
 type RegisterOrcaProfileHandlersOptions = {
   onBeforeRelaunch?: () => void | Promise<void>
+  onAuthMutation?: () => void
+  onBeforeSignOut?: () => void
 }
 
 function profileIdFromArgs(args: unknown): string {
@@ -248,8 +250,13 @@ export function registerOrcaProfileHandlers(
 
   ipcMain.handle(
     'orcaProfiles:connectCurrent',
-    async (): Promise<ConnectCurrentOrcaProfileResult> =>
-      connectCurrentOrcaProfile(getProfileUserDataPath())
+    async (): Promise<ConnectCurrentOrcaProfileResult> => {
+      const result = await connectCurrentOrcaProfile(getProfileUserDataPath())
+      if (result.status === 'connected') {
+        options.onAuthMutation?.()
+      }
+      return result
+    }
   )
 
   ipcMain.handle(
@@ -264,6 +271,7 @@ export function registerOrcaProfileHandlers(
       )
       if (result.status === 'created') {
         seedNewOrcaProfileTelemetryConsent(result.profile.id, store.getSettings().telemetry)
+        options.onAuthMutation?.()
       }
       return result
     }
@@ -271,20 +279,35 @@ export function registerOrcaProfileHandlers(
 
   ipcMain.handle(
     'orcaProfiles:refreshAuth',
-    async (): Promise<RefreshCurrentOrcaProfileAuthResult> =>
-      refreshCurrentOrcaProfileAuth(getProfileUserDataPath())
+    async (): Promise<RefreshCurrentOrcaProfileAuthResult> => {
+      const result = await refreshCurrentOrcaProfileAuth(getProfileUserDataPath())
+      if (result.status === 'refreshed') {
+        options.onAuthMutation?.()
+      }
+      return result
+    }
   )
 
   ipcMain.handle(
     'orcaProfiles:signOutCurrent',
-    async (): Promise<SignOutCurrentOrcaProfileResult> =>
-      signOutCurrentOrcaProfile(getProfileUserDataPath())
+    async (): Promise<SignOutCurrentOrcaProfileResult> => {
+      options.onBeforeSignOut?.()
+      return signOutCurrentOrcaProfile(getProfileUserDataPath())
+    }
   )
 
   ipcMain.handle(
     'orcaProfiles:selectOrg',
-    async (_event, rawArgs: SelectOrcaProfileOrgArgs): Promise<SelectOrcaProfileOrgResult> =>
-      selectCurrentOrcaProfileOrg(getProfileUserDataPath(), orgIdFromUnknown(rawArgs))
+    async (_event, rawArgs: SelectOrcaProfileOrgArgs): Promise<SelectOrcaProfileOrgResult> => {
+      const result = await selectCurrentOrcaProfileOrg(
+        getProfileUserDataPath(),
+        orgIdFromUnknown(rawArgs)
+      )
+      if (result.status === 'selected') {
+        options.onAuthMutation?.()
+      }
+      return result
+    }
   )
 
   registerOrcaProfileOrgMemberHandlers()

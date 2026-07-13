@@ -15,6 +15,8 @@ import {
   migrateMobilePairingDataToCanonicalUserDataPath
 } from './persistence'
 import { ensureActiveOrcaProfile, initOrcaProfilePaths } from './orca-profiles/profile-index-store'
+import { getOrcaCloudAuthConfig } from './orca-profiles/profile-cloud-auth-config'
+import { getProfileUserDataPath } from './orca-profiles/profile-storage-paths'
 import { applyAppIcon } from './app-icon'
 import { StatsCollector, initStatsPath } from './stats/collector'
 import { ClaudeUsageStore, initClaudeUsagePath } from './claude-usage/store'
@@ -41,6 +43,8 @@ import { resolveConsent } from './telemetry/consent'
 import { triggerStartupNotificationRegistration } from './ipc/notifications'
 import { OrcaRuntimeService } from './runtime/orca-runtime'
 import { OrcaRuntimeRpcServer } from './runtime/runtime-rpc'
+import { DesktopRelayService } from './runtime/relay/desktop-relay-service'
+import type { RelayBrokerStatus } from './runtime/relay/relay-session-broker'
 import { awaitRuntimeFileWatcherUnsubscribes } from './runtime/orca-runtime-files'
 import { clearRuntimeMetadataIfOwned } from './runtime/runtime-metadata'
 import { ensureMainI18n, setMainUiLanguage } from './i18n/main-i18n'
@@ -205,6 +209,8 @@ let claudeRuntimeAuth: ClaudeRuntimeAuthService | null = null
 let runtime: OrcaRuntimeService | null = null
 let rateLimits: RateLimitService | null = null
 let runtimeRpc: OrcaRuntimeRpcServer | null = null
+let desktopRelayService: DesktopRelayService | null = null
+let desktopRelayStatus: RelayBrokerStatus = 'offline'
 // Why: set during early startup; gates whether headless serve installs the
 // offscreen browser backend (and thus advertises browser pane support).
 let headlessBrowserDisplayAvailable = false
@@ -940,8 +946,11 @@ function openMainWindow(): BrowserWindow {
         codexRuntimeHome ? [codexRuntimeHome.getHostRuntimeHomePath()] : [],
       onBeforeRelaunch: async () => {
         isQuitting = true
+        desktopRelayService?.fenceAndCloseNow()
         await preserveAgentAuthBeforeRestart({ codexRuntimeHome, claudeRuntimeAuth, store })
-      }
+      },
+      onOrcaProfileAuthMutation: () => desktopRelayService?.authMutated(),
+      onBeforeOrcaProfileSignOut: () => desktopRelayService?.fenceAndCloseNow()
     }
   )
   automations.setWebContents(window.webContents)
@@ -2042,7 +2051,7 @@ app.whenReady().then(async () => {
     ...(serveOptions?.wsPort !== undefined ? { wsPort: serveOptions.wsPort } : {}),
     webClientRoot: getBundledWebClientRoot()
   })
-  registerMobileHandlers(runtimeRpc)
+  registerMobileHandlers(runtimeRpc, { getRelayStatus: () => desktopRelayStatus })
 
   if (!isServeMode) {
     startDesktopFirstWindowStartupServices()
@@ -2139,6 +2148,27 @@ app.whenReady().then(async () => {
     })
   ])
 
+  const cloudAuth = getOrcaCloudAuthConfig()
+  if (cloudAuth.configured) {
+    try {
+      desktopRelayService = new DesktopRelayService({
+        authConfig: cloudAuth.config,
+        userDataPath: getProfileUserDataPath(),
+        appVersion: app.getVersion(),
+        runtimeRpc,
+        onStatus: (status) => {
+          desktopRelayStatus = status
+        }
+      })
+      desktopRelayService.start()
+    } catch (error) {
+      console.warn(
+        '[relay] Desktop relay startup unavailable:',
+        error instanceof Error ? error.message : String(error)
+      )
+    }
+  }
+
   // Why: the macOS notification permission dialog must fire after the window
   // is visible and focused. If it fires before the window exists, the system
   // dialog either doesn't appear or gets immediately covered by the maximized
@@ -2172,6 +2202,7 @@ app.on('before-quit', () => {
     })
   }
   isQuitting = true
+  desktopRelayService?.fenceAndCloseNow()
   unsubscribeSystemResumeBroadcast?.()
   unsubscribeSystemResumeBroadcast = null
   unsubscribeAgentAwakeStatusChanges?.()
