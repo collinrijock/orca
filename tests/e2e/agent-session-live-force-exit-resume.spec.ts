@@ -211,12 +211,32 @@ test('resumes a live agent record after force-exit restart when pane PTY ownersh
     // hydration-gated writer before polling persisted state.
     await page.evaluate(() => window.__store?.getState().captureAllSleepingAgentSessions())
 
-    await expect
-      .poll(() => persistedLiveRecordExists(session.userDataDir), {
-        timeout: 15_000,
-        message: 'Live sleeping-agent record was not persisted before force exit'
-      })
-      .toBe(true)
+    // Why: the record reaches disk via the debounced session writer (150ms) plus
+    // the main-process scheduleSave (up to 5s). Under CI event-loop starvation —
+    // the same shard drifts renderer timers ~1s — both stages need headroom, so
+    // poll to 30s (this suite's other readiness budget). On a miss, surface store
+    // vs disk state to separate a lost write from a merely slow flush.
+    const persistDeadline = Date.now() + 30_000
+    let persisted = false
+    while (Date.now() < persistDeadline) {
+      if (persistedLiveRecordExists(session.userDataDir)) {
+        persisted = true
+        break
+      }
+      await page.waitForTimeout(250)
+    }
+    if (!persisted) {
+      const storeRecords = await page.evaluate(
+        () => window.__store?.getState().sleepingAgentSessionsByPaneKey
+      )
+      throw new Error(
+        `Live sleeping-agent record was not persisted before force exit. store=${JSON.stringify(
+          storeRecords
+        )} disk=${JSON.stringify(
+          readPersistedData(session.userDataDir).workspaceSession?.sleepingAgentSessionsByPaneKey
+        )}`
+      )
+    }
 
     const daemonPid = readDaemonPid(session.userDataDir)
     await forceKillElectronApp(firstApp)

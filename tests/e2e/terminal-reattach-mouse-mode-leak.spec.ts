@@ -230,8 +230,14 @@ test.describe('reattach mouse-mode leak', () => {
           await new Promise<void>((resolve) =>
             pane.terminal.write('\x1b[?1003h\x1b[?1006h', () => resolve())
           )
-          await new Promise((resolve) => requestAnimationFrame(() => resolve(undefined)))
-          const classAfterArm = pane.terminal.element.classList.contains('enable-mouse-events')
+          // Why: xterm toggles the enable-mouse-events class from a batched
+          // render pass, so a single rAF can race it on a slow CI shard; poll a
+          // few frames until the class lands before probing motion.
+          let classAfterArm = false
+          for (let attempt = 0; attempt < 30 && !classAfterArm; attempt += 1) {
+            await new Promise((resolve) => requestAnimationFrame(() => resolve(undefined)))
+            classAfterArm = pane.terminal.element.classList.contains('enable-mouse-events')
+          }
           await dispatchMotion()
 
           return { afterReattach, classAfterArm, armedReports: motionReports().length }
