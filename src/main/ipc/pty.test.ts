@@ -2686,7 +2686,7 @@ describe('registerPtyHandlers', () => {
         // which adds async hops; a single microtask flush is no longer enough.
         await new Promise((resolve) => setImmediate(resolve))
 
-        expect(shutdown).toHaveBeenCalledWith('remote-pty', { immediate: false })
+        expect(shutdown).toHaveBeenCalledWith('remote-pty', { immediate: true })
         expect(store.markSshRemotePtyLease).toHaveBeenCalledWith(
           'ssh-1',
           'remote-pty',
@@ -3028,7 +3028,7 @@ describe('registerPtyHandlers', () => {
         expect(controller.kill('ssh:ssh-1@@relay-pty')).toBe(true)
         await new Promise((resolve) => setImmediate(resolve))
 
-        expect(shutdown).toHaveBeenCalledWith('ssh:ssh-1@@relay-pty', { immediate: false })
+        expect(shutdown).toHaveBeenCalledWith('ssh:ssh-1@@relay-pty', { immediate: true })
         expect(localShutdown).not.toHaveBeenCalled()
         expect(store.markSshRemotePtyLease).toHaveBeenCalledWith(
           'ssh-1',

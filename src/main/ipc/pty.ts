@@ -3724,7 +3724,9 @@ export function registerPtyHandlers(
       let connectionId: string | null | undefined = ptyOwnership.get(ptyId)
       const parsedSshId = connectionId === undefined ? parseAppSshPtyId(ptyId) : null
       connectionId ??= parsedSshId?.connectionId
-      const options: PtyShutdownOptions = { immediate: false }
+      // Why: paired/mobile close has no renderer left to observe a later
+      // graceful fallback. Require the provider's synchronous force-close path.
+      const options: PtyShutdownOptions = { immediate: true }
       let provider: IPtyProvider | undefined
       try {
         provider = connectionId ? getProvider(connectionId) : getProviderForPty(ptyId)

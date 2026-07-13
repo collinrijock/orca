@@ -144,6 +144,8 @@ const INTERACTIVE_REDRAW_MAX_CHARS = PTY_OUTPUT_FLUSH_CHUNK_CHARS
 const INTERACTIVE_OUTPUT_BUDGET_CHARS = 32 * 1024
 const STARTUP_COMMAND_WRITE_DELAY_MS = 50
 const STARTUP_COMMAND_SHELL_READY_FALLBACK_MS = 1500
+const STALE_SPAWN_KILL_RETRY_MS = 5000
+const STALE_SPAWN_KILL_RETRY_LIMIT = 8
 const ALLOWED_SIGNALS = new Set([
   'SIGINT',
   'SIGTERM',
@@ -728,27 +730,37 @@ export class PtyHandler {
       // response is discarded and no renderer can own this PTY. Shut it down
       // immediately so it does not linger as an unreachable remote shell.
       this.releaseStartupCommand(managed)
-      managed.killTimer = setTimeout(() => {
-        const still = this.ptys.get(id)
-        if (still && !still.disposed) {
-          try {
-            killPtyForShutdown(still, 'SIGKILL')
-          } catch (error) {
-            process.stderr.write(
-              `[pty-handler] stale-spawn fallback kill failed: ${error instanceof Error ? error.message : String(error)}\n`
-            )
-            // Why: a thrown native kill is not proof of close. Retain the only
-            // managed handle so relay disposal can retry instead of orphaning
-            // an untracked PTY/ConPTY process.
-            still.killTimer = undefined
-            return
+      let fallbackAttempts = 0
+      const scheduleFallback = (): void => {
+        managed.killTimer = setTimeout(() => {
+          const still = this.ptys.get(id)
+          if (still && !still.disposed) {
+            try {
+              killPtyForShutdown(still, 'SIGKILL')
+            } catch (error) {
+              fallbackAttempts += 1
+              if (fallbackAttempts <= 2 || fallbackAttempts === STALE_SPAWN_KILL_RETRY_LIMIT) {
+                process.stderr.write(
+                  `[pty-handler] stale-spawn fallback kill failed: ${error instanceof Error ? error.message : String(error)}\n`
+                )
+              }
+              // Why: the stale caller can never retry an id it did not receive.
+              // Keep bounded automatic ownership before relay disposal takes over.
+              if (fallbackAttempts < STALE_SPAWN_KILL_RETRY_LIMIT) {
+                scheduleFallback()
+              } else {
+                still.killTimer = undefined
+              }
+              return
+            }
+            this.notifyExitListener(still)
+            disposeManagedPty(still)
+            this.ptys.delete(id)
+            this.clearPtyFlowState(id)
           }
-          this.notifyExitListener(still)
-          disposeManagedPty(still)
-          this.ptys.delete(id)
-          this.clearPtyFlowState(id)
-        }
-      }, 5000)
+        }, STALE_SPAWN_KILL_RETRY_MS)
+      }
+      scheduleFallback()
       // Why: arm fallback ownership before native shutdown. node-pty can throw
       // synchronously, especially during ConPTY startup, and the orphan still
       // needs a later force-close owner even when this request rejects.

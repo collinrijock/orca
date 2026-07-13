@@ -735,7 +735,7 @@ describe('PtyHandler', () => {
       expect(stderr).toHaveBeenCalledWith(
         expect.stringContaining('stale-spawn fallback kill failed')
       )
-      await dispatcher.callRequest('pty.shutdown', { id: 'pty-1', immediate: true })
+      expect(() => vi.advanceTimersByTime(5000)).not.toThrow()
       expect(killSpy).toHaveBeenNthCalledWith(3, 'SIGKILL')
       expect(handler.activePtyCount).toBe(0)
     } finally {

@@ -3559,7 +3559,8 @@
           "file": "src/relay/pty-handler.test.ts",
           "assertions": [
             "Windows immediate, graceful/fallback, and relay-dispose shutdown issue one no-argument kill",
-            "stale spawn and explicit shutdown native failures retain one managed PTY and a later successful retry clears it"
+            "stale spawn native failures retain one managed PTY and retry automatically within eight bounded attempts",
+            "explicit shutdown native failure retains one managed PTY and a later caller retry clears it"
           ]
         },
         {
@@ -3695,7 +3696,7 @@
             "direct local and SSH kill requests share the retained owner and re-drive after in-flight provider replacement",
             "replacement-provider callers settle only after the replacement shutdown succeeds and retain stronger coalesced identity options",
             "generationless identity-mismatch failure cannot tombstone a replacement relay-generation lease",
-            "paired/mobile controller kill fails closed when offline SSH intent cannot be made durable",
+            "paired/mobile controller close requires immediate provider shutdown and fails closed when offline SSH intent cannot be made durable",
             "host-scoped liveness lists only the selected provider instead of fanning out to unrelated SSH hosts",
             "relay generation reuse removes stale retry ownership without touching the new PTY",
             "lease-less SSH shutdown survives provider unregister and re-drives the replacement transport"
