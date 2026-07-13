@@ -69,7 +69,7 @@ describe('stable logical RPC client', () => {
     const pending = deferred<RpcResponse>()
     oldSession.sendRequest.mockReturnValue(pending.promise)
     nextSession.sendRequest.mockResolvedValue(success('next'))
-    const client = createStableLogicalRpcClient(oldSession, 'direct')
+    const client = createStableLogicalRpcClient(oldSession, 'lan')
     const stream = vi.fn()
     client.subscribe('terminal.subscribe', { terminal: 'term-1' }, stream)
     const request = client.sendRequest('worktree.create', { name: 'new' })
@@ -101,7 +101,7 @@ describe('stable logical RPC client', () => {
     const oldSession = new FakeSession('connected')
     const nextSession = new FakeSession('connected')
     oldSession.sendRequest.mockResolvedValue(success('old'))
-    const client = createStableLogicalRpcClient(oldSession, 'direct')
+    const client = createStableLogicalRpcClient(oldSession, 'lan')
     client.subscribe(
       'terminal.subscribe',
       { terminal: 'term-1', viewport: { cols: 80, rows: 24 } },
@@ -122,14 +122,14 @@ describe('stable logical RPC client', () => {
   it('closes a replacement that fails authentication and preserves the active session', async () => {
     const oldSession = new FakeSession('connected')
     const replacement = new FakeSession('connecting')
-    const client = createStableLogicalRpcClient(oldSession, 'direct')
+    const client = createStableLogicalRpcClient(oldSession, 'lan')
     const migrating = client.migrateTo(replacement, 'relay')
     replacement.setState('auth-failed')
 
     await expect(migrating).rejects.toThrow(/auth-failed/)
     expect(replacement.close).toHaveBeenCalledOnce()
     expect(oldSession.close).not.toHaveBeenCalled()
-    expect(client.getActivePath()).toBe('direct')
+    expect(client.getActivePath()).toBe('lan')
     expect(client.getGeneration()).toBe(1)
   })
 })

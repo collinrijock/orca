@@ -1,9 +1,11 @@
 import {
   PairingGetEndpointsResultSchema,
+  type DeviceResumeConfirmed,
   type MobileRelayEndpoint
 } from '../../../src/shared/mobile-relay-credential-contract'
 import { MobileRelayE2eeLink } from './mobile-relay-e2ee-link'
 import { MobileRelayRpcStreams } from './mobile-relay-rpc-streams'
+import { MobileE2EEAuthenticationError } from './mobile-e2ee-v2-physical-channel'
 import { isRpcResponse } from './rpc-response-shape'
 import type { RpcClient } from './rpc-client'
 import type { ConnectionState, RpcResponse } from './types'
@@ -16,6 +18,8 @@ type PendingRequest = {
 
 export type MobileRelayRpcSession = RpcClient & {
   getLeaseExpiresAt(): number | null
+  getResumeConfirmation(): DeviceResumeConfirmed | null
+  getFailure(): Error | null
 }
 
 export function connectMobileRelayRpcSession(args: {
@@ -35,6 +39,8 @@ export function connectMobileRelayRpcSession(args: {
   let requestCounter = 0
   let lastConnectedAt: number | null = null
   let leaseExpiresAt: number | null = null
+  let resumeConfirmation: DeviceResumeConfirmed | null = null
+  let failure: Error | null = null
   let closed = false
   const streams = new MobileRelayRpcStreams({
     nextId,
@@ -100,7 +106,9 @@ export function connectMobileRelayRpcSession(args: {
       streams.clear()
       publishState('disconnected')
     },
-    getLeaseExpiresAt: () => leaseExpiresAt
+    getLeaseExpiresAt: () => leaseExpiresAt,
+    getResumeConfirmation: () => resumeConfirmation,
+    getFailure: () => failure
   }
   return client
 
@@ -119,6 +127,7 @@ export function connectMobileRelayRpcSession(args: {
       if (!result.resumeConfirmation || result.relay?.relayHostId !== args.relay.relayHostId) {
         throw new Error('relay resume confirmation missing')
       }
+      resumeConfirmation = result.resumeConfirmation
       lastConnectedAt = Date.now()
       publishState('connected')
     } catch (error) {
@@ -221,9 +230,10 @@ export function connectMobileRelayRpcSession(args: {
       return
     }
     closed = true
+    failure = error
     link.close()
     rejectPending(error)
-    publishState('disconnected')
+    publishState(error instanceof MobileE2EEAuthenticationError ? 'auth-failed' : 'disconnected')
   }
 
   function rejectPending(error: Error): void {

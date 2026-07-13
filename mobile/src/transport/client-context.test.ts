@@ -10,6 +10,9 @@ const loadHostsMock = vi.fn()
 vi.mock('./rpc-client', () => ({
   connect: (...args: unknown[]) => connectMock(...args)
 }))
+vi.mock('./host-logical-client', () => ({
+  openHostLogicalClient: (...args: unknown[]) => connectMock(...args)
+}))
 vi.mock('./host-store', () => ({
   loadHosts: () => loadHostsMock()
 }))
