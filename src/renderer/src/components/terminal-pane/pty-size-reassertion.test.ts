@@ -70,7 +70,8 @@ describe('createPtySizeReassertion', () => {
     reassertion.request()
     await flushAsyncTicks()
 
-    expect(calls).toEqual(['fit', 'measure', 'read-applied'])
+    // The trailing measure is the resolve-time staleness check.
+    expect(calls).toEqual(['fit', 'measure', 'read-applied', 'measure'])
   })
 
   it('does not duplicate the resize when fit already triggered xterm onResize', async () => {
@@ -215,6 +216,111 @@ describe('createPtySizeReassertion', () => {
     expect(forwardResize).toHaveBeenCalledTimes(1)
     expect(forwardResize).toHaveBeenCalledWith(120, 40)
     expect(forwardResize).not.toHaveBeenCalledWith(100, 40)
+  })
+
+  it('suppresses a stale forward when xterm was refit while the read was in flight', async () => {
+    // Regression: a reveal-time fit (or snapshot-restore xterm resize) changes
+    // the grid after the target was captured, with no second request() to
+    // guard it. The resolved callback must not resize the PTY back to the
+    // pre-reveal grid.
+    let dims = { cols: 80, rows: 24 }
+    let resolveRead: (value: { cols: number; rows: number }) => void = () => {}
+    const getAppliedSize = vi
+      .fn<() => Promise<{ cols: number; rows: number } | null>>()
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveRead = resolve
+          })
+      )
+      .mockResolvedValue({ cols: 145, rows: 78 })
+    const forwardResize = vi.fn()
+    const reassertion = createPtySizeReassertion({
+      isDisposed: () => false,
+      getPtyId: () => 'pty-1',
+      isRemotePtyId: () => false,
+      shouldSuppressDesktopResize: () => false,
+      fit: vi.fn(),
+      getTerminalDimensions: () => dims,
+      getAppliedSize,
+      forwardResize
+    })
+
+    reassertion.request({ fit: false })
+    dims = { cols: 145, rows: 78 }
+    resolveRead({ cols: 145, rows: 78 })
+    await flushAsyncTicks()
+
+    expect(forwardResize).not.toHaveBeenCalledWith(80, 24)
+    expect(forwardResize).not.toHaveBeenCalled()
+  })
+
+  it('re-runs against the fresh grid when the PTY kept the old size across a mid-flight refit', async () => {
+    let dims = { cols: 80, rows: 24 }
+    let resolveRead: (value: { cols: number; rows: number }) => void = () => {}
+    const getAppliedSize = vi
+      .fn<() => Promise<{ cols: number; rows: number } | null>>()
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveRead = resolve
+          })
+      )
+      .mockResolvedValue({ cols: 80, rows: 24 })
+    const forwardResize = vi.fn()
+    const reassertion = createPtySizeReassertion({
+      isDisposed: () => false,
+      getPtyId: () => 'pty-1',
+      isRemotePtyId: () => false,
+      shouldSuppressDesktopResize: () => false,
+      fit: vi.fn(),
+      getTerminalDimensions: () => dims,
+      getAppliedSize,
+      forwardResize
+    })
+
+    reassertion.request({ fit: false })
+    dims = { cols: 145, rows: 78 }
+    resolveRead({ cols: 80, rows: 24 })
+    await flushAsyncTicks()
+
+    expect(getAppliedSize).toHaveBeenCalledTimes(2)
+    expect(forwardResize).toHaveBeenCalledTimes(1)
+    expect(forwardResize).toHaveBeenCalledWith(145, 78)
+  })
+
+  it('does not forward a stale target when the readback fails after a mid-flight refit', async () => {
+    let dims = { cols: 80, rows: 24 }
+    let rejectRead: (reason: Error) => void = () => {}
+    const getAppliedSize = vi
+      .fn<() => Promise<{ cols: number; rows: number } | null>>()
+      .mockImplementationOnce(
+        () =>
+          new Promise((_resolve, reject) => {
+            rejectRead = reject
+          })
+      )
+      .mockRejectedValue(new Error('unavailable'))
+    const forwardResize = vi.fn()
+    const reassertion = createPtySizeReassertion({
+      isDisposed: () => false,
+      getPtyId: () => 'pty-1',
+      isRemotePtyId: () => false,
+      shouldSuppressDesktopResize: () => false,
+      fit: vi.fn(),
+      getTerminalDimensions: () => dims,
+      getAppliedSize,
+      forwardResize
+    })
+
+    reassertion.request({ fit: false })
+    dims = { cols: 145, rows: 78 }
+    rejectRead(new Error('unavailable'))
+    await flushAsyncTicks()
+
+    expect(forwardResize).not.toHaveBeenCalledWith(80, 24)
+    // The unguarded fallback resize still happens, but at the fresh grid.
+    expect(forwardResize).toHaveBeenCalledWith(145, 78)
   })
 
   it('forwards once when applied-size readback fails', async () => {
