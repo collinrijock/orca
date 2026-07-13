@@ -187,7 +187,10 @@ function getWslContextFromPreferredDistro(
 /**
  * Removes all local tracking state for a PTY id after teardown.
  */
-function clearPtyState(id: string): void {
+function clearPtyState(id: string, expectedProc?: pty.IPty): boolean {
+  if (expectedProc && ptyProcesses.get(id) !== expectedProc) {
+    return false
+  }
   runPtyCleanup(id)
   disposePtyListeners(id)
   ptyProcesses.delete(id)
@@ -198,6 +201,7 @@ function clearPtyState(id: string): void {
   ptyLoadGeneration.delete(id)
   ptyShutdownInProgress.delete(id)
   ptyExitDuringShutdown.delete(id)
+  return true
 }
 
 /**
@@ -811,6 +815,16 @@ export class LocalPtyProvider implements IPtyProvider {
       if (process.platform !== 'win32') {
         ;(proc as unknown as { kill: (sig?: string) => void }).kill = () => {}
       }
+      if (ptyProcesses.get(id) !== proc) {
+        // Why: native exit delivery can trail a same-id replacement. Clean
+        // only this old handle; id-keyed maps now belong to the new process.
+        startupCommandCleanup?.()
+        for (const disposable of disposables) {
+          disposable.dispose()
+        }
+        destroyPtyProcess(proc)
+        return
+      }
       if (ptyShutdownInProgress.has(id)) {
         ptyExitDuringShutdown.set(id, exitCode)
         return
@@ -820,7 +834,7 @@ export class LocalPtyProvider implements IPtyProvider {
         shellReadyTimeout = null
       }
       startupCommandCleanup?.()
-      clearPtyState(id)
+      clearPtyState(id, proc)
       // Why: release the master ptmx fd on the natural-exit path — without
       // this, a shell that exits cleanly (the common case) never releases its
       // fd until the next GC. See docs/fix-pty-fd-leak.md.
@@ -942,7 +956,7 @@ export class LocalPtyProvider implements IPtyProvider {
     if (exitObserved) {
       disposePtyListeners(id)
       destroyPtyProcess(proc, { alreadyKilled: true })
-      clearPtyState(id)
+      clearPtyState(id, proc)
       this.opts.onExit?.(id, exitCode)
       for (const cb of exitListeners) {
         cb({ id, code: exitCode })

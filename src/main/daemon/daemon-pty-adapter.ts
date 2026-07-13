@@ -1373,38 +1373,40 @@ export class DaemonPtyAdapter implements IPtyProvider {
           fact: event.payload
         })
       } else if (event.event === 'exit') {
-        this.activeSessionIds.delete(event.sessionId)
-        this.dirtySessionVersions.delete(event.sessionId)
-        // Why: an exited session must not be owed a resume on reconnect — a
-        // reused sessionId would receive a stray resumePty. Same for the
-        // background set: a reused id must start un-thinned.
-        this.pausedProducerSessionIds.delete(event.sessionId)
-        this.producerResumesOwedOnReconnect.delete(event.sessionId)
-        this.backgroundedSessionIds.delete(event.sessionId)
-        if (!this.sleepRestoreSessionIds.has(event.sessionId)) {
-          this.coldRestoreCache.delete(event.sessionId)
-          this.paneIdentityBySessionId.delete(event.sessionId)
-        }
-        // Why: an exited session can never be checkpointed again, so its pending
-        // full-checkpoint flag is dead state. Without this, a cold-restored
-        // session that exits before its first checkpoint leaks a permanent entry.
-        this.sessionsNeedingFullCheckpoint.delete(event.sessionId)
-        // Why: a reused sessionId (renderer respawns a persisted ptyId) must
-        // not inherit the dead session's snapshot cooldown.
-        this.lastFullCheckpointAt.delete(event.sessionId)
-        this.stopCheckpointTimerIfIdle()
-        if (this.historyManager) {
-          void this.historyManager
-            .closeSession(event.sessionId, event.payload.code)
-            .catch((err) => console.warn('[history] closeSession failed:', event.sessionId, err))
-        }
-        this.initialCwds.delete(event.sessionId)
-        // oxlint-disable-next-line unicorn/no-useless-spread -- copy-safe: listeners may unsubscribe during iteration
-        for (const listener of [...this.exitListeners]) {
-          listener({ id: event.sessionId, code: event.payload.code })
-        }
+        void this.handleExitEvent(event.sessionId, event.payload.code)
       }
     })
+  }
+
+  private async handleExitEvent(sessionId: string, code: number): Promise<void> {
+    // Why: control and stream sockets can reorder a replacement create reply
+    // ahead of the old process's queued exit. Targeted liveness proof prevents
+    // that stale exit from deleting the replacement's same-id ownership.
+    if ((await this.getAppliedSize(sessionId)) !== null) {
+      return
+    }
+    this.activeSessionIds.delete(sessionId)
+    this.dirtySessionVersions.delete(sessionId)
+    this.pausedProducerSessionIds.delete(sessionId)
+    this.producerResumesOwedOnReconnect.delete(sessionId)
+    this.backgroundedSessionIds.delete(sessionId)
+    if (!this.sleepRestoreSessionIds.has(sessionId)) {
+      this.coldRestoreCache.delete(sessionId)
+      this.paneIdentityBySessionId.delete(sessionId)
+    }
+    this.sessionsNeedingFullCheckpoint.delete(sessionId)
+    this.lastFullCheckpointAt.delete(sessionId)
+    this.stopCheckpointTimerIfIdle()
+    if (this.historyManager) {
+      void this.historyManager
+        .closeSession(sessionId, code)
+        .catch((err) => console.warn('[history] closeSession failed:', sessionId, err))
+    }
+    this.initialCwds.delete(sessionId)
+    // oxlint-disable-next-line unicorn/no-useless-spread -- copy-safe: listeners may unsubscribe during iteration
+    for (const listener of [...this.exitListeners]) {
+      listener({ id: sessionId, code })
+    }
   }
 }
 

@@ -2,10 +2,10 @@ import type { DaemonPtyAdapter } from './daemon-pty-adapter'
 import {
   appendProviderReconciliationIds,
   bindProviderRoute,
-  bindProviderRouteIfAbsent,
   deleteProviderRoute,
+  discoverProviderSessionsAndBindRoutes,
   listProviderProcessesAndReconcileRoutes,
-  reconcileProviderRoutesAfterStartup,
+  reconcileProviderRoutesOnStartup,
   type ProviderRoute
 } from './pty-provider-route-reconciliation'
 import type {
@@ -63,10 +63,7 @@ export class DaemonPtyRouter implements IPtyProvider {
   async discoverLegacySessions(): Promise<void> {
     for (const adapter of this.legacy) {
       try {
-        const sessions = await adapter.listProcesses()
-        for (const session of sessions) {
-          bindProviderRouteIfAbsent(this.sessionAdapters, session.id, adapter)
-        }
+        await discoverProviderSessionsAndBindRoutes(adapter, this.sessionAdapters)
       } catch (error) {
         console.warn('[daemon] Failed to discover legacy daemon sessions', error)
       }
@@ -236,10 +233,12 @@ export class DaemonPtyRouter implements IPtyProvider {
     const alive: string[] = []
     const killed: string[] = []
     for (const adapter of this.allAdapters()) {
-      const routesAtStart = new Map(this.sessionAdapters)
-      const result = await adapter.reconcileOnStartup(validWorktreeIds)
+      const result = await reconcileProviderRoutesOnStartup(
+        adapter,
+        this.sessionAdapters,
+        validWorktreeIds
+      )
       appendProviderReconciliationIds({ alive, killed }, result)
-      reconcileProviderRoutesAfterStartup(this.sessionAdapters, routesAtStart, adapter, result)
     }
     return { alive, killed }
   }

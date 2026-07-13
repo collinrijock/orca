@@ -71,10 +71,7 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
   async discoverDaemonSessions(): Promise<void> {
     for (const adapter of this.allDaemonAdapters()) {
       try {
-        const sessions = await adapter.listProcesses()
-        for (const session of sessions) {
-          PtyRoutes.bindProviderRouteIfAbsent(this.sessionProviders, session.id, adapter)
-        }
+        await PtyRoutes.discoverProviderSessionsAndBindRoutes(adapter, this.sessionProviders)
       } catch (error) {
         console.warn('[daemon] Failed to discover degraded daemon sessions', error)
       }
@@ -263,15 +260,12 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
     const alive: string[] = []
     const killed: string[] = []
     for (const adapter of this.allDaemonAdapters()) {
-      const routesAtStart = new Map(this.sessionProviders)
-      const result = await adapter.reconcileOnStartup(validWorktreeIds)
-      PtyRoutes.appendProviderReconciliationIds({ alive, killed }, result)
-      PtyRoutes.reconcileProviderRoutesAfterStartup(
-        this.sessionProviders,
-        routesAtStart,
+      const result = await PtyRoutes.reconcileProviderRoutesOnStartup(
         adapter,
-        result
+        this.sessionProviders,
+        validWorktreeIds
       )
+      PtyRoutes.appendProviderReconciliationIds({ alive, killed }, result)
     }
     return { alive, killed }
   }

@@ -992,6 +992,32 @@ describe('LocalPtyProvider', () => {
       expect(provider.hasPty(id)).toBe(false)
     })
 
+    it('does not let a queued old exit delete a same-id replacement', async () => {
+      let staleExit: ((event: { exitCode: number }) => void) | undefined
+      const oldProc = {
+        ...mockProc,
+        pid: 101,
+        kill: vi.fn(),
+        onExit: vi.fn((callback) => {
+          staleExit = callback
+          return { dispose: vi.fn() }
+        })
+      }
+      const replacementProc = { ...mockProc, pid: 202, kill: vi.fn() }
+      spawnMock.mockReturnValueOnce(oldProc).mockReturnValueOnce(replacementProc)
+      const exits = vi.fn()
+      provider.onExit(exits)
+
+      await provider.spawn({ sessionId: 'same-id', cols: 80, rows: 24 })
+      provider.killOrphanedPtys(provider.advanceGeneration())
+      await provider.spawn({ sessionId: 'same-id', cols: 80, rows: 24 })
+      staleExit?.({ exitCode: 0 })
+
+      expect(provider.getPtyProcess('same-id')).toBe(replacementProc)
+      expect(provider.hasPty('same-id')).toBe(true)
+      expect(exits).not.toHaveBeenCalled()
+    })
+
     it('invokes onExit callback via the node-pty exit handler', async () => {
       const onExit = vi.fn()
       provider.configure({ onExit })

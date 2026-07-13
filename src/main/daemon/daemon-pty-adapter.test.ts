@@ -557,6 +557,21 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       await waitFor(() => exits.length > 0)
       expect(exits[0]).toEqual({ id, code: 42 })
     })
+
+    it('suppresses an old exit when targeted readback proves a same-id replacement', async () => {
+      const exits: { id: string; code: number }[] = []
+      adapter.onExit((payload) => exits.push(payload))
+      const { id } = await adapter.spawn({ sessionId: 'same-id', cols: 80, rows: 24 })
+      vi.spyOn(adapter, 'getAppliedSize').mockResolvedValueOnce({ cols: 80, rows: 24 })
+      const internals = adapter as unknown as {
+        handleExitEvent(sessionId: string, code: number): Promise<void>
+      }
+
+      await internals.handleExitEvent(id, 0)
+
+      expect(adapter.hasPty(id)).toBe(true)
+      expect(exits).toEqual([])
+    })
   })
 
   describe('spawn with sessionId (reattach)', () => {
