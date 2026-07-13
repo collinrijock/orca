@@ -8,8 +8,8 @@ export type {
 
 export class RuntimeClientError extends Error {
   readonly code: string
-  // Why: optional structured recovery remains available to human formatting;
-  // agent-facing JSON strips prescriptive nextSteps.
+  // Why: optional structured recovery is shared by human formatting and
+  // machine-readable JSON errors so both surfaces retain recovery context.
   readonly data?: unknown
 
   constructor(code: string, message: string, data?: unknown) {

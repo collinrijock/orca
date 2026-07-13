@@ -1,7 +1,11 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { formatCliError, reportCliError } from './format'
 import { RuntimeClientError, RuntimeRpcFailureError } from './runtime-client'
+
+afterEach(() => {
+  vi.restoreAllMocks()
+})
 
 describe('CLI error recovery', () => {
   it('renders explicit local recovery in human output', () => {
@@ -27,7 +31,7 @@ describe('CLI error recovery', () => {
     expect(output).not.toContain('Fix the command flags or RPC params')
   })
 
-  it('strips local next steps from JSON errors', () => {
+  it('keeps safe local recovery in JSON errors', () => {
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
     const error = new RuntimeClientError('invalid_argument', 'Unknown command: worktree lst', {
       nextSteps: ['Run `orca help` to inspect available commands.']
@@ -35,13 +39,15 @@ describe('CLI error recovery', () => {
 
     reportCliError(error, true)
 
-    const output = logSpy.mock.calls.flat().join('\n')
-    expect(output).not.toContain('nextSteps')
-    expect(output).not.toContain('Run `orca help`')
-    logSpy.mockRestore()
+    const output = JSON.parse(logSpy.mock.calls.flat().join('\n')) as {
+      error: { data?: { nextSteps?: string[] } }
+    }
+    expect(output.error.data?.nextSteps).toEqual([
+      'Run `orca help` to inspect available commands.'
+    ])
   })
 
-  it('strips runtime next steps from JSON errors', () => {
+  it('preserves runtime recovery data in JSON errors', () => {
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
     const error = new RuntimeRpcFailureError({
       id: 'req_rpc_json',
@@ -51,8 +57,8 @@ describe('CLI error recovery', () => {
         message: 'Unknown runtime argument',
         data: {
           detail: 'invalid selector',
-          nestedRecovery: { nextSteps: ['Retry with --force'] },
-          nextSteps: ['Retry with --force']
+          nestedRecovery: { nextSteps: ['Inspect the valid selectors'] },
+          nextSteps: ['Inspect the valid selectors']
         }
       },
       _meta: { runtimeId: 'runtime_local' }
@@ -60,11 +66,20 @@ describe('CLI error recovery', () => {
 
     reportCliError(error, true)
 
-    const output = logSpy.mock.calls.flat().join('\n')
-    expect(output).toContain('invalid selector')
-    expect(output).not.toContain('nextSteps')
-    expect(output).not.toContain('--force')
-    logSpy.mockRestore()
+    const output = JSON.parse(logSpy.mock.calls.flat().join('\n')) as {
+      error: {
+        data?: {
+          detail?: string
+          nestedRecovery?: { nextSteps?: string[] }
+          nextSteps?: string[]
+        }
+      }
+    }
+    expect(output.error.data).toEqual({
+      detail: 'invalid selector',
+      nestedRecovery: { nextSteps: ['Inspect the valid selectors'] },
+      nextSteps: ['Inspect the valid selectors']
+    })
   })
 
   it('prefers RPC recovery over generic computer hints in text output', () => {

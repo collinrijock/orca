@@ -237,25 +237,29 @@ describe('unknown command recovery', () => {
   })
 
   it('directs a near-miss command to read-only discovery', async () => {
-    await main(['worktree', 'lst'], '/tmp/repo')
+    await main(['worktree', 'move'], '/tmp/repo')
 
     expect(process.exitCode).toBe(1)
     const stderr = errorSpy.mock.calls.map((call) => String(call[0])).join('\n')
-    expect(stderr).toContain('Unknown command: worktree lst')
+    expect(stderr).toContain('Unknown command: worktree move')
     expect(stderr).not.toContain('Did you mean')
+    expect(stderr).not.toContain('orca worktree remove')
     expect(stderr).toContain('Next step: Run `orca help`')
   })
 
-  it('keeps command recovery instructions out of JSON', async () => {
+  it('directs JSON consumers to read-only command discovery', async () => {
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
 
-    await main(['worktree', 'lst', '--json'], '/tmp/repo')
+    await main(['worktree', 'move', '--json'], '/tmp/repo')
 
     expect(process.exitCode).toBe(1)
     const response = JSON.parse(logSpy.mock.calls.flat().join('\n')) as {
-      error: { data?: unknown }
+      error: { data?: { nextSteps?: string[]; suggestions?: string[] } }
     }
-    expect(response.error.data).toBeUndefined()
+    expect(response.error.data?.suggestions).toBeUndefined()
+    expect(response.error.data?.nextSteps).toEqual([
+      'Run `orca help` or `orca agent-context --json` to inspect available commands before retrying.'
+    ])
     logSpy.mockRestore()
   })
 
@@ -277,7 +281,7 @@ describe('unknown command recovery', () => {
     expect(stderr).toContain('Unknown flag --workspace for command: worktree list')
   })
 
-  it('keeps flag recovery instructions out of JSON', async () => {
+  it('directs JSON consumers to command-specific flag discovery', async () => {
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
 
     await main(['worktree', 'list', '--jso', '--json'], '/tmp/repo')
@@ -289,7 +293,9 @@ describe('unknown command recovery', () => {
       }
     }
     expect(response.error.data?.validFlags).toContain('json')
-    expect(response.error.data?.nextSteps).toBeUndefined()
+    expect(response.error.data?.nextSteps).toEqual([
+      'Run `orca help worktree list` to inspect supported flags before retrying.'
+    ])
     logSpy.mockRestore()
   })
 
@@ -1913,7 +1919,7 @@ describe('orca cli worktree awareness', () => {
     process.exitCode = priorExitCode
   })
 
-  it('reports runtime parent selector failures without hidden flag guidance', async () => {
+  it('reports runtime parent selector failures with structured recovery', async () => {
     callMock.mockRejectedValueOnce(
       new RuntimeRpcFailureError({
         id: 'req_create',
@@ -1966,8 +1972,8 @@ describe('orca cli worktree awareness', () => {
     })
     expect(output).toContain('"ok": false')
     expect(output).toContain('Parent selector was not found.')
-    expect(output).not.toContain('nextSteps')
-    expect(output).not.toContain('--parent-worktree selector')
+    expect(output).toContain('nextSteps')
+    expect(output).toContain('--parent-worktree selector')
     expect(output).not.toContain('--parent-workspace')
     expect(errSpy).not.toHaveBeenCalled()
     expect(process.exitCode).toBe(1)

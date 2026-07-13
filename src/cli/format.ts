@@ -108,7 +108,7 @@ export function formatCliError(error: unknown, context: CliErrorContext = {}): s
 export function reportCliError(error: unknown, json: boolean, context: CliErrorContext = {}): void {
   if (json) {
     if (error instanceof RuntimeRpcFailureError) {
-      console.log(JSON.stringify(agentFacingRpcFailure(error.response), null, 2))
+      console.log(JSON.stringify(error.response, null, 2))
     } else {
       const response: RuntimeRpcFailure = {
         id: 'local',
@@ -149,45 +149,17 @@ function nextStepsFromData(data: unknown): string[] {
   return []
 }
 
-function agentFacingErrorData(data: unknown): unknown {
-  if (Array.isArray(data)) {
-    return data.map(agentFacingErrorData).filter((value) => value !== undefined)
-  }
-  if (!data || typeof data !== 'object') {
-    return data
-  }
-  // Why: JSON is consumed by agents, so descriptive error facts may pass through
-  // but prescriptive recovery instructions remain human-only at every depth.
-  const agentFacingData = Object.fromEntries(
-    Object.entries(data as Record<string, unknown>)
-      .filter(([key]) => key !== 'nextSteps')
-      .map(([key, value]) => [key, agentFacingErrorData(value)])
-      .filter(([, value]) => value !== undefined)
-  )
-  return Object.keys(agentFacingData).length > 0 ? agentFacingData : undefined
-}
-
-function agentFacingRpcFailure(response: RuntimeRpcFailure): RuntimeRpcFailure {
-  return {
-    ...response,
-    error: {
-      ...response.error,
-      data: agentFacingErrorData(response.error.data)
-    }
-  }
-}
-
 function localCliErrorData(error: unknown, context: CliErrorContext): unknown {
   // Why: error-specific recovery must win over the generic computer fallback.
   if (error instanceof RuntimeClientError && error.data !== undefined) {
-    return agentFacingErrorData(error.data)
+    return error.data
   }
   if (
     error instanceof RuntimeClientError &&
     error.code === 'invalid_argument' &&
     context.commandPath?.[0] === 'computer'
   ) {
-    return agentFacingErrorData(computerUseErrorRecoveryData('invalid_argument'))
+    return computerUseErrorRecoveryData('invalid_argument')
   }
   return undefined
 }
