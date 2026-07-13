@@ -1,5 +1,6 @@
 import {
   execDockerSshRelayTargetCommand,
+  shellQuote,
   type DockerSshRelayTarget
 } from './docker-ssh-relay-target'
 
@@ -50,10 +51,16 @@ function parseRelayProcessRows(output: string): RelayProcessRow[] {
   }
   return output.split('\n').map((line) => {
     const [type, rawPid, rawParentPid, cwd] = line.split('\t')
+    // Why: Number('') is 0, so empty pid/ppid (e.g. vanished /proc status) must
+    // throw and let expect.poll retry instead of accepting parentPid: 0.
     const pid = Number(rawPid)
     const parentPid = Number(rawParentPid)
     if (
       (type !== 'relay' && type !== 'watcher') ||
+      rawPid === undefined ||
+      rawPid === '' ||
+      rawParentPid === undefined ||
+      rawParentPid === '' ||
       !Number.isInteger(pid) ||
       !Number.isInteger(parentPid) ||
       !cwd
@@ -62,10 +69,6 @@ function parseRelayProcessRows(output: string): RelayProcessRow[] {
     }
     return { type, pid, parentPid, cwd }
   })
-}
-
-function shellQuote(value: string): string {
-  return `'${value.replaceAll("'", "'\\''")}'`
 }
 
 export function readDockerSshRelayProcessSnapshot(

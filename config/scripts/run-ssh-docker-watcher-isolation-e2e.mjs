@@ -8,10 +8,14 @@ const env = {
   ORCA_E2E_SSH_DOCKER: '1'
 }
 
-const runtime = spawnSync(pnpm, ['run', 'ensure:electron-runtime'], {
+// Why: Node's CVE-2024-27980 hardening rejects .cmd spawns without shell on Windows.
+const spawnOptions = {
   stdio: 'inherit',
-  env
-})
+  env,
+  shell: process.platform === 'win32'
+}
+
+const runtime = spawnSync(pnpm, ['run', 'ensure:electron-runtime'], spawnOptions)
 
 if (runtime.status !== 0) {
   process.exit(runtime.status ?? 1)
@@ -31,10 +35,7 @@ const result = spawnSync(
     '--workers=1',
     ...extraArgs
   ],
-  {
-    stdio: 'inherit',
-    env
-  }
+  spawnOptions
 )
 
 process.exit(result.status ?? 1)

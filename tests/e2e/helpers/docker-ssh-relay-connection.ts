@@ -93,34 +93,37 @@ export async function disconnectDockerSshRelayTarget(page: Page, targetId: strin
   }, targetId)
 }
 
+async function performDockerSshRelayReconnect(
+  page: Page,
+  targetId: string,
+  disconnectFirst: boolean
+): Promise<void> {
+  await page.evaluate(
+    async ({ targetId, disconnectFirst }) => {
+      const store = window.__store
+      if (!store) {
+        throw new Error('Store unavailable')
+      }
+      if (disconnectFirst) {
+        await window.api.ssh.disconnect({ targetId })
+      }
+      const state = await window.api.ssh.connect({ targetId })
+      if (!state || state.status !== 'connected') {
+        throw new Error(`SSH target did not reconnect: ${JSON.stringify(state)}`)
+      }
+      store.getState().setSshConnectionState(targetId, state)
+    },
+    { targetId, disconnectFirst }
+  )
+}
+
 export async function reconnectDockerSshRelayTarget(page: Page, targetId: string): Promise<void> {
-  await page.evaluate(async (targetId) => {
-    const store = window.__store
-    if (!store) {
-      throw new Error('Store unavailable')
-    }
-    await window.api.ssh.disconnect({ targetId })
-    const state = await window.api.ssh.connect({ targetId })
-    if (!state || state.status !== 'connected') {
-      throw new Error(`SSH target did not reconnect: ${JSON.stringify(state)}`)
-    }
-    store.getState().setSshConnectionState(targetId, state)
-  }, targetId)
+  return performDockerSshRelayReconnect(page, targetId, true)
 }
 
 export async function reconnectDisconnectedDockerSshRelayTarget(
   page: Page,
   targetId: string
 ): Promise<void> {
-  await page.evaluate(async (targetId) => {
-    const store = window.__store
-    if (!store) {
-      throw new Error('Store unavailable')
-    }
-    const state = await window.api.ssh.connect({ targetId })
-    if (!state || state.status !== 'connected') {
-      throw new Error(`SSH target did not reconnect: ${JSON.stringify(state)}`)
-    }
-    store.getState().setSshConnectionState(targetId, state)
-  }, targetId)
+  return performDockerSshRelayReconnect(page, targetId, false)
 }

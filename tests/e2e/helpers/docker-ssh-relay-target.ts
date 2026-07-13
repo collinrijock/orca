@@ -28,7 +28,7 @@ function tryRun(command: string, args: string[], opts: { timeoutMs?: number } = 
   spawnSync(command, args, { stdio: 'ignore', timeout: opts.timeoutMs ?? 10_000 })
 }
 
-function shellQuote(value: string): string {
+export function shellQuote(value: string): string {
   return `'${value.replaceAll("'", "'\\''")}'`
 }
 
