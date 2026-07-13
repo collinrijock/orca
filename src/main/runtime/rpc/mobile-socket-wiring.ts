@@ -13,6 +13,7 @@ export type MobileSocketTransportMetadata =
       relayHostId: string
       relayDeviceId: string
       basisConnId: string
+      credentialKind: 'invite' | 'resume'
     }
 
 export type MobileSocketTransport = {

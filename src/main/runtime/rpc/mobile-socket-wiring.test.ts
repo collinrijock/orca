@@ -123,7 +123,8 @@ describe('MobileSocketWiring', () => {
       transport: 'relay',
       relayHostId: 'AbCdEf0123_-xyZ9',
       relayDeviceId: 'outer-device',
-      basisConnId: 'connection-1'
+      basisConnId: 'connection-1',
+      credentialKind: 'invite'
     }
     const wiring = new MobileSocketWiring({
       deviceRegistry: registryFor('e2ee-device', 'valid-token'),
