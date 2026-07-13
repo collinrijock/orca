@@ -1,16 +1,15 @@
 import type { IPtyProvider } from '../providers/types'
+import { deleteProviderRoute, type ProviderRoute } from './pty-provider-route-reconciliation'
 
 export async function shutdownDegradedFallbackSessions<T extends IPtyProvider>(
-  sessionProviders: Map<string, T>,
+  sessionProviders: Map<string, ProviderRoute<T>>,
   fallback: T
 ): Promise<number> {
-  const ids = [...sessionProviders]
-    .filter(([, provider]) => provider === fallback)
-    .map(([id]) => id)
+  const routes = [...sessionProviders].filter(([, route]) => route.provider === fallback)
   const results = await Promise.allSettled(
-    ids.map(async (id) => {
+    routes.map(async ([id, route]) => {
       await fallback.shutdown(id, { immediate: true })
-      sessionProviders.delete(id)
+      deleteProviderRoute(sessionProviders, id, route)
     })
   )
   // Why: fallback cleanup must not abort the user's daemon-restart recovery path.

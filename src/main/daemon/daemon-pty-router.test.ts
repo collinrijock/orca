@@ -157,6 +157,26 @@ describe('DaemonPtyRouter', () => {
     expect(exit).not.toHaveBeenCalled()
   })
 
+  it('retains a same-adapter replacement across an older process listing', async () => {
+    const current = createAdapter('current')
+    const legacy = createAdapter('legacy', ['shared-session'])
+    const router = new DaemonPtyRouter({ current, legacy: [legacy] })
+    await router.discoverLegacySessions()
+    let finishLegacyListing!: (sessions: []) => void
+    vi.mocked(legacy.listProcesses).mockImplementationOnce(
+      () => new Promise((resolve) => (finishLegacyListing = resolve))
+    )
+
+    const staleListing = router.listProcesses()
+    await router.spawn({ sessionId: 'shared-session', cols: 80, rows: 24 })
+    finishLegacyListing([])
+    await staleListing
+    router.write('shared-session', 'replacement')
+
+    expect(legacy.write).toHaveBeenCalledWith('shared-session', 'replacement')
+    expect(current.write).not.toHaveBeenCalledWith('shared-session', 'replacement')
+  })
+
   it('routes fresh foreground confirmation to the session-owning daemon', async () => {
     const current = createAdapter('current', ['current-session'])
     const legacy = createAdapter('legacy', ['legacy-session'])

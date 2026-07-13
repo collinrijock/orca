@@ -1,5 +1,13 @@
 import type { DaemonPtyAdapter } from './daemon-pty-adapter'
-import { listProviderProcessesAndReconcileRoutes } from './pty-provider-route-reconciliation'
+import {
+  appendProviderReconciliationIds,
+  bindProviderRoute,
+  bindProviderRouteIfAbsent,
+  deleteProviderRoute,
+  listProviderProcessesAndReconcileRoutes,
+  reconcileProviderRoutesAfterStartup,
+  type ProviderRoute
+} from './pty-provider-route-reconciliation'
 import type {
   IPtyProvider,
   PtyBackgroundStreamEvent,
@@ -14,7 +22,7 @@ export class DaemonPtyRouter implements IPtyProvider {
   readonly requiresShutdownExitProof = true
   private current: DaemonPtyAdapter
   private legacy: DaemonPtyAdapter[]
-  private sessionAdapters = new Map<string, DaemonPtyAdapter>()
+  private sessionAdapters = new Map<string, ProviderRoute<DaemonPtyAdapter>>()
   private unsubscribers: (() => void)[] = []
   private dataListeners: ((payload: {
     id: string
@@ -37,12 +45,12 @@ export class DaemonPtyRouter implements IPtyProvider {
         adapter.onExit((payload) => {
           // Why: a late exit from a legacy daemon must not delete a route that
           // has already been rebound to a replacement provider generation.
-          const routed = this.sessionAdapters.get(payload.id)
-          if (routed && routed !== adapter) {
+          const route = this.sessionAdapters.get(payload.id)
+          if (route && route.provider !== adapter) {
             return
           }
-          if (routed === adapter) {
-            this.sessionAdapters.delete(payload.id)
+          if (route?.provider === adapter) {
+            deleteProviderRoute(this.sessionAdapters, payload.id, route)
           }
           for (const listener of this.exitListeners) {
             listener(payload)
@@ -57,7 +65,7 @@ export class DaemonPtyRouter implements IPtyProvider {
       try {
         const sessions = await adapter.listProcesses()
         for (const session of sessions) {
-          this.sessionAdapters.set(session.id, adapter)
+          bindProviderRouteIfAbsent(this.sessionAdapters, session.id, adapter)
         }
       } catch (error) {
         console.warn('[daemon] Failed to discover legacy daemon sessions', error)
@@ -66,10 +74,10 @@ export class DaemonPtyRouter implements IPtyProvider {
   }
 
   async spawn(opts: PtySpawnOptions): Promise<PtySpawnResult> {
-    const adapter = opts.sessionId ? this.sessionAdapters.get(opts.sessionId) : undefined
+    const adapter = opts.sessionId ? this.sessionAdapters.get(opts.sessionId)?.provider : undefined
     const target = adapter ?? this.current
     const result = await target.spawn(opts)
-    this.sessionAdapters.set(result.id, target)
+    bindProviderRoute(this.sessionAdapters, result.id, target)
     return result
   }
 
@@ -78,7 +86,7 @@ export class DaemonPtyRouter implements IPtyProvider {
   }
 
   hasPty(id: string): boolean {
-    const routed = this.sessionAdapters.get(id)
+    const routed = this.sessionAdapters.get(id)?.provider
     if (routed) {
       return routed.hasPty(id)
     }
@@ -228,21 +236,10 @@ export class DaemonPtyRouter implements IPtyProvider {
     const alive: string[] = []
     const killed: string[] = []
     for (const adapter of this.allAdapters()) {
+      const routesAtStart = new Map(this.sessionAdapters)
       const result = await adapter.reconcileOnStartup(validWorktreeIds)
-      // Why: daemon startup can reconcile many restored sessions; spreading
-      // those arrays into push can exceed JavaScript's argument limit.
-      for (const id of result.alive) {
-        alive.push(id)
-      }
-      for (const id of result.killed) {
-        killed.push(id)
-      }
-      for (const id of result.alive) {
-        this.sessionAdapters.set(id, adapter)
-      }
-      for (const id of result.killed) {
-        this.sessionAdapters.delete(id)
-      }
+      appendProviderReconciliationIds({ alive, killed }, result)
+      reconcileProviderRoutesAfterStartup(this.sessionAdapters, routesAtStart, adapter, result)
     }
     return { alive, killed }
   }
@@ -295,7 +292,7 @@ export class DaemonPtyRouter implements IPtyProvider {
   }
 
   private adapterFor(sessionId: string): DaemonPtyAdapter {
-    return this.sessionAdapters.get(sessionId) ?? this.current
+    return this.sessionAdapters.get(sessionId)?.provider ?? this.current
   }
 
   private allAdapters(): DaemonPtyAdapter[] {

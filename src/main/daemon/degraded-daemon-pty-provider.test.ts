@@ -128,6 +128,27 @@ describe('DegradedDaemonPtyProvider', () => {
     expect(fallback.write).toHaveBeenCalledWith('shared-session', 'after-exit')
   })
 
+  it('retains a same-provider replacement across an older process listing', async () => {
+    const current = createDaemonAdapter('daemon', ['shared-session'])
+    const fallback = createProvider('fallback')
+    const provider = new DegradedDaemonPtyProvider({ current, legacy: [], fallback })
+    await provider.discoverDaemonSessions()
+    let finishDaemonListing!: (sessions: []) => void
+    vi.mocked(current.listProcesses).mockImplementationOnce(
+      () => new Promise((resolve) => (finishDaemonListing = resolve))
+    )
+
+    const staleListing = provider.listProcesses()
+    await provider.spawn({ sessionId: 'shared-session', cols: 80, rows: 24 })
+    finishDaemonListing([])
+    await staleListing
+    provider.write('shared-session', 'replacement')
+
+    expect(provider.getCurrentDaemonSessionIds()).toEqual(['shared-session'])
+    expect(current.write).toHaveBeenCalledWith('shared-session', 'replacement')
+    expect(fallback.write).not.toHaveBeenCalledWith('shared-session', 'replacement')
+  })
+
   it('routes fresh foreground confirmation to the session owner', async () => {
     const current = createDaemonAdapter('daemon', ['daemon-session'])
     const fallback = createProvider('fallback')
