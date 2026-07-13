@@ -17,14 +17,19 @@ export function isNativeChatShortcutTitleFallbackSafe(
 export function resolveNativeChatToggleShortcutDetectedAgent({
   terminalTabId,
   activeLeafId,
-  agentStatusByPaneKey
+  agentStatusByPaneKey,
+  allowTabFallback = true
 }: {
   terminalTabId: string
   activeLeafId: string | null
   agentStatusByPaneKey: Record<string, { agentType?: AgentType }>
+  allowTabFallback?: boolean
 }): AgentType | null {
   if (activeLeafId) {
     return agentStatusByPaneKey[`${terminalTabId}:${activeLeafId}`]?.agentType ?? null
+  }
+  if (!allowTabFallback) {
+    return null
   }
   return (
     Object.entries(agentStatusByPaneKey).find(([paneKey]) =>
@@ -68,12 +73,14 @@ export function useNativeChatToggleShortcut(worktreeId: string, isWorktreeActive
       // the unified tab id.
       const terminalLayout = state.terminalLayoutsByTabId[tab.entityId]
       const activeLeafId = terminalLayout?.activeLeafId ?? null
+      const tabWideFallbackSafe = isNativeChatShortcutTitleFallbackSafe(terminalLayout?.root)
       const detectedAgent = resolveNativeChatToggleShortcutDetectedAgent({
         terminalTabId: tab.entityId,
         activeLeafId,
-        agentStatusByPaneKey: state.agentStatusByPaneKey
+        agentStatusByPaneKey: state.agentStatusByPaneKey,
+        allowTabFallback: tabWideFallbackSafe
       })
-      const titleFallbackAgent = isNativeChatShortcutTitleFallbackSafe(terminalLayout?.root)
+      const titleFallbackAgent = tabWideFallbackSafe
         ? (resolveCommittedTitleAgentType(tab.label ?? '') ??
           (terminalTab ? resolveCommittedTitleAgentType(terminalTab.title) : null))
         : null
@@ -81,7 +88,7 @@ export function useNativeChatToggleShortcut(worktreeId: string, isWorktreeActive
         !canToggleNativeChat({
           experimentalNativeChatEnabled: state.settings?.experimentalNativeChat === true,
           contentType: 'terminal',
-          launchAgent: detectedAgent ? null : terminalTab?.launchAgent,
+          launchAgent: detectedAgent || !tabWideFallbackSafe ? null : terminalTab?.launchAgent,
           detectedAgent,
           resolvedAgent: detectedAgent ? null : titleFallbackAgent,
           nativeChatTranscriptIsLocalReadable: isNativeChatTranscriptLocalReadable(

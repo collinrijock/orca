@@ -1,4 +1,18 @@
 import type { AgentStatusEntry, AgentType } from '../../../../shared/agent-status-types'
+import type { TerminalLayoutSnapshot } from '../../../../shared/types'
+
+function layoutContainsLeaf(layout: TerminalLayoutSnapshot, leafId: string): boolean {
+  const visit = (node: TerminalLayoutSnapshot['root']): boolean => {
+    if (!node) {
+      return false
+    }
+    if (node.type === 'leaf') {
+      return node.leafId === leafId
+    }
+    return visit(node.first) || visit(node.second)
+  }
+  return layout.root === null || visit(layout.root)
+}
 
 /**
  * Project `agentStatusByPaneKey` down to the stable `{ terminalTabId: agentType }`
@@ -13,16 +27,30 @@ import type { AgentStatusEntry, AgentType } from '../../../../shared/agent-statu
  * those transitions, so the strip re-renders only when a tab actually gains, loses,
  * or changes its agent.
  *
- * First matching pane per tab wins, mirroring `findTabAgentEntry` exactly (tab ids
- * are colon-free by construction, so the substring before the first `:` is the
- * tab id). A pane whose entry has no `agentType` still claims the tab and yields
- * `null`, identical to `findTabAgentEntry(...)?.agentType ?? null`.
+ * The active layout leaf wins when available because that is where a tab-level
+ * chat action opens. Before layout hydration, the first matching pane preserves
+ * the legacy lookup behavior (tab ids are colon-free by construction).
  */
 export function selectTabAgentTypesByTabId(
-  agentStatusByPaneKey: Record<string, AgentStatusEntry>
+  agentStatusByPaneKey: Record<string, AgentStatusEntry>,
+  terminalLayoutsByTabId: Record<string, TerminalLayoutSnapshot> = {}
 ): Record<string, AgentType> {
   const byTabId: Record<string, AgentType> = {}
   const claimed = new Set<string>()
+  // Why: the tab action opens chat on the active split leaf, so that leaf's
+  // identity must outrank object insertion order from unrelated siblings.
+  for (const [tabId, layout] of Object.entries(terminalLayoutsByTabId)) {
+    claimed.add(tabId)
+    const activeLeafId =
+      layout.activeLeafId ?? (layout.root?.type === 'leaf' ? layout.root.leafId : null)
+    if (!activeLeafId || !layoutContainsLeaf(layout, activeLeafId)) {
+      continue
+    }
+    const entry = agentStatusByPaneKey[`${tabId}:${activeLeafId}`]
+    if (entry?.agentType != null) {
+      byTabId[tabId] = entry.agentType
+    }
+  }
   for (const [paneKey, entry] of Object.entries(agentStatusByPaneKey)) {
     const colon = paneKey.indexOf(':')
     if (colon <= 0) {
@@ -38,4 +66,16 @@ export function selectTabAgentTypesByTabId(
     }
   }
   return byTabId
+}
+
+export function selectSplitTerminalTabsById(
+  terminalLayoutsByTabId: Record<string, TerminalLayoutSnapshot>
+): Record<string, true> {
+  const splitTabs: Record<string, true> = {}
+  for (const [tabId, layout] of Object.entries(terminalLayoutsByTabId)) {
+    if (layout.root?.type === 'split') {
+      splitTabs[tabId] = true
+    }
+  }
+  return splitTabs
 }

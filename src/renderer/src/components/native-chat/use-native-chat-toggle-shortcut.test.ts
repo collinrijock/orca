@@ -43,6 +43,20 @@ describe('resolveNativeChatToggleShortcutDetectedAgent', () => {
       })
     ).toBe('claude')
   })
+
+  it('does not inherit a split sibling before the active leaf is known', () => {
+    expect(
+      resolveNativeChatToggleShortcutDetectedAgent({
+        terminalTabId: 'tab-1',
+        activeLeafId: null,
+        agentStatusByPaneKey: {
+          'tab-1:agent-leaf': { agentType: 'claude' },
+          'tab-1:shell-leaf': {}
+        },
+        allowTabFallback: false
+      })
+    ).toBeNull()
+  })
 })
 
 describe('isNativeChatShortcutTitleFallbackSafe', () => {
