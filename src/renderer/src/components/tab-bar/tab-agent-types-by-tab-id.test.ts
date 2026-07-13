@@ -4,7 +4,7 @@ import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import type { TerminalLayoutSnapshot } from '../../../../shared/types'
 import { findTabAgentEntry } from '../native-chat/native-chat-tab-agent-entry'
 import {
-  selectSplitTerminalTabsById,
+  selectNativeChatTabWideFallbackUnsafeTabsById,
   selectTabAgentTypesByTabId
 } from './tab-agent-types-by-tab-id'
 
@@ -66,7 +66,7 @@ describe('selectTabAgentTypesByTabId', () => {
 
     expect(selectTabAgentTypesByTabId(agentFirst, layouts)['tab-1']).toBe('codex')
     expect(selectTabAgentTypesByTabId(activeFirst, layouts)['tab-1']).toBe('codex')
-    expect(selectSplitTerminalTabsById(layouts)).toEqual({ 'tab-1': true })
+    expect(selectNativeChatTabWideFallbackUnsafeTabsById(layouts)).toEqual({ 'tab-1': true })
   })
 
   it('does not inherit a supported sibling when the active split leaf is a shell', () => {
@@ -126,6 +126,52 @@ describe('selectTabAgentTypesByTabId', () => {
     )
 
     expect(projection['tab-1'] ?? null).toBeNull()
+    expect(
+      selectNativeChatTabWideFallbackUnsafeTabsById({
+        'tab-1': {
+          root: { type: 'leaf', leafId: 'leaf-a' },
+          activeLeafId: 'closed-leaf',
+          expandedLeafId: null
+        }
+      })
+    ).toEqual({ 'tab-1': true })
+  })
+
+  it('uses the pane entry while a rootless layout is still hydrating', () => {
+    expect(
+      selectTabAgentTypesByTabId(
+        { 'tab-1:leaf-a': entry({ agentType: 'claude' }) },
+        { 'tab-1': { root: null, activeLeafId: null, expandedLeafId: null } }
+      )
+    ).toEqual({ 'tab-1': 'claude' })
+  })
+
+  it('resolves the active leaf through nested splits and ignores expanded siblings', () => {
+    const layout: TerminalLayoutSnapshot = {
+      root: {
+        type: 'split',
+        direction: 'horizontal',
+        first: { type: 'leaf', leafId: 'leaf-a' },
+        second: {
+          type: 'split',
+          direction: 'vertical',
+          first: { type: 'leaf', leafId: 'leaf-b' },
+          second: { type: 'leaf', leafId: 'leaf-c' }
+        }
+      },
+      activeLeafId: 'leaf-c',
+      expandedLeafId: 'leaf-a'
+    }
+
+    expect(
+      selectTabAgentTypesByTabId(
+        {
+          'tab-1:leaf-a': entry({ agentType: 'claude' }),
+          'tab-1:leaf-c': entry({ agentType: 'codex' })
+        },
+        { 'tab-1': layout }
+      )
+    ).toEqual({ 'tab-1': 'codex' })
   })
 
   it('stays shallow-equal across a working<->idle status flip (no re-render)', () => {

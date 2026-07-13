@@ -1,4 +1,48 @@
-import type { TuiAgent } from '../../../../shared/types'
+import type {
+  TerminalLayoutSnapshot,
+  TerminalPaneLayoutNode,
+  TuiAgent
+} from '../../../../shared/types'
+
+function layoutNodeContainsLeaf(node: TerminalPaneLayoutNode | null, leafId: string): boolean {
+  if (!node) {
+    return false
+  }
+  if (node.type === 'leaf') {
+    return node.leafId === leafId
+  }
+  return layoutNodeContainsLeaf(node.first, leafId) || layoutNodeContainsLeaf(node.second, leafId)
+}
+
+export function resolveNativeChatActiveLayoutLeafId(
+  layout: TerminalLayoutSnapshot | null | undefined
+): string | null {
+  if (!layout) {
+    return null
+  }
+  if (layout.activeLeafId) {
+    // Why: close/hydration races can leave activeLeafId one snapshot behind
+    // the topology; stale pane evidence must not route chat to a removed leaf.
+    return !layout.root || layoutNodeContainsLeaf(layout.root, layout.activeLeafId)
+      ? layout.activeLeafId
+      : null
+  }
+  return layout.root?.type === 'leaf' ? layout.root.leafId : null
+}
+
+export function isNativeChatTabWideFallbackSafe(
+  layout: TerminalLayoutSnapshot | null | undefined
+): boolean {
+  if (!layout?.root) {
+    return true
+  }
+  if (layout.root.type === 'split') {
+    return false
+  }
+  // Why: a stale active id means the single-leaf collapse is not yet settled;
+  // tab-wide launch/title evidence could still describe the removed sibling.
+  return !layout.activeLeafId || layout.activeLeafId === layout.root.leafId
+}
 
 export function nativeChatLaunchAgentForLeaf(args: {
   launchAgent?: TuiAgent | null

@@ -82,7 +82,7 @@ import { shouldShowWindowsShellMenu } from './windows-shell-menu-visibility'
 import { canToggleNativeChat } from '../native-chat/native-chat-availability'
 import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
 import {
-  selectSplitTerminalTabsById,
+  selectNativeChatTabWideFallbackUnsafeTabsById,
   selectTabAgentTypesByTabId
 } from './tab-agent-types-by-tab-id'
 import { resolveCommittedTitleAgentType } from '@/lib/pane-agent-evidence'
@@ -464,8 +464,8 @@ function TabBarInner({
       selectTabAgentTypesByTabId(s.agentStatusByPaneKey ?? {}, s.terminalLayoutsByTabId)
     )
   )
-  const splitTerminalTabsById = useAppStore(
-    useShallow((s) => selectSplitTerminalTabsById(s.terminalLayoutsByTabId))
+  const nativeChatTabWideFallbackUnsafeTabsById = useAppStore(
+    useShallow((s) => selectNativeChatTabWideFallbackUnsafeTabsById(s.terminalLayoutsByTabId))
   )
   const nativeChatEnabled = useAppStore((s) => s.settings?.experimentalNativeChat === true)
   const nativeChatTranscriptIsLocalReadable = useAppStore((s) =>
@@ -1124,15 +1124,16 @@ function TabBarInner({
                 // agent-status pane keys are `${terminalTab.id}:${leafId}`, and
                 // the unified tab id can differ from it.
                 const detectedAgent = tabAgentTypesByTabId[terminalTab.id] ?? null
-                const isSplitTerminalTab = splitTerminalTabsById[terminalTab.id] === true
+                const tabWideFallbackSafe =
+                  nativeChatTabWideFallbackUnsafeTabsById[terminalTab.id] !== true
                 const canToggleViewMode =
                   unifiedTabForItem !== undefined &&
                   canToggleNativeChat({
                     experimentalNativeChatEnabled: nativeChatEnabled,
                     contentType: 'terminal',
-                    launchAgent: isSplitTerminalTab ? null : terminalTab.launchAgent,
+                    launchAgent: tabWideFallbackSafe ? terminalTab.launchAgent : null,
                     detectedAgent,
-                    resolvedAgent: isSplitTerminalTab ? null : resolvedAgent,
+                    resolvedAgent: tabWideFallbackSafe ? resolvedAgent : null,
                     nativeChatTranscriptIsLocalReadable,
                     isChatViewMode: unifiedTabForItem.viewMode === 'chat'
                   })

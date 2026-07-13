@@ -1,18 +1,9 @@
 import type { AgentStatusEntry, AgentType } from '../../../../shared/agent-status-types'
 import type { TerminalLayoutSnapshot } from '../../../../shared/types'
-
-function layoutContainsLeaf(layout: TerminalLayoutSnapshot, leafId: string): boolean {
-  const visit = (node: TerminalLayoutSnapshot['root']): boolean => {
-    if (!node) {
-      return false
-    }
-    if (node.type === 'leaf') {
-      return node.leafId === leafId
-    }
-    return visit(node.first) || visit(node.second)
-  }
-  return layout.root === null || visit(layout.root)
-}
+import {
+  isNativeChatTabWideFallbackSafe,
+  resolveNativeChatActiveLayoutLeafId
+} from '../native-chat/native-chat-leaf-routing'
 
 /**
  * Project `agentStatusByPaneKey` down to the stable `{ terminalTabId: agentType }`
@@ -40,10 +31,14 @@ export function selectTabAgentTypesByTabId(
   // Why: the tab action opens chat on the active split leaf, so that leaf's
   // identity must outrank object insertion order from unrelated siblings.
   for (const [tabId, layout] of Object.entries(terminalLayoutsByTabId)) {
+    // A rootless snapshot with no active leaf is hydration absence, not a
+    // topology decision; preserve the legacy tab lookup until a leaf exists.
+    if (!layout.root && !layout.activeLeafId) {
+      continue
+    }
     claimed.add(tabId)
-    const activeLeafId =
-      layout.activeLeafId ?? (layout.root?.type === 'leaf' ? layout.root.leafId : null)
-    if (!activeLeafId || !layoutContainsLeaf(layout, activeLeafId)) {
+    const activeLeafId = resolveNativeChatActiveLayoutLeafId(layout)
+    if (!activeLeafId) {
       continue
     }
     const entry = agentStatusByPaneKey[`${tabId}:${activeLeafId}`]
@@ -68,14 +63,14 @@ export function selectTabAgentTypesByTabId(
   return byTabId
 }
 
-export function selectSplitTerminalTabsById(
+export function selectNativeChatTabWideFallbackUnsafeTabsById(
   terminalLayoutsByTabId: Record<string, TerminalLayoutSnapshot>
 ): Record<string, true> {
-  const splitTabs: Record<string, true> = {}
+  const unsafeTabs: Record<string, true> = {}
   for (const [tabId, layout] of Object.entries(terminalLayoutsByTabId)) {
-    if (layout.root?.type === 'split') {
-      splitTabs[tabId] = true
+    if (!isNativeChatTabWideFallbackSafe(layout)) {
+      unsafeTabs[tabId] = true
     }
   }
-  return splitTabs
+  return unsafeTabs
 }
