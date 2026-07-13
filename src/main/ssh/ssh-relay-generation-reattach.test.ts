@@ -122,7 +122,7 @@ describe('SSH relay generation reattach', () => {
     expect(attachForReconnect).not.toHaveBeenCalled()
     expect(mockStore.markSshRemotePtyLease).toHaveBeenCalledWith(
       'target-1',
-      'pty-recycled',
+      'ssh:target-1@@relay-old@@pty-recycled',
       'expired'
     )
     expect(mockWindow.webContents.send).toHaveBeenCalledWith('pty:exit', {

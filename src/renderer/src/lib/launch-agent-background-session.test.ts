@@ -476,7 +476,7 @@ describe('launchAgentBackgroundSession', () => {
     expect(mockUpdateTabPtyId).not.toHaveBeenCalled()
   })
 
-  it('retains exact PTY retry ownership when cleanup after local spawn fails', async () => {
+  it('delegates exact PTY retry ownership to main when cleanup after local spawn fails', async () => {
     mockRegisterEagerPtyBuffer.mockImplementationOnce(() => {
       throw new Error('subscription setup failed')
     })
@@ -496,7 +496,7 @@ describe('launchAgentBackgroundSession', () => {
 
     expect(mockKill).toHaveBeenCalledWith('pty-1', { expectedTabId: 'tab-1' })
     retryRetainedPtyKills()
-    await vi.waitFor(() => expect(mockKill).toHaveBeenCalledTimes(2))
+    expect(mockKill).toHaveBeenCalledTimes(1)
     expect(mockCloseTab).toHaveBeenCalledWith('tab-1', { recordInteraction: false })
   })
 
@@ -809,9 +809,8 @@ describe('launchAgentBackgroundSession', () => {
     })
     mockRuntimeEnvironmentSubscribe.mockRejectedValueOnce(new Error('subscription failed'))
     const { launchAgentBackgroundSession } = await import('./launch-agent-background-session')
-    const { retryRetainedRuntimeTerminalCloses } = await import(
-      './runtime-terminal-close-retry-ownership'
-    )
+    const { retryRetainedRuntimeTerminalCloses } =
+      await import('./runtime-terminal-close-retry-ownership')
 
     await expect(
       launchAgentBackgroundSession({
@@ -828,7 +827,7 @@ describe('launchAgentBackgroundSession', () => {
       timeoutMs: undefined
     })
     retryRetainedRuntimeTerminalCloses()
-    await vi.waitFor(() => expect(closeAttempts).toBe(2))
+    expect(closeAttempts).toBe(1)
     expect(state.clearTabPtyId).toHaveBeenCalledWith('tab-1', 'remote:env-1@@terminal-1')
     expect(state.clearAgentLaunchConfig).toHaveBeenCalledWith(expect.stringMatching(/^tab-1:/))
     expect(mockCloseTab).toHaveBeenCalledWith('tab-1', { recordInteraction: false })
