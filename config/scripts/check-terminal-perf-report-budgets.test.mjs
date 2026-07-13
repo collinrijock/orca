@@ -107,6 +107,31 @@ describe('check-terminal-perf-report-budgets', () => {
     expect(result.stderr).toContain('renderer dropped backlogs 1 exceeded budget 0')
   })
 
+  it('applies the under-load timer-drift budget to multi-pane redraw scenarios', () => {
+    const passPath = writeReport(
+      ['panes=50', 'frames=60', 'median=12.0ms', 'worst=40.0ms', 'maxTimerDrift=1510.0ms'].join(
+        ' '
+      ),
+      'opencode-scale-same-workspace-50'
+    )
+
+    const passOutput = execFileSync(process.execPath, [scriptPath, passPath], {
+      cwd: process.cwd(),
+      encoding: 'utf8'
+    })
+    expect(passOutput).toContain('Terminal perf budget check passed for 1 annotation row(s).')
+
+    const failPath = writeReport(
+      ['panes=50', 'frames=60', 'median=12.0ms', 'worst=40.0ms', 'maxTimerDrift=2501.0ms'].join(
+        ' '
+      ),
+      'opencode-cross-workspace-typing'
+    )
+    const failResult = runChecker(failPath)
+    expect(failResult.status).toBe(1)
+    expect(failResult.stderr).toContain('timer drift 2501ms exceeded budget 2500ms')
+  })
+
   it('fails malformed metric values instead of treating them as absent', () => {
     const reportPath = writeReport('panes=1 median=999 worst=abcms rendererQueuedChars=wat')
 

@@ -251,8 +251,10 @@ async function waitForRestoredViewportAnchor(
   target: ViewportAnchor,
   tolerancePx = 80
 ): Promise<ViewportAnchor> {
-  const startedAt = Date.now()
+  // Why: waitForStableViewportAnchor can take up to 15s; start the restoration
+  // poll after it settles so a slow first settle does not skip the 10s window.
   let lastAnchor = await waitForStableViewportAnchor(page)
+  const startedAt = Date.now()
   while (Date.now() - startedAt < 10_000) {
     if (lastAnchor.key === target.key && Math.abs(lastAnchor.top - target.top) < tolerancePx) {
       return lastAnchor
