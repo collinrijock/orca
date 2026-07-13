@@ -3687,7 +3687,8 @@
           "assertions": [
             "a reused live daemon session rejects attach and kill from a replacement pane identity",
             "native immediate force-kill failure preserves the live daemon session for retry",
-            "same-id create waits for physical exit proof without disposing the terminating session owner"
+            "same-id create waits for physical exit proof without disposing the terminating session owner",
+            "the host publishes Session ownership and attaches its client before buffered data and exit flush synchronously on subscription"
           ]
         },
         {
@@ -4193,6 +4194,15 @@
           "result": "passed",
           "durationSeconds": 10.49,
           "summary": "1800 tests passed with exact same-id startup replay admission, retained pre-handler/liveness bounds, and cross-provider retry identity preserved."
+        },
+        {
+          "date": "2026-07-12",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/providers/local-pty-provider.test.ts src/main/daemon/daemon-pty-adapter.test.ts src/main/daemon/daemon-pty-router.test.ts src/main/daemon/degraded-daemon-pty-provider.test.ts src/main/daemon/session.test.ts src/main/daemon/pty-subprocess.test.ts src/main/daemon/terminal-host.test.ts src/main/daemon/terminal-host-session-reaping-leak.test.ts src/main/daemon/daemon-server.test.ts src/main/ipc/pty.test.ts src/main/ipc/runtime-terminal-close-retry-owner.test.ts src/main/runtime/orca-runtime.test.ts",
+          "result": "passed",
+          "durationSeconds": 9.06,
+          "summary": "1443 tests passed: two-phase Session startup delivered synchronous buffered BOOT output and exit to the published owner/client, reaped the exact map entry, and allowed a clean same-ID replacement."
         }
       ],
       "runtimeBudget": {

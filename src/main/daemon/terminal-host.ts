@@ -136,6 +136,7 @@ export class TerminalHost {
       subprocess,
       shellReadySupported,
       historySeed: opts.historySeed,
+      deferSubprocessSubscription: true,
       // Why: reap the dead session (dispose emulator + drop from the map) the
       // moment its subprocess exits, instead of retaining it for the daemon's
       // lifetime. Nothing reads a dead session's emulator (getSnapshot/
@@ -149,6 +150,7 @@ export class TerminalHost {
     this.sessions.set(opts.sessionId, session)
 
     const token = session.attachClient(opts.streamClient)
+    session.startSubprocessSubscription()
 
     if (opts.command && !subprocess.startupCommandDeliveredInShellArgs) {
       // Why: startup commands must run inside the long-lived interactive shell

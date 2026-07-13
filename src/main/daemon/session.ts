@@ -93,6 +93,9 @@ export type SessionOptions = {
   shellReadyTimeoutMs?: number
   historySeed?: string
   scrollback?: number
+  // Why: TerminalHost must publish the Session and attach its first client
+  // before node-pty flushes buffered data/exit synchronously on subscription.
+  deferSubprocessSubscription?: boolean
   // Why: fired once the session reaches a terminal state (natural exit or
   // kill-timeout force-dispose) so the owner (TerminalHost) can reap it —
   // dispose the headless emulator and drop it from its session map. Without a
@@ -141,6 +144,7 @@ export class Session {
   private readonly _historySeeded: boolean | undefined
   private readonly exitProofPromise: Promise<void>
   private resolveExitProof!: () => void
+  private subprocessSubscriptionStarted = false
 
   constructor(opts: SessionOptions) {
     this.sessionId = opts.sessionId
@@ -179,6 +183,16 @@ export class Session {
     }
 
     this.postReadyFlushGate = new PostReadyFlushGate(() => this.flushPreReadyQueue())
+    if (!opts.deferSubprocessSubscription) {
+      this.startSubprocessSubscription()
+    }
+  }
+
+  startSubprocessSubscription(): void {
+    if (this.subprocessSubscriptionStarted) {
+      return
+    }
+    this.subprocessSubscriptionStarted = true
     this.subprocess.onData((data) => this.handleSubprocessData(data))
     this.subprocess.onExit((code) => this.handleSubprocessExit(code))
   }

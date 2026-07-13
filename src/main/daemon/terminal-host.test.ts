@@ -156,6 +156,41 @@ describe('TerminalHost', () => {
       expect(spawnFn).toHaveBeenCalledTimes(2)
     })
 
+    it('publishes ownership before buffered data and exit flush on subscription', async () => {
+      const buffered = createMockSubprocess()
+      buffered.onData = vi.fn((callback) => callback('BOOT'))
+      buffered.onExit = vi.fn((callback) => callback(0))
+      const replacement = createMockSubprocess()
+      spawnFn = vi.fn().mockReturnValueOnce(buffered).mockReturnValue(replacement)
+      host.dispose()
+      host = new TerminalHost({ spawnSubprocess: spawnFn as MockSpawnFn })
+      const onData = vi.fn()
+      const onExit = vi.fn()
+
+      const first = await host.createOrAttach({
+        sessionId: 'session-1',
+        cols: 80,
+        rows: 24,
+        streamClient: { onData, onExit }
+      })
+
+      expect(first).toMatchObject({ isNew: true, snapshot: null })
+      expect(onData).toHaveBeenCalledWith('BOOT')
+      expect(onExit).toHaveBeenCalledWith(0, first.sessionGeneration)
+      expect(host.listSessions()).toHaveLength(0)
+
+      await expect(
+        host.createOrAttach({
+          sessionId: 'session-1',
+          cols: 80,
+          rows: 24,
+          streamClient: { onData: vi.fn(), onExit: vi.fn() }
+        })
+      ).resolves.toMatchObject({ isNew: true })
+      expect(host.listSessions()).toHaveLength(1)
+      expect(spawnFn).toHaveBeenCalledTimes(2)
+    })
+
     it('returns snapshot when attaching to existing session', async () => {
       await host.createOrAttach({
         sessionId: 'session-1',
