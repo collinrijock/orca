@@ -289,6 +289,45 @@ describe('createPtySizeReassertion', () => {
     expect(forwardResize).toHaveBeenCalledWith(145, 78)
   })
 
+  it('keeps a single read in flight and converges when the grid oscillates across resolves', async () => {
+    // Why: a flapping layout (competing fitters) must not amplify into more
+    // than one concurrent readback, and the re-run chain must stop as soon as
+    // the grid holds still for one read.
+    const grids = [
+      { cols: 80, rows: 24 },
+      { cols: 145, rows: 78 },
+      { cols: 80, rows: 24 },
+      { cols: 100, rows: 40 }
+    ]
+    let readCount = 0
+    let dims = grids[0]
+    const getAppliedSize = vi.fn(async () => {
+      readCount += 1
+      // The grid moves during each of the first three flights, then settles.
+      dims = grids[Math.min(readCount, grids.length - 1)]
+      return { cols: 100, rows: 40 }
+    })
+    const forwardResize = vi.fn()
+    const reassertion = createPtySizeReassertion({
+      isDisposed: () => false,
+      getPtyId: () => 'pty-1',
+      isRemotePtyId: () => false,
+      shouldSuppressDesktopResize: () => false,
+      fit: vi.fn(),
+      getTerminalDimensions: () => dims,
+      getAppliedSize,
+      forwardResize
+    })
+
+    reassertion.request({ fit: false })
+    await flushAsyncTicks(20)
+
+    // One re-run per moved-grid flight, then convergence: applied 100x40
+    // matches the settled grid, so nothing is forwarded.
+    expect(getAppliedSize).toHaveBeenCalledTimes(4)
+    expect(forwardResize).not.toHaveBeenCalled()
+  })
+
   it('does not forward a stale target when the readback fails after a mid-flight refit', async () => {
     let dims = { cols: 80, rows: 24 }
     let rejectRead: (reason: Error) => void = () => {}
