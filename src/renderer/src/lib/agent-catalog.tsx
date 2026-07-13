@@ -14,6 +14,7 @@ import {
 } from './agent-icon-glyphs'
 import { translate } from '@/i18n/i18n'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
+import { AGENT_FAVICON_ASSETS } from './agent-favicon-assets'
 
 export type AgentCatalogEntry = {
   id: TuiAgent
@@ -340,10 +341,14 @@ export function AgentIcon({
     return <OpenCodeIcon size={size} />
   }
   const catalogEntry = getAgentCatalog().find((a) => a.id === agent)
-  if (catalogEntry?.iconUrl) {
+  // Why: prefer the favicon bundled at build time so the icon renders without a
+  // live network request — Google's favicon service is unreachable in some
+  // regions and offline, which left these icons broken (#8451).
+  const bundledFaviconUrl = AGENT_FAVICON_ASSETS[agent]
+  if (catalogEntry?.iconUrl || bundledFaviconUrl) {
     return (
       <img
-        src={catalogEntry.iconUrl}
+        src={catalogEntry?.iconUrl ?? bundledFaviconUrl}
         width={size}
         height={size}
         alt=""
@@ -352,8 +357,9 @@ export function AgentIcon({
     )
   }
   if (catalogEntry?.faviconDomain) {
-    // Why: agents without a published SVG icon use their site favicon via
-    // Google's favicon service — same source the README uses for the agent badge list.
+    // Why: agents without a published SVG icon or bundled favicon fall back to
+    // their site favicon via Google's favicon service — same source the README
+    // uses for the agent badge list.
     return (
       <img
         src={`https://www.google.com/s2/favicons?domain=${catalogEntry.faviconDomain}&sz=64`}

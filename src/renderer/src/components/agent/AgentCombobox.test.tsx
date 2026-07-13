@@ -37,4 +37,14 @@ describe('AgentCombobox', () => {
     expect(markup).not.toContain('https://www.google.com/s2/favicons')
     expect(markup).not.toContain('<img')
   })
+
+  it('renders bundled favicons for favicon-domain agents instead of the remote Google service', () => {
+    // Why: these icons previously loaded from Google's favicon service, which is
+    // unreachable in some regions/offline and left them broken (#8451).
+    for (const agent of ['cursor', 'gemini', 'kimi', 'devin'] as const) {
+      const markup = renderToStaticMarkup(<AgentIcon agent={agent} />)
+      expect(markup).toContain(`/resources/agent-icons/${agent}.png`)
+      expect(markup).not.toContain('https://www.google.com/s2/favicons')
+    }
+  })
 })
