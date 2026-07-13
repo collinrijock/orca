@@ -44,6 +44,11 @@ type ColdRestorePayload = {
   oscLinks?: TerminalOscLinkRange[]
 }
 
+type AppliedSizeReadback =
+  | { status: 'alive'; size: { cols: number; rows: number } }
+  | { status: 'absent' }
+  | { status: 'unknown' }
+
 function getRecoveredHistorySeed(restoreInfo: ColdRestoreInfo): string | null {
   // Why: alt-screen snapshots represent the TUI buffer; prefer its normal
   // scrollback so a dead TUI is not revived as the fresh shell's active screen.
@@ -138,6 +143,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
   // resume died with the connection. Owe those sessions a resume on the next
   // connect; the daemon's 5s failsafe covers the window in between.
   private producerResumesOwedOnReconnect = new Set<string>()
+  private pendingExitProofs = new Map<string, number>()
   private static CHECKPOINT_INTERVAL_MS = 5_000
   // Why: a streaming session (build logs, `yes`) re-triggers a full multi-MB
   // snapshot checkpoint on every 5s tick via pending-buffer overflow or the
@@ -635,14 +641,19 @@ export class DaemonPtyAdapter implements IPtyProvider {
   // and re-assert. Null (RPC failure / unknown session) means "cannot confirm",
   // which the renderer treats as a cue to re-forward once.
   async getAppliedSize(id: string): Promise<{ cols: number; rows: number } | null> {
+    const readback = await this.readAppliedSize(id)
+    return readback.status === 'alive' ? readback.size : null
+  }
+
+  private async readAppliedSize(id: string): Promise<AppliedSizeReadback> {
     try {
       const result = await this.client.request<{ size: { cols: number; rows: number } | null }>(
         'getSize',
         { sessionId: id }
       )
-      return result.size ?? null
+      return result.size ? { status: 'alive', size: result.size } : { status: 'absent' }
     } catch {
-      return null
+      return { status: 'unknown' }
     }
   }
 
@@ -800,6 +811,16 @@ export class DaemonPtyAdapter implements IPtyProvider {
         this.activeSessionIds.delete(session.sessionId)
       }
     }
+    const liveIds = new Set(
+      result.sessions.filter((session) => session.isAlive).map((session) => session.sessionId)
+    )
+    for (const [id, code] of this.pendingExitProofs) {
+      if (liveIds.has(id)) {
+        this.pendingExitProofs.delete(id)
+      } else {
+        this.finalizeExitEvent(id, code)
+      }
+    }
     return result.sessions
       .filter((s) => s.isAlive)
       .map((s) => ({
@@ -842,6 +863,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
     this.sessionsNeedingFullCheckpoint.clear()
     this.pausedProducerSessionIds.clear()
     this.producerResumesOwedOnReconnect.clear()
+    this.pendingExitProofs.clear()
     this.stopCheckpointTimer()
     for (const id of ids) {
       this.coldRestoreCache.delete(id)
@@ -917,6 +939,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
     this.coldRestoreCache.clear()
     this.pausedProducerSessionIds.clear()
     this.producerResumesOwedOnReconnect.clear()
+    this.pendingExitProofs.clear()
     this.removeEventListener?.()
     this.removeEventListener = null
     // Why: final checkpoints are written daemon-side in TerminalHost.dispose()
@@ -960,6 +983,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
     }
     this.pausedProducerSessionIds.clear()
     this.producerResumesOwedOnReconnect.clear()
+    this.pendingExitProofs.clear()
     this.removeEventListener?.()
     this.removeEventListener = null
     this.client.disconnect()
@@ -1382,9 +1406,26 @@ export class DaemonPtyAdapter implements IPtyProvider {
     // Why: control and stream sockets can reorder a replacement create reply
     // ahead of the old process's queued exit. Targeted liveness proof prevents
     // that stale exit from deleting the replacement's same-id ownership.
-    if ((await this.getAppliedSize(sessionId)) !== null) {
+    const readback = await this.readAppliedSize(sessionId)
+    if (readback.status === 'alive') {
       return
     }
+    if (readback.status === 'unknown') {
+      if (!this.activeSessionIds.has(sessionId)) {
+        this.finalizeExitEvent(sessionId, code)
+        return
+      }
+      // Why: a failed control-socket probe is not absence proof. Retain the
+      // active id until authoritative listing; this also bounds retention to
+      // the adapter's already-owned sessions instead of arbitrary exit ids.
+      this.pendingExitProofs.set(sessionId, code)
+      return
+    }
+    this.finalizeExitEvent(sessionId, code)
+  }
+
+  private finalizeExitEvent(sessionId: string, code: number): void {
+    this.pendingExitProofs.delete(sessionId)
     this.activeSessionIds.delete(sessionId)
     this.dirtySessionVersions.delete(sessionId)
     this.pausedProducerSessionIds.delete(sessionId)

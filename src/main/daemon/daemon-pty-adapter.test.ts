@@ -562,15 +562,49 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       const exits: { id: string; code: number }[] = []
       adapter.onExit((payload) => exits.push(payload))
       const { id } = await adapter.spawn({ sessionId: 'same-id', cols: 80, rows: 24 })
-      vi.spyOn(adapter, 'getAppliedSize').mockResolvedValueOnce({ cols: 80, rows: 24 })
       const internals = adapter as unknown as {
+        readAppliedSize(sessionId: string): Promise<{
+          status: 'alive' | 'absent' | 'unknown'
+          size?: { cols: number; rows: number }
+        }>
         handleExitEvent(sessionId: string, code: number): Promise<void>
       }
+      vi.spyOn(internals, 'readAppliedSize').mockResolvedValueOnce({
+        status: 'alive',
+        size: { cols: 80, rows: 24 }
+      })
 
       await internals.handleExitEvent(id, 0)
 
       expect(adapter.hasPty(id)).toBe(true)
       expect(exits).toEqual([])
+    })
+
+    it('retains an unknown exit until authoritative listing reconciles it', async () => {
+      const exits: { id: string; code: number }[] = []
+      adapter.onExit((payload) => exits.push(payload))
+      const { id } = await adapter.spawn({ sessionId: 'same-id', cols: 80, rows: 24 })
+      const internals = adapter as unknown as {
+        readAppliedSize(sessionId: string): Promise<{ status: 'alive' | 'absent' | 'unknown' }>
+        handleExitEvent(sessionId: string, code: number): Promise<void>
+        pendingExitProofs: Map<string, number>
+        activeSessionIds: Set<string>
+      }
+      vi.spyOn(internals, 'readAppliedSize').mockResolvedValueOnce({ status: 'unknown' })
+
+      await internals.handleExitEvent(id, 7)
+
+      expect(adapter.hasPty(id)).toBe(true)
+      expect(internals.pendingExitProofs.get(id)).toBe(7)
+      expect(exits).toEqual([])
+
+      await adapter.listProcesses()
+      expect(internals.pendingExitProofs.has(id)).toBe(false)
+
+      internals.activeSessionIds.add('confirmed-absent')
+      internals.pendingExitProofs.set('confirmed-absent', 9)
+      await adapter.listProcesses()
+      expect(exits).toContainEqual({ id: 'confirmed-absent', code: 9 })
     })
   })
 
