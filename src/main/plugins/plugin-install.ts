@@ -1,4 +1,4 @@
-import { mkdtemp, realpath, rm } from 'node:fs/promises'
+import { mkdtemp, readdir, realpath, rm } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { isAbsolute, join, relative, resolve, sep } from 'node:path'
@@ -8,11 +8,19 @@ import {
 } from '../../shared/plugins/plugin-manifest'
 import {
   isAllowedPluginGitUrl,
+  pluginInstallSourceSchema,
   removePluginLock
 } from '../../shared/plugins/plugin-install-lockfile'
 import { readPluginLockfile, writePluginLockfile } from './plugin-install-lockfile-store'
-import { installStagedPluginTree, type PluginInstallResult } from './plugin-install-staging'
+import {
+  inspectPluginInstallTree,
+  installStagedPluginTree,
+  type PluginInstallResult
+} from './plugin-install-staging'
 import { checkoutPluginGitSource } from './plugin-git-repository'
+import { readPluginCurrentPointer } from './plugin-current-pointer'
+import { readPluginInstallProvenance } from './plugin-install-provenance'
+import { publishPluginInstall } from './plugin-install-publication'
 
 export type { PluginInstallResult } from './plugin-install-staging'
 
@@ -105,6 +113,123 @@ export async function installPluginFromGit(input: {
       return { ok: false, error: error instanceof Error ? error.message : String(error) }
     } finally {
       await rm(stagingDir, { recursive: true, force: true })
+    }
+  })
+}
+
+export async function installPluginFromMarketplace(input: {
+  pluginsDir: string
+  hostVersion: string
+  expectedPluginKey: string
+  expectedResolvedCommit: string
+  marketplace: { url: string; ref: string; resolvedCommit: string }
+  plugin: { url: string; ref: string }
+}): Promise<PluginInstallResult> {
+  const source = pluginInstallSourceSchema.parse({
+    kind: 'marketplace',
+    marketplace: input.marketplace,
+    plugin: input.plugin
+  })
+  if (!isQualifiedPluginKey(input.expectedPluginKey)) {
+    return { ok: false, error: 'invalid marketplace plugin identity' }
+  }
+  if (!/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/.test(input.expectedResolvedCommit)) {
+    return { ok: false, error: 'invalid previewed plugin commit' }
+  }
+  return serializePluginMutation(input.pluginsDir, async () => {
+    const stagingDir = await mkdtemp(join(tmpdir(), 'orca-plugin-marketplace-install-'))
+    try {
+      const resolvedCommit = await checkoutPluginGitSource({
+        url: input.plugin.url,
+        ref: input.plugin.ref,
+        destination: stagingDir,
+        workingDirectory: tmpdir()
+      })
+      if (resolvedCommit !== input.expectedResolvedCommit) {
+        return { ok: false, error: 'plugin source changed after preview; review the update again' }
+      }
+      return await installStagedPluginTree({
+        pluginsDir: input.pluginsDir,
+        stagingDir,
+        hostVersion: input.hostVersion,
+        source,
+        resolvedCommit,
+        expectedPluginKey: input.expectedPluginKey
+      })
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : String(error) }
+    } finally {
+      await rm(stagingDir, { recursive: true, force: true })
+    }
+  })
+}
+
+/** Restores the single retained immutable predecessor. The old consent
+ * fingerprint becomes current again, so enablement still fails closed until
+ * the user has approved those exact bytes. */
+export async function rollbackInstalledPlugin(input: {
+  pluginsDir: string
+  pluginKey: string
+  hostVersion: string
+}): Promise<PluginInstallResult> {
+  if (!isQualifiedPluginKey(input.pluginKey)) {
+    return { ok: false, error: 'invalid qualified plugin key' }
+  }
+  return serializePluginMutation(input.pluginsDir, async () => {
+    const pluginDir = join(input.pluginsDir, input.pluginKey)
+    const currentContentHash = await readPluginCurrentPointer(pluginDir).catch(() => null)
+    if (!currentContentHash) {
+      return { ok: false, error: 'installed plugin has no current version' }
+    }
+    const candidates = (await readdir(pluginDir, { withFileTypes: true }).catch(() => []))
+      .filter(
+        (entry) =>
+          entry.isDirectory() &&
+          /^(?:[0-9a-f]{32}|[0-9a-f]{64})$/.test(entry.name) &&
+          entry.name !== currentContentHash
+      )
+      .map((entry) => entry.name)
+    if (candidates.length !== 1) {
+      return {
+        ok: false,
+        error:
+          candidates.length === 0
+            ? 'no rollback version is available'
+            : 'rollback state is ambiguous'
+      }
+    }
+    const contentHash = candidates[0]!
+    const provenance = await readPluginInstallProvenance(pluginDir, contentHash)
+    if (
+      !provenance ||
+      provenance.pluginKey !== input.pluginKey ||
+      provenance.contentHash !== contentHash
+    ) {
+      return { ok: false, error: 'rollback version has no valid install provenance' }
+    }
+    const inspection = await inspectPluginInstallTree({
+      rootDir: join(pluginDir, contentHash),
+      hostVersion: input.hostVersion,
+      expectedPluginKey: input.pluginKey
+    })
+    if (!inspection.ok || inspection.contentHash !== contentHash) {
+      return {
+        ok: false,
+        error: inspection.ok ? 'rollback version failed integrity verification' : inspection.error
+      }
+    }
+    try {
+      await publishPluginInstall({ pluginsDir: input.pluginsDir, pluginDir, entry: provenance })
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : String(error) }
+    }
+    return {
+      ok: true,
+      pluginKey: input.pluginKey,
+      version: inspection.manifest.version,
+      contentHash,
+      consentFingerprint: provenance.consentFingerprint,
+      resolvedCommit: provenance.resolvedCommit
     }
   })
 }

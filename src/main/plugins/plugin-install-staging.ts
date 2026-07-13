@@ -33,6 +33,16 @@ export type PluginInstallResult =
     }
   | { ok: false; error: string }
 
+export type PluginInstallInspection =
+  | {
+      ok: true
+      manifest: PluginManifest
+      pluginKey: string
+      contentHash: string
+      consentFingerprint: string
+    }
+  | { ok: false; error: string }
+
 async function validatePluginInstallTree(
   rootDir: string,
   manifest: PluginManifest
@@ -67,6 +77,41 @@ async function readInstallManifest(
   return { ok: true, manifest: parsed.manifest }
 }
 
+/** Validates and hashes a source tree without publishing it. Marketplace
+ * previews use this exact path so the reviewed bytes match install policy. */
+export async function inspectPluginInstallTree(input: {
+  rootDir: string
+  hostVersion: string
+  expectedPluginKey?: string
+}): Promise<PluginInstallInspection> {
+  const sourceManifest = await readInstallManifest(input.rootDir, input.hostVersion)
+  if (!sourceManifest.ok) {
+    return sourceManifest
+  }
+  const pluginKey = qualifiedPluginKey(sourceManifest.manifest)
+  if (input.expectedPluginKey && pluginKey !== input.expectedPluginKey) {
+    return {
+      ok: false,
+      error: `plugin manifest identity ${pluginKey} does not match marketplace listing ${input.expectedPluginKey}`
+    }
+  }
+  const declaredArtifacts = await validatePluginInstallTree(input.rootDir, sourceManifest.manifest)
+  if (!declaredArtifacts.ok) {
+    return { ok: false, error: `invalid declared artifact: ${declaredArtifacts.error}` }
+  }
+  const treeHash = await hashPluginTree(input.rootDir)
+  if (!treeHash.ok) {
+    return { ok: false, error: treeHash.error }
+  }
+  return {
+    ok: true,
+    manifest: sourceManifest.manifest,
+    pluginKey,
+    contentHash: treeHash.hash,
+    consentFingerprint: fingerprintPluginConsent(sourceManifest.manifest, treeHash.hash)
+  }
+}
+
 /** Installs a validated staging tree into the hash-addressed layout. */
 export async function installStagedPluginTree(input: {
   pluginsDir: string
@@ -74,24 +119,20 @@ export async function installStagedPluginTree(input: {
   hostVersion: string
   source: PluginInstallSource
   resolvedCommit: string | null
+  expectedPluginKey?: string
 }): Promise<PluginInstallResult> {
-  const sourceManifest = await readInstallManifest(input.stagingDir, input.hostVersion)
-  if (!sourceManifest.ok) {
-    return sourceManifest
+  const sourceInspection = await inspectPluginInstallTree({
+    rootDir: input.stagingDir,
+    hostVersion: input.hostVersion,
+    ...(input.expectedPluginKey ? { expectedPluginKey: input.expectedPluginKey } : {})
+  })
+  if (!sourceInspection.ok) {
+    return sourceInspection
   }
-  let manifest = sourceManifest.manifest
-  const declaredArtifacts = await validatePluginInstallTree(input.stagingDir, manifest)
-  if (!declaredArtifacts.ok) {
-    return { ok: false, error: `invalid declared artifact: ${declaredArtifacts.error}` }
-  }
-  // Hash before copy: also enforces the symlink/entry-count/size limits.
-  const treeHash = await hashPluginTree(input.stagingDir)
-  if (!treeHash.ok) {
-    return { ok: false, error: treeHash.error }
-  }
-  const pluginKey = qualifiedPluginKey(manifest)
+  let manifest = sourceInspection.manifest
+  const pluginKey = sourceInspection.pluginKey
   const pluginDir = join(input.pluginsDir, pluginKey)
-  const versionDir = join(pluginDir, treeHash.hash)
+  const versionDir = join(pluginDir, sourceInspection.contentHash)
   if (!existsSync(versionDir)) {
     const stagedVersionDir = `${versionDir}.staging`
     try {
@@ -111,7 +152,7 @@ export async function installStagedPluginTree(input: {
         }
       })
       const copiedHash = await hashPluginTree(stagedVersionDir)
-      if (!copiedHash.ok || copiedHash.hash !== treeHash.hash) {
+      if (!copiedHash.ok || copiedHash.hash !== sourceInspection.contentHash) {
         return {
           ok: false,
           error: copiedHash.ok
@@ -141,7 +182,7 @@ export async function installStagedPluginTree(input: {
     // Never repoint at an existing hash directory without proving its bytes;
     // a previous partial/tampered install must not be revived by reinstall.
     const existingHash = await hashPluginTree(versionDir)
-    if (!existingHash.ok || existingHash.hash !== treeHash.hash) {
+    if (!existingHash.ok || existingHash.hash !== sourceInspection.contentHash) {
       return {
         ok: false,
         error: existingHash.ok
@@ -165,13 +206,13 @@ export async function installStagedPluginTree(input: {
       }
     }
   }
-  const consentFingerprint = fingerprintPluginConsent(manifest, treeHash.hash)
+  const consentFingerprint = fingerprintPluginConsent(manifest, sourceInspection.contentHash)
   const entry: PluginLockEntry = {
     pluginKey,
     version: manifest.version,
     source: input.source,
     resolvedCommit: input.resolvedCommit,
-    contentHash: treeHash.hash,
+    contentHash: sourceInspection.contentHash,
     consentFingerprint,
     installedAt: Date.now()
   }
@@ -184,7 +225,7 @@ export async function installStagedPluginTree(input: {
     ok: true,
     pluginKey,
     version: manifest.version,
-    contentHash: treeHash.hash,
+    contentHash: sourceInspection.contentHash,
     consentFingerprint,
     resolvedCommit: input.resolvedCommit
   }

@@ -969,10 +969,11 @@ export type PluginHostListEntry = {
   }[]
   restarts: number
   source?: {
-    kind: 'local-path' | 'git'
+    kind: 'local-path' | 'git' | 'marketplace'
     reference: string
     resolvedCommit: string | null
     contentHash: string
+    marketplace?: { reference: string; resolvedCommit: string }
   }
 }
 

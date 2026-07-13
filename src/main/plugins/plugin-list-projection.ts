@@ -64,10 +64,11 @@ export type PluginListEntry = {
   }[]
   restarts: number
   source?: {
-    kind: 'local-path' | 'git'
+    kind: 'local-path' | 'git' | 'marketplace'
     reference: string
     resolvedCommit: string | null
     contentHash: string
+    marketplace?: { reference: string; resolvedCommit: string }
   }
 }
 
@@ -170,9 +171,21 @@ export function buildPluginList(service: PluginService, lock: PluginLockfile): P
             source: {
               kind: lockEntry.source.kind,
               reference:
-                lockEntry.source.kind === 'git' ? lockEntry.source.url : lockEntry.source.path,
+                lockEntry.source.kind === 'local-path'
+                  ? lockEntry.source.path
+                  : lockEntry.source.kind === 'git'
+                    ? lockEntry.source.url
+                    : lockEntry.source.plugin.url,
               resolvedCommit: lockEntry.resolvedCommit,
-              contentHash: lockEntry.contentHash
+              contentHash: lockEntry.contentHash,
+              ...(lockEntry.source.kind === 'marketplace'
+                ? {
+                    marketplace: {
+                      reference: lockEntry.source.marketplace.url,
+                      resolvedCommit: lockEntry.source.marketplace.resolvedCommit
+                    }
+                  }
+                : {})
             }
           }
         : {})
