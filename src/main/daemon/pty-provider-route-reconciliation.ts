@@ -30,6 +30,11 @@ function beginProviderRouteSpawnAdmission<T>(
   admissions: Map<string, ProviderRouteSpawnAdmission<T>>,
   id: string
 ): ProviderRouteSpawnAdmission<T> {
+  // Why: one provider session belongs to one pane identity. Concurrent
+  // same-id admission cannot be ordered safely, so fail closed before spawn.
+  if (admissions.has(id)) {
+    throw new Error(`PTY spawn already in progress for "${id}"`)
+  }
   const admission = { id, deferredExits: [] }
   admissions.set(id, admission)
   return admission

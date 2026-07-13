@@ -198,6 +198,30 @@ describe('DegradedDaemonPtyProvider', () => {
     expect(exit).toHaveBeenCalledWith({ id: 'same-id', code: 7 })
   })
 
+  it('rejects overlapping fallback spawn before it can overwrite deferred exit proof', async () => {
+    const current = createDaemonAdapter('daemon')
+    const fallback = createProvider('fallback')
+    const provider = new DegradedDaemonPtyProvider({ current, legacy: [], fallback })
+    const exit = vi.fn()
+    provider.onExit(exit)
+    let rejectSpawn!: (error: Error) => void
+    vi.mocked(fallback.spawn).mockImplementationOnce(
+      () => new Promise((_resolve, reject) => (rejectSpawn = reject))
+    )
+
+    const first = provider.spawn({ sessionId: 'same-id', cols: 80, rows: 24 })
+    await vi.waitFor(() => expect(fallback.spawn).toHaveBeenCalledOnce())
+    await expect(provider.spawn({ sessionId: 'same-id', cols: 80, rows: 24 })).rejects.toThrow(
+      'PTY spawn already in progress'
+    )
+    fallback.emitExit('same-id', 7)
+    rejectSpawn(new Error('first spawn failed'))
+
+    await expect(first).rejects.toThrow('first spawn failed')
+    expect(fallback.spawn).toHaveBeenCalledOnce()
+    expect(exit).toHaveBeenCalledOnce()
+  })
+
   it('routes fresh foreground confirmation to the session owner', async () => {
     const current = createDaemonAdapter('daemon', ['daemon-session'])
     const fallback = createProvider('fallback')

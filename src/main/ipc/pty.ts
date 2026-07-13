@@ -57,6 +57,7 @@ import { isPwshAvailable } from '../pwsh'
 import { LocalPtyProvider } from '../providers/local-pty-provider'
 import type {
   IPtyProvider,
+  PtyProcessInfo,
   PtyShutdownOptions,
   PtySpawnOptions,
   PtySpawnResult
@@ -189,6 +190,7 @@ type RetainedPtyShutdown = {
 }
 const pendingSshShutdownRetries = new Map<string, RetainedPtyShutdown>()
 const pendingLocalShutdownRetries = new Map<string, RetainedPtyShutdown>()
+const providerProcessListsInFlight = new WeakMap<IPtyProvider, Promise<PtyProcessInfo[]>>()
 const sshRetainedExitUnsubscribers = new Map<string, () => void>()
 let retainedShutdownRetryTimer: ReturnType<typeof setTimeout> | null = null
 const MAX_RETAINED_SHUTDOWN_BACKOFF_MS = 30_000
@@ -519,7 +521,19 @@ function delay(ms: number): Promise<void> {
 }
 
 async function isProviderPtyLive(provider: IPtyProvider, ptyId: string): Promise<boolean> {
-  return (await provider.listProcesses()).some((session) => session.id === ptyId)
+  let listing = providerProcessListsInFlight.get(provider)
+  if (!listing) {
+    listing = provider.listProcesses()
+    providerProcessListsInFlight.set(provider, listing)
+    try {
+      return (await listing).some((session) => session.id === ptyId)
+    } finally {
+      if (providerProcessListsInFlight.get(provider) === listing) {
+        providerProcessListsInFlight.delete(provider)
+      }
+    }
+  }
+  return (await listing).some((session) => session.id === ptyId)
 }
 
 async function verifyPtyStopped(

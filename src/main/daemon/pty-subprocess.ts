@@ -1195,8 +1195,8 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
         nodePtyKillIssued = true
         proc.kill()
       } catch (error) {
-        nodePtyKillIssued = false
         if (!hasExited()) {
+          nodePtyKillIssued = false
           throw error
         }
       }
@@ -1210,12 +1210,17 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
         return
       }
       if (process.platform === 'win32') {
+        // Why: graceful and force shutdown share one native ConPTY close.
+        // Once accepted, wait for exit proof instead of closing twice.
+        if (nodePtyKillIssued) {
+          return
+        }
         try {
           nodePtyKillIssued = true
           proc.kill()
         } catch (error) {
-          nodePtyKillIssued = false
           if (!hasExited()) {
+            nodePtyKillIssued = false
             throw error
           }
         }
@@ -1232,8 +1237,8 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
           nodePtyKillIssued = true
           proc.kill()
         } catch (fallbackError) {
-          nodePtyKillIssued = false
           if (!hasExited()) {
+            nodePtyKillIssued = false
             throw fallbackError
           }
         }

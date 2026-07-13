@@ -2611,6 +2611,7 @@ describe('createPtySubprocess', () => {
       }
       proc.destroy = vi.fn(() => proc.kill())
       spawnMock.mockReturnValue(proc)
+      const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true)
       const origPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
       Object.defineProperty(process, 'platform', { value: 'win32' })
       try {
@@ -2620,11 +2621,12 @@ describe('createPtySubprocess', () => {
         expect(proc.kill).toHaveBeenCalledOnce()
         expect(proc.destroy).not.toHaveBeenCalled()
       } finally {
+        killSpy.mockRestore()
         restorePlatform(origPlatform)
       }
     })
 
-    it('retries Windows ConPTY kill when force follows an unproved graceful kill', () => {
+    it('does not reissue Windows ConPTY close after accepted graceful kill', () => {
       const proc = mockPtyProcess(123456) as ReturnType<typeof mockPtyProcess> & {
         destroy: ReturnType<typeof vi.fn>
       }
@@ -2641,9 +2643,65 @@ describe('createPtySubprocess', () => {
         handle.forceKill()
         handle.dispose()
 
-        expect(proc.kill).toHaveBeenCalledTimes(2)
-        expect(proc.kill.mock.calls).toEqual([[], []])
+        expect(proc.kill).toHaveBeenCalledOnce()
+        expect(proc.kill.mock.calls).toEqual([[]])
         expect(killSpy).not.toHaveBeenCalled()
+        expect(proc.destroy).not.toHaveBeenCalled()
+      } finally {
+        killSpy.mockRestore()
+        restorePlatform(origPlatform)
+      }
+    })
+
+    it('retries Windows ConPTY close after graceful native throw', () => {
+      const proc = mockPtyProcess(123456) as ReturnType<typeof mockPtyProcess> & {
+        destroy: ReturnType<typeof vi.fn>
+      }
+      proc.kill.mockImplementationOnce(() => {
+        throw new Error('native close failed')
+      })
+      proc.destroy = vi.fn(() => proc.kill())
+      spawnMock.mockReturnValue(proc)
+      const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true)
+      const origPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
+      Object.defineProperty(process, 'platform', { value: 'win32' })
+      try {
+        const handle = createPtySubprocess({ sessionId: 'test', cols: 80, rows: 24 })
+        expect(() => handle.kill()).toThrow('native close failed')
+        expect(() => handle.forceKill()).not.toThrow()
+        handle.dispose()
+
+        expect(proc.kill.mock.calls).toEqual([[], []])
+        expect(proc.destroy).not.toHaveBeenCalled()
+      } finally {
+        killSpy.mockRestore()
+        restorePlatform(origPlatform)
+      }
+    })
+
+    it('does not reissue Windows ConPTY close after native throw with OS exit proof', () => {
+      const proc = mockPtyProcess(123456) as ReturnType<typeof mockPtyProcess> & {
+        destroy: ReturnType<typeof vi.fn>
+      }
+      proc.kill.mockImplementation(() => {
+        throw new Error('native close raced exit')
+      })
+      proc.destroy = vi.fn(() => proc.kill())
+      spawnMock.mockReturnValue(proc)
+      const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => {
+        const error = new Error('already gone') as NodeJS.ErrnoException
+        error.code = 'ESRCH'
+        throw error
+      })
+      const origPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
+      Object.defineProperty(process, 'platform', { value: 'win32' })
+      try {
+        const handle = createPtySubprocess({ sessionId: 'test', cols: 80, rows: 24 })
+        expect(() => handle.kill()).not.toThrow()
+        handle.forceKill()
+        handle.dispose()
+
+        expect(proc.kill).toHaveBeenCalledOnce()
         expect(proc.destroy).not.toHaveBeenCalled()
       } finally {
         killSpy.mockRestore()

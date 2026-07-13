@@ -205,6 +205,29 @@ describe('DaemonPtyRouter', () => {
     expect(exit).toHaveBeenCalledWith({ id: 'same-id', code: 7 })
   })
 
+  it('rejects overlapping same-id spawn before it can overwrite deferred exit proof', async () => {
+    const current = createAdapter('current')
+    const router = new DaemonPtyRouter({ current, legacy: [] })
+    const exit = vi.fn()
+    router.onExit(exit)
+    let rejectSpawn!: (error: Error) => void
+    vi.mocked(current.spawn).mockImplementationOnce(
+      () => new Promise((_resolve, reject) => (rejectSpawn = reject))
+    )
+
+    const first = router.spawn({ sessionId: 'same-id', cols: 80, rows: 24 })
+    await vi.waitFor(() => expect(current.spawn).toHaveBeenCalledOnce())
+    await expect(router.spawn({ sessionId: 'same-id', cols: 80, rows: 24 })).rejects.toThrow(
+      'PTY spawn already in progress'
+    )
+    current.emitExit('same-id', 7)
+    rejectSpawn(new Error('first spawn failed'))
+
+    await expect(first).rejects.toThrow('first spawn failed')
+    expect(current.spawn).toHaveBeenCalledOnce()
+    expect(exit).toHaveBeenCalledOnce()
+  })
+
   it('retains a same-adapter replacement across an older process listing', async () => {
     const current = createAdapter('current')
     const legacy = createAdapter('legacy', ['shared-session'])

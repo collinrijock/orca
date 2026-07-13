@@ -203,7 +203,8 @@ import {
   rebindLocalProviderListeners,
   unregisterSshPtyProvider,
   releasePendingSshShutdownsForTarget,
-  getLocalPtyProvider
+  getLocalPtyProvider,
+  shutdownPtyWithRetainedOwnership
 } from './pty'
 import {
   _resetHiddenRendererPtyDeliveryGateForTest,
@@ -3545,6 +3546,43 @@ describe('registerPtyHandlers', () => {
     expect(shutdown).toHaveBeenCalledOnce()
     expect(removePendingLocalPtyShutdown).toHaveBeenCalledWith('local-pty')
     vi.useRealTimers()
+  })
+
+  it('coalesces 50 accepted SSH shutdown proofs into one provider inventory', async () => {
+    const connectionId = 'ssh-bulk-proof'
+    const ids = Array.from({ length: 50 }, (_, index) => `ssh:${connectionId}@@pty-${index}`)
+    let resolveListing!: (processes: []) => void
+    const listing = new Promise<[]>((resolve) => {
+      resolveListing = resolve
+    })
+    const shutdown = vi.fn(async () => {})
+    const listProcesses = vi.fn(() => listing)
+    const provider = {
+      requiresShutdownExitProof: true,
+      shutdown,
+      listProcesses,
+      onExit: vi.fn(() => () => {})
+    } as never
+    registerSshPtyProvider(connectionId, provider)
+    try {
+      const shutdowns = ids.map((id) =>
+        shutdownPtyWithRetainedOwnership({
+          id,
+          connectionId,
+          provider,
+          options: { immediate: true }
+        })
+      )
+      await vi.waitFor(() => expect(shutdown).toHaveBeenCalledTimes(50))
+      await vi.waitFor(() => expect(listProcesses).toHaveBeenCalledOnce())
+      resolveListing([])
+      await expect(Promise.all(shutdowns)).resolves.toHaveLength(50)
+
+      expect(listProcesses).toHaveBeenCalledOnce()
+    } finally {
+      unregisterSshPtyProvider(connectionId)
+      releasePendingSshShutdownsForTarget(connectionId)
+    }
   })
 
   it('does not let an old provider exit readback settle replacement retry ownership', async () => {
