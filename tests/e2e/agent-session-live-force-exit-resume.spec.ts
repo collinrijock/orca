@@ -165,6 +165,15 @@ test('resumes a live agent record after force-exit restart when pane PTY ownersh
     const page = firstLaunch.page
     const worktreeId = await attachRepoAndOpenTerminal(page, repoPath)
     await waitForSessionReady(page)
+    // Why: the session writer persists only once hydrationSucceeded flips (not
+    // just workspaceSessionReady) — see shouldPersistWorkspaceSession — so the
+    // record write below is a silent no-op until hydration completes.
+    await expect
+      .poll(() => page.evaluate(() => window.__store?.getState().hydrationSucceeded === true), {
+        timeout: 30_000,
+        message: 'hydrationSucceeded did not become true before persisting the live record'
+      })
+      .toBe(true)
     await waitForActiveWorktree(page)
     await ensureTerminalVisible(page)
     await waitForActiveTerminalManager(page, 30_000)
@@ -197,8 +206,8 @@ test('resumes a live agent record after force-exit restart when pane PTY ownersh
     )
 
     // Drive the product's own quit-capture path (what the 60s timer / beforeunload
-    // run) so the live record is flushed deterministically instead of racing the
-    // debounced session writer before the poll below.
+    // run). Its origin:'quit' record differs from the live one, forcing a store
+    // change that triggers the (now hydration-gated) writer before the poll below.
     await page.evaluate(() => window.__store?.getState().captureAllSleepingAgentSessions())
 
     await expect

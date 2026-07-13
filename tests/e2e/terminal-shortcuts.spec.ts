@@ -19,6 +19,7 @@ import type { ElectronApplication, Page } from '@stablyai/playwright-test'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../src/shared/constants'
 import {
   execInTerminal,
+  sendToTerminal,
   countVisibleTerminalPanes,
   waitForActiveTerminalManager,
   waitForTerminalOutput,
@@ -534,9 +535,11 @@ test.describe('Terminal Shortcuts', () => {
     await pressAndExpectWrite(orcaPage, electronApp, 'Shift+Enter', '\x1b[13;2u')
 
     // The shell is only standing in for a KKP-aware TUI and does not consume the
-    // CSI-u input above. Send an idempotent "set flags to 0" reset rather than a
-    // stack pop so it doesn't race the shell line editor still holding that input.
-    await execInTerminal(orcaPage, ptyId, "\x03printf '\\033[=0u'")
+    // CSI-u input above. Clear it deterministically (Ctrl-U kill-line + Ctrl-C)
+    // first, then send the idempotent "set flags to 0" reset as its own settled
+    // command so the reset byte can't be swallowed mid line-edit.
+    await sendToTerminal(orcaPage, ptyId, '\x15\x03')
+    await execInTerminal(orcaPage, ptyId, "printf '\\033[=0u'")
     await expect.poll(() => getKittyKeyboardFlags(orcaPage)).toBe(0)
     await pressAndExpectWrite(orcaPage, electronApp, 'Shift+Enter', '\x1b\r')
   })
