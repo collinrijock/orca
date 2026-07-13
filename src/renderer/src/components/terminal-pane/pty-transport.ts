@@ -628,7 +628,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
 
   // Why: shared by connect() and attach() to avoid duplicating title/bell/exit
   // logic across the two code paths that register a PTY.
-  function registerPtyDataHandler(id: string): void {
+  function registerPtyDataHandler(id: string) {
     // Why: relay pty.attach sends replay data via a dedicated pty:replay IPC
     // channel. Route it through onReplayData so the renderer engages the
     // replay guard and xterm auto-replies do not leak into the shell.
@@ -660,14 +660,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
     ptyDataHandlers.set(id, dataHandler)
     ownedDataAndReplayHandlers.set(id, { data: dataHandler, replay: replayHandler, owner })
     publishPtyPrimaryDataHandlerOwner(id, owner)
-    drainPreHandlerPtyData(
-      id,
-      dataHandler,
-      () =>
-        owner.active &&
-        ownedDataAndReplayHandlers.get(id)?.owner === owner &&
-        ptyDataHandlers.get(id) === dataHandler
-    )
+    return { dataHandler, owner }
   }
 
   function clearAccumulatedState(): void {
@@ -705,7 +698,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
     }
   }
 
-  function registerPtyExitHandler(id: string): void {
+  function registerPtyExitHandler(id: string) {
     const exitHandler = (code: number): void => {
       if (ptyId !== null && ptyId !== id) {
         // Why: a preserved sleep/reconnect session can report its old exit
@@ -732,16 +725,35 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
     // would otherwise fire stale notifications after the data handler
     // is removed but before the exit event arrives.
     ptyTeardownHandlers.set(id, clearAccumulatedState)
-    if (!drainPreHandlerPtyExit(id, exitHandler)) {
+    return { exitHandler, owner }
+  }
+
+  function drainRegisteredPtyHandlers(
+    id: string,
+    dataRegistration: ReturnType<typeof registerPtyDataHandler>,
+    exitRegistration: ReturnType<typeof registerPtyExitHandler>
+  ): boolean {
+    const isDataCurrent = (): boolean =>
+      dataRegistration.owner.active &&
+      ownedDataAndReplayHandlers.get(id)?.owner === dataRegistration.owner &&
+      ptyDataHandlers.get(id) === dataRegistration.dataHandler
+    const isExitCurrent = (): boolean =>
+      exitRegistration.owner.active &&
+      ownedExitHandlers.get(id)?.owner === exitRegistration.owner &&
+      ptyExitHandlers.get(id) === exitRegistration.exitHandler
+    drainPreHandlerPtyData(id, dataRegistration.dataHandler, isDataCurrent)
+    if (!isExitCurrent()) {
+      return false
+    }
+    if (!drainPreHandlerPtyExit(id, exitRegistration.exitHandler)) {
       reconcilePreHandlerPtyExitAfterOverflow(
         id,
         window.api.pty.hasPty,
-        exitHandler,
-        () =>
-          ownedExitHandlers.get(id)?.handler === exitHandler &&
-          ptyExitHandlers.get(id) === exitHandler
+        exitRegistration.exitHandler,
+        isExitCurrent
       )
     }
+    return isDataCurrent() && isExitCurrent()
   }
 
   return {
@@ -836,9 +848,16 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
           onPtySpawn?.(spawnResult.id)
         }
 
-        registerPtyDataHandler(spawnResult.id)
-        registerPtyExitHandler(spawnResult.id)
-        if (!connected || ptyId !== spawnResult.id) {
+        const dataRegistration = registerPtyDataHandler(spawnResult.id)
+        const exitRegistration = registerPtyExitHandler(spawnResult.id)
+        const handlersCurrent = drainRegisteredPtyHandlers(
+          spawnResult.id,
+          dataRegistration,
+          exitRegistration
+        )
+        if (!handlersCurrent || !connected || ptyId !== spawnResult.id) {
+          connected = false
+          ptyId = null
           return undefined
         }
 
@@ -948,9 +967,12 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
       connected = true
       // Why: skip onPtySpawn — it would reset lastActivityAt and destroy the
       // recency sort order that reconnectPersistedTerminals preserved.
-      registerPtyDataHandler(id)
-      registerPtyExitHandler(id)
-      if (!connected || ptyId !== id) {
+      const dataRegistration = registerPtyDataHandler(id)
+      const exitRegistration = registerPtyExitHandler(id)
+      const handlersCurrent = drainRegisteredPtyHandlers(id, dataRegistration, exitRegistration)
+      if (!handlersCurrent || !connected || ptyId !== id) {
+        connected = false
+        ptyId = null
         return
       }
 

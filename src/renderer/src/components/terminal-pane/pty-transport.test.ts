@@ -454,6 +454,80 @@ describe('createIpcPtyTransport', () => {
     expect(nextTransport.isConnected()).toBe(false)
   })
 
+  it('keeps reentrant replacement ownership atomic while attach drains buffered data', async () => {
+    const { createIpcPtyTransport, ensurePtyDispatcher } = await import('./pty-transport')
+    ensurePtyDispatcher()
+    onData?.({ id: 'same-id', data: 'first buffered chunk' })
+    onData?.({ id: 'same-id', data: 'second buffered chunk' })
+    const outerData: string[] = []
+    const outerExit = vi.fn()
+    const replacementData = vi.fn()
+    const replacementExit = vi.fn()
+    const outerTransport = createIpcPtyTransport()
+    const replacementTransport = createIpcPtyTransport()
+    outerTransport.attach({
+      existingPtyId: 'same-id',
+      callbacks: {
+        onData: (data) => {
+          outerData.push(data)
+          replacementTransport.attach({
+            existingPtyId: 'same-id',
+            callbacks: { onData: replacementData, onExit: replacementExit }
+          })
+        },
+        onExit: outerExit
+      }
+    })
+
+    onData?.({ id: 'same-id', data: 'live replacement data' })
+    onExit?.({ id: 'same-id', code: 7 })
+
+    expect(outerData).toEqual(['first buffered chunk'])
+    expect(outerTransport.isConnected()).toBe(false)
+    expect(replacementData).toHaveBeenCalledWith('second buffered chunk')
+    expect(replacementData).toHaveBeenCalledWith('live replacement data')
+    expect(outerExit).not.toHaveBeenCalled()
+    expect(replacementExit).toHaveBeenCalledWith(7)
+    expect(replacementTransport.isConnected()).toBe(false)
+  })
+
+  it('keeps reentrant replacement ownership atomic while connect drains buffered data', async () => {
+    const { createIpcPtyTransport, ensurePtyDispatcher } = await import('./pty-transport')
+    const spawn = window.api.pty.spawn as unknown as ReturnType<typeof vi.fn>
+    spawn.mockResolvedValueOnce({ id: 'same-id' })
+    ensurePtyDispatcher()
+    onData?.({ id: 'same-id', data: 'first buffered chunk' })
+    onData?.({ id: 'same-id', data: 'second buffered chunk' })
+    const outerData: string[] = []
+    const outerExit = vi.fn()
+    const replacementData = vi.fn()
+    const replacementExit = vi.fn()
+    const outerTransport = createIpcPtyTransport()
+    const replacementTransport = createIpcPtyTransport()
+
+    const result = await outerTransport.connect({
+      url: '',
+      callbacks: {
+        onData: (data) => {
+          outerData.push(data)
+          replacementTransport.attach({
+            existingPtyId: 'same-id',
+            callbacks: { onData: replacementData, onExit: replacementExit }
+          })
+        },
+        onExit: outerExit
+      }
+    })
+    onExit?.({ id: 'same-id', code: 8 })
+
+    expect(result).toBeUndefined()
+    expect(outerData).toEqual(['first buffered chunk'])
+    expect(outerTransport.isConnected()).toBe(false)
+    expect(replacementData).toHaveBeenCalledWith('second buffered chunk')
+    expect(outerExit).not.toHaveBeenCalled()
+    expect(replacementExit).toHaveBeenCalledWith(8)
+  })
+
   it('ignores a stale exit for a previous PTY after reconnecting the same transport', async () => {
     const { createIpcPtyTransport } = await import('./pty-transport')
     const spawn = window.api.pty.spawn as unknown as ReturnType<typeof vi.fn>
@@ -1968,6 +2042,43 @@ describe('createIpcPtyTransport', () => {
     onData?.({ id: 'pty-1', data: 'live again' })
 
     expect(onDataCallback).toHaveBeenCalledWith('live again')
+  })
+
+  it('does not restore failed-shutdown handlers over a replacement pane', async () => {
+    const {
+      createIpcPtyTransport,
+      restorePtyDataHandlersAfterFailedShutdown,
+      unregisterPtyDataHandlers
+    } = await import('./pty-transport')
+    const { ptyDataHandlers, ptyReplayHandlers, ptyTeardownHandlers } =
+      await import('./pty-dispatcher')
+    const oldTransport = createIpcPtyTransport()
+    oldTransport.attach({ existingPtyId: 'same-id', callbacks: {} })
+    const snapshots = unregisterPtyDataHandlers(['same-id'])
+    const replacementData = vi.fn()
+    const replacementReplay = vi.fn()
+    const replacementTransport = createIpcPtyTransport()
+    replacementTransport.attach({
+      existingPtyId: 'same-id',
+      callbacks: { onData: replacementData, onReplayData: replacementReplay }
+    })
+    const replacementHandlers = {
+      data: ptyDataHandlers.get('same-id'),
+      replay: ptyReplayHandlers.get('same-id'),
+      teardown: ptyTeardownHandlers.get('same-id')
+    }
+
+    restorePtyDataHandlersAfterFailedShutdown(snapshots)
+    onData?.({ id: 'same-id', data: 'replacement live data' })
+    onReplay?.({ id: 'same-id', data: 'replacement replay data' })
+
+    expect(ptyDataHandlers.get('same-id')).toBe(replacementHandlers.data)
+    expect(ptyReplayHandlers.get('same-id')).toBe(replacementHandlers.replay)
+    expect(ptyTeardownHandlers.get('same-id')).toBe(replacementHandlers.teardown)
+    expect(replacementData).toHaveBeenCalledWith('replacement live data')
+    expect(replacementReplay).toHaveBeenCalledWith('replacement replay data')
+    oldTransport.detach?.()
+    replacementTransport.disconnect()
   })
 
   it('unregisterPtyDataHandlers cancels staleTitleTimer so it cannot fire stale idle transition', async () => {

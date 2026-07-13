@@ -1,4 +1,4 @@
-import type { PtyDataMeta } from './pty-dispatcher'
+import type { PtyDataMeta } from './pty-primary-handler-registry'
 
 type PtyPrimaryHandlerAdmissionRegistry = {
   dataHandlers: Map<string, (data: string, meta?: PtyDataMeta) => void>
@@ -72,6 +72,25 @@ export function revokePtyPrimaryDataHandlerOwner(
   revokeOwner(primaryDataHandlerOwners, ptyId, owner)
 }
 
+export function suspendPtyPrimaryDataHandlerOwner(
+  ptyId: string
+): PtyPrimaryHandlerOwner | undefined {
+  const owner = primaryDataHandlerOwners.get(ptyId)
+  primaryDataHandlerOwners.delete(ptyId)
+  return owner
+}
+
+export function restorePtyPrimaryDataHandlerOwner(
+  ptyId: string,
+  owner: PtyPrimaryHandlerOwner | undefined
+): boolean {
+  if (!isOwnerCurrent(primaryDataHandlerOwners, ptyId, owner)) {
+    return false
+  }
+  primaryDataHandlerOwners.set(ptyId, owner)
+  return true
+}
+
 export function publishPtyPrimaryExitHandlerOwner(
   ptyId: string,
   owner: PtyPrimaryHandlerOwner
@@ -84,6 +103,17 @@ export function revokePtyPrimaryExitHandlerOwner(
   owner: PtyPrimaryHandlerOwner
 ): void {
   revokeOwner(primaryExitHandlerOwners, ptyId, owner)
+}
+
+export function getPtyPrimaryExitHandlerOwner(ptyId: string): PtyPrimaryHandlerOwner | undefined {
+  return primaryExitHandlerOwners.get(ptyId)
+}
+
+export function isPtyPrimaryExitHandlerOwnerCurrent(
+  ptyId: string,
+  owner: PtyPrimaryHandlerOwner | undefined
+): boolean {
+  return Boolean(owner?.active && primaryExitHandlerOwners.get(ptyId) === owner)
 }
 
 function isOwnerCurrent(
@@ -101,7 +131,7 @@ export function suspendPtyPrimaryHandlersForAdmission(
 ): PtyPrimaryHandlerAdmissionSnapshot {
   const snapshot: PtyPrimaryHandlerAdmissionSnapshot = {
     ptyId,
-    dataOwner: primaryDataHandlerOwners.get(ptyId),
+    dataOwner: suspendPtyPrimaryDataHandlerOwner(ptyId),
     exitOwner: primaryExitHandlerOwners.get(ptyId),
     dataHandler: registry.dataHandlers.get(ptyId),
     replayHandler: registry.replayHandlers.get(ptyId),
@@ -112,7 +142,6 @@ export function suspendPtyPrimaryHandlersForAdmission(
   registry.replayHandlers.delete(ptyId)
   registry.exitHandlers.delete(ptyId)
   registry.teardownHandlers.delete(ptyId)
-  primaryDataHandlerOwners.delete(ptyId)
   primaryExitHandlerOwners.delete(ptyId)
   return snapshot
 }
