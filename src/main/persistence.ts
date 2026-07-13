@@ -3801,6 +3801,11 @@ export class Store {
   }
 
   private flushOrThrow(): void {
+    if (this.writesFrozen) {
+      // Why: callers use this path as a durability boundary before discarding
+      // rollback authority, so an intentionally frozen store must fail closed.
+      throw new Error('persistence-writes-frozen')
+    }
     if (this.writeTimer) {
       clearTimeout(this.writeTimer)
       this.writeTimer = null
@@ -6551,10 +6556,12 @@ export class Store {
   // ── Flush (for shutdown) ───────────────────────────────────────────
 
   flush(): void {
-    try {
-      this.flushOrThrow()
-    } catch (err) {
-      console.error('[persistence] Failed to flush state:', err)
+    if (!this.writesFrozen) {
+      try {
+        this.flushOrThrow()
+      } catch (err) {
+        console.error('[persistence] Failed to flush state:', err)
+      }
     }
     this.writeGithubCacheSnapshotSync()
   }

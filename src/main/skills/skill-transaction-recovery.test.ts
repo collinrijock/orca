@@ -592,10 +592,11 @@ describe('skill transaction recovery', () => {
     expect(await lstat(lockRoot).catch(() => null)).toBeNull()
   })
 
-  it('restores a self-contained orphan before inventory has loaded a ledger', async () => {
+  it('retains an unrecoverable orphan and continues with healthy siblings', async () => {
     const { root, live, record, snapshot } = await fixture()
     const reservedRoot = join(root, '.orca-skill-transactions')
-    const transaction = join(reservedRoot, 'orphan')
+    const transaction = join(reservedRoot, 'a-unrecoverable')
+    const recoverable = join(reservedRoot, 'b-recoverable')
     const unmarked = join(reservedRoot, 'keep-me')
     await cp(live, join(transaction, 'backup'), { recursive: true })
     await mkdir(unmarked, { recursive: true })
@@ -605,14 +606,15 @@ describe('skill transaction recovery', () => {
       prior: snapshot,
       stageSource: live
     })
+    await mkdir(recoverable, { recursive: true })
+    await writeSkillTransactionMarker(recoverable, marker(record, snapshot, 'staging'))
     await writeFile(join(live, 'SKILL.md'), 'interrupted publication')
 
-    await expect(
-      sweepOrphanedSkillTransactions(join(root, 'skills'), emptySkillManagementLedger())
-    ).rejects.toThrow('skill-transaction-recovery-required')
+    await sweepOrphanedSkillTransactions(join(root, 'skills'), emptySkillManagementLedger())
 
     expect(await readFile(join(live, 'SKILL.md'), 'utf8')).toBe('interrupted publication')
     expect(await readFile(join(transaction, 'transaction.json'), 'utf8')).toBeTruthy()
+    expect(await lstat(recoverable).catch(() => null)).toBeNull()
     expect(await import('node:fs/promises').then(({ stat }) => stat(unmarked))).toBeTruthy()
   })
 

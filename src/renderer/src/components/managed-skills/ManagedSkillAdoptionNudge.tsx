@@ -31,38 +31,43 @@ export function ManagedSkillAdoptionNudge(): null {
       shownKeys.current.add(candidateKey(candidate))
     }
     const persistDismissal = (): void => {
-      const pending = unseen.filter((candidate) => {
+      const pending = unseen.flatMap((candidate) => {
         const key = candidateKey(candidate)
         if (persistedKeys.current.has(key)) {
-          return false
+          return []
         }
         persistedKeys.current.add(key)
-        return true
+        return [{ candidate, key }]
       })
       // Why: Sonner may report action, dismiss, and auto-close for one toast;
       // each exact tuple must reach the durable ledger only once.
-      void pending.reduce(
-        (settled, candidate) => settled.then(() => state.dismiss(candidate)),
-        Promise.resolve()
-      )
+      for (const { candidate, key } of pending) {
+        void state.dismiss(candidate).catch(() => persistedKeys.current.delete(key))
+      }
     }
     const count = unseen.length
     toast.info(
-      translate(
-        'auto.components.managedSkills.adoptionNudge.title',
-        '{{value0}} installed Orca skills can be kept up to date',
-        { value0: count }
-      ),
+      count === 1
+        ? translate(
+            'auto.components.managedSkills.adoptionNudge.title_one',
+            'Track updates for an installed Orca skill?',
+            { value0: count }
+          )
+        : translate(
+            'auto.components.managedSkills.adoptionNudge.title_other',
+            'Track updates for {{value0}} installed Orca skills?',
+            { value0: count }
+          ),
       {
         description: translate(
           'auto.components.managedSkills.adoptionNudge.description',
-          'Review exact official copies before Orca manages them.'
+          'These match Orca’s official versions. Orca shows when updates are available and only installs one after you approve it.'
         ),
         duration: 12_000,
         onDismiss: persistDismissal,
         onAutoClose: persistDismissal,
         action: {
-          label: translate('auto.components.managedSkills.adoptionNudge.review', 'Review'),
+          label: translate('auto.components.managedSkills.adoptionNudge.review', 'Choose skills'),
           onClick: () => {
             openSettingsTarget({ pane: 'agents', repoId: null })
             openSettingsPage()

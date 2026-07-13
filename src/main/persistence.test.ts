@@ -6774,6 +6774,36 @@ describe('Store', () => {
     ).toContainEqual(candidate)
   })
 
+  it('rolls back skill ledger mutations when durable writes are frozen', async () => {
+    const store = await createStore()
+    const destination = {
+      id: 'frozen-skill',
+      hostId: 'local' as const,
+      skillName: 'orca-cli',
+      unresolvedPath: '/home/alice/.agents/skills/orca-cli',
+      installedPackageDigest: 'a'.repeat(64)
+    }
+    const candidate = {
+      hostId: 'local' as const,
+      physicalIdentity: '1:2',
+      skillName: 'orca-cli',
+      snapshotDigest: 'b'.repeat(64),
+      dismissedAt: 1
+    }
+    store.freezeWrites()
+
+    expect(() => store.setManagedSkillDestination(destination as never)).toThrow(
+      'persistence-writes-frozen'
+    )
+    expect(() => store.dismissSkillAdoptionCandidate(candidate)).toThrow(
+      'persistence-writes-frozen'
+    )
+    expect(store.getSkillManagementLedger()).toMatchObject({
+      destinations: {},
+      dismissedAdoptionCandidates: []
+    })
+  })
+
   it('reads legacy terminal scrollback snapshots for explicit profile data files', async () => {
     const profileDataDirectory = join(testState.dir, 'profiles', 'local-default')
     const profileDataFile = join(profileDataDirectory, 'orca-data.json')

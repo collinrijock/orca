@@ -50,12 +50,14 @@ vi.mock('@/store', () => ({
 
 describe('ManagedSkillAdoptionNudge', () => {
   beforeEach(() => {
-    mocks.dismiss.mockClear()
+    mocks.dismiss.mockReset()
+    mocks.dismiss.mockResolvedValue(undefined)
     mocks.info.mockClear()
     mocks.openSettingsPage.mockClear()
     mocks.openSettingsTarget.mockClear()
     mocks.inventory.installations[0]!.installedPackageDigest = 'a'.repeat(64)
     mocks.inventory.installations[0]!.adoptionPromptEligible = true
+    mocks.inventory.installations[1]!.adoptionPromptEligible = false
   })
 
   afterEach(() => {
@@ -111,6 +113,28 @@ describe('ManagedSkillAdoptionNudge', () => {
     mocks.inventory.installations[0]!.adoptionPromptEligible = true
     root = await mount()
     expect(mocks.info).toHaveBeenCalledTimes(1)
+    root.unmount()
+  })
+
+  it('dismisses healthy candidates when one persistence call fails and allows retry', async () => {
+    mocks.inventory.installations[1]!.adoptionPromptEligible = true
+    mocks.dismiss.mockRejectedValueOnce(new Error('disk full'))
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+    await act(async () => root.render(<ManagedSkillAdoptionNudge />))
+    const options = mocks.info.mock.calls[0]?.[1] as {
+      onDismiss: () => void
+      onAutoClose: () => void
+    }
+
+    await act(async () => options.onAutoClose())
+    await vi.waitFor(() => expect(mocks.dismiss).toHaveBeenCalledTimes(2))
+    expect(mocks.dismiss).toHaveBeenNthCalledWith(1, mocks.inventory.installations[0])
+    expect(mocks.dismiss).toHaveBeenNthCalledWith(2, mocks.inventory.installations[1])
+    await act(async () => options.onDismiss())
+    await vi.waitFor(() => expect(mocks.dismiss).toHaveBeenCalledTimes(3))
+    expect(mocks.dismiss).toHaveBeenNthCalledWith(3, mocks.inventory.installations[0])
     root.unmount()
   })
 })

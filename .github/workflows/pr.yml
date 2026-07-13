@@ -17,6 +17,7 @@ jobs:
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Install native build tools
         run: sudo apt-get update && sudo apt-get install -y build-essential python3 zlib1g-dev zsh
@@ -74,7 +75,9 @@ jobs:
       # Why: skill revisions are append-only; checking merge-queue and main
       # heads prevents independently green PRs from claiming one revision.
       - name: Verify bundled skill manifest
-        run: pnpm run verify:skill-bundle-manifest -- --base-ref=origin/${{ github.base_ref }}
+        env:
+          SKILL_BASE_REF: origin/${{ github.base_ref }}
+        run: pnpm run verify:skill-bundle-manifest -- --base-ref="$SKILL_BASE_REF"
 
       # Why: oxlint fails any file over max-lines that is NOT suppressed, so this
       # ratchet forbids ADDING a new suppression (inline disable or mobile max

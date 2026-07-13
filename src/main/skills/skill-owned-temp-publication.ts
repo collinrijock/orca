@@ -40,60 +40,65 @@ export async function publishSkillFileThroughOwnedTemp(args: {
   await args.callbacks.assertBoundary(applying)
   const mode = args.expectedFile.executable ? 0o755 : 0o644
   const handle = await open(temporaryPath, 'wx', mode)
-  const creating = {
-    ...applying,
-    temporary: {
-      path: temporaryRelativePath,
-      physicalIdentity: skillPhysicalIdentity(temporaryPath, await handle.stat()),
-      expectedFile: args.expectedFile,
-      state: 'creating'
-    }
-  } as const
-  try {
-    // Why: partial bytes are recoverable only after the exclusively created
-    // inode is durably recorded as transaction-owned.
-    await args.callbacks.journal(creating)
-    await args.callbacks.assertBoundary(creating)
-    const bytes = await (args.runtime?.readSource ?? readFile)(args.sourcePath)
-    if (
-      !matchesFileIdentity(
-        describeObservedSkillFile(args.expectedFile.path, bytes, args.expectedFile.executable),
-        args.expectedFile
-      )
-    ) {
-      throw new Error('skill-owned-temp-source-changed')
-    }
-    await args.callbacks.assertBoundary(creating)
-    await (args.runtime?.writeBytes ?? ((target, value) => target.writeFile(value)))(handle, bytes)
-    const written = {
-      ...creating,
-      temporary: { ...creating.temporary, state: 'written' as const }
-    }
-    await args.callbacks.assertBoundary(written)
-    await args.callbacks.journal(written)
-    if (process.platform !== 'win32') {
-      await args.callbacks.assertBoundary(written)
-      await (args.runtime?.chmodTemp ?? ((target, nextMode) => target.chmod(nextMode)))(
+  const ready = await (async () => {
+    let completed = false
+    try {
+      const creating = {
+        ...applying,
+        temporary: {
+          path: temporaryRelativePath,
+          physicalIdentity: skillPhysicalIdentity(temporaryPath, await handle.stat()),
+          expectedFile: args.expectedFile,
+          state: 'creating'
+        }
+      } as const
+      // Why: partial bytes are recoverable only after the exclusively created
+      // inode is durably recorded as transaction-owned.
+      await args.callbacks.journal(creating)
+      await args.callbacks.assertBoundary(creating)
+      const bytes = await (args.runtime?.readSource ?? readFile)(args.sourcePath)
+      if (
+        !matchesFileIdentity(
+          describeObservedSkillFile(args.expectedFile.path, bytes, args.expectedFile.executable),
+          args.expectedFile
+        )
+      ) {
+        throw new Error('skill-owned-temp-source-changed')
+      }
+      await args.callbacks.assertBoundary(creating)
+      await (args.runtime?.writeBytes ?? ((target, value) => target.writeFile(value)))(
         handle,
-        mode
+        bytes
       )
+      const written = {
+        ...creating,
+        temporary: { ...creating.temporary, state: 'written' as const }
+      }
+      await args.callbacks.assertBoundary(written)
+      await args.callbacks.journal(written)
+      if (process.platform !== 'win32') {
+        await args.callbacks.assertBoundary(written)
+        await (args.runtime?.chmodTemp ?? ((target, nextMode) => target.chmod(nextMode)))(
+          handle,
+          mode
+        )
+      }
+      const readyState = {
+        ...written,
+        temporary: { ...written.temporary, state: 'ready' as const }
+      }
+      await args.callbacks.assertBoundary(readyState)
+      await args.callbacks.journal(readyState)
+      await args.callbacks.assertBoundary(readyState)
+      await (args.runtime?.syncTemp ?? ((target) => target.sync()))(handle)
+      await args.callbacks.assertBoundary(readyState)
+      completed = true
+      return readyState
+    } finally {
+      const closing = handle.close()
+      await (completed ? closing : closing.catch(() => undefined))
     }
-    const ready = {
-      ...written,
-      temporary: { ...written.temporary, state: 'ready' as const }
-    }
-    await args.callbacks.assertBoundary(ready)
-    await args.callbacks.journal(ready)
-    await args.callbacks.assertBoundary(ready)
-    await (args.runtime?.syncTemp ?? ((target) => target.sync()))(handle)
-    await args.callbacks.assertBoundary(ready)
-  } finally {
-    await handle.close()
-  }
-  const ready = {
-    ...creating,
-    temporary: { ...creating.temporary, state: 'ready' as const }
-  }
+  })()
   await args.callbacks.assertBoundary(ready)
   await retrySkillRename(temporaryPath, livePath, () => args.callbacks.assertBoundary(ready))
   const applied = {

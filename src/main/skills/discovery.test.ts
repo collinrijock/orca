@@ -76,6 +76,25 @@ describe('skill discovery', () => {
     expect(result.skills).toEqual([])
   })
 
+  it('hard-excludes symlink aliases into reserved updater transactions', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-skills-'))
+    const home = join(root, 'home')
+    const skillsRoot = join(home, '.agents', 'skills')
+    const reservedRoot = join(skillsRoot, '.orca-skill-transactions')
+    const stagedSkill = join(reservedRoot, 'transaction-1', 'stage')
+    await mkdir(stagedSkill, { recursive: true })
+    await writeFile(join(stagedSkill, 'SKILL.md'), '# Staged package')
+    await symlink(
+      reservedRoot,
+      join(skillsRoot, 'alias'),
+      process.platform === 'win32' ? 'junction' : 'dir'
+    )
+
+    const result = await discoverSkills({ homeDir: home, cwd: home, repos: [] })
+
+    expect(result.skills).toEqual([])
+  })
+
   it('discovers skill packages through symlinked skill directories', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-skills-'))
     const home = join(root, 'home')

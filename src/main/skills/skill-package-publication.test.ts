@@ -1,4 +1,4 @@
-import { cp, mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
+import { cp, mkdir, mkdtemp, readFile, rename, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -258,7 +258,9 @@ describe('skill package publication boundaries', () => {
       ) {
         replaced = true
         const target = join(fixture.live, publication.temporary.expectedFile.path)
-        await rm(target)
+        // Keep the original inode alive so filesystems cannot recycle it for
+        // the replacement and make this authority fixture nondeterministic.
+        await rename(target, `${target}.original`)
         await cp(join(fixture.stageRoot, publication.temporary.expectedFile.path), target)
       }
     }

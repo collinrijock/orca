@@ -1,13 +1,14 @@
 import type {
   SkillManagementInstallation,
-  SkillManagementStatus
+  SkillManagementStatus,
+  SkillReplacementPreview
 } from '../../../../shared/skill-management'
 import { translate } from '@/i18n/i18n'
 
 export function managedSkillStatusCopy(status: SkillManagementStatus): string {
   switch (status) {
     case 'managed-current':
-      return translate('auto.components.settings.ManagedOrcaSkills.managedCurrent', 'Managed')
+      return translate('auto.components.settings.ManagedOrcaSkills.managedCurrent', 'Up to date')
     case 'managed-update-available':
       return translate(
         'auto.components.settings.ManagedOrcaSkills.managedUpdate',
@@ -16,21 +17,21 @@ export function managedSkillStatusCopy(status: SkillManagementStatus): string {
     case 'known-current':
       return translate(
         'auto.components.settings.ManagedOrcaSkills.availableToManage',
-        'Available to manage'
+        'Not tracked'
       )
     case 'known-update-available':
       return translate(
         'auto.components.settings.ManagedOrcaSkills.manageAndUpdate',
-        'Manage and update'
+        'Update available'
       )
     case 'newer-known':
-      return translate('auto.components.settings.ManagedOrcaSkills.newerKnown', 'Newer release')
+      return translate('auto.components.settings.ManagedOrcaSkills.newerKnown', 'Newer than Orca')
     case 'modified':
-      return translate('auto.components.settings.ManagedOrcaSkills.modified', 'Modified')
+      return translate('auto.components.settings.ManagedOrcaSkills.modified', 'Local changes')
     case 'unknown':
-      return translate('auto.components.settings.ManagedOrcaSkills.unknown', 'Unknown copy')
+      return translate('auto.components.settings.ManagedOrcaSkills.unknown', 'Unrecognized')
     case 'externally-managed':
-      return translate('auto.components.settings.ManagedOrcaSkills.external', 'Externally managed')
+      return translate('auto.components.settings.ManagedOrcaSkills.external', 'Managed elsewhere')
     case 'inaccessible':
       return translate('auto.components.settings.ManagedOrcaSkills.inaccessible', 'Inaccessible')
     case 'update-failed':
@@ -38,17 +39,76 @@ export function managedSkillStatusCopy(status: SkillManagementStatus): string {
   }
 }
 
-export function managedSkillDiagnosticCopy(
-  installation: Pick<
-    SkillManagementInstallation,
-    'installedReleaseRevision' | 'installedAppVersion' | 'installedPackageDigest'
-  >
+export function managedSkillSummaryCopy(
+  installation: Pick<SkillManagementInstallation, 'status'>
 ): string {
-  const digest = installation.installedPackageDigest?.slice(0, 8) ?? '—'
-  if (installation.installedReleaseRevision === null || installation.installedAppVersion === null) {
-    // Why: the current app version says nothing about which release produced
-    // unknown bytes, so diagnostic copy must not invent provenance.
-    return `${translate('auto.components.settings.ManagedOrcaSkills.unverified', 'unverified')} · ${digest}`
+  switch (installation.status) {
+    case 'managed-current':
+      return translate(
+        'auto.components.settings.ManagedOrcaSkills.summaryManagedCurrent',
+        'Orca is tracking this skill for new versions.'
+      )
+    case 'known-current':
+      return translate(
+        'auto.components.settings.ManagedOrcaSkills.summaryKnownCurrent',
+        'This installed copy matches Orca’s current version.'
+      )
+    case 'known-update-available':
+    case 'managed-update-available':
+      return translate(
+        'auto.components.settings.ManagedOrcaSkills.summaryUpdateAvailable',
+        'A newer official version is ready to install.'
+      )
+    case 'newer-known':
+      return translate(
+        'auto.components.settings.ManagedOrcaSkills.summaryNewerKnown',
+        'This installed copy is newer than the version bundled with Orca.'
+      )
+    case 'modified':
+      return translate(
+        'auto.components.settings.ManagedOrcaSkills.summaryModified',
+        'This installed copy has local changes. Review them before replacing it.'
+      )
+    case 'unknown':
+      return translate(
+        'auto.components.settings.ManagedOrcaSkills.summaryUnknown',
+        'This installed copy does not match a known Orca version.'
+      )
+    case 'externally-managed':
+      return translate(
+        'auto.components.settings.ManagedOrcaSkills.summaryExternal',
+        'Another installer controls this copy, so Orca will not change it.'
+      )
+    case 'inaccessible':
+      return translate(
+        'auto.components.settings.ManagedOrcaSkills.summaryInaccessible',
+        'Orca could not read this installed copy.'
+      )
+    case 'update-failed':
+      return translate(
+        'auto.components.settings.ManagedOrcaSkills.summaryFailed',
+        'The last update failed. Your previous copy was kept.'
+      )
   }
-  return `r${installation.installedReleaseRevision} · Orca ${installation.installedAppVersion} · ${digest}`
+}
+
+export function managedSkillDisplayName(name: string): string {
+  const preferredWords: Record<string, string> = { orca: 'Orca', cli: 'CLI' }
+  return name
+    .split('-')
+    .map((word) => preferredWords[word] ?? `${word.slice(0, 1).toUpperCase()}${word.slice(1)}`)
+    .join(' ')
+}
+
+export function managedSkillReplacementChangeCopy(
+  change: SkillReplacementPreview['files'][number]['change']
+): string {
+  switch (change) {
+    case 'added':
+      return translate('auto.components.settings.ManagedOrcaSkills.changeAdded', 'Added')
+    case 'removed':
+      return translate('auto.components.settings.ManagedOrcaSkills.changeRemoved', 'Removed')
+    case 'modified':
+      return translate('auto.components.settings.ManagedOrcaSkills.changeModified', 'Modified')
+  }
 }

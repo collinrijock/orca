@@ -221,6 +221,7 @@ export async function buildSkillTransactionPackage(args: {
         contentState: 'created'
       }
     }
+    let completed = false
     try {
       await args.journal(evidence)
       await args.assertSourceAuthority()
@@ -271,8 +272,10 @@ export async function buildSkillTransactionPackage(args: {
       await args.assertBoundary(evidence)
       await (args.runtime?.syncFile ?? ((target) => target.sync()))(handle)
       await args.assertBoundary(evidence)
+      completed = true
     } finally {
-      await handle.close()
+      const closing = handle.close()
+      await (completed ? closing : closing.catch(() => undefined))
     }
     evidence = {
       ...evidence,

@@ -80,22 +80,26 @@ try {
   // Why: shipped packages are currently single-file, so this temporary source
   // package keeps nested, binary, and POSIX executable semantics in the real CLI oracle.
   await createRepresentativeFixture()
+  const cliArgs = [
+    '--yes',
+    `skills@${cliVersion}`,
+    'add',
+    source,
+    '--skill',
+    ...skillNames,
+    '--agent',
+    'codex',
+    'claude-code',
+    '--global',
+    '--yes',
+    ...(shape === 'copy' ? ['--copy'] : [])
+  ]
+  // Why: Node 24 rejects direct .cmd execution on Windows; cmd.exe is the
+  // native launcher while POSIX keeps the argument-safe direct npx path.
+  const cliExecutable = process.platform === 'win32' ? (process.env.ComSpec ?? 'cmd.exe') : 'npx'
   execFileSync(
-    process.platform === 'win32' ? 'npx.cmd' : 'npx',
-    [
-      '--yes',
-      `skills@${cliVersion}`,
-      'add',
-      source,
-      '--skill',
-      ...skillNames,
-      '--agent',
-      'codex',
-      'claude-code',
-      '--global',
-      '--yes',
-      ...(shape === 'copy' ? ['--copy'] : [])
-    ],
+    cliExecutable,
+    process.platform === 'win32' ? ['/d', '/s', '/c', 'npx.cmd', ...cliArgs] : cliArgs,
     {
       cwd: source,
       env: {

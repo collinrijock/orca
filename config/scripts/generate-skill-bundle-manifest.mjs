@@ -94,7 +94,11 @@ function gitTreeSha(entries) {
         name: file.filename,
         hash: Buffer.from(file.gitBlobSha, 'hex')
       }))
-    ].sort((left, right) => Buffer.from(left.name).compare(Buffer.from(right.name)))
+    ].sort((left, right) => {
+      const leftName = left.mode === '40000' ? `${left.name}/` : left.name
+      const rightName = right.mode === '40000' ? `${right.name}/` : right.name
+      return Buffer.from(leftName).compare(Buffer.from(rightName))
+    })
     const body = Buffer.concat(
       children.map(({ mode, name, hash }) =>
         Buffer.concat([Buffer.from(`${mode} ${name}\0`, 'utf8'), hash])

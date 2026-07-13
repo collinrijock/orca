@@ -3744,9 +3744,9 @@
       "platforms": ["macos", "linux", "windows"],
       "providers": ["local", "daemon", "ssh", "wsl", "remote-runtime"],
       "coveredPlatforms": ["macos"],
-      "coveredProviders": ["local", "daemon", "ssh", "wsl", "remote-runtime"],
+      "coveredProviders": ["local", "daemon", "wsl", "remote-runtime"],
       "coverageNotes": "Deterministic provider-contract tests prove that the shared local/daemon/WSL IPC path preserves numeric process status, while remote runtime stream retirement reports unknown status and ownership accepts only numeric zero.",
-      "motivatingLinks": ["https://github.com/stablyai/orca"],
+      "motivatingLinks": ["https://github.com/stablyai/orca/pull/8496"],
       "invariant": "A transport may report numeric zero only when its terminal provider supplies an authoritative process exit; disconnect, stale-handle retirement, and stream end remain unknown and cannot grant skill ownership.",
       "oracle": "Drive the IPC PTY transport with zero and nonzero process exits, drive remote runtime close/end/stale events without a process status, and assert the install decision accepts only code zero after an active install window.",
       "commands": [
@@ -3810,6 +3810,7 @@
       ],
       "knownGaps": [
         "Daemon and WSL use the same IPC transport contract as local but do not yet have live provider processes in this unit gate.",
+        "SSH exit-status propagation does not yet have deterministic or live provider evidence in this gate.",
         "Remote runtimes currently expose stream completion rather than an authoritative subprocess exit status."
       ],
       "demotionRule": "Demote or quarantine if the gate flakes once without a product or harness issue filed to the owner."
@@ -3827,7 +3828,7 @@
       "coveredPlatforms": ["macos"],
       "coveredProviders": ["local"],
       "coverageNotes": "Deterministic fixtures prove depth, entry, file-count, per-file-byte, and aggregate-byte limits and prove one inaccessible candidate cannot hide healthy siblings.",
-      "motivatingLinks": ["https://github.com/stablyai/orca"],
+      "motivatingLinks": ["https://github.com/stablyai/orca/pull/8496"],
       "invariant": "Always-mounted and focus-triggered skill inventory performs bounded directory and byte work per candidate, and a pathological candidate cannot reject or hide healthy sibling rows.",
       "oracle": "Drive tiny injected limits across depth, entries, files, single-file bytes, and aggregate bytes; then inventory an oversized and an access-denied candidate beside a healthy official copy and assert stable fail-closed rows plus the healthy sibling.",
       "commands": [

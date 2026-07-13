@@ -81,6 +81,11 @@ async function findSkillFiles(rootPath: string, maxDepth: number): Promise<strin
     } catch {
       return
     }
+    if (resolvedDirPath.split(sep).includes(RESERVED_SKILL_TRANSACTION_DIRECTORY)) {
+      // Why: a differently named provider symlink must not make crash-recovery
+      // packages visible as installed skills.
+      return
+    }
     if (visitedDirectoryPaths.has(resolvedDirPath)) {
       return
     }

@@ -46,13 +46,10 @@ export async function loadSkillBundleArtifacts(
   if (!('skills' in manifest) || !Array.isArray(manifest.skills)) {
     throw new Error('Invalid skill bundle manifest')
   }
-  if (
-    !('appVersion' in manifest) ||
-    typeof manifest.appVersion !== 'string' ||
-    !('skills' in registry) ||
-    typeof registry.skills !== 'object' ||
-    registry.skills === null
-  ) {
+  if (!('appVersion' in manifest) || typeof manifest.appVersion !== 'string') {
+    throw new Error('Invalid skill bundle manifest')
+  }
+  if (!('skills' in registry) || typeof registry.skills !== 'object' || registry.skills === null) {
     throw new Error('Invalid skill snapshot registry')
   }
   if (!('releases' in releaseMapping) || !Array.isArray(releaseMapping.releases)) {

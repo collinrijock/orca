@@ -97,6 +97,22 @@ describe('skill bundle manifest generator', () => {
     expect(gitTreeSha(files)).toMatch(/^[a-f0-9]{40}$/)
   })
 
+  it('matches Git when a directory and file share a name prefix', async () => {
+    const packageRoot = await createPackage()
+    await mkdir(path.join(packageRoot, 'sub'))
+    await writeFile(path.join(packageRoot, 'sub', 'inner.txt'), 'nested\n')
+    await writeFile(path.join(packageRoot, 'sub.md'), 'sibling\n')
+    const files = await collectPackageFiles(packageRoot)
+    execFileSync('git', ['init', '--quiet'], { cwd: packageRoot })
+    execFileSync('git', ['add', '-A'], { cwd: packageRoot })
+    const expected = execFileSync('git', ['write-tree'], {
+      cwd: packageRoot,
+      encoding: 'utf8'
+    }).trim()
+
+    expect(gitTreeSha(files)).toBe(expected)
+  })
+
   it('rejects a released revision that differs from the tagged package', () => {
     const digest = 'a'.repeat(64)
     const artifacts = {

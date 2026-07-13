@@ -70,6 +70,7 @@ export async function sweepOrphanedSkillTransactions(
       continue
     }
     const entries = await readdir(reservedRoot, { withFileTypes: true })
+    entries.sort((left, right) => left.name.localeCompare(right.name, 'en'))
     for (const entry of entries) {
       if (!entry.isDirectory() || entry.name === 'locks') {
         continue
@@ -86,16 +87,16 @@ export async function sweepOrphanedSkillTransactions(
       } catch {
         continue
       }
-      const locksRoot = join(reservedRoot, 'locks')
-      await mkdir(locksRoot, { recursive: true })
-      const locksRootSafe = await lstat(locksRoot).then(
-        (lockStat) => lockStat.isDirectory() && !lockStat.isSymbolicLink()
-      )
-      if (!locksRootSafe) {
-        continue
-      }
       let release: (() => Promise<void>) | null = null
       try {
+        const locksRoot = join(reservedRoot, 'locks')
+        await mkdir(locksRoot, { recursive: true })
+        const locksRootSafe = await lstat(locksRoot).then(
+          (lockStat) => lockStat.isDirectory() && !lockStat.isSymbolicLink()
+        )
+        if (!locksRootSafe) {
+          continue
+        }
         release = await acquireSkillDestinationLock(join(locksRoot, marker.destinationId))
         const record = ledger.destinations[marker.destinationId]
         const committed = Boolean(
@@ -113,12 +114,11 @@ export async function sweepOrphanedSkillTransactions(
           currentDisposition: committed ? 'committed' : 'restore'
         })
         await rm(transactionRoot, { recursive: true, force: true })
-      } catch (error) {
-        if (!(error instanceof Error) || error.message !== 'skill-update-busy') {
-          throw error
-        }
+      } catch {
+        // Why: orphan sweeping is best-effort; retain this transaction's
+        // evidence without preventing independent siblings from recovering.
       } finally {
-        await release?.()
+        await release?.().catch(() => undefined)
       }
     }
   }

@@ -1,24 +1,28 @@
 import { describe, expect, it } from 'vitest'
-import { managedSkillDiagnosticCopy } from './managed-skill-status-copy'
+import {
+  managedSkillDisplayName,
+  managedSkillReplacementChangeCopy,
+  managedSkillSummaryCopy
+} from './managed-skill-status-copy'
 
-describe('managed skill diagnostic copy', () => {
-  it('does not attribute unknown bytes to the current Orca release', () => {
-    expect(
-      managedSkillDiagnosticCopy({
-        installedReleaseRevision: null,
-        installedAppVersion: null,
-        installedPackageDigest: 'abcdef0123456789'
-      })
-    ).toBe('unverified · abcdef01')
+describe('managed skill settings copy', () => {
+  it('explains the user decision instead of exposing release diagnostics', () => {
+    expect(managedSkillSummaryCopy({ status: 'known-current' })).toBe(
+      'This installed copy matches Orca’s current version.'
+    )
+    expect(managedSkillSummaryCopy({ status: 'modified' })).toBe(
+      'This installed copy has local changes. Review them before replacing it.'
+    )
   })
 
-  it('shows release provenance only for a mapped snapshot', () => {
+  it('turns package identifiers into readable skill names', () => {
+    expect(managedSkillDisplayName('computer-use')).toBe('Computer Use')
+    expect(managedSkillDisplayName('orca-cli')).toBe('Orca CLI')
+  })
+
+  it('localizes replacement change labels', () => {
     expect(
-      managedSkillDiagnosticCopy({
-        installedReleaseRevision: 7,
-        installedAppVersion: '1.2.3',
-        installedPackageDigest: 'abcdef0123456789'
-      })
-    ).toBe('r7 · Orca 1.2.3 · abcdef01')
+      (['added', 'removed', 'modified'] as const).map(managedSkillReplacementChangeCopy)
+    ).toEqual(['Added', 'Removed', 'Modified'])
   })
 })
