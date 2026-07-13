@@ -6,6 +6,10 @@ import type {
   WatcherProcessSubscription
 } from '../ipc/parcel-watcher-process'
 import { WatcherProcessFailure } from '../ipc/parcel-watcher-process-failure'
+import {
+  WATCHER_IGNORE_DIRS,
+  buildParcelWatcherIgnoreOptions
+} from '../ipc/filesystem-watcher-ignore'
 
 const {
   forgetRuntimeWatcherProcessRootMock,
@@ -87,7 +91,7 @@ describe('watchFileExplorerInWatcherProcess', () => {
     expect(subscribeViaRuntimeWatcherProcessMock).toHaveBeenCalledWith(
       '/repo',
       expect.any(Function),
-      expect.objectContaining({ ignore: expect.arrayContaining(['.git', 'node_modules']) }),
+      buildParcelWatcherIgnoreOptions(WATCHER_IGNORE_DIRS),
       expect.objectContaining({
         delivery: { includeDirectoryMetadata: true, maxEventsPerBatch: 200 },
         onInterruption: expect.any(Function),
