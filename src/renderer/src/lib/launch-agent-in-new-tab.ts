@@ -222,7 +222,9 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
       groupId,
       hasPrompt,
       startupPlan,
-      ...initialViewModeProps,
+      // Why: omission means terminal locally, but would let a paired host apply
+      // its own default; send the client's resolved terminal choice explicitly.
+      viewMode: initialViewModeProps.viewMode ?? 'terminal',
       onPromptDelivered
     })
     return { tabId: null, startupPlan, pasteDraftAfterLaunch: false }

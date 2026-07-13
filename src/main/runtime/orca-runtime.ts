@@ -2139,7 +2139,11 @@ export class OrcaRuntimeService {
   // creates so ordinary renderer spawns never publish here.
   private pendingMobileTerminalCreatesByKey = new Map<
     string,
-    { activate: boolean; selectIfNoActiveTab: boolean }
+    {
+      activate: boolean
+      selectIfNoActiveTab: boolean
+      viewMode?: 'terminal' | 'chat'
+    }
   >()
   private mobileSessionTabListeners = new Set<(snapshot: RuntimeMobileSessionTabsResult) => void>()
   // Why: coalesces title/status-driven session.tabs emits so spinner churn
@@ -3663,6 +3667,7 @@ export class OrcaRuntimeService {
       activate: boolean
       selectIfNoActiveTab?: boolean
       startupCwd?: string
+      viewMode?: 'terminal' | 'chat'
       split?: { splitFromLeafId: string; direction: 'horizontal' | 'vertical' }
     }
   ): void {
@@ -3694,6 +3699,17 @@ export class OrcaRuntimeService {
       baseLayout,
       args.split
     )
+    // Why: a main-side PTY rescue or split publication must not erase the
+    // host's explicit tab mode before the renderer graph catches up.
+    const viewMode =
+      args.viewMode ??
+      existingTab?.viewMode ??
+      existing?.tabs.find(
+        (candidate): candidate is RuntimeMobileSessionTerminalTab =>
+          candidate.type === 'terminal' &&
+          candidate.parentTabId === args.tabId &&
+          candidate.viewMode !== undefined
+      )?.viewMode
     const tab: RuntimeMobileSessionTerminalTab = {
       type: 'terminal',
       id: `${args.tabId}::${args.leafId}`,
@@ -3703,6 +3719,7 @@ export class OrcaRuntimeService {
       title,
       ...(pty.launchAgent ? { launchAgent: pty.launchAgent } : {}),
       ...(args.startupCwd ? { startupCwd: args.startupCwd } : {}),
+      ...(viewMode ? { viewMode } : {}),
       parentLayout,
       isActive:
         args.activate || (args.selectIfNoActiveTab !== false && existing?.activeTabId == null)
@@ -18016,7 +18033,8 @@ export class OrcaRuntimeService {
     // requested group, so any wrong-group placement is cosmetic and stall-window-only.
     this.pendingMobileTerminalCreatesByKey.set(pendingCreateKey, {
       activate: opts.activate !== false,
-      selectIfNoActiveTab: true
+      selectIfNoActiveTab: true,
+      ...(opts.viewMode ? { viewMode: opts.viewMode } : {})
     })
     try {
       // Why: the PTY spawn and the tabCreate reply race on independent IPC
@@ -18224,6 +18242,11 @@ export class OrcaRuntimeService {
     }
     const parentTabId = livePty.pty.tabId ?? `pty:${livePty.pty.ptyId}`
     const leafId = parsePaneKey(livePty.pty.paneKey ?? '')?.leafId ?? randomUUID()
+    if (opts.viewMode) {
+      // Why: the runtime-owned binding must survive a serve restart with the
+      // same initial mode, not fall back to a later client's local default.
+      this.persistHeadlessSessionTabProps(worktreeId, parentTabId, { viewMode: opts.viewMode })
+    }
     const existing = this.mobileSessionTabsByWorktree.get(worktreeId)
     const existingSurface =
       existing?.tabs.find(
@@ -18393,21 +18416,27 @@ export class OrcaRuntimeService {
       return null
     }
     const existing = this.findMobileTerminalSurface(worktreeId, tabId)
-    if (existing) {
-      // Why: the renderer's own publication already landed; stay idempotent.
+    if (
+      existing &&
+      this.isReadyMobileTerminalSurface(existing) &&
+      (pending.viewMode === undefined || existing.tab.viewMode === pending.viewMode)
+    ) {
+      // Why: the renderer's ready publication already landed with the intended
+      // mode; only a pending shell still needs the main-side PTY rescue.
       return existing
     }
     const pty = this.findLiveRegisteredPtyForRendererTab(worktreeId, tabId)
     const leafId = pty ? parsePaneKey(pty.paneKey ?? '')?.leafId : undefined
     if (!pty || !leafId) {
-      return null
+      return existing
     }
     this.publishPtyBackedMobileSessionTerminal(worktreeId, pty, {
       tabId,
       leafId,
       title: null,
       activate: pending.activate,
-      selectIfNoActiveTab: pending.selectIfNoActiveTab
+      selectIfNoActiveTab: pending.selectIfNoActiveTab,
+      ...(pending.viewMode ? { viewMode: pending.viewMode } : {})
     })
     // Why: waitForMobileTerminalSurface's check closures are drained only inside
     // syncWindowGraph; a main-side publish must drain them too or the pending
