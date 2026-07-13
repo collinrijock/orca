@@ -103,20 +103,20 @@ Slack, GitHub comments, or any other channel to reach a human during the run.
   # blocks on \`check --wait\` until the coordinator replies, then prints the
   # reply body. Use it anywhere you would otherwise have reached for
   # AskUserQuestion.
-  ${cli} orchestration ask --to ${params.coordinatorHandle} \\
+  ${cli} orchestration ask --to ${params.coordinatorHandle} --from ${params.workerHandle} \\
     --question "<your question>" \\
     --options "<optional,comma,separated>" \\
     --timeout-ms 600000
 
   # Escalate a blocker or failure (pre-completion, when you need the
   # coordinator to do something before you can continue):
-  ${cli} orchestration send --to ${params.coordinatorHandle} \\
+  ${cli} orchestration send --to ${params.coordinatorHandle} --from ${params.workerHandle} \\
     --type escalation --subject "Blocked: <reason>" \\
     --body "<details>" \\
     --task-id ${params.taskId}
 
   # Check for messages from the coordinator:
-  ${cli} orchestration check
+  ${cli} orchestration check --terminal ${params.workerHandle}
 
 ${postDoneInstructions}`
 

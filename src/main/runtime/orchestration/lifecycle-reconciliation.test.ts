@@ -20,8 +20,9 @@ describe('lifecycle reconciliation', () => {
       payload: JSON.stringify({ taskId: task.id, dispatchId: dispatch.id })
     })
 
-    expect(reconcileLifecycleMessage(db, message, (line) => logs.push(line))).toEqual({
-      action: 'ignored'
+    expect(reconcileLifecycleMessage(db, message, (line) => logs.push(line))).toMatchObject({
+      action: 'rejected',
+      code: 'sender_not_assignee'
     })
     expect(db.getTask(task.id)?.status).toBe('dispatched')
     expect(db.getDispatchContextById(dispatch.id)?.status).toBe('dispatched')
@@ -82,7 +83,7 @@ describe('lifecycle reconciliation', () => {
       senderPaneKey: 'tab_w:42'
     })
 
-    expect(reconcileLifecycleMessage(db, message).action).toBe('ignored')
+    expect(reconcileLifecycleMessage(db, message).action).toBe('rejected')
     expect(db.getTask(task.id)?.status).toBe('dispatched')
   })
 
@@ -99,8 +100,25 @@ describe('lifecycle reconciliation', () => {
       senderPaneKey: `tab_w2:${LEAF_B}`
     })
 
-    expect(reconcileLifecycleMessage(db, message)).toEqual({ action: 'ignored' })
+    expect(reconcileLifecycleMessage(db, message)).toMatchObject({
+      action: 'rejected',
+      code: 'sender_not_assignee',
+      reason: expect.stringContaining('expected handle term_owner')
+    })
     expect(db.getTask(task.id)?.status).toBe('dispatched')
+    expect(db.getMessageById(message.id)).toMatchObject({
+      type: 'worker_done',
+      priority: 'high',
+      subject: 'Rejected worker_done: Done',
+      body: expect.stringContaining('Orca rejected this worker_done')
+    })
+    const persisted = db.getMessageById(message.id)
+    expect(JSON.parse(persisted?.payload ?? '{}')).toMatchObject({
+      taskId: task.id,
+      dispatchId: dispatch.id,
+      _orcaLifecycleRejection: { code: 'sender_not_assignee' }
+    })
+    expect(persisted && reconcileLifecycleMessage(db, persisted)).toEqual({ action: 'ignored' })
   })
 
   it('rejects a coordinator completion for a pane-bound dispatch', () => {
@@ -115,7 +133,10 @@ describe('lifecycle reconciliation', () => {
       payload: JSON.stringify({ taskId: task.id, dispatchId: dispatch.id })
     })
 
-    expect(reconcileLifecycleMessage(db, message)).toEqual({ action: 'ignored' })
+    expect(reconcileLifecycleMessage(db, message)).toMatchObject({
+      action: 'rejected',
+      code: 'sender_not_assignee'
+    })
     expect(db.getTask(task.id)?.status).toBe('dispatched')
   })
 
@@ -141,7 +162,10 @@ describe('lifecycle reconciliation', () => {
       type: 'worker_done',
       payload: JSON.stringify({ taskId: rejectedTask.id, dispatchId: rejectedDispatch.id })
     })
-    expect(reconcileLifecycleMessage(db, rejected)).toEqual({ action: 'ignored' })
+    expect(reconcileLifecycleMessage(db, rejected)).toMatchObject({
+      action: 'rejected',
+      code: 'sender_not_assignee'
+    })
     expect(db.getTask(rejectedTask.id)?.status).toBe('dispatched')
   })
 
@@ -160,7 +184,10 @@ describe('lifecycle reconciliation', () => {
       payload,
       senderPaneKey: `tab_c:${LEAF_B}`
     })
-    expect(reconcileLifecycleMessage(db, foreign)).toEqual({ action: 'ignored' })
+    expect(reconcileLifecycleMessage(db, foreign)).toMatchObject({
+      action: 'rejected',
+      code: 'sender_not_assignee'
+    })
     expect(db.getTask(child.id)?.status).toBe('pending')
 
     const owner = db.insertMessage({
@@ -199,11 +226,14 @@ describe('lifecycle reconciliation', () => {
       payload,
       senderPaneKey: `tab_f:${LEAF_B}`
     })
-    expect(reconcileLifecycleMessage(db, replay)).toEqual({ action: 'ignored' })
+    expect(reconcileLifecycleMessage(db, replay)).toMatchObject({
+      action: 'rejected',
+      code: 'sender_not_assignee'
+    })
     expect(db.getTask(task.id)?.result).toBe(result)
   })
 
-  it('ignores worker_done sent from a different pane', () => {
+  it('surfaces worker_done sent from a different pane as rejected', () => {
     db = new OrchestrationDb(':memory:')
     const task = db.createTask({ spec: 'work' })
     const dispatch = db.createDispatchContext(task.id, 'term_owner', `tab_w1:${LEAF_A}`)
@@ -217,15 +247,16 @@ describe('lifecycle reconciliation', () => {
       senderPaneKey: `tab_w2:${LEAF_B}`
     })
 
-    expect(reconcileLifecycleMessage(db, message, (line) => logs.push(line))).toEqual({
-      action: 'ignored'
+    expect(reconcileLifecycleMessage(db, message, (line) => logs.push(line))).toMatchObject({
+      action: 'rejected',
+      code: 'sender_not_assignee'
     })
     expect(db.getTask(task.id)?.status).toBe('dispatched')
     expect(db.getDispatchContextById(dispatch.id)?.status).toBe('dispatched')
-    expect(logs.some((line) => line.includes('lacked assignee authority'))).toBe(true)
+    expect(logs.some((line) => line.includes('worker_done rejected'))).toBe(true)
   })
 
-  it('ignores a heartbeat sent from a different pane without recording liveness', () => {
+  it('surfaces a heartbeat sent from a different pane without recording liveness', () => {
     db = new OrchestrationDb(':memory:')
     const task = db.createTask({ spec: 'work' })
     const dispatch = db.createDispatchContext(task.id, 'term_owner', `tab_w1:${LEAF_A}`)
@@ -238,11 +269,18 @@ describe('lifecycle reconciliation', () => {
       senderPaneKey: `tab_w2:${LEAF_B}`
     })
 
-    expect(reconcileLifecycleMessage(db, heartbeat)).toEqual({ action: 'ignored' })
+    expect(reconcileLifecycleMessage(db, heartbeat)).toMatchObject({
+      action: 'rejected',
+      code: 'sender_not_assignee'
+    })
     expect(db.getDispatchContextById(dispatch.id)?.last_heartbeat_at).toBeNull()
+    expect(db.getMessageById(heartbeat.id)).toMatchObject({
+      type: 'heartbeat',
+      subject: 'Rejected heartbeat: alive'
+    })
   })
 
-  it('ignores a foreign heartbeat that claims the assignee handle', () => {
+  it('surfaces a foreign heartbeat that claims the assignee handle', () => {
     db = new OrchestrationDb(':memory:')
     const task = db.createTask({ spec: 'work' })
     const dispatch = db.createDispatchContext(task.id, 'term_owner', `tab_w1:${LEAF_A}`)
@@ -255,7 +293,10 @@ describe('lifecycle reconciliation', () => {
       senderPaneKey: `tab_w2:${LEAF_B}`
     })
 
-    expect(reconcileLifecycleMessage(db, heartbeat)).toEqual({ action: 'ignored' })
+    expect(reconcileLifecycleMessage(db, heartbeat)).toMatchObject({
+      action: 'rejected',
+      code: 'sender_not_assignee'
+    })
     expect(db.getDispatchContextById(dispatch.id)?.last_heartbeat_at).toBeNull()
   })
 

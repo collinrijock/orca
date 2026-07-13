@@ -116,7 +116,9 @@ async function runLegacyRemoteOrcaCli(
     return {
       stdout: formatted.stdout,
       stderr: formatted.stderr,
-      exitCode: response.ok ? 0 : 1
+      // Why: the legacy SSH bridge bypasses the local CLI handler that turns
+      // a persisted lifecycle rejection into an unsuccessful command.
+      exitCode: response.ok && !hasLifecycleRejection(response.result) ? 0 : 1
     }
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
@@ -137,6 +139,14 @@ async function runLegacyRemoteOrcaCli(
     }
     return { stdout: '', stderr: `${message}\n`, exitCode: 1 }
   }
+}
+
+function hasLifecycleRejection(result: unknown): boolean {
+  if (!result || typeof result !== 'object') {
+    return false
+  }
+  const lifecycle = (result as { lifecycle?: unknown }).lifecycle
+  return typeof lifecycle === 'object' && (lifecycle as { action?: unknown }).action === 'rejected'
 }
 
 async function dispatchRemoteCli(

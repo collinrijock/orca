@@ -11,7 +11,8 @@ vi.mock('../persistence', () => ({
   getCanonicalUserDataPath: () => '/host/user-data'
 }))
 
-import type { OrcaRuntimeService } from '../runtime/orca-runtime'
+import { OrchestrationDb } from '../runtime/orchestration/db'
+import { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type { HostCliPassthroughOptions } from './ssh-remote-cli-host-passthrough'
 import { runRemoteOrcaCli } from './ssh-remote-orca-cli'
 
@@ -168,6 +169,54 @@ describe('runRemoteOrcaCli', () => {
     expect(db.insertMessage).toHaveBeenCalledWith(
       expect.objectContaining({ senderPaneKey: 'tab_ssh:leaf_ssh' })
     )
+  })
+
+  it('returns a non-zero status for lifecycle rejection through the legacy fallback', async () => {
+    const db = new OrchestrationDb(':memory:')
+    const runtime = new OrcaRuntimeService()
+    runtime.setOrchestrationDb(db)
+    vi.spyOn(runtime, 'deliverPendingMessagesForHandle').mockImplementation(() => {})
+    vi.spyOn(runtime, 'notifyMessageArrived').mockImplementation(() => {})
+    const task = db.createTask({ spec: 'remote work' })
+    const dispatch = db.createDispatchContext(task.id, 'term_ssh', 'tab_owner:leaf_owner')
+
+    try {
+      const result = await runRemoteOrcaCli(
+        runtime,
+        {
+          argv: [
+            'orchestration',
+            'send',
+            '--from',
+            'term_ssh',
+            '--to',
+            'term_coord',
+            '--subject',
+            'Done',
+            '--type',
+            'worker_done',
+            '--payload',
+            JSON.stringify({ taskId: task.id, dispatchId: dispatch.id }),
+            '--json'
+          ],
+          cwd: '/home/alice/repo',
+          env: { ORCA_PANE_KEY: 'tab_foreign:leaf_foreign' }
+        },
+        LEGACY_FALLBACK_OPTIONS
+      )
+
+      expect(result.exitCode).toBe(1)
+      expect(JSON.parse(result.stdout)).toMatchObject({
+        ok: true,
+        result: {
+          message: { type: 'worker_done', subject: 'Rejected worker_done: Done' },
+          lifecycle: { action: 'rejected', code: 'sender_not_assignee' }
+        }
+      })
+      expect(db.getTask(task.id)?.status).toBe('dispatched')
+    } finally {
+      db.close()
+    }
   })
 
   it('accepts equals-style orchestration flags in the remote shim', async () => {

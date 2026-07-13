@@ -90,7 +90,7 @@ describe('buildDispatchPreamble', () => {
 
   it('includes ask block with BEHAVIOR RULE #1 forbidding AskUserQuestion', () => {
     const result = buildDispatchPreamble(baseParams())
-    expect(result).toContain('orchestration ask')
+    expect(result).toMatch(/orchestration ask --to term_coord --from term_worker/)
     expect(result).toContain('--question')
     expect(result).toContain('--timeout-ms 600000')
     // Why: the exact phrase is asserted so the rule can't be trimmed away by
@@ -104,6 +104,16 @@ describe('buildDispatchPreamble', () => {
     // Three mentions: the one-liner ban, the TUI-prompt rationale, and the
     // "when tempted to reach for AskUserQuestion" closing line.
     expect(occurrences).toBe(3)
+  })
+
+  it('binds every injected worker command to the dispatched terminal', () => {
+    const result = buildDispatchPreamble(baseParams())
+
+    expect(result).toMatch(/orchestration ask --to term_coord --from term_worker/)
+    expect(result).toMatch(
+      /orchestration send --to term_coord --from term_worker \\\n    --type escalation/
+    )
+    expect(result).toContain('orchestration check --terminal term_worker')
   })
 
   it('tells prompt-returning workers to idle without post-done polling', () => {

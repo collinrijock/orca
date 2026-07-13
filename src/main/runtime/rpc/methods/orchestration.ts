@@ -237,6 +237,12 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
           if (reconciled.action === 'suppressed') {
             return { message: msg }
           }
+          if (reconciled.action === 'rejected') {
+            const rejection = db.getMessageById(msg.id) ?? msg
+            runtime.deliverPendingMessagesForHandle(params.to)
+            runtime.notifyMessageArrived(params.to, rejection.type)
+            return { message: rejection, lifecycle: reconciled }
+          }
         }
         runtime.deliverPendingMessagesForHandle(params.to)
         runtime.notifyMessageArrived(params.to, msg.type)
@@ -307,22 +313,26 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
           ? db.getAllMessagesForHandle(handle, undefined, typeFilter)
           : db.getUnreadMessages(handle, typeFilter)
 
+        let visibleMessages = messages
         if (consumeUnread && messages.length > 0) {
           // Why: manual coordinators can consume lifecycle messages before
           // the coordinator loop sees them, but unread `check` is still an
           // authoritative read path for worker_done/heartbeat.
-          for (const message of messages) {
-            reconcileLifecycleMessage(db, message)
-          }
+          visibleMessages = messages.map((message) => {
+            const reconciled = reconcileLifecycleMessage(db, message)
+            return reconciled.action === 'rejected'
+              ? (db.getMessageById(message.id) ?? message)
+              : message
+          })
           db.markAsRead(messages.map((m) => m.id))
         }
 
         if (params.inject) {
-          const formatted = messages.map(formatMessageBanner).join('\n\n')
-          return { messages, formatted, count: messages.length }
+          const formatted = visibleMessages.map(formatMessageBanner).join('\n\n')
+          return { messages: visibleMessages, formatted, count: visibleMessages.length }
         }
 
-        return { messages, count: messages.length }
+        return { messages: visibleMessages, count: visibleMessages.length }
       }
 
       if (signal?.aborted) {

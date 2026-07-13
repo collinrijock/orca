@@ -169,17 +169,34 @@ describe('orchestration RPC methods', () => {
       const dispatch = db.createDispatchContext(task.id, 'term_worker', 'tab_worker:leaf_worker')
       vi.spyOn(runtime, 'getTerminalPaneKey').mockReturnValue('tab_worker:leaf_worker')
       vi.spyOn(runtime, 'deliverPendingMessagesForHandle').mockImplementation(() => {})
+      vi.spyOn(runtime, 'notifyMessageArrived').mockImplementation(() => {})
 
-      await call('orchestration.send', {
+      const result = (await call('orchestration.send', {
         from: 'term_worker',
         to: 'term_coord',
         subject: 'Done',
         type: 'worker_done',
         senderPaneKey: 'tab_foreign:leaf_foreign',
         payload: JSON.stringify({ taskId: task.id, dispatchId: dispatch.id })
-      })
+      })) as {
+        message: { id: string; type: string; subject: string }
+        lifecycle: { action: string; code: string; reason: string }
+      }
 
       expect(db.getTask(task.id)?.status).toBe('dispatched')
+      expect(result.lifecycle).toMatchObject({
+        action: 'rejected',
+        code: 'sender_not_assignee',
+        reason: expect.stringContaining('expected handle term_worker')
+      })
+      expect(result.message).toMatchObject({
+        type: 'worker_done',
+        subject: 'Rejected worker_done: Done'
+      })
+      expect(db.getUnreadMessages('term_coord')).toEqual([
+        expect.objectContaining({ id: result.message.id, type: 'worker_done' })
+      ])
+      expect(runtime.notifyMessageArrived).toHaveBeenCalledWith('term_coord', 'worker_done')
     })
 
     it('does not wake waiters for a heartbeat suppressed at send time', async () => {
@@ -789,6 +806,34 @@ describe('orchestration RPC methods', () => {
       expect(db.getTask(task.id)?.status).toBe('dispatched')
       expect(db.getDispatchContextById(staleDispatch.id)?.status).toBe('failed')
       expect(db.getDispatchContextById(activeDispatch.id)?.status).toBe('dispatched')
+    })
+
+    it('returns a persisted foreign completion as a rejection diagnostic', async () => {
+      setup()
+      const { task, dispatch } = createDispatchedTask('term_worker', 'tab_worker:leaf_worker')
+      insertWorkerDone({
+        from: 'term_foreign',
+        taskId: task.id,
+        dispatchId: dispatch.id,
+        senderPaneKey: 'tab_foreign:leaf_foreign'
+      })
+
+      const result = (await call('orchestration.check', {
+        terminal: 'term_coord',
+        types: 'worker_done'
+      })) as { count: number; messages: { type: string; subject: string; body: string }[] }
+
+      expect(result).toMatchObject({
+        count: 1,
+        messages: [
+          {
+            type: 'worker_done',
+            subject: 'Rejected worker_done: Done',
+            body: expect.stringContaining('expected handle term_worker')
+          }
+        ]
+      })
+      expect(db.getTask(task.id)?.status).toBe('dispatched')
     })
 
     it('records heartbeat returned by unread manual check', async () => {

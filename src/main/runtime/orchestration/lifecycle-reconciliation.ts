@@ -33,8 +33,15 @@ export type LifecycleReconciliationResult =
   // read); senders must not wake waiters for it, unlike `ignored` rows that
   // stay unread and still need delivery.
   | { action: 'suppressed' }
+  | LifecycleRejectionResult
   | { action: 'completed'; taskId: string; dispatchId: string }
   | { action: 'heartbeat_recorded'; dispatchId: string }
+
+export type LifecycleRejectionResult = {
+  action: 'rejected'
+  code: 'sender_not_assignee'
+  reason: string
+}
 
 type LogFn = (msg: string) => void
 
@@ -52,6 +59,11 @@ function parseObjectPayload(msg: MessageRow, onInvalidJson: () => void): Record<
     onInvalidJson()
     return {}
   }
+}
+
+function hasPersistedLifecycleRejection(payload: Record<string, unknown>): boolean {
+  const rejection = payload._orcaLifecycleRejection
+  return Boolean(rejection) && typeof rejection === 'object'
 }
 
 export function reconcileLifecycleMessage(
@@ -87,6 +99,9 @@ function reconcileHeartbeatMessage(
   const payload = parseObjectPayload(msg, () => {
     onLog(`Heartbeat from ${msg.from_handle} has invalid JSON payload; ignored`)
   })
+  if (hasPersistedLifecycleRejection(payload)) {
+    return { action: 'ignored' }
+  }
   const dispatchId = payload.dispatchId
   if (typeof dispatchId !== 'string' || dispatchId.length === 0) {
     onLog(`Heartbeat from ${msg.from_handle} missing dispatchId; ignored`)
@@ -105,10 +120,10 @@ function reconcileHeartbeatMessage(
   if (!hasLifecycleAuthority(dispatch, msg)) {
     // Why: a wrong-pane heartbeat must not refresh liveness — it would mask
     // a hung assignee behind another agent's timer.
-    onLog(
-      `Heartbeat for dispatch ${dispatchId} lacked assignee authority: handle ${msg.from_handle}, pane ${msg.sender_pane_key ?? '<missing>'}; ignored`
-    )
-    return { action: 'ignored' }
+    const reason = buildLifecycleAuthorityRejectionReason(dispatchId, dispatch, msg)
+    onLog(`Heartbeat rejected: ${reason}`)
+    db.convertLifecycleMessageToRejection(msg.id, reason)
+    return { action: 'rejected', code: 'sender_not_assignee', reason }
   }
 
   // Why: dispatchId-specific writes let the DB ignore late heartbeats for
@@ -127,6 +142,9 @@ function reconcileWorkerDoneMessage(
   const payload = parseObjectPayload(msg, () => {
     onLog(`Warning: invalid payload in worker_done from ${msg.from_handle}`)
   })
+  if (hasPersistedLifecycleRejection(payload)) {
+    return { action: 'ignored' }
+  }
 
   const taskId = payload.taskId
   if (typeof taskId !== 'string' || taskId.length === 0) {
@@ -160,10 +178,10 @@ function reconcileWorkerDoneMessage(
     return { action: 'ignored' }
   }
   if (!hasLifecycleAuthority(dispatch, msg)) {
-    onLog(
-      `Warning: worker_done for dispatch ${dispatchId} lacked assignee authority: expected handle ${dispatch.assignee_handle ?? '<unknown>'}, pane ${dispatch.assignee_pane_key ?? '<legacy>'}; got handle ${msg.from_handle}, pane ${msg.sender_pane_key ?? '<missing>'}; ignored`
-    )
-    return { action: 'ignored' }
+    const reason = buildLifecycleAuthorityRejectionReason(dispatchId, dispatch, msg)
+    onLog(`Warning: worker_done rejected: ${reason}`)
+    db.convertLifecycleMessageToRejection(msg.id, reason)
+    return { action: 'rejected', code: 'sender_not_assignee', reason }
   }
   // Why: `orchestration.send` can release the DB lock before waking the
   // coordinator; the later coordinator read still needs to observe completion.
@@ -195,6 +213,18 @@ function reconcileWorkerDoneMessage(
 
   onLog(`Task ${taskId} completed`)
   return { action: 'completed', taskId, dispatchId }
+}
+
+function buildLifecycleAuthorityRejectionReason(
+  dispatchId: string,
+  dispatch: { assignee_handle: string | null; assignee_pane_key: string | null },
+  msg: MessageRow
+): string {
+  return (
+    `dispatch ${dispatchId} expected handle ${dispatch.assignee_handle ?? '<unknown>'}, ` +
+    `pane ${dispatch.assignee_pane_key ?? '<legacy>'}; received handle ${msg.from_handle}, ` +
+    `pane ${msg.sender_pane_key ?? '<missing>'}`
+  )
 }
 
 function suppressEarlierHeartbeats(
