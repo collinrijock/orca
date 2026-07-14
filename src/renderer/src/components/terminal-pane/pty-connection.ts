@@ -4812,6 +4812,9 @@ export function connectPanePty(
     // Why: hidden recovery state belongs to one PTY stream. Reattach/restart
     // can reuse the pane object for a different session before visibility.
     let hiddenOutputRestorePtyId: string | null = null
+    // One recovery re-kick per xterm instance: a window-cap decline schedules
+    // its own retry, and a cooldown decline means a remount is imminent.
+    let certifiedDeadRestoreRecoveryRequested = false
     let hiddenOutputRestoreGeneration = 0
     // Flood-backpressure suppression (HIDDEN_OUTPUT_RESTORE_FLOOD_SUPPRESS_MS).
     let hiddenOutputRestoreFloodSuppressedUntil = 0
@@ -6154,6 +6157,19 @@ export function connectPanePty(
       // in-flight bytes (~60s while idle). Recovery owns the pane now; the
       // remounted pane gets a fresh xterm and a fresh restore.
       if (isTerminalWritePipelineCertifiedDead(pane.terminal)) {
+        // Why the re-kick: certification's own recovery request can be
+        // budget-declined (or its scheduled retry cancelled by a sibling
+        // pane's remount). Without a fallback here, a revealed dead pane
+        // skips its restore forever and keeps the stale pre-death frame.
+        if (!certifiedDeadRestoreRecoveryRequested && !disposed) {
+          certifiedDeadRestoreRecoveryRequested = true
+          const storePtyId = useAppStore.getState().ptyIdsByTabId?.[deps.tabId]?.[0] ?? null
+          void requestTerminalPaneRecovery({
+            tabId: deps.tabId,
+            ptyId: transport.getPtyId() ?? storePtyId,
+            reason: 'restore-blocked'
+          })
+        }
         return false
       }
       resetHiddenOutputRestoreIfPtyChanged()

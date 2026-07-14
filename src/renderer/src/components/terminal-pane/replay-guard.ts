@@ -3,8 +3,10 @@ import { writeForegroundTerminalChunk } from '@/lib/pane-manager/pane-terminal-f
 import { recordRendererCrashBreadcrumb } from '@/lib/crash-breadcrumb-recorder'
 import { ensureArabicShapingJoinerForText } from '@/lib/pane-manager/terminal-arabic-shaping-joiner'
 import {
+  hasTerminalParseProgressSince,
   isTerminalWritePipelineCertifiedDead,
-  notifyUndeliverableWrite
+  notifyUndeliverableWrite,
+  recordTerminalParseProgress
 } from '@/lib/pane-manager/terminal-write-pipeline-health'
 
 // Why: xterm.js auto-responds to terminal query sequences (DA1 `CSI c`,
@@ -50,10 +52,12 @@ export type ReplayingPanesRef = React.RefObject<Map<number, number>>
 //   2. probe completes, replay callback never ran     → every replay byte has
 //      parsed (FIFO), so no further auto-replies can exist; the completion
 //      was genuinely lost. Release.
-//   3. probe never completes                          → the pipeline is
-//      wedged; a dead parser can never emit auto-replies, so releasing after
-//      a bounded wait cannot leak anything — and the pane needs recovery,
-//      which the breadcrumb reports.
+//   3. probe never completes                          → wedged OR merely
+//      behind. Other completions parsing after the probe was queued prove
+//      "behind" — the deadline extends until a fully quiet window passes.
+//      Only a quiet window certifies wedged: a dead parser can never emit
+//      auto-replies, so releasing then cannot leak anything — and the pane
+//      needs recovery, which the breadcrumb reports.
 // While the probe is pending (slow-but-alive replay), the guard HOLDS.
 const REPLAY_GUARD_STALL_CHECK_MS = 10_000
 
@@ -115,24 +119,50 @@ function engageReplayGuard(
     }
     onRelease?.()
   }
+  const armWedgeDeadline = (quietSinceMs: number): void => {
+    timer = setTimeout(() => {
+      if (released) {
+        return
+      }
+      // Why: completions parsed after the probe was queued prove the FIFO is
+      // alive and merely behind (hidden-restore backlogs parse slowly). A
+      // wedge verdict here would open the guard while replay bytes are still
+      // parsing — leaking auto-replies into the agent's stdin — and hand a
+      // healthy pane to recovery. Certify only after a fully quiet window.
+      if (hasTerminalParseProgressSince(terminal, quietSinceMs)) {
+        armWedgeDeadline(Date.now())
+        return
+      }
+      release('wedged')
+    }, stallCheckMs)
+  }
   const probeForStall = (): void => {
     if (released) {
       return
     }
+    const probeQueuedAt = Date.now()
     try {
       // FIFO certification: this callback can only run after every replay
       // byte queued before it has parsed (state 2 above).
-      terminal.write('', () => release('lost-completion'))
+      terminal.write('', () => {
+        recordTerminalParseProgress(terminal)
+        release('lost-completion')
+      })
     } catch {
       // write threw (terminal disposed mid-replay): nothing will ever parse,
       // so no auto-replies can leak.
       release('wedged')
       return
     }
-    timer = setTimeout(() => release('wedged'), stallCheckMs)
+    armWedgeDeadline(probeQueuedAt)
   }
   timer = setTimeout(probeForStall, stallCheckMs)
-  return () => release('parsed')
+  return () => {
+    // Why recorded even after release: a late completion is still parse
+    // progress, and sibling guards' wedge deadlines consult it.
+    recordTerminalParseProgress(terminal)
+    release('parsed')
+  }
 }
 
 /** Writes `data` into the pane's terminal with the replay guard engaged,

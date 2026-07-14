@@ -12,7 +12,12 @@ import { recordRendererCrashBreadcrumb } from '@/lib/crash-breadcrumb-recorder'
 // detach() preserves the live PTY, and the remounted pane builds a fresh
 // xterm that reattaches and replays the daemon snapshot. No shell restart.
 
-export type TerminalPaneRecoveryReason = 'write-stalled' | 'replay-wedged' | 'input-undeliverable'
+export type TerminalPaneRecoveryReason =
+  | 'write-stalled'
+  | 'replay-wedged'
+  | 'input-undeliverable'
+  // A restore was requested for a certified-dead pipeline (reveal path).
+  | 'restore-blocked'
 
 type RecoveryRequest = {
   tabId: string
@@ -159,6 +164,13 @@ export async function requestTerminalPaneRecovery(request: RecoveryRequest): Pro
     return false
   }
   if (!remounted) {
+    // Why: this was the one silent outcome — the tab is gone from the store
+    // (closed/orphaned), so retrying is pointless, but the trace must show
+    // that a certified-dead pane asked for recovery and none happened.
+    recordRendererCrashBreadcrumb('terminal_pane_recovery_remount_unavailable', {
+      tabId: request.tabId,
+      reason: request.reason
+    })
     return false
   }
   const timestamps = recoveryTimestampsByTabId.get(request.tabId) ?? []

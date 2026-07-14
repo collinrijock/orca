@@ -59,6 +59,31 @@ describe('requestTerminalPaneRecovery', () => {
     expect(mocks.hasPty).not.toHaveBeenCalled()
   })
 
+  it('records a breadcrumb when the tab cannot be remounted, without consuming budget', async () => {
+    mocks.remountTerminalTabForRecovery.mockReturnValue(false)
+
+    const result = await requestTerminalPaneRecovery({
+      tabId: 'tab-gone',
+      ptyId: 'pty-1',
+      reason: 'restore-blocked'
+    })
+
+    expect(result).toBe(false)
+    expect(mocks.recordRendererCrashBreadcrumb).toHaveBeenCalledWith(
+      'terminal_pane_recovery_remount_unavailable',
+      { tabId: 'tab-gone', reason: 'restore-blocked' }
+    )
+    // Budget untouched: a later request for the same tab may still remount.
+    mocks.remountTerminalTabForRecovery.mockReturnValue(true)
+    expect(
+      await requestTerminalPaneRecovery({
+        tabId: 'tab-gone',
+        ptyId: 'pty-1',
+        reason: 'restore-blocked'
+      })
+    ).toBe(true)
+  })
+
   it('coalesces repeat requests inside the cooldown window', async () => {
     vi.useFakeTimers()
     vi.setSystemTime(0)
@@ -264,6 +289,11 @@ describe('requestTerminalPaneRecovery', () => {
     })
 
     expect(result).toBe(false)
-    expect(mocks.recordRendererCrashBreadcrumb).not.toHaveBeenCalled()
+    // Not silent anymore: the missing-tab outcome is breadcrumbed (see the
+    // dedicated test above), but no remount breadcrumb may fire.
+    expect(mocks.recordRendererCrashBreadcrumb).not.toHaveBeenCalledWith(
+      'terminal_pane_recovery_remount',
+      expect.anything()
+    )
   })
 })

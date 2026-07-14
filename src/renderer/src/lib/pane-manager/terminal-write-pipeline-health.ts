@@ -21,6 +21,21 @@ type UndeliverableWriteHandler = (reason: UndeliverableWriteReason) => void
 
 const handlersByTerminal = new WeakMap<object, UndeliverableWriteHandler>()
 const certifiedDeadTerminals = new WeakSet<object>()
+// Why: wedge verdicts must distinguish "dead" from "alive but behind". Any
+// write completion on a terminal — scheduler settles and replay releases —
+// reports here, and probe deadlines consult it before certifying.
+const lastParseProgressAtByTerminal = new WeakMap<object, number>()
+
+/** Report one parsed write completion for this terminal. */
+export function recordTerminalParseProgress(terminal: object): void {
+  lastParseProgressAtByTerminal.set(terminal, Date.now())
+}
+
+/** Whether any write completion parsed on this terminal after `sinceMs`. */
+export function hasTerminalParseProgressSince(terminal: object, sinceMs: number): boolean {
+  const at = lastParseProgressAtByTerminal.get(terminal)
+  return at !== undefined && at > sinceMs
+}
 
 type StallWatch = {
   timer: ReturnType<typeof setTimeout>
@@ -131,6 +146,7 @@ export function armTerminalWriteStallWatch(
 
 /** Write completed normally — the pipeline is healthy; drop any pending watch. */
 export function settleTerminalWriteStallWatch(terminal: object): void {
+  recordTerminalParseProgress(terminal)
   const watch = stallWatchByTerminal.get(terminal)
   if (!watch) {
     return
@@ -148,5 +164,6 @@ export function _resetWritePipelineHealthForTests(terminal?: object): void {
     stallWatchByTerminal.delete(terminal)
     handlersByTerminal.delete(terminal)
     certifiedDeadTerminals.delete(terminal)
+    lastParseProgressAtByTerminal.delete(terminal)
   }
 }

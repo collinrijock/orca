@@ -7980,6 +7980,60 @@ describe('connectPanePty', () => {
       )
     })
 
+    it('kicks pane recovery when reveal finds the write pipeline certified dead', async () => {
+      // The 2026-07-13 fossil-pane incident shape: bytes drop while hidden,
+      // the pipeline is certified dead, and certification's own recovery
+      // request came up empty — reveal must re-kick recovery instead of
+      // silently skipping the restore and stranding the stale frame.
+      enableMainAuthority()
+      const remountTerminalTabForRecovery = vi.fn<(tabId: string) => boolean>(() => true)
+      mockStoreState = { ...mockStoreState, remountTerminalTabForRecovery } as StoreState
+      const { _resetTerminalPaneRecoveryForTests } = await import('./terminal-pane-recovery')
+      _resetTerminalPaneRecoveryForTests()
+      const deps = createDeps({ isVisibleRef: { current: false } })
+      const { pane, dataCallback } = await connectHiddenPane(deps)
+      const getMainBufferSnapshot = window.api.pty.getMainBufferSnapshot as unknown as ReturnType<
+        typeof vi.fn
+      >
+      getMainBufferSnapshot.mockResolvedValue({
+        data: 'model snapshot\r\n',
+        cols: 100,
+        rows: 30,
+        seq: 64
+      })
+
+      dataCallback('hidden output\r\n', { seq: 16, rawLength: 16 })
+
+      // Pipeline dies while hidden; the certification-time recovery request
+      // finds no remountable tab (budget stays unconsumed, no retry timer).
+      remountTerminalTabForRecovery.mockReturnValueOnce(false)
+      const { notifyUndeliverableWrite } =
+        await import('@/lib/pane-manager/terminal-write-pipeline-health')
+      notifyUndeliverableWrite(pane.terminal, 'write-stalled')
+      await flushAsyncTicks(4)
+      expect(remountTerminalTabForRecovery).toHaveBeenCalledTimes(1)
+
+      const { _dispatchPtyModelRestoreNeededForTest } = await import('./pty-model-restore-channel')
+      _dispatchPtyModelRestoreNeededForTest({ id: 'pty-id', reason: 'hidden-drop', markerSeq: 64 })
+      ;(deps.isVisibleRef as { current: boolean }).current = true
+      const { requestTerminalBacklogRecovery } =
+        await import('@/lib/pane-manager/pane-terminal-output-scheduler')
+      requestTerminalBacklogRecovery(pane.terminal as never)
+      await flushAsyncTicks(20)
+
+      // Restore stays skipped (a dead pipeline can never parse the snapshot),
+      // but recovery got exactly one re-kick for the revealed pane.
+      expect(getMainBufferSnapshot).not.toHaveBeenCalled()
+      expect(remountTerminalTabForRecovery).toHaveBeenCalledTimes(2)
+      expect(remountTerminalTabForRecovery).toHaveBeenLastCalledWith('tab-1')
+
+      // Latched per xterm instance: repeat restore attempts do not spam.
+      _dispatchPtyModelRestoreNeededForTest({ id: 'pty-id', reason: 'hidden-drop', markerSeq: 96 })
+      await flushAsyncTicks(4)
+      expect(remountTerminalTabForRecovery).toHaveBeenCalledTimes(2)
+      _resetTerminalPaneRecoveryForTests()
+    })
+
     it('clears the hidden bit on visibility flips through syncProcessTracking', async () => {
       enableMainAuthority()
       const deps = createDeps({ isVisibleRef: { current: false } })
