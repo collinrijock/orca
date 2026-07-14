@@ -237,6 +237,13 @@ export function HeroFlow({
                 {translate('auto.components.mobile.MobileHero.2f077ef4eb', ', and scan the code.')}
               </p>
             </div>
+            <div className="mp-pairing-relay">
+              <MobilePairingConnectionOptions
+                value={connectionMode}
+                onChange={onConnectionModeChange}
+                compact
+              />
+            </div>
             <div className="mp-qr-stack mp-pairing-qr">
               <div
                 className="mp-qr mp-qr-large"
@@ -273,12 +280,6 @@ export function HeroFlow({
               </button>
             </div>
             <div className="mp-pairing-controls">
-              <MobilePairingConnectionOptions
-                value={connectionMode}
-                onChange={onConnectionModeChange}
-                compact
-              />
-
               <div className="mp-network-row">
                 <span className="mp-network-label">
                   {translate('auto.components.mobile.MobileHero.dfd2aa9d5d', 'Network')}

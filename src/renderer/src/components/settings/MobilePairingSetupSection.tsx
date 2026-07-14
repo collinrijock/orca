@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { ExternalLink, Loader2, QrCode, RefreshCw } from 'lucide-react'
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '../ui/accordion'
 import { Button } from '../ui/button'
@@ -11,6 +12,7 @@ const TAILSCALE_DOWNLOAD_URL = 'https://tailscale.com/download'
 
 type MobilePairingSetupSectionProps = {
   connectionMode: MobilePairingConnectionMode
+  relayConnectionControl: ReactNode
   networkInterfaces: MobileNetworkInterface[]
   selectedAddress: string | undefined
   onSelectedAddressChange: (address: string) => void
@@ -23,6 +25,7 @@ type MobilePairingSetupSectionProps = {
 
 export function MobilePairingSetupSection({
   connectionMode,
+  relayConnectionControl,
   networkInterfaces,
   selectedAddress,
   onSelectedAddressChange,
@@ -33,7 +36,7 @@ export function MobilePairingSetupSection({
   onGenerateQr
 }: MobilePairingSetupSectionProps): React.JSX.Element {
   return (
-    <section className="rounded-lg border border-border/60 p-4">
+    <section>
       <h3 className="text-sm font-medium">
         {translate('auto.components.settings.MobilePairingSetupSection.title', 'Pair a phone')}
       </h3>
@@ -48,6 +51,7 @@ export function MobilePairingSetupSection({
               'The pairing code connects only through the local network address below.'
             )}
       </p>
+      <div className="mt-2">{relayConnectionControl}</div>
       <Button
         onClick={onGenerateQr}
         disabled={loading || !selectedAddress}

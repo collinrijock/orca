@@ -9054,7 +9054,7 @@
           "reconnecting": "正在重新连接",
           "unavailable": "不可用",
           "title": "新手机应如何连接？",
-          "anywhere": "随时随地连接",
+          "anywhere": "使用 Orca Relay 连接",
           "recommended": "推荐",
           "automaticDescription": "Orca 会优先使用直接连接，否则使用 Orca Relay。",
           "signInDescription": "请在此桌面端登录以使用 Orca Relay。",

@@ -9054,7 +9054,7 @@
           "reconnecting": "再接続中",
           "unavailable": "利用不可",
           "title": "新しいスマートフォンをどのように接続しますか？",
-          "anywhere": "どこからでも接続",
+          "anywhere": "Orca Relay で接続",
           "recommended": "推奨",
           "automaticDescription": "利用可能な場合は直接接続し、それ以外ではOrca Relayを使用します。",
           "signInDescription": "Orca Relayを使用するには、このデスクトップでサインインしてください。",

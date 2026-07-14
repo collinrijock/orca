@@ -23,6 +23,7 @@ function renderSection(
   const onGenerateQr = vi.fn()
   const props: React.ComponentProps<typeof MobilePairingSetupSection> = {
     connectionMode: 'local-only',
+    relayConnectionControl: null,
     networkInterfaces: [LAN, TAILNET],
     selectedAddress: TAILNET.address,
     onSelectedAddressChange,

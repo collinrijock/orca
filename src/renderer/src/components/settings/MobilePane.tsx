@@ -204,10 +204,11 @@ export function MobilePane(): React.JSX.Element {
 
   return (
     <div className="space-y-6">
-      <MobilePairingConnectionOptions value={connectionMode} onChange={changeConnectionMode} />
-
       <MobilePairingSetupSection
         connectionMode={connectionMode}
+        relayConnectionControl={
+          <MobilePairingConnectionOptions value={connectionMode} onChange={changeConnectionMode} />
+        }
         networkInterfaces={networkInterfaces}
         selectedAddress={selectedAddress}
         onSelectedAddressChange={setSelectedAddress}
