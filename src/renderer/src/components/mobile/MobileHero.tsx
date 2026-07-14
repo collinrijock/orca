@@ -207,14 +207,16 @@ export function HeroFlow({
                   'auto.components.mobile.MobileHero.bb0074ce11',
                   'Pairing QR code'
                 )}
-                aria-busy={pairLoading && !pairQrDataUrl}
+                aria-busy={pairLoading}
               >
                 {pairQrDataUrl ? (
                   <img
                     src={pairQrDataUrl}
                     alt={translate('auto.components.mobile.MobileHero.27735e5f4e', 'Pairing QR')}
+                    className={cn(pairLoading && 'mp-qr-refreshing')}
                   />
-                ) : pairLoading ? (
+                ) : null}
+                {pairLoading ? (
                   <span className="mp-qr-loading">
                     {translate('auto.components.mobile.MobileHero.65b3f2e8bc', 'Generating…')}
                   </span>

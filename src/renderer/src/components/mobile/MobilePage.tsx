@@ -203,6 +203,8 @@ export default function MobilePage(): React.JSX.Element {
         } else {
           hasGeneratedRef.current = false
           if (mountedRef.current) {
+            setPairQrDataUrl(null)
+            setPairingUrl(null)
             toast.error(
               translate(
                 'auto.components.mobile.MobilePage.b353e18de1',
@@ -214,6 +216,8 @@ export default function MobilePage(): React.JSX.Element {
       } catch {
         if (mountedRef.current && requestId === pairingRequestIdRef.current) {
           hasGeneratedRef.current = false
+          setPairQrDataUrl(null)
+          setPairingUrl(null)
           toast.error(
             translate(
               'auto.components.mobile.MobilePage.4c8bd11c1a',
@@ -241,7 +245,6 @@ export default function MobilePage(): React.JSX.Element {
       pairingRequestIdRef.current += 1
       const shouldRegenerate = hasGeneratedRef.current || pairLoading
       hasGeneratedRef.current = false
-      setPairQrDataUrl(null)
       setPairingUrl(null)
       if (shouldRegenerate) {
         void generatePairing(true, undefined, nextMode)

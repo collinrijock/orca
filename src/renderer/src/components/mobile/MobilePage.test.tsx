@@ -42,6 +42,7 @@ vi.mock('./MobilePageContent', () => ({
     enterFlow: () => void
     handleConnectionModeChange: (mode: MobilePairingConnectionMode) => void
     handleContinue: () => void
+    pairQrDataUrl: string | null
     pairingUrl: string | null
     stage: string | null
     stepIdx: number
@@ -50,6 +51,7 @@ vi.mock('./MobilePageContent', () => ({
       <span data-testid="stage">{props.stage ?? 'loading'}</span>
       <span data-testid="step">{props.stepIdx}</span>
       <span data-testid="mode">{props.connectionMode}</span>
+      <span data-testid="pairing-qr">{props.pairQrDataUrl ?? 'none'}</span>
       <span data-testid="pairing-url">{props.pairingUrl ?? 'none'}</span>
       <button type="button" onClick={props.enterFlow}>
         Enter flow
@@ -113,8 +115,16 @@ describe('MobilePage pairing connection mode', () => {
     await openPairingStep()
 
     await waitFor(() => expect(getPairingQR).toHaveBeenCalledWith({ connectionMode: 'automatic' }))
+    await waitFor(() => expect(screen.getByTestId('pairing-qr')).toHaveTextContent('base64,qr'))
     expect(screen.getByTestId('mode')).toHaveTextContent('automatic')
 
+    let resolveLocalQr: ((value: Record<string, unknown>) => void) | undefined
+    getPairingQR.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveLocalQr = resolve
+        })
+    )
     await user.click(screen.getByRole('button', { name: 'Local only' }))
     await waitFor(() =>
       expect(getPairingQR).toHaveBeenLastCalledWith({
@@ -123,6 +133,15 @@ describe('MobilePage pairing connection mode', () => {
       })
     )
     expect(screen.getByTestId('mode')).toHaveTextContent('local-only')
+    expect(screen.getByTestId('pairing-qr')).toHaveTextContent('base64,qr')
+    expect(screen.getByTestId('pairing-url')).toHaveTextContent('none')
+
+    resolveLocalQr?.({
+      available: true,
+      qrDataUrl: 'data:image/png;base64,local-qr',
+      pairingUrl: 'orca://pair#local'
+    })
+    await waitFor(() => expect(screen.getByTestId('pairing-qr')).toHaveTextContent('local-qr'))
   })
 
   it('defaults signed-out pairing to local-only', async () => {
@@ -131,5 +150,17 @@ describe('MobilePage pairing connection mode', () => {
 
     await waitFor(() => expect(getPairingQR).toHaveBeenCalledWith({ connectionMode: 'local-only' }))
     expect(screen.getByTestId('mode')).toHaveTextContent('local-only')
+  })
+
+  it('removes the old QR if policy rotation fails', async () => {
+    const user = userEvent.setup()
+    await openPairingStep()
+    await waitFor(() => expect(screen.getByTestId('pairing-qr')).toHaveTextContent('base64,qr'))
+
+    getPairingQR.mockRejectedValueOnce(new Error('rotation failed'))
+    await user.click(screen.getByRole('button', { name: 'Local only' }))
+
+    await waitFor(() => expect(screen.getByTestId('pairing-qr')).toHaveTextContent('none'))
+    expect(screen.getByTestId('pairing-url')).toHaveTextContent('none')
   })
 })
