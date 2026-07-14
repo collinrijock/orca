@@ -1244,6 +1244,9 @@ export class LocalPtyProvider implements IPtyProvider {
       // Why: app quit cannot retain NAPI callbacks into FreeEnvironment; the
       // process exit itself is the final physical handle boundary here.
       destroyPtyProcess(proc, { alreadyKilled: true })
+      // Why: app quit replaces node-pty's onExit callback as the final owner;
+      // overlapping shutdown waiters must join that same terminal boundary.
+      ptyPhysicalExits.get(id)?.markExited()
       clearPtyState(id)
     }
   }

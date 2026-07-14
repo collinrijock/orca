@@ -76,13 +76,15 @@ export async function killAllProcessesForWorktree(
     return current
   }
 
+  // Why: headless CLI has no ready renderer graph; only that known sentinel
+  // may fall through to the provider and registry physical-owner sweeps.
   const runtimeSweep = deps.runtime
     ? settleBeforeDeadline(
         () => deps.runtime!.stopTerminalsForWorktree(worktreeId, { deadline, stopPty }),
         { stopped: 0 },
         deadline,
         deps.requirePhysicalStop ? deadlineError : undefined,
-        false
+        (error) => !(error instanceof Error && error.message === 'runtime_unavailable')
       )
     : Promise.resolve({ stopped: 0 })
   const providerSweep = settleBeforeDeadline(
@@ -139,7 +141,7 @@ async function settleBeforeDeadline<T>(
   fallback: T,
   deadline: number,
   failClosedError?: Error,
-  failClosedOnRunError = true
+  failClosedOnRunError: (error: unknown) => boolean = () => true
 ): Promise<T> {
   const remaining = deadline - Date.now()
   if (remaining <= 0) {
@@ -172,7 +174,7 @@ async function settleBeforeDeadline<T>(
     )
     timer.unref?.()
     void run().then(finish, (error: unknown) =>
-      failClosedError && failClosedOnRunError ? fail(error) : finish(fallback)
+      failClosedError && failClosedOnRunError(error) ? fail(error) : finish(fallback)
     )
   })
 }
@@ -202,6 +204,7 @@ async function sweepProviderByPrefix(
     // and authoritative worktree ownership must remain usable during teardown.
     const cwdOwned =
       worktreePath !== undefined &&
+      s.worktreeId === undefined &&
       typeof s.cwd === 'string' &&
       s.cwd.length > 0 &&
       isPathInsideOrEqual(worktreePath, s.cwd)

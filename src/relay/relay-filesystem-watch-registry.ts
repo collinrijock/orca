@@ -284,13 +284,12 @@ export class RelayFilesystemWatchRegistry {
       const expectedAbort =
         (error instanceof Error && error.name === 'AbortError') ||
         (isWatcherProcessFailure(error) && error.code === 'subscribe_aborted')
-      if (!expectedAbort && error instanceof Error) {
-        process.stderr.write(
-          `[relay] File watcher not available for ${state.rootPath}: ${error.message}\n`
-        )
-        throw error
+      if (expectedAbort) {
+        return
       }
-      return
+      const message = error instanceof Error ? error.message : String(error)
+      process.stderr.write(`[relay] File watcher not available for ${state.rootPath}: ${message}\n`)
+      throw error
     }
     if (context?.isStale()) {
       this.releaseWatchClient(state, clientId)

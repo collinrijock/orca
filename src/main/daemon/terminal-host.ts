@@ -208,11 +208,11 @@ export class TerminalHost {
 
   kill(sessionId: string, opts: { immediate?: boolean } = {}): Promise<void> {
     const session = this.getAliveSession(sessionId)
+    const killed = opts.immediate
+      ? session.forceKillAndWaitForExit()
+      : Promise.resolve(session.kill())
     this.recordTombstone(sessionId)
-    if (opts.immediate) {
-      return session.forceKillAndWaitForExit()
-    }
-    return Promise.resolve(session.kill())
+    return killed
   }
 
   // Why: dispose a dead session's headless emulator and drop it from the map so

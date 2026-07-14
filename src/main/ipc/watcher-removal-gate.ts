@@ -58,9 +58,14 @@ function beginRemovalSensitiveInstall(
   createRemovalError: () => Error
 ): () => void {
   const normalizedRoot = normalizeRuntimePathForComparison(rootPath)
+  // Why: PTY admission can fence both worktree identity and cwd, which may be
+  // parent/child roots; neither side may overlap an active removal.
   if (
     matchingHostStates(connectionId).some(
-      (state) => state.removalCount > 0 && isPathInsideOrEqual(state.rootPath, normalizedRoot)
+      (state) =>
+        state.removalCount > 0 &&
+        (isPathInsideOrEqual(state.rootPath, normalizedRoot) ||
+          isPathInsideOrEqual(normalizedRoot, state.rootPath))
     )
   ) {
     throw createRemovalError()

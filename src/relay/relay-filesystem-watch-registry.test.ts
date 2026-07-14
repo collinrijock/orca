@@ -199,6 +199,16 @@ describe('RelayFilesystemWatchRegistry', () => {
     expect(rejectSubscribe).toBeDefined()
   })
 
+  it('propagates unexpected non-Error setup failures', async () => {
+    vi.spyOn(pool, 'subscribe').mockRejectedValueOnce('native setup failed')
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
+    try {
+      await expect(registry.watch('/repo', context(1))).rejects.toBe('native setup failed')
+    } finally {
+      stderr.mockRestore()
+    }
+  })
+
   it('rejects acknowledged teardown while another client still owns the watch', async () => {
     await registry.watch('/repo', context(1))
     await registry.watch('/repo', context(2))

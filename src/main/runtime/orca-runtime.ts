@@ -17711,13 +17711,13 @@ export class OrcaRuntimeService {
       const removalGate = await this.acquireFileWatcherRemoval(canonicalWorktreePath)
       let removalCompleted = false
       try {
+        // Why: linked-path deletion is destructive too; PTYs must release every
+        // handle before Windows or WSL filesystem cleanup starts.
+        await this.stopPtysForDestructiveWorktreeRemoval(removalTarget.id)
+
         if (linkedPaths.length > 0) {
           await removeWorktreeLinkedPaths(canonicalWorktreePath, linkedPaths)
         }
-
-        // Why: the gate spans terminal shutdown through Git and any recursive
-        // fallback so a late headless spawn cannot recreate a native handle.
-        await this.stopPtysForDestructiveWorktreeRemoval(removalTarget.id)
 
         try {
           const removeOptions = {

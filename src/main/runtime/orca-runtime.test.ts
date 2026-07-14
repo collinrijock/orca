@@ -28725,6 +28725,28 @@ describe('OrcaRuntimeService', () => {
     expect(deleteWorktreeHistoryDirMock).not.toHaveBeenCalled()
   })
 
+  it('stops worktree PTYs before removing linked paths', async () => {
+    const repo = { ...store.getRepos()[0], symlinkPaths: ['node_modules'] }
+    const runtimeStore = { ...store, getRepos: () => [repo], getRepo: () => repo }
+    const runtime = createWorktreeRemovalRuntime(runtimeStore)
+    const stopAndWait = vi.fn().mockResolvedValue(true)
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => true,
+      stopAndWait,
+      getForegroundProcess: async () => null
+    })
+    syncSinglePty(runtime, 'pty-1')
+    vi.mocked(removeWorktree).mockResolvedValue({})
+    removeWorktreeLinkedPathsMock.mockImplementationOnce(async () => {
+      expect(stopAndWait).toHaveBeenCalledWith('pty-1')
+    })
+
+    await runtime.removeManagedWorktree(TEST_WORKTREE_ID)
+
+    expect(removeWorktreeLinkedPathsMock).toHaveBeenCalledWith(TEST_WORKTREE_PATH, ['node_modules'])
+  })
+
   it('waits for every watcher layer to settle before restoring after teardown failure', async () => {
     const runtime = createRuntime()
     let finishRuntimeClose: () => void = () => {}

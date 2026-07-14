@@ -1417,5 +1417,21 @@ describe('LocalPtyProvider', () => {
       expect(killSpy).toHaveBeenCalledTimes(1)
       expect(destroySpy).not.toHaveBeenCalled()
     })
+
+    it('settles an overlapping shutdown when app quit takes final ownership', async () => {
+      mockProc.kill.mockImplementation(() => undefined)
+      const { id } = await provider.spawn({ cols: 80, rows: 24 })
+      const shutdown = provider.shutdown(id, { immediate: true })
+      let settled = false
+      void shutdown.then(() => {
+        settled = true
+      })
+      await Promise.resolve()
+      expect(settled).toBe(false)
+
+      provider.killAll()
+
+      await expect(shutdown).resolves.toBeUndefined()
+    })
   })
 })

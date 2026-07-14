@@ -88,6 +88,16 @@ describe('watcher removal gate', () => {
     removal.release()
   })
 
+  it('rejects enclosing installs while a nested root is being removed', async () => {
+    const removal = acquireWatcherRemovalGate('/repo/nested')
+    await removal.ready
+
+    expect(() => beginWatcherInstall('/repo')).toThrow(WatcherRemovalInProgressError)
+    expect(() => beginTerminalInstall('/repo')).toThrow(TerminalRemovalInProgressError)
+
+    removal.release()
+  })
+
   it('does not fence a distinct POSIX root containing a literal backslash', async () => {
     const removal = acquireWatcherRemovalGate('/srv/team\\repo')
     await removal.ready

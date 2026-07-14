@@ -111,6 +111,26 @@ describe('killAllProcessesForWorktree', () => {
     expect(result.providerStopped).toBe(2)
   })
 
+  it('does not use cwd fallback against a different authoritative worktree id', async () => {
+    const localProvider = createProviderStub(async () => [
+      {
+        id: 'owned-by-sibling',
+        cwd: '/repo/app/nested',
+        title: 'shell',
+        worktreeId: 'repo-1::/repo/sibling'
+      }
+    ])
+    listRegisteredPtysMock.mockReturnValue([])
+
+    const result = await killAllProcessesForWorktree('repo-1::/repo/app', {
+      localProvider,
+      requirePhysicalStop: true
+    })
+
+    expect(localProvider.shutdown).not.toHaveBeenCalled()
+    expect(result.providerStopped).toBe(0)
+  })
+
   it('uses authoritative remote worktree ownership without sweeping the local registry', async () => {
     const remoteProvider = createProviderStub(async () => [
       { id: 'pty-remote', cwd: '/remote/w1', title: 'shell', worktreeId: 'w1' },
@@ -338,7 +358,7 @@ describe('killAllProcessesForWorktree', () => {
   })
 
   it('tolerates runtime.stopTerminalsForWorktree throwing (headless assertGraphReady reject)', async () => {
-    const stopTerminalsForWorktree = vi.fn().mockRejectedValue(new Error('graph not ready'))
+    const stopTerminalsForWorktree = vi.fn().mockRejectedValue(new Error('runtime_unavailable'))
     const runtime = {
       stopTerminalsForWorktree
     } as unknown as Parameters<typeof killAllProcessesForWorktree>[1]['runtime']
@@ -349,6 +369,23 @@ describe('killAllProcessesForWorktree', () => {
     const result = await killAllProcessesForWorktree('w1', { runtime, localProvider })
 
     expect(result.runtimeStopped).toBe(0)
+  })
+
+  it('fails destructive teardown closed when the runtime sweep rejects', async () => {
+    const stopTerminalsForWorktree = vi.fn().mockRejectedValue(new Error('runtime sweep failed'))
+    const runtime = {
+      stopTerminalsForWorktree
+    } as unknown as Parameters<typeof killAllProcessesForWorktree>[1]['runtime']
+    const localProvider = createProviderStub(async () => [])
+    listRegisteredPtysMock.mockReturnValue([])
+
+    await expect(
+      killAllProcessesForWorktree('w1', {
+        runtime,
+        localProvider,
+        requirePhysicalStop: true
+      })
+    ).rejects.toThrow('runtime sweep failed')
   })
 
   it('bounds the entire process sweep when a provider never settles', async () => {

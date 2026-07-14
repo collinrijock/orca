@@ -383,6 +383,29 @@ describe('TerminalHost', () => {
       expect(host.isKilled('session-1')).toBe(true)
     })
 
+    it('does not tombstone a session when graceful kill admission fails', async () => {
+      await host.createOrAttach({
+        sessionId: 'session-1',
+        cols: 80,
+        rows: 24,
+        streamClient: { onData: vi.fn(), onExit: vi.fn() }
+      })
+      lastSubprocess.kill = vi.fn(() => {
+        throw new Error('signal rejected')
+      })
+
+      expect(() => host.kill('session-1')).toThrow('signal rejected')
+      expect(host.isKilled('session-1')).toBe(false)
+      await expect(
+        host.createOrAttach({
+          sessionId: 'session-1',
+          cols: 80,
+          rows: 24,
+          streamClient: { onData: vi.fn(), onExit: vi.fn() }
+        })
+      ).resolves.toMatchObject({ isNew: false })
+    })
+
     it('force-kills immediately when requested', async () => {
       await host.createOrAttach({
         sessionId: 'session-1',
