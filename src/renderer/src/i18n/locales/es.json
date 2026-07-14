@@ -2884,6 +2884,9 @@
           },
           "TerminalTabSplitMenuSection": {
             "splitTerminal": "Dividir terminal"
+          },
+          "TerminalTabLeadingIcon": {
+            "7ab2964bea": "Finalización de agente sin leer"
           }
         }
       },

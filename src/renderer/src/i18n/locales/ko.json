@@ -2884,6 +2884,9 @@
           },
           "TerminalTabSplitMenuSection": {
             "splitTerminal": "터미널 분할"
+          },
+          "TerminalTabLeadingIcon": {
+            "7ab2964bea": "읽지 않은 에이전트 완료"
           }
         }
       },

@@ -2884,6 +2884,9 @@
           },
           "TerminalTabSplitMenuSection": {
             "splitTerminal": "Split terminal"
+          },
+          "TerminalTabLeadingIcon": {
+            "7ab2964bea": "Unread agent completion"
           }
         }
       },
