@@ -5,6 +5,7 @@ import { dirname, join, resolve } from 'node:path'
 import { promisify } from 'node:util'
 
 import { applyWindowsNodePtySettlement } from './ssh-relay-node-pty-windows-settlement.mjs'
+import { applyWindowsNodePtyBuildDeterminism } from './ssh-relay-node-pty-windows-build-determinism.mjs'
 
 const require = createRequire(import.meta.url)
 const execFileAsync = promisify(execFile)
@@ -13,6 +14,21 @@ const NODE_ADDON_API_DIRECTORY = dirname(require.resolve('node-addon-api/package
 const BUILD_TIMEOUT_MS = 10 * 60 * 1000
 const COMMAND_TIMEOUT_MS = 60 * 1000
 const MAX_COMMAND_OUTPUT_BYTES = 16 * 1024 * 1024
+
+export function nodePtyNativeBuildCommands({ nodePath, nodeRoot, tuple }) {
+  const nodeGypArguments = ['--release', `--nodedir=${nodeRoot}`]
+  if (!tuple.startsWith('darwin-')) {
+    return [{ command: nodePath, args: [NODE_GYP_PATH, 'rebuild', ...nodeGypArguments] }]
+  }
+  return [
+    { command: nodePath, args: [NODE_GYP_PATH, 'configure', ...nodeGypArguments] },
+    {
+      command: 'make',
+      // Why: ld must retain a loadable UUID while ignoring incidental inputs such as build time.
+      args: ['-C', 'build', 'BUILDTYPE=Release', 'LDFLAGS.target=-Wl,-reproducible']
+    }
+  ]
+}
 
 async function runCommand(command, args, options = {}) {
   // Why: native build tools can be noisy or hang; both cases must settle within explicit bounds.
@@ -134,6 +150,7 @@ export async function buildPatchedSshRelayNodePty({
     dereference: true,
     filter: sourceFilter
   })
+  await applyWindowsNodePtyBuildDeterminism({ nodePtyDirectory: buildDirectory, tuple })
   await applyWindowsNodePtySettlement({
     nodePtyLibraryDirectory: join(buildDirectory, 'lib'),
     tuple
@@ -147,23 +164,26 @@ export async function buildPatchedSshRelayNodePty({
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), BUILD_TIMEOUT_MS)
   try {
-    await runCommand(nodePath, [NODE_GYP_PATH, 'rebuild', '--release', `--nodedir=${nodeRoot}`], {
-      cwd: buildDirectory,
-      signal: controller.signal,
-      timeout: BUILD_TIMEOUT_MS,
-      windowsHide: true,
-      env: {
-        ...process.env,
-        PATH: `${dirname(nodePath)}${process.platform === 'win32' ? ';' : ':'}${process.env.PATH ?? ''}`,
-        npm_config_arch: tuple.includes('arm64') ? 'arm64' : 'x64',
-        npm_config_build_from_source: 'true',
-        npm_config_nodedir: nodeRoot,
-        // Why: a successful build must prove all Node inputs were staged, never fetched implicitly.
-        npm_config_offline: 'true',
-        npm_config_disturl: 'http://127.0.0.1:9',
-        npm_config_target: nodeVersion
-      }
-    })
+    const buildEnvironment = {
+      ...process.env,
+      PATH: `${dirname(nodePath)}${process.platform === 'win32' ? ';' : ':'}${process.env.PATH ?? ''}`,
+      npm_config_arch: tuple.includes('arm64') ? 'arm64' : 'x64',
+      npm_config_build_from_source: 'true',
+      npm_config_nodedir: nodeRoot,
+      // Why: a successful build must prove all Node inputs were staged, never fetched implicitly.
+      npm_config_offline: 'true',
+      npm_config_disturl: 'http://127.0.0.1:9',
+      npm_config_target: nodeVersion
+    }
+    for (const buildCommand of nodePtyNativeBuildCommands({ nodePath, nodeRoot, tuple })) {
+      await runCommand(buildCommand.command, buildCommand.args, {
+        cwd: buildDirectory,
+        signal: controller.signal,
+        timeout: BUILD_TIMEOUT_MS,
+        windowsHide: true,
+        env: buildEnvironment
+      })
+    }
   } finally {
     clearTimeout(timeout)
   }

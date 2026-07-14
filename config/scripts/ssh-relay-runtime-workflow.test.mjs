@@ -64,6 +64,10 @@ describe('SSH relay runtime artifact workflow', () => {
     expect(source).toContain(
       'node --check config/scripts/ssh-relay-runtime-reproducibility.test.mjs'
     )
+    expect(source.match(/ssh-relay-node-pty-build\.test\.mjs/g)).toHaveLength(2)
+    expect(source.match(/ssh-relay-node-pty-windows-build-determinism\.test\.mjs/g)).toHaveLength(2)
+    expect(source.match(/ssh-relay-runtime-build\.test\.mjs/g)).toHaveLength(2)
+    expect(source.match(/--work-directory/g)).toHaveLength(2)
     expect(source).toContain('cp "$first_output"/*.tar.xz')
     expect(source).toContain("Get-ChildItem -LiteralPath $firstOutput -Filter '*.zip'")
     expect(source).toContain('ssh-relay-node-zip-inspection.test.mjs')

@@ -1,9 +1,8 @@
 #!/usr/bin/env node
 
 import { execFile } from 'node:child_process'
-import { mkdir, mkdtemp, readFile, rm } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
-import { dirname, join, resolve } from 'node:path'
+import { mkdir, readFile, rm } from 'node:fs/promises'
+import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { promisify } from 'node:util'
 
 import { buildPatchedSshRelayNodePty } from './ssh-relay-node-pty-build.mjs'
@@ -51,6 +50,8 @@ export function parseBuildArguments(argv) {
       result.inputsDirectory = resolve(value)
     } else if (flag === '--output-directory') {
       result.outputDirectory = resolve(value)
+    } else if (flag === '--work-directory') {
+      result.workDirectory = resolve(value)
     } else if (flag === '--contract') {
       result.contractPath = resolve(value)
     } else if (flag === '--source-date-epoch') {
@@ -66,6 +67,7 @@ export function parseBuildArguments(argv) {
     'tuple',
     'inputsDirectory',
     'outputDirectory',
+    'workDirectory',
     'sourceDateEpoch',
     'gitCommit'
   ]) {
@@ -83,6 +85,20 @@ export function parseBuildArguments(argv) {
     throw new Error('--git-commit must be a full lowercase SHA-1')
   }
   return result
+}
+
+function containsPath(parent, candidate) {
+  const path = relative(parent, candidate)
+  return path === '' || (path !== '..' && !path.startsWith(`..${sep}`) && !isAbsolute(path))
+}
+
+export function assertDisjointRuntimeBuildDirectories(outputDirectory, workDirectory) {
+  if (
+    containsPath(outputDirectory, workDirectory) ||
+    containsPath(workDirectory, outputDirectory)
+  ) {
+    throw new Error('Runtime output and work directories must be disjoint')
+  }
 }
 
 function assertTargetNative(tuple) {
@@ -153,6 +169,7 @@ function relayPlatform(tuple) {
 export async function buildSshRelayRuntime(options) {
   const started = process.hrtime.bigint()
   assertTargetNative(options.tuple)
+  assertDisjointRuntimeBuildDirectories(options.outputDirectory, options.workDirectory)
   const release = validateSshRelayNodeReleaseContract(
     JSON.parse(await readFile(options.contractPath, 'utf8'))
   )
@@ -161,11 +178,17 @@ export async function buildSshRelayRuntime(options) {
     inputsDirectory: options.inputsDirectory,
     archiveTuples: [options.tuple]
   })
-  const workDirectory = await mkdtemp(join(tmpdir(), `orca-runtime-${options.tuple}-`))
-  // Why: the final directory is still created exclusively, but callers need not pre-create parents.
-  await mkdir(dirname(options.outputDirectory), { recursive: true })
+  const workDirectory = options.workDirectory
+  // Why: both final and clean-build paths are exclusive, but callers need not pre-create parents.
+  await Promise.all([
+    mkdir(dirname(options.outputDirectory), { recursive: true }),
+    mkdir(dirname(workDirectory), { recursive: true })
+  ])
   await mkdir(options.outputDirectory)
+  let workDirectoryCreated = false
   try {
+    await mkdir(workDirectory)
+    workDirectoryCreated = true
     await run(process.execPath, [resolve(scriptDirectory, 'build-relay.mjs')], { cwd: projectRoot })
     const extractedDirectory = join(workDirectory, 'node-inputs')
     const nodeArchivePath = join(options.inputsDirectory, release.archives[options.tuple].name)
@@ -244,7 +267,9 @@ export async function buildSshRelayRuntime(options) {
     await rm(options.outputDirectory, { recursive: true, force: true })
     throw error
   } finally {
-    await rm(workDirectory, { recursive: true, force: true })
+    if (workDirectoryCreated) {
+      await rm(workDirectory, { recursive: true, force: true })
+    }
   }
 }
 

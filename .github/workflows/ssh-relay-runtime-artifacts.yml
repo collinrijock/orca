@@ -108,9 +108,12 @@ jobs:
           pnpm exec vitest run --config config/vitest.config.ts \
             config/scripts/ssh-relay-node-release-verification.test.mjs \
             config/scripts/ssh-relay-node-tar-inspection.test.mjs \
+            config/scripts/ssh-relay-node-pty-build.test.mjs \
+            config/scripts/ssh-relay-node-pty-windows-build-determinism.test.mjs \
             config/scripts/ssh-relay-node-pty-windows-settlement.test.mjs \
             config/scripts/ssh-relay-node-zip-inspection.test.mjs \
             config/scripts/ssh-relay-runtime-artifact.test.mjs \
+            config/scripts/ssh-relay-runtime-build.test.mjs \
             config/scripts/ssh-relay-runtime-pty-smoke.test.mjs \
             config/scripts/ssh-relay-runtime-reproducibility.test.mjs \
             config/scripts/ssh-relay-runtime-resource-diagnostics.test.mjs \
@@ -140,6 +143,7 @@ jobs:
           mkdir -p "$output_root"
           first_output="$output_root/first"
           second_output="$output_root/second"
+          work_directory="$output_root/build-work"
           source_commit=$(git rev-parse HEAD)
           source_date_epoch=$(git show -s --format=%ct "$source_commit")
           for output in "$first_output" "$second_output"; do
@@ -148,6 +152,7 @@ jobs:
               --tuple '${{ matrix.tuple }}' \
               --inputs-directory "$NODE_INPUTS" \
               --output-directory "$output" \
+              --work-directory "$work_directory" \
               --source-date-epoch "$source_date_epoch" \
               --git-commit "$source_commit"
             identity="$output/orca-ssh-relay-runtime-${{ matrix.tuple }}.identity.json"
@@ -267,9 +272,12 @@ jobs:
           pnpm exec vitest run --config config/vitest.config.ts `
             config/scripts/ssh-relay-node-release-verification.test.mjs `
             config/scripts/ssh-relay-node-tar-inspection.test.mjs `
+            config/scripts/ssh-relay-node-pty-build.test.mjs `
+            config/scripts/ssh-relay-node-pty-windows-build-determinism.test.mjs `
             config/scripts/ssh-relay-node-pty-windows-settlement.test.mjs `
             config/scripts/ssh-relay-node-zip-inspection.test.mjs `
             config/scripts/ssh-relay-runtime-artifact.test.mjs `
+            config/scripts/ssh-relay-runtime-build.test.mjs `
             config/scripts/ssh-relay-runtime-pty-smoke.test.mjs `
             config/scripts/ssh-relay-runtime-reproducibility.test.mjs `
             config/scripts/ssh-relay-runtime-resource-diagnostics.test.mjs `
@@ -310,6 +318,7 @@ jobs:
           New-Item -ItemType Directory -Path $outputRoot -Force | Out-Null
           $firstOutput = Join-Path $outputRoot 'first'
           $secondOutput = Join-Path $outputRoot 'second'
+          $workDirectory = Join-Path $outputRoot 'build-work'
           $sourceCommit = git rev-parse HEAD
           $sourceDateEpoch = git show -s --format=%ct $sourceCommit
           foreach ($output in @($firstOutput, $secondOutput)) {
@@ -318,6 +327,7 @@ jobs:
               --tuple '${{ matrix.tuple }}' `
               --inputs-directory $env:NODE_INPUTS `
               --output-directory $output `
+              --work-directory $workDirectory `
               --source-date-epoch $sourceDateEpoch `
               --git-commit $sourceCommit
             if ($LASTEXITCODE -ne 0) { throw 'runtime build failed' }
