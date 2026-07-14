@@ -15,6 +15,7 @@ import type { RpcClient } from '../transport/rpc-client'
 import type { RpcResponse, RpcSuccess } from '../transport/types'
 import { colors, spacing, radii, typography } from '../theme/mobile-theme'
 import { BottomDrawer, BOTTOM_DRAWER_HIDE_DURATION_MS } from './BottomDrawer'
+import { BottomDrawerModalHost } from './bottom-drawer-modal-host'
 import { PickerListDrawer } from './PickerListDrawer'
 import { MobileAgentIcon } from './MobileAgentIcon'
 import { getSuggestedCreatureName } from './worktree-name-suggestion'
@@ -814,7 +815,20 @@ function NewWorktreeModalContent({
   }
 
   return (
-    <>
+    // Why: hosting the form and every picker in one persistent native Modal makes
+    // form → repo/agent transitions in-window view swaps, avoiding the iOS
+    // dismiss-then-present race that left the dropdowns unresponsive. Back routes
+    // to the form from a picker, or closes the flow from the form.
+    <BottomDrawerModalHost
+      visible={visible}
+      onRequestClose={() => {
+        if (drawerView === 'form') {
+          onClose()
+        } else {
+          transitionDrawer('form')
+        }
+      }}
+    >
       <BottomDrawer visible={visible && drawerView === 'form'} onClose={onClose}>
         <View style={styles.header}>
           <Text style={styles.title}>Create Workspace</Text>
@@ -1088,7 +1102,7 @@ function NewWorktreeModalContent({
         onDontRun={skipSetupTrust}
         onClose={closeSetupTrust}
       />
-    </>
+    </BottomDrawerModalHost>
   )
 }
 
