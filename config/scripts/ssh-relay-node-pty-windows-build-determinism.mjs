@@ -36,18 +36,19 @@ const REPRODUCIBLE_LINKER_OPTIONS = `            'VCLinkerTool': {
               'AdditionalOptions': [
                 '/DYNAMICBASE',
                 '/guard:cf',
+                '/INCREMENTAL:NO',
                 '/Brepro',
                 '/experimental:deterministic'
               ]
             }`
 
-const REQUIRED_GENERATED_OPTIONS = ['/Brepro', '/experimental:deterministic']
+const REQUIRED_COMPILER_OPTIONS = ['/Brepro', '/experimental:deterministic']
+const REQUIRED_LINKER_OPTIONS = [...REQUIRED_COMPILER_OPTIONS, '/INCREMENTAL:NO']
 const MAX_LINK_COMMAND_TRACKING_BYTES = 256 * 1024
 const MAX_LINK_COMMAND_TRACKING_CANDIDATES = 32
 const MAX_LINK_COMMAND_TRACKING_DEPTH = 8
 const MAX_LINK_COMMAND_TRACKING_ENTRIES = 10_000
 const TARGET_LINK_OUTPUT_PATTERN = /(?:^|[\\/:"'\s])conpty_console_list\.node(?=$|[\\/:"'\s])/i
-const TARGET_INCREMENTAL_DATABASE = 'conpty_console_list.ilk'
 
 function decodeXmlText(value) {
   return value
@@ -72,7 +73,7 @@ function releaseDefinitionGroup(source, configuration) {
   return groups[0][2]
 }
 
-function requiredToolOptions(group, tool) {
+function requiredToolOptions(group, tool, requiredOptions) {
   const tools = [...group.matchAll(new RegExp(`<${tool}\\b[^>]*>([\\s\\S]*?)</${tool}>`, 'g'))]
   const options = tools.flatMap((match) => [
     ...match[1].matchAll(/<AdditionalOptions\b[^>]*>([\s\S]*?)<\/AdditionalOptions>/g)
@@ -84,13 +85,13 @@ function requiredToolOptions(group, tool) {
   if (!tokens.includes('%(AdditionalOptions)')) {
     throw new Error(`generated MSBuild settings do not inherit ${tool} options`)
   }
-  for (const required of REQUIRED_GENERATED_OPTIONS) {
+  for (const required of requiredOptions) {
     const count = tokens.filter((token) => token.toLowerCase() === required.toLowerCase()).length
     if (count !== 1) {
       throw new Error(`generated MSBuild settings require exactly one ${tool} ${required}`)
     }
   }
-  return [...REQUIRED_GENERATED_OPTIONS]
+  return [...requiredOptions]
 }
 
 export async function applyWindowsNodePtyBuildDeterminism({ nodePtyDirectory, tuple }) {
@@ -103,11 +104,13 @@ export async function applyWindowsNodePtyBuildDeterminism({ nodePtyDirectory, tu
     source.split(COMPILER_OPTIONS).length !== 2 ||
     source.split(LINKER_OPTIONS).length !== 2 ||
     source.includes("'/Brepro'") ||
+    source.includes("'/INCREMENTAL:NO'") ||
     source.includes("'/experimental:deterministic'")
   ) {
     throw new Error('node-pty Windows build settings do not match the reviewed source')
   }
-  // Why: ARM64 compiler output changes even with a reproducible linker unless both stages opt in.
+  // Why: ARM64 needs both reproducible stages, while /DEBUG-implied incremental thunks still drift.
+  // Keep this producer correction inside the exclusive copied artifact source.
   const reproducibleSource = source
     .replace(COMPILER_OPTIONS, REPRODUCIBLE_COMPILER_OPTIONS)
     .replace(LINKER_OPTIONS, REPRODUCIBLE_LINKER_OPTIONS)
@@ -126,8 +129,8 @@ export async function assertWindowsNodePtyGeneratedBuildSettings({ nodePtyDirect
   // Why: the source rewrite is insufficient proof unless gyp propagates both stages into MSBuild.
   return {
     configuration,
-    compilerOptions: requiredToolOptions(group, 'ClCompile'),
-    linkerOptions: requiredToolOptions(group, 'Link'),
+    compilerOptions: requiredToolOptions(group, 'ClCompile', REQUIRED_COMPILER_OPTIONS),
+    linkerOptions: requiredToolOptions(group, 'Link', REQUIRED_LINKER_OPTIONS),
     project
   }
 }
@@ -180,7 +183,7 @@ async function discoverLinkCommandTracking(nodePtyDirectory) {
         if (candidates.length > MAX_LINK_COMMAND_TRACKING_CANDIDATES) {
           throw new Error('MSBuild linker tracking discovery has too many candidates')
         }
-      } else if (child.isFile() && child.name.toLowerCase() === TARGET_INCREMENTAL_DATABASE) {
+      } else if (child.isFile() && child.name.toLowerCase() === 'conpty_console_list.ilk') {
         incrementalDatabases.push(childPath)
         if (incrementalDatabases.length > 1) {
           throw new Error('MSBuild incremental database discovery has duplicate target files')
@@ -281,13 +284,14 @@ export async function inspectWindowsNodePtyLinkCommandTracking({ nodePtyDirector
   let incrementalDatabase = { state: 'absent' }
   if (discovery.incrementalDatabases.length === 1) {
     const bytes = (await stat(discovery.incrementalDatabases[0])).size
-    if (!Number.isSafeInteger(bytes) || bytes < 0) {
-      throw new Error('MSBuild incremental database has an invalid size')
-    }
     incrementalDatabase = { bytes, state: 'present' }
   }
+  const linkCommand = parseWindowsNodePtyLinkCommandTracking(matching[0])
+  if (linkCommand.incremental !== 'disabled' || incrementalDatabase.state !== 'absent') {
+    throw new Error('MSBuild incremental linking must be disabled without a target database')
+  }
   return {
-    ...parseWindowsNodePtyLinkCommandTracking(matching[0]),
+    ...linkCommand,
     candidateFiles: discovery.candidates.length,
     incrementalDatabase,
     searchedEntries: discovery.entries

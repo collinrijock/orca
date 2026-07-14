@@ -25,7 +25,7 @@ async function copiedSource() {
 
 async function generatedProject({
   compilerOptions = '/Brepro /experimental:deterministic %(AdditionalOptions)',
-  linkerOptions = '/Brepro /experimental:deterministic %(AdditionalOptions)',
+  linkerOptions = '/Brepro /experimental:deterministic /INCREMENTAL:NO %(AdditionalOptions)',
   platform = 'ARM64'
 } = {}) {
   const directory = await mkdtemp(join(tmpdir(), 'orca-node-pty-windows-msbuild-'))
@@ -54,6 +54,7 @@ describe('SSH relay Windows node-pty build determinism', () => {
     expect(compilerOptions).toContain("'/experimental:deterministic'")
     expect(linkerOptions).toContain("'/Brepro'")
     expect(linkerOptions).toContain("'/experimental:deterministic'")
+    expect(linkerOptions).toContain("'/INCREMENTAL:NO'")
     expect(await readFile(resolve('node_modules/node-pty/binding.gyp'), 'utf8')).toBe(
       repositorySource
     )
@@ -83,7 +84,7 @@ describe('SSH relay Windows node-pty build determinism', () => {
     ).resolves.toEqual({
       configuration: 'Release|ARM64',
       compilerOptions: ['/Brepro', '/experimental:deterministic'],
-      linkerOptions: ['/Brepro', '/experimental:deterministic'],
+      linkerOptions: ['/Brepro', '/experimental:deterministic', '/INCREMENTAL:NO'],
       project: 'conpty_console_list.vcxproj'
     })
   })
@@ -170,21 +171,28 @@ describe('SSH relay Windows node-pty build determinism', () => {
         nodePtyDirectory: directory,
         tuple: 'win32-x64'
       })
-    ).resolves.toMatchObject({
-      candidateFiles: 2,
-      incremental: 'disabled',
-      incrementalDatabase: { bytes: 4096, state: 'present' }
-    })
+    ).rejects.toThrow('must be disabled without a target database')
     await rm(incrementalPath)
     await expect(
       inspectWindowsNodePtyLinkCommandTracking({ nodePtyDirectory: directory, tuple: 'win32-x64' })
-    ).resolves.toMatchObject({ incrementalDatabase: { state: 'absent' } })
+    ).resolves.toMatchObject({
+      candidateFiles: 2,
+      incremental: 'disabled',
+      incrementalDatabase: { state: 'absent' }
+    })
     await expect(
       inspectWindowsNodePtyLinkCommandTracking({
         nodePtyDirectory: '/not-used-on-posix',
         tuple: 'linux-arm64-glibc'
       })
     ).resolves.toBeUndefined()
+    await writeFile(
+      trackingPath,
+      '^one\n/OUT:conpty_console_list.node /Brepro /GUARD:CF /experimental:deterministic'
+    )
+    await expect(
+      inspectWindowsNodePtyLinkCommandTracking({ nodePtyDirectory: directory, tuple: 'win32-x64' })
+    ).rejects.toThrow('must be disabled without a target database')
     await writeFile(trackingPath, Buffer.alloc(300_000))
     await expect(
       inspectWindowsNodePtyLinkCommandTracking({
