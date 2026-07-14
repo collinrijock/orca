@@ -224,6 +224,7 @@ import {
   deletePtyOwnership,
   getSshPtyProvider,
   getPtyIdsForConnection,
+  releasePendingSshShutdownsForTarget,
   shutdownPtyWithRetainedOwnership
 } from './pty'
 
@@ -347,6 +348,7 @@ describe('SSH IPC handlers', () => {
     powerMonitorOffMock.mockReset()
     vi.mocked(getSshPtyProvider).mockReset()
     vi.mocked(getPtyIdsForConnection).mockReset().mockReturnValue([])
+    vi.mocked(releasePendingSshShutdownsForTarget).mockReset()
     vi.mocked(clearProviderPtyState).mockReset()
     vi.mocked(deletePtyOwnership).mockReset()
     vi.mocked(shutdownPtyWithRetainedOwnership)
@@ -1342,6 +1344,36 @@ describe('SSH IPC handlers', () => {
       'pty-expired',
       'expired'
     )
+    expect(releasePendingSshShutdownsForTarget).toHaveBeenCalledWith('ssh-1')
+    expect(mockConnectionManager.disconnect).toHaveBeenCalledWith('ssh-1')
+  })
+
+  it('ssh:resetRelay preserves retained shutdown owners when relay stop is unconfirmed', async () => {
+    const target: SshTarget = {
+      id: 'ssh-1',
+      label: 'Server',
+      host: 'example.com',
+      port: 22,
+      username: 'deploy'
+    }
+    const conn = {}
+    mockSshStore.getTarget.mockReturnValue(target)
+    mockConnectionManager.connect.mockResolvedValue(conn)
+    mockConnectionManager.getConnection.mockReturnValue(undefined)
+    mockForceStopRelayForTarget.mockRejectedValueOnce(new Error('relay stop unconfirmed'))
+    mockStore.getSshRemotePtyLeases.mockReturnValue([
+      { targetId: 'ssh-1', ptyId: 'pty-lease', relayInstanceId: 'boot-a', state: 'detached' }
+    ])
+    vi.mocked(getPtyIdsForConnection).mockReturnValue(['ssh:ssh-1@@boot-a@@pty-live'])
+
+    await expect(handlers.get('ssh:resetRelay')!(null, { targetId: 'ssh-1' })).rejects.toThrow(
+      'relay stop unconfirmed'
+    )
+
+    expect(releasePendingSshShutdownsForTarget).not.toHaveBeenCalled()
+    expect(mockStore.markSshRemotePtyLease).not.toHaveBeenCalled()
+    expect(clearProviderPtyState).not.toHaveBeenCalled()
+    expect(deletePtyOwnership).not.toHaveBeenCalled()
     expect(mockConnectionManager.disconnect).toHaveBeenCalledWith('ssh-1')
   })
 

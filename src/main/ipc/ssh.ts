@@ -1100,24 +1100,30 @@ export function registerSshHandlers(
 
     const existingConn = connectionManager!.getConnection(targetId)
     const conn = existingConn ?? (await connectionManager!.connect(target))
+    let relayStopConfirmed = false
     try {
       await forceStopRelayForTarget(conn, targetId)
+      relayStopConfirmed = true
     } finally {
-      const ptyIds = new Set(getPtyIdsForConnection(targetId))
-      for (const lease of persistedStore!.getSshRemotePtyLeases(targetId)) {
-        if (lease.state !== 'terminated' && lease.state !== 'expired') {
-          const appPtyId = toAppSshPtyId(targetId, lease.ptyId, lease.relayInstanceId)
-          ptyIds.add(appPtyId)
-          persistedStore!.markSshRemotePtyLease(targetId, appPtyId, 'expired')
+      // Why: a confirmed daemon stop makes every retained raw or generated
+      // retry unreachable. A pre-accept failure must preserve retry ownership.
+      if (relayStopConfirmed) {
+        releasePendingSshShutdownsForTarget(targetId)
+        const ptyIds = new Set(getPtyIdsForConnection(targetId))
+        for (const lease of persistedStore!.getSshRemotePtyLeases(targetId)) {
+          if (lease.state !== 'terminated' && lease.state !== 'expired') {
+            const appPtyId = toAppSshPtyId(targetId, lease.ptyId, lease.relayInstanceId)
+            ptyIds.add(appPtyId)
+            persistedStore!.markSshRemotePtyLease(targetId, appPtyId, 'expired')
+          }
         }
-      }
-      // Why: reset force-kills the remote relay daemon, so every local PTY
-      // handle owned by that relay is stale even if the reset command failed
-      // after the remote process accepted SIGTERM.
-      for (const ptyId of ptyIds) {
-        const appPtyId = toAppSshPtyId(targetId, ptyId)
-        clearProviderPtyState(appPtyId)
-        deletePtyOwnership(appPtyId)
+        // Why: confirmed reset force-killed the remote relay daemon, so every
+        // local PTY handle owned by that relay is stale.
+        for (const ptyId of ptyIds) {
+          const appPtyId = toAppSshPtyId(targetId, ptyId)
+          clearProviderPtyState(appPtyId)
+          deletePtyOwnership(appPtyId)
+        }
       }
       // Why: reset's connect() can trip onCredentialRequest, which adds to
       // credentialRequestedForTarget. Without this delete, a later doConnect

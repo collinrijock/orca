@@ -3600,6 +3600,53 @@ describe('registerPtyHandlers', () => {
     }
   })
 
+  it('releases generation-qualified and legacy SSH retries after confirmed relay reset', async () => {
+    vi.useFakeTimers()
+    const connectionId = 'ssh-reset-release'
+    const oldShutdown = vi.fn().mockRejectedValue(new Error('transport unavailable'))
+    const replacementShutdown = vi.fn().mockResolvedValue(undefined)
+    const makeProvider = (shutdown: typeof oldShutdown) =>
+      ({
+        shutdown,
+        listProcesses: vi.fn(async () => []),
+        onExit: vi.fn(() => () => {})
+      }) as never
+    const oldProvider = makeProvider(oldShutdown)
+    const replacementProvider = makeProvider(replacementShutdown)
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    registerSshPtyProvider(connectionId, oldProvider)
+    try {
+      const attempts = [
+        shutdownPtyWithRetainedOwnership({
+          id: `ssh:${connectionId}@@legacy-pty`,
+          connectionId,
+          provider: oldProvider,
+          options: { immediate: true }
+        }),
+        shutdownPtyWithRetainedOwnership({
+          id: `ssh:${connectionId}@@boot-a@@generated-pty`,
+          connectionId,
+          provider: oldProvider,
+          options: { immediate: true }
+        })
+      ]
+      await Promise.all(attempts.map((attempt) => expect(attempt).rejects.toThrow()))
+      expect(oldShutdown).toHaveBeenCalledTimes(2)
+
+      releasePendingSshShutdownsForTarget(connectionId)
+      registerSshPtyProvider(connectionId, replacementProvider)
+      await vi.advanceTimersByTimeAsync(30_000)
+
+      expect(replacementShutdown).not.toHaveBeenCalled()
+      expect(vi.getTimerCount()).toBe(0)
+    } finally {
+      unregisterSshPtyProvider(connectionId)
+      releasePendingSshShutdownsForTarget(connectionId)
+      warn.mockRestore()
+      vi.useRealTimers()
+    }
+  })
+
   it('does not let an old provider exit readback settle replacement retry ownership', async () => {
     vi.useFakeTimers()
     type ProcessInfo = { id: string; cwd: string; title: string }
@@ -11816,13 +11863,17 @@ describe('registerPtyHandlers', () => {
     )
   })
 
-  it('disposes PTY listeners before did-finish-load orphan cleanup', async () => {
+  it('keeps PTY listeners through did-finish-load orphan shutdown acceptance', async () => {
     const onDataDisposable = makeDisposable()
     const onExitDisposable = makeDisposable()
-    const killSpy = vi.fn()
+    let exitCb: ((info: { exitCode: number }) => void) | null = null
+    const killSpy = vi.fn(() => exitCb?.({ exitCode: -1 }))
     const proc = {
       onData: vi.fn(() => onDataDisposable),
-      onExit: vi.fn(() => onExitDisposable),
+      onExit: vi.fn((cb: (info: { exitCode: number }) => void) => {
+        exitCb = cb
+        return onExitDisposable
+      }),
       write: vi.fn(),
       resize: vi.fn(),
       kill: killSpy,
@@ -11858,12 +11909,68 @@ describe('registerPtyHandlers', () => {
     didFinishLoad()
     didFinishLoad()
 
-    expect(onDataDisposable.dispose.mock.invocationCallOrder[0]).toBeLessThan(
-      killSpy.mock.invocationCallOrder[0]
+    await vi.waitFor(() => expect(killSpy).toHaveBeenCalledOnce())
+    expect(killSpy.mock.invocationCallOrder[0]).toBeLessThan(
+      onDataDisposable.dispose.mock.invocationCallOrder[0]
     )
-    expect(onExitDisposable.dispose.mock.invocationCallOrder[0]).toBeLessThan(
-      killSpy.mock.invocationCallOrder[0]
+    expect(killSpy.mock.invocationCallOrder[0]).toBeLessThan(
+      onExitDisposable.dispose.mock.invocationCallOrder[0]
     )
+  })
+
+  it('retains a reload-orphan PTY when native shutdown throws before exit proof', async () => {
+    const onDataDisposable = makeDisposable()
+    const onExitDisposable = makeDisposable()
+    const killSpy = vi.fn(() => {
+      throw new Error('native kill failed')
+    })
+    spawnMock.mockReturnValue({
+      onData: vi.fn(() => onDataDisposable),
+      onExit: vi.fn(() => onExitDisposable),
+      write: vi.fn(),
+      resize: vi.fn(),
+      kill: killSpy,
+      process: 'zsh',
+      pid: 12345
+    })
+    const runtime = {
+      setPtyController: vi.fn(),
+      noteTerminalSpawnCommand: vi.fn(),
+      onPtySpawned: vi.fn(),
+      onPtyData: vi.fn(),
+      onPtyExit: vi.fn(),
+      preAllocateHandleForPty: vi.fn()
+    }
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const processProbe = vi.spyOn(process, 'kill').mockImplementation(() => true)
+    try {
+      registerPtyHandlers(mainWindow as never, runtime as never)
+      const didFinishLoadHandlers = mainWindow.webContents.on.mock.calls
+        .filter(([eventName]) => eventName === 'did-finish-load')
+        .map(([, handler]) => handler as () => void)
+      const spawnResult = (await handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24
+      })) as { id: string }
+
+      for (const handler of didFinishLoadHandlers) {
+        handler()
+      }
+      for (const handler of didFinishLoadHandlers) {
+        handler()
+      }
+      await vi.waitFor(() => expect(killSpy).toHaveBeenCalledOnce())
+
+      expect(onDataDisposable.dispose).not.toHaveBeenCalled()
+      expect(onExitDisposable.dispose).not.toHaveBeenCalled()
+      expect(runtime.onPtyExit).not.toHaveBeenCalled()
+      expect((await getLocalPtyProvider().listProcesses()).map(({ id }) => id)).toContain(
+        spawnResult.id
+      )
+    } finally {
+      processProbe.mockRestore()
+      warn.mockRestore()
+    }
   })
 
   it('removes the previous orphan-cleanup listener from its original webContents', () => {
@@ -11991,10 +12098,14 @@ describe('registerPtyHandlers', () => {
   // Why: guard against over-suppression — when no recovery reload is in flight the
   // sweep MUST still reclaim genuinely orphaned local PTYs.
   it('still sweeps orphaned local PTYs when no recovery reload is in flight', async () => {
-    const killSpy = vi.fn()
+    let exitCb: ((info: { exitCode: number }) => void) | null = null
+    const killSpy = vi.fn(() => exitCb?.({ exitCode: -1 }))
     const proc = {
       onData: vi.fn(() => makeDisposable()),
-      onExit: vi.fn(() => makeDisposable()),
+      onExit: vi.fn((cb: (info: { exitCode: number }) => void) => {
+        exitCb = cb
+        return makeDisposable()
+      }),
       write: vi.fn(),
       resize: vi.fn(),
       kill: killSpy,
@@ -12036,8 +12147,8 @@ describe('registerPtyHandlers', () => {
     didFinishLoad()
     didFinishLoad()
 
-    expect(killSpy).toHaveBeenCalled()
-    expect(runtime.onPtyExit).toHaveBeenCalledWith(spawnResult.id, -1)
+    await vi.waitFor(() => expect(killSpy).toHaveBeenCalledOnce())
+    await vi.waitFor(() => expect(runtime.onPtyExit).toHaveBeenCalledWith(spawnResult.id, -1))
     const listed = await getLocalPtyProvider().listProcesses()
     expect(listed.some((info) => info.id === spawnResult.id)).toBe(false)
   })

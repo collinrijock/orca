@@ -1182,16 +1182,15 @@ export class LocalPtyProvider implements IPtyProvider {
 
   // ─── Local-only helpers (not part of IPtyProvider interface) ───────
 
-  /** Kill orphaned PTYs from previous page loads. */
-  killOrphanedPtys(currentGeneration: number): { id: string }[] {
-    const killed: { id: string }[] = []
-    for (const [id, proc] of ptyProcesses) {
+  /** Enumerate PTYs owned by renderer generations older than the current page. */
+  listOrphanedPtys(currentGeneration: number): { id: string }[] {
+    const orphaned: { id: string }[] = []
+    for (const id of ptyProcesses.keys()) {
       if ((ptyLoadGeneration.get(id) ?? -1) < currentGeneration) {
-        safeKillAndClean(id, proc)
-        killed.push({ id })
+        orphaned.push({ id })
       }
     }
-    return killed
+    return orphaned
   }
 
   /** Advance the load generation counter (called on renderer reload). */

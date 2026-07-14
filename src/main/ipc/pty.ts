@@ -1639,7 +1639,7 @@ export function getSshPtyProvider(connectionId: string): IPtyProvider | undefine
  * Returns the installed PTY provider — after `setLocalPtyProvider()` runs
  * during daemon init this may be the routed adapter (specifically either
  * `DaemonPtyAdapter` or its `DaemonPtyRouter` wrapper). Callers needing
- * `LocalPtyProvider`-specific methods (`killOrphanedPtys`,
+ * `LocalPtyProvider`-specific methods (`listOrphanedPtys`,
  * `advanceGeneration`, `getPtyProcess`) must type-narrow or import the
  * concrete class directly. */
 export function getLocalPtyProvider(): IPtyProvider {
@@ -3472,12 +3472,17 @@ export function registerPtyHandlers(
       if (options?.isRecoveryReloadInFlight?.(mainWindow.webContents.id)) {
         return
       }
-      const killed = lp.killOrphanedPtys(generation - 1)
-      for (const { id } of killed) {
-        clearProviderPtyState(id)
-        ptyOwnership.delete(id)
-        markClaudePtyExited(id)
-        runtime?.onPtyExit(id, -1)
+      for (const { id } of lp.listOrphanedPtys(generation - 1)) {
+        // Why: native kill can throw while the process remains live. The
+        // retained owner keeps its handle/listeners and retries after reload.
+        void shutdownPtyWithRetainedOwnership({
+          id,
+          provider: lp,
+          options: { immediate: true },
+          requireExitProof: true
+        }).catch(() => {
+          // The retained owner logs bounded retry milestones and stays authoritative.
+        })
       }
     }
     didFinishLoadWebContents = mainWindow.webContents
