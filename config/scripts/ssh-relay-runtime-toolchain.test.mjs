@@ -7,7 +7,7 @@ import {
   sshRelayRuntimeBuilderIdentity,
   sshRelayRuntimeRunnerIdentity,
   sshRelayRuntimeStripVersionProbe,
-  sshRelayRuntimeWindowsFileVersionInvocation
+  sshRelayRuntimeWindowsMsvcToolsetVersion
 } from './ssh-relay-runtime-toolchain.mjs'
 
 const commit = 'a'.repeat(40)
@@ -28,37 +28,28 @@ describe('SSH relay runtime build provenance', () => {
     ).toBe('Microsoft (R) C/C++ Optimizing Compiler Version 19.44.35228 for ARM64')
   })
 
-  it('selects a bounded Windows linker file version', () => {
+  it('selects a bounded Windows linker toolset version', () => {
     expect(
-      selectSshRelayRuntimeToolVersion(
-        { stdout: '14.44.35228.0\r\n' },
-        /^(?!0\.0\.0\.0$)\d+(?:\.\d+){3}$/
-      )
-    ).toBe('14.44.35228.0')
+      selectSshRelayRuntimeToolVersion({ stdout: 'MSVC 14.44.35207\r\n' }, /^MSVC \d+\.\d+\.\d+$/)
+    ).toBe('MSVC 14.44.35207')
   })
 
-  it('rejects an absent Windows linker numeric file version', () => {
+  it('derives the version only from a canonical resolved MSVC linker path', () => {
+    const path = String.raw`C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Tools\MSVC\14.44.35207\bin\HostX64\x64\link.exe`
+    expect(sshRelayRuntimeWindowsMsvcToolsetVersion(path)).toBe('MSVC 14.44.35207')
+    expect(
+      sshRelayRuntimeWindowsMsvcToolsetVersion(
+        String.raw`C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Tools\MSVC\14.44.35207\bin\HostARM64\ARM64\link.exe`
+      )
+    ).toBe('MSVC 14.44.35207')
     expect(() =>
-      selectSshRelayRuntimeToolVersion(
-        { stdout: '0.0.0.0\r\n' },
-        /^(?!0\.0\.0\.0$)\d+(?:\.\d+){3}$/
+      sshRelayRuntimeWindowsMsvcToolsetVersion(String.raw`C:\tools\14.44.35207\link.exe`)
+    ).toThrow(/MSVC toolset path/)
+    expect(() =>
+      sshRelayRuntimeWindowsMsvcToolsetVersion(
+        String.raw`C:\MSVC\14.44.35207\bin\shadow\MSVC\14.44.1\bin\link.exe`
       )
-    ).toThrow(/0\.0\.0\.0/)
-  })
-
-  it('passes the resolved linker path through a non-interpolated environment value', () => {
-    const path = String.raw`C:\Program Files\Microsoft Visual Studio\link.exe`
-    expect(sshRelayRuntimeWindowsFileVersionInvocation(path)).toEqual({
-      command: 'pwsh.exe',
-      args: [
-        '-NoLogo',
-        '-NoProfile',
-        '-NonInteractive',
-        '-Command',
-        "$versionInfo = [System.Diagnostics.FileVersionInfo]::GetVersionInfo([Environment]::GetEnvironmentVariable('ORCA_SSH_RELAY_TOOL_PATH')); '{0}.{1}.{2}.{3}' -f $versionInfo.FileMajorPart, $versionInfo.FileMinorPart, $versionInfo.FileBuildPart, $versionInfo.FilePrivatePart"
-      ],
-      options: { env: { ORCA_SSH_RELAY_TOOL_PATH: path } }
-    })
+    ).toThrow(/MSVC toolset path/)
   })
 
   it('bounds failed version diagnostics', () => {

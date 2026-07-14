@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto'
 import { createReadStream } from 'node:fs'
 import { readdir, realpath, stat } from 'node:fs/promises'
 import { createRequire } from 'node:module'
-import { dirname, isAbsolute, join, relative } from 'node:path'
+import { dirname, isAbsolute, join, relative, win32 } from 'node:path'
 import { isDeepStrictEqual, promisify } from 'node:util'
 
 const require = createRequire(import.meta.url)
@@ -26,11 +26,10 @@ async function sha256File(path) {
   return `sha256:${hash.digest('hex')}`
 }
 
-async function capture(command, args, { env } = {}) {
+async function capture(command, args) {
   try {
     return await execFileAsync(command, args, {
       encoding: 'utf8',
-      ...(env ? { env: { ...process.env, ...env } } : {}),
       maxBuffer: TOOL_OUTPUT_BYTES,
       timeout: TOOL_TIMEOUT_MS,
       windowsHide: true
@@ -82,14 +81,13 @@ async function executableRecord({
   versionCommand,
   versionArgs,
   versionPattern,
-  windowsFileVersion = false,
+  windowsMsvcToolsetVersion = false,
   xcrun = false
 }) {
   const path = await locateExecutable(command, { xcrun })
-  const invocation = windowsFileVersion
-    ? sshRelayRuntimeWindowsFileVersionInvocation(path)
-    : { command: versionCommand ?? path, args: versionArgs ?? args }
-  const result = await capture(invocation.command, invocation.args, invocation.options)
+  const result = windowsMsvcToolsetVersion
+    ? { stdout: sshRelayRuntimeWindowsMsvcToolsetVersion(path) }
+    : await capture(versionCommand ?? path, versionArgs ?? args)
   return {
     version: selectSshRelayRuntimeToolVersion(result, versionPattern),
     sha256: await sha256File(path)
@@ -187,21 +185,25 @@ export function sshRelayRuntimeStripVersionProbe(platform) {
     : { args: ['--version'] }
 }
 
-export function sshRelayRuntimeWindowsFileVersionInvocation(path) {
-  const versionInfo =
-    "[System.Diagnostics.FileVersionInfo]::GetVersionInfo([Environment]::GetEnvironmentVariable('ORCA_SSH_RELAY_TOOL_PATH'))"
-  return {
-    command: 'pwsh.exe',
-    args: [
-      '-NoLogo',
-      '-NoProfile',
-      '-NonInteractive',
-      '-Command',
-      // Why: hosted link.exe returns an empty FileVersion string; its numeric PE fields are stable.
-      `$versionInfo = ${versionInfo}; '{0}.{1}.{2}.{3}' -f $versionInfo.FileMajorPart, $versionInfo.FileMinorPart, $versionInfo.FileBuildPart, $versionInfo.FilePrivatePart`
-    ],
-    options: { env: { ORCA_SSH_RELAY_TOOL_PATH: path } }
+export function sshRelayRuntimeWindowsMsvcToolsetVersion(path) {
+  const normalized = win32.normalize(path)
+  const segments = normalized.split(win32.sep)
+  const msvcIndexes = segments.flatMap((segment, index) =>
+    segment.toLowerCase() === 'msvc' ? [index] : []
+  )
+  const msvcIndex = msvcIndexes[0]
+  const version = segments[msvcIndex + 1]
+  if (
+    !win32.isAbsolute(normalized) ||
+    msvcIndexes.length !== 1 ||
+    !/^\d+\.\d+\.\d+$/.test(version ?? '') ||
+    segments[msvcIndex + 2]?.toLowerCase() !== 'bin' ||
+    segments.at(-1)?.toLowerCase() !== 'link.exe'
+  ) {
+    throw new Error('Resolved Windows linker is not in a bounded MSVC toolset path')
   }
+  // Why: hosted link.exe has no version resource; its resolved toolset path plus byte hash is exact.
+  return `MSVC ${version}`
 }
 
 export function assertSshRelayRuntimeToolchain(toolchain, tuple) {
@@ -248,9 +250,8 @@ export async function collectSshRelayRuntimeToolchain(nodePath) {
       linker: await executableRecord({
         command: 'link.exe',
         args: [],
-        // Why: hosted link.exe is pipe-silent; authenticated numeric PE metadata gives its version.
-        windowsFileVersion: true,
-        versionPattern: /^(?!0\.0\.0\.0$)\d+(?:\.\d+){3}$/
+        windowsMsvcToolsetVersion: true,
+        versionPattern: /^MSVC \d+\.\d+\.\d+$/
       }),
       buildSystem: await executableRecord({
         command: 'msbuild.exe',
