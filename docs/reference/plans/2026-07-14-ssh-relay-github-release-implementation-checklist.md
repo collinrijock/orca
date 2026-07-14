@@ -58,10 +58,10 @@ same change as the work it records.
   [#8728](https://github.com/stablyai/orca/pull/8728) at implementation commit `b9d80a4cb`; no
   deploy/resolver call site is connected and no tuple is enabled.
 - Active package: Work Package 2 target-native runtime assembly, archive inspection, executable
-  smoke, SBOM, and provenance only. The Windows x64/arm64 artifact candidate is uncommitted on top
-  of `c308107a9` in stacked draft PR [#8741](https://github.com/stablyai/orca/pull/8741) while its
-  final diff and local gates are re-audited before native CI. It may produce test artifacts but must
-  not publish, resolve, transfer, install, launch, or enable them.
+  smoke, SBOM, and provenance only. The Windows x64/arm64 artifact candidate is implemented at exact
+  head `922edb6ff28199b394f508731fd18a635bec49a0` in stacked draft PR
+  [#8741](https://github.com/stablyai/orca/pull/8741) and awaits exact-head native CI. It may produce
+  test artifacts but must not publish, resolve, transfer, install, launch, or enable them.
 - Active evidence gate: the immutable Node v24.18.0 contract, pinned release key, bounded verifier,
   and artifact-only CLI are locally green under E-M3-NODE-RED-001 and E-M3-NODE-PROVENANCE-001.
   E-M3-RUNTIME-LOCAL-001 additionally proves one unpublished Linux arm64 glibc assembly, exact-tree
@@ -79,8 +79,9 @@ same change as the work it records.
   proof remains active and no implicit `node-gyp` download is allowed.
 - Windows PTY-closure correction: E-M3-WINDOWS-CONPTY-GAP-001 proved the candidate omitted the
   `conpty.dll` and `OpenConsole.exe` files required by Orca's production `useConptyDll: true` path
-  and therefore exercised a weaker system-ConPTY smoke. The artifact and smoke correction is active;
-  no Windows executable cell is complete.
+  and therefore exercised a weaker system-ConPTY smoke. E-M3-WINDOWS-LOCAL-002 proves the corrected
+  local tree-closure and smoke configuration contracts; native execution remains open and no
+  Windows executable cell is complete.
 - Production behavior: unchanged; Orca embeds relay JavaScript and installs `node-pty` plus
   `@parcel/watcher` with remote npm.
 - New runtime assets published: none.
@@ -1216,6 +1217,7 @@ focused commands as their scripts/tests are introduced.
 - [x] `pnpm exec vitest run --config config/vitest.config.ts config/scripts/ssh-relay-node-release-verification.test.mjs` (E-M3-NODE-RED-001, E-M3-NODE-PROVENANCE-001)
 - [x] `node config/scripts/verify-ssh-relay-node-release-inputs.mjs --inputs-directory <verified-input-directory> --archive linux-x64-glibc` (E-M3-NODE-PROVENANCE-001; metadata and archive verification only)
 - [x] `pnpm exec vitest run --config config/vitest.config.ts config/scripts/ssh-relay-node-zip-inspection.test.mjs config/scripts/ssh-relay-runtime-zip.test.mjs` (E-M3-WINDOWS-ZIP-RED-001, E-M3-WINDOWS-INPUT-001; synthetic ZIP/input contracts only)
+- [x] `pnpm exec vitest run --config config/vitest.config.ts config/scripts/ssh-relay-runtime-windows-tree.test.mjs` (E-M3-WINDOWS-LOCAL-002; structural Windows ConPTY closure only, no execution)
 - [x] `node config/scripts/verify-ssh-relay-node-release-inputs.mjs --inputs-directory <verified-windows-input-directory> --archive win32-x64` (E-M3-WINDOWS-INPUT-001; signed real Node ZIP, headers, and import library; no Windows execution)
 - [x] `node config/scripts/build-ssh-relay-runtime.mjs --tuple linux-arm64-glibc --inputs-directory <verified-input-directory> --output-directory <exclusive-output> --source-date-epoch <epoch> --git-commit <full-sha>` (E-M3-RUNTIME-LOCAL-001; local native Linux arm64 only)
 - [x] `node config/scripts/verify-ssh-relay-runtime.mjs --runtime-directory <runtime-tree> --identity <identity.json> --archive <runtime.tar.xz>` (E-M3-RUNTIME-LOCAL-001; local native Linux arm64 only)
@@ -2301,8 +2303,9 @@ fragmentLinks=9`.
 ### E-M3-WINDOWS-CONPTY-GAP-001 — Candidate omitted the production ConPTY runtime closure
 
 - Date: 2026-07-14
-- Commit SHA / PR: source audit of the uncommitted Windows artifact-only candidate on top of
-  `c308107a9`; draft PR [#8741](https://github.com/stablyai/orca/pull/8741)
+- Commit SHA / PR: source audit while preparing implementation commit
+  `922edb6ff28199b394f508731fd18a635bec49a0`; draft PR
+  [#8741](https://github.com/stablyai/orca/pull/8741)
 - Runner: macOS 26.2 arm64; source and installed-package inspection only
 - Remote and transport: none
 - Exact commands:
@@ -2400,8 +2403,8 @@ fragmentLinks=9`.
 ### E-M3-WINDOWS-INPUT-001 — Signed Windows Node inputs and bounded selective extraction
 
 - Date: 2026-07-14
-- Commit SHA / PR: uncommitted Windows artifact-only implementation on top of `c308107a9`; draft PR
-  [#8741](https://github.com/stablyai/orca/pull/8741); native Windows CI pending
+- Commit SHA / PR: implementation commit `922edb6ff28199b394f508731fd18a635bec49a0`;
+  draft PR [#8741](https://github.com/stablyai/orca/pull/8741); native Windows CI pending
 - Runners: focused tests and real selective extraction on macOS 26.2 arm64 with Node v26.0.0/pnpm
   10.24.0; signature/checksum/file verification in native Linux arm64 container
   `node@sha256:032e78d7e54e352129831743737e3a83171d9cc5b5896f411649c597ce0b11ea`
@@ -2465,6 +2468,57 @@ fragmentLinks=9`.
   only; no Windows per-tuple build/executable cell is checked.
 - Follow-up: run the exact builder on native `windows-2022` and `windows-11-arm`, require the
   loopback-only `node-gyp` fallback URL to remain unused, and record only the cells actually passed.
+
+### E-M3-WINDOWS-LOCAL-002 — Corrected Windows artifact contracts and local static gates
+
+- Date: 2026-07-14
+- Commit SHA / PR: implementation commit `922edb6ff28199b394f508731fd18a635bec49a0`;
+  draft PR [#8741](https://github.com/stablyai/orca/pull/8741)
+- Runner: macOS 26.2 arm64; Node v26.0.0 and pnpm 10.24.0. The repository requires Node 24, so
+  exact-head draft-PR CI is the authoritative supported-Node result.
+- Remote and transport: none; synthetic contracts and repository static checks only
+- Exact commands:
+
+  ```sh
+  pnpm exec vitest run --config config/vitest.config.ts \
+    config/scripts/ssh-relay-node-release-verification.test.mjs \
+    config/scripts/ssh-relay-node-tar-inspection.test.mjs \
+    config/scripts/ssh-relay-node-zip-inspection.test.mjs \
+    config/scripts/ssh-relay-runtime-artifact.test.mjs \
+    config/scripts/ssh-relay-runtime-windows-tree.test.mjs \
+    config/scripts/ssh-relay-runtime-zip.test.mjs \
+    config/scripts/ssh-relay-runtime-workflow.test.mjs
+  pnpm run typecheck
+  pnpm exec oxlint
+  pnpm run check:max-lines-ratchet
+  GOMAXPROCS=2 pnpm run lint
+  pnpm exec oxfmt --check \
+    docs/reference/plans/2026-07-14-ssh-relay-github-release-implementation-checklist.md \
+    docs/reference/plans/2026-07-14-ssh-relay-github-release-plan.html
+  git diff --check
+  ```
+
+- Result: PASS. Seven focused suites passed 21/21 tests in 290 ms. Typecheck, oxlint, max-lines,
+  full lint/reliability/localization gates, plan formatting, and diff whitespace passed. Oxlint
+  reported only pre-existing warnings outside this package. Full lint used `GOMAXPROCS=2` because
+  the external Go type-aware linter had previously segfaulted on an existing dependency declaration
+  at unconstrained concurrency.
+- Oracle proved: deterministic synthetic Windows ZIP packing and complete ZIP reinspection;
+  signed-input schema and bounded ZIP/header staging contracts; Windows-unsafe header path
+  rejection; the Windows runtime-tree identity contains `conpty.dll` and `OpenConsole.exe` as
+  native runtime files; the smoke configuration selects `useConptyDll: true`; the workflow declares
+  exact x64/arm64 native runners and has read-only, unpublished artifact authority.
+- Resource metrics: focused Vitest duration 290 ms. Runtime RSS, open files/channels, cancellation
+  settlement, artifact size, and native build/smoke duration do not apply to these synthetic checks
+  and remain open for target-native evidence.
+- Does not prove: Windows native compilation, offline `node-gyp`, staged ConPTY execution,
+  bundled-Node/PTY/watcher smoke, full artifact bytes or reproducibility, native trust/signing,
+  oldest baseline, SSH transfer/install, publication, resolver/cache/fallback/UI, or any enabled
+  tuple.
+- Checklist items satisfied: the added purpose-named local Windows-tree command only. Windows
+  per-tuple build/executable and ConPTY implementation boxes remain unchecked pending native CI.
+- Follow-up: push this exact implementation head and record exact Windows x64/arm64 jobs, images,
+  artifact IDs/hashes/sizes, build/verify/smoke durations, RSS, and any discriminating failure.
 
 ### E-M3-RUNTIME-LOCAL-001 — First target-native Linux arm64 runtime artifact
 
