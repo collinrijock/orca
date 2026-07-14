@@ -1,4 +1,4 @@
-import { open, readFile, writeFile } from 'node:fs/promises'
+import { open, readFile, readdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 
 const COMPILER_OPTIONS = `            'VCCLCompilerTool': {
@@ -43,6 +43,10 @@ const REPRODUCIBLE_LINKER_OPTIONS = `            'VCLinkerTool': {
 
 const REQUIRED_GENERATED_OPTIONS = ['/Brepro', '/experimental:deterministic']
 const MAX_LINK_COMMAND_TRACKING_BYTES = 256 * 1024
+const MAX_LINK_COMMAND_TRACKING_CANDIDATES = 32
+const MAX_LINK_COMMAND_TRACKING_DEPTH = 8
+const MAX_LINK_COMMAND_TRACKING_ENTRIES = 10_000
+const TARGET_LINK_OUTPUT_PATTERN = /(?:^|[\\/:"'\s])conpty_console_list\.node(?=$|[\\/:"'\s])/i
 
 function decodeXmlText(value) {
   return value
@@ -127,21 +131,6 @@ export async function assertWindowsNodePtyGeneratedBuildSettings({ nodePtyDirect
   }
 }
 
-export function windowsNodePtyLinkCommandTrackingPath({ nodePtyDirectory, tuple }) {
-  if (!tuple.startsWith('win32-')) {
-    return undefined
-  }
-  return join(
-    nodePtyDirectory,
-    'build',
-    'Release',
-    'obj',
-    'conpty_console_list',
-    'conpty_console_list.tlog',
-    'link.command.1.tlog'
-  )
-}
-
 async function readBoundedLinkCommandTracking(path) {
   const handle = await open(path, 'r')
   try {
@@ -159,6 +148,39 @@ async function readBoundedLinkCommandTracking(path) {
   } finally {
     await handle.close()
   }
+}
+
+async function discoverLinkCommandTracking(nodePtyDirectory) {
+  const queue = [{ depth: 0, path: join(nodePtyDirectory, 'build') }]
+  const candidates = []
+  let entries = 0
+  for (let index = 0; index < queue.length; index += 1) {
+    const current = queue[index]
+    const children = await readdir(current.path, { withFileTypes: true })
+    children.sort((left, right) => left.name.localeCompare(right.name))
+    for (const child of children) {
+      entries += 1
+      if (entries > MAX_LINK_COMMAND_TRACKING_ENTRIES) {
+        throw new Error('MSBuild linker tracking discovery exceeds the bounded entry count')
+      }
+      if (child.isSymbolicLink()) {
+        throw new Error('MSBuild linker tracking discovery rejects symbolic links')
+      }
+      const childPath = join(current.path, child.name)
+      if (child.isDirectory()) {
+        if (current.depth >= MAX_LINK_COMMAND_TRACKING_DEPTH) {
+          throw new Error('MSBuild linker tracking discovery exceeds the bounded depth')
+        }
+        queue.push({ depth: current.depth + 1, path: childPath })
+      } else if (child.isFile() && child.name.toLowerCase() === 'link.command.1.tlog') {
+        candidates.push(childPath)
+        if (candidates.length > MAX_LINK_COMMAND_TRACKING_CANDIDATES) {
+          throw new Error('MSBuild linker tracking discovery has too many candidates')
+        }
+      }
+    }
+  }
+  return { candidates, entries }
 }
 
 function decodeLinkCommandTracking(bytes) {
@@ -230,6 +252,26 @@ export function parseWindowsNodePtyLinkCommandTracking(bytes) {
   }
 }
 
-export async function inspectWindowsNodePtyLinkCommandTracking(path) {
-  return parseWindowsNodePtyLinkCommandTracking(await readBoundedLinkCommandTracking(path))
+export async function inspectWindowsNodePtyLinkCommandTracking({ nodePtyDirectory, tuple }) {
+  if (!tuple.startsWith('win32-')) {
+    return undefined
+  }
+  const discovery = await discoverLinkCommandTracking(nodePtyDirectory)
+  const matching = []
+  for (const path of discovery.candidates) {
+    const bytes = await readBoundedLinkCommandTracking(path)
+    if (TARGET_LINK_OUTPUT_PATTERN.test(decodeLinkCommandTracking(bytes).text)) {
+      matching.push(bytes)
+    }
+  }
+  if (matching.length !== 1) {
+    throw new Error(
+      `MSBuild linker tracking discovery requires exactly one target command file (candidates=${discovery.candidates.length}, matches=${matching.length}, entries=${discovery.entries})`
+    )
+  }
+  return {
+    ...parseWindowsNodePtyLinkCommandTracking(matching[0]),
+    candidateFiles: discovery.candidates.length,
+    searchedEntries: discovery.entries
+  }
 }

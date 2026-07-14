@@ -8,8 +8,7 @@ import { applyWindowsNodePtySettlement } from './ssh-relay-node-pty-windows-sett
 import {
   applyWindowsNodePtyBuildDeterminism,
   assertWindowsNodePtyGeneratedBuildSettings,
-  inspectWindowsNodePtyLinkCommandTracking,
-  windowsNodePtyLinkCommandTrackingPath
+  inspectWindowsNodePtyLinkCommandTracking
 } from './ssh-relay-node-pty-windows-build-determinism.mjs'
 
 const require = createRequire(import.meta.url)
@@ -194,12 +193,11 @@ export async function buildPatchedSshRelayNodePty({
       tuple
     })
     if (generatedSettings) {
-      const trackingPath = windowsNodePtyLinkCommandTrackingPath({
+      // Why: MSBuild tracking layout differs by runner, so selection is bounded by target content.
+      const linkCommand = await inspectWindowsNodePtyLinkCommandTracking({
         nodePtyDirectory: buildDirectory,
         tuple
       })
-      // Why: an unset property cannot classify ARM64 thunks; the post-build command is authoritative.
-      const linkCommand = await inspectWindowsNodePtyLinkCommandTracking(trackingPath)
       process.stdout.write(
         `windows_node_pty_msbuild_settings=${JSON.stringify({
           ...generatedSettings,

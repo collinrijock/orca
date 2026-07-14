@@ -8,8 +8,7 @@ import {
   applyWindowsNodePtyBuildDeterminism,
   assertWindowsNodePtyGeneratedBuildSettings,
   inspectWindowsNodePtyLinkCommandTracking,
-  parseWindowsNodePtyLinkCommandTracking,
-  windowsNodePtyLinkCommandTrackingPath
+  parseWindowsNodePtyLinkCommandTracking
 } from './ssh-relay-node-pty-windows-build-determinism.mjs'
 
 const temporaryDirectories = []
@@ -90,22 +89,6 @@ describe('SSH relay Windows node-pty build determinism', () => {
   })
 
   it('parses one bounded UTF-16 linker command into an allowlisted switch summary', () => {
-    expect(
-      windowsNodePtyLinkCommandTrackingPath({
-        nodePtyDirectory: 'C:\\artifact-node-pty',
-        tuple: 'win32-arm64'
-      })
-    ).toBe(
-      join(
-        'C:\\artifact-node-pty',
-        'build',
-        'Release',
-        'obj',
-        'conpty_console_list',
-        'conpty_console_list.tlog',
-        'link.command.1.tlog'
-      )
-    )
     const command = [
       '^C:\\artifact-node-pty\\build\\Release\\obj\\conpty_console_list.obj',
       '/OUT:conpty_console_list.node /INCREMENTAL:NO /GUARD:CF /DEBUG:FULL',
@@ -128,12 +111,6 @@ describe('SSH relay Windows node-pty build determinism', () => {
         '/opt:ref'
       ]
     })
-    expect(
-      windowsNodePtyLinkCommandTrackingPath({
-        nodePtyDirectory: '/not-used-on-posix',
-        tuple: 'linux-arm64-glibc'
-      })
-    ).toBeUndefined()
   })
 
   it('rejects oversized, malformed, duplicate, or ambiguous linker tracking input', () => {
@@ -174,18 +151,96 @@ describe('SSH relay Windows node-pty build determinism', () => {
   it('bounds linker tracking bytes while reading the generated file', async () => {
     const directory = await mkdtemp(join(tmpdir(), 'orca-node-pty-link-tracking-'))
     temporaryDirectories.push(directory)
-    const trackingPath = join(directory, 'link.command.1.tlog')
+    const trackingPath = join(
+      directory,
+      'build',
+      'unexpected',
+      'target.tlog',
+      'link.command.1.tlog'
+    )
+    const otherPath = join(directory, 'build', 'other', 'link.command.1.tlog')
+    await mkdir(join(directory, 'build', 'unexpected', 'target.tlog'), { recursive: true })
+    await mkdir(join(directory, 'build', 'other'), { recursive: true })
     await writeFile(
       trackingPath,
-      '^one\n/INCREMENTAL:NO /Brepro /GUARD:CF /experimental:deterministic'
+      '^one\n/OUT:conpty_console_list.node /INCREMENTAL:NO /Brepro /GUARD:CF /experimental:deterministic'
     )
-    await expect(inspectWindowsNodePtyLinkCommandTracking(trackingPath)).resolves.toMatchObject({
-      incremental: 'disabled'
-    })
+    await writeFile(otherPath, '^other\n/OUT:not_conpty_console_list.node /INCREMENTAL:NO')
+    await expect(
+      inspectWindowsNodePtyLinkCommandTracking({
+        nodePtyDirectory: directory,
+        tuple: 'win32-x64'
+      })
+    ).resolves.toMatchObject({ candidateFiles: 2, incremental: 'disabled' })
+    await expect(
+      inspectWindowsNodePtyLinkCommandTracking({
+        nodePtyDirectory: '/not-used-on-posix',
+        tuple: 'linux-arm64-glibc'
+      })
+    ).resolves.toBeUndefined()
     await writeFile(trackingPath, Buffer.alloc(300_000))
-    await expect(inspectWindowsNodePtyLinkCommandTracking(trackingPath)).rejects.toThrow(
-      'outside the bounded size'
+    await expect(
+      inspectWindowsNodePtyLinkCommandTracking({
+        nodePtyDirectory: directory,
+        tuple: 'win32-x64'
+      })
+    ).rejects.toThrow('outside the bounded size')
+  })
+
+  it('rejects missing or duplicate target linker tracking candidates', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'orca-node-pty-link-tracking-'))
+    temporaryDirectories.push(directory)
+    await mkdir(join(directory, 'build', 'first'), { recursive: true })
+    await expect(
+      inspectWindowsNodePtyLinkCommandTracking({
+        nodePtyDirectory: directory,
+        tuple: 'win32-arm64'
+      })
+    ).rejects.toThrow('exactly one target command file')
+    const command =
+      '^one\n/OUT:conpty_console_list.node /Brepro /GUARD:CF /experimental:deterministic'
+    await writeFile(join(directory, 'build', 'first', 'link.command.1.tlog'), command)
+    await mkdir(join(directory, 'build', 'second'), { recursive: true })
+    await writeFile(join(directory, 'build', 'second', 'link.command.1.tlog'), command)
+    await expect(
+      inspectWindowsNodePtyLinkCommandTracking({
+        nodePtyDirectory: directory,
+        tuple: 'win32-arm64'
+      })
+    ).rejects.toThrow('exactly one target command file')
+  })
+
+  it('rejects tracking discovery beyond its depth or candidate budgets', async () => {
+    const deepDirectory = await mkdtemp(join(tmpdir(), 'orca-node-pty-link-depth-'))
+    temporaryDirectories.push(deepDirectory)
+    await mkdir(
+      join(deepDirectory, 'build', ...Array.from({ length: 10 }, (_, index) => `${index}`)),
+      {
+        recursive: true
+      }
     )
+    await expect(
+      inspectWindowsNodePtyLinkCommandTracking({
+        nodePtyDirectory: deepDirectory,
+        tuple: 'win32-x64'
+      })
+    ).rejects.toThrow('exceeds the bounded depth')
+
+    const wideDirectory = await mkdtemp(join(tmpdir(), 'orca-node-pty-link-candidates-'))
+    temporaryDirectories.push(wideDirectory)
+    await Promise.all(
+      Array.from({ length: 33 }, async (_, index) => {
+        const candidateDirectory = join(wideDirectory, 'build', `${index}`)
+        await mkdir(candidateDirectory, { recursive: true })
+        await writeFile(join(candidateDirectory, 'link.command.1.tlog'), '^candidate')
+      })
+    )
+    await expect(
+      inspectWindowsNodePtyLinkCommandTracking({
+        nodePtyDirectory: wideDirectory,
+        tuple: 'win32-arm64'
+      })
+    ).rejects.toThrow('too many candidates')
   })
 
   it('rejects missing, duplicate, non-inherited, or wrong-architecture generated settings', async () => {
