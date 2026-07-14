@@ -12,6 +12,8 @@ import {
 import { resolveHostSessionTabIdForWebSessionTab } from '@/runtime/web-session-tabs-sync'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { guardPinnedTabClose, resolvePinnedTabLabel } from '@/store/pinned-tab-close-guard'
+import type { TerminalTabCloseReason } from '@/store/slices/terminal-tab-retirement'
+import { closeLocalTerminalTabState } from './close-local-terminal-tab-state'
 
 const EDITOR_TAB_CONTENT_TYPES = new Set<TabContentType>([
   'editor',
@@ -63,28 +65,6 @@ function getWorktreeTerminalTabIds(state: TerminalTabActionState, worktreeId: st
     }
   }
   return [...ids]
-}
-
-function closeLocalTerminalTabState(terminalTabId: string): void {
-  const state = useAppStore.getState()
-  if (
-    Object.values(state.tabsByWorktree).some((tabs) => tabs.some((tab) => tab.id === terminalTabId))
-  ) {
-    state.closeTab(terminalTabId)
-    return
-  }
-
-  for (const tabs of Object.values(state.unifiedTabsByWorktree ?? {})) {
-    const unified = tabs.find(
-      (tab) =>
-        tab.contentType === 'terminal' &&
-        (tab.entityId === terminalTabId || tab.id === terminalTabId)
-    )
-    if (unified) {
-      state.closeUnifiedTab(unified.id)
-      return
-    }
-  }
 }
 
 function isPinnedVisibleTab(
@@ -149,7 +129,10 @@ export function createNewTerminalTab(
   state.setTabBarOrder(activeWorktreeId, order)
 }
 
-export function closeTerminalTab(tabId: string, options?: { force?: boolean }): void {
+export function closeTerminalTab(
+  tabId: string,
+  options?: { force?: boolean; reason?: TerminalTabCloseReason }
+): void {
   const state = useAppStore.getState()
   const target = resolveCloseTerminalTabTarget(state, tabId)
   if (!target) {
@@ -159,7 +142,11 @@ export function closeTerminalTab(tabId: string, options?: { force?: boolean }): 
 
   // Why: a pinned tab routes through the confirmation guard instead of closing
   // outright. `force` is the post-confirmation re-entry, which skips the guard.
-  if (!options?.force && isPinnedVisibleTab(state, owningWorktreeId, terminalTabId)) {
+  if (
+    options?.reason !== 'pty-exit' &&
+    !options?.force &&
+    isPinnedVisibleTab(state, owningWorktreeId, terminalTabId)
+  ) {
     guardPinnedTabClose({
       isPinned: true,
       tabLabel: resolvePinnedTabLabel(state, owningWorktreeId, terminalTabId),
@@ -187,7 +174,10 @@ export function closeTerminalTab(tabId: string, options?: { force?: boolean }): 
       }) ?? toHostSessionTabId(terminalTabId)
     // Why: prune local mirrors immediately so close feels responsive while the
     // host session snapshot catches up.
-    closeLocalTerminalTabState(terminalTabId)
+    closeLocalTerminalTabState(terminalTabId, {
+      reason: options?.reason,
+      remoteCloseOwnedByHost: true
+    })
     void closeWebRuntimeSessionTab({
       worktreeId: owningWorktreeId,
       tabId: hostBackedTabId,
@@ -198,7 +188,7 @@ export function closeTerminalTab(tabId: string, options?: { force?: boolean }): 
 
   const currentTerminalTabIds = getWorktreeTerminalTabIds(state, owningWorktreeId)
   if (currentTerminalTabIds.length <= 1) {
-    closeLocalTerminalTabState(terminalTabId)
+    closeLocalTerminalTabState(terminalTabId, { reason: options?.reason })
     if (state.activeWorktreeId === owningWorktreeId) {
       // Why: only deactivate the worktree when no tabs of any kind remain.
       // Editor files are a separate tab type; closing the last terminal tab
@@ -229,7 +219,7 @@ export function closeTerminalTab(tabId: string, options?: { force?: boolean }): 
     }
   }
 
-  closeLocalTerminalTabState(terminalTabId)
+  closeLocalTerminalTabState(terminalTabId, { reason: options?.reason })
 }
 
 export function closeOtherTerminalTabs(tabId: string, activeWorktreeId: string | null): void {

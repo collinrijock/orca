@@ -1334,9 +1334,9 @@ function Terminal(): React.JSX.Element | null {
       if (shouldDeferParkedPtyExitTabClose(tabId, ptyId)) {
         return
       }
-      handleCloseTab(tabId)
+      closeTerminalTab(tabId, { reason: 'pty-exit' })
     },
-    [consumeSuppressedPtyExit, handleCloseTab]
+    [consumeSuppressedPtyExit]
   )
 
   const handleCloseOthers = useCallback(

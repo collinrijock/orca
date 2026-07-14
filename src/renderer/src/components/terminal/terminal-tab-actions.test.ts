@@ -197,7 +197,10 @@ describe('closeTerminalTab', () => {
 
     closeTerminalTab('local-tab-1')
 
-    expect(closeTab).toHaveBeenCalledWith('local-tab-1')
+    expect(closeTab).toHaveBeenCalledWith('local-tab-1', {
+      reason: undefined,
+      remoteCloseOwnedByHost: true
+    })
     expect(closeWebRuntimeSessionTabMock).toHaveBeenCalledWith({
       worktreeId: 'wt-1',
       tabId: 'host-tab-1',
@@ -319,7 +322,10 @@ describe('closeTerminalTab', () => {
 
     closeTerminalTab('plain-uuid-tab')
 
-    expect(closeTab).toHaveBeenCalledWith('plain-uuid-tab')
+    expect(closeTab).toHaveBeenCalledWith('plain-uuid-tab', {
+      reason: undefined,
+      remoteCloseOwnedByHost: true
+    })
     expect(closeWebRuntimeSessionTabMock).toHaveBeenCalledWith({
       worktreeId: 'wt-1',
       tabId: 'plain-uuid-tab',
