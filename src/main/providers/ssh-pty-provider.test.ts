@@ -67,6 +67,21 @@ describe('SshPtyProvider', () => {
       })
     })
 
+    it('forwards the user-terminal credential guard opt-out to the relay host', async () => {
+      mux.request.mockResolvedValue({ id: 'pty-guard-setting' })
+
+      await provider.spawn({
+        cols: 120,
+        rows: 40,
+        suppressUserTerminalGitCredentialPrompt: false
+      })
+
+      expect(mux.request).toHaveBeenCalledWith(
+        'pty.spawn',
+        expect.objectContaining({ suppressUserTerminalGitCredentialPrompt: false })
+      )
+    })
+
     it('forwards pane identity as relay metadata on fresh spawn', async () => {
       mux.request.mockResolvedValue({ id: 'pty-2' })
 

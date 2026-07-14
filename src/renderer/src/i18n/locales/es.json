@@ -6764,7 +6764,7 @@
             "tui": "TUI",
             "tuiDescription": "Eventos discretos de rueda para apps de terminal de pantalla completa."
           },
-          "3fab0f2239": "Stop git in user terminals from opening Git Credential Manager sign-in windows. Saved credentials still work; git fails fast instead of prompting. Applies to new terminals."
+          "3fab0f2239": "Evita que git abra ventanas de inicio de sesión de Git Credential Manager en terminales de usuario. Las credenciales guardadas siguen funcionando; git falla de inmediato en lugar de solicitar autenticación. Se aplica a terminales nuevas."
         },
         "TerminalSettingsPreview": {
           "a63953a48a": "Vista previa del tema {{value0}}",
@@ -8500,17 +8500,17 @@
               "7c7056940a": "shell",
               "713c4a2f92": "Elija el shell predeterminado para los nuevos paneles de terminal en Windows.",
               "13715f9d23": "Shell predeterminado",
-              "8630676830": "Block Git Credential Popups",
-              "9d8b09bc09": "Stop git in terminals from opening Git Credential Manager sign-in windows.",
+              "8630676830": "Bloquear ventanas emergentes de credenciales de Git",
+              "9d8b09bc09": "Evita que git abra ventanas de inicio de sesión de Git Credential Manager en terminales.",
               "ba9f11ecc3": "git",
-              "7c7c74ef60": "credential",
-              "8eff361700": "popup",
+              "7c7c74ef60": "credencial",
+              "8eff361700": "ventana emergente",
               "7c82e855b0": "oauth",
               "bf215181b5": "github",
-              "b19a25c6a0": "sign in",
+              "b19a25c6a0": "iniciar sesión",
               "ef5acdb939": "gcm",
-              "4ae35dbb42": "prompt",
-              "27e4a4878d": "credential manager"
+              "4ae35dbb42": "solicitud",
+              "27e4a4878d": "gestor de credenciales"
             }
           }
         },

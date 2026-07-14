@@ -876,6 +876,14 @@ describe('registerPtyHandlers', () => {
       expect(env.TERM_PROGRAM).toBe('Orca')
     })
 
+    it('keeps indexed Git prompt guards in a local agent terminal env', async () => {
+      const env = await spawnAndGetEnv(undefined, undefined, undefined, undefined, 'claude')
+      expect(env.GIT_TERMINAL_PROMPT).toBe('0')
+      expect(env.GCM_INTERACTIVE).toBe('never')
+      expect(Object.values(env)).toContain('credential.interactive')
+      expect(Object.values(env)).toContain('credential.guiPrompt')
+    })
+
     it('advertises OSC 8 hyperlink support via FORCE_HYPERLINK', async () => {
       // Why: the supports-hyperlinks npm package hard-codes a TERM_PROGRAM
       // allowlist (iTerm.app / WezTerm / vscode) and reports false for
@@ -2048,6 +2056,26 @@ describe('registerPtyHandlers', () => {
         } finally {
           mockedApp.isPackaged = prev
         }
+      })
+
+      it('defers indexed Git prompt guards from the daemon wire environment', async () => {
+        const env = await daemonSpawnAndGetEnv(
+          {
+            GIT_CONFIG_COUNT: '1',
+            GIT_CONFIG_KEY_0: 'http.proxy',
+            GIT_CONFIG_VALUE_0: 'http://proxy.invalid'
+          },
+          undefined,
+          undefined,
+          undefined,
+          { command: 'claude' }
+        )
+
+        expect(env.GIT_TERMINAL_PROMPT).toBe('0')
+        expect(env.GCM_INTERACTIVE).toBe('never')
+        expect(env.GIT_CONFIG_COUNT).toBe('1')
+        expect(env.GIT_CONFIG_KEY_0).toBe('http.proxy')
+        expect(env.GIT_CONFIG_KEY_1).toBeUndefined()
       })
 
       it('passes the minted sessionId through to provider.spawn and host env setup', async () => {

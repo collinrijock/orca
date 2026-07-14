@@ -30,6 +30,10 @@ import {
 } from './gh-rate-limit-breaker'
 import { getDefaultWslDistro, parseWslPath, toWindowsWslPath, type WslPathInfo } from '../wsl'
 import { addWslEnvKeys } from '../wsl-env'
+import {
+  appendGitConfigEnv,
+  gitCredentialPromptGuardEnv
+} from '../../shared/git-credential-prompt-env'
 import { getSpawnArgsForWindows, isWindowsBatchScript, resolveWindowsCommand } from '../win32-utils'
 import {
   buildWslLoginShellCommand,
@@ -559,20 +563,7 @@ export function gitOptionalLocksDisabledEnv(
  * already present in `env` so we never clobber config a caller injected the
  * same way.
  */
-export function appendGitConfigEnv(
-  env: NodeJS.ProcessEnv,
-  entries: readonly (readonly [key: string, value: string])[]
-): NodeJS.ProcessEnv {
-  const parsed = Number.parseInt(env.GIT_CONFIG_COUNT ?? '', 10)
-  const base = Number.isInteger(parsed) && parsed > 0 ? parsed : 0
-  const next = { ...env }
-  entries.forEach(([key, value], index) => {
-    next[`GIT_CONFIG_KEY_${base + index}`] = key
-    next[`GIT_CONFIG_VALUE_${base + index}`] = value
-  })
-  next.GIT_CONFIG_COUNT = String(base + entries.length)
-  return next
-}
+export { appendGitConfigEnv }
 
 /**
  * Pin Orca-spawned git to untranslated English output so stderr/progress
@@ -585,47 +576,11 @@ export function untranslatedGitOutputEnv(env: NodeJS.ProcessEnv = process.env): 
   return { ...env, ...UNTRANSLATED_GIT_OUTPUT_ENV }
 }
 
-const GIT_CONFIG_WSLENV_KEY_RE = /^GIT_CONFIG_(?:COUNT|KEY_\d+|VALUE_\d+)$/
-
 export function promptGuardGitEnv(
   env: NodeJS.ProcessEnv = process.env,
   platform: NodeJS.Platform = process.platform
 ): NodeJS.ProcessEnv {
-  const next = appendGitConfigEnv(
-    {
-      ...untranslatedGitOutputEnv(env),
-      GIT_TERMINAL_PROMPT: '0',
-      GIT_ASKPASS: env.GIT_ASKPASS ?? '',
-      SSH_ASKPASS: env.SSH_ASKPASS ?? '',
-      // Why: Git Credential Manager ignores GIT_TERMINAL_PROMPT / GIT_ASKPASS and
-      // pops a GUI on first auth — the Windows worktree-create hang (STA-1292).
-      // `never` suppresses the prompt while still serving cached credentials.
-      GCM_INTERACTIVE: 'never'
-    },
-    // Why: disable only the *interactive* credential prompt, NOT the helper
-    // itself — an empty credential.helper would break cached-credential auth for
-    // private repos. Harmless on macOS/Linux (no GCM) and on the SSH path.
-    [
-      ['credential.interactive', 'false'],
-      ['credential.guiPrompt', 'false']
-    ]
-  )
-  if (platform === 'win32') {
-    // Why: wsl.exe only imports env vars named in WSLENV, so WSL-routed git
-    // would never see the guard — and WSL setups commonly use the Windows
-    // credential manager as git's helper, which pops the same OAuth window
-    // (issue #7652). Askpass vars are deliberately not forwarded: a Windows
-    // askpass path is meaningless inside the distro. GIT_CONFIG_* must be
-    // forwarded all-or-nothing (including caller-preexisting entries): a
-    // GIT_CONFIG_COUNT that crosses without every KEY_n/VALUE_n below it makes
-    // git error out on "bogus count".
-    addWslEnvKeys(next, [
-      'GIT_TERMINAL_PROMPT',
-      'GCM_INTERACTIVE',
-      ...Object.keys(next).filter((key) => GIT_CONFIG_WSLENV_KEY_RE.test(key))
-    ])
-  }
-  return next
+  return gitCredentialPromptGuardEnv(untranslatedGitOutputEnv(env), platform)
 }
 
 /**
@@ -639,15 +594,7 @@ export function promptGuardShellEnv(
   env: NodeJS.ProcessEnv = process.env,
   platform: NodeJS.Platform = process.platform
 ): NodeJS.ProcessEnv {
-  const next = promptGuardGitEnv(env, platform)
-  for (const key of Object.keys(UNTRANSLATED_GIT_OUTPUT_ENV)) {
-    if (env[key] === undefined) {
-      delete next[key]
-    } else {
-      next[key] = env[key]
-    }
-  }
-  return next
+  return gitCredentialPromptGuardEnv(env, platform)
 }
 
 /**

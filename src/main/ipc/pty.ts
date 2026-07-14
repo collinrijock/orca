@@ -566,6 +566,9 @@ export type BuildPtyHostEnvOptions = {
    *  (issue #7652). No effect on non-Windows hosts; agent terminals are always
    *  guarded on every platform regardless of this flag. */
   suppressUserTerminalGitCredentialPrompt?: boolean
+  /** Keep indexed Git config off the sparse daemon wire; the daemon appends
+   *  guard entries after merging its authoritative inherited environment. */
+  deferGitConfigGuardToDaemon?: boolean
 }
 
 function readInheritedPath(baseEnv: Record<string, string>): string {
@@ -861,7 +864,8 @@ export function buildPtyHostEnv(
   // agent retries git in a network-restricted intranet (issue #7652).
   applyTerminalGitCredentialPromptGuard(baseEnv, {
     launchCommand: launchCommandHint,
-    suppressUserTerminalPrompt: opts.suppressUserTerminalGitCredentialPrompt !== false
+    suppressUserTerminalPrompt: opts.suppressUserTerminalGitCredentialPrompt !== false,
+    deferGitConfigGuardToHost: opts.deferGitConfigGuardToDaemon
   })
 
   const shouldPrepareOmpShadow = piAgentKind === 'omp' || !hasLaunchCommand
@@ -3047,6 +3051,7 @@ export function registerPtyHandlers(
           wslDistro: codexSelectionTarget.runtime === 'wsl' ? codexSelectionTarget.wslDistro : null,
           agentStatusHooksEnabled: isAgentStatusHooksEnabled(getSettings?.()),
           networkProxySettings: getSettings?.(),
+          deferGitConfigGuardToDaemon: true,
           suppressUserTerminalGitCredentialPrompt:
             getSettings?.()?.terminalSuppressGitCredentialPrompt ?? true
         })
@@ -3061,6 +3066,8 @@ export function registerPtyHandlers(
         rows: args.rows,
         cwd,
         env,
+        suppressUserTerminalGitCredentialPrompt:
+          getSettings?.()?.terminalSuppressGitCredentialPrompt ?? true,
         ...(isMintedSessionId ? { isNewSession: true } : {})
       }
       spawnOptions.envToDelete = mergePtyEnvDeletions(
@@ -3904,6 +3911,7 @@ export function registerPtyHandlers(
               codexSelectionTarget.runtime === 'wsl' ? codexSelectionTarget.wslDistro : null,
             agentStatusHooksEnabled: isAgentStatusHooksEnabled(getSettings?.()),
             networkProxySettings: getSettings?.(),
+            deferGitConfigGuardToDaemon: true,
             suppressUserTerminalGitCredentialPrompt:
               getSettings?.()?.terminalSuppressGitCredentialPrompt ?? true
           })
@@ -3947,6 +3955,8 @@ export function registerPtyHandlers(
         rows: args.rows,
         cwd,
         env: spawnEnv,
+        suppressUserTerminalGitCredentialPrompt:
+          getSettings?.()?.terminalSuppressGitCredentialPrompt ?? true,
         ...(isMintedSessionId ? { isNewSession: true } : {})
       }
       if (combinedEnvToDelete) {

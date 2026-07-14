@@ -52,6 +52,7 @@ export function TerminalAdvancedSection({
   pwshAvailable,
   isMac
 }: TerminalAdvancedSectionProps): React.JSX.Element {
+  const terminalGitCredentialPopupSearchEntries = getTerminalGitCredentialPopupSearchEntry()
   const scrollbackRows = normalizeDesktopTerminalScrollbackRows(settings.terminalScrollbackRows)
   const [scrollbackRowsDraft, setScrollbackRowsDraft] = useState(String(scrollbackRows))
   const [prevScrollbackRows, setPrevScrollbackRows] = useState(scrollbackRows)
@@ -305,18 +306,8 @@ export function TerminalAdvancedSection({
         ) : null}
 
         {showWindowsGitCredentialGuard &&
-        matchesSettingsSearch(searchQuery, getTerminalGitCredentialPopupSearchEntry()) ? (
-          <SearchableSetting
-            title={translate(
-              'auto.components.settings.terminal.windows.search.8630676830',
-              'Block Git Credential Popups'
-            )}
-            description={translate(
-              'auto.components.settings.terminal.windows.search.9d8b09bc09',
-              'Stop git in terminals from opening Git Credential Manager sign-in windows.'
-            )}
-            keywords={['git', 'credential', 'popup', 'oauth', 'github', 'sign in', 'gcm', 'prompt']}
-          >
+        matchesSettingsSearch(searchQuery, terminalGitCredentialPopupSearchEntries) ? (
+          <SearchableSetting {...terminalGitCredentialPopupSearchEntries[0]}>
             <SettingsSwitchRow
               label={translate(
                 'auto.components.settings.terminal.windows.search.8630676830',

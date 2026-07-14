@@ -150,6 +150,11 @@ export class SshPtyProvider implements IPtyProvider {
       cwd: opts.cwd,
       env: this.withRemoteCliBridgeEnv(opts.env, opts.envToDelete),
       ...(opts.envToDelete?.length ? { envToDelete: opts.envToDelete } : {}),
+      ...(opts.suppressUserTerminalGitCredentialPrompt !== undefined
+        ? {
+            suppressUserTerminalGitCredentialPrompt: opts.suppressUserTerminalGitCredentialPrompt
+          }
+        : {}),
       // Why: the relay's plugin-overlay env augmenter needs to know which
       // Pi-compatible agent is being launched, while commandDelivery tells it
       // whether to submit the command itself for runtime-owned background PTYs.

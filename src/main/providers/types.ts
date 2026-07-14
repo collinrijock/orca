@@ -60,6 +60,9 @@ export type PtySpawnOptions = {
   cwd?: string
   env?: Record<string, string>
   envToDelete?: string[]
+  /** Remote hosts use their own platform when deciding whether a user shell
+   *  receives the Windows credential-popup guard. */
+  suppressUserTerminalGitCredentialPrompt?: boolean
   command?: string
   commandDelivery?: 'renderer' | 'provider'
   startupCommandDelivery?: StartupCommandDelivery

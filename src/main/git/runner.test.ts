@@ -13,6 +13,7 @@ import {
   redirectPortedHostnameToEnv,
   untranslatedGitOutputEnv
 } from './runner'
+import { mergeGitConfigEnvProtocol } from '../../shared/git-credential-prompt-env'
 
 // Reads git config injected via the GIT_CONFIG_COUNT/KEY/VALUE env protocol
 // back into a plain key→value map so tests can assert on it directly.
@@ -189,6 +190,47 @@ describe('appendGitConfigEnv', () => {
     // New entry appended at the next index.
     expect(env.GIT_CONFIG_KEY_1).toBe('credential.guiPrompt')
     expect(env.GIT_CONFIG_VALUE_1).toBe('false')
+  })
+
+  it.each(['bogus', '-1', '0', String(Number.MAX_SAFE_INTEGER)])(
+    'does not overwrite dangling caller config when count is %s',
+    (count) => {
+      const original = {
+        GIT_CONFIG_COUNT: count,
+        GIT_CONFIG_KEY_0: 'user.key',
+        GIT_CONFIG_VALUE_0: 'caller-value'
+      }
+      expect(appendGitConfigEnv(original, [['credential.interactive', 'false']])).toEqual(original)
+    }
+  )
+
+  it('does not append to an incomplete indexed-config protocol', () => {
+    const original = { GIT_CONFIG_COUNT: '1', GIT_CONFIG_KEY_0: 'user.key' }
+    expect(appendGitConfigEnv(original, [['credential.interactive', 'false']])).toEqual(original)
+  })
+})
+
+describe('mergeGitConfigEnvProtocol', () => {
+  it('replaces inherited indexed config atomically when an override has a smaller count', () => {
+    const env = mergeGitConfigEnvProtocol(
+      {
+        GIT_CONFIG_COUNT: '2',
+        GIT_CONFIG_KEY_0: 'base.zero',
+        GIT_CONFIG_VALUE_0: 'zero',
+        GIT_CONFIG_KEY_1: 'base.one',
+        GIT_CONFIG_VALUE_1: 'one'
+      },
+      {
+        GIT_CONFIG_COUNT: '1',
+        GIT_CONFIG_KEY_0: 'override.zero',
+        GIT_CONFIG_VALUE_0: 'override'
+      }
+    )
+
+    expect(env.GIT_CONFIG_COUNT).toBe('1')
+    expect(env.GIT_CONFIG_KEY_0).toBe('override.zero')
+    expect(env.GIT_CONFIG_KEY_1).toBeUndefined()
+    expect(env.GIT_CONFIG_VALUE_1).toBeUndefined()
   })
 })
 

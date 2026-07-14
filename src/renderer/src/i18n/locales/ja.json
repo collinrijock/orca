@@ -6786,7 +6786,7 @@
             "tui": "TUI",
             "tuiDescription": "全画面ターミナルアプリ向けの離散的なホイール通知。"
           },
-          "3fab0f2239": "Stop git in user terminals from opening Git Credential Manager sign-in windows. Saved credentials still work; git fails fast instead of prompting. Applies to new terminals."
+          "3fab0f2239": "ユーザーターミナルで Git Credential Manager のサインインウィンドウが開かないようにします。保存済みの認証情報は引き続き使用でき、プロンプトを表示せずに git が即座に失敗します。新しいターミナルに適用されます。"
         },
         "TerminalSettingsPreview": {
           "a63953a48a": "{{value0}} テーマのプレビュー",
@@ -8522,17 +8522,17 @@
               "7c7056940a": "シェル",
               "713c4a2f92": "Windows 上の新規 terminal ペインのデフォルト シェルを選択します。",
               "13715f9d23": "デフォルトのシェル",
-              "8630676830": "Block Git Credential Popups",
-              "9d8b09bc09": "Stop git in terminals from opening Git Credential Manager sign-in windows.",
+              "8630676830": "Git 認証情報ポップアップをブロック",
+              "9d8b09bc09": "ターミナルで Git Credential Manager のサインインウィンドウが開かないようにします。",
               "ba9f11ecc3": "git",
-              "7c7c74ef60": "credential",
-              "8eff361700": "popup",
+              "7c7c74ef60": "認証情報",
+              "8eff361700": "ポップアップ",
               "7c82e855b0": "oauth",
               "bf215181b5": "github",
-              "b19a25c6a0": "sign in",
+              "b19a25c6a0": "サインイン",
               "ef5acdb939": "gcm",
-              "4ae35dbb42": "prompt",
-              "27e4a4878d": "credential manager"
+              "4ae35dbb42": "プロンプト",
+              "27e4a4878d": "認証情報マネージャー"
             }
           }
         },
