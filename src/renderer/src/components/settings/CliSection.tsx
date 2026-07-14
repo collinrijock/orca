@@ -22,6 +22,7 @@ import { Button } from '../ui/button'
 import { Label } from '../ui/label'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip'
 import { AgentSkillSetupPanel } from './AgentSkillSetupPanel'
+import { SkillFreshnessCheckButton } from '../skills/SkillFreshnessCheckButton'
 import { CliRegistrationDialog } from './CliRegistrationDialog'
 import {
   buildSkillCommandForRuntime,
@@ -391,6 +392,8 @@ export function CliSection({
               }}
               onRecheck={refreshCliSkill}
             />
+
+            <SkillFreshnessCheckButton className="mt-3" />
           </div>
         ) : null}
       </div>

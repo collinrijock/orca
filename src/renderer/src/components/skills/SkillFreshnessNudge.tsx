@@ -3,7 +3,7 @@ import { toast } from 'sonner'
 import { useSkillFreshness } from '@/hooks/useSkillFreshness'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
-import { requestSkillFreshnessUpdateTerminal } from './skill-freshness-update-terminal'
+import { requestSkillFreshnessUpdateDialog } from './skill-freshness-update-dialog'
 
 const MAX_DISMISSED_FRESHNESS_NUDGES = 512
 const NO_DISMISSED_FRESHNESS_NUDGES: string[] = []
@@ -18,7 +18,6 @@ function candidateKey(args: {
 
 export function SkillFreshnessNudge(): null {
   const state = useSkillFreshness()
-  const openSkillsPage = useAppStore((store) => store.openSkillsPage)
   const settings = useAppStore((store) => store.settings)
   const dismissed = settings?.dismissedSkillFreshnessNudges ?? NO_DISMISSED_FRESHNESS_NUDGES
   const updateSettings = useAppStore((store) => store.updateSettings)
@@ -79,11 +78,11 @@ export function SkillFreshnessNudge(): null {
       names.size === 1
         ? translate(
             'auto.components.skills.SkillFreshnessNudge.titleOne',
-            'An installed Orca skill has an update'
+            'An installed Orca skill is out of date'
           )
         : translate(
             'auto.components.skills.SkillFreshnessNudge.titleMany',
-            '{{value0}} installed Orca skills have updates',
+            '{{value0}} installed Orca skills are out of date',
             { value0: names.size }
           ),
       {
@@ -91,20 +90,22 @@ export function SkillFreshnessNudge(): null {
           'auto.components.skills.SkillFreshnessNudge.description',
           'Orca recognized exact older official copies. Review the targeted update command before running it.'
         ),
-        duration: 12_000,
+        // Why: the nudge lingers until the user acts. Ignoring it (app quit)
+        // records nothing, so a still-outdated skill may prompt once next launch.
+        duration: Number.POSITIVE_INFINITY,
+        // Why: only an explicit dismissal (the close button) records the keys;
+        // opening the review dialog is engagement, not a decision to hide it.
         onDismiss: persistDismissal,
-        onAutoClose: persistDismissal,
         action: {
-          label: translate('auto.components.skills.SkillFreshnessNudge.review', 'Review command'),
-          onClick: () => {
-            requestSkillFreshnessUpdateTerminal()
-            openSkillsPage()
-            persistDismissal()
-          }
+          label: translate(
+            'auto.components.skills.SkillFreshnessNudge.review',
+            'Review update command'
+          ),
+          onClick: () => requestSkillFreshnessUpdateDialog()
         }
       }
     )
-  }, [dismissed, openSkillsPage, settings, state.inventory, updateSettings])
+  }, [dismissed, settings, state.inventory, updateSettings])
 
   return null
 }

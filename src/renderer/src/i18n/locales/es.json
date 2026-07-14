@@ -3597,12 +3597,12 @@
           "0c74e7ff34": "Local"
         },
         "SkillFreshnessNudge": {
-          "titleOne": "Una skill de Orca instalada tiene una actualización",
-          "titleMany": "{{value0}} skills de Orca instaladas tienen actualizaciones",
+          "titleOne": "Una skill de Orca instalada está desactualizada",
+          "titleMany": "{{value0}} skills de Orca instaladas están desactualizadas",
           "description": "Orca reconoció copias oficiales anteriores exactas. Revisa el comando de actualización dirigido antes de ejecutarlo.",
-          "review": "Revisar comando"
+          "review": "Revisar comando de actualización"
         },
-        "SkillFreshnessPanel": {
+        "SkillFreshnessRow": {
           "current": "Actual",
           "outdated": "Actualización disponible",
           "newerKnown": "Copia conocida más reciente",
@@ -3621,20 +3621,28 @@
           "outdatedUnsupportedPlacementDescription": "Se encontró una copia oficial anterior, pero esta ubicación no se puede actualizar de forma segura.",
           "newerKnownDescription": "Coincide con una revisión conocida más reciente que esta compilación de Orca. No se ofrece ninguna actualización.",
           "unrecognizedDescription": "Puede estar editada o proceder de otra fuente. Orca no la actualizará.",
-          "inaccessibleDescription": "Orca no pudo inspeccionar esta ubicación. No se ofrece ninguna actualización.",
+          "inaccessibleDescription": "Orca no pudo inspeccionar esta ubicación. No se ofrece ninguna actualización."
+        },
+        "SkillFreshnessUpdateDialog": {
           "title": "Actualidad de las skills de Orca",
           "description": "Orca compara las copias instaladas con instantáneas oficiales. Nunca escribe en las carpetas de skills ni ejecuta comandos de actualización automáticamente.",
-          "checkNow": "Comprobar ahora",
           "checking": "Comprobando las skills de Orca instaladas…",
           "none": "No se encontraron skills de Orca instaladas.",
           "updateOne": "Se puede actualizar 1 skill de forma segura",
           "updateMany": "Se pueden actualizar {{value0}} skills de forma segura",
-          "updateDescription": "Abre un borrador editable en la terminal. Revísalo y pulsa Intro tú mismo para ejecutarlo.",
-          "closeTerminal": "Cerrar terminal",
-          "openTerminal": "Revisar comando de actualización",
+          "updateDescription": "El comando está rellenado abajo. Revísalo y pulsa Intro tú mismo para ejecutarlo.",
+          "success": "Todas las skills de Orca instaladas están actualizadas.",
+          "attention": "Algunas skills de Orca instaladas no se pueden actualizar automáticamente.",
+          "attentionDescription": "Abre Detalles para ver por qué no se ofrece una actualización global segura para cada copia.",
+          "details": "Detalles",
           "terminalTitle": "Actualizar skills de Orca",
           "terminalDescription": "El comando dirigido está rellenado, pero no se está ejecutando. Revísalo y pulsa Intro para continuar.",
-          "terminalAria": "Terminal de actualización de skills de Orca"
+          "terminalAria": "Terminal de actualización de skills de Orca",
+          "checkNow": "Comprobar ahora",
+          "close": "Cerrar"
+        },
+        "SkillFreshnessCheckButton": {
+          "label": "Buscar actualizaciones de skills"
         }
       },
       "sidebar": {

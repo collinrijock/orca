@@ -155,8 +155,15 @@ Slimmed:
 
 ### D. Surfacing
 
-- **Skills-page rows** (read-only): name, status badge, one-line explanation. `newer-known`,
-  `unrecognized`, `inaccessible`, and unsupported-topology rows are informational.
+- **Surfaces (venue decision 2026-07-14):** a lingering toast, an update modal, and one
+  compact CLI-settings re-entry row ("Check for skill updates"). The Skills page was
+  de-linked by #4535 (2026-06-02) — its only entry, the sidebar toolbox menu, was removed —
+  so it is no longer a venue; the freshness surface moved off it entirely. The behavior
+  contracts below (name-scoped eligibility, no auto-run, dismissal keys, re-inventory
+  triggers) are unchanged; only the venue moved.
+- **Per-placement rows** (read-only): name, status badge, one-line explanation. `newer-known`,
+  `unrecognized`, `inaccessible`, and unsupported-topology rows are informational. They live in
+  the modal's collapsed **Details** section (auto-expanded when a placement is blocked).
 - **Name-scoped update eligibility:** eligibility is computed across all discovered placements
   of a name, not per row. Offer a name only when at least one placement is `outdated` and every
   placement is an exact `current` or `outdated` official snapshot in a topology the validated
@@ -168,16 +175,20 @@ Slimmed:
   inaccessible, repo/plugin, independent-copy, or otherwise unsupported placement poisons the
   update offer for that name entirely.
 - The action combines only eligible outdated Orca names into
-  `npx skills update <names...> --global`, opens the existing run-command terminal with that
-  command pre-filled, and leaves execution to the user. Never use an unscoped bulk update and
-  never auto-submit the command. Re-inventory after terminal exit or focus; only observed
-  bytes, not the skills CLI exit status, determine success.
-- **One non-repeating nudge**: count only eligible outdated skill names and offer the same
-  targeted run-the-command action. An outdated name poisoned by another placement remains
-  visible on the Skills page but never produces an unsafe nudge action. Dismissal is recorded per
-  (install, bundled revision), so a newly outdated official placement or genuinely newer
-  stub revision may prompt once more. No toggle — nothing automatic happens that would need
-  one.
+  `npx skills update <names...> --global` and opens the update modal's editable terminal with
+  that command pre-filled, leaving execution to the user. Never use an unscoped bulk update and
+  never auto-submit the command. Re-inventory after terminal exit, modal close, or focus; only
+  observed bytes, not the skills CLI exit status, determine success. When the eligible set
+  empties and every placement is `current`, the modal shows an up-to-date state; if placements
+  remain outdated-but-blocked or unrecognized, it says so honestly instead.
+- **One lingering, non-repeating nudge**: count only eligible outdated skill names and offer the
+  same targeted action, which opens the update modal. The toast lingers (no auto-close) until the
+  user opens the modal or explicitly dismisses it; ignoring it (app quit) records nothing, so a
+  still-outdated skill may prompt once more next launch. An outdated name poisoned by another
+  placement remains visible in the modal's Details but never produces an unsafe nudge action.
+  Dismissal is recorded per (physical identity, name, bundled revision) only on explicit dismissal,
+  so a newly outdated official placement or genuinely newer stub revision may prompt once more. No
+  toggle — nothing automatic happens that would need one.
 
 ### E. Migration (fat → stub)
 

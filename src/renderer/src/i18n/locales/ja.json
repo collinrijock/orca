@@ -3597,12 +3597,12 @@
           "0c74e7ff34": "ローカル"
         },
         "SkillFreshnessNudge": {
-          "titleOne": "インストール済みの Orca スキルに更新があります",
-          "titleMany": "インストール済みの Orca スキル {{value0}} 件に更新があります",
+          "titleOne": "インストール済みの Orca スキルが古くなっています",
+          "titleMany": "インストール済みの Orca スキル {{value0}} 件が古くなっています",
           "description": "Orca は以前の公式コピーとの完全一致を確認しました。実行前に対象を限定した更新コマンドを確認してください。",
-          "review": "コマンドを確認"
+          "review": "更新コマンドを確認"
         },
-        "SkillFreshnessPanel": {
+        "SkillFreshnessRow": {
           "current": "最新",
           "outdated": "更新可能",
           "newerKnown": "既知の新しいコピー",
@@ -3621,20 +3621,28 @@
           "outdatedUnsupportedPlacementDescription": "以前の公式コピーが見つかりましたが、この配置はその場で安全に更新できません。",
           "newerKnownDescription": "この Orca ビルドより新しい既知のリビジョンと一致します。更新は提供されません。",
           "unrecognizedDescription": "編集済みか、別の提供元の可能性があります。Orca は更新しません。",
-          "inaccessibleDescription": "Orca はこの配置を検査できませんでした。更新は提供されません。",
+          "inaccessibleDescription": "Orca はこの配置を検査できませんでした。更新は提供されません。"
+        },
+        "SkillFreshnessUpdateDialog": {
           "title": "Orca スキルの更新状況",
           "description": "Orca はインストール済みコピーを公式スナップショットと比較します。スキルフォルダーへの書き込みや更新コマンドの自動実行は行いません。",
-          "checkNow": "今すぐ確認",
           "checking": "インストール済みの Orca スキルを確認中…",
           "none": "インストール済みの Orca スキルは見つかりませんでした。",
           "updateOne": "1 件のスキルを安全に更新できます",
           "updateMany": "{{value0}} 件のスキルを安全に更新できます",
-          "updateDescription": "編集可能なターミナル下書きを開きます。内容を確認し、自分で Enter キーを押して実行してください。",
-          "closeTerminal": "ターミナルを閉じる",
-          "openTerminal": "更新コマンドを確認",
+          "updateDescription": "コマンドは下に入力済みです。内容を確認し、自分で Enter キーを押して実行してください。",
+          "success": "インストール済みの Orca スキルはすべて最新です。",
+          "attention": "一部のインストール済み Orca スキルは自動的に更新できません。",
+          "attentionDescription": "各コピーで安全なグローバル更新が提供されない理由は、詳細を開いて確認してください。",
+          "details": "詳細",
           "terminalTitle": "Orca スキルを更新",
           "terminalDescription": "対象を限定したコマンドが入力済みですが、まだ実行されていません。確認して Enter キーを押してください。",
-          "terminalAria": "Orca スキル更新ターミナル"
+          "terminalAria": "Orca スキル更新ターミナル",
+          "checkNow": "今すぐ確認",
+          "close": "閉じる"
+        },
+        "SkillFreshnessCheckButton": {
+          "label": "スキルの更新を確認"
         }
       },
       "sidebar": {

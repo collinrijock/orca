@@ -3597,12 +3597,12 @@
           "0c74e7ff34": "Local"
         },
         "SkillFreshnessNudge": {
-          "titleOne": "An installed Orca skill has an update",
-          "titleMany": "{{value0}} installed Orca skills have updates",
+          "titleOne": "An installed Orca skill is out of date",
+          "titleMany": "{{value0}} installed Orca skills are out of date",
           "description": "Orca recognized exact older official copies. Review the targeted update command before running it.",
-          "review": "Review command"
+          "review": "Review update command"
         },
-        "SkillFreshnessPanel": {
+        "SkillFreshnessRow": {
           "current": "Current",
           "outdated": "Update available",
           "newerKnown": "Newer known copy",
@@ -3621,20 +3621,28 @@
           "outdatedUnsupportedPlacementDescription": "An older official copy was found, but this placement cannot be updated safely in place.",
           "newerKnownDescription": "Matches a known revision newer than this Orca build. No update is offered.",
           "unrecognizedDescription": "May be edited or from another source. Orca will not update it.",
-          "inaccessibleDescription": "Orca could not inspect this placement. No update is offered.",
+          "inaccessibleDescription": "Orca could not inspect this placement. No update is offered."
+        },
+        "SkillFreshnessUpdateDialog": {
           "title": "Orca skill freshness",
           "description": "Orca compares installed copies with official snapshots. It never writes to skill folders or runs update commands automatically.",
-          "checkNow": "Check now",
           "checking": "Checking installed Orca skills…",
           "none": "No installed Orca skills found.",
           "updateOne": "1 skill can be updated safely",
           "updateMany": "{{value0}} skills can be updated safely",
-          "updateDescription": "Open an editable terminal draft. Review it, then press Enter yourself to run it.",
-          "closeTerminal": "Close terminal",
-          "openTerminal": "Review update command",
+          "updateDescription": "The command is pre-filled below. Review it, then press Enter yourself to run it.",
+          "success": "All installed Orca skills are up to date.",
+          "attention": "Some installed Orca skills cannot be updated automatically.",
+          "attentionDescription": "Open Details to see why a safe global update is not offered for each copy.",
+          "details": "Details",
           "terminalTitle": "Update Orca skills",
           "terminalDescription": "The targeted command is pre-filled but not running. Review it and press Enter to continue.",
-          "terminalAria": "Orca skill update terminal"
+          "terminalAria": "Orca skill update terminal",
+          "checkNow": "Check now",
+          "close": "Close"
+        },
+        "SkillFreshnessCheckButton": {
+          "label": "Check for skill updates"
         }
       },
       "sidebar": {

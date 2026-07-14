@@ -3597,12 +3597,12 @@
           "0c74e7ff34": "当地的"
         },
         "SkillFreshnessNudge": {
-          "titleOne": "已安装的 Orca 技能有更新",
-          "titleMany": "{{value0}} 个已安装的 Orca 技能有更新",
+          "titleOne": "已安装的 Orca 技能已过期",
+          "titleMany": "{{value0}} 个已安装的 Orca 技能已过期",
           "description": "Orca 识别出了与早期官方版本完全一致的副本。运行前请检查定向更新命令。",
-          "review": "检查命令"
+          "review": "检查更新命令"
         },
-        "SkillFreshnessPanel": {
+        "SkillFreshnessRow": {
           "current": "当前版本",
           "outdated": "有可用更新",
           "newerKnown": "已知的较新副本",
@@ -3621,20 +3621,28 @@
           "outdatedUnsupportedPlacementDescription": "找到了早期官方副本，但此位置无法安全地就地更新。",
           "newerKnownDescription": "与比此 Orca 构建更新的已知修订版一致。不提供更新。",
           "unrecognizedDescription": "可能已被编辑或来自其他来源。Orca 不会更新它。",
-          "inaccessibleDescription": "Orca 无法检查此位置。不提供更新。",
+          "inaccessibleDescription": "Orca 无法检查此位置。不提供更新。"
+        },
+        "SkillFreshnessUpdateDialog": {
           "title": "Orca 技能更新状态",
           "description": "Orca 会将已安装副本与官方快照进行比较。它绝不会写入技能文件夹或自动运行更新命令。",
-          "checkNow": "立即检查",
           "checking": "正在检查已安装的 Orca 技能…",
           "none": "未找到已安装的 Orca 技能。",
           "updateOne": "可以安全更新 1 个技能",
           "updateMany": "可以安全更新 {{value0}} 个技能",
-          "updateDescription": "打开可编辑的终端草稿。检查后，请自行按 Enter 键运行。",
-          "closeTerminal": "关闭终端",
-          "openTerminal": "检查更新命令",
+          "updateDescription": "命令已在下方预先填入。检查后，请自行按 Enter 键运行。",
+          "success": "所有已安装的 Orca 技能均为最新。",
+          "attention": "部分已安装的 Orca 技能无法自动更新。",
+          "attentionDescription": "打开“详情”查看为何未对每个副本提供安全的全局更新。",
+          "details": "详情",
           "terminalTitle": "更新 Orca 技能",
           "terminalDescription": "定向命令已预先填入，但尚未运行。请检查并按 Enter 键继续。",
-          "terminalAria": "Orca 技能更新终端"
+          "terminalAria": "Orca 技能更新终端",
+          "checkNow": "立即检查",
+          "close": "关闭"
+        },
+        "SkillFreshnessCheckButton": {
+          "label": "检查技能更新"
         }
       },
       "sidebar": {
