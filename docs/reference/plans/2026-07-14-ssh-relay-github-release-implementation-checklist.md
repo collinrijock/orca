@@ -2,7 +2,7 @@
 
 Date created: 2026-07-14<br>
 Last updated: 2026-07-14<br>
-Current phase: Milestone 3 / Work Package 2 target-native runtime assembly — exact-head run 29353432240 keeps Linux x64/arm64, macOS x64/arm64, and Windows x64 exactly reproducible and proves the bounded PE diagnostic natively on Windows arm64; the rejected arm64 files have identical 956,928-byte layouts but differ in 2,946 bytes across 2,887 ranges beginning in `.text`, plus `/Brepro` timestamp/CodeView identity fields; bounded full-scan section summaries are locally green at exact implementation commit `cd7f94136` and await the six target-native cells before any producer correction; oldest-baseline, native-trust, cross-family remote, and measured-baseline gates remain open; no bundled-runtime path is enabled<br>
+Current phase: Milestone 3 / Work Package 2 target-native runtime assembly — exact-head run 29354676731 keeps Linux x64/arm64, macOS x64/arm64, and Windows x64 exactly reproducible, while Windows arm64 fails closed with no upload after a complete bounded scan; 2,879 of 2,947 differing bytes are one-byte changes every 16 bytes in the first 46,049 bytes of `.text`, and the remaining 68 bytes are `/Brepro`-derived COFF/debug/CodeView data; exact implementation commit `6546f54d5` now applies `/Brepro` and `/experimental:deterministic` to compiler and linker inputs in the copied node-pty source only, is locally green, and awaits the six target-native cells; oldest-baseline, native-trust, cross-family remote, and measured-baseline gates remain open; no bundled-runtime path is enabled<br>
 Primary design: [SSH relay GitHub Release plan](./2026-07-14-ssh-relay-github-release-plan.html)<br>
 Motivating issues: [#8450](https://github.com/stablyai/orca/issues/8450), [#1693](https://github.com/stablyai/orca/issues/1693)
 
@@ -158,12 +158,11 @@ same change as the work it records.
   per-target opt-in selects bundled-preferred behavior, and implementing the setting does not
   authorize default-on rollout or legacy removal (E-M1-ROLLOUT-DECISION-001).
 - Legacy fallback removal: not authorized.
-- Next required action: push exact implementation commit `cd7f94136` plus its evidence-ledger head
-  and run all six target-native cells. Keep every current POSIX and Windows x64 control exactly
-  reproducible; require Windows arm64 to fail without upload after classifying all 2,887 ranges by
-  raw section and known PE metadata. Make no copied-artifact producer correction until that evidence
-  is recorded; keep the strict comparator, repository-wide node-pty patch, legacy/default path, and
-  all other release gates unchanged.
+- Next required action: push exact implementation commit `6546f54d5` plus its evidence-ledger head
+  and run all six target-native cells. Require both Windows architectures to accept the compiler and
+  linker flags, all six outputs to compare exactly before upload, and no regression in native smoke;
+  keep the strict comparator, failed-binary no-upload boundary, repository-wide node-pty patch,
+  legacy/default path, and all other release gates unchanged.
 
 ## Non-Negotiable Invariants
 
@@ -656,7 +655,12 @@ locally green under E-M3-WINDOWS-PE-DIAGNOSTIC-LOCAL-001. Exact-head run 2935343
 control and real arm64 parser, but its 128 detailed ranges are exhausted by `.text`; the active
 diagnostic-only correction adds bounded full-scan section totals/samples before any producer change.
 Exact implementation commit `cd7f94136` is locally green under
-E-M3-WINDOWS-PE-FULL-SCAN-LOCAL-001 and awaits native evidence.
+E-M3-WINDOWS-PE-FULL-SCAN-LOCAL-001. Exact-head run 29354676731 then classifies the complete
+arm64 drift under E-M3-WINDOWS-PE-FULL-SCAN-CI-RED-001: 2,879 one-byte `.text` differences at
+16-byte intervals plus 68 `/Brepro`-derived metadata bytes, with five controls reproducible and
+uploaded and no rejected arm64 upload. Exact implementation commit `6546f54d5` applies the native
+toolchain's reproducible compiler and linker inputs only to the copied node-pty `binding.gyp`, is
+locally green under E-M3-WINDOWS-COMPILER-DETERMINISM-LOCAL-001, and awaits native proof.
 
 Each runtime must contain only the executable closure required by the relay.
 
@@ -4404,6 +4408,165 @@ or unexpected token`; the first logs did not identify a source location.
   five reproducible uploads plus a rejected Windows arm64 full-scan summary, and record that evidence
   before changing any copied-artifact producer input.
 
+### E-M3-WINDOWS-PE-FULL-SCAN-CI-RED-001 — Complete native arm64 region classification
+
+- Date: 2026-07-14
+- Commit SHA / PR: exact head `a51093f009a03a1105e9f0b86be14797a8046414`, containing exact
+  diagnostic implementation `cd7f941365bf6e631cf0f9947f517ecef02afc8e`; stacked draft
+  PR [#8741](https://github.com/stablyai/orca/pull/8741)
+- Run and jobs: [run 29354676731](https://github.com/stablyai/orca/actions/runs/29354676731),
+  conclusion `failure`; Windows arm64 `87159223395`, Linux arm64 `87159223407`, macOS x64
+  `87159223419`, macOS arm64 `87159223455`, Windows x64 `87159223488`, and Linux x64
+  `87159223544`
+- Runners: the six target-native labels recorded in prior reproducibility evidence. The diagnostic
+  cell was Windows 11 Enterprise 10.0.26200 arm64, image `windows-11-arm64` `20260706.102.1`,
+  runner `2.335.1`, provisioner `20260624.560`, Node v24.18.0, MSVC 19.44.35228 / tools
+  14.44.35207, Windows SDK 10.0.26100.0, and Python 3.13.14.
+- Remote and transport: none; target-native artifact assembly/execution, rejected-file diagnostics,
+  and unpublished Actions artifact upload only
+- Exact evidence commands:
+
+  ```sh
+  gh run view 29354676731 --repo stablyai/orca \
+    --json headSha,status,conclusion,url,createdAt,updatedAt,jobs
+  gh api repos/stablyai/orca/actions/jobs/87159223395/logs
+  gh api 'repos/stablyai/orca/actions/runs/29354676731/artifacts?per_page=100'
+  ```
+
+- Result: FAIL as the intended evidence-producing gate. All Windows contract suites passed before
+  execution; Linux x64/arm64, macOS x64/arm64, and Windows x64 built twice, inspected, smoked,
+  compared exactly, and uploaded. Windows arm64 built, inspected, and smoked both outputs, then the
+  strict comparator rejected `conpty_console_list.node`; the full-scan diagnostic completed before
+  the fatal throw and the upload step was skipped.
+- Uploaded controls: `ssh-relay-runtime-linux-x64-glibc` artifact `8319697674` (29,282,973 bytes),
+  Linux arm64 `8319710845` (28,211,514), macOS x64 `8319759300` (26,374,729), macOS arm64
+  `8319686475` (24,756,958), and Windows x64 `8319797990` (37,075,313). All are unpublished and
+  expire 2026-07-21; the run contains exactly five artifacts and no Windows arm64 artifact.
+- Rejected arm64 outputs: content IDs
+  `75f048e2216c5a88b5dec886d7ce43f8c54768c42184835cfd0d9a22ea3f1e53` and
+  `dddc49d84bdafd5bef136be5050352555e99943b21f49781f1604bd9e37051bc`; ZIP sizes 33,261,549
+  and 33,261,550 bytes with SHA-256
+  `4c21eaba04e514dee246ee23ea6b4559369fc37eaf90dc0634f11146427bb45a` and
+  `aecde9c9982d972d194417cc2d076353fb808f39ba4f018b8d9e64cfdf5c3411`.
+- PE diagnostic result: both modules are 956,928-byte machine `0xaa64` PE32+ files with identical
+  12-section layout, data directories, imports, relocations, 840,192-byte code section, and linker
+  version 14.44. Their SHA-256 values are
+  `52d4909f106a4e8f85e7fc4c8cc0ccae93eaa74a83342b569d71f67619f15a1e` and
+  `6926210ec6208caa2a79655e2af544b74d8a0d6d1b8c7637d4ece017c89046de`. Exactly 2,947 bytes
+  differ across 2,886 ranges:
+  - `.text`: 2,879 one-byte ranges from file offsets 1,052 through 47,100, exactly 16 bytes apart;
+    all eight retained samples change `85` to `0e`.
+  - COFF header: one four-byte `/Brepro` timestamp range.
+  - Debug directory: three four-byte ranges carrying that timestamp.
+  - CodeView data: one 16-byte identifier range.
+  - `.rdata`: two ranges totaling 36 bytes, containing the derived CodeView/build identities and
+    timestamp.
+
+  The CodeView path remains 92 bytes with identical SHA-256
+  `401080e65f10d7483583537fc7394ddf416fa36febfd76e6d1c17c64bb36f3ea`; no other section
+  differs. The detailed list remains capped while every range contributes to the five bounded region
+  summaries.
+
+- Duration and resource metrics: jobs were 9m50s Windows arm64, 6m56s Windows x64, 5m33s macOS x64,
+  3m44s Linux arm64, 3m18s Linux x64, and 2m55s macOS arm64. Arm64 builds took 152,517 ms and
+  130,926 ms; smoke took 5,963 ms and 5,414 ms at 51,884,032 and 51,789,824 bytes RSS. The complete
+  smoke stages took 7,978 ms and 7,203 ms. Build peak RSS, open files/channels, and cancellation
+  settlement were not instrumented.
+- Artifact/log/trace link: run/jobs and five unpublished seven-day artifacts above; rejected arm64
+  bytes remained runner-local
+- Oracle proved: the arm64 failure is copied-source producer nondeterminism concentrated in a
+  regular `.text` pattern, with only derived `/Brepro` identities elsewhere. It is not ZIP order,
+  tree metadata, comparator normalization, a changing PDB path, or a cross-platform regression. The
+  strict no-upload boundary remains effective.
+- Does not prove: which compiler input causes the repeating `.text` byte, a safe producer
+  correction, arm64 equality, cross-run equality, oldest baselines, native trust, SSH, publication,
+  transfer, fallback, UI, or any enabled tuple.
+- Checklist items satisfied: complete native PE region classification and five control cells only;
+  no tuple or production checkbox.
+- Follow-up: evaluate a test-covered reproducible compiler input only in the copied node-pty source,
+  rerun all local gates and all six target-native cells, and require exact arm64 equality without
+  normalizing binaries or weakening the comparator.
+
+### E-M3-WINDOWS-COMPILER-DETERMINISM-LOCAL-001 — Copied-source MSVC reproducibility inputs
+
+- Date: 2026-07-14
+- Commit SHA / PR: exact implementation commit
+  `6546f54d53446015f10681fffff9fe895e460232`; stacked draft
+  PR [#8741](https://github.com/stablyai/orca/pull/8741), native execution pending
+- Runner: macOS 26.2 build 25C56, native Apple M4 arm64; Node v26.0.0 and pnpm 10.24.0. This
+  runner cannot execute MSVC, so target-native Windows jobs remain authoritative.
+- Remote and transport: none; copied `binding.gyp` source-shape contracts only
+- Exact red command:
+
+  ```sh
+  pnpm exec vitest run --config config/vitest.config.ts \
+    config/scripts/ssh-relay-node-pty-windows-build-determinism.test.mjs
+  ```
+
+- Red result: FAIL as intended, one failed and one passed test. The copied compiler block lacked
+  `/Brepro`; no implementation change had yet been made.
+- Exact green commands:
+
+  ```sh
+  node --check config/scripts/ssh-relay-node-pty-windows-build-determinism.mjs
+  node --check config/scripts/ssh-relay-node-pty-windows-build-determinism.test.mjs
+  pnpm exec vitest run --config config/vitest.config.ts \
+    config/scripts/ssh-relay-node-pty-windows-build-determinism.test.mjs \
+    config/scripts/ssh-relay-node-pty-build.test.mjs \
+    config/scripts/ssh-relay-runtime-workflow.test.mjs
+  pnpm exec vitest run --config config/vitest.config.ts \
+    config/scripts/ssh-relay-node-release-verification.test.mjs \
+    config/scripts/ssh-relay-node-tar-inspection.test.mjs \
+    config/scripts/ssh-relay-node-pty-build.test.mjs \
+    config/scripts/ssh-relay-node-pty-windows-build-determinism.test.mjs \
+    config/scripts/ssh-relay-node-pty-windows-settlement.test.mjs \
+    config/scripts/ssh-relay-node-zip-inspection.test.mjs \
+    config/scripts/ssh-relay-runtime-artifact.test.mjs \
+    config/scripts/ssh-relay-runtime-build.test.mjs \
+    config/scripts/ssh-relay-runtime-pty-smoke.test.mjs \
+    config/scripts/ssh-relay-runtime-reproducibility.test.mjs \
+    config/scripts/ssh-relay-runtime-resource-diagnostics.test.mjs \
+    config/scripts/ssh-relay-runtime-windows-pe-diagnostic.test.mjs \
+    config/scripts/ssh-relay-runtime-windows-tree.test.mjs \
+    config/scripts/ssh-relay-runtime-workflow.test.mjs \
+    config/scripts/ssh-relay-runtime-zip.test.mjs
+  pnpm run typecheck
+  pnpm exec oxlint config/scripts/ssh-relay-node-pty-windows-build-determinism.mjs \
+    config/scripts/ssh-relay-node-pty-windows-build-determinism.test.mjs \
+    config/scripts/ssh-relay-node-pty-build.mjs \
+    config/scripts/ssh-relay-runtime-workflow.test.mjs
+  pnpm run check:max-lines-ratchet
+  GOMAXPROCS=2 pnpm run lint
+  pnpm exec oxfmt --check .github/workflows/ssh-relay-runtime-artifacts.yml \
+    config/scripts/ssh-relay-node-pty-windows-build-determinism.mjs \
+    config/scripts/ssh-relay-node-pty-windows-build-determinism.test.mjs \
+    config/scripts/ssh-relay-node-pty-build.mjs \
+    config/scripts/ssh-relay-runtime-workflow.test.mjs \
+    docs/reference/plans/2026-07-14-ssh-relay-github-release-implementation-checklist.md
+  git diff --check
+  ```
+
+- Green result: PASS. Both syntax checks exited zero; the purpose command passed 6/6 tests across
+  three suites; all 15 artifact suites passed 51/51 tests. Typecheck, focused oxlint, the 355-entry
+  max-lines ratchet, full repository lint/reliability/localization, formatting, staged hooks, and
+  diff checks exited zero. Full lint emitted only pre-existing warnings outside this package.
+- Duration and resource metrics: purpose suite 183 ms Vitest; complete artifact suite 1.27s Vitest
+  / 2.65s wall; typecheck 2.85s; focused oxlint 0.76s; max-lines 1.81s; full lint 10.91s; formatting
+  and diff check 1.10s. Synthetic peak RSS/open files were not instrumented.
+- Artifact/log/trace link: exact source commit; no binary artifact was created or uploaded
+- Oracle proved: Windows builds receive `/Brepro` and `/experimental:deterministic` in both the
+  compiler and linker option blocks after an exact reviewed-source match. POSIX tuples are untouched,
+  unexpected or already-modified source fails closed, and the installed repository
+  `node_modules/node-pty/binding.gyp` remains byte-identical because only the exclusive copied source
+  is rewritten.
+- Does not prove: that MSVC 19.44 accepts the flags on both architectures, Windows arm64 equality,
+  native execution, cross-run equality, oldest baselines, native trust, SSH, publication, transfer,
+  fallback, UI, or any enabled tuple.
+- Checklist items satisfied: copied-source compiler/linker input contract only; no tuple or
+  production checkbox.
+- Follow-up: push the exact implementation and ledger head, run all six target-native cells, and
+  require exact equality and successful unpublished upload on both Windows architectures.
+
 ## Accepted Gaps
 
 No product gap is accepted merely because it appears in this list. Each entry requires explicit
@@ -4461,12 +4624,11 @@ The project is not complete until every applicable item below is checked with ev
 
 ## Next Required Action
 
-Push exact implementation commit `cd7f94136` plus its evidence-ledger head and run all six
-target-native cells. Keep every current POSIX and Windows x64 control exactly reproducible; require
-Windows arm64 to fail without upload after classifying all 2,887 ranges by raw section and known PE
-metadata. Use only that evidence to choose or reject the narrowest copied-artifact build correction,
-then rerun local gates and all six target-native jobs without weakening the comparator. Cross-family
-Layer B targets, the protected
+Push exact implementation commit `6546f54d5` plus its evidence-ledger head and run all six
+target-native cells. Require both Windows architectures to accept the compiler and linker flags,
+all six outputs to compare exactly before upload, and no regression in native smoke; keep the strict
+comparator, failed-binary no-upload boundary, repository-wide node-pty patch, legacy/default path,
+and all other release gates unchanged. Cross-family Layer B targets, the protected
 manifest-signing environment, oldest-baseline/native-trust cells, and the paired legacy performance
 baseline remain release/default-path blockers; no publication, desktop resolver, SSH transfer/
 install, per-target Beta, fallback, tuple enablement, or default behavior may be connected by this
