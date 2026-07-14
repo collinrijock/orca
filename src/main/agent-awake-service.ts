@@ -5,6 +5,18 @@ import { MacosSystemSleepAssertion } from './macos-system-sleep-assertion'
 
 export const AGENT_AWAKE_STATUS_STALE_AFTER_MS = 2 * 60 * 60 * 1000
 
+// Why: the display is the single biggest battery draw and only needs to stay
+// lit while an agent is ACTIVELY producing status. Keeping the screen on during
+// a long quiet stretch — or after an agent has silently died with its shell
+// still open (no terminating hook, so the 2h backstop above is what releases
+// it) — wastes power for up to two hours. Once no working status has been
+// refreshed within this shorter window, downgrade to a system-only assertion:
+// the machine (and the agent) stays awake for the full 2h window, but the
+// display is allowed to sleep normally.
+export const AGENT_AWAKE_DISPLAY_KEEP_AFTER_MS = 15 * 60 * 1000
+
+type AgentAwakeBlockerType = 'prevent-app-suspension' | 'prevent-display-sleep'
+
 export type AgentAwakeStatus = {
   state: AgentStatusState
   receivedAt: number
@@ -43,6 +55,7 @@ export class AgentAwakeService {
   private enabled = false
   private statuses: AgentAwakeStatus[] = []
   private blockerId: number | null = null
+  private blockerType: AgentAwakeBlockerType | null = null
   private staleTimer: ReturnType<typeof setTimeout> | null = null
   private readonly blocker: PowerSaveBlocker
   private readonly linuxAssertion: PlatformAwakeAssertion
@@ -104,10 +117,17 @@ export class AgentAwakeService {
 
   private refresh(reason: string): void {
     this.scheduleStaleTimer()
+    const now = this.now()
     const runningStatusCount = this.getEligibleRunningStatusCount()
     const shouldBlock = this.enabled && runningStatusCount > 0
     if (shouldBlock) {
-      this.startBlocker(reason, runningStatusCount)
+      // Keep the screen lit only while an agent is actively working; once every
+      // working status has gone quiet past the display window, keep the system
+      // (and the agent) awake but let the display sleep.
+      const displayEligibleCount = this.getDisplayEligibleCount(now)
+      const desiredType: AgentAwakeBlockerType =
+        displayEligibleCount > 0 ? 'prevent-display-sleep' : 'prevent-app-suspension'
+      this.startBlocker(reason, runningStatusCount, desiredType)
       this.startMacosAssertion(reason)
       this.startLinuxAssertion(reason)
     } else {
@@ -120,6 +140,14 @@ export class AgentAwakeService {
   private getEligibleRunningStatusCount(): number {
     const now = this.now()
     return this.statuses.filter((status) => this.isWakeEligible(status, now)).length
+  }
+
+  private getDisplayEligibleCount(now: number): number {
+    return this.statuses.filter(
+      (status) =>
+        this.isWakeEligible(status, now) &&
+        now - status.receivedAt <= AGENT_AWAKE_DISPLAY_KEEP_AFTER_MS
+    ).length
   }
 
   private isWakeEligible(status: AgentAwakeStatus, now: number): boolean {
@@ -143,11 +171,17 @@ export class AgentAwakeService {
       ) {
         continue
       }
-      const expiry = status.receivedAt + AGENT_AWAKE_STATUS_STALE_AFTER_MS
-      if (expiry <= now) {
-        continue
+      // Wake at BOTH boundaries: the display-keep expiry (downgrade the screen
+      // to system-only) and the full stale expiry (release entirely).
+      for (const expiry of [
+        status.receivedAt + AGENT_AWAKE_DISPLAY_KEEP_AFTER_MS,
+        status.receivedAt + AGENT_AWAKE_STATUS_STALE_AFTER_MS
+      ]) {
+        if (expiry <= now) {
+          continue
+        }
+        earliestExpiry = earliestExpiry === null ? expiry : Math.min(earliestExpiry, expiry)
       }
-      earliestExpiry = earliestExpiry === null ? expiry : Math.min(earliestExpiry, expiry)
     }
     if (earliestExpiry === null) {
       return
@@ -169,21 +203,34 @@ export class AgentAwakeService {
     this.staleTimer = null
   }
 
-  private startBlocker(reason: string, runningStatusCount: number): void {
-    if (this.blockerId !== null) {
+  private startBlocker(
+    reason: string,
+    runningStatusCount: number,
+    desiredType: AgentAwakeBlockerType
+  ): void {
+    // Keep an already-running blocker only if it is the type we want; a
+    // display<->system transition must swap the assertion.
+    if (this.blockerId !== null && this.blockerType === desiredType) {
       if (this.reconcileBlocker('start-reconcile')) {
         return
       }
     }
+    // Stop any existing (wrong-type or dead) blocker before starting the new
+    // type so a display->system downgrade never leaks the display assertion.
+    if (this.blockerId !== null) {
+      this.stopBlocker('blocker-type-change', runningStatusCount)
+    }
     try {
-      const id = this.blocker.start('prevent-display-sleep')
+      const id = this.blocker.start(desiredType)
       this.blockerId = id
+      this.blockerType = desiredType
       this.reconcileBlocker('post-start')
     } catch (err) {
       this.logger.warn('[agent-awake] failed to start blocker', {
         reason,
         enabled: this.enabled,
         runningStatusCount,
+        blockerType: desiredType,
         error: err
       })
     }
@@ -254,6 +301,9 @@ export class AgentAwakeService {
       })
     }
     this.reconcileBlocker('post-stop')
+    if (this.blockerId === null) {
+      this.blockerType = null
+    }
   }
 
   private reconcileBlocker(reason: string): boolean {

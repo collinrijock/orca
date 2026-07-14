@@ -1,5 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { AgentAwakeService, AGENT_AWAKE_STATUS_STALE_AFTER_MS } from './agent-awake-service'
+import {
+  AgentAwakeService,
+  AGENT_AWAKE_DISPLAY_KEEP_AFTER_MS,
+  AGENT_AWAKE_STATUS_STALE_AFTER_MS
+} from './agent-awake-service'
 import type { AgentAwakeStatus } from './agent-awake-service'
 
 vi.mock('electron', () => ({
@@ -122,6 +126,53 @@ describe('AgentAwakeService', () => {
     expect(linuxAssertion.start).toHaveBeenCalledTimes(1)
   })
 
+  it('keeps the system awake but lets the display sleep for a status quiet past the display window', () => {
+    const blocker = createBlocker()
+    const macosAssertion = createMacosAssertion()
+    const linuxAssertion = createLinuxAssertion()
+    // Working status last refreshed longer ago than the display-keep window but
+    // still within the 2h system window (e.g. a long silent tool call, or an
+    // agent that died with its shell still open).
+    const now = 1_000 + AGENT_AWAKE_DISPLAY_KEEP_AFTER_MS + 1
+    const service = createService(() => now, blocker, macosAssertion, linuxAssertion)
+
+    service.setEnabled(true)
+    service.setStatuses([workingStatus({ receivedAt: 1_000 })])
+
+    expect(blocker.start).toHaveBeenCalledTimes(1)
+    expect(blocker.start).toHaveBeenCalledWith('prevent-app-suspension')
+    expect(macosAssertion.start).toHaveBeenCalledTimes(1)
+    expect(linuxAssertion.start).toHaveBeenCalledTimes(1)
+  })
+
+  it('downgrades the display assertion to system-only when a working status stops refreshing', () => {
+    vi.useFakeTimers()
+    let now = 1_000
+    const blocker = createBlocker()
+    const macosAssertion = createMacosAssertion()
+    const linuxAssertion = createLinuxAssertion()
+    const service = createService(() => now, blocker, macosAssertion, linuxAssertion)
+
+    service.setEnabled(true)
+    service.setStatuses([workingStatus({ receivedAt: 1_000 })])
+    expect(blocker.start).toHaveBeenLastCalledWith('prevent-display-sleep')
+    // Ignore the setup-time stop that fires while enabling before a status exists.
+    macosAssertion.stop.mockClear()
+    linuxAssertion.stop.mockClear()
+
+    // Cross the display-keep boundary with no newer status.
+    now = 1_000 + AGENT_AWAKE_DISPLAY_KEEP_AFTER_MS + 1
+    vi.advanceTimersByTime(AGENT_AWAKE_DISPLAY_KEEP_AFTER_MS + 1)
+
+    // The display assertion is swapped for a system-only one; the platform
+    // (system) assertions are never stopped, so the agent keeps running.
+    expect(blocker.stop).toHaveBeenCalledWith(1)
+    expect(blocker.start).toHaveBeenLastCalledWith('prevent-app-suspension')
+    expect(macosAssertion.stop).not.toHaveBeenCalled()
+    expect(linuxAssertion.stop).not.toHaveBeenCalled()
+    service.dispose()
+  })
+
   it('starts and stops from settings flips around an already-running status', () => {
     const blocker = createBlocker()
     const macosAssertion = createMacosAssertion()
@@ -231,14 +282,21 @@ describe('AgentAwakeService', () => {
     service.setStatuses([workingStatus({ receivedAt: 1_000 })])
     now = 2_000
     service.setStatuses([workingStatus({ receivedAt: 2_000 })])
+    // Ignore the setup-time stop that fires while enabling before a status exists.
+    macosAssertion.stop.mockClear()
+    linuxAssertion.stop.mockClear()
     now = 1_000 + AGENT_AWAKE_STATUS_STALE_AFTER_MS + 1
     vi.advanceTimersByTime(AGENT_AWAKE_STATUS_STALE_AFTER_MS)
 
-    expect(blocker.stop).not.toHaveBeenCalled()
+    // The system is still kept awake because the newer status is within its own
+    // 2h window. (The Electron blocker may have swapped display->system type by
+    // now; the platform assertions are the true "still awake" signal.)
+    expect(macosAssertion.stop).not.toHaveBeenCalled()
+    expect(linuxAssertion.stop).not.toHaveBeenCalled()
     now = 2_000 + AGENT_AWAKE_STATUS_STALE_AFTER_MS + 1
     vi.advanceTimersByTime(1_000)
 
-    expect(blocker.stop).toHaveBeenCalledWith(1)
+    expect(macosAssertion.stop).toHaveBeenCalledWith('stale-expiry')
     service.dispose()
   })
 

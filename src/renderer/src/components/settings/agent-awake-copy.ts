@@ -15,13 +15,13 @@ export function getAgentAwakeDescription(
   if (userAgent.includes('Windows')) {
     return translate(
       AGENT_AWAKE_DESCRIPTION_WINDOWS_KEY,
-      "Keeps this computer and display awake while agents are working. Lid-close behavior follows this device's power settings."
+      "Keeps this computer awake so agents keep running. The display stays on while agents are actively working and is allowed to sleep during long quiet stretches. Lid-close behavior follows this device's power settings."
     )
   }
 
   return translate(
     AGENT_AWAKE_DESCRIPTION_DEFAULT_KEY,
-    'Keeps this computer and display awake while agents are working. Orca also asks this device to stay awake when the lid is closed, subject to its power policy.'
+    'Keeps this computer awake so agents keep running. The display stays on while agents are actively working and is allowed to sleep during long quiet stretches. Orca also asks this device to stay awake when the lid is closed, subject to its power policy.'
   )
 }
 
