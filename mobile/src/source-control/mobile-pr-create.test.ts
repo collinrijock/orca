@@ -132,7 +132,7 @@ describe('mobile create form gating parity', () => {
         title: 'Add feature',
         body: '',
         canCreate: false,
-        blockedReason: 'base_not_on_remote' as unknown as MobilePrPrefill['blockedReason']
+        blockedReason: 'future_desktop_reason' as unknown as MobilePrPrefill['blockedReason']
       })
     ).toBe('This branch is not ready for a pull request yet.')
   })
