@@ -2,7 +2,7 @@
 
 Date created: 2026-07-14<br>
 Last updated: 2026-07-14<br>
-Current phase: Milestone 3 / Work Package 2 target-native runtime assembly — exact-head run [29363423068](https://github.com/stablyai/orca/actions/runs/29363423068) at commit `2db46d91b` proves bounded `build/Release` discovery on both native Windows architectures: both clean builds select three tracking candidates, search 82 entries, select one target record, and report the same `/brepro`, `/debug`, `/experimental:deterministic`, `/guard:cf` summary with no explicit `/incremental` switch; Linux x64/arm64, macOS x64/arm64, and Windows x64 compare exactly and upload, while Windows arm64 retains the 2,879 linker-thunk mismatch and fails before upload under E-M3-WINDOWS-LINK-COMMAND-RELEASE-ROOT-CI-RED-001; exact implementation commit `e7d9a1c8d` adds only a bounded target `.ilk` presence/size diagnostic and is locally green under E-M3-WINDOWS-INCREMENTAL-DATABASE-LOCAL-001; the next exact-head six-cell run is required before any producer change; no evidence authorizes changing a comparator, production/default path, or tuple state; oldest-baseline, native-trust, cross-family remote, and measured-baseline gates remain open; no bundled-runtime path is enabled<br>
+Current phase: Milestone 3 / Work Package 2 target-native runtime assembly — exact-head run [29364581781](https://github.com/stablyai/orca/actions/runs/29364581781) at ledger head `d1eca8a55` proves both clean Windows x64 builds create the same 4,238,838-byte target `.ilk` and both clean Windows arm64 builds create the same 4,980,517-byte target `.ilk`; Microsoft documents that `/DEBUG` implies `/INCREMENTAL` and that incremental linking creates this database; Windows x64 and all four POSIX controls compare and upload, while arm64 retains the exact 2,879-thunk drift and no rejected upload under E-M3-WINDOWS-INCREMENTAL-DATABASE-CI-RED-001; exact implementation commit `6dfdfa0bd` adds `/INCREMENTAL:NO` only to the copied node-pty Windows linker options and is locally green under E-M3-WINDOWS-INCREMENTAL-DISABLE-LOCAL-001; the next exact-head six-cell run must prove generated/actual option propagation, target `.ilk` absence, complete strict equality, smoke, and upload before this correction is accepted; `/guard:cf`, the repository-wide node-pty patch, production/default behavior, and every tuple state remain unchanged; oldest-baseline, native-trust, cross-family remote, and measured-baseline gates remain open; no bundled-runtime path is enabled<br>
 Primary design: [SSH relay GitHub Release plan](./2026-07-14-ssh-relay-github-release-plan.html)<br>
 Motivating issues: [#8450](https://github.com/stablyai/orca/issues/8450), [#1693](https://github.com/stablyai/orca/issues/1693)
 
@@ -742,6 +742,15 @@ incremental linking without an explicit command switch, the next bounded diagnos
 the exact target `.ilk` file's presence and size from the already bounded clean Release tree before
 any copied-artifact producer change.
 
+Exact-head run 29364581781 proves both Windows architectures create a stable target `.ilk` in each
+clean build: 4,238,838 bytes on x64 and 4,980,517 bytes on arm64. Microsoft documents that
+`/DEBUG` implies `/INCREMENTAL`, incremental linking creates the `.ilk`, and `/INCREMENTAL:NO` is
+the explicit override. Five controls compare and upload; arm64 retains the exact thunk drift and
+fails before upload (E-M3-WINDOWS-INCREMENTAL-DATABASE-CI-RED-001). This authorizes one narrow
+producer correction: add `/INCREMENTAL:NO` only to the copied node-pty Windows linker options,
+retain `/guard:cf`, and fail closed unless the generated project and actual command each contain
+exactly one disable switch and the clean output tree contains no target `.ilk`.
+
 Each runtime must contain only the executable closure required by the relay.
 
 - [ ] Replace or extend `config/scripts/build-relay.mjs` without weakening its existing relay and
@@ -1345,16 +1354,16 @@ Baseline measurements must be captured before product behavior changes.
 
 Update status and evidence as work begins. Do not combine these into one large behavior switch.
 
-| Work package              | Scope                                                                                      | Default behavior change     | Status                                                | PR/evidence                                                             |
-| ------------------------- | ------------------------------------------------------------------------------------------ | --------------------------- | ----------------------------------------------------- | ----------------------------------------------------------------------- |
-| 0. #8450 legacy fix       | Coherent Node/npm selection and live repro                                                 | Fixes legacy selection only | Complete and CI-green in draft PR #8724               | E-M0-UNIT-002, E-M0-LIVE-002, E-M0-STATIC-002, E-M0-PR-001, E-M0-CI-001 |
-| 1. Contract and selectors | Manifest schema, identity, platform/libc selection, hostile inputs                         | None                        | Complete and CI-green in draft PR #8728               | `b9d80a4cb`; E-M2-RED-001, E-M2-CONTRACT-001, E-M2-CI-001               |
-| 2. Runtime builds         | Per-tuple assembly, native smoke, SBOM/provenance/signing                                  | None                        | Draft PR #8741; native target `.ilk` evidence pending | `e7d9a1c8d`; E-M3-WINDOWS-INCREMENTAL-DATABASE-LOCAL-001                |
-| 3. Release publication    | Prerequisite DAG, embedded manifest, draft upload/read-back gates                          | Asset-only                  | Not started                                           | —                                                                       |
-| 4. Desktop resolver/cache | Verified download, extraction, cache, offline behavior                                     | None/forced mode only       | Not started                                           | —                                                                       |
-| 5. Transfer/install       | Bounded transports, structured sentinel, bundled launch behind per-target Beta/forced mode | Per-target opt-in only      | Not started                                           | —                                                                       |
-| 6. Fallback/diagnostics   | Abort-and-join state machine, mode isolation, reason codes, target-mode configuration/UI   | Per-target Beta only        | Not started                                           | —                                                                       |
-| 7. Live gates/rollout     | Matrix, security, performance, release promotion                                           | Per-tuple staged            | Not started                                           | —                                                                       |
+| Work package              | Scope                                                                                      | Default behavior change     | Status                                                 | PR/evidence                                                             |
+| ------------------------- | ------------------------------------------------------------------------------------------ | --------------------------- | ------------------------------------------------------ | ----------------------------------------------------------------------- |
+| 0. #8450 legacy fix       | Coherent Node/npm selection and live repro                                                 | Fixes legacy selection only | Complete and CI-green in draft PR #8724                | E-M0-UNIT-002, E-M0-LIVE-002, E-M0-STATIC-002, E-M0-PR-001, E-M0-CI-001 |
+| 1. Contract and selectors | Manifest schema, identity, platform/libc selection, hostile inputs                         | None                        | Complete and CI-green in draft PR #8728                | `b9d80a4cb`; E-M2-RED-001, E-M2-CONTRACT-001, E-M2-CI-001               |
+| 2. Runtime builds         | Per-tuple assembly, native smoke, SBOM/provenance/signing                                  | None                        | Draft PR #8741; native `/INCREMENTAL:NO` proof pending | `6dfdfa0bd`; E-M3-WINDOWS-INCREMENTAL-DISABLE-LOCAL-001                 |
+| 3. Release publication    | Prerequisite DAG, embedded manifest, draft upload/read-back gates                          | Asset-only                  | Not started                                            | —                                                                       |
+| 4. Desktop resolver/cache | Verified download, extraction, cache, offline behavior                                     | None/forced mode only       | Not started                                            | —                                                                       |
+| 5. Transfer/install       | Bounded transports, structured sentinel, bundled launch behind per-target Beta/forced mode | Per-target opt-in only      | Not started                                            | —                                                                       |
+| 6. Fallback/diagnostics   | Abort-and-join state machine, mode isolation, reason codes, target-mode configuration/UI   | Per-target Beta only        | Not started                                            | —                                                                       |
+| 7. Live gates/rollout     | Matrix, security, performance, release promotion                                           | Per-tuple staged            | Not started                                            | —                                                                       |
 
 Every PR must document:
 
@@ -5720,6 +5729,161 @@ the bounded depth` before opening or parsing a candidate. Starting at the comple
   producer change. Preserve `/guard:cf`, strict comparison, no rejected upload, and every
   default/legacy boundary.
 
+### E-M3-WINDOWS-INCREMENTAL-DATABASE-CI-RED-001 — Native `.ilk` proves implicit incremental link
+
+- Date: 2026-07-14
+- Commit SHA / PR: exact ledger head `d1eca8a55dec3e96f9ecf1600e8e6e169cdfd3fe`, containing exact
+  diagnostic implementation commit `e7d9a1c8d3222ff5923679ad69b76b57d963c4f3`; stacked draft
+  PR [#8741](https://github.com/stablyai/orca/pull/8741)
+- Run and jobs: [run 29364581781](https://github.com/stablyai/orca/actions/runs/29364581781),
+  conclusion `failure`; Windows x64 `87192850326` success, Windows arm64 `87192850417` expected
+  strict-comparison failure, Linux arm64 `87192850309` success, Linux x64 `87192850444` success,
+  macOS x64 `87192850303` success, and macOS arm64 `87192850364` success
+- Runners: Windows x64 used `windows-2022` / `win22` `20260706.237.1`, native X64; Windows arm64
+  used `windows-11-arm` / `win11-arm64` `20260706.102.1`, native ARM64. Linux x64 used
+  `ubuntu-24.04` / `ubuntu24` `20260705.232.1`; Linux arm64 used `ubuntu-24.04-arm` /
+  `ubuntu24-arm64` `20260706.52.2`; macOS x64 used `macos-15-intel` / `macos15`
+  `20260629.0276.1`; macOS arm64 used `macos-15` / `macos15` `20260706.0213.1`. Every runner
+  checked out the exact head above; both Windows jobs used Node v24.18.0 and MSVC 14.44.35207 /
+  compiler 19.44.35228.
+- Remote and transport: none; target-native artifact assembly, strict comparison, and unpublished
+  seven-day Actions artifacts only
+- Exact evidence commands:
+
+  ```sh
+  gh run view 29364581781 --repo stablyai/orca \
+    --json status,conclusion,headSha,createdAt,updatedAt,url,jobs
+  gh api repos/stablyai/orca/actions/jobs/87192850326/logs
+  gh api repos/stablyai/orca/actions/jobs/87192850417/logs
+  gh api 'repos/stablyai/orca/actions/runs/29364581781/artifacts?per_page=100'
+  curl -fsSL --proto '=https' --tlsv1.2 \
+    'https://learn.microsoft.com/en-us/cpp/build/reference/incremental-link-incrementally?view=msvc-170' \
+    | rg -i -C 2 'DEBUG|incremental.*default|\.ilk|INCREMENTAL:NO'
+  ```
+
+- Result: FAIL as the intended strict evidence boundary. Both clean x64 builds report the same
+  4,238,838-byte `conpty_console_list.ilk`; both clean arm64 builds report the same 4,980,517-byte
+  target database. All four still report `/debug` with `incremental: unspecified` and no explicit
+  `/incremental` or `/opt` switch in the command record. Microsoft documents that `/DEBUG` implies
+  `/INCREMENTAL`, incremental links create/update an `.ilk`, and `/INCREMENTAL:NO` overrides the
+  default. Windows x64 and all four POSIX controls compare exactly. Windows arm64 builds, verifies,
+  and executes both candidates, then rejects only `conpty_console_list.node` and skips upload.
+- Arm64 diagnostic: the two 956,928-byte modules again differ at 5,826 bytes across 2,886 ranges:
+  5,758 bytes in 2,879 two-byte `.text` ranges spaced 16 bytes apart, plus the same 68 derived
+  COFF/debug/CodeView bytes. Their content IDs are
+  `sha256:b38d3343e96f339eb7197a4fb379b5f636d5f6752d42434b508bb7c67803f57c` and
+  `sha256:9d937233f63b142f03e504af2ffeeeb05b2de2b979047a369a79dd1d793b1786`.
+- Uploaded controls: exactly five unpublished artifacts and no Windows arm64 artifact: Windows x64
+  `8323660213`, 37,075,309 bytes,
+  `sha256:788c43c94db25e995e6d36ab437d841e01a24846f3b8ec519f62fd7bebeb4fbd`; Linux x64
+  `8323618920`, 29,280,401 bytes,
+  `sha256:0b19a0b1dd78793ae0d55f7077eb871a7a8f98d3f7e4c3b8fd5f457f8f008fd6`; Linux arm64
+  `8323624757`, 28,207,487 bytes,
+  `sha256:cf4bb8255b260fc9109b9180b05d561a3b3cb0c3eeb791d111aff649368a5c86`; macOS x64
+  `8323808296`, 26,420,419 bytes,
+  `sha256:4117ae641972cad3936b9733b8461148ab2e4e3280cb3d27d31b479d966e412a`; and macOS arm64
+  `8323599375`, 24,749,802 bytes,
+  `sha256:b29cba1d66f7fedfa89bd4994d0186b5f2e0f89a17b95d709727808e0ccf3590`.
+- Duration and resource metrics: jobs ran 4m56s Windows x64, 10m25s Windows arm64, 3m32s Linux
+  arm64, 3m22s Linux x64, 10m47s macOS x64, and 2m38s macOS arm64. Windows arm64 clean builds took
+  156,490.445 ms and 135,338.371 ms; smoke took 5,949.372 ms at 53,084,160-byte RSS and
+  5,425.281 ms at 52,871,168-byte RSS. SSH channels/files, cancellation, and fallback delay remain
+  outside this artifact-only run.
+- Artifact/log/trace link: run/jobs, Microsoft linker reference above, and the five unpublished
+  artifacts; rejected arm64 bytes existed only in the bounded job workspace and logs and were not
+  uploaded
+- Oracle proved: a fresh target incremental-link database on both clean builds and both native
+  architectures; the documented `/DEBUG`-implied incremental state; stable target database sizes;
+  five exact controls; unchanged arm64 thunk drift; strict rejection and no rejected upload.
+- Does not prove: that `/INCREMENTAL:NO` removes the thunk drift, that all six outputs compare,
+  oldest baselines, native trust, SSH, publication, transfer, fallback, UI, or any enabled tuple.
+- Checklist items satisfied: native implicit-incremental-link classification only; no tuple or
+  production checkbox.
+- Follow-up: add exactly one `/INCREMENTAL:NO` to only the copied node-pty Windows linker options.
+  Fail closed unless the generated project and actual command each contain it exactly once and the
+  clean tree contains no target `.ilk`; rerun all six native cells with `/guard:cf`, strict
+  comparison, and rejected-output no-upload unchanged.
+
+### E-M3-WINDOWS-INCREMENTAL-DISABLE-LOCAL-001 — Copied-artifact full-link correction
+
+- Date: 2026-07-14
+- Commit SHA / PR: exact implementation commit
+  `6dfdfa0bd0d812c20981ffb728ddd18273097e6a`; stacked draft
+  PR [#8741](https://github.com/stablyai/orca/pull/8741), target-native execution pending
+- Runner: macOS 26.2 build 25C56, native Apple M4 arm64; Node v26.0.0 and pnpm 10.24.0. This runner
+  cannot execute MSVC, so Windows x64/arm64 jobs remain authoritative.
+- Remote and transport: none; copied-source, generated-project, actual-command/result-shape, and
+  ordering contracts only
+- Red evidence: E-M3-WINDOWS-INCREMENTAL-DATABASE-CI-RED-001 proves both native architectures use
+  `/DEBUG`-implied incremental linking, create stable target `.ilk` files, and retain the arm64 thunk
+  drift; no synthetic local failure substitutes for that target-native evidence
+- Exact green commands:
+
+  ```sh
+  node --check config/scripts/ssh-relay-node-pty-windows-build-determinism.mjs
+  node --check config/scripts/ssh-relay-node-pty-windows-build-determinism.test.mjs
+  /usr/bin/time -lp pnpm exec vitest run --config config/vitest.config.ts \
+    config/scripts/ssh-relay-node-pty-windows-build-determinism.test.mjs \
+    config/scripts/ssh-relay-node-pty-build.test.mjs \
+    config/scripts/ssh-relay-runtime-workflow.test.mjs
+  /usr/bin/time -lp pnpm exec vitest run --config config/vitest.config.ts \
+    config/scripts/ssh-relay-node-release-verification.test.mjs \
+    config/scripts/ssh-relay-node-tar-inspection.test.mjs \
+    config/scripts/ssh-relay-node-pty-build.test.mjs \
+    config/scripts/ssh-relay-node-pty-windows-build-determinism.test.mjs \
+    config/scripts/ssh-relay-node-pty-windows-settlement.test.mjs \
+    config/scripts/ssh-relay-node-zip-inspection.test.mjs \
+    config/scripts/ssh-relay-runtime-artifact.test.mjs \
+    config/scripts/ssh-relay-runtime-build.test.mjs \
+    config/scripts/ssh-relay-runtime-pty-smoke.test.mjs \
+    config/scripts/ssh-relay-runtime-reproducibility.test.mjs \
+    config/scripts/ssh-relay-runtime-resource-diagnostics.test.mjs \
+    config/scripts/ssh-relay-runtime-windows-pe-diagnostic.test.mjs \
+    config/scripts/ssh-relay-runtime-windows-tree.test.mjs \
+    config/scripts/ssh-relay-runtime-workflow.test.mjs \
+    config/scripts/ssh-relay-runtime-zip.test.mjs
+  pnpm run typecheck
+  pnpm exec oxlint \
+    config/scripts/ssh-relay-node-pty-windows-build-determinism.mjs \
+    config/scripts/ssh-relay-node-pty-windows-build-determinism.test.mjs \
+    config/scripts/ssh-relay-node-pty-build.mjs
+  pnpm run check:max-lines-ratchet
+  GOMAXPROCS=2 pnpm run lint
+  pnpm exec oxfmt --check \
+    config/scripts/ssh-relay-node-pty-windows-build-determinism.mjs \
+    config/scripts/ssh-relay-node-pty-windows-build-determinism.test.mjs \
+    config/scripts/ssh-relay-node-pty-build.mjs \
+    docs/reference/plans/2026-07-14-ssh-relay-github-release-implementation-checklist.md
+  git diff --check
+  ```
+
+- Result: PASS. The purpose suites pass 13/13 tests and all 15 artifact suites pass 58/58. Syntax,
+  typecheck, focused oxlint, the 355-entry max-lines ratchet, full repository
+  lint/reliability/localization, formatting, diff, and staged pre-commit hooks exit zero. Full lint
+  emits only pre-existing warnings outside this artifact package.
+- Duration and resource metrics: purpose gate 1.00 s wall / 202 ms Vitest with 132,235,264-byte
+  maximum RSS and 96,408,952-byte peak footprint; complete artifact gate 2.63 s wall / 1.13 s
+  Vitest with 132,251,648-byte maximum RSS and 96,490,944-byte peak footprint. The parallel
+  typecheck/focused-lint/max-lines group completed in 3.1 s; full lint and format/diff gates settled
+  within 10.1 s. No runtime archive, SSH channel/file, cancellation, fallback, or launch-latency
+  metric is exercised by this local package.
+- Artifact/log/trace link: exact implementation commit and local command output; no runtime artifact
+  was created, staged, published, or uploaded
+- Oracle proved: only the copied Windows node-pty linker options gain exactly one
+  `/INCREMENTAL:NO`; compiler options remain separate and `/guard:cf` remains present; source drift
+  or repeat transformation fails closed; generated Release projects must inherit exactly one disable
+  switch; actual target commands must classify it as disabled; any target `.ilk` fails before
+  staging; POSIX and the installed repository source remain unchanged. Both source and test modules
+  remain below 300 lines without a max-lines bypass.
+- Does not prove: MSVC accepts/propagates the option on either native architecture, that target
+  `.ilk` is absent, that the arm64 thunks become stable, that all six outputs compare and upload,
+  oldest baselines, native trust, SSH, publication, transfer, fallback, UI, or any enabled tuple.
+- Checklist items satisfied: local copied-artifact incremental-disable contract only; no tuple or
+  production checkbox.
+- Follow-up: push the exact implementation plus ledger head and rerun all six target-native cells.
+  Require both Windows clean builds to report `/incremental:no`, no target `.ilk`, complete runtime
+  smoke, exact output equality, and upload before accepting the correction.
+
 ## Accepted Gaps
 
 No product gap is accepted merely because it appears in this list. Each entry requires explicit
@@ -5730,7 +5894,7 @@ owner and promotion condition.
 | Bundled runtime only partially implemented | Six unpublished native artifact proofs; no production consumer          | #8450/#1693 environment failures remain        | Codex implementation owner                              | Complete Work Packages 2–7 plus Milestones 3–14                               | Open         |
 | No bundled tuple enabled                   | Every target's default and effective mode remains legacy                | No bundled support claim can be made           | Codex implementation owner                              | Complete target-native build/trust and both required live-evidence layers     | Open         |
 | Windows runtime smoke incomplete           | Native x64/arm64 smoke settles and uploads exact evidence               | Historical blocker is closed                   | Codex implementation owner                              | Met by E-M3-WINDOWS-CI-001                                                    | CLOSED       |
-| Native clean-rebuild identity unproved     | Five controls pass; arm64 target command has no explicit `/INCREMENTAL` | Toolchain drift may change native content IDs  | Codex implementation owner                              | Classify target `.ilk`, then make all six clean builds match                  | Open         |
+| Native clean-rebuild identity unproved     | Five controls pass; copied `/INCREMENTAL:NO` is locally green           | Toolchain drift may change native content IDs  | Codex implementation owner                              | Prove flag, no `.ilk`, and all-six equality on native runners                 | Open         |
 | Cross-family Layer B remotes unavailable   | GitHub native runner labels exist; no approved reachable target pool    | Client/remote integration gaps may escape      | Repository release administrator + implementation owner | Approve provider/snapshots/credentials/egress/teardown/cost owner             | BLOCKED      |
 | Musl has no accepted official Node binary  | Musl is deliberately legacy-only                                        | Unofficial binary would break provenance trust | Codex implementation owner                              | Orca-owned target-native source build, signing, provenance, and live gates    | ACCEPTED GAP |
 | Native arm64 live matrices incomplete      | Hosted Linux/Windows arm64 labels exist; full SSH/runtime cells do not  | Cross-build or unit tests may hide native bugs | Codex implementation owner                              | Full native archive, trust, SFTP/system-SSH, RPC, and baseline evidence       | Open         |
@@ -5777,11 +5941,10 @@ The project is not complete until every applicable item below is checked with ev
 
 ## Next Required Action
 
-Add a purpose-tested bounded diagnostic for the exact target `conpty_console_list.ilk` file under
-the already bounded clean `build/Release` traversal, recording only presence and size. Rerun both
-Windows architectures and all four POSIX controls. Only if target-native evidence proves implicit
-incremental linking may a copied-artifact `/INCREMENTAL:NO` producer correction be considered;
-retain `/guard:cf`, strict parsing/comparison, and rejected-output no-upload.
+Push exact implementation commit `6dfdfa0bd` plus its evidence-ledger head, then rerun both Windows
+architectures and all four POSIX controls. Require both Windows clean builds to report exactly one
+`/INCREMENTAL:NO`, no target `.ilk`, complete smoke, exact output equality, and upload. Retain
+`/guard:cf`, strict parsing/comparison, and rejected-output no-upload.
 Cross-family Layer B targets, the protected manifest-signing environment,
 oldest-baseline/native-trust cells, and the paired legacy performance baseline remain
 release/default-path blockers; no publication, desktop resolver, SSH transfer/install, per-target
