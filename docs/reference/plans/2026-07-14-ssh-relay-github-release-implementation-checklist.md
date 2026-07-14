@@ -66,7 +66,9 @@ same change as the work it records.
   E-M3-RUNTIME-LOCAL-001 additionally proves one unpublished Linux arm64 glibc assembly, exact-tree
   archive inspection, deterministic repack, bundled Node 24.18.0 execution, real patched PTY, and
   watcher events. E-M3-STATIC-001 records the current focused, type, lint, format, line-budget, and
-  diff gates. Oldest-baseline, native-trust, SSH, and every other tuple cell remain open.
+  diff gates. The first exact-head native run exposed a macOS `/var` versus `/private/var` watcher
+  oracle mismatch under E-M3-CI-RED-001; the canonical-path fix is pending rerun. Oldest-baseline,
+  native-trust, SSH, and every other tuple cell remain open.
 - Production behavior: unchanged; Orca embeds relay JavaScript and installs `node-pty` plus
   `@parcel/watcher` with remote npm.
 - New runtime assets published: none.
@@ -79,8 +81,9 @@ same change as the work it records.
 - Rollout control: existing per-SSH-target configuration; legacy is the default and the bundled
   runtime is an explicit per-target Beta opt-in under E-M1-ROLLOUT-DECISION-001.
 - Legacy fallback removal: not authorized.
-- Next required action: run the isolated four-tuple POSIX artifact workflow on the exact draft-PR
-  head and record each native GitHub runner result. Keep Windows runtime/zip implementation,
+- Next required action: push the macOS watcher-path oracle correction, rerun the isolated four-tuple
+  POSIX artifact workflow on the exact draft-PR head, and record each native GitHub runner result.
+  Keep Windows runtime/zip implementation,
   cross-family remote infrastructure, signing/trust, and measured legacy baseline gates open; do not
   introduce publication, resolver, transfer, rollout, tuple enablement, or default behavior.
 
@@ -1136,7 +1139,7 @@ Update status and evidence as work begins. Do not combine these into one large b
 | ------------------------- | ------------------------------------------------------------------------------------------ | --------------------------- | ---------------------------------------- | ----------------------------------------------------------------------- |
 | 0. #8450 legacy fix       | Coherent Node/npm selection and live repro                                                 | Fixes legacy selection only | Complete and CI-green in draft PR #8724  | E-M0-UNIT-002, E-M0-LIVE-002, E-M0-STATIC-002, E-M0-PR-001, E-M0-CI-001 |
 | 1. Contract and selectors | Manifest schema, identity, platform/libc selection, hostile inputs                         | None                        | Complete and CI-green in draft PR #8728  | `b9d80a4cb`; E-M2-RED-001, E-M2-CONTRACT-001, E-M2-CI-001               |
-| 2. Runtime builds         | Per-tuple assembly, native smoke, SBOM/provenance/signing                                  | None                        | Draft PR #8741; native CI pending        | `f2b387b21`; E-M3-NODE-RED-001, E-M3-NODE-PROVENANCE-001, E-M3-RUNTIME-LOCAL-001, E-M3-STATIC-001 |
+| 2. Runtime builds         | Per-tuple assembly, native smoke, SBOM/provenance/signing                                  | None                        | Draft PR #8741; macOS oracle fix pending | `f2b387b21`; E-M3-NODE-RED-001, E-M3-NODE-PROVENANCE-001, E-M3-RUNTIME-LOCAL-001, E-M3-STATIC-001, E-M3-CI-RED-001 |
 | 3. Release publication    | Prerequisite DAG, embedded manifest, draft upload/read-back gates                          | Asset-only                  | Not started                              | —                                                                       |
 | 4. Desktop resolver/cache | Verified download, extraction, cache, offline behavior                                     | None/forced mode only       | Not started                              | —                                                                       |
 | 5. Transfer/install       | Bounded transports, structured sentinel, bundled launch behind per-target Beta/forced mode | Per-target opt-in only      | Not started                              | —                                                                       |
@@ -2395,6 +2398,57 @@ fragmentLinks=9`.
 - Checklist items satisfied: current Work Package 2 local handoff/static gate only.
 - Follow-up: create the isolated stacked draft PR, run the four target-native POSIX jobs, and replace
   uncommitted/local evidence with exact commit, run, job, image, artifact, and duration identifiers.
+
+### E-M3-CI-RED-001 — Native macOS watcher path-oracle failure
+
+- Date: 2026-07-14
+- Commit SHA / PR: exact draft-PR head `f8a230ef301fc6f2bb76082f549e3b3ae725c142` in
+  [#8741](https://github.com/stablyai/orca/pull/8741)
+- Runner and jobs: GitHub Actions run
+  [29335018198](https://github.com/stablyai/orca/actions/runs/29335018198); macOS arm64 job
+  [87092056703](https://github.com/stablyai/orca/actions/runs/29335018198/job/87092056703) used
+  `macos-15-arm64` image `20260706.0213.1`, macOS 15.7.7, runner arm64, and Node v24.18.0;
+  macOS x64 job
+  [87092056769](https://github.com/stablyai/orca/actions/runs/29335018198/job/87092056769) used
+  `macos-15` image `20260629.0276.1`, runner x64, and Node v24.18.0
+- Remote and transport: no SSH remote; target-native artifact build and local execution on each
+  hosted runner; Node inputs downloaded from the exact pinned nodejs.org URLs
+- Exact workflow/log commands:
+
+  ```sh
+  gh run watch 29335018198 --repo stablyai/orca --exit-status --interval 10
+  gh api -H 'Accept: application/vnd.github+json' \
+    repos/stablyai/orca/actions/jobs/87092056703/logs
+  gh api -H 'Accept: application/vnd.github+json' \
+    repos/stablyai/orca/actions/jobs/87092056769/logs
+  ```
+
+- Result: expected discriminating FAIL. Both macOS jobs passed exact-head checkout, Node 24 setup,
+  frozen dependency install, 15/15 contract tests, authenticated Node input download, target-native
+  Node/`node-pty`/watcher assembly, deterministic archive inspection, and full tree hashing. Native
+  smoke then timed out after 15 seconds waiting for watcher `create`; evidence upload correctly did
+  not run. Both Linux jobs completed build, verification, smoke, and unpublished upload, but their
+  cells remain provisional until the corrected exact-head matrix reruns.
+- Duration and resource metrics: macOS arm64 job failed in 1m51s after a 54,699.324 ms artifact
+  build; macOS x64 failed in 3m44s after a 105,665.482 ms artifact build. Each watcher wait settled
+  at its declared 15-second bound. Peak memory and open-file counts were not recorded in the failed
+  macOS smoke because no success payload was emitted.
+- Artifact/log/trace link: run and job links above. The arm64 pre-smoke artifact had content ID
+  `sha256:cc205af32168718f9662e8513338ad844ba4c1210c247623d84f92778afa1610` and archive hash
+  `sha256:cd9cca6f56c9645a73b6b022515668ef7392c2eeb8f01d63b8a46b046cf337a3`;
+  the x64 pre-smoke artifact had content ID
+  `sha256:82a7017f6c1f703258a9d6b9f3d5ad4d5c57320f1b667fd87902cb1f4cd21cd3` and archive hash
+  `sha256:88670165fcdf55236fb2a81d70566b913b39824362b5cf5f0136e646bf9c9b2c`.
+- Oracle proved: the native matrix and exact-head provenance gates discriminate after successful
+  builds; macOS FSEvents can report canonical `/private/var/...` paths while `tmpdir()` supplied the
+  `/var/...` symlink spelling, so the equality oracle could reject the same filesystem object.
+- Does not prove: a passing macOS watcher, upload, native trust/signing, oldest baseline, SSH,
+  relay RPCs, Windows, or any enabled tuple. Successful Linux results from this failed aggregate do
+  not satisfy the final corrected-head evidence requirement.
+- Checklist items satisfied: red half of the macOS target-native watcher-smoke gate only; no tuple
+  checkbox was changed.
+- Follow-up: canonicalize the watched temporary directory before constructing expected event paths,
+  retain bounded observed-event diagnostics, rerun all four jobs, and require every upload to pass.
 
 ## Accepted Gaps
 

@@ -1,6 +1,6 @@
 'use strict'
 
-const { appendFile, mkdtemp, rename, rm, unlink, writeFile } = require('node:fs/promises')
+const { appendFile, mkdtemp, realpath, rename, rm, unlink, writeFile } = require('node:fs/promises')
 const { tmpdir } = require('node:os')
 const { join } = require('node:path')
 const { createRequire } = require('node:module')
@@ -90,13 +90,17 @@ async function waitFor(events, predicate, label) {
     while (!predicate(events)) {
       await Promise.race([new Promise((resolve) => setTimeout(resolve, 25)), timer.promise])
     }
+  } catch (error) {
+    throw new Error(`${error.message}; observed=${JSON.stringify(events.slice(-20))}`)
   } finally {
     timer.cancel()
   }
 }
 
 async function watcherSmoke() {
-  const directory = await mkdtemp(join(tmpdir(), 'orca-runtime-watcher-'))
+  const createdDirectory = await mkdtemp(join(tmpdir(), 'orca-runtime-watcher-'))
+  // Why: macOS FSEvents reports `/private/var` even when tmpdir returned the `/var` symlink.
+  const directory = await realpath(createdDirectory)
   const first = join(directory, 'first.txt')
   const second = join(directory, 'renamed.txt')
   const events = []
