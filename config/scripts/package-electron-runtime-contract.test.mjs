@@ -7,6 +7,19 @@ const projectDir = resolve(import.meta.dirname, '../..')
 const packageJson = JSON.parse(readFileSync(join(projectDir, 'package.json'), 'utf8'))
 
 describe('Electron runtime package contract', () => {
+  it('keeps shared WebGL atlas invalidation reproducible from vendored source', () => {
+    const patch = readFileSync(
+      join(projectDir, 'config/patches/@xterm__addon-webgl@0.20.0-beta.286.patch'),
+      'utf8'
+    )
+
+    expect(patch).toContain('diff --git a/src/Types.ts b/src/Types.ts')
+    expect(patch).toContain('readonly clearModelGeneration: number')
+    expect(patch).toContain('const generation = this._atlas.clearModelGeneration')
+    expect(patch).toContain('this.clearModelGeneration++')
+    expect(patch).toContain('this._atlas._clearModelGeneration||0')
+  })
+
   it('keeps root postinstall as the single Electron binary install owner', () => {
     expect(packageJson.scripts.postinstall).toBe('node config/scripts/rebuild-native-deps.mjs')
     expect(packageJson.pnpm.onlyBuiltDependencies).not.toContain('electron')
