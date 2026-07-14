@@ -72,7 +72,7 @@ describe('SSH relay Windows node-pty build determinism', () => {
   })
 
   it('proves the generated Release project propagates compile and link settings', async () => {
-    const directory = await generatedProject()
+    const directory = await generatedProject({ platform: 'arm64' })
     await expect(
       assertWindowsNodePtyGeneratedBuildSettings({
         nodePtyDirectory: directory,

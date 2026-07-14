@@ -53,9 +53,13 @@ function decodeXmlText(value) {
 }
 
 function releaseDefinitionGroup(source, configuration) {
+  const expectedCondition = `'Release|${configuration}'`.toLowerCase()
   const groups = [
     ...source.matchAll(/<ItemDefinitionGroup\b([^>]*)>([\s\S]*?)<\/ItemDefinitionGroup>/g)
-  ].filter((match) => decodeXmlText(match[1]).includes(`'Release|${configuration}'`))
+  ].filter((match) => {
+    // Why: native arm64 MSBuild uses lowercase `arm64`; platform identities are case-insensitive.
+    return decodeXmlText(match[1]).toLowerCase().includes(expectedCondition)
+  })
   if (groups.length !== 1) {
     throw new Error('generated MSBuild settings lack one exact Release configuration')
   }
