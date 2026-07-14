@@ -1093,6 +1093,18 @@
           </div>
 
           <div class="callout">
+            <strong>Legacy families are not bundled evidence</strong>
+            <p>
+              Current source recognizes Linux, macOS, and Windows remotes on x64 and arm64 and uses
+              coherent remote Node/npm plus the remote native-install path. Linux legacy identity
+              does not distinguish glibc from musl. The bundled selector introduces that distinction
+              and starts with musl disabled. A source-declared family or passing unit test is not a
+              fallback claim: this project currently has live legacy evidence only for Ubuntu 24.04
+              arm64 over built-in SSH2/SFTP, so every other fallback cell remains open.
+            </p>
+          </div>
+
+          <div class="callout">
             <strong>Promotion rule</strong>
             <p>
               Milestone 1 starts with no declared bundled tuples and decides which candidates become
@@ -1155,12 +1167,21 @@
                   are uploaded.
                 </li>
                 <li>
-                  A protected release environment signs canonical, versioned manifest bytes with
-                  narrowly scoped key access.
+                  Ed25519 signs a fixed-order, schema-validated UTF-8 JSON projection through the
+                  existing <code>tweetnacl</code> dependency. Tuple and file arrays are sorted,
+                  identity fields are portable ASCII, numbers are safe integers, and signatures
+                  remain outside the signed projection.
                 </li>
                 <li>
-                  Define key IDs, dual-sign rotation, revocation response, and exact-tag
-                  anti-rollback before implementation.
+                  An offline-generated 32-byte seed exists only in a tag-restricted
+                  <code>relay-runtime-manifest-signing</code> GitHub Environment with required
+                  reviewers. Only the aggregate signing job receives it; runtime publication stays
+                  blocked until that environment and its access audit exist.
+                </li>
+                <li>
+                  Key IDs are SHA-256 of the raw 32-byte public key. Rotation dual-signs two desktop
+                  releases and at least 30 days; revocation and emergency replacement use a new
+                  desktop build. Unknown, duplicate, or malformed signature entries fail closed.
                 </li>
                 <li>
                   Every Node/CVE/runtime/key change ships as a new desktop tag/build with a newly
@@ -1170,6 +1191,15 @@
                 <li>
                   There is no mutable freshness channel or runtime-only <code>latest</code> lookup;
                   emergency refresh and key response use the normal desktop update path.
+                </li>
+                <li>
+                  The embedded manifest tag/channel/version must equal the compiled desktop
+                  identity. A newer desktop rejects an older manifest; an explicit desktop downgrade
+                  uses only its own embedded manifest and isolated cache identity.
+                </li>
+                <li>
+                  GitHub keyless artifact attestations supplement build provenance but never replace
+                  the offline-verifiable embedded Ed25519 signature.
                 </li>
                 <li>Archive identity includes every executable and native artifact.</li>
                 <li>
@@ -1181,8 +1211,11 @@
                   transfer.
                 </li>
                 <li>
-                  Preserve official Node signatures where possible and sign Orca-built macOS and
-                  Windows native code.
+                  Preserve valid official Node signatures. Before final hashes, sign every
+                  Orca-built macOS executable, <code>.node</code>, dylib, and
+                  <code>spawn-helper</code> with the existing Developer ID identity, and send every
+                  unsigned Windows <code>.exe</code>, DLL, and <code>.node</code> through the
+                  existing SignPath inner-binary flow.
                 </li>
                 <li>
                   Native build/signing jobs verify platform-native trust on native runners and put
@@ -1221,29 +1254,61 @@
                 </li>
                 <li>
                   Cover BusyBox, Alpine, old glibc, containers, Rosetta, startup noise, and
-                  ambiguous output in selector and live tests.
+                  ambiguous output in selector and live tests. No BusyBox-only variant is initially
+                  qualified: Ubuntu's BusyBox 1.36.1 lacks <code>nohup</code> and selects legacy.
                 </li>
                 <li>
-                  Define the exact POSIX baseline: POSIX <code>sh</code>, byte-preserving
-                  stdin-to-file via <code>cat</code> or a proven equivalent, and required
+                  The POSIX baseline is POSIX <code>sh</code> with builtin
+                  <code>command</code>/<code>printf</code>, byte-preserving stdin-to-file via
+                  <code>cat</code>, and required
                   <code>mkdir</code
                   >/<code>rm</code>/<code>mv</code>/<code>chmod</code>/<code>test</code>/<code
                     >nohup</code
                   >
-                  semantics.
+                  semantics. It excludes Node, Python, Perl, tar, base64, checksum tools, and
+                  compilers.
                 </li>
                 <li>
-                  Define the exact Windows OpenSSH PowerShell/.NET versions and binary
-                  file/rename/permission/process primitives; missing primitives are an explicit
-                  compatibility result.
+                  Windows requires OpenSSH 8.1p1, Windows PowerShell 5.1, and .NET Framework 4.8. A
+                  bounded 64 KiB <code>FileStream</code> loop writes raw stdin under an exclusive
+                  <code>FileMode.CreateNew</code> staging lock; it rejects early EOF and excess
+                  bytes and uses same-volume publish.
                 </li>
                 <li>
-                  The no-tar path needs no Node, Python, or archive program: Orca frames manifest
-                  files locally and streams each file over SSH into exclusive staging.
+                  Both families run a nonce-bound binary-fidelity semantic probe once per
+                  authenticated connection. Missing or incorrect primitives are compatibility
+                  failures; probe results never survive reconnect or cross host boundaries.
+                </li>
+                <li>
+                  The no-tar path opens one bounded stdin byte stream per manifest file and sends
+                  exactly the declared size into exclusive staging. It becomes sequential under
+                  <code>MaxSessions=1</code>; transferred bundled Node later hashes the complete
+                  tree.
                 </li>
               </ul>
             </div>
           </details>
+
+          <div class="callout">
+            <strong>Hard resource and latency budgets</strong>
+            <p>
+              The local verified cache is capped at 2 GiB. Archives are rejected above 100 MiB
+              compressed, 350 MiB expanded, 5,000 entries, or 250 MiB for one file. Incremental
+              transfer/extraction memory is capped at 64 MiB on the desktop and 32 MiB remotely;
+              buffers stay at or below 1 MiB. SFTP starts at four files/channels and never exceeds
+              eight open files, dropping to one for <code>MaxSessions=1</code>.
+            </p>
+            <p>
+              Cold bootstrap is capped at 30 minutes with named sub-budgets, and cancellation must
+              join within 10 seconds. Warm p95 may be at most 100 ms or 10% slower than paired
+              legacy, whichever allowance is larger. Cold p95 may not exceed the smaller of 30
+              minutes or 115% of measured bytes/throughput time plus five minutes. Offline failures
+              classify within 20 seconds and eligible legacy starts within 10 seconds after
+              classification and join. Native GitHub jobs compare at least ten paired samples under
+              the same network shaping; inconclusive hosted variance requires a dedicated runner
+              rather than a weaker threshold.
+            </p>
+          </div>
         </section>
 
         <section id="fallback">
@@ -1287,6 +1352,22 @@
                   <td>Verified local cache hit</td>
                   <td>Upload and validate</td>
                   <td>Remote may remain fully offline</td>
+                </tr>
+                <tr>
+                  <td>Client offline or asset absent, with no verified local cache</td>
+                  <td>
+                    Use proven legacy in per-target Beta <code>auto</code>; forced bundled fails at
+                    the exact availability stage
+                  </td>
+                  <td>No GitHub request is ever delegated to the SSH host</td>
+                </tr>
+                <tr>
+                  <td>Bundled availability failure and legacy prerequisites also fail</td>
+                  <td>
+                    Report both stage codes with retry, update, and disable-Beta guidance; preserve
+                    the original bundled error
+                  </td>
+                  <td>No false fallback-success claim or hidden retry loop</td>
                 </tr>
                 <tr>
                   <td>Detected local or remote cache corruption</td>
@@ -1740,8 +1821,11 @@
             <article class="risk">
               <strong>OS-native trust controls</strong>
               <p>
-                Preserve official Node signatures where possible, sign Orca-built native code, and
-                test macOS Gatekeeper plus Windows Authenticode, WDAC, and antivirus behavior.
+                Test quarantined bytes on clean macOS 13.5 x64/arm64 snapshots with Gatekeeper and
+                strict codesign. Test Server 2022 x64 and Windows 11 24H2 arm64 with current
+                Defender intelligence, then Windows 11 24H2 x64 with the release WDAC policy in
+                audit and enforced modes. Record snapshot, policy, and security-intelligence IDs;
+                any denial blocks release rather than weakening the endpoint control.
               </p>
             </article>
             <article class="risk">

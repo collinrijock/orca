@@ -179,7 +179,8 @@ runner/remote, and numeric-budget decisions with authoritative evidence before s
       x64 artifact passes a live Rosetta SSH cell. A native arm64 shell selects arm64; detection
       never forces a native-architecture artifact across a translated process boundary.
       (E-M1-BASELINE-001)
-- [ ] Document currently supported legacy tuples separately from proposed bundled tuples.
+- [x] Document current legacy platform families separately from bundled candidates and distinguish a
+      code-declared family from a live-evidenced fallback claim. (E-M1-LEGACY-INVENTORY-001)
 
 Decision owner: Codex implementation owner for #8450. Decision authority: conservative
 implementation boundary under the user-approved legacy-default Beta rollout. These are minimum
@@ -190,6 +191,22 @@ The initial candidate families are Linux glibc x64/arm64, macOS x64/arm64, and W
 Linux musl, WSL, Rosetta-translated macOS, and any unlisted OS/architecture remain legacy-only.
 Version parsing is exact and fail-conservative; an unknown, missing, older, or conflicting baseline
 probe selects legacy rather than guessing a compatible artifact.
+
+| Remote family        | Current legacy path                                                                 | Proposed bundled candidate                           | Live fallback evidence in this project |
+| -------------------- | ----------------------------------------------------------------------------------- | ---------------------------------------------------- | -------------------------------------- |
+| Linux x64 glibc      | Declared `linux-x64`; coherent remote Node/npm plus remote native npm install       | `linux-x64-glibc`                                    | None yet                               |
+| Linux arm64 glibc    | Declared `linux-arm64`; coherent remote Node/npm plus remote native npm install     | `linux-arm64-glibc`                                  | E-M0-LIVE-002 (Ubuntu 24.04 arm64)     |
+| Linux x64/arm64 musl | Shares current Linux platform key; compatibility depends on legacy npm/native build | None initially; selector returns legacy              | None                                   |
+| macOS x64            | Declared `darwin-x64`; coherent remote Node/npm plus remote native npm install      | `darwin-x64`                                         | None                                   |
+| macOS arm64          | Declared `darwin-arm64`; coherent remote Node/npm plus remote native npm install    | `darwin-arm64`                                       | None                                   |
+| Windows x64          | Declared `win32-x64`; coherent `node.exe`/`npm.cmd` plus remote native install      | `win32-x64`                                          | None                                   |
+| Windows arm64        | Declared `win32-arm64`; coherent `node.exe`/`npm.cmd` plus remote native install    | `win32-arm64`                                        | None                                   |
+| WSL/Rosetta/other    | No separate current platform identity; behavior follows detected process family     | No candidate until a separately identified live cell | None                                   |
+
+“Declared” above means the current source accepts the platform and has deterministic unit coverage;
+it is not a claim that this project has a passing live SSH fallback cell. Automatic legacy fallback
+for a bundled tuple is permitted only where the last column has current evidence for the relevant
+family/transport conditions.
 
 ### Validation runner and network topology
 
@@ -220,9 +237,18 @@ the exact commit under test without introducing a second release-control plane.
       target pool currently exists. (E-M1-RUNNER-INVENTORY-001)
 - [ ] Name and pin the representative POSIX and Windows remote images/snapshots used for Layer B,
       including their OpenSSH and bootstrap-primitive baselines and network-egress controls.
-- [ ] Select a repeatable GitHub runner class or approved dedicated runner for numeric regression
-      baselines. If hosted-runner variance prevents the Milestone 1 thresholds from being evaluated,
-      use the dedicated runner for the affected metric rather than weakening the threshold.
+- [x] Use the explicit native GitHub runner labels below for paired legacy-versus-bundled regression
+      measurements in the same job, with local network shaping and at least ten samples per path. If
+      three qualifying reruns have over 15% coefficient of variation or disagree on the threshold,
+      require an approved dedicated runner; do not weaken the threshold. (E-M1-BUDGET-DECISION-001)
+
+BLOCKED for cross-family live evidence, not for contract-only work: the Codex implementation owner
+owns repo-local fixture/workflow definitions, but a repository release administrator must approve an
+ephemeral cloud credential/environment or a self-hosted target pool before immutable POSIX and
+Windows Layer B snapshots can be named as reachable infrastructure. The unblock record must include
+provider, snapshot IDs, credential owner, egress policy, teardown SLA, and cost/capacity owner. Safe
+default: no Layer B cell and no bundled tuple is enabled; continue schema/selector and local
+same-family test work without secrets.
 
 #### Native runner inventory decision
 
@@ -249,16 +275,41 @@ the affected tuple disabled.
 
 ### Remote bootstrap primitives
 
-- [ ] Define the exact POSIX baseline, including POSIX `sh`, byte-preserving stdin-to-file via `cat`
-      or a proven equivalent, and required `mkdir`/`rm`/`mv`/`chmod`/`test`/`nohup` semantics.
-- [ ] Define the exact Windows OpenSSH, PowerShell, and .NET baseline plus binary file I/O, exclusive
-      staging, atomic rename, permission, and detached-process primitives.
-- [ ] Decide how each required primitive is capability-probed without Node or Python and how probe
-      results are scoped to the remote host/connection.
-- [ ] Define missing-command behavior as compatibility failure, eligible for legacy in `auto` only
-      where that legacy tuple is proven.
-- [ ] Record BusyBox variants whose semantics satisfy the POSIX baseline and disable bundled mode for
-      variants that do not.
+- [x] Define the exact POSIX baseline as POSIX `sh` with builtin `command`/`printf` plus
+      byte-preserving `cat`, `mkdir`, `rm`, `mv`, `chmod`, `test`, and `nohup`; no Node, Python,
+      Perl, tar, base64, checksum tool, or compiler is permitted. (E-M1-BOOTSTRAP-DECISION-001)
+- [x] Define the exact Windows baseline as OpenSSH for Windows 8.1p1, Windows PowerShell 5.1, and
+      .NET Framework 4.8 with `FileStream`, `FileMode.CreateNew`, 64 KiB binary reads/writes,
+      same-volume `Directory.Move`, ACL-preserving filesystem operations, and the existing detached
+      relay launch mechanism. (E-M1-BOOTSTRAP-DECISION-001)
+- [x] Capability-probe required semantics with a client-generated nonce and byte fixture, without
+      Node or Python, once per authenticated SSH connection. Never persist or share the result
+      across hosts or reconnect generations. (E-M1-BOOTSTRAP-DECISION-001)
+- [x] Treat missing or semantically incorrect bootstrap primitives as compatibility failure,
+      eligible for legacy in `auto` only where that exact legacy family has current evidence.
+      (E-M1-BOOTSTRAP-DECISION-001)
+- [x] Record no BusyBox-only variant as qualified initially. Ubuntu 24.04 arm64 BusyBox 1.36.1 lacks
+      the required `nohup` applet and therefore selects legacy; any BusyBox host must pass the full
+      semantic probe with external required commands before it can become a candidate.
+      (E-M1-BUSYBOX-001)
+
+#### Bootstrap primitive decision
+
+POSIX system SSH and built-in SSH2 both open a dedicated stdin byte stream for each manifest file.
+The remote command creates that file with restrictive permissions and `cat > file`; the client sends
+exactly the declared size and closes stdin. The initial semantic probe round-trips a binary fixture
+containing NUL, CR, LF, high-bit bytes, and no trailing newline through the same path. Per-file
+channels are bounded and become sequential under `MaxSessions=1`. Full staged-tree integrity is
+still checked later by transferred bundled Node, not by trusting `cat` or a remote checksum command.
+
+Windows transfer sends raw bytes to a purpose-built PowerShell script that reads
+`Console.OpenStandardInput()` into a 64 KiB buffer and writes with `FileStream`. A `CreateNew` lock
+file containing an unguessable client token establishes exclusive staging ownership before the
+directory is created; every later command verifies that token. The reader rejects early EOF and one
+extra byte beyond the declared safe-integer size. It never materializes the file as a string,
+JSON/base64 value, or whole-file buffer. Publish uses same-volume rename only after bundled-Node
+tree verification and native probes. Probe artifacts and locks are removed on success, failure, or
+cancellation; cleanup settlement is part of the timeout oracle.
 
 ### Node runtime ownership
 
@@ -286,38 +337,103 @@ the affected tuple disabled.
 
 ### Trust and signing
 
-- [ ] Choose manifest signature algorithm and library based on existing Orca dependencies and
-      platform availability.
-- [ ] Define canonical manifest serialization byte-for-byte.
-- [ ] Define signing-key creation, storage, protected-environment access, auditability, and least
-      privilege.
-- [ ] Define key IDs, accepted-key embedding, dual-key rotation window, revocation response, and
-      emergency replacement. Revocation and emergency replacement ship through the desktop update
-      path; old clients remain pinned and no mutable freshness lookup is introduced.
-- [ ] Define exact-tag anti-rollback behavior and whether downgrading the desktop may use older
-      manifests.
-- [ ] Decide whether keyless build provenance supplements or replaces any long-lived CI credential.
-- [ ] Define macOS code-signing/notarization requirements for Node, `spawn-helper`, and native
-      modules.
-- [ ] Define Windows Authenticode requirements for Node, `.node`, DLL, and helper executables.
-- [ ] Define WDAC, Gatekeeper, antivirus, and endpoint-protection validation environments.
+- [x] Use Ed25519 detached signatures through the existing direct `tweetnacl@1.0.3` dependency;
+      reject non-64-byte signatures, non-32-byte public keys, unknown algorithms, and unknown keys.
+      (E-M1-TRUST-DECISION-001)
+- [x] Canonicalize only a fully validated unsigned manifest projection: fixed schema field order,
+      tuples sorted by canonical tuple ID, files sorted by portable relative path, safe integers,
+      portable ASCII identity/path fields, no optional `undefined`, and UTF-8 `JSON.stringify`
+      bytes with no whitespace or trailing newline. Signatures are outside the signed projection.
+      (E-M1-TRUST-DECISION-001)
+- [x] Generate Ed25519 keys offline, store only the base64-encoded 32-byte seed in a tag-restricted
+      `relay-runtime-manifest-signing` GitHub Environment with required reviewers, expose it only to
+      the fail-closed aggregate job, pin every action by commit SHA, grant no write permission except
+      the separate draft-release upload job, and rely on environment deployment logs for audit.
+      (E-M1-TRUST-DECISION-001)
+- [x] Define key ID as `sha256:<lowercase hex SHA-256 of the 32-byte Ed25519 public key>`. Embed the
+      accepted key set in the desktop. Rotation dual-signs at least two consecutive desktop releases
+      and 30 days; old-key removal/revocation and emergency replacement ship only in a new desktop
+      build. Old clients and manifests remain pinned with no freshness lookup.
+      (E-M1-TRUST-DECISION-001)
+- [x] Require embedded manifest tag/channel/version to equal the compiled desktop identity and use
+      only that exact release URL. A newer desktop never accepts an older manifest. A user-initiated
+      desktop downgrade may use its own embedded older manifest/cache namespace but cannot rewrite a
+      newer content-addressed install. (E-M1-TRUST-DECISION-001)
+- [x] Use GitHub artifact attestations/keyless OIDC provenance as a supplement, never as a replacement
+      for the offline-verifiable embedded Ed25519 manifest signature. (E-M1-TRUST-DECISION-001)
+- [x] Preserve valid official Node signatures. Sign every Orca-built macOS executable, `.node`,
+      dylib, and `spawn-helper` with the existing Developer ID Application identity before final
+      hashes; verify strict codesign and notarized containing-app provenance on a native runner.
+      (E-M1-TRUST-DECISION-001)
+- [x] Preserve valid upstream Authenticode signatures and send every unsigned Orca-built Windows
+      `.exe`, `.dll`, and `.node` through the existing SignPath inner-binary flow before final hashes;
+      verify `Get-AuthenticodeSignature` and signer policy on returned bytes.
+      (E-M1-TRUST-DECISION-001)
+- [x] Define target-native trust environments: clean macOS 13.5 x64/arm64 snapshots with quarantine
+      plus Gatekeeper/codesign assessment; Windows Server 2022 x64 and Windows 11 24H2 arm64
+      snapshots with current Microsoft Defender signatures; and a disposable Windows 11 24H2 x64
+      VM with the release WDAC policy in audit then enforced mode. Record snapshot/policy/signature
+      IDs in every run; third-party EDR observations may supplement but not replace these gates.
+      (E-M1-ENDPOINT-DECISION-001)
+
+#### Manifest-key operational gate
+
+Decision owner: Codex implementation owner for #8450. Operational owners: repository release
+administrators for GitHub Environment/reviewer policy, existing Apple credential owners for macOS,
+and existing SignPath organization approvers for Windows. No key or secret is created by this
+decision. Runtime publication remains blocked until the protected environment, two test keys,
+dual-sign/unknown-key/revocation rehearsals, action-SHA allowlist, and access audit are executable.
+
+The signing job receives canonical unsigned bytes and returns only key ID plus signature. The
+aggregate job reconstructs and verifies the signed projection before emitting the final manifest.
+The desktop repeats the same validation and rejects duplicates before cryptographic verification.
+At least one accepted signature is required, every signature entry must be unique, and a malformed
+or unknown extra signature fails closed rather than being ignored. Key compromise cannot alter an
+old client's embedded manifest or archive hashes; emergency response stops asset publication and
+ships a new desktop build with revised accepted keys.
+
+The trust-environment decision does not imply those snapshots exist in an approved pool. Gatekeeper
+tests add a quarantine attribute to the downloaded runtime before assessment and execution. Windows
+tests update Defender intelligence, scan the unpacked tree, verify every PE signature, run native
+PTY/watcher smoke, then repeat under the enforced WDAC policy. Detection, quarantine, or policy
+denial is release-blocking and must retain logs without weakening the security product.
 
 ### Operational budgets and rollout policy
 
 - [ ] Record current legacy cold-install and warm-connect baselines on representative networks.
-- [ ] Set numeric local cache size and eviction budgets.
-- [ ] Set archive compressed-size, expanded-size, file-count, and per-file limits.
-- [ ] Set local download, extraction, transfer, remote verification, launch, cancellation, and total
-      bootstrap time budgets.
-- [ ] Set desktop and remote peak-memory budgets for every transfer path.
-- [ ] Set SFTP concurrency and open-channel limits.
-- [ ] Define acceptable warm-path and cold-path latency regressions numerically.
-- [ ] Define how long legacy fallback remains and the evidence required before narrowing it.
+- [x] Set the local verified-runtime cache to 2 GiB, with an atomic LRU that never evicts referenced,
+      locked, staging, current-manifest, or running content; retain at least current plus previous
+      content per used tuple when they fit. (E-M1-BUDGET-DECISION-001)
+- [x] Reject an archive over 100 MiB compressed, 350 MiB expanded, 5,000 entries, 250 MiB for one
+      file, a path over 240 UTF-8 bytes, or aggregate metadata arithmetic outside safe integers.
+      (E-M1-BUDGET-DECISION-001)
+- [x] Set stage ceilings: cache lookup 2 s, connect/DNS availability decision 15 s, download 5 min,
+      extraction 2 min, transfer 20 min, remote full-tree verification 3 min, native/smoke probes
+      2 min, launch/handshake 30 s, cancellation-and-join 10 s, and total cold bootstrap 30 min.
+      (E-M1-BUDGET-DECISION-001)
+- [x] Limit incremental transfer/extraction memory to 64 MiB on the desktop and 32 MiB on the remote,
+      excluding the launched relay's measured steady-state runtime; no single buffer exceeds 1 MiB.
+      (E-M1-BUDGET-DECISION-001)
+- [x] Limit SFTP to four in-flight files and four bootstrap channels by default, reduce to one after
+      the existing `MaxSessions=1` capability result, and never exceed eight open file handles in
+      either process. (E-M1-BUDGET-DECISION-001)
+- [x] Require warm-connect p95 to be no more than 100 ms or 10% slower than paired legacy, whichever
+      allowance is larger. Cold p95 must not exceed the smaller of the 30-minute hard cap or 115% of
+      the measured bytes/throughput lower bound plus five minutes at 1/10/100 Mbps and 50/100/200 ms
+      RTT. Offline/connectivity classification completes within 20 s, and legacy starts within 10 s
+      after any eligible failure is classified and bundled work is joined. (E-M1-BUDGET-DECISION-001)
+- [x] Keep automatic legacy fallback through at least two stable releases and 30 days after any
+      separately authorized default-on change. Narrowing fallback or removing legacy requires a
+      separate review plus complete matrix, soak, support, and rollback evidence.
+      (E-M1-BUDGET-DECISION-001)
 - [x] Use existing per-SSH-target configuration for rollout control; do not add a rollout backend.
       This closes the control-mechanism decision, not its implementation.
       (E-M1-ROLLOUT-DECISION-001)
-- [ ] Decide user-facing behavior when the client is offline, the asset is absent locally, the
-      remote cache is absent, and legacy prerequisites are unavailable.
+- [x] Define offline/missing-asset behavior: use a verified client cache without GitHub or remote
+      egress; otherwise classified offline/404/cache-unavailable errors may use proven legacy in
+      Beta `auto`. If legacy prerequisites also fail, return both stage codes and actionable retry,
+      update, or disable-Beta guidance without hiding the original error. Integrity failures never
+      fallback. (E-M1-BUDGET-DECISION-001)
 
 #### Per-target Beta rollout decision
 
@@ -1699,6 +1815,196 @@ fragmentLinks=9`.
   both required plan artifacts.
 - Follow-up: continue the remaining Milestone 1 gates and keep contract implementation in stacked
   draft PR #8728 with no default behavior change.
+
+### E-M1-LEGACY-INVENTORY-001 — Current legacy families versus bundled candidates
+
+- Date: 2026-07-14
+- Commit SHA / PR: stacked draft PR [#8728](https://github.com/stablyai/orca/pull/8728); decision
+  change pending commit on `Jinwoo-H/bug-8450-ssh-relay-contracts`
+- Runner: macOS 26.2 arm64 native; Vitest Node environment
+- Remote: none; source-declared platform identities and deterministic tests only
+- Transport/network: local files only
+- Exact command:
+  `pnpm exec vitest run --config config/vitest.config.ts src/main/ssh/relay-protocol.test.ts src/main/ssh/ssh-remote-platform-detection.test.ts`
+- Result: PASS; 35/35 tests across two files, including Linux/macOS/Windows x64/arm64 parsing and
+  conservative unsupported-platform rejection
+- Duration and resource metrics: 253 ms; memory, channels, and files not instrumented
+- Artifact/log/trace link: local Vitest stdout; current `RelayPlatform` source and the living table
+- Oracle proved: current source has six deterministic legacy platform identities and rejects unknown
+  OS/architectures; the plan now separates those identities from libc-aware bundled candidates and
+  from live fallback claims.
+- Does not prove: a live SSH connection, native npm install, PTY/watcher health, libc compatibility,
+  or fallback on any family. E-M0-LIVE-002 remains the only live legacy evidence in this project.
+- Checklist items satisfied: Milestone 1 legacy-versus-bundled family inventory.
+- Follow-up: fill current legacy E2E cells before allowing automatic fallback for each corresponding
+  bundled tuple.
+
+### E-M1-BOOTSTRAP-DECISION-001 — No-Node POSIX and bounded Windows primitive contract
+
+- Date: 2026-07-14
+- Commit SHA / PR: stacked draft PR [#8728](https://github.com/stablyai/orca/pull/8728); decision
+  change pending commit on `Jinwoo-H/bug-8450-ssh-relay-contracts`
+- Runner: macOS 26.2 arm64 native; Docker Desktop native arm64 Linux containers
+- Remote: local Ubuntu 24.04, Debian 12/bookworm-slim, and AlmaLinux 8 arm64 containers; no SSH
+  daemon, Windows host, or BusyBox image
+- Transport/network: Docker stdin/stdout only; the fixture exercised the proposed raw per-file
+  stream but not an authenticated SSH channel
+- Exact command: inline Node harness spawned each image with `docker run --rm -i ... sh -c`, sent a
+  ten-byte fixture containing NUL/CR/LF/high-bit bytes, and required exact output after
+  `mkdir`/`cat`/`chmod`/`mv`/`test`/`nohup`/`rm`
+- Result: PASS; exact ten-byte round trip on Ubuntu 24.04, Debian bookworm-slim, and AlmaLinux 8
+- Duration and resource metrics: Ubuntu 4,384 ms, Debian 569 ms, AlmaLinux 506 ms including container
+  startup; one stdin/stdout stream; peak memory and open-file counts not instrumented
+- Artifact/log/trace link: local harness stdout recorded in the implementation session
+- Oracle proved: the declared POSIX command subset can preserve the binary fixture without Node,
+  Python, Perl, tar, base64, or checksum tools on three glibc userlands.
+- Does not prove: SSH framing, cancellation, short/extra input rejection, concurrency,
+  `MaxSessions=1`, BusyBox, Windows PowerShell/.NET, exclusive lock races, full-size transfer, or
+  complete-tree verification.
+- Checklist items satisfied: Milestone 1 POSIX/Windows primitive, per-connection probe, and
+  compatibility-failure decisions only. Windows is a specified contract, not executable evidence.
+- Follow-up: turn this into purpose-named unit/live tests, add BusyBox and bounded Windows binary
+  transfer, and do not enable any tuple from this local semantic probe.
+
+### E-M1-BUSYBOX-001 — BusyBox-only primitive baseline fails closed
+
+- Date: 2026-07-14
+- Commit SHA / PR: stacked draft PR [#8728](https://github.com/stablyai/orca/pull/8728); decision
+  change pending commit on `Jinwoo-H/bug-8450-ssh-relay-contracts`
+- Runner: macOS 26.2 arm64 native; Ubuntu 24.04 arm64 Docker container
+- Remote: BusyBox v1.36.1, Ubuntu package `1:1.36.1-6ubuntu3.1`; no SSH daemon
+- Transport/network: Docker stdin and Ubuntu package mirror; no SSH
+- Exact command: install BusyBox, enumerate applets, install its applet symlinks into an isolated
+  `PATH`, then run the declared `sh`/`cat`/`mkdir`/`rm`/`mv`/`chmod`/`test`/`nohup` semantic probe
+- Result: PASS for fail-conservative classification; the probe exited 127 because this BusyBox build
+  provides all declared applets except `nohup`, so it is ineligible and must select legacy
+- Duration and resource metrics: 4.6 s including package installation; one container/process stream;
+  peak memory not instrumented
+- Artifact/log/trace link: local stdout recorded
+  `BusyBox v1.36.1 (Ubuntu 1:1.36.1-6ubuntu3.1) multi-call binary`; applet inventory omitted `nohup`
+- Oracle proved: the selector cannot infer compatibility from “BusyBox 1.36.1” alone and the exact
+  declared primitive probe rejects this variant rather than attempting a partial bundled install.
+- Does not prove: Alpine's BusyBox build, BusyBox plus an external `nohup`, SSH behavior, or any
+  passing BusyBox tuple. No BusyBox bundled support is claimed.
+- Checklist items satisfied: Milestone 1 initial BusyBox variant record and deterministic disable
+  rule.
+- Follow-up: add this missing-`nohup` case to the committed selector/primitive suite and retain
+  legacy unless a complete BusyBox environment passes live SSH evidence.
+
+### E-M1-BUDGET-DECISION-001 — Fail-closed resource, timeout, and rollout budgets
+
+- Date: 2026-07-14
+- Commit SHA / PR: stacked draft PR [#8728](https://github.com/stablyai/orca/pull/8728); decision
+  change pending commit on `Jinwoo-H/bug-8450-ssh-relay-contracts`
+- Runner: documentation decision in the macOS 26.2 arm64 native worktree
+- Remote: not applicable; measured legacy and bundled baselines remain open
+- Transport/network: not applicable; the decision defines later 1/10/100 Mbps and 50/100/200 ms
+  shaped tests
+- Exact command: plan/checklist content validation plus arithmetic review of every byte/count/time
+  ceiling; no runtime benchmark is represented by this entry
+- Result: PASS for recording release-blocking upper bounds and paired comparison rules; no
+  performance gate is claimed passed
+- Duration and resource metrics: decision/content validation only; runtime metrics intentionally
+  absent until the baseline harness is implemented
+- Artifact/log/trace link: “Operational budgets and rollout policy” in this checklist and “Hard
+  resource and latency budgets” in the HTML plan
+- Oracle proved: implementation now has explicit rejection, cache, memory, concurrency, timeout,
+  cancellation, warm/cold latency, fallback-delay, and legacy-retention thresholds to test against.
+- Does not prove: that the limits fit the final full-size archive, that either implementation stays
+  below them, hosted-runner stability, or any baseline/regression result. Those boxes remain open.
+- Checklist items satisfied: Milestone 1 cache/archive/time/memory/channel/latency/fallback-duration,
+  paired-runner-method, and offline/missing-asset policy decisions.
+- Follow-up: measure legacy first, instrument file/channel/memory/cancellation metrics, and revise
+  both plan files before implementation only if evidence proves a limit infeasible.
+
+### E-M1-TRUST-DECISION-001 — Manifest and native-signing trust policy
+
+- Date: 2026-07-14
+- Commit SHA / PR: stacked draft PR [#8728](https://github.com/stablyai/orca/pull/8728); decision
+  change pending commit on `Jinwoo-H/bug-8450-ssh-relay-contracts`
+- Runner: macOS 26.2 arm64 native for local Ed25519 probe; historical native Windows Server 2022 x64
+  GitHub-hosted signing rehearsal jobs
+- Remote: not applicable; no SSH transfer or target-native execution of a relay artifact
+- Transport/network: local `tweetnacl` sign/verify plus GitHub Actions/SignPath artifact round trips
+- Exact command:
+
+  ```sh
+  rg -n 'tweetnacl|CSC_LINK|APPLE_ID|SIGNPATH|SignPath|Get-AuthenticodeSignature' package.json .github/workflows config
+  node --input-type=module <inline-tweetnacl-sign-mutate-verify-harness>
+  gh run view 28987534795 --repo stablyai/orca --json status,conclusion,createdAt,updatedAt,url,jobs
+  gh run view 28988432001 --repo stablyai/orca --json status,conclusion,createdAt,updatedAt,url,jobs
+  ```
+
+- Result: PASS for technical feasibility and existing Windows signing evidence. The local probe made
+  and verified a 64-byte Ed25519 signature with `tweetnacl`, derived the SHA-256 public-key ID, and
+  rejected a changed payload. SignPath test-policy run `28987534795` and release-policy run
+  `28988432001` both signed/restored inner PE files, rebuilt/signed the installer, and passed
+  end-to-end signature verification.
+- Duration and resource metrics: local Ed25519 probe under 0.1 s; test SignPath job 10m7s; production
+  SignPath rehearsal 17m24s; signing memory not instrumented
+- Artifact/log/trace link:
+  - https://github.com/stablyai/orca/actions/runs/28987534795/job/86019904578
+  - https://github.com/stablyai/orca/actions/runs/28988432001/job/86022677749
+- Oracle proved: the chosen signature primitive works through an already packaged dependency, and
+  the repository's existing Windows release machinery can return signed inner native bytes before
+  final packaging/hashing.
+- Does not prove: canonical serializer implementation, protected manifest environment/secret,
+  dual-key rotation, revocation, action-SHA pinning, artifact attestations, macOS relay-native
+  signing/notarization, key custody, WDAC/Gatekeeper/AV, or any signed relay runtime. Those remain
+  release-blocking implementation/operational gates.
+- Checklist items satisfied: Milestone 1 algorithm, canonical-byte, key-custody policy, rotation,
+  anti-rollback, keyless-provenance, and native macOS/Windows signing decisions only.
+- Follow-up: implement hostile-input/canonical/signature tests without real secrets, then provision
+  and rehearse the protected environment before any release workflow can sign a manifest.
+
+### E-M1-ENDPOINT-DECISION-001 — Native trust validation environment contract
+
+- Date: 2026-07-14
+- Commit SHA / PR: stacked draft PR [#8728](https://github.com/stablyai/orca/pull/8728); decision
+  change pending commit on `Jinwoo-H/bug-8450-ssh-relay-contracts`
+- Runner: documentation decision in the macOS 26.2 arm64 native worktree
+- Remote: no approved macOS 13.5, Windows Server 2022/Windows 11 arm64, or WDAC-enforced snapshot was
+  executed
+- Transport/network: not applicable
+- Exact command: repository signing-workflow inspection plus synchronized checklist/HTML content
+  validation; no endpoint-protection command is represented by this decision entry
+- Result: PASS for defining exact target-native environments and fail-closed outcomes; all execution
+  gates remain open
+- Duration and resource metrics: decision/content validation only
+- Artifact/log/trace link: Milestone 1 trust section and HTML “OS-native trust controls” risk
+- Oracle proved: future Gatekeeper/Defender/WDAC evidence has concrete OS/architecture, quarantine,
+  policy mode, identity logging, and release-blocking requirements.
+- Does not prove: snapshot/provider availability, policy ownership, actual signature acceptance,
+  antivirus behavior, native loading, PTY/watcher smoke, or any endpoint-protection pass.
+- Checklist items satisfied: Milestone 1 endpoint-protection environment decision only.
+- Follow-up: provision or approve the snapshot pool and keep every affected tuple disabled until the
+  target-native runs pass.
+
+### E-M1-DECISION-DOC-002 — Remaining Milestone 1 plan-content validation
+
+- Date: 2026-07-14
+- Commit SHA / PR: stacked draft PR [#8728](https://github.com/stablyai/orca/pull/8728); decision
+  change pending commit on `Jinwoo-H/bug-8450-ssh-relay-contracts`
+- Runner: macOS 26.2 arm64 native; Node v26.0.0 and pnpm 10.24.0
+- Remote: not applicable; documentation/content validation only
+- Transport/network: local files only
+- Exact command: purpose-built inline Node validation using `marked` and `parse5`, required-content
+  assertions for all newly recorded Milestone 1 decisions, `pnpm exec oxfmt --check` on both
+  artifacts, and `git diff --check`
+- Result: PASS; `links=1 fences=2 htmlIds=11 fragmentLinks=9`, no
+  parse/fragment/duplicate-ID/content/format/whitespace findings
+- Duration and resource metrics: structural validation 42 ms; formatter check 253 ms; resource
+  usage not instrumented
+- Artifact/log/trace link: this checklist and the linked HTML plan
+- Oracle proved: both artifacts contain synchronized legacy-family, bootstrap, BusyBox,
+  offline/fallback, numeric-budget, manifest-trust, native-signing, and endpoint-environment decisions
+  and remain structurally valid.
+- Does not prove: implementation, measured budget compliance, key provisioning, native trust, live
+  transfer, or any enabled tuple.
+- Checklist items satisfied: evidence-backed synchronization of the remaining safely decidable
+  Milestone 1 policy content.
+- Follow-up: commit this decision package, replace pending references with the exact SHA, and keep
+  unresolved operational/live gates open.
 
 ## Accepted Gaps
 
