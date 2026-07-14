@@ -1,0 +1,162 @@
+name: SSH Relay Runtime Artifacts
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/ssh-relay-runtime-artifacts.yml'
+      - 'config/patches/node-pty@1.1.0.patch'
+      - 'config/scripts/build-relay.mjs'
+      - 'config/scripts/*ssh-relay*'
+      - 'config/ssh-relay-node-release-keys/**'
+      - 'config/ssh-relay-node-release-v24.18.0.json'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'src/main/ipc/parcel-watcher-process-entry.ts'
+      - 'src/relay/**'
+  workflow_dispatch:
+
+concurrency:
+  group: ssh-relay-runtime-artifacts-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build-posix-runtime:
+    name: Build ${{ matrix.tuple }} runtime
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            tuple: linux-x64-glibc
+            node_archive: node-v24.18.0-linux-x64.tar.xz
+          - runner: ubuntu-24.04-arm
+            tuple: linux-arm64-glibc
+            node_archive: node-v24.18.0-linux-arm64.tar.xz
+          - runner: macos-15-intel
+            tuple: darwin-x64
+            node_archive: node-v24.18.0-darwin-x64.tar.xz
+          - runner: macos-15
+            tuple: darwin-arm64
+            node_archive: node-v24.18.0-darwin-arm64.tar.xz
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout exact source revision
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with:
+          # Why: artifact evidence must name the exact reviewed source, not GitHub's synthetic merge.
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6
+        with:
+          run_install: false
+
+      - name: Setup Node 24.18.0
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 24.18.0
+          cache: pnpm
+
+      - name: Record native runner identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf 'requested_runner=%s\n' '${{ matrix.runner }}'
+          printf 'resolved_image_os=%s\n' "${ImageOS:-unknown}"
+          printf 'resolved_image_version=%s\n' "${ImageVersion:-unknown}"
+          printf 'runner_arch=%s\n' "$RUNNER_ARCH"
+          printf 'runner_environment=%s\n' "$RUNNER_ENVIRONMENT"
+          uname -a
+          node --version
+          printf 'source_commit=%s\n' "$(git rev-parse HEAD)"
+
+      - name: Install Linux build and verification tools
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq build-essential ca-certificates curl gnupg gpgv python3 xz-utils
+
+      - name: Install macOS signature verifier
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          set -euo pipefail
+          brew list gnupg >/dev/null 2>&1 || brew install gnupg
+          command -v xz
+          xcodebuild -version
+
+      - name: Install source dependencies without native postinstall
+        shell: bash
+        run: |
+          set -euo pipefail
+          pnpm install --frozen-lockfile --ignore-scripts
+          git diff --exit-code package.json pnpm-lock.yaml
+
+      - name: Run runtime artifact contract tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          pnpm exec vitest run --config config/vitest.config.ts \
+            config/scripts/ssh-relay-node-release-verification.test.mjs \
+            config/scripts/ssh-relay-node-tar-inspection.test.mjs \
+            config/scripts/ssh-relay-runtime-artifact.test.mjs \
+            config/scripts/ssh-relay-runtime-workflow.test.mjs
+
+      - name: Download exact Node release inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          inputs="$RUNNER_TEMP/node-release-inputs"
+          mkdir -p "$inputs"
+          base='https://nodejs.org/dist/v24.18.0'
+          for asset in SHASUMS256.txt SHASUMS256.txt.sig '${{ matrix.node_archive }}'; do
+            curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 \
+              --connect-timeout 20 --max-time 300 --retry 2 --retry-delay 2 --retry-all-errors \
+              "$base/$asset" --output "$inputs/$asset"
+          done
+          printf 'NODE_INPUTS=%s\n' "$inputs" >> "$GITHUB_ENV"
+
+      - name: Build, inspect, and smoke exact runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          output="$RUNNER_TEMP/ssh-relay-runtime/${{ matrix.tuple }}"
+          mkdir -p "$(dirname "$output")"
+          source_commit=$(git rev-parse HEAD)
+          source_date_epoch=$(git show -s --format=%ct "$source_commit")
+          /usr/bin/time -p node config/scripts/build-ssh-relay-runtime.mjs \
+            --tuple '${{ matrix.tuple }}' \
+            --inputs-directory "$NODE_INPUTS" \
+            --output-directory "$output" \
+            --source-date-epoch "$source_date_epoch" \
+            --git-commit "$source_commit"
+          identity="$output/orca-ssh-relay-runtime-${{ matrix.tuple }}.identity.json"
+          archive=$(find "$output" -maxdepth 1 -name '*.tar.xz' -print -quit)
+          /usr/bin/time -p node config/scripts/verify-ssh-relay-runtime.mjs \
+            --runtime-directory "$output/runtime" \
+            --identity "$identity" \
+            --archive "$archive"
+          if find "$output/runtime" -type f \( -name npm -o -name npx -o -name corepack -o -name '*.map' \) -print -quit | grep -q .; then
+            echo 'Runtime contains a prohibited package manager or source map.' >&2
+            exit 1
+          fi
+          parcel_packages=$(find "$output/runtime/node_modules/@parcel" -mindepth 1 -maxdepth 1 -type d | wc -l | tr -d ' ')
+          test "$parcel_packages" = 2
+          mkdir -p "$GITHUB_WORKSPACE/runtime-evidence/${{ matrix.tuple }}"
+          cp "$output"/*.tar.xz "$output"/*.spdx.json "$output"/*.provenance.json "$output"/*.identity.json \
+            "$GITHUB_WORKSPACE/runtime-evidence/${{ matrix.tuple }}/"
+
+      - name: Upload unpublished artifact evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: ssh-relay-runtime-${{ matrix.tuple }}
+          path: runtime-evidence/${{ matrix.tuple }}/
+          if-no-files-found: error
+          retention-days: 7

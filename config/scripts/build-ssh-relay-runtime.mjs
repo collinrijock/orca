@@ -1,0 +1,234 @@
+#!/usr/bin/env node
+
+import { execFile } from 'node:child_process'
+import { mkdir, mkdtemp, readFile, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { dirname, join, resolve } from 'node:path'
+import { promisify } from 'node:util'
+
+import { buildPatchedSshRelayNodePty } from './ssh-relay-node-pty-build.mjs'
+import { extractVerifiedSshRelayNodeBuildInputs } from './ssh-relay-node-tar-inspection.mjs'
+import {
+  createSshRelayRuntimeArchive,
+  inspectSshRelayRuntimeArchive
+} from './ssh-relay-runtime-archive.mjs'
+import { writeSshRelayRuntimeMetadata } from './ssh-relay-runtime-provenance.mjs'
+import { assembleSshRelayRuntimeTree } from './ssh-relay-runtime-tree.mjs'
+import { validateSshRelayNodeReleaseContract } from './ssh-relay-node-release-verification.mjs'
+import { verifyNodeReleaseInputs } from './verify-ssh-relay-node-release-inputs.mjs'
+
+const execFileAsync = promisify(execFile)
+const scriptDirectory = import.meta.dirname
+const projectRoot = resolve(scriptDirectory, '..', '..')
+const defaultContractPath = resolve(projectRoot, 'config', 'ssh-relay-node-release-v24.18.0.json')
+const SUPPORTED_TUPLES = new Set([
+  'linux-x64-glibc',
+  'linux-arm64-glibc',
+  'darwin-x64',
+  'darwin-arm64'
+])
+const BUILD_COMMAND_TIMEOUT_MS = 10 * 60 * 1000
+
+function valueAfter(argv, index, flag) {
+  const value = argv[index + 1]
+  if (!value || value.startsWith('--')) {
+    throw new Error(`${flag} requires a value`)
+  }
+  return value
+}
+
+export function parseBuildArguments(argv) {
+  const result = { contractPath: defaultContractPath }
+  for (let index = 0; index < argv.length; index += 1) {
+    const flag = argv[index]
+    const value = valueAfter(argv, index, flag)
+    if (flag === '--tuple') {
+      result.tuple = value
+    } else if (flag === '--inputs-directory') {
+      result.inputsDirectory = resolve(value)
+    } else if (flag === '--output-directory') {
+      result.outputDirectory = resolve(value)
+    } else if (flag === '--contract') {
+      result.contractPath = resolve(value)
+    } else if (flag === '--source-date-epoch') {
+      result.sourceDateEpoch = Number(value)
+    } else if (flag === '--git-commit') {
+      result.gitCommit = value
+    } else {
+      throw new Error(`Unknown argument: ${flag}`)
+    }
+    index += 1
+  }
+  for (const field of [
+    'tuple',
+    'inputsDirectory',
+    'outputDirectory',
+    'sourceDateEpoch',
+    'gitCommit'
+  ]) {
+    if (result[field] === undefined) {
+      throw new Error(`Missing required build argument: ${field}`)
+    }
+  }
+  if (!SUPPORTED_TUPLES.has(result.tuple)) {
+    throw new Error(`Unsupported runtime build tuple: ${result.tuple}`)
+  }
+  if (!Number.isSafeInteger(result.sourceDateEpoch) || result.sourceDateEpoch < 0) {
+    throw new Error('--source-date-epoch must be a non-negative safe integer')
+  }
+  if (!/^[0-9a-f]{40}$/.test(result.gitCommit)) {
+    throw new Error('--git-commit must be a full lowercase SHA-1')
+  }
+  return result
+}
+
+function assertTargetNative(tuple) {
+  const os = tuple.startsWith('linux-') ? 'linux' : 'darwin'
+  const architecture = tuple.includes('arm64') ? 'arm64' : 'x64'
+  if (process.platform !== os || process.arch !== architecture) {
+    throw new Error(`Runtime ${tuple} must be assembled on target-native ${os}/${architecture}`)
+  }
+  if (os === 'linux') {
+    const glibc = process.report?.getReport?.().header?.glibcVersionRuntime
+    if (typeof glibc !== 'string' || glibc.length === 0) {
+      throw new Error(`Runtime ${tuple} requires a native glibc build environment`)
+    }
+  }
+}
+
+async function run(command, args, options = {}) {
+  const result = await execFileAsync(command, args, {
+    ...options,
+    encoding: 'utf8',
+    maxBuffer: 16 * 1024 * 1024,
+    timeout: options.timeout ?? BUILD_COMMAND_TIMEOUT_MS,
+    windowsHide: true
+  })
+  if (result.stdout) {
+    process.stdout.write(result.stdout)
+  }
+  if (result.stderr) {
+    process.stderr.write(result.stderr)
+  }
+  return result.stdout.trim()
+}
+
+async function toolchainDetails(nodePath) {
+  const commands = [
+    ['bundledNode', nodePath, ['--version']],
+    ['xz', 'xz', ['--version']],
+    ['compiler', process.platform === 'win32' ? 'cl.exe' : 'c++', ['--version']],
+    [
+      'strip',
+      process.platform === 'darwin'
+        ? 'xcrun'
+        : process.platform === 'win32'
+          ? 'llvm-strip.exe'
+          : 'strip',
+      process.platform === 'darwin' ? ['--find', 'strip'] : ['--version']
+    ],
+    ['python', process.platform === 'win32' ? 'python.exe' : 'python3', ['--version']]
+  ]
+  const details = {}
+  for (const [name, command, args] of commands) {
+    details[name] = (await run(command, args)).split(/\r?\n/)[0]
+  }
+  details.buildNode = process.version
+  return details
+}
+
+function relayPlatform(tuple) {
+  return tuple.replace('-glibc', '')
+}
+
+export async function buildSshRelayRuntime(options) {
+  const started = process.hrtime.bigint()
+  assertTargetNative(options.tuple)
+  const release = validateSshRelayNodeReleaseContract(
+    JSON.parse(await readFile(options.contractPath, 'utf8'))
+  )
+  await verifyNodeReleaseInputs({
+    contractPath: options.contractPath,
+    inputsDirectory: options.inputsDirectory,
+    archiveTuples: [options.tuple]
+  })
+  const workDirectory = await mkdtemp(join(tmpdir(), `orca-runtime-${options.tuple}-`))
+  // Why: the final directory is still created exclusively, but callers need not pre-create parents.
+  await mkdir(dirname(options.outputDirectory), { recursive: true })
+  await mkdir(options.outputDirectory)
+  try {
+    await run(process.execPath, [resolve(scriptDirectory, 'build-relay.mjs')], { cwd: projectRoot })
+    const extractedDirectory = join(workDirectory, 'node-inputs')
+    const extracted = await extractVerifiedSshRelayNodeBuildInputs(
+      release,
+      options.tuple,
+      join(options.inputsDirectory, release.archives[options.tuple].name),
+      extractedDirectory
+    )
+    const bundledVersion = await run(extracted.nodePath, ['--version'])
+    if (bundledVersion !== `v${release.nodeVersion}`) {
+      throw new Error(`Bundled Node version mismatch: ${bundledVersion}`)
+    }
+    const nodePty = await buildPatchedSshRelayNodePty({
+      projectRoot,
+      nodePath: extracted.nodePath,
+      nodeRoot: extracted.extractedRoot,
+      nodeVersion: release.nodeVersion,
+      tuple: options.tuple,
+      buildDirectory: join(workDirectory, 'node-pty')
+    })
+    const runtimeRoot = join(options.outputDirectory, 'runtime')
+    const identity = await assembleSshRelayRuntimeTree({
+      tuple: options.tuple,
+      nodeRoot: extracted.extractedRoot,
+      nodePtyBuildDirectory: nodePty.buildDirectory,
+      relayDirectory: resolve(projectRoot, 'out', 'relay', relayPlatform(options.tuple)),
+      runtimeRoot,
+      nodeVersion: release.nodeVersion
+    })
+    const archive = await createSshRelayRuntimeArchive({
+      runtimeRoot,
+      outputDirectory: options.outputDirectory,
+      identity,
+      sourceDateEpoch: options.sourceDateEpoch
+    })
+    const inspection = await inspectSshRelayRuntimeArchive(archive.path, identity)
+    const toolchain = await toolchainDetails(extracted.nodePath)
+    const metadata = await writeSshRelayRuntimeMetadata({
+      outputDirectory: options.outputDirectory,
+      identity,
+      archive,
+      nodeRelease: release,
+      sourceDateEpoch: options.sourceDateEpoch,
+      gitCommit: options.gitCommit,
+      builder: process.env.GITHUB_WORKFLOW_REF ?? `local://${process.platform}/${process.arch}`,
+      toolchain
+    })
+    return {
+      tuple: options.tuple,
+      contentId: identity.contentId,
+      archive,
+      inspection,
+      metadata,
+      toolchain,
+      durationMs: Number(process.hrtime.bigint() - started) / 1e6
+    }
+  } catch (error) {
+    await rm(options.outputDirectory, { recursive: true, force: true })
+    throw error
+  } finally {
+    await rm(workDirectory, { recursive: true, force: true })
+  }
+}
+
+async function main() {
+  const result = await buildSshRelayRuntime(parseBuildArguments(process.argv.slice(2)))
+  process.stdout.write(`${JSON.stringify(result, null, 2)}\n`)
+}
+
+if (process.argv[1] && resolve(process.argv[1]) === import.meta.filename) {
+  main().catch((error) => {
+    process.stderr.write(`SSH relay runtime build failed: ${error.message}\n`)
+    process.exitCode = 1
+  })
+}

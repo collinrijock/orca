@@ -60,6 +60,12 @@ same change as the work it records.
 - Active package: Work Package 2 target-native runtime assembly, archive inspection, executable
   smoke, SBOM, and provenance only. It may produce test artifacts but must not publish, resolve,
   transfer, install, launch, or enable them.
+- Active evidence gate: the immutable Node v24.18.0 contract, pinned release key, bounded verifier,
+  and artifact-only CLI are locally green under E-M3-NODE-RED-001 and E-M3-NODE-PROVENANCE-001.
+  E-M3-RUNTIME-LOCAL-001 additionally proves one unpublished Linux arm64 glibc assembly, exact-tree
+  archive inspection, deterministic repack, bundled Node 24.18.0 execution, real patched PTY, and
+  watcher events. E-M3-STATIC-001 records the current focused, type, lint, format, line-budget, and
+  diff gates. Oldest-baseline, native-trust, SSH, and every other tuple cell remain open.
 - Production behavior: unchanged; Orca embeds relay JavaScript and installs `node-pty` plus
   `@parcel/watcher` with remote npm.
 - New runtime assets published: none.
@@ -72,10 +78,10 @@ same change as the work it records.
 - Rollout control: existing per-SSH-target configuration; legacy is the default and the bundled
   runtime is an explicit per-target Beta opt-in under E-M1-ROLLOUT-DECISION-001.
 - Legacy fallback removal: not authorized.
-- Next required action: create the isolated stacked Work Package 2 branch/PR and implement the first
-  target-native runtime assembly plus archive inspection and executable smoke without publication or
-  production consumption. Keep cross-family remote infrastructure and measured legacy baseline gates
-  open and do not introduce resolver, transfer, rollout, or default behavior.
+- Next required action: run the isolated four-tuple POSIX artifact workflow on the exact draft-PR
+  head and record each native GitHub runner result. Keep Windows runtime/zip implementation,
+  cross-family remote infrastructure, signing/trust, and measured legacy baseline gates open; do not
+  introduce publication, resolver, transfer, rollout, tuple enablement, or default behavior.
 
 ## Non-Negotiable Invariants
 
@@ -541,9 +547,11 @@ Each runtime must contain only the executable closure required by the relay.
 
 - [ ] Replace or extend `config/scripts/build-relay.mjs` without weakening its existing relay and
       watcher content-hash guarantees.
-- [ ] Add a clearly named runtime assembly script, for example
+- [x] Add a clearly named runtime assembly script, for example
       `config/scripts/build-ssh-relay-runtime.mjs`.
-- [ ] Pin Node and verify downloaded source/binary checksums and upstream signatures.
+      (E-M3-RUNTIME-LOCAL-001)
+- [x] Pin Node and verify downloaded source/binary checksums and upstream signatures.
+      (E-M3-NODE-PROVENANCE-001; real archive execution remains a separate per-tuple gate)
 - [ ] Build Orca’s patched `node-pty@1.1.0` against the exact bundled Node runtime.
 - [ ] Assert Orca-required patched exports/diagnostics exist; do not silently use an upstream
       prebuild that omits the patch.
@@ -551,26 +559,30 @@ Each runtime must contain only the executable closure required by the relay.
 - [ ] Include relay JavaScript, watcher child, required runtime JavaScript closure, licenses, SBOM,
       provenance, and runtime metadata.
 - [ ] Exclude package managers, development dependencies, compilers, sources, caches, build
-      directories, and debug symbols unless an approved diagnostics requirement needs them.
-- [ ] Make archive output deterministic or document and isolate unavoidable nondeterminism.
-- [ ] Verify required executable modes before archiving.
+      directories, and Orca-built debug symbols unless an approved diagnostics requirement needs
+      them. Preserve verified official Node executable bytes without stripping or rewriting them,
+      even when the upstream binary contains debug metadata.
+- [x] Make POSIX `tar.xz` output deterministic for the same tree, epoch, and pinned compression
+      toolchain; keep Windows zip determinism as an open per-tuple gate. (E-M3-RUNTIME-LOCAL-001)
+- [x] Verify required executable modes before archiving. (E-M3-RUNTIME-LOCAL-001)
 - [ ] Sign native code according to the platform decisions in Milestone 1.
 - [ ] Verify platform-native signatures/policy on target-native runners after signing and before
       aggregation; attest the exact verified bytes for the signed manifest.
-- [ ] Run local archive inspection and target-runtime smoke before upload.
+- [x] Run local POSIX archive inspection and target-runtime smoke before any upload; Windows remains
+      open until its separate builder/verifier exists. (E-M3-RUNTIME-LOCAL-001)
 
 ### Per-tuple build and executable proof
 
-| Runtime tuple     | Build/provenance | Bundled Node | `node-pty` load + real PTY | Watcher events | Oldest baseline | Native trust | Evidence |
-| ----------------- | ---------------- | ------------ | -------------------------- | -------------- | --------------- | ------------ | -------- |
-| linux-x64-glibc   | [ ]              | [ ]          | [ ]                        | [ ]            | [ ]             | [ ]          | —        |
-| linux-arm64-glibc | [ ]              | [ ]          | [ ]                        | [ ]            | [ ]             | [ ]          | —        |
-| linux-x64-musl    | [ ]              | [ ]          | [ ]                        | [ ]            | [ ]             | [ ]          | —        |
-| linux-arm64-musl  | [ ]              | [ ]          | [ ]                        | [ ]            | [ ]             | [ ]          | —        |
-| darwin-x64        | [ ]              | [ ]          | [ ]                        | [ ]            | [ ]             | [ ]          | —        |
-| darwin-arm64      | [ ]              | [ ]          | [ ]                        | [ ]            | [ ]             | [ ]          | —        |
-| win32-x64         | [ ]              | [ ]          | [ ]                        | [ ]            | [ ]             | [ ]          | —        |
-| win32-arm64       | [ ]              | [ ]          | [ ]                        | [ ]            | [ ]             | [ ]          | —        |
+| Runtime tuple     | Build/provenance | Bundled Node | `node-pty` load + real PTY | Watcher events | Oldest baseline | Native trust | Evidence               |
+| ----------------- | ---------------- | ------------ | -------------------------- | -------------- | --------------- | ------------ | ---------------------- |
+| linux-x64-glibc   | [ ]              | [ ]          | [ ]                        | [ ]            | [ ]             | [ ]          | —                      |
+| linux-arm64-glibc | [x]              | [x]          | [x]                        | [x]            | [ ]             | [ ]          | E-M3-RUNTIME-LOCAL-001 |
+| linux-x64-musl    | [ ]              | [ ]          | [ ]                        | [ ]            | [ ]             | [ ]          | —                      |
+| linux-arm64-musl  | [ ]              | [ ]          | [ ]                        | [ ]            | [ ]             | [ ]          | —                      |
+| darwin-x64        | [ ]              | [ ]          | [ ]                        | [ ]            | [ ]             | [ ]          | —                      |
+| darwin-arm64      | [ ]              | [ ]          | [ ]                        | [ ]            | [ ]             | [ ]          | —                      |
+| win32-x64         | [ ]              | [ ]          | [ ]                        | [ ]            | [ ]             | [ ]          | —                      |
+| win32-arm64       | [ ]              | [ ]          | [ ]                        | [ ]            | [ ]             | [ ]          | —                      |
 
 Rules:
 
@@ -1119,16 +1131,16 @@ Baseline measurements must be captured before product behavior changes.
 
 Update status and evidence as work begins. Do not combine these into one large behavior switch.
 
-| Work package              | Scope                                                                                      | Default behavior change     | Status                                  | PR/evidence                                                             |
-| ------------------------- | ------------------------------------------------------------------------------------------ | --------------------------- | --------------------------------------- | ----------------------------------------------------------------------- |
-| 0. #8450 legacy fix       | Coherent Node/npm selection and live repro                                                 | Fixes legacy selection only | Complete and CI-green in draft PR #8724 | E-M0-UNIT-002, E-M0-LIVE-002, E-M0-STATIC-002, E-M0-PR-001, E-M0-CI-001 |
-| 1. Contract and selectors | Manifest schema, identity, platform/libc selection, hostile inputs                         | None                        | Complete and CI-green in draft PR #8728 | `b9d80a4cb`; E-M2-RED-001, E-M2-CONTRACT-001, E-M2-CI-001               |
-| 2. Runtime builds         | Per-tuple assembly, native smoke, SBOM/provenance/signing                                  | None                        | In progress                             | No implementation evidence yet                                          |
-| 3. Release publication    | Prerequisite DAG, embedded manifest, draft upload/read-back gates                          | Asset-only                  | Not started                             | —                                                                       |
-| 4. Desktop resolver/cache | Verified download, extraction, cache, offline behavior                                     | None/forced mode only       | Not started                             | —                                                                       |
-| 5. Transfer/install       | Bounded transports, structured sentinel, bundled launch behind per-target Beta/forced mode | Per-target opt-in only      | Not started                             | —                                                                       |
-| 6. Fallback/diagnostics   | Abort-and-join state machine, mode isolation, reason codes, target-mode configuration/UI   | Per-target Beta only        | Not started                             | —                                                                       |
-| 7. Live gates/rollout     | Matrix, security, performance, release promotion                                           | Per-tuple staged            | Not started                             | —                                                                       |
+| Work package              | Scope                                                                                      | Default behavior change     | Status                                   | PR/evidence                                                             |
+| ------------------------- | ------------------------------------------------------------------------------------------ | --------------------------- | ---------------------------------------- | ----------------------------------------------------------------------- |
+| 0. #8450 legacy fix       | Coherent Node/npm selection and live repro                                                 | Fixes legacy selection only | Complete and CI-green in draft PR #8724  | E-M0-UNIT-002, E-M0-LIVE-002, E-M0-STATIC-002, E-M0-PR-001, E-M0-CI-001 |
+| 1. Contract and selectors | Manifest schema, identity, platform/libc selection, hostile inputs                         | None                        | Complete and CI-green in draft PR #8728  | `b9d80a4cb`; E-M2-RED-001, E-M2-CONTRACT-001, E-M2-CI-001               |
+| 2. Runtime builds         | Per-tuple assembly, native smoke, SBOM/provenance/signing                                  | None                        | In progress; one local POSIX tuple green | E-M3-NODE-RED-001, E-M3-NODE-PROVENANCE-001, E-M3-RUNTIME-LOCAL-001, E-M3-STATIC-001 |
+| 3. Release publication    | Prerequisite DAG, embedded manifest, draft upload/read-back gates                          | Asset-only                  | Not started                              | —                                                                       |
+| 4. Desktop resolver/cache | Verified download, extraction, cache, offline behavior                                     | None/forced mode only       | Not started                              | —                                                                       |
+| 5. Transfer/install       | Bounded transports, structured sentinel, bundled launch behind per-target Beta/forced mode | Per-target opt-in only      | Not started                              | —                                                                       |
+| 6. Fallback/diagnostics   | Abort-and-join state machine, mode isolation, reason codes, target-mode configuration/UI   | Per-target Beta only        | Not started                              | —                                                                       |
+| 7. Live gates/rollout     | Matrix, security, performance, release promotion                                           | Per-tuple staged            | Not started                              | —                                                                       |
 
 Every PR must document:
 
@@ -1170,11 +1182,18 @@ focused commands as their scripts/tests are introduced.
 - [x] `pnpm exec vitest run --config config/vitest.config.ts src/main/ssh/ssh-remote-node-toolchain-resolution.test.ts` (E-M0-UNIT-001)
 - [x] `pnpm run test:e2e:ssh-node-toolchain-resolution` (E-M0-LIVE-001)
 
+### Milestone 3 commands added
+
+- [x] `pnpm exec vitest run --config config/vitest.config.ts config/scripts/ssh-relay-node-release-verification.test.mjs` (E-M3-NODE-RED-001, E-M3-NODE-PROVENANCE-001)
+- [x] `node config/scripts/verify-ssh-relay-node-release-inputs.mjs --inputs-directory <verified-input-directory> --archive linux-x64-glibc` (E-M3-NODE-PROVENANCE-001; metadata and archive verification only)
+- [x] `node config/scripts/build-ssh-relay-runtime.mjs --tuple linux-arm64-glibc --inputs-directory <verified-input-directory> --output-directory <exclusive-output> --source-date-epoch <epoch> --git-commit <full-sha>` (E-M3-RUNTIME-LOCAL-001; local native Linux arm64 only)
+- [x] `node config/scripts/verify-ssh-relay-runtime.mjs --runtime-directory <runtime-tree> --identity <identity.json> --archive <runtime.tar.xz>` (E-M3-RUNTIME-LOCAL-001; local native Linux arm64 only)
+
 ### Commands/scripts that must be added or formally identified
 
 - [x] Manifest/schema/identity/signature/selector unit-test command. (E-M2-CONTRACT-001)
-- [ ] Per-tuple runtime assembly command.
-- [ ] Per-tuple archive inspection and native smoke command.
+- [x] Per-tuple POSIX runtime assembly command. (E-M3-RUNTIME-LOCAL-001; Windows command remains open)
+- [x] Per-tuple POSIX archive inspection and native smoke command. (E-M3-RUNTIME-LOCAL-001; Windows command remains open)
 - [ ] Embedded-manifest extraction/comparison command for every packaged app.
 - [ ] Draft release relay-asset completeness/read-back command.
 - [ ] Release-DAG failure rehearsal covering native signing, aggregate, timeout/retry/manual approval,
@@ -2168,6 +2187,213 @@ fragmentLinks=9`.
 - Follow-up: keep PR #8728 draft and isolated; begin Work Package 2 on a new stacked branch with no
   production consumer.
 
+### E-M3-NODE-RED-001 — Node release verifier red gate
+
+- Date: 2026-07-14
+- Commit SHA / PR: `0c299fe189310b6dbd539f0f0f506b240524ba6a` plus uncommitted Work Package 2 test; no Work Package 2 PR yet
+- Runner: macOS 26.2 arm64 native; Node v26.0.0 and pnpm 10.24.0
+- Remote: not applicable; local test discovery only
+- Transport/network: none
+- Exact command:
+
+  ```sh
+  pnpm exec vitest run --config config/vitest.config.ts \
+    config/scripts/ssh-relay-node-release-verification.test.mjs
+  ```
+
+- Result: expected FAIL before implementation. Vitest could not import the intentionally missing
+  `config/scripts/ssh-relay-node-release-verification.mjs`; one suite failed before collecting tests.
+- Duration and resource metrics: 136 ms Vitest duration; archive/runtime resources do not apply.
+- Artifact/log/trace link: durable test path above; local command output retained in the
+  implementation session.
+- Oracle proved: the focused suite was discriminating before the verifier facade and domain modules
+  existed.
+- Does not prove: any validation behavior, cryptographic verification, downloaded byte, archive,
+  extraction, runtime execution, SSH behavior, or platform tuple.
+- Checklist items satisfied: red half of the Milestone 3 Node provenance implementation gate only.
+- Follow-up: green implementation and real release-input proof are recorded in
+  E-M3-NODE-PROVENANCE-001.
+
+### E-M3-NODE-PROVENANCE-001 — Pinned Node metadata and archive verification
+
+- Date: 2026-07-14
+- Commit SHA / PR: `0c299fe189310b6dbd539f0f0f506b240524ba6a` plus uncommitted Work Package 2 implementation; no Work Package 2 PR yet
+- Runner: focused tests on macOS 26.2 arm64 with Node v26.0.0/pnpm 10.24.0; real proof in
+  Docker Engine 29.2.1 on Linux/arm64 using `node:24-bookworm` resolved to
+  `node@sha256:032e78d7e54e352129831743737e3a83171d9cc5b5896f411649c597ce0b11ea`,
+  Node v24.17.0, and GnuPG/gpgv 2.2.40
+- Remote: not applicable; local container build-input verification only
+- Transport/network: HTTPS downloads from exact `https://nodejs.org/dist/v24.18.0/` URLs; Debian
+  package mirrors supplied `ca-certificates`, `curl`, `gnupg`, and `gpgv`; no SSH transport
+- Exact command:
+
+  ```sh
+  pnpm exec vitest run --config config/vitest.config.ts \
+    config/scripts/ssh-relay-node-release-verification.test.mjs
+
+  docker run --rm -v "$PWD:/workspace:ro" -w /workspace node:24-bookworm \
+    bash -lc 'set -euo pipefail
+      apt-get update -qq
+      DEBIAN_FRONTEND=noninteractive apt-get install -y -qq ca-certificates curl gnupg gpgv >/dev/null
+      mkdir -p /tmp/node-inputs
+      curl --fail --silent --show-error --location --proto "=https" --tlsv1.2 https://nodejs.org/dist/v24.18.0/SHASUMS256.txt --output /tmp/node-inputs/SHASUMS256.txt
+      curl --fail --silent --show-error --location --proto "=https" --tlsv1.2 https://nodejs.org/dist/v24.18.0/SHASUMS256.txt.sig --output /tmp/node-inputs/SHASUMS256.txt.sig
+      curl --fail --silent --show-error --location --proto "=https" --tlsv1.2 https://nodejs.org/dist/v24.18.0/node-v24.18.0-linux-x64.tar.xz --output /tmp/node-inputs/node-v24.18.0-linux-x64.tar.xz
+      node config/scripts/verify-ssh-relay-node-release-inputs.mjs --inputs-directory /tmp/node-inputs --archive linux-x64-glibc'
+  ```
+
+- Result: PASS. Seven focused tests passed. The real verifier accepted the pinned release-key hash
+  `84b1ca614406f341cb86e72920f5a64687a13ab67ab84038bcf2abba97898a84`, exact signer
+  `C82FA3AE1CBEDC6BE46B9360C43CEC45C17AB93C`, authenticated checksum-document hash
+  `3927bab574a00ca0560c9583fe19655ba19603a1c5851414e4325d34ac50e469`, all six pinned
+  checksum entries, and the 31,511,588-byte Linux x64 archive hash
+  `55aa7153f9d88f28d765fcdad5ae6945b5c0f98a36881703817e4c450fa76742`.
+- Duration and resource metrics: final focused Vitest duration 160 ms; container provisioning,
+  metadata download, archive download, and verification completed in approximately 11 seconds.
+  Peak memory and network bytes were not instrumented; the accepted archive size was 31,511,588
+  bytes and hashing was streaming/bounded.
+- Artifact/log/trace link: committed contract, pinned ASCII release key, purpose-named verifier
+  modules/CLI, and local command output; no artifact was published or retained in the repository.
+- Oracle proved: strict immutable six-tuple contract validation; bounded metadata/archive hashing;
+  exact release-key bytes; detached-signature success through gpgv; exact signer fingerprint;
+  authenticated checksum-to-archive cross-checking; duplicate/malformed/missing/mismatched input
+  rejection in focused tests; and one real official Linux x64 archive byte hash.
+- Does not prove: archive safety or extraction, Linux x64 execution (the container was arm64), any
+  bundled Node/native dependency/PTY/watcher behavior, the other five archive downloads, target-native
+  assembly/signing, SSH transfer, release publication, cache behavior, or any enabled tuple.
+- Checklist items satisfied: Milestone 3 pinned Node/downloaded-binary checksum/upstream-signature
+  implementation gate and the two Milestone 3 verification-command inventory entries only.
+- Follow-up: assemble the first runtime on a target-native runner, inspect its archive, execute its
+  bundled Node and native dependencies, then fill only the evidence cells actually proved.
+
+### E-M3-RUNTIME-LOCAL-001 — First target-native Linux arm64 runtime artifact
+
+- Date: 2026-07-14
+- Commit SHA / PR: `0c299fe189310b6dbd539f0f0f506b240524ba6a` plus uncommitted Work
+  Package 2 implementation; no Work Package 2 PR yet
+- Runner: macOS 26.2 arm64 host with Docker Engine 29.2.1; native Linux/arm64 container
+  `node@sha256:032e78d7e54e352129831743737e3a83171d9cc5b5896f411649c597ce0b11ea`
+  (Debian bookworm, build Node v24.17.0), bundled Node v24.18.0 ABI 137, Python 3.11.2, GNU
+  C++ 12.2.0, GNU strip 2.40, XZ Utils 5.4.1, GnuPG/gpgv 2.2.40
+- Remote: none; native container artifact build/execution only, not an SSH host or oldest-baseline VM
+- Transport/network: exact HTTPS downloads from `nodejs.org/dist/v24.18.0`; Debian package mirrors
+  for build/signature-verification tools; no SSH, SFTP, system SSH, release upload, or remote egress
+- Exact command:
+
+  ```sh
+  docker run --rm \
+    -v "$PWD:/workspace" \
+    -v /tmp/orca-runtime-linux-arm64-v3:/evidence \
+    -w /workspace \
+    node@sha256:032e78d7e54e352129831743737e3a83171d9cc5b5896f411649c597ce0b11ea \
+    bash -lc 'set -euo pipefail
+      apt-get update -qq
+      DEBIAN_FRONTEND=noninteractive apt-get install -y -qq build-essential ca-certificates curl gnupg gpgv python3 xz-utils >/dev/null
+      mkdir -p /tmp/node-inputs
+      base=https://nodejs.org/dist/v24.18.0
+      for asset in SHASUMS256.txt SHASUMS256.txt.sig node-v24.18.0-linux-arm64.tar.xz; do
+        curl --fail --silent --show-error --location --proto "=https" --tlsv1.2 \
+          --connect-timeout 20 --max-time 300 --retry 2 --retry-delay 2 --retry-all-errors \
+          "$base/$asset" --output "/tmp/node-inputs/$asset"
+      done
+      output=/evidence/new-parent/artifact
+      node config/scripts/build-ssh-relay-runtime.mjs --tuple linux-arm64-glibc --inputs-directory /tmp/node-inputs --output-directory "$output" --source-date-epoch 1784030321 --git-commit 0c299fe189310b6dbd539f0f0f506b240524ba6a
+      identity="$output/orca-ssh-relay-runtime-linux-arm64-glibc.identity.json"
+      archive=$(find "$output" -maxdepth 1 -name "*.tar.xz" -print -quit)
+      node config/scripts/verify-ssh-relay-runtime.mjs --runtime-directory "$output/runtime" --identity "$identity" --archive "$archive"'
+  ```
+
+  A second clean `createSshRelayRuntimeArchive` invocation used the same runtime tree,
+  `SOURCE_DATE_EPOCH`, container digest, Node tar implementation, and XZ 5.4.1, followed by `cmp`
+  and `sha256sum` against the first archive.
+
+- Result: PASS. The target-native build authenticated the official Node metadata/archive, inspected
+  5,774 upstream tar entries before selective extraction, executed Node v24.18.0, source-built
+  Orca-patched `node-pty@1.1.0` against the exact Node 24 headers, stripped the resulting Linux
+  addon, copied exactly one Linux arm64 glibc watcher native package, and preserved the existing
+  relay/watcher content hash. Full archive and unpacked-tree verification agreed on content ID
+  `sha256:cf0acba7a8839d5ee422755562ce30ffa4433a663991054d0b5d9681ebc54832`.
+  The bundled runtime produced PTY input, 101×37 resize, and exit code 23 plus watcher create,
+  update, rename-as-delete/create, and delete events. The same tree repacked byte-for-byte
+  identically: both archives hashed to
+  `sha256:b1b9857a42d45a068f03f2484f98fcebe82b3d21ddd53eac7d0bdabf494a7f9e`.
+- Duration and resource metrics: exclusive artifact staging to finalized identity took 138.666
+  seconds based on output birth/finalization timestamps; deterministic repack compression took
+  approximately 109 seconds; full archive/tree/native verification took 3,746.221 ms; bundled
+  PTY/watcher smoke took 248.879 ms with 35,328,000-byte RSS. The archive is 28,192,132 bytes,
+  expands to 122,865,156 bytes, and contains 34 files/49 total entries. Build peak memory, open-file
+  count, and cancellation settlement were not instrumented and remain CI follow-ups. After adding
+  bounded native-command/xz execution, compressed-size prechecks, exact mode verification, frozen
+  installs, and automatic parent creation, a fresh build into the previously absent
+  `/evidence/new-parent/artifact` completed in 89,580.560 ms and retained the exact content/archive
+  hashes above; verification took 3,515.039 ms and smoke took 192.609 ms with 34,885,632-byte RSS.
+- Artifact/log/trace link: unpublished local artifact directory
+  `/tmp/orca-runtime-linux-arm64-v3/new-parent/artifact`; archive hash above; SBOM hash
+  `sha256:27f81b5650b088dc8e01563b0229c978f8ea05828e90a1a4fd0d11640d6cc54a`;
+  provenance hash
+  `sha256:dc1433c481b57de44929248ddb033f2a35bfdb40fc32d9f442b9d8f8ed7f816c`;
+  identity hash
+  `sha256:95b4ca6bcce846c65c6b15c35df548db0598d8156aee1c54c196b95f998824a6`.
+- Oracle proved: one native Linux arm64 glibc artifact-only build; exact official Node signature and
+  archive input; bounded source-tar inspection; exclusive selective extraction; Node-ABI-matched
+  patched `node-pty`; one correct watcher package; runtime-only JavaScript/license closure; SPDX
+  SBOM/provenance/identity assets; executable modes; deterministic `tar.xz`; exact archive/tree
+  hashes; and direct bundled Node/native PTY/watcher execution before any upload.
+- Does not prove: GitHub runner reproducibility, Linux x64, macOS, Windows/zip, musl, oldest glibc or
+  kernel, native code signing/trust, quarantine/Gatekeeper/WDAC/AV, SSH/SFTP/system-SSH transfer,
+  relay RPC conformance, cancellation/file-handle/peak-memory budgets, release publication, cache,
+  fallback, UI, or any enabled tuple. Docker Desktop architecture is native arm64 but this is not an
+  approved oldest-baseline or cross-family remote cell. The verified official Node binary reports
+  upstream debug metadata and was intentionally preserved byte-for-byte; only Orca-built
+  `pty.node` was stripped. Both plan artifacts now state that precedence explicitly.
+- Checklist items satisfied: named assembly script; POSIX deterministic archive; pre-archive mode
+  verification; local POSIX archive/smoke commands; Linux arm64 build/provenance, bundled Node,
+  patched real PTY, and watcher cells only.
+- Follow-up: run `.github/workflows/ssh-relay-runtime-artifacts.yml` on the exact draft-PR head,
+  record resolved runner image identities and artifacts, implement Windows zip/native assembly
+  separately, and leave every tuple disabled until oldest-baseline, trust, and both live SSH layers
+  are complete.
+
+### E-M3-STATIC-001 — Work Package 2 focused and repository static gates
+
+- Date: 2026-07-14
+- Commit SHA / PR: `0c299fe189310b6dbd539f0f0f506b240524ba6a` plus uncommitted Work
+  Package 2 implementation; no Work Package 2 PR yet
+- Runner: macOS 26.2 arm64; Node v26.0.0 and pnpm 10.24.0
+- Remote and transport: not applicable; local source/static verification only
+- Exact commands:
+
+  ```sh
+  pnpm exec vitest run --config config/vitest.config.ts \
+    config/scripts/ssh-relay-node-release-verification.test.mjs \
+    config/scripts/ssh-relay-node-tar-inspection.test.mjs \
+    config/scripts/ssh-relay-runtime-artifact.test.mjs \
+    config/scripts/ssh-relay-runtime-workflow.test.mjs
+  pnpm run typecheck
+  pnpm run lint
+  pnpm exec oxfmt --check .github/workflows/ssh-relay-runtime-artifacts.yml \
+    config/scripts/*ssh-relay* config/ssh-relay-node-release-v24.18.0.json
+  pnpm run check:max-lines-ratchet
+  git diff --check
+  ```
+
+- Result: PASS. Four focused suites passed 15/15 tests in 993 ms; typecheck passed; repository lint
+  passed with only pre-existing warnings outside Work Package 2; formatting passed for 20 matched
+  files; max-lines reported 355 grandfathered suppressions and no new bypass; diff check passed.
+- Duration and resource metrics: full lint completed in 20.438 seconds. Peak memory, open files, and
+  cancellation settlement were not instrumented by these static commands.
+- Artifact/log/trace link: purpose-named tests and local command output; durable GitHub job links are
+  pending the draft PR.
+- Oracle proved: hostile release-input/archive cases, canonical identity parity, deterministic
+  archive/exact-tree and permission rejection, workflow runner/action/no-publication/frozen-install
+  contracts, compilation, repository lint policy, formatting, line budget, and whitespace safety.
+- Does not prove: Node 24 source-tool execution, target-native runners beyond E-M3-RUNTIME-LOCAL-001,
+  macOS/x64, signing/trust, oldest baselines, SSH transfer, relay RPCs, publication, cancellation
+  settlement, or any enabled tuple. The exact workflow head and Node 24 gates require PR CI.
+- Checklist items satisfied: current Work Package 2 local handoff/static gate only.
+- Follow-up: create the isolated stacked draft PR, run the four target-native POSIX jobs, and replace
+  uncommitted/local evidence with exact commit, run, job, image, artifact, and duration identifiers.
+
 ## Accepted Gaps
 
 No product gap is accepted merely because it appears in this list. Each entry requires explicit
@@ -2175,8 +2401,9 @@ owner and promotion condition.
 
 | Gap                                        | Current behavior                                                        | Risk                                           | Owner                                                   | Promotion/removal condition                                                   | Status       |
 | ------------------------------------------ | ----------------------------------------------------------------------- | ---------------------------------------------- | ------------------------------------------------------- | ----------------------------------------------------------------------------- | ------------ |
-| Bundled runtime not implemented            | Proven legacy path only; WP1 contracts have no production consumer      | #8450/#1693 environment failures remain        | Codex implementation owner                              | Work Packages 2–7 plus Milestones 3–14                                        | Open         |
+| Bundled runtime only partially implemented | One unpublished Linux arm64 artifact proof; no production consumer      | #8450/#1693 environment failures remain        | Codex implementation owner                              | Complete Work Packages 2–7 plus Milestones 3–14                               | Open         |
 | No bundled tuple enabled                   | Every target's default and effective mode remains legacy                | No bundled support claim can be made           | Codex implementation owner                              | Complete target-native build/trust and both required live-evidence layers     | Open         |
+| Windows runtime/zip builder absent         | Windows targets remain entirely on the legacy path                      | POSIX proof cannot establish Windows behavior  | Codex implementation owner                              | Bounded deterministic zip, Node/native build, signing, smoke, and live gates  | Open         |
 | Cross-family Layer B remotes unavailable   | GitHub native runner labels exist; no approved reachable target pool    | Client/remote integration gaps may escape      | Repository release administrator + implementation owner | Approve provider/snapshots/credentials/egress/teardown/cost owner             | BLOCKED      |
 | Musl has no accepted official Node binary  | Musl is deliberately legacy-only                                        | Unofficial binary would break provenance trust | Codex implementation owner                              | Orca-owned target-native source build, signing, provenance, and live gates    | ACCEPTED GAP |
 | Native arm64 live matrices incomplete      | Hosted Linux/Windows arm64 labels exist; full SSH/runtime cells do not  | Cross-build or unit tests may hide native bugs | Codex implementation owner                              | Full native archive, trust, SFTP/system-SSH, RPC, and baseline evidence       | Open         |
@@ -2223,9 +2450,9 @@ The project is not complete until every applicable item below is checked with ev
 
 ## Next Required Action
 
-Create the isolated stacked Work Package 2 branch/PR and implement target-native runtime assembly,
-archive inspection, and executable bundled-Node/native-module/PTY/watcher smoke as artifact-only
-capabilities. The cross-family Layer B target pool, protected manifest-signing environment, and
-paired legacy performance baseline remain release/default-path blockers; no publication, desktop
-resolver, SSH transfer/install, per-target Beta, fallback, or default behavior may be connected by
-this package.
+Run `.github/workflows/ssh-relay-runtime-artifacts.yml` on the exact stacked draft-PR head and record
+the four native POSIX runner results without publishing assets. Then implement Windows zip/native
+assembly as its own evidence-gated slice. The cross-family Layer B target pool, protected
+manifest-signing environment, and paired legacy performance baseline remain release/default-path
+blockers; no publication, desktop resolver, SSH transfer/install, per-target Beta, fallback, tuple
+enablement, or default behavior may be connected by this package.

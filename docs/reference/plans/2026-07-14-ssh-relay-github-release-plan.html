@@ -1037,9 +1037,11 @@
               <div>
                 <h3>Gate rollout by evidence</h3>
                 <p>
-                  Publish assets before consuming them, then progress through opt-in RC, internal
-                  canary, default-on RC, and stable. Enable only tuples with complete live evidence;
-                  keep the fallback through at least two stable cycles.
+                  Publish assets before consuming them, then ship the per-target Beta through RC and
+                  stable while every target remains on legacy unless explicitly opted in. Any
+                  default-on RC or stable promotion requires a separate reviewed decision. Enable
+                  only tuples with complete live evidence; keep the fallback through at least two
+                  stable cycles.
                 </p>
               </div>
               <div class="phase-output">
@@ -1147,8 +1149,10 @@
                 </li>
                 <li>Runtime metadata, dependency licenses, and a file-level SHA-256 manifest.</li>
                 <li>
-                  No development dependencies, package manager, compiler, source maps, or PDBs
-                  unless explicitly needed for diagnostics.
+                  No development dependencies, package manager, compiler, source maps, PDBs, or
+                  Orca-built debug symbols unless explicitly needed for diagnostics. Preserve the
+                  verified official Node executable byte-for-byte even when upstream metadata is
+                  present; never strip or rewrite those authenticated bytes.
                 </li>
               </ul>
             </div>
