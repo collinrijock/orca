@@ -528,10 +528,15 @@ export default function HomeScreen() {
             fetchTaskProviders(entry.client, entry.hostId, setTaskProvidersByHost, () => false)
           }
         } else {
-          if (unsubNotif) {
-            unsubNotif()
-            unsubNotif = null
-          }
+          // Why (#8129): keep the notification subscription alive across the
+          // reconnect cycle. subscribeToDesktopNotifications relies on the RPC
+          // client replaying its stream and re-emitting `ready` on reconnect to
+          // trigger catch-up (fetchMissed, gated on reconnectReadyCount > 1).
+          // Tearing it down on every non-'connected' state destroyed and
+          // recreated the subscription each reconnect, resetting the internal
+          // reconnectReadyCount to 0 so catch-up never fired. The subscription
+          // is still disposed by the effect cleanup below when the
+          // (hostId, client) pair changes.
           if (unsubAccounts) {
             unsubAccounts()
             unsubAccounts = null
