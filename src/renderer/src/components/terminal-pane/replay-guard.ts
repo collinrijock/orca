@@ -3,6 +3,7 @@ import { writeForegroundTerminalChunk } from '@/lib/pane-manager/pane-terminal-f
 import { recordRendererCrashBreadcrumb } from '@/lib/crash-breadcrumb-recorder'
 import { ensureArabicShapingJoinerForText } from '@/lib/pane-manager/terminal-arabic-shaping-joiner'
 import {
+  captureTerminalParseProgressGeneration,
   hasTerminalParseProgressSince,
   isTerminalWritePipelineCertifiedDead,
   notifyUndeliverableWrite,
@@ -119,7 +120,7 @@ function engageReplayGuard(
     }
     onRelease?.()
   }
-  const armWedgeDeadline = (quietSinceMs: number): void => {
+  const armWedgeDeadline = (quietSinceGeneration: number): void => {
     timer = setTimeout(() => {
       if (released) {
         return
@@ -129,8 +130,8 @@ function engageReplayGuard(
       // wedge verdict here would open the guard while replay bytes are still
       // parsing — leaking auto-replies into the agent's stdin — and hand a
       // healthy pane to recovery. Certify only after a fully quiet window.
-      if (hasTerminalParseProgressSince(terminal, quietSinceMs)) {
-        armWedgeDeadline(Date.now())
+      if (hasTerminalParseProgressSince(terminal, quietSinceGeneration)) {
+        armWedgeDeadline(captureTerminalParseProgressGeneration(terminal))
         return
       }
       release('wedged')
@@ -140,7 +141,7 @@ function engageReplayGuard(
     if (released) {
       return
     }
-    const probeQueuedAt = Date.now()
+    const probeQueuedAtGeneration = captureTerminalParseProgressGeneration(terminal)
     try {
       // FIFO certification: this callback can only run after every replay
       // byte queued before it has parsed (state 2 above).
@@ -154,7 +155,7 @@ function engageReplayGuard(
       release('wedged')
       return
     }
-    armWedgeDeadline(probeQueuedAt)
+    armWedgeDeadline(probeQueuedAtGeneration)
   }
   timer = setTimeout(probeForStall, stallCheckMs)
   return () => {

@@ -179,9 +179,12 @@ describe('pane terminal output scheduler', () => {
     it('credits when queued output is discarded', async () => {
       vi.useFakeTimers()
       const { writeTerminalOutput, discardTerminalOutput } = await loadScheduler()
+      const { captureTerminalParseProgressGeneration, hasTerminalParseProgressSince } =
+        await import('./terminal-write-pipeline-health')
       const terminal = createTerminal()
       terminal.write.mockImplementation(() => {})
       const credit = makeCredit()
+      const parseGeneration = captureTerminalParseProgressGeneration(terminal)
 
       writeTerminalOutput(terminal, 'doomed', {
         foreground: true,
@@ -191,6 +194,9 @@ describe('pane terminal output scheduler', () => {
       expect(credit.count()).toBe(0)
       discardTerminalOutput(terminal)
       expect(credit.count()).toBe(1)
+      // Discard settles delivery ownership, not xterm parsing; replay wedge
+      // deadlines must not treat cleanup as evidence that the parser is alive.
+      expect(hasTerminalParseProgressSince(terminal, parseGeneration)).toBe(false)
     })
 
     it('credits an empty write immediately', async () => {

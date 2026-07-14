@@ -21,20 +21,25 @@ type UndeliverableWriteHandler = (reason: UndeliverableWriteReason) => void
 
 const handlersByTerminal = new WeakMap<object, UndeliverableWriteHandler>()
 const certifiedDeadTerminals = new WeakSet<object>()
-// Why: wedge verdicts must distinguish "dead" from "alive but behind". Any
-// write completion on a terminal — scheduler settles and replay releases —
-// reports here, and probe deadlines consult it before certifying.
-const lastParseProgressAtByTerminal = new WeakMap<object, number>()
+// Why: wedge verdicts must distinguish "dead" from "alive but behind". A
+// generation avoids same-millisecond misses and wall-clock adjustments while
+// keeping the completion hot path constant-time and terminal-scoped.
+const parseProgressGenerationByTerminal = new WeakMap<object, number>()
 
 /** Report one parsed write completion for this terminal. */
 export function recordTerminalParseProgress(terminal: object): void {
-  lastParseProgressAtByTerminal.set(terminal, Date.now())
+  const nextGeneration = (parseProgressGenerationByTerminal.get(terminal) ?? 0) + 1
+  parseProgressGenerationByTerminal.set(terminal, nextGeneration)
 }
 
-/** Whether any write completion parsed on this terminal after `sinceMs`. */
-export function hasTerminalParseProgressSince(terminal: object, sinceMs: number): boolean {
-  const at = lastParseProgressAtByTerminal.get(terminal)
-  return at !== undefined && at > sinceMs
+/** Capture the current parse-progress generation for a later quiet-window check. */
+export function captureTerminalParseProgressGeneration(terminal: object): number {
+  return parseProgressGenerationByTerminal.get(terminal) ?? 0
+}
+
+/** Whether a write completion parsed after `generation` was captured. */
+export function hasTerminalParseProgressSince(terminal: object, generation: number): boolean {
+  return captureTerminalParseProgressGeneration(terminal) !== generation
 }
 
 type StallWatch = {
@@ -144,15 +149,20 @@ export function armTerminalWriteStallWatch(
   stallWatchByTerminal.set(terminal, watch)
 }
 
-/** Write completed normally — the pipeline is healthy; drop any pending watch. */
-export function settleTerminalWriteStallWatch(terminal: object): void {
-  recordTerminalParseProgress(terminal)
+/** Cancel a pending watch without claiming that any bytes parsed. */
+export function cancelTerminalWriteStallWatch(terminal: object): void {
   const watch = stallWatchByTerminal.get(terminal)
   if (!watch) {
     return
   }
   clearTimeout(watch.timer)
   stallWatchByTerminal.delete(terminal)
+}
+
+/** Write completed normally — the pipeline is healthy; drop any pending watch. */
+export function settleTerminalWriteStallWatch(terminal: object): void {
+  recordTerminalParseProgress(terminal)
+  cancelTerminalWriteStallWatch(terminal)
 }
 
 export function _resetWritePipelineHealthForTests(terminal?: object): void {
@@ -164,6 +174,6 @@ export function _resetWritePipelineHealthForTests(terminal?: object): void {
     stallWatchByTerminal.delete(terminal)
     handlersByTerminal.delete(terminal)
     certifiedDeadTerminals.delete(terminal)
-    lastParseProgressAtByTerminal.delete(terminal)
+    parseProgressGenerationByTerminal.delete(terminal)
   }
 }

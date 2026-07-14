@@ -19,6 +19,7 @@ import {
 } from './pane-terminal-output-ack-credit'
 import {
   armTerminalWriteStallWatch,
+  cancelTerminalWriteStallWatch,
   settleTerminalWriteStallWatch
 } from './terminal-write-pipeline-health'
 import {
@@ -1440,9 +1441,9 @@ export function discardTerminalOutput(terminal: TerminalOutputTarget): void {
   discardInFlightTerminalOutputAckCredits(terminal)
   queuedByTerminal.delete(terminal)
   discardForegroundRenderSettle(terminal)
-  // Why: a legitimately disposed pane must not leave a pending stall watch to
-  // probe the dead terminal later and report a false wedge.
-  settleTerminalWriteStallWatch(terminal)
+  // Why: cleanup must cancel the watch without masquerading as parse progress;
+  // replay guards use real completions to distinguish slow from wedged.
+  cancelTerminalWriteStallWatch(terminal)
   recordQueueDebugPressure()
 }
 
