@@ -1696,7 +1696,7 @@ describe('registerPtyHandlers', () => {
         })
         try {
           const env = await daemonSpawnAndGetEnv({ PATH: '/usr/local/bin:/usr/bin' })
-          const entries = env.PATH.split(delimiter)
+          const entries = env.PATH.split(posix.delimiter)
           const shimDir = join('/tmp/orca-user-data', 'linux-orca-cli-shim')
           // Why: bare `orca` must resolve to the Orca CLI before /usr/bin/orca
           // (the GNOME screen reader) inside Orca-managed terminals (#7904).
@@ -6735,6 +6735,8 @@ describe('registerPtyHandlers', () => {
 
   it('spawns a plain POSIX login shell and queues startup commands for the live session', async () => {
     const originalPlatform = process.platform
+    const originalHome = process.env.HOME
+    const originalOrcaOrigZdotdir = process.env.ORCA_ORIG_ZDOTDIR
     const originalShell = process.env.SHELL
     const originalZdotdir = process.env.ZDOTDIR
 
@@ -6742,6 +6744,9 @@ describe('registerPtyHandlers', () => {
       configurable: true,
       value: 'darwin'
     })
+    // Why: this test simulates macOS even when Vitest runs on a Windows host.
+    process.env.HOME = '/Users/test'
+    delete process.env.ORCA_ORIG_ZDOTDIR
     process.env.SHELL = '/bin/zsh'
     delete process.env.ZDOTDIR
 
@@ -6759,6 +6764,16 @@ describe('registerPtyHandlers', () => {
         configurable: true,
         value: originalPlatform
       })
+      if (originalHome === undefined) {
+        delete process.env.HOME
+      } else {
+        process.env.HOME = originalHome
+      }
+      if (originalOrcaOrigZdotdir === undefined) {
+        delete process.env.ORCA_ORIG_ZDOTDIR
+      } else {
+        process.env.ORCA_ORIG_ZDOTDIR = originalOrcaOrigZdotdir
+      }
       if (originalShell === undefined) {
         delete process.env.SHELL
       } else {
