@@ -143,7 +143,7 @@ jobs:
           mkdir -p "$output_root"
           first_output="$output_root/first"
           second_output="$output_root/second"
-          work_directory="$output_root/build-work"
+          work_directory="$RUNNER_TEMP/orca-ssh-relay-runtime-build-work"
           source_commit=$(git rev-parse HEAD)
           source_date_epoch=$(git show -s --format=%ct "$source_commit")
           for output in "$first_output" "$second_output"; do
@@ -318,7 +318,7 @@ jobs:
           New-Item -ItemType Directory -Path $outputRoot -Force | Out-Null
           $firstOutput = Join-Path $outputRoot 'first'
           $secondOutput = Join-Path $outputRoot 'second'
-          $workDirectory = Join-Path $outputRoot 'build-work'
+          $workDirectory = Join-Path $env:RUNNER_TEMP 'orca-ssh-relay-runtime-build-work'
           $sourceCommit = git rev-parse HEAD
           $sourceDateEpoch = git show -s --format=%ct $sourceCommit
           foreach ($output in @($firstOutput, $secondOutput)) {

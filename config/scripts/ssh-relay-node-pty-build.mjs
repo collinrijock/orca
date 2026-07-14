@@ -24,7 +24,7 @@ export function nodePtyNativeBuildCommands({ nodePath, nodeRoot, tuple }) {
     { command: nodePath, args: [NODE_GYP_PATH, 'configure', ...nodeGypArguments] },
     {
       command: 'make',
-      // Why: ld must retain a loadable UUID while ignoring incidental inputs such as build time.
+      // Why: a canonical build path plus this flag retains a loadable, reproducible Mach-O UUID.
       args: ['-C', 'build', 'BUILDTYPE=Release', 'LDFLAGS.target=-Wl,-reproducible']
     }
   ]

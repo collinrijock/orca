@@ -68,6 +68,12 @@ describe('SSH relay runtime artifact workflow', () => {
     expect(source.match(/ssh-relay-node-pty-windows-build-determinism\.test\.mjs/g)).toHaveLength(2)
     expect(source.match(/ssh-relay-runtime-build\.test\.mjs/g)).toHaveLength(2)
     expect(source.match(/--work-directory/g)).toHaveLength(2)
+    expect(source).toContain('work_directory="$RUNNER_TEMP/orca-ssh-relay-runtime-build-work"')
+    expect(source).toContain(
+      "$workDirectory = Join-Path $env:RUNNER_TEMP 'orca-ssh-relay-runtime-build-work'"
+    )
+    expect(source).not.toContain('work_directory="$output_root/build-work"')
+    expect(source).not.toContain("Join-Path $outputRoot 'build-work'")
     expect(source).toContain('cp "$first_output"/*.tar.xz')
     expect(source).toContain("Get-ChildItem -LiteralPath $firstOutput -Filter '*.zip'")
     expect(source).toContain('ssh-relay-node-zip-inspection.test.mjs')
