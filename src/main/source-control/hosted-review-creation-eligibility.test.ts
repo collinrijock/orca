@@ -17,7 +17,8 @@ const {
   glabExecFileAsyncMock,
   gitExecFileAsyncMock,
   getUpstreamStatusMock,
-  getSshGitProviderMock
+  getSshGitProviderMock,
+  getEnterpriseGitHubRepoSlugMock
 } = vi.hoisted(() => ({
   createGitHubPullRequestMock: vi.fn(),
   createGitLabMergeRequestMock: vi.fn(),
@@ -35,13 +36,18 @@ const {
   glabExecFileAsyncMock: vi.fn(),
   gitExecFileAsyncMock: vi.fn(),
   getUpstreamStatusMock: vi.fn(),
-  getSshGitProviderMock: vi.fn()
+  getSshGitProviderMock: vi.fn(),
+  getEnterpriseGitHubRepoSlugMock: vi.fn()
 }))
 
 vi.mock('../github/client', () => ({
   createGitHubPullRequest: createGitHubPullRequestMock,
   getRepoSlug: getRepoSlugMock,
   getPRForBranch: vi.fn()
+}))
+
+vi.mock('../github/github-enterprise-repository', () => ({
+  getEnterpriseGitHubRepoSlug: getEnterpriseGitHubRepoSlugMock
 }))
 
 vi.mock('../gitlab/client', () => ({
@@ -129,7 +135,8 @@ function resetMocks(): void {
     glabExecFileAsyncMock,
     gitExecFileAsyncMock,
     getUpstreamStatusMock,
-    getSshGitProviderMock
+    getSshGitProviderMock,
+    getEnterpriseGitHubRepoSlugMock
   ]) {
     mock.mockReset()
   }
@@ -141,6 +148,22 @@ function mockGitHubProvider(): void {
   getBitbucketRepoSlugMock.mockResolvedValue(null)
   getAzureDevOpsRepoSlugMock.mockResolvedValue(null)
   getGiteaRepoSlugMock.mockResolvedValue(null)
+  getEnterpriseGitHubRepoSlugMock.mockResolvedValue(null)
+}
+
+// GHES: github.com-only slug parsing misses the custom host, so the enterprise
+// resolver claims the repo and reports the host for the gh auth probe (#8312).
+function mockGitHubEnterpriseProvider(): void {
+  getProjectSlugMock.mockResolvedValue(null)
+  getRepoSlugMock.mockResolvedValue(null)
+  getBitbucketRepoSlugMock.mockResolvedValue(null)
+  getAzureDevOpsRepoSlugMock.mockResolvedValue(null)
+  getGiteaRepoSlugMock.mockResolvedValue(null)
+  getEnterpriseGitHubRepoSlugMock.mockResolvedValue({
+    owner: 'acme',
+    repo: 'orca',
+    host: 'github.acme-corp.com'
+  })
 }
 
 function mockGitLabProvider(): void {
@@ -346,6 +369,31 @@ describe('getHostedReviewCreationEligibility', () => {
       defaultBaseRef: 'origin/main',
       head: 'feature/create-pr'
     })
+  })
+
+  it('detects a GitHub Enterprise Server branch as the GitHub provider (#8312)', async () => {
+    mockGitHubEnterpriseProvider()
+
+    await expect(
+      getHostedReviewCreationEligibility({
+        repoPath: '/repo',
+        branch: 'feature/create-pr',
+        base: 'origin/main',
+        hasUncommittedChanges: false,
+        hasUpstream: true,
+        ahead: 0,
+        behind: 0
+      })
+    ).resolves.toMatchObject({
+      provider: 'github',
+      canCreate: true,
+      blockedReason: null,
+      nextAction: null
+    })
+
+    // Enterprise auth was already confirmed during detection; the gate must not
+    // fire a redundant gh probe.
+    expect(ghExecFileAsyncMock).not.toHaveBeenCalled()
   })
 
   it('resolves remote eligibility through SSH repo metadata without generating PR copy', async () => {
