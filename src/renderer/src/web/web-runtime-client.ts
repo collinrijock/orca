@@ -36,6 +36,7 @@ type SubscriptionCallbacks = {
   onError?: (error: { code: string; message: string }) => void
   onClose?: () => void
   onTransportInterrupted?: () => void
+  onTransportReplayed?: () => void
 }
 
 type RuntimeSubscription = {
@@ -196,6 +197,7 @@ export class WebRuntimeClient {
     )
     let stopped = false
     let remoteSubscriptionId: string | null = null
+    let transportInterrupted = false
     let unwatchStarted = false
     let handle: WebRuntimeSubscriptionHandle | null = null
     const dropLocalSubscription = (): void => {
@@ -252,6 +254,7 @@ export class WebRuntimeClient {
     const wrappedCallbacks: SubscriptionCallbacks = {
       ...callbacks,
       onResponse: (response) => {
+        transportInterrupted = false
         const nextSubscriptionId = getFileWatchSubscriptionId(response)
         if (nextSubscriptionId) {
           remoteSubscriptionId = nextSubscriptionId
@@ -282,6 +285,7 @@ export class WebRuntimeClient {
         }
       },
       onTransportInterrupted: () => {
+        transportInterrupted = true
         remoteSubscriptionId = null
         if (!stopped) {
           return
@@ -294,6 +298,9 @@ export class WebRuntimeClient {
         // Why: socket close physically releases the old server subscription;
         // a locally stopped watch must not be replayed on the replacement.
         dropLocalSubscription()
+      },
+      onTransportReplayed: () => {
+        transportInterrupted = false
       }
     }
     handle = await this.subscribeOnCurrentConnection(
@@ -311,6 +318,10 @@ export class WebRuntimeClient {
         stopped = true
         if (remoteSubscriptionId) {
           unwatchAndDropLocalSubscription()
+        } else if (transportInterrupted) {
+          // Why: socket close already released the old server subscription;
+          // remove its replay record instead of reviving a locally stopped watch.
+          dropLocalSubscription()
         }
         // Why: an older server may not publish its id until ready. Retain the
         // callback so a late response can still physically unwatch the root.
@@ -545,6 +556,11 @@ export class WebRuntimeClient {
 
     const subscription = this.subscriptions.get(response.id)
     if (subscription && isSubscriptionResponse(response)) {
+      // Why: setup failures are terminal. Evict before callbacks so a
+      // synchronous retry creates a fresh watch and reconnect cannot replay it.
+      if (response.ok === false) {
+        this.subscriptions.delete(response.id)
+      }
       subscription.callbacks.onResponse(response)
       if (response.ok && isEndResult(response.result)) {
         this.subscriptions.delete(response.id)
@@ -715,13 +731,15 @@ export class WebRuntimeClient {
       subscription.needsReplay = false
       this.subscriptions.set(subscription.id, subscription)
       if (
-        !this.sendEncrypted({
+        this.sendEncrypted({
           id: subscription.id,
           deviceToken: this.pairing.deviceToken,
           method: subscription.method,
           params: subscription.params
         })
       ) {
+        subscription.callbacks.onTransportReplayed?.()
+      } else {
         subscription.needsReplay = true
       }
     }
@@ -840,9 +858,6 @@ function isSubscriptionResponse(
 ): response is RuntimeRpcResponse<unknown> {
   if (!('ok' in response)) {
     return false
-  }
-  if (response.ok === false) {
-    return true
   }
   if (response.ok === false) {
     return true

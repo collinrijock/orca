@@ -423,6 +423,24 @@ describe('registerFilesystemWatcherHandlers', () => {
     })
   })
 
+  it('does not restore an SSH listener stopped while deletion is pending', async () => {
+    const firstUnwatch = vi.fn()
+    const watchMock = vi.fn().mockResolvedValue(firstUnwatch)
+    const closeWatch = vi.fn().mockResolvedValue(undefined)
+    getSshFilesystemProviderMock.mockReturnValue({ watch: watchMock, closeWatch })
+    const sender = { isDestroyed: () => false, send: vi.fn(), once: vi.fn(), id: 1 }
+    const args = { worktreePath: '/home/me/repo', connectionId: 'conn-1' }
+
+    await handlers['fs:watchWorktree']({ sender }, args)
+    await closeRemoteWatcherForWorktreePath('conn-1', '/home/me/repo')
+    handlers['fs:unwatchWorktree']({ sender }, args)
+    await restoreRemoteWatcherAfterFailedRemoval('conn-1', '/home/me/repo')
+
+    expect(closeWatch).toHaveBeenCalledWith('/home/me/repo')
+    expect(watchMock).toHaveBeenCalledTimes(1)
+    expect(sender.send).not.toHaveBeenCalled()
+  })
+
   it('preserves remote event routing when acknowledged teardown rejects', async () => {
     const sendOne = vi.fn()
     const sendTwo = vi.fn()

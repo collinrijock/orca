@@ -563,6 +563,49 @@ describe('local filesystem watcher unsubscribe cleanup', () => {
     expect(unsubscribeMock).toHaveBeenCalledTimes(1)
   })
 
+  it('retries on a fresh generation when a listener arrives after install abort', async () => {
+    vi.mocked(stat).mockResolvedValue({ isDirectory: () => true } as never)
+    let replacementCallback: Parameters<typeof subscribeViaWatcherProcess>[1] = () => undefined
+    const replacementUnsubscribe = vi.fn()
+    vi.mocked(subscribeViaWatcherProcess)
+      .mockImplementationOnce(
+        (_dir, _callback, _options, hooks) =>
+          new Promise((_resolve, reject) => {
+            hooks?.signal?.addEventListener('abort', () => reject(new Error('subscribe aborted')), {
+              once: true
+            })
+          })
+      )
+      .mockImplementationOnce(async (_dir, callback) => {
+        replacementCallback = callback
+        return { unsubscribe: replacementUnsubscribe }
+      })
+    const firstSender = { isDestroyed: () => false, send: vi.fn(), once: vi.fn(), id: 1 }
+    const replacementSender = { isDestroyed: () => false, send: vi.fn(), once: vi.fn(), id: 2 }
+
+    const firstWatch = handlers['fs:watchWorktree'](
+      { sender: firstSender },
+      { worktreePath: '/tmp/repo' }
+    ) as Promise<unknown>
+    await vi.waitFor(() => expect(subscribeViaWatcherProcess).toHaveBeenCalledTimes(1))
+
+    handlers['fs:unwatchWorktree']({ sender: firstSender }, { worktreePath: '/tmp/repo' })
+    const replacementWatch = handlers['fs:watchWorktree'](
+      { sender: replacementSender },
+      { worktreePath: '/tmp/repo' }
+    ) as Promise<unknown>
+
+    await Promise.all([firstWatch, replacementWatch])
+    expect(subscribeViaWatcherProcess).toHaveBeenCalledTimes(2)
+    replacementCallback(null, [{ type: 'update', path: '/tmp/repo/retry.txt' }] as never)
+    await vi.waitFor(() =>
+      expect(replacementSender.send).toHaveBeenCalledWith('fs:changed', {
+        worktreePath: '/tmp/repo',
+        events: [{ kind: 'update', absolutePath: '/tmp/repo/retry.txt', isDirectory: true }]
+      })
+    )
+  })
+
   it('cancels an opening local watcher for worktree deletion', async () => {
     vi.mocked(stat).mockResolvedValue({ isDirectory: () => true } as never)
     let resolveSubscribe: (subscription: { unsubscribe: () => void }) => void = () => {}
@@ -623,6 +666,22 @@ describe('local filesystem watcher unsubscribe cleanup', () => {
       worktreePath: '/tmp/repo',
       events: [{ kind: 'overflow', absolutePath: '/tmp/repo' }]
     })
+  })
+
+  it('does not restore a local listener stopped while deletion is pending', async () => {
+    vi.mocked(stat).mockResolvedValue({ isDirectory: () => true } as never)
+    const firstUnsubscribe = vi.fn()
+    vi.mocked(subscribeParcelWatcher).mockResolvedValue({ unsubscribe: firstUnsubscribe } as never)
+    const sender = { isDestroyed: () => false, send: vi.fn(), once: vi.fn(), id: 1 }
+
+    await handlers['fs:watchWorktree']({ sender }, { worktreePath: '/tmp/repo' })
+    await closeLocalWatcherForWorktreePath('/tmp/repo')
+    handlers['fs:unwatchWorktree']({ sender }, { worktreePath: '/tmp/repo' })
+    await restoreLocalWatcherAfterFailedRemoval('/tmp/repo')
+
+    expect(firstUnsubscribe).toHaveBeenCalledTimes(1)
+    expect(subscribeParcelWatcher).toHaveBeenCalledTimes(1)
+    expect(sender.send).not.toHaveBeenCalled()
   })
 
   it('cancels an opening local watcher during app shutdown', async () => {

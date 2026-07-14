@@ -84,6 +84,10 @@ const suspendedLocalWatcherListeners = new Map<
   string,
   { worktreePath: string; listeners: Map<number, WebContents> }
 >()
+// Why: an install cancelled by shutdown cannot be revived by a waiter that
+// resumes after a later handler call reopens the watcher subsystem.
+let localWatchersClosed = false
+let localWatcherLifecycleGeneration = 0
 const failedLocalUnsubscribes = new Map<string, unknown>()
 type LocalWatcherInstallToken = {
   cancelled: boolean
@@ -105,7 +109,7 @@ function addInFlightLocalInstallListener(
   token: LocalWatcherInstallToken,
   sender: WebContents
 ): void {
-  if (sender.isDestroyed()) {
+  if (sender.isDestroyed() || token.abortController.signal.aborted) {
     return
   }
   token.listeners.set(sender.id, sender)
@@ -486,6 +490,12 @@ async function createWatcher(
 // ── Subscribe / Unsubscribe ──────────────────────────────────────────
 
 function cleanupLocalWatchersForSender(senderId: number): void {
+  for (const [rootKey, suspended] of suspendedLocalWatcherListeners) {
+    suspended.listeners.delete(senderId)
+    if (suspended.listeners.size === 0) {
+      suspendedLocalWatcherListeners.delete(rootKey)
+    }
+  }
   cleanupInFlightLocalInstallsForSender(senderId)
   for (const [key, watchedRoot] of watchedRoots) {
     if (watchedRoot.listeners.has(senderId)) {
@@ -563,10 +573,17 @@ function addLocalWatchListener(rootKey: string, sender: WebContents): void {
   registerSenderCleanup(sender)
 }
 
-async function subscribe(worktreePath: string, sender: WebContents): Promise<void> {
+async function subscribe(
+  worktreePath: string,
+  sender: WebContents,
+  generation = localWatcherLifecycleGeneration
+): Promise<void> {
+  if (localWatchersClosed || generation !== localWatcherLifecycleGeneration) {
+    return
+  }
   const finishInstall = beginWatcherInstall(worktreePath)
   try {
-    await subscribeWhileRemovalAllowed(worktreePath, sender)
+    await subscribeWhileRemovalAllowed(worktreePath, sender, generation)
   } finally {
     finishInstall()
   }
@@ -574,8 +591,12 @@ async function subscribe(worktreePath: string, sender: WebContents): Promise<voi
 
 async function subscribeWhileRemovalAllowed(
   worktreePath: string,
-  sender: WebContents
+  sender: WebContents,
+  generation: number
 ): Promise<void> {
+  if (localWatchersClosed || generation !== localWatcherLifecycleGeneration) {
+    return
+  }
   const { key: rootKey, path: rootPath } = localWatcherRoot(worktreePath)
   if (sender.isDestroyed()) {
     return
@@ -608,7 +629,8 @@ async function subscribeWhileRemovalAllowed(
   const pendingInstall = pendingLocalInstallPromises.get(rootKey)
   if (pendingInstall) {
     const inFlight = inFlightLocalInstalls.get(rootKey)
-    if (inFlight) {
+    const canJoinInstall = inFlight && !inFlight.abortController.signal.aborted
+    if (canJoinInstall) {
       // Why: an unwatch may cancel an install while another renderer is still
       // awaiting the same root; a new live listener should keep it alive.
       addInFlightLocalInstallListener(inFlight, sender)
@@ -617,6 +639,28 @@ async function subscribeWhileRemovalAllowed(
       }
     }
     const result = await pendingInstall
+    if (
+      result === 'cancelled' &&
+      !canJoinInstall &&
+      !localWatchersClosed &&
+      generation === localWatcherLifecycleGeneration
+    ) {
+      // Why: AbortSignal cannot be revived. Listeners arriving after physical
+      // cancellation wait out that generation, then own a fresh install.
+      if (pendingLocalInstallPromises.get(rootKey) === pendingInstall) {
+        pendingLocalInstallPromises.delete(rootKey)
+      }
+      const retryListeners = new Map(
+        capacityRetryListeners.map((listener) => [listener.id, listener])
+      )
+      retryListeners.set(sender.id, sender)
+      for (const listener of retryListeners.values()) {
+        if (!listener.isDestroyed()) {
+          await subscribeWhileRemovalAllowed(worktreePath, listener, generation)
+        }
+      }
+      return
+    }
     if (!inFlight) {
       if (result === 'installed') {
         for (const listener of capacityRetryListeners) {
@@ -742,6 +786,11 @@ async function doInstallLocalWatcher(
 
 function unsubscribe(worktreePath: string, senderId: number): void {
   const { key: rootKey } = localWatcherRoot(worktreePath)
+  const suspended = suspendedLocalWatcherListeners.get(rootKey)
+  suspended?.listeners.delete(senderId)
+  if (suspended?.listeners.size === 0) {
+    suspendedLocalWatcherListeners.delete(rootKey)
+  }
   const capacityRetry = pendingLocalCapacityRetries.get(rootKey)
   if (capacityRetry) {
     capacityRetry.listeners.delete(senderId)
@@ -1079,6 +1128,12 @@ function releaseRemoteWatchListener(key: string, senderId: number): void {
 }
 
 function cleanupRemoteWatchersForSender(senderId: number): void {
+  for (const [key, suspended] of suspendedRemoteWatcherListeners) {
+    suspended.listeners.delete(senderId)
+    if (suspended.listeners.size === 0) {
+      suspendedRemoteWatcherListeners.delete(key)
+    }
+  }
   cleanupInFlightRemoteInstallsForSender(senderId)
   for (const key of Array.from(remoteWatchers.keys())) {
     releaseRemoteWatchListener(key, senderId)
@@ -1382,6 +1437,9 @@ export function registerFilesystemWatcherHandlers(): void {
         }
         return
       }
+      // Why: tests and post-shutdown renderer reattachment reopen the local
+      // subsystem, while stale callers retain the prior generation.
+      localWatchersClosed = false
       await subscribe(args.worktreePath, event.sender)
     }
   )
@@ -1391,6 +1449,11 @@ export function registerFilesystemWatcherHandlers(): void {
     (_event, args: { worktreePath: string; connectionId?: string }): void => {
       if (args.connectionId) {
         const key = remoteWatcherKey(args.connectionId, args.worktreePath)
+        const suspended = suspendedRemoteWatcherListeners.get(key)
+        suspended?.listeners.delete(_event.sender.id)
+        if (suspended?.listeners.size === 0) {
+          suspendedRemoteWatcherListeners.delete(key)
+        }
         const retry = pendingRemoteWatcherRetryListeners.get(key)
         retry?.listeners.delete(_event.sender.id)
         const retryTimer = pendingRemoteWatcherRetries.get(key)
@@ -1445,12 +1508,12 @@ export async function closeAllWatchers(): Promise<void> {
   pendingRemoteWatcherRetries.clear()
   pendingRemoteWatcherRetryListeners.clear()
   loggedUnavailableRemoteWatchers.clear()
-  // Why: latch the subsystem shut and drop the dedup map so a late install that
-  // begins after teardown is refused instead of registering post-shutdown. Bump
-  // the generation so a waiter that resumes after a later reopen still recurses
-  // on a stale lifecycle and is refused.
+  // Why: latch both watcher subsystems shut so late installs cannot register
+  // post-shutdown. Generation bumps also reject waiters from an older lifecycle.
   remoteWatchersClosed = true
   remoteWatcherLifecycleGeneration += 1
+  localWatchersClosed = true
+  localWatcherLifecycleGeneration += 1
   pendingRemoteInstallPromises.clear()
   // Why: cancel any in-flight provider.watch() calls so their resolved
   // unwatch handles are discarded instead of being installed after shutdown.

@@ -277,6 +277,91 @@ describe('WebRuntimeClient', () => {
     expect(internals.subscriptions.size).toBe(0)
   })
 
+  it('does not replay a file watch stopped after its socket disconnects', async () => {
+    const client = new WebRuntimeClient({
+      v: 2,
+      endpoint: 'ws://127.0.0.1:6768',
+      deviceToken: 'token',
+      publicKeyB64: Buffer.alloc(32).toString('base64')
+    })
+    const initialSocket = fakeSockets[0]!
+    initialSocket.readyState = FakeWebSocket.OPEN
+    const internals = client as unknown as {
+      ws: FakeWebSocket | null
+      sharedKey: Uint8Array | null
+      state: string
+      subscriptions: Map<string, { needsReplay: boolean }>
+      setState(next: string): void
+    }
+    internals.sharedKey = new Uint8Array(32)
+    internals.state = 'connected'
+    const handle = await client.subscribe(
+      'files.watch',
+      { worktree: 'wt-1' },
+      { onResponse: vi.fn() }
+    )
+
+    initialSocket.onclose?.()
+    expect(Array.from(internals.subscriptions.values())[0]?.needsReplay).toBe(true)
+    handle.unsubscribe()
+    expect(internals.subscriptions.size).toBe(0)
+
+    const replacementSocket = new FakeWebSocket('ws://127.0.0.1:6768')
+    replacementSocket.readyState = FakeWebSocket.OPEN
+    internals.ws = replacementSocket
+    internals.sharedKey = new Uint8Array(32)
+    internals.setState('connected')
+    expect(replacementSocket.send).not.toHaveBeenCalled()
+    client.close()
+  })
+
+  it('evicts a failed file-watch setup before reconnect can replay it', async () => {
+    const client = new WebRuntimeClient({
+      v: 2,
+      endpoint: 'ws://127.0.0.1:6768',
+      deviceToken: 'token',
+      publicKeyB64: Buffer.alloc(32).toString('base64')
+    })
+    const initialSocket = fakeSockets[0]!
+    initialSocket.readyState = FakeWebSocket.OPEN
+    const sharedKey = new Uint8Array(32)
+    const onResponse = vi.fn()
+    const internals = client as unknown as {
+      ws: FakeWebSocket | null
+      sharedKey: Uint8Array | null
+      state: string
+      subscriptions: Map<string, unknown>
+      handleSocketMessage(rawData: unknown): Promise<void>
+      setState(next: string): void
+    }
+    internals.sharedKey = sharedKey
+    internals.state = 'connected'
+    await client.subscribe('files.watch', { worktree: 'wt-1' }, { onResponse })
+    const subscriptionId = Array.from(internals.subscriptions.keys())[0]!
+
+    await internals.handleSocketMessage(
+      encrypt(
+        JSON.stringify({
+          id: subscriptionId,
+          ok: false,
+          error: { code: 'watch_failed', message: 'root unavailable' }
+        }),
+        sharedKey
+      )
+    )
+
+    expect(onResponse).toHaveBeenCalledTimes(1)
+    expect(internals.subscriptions.size).toBe(0)
+    initialSocket.onclose?.()
+    const replacementSocket = new FakeWebSocket('ws://127.0.0.1:6768')
+    replacementSocket.readyState = FakeWebSocket.OPEN
+    internals.ws = replacementSocket
+    internals.sharedKey = sharedKey
+    internals.setState('connected')
+    expect(replacementSocket.send).not.toHaveBeenCalled()
+    client.close()
+  })
+
   it('keeps file watches on the owning WebSocket instead of opening child clients', async () => {
     const client = new WebRuntimeClient({
       v: 2,
