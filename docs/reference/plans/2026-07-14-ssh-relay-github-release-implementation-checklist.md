@@ -2,7 +2,7 @@
 
 Date created: 2026-07-14<br>
 Last updated: 2026-07-14<br>
-Current phase: Milestone 3 / Work Package 2 target-native runtime assembly — four POSIX native-runner artifact builds are CI-green; Windows signed-input verification and runtime/ZIP assembly reach native smoke on both architectures, but bounded smoke diagnostics/execution, reproducibility, oldest-baseline, native-trust, cross-family remote, and measured-baseline gates remain open; no bundled-runtime path is enabled<br>
+Current phase: Milestone 3 / Work Package 2 target-native runtime assembly — correct prompt Windows PTY smoke-process settlement after functionally successful native x64 and arm64 execution; exact-head green CI, reproducibility, oldest-baseline, native-trust, cross-family remote, and measured-baseline gates remain open; no bundled-runtime path is enabled<br>
 Primary design: [SSH relay GitHub Release plan](./2026-07-14-ssh-relay-github-release-plan.html)<br>
 Motivating issues: [#8450](https://github.com/stablyai/orca/issues/8450), [#1693](https://github.com/stablyai/orca/issues/1693)
 
@@ -61,12 +61,15 @@ same change as the work it records.
   smoke, SBOM, and provenance only. The Windows x64/arm64 artifact candidate and portability
   corrections are implemented through `b6903b220`, with bounded smoke diagnostics in `3aab5aff8`,
   in stacked draft PR
-  [#8741](https://github.com/stablyai/orca/pull/8741). Both native architectures passed all seven
-  contract suites, exact signed-input verification, native compilation, and bounded runtime/ZIP
-  assembly at exact CI head `42aa02fa9` (E-M3-WINDOWS-CI-RED-004). Both then time out during the
-  bundled smoke, while the parent currently suppresses bounded child stderr needed to classify the
-  failing PTY or watcher substage. This package may produce test artifacts but must not publish,
-  resolve, transfer, install, launch, or enable them.
+  [#8741](https://github.com/stablyai/orca/pull/8741). Exact-head run
+  [29341643555](https://github.com/stablyai/orca/actions/runs/29341643555) proves the bundled Node,
+  patched PTY input/resize/exit, and watcher lifecycle complete on x64 in 3,357.413 ms with
+  56,905,728-byte RSS and arm64 in 6,593.663 ms with 54,505,472-byte RSS, but each child retains a
+  Windows handle until the parent kills it at its 45-second bound. The active slice is a
+  discriminating PTY-listener/terminal-cleanup contract followed by explicit prompt ConPTY
+  settlement; the injected lifecycle contract and repository static gates are locally green, while
+  exact-head native execution remains mandatory. This package may produce test artifacts but must
+  not publish, resolve, transfer, install, launch, or enable them.
 - Active evidence gate: the immutable Node v24.18.0 contract, pinned release key, bounded verifier,
   and artifact-only CLI are locally green under E-M3-NODE-RED-001 and E-M3-NODE-PROVENANCE-001.
   E-M3-RUNTIME-LOCAL-001 additionally proves one unpublished Linux arm64 glibc assembly, exact-tree
@@ -577,6 +580,11 @@ and reviewed compatibility contract.
 archive inspection, bundled-Node/native-module/PTY/watcher smoke, SBOM, and provenance capabilities
 behind purpose-named scripts and CI artifacts. No release publication, desktop resolver, SSH
 transfer, install, fallback, rollout setting, or tuple enablement belongs in this package.
+
+**Active sub-gate — 2026-07-14, Codex implementation owner:** the discriminating lifecycle test and
+explicit listener/ConPTY cleanup are locally green without `process.exit()` or a weakened 45-second
+bound. Exact-head native x64/arm64 CI must now prove normal child settlement and artifact retention;
+the prior common failure is run 29341643555/jobs 87114639412 and 87114639449.
 
 Each runtime must contain only the executable closure required by the relay.
 
@@ -1231,6 +1239,7 @@ focused commands as their scripts/tests are introduced.
 - [x] `node config/scripts/verify-ssh-relay-node-release-inputs.mjs --inputs-directory <verified-input-directory> --archive linux-x64-glibc` (E-M3-NODE-PROVENANCE-001; metadata and archive verification only)
 - [x] `pnpm exec vitest run --config config/vitest.config.ts config/scripts/ssh-relay-node-zip-inspection.test.mjs config/scripts/ssh-relay-runtime-zip.test.mjs` (E-M3-WINDOWS-ZIP-RED-001, E-M3-WINDOWS-INPUT-001; synthetic ZIP/input contracts only)
 - [x] `pnpm exec vitest run --config config/vitest.config.ts config/scripts/ssh-relay-runtime-windows-tree.test.mjs` (E-M3-WINDOWS-LOCAL-002; structural Windows ConPTY closure only, no execution)
+- [x] `pnpm exec vitest run --config config/vitest.config.ts config/scripts/ssh-relay-runtime-pty-smoke.test.mjs` (E-M3-WINDOWS-SMOKE-SETTLEMENT-LOCAL-RED-001, E-M3-WINDOWS-SMOKE-SETTLEMENT-LOCAL-001; native evidence remains pending)
 - [x] `node config/scripts/verify-ssh-relay-node-release-inputs.mjs --inputs-directory <verified-windows-input-directory> --archive win32-x64` (E-M3-WINDOWS-INPUT-001; signed real Node ZIP, headers, and import library; no Windows execution)
 - [x] `node config/scripts/build-ssh-relay-runtime.mjs --tuple linux-arm64-glibc --inputs-directory <verified-input-directory> --output-directory <exclusive-output> --source-date-epoch <epoch> --git-commit <full-sha>` (E-M3-RUNTIME-LOCAL-001; local native Linux arm64 only)
 - [x] `node config/scripts/verify-ssh-relay-runtime.mjs --runtime-directory <runtime-tree> --identity <identity.json> --archive <runtime.tar.xz>` (E-M3-RUNTIME-LOCAL-001; local native Linux arm64 only)
@@ -2842,6 +2851,136 @@ or unexpected token`; the first logs did not identify a source location.
 - Follow-up: rerun native Windows x64, capture the classified child tail, and make no execution-path
   change until that evidence identifies the actual failure.
 
+### E-M3-WINDOWS-SMOKE-SETTLEMENT-CI-RED-001 — Native Windows smoke succeeds but does not settle
+
+- Date: 2026-07-14
+- Commit SHA / PR: exact workflow head `df661e370102b9b66c26f4c708e641abef0aa1ae`; draft PR
+  [#8741](https://github.com/stablyai/orca/pull/8741)
+- Runners and jobs: GitHub Actions run
+  [29341643555](https://github.com/stablyai/orca/actions/runs/29341643555); Windows x64 job
+  [87114639412](https://github.com/stablyai/orca/actions/runs/29341643555/job/87114639412),
+  `windows-2022` image `20260706.237.1`, Windows Server 2022 10.0.20348, native x64, Node
+  v24.18.0; Windows arm64 job
+  [87114639449](https://github.com/stablyai/orca/actions/runs/29341643555/job/87114639449),
+  `windows-11-arm64` image `20260706.102.1`, Windows 11 Enterprise 10.0.26200, native arm64,
+  Node v24.18.0
+- Remote and transport: no SSH remote; target-native artifact build and bundled-runtime execution
+  on the hosted runner; exact signed inputs downloaded from pinned nodejs.org URLs
+- Exact command:
+
+  ```sh
+  gh api repos/stablyai/orca/actions/jobs/87114639412/logs | \
+    rg -n -C 16 'Bundled runtime smoke command failed|timeoutMs=|Image:|Version:'
+  gh api repos/stablyai/orca/actions/jobs/87114639449/logs | \
+    rg -n -C 16 'Bundled runtime smoke command failed|timeoutMs=|Image:|Version:'
+  ```
+
+- Result: expected discriminating FAIL. The exact signed inputs, offline native build, archive and
+  complete-tree verification all passed. Bundled Node v24.18.0/ABI 137 then completed the patched
+  ConPTY smoke with exit 23, 101×37 resize, input marker, and both native modules loaded from
+  `build/Release`; watcher create, update, rename-as-delete/create, and delete also completed. The
+  x64 child emitted valid JSON after 3,357.413 ms with 56,905,728-byte RSS; arm64 emitted the same
+  functional result after 6,593.663 ms with 54,505,472-byte RSS. Both remained alive until the
+  parent killed them at 45 seconds (`code=null`, `killed=true`, `signal="SIGTERM"`, empty stderr).
+- Artifact metrics: x64 content ID
+  `sha256:8cf9eb4e04459e25d710a28235a57e777d39f65168841c2408ab658243a21d94`; ZIP
+  37,212,068 bytes with SHA-256
+  `sha256:11f83971ed20cde7be41aa2f753cfd4350cd4a70a3fe46a27540ebc872c4ca56`; build
+  151,226.208 ms. Arm64 content ID
+  `sha256:dda60b6237b320c74236f57bece072d0f847479eb322f43f22c829daf2ce9bf6`; ZIP
+  33,261,533 bytes with SHA-256
+  `sha256:f3fefed7b959fb6c3945170e8f0f7d2766cf26240aef9928b0e25770e5b19a26`; 86,189,740
+  expanded bytes; build 248,307.259 ms. Uploads remained skipped because prompt process settlement
+  is part of executable proof.
+- Oracle proved: Windows x64 and arm64 PTY/ConPTY and watcher functionality succeeds through each
+  exact bundled runtime, and the common remaining failure occurs after successful JSON emission in
+  child-process handle settlement rather than in PTY, watcher, archive, or tree validation.
+- Does not prove: prompt cleanup, durable artifact upload, clean-rebuild identity, native
+  trust/signing, oldest baseline, SSH, or any enabled tuple. Both per-tuple rows remain unchecked
+  until the child exits normally and exact-head CI retains each artifact.
+- Follow-up: retain and dispose the PTY listener subscriptions, call the supported Windows terminal
+  cleanup after a validated successful exit, and prove normal child settlement without
+  `process.exit()` on both native architectures.
+
+### E-M3-WINDOWS-SMOKE-SETTLEMENT-LOCAL-RED-001 — PTY lifecycle cleanup contract red gate
+
+- Date: 2026-07-14
+- Commit SHA / PR: uncommitted contract test and behavior-preserving PTY-smoke module extraction on
+  exact base `df661e370102b9b66c26f4c708e641abef0aa1ae`; draft PR
+  [#8741](https://github.com/stablyai/orca/pull/8741)
+- Runner: macOS 26.2 arm64; Node v26.0.0 and pnpm 10.24.0
+- Remote and transport: none; injected terminal/listener lifecycle only
+- Exact command:
+  `pnpm exec vitest run --config config/vitest.config.ts config/scripts/ssh-relay-runtime-pty-smoke.test.mjs`
+- Result: expected FAIL in 122 ms. The Windows success case returned a valid exit result but called
+  `terminal.kill()` zero times; the POSIX success case and Windows case both disposed zero of their
+  three `onData`/`onExit` subscriptions. Two tests failed, with no timeout or synthetic forced exit.
+- Oracle proved: the current success path lacks the exact listener and ConPTY cleanup operations
+  required by the native x64 diagnostic, and the purpose-named suite distinguishes Windows-only
+  terminal cleanup from platform-neutral listener disposal.
+- Does not prove: the green implementation, actual Windows handle release, timeout/error cleanup,
+  full child-process settlement, arm64 behavior, or any tuple support.
+- Checklist items satisfied: red half of the Windows PTY smoke-settlement correction only.
+- Follow-up: add idempotent finally cleanup, preserve successful POSIX no-kill behavior, rerun this
+  suite and all artifact/static gates, then require exact-head native Windows CI.
+
+### E-M3-WINDOWS-SMOKE-SETTLEMENT-LOCAL-001 — Explicit PTY resource settlement
+
+- Date: 2026-07-14
+- Commit SHA / PR: uncommitted implementation on exact base
+  `df661e370102b9b66c26f4c708e641abef0aa1ae`; draft PR
+  [#8741](https://github.com/stablyai/orca/pull/8741)
+- Runner: macOS 26.2 arm64; Node v26.0.0 and pnpm 10.24.0. Exact-head Node 24 native CI remains
+  authoritative.
+- Remote and transport: none; injected terminal lifecycle plus local source/static verification
+- Exact commands:
+
+  ```sh
+  pnpm exec vitest run --config config/vitest.config.ts \
+    config/scripts/ssh-relay-runtime-pty-smoke.test.mjs
+  pnpm exec vitest run --config config/vitest.config.ts \
+    config/scripts/ssh-relay-node-release-verification.test.mjs \
+    config/scripts/ssh-relay-node-tar-inspection.test.mjs \
+    config/scripts/ssh-relay-node-zip-inspection.test.mjs \
+    config/scripts/ssh-relay-runtime-artifact.test.mjs \
+    config/scripts/ssh-relay-runtime-pty-smoke.test.mjs \
+    config/scripts/ssh-relay-runtime-windows-tree.test.mjs \
+    config/scripts/ssh-relay-runtime-zip.test.mjs \
+    config/scripts/ssh-relay-runtime-workflow.test.mjs
+  pnpm run typecheck
+  pnpm exec oxlint \
+    config/scripts/ssh-relay-runtime-smoke-child.cjs \
+    config/scripts/ssh-relay-runtime-pty-smoke.cjs \
+    config/scripts/ssh-relay-runtime-pty-smoke.test.mjs \
+    config/scripts/ssh-relay-runtime-workflow.test.mjs
+  pnpm run check:max-lines-ratchet
+  GOMAXPROCS=2 pnpm run lint
+  pnpm exec oxfmt --check .github/workflows/ssh-relay-runtime-artifacts.yml \
+    config/scripts/ssh-relay-runtime-smoke-child.cjs \
+    config/scripts/ssh-relay-runtime-pty-smoke.cjs \
+    config/scripts/ssh-relay-runtime-pty-smoke.test.mjs \
+    config/scripts/ssh-relay-runtime-workflow.test.mjs \
+    docs/reference/plans/2026-07-14-ssh-relay-github-release-implementation-checklist.md
+  git diff --check
+  ```
+
+- Result: PASS. The lifecycle suite passed 2/2 tests in 117 ms; the eight artifact suites passed
+  25/25 tests in 417 ms. Typecheck, focused oxlint, max-lines ratchet, full
+  lint/reliability/localization checks, formatting, and diff whitespace passed. Full lint reported
+  only pre-existing warnings outside this package.
+- Oracle proved: the success path retains and disposes both data subscriptions and the exit
+  subscription exactly once; a validated Windows exit additionally calls the supported node-pty
+  terminal cleanup exactly once, while a successful POSIX exit does not kill its terminal. Cleanup
+  is in `finally`, the existing timeout/error path still kills the terminal, and no `process.exit()`
+  was introduced. Both native workflow families now run the lifecycle contract.
+- Does not prove: actual Windows ConPTY handle release, prompt bundled child-process exit, exact-head
+  Node 24 behavior, artifact retention, clean-rebuild identity, native trust, oldest baseline, SSH,
+  or any enabled tuple. Both Windows per-tuple cells remain unchecked.
+- Checklist items satisfied: local green half of the PTY smoke-settlement correction and its
+  purpose-named verification-command inventory only.
+- Follow-up: commit and push the isolated correction, run both target-native Windows jobs at the
+  exact head, and require normal smoke completion plus artifact upload before advancing.
+
 ### E-M3-RUNTIME-LOCAL-001 — First target-native Linux arm64 runtime artifact
 
 - Date: 2026-07-14
@@ -3081,7 +3220,7 @@ owner and promotion condition.
 | ------------------------------------------ | ----------------------------------------------------------------------- | ----------------------------------------------- | ------------------------------------------------------- | ------------------------------------------------------------------------------ | ------------ |
 | Bundled runtime only partially implemented | Four unpublished POSIX native artifact proofs; no production consumer   | #8450/#1693 environment failures remain         | Codex implementation owner                              | Complete Work Packages 2–7 plus Milestones 3–14                                | Open         |
 | No bundled tuple enabled                   | Every target's default and effective mode remains legacy                | No bundled support claim can be made            | Codex implementation owner                              | Complete target-native build/trust and both required live-evidence layers      | Open         |
-| Windows runtime smoke incomplete           | Native candidate ZIPs build, but smoke fails before artifact retention  | Pre-smoke proof cannot establish relay behavior | Codex implementation owner                              | Classified passing PTY/watcher smoke, reproducibility, trust, and live gates   | Open         |
+| Windows runtime smoke incomplete           | Both native smokes work but prior children hung; local cleanup awaits CI | No prompt settlement or retained artifact proof | Codex implementation owner                              | Exact-head clean exit/upload, reproducibility, trust, and live gates           | Open         |
 | Native clean-rebuild identity unproved     | One successful artifact per corrected-head hosted runner                | Toolchain drift may change native content IDs   | Codex implementation owner                              | Same-head, same-runner clean builds match or a reviewed reproducibility policy | Open         |
 | Cross-family Layer B remotes unavailable   | GitHub native runner labels exist; no approved reachable target pool    | Client/remote integration gaps may escape       | Repository release administrator + implementation owner | Approve provider/snapshots/credentials/egress/teardown/cost owner              | BLOCKED      |
 | Musl has no accepted official Node binary  | Musl is deliberately legacy-only                                        | Unofficial binary would break provenance trust  | Codex implementation owner                              | Orca-owned target-native source build, signing, provenance, and live gates     | ACCEPTED GAP |
@@ -3129,9 +3268,10 @@ The project is not complete until every applicable item below is checked with ev
 
 ## Next Required Action
 
-Implement bounded deterministic Windows ZIP/native assembly as its own evidence-gated slice, add
-native Windows x64/arm64 jobs without publishing assets, and add a same-head/same-runner clean-build
-identity comparison for native reproducibility. The cross-family Layer B target pool, protected
-manifest-signing environment, and paired legacy performance baseline remain release/default-path
-blockers; no publication, desktop resolver, SSH transfer/install, per-target Beta, fallback, tuple
-enablement, or default behavior may be connected by this package.
+Commit and push the isolated PTY smoke-settlement correction, then require exact-head Windows
+x64/arm64 jobs to exit normally and upload their unpublished evidence artifacts. If both pass, record
+their exact hashes, sizes, smoke/build durations, RSS, runner images, and residual gaps before the
+separate same-head/same-runner clean-build identity gate. The cross-family Layer B target pool,
+protected manifest-signing environment, and paired legacy performance baseline remain
+release/default-path blockers; no publication, desktop resolver, SSH transfer/install, per-target
+Beta, fallback, tuple enablement, or default behavior may be connected by this package.
