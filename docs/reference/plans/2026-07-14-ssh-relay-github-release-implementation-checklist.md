@@ -60,7 +60,8 @@ same change as the work it records.
 - Active package: Work Package 2 target-native runtime assembly, archive inspection, executable
   smoke, SBOM, and provenance only. The Windows x64/arm64 artifact candidate and portability
   corrections are implemented through `b6903b220`, with bounded smoke diagnostics in `3aab5aff8`,
-  and explicit PTY smoke settlement in `ddf28eb8d`, in stacked draft PR
+  explicit PTY smoke settlement in `ddf28eb8d`, and bounded active-resource diagnostics in
+  `6bba90020`, in stacked draft PR
   [#8741](https://github.com/stablyai/orca/pull/8741). Exact-head run
   [29341643555](https://github.com/stablyai/orca/actions/runs/29341643555) proves the bundled Node,
   patched PTY input/resize/exit, and watcher lifecycle complete on x64 in 3,357.413 ms with
@@ -3025,8 +3026,8 @@ or unexpected token`; the first logs did not identify a source location.
 ### E-M3-WINDOWS-RESOURCE-DIAGNOSTIC-LOCAL-001 — Bounded post-cleanup resource observation
 
 - Date: 2026-07-14
-- Commit SHA / PR: uncommitted diagnostic implementation on exact base
-  `b6291e55b1781b4c4e6f46a4965152f4a0d2334f`; draft PR
+- Commit SHA / PR: diagnostic implementation commit
+  `6bba900209543a53b7673ca12173159d40d9fc87`; draft PR
   [#8741](https://github.com/stablyai/orca/pull/8741)
 - Runner: macOS 26.2 arm64; Node v26.0.0 and pnpm 10.24.0. Native Windows classification remains
   authoritative.
