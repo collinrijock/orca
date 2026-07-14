@@ -8,6 +8,7 @@ import { useAppStore } from '../../store'
 import type { MobileRelayStatus } from '../../../../shared/mobile-relay-status'
 import type { MobilePairingConnectionMode } from '../../../../shared/mobile-pairing-connection-mode'
 import { MobileRelayBetaAvailability } from './MobileRelayBetaAvailability'
+import { SettingsRow, SettingsSwitch } from './SettingsFormControls'
 
 function relayStatusLabel(status: MobileRelayStatus): string {
   if (status === 'registered') {
@@ -47,6 +48,33 @@ type CompactConnectionOptionsProps = {
   relayStatus: MobileRelayStatus
 }
 
+function ConnectionModeSwitch({
+  value,
+  onChange,
+  signedIn
+}: Pick<CompactConnectionOptionsProps, 'value' | 'onChange' | 'signedIn'>): React.JSX.Element {
+  return (
+    <SettingsRow
+      label={translate(
+        'auto.components.settings.MobilePairingConnectionOptions.anywhere',
+        'Connect from anywhere'
+      )}
+      description={<MobileRelayBetaAvailability />}
+      control={
+        <SettingsSwitch
+          checked={value === 'automatic'}
+          disabled={!signedIn}
+          ariaLabel={translate(
+            'auto.components.settings.MobilePairingConnectionOptions.anywhere',
+            'Connect from anywhere'
+          )}
+          onChange={() => onChange(value === 'automatic' ? 'local-only' : 'automatic')}
+        />
+      }
+    />
+  )
+}
+
 function CompactConnectionOptions({
   value,
   onChange,
@@ -58,74 +86,7 @@ function CompactConnectionOptions({
 }: CompactConnectionOptionsProps): React.JSX.Element {
   return (
     <section className="w-full space-y-2">
-      <h3 className="text-sm font-medium">
-        {translate(
-          'auto.components.settings.MobilePairingConnectionOptions.title',
-          'How should the new phone connect?'
-        )}
-      </h3>
-      <div className="grid grid-cols-2 gap-2" role="radiogroup">
-        <div
-          className={cn(
-            'flex min-h-16 items-center gap-2 rounded-lg border border-border/60 px-3 py-2',
-            !signedIn && 'opacity-60',
-            value === 'automatic' && signedIn && 'bg-accent'
-          )}
-        >
-          <input
-            id="mobile-pairing-connection-mode-automatic-compact"
-            type="radio"
-            name="mobile-pairing-connection-mode"
-            value="automatic"
-            checked={value === 'automatic'}
-            disabled={!signedIn}
-            onChange={() => onChange('automatic')}
-            className="size-4 shrink-0 accent-primary"
-          />
-          <span className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
-            <label
-              htmlFor="mobile-pairing-connection-mode-automatic-compact"
-              className={cn('text-sm font-medium', signedIn && 'cursor-pointer')}
-            >
-              {translate(
-                'auto.components.settings.MobilePairingConnectionOptions.anywhere',
-                'Connect from anywhere'
-              )}
-            </label>
-            <MobileRelayBetaAvailability />
-          </span>
-        </div>
-
-        <label
-          className={cn(
-            'flex min-h-16 cursor-pointer items-center gap-2 rounded-lg border border-border/60 px-3 py-2',
-            value === 'local-only' && 'bg-accent'
-          )}
-        >
-          <input
-            type="radio"
-            name="mobile-pairing-connection-mode"
-            value="local-only"
-            checked={value === 'local-only'}
-            onChange={() => onChange('local-only')}
-            className="size-4 shrink-0 accent-primary"
-          />
-          <span className="min-w-0">
-            <span className="block text-sm font-medium">
-              {translate(
-                'auto.components.settings.MobilePairingConnectionOptions.localOnly',
-                'Local network only'
-              )}
-            </span>
-            <span className="block text-[11px] text-muted-foreground">
-              {translate(
-                'auto.components.settings.MobilePairingConnectionOptions.localShort',
-                'LAN or Tailscale'
-              )}
-            </span>
-          </span>
-        </label>
-      </div>
+      <ConnectionModeSwitch value={value} onChange={onChange} signedIn={signedIn} />
 
       <div className="flex min-h-9 items-center justify-between gap-3">
         <p className="text-xs text-muted-foreground">
@@ -227,115 +188,47 @@ export function MobilePairingConnectionOptions({
 
   return (
     <section className="space-y-2">
-      <h3 className="text-sm font-medium">
-        {translate(
-          'auto.components.settings.MobilePairingConnectionOptions.title',
-          'How should the new phone connect?'
+      <ConnectionModeSwitch value={value} onChange={onChange} signedIn={signedIn} />
+      <div className="flex min-h-9 items-center justify-between gap-3">
+        <p className="text-xs text-muted-foreground">
+          {!signedIn
+            ? translate(
+                'auto.components.settings.MobilePairingConnectionOptions.signInDescription',
+                'Sign in on this desktop to use Orca Relay.'
+              )
+            : value === 'automatic'
+              ? translate(
+                  'auto.components.settings.MobilePairingConnectionOptions.automaticDescription',
+                  'Orca uses a direct connection when available and Relay otherwise.'
+                )
+              : translate(
+                  'auto.components.settings.MobilePairingConnectionOptions.localDescription',
+                  'Uses LAN or Tailscale without connecting this phone through Orca Relay.'
+                )}
+        </p>
+        {signedIn ? (
+          <Badge variant="outline" className={cn('shrink-0', value !== 'automatic' && 'invisible')}>
+            {relayStatusLabel(relayStatus)}
+          </Badge>
+        ) : configured ? (
+          <Button
+            type="button"
+            size="sm"
+            className="w-24 shrink-0"
+            disabled={connecting}
+            onClick={() => void connect()}
+          >
+            {connecting ? <Loader2 className="animate-spin" /> : null}
+            {translate('auto.components.settings.MobilePairingConnectionOptions.signIn', 'Sign in')}
+          </Button>
+        ) : (
+          <Badge variant="outline" className="shrink-0">
+            {translate(
+              'auto.components.settings.MobilePairingConnectionOptions.unavailable',
+              'Unavailable'
+            )}
+          </Badge>
         )}
-      </h3>
-      <div className="space-y-2" role="radiogroup">
-        <div
-          className={cn(
-            'flex items-center gap-3 rounded-lg border border-border/60 px-3',
-            'py-3',
-            value === 'automatic' && signedIn && 'bg-accent'
-          )}
-        >
-          <div className="flex min-w-0 flex-1 items-start gap-3">
-            <input
-              id="mobile-pairing-connection-mode-automatic"
-              type="radio"
-              name="mobile-pairing-connection-mode"
-              value="automatic"
-              checked={value === 'automatic'}
-              disabled={!signedIn}
-              onChange={() => onChange('automatic')}
-              className="mt-0.5 size-4 shrink-0 accent-primary"
-            />
-            <span className="min-w-0 space-y-0.5">
-              <span className="flex flex-wrap items-center gap-2 text-sm font-medium">
-                <label
-                  htmlFor="mobile-pairing-connection-mode-automatic"
-                  className={cn(signedIn && 'cursor-pointer')}
-                >
-                  {translate(
-                    'auto.components.settings.MobilePairingConnectionOptions.anywhere',
-                    'Connect from anywhere'
-                  )}
-                </label>
-                <MobileRelayBetaAvailability />
-              </span>
-              <span className="block text-xs text-muted-foreground">
-                {signedIn
-                  ? translate(
-                      'auto.components.settings.MobilePairingConnectionOptions.automaticDescription',
-                      'Orca uses a direct connection when available and Relay otherwise.'
-                    )
-                  : translate(
-                      'auto.components.settings.MobilePairingConnectionOptions.signInDescription',
-                      'Sign in on this desktop to use Orca Relay.'
-                    )}
-              </span>
-            </span>
-          </div>
-          {signedIn ? (
-            <Badge variant="outline" className="shrink-0">
-              {relayStatusLabel(relayStatus)}
-            </Badge>
-          ) : configured ? (
-            <Button
-              type="button"
-              size="sm"
-              className="w-24 shrink-0"
-              disabled={connecting}
-              onClick={() => void connect()}
-            >
-              {connecting ? <Loader2 className="animate-spin" /> : null}
-              {translate(
-                'auto.components.settings.MobilePairingConnectionOptions.signIn',
-                'Sign in'
-              )}
-            </Button>
-          ) : (
-            <Badge variant="outline" className="shrink-0">
-              {translate(
-                'auto.components.settings.MobilePairingConnectionOptions.unavailable',
-                'Unavailable'
-              )}
-            </Badge>
-          )}
-        </div>
-
-        <label
-          className={cn(
-            'flex cursor-pointer items-start gap-3 rounded-lg border border-border/60 px-3',
-            'py-3',
-            value === 'local-only' && 'bg-accent'
-          )}
-        >
-          <input
-            type="radio"
-            name="mobile-pairing-connection-mode"
-            value="local-only"
-            checked={value === 'local-only'}
-            onChange={() => onChange('local-only')}
-            className="mt-0.5 size-4 shrink-0 accent-primary"
-          />
-          <span className="min-w-0 space-y-0.5">
-            <span className="block text-sm font-medium">
-              {translate(
-                'auto.components.settings.MobilePairingConnectionOptions.localOnly',
-                'Local network only'
-              )}
-            </span>
-            <span className="block text-xs text-muted-foreground">
-              {translate(
-                'auto.components.settings.MobilePairingConnectionOptions.localDescription',
-                'Uses LAN or Tailscale without connecting this phone through Orca Relay.'
-              )}
-            </span>
-          </span>
-        </label>
       </div>
     </section>
   )
