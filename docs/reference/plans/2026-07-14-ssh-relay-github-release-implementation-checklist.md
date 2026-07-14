@@ -2,7 +2,7 @@
 
 Date created: 2026-07-14<br>
 Last updated: 2026-07-14<br>
-Current phase: Milestone 3 / Work Package 2 target-native runtime assembly — four POSIX native-runner artifact builds are CI-green; Windows contract tests are native-runner green but signature-tool path portability, runtime/ZIP, reproducibility, oldest-baseline, native-trust, cross-family remote, and measured-baseline gates remain open; no bundled-runtime path is enabled<br>
+Current phase: Milestone 3 / Work Package 2 target-native runtime assembly — four POSIX native-runner artifact builds are CI-green; Windows signed-input verification and runtime/ZIP assembly reach native smoke on both architectures, but bounded smoke diagnostics/execution, reproducibility, oldest-baseline, native-trust, cross-family remote, and measured-baseline gates remain open; no bundled-runtime path is enabled<br>
 Primary design: [SSH relay GitHub Release plan](./2026-07-14-ssh-relay-github-release-plan.html)<br>
 Motivating issues: [#8450](https://github.com/stablyai/orca/issues/8450), [#1693](https://github.com/stablyai/orca/issues/1693)
 
@@ -61,11 +61,11 @@ same change as the work it records.
   smoke, SBOM, and provenance only. The Windows x64/arm64 artifact candidate and portability
   corrections are implemented through `b6903b220` in stacked draft PR
   [#8741](https://github.com/stablyai/orca/pull/8741). Both native architectures passed all seven
-  contract suites at the preceding head, then failed closed before extraction/build because Git for
-  Windows `gpgv` rejected an absolute drive-letter keyring path (E-M3-WINDOWS-CI-RED-003). The
-  cwd-relative correction is locally green under E-M3-WINDOWS-GPG-PATH-LOCAL-001 and awaits native
-  CI. This package may produce test artifacts but must not publish, resolve, transfer, install,
-  launch, or enable them.
+  contract suites, exact signed-input verification, native compilation, and bounded runtime/ZIP
+  assembly at exact CI head `42aa02fa9` (E-M3-WINDOWS-CI-RED-004). Both then time out during the
+  bundled smoke, while the parent currently suppresses bounded child stderr needed to classify the
+  failing PTY or watcher substage. This package may produce test artifacts but must not publish,
+  resolve, transfer, install, launch, or enable them.
 - Active evidence gate: the immutable Node v24.18.0 contract, pinned release key, bounded verifier,
   and artifact-only CLI are locally green under E-M3-NODE-RED-001 and E-M3-NODE-PROVENANCE-001.
   E-M3-RUNTIME-LOCAL-001 additionally proves one unpublished Linux arm64 glibc assembly, exact-tree
@@ -90,7 +90,10 @@ same change as the work it records.
   Windows shebang parsing, authenticated-key checkout bytes, and POSIX-only mode assertions. At the
   corrected exact head, E-M3-WINDOWS-CI-RED-003 proves 20 passing and one intentionally skipped test
   on each native architecture, exact input download, and a common fail-closed Git-for-Windows
-  `gpgv` drive-letter keyring incompatibility. No Windows executable evidence is claimed.
+  `gpgv` drive-letter keyring incompatibility. E-M3-WINDOWS-CI-RED-004 proves that correction with
+  21 passing and one intentionally skipped test, signed input acceptance, native compilation, and
+  runtime/ZIP assembly on each architecture; both 45-second bundled smoke commands then time out
+  without propagating their already bounded child stderr. No Windows executable cell is claimed.
 - Production behavior: unchanged; Orca embeds relay JavaScript and installs `node-pty` plus
   `@parcel/watcher` with remote npm.
 - New runtime assets published: none.
@@ -103,13 +106,12 @@ same change as the work it records.
 - Rollout control: existing per-SSH-target configuration; legacy is the default and the bundled
   runtime is an explicit per-target Beta opt-in under E-M1-ROLLOUT-DECISION-001.
 - Legacy fallback removal: not authorized.
-- Next required action: pass only cwd-relative verified-copy paths to `gpg`/`gpgv`, add a
-  discriminating command-boundary regression test, and collect exact Windows x64/arm64 plus POSIX
-  regression evidence from the corrected draft-PR head. A
-  same-head/same-runner clean-rebuild identity oracle for native build reproducibility remains a
-  separate open gate. Keep cross-family remote infrastructure, signing/trust, and measured legacy
-  baseline gates open; do not introduce publication, resolver, transfer, rollout, tuple enablement,
-  or default behavior.
+- Next required action: preserve the smoke command's bounded stdout/stderr and timeout metadata in
+  the parent failure, add a discriminating diagnostic test, and rerun Windows x64 first to classify
+  the PTY/watcher failure before changing smoke behavior. A same-head/same-runner clean-rebuild
+  identity oracle for native build reproducibility remains a separate open gate. Keep cross-family
+  remote infrastructure, signing/trust, and measured legacy baseline gates open; do not introduce
+  publication, resolver, transfer, rollout, tuple enablement, or default behavior.
 
 ## Non-Negotiable Invariants
 
@@ -2709,6 +2711,136 @@ or unexpected token`; the first logs did not identify a source location.
 - Follow-up: run the exact correction on Windows x64/arm64 and all four POSIX artifact jobs, then
   record any next discriminating native boundary without broadening this work package.
 
+### E-M3-WINDOWS-CI-RED-004 — Native Windows assembly reached an opaque bounded smoke timeout
+
+- Date: 2026-07-14
+- Commit SHA / PR: exact workflow head `42aa02fa9eccf81e40d80f87461ddd232a1cda1f`, containing
+  implementation commit `b6903b220`; draft PR
+  [#8741](https://github.com/stablyai/orca/pull/8741)
+- Run: [SSH Relay Runtime Artifacts 29340686444](https://github.com/stablyai/orca/actions/runs/29340686444),
+  conclusion `failure`; all four POSIX regression jobs passed and uploaded only unpublished
+  seven-day Actions artifacts.
+- Native Windows jobs:
+  - x64 job `87111302431`: `windows-2022`, resolved `win22` image `20260706.237.1`, GitHub-hosted
+    X64, Windows Server 2022 Datacenter build 20348, Node v24.18.0; failed after 4m37s.
+  - arm64 job `87111302486`: `windows-11-arm`, resolved `win11-arm64` image `20260706.102.1`,
+    GitHub-hosted ARM64, Windows 10 Enterprise build 26200, Node v24.18.0; failed after 7m9s.
+- Remote and transport: no SSH remote. Exact inputs came from `nodejs.org/dist/v24.18.0`; no release
+  publication or Windows artifact upload occurred.
+- Exact commands:
+
+  ```sh
+  gh run view 29340686444 --repo stablyai/orca \
+    --json databaseId,headSha,status,conclusion,url,createdAt,updatedAt,jobs
+  gh api repos/stablyai/orca/actions/jobs/87111302431/logs | \
+    rg -n -C 25 "SSH relay runtime verification failed|durationMs|contentId|Process completed with exit code"
+  gh api repos/stablyai/orca/actions/jobs/87111302486/logs | \
+    rg -n -C 25 "SSH relay runtime verification failed|durationMs|contentId|Process completed with exit code"
+  gh api --paginate repos/stablyai/orca/actions/runs/29340686444/artifacts
+  ```
+
+- Result: FAIL at the native bundled smoke on both architectures. Each runner passed all seven
+  contract suites with 21 passing and one intentionally skipped test, authenticated the exact Node
+  checksum/signature plus ZIP/headers/import library, compiled the patched native modules, assembled
+  and reinspected a 60-entry/42-file deterministic-format ZIP, and entered verification's smoke only
+  after archive/tree integrity checks. X64 produced a 37,212,065-byte ZIP expanding to 97,248,414
+  bytes, content ID `90823b2c6bf7dad748a4399fe74fdfa8be82ef4a00d727e3a6be173f274fd43f`,
+  archive SHA-256 `ee7634dea179026b3ba8232294016d939e32edc34e1fd3697dd9e11722285d6a`,
+  and 146,511.617 ms build duration. Arm64 produced a 33,261,531-byte ZIP expanding to 86,189,740
+  bytes, content ID `09ec2772bb8c47ee240fd226963b7e251a8060e7f84321cb24d2668bf993e2ca`,
+  archive SHA-256 `5cb50521ec88d491f1a4183fc13f0b0f688e242e290038c4d34e0125d8e8b2c2`,
+  and 176,108.728 ms build duration.
+- Failure boundary: each bundled-Node smoke exceeded the parent command's 45-second timeout. The
+  child already bounds PTY and watcher waits at 15 seconds and writes its classified failure to
+  stderr, but `verify-ssh-relay-runtime.mjs` currently reports only the generic `execFile` stack.
+  The logs therefore cannot distinguish PTY, watcher, cleanup-handle, or combined failure. Upload
+  remained skipped. Smoke RSS, channel/file counts, and cancellation settlement were not emitted.
+- Oracle proved: the GPG relative-path correction works through real Git-for-Windows GPG on native
+  x64 and arm64; signed-input gating, offline native build inputs, patched native compilation,
+  bundled Node v24.18.0 staging, ZIP construction/inspection, and pre-execution archive/tree gates
+  all precede the failing smoke. The four POSIX jobs remain green on the exact same source head.
+- Does not prove: successful Windows PTY/ConPTY/watcher execution, which smoke substage failed,
+  prompt child-process settlement, ZIP clean-rebuild identity, durable Windows artifact bytes,
+  native trust/signing, oldest baseline, SSH, or any enabled tuple.
+- Checklist items satisfied: native GPG path portability and pre-smoke Windows assembly progression
+  only. Windows per-tuple cells remain unchecked because executable smoke and artifact retention did
+  not pass.
+- Follow-up: preserve bounded child stdout, stderr, timeout, exit, and signal details in the parent
+  diagnostic; add a failure-path unit test; rerun x64 first and change no PTY/watcher behavior until
+  the classified child failure is visible.
+
+### E-M3-WINDOWS-SMOKE-DIAGNOSTIC-RED-001 — Bounded child-detail propagation red gate
+
+- Date: 2026-07-14
+- Commit SHA / PR: uncommitted purpose-named regression test on exact head
+  `42aa02fa9eccf81e40d80f87461ddd232a1cda1f`; draft PR
+  [#8741](https://github.com/stablyai/orca/pull/8741)
+- Runner: macOS 26.2 arm64; Node v26.0.0 and pnpm 10.24.0
+- Remote and transport: none; synthetic child-process error object only
+- Exact command:
+  `pnpm exec vitest run --config config/vitest.config.ts config/scripts/ssh-relay-runtime-artifact.test.mjs`
+- Result: expected FAIL; the new diagnostic test failed and three existing tests passed in 239 ms
+  because `formatSshRelayRuntimeSmokeFailure` did not exist. The required oracle supplies timeout,
+  exit/signal state, partial stdout, and a greater-than-limit stderr whose final classified failure
+  must survive explicit truncation.
+- Oracle proved: existing parent diagnostics cannot satisfy the bounded failure-detail contract and
+  the new test discriminates both missing metadata and unbounded/error-tail-losing implementations.
+- Does not prove: child execution, Windows behavior, the actual PTY/watcher failure, cleanup
+  settlement, or any tuple support.
+- Checklist items satisfied: red half of the smoke-diagnostic correction only.
+- Follow-up: implement a 64-KiB tail-preserving formatter around the already 4-MiB-bounded child
+  process, wrap `execFile` failure with it, and rerun focused/static gates before native x64 CI.
+
+### E-M3-WINDOWS-SMOKE-DIAGNOSTIC-LOCAL-001 — Bounded child-detail propagation correction
+
+- Date: 2026-07-14
+- Commit SHA / PR: uncommitted correction on exact base
+  `42aa02fa9eccf81e40d80f87461ddd232a1cda1f`; draft PR
+  [#8741](https://github.com/stablyai/orca/pull/8741)
+- Runner: macOS 26.2 arm64; Node v26.0.0 and pnpm 10.24.0. Exact-head Node 24 CI remains
+  authoritative.
+- Remote and transport: none; synthetic child-process error plus local artifact contracts
+- Exact commands:
+
+  ```sh
+  pnpm exec vitest run --config config/vitest.config.ts \
+    config/scripts/ssh-relay-runtime-artifact.test.mjs
+  pnpm exec vitest run --config config/vitest.config.ts \
+    config/scripts/ssh-relay-node-release-verification.test.mjs \
+    config/scripts/ssh-relay-node-tar-inspection.test.mjs \
+    config/scripts/ssh-relay-node-zip-inspection.test.mjs \
+    config/scripts/ssh-relay-runtime-artifact.test.mjs \
+    config/scripts/ssh-relay-runtime-windows-tree.test.mjs \
+    config/scripts/ssh-relay-runtime-zip.test.mjs \
+    config/scripts/ssh-relay-runtime-workflow.test.mjs
+  pnpm run typecheck
+  pnpm exec oxlint \
+    config/scripts/verify-ssh-relay-runtime.mjs \
+    config/scripts/ssh-relay-runtime-artifact.test.mjs
+  pnpm exec oxlint
+  pnpm run check:max-lines-ratchet
+  GOMAXPROCS=2 pnpm run lint
+  pnpm exec oxfmt --check \
+    docs/reference/plans/2026-07-14-ssh-relay-github-release-implementation-checklist.md \
+    docs/reference/plans/2026-07-14-ssh-relay-github-release-plan.html
+  git diff --check
+  ```
+
+- Result: PASS. The focused artifact suite passed 4/4 tests in 194 ms; all seven artifact suites
+  passed 23/23 tests in 293 ms. Typecheck, focused and full oxlint, max-lines ratchet, full
+  lint/reliability/localization gates, plan formatting, and diff whitespace passed. Full lint
+  reported only existing warnings outside this package and used the recorded `GOMAXPROCS=2`
+  stability constraint.
+- Oracle proved: any failed bundled-smoke child now propagates the declared 45-second parent timeout,
+  exit code, kill state, signal, message, stdout, and stderr; each stream retains at most its final
+  64 KiB with an explicit omitted-byte count. The real command remains capped at 4 MiB and no
+  success-path parsing or smoke behavior changed.
+- Does not prove: real child failure propagation on Windows, which PTY/watcher stage fails,
+  process-tree settlement after timeout, successful native smoke, or any tuple support.
+- Checklist items satisfied: local green half of the bounded smoke-diagnostic correction only.
+- Follow-up: rerun native Windows x64, capture the classified child tail, and make no execution-path
+  change until that evidence identifies the actual failure.
+
 ### E-M3-RUNTIME-LOCAL-001 — First target-native Linux arm64 runtime artifact
 
 - Date: 2026-07-14
@@ -2944,18 +3076,18 @@ or unexpected token`; the first logs did not identify a source location.
 No product gap is accepted merely because it appears in this list. Each entry requires explicit
 owner and promotion condition.
 
-| Gap                                        | Current behavior                                                        | Risk                                           | Owner                                                   | Promotion/removal condition                                                    | Status       |
-| ------------------------------------------ | ----------------------------------------------------------------------- | ---------------------------------------------- | ------------------------------------------------------- | ------------------------------------------------------------------------------ | ------------ |
-| Bundled runtime only partially implemented | Four unpublished POSIX native artifact proofs; no production consumer   | #8450/#1693 environment failures remain        | Codex implementation owner                              | Complete Work Packages 2–7 plus Milestones 3–14                                | Open         |
-| No bundled tuple enabled                   | Every target's default and effective mode remains legacy                | No bundled support claim can be made           | Codex implementation owner                              | Complete target-native build/trust and both required live-evidence layers      | Open         |
-| Windows runtime/zip builder absent         | Windows targets remain entirely on the legacy path                      | POSIX proof cannot establish Windows behavior  | Codex implementation owner                              | Bounded deterministic zip, Node/native build, signing, smoke, and live gates   | Open         |
-| Native clean-rebuild identity unproved     | One successful artifact per corrected-head hosted runner                | Toolchain drift may change native content IDs  | Codex implementation owner                              | Same-head, same-runner clean builds match or a reviewed reproducibility policy | Open         |
-| Cross-family Layer B remotes unavailable   | GitHub native runner labels exist; no approved reachable target pool    | Client/remote integration gaps may escape      | Repository release administrator + implementation owner | Approve provider/snapshots/credentials/egress/teardown/cost owner              | BLOCKED      |
-| Musl has no accepted official Node binary  | Musl is deliberately legacy-only                                        | Unofficial binary would break provenance trust | Codex implementation owner                              | Orca-owned target-native source build, signing, provenance, and live gates     | ACCEPTED GAP |
-| Native arm64 live matrices incomplete      | Hosted Linux/Windows arm64 labels exist; full SSH/runtime cells do not  | Cross-build or unit tests may hide native bugs | Codex implementation owner                              | Full native archive, trust, SFTP/system-SSH, RPC, and baseline evidence        | Open         |
-| Legacy performance baseline unmeasured     | Numeric budgets exist; paired cold/warm measurements do not             | Regression thresholds lack a measured baseline | Codex implementation owner                              | Purpose-built paired harness with ten samples on pinned runner classes         | Open         |
-| Manifest signing environment unprovisioned | Ed25519/key-rotation policy exists; no protected runtime signing secret | Runtime assets cannot be safely published      | Repository release administrator                        | Protected environment, reviewers, two test keys, rehearsals, and access audit  | BLOCKED      |
-| Bootstrap primitives lack full live proof  | POSIX/Windows contracts exist; bounded SSH implementations do not       | Hidden dependency or transfer corruption       | Codex implementation owner                              | Purpose-named full-size SFTP/POSIX/Windows system-SSH live suites              | Open         |
+| Gap                                        | Current behavior                                                        | Risk                                            | Owner                                                   | Promotion/removal condition                                                    | Status       |
+| ------------------------------------------ | ----------------------------------------------------------------------- | ----------------------------------------------- | ------------------------------------------------------- | ------------------------------------------------------------------------------ | ------------ |
+| Bundled runtime only partially implemented | Four unpublished POSIX native artifact proofs; no production consumer   | #8450/#1693 environment failures remain         | Codex implementation owner                              | Complete Work Packages 2–7 plus Milestones 3–14                                | Open         |
+| No bundled tuple enabled                   | Every target's default and effective mode remains legacy                | No bundled support claim can be made            | Codex implementation owner                              | Complete target-native build/trust and both required live-evidence layers      | Open         |
+| Windows runtime smoke incomplete           | Native candidate ZIPs build, but smoke fails before artifact retention  | Pre-smoke proof cannot establish relay behavior | Codex implementation owner                              | Classified passing PTY/watcher smoke, reproducibility, trust, and live gates   | Open         |
+| Native clean-rebuild identity unproved     | One successful artifact per corrected-head hosted runner                | Toolchain drift may change native content IDs   | Codex implementation owner                              | Same-head, same-runner clean builds match or a reviewed reproducibility policy | Open         |
+| Cross-family Layer B remotes unavailable   | GitHub native runner labels exist; no approved reachable target pool    | Client/remote integration gaps may escape       | Repository release administrator + implementation owner | Approve provider/snapshots/credentials/egress/teardown/cost owner              | BLOCKED      |
+| Musl has no accepted official Node binary  | Musl is deliberately legacy-only                                        | Unofficial binary would break provenance trust  | Codex implementation owner                              | Orca-owned target-native source build, signing, provenance, and live gates     | ACCEPTED GAP |
+| Native arm64 live matrices incomplete      | Hosted Linux/Windows arm64 labels exist; full SSH/runtime cells do not  | Cross-build or unit tests may hide native bugs  | Codex implementation owner                              | Full native archive, trust, SFTP/system-SSH, RPC, and baseline evidence        | Open         |
+| Legacy performance baseline unmeasured     | Numeric budgets exist; paired cold/warm measurements do not             | Regression thresholds lack a measured baseline  | Codex implementation owner                              | Purpose-built paired harness with ten samples on pinned runner classes         | Open         |
+| Manifest signing environment unprovisioned | Ed25519/key-rotation policy exists; no protected runtime signing secret | Runtime assets cannot be safely published       | Repository release administrator                        | Protected environment, reviewers, two test keys, rehearsals, and access audit  | BLOCKED      |
+| Bootstrap primitives lack full live proof  | POSIX/Windows contracts exist; bounded SSH implementations do not       | Hidden dependency or transfer corruption        | Codex implementation owner                              | Purpose-named full-size SFTP/POSIX/Windows system-SSH live suites              | Open         |
 
 ## Final Definition of Done
 

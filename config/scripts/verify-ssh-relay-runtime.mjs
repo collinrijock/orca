@@ -10,6 +10,31 @@ import { computeSshRelayRuntimeContentId } from './ssh-relay-runtime-identity.mj
 const execFileAsync = promisify(execFile)
 const scriptDirectory = import.meta.dirname
 const MAX_SMOKE_OUTPUT_BYTES = 4 * 1024 * 1024
+const MAX_SMOKE_FAILURE_DETAIL_BYTES = 64 * 1024
+const SMOKE_TIMEOUT_MS = 45_000
+
+function boundedSshRelayRuntimeSmokeDetail(value) {
+  const text = typeof value === 'string' ? value : Buffer.isBuffer(value) ? value.toString() : ''
+  const bytes = Buffer.from(text)
+  if (bytes.length <= MAX_SMOKE_FAILURE_DETAIL_BYTES) {
+    return text
+  }
+  const retained = bytes.subarray(bytes.length - MAX_SMOKE_FAILURE_DETAIL_BYTES).toString()
+  return `[truncated ${bytes.length - MAX_SMOKE_FAILURE_DETAIL_BYTES} bytes]\n${retained}`
+}
+
+export function formatSshRelayRuntimeSmokeFailure(error) {
+  return [
+    'Bundled runtime smoke command failed:',
+    `timeoutMs=${SMOKE_TIMEOUT_MS}`,
+    `code=${JSON.stringify(error?.code ?? null)}`,
+    `killed=${JSON.stringify(error?.killed ?? false)}`,
+    `signal=${JSON.stringify(error?.signal ?? null)}`,
+    `message=${JSON.stringify(error?.message ?? String(error))}`,
+    `stdout=${JSON.stringify(boundedSshRelayRuntimeSmokeDetail(error?.stdout))}`,
+    `stderr=${JSON.stringify(boundedSshRelayRuntimeSmokeDetail(error?.stderr))}`
+  ].join(' ')
+}
 
 function parseArguments(argv) {
   const result = {}
@@ -110,13 +135,19 @@ export async function verifyRuntimeTree(runtimeDirectory, identity) {
 async function runBundledSmoke(runtimeDirectory, identity) {
   const nodePath = join(runtimeDirectory, 'bin', identity.os === 'win32' ? 'node.exe' : 'node')
   const childPath = resolve(scriptDirectory, 'ssh-relay-runtime-smoke-child.cjs')
-  const result = await execFileAsync(nodePath, [childPath, runtimeDirectory], {
-    cwd: runtimeDirectory,
-    encoding: 'utf8',
-    maxBuffer: MAX_SMOKE_OUTPUT_BYTES,
-    timeout: 45_000,
-    windowsHide: true
-  })
+  let result
+  try {
+    result = await execFileAsync(nodePath, [childPath, runtimeDirectory], {
+      cwd: runtimeDirectory,
+      encoding: 'utf8',
+      maxBuffer: MAX_SMOKE_OUTPUT_BYTES,
+      timeout: SMOKE_TIMEOUT_MS,
+      windowsHide: true
+    })
+  } catch (error) {
+    // The child classifies PTY/watcher failures; retain its bounded tail to avoid blind CI retries.
+    throw new Error(formatSshRelayRuntimeSmokeFailure(error), { cause: error })
+  }
   const smoke = JSON.parse(result.stdout)
   if (smoke.nodeVersion !== `v${identity.nodeVersion}`) {
     throw new Error(`Bundled smoke used unexpected Node version: ${smoke.nodeVersion}`)

@@ -10,7 +10,10 @@ import {
   inspectSshRelayRuntimeArchive
 } from './ssh-relay-runtime-archive.mjs'
 import { computeSshRelayRuntimeContentId } from './ssh-relay-runtime-identity.mjs'
-import { verifyRuntimeTree } from './verify-ssh-relay-runtime.mjs'
+import {
+  formatSshRelayRuntimeSmokeFailure,
+  verifyRuntimeTree
+} from './verify-ssh-relay-runtime.mjs'
 
 const temporaryDirectories = []
 afterEach(async () => {
@@ -177,6 +180,25 @@ describe('SSH relay runtime artifact', () => {
         /entry mismatch/i
       )
     }
+  })
+
+  it('preserves bounded bundled-smoke child failure diagnostics', () => {
+    const message = formatSshRelayRuntimeSmokeFailure({
+      code: 'ETIMEDOUT',
+      killed: true,
+      signal: 'SIGTERM',
+      message: 'Command timed out',
+      stdout: 'partial smoke output',
+      stderr: `${'x'.repeat(70 * 1024)}Bundled runtime smoke failed: watcher create exceeded 15000 ms`
+    })
+
+    expect(message).toContain('timeoutMs=45000')
+    expect(message).toContain('code="ETIMEDOUT"')
+    expect(message).toContain('killed=true')
+    expect(message).toContain('signal="SIGTERM"')
+    expect(message).toContain('partial smoke output')
+    expect(message).toContain('truncated')
+    expect(message).toContain('watcher create exceeded 15000 ms')
   })
 
   it.skipIf(process.platform === 'win32')(
