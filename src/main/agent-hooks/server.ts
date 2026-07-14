@@ -977,15 +977,19 @@ export class AgentHookServer {
 
   private getPhysicalPaneKeyForAuthority(paneKey: string, ptyId?: string): string {
     const ownerPaneKey = this.resolvePaneKeyAlias(paneKey)
+    let fallbackPaneKey = paneKey
     for (const [physicalPaneKey, entry] of this.legacyPaneKeyAliases) {
       if (
         entry.stablePaneKey === ownerPaneKey &&
         (!ptyId || !entry.ptyId || entry.ptyId === ptyId)
       ) {
-        return physicalPaneKey
+        if (entry.authorityVerified) {
+          return physicalPaneKey
+        }
+        fallbackPaneKey = physicalPaneKey
       }
     }
-    return paneKey
+    return fallbackPaneKey
   }
 
   canTransferPaneAuthority(
@@ -996,11 +1000,14 @@ export class AgentHookServer {
     if (!isValidPaneKey(fromPaneKey)) {
       return false
     }
+    const ownerPaneKey = this.resolvePaneKeyAlias(fromPaneKey)
     const physicalPaneKey = this.getPhysicalPaneKeyForAuthority(fromPaneKey, ptyId)
     const alias = this.legacyPaneKeyAliases.get(physicalPaneKey)
     if (ptyId) {
       return Boolean(
-        (alias?.authorityVerified && alias.ptyId === ptyId) || ownsPty(physicalPaneKey, ptyId)
+        (alias?.authorityVerified && alias.ptyId === ptyId) ||
+        ownsPty(physicalPaneKey, ptyId) ||
+        (ownerPaneKey !== physicalPaneKey && ownsPty(ownerPaneKey, ptyId))
       )
     }
     // Why: hook status is renderer-originated evidence, not PTY ownership.

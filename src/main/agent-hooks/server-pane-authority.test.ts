@@ -111,6 +111,24 @@ describe('AgentHookServer pane authority', () => {
     restored.transferPaneAuthority(SOURCE, TARGET, 'pty-1', 10, { authorityVerified: false })
     expect(restored.canTransferPaneAuthority(TARGET, undefined, () => false)).toBe(false)
     expect(restored.canTransferPaneAuthority(TARGET, 'pty-1', () => false)).toBe(false)
+    expect(
+      restored.canTransferPaneAuthority(TARGET, 'pty-1', (paneKey, ptyId) => {
+        return paneKey === TARGET && ptyId === 'pty-1'
+      })
+    ).toBe(true)
+    restored.transferPaneAuthority(TARGET, FINAL, 'pty-1', 20)
+    expect(restored.canTransferPaneAuthority(FINAL, undefined, () => false)).toBe(true)
+  })
+
+  it('prefers a spawn-verified legacy alias over an earlier migration fallback', () => {
+    const server = new AgentHookServer()
+    server.registerPaneKeyAlias('tab-source:0', SOURCE, 'pty-1')
+    server.registerPaneKeyAlias('tab-source:1', SOURCE, 'pty-1', 20, {
+      authorityVerified: true
+    })
+
+    expect(server.canTransferPaneAuthority(SOURCE, undefined, () => false)).toBe(true)
+    expect(server.canTransferPaneAuthority(SOURCE, 'pty-1', () => false)).toBe(true)
   })
 
   it('bounds persisted aliases by evicting the oldest authority', () => {
