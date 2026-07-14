@@ -71,6 +71,15 @@ export const terminalTeardownIntentJournalRecordSchema = z.discriminatedUnion('k
     .strict(),
   journalBaseSchema
     .extend({
+      kind: z.literal('ssh-migrate-generation'),
+      targetId: nonEmptyString,
+      ptyId: nonEmptyString,
+      relayInstanceId: nonEmptyString,
+      attachedAt: timestamp
+    })
+    .strict(),
+  journalBaseSchema
+    .extend({
       kind: z.literal('ssh-set'),
       targetId: nonEmptyString,
       ptyId: nonEmptyString,
@@ -93,6 +102,13 @@ export type TerminalTeardownIntentMutation =
   | { kind: 'runtime-upsert'; request: PersistedRuntimeTerminalClose }
   | { kind: 'runtime-remove'; environmentId: string; handle: string }
   | { kind: 'runtime-remove-environment'; environmentId: string }
+  | {
+      kind: 'ssh-migrate-generation'
+      targetId: string
+      ptyId: string
+      relayInstanceId: string
+      attachedAt: number
+    }
   | {
       kind: 'ssh-set'
       targetId: string

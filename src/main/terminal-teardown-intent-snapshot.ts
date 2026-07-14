@@ -182,6 +182,22 @@ function applyJournalRecord(
         (entry) => entry.environmentId !== record.environmentId
       )
       return
+    case 'ssh-migrate-generation': {
+      const lease = state.sshRemotePtyLeases?.find(
+        (candidate) =>
+          candidate.targetId === record.targetId &&
+          candidate.ptyId === record.ptyId &&
+          candidate.relayInstanceId === undefined
+      )
+      if (!lease) {
+        return
+      }
+      lease.relayInstanceId = record.relayInstanceId
+      lease.state = 'attached'
+      lease.updatedAt = Math.max(lease.updatedAt, record.attachedAt)
+      lease.lastAttachedAt = Math.max(lease.lastAttachedAt ?? 0, record.attachedAt)
+      return
+    }
     case 'ssh-set': {
       const lease = state.sshRemotePtyLeases?.find(
         (candidate) =>

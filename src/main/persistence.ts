@@ -6604,6 +6604,38 @@ export class Store {
     return true
   }
 
+  migrateLegacySshRemotePtyLeaseGeneration(
+    targetId: string,
+    ptyId: string,
+    relayInstanceId: string
+  ): boolean {
+    const relayPtyId = this.getRelayPtyIdForSshLeaseStorage(targetId, ptyId)
+    const lease = this.state.sshRemotePtyLeases?.find(
+      (entry) =>
+        entry.targetId === targetId &&
+        entry.ptyId === relayPtyId &&
+        entry.relayInstanceId === undefined
+    )
+    if (!lease) {
+      return false
+    }
+    const now = Date.now()
+    lease.relayInstanceId = relayInstanceId
+    lease.state = 'attached'
+    lease.updatedAt = now
+    lease.lastAttachedAt = now
+    // Why: crash-safe adoption must remain O(1) per restored pane instead of
+    // synchronously serializing the full persisted store during startup.
+    this.persistTerminalTeardownIntents({
+      kind: 'ssh-migrate-generation',
+      targetId,
+      ptyId: relayPtyId,
+      relayInstanceId,
+      attachedAt: now
+    })
+    return true
+  }
+
   markSshRemotePtyShutdownRequested(targetId: string, ptyId: string): boolean {
     const requestedGeneration = parseAppSshPtyId(ptyId)?.relayInstanceId
     const relayPtyId = this.getRelayPtyIdForSshLeaseStorage(targetId, ptyId)

@@ -1244,6 +1244,7 @@ export class SshRelaySession {
         })
         .filter((entry): entry is [string, ExpectedPtyIdentity] => entry !== null)
     )
+    const leaseByPtyId = new Map(attachableLeases.map((lease) => [lease.ptyId, lease]))
     // Why: after app restart, ptyOwnership is empty but durable SSH leases
     // still describe remote PTYs that survived in the relay grace window.
     const ownedPtyIds = getPtyIdsForConnection(this.targetId).flatMap((appPtyId) => {
@@ -1276,15 +1277,35 @@ export class SshRelaySession {
           return
         }
         const appPtyId = toAppSshPtyId(this.targetId, ptyId, relayInstanceId)
+        const lease = leaseByPtyId.get(ptyId)
+        if (lease && !lease.relayInstanceId && relayInstanceId) {
+          // Why: only a proven attach can bind a pre-generation lease to the
+          // relay boot that actually owns it; strict normal writes stay fenced.
+          const migrated = this.store.migrateLegacySshRemotePtyLeaseGeneration(
+            this.targetId,
+            ptyId,
+            relayInstanceId
+          )
+          if (!migrated && !this.store.markSshRemotePtyLease(this.targetId, appPtyId, 'attached')) {
+            continue
+          }
+        } else {
+          this.store.markSshRemotePtyLease(this.targetId, appPtyId, 'attached')
+        }
         setPtyOwnership(appPtyId, this.targetId)
-        this.store.markSshRemotePtyLease(this.targetId, appPtyId, 'attached')
         this.forwardReattachReplay(appPtyId, attachResult.replay ?? '')
       } catch (err) {
         if (!isSshPtyNotFoundError(err)) {
           throw err
         }
-        const appPtyId = toAppSshPtyId(this.targetId, ptyId, relayInstanceId)
-        if (isSshPtyIdentityMismatchError(err)) {
+        const lease = leaseByPtyId.get(ptyId)
+        const isLegacyLease = Boolean(lease && !lease.relayInstanceId && relayInstanceId)
+        const appPtyId = toAppSshPtyId(
+          this.targetId,
+          ptyId,
+          isLegacyLease ? undefined : relayInstanceId
+        )
+        if (isSshPtyIdentityMismatchError(err) && !isLegacyLease) {
           console.warn(
             `[ssh-relay-session] Ignoring stale PTY ${ptyId} for ${this.targetId} after relay identity mismatch: ${
               err instanceof Error ? err.message : String(err)
@@ -1297,17 +1318,9 @@ export class SshRelaySession {
             err instanceof Error ? err.message : String(err)
           }`
         )
-        clearProviderPtyState(appPtyId)
-        deletePtyOwnership(appPtyId)
-        this.forwardedReattachReplayByPty.delete(appPtyId)
-        this.store.markSshRemotePtyLease(this.targetId, appPtyId, 'expired')
-        // Why: if the new relay cannot reattach this id, the remote backing
-        // process is gone. Tell the renderer so it clears stale pane bindings
-        // instead of keeping a cursor-only terminal.
-        const win = this.getMainWindow()
-        if (win && !win.isDestroyed()) {
-          win.webContents.send('pty:exit', { id: appPtyId, code: -1 })
-        }
+        // Why: a failed legacy attach has not earned the new generation. Retire
+        // and notify its original id so a recycled current relay id stays intact.
+        this.expireReattachPty(ptyId, appPtyId)
       }
     }
   }
