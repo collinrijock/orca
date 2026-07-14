@@ -4,6 +4,7 @@ import {
   assertSshRelayRuntimeToolchain,
   collectSshRelayRuntimeToolchain,
   selectSshRelayRuntimeToolVersion,
+  selectSshRelayRuntimeWindowsMsvcLinker,
   sshRelayRuntimeBuilderIdentity,
   sshRelayRuntimeRunnerIdentity,
   sshRelayRuntimeStripVersionProbe,
@@ -52,6 +53,20 @@ describe('SSH relay runtime build provenance', () => {
     ).toThrow(/MSVC toolset path/)
   })
 
+  it('selects exactly one canonical MSVC linker after Git for Windows PATH entries', () => {
+    const x64 = String.raw`C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Tools\MSVC\14.44.35207\bin\HostX64\x64\link.exe`
+    const arm64 = String.raw`C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Tools\MSVC\14.44.35207\bin\HostARM64\ARM64\link.exe`
+    const git = String.raw`C:\Program Files\Git\usr\bin\link.exe`
+    expect(selectSshRelayRuntimeWindowsMsvcLinker([git, x64])).toBe(x64)
+    expect(selectSshRelayRuntimeWindowsMsvcLinker([git, arm64])).toBe(arm64)
+    expect(() => selectSshRelayRuntimeWindowsMsvcLinker([git])).toThrow(
+      /exactly one canonical MSVC linker/
+    )
+    expect(() => selectSshRelayRuntimeWindowsMsvcLinker([x64, arm64])).toThrow(
+      /exactly one canonical MSVC linker/
+    )
+  })
+
   it('bounds failed version diagnostics', () => {
     expect(() =>
       selectSshRelayRuntimeToolVersion({ stderr: `unexpected ${'x'.repeat(1_000)}` }, /version/i)
@@ -59,10 +74,15 @@ describe('SSH relay runtime build provenance', () => {
   })
 
   it('bounds rejected Windows linker path diagnostics', () => {
-    const path = String.raw`C:\${'unexpected\\'.repeat(100)}link.exe`
+    const path = `C:\\${'unexpected\\'.repeat(100)}link.exe`
     expect(() => sshRelayRuntimeWindowsMsvcToolsetVersion(path)).toThrow(
       /^Resolved Windows linker is not in a bounded MSVC toolset path: .{1,512}$/
     )
+    expect(() =>
+      selectSshRelayRuntimeWindowsMsvcLinker(
+        Array.from({ length: 20 }, (_, index) => `C:\\${index}\\${'x'.repeat(600)}\\link.exe`)
+      )
+    ).toThrow(/^Runtime build did not resolve exactly one canonical MSVC linker: .{1,512}$/)
   })
 
   it('pins GitHub builder identity to the exact source commit', () => {

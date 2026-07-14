@@ -55,7 +55,7 @@ export function selectSshRelayRuntimeToolVersion({ stdout = '', stderr = '' }, p
   return version
 }
 
-async function locateExecutable(command, { xcrun = false } = {}) {
+async function locateExecutable(command, { windowsMsvcLinker = false, xcrun = false } = {}) {
   if (isAbsolute(command)) {
     return realpath(command)
   }
@@ -65,10 +65,11 @@ async function locateExecutable(command, { xcrun = false } = {}) {
       ? ['where.exe', [command]]
       : ['which', [command]]
   const result = await capture(...locator)
-  const path = result.stdout
+  const paths = result.stdout
     .split(/\r?\n/)
     .map((line) => line.trim())
-    .find(Boolean)
+    .filter(Boolean)
+  const path = windowsMsvcLinker ? selectSshRelayRuntimeWindowsMsvcLinker(paths) : paths[0]
   if (!path || !isAbsolute(path)) {
     throw new Error(`Runtime build tool executable could not be resolved: ${command}`)
   }
@@ -84,7 +85,10 @@ async function executableRecord({
   windowsMsvcToolsetVersion = false,
   xcrun = false
 }) {
-  const path = await locateExecutable(command, { xcrun })
+  const path = await locateExecutable(command, {
+    windowsMsvcLinker: windowsMsvcToolsetVersion,
+    xcrun
+  })
   const result = windowsMsvcToolsetVersion
     ? { stdout: sshRelayRuntimeWindowsMsvcToolsetVersion(path) }
     : await capture(versionCommand ?? path, versionArgs ?? args)
@@ -205,6 +209,33 @@ export function sshRelayRuntimeWindowsMsvcToolsetVersion(path) {
   }
   // Why: hosted link.exe has no version resource; its resolved toolset path plus byte hash is exact.
   return `MSVC ${version}`
+}
+
+export function selectSshRelayRuntimeWindowsMsvcLinker(paths) {
+  const candidates = [
+    ...new Map(paths.map((path) => [win32.normalize(path).toLowerCase(), path])).values()
+  ]
+  const matches = candidates.filter((path) => {
+    try {
+      sshRelayRuntimeWindowsMsvcToolsetVersion(path)
+      return true
+    } catch {
+      return false
+    }
+  })
+  if (matches.length !== 1) {
+    const diagnostic =
+      candidates
+        .slice(-4)
+        .map((path) => win32.normalize(path).split(win32.sep).slice(-8).join(win32.sep))
+        .join(' | ')
+        .slice(-512) || '<empty>'
+    throw new Error(
+      `Runtime build did not resolve exactly one canonical MSVC linker: ${diagnostic}`
+    )
+  }
+  // Why: Git for Windows also provides link.exe and is prepended for signature verification in CI.
+  return matches[0]
 }
 
 export function assertSshRelayRuntimeToolchain(toolchain, tuple) {
