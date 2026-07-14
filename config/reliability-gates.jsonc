@@ -2165,8 +2165,7 @@
         {
           "file": "src/renderer/src/startup/ssh-startup-reconnect.test.ts",
           "assertions": [
-            "the state returned by ssh.connect is published before persisted terminals reconnect",
-            "passphrase-protected and inactive targets do not reconnect eagerly"
+            "the state returned by ssh.connect is published before persisted terminals reconnect"
           ]
         },
         {
