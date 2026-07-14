@@ -59,7 +59,8 @@ same change as the work it records.
   deploy/resolver call site is connected and no tuple is enabled.
 - Active package: Work Package 2 target-native runtime assembly, archive inspection, executable
   smoke, SBOM, and provenance only. The Windows x64/arm64 artifact candidate and portability
-  corrections are implemented through `b6903b220` in stacked draft PR
+  corrections are implemented through `b6903b220`, with bounded smoke diagnostics in `3aab5aff8`,
+  in stacked draft PR
   [#8741](https://github.com/stablyai/orca/pull/8741). Both native architectures passed all seven
   contract suites, exact signed-input verification, native compilation, and bounded runtime/ZIP
   assembly at exact CI head `42aa02fa9` (E-M3-WINDOWS-CI-RED-004). Both then time out during the
@@ -2772,7 +2773,7 @@ or unexpected token`; the first logs did not identify a source location.
 ### E-M3-WINDOWS-SMOKE-DIAGNOSTIC-RED-001 — Bounded child-detail propagation red gate
 
 - Date: 2026-07-14
-- Commit SHA / PR: uncommitted purpose-named regression test on exact head
+- Commit SHA / PR: red test introduced before its implementation in `3aab5aff8`; exact base
   `42aa02fa9eccf81e40d80f87461ddd232a1cda1f`; draft PR
   [#8741](https://github.com/stablyai/orca/pull/8741)
 - Runner: macOS 26.2 arm64; Node v26.0.0 and pnpm 10.24.0
@@ -2794,7 +2795,7 @@ or unexpected token`; the first logs did not identify a source location.
 ### E-M3-WINDOWS-SMOKE-DIAGNOSTIC-LOCAL-001 — Bounded child-detail propagation correction
 
 - Date: 2026-07-14
-- Commit SHA / PR: uncommitted correction on exact base
+- Commit SHA / PR: implementation commit `3aab5aff8` on exact base
   `42aa02fa9eccf81e40d80f87461ddd232a1cda1f`; draft PR
   [#8741](https://github.com/stablyai/orca/pull/8741)
 - Runner: macOS 26.2 arm64; Node v26.0.0 and pnpm 10.24.0. Exact-head Node 24 CI remains
