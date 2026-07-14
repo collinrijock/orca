@@ -3337,7 +3337,7 @@ export function connectPanePty(
     if (transport.isConnected() && transport.getPtyId() !== null) {
       return
     }
-    const storePtyId = useAppStore.getState().ptyIdsByTabId[deps.tabId]?.[0] ?? null
+    const storePtyId = useAppStore.getState().ptyIdsByTabId?.[deps.tabId]?.[0] ?? null
     void requestTerminalPaneRecovery({
       tabId: deps.tabId,
       ptyId: transport.getPtyId() ?? storePtyId,
@@ -3351,7 +3351,7 @@ export function connectPanePty(
   const unregisterUndeliverableWriteHandler = registerUndeliverableWriteHandler(
     pane.terminal,
     (reason) => {
-      const storePtyId = useAppStore.getState().ptyIdsByTabId[deps.tabId]?.[0] ?? null
+      const storePtyId = useAppStore.getState().ptyIdsByTabId?.[deps.tabId]?.[0] ?? null
       void requestTerminalPaneRecovery({
         tabId: deps.tabId,
         ptyId: transport.getPtyId() ?? storePtyId,

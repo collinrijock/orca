@@ -149,6 +149,19 @@ describe('requestTerminalPaneRecovery', () => {
     expect(mocks.remountTerminalTabForRecovery).not.toHaveBeenCalled()
   })
 
+  it('never throws when the store surface is partial (timer/callback contexts)', async () => {
+    // Regression: recovery fires from stall-watch timers and write callbacks;
+    // an environment with a partial store (mocked suites, teardown races) must
+    // get a false return, not an unhandled TypeError.
+    mocks.remountTerminalTabForRecovery.mockImplementation(() => {
+      throw new TypeError('remountTerminalTabForRecovery is not a function')
+    })
+
+    await expect(
+      requestTerminalPaneRecovery({ tabId: 'tab-1', ptyId: 'pty-1', reason: 'write-stalled' })
+    ).resolves.toBe(false)
+  })
+
   it('does not consume budget when the tab no longer exists', async () => {
     mocks.remountTerminalTabForRecovery.mockReturnValue(false)
 

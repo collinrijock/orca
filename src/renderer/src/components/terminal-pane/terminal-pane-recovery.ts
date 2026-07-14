@@ -78,7 +78,15 @@ export async function requestTerminalPaneRecovery(request: RecoveryRequest): Pro
       return false
     }
   }
-  const remounted = useAppStore.getState().remountTerminalTabForRecovery(request.tabId)
+  let remounted = false
+  try {
+    remounted = useAppStore.getState().remountTerminalTabForRecovery(request.tabId)
+  } catch {
+    // Why: recovery fires from timer and write-callback contexts (stall watch,
+    // replay guard, onData) — it is best-effort by contract and must never
+    // surface a throw there (partial store surfaces in tests, teardown races).
+    return false
+  }
   if (!remounted) {
     return false
   }
