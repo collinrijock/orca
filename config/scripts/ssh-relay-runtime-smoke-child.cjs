@@ -6,6 +6,7 @@ const { join } = require('node:path')
 const { createRequire } = require('node:module')
 
 const { runSshRelayRuntimePtySmoke } = require('./ssh-relay-runtime-pty-smoke.cjs')
+const { observeWindowsResourceSettlement } = require('./ssh-relay-runtime-resource-diagnostics.cjs')
 
 const runtimeRoot = process.argv[2]
 if (!runtimeRoot) {
@@ -93,9 +94,10 @@ async function main() {
     runSshRelayRuntimePtySmoke({ nodePty, runtimeRequire, runtimeRoot }),
     watcherSmoke()
   ])
+  const resourceSettlement = await observeWindowsResourceSettlement()
   const durationMs = Number(process.hrtime.bigint() - started) / 1e6
   process.stdout.write(
-    `${JSON.stringify({ nodeVersion: process.version, modulesAbi: process.versions.modules, pty, watcher: watched, durationMs, rssBytes: process.memoryUsage().rss })}\n`
+    `${JSON.stringify({ nodeVersion: process.version, modulesAbi: process.versions.modules, pty, watcher: watched, resourceSettlement, durationMs, rssBytes: process.memoryUsage().rss })}\n`
   )
 }
 

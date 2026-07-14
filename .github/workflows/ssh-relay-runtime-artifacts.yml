@@ -109,6 +109,7 @@ jobs:
             config/scripts/ssh-relay-node-zip-inspection.test.mjs \
             config/scripts/ssh-relay-runtime-artifact.test.mjs \
             config/scripts/ssh-relay-runtime-pty-smoke.test.mjs \
+            config/scripts/ssh-relay-runtime-resource-diagnostics.test.mjs \
             config/scripts/ssh-relay-runtime-windows-tree.test.mjs \
             config/scripts/ssh-relay-runtime-zip.test.mjs \
             config/scripts/ssh-relay-runtime-workflow.test.mjs
@@ -251,6 +252,7 @@ jobs:
             config/scripts/ssh-relay-node-zip-inspection.test.mjs `
             config/scripts/ssh-relay-runtime-artifact.test.mjs `
             config/scripts/ssh-relay-runtime-pty-smoke.test.mjs `
+            config/scripts/ssh-relay-runtime-resource-diagnostics.test.mjs `
             config/scripts/ssh-relay-runtime-windows-tree.test.mjs `
             config/scripts/ssh-relay-runtime-zip.test.mjs `
             config/scripts/ssh-relay-runtime-workflow.test.mjs

@@ -60,6 +60,7 @@ describe('SSH relay runtime artifact workflow', () => {
     expect(source).toContain("Get-ChildItem -LiteralPath $output -Filter '*.zip'")
     expect(source).toContain('ssh-relay-node-zip-inspection.test.mjs')
     expect(source).toContain('ssh-relay-runtime-pty-smoke.test.mjs')
+    expect(source).toContain('ssh-relay-runtime-resource-diagnostics.test.mjs')
     expect(source).toContain('ssh-relay-runtime-zip.test.mjs')
     expect(source).toContain('node-v24.18.0-headers.tar.gz')
     expect(source).toContain('node_library: win-x64/node.lib')
