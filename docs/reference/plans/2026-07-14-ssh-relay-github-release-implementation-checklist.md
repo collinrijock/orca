@@ -8,7 +8,7 @@ work; keep exact commands, runner identities, hashes, metrics, and residual gaps
 
 Date created: 2026-07-14<br>
 Last updated: 2026-07-14<br>
-Current phase: Milestone 3 / Work Package 2 runtime closure — exact implementation commit `ec5461aff` moves the exact per-tuple closure/prohibited-content/package/license gate into the artifact builder and is locally green under E-M3-RUNTIME-CLOSURE-LOCAL-001; all six prior candidate archives from run [29365815434](https://github.com/stablyai/orca/actions/runs/29365815434) satisfy the new 34/35/42-file closure, but the new builder gate has not yet run target-natively and no Milestone 3 completion box is closed by local/static reuse alone; the next exact-head six-cell run must retain the proven content IDs, enforce the closure before archiving, complete smoke and clean-build equality, and upload before this slice is accepted; SBOM/provenance completeness, compiler/toolchain records, oldest-baseline, native-trust, cross-family remote, and measured-baseline gates remain open; production/default behavior and every tuple state remain unchanged; no bundled-runtime path is enabled<br>
+Current phase: Milestone 3 / Work Package 2 SBOM/provenance closure — exact-head run [29367559831](https://github.com/stablyai/orca/actions/runs/29367559831) at ledger head `ace3d4f41` passes the builder-enforced 34/35/42-file closure, unchanged runtime content IDs, complete smoke, clean-build equality, and upload on all six native runner families under E-M3-RUNTIME-CLOSURE-CI-001; exact metadata implementation commit `26bbd7b67` adds file-to-package SPDX ownership/dependency relationships, archive-scoped document identity, exact-commit builder identity, resolved runner image/architecture, and bounded SHA-256 records for native executables and complete build-package trees, and is locally green under E-M3-METADATA-LOCAL-001; the next exact-head six-cell run must prove those records and metadata equality target-natively before the remaining SBOM/provenance/toolchain boxes are checked; oldest-baseline, native-trust, cross-family remote, and measured-baseline gates remain open; production/default behavior and every tuple state remain unchanged; no bundled-runtime path is enabled<br>
 Primary design: [SSH relay GitHub Release plan](./2026-07-14-ssh-relay-github-release-plan.html)<br>
 Motivating issues: [#8450](https://github.com/stablyai/orca/issues/8450), [#1693](https://github.com/stablyai/orca/issues/1693)
 
@@ -175,11 +175,12 @@ same change as the work it records.
   per-target opt-in selects bundled-preferred behavior, and implementing the setting does not
   authorize default-on rollout or legacy removal (E-M1-ROLLOUT-DECISION-001).
 - Legacy fallback removal: not authorized.
-- Next required action: push exact implementation commit `ec5461aff` plus its evidence-ledger head
-  and rerun all six target-native cells. Require the builder-enforced closure, unchanged runtime
-  content IDs, complete smoke, clean-build equality, and upload before checking the related
-  Milestone 3 claims. Then fix the separately identified SBOM/provenance/toolchain gaps. Preserve the
-  artifact-only boundary, legacy/default path, and every other release gate.
+- Next required action: push exact metadata implementation commit `26bbd7b67` plus its evidence-
+  ledger head and rerun all six target-native cells. Require exact SPDX ownership, archive-scoped
+  document identity, commit-pinned builder identity, resolved runner identity, complete bounded tool
+  records with SHA-256, clean-build metadata equality, smoke, and upload before checking the remaining
+  Milestone 3 metadata/toolchain claims. Preserve the artifact-only boundary, legacy/default path,
+  and every other release gate.
 
 ## Non-Negotiable Invariants
 
@@ -773,8 +774,8 @@ related implementation claims are checked.
 
 Each runtime must contain only the executable closure required by the relay.
 
-- [ ] Replace or extend `config/scripts/build-relay.mjs` without weakening its existing relay and
-      watcher content-hash guarantees.
+- [x] Replace or extend `config/scripts/build-relay.mjs` without weakening its existing relay and
+      watcher content-hash guarantees. (E-M3-RUNTIME-CLOSURE-CI-001)
 - [x] Add a clearly named runtime assembly script, for example
       `config/scripts/build-ssh-relay-runtime.mjs`.
       (E-M3-RUNTIME-LOCAL-001)
@@ -784,23 +785,27 @@ Each runtime must contain only the executable closure required by the relay.
       headers archive and tuple-specific `node.lib`; verify/copy them into an exclusive local build
       root and configure `node-gyp` to fail rather than fetch an unstaged input.
       (E-M3-WINDOWS-INPUT-001; successful target-native offline build remains a per-tuple gate)
-- [ ] Build Orca’s patched `node-pty@1.1.0` against the exact bundled Node runtime.
-- [ ] Assert Orca-required patched exports/diagnostics exist; do not silently use an upstream
-      prebuild that omits the patch.
+- [x] Build Orca’s patched `node-pty@1.1.0` against the exact bundled Node runtime.
+      (E-M3-RUNTIME-CLOSURE-CI-001)
+- [x] Assert Orca-required patched exports/diagnostics exist; do not silently use an upstream
+      prebuild that omits the patch. (E-M3-RUNTIME-CLOSURE-CI-001)
 - [x] For Windows, copy the tuple-architecture `conpty.dll` and `OpenConsole.exe` from the pinned
       node-pty source into `build/Release/conpty`, hash them into the runtime identity as native
       runtime files, and prove PTY spawn/resize/exit with `useConptyDll: true`. Do not substitute a
       system-ConPTY smoke for the production path. (E-M3-WINDOWS-CONPTY-GAP-001,
       E-M3-WINDOWS-CI-001)
-- [ ] Include exactly one compatible `@parcel/watcher@2.5.6` native optional package.
-- [ ] Include relay JavaScript, watcher child, required runtime JavaScript closure, licenses, SBOM,
-      provenance, and runtime metadata.
-- [ ] Exclude package managers, development dependencies, compilers, sources, caches, build
+- [x] Include exactly one compatible `@parcel/watcher@2.5.6` native optional package.
+      (E-M3-RUNTIME-CLOSURE-CI-001)
+- [x] Include relay JavaScript, watcher child, required runtime JavaScript closure, licenses, SBOM,
+      provenance, and runtime metadata. (E-M3-RUNTIME-CLOSURE-CI-001; metadata completeness remains
+      a separate open gate)
+- [x] Exclude package managers, development dependencies, compilers, sources, caches, build
       directories, and Orca-built debug symbols unless an approved diagnostics requirement needs
       them. Preserve verified official Node executable bytes without stripping or rewriting them,
-      even when the upstream binary contains debug metadata.
-- [x] Make POSIX `tar.xz` output deterministic for the same tree, epoch, and pinned compression
-      toolchain; keep Windows zip determinism as an open per-tuple gate. (E-M3-RUNTIME-LOCAL-001)
+      even when the upstream binary contains debug metadata. (E-M3-RUNTIME-CLOSURE-CI-001)
+- [x] Make POSIX `tar.xz` and Windows ZIP output deterministic for the same tree, epoch, and pinned
+      compression toolchain. (E-M3-RUNTIME-LOCAL-001, E-M3-REPRODUCIBILITY-CI-001,
+      E-M3-RUNTIME-CLOSURE-CI-001)
 - [x] Verify required executable modes before archiving. (E-M3-RUNTIME-LOCAL-001)
 - [ ] Sign native code according to the platform decisions in Milestone 1.
 - [ ] Verify platform-native signatures/policy on target-native runners after signing and before
@@ -1375,16 +1380,16 @@ Baseline measurements must be captured before product behavior changes.
 
 Update status and evidence as work begins. Do not combine these into one large behavior switch.
 
-| Work package              | Scope                                                                                      | Default behavior change     | Status                                                                    | PR/evidence                                                             |
-| ------------------------- | ------------------------------------------------------------------------------------------ | --------------------------- | ------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
-| 0. #8450 legacy fix       | Coherent Node/npm selection and live repro                                                 | Fixes legacy selection only | Complete and CI-green in draft PR #8724                                   | E-M0-UNIT-002, E-M0-LIVE-002, E-M0-STATIC-002, E-M0-PR-001, E-M0-CI-001 |
-| 1. Contract and selectors | Manifest schema, identity, platform/libc selection, hostile inputs                         | None                        | Complete and CI-green in draft PR #8728                                   | `b9d80a4cb`; E-M2-RED-001, E-M2-CONTRACT-001, E-M2-CI-001               |
-| 2. Runtime builds         | Per-tuple assembly, native smoke, SBOM/provenance/signing                                  | None                        | Draft PR #8741; exact closure locally green; native closure/trust pending | `ec5461aff`; E-M3-RUNTIME-CLOSURE-LOCAL-001                             |
-| 3. Release publication    | Prerequisite DAG, embedded manifest, draft upload/read-back gates                          | Asset-only                  | Not started                                                               | —                                                                       |
-| 4. Desktop resolver/cache | Verified download, extraction, cache, offline behavior                                     | None/forced mode only       | Not started                                                               | —                                                                       |
-| 5. Transfer/install       | Bounded transports, structured sentinel, bundled launch behind per-target Beta/forced mode | Per-target opt-in only      | Not started                                                               | —                                                                       |
-| 6. Fallback/diagnostics   | Abort-and-join state machine, mode isolation, reason codes, target-mode configuration/UI   | Per-target Beta only        | Not started                                                               | —                                                                       |
-| 7. Live gates/rollout     | Matrix, security, performance, release promotion                                           | Per-tuple staged            | Not started                                                               | —                                                                       |
+| Work package              | Scope                                                                                      | Default behavior change     | Status                                                              | PR/evidence                                                             |
+| ------------------------- | ------------------------------------------------------------------------------------------ | --------------------------- | ------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| 0. #8450 legacy fix       | Coherent Node/npm selection and live repro                                                 | Fixes legacy selection only | Complete and CI-green in draft PR #8724                             | E-M0-UNIT-002, E-M0-LIVE-002, E-M0-STATIC-002, E-M0-PR-001, E-M0-CI-001 |
+| 1. Contract and selectors | Manifest schema, identity, platform/libc selection, hostile inputs                         | None                        | Complete and CI-green in draft PR #8728                             | `b9d80a4cb`; E-M2-RED-001, E-M2-CONTRACT-001, E-M2-CI-001               |
+| 2. Runtime builds         | Per-tuple assembly, native smoke, SBOM/provenance/signing                                  | None                        | Draft PR #8741; native closure green; metadata local; trust pending | `26bbd7b67`; E-M3-RUNTIME-CLOSURE-CI-001, E-M3-METADATA-LOCAL-001       |
+| 3. Release publication    | Prerequisite DAG, embedded manifest, draft upload/read-back gates                          | Asset-only                  | Not started                                                         | —                                                                       |
+| 4. Desktop resolver/cache | Verified download, extraction, cache, offline behavior                                     | None/forced mode only       | Not started                                                         | —                                                                       |
+| 5. Transfer/install       | Bounded transports, structured sentinel, bundled launch behind per-target Beta/forced mode | Per-target opt-in only      | Not started                                                         | —                                                                       |
+| 6. Fallback/diagnostics   | Abort-and-join state machine, mode isolation, reason codes, target-mode configuration/UI   | Per-target Beta only        | Not started                                                         | —                                                                       |
+| 7. Live gates/rollout     | Matrix, security, performance, release promotion                                           | Per-tuple staged            | Not started                                                         | —                                                                       |
 
 Every PR must document:
 
@@ -1442,6 +1447,7 @@ focused commands as their scripts/tests are introduced.
 - [x] `node config/scripts/build-ssh-relay-runtime.mjs --tuple linux-arm64-glibc --inputs-directory <verified-input-directory> --output-directory <exclusive-output> --work-directory <exclusive-stable-work> --source-date-epoch <epoch> --git-commit <full-sha>` (E-M3-RUNTIME-LOCAL-001, E-M3-REPRODUCIBILITY-LINKER-LOCAL-001; local native Linux arm64 history plus current stable-work contract)
 - [x] `node config/scripts/verify-ssh-relay-runtime.mjs --runtime-directory <runtime-tree> --identity <identity.json> --archive <runtime.tar.xz>` (E-M3-RUNTIME-LOCAL-001; local native Linux arm64 only)
 - [x] `pnpm exec vitest run --config config/vitest.config.ts config/scripts/ssh-relay-*.test.mjs` (E-M3-RUNTIME-CLOSURE-LOCAL-001; 68 local artifact-contract tests plus static reuse of six prior candidate archives; new target-native builder execution remains pending)
+- [x] `pnpm exec vitest run --config config/vitest.config.ts config/scripts/ssh-relay-*.test.mjs && pnpm run typecheck && pnpm run lint && pnpm run check:max-lines-ratchet` (E-M3-METADATA-LOCAL-001; 76 local artifact-contract tests, typecheck, full lint, reliability gates, localization gates, and max-lines ratchet; native metadata/toolchain proof remains pending)
 
 ### Commands/scripts that must be added or formally identified
 
@@ -6062,6 +6068,127 @@ the bounded depth` before opening or parsing a candidate. Starting at the comple
   require unchanged runtime content IDs, builder-enforced closure, complete smoke, clean-build
   equality, and upload. Then fix and prove SBOM/provenance completeness separately.
 
+### E-M3-RUNTIME-CLOSURE-CI-001 — Exact closure passes all six target-native builds
+
+- Date: 2026-07-14
+- Commit SHA / PR: exact ledger head `ace3d4f416b1c710d601aa72c4b45824266b5cad`, containing exact
+  closure implementation commit `ec5461aff61d6868c18d4db1ce27f409a43ecf47`; stacked draft PR
+  [#8741](https://github.com/stablyai/orca/pull/8741)
+- Run and jobs: [run 29367559831](https://github.com/stablyai/orca/actions/runs/29367559831),
+  conclusion `success`; Windows arm64 `87202773590`, Windows x64 `87202773643`, macOS arm64
+  `87202773645`, macOS x64 `87202773658`, Linux x64 `87202773669`, and Linux arm64 `87202773674`
+  all passed
+- Runners: `windows-11-arm` / `win11-arm64` `20260706.102.1` native ARM64;
+  `windows-2022` / `win22` `20260706.237.1` native X64; `macos-15` / `macos15`
+  `20260706.0213.1` native ARM64; `macos-15-intel` / `macos15` `20260629.0276.1` native X64;
+  `ubuntu-24.04` / `ubuntu24` `20260705.232.1` native X64; and `ubuntu-24.04-arm` /
+  `ubuntu24-arm64` `20260706.52.2` native ARM64. Every job checked out the exact head above in a
+  GitHub-hosted environment.
+- Remote and transport: none; target-native artifact build/inspection/smoke and unpublished
+  seven-day Actions artifacts only
+- Exact evidence commands:
+
+  ```sh
+  gh run view 29367559831 --repo stablyai/orca \
+    --json status,conclusion,headSha,createdAt,updatedAt,url,jobs
+  gh run view 29367559831 --repo stablyai/orca --log | \
+    rg 'requested_runner=|resolved_image_os=|resolved_image_version=|runner_arch=|runner_environment=|source_commit='
+  gh run view 29367559831 --repo stablyai/orca --log | \
+    rg 'Test Files|"contentId"|windows_node_pty_msbuild_settings|clean_build_output=|runtime-evidence/'
+  gh api 'repos/stablyai/orca/actions/runs/29367559831/artifacts?per_page=100'
+  ```
+
+- Result: PASS. All four POSIX jobs passed 15 artifact-contract files and both Windows jobs passed 16. Each clean build then executed the builder-enforced exact closure before archiving, archive
+  inspection, bundled Node/native PTY/watcher smoke, strict clean-output comparison, and upload.
+  Both Windows builds retained exactly one `/INCREMENTAL:NO`, `/guard:cf`, no target `.ilk`, and
+  identical native output. No tuple changed content identity: Linux x64
+  `sha256:960546cd96c67fcf9bb0a61e96ecdbecbffd9104d3a495578f8bb19dd810649a`, Linux arm64
+  `sha256:aa3aa8ae8b42334ba7b0dbe5c43fd1184e36b3f4f4a9bec0e990e9b78f090756`, macOS x64
+  `sha256:585ea6034cdd07487d8667059f975a877c795a45dc0d6eeee1617f2e3749faa2`, macOS arm64
+  `sha256:40ff5d2036784b794e7b09f78596409f63f3145280c530bece5280d40897f6cb`, Windows x64
+  `sha256:6f7cbeb120e67766037649f6079099346220973e6158e1429b6ebf42729f1564`, and Windows arm64
+  `sha256:741765a10ddc824cd305b9a50c8efd91477517c05d9cfe1ca46342c002652186`.
+- Uploaded evidence: exactly six unpublished artifacts: Windows arm64 `8324892474`, 33,083,332
+  bytes, `sha256:1b90d23c5573116cf855926db294dff906407a5703260099d0d0f58bb500eb6a`;
+  Windows x64 `8324831155`, 37,033,206 bytes,
+  `sha256:013fa42e0bf29a36f378dffe6d327090a042be9e5947e55e6e097d3382418c5d`; macOS arm64
+  `8324786647`, 24,734,978 bytes,
+  `sha256:87e2632c542964df47ab4f981da0909532c51be6b2131692e539aaa1c77d409c`; macOS x64
+  `8324870620`, 26,400,500 bytes,
+  `sha256:d9ddf9b00d77aa05785e0813e3a61fcb07cd8f5f06b270e9703d5f2e28c03370`; Linux arm64
+  `8324781748`, 28,205,869 bytes,
+  `sha256:47d40a3eacf149270efabe7688f700dcfca7c1e155bbc2188298c7e78948469b`; and Linux x64
+  `8324772777`, 29,281,599 bytes,
+  `sha256:5b1552f4e2d28db1f552068e3bad6eb174e83ad88800101120a92cf2f0e44121`.
+- Duration and resource metrics: job wall times were 7m51s Windows arm64, 5m26s Windows x64, 3m38s
+  macOS arm64, 6m58s macOS x64, 3m06s Linux x64, and 3m23s Linux arm64. SSH channels/files,
+  cancellation, fallback delay, and connection latency remain outside this artifact-only run.
+- Oracle proved: the exact closure is enforced inside the artifact builder on all six native runner
+  families; the reviewed Node, patched native PTY, one tuple-native watcher, relay/watcher JavaScript,
+  runtime metadata, and license bundle are present; package managers, development/build/source/map/
+  PDB/ILK content and any unreviewed path are absent; complete smoke, reproducibility, and no-upload-
+  before-success ordering remain intact.
+- Does not prove: the subsequent SPDX/toolchain correction at `26bbd7b67`, oldest-baseline execution,
+  native signing/trust, SSH transfer/install, publication, fallback, UI, performance, or any enabled
+  tuple.
+- Checklist items satisfied: build the exact patched `node-pty`; assert patch markers; include one
+  compatible watcher and the complete declared runtime/license/metadata closure; exclude all
+  undeclared content. No tuple or production path is enabled.
+- Follow-up: prove the separately committed metadata correction on all six native cells before
+  checking SBOM/toolchain completeness, then proceed to oldest-baseline and native-trust gates.
+
+### E-M3-METADATA-LOCAL-001 — SPDX ownership and bounded toolchain provenance
+
+- Date: 2026-07-14
+- Commit SHA / PR: exact implementation commit
+  `26bbd7b67a035cdf309ccdbbaab5985f4cc797fe`; stacked draft PR
+  [#8741](https://github.com/stablyai/orca/pull/8741)
+- Runner: local macOS 26.2 build 25C56, Darwin 25.2.0 arm64 on Apple Silicon; Node v26.0.0 and
+  pnpm 10.24.0 for pure metadata/tool-discovery tests
+- Remote and transport: none; artifact-only local contract tests
+- Exact evidence commands:
+
+  ```sh
+  pnpm exec vitest run --config config/vitest.config.ts config/scripts/ssh-relay-*.test.mjs
+  pnpm run typecheck
+  pnpm run lint
+  pnpm run check:max-lines-ratchet
+  pnpm exec oxfmt --check .github/workflows/ssh-relay-runtime-artifacts.yml \
+    config/scripts/build-ssh-relay-runtime.mjs \
+    config/scripts/ssh-relay-runtime-provenance.mjs \
+    config/scripts/ssh-relay-runtime-provenance.test.mjs \
+    config/scripts/ssh-relay-runtime-sbom.mjs \
+    config/scripts/ssh-relay-runtime-sbom.test.mjs \
+    config/scripts/ssh-relay-runtime-toolchain.mjs \
+    config/scripts/ssh-relay-runtime-toolchain.test.mjs \
+    config/scripts/ssh-relay-runtime-workflow.test.mjs
+  git diff --check
+  ```
+
+- Result: PASS. Nineteen artifact test files passed 76 tests; typecheck, full lint and its
+  reliability/localization/line-budget sub-gates, focused formatting, and diff checks passed. The
+  SPDX builder assigns every runtime file to exactly one package with `CONTAINS`, records relay
+  `DEPENDS_ON` relationships, uses the immutable content ID as relay package version, uses the exact
+  archive SHA-256 in the unique document namespace, and rejects unowned paths, identifier collisions,
+  or a missing archive digest. The provenance collector pins the builder URL to the exact Git commit,
+  requires the requested/resolved runner label, OS, architecture, hosted environment, and image
+  version, selects the real Windows compiler/linker version from stderr rather than the usage line,
+  and records bounded SHA-256 plus version for bundled/build Node, compiler, linker where applicable,
+  build system, Python, archive tool, strip tool where applicable, and complete bounded trees for
+  `node-gyp`, `node-addon-api`, and `yazl` where applicable.
+- Oracle proved: the prior placeholder relay SBOM version, unowned file inventory, content-ID-only
+  document namespace, merge-ref builder identity, missing runner identity, un-hashed tool strings,
+  and Windows compiler usage-string record are corrected by one fail-closed metadata boundary; local
+  native discovery produces only bounded version/digest records without absolute host paths.
+- Does not prove: Windows tool discovery/version parsing, all six runner-image records, clean-build
+  equality of the new SBOM/provenance bytes, uploaded metadata, an external SPDX consumer, native
+  signing/trust, oldest baselines, SSH, publication, or any enabled tuple.
+- Checklist items satisfied: local SBOM/provenance/toolchain implementation and purpose tests only;
+  native metadata/toolchain boxes remain unchecked.
+- Follow-up: push the exact implementation plus this ledger head, rerun all six native cells, inspect
+  each uploaded SPDX/provenance document, and require complete bounded records and clean-build
+  equality before closing the remaining Milestone 3 metadata/toolchain claims.
+
 ## Accepted Gaps
 
 No product gap is accepted merely because it appears in this list. Each entry requires explicit
@@ -6119,11 +6246,11 @@ The project is not complete until every applicable item below is checked with ev
 
 ## Next Required Action
 
-Push exact implementation commit `ec5461aff` plus its evidence-ledger head and rerun all six target-
-native cells. Require the builder-enforced exact closure, unchanged runtime content IDs, complete
-smoke, clean-build equality, and upload before checking the related Milestone 3 claims. Then correct
-and prove SBOM/provenance/toolchain completeness as a separate artifact-only slice before proceeding
-to oldest-baseline and native-trust proof.
+Push exact metadata implementation commit `26bbd7b67` plus its evidence-ledger head and rerun all six
+target-native cells. Require exact SPDX ownership, archive-scoped document identity, commit-pinned
+builder identity, resolved runner identity, complete bounded tool records with SHA-256, clean-build
+metadata equality, smoke, and upload before checking the remaining Milestone 3 metadata/toolchain
+claims. Then proceed to oldest-baseline and native-trust proof.
 
 Cross-family Layer B targets, the protected manifest-signing environment, oldest-baseline/native-
 trust cells, and the paired legacy performance baseline remain release/default-path blockers. No
