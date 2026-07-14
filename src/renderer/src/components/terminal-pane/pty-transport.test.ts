@@ -1970,6 +1970,15 @@ describe('createIpcPtyTransport', () => {
       await createIpcPtyTransport().connect({ url: '', callbacks: {} })
       await flushPtySideEffects()
       expect(killMock).toHaveBeenCalledTimes(1)
+
+      const reattachTransport = createIpcPtyTransport()
+      spawnMock.mockResolvedValueOnce({ id: 'pty-reattach', isReattach: true })
+      const reattach = reattachTransport.connect({ url: '', callbacks: {} })
+      reattachTransport.destroy?.()
+      await reattach
+      await flushPtySideEffects()
+      expect(killMock).toHaveBeenCalledTimes(1)
+      expect(reattachTransport.getPtyId()).toBeNull()
     } finally {
       warn.mockRestore()
     }

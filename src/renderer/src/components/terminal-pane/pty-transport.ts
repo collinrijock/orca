@@ -828,13 +828,16 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
           ? spawnResult.launchAgent
           : undefined
 
-        // If destroyed while spawn was in flight, kill the new pty and bail
+        // If destroyed while spawn was in flight, kill only a newly created PTY.
+        // A reattach belongs to an existing session outside this transport.
         if (destroyed) {
-          void killPtyRetainingRetryOwnership(
-            spawnResult.id,
-            '[pty] Failed to stop PTY spawned after transport teardown',
-            shutdownIdentity
-          ).catch(() => {})
+          if (!spawnResult.isReattach) {
+            void killPtyRetainingRetryOwnership(
+              spawnResult.id,
+              '[pty] Failed to stop PTY spawned after transport teardown',
+              shutdownIdentity
+            ).catch(() => {})
+          }
           return
         }
 

@@ -896,6 +896,9 @@ function retainLocalPtyShutdown(
   } else {
     retained.options = mergePtyShutdownOptions(retained.options, options)
   }
+  // Why: disk failure must not strand the live process merely because its
+  // crash-durable intent could not be refreshed.
+  scheduleRetainedShutdownRetries()
   if (typeof activePtyStore?.upsertPendingLocalPtyShutdown === 'function') {
     activePtyStore.upsertPendingLocalPtyShutdown({
       ptyId: id,
@@ -906,7 +909,6 @@ function retainLocalPtyShutdown(
       requestedAt: Date.now()
     })
   }
-  scheduleRetainedShutdownRetries()
   return retained
 }
 
@@ -916,8 +918,17 @@ function retainSshPtyShutdown(
   provider: IPtyProvider | null,
   options: PtyShutdownOptions
 ): RetainedPtyShutdown | null {
-  const persisted = activePtyStore?.markSshRemotePtyShutdownRequested?.(connectionId, id) === true
+  let persisted = false
+  let persistenceError: unknown
+  try {
+    persisted = activePtyStore?.markSshRemotePtyShutdownRequested?.(connectionId, id) === true
+  } catch (error) {
+    persistenceError = error
+  }
   if (!provider && !persisted) {
+    if (persistenceError) {
+      throw persistenceError
+    }
     return null
   }
   let retained = pendingSshShutdownRetries.get(id)
@@ -947,6 +958,9 @@ function retainSshPtyShutdown(
     }
   }
   scheduleRetainedShutdownRetries()
+  if (persistenceError) {
+    throw persistenceError
+  }
   return retained
 }
 

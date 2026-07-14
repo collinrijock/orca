@@ -170,4 +170,40 @@ describe('runtime terminal close retry ownership', () => {
     expect(remove).toHaveBeenCalledWith('environment-1', 'terminal-1')
     expect(vi.getTimerCount()).toBe(0)
   })
+
+  it('attempts the close when durable intent persistence throws', async () => {
+    vi.useFakeTimers()
+    const remove = vi.fn()
+    initializeRuntimeTerminalCloseRetryOwner(
+      {
+        getPendingRuntimeTerminalCloses: () => [],
+        upsertPendingRuntimeTerminalClose: () => {
+          throw new Error('runtime intent disk full')
+        },
+        removePendingRuntimeTerminalClose: remove
+      } as never,
+      '/tmp/orca-runtime-owner-test'
+    )
+    getRuntimeEnvironmentStatusMock.mockResolvedValue({
+      id: 'status-a',
+      ok: true,
+      result: { runtimeId: 'runtime-a' },
+      _meta: { runtimeId: 'runtime-a' }
+    })
+    callRuntimeEnvironmentMock.mockResolvedValue({
+      id: 'close-a',
+      ok: true,
+      result: { close: true },
+      _meta: { runtimeId: 'runtime-a' }
+    })
+
+    expect(() =>
+      closeRuntimeTerminalWithRetryOwnership('environment-1', 'terminal-1', 'runtime-a')
+    ).toThrow('runtime intent disk full')
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(callRuntimeEnvironmentMock).toHaveBeenCalledOnce()
+    expect(remove).toHaveBeenCalledWith('environment-1', 'terminal-1')
+    expect(vi.getTimerCount()).toBe(0)
+  })
 })

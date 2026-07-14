@@ -3527,6 +3527,54 @@ describe('registerPtyHandlers', () => {
     vi.useRealTimers()
   })
 
+  it('attempts local and SSH shutdown when durable intent writes throw', async () => {
+    vi.useFakeTimers()
+    const localShutdown = vi.fn().mockResolvedValue(undefined)
+    const sshShutdown = vi.fn().mockResolvedValue(undefined)
+    const provider = (shutdown: typeof localShutdown) =>
+      ({
+        shutdown,
+        onData: vi.fn(() => () => {}),
+        onReplay: vi.fn(() => () => {}),
+        onExit: vi.fn(() => () => {}),
+        listProcesses: vi.fn(async () => [])
+      }) as never
+    setLocalPtyProvider(provider(localShutdown))
+    registerSshPtyProvider('ssh-persist-fail', provider(sshShutdown))
+    handlers.clear()
+    registerPtyHandlers(mainWindow as never, undefined, undefined, undefined, undefined, {
+      getPendingLocalPtyShutdowns: () => [],
+      upsertPendingLocalPtyShutdown: () => {
+        throw new Error('local intent disk full')
+      },
+      markSshRemotePtyShutdownRequested: () => {
+        throw new Error('SSH intent disk full')
+      }
+    } as never)
+
+    try {
+      await expect(handlers.get('pty:kill')!(null, { id: 'local-persist-fail' })).rejects.toThrow(
+        'local intent disk full'
+      )
+      await expect(
+        handlers.get('pty:kill')!(null, { id: 'ssh:ssh-persist-fail@@remote-pty' })
+      ).rejects.toThrow('SSH intent disk full')
+      await vi.advanceTimersByTimeAsync(0)
+
+      expect(localShutdown).toHaveBeenCalledWith('local-persist-fail', {
+        immediate: true,
+        keepHistory: false
+      })
+      expect(sshShutdown).toHaveBeenCalledWith('ssh:ssh-persist-fail@@remote-pty', {
+        immediate: true,
+        keepHistory: false
+      })
+    } finally {
+      unregisterSshPtyProvider('ssh-persist-fail')
+      releasePendingSshShutdownsForTarget('ssh-persist-fail')
+    }
+  })
+
   it('keeps accepted local kills until provider readback proves physical exit', async () => {
     vi.useFakeTimers()
     const shutdown = vi.fn().mockResolvedValue(undefined)

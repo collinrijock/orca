@@ -209,21 +209,33 @@ function retain(
     }
     retainedCloses.set(closeKey, close)
     if (typeof store?.upsertPendingRuntimeTerminalClose === 'function') {
-      store.upsertPendingRuntimeTerminalClose({
-        environmentId,
-        handle,
-        ...(runtimeId ? { runtimeId } : {}),
-        requestedAt: Date.now()
-      })
+      try {
+        store.upsertPendingRuntimeTerminalClose({
+          environmentId,
+          handle,
+          ...(runtimeId ? { runtimeId } : {}),
+          requestedAt: Date.now()
+        })
+      } catch (error) {
+        // Why: a failed durable write cannot prevent the in-memory owner from
+        // attempting the close while this process remains alive.
+        schedule()
+        throw error
+      }
     }
   } else if (!close.runtimeId && incomingRuntimeId) {
     close.runtimeId = incomingRuntimeId
-    store?.upsertPendingRuntimeTerminalClose?.({
-      environmentId,
-      handle,
-      runtimeId: incomingRuntimeId,
-      requestedAt: Date.now()
-    })
+    try {
+      store?.upsertPendingRuntimeTerminalClose?.({
+        environmentId,
+        handle,
+        runtimeId: incomingRuntimeId,
+        requestedAt: Date.now()
+      })
+    } catch (error) {
+      schedule()
+      throw error
+    }
   }
   return close
 }
