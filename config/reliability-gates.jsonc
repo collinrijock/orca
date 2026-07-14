@@ -4211,7 +4211,8 @@
         {
           "file": "src/main/ipc/filesystem-watcher.test.ts",
           "assertions": [
-            "a transient WSL child-capacity rejection automatically retries on release and renderer unwatch cancels the wait"
+            "a transient WSL child-capacity rejection automatically retries on release and renderer unwatch cancels the wait",
+            "failed SSH worktree removal restores every live renderer listener, emits overflow, and resumes precise events"
           ]
         },
         {
@@ -4345,7 +4346,8 @@
             "a cancelled pending install retains physical-exit failure across an immediate second destructive close",
             "desktop terminal failure remains root-owned even when the cleared subscription later unsubscribes cleanly",
             "Windows drive and UNC watcher ownership is found across path casing and separator variants",
-            "Windows event payloads retain the physical root spelling instead of the comparison key"
+            "Windows event payloads retain the physical root spelling instead of the comparison key",
+            "failed local worktree removal restores every live renderer listener and emits overflow"
           ]
         },
         {
@@ -4361,7 +4363,8 @@
           "assertions": [
             "desktop IPC deletion never starts Git removal when physical PTY teardown cannot be proven",
             "normal and orphan/leftover deletion paths perform strict PTY teardown before local or SSH Git/filesystem removal",
-            "SSH deletion fails closed before Git when the remote PTY provider is unavailable"
+            "SSH deletion fails closed before Git when the remote PTY provider is unavailable",
+            "failed IPC deletion finishes the watcher fence as aborted so logical subscriptions can recover"
           ]
         },
         {
@@ -4437,7 +4440,8 @@
           "assertions": [
             "Windows runtime cleanup waits for the native close event, fails closed at a bounded deadline, and clears retained ownership on late close without retry listeners",
             "a Windows watcher error before cleanup uses Node's proven native error-close as physical-exit proof, emits final overflow and terminal error, and releases deletion ownership",
-            "pre-publication local runtime setup failure remains owned through destructive cleanup"
+            "pre-publication local runtime setup failure remains owned through destructive cleanup",
+            "failed deletion re-arms runtime watches immediately after ordinary teardown or after delayed physical exit, without reviving a logically stopped watch"
           ]
         },
         {
@@ -4455,7 +4459,9 @@
             "destructive worktree teardown awaits controller stopAndWait instead of treating fire-and-forget kill as physical exit",
             "runtime worktree deletion never starts Git removal when a known PTY cannot be physically stopped",
             "SSH runtime deletion shuts down an authoritatively owned remote PTY before remote Git removal",
-            "a delayed physical-exit retry remains scoped to its registered cleanup owner and cannot tear down a same-id replacement"
+            "a delayed physical-exit retry remains scoped to its registered cleanup owner and cannot tear down a same-id replacement",
+            "failed CLI worktree deletion restores watcher ownership after releasing the install fence",
+            "cross-layer teardown failure joins every bounded watcher close before restoration begins"
           ]
         },
         {
@@ -4567,7 +4573,8 @@
         {
           "file": "src/renderer/src/web/web-runtime-client.test.ts",
           "assertions": [
-            "a stopped pre-ready paired-web watch retains its callback beyond the former deadline and uses the early server token to unwatch"
+            "a stopped pre-ready paired-web watch retains its callback beyond the former deadline and uses the early server token to unwatch",
+            "transient shared-socket loss replays an active file watch under a new transport id while preserving its logical handle and never revives a stopped watch"
           ]
         },
         {

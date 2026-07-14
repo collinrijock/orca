@@ -30,7 +30,8 @@ vi.mock('../providers/ssh-filesystem-dispatch', () => ({
 import {
   closeAllWatchers,
   closeRemoteWatcherForWorktreePath,
-  registerFilesystemWatcherHandlers
+  registerFilesystemWatcherHandlers,
+  restoreRemoteWatcherAfterFailedRemoval
 } from './filesystem-watcher'
 import { stat } from 'node:fs/promises'
 import { subscribe as subscribeParcelWatcher } from '@parcel/watcher'
@@ -388,6 +389,38 @@ describe('registerFilesystemWatcherHandlers', () => {
 
     resolveClose()
     await close
+  })
+
+  it('re-arms SSH listeners after remote worktree deletion fails', async () => {
+    const firstUnwatch = vi.fn()
+    const replacementUnwatch = vi.fn()
+    const watchMock = vi
+      .fn()
+      .mockResolvedValueOnce(firstUnwatch)
+      .mockResolvedValueOnce(replacementUnwatch)
+    const closeWatch = vi.fn().mockResolvedValue(undefined)
+    getSshFilesystemProviderMock.mockReturnValue({ watch: watchMock, closeWatch })
+    const sender = { isDestroyed: () => false, send: vi.fn(), once: vi.fn(), id: 1 }
+
+    await handlers['fs:watchWorktree'](
+      { sender },
+      { worktreePath: '/home/me/repo', connectionId: 'conn-1' }
+    )
+    await closeRemoteWatcherForWorktreePath('conn-1', '/home/me/repo')
+    await restoreRemoteWatcherAfterFailedRemoval('conn-1', '/home/me/repo')
+
+    expect(closeWatch).toHaveBeenCalledWith('/home/me/repo')
+    expect(watchMock).toHaveBeenCalledTimes(2)
+    expect(sender.send).toHaveBeenCalledWith('fs:changed', {
+      worktreePath: '/home/me/repo',
+      events: [{ kind: 'overflow', absolutePath: '/home/me/repo' }]
+    })
+    const replacementEvents = watchMock.mock.calls[1][1] as (events: unknown[]) => void
+    replacementEvents([{ kind: 'update', absolutePath: '/home/me/repo/file.ts' }])
+    expect(sender.send).toHaveBeenLastCalledWith('fs:changed', {
+      worktreePath: '/home/me/repo',
+      events: [{ kind: 'update', absolutePath: '/home/me/repo/file.ts' }]
+    })
   })
 
   it('preserves remote event routing when acknowledged teardown rejects', async () => {

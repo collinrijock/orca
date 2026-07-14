@@ -157,11 +157,19 @@ const electronMocks = vi.hoisted(() => {
 
 const closeLocalWatcherForWorktreePathMock = vi.hoisted(() => vi.fn())
 const closeRemoteWatcherForWorktreePathMock = vi.hoisted(() => vi.fn())
+const restoreLocalWatcherAfterFailedRemovalMock = vi.hoisted(() => vi.fn())
+const restoreRemoteWatcherAfterFailedRemovalMock = vi.hoisted(() => vi.fn())
+const forgetLocalWatcherRemovalSnapshotMock = vi.hoisted(() => vi.fn())
+const forgetRemoteWatcherRemovalSnapshotMock = vi.hoisted(() => vi.fn())
 
 vi.mock('electron', () => electronMocks)
 vi.mock('../ipc/filesystem-watcher', () => ({
   closeLocalWatcherForWorktreePath: closeLocalWatcherForWorktreePathMock,
-  closeRemoteWatcherForWorktreePath: closeRemoteWatcherForWorktreePathMock
+  closeRemoteWatcherForWorktreePath: closeRemoteWatcherForWorktreePathMock,
+  restoreLocalWatcherAfterFailedRemoval: restoreLocalWatcherAfterFailedRemovalMock,
+  restoreRemoteWatcherAfterFailedRemoval: restoreRemoteWatcherAfterFailedRemovalMock,
+  forgetLocalWatcherRemovalSnapshot: forgetLocalWatcherRemovalSnapshotMock,
+  forgetRemoteWatcherRemovalSnapshot: forgetRemoteWatcherRemovalSnapshotMock
 }))
 
 const {
@@ -570,6 +578,10 @@ function resetRuntimeTestMocks(): void {
   electronMocks.ipcMain.emit.mockClear()
   closeLocalWatcherForWorktreePathMock.mockReset().mockResolvedValue(undefined)
   closeRemoteWatcherForWorktreePathMock.mockReset().mockResolvedValue(undefined)
+  restoreLocalWatcherAfterFailedRemovalMock.mockReset().mockResolvedValue(undefined)
+  restoreRemoteWatcherAfterFailedRemovalMock.mockReset().mockResolvedValue(undefined)
+  forgetLocalWatcherRemovalSnapshotMock.mockReset()
+  forgetRemoteWatcherRemovalSnapshotMock.mockReset()
   vi.mocked(listWorktrees).mockResolvedValue(MOCK_GIT_WORKTREES)
   vi.mocked(listWorktreesStrict).mockResolvedValue(MOCK_GIT_WORKTREES)
   vi.mocked(addWorktree).mockReset()
@@ -28711,6 +28723,56 @@ describe('OrcaRuntimeService', () => {
     expect(deleteWorktreeHistoryDirMock).not.toHaveBeenCalled()
   })
 
+  it('waits for every watcher layer to settle before restoring after teardown failure', async () => {
+    const runtime = createRuntime()
+    let finishRuntimeClose: () => void = () => {}
+    const runtimeClose = new Promise<void>((resolve) => {
+      finishRuntimeClose = resolve
+    })
+    const fileCommands = (
+      runtime as unknown as {
+        fileCommands: {
+          closeFileExplorerWatchersForPath: (path: string) => Promise<void>
+          restoreFileExplorerWatchersAfterFailedRemoval: (path: string) => Promise<void>
+        }
+      }
+    ).fileCommands
+    vi.spyOn(fileCommands, 'closeFileExplorerWatchersForPath').mockReturnValueOnce(runtimeClose)
+    const restoreRuntime = vi
+      .spyOn(fileCommands, 'restoreFileExplorerWatchersAfterFailedRemoval')
+      .mockResolvedValue(undefined)
+    closeLocalWatcherForWorktreePathMock.mockRejectedValueOnce(
+      new Error('desktop watcher close failed')
+    )
+
+    const result = runtime.acquireFileWatcherRemoval(TEST_WORKTREE_PATH).catch((error) => error)
+    await Promise.resolve()
+    expect(restoreLocalWatcherAfterFailedRemovalMock).not.toHaveBeenCalled()
+    expect(restoreRuntime).not.toHaveBeenCalled()
+
+    finishRuntimeClose()
+    await expect(result).resolves.toEqual(
+      expect.objectContaining({
+        message: 'desktop watcher close failed'
+      })
+    )
+    expect(restoreLocalWatcherAfterFailedRemovalMock).toHaveBeenCalledWith(TEST_WORKTREE_PATH)
+    expect(restoreRuntime).toHaveBeenCalledWith(TEST_WORKTREE_PATH, undefined)
+  })
+
+  it('restores runtime watchers when CLI worktree deletion fails after teardown', async () => {
+    const runtime = createWorktreeRemovalRuntime()
+    vi.mocked(getEffectiveHooks).mockReturnValue(null)
+    vi.mocked(removeWorktree).mockRejectedValue(new Error('delete failed'))
+
+    await expect(runtime.removeManagedWorktree(TEST_WORKTREE_ID)).rejects.toThrow('delete failed')
+
+    expect(restoreLocalWatcherAfterFailedRemovalMock).toHaveBeenCalledWith(TEST_WORKTREE_PATH)
+    expect(forgetLocalWatcherRemovalSnapshotMock).not.toHaveBeenCalled()
+    const finishRetry = beginWatcherInstall(TEST_WORKTREE_PATH)
+    finishRetry()
+  })
+
   it('closes before and after draining a pre-removal watcher install', async () => {
     const runtime = createRuntime()
     const finishInstall = beginWatcherInstall(TEST_WORKTREE_PATH)
@@ -28724,7 +28786,8 @@ describe('OrcaRuntimeService', () => {
     finishInstall()
     const gate = await acquiring
     expect(closeLocalWatcherForWorktreePathMock).toHaveBeenCalledTimes(2)
-    gate.release()
+    await gate.finish(false)
+    expect(restoreLocalWatcherAfterFailedRemovalMock).toHaveBeenCalledWith(TEST_WORKTREE_PATH)
 
     const finishRetry = beginWatcherInstall(TEST_WORKTREE_PATH)
     finishRetry()

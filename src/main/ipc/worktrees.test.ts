@@ -527,7 +527,9 @@ describe('registerWorktreeHandlers', () => {
             connectionId?: string
           ) => Promise<void>
         )(worktreePath, connectionId)
-        return { ready: Promise.resolve(), release: vi.fn() }
+        return {
+          finish: vi.fn().mockResolvedValue(undefined)
+        }
       }
     )
     registerWorktreeHandlers(mainWindow as never, store as never, runtimeStub as never)
@@ -6832,10 +6834,9 @@ describe('registerWorktreeHandlers', () => {
 
   it('releases the watcher-install fence when worktree deletion fails', async () => {
     mockKnownFeatureWorktree()
-    const release = vi.fn()
+    const finish = vi.fn().mockResolvedValue(undefined)
     runtimeStub.acquireFileWatcherRemoval.mockResolvedValueOnce({
-      ready: Promise.resolve(),
-      release
+      finish
     })
     removeWorktreeMock.mockRejectedValueOnce(new Error('delete failed'))
 
@@ -6845,7 +6846,7 @@ describe('registerWorktreeHandlers', () => {
       })
     ).rejects.toThrow('delete failed')
 
-    expect(release).toHaveBeenCalledTimes(1)
+    expect(finish).toHaveBeenCalledWith(false)
     expect(store.removeWorktreeMeta).not.toHaveBeenCalled()
   })
 

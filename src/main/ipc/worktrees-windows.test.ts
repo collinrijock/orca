@@ -267,8 +267,7 @@ describe('registerWorktreeHandlers – Windows path handling', () => {
       clearOptimisticReconcileToken: vi.fn(),
       closeFileWatchersForRemoval: vi.fn().mockResolvedValue(undefined),
       acquireFileWatcherRemoval: vi.fn().mockResolvedValue({
-        ready: Promise.resolve(),
-        release: vi.fn()
+        finish: vi.fn().mockResolvedValue(undefined)
       })
     }
     registerWorktreeHandlers(mainWindow as never, store as never, runtimeStub as never)

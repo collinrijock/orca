@@ -1520,6 +1520,7 @@ export function registerWorktreeHandlers(
                 worktreePath,
                 repo.connectionId
               )
+              let removalCompleted = false
               try {
                 await stopPtysForDestructiveWorktreeRemoval(
                   runtime,
@@ -1527,8 +1528,9 @@ export function registerWorktreeHandlers(
                   repo.connectionId
                 )
                 await fsProvider!.deletePath(worktreePath, true)
+                removalCompleted = true
               } finally {
-                removalGate.release()
+                await removalGate.finish(removalCompleted)
               }
               await cleanupUnusedWorktreePushTargetRemoteSsh(
                 provider!,
@@ -1539,11 +1541,13 @@ export function registerWorktreeHandlers(
               )
             } else {
               const removalGate = await runtime.acquireFileWatcherRemoval(worktreePath)
+              let removalCompleted = false
               try {
                 await stopPtysForDestructiveWorktreeRemoval(runtime, args.worktreeId)
                 await removeLocalWorktreePath(worktreePath, localWorktreeGitOptions)
+                removalCompleted = true
               } finally {
-                removalGate.release()
+                await removalGate.finish(removalCompleted)
               }
               await cleanupUnusedWorktreePushTargetRemote(
                 repo.path,
@@ -1582,11 +1586,13 @@ export function registerWorktreeHandlers(
                 throw new Error(ORPHANED_WORKTREE_DIRECTORY_MESSAGE)
               }
               const removalGate = await runtime.acquireFileWatcherRemoval(worktreePath)
+              let removalCompleted = false
               try {
                 await stopPtysForDestructiveWorktreeRemoval(runtime, args.worktreeId)
                 await removeLocalWorktreePath(worktreePath, localWorktreeGitOptions)
+                removalCompleted = true
               } finally {
-                removalGate.release()
+                await removalGate.finish(removalCompleted)
               }
               await cleanupUnusedWorktreePushTargetRemote(
                 repo.path,
@@ -1727,13 +1733,15 @@ export function registerWorktreeHandlers(
             repo.connectionId
           )
           let rawRemovalResult: RemoveWorktreeResult | undefined
+          let removalCompleted = false
           try {
             await stopPtysForDestructiveWorktreeRemoval(runtime, args.worktreeId, repo.connectionId)
             rawRemovalResult = await (Object.keys(remoteRemoveOptions).length > 0
               ? provider!.removeWorktree(canonicalWorktreePath, args.force, remoteRemoveOptions)
               : provider!.removeWorktree(canonicalWorktreePath, args.force))
+            removalCompleted = true
           } finally {
-            removalGate.release()
+            await removalGate.finish(removalCompleted)
           }
           const removalResult = preserveBranchHeadFallback(
             rawRemovalResult,
@@ -1810,6 +1818,7 @@ export function registerWorktreeHandlers(
 
         let removalResult: RemoveWorktreeResult | undefined
         const removalGate = await runtime.acquireFileWatcherRemoval(canonicalWorktreePath)
+        let removalCompleted = false
         try {
           // Why: preflight ignores only these configured paths without mutating
           // the worktree; keep new watcher installs fenced through Git removal.
@@ -1854,6 +1863,7 @@ export function registerWorktreeHandlers(
             })
             if (recoveredRemovalResult) {
               removalResult = recoveredRemovalResult
+              removalCompleted = true
             } else if (isOrphanedWorktreeError(error)) {
               // If git no longer tracks this worktree, clean up the directory and metadata
               console.warn(
@@ -1897,6 +1907,7 @@ export function registerWorktreeHandlers(
               preservedBranchCleanupByWorktreeId.delete(args.worktreeId)
               invalidateAuthorizedRootsCache()
               notifyWorktreesChanged(mainWindow, repoId)
+              removalCompleted = true
               return {}
             } else {
               throw new Error(
@@ -1904,8 +1915,9 @@ export function registerWorktreeHandlers(
               )
             }
           }
+          removalCompleted = true
         } finally {
-          removalGate.release()
+          await removalGate.finish(removalCompleted)
         }
         await cleanupUnusedWorktreePushTargetRemote(
           repo.path,

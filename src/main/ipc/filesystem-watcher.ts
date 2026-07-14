@@ -80,6 +80,10 @@ const pendingTeardowns = new Map<string, ReturnType<typeof setTimeout>>()
 // cleanup can start it before app shutdown, so will-quit must still await it.
 const pendingLocalUnsubscribes = new Set<Promise<void>>()
 const pendingLocalUnsubscribesByRoot = new Map<string, Set<Promise<void>>>()
+const suspendedLocalWatcherListeners = new Map<
+  string,
+  { worktreePath: string; listeners: Map<number, WebContents> }
+>()
 const failedLocalUnsubscribes = new Map<string, unknown>()
 type LocalWatcherInstallToken = {
   cancelled: boolean
@@ -793,6 +797,24 @@ function unsubscribe(worktreePath: string, senderId: number): void {
 
 export async function closeLocalWatcherForWorktreePath(worktreePath: string): Promise<void> {
   const { key: rootKey } = localWatcherRoot(worktreePath)
+  const suspended = suspendedLocalWatcherListeners.get(rootKey) ?? {
+    worktreePath,
+    listeners: new Map<number, WebContents>()
+  }
+  for (const source of [
+    pendingLocalCapacityRetries.get(rootKey)?.listeners,
+    inFlightLocalInstalls.get(rootKey)?.listeners,
+    watchedRoots.get(rootKey)?.listeners
+  ]) {
+    for (const [senderId, sender] of source ?? []) {
+      if (!sender.isDestroyed()) {
+        suspended.listeners.set(senderId, sender)
+      }
+    }
+  }
+  if (suspended.listeners.size > 0) {
+    suspendedLocalWatcherListeners.set(rootKey, suspended)
+  }
   clearLocalCapacityRetry(rootKey)
   const pendingTeardown = pendingTeardowns.get(rootKey)
   if (pendingTeardown) {
@@ -828,6 +850,43 @@ export async function closeLocalWatcherForWorktreePath(worktreePath: string): Pr
   await trackLocalUnsubscribe(rootKey, root)
 }
 
+export async function restoreLocalWatcherAfterFailedRemoval(worktreePath: string): Promise<void> {
+  const { key: rootKey } = localWatcherRoot(worktreePath)
+  const suspended = suspendedLocalWatcherListeners.get(rootKey)
+  if (!suspended) {
+    return
+  }
+  suspendedLocalWatcherListeners.delete(rootKey)
+  const failures: unknown[] = []
+  const failedListeners = new Map<number, WebContents>()
+  for (const sender of suspended.listeners.values()) {
+    if (sender.isDestroyed()) {
+      continue
+    }
+    try {
+      await subscribe(suspended.worktreePath, sender)
+      sender.send('fs:changed', {
+        worktreePath: suspended.worktreePath,
+        events: [{ kind: 'overflow', absolutePath: suspended.worktreePath }]
+      } satisfies FsChangedPayload)
+    } catch (error) {
+      failures.push(error)
+      failedListeners.set(sender.id, sender)
+    }
+  }
+  if (failures.length > 0) {
+    suspendedLocalWatcherListeners.set(rootKey, {
+      worktreePath: suspended.worktreePath,
+      listeners: failedListeners
+    })
+    throw failures[0]
+  }
+}
+
+export function forgetLocalWatcherRemovalSnapshot(worktreePath: string): void {
+  suspendedLocalWatcherListeners.delete(localWatcherRoot(worktreePath).key)
+}
+
 // Remote watcher state
 type RemoteWatcherState = {
   unwatch: () => void
@@ -845,6 +904,10 @@ type RemoteWatcherInstallToken = {
 
 // Key: `${connectionId}:${worktreePath}`, Value: shared remote watch state.
 const remoteWatchers = new Map<string, RemoteWatcherState>()
+const suspendedRemoteWatcherListeners = new Map<
+  string,
+  { connectionId: string; worktreePath: string; listeners: Map<number, WebContents> }
+>()
 const loggedUnavailableRemoteWatchers = new Set<string>()
 const pendingRemoteWatcherRetries = new Map<string, ReturnType<typeof setTimeout>>()
 const pendingRemoteWatcherRetryListeners = new Map<
@@ -876,6 +939,25 @@ export async function closeRemoteWatcherForWorktreePath(
   worktreePath: string
 ): Promise<void> {
   const key = remoteWatcherKey(connectionId, worktreePath)
+  const suspended = suspendedRemoteWatcherListeners.get(key) ?? {
+    connectionId,
+    worktreePath,
+    listeners: new Map<number, WebContents>()
+  }
+  for (const source of [
+    pendingRemoteWatcherRetryListeners.get(key)?.listeners,
+    inFlightRemoteInstalls.get(key)?.listeners,
+    remoteWatchers.get(key)?.listeners
+  ]) {
+    for (const [senderId, sender] of source ?? []) {
+      if (!sender.isDestroyed()) {
+        suspended.listeners.set(senderId, sender)
+      }
+    }
+  }
+  if (suspended.listeners.size > 0) {
+    suspendedRemoteWatcherListeners.set(key, suspended)
+  }
   const retryTimer = pendingRemoteWatcherRetries.get(key)
   if (retryTimer) {
     clearTimeout(retryTimer)
@@ -894,6 +976,38 @@ export async function closeRemoteWatcherForWorktreePath(
     : Promise.resolve(state?.unwatch()))
   remoteWatchers.delete(key)
   loggedUnavailableRemoteWatchers.delete(key)
+}
+
+export async function restoreRemoteWatcherAfterFailedRemoval(
+  connectionId: string,
+  worktreePath: string
+): Promise<void> {
+  const key = remoteWatcherKey(connectionId, worktreePath)
+  const suspended = suspendedRemoteWatcherListeners.get(key)
+  if (!suspended) {
+    return
+  }
+  suspendedRemoteWatcherListeners.delete(key)
+  for (const sender of suspended.listeners.values()) {
+    if (sender.isDestroyed()) {
+      continue
+    }
+    const result = await installRemoteWatcher(sender, connectionId, worktreePath)
+    if (result === 'unavailable') {
+      scheduleRemoteWatcherRetry(sender, connectionId, worktreePath)
+    }
+    sender.send('fs:changed', {
+      worktreePath,
+      events: [{ kind: 'overflow', absolutePath: worktreePath }]
+    } satisfies FsChangedPayload)
+  }
+}
+
+export function forgetRemoteWatcherRemovalSnapshot(
+  connectionId: string,
+  worktreePath: string
+): void {
+  suspendedRemoteWatcherListeners.delete(remoteWatcherKey(connectionId, worktreePath))
 }
 
 function addInFlightRemoteInstallListener(
@@ -1312,6 +1426,8 @@ function remoteWatcherKey(connectionId: string, worktreePath: string): string {
 export async function closeAllWatchers(): Promise<void> {
   senderCleanupRegistered.clear()
   unwatchableRoots.clear()
+  suspendedLocalWatcherListeners.clear()
+  suspendedRemoteWatcherListeners.clear()
   for (const retry of pendingLocalCapacityRetries.values()) {
     retry.cancelWait()
   }

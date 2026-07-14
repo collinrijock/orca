@@ -38,7 +38,8 @@ vi.mock('../providers/ssh-filesystem-dispatch', () => ({
 import {
   closeAllWatchers,
   closeLocalWatcherForWorktreePath,
-  registerFilesystemWatcherHandlers
+  registerFilesystemWatcherHandlers,
+  restoreLocalWatcherAfterFailedRemoval
 } from './filesystem-watcher'
 import { stat } from 'node:fs/promises'
 import { subscribe as subscribeParcelWatcher } from '@parcel/watcher'
@@ -596,6 +597,32 @@ describe('local filesystem watcher unsubscribe cleanup', () => {
 
     expect(closedBeforeNativeSubscribe).toBe(true)
     expect(unsubscribeMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('re-arms active local listeners after worktree deletion fails', async () => {
+    vi.mocked(stat).mockResolvedValue({ isDirectory: () => true } as never)
+    const firstUnsubscribe = vi.fn()
+    const replacementUnsubscribe = vi.fn()
+    vi.mocked(subscribeParcelWatcher)
+      .mockResolvedValueOnce({ unsubscribe: firstUnsubscribe } as never)
+      .mockResolvedValueOnce({ unsubscribe: replacementUnsubscribe } as never)
+    const sender = {
+      isDestroyed: () => false,
+      send: vi.fn(),
+      once: vi.fn(),
+      id: 1
+    }
+
+    await handlers['fs:watchWorktree']({ sender }, { worktreePath: '/tmp/repo' })
+    await closeLocalWatcherForWorktreePath('/tmp/repo')
+    await restoreLocalWatcherAfterFailedRemoval('/tmp/repo')
+
+    expect(firstUnsubscribe).toHaveBeenCalledTimes(1)
+    expect(subscribeParcelWatcher).toHaveBeenCalledTimes(2)
+    expect(sender.send).toHaveBeenCalledWith('fs:changed', {
+      worktreePath: '/tmp/repo',
+      events: [{ kind: 'overflow', absolutePath: '/tmp/repo' }]
+    })
   })
 
   it('cancels an opening local watcher during app shutdown', async () => {

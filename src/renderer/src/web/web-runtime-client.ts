@@ -35,12 +35,15 @@ type SubscriptionCallbacks = {
   onBinary?: (bytes: Uint8Array<ArrayBufferLike>) => void
   onError?: (error: { code: string; message: string }) => void
   onClose?: () => void
+  onTransportInterrupted?: () => void
 }
 
 type RuntimeSubscription = {
+  id: string
   method: string
   params: unknown
   callbacks: SubscriptionCallbacks
+  needsReplay: boolean
 }
 
 export type WebRuntimeSubscriptionHandle = {
@@ -277,6 +280,20 @@ export class WebRuntimeClient {
         if (!stopped) {
           callbacks.onClose?.()
         }
+      },
+      onTransportInterrupted: () => {
+        remoteSubscriptionId = null
+        if (!stopped) {
+          return
+        }
+        const retries = this.fileWatchTeardownRetries.get(teardownKey)
+        retries?.delete(retryRemoteUnwatch)
+        if (retries?.size === 0) {
+          this.fileWatchTeardownRetries.delete(teardownKey)
+        }
+        // Why: socket close physically releases the old server subscription;
+        // a locally stopped watch must not be replayed on the replacement.
+        dropLocalSubscription()
       }
     }
     handle = await this.subscribeOnCurrentConnection(
@@ -310,14 +327,15 @@ export class WebRuntimeClient {
   ): Promise<WebRuntimeSubscriptionHandle> {
     await this.waitForConnected(options?.timeoutMs)
     const id = this.nextId()
-    this.subscriptions.set(id, { method, params, callbacks })
+    const subscription: RuntimeSubscription = { id, method, params, callbacks, needsReplay: false }
+    this.subscriptions.set(id, subscription)
     if (!this.sendEncrypted({ id, deviceToken: this.pairing.deviceToken, method, params })) {
       this.subscriptions.delete(id)
       throw new Error('Remote Orca runtime is not connected.')
     }
     return {
       unsubscribe: () => {
-        this.subscriptions.delete(id)
+        this.subscriptions.delete(subscription.id)
         // Tell the server to reap its keyed cleanup (e.g. native-chat fs-watcher)
         // before the socket goes away. Best-effort: a closed socket already reaps.
         const teardown = options?.buildUnsubscribe?.(params)
@@ -610,7 +628,7 @@ export class WebRuntimeClient {
     this.clearHandshakeTimer()
     this.clearHeartbeatTimer()
     this.rejectAllPending('Remote Orca runtime connection interrupted.')
-    this.notifySubscriptionsClosed()
+    this.handleInterruptedSubscriptions()
     if (this.intentionallyClosed || this.state === 'auth-failed') {
       this.setState(this.state === 'auth-failed' ? 'auth-failed' : 'disconnected')
       return
@@ -635,6 +653,7 @@ export class WebRuntimeClient {
   private setState(next: WebRuntimeConnectionState): void {
     this.state = next
     if (next === 'connected') {
+      this.replayInterruptedSubscriptions()
       this.startHeartbeat()
       for (const waiter of this.waiters.splice(0)) {
         waiter.resolve()
@@ -669,6 +688,42 @@ export class WebRuntimeClient {
     this.subscriptions.clear()
     for (const subscription of subscriptions) {
       subscription.callbacks.onClose?.()
+    }
+  }
+
+  private handleInterruptedSubscriptions(): void {
+    for (const [id, subscription] of Array.from(this.subscriptions)) {
+      if (!SHARED_CONNECTION_SUBSCRIPTION_METHODS.has(subscription.method)) {
+        this.subscriptions.delete(id)
+        subscription.callbacks.onClose?.()
+        continue
+      }
+      subscription.callbacks.onTransportInterrupted?.()
+      if (this.subscriptions.get(subscription.id) === subscription) {
+        subscription.needsReplay = true
+      }
+    }
+  }
+
+  private replayInterruptedSubscriptions(): void {
+    for (const subscription of Array.from(this.subscriptions.values())) {
+      if (!subscription.needsReplay) {
+        continue
+      }
+      this.subscriptions.delete(subscription.id)
+      subscription.id = this.nextId()
+      subscription.needsReplay = false
+      this.subscriptions.set(subscription.id, subscription)
+      if (
+        !this.sendEncrypted({
+          id: subscription.id,
+          deviceToken: this.pairing.deviceToken,
+          method: subscription.method,
+          params: subscription.params
+        })
+      ) {
+        subscription.needsReplay = true
+      }
     }
   }
 

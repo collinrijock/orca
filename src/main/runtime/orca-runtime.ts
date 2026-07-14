@@ -719,9 +719,13 @@ import { invalidateAuthorizedRootsCache } from '../ipc/filesystem-auth'
 import { prepareLocalWorktreeRootForRepo } from '../worktree-root-preparation'
 import {
   closeLocalWatcherForWorktreePath,
-  closeRemoteWatcherForWorktreePath
+  closeRemoteWatcherForWorktreePath,
+  forgetLocalWatcherRemovalSnapshot,
+  forgetRemoteWatcherRemovalSnapshot,
+  restoreLocalWatcherAfterFailedRemoval,
+  restoreRemoteWatcherAfterFailedRemoval
 } from '../ipc/filesystem-watcher'
-import { acquireWatcherRemovalGate, type WatcherRemovalGate } from '../ipc/watcher-removal-gate'
+import { acquireWatcherRemovalGate } from '../ipc/watcher-removal-gate'
 import { HeadlessEmulator } from '../daemon/headless-emulator'
 import {
   isNativeWindowsConptyPty,
@@ -5433,19 +5437,44 @@ export class OrcaRuntimeService {
     worktreePath: string,
     connectionId?: string
   ): Promise<void> => {
-    // Why: desktop and paired runtime clients own independent native watches;
-    // destructive cleanup is safe only after both release the worktree path.
-    await Promise.all([
+    const results = await Promise.allSettled([
       connectionId
         ? closeRemoteWatcherForWorktreePath(connectionId, worktreePath)
         : closeLocalWatcherForWorktreePath(worktreePath),
       this.fileCommands.closeFileExplorerWatchersForPath(worktreePath, connectionId)
     ])
+    const failure = results.find((result): result is PromiseRejectedResult => {
+      return result.status === 'rejected'
+    })
+    if (failure) {
+      // Why: restoration must start only after every bounded teardown settles;
+      // otherwise a late close can stale a just-restored logical subscription.
+      throw failure.reason
+    }
+  }
+  restoreFileWatchersAfterFailedRemoval = async (
+    worktreePath: string,
+    connectionId?: string
+  ): Promise<void> => {
+    await Promise.all([
+      connectionId
+        ? restoreRemoteWatcherAfterFailedRemoval(connectionId, worktreePath)
+        : restoreLocalWatcherAfterFailedRemoval(worktreePath),
+      this.fileCommands.restoreFileExplorerWatchersAfterFailedRemoval(worktreePath, connectionId)
+    ])
+  }
+  forgetFileWatchersAfterRemoval = (worktreePath: string, connectionId?: string): void => {
+    if (connectionId) {
+      forgetRemoteWatcherRemovalSnapshot(connectionId, worktreePath)
+    } else {
+      forgetLocalWatcherRemovalSnapshot(worktreePath)
+    }
+    this.fileCommands.forgetFileExplorerWatchersAfterRemoval(worktreePath, connectionId)
   }
   acquireFileWatcherRemoval = async (
     worktreePath: string,
     connectionId?: string
-  ): Promise<WatcherRemovalGate> => {
+  ): Promise<{ finish(removed: boolean): Promise<void> }> => {
     const gate = acquireWatcherRemovalGate(worktreePath, connectionId)
     try {
       // Why: the first pass aborts desktop setup immediately; the second catches
@@ -5453,9 +5482,39 @@ export class OrcaRuntimeService {
       await this.closeFileWatchersForRemoval(worktreePath, connectionId)
       await gate.ready
       await this.closeFileWatchersForRemoval(worktreePath, connectionId)
-      return gate
+      let finished = false
+      return {
+        finish: async (removed) => {
+          if (finished) {
+            return
+          }
+          finished = true
+          if (removed) {
+            this.forgetFileWatchersAfterRemoval(worktreePath, connectionId)
+          }
+          gate.release()
+          if (!removed) {
+            await this.restoreFileWatchersAfterFailedRemoval(worktreePath, connectionId).catch(
+              (restoreError: unknown) => {
+                console.error('[worktrees] failed to restore watchers after removal failed', {
+                  worktreePath,
+                  restoreError
+                })
+              }
+            )
+          }
+        }
+      }
     } catch (error) {
       gate.release()
+      await this.restoreFileWatchersAfterFailedRemoval(worktreePath, connectionId).catch(
+        (restoreError: unknown) => {
+          console.error('[worktrees] failed to restore watchers after removal setup failed', {
+            worktreePath,
+            restoreError
+          })
+        }
+      )
       throw error
     }
   }
@@ -17337,11 +17396,13 @@ export class OrcaRuntimeService {
               removalTarget.path,
               repo.connectionId
             )
+            let removalCompleted = false
             try {
               await this.stopPtysForDestructiveWorktreeRemoval(removalTarget.id, repo.connectionId)
               await fsProvider!.deletePath(removalTarget.path, true)
+              removalCompleted = true
             } finally {
-              removalGate.release()
+              await removalGate.finish(removalCompleted)
             }
             await cleanupUnusedWorktreePushTargetRemoteSsh(
               provider!,
@@ -17352,11 +17413,13 @@ export class OrcaRuntimeService {
             )
           } else {
             const removalGate = await this.acquireFileWatcherRemoval(removalTarget.path)
+            let removalCompleted = false
             try {
               await this.stopPtysForDestructiveWorktreeRemoval(removalTarget.id)
               await removeLocalWorktreePath(removalTarget.path, localWorktreeGitOptions)
+              removalCompleted = true
             } finally {
-              removalGate.release()
+              await removalGate.finish(removalCompleted)
             }
             await cleanupUnusedWorktreePushTargetRemote(
               repo.path,
@@ -17396,11 +17459,13 @@ export class OrcaRuntimeService {
               throw new Error(ORPHANED_WORKTREE_DIRECTORY_MESSAGE)
             }
             const removalGate = await this.acquireFileWatcherRemoval(removalTarget.path)
+            let removalCompleted = false
             try {
               await this.stopPtysForDestructiveWorktreeRemoval(removalTarget.id)
               await removeLocalWorktreePath(removalTarget.path, localWorktreeGitOptions)
+              removalCompleted = true
             } finally {
-              removalGate.release()
+              await removalGate.finish(removalCompleted)
             }
             await cleanupUnusedWorktreePushTargetRemote(
               repo.path,
@@ -17507,13 +17572,15 @@ export class OrcaRuntimeService {
           repo.connectionId
         )
         let rawRemovalResult: RemoveWorktreeResult | undefined
+        let removalCompleted = false
         try {
           await this.stopPtysForDestructiveWorktreeRemoval(removalTarget.id, repo.connectionId)
           rawRemovalResult = await (Object.keys(remoteRemoveOptions).length > 0
             ? provider!.removeWorktree(canonicalWorktreePath, force, remoteRemoveOptions)
             : provider!.removeWorktree(canonicalWorktreePath, force))
+          removalCompleted = true
         } finally {
-          removalGate.release()
+          await removalGate.finish(removalCompleted)
         }
         const removalResult = this.preserveBranchHeadFallback(
           rawRemovalResult,
@@ -17607,6 +17674,7 @@ export class OrcaRuntimeService {
 
       let removalResult: RemoveWorktreeResult | undefined
       const removalGate = await this.acquireFileWatcherRemoval(canonicalWorktreePath)
+      let removalCompleted = false
       try {
         if (linkedPaths.length > 0) {
           await removeWorktreeLinkedPaths(canonicalWorktreePath, linkedPaths)
@@ -17643,6 +17711,7 @@ export class OrcaRuntimeService {
           })
           if (recoveredRemovalResult) {
             removalResult = recoveredRemovalResult
+            removalCompleted = true
           } else if (isOrphanedWorktreeError(error)) {
             const access = getLocalWorktreePathAccess(localWorktreeGitOptions)
             if (
@@ -17683,6 +17752,7 @@ export class OrcaRuntimeService {
             this.invalidateResolvedWorktreeCache()
             invalidateAuthorizedRootsCache()
             this.notifyWorktreesChanged(repo.id)
+            removalCompleted = true
             return {
               ...(warning ? { warning } : {})
             }
@@ -17690,8 +17760,9 @@ export class OrcaRuntimeService {
             throw new Error(formatWorktreeRemovalError(error, canonicalWorktreePath, force))
           }
         }
+        removalCompleted = true
       } finally {
-        removalGate.release()
+        await removalGate.finish(removalCompleted)
       }
 
       await cleanupUnusedWorktreePushTargetRemote(

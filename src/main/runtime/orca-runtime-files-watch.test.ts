@@ -59,6 +59,7 @@ vi.mock('../providers/ssh-filesystem-dispatch', () => ({
 
 import {
   _getRuntimeFileWatcherReleaseCountForTests,
+  _resetRuntimeFileWatcherLeasesForTests,
   awaitRuntimeFileWatcherUnsubscribes,
   RuntimeFileCommands,
   WINDOWS_RUNTIME_FILE_WATCH_CLOSE_DEADLINE_MS
@@ -114,6 +115,7 @@ describe('RuntimeFileCommands file watching', () => {
 
   afterEach(async () => {
     await awaitRuntimeFileWatcherUnsubscribes()
+    _resetRuntimeFileWatcherLeasesForTests()
     Object.defineProperty(process, 'platform', {
       configurable: true,
       value: originalPlatform
@@ -202,6 +204,7 @@ describe('RuntimeFileCommands file watching', () => {
     expect(watcher.close).toHaveBeenCalledTimes(1)
     expect(watcher.listenerCount('close')).toBe(0)
     expect(watcher.listenerCount('error')).toBe(0)
+    commands.forgetFileExplorerWatchersAfterRemoval('C:\\repo')
     expect(_getRuntimeFileWatcherReleaseCountForTests()).toBe(0)
     expect(vi.getTimerCount()).toBe(0)
   })
@@ -238,6 +241,8 @@ describe('RuntimeFileCommands file watching', () => {
     watcher.emit('close')
     await closeError.physicalExit
     await Promise.resolve()
+    expect(_getRuntimeFileWatcherReleaseCountForTests()).toBe(1)
+    commands.forgetFileExplorerWatchersAfterRemoval('C:\\repo')
     expect(_getRuntimeFileWatcherReleaseCountForTests()).toBe(0)
     await expect(commands.closeFileExplorerWatchersForPath('C:\\repo')).resolves.toBeUndefined()
     expect(watcher.close).toHaveBeenCalledTimes(1)
@@ -380,6 +385,99 @@ describe('RuntimeFileCommands file watching', () => {
     await expect(commands.closeFileExplorerWatchersForPath('/repo')).resolves.toBeUndefined()
     expect(watcherDispose).toHaveBeenCalledTimes(2)
   })
+
+  posixWatcherProcessIt('re-arms a logical runtime watch after removal aborts', async () => {
+    resolveAuthorizedPathMock.mockResolvedValue('/repo')
+    statMock.mockResolvedValue({ isDirectory: () => true })
+    const firstDispose = vi.fn().mockResolvedValue(undefined)
+    const replacementDispose = vi.fn().mockResolvedValue(undefined)
+    watchInWatcherProcessMock
+      .mockResolvedValueOnce(firstDispose)
+      .mockResolvedValueOnce(replacementDispose)
+    const onEvents = vi.fn()
+    const onTerminalError = vi.fn()
+    const { commands } = createRuntimeFileCommands('/repo')
+
+    const unsubscribe = await commands.watchFileExplorer('id:wt-1', onEvents, onTerminalError)
+    await commands.closeFileExplorerWatchersForPath('/repo')
+    expect(firstDispose).toHaveBeenCalledTimes(1)
+
+    await commands.restoreFileExplorerWatchersAfterFailedRemoval('/repo')
+
+    expect(watchInWatcherProcessMock).toHaveBeenCalledTimes(2)
+    expect(onTerminalError).not.toHaveBeenCalled()
+    await unsubscribe()
+    expect(replacementDispose).toHaveBeenCalledTimes(1)
+  })
+
+  posixWatcherProcessIt(
+    're-arms a logical runtime watch after a timed-out child physically exits',
+    async () => {
+      resolveAuthorizedPathMock.mockResolvedValue('/repo')
+      statMock.mockResolvedValue({ isDirectory: () => true })
+      let resolvePhysicalExit: () => void = () => {}
+      const physicalExit = new Promise<void>((resolve) => {
+        resolvePhysicalExit = resolve
+      })
+      const teardownError = new WatcherProcessFailure(
+        'file watcher process did not exit after termination deadline',
+        'supervisor',
+        'process_unavailable',
+        physicalExit
+      )
+      const firstDispose = vi.fn().mockRejectedValue(teardownError)
+      const replacementDispose = vi.fn().mockResolvedValue(undefined)
+      watchInWatcherProcessMock
+        .mockResolvedValueOnce(firstDispose)
+        .mockResolvedValueOnce(replacementDispose)
+      const { commands } = createRuntimeFileCommands('/repo')
+
+      const unsubscribe = await commands.watchFileExplorer('id:wt-1', vi.fn())
+      await expect(commands.closeFileExplorerWatchersForPath('/repo')).rejects.toBe(teardownError)
+      await commands.restoreFileExplorerWatchersAfterFailedRemoval('/repo')
+      expect(watchInWatcherProcessMock).toHaveBeenCalledTimes(1)
+
+      resolvePhysicalExit()
+      await physicalExit
+      await vi.waitFor(() => expect(watchInWatcherProcessMock).toHaveBeenCalledTimes(2))
+
+      await unsubscribe()
+      expect(replacementDispose).toHaveBeenCalledTimes(1)
+    }
+  )
+
+  posixWatcherProcessIt(
+    'does not re-arm a stopped runtime watch after a timed-out child exits',
+    async () => {
+      resolveAuthorizedPathMock.mockResolvedValue('/repo')
+      statMock.mockResolvedValue({ isDirectory: () => true })
+      let resolvePhysicalExit: () => void = () => {}
+      const physicalExit = new Promise<void>((resolve) => {
+        resolvePhysicalExit = resolve
+      })
+      const teardownError = new WatcherProcessFailure(
+        'file watcher process did not exit after termination deadline',
+        'supervisor',
+        'process_unavailable',
+        physicalExit
+      )
+      const firstDispose = vi.fn().mockRejectedValue(teardownError)
+      watchInWatcherProcessMock.mockResolvedValue(firstDispose)
+      const { commands } = createRuntimeFileCommands('/repo')
+
+      const unsubscribe = await commands.watchFileExplorer('id:wt-1', vi.fn())
+      await expect(commands.closeFileExplorerWatchersForPath('/repo')).rejects.toBe(teardownError)
+      await commands.restoreFileExplorerWatchersAfterFailedRemoval('/repo')
+      await expect(unsubscribe()).rejects.toBe(teardownError)
+
+      resolvePhysicalExit()
+      await physicalExit
+      await Promise.resolve()
+
+      expect(watchInWatcherProcessMock).toHaveBeenCalledTimes(1)
+      expect(_getRuntimeFileWatcherReleaseCountForTests()).toBe(0)
+    }
+  )
 
   posixWatcherProcessIt('clears a failed runtime release after physical child exit', async () => {
     resolveAuthorizedPathMock.mockResolvedValue('/repo')

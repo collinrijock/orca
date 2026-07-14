@@ -205,6 +205,78 @@ describe('WebRuntimeClient', () => {
     }
   })
 
+  it('replays an active file watch on reconnect and keeps its logical handle', async () => {
+    const client = new WebRuntimeClient({
+      v: 2,
+      endpoint: 'ws://127.0.0.1:6768',
+      deviceToken: 'token',
+      publicKeyB64: Buffer.alloc(32).toString('base64')
+    })
+    const initialSocket = fakeSockets[0]!
+    initialSocket.readyState = FakeWebSocket.OPEN
+    const onResponse = vi.fn()
+    const onClose = vi.fn()
+    const internals = client as unknown as {
+      ws: FakeWebSocket | null
+      sharedKey: Uint8Array | null
+      state: string
+      subscriptions: Map<
+        string,
+        {
+          callbacks: { onResponse: typeof onResponse }
+          needsReplay: boolean
+        }
+      >
+      setState(next: string): void
+      handleSocketClosed(socket: FakeWebSocket): void
+    }
+    internals.sharedKey = new Uint8Array(32)
+    internals.state = 'connected'
+
+    const handle = await client.subscribe(
+      'files.watch',
+      { worktree: 'wt-1' },
+      { onResponse, onClose }
+    )
+    const firstId = Array.from(internals.subscriptions.keys())[0]
+    expect(initialSocket.send).toHaveBeenCalledTimes(1)
+
+    initialSocket.onclose?.()
+
+    expect(onClose).not.toHaveBeenCalled()
+    expect(internals.subscriptions.get(firstId!)?.needsReplay).toBe(true)
+
+    const replacementSocket = new FakeWebSocket('ws://127.0.0.1:6768')
+    replacementSocket.readyState = FakeWebSocket.OPEN
+    internals.ws = replacementSocket
+    internals.sharedKey = new Uint8Array(32)
+    internals.setState('connected')
+
+    const [replacementId, replacement] = Array.from(internals.subscriptions.entries())[0]!
+    expect(replacementId).not.toBe(firstId)
+    expect(replacementSocket.send).toHaveBeenCalledTimes(1)
+    replacement.callbacks.onResponse({
+      id: replacementId,
+      ok: true,
+      streaming: true,
+      result: { type: 'changed', worktree: 'wt-1', events: [] },
+      _meta: { runtimeId: 'runtime-web-test' }
+    })
+    expect(onResponse).toHaveBeenCalledTimes(1)
+
+    handle.unsubscribe()
+    internals.handleSocketClosed(replacementSocket)
+    expect(internals.subscriptions.size).toBe(0)
+    const secondReplacementSocket = new FakeWebSocket('ws://127.0.0.1:6768')
+    secondReplacementSocket.readyState = FakeWebSocket.OPEN
+    internals.ws = secondReplacementSocket
+    internals.sharedKey = new Uint8Array(32)
+    internals.setState('connected')
+    expect(secondReplacementSocket.send).not.toHaveBeenCalled()
+    client.close()
+    expect(internals.subscriptions.size).toBe(0)
+  })
+
   it('keeps file watches on the owning WebSocket instead of opening child clients', async () => {
     const client = new WebRuntimeClient({
       v: 2,

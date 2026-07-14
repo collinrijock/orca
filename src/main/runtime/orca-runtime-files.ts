@@ -93,7 +93,12 @@ const OPEN_NOFOLLOW = typeof constants.O_NOFOLLOW === 'number' ? constants.O_NOF
 // Why: runtime files.watch subscriptions are cleaned up through synchronous RPC
 // callbacks. Track native Parcel unsubscribe work so app shutdown can drain it.
 const pendingRuntimeFileWatcherUnsubscribes = new Set<Promise<void>>()
-const runtimeFileWatcherReleasesByOwnerAndRoot = new Map<string, Set<() => Promise<void>>>()
+type RuntimeFileWatcherLease = {
+  suspend(): Promise<void>
+  resume(): Promise<void>
+  forget(): void
+}
+const runtimeFileWatcherLeasesByOwnerAndRoot = new Map<string, Set<RuntimeFileWatcherLease>>()
 const MOBILE_BINARY_EXTENSIONS = new Set([
   '.avif',
   '.bmp',
@@ -200,48 +205,138 @@ function registerRuntimeFileWatcherRelease(
   runtimeId: string,
   connectionId: string | undefined,
   rootPaths: string[],
-  unsubscribe: () => Promise<void>
+  unsubscribe: () => Promise<void>,
+  restart: () => Promise<() => Promise<void>>,
+  onRestoreError: (error: Error) => void
 ): () => Promise<void> {
   const keys = Array.from(
     new Set(
       rootPaths.map((rootPath) => runtimeWatcherReleaseKey(runtimeId, connectionId, rootPath))
     )
   )
-  let releasePromise: Promise<void> | undefined
-  const removeRelease = (): void => {
+  let currentUnsubscribe: (() => Promise<void>) | null = unsubscribe
+  let releasePromise: Promise<void> | null = null
+  let physicalExitPromise: Promise<void> | null = null
+  let resumePromise: Promise<void> | null = null
+  let stopPromise: Promise<void> | null = null
+  let logicallyStopped = false
+  const removeLease = (): void => {
     for (const key of keys) {
-      const releases = runtimeFileWatcherReleasesByOwnerAndRoot.get(key)
-      releases?.delete(release)
-      if (releases?.size === 0) {
-        runtimeFileWatcherReleasesByOwnerAndRoot.delete(key)
+      const leases = runtimeFileWatcherLeasesByOwnerAndRoot.get(key)
+      leases?.delete(lease)
+      if (leases?.size === 0) {
+        runtimeFileWatcherLeasesByOwnerAndRoot.delete(key)
       }
     }
   }
-  const release = (): Promise<void> => {
-    if (!releasePromise) {
-      releasePromise = trackRuntimeFileWatcherUnsubscribe(rootPaths[0], unsubscribe)
-      releasePromise.then(removeRelease, (error: unknown) => {
-        if (isWatcherProcessFailure(error) && error.physicalExit) {
-          void error.physicalExit.then(() => {
-            releasePromise = Promise.resolve()
-            removeRelease()
-          })
-        } else {
-          // Why: a synchronous Windows close failure has no process-exit
-          // signal; retain the root and allow a later destructive retry.
-          releasePromise = undefined
-        }
-      })
+  const suspend = (): Promise<void> => {
+    if (releasePromise) {
+      return releasePromise
     }
-    return releasePromise
+    const release = currentUnsubscribe
+    if (!release) {
+      return Promise.resolve()
+    }
+    const attempt = trackRuntimeFileWatcherUnsubscribe(rootPaths[0], release)
+    releasePromise = attempt
+    void attempt.then(
+      () => {
+        if (currentUnsubscribe === release) {
+          currentUnsubscribe = null
+        }
+        releasePromise = null
+      },
+      (error: unknown) => {
+        if (isWatcherProcessFailure(error) && error.physicalExit) {
+          const physicalExit = error.physicalExit.then(() => {
+            if (currentUnsubscribe === release) {
+              currentUnsubscribe = null
+            }
+            releasePromise = null
+            if (physicalExitPromise === physicalExit) {
+              physicalExitPromise = null
+            }
+            if (logicallyStopped) {
+              removeLease()
+            }
+          })
+          physicalExitPromise = physicalExit
+        } else {
+          // Why: a synchronous close failure retains the native owner so a
+          // later removal or logical unsubscribe can retry the same handle.
+          releasePromise = null
+        }
+      }
+    )
+    return attempt
+  }
+  const lease: RuntimeFileWatcherLease = {
+    suspend,
+    resume: () => {
+      if (logicallyStopped || (currentUnsubscribe && !physicalExitPromise)) {
+        return Promise.resolve()
+      }
+      if (resumePromise) {
+        return physicalExitPromise ? Promise.resolve() : resumePromise
+      }
+      // Why: a timed-out child still owns native handles until its physical
+      // exit; restoration must join that owner before starting a replacement.
+      const resumesAfterPhysicalExit = physicalExitPromise !== null
+      const attempt = Promise.resolve(physicalExitPromise ?? releasePromise)
+        .then(async () => {
+          if (logicallyStopped) {
+            return
+          }
+          const nextUnsubscribe = await restart()
+          if (logicallyStopped) {
+            await nextUnsubscribe()
+            return
+          }
+          currentUnsubscribe = nextUnsubscribe
+        })
+        .catch((error: unknown) => {
+          const restoreError = error instanceof Error ? error : new Error(String(error))
+          queueMicrotask(() => onRestoreError(restoreError))
+          throw restoreError
+        })
+        .finally(() => {
+          resumePromise = null
+        })
+      resumePromise = attempt
+      if (resumesAfterPhysicalExit) {
+        void attempt.catch(() => {})
+        return Promise.resolve()
+      }
+      return attempt
+    },
+    forget: () => {
+      logicallyStopped = true
+      removeLease()
+    }
   }
   for (const key of keys) {
-    const releases =
-      runtimeFileWatcherReleasesByOwnerAndRoot.get(key) ?? new Set<() => Promise<void>>()
-    releases.add(release)
-    runtimeFileWatcherReleasesByOwnerAndRoot.set(key, releases)
+    const leases = runtimeFileWatcherLeasesByOwnerAndRoot.get(key) ?? new Set()
+    leases.add(lease)
+    runtimeFileWatcherLeasesByOwnerAndRoot.set(key, leases)
   }
-  return release
+  return () => {
+    if (stopPromise) {
+      return stopPromise
+    }
+    logicallyStopped = true
+    const release =
+      resumePromise && !physicalExitPromise
+        ? Promise.resolve(resumePromise)
+            .catch(() => undefined)
+            .then(suspend)
+        : suspend()
+    const attempt = release.then(removeLease).catch((error: unknown) => {
+      stopPromise = null
+      throw error
+    })
+    stopPromise = attempt
+    return attempt
+  }
 }
 
 export async function awaitRuntimeFileWatcherUnsubscribes(): Promise<void> {
@@ -249,13 +344,26 @@ export async function awaitRuntimeFileWatcherUnsubscribes(): Promise<void> {
 }
 
 export function _getRuntimeFileWatcherReleaseCountForTests(): number {
-  const releases = new Set<() => Promise<void>>()
-  for (const rootReleases of runtimeFileWatcherReleasesByOwnerAndRoot.values()) {
-    for (const release of rootReleases) {
-      releases.add(release)
+  const leases = new Set<RuntimeFileWatcherLease>()
+  for (const rootLeases of runtimeFileWatcherLeasesByOwnerAndRoot.values()) {
+    for (const lease of rootLeases) {
+      leases.add(lease)
     }
   }
-  return releases.size
+  return leases.size
+}
+
+export function _resetRuntimeFileWatcherLeasesForTests(): void {
+  const leases = new Set<RuntimeFileWatcherLease>()
+  for (const rootLeases of runtimeFileWatcherLeasesByOwnerAndRoot.values()) {
+    for (const lease of rootLeases) {
+      leases.add(lease)
+    }
+  }
+  for (const lease of leases) {
+    lease.forget()
+  }
+  runtimeFileWatcherLeasesByOwnerAndRoot.clear()
 }
 
 export type ResolvedRuntimeFileWorktree = Worktree & { git: GitWorktreeInfo }
@@ -1011,68 +1119,88 @@ export class RuntimeFileCommands {
     signal?: AbortSignal
   ): Promise<() => void> {
     const target = await this.resolveFileExplorerPath(worktreeSelector, '')
-    const finishInstall = beginWatcherInstall(target.path, target.connectionId)
-    try {
-      const provider = target.connectionId ? getSshFilesystemProvider(target.connectionId) : null
-      if (target.connectionId) {
-        if (!provider) {
-          throw new Error(SSH_FILESYSTEM_PROVIDER_UNAVAILABLE_MESSAGE)
+    const open = async (): Promise<{
+      unsubscribe: () => Promise<void>
+      rootPaths: string[]
+    }> => {
+      const finishInstall = beginWatcherInstall(target.path, target.connectionId)
+      try {
+        const provider = target.connectionId ? getSshFilesystemProvider(target.connectionId) : null
+        if (target.connectionId) {
+          if (!provider) {
+            throw new Error(SSH_FILESYSTEM_PROVIDER_UNAVAILABLE_MESSAGE)
+          }
+          // Why: the RPC layer already threads AbortSignal for local watches; SSH
+          // must cancel the remote fs.watch request instead of waiting it out.
+          const close = await provider.watch(target.path, callback, { signal, onTerminalError })
+          return { unsubscribe: async () => close(), rootPaths: [target.path] }
         }
-        // Why: the RPC layer already threads AbortSignal for local watches; SSH
-        // must cancel the remote fs.watch request instead of waiting it out.
-        const close = await provider.watch(target.path, callback, { signal, onTerminalError })
-        return registerRuntimeFileWatcherRelease(
-          this.host.getRuntimeId(),
-          target.connectionId,
-          [target.path],
-          async () => close()
-        )
-      }
 
-      const rootPath = await resolveAuthorizedPath(target.path, this.host.requireStore())
-      const rootStats = await stat(rootPath)
-      if (!rootStats.isDirectory()) {
-        throw new Error('not_a_directory')
-      }
-      if (process.platform === 'win32') {
-        const close = watchWindowsRuntimeFileExplorer(rootPath, callback, onTerminalError)
-        return registerRuntimeFileWatcherRelease(
-          this.host.getRuntimeId(),
-          undefined,
-          [target.path, rootPath],
-          async () => close()
+        const rootPath = await resolveAuthorizedPath(target.path, this.host.requireStore())
+        const rootStats = await stat(rootPath)
+        if (!rootStats.isDirectory()) {
+          throw new Error('not_a_directory')
+        }
+        if (process.platform === 'win32') {
+          const close = watchWindowsRuntimeFileExplorer(rootPath, callback, onTerminalError)
+          return { unsubscribe: close, rootPaths: [target.path, rootPath] }
+        }
+        // Why: the forked watcher keeps the blocking crawl and native faults out
+        // of the main/`serve` process (issues #5308 and #8212).
+        const dispose = await watchFileExplorerInWatcherProcess(
+          rootPath,
+          callback,
+          onTerminalError,
+          signal
         )
+        return { unsubscribe: dispose, rootPaths: [target.path, rootPath] }
+      } finally {
+        finishInstall()
       }
-      // Why: the forked watcher keeps the blocking crawl and native faults out
-      // of the main/`serve` process (issues #5308 and #8212).
-      const dispose = await watchFileExplorerInWatcherProcess(
-        rootPath,
-        callback,
-        onTerminalError,
-        signal
-      )
-      return registerRuntimeFileWatcherRelease(
-        this.host.getRuntimeId(),
-        undefined,
-        [target.path, rootPath],
-        dispose
-      )
-    } finally {
-      finishInstall()
     }
+    const initial = await open()
+    return registerRuntimeFileWatcherRelease(
+      this.host.getRuntimeId(),
+      target.connectionId,
+      initial.rootPaths,
+      initial.unsubscribe,
+      async () => (await open()).unsubscribe,
+      onTerminalError
+    )
   }
 
   async closeFileExplorerWatchersForPath(rootPath: string, connectionId?: string): Promise<void> {
     const key = runtimeWatcherReleaseKey(this.host.getRuntimeId(), connectionId, rootPath)
-    const releases = runtimeFileWatcherReleasesByOwnerAndRoot.get(key)
-    if (releases) {
-      await Promise.all(Array.from(releases, (release) => release()))
+    const leases = runtimeFileWatcherLeasesByOwnerAndRoot.get(key)
+    if (leases) {
+      await Promise.all(Array.from(leases, (lease) => lease.suspend()))
     }
     if (!connectionId) {
       // Why: setup can fail before registerRuntimeFileWatcherRelease publishes
       // its callback, while the host still retains an unkillable child owner.
       const resolvedRootPath = await resolveAuthorizedPath(rootPath, this.host.requireStore())
       await closeFileExplorerWatcherInWatcherProcess(resolvedRootPath)
+    }
+  }
+
+  async restoreFileExplorerWatchersAfterFailedRemoval(
+    rootPath: string,
+    connectionId?: string
+  ): Promise<void> {
+    const key = runtimeWatcherReleaseKey(this.host.getRuntimeId(), connectionId, rootPath)
+    const leases = runtimeFileWatcherLeasesByOwnerAndRoot.get(key)
+    if (leases) {
+      await Promise.all(Array.from(leases, (lease) => lease.resume()))
+    }
+  }
+
+  forgetFileExplorerWatchersAfterRemoval(rootPath: string, connectionId?: string): void {
+    const key = runtimeWatcherReleaseKey(this.host.getRuntimeId(), connectionId, rootPath)
+    const leases = runtimeFileWatcherLeasesByOwnerAndRoot.get(key)
+    if (leases) {
+      for (const lease of Array.from(leases)) {
+        lease.forget()
+      }
     }
   }
 
