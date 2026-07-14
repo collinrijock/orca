@@ -22,6 +22,7 @@ import {
   cancelTerminalWriteStallWatch,
   failTerminalWriteStallWatch,
   isTerminalWritePipelineCertifiedDead,
+  recordTerminalParseProgress,
   settleTerminalWriteStallWatch
 } from './terminal-write-pipeline-health'
 import {
@@ -1503,10 +1504,19 @@ export function waitForTerminalOutputParsed(terminal: TerminalOutputTarget): Pro
       }
       resolve()
     }
+    const finishParsed = (): void => {
+      // Why: serializer/startup probes share xterm's FIFO with replay guards;
+      // their completion is real parser progress even though they carry no bytes.
+      recordTerminalParseProgress(terminal)
+      finish()
+    }
     timer = setTimeout(finish, PARSE_SETTLE_TIMEOUT_MS)
     try {
-      terminal.write('', finish)
+      terminal.write('', finishParsed)
     } catch {
+      // Why: a synchronous rejection means this concrete xterm cannot accept
+      // even an empty FIFO probe; recovery must replace it before reuse.
+      failTerminalWriteStallWatch(terminal)
       finish()
     }
   })

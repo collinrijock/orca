@@ -131,6 +131,9 @@ export function armTerminalWriteStallWatch(
     try {
       terminal.write('', () => {
         probeParsed = true
+        // Why: replay guards share this terminal-scoped generation; even an
+        // auxiliary FIFO probe proves the parser is alive and making progress.
+        recordTerminalParseProgress(terminal)
         // Why: a parsed probe proves the pipeline is alive — the stalled
         // completion was just slow. Disarm; the next write re-arms.
         const current = stallWatchByTerminal.get(terminal)

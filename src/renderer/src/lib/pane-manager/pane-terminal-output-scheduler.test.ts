@@ -265,6 +265,48 @@ describe('pane terminal output scheduler', () => {
       }
     })
 
+    it('records parse progress when the parsed-output probe completes', async () => {
+      const { waitForTerminalOutputParsed } = await loadScheduler()
+      const {
+        _resetWritePipelineHealthForTests,
+        captureTerminalParseProgressGeneration,
+        hasTerminalParseProgressSince
+      } = await import('./terminal-write-pipeline-health')
+      const terminal = createTerminal()
+      let parsed: (() => void) | undefined
+      terminal.write.mockImplementation((_data: string, callback?: () => void) => {
+        parsed = callback
+      })
+      try {
+        const generation = captureTerminalParseProgressGeneration(terminal)
+        const wait = waitForTerminalOutputParsed(terminal)
+
+        parsed?.()
+        await wait
+
+        expect(hasTerminalParseProgressSince(terminal, generation)).toBe(true)
+      } finally {
+        _resetWritePipelineHealthForTests(terminal)
+      }
+    })
+
+    it('certifies a terminal whose parsed-output probe throws synchronously', async () => {
+      const { waitForTerminalOutputParsed } = await loadScheduler()
+      const { _resetWritePipelineHealthForTests, isTerminalWritePipelineCertifiedDead } =
+        await import('./terminal-write-pipeline-health')
+      const terminal = createTerminal()
+      terminal.write.mockImplementation(() => {
+        throw new Error('disposed')
+      })
+      try {
+        await waitForTerminalOutputParsed(terminal)
+
+        expect(isTerminalWritePipelineCertifiedDead(terminal)).toBe(true)
+      } finally {
+        _resetWritePipelineHealthForTests(terminal)
+      }
+    })
+
     it('credits an empty write immediately', async () => {
       const { writeTerminalOutput } = await loadScheduler()
       const terminal = createTerminal()

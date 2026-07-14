@@ -120,12 +120,14 @@ describe('terminal write pipeline health', () => {
     registerUndeliverableWriteHandler(terminal, handler)
 
     armTerminalWriteStallWatch(terminal)
+    const generation = captureTerminalParseProgressGeneration(terminal)
     vi.advanceTimersByTime(WRITE_PIPELINE_STALL_CHECK_MS)
     // Probe write queued; the pipeline is alive and parses it.
     expect(terminal.pendingCallbacks).toHaveLength(1)
     terminal.flush()
     vi.advanceTimersByTime(WRITE_PIPELINE_STALL_CHECK_MS * 3)
 
+    expect(hasTerminalParseProgressSince(terminal, generation)).toBe(true)
     expect(handler).not.toHaveBeenCalled()
     expect(isTerminalWritePipelineCertifiedDead(terminal)).toBe(false)
     _resetWritePipelineHealthForTests(terminal)
