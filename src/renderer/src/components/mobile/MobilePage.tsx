@@ -33,9 +33,9 @@ export default function MobilePage(): React.JSX.Element {
   const [pairingUrl, setPairingUrl] = useState<string | null>(null)
   const [pairLoading, setPairLoading] = useState(false)
   const signedIn = useAppStore((state) => state.orcaProfileAuthStatus?.state === 'connected')
-  const [connectionMode, setConnectionMode] = useState<MobilePairingConnectionMode>(() =>
-    signedIn ? 'automatic' : 'local-only'
-  )
+  // Why: Relay is opt-in while compatible mobile builds are limited to the
+  // TestFlight preview and Android APK.
+  const [connectionMode, setConnectionMode] = useState<MobilePairingConnectionMode>('local-only')
   const [networkInterfaces, setNetworkInterfaces] = useState<MobileNetworkInterface[]>([])
   const [selectedAddress, setSelectedAddress] = useState<string | undefined>(undefined)
   // Why: tracks whether `selectedAddress` came from the user typing a
@@ -256,8 +256,8 @@ export default function MobilePage(): React.JSX.Element {
   useEffect(() => {
     const wasSignedIn = wasSignedInRef.current
     wasSignedInRef.current = signedIn
-    if (signedIn !== wasSignedIn) {
-      handleConnectionModeChange(signedIn ? 'automatic' : 'local-only')
+    if (wasSignedIn && !signedIn) {
+      handleConnectionModeChange('local-only')
     }
   }, [handleConnectionModeChange, signedIn])
 

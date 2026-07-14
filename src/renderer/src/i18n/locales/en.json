@@ -9075,6 +9075,13 @@
           "tailnet": "Connect with your own tailnet",
           "tailnetDescription": "Install Tailscale on this computer and your phone, sign in to the same tailnet, then select its 100.x.y.z address above.",
           "getTailscale": "Get Tailscale"
+        },
+        "MobileRelayBetaAvailability": {
+          "about": "About the Orca Relay beta",
+          "beta": "Beta",
+          "availability": "Orca Relay is currently available on the iOS TestFlight preview and Android APK, not the public App Store build.",
+          "testFlight": "Open TestFlight",
+          "androidApk": "Download Android APK"
         }
       },
       "right": {

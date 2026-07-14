@@ -43,7 +43,8 @@ describe('MobilePairingConnectionOptions', () => {
             statusListener = listener
             return vi.fn()
           })
-        }
+        },
+        shell: { openUrl: vi.fn().mockResolvedValue(undefined) }
       }
     })
     mocks.state = {
@@ -90,6 +91,24 @@ describe('MobilePairingConnectionOptions', () => {
     expect(onChange).toHaveBeenCalledWith('local-only')
     statusListener?.('standby')
     await waitFor(() => expect(screen.getByText('Available')).toBeVisible())
+  })
+
+  it('explains the Relay beta and opens both compatible mobile builds', async () => {
+    const user = userEvent.setup()
+    render(<MobilePairingConnectionOptions value="local-only" onChange={vi.fn()} />)
+
+    await user.click(screen.getByRole('button', { name: 'About the Orca Relay beta' }))
+    expect(screen.getByText(/currently available on the iOS TestFlight preview/i)).toBeVisible()
+
+    await user.click(screen.getByRole('button', { name: 'Open TestFlight' }))
+    expect(window.api.shell.openUrl).toHaveBeenCalledWith(
+      'https://testflight.apple.com/join/YjeGMQBA'
+    )
+
+    await user.click(screen.getByRole('button', { name: 'Download Android APK' }))
+    expect(window.api.shell.openUrl).toHaveBeenCalledWith(
+      'https://github.com/stablyai/orca/releases/download/mobile-android-v0.0.27/app-release.apk'
+    )
   })
 
   it('keeps the compact onboarding choices structurally stable across modes', async () => {

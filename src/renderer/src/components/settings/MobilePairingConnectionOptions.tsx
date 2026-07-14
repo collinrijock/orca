@@ -7,6 +7,7 @@ import { translate } from '../../i18n/i18n'
 import { useAppStore } from '../../store'
 import type { MobileRelayStatus } from '../../../../shared/mobile-relay-status'
 import type { MobilePairingConnectionMode } from '../../../../shared/mobile-pairing-connection-mode'
+import { MobileRelayBetaAvailability } from './MobileRelayBetaAvailability'
 
 function relayStatusLabel(status: MobileRelayStatus): string {
   if (status === 'registered') {
@@ -64,14 +65,15 @@ function CompactConnectionOptions({
         )}
       </h3>
       <div className="grid grid-cols-2 gap-2" role="radiogroup">
-        <label
+        <div
           className={cn(
             'flex min-h-16 items-center gap-2 rounded-lg border border-border/60 px-3 py-2',
-            signedIn ? 'cursor-pointer' : 'cursor-not-allowed opacity-60',
+            !signedIn && 'opacity-60',
             value === 'automatic' && signedIn && 'bg-accent'
           )}
         >
           <input
+            id="mobile-pairing-connection-mode-automatic-compact"
             type="radio"
             name="mobile-pairing-connection-mode"
             value="automatic"
@@ -80,21 +82,19 @@ function CompactConnectionOptions({
             onChange={() => onChange('automatic')}
             className="size-4 shrink-0 accent-primary"
           />
-          <span className="min-w-0 flex-1">
-            <span className="block text-sm font-medium">
+          <span className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+            <label
+              htmlFor="mobile-pairing-connection-mode-automatic-compact"
+              className={cn('text-sm font-medium', signedIn && 'cursor-pointer')}
+            >
               {translate(
                 'auto.components.settings.MobilePairingConnectionOptions.anywhere',
                 'Connect from anywhere'
               )}
-            </span>
-            <span className="block text-[11px] text-muted-foreground">
-              {translate(
-                'auto.components.settings.MobilePairingConnectionOptions.recommended',
-                'Recommended'
-              )}
-            </span>
+            </label>
+            <MobileRelayBetaAvailability />
           </span>
-        </label>
+        </div>
 
         <label
           className={cn(
@@ -241,10 +241,9 @@ export function MobilePairingConnectionOptions({
             value === 'automatic' && signedIn && 'bg-accent'
           )}
         >
-          <label
-            className={cn('flex min-w-0 flex-1 items-start gap-3', signedIn && 'cursor-pointer')}
-          >
+          <div className="flex min-w-0 flex-1 items-start gap-3">
             <input
+              id="mobile-pairing-connection-mode-automatic"
               type="radio"
               name="mobile-pairing-connection-mode"
               value="automatic"
@@ -255,16 +254,16 @@ export function MobilePairingConnectionOptions({
             />
             <span className="min-w-0 space-y-0.5">
               <span className="flex flex-wrap items-center gap-2 text-sm font-medium">
-                {translate(
-                  'auto.components.settings.MobilePairingConnectionOptions.anywhere',
-                  'Connect from anywhere'
-                )}
-                <span className="text-xs font-normal text-muted-foreground">
+                <label
+                  htmlFor="mobile-pairing-connection-mode-automatic"
+                  className={cn(signedIn && 'cursor-pointer')}
+                >
                   {translate(
-                    'auto.components.settings.MobilePairingConnectionOptions.recommended',
-                    'Recommended'
+                    'auto.components.settings.MobilePairingConnectionOptions.anywhere',
+                    'Connect from anywhere'
                   )}
-                </span>
+                </label>
+                <MobileRelayBetaAvailability />
               </span>
               <span className="block text-xs text-muted-foreground">
                 {signedIn
@@ -278,7 +277,7 @@ export function MobilePairingConnectionOptions({
                     )}
               </span>
             </span>
-          </label>
+          </div>
           {signedIn ? (
             <Badge variant="outline" className="shrink-0">
               {relayStatusLabel(relayStatus)}

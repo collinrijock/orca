@@ -9075,6 +9075,13 @@
           "tailnet": "내 tailnet으로 연결",
           "tailnetDescription": "이 컴퓨터와 휴대폰에 Tailscale을 설치하고 같은 tailnet에 로그인한 다음 위에서 100.x.y.z 주소를 선택하세요.",
           "getTailscale": "Tailscale 받기"
+        },
+        "MobileRelayBetaAvailability": {
+          "about": "Orca Relay 베타 정보",
+          "beta": "베타",
+          "availability": "Orca Relay는 현재 iOS TestFlight 미리 보기 및 Android APK에서 사용할 수 있으며, 공개 App Store 빌드에서는 사용할 수 없습니다.",
+          "testFlight": "TestFlight 열기",
+          "androidApk": "Android APK 다운로드"
         }
       },
       "right": {
