@@ -8,7 +8,7 @@ work; keep exact commands, runner identities, hashes, metrics, and residual gaps
 
 Date created: 2026-07-14<br>
 Last updated: 2026-07-14<br>
-Current phase: Milestone 3 / Work Package 2 SBOM/provenance closure — **In progress — 2026-07-14, Codex implementation owner**; exact-head run [29368482959](https://github.com/stablyai/orca/actions/runs/29368482959) proves exact metadata/build equality and upload on all four POSIX cells but fails closed in both Windows contract-test cells before build or upload because direct no-argument `link.exe` invocation returns no selectable version line (E-M3-METADATA-CI-RED-001); artifact inspection also shows both Linux `strip` records contain a usage line rather than a version; exact implementation commit `e3f76d3ba` requests bounded linker help and GNU strip version output, encodes the reviewed single monotonic Windows build floors as x64 19045 and arm64 26100, and passes 20 files / 96 tests plus static gates under E-M3-METADATA-CORRECTION-LOCAL-001; the next exact-head run must pass all six native cells and direct metadata inspection before any remaining SBOM/provenance/toolchain box is checked; oldest-baseline, native-trust, cross-family remote, and measured-baseline gates remain open; production/default behavior and every tuple state remain unchanged; no bundled-runtime path is enabled<br>
+Current phase: Milestone 3 / Work Package 2 SBOM/provenance closure — **In progress — 2026-07-14, Codex implementation owner**; exact-head run [29369350259](https://github.com/stablyai/orca/actions/runs/29369350259) proves corrected GNU strip versions, exact metadata/build equality, and upload on all four POSIX cells but shows `link.exe /?` is also silent when piped on both Windows architectures, which fail closed before build or upload (E-M3-METADATA-CI-RED-002); exact implementation commit `e85f0c700` retains SHA-256 of the resolved linker and reads its authenticated PE `FileVersion` through non-interactive PowerShell with the path passed as a positional argument, and passes 20 files / 97 tests plus static gates under E-M3-WINDOWS-LINKER-FILE-VERSION-LOCAL-001; the next exact-head run must pass all six native cells and direct metadata inspection before any remaining SBOM/provenance/toolchain box is checked; oldest-baseline, native-trust, cross-family remote, and measured-baseline gates remain open; production/default behavior and every tuple state remain unchanged; no bundled-runtime path is enabled<br>
 Primary design: [SSH relay GitHub Release plan](./2026-07-14-ssh-relay-github-release-plan.html)<br>
 Motivating issues: [#8450](https://github.com/stablyai/orca/issues/8450), [#1693](https://github.com/stablyai/orca/issues/1693)
 
@@ -175,7 +175,7 @@ same change as the work it records.
   per-target opt-in selects bundled-preferred behavior, and implementing the setting does not
   authorize default-on rollout or legacy removal (E-M1-ROLLOUT-DECISION-001).
 - Legacy fallback removal: not authorized.
-- Next required action: push exact correction commit `e3f76d3ba` plus its evidence-ledger head and
+- Next required action: push exact correction commit `e85f0c700` plus its evidence-ledger head and
   rerun all six target-native cells. Require exact SPDX ownership, archive-scoped document identity,
   commit-pinned builder identity, resolved runner identity, complete bounded tool records with
   SHA-256, clean-build metadata equality, smoke, upload, and regenerated Windows identities before
@@ -6294,6 +6294,91 @@ the bounded depth` before opening or parsing a candidate. Starting at the comple
   native-trust boxes remain unchecked.
 - Follow-up: push the exact implementation and ledger head, then require all six native jobs plus
   direct inspection of every uploaded metadata document before closing the metadata/toolchain gate.
+- Subsequent native evidence: E-M3-METADATA-CI-RED-002 disproves the locally inferred
+  `link.exe /?` behavior;
+  both hosted Windows architectures remain silent when the help output is piped by Node.
+
+### E-M3-METADATA-CI-RED-002 — Linker help remains silent on native Windows
+
+- Date: 2026-07-14
+- Commit SHA / PR: exact tested head `c906c21ce117021885ec4db68c62ef28c141d7ba`;
+  stacked draft PR [#8741](https://github.com/stablyai/orca/pull/8741)
+- Runner: [GitHub Actions run 29369350259](https://github.com/stablyai/orca/actions/runs/29369350259),
+  final conclusion `failure` after 6m15s. Native job IDs: Linux x64 `87208675566`, Linux arm64
+  `87208675357`, macOS x64 `87208675363`, macOS arm64 `87208675377`, Windows x64 `87208675364`,
+  and Windows arm64 `87208675391`.
+- Remote and transport: none; target-native artifact-only build workflow
+- Exact evidence commands:
+
+  ```sh
+  gh run view 29369350259 --repo stablyai/orca --json status,conclusion,headSha,jobs
+  gh api repos/stablyai/orca/actions/jobs/87208675364/logs
+  gh api repos/stablyai/orca/actions/jobs/87208675391/logs
+  gh api repos/stablyai/orca/actions/runs/29369350259/artifacts
+  gh run download 29369350259 --repo stablyai/orca --dir /tmp/orca-8450-metadata-red-29369350259
+  # Parse every downloaded identity/SPDX/provenance document and hash every archive locally.
+  ```
+
+- Result: EXPECTED RED. Linux x64 completed in 2m53s, Linux arm64 in 3m30s, macOS arm64 in 2m52s,
+  and macOS x64 in 6m14s; each passed native contracts, built twice, smoked, compared every
+  runtime/archive/identity/SPDX/provenance byte exactly, and uploaded. Windows x64 failed in 1m24s
+  and Windows arm64 in 3m51s at the same linker-version selector before input download, build,
+  smoke, comparison, or upload. Explicit `link.exe /?` is still silent when invoked through the
+  bounded Node child-process pipe on both hosted MSVC environments. The four POSIX artifact IDs are
+  Linux x64 `8325461679`, Linux arm64 `8325476952`, macOS arm64 `8325460610`, and macOS x64
+  `8325542377`; no Windows artifact exists for this run.
+- Downloaded-artifact audit: all four archive hashes match identity and provenance; every SPDX
+  namespace is scoped to the exact archive SHA-256; all 34 Linux and 35 macOS files have exactly one
+  package owner and eight dependency relationships; builder URLs pin exact commit `c906c21ce`;
+  runner identities are complete; Linux x64/arm64 now record `GNU strip (GNU Binutils for Ubuntu)
+2.42`; and no tool record contains a usage line. POSIX content IDs remain unchanged.
+- Oracle proved: the corrected GNU version probe works and stays reproducible on both Linux
+  architectures; all four POSIX metadata contracts are complete for this head; direct linker banner
+  parsing is not a portable Windows provenance source and fails closed on both native architectures.
+- Does not prove: Windows metadata/build output, regenerated Windows content identities, native
+  linker file versions, oldest baselines, native trust/signing, SSH, publication, or an enabled tuple.
+- Checklist items satisfied: no new completion box; the compiler/toolchain item remains in progress.
+- Follow-up: retain SHA-256 of the resolved linker but obtain its actual PE file version without
+  relying on linker stdout/stderr, then rerun every native cell from one exact head.
+
+### E-M3-WINDOWS-LINKER-FILE-VERSION-LOCAL-001 — Authenticated linker PE version
+
+- Date: 2026-07-14
+- Commit SHA / PR: exact implementation commit
+  `e85f0c700c1bd40e76e08ef5063f9b3128acb600`; stacked draft PR
+  [#8741](https://github.com/stablyai/orca/pull/8741)
+- Runner: local macOS 26.2 build 25C56, Darwin 25.2.0 arm64 on Apple Silicon; Node v26.0.0 and
+  pnpm 10.24.0 for pure invocation/metadata tests
+- Remote and transport: none; artifact-only local contract tests
+- Exact evidence commands:
+
+  ```sh
+  pnpm exec vitest run --config config/vitest.config.ts \
+    config/scripts/ssh-relay-*.test.mjs \
+    src/main/ssh/ssh-relay-artifact-selector.test.ts
+  pnpm run typecheck
+  pnpm run lint
+  pnpm exec oxfmt --check \
+    config/scripts/ssh-relay-runtime-toolchain.mjs \
+    config/scripts/ssh-relay-runtime-toolchain.test.mjs
+  git diff --check
+  ```
+
+- Result: PASS. Twenty test files passed 97 tests; typecheck, full lint and its
+  reliability/localization/line-budget sub-gates, focused formatting, and diff checks passed. The
+  linker record still hashes the resolved `link.exe` bytes. Its version now comes from
+  `System.Diagnostics.FileVersionInfo` through `pwsh.exe -NoLogo -NoProfile -NonInteractive`; the
+  resolved path is a separate positional argument and is never interpolated into executable script
+  text. Only a bounded numeric three- or four-component file version is accepted.
+- Oracle proved: the native-silent banner is no longer a provenance dependency; exact linker bytes
+  remain authenticated; paths containing spaces cannot alter the PowerShell expression; malformed,
+  missing, or nonnumeric file versions still fail closed.
+- Does not prove: the PE file-version call on either native Windows architecture, the exact returned
+  linker versions, Windows build/equality/upload, regenerated Windows content IDs, oldest baselines,
+  native trust/signing, SSH, publication, or an enabled tuple.
+- Checklist items satisfied: local correction only; the compiler/toolchain item remains unchecked.
+- Follow-up: push this exact implementation plus the ledger head and require all six native jobs and
+  direct inspection of every uploaded metadata document before closing the metadata/toolchain gate.
 
 ## Accepted Gaps
 
@@ -6352,7 +6437,7 @@ The project is not complete until every applicable item below is checked with ev
 
 ## Next Required Action
 
-Push exact correction commit `e3f76d3ba` plus this evidence-ledger head and rerun all six
+Push exact correction commit `e85f0c700` plus this evidence-ledger head and rerun all six
 target-native cells. Require exact SPDX ownership, archive-scoped document identity, commit-pinned
 builder identity, resolved runner identity, complete bounded tool records with SHA-256, clean-build
 metadata equality, smoke, upload, and regenerated Windows content identities before checking the
