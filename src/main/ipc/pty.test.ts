@@ -10437,12 +10437,12 @@ describe('registerPtyHandlers', () => {
     expect(mockProc.proc.write).not.toHaveBeenCalled()
   })
 
-  it('anchors runtime output sequencing from a provider reattach snapshot', async () => {
+  it('synchronizes runtime output sequencing from a provider reattach snapshot', async () => {
     setLocalPtyProvider({
       spawn: vi.fn(async () => ({
         id: 'pty-restored',
         isReattach: true,
-        snapshotOutputSequence: 900
+        providerSequence: { value: 900, generation: 'continued' as const }
       })),
       write: vi.fn(),
       resize: vi.fn(),
@@ -10456,7 +10456,8 @@ describe('registerPtyHandlers', () => {
     const runtime = {
       setPtyController: vi.fn(),
       noteTerminalSpawnCommand: vi.fn(),
-      anchorPtyOutputSequenceFromProviderSnapshot: vi.fn(),
+      getPtyOutputSequence: vi.fn().mockReturnValue(7),
+      synchronizePtyOutputSequenceFromProvider: vi.fn(),
       onPtySpawned: vi.fn(),
       onPtyData: vi.fn(),
       onPtyExit: vi.fn(),
@@ -10467,9 +10468,10 @@ describe('registerPtyHandlers', () => {
 
     await handlers.get('pty:spawn')!(null, { cols: 80, rows: 24 })
 
-    expect(runtime.anchorPtyOutputSequenceFromProviderSnapshot).toHaveBeenCalledWith(
+    expect(runtime.synchronizePtyOutputSequenceFromProvider).toHaveBeenCalledWith(
       'pty-restored',
-      900
+      { value: 900, generation: 'continued' },
+      7
     )
   })
 
@@ -10510,7 +10512,7 @@ describe('registerPtyHandlers', () => {
       'pty-cold-restore',
       'restored history\r\n',
       undefined,
-      { cwd: '/projects/restored', oscLinks }
+      { cwd: '/projects/restored', oscLinks, preferProviderIfExisting: true }
     )
   })
 

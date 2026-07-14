@@ -3125,11 +3125,16 @@ export function registerPtyHandlers(
           if (args.preAllocatedHandle) {
             trustedTerminalHandleEnv.add(args.preAllocatedHandle)
           }
+          const expectedPtyId = effectiveSessionAppId ?? sessionId
+          const sequenceBeforeProviderSpawn = expectedPtyId
+            ? (runtime?.getPtyOutputSequence?.(expectedPtyId) ?? 0)
+            : 0
           result = await provider.spawn(spawnOptions)
-          if (typeof result.snapshotOutputSequence === 'number') {
-            runtime?.anchorPtyOutputSequenceFromProviderSnapshot?.(
+          if (result.providerSequence) {
+            runtime?.synchronizePtyOutputSequenceFromProvider?.(
               result.id,
-              result.snapshotOutputSequence
+              result.providerSequence,
+              sequenceBeforeProviderSpawn
             )
           }
         } catch (err) {
@@ -4049,11 +4054,16 @@ export function registerPtyHandlers(
             )
           }
           spawnTiming.mark('options')
+          const expectedPtyId = effectiveSessionAppId ?? effectiveSessionId
+          const sequenceBeforeProviderSpawn = expectedPtyId
+            ? (runtime?.getPtyOutputSequence?.(expectedPtyId) ?? 0)
+            : 0
           result = await provider.spawn(spawnOptions)
-          if (typeof result.snapshotOutputSequence === 'number') {
-            runtime?.anchorPtyOutputSequenceFromProviderSnapshot?.(
+          if (result.providerSequence) {
+            runtime?.synchronizePtyOutputSequenceFromProvider?.(
               result.id,
-              result.snapshotOutputSequence
+              result.providerSequence,
+              sequenceBeforeProviderSpawn
             )
           }
           spawnTiming.mark('provider_spawn')
@@ -4290,7 +4300,8 @@ export function registerPtyHandlers(
           ) {
             runtime.seedHeadlessTerminal(result.id, result.coldRestore.scrollback, seedSize, {
               cwd: result.coldRestore.cwd,
-              oscLinks: result.coldRestore.oscLinks
+              oscLinks: result.coldRestore.oscLinks,
+              preferProviderIfExisting: true
             })
           }
         }

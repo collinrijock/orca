@@ -25,6 +25,7 @@ import type {
   TerminalSideEffectFact
 } from '../../shared/terminal-side-effect-facts'
 import type { TerminalGitHubPRLink } from '../../shared/terminal-github-pr-link-detector'
+import { TerminalKittyKeyboardModeTracker } from '../../shared/terminal-kitty-keyboard-mode-tracker'
 import {
   AGENT_STATUS_STALE_AFTER_MS,
   isFreshNonDoneAgentStatus,
@@ -1180,6 +1181,8 @@ type RuntimeHeadlessTerminal = {
 type HeadlessSeedMetadata = {
   cwd?: string | null
   oscLinks?: TerminalOscLinkRange[]
+  /** Cold restore history must outrank a model that only saw new-generation bytes. */
+  preferProviderIfExisting?: boolean
   /** Persisted kitty flags from the daemon snapshot, re-applied to the fresh
    *  emulator so hidden `CSI ? u` answers the real flags instead of ?0u
    *  (terminal-query-authority.md §kitty). */
@@ -2249,7 +2252,14 @@ export class OrcaRuntimeService {
   private titleObservationSequence = 0
   private headlessTerminals = new Map<string, RuntimeHeadlessTerminal>()
   private ptyOutputSequenceById = new Map<string, number>()
-  private providerSequenceAnchoredPtys = new Set<string>()
+  private providerSequenceInitializedPtys = new Set<string>()
+  private providerSequenceOffsetByPtyId = new Map<string, number>()
+  private providerSnapshotPreferredPtys = new Set<string>()
+  private providerModeTrackersByPtyId = new Map<string, TerminalKittyKeyboardModeTracker>()
+  private providerModeSnapshotScansByPtyId = new Map<
+    string,
+    Set<TerminalKittyKeyboardModeTracker>
+  >()
   private recentPtyPathCandidatesById = new Map<string, string[]>()
   // Why: OSC 9999 status can span PTY chunks. Keeping parser state in the
   // runtime lets hidden/model-owned terminals observe agent state without a
@@ -5686,6 +5696,10 @@ export class OrcaRuntimeService {
   onPtyData(ptyId: string, data: string, at: number, sequenceChars = data.length): number {
     const outputSequence = (this.ptyOutputSequenceById.get(ptyId) ?? 0) + sequenceChars
     this.ptyOutputSequenceById.set(ptyId, outputSequence)
+    this.providerModeTrackersByPtyId.get(ptyId)?.scan(data)
+    for (const tracker of this.providerModeSnapshotScansByPtyId.get(ptyId) ?? []) {
+      tracker.scan(data)
+    }
     const osc7Metadata = this.recordOsc7MetadataForPty(ptyId, data)
     const cwd = osc7Metadata.cwd
     const cwdChanged = osc7Metadata.cwdChanged
@@ -6410,6 +6424,29 @@ export class OrcaRuntimeService {
     this.ptyTitleTrackersByPtyId.delete(ptyId)
   }
 
+  private resetTrackedTerminalStateForProviderGeneration(ptyId: string): void {
+    // Why: a replacement daemon session can reuse the PTY id, but title/parser
+    // state from the prior process must not bleed into its snapshots or chunks.
+    this.disposePtyTitleTracker(ptyId)
+    this.oscTitleScanTailByPtyId.delete(ptyId)
+    this.osc7ScanTailByPtyId.delete(ptyId)
+    this.agentStatusOscProcessorsByPtyId.delete(ptyId)
+    const pty = this.ptysById.get(ptyId)
+    if (pty) {
+      pty.lastOscTitle = null
+      pty.lastOscTitleAt = null
+      pty.lastAgentStatus = null
+      pty.managementTitle = null
+      pty.managementTitleAt = null
+    }
+    for (const leaf of this.getLeavesForPty(ptyId)) {
+      leaf.lastOscTitle = null
+      leaf.lastOscTitleAt = null
+      leaf.lastAgentStatus = null
+    }
+    this.clearAgentRowSnapshotsForPty(ptyId)
+  }
+
   private setTerminalSideEffectConsumerAvailable(available: boolean): void {
     const nextAvailable = available && this.onTerminalSideEffects !== null
     if (nextAvailable === this.terminalSideEffectConsumerAvailable) {
@@ -6600,27 +6637,78 @@ export class OrcaRuntimeService {
     return this.ptyOutputSequenceById.get(ptyId) ?? 0
   }
 
-  anchorPtyOutputSequenceFromProviderSnapshot(ptyId: string, providerSequence: number): number {
+  synchronizePtyOutputSequenceFromProvider(
+    ptyId: string,
+    providerSequence: { value: number; generation: 'continued' | 'reset' },
+    runtimeSequenceAtSpawnStart = 0
+  ): number {
     if (
-      this.providerSequenceAnchoredPtys.has(ptyId) ||
-      !Number.isFinite(providerSequence) ||
-      providerSequence < 0
+      !Number.isFinite(providerSequence.value) ||
+      providerSequence.value < 0 ||
+      !Number.isFinite(runtimeSequenceAtSpawnStart) ||
+      runtimeSequenceAtSpawnStart < 0
     ) {
       return this.getPtyOutputSequence(ptyId)
     }
-    const baseline = Math.floor(providerSequence)
-    const anchoredSequence = baseline + this.getPtyOutputSequence(ptyId)
-    this.ptyOutputSequenceById.set(ptyId, anchoredSequence)
-    this.providerSequenceAnchoredPtys.add(ptyId)
+    const baseline = Math.floor(providerSequence.value)
+    const currentSequence = this.getPtyOutputSequence(ptyId)
+    const sequenceAtSpawnStart = Math.min(currentSequence, Math.floor(runtimeSequenceAtSpawnStart))
+    const postSpawnSequence = currentSequence - sequenceAtSpawnStart
+    const wasInitialized = this.providerSequenceInitializedPtys.has(ptyId)
+    const replacesExistingRuntimeGeneration = wasInitialized || sequenceAtSpawnStart > 0
+    const providerOffset =
+      providerSequence.generation === 'reset'
+        ? sequenceAtSpawnStart
+        : (this.providerSequenceOffsetByPtyId.get(ptyId) ?? 0)
+    const providerBaseline = providerOffset + baseline
+
+    if (providerSequence.generation === 'reset') {
+      // Why: daemon respawn/cold restore starts a new absolute domain. Old
+      // emulator state cannot remain authoritative over the replacement.
+      if (replacesExistingRuntimeGeneration) {
+        this.disposeHeadlessTerminal(ptyId)
+      }
+      this.providerModeTrackersByPtyId.delete(ptyId)
+      if (replacesExistingRuntimeGeneration && postSpawnSequence === 0) {
+        this.resetTrackedTerminalStateForProviderGeneration(ptyId)
+      }
+    }
+
+    const synchronizedSequence =
+      providerSequence.generation === 'reset'
+        ? currentSequence
+        : wasInitialized
+          ? currentSequence
+          : providerBaseline + postSpawnSequence
+    this.ptyOutputSequenceById.set(ptyId, synchronizedSequence)
+    this.providerSequenceInitializedPtys.add(ptyId)
+    this.providerSequenceOffsetByPtyId.set(ptyId, providerOffset)
+
+    const snapshotMayCoverMissingState =
+      (providerSequence.generation === 'continued' && !wasInitialized) ||
+      (postSpawnSequence > 0 &&
+        providerSequence.generation === 'reset' &&
+        replacesExistingRuntimeGeneration) ||
+      (providerSequence.generation === 'continued' &&
+        wasInitialized &&
+        providerBaseline > currentSequence)
+    if (snapshotMayCoverMissingState) {
+      // Why: bytes can cross the control/stream sockets around attach. Until a
+      // full renderer/provider snapshot is available, a partial model is unsafe.
+      this.providerSnapshotPreferredPtys.add(ptyId)
+    } else if (providerSequence.generation === 'reset') {
+      this.providerSnapshotPreferredPtys.delete(ptyId)
+    }
+
     const headless = this.headlessTerminals.get(ptyId)
-    if (headless) {
+    if (headless && !wasInitialized && providerSequence.generation === 'continued') {
       // Why: daemon bytes can reach main just before spawn resolves. Queue the
       // baseline behind those writes so their emulator sequence is rebased too.
       headless.writeChain = headless.writeChain.then(() => {
-        headless.outputSequence += baseline
+        headless.outputSequence = synchronizedSequence
       })
     }
-    return anchoredSequence
+    return synchronizedSequence
   }
 
   subscribeToTerminalData(
@@ -6821,10 +6909,17 @@ export class OrcaRuntimeService {
   // scrollback to mobile so it rewraps at the new cols, but alternate-screen
   // TUIs (vim, Claude Code) own their repaint and have no scrollback — for
   // those the mobile client just resizes xterm geometry and consumes the
-  // TUI's own redraw, so the resize re-stream must be skipped. Returns false
-  // when there is no headless emulator (resize falls back to geometry-only).
+  // TUI's own redraw, so the resize re-stream must be skipped. Provider state
+  // covers restored PTYs whose main-side emulator is only a partial suffix.
   isTerminalAlternateScreen(ptyId: string): boolean {
-    return this.headlessTerminals.get(ptyId)?.emulator.isAlternateScreen ?? false
+    if (this.providerSnapshotPreferredPtys.has(ptyId)) {
+      return this.providerModeTrackersByPtyId.get(ptyId)?.isAlternateScreen ?? false
+    }
+    return (
+      this.headlessTerminals.get(ptyId)?.emulator.isAlternateScreen ??
+      this.providerModeTrackersByPtyId.get(ptyId)?.isAlternateScreen ??
+      false
+    )
   }
 
   // Why: daemon-backed PTYs that the runtime adopted after an Orca relaunch
@@ -6848,10 +6943,14 @@ export class OrcaRuntimeService {
     if (existing) {
       // Why: emulator already has live data — re-seeding would duplicate
       // every byte. The seed is only valid when the emulator is fresh.
+      if (metadata.preferProviderIfExisting) {
+        this.providerSnapshotPreferredPtys.add(ptyId)
+      }
       return
     }
     const dims = size ?? this.getTerminalSize(ptyId) ?? { cols: 80, rows: 24 }
     const state = this.createPtyHeadlessTerminalState(ptyId, dims)
+    state.outputSequence = this.getPtyOutputSequence(ptyId)
     this.headlessTerminals.set(ptyId, state)
     this.recordOsc7MetadataForPty(ptyId, data)
     this.recordRecentPtyOutputForPathProvenance(ptyId, data)
@@ -6873,6 +6972,7 @@ export class OrcaRuntimeService {
         if (metadata.oscLinks !== undefined) {
           state.emulator.setRestoredOscLinks(metadata.oscLinks)
         }
+        this.providerSnapshotPreferredPtys.delete(ptyId)
       })
       .catch(() => {
         // Seeding is best-effort; live data will continue to populate the
@@ -6890,7 +6990,8 @@ export class OrcaRuntimeService {
     if (this.headlessHydrationState.has(ptyId)) {
       return
     }
-    if (this.headlessTerminals.has(ptyId)) {
+    const providerSnapshotPreferred = this.providerSnapshotPreferredPtys.has(ptyId)
+    if (this.headlessTerminals.has(ptyId) && !providerSnapshotPreferred) {
       // Daemon-snapshot seed already populated the emulator — skip hydration.
       this.headlessHydrationState.set(ptyId, 'done')
       return
@@ -6905,11 +7006,18 @@ export class OrcaRuntimeService {
       return
     }
 
+    if (providerSnapshotPreferred) {
+      // Why: a stream byte can create a partial model before restored history
+      // arrives. A mounted renderer snapshot can safely replace that model.
+      this.disposeHeadlessTerminal(ptyId)
+    }
+
     this.headlessHydrationState.set(ptyId, 'pending')
     const dims = this.getTerminalSize(ptyId) ?? { cols: 80, rows: 24 }
     // Why: hydration writes below never set forwardQueryReplies (main-side
     // replay guard) — renderer-buffer snapshots can embed stale queries.
     const state = this.createPtyHeadlessTerminalState(ptyId, dims)
+    state.outputSequence = this.getPtyOutputSequence(ptyId)
     this.headlessTerminals.set(ptyId, state)
 
     // Why: append the seed work to writeChain so live writes queued by
@@ -6948,6 +7056,7 @@ export class OrcaRuntimeService {
           state.emulator.setLastTitle(seedTitle)
           this.applySeededAgentStatus(ptyId, seedTitle)
         }
+        this.providerSnapshotPreferredPtys.delete(ptyId)
       } catch {
         // Hydration is best-effort. Live writes continue via the same
         // writeChain that this catch-arm leaves intact.
@@ -7140,6 +7249,19 @@ export class OrcaRuntimeService {
     alternateScreen?: boolean
     pendingEscapeTailAnsi?: string
   } | null> {
+    if (this.providerSnapshotPreferredPtys.has(ptyId)) {
+      // Why: pre-attach stream bytes only form a suffix of restored state. A
+      // sequenced provider snapshot safely reconciles live bytes; renderer is
+      // the fallback when an older provider cannot expose that boundary.
+      const providerSnapshot = await this.serializeProviderTerminalBuffer(ptyId, opts)
+      if (providerSnapshot) {
+        return providerSnapshot
+      }
+      const rendererSnapshot = await this.serializeRendererTerminalBuffer(ptyId, opts)
+      if (rendererSnapshot) {
+        return rendererSnapshot
+      }
+    }
     const headlessSnapshot = await this.serializeHeadlessTerminalBuffer(ptyId, opts)
     if (headlessSnapshot) {
       return headlessSnapshot
@@ -7198,13 +7320,42 @@ export class OrcaRuntimeService {
     ptyId: string,
     opts: { scrollbackRows?: number } = {}
   ): Promise<PtyProviderBufferSnapshot | null> {
+    const liveModeTracker = new TerminalKittyKeyboardModeTracker()
+    let liveModeTrackers = this.providerModeSnapshotScansByPtyId.get(ptyId)
+    if (!liveModeTrackers) {
+      liveModeTrackers = new Set()
+      this.providerModeSnapshotScansByPtyId.set(ptyId, liveModeTrackers)
+    }
+    liveModeTrackers.add(liveModeTracker)
     try {
       // Why: daemon PTYs survive an app relaunch before any renderer mounts.
       // Mobile still needs their retained history without navigating desktop.
       const snapshot = await this.ptyController?.serializeProviderBuffer?.(ptyId, opts)
-      return snapshot ? this.preferTrackedLastTitle(ptyId, snapshot) : null
+      if (typeof snapshot?.alternateScreen === 'boolean') {
+        const modeTracker = new TerminalKittyKeyboardModeTracker()
+        if (snapshot.alternateScreen) {
+          modeTracker.scan('\x1b[?1049h')
+        }
+        if (liveModeTracker.hasObservedAlternateScreenSwitch) {
+          modeTracker.scan(liveModeTracker.isAlternateScreen ? '\x1b[?1049h' : '\x1b[?1049l')
+        }
+        this.providerModeTrackersByPtyId.set(ptyId, modeTracker)
+      }
+      if (!snapshot) {
+        return null
+      }
+      const providerOffset = this.providerSequenceOffsetByPtyId.get(ptyId) ?? 0
+      return this.preferTrackedLastTitle(ptyId, {
+        ...snapshot,
+        seq: providerOffset + snapshot.seq
+      })
     } catch {
       return null
+    } finally {
+      liveModeTrackers.delete(liveModeTracker)
+      if (liveModeTrackers.size === 0) {
+        this.providerModeSnapshotScansByPtyId.delete(ptyId)
+      }
     }
   }
 
@@ -8293,7 +8444,11 @@ export class OrcaRuntimeService {
     this.clearWaitBlockedCheckState(ptyId)
     this.recentPtyPathCandidatesById.delete(ptyId)
     this.ptyOutputSequenceById.delete(ptyId)
-    this.providerSequenceAnchoredPtys.delete(ptyId)
+    this.providerSequenceInitializedPtys.delete(ptyId)
+    this.providerSequenceOffsetByPtyId.delete(ptyId)
+    this.providerSnapshotPreferredPtys.delete(ptyId)
+    this.providerModeTrackersByPtyId.delete(ptyId)
+    this.providerModeSnapshotScansByPtyId.delete(ptyId)
     this.agentStatusOscProcessorsByPtyId.delete(ptyId)
     this.terminalSpawnCommandsByPtyId.delete(ptyId)
     this.disposePtyTitleTracker(ptyId)
@@ -20511,7 +20666,11 @@ export class OrcaRuntimeService {
     this.clearWaitBlockedCheckState(ptyId)
     this.recentPtyPathCandidatesById.delete(ptyId)
     this.ptyOutputSequenceById.delete(ptyId)
-    this.providerSequenceAnchoredPtys.delete(ptyId)
+    this.providerSequenceInitializedPtys.delete(ptyId)
+    this.providerSequenceOffsetByPtyId.delete(ptyId)
+    this.providerSnapshotPreferredPtys.delete(ptyId)
+    this.providerModeTrackersByPtyId.delete(ptyId)
+    this.providerModeSnapshotScansByPtyId.delete(ptyId)
     this.agentStatusOscProcessorsByPtyId.delete(ptyId)
     this.terminalSpawnCommandsByPtyId.delete(ptyId)
     this.disposePtyTitleTracker(ptyId)

@@ -46,6 +46,17 @@ function getRecoveredHistorySeed(restoreInfo: ColdRestoreInfo): string | null {
     : restoreInfo.rehydrateSequences + restoreInfo.snapshotAnsi
 }
 
+function providerSequenceForSpawn(
+  result: CreateOrAttachResult
+): PtySpawnResult['providerSequence'] {
+  if (result.isNew) {
+    return { value: 0, generation: 'reset' }
+  }
+  return typeof result.snapshot?.outputSequence === 'number'
+    ? { value: result.snapshot.outputSequence, generation: 'continued' }
+    : undefined
+}
+
 export type DaemonPtyAdapterOptions = {
   socketPath: string
   tokenPath: string
@@ -317,6 +328,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
 
     const wasAlreadyManaged = this.activeSessionIds.has(sessionId)
     this.activeSessionIds.add(sessionId)
+    const providerSequence = providerSequenceForSpawn(result)
 
     // Cold restore: daemon created a new session but disk history shows
     // an unclean shutdown → return saved scrollback so the renderer can
@@ -348,10 +360,16 @@ export class DaemonPtyAdapter implements IPtyProvider {
           pid,
           ...launchIdentity(),
           coldRestore,
+          ...(providerSequence ? { providerSequence } : {}),
           ...(!result.isNew ? { isReattach: true } : {})
         }
       }
-      return { id: sessionId, pid, ...launchIdentity() }
+      return {
+        id: sessionId,
+        pid,
+        ...launchIdentity(),
+        ...(providerSequence ? { providerSequence } : {})
+      }
     }
 
     if (this.historyManager && result.isNew) {
@@ -389,6 +407,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
         id: sessionId,
         pid,
         ...launchIdentity(),
+        ...(providerSequence ? { providerSequence } : {}),
         ...(isReattach ? { isReattach: true } : {})
       }
     }
@@ -410,9 +429,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
       snapshot: snapshotPayload,
       snapshotCols: result.snapshot.cols,
       snapshotRows: result.snapshot.rows,
-      ...(typeof result.snapshot.outputSequence === 'number'
-        ? { snapshotOutputSequence: result.snapshot.outputSequence }
-        : {}),
+      ...(providerSequence ? { providerSequence } : {}),
       ...(typeof kittyKeyboardFlags === 'number' && kittyKeyboardFlags > 0
         ? { snapshotKittyKeyboardFlags: kittyKeyboardFlags }
         : {}),
