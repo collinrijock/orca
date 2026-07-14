@@ -157,7 +157,7 @@ export function SkillFreshnessUpdateDialog(): React.JSX.Element {
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-xl">
+      <DialogContent className="scrollbar-sleek max-h-[85vh] overflow-y-auto sm:max-w-xl">
         <DialogHeader>
           <DialogTitle>
             {translate(
