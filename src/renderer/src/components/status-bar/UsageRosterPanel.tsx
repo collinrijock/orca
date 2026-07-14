@@ -79,27 +79,30 @@ export function UsageRow({
           {name}
           {plan ? <span className="font-normal text-muted-foreground"> · {plan}</span> : null}
         </span>
-        {!signedOut && reset ? (
+        {signedOut ? (
+          <>
+            <span className="min-w-0 truncate text-[11px] text-muted-foreground">
+              {translate(
+                'auto.components.status.bar.UsageRosterPanel.notSignedIn',
+                'not signed in'
+              )}
+            </span>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation()
+                onSignIn(p.provider)
+              }}
+              className="ml-auto shrink-0 rounded-md border border-border bg-secondary px-2.5 py-0.5 text-xs text-foreground hover:bg-accent"
+            >
+              {translate('auto.components.status.bar.StatusBar.c35af53b73', 'Sign in')}
+            </button>
+          </>
+        ) : reset ? (
           <span className="shrink-0 text-[11px] text-muted-foreground">{reset}</span>
         ) : null}
-        {signedOut ? (
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation()
-              onSignIn(p.provider)
-            }}
-            className="ml-auto shrink-0 rounded-md border border-border bg-secondary px-2.5 py-0.5 text-xs text-foreground hover:bg-accent"
-          >
-            {translate('auto.components.status.bar.StatusBar.c35af53b73', 'Sign in')}
-          </button>
-        ) : null}
       </div>
-      {signedOut ? (
-        <div className="pl-[30px] text-[11px] text-muted-foreground">
-          {translate('auto.components.status.bar.UsageRosterPanel.notSignedIn', 'not signed in')}
-        </div>
-      ) : (
+      {signedOut ? null : (
         <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 pl-[30px]">
           {sections.map((s) => {
             const used = clampUsedPercent(s.window.usedPercent)

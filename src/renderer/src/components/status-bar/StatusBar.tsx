@@ -1107,7 +1107,21 @@ function WindowLabel({
   )
 }
 
-// Single-letter provider badge for the icon-only (narrow) status bar.
+// Single-letter provider badge for the icon-only (narrow) status bar. Shared by
+// the roster trigger and ProviderDetailsMenu so the dot's has-data condition
+// and markup can't drift between the two.
+function ProviderLetterBadge({ p }: { p: ProviderRateLimits }): React.JSX.Element {
+  const hasData = Boolean(p.session || p.weekly || p.fableWeekly || p.monthly || p.buckets?.length)
+  return (
+    <span className="inline-flex items-center gap-1 text-muted-foreground">
+      <span
+        className={`inline-block h-2 w-2 rounded-full ${hasData ? 'bg-muted-foreground/60' : 'bg-muted-foreground/30'}`}
+      />
+      {getProviderLetter(p.provider)}
+    </span>
+  )
+}
+
 function getProviderLetter(provider: ProviderRateLimits['provider']): string {
   switch (provider) {
     case 'claude':
@@ -1822,6 +1836,7 @@ export function ProviderDetailsMenu({
     <>
       {topContent}
       <div className="p-2">
+        {/* Why: provider-specific action sections may render richer reset-credit UI. */}
         <ProviderPanel
           p={provider}
           showResetCredits={!hidePanelResetCredits}
@@ -1862,12 +1877,7 @@ export function ProviderDetailsMenu({
           aria-label={ariaLabel}
         >
           {iconOnly ? (
-            <span className="inline-flex items-center gap-1">
-              <span
-                className={`inline-block h-2 w-2 rounded-full ${provider.session || provider.weekly || provider.fableWeekly ? 'bg-muted-foreground/60' : 'bg-muted-foreground/30'}`}
-              />
-              <span className="text-muted-foreground">{getProviderLetter(provider.provider)}</span>
-            </span>
+            <ProviderLetterBadge p={provider} />
           ) : (
             <ProviderSegment p={provider} compact={compact} display={usagePercentageDisplay} />
           )}
@@ -1891,21 +1901,7 @@ export function ProviderDetailsMenu({
           event.preventDefault()
         }}
       >
-        {topContent}
-        <div className="p-2">
-          {/* Why: provider-specific action sections may render richer reset-credit UI. */}
-          <ProviderPanel
-            p={provider}
-            showResetCredits={!hidePanelResetCredits}
-            usagePercentageDisplay={usagePercentageDisplay}
-          />
-        </div>
-        {children ? (
-          <>
-            <DropdownMenuSeparator />
-            {children}
-          </>
-        ) : null}
+        {panelBody}
       </DropdownMenuContent>
     </DropdownMenu>
   )
@@ -2201,19 +2197,8 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
                   {rosterProviders.map((p) =>
                     iconOnly ? (
                       // Narrow status bar: fall back to main's compact letter badge.
-                      <span
-                        key={p.provider}
-                        className="inline-flex items-center gap-1 text-muted-foreground"
-                        title={getProviderDisplayName(p.provider)}
-                      >
-                        <span
-                          className={`inline-block h-2 w-2 rounded-full ${
-                            p.session || p.weekly || p.fableWeekly || p.monthly || p.buckets?.length
-                              ? 'bg-muted-foreground/60'
-                              : 'bg-muted-foreground/30'
-                          }`}
-                        />
-                        {getProviderLetter(p.provider)}
+                      <span key={p.provider} title={getProviderDisplayName(p.provider)}>
+                        <ProviderLetterBadge p={p} />
                       </span>
                     ) : (
                       <ProviderSegment
