@@ -9060,6 +9060,7 @@
           "signInDescription": "Orca Relay를 사용하려면 이 데스크톱에서 로그인하세요.",
           "signIn": "로그인",
           "localOnly": "로컬 네트워크만",
+          "localShort": "LAN 또는 Tailscale",
           "localDescription": "이 휴대폰을 Orca Relay에 연결하지 않고 LAN 또는 Tailscale을 사용합니다."
         },
         "MobilePairingSetupSection": {

@@ -9060,6 +9060,7 @@
           "signInDescription": "Orca Relayを使用するには、このデスクトップでサインインしてください。",
           "signIn": "サインイン",
           "localOnly": "ローカルネットワークのみ",
+          "localShort": "LAN または Tailscale",
           "localDescription": "このスマートフォンをOrca Relayに接続せず、LANまたはTailscaleを使用します。"
         },
         "MobilePairingSetupSection": {

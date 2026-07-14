@@ -621,6 +621,31 @@
   align-items: start;
 }
 
+.mobile-page-root .mp-pairing-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    'copy qr'
+    'controls controls';
+  column-gap: 32px;
+  row-gap: 22px;
+  align-items: start;
+}
+
+.mobile-page-root .mp-pairing-copy {
+  grid-area: copy;
+}
+
+.mobile-page-root .mp-pairing-qr {
+  grid-area: qr;
+  margin-top: 72px;
+}
+
+.mobile-page-root .mp-pairing-controls {
+  grid-area: controls;
+  min-width: 0;
+}
+
 /* Why: align the QR's top with the body copy ("Scan the QR…") instead
    of the eyebrow row above it. The eyebrow row is ~22px tall + 22px
    margin-bottom, and the h2 is ~38px line-height with no top margin —

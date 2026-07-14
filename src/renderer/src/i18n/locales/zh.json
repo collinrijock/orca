@@ -9060,6 +9060,7 @@
           "signInDescription": "请在此桌面端登录以使用 Orca Relay。",
           "signIn": "登录",
           "localOnly": "仅限本地网络",
+          "localShort": "局域网或 Tailscale",
           "localDescription": "使用局域网或 Tailscale，不通过 Orca Relay 连接这部手机。"
         },
         "MobilePairingSetupSection": {

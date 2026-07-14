@@ -94,18 +94,6 @@ function CompactConnectionOptions({
               )}
             </span>
           </span>
-          {signedIn ? (
-            <Badge variant="outline" className="shrink-0">
-              {relayStatusLabel(relayStatus)}
-            </Badge>
-          ) : !configured ? (
-            <Badge variant="outline" className="shrink-0">
-              {translate(
-                'auto.components.settings.MobilePairingConnectionOptions.unavailable',
-                'Unavailable'
-              )}
-            </Badge>
-          ) : null}
         </label>
 
         <label
@@ -122,11 +110,19 @@ function CompactConnectionOptions({
             onChange={() => onChange('local-only')}
             className="size-4 shrink-0 accent-primary"
           />
-          <span className="text-sm font-medium">
-            {translate(
-              'auto.components.settings.MobilePairingConnectionOptions.localOnly',
-              'Local network only'
-            )}
+          <span className="min-w-0">
+            <span className="block text-sm font-medium">
+              {translate(
+                'auto.components.settings.MobilePairingConnectionOptions.localOnly',
+                'Local network only'
+              )}
+            </span>
+            <span className="block text-[11px] text-muted-foreground">
+              {translate(
+                'auto.components.settings.MobilePairingConnectionOptions.localShort',
+                'LAN or Tailscale'
+              )}
+            </span>
           </span>
         </label>
       </div>
@@ -148,7 +144,11 @@ function CompactConnectionOptions({
                   'Uses LAN or Tailscale without connecting this phone through Orca Relay.'
                 )}
         </p>
-        {!signedIn && configured ? (
+        {signedIn ? (
+          <Badge variant="outline" className={cn('shrink-0', value !== 'automatic' && 'invisible')}>
+            {relayStatusLabel(relayStatus)}
+          </Badge>
+        ) : configured ? (
           <Button
             type="button"
             size="xs"
@@ -159,7 +159,14 @@ function CompactConnectionOptions({
             {connecting ? <Loader2 className="animate-spin" /> : null}
             {translate('auto.components.settings.MobilePairingConnectionOptions.signIn', 'Sign in')}
           </Button>
-        ) : null}
+        ) : (
+          <Badge variant="outline" className="shrink-0">
+            {translate(
+              'auto.components.settings.MobilePairingConnectionOptions.unavailable',
+              'Unavailable'
+            )}
+          </Badge>
+        )}
       </div>
     </section>
   )

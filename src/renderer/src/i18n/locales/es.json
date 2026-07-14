@@ -9060,6 +9060,7 @@
           "signInDescription": "Inicia sesión en este ordenador para usar Orca Relay.",
           "signIn": "Iniciar sesión",
           "localOnly": "Solo red local",
+          "localShort": "LAN o Tailscale",
           "localDescription": "Usa LAN o Tailscale sin conectar este teléfono mediante Orca Relay."
         },
         "MobilePairingSetupSection": {

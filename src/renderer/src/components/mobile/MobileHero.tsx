@@ -180,8 +180,8 @@ export function HeroFlow({
         </div>
 
         <div className={cn('mp-flow-screen', stepIdx === 1 && 'is-active')}>
-          <div className="mp-step2-layout">
-            <div className="mp-step2-copy">
+          <div className="mp-pairing-layout">
+            <div className="mp-step2-copy mp-pairing-copy">
               <div className="mp-eyebrow-row">
                 <div className="mp-step-num">2</div>
                 <span className="mp-eyebrow">
@@ -199,7 +199,41 @@ export function HeroFlow({
                 </strong>
                 {translate('auto.components.mobile.MobileHero.2f077ef4eb', ', and scan the code.')}
               </p>
-
+            </div>
+            <div className="mp-qr-stack mp-pairing-qr">
+              <div
+                className="mp-qr mp-qr-large"
+                aria-label={translate(
+                  'auto.components.mobile.MobileHero.bb0074ce11',
+                  'Pairing QR code'
+                )}
+                aria-busy={pairLoading && !pairQrDataUrl}
+              >
+                {pairQrDataUrl ? (
+                  <img
+                    src={pairQrDataUrl}
+                    alt={translate('auto.components.mobile.MobileHero.27735e5f4e', 'Pairing QR')}
+                  />
+                ) : pairLoading ? (
+                  <span className="mp-qr-loading">
+                    {translate('auto.components.mobile.MobileHero.65b3f2e8bc', 'Generating…')}
+                  </span>
+                ) : null}
+              </div>
+              <button
+                type="button"
+                className="mp-link-under"
+                onClick={onRegeneratePairing}
+                disabled={pairLoading}
+              >
+                {pairLoading
+                  ? translate('auto.components.mobile.MobileHero.65b3f2e8bc', 'Generating…')
+                  : pairQrDataUrl
+                    ? translate('auto.components.mobile.MobileHero.e59a252eca', 'Regenerate code')
+                    : translate('auto.components.mobile.MobileHero.a6cffbbb0b', 'Generate code')}
+              </button>
+            </div>
+            <div className="mp-pairing-controls">
               <MobilePairingConnectionOptions
                 value={connectionMode}
                 onChange={onConnectionModeChange}
@@ -256,39 +290,6 @@ export function HeroFlow({
                 address={selectedAddress}
                 className="mt-3"
               />
-            </div>
-            <div className="mp-qr-stack">
-              <div
-                className="mp-qr mp-qr-large"
-                aria-label={translate(
-                  'auto.components.mobile.MobileHero.bb0074ce11',
-                  'Pairing QR code'
-                )}
-                aria-busy={pairLoading && !pairQrDataUrl}
-              >
-                {pairQrDataUrl ? (
-                  <img
-                    src={pairQrDataUrl}
-                    alt={translate('auto.components.mobile.MobileHero.27735e5f4e', 'Pairing QR')}
-                  />
-                ) : pairLoading ? (
-                  <span className="mp-qr-loading">
-                    {translate('auto.components.mobile.MobileHero.65b3f2e8bc', 'Generating…')}
-                  </span>
-                ) : null}
-              </div>
-              <button
-                type="button"
-                className="mp-link-under"
-                onClick={onRegeneratePairing}
-                disabled={pairLoading}
-              >
-                {pairLoading
-                  ? translate('auto.components.mobile.MobileHero.65b3f2e8bc', 'Generating…')
-                  : pairQrDataUrl
-                    ? translate('auto.components.mobile.MobileHero.e59a252eca', 'Regenerate code')
-                    : translate('auto.components.mobile.MobileHero.a6cffbbb0b', 'Generate code')}
-              </button>
             </div>
           </div>
         </div>

@@ -91,4 +91,28 @@ describe('MobilePairingConnectionOptions', () => {
     statusListener?.('standby')
     await waitFor(() => expect(screen.getByText('Available')).toBeVisible())
   })
+
+  it('keeps the compact onboarding choices structurally stable across modes', async () => {
+    mocks.state = {
+      orcaProfileAuthStatus: {
+        activeProfileId: 'profile-1',
+        configured: true,
+        state: 'connected',
+        persistence: 'encrypted'
+      },
+      orcaProfileConnecting: false,
+      connectCurrentOrcaProfile: connect
+    }
+    const props = { compact: true, onChange: vi.fn() }
+    const { rerender } = render(<MobilePairingConnectionOptions {...props} value="automatic" />)
+
+    expect(screen.getByRole('radiogroup').children).toHaveLength(2)
+    expect(screen.getByText('LAN or Tailscale')).toBeVisible()
+    expect(screen.getByText(/direct connection when available/i)).toBeVisible()
+    await waitFor(() => expect(screen.getByText('Ready')).toBeInTheDocument())
+
+    rerender(<MobilePairingConnectionOptions {...props} value="local-only" />)
+    expect(screen.getByRole('radiogroup').children).toHaveLength(2)
+    expect(screen.getByText(/without connecting this phone through Orca Relay/i)).toBeVisible()
+  })
 })
