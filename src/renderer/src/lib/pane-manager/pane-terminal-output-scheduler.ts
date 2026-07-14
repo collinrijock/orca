@@ -20,6 +20,7 @@ import {
 import {
   armTerminalWriteStallWatch,
   cancelTerminalWriteStallWatch,
+  failTerminalWriteStallWatch,
   settleTerminalWriteStallWatch
 } from './terminal-write-pipeline-health'
 import {
@@ -823,36 +824,46 @@ function hasDrainableBacklog(): boolean {
 function writeBackgroundTerminalChunk(
   terminal: TerminalOutputTarget,
   data: string,
-  onParsed?: TerminalOutputParsedCallback
-): void {
+  onParsed?: TerminalOutputParsedCallback,
+  onWriteFailure?: () => void
+): boolean {
   // Why guarded: these callbacks run inside xterm's WriteBuffer loop, where an
   // escaping throw permanently wedges the terminal (see
   // xterm-write-callback-guard.ts).
   const runOnParsed = onParsed
     ? (): void => runGuardedWriteCompletionStep('background-on-parsed', onParsed)
     : undefined
+  const runOnWriteFailure = onWriteFailure
+    ? (): void => runGuardedWriteCompletionStep('background-on-write-failure', onWriteFailure)
+    : undefined
   const scrollIntent = captureTerminalWriteScrollIntent(terminal)
-  if (!scrollIntent) {
-    if (!runOnParsed || terminal.write.length < 2) {
-      terminal.write(data)
-      runOnParsed?.()
-      return
+  try {
+    if (!scrollIntent) {
+      if (!runOnParsed || terminal.write.length < 2) {
+        terminal.write(data)
+        runOnParsed?.()
+        return true
+      }
+      terminal.write(data, runOnParsed)
+      return true
     }
-    terminal.write(data, runOnParsed)
-    return
+    const runScrollIntentThenParsed = (): void => {
+      runGuardedWriteCompletionStep('background-scroll-intent', () =>
+        enforceTerminalWriteScrollIntent(terminal, scrollIntent)
+      )
+      runOnParsed?.()
+    }
+    if (terminal.write.length < 2) {
+      terminal.write(data)
+      runScrollIntentThenParsed()
+      return true
+    }
+    terminal.write(data, runScrollIntentThenParsed)
+    return true
+  } catch {
+    runOnWriteFailure?.()
+    return false
   }
-  const runScrollIntentThenParsed = (): void => {
-    runGuardedWriteCompletionStep('background-scroll-intent', () =>
-      enforceTerminalWriteScrollIntent(terminal, scrollIntent)
-    )
-    runOnParsed?.()
-  }
-  if (terminal.write.length < 2) {
-    terminal.write(data)
-    runScrollIntentThenParsed()
-    return
-  }
-  terminal.write(data, runScrollIntentThenParsed)
 }
 
 function writeForegroundTerminalChunkWithIntent(
@@ -863,10 +874,11 @@ function writeForegroundTerminalChunkWithIntent(
     followupViewportRefresh: boolean
     shouldRefreshViewportSynchronously: ForegroundRefreshSyncResolver
     onParsed?: TerminalOutputParsedCallback
+    onWriteFailure?: () => void
   }
-): void {
+): boolean {
   const scrollIntent = captureTerminalWriteScrollIntent(terminal)
-  writeForegroundTerminalChunk(terminal, data, {
+  return writeForegroundTerminalChunk(terminal, data, {
     forceViewportRefresh: options.forceViewportRefresh,
     followupViewportRefresh: options.followupViewportRefresh,
     shouldRefreshViewportSynchronously: options.shouldRefreshViewportSynchronously,
@@ -875,7 +887,8 @@ function writeForegroundTerminalChunkWithIntent(
       // will keep, not from a pre-intent-restored viewport snapshot.
       enforceTerminalWriteScrollIntent(terminal, scrollIntent)
       options.onParsed?.()
-    }
+    },
+    onWriteFailure: options.onWriteFailure
   })
 }
 
@@ -948,6 +961,22 @@ function composeParsedCallback(
   }
 }
 
+function composeWriteFailureCallback(
+  terminal: TerminalOutputTarget,
+  ackCreditsParsed: (() => void) | undefined
+): () => void {
+  return () => {
+    try {
+      // A rejected write still consumed the main-owned delivery window.
+      ackCreditsParsed?.()
+    } finally {
+      // Why: a synchronous rejection proves undeliverability, but it proves
+      // nothing about parse progress. Recover without extending replay guards.
+      failTerminalWriteStallWatch(terminal)
+    }
+  }
+}
+
 function writeQueuedChunk(entry: QueueEntry): 'foreground' | 'background' | null {
   const queuedWrite = takeQueuedChunk(entry, BACKGROUND_CHUNK_CHARS)
   if (!queuedWrite) {
@@ -967,35 +996,47 @@ function writeQueuedChunk(entry: QueueEntry): 'foreground' | 'background' | null
   })
   try {
     queuedWrite.beforeWrite?.(queuedWrite.data)
-    if (queuedWrite.foreground) {
-      writeForegroundTerminalChunkWithIntent(
-        entry.terminal,
-        queuedWrite.stripTransientCursorShows
-          ? removeTransientCursorShowSequences(queuedWrite.data)
-          : queuedWrite.data,
-        {
-          forceViewportRefresh: queuedWrite.forceForegroundRefresh,
-          followupViewportRefresh: queuedWrite.followupForegroundRefresh,
-          shouldRefreshViewportSynchronously: queuedWrite.shouldRefreshForegroundSynchronously,
-          onParsed: composeParsedCallback(
-            entry.terminal,
-            queuedWrite.onParsed,
-            ackCreditsParsed,
-            pacer
-          )
-        }
-      )
-    } else {
-      writeBackgroundTerminalChunk(
-        entry.terminal,
-        queuedWrite.data,
-        composeParsedCallback(entry.terminal, queuedWrite.onParsed, ackCreditsParsed, pacer)
-      )
+    const writeAccepted = queuedWrite.foreground
+      ? writeForegroundTerminalChunkWithIntent(
+          entry.terminal,
+          queuedWrite.stripTransientCursorShows
+            ? removeTransientCursorShowSequences(queuedWrite.data)
+            : queuedWrite.data,
+          {
+            forceViewportRefresh: queuedWrite.forceForegroundRefresh,
+            followupViewportRefresh: queuedWrite.followupForegroundRefresh,
+            shouldRefreshViewportSynchronously: queuedWrite.shouldRefreshForegroundSynchronously,
+            onParsed: composeParsedCallback(
+              entry.terminal,
+              queuedWrite.onParsed,
+              ackCreditsParsed,
+              pacer
+            ),
+            onWriteFailure: composeWriteFailureCallback(entry.terminal, ackCreditsParsed)
+          }
+        )
+      : writeBackgroundTerminalChunk(
+          entry.terminal,
+          queuedWrite.data,
+          composeParsedCallback(entry.terminal, queuedWrite.onParsed, ackCreditsParsed, pacer),
+          composeWriteFailureCallback(entry.terminal, ackCreditsParsed)
+        )
+    if (!writeAccepted) {
+      // The failure callback credited the submitted chunk; credit and abandon
+      // the detached tail so the drain cannot retry a certified-dead xterm.
+      fireQueuedAckCredits(entry)
+      entry.chunks.length = 0
+      entry.chunkIndex = 0
+      entry.queuedChars = 0
+      clearForegroundHoldSafety(entry)
+      clearForegroundCoalesce(entry)
+      recordQueueDebugPressure()
+      return null
     }
   } catch {
-    // Why: pane.terminal.dispose() can race with a queued late-arriving PTY ping;
-    // a write to a disposed terminal throws. Drop the entry rather than crashing
-    // the scheduler for other panes still draining.
+    // Why: beforeWrite or pre-write viewport capture can fail before xterm owns
+    // the bytes. Cancel the armed watch without claiming parser failure.
+    cancelTerminalWriteStallWatch(entry.terminal)
     ackCreditsParsed?.()
     fireQueuedAckCredits(entry)
     entry.chunks.length = 0
@@ -1248,13 +1289,15 @@ export function writeTerminalOutput(
           followupViewportRefresh: options.followupForegroundRefresh === true,
           shouldRefreshViewportSynchronously:
             options.shouldRefreshForegroundSynchronously ?? ALWAYS_REFRESH_FOREGROUND_SYNCHRONOUSLY,
-          onParsed: composeParsedCallback(terminal, options.onParsed, ackCreditsParsed, undefined)
+          onParsed: composeParsedCallback(terminal, options.onParsed, ackCreditsParsed, undefined),
+          onWriteFailure: composeWriteFailureCallback(terminal, ackCreditsParsed)
         }
       )
     } catch (error) {
       // beforeWrite can throw before xterm owns the callback; consume the
       // delivery here. xterm write throws are caught by the foreground writer.
       ackCreditsParsed?.()
+      cancelTerminalWriteStallWatch(terminal)
       throw error
     }
     return
@@ -1326,36 +1369,42 @@ export function flushTerminalOutput(
     })
     try {
       queuedWrite.beforeWrite?.(queuedWrite.data)
-      if (queuedWrite.foreground) {
-        writeForegroundTerminalChunkWithIntent(
-          terminal,
-          queuedWrite.stripTransientCursorShows
-            ? removeTransientCursorShowSequences(queuedWrite.data)
-            : queuedWrite.data,
-          {
-            forceViewportRefresh: queuedWrite.forceForegroundRefresh,
-            followupViewportRefresh: queuedWrite.followupForegroundRefresh,
-            shouldRefreshViewportSynchronously: queuedWrite.shouldRefreshForegroundSynchronously,
-            onParsed: composeParsedCallback(
-              terminal,
-              queuedWrite.onParsed,
-              ackCreditsParsed,
-              undefined
-            )
-          }
-        )
-      } else {
-        writeBackgroundTerminalChunk(
-          terminal,
-          queuedWrite.data,
-          composeParsedCallback(terminal, queuedWrite.onParsed, ackCreditsParsed, undefined)
-        )
+      const writeAccepted = queuedWrite.foreground
+        ? writeForegroundTerminalChunkWithIntent(
+            terminal,
+            queuedWrite.stripTransientCursorShows
+              ? removeTransientCursorShowSequences(queuedWrite.data)
+              : queuedWrite.data,
+            {
+              forceViewportRefresh: queuedWrite.forceForegroundRefresh,
+              followupViewportRefresh: queuedWrite.followupForegroundRefresh,
+              shouldRefreshViewportSynchronously: queuedWrite.shouldRefreshForegroundSynchronously,
+              onParsed: composeParsedCallback(
+                terminal,
+                queuedWrite.onParsed,
+                ackCreditsParsed,
+                undefined
+              ),
+              onWriteFailure: composeWriteFailureCallback(terminal, ackCreditsParsed)
+            }
+          )
+        : writeBackgroundTerminalChunk(
+            terminal,
+            queuedWrite.data,
+            composeParsedCallback(terminal, queuedWrite.onParsed, ackCreditsParsed, undefined),
+            composeWriteFailureCallback(terminal, ackCreditsParsed)
+          )
+      if (!writeAccepted) {
+        fireQueuedAckCredits(entry)
+        clearForegroundHoldSafety(entry)
+        clearForegroundCoalesce(entry)
+        recordQueueDebugPressure()
+        return
       }
     } catch {
-      // Why: pane.terminal.dispose() can race with a queued late-arriving PTY ping;
-      // a write to a disposed terminal throws. Drop the entry rather than crashing
-      // the scheduler for other panes still draining. Consumed + abandoned
-      // chunks both credit their deliveries.
+      // Why: pre-write hooks/capture failed before xterm owned these bytes.
+      // Cancel the watch; consumed + abandoned chunks still credit delivery.
+      cancelTerminalWriteStallWatch(terminal)
       ackCreditsParsed?.()
       fireQueuedAckCredits(entry)
       clearForegroundHoldSafety(entry)

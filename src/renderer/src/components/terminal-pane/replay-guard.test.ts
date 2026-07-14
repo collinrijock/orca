@@ -9,6 +9,8 @@ import {
 import { configureLazyArabicShapingJoiner } from '@/lib/pane-manager/terminal-arabic-shaping-joiner'
 import {
   _resetWritePipelineHealthForTests,
+  captureTerminalParseProgressGeneration,
+  hasTerminalParseProgressSince,
   notifyUndeliverableWrite,
   registerUndeliverableWriteHandler
 } from '@/lib/pane-manager/terminal-write-pipeline-health'
@@ -563,6 +565,35 @@ describe('replay-guard stall handling (probe-certified release)', () => {
       // t=3000: the extended window passed with zero progress → wedged.
       vi.advanceTimersByTime(1_000)
       expect(isPaneReplaying(ref, 1)).toBe(false)
+      expect(recoveryReasons).toEqual(['replay-wedged'])
+      expect(mocks.recordRendererCrashBreadcrumb).toHaveBeenCalledWith(
+        'terminal_replay_guard_wedged_release',
+        { paneId: 1 }
+      )
+    } finally {
+      unregister()
+      _resetWritePipelineHealthForTests(terminal)
+      errorSpy.mockRestore()
+    }
+  })
+
+  it('recovers an immediately rejected replay without recording parse progress', () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const ref = makeRef()
+    const { pane, terminal } = makeFakePane(1)
+    const recoveryReasons: string[] = []
+    const generation = captureTerminalParseProgressGeneration(terminal)
+    const unregister = registerUndeliverableWriteHandler(terminal, (reason) => {
+      recoveryReasons.push(reason)
+    })
+    terminal.write = () => {
+      throw new Error('terminal disposed')
+    }
+    try {
+      replayIntoTerminal(pane, ref, 'rejected replay')
+
+      expect(isPaneReplaying(ref, 1)).toBe(false)
+      expect(hasTerminalParseProgressSince(terminal, generation)).toBe(false)
       expect(recoveryReasons).toEqual(['replay-wedged'])
       expect(mocks.recordRendererCrashBreadcrumb).toHaveBeenCalledWith(
         'terminal_replay_guard_wedged_release',

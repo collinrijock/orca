@@ -1501,6 +1501,49 @@ describe('pane terminal output scheduler', () => {
     expect(terminal.write).not.toHaveBeenCalled()
   })
 
+  it('does not feed a replay quiet window when foreground writes are rejected', async () => {
+    const { writeTerminalOutput } = await loadScheduler()
+    const {
+      _resetWritePipelineHealthForTests,
+      captureTerminalParseProgressGeneration,
+      hasTerminalParseProgressSince,
+      isTerminalWritePipelineCertifiedDead,
+      registerUndeliverableWriteHandler
+    } = await import('./terminal-write-pipeline-health')
+    const terminal = createForegroundTerminal()
+    terminal.write.mockImplementation(() => {
+      throw new Error('terminal disposed')
+    })
+    const recoveryReasons: string[] = []
+    const unregister = registerUndeliverableWriteHandler(terminal, (reason) => {
+      recoveryReasons.push(reason)
+    })
+    const generation = captureTerminalParseProgressGeneration(terminal)
+    const ackCredits = [vi.fn(), vi.fn(), vi.fn()]
+    const onParsed = vi.fn()
+    try {
+      for (const [index, ackCredit] of ackCredits.entries()) {
+        writeTerminalOutput(terminal, `rejected-${index}`, {
+          foreground: true,
+          ackCredit,
+          onParsed
+        })
+      }
+
+      // This generation is exactly what a pending replay guard consults.
+      expect(hasTerminalParseProgressSince(terminal, generation)).toBe(false)
+      expect(recoveryReasons).toEqual(['write-stalled'])
+      expect(isTerminalWritePipelineCertifiedDead(terminal)).toBe(true)
+      expect(onParsed).not.toHaveBeenCalled()
+      for (const ackCredit of ackCredits) {
+        expect(ackCredit).toHaveBeenCalledTimes(1)
+      }
+    } finally {
+      unregister()
+      _resetWritePipelineHealthForTests(terminal)
+    }
+  })
+
   it('survives a write to a disposed terminal during background drain', async () => {
     vi.useFakeTimers()
     const { writeTerminalOutput } = await loadScheduler()
@@ -1510,7 +1553,9 @@ describe('pane terminal output scheduler', () => {
       })
     }
 
-    writeTerminalOutput(throwing, 'late-ping', { foreground: false })
+    // More than two drain slices: rejection must abandon the detached tail
+    // instead of synchronously retrying the same certified-dead xterm.
+    writeTerminalOutput(throwing, 'x'.repeat(40 * 1024), { foreground: false })
 
     // Why: drain runs inside setTimeout; if the throw escapes drainQueuedOutput
     // it would crash the timer callback and leave the scheduler poisoned.

@@ -72,9 +72,13 @@ export function isPaneReplaying(ref: ReplayingPanesRef, paneId: number): boolean
 }
 
 type ReplayGuardWriteTarget = Pick<ManagedPane['terminal'], 'write'>
+type ReplayGuardWriteCallbacks = {
+  onParsed: () => void
+  onWriteFailure: () => void
+}
 
 /**
- * Engage the replay counter for one write and return the release function.
+ * Engage the replay counter for one write and return its settlement callbacks.
  * Release runs exactly once — from xterm's write completion or, failing
  * that, from the probe-certified stall path — so a lost completion cannot
  * latch the guard.
@@ -85,7 +89,7 @@ function engageReplayGuard(
   terminal: ReplayGuardWriteTarget,
   stallCheckMs: number,
   onRelease?: () => void
-): () => void {
+): ReplayGuardWriteCallbacks {
   map.set(paneId, (map.get(paneId) ?? 0) + 1)
   let released = false
   let timer: ReturnType<typeof setTimeout> | null = null
@@ -111,11 +115,11 @@ function engageReplayGuard(
       recordRendererCrashBreadcrumb('terminal_replay_guard_lost_completion', { paneId })
     } else if (reason === 'wedged') {
       console.error(
-        `[terminal] replay guard released for pane ${paneId} — the probe write never parsed (wedged xterm write pipeline; pane likely needs recovery)`
+        `[terminal] replay guard released for pane ${paneId} — xterm rejected the replay write or its probe never parsed (undeliverable write pipeline; pane likely needs recovery)`
       )
       recordRendererCrashBreadcrumb('terminal_replay_guard_wedged_release', { paneId })
-      // Why: the probe already certified the pipeline dead — hand the pane to
-      // recovery instead of leaving a fossil frame that eats keystrokes.
+      // Why: a rejected replay or silent probe makes the pipeline
+      // undeliverable — recover instead of leaving a fossil that eats input.
       notifyUndeliverableWrite(terminal, 'replay-wedged')
     }
     onRelease?.()
@@ -158,11 +162,16 @@ function engageReplayGuard(
     armWedgeDeadline(probeQueuedAtGeneration)
   }
   timer = setTimeout(probeForStall, stallCheckMs)
-  return () => {
-    // Why recorded even after release: a late completion is still parse
-    // progress, and sibling guards' wedge deadlines consult it.
-    recordTerminalParseProgress(terminal)
-    release('parsed')
+  return {
+    onParsed: () => {
+      // Why recorded even after release: a late completion is still parse
+      // progress, and sibling guards' wedge deadlines consult it.
+      recordTerminalParseProgress(terminal)
+      release('parsed')
+    },
+    // A rejected write produced no replay auto-replies, so release immediately
+    // and recover without recording fake parser progress.
+    onWriteFailure: () => release('wedged')
   }
 }
 
@@ -187,7 +196,7 @@ export function replayIntoTerminal(
     return
   }
   ensureArabicShapingJoinerForText(pane.terminal, data)
-  const releaseParsed = engageReplayGuard(
+  const guardCallbacks = engageReplayGuard(
     replayingPanesRef.current,
     pane.id,
     pane.terminal,
@@ -199,7 +208,8 @@ export function replayIntoTerminal(
     forceViewportRefresh: true,
     followupViewportRefresh: true,
     shouldRefreshViewportSynchronously: options.shouldRefreshViewportSynchronously,
-    onParsed: releaseParsed
+    onParsed: guardCallbacks.onParsed,
+    onWriteFailure: guardCallbacks.onWriteFailure
   })
 }
 
@@ -221,7 +231,7 @@ export function replayIntoTerminalAsync(
   return new Promise((resolve) => {
     // Why resolve on either release path: callers await this to sequence
     // restore steps; a lost write completion must not hang the restore chain.
-    const releaseParsed = engageReplayGuard(
+    const guardCallbacks = engageReplayGuard(
       replayingPanesRef.current,
       pane.id,
       pane.terminal,
@@ -232,7 +242,8 @@ export function replayIntoTerminalAsync(
       forceViewportRefresh: true,
       followupViewportRefresh: true,
       shouldRefreshViewportSynchronously: options.shouldRefreshViewportSynchronously,
-      onParsed: releaseParsed
+      onParsed: guardCallbacks.onParsed,
+      onWriteFailure: guardCallbacks.onWriteFailure
     })
   })
 }

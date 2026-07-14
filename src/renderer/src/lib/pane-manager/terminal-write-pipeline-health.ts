@@ -51,6 +51,25 @@ const stallWatchByTerminal = new WeakMap<object, StallWatch>()
 
 export const WRITE_PIPELINE_STALL_CHECK_MS = 10_000
 
+function certifyTerminalWritePipelineDead(terminal: object, expectedWatch?: StallWatch): void {
+  const watch = stallWatchByTerminal.get(terminal)
+  // Why: a real parse can settle and remove the watch before a stale probe
+  // deadline runs. Only the watch that armed that deadline may certify.
+  if (expectedWatch && watch !== expectedWatch) {
+    return
+  }
+  if (watch) {
+    stallWatchByTerminal.delete(terminal)
+    try {
+      watch.onCertifiedDead?.()
+    } catch {
+      // Why: discard can bottom out in a partial window.api surface; recovery
+      // notification must still run after cleanup fails.
+    }
+  }
+  notifyUndeliverableWrite(terminal, 'write-stalled')
+}
+
 export function registerUndeliverableWriteHandler(
   terminal: object,
   handler: UndeliverableWriteHandler
@@ -103,23 +122,7 @@ export function armTerminalWriteStallWatch(
     onCertifiedDead: options.onCertifiedDead,
     timer: setTimeout(probeForStall, stallCheckMs)
   }
-  const certifyDead = (): void => {
-    // Why the ownership check: a settle (healthy completion) can land between
-    // the probe write and this timeout; it removes the watch, and a stale
-    // timer must not certify a live pipeline dead.
-    if (stallWatchByTerminal.get(terminal) !== watch) {
-      return
-    }
-    stallWatchByTerminal.delete(terminal)
-    try {
-      watch.onCertifiedDead?.()
-    } catch {
-      // Why: the discard callback bottoms out in window.api (ack credits); a
-      // partial surface must not kill the timer unhandled — or suppress the
-      // recovery notification below, which is the whole point of certifying.
-    }
-    notifyUndeliverableWrite(terminal, 'write-stalled')
-  }
+  const certifyDead = (): void => certifyTerminalWritePipelineDead(terminal, watch)
   function probeForStall(): void {
     if (stallWatchByTerminal.get(terminal) !== watch) {
       return
@@ -163,6 +166,12 @@ export function cancelTerminalWriteStallWatch(terminal: object): void {
 export function settleTerminalWriteStallWatch(terminal: object): void {
   recordTerminalParseProgress(terminal)
   cancelTerminalWriteStallWatch(terminal)
+}
+
+/** A synchronous terminal.write failure proves the pipeline cannot accept the
+ *  issued bytes. Recover immediately without reporting fake parse progress. */
+export function failTerminalWriteStallWatch(terminal: object): void {
+  certifyTerminalWritePipelineDead(terminal)
 }
 
 export function _resetWritePipelineHealthForTests(terminal?: object): void {
