@@ -12,8 +12,12 @@ const GROK_CLI_PROXY_BASE =
   process.env.GROK_CLI_CHAT_PROXY_BASE_URL?.trim().replace(/\/$/, '') ||
   'https://cli-chat-proxy.grok.com/v1'
 const BILLING_CREDITS_URL = `${GROK_CLI_PROXY_BASE}/billing?format=credits`
+// Why: unified-billing accounts have no weekly credits; their included monthly
+// budget is only present in the default (format-less) billing view.
+const BILLING_DEFAULT_URL = `${GROK_CLI_PROXY_BASE}/billing`
 const API_TIMEOUT_MS = 10_000
 const WEEKLY_WINDOW_MINUTES = 10_080
+const MONTHLY_WINDOW_MINUTES = 43_200
 
 const GROK_CLI_AUTH_HEADER = 'xai-grok-cli'
 
@@ -31,6 +35,8 @@ type GrokBillingConfig = {
   billingPeriodStart?: string
   billingPeriodEnd?: string
   subscriptionTier?: string
+  monthlyLimit?: GrokMoneyVal
+  used?: GrokMoneyVal
   onDemandCap?: GrokMoneyVal
   onDemandUsed?: GrokMoneyVal
   prepaidBalance?: GrokMoneyVal
@@ -81,6 +87,28 @@ function mapWeeklyCredits(config: GrokBillingConfig): RateLimitWindow | null {
   }
 }
 
+function parseMoneyVal(value: GrokMoneyVal | undefined): number | null {
+  const raw = value?.val
+  const num = typeof raw === 'string' ? Number.parseFloat(raw) : raw
+  return typeof num === 'number' && Number.isFinite(num) ? num : null
+}
+
+function mapMonthlyUsage(config: GrokBillingConfig): RateLimitWindow | null {
+  const limit = parseMoneyVal(config.monthlyLimit)
+  const used = parseMoneyVal(config.used)
+  if (limit === null || used === null || limit <= 0) {
+    return null
+  }
+  const periodEnd = config.currentPeriod?.end ?? config.billingPeriodEnd
+  const resetsAt = periodEnd ? Date.parse(periodEnd) : null
+  return {
+    usedPercent: Math.min(100, Math.max(0, (used / limit) * 100)),
+    windowMinutes: MONTHLY_WINDOW_MINUTES,
+    resetsAt: resetsAt !== null && Number.isFinite(resetsAt) ? resetsAt : null,
+    resetDescription: parseResetDescription(periodEnd)
+  }
+}
+
 function grokRequestHeaders(session: GrokAuthSession): Record<string, string> {
   const headers: Record<string, string> = {
     Authorization: `Bearer ${session.accessToken}`,
@@ -103,32 +131,79 @@ function resolveBillingConfig(data: GrokBillingResponse): GrokBillingConfig | nu
   return null
 }
 
-function mapBillingResponse(
-  data: GrokBillingResponse,
+function billingUsageResult(
+  windows: { weekly?: RateLimitWindow | null; monthly?: RateLimitWindow | null },
+  config: GrokBillingConfig,
   session: GrokAuthSession
 ): ProviderRateLimits {
-  const config = resolveBillingConfig(data)
-  // Why: a 200 without credit usage means the plan has no weekly credits —
-  // 'unavailable' hides the bar (like Claude on API-key billing); 'error'
-  // would paint a permanent alert for a signed-in account that has no quota.
-  if (!config) {
-    return result('unavailable', 'Grok billing response did not include config')
-  }
-  const weekly = mapWeeklyCredits(config)
   const tier = config.subscriptionTier?.trim()
   const authLabel = session.email?.trim() || session.userId || 'Grok account'
   const provenance = tier ? `${authLabel} (${tier})` : authLabel
   return {
     provider: 'grok',
     session: null,
-    weekly,
+    weekly: windows.weekly ?? null,
+    ...(windows.monthly ? { monthly: windows.monthly } : {}),
     updatedAt: Date.now(),
-    error: weekly ? null : 'Grok billing response did not include credit usage',
-    status: weekly ? 'ok' : 'unavailable',
+    error: null,
+    status: 'ok',
     usageMetadata: {
       source: 'oauth',
       authProvenance: provenance
     }
+  }
+}
+
+type GrokBillingFetchOutcome =
+  | { kind: 'data'; data: GrokBillingResponse }
+  | { kind: 'result'; result: ProviderRateLimits }
+
+async function fetchBillingData(
+  url: string,
+  session: GrokAuthSession,
+  signal?: AbortSignal
+): Promise<GrokBillingFetchOutcome> {
+  const requestSignal = signal
+    ? AbortSignal.any([signal, AbortSignal.timeout(API_TIMEOUT_MS)])
+    : AbortSignal.timeout(API_TIMEOUT_MS)
+  const res = await net.fetch(url, {
+    headers: grokRequestHeaders(session),
+    signal: requestSignal
+  })
+  if (res.status === 401 || res.status === 403) {
+    return {
+      kind: 'result',
+      result: result('error', `Grok usage request unauthorized (HTTP ${res.status})`)
+    }
+  }
+  if (!res.ok) {
+    return {
+      kind: 'result',
+      result: result('error', `Grok usage request failed (HTTP ${res.status})`)
+    }
+  }
+  const data: unknown = await res.json()
+  return {
+    kind: 'data',
+    data: typeof data === 'object' && data !== null ? (data as GrokBillingResponse) : {}
+  }
+}
+
+async function fetchMonthlyUsageFallback(
+  session: GrokAuthSession,
+  signal?: AbortSignal
+): Promise<RateLimitWindow | null> {
+  try {
+    const outcome = await fetchBillingData(BILLING_DEFAULT_URL, session, signal)
+    if (outcome.kind === 'result') {
+      return null
+    }
+    const config = outcome.data.config ?? outcome.data
+    return mapMonthlyUsage(config)
+  } catch {
+    // Why: the fallback read must not turn a signed-in no-credits account into
+    // an error chip; the credits-view 'unavailable' presentation stands.
+    return null
   }
 }
 
@@ -152,24 +227,29 @@ export async function fetchGrokRateLimits(
   }
 
   try {
-    const signal = options.signal
-      ? AbortSignal.any([options.signal, AbortSignal.timeout(API_TIMEOUT_MS)])
-      : AbortSignal.timeout(API_TIMEOUT_MS)
-    const res = await net.fetch(BILLING_CREDITS_URL, {
-      headers: grokRequestHeaders(session),
-      signal
-    })
-    if (res.status === 401 || res.status === 403) {
-      return result('error', `Grok usage request unauthorized (HTTP ${res.status})`)
+    const outcome = await fetchBillingData(BILLING_CREDITS_URL, session, options.signal)
+    if (outcome.kind === 'result') {
+      return outcome.result
     }
-    if (!res.ok) {
-      return result('error', `Grok usage request failed (HTTP ${res.status})`)
+    const config = resolveBillingConfig(outcome.data)
+    // Why: a 200 without credit usage means the plan has no weekly credits —
+    // 'unavailable' hides the bar (like Claude on API-key billing); 'error'
+    // would paint a permanent alert for a signed-in account that has no quota.
+    if (!config) {
+      return result('unavailable', 'Grok billing response did not include config')
     }
-    const data: unknown = await res.json()
-    return mapBillingResponse(
-      typeof data === 'object' && data !== null ? (data as GrokBillingResponse) : {},
-      session
-    )
+    const weekly = mapWeeklyCredits(config)
+    if (weekly) {
+      return billingUsageResult({ weekly }, config, session)
+    }
+    // Why: unified-billing accounts report a monthly included-usage budget
+    // instead of weekly credits; the credits view omits creditUsagePercent
+    // for them, so read the default billing view before giving up.
+    const monthly = await fetchMonthlyUsageFallback(session, options.signal)
+    if (monthly) {
+      return billingUsageResult({ monthly }, config, session)
+    }
+    return result('unavailable', 'Grok billing response did not include credit usage')
   } catch (err) {
     return result('error', err instanceof Error ? err.message : 'Grok usage request failed')
   }
