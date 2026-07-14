@@ -59,11 +59,13 @@ same change as the work it records.
   deploy/resolver call site is connected and no tuple is enabled.
 - Active package: Work Package 2 target-native runtime assembly, archive inspection, executable
   smoke, SBOM, and provenance only. The Windows x64/arm64 artifact candidate and portability
-  corrections are at exact head `b387ac48cda70b60a5a148c03ce740f9afedf9cb` in stacked draft PR
-  [#8741](https://github.com/stablyai/orca/pull/8741). Both native architectures pass all seven
-  contract suites, then fail closed before extraction/build because Git for Windows `gpgv` rejects
-  an absolute drive-letter keyring path (E-M3-WINDOWS-CI-RED-003). It may produce test artifacts but
-  must not publish, resolve, transfer, install, launch, or enable them.
+  corrections are implemented through `b6903b220` in stacked draft PR
+  [#8741](https://github.com/stablyai/orca/pull/8741). Both native architectures passed all seven
+  contract suites at the preceding head, then failed closed before extraction/build because Git for
+  Windows `gpgv` rejected an absolute drive-letter keyring path (E-M3-WINDOWS-CI-RED-003). The
+  cwd-relative correction is locally green under E-M3-WINDOWS-GPG-PATH-LOCAL-001 and awaits native
+  CI. This package may produce test artifacts but must not publish, resolve, transfer, install,
+  launch, or enable them.
 - Active evidence gate: the immutable Node v24.18.0 contract, pinned release key, bounded verifier,
   and artifact-only CLI are locally green under E-M3-NODE-RED-001 and E-M3-NODE-PROVENANCE-001.
   E-M3-RUNTIME-LOCAL-001 additionally proves one unpublished Linux arm64 glibc assembly, exact-tree
@@ -2641,8 +2643,8 @@ or unexpected token`; the first logs did not identify a source location.
 ### E-M3-WINDOWS-GPG-PATH-RED-001 — Relative verified-copy command boundary red gate
 
 - Date: 2026-07-14
-- Commit SHA / PR: uncommitted purpose-named regression test on exact head
-  `b387ac48cda70b60a5a148c03ce740f9afedf9cb`; draft PR
+- Commit SHA / PR: red test introduced before its implementation in correction commit
+  `b6903b220`; exact base `b387ac48cda70b60a5a148c03ce740f9afedf9cb`; draft PR
   [#8741](https://github.com/stablyai/orca/pull/8741)
 - Runner: macOS 26.2 arm64; Node v26.0.0 and pnpm 10.24.0
 - Remote and transport: none; mocked child-process command boundary only
@@ -2662,7 +2664,7 @@ or unexpected token`; the first logs did not identify a source location.
 ### E-M3-WINDOWS-GPG-PATH-LOCAL-001 — Relative verified-copy command boundary correction
 
 - Date: 2026-07-14
-- Commit SHA / PR: uncommitted correction on exact base
+- Commit SHA / PR: implementation commit `b6903b220` on exact base
   `b387ac48cda70b60a5a148c03ce740f9afedf9cb`; draft PR
   [#8741](https://github.com/stablyai/orca/pull/8741)
 - Runner: macOS 26.2 arm64; Node v26.0.0 and pnpm 10.24.0. The repository requires Node 24, so
