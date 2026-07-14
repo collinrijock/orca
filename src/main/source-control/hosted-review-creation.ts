@@ -163,40 +163,24 @@ async function baseRefExistsOnRemote(
   const run = (argv: string[]): Promise<{ stdout: string }> =>
     runGitForHostedReview(repoPath, argv, connectionId, options)
 
-  // for-each-ref exits 0 whether or not the pattern matches, so a clean empty
-  // result is an authoritative "absent" while a thrown error is a transport
-  // failure. Never conflate the two: on an unreachable host, preserve the
-  // candidate rather than silently demoting a legitimately-pushed parent base.
-  // A single `*` does not cross `/` (see repo.ts search-ref globbing), so this
-  // matches the branch under exactly one remote segment.
-  let forEachRefStdout: string
+  const patterns = [`refs/remotes/*/${base}`]
+  // Non-origin remote-qualified candidate (e.g. `fork/main`): the wildcard glob
+  // above only matches a branch literally named that because `*` does not cross `/`.
+  // Include the exact tracking ref directly.
+  if (base.includes('/')) {
+    patterns.push(`refs/remotes/${base}`)
+  }
+
   try {
-    ;({ stdout: forEachRefStdout } = await run([
-      'for-each-ref',
-      '--count=1',
-      '--format=%(refname)',
-      `refs/remotes/*/${base}`
-    ]))
+    // for-each-ref exits 0 whether or not the pattern matches, so a clean empty
+    // result is an authoritative "absent" while a thrown error is a transport
+    // failure. Never conflate the two: on an unreachable host, preserve the
+    // candidate rather than silently demoting a legitimately-pushed parent base.
+    const { stdout } = await run(['for-each-ref', '--count=1', '--format=%(refname)', ...patterns])
+    return stdout.trim().length > 0
   } catch {
     return true
   }
-  if (forEachRefStdout.trim().length > 0) {
-    return true
-  }
-
-  // Non-origin remote-qualified candidate (e.g. `fork/main`): the wildcard glob
-  // above only matches a branch literally named that, so verify the tracking ref
-  // directly. A non-zero exit means the ref is absent (the probe above already
-  // proved the host is reachable).
-  if (base.includes('/')) {
-    try {
-      const { stdout } = await run(['rev-parse', '--verify', '--quiet', `refs/remotes/${base}`])
-      return stdout.trim().length > 0
-    } catch {
-      return false
-    }
-  }
-  return false
 }
 
 async function getCurrentBranch(
