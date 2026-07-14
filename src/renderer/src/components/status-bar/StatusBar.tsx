@@ -33,6 +33,9 @@ import {
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { useAppStore } from '../../store'
@@ -53,11 +56,13 @@ import {
   barColor,
   clampUsedPercent,
   formatResetCreditExpiry,
+  getProviderDisplayName,
   getProviderUsageStatusLabel
 } from './tooltip'
 import { ClaudeIcon, GeminiIcon, MiniMaxIcon, OpenAIIcon, OpenCodeGoIcon } from './icons'
 import { AgentIcon } from '@/lib/agent-catalog'
 import { formatWindowLabel } from '@/lib/window-label-formatter'
+import { UsageRosterPanel } from './UsageRosterPanel'
 import { markLiveCodexSessionsForRestart } from '@/lib/codex-session-restart'
 import { UpdateStatusSegment } from './UpdateStatusSegment'
 import { isStatusBarItemAvailable } from './status-bar-agent-gating'
@@ -81,6 +86,7 @@ import {
 } from '@/runtime/runtime-provider-accounts-client'
 import { translate } from '@/i18n/i18n'
 import {
+  getDisplayedUsagePercentage,
   normalizeUsagePercentageDisplay,
   type UsagePercentageDisplay
 } from '../../../../shared/usage-percentage-display'
@@ -660,14 +666,20 @@ function AccountRuntimeToggle<TGroup extends { key: string; label: string }>({
   )
 }
 
-function ClaudeSwitcherMenu({
+// Exported so its account-switch/reset logic is preserved for row drill-in even
+// though the footer now opens the consolidated UsageRosterPanel first.
+export function ClaudeSwitcherMenu({
   claude,
   compact,
-  iconOnly
+  iconOnly,
+  asSubmenu = false,
+  triggerContent
 }: {
   claude: ProviderRateLimits
   compact: boolean
   iconOnly: boolean
+  asSubmenu?: boolean
+  triggerContent?: React.ReactNode
 }): React.JSX.Element {
   const [open, setOpen] = useState(false)
   const [accountsExpanded, setAccountsExpanded] = useState(false)
@@ -832,6 +844,8 @@ function ClaudeSwitcherMenu({
       provider={claude}
       compact={compact}
       iconOnly={iconOnly}
+      asSubmenu={asSubmenu}
+      triggerContent={triggerContent}
       ariaLabel={translate(
         'auto.components.status.bar.StatusBar.3dd7ddfae1',
         'Open Claude details and account switcher'
@@ -940,21 +954,6 @@ function ClaudeSwitcherMenu({
         {translate('auto.components.status.bar.StatusBar.75ded02687', 'Manage Accounts…')}
       </DropdownMenuItem>
     </ProviderDetailsMenu>
-  )
-}
-
-// ---------------------------------------------------------------------------
-// Mini progress bar (shows consumption / % used, grey)
-// ---------------------------------------------------------------------------
-
-function MiniBar({ usedPct }: { usedPct: number }): React.JSX.Element {
-  return (
-    <div className="w-[48px] h-[6px] rounded-full bg-muted overflow-hidden flex-shrink-0">
-      <div
-        className="h-full rounded-full transition-all duration-300 bg-muted-foreground/40"
-        style={{ width: `${clampUsedPercent(usedPct)}%` }}
-      />
-    </div>
   )
 }
 
@@ -1093,17 +1092,41 @@ function InlineUsageSkeleton(): React.JSX.Element {
 function WindowLabel({
   w,
   label,
-  display
+  display,
+  showLabel = true
 }: {
   w: RateLimitWindow
   label: string
   display: UsagePercentageDisplay
+  showLabel?: boolean
 }): React.JSX.Element {
   return (
     <span className="tabular-nums">
-      {formatUsagePercentageLabel(w.usedPercent, display)} {label}
+      {getDisplayedUsagePercentage(w.usedPercent, display)}%{showLabel ? ` ${label}` : ''}
     </span>
   )
+}
+
+// Single-letter provider badge for the icon-only (narrow) status bar.
+function getProviderLetter(provider: ProviderRateLimits['provider']): string {
+  switch (provider) {
+    case 'claude':
+      return 'C'
+    case 'gemini':
+      return 'G'
+    case 'opencode-go':
+      return 'O'
+    case 'kimi':
+      return 'K'
+    case 'antigravity':
+      return 'A'
+    case 'minimax':
+      return 'M'
+    case 'grok':
+      return 'R'
+    case 'codex':
+      return 'X'
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -1171,24 +1194,27 @@ function ProviderSegment({
 
   if (p.buckets && p.buckets.length > 0) {
     const visibleBuckets = p.buckets.filter((b) => STATUS_BAR_BUCKET_NAMES.has(b.name))
+    // Roster shows the tightest bucket (highest % used) to stay compact.
+    const tightestBucket =
+      visibleBuckets.length > 0
+        ? visibleBuckets.reduce((a, b) => (b.usedPercent > a.usedPercent ? b : a))
+        : null
     return (
       <span className="inline-flex items-center gap-1.5">
         <ProviderIcon provider={provider} />
-        {visibleBuckets.map((bucket, i) => (
-          <React.Fragment key={bucket.name}>
-            {i > 0 && <span className="text-muted-foreground">·</span>}
-            <span className="tabular-nums">
-              {bucket.name} {formatUsagePercentageLabel(bucket.usedPercent, display)}
-            </span>
-          </React.Fragment>
-        ))}
-        {visibleBuckets.length === 0 && p.session && (
+        {tightestBucket ? (
+          <span className="tabular-nums">
+            {tightestBucket.name} {getDisplayedUsagePercentage(tightestBucket.usedPercent, display)}
+            %
+          </span>
+        ) : p.session ? (
           <WindowLabel
             w={p.session}
             label={formatWindowLabel(p.session.windowMinutes)}
             display={display}
+            showLabel={!compact}
           />
-        )}
+        ) : null}
         {isStale && <AlertTriangle size={11} className="text-muted-foreground/80" />}
       </span>
     )
@@ -1218,29 +1244,41 @@ function ProviderSegment({
       : null
   ].filter((w): w is { key: string; window: RateLimitWindow; label: string } => w !== null)
 
+  // Roster: show only the tightest window (highest % used) with a threshold-colored
+  // number so the footer stays compact; the dropdown still lists every window.
+  const tightestWindow =
+    visibleWindows.length > 0
+      ? visibleWindows.reduce((a, b) => (b.window.usedPercent > a.window.usedPercent ? b : a))
+      : null
+
   return (
     <span className="inline-flex items-center gap-1.5">
       <ProviderIcon provider={provider} />
-      {p.session && !compact && <MiniBar usedPct={clampUsedPercent(p.session.usedPercent)} />}
-      {visibleWindows.map((window, index) => (
-        <React.Fragment key={window.key}>
-          {index > 0 && <span className="text-muted-foreground">·</span>}
-          <WindowLabel w={window.window} label={window.label} display={display} />
-        </React.Fragment>
-      ))}
+      {tightestWindow && (
+        <WindowLabel
+          w={tightestWindow.window}
+          label={tightestWindow.label}
+          display={display}
+          showLabel={!compact}
+        />
+      )}
       {isStale && <AlertTriangle size={11} className="text-muted-foreground/80" />}
     </span>
   )
 }
 
-function CodexSwitcherMenu({
+export function CodexSwitcherMenu({
   codex,
   compact,
-  iconOnly
+  iconOnly,
+  asSubmenu = false,
+  triggerContent
 }: {
   codex: ProviderRateLimits
   compact: boolean
   iconOnly: boolean
+  asSubmenu?: boolean
+  triggerContent?: React.ReactNode
 }): React.JSX.Element {
   const [open, setOpen] = useState(false)
   const [accountsExpanded, setAccountsExpanded] = useState(false)
@@ -1516,6 +1554,8 @@ function CodexSwitcherMenu({
       provider={codex}
       compact={compact}
       iconOnly={iconOnly}
+      asSubmenu={asSubmenu}
+      triggerContent={triggerContent}
       // Why: Codex reset credits render beside the reset action below; showing
       // them in the generic provider summary duplicates the same metadata.
       hidePanelResetCredits
@@ -1746,7 +1786,9 @@ export function ProviderDetailsMenu({
   hidePanelResetCredits = false,
   open,
   onOpenChange,
-  children
+  children,
+  asSubmenu = false,
+  triggerContent
 }: {
   provider: ProviderRateLimits
   compact: boolean
@@ -1757,6 +1799,10 @@ export function ProviderDetailsMenu({
   open?: boolean
   onOpenChange?: (open: boolean) => void
   children?: React.ReactNode
+  // When set, render as a drill-in submenu (used by the consolidated Usage
+  // popover) with triggerContent as the full-width row instead of a segment.
+  asSubmenu?: boolean
+  triggerContent?: React.ReactNode
 }): React.JSX.Element {
   const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
   const usagePercentageDisplay = normalizeUsagePercentageDisplay(
@@ -1772,6 +1818,41 @@ export function ProviderDetailsMenu({
     onOpenChange?.(nextOpen)
   }
 
+  const panelBody = (
+    <>
+      {topContent}
+      <div className="p-2">
+        <ProviderPanel
+          p={provider}
+          showResetCredits={!hidePanelResetCredits}
+          usagePercentageDisplay={usagePercentageDisplay}
+        />
+      </div>
+      {children ? (
+        <>
+          <DropdownMenuSeparator />
+          {children}
+        </>
+      ) : null}
+    </>
+  )
+
+  if (asSubmenu) {
+    return (
+      <DropdownMenuSub open={open} onOpenChange={handleOpenChange}>
+        <DropdownMenuSubTrigger className="w-full items-center gap-3 px-3.5 py-2.5">
+          {triggerContent}
+        </DropdownMenuSubTrigger>
+        <DropdownMenuSubContent
+          collisionPadding={{ top: 8, bottom: 32, left: 8, right: 8 }}
+          className="max-h-(--radix-dropdown-menu-content-available-height) w-[300px] overflow-y-auto p-0 scrollbar-sleek"
+        >
+          {panelBody}
+        </DropdownMenuSubContent>
+      </DropdownMenuSub>
+    )
+  }
+
   return (
     <DropdownMenu open={open} onOpenChange={handleOpenChange} modal={false}>
       <DropdownMenuTrigger asChild>
@@ -1785,23 +1866,7 @@ export function ProviderDetailsMenu({
               <span
                 className={`inline-block h-2 w-2 rounded-full ${provider.session || provider.weekly || provider.fableWeekly ? 'bg-muted-foreground/60' : 'bg-muted-foreground/30'}`}
               />
-              <span className="text-muted-foreground">
-                {provider.provider === 'claude'
-                  ? 'C'
-                  : provider.provider === 'gemini'
-                    ? 'G'
-                    : provider.provider === 'opencode-go'
-                      ? 'O'
-                      : provider.provider === 'kimi'
-                        ? 'K'
-                        : provider.provider === 'antigravity'
-                          ? 'A'
-                          : provider.provider === 'minimax'
-                            ? 'M'
-                            : provider.provider === 'grok'
-                              ? 'R'
-                              : 'X'}
-              </span>
+              <span className="text-muted-foreground">{getProviderLetter(provider.provider)}</span>
             </span>
           ) : (
             <ProviderSegment p={provider} compact={compact} display={usagePercentageDisplay} />
@@ -1857,6 +1922,12 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
   const rateLimits = useAppStore((s) => s.rateLimits)
   const settings = useAppStore((s) => s.settings)
   const refreshRateLimits = useAppStore((s) => s.refreshRateLimits)
+  const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
+  const openSettingsPage = useAppStore((s) => s.openSettingsPage)
+  const usagePercentageDisplay = normalizeUsagePercentageDisplay(
+    useAppStore((s) => s.usagePercentageDisplay)
+  )
+  const [usageMenuOpen, setUsageMenuOpen] = useState(false)
   const statusBarVisible = useAppStore((s) => s.statusBarVisible)
   const statusBarItems = useAppStore((s) => s.statusBarItems)
   const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
@@ -2059,6 +2130,35 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
   // floating-workspace activity and clears via the shared unread paths.
   const showFloatingWorkspaceAttentionDot = !floatingTerminalOpen && hasFloatingUnread
 
+  // Consolidated roster: the leading pill dot reflects the worst usage tier across
+  // every visible meter.
+  const rosterProviders = [
+    showClaude ? visibleClaude : null,
+    showCodex ? visibleCodex : null,
+    showGemini ? visibleGemini : null,
+    showAntigravity ? visibleAntigravity : null,
+    showOpencodeGo ? visibleOpencodeGo : null,
+    showKimi ? visibleKimi : null,
+    showMiniMax ? visibleMiniMax : null,
+    showGrok ? visibleGrok : null
+  ].filter((p): p is ProviderRateLimits => p !== null)
+
+  const handleManageAccounts = (): void => {
+    setUsageMenuOpen(false)
+    openSettingsTarget({ pane: 'accounts', repoId: null })
+    openSettingsPage()
+  }
+  const handleUsageDetails = (): void => {
+    setUsageMenuOpen(false)
+    openSettingsTarget({ pane: 'stats', repoId: null })
+    openSettingsPage()
+  }
+  const handleOpenProviderAccounts = (provider: ProviderRateLimits['provider']): void => {
+    setUsageMenuOpen(false)
+    openSettingsTarget({ pane: 'accounts', repoId: null, sectionId: `accounts-${provider}` })
+    openSettingsPage()
+  }
+
   return (
     <div
       ref={containerRefCallback}
@@ -2086,81 +2186,107 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
             <StatusBarUsageEmptyCta />
           ) : null
         ) : (
-          // Why: one-time usage-display change callout anchors to this cluster so
-          // it sits next to the meters the user is confused by, not a global toast.
+          // Consolidated roster pill → opens the all-agents Usage popover (mock parity).
           <UsagePercentageDisplayChangeNotice hasVisibleUsageMeters={hasVisibleUsageMeters}>
-            {showClaude && (
-              <ClaudeSwitcherMenu claude={visibleClaude} compact={compact} iconOnly={iconOnly} />
-            )}
-            {showCodex && (
-              <CodexSwitcherMenu codex={visibleCodex} compact={compact} iconOnly={iconOnly} />
-            )}
-            {showGemini && (
-              <ProviderDetailsMenu
-                provider={visibleGemini}
-                compact={compact}
-                iconOnly={iconOnly}
-                ariaLabel={translate(
-                  'auto.components.status.bar.StatusBar.d2375976eb',
-                  'Open Gemini usage details'
-                )}
-              />
-            )}
-            {showAntigravity && (
-              <ProviderDetailsMenu
-                provider={visibleAntigravity}
-                compact={compact}
-                iconOnly={iconOnly}
-                ariaLabel={translate(
-                  'auto.components.status.bar.StatusBar.antigravityUsageDetails',
-                  'Open Antigravity usage details'
-                )}
-              />
-            )}
-            {showOpencodeGo && (
-              <ProviderDetailsMenu
-                provider={visibleOpencodeGo}
-                compact={compact}
-                iconOnly={iconOnly}
-                ariaLabel={translate(
-                  'auto.components.status.bar.StatusBar.629251f4b6',
-                  'Open OpenCode Go usage details'
-                )}
-              />
-            )}
-            {showKimi && (
-              <ProviderDetailsMenu
-                provider={visibleKimi}
-                compact={compact}
-                iconOnly={iconOnly}
-                ariaLabel={translate(
-                  'auto.components.status.bar.StatusBar.fda8146810',
-                  'Open Kimi usage details'
-                )}
-              />
-            )}
-            {showMiniMax && (
-              <ProviderDetailsMenu
-                provider={visibleMiniMax}
-                compact={compact}
-                iconOnly={iconOnly}
-                ariaLabel={translate(
-                  'auto.components.status.bar.StatusBar.06741a2f3d',
-                  'Open MiniMax usage details'
-                )}
-              />
-            )}
-            {showGrok && (
-              <ProviderDetailsMenu
-                provider={visibleGrok}
-                compact={compact}
-                iconOnly={iconOnly}
-                ariaLabel={translate(
-                  'auto.components.status.bar.StatusBar.grokUsageAria',
-                  'Open Grok usage details'
-                )}
-              />
-            )}
+            <DropdownMenu open={usageMenuOpen} onOpenChange={setUsageMenuOpen} modal={false}>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  className="inline-flex items-center gap-3 rounded px-1 py-0.5 hover:bg-accent/70"
+                  aria-label={translate(
+                    'auto.components.status.bar.UsageRosterPanel.title',
+                    'Usage'
+                  )}
+                >
+                  {rosterProviders.map((p) =>
+                    iconOnly ? (
+                      // Narrow status bar: fall back to main's compact letter badge.
+                      <span
+                        key={p.provider}
+                        className="inline-flex items-center gap-1 text-muted-foreground"
+                        title={getProviderDisplayName(p.provider)}
+                      >
+                        <span
+                          className={`inline-block h-2 w-2 rounded-full ${
+                            p.session || p.weekly || p.fableWeekly || p.monthly || p.buckets?.length
+                              ? 'bg-muted-foreground/60'
+                              : 'bg-muted-foreground/30'
+                          }`}
+                        />
+                        {getProviderLetter(p.provider)}
+                      </span>
+                    ) : (
+                      <ProviderSegment
+                        key={p.provider}
+                        p={p}
+                        compact={compact}
+                        display={usagePercentageDisplay}
+                      />
+                    )
+                  )}
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent
+                side="top"
+                align="start"
+                sideOffset={8}
+                // Keep the popover (and its drill-in submenus) above the status
+                // bar instead of overlapping it — bottom padding ≈ footer height.
+                collisionPadding={{ top: 8, bottom: 32, left: 8, right: 8 }}
+                className="w-[360px] p-0"
+              >
+                <UsageRosterPanel
+                  providers={rosterProviders}
+                  display={usagePercentageDisplay}
+                  isRefreshing={isRefreshing || anyFetching}
+                  onRefresh={handleRefresh}
+                  onOpenProvider={handleOpenProviderAccounts}
+                  onSignIn={handleOpenProviderAccounts}
+                  onManageAccounts={handleManageAccounts}
+                  onUsageDetails={handleUsageDetails}
+                  renderRow={(p, rowNode) => {
+                    // Every provider drills into its detail panel (parity with the
+                    // per-provider dropdowns on main); Claude/Codex additionally get
+                    // the account switcher + runtime toggle + Codex reset credits.
+                    if (p.provider === 'claude') {
+                      return (
+                        <ClaudeSwitcherMenu
+                          claude={p}
+                          compact={compact}
+                          iconOnly={false}
+                          asSubmenu
+                          triggerContent={rowNode}
+                        />
+                      )
+                    }
+                    if (p.provider === 'codex') {
+                      return (
+                        <CodexSwitcherMenu
+                          codex={p}
+                          compact={compact}
+                          iconOnly={false}
+                          asSubmenu
+                          triggerContent={rowNode}
+                        />
+                      )
+                    }
+                    return (
+                      <ProviderDetailsMenu
+                        provider={p}
+                        compact={compact}
+                        iconOnly={false}
+                        asSubmenu
+                        triggerContent={rowNode}
+                        ariaLabel={translate(
+                          'auto.components.status.bar.UsageRosterPanel.openDetails',
+                          'Open usage details'
+                        )}
+                      />
+                    )
+                  }}
+                />
+              </DropdownMenuContent>
+            </DropdownMenu>
           </UsagePercentageDisplayChangeNotice>
         )}
         {anyVisible && !isEmptyUsageState && (

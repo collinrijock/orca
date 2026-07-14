@@ -201,10 +201,12 @@ export function getWindowSections(
 
 // Why: color-coded by consumption so users can quickly gauge urgency.
 // Matches common harness usage meters (Claude/Codex): bars fill with % used.
-// Green = comfortable (<60% used), yellow = caution (60-80%), red = critical (≥80%).
+// Neutral = comfortable (<60% used), yellow = caution (60-80%), red = critical (≥80%).
+// Why: the <60 band is neutral (not green) so the always-visible meter stays quiet
+// until a limit nears — color = state (STYLEGUIDE) — and matches MiniBar's grey fill.
 export function barColor(usedPct: number): string {
   if (usedPct < 60) {
-    return 'bg-green-500'
+    return 'bg-muted-foreground/40'
   }
   if (usedPct < 80) {
     return 'bg-yellow-500'
