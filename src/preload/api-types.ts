@@ -315,6 +315,7 @@ import type { ResolvedSourceControlAiGenerationParams } from '../shared/source-c
 import type { SourceControlAiSettings } from '../shared/source-control-ai-types'
 import type { ShellOpenLocalPathResult } from '../shared/shell-open-types'
 import type { SkillDiscoveryResult, SkillDiscoveryTarget } from '../shared/skills'
+import type { SkillFreshnessInventory } from '../shared/skill-freshness'
 import type {
   CrashReportBreadcrumbData,
   CrashReportCopyDiagnosticsArgs,
@@ -2218,6 +2219,7 @@ export type PreloadApi = {
   }
   skills: {
     discover: (target?: SkillDiscoveryTarget) => Promise<SkillDiscoveryResult>
+    freshnessInventory: () => Promise<SkillFreshnessInventory>
   }
   pet: {
     import: () => Promise<CustomPet | null>

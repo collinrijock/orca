@@ -70,6 +70,7 @@ import type {
 import type { GitHistoryOptions, GitHistoryResult } from '../shared/git-history'
 import type { ShellOpenLocalPathResult } from '../shared/shell-open-types'
 import type { SkillDiscoveryResult, SkillDiscoveryTarget } from '../shared/skills'
+import type { SkillFreshnessInventory } from '../shared/skill-freshness'
 import type {
   RuntimeBrowserDriverState,
   RuntimeMobileSessionTabMove,
@@ -2191,7 +2192,9 @@ const api = {
 
   skills: {
     discover: (target?: SkillDiscoveryTarget): Promise<SkillDiscoveryResult> =>
-      ipcRenderer.invoke('skills:discover', target)
+      ipcRenderer.invoke('skills:discover', target),
+    freshnessInventory: (): Promise<SkillFreshnessInventory> =>
+      ipcRenderer.invoke('skills:freshnessInventory')
   },
 
   pet: {

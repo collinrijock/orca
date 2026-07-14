@@ -24,6 +24,7 @@ import type {
 } from '../../../../shared/skills'
 import { countSkillsBySource, filterSkills, type SkillsFilterState } from './skills-filter'
 import { translate } from '@/i18n/i18n'
+import { SkillFreshnessPanel } from './SkillFreshnessPanel'
 
 const providerLabels: Record<SkillProvider, string> = {
   codex: 'Codex',
@@ -401,19 +402,18 @@ export default function SkillsPage(): React.JSX.Element {
       </section>
 
       <section className="scrollbar-sleek min-h-0 flex-1 overflow-y-auto px-5 py-4">
-        {visibleSkills.length > 0 ? (
-          <div className="mx-auto flex max-w-5xl flex-col gap-3">
-            {visibleSkills.map((skill) => (
-              <SkillCard key={skill.id} skill={skill} />
-            ))}
-          </div>
-        ) : (
-          <EmptyState
-            loading={loading}
-            hasSkills={skills.length > 0}
-            onRefresh={() => void loadSkills()}
-          />
-        )}
+        <div className="mx-auto flex max-w-5xl flex-col gap-3">
+          <SkillFreshnessPanel />
+          {visibleSkills.length > 0 ? (
+            visibleSkills.map((skill) => <SkillCard key={skill.id} skill={skill} />)
+          ) : (
+            <EmptyState
+              loading={loading}
+              hasSkills={skills.length > 0}
+              onRefresh={() => void loadSkills()}
+            />
+          )}
+        </div>
       </section>
     </main>
   )
