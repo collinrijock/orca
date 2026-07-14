@@ -359,7 +359,9 @@ describe('AgentAwakeService', () => {
 
     service.setEnabled(true)
     service.setStatuses([workingStatus({ receivedAt: 1_000 })])
-    now = 1_000 + AGENT_AWAKE_STATUS_STALE_AFTER_MS + 1
+    // The exact expiry must release the assertion; otherwise the scheduler has
+    // no later boundary to wake it and the blocker can survive indefinitely.
+    now = 1_000 + AGENT_AWAKE_STATUS_STALE_AFTER_MS
     vi.advanceTimersByTime(AGENT_AWAKE_STATUS_STALE_AFTER_MS)
 
     expect(blocker.stop).toHaveBeenCalledWith(1)

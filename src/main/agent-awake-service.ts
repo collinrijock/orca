@@ -180,7 +180,7 @@ export class AgentAwakeService {
       status.observedInCurrentRuntime &&
       status.state === 'working' &&
       Number.isFinite(status.receivedAt) &&
-      now - status.receivedAt <= AGENT_AWAKE_STATUS_STALE_AFTER_MS
+      now - status.receivedAt < AGENT_AWAKE_STATUS_STALE_AFTER_MS
     )
   }
 
