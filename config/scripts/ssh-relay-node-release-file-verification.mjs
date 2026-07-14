@@ -74,3 +74,25 @@ export async function verifySshRelayNodeArchive(releaseInput, tuple, archivePath
   }
   return { tuple, name: archive.name, ...result }
 }
+
+export async function verifySshRelayNodeWindowsBuildInput(releaseInput, kind, tuple, inputPath) {
+  const release = validateSshRelayNodeReleaseContract(releaseInput)
+  const input =
+    kind === 'headers'
+      ? release.windowsBuildInputs.headersArchive
+      : kind === 'import-library'
+        ? release.windowsBuildInputs.importLibraries[tuple]
+        : undefined
+  if (!input) {
+    throw new Error(`Unknown Node Windows build input: ${kind}/${String(tuple)}`)
+  }
+  const result = await hashBoundedFile(
+    inputPath,
+    release.maximumArchiveBytes,
+    `Node Windows ${kind}`
+  )
+  if (result.sha256 !== input.sha256) {
+    throw new Error(`Node Windows ${kind} SHA-256 mismatch for ${String(tuple)}`)
+  }
+  return { kind, tuple: kind === 'headers' ? undefined : tuple, name: input.name, ...result }
+}

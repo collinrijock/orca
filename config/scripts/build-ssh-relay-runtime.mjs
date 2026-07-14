@@ -8,6 +8,7 @@ import { promisify } from 'node:util'
 
 import { buildPatchedSshRelayNodePty } from './ssh-relay-node-pty-build.mjs'
 import { extractVerifiedSshRelayNodeBuildInputs } from './ssh-relay-node-tar-inspection.mjs'
+import { extractVerifiedSshRelayNodeZipBuildInputs } from './ssh-relay-node-zip-inspection.mjs'
 import {
   createSshRelayRuntimeArchive,
   inspectSshRelayRuntimeArchive
@@ -25,7 +26,9 @@ const SUPPORTED_TUPLES = new Set([
   'linux-x64-glibc',
   'linux-arm64-glibc',
   'darwin-x64',
-  'darwin-arm64'
+  'darwin-arm64',
+  'win32-x64',
+  'win32-arm64'
 ])
 const BUILD_COMMAND_TIMEOUT_MS = 10 * 60 * 1000
 
@@ -83,7 +86,7 @@ export function parseBuildArguments(argv) {
 }
 
 function assertTargetNative(tuple) {
-  const os = tuple.startsWith('linux-') ? 'linux' : 'darwin'
+  const os = tuple.startsWith('linux-') ? 'linux' : tuple.startsWith('darwin-') ? 'darwin' : 'win32'
   const architecture = tuple.includes('arm64') ? 'arm64' : 'x64'
   if (process.platform !== os || process.arch !== architecture) {
     throw new Error(`Runtime ${tuple} must be assembled on target-native ${os}/${architecture}`)
@@ -114,24 +117,30 @@ async function run(command, args, options = {}) {
 }
 
 async function toolchainDetails(nodePath) {
-  const commands = [
-    ['bundledNode', nodePath, ['--version']],
-    ['xz', 'xz', ['--version']],
-    ['compiler', process.platform === 'win32' ? 'cl.exe' : 'c++', ['--version']],
-    [
-      'strip',
-      process.platform === 'darwin'
-        ? 'xcrun'
-        : process.platform === 'win32'
-          ? 'llvm-strip.exe'
-          : 'strip',
-      process.platform === 'darwin' ? ['--find', 'strip'] : ['--version']
-    ],
-    ['python', process.platform === 'win32' ? 'python.exe' : 'python3', ['--version']]
-  ]
+  const commands =
+    process.platform === 'win32'
+      ? [
+          ['bundledNode', nodePath, ['--version']],
+          ['compiler', 'cl.exe', []],
+          ['python', 'python.exe', ['--version']]
+        ]
+      : [
+          ['bundledNode', nodePath, ['--version']],
+          ['xz', 'xz', ['--version']],
+          ['compiler', 'c++', ['--version']],
+          [
+            'strip',
+            process.platform === 'darwin' ? 'xcrun' : 'strip',
+            process.platform === 'darwin' ? ['--find', 'strip'] : ['--version']
+          ],
+          ['python', 'python3', ['--version']]
+        ]
   const details = {}
   for (const [name, command, args] of commands) {
     details[name] = (await run(command, args)).split(/\r?\n/)[0]
+  }
+  if (process.platform === 'win32') {
+    details.zip = 'yazl 3.3.1'
   }
   details.buildNode = process.version
   return details
@@ -159,12 +168,30 @@ export async function buildSshRelayRuntime(options) {
   try {
     await run(process.execPath, [resolve(scriptDirectory, 'build-relay.mjs')], { cwd: projectRoot })
     const extractedDirectory = join(workDirectory, 'node-inputs')
-    const extracted = await extractVerifiedSshRelayNodeBuildInputs(
-      release,
-      options.tuple,
-      join(options.inputsDirectory, release.archives[options.tuple].name),
-      extractedDirectory
-    )
+    const nodeArchivePath = join(options.inputsDirectory, release.archives[options.tuple].name)
+    const extracted = options.tuple.startsWith('win32-')
+      ? await extractVerifiedSshRelayNodeZipBuildInputs(
+          release,
+          options.tuple,
+          nodeArchivePath,
+          extractedDirectory,
+          {
+            headersArchivePath: join(
+              options.inputsDirectory,
+              release.windowsBuildInputs.headersArchive.name
+            ),
+            importLibraryPath: join(
+              options.inputsDirectory,
+              ...release.windowsBuildInputs.importLibraries[options.tuple].name.split('/')
+            )
+          }
+        )
+      : await extractVerifiedSshRelayNodeBuildInputs(
+          release,
+          options.tuple,
+          nodeArchivePath,
+          extractedDirectory
+        )
     const bundledVersion = await run(extracted.nodePath, ['--version'])
     if (bundledVersion !== `v${release.nodeVersion}`) {
       throw new Error(`Bundled Node version mismatch: ${bundledVersion}`)

@@ -10,7 +10,8 @@ import {
   validateSshRelayNodeReleaseContract,
   verifySshRelayNodeArchive,
   verifySshRelayNodeChecksumDocument,
-  verifySshRelayNodeSignature
+  verifySshRelayNodeSignature,
+  verifySshRelayNodeWindowsBuildInput
 } from './ssh-relay-node-release-verification.mjs'
 
 const scriptDirectory = import.meta.dirname
@@ -104,11 +105,34 @@ export async function verifyNodeReleaseInputs(
   )
   const checksums = verifySshRelayNodeChecksumDocument(release, checksumBytes)
   const archives = []
+  const windowsBuildInputs = []
   for (const tuple of archiveTuples) {
     const archive = release.archives[tuple]
     archives.push(
       await verifySshRelayNodeArchive(release, tuple, join(inputsDirectory, archive.name))
     )
+    if (tuple.startsWith('win32-')) {
+      const headers = release.windowsBuildInputs.headersArchive
+      const library = release.windowsBuildInputs.importLibraries[tuple]
+      if (!windowsBuildInputs.some((input) => input.kind === 'headers')) {
+        windowsBuildInputs.push(
+          await verifySshRelayNodeWindowsBuildInput(
+            release,
+            'headers',
+            tuple,
+            join(inputsDirectory, headers.name)
+          )
+        )
+      }
+      windowsBuildInputs.push(
+        await verifySshRelayNodeWindowsBuildInput(
+          release,
+          'import-library',
+          tuple,
+          join(inputsDirectory, ...library.name.split('/'))
+        )
+      )
+    }
   }
 
   return {
@@ -118,7 +142,8 @@ export async function verifyNodeReleaseInputs(
     signerFingerprint: signature.signerFingerprint,
     checksumSha256: signature.checksumSha256,
     checksumEntriesVerified: checksums.length,
-    archives
+    archives,
+    windowsBuildInputs
   }
 }
 

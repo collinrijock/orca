@@ -60,7 +60,14 @@ const release = {
     }
   },
   maximumArchiveBytes: 1024 * 1024,
-  archives
+  archives,
+  windowsBuildInputs: {
+    headersArchive: { name: 'node-v24.18.0-headers.tar.gz', sha256: '7'.repeat(64) },
+    importLibraries: {
+      'win32-arm64': { name: 'win-arm64/node.lib', sha256: '8'.repeat(64) },
+      'win32-x64': { name: 'win-x64/node.lib', sha256: '9'.repeat(64) }
+    }
+  }
 }
 
 const temporaryDirectories = []

@@ -106,7 +106,10 @@ jobs:
           pnpm exec vitest run --config config/vitest.config.ts \
             config/scripts/ssh-relay-node-release-verification.test.mjs \
             config/scripts/ssh-relay-node-tar-inspection.test.mjs \
+            config/scripts/ssh-relay-node-zip-inspection.test.mjs \
             config/scripts/ssh-relay-runtime-artifact.test.mjs \
+            config/scripts/ssh-relay-runtime-windows-tree.test.mjs \
+            config/scripts/ssh-relay-runtime-zip.test.mjs \
             config/scripts/ssh-relay-runtime-workflow.test.mjs
 
       - name: Download exact Node release inputs
@@ -152,6 +155,166 @@ jobs:
           mkdir -p "$GITHUB_WORKSPACE/runtime-evidence/${{ matrix.tuple }}"
           cp "$output"/*.tar.xz "$output"/*.spdx.json "$output"/*.provenance.json "$output"/*.identity.json \
             "$GITHUB_WORKSPACE/runtime-evidence/${{ matrix.tuple }}/"
+
+      - name: Upload unpublished artifact evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: ssh-relay-runtime-${{ matrix.tuple }}
+          path: runtime-evidence/${{ matrix.tuple }}/
+          if-no-files-found: error
+          retention-days: 7
+
+  build-windows-runtime:
+    name: Build ${{ matrix.tuple }} runtime
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: windows-2022
+            tuple: win32-x64
+            node_archive: node-v24.18.0-win-x64.zip
+            node_library: win-x64/node.lib
+            msvc_arch: x64
+          - runner: windows-11-arm
+            tuple: win32-arm64
+            node_archive: node-v24.18.0-win-arm64.zip
+            node_library: win-arm64/node.lib
+            msvc_arch: arm64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout exact source revision
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with:
+          # Why: artifact evidence must name the exact reviewed source, not GitHub's synthetic merge.
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Configure target-native MSVC
+        uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1
+        with:
+          arch: ${{ matrix.msvc_arch }}
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6
+        with:
+          run_install: false
+
+      - name: Setup Node 24.18.0
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 24.18.0
+          cache: pnpm
+
+      - name: Record native runner identity
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          "requested_runner=${{ matrix.runner }}"
+          "resolved_image_os=$env:ImageOS"
+          "resolved_image_version=$env:ImageVersion"
+          "runner_arch=$env:RUNNER_ARCH"
+          "runner_environment=$env:RUNNER_ENVIRONMENT"
+          Get-ComputerInfo | Select-Object WindowsProductName, WindowsVersion, OsBuildNumber
+          node --version
+          "source_commit=$(git rev-parse HEAD)"
+
+      - name: Select bundled Git signature tools
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $gitUsrBin = Join-Path $env:ProgramFiles 'Git/usr/bin'
+          foreach ($tool in @('gpg.exe', 'gpgv.exe')) {
+            if (-not (Test-Path -LiteralPath (Join-Path $gitUsrBin $tool) -PathType Leaf)) {
+              throw "Git for Windows does not provide required signature tool: $tool"
+            }
+          }
+          $gitUsrBin | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+      - name: Install source dependencies without native postinstall
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          pnpm install --frozen-lockfile --ignore-scripts
+          if ($LASTEXITCODE -ne 0) { throw 'pnpm install failed' }
+          git diff --exit-code package.json pnpm-lock.yaml
+          if ($LASTEXITCODE -ne 0) { throw 'frozen install changed dependency files' }
+
+      - name: Run runtime artifact contract tests
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          pnpm exec vitest run --config config/vitest.config.ts `
+            config/scripts/ssh-relay-node-release-verification.test.mjs `
+            config/scripts/ssh-relay-node-tar-inspection.test.mjs `
+            config/scripts/ssh-relay-node-zip-inspection.test.mjs `
+            config/scripts/ssh-relay-runtime-artifact.test.mjs `
+            config/scripts/ssh-relay-runtime-windows-tree.test.mjs `
+            config/scripts/ssh-relay-runtime-zip.test.mjs `
+            config/scripts/ssh-relay-runtime-workflow.test.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'runtime artifact contract tests failed' }
+
+      - name: Download exact Node release inputs
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $inputs = Join-Path $env:RUNNER_TEMP 'node-release-inputs'
+          New-Item -ItemType Directory -Path $inputs | Out-Null
+          $base = 'https://nodejs.org/dist/v24.18.0'
+          $assets = @(
+            'SHASUMS256.txt',
+            'SHASUMS256.txt.sig',
+            '${{ matrix.node_archive }}',
+            'node-v24.18.0-headers.tar.gz',
+            '${{ matrix.node_library }}'
+          )
+          foreach ($asset in $assets) {
+            $destination = Join-Path $inputs $asset
+            New-Item -ItemType Directory -Path (Split-Path -Parent $destination) -Force | Out-Null
+            & curl.exe --fail --silent --show-error --location --proto '=https' --tlsv1.2 `
+              --connect-timeout 20 --max-time 300 --retry 2 --retry-delay 2 --retry-all-errors `
+              "$base/$asset" --output $destination
+            if ($LASTEXITCODE -ne 0) { throw "Node input download failed: $asset" }
+          }
+          "NODE_INPUTS=$inputs" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Build, inspect, and smoke exact runtime
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $output = Join-Path $env:RUNNER_TEMP 'ssh-relay-runtime/${{ matrix.tuple }}'
+          New-Item -ItemType Directory -Path (Split-Path -Parent $output) -Force | Out-Null
+          $sourceCommit = git rev-parse HEAD
+          $sourceDateEpoch = git show -s --format=%ct $sourceCommit
+          node config/scripts/build-ssh-relay-runtime.mjs `
+            --tuple '${{ matrix.tuple }}' `
+            --inputs-directory $env:NODE_INPUTS `
+            --output-directory $output `
+            --source-date-epoch $sourceDateEpoch `
+            --git-commit $sourceCommit
+          if ($LASTEXITCODE -ne 0) { throw 'runtime build failed' }
+          $identity = Join-Path $output 'orca-ssh-relay-runtime-${{ matrix.tuple }}.identity.json'
+          $archive = Get-ChildItem -LiteralPath $output -Filter '*.zip' -File | Select-Object -First 1
+          if (-not $archive) { throw 'runtime ZIP is missing' }
+          node config/scripts/verify-ssh-relay-runtime.mjs `
+            --runtime-directory (Join-Path $output 'runtime') `
+            --identity $identity `
+            --archive $archive.FullName
+          if ($LASTEXITCODE -ne 0) { throw 'runtime verification failed' }
+          $prohibited = Get-ChildItem -LiteralPath (Join-Path $output 'runtime') -Recurse -File |
+            Where-Object { $_.Name -in @('npm', 'npm.cmd', 'npx', 'npx.cmd', 'corepack', 'corepack.cmd') -or $_.Name.EndsWith('.map') } |
+            Select-Object -First 1
+          if ($prohibited) { throw "Runtime contains a prohibited file: $($prohibited.FullName)" }
+          $parcelRoot = Join-Path $output 'runtime/node_modules/@parcel'
+          if (@(Get-ChildItem -LiteralPath $parcelRoot -Directory).Count -ne 2) {
+            throw 'Runtime must contain exactly the watcher wrapper and one native package'
+          }
+          $evidence = Join-Path $env:GITHUB_WORKSPACE 'runtime-evidence/${{ matrix.tuple }}'
+          New-Item -ItemType Directory -Path $evidence -Force | Out-Null
+          Copy-Item -LiteralPath $archive.FullName -Destination $evidence
+          Get-ChildItem -LiteralPath $output -File |
+            Where-Object { $_.Name -match '\.(?:spdx|provenance|identity)\.json$' } |
+            Copy-Item -Destination $evidence
 
       - name: Upload unpublished artifact evidence
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7

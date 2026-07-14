@@ -1135,15 +1135,37 @@
               Rosetta SSH cell. These are selector eligibility constraints, not tuple enablement;
               every candidate still needs the complete two-layer evidence.
             </p>
+            <p>
+              Windows target-native native-module builds use three immutable inputs authenticated by
+              that same signed checksum document: the tuple's official Node ZIP, the exact-version
+              <code>headers.tar.gz</code>, and the tuple's <code>win-*/node.lib</code>. The Windows
+              ZIP does not contain build headers or the import library. Stage only the required
+              executable, license, headers, and import library into the local build root; disable
+              implicit <code>node-gyp</code> downloads so no unrecorded build input can enter.
+            </p>
           </div>
 
           <details open>
             <summary>Archive contents</summary>
             <div class="details-body">
               <ul>
-                <li>Unmodified official Node v24.18.0 executable pinned by source archive hash.</li>
+                <li>
+                  Unmodified official Node v24.18.0 executable pinned by its signed binary-archive
+                  hash. Windows native builds additionally authenticate the signed headers archive
+                  and architecture-specific <code>node.lib</code>, neither of which is shipped in
+                  the Windows runtime ZIP.
+                </li>
                 <li><code>relay.js</code> and crash-isolated <code>relay-watcher.js</code>.</li>
                 <li>Orca-patched <code>node-pty@1.1.0</code> built for the bundled runtime.</li>
+                <li>
+                  Windows also carries the pinned node-pty ConPTY runtime closure (<code
+                    >conpty.dll</code
+                  >
+                  and <code>OpenConsole.exe</code>) for the tuple architecture. Hash both files into
+                  the tree identity, classify them as native runtime inputs for signing/trust, and
+                  run PTY smoke with the production <code>useConptyDll: true</code> behavior rather
+                  than silently exercising system ConPTY.
+                </li>
                 <li>
                   <code>@parcel/watcher@2.5.6</code> with exactly one native optional package.
                 </li>

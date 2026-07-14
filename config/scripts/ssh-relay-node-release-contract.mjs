@@ -17,6 +17,10 @@ const ARCHIVE_SUFFIXES = Object.freeze({
   'win32-arm64': 'win-arm64.zip',
   'win32-x64': 'win-x64.zip'
 })
+const WINDOWS_LIBRARY_NAMES = Object.freeze({
+  'win32-arm64': 'win-arm64/node.lib',
+  'win32-x64': 'win-x64/node.lib'
+})
 
 const HEX_SHA256 = /^[0-9a-f]{64}$/
 const OPENPGP_FINGERPRINT = /^[0-9A-F]{40}$/
@@ -126,6 +130,35 @@ function validateArchives(release) {
   }
 }
 
+function validateWindowsBuildInputs(release) {
+  assertRecord(release.windowsBuildInputs, 'Windows build inputs')
+  assertExactKeys(
+    release.windowsBuildInputs,
+    ['headersArchive', 'importLibraries'],
+    'Windows build inputs'
+  )
+  const headers = release.windowsBuildInputs.headersArchive
+  assertRecord(headers, 'Windows headers archive')
+  assertExactKeys(headers, ['name', 'sha256'], 'Windows headers archive')
+  if (headers.name !== `node-v${release.nodeVersion}-headers.tar.gz`) {
+    throw new Error('Windows headers archive name does not match the pinned Node version')
+  }
+  assertSha256(headers.sha256, 'Windows headers archive SHA-256')
+
+  const libraries = release.windowsBuildInputs.importLibraries
+  assertRecord(libraries, 'Windows import libraries')
+  assertExactKeys(libraries, Object.keys(WINDOWS_LIBRARY_NAMES), 'Windows import libraries')
+  for (const [tuple, expectedName] of Object.entries(WINDOWS_LIBRARY_NAMES)) {
+    const library = libraries[tuple]
+    assertRecord(library, `Windows import library ${tuple}`)
+    assertExactKeys(library, ['name', 'sha256'], `Windows import library ${tuple}`)
+    if (library.name !== expectedName) {
+      throw new Error(`Windows import library name does not match ${tuple}`)
+    }
+    assertSha256(library.sha256, `Windows import library ${tuple} SHA-256`)
+  }
+}
+
 export function sha256(bytes) {
   return createHash('sha256').update(bytes).digest('hex')
 }
@@ -141,7 +174,8 @@ export function validateSshRelayNodeReleaseContract(release) {
       'checksumDocument',
       'signature',
       'maximumArchiveBytes',
-      'archives'
+      'archives',
+      'windowsBuildInputs'
     ],
     'Node release contract'
   )
@@ -157,6 +191,7 @@ export function validateSshRelayNodeReleaseContract(release) {
 
   validateMetadataContract(release)
   validateArchives(release)
+  validateWindowsBuildInputs(release)
   return release
 }
 
@@ -199,16 +234,28 @@ export function verifySshRelayNodeChecksumDocument(releaseInput, bytesInput) {
     throw new Error('Node checksum document SHA-256 does not match the pinned contract')
   }
 
-  return EXPECTED_TUPLES.map((tuple) => {
-    const archive = release.archives[tuple]
-    const documentDigest = entries.get(archive.name)
+  const expectedFiles = [
+    ...EXPECTED_TUPLES.map((tuple) => ({
+      kind: 'runtime-archive',
+      tuple,
+      ...release.archives[tuple]
+    })),
+    { kind: 'windows-headers', ...release.windowsBuildInputs.headersArchive },
+    ...Object.entries(release.windowsBuildInputs.importLibraries).map(([tuple, file]) => ({
+      kind: 'windows-import-library',
+      tuple,
+      ...file
+    }))
+  ]
+  return expectedFiles.map((file) => {
+    const documentDigest = entries.get(file.name)
     if (documentDigest === undefined) {
-      throw new Error(`Node checksum document is missing pinned archive: ${archive.name}`)
+      throw new Error(`Node checksum document is missing pinned input: ${file.name}`)
     }
-    if (documentDigest !== archive.sha256) {
-      throw new Error(`Node checksum document digest mismatch for pinned archive: ${archive.name}`)
+    if (documentDigest !== file.sha256) {
+      throw new Error(`Node checksum document digest mismatch for pinned input: ${file.name}`)
     }
-    return { tuple, name: archive.name, sha256: archive.sha256 }
+    return file
   })
 }
 

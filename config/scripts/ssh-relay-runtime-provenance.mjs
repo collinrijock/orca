@@ -101,6 +101,27 @@ export async function writeSshRelayRuntimeMetadata({
         ['node', 'node-pty-native', 'parcel-watcher-native', 'native-runtime'].includes(entry.role)
     )
     .map((entry) => ({ path: entry.path, sha256: entry.sha256 }))
+  const resolvedDependencies = [
+    {
+      uri: `${nodeRelease.baseUrl}/${nodeRelease.archives[identity.tupleId].name}`,
+      digest: { sha256: nodeRelease.archives[identity.tupleId].sha256 }
+    },
+    {
+      uri: nodeRelease.signature.key.sourceUrl,
+      digest: { sha256: nodeRelease.signature.key.sha256 }
+    },
+    { uri: `git+https://github.com/stablyai/orca@${gitCommit}`, digest: { gitCommit } }
+  ]
+  if (identity.tupleId.startsWith('win32-')) {
+    const headers = nodeRelease.windowsBuildInputs.headersArchive
+    const library = nodeRelease.windowsBuildInputs.importLibraries[identity.tupleId]
+    resolvedDependencies.splice(
+      1,
+      0,
+      { uri: `${nodeRelease.baseUrl}/${headers.name}`, digest: { sha256: headers.sha256 } },
+      { uri: `${nodeRelease.baseUrl}/${library.name}`, digest: { sha256: library.sha256 } }
+    )
+  }
   const provenance = {
     _type: 'https://in-toto.io/Statement/v1',
     subject: [{ name: archive.name, digest: { sha256: archive.sha256.slice('sha256:'.length) } }],
@@ -114,17 +135,7 @@ export async function writeSshRelayRuntimeMetadata({
           sourceDateEpoch
         },
         internalParameters: { toolchain },
-        resolvedDependencies: [
-          {
-            uri: nodeRelease.baseUrl,
-            digest: { sha256: nodeRelease.archives[identity.tupleId].sha256 }
-          },
-          {
-            uri: nodeRelease.signature.key.sourceUrl,
-            digest: { sha256: nodeRelease.signature.key.sha256 }
-          },
-          { uri: `git+https://github.com/stablyai/orca@${gitCommit}`, digest: { gitCommit } }
-        ]
+        resolvedDependencies
       },
       runDetails: {
         builder: { id: builder },

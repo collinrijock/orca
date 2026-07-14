@@ -58,9 +58,10 @@ same change as the work it records.
   [#8728](https://github.com/stablyai/orca/pull/8728) at implementation commit `b9d80a4cb`; no
   deploy/resolver call site is connected and no tuple is enabled.
 - Active package: Work Package 2 target-native runtime assembly, archive inspection, executable
-  smoke, SBOM, and provenance only at exact implementation head `151628992` in stacked draft PR
-  [#8741](https://github.com/stablyai/orca/pull/8741). It may produce test artifacts but must not
-  publish, resolve, transfer, install, launch, or enable them.
+  smoke, SBOM, and provenance only. The Windows x64/arm64 artifact candidate is uncommitted on top
+  of `c308107a9` in stacked draft PR [#8741](https://github.com/stablyai/orca/pull/8741) while its
+  final diff and local gates are re-audited before native CI. It may produce test artifacts but must
+  not publish, resolve, transfer, install, launch, or enable them.
 - Active evidence gate: the immutable Node v24.18.0 contract, pinned release key, bounded verifier,
   and artifact-only CLI are locally green under E-M3-NODE-RED-001 and E-M3-NODE-PROVENANCE-001.
   E-M3-RUNTIME-LOCAL-001 additionally proves one unpublished Linux arm64 glibc assembly, exact-tree
@@ -71,6 +72,15 @@ same change as the work it records.
   archive/tree verification, bundled Node, patched PTY, and watcher smoke for Linux x64/arm64 and
   macOS x64/arm64 under E-M3-CI-001. Same-runner clean-rebuild identity, oldest-baseline,
   native-trust, SSH, Windows, and musl cells remain open.
+- Windows input correction: E-M3-WINDOWS-INPUT-GAP-001 proved the official Windows ZIP lacks headers
+  and `node.lib`. Both artifacts now require the exact signed headers archive and tuple import
+  library as explicit inputs. The schema, signed-checksum verifier, bounded ZIP/header extraction,
+  and import-library staging are locally green under E-M3-WINDOWS-INPUT-001; native Windows build
+  proof remains active and no implicit `node-gyp` download is allowed.
+- Windows PTY-closure correction: E-M3-WINDOWS-CONPTY-GAP-001 proved the candidate omitted the
+  `conpty.dll` and `OpenConsole.exe` files required by Orca's production `useConptyDll: true` path
+  and therefore exercised a weaker system-ConPTY smoke. The artifact and smoke correction is active;
+  no Windows executable cell is complete.
 - Production behavior: unchanged; Orca embeds relay JavaScript and installs `node-pty` plus
   `@parcel/watcher` with remote npm.
 - New runtime assets published: none.
@@ -83,11 +93,12 @@ same change as the work it records.
 - Rollout control: existing per-SSH-target configuration; legacy is the default and the bundled
   runtime is an explicit per-target Beta opt-in under E-M1-ROLLOUT-DECISION-001.
 - Legacy fallback removal: not authorized.
-- Next required action: implement the bounded deterministic Windows runtime/ZIP builder and verifier
-  as the next artifact-only slice, add native Windows x64/arm64 runner jobs, and separately add a
-  same-head/same-runner clean-rebuild identity oracle for native build reproducibility. Keep
-  cross-family remote infrastructure, signing/trust, and measured legacy baseline gates open; do not
-  introduce publication, resolver, transfer, rollout, tuple enablement, or default behavior.
+- Next required action: finish the final local audit of the bounded Windows runtime/ZIP builder and
+  verifier, commit the artifact-only implementation, and collect exact Windows x64/arm64 plus POSIX
+  regression evidence from draft-PR CI. A same-head/same-runner clean-rebuild identity oracle for
+  native build reproducibility remains a separate open gate. Keep cross-family remote
+  infrastructure, signing/trust, and measured legacy baseline gates open; do not introduce
+  publication, resolver, transfer, rollout, tuple enablement, or default behavior.
 
 ## Non-Negotiable Invariants
 
@@ -350,6 +361,10 @@ cancellation; cleanup settlement is part of the timeout oracle.
       provenance, and preserve official executable bytes/signatures. Orca-built native executables
       and libraries still require the target-native signing policy decided below.
       (E-M1-NODE-PROVENANCE-001)
+- [x] For Windows native-module builds, authenticate the exact-version `headers.tar.gz` and
+      architecture-specific `win-*/node.lib` through that same signed checksum document in addition
+      to the tuple ZIP. The official Windows ZIP does not contain either build input; implicit
+      `node-gyp` downloads are prohibited. (E-M3-WINDOWS-INPUT-GAP-001)
 
 ### Trust and signing
 
@@ -558,9 +573,17 @@ Each runtime must contain only the executable closure required by the relay.
       (E-M3-RUNTIME-LOCAL-001)
 - [x] Pin Node and verify downloaded source/binary checksums and upstream signatures.
       (E-M3-NODE-PROVENANCE-001; real archive execution remains a separate per-tuple gate)
+- [x] Extend the immutable Node input contract for Windows to include the signed exact-version
+      headers archive and tuple-specific `node.lib`; verify/copy them into an exclusive local build
+      root and configure `node-gyp` to fail rather than fetch an unstaged input.
+      (E-M3-WINDOWS-INPUT-001; successful target-native offline build remains a per-tuple gate)
 - [ ] Build Orca’s patched `node-pty@1.1.0` against the exact bundled Node runtime.
 - [ ] Assert Orca-required patched exports/diagnostics exist; do not silently use an upstream
       prebuild that omits the patch.
+- [ ] For Windows, copy the tuple-architecture `conpty.dll` and `OpenConsole.exe` from the pinned
+      node-pty source into `build/Release/conpty`, hash them into the runtime identity as native
+      runtime files, and prove PTY spawn/resize/exit with `useConptyDll: true`. Do not substitute a
+      system-ConPTY smoke for the production path. (E-M3-WINDOWS-CONPTY-GAP-001)
 - [ ] Include exactly one compatible `@parcel/watcher@2.5.6` native optional package.
 - [ ] Include relay JavaScript, watcher child, required runtime JavaScript closure, licenses, SBOM,
       provenance, and runtime metadata.
@@ -1192,6 +1215,8 @@ focused commands as their scripts/tests are introduced.
 
 - [x] `pnpm exec vitest run --config config/vitest.config.ts config/scripts/ssh-relay-node-release-verification.test.mjs` (E-M3-NODE-RED-001, E-M3-NODE-PROVENANCE-001)
 - [x] `node config/scripts/verify-ssh-relay-node-release-inputs.mjs --inputs-directory <verified-input-directory> --archive linux-x64-glibc` (E-M3-NODE-PROVENANCE-001; metadata and archive verification only)
+- [x] `pnpm exec vitest run --config config/vitest.config.ts config/scripts/ssh-relay-node-zip-inspection.test.mjs config/scripts/ssh-relay-runtime-zip.test.mjs` (E-M3-WINDOWS-ZIP-RED-001, E-M3-WINDOWS-INPUT-001; synthetic ZIP/input contracts only)
+- [x] `node config/scripts/verify-ssh-relay-node-release-inputs.mjs --inputs-directory <verified-windows-input-directory> --archive win32-x64` (E-M3-WINDOWS-INPUT-001; signed real Node ZIP, headers, and import library; no Windows execution)
 - [x] `node config/scripts/build-ssh-relay-runtime.mjs --tuple linux-arm64-glibc --inputs-directory <verified-input-directory> --output-directory <exclusive-output> --source-date-epoch <epoch> --git-commit <full-sha>` (E-M3-RUNTIME-LOCAL-001; local native Linux arm64 only)
 - [x] `node config/scripts/verify-ssh-relay-runtime.mjs --runtime-directory <runtime-tree> --identity <identity.json> --archive <runtime.tar.xz>` (E-M3-RUNTIME-LOCAL-001; local native Linux arm64 only)
 
@@ -2272,6 +2297,174 @@ fragmentLinks=9`.
   implementation gate and the two Milestone 3 verification-command inventory entries only.
 - Follow-up: assemble the first runtime on a target-native runner, inspect its archive, execute its
   bundled Node and native dependencies, then fill only the evidence cells actually proved.
+
+### E-M3-WINDOWS-CONPTY-GAP-001 — Candidate omitted the production ConPTY runtime closure
+
+- Date: 2026-07-14
+- Commit SHA / PR: source audit of the uncommitted Windows artifact-only candidate on top of
+  `c308107a9`; draft PR [#8741](https://github.com/stablyai/orca/pull/8741)
+- Runner: macOS 26.2 arm64; source and installed-package inspection only
+- Remote and transport: none
+- Exact commands:
+
+  ```sh
+  rg -n "useConpty|nodePty\\.spawn|pty\\.spawn" src/main src/shared
+  sed -n '470,515p' src/main/daemon/pty-subprocess.ts
+  sed -n '1,130p' node_modules/node-pty/scripts/post-install.js
+  find node_modules/node-pty/third_party/conpty -maxdepth 3 -type f -print | sort
+  rg -n "conpty\\.dll|OpenConsole|useConptyDll" \
+    config/scripts/ssh-relay-runtime-tree.mjs \
+    config/scripts/ssh-relay-runtime-smoke-child.cjs
+  ```
+
+- Result: discriminating discovery. Orca's daemon PTY spawn passes `useConptyDll: true` on Windows.
+  Pinned `node-pty@1.1.0` supplies architecture-specific `conpty.dll` and `OpenConsole.exe` under
+  `third_party/conpty/1.23.251008001/win10-{x64,arm64}` and its postinstall copies those files to
+  `build/Release/conpty`. The candidate directly invoked `node-gyp`, copied only `conpty.node` and
+  `conpty_console_list.node`, and smoked with `useConpty: true` but not `useConptyDll: true`.
+- Oracle proved: the candidate artifact could pass its proposed smoke while omitting files required
+  by the production relay PTY configuration. Both plan artifacts now require the exact ConPTY
+  runtime closure and production-mode smoke before a Windows executable cell can pass.
+- Does not prove: corrected staging, artifact-tree identity, ConPTY execution, Authenticode/native
+  trust, Windows build, SSH, transfer, install, or any enabled tuple.
+- Checklist items satisfied: none; this is a red gap record and its implementation item remains open.
+- Follow-up: stage the tuple-specific files without running an implicit downloader, copy and hash
+  them into the runtime, use `useConptyDll: true` in native smoke, and obtain Windows x64/arm64 CI
+  evidence before checking the implementation item.
+
+### E-M3-WINDOWS-INPUT-GAP-001 — Windows ZIP lacks native build inputs
+
+- Date: 2026-07-14
+- Commit SHA / PR: investigation while implementing the Windows artifact-only slice in draft PR
+  [#8741](https://github.com/stablyai/orca/pull/8741); no Windows artifact was produced or enabled
+- Runner: macOS 26.2 arm64; `curl` plus system `unzip`; inspection only
+- Remote and transport: exact HTTPS download from
+  `https://nodejs.org/dist/v24.18.0/node-v24.18.0-win-x64.zip`; no SSH or release upload
+- Exact commands:
+
+  ```sh
+  curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 \
+    --connect-timeout 20 --max-time 300 --retry 2 --retry-delay 2 --retry-all-errors \
+    https://nodejs.org/dist/v24.18.0/node-v24.18.0-win-x64.zip \
+    --output /tmp/orca-node-win-input-check/node-v24.18.0-win-x64.zip
+  unzip -l /tmp/orca-node-win-input-check/node-v24.18.0-win-x64.zip | \
+    rg 'node\\.exe$|include/node/node\\.h$|node\\.lib$|LICENSE$'
+  curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 \
+    https://nodejs.org/dist/v24.18.0/SHASUMS256.txt | \
+    rg 'headers|win-(x64|arm64)/node\\.lib|win-(x64|arm64)\\.zip'
+  ```
+
+- Result: discriminating discovery. The authenticated x64 ZIP contains 2,449 files and 105,728,964
+  expanded bytes, including the 92,534,088-byte `node.exe` and root `LICENSE`, but no
+  `include/node/node.h` and no `node.lib`. The same signed checksum document authenticates
+  `node-v24.18.0-headers.tar.gz` as
+  `6c7d41d83c3481d2301115b8ce4a44b7d4fbfa52859b1aac14f445d460137887`,
+  `win-x64/node.lib` as
+  `589684168a73547ca47cd22d76a4e465ef561abe89fb1b2b23fe35bbe857d505`, and
+  `win-arm64/node.lib` as
+  `7da03c5111815b69bbe63ffd2e51b28cd69eec9f545b7ccb8756efffdbb88dc2`.
+- Oracle proved: the original six-binary-archive contract is insufficient to build `node-pty` on
+  Windows without an unrecorded `node-gyp` download. Both plan artifacts now require the signed
+  headers archive and per-architecture import library as explicit immutable build inputs.
+- Does not prove: headers/import-library download or extraction, Windows build, ZIP determinism,
+  bundled Node/ConPTY/watcher execution, signing/trust, SSH, or any enabled tuple.
+- Checklist items satisfied: Windows build-input policy correction only; implementation remains
+  unchecked.
+- Follow-up: extend the signed input schema/verifier and hostile-input tests, stage only the required
+  headers and `node.lib`, then run the native Windows build with implicit downloads disabled.
+
+### E-M3-WINDOWS-ZIP-RED-001 — Windows ZIP/input contract red gate
+
+- Date: 2026-07-14
+- Commit SHA / PR: uncommitted Windows artifact-only tests on top of `c308107a9`; draft PR
+  [#8741](https://github.com/stablyai/orca/pull/8741)
+- Runner: macOS 26.2 arm64; Node v26.0.0 and pnpm 10.24.0
+- Remote and transport: none; synthetic local test discovery only
+- Exact command:
+
+  ```sh
+  pnpm exec vitest run --config config/vitest.config.ts \
+    config/scripts/ssh-relay-runtime-zip.test.mjs \
+    config/scripts/ssh-relay-node-zip-inspection.test.mjs
+  ```
+
+- Result: expected FAIL before implementation. Both suites failed at import because the deliberately
+  missing `ssh-relay-runtime-zip.mjs` and `ssh-relay-node-zip-inspection.mjs` modules did not exist;
+  zero tests were collected.
+- Duration and resource metrics: 196 ms Vitest duration; archive/runtime resources do not apply.
+- Oracle proved: both Windows ZIP boundaries were discriminating before their implementations.
+- Does not prove: any ZIP validation, real Node input, Windows build/execution, SSH, or tuple support.
+- Checklist items satisfied: red half of the Windows ZIP/input contract gate only.
+- Follow-up: E-M3-WINDOWS-INPUT-001 records the first green implementation and real signed inputs.
+
+### E-M3-WINDOWS-INPUT-001 — Signed Windows Node inputs and bounded selective extraction
+
+- Date: 2026-07-14
+- Commit SHA / PR: uncommitted Windows artifact-only implementation on top of `c308107a9`; draft PR
+  [#8741](https://github.com/stablyai/orca/pull/8741); native Windows CI pending
+- Runners: focused tests and real selective extraction on macOS 26.2 arm64 with Node v26.0.0/pnpm
+  10.24.0; signature/checksum/file verification in native Linux arm64 container
+  `node@sha256:032e78d7e54e352129831743737e3a83171d9cc5b5896f411649c597ce0b11ea`
+  with GnuPG/gpgv 2.2.40
+- Remote and transport: exact HTTPS inputs from `nodejs.org/dist/v24.18.0`; no SSH, release upload,
+  Windows execution, or remote-host egress
+- Exact commands:
+
+  ```sh
+  pnpm exec vitest run --config config/vitest.config.ts \
+    config/scripts/ssh-relay-node-release-verification.test.mjs \
+    config/scripts/ssh-relay-node-tar-inspection.test.mjs \
+    config/scripts/ssh-relay-node-zip-inspection.test.mjs \
+    config/scripts/ssh-relay-runtime-artifact.test.mjs \
+    config/scripts/ssh-relay-runtime-zip.test.mjs \
+    config/scripts/ssh-relay-runtime-workflow.test.mjs
+
+  docker run --rm \
+    -v "$PWD:/workspace:ro" -v /tmp/orca-node-win-input-check:/inputs:ro \
+    -w /workspace \
+    node@sha256:032e78d7e54e352129831743737e3a83171d9cc5b5896f411649c597ce0b11ea \
+    bash -lc 'set -euo pipefail
+      apt-get update -qq
+      DEBIAN_FRONTEND=noninteractive apt-get install -y -qq gnupg gpgv >/dev/null
+      node config/scripts/verify-ssh-relay-node-release-inputs.mjs \
+        --inputs-directory /inputs --archive win32-x64'
+
+  node --input-type=module -e \
+    "import {readFile} from 'node:fs/promises';
+     import {extractVerifiedSshRelayNodeZipBuildInputs} from
+       './config/scripts/ssh-relay-node-zip-inspection.mjs';
+     const release=JSON.parse(await readFile(
+       './config/ssh-relay-node-release-v24.18.0.json','utf8'));
+     console.log(await extractVerifiedSshRelayNodeZipBuildInputs(
+       release,'win32-x64','<node-zip>','<exclusive-destination>',
+       {headersArchivePath:'<headers.tar.gz>',importLibraryPath:'<win-x64/node.lib>'}));"
+  ```
+
+- Result: PASS. Six focused suites passed 19/19 tests. The real verifier authenticated signer
+  `C82FA3AE1CBEDC6BE46B9360C43CEC45C17AB93C`, the exact signed checksum document, all nine pinned
+  release inputs, the 37,176,245-byte x64 ZIP, 9,951,449-byte headers archive, and 2,986,260-byte x64
+  import library. Bounded ZIP inspection consumed 2,449 entries/1,984 files/105,728,964 expanded
+  bytes and selectively staged only `node.exe` plus `LICENSE`. Bounded headers inspection consumed
+  3,326 entries/2,726 files/58,969,198 expanded bytes and staged only `include`; `node.lib` was
+  rehashed before and after exclusive copy to `Release/node.lib`.
+- Resource and integrity details: all input hashing and archive entry verification streamed; each
+  file was bounded by 256 MiB, aggregate input expansion by 1 GiB, path depth by 32, path bytes by
+  512, and entries by 100,000. Synthetic runtime ZIP creation was byte-identical for the same tree
+  and epoch and rejected extra entries and content mismatch. Peak RSS, open files, and cancellation
+  settlement were not instrumented in this local slice.
+- Oracle proved: exact schema and signed-checksum coverage for the Windows ZIP, common headers, and
+  tuple import library; missing/malformed input rejection; safe portable ZIP paths, traversal and
+  case-fold collision rejection; CRC-32 plus SHA-256 streaming; bounded selective extraction; exact
+  post-copy hashes; and deterministic synthetic runtime ZIP packing/inspection.
+- Does not prove: native Windows `node-pty` build, that `node-gyp` succeeds offline, bundled
+  `node.exe`/ConPTY/watcher execution, full-runtime ZIP identity on Windows, Windows x64/arm64
+  signing/trust, oldest baseline, SSH/SFTP/system-SSH, release publication, cache/fallback/UI, or any
+  enabled tuple. Local `gpg`/`gpgv` were unavailable on macOS, so the signature proof is the pinned
+  Linux container command above; Windows jobs explicitly select Git for Windows' bundled tools.
+- Checklist items satisfied: explicit signed Windows build-input contract and bounded local staging
+  only; no Windows per-tuple build/executable cell is checked.
+- Follow-up: run the exact builder on native `windows-2022` and `windows-11-arm`, require the
+  loopback-only `node-gyp` fallback URL to remain unused, and record only the cells actually passed.
 
 ### E-M3-RUNTIME-LOCAL-001 — First target-native Linux arm64 runtime artifact
 

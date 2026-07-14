@@ -45,5 +45,21 @@
       "name": "node-v24.18.0-win-x64.zip",
       "sha256": "0ae68406b42d7725661da979b1403ec9926da205c6770827f33aac9d8f26e821"
     }
+  },
+  "windowsBuildInputs": {
+    "headersArchive": {
+      "name": "node-v24.18.0-headers.tar.gz",
+      "sha256": "6c7d41d83c3481d2301115b8ce4a44b7d4fbfa52859b1aac14f445d460137887"
+    },
+    "importLibraries": {
+      "win32-arm64": {
+        "name": "win-arm64/node.lib",
+        "sha256": "7da03c5111815b69bbe63ffd2e51b28cd69eec9f545b7ccb8756efffdbb88dc2"
+      },
+      "win32-x64": {
+        "name": "win-x64/node.lib",
+        "sha256": "589684168a73547ca47cd22d76a4e465ef561abe89fb1b2b23fe35bbe857d505"
+      }
+    }
   }
 }

@@ -52,7 +52,7 @@ async function actualTree(runtimeDirectory) {
         results.set(path.toLowerCase(), {
           path,
           type: 'directory',
-          mode: metadata.mode & 0o777
+          mode: process.platform === 'win32' ? null : metadata.mode & 0o777
         })
         await visit(absolutePath)
       } else if (child.isFile()) {
@@ -61,7 +61,7 @@ async function actualTree(runtimeDirectory) {
           path,
           type: 'file',
           size: bytes.length,
-          mode: metadata.mode & 0o777,
+          mode: process.platform === 'win32' ? null : metadata.mode & 0o777,
           sha256: `sha256:${createHash('sha256').update(bytes).digest('hex')}`
         })
       } else {
@@ -81,7 +81,8 @@ export async function verifyRuntimeTree(runtimeDirectory, identity) {
       !entry ||
       entry.path !== expected.path ||
       entry.type !== expected.type ||
-      entry.mode !== expected.mode
+      // Why: NTFS has no execute bit; the verified ZIP carries canonical mode metadata instead.
+      (process.platform !== 'win32' && entry.mode !== expected.mode)
     ) {
       throw new Error(`Runtime tree entry mismatch: ${expected.path}`)
     }
@@ -109,7 +110,7 @@ export async function verifyRuntimeTree(runtimeDirectory, identity) {
 }
 
 async function runBundledSmoke(runtimeDirectory, identity) {
-  const nodePath = join(runtimeDirectory, 'bin', 'node')
+  const nodePath = join(runtimeDirectory, 'bin', identity.os === 'win32' ? 'node.exe' : 'node')
   const childPath = resolve(scriptDirectory, 'ssh-relay-runtime-smoke-child.cjs')
   const result = await execFileAsync(nodePath, [childPath, runtimeDirectory], {
     cwd: runtimeDirectory,

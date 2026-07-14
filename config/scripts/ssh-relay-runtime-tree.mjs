@@ -36,14 +36,30 @@ const COMPATIBILITY = Object.freeze({
     }
   },
   'darwin-x64': { kind: 'darwin', minimumVersion: '13.5' },
-  'darwin-arm64': { kind: 'darwin', minimumVersion: '13.5' }
+  'darwin-arm64': { kind: 'darwin', minimumVersion: '13.5' },
+  'win32-x64': {
+    kind: 'win32',
+    minimumBuild: 20348,
+    minimumOpenSshVersion: '8.1p1',
+    minimumPowerShellVersion: '5.1',
+    minimumDotNetFrameworkRelease: 528040
+  },
+  'win32-arm64': {
+    kind: 'win32',
+    minimumBuild: 20348,
+    minimumOpenSshVersion: '8.1p1',
+    minimumPowerShellVersion: '5.1',
+    minimumDotNetFrameworkRelease: 528040
+  }
 })
 
 const WATCHER_PACKAGES = Object.freeze({
   'linux-x64-glibc': '@parcel/watcher-linux-x64-glibc',
   'linux-arm64-glibc': '@parcel/watcher-linux-arm64-glibc',
   'darwin-x64': '@parcel/watcher-darwin-x64',
-  'darwin-arm64': '@parcel/watcher-darwin-arm64'
+  'darwin-arm64': '@parcel/watcher-darwin-arm64',
+  'win32-x64': '@parcel/watcher-win32-x64',
+  'win32-arm64': '@parcel/watcher-win32-arm64'
 })
 
 function packageDirectory(name) {
@@ -116,11 +132,25 @@ async function copyNodePty(buildDirectory, runtimeRoot, tuple) {
     await copyNormalized(join(buildDirectory, 'lib', path), join(destination, 'lib', path))
   }
   await writeJson(join(destination, 'package.json'), await minimalPackage('node-pty'))
-  await copyNormalized(
-    join(buildDirectory, 'build', 'Release', 'pty.node'),
-    join(destination, 'build', 'Release', 'pty.node'),
-    0o755
-  )
+  const nativeNames = tuple.startsWith('win32-')
+    ? ['conpty.node', 'conpty_console_list.node']
+    : ['pty.node']
+  for (const name of nativeNames) {
+    await copyNormalized(
+      join(buildDirectory, 'build', 'Release', name),
+      join(destination, 'build', 'Release', name),
+      0o755
+    )
+  }
+  if (tuple.startsWith('win32-')) {
+    for (const name of ['conpty.dll', 'OpenConsole.exe']) {
+      await copyNormalized(
+        join(buildDirectory, 'build', 'Release', 'conpty', name),
+        join(destination, 'build', 'Release', 'conpty', name),
+        0o755
+      )
+    }
+  }
   if (tuple.startsWith('darwin-')) {
     await copyNormalized(
       join(buildDirectory, 'build', 'Release', 'spawn-helper'),
@@ -192,7 +222,7 @@ async function writeLicenses(runtimeRoot, nodeRoot, packages) {
 }
 
 function runtimeRole(path) {
-  if (path === 'bin/node') {
+  if (path === 'bin/node' || path === 'bin/node.exe') {
     return 'node'
   }
   if (path === 'relay.js') {
@@ -201,13 +231,21 @@ function runtimeRole(path) {
   if (path === 'relay-watcher.js') {
     return 'relay-watcher'
   }
-  if (path.endsWith('/pty.node')) {
+  if (
+    path.endsWith('/pty.node') ||
+    path.endsWith('/conpty.node') ||
+    path.endsWith('/conpty_console_list.node')
+  ) {
     return 'node-pty-native'
   }
   if (path.endsWith('/watcher.node')) {
     return 'parcel-watcher-native'
   }
-  if (path.endsWith('/spawn-helper')) {
+  if (
+    path.endsWith('/spawn-helper') ||
+    path.endsWith('/conpty/conpty.dll') ||
+    path.endsWith('/conpty/OpenConsole.exe')
+  ) {
     return 'native-runtime'
   }
   if (path === 'THIRD_PARTY_LICENSES.txt') {
@@ -263,7 +301,15 @@ async function collectEntries(runtimeRoot) {
         if (metadata.size > MAX_FILE_BYTES) {
           throw new Error(`Runtime file exceeds size limit: ${path}`)
         }
-        const mode = metadata.mode & 0o777
+        const role = runtimeRole(path)
+        // Why: NTFS has no POSIX execute bits; ZIP metadata carries the canonical runtime mode.
+        const mode =
+          process.platform === 'win32' &&
+          ['node', 'node-pty-native', 'parcel-watcher-native', 'native-runtime'].includes(role)
+            ? 0o755
+            : process.platform === 'win32'
+              ? 0o644
+              : metadata.mode & 0o777
         if (mode !== 0o644 && mode !== 0o755) {
           throw new Error(`Runtime file has a non-canonical mode: ${path}`)
         }
@@ -271,7 +317,7 @@ async function collectEntries(runtimeRoot) {
         entries.push({
           path,
           type: 'file',
-          role: runtimeRole(path),
+          role,
           size: bytes.length,
           mode,
           sha256: `sha256:${createHash('sha256').update(bytes).digest('hex')}`
@@ -303,7 +349,11 @@ export async function assembleSshRelayRuntimeTree({
     throw new Error(`Runtime tree assembly is not implemented for ${tuple}`)
   }
   await mkdir(runtimeRoot)
-  await copyNormalized(join(nodeRoot, 'bin', 'node'), join(runtimeRoot, 'bin', 'node'), 0o755)
+  const nodeName = tuple.startsWith('win32-') ? 'node.exe' : 'node'
+  const nodeSource = tuple.startsWith('win32-')
+    ? join(nodeRoot, nodeName)
+    : join(nodeRoot, 'bin', nodeName)
+  await copyNormalized(join(nodeSource), join(runtimeRoot, 'bin', nodeName), 0o755)
   const version = await relayBuildVersion(relayDirectory)
   await Promise.all([
     copyNormalized(join(relayDirectory, 'relay.js'), join(runtimeRoot, 'relay.js')),
@@ -331,7 +381,7 @@ export async function assembleSshRelayRuntimeTree({
   })
 
   const tree = await collectEntries(runtimeRoot)
-  const os = tuple.startsWith('linux-') ? 'linux' : 'darwin'
+  const os = tuple.startsWith('linux-') ? 'linux' : tuple.startsWith('darwin-') ? 'darwin' : 'win32'
   const architecture = tuple.includes('arm64') ? 'arm64' : 'x64'
   const identity = {
     tupleId: tuple,

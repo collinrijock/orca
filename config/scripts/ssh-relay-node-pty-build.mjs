@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process'
-import { cp, mkdir, readFile, stat } from 'node:fs/promises'
+import { copyFile, cp, mkdir, readFile, readdir, stat } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { dirname, join, resolve } from 'node:path'
 import { promisify } from 'node:util'
@@ -52,9 +52,19 @@ async function assertPatchedSource(nodePtyDirectory) {
 
 async function assertBuiltArtifacts(buildDirectory, tuple) {
   const releaseDirectory = join(buildDirectory, 'build', 'Release')
-  const ptyPath = join(releaseDirectory, 'pty.node')
-  if (!(await stat(ptyPath)).isFile()) {
-    throw new Error('node-pty did not produce build/Release/pty.node')
+  const nativePaths = tuple.startsWith('win32-')
+    ? [
+        'conpty.node',
+        'conpty_console_list.node',
+        'pty.node',
+        'conpty/conpty.dll',
+        'conpty/OpenConsole.exe'
+      ]
+    : ['pty.node']
+  for (const path of nativePaths) {
+    if (!(await stat(join(releaseDirectory, ...path.split('/')))).isFile()) {
+      throw new Error(`node-pty did not produce build/Release/${path}`)
+    }
   }
   if (tuple.startsWith('darwin-')) {
     const helperPath = join(releaseDirectory, 'spawn-helper')
@@ -62,6 +72,31 @@ async function assertBuiltArtifacts(buildDirectory, tuple) {
     if (!helper.isFile() || (helper.mode & 0o111) === 0) {
       throw new Error('macOS node-pty did not produce executable build/Release/spawn-helper')
     }
+  }
+}
+
+async function stageWindowsConptyRuntime(buildDirectory, tuple) {
+  if (!tuple.startsWith('win32-')) {
+    return
+  }
+  const conptyRoot = join(buildDirectory, 'third_party', 'conpty')
+  const versions = (await readdir(conptyRoot, { withFileTypes: true })).filter((entry) =>
+    entry.isDirectory()
+  )
+  if (versions.length !== 1) {
+    throw new Error('node-pty must contain exactly one pinned ConPTY runtime version')
+  }
+  const architecture = tuple.endsWith('-arm64') ? 'arm64' : 'x64'
+  const sourceDirectory = join(conptyRoot, versions[0].name, `win10-${architecture}`)
+  const destinationDirectory = join(buildDirectory, 'build', 'Release', 'conpty')
+  await mkdir(destinationDirectory)
+  // Why: direct node-gyp bypasses node-pty's postinstall, while Orca explicitly uses this DLL path.
+  for (const name of ['conpty.dll', 'OpenConsole.exe']) {
+    const sourcePath = join(sourceDirectory, name)
+    if (!(await stat(sourcePath)).isFile()) {
+      throw new Error(`node-pty is missing pinned ${architecture} ConPTY runtime file: ${name}`)
+    }
+    await copyFile(sourcePath, join(destinationDirectory, name))
   }
 }
 
@@ -117,23 +152,29 @@ export async function buildPatchedSshRelayNodePty({
         npm_config_arch: tuple.includes('arm64') ? 'arm64' : 'x64',
         npm_config_build_from_source: 'true',
         npm_config_nodedir: nodeRoot,
+        // Why: a successful build must prove all Node inputs were staged, never fetched implicitly.
+        npm_config_offline: 'true',
+        npm_config_disturl: 'http://127.0.0.1:9',
         npm_config_target: nodeVersion
       }
     })
   } finally {
     clearTimeout(timeout)
   }
+  await stageWindowsConptyRuntime(buildDirectory, tuple)
   await assertBuiltArtifacts(buildDirectory, tuple)
   await stripBuiltArtifacts(buildDirectory, tuple)
 
   // Why: loading with the bundled executable catches an accidental host-ABI build immediately.
+  const nativeNames = tuple.startsWith('win32-') ? ['conpty', 'conpty_console_list'] : ['pty']
   await runCommand(
     nodePath,
     [
       '-e',
       `const {loadNativeModule}=require(${JSON.stringify(join(buildDirectory, 'lib', 'utils.js'))});` +
-        `const loaded=loadNativeModule('pty');` +
-        `if(!loaded.dir.replace(/\\\\/g,'/').includes('build/Release/'))process.exit(2);`
+        `for(const name of ${JSON.stringify(nativeNames)}){` +
+        `const loaded=loadNativeModule(name);` +
+        `if(!loaded.dir.replace(/\\\\/g,'/').includes('build/Release/'))process.exit(2);}`
     ],
     { cwd: buildDirectory, windowsHide: true, env: process.env }
   )

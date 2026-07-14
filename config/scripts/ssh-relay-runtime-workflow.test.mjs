@@ -11,20 +11,27 @@ const workflowUrl = new URL(
 describe('SSH relay runtime artifact workflow', () => {
   it('uses exact native runner labels and SHA-pinned actions without publication authority', async () => {
     const workflow = parse(await readFile(workflowUrl, 'utf8'))
-    const job = workflow.jobs['build-posix-runtime']
-    const matrix = job.strategy.matrix.include
+    const posixJob = workflow.jobs['build-posix-runtime']
+    const windowsJob = workflow.jobs['build-windows-runtime']
 
-    expect(matrix.map((entry) => [entry.runner, entry.tuple])).toEqual([
+    expect(posixJob.strategy.matrix.include.map((entry) => [entry.runner, entry.tuple])).toEqual([
       ['ubuntu-24.04', 'linux-x64-glibc'],
       ['ubuntu-24.04-arm', 'linux-arm64-glibc'],
       ['macos-15-intel', 'darwin-x64'],
       ['macos-15', 'darwin-arm64']
     ])
+    expect(windowsJob.strategy.matrix.include.map((entry) => [entry.runner, entry.tuple])).toEqual([
+      ['windows-2022', 'win32-x64'],
+      ['windows-11-arm', 'win32-arm64']
+    ])
     expect(workflow.permissions).toEqual({ contents: 'read' })
-    expect(job['timeout-minutes']).toBe(20)
-    expect(job.steps[0].with.ref).toBe('${{ github.event.pull_request.head.sha || github.sha }}')
-    for (const step of job.steps.filter((candidate) => candidate.uses)) {
-      expect(step.uses).toMatch(/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+@[0-9a-f]{40}$/)
+    expect(posixJob['timeout-minutes']).toBe(20)
+    expect(windowsJob['timeout-minutes']).toBe(30)
+    for (const job of [posixJob, windowsJob]) {
+      expect(job.steps[0].with.ref).toBe('${{ github.event.pull_request.head.sha || github.sha }}')
+      for (const step of job.steps.filter((candidate) => candidate.uses)) {
+        expect(step.uses).toMatch(/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+@[0-9a-f]{40}$/)
+      }
     }
   })
 
@@ -50,6 +57,12 @@ describe('SSH relay runtime artifact workflow', () => {
     expect(source).toContain('--git-commit "$source_commit"')
     expect(source).not.toContain('--git-commit "$GITHUB_SHA"')
     expect(source).toContain('cp "$output"/*.tar.xz')
+    expect(source).toContain("Get-ChildItem -LiteralPath $output -Filter '*.zip'")
+    expect(source).toContain('ssh-relay-node-zip-inspection.test.mjs')
+    expect(source).toContain('ssh-relay-runtime-zip.test.mjs')
+    expect(source).toContain('node-v24.18.0-headers.tar.gz')
+    expect(source).toContain('node_library: win-x64/node.lib')
+    expect(source).toContain("@('gpg.exe', 'gpgv.exe')")
     expect(steps[uploadIndex].with.path).toBe('runtime-evidence/${{ matrix.tuple }}/')
     expect(source).not.toMatch(/releases\/|gh release|contents:\s*write/i)
   })

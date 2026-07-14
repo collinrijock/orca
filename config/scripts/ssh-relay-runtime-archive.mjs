@@ -8,6 +8,8 @@ import { pipeline } from 'node:stream/promises'
 
 import { create, Parser } from 'tar'
 
+import { createSshRelayRuntimeZip, inspectSshRelayRuntimeZip } from './ssh-relay-runtime-zip.mjs'
+
 const MAX_ARCHIVE_BYTES = 100 * 1024 * 1024
 const MAX_DIAGNOSTIC_BYTES = 64 * 1024
 const XZ_TIMEOUT_MS = 5 * 60 * 1000
@@ -17,7 +19,8 @@ function archiveName(tuple, contentId) {
   if (!match) {
     throw new Error('Runtime content identity is not a SHA-256 digest')
   }
-  return `orca-ssh-relay-runtime-v1-${tuple}-${match[1]}.tar.xz`
+  const suffix = tuple.startsWith('win32-') ? 'zip' : 'tar.xz'
+  return `orca-ssh-relay-runtime-v1-${tuple}-${match[1]}.${suffix}`
 }
 
 async function compressTar(tarPath, archivePath, signal) {
@@ -96,6 +99,15 @@ export async function createSshRelayRuntimeArchive({
   sourceDateEpoch,
   signal
 }) {
+  if (identity.tupleId.startsWith('win32-')) {
+    return createSshRelayRuntimeZip({
+      runtimeRoot,
+      outputDirectory,
+      identity,
+      sourceDateEpoch,
+      signal
+    })
+  }
   if (!Number.isSafeInteger(sourceDateEpoch) || sourceDateEpoch < 0) {
     throw new Error('Runtime archive SOURCE_DATE_EPOCH must be a non-negative safe integer')
   }
@@ -141,6 +153,9 @@ export async function createSshRelayRuntimeArchive({
 }
 
 export async function inspectSshRelayRuntimeArchive(archivePath, identity, { signal } = {}) {
+  if (identity.tupleId.startsWith('win32-')) {
+    return inspectSshRelayRuntimeZip(archivePath, identity, { signal })
+  }
   const metadata = await stat(archivePath)
   if (!metadata.isFile() || metadata.size === 0 || metadata.size > MAX_ARCHIVE_BYTES) {
     throw new Error('Runtime archive exceeds the release-manifest compressed-size limit')
