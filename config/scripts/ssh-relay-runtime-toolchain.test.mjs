@@ -31,10 +31,19 @@ describe('SSH relay runtime build provenance', () => {
   it('selects a bounded Windows linker file version', () => {
     expect(
       selectSshRelayRuntimeToolVersion(
-        { stdout: '14.44.35228.0 built by release pipeline\r\n' },
-        /^\d+(?:\.\d+){2,3}(?:\s.*)?$/
+        { stdout: '14.44.35228.0\r\n' },
+        /^(?!0\.0\.0\.0$)\d+(?:\.\d+){3}$/
       )
-    ).toBe('14.44.35228.0 built by release pipeline')
+    ).toBe('14.44.35228.0')
+  })
+
+  it('rejects an absent Windows linker numeric file version', () => {
+    expect(() =>
+      selectSshRelayRuntimeToolVersion(
+        { stdout: '0.0.0.0\r\n' },
+        /^(?!0\.0\.0\.0$)\d+(?:\.\d+){3}$/
+      )
+    ).toThrow(/0\.0\.0\.0/)
   })
 
   it('passes the resolved linker path through a non-interpolated environment value', () => {
@@ -46,7 +55,7 @@ describe('SSH relay runtime build provenance', () => {
         '-NoProfile',
         '-NonInteractive',
         '-Command',
-        "[System.Diagnostics.FileVersionInfo]::GetVersionInfo([Environment]::GetEnvironmentVariable('ORCA_SSH_RELAY_TOOL_PATH')).FileVersion"
+        "$versionInfo = [System.Diagnostics.FileVersionInfo]::GetVersionInfo([Environment]::GetEnvironmentVariable('ORCA_SSH_RELAY_TOOL_PATH')); '{0}.{1}.{2}.{3}' -f $versionInfo.FileMajorPart, $versionInfo.FileMinorPart, $versionInfo.FileBuildPart, $versionInfo.FilePrivatePart"
       ],
       options: { env: { ORCA_SSH_RELAY_TOOL_PATH: path } }
     })

@@ -188,6 +188,8 @@ export function sshRelayRuntimeStripVersionProbe(platform) {
 }
 
 export function sshRelayRuntimeWindowsFileVersionInvocation(path) {
+  const versionInfo =
+    "[System.Diagnostics.FileVersionInfo]::GetVersionInfo([Environment]::GetEnvironmentVariable('ORCA_SSH_RELAY_TOOL_PATH'))"
   return {
     command: 'pwsh.exe',
     args: [
@@ -195,7 +197,8 @@ export function sshRelayRuntimeWindowsFileVersionInvocation(path) {
       '-NoProfile',
       '-NonInteractive',
       '-Command',
-      "[System.Diagnostics.FileVersionInfo]::GetVersionInfo([Environment]::GetEnvironmentVariable('ORCA_SSH_RELAY_TOOL_PATH')).FileVersion"
+      // Why: hosted link.exe returns an empty FileVersion string; its numeric PE fields are stable.
+      `$versionInfo = ${versionInfo}; '{0}.{1}.{2}.{3}' -f $versionInfo.FileMajorPart, $versionInfo.FileMinorPart, $versionInfo.FileBuildPart, $versionInfo.FilePrivatePart`
     ],
     options: { env: { ORCA_SSH_RELAY_TOOL_PATH: path } }
   }
@@ -245,9 +248,9 @@ export async function collectSshRelayRuntimeToolchain(nodePath) {
       linker: await executableRecord({
         command: 'link.exe',
         args: [],
-        // Why: hosted link.exe is pipe-silent; authenticated PE metadata gives its real version.
+        // Why: hosted link.exe is pipe-silent; authenticated numeric PE metadata gives its version.
         windowsFileVersion: true,
-        versionPattern: /^\d+(?:\.\d+){2,3}(?:\s.*)?$/
+        versionPattern: /^(?!0\.0\.0\.0$)\d+(?:\.\d+){3}$/
       }),
       buildSystem: await executableRecord({
         command: 'msbuild.exe',
