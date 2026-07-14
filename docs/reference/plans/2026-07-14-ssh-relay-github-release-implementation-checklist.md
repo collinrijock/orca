@@ -2,7 +2,7 @@
 
 Date created: 2026-07-14<br>
 Last updated: 2026-07-14<br>
-Current phase: Milestone 3 / Work Package 2 target-native runtime assembly — exact-head run 29357355064 keeps Linux x64/arm64, macOS x64/arm64, and Windows x64 exactly reproducible and uploads exactly those five unpublished artifacts; Windows x64 proves the generated compiler/linker flags in both clean builds, while native Windows arm64 fails closed before staging because the generated Release-condition verifier does not accept the runner's lowercase `arm64` platform spelling; no arm64 artifact is uploaded and no disassembly or producer correction is yet justified; the active bounded package makes only that architecture comparison case-insensitive while retaining exact Release/configuration cardinality and option checks; oldest-baseline, native-trust, cross-family remote, and measured-baseline gates remain open; no bundled-runtime path is enabled<br>
+Current phase: Milestone 3 / Work Package 2 target-native runtime assembly — exact-head run 29357355064 keeps Linux x64/arm64, macOS x64/arm64, and Windows x64 exactly reproducible and uploads exactly those five unpublished artifacts; Windows x64 proves the generated compiler/linker flags in both clean builds, while native Windows arm64 fails closed before staging because the generated Release-condition verifier does not accept the runner's lowercase `arm64` platform spelling; no arm64 artifact is uploaded and no disassembly or producer correction is yet justified; exact implementation commit `4207c207a` makes only that architecture comparison case-insensitive while retaining exact Release/configuration cardinality and option checks, is locally green under E-M3-WINDOWS-MSBUILD-PLATFORM-CASE-LOCAL-001, and awaits all six target-native cells; oldest-baseline, native-trust, cross-family remote, and measured-baseline gates remain open; no bundled-runtime path is enabled<br>
 Primary design: [SSH relay GitHub Release plan](./2026-07-14-ssh-relay-github-release-plan.html)<br>
 Motivating issues: [#8450](https://github.com/stablyai/orca/issues/8450), [#1693](https://github.com/stablyai/orca/issues/1693)
 
@@ -163,12 +163,11 @@ same change as the work it records.
   per-target opt-in selects bundled-preferred behavior, and implementing the setting does not
   authorize default-on rollout or legacy removal (E-M1-ROLLOUT-DECISION-001).
 - Legacy fallback removal: not authorized.
-- Next required action: test and implement the bounded case-insensitive architecture comparison for
-  generated MSBuild Release conditions, retain exact group and option cardinality, then rerun all
-  six target-native cells. Require both Windows jobs to prove their generated compiler/linker
-  settings; only if arm64 reaches the known comparator mismatch may paired bounded disassembly
-  justify a producer correction. Preserve all five controls, rejected-binary no-upload, the
-  repository-wide node-pty patch, legacy/default path, and every other release gate.
+- Next required action: push exact implementation commit `4207c207a` plus its evidence-ledger head
+  and rerun all six target-native cells. Require both Windows jobs to prove their generated
+  compiler/linker settings; only if arm64 reaches the known comparator mismatch may paired bounded
+  disassembly justify a producer correction. Preserve all five controls, rejected-binary no-upload,
+  the repository-wide node-pty patch, legacy/default path, and every other release gate.
 
 ## Non-Negotiable Invariants
 
@@ -679,8 +678,9 @@ Windows arm64 before staging because the Release group lookup does not accept th
 **In progress — 2026-07-14, Codex implementation owner:** make only the expected generated Release
 architecture comparison case-insensitive, while retaining one exact Release group, the expected
 tuple architecture, one inherited compiler/linker option block, and exactly one instance of each
-required flag. Add the lowercase-arm64 purpose fixture before rerunning all six native cells. Do not
-change a producer, normalize output, weaken reproducibility, or connect a production consumer.
+required flag. Exact implementation commit `4207c207a` and its lowercase-arm64 fixture are locally
+green under E-M3-WINDOWS-MSBUILD-PLATFORM-CASE-LOCAL-001; all six native cells remain required. Do
+not change a producer, normalize output, weaken reproducibility, or connect a production consumer.
 
 Each runtime must contain only the executable closure required by the relay.
 
@@ -4811,6 +4811,88 @@ configuration` before runtime staging, verification, smoke, comparison, or diagn
   architecture case-insensitively, retaining exact group and option cardinality. Rerun both Windows
   cells and all four POSIX controls before interpreting the underlying PE drift.
 
+### E-M3-WINDOWS-MSBUILD-PLATFORM-CASE-LOCAL-001 — Lowercase native platform contract
+
+- Date: 2026-07-14
+- Commit SHA / PR: exact implementation commit
+  `4207c207ab932ef67522b4f73b98d63fa32d0924`; stacked draft
+  PR [#8741](https://github.com/stablyai/orca/pull/8741), native execution pending
+- Runner: macOS 26.2 build 25C56, native Apple M4 arm64; Node v26.0.0 and pnpm 10.24.0. This
+  runner cannot generate or execute native MSBuild/ARM64 PE inputs, so the target-native Windows
+  jobs remain authoritative.
+- Remote and transport: none; synthetic generated-project fixtures and workflow/source contracts
+  only
+- Exact red command:
+
+  ```sh
+  pnpm exec vitest run --config config/vitest.config.ts \
+    config/scripts/ssh-relay-node-pty-windows-build-determinism.test.mjs
+  ```
+
+- Red result: FAIL as intended, one failed and three passed tests because a generated
+  `Release|arm64` condition was rejected for the `win32-arm64` tuple.
+- Exact green commands:
+
+  ```sh
+  node --check config/scripts/ssh-relay-node-pty-windows-build-determinism.mjs
+  node --check config/scripts/ssh-relay-node-pty-windows-build-determinism.test.mjs
+  pnpm exec vitest run --config config/vitest.config.ts \
+    config/scripts/ssh-relay-node-pty-windows-build-determinism.test.mjs \
+    config/scripts/ssh-relay-node-pty-build.test.mjs \
+    config/scripts/ssh-relay-runtime-workflow.test.mjs
+  pnpm exec vitest run --config config/vitest.config.ts \
+    config/scripts/ssh-relay-node-release-verification.test.mjs \
+    config/scripts/ssh-relay-node-tar-inspection.test.mjs \
+    config/scripts/ssh-relay-node-pty-build.test.mjs \
+    config/scripts/ssh-relay-node-pty-windows-build-determinism.test.mjs \
+    config/scripts/ssh-relay-node-pty-windows-settlement.test.mjs \
+    config/scripts/ssh-relay-node-zip-inspection.test.mjs \
+    config/scripts/ssh-relay-runtime-artifact.test.mjs \
+    config/scripts/ssh-relay-runtime-build.test.mjs \
+    config/scripts/ssh-relay-runtime-pty-smoke.test.mjs \
+    config/scripts/ssh-relay-runtime-reproducibility.test.mjs \
+    config/scripts/ssh-relay-runtime-resource-diagnostics.test.mjs \
+    config/scripts/ssh-relay-runtime-windows-pe-diagnostic.test.mjs \
+    config/scripts/ssh-relay-runtime-windows-tree.test.mjs \
+    config/scripts/ssh-relay-runtime-workflow.test.mjs \
+    config/scripts/ssh-relay-runtime-zip.test.mjs
+  pnpm run typecheck
+  pnpm exec oxlint config/scripts/ssh-relay-node-pty-windows-build-determinism.mjs \
+    config/scripts/ssh-relay-node-pty-windows-build-determinism.test.mjs
+  pnpm run check:max-lines-ratchet
+  GOMAXPROCS=2 pnpm run lint
+  pnpm exec oxfmt --check \
+    config/scripts/ssh-relay-node-pty-windows-build-determinism.mjs \
+    config/scripts/ssh-relay-node-pty-windows-build-determinism.test.mjs \
+    docs/reference/plans/2026-07-14-ssh-relay-github-release-implementation-checklist.md
+  pnpm exec lint-staged
+  git diff --check
+  ```
+
+- Green result: PASS. Both syntax checks exited zero; the purpose command passed 8/8 tests across
+  three suites; all 15 artifact suites passed 53/53 tests. Typecheck, focused oxlint, the
+  355-entry max-lines ratchet, full repository lint/reliability/localization, formatting, staged
+  hooks, and diff checks exited zero. Full lint emitted only pre-existing warnings outside this
+  package.
+- Duration and resource metrics: red suite 382 ms Vitest; purpose suite 181 ms Vitest; complete
+  artifact suite 1.51 s Vitest; typecheck 3.41 s; focused lint/line ratchet 3.28 s; full lint
+  13.30 s. Synthetic peak RSS, open files/channels, and cancellation settlement were not
+  instrumented.
+- Artifact/log/trace link: exact source commit and local command output; no binary artifact was
+  created or uploaded
+- Oracle proved: `Release|arm64` is accepted for only the expected `win32-arm64` architecture while
+  the quoted Release condition remains exact apart from case. Wrong architecture, missing or
+  duplicate group/option blocks, missing inheritance, and missing or duplicated required flags
+  still fail closed. No source rewrite, producer, comparator, staging, or production path changed.
+- Does not prove: the exact native generated XML, native flag propagation, complete arm64 build,
+  paired disassembly, a safe producer correction, arm64 equality, oldest baselines, native trust,
+  SSH, publication, transfer, fallback, UI, or any enabled tuple.
+- Checklist items satisfied: local generated-project platform-casing contract only; no tuple or
+  production checkbox.
+- Follow-up: push the exact implementation and ledger head, then run all six target-native cells and
+  require both Windows architectures to log the accepted generated settings before interpreting any
+  later comparator mismatch.
+
 ## Accepted Gaps
 
 No product gap is accepted merely because it appears in this list. Each entry requires explicit
@@ -4868,12 +4950,11 @@ The project is not complete until every applicable item below is checked with ev
 
 ## Next Required Action
 
-Add a purpose fixture for lowercase native arm64 MSBuild platform spelling, implement only an exact
-case-insensitive expected-architecture comparison, and rerun all six target-native cells. Require
-both Windows jobs to prove the generated Release compiler/linker settings; if arm64 then reaches the
-known comparator mismatch, record both bounded disassemblies while retaining all four POSIX
-controls, strict comparison, and rejected-arm64 no-upload. Cross-family Layer B targets, the
-protected manifest-signing environment, oldest-baseline/native-trust cells, and the paired legacy
-performance baseline remain release/default-path blockers; no publication, desktop resolver, SSH
-transfer/install, per-target Beta, fallback, tuple enablement, or default behavior may be connected
-by this package.
+Push exact implementation commit `4207c207a` plus its evidence-ledger head and rerun all six
+target-native cells. Require both Windows jobs to prove the generated Release compiler/linker
+settings; if arm64 then reaches the known comparator mismatch, record both bounded disassemblies
+while retaining all four POSIX controls, strict comparison, and rejected-arm64 no-upload.
+Cross-family Layer B targets, the protected manifest-signing environment,
+oldest-baseline/native-trust cells, and the paired legacy performance baseline remain
+release/default-path blockers; no publication, desktop resolver, SSH transfer/install, per-target
+Beta, fallback, tuple enablement, or default behavior may be connected by this package.
