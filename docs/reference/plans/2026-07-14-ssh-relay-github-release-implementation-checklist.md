@@ -8,7 +8,7 @@ work; keep exact commands, runner identities, hashes, metrics, and residual gaps
 
 Date created: 2026-07-14<br>
 Last updated: 2026-07-14<br>
-Current phase: Milestone 3 / Work Package 2 SBOM/provenance closure — **In progress — 2026-07-14, Codex implementation owner**; exact-head run [29370926985](https://github.com/stablyai/orca/actions/runs/29370926985) and direct payload audit keep Linux x64/arm64 and macOS x64/arm64 green but both Windows cells fail closed before build/upload because the authenticated linker's string-valued PE `FileVersion` is empty on both hosted architectures (E-M3-METADATA-CI-RED-004); exact implementation commit `1b775e6af` formats the four numeric PE version fields, rejects the absent `0.0.0.0` form, preserves exact linker-byte hashing and environment-isolated path transport, and passes 20 files / 99 tests plus typecheck, full lint, formatting, max-lines, and diff gates (E-M3-WINDOWS-LINKER-NUMERIC-LOCAL-001); the correction still requires an exact-head all-six native run and direct artifact inspection before any remaining SBOM/provenance/toolchain box is checked; oldest-baseline, native-trust, cross-family remote, and measured-baseline gates remain open; production/default behavior and every tuple state remain unchanged; no bundled-runtime path is enabled<br>
+Current phase: Milestone 3 / Work Package 2 SBOM/provenance closure — **In progress — 2026-07-14, Codex implementation owner**; exact-head run [29371551072](https://github.com/stablyai/orca/actions/runs/29371551072) and direct payload audit keep Linux x64/arm64 and macOS x64/arm64 green but both Windows cells fail closed before build/upload because the authenticated linker has no usable PE version resource and returns `0.0.0.0` on both hosted architectures (E-M3-METADATA-CI-RED-005); exact implementation commit `18d10da27` derives a bounded toolset identity from the canonical resolved `.../MSVC/<version>/bin/.../link.exe` path while retaining the exact linker SHA-256, rejects malformed/ambiguous/non-MSVC paths, and passes 20 files / 98 tests plus typecheck, full lint, formatting, max-lines, and diff gates (E-M3-WINDOWS-LINKER-TOOLSET-LOCAL-001); the correction still requires an exact-head all-six native run and direct artifact inspection before any remaining SBOM/provenance/toolchain box is checked; oldest-baseline, native-trust, cross-family remote, and measured-baseline gates remain open; production/default behavior and every tuple state remain unchanged; no bundled-runtime path is enabled<br>
 Primary design: [SSH relay GitHub Release plan](./2026-07-14-ssh-relay-github-release-plan.html)<br>
 Motivating issues: [#8450](https://github.com/stablyai/orca/issues/8450), [#1693](https://github.com/stablyai/orca/issues/1693)
 
@@ -175,12 +175,12 @@ same change as the work it records.
   per-target opt-in selects bundled-preferred behavior, and implementing the setting does not
   authorize default-on rollout or legacy removal (E-M1-ROLLOUT-DECISION-001).
 - Legacy fallback removal: not authorized.
-- Next required action: push exact numeric PE-version correction commit `1b775e6af` plus its evidence
-  ledger head and rerun all six target-native cells. Require a nonzero four-component linker version,
-  exact SPDX ownership, archive-scoped document identity, commit-pinned builder identity, resolved
-  runner identity, complete bounded tool records, regenerated Windows content identities, smoke,
-  exact clean-build equality, and upload. Preserve the artifact-only boundary, legacy/default path,
-  and every other release gate.
+- Next required action: push exact MSVC-toolset linker identity commit `18d10da27` plus its evidence
+  ledger head and rerun all six target-native cells. Require the expected bounded toolset identity and
+  exact linker SHA-256, exact SPDX ownership, archive-scoped document identity, commit-pinned builder
+  identity, resolved runner identity, complete bounded tool records, regenerated Windows content
+  identities, smoke, exact clean-build equality, and upload. Preserve the artifact-only boundary,
+  legacy/default path, and every other release gate.
 
 ## Non-Negotiable Invariants
 
@@ -6635,6 +6635,109 @@ bounded version line: <empty>`. The PE lookup returned successfully but the `Fil
 - Follow-up: push this exact implementation and ledger head, then require all six native jobs and
   direct inspection of every uploaded artifact before closing any metadata/provenance claim.
 
+### E-M3-METADATA-CI-RED-005 — Native linkers have no PE version resource
+
+- Date: 2026-07-14
+- Commit SHA / PR: exact tested head `3c3d47fc4bf06610d43dcdb267eadfed46627b0f`;
+  stacked draft PR [#8741](https://github.com/stablyai/orca/pull/8741)
+- Runner: [GitHub Actions run 29371551072](https://github.com/stablyai/orca/actions/runs/29371551072),
+  final conclusion `failure` after 7m31s. Native job IDs and wall durations: Linux x64
+  `87215769010` / 3m09s, Linux arm64 `87215769039` / 3m16s, macOS x64 `87215769046` /
+  7m20s, macOS arm64 `87215769029` / 2m37s, Windows x64 `87215768998` / 1m29s, and
+  Windows arm64 `87215769056` / 3m55s.
+- Remote and transport: none; target-native artifact-only build workflow
+- Exact evidence commands:
+
+  ```sh
+  gh run view 29371551072 --repo stablyai/orca \
+    --json status,conclusion,headSha,createdAt,updatedAt,url,jobs
+  gh api repos/stablyai/orca/actions/runs/29371551072/artifacts
+  gh api repos/stablyai/orca/actions/jobs/87215768998/logs
+  gh api repos/stablyai/orca/actions/jobs/87215769056/logs
+  gh run download 29371551072 --repo stablyai/orca \
+    --dir /tmp/orca-8450-metadata-red-29371551072
+  # Repeat the exact fail-closed jq/shasum audit in E-M3-METADATA-CI-RED-003 with:
+  # evidence=/tmp/orca-8450-metadata-red-29371551072
+  # commit=3c3d47fc4bf06610d43dcdb267eadfed46627b0f
+  # run_id=29371551072
+  ```
+
+- Result: EXPECTED RED. All four POSIX cells again passed contracts, two clean native builds,
+  archive/tree inspection, bundled runtime smoke, byte-for-byte comparison, and upload. Windows x64
+  and arm64 each passed 78 contract tests after native MSVC setup, then rejected the exact diagnostic
+  `Runtime build tool did not report a bounded version line: 0.0.0.0`. This proves both resolved
+  `link.exe` binaries lack a usable PE version resource rather than merely an empty formatted string.
+  Input download, build, smoke, comparison, and upload remained skipped; no Windows artifact exists.
+- Downloaded-artifact audit:
+
+  | Tuple             | Artifact ID  | Archive SHA-256                                                    | Content ID prefix | Files |
+  | ----------------- | ------------ | ------------------------------------------------------------------ | ----------------- | ----- |
+  | linux-x64-glibc   | `8326313178` | `fb30c981c7d8ef32a57485cad75850058b6bb38988c5fe34a269d6e0bd33eb06` | `960546cd…`       | 34    |
+  | linux-arm64-glibc | `8326316547` | `0d70e0646540461676fe4eeb8db38c13d13e4bd747db5609dec90a957c4db79d` | `aa3aa8ae…`       | 34    |
+  | darwin-x64        | `8326400647` | `fe4a79d356baf0523822e4524989df4c3b3153e36e777fc44a09b96d2926df68` | `585ea603…`       | 35    |
+  | darwin-arm64      | `8326301297` | `891489f352ae978aff91c227af908514df827ee7f4aba0513f5f0891a2b99ccd` | `40ff5d20…`       | 35    |
+
+  All archive/subject hashes, archive-scoped SPDX namespaces, one-owner-per-file counts, eight
+  dependency relationships, prohibited-content assertions, exact commit/run identities, runner
+  labels/images/architectures, and bounded tool version/hash records passed. POSIX content IDs and
+  native tool versions remain unchanged; builder/source identities pin exact head `3c3d47fc4` and
+  invocation `29371551072`.
+
+- Oracle proved: neither string nor integer PE version metadata can identify the hosted MSVC linker;
+  both architectures fail closed before producing incomplete provenance; four independent POSIX
+  controls remain complete and reproducible at the exact head.
+- Does not prove: a bounded alternative linker identity on Windows, any Windows artifact/metadata,
+  regenerated Windows content IDs, oldest baselines, native trust/signing, SSH, publication, or an
+  enabled tuple.
+- Checklist items satisfied: no new completion box; the all-six SBOM/provenance/toolchain item
+  remains in progress.
+- Follow-up: derive the vendor toolset version from the canonical resolved MSVC linker directory,
+  reject malformed/ambiguous/non-MSVC layouts, retain the exact linker SHA-256, and rerun all cells.
+
+### E-M3-WINDOWS-LINKER-TOOLSET-LOCAL-001 — Resolved MSVC toolset identity
+
+- Date: 2026-07-14
+- Commit SHA / PR: exact implementation commit
+  `18d10da2750af66ae3486b61382ab90d5c410f8a`; stacked draft PR
+  [#8741](https://github.com/stablyai/orca/pull/8741)
+- Runner: local macOS 26.2 build 25C56, Darwin 25.2.0 arm64 on Apple Silicon; Node v26.0.0 and
+  pnpm 10.24.0 for pure path/provenance tests
+- Remote and transport: none; artifact-only local contracts
+- Exact evidence commands:
+
+  ```sh
+  pnpm exec vitest run --config config/vitest.config.ts \
+    config/scripts/ssh-relay-*.test.mjs \
+    src/main/ssh/ssh-relay-artifact-selector.test.ts
+  pnpm run typecheck
+  pnpm run lint
+  pnpm run check:max-lines-ratchet
+  pnpm exec oxfmt --check \
+    config/scripts/ssh-relay-runtime-toolchain.mjs \
+    config/scripts/ssh-relay-runtime-toolchain.test.mjs
+  git diff --check
+  ```
+
+- Result: PASS. Twenty focused test files passed 98 tests in 1.47s. Typecheck passed all three
+  TypeScript projects. Full lint passed oxlint, switch exhaustiveness, styled-scrollbar,
+  reliability-gate, max-lines, bundled-skill, localization-catalog, and localization-coverage gates;
+  its diagnostics remain pre-existing unrelated warnings. The independent max-lines ratchet,
+  focused formatting, and diff checks passed.
+- Oracle proved: x64 and arm64 canonical Visual Studio paths produce the bounded identity
+  `MSVC 14.44.35207`; path parsing uses Windows semantics on every client OS; it requires one exact
+  case-insensitive `MSVC` segment, a three-component numeric version, the immediate `bin` segment,
+  an absolute path, and terminal `link.exe`; non-MSVC and ambiguous paths fail closed. The resolved
+  linker executable remains SHA-256 authenticated, so the path version is provenance metadata rather
+  than the byte-identity boundary. No PowerShell, PE metadata, stdout, or mutable version lookup is
+  required.
+- Does not prove: the exact native hosted paths, a Windows toolchain record/build/smoke/equality/
+  upload, regenerated Windows content IDs, oldest Windows execution, native trust/signing, SSH,
+  publication, or an enabled tuple.
+- Checklist items satisfied: local correction only; the all-six compiler/toolchain item remains
+  unchecked.
+- Follow-up: push this exact implementation and ledger head, then require all six native jobs and
+  direct inspection of every uploaded artifact before closing any metadata/provenance claim.
+
 ## Accepted Gaps
 
 No product gap is accepted merely because it appears in this list. Each entry requires explicit
@@ -6692,12 +6795,12 @@ The project is not complete until every applicable item below is checked with ev
 
 ## Next Required Action
 
-Push exact numeric PE-version correction commit `1b775e6af` plus this evidence-ledger head and rerun
-all six target-native cells. Require a nonzero four-component linker version, exact SPDX ownership,
-archive-scoped document identity, commit-pinned builder identity, resolved runner identity, complete
-bounded tool records with SHA-256, clean-build metadata equality, smoke, upload, and regenerated
-Windows content identities before checking the remaining Milestone 3 metadata/toolchain claims.
-Then proceed to oldest-baseline and native-trust proof.
+Push exact MSVC-toolset linker identity commit `18d10da27` plus this evidence-ledger head and rerun
+all six target-native cells. Require the expected bounded toolset identity and exact linker SHA-256,
+exact SPDX ownership, archive-scoped document identity, commit-pinned builder identity, resolved
+runner identity, complete bounded tool records with SHA-256, clean-build metadata equality, smoke,
+upload, and regenerated Windows content identities before checking the remaining Milestone 3
+metadata/toolchain claims. Then proceed to oldest-baseline and native-trust proof.
 
 Cross-family Layer B targets, the protected manifest-signing environment, oldest-baseline/native-
 trust cells, and the paired legacy performance baseline remain release/default-path blockers. No

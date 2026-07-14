@@ -22,11 +22,11 @@ complete a box.
 
 - [ ] **WP2 — Finish target-native artifact metadata and provenance.**
   - Four POSIX GitHub runner cells pass build, smoke, equality, metadata upload, and direct payload
-    audit in [run 29370926985](https://github.com/stablyai/orca/actions/runs/29370926985).
-  - Windows x64/arm64 fail closed because hosted `link.exe` returns an empty string-valued PE
-    `FileVersion`; neither cell downloads inputs or produces an artifact.
-  - Local commit `1b775e6af` formats the PE version from bounded numeric fields and rejects an absent
-    all-zero version. It is green across 20 test files / 99 tests plus static gates.
+    audit in [run 29371551072](https://github.com/stablyai/orca/actions/runs/29371551072).
+  - Windows x64/arm64 prove hosted `link.exe` has no usable PE version resource (`0.0.0.0`); neither
+    cell downloads inputs or produces an artifact.
+  - Local commit `18d10da27` records the bounded MSVC toolset directory from the resolved linker path
+    plus the exact linker SHA-256. It is green across 20 test files / 98 tests plus static gates.
   - Next gate: push that exact correction, rerun all six native jobs, then inspect every uploaded
     artifact before completing the metadata/provenance box.
 
