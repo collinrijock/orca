@@ -4,6 +4,8 @@ import { createRequire } from 'node:module'
 import { dirname, join, resolve } from 'node:path'
 import { promisify } from 'node:util'
 
+import { applyWindowsNodePtySettlement } from './ssh-relay-node-pty-windows-settlement.mjs'
+
 const require = createRequire(import.meta.url)
 const execFileAsync = promisify(execFile)
 const NODE_GYP_PATH = require.resolve('node-gyp/bin/node-gyp.js')
@@ -131,6 +133,10 @@ export async function buildPatchedSshRelayNodePty({
     recursive: true,
     dereference: true,
     filter: sourceFilter
+  })
+  await applyWindowsNodePtySettlement({
+    nodePtyLibraryDirectory: join(buildDirectory, 'lib'),
+    tuple
   })
   await mkdir(join(buildDirectory, 'node_modules'), { recursive: true })
   await cp(NODE_ADDON_API_DIRECTORY, join(buildDirectory, 'node_modules', 'node-addon-api'), {

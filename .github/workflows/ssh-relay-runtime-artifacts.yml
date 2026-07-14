@@ -106,6 +106,7 @@ jobs:
           pnpm exec vitest run --config config/vitest.config.ts \
             config/scripts/ssh-relay-node-release-verification.test.mjs \
             config/scripts/ssh-relay-node-tar-inspection.test.mjs \
+            config/scripts/ssh-relay-node-pty-windows-settlement.test.mjs \
             config/scripts/ssh-relay-node-zip-inspection.test.mjs \
             config/scripts/ssh-relay-runtime-artifact.test.mjs \
             config/scripts/ssh-relay-runtime-pty-smoke.test.mjs \
@@ -249,6 +250,7 @@ jobs:
           pnpm exec vitest run --config config/vitest.config.ts `
             config/scripts/ssh-relay-node-release-verification.test.mjs `
             config/scripts/ssh-relay-node-tar-inspection.test.mjs `
+            config/scripts/ssh-relay-node-pty-windows-settlement.test.mjs `
             config/scripts/ssh-relay-node-zip-inspection.test.mjs `
             config/scripts/ssh-relay-runtime-artifact.test.mjs `
             config/scripts/ssh-relay-runtime-pty-smoke.test.mjs `
