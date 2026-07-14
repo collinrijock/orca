@@ -147,17 +147,23 @@ function quoteSh(value: string): string {
 }
 
 function createWindowsLauncherCompileCommand(
-  sourcePath: string,
+  binDir: string,
+  sourceFileName: string,
+  launcherFileName: string,
   launcherPath: string,
+  sourcePath: string,
   legacyShimPath: string
 ): string {
+  // Why: legacy csc.exe mis-parses space-bearing absolute paths handed to it by
+  // Windows PowerShell 5.1's native-argument quoting, so compile from the bin
+  // directory and pass only the bare, space-free launcher file names.
   const compilerArgs = [
     '/nologo',
     '/target:exe',
     '/optimize+',
     '/warnaserror+',
-    `/out:${launcherPath}`,
-    sourcePath
+    `/out:${launcherFileName}`,
+    sourceFileName
   ]
     .map(powerShellNativeArg)
     .join(' ')
@@ -166,6 +172,7 @@ function createWindowsLauncherCompileCommand(
       // Why: an upgrade must not leave the old %* batch bridge callable when
       // compiler discovery fails; losing the convenience CLI is safer.
       `Remove-Item -LiteralPath ${powerShellLiteral(legacyShimPath)} -Force -ErrorAction SilentlyContinue`,
+      `Set-Location -ErrorAction Stop -LiteralPath ${powerShellLiteral(binDir)}`,
       '$windowsDirectory = if ($env:WINDIR) { $env:WINDIR } else { $env:SystemRoot }',
       `$compilerCandidates = @((Join-Path $windowsDirectory 'Microsoft.NET\\Framework64\\v4.0.30319\\csc.exe'), (Join-Path $windowsDirectory 'Microsoft.NET\\Framework\\v4.0.30319\\csc.exe'))`,
       '$compiler = $compilerCandidates | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } | Select-Object -First 1',
@@ -180,16 +187,26 @@ function createWindowsLauncherCompileCommand(
 
 export function createRemoteCliInstallPlan(env: RemoteCliInstallEnv): RemoteCliInstallPlan {
   if (isWindowsRemoteHost(env.hostPlatform)) {
-    const launcherPath = joinRemotePath(env.hostPlatform, env.binDir, 'orca.exe')
-    const sourcePath = joinRemotePath(env.hostPlatform, env.binDir, 'orca-launcher.cs')
+    const launcherFileName = 'orca.exe'
+    const sourceFileName = 'orca-launcher.cs'
+    const launcherPath = joinRemotePath(env.hostPlatform, env.binDir, launcherFileName)
+    const sourcePath = joinRemotePath(env.hostPlatform, env.binDir, sourceFileName)
     const legacyShimPath = joinRemotePath(env.hostPlatform, env.binDir, 'orca.cmd')
+    const binDir = joinRemotePath(env.hostPlatform, env.binDir)
     return {
       launcherPath,
       files: [{ path: sourcePath, contents: WINDOWS_REMOTE_CLI_LAUNCHER_SOURCE }],
       // Why: compiling on the Windows target avoids shipping an unsigned
       // cross-host binary while ensuring argv never crosses cmd.exe's parser.
       postWriteCommands: [
-        createWindowsLauncherCompileCommand(sourcePath, launcherPath, legacyShimPath)
+        createWindowsLauncherCompileCommand(
+          binDir,
+          sourceFileName,
+          launcherFileName,
+          launcherPath,
+          sourcePath,
+          legacyShimPath
+        )
       ]
     }
   }

@@ -41,7 +41,12 @@ describe('SSH remote Orca CLI launcher', () => {
     expect(plan.postWriteCommands).toHaveLength(1)
     const compileScript = decodePowerShellCommand(plan.postWriteCommands[0] ?? '')
     expect(compileScript).toContain('v4.0.30319\\csc.exe')
-    expect(compileScript).toContain('/out:C:/Users/me user/.orca-relay/bin/orca.exe')
+    // Why: legacy csc.exe is invoked from the bin directory with bare, space-free
+    // file names so PowerShell 5.1 never mangles a space-bearing absolute path.
+    expect(compileScript).toContain(
+      "Set-Location -ErrorAction Stop -LiteralPath 'C:/Users/me user/.orca-relay/bin'"
+    )
+    expect(compileScript).toContain('/out:orca.exe')
     expect(compileScript).toContain('C:/Users/me user/.orca-relay/bin/orca-launcher.cs')
     expect(compileScript).toContain('C:/Users/me user/.orca-relay/bin/orca.cmd')
     expect(compileScript.indexOf('orca.cmd')).toBeLessThan(compileScript.indexOf('csc.exe'))
