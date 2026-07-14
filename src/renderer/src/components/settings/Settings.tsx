@@ -109,6 +109,7 @@ import {
   buildRepoIdToRepresentative,
   buildSettingsProjectList,
   getSettingsProjectHostRepo,
+  removeSettingsProjectFromAllHosts,
   resolveSettingsTargetRepoId
 } from './settings-project-list'
 
@@ -320,16 +321,10 @@ function Settings(): React.JSX.Element {
   )
   // Why: the pane-level "Remove Project" removes the whole project (every host
   // setup), not just the selected host — the per-host remove lives inside
-  // "Available Hosts". Sequential so each host's teardown + projection recompute
-  // don't interleave.
+  // "Available Hosts".
   const removeProjectAllHosts = useCallback(
-    async (setups: readonly ProjectHostSetup[]): Promise<void> => {
-      for (const setup of setups) {
-        if (setup.repoId.trim().length > 0) {
-          await removeProject(setup.repoId, { hostId: setup.hostId })
-        }
-      }
-    },
+    (setups: readonly ProjectHostSetup[]): Promise<void> =>
+      removeSettingsProjectFromAllHosts(setups, removeProject),
     [removeProject]
   )
 

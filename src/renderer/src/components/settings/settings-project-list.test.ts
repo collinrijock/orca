@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { ProjectHostSetup, Repo } from '../../../../shared/types'
 import {
   buildRepoIdToHostSelection,
@@ -6,6 +6,7 @@ import {
   buildSettingsProjectList,
   getSettingsProjectHostRepo,
   getSettingsProjectRepresentativeRepoId,
+  removeSettingsProjectFromAllHosts,
   resolveEffectiveProjectHost,
   resolveSettingsTargetRepoId
 } from './settings-project-list'
@@ -209,5 +210,48 @@ describe('deep-link resolution', () => {
     expect(
       getSettingsProjectHostRepo(sameIdProjects[0], sameIdRepos, 'runtime:home-mac')?.path
     ).toBe('/remote/repo')
+  })
+})
+
+describe('removeSettingsProjectFromAllHosts', () => {
+  it('removes every host setup with its own hostId and skips setups without a repo row', async () => {
+    const removeProject = vi.fn().mockResolvedValue(undefined)
+    const setups = [
+      makeSetup({ hostId: 'local', repoId: 'local-1' }),
+      makeSetup({ hostId: 'ssh:box', repoId: '  ' }),
+      makeSetup({ hostId: 'runtime:home-mac', repoId: 'remote-9' })
+    ]
+
+    await removeSettingsProjectFromAllHosts(setups, removeProject)
+
+    expect(removeProject.mock.calls).toEqual([
+      ['local-1', { hostId: 'local' }],
+      ['remote-9', { hostId: 'runtime:home-mac' }]
+    ])
+  })
+
+  it('awaits each host removal before starting the next', async () => {
+    let resolveFirst: (() => void) | undefined
+    const removeProject = vi
+      .fn()
+      .mockImplementationOnce(
+        () =>
+          new Promise<void>((resolve) => {
+            resolveFirst = resolve
+          })
+      )
+      .mockResolvedValue(undefined)
+    const setups = [
+      makeSetup({ hostId: 'local', repoId: 'local-1' }),
+      makeSetup({ hostId: 'runtime:home-mac', repoId: 'remote-9' })
+    ]
+
+    const pending = removeSettingsProjectFromAllHosts(setups, removeProject)
+    await Promise.resolve()
+    expect(removeProject).toHaveBeenCalledTimes(1)
+
+    resolveFirst?.()
+    await pending
+    expect(removeProject).toHaveBeenCalledTimes(2)
   })
 })

@@ -151,6 +151,22 @@ export function resolveSettingsTargetRepoId(
 }
 
 /**
+ * Removes a project's setup on every host it exists on. Sequential so each
+ * host's teardown + projection recompute don't interleave; setups without a
+ * repo row (planned/not-set-up hosts) have nothing to remove.
+ */
+export async function removeSettingsProjectFromAllHosts(
+  setups: readonly ProjectHostSetup[],
+  removeProject: (repoId: string, options: { hostId: ExecutionHostId }) => Promise<void>
+): Promise<void> {
+  for (const setup of setups) {
+    if (setup.repoId.trim().length > 0) {
+      await removeProject(setup.repoId, { hostId: setup.hostId })
+    }
+  }
+}
+
+/**
  * The repo row the project pane should render for the given host selection.
  * Shared by the pane and the hooks-loading effect so they always agree on which
  * host's repo (id + host) is mounted — critical in the same-id/self-pair case.

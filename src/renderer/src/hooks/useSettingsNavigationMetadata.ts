@@ -550,7 +550,13 @@ export function buildSettingsNavigationMetadata({
     ...buildSettingsProjectList(repos).map(({ project, representativeRepoId, setups }) => {
       const representativeRepo = reposById.get(representativeRepoId) ?? repos[0]
       const hostSummary =
-        setups.length > 1 ? `${setups.length} hosts` : (setups[0]?.path ?? representativeRepo.path)
+        setups.length > 1
+          ? translate(
+              'auto.hooks.useSettingsNavigationMetadata.projectHostsSummary',
+              '{{value0}} hosts',
+              { value0: setups.length }
+            )
+          : (setups[0]?.path ?? representativeRepo.path)
       return {
         id: `repo-${representativeRepoId}`,
         title: project.displayName,
