@@ -2,7 +2,7 @@
 
 Date created: 2026-07-14<br>
 Last updated: 2026-07-14<br>
-Current phase: Milestone 3 / Work Package 2 target-native runtime assembly — exact-head run 29355973362 keeps Linux x64/arm64, macOS x64/arm64, and Windows x64 exactly reproducible, while Windows arm64 again fails closed with no upload after both complete runtimes execute successfully; adding `/Brepro` and `/experimental:deterministic` to the copied compiler and linker settings did not change the 2,947-byte drift at all, so the next bounded package must prove the generated MSBuild inputs and classify the repeated ARM64 instructions before another producer correction; oldest-baseline, native-trust, cross-family remote, and measured-baseline gates remain open; no bundled-runtime path is enabled<br>
+Current phase: Milestone 3 / Work Package 2 target-native runtime assembly — exact-head run 29355973362 keeps Linux x64/arm64, macOS x64/arm64, and Windows x64 exactly reproducible, while Windows arm64 again fails closed with no upload after both complete runtimes execute successfully; adding `/Brepro` and `/experimental:deterministic` to the copied compiler and linker settings did not change the 2,947-byte drift at all; exact implementation commit `0d3a0c9d3` now fail-closed verifies the generated Release MSBuild inputs and adds bounded paired ARM64 disassembly after a mismatch, is locally green, and awaits the six target-native cells; oldest-baseline, native-trust, cross-family remote, and measured-baseline gates remain open; no bundled-runtime path is enabled<br>
 Primary design: [SSH relay GitHub Release plan](./2026-07-14-ssh-relay-github-release-plan.html)<br>
 Motivating issues: [#8450](https://github.com/stablyai/orca/issues/8450), [#1693](https://github.com/stablyai/orca/issues/1693)
 
@@ -158,11 +158,11 @@ same change as the work it records.
   per-target opt-in selects bundled-preferred behavior, and implementing the setting does not
   authorize default-on rollout or legacy removal (E-M1-ROLLOUT-DECISION-001).
 - Legacy fallback removal: not authorized.
-- Next required action: add a bounded diagnostic that fail-closed inspects the generated
-  `conpty_console_list.vcxproj` for the expected compiler/linker settings and reports paired ARM64
-  instruction/disassembly context around the first differing ranges. Require both native Windows
-  cells while retaining all four POSIX controls, strict comparison, rejected-binary no-upload,
-  repository-wide node-pty patch, legacy/default path, and all other release gates unchanged.
+- Next required action: push exact diagnostic implementation commit `0d3a0c9d3` plus its
+  evidence-ledger head and run all six target-native cells. Require both Windows jobs to prove the
+  generated Release compiler/linker settings; if arm64 still differs, record both bounded
+  disassemblies while retaining all four POSIX controls, strict comparison, rejected-binary
+  no-upload, repository-wide node-pty patch, legacy/default path, and all other release gates.
 
 ## Non-Negotiable Invariants
 
@@ -662,9 +662,10 @@ uploaded and no rejected arm64 upload. Exact implementation commit `6546f54d5` a
 toolchain's reproducible compiler and linker settings only to the copied node-pty `binding.gyp` and
 is locally green under E-M3-WINDOWS-COMPILER-DETERMINISM-LOCAL-001. Exact-head run 29355973362 then
 kept five controls reproducible but reproduced the identical Windows arm64 PE drift under
-E-M3-WINDOWS-COMPILER-DETERMINISM-CI-RED-001. The next diagnostic must prove how those settings
-reach the generated `conpty_console_list.vcxproj` and report bounded ARM64 instruction/disassembly
-context; no second producer correction is justified before that evidence.
+E-M3-WINDOWS-COMPILER-DETERMINISM-CI-RED-001. Exact implementation commit `0d3a0c9d3` now
+fail-closed verifies how those settings reach the generated `conpty_console_list.vcxproj` and adds
+bounded paired ARM64 disassembly after a mismatch under E-M3-WINDOWS-MSBUILD-DISASSEMBLY-LOCAL-001;
+no second producer correction is justified before the target-native evidence.
 
 Each runtime must contain only the executable closure required by the relay.
 
@@ -4641,6 +4642,95 @@ or unexpected token`; the first logs did not identify a source location.
   first differing ranges. Do not change the producer, normalize binaries, weaken comparison, or
   upload rejected bytes before that evidence.
 
+### E-M3-WINDOWS-MSBUILD-DISASSEMBLY-LOCAL-001 — Generated-project and bounded disassembly contracts
+
+- Date: 2026-07-14
+- Commit SHA / PR: exact implementation commit
+  `0d3a0c9d3f0eee78d3106a646369cc3fc5db96b1`; stacked draft
+  PR [#8741](https://github.com/stablyai/orca/pull/8741), native execution pending
+- Runner: macOS 26.2 build 25C56, native Apple M4 arm64; Node v26.0.0 and pnpm 10.24.0. This
+  runner cannot generate or execute native MSBuild/ARM64 PE inputs, so the target-native Windows
+  jobs remain authoritative.
+- Remote and transport: none; synthetic generated-project fixtures and workflow-source contracts
+  only
+- Exact red command:
+
+  ```sh
+  pnpm exec vitest run --config config/vitest.config.ts \
+    config/scripts/ssh-relay-node-pty-windows-build-determinism.test.mjs
+  ```
+
+- Red result: FAIL as intended, two failed and two passed tests because no generated-project
+  verifier existed.
+- Exact green commands:
+
+  ```sh
+  node --check config/scripts/ssh-relay-node-pty-windows-build-determinism.mjs
+  node --check config/scripts/ssh-relay-node-pty-windows-build-determinism.test.mjs
+  node --check config/scripts/ssh-relay-node-pty-build.mjs
+  node --check config/scripts/ssh-relay-runtime-workflow.test.mjs
+  pnpm exec vitest run --config config/vitest.config.ts \
+    config/scripts/ssh-relay-node-pty-windows-build-determinism.test.mjs \
+    config/scripts/ssh-relay-node-pty-build.test.mjs \
+    config/scripts/ssh-relay-runtime-workflow.test.mjs
+  pnpm exec vitest run --config config/vitest.config.ts \
+    config/scripts/ssh-relay-node-release-verification.test.mjs \
+    config/scripts/ssh-relay-node-tar-inspection.test.mjs \
+    config/scripts/ssh-relay-node-pty-build.test.mjs \
+    config/scripts/ssh-relay-node-pty-windows-build-determinism.test.mjs \
+    config/scripts/ssh-relay-node-pty-windows-settlement.test.mjs \
+    config/scripts/ssh-relay-node-zip-inspection.test.mjs \
+    config/scripts/ssh-relay-runtime-artifact.test.mjs \
+    config/scripts/ssh-relay-runtime-build.test.mjs \
+    config/scripts/ssh-relay-runtime-pty-smoke.test.mjs \
+    config/scripts/ssh-relay-runtime-reproducibility.test.mjs \
+    config/scripts/ssh-relay-runtime-resource-diagnostics.test.mjs \
+    config/scripts/ssh-relay-runtime-windows-pe-diagnostic.test.mjs \
+    config/scripts/ssh-relay-runtime-windows-tree.test.mjs \
+    config/scripts/ssh-relay-runtime-workflow.test.mjs \
+    config/scripts/ssh-relay-runtime-zip.test.mjs
+  pnpm run typecheck
+  pnpm exec oxlint config/scripts/ssh-relay-node-pty-windows-build-determinism.mjs \
+    config/scripts/ssh-relay-node-pty-windows-build-determinism.test.mjs \
+    config/scripts/ssh-relay-node-pty-build.mjs \
+    config/scripts/ssh-relay-runtime-workflow.test.mjs
+  pnpm run check:max-lines-ratchet
+  GOMAXPROCS=2 pnpm run lint
+  pnpm exec oxfmt --check .github/workflows/ssh-relay-runtime-artifacts.yml \
+    config/scripts/ssh-relay-node-pty-windows-build-determinism.mjs \
+    config/scripts/ssh-relay-node-pty-windows-build-determinism.test.mjs \
+    config/scripts/ssh-relay-node-pty-build.mjs \
+    config/scripts/ssh-relay-runtime-workflow.test.mjs \
+    docs/reference/plans/2026-07-14-ssh-relay-github-release-implementation-checklist.md
+  pnpm exec lint-staged
+  git diff --check
+  ```
+
+- Green result: PASS. All syntax checks exited zero; the purpose command passed 8/8 tests across
+  three suites; all 15 artifact suites passed 53/53 tests. Typecheck, focused oxlint, the
+  355-entry max-lines ratchet, full repository lint/reliability/localization, formatting, staged
+  hooks, and diff checks exited zero. Full lint emitted only pre-existing warnings outside this
+  package.
+- Duration and resource metrics: purpose suite 156 ms Vitest; complete artifact suite 1.11s
+  Vitest. Static-gate wall time, synthetic peak RSS, open files/channels, and cancellation
+  settlement were not instrumented.
+- Artifact/log/trace link: exact source commit and local command output; no binary artifact was
+  created or uploaded
+- Oracle proved: Windows artifact builds now reject a missing, duplicate, non-inherited, or
+  wrong-architecture Release `ClCompile`/`Link` option in the generated
+  `conpty_console_list.vcxproj` before runtime staging, and log the exact accepted setting summary.
+  On an arm64 mismatch the workflow retains the existing structured PE diagnostic, then requests
+  only absolute image addresses `0x180001000` through `0x180001200` from native
+  `llvm-objdump.exe` before the fatal throw. Rejected bytes still cannot reach artifact staging.
+- Does not prove: the real generated XML shape, native `llvm-objdump` availability/output, which
+  repeated ARM64 instruction differs, a safe producer correction, arm64 equality, oldest
+  baselines, native trust, SSH, publication, transfer, fallback, UI, or any enabled tuple.
+- Checklist items satisfied: local generated-project and bounded-disassembly contracts only; no
+  tuple or production checkbox.
+- Follow-up: push the exact implementation and ledger head, run all six target-native cells, and
+  require both Windows jobs to prove generated settings. If arm64 still differs, record the two
+  bounded disassemblies and retain strict failure/no-upload before any producer correction.
+
 ## Accepted Gaps
 
 No product gap is accepted merely because it appears in this list. Each entry requires explicit
@@ -4698,11 +4788,11 @@ The project is not complete until every applicable item below is checked with ev
 
 ## Next Required Action
 
-Add a bounded diagnostic that fail-closed inspects generated `conpty_console_list.vcxproj`
-compiler/linker settings and reports paired ARM64 instruction/disassembly context around the first
-differing ranges. Run both native Windows cells with all four POSIX controls, require the x64 and
-POSIX outputs to remain exact, and retain the fatal comparator plus rejected-arm64 no-upload
-boundary. Cross-family Layer B targets, the protected manifest-signing environment,
-oldest-baseline/native-trust cells, and the paired legacy performance baseline remain release/
-default-path blockers; no publication, desktop resolver, SSH transfer/install, per-target Beta,
-fallback, tuple enablement, or default behavior may be connected by this package.
+Push exact diagnostic implementation commit `0d3a0c9d3` plus its evidence-ledger head and run all
+six target-native cells. Require both Windows jobs to prove the generated Release compiler/linker
+settings; if arm64 still differs, record both bounded disassemblies while retaining all four POSIX
+controls, strict comparison, and rejected-arm64 no-upload. Cross-family Layer B targets, the
+protected manifest-signing environment, oldest-baseline/native-trust cells, and the paired legacy
+performance baseline remain release/default-path blockers; no publication, desktop resolver, SSH
+transfer/install, per-target Beta, fallback, tuple enablement, or default behavior may be connected
+by this package.
