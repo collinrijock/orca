@@ -817,13 +817,16 @@ function NewWorktreeModalContent({
   return (
     // Why: hosting the form and every picker in one persistent native Modal makes
     // form → repo/agent transitions in-window view swaps, avoiding the iOS
-    // dismiss-then-present race that left the dropdowns unresponsive. Back routes
-    // to the form from a picker, or closes the flow from the form.
+    // dismiss-then-present race that left the dropdowns unresponsive. Native back
+    // closes the flow from the form, routes the trust prompt through its in-flight
+    // guard, and otherwise returns to the form from a picker.
     <BottomDrawerModalHost
       visible={visible}
       onRequestClose={() => {
         if (drawerView === 'form') {
           onClose()
+        } else if (drawerView === 'trust') {
+          closeSetupTrust()
         } else {
           transitionDrawer('form')
         }
@@ -1050,7 +1053,7 @@ function NewWorktreeModalContent({
       </BottomDrawer>
 
       {/* Why: list drawers stay outside the form's ScrollView, and the transition
-          state prevents overlapping native modals from swallowing iOS taps. */}
+          state lets each hosted overlay finish hiding before the next appears. */}
       <SmartWorkspaceSourceDrawer
         visible={visible && drawerView === 'source'}
         client={client}
