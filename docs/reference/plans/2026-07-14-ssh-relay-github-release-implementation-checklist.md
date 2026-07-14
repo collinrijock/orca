@@ -55,8 +55,8 @@ same change as the work it records.
 - Active package: Work Package 1's disconnected manifest, content-identity, signature, release-asset,
   and conservative selector contracts are locally implemented and green under E-M2-RED-001 and
   E-M2-CONTRACT-001. They remain isolated in stacked draft PR
-  [#8728](https://github.com/stablyai/orca/pull/8728); no deploy/resolver call site is connected and
-  no tuple is enabled.
+  [#8728](https://github.com/stablyai/orca/pull/8728) at implementation commit `b9d80a4cb`; no
+  deploy/resolver call site is connected and no tuple is enabled.
 - Production behavior: unchanged; Orca embeds relay JavaScript and installs `node-pty` plus
   `@parcel/watcher` with remote npm.
 - New runtime assets published: none.
@@ -1115,7 +1115,7 @@ Update status and evidence as work begins. Do not combine these into one large b
 | Work package              | Scope                                                                                      | Default behavior change     | Status                                  | PR/evidence                                                             |
 | ------------------------- | ------------------------------------------------------------------------------------------ | --------------------------- | --------------------------------------- | ----------------------------------------------------------------------- |
 | 0. #8450 legacy fix       | Coherent Node/npm selection and live repro                                                 | Fixes legacy selection only | Complete and CI-green in draft PR #8724 | E-M0-UNIT-002, E-M0-LIVE-002, E-M0-STATIC-002, E-M0-PR-001, E-M0-CI-001 |
-| 1. Contract and selectors | Manifest schema, identity, platform/libc selection, hostile inputs                         | None                        | Locally green; draft PR CI pending      | Draft PR #8728; E-M2-RED-001, E-M2-CONTRACT-001                         |
+| 1. Contract and selectors | Manifest schema, identity, platform/libc selection, hostile inputs                         | None                        | Locally green; draft PR CI pending      | Draft PR #8728; `b9d80a4cb`; E-M2-RED-001, E-M2-CONTRACT-001            |
 | 2. Runtime builds         | Per-tuple assembly, native smoke, SBOM/provenance/signing                                  | None                        | Not started                             | —                                                                       |
 | 3. Release publication    | Prerequisite DAG, embedded manifest, draft upload/read-back gates                          | Asset-only                  | Not started                             | —                                                                       |
 | 4. Desktop resolver/cache | Verified download, extraction, cache, offline behavior                                     | None/forced mode only       | Not started                             | —                                                                       |
@@ -2057,10 +2057,8 @@ fragmentLinks=9`.
 ### E-M2-CONTRACT-001 — Manifest, identity, signature, URL, and selector contracts
 
 - Date: 2026-07-14
-- Commit SHA / PR: current Work Package 1 implementation worktree based on
-  `959bc05caca7e5ccb4c69b47c1bf6f5b47671c57`; stacked draft PR
-  [#8728](https://github.com/stablyai/orca/pull/8728); exact implementation SHA and PR CI evidence
-  pending
+- Commit SHA / PR: `b9d80a4cbca43c344a3a5fbdc669fa97c7527da0`; stacked draft PR
+  [#8728](https://github.com/stablyai/orca/pull/8728); PR CI evidence pending
 - Runner: macOS 26.2 arm64 native; Node v26.0.0 and pnpm 10.24.0 (repository requests Node 24)
 - Remote: not applicable; pure local schema, cryptography, identity, release-name, and selection tests
 - Transport/network: local Vitest/static tools only; no SSH, release download, or GitHub API call
@@ -2119,8 +2117,8 @@ fragmentLinks=9`.
 - Checklist items satisfied: Milestone 2 manifest-schema, signed-content, content-identity,
   release-name/URL, schema-level hostile path/type, and pure selector contract items explicitly
   marked above; verification command inventory entry.
-- Follow-up: record exact implementation SHA and GitHub Actions result, then begin Work Package 2
-  target-native runtime assembly without production consumption.
+- Follow-up: push and record the exact GitHub Actions result, then begin Work Package 2 target-native
+  runtime assembly without production consumption.
 
 ## Accepted Gaps
 
