@@ -2,7 +2,7 @@
 
 Date created: 2026-07-14<br>
 Last updated: 2026-07-14<br>
-Current phase: Milestone 2 / Work Package 1 contracts and selectors — Milestone 1 safety decisions are recorded; cross-family remote infrastructure and measured baselines remain open; no bundled-runtime path is enabled<br>
+Current phase: Milestone 3 / Work Package 2 target-native runtime assembly — Work Package 1 contracts are CI-green; cross-family remote infrastructure and measured baselines remain open; no bundled-runtime path is enabled<br>
 Primary design: [SSH relay GitHub Release plan](./2026-07-14-ssh-relay-github-release-plan.html)<br>
 Motivating issues: [#8450](https://github.com/stablyai/orca/issues/8450), [#1693](https://github.com/stablyai/orca/issues/1693)
 
@@ -52,11 +52,14 @@ same change as the work it records.
   E-M0-STATIC-002, E-M0-LIVE-002, E-M0-CI-001). Draft PR
   [#8724](https://github.com/stablyai/orca/pull/8724) is open and CI-green at implementation head
   `94e58d83e`.
-- Active package: Work Package 1's disconnected manifest, content-identity, signature, release-asset,
-  and conservative selector contracts are locally implemented and green under E-M2-RED-001 and
-  E-M2-CONTRACT-001. They remain isolated in stacked draft PR
+- Completed package: Work Package 1's disconnected manifest, content-identity, signature,
+  release-asset, and conservative selector contracts are locally and CI-green under E-M2-RED-001,
+  E-M2-CONTRACT-001, and E-M2-CI-001. They remain isolated in stacked draft PR
   [#8728](https://github.com/stablyai/orca/pull/8728) at implementation commit `b9d80a4cb`; no
   deploy/resolver call site is connected and no tuple is enabled.
+- Active package: Work Package 2 target-native runtime assembly, archive inspection, executable
+  smoke, SBOM, and provenance only. It may produce test artifacts but must not publish, resolve,
+  transfer, install, launch, or enable them.
 - Production behavior: unchanged; Orca embeds relay JavaScript and installs `node-pty` plus
   `@parcel/watcher` with remote npm.
 - New runtime assets published: none.
@@ -69,10 +72,10 @@ same change as the work it records.
 - Rollout control: existing per-SSH-target configuration; legacy is the default and the bundled
   runtime is an explicit per-target Beta opt-in under E-M1-ROLLOUT-DECISION-001.
 - Legacy fallback removal: not authorized.
-- Next required action: commit and run draft PR #8728 CI for the locally green Work Package 1
-  contract package, record the exact CI evidence, then begin artifact-only target-native runtime
-  assembly. Keep cross-family remote infrastructure and measured legacy baseline gates open and do
-  not introduce resolver, transfer, rollout, or default behavior.
+- Next required action: create the isolated stacked Work Package 2 branch/PR and implement the first
+  target-native runtime assembly plus archive inspection and executable smoke without publication or
+  production consumption. Keep cross-family remote infrastructure and measured legacy baseline gates
+  open and do not introduce resolver, transfer, rollout, or default behavior.
 
 ## Non-Negotiable Invariants
 
@@ -469,12 +472,11 @@ matrix cells.
 
 Suggested modules are provisional; update this file before choosing different names.
 
-**In progress — 2026-07-14, Codex implementation owner:** implement the pure manifest schema,
+**Work Package 1 complete — 2026-07-14, Codex implementation owner:** implemented the pure manifest schema,
 canonical unsigned bytes/signature verification, content identity, and fail-conservative
 platform/libc selector with hostile-input tests only. No deploy/resolver call site or bundled tuple is
-enabled in this package. Session checkpoint: implementation and local gates are complete under
-E-M2-RED-001 and E-M2-CONTRACT-001; draft PR #8728 CI and exact implementation-commit evidence are
-the remaining package gates.
+enabled in this package. Local and exact-head draft PR evidence is recorded under E-M2-RED-001,
+E-M2-CONTRACT-001, and E-M2-CI-001.
 
 ### Manifest schema
 
@@ -529,6 +531,11 @@ Completion evidence required: schema and test files, red/green evidence, canonic
 and reviewed compatibility contract.
 
 ## Milestone 3 — Build Minimal Self-Contained Runtime Archives
+
+**In progress — 2026-07-14, Codex implementation owner:** isolate target-native runtime assembly,
+archive inspection, bundled-Node/native-module/PTY/watcher smoke, SBOM, and provenance capabilities
+behind purpose-named scripts and CI artifacts. No release publication, desktop resolver, SSH
+transfer, install, fallback, rollout setting, or tuple enablement belongs in this package.
 
 Each runtime must contain only the executable closure required by the relay.
 
@@ -1115,8 +1122,8 @@ Update status and evidence as work begins. Do not combine these into one large b
 | Work package              | Scope                                                                                      | Default behavior change     | Status                                  | PR/evidence                                                             |
 | ------------------------- | ------------------------------------------------------------------------------------------ | --------------------------- | --------------------------------------- | ----------------------------------------------------------------------- |
 | 0. #8450 legacy fix       | Coherent Node/npm selection and live repro                                                 | Fixes legacy selection only | Complete and CI-green in draft PR #8724 | E-M0-UNIT-002, E-M0-LIVE-002, E-M0-STATIC-002, E-M0-PR-001, E-M0-CI-001 |
-| 1. Contract and selectors | Manifest schema, identity, platform/libc selection, hostile inputs                         | None                        | Locally green; draft PR CI pending      | Draft PR #8728; `b9d80a4cb`; E-M2-RED-001, E-M2-CONTRACT-001            |
-| 2. Runtime builds         | Per-tuple assembly, native smoke, SBOM/provenance/signing                                  | None                        | Not started                             | —                                                                       |
+| 1. Contract and selectors | Manifest schema, identity, platform/libc selection, hostile inputs                         | None                        | Complete and CI-green in draft PR #8728 | `b9d80a4cb`; E-M2-RED-001, E-M2-CONTRACT-001, E-M2-CI-001               |
+| 2. Runtime builds         | Per-tuple assembly, native smoke, SBOM/provenance/signing                                  | None                        | In progress                             | No implementation evidence yet                                          |
 | 3. Release publication    | Prerequisite DAG, embedded manifest, draft upload/read-back gates                          | Asset-only                  | Not started                             | —                                                                       |
 | 4. Desktop resolver/cache | Verified download, extraction, cache, offline behavior                                     | None/forced mode only       | Not started                             | —                                                                       |
 | 5. Transfer/install       | Bounded transports, structured sentinel, bundled launch behind per-target Beta/forced mode | Per-target opt-in only      | Not started                             | —                                                                       |
@@ -2120,6 +2127,47 @@ fragmentLinks=9`.
 - Follow-up: push and record the exact GitHub Actions result, then begin Work Package 2 target-native
   runtime assembly without production consumption.
 
+### E-M2-CI-001 — Work Package 1 full PR verification and packaging gate
+
+- Date: 2026-07-14
+- Commit SHA / PR: exact checked head `6732d911a8e81ad071925e68d3a60fec2e3e452a`, containing
+  implementation commit `b9d80a4cbca43c344a3a5fbdc669fa97c7527da0`; stacked draft PR
+  [#8728](https://github.com/stablyai/orca/pull/8728)
+- Runner: GitHub-hosted native x64 `ubuntu-latest`, resolved to Ubuntu 24.04 image
+  `20260705.232.1`; image provisioner `20260624.560`; runner `2.335.1`; Node v24.18.0
+- Remote: not applicable; the workflow provisioned no SSH server and exercised no remote tuple
+- Transport/network: GitHub Actions checkout/package traffic only; no SSH/SFTP/system-SSH runtime
+  transfer
+- Exact command:
+
+  ```sh
+  gh run watch 29329963564 --repo stablyai/orca --exit-status
+  gh pr view 8728 --repo stablyai/orca \
+    --json url,isDraft,state,headRefOid,baseRefOid,mergeStateStatus,statusCheckRollup
+  gh api repos/stablyai/orca/actions/jobs/87075275741
+  gh run view 29329963564 --repo stablyai/orca --job 87075275741 --log
+  ```
+
+- Result: PASS. The `verify` job completed successfully on the exact PR head; repository lint,
+  reliability gates, max-lines, typecheck, Git 2.25 compatibility, 2,803 passing test files with
+  29,695 passing tests, unpacked Linux app packaging, packaged daemon load, and packaged CLI smoke
+  all passed. Nine test files and 55 tests were intentionally skipped by the existing suite.
+- Duration and resource metrics: 11m52s from `2026-07-14T11:44:44Z` to
+  `2026-07-14T11:56:36Z`; the workflow did not report peak memory, channel, handle, or file counts.
+- Artifact/log/trace link:
+  https://github.com/stablyai/orca/actions/runs/29329963564/job/87075275741
+- Oracle proved: Work Package 1 compiles and passes the repository's full PR regression/package gate
+  under the pinned Node 24 runtime on a native Linux x64 runner; PR #8728 is draft, open, and reports
+  a clean merge state at the checked head.
+- Does not prove: live SSH, Linux arm64, macOS, Windows, musl, archive assembly/extraction, native
+  runtime execution, signing, release assets, download/cache, transfer/install, fallback, UI,
+  performance budgets, or any enabled tuple. The existing relay build exercised by packaging remains
+  the legacy JavaScript build, not a self-contained runtime artifact.
+- Checklist items satisfied: Work Package 1 exact-head PR CI gate only; no live matrix or runtime
+  tuple cell.
+- Follow-up: keep PR #8728 draft and isolated; begin Work Package 2 on a new stacked branch with no
+  production consumer.
+
 ## Accepted Gaps
 
 No product gap is accepted merely because it appears in this list. Each entry requires explicit
@@ -2175,9 +2223,9 @@ The project is not complete until every applicable item below is checked with ev
 
 ## Next Required Action
 
-Commit and push the locally green Work Package 1 contract layer to stacked draft PR #8728, run its
-GitHub Actions checks on the exact implementation SHA, and append that evidence without enabling a
-tuple. If CI remains green, begin Work Package 2 with target-native artifact assembly and executable
-smoke only. The cross-family Layer B target pool, protected manifest-signing environment, and paired
-legacy performance baseline remain release/default-path blockers; no resolver, transfer, per-target
-Beta, fallback, or default behavior may be connected by the next package.
+Create the isolated stacked Work Package 2 branch/PR and implement target-native runtime assembly,
+archive inspection, and executable bundled-Node/native-module/PTY/watcher smoke as artifact-only
+capabilities. The cross-family Layer B target pool, protected manifest-signing environment, and
+paired legacy performance baseline remain release/default-path blockers; no publication, desktop
+resolver, SSH transfer/install, per-target Beta, fallback, or default behavior may be connected by
+this package.
