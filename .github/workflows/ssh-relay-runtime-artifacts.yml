@@ -107,6 +107,8 @@ jobs:
           node --check config/scripts/ssh-relay-runtime-reproducibility.test.mjs
           node --check config/scripts/build-ssh-relay-runtime.mjs
           node --check config/scripts/ssh-relay-runtime-build.test.mjs
+          node --check config/scripts/ssh-relay-runtime-closure.mjs
+          node --check config/scripts/ssh-relay-runtime-closure.test.mjs
           pnpm exec vitest run --config config/vitest.config.ts \
             config/scripts/ssh-relay-node-release-verification.test.mjs \
             config/scripts/ssh-relay-node-tar-inspection.test.mjs \
@@ -116,6 +118,7 @@ jobs:
             config/scripts/ssh-relay-node-zip-inspection.test.mjs \
             config/scripts/ssh-relay-runtime-artifact.test.mjs \
             config/scripts/ssh-relay-runtime-build.test.mjs \
+            config/scripts/ssh-relay-runtime-closure.test.mjs \
             config/scripts/ssh-relay-runtime-pty-smoke.test.mjs \
             config/scripts/ssh-relay-runtime-reproducibility.test.mjs \
             config/scripts/ssh-relay-runtime-resource-diagnostics.test.mjs \
@@ -279,6 +282,10 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'runtime build script syntax check failed' }
           node --check config/scripts/ssh-relay-runtime-build.test.mjs
           if ($LASTEXITCODE -ne 0) { throw 'runtime build test syntax check failed' }
+          node --check config/scripts/ssh-relay-runtime-closure.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'runtime closure script syntax check failed' }
+          node --check config/scripts/ssh-relay-runtime-closure.test.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'runtime closure test syntax check failed' }
           pnpm exec vitest run --config config/vitest.config.ts `
             config/scripts/ssh-relay-node-release-verification.test.mjs `
             config/scripts/ssh-relay-node-tar-inspection.test.mjs `
@@ -288,6 +295,7 @@ jobs:
             config/scripts/ssh-relay-node-zip-inspection.test.mjs `
             config/scripts/ssh-relay-runtime-artifact.test.mjs `
             config/scripts/ssh-relay-runtime-build.test.mjs `
+            config/scripts/ssh-relay-runtime-closure.test.mjs `
             config/scripts/ssh-relay-runtime-pty-smoke.test.mjs `
             config/scripts/ssh-relay-runtime-reproducibility.test.mjs `
             config/scripts/ssh-relay-runtime-resource-diagnostics.test.mjs `

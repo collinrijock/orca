@@ -4,6 +4,11 @@ import { createRequire } from 'node:module'
 import { dirname, join, relative, sep } from 'node:path'
 
 import { computeSshRelayRuntimeContentId } from './ssh-relay-runtime-identity.mjs'
+import {
+  sshRelayRuntimeFileRole,
+  sshRelayRuntimeWatcherPackage,
+  verifySshRelayRuntimeClosure
+} from './ssh-relay-runtime-closure.mjs'
 
 const require = createRequire(import.meta.url)
 const MAX_FILES = 5_000
@@ -51,15 +56,6 @@ const COMPATIBILITY = Object.freeze({
     minimumPowerShellVersion: '5.1',
     minimumDotNetFrameworkRelease: 528040
   }
-})
-
-const WATCHER_PACKAGES = Object.freeze({
-  'linux-x64-glibc': '@parcel/watcher-linux-x64-glibc',
-  'linux-arm64-glibc': '@parcel/watcher-linux-arm64-glibc',
-  'darwin-x64': '@parcel/watcher-darwin-x64',
-  'darwin-arm64': '@parcel/watcher-darwin-arm64',
-  'win32-x64': '@parcel/watcher-win32-x64',
-  'win32-arm64': '@parcel/watcher-win32-arm64'
 })
 
 function packageDirectory(name) {
@@ -176,10 +172,7 @@ async function copyPackageRuntime(name, runtimeRoot, relativePaths) {
 }
 
 async function copyParcelWatcher(runtimeRoot, tuple) {
-  const watcherPackage = WATCHER_PACKAGES[tuple]
-  if (!watcherPackage) {
-    throw new Error(`No bundled Parcel watcher package is defined for ${tuple}`)
-  }
+  const watcherPackage = sshRelayRuntimeWatcherPackage(tuple)
   await copyPackageRuntime('@parcel/watcher', runtimeRoot, ['index.js', 'wrapper.js'])
   await copyPackageRuntime(watcherPackage, runtimeRoot, ['watcher.node'])
   await chmod(
@@ -219,39 +212,6 @@ async function writeLicenses(runtimeRoot, nodeRoot, packages) {
     mode: 0o644
   })
   await chmod(join(runtimeRoot, 'THIRD_PARTY_LICENSES.txt'), 0o644)
-}
-
-function runtimeRole(path) {
-  if (path === 'bin/node' || path === 'bin/node.exe') {
-    return 'node'
-  }
-  if (path === 'relay.js') {
-    return 'relay'
-  }
-  if (path === 'relay-watcher.js') {
-    return 'relay-watcher'
-  }
-  if (
-    path.endsWith('/pty.node') ||
-    path.endsWith('/conpty.node') ||
-    path.endsWith('/conpty_console_list.node')
-  ) {
-    return 'node-pty-native'
-  }
-  if (path.endsWith('/watcher.node')) {
-    return 'parcel-watcher-native'
-  }
-  if (
-    path.endsWith('/spawn-helper') ||
-    path.endsWith('/conpty/conpty.dll') ||
-    path.endsWith('/conpty/OpenConsole.exe')
-  ) {
-    return 'native-runtime'
-  }
-  if (path === 'THIRD_PARTY_LICENSES.txt') {
-    return 'license'
-  }
-  return 'runtime-javascript'
 }
 
 function assertPortableRuntimePath(path) {
@@ -301,7 +261,7 @@ async function collectEntries(runtimeRoot) {
         if (metadata.size > MAX_FILE_BYTES) {
           throw new Error(`Runtime file exceeds size limit: ${path}`)
         }
-        const role = runtimeRole(path)
+        const role = sshRelayRuntimeFileRole(path)
         // Why: NTFS has no POSIX execute bits; ZIP metadata carries the canonical runtime mode.
         const mode =
           process.platform === 'win32' &&
@@ -392,5 +352,6 @@ export async function assembleSshRelayRuntimeTree({
     dependencies: { nodePtyVersion: '1.1.0', parcelWatcherVersion: '2.5.6' },
     entries: tree.entries
   }
+  await verifySshRelayRuntimeClosure(runtimeRoot, identity)
   return { ...identity, contentId: computeSshRelayRuntimeContentId(identity), ...tree }
 }

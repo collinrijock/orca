@@ -61,6 +61,10 @@ describe('SSH relay runtime artifact workflow', () => {
     expect(source).toContain('foreach ($output in @($firstOutput, $secondOutput))')
     expect(source).toContain('ssh-relay-runtime-reproducibility.mjs')
     expect(source).toContain('ssh-relay-runtime-reproducibility.test.mjs')
+    expect(source.match(/ssh-relay-runtime-closure\.test\.mjs/g)).toHaveLength(4)
+    expect(
+      source.match(/node --check config\/scripts\/ssh-relay-runtime-closure\.mjs/g)
+    ).toHaveLength(2)
     expect(source).toContain('ssh-relay-runtime-windows-pe-diagnostic.mjs')
     expect(source).toContain('ssh-relay-runtime-windows-pe-diagnostic.test.mjs')
     expect(source).toContain('llvm-objdump.exe')
