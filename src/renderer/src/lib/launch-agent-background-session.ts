@@ -1,14 +1,10 @@
 import { useAppStore } from '@/store'
 import { buildAgentStartupPlan } from '@/lib/tui-agent-startup'
-import type {
-  LaunchAgentBackgroundSessionArgs,
-  LaunchAgentBackgroundSessionResult
-} from '@/lib/agent-background-session-contract'
+import type * as BackgroundSession from '@/lib/agent-background-session-contract'
 import { getAgentLaunchPlatformForRepo } from '@/lib/agent-launch-platform'
 import { CLIENT_PLATFORM } from '@/lib/new-workspace'
 import { tuiAgentToAgentKind } from '@/lib/telemetry'
-import { pasteDraftWhenAgentReady } from '@/lib/agent-paste-draft'
-import { showAutomationPromptNotSentToast } from '@/lib/agent-background-session-timeout-toast'
+import { scheduleAgentBackgroundDraft } from '@/lib/agent-background-draft-delivery'
 import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
 import { requestBackgroundTerminalWorktreeMount } from '@/components/terminal/background-terminal-worktree-mount'
 import {
@@ -20,14 +16,14 @@ import { repoIsRemote } from '../../../shared/agent-launch-remote'
 import { makePaneKey } from '../../../shared/stable-pane-id'
 import {
   registerEagerPtyBuffer,
-  subscribeToPtyExit,
-  type EagerPtyHandle
+  subscribeToPtyExit
 } from '@/components/terminal-pane/pty-dispatcher'
 import { subscribeToPtyData } from '@/components/terminal-pane/pty-data-sidecar-subscriptions'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import { getSettingsForWorktreeRuntimeOwner } from '@/lib/worktree-runtime-owner'
 import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
 import { singlePaneLayoutSnapshot } from '@/store/slices/terminal-helpers'
+import { retireUnownedTerminal } from '@/lib/retire-unowned-background-terminal'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import {
   subscribeToRuntimeTerminalData,
@@ -42,8 +38,8 @@ import { resolveLocalWindowsAgentStartupShell } from '../../../shared/windows-te
 import * as backgroundCleanup from '@/lib/agent-background-session-cleanup'
 
 export async function launchAgentBackgroundSession(
-  args: LaunchAgentBackgroundSessionArgs
-): Promise<LaunchAgentBackgroundSessionResult | null> {
+  args: BackgroundSession.LaunchAgentBackgroundSessionArgs
+): Promise<BackgroundSession.LaunchAgentBackgroundSessionResult | null> {
   const { agent, worktreeId, prompt, launchSource, title, onData, onExit, onAgentStatus } = args
   const store = useAppStore.getState()
   const worktree = store.allWorktrees().find((entry) => entry.id === worktreeId)
@@ -115,12 +111,13 @@ export async function launchAgentBackgroundSession(
   const leafId = createBrowserUuid()
   const paneKey = makePaneKey(tab.id, leafId)
   const launchToken = createBrowserUuid()
-  store.registerAgentLaunchConfig(paneKey, startupPlan.launchConfig, {
+  const launchRegistration = {
     agentType: agent,
     launchToken,
     tabId: tab.id,
     leafId
-  })
+  }
+  store.registerAgentLaunchConfig(paneKey, startupPlan.launchConfig, launchRegistration)
   // Why: `title` labels the tab/worktree entry. Pane titles render as an
   // in-terminal title row, so background sessions must not persist it there.
   store.setTabLayout(tab.id, singlePaneLayoutSnapshot(leafId))
@@ -148,8 +145,9 @@ export async function launchAgentBackgroundSession(
   )
   let ptyId = ''
   let runtimeTerminalHandle: string | null = null
+  let returnedLaunchConfig: typeof startupPlan.launchConfig | undefined
   let exitHandled = false
-  let eagerPtyBuffer: EagerPtyHandle | null = null
+  let eagerPtyBuffer: ReturnType<typeof registerEagerPtyBuffer> | null = null
   let unsubscribeExit = (): void => {},
     unsubscribeData = (): void => {}
   const handleExit = (exitPtyId: string, code: number): void => {
@@ -236,14 +234,25 @@ export async function launchAgentBackgroundSession(
         }
       })
       ptyId = result.id
-      if (result.launchConfig) {
-        store.registerAgentLaunchConfig(paneKey, result.launchConfig, {
-          agentType: agent,
-          launchToken,
-          tabId: tab.id,
-          leafId
-        })
-      }
+      returnedLaunchConfig = result.launchConfig
+    }
+    if (
+      await retireUnownedTerminal({
+        tabId: tab.id,
+        ptyId,
+        runtimeTarget,
+        runtimeTerminalHandle,
+        onRetire: () => {
+          exitHandled = true
+          sshStartupDelivery.clear()
+          store.clearAgentLaunchConfig(paneKey)
+        }
+      })
+    ) {
+      return null
+    }
+    if (returnedLaunchConfig) {
+      store.registerAgentLaunchConfig(paneKey, returnedLaunchConfig, launchRegistration)
     }
     store.updateTabPtyId(tab.id, ptyId)
     store.setTabLayout(tab.id, singlePaneLayoutSnapshot(leafId, ptyId))
@@ -291,25 +300,16 @@ export async function launchAgentBackgroundSession(
       unsubscribeExit = subscribeToPtyExit(ptyId, (code) => handleExit(ptyId, code))
     }
 
-    // Why: mount only after the explicit PTY is bound. Mounting at the earlier
-    // createTab boundary lets a slow SSH/remote spawn race TerminalPane's fresh
-    // spawn path and launch the agent twice.
+    // Why: mounting before explicit PTY binding lets TerminalPane race a second spawn.
     requestBackgroundTerminalWorktreeMount({ worktreeId, tabIds: [tab.id] })
 
     if (pasteDraftAfterLaunch !== null) {
-      void pasteDraftWhenAgentReady({
-        tabId: tab.id,
-        content: pasteDraftAfterLaunch,
-        agent,
-        submit: true,
-        onTimeout: () => showAutomationPromptNotSentToast(agent)
-      })
+      scheduleAgentBackgroundDraft(tab.id, pasteDraftAfterLaunch, agent)
     }
 
     return { tabId: tab.id, paneKey, ptyId, startupPlan }
   } catch (error) {
-    // Why: terminal creation and stream subscription are separate remote calls.
-    // A failure between them must not strand an invisible runtime terminal.
+    // Why: partial remote setup must not strand an invisible runtime terminal.
     exitHandled = true
     await backgroundCleanup.cleanupFailedAgentBackgroundSession({
       unsubscribeExit,
