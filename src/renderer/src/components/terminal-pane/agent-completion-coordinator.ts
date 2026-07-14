@@ -510,9 +510,12 @@ export function createAgentCompletionCoordinator(
       handleRecognizedProcess(recognized)
       return true
     }
-    if (pendingHookDoneTimer !== null) {
-      // Why: a pending quiet-window 'done' is the authoritative completion;
-      // tearing down agent evidence here would make the timer drop it.
+    if (pendingHookDoneTimer !== null || pendingCodexAttentionTimer !== null) {
+      // Why: a pending quiet-window 'done' or debounced Codex attention is the
+      // authoritative signal for this turn; tearing down agent evidence here (a
+      // transient null/shell foreground blip before the agent process is
+      // recognized) would make the timer's hasAgentRunEvidence guard silently
+      // drop it. Keep the fail-open contract for #8387 as for the done timer.
       scheduleNextPoll()
       return false
     }
@@ -734,6 +737,12 @@ export function createAgentCompletionCoordinator(
     ) {
       return false
     }
+    // Why: a genuine Codex resume can surface as a working-spinner title before
+    // (or instead of) the resume 'working' hook, so cancel the debounced
+    // attention here or the self-resolving pause still fires a false banner
+    // (#8387). Placed after the replay guard so only an authoritative resume —
+    // not a stale post-completion title replay — drops a still-pending banner.
+    clearPendingCodexAttention()
     workingStatusObserved = true
     requiresFreshWorking = false
     lastCompletionIdentityByPaneKey.delete(options.paneKey)
