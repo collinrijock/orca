@@ -1,5 +1,5 @@
 import { execFileSync, spawnSync } from 'node:child_process'
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 
@@ -12,6 +12,15 @@ export type DockerSshRelayTarget = {
   identityFile: string
   port: number
   tempDir: string
+}
+
+export type DockerSshNodeToolchainFixture = {
+  systemNodePath: string
+  systemNodeVersion: string
+  nvmNodePath: string
+  nvmNpmPath: string
+  nodeVersion: string
+  npmVersion: string
 }
 
 const CONTAINER_IMAGE = process.env.ORCA_E2E_SSH_DOCKER_IMAGE ?? 'node:22-bookworm'
@@ -102,6 +111,70 @@ export function writeDockerSshRelayTargetFile(
     target,
     `printf '%s' ${shellQuote(contents)} > ${shellQuote(filePath)}`
   )
+}
+
+export function configureDockerSshNodeToolchainFixture(
+  target: DockerSshRelayTarget
+): DockerSshNodeToolchainFixture {
+  const donorName = `${target.containerName}-node-donor`
+  const runtimeRoot = path.join(target.tempDir, 'node-runtime')
+  const localNode = path.join(runtimeRoot, 'node')
+  const localNpm = path.join(runtimeRoot, 'npm')
+  const donorNodeVersion = run('docker', ['run', '--rm', 'node:22-bookworm', 'node', '--version'])
+  const nvmVersionDir = `/root/.nvm/versions/node/${donorNodeVersion}`
+  const nvmBin = `${nvmVersionDir}/bin`
+  const nvmNodePath = `${nvmBin}/node`
+  const nvmNpmPath = `${nvmBin}/npm`
+
+  mkdirSync(runtimeRoot, { recursive: true })
+  tryRun('docker', ['rm', '-f', donorName])
+  try {
+    run('docker', ['create', '--name', donorName, 'node:22-bookworm'])
+    run('docker', ['cp', `${donorName}:/usr/local/bin/node`, localNode])
+    run('docker', ['cp', `${donorName}:/usr/local/lib/node_modules/npm`, localNpm])
+    execDockerSshRelayTargetCommand(
+      target,
+      [
+        'apt-get update >/tmp/apt-node-update.log',
+        'DEBIAN_FRONTEND=noninteractive apt-get install -y nodejs npm build-essential python3 >/tmp/apt-node-install.log',
+        'rm -f /usr/bin/npm /usr/bin/npx',
+        `mkdir -p ${shellQuote(nvmBin)} ${shellQuote(`${nvmVersionDir}/lib/node_modules`)}`
+      ].join(' && ')
+    )
+    run('docker', ['cp', localNode, `${target.containerName}:${nvmNodePath}`])
+    run('docker', ['cp', localNpm, `${target.containerName}:${nvmVersionDir}/lib/node_modules/npm`])
+    execDockerSshRelayTargetCommand(
+      target,
+      [
+        `chmod 755 ${shellQuote(nvmNodePath)}`,
+        `ln -s ../lib/node_modules/npm/bin/npm-cli.js ${shellQuote(nvmNpmPath)}`,
+        `ln -s ../lib/node_modules/npm/bin/npx-cli.js ${shellQuote(`${nvmBin}/npx`)}`
+      ].join(' && ')
+    )
+    // Why: this is the Ubuntu layout from #8450—the guard hides NVM from
+    // non-interactive startup, while Orca must still discover it on disk.
+    writeDockerSshRelayTargetFile(
+      target,
+      '/root/.bashrc',
+      'case $- in\n  *i*) ;;\n  *) return;;\nesac\n' +
+        `export NVM_DIR="$HOME/.nvm"\nexport PATH="$NVM_DIR/versions/node/${donorNodeVersion}/bin:$PATH"\n`
+    )
+
+    const [systemNodeVersion, nodeVersion, npmVersion] = execDockerSshRelayTargetCommand(
+      target,
+      `/usr/bin/node --version && ${shellQuote(nvmNodePath)} --version && PATH=${shellQuote(nvmBin)}:$PATH ${shellQuote(nvmNpmPath)} --version`
+    ).split('\n')
+    return {
+      systemNodePath: '/usr/bin/node',
+      systemNodeVersion,
+      nvmNodePath,
+      nvmNpmPath,
+      nodeVersion,
+      npmVersion
+    }
+  } finally {
+    tryRun('docker', ['rm', '-f', donorName])
+  }
 }
 
 export function startDockerSshRelayTarget(testInfo: TestInfo): DockerSshRelayTarget {

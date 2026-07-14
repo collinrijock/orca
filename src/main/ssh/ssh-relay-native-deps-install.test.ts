@@ -238,6 +238,9 @@ describe('installNativeDeps (via deployAndLaunchRelay)', () => {
   }
 
   it('writes a hardcoded package.json BEFORE running npm install', async () => {
+    vi.mocked(resolveRemoteNodePath).mockResolvedValueOnce(
+      '/home/u/.nvm/versions/node/v22.22.0/bin/node'
+    )
     const conn = makeMockConnection(sftpCapture)
     feed(makeExecResponses({ npmInstall: 'ok', probe: 'ok' }))
 
@@ -262,6 +265,9 @@ describe('installNativeDeps (via deployAndLaunchRelay)', () => {
       (c) => c.includes('npm install') && c.includes('node-pty') && c.includes('@parcel/watcher')
     )
     expect(npmInstallIdx).toBeGreaterThanOrEqual(0)
+    expect(execCalls[npmInstallIdx]).toContain(
+      "export PATH='/home/u/.nvm/versions/node/v22.22.0/bin':$PATH"
+    )
     // Pin actual ordering: number of execCommand calls observed at the moment
     // ws.end() ran for package.json must be < the index of `npm install`.
     // Catches a future refactor that fires SFTP-write and npm install via

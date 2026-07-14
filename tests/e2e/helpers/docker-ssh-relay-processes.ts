@@ -45,6 +45,18 @@ for proc in /proc/[0-9]*; do
 done
 `
 
+const LIST_RELAY_NODE_PATHS_COMMAND = `
+for proc in /proc/[0-9]*; do
+  [ -r "$proc/cmdline" ] || continue
+  argv=()
+  mapfile -d '' -t argv < "$proc/cmdline" 2>/dev/null || continue
+  [ "\${argv[1]##*/}" = relay.js ] || continue
+  for arg in "\${argv[@]:2}"; do
+    if [ "$arg" = --detached ]; then printf '%s\\n' "\${argv[0]}"; break; fi
+  done
+done
+`
+
 function parseRelayProcessRows(output: string): RelayProcessRow[] {
   if (!output) {
     return []
@@ -89,6 +101,15 @@ export function readDockerSshRelayProcessSnapshot(
     throw new Error(`Expected one Docker SSH relay process group, found ${groups.length}`)
   }
   return groups[0] ?? null
+}
+
+export function readDockerSshRelayNodePath(target: DockerSshRelayTarget): string | null {
+  const output = execDockerSshRelayTargetCommand(target, LIST_RELAY_NODE_PATHS_COMMAND)
+  const nodePaths = output ? output.split('\n').filter(Boolean) : []
+  if (nodePaths.length > 1) {
+    throw new Error(`Expected one Docker SSH relay, found ${nodePaths.length}`)
+  }
+  return nodePaths[0] ?? null
 }
 
 export function signalDockerSshRelayWatchers(

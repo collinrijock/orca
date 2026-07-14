@@ -39,6 +39,27 @@ describe('resolveRemoteNodePath', () => {
       .mockResolvedValueOnce('v20.0.0\n') // version check
 
     await expect(resolveRemoteNodePath(conn)).resolves.toBe('/usr/local/bin/node')
+
+    expect(execCommandMock.mock.calls[1]![1]).toBe(
+      "printf '%s\\n' '__ORCA_NODE_VERSION__' && '/usr/local/bin/node' --version && printf '%s\\n' '__ORCA_NPM_VERSION__' && PATH='/usr/local/bin':$PATH '/usr/local/bin/npm' --version"
+    )
+    expect(execCommandMock.mock.calls[1]![2]).toEqual({ wrapCommand: true })
+  })
+
+  it('skips an incomplete system Node and selects a complete NVM toolchain', async () => {
+    execCommandMock
+      .mockResolvedValueOnce('/usr/bin/node\n/home/u/.nvm/versions/node/v22.22.0/bin/node\n')
+      .mockRejectedValueOnce(new Error('/usr/bin/npm: not found'))
+      .mockResolvedValueOnce('v22.22.0\n11.13.0\n')
+
+    await expect(resolveRemoteNodePath(conn)).resolves.toBe(
+      '/home/u/.nvm/versions/node/v22.22.0/bin/node'
+    )
+
+    expect(execCommandMock.mock.calls[1]![1]).toContain("'/usr/bin/npm' --version")
+    expect(execCommandMock.mock.calls[2]![1]).toContain(
+      "'/home/u/.nvm/versions/node/v22.22.0/bin/npm' --version"
+    )
   })
 
   it('probes mise install directories', async () => {
@@ -220,10 +241,9 @@ describe('resolveRemoteNodePath', () => {
       '/home/u/.nvm/versions/node/v20.11.0/bin/node'
     )
 
-    expect(execCommandMock).toHaveBeenNthCalledWith(3, conn, `'/bin/zsh' -lc 'command -v node'`, {
-      wrapCommand: false,
-      timeoutMs: 8_000
-    })
+    expect(execCommandMock.mock.calls[2]![1]).toMatch(/^'\/bin\/zsh' -lc /)
+    expect(execCommandMock.mock.calls[2]![1]).toContain('__ORCA_NODE_PATH__')
+    expect(execCommandMock.mock.calls[2]![2]).toEqual({ wrapCommand: false, timeoutMs: 8_000 })
   })
 
   it('falls back to the login shell when every path-probe candidate is too old', async () => {
@@ -250,12 +270,10 @@ describe('resolveRemoteNodePath', () => {
 
     await resolveRemoteNodePath(conn)
 
-    expect(execCommandMock).toHaveBeenNthCalledWith(
-      3,
-      conn,
-      `'/usr/bin/fish' -lc 'command -v node'`,
-      { wrapCommand: false, timeoutMs: 8_000 }
-    )
+    expect(execCommandMock.mock.calls[2]![1]).toMatch(/^'\/usr\/bin\/fish' -lc /)
+    expect(execCommandMock.mock.calls[2]![1]).toContain('__ORCA_NODE_PATH__')
+    expect(execCommandMock.mock.calls[2]![2]).toEqual({ wrapCommand: false, timeoutMs: 8_000 })
+    expect(execCommandMock.mock.calls[3]![2]).toEqual({ wrapCommand: true })
   })
 
   it('uses /bin/sh when the remote shell expansion falls back to it', async () => {
@@ -266,10 +284,9 @@ describe('resolveRemoteNodePath', () => {
       .mockResolvedValueOnce('v20.0.0\n')
 
     await expect(resolveRemoteNodePath(conn)).resolves.toBe('/usr/local/bin/node')
-    expect(execCommandMock).toHaveBeenNthCalledWith(3, conn, `'/bin/sh' -c 'command -v node'`, {
-      wrapCommand: false,
-      timeoutMs: 8_000
-    })
+    expect(execCommandMock.mock.calls[2]![1]).toMatch(/^'\/bin\/sh' -c /)
+    expect(execCommandMock.mock.calls[2]![1]).toContain('__ORCA_NODE_PATH__')
+    expect(execCommandMock.mock.calls[2]![2]).toEqual({ wrapCommand: false, timeoutMs: 8_000 })
   })
 
   // ── Failure ───────────────────────────────────────────────────────────
@@ -437,5 +454,10 @@ describe('resolveRemoteNodePath', () => {
 
     const discoveryScript = decodePowerShellCommand(execCommandMock.mock.calls[0]![1] as string)
     expect(discoveryScript).not.toMatch(/Write-Output \$path\s+exit 0/)
+    const selectedToolchainProbe = decodePowerShellCommand(
+      execCommandMock.mock.calls[2]![1] as string
+    )
+    expect(selectedToolchainProbe).toContain('C:/Program Files/nodejs/npm.cmd')
+    expect(selectedToolchainProbe).toContain("$env:PATH = 'C:/Program Files/nodejs' + ';'")
   })
 })
