@@ -60,9 +60,6 @@ export type PtySpawnOptions = {
   cwd?: string
   env?: Record<string, string>
   envToDelete?: string[]
-  /** Remote hosts use their own platform when deciding whether a user shell
-   *  receives the Windows credential-popup guard. */
-  suppressUserTerminalGitCredentialPrompt?: boolean
   command?: string
   commandDelivery?: 'renderer' | 'provider'
   startupCommandDelivery?: StartupCommandDelivery
@@ -157,6 +154,8 @@ export type PtyProcessInfo = {
 
 export type IPtyProvider = {
   spawn(opts: PtySpawnOptions): Promise<PtySpawnResult>
+  /** Whether this spawn target can append the Git guard after its final env merge. */
+  supportsGitCredentialGuardHost?: (sessionId?: string) => boolean
   attach(id: string): Promise<void>
   hasPty?: (id: string) => boolean
   write(id: string, data: string): void

@@ -136,68 +136,8 @@ export const getTerminalRightClickToPasteSearchEntry = createLocalizedCatalog(()
   }
 ])
 
-export const getTerminalGitCredentialPopupSearchEntry = createLocalizedCatalog(() => [
-  {
-    title: translate(
-      'auto.components.settings.terminal.windows.search.8630676830',
-      'Block Git Credential Popups'
-    ),
-    description: translate(
-      'auto.components.settings.terminal.windows.search.9d8b09bc09',
-      'Stop git in terminals from opening Git Credential Manager sign-in windows.'
-    ),
-    keywords: [
-      ...translateSearchKeyword(
-        'auto.components.settings.terminal.windows.search.e7d2793b03',
-        'terminal'
-      ),
-      ...translateSearchKeyword(
-        'auto.components.settings.terminal.windows.search.28ff08ed35',
-        'windows'
-      ),
-      ...translateSearchKeyword(
-        'auto.components.settings.terminal.windows.search.ba9f11ecc3',
-        'git'
-      ),
-      ...translateSearchKeyword(
-        'auto.components.settings.terminal.windows.search.7c7c74ef60',
-        'credential'
-      ),
-      ...translateSearchKeyword(
-        'auto.components.settings.terminal.windows.search.8eff361700',
-        'popup'
-      ),
-      ...translateSearchKeyword(
-        'auto.components.settings.terminal.windows.search.7c82e855b0',
-        'oauth'
-      ),
-      ...translateSearchKeyword(
-        'auto.components.settings.terminal.windows.search.bf215181b5',
-        'github'
-      ),
-      ...translateSearchKeyword(
-        'auto.components.settings.terminal.windows.search.b19a25c6a0',
-        'sign in'
-      ),
-      ...translateSearchKeyword(
-        'auto.components.settings.terminal.windows.search.ef5acdb939',
-        'gcm'
-      ),
-      ...translateSearchKeyword(
-        'auto.components.settings.terminal.windows.search.4ae35dbb42',
-        'prompt'
-      ),
-      ...translateSearchKeyword(
-        'auto.components.settings.terminal.windows.search.27e4a4878d',
-        'credential manager'
-      )
-    ]
-  }
-])
-
 export const getTerminalWindowsSearchEntries = createLocalizedCatalog((): SettingsSearchEntry[] => [
   ...getTerminalWindowsShellSearchEntry(),
   ...getTerminalWindowsPowershellImplementationSearchEntry(),
-  ...getTerminalRightClickToPasteSearchEntry(),
-  ...getTerminalGitCredentialPopupSearchEntry()
+  ...getTerminalRightClickToPasteSearchEntry()
 ])

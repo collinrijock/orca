@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
 import { homedir } from 'node:os'
-import { buildRelayCloneEnv, buildRelayCommandEnv, buildRelayGitEnv } from './relay-command-env'
+import {
+  buildRelayCommandEnv,
+  buildRelayGitEnv,
+  buildRelayUnattendedGitEnv
+} from './relay-command-env'
 
 // homedir() is the fallback when the relay env carries no HOME; mock it so the
 // fallback path is deterministic and the "no resolvable home" branch is reachable.
@@ -246,9 +250,9 @@ describe('buildRelayGitEnv', () => {
   })
 })
 
-describe('buildRelayCloneEnv', () => {
+describe('buildRelayUnattendedGitEnv', () => {
   it('disables credential UI while preserving relay PATH, locale, and caller askpass', () => {
-    const env = buildRelayCloneEnv(
+    const env = buildRelayUnattendedGitEnv(
       {
         HOME: '/home/me',
         PATH: '/custom/bin',
@@ -266,6 +270,7 @@ describe('buildRelayCloneEnv', () => {
     expect(env.GIT_CONFIG_VALUE_0).toBe('false')
     expect(env.GIT_CONFIG_KEY_1).toBe('credential.guiPrompt')
     expect(env.GIT_CONFIG_VALUE_1).toBe('false')
+    expect(env.GIT_SSH_COMMAND).toBe('ssh -o BatchMode=yes')
     expect(env.LC_ALL).toBe('en_US.UTF-8')
     expect(env.PATH?.split(':')).toEqual(expect.arrayContaining(['/custom/bin', '/usr/bin']))
   })

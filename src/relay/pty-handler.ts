@@ -24,13 +24,12 @@ import {
   scanForShellReady,
   type ShellReadyScanState
 } from '../main/shell-ready-marker-scanner'
+import { applyTerminalGitCredentialPromptGuard } from '../shared/terminal-git-credential-guard'
 import {
-  applyTerminalGitCredentialPromptGuard,
-  clearTerminalGitCredentialPromptGuard,
-  ensureTerminalGitCredentialPromptGuard,
-  hasTerminalGitCredentialPromptGuardOwnership
-} from '../shared/terminal-git-credential-guard'
-import { mergeGitConfigEnvProtocol } from '../shared/git-credential-prompt-env'
+  gitCredentialPromptGuardEnv,
+  mergeGitConfigEnvProtocol
+} from '../shared/git-credential-prompt-env'
+import { isTuiAgent } from '../shared/tui-agent-config'
 
 // Why: node-pty is a native addon that may not be installed on the remote.
 // Dynamic import keeps the require() lazy so loadPty() returns null gracefully
@@ -663,12 +662,11 @@ export class PtyHandler {
     // Why: SSH PTYs bypass main's host-env builder. Apply the policy only
     // after the relay merges its authoritative process environment so indexed
     // Git config and remote Windows/WSL behavior remain intact.
-    applyTerminalGitCredentialPromptGuard(spawnEnv, {
+    const gitCredentialPromptGuarded = applyTerminalGitCredentialPromptGuard(spawnEnv, {
       launchCommand: launchCommandHint,
-      suppressUserTerminalPrompt: params.suppressUserTerminalGitCredentialPrompt !== false,
+      isUnattended: isTuiAgent(params.launchAgent),
       platform: process.platform
     })
-    const gitCredentialPromptGuarded = hasTerminalGitCredentialPromptGuardOwnership(spawnEnv)
     const shouldEmitShellReadyMarker =
       launchCommandHint !== undefined &&
       shouldUseShellReadyStartupDelivery({
@@ -1093,19 +1091,11 @@ export class PtyHandler {
         },
         envToDelete
       )
-      // Why: revive lacks the original launch command, so preserve the policy
-      // decision made at fresh spawn. Legacy Windows state adopts the new safe
-      // default because the old format cannot represent an opt-out.
-      const serializedGitCredentialPromptGuarded =
-        typeof entry.gitCredentialPromptGuarded === 'boolean'
-          ? entry.gitCredentialPromptGuarded
-          : undefined
-      const gitCredentialPromptGuarded =
-        serializedGitCredentialPromptGuarded ?? process.platform === 'win32'
+      // Why: revive lacks the original launch command, so preserve the guard
+      // decision made at fresh spawn. Legacy state remains an ordinary shell.
+      const gitCredentialPromptGuarded = entry.gitCredentialPromptGuarded === true
       if (gitCredentialPromptGuarded) {
-        ensureTerminalGitCredentialPromptGuard(spawnEnv, process.platform)
-      } else {
-        clearTerminalGitCredentialPromptGuard(spawnEnv)
+        Object.assign(spawnEnv, gitCredentialPromptGuardEnv(spawnEnv, process.platform))
       }
       const shellLaunch = getRelayShellLaunchConfig(shell, spawnEnv)
       const term = ptyMod.spawn(shell, shellLaunch.args, {

@@ -170,12 +170,14 @@ export function buildRelayGitEnv(
   return { ...buildRelayCommandEnv(baseEnv, platform), ...UNTRANSLATED_GIT_OUTPUT_ENV }
 }
 
-/** Env for unattended clone RPCs, which have no terminal that can answer auth UI. */
-export function buildRelayCloneEnv(
+/** Env for unattended Git RPCs, which have no terminal that can answer auth UI. */
+export function buildRelayUnattendedGitEnv(
   baseEnv: NodeJS.ProcessEnv = process.env,
   platform: NodeJS.Platform = process.platform
 ): NodeJS.ProcessEnv {
   // Why: SSH-host GCM can open its own OAuth window even though the clone's
   // stdin is ignored, leaving the relay request hung with no way to answer it.
-  return gitCredentialPromptGuardEnv(buildRelayGitEnv(baseEnv, platform), platform)
+  const env = gitCredentialPromptGuardEnv(buildRelayGitEnv(baseEnv, platform), platform)
+  env.GIT_SSH_COMMAND ??= 'ssh -o BatchMode=yes'
+  return env
 }

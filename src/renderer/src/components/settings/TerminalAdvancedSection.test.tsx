@@ -4,21 +4,10 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { GlobalSettings } from '../../../../shared/types'
-import { useAppStore } from '../../store'
 import { TerminalAdvancedSection } from './TerminalAdvancedSection'
 
-const i18nMock = vi.hoisted(() => ({
-  language: 'en',
-  translations: new Map<string, string>()
-}))
-
 vi.mock('@/i18n/i18n', () => ({
-  i18n: {
-    get language() {
-      return i18nMock.language
-    }
-  },
-  translate: (key: string, defaultValue: string) => i18nMock.translations.get(key) ?? defaultValue
+  translate: (_key: string, defaultValue: string) => defaultValue
 }))
 
 describe('TerminalAdvancedSection scrollback rows', () => {
@@ -27,9 +16,6 @@ describe('TerminalAdvancedSection scrollback rows', () => {
 
   beforeEach(() => {
     globalThis.IS_REACT_ACT_ENVIRONMENT = true
-    i18nMock.language = 'en'
-    i18nMock.translations.clear()
-    useAppStore.setState({ settingsSearchQuery: '' })
     container = document.createElement('div')
     document.body.appendChild(container)
     root = createRoot(container)
@@ -50,7 +36,6 @@ describe('TerminalAdvancedSection scrollback rows', () => {
           setScrollbackMode={vi.fn()}
           searchQuery=""
           showWindowsPowerShellImplementation={false}
-          showWindowsGitCredentialGuard={false}
           isMac={false}
         />
       )
@@ -117,31 +102,5 @@ describe('TerminalAdvancedSection scrollback rows', () => {
 
     expect(updateSettings).toHaveBeenCalledWith({ terminalScrollbackRows: 12345 })
     expect(input.value).toBe('12345')
-  })
-
-  it('keeps the credential setting visible for a localized keyword match', () => {
-    i18nMock.language = 'es'
-    i18nMock.translations.set(
-      'auto.components.settings.terminal.windows.search.27e4a4878d',
-      'gestor de credenciales'
-    )
-    useAppStore.setState({ settingsSearchQuery: 'gestor de credenciales' })
-
-    act(() => {
-      root.render(
-        <TerminalAdvancedSection
-          settings={{} as GlobalSettings}
-          updateSettings={vi.fn()}
-          scrollbackMode="preset"
-          setScrollbackMode={vi.fn()}
-          searchQuery="gestor de credenciales"
-          showWindowsPowerShellImplementation={false}
-          showWindowsGitCredentialGuard
-          isMac={false}
-        />
-      )
-    })
-
-    expect(container.textContent).toContain('Block Git Credential Popups')
   })
 })

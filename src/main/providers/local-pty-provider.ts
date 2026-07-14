@@ -297,7 +297,13 @@ export type LocalPtyProviderOptions = {
   buildSpawnEnv?: (
     id: string,
     baseEnv: Record<string, string>,
-    ctx?: { command?: string; shellPath?: string; isWsl?: boolean; wslDistro?: string | null }
+    ctx?: {
+      command?: string
+      launchAgent?: PtySpawnOptions['launchAgent']
+      shellPath?: string
+      isWsl?: boolean
+      wslDistro?: string | null
+    }
   ) => Record<string, string>
   /** Whether worktree-scoped shell history is enabled. When true (or absent)
    *  and a worktreeId is provided, HISTFILE is scoped per-worktree. */
@@ -522,6 +528,7 @@ export class LocalPtyProvider implements IPtyProvider {
     const finalEnv = this.opts.buildSpawnEnv
       ? this.opts.buildSpawnEnv(id, spawnEnv, {
           command: args.command,
+          launchAgent: args.launchAgent,
           shellPath,
           isWsl: isWslShell,
           wslDistro: launchWslDistro

@@ -10,10 +10,6 @@ import {
   resolveSetupAgentSequenceLaunchCommand,
   SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV
 } from '../shared/setup-agent-sequencing'
-import {
-  ensureTerminalGitCredentialPromptGuard,
-  TERMINAL_GIT_CREDENTIAL_GUARD_STATE_ENV
-} from '../shared/terminal-git-credential-guard'
 
 const { mockPtySpawn, mockPtyInstance } = vi.hoisted(() => ({
   mockPtySpawn: vi.fn(),
@@ -200,7 +196,6 @@ describe('PtyHandler', () => {
     try {
       await dispatcher.callRequest('pty.spawn', {
         command: 'claude',
-        suppressUserTerminalGitCredentialPrompt: false,
         env: {
           GIT_CONFIG_COUNT: '1',
           GIT_CONFIG_KEY_0: 'http.proxy',
@@ -227,48 +222,46 @@ describe('PtyHandler', () => {
     }
   })
 
-  it('guards Windows SSH user terminals while honoring the forwarded opt-out', async () => {
+  it('guards a trusted SSH agent when its command uses a custom wrapper', async () => {
+    await dispatcher.callRequest('pty.spawn', {
+      command: 'cd /repo && custom-agent-wrapper',
+      launchAgent: 'claude'
+    })
+
+    const spawnEnv = mockPtySpawn.mock.calls[0]?.[2]?.env as Record<string, string>
+    expect(spawnEnv.GIT_TERMINAL_PROMPT).toBe('0')
+    expect(spawnEnv.GCM_INTERACTIVE).toBe('never')
+    expect(Object.values(spawnEnv)).toContain('credential.interactive')
+    expect(Object.values(spawnEnv)).toContain('credential.guiPrompt')
+  })
+
+  it('leaves an ordinary Windows SSH user terminal unchanged', async () => {
     const originalPlatform = process.platform
-    const savedTerminalPrompt = process.env.GIT_TERMINAL_PROMPT
-    const savedGcmInteractive = process.env.GCM_INTERACTIVE
-    delete process.env.GIT_TERMINAL_PROMPT
-    delete process.env.GCM_INTERACTIVE
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
 
     try {
       await dispatcher.callRequest('pty.spawn', {
-        suppressUserTerminalGitCredentialPrompt: true
+        env: {
+          GIT_TERMINAL_PROMPT: '1',
+          GCM_INTERACTIVE: 'auto',
+          GIT_CONFIG_COUNT: '1',
+          GIT_CONFIG_KEY_0: 'core.quotePath',
+          GIT_CONFIG_VALUE_0: 'false'
+        }
       })
-      const guardedEnv = mockPtySpawn.mock.calls[0]?.[2]?.env as Record<string, string>
-      expect(guardedEnv.GIT_TERMINAL_PROMPT).toBe('0')
-      expect(guardedEnv.GCM_INTERACTIVE).toBe('never')
-      expect((guardedEnv.WSLENV ?? '').split(':')).toContain('GIT_CONFIG_COUNT')
-
-      mockPtySpawn.mockClear()
-      await dispatcher.callRequest('pty.spawn', {
-        env: guardedEnv,
-        suppressUserTerminalGitCredentialPrompt: false
-      })
-      const optedOutEnv = mockPtySpawn.mock.calls[0]?.[2]?.env as Record<string, string>
-      expect(optedOutEnv.GIT_TERMINAL_PROMPT).toBeUndefined()
-      expect(optedOutEnv.GCM_INTERACTIVE).toBeUndefined()
-      const state = (await dispatcher.callRequest('pty.serialize', { ids: ['pty-2'] })) as string
+      const userEnv = mockPtySpawn.mock.calls[0]?.[2]?.env as Record<string, string>
+      expect(userEnv.GIT_TERMINAL_PROMPT).toBe('1')
+      expect(userEnv.GCM_INTERACTIVE).toBe('auto')
+      expect(userEnv.GIT_CONFIG_COUNT).toBe('1')
+      expect(userEnv.GIT_CONFIG_KEY_0).toBe('core.quotePath')
+      expect(userEnv.GIT_CONFIG_KEY_1).toBeUndefined()
+      const state = (await dispatcher.callRequest('pty.serialize', { ids: ['pty-1'] })) as string
       expect(JSON.parse(state)[0]?.gitCredentialPromptGuarded).toBe(false)
     } finally {
       Object.defineProperty(process, 'platform', {
         configurable: true,
         value: originalPlatform
       })
-      if (savedTerminalPrompt === undefined) {
-        delete process.env.GIT_TERMINAL_PROMPT
-      } else {
-        process.env.GIT_TERMINAL_PROMPT = savedTerminalPrompt
-      }
-      if (savedGcmInteractive === undefined) {
-        delete process.env.GCM_INTERACTIVE
-      } else {
-        process.env.GCM_INTERACTIVE = savedGcmInteractive
-      }
     }
   })
 
@@ -1655,8 +1648,7 @@ describe('PtyHandler', () => {
 
   it('revive preserves the credential guard chosen for an SSH agent terminal', async () => {
     await dispatcher.callRequest('pty.spawn', {
-      command: 'claude',
-      suppressUserTerminalGitCredentialPrompt: false
+      command: 'claude'
     })
     const state = (await dispatcher.callRequest('pty.serialize', { ids: ['pty-1'] })) as string
     expect(JSON.parse(state)[0]?.gitCredentialPromptGuarded).toBe(true)
@@ -1679,21 +1671,18 @@ describe('PtyHandler', () => {
     expect(Object.values(revivedEnv)).toContain('credential.guiPrompt')
   })
 
-  it('revive clears a relay guard inherited by an opted-out user terminal', async () => {
-    const inheritedGuard: Record<string, string> = {}
-    ensureTerminalGitCredentialPromptGuard(inheritedGuard, 'linux')
-    const saved = Object.fromEntries(
-      Object.keys(inheritedGuard).map((key) => [key, process.env[key]])
-    )
-    Object.assign(process.env, inheritedGuard)
+  it('revive treats legacy relay state as an ordinary unguarded terminal', async () => {
+    const savedTerminalPrompt = process.env.GIT_TERMINAL_PROMPT
+    const savedGcmInteractive = process.env.GCM_INTERACTIVE
+    delete process.env.GIT_TERMINAL_PROMPT
+    delete process.env.GCM_INTERACTIVE
     const state = JSON.stringify([
       {
-        id: 'pty-guard-opt-out',
+        id: 'pty-legacy',
         pid: process.pid,
         cols: 80,
         rows: 24,
-        cwd: process.cwd(),
-        gitCredentialPromptGuarded: false
+        cwd: process.cwd()
       }
     ])
     const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true)
@@ -1703,16 +1692,17 @@ describe('PtyHandler', () => {
       const revivedEnv = mockPtySpawn.mock.calls[0]?.[2]?.env as Record<string, string>
       expect(revivedEnv.GIT_TERMINAL_PROMPT).toBeUndefined()
       expect(revivedEnv.GCM_INTERACTIVE).toBeUndefined()
-      expect(revivedEnv.GIT_CONFIG_COUNT).toBeUndefined()
-      expect(revivedEnv[TERMINAL_GIT_CREDENTIAL_GUARD_STATE_ENV]).toBeUndefined()
     } finally {
       killSpy.mockRestore()
-      for (const key of Object.keys(inheritedGuard)) {
-        if (saved[key] === undefined) {
-          delete process.env[key]
-        } else {
-          process.env[key] = saved[key]
-        }
+      if (savedTerminalPrompt === undefined) {
+        delete process.env.GIT_TERMINAL_PROMPT
+      } else {
+        process.env.GIT_TERMINAL_PROMPT = savedTerminalPrompt
+      }
+      if (savedGcmInteractive === undefined) {
+        delete process.env.GCM_INTERACTIVE
+      } else {
+        process.env.GCM_INTERACTIVE = savedGcmInteractive
       }
     }
   })

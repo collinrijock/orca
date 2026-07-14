@@ -777,7 +777,12 @@ async function buildNetworkSshPolicyEnv(options: GitExecOptions): Promise<{
   }
 
   if (!configuredCommand) {
-    return { env: { ...promptEnv, GIT_SSH_COMMAND: 'ssh -o BatchMode=yes' }, mode: 'fallback' }
+    const env = { ...promptEnv, GIT_SSH_COMMAND: 'ssh -o BatchMode=yes' }
+    // Why: WSL routing can come from either an explicit distro or a UNC cwd.
+    if (resolved.wsl) {
+      addWslEnvKeys(env, ['GIT_SSH_COMMAND'])
+    }
+    return { env, mode: 'fallback' }
   }
 
   const batchModeCommand = buildOpenSshBatchModeCommand(configuredCommand)
@@ -787,10 +792,11 @@ async function buildNetworkSshPolicyEnv(options: GitExecOptions): Promise<{
     return { env: promptEnv, mode: 'configured-wrapper-passthrough' }
   }
 
-  return {
-    env: { ...promptEnv, GIT_SSH_COMMAND: batchModeCommand },
-    mode: 'configured-openssh'
+  const env = { ...promptEnv, GIT_SSH_COMMAND: batchModeCommand }
+  if (resolved.wsl) {
+    addWslEnvKeys(env, ['GIT_SSH_COMMAND'])
   }
+  return { env, mode: 'configured-openssh' }
 }
 
 /**

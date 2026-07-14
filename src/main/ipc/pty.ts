@@ -554,6 +554,8 @@ export type BuildPtyHostEnvOptions = {
    *  resolve to Pi for back-compat. NEVER infer from disk presence; that's
    *  the bug this option fixes (cross-agent shadowing when both dirs exist). */
   launchCommand?: string
+  /** Trusted agent identity for wrapped commands that cannot be recognized from text. */
+  launchAgent?: TuiAgent
   shellPath?: string
   isWsl?: boolean
   /** Distro for WSL spawns (null = Windows default distro). Drives the WSL
@@ -561,11 +563,6 @@ export type BuildPtyHostEnvOptions = {
   wslDistro?: string | null
   agentStatusHooksEnabled: boolean
   networkProxySettings?: NetworkProxySettings
-  /** When true (the default at the call sites), a user terminal's git on a
-   *  Windows host cannot pop Git Credential Manager's interactive OAuth window
-   *  (issue #7652). No effect on non-Windows hosts; agent terminals are always
-   *  guarded on every platform regardless of this flag. */
-  suppressUserTerminalGitCredentialPrompt?: boolean
   /** Keep indexed Git config off the sparse daemon wire; the daemon appends
    *  guard entries after merging its authoritative inherited environment. */
   deferGitConfigGuardToDaemon?: boolean
@@ -859,12 +856,11 @@ export function buildPtyHostEnv(
   const hasLaunchCommand =
     typeof launchCommandHint === 'string' && launchCommandHint.trim().length > 0
 
-  // Why: git a terminal runs inherits this env; guard it so a GitHub auth
-  // request can't pop the OS credential helper's OAuth window and loop when an
-  // agent retries git in a network-restricted intranet (issue #7652).
+  // Why: unattended agents must fail instead of opening OS credential UI and
+  // retrying auth in a loop; ordinary user terminals keep normal Git behavior.
   applyTerminalGitCredentialPromptGuard(baseEnv, {
     launchCommand: launchCommandHint,
-    suppressUserTerminalPrompt: opts.suppressUserTerminalGitCredentialPrompt !== false,
+    isUnattended: opts.launchAgent !== undefined,
     deferGitConfigGuardToHost: opts.deferGitConfigGuardToDaemon
   })
 
@@ -1567,13 +1563,12 @@ export function registerPtyHandlers(
           skipCodexHomeEnv: ctx?.isWsl === true && !selectedCodexHomePath,
           githubAttributionEnabled: getSettings?.()?.enableGitHubAttribution ?? false,
           launchCommand: ctx?.command,
+          launchAgent: ctx?.launchAgent,
           shellPath: ctx?.shellPath,
           isWsl: ctx?.isWsl,
           wslDistro: ctx?.wslDistro ?? null,
           agentStatusHooksEnabled: isAgentStatusHooksEnabled(getSettings?.()),
-          networkProxySettings: getSettings?.(),
-          suppressUserTerminalGitCredentialPrompt:
-            getSettings?.()?.terminalSuppressGitCredentialPrompt ?? true
+          networkProxySettings: getSettings?.()
         })
         // Why: agents need their own terminal handle at process start so they
         // can self-identify in orchestration messages without an extra RPC.
@@ -3052,14 +3047,13 @@ export function registerPtyHandlers(
           skipCodexHomeEnv,
           githubAttributionEnabled: getSettings?.()?.enableGitHubAttribution ?? false,
           launchCommand: args.command,
+          launchAgent: isTuiAgent(args.launchAgent) ? args.launchAgent : undefined,
           shellPath: daemonShellOverride ?? process.env.COMSPEC,
           isWsl: shouldSkipCodexHomeEnvForWindowsShell(daemonShellOverride, cwd),
           wslDistro: codexSelectionTarget.runtime === 'wsl' ? codexSelectionTarget.wslDistro : null,
           agentStatusHooksEnabled: isAgentStatusHooksEnabled(getSettings?.()),
           networkProxySettings: getSettings?.(),
-          deferGitConfigGuardToDaemon: true,
-          suppressUserTerminalGitCredentialPrompt:
-            getSettings?.()?.terminalSuppressGitCredentialPrompt ?? true
+          deferGitConfigGuardToDaemon: provider.supportsGitCredentialGuardHost?.(sessionId) === true
         })
         promoteAgentTeamsShimPath(env, requestedAgentTeamsPath)
       }
@@ -3072,8 +3066,6 @@ export function registerPtyHandlers(
         rows: args.rows,
         cwd,
         env,
-        suppressUserTerminalGitCredentialPrompt:
-          getSettings?.()?.terminalSuppressGitCredentialPrompt ?? true,
         ...(isMintedSessionId ? { isNewSession: true } : {})
       }
       spawnOptions.envToDelete = mergePtyEnvDeletions(
@@ -3096,6 +3088,9 @@ export function registerPtyHandlers(
       }
       if (args.startupCommandDelivery !== undefined) {
         spawnOptions.startupCommandDelivery = args.startupCommandDelivery
+      }
+      if (isTuiAgent(args.launchAgent)) {
+        spawnOptions.launchAgent = args.launchAgent
       }
       if (args.worktreeId !== undefined) {
         spawnOptions.worktreeId = args.worktreeId
@@ -3914,15 +3909,15 @@ export function registerPtyHandlers(
             skipCodexHomeEnv,
             githubAttributionEnabled: getSettings?.()?.enableGitHubAttribution ?? false,
             launchCommand: args.command,
+            launchAgent: isTuiAgent(args.launchAgent) ? args.launchAgent : undefined,
             shellPath: effectiveShellOverride ?? process.env.COMSPEC,
             isWsl: shouldSkipCodexHomeEnvForWindowsShell(effectiveShellOverride, cwd),
             wslDistro:
               codexSelectionTarget.runtime === 'wsl' ? codexSelectionTarget.wslDistro : null,
             agentStatusHooksEnabled: isAgentStatusHooksEnabled(getSettings?.()),
             networkProxySettings: getSettings?.(),
-            deferGitConfigGuardToDaemon: true,
-            suppressUserTerminalGitCredentialPrompt:
-              getSettings?.()?.terminalSuppressGitCredentialPrompt ?? true
+            deferGitConfigGuardToDaemon:
+              provider.supportsGitCredentialGuardHost?.(effectiveSessionId) === true
           })
           promoteAgentTeamsShimPath(env, requestedAgentTeamsPath)
         } catch (err) {
@@ -3964,8 +3959,6 @@ export function registerPtyHandlers(
         rows: args.rows,
         cwd,
         env: spawnEnv,
-        suppressUserTerminalGitCredentialPrompt:
-          getSettings?.()?.terminalSuppressGitCredentialPrompt ?? true,
         ...(isMintedSessionId ? { isNewSession: true } : {})
       }
       if (combinedEnvToDelete) {

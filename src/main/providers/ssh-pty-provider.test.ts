@@ -67,18 +67,22 @@ describe('SshPtyProvider', () => {
       })
     })
 
-    it('forwards the user-terminal credential guard opt-out to the relay host', async () => {
-      mux.request.mockResolvedValue({ id: 'pty-guard-setting' })
+    it('forwards trusted agent identity for wrapped remote commands', async () => {
+      mux.request.mockResolvedValue({ id: 'pty-agent' })
 
       await provider.spawn({
         cols: 120,
         rows: 40,
-        suppressUserTerminalGitCredentialPrompt: false
+        command: 'cd /repo && custom-agent-wrapper',
+        launchAgent: 'claude'
       })
 
       expect(mux.request).toHaveBeenCalledWith(
         'pty.spawn',
-        expect.objectContaining({ suppressUserTerminalGitCredentialPrompt: false })
+        expect.objectContaining({
+          command: 'cd /repo && custom-agent-wrapper',
+          launchAgent: 'claude'
+        })
       )
     })
 

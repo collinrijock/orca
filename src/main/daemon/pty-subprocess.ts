@@ -34,12 +34,11 @@ import { removeInheritedNoColor } from '../pty/terminal-color-env'
 import { removeAppImageRuntimeEnv } from '../pty/appimage-terminal-env'
 import { parseWslPath } from '../wsl'
 import { addWslEnvKeys } from '../wsl-env'
-import { mergeGitConfigEnvProtocol } from '../../shared/git-credential-prompt-env'
 import {
-  clearTerminalGitCredentialPromptGuard,
-  ensureTerminalGitCredentialPromptGuard,
-  TERMINAL_GIT_CREDENTIAL_GUARD_POLICY_ENV
-} from '../../shared/terminal-git-credential-guard'
+  gitCredentialPromptGuardEnv,
+  mergeGitConfigEnvProtocol
+} from '../../shared/git-credential-prompt-env'
+import { TERMINAL_GIT_CREDENTIAL_GUARD_POLICY_ENV } from '../../shared/terminal-git-credential-guard'
 import { getWslContextFromSessionId } from './wsl-session-context'
 import { addOrcaWslInteropEnv } from '../pty/wsl-orca-env'
 import {
@@ -64,6 +63,7 @@ import { parsePtySessionId } from './pty-session-id'
 import { getAgentForegroundContextPaths } from '../providers/agent-foreground-context-paths'
 import { assertSafeAgentStartupCwd, resolveSafePtyDefaultCwd } from '../providers/pty-default-cwd'
 import { ORCA_HERMES_STARTUP_QUERY_ENV } from '../../shared/hermes-startup-query'
+import type { TuiAgent } from '../../shared/types'
 
 const PANE_IDENTITY_ENV_KEYS = [
   'ORCA_PANE_KEY',
@@ -90,24 +90,18 @@ const PENDING_PRE_LISTENER_DATA_MAX_CHARS = 512 * 1024
 
 function composeGuardedDaemonGitConfigEnv(
   env: Record<string, string>,
-  explicitEnv: Record<string, string> | undefined
+  explicitEnv: Record<string, string> | undefined,
+  launchAgent: TuiAgent | undefined
 ): void {
   const policy = explicitEnv?.[TERMINAL_GIT_CREDENTIAL_GUARD_POLICY_ENV]
   delete env[TERMINAL_GIT_CREDENTIAL_GUARD_POLICY_ENV]
-  if (policy === 'clear') {
-    clearTerminalGitCredentialPromptGuard(env)
-    return
-  }
-  if (
-    policy !== 'guard' &&
-    (explicitEnv?.GIT_TERMINAL_PROMPT !== '0' || explicitEnv.GCM_INTERACTIVE !== 'never')
-  ) {
+  if (policy !== 'guard' && launchAgent === undefined) {
     return
   }
   // Why: the daemon can outlive Electron, so only its process.env is the
   // authoritative inherited config. The raw env merge already gives an
   // explicit wire protocol normal override semantics; append only the guard.
-  ensureTerminalGitCredentialPromptGuard(env, process.platform)
+  Object.assign(env, gitCredentialPromptGuardEnv(env, process.platform))
 }
 
 export type PtySubprocessOptions = {
@@ -119,6 +113,7 @@ export type PtySubprocessOptions = {
   envToDelete?: string[]
   command?: string
   startupCommandDelivery?: StartupCommandDelivery
+  launchAgent?: TuiAgent
   /** Explicit shell executable path/basename the renderer asked for.
    *  Overrides env.COMSPEC / env.SHELL resolution inside the daemon so a user
    *  who picks "New WSL terminal" from the "+" menu actually gets WSL. */
@@ -588,7 +583,7 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
     // restores clickable refs like `owner/repo#123` / `PR#123`.
     FORCE_HYPERLINK: '1'
   } as Record<string, string>
-  composeGuardedDaemonGitConfigEnv(env, opts.env)
+  composeGuardedDaemonGitConfigEnv(env, opts.env, opts.launchAgent)
   for (const key of opts.envToDelete ?? []) {
     delete env[key]
   }

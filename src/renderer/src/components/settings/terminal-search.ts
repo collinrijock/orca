@@ -22,7 +22,6 @@ import {
   getTerminalTypographySearchEntries
 } from './terminal-typography-search'
 import {
-  getTerminalGitCredentialPopupSearchEntry,
   getTerminalRightClickToPasteSearchEntry,
   getTerminalWindowsPowershellImplementationSearchEntry,
   getTerminalWindowsShellSearchEntry
@@ -113,8 +112,7 @@ export function getTerminalPaneSearchEntries(platform: {
     ...(isWindowsTerminalHost
       ? [
           ...getTerminalWindowsShellSearchEntry(),
-          ...getTerminalWindowsPowershellImplementationSearchEntry(),
-          ...getTerminalGitCredentialPopupSearchEntry()
+          ...getTerminalWindowsPowershellImplementationSearchEntry()
         ]
       : []),
     ...getTerminalRightClickToPasteSearchEntry(),

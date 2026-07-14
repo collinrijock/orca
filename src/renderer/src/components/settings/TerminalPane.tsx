@@ -13,7 +13,6 @@ import {
   getTerminalSetupScriptSearchEntries
 } from './terminal-search'
 import {
-  getTerminalGitCredentialPopupSearchEntry,
   getTerminalRightClickToPasteSearchEntry,
   getTerminalWindowsPowershellImplementationSearchEntry,
   getTerminalWindowsShellSearchEntry
@@ -104,8 +103,6 @@ export function TerminalPane({
         searchQuery,
         getTerminalWindowsPowershellImplementationSearchEntry()
       )) ||
-    (showWindowsHostSettings &&
-      matchesSettingsSearch(searchQuery, getTerminalGitCredentialPopupSearchEntry())) ||
     (isMac &&
       (matchesSettingsSearch(searchQuery, getTerminalMacOptionSearchEntries()) ||
         matchesSettingsSearch(searchQuery, getTerminalMacYenSearchEntries()))) ? (
@@ -117,7 +114,6 @@ export function TerminalPane({
         setScrollbackMode={setScrollbackMode}
         searchQuery={searchQuery}
         showWindowsPowerShellImplementation={showWindowsPowerShellImplementation}
-        showWindowsGitCredentialGuard={showWindowsHostSettings}
         pwshAvailable={pwshAvailable}
         isMac={isMac}
       />
