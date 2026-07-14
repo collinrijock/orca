@@ -167,4 +167,78 @@ describe('remote filesystem watcher cancellation', () => {
     installs.get('/shutdown')?.resolve(vi.fn())
     await shutdownWatch
   })
+
+  it('keeps the shared install alive when a replacement sender joins before the deferred abort fires', async () => {
+    let installSignal: AbortSignal | undefined
+    let resolveInstall: ((unwatch: () => void) => void) | undefined
+    const watchMock = vi.fn(
+      (_rootPath, _callback, options?: { signal?: AbortSignal }) =>
+        new Promise<() => void>((resolve) => {
+          installSignal = options?.signal
+          resolveInstall = resolve
+        })
+    )
+    getSshFilesystemProviderMock.mockReturnValue({ watch: watchMock })
+    const args = { worktreePath: '/home/me/repo', connectionId: 'conn-1' }
+    const senderOne = { isDestroyed: () => false, send: vi.fn(), once: vi.fn(), id: 1 }
+    const senderTwo = { isDestroyed: () => false, send: vi.fn(), once: vi.fn(), id: 2 }
+    const first = handlers['fs:watchWorktree']({ sender: senderOne }, args) as Promise<unknown>
+
+    await Promise.resolve()
+    expect(watchMock).toHaveBeenCalledTimes(1)
+
+    // The last listener leaves and a replacement joins in the SAME tick — before
+    // the queued abort microtask runs. The shared install must survive.
+    handlers['fs:unwatchWorktree']({ sender: { id: 1 } }, args)
+    const second = handlers['fs:watchWorktree']({ sender: senderTwo }, args) as Promise<unknown>
+
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(installSignal?.aborted).toBe(false)
+    expect(watchMock).toHaveBeenCalledTimes(1)
+
+    resolveInstall?.(vi.fn())
+    await Promise.all([first, second])
+  })
+
+  it('refuses a post-shutdown joiner recursion instead of resurrecting the install', async () => {
+    let firstSignal: AbortSignal | undefined
+    let resolveFirst: ((unwatch: () => void) => void) | undefined
+    const lateUnwatch = vi.fn()
+    const watchMock = vi.fn(
+      (_rootPath, _callback, options?: { signal?: AbortSignal }) =>
+        new Promise<() => void>((resolve) => {
+          firstSignal = options?.signal
+          resolveFirst = resolve
+        })
+    )
+    getSshFilesystemProviderMock.mockReturnValue({ watch: watchMock })
+    const args = { worktreePath: '/home/me/repo', connectionId: 'conn-1' }
+    const firstSender = { isDestroyed: () => false, send: vi.fn(), once: vi.fn(), id: 1 }
+    const secondSender = { isDestroyed: () => false, send: vi.fn(), once: vi.fn(), id: 2 }
+    const first = handlers['fs:watchWorktree']({ sender: firstSender }, args) as Promise<unknown>
+
+    await Promise.resolve()
+    expect(watchMock).toHaveBeenCalledTimes(1)
+
+    // Last listener leaves -> deferred abort fires while the install is still pending.
+    handlers['fs:unwatchWorktree']({ sender: { id: 1 } }, args)
+    await vi.waitFor(() => expect(firstSignal?.aborted).toBe(true))
+
+    // Joiner arrives after physical abort (canJoinInstall === false); it awaits the
+    // 'cancelled' resolution and would recurse into a fresh install.
+    const second = handlers['fs:watchWorktree']({ sender: secondSender }, args) as Promise<unknown>
+    await Promise.resolve()
+
+    // Shutdown latches the subsystem before the joiner's recursion runs.
+    await closeAllWatchers()
+
+    // Late success of the aborted generation must be unwatched, not registered.
+    resolveFirst?.(lateUnwatch)
+    await Promise.all([first, second])
+
+    // The recursion is refused post-shutdown: provider.watch() is never called again.
+    expect(watchMock).toHaveBeenCalledTimes(1)
+    expect(lateUnwatch).toHaveBeenCalledTimes(1)
+  })
 })

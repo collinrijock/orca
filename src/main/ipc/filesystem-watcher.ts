@@ -668,6 +668,10 @@ const inFlightRemoteInstalls = new Map<string, RemoteWatcherInstallToken>()
 // map, instead of each call independently invoking provider.watch() and
 // overwriting the per-key state on resolution.
 const pendingRemoteInstallPromises = new Map<string, Promise<RemoteWatcherInstallResult>>()
+// Why: block installs that begin AFTER closeAllWatchers — an in-flight joiner
+// recursion or a fired retry tick calls installRemoteWatcher directly, bypassing
+// the token-abort loop. A genuine new fs:watchWorktree clears the latch.
+let remoteWatchersClosed = false
 const REMOTE_WATCH_RETRY_MS = 1_000
 const REMOTE_WATCH_RETRY_TIMEOUT_MS = 60_000
 
@@ -742,6 +746,11 @@ async function installRemoteWatcher(
   connectionId: string,
   worktreePath: string
 ): Promise<RemoteWatcherInstallResult> {
+  // Why: refuse installs racing in after teardown (joiner recursion, fired retry
+  // tick) so provider.watch() is never called and registered post-shutdown.
+  if (remoteWatchersClosed) {
+    return 'cancelled'
+  }
   const provider = getSshFilesystemProvider(connectionId)
   if (!provider || sender.isDestroyed()) {
     return 'unavailable'
@@ -919,6 +928,9 @@ export function registerFilesystemWatcherHandlers(): void {
     'fs:watchWorktree',
     async (event, args: { worktreePath: string; connectionId?: string }): Promise<void> => {
       if (args.connectionId) {
+        // Why: a real new watch reopens the subsystem after closeAllWatchers
+        // latched it shut (also how tests reset between cases).
+        remoteWatchersClosed = false
         const key = `${args.connectionId}:${args.worktreePath}`
         const result = await installRemoteWatcher(
           event.sender,
@@ -986,6 +998,10 @@ export async function closeAllWatchers(): Promise<void> {
   }
   pendingRemoteWatcherRetries.clear()
   loggedUnavailableRemoteWatchers.clear()
+  // Why: latch the subsystem shut and drop the dedup map so a late install that
+  // begins after teardown is refused instead of registering post-shutdown.
+  remoteWatchersClosed = true
+  pendingRemoteInstallPromises.clear()
   // Why: cancel any in-flight provider.watch() calls so their resolved
   // unwatch handles are discarded instead of being installed after shutdown.
   for (const token of inFlightRemoteInstalls.values()) {
