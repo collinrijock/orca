@@ -193,28 +193,57 @@ describe('AgentAwakeService', () => {
     service.dispose()
   })
 
-  it('never downgrades the display on Windows (no independent system-sleep floor)', () => {
+  it('does not stack a second blocker if a display->system swap cannot stop the old one', () => {
+    vi.useFakeTimers()
+    let now = 1_000
     const blocker = createBlocker()
-    // Quiet past the display window, but on Windows the display assertion is the
-    // only thing keeping the system awake, so it must NOT be downgraded.
-    const now = 1_000 + AGENT_AWAKE_DISPLAY_KEEP_AFTER_MS + 1
-    const service = createService(
-      () => now,
-      blocker,
-      createMacosAssertion(),
-      createLinuxAssertion(),
-      null,
-      'win32'
-    )
+    const service = createService(() => now, blocker) // darwin (can downgrade)
 
     service.setEnabled(true)
-    service.setStatuses([workingStatus({ receivedAt: 1_000 })])
+    service.setStatuses([workingStatus({ receivedAt: 1_000 })]) // fresh -> prevent-display-sleep (id 1)
+    expect(blocker.start).toHaveBeenLastCalledWith('prevent-display-sleep')
 
-    expect(blocker.start).toHaveBeenCalledTimes(1)
-    expect(blocker.start).toHaveBeenCalledWith('prevent-display-sleep')
-    expect(blocker.start).not.toHaveBeenCalledWith('prevent-app-suspension')
+    // The swap tries to stop id 1 first, but stop fails and Electron still
+    // reports it started — the old assertion must NOT be leaked under a new one.
+    blocker.stop.mockImplementation(() => {
+      throw new Error('stop failed')
+    })
+    blocker.isStarted.mockReturnValue(true)
+    blocker.start.mockClear()
+
+    now = 1_000 + AGENT_AWAKE_DISPLAY_KEEP_AFTER_MS + 1
+    vi.advanceTimersByTime(AGENT_AWAKE_DISPLAY_KEEP_AFTER_MS + 1)
+
+    expect(blocker.start).not.toHaveBeenCalled()
     service.dispose()
   })
+
+  it.each(['win32', 'linux'] as const)(
+    'never downgrades the display on %s (only macOS has a canonical system-sleep floor)',
+    (platform) => {
+      const blocker = createBlocker()
+      // Quiet past the display window, but off macOS the display assertion is
+      // load-bearing for keeping the system (and agent) awake, so it must NOT
+      // be downgraded to prevent-app-suspension.
+      const now = 1_000 + AGENT_AWAKE_DISPLAY_KEEP_AFTER_MS + 1
+      const service = createService(
+        () => now,
+        blocker,
+        createMacosAssertion(),
+        createLinuxAssertion(),
+        null,
+        platform
+      )
+
+      service.setEnabled(true)
+      service.setStatuses([workingStatus({ receivedAt: 1_000 })])
+
+      expect(blocker.start).toHaveBeenCalledTimes(1)
+      expect(blocker.start).toHaveBeenCalledWith('prevent-display-sleep')
+      expect(blocker.start).not.toHaveBeenCalledWith('prevent-app-suspension')
+      service.dispose()
+    }
+  )
 
   it('starts and stops from settings flips around an already-running status', () => {
     const blocker = createBlocker()

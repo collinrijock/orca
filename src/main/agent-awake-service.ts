@@ -19,8 +19,8 @@ export const AGENT_AWAKE_STATUS_STALE_AFTER_MS = 2 * 60 * 60 * 1000
 // will let the display sleep mid-work; press a key to wake it (the agent keeps
 // running). Refreshing this off raw PTY output would keep such screens lit but
 // costs the battery win (a spinner counts as output), so it's left as future
-// work. The downgrade only applies where a separate system-sleep floor exists
-// (macOS/Linux); Windows keeps prevent-display-sleep (see refresh()).
+// work. The downgrade applies on macOS only (canonical caffeinate floor);
+// Windows and Linux keep prevent-display-sleep (see refresh()).
 export const AGENT_AWAKE_DISPLAY_KEEP_AFTER_MS = 15 * 60 * 1000
 
 type AgentAwakeBlockerType = 'prevent-app-suspension' | 'prevent-display-sleep'
@@ -133,16 +133,19 @@ export class AgentAwakeService {
     const shouldBlock = this.enabled && runningStatusCount > 0
     if (shouldBlock) {
       // Keep the screen lit only while an agent is actively working; once every
-      // working status has gone quiet past the display window, keep the system
-      // (and the agent) awake but let the display sleep. Only downgrade where a
-      // SEPARATE system-sleep floor is held (macOS caffeinate / Linux
-      // systemd-inhibit); on Windows there is no such floor, and letting the
-      // display sleep can trigger Modern Standby and suspend the agent, so keep
-      // prevent-display-sleep there — the display assertion is load-bearing.
-      const hasIndependentSystemFloor = this.platform === 'darwin' || this.platform === 'linux'
+      // working status has gone quiet past the display window, downgrade so the
+      // display can sleep while the system (and the agent) stays awake.
+      //
+      // Only downgrade on macOS: `caffeinate -i -s` is a canonical, always-present
+      // idle-sleep inhibitor, so dropping the Electron display assertion is safe
+      // there. Windows has no independent floor (Modern Standby can suspend the
+      // agent once the display sleeps), and on Linux the guarantee depends on the
+      // distro's logind idle-action / inhibitor semantics, so both keep
+      // prevent-display-sleep — the display assertion is load-bearing for them.
+      const canDropDisplayAssertion = this.platform === 'darwin'
       const displayEligibleCount = this.getDisplayEligibleCount(now)
       const desiredType: AgentAwakeBlockerType =
-        displayEligibleCount > 0 || !hasIndependentSystemFloor
+        displayEligibleCount > 0 || !canDropDisplayAssertion
           ? 'prevent-display-sleep'
           : 'prevent-app-suspension'
       this.startBlocker(reason, runningStatusCount, desiredType)
@@ -236,6 +239,12 @@ export class AgentAwakeService {
     // type so a display->system downgrade never leaks the display assertion.
     if (this.blockerId !== null) {
       this.stopBlocker('blocker-type-change', runningStatusCount)
+      if (this.blockerId !== null) {
+        // The old blocker could not be stopped (stop threw and Electron still
+        // reports it started). Do NOT stack a second assertion — keep the
+        // current one and retry the swap on the next refresh.
+        return
+      }
     }
     try {
       const id = this.blocker.start(desiredType)
