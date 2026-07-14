@@ -2557,6 +2557,13 @@ fragmentLinks=9`.
   inspector correctly rejected it. `ssh-relay-node-release-verification.test.mjs` and
   `ssh-relay-runtime-artifact.test.mjs` separately failed at import with only `SyntaxError: Invalid
 or unexpected token`; the first logs did not identify a source location.
+- Discriminating follow-up: exact head `55f7137c6e065481d2f58fed1353df9a75914fc8` reran in
+  [run 29339487426](https://github.com/stablyai/orca/actions/runs/29339487426). X64 job
+  `87107170544` proved the explicit tar-mode correction: five suites and all 11 collected tests
+  passed in 1.24s. Only the same two import-time syntax errors remained. Both failing suites import
+  a command-line `.mjs` file with a Unix shebang, while every supported call site already invokes
+  those files through `node`; the next correction removes only those unused shebangs and preserves
+  the CLI main guards.
 - Oracle proved: both requested hosted runner labels resolve to native Node 24 environments, MSVC
   setup succeeds, Git for Windows supplies both required GPG tools, frozen source installation
   succeeds, and the test command stops the artifact build before any download or upload. It also
@@ -2567,9 +2574,9 @@ or unexpected token`; the first logs did not identify a source location.
   enabled tuple.
 - Checklist items satisfied: exact Windows runner-label resolution only. No Windows build,
   executable, archive, or artifact cell is checked.
-- Follow-up: declare `0o755` in the tar fixture's archive metadata instead of relying on NTFS,
-  rerun the same seven suites on both native architectures, and diagnose the two import failures if
-  they recur before allowing either job to download inputs.
+- Follow-up: rerun the same seven suites on both native architectures without the two unused
+  shebangs. Treat a recurrence as evidence against the transform-boundary diagnosis and continue to
+  block input download/build.
 
 ### E-M3-RUNTIME-LOCAL-001 — First target-native Linux arm64 runtime artifact
 

@@ -1,5 +1,3 @@
-#!/usr/bin/env node
-
 import { execFile } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { readFile, readdir, stat } from 'node:fs/promises'
