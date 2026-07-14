@@ -254,11 +254,12 @@ export class WatcherProcessSupervisor {
     // Why: destructive Windows cleanup must await exit to release directory handles.
     this.canaryDir = removeWatcherCanaryDirectory(this.canaryDir)
     return this.terminationQueue.track(
-      termination.terminateIdleWatcherChild(proc, this.pendingUnsubscribes, (exited) => {
+      termination.terminateIdleWatcherChild(proc, this.pendingUnsubscribes, () => {
+        // Why: an idle child owns zero records, so a missed exit deadline has no
+        // double-watch hazard; the child keeps its capacity reservation until
+        // physical exit, and poisoning this supervisor would permanently end
+        // local watching — the shared singleton has no retire-and-replace path.
         this.terminatingChild = null
-        if (!exited) {
-          this.shutdownRequested = true
-        }
       })
     )
   }

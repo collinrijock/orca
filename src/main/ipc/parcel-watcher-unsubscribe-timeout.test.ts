@@ -83,6 +83,43 @@ describe('watcher native unsubscribe timeout', () => {
     }
   })
 
+  it('spawns a fresh child after the idle kill misses the exit deadline', async () => {
+    vi.useFakeTimers()
+    try {
+      const promise = subscribeViaWatcherProcess('/repo', vi.fn(), {})
+      const first = currentChild()
+      ackSubscribe(first, 0)
+      const subscription = await promise
+
+      const unsubscribe = subscription.unsubscribe().catch((error: unknown) => error)
+      expect(first.kill).toHaveBeenCalledTimes(1)
+      await vi.advanceTimersByTimeAsync(WATCHER_PROCESS_EXIT_DEADLINE_MS)
+      expect(first.kill).toHaveBeenLastCalledWith('SIGKILL')
+      // Why: removal callers still fail closed on the unproven exit.
+      const error = (await unsubscribe) as Error & { physicalExit?: Promise<void> }
+      expect(error).toMatchObject({
+        message: 'file watcher process did not exit after termination deadline',
+        physicalExit: expect.any(Promise)
+      })
+
+      // Why: the idle child owned zero records, so its zombie must not poison
+      // the shared supervisor — the next subscribe gets a fresh child.
+      const respawnPromise = subscribeViaWatcherProcess('/repo2', vi.fn(), {})
+      expect(forkMock).toHaveBeenCalledTimes(2)
+      const second = currentChild()
+      expect(second).not.toBe(first)
+      expect(second.sent[0]).toMatchObject({ op: 'subscribe', dir: '/repo2' })
+      ackSubscribe(second)
+      await expect(respawnPromise).resolves.toMatchObject({ unsubscribe: expect.any(Function) })
+
+      first.emit('exit', null, 'SIGKILL')
+      await error.physicalExit
+      expect(vi.getTimerCount()).toBe(0)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('rejects only after an unkillable child reaches its exit deadline', async () => {
     vi.useFakeTimers()
     try {
