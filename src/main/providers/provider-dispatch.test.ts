@@ -145,7 +145,8 @@ describe('PTY provider dispatch', () => {
       cols: 80,
       rows: 24,
       cwd: undefined,
-      env: undefined
+      env: undefined,
+      suppressUserTerminalGitCredentialPrompt: true
     })
 
     unregisterSshPtyProvider('conn-123')
