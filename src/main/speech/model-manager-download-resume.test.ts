@@ -235,6 +235,127 @@ describe('ModelManager download resume', () => {
     }
   })
 
+  it('continues through more than eight advancing range segments', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'orca-model-resume-'))
+    try {
+      for (let offset = 1; offset <= 9; offset += 1) {
+        scriptRequest((sentHeaders) => {
+          expect(sentHeaders.range).toBe(`bytes=${offset}-`)
+          return {
+            statusCode: 206,
+            headers: {
+              'content-length': '1',
+              'content-range': `bytes ${offset}-${offset}/${PAYLOAD.length}`
+            },
+            chunks: [PAYLOAD.subarray(offset, offset + 1)]
+          }
+        })
+      }
+      scriptRequest((sentHeaders) => {
+        expect(sentHeaders.range).toBe('bytes=10-')
+        return {
+          statusCode: 206,
+          headers: {
+            'content-length': '10',
+            'content-range': `bytes 10-19/${PAYLOAD.length}`
+          },
+          chunks: [PAYLOAD.subarray(10)]
+        }
+      })
+      const manager = new ModelManager(dir) as unknown as ModelManagerInternals
+      const archivePath = join(dir, 'model.tar.bz2')
+      writeFileSync(archivePath, PAYLOAD.subarray(0, 1))
+
+      await manager.downloadArchiveWithRetry(
+        'https://example.com/model.tar.bz2',
+        archivePath,
+        PAYLOAD.length,
+        'm',
+        () => false,
+        new AbortController().signal
+      )
+
+      expect(netRequestMock).toHaveBeenCalledTimes(10)
+      expect(readFileSync(archivePath)).toEqual(PAYLOAD)
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('bounds pathological advancing range segment requests', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'orca-model-resume-'))
+    try {
+      const manager = new ModelManager(dir) as unknown as ModelManagerInternals
+      const archivePath = join(dir, 'model.tar.bz2')
+      let bytesWritten = 0
+      const downloadFileMock = vi.spyOn(manager, 'downloadFile').mockImplementation(() => {
+        bytesWritten += 1
+        writeFileSync(archivePath, Buffer.alloc(bytesWritten))
+        return Promise.resolve()
+      })
+
+      await expect(
+        manager.downloadArchiveWithRetry(
+          'https://example.com/model.tar.bz2',
+          archivePath,
+          300,
+          'm',
+          () => false,
+          new AbortController().signal
+        )
+      ).rejects.toThrow(/after 256 attempts/)
+
+      expect(downloadFileMock).toHaveBeenCalledTimes(256)
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('keeps the known archive total when Content-Range omits it', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'orca-model-resume-'))
+    try {
+      scriptRequest((sentHeaders) => {
+        expect(sentHeaders.range).toBe('bytes=10-')
+        return {
+          statusCode: 206,
+          headers: {
+            'content-length': '5',
+            'content-range': 'bytes 10-14/*'
+          },
+          chunks: [PAYLOAD.subarray(10, 15)]
+        }
+      })
+      scriptRequest((sentHeaders) => {
+        expect(sentHeaders.range).toBe('bytes=15-')
+        return {
+          statusCode: 206,
+          headers: {
+            'content-length': '5',
+            'content-range': 'bytes 15-19/*'
+          },
+          chunks: [PAYLOAD.subarray(15)]
+        }
+      })
+      const manager = new ModelManager(dir) as unknown as ModelManagerInternals
+      const archivePath = join(dir, 'model.tar.bz2')
+      writeFileSync(archivePath, PAYLOAD.subarray(0, 10))
+
+      await manager.downloadArchiveWithRetry(
+        'https://example.com/model.tar.bz2',
+        archivePath,
+        PAYLOAD.length,
+        'm',
+        () => false,
+        new AbortController().signal
+      )
+
+      expect(netRequestMock).toHaveBeenCalledTimes(2)
+      expect(readFileSync(archivePath)).toEqual(PAYLOAD)
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
   it('rejects and discards a partial when Content-Range does not match the offset', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'orca-model-resume-'))
     try {

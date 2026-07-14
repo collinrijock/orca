@@ -51,7 +51,10 @@ const DOWNLOAD_IDLE_TIMEOUT_MS = 120_000
 // request lets those connections finish instead of failing the same way on
 // every full restart.
 const DOWNLOAD_RETRY_DELAYS_MS = [1_000, 2_000, 4_000]
-const MAX_DOWNLOAD_ATTEMPTS = 8
+const MAX_DOWNLOAD_FAILURES = 8
+// Why: successful bounded ranges may require more than the failure budget, but
+// a server returning pathological tiny segments must not create an endless loop.
+const MAX_ADVANCING_RANGE_SEGMENTS = 256
 // Why: a longer server window should be surfaced for a later manual retry,
 // rather than leaving the settings download looking stuck for minutes.
 const MAX_RETRY_AFTER_MS = 120_000
@@ -450,11 +453,13 @@ export class ModelManager {
     isAborted: () => boolean,
     signal: AbortSignal
   ): Promise<void> {
-    let attempt = 0
+    let requestCount = 0
+    let retryFailures = 0
+    let advancingRangeSegments = 0
     let noProgressStreak = 0
     const totals: DownloadTotals = { totalBytes: expectedSize }
     for (;;) {
-      attempt += 1
+      requestCount += 1
       const offset = this.getPartialArchiveBytes(archivePath)
       // Why: the transport can fail after the final byte reached disk; the
       // caller's SHA-256 check is the authoritative completion test.
@@ -487,18 +492,19 @@ export class ModelManager {
         const incompleteResponse = new Error(
           `Model download response ended at ${receivedBytes} of ${totals.totalBytes} bytes`
         )
-        if (attempt >= MAX_DOWNLOAD_ATTEMPTS) {
-          throw describeInterruptedDownload(
-            incompleteResponse,
-            receivedBytes,
-            totals.totalBytes,
-            attempt
-          )
-        }
         if (receivedBytes > offset) {
           // Why: some proxies return a valid but bounded range segment; request
           // the next segment immediately instead of failing checksum or waiting.
           noProgressStreak = 0
+          advancingRangeSegments += 1
+          if (advancingRangeSegments >= MAX_ADVANCING_RANGE_SEGMENTS) {
+            throw describeInterruptedDownload(
+              incompleteResponse,
+              receivedBytes,
+              totals.totalBytes,
+              requestCount
+            )
+          }
           continue
         }
         const retryableIncompleteResponse = incompleteResponse as HttpStatusError
@@ -516,11 +522,12 @@ export class ModelManager {
         if (!isRetryableDownloadError(err)) {
           throw err
         }
+        retryFailures += 1
         if (
-          attempt >= MAX_DOWNLOAD_ATTEMPTS ||
+          retryFailures >= MAX_DOWNLOAD_FAILURES ||
           noProgressStreak > DOWNLOAD_RETRY_DELAYS_MS.length
         ) {
-          throw describeInterruptedDownload(err, receivedBytes, totals.totalBytes, attempt)
+          throw describeInterruptedDownload(err, receivedBytes, totals.totalBytes, requestCount)
         }
         const retryAfterMs = (err as HttpStatusError).retryAfterMs
         if (retryAfterMs !== undefined && retryAfterMs > MAX_RETRY_AFTER_MS) {
@@ -529,7 +536,11 @@ export class ModelManager {
             `HTTP ${statusCode}; server requested retry after ${Math.ceil(retryAfterMs / 1_000)} seconds`
           )
         }
-        console.warn(`[speech] Model download attempt ${attempt} failed, retrying:`, modelId, err)
+        console.warn(
+          `[speech] Model download attempt ${requestCount} failed, retrying:`,
+          modelId,
+          err
+        )
         await sleepUnlessAborted(
           retryAfterMs ??
             DOWNLOAD_RETRY_DELAYS_MS[
@@ -721,12 +732,13 @@ export class ModelManager {
         // Why: a 200 despite our Range request means the server restarted the
         // transfer from byte zero, so the partial file must be overwritten.
         const progressBase = resumed ? resumeOffset : 0
-        const totalSize =
-          resumed && contentRange?.totalBytes !== undefined
-            ? contentRange.totalBytes
-            : parsedLength > 0
-              ? progressBase + parsedLength
-              : expectedSize
+        // Why: Content-Length on a 206 describes only this segment; when
+        // Content-Range uses '*', retain the known complete archive size.
+        const totalSize = resumed
+          ? (contentRange?.totalBytes ?? totals?.totalBytes ?? expectedSize)
+          : parsedLength > 0
+            ? parsedLength
+            : expectedSize
         if (totals) {
           totals.totalBytes = totalSize
         }
