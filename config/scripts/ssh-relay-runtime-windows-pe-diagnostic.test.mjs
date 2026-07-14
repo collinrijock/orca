@@ -74,10 +74,10 @@ async function fixturePair(firstBytes, secondBytes) {
 
 describe('SSH relay Windows PE mismatch diagnostic', () => {
   it('reports bounded byte ranges and relevant header differences without file paths', async () => {
-    const fixture = await fixturePair(
-      peFixture(),
-      peFixture({ identifierByte: 0x22, timestamp: 0x87654321 })
-    )
+    const first = peFixture()
+    const second = peFixture({ identifierByte: 0x22, timestamp: 0x87654321 })
+    second[0x300] = 0xff
+    const fixture = await fixturePair(first, second)
 
     const result = await diagnoseWindowsPeMismatch(fixture)
 
@@ -90,8 +90,8 @@ describe('SSH relay Windows PE mismatch diagnostic', () => {
           sha256: expect.stringMatching(/^sha256:/)
         }),
         difference: expect.objectContaining({
-          differingBytes: 24,
-          rangeCount: 3,
+          differingBytes: 25,
+          rangeCount: 4,
           rangesTruncated: false
         })
       })
@@ -101,8 +101,22 @@ describe('SSH relay Windows PE mismatch diagnostic', () => {
     expect(result.difference.ranges.map((range) => range.firstRegion)).toEqual([
       'COFF header',
       'debug directory',
-      'CodeView data 0'
+      'CodeView data 0',
+      'section .rdata'
     ])
+    expect(result.difference.regionSummaries).toEqual([
+      expect.objectContaining({ firstRegion: 'COFF header', differingBytes: 4, rangeCount: 1 }),
+      expect.objectContaining({ firstRegion: 'debug directory', differingBytes: 4, rangeCount: 1 }),
+      expect.objectContaining({
+        firstRegion: 'CodeView data 0',
+        differingBytes: 16,
+        rangeCount: 1
+      }),
+      expect.objectContaining({ firstRegion: 'section .rdata', differingBytes: 1, rangeCount: 1 })
+    ])
+    expect(result.difference.regionSummaries[3].samples[0]).toEqual(
+      expect.objectContaining({ firstBytes: '00', secondBytes: 'ff', bytesTruncated: false })
+    )
     expect(result.difference.headerDifferences.map((entry) => entry.field)).toEqual([
       'coff.timeDateStamp',
       'debugDirectory.0.codeView.identifier',
@@ -129,6 +143,34 @@ describe('SSH relay Windows PE mismatch diagnostic', () => {
     await expect(
       diagnoseWindowsPeMismatch({ ...fixture, signal: AbortSignal.abort() })
     ).rejects.toThrow('aborted')
+  })
+
+  it('caps per-region samples and per-range byte excerpts', async () => {
+    const first = peFixture()
+    const second = peFixture()
+    for (let index = 0; index < 10; index += 1) {
+      second[0x280 + index * 2] = 0xff
+    }
+    second.fill(0xff, 0x340, 0x368)
+    const result = await diagnoseWindowsPeMismatch(await fixturePair(first, second))
+
+    expect(result.difference.regionSummaries).toEqual([
+      expect.objectContaining({
+        firstRegion: 'section .rdata',
+        differingBytes: 50,
+        rangeCount: 11,
+        samples: expect.any(Array)
+      })
+    ])
+    expect(result.difference.regionSummaries[0].samples).toHaveLength(8)
+    expect(result.difference.ranges.at(-1)).toEqual(
+      expect.objectContaining({
+        length: 40,
+        bytesTruncated: true,
+        firstBytes: '00'.repeat(32),
+        secondBytes: 'ff'.repeat(32)
+      })
+    )
   })
 
   it('parses only the two explicit CLI inputs', () => {

@@ -8,6 +8,8 @@ const MAX_SECTIONS = 96
 const MAX_DEBUG_ENTRIES = 32
 const MAX_DIFF_RANGES = 128
 const MAX_HEADER_DIFFERENCES = 128
+const MAX_RANGE_SAMPLE_BYTES = 32
+const MAX_REGION_SAMPLES = 8
 const READ_CHUNK_BYTES = 64 * 1024
 const DIAGNOSTIC_TIMEOUT_MS = 60_000
 
@@ -146,9 +148,74 @@ function parsePeHeader(buffer) {
       start: section.headerOffset,
       end: section.headerOffset + 40,
       label: `section header ${section.name}`
-    }))
+    })),
+    ...sections
+      .filter((section) => section.rawSize > 0)
+      .map((section) => ({
+        start: section.rawPointer,
+        end: section.rawPointer + section.rawSize,
+        label: `section ${section.name}`
+      }))
   ]
   return { header, regions, sections }
+}
+
+function regionAt(regions, offset) {
+  const matches = regions.filter((region) => offset >= region.start && offset < region.end)
+  matches.sort((left, right) => left.end - left.start - (right.end - right.start))
+  return matches[0]?.label ?? 'unmapped file data'
+}
+
+function bytesHex(bytes) {
+  return bytes
+    .map((byte) => (byte === undefined ? '--' : byte.toString(16).padStart(2, '0')))
+    .join('')
+}
+
+function rangeRecord(state, firstRegions, secondRegions) {
+  const firstRegion = regionAt(firstRegions, state.start)
+  const secondRegion = regionAt(secondRegions, state.start)
+  return {
+    start: state.start,
+    endExclusive: state.end,
+    startHex: hex(state.start),
+    endExclusiveHex: hex(state.end),
+    length: state.end - state.start,
+    firstRegion,
+    secondRegion,
+    firstBytes: bytesHex(state.firstBytes),
+    secondBytes: bytesHex(state.secondBytes),
+    bytesTruncated: state.end - state.start > state.firstBytes.length
+  }
+}
+
+function addRegionSummary(state, range) {
+  const key = `${range.firstRegion}\0${range.secondRegion}`
+  let summary = state.regionSummaries.get(key)
+  if (!summary) {
+    summary = {
+      firstRegion: range.firstRegion,
+      secondRegion: range.secondRegion,
+      differingBytes: 0,
+      rangeCount: 0,
+      firstOffset: range.start,
+      lastEndExclusive: range.endExclusive,
+      samples: []
+    }
+    state.regionSummaries.set(key, summary)
+  }
+  summary.differingBytes += range.length
+  summary.rangeCount += 1
+  summary.lastEndExclusive = range.endExclusive
+  if (summary.samples.length < MAX_REGION_SAMPLES) {
+    summary.samples.push({
+      start: range.start,
+      endExclusive: range.endExclusive,
+      firstBytes: range.firstBytes,
+      secondBytes: range.secondBytes,
+      bytesTruncated: range.bytesTruncated
+    })
+  }
 }
 
 function rvaToFileOffset(rva, header, sections) {
@@ -275,27 +342,29 @@ function finishRange(state, firstRegions, secondRegions) {
     return
   }
   state.rangeCount += 1
+  const range = rangeRecord(state, firstRegions, secondRegions)
+  addRegionSummary(state, range)
   if (state.ranges.length < MAX_DIFF_RANGES) {
-    const regionAt = (regions) =>
-      regions.find((region) => state.start >= region.start && state.start < region.end)?.label ??
-      'unmapped file data'
-    state.ranges.push({
-      start: state.start,
-      endExclusive: state.end,
-      startHex: hex(state.start),
-      endExclusiveHex: hex(state.end),
-      length: state.end - state.start,
-      firstRegion: regionAt(firstRegions),
-      secondRegion: regionAt(secondRegions)
-    })
+    state.ranges.push(range)
   }
   state.start = undefined
+  state.firstBytes = []
+  state.secondBytes = []
 }
 
 async function compareBytes(first, second, signal) {
   const firstHash = createHash('sha256')
   const secondHash = createHash('sha256')
-  const state = { differingBytes: 0, end: 0, rangeCount: 0, ranges: [], start: undefined }
+  const state = {
+    differingBytes: 0,
+    end: 0,
+    firstBytes: [],
+    rangeCount: 0,
+    ranges: [],
+    regionSummaries: new Map(),
+    secondBytes: [],
+    start: undefined
+  }
   const length = Math.max(first.metadata.size, second.metadata.size)
   for (let offset = 0; offset < length; offset += READ_CHUNK_BYTES) {
     signal.throwIfAborted()
@@ -313,7 +382,15 @@ async function compareBytes(first, second, signal) {
         index >= firstLength || index >= secondLength || firstBytes[index] !== secondBytes[index]
       if (different) {
         state.differingBytes += 1
-        state.start ??= offset + index
+        if (state.start === undefined) {
+          state.start = offset + index
+          state.firstBytes = []
+          state.secondBytes = []
+        }
+        if (state.firstBytes.length < MAX_RANGE_SAMPLE_BYTES) {
+          state.firstBytes.push(index < firstLength ? firstBytes[index] : undefined)
+          state.secondBytes.push(index < secondLength ? secondBytes[index] : undefined)
+        }
         state.end = offset + index + 1
       } else {
         finishRange(state, first.parsed.regions, second.parsed.regions)
@@ -327,7 +404,8 @@ async function compareBytes(first, second, signal) {
     differingBytes: state.differingBytes,
     rangeCount: state.rangeCount,
     ranges: state.ranges,
-    rangesTruncated: state.rangeCount > state.ranges.length
+    rangesTruncated: state.rangeCount > state.ranges.length,
+    regionSummaries: [...state.regionSummaries.values()]
   }
 }
 
@@ -390,6 +468,7 @@ export async function diagnoseWindowsPeMismatch({
         rangeCount: comparison.rangeCount,
         ranges: comparison.ranges,
         rangesTruncated: comparison.rangesTruncated,
+        regionSummaries: comparison.regionSummaries,
         headerDifferences: headerState.differences,
         headerDifferencesTruncated: headerState.truncated
       }
