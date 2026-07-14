@@ -1070,10 +1070,10 @@
                 <code>linux-arm64-glibc</code><span>Decision-gated candidate</span>
               </div>
               <div class="artifact">
-                <code>linux-x64-musl</code><span>Gate on runtime source</span>
+                <code>linux-x64-musl</code><span>Legacy-only; Orca build required</span>
               </div>
               <div class="artifact">
-                <code>linux-arm64-musl</code><span>Gate on real runner</span>
+                <code>linux-arm64-musl</code><span>Legacy-only; Orca build required</span>
               </div>
             </div>
             <div>
@@ -1086,7 +1086,9 @@
               <div class="artifact">
                 <code>win32-x64</code><span>Decision-gated candidate</span>
               </div>
-              <div class="artifact"><code>win32-arm64</code><span>Gate on real runner</span></div>
+              <div class="artifact">
+                <code>win32-arm64</code><span>Decision-gated candidate</span>
+              </div>
             </div>
           </div>
 
@@ -1101,11 +1103,31 @@
             </p>
           </div>
 
+          <div class="callout">
+            <strong>Initial immutable runtime baseline</strong>
+            <p>
+              The first contract pins unchanged official Node v24.18.0 LTS binaries. Linux glibc
+              candidates require kernel 4.18, glibc 2.28, and libstdc++ 6.0.25 with
+              <code>GLIBCXX_3.4.25</code>; macOS candidates require 13.5. Initial Windows x64
+              candidates require Windows 10 22H2 build 19045 or Server 2022 build 20348, and arm64
+              requires Windows 11 24H2 build 26100. Windows bootstrap additionally requires OpenSSH
+              for Windows 8.1p1, Windows PowerShell 5.1, and .NET Framework 4.8.
+            </p>
+            <p>
+              Node's detached checksum signature is verified against a build-input-pinned official
+              release keyring before extraction. Musl has no accepted official binary for this
+              package, so musl remains legacy-only until Orca owns and proves a target-native source
+              build. Rosetta-translated shells remain legacy until the x64 artifact passes a live
+              Rosetta SSH cell. These are selector eligibility constraints, not tuple enablement;
+              every candidate still needs the complete two-layer evidence.
+            </p>
+          </div>
+
           <details open>
             <summary>Archive contents</summary>
             <div class="details-body">
               <ul>
-                <li>Bundled Node executable pinned to one version.</li>
+                <li>Unmodified official Node v24.18.0 executable pinned by source archive hash.</li>
                 <li><code>relay.js</code> and crash-isolated <code>relay-watcher.js</code>.</li>
                 <li>Orca-patched <code>node-pty@1.1.0</code> built for the bundled runtime.</li>
                 <li>
@@ -1551,6 +1573,15 @@
               representative remote is available. Numeric regression comparisons use a repeatable
               runner class or a dedicated runner when hosted-runner variance would make the agreed
               threshold inconclusive.
+            </p>
+            <p>
+              Qualifying jobs pin explicit native labels: <code>ubuntu-24.04</code> and
+              <code>ubuntu-24.04-arm</code>, <code>macos-15-intel</code> and <code>macos-15</code>,
+              plus <code>windows-2022</code> and <code>windows-11-arm</code>. GitHub refreshes these
+              images weekly, so each job logs the resolved image version; <code>*-latest</code> and
+              third-party runner labels do not qualify a tuple merely because another repository
+              workflow uses them. Hosted capacity is unreserved, and no approved self-hosted SSH
+              target pool or cross-family endpoint is assumed.
             </p>
           </div>
 

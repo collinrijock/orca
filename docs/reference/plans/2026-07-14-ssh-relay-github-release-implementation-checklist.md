@@ -159,15 +159,34 @@ No production implementation begins until every blocking item has an owner and d
 runner/remote, and numeric-budget decisions with authoritative evidence before starting Work Package
 1 implementation on a separate branch/PR boundary.
 
-- [ ] Define the oldest supported glibc version.
-- [ ] Define the oldest supported libstdc++/C++ ABI level.
-- [ ] Define the minimum supported Linux kernel.
-- [ ] Define supported musl distribution and musl-version baselines.
-- [ ] Define minimum supported macOS version for x64 and arm64.
-- [ ] Define minimum supported Windows build and OpenSSH/PowerShell baseline.
-- [ ] Decide whether Rosetta-hosted shells select x64, arm64, or legacy based on the actual remote
-      process architecture.
+- [x] Define the oldest supported glibc version as 2.28 for initial Linux x64/arm64 candidates.
+      (E-M1-BASELINE-001)
+- [x] Define the oldest supported libstdc++/C++ ABI level as libstdc++ 6.0.25 with
+      `GLIBCXX_3.4.25`. (E-M1-BASELINE-001)
+- [x] Define the minimum supported Linux kernel as 4.18. (E-M1-BASELINE-001)
+- [x] Define no enabled musl baseline initially. Alpine/musl remains a selector and legacy-path test
+      family until Orca produces and proves its own target-native Node/runtime build; no unofficial
+      Node binary is accepted. (E-M1-BASELINE-001, E-M1-NODE-PROVENANCE-001)
+- [x] Define macOS 13.5 as the minimum for both x64 and arm64 candidates. (E-M1-BASELINE-001)
+- [x] Define the initial Windows candidates as Windows 10 22H2 build 19045 or Server 2022 build
+      20348 for x64, and Windows 11 24H2 build 26100 for arm64, with OpenSSH for Windows 8.1p1,
+      Windows PowerShell 5.1, and .NET Framework 4.8 as minimum bootstrap primitives.
+      (E-M1-BASELINE-001)
+- [x] Treat a Rosetta-translated shell as x64 process architecture, but keep it on legacy until an
+      x64 artifact passes a live Rosetta SSH cell. A native arm64 shell selects arm64; detection
+      never forces a native-architecture artifact across a translated process boundary.
+      (E-M1-BASELINE-001)
 - [ ] Document currently supported legacy tuples separately from proposed bundled tuples.
+
+Decision owner: Codex implementation owner for #8450. Decision authority: conservative
+implementation boundary under the user-approved legacy-default Beta rollout. These are minimum
+eligibility constraints, not support claims: every candidate remains disabled until its two-layer
+live evidence cells pass.
+
+The initial candidate families are Linux glibc x64/arm64, macOS x64/arm64, and Windows x64/arm64.
+Linux musl, WSL, Rosetta-translated macOS, and any unlisted OS/architecture remain legacy-only.
+Version parsing is exact and fail-conservative; an unknown, missing, older, or conflicting baseline
+probe selects legacy rather than guessing a compatible artifact.
 
 ### Validation runner and network topology
 
@@ -193,13 +212,37 @@ the exact commit under test without introducing a second release-control plane.
       do not assume networking between unrelated hosted jobs. (E-M1-RUNNER-DECISION-001)
 - [x] Keep any tuple without an available qualifying native runner or reachable representative
       remote disabled and on its proven legacy path. (E-M1-RUNNER-DECISION-001)
-- [ ] Inventory the repository's available GitHub-hosted and approved self-hosted runner labels;
-      record which are native, their image/version update policy, capacity, and architecture.
+- [x] Inventory the repository's available GitHub-hosted runner labels and record native
+      architecture, image/version policy, and unreserved capacity. No approved self-hosted SSH
+      target pool currently exists. (E-M1-RUNNER-INVENTORY-001)
 - [ ] Name and pin the representative POSIX and Windows remote images/snapshots used for Layer B,
       including their OpenSSH and bootstrap-primitive baselines and network-egress controls.
 - [ ] Select a repeatable GitHub runner class or approved dedicated runner for numeric regression
       baselines. If hosted-runner variance prevents the Milestone 1 thresholds from being evaluated,
       use the dedicated runner for the affected metric rather than weakening the threshold.
+
+#### Native runner inventory decision
+
+Decision owner: Codex implementation owner for #8450. Image authority: GitHub-hosted runner image
+catalog; repository workflow inventory at this branch. Pin explicit OS labels in new relay workflows
+and record the resolved image version from every job because GitHub refreshes images weekly.
+`*-latest` is not permitted for qualifying tuple evidence.
+
+| Client/build architecture | Qualifying label   | Native image family | Capacity/update rule                                                                 |
+| ------------------------- | ------------------ | ------------------- | ------------------------------------------------------------------------------------ |
+| Linux x64                 | `ubuntu-24.04`     | Ubuntu 24.04 x64    | GitHub-hosted ephemeral, unreserved/queue-dependent; weekly image, log exact version |
+| Linux arm64               | `ubuntu-24.04-arm` | Ubuntu 24.04 arm64  | GitHub-hosted ephemeral, unreserved/queue-dependent; weekly image, log exact version |
+| macOS x64                 | `macos-15-intel`   | macOS 15 x64        | GitHub-hosted ephemeral, unreserved/queue-dependent; weekly image, log exact version |
+| macOS arm64               | `macos-15`         | macOS 15 arm64      | GitHub-hosted ephemeral, unreserved/queue-dependent; weekly image, log exact version |
+| Windows x64               | `windows-2022`     | Server 2022 x64     | GitHub-hosted ephemeral, unreserved/queue-dependent; weekly image, log exact version |
+| Windows arm64             | `windows-11-arm`   | Windows 11 arm64    | GitHub-hosted ephemeral, unreserved/queue-dependent; weekly image, log exact version |
+
+The repository already uses `ubuntu-latest`, `ubuntu-24.04-arm`, `macos-15`, `windows-2022`, and a
+third-party macOS release label. Existing `latest` and third-party labels may remain for their
+current workflows but do not qualify a relay tuple unless the relay job pins the explicit label and
+records its resolved image. No approved self-hosted SSH target pool, reserved hosted-runner capacity,
+or cross-family remote endpoint is inferred from this inventory; those unresolved Layer B cells keep
+the affected tuple disabled.
 
 ### Remote bootstrap primitives
 
@@ -216,15 +259,27 @@ the exact commit under test without introducing a second release-control plane.
 
 ### Node runtime ownership
 
-- [ ] Select the bundled Node major/minor/patch and support/EOL policy.
-- [ ] Decide the provenance for each Node binary: unchanged official binary, Orca-built binary, or
-      another documented source.
-- [ ] Decide how musl Node binaries are produced. Do not use an unreviewed unofficial binary source.
-- [ ] Define the Node update cadence and CVE response SLA.
-- [ ] Define refresh identity when only Node, CVE remediation, native code, or a signing key changes.
-      Every refresh must ship through a new desktop tag/build with a newly embedded manifest.
-- [ ] Decide which upstream signatures are preserved and which Orca-built binaries require native
-      signing.
+- [x] Pin the first runtime contract to official Node v24.18.0 LTS (Krypton). Stay on Node 24 LTS
+      until a separately reviewed major upgrade; never silently float a desktop build to a newer
+      patch. (E-M1-NODE-PROVENANCE-001)
+- [x] Use unchanged official nodejs.org binaries for Linux glibc x64/arm64, macOS x64/arm64, and
+      Windows x64/arm64. Build all relay code and native dependencies in target-native Orca jobs;
+      do not substitute cross-built Node executables. (E-M1-NODE-PROVENANCE-001)
+- [x] Produce no musl Node binary in the initial release. A later musl candidate requires an
+      Orca-owned target-native source build, reproducible provenance, signing, and the same live
+      gates; unofficial community binaries are prohibited. (E-M1-NODE-PROVENANCE-001)
+- [x] Check Node security/release status at least weekly and at every desktop release cut. Triage a
+      published Node/runtime CVE within one business day; ship an applicable critical fix within
+      seven calendar days and high-severity fix within fourteen, or disable the affected bundled
+      tuple while legacy remains available. (E-M1-NODE-PROVENANCE-001)
+- [x] Require every Node patch, CVE remediation, native-code change, dependency change, manifest-key
+      change, or accepted-key change to create a new runtime content ID and a new desktop tag/build
+      with a newly embedded signed manifest. Old clients remain pinned. (E-M1-NODE-PROVENANCE-001)
+- [x] Verify the detached Node `SHASUMS256.txt.sig` against a build-input-pinned Node release
+      keyring before extraction, record the signer fingerprint and source archive digest in
+      provenance, and preserve official executable bytes/signatures. Orca-built native executables
+      and libraries still require the target-native signing policy decided below.
+      (E-M1-NODE-PROVENANCE-001)
 
 ### Trust and signing
 
@@ -1509,6 +1564,138 @@ fragmentLinks=9`.
   decisions only; implementation boxes in Milestones 8 and 14 remain open.
 - Follow-up: implement and test the target configuration/UI in its reviewable work package after the
   Work Package 0 boundary and remaining Milestone 1 blockers are closed.
+
+### E-M1-BASELINE-001 — Conservative initial runtime eligibility baselines
+
+- Date: 2026-07-14
+- Commit SHA / PR: parent `9a8f98fd9`; decision content on
+  `Jinwoo-H/bug-8450-ssh-relay-contracts` pending its stacked draft PR
+- Runner: macOS 26.2 arm64 native; authoritative Node v24.18.0 release/build metadata fetched over
+  HTTPS
+- Remote: no SSH remote; local AlmaLinux 8 arm64 container reported glibc 2.28 and
+  `libstdc++-8.5.0`
+- Transport/network: HTTPS to nodejs.org and raw.githubusercontent.com; local Docker execution only
+- Exact command:
+
+  ```sh
+  curl -fsSL https://nodejs.org/dist/index.json | jq -r '[.[] | select(.version | startswith("v24."))][0] | {version,date,lts,security,files}'
+  curl -fsSL https://raw.githubusercontent.com/nodejs/node/v24.18.0/BUILDING.md | sed -n '65,190p'
+  docker run --rm almalinux:8 sh -lc 'uname -m; getconf GNU_LIBC_VERSION; rpm -q libstdc++ glibc'
+  ```
+
+- Result: PASS for a decision record. Node v24.18.0 is LTS and publishes official Linux glibc,
+  macOS, and Windows archives for x64/arm64. Its supported-platform contract states Linux kernel
+  4.18, glibc 2.28, libstdc++ 6.0.25/`GLIBCXX_3.4.25`, macOS 13.5, Windows 10/Server 2016 x64,
+  and Windows 10 arm64 minimums. Orca adopts those Linux/macOS floors and stricter Windows floors
+  aligned with the declared SSH bootstrap primitives.
+- Duration and resource metrics: network reads under 1 s each; local AlmaLinux probe 0.6 s; no
+  runtime load or memory metric applies to the policy decision
+- Artifact/log/trace link:
+  - https://nodejs.org/dist/v24.18.0/
+  - https://github.com/nodejs/node/blob/v24.18.0/BUILDING.md#supported-platforms
+- Oracle proved: the recorded minimums do not claim compatibility below the upstream official Node
+  binary ABI/OS floors, and musl is excluded because Node publishes no official musl archive.
+- Does not prove: any Orca runtime archive, native module, SSH primitive, Rosetta behavior, Windows
+  host, minimum-kernel VM, or enabled tuple. Every candidate remains disabled pending live evidence.
+- Checklist items satisfied: Milestone 1 glibc, libstdc++, kernel, musl, macOS, Windows, and Rosetta
+  eligibility decisions.
+- Follow-up: encode these floors in the manifest/selector contract and fill every target-native live
+  cell before enabling a tuple.
+
+### E-M1-NODE-PROVENANCE-001 — Pinned official Node 24 LTS provenance policy
+
+- Date: 2026-07-14
+- Commit SHA / PR: parent `9a8f98fd9`; decision content on
+  `Jinwoo-H/bug-8450-ssh-relay-contracts` pending its stacked draft PR
+- Runner: macOS 26.2 arm64 native orchestrating an Ubuntu 24.04 arm64 Docker container for GPG
+  verification
+- Remote: not applicable; provenance inputs were verified locally before any extraction or transfer
+- Transport/network: HTTPS to nodejs.org and the Node release-key repository; no SSH
+- Exact command:
+
+  ```sh
+  curl -fsSL https://nodejs.org/dist/v24.18.0/SHASUMS256.txt | rg 'node-v24\.18\.0-(linux-(x64|arm64)|darwin-(x64|arm64)|win-(x64|arm64))\.(tar\.xz|zip)$'
+  docker run --rm ubuntu:24.04 bash -lc 'apt-get update -qq && apt-get install -y -qq ca-certificates curl gpgv >/dev/null && curl -fsSL https://github.com/nodejs/release-keys/raw/refs/heads/main/gpg-only-active-keys/pubring.kbx -o /tmp/nodejs-active.kbx && curl -fsSL https://nodejs.org/dist/v24.18.0/SHASUMS256.txt -o /tmp/SHASUMS256.txt && curl -fsSL https://nodejs.org/dist/v24.18.0/SHASUMS256.txt.sig -o /tmp/SHASUMS256.txt.sig && gpgv --keyring /tmp/nodejs-active.kbx /tmp/SHASUMS256.txt.sig /tmp/SHASUMS256.txt && sha256sum /tmp/SHASUMS256.txt'
+  ```
+
+- Result: PASS; detached signature timestamp `2026-06-23T23:07:59Z` verified with active Node release
+  key `C82FA3AE1CBEDC6BE46B9360C43CEC45C17AB93C` (Richard Lau); verified checksum-file SHA-256
+  `3927bab574a00ca0560c9583fe19655ba19603a1c5851414e4325d34ac50e469`
+- Duration and resource metrics: checksum fetch 0.3 s; clean-container key/signature verification
+  11.9 s including package installation; resource usage not instrumented
+- Artifact/log/trace link:
+  - https://nodejs.org/dist/v24.18.0/SHASUMS256.txt
+  - https://nodejs.org/dist/v24.18.0/SHASUMS256.txt.sig
+  - https://github.com/nodejs/release-keys
+- Oracle proved: the selected six upstream archives exist and their checksum list has a valid
+  signature from the active Node release keyring. The policy pins the exact patch and requires a
+  new desktop identity for every refresh.
+- Does not prove: that future CI pins rather than mutably fetches the keyring, verifies archives,
+  preserves native signatures, builds native modules, meets the CVE SLA, or signs Orca artifacts.
+  Those remain implementation/release gates.
+- Checklist items satisfied: Milestone 1 Node version, provenance, musl-source, update/CVE, refresh
+  identity, and upstream-signature decisions.
+- Follow-up: vendor a reviewed keyring/input digest into the build contract, implement fail-closed
+  verification, and add target-native signing/provenance jobs.
+
+### E-M1-RUNNER-INVENTORY-001 — Native GitHub-hosted runner catalog
+
+- Date: 2026-07-14
+- Commit SHA / PR: parent `9a8f98fd9`; decision content on
+  `Jinwoo-H/bug-8450-ssh-relay-contracts` pending its stacked draft PR
+- Runner: macOS 26.2 arm64 native; GitHub runner-image catalog plus repository workflow inventory
+- Remote: not applicable; no SSH target is claimed
+- Transport/network: HTTPS to the GitHub runner-image catalog and GitHub Actions logs
+- Exact command:
+
+  ```sh
+  curl -fsSL https://raw.githubusercontent.com/actions/runner-images/main/README.md | sed -n '/Available Images/,/Beta Images/p'
+  rg -n 'runs-on:' .github/workflows
+  gh run view 29325885071 --repo stablyai/orca --job 87061960266 --log
+  gh run view 29325884997 --repo stablyai/orca --job 87061960091 --log
+  ```
+
+- Result: PASS for inventory. The catalog exposes native x64/arm64 Linux, macOS, and Windows labels
+  selected above and documents weekly image refresh. PR evidence independently resolved
+  `ubuntu-latest` to x64 `ubuntu-24.04` image `20260705.232.1` and `macos-15` to arm64
+  `macos-15-arm64` image `20260706.0213.1`.
+- Duration and resource metrics: catalog fetch 0.2 s; workflow scan 0.1 s; prior log reads under 3 s;
+  hosted capacity is unreserved and queue-dependent rather than a fixed resource guarantee
+- Artifact/log/trace link:
+  - https://github.com/actions/runner-images#available-images
+  - E-M0-CI-001 job links
+- Oracle proved: explicit native labels exist for the six client/build architectures and new relay
+  workflows can avoid mutable `latest` aliases while recording exact resolved images.
+- Does not prove: repository access to paid capacity at a future run, runner availability, SSH
+  server reachability, cross-family networking, image stability, or any runtime tuple. No approved
+  self-hosted target pool was found or inferred.
+- Checklist items satisfied: Milestone 1 runner-label/architecture/image-update/capacity inventory.
+- Follow-up: pin representative remote images/snapshots, provision cross-family endpoints, and run
+  a minimal native label smoke before assigning any evidence cell.
+
+### E-M1-DECISION-DOC-001 — Baseline/provenance plan-content validation
+
+- Date: 2026-07-14
+- Commit SHA / PR: parent `9a8f98fd9`; decision content on
+  `Jinwoo-H/bug-8450-ssh-relay-contracts` pending its stacked draft PR
+- Runner: macOS 26.2 arm64 native; Node v26.0.0 and pnpm 10.24.0
+- Remote: not applicable; documentation/content validation only
+- Transport/network: local files only
+- Exact command: purpose-built inline Node validation using `marked` and `parse5`, followed by
+  `pnpm exec oxfmt --check` for both plan artifacts and `git diff --check`
+- Result: PASS; `links=1 fences=2 htmlIds=11 fragmentLinks=9`, no parse/fragment/duplicate-ID,
+  formatting, or whitespace findings
+- Duration and resource metrics: structural validation 42 ms; formatter check 243 ms; resource
+  usage not instrumented
+- Artifact/log/trace link: this checklist and the linked HTML plan
+- Oracle proved: both artifacts contain the baseline, Node provenance, musl legacy-only, and explicit
+  native-runner inventory decisions and remain structurally valid.
+- Does not prove: implementation, live compatibility, runner access, SSH transport, signing, or any
+  enabled tuple.
+- Checklist items satisfied: evidence-backed synchronization of the Milestone 1 decision content in
+  both required plan artifacts.
+- Follow-up: commit these decisions, replace pending commit references in the next evidence update,
+  and continue the remaining Milestone 1 gates.
 
 ## Accepted Gaps
 
