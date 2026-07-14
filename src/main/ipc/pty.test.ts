@@ -1695,9 +1695,13 @@ describe('registerPtyHandlers', () => {
           value: 'linux'
         })
         try {
-          const env = await daemonSpawnAndGetEnv({ PATH: '/usr/local/bin:/usr/bin' })
-          const entries = env.PATH.split(posix.delimiter)
-          const shimDir = posix.join('/tmp/orca-user-data', 'linux-orca-cli-shim')
+          // Why: overriding process.platform does not change the already-loaded
+          // node:path dialect; keep this synthetic PATH internally consistent.
+          const env = await daemonSpawnAndGetEnv({
+            PATH: ['/usr/local/bin', '/usr/bin'].join(delimiter)
+          })
+          const entries = env.PATH.split(delimiter)
+          const shimDir = join('/tmp/orca-user-data', 'linux-orca-cli-shim')
           // Why: bare `orca` must resolve to the Orca CLI before /usr/bin/orca
           // (the GNOME screen reader) inside Orca-managed terminals (#7904).
           expect(entries.indexOf(shimDir)).toBeGreaterThanOrEqual(0)
