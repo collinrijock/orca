@@ -95,6 +95,24 @@ describe('AgentHookServer pane authority', () => {
     expect(server.canTransferPaneAuthority(TARGET, 'other-pty', () => false)).toBe(false)
   })
 
+  it('does not treat registered or restored aliases as verified authority', () => {
+    const registered = new AgentHookServer()
+    registered.registerPaneKeyAlias('tab-source:0', SOURCE, 'pty-1')
+
+    expect(registered.canTransferPaneAuthority(SOURCE, undefined, () => false)).toBe(false)
+    expect(registered.canTransferPaneAuthority(SOURCE, 'pty-1', () => false)).toBe(false)
+    expect(
+      registered.canTransferPaneAuthority(SOURCE, 'pty-1', (paneKey, ptyId) => {
+        return paneKey === 'tab-source:0' && ptyId === 'pty-1'
+      })
+    ).toBe(true)
+
+    const restored = new AgentHookServer()
+    restored.transferPaneAuthority(SOURCE, TARGET, 'pty-1', 10, { authorityVerified: false })
+    expect(restored.canTransferPaneAuthority(TARGET, undefined, () => false)).toBe(false)
+    expect(restored.canTransferPaneAuthority(TARGET, 'pty-1', () => false)).toBe(false)
+  })
+
   it('bounds persisted aliases by evicting the oldest authority', () => {
     const server = new AgentHookServer()
     const listener = vi.fn()

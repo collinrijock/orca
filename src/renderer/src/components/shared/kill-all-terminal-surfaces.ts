@@ -5,10 +5,10 @@ import {
 } from '../terminal/terminal-tab-actions'
 import {
   buildTerminalTabRetirementPlans,
-  getTerminalPtyOwnershipIdentity,
   type TerminalTabRetirementPlan,
   type TerminalTabRetirementState
 } from '@/store/slices/terminal-tab-retirement'
+import { reserveTerminalRetirementTeardowns } from '@/store/slices/terminal-retirement-teardown-reservation'
 
 const CLOSE_BATCH_SIZE = 2
 
@@ -123,29 +123,6 @@ function getNextTerminalId(ids: ReadonlySet<string>, closingId: string): string 
   return null
 }
 
-function reserveRetirementPlanTeardowns(
-  state: KillAllTerminalSurfaceState,
-  plan: TerminalTabRetirementPlan,
-  scheduledPtyOwners: Set<string>
-): TerminalTabRetirementPlan {
-  const cleanupOnlyPtyIds = new Set(plan.cleanupOnlyPtyIds)
-  const reserve = (ptyId: string): boolean => {
-    const owner = getTerminalPtyOwnershipIdentity(state, ptyId, plan.worktreeId)
-    if (scheduledPtyOwners.has(owner)) {
-      cleanupOnlyPtyIds.add(ptyId)
-      return false
-    }
-    scheduledPtyOwners.add(owner)
-    return true
-  }
-  return {
-    ...plan,
-    localOrSshPtyIds: plan.localOrSshPtyIds.filter(reserve),
-    runtimeTerminals: plan.runtimeTerminals.filter((terminal) => reserve(terminal.ptyId)),
-    cleanupOnlyPtyIds: [...cleanupOnlyPtyIds]
-  }
-}
-
 function createDefaultDependencies(): KillAllTerminalSurfaceDependencies {
   return {
     getState: useAppStore.getState,
@@ -224,6 +201,7 @@ export async function runKillAllTerminalSurfaces(
   let closeYieldCount = 0
   while (closeWave.closeOrder.length > 0) {
     const batchTargetIds = closeWave.closeOrder.splice(0, CLOSE_BATCH_SIZE)
+    let mustReplanAfterYield = false
     for (const targetId of batchTargetIds) {
       remainingTargetIds.delete(targetId)
       attemptedTargetIds.push(targetId)
@@ -231,11 +209,12 @@ export async function runKillAllTerminalSurfaces(
       const remainingTerminalIds =
         closeWave.terminalIdsByWorktree.get(owningWorktreeId) ?? new Set<string>()
       const nextTerminalTabId = getNextTerminalId(remainingTerminalIds, targetId)
-      const retirementPlan = reserveRetirementPlanTeardowns(
+      const { plan: retirementPlan, newlyScheduledPtyOwners } = reserveTerminalRetirementTeardowns(
         closeWave.state,
         closeWave.retirementPlans.get(targetId)!,
         scheduledPtyOwners
       )
+      let closeFailed = false
       try {
         deps.closeSurface(targetId, {
           force: true,
@@ -248,7 +227,19 @@ export async function runKillAllTerminalSurfaces(
           }
         })
       } catch {
+        closeFailed = true
         failedCloseTargetIds.add(targetId)
+      }
+      const failedTargetSurvived =
+        closeFailed && snapshotKillAllTerminalSurfaceIds(deps.getState()).includes(targetId)
+      if (failedTargetSurvived) {
+        // Why: a pre-mutation failure leaves the tab as a live non-target owner.
+        // Replan before touching siblings so it still protects counts and PTYs.
+        for (const owner of newlyScheduledPtyOwners) {
+          scheduledPtyOwners.delete(owner)
+        }
+        mustReplanAfterYield = true
+        break
       }
       remainingTerminalIds.delete(targetId)
       for (const ptyId of retirementPlan.localOrSshPtyIds) {
@@ -275,7 +266,7 @@ export async function runKillAllTerminalSurfaces(
       closeYieldCount += 1
       closeBatchStartedAt = deps.now()
       const stateAfterYield = deps.getState()
-      if (stateAfterYield !== stateAfterBatch) {
+      if (mustReplanAfterYield || stateAfterYield !== stateAfterBatch) {
         // Why: a yield lets tabs move, detach, or appear. Replanning the
         // remaining snapshot prevents stale ownership from killing a survivor.
         closeWave = createCloseWave(stateAfterYield)

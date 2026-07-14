@@ -134,6 +134,30 @@ describe('terminal tab retirement store boundary', () => {
     expect(mockKill).not.toHaveBeenCalled()
   })
 
+  it('preserves shared-owner snapshots while closing the source tab', async () => {
+    const store = createTestStore()
+    const snapshot = { snapshot: 'shared snapshot' }
+    const coldRestore = { scrollback: 'shared scrollback', cwd: 'C:\\workspace' }
+    seedStore(store, {
+      tabsByWorktree: {
+        'wt-1': [
+          makeTab({ id: 'tab-1', worktreeId: 'wt-1', ptyId: 'pty-shared' }),
+          makeTab({ id: 'tab-2', worktreeId: 'wt-1', ptyId: 'pty-shared' })
+        ]
+      },
+      ptyIdsByTabId: { 'tab-1': ['pty-shared'], 'tab-2': ['pty-shared'] },
+      pendingSnapshotByPtyId: { 'pty-shared': snapshot },
+      pendingColdRestoreByPtyId: { 'pty-shared': coldRestore }
+    })
+
+    store.getState().closeTab('tab-1')
+    await Promise.resolve()
+
+    expect(mockKill).not.toHaveBeenCalled()
+    expect(store.getState().pendingSnapshotByPtyId['pty-shared']).toBe(snapshot)
+    expect(store.getState().pendingColdRestoreByPtyId['pty-shared']).toBe(coldRestore)
+  })
+
   it('reconciles natural exit without issuing teardown or revoking resume authority', async () => {
     const store = createTestStore()
     const record = sleepingRecord('tab-1:leaf-1', 'tab-1')

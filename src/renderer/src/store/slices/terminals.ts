@@ -1274,15 +1274,11 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
 
     set((s) => {
       const next = { ...s.tabsByWorktree }
-      let closingPtyId: string | null = null
       for (const wId of Object.keys(next)) {
         const before = next[wId]
         const closingTab = before.find((t) => t.id === tabId)
         if (closingTab) {
           closingWorktreeId = wId
-          if (!closingPtyId) {
-            closingPtyId = closingTab.ptyId ?? null
-          }
         }
         const after = before.filter((t) => t.id !== tabId)
         if (after.length !== before.length) {
@@ -1392,8 +1388,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         ...retirementPlan.localOrSshPtyIds,
         ...retirementPlan.runtimeTerminals.map((terminal) => terminal.ptyId),
         ...retirementPlan.cleanupOnlyPtyIds,
-        ...retirementPlan.unroutablePtyIds,
-        ...(closingPtyId ? [closingPtyId] : [])
+        ...retirementPlan.unroutablePtyIds
       ])
       for (const closingId of closingPtyIds) {
         if (closingId in nextSnapshots) {

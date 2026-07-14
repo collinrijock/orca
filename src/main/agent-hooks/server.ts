@@ -90,6 +90,7 @@ type PaneKeyAliasEntry = {
   stablePaneKey: string
   ptyId: string | null
   updatedAt: number
+  authorityVerified: boolean
 }
 
 // Why: name of the on-disk cache that survives Orca restart. Lives next to
@@ -998,11 +999,13 @@ export class AgentHookServer {
     const physicalPaneKey = this.getPhysicalPaneKeyForAuthority(fromPaneKey, ptyId)
     const alias = this.legacyPaneKeyAliases.get(physicalPaneKey)
     if (ptyId) {
-      return alias?.ptyId === ptyId || ownsPty(physicalPaneKey, ptyId)
+      return Boolean(
+        (alias?.authorityVerified && alias.ptyId === ptyId) || ownsPty(physicalPaneKey, ptyId)
+      )
     }
     // Why: hook status is renderer-originated evidence, not PTY ownership.
     // ID-less moves are safe only after a prior verified transfer minted an alias.
-    return Boolean(alias)
+    return alias?.authorityVerified === true
   }
 
   registerPaneKeyAlias(
@@ -1010,7 +1013,7 @@ export class AgentHookServer {
     stablePaneKey: string,
     ptyId?: string,
     updatedAt = Date.now(),
-    options?: { overwriteExisting?: boolean }
+    options?: { overwriteExisting?: boolean; authorityVerified?: boolean }
   ): void {
     const legacy = parseLegacyNumericPaneKey(legacyPaneKey)
     const stable = isValidPaneKey(stablePaneKey) ? parsePaneKey(stablePaneKey) : null
@@ -1025,18 +1028,21 @@ export class AgentHookServer {
       typeof ptyId === 'string' && ptyId.trim().length > 0 ? ptyId.trim() : existing?.ptyId
     const normalizedUpdatedAt =
       Number.isFinite(updatedAt) && updatedAt > 0 ? updatedAt : (existing?.updatedAt ?? Date.now())
+    const authorityVerified = options?.authorityVerified ?? false
     if (
       existing &&
       existing.stablePaneKey === stablePaneKey &&
       existing.ptyId === (normalizedPtyId ?? null) &&
-      existing.updatedAt === normalizedUpdatedAt
+      existing.updatedAt === normalizedUpdatedAt &&
+      existing.authorityVerified === authorityVerified
     ) {
       return
     }
     this.legacyPaneKeyAliases.set(legacy.paneKey, {
       stablePaneKey,
       ptyId: normalizedPtyId ?? null,
-      updatedAt: normalizedUpdatedAt
+      updatedAt: normalizedUpdatedAt,
+      authorityVerified
     })
     this.boundPaneKeyAliases()
     if (normalizedPtyId) {
@@ -1048,7 +1054,8 @@ export class AgentHookServer {
     fromPaneKey: string,
     toPaneKey: string,
     ptyId?: string,
-    updatedAt = Date.now()
+    updatedAt = Date.now(),
+    options?: { authorityVerified?: boolean }
   ): void {
     if (!isValidPaneKey(fromPaneKey) || !isValidPaneKey(toPaneKey)) {
       return
@@ -1084,7 +1091,8 @@ export class AgentHookServer {
     this.legacyPaneKeyAliases.set(physicalPaneKey, {
       stablePaneKey: toPaneKey,
       ptyId: normalizedPtyId,
-      updatedAt
+      updatedAt,
+      authorityVerified: options?.authorityVerified ?? true
     })
     this.boundPaneKeyAliases()
     this.closedAgentStatusPaneKeys.delete(toPaneKey)

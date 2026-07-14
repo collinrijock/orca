@@ -390,7 +390,7 @@
         "https://github.com/stablyai/orca/issues/8001"
       ],
       "invariant": "Every terminal surface confirmed in the invoking renderer is force-closed exactly once after daemon management settles, later-created surfaces and non-terminal tabs survive, and exact shutdown requests are limited to deduplicated current non-runtime PTY bindings of the confirmed surfaces.",
-      "oracle": "Snapshot terminal entity IDs before the first await; mutate ownership, active selection, bindings, and tab presence while daemon management is pending; then assert only the immutable targets disappear from both terminal stores, active targets close last with valid editor/browser/deactivated post-state, every captured exact PTY promise settles before callbacks, and no provider inventory sweep or late-tab kill occurs.",
+      "oracle": "Snapshot terminal entity IDs before the first await; mutate ownership, active selection, bindings, and tab presence while daemon management is pending and between bounded close batches; then assert only the immutable targets disappear from both terminal stores, active targets close last with valid editor/browser/deactivated post-state, every captured exact PTY promise settles before callbacks, and no provider inventory sweep or late-tab kill occurs.",
       "commands": [
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/shared/kill-all-terminal-surfaces.test.ts src/renderer/src/components/shared/useDaemonActions.test.tsx src/renderer/src/components/terminal/terminal-tab-actions-kill-all.test.ts src/main/ipc/pty-management.test.ts"
       ],
@@ -409,7 +409,7 @@
             "current exact PTY bindings are deduplicated, remote runtime IDs and stale/late bindings are excluded, and all per-PTY settlements finish before completion",
             "the production dependency path calls daemon management exactly once and never invokes listSessions for a post-kill sweep",
             "management rejection and per-close/provider failures do not stop remaining cleanup and produce bounded count/latency diagnostics",
-            "a real 100-tab Zustand fixture records 100 close attempts and exact kills, at least 100 writes, and 49 event-loop yields; a planner operation-count test proves the live-owner stores are indexed once"
+            "a real 100-tab Zustand fixture records 100 close attempts and exact kills, at least 100 writes, and 49 event-loop yields; ownership is revalidated at most once after each yield when the store changed"
           ]
         },
         {
@@ -462,7 +462,7 @@
       },
       "performanceBudget": {
         "required": true,
-        "evidence": "The coordinator performs one management sweep, builds one live-owner index, closes each present unique target once, and sends at most one exact kill per unique current non-runtime PTY not already settled by daemon management. A real 100-tab Zustand fixture asserts 100 close attempts, 100 total local kill calls, at least 100 store writes, and 49 event-loop yields; a separate operation-count test proves terminal and unified ownership stores are each scanned once. Production diagnostics still report measured close-batch duration, but the deterministic gate deliberately makes no machine-load-sensitive latency claim."
+        "evidence": "The coordinator performs one management sweep, builds an initial live-owner index, and revalidates at most once after each two-close yield when the Zustand state changed (at most 49 replans for the 100-tab fixture). It closes each present unique target once and sends at most one exact kill per unique current non-runtime PTY not already settled by daemon management. The fixture asserts 100 close attempts, 100 local kill calls, at least 100 store writes, and 49 yields; planner-level tests prove each individual plan build scans terminal and unified ownership stores once. Production diagnostics report measured close-batch duration, while the deterministic gate makes no machine-load-sensitive latency claim."
       },
       "promotionCriteria": [
         "Run the focused gate for at least 100 consecutive passes or 14 days across required CI platforms.",
@@ -476,7 +476,7 @@
         "Runtime-host terminal close is best-effort because closeTerminalTab still discards the existing async host result and its close-intent lifetime is shorter than the possible RPC flow.",
         "Daemon adapter listing failures remain suppressed by the existing management API, so reported daemon counts are not authoritative verification of every process."
       ],
-      "demotionRule": "Keep experimental or demote to protection none if the gate flakes, permits a late-created tab or unrelated PTY to close, duplicates provider shutdown, or regresses the one-snapshot ownership-index invariant."
+      "demotionRule": "Keep experimental or demote to protection none if the gate flakes, permits a late-created tab or unrelated PTY to close, duplicates provider shutdown, or performs more than one ownership replan per bounded yield."
     },
     {
       "id": "terminal-session.explicit-close-retirement",
@@ -573,7 +573,7 @@
       },
       "flakeHistory": {
         "status": "unknown",
-        "evidence": "The Electron gate passed twice locally, including once through the registered fresh-build command; CI and soak history are not yet available."
+        "evidence": "The Electron gate passed three times locally, including the final review-fix head through the registered fresh-build command; CI and soak history are not yet available."
       },
       "redGreenEvidence": {
         "status": "partial",

@@ -2287,7 +2287,8 @@ function registerPersistedPaneKeyAlias(entry: LegacyPaneKeyAliasEntry): void {
     entry.legacyPaneKey,
     entry.stablePaneKey,
     entry.ptyId,
-    entry.updatedAt
+    entry.updatedAt,
+    { authorityVerified: false }
   )
 }
 

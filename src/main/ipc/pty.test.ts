@@ -3326,6 +3326,17 @@ describe('registerPtyHandlers', () => {
     )
   })
 
+  it('rejects runtime terminal IDs before unowned local provider routing', async () => {
+    const shutdown = vi.spyOn(getLocalPtyProvider(), 'shutdown')
+    handlers.clear()
+    registerPtyHandlers(mainWindow as never)
+
+    await expect(
+      handlers.get('pty:kill')!(null, { id: 'remote:env-1@@terminal-1' })
+    ).rejects.toThrow('Invalid PTY provider id')
+    expect(shutdown).not.toHaveBeenCalled()
+  })
+
   it('synthesizes runtime exit after ordinary daemon-backed pty kill', async () => {
     const shutdown = vi.fn(async () => undefined)
     const runtime = {
@@ -10469,7 +10480,9 @@ describe('registerPtyHandlers', () => {
     expect(registerPaneKeyAliasMock).toHaveBeenCalledWith(
       'tab-1:0',
       stablePaneKey,
-      expect.any(String)
+      expect.any(String),
+      expect.any(Number),
+      { authorityVerified: true }
     )
     expect(clearMigrationUnsupportedPtysForPaneKeyMock).toHaveBeenCalledWith(stablePaneKey)
     expect(setMigrationUnsupportedPtyMock).not.toHaveBeenCalled()
