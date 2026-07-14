@@ -63,6 +63,8 @@ describe('SSH relay runtime artifact workflow', () => {
     expect(source).toContain('ssh-relay-runtime-reproducibility.test.mjs')
     expect(source).toContain('ssh-relay-runtime-windows-pe-diagnostic.mjs')
     expect(source).toContain('ssh-relay-runtime-windows-pe-diagnostic.test.mjs')
+    expect(source).toContain('llvm-objdump.exe')
+    expect(source).toContain('--start-address=0x180001000 --stop-address=0x180001200')
     expect(source).toContain(
       'node --check config/scripts/ssh-relay-runtime-reproducibility.test.mjs'
     )
@@ -108,9 +110,12 @@ describe('SSH relay runtime artifact workflow', () => {
     expect(windowsRun.indexOf('ssh-relay-runtime-windows-pe-diagnostic.mjs')).toBeGreaterThan(
       windowsRun.indexOf('ssh-relay-runtime-reproducibility.mjs')
     )
+    expect(windowsRun.indexOf('llvm-objdump.exe')).toBeGreaterThan(
+      windowsRun.indexOf('ssh-relay-runtime-windows-pe-diagnostic.mjs')
+    )
     expect(
       windowsRun.indexOf("throw 'runtime reproducibility verification failed'")
-    ).toBeGreaterThan(windowsRun.indexOf('ssh-relay-runtime-windows-pe-diagnostic.mjs'))
+    ).toBeGreaterThan(windowsRun.indexOf('llvm-objdump.exe'))
     expect(windowsRun.indexOf('runtime-evidence/${{ matrix.tuple }}')).toBeGreaterThan(
       windowsRun.indexOf("throw 'runtime reproducibility verification failed'")
     )

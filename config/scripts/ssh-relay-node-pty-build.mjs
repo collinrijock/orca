@@ -5,7 +5,10 @@ import { dirname, join, resolve } from 'node:path'
 import { promisify } from 'node:util'
 
 import { applyWindowsNodePtySettlement } from './ssh-relay-node-pty-windows-settlement.mjs'
-import { applyWindowsNodePtyBuildDeterminism } from './ssh-relay-node-pty-windows-build-determinism.mjs'
+import {
+  applyWindowsNodePtyBuildDeterminism,
+  assertWindowsNodePtyGeneratedBuildSettings
+} from './ssh-relay-node-pty-windows-build-determinism.mjs'
 
 const require = createRequire(import.meta.url)
 const execFileAsync = promisify(execFile)
@@ -183,6 +186,15 @@ export async function buildPatchedSshRelayNodePty({
         windowsHide: true,
         env: buildEnvironment
       })
+    }
+    const generatedSettings = await assertWindowsNodePtyGeneratedBuildSettings({
+      nodePtyDirectory: buildDirectory,
+      tuple
+    })
+    if (generatedSettings) {
+      process.stdout.write(
+        `windows_node_pty_msbuild_settings=${JSON.stringify(generatedSettings)}\n`
+      )
     }
   } finally {
     clearTimeout(timeout)

@@ -372,6 +372,22 @@ jobs:
                 --first-pe $firstPe `
                 --second-pe $secondPe
               if ($LASTEXITCODE -ne 0) { Write-Output 'windows_pe_diagnostic=failed' }
+              if ('${{ matrix.tuple }}' -eq 'win32-arm64') {
+                $llvmObjdump = Get-Command llvm-objdump.exe -ErrorAction SilentlyContinue
+                if ($llvmObjdump) {
+                  foreach ($candidate in @(
+                    @{ Label = 'first'; Path = $firstPe },
+                    @{ Label = 'second'; Path = $secondPe }
+                  )) {
+                    "windows_arm64_disassembly=$($candidate.Label)"
+                    # Why: the first 512 code bytes classify the repeated instruction without retaining rejected files.
+                    & $llvmObjdump.Source --disassemble --start-address=0x180001000 --stop-address=0x180001200 $candidate.Path
+                    if ($LASTEXITCODE -ne 0) { Write-Output 'windows_arm64_disassembly=failed' }
+                  }
+                } else {
+                  Write-Output 'windows_arm64_disassembly=tool-unavailable'
+                }
+              }
             } else {
               Write-Output 'windows_pe_diagnostic=skipped_missing_input'
             }

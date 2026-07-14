@@ -2,7 +2,7 @@
 
 Date created: 2026-07-14<br>
 Last updated: 2026-07-14<br>
-Current phase: Milestone 3 / Work Package 2 target-native runtime assembly — exact-head run 29354676731 keeps Linux x64/arm64, macOS x64/arm64, and Windows x64 exactly reproducible, while Windows arm64 fails closed with no upload after a complete bounded scan; 2,879 of 2,947 differing bytes are one-byte changes every 16 bytes in the first 46,049 bytes of `.text`, and the remaining 68 bytes are `/Brepro`-derived COFF/debug/CodeView data; exact implementation commit `6546f54d5` now applies `/Brepro` and `/experimental:deterministic` to compiler and linker inputs in the copied node-pty source only, is locally green, and awaits the six target-native cells; oldest-baseline, native-trust, cross-family remote, and measured-baseline gates remain open; no bundled-runtime path is enabled<br>
+Current phase: Milestone 3 / Work Package 2 target-native runtime assembly — exact-head run 29355973362 keeps Linux x64/arm64, macOS x64/arm64, and Windows x64 exactly reproducible, while Windows arm64 again fails closed with no upload after both complete runtimes execute successfully; adding `/Brepro` and `/experimental:deterministic` to the copied compiler and linker settings did not change the 2,947-byte drift at all, so the next bounded package must prove the generated MSBuild inputs and classify the repeated ARM64 instructions before another producer correction; oldest-baseline, native-trust, cross-family remote, and measured-baseline gates remain open; no bundled-runtime path is enabled<br>
 Primary design: [SSH relay GitHub Release plan](./2026-07-14-ssh-relay-github-release-plan.html)<br>
 Motivating issues: [#8450](https://github.com/stablyai/orca/issues/8450), [#1693](https://github.com/stablyai/orca/issues/1693)
 
@@ -158,11 +158,11 @@ same change as the work it records.
   per-target opt-in selects bundled-preferred behavior, and implementing the setting does not
   authorize default-on rollout or legacy removal (E-M1-ROLLOUT-DECISION-001).
 - Legacy fallback removal: not authorized.
-- Next required action: push exact implementation commit `6546f54d5` plus its evidence-ledger head
-  and run all six target-native cells. Require both Windows architectures to accept the compiler and
-  linker flags, all six outputs to compare exactly before upload, and no regression in native smoke;
-  keep the strict comparator, failed-binary no-upload boundary, repository-wide node-pty patch,
-  legacy/default path, and all other release gates unchanged.
+- Next required action: add a bounded diagnostic that fail-closed inspects the generated
+  `conpty_console_list.vcxproj` for the expected compiler/linker settings and reports paired ARM64
+  instruction/disassembly context around the first differing ranges. Require both native Windows
+  cells while retaining all four POSIX controls, strict comparison, rejected-binary no-upload,
+  repository-wide node-pty patch, legacy/default path, and all other release gates unchanged.
 
 ## Non-Negotiable Invariants
 
@@ -659,8 +659,12 @@ E-M3-WINDOWS-PE-FULL-SCAN-LOCAL-001. Exact-head run 29354676731 then classifies 
 arm64 drift under E-M3-WINDOWS-PE-FULL-SCAN-CI-RED-001: 2,879 one-byte `.text` differences at
 16-byte intervals plus 68 `/Brepro`-derived metadata bytes, with five controls reproducible and
 uploaded and no rejected arm64 upload. Exact implementation commit `6546f54d5` applies the native
-toolchain's reproducible compiler and linker inputs only to the copied node-pty `binding.gyp`, is
-locally green under E-M3-WINDOWS-COMPILER-DETERMINISM-LOCAL-001, and awaits native proof.
+toolchain's reproducible compiler and linker settings only to the copied node-pty `binding.gyp` and
+is locally green under E-M3-WINDOWS-COMPILER-DETERMINISM-LOCAL-001. Exact-head run 29355973362 then
+kept five controls reproducible but reproduced the identical Windows arm64 PE drift under
+E-M3-WINDOWS-COMPILER-DETERMINISM-CI-RED-001. The next diagnostic must prove how those settings
+reach the generated `conpty_console_list.vcxproj` and report bounded ARM64 instruction/disassembly
+context; no second producer correction is justified before that evidence.
 
 Each runtime must contain only the executable closure required by the relay.
 
@@ -4567,23 +4571,93 @@ or unexpected token`; the first logs did not identify a source location.
 - Follow-up: push the exact implementation and ledger head, run all six target-native cells, and
   require exact equality and successful unpublished upload on both Windows architectures.
 
+### E-M3-WINDOWS-COMPILER-DETERMINISM-CI-RED-001 — Compiler-setting correction does not remove arm64 drift
+
+- Date: 2026-07-14
+- Commit SHA / PR: exact head `a6b423f33f0f0f7b4e7975ed80d901f168563e61`, containing exact
+  implementation commit `6546f54d53446015f10681fffff9fe895e460232`; stacked draft
+  PR [#8741](https://github.com/stablyai/orca/pull/8741)
+- Run and jobs: [run 29355973362](https://github.com/stablyai/orca/actions/runs/29355973362),
+  conclusion `failure`; Linux arm64 `87163591039`, Windows x64 `87163591059`, macOS x64
+  `87163591076`, Windows arm64 `87163591141`, macOS arm64 `87163591145`, and Linux x64
+  `87163591207`
+- Runners: the six target-native labels recorded in prior reproducibility evidence. The failing cell
+  was GitHub-hosted `windows-11-arm`, resolved image `win11-arm64` `20260706.102.1`, native
+  `ARM64`, Node v24.18.0, MSVC 19.44.35228 / tools 14.44.35207, Windows SDK 10.0.26100.0, and
+  Python 3.13.14.
+- Remote and transport: none; target-native artifact assembly/execution, rejected-file diagnostics,
+  and unpublished Actions artifact upload only
+- Exact evidence commands:
+
+  ```sh
+  gh run view 29355973362 --repo stablyai/orca \
+    --json headSha,status,conclusion,url,createdAt,updatedAt,jobs
+  gh run view 29355973362 --repo stablyai/orca --job 87163591141 --log-failed
+  gh api repos/stablyai/orca/actions/runs/29355973362/artifacts --paginate
+  ```
+
+- Result: FAIL as the intended strict evidence gate. All 15 Windows contract suites passed with
+  48 passing and three intentionally skipped tests. Linux x64/arm64, macOS x64/arm64, and Windows
+  x64 built twice, inspected, executed, compared exactly, and uploaded. Windows arm64 built and
+  executed both complete outputs, then the comparator rejected
+  `runtime/node_modules/node-pty/build/Release/conpty_console_list.node`; the diagnostic ran, the
+  job failed, and no Windows arm64 artifact was uploaded.
+- Uploaded controls: Linux x64 artifact `8320207112` (29,282,626 bytes), Linux arm64
+  `8320217472` (28,211,075), macOS x64 `8320277866` (26,390,709), macOS arm64 `8320191810`
+  (24,741,051), and Windows x64 `8320261436` (37,075,310). All are unpublished seven-day
+  artifacts; the run contains exactly five artifacts.
+- Rejected arm64 outputs: content IDs
+  `5523ec111f63a53edb3da090cf90bedb0421c2c9862dc0356e106fdf5a6519f2` and
+  `faadd0f5285a449fd0aad0960918edc72d565dc150171e8e292c160931340235`; ZIP sizes
+  33,261,550 and 33,261,546 bytes with SHA-256
+  `769fc2b8a4761b8d19b9d4b02adc2add6b4232ed73a1ee154e6e073760f52eda` and
+  `217e9f8b500837130e0978a7aa03dba2790a926b42410752c7d804e6d5a38143`.
+- PE diagnostic result: both rejected modules remain 956,928-byte machine `0xaa64` PE32+ files
+  with the identical 12-section layout. Their SHA-256 values are
+  `548ff529facca76eb3a30c79f96e2170336b7cf01a3e55aabc2a5cd615cd1111` and
+  `e0039271e09a898d3edf9eb4506f3d895cd3282a893a1e15acb4abec2f9cb69c`. Exactly the
+  same 2,947 bytes differ across 2,886 ranges: 2,879 one-byte `.text` ranges every 16 bytes from
+  offsets 1,052 through 47,100, plus 68 bytes of derived COFF/debug/CodeView identity. The retained
+  `.text` samples all change `45` to `2d`; the 92-byte PDB path hash remains identical.
+- Duration and resource metrics: jobs were 8m25s Windows arm64, 5m50s macOS x64, 5m15s Windows
+  x64, 3m37s Linux arm64, 3m16s Linux x64, and 2m41s macOS arm64. Arm64 builds took 141,484 ms
+  and 116,582 ms; smoke took 5,784 ms and 5,439 ms at 53,014,528 and 53,047,296 bytes RSS. The
+  complete smoke stages took 7,448 ms and 7,383 ms. Build peak RSS, open files/channels, and
+  cancellation settlement were not instrumented.
+- Artifact/log/trace link: run/jobs and the five unpublished artifacts above; rejected arm64 bytes
+  remained runner-local
+- Oracle proved: adding the reviewed compiler/linker settings did not alter the arm64 failure
+  signature, while all five controls and both arm64 runtime executions remain healthy. The strict
+  comparator and no-upload boundary still work. This falsifies the hypothesis that the copied
+  settings alone are sufficient.
+- Does not prove: whether the generated MSBuild project actually propagates both settings to every
+  `conpty_console_list` compile/link invocation, what the repeated ARM64 instruction represents, a
+  safe producer correction, arm64 or cross-run equality, oldest baselines, native trust, SSH,
+  publication, transfer, fallback, UI, or any enabled tuple.
+- Checklist items satisfied: native negative evidence and five reproducible control cells only; no
+  tuple or production checkbox.
+- Follow-up: inspect the generated `conpty_console_list.vcxproj` fail-closed for the expected
+  compiler/linker inputs and emit bounded paired ARM64 instruction/disassembly context around the
+  first differing ranges. Do not change the producer, normalize binaries, weaken comparison, or
+  upload rejected bytes before that evidence.
+
 ## Accepted Gaps
 
 No product gap is accepted merely because it appears in this list. Each entry requires explicit
 owner and promotion condition.
 
-| Gap                                        | Current behavior                                                        | Risk                                           | Owner                                                   | Promotion/removal condition                                                    | Status       |
-| ------------------------------------------ | ----------------------------------------------------------------------- | ---------------------------------------------- | ------------------------------------------------------- | ------------------------------------------------------------------------------ | ------------ |
-| Bundled runtime only partially implemented | Six unpublished native artifact proofs; no production consumer          | #8450/#1693 environment failures remain        | Codex implementation owner                              | Complete Work Packages 2–7 plus Milestones 3–14                                | Open         |
-| No bundled tuple enabled                   | Every target's default and effective mode remains legacy                | No bundled support claim can be made           | Codex implementation owner                              | Complete target-native build/trust and both required live-evidence layers      | Open         |
-| Windows runtime smoke incomplete           | Native x64/arm64 smoke settles and uploads exact evidence               | Historical blocker is closed                   | Codex implementation owner                              | Met by E-M3-WINDOWS-CI-001                                                     | CLOSED       |
-| Native clean-rebuild identity unproved     | Five native cells pass; Windows arm64 `conpty_console_list.node` drifts | Toolchain drift may change native content IDs  | Codex implementation owner                              | All six same-head, same-runner clean builds match without weakening the oracle | Open         |
-| Cross-family Layer B remotes unavailable   | GitHub native runner labels exist; no approved reachable target pool    | Client/remote integration gaps may escape      | Repository release administrator + implementation owner | Approve provider/snapshots/credentials/egress/teardown/cost owner              | BLOCKED      |
-| Musl has no accepted official Node binary  | Musl is deliberately legacy-only                                        | Unofficial binary would break provenance trust | Codex implementation owner                              | Orca-owned target-native source build, signing, provenance, and live gates     | ACCEPTED GAP |
-| Native arm64 live matrices incomplete      | Hosted Linux/Windows arm64 labels exist; full SSH/runtime cells do not  | Cross-build or unit tests may hide native bugs | Codex implementation owner                              | Full native archive, trust, SFTP/system-SSH, RPC, and baseline evidence        | Open         |
-| Legacy performance baseline unmeasured     | Numeric budgets exist; paired cold/warm measurements do not             | Regression thresholds lack a measured baseline | Codex implementation owner                              | Purpose-built paired harness with ten samples on pinned runner classes         | Open         |
-| Manifest signing environment unprovisioned | Ed25519/key-rotation policy exists; no protected runtime signing secret | Runtime assets cannot be safely published      | Repository release administrator                        | Protected environment, reviewers, two test keys, rehearsals, and access audit  | BLOCKED      |
-| Bootstrap primitives lack full live proof  | POSIX/Windows contracts exist; bounded SSH implementations do not       | Hidden dependency or transfer corruption       | Codex implementation owner                              | Purpose-named full-size SFTP/POSIX/Windows system-SSH live suites              | Open         |
+| Gap                                        | Current behavior                                                                                          | Risk                                           | Owner                                                   | Promotion/removal condition                                                                                                                               | Status       |
+| ------------------------------------------ | --------------------------------------------------------------------------------------------------------- | ---------------------------------------------- | ------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ |
+| Bundled runtime only partially implemented | Six unpublished native artifact proofs; no production consumer                                            | #8450/#1693 environment failures remain        | Codex implementation owner                              | Complete Work Packages 2–7 plus Milestones 3–14                                                                                                           | Open         |
+| No bundled tuple enabled                   | Every target's default and effective mode remains legacy                                                  | No bundled support claim can be made           | Codex implementation owner                              | Complete target-native build/trust and both required live-evidence layers                                                                                 | Open         |
+| Windows runtime smoke incomplete           | Native x64/arm64 smoke settles and uploads exact evidence                                                 | Historical blocker is closed                   | Codex implementation owner                              | Met by E-M3-WINDOWS-CI-001                                                                                                                                | CLOSED       |
+| Native clean-rebuild identity unproved     | Five native cells pass; copied MSVC settings do not remove Windows arm64 `conpty_console_list.node` drift | Toolchain drift may change native content IDs  | Codex implementation owner                              | Generated-build-input and ARM64 instruction diagnostics identify a safe producer correction; all six clean builds then match without weakening the oracle | Open         |
+| Cross-family Layer B remotes unavailable   | GitHub native runner labels exist; no approved reachable target pool                                      | Client/remote integration gaps may escape      | Repository release administrator + implementation owner | Approve provider/snapshots/credentials/egress/teardown/cost owner                                                                                         | BLOCKED      |
+| Musl has no accepted official Node binary  | Musl is deliberately legacy-only                                                                          | Unofficial binary would break provenance trust | Codex implementation owner                              | Orca-owned target-native source build, signing, provenance, and live gates                                                                                | ACCEPTED GAP |
+| Native arm64 live matrices incomplete      | Hosted Linux/Windows arm64 labels exist; full SSH/runtime cells do not                                    | Cross-build or unit tests may hide native bugs | Codex implementation owner                              | Full native archive, trust, SFTP/system-SSH, RPC, and baseline evidence                                                                                   | Open         |
+| Legacy performance baseline unmeasured     | Numeric budgets exist; paired cold/warm measurements do not                                               | Regression thresholds lack a measured baseline | Codex implementation owner                              | Purpose-built paired harness with ten samples on pinned runner classes                                                                                    | Open         |
+| Manifest signing environment unprovisioned | Ed25519/key-rotation policy exists; no protected runtime signing secret                                   | Runtime assets cannot be safely published      | Repository release administrator                        | Protected environment, reviewers, two test keys, rehearsals, and access audit                                                                             | BLOCKED      |
+| Bootstrap primitives lack full live proof  | POSIX/Windows contracts exist; bounded SSH implementations do not                                         | Hidden dependency or transfer corruption       | Codex implementation owner                              | Purpose-named full-size SFTP/POSIX/Windows system-SSH live suites                                                                                         | Open         |
 
 ## Final Definition of Done
 
@@ -4624,12 +4698,11 @@ The project is not complete until every applicable item below is checked with ev
 
 ## Next Required Action
 
-Push exact implementation commit `6546f54d5` plus its evidence-ledger head and run all six
-target-native cells. Require both Windows architectures to accept the compiler and linker flags,
-all six outputs to compare exactly before upload, and no regression in native smoke; keep the strict
-comparator, failed-binary no-upload boundary, repository-wide node-pty patch, legacy/default path,
-and all other release gates unchanged. Cross-family Layer B targets, the protected
-manifest-signing environment, oldest-baseline/native-trust cells, and the paired legacy performance
-baseline remain release/default-path blockers; no publication, desktop resolver, SSH transfer/
-install, per-target Beta, fallback, tuple enablement, or default behavior may be connected by this
-package.
+Add a bounded diagnostic that fail-closed inspects generated `conpty_console_list.vcxproj`
+compiler/linker settings and reports paired ARM64 instruction/disassembly context around the first
+differing ranges. Run both native Windows cells with all four POSIX controls, require the x64 and
+POSIX outputs to remain exact, and retain the fatal comparator plus rejected-arm64 no-upload
+boundary. Cross-family Layer B targets, the protected manifest-signing environment,
+oldest-baseline/native-trust cells, and the paired legacy performance baseline remain release/
+default-path blockers; no publication, desktop resolver, SSH transfer/install, per-target Beta,
+fallback, tuple enablement, or default behavior may be connected by this package.

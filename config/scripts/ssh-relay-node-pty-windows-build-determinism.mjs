@@ -41,6 +41,48 @@ const REPRODUCIBLE_LINKER_OPTIONS = `            'VCLinkerTool': {
               ]
             }`
 
+const REQUIRED_GENERATED_OPTIONS = ['/Brepro', '/experimental:deterministic']
+
+function decodeXmlText(value) {
+  return value
+    .replaceAll('&quot;', '"')
+    .replaceAll('&apos;', "'")
+    .replaceAll('&lt;', '<')
+    .replaceAll('&gt;', '>')
+    .replaceAll('&amp;', '&')
+}
+
+function releaseDefinitionGroup(source, configuration) {
+  const groups = [
+    ...source.matchAll(/<ItemDefinitionGroup\b([^>]*)>([\s\S]*?)<\/ItemDefinitionGroup>/g)
+  ].filter((match) => decodeXmlText(match[1]).includes(`'Release|${configuration}'`))
+  if (groups.length !== 1) {
+    throw new Error('generated MSBuild settings lack one exact Release configuration')
+  }
+  return groups[0][2]
+}
+
+function requiredToolOptions(group, tool) {
+  const tools = [...group.matchAll(new RegExp(`<${tool}\\b[^>]*>([\\s\\S]*?)</${tool}>`, 'g'))]
+  const options = tools.flatMap((match) => [
+    ...match[1].matchAll(/<AdditionalOptions\b[^>]*>([\s\S]*?)<\/AdditionalOptions>/g)
+  ])
+  if (tools.length !== 1 || options.length !== 1) {
+    throw new Error(`generated MSBuild settings lack one exact ${tool} option block`)
+  }
+  const tokens = decodeXmlText(options[0][1]).trim().split(/\s+/)
+  if (!tokens.includes('%(AdditionalOptions)')) {
+    throw new Error(`generated MSBuild settings do not inherit ${tool} options`)
+  }
+  for (const required of REQUIRED_GENERATED_OPTIONS) {
+    const count = tokens.filter((token) => token.toLowerCase() === required.toLowerCase()).length
+    if (count !== 1) {
+      throw new Error(`generated MSBuild settings require exactly one ${tool} ${required}`)
+    }
+  }
+  return [...REQUIRED_GENERATED_OPTIONS]
+}
+
 export async function applyWindowsNodePtyBuildDeterminism({ nodePtyDirectory, tuple }) {
   if (!tuple.startsWith('win32-')) {
     return false
@@ -61,4 +103,21 @@ export async function applyWindowsNodePtyBuildDeterminism({ nodePtyDirectory, tu
     .replace(LINKER_OPTIONS, REPRODUCIBLE_LINKER_OPTIONS)
   await writeFile(bindingPath, reproducibleSource, 'utf8')
   return true
+}
+
+export async function assertWindowsNodePtyGeneratedBuildSettings({ nodePtyDirectory, tuple }) {
+  if (!tuple.startsWith('win32-')) {
+    return undefined
+  }
+  const project = 'conpty_console_list.vcxproj'
+  const configuration = `Release|${tuple.endsWith('-arm64') ? 'ARM64' : 'x64'}`
+  const source = await readFile(join(nodePtyDirectory, 'build', project), 'utf8')
+  const group = releaseDefinitionGroup(source, configuration.split('|')[1])
+  // Why: the source rewrite is insufficient proof unless gyp propagates both stages into MSBuild.
+  return {
+    configuration,
+    compilerOptions: requiredToolOptions(group, 'ClCompile'),
+    linkerOptions: requiredToolOptions(group, 'Link'),
+    project
+  }
 }
