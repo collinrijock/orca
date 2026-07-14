@@ -200,6 +200,11 @@ describe('createHostedReview', () => {
       if (args[0] === 'status') {
         return { stdout: '', stderr: '' }
       }
+      // Why: base-on-remote probe (Change 2 enforcement) — the default base
+      // resolves to a remote-tracking branch so create-time validation passes.
+      if (args[0] === 'for-each-ref') {
+        return { stdout: 'refs/remotes/origin/main\n', stderr: '' }
+      }
       if (args[0] === 'log' && args.includes('--pretty=%s')) {
         return { stdout: 'Feature title\n', stderr: '' }
       }
@@ -274,6 +279,32 @@ describe('createHostedReview', () => {
       ok: false,
       code: 'validation',
       error: 'Create PR failed: switch back to the selected branch before creating a pull request.'
+    })
+    expect(createGitHubPullRequestMock).not.toHaveBeenCalled()
+  })
+
+  it('blocks creation with actionable copy when the submitted base is local-only', async () => {
+    // for-each-ref falls through to '' → the submitted stacked parent is not on
+    // the remote, so create-time enforcement blocks with actionable copy.
+    gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
+      if (args[0] === 'rev-parse') {
+        return { stdout: 'feature\n', stderr: '' }
+      }
+      return { stdout: '', stderr: '' }
+    })
+
+    await expect(
+      createHostedReview('/repo', {
+        provider: 'github',
+        base: 'stacked-parent',
+        head: 'feature',
+        title: 'Feature'
+      })
+    ).resolves.toEqual({
+      ok: false,
+      code: 'validation',
+      error:
+        'Create PR failed: the base branch "stacked-parent" hasn\'t been pushed to the remote. Choose a pushed base or push it first.'
     })
     expect(createGitHubPullRequestMock).not.toHaveBeenCalled()
   })
@@ -455,6 +486,10 @@ describe('createHostedReview', () => {
         if (args[0] === 'rev-parse' && args[1] === '--abbrev-ref' && args[2] === 'HEAD') {
           return { stdout: 'feature\n', stderr: '' }
         }
+        if (args[0] === 'for-each-ref') {
+          // Base-on-remote probe (Change 2) runs on the SSH host; base is pushed.
+          return { stdout: 'refs/remotes/origin/main\n', stderr: '' }
+        }
         if (args[0] === 'log' && args.includes('--pretty=%s')) {
           return { stdout: 'Feature title\n', stderr: '' }
         }
@@ -573,6 +608,82 @@ describe('getHostedReviewCreationEligibility', () => {
     })
   })
 
+  // Stacked-worktree base resolution (Change 1/2). `stackedArgs` defaults to a
+  // bare local-only parent; `mockRefs` controls the remote-tracking snapshot.
+  const stackedArgs = (
+    overrides: Partial<Parameters<typeof getHostedReviewCreationEligibility>[0]> = {}
+  ): Parameters<typeof getHostedReviewCreationEligibility>[0] => ({
+    repoPath: '/repo',
+    branch: 'feature/stacked',
+    base: 'stacked-parent',
+    hasUncommittedChanges: false,
+    hasUpstream: true,
+    ahead: 0,
+    behind: 0,
+    ...overrides
+  })
+
+  const mockRefs = (opts: {
+    symbolicRef?: string
+    forEachRef?: string
+    forEachThrows?: boolean
+    revParseThrows?: boolean
+  }): void => {
+    gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
+      if (args[0] === 'symbolic-ref') {
+        return { stdout: opts.symbolicRef ?? '', stderr: '' }
+      }
+      if (args[0] === 'for-each-ref') {
+        if (opts.forEachThrows) {
+          throw new Error('ssh: connect: connection refused')
+        }
+        return { stdout: opts.forEachRef ?? '', stderr: '' }
+      }
+      if (args[0] === 'rev-parse' && opts.revParseThrows) {
+        throw new Error('unknown revision')
+      }
+      return { stdout: 'refs/remotes/origin/main\n', stderr: '' }
+    })
+  }
+
+  it('falls back to the repo default when a stacked parent base is local-only', async () => {
+    mockRefs({ symbolicRef: 'refs/remotes/origin/main\n' })
+    await expect(getHostedReviewCreationEligibility(stackedArgs())).resolves.toMatchObject({
+      canCreate: true,
+      blockedReason: null,
+      defaultBaseRef: 'origin/main'
+    })
+  })
+
+  it('preserves a stacked parent base that exists on the remote', async () => {
+    mockRefs({ forEachRef: 'refs/remotes/origin/parent-pushed\n' })
+    await expect(
+      getHostedReviewCreationEligibility(stackedArgs({ base: 'parent-pushed' }))
+    ).resolves.toMatchObject({
+      canCreate: true,
+      blockedReason: null,
+      defaultBaseRef: 'parent-pushed'
+    })
+  })
+
+  it('keeps the candidate base when no repo default can be resolved', async () => {
+    mockRefs({ revParseThrows: true })
+    await expect(getHostedReviewCreationEligibility(stackedArgs())).resolves.toMatchObject({
+      canCreate: true,
+      blockedReason: null,
+      defaultBaseRef: 'stacked-parent'
+    })
+  })
+
+  it('preserves the candidate base when the remote probe cannot reach the host', async () => {
+    // Transport failure must not be read as "absent" — that would demote a
+    // legitimately-pushed parent to the repo default on a transient SSH blip.
+    mockRefs({ forEachThrows: true })
+    await expect(
+      getHostedReviewCreationEligibility(stackedArgs({ base: 'parent-pushed' }))
+    ).resolves.toMatchObject({ canCreate: true, defaultBaseRef: 'parent-pushed' })
+  })
+
   it('blocks dirty tracked GitHub branches before PR creation', async () => {
     await expect(
       getHostedReviewCreationEligibility({
@@ -664,7 +775,12 @@ describe('getHostedReviewCreationEligibility', () => {
     expect(getHostedReviewForBranchMock).toHaveBeenCalledWith(
       expect.objectContaining({ repoPath: '/remote/repo', connectionId: 'ssh-1' })
     )
-    expect(remoteGit.exec).not.toHaveBeenCalled()
+    // Why: the base-on-remote probe must run on the SSH host that will execute
+    // the provider create, so it flows through the relay exec, not local git.
+    expect(remoteGit.exec).toHaveBeenCalledWith(
+      ['for-each-ref', '--count=1', '--format=%(refname)', 'refs/remotes/*/main'],
+      '/remote/repo'
+    )
   })
 
   it('offers push as the next action for authenticated branches with local-only commits', async () => {
