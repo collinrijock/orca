@@ -2564,6 +2564,16 @@ or unexpected token`; the first logs did not identify a source location.
   a command-line `.mjs` file with a Unix shebang, while every supported call site already invokes
   those files through `node`; the next correction removes only those unused shebangs and preserves
   the CLI main guards.
+- Second follow-up: exact head `ef94c90663740c657d44e93f758c99016e66b61a` reran in
+  [run 29339742904](https://github.com/stablyai/orca/actions/runs/29339742904). X64 job
+  `87108126824` collected all seven suites and 21 tests, proving the shebang correction. Eighteen
+  tests passed, one POSIX archive test skipped as designed, and two Windows-specific assertions
+  failed in 1.17s: Git checkout converted the pinned armored key from LF to CRLF, and a POSIX
+  `chmod(0o600)` rejection assertion ran even though the Windows verifier intentionally takes modes
+  from verified ZIP metadata. The received key hash
+  `25cc2da386fe54cfc6a3d683f1df2a5f636014a31be8efadd73a9ecc2208dbec` exactly matches
+  `sed 's/$/\r/' <pinned-key> | shasum -a 256`; the committed LF bytes remain
+  `84b1ca614406f341cb86e72920f5a64687a13ab67ab84038bcf2abba97898a84`.
 - Oracle proved: both requested hosted runner labels resolve to native Node 24 environments, MSVC
   setup succeeds, Git for Windows supplies both required GPG tools, frozen source installation
   succeeds, and the test command stops the artifact build before any download or upload. It also
@@ -2574,9 +2584,9 @@ or unexpected token`; the first logs did not identify a source location.
   enabled tuple.
 - Checklist items satisfied: exact Windows runner-label resolution only. No Windows build,
   executable, archive, or artifact cell is checked.
-- Follow-up: rerun the same seven suites on both native architectures without the two unused
-  shebangs. Treat a recurrence as evidence against the transform-boundary diagnosis and continue to
-  block input download/build.
+- Follow-up: mark the pinned armored key `-text` so checkout preserves its authenticated bytes,
+  keep the filesystem-mode mutation assertion POSIX-only, and rerun both native architectures.
+  Continue to block input download/build until all seven suites pass.
 
 ### E-M3-RUNTIME-LOCAL-001 — First target-native Linux arm64 runtime artifact
 

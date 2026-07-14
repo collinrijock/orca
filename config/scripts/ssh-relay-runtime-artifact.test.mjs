@@ -170,10 +170,13 @@ describe('SSH relay runtime artifact', () => {
     )
 
     await writeFile(join(fixture.runtimeRoot, 'relay.js'), 'relay')
-    await chmod(join(fixture.runtimeRoot, 'relay.js'), 0o600)
-    await expect(verifyRuntimeTree(fixture.runtimeRoot, fixture.identity)).rejects.toThrow(
-      /entry mismatch/i
-    )
+    if (process.platform !== 'win32') {
+      // Why: NTFS cannot represent the POSIX mode that the verified ZIP carries for remote install.
+      await chmod(join(fixture.runtimeRoot, 'relay.js'), 0o600)
+      await expect(verifyRuntimeTree(fixture.runtimeRoot, fixture.identity)).rejects.toThrow(
+        /entry mismatch/i
+      )
+    }
   })
 
   it.skipIf(process.platform === 'win32')(
