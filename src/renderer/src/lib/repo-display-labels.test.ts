@@ -56,6 +56,21 @@ describe('getRepoDisplayLabelsByPath', () => {
     expect(labels.size).toBe(2)
   })
 
+  it('keeps cross-host repos with identical path AND name as separate entries', () => {
+    // Hardening: when paths are byte-identical the same-name collision loop runs
+    // and re-sets each entry, so host scoping must survive that pass too — neither
+    // host may overwrite the other. Label text can still coincide; that residual is
+    // disambiguated by the host section/badge, not this map.
+    const localRepo = { path: '/Users/alice', displayName: 'home' }
+    const sshRepo = { path: '/Users/alice', displayName: 'home', connectionId: 'prod-ssh' }
+    const labels = getRepoDisplayLabelsByPath([localRepo, sshRepo])
+
+    expect(getRepoDisplayLabelKey(localRepo)).not.toBe(getRepoDisplayLabelKey(sshRepo))
+    expect(labels.size).toBe(2)
+    expect(labels.get(getRepoDisplayLabelKey(localRepo))).toBeDefined()
+    expect(labels.get(getRepoDisplayLabelKey(sshRepo))).toBeDefined()
+  })
+
   it('normalizes Windows separators to slash display labels', () => {
     const labels = getRepoDisplayLabelsByPath([
       { path: 'C:\\workspace\\payments\\api', displayName: 'api' },
