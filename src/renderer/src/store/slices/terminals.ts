@@ -39,6 +39,7 @@ import {
   splitWorktreeId,
   splitWorktreeIdForFilesystem
 } from '../../../../shared/worktree-id'
+import { isFolderWorkspaceRepoId } from '../../../../shared/folder-workspace-worktree'
 import { isWslUncPath } from '../../../../shared/wsl-paths'
 import type { ProjectExecutionRuntimeResolution } from '../../../../shared/project-execution-runtime'
 import type { StartupCommandDelivery } from '../../../../shared/codex-startup-delivery'
@@ -176,18 +177,19 @@ function buildRuntimeSessionPlaceholders({
     if (!parsed) {
       continue
     }
-    // Why (#8283): folder (non-git) workspace instances keep the runtime shape
-    // `folder-workspace:<pgid>::<folderPath>::workspace:<uuid>` and carry no
-    // `worktree:`/`folder:` prefix, so the folder guard above misses them and
-    // splitWorktreeId (first `::`) leaves the `::workspace:<uuid>` suffix on the
-    // path. That synthetic, nonexistent path reaches Git as a cwd and fails with
-    // a continuous `spawn git ENOENT` on every status poll. Resolve the real
-    // folder path and tag the placeholder as a folder repo so the
-    // isGitRepoKind-gated status poll never spawns Git for it. The suffix-strip
-    // itself (not a substring match) is the folder-instance signal.
+    // Why (#8283): folder (non-git) workspace worktrees keep the runtime shape
+    // `folder-workspace:<pgid>::<folderPath>[::workspace:<uuid>]` and carry no
+    // `worktree:`/`folder:` prefix, so the folder guard above misses them.
+    // splitWorktreeId (first `::`) also leaves any `::workspace:<uuid>` instance
+    // suffix on the path, and that synthetic, nonexistent path reaches Git as a
+    // cwd — a continuous `spawn git ENOENT` on every status poll. Strip the
+    // suffix for a real folder cwd, and tag the placeholder `kind:'folder'`
+    // whenever the repo id is a folder-workspace id (covers the bare root and
+    // every instance, in any arrival order) so the isGitRepoKind-gated poll
+    // never spawns Git for it.
     const worktreePath =
       splitWorktreeIdForFilesystem(worktreeId)?.worktreePath ?? parsed.worktreePath
-    const isFolderWorkspace = worktreePath !== parsed.worktreePath
+    const isFolderWorkspace = isFolderWorkspaceRepoId(parsed.repoId)
     const existingRepo = nextRepos.some((repo) => repo.id === parsed.repoId)
     if (!existingRepo) {
       // Why: remote catalogs load after hydration, but host-split session

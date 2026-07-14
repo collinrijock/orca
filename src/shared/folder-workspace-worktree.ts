@@ -1,11 +1,19 @@
 import type { FolderWorkspace, Worktree } from './types'
 import { folderWorkspaceKey } from './workspace-scope'
 
+// A folder (non-git) workspace's synthetic repo id is `folder-workspace:<pgid>`.
+// Git repo ids are bare UUIDs, so this prefix uniquely identifies folder repos.
+export const FOLDER_WORKSPACE_REPO_ID_PREFIX = 'folder-workspace:'
+
+export function isFolderWorkspaceRepoId(repoId: string): boolean {
+  return repoId.startsWith(FOLDER_WORKSPACE_REPO_ID_PREFIX)
+}
+
 export function folderWorkspaceToWorktree(folderWorkspace: FolderWorkspace): Worktree {
   const linkedTask = folderWorkspace.linkedTask
   return {
     id: folderWorkspaceKey(folderWorkspace.id),
-    repoId: `folder-workspace:${folderWorkspace.projectGroupId}`,
+    repoId: `${FOLDER_WORKSPACE_REPO_ID_PREFIX}${folderWorkspace.projectGroupId}`,
     displayName: folderWorkspace.name,
     comment: folderWorkspace.comment,
     linkedIssue:

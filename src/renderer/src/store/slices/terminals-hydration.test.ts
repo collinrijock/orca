@@ -318,15 +318,77 @@ describe('hydrateWorkspaceSession', () => {
 
     // The synthetic `::workspace:<uuid>` suffix is not a filesystem path; if it
     // reaches a worktree path it becomes a Git cwd and fails with a continuous
-    // `spawn git ENOENT` on every status poll (#8283).
-    for (const worktree of store.getState().worktreesByRepo[folderRepoId] ?? []) {
-      expect(worktree.path).not.toContain(FOLDER_WORKSPACE_INSTANCE_SEPARATOR)
-    }
+    // `spawn git ENOENT` on every status poll (#8283). Assert the placeholder
+    // exists first so the path check can never pass vacuously.
+    const placeholderWorktrees = store.getState().worktreesByRepo[folderRepoId] ?? []
+    expect(placeholderWorktrees).toHaveLength(1)
+    expect(placeholderWorktrees[0]?.path).toBe(folderPath)
     // The placeholder repo must be classified as a folder repo so the
     // isGitRepoKind-gated status poll never spawns Git for it.
     const placeholderRepo = store.getState().repos.find((repo) => repo.id === folderRepoId)
-    if (placeholderRepo) {
-      expect(isGitRepoKind(placeholderRepo)).toBe(false)
+    expect(placeholderRepo).toBeDefined()
+    expect(isGitRepoKind(placeholderRepo!)).toBe(false)
+  })
+
+  it('classifies the bare runtime folder-workspace root (no instance suffix) as a folder (#8283)', () => {
+    const store = createTestStore()
+    // The folder-workspace root worktree id has no `::workspace:<uuid>` suffix,
+    // so a suffix-strip signal alone misses it — it must still be folder-tagged.
+    const folderRepoId = 'folder-workspace:pg1'
+    const folderPath = '/home/user'
+    const rootId = `${folderRepoId}::${folderPath}`
+    const session: WorkspaceSessionState = {
+      ...getDefaultWorkspaceSession(),
+      activeRepoId: folderRepoId,
+      activeWorktreeId: rootId,
+      activeTabId: 'folder-root-tab',
+      tabsByWorktree: {
+        [rootId]: [makeTab({ id: 'folder-root-tab', worktreeId: rootId, ptyId: 'folder-root' })]
+      }
+    }
+
+    store.getState().hydrateWorkspaceSession(session, {
+      runtimeHostIdByWorkspaceSessionKey: { [rootId]: 'runtime:env-1' }
+    })
+
+    const placeholderRepo = store.getState().repos.find((repo) => repo.id === folderRepoId)
+    expect(placeholderRepo).toBeDefined()
+    expect(isGitRepoKind(placeholderRepo!)).toBe(false)
+    expect(store.getState().worktreesByRepo[folderRepoId]?.[0]?.path).toBe(folderPath)
+  })
+
+  it('keeps the folder classification when the root key precedes the instance key (#8283)', () => {
+    const store = createTestStore()
+    // Insertion order must not matter: if the root inserts the placeholder repo
+    // first, the later instance key still resolves to a folder-classified repo.
+    const folderRepoId = 'folder-workspace:pg1'
+    const folderPath = '/home/user'
+    const rootId = `${folderRepoId}::${folderPath}`
+    const instanceId = `${rootId}${FOLDER_WORKSPACE_INSTANCE_SEPARATOR}11111111-1111-1111-1111-111111111111`
+    const session: WorkspaceSessionState = {
+      ...getDefaultWorkspaceSession(),
+      activeRepoId: folderRepoId,
+      activeWorktreeId: instanceId,
+      activeTabId: 'inst-tab',
+      tabsByWorktree: {
+        [rootId]: [makeTab({ id: 'root-tab', worktreeId: rootId, ptyId: 'root-session' })],
+        [instanceId]: [makeTab({ id: 'inst-tab', worktreeId: instanceId, ptyId: 'inst-session' })]
+      }
+    }
+
+    // Root key ordered before the instance key in the owner map.
+    store.getState().hydrateWorkspaceSession(session, {
+      runtimeHostIdByWorkspaceSessionKey: {
+        [rootId]: 'runtime:env-1',
+        [instanceId]: 'runtime:env-1'
+      }
+    })
+
+    const placeholderRepo = store.getState().repos.find((repo) => repo.id === folderRepoId)
+    expect(placeholderRepo).toBeDefined()
+    expect(isGitRepoKind(placeholderRepo!)).toBe(false)
+    for (const worktree of store.getState().worktreesByRepo[folderRepoId] ?? []) {
+      expect(worktree.path).toBe(folderPath)
     }
   })
 
