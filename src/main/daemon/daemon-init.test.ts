@@ -1622,16 +1622,85 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     expect(forkMock).toHaveBeenCalled()
   })
 
-  it('adopts an unresponsive daemon whose pipe still accepts connections (update-relaunch wedge)', async () => {
-    // Why: the Windows update-relaunch regression — post-install disk/AV load
-    // wedges the daemon past the 3s health budget AND the 5s hello budget of
-    // the session-list re-verification, while its sessions are still alive.
-    // The old fail-closed path killed the daemon here. A pipe that accepts a
-    // raw connection proves the daemon is alive, so the launcher must adopt.
+  // Why: a net.connect stub whose 'connect' fires — makes probeSocket() report
+  // the wedged daemon's pipe as alive on every grace re-check.
+  function stubAliveSocketConnect() {
+    const handlers: Record<string, (() => void)[]> = { connect: [], error: [] }
+    return {
+      on(event: string, cb: () => void) {
+        handlers[event]?.push(cb)
+        if (event === 'connect') {
+          queueMicrotask(() => cb())
+        }
+        return this
+      },
+      removeListener(event: string, cb: () => void) {
+        handlers[event] = handlers[event]?.filter((handler) => handler !== cb) ?? []
+        return this
+      },
+      destroy() {}
+    }
+  }
+
+  it('adopts a transiently wedged daemon that drains and reports live sessions within the grace window', async () => {
+    // Why: the Windows update-relaunch case — post-install disk/AV load wedges
+    // the daemon past the first hello budget, but it drains within seconds and
+    // still owns live sessions. The launcher must give it a bounded grace and
+    // ADOPT it rather than killing its live sessions.
     const mod = await importFresh()
     await mod.initDaemonPtyProvider()
 
+    // First probe times out (still draining); the retry within the grace
+    // window succeeds and reports a live session.
     daemonClientMock.mockImplementationOnce(function MockDaemonClient() {
+      return {
+        ensureConnected: vi.fn(async () => {
+          throw new Error('Hello response timed out')
+        }),
+        request: vi.fn(),
+        disconnect: vi.fn()
+      }
+    })
+    daemonClientMock.mockImplementationOnce(function MockDaemonClient() {
+      return {
+        ensureConnected: vi.fn(async () => {}),
+        request: vi.fn(async () => ({ sessions: [{ sessionId: 'wt-1@@live', isAlive: true }] })),
+        disconnect: vi.fn()
+      }
+    })
+
+    const launcher = spawnerInstances[0].launcher as (
+      socketPath: string,
+      tokenPath: string
+    ) => Promise<{ shutdown(): Promise<void> }>
+    checkDaemonHealthMock.mockResolvedValueOnce('unreachable')
+    probeSocketExistsMock.mockReturnValue(true)
+    netConnectMock.mockImplementation(stubAliveSocketConnect)
+
+    await launcher('/fake/socket', '/fake/token')
+
+    expect(killStaleDaemonMock).not.toHaveBeenCalled()
+    expect(forkMock).not.toHaveBeenCalled()
+  })
+
+  it('replaces a permanently wedged daemon after the grace window is exhausted (#8689)', async () => {
+    // Why: a daemon whose socket keeps accepting connections but whose event
+    // loop never answers hello would, under the old code, be preserved forever
+    // — every terminal spawn then failed with "Hello response timed out" with
+    // no recovery. After the bounded grace it must be replaced so the app gets
+    // working terminals again.
+    const mod = await importFresh()
+    await mod.initDaemonPtyProvider()
+
+    const answeringDefault = function MockDaemonClient() {
+      return {
+        ensureConnected: vi.fn(async () => {}),
+        request: vi.fn(async () => ({ sessions: [] })),
+        disconnect: vi.fn()
+      }
+    }
+    // Every probe across the whole grace window times out (permanent wedge).
+    daemonClientMock.mockImplementation(function MockDaemonClient() {
       return {
         ensureConnected: vi.fn(async () => {
           throw new Error('Hello response timed out')
@@ -1646,25 +1715,82 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
       tokenPath: string
     ) => Promise<{ shutdown(): Promise<void> }>
     checkDaemonHealthMock.mockResolvedValueOnce('unreachable')
-    // The raw pipe probe succeeds even though every RPC timed out.
     probeSocketExistsMock.mockReturnValue(true)
-    netConnectMock.mockImplementationOnce(() => {
-      const handlers: Record<string, (() => void)[]> = { connect: [], error: [] }
+    netConnectMock.mockImplementation(stubAliveSocketConnect)
+    forkMock.mockImplementationOnce(() => ({
+      pid: 12345,
+      on(event: string, cb: (arg?: unknown) => void) {
+        if (event === 'message') {
+          queueMicrotask(() => cb({ type: 'ready' }))
+        }
+        return this
+      },
+      off() {
+        return this
+      },
+      disconnect: vi.fn(),
+      unref: vi.fn()
+    }))
+
+    // Count only the launcher's own session-count probes.
+    daemonClientMock.mockClear()
+
+    try {
+      await launcher('/fake/socket', '/fake/token')
+
+      expect(killStaleDaemonMock).toHaveBeenCalledWith(
+        FAKE_RUNTIME_DIR,
+        '/fake/socket',
+        '/fake/token'
+      )
+      expect(forkMock).toHaveBeenCalled()
+      // Pins the grace budget: 1 initial probe + WEDGED_DAEMON_GRACE_RETRIES (3)
+      // retries. If someone cuts the retry count, this fails — a guard against
+      // silently shrinking the transient-wedge live-session protection.
+      expect(daemonClientMock).toHaveBeenCalledTimes(4)
+    } finally {
+      // Restore the answering default so the persistent throwing impl above
+      // does not leak into later tests (clearAllMocks clears calls, not impls).
+      daemonClientMock.mockImplementation(answeringDefault)
+    }
+  })
+
+  it('preserves a daemon that drains only on the final grace retry (pins the grace budget)', async () => {
+    // Why: pins WEDGED_DAEMON_GRACE_RETRIES ≥ 3. The daemon stays wedged across
+    // the initial probe and the first two retries, then drains and reports a
+    // live session on the LAST allowed retry. Cutting the retry budget would
+    // replace this still-live daemon — this test fails if that happens.
+    const mod = await importFresh()
+    await mod.initDaemonPtyProvider()
+
+    // 3 wedged probes (initial + retries 1 & 2)...
+    for (let i = 0; i < 3; i++) {
+      daemonClientMock.mockImplementationOnce(function MockDaemonClient() {
+        return {
+          ensureConnected: vi.fn(async () => {
+            throw new Error('Hello response timed out')
+          }),
+          request: vi.fn(),
+          disconnect: vi.fn()
+        }
+      })
+    }
+    // ...then it drains on the final allowed retry and reports a live session.
+    daemonClientMock.mockImplementationOnce(function MockDaemonClient() {
       return {
-        on(event: string, cb: () => void) {
-          handlers[event]?.push(cb)
-          if (event === 'connect') {
-            queueMicrotask(() => cb())
-          }
-          return this
-        },
-        removeListener(event: string, cb: () => void) {
-          handlers[event] = handlers[event]?.filter((handler) => handler !== cb) ?? []
-          return this
-        },
-        destroy() {}
+        ensureConnected: vi.fn(async () => {}),
+        request: vi.fn(async () => ({ sessions: [{ sessionId: 'wt-1@@live', isAlive: true }] })),
+        disconnect: vi.fn()
       }
     })
+
+    const launcher = spawnerInstances[0].launcher as (
+      socketPath: string,
+      tokenPath: string
+    ) => Promise<{ shutdown(): Promise<void> }>
+    checkDaemonHealthMock.mockResolvedValueOnce('unreachable')
+    probeSocketExistsMock.mockReturnValue(true)
+    netConnectMock.mockImplementation(stubAliveSocketConnect)
 
     await launcher('/fake/socket', '/fake/token')
 
@@ -1695,6 +1821,7 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     ) => Promise<{ shutdown(): Promise<void> }>
     checkDaemonHealthMock.mockResolvedValueOnce('rejected')
     probeSocketExistsMock.mockReturnValue(true)
+    netConnectMock.mockImplementation(stubAliveSocketConnect)
     forkMock.mockImplementationOnce(() => ({
       pid: 12345,
       on(event: string, cb: (arg?: unknown) => void) {
@@ -1709,6 +1836,7 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
       disconnect: vi.fn(),
       unref: vi.fn()
     }))
+    daemonClientMock.mockClear()
 
     await launcher('/fake/socket', '/fake/token')
 
@@ -1718,6 +1846,10 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
       '/fake/token'
     )
     expect(forkMock).toHaveBeenCalled()
+    // Pins the 'rejected' fast-path: a daemon that actively refuses the
+    // handshake is never worth a grace window, so it is probed exactly once
+    // (no retries) before replacement.
+    expect(daemonClientMock).toHaveBeenCalledTimes(1)
   })
 
   it('adopts a healthy daemon whose pid-file identity cannot be verified (null startedAtMs metadata)', async () => {

@@ -65,6 +65,18 @@ function logDaemonMilestone(event: string, details: Record<string, unknown> = {}
   }
 }
 
+// Why: how many extra hello+listSessions probes to make against a wedged-but-
+// connectable daemon before replacing it. Each probe waits out the client's 5s
+// hello timeout, so this spaces re-checks ~5s apart, giving a transiently wedged
+// daemon (Windows update-relaunch drain) up to ~20s to answer while keeping a
+// permanent wedge (#8689) bounded well under the 60s local-PTY fail-open cap.
+// Trade-off: a transient wedge that still owns live sessions but takes longer
+// than this window to drain is now replaced (its live processes lost, though
+// scrollback cold-restores) rather than preserved indefinitely. If field
+// update-relaunch drains routinely exceed ~20s, raise this — it stays bounded
+// by the fail-open cap.
+const WEDGED_DAEMON_GRACE_RETRIES = 3
+
 let spawner: DaemonSpawner | null = null
 type DaemonProvider = DaemonPtyRouter | DaemonPtyAdapter | DegradedDaemonPtyProvider
 
@@ -257,7 +269,28 @@ function createOutOfProcessLauncher(runtimeDir: string): DaemonLauncher {
       // health check while the daemon is alive and owning terminals. Killing
       // it would destroy every live session, so re-verify with a session list
       // first.
-      const liveSessionCount = await getAliveDaemonSessionCount(socketPath, tokenPath)
+      let liveSessionCount = await getAliveDaemonSessionCount(socketPath, tokenPath)
+      // Why: on a Windows update relaunch the daemon can be transiently wedged
+      // past every RPC budget (final checkpoint flush + installer/AV disk
+      // pressure) while its sessions are still alive — replacing it here is what
+      // killed those sessions. A pipe that still accepts connections proves a
+      // live daemon, so give a wedged-but-connectable daemon a bounded grace to
+      // drain and answer before deciding. A PERMANENTLY wedged daemon (accepts
+      // connections but its event loop never answers hello — #8689) exhausts the
+      // grace and falls through to replacement below, instead of being preserved
+      // forever, which strands the app with zero working terminals. 'rejected'
+      // means the daemon answered and refused the handshake — it can never be
+      // adopted, so it skips the grace and replacement stays the only recovery.
+      let graceRetry = 0
+      while (
+        liveSessionCount === null &&
+        health !== 'rejected' &&
+        graceRetry < WEDGED_DAEMON_GRACE_RETRIES &&
+        (await probeSocket(socketPath))
+      ) {
+        liveSessionCount = await getAliveDaemonSessionCount(socketPath, tokenPath)
+        graceRetry++
+      }
       if (liveSessionCount !== null && liveSessionCount > 0) {
         if (health === 'pty-spawn-unhealthy') {
           console.warn(
@@ -271,20 +304,6 @@ function createOutOfProcessLauncher(runtimeDir: string): DaemonLauncher {
         }
         console.warn(
           `[daemon] Preserving daemon that failed the health check because it owns ${liveSessionCount} live session${liveSessionCount === 1 ? '' : 's'}`
-        )
-        return createPreservedDaemonHandle(runtimeDir)
-      }
-      // Why: on a Windows update relaunch the daemon can be wedged past every
-      // RPC budget (final checkpoint flush + installer/AV disk pressure), so
-      // both the health check AND the session list time out while sessions
-      // are still alive — failing closed here is what killed those sessions.
-      // A pipe that still accepts connections proves a live daemon: adopt it
-      // and let the adapter reconnect once the daemon drains. 'rejected'
-      // means the daemon answered and refused the handshake — it can never be
-      // adopted, so replacement stays the only recovery.
-      if (liveSessionCount === null && health !== 'rejected' && (await probeSocket(socketPath))) {
-        console.warn(
-          '[daemon] Preserving unresponsive daemon because its socket still accepts connections'
         )
         return createPreservedDaemonHandle(runtimeDir)
       }
