@@ -828,8 +828,8 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
           ? spawnResult.launchAgent
           : undefined
 
-        // If destroyed while spawn was in flight, kill only a newly created PTY.
-        // A reattach belongs to an existing session outside this transport.
+        // If destroyed while the connect was in flight, kill only what this
+        // connect actually created. Reattaches remain owned by tab lifecycle.
         if (destroyed) {
           if (!spawnResult.isReattach) {
             void killPtyRetainingRetryOwnership(
