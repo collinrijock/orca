@@ -161,7 +161,7 @@ export function GrokAccountsSection(): React.JSX.Element {
                   'Weekly credits'
                 )
               : translate(
-                  'auto.components.settings.GrokAccountsSection.monthlyUsageTitle',
+                  'auto.components.settings.GrokAccountsSection.e6dadc1e2b',
                   'Monthly usage'
                 )
           }
@@ -172,7 +172,7 @@ export function GrokAccountsSection(): React.JSX.Element {
                   'Same weekly credit % as the grok /usage screen in the terminal.'
                 )
               : translate(
-                  'auto.components.settings.GrokAccountsSection.monthlyUsageDescription',
+                  'auto.components.settings.GrokAccountsSection.75e396bf42',
                   'Included monthly usage for Grok unified-billing accounts.'
                 )
           }
