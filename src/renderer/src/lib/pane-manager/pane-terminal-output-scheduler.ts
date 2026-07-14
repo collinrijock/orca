@@ -741,6 +741,16 @@ function fireQueuedAckCredits(entry: QueueEntry): void {
   }
 }
 
+function discardDetachedQueueEntry(entry: QueueEntry): void {
+  fireQueuedAckCredits(entry)
+  entry.chunks.length = 0
+  entry.chunkIndex = 0
+  entry.queuedChars = 0
+  entry.highPriority = false
+  clearForegroundHoldSafety(entry)
+  clearForegroundCoalesce(entry)
+}
+
 function queueCapExceeded(entry: QueueEntry): boolean {
   return (
     entry.queuedChars > maxQueueChars ||
@@ -979,6 +989,12 @@ function composeWriteFailureCallback(
 }
 
 function writeQueuedChunk(entry: QueueEntry): 'foreground' | 'background' | null {
+  if (isTerminalWritePipelineCertifiedDead(entry.terminal)) {
+    // The drain owns this detached entry, so map-based discard cannot see it.
+    discardDetachedQueueEntry(entry)
+    discardTerminalOutput(entry.terminal)
+    return null
+  }
   const queuedWrite = takeQueuedChunk(entry, BACKGROUND_CHUNK_CHARS)
   if (!queuedWrite) {
     return null
@@ -1347,6 +1363,11 @@ export function flushTerminalOutput(
     return
   }
   queuedByTerminal.delete(terminal)
+  if (isTerminalWritePipelineCertifiedDead(terminal)) {
+    discardDetachedQueueEntry(entry)
+    discardTerminalOutput(terminal)
+    return
+  }
   if (!isEntryDrainable(entry)) {
     queuedByTerminal.set(terminal, entry)
     return

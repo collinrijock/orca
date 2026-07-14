@@ -199,6 +199,56 @@ describe('pane terminal output scheduler', () => {
       expect(hasTerminalParseProgressSince(terminal, parseGeneration)).toBe(false)
     })
 
+    it('discards queued output when replay certification precedes the drain', async () => {
+      vi.useFakeTimers()
+      const { writeTerminalOutput } = await loadScheduler()
+      const { _resetWritePipelineHealthForTests, notifyUndeliverableWrite } =
+        await import('./terminal-write-pipeline-health')
+      const terminal = createTerminal()
+      const credits = [vi.fn(), vi.fn(), vi.fn()]
+      try {
+        for (const [index, credit] of credits.entries()) {
+          writeTerminalOutput(terminal, `queued-${index}`, {
+            foreground: false,
+            ackCredit: credit
+          })
+        }
+
+        notifyUndeliverableWrite(terminal, 'replay-wedged')
+        vi.advanceTimersByTime(100)
+
+        expect(terminal.write).not.toHaveBeenCalled()
+        for (const credit of credits) {
+          expect(credit).toHaveBeenCalledTimes(1)
+        }
+      } finally {
+        _resetWritePipelineHealthForTests(terminal)
+      }
+    })
+
+    it('discards queued output when a certified terminal is flushed', async () => {
+      vi.useFakeTimers()
+      const { flushTerminalOutput, writeTerminalOutput } = await loadScheduler()
+      const { _resetWritePipelineHealthForTests, notifyUndeliverableWrite } =
+        await import('./terminal-write-pipeline-health')
+      const terminal = createTerminal()
+      const credit = vi.fn()
+      try {
+        writeTerminalOutput(terminal, 'queued', {
+          foreground: false,
+          ackCredit: credit
+        })
+        notifyUndeliverableWrite(terminal, 'replay-wedged')
+
+        flushTerminalOutput(terminal)
+
+        expect(terminal.write).not.toHaveBeenCalled()
+        expect(credit).toHaveBeenCalledTimes(1)
+      } finally {
+        _resetWritePipelineHealthForTests(terminal)
+      }
+    })
+
     it('credits an empty write immediately', async () => {
       const { writeTerminalOutput } = await loadScheduler()
       const terminal = createTerminal()

@@ -54,7 +54,10 @@ import {
   isTerminalWritePipelineCertifiedDead,
   registerUndeliverableWriteHandler
 } from '@/lib/pane-manager/terminal-write-pipeline-health'
-import { requestTerminalPaneRecovery } from './terminal-pane-recovery'
+import {
+  captureTerminalPaneRecoveryGeneration,
+  requestTerminalPaneRecovery
+} from './terminal-pane-recovery'
 import {
   isDocumentVisibilityProvenStale,
   registerStaleDocumentVisibilityRecovery
@@ -948,6 +951,9 @@ export function connectPanePty(
   deps: PtyConnectionDeps
 ): PanePtyBinding {
   const shouldRefreshForegroundSynchronously = (): boolean => !manager.hasWebglRenderer(pane.id)
+  // Why: recovery ownership belongs to this xterm instance. A request that
+  // settles after remount must not remount its already-replaced successor.
+  const terminalRecoveryGeneration = captureTerminalPaneRecoveryGeneration(deps.tabId)
   exposeE2eTerminalPtyOutputDebug()
   let disposed = false
   let connectFrame: number | null = null
@@ -3368,6 +3374,7 @@ export function connectPanePty(
       tabId: deps.tabId,
       ptyId: undeliverablePtyId,
       reason: 'input-undeliverable',
+      terminalRecoveryGeneration,
       // Why: pty:hasPty answers null for ids the local registry doesn't own,
       // and a disconnected remote pane would otherwise remount-churn on every
       // cooldown window while typing. Local panes keep the lenient gate.
@@ -3382,11 +3389,15 @@ export function connectPanePty(
   const unregisterUndeliverableWriteHandler = registerUndeliverableWriteHandler(
     pane.terminal,
     (reason) => {
+      // Certification can arrive while this terminal still owns queued or
+      // detached scheduler work; release its delivery credits immediately.
+      discardTerminalOutput(pane.terminal)
       const storePtyId = useAppStore.getState().ptyIdsByTabId?.[deps.tabId]?.[0] ?? null
       void requestTerminalPaneRecovery({
         tabId: deps.tabId,
         ptyId: transport.getPtyId() ?? storePtyId,
-        reason
+        reason,
+        terminalRecoveryGeneration
       })
     }
   )
@@ -4812,8 +4823,8 @@ export function connectPanePty(
     // Why: hidden recovery state belongs to one PTY stream. Reattach/restart
     // can reuse the pane object for a different session before visibility.
     let hiddenOutputRestorePtyId: string | null = null
-    // One recovery re-kick per xterm instance: a window-cap decline schedules
-    // its own retry, and a cooldown decline means a remount is imminent.
+    // One recovery re-kick per xterm instance. Generation-aware cooldown and
+    // window-cap retries keep a fresh-but-wedged replacement from fossilizing.
     let certifiedDeadRestoreRecoveryRequested = false
     let hiddenOutputRestoreGeneration = 0
     // Flood-backpressure suppression (HIDDEN_OUTPUT_RESTORE_FLOOD_SUPPRESS_MS).
@@ -6167,7 +6178,8 @@ export function connectPanePty(
           void requestTerminalPaneRecovery({
             tabId: deps.tabId,
             ptyId: transport.getPtyId() ?? storePtyId,
-            reason: 'restore-blocked'
+            reason: 'restore-blocked',
+            terminalRecoveryGeneration
           })
         }
         return false

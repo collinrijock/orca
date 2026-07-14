@@ -23,6 +23,9 @@ type RecoveryRequest = {
   tabId: string
   ptyId: string | null
   reason: TerminalPaneRecoveryReason
+  /** Identifies the xterm generation making the request. A replaced xterm
+   *  must not schedule or complete recovery for its successor. */
+  terminalRecoveryGeneration?: number
   /** Remote panes (runtime mirrors, app-SSH) must prove the PTY alive before
    *  an input-undeliverable remount: pty:hasPty answers null for ids the local
    *  registry doesn't own, and treating null as "proceed" would let a
@@ -42,12 +45,13 @@ const RECOVERY_WINDOW_MS = 5 * 60_000
 const RECOVERY_COOLDOWN_MS = 15_000
 
 const recoveryTimestampsByTabId = new Map<string, number[]>()
+const recoveryGenerationByTabId = new Map<string, number>()
 const pendingRetryTimerByTabId = new Map<string, ReturnType<typeof setTimeout>>()
 
 type RecoveryBudget =
   | { allowed: true }
   | { allowed: false; declinedBy: 'window-cap'; retryInMs: number }
-  | { allowed: false; declinedBy: 'cooldown' }
+  | { allowed: false; declinedBy: 'cooldown'; retryInMs: number }
 
 function recoveryBudget(tabId: string, now: number): RecoveryBudget {
   const timestamps = recoveryTimestampsByTabId.get(tabId) ?? []
@@ -64,28 +68,39 @@ function recoveryBudget(tabId: string, now: number): RecoveryBudget {
   }
   const last = recent.at(-1)
   if (last !== undefined && now - last < RECOVERY_COOLDOWN_MS) {
-    return { allowed: false, declinedBy: 'cooldown' }
+    return {
+      allowed: false,
+      declinedBy: 'cooldown',
+      retryInMs: last + RECOVERY_COOLDOWN_MS - now
+    }
   }
   return { allowed: true }
 }
 
-/**
- * Why cap-declines retry and cooldown-declines do not: a cooldown decline
- * means a remount just happened (or is imminent) for this TAB, and remounts
- * are tab-scoped — every pane's xterm gets replaced, so a pane that dies
- * again re-certifies on its fresh xterm and files a fresh request. A
- * window-cap decline is the opposite: the pane keeps its certified-dead
- * xterm, replays into it are short-circuited (nothing will ever re-certify),
- * so without a scheduled retry the pane is a permanent zombie — the exact
- * production drip this module exists to end.
- */
+export function captureTerminalPaneRecoveryGeneration(tabId: string): number {
+  return recoveryGenerationByTabId.get(tabId) ?? 0
+}
+
+function requestBelongsToCurrentRecoveryGeneration(request: RecoveryRequest): boolean {
+  return (
+    request.terminalRecoveryGeneration === undefined ||
+    request.terminalRecoveryGeneration === captureTerminalPaneRecoveryGeneration(request.tabId)
+  )
+}
+
 function scheduleRecoveryRetry(request: RecoveryRequest, delayMs: number): void {
+  if (!requestBelongsToCurrentRecoveryGeneration(request)) {
+    return
+  }
   if (pendingRetryTimerByTabId.has(request.tabId)) {
     return
   }
   const timer = setTimeout(
     () => {
       pendingRetryTimerByTabId.delete(request.tabId)
+      if (!requestBelongsToCurrentRecoveryGeneration(request)) {
+        return
+      }
       void requestTerminalPaneRecovery(request)
     },
     Math.max(delayMs, 1_000)
@@ -110,9 +125,15 @@ function cancelPendingRecoveryRetry(tabId: string): void {
  * exited"), and remounting there would race it.
  */
 export async function requestTerminalPaneRecovery(request: RecoveryRequest): Promise<boolean> {
+  if (!requestBelongsToCurrentRecoveryGeneration(request)) {
+    return false
+  }
   const budget = recoveryBudget(request.tabId, Date.now())
   if (!budget.allowed) {
-    if (budget.declinedBy === 'window-cap') {
+    if (
+      budget.declinedBy === 'window-cap' ||
+      (budget.declinedBy === 'cooldown' && request.terminalRecoveryGeneration !== undefined)
+    ) {
       scheduleRecoveryRetry(request, budget.retryInMs)
     }
     return false
@@ -139,9 +160,15 @@ export async function requestTerminalPaneRecovery(request: RecoveryRequest): Pro
     }
     // Re-check the budget across the await: a concurrent detector may have
     // already consumed it for this tab.
+    if (!requestBelongsToCurrentRecoveryGeneration(request)) {
+      return false
+    }
     const recheck = recoveryBudget(request.tabId, Date.now())
     if (!recheck.allowed) {
-      if (recheck.declinedBy === 'window-cap') {
+      if (
+        recheck.declinedBy === 'window-cap' ||
+        (recheck.declinedBy === 'cooldown' && request.terminalRecoveryGeneration !== undefined)
+      ) {
         scheduleRecoveryRetry(request, recheck.retryInMs)
       }
       return false
@@ -176,6 +203,10 @@ export async function requestTerminalPaneRecovery(request: RecoveryRequest): Pro
   const timestamps = recoveryTimestampsByTabId.get(request.tabId) ?? []
   timestamps.push(Date.now())
   recoveryTimestampsByTabId.set(request.tabId, timestamps)
+  recoveryGenerationByTabId.set(
+    request.tabId,
+    captureTerminalPaneRecoveryGeneration(request.tabId) + 1
+  )
   // A remount replaces every pane xterm in the tab; a previously scheduled
   // retry would only re-remount the fresh, healthy panes.
   cancelPendingRecoveryRetry(request.tabId)
@@ -191,6 +222,7 @@ export async function requestTerminalPaneRecovery(request: RecoveryRequest): Pro
 
 export function _resetTerminalPaneRecoveryForTests(): void {
   recoveryTimestampsByTabId.clear()
+  recoveryGenerationByTabId.clear()
   for (const timer of pendingRetryTimerByTabId.values()) {
     clearTimeout(timer)
   }

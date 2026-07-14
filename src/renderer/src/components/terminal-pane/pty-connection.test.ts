@@ -8009,9 +8009,17 @@ describe('connectPanePty', () => {
       // Pipeline dies while hidden; the certification-time recovery request
       // finds no remountable tab (budget stays unconsumed, no retry timer).
       remountTerminalTabForRecovery.mockReturnValueOnce(false)
+      const ackCredit = vi.fn()
+      const { writeTerminalOutput } =
+        await import('@/lib/pane-manager/pane-terminal-output-scheduler')
+      writeTerminalOutput(pane.terminal, 'queued before certification', {
+        foreground: false,
+        ackCredit
+      })
       const { notifyUndeliverableWrite } =
         await import('@/lib/pane-manager/terminal-write-pipeline-health')
       notifyUndeliverableWrite(pane.terminal, 'write-stalled')
+      expect(ackCredit).toHaveBeenCalledTimes(1)
       await flushAsyncTicks(4)
       expect(remountTerminalTabForRecovery).toHaveBeenCalledTimes(1)
 
