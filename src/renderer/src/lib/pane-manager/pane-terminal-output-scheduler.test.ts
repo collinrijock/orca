@@ -1534,6 +1534,9 @@ describe('pane terminal output scheduler', () => {
       expect(hasTerminalParseProgressSince(terminal, generation)).toBe(false)
       expect(recoveryReasons).toEqual(['write-stalled'])
       expect(isTerminalWritePipelineCertifiedDead(terminal)).toBe(true)
+      // Only the first rejection touches xterm; later PTY deliveries credit
+      // directly while recovery owns the certified-dead instance.
+      expect(terminal.write).toHaveBeenCalledTimes(1)
       expect(onParsed).not.toHaveBeenCalled()
       for (const ackCredit of ackCredits) {
         expect(ackCredit).toHaveBeenCalledTimes(1)

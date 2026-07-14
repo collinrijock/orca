@@ -21,6 +21,7 @@ import {
   armTerminalWriteStallWatch,
   cancelTerminalWriteStallWatch,
   failTerminalWriteStallWatch,
+  isTerminalWritePipelineCertifiedDead,
   settleTerminalWriteStallWatch
 } from './terminal-write-pipeline-health'
 import {
@@ -1123,6 +1124,12 @@ export function writeTerminalOutput(
   options: WriteTerminalOutputOptions
 ): void {
   exposeDebugApi()
+  // Why: recovery may be budget-delayed while PTY output keeps flowing. Main
+  // owns the authoritative buffer; credit delivery without waking dead xterm.
+  if (isTerminalWritePipelineCertifiedDead(terminal)) {
+    options.ackCredit?.()
+    return
+  }
   if (!data) {
     // Why: an empty write still consumed its delivery — credit or main's
     // in-flight window leaks.
