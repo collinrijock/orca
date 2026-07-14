@@ -17066,6 +17066,16 @@ describe('OrcaRuntimeService', () => {
   it('creates mobile session terminals in a headless runtime server', async () => {
     const spawn = vi.fn().mockResolvedValue({ id: 'pty-headless' })
     const runtime = new OrcaRuntimeService(store)
+    const persistViewMode = vi.spyOn(
+      runtime as unknown as {
+        persistHeadlessSessionTabProps: (
+          worktreeId: string,
+          tabId: string,
+          props: { viewMode: 'terminal' | 'chat' }
+        ) => void
+      },
+      'persistHeadlessSessionTabProps'
+    )
     runtime.setPtyController({
       spawn,
       write: () => true,
@@ -17074,7 +17084,9 @@ describe('OrcaRuntimeService', () => {
     })
     runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
 
-    const result = await runtime.createMobileSessionTerminal(`id:${TEST_WORKTREE_ID}`)
+    const result = await runtime.createMobileSessionTerminal(`id:${TEST_WORKTREE_ID}`, {
+      viewMode: 'chat'
+    })
 
     expect(spawn).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -17090,7 +17102,11 @@ describe('OrcaRuntimeService', () => {
       type: 'terminal',
       status: 'ready',
       terminal: expect.stringMatching(/^term_/),
+      viewMode: 'chat',
       isActive: true
+    })
+    expect(persistViewMode).toHaveBeenCalledWith(TEST_WORKTREE_ID, result.tab.parentTabId, {
+      viewMode: 'chat'
     })
 
     const listed = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
@@ -20138,7 +20154,8 @@ describe('OrcaRuntimeService', () => {
     })
 
     const result = await runtime.createMobileSessionTerminal(`id:${TEST_WORKTREE_ID}`, {
-      activate: false
+      activate: false,
+      viewMode: 'chat'
     })
 
     expect(send).toHaveBeenCalledWith(
@@ -20146,7 +20163,8 @@ describe('OrcaRuntimeService', () => {
       expect.objectContaining({
         worktreeId: TEST_WORKTREE_ID,
         activate: false,
-        source: 'runtime-session'
+        source: 'runtime-session',
+        viewMode: 'chat'
       })
     )
     expect(focusTerminal).not.toHaveBeenCalled()
@@ -20504,7 +20522,8 @@ describe('OrcaRuntimeService', () => {
       })
 
       const create = runtime.createMobileSessionTerminal(`id:${TEST_WORKTREE_ID}`, {
-        activate: true
+        activate: true,
+        viewMode: 'terminal'
       })
       let settled = false
       const settledCreate = create.finally(() => {
@@ -20550,6 +20569,7 @@ describe('OrcaRuntimeService', () => {
         leafId: pendingLeafId,
         status: 'ready',
         terminal: expect.stringMatching(/^term_/),
+        viewMode: 'terminal',
         isActive: true
       })
       expect(spawn).toHaveBeenCalledWith(
@@ -20567,7 +20587,8 @@ describe('OrcaRuntimeService', () => {
         expect.objectContaining({
           ptyId: 'pty-materialized',
           tabId: 'tab-pending',
-          leafId: pendingLeafId
+          leafId: pendingLeafId,
+          viewMode: 'terminal'
         })
       )
       expect(closeTerminal).not.toHaveBeenCalled()
@@ -20761,7 +20782,8 @@ describe('OrcaRuntimeService', () => {
       })
 
       const create = runtime.createMobileSessionTerminal(`id:${TEST_WORKTREE_ID}`, {
-        activate: true
+        activate: true,
+        viewMode: 'chat'
       })
       let settled = false
       const settledCreate = create.finally(() => {
@@ -20769,8 +20791,35 @@ describe('OrcaRuntimeService', () => {
       })
       await vi.waitFor(() => expect(send).toHaveBeenCalledTimes(1))
 
+      // A shell-only renderer snapshot can win the first race but still omit
+      // launch props. The later PTY rescue must fill the explicit mode.
+      runtime.syncWindowGraph(1, {
+        tabs: [],
+        leaves: [],
+        mobileSessionTabs: [
+          {
+            worktree: TEST_WORKTREE_ID,
+            publicationEpoch: 'renderer-shell',
+            snapshotVersion: 1,
+            activeGroupId: 'group-1',
+            activeTabId: `tab-alive::${leafId}`,
+            activeTabType: 'terminal',
+            tabs: [
+              {
+                type: 'terminal',
+                id: `tab-alive::${leafId}`,
+                parentTabId: 'tab-alive',
+                leafId,
+                title: 'Terminal',
+                isActive: true
+              }
+            ]
+          }
+        ]
+      })
+
       // The renderer's own PTY spawn registers with the tab binding — the same
-      // call the pty IPC layer now makes — without any mobileSessionTabs sync.
+      // call the pty IPC layer now makes — after the shell-only snapshot.
       runtime.registerPty('pty-alive', TEST_WORKTREE_ID, null, {
         tabId: 'tab-alive',
         leafId
@@ -20786,7 +20835,8 @@ describe('OrcaRuntimeService', () => {
         parentTabId: 'tab-alive',
         leafId,
         status: 'ready',
-        terminal: expect.stringMatching(/^term_/)
+        terminal: expect.stringMatching(/^term_/),
+        viewMode: 'chat'
       })
       expect(closeTerminal).not.toHaveBeenCalled()
     } finally {
