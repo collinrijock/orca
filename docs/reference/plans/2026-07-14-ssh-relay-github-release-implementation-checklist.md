@@ -2,7 +2,7 @@
 
 Date created: 2026-07-14<br>
 Last updated: 2026-07-14<br>
-Current phase: Milestone 3 / Work Package 2 target-native runtime assembly — exact-head run 29358223742 isolates 2,879 Windows arm64 linker-emitted 16-byte function thunks whose `adrp`/`add`/`br` control flow is byte-identical and whose unreachable fourth `udf` instruction differs, plus 68 derived `/Brepro` identity bytes; exact-head run 29359948742 disproves the empty `LinkIncremental` property oracle; exact-head run 29361673339 then proves the locally assumed `link.command.1.tlog` path is absent after successful native compilation on both Windows architectures, so each fails closed before staging/upload while all four POSIX controls remain reproducible and upload; exact implementation commit `6198f0ddd` adds bounded, target-matching tracking-file discovery and is locally green under E-M3-WINDOWS-LINK-COMMAND-DISCOVERY-LOCAL-001; the next six-cell exact-head run remains required, and no evidence authorizes `/INCREMENTAL:NO` or any producer change; oldest-baseline, native-trust, cross-family remote, and measured-baseline gates remain open; no bundled-runtime path is enabled<br>
+Current phase: Milestone 3 / Work Package 2 target-native runtime assembly — exact-head run 29358223742 isolates 2,879 Windows arm64 linker-emitted 16-byte function thunks whose `adrp`/`add`/`br` control flow is byte-identical and whose unreachable fourth `udf` instruction differs, plus 68 derived `/Brepro` identity bytes; exact-head run 29359948742 disproves the empty `LinkIncremental` property oracle; exact-head run 29361673339 proves the locally assumed fixed tracking path is absent; exact-head run 29362672415 then proves both native Windows builds fail closed because bounded discovery from the entire generated `build` tree reaches unrelated dependency depth, while all four POSIX controls remain reproducible and upload; the narrow `build/Release` output-tree correction is locally green under E-M3-WINDOWS-LINK-COMMAND-RELEASE-ROOT-LOCAL-001 and requires a new six-cell exact-head run; no evidence authorizes changing a bound, producer, comparator, or default path; oldest-baseline, native-trust, cross-family remote, and measured-baseline gates remain open; no bundled-runtime path is enabled<br>
 Primary design: [SSH relay GitHub Release plan](./2026-07-14-ssh-relay-github-release-plan.html)<br>
 Motivating issues: [#8450](https://github.com/stablyai/orca/issues/8450), [#1693](https://github.com/stablyai/orca/issues/1693)
 
@@ -719,6 +719,19 @@ rejects symbolic links and more than 32 tracking candidates, reads each candidat
 existing 256 KiB cap, and requires exactly one exact target-output match before strict parsing. The
 active gate is now a new exact-head native run; no producer change is authorized locally.
 
+Exact-head run 29362672415 proves both native Windows builds reach the discovery gate after target
+compilation but reject because scanning from the entire generated `build` tree encounters unrelated
+dependency directories beyond depth eight. All four POSIX controls compare and upload. The active
+correction may narrow only the traversal root to `build/Release`, the output tree where both logs
+show MSBuild emitted `conpty_console_list.node`; every existing depth, entry, candidate, byte,
+encoding, target-cardinality, parser, comparator, and no-upload bound remains unchanged
+(E-M3-WINDOWS-LINK-COMMAND-DISCOVERY-CI-RED-001).
+
+The correction now scopes the same bounded discovery to `build/Release` only and is locally green
+under E-M3-WINDOWS-LINK-COMMAND-RELEASE-ROOT-LOCAL-001. No budget, parser, producer, comparison,
+staging, upload, legacy, or production behavior changed. The active gate is another exact-head
+six-cell native run.
+
 Each runtime must contain only the executable closure required by the relay.
 
 - [ ] Replace or extend `config/scripts/build-relay.mjs` without weakening its existing relay and
@@ -1322,16 +1335,16 @@ Baseline measurements must be captured before product behavior changes.
 
 Update status and evidence as work begins. Do not combine these into one large behavior switch.
 
-| Work package              | Scope                                                                                      | Default behavior change     | Status                                                 | PR/evidence                                                             |
-| ------------------------- | ------------------------------------------------------------------------------------------ | --------------------------- | ------------------------------------------------------ | ----------------------------------------------------------------------- |
-| 0. #8450 legacy fix       | Coherent Node/npm selection and live repro                                                 | Fixes legacy selection only | Complete and CI-green in draft PR #8724                | E-M0-UNIT-002, E-M0-LIVE-002, E-M0-STATIC-002, E-M0-PR-001, E-M0-CI-001 |
-| 1. Contract and selectors | Manifest schema, identity, platform/libc selection, hostile inputs                         | None                        | Complete and CI-green in draft PR #8728                | `b9d80a4cb`; E-M2-RED-001, E-M2-CONTRACT-001, E-M2-CI-001               |
-| 2. Runtime builds         | Per-tuple assembly, native smoke, SBOM/provenance/signing                                  | None                        | Draft PR #8741; native target-record discovery pending | `6198f0ddd`; E-M3-WINDOWS-LINK-COMMAND-DISCOVERY-LOCAL-001              |
-| 3. Release publication    | Prerequisite DAG, embedded manifest, draft upload/read-back gates                          | Asset-only                  | Not started                                            | —                                                                       |
-| 4. Desktop resolver/cache | Verified download, extraction, cache, offline behavior                                     | None/forced mode only       | Not started                                            | —                                                                       |
-| 5. Transfer/install       | Bounded transports, structured sentinel, bundled launch behind per-target Beta/forced mode | Per-target opt-in only      | Not started                                            | —                                                                       |
-| 6. Fallback/diagnostics   | Abort-and-join state machine, mode isolation, reason codes, target-mode configuration/UI   | Per-target Beta only        | Not started                                            | —                                                                       |
-| 7. Live gates/rollout     | Matrix, security, performance, release promotion                                           | Per-tuple staged            | Not started                                            | —                                                                       |
+| Work package              | Scope                                                                                      | Default behavior change     | Status                                                | PR/evidence                                                             |
+| ------------------------- | ------------------------------------------------------------------------------------------ | --------------------------- | ----------------------------------------------------- | ----------------------------------------------------------------------- |
+| 0. #8450 legacy fix       | Coherent Node/npm selection and live repro                                                 | Fixes legacy selection only | Complete and CI-green in draft PR #8724               | E-M0-UNIT-002, E-M0-LIVE-002, E-M0-STATIC-002, E-M0-PR-001, E-M0-CI-001 |
+| 1. Contract and selectors | Manifest schema, identity, platform/libc selection, hostile inputs                         | None                        | Complete and CI-green in draft PR #8728               | `b9d80a4cb`; E-M2-RED-001, E-M2-CONTRACT-001, E-M2-CI-001               |
+| 2. Runtime builds         | Per-tuple assembly, native smoke, SBOM/provenance/signing                                  | None                        | Draft PR #8741; native Release-tree discovery pending | E-M3-WINDOWS-LINK-COMMAND-RELEASE-ROOT-LOCAL-001                        |
+| 3. Release publication    | Prerequisite DAG, embedded manifest, draft upload/read-back gates                          | Asset-only                  | Not started                                           | —                                                                       |
+| 4. Desktop resolver/cache | Verified download, extraction, cache, offline behavior                                     | None/forced mode only       | Not started                                           | —                                                                       |
+| 5. Transfer/install       | Bounded transports, structured sentinel, bundled launch behind per-target Beta/forced mode | Per-target opt-in only      | Not started                                           | —                                                                       |
+| 6. Fallback/diagnostics   | Abort-and-join state machine, mode isolation, reason codes, target-mode configuration/UI   | Per-target Beta only        | Not started                                           | —                                                                       |
+| 7. Live gates/rollout     | Matrix, security, performance, release promotion                                           | Per-tuple staged            | Not started                                           | —                                                                       |
 
 Every PR must document:
 
@@ -5408,23 +5421,158 @@ configuration` before runtime staging, verification, smoke, comparison, or diagn
   require both Windows clean builds to select one target record and emit the same accepted summary
   before changing the producer.
 
+### E-M3-WINDOWS-LINK-COMMAND-DISCOVERY-CI-RED-001 — Whole build tree exceeds depth bound
+
+- Date: 2026-07-14
+- Commit SHA / PR: exact head `f9a49d53123b27b19713eadef927de1102ec08de`, containing exact
+  discovery implementation commit `6198f0ddd5b31704ab72902e9a21e78412da870d`; stacked draft
+  PR [#8741](https://github.com/stablyai/orca/pull/8741)
+- Run and jobs: [run 29362672415](https://github.com/stablyai/orca/actions/runs/29362672415),
+  conclusion `failure`; Windows x64 `87186432938` expected diagnostic failure, Windows arm64
+  `87186432948` expected diagnostic failure, macOS arm64 `87186432965` success, Linux arm64
+  `87186432979` success, Linux x64 `87186432980` success, and macOS x64 `87186433013` success
+- Runners: GitHub-hosted Windows x64 and arm64 used the same native labels, images, runner, Node,
+  and MSVC versions recorded by E-M3-WINDOWS-LINK-COMMAND-PATH-CI-RED-001; exact source head was
+  `f9a49d531`. The four POSIX controls used their previously recorded target-native labels.
+- Remote and transport: none; target-native artifact assembly, bounded build-tree discovery, and
+  unpublished Actions artifacts only
+- Exact evidence commands:
+
+  ```sh
+  gh run view 29362672415 --repo stablyai/orca \
+    --json status,conclusion,headSha,createdAt,updatedAt,url,jobs
+  gh api repos/stablyai/orca/actions/jobs/87186432938/logs
+  gh api repos/stablyai/orca/actions/jobs/87186432948/logs
+  gh api 'repos/stablyai/orca/actions/runs/29362672415/artifacts?per_page=100'
+  ```
+
+- Result: FAIL as the intended discovery boundary. Each Windows job successfully compiles the
+  target and enters bounded discovery, then rejects with `MSBuild linker tracking discovery exceeds
+the bounded depth` before opening or parsing a candidate. Starting at the complete generated
+  `build` tree includes unrelated dependency/project subtrees; the evidence does not justify
+  raising the eight-level limit. Both logs show the target binary is emitted under `build/Release`,
+  which is the narrow output-tree root for the next correction.
+- Uploaded controls: exactly four unpublished seven-day POSIX artifacts and no Windows artifacts:
+  Linux x64 `8322871131`, 29,278,807 bytes,
+  `sha256:b11ceb6bd42d28d379d32b3627a242f60cf62f78e9a7267589220ce7737b9c63`; Linux arm64
+  `8322874205`, 28,209,038 bytes,
+  `sha256:f2195e1f4c03d1fb6507e32b5d5328a65f351c2c22b56a8144aa1c9449c3f733`; macOS x64
+  `8322934998`, 26,370,804 bytes,
+  `sha256:6fea712fd57b06cc93a7e8f0f3ebda4526307258be66ba901cd3fc190f7a03ed`; and macOS arm64
+  `8322879006`, 24,728,020 bytes,
+  `sha256:2407308e60002c5e735cd301f1f30e9754d5c383a18f36009d14f08085f1f577`.
+- Duration and resource metrics: jobs ran 2m58s Windows x64, 6m25s Windows arm64, 3m45s macOS
+  arm64, 3m25s Linux arm64, 3m22s Linux x64, and 5m56s macOS x64. Windows fails after one native
+  compile but before runtime smoke; no new Windows RSS, channel/file count, cancellation, or
+  fallback metric exists.
+- Artifact/log/trace link: run/jobs and four unpublished POSIX artifacts above; no Windows runtime
+  or rejected binary was staged or uploaded
+- Oracle proved: both native Windows architectures reach and enforce the same traversal-depth
+  bound; whole-build-tree discovery is too broad; the target output tree is `build/Release`; all
+  four POSIX controls remain reproducible and upload.
+- Does not prove: whether `build/Release` contains tracking candidates, candidate/target cardinality,
+  record shape, allowlisted switch summary, incremental-link state, thunk ownership, a safe producer
+  correction, Windows equality, oldest baselines, native trust, SSH, publication, transfer,
+  fallback, UI, or any enabled tuple.
+- Checklist items satisfied: native negative discovery-root evidence only; no tuple or production
+  checkbox.
+- Follow-up: narrow the discovery root to `build/Release` without raising or removing any bound,
+  then rerun all six native cells and require exactly one target record on both Windows runners.
+
+### E-M3-WINDOWS-LINK-COMMAND-RELEASE-ROOT-LOCAL-001 — Release output-tree discovery scope
+
+- Date: 2026-07-14
+- Commit SHA / PR: implementation and ledger are in the current artifact-only checkpoint; record
+  the exact implementation SHA in the immediate documentation evidence head after commit; stacked
+  draft PR [#8741](https://github.com/stablyai/orca/pull/8741), target-native execution pending
+- Runner: macOS 26.2 build 25C56, native Apple M4 arm64; Node v26.0.0 and pnpm 10.24.0. This runner
+  cannot generate the native MSBuild tree, so Windows x64/arm64 jobs remain authoritative.
+- Remote and transport: none; bounded discovery-root and builder-ordering contracts only
+- Red evidence: E-M3-WINDOWS-LINK-COMMAND-DISCOVERY-CI-RED-001 on both native Windows
+  architectures; no synthetic local failure substitutes for that real traversal-shape evidence
+- Exact green commands:
+
+  ```sh
+  node --check config/scripts/ssh-relay-node-pty-windows-build-determinism.mjs
+  node --check config/scripts/ssh-relay-node-pty-windows-build-determinism.test.mjs
+  node --check config/scripts/ssh-relay-node-pty-build.mjs
+  /usr/bin/time -lp pnpm exec vitest run --config config/vitest.config.ts \
+    config/scripts/ssh-relay-node-pty-windows-build-determinism.test.mjs \
+    config/scripts/ssh-relay-node-pty-build.test.mjs \
+    config/scripts/ssh-relay-runtime-workflow.test.mjs
+  pnpm exec vitest run --config config/vitest.config.ts \
+    config/scripts/ssh-relay-node-release-verification.test.mjs \
+    config/scripts/ssh-relay-node-tar-inspection.test.mjs \
+    config/scripts/ssh-relay-node-pty-build.test.mjs \
+    config/scripts/ssh-relay-node-pty-windows-build-determinism.test.mjs \
+    config/scripts/ssh-relay-node-pty-windows-settlement.test.mjs \
+    config/scripts/ssh-relay-node-zip-inspection.test.mjs \
+    config/scripts/ssh-relay-runtime-artifact.test.mjs \
+    config/scripts/ssh-relay-runtime-build.test.mjs \
+    config/scripts/ssh-relay-runtime-pty-smoke.test.mjs \
+    config/scripts/ssh-relay-runtime-reproducibility.test.mjs \
+    config/scripts/ssh-relay-runtime-resource-diagnostics.test.mjs \
+    config/scripts/ssh-relay-runtime-windows-pe-diagnostic.test.mjs \
+    config/scripts/ssh-relay-runtime-windows-tree.test.mjs \
+    config/scripts/ssh-relay-runtime-workflow.test.mjs \
+    config/scripts/ssh-relay-runtime-zip.test.mjs
+  pnpm run typecheck
+  pnpm exec oxlint \
+    config/scripts/ssh-relay-node-pty-windows-build-determinism.mjs \
+    config/scripts/ssh-relay-node-pty-windows-build-determinism.test.mjs \
+    config/scripts/ssh-relay-node-pty-build.mjs
+  pnpm run check:max-lines-ratchet
+  GOMAXPROCS=2 pnpm run lint
+  pnpm exec oxfmt --check \
+    config/scripts/ssh-relay-node-pty-windows-build-determinism.mjs \
+    config/scripts/ssh-relay-node-pty-windows-build-determinism.test.mjs \
+    config/scripts/ssh-relay-node-pty-build.mjs \
+    docs/reference/plans/2026-07-14-ssh-relay-github-release-implementation-checklist.md
+  git diff --check
+  ```
+
+- Green result: PASS. The purpose suites pass 13/13 tests and all 15 artifact suites pass 58/58.
+  Syntax checks, typecheck, focused oxlint, the 355-entry max-lines ratchet, full repository
+  lint/reliability/localization, formatting, and diff checks exit zero. Full lint emits only
+  pre-existing warnings outside this package.
+- Duration and resource metrics: focused purpose gate 1.26 s wall / 263 ms Vitest with
+  131,710,976-byte maximum RSS and 95,868,256-byte peak footprint; complete artifact gate 4.01 s
+  wall / 1.92 s Vitest; typecheck 4.21 s, focused lint 0.90 s, max-lines 2.37 s, and full lint
+  13.78 s. The final artifact run was parallel with static gates, so its process RSS was not
+  isolated. No SSH channels/files, cancellation, fallback, or runtime latency is exercised.
+- Artifact/log/trace link: current exact source/tests and local command output; no runtime artifact
+  was created, staged, published, or uploaded
+- Oracle proved: target discovery begins at `build/Release`, matching the exact native output tree
+  evidenced by both Windows logs; tests place valid, irrelevant, duplicate, oversized, deep, and
+  over-cardinality fixtures below that root. The existing entry/depth/candidate/byte, symbolic-link,
+  encoding, target-cardinality, strict-parser, and POSIX no-op contracts remain unchanged.
+- Does not prove: that either native Release tree contains a candidate, candidate/target
+  cardinality, record shape, allowlisted switch summary, incremental-link state, thunk ownership, a
+  safe producer correction, arm64 equality, oldest baselines, native trust, SSH, publication,
+  transfer, fallback, UI, or any enabled tuple.
+- Checklist items satisfied: local Release-tree discovery scope only; no tuple or production
+  checkbox.
+- Follow-up: push the exact implementation and ledger head, rerun all six target-native cells, and
+  require both Windows clean builds to select one target record and emit the same accepted summary
+  before changing the producer.
+
 ## Accepted Gaps
 
 No product gap is accepted merely because it appears in this list. Each entry requires explicit
 owner and promotion condition.
 
-| Gap                                        | Current behavior                                                           | Risk                                           | Owner                                                   | Promotion/removal condition                                                                                                           | Status       |
-| ------------------------------------------ | -------------------------------------------------------------------------- | ---------------------------------------------- | ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- | ------------ |
-| Bundled runtime only partially implemented | Six unpublished native artifact proofs; no production consumer             | #8450/#1693 environment failures remain        | Codex implementation owner                              | Complete Work Packages 2–7 plus Milestones 3–14                                                                                       | Open         |
-| No bundled tuple enabled                   | Every target's default and effective mode remains legacy                   | No bundled support claim can be made           | Codex implementation owner                              | Complete target-native build/trust and both required live-evidence layers                                                             | Open         |
-| Windows runtime smoke incomplete           | Native x64/arm64 smoke settles and uploads exact evidence                  | Historical blocker is closed                   | Codex implementation owner                              | Met by E-M3-WINDOWS-CI-001                                                                                                            | CLOSED       |
-| Native clean-rebuild identity unproved     | Four POSIX controls pass; bounded target-record discovery is locally green | Toolchain drift may change native content IDs  | Codex implementation owner                              | Prove the actual target linker command natively, then apply only an evidenced producer correction and make all six clean builds match | Open         |
-| Cross-family Layer B remotes unavailable   | GitHub native runner labels exist; no approved reachable target pool       | Client/remote integration gaps may escape      | Repository release administrator + implementation owner | Approve provider/snapshots/credentials/egress/teardown/cost owner                                                                     | BLOCKED      |
-| Musl has no accepted official Node binary  | Musl is deliberately legacy-only                                           | Unofficial binary would break provenance trust | Codex implementation owner                              | Orca-owned target-native source build, signing, provenance, and live gates                                                            | ACCEPTED GAP |
-| Native arm64 live matrices incomplete      | Hosted Linux/Windows arm64 labels exist; full SSH/runtime cells do not     | Cross-build or unit tests may hide native bugs | Codex implementation owner                              | Full native archive, trust, SFTP/system-SSH, RPC, and baseline evidence                                                               | Open         |
-| Legacy performance baseline unmeasured     | Numeric budgets exist; paired cold/warm measurements do not                | Regression thresholds lack a measured baseline | Codex implementation owner                              | Purpose-built paired harness with ten samples on pinned runner classes                                                                | Open         |
-| Manifest signing environment unprovisioned | Ed25519/key-rotation policy exists; no protected runtime signing secret    | Runtime assets cannot be safely published      | Repository release administrator                        | Protected environment, reviewers, two test keys, rehearsals, and access audit                                                         | BLOCKED      |
-| Bootstrap primitives lack full live proof  | POSIX/Windows contracts exist; bounded SSH implementations do not          | Hidden dependency or transfer corruption       | Codex implementation owner                              | Purpose-named full-size SFTP/POSIX/Windows system-SSH live suites                                                                     | Open         |
+| Gap                                        | Current behavior                                                          | Risk                                           | Owner                                                   | Promotion/removal condition                                                           | Status       |
+| ------------------------------------------ | ------------------------------------------------------------------------- | ---------------------------------------------- | ------------------------------------------------------- | ------------------------------------------------------------------------------------- | ------------ |
+| Bundled runtime only partially implemented | Six unpublished native artifact proofs; no production consumer            | #8450/#1693 environment failures remain        | Codex implementation owner                              | Complete Work Packages 2–7 plus Milestones 3–14                                       | Open         |
+| No bundled tuple enabled                   | Every target's default and effective mode remains legacy                  | No bundled support claim can be made           | Codex implementation owner                              | Complete target-native build/trust and both required live-evidence layers             | Open         |
+| Windows runtime smoke incomplete           | Native x64/arm64 smoke settles and uploads exact evidence                 | Historical blocker is closed                   | Codex implementation owner                              | Met by E-M3-WINDOWS-CI-001                                                            | CLOSED       |
+| Native clean-rebuild identity unproved     | Four POSIX controls pass; bounded Release-tree discovery is locally green | Toolchain drift may change native content IDs  | Codex implementation owner                              | Prove the actual target linker command natively, then make all six clean builds match | Open         |
+| Cross-family Layer B remotes unavailable   | GitHub native runner labels exist; no approved reachable target pool      | Client/remote integration gaps may escape      | Repository release administrator + implementation owner | Approve provider/snapshots/credentials/egress/teardown/cost owner                     | BLOCKED      |
+| Musl has no accepted official Node binary  | Musl is deliberately legacy-only                                          | Unofficial binary would break provenance trust | Codex implementation owner                              | Orca-owned target-native source build, signing, provenance, and live gates            | ACCEPTED GAP |
+| Native arm64 live matrices incomplete      | Hosted Linux/Windows arm64 labels exist; full SSH/runtime cells do not    | Cross-build or unit tests may hide native bugs | Codex implementation owner                              | Full native archive, trust, SFTP/system-SSH, RPC, and baseline evidence               | Open         |
+| Legacy performance baseline unmeasured     | Numeric budgets exist; paired cold/warm measurements do not               | Regression thresholds lack a measured baseline | Codex implementation owner                              | Purpose-built paired harness with ten samples on pinned runner classes                | Open         |
+| Manifest signing environment unprovisioned | Ed25519/key-rotation policy exists; no protected runtime signing secret   | Runtime assets cannot be safely published      | Repository release administrator                        | Protected environment, reviewers, two test keys, rehearsals, and access audit         | BLOCKED      |
+| Bootstrap primitives lack full live proof  | POSIX/Windows contracts exist; bounded SSH implementations do not         | Hidden dependency or transfer corruption       | Codex implementation owner                              | Purpose-named full-size SFTP/POSIX/Windows system-SSH live suites                     | Open         |
 
 ## Final Definition of Done
 
@@ -5465,11 +5613,12 @@ The project is not complete until every applicable item below is checked with ev
 
 ## Next Required Action
 
-Push exact implementation commit `6198f0ddd` plus its evidence-ledger head, then rerun both Windows
-architectures and all four POSIX controls at the exact head. Require both Windows clean builds to
-select one target record and report the same allowlisted switch summary. Only if that target-native
-evidence classifies the 2,879 function thunks may one copied-artifact producer correction be
-considered; retain strict parsing/comparison and rejected-output no-upload.
+Commit and push the bounded `build/Release` output-tree discovery correction without raising any
+entry/depth/candidate/byte bound, then rerun both Windows architectures and all four POSIX controls.
+Require both Windows clean builds to select one target record and report the same allowlisted
+switch summary. Only if that target-native evidence classifies the 2,879 function thunks may one
+copied-artifact producer correction be considered; retain strict parsing/comparison and
+rejected-output no-upload.
 Cross-family Layer B targets, the protected manifest-signing environment,
 oldest-baseline/native-trust cells, and the paired legacy performance baseline remain
 release/default-path blockers; no publication, desktop resolver, SSH transfer/install, per-target

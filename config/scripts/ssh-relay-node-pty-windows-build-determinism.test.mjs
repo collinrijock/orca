@@ -154,13 +154,16 @@ describe('SSH relay Windows node-pty build determinism', () => {
     const trackingPath = join(
       directory,
       'build',
+      'Release',
       'unexpected',
       'target.tlog',
       'link.command.1.tlog'
     )
-    const otherPath = join(directory, 'build', 'other', 'link.command.1.tlog')
-    await mkdir(join(directory, 'build', 'unexpected', 'target.tlog'), { recursive: true })
-    await mkdir(join(directory, 'build', 'other'), { recursive: true })
+    const otherPath = join(directory, 'build', 'Release', 'other', 'link.command.1.tlog')
+    await mkdir(join(directory, 'build', 'Release', 'unexpected', 'target.tlog'), {
+      recursive: true
+    })
+    await mkdir(join(directory, 'build', 'Release', 'other'), { recursive: true })
     await writeFile(
       trackingPath,
       '^one\n/OUT:conpty_console_list.node /INCREMENTAL:NO /Brepro /GUARD:CF /experimental:deterministic'
@@ -190,7 +193,7 @@ describe('SSH relay Windows node-pty build determinism', () => {
   it('rejects missing or duplicate target linker tracking candidates', async () => {
     const directory = await mkdtemp(join(tmpdir(), 'orca-node-pty-link-tracking-'))
     temporaryDirectories.push(directory)
-    await mkdir(join(directory, 'build', 'first'), { recursive: true })
+    await mkdir(join(directory, 'build', 'Release', 'first'), { recursive: true })
     await expect(
       inspectWindowsNodePtyLinkCommandTracking({
         nodePtyDirectory: directory,
@@ -199,9 +202,9 @@ describe('SSH relay Windows node-pty build determinism', () => {
     ).rejects.toThrow('exactly one target command file')
     const command =
       '^one\n/OUT:conpty_console_list.node /Brepro /GUARD:CF /experimental:deterministic'
-    await writeFile(join(directory, 'build', 'first', 'link.command.1.tlog'), command)
-    await mkdir(join(directory, 'build', 'second'), { recursive: true })
-    await writeFile(join(directory, 'build', 'second', 'link.command.1.tlog'), command)
+    await writeFile(join(directory, 'build', 'Release', 'first', 'link.command.1.tlog'), command)
+    await mkdir(join(directory, 'build', 'Release', 'second'), { recursive: true })
+    await writeFile(join(directory, 'build', 'Release', 'second', 'link.command.1.tlog'), command)
     await expect(
       inspectWindowsNodePtyLinkCommandTracking({
         nodePtyDirectory: directory,
@@ -214,7 +217,12 @@ describe('SSH relay Windows node-pty build determinism', () => {
     const deepDirectory = await mkdtemp(join(tmpdir(), 'orca-node-pty-link-depth-'))
     temporaryDirectories.push(deepDirectory)
     await mkdir(
-      join(deepDirectory, 'build', ...Array.from({ length: 10 }, (_, index) => `${index}`)),
+      join(
+        deepDirectory,
+        'build',
+        'Release',
+        ...Array.from({ length: 10 }, (_, index) => `${index}`)
+      ),
       {
         recursive: true
       }
@@ -230,7 +238,7 @@ describe('SSH relay Windows node-pty build determinism', () => {
     temporaryDirectories.push(wideDirectory)
     await Promise.all(
       Array.from({ length: 33 }, async (_, index) => {
-        const candidateDirectory = join(wideDirectory, 'build', `${index}`)
+        const candidateDirectory = join(wideDirectory, 'build', 'Release', `${index}`)
         await mkdir(candidateDirectory, { recursive: true })
         await writeFile(join(candidateDirectory, 'link.command.1.tlog'), '^candidate')
       })

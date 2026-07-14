@@ -151,7 +151,8 @@ async function readBoundedLinkCommandTracking(path) {
 }
 
 async function discoverLinkCommandTracking(nodePtyDirectory) {
-  const queue = [{ depth: 0, path: join(nodePtyDirectory, 'build') }]
+  // Why: generated dependency projects live elsewhere; only Release contains target link outputs.
+  const queue = [{ depth: 0, path: join(nodePtyDirectory, 'build', 'Release') }]
   const candidates = []
   let entries = 0
   for (let index = 0; index < queue.length; index += 1) {
