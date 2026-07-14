@@ -52,22 +52,27 @@ same change as the work it records.
   E-M0-STATIC-002, E-M0-LIVE-002, E-M0-CI-001). Draft PR
   [#8724](https://github.com/stablyai/orca/pull/8724) is open and CI-green at implementation head
   `94e58d83e`.
-- Active package: Milestone 1 decisions and Work Package 1 contracts are isolated in stacked draft PR
-  [#8728](https://github.com/stablyai/orca/pull/8728); decision commit `a84d52dc6` changes no runtime
-  behavior and enables no tuple.
+- Active package: Work Package 1's disconnected manifest, content-identity, signature, release-asset,
+  and conservative selector contracts are locally implemented and green under E-M2-RED-001 and
+  E-M2-CONTRACT-001. They remain isolated in stacked draft PR
+  [#8728](https://github.com/stablyai/orca/pull/8728); no deploy/resolver call site is connected and
+  no tuple is enabled.
 - Production behavior: unchanged; Orca embeds relay JavaScript and installs `node-pty` plus
   `@parcel/watcher` with remote npm.
 - New runtime assets published: none.
 - Bundled runtime enabled: no.
-- Declared supported bundled tuples: none until the baseline and runner decisions below are closed.
+- Declared supported bundled tuples: none until the required target-native and two-layer live
+  evidence cells are complete.
 - Validation orchestration: GitHub Actions is the primary runner and evidence surface under
-  E-M1-RUNNER-DECISION-001; exact native labels and representative remote targets remain open.
+  E-M1-RUNNER-DECISION-001; exact native labels are recorded, while representative cross-family
+  remote targets remain open.
 - Rollout control: existing per-SSH-target configuration; legacy is the default and the bundled
   runtime is an explicit per-target Beta opt-in under E-M1-ROLLOUT-DECISION-001.
 - Legacy fallback removal: not authorized.
-- Next required action: implement the versioned manifest/identity/selector contracts and hostile-input
-  tests in draft PR #8728. Keep cross-family remote infrastructure and measured legacy baseline
-  gates open and do not introduce any resolver, transfer, rollout, or default behavior.
+- Next required action: commit and run draft PR #8728 CI for the locally green Work Package 1
+  contract package, record the exact CI evidence, then begin artifact-only target-native runtime
+  assembly. Keep cross-family remote infrastructure and measured legacy baseline gates open and do
+  not introduce resolver, transfer, rollout, or default behavior.
 
 ## Non-Negotiable Invariants
 
@@ -467,38 +472,44 @@ Suggested modules are provisional; update this file before choosing different na
 **In progress — 2026-07-14, Codex implementation owner:** implement the pure manifest schema,
 canonical unsigned bytes/signature verification, content identity, and fail-conservative
 platform/libc selector with hostile-input tests only. No deploy/resolver call site or bundled tuple is
-enabled in this package.
+enabled in this package. Session checkpoint: implementation and local gates are complete under
+E-M2-RED-001 and E-M2-CONTRACT-001; draft PR #8728 CI and exact implementation-commit evidence are
+the remaining package gates.
 
 ### Manifest schema
 
-- [ ] Add a versioned relay artifact schema in a concrete domain module such as
-      `src/main/ssh/ssh-relay-artifact-schema.ts`.
-- [ ] Include schema version, exact Orca build tag, relay protocol version, runtime content ID,
+- [x] Add a versioned relay artifact schema in `src/main/ssh/ssh-relay-artifact-schema.ts`.
+      (E-M2-CONTRACT-001)
+- [x] Include schema version, exact Orca build tag, relay protocol version, runtime content ID,
       OS, architecture, libc family/version requirements, minimum OS/kernel requirements, Node
       version, dependency versions, archive name, archive size, expanded size, file count, and
-      archive SHA-256.
-- [ ] Include every runtime file’s relative path, type, size, SHA-256, and required executable mode.
-- [ ] Include signing key ID, signature algorithm/version, creation timestamp, and provenance/SBOM
-      references without making wall-clock time part of runtime identity.
-- [ ] Include target-native code-signing verification attestation, policy/tool identity, and the
-      exact attested byte hashes inside the signed manifest.
-- [ ] Reject duplicate tuple entries, duplicate/case-colliding paths, unsafe Windows names,
+      archive SHA-256. (E-M2-CONTRACT-001)
+- [x] Include every runtime file’s relative path, type, size, SHA-256, and required executable mode.
+      (E-M2-CONTRACT-001)
+- [x] Include signing key ID, signature algorithm/version, creation timestamp, and provenance/SBOM
+      references without making wall-clock time part of runtime identity. (E-M2-CONTRACT-001)
+- [x] Include target-native code-signing verification attestation, policy/tool identity, and the
+      exact attested byte hashes inside the signed manifest. (E-M2-CONTRACT-001)
+- [x] Reject duplicate tuple entries, duplicate/case-colliding paths, unsafe Windows names,
       unsupported schema versions, missing required files, extra native platform packages, and
-      inconsistent aggregate sizes.
-- [ ] Define exact archive naming for stable, RC, and perf builds.
-- [ ] Define exact direct release URL construction. Runtime code must not call the GitHub API or use
-      a mutable `latest` URL.
+      inconsistent aggregate sizes. (E-M2-CONTRACT-001)
+- [x] Define exact archive naming for stable, RC, and perf builds. (E-M2-CONTRACT-001)
+- [x] Define exact direct release URL construction. Runtime code must not call the GitHub API or use
+      a mutable `latest` URL. (E-M2-CONTRACT-001)
 
 ### Content identity
 
-- [ ] Compute the content identity from canonical full-runtime metadata and file digests, including
+- [x] Compute the content identity from canonical full-runtime metadata and file digests, including
       Node, relay entries, native modules, helper executables, and runtime JavaScript.
-- [ ] Prove changing only Node changes the identity.
-- [ ] Prove changing only `node-pty` changes the identity.
-- [ ] Prove changing only `@parcel/watcher` changes the identity.
-- [ ] Prove changing only `relay-watcher.js` changes the identity.
-- [ ] Prove mode changes for executable files change the identity or are otherwise authenticated.
-- [ ] Prove metadata that should not affect execution does not create nondeterministic identities.
+      (E-M2-CONTRACT-001)
+- [x] Prove changing only Node changes the identity. (E-M2-CONTRACT-001)
+- [x] Prove changing only `node-pty` changes the identity. (E-M2-CONTRACT-001)
+- [x] Prove changing only `@parcel/watcher` changes the identity. (E-M2-CONTRACT-001)
+- [x] Prove changing only `relay-watcher.js` changes the identity. (E-M2-CONTRACT-001)
+- [x] Prove mode changes for executable files change the identity or are otherwise authenticated.
+      (E-M2-CONTRACT-001)
+- [x] Prove metadata that should not affect execution does not create nondeterministic identities.
+      (E-M2-CONTRACT-001)
 - [ ] Update remote directory parsing and GC rules for the new mode-qualified identity without
       breaking legacy directory recognition.
 
@@ -1101,16 +1112,16 @@ Baseline measurements must be captured before product behavior changes.
 
 Update status and evidence as work begins. Do not combine these into one large behavior switch.
 
-| Work package              | Scope                                                                                      | Default behavior change     | Status                                           | PR/evidence                                                             |
-| ------------------------- | ------------------------------------------------------------------------------------------ | --------------------------- | ------------------------------------------------ | ----------------------------------------------------------------------- |
-| 0. #8450 legacy fix       | Coherent Node/npm selection and live repro                                                 | Fixes legacy selection only | Complete and CI-green in draft PR #8724          | E-M0-UNIT-002, E-M0-LIVE-002, E-M0-STATIC-002, E-M0-PR-001, E-M0-CI-001 |
-| 1. Contract and selectors | Manifest schema, identity, platform/libc selection, hostile inputs                         | None                        | Safety decisions recorded; contracts in progress | Draft PR #8728; a84d52dc6, 5c37e8efe                                    |
-| 2. Runtime builds         | Per-tuple assembly, native smoke, SBOM/provenance/signing                                  | None                        | Not started                                      | —                                                                       |
-| 3. Release publication    | Prerequisite DAG, embedded manifest, draft upload/read-back gates                          | Asset-only                  | Not started                                      | —                                                                       |
-| 4. Desktop resolver/cache | Verified download, extraction, cache, offline behavior                                     | None/forced mode only       | Not started                                      | —                                                                       |
-| 5. Transfer/install       | Bounded transports, structured sentinel, bundled launch behind per-target Beta/forced mode | Per-target opt-in only      | Not started                                      | —                                                                       |
-| 6. Fallback/diagnostics   | Abort-and-join state machine, mode isolation, reason codes, target-mode configuration/UI   | Per-target Beta only        | Not started                                      | —                                                                       |
-| 7. Live gates/rollout     | Matrix, security, performance, release promotion                                           | Per-tuple staged            | Not started                                      | —                                                                       |
+| Work package              | Scope                                                                                      | Default behavior change     | Status                                  | PR/evidence                                                             |
+| ------------------------- | ------------------------------------------------------------------------------------------ | --------------------------- | --------------------------------------- | ----------------------------------------------------------------------- |
+| 0. #8450 legacy fix       | Coherent Node/npm selection and live repro                                                 | Fixes legacy selection only | Complete and CI-green in draft PR #8724 | E-M0-UNIT-002, E-M0-LIVE-002, E-M0-STATIC-002, E-M0-PR-001, E-M0-CI-001 |
+| 1. Contract and selectors | Manifest schema, identity, platform/libc selection, hostile inputs                         | None                        | Locally green; draft PR CI pending      | Draft PR #8728; E-M2-RED-001, E-M2-CONTRACT-001                         |
+| 2. Runtime builds         | Per-tuple assembly, native smoke, SBOM/provenance/signing                                  | None                        | Not started                             | —                                                                       |
+| 3. Release publication    | Prerequisite DAG, embedded manifest, draft upload/read-back gates                          | Asset-only                  | Not started                             | —                                                                       |
+| 4. Desktop resolver/cache | Verified download, extraction, cache, offline behavior                                     | None/forced mode only       | Not started                             | —                                                                       |
+| 5. Transfer/install       | Bounded transports, structured sentinel, bundled launch behind per-target Beta/forced mode | Per-target opt-in only      | Not started                             | —                                                                       |
+| 6. Fallback/diagnostics   | Abort-and-join state machine, mode isolation, reason codes, target-mode configuration/UI   | Per-target Beta only        | Not started                             | —                                                                       |
+| 7. Live gates/rollout     | Matrix, security, performance, release promotion                                           | Per-tuple staged            | Not started                             | —                                                                       |
 
 Every PR must document:
 
@@ -1154,7 +1165,7 @@ focused commands as their scripts/tests are introduced.
 
 ### Commands/scripts that must be added or formally identified
 
-- [ ] Manifest/schema/identity unit-test command.
+- [x] Manifest/schema/identity/signature/selector unit-test command. (E-M2-CONTRACT-001)
 - [ ] Per-tuple runtime assembly command.
 - [ ] Per-tuple archive inspection and native smoke command.
 - [ ] Embedded-manifest extraction/comparison command for every packaged app.
@@ -2007,23 +2018,125 @@ fragmentLinks=9`.
 - Follow-up: keep unresolved remote-pool and measured-baseline gates open while contract-only work
   proceeds without secrets or a runtime behavior switch.
 
+### E-M2-RED-001 — Missing contract modules and canonical-vector red baseline
+
+- Date: 2026-07-14
+- Commit SHA / PR: `959bc05caca7e5ccb4c69b47c1bf6f5b47671c57` plus uncommitted Work
+  Package 1 tests; stacked draft PR [#8728](https://github.com/stablyai/orca/pull/8728)
+- Runner: macOS 26.2 arm64 native; Node v26.0.0 and pnpm 10.24.0
+- Remote: not applicable; pure local contract tests
+- Transport/network: local Vitest only; no SSH or GitHub request
+- Exact command:
+
+  ```sh
+  pnpm exec vitest run --config config/vitest.config.ts \
+    src/main/ssh/ssh-relay-artifact-schema.test.ts \
+    src/main/ssh/ssh-relay-runtime-identity.test.ts \
+    src/main/ssh/ssh-relay-manifest-signature.test.ts \
+    src/main/ssh/ssh-relay-release-asset.test.ts \
+    src/main/ssh/ssh-relay-artifact-selector.test.ts
+  ```
+
+- Result: FAIL as the intended executable red baseline: signature and selector suites failed to
+  import because their production modules did not exist; the identity vector still contained its
+  explicit replacement marker; and one native-package fixture reached the undeclared-parent guard
+  before the intended native-package guard. Four files failed, one passed, with 35 tests executed
+  (33 passed and 2 failed) plus two import-failed suites.
+- Duration and resource metrics: 292 ms Vitest duration; no runtime-transfer resources apply.
+- Artifact/log/trace link: local command output retained in the implementation session; test paths
+  above are the durable repro.
+- Oracle proved: the new tests were discriminating before the missing signature/selector modules and
+  canonical vector were implemented, and the native-package fixture needed to preserve tree
+  consistency to reach its intended oracle.
+- Does not prove: behavior before all schema/identity files existed, live SSH, a real archive,
+  cryptographic key custody, target-native execution, or any production-path failure.
+- Checklist items satisfied: red half of the Work Package 1 contract-test gate only.
+- Follow-up: implemented and superseded for green behavior by E-M2-CONTRACT-001; retained as red
+  history.
+
+### E-M2-CONTRACT-001 — Manifest, identity, signature, URL, and selector contracts
+
+- Date: 2026-07-14
+- Commit SHA / PR: current Work Package 1 implementation worktree based on
+  `959bc05caca7e5ccb4c69b47c1bf6f5b47671c57`; stacked draft PR
+  [#8728](https://github.com/stablyai/orca/pull/8728); exact implementation SHA and PR CI evidence
+  pending
+- Runner: macOS 26.2 arm64 native; Node v26.0.0 and pnpm 10.24.0 (repository requests Node 24)
+- Remote: not applicable; pure local schema, cryptography, identity, release-name, and selection tests
+- Transport/network: local Vitest/static tools only; no SSH, release download, or GitHub API call
+- Exact command:
+
+  ```sh
+  pnpm exec vitest run --config config/vitest.config.ts \
+    src/main/ssh/ssh-relay-artifact-schema.test.ts \
+    src/main/ssh/ssh-relay-runtime-identity.test.ts \
+    src/main/ssh/ssh-relay-manifest-signature.test.ts \
+    src/main/ssh/ssh-relay-release-asset.test.ts \
+    src/main/ssh/ssh-relay-artifact-selector.test.ts
+  pnpm run typecheck
+  pnpm run lint
+  pnpm run check:max-lines-ratchet
+  pnpm exec oxfmt --check \
+    src/main/ssh/ssh-relay-artifact-consistency.ts \
+    src/main/ssh/ssh-relay-artifact-path-policy.ts \
+    src/main/ssh/ssh-relay-artifact-schema.ts \
+    src/main/ssh/ssh-relay-artifact-selector.ts \
+    src/main/ssh/ssh-relay-manifest-signature.ts \
+    src/main/ssh/ssh-relay-release-asset.ts \
+    src/main/ssh/ssh-relay-runtime-identity.ts \
+    src/main/ssh/ssh-relay-artifact-schema.test.ts \
+    src/main/ssh/ssh-relay-artifact-selector.test.ts \
+    src/main/ssh/ssh-relay-manifest-signature.test.ts \
+    src/main/ssh/ssh-relay-release-asset.test.ts \
+    src/main/ssh/ssh-relay-runtime-identity.test.ts \
+    src/main/ssh/ssh-relay-artifact-test-manifest.ts \
+    docs/reference/plans/2026-07-14-ssh-relay-github-release-implementation-checklist.md
+  git diff --cached --check
+  ```
+
+- Result: PASS locally. Five suites passed with 68/68 tests; Node/CLI/web typecheck passed; the full
+  repository lint/reliability/localization chain exited zero with pre-existing warnings only; the
+  355-entry max-lines ratchet reported no new bypass; touched-file formatting and tracked diff checks
+  passed.
+- Duration and resource metrics: final Vitest duration 540 ms (1.33 s wall); typecheck 3.91 s; full
+  lint 23.62 s; formatting check 874 ms; max-lines and diff checks under 1 s. Runtime memory,
+  channels, handles, files, and cancellation do not apply to this disconnected pure contract layer
+  and were not instrumented.
+- Artifact/log/trace link: local command output; canonical runtime identity vector
+  `sha256:5afe9c8094ec61a5eec6f7be6d1035faacee7362871985c74cc6ee6aceea8677`; canonical
+  unsigned-manifest byte hash `e78bf4416628a91055035dc7926035cbf633f29d3618be34e041c6dc5e0794fb`;
+  draft PR #8728
+- Oracle proved: strict versioned parsing; bounded sizes/counts; portable path and special-entry
+  rejection; required runtime closure and executable Node mode; tuple/archive/attestation
+  cross-consistency; stable content identity; exact stable/RC/perf tag and direct-URL rules; initial
+  and dual Ed25519 signing with canonical unsigned bytes; unknown/malformed/duplicate/mismatched
+  key failure; conservative Linux glibc/musl, macOS, Windows-bootstrap, translated-process, unknown,
+  old, unavailable, and ambiguous selection.
+- Does not prove: Node 24 execution, real archive parsing/extraction, local cache/download, target
+  probes, SSH/SFTP/system-SSH transfer, runtime build/native loading, signing environment custody,
+  release publication, fallback state, UI rollout, performance, or any live matrix cell. No module
+  is connected to a production call site and no tuple is enabled.
+- Checklist items satisfied: Milestone 2 manifest-schema, signed-content, content-identity,
+  release-name/URL, schema-level hostile path/type, and pure selector contract items explicitly
+  marked above; verification command inventory entry.
+- Follow-up: record exact implementation SHA and GitHub Actions result, then begin Work Package 2
+  target-native runtime assembly without production consumption.
+
 ## Accepted Gaps
 
 No product gap is accepted merely because it appears in this list. Each entry requires explicit
 owner and promotion condition.
 
-| Gap                                            | Current behavior                                                                       | Risk                                          | Owner                              | Promotion/removal condition                                          | Status |
-| ---------------------------------------------- | -------------------------------------------------------------------------------------- | --------------------------------------------- | ---------------------------------- | -------------------------------------------------------------------- | ------ |
-| Bundled runtime not implemented                | Remote Node/npm installer                                                              | #8450/#1693 failure classes remain            | Unassigned                         | Milestones 1–14                                                      | Open   |
-| Bundled support matrix undeclared              | Legacy support only where proven                                                       | Cannot claim tuple coverage                   | Unassigned                         | Baselines and real runners decided                                   | Open   |
-| musl Node provenance undecided                 | Legacy eligibility only                                                                | Untrusted/incompatible binary risk            | Unassigned                         | Reviewed runtime source/build                                        | Open   |
-| Windows arm64 real runner undecided            | Legacy eligibility only                                                                | Cross-build may hide runtime failure          | Unassigned                         | Native runner and full proof                                         | Open   |
-| Linux arm64 real runner undecided              | Existing Docker evidence is not full runtime matrix                                    | Native regression may escape                  | Unassigned                         | Native full-matrix proof                                             | Open   |
-| No numeric perf budgets yet                    | Current legacy behavior                                                                | “No regression” is unmeasurable               | Unassigned                         | Baselines and thresholds recorded                                    | Open   |
-| Signing/key lifecycle undecided                | GitHub app-release trust only                                                          | Relay-specific supply-chain gap               | Unassigned                         | Milestone 1 trust decisions                                          | Open   |
-| Remote bootstrap primitive baselines undecided | Existing transport-specific shell assumptions                                          | Hidden tool dependency or corrupt transfer    | Unassigned                         | Milestone 1 POSIX/Windows decisions and live tests                   | Open   |
-| WP0 commit/PR boundary absent                  | Uncommitted, independently scoped worktree diff                                        | Starting WP1 now would mix review packages    | User authorization required        | Separately authorized WP0 commit/PR or equivalent reviewed boundary  | Open   |
-| Repository-wide lint failure outside WP0       | Touched-file oxlint passes; full lint stops on untouched renderer exhaustiveness error | Required handoff gate cannot be claimed green | Existing renderer owner unassigned | Fix or explicitly baseline E-M0-LINT-001, then rerun `pnpm run lint` | Open   |
+| Gap                                        | Current behavior                                                        | Risk                                           | Owner                                                   | Promotion/removal condition                                                   | Status       |
+| ------------------------------------------ | ----------------------------------------------------------------------- | ---------------------------------------------- | ------------------------------------------------------- | ----------------------------------------------------------------------------- | ------------ |
+| Bundled runtime not implemented            | Proven legacy path only; WP1 contracts have no production consumer      | #8450/#1693 environment failures remain        | Codex implementation owner                              | Work Packages 2–7 plus Milestones 3–14                                        | Open         |
+| No bundled tuple enabled                   | Every target's default and effective mode remains legacy                | No bundled support claim can be made           | Codex implementation owner                              | Complete target-native build/trust and both required live-evidence layers     | Open         |
+| Cross-family Layer B remotes unavailable   | GitHub native runner labels exist; no approved reachable target pool    | Client/remote integration gaps may escape      | Repository release administrator + implementation owner | Approve provider/snapshots/credentials/egress/teardown/cost owner             | BLOCKED      |
+| Musl has no accepted official Node binary  | Musl is deliberately legacy-only                                        | Unofficial binary would break provenance trust | Codex implementation owner                              | Orca-owned target-native source build, signing, provenance, and live gates    | ACCEPTED GAP |
+| Native arm64 live matrices incomplete      | Hosted Linux/Windows arm64 labels exist; full SSH/runtime cells do not  | Cross-build or unit tests may hide native bugs | Codex implementation owner                              | Full native archive, trust, SFTP/system-SSH, RPC, and baseline evidence       | Open         |
+| Legacy performance baseline unmeasured     | Numeric budgets exist; paired cold/warm measurements do not             | Regression thresholds lack a measured baseline | Codex implementation owner                              | Purpose-built paired harness with ten samples on pinned runner classes        | Open         |
+| Manifest signing environment unprovisioned | Ed25519/key-rotation policy exists; no protected runtime signing secret | Runtime assets cannot be safely published      | Repository release administrator                        | Protected environment, reviewers, two test keys, rehearsals, and access audit | BLOCKED      |
+| Bootstrap primitives lack full live proof  | POSIX/Windows contracts exist; bounded SSH implementations do not       | Hidden dependency or transfer corruption       | Codex implementation owner                              | Purpose-named full-size SFTP/POSIX/Windows system-SSH live suites             | Open         |
 
 ## Final Definition of Done
 
@@ -2064,8 +2177,9 @@ The project is not complete until every applicable item below is checked with ev
 
 ## Next Required Action
 
-Place the implementation/live-proven Milestone 0 diff behind its separately authorized commit/PR
-boundary and resolve or explicitly baseline E-M0-LINT-001. Then assign owners and close Milestone
-1’s support baseline, remote bootstrap primitives, Node provenance/refresh policy, signing
-lifecycle, transfer/resource budgets, and rollout-policy decisions. Do not start a production
-default-path change before those decisions are reflected here.
+Commit and push the locally green Work Package 1 contract layer to stacked draft PR #8728, run its
+GitHub Actions checks on the exact implementation SHA, and append that evidence without enabling a
+tuple. If CI remains green, begin Work Package 2 with target-native artifact assembly and executable
+smoke only. The cross-family Layer B target pool, protected manifest-signing environment, and paired
+legacy performance baseline remain release/default-path blockers; no resolver, transfer, per-target
+Beta, fallback, or default behavior may be connected by the next package.
