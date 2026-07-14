@@ -20,16 +20,15 @@ complete a box.
 
 ## Active work
 
-- [ ] **WP2 — Finish target-native artifact metadata and provenance.**
-  - Four POSIX GitHub runner cells pass build, smoke, equality, metadata upload, and direct payload
-    audit in [run 29372816457](https://github.com/stablyai/orca/actions/runs/29372816457).
-  - Windows x64/arm64 prove Git for Windows' `link.exe` shadows the configured MSVC linker; neither
-    cell downloads inputs or produces an artifact.
-  - Local commit `5f0c1417d` selects exactly one canonical MSVC candidate while keeping the strict
-    path grammar and exact linker hash. It is green across 20 test files / 100 tests plus static
-    gates.
-  - Next gate: push the correction, rerun all six native jobs, then directly inspect all six
-    artifacts before completing the metadata/provenance box.
+- [ ] **WP2 — Prove oldest supported baselines and native trust.**
+  - All six target-native artifact, smoke, equality, SBOM, license, provenance, toolchain, and
+    prohibited-content cells pass in
+    [run 29373507297](https://github.com/stablyai/orca/actions/runs/29373507297); every downloaded
+    payload passed direct audit.
+  - No tuple is enabled: the artifacts still need execution on each declared oldest OS/libc/kernel
+    baseline and target-native signing/trust proof.
+  - Next gate: add the purpose-named baseline verification capability and GitHub-runner cells that
+    can qualify, while keeping unavailable snapshot/trust cells explicit and disabled.
 
 ## Work packages, in required order
 
@@ -55,7 +54,7 @@ complete a box.
 - [x] Build and smoke-test Node, patched `node-pty`, and `@parcel/watcher` on GitHub runners for
       Linux, macOS, and Windows on x64 and arm64.
 - [x] Prove exact clean-build equality and exact runtime-tree closure on all six runner families.
-- [ ] Complete the all-six SBOM, license, provenance, toolchain, and prohibited-content audit.
+- [x] Complete the all-six SBOM, license, provenance, toolchain, and prohibited-content audit.
 - [ ] Prove each candidate on its oldest supported OS/libc/kernel baseline.
 - [ ] Sign macOS and Windows bytes and verify native trust on the target OS.
 - [ ] Merge draft PR [#8741](https://github.com/stablyai/orca/pull/8741).

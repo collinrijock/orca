@@ -8,7 +8,7 @@ work; keep exact commands, runner identities, hashes, metrics, and residual gaps
 
 Date created: 2026-07-14<br>
 Last updated: 2026-07-14<br>
-Current phase: Milestone 3 / Work Package 2 SBOM/provenance closure — **In progress — 2026-07-14, Codex implementation owner**; exact-head run [29372816457](https://github.com/stablyai/orca/actions/runs/29372816457) and direct payload audit keep Linux x64/arm64 and macOS x64/arm64 green while both Windows cells independently prove Git for Windows' `C:\Program Files\Git\usr\bin\link.exe` shadows the configured MSVC linker and fail closed before input download/build/upload (E-M3-METADATA-CI-RED-007); exact implementation commit `5f0c1417d` selects exactly one strict canonical MSVC candidate from all resolved linker paths, rejects zero/ambiguous matches, retains the exact selected-binary SHA-256, and passes 20 files / 100 tests plus typecheck, full lint, formatting, max-lines, and diff gates (E-M3-WINDOWS-LINKER-SELECTION-LOCAL-001); the correction requires an exact-head all-six native run and direct inspection of all six artifacts before any remaining SBOM/provenance/toolchain box is checked; oldest-baseline, native-trust, cross-family remote, and measured-baseline gates remain open; production/default behavior and every tuple state remain unchanged; no bundled-runtime path is enabled<br>
+Current phase: Milestone 3 / Work Package 2 oldest-supported-baseline and native-trust proof — **In progress — 2026-07-14, Codex implementation owner**; exact-head run [29373507297](https://github.com/stablyai/orca/actions/runs/29373507297) passes all six target-native build, smoke, exact clean-build equality, upload, SBOM, license, provenance, runner/toolchain, and prohibited-content cells, and direct inspection of every downloaded payload passes exact archive/subject hashes, archive-scoped SPDX identity, one-owner-per-file, dependency, commit/run/builder/runner, tool-version/hash, and closure assertions (E-M3-METADATA-CI-001); Windows x64/arm64 record strict `MSVC 14.44.35207` identities and distinct exact linker SHA-256 values despite the Git-for-Windows PATH collision; the all-six metadata/provenance gate is closed, while oldest-baseline execution, native signing/trust, cross-family remotes, and measured legacy baselines remain open; production/default behavior and every tuple state remain unchanged; no bundled-runtime path is enabled and no artifact is published<br>
 Primary design: [SSH relay GitHub Release plan](./2026-07-14-ssh-relay-github-release-plan.html)<br>
 Motivating issues: [#8450](https://github.com/stablyai/orca/issues/8450), [#1693](https://github.com/stablyai/orca/issues/1693)
 
@@ -175,11 +175,12 @@ same change as the work it records.
   per-target opt-in selects bundled-preferred behavior, and implementing the setting does not
   authorize default-on rollout or legacy removal (E-M1-ROLLOUT-DECISION-001).
 - Legacy fallback removal: not authorized.
-- Next required action: push unique canonical MSVC linker-selection commit `5f0c1417d` plus its
-  evidence ledger head and rerun all six target-native cells. Require one strict MSVC match despite
-  the Git-for-Windows PATH collision, the exact selected-linker SHA-256, and all metadata, smoke,
-  equality, upload, and direct payload audits before the all-six provenance item can close. Preserve
-  the artifact-only boundary, legacy/default path, and every other release gate.
+- Next required action: implement purpose-named oldest-supported-baseline verification and its
+  artifact-only workflow cells. Use GitHub-hosted native runners where they satisfy the declared
+  floor, add static libc/libstdc++/kernel eligibility oracles where execution alone is insufficient,
+  and keep unavailable macOS/Windows snapshot and native-trust cells explicitly open rather than
+  substituting newer runners. Preserve the artifact-only boundary, legacy/default path, and every
+  tuple's disabled state.
 
 ## Non-Negotiable Invariants
 
@@ -648,6 +649,14 @@ archive inspection, bundled-Node/native-module/PTY/watcher smoke, SBOM, and prov
 behind purpose-named scripts and CI artifacts. No release publication, desktop resolver, SSH
 transfer, install, fallback, rollout setting, or tuple enablement belongs in this package.
 
+**Current active gate — 2026-07-14, Codex implementation owner:** exact-head run 29373507297 and
+direct inspection of all six downloaded payloads close target-native metadata/provenance/toolchain
+completeness under E-M3-METADATA-CI-001. The next artifact-only package must prove the declared
+oldest glibc/libstdc++/kernel, macOS, and Windows floors and target-native trust. A newer hosted
+runner, static symbol scan, or container may add evidence but cannot silently stand in for an
+unavailable qualifying snapshot. Every tuple remains disabled and no production consumer is
+connected.
+
 **Active sub-gate — 2026-07-14, Codex implementation owner:** exact-head run 29345126283 proves all
 six target-native artifact/executable jobs, including normal Windows x64/arm64 settlement and
 unpublished upload. E-M3-REPRODUCIBILITY-LOCAL-001 proves the bounded comparator requires two
@@ -798,8 +807,7 @@ Each runtime must contain only the executable closure required by the relay.
 - [x] Include exactly one compatible `@parcel/watcher@2.5.6` native optional package.
       (E-M3-RUNTIME-CLOSURE-CI-001)
 - [x] Include relay JavaScript, watcher child, required runtime JavaScript closure, licenses, SBOM,
-      provenance, and runtime metadata. (E-M3-RUNTIME-CLOSURE-CI-001; metadata completeness remains
-      a separate open gate)
+      provenance, and runtime metadata. (E-M3-RUNTIME-CLOSURE-CI-001, E-M3-METADATA-CI-001)
 - [x] Exclude package managers, development dependencies, compilers, sources, caches, build
       directories, and Orca-built debug symbols unless an approved diagnostics requirement needs
       them. Preserve verified official Node executable bytes without stripping or rewriting them,
@@ -836,9 +844,10 @@ Rules:
 - [x] Every current candidate archive executes the exact bundled Node, loads both native
       dependencies, spawns a real PTY, performs input/resize/exit, and observes
       create/modify/rename/delete watcher events. (E-M3-REPRODUCIBILITY-CI-001)
-- [ ] Every build records compiler/toolchain/container image digests and runner architecture.
-      **In progress — 2026-07-14, Codex implementation owner:** run 29368482959 failed closed on
-      both Windows architectures at the linker-version probe; no Windows build or upload followed.
+- [x] Every build records compiler/toolchain/container image digests and runner architecture.
+      Current jobs use no build container; each hosted runner records its requested label, resolved
+      image/version, native architecture, exact tool versions, and executable/code SHA-256 values.
+      (E-M3-METADATA-CI-001)
 
 ## Milestone 4 — Make Relay Artifacts Prerequisites of Desktop Builds
 
@@ -6925,6 +6934,67 @@ bounded version line: <empty>`. The PE lookup returned successfully but the `Fil
 - Follow-up: push this exact commit and ledger head, then require all six native jobs and direct
   inspection of every uploaded artifact before closing any metadata/provenance claim.
 
+### E-M3-METADATA-CI-001 — All-six native metadata and provenance closure
+
+- Date: 2026-07-14
+- Commit SHA / PR: exact tested head `ff3ebf37e32e9dad5834e669438efd46a974a708`;
+  stacked draft PR [#8741](https://github.com/stablyai/orca/pull/8741)
+- Runner: [GitHub Actions run 29373507297](https://github.com/stablyai/orca/actions/runs/29373507297),
+  final conclusion `success` after 9m13s. Native job IDs and wall durations: Linux x64
+  `87221923438` / 2m55s, Linux arm64 `87221923415` / 3m06s, macOS x64 `87221923414` /
+  7m02s, macOS arm64 `87221923432` / 3m29s, Windows x64 `87221923434` / 4m50s, and
+  Windows arm64 `87221923449` / 9m08s.
+- Remote and transport: none; target-native artifact-only build workflow
+- Exact evidence commands:
+
+  ```sh
+  gh run view 29373507297 --repo stablyai/orca \
+    --json status,conclusion,headSha,createdAt,updatedAt,url,jobs
+  gh api repos/stablyai/orca/actions/runs/29373507297/artifacts
+  gh run download 29373507297 --repo stablyai/orca \
+    --dir /tmp/orca-8450-metadata-green-29373507297
+  # Repeat the exact fail-closed jq/shasum audit in E-M3-METADATA-CI-RED-003 with:
+  # evidence=/tmp/orca-8450-metadata-green-29373507297
+  # commit=ff3ebf37e32e9dad5834e669438efd46a974a708
+  # run_id=29373507297
+  ```
+
+- Result: PASS. All six native cells passed contract tests, authenticated exact Node inputs, two
+  independent clean builds, archive/tree inspection, bundled Node/native PTY/watcher smoke,
+  byte-for-byte runtime/archive/identity/SPDX/provenance comparison, and unpublished upload. Direct
+  inspection of all six downloaded payloads passed every archive/subject hash, archive-scoped SPDX
+  namespace, one-owner-per-file count, eight-dependency relationship, prohibited-content, exact
+  commit/run/builder/source identity, runner identity, and bounded tool version/hash assertion.
+- Downloaded-artifact audit:
+
+  | Tuple             | Artifact ID  | Archive SHA-256                                                    | Content ID prefix | Files | Runner image                   |
+  | ----------------- | ------------ | ------------------------------------------------------------------ | ----------------- | ----- | ------------------------------ |
+  | linux-x64-glibc   | `8327034796` | `177ad16222b08beb972bf66910bbafd32bf1e820deb007fef3304057cb6a01b8` | `960546cd…`       | 34    | `ubuntu24` 20260705.232.1      |
+  | linux-arm64-glibc | `8327039534` | `9042214412ce73cd1febf94ff48a17de7bd979808e2226485fbbbf4b73fc093a` | `aa3aa8ae…`       | 34    | `ubuntu24-arm64` 20260706.52.2 |
+  | darwin-x64        | `8327118454` | `449d96e0230f9f07437df571ccf4ab64bc124f9b398013e59c0d2ca1c4be0db8` | `585ea603…`       | 35    | `macos15` 20260629.0276.1      |
+  | darwin-arm64      | `8327045964` | `cb593b9a30a82c743e4fffb201b57192c55af927bfce71a0cf9f6dc643dd20cb` | `40ff5d20…`       | 35    | `macos15` 20260706.0213.1      |
+  | win32-x64         | `8327073419` | `b59aa25e59fb148b24dcc56d3c5ef6f1545a42673ba4e4f99a4b27fa1d0fb253` | `7ddad668…`       | 42    | `win22` 20260706.237.1         |
+  | win32-arm64       | `8327157772` | `6b2fa8471a85c4d6872df34caf32acfdb7e9bf6c94cf83af06d5f19cecc1f33e` | `2955cec7…`       | 42    | `win11-arm64` 20260706.102.1   |
+
+  Windows x64 records `MSVC 14.44.35207` with exact linker SHA-256
+  `ca11e6c45debd34bf652dfe984c5360a531a005ed78bf72852330c9c2590cf0d`; Windows arm64 records the
+  same bounded toolset identity with distinct exact linker SHA-256
+  `f167f4e80fe6c38ba7099c22d83ef189e906b97b03d316b3cbfbac1eadc9fa6a`. No build job uses a
+  container; every job records the requested native runner label, resolved image/version,
+  architecture, environment, and exact tool executable or package-tree digests.
+
+- Oracle proved: the current six candidates have complete target-native build metadata, exact
+  clean-build identity, SPDX file/package ownership, license/closure contracts, runner identity,
+  bounded compiler/toolchain records, and direct payload consistency at the tested exact head. The
+  Git-for-Windows `link.exe` collision does not change the selected MSVC binary or its recorded hash.
+- Does not prove: execution on declared oldest OS/libc/kernel floors, native signing/trust,
+  cross-family SSH transfer/install, release aggregation/publication, packaged desktop consumption,
+  fallback, rollout UI, performance, or an enabled tuple.
+- Checklist items satisfied: the Milestone 3 compiler/toolchain/runner record item and the short
+  tracker's all-six SBOM/license/provenance/toolchain/prohibited-content item.
+- Follow-up: implement and run purpose-named oldest-supported-baseline checks, then prove native
+  signing/trust before connecting any artifact consumer or enabling any tuple.
+
 ## Accepted Gaps
 
 No product gap is accepted merely because it appears in this list. Each entry requires explicit
@@ -6982,13 +7052,12 @@ The project is not complete until every applicable item below is checked with ev
 
 ## Next Required Action
 
-Push unique canonical MSVC linker-selection commit `5f0c1417d` plus this evidence-ledger head and
-rerun all six target-native cells. Require exactly one strict MSVC candidate despite the
-Git-for-Windows PATH collision, retain the exact selected-linker SHA-256, and pass exact SPDX
-ownership, archive-scoped document identity, commit-pinned builder identity, resolved runner
-identity, complete bounded tool records, clean-build metadata equality, smoke, upload, regenerated
-Windows content identities, and direct artifact inspection before checking the remaining Milestone
-3 metadata/toolchain claims. Then proceed to oldest-baseline and native-trust proof.
+Implement purpose-named oldest-supported-baseline verification and artifact-only workflow cells.
+Use GitHub-hosted native runners only where their OS/architecture actually satisfies a declared
+floor; add static glibc/libstdc++/kernel eligibility oracles where execution on a newer runner is
+insufficient, and do not claim an unavailable macOS/Windows floor from a newer hosted image. Record
+the exact container image digest when a baseline container supplements native execution. Then prove
+target-native signing/trust before connecting any artifact consumer or enabling any tuple.
 
 Cross-family Layer B targets, the protected manifest-signing environment, oldest-baseline/native-
 trust cells, and the paired legacy performance baseline remain release/default-path blockers. No
