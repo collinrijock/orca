@@ -17,6 +17,8 @@ import type {
 } from '../shared/local-log-tail-types'
 import type { ReadClipboardTextOptions } from '../shared/clipboard-text'
 import type { AppIdentity } from '../shared/app-identity'
+import type { MobileRelayStatus } from '../shared/mobile-relay-status'
+import type { MobilePairingConnectionMode } from '../shared/mobile-pairing-connection-mode'
 import type {
   CreateLocalOrcaProfileArgs,
   CreateLocalOrcaProfileResult,
@@ -3142,7 +3144,11 @@ export type PreloadApi = {
     listNetworkInterfaces: () => Promise<{
       interfaces: { name: string; address: string }[]
     }>
-    getPairingQR: (args?: { address?: string; rotate?: boolean }) => Promise<
+    getPairingQR: (args?: {
+      address?: string
+      connectionMode?: MobilePairingConnectionMode
+      rotate?: boolean
+    }) => Promise<
       | { available: false }
       | {
           available: true
@@ -3184,6 +3190,8 @@ export type PreloadApi = {
     listRuntimeAccessGrants: () => Promise<{ grants: RuntimeAccessGrant[] }>
     revokeRuntimeAccess: (args: { deviceId: string }) => Promise<{ revoked: boolean }>
     isWebSocketReady: () => Promise<{ ready: boolean; endpoint: string | null }>
+    getRelayStatus: () => Promise<{ status: MobileRelayStatus }>
+    onRelayStatusChanged: (callback: (status: MobileRelayStatus) => void) => () => void
   }
   speech: {
     getCatalog: () => Promise<SpeechModelManifest[]>
