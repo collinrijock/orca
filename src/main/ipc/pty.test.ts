@@ -6129,13 +6129,22 @@ describe('registerPtyHandlers', () => {
     // awaits a promise that never settles and the tab hangs forever.
     registerPtyHandlers(mainWindow as never)
     const leafId = '44444444-4444-4444-8444-444444444444'
-    const spawnArgs = { cols: 80, rows: 24, tabId: 'tab-reservation', leafId }
+    const paneKey = makePaneKey('tab-reservation', leafId)
+    const spawnArgs = {
+      cols: 80,
+      rows: 24,
+      tabId: 'tab-reservation',
+      leafId,
+      env: { ORCA_PANE_KEY: paneKey, ORCA_TAB_ID: 'tab-reservation' }
+    }
 
     registerPtyMock.mockImplementationOnce(() => {
       throw new Error('boom: post-spawn registration failed')
     })
 
     await expect(handlers.get('pty:spawn')!(null, spawnArgs)).rejects.toThrow('boom')
+    const orphanedPtyId = (registerPtyMock.mock.calls[0]![0] as { ptyId: string }).ptyId
+    expect(unregisterPtyMock).toHaveBeenCalledWith(orphanedPtyId)
 
     // A second spawn for the same pane must run a fresh spawn rather than await
     // the leaked (never-settled) reservation promise.
@@ -6175,12 +6184,16 @@ describe('registerPtyHandlers', () => {
     }
     let spawnCount = 0
     const providerSpawn = vi.fn(async () => ({ id: `pty-${++spawnCount}` }))
+    const shutdown = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('native shutdown failed'))
+      .mockResolvedValue(undefined)
     setLocalPtyProvider({
       spawn: providerSpawn,
       write: vi.fn(),
       resize: vi.fn(),
       kill: vi.fn(),
-      shutdown: vi.fn(),
+      shutdown,
       sendSignal: vi.fn(),
       getCwd: vi.fn(),
       getInitialCwd: vi.fn(),
@@ -6199,7 +6212,9 @@ describe('registerPtyHandlers', () => {
       getProfiles: vi.fn()
     } as never)
     const store = {
-      persistPtyBinding: vi.fn()
+      persistPtyBinding: vi.fn(),
+      upsertPendingLocalPtyShutdown: vi.fn(),
+      removePendingLocalPtyShutdown: vi.fn()
     }
     let controller: RuntimeSpawnController | null = null
     const runtime = {
@@ -6240,6 +6255,21 @@ describe('registerPtyHandlers', () => {
     }
 
     await expect(spawnController.spawn(spawnArgs)).rejects.toThrow('boom')
+    expect(shutdown).toHaveBeenCalledWith('pty-1', {
+      immediate: true,
+      expectedPaneKey: paneKey,
+      expectedTabId: 'tab-runtime-reservation'
+    })
+    expect(store.upsertPendingLocalPtyShutdown).toHaveBeenCalledWith({
+      ptyId: 'pty-1',
+      expectedPaneKey: paneKey,
+      expectedTabId: 'tab-runtime-reservation',
+      requestedAt: expect.any(Number)
+    })
+    expect(store.removePendingLocalPtyShutdown).not.toHaveBeenCalled()
+    await vi.waitFor(() => expect(shutdown).toHaveBeenCalledTimes(2))
+    expect(store.removePendingLocalPtyShutdown).toHaveBeenCalledWith('pty-1')
+    expect(unregisterPtyMock).toHaveBeenCalledWith('pty-1')
 
     // The reservation must be gone, so a second materialization runs a fresh
     // provider.spawn instead of awaiting the leaked promise.

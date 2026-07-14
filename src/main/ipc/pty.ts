@@ -3732,7 +3732,8 @@ export function registerPtyHandlers(
       const paneSpawnReservation = materializedPaneKey
         ? reservePaneSpawn(materializedPaneKey)
         : null
-      let result: PtySpawnResult
+      let result: PtySpawnResult | undefined
+      let failedSpawnCleanupAttempted = false
       try {
         try {
           if (args.preAllocatedHandle) {
@@ -3829,6 +3830,7 @@ export function registerPtyHandlers(
               // writes, but the pre-existing provider session remains owned.
               deletePtyOwnership(result.id)
             } else {
+              failedSpawnCleanupAttempted = true
               if (args.connectionId) {
                 // Why: the binding failed, so the SSH lease is the only durable
                 // identity that can carry cleanup across an app restart.
@@ -3911,6 +3913,21 @@ export function registerPtyHandlers(
         const response = { id: result.id }
         return resolvePaneSpawnReservation(materializedPaneKey, paneSpawnReservation, response)
       } catch (err) {
+        if (result?.isReattach) {
+          // Why: this request published only routing ownership for an existing
+          // provider session; failed setup must not kill that session.
+          deletePtyOwnership(result.id)
+        } else if (result && !failedSpawnCleanupAttempted) {
+          try {
+            await retainFailedSpawnCleanup(result.id, args.connectionId, provider, {
+              immediate: true,
+              ...(metadataPaneKey ? { expectedPaneKey: metadataPaneKey } : {}),
+              ...(typeof args.tabId === 'string' ? { expectedTabId: args.tabId } : {})
+            })
+          } catch (shutdownErr) {
+            console.warn('[pty] failed to clean up PTY after post-spawn failure:', shutdownErr)
+          }
+        }
         // Why: once the reservation is created, any later throw — spawn
         // failure, persist failure, or a post-spawn helper such as
         // registerPty/rememberPaneKeyForPty/track — must settle it. Otherwise
@@ -4642,7 +4659,8 @@ export function registerPtyHandlers(
           if (preSpawnHiddenMarkId !== null) {
             markHiddenRendererPty(preSpawnHiddenMarkId)
           }
-          let result: PtySpawnResult
+          let result: PtySpawnResult | undefined
+          let failedSpawnCleanupAttempted = false
           try {
             try {
               if (preAllocatedHandle) {
@@ -4826,6 +4844,7 @@ export function registerPtyHandlers(
               } catch (err) {
                 console.error('[pty] failed to persist PTY binding after spawn:', err)
                 if (!result.isReattach) {
+                  failedSpawnCleanupAttempted = true
                   try {
                     await retainFailedSpawnCleanup(result.id, args.connectionId, provider, {
                       immediate: true,
@@ -5030,6 +5049,21 @@ export function registerPtyHandlers(
             }
             return resolvePaneSpawnReservation(reservationPaneKey, paneSpawnReservation, response)
           } catch (err) {
+            if (result?.isReattach) {
+              // Why: this request published only routing ownership for an existing
+              // provider session; failed setup must not kill that session.
+              deletePtyOwnership(result.id)
+            } else if (result && !failedSpawnCleanupAttempted) {
+              try {
+                await retainFailedSpawnCleanup(result.id, args.connectionId, provider, {
+                  immediate: true,
+                  ...(validatedPaneKey ? { expectedPaneKey: validatedPaneKey } : {}),
+                  ...(typeof args.tabId === 'string' ? { expectedTabId: args.tabId } : {})
+                })
+              } catch (shutdownErr) {
+                console.warn('[pty] failed to clean up PTY after post-spawn failure:', shutdownErr)
+              }
+            }
             // Why: once the reservation is created, any later throw —
             // spawn failure, persist failure, or a post-spawn helper such as
             // seedHeadlessTerminal/registerPty/track — must settle it. Otherwise
