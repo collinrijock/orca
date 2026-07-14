@@ -1,6 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
-  attachTerminalScrollIntentTracking,
   captureTerminalWriteScrollIntent,
   enforceTerminalCurrentScrollIntent,
   enforceTerminalWriteScrollIntent,
@@ -10,6 +9,11 @@ import {
   syncTerminalScrollIntentFromViewport,
   syncTerminalScrollIntentSoon
 } from './terminal-scroll-intent'
+import { attachTerminalScrollIntentTracking } from './terminal-scroll-intent-dom-tracking'
+import {
+  beginTerminalScrollIntentBufferRebuild,
+  endTerminalScrollIntentBufferRebuild
+} from './terminal-scroll-intent-rebuild'
 
 function createTerminal({
   viewportY,
@@ -468,6 +472,63 @@ describe('terminal scroll intent', () => {
 
     expect(terminal.scrollToLine).toHaveBeenLastCalledWith(150)
     expect(terminal.buffer.active.viewportY).toBe(150)
+  })
+
+  it('does not re-latch a pinned intent from a transiently shorter rebuilt buffer', () => {
+    const terminal = createTerminal({ viewportY: 248, baseY: 254 })
+    markTerminalPinnedViewport(terminal)
+    const snapshot = captureTerminalWriteScrollIntent(terminal)
+
+    // Snapshot replay cleared the buffer; enforcement races the async parse.
+    terminal.buffer.active.baseY = 0
+    terminal.buffer.active.viewportY = 0
+    enforceTerminalWriteScrollIntent(terminal, snapshot)
+
+    // The replay finishes parsing and the scrollback regrows past the pin.
+    terminal.buffer.active.baseY = 284
+    terminal.buffer.active.viewportY = 284
+    enforceTerminalCurrentScrollIntent(terminal)
+
+    expect(terminal.scrollToLine).toHaveBeenLastCalledWith(248)
+    expect(terminal.buffer.active.viewportY).toBe(248)
+  })
+
+  it('keeps a pinned intent when capture races a cleared unparsed buffer', () => {
+    const terminal = createTerminal({ viewportY: 248, baseY: 254 })
+    markTerminalPinnedViewport(terminal)
+
+    // A live write batch captures while the rebuilt buffer is still empty; the
+    // at-bottom(0/0) reading is transient and must not convert the pin.
+    terminal.buffer.active.baseY = 0
+    terminal.buffer.active.viewportY = 0
+    const snapshot = captureTerminalWriteScrollIntent(terminal)
+    expect(snapshot?.kind).toBe('pinnedViewport')
+  })
+
+  it('suspends intent capture and enforcement while a buffer rebuild is in flight', () => {
+    const terminal = createTerminal({ viewportY: 248, baseY: 254 })
+    markTerminalPinnedViewport(terminal)
+    const preReplay = captureTerminalWriteScrollIntent(terminal)
+    beginTerminalScrollIntentBufferRebuild(terminal)
+
+    terminal.buffer.active.baseY = 0
+    terminal.buffer.active.viewportY = 0
+    expect(captureTerminalWriteScrollIntent(terminal)).toBeNull()
+    enforceTerminalCurrentScrollIntent(terminal)
+
+    // A live streaming batch lands while the replay is partially parsed.
+    terminal.buffer.active.baseY = 284
+    terminal.buffer.active.viewportY = 0
+    enforceTerminalWriteScrollIntent(terminal, preReplay)
+    expect(terminal.scrollToLine).not.toHaveBeenCalled()
+    expect(terminal.scrollToBottom).not.toHaveBeenCalled()
+
+    terminal.buffer.active.viewportY = 284
+    endTerminalScrollIntentBufferRebuild(terminal)
+    enforceTerminalWriteScrollIntent(terminal, preReplay, { restoreBy: 'bottomOffset' })
+    expect(terminal.scrollToLine).toHaveBeenLastCalledWith(278)
+    expect(terminal.buffer.active.viewportY).toBe(278)
+    expect(getTerminalScrollIntentKind(terminal)).toBe('pinnedViewport')
   })
 
   it('supports bottom-offset restore for buffer-rebuild write paths', () => {

@@ -7,7 +7,7 @@ import {
 import { clearPendingSplitScrollRestore } from './pane-split-scroll'
 import { activateOrcaTerminalUnicodeProvider } from '../../../../shared/terminal-unicode-provider'
 import { attachTerminalMouseWheelMultiplier } from './pane-terminal-mouse-wheel'
-import { attachTerminalScrollIntentTracking } from './terminal-scroll-intent'
+import { attachTerminalScrollIntentTracking } from './terminal-scroll-intent-dom-tracking'
 import { attachDomRendererFocusClassSync } from './pane-dom-focus-class-sync'
 import { attachWebgl, cancelPendingWebglRefresh, disposeWebgl } from './pane-webgl-renderer'
 import { configureLazyArabicShapingJoiner } from './terminal-arabic-shaping-joiner'

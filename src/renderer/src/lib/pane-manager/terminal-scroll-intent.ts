@@ -1,10 +1,10 @@
-import type { IDisposable } from '@xterm/xterm'
+import { isTerminalScrollIntentRebuildInFlight } from './terminal-scroll-intent-rebuild'
 
 type TerminalScrollIntentKind = 'followOutput' | 'pinnedViewport'
 
 type BufferType = 'normal' | 'alternate'
 
-type TerminalScrollIntentTarget = {
+export type TerminalScrollIntentTarget = {
   buffer?: {
     active?: {
       type?: string
@@ -16,7 +16,7 @@ type TerminalScrollIntentTarget = {
   scrollToLine?: (line: number) => void
 }
 
-type TerminalScrollIntentKey = string
+export type TerminalScrollIntentKey = string
 
 type TerminalScrollIntent = {
   kind: TerminalScrollIntentKind
@@ -50,14 +50,6 @@ const terminalScrollIntentKeyByTerminal = new WeakMap<
 const terminalScrollIntentByKey = new Map<TerminalScrollIntentKey, TerminalScrollIntent>()
 
 const BOTTOM_TOLERANCE_ROWS = 1
-const XTERM_SCROLL_INTENT_POINTER_TARGET_CLASSES = [
-  'xterm-viewport',
-  'xterm-scrollbar',
-  'xterm-slider'
-] as const
-const XTERM_SCROLL_INTENT_POINTER_TARGET_SELECTOR = XTERM_SCROLL_INTENT_POINTER_TARGET_CLASSES.map(
-  (className) => `.${className}`
-).join(',')
 
 function readBufferSnapshot(
   terminal: TerminalScrollIntentTarget
@@ -105,7 +97,7 @@ function readStoredIntent(terminal: TerminalScrollIntentTarget): TerminalScrollI
   return key ? terminalScrollIntentByKey.get(key) : undefined
 }
 
-function bindTerminalScrollIntentKey(
+export function bindTerminalScrollIntentKey(
   terminal: TerminalScrollIntentTarget,
   key: TerminalScrollIntentKey | undefined
 ): TerminalScrollIntent | undefined {
@@ -134,14 +126,6 @@ function safeScrollCall(fn: () => void): boolean {
     }
     throw err
   }
-}
-
-function isTerminalScrollIntentPointerTarget(target: EventTarget | null): target is Element {
-  if (typeof Element === 'undefined' || !(target instanceof Element)) {
-    return false
-  }
-  // xterm's custom scrollbar uses separate thumb/track nodes from the viewport.
-  return target.closest(XTERM_SCROLL_INTENT_POINTER_TARGET_SELECTOR) !== null
 }
 
 export function markTerminalFollowOutput(terminal: TerminalScrollIntentTarget): void {
@@ -212,6 +196,9 @@ export function getTerminalScrollIntentKind(
 export function captureTerminalWriteScrollIntent(
   terminal: TerminalScrollIntentTarget
 ): TerminalScrollIntentWriteSnapshot | null {
+  if (isTerminalScrollIntentRebuildInFlight(terminal)) {
+    return null
+  }
   const snapshot = readBufferSnapshot(terminal)
   if (!snapshot) {
     return null
@@ -222,8 +209,14 @@ export function captureTerminalWriteScrollIntent(
     (isAtBottom(snapshot.viewportY, snapshot.baseY) ? 'followOutput' : 'pinnedViewport')
   // Why: a pinned intent whose live viewport still sits at the bottom is a
   // phantom pin (the user's scroll never detached the viewport). Enforcing it
-  // would freeze the terminal at the current line on every write batch.
-  if (kind === 'pinnedViewport' && isAtBottom(snapshot.viewportY, snapshot.baseY)) {
+  // would freeze the terminal at the current line on every write batch. Only
+  // trust the at-bottom reading when the scrollback is at least as long as the
+  // pin's — a shorter one is a cleared buffer that has not finished parsing.
+  if (
+    kind === 'pinnedViewport' &&
+    isAtBottom(snapshot.viewportY, snapshot.baseY) &&
+    (!existing || snapshot.baseY >= existing.baseY)
+  ) {
     kind = 'followOutput'
   }
   return {
@@ -239,7 +232,7 @@ export function enforceTerminalWriteScrollIntent(
   snapshot: TerminalScrollIntentWriteSnapshot | null,
   options: TerminalScrollIntentEnforceOptions = {}
 ): void {
-  if (!snapshot) {
+  if (!snapshot || isTerminalScrollIntentRebuildInFlight(terminal)) {
     return
   }
   const current = readBufferSnapshot(terminal)
@@ -260,10 +253,20 @@ export function enforceTerminalWriteScrollIntent(
   if (current.viewportY !== targetY) {
     safeScrollCall(() => terminal.scrollToLine?.(targetY))
   }
+  const existing = readStoredIntent(terminal)
+  // Why: a scrollback shorter than the stored pin means the buffer is being
+  // rebuilt; re-latching from it would overwrite the durable line with the
+  // cleared buffer's line 0.
+  if (existing?.kind === 'pinnedViewport' && current.baseY < existing.baseY) {
+    return
+  }
   writeIntent(terminal, 'pinnedViewport')
 }
 
 export function enforceTerminalCurrentScrollIntent(terminal: TerminalScrollIntentTarget): void {
+  if (isTerminalScrollIntentRebuildInFlight(terminal)) {
+    return
+  }
   const existing = readStoredIntent(terminal)
   if (!existing) {
     enforceTerminalWriteScrollIntent(terminal, captureTerminalWriteScrollIntent(terminal))
@@ -288,57 +291,4 @@ export function enforceTerminalCurrentScrollIntent(terminal: TerminalScrollInten
       ? 'bottomOffset'
       : 'viewportLine'
   enforceTerminalWriteScrollIntent(terminal, snapshot, { restoreBy })
-}
-
-export function attachTerminalScrollIntentTracking(
-  terminal: TerminalScrollIntentTarget,
-  host: HTMLElement,
-  intentKey?: TerminalScrollIntentKey
-): IDisposable {
-  if (!bindTerminalScrollIntentKey(terminal, intentKey)) {
-    syncTerminalScrollIntentFromViewport(terminal)
-  }
-  let pointerScrollActive = false
-
-  const onWheel = (event: WheelEvent): void => {
-    if (event.deltaY < 0) {
-      markTerminalPinnedViewport(terminal)
-      syncTerminalScrollIntentSoon(terminal, { preservePinnedAtBottom: true })
-      return
-    }
-    syncTerminalScrollIntentSoon(terminal)
-  }
-
-  const onPointerDown = (event: PointerEvent): void => {
-    pointerScrollActive = isTerminalScrollIntentPointerTarget(event.target)
-  }
-
-  const onPointerDone = (): void => {
-    if (!pointerScrollActive) {
-      return
-    }
-    pointerScrollActive = false
-    syncTerminalScrollIntentFromViewport(terminal)
-  }
-
-  const onScroll = (): void => {
-    if (pointerScrollActive) {
-      syncTerminalScrollIntentFromViewport(terminal)
-    }
-  }
-
-  host.addEventListener('wheel', onWheel, { capture: true, passive: true })
-  host.addEventListener('pointerdown', onPointerDown, true)
-  host.addEventListener('scroll', onScroll, true)
-  globalThis.addEventListener?.('pointerup', onPointerDone, true)
-  globalThis.addEventListener?.('pointercancel', onPointerDone, true)
-  return {
-    dispose: () => {
-      host.removeEventListener('wheel', onWheel, true)
-      host.removeEventListener('pointerdown', onPointerDown, true)
-      host.removeEventListener('scroll', onScroll, true)
-      globalThis.removeEventListener?.('pointerup', onPointerDone, true)
-      globalThis.removeEventListener?.('pointercancel', onPointerDone, true)
-    }
-  }
 }

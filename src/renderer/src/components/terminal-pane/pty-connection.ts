@@ -110,6 +110,11 @@ import {
   captureTerminalWriteScrollIntent,
   enforceTerminalWriteScrollIntent
 } from '@/lib/pane-manager/terminal-scroll-intent'
+import {
+  beginTerminalScrollIntentBufferRebuild,
+  endTerminalScrollIntentBufferRebuild
+} from '@/lib/pane-manager/terminal-scroll-intent-rebuild'
+import { runGuardedWriteCompletionStep } from '@/lib/pane-manager/xterm-write-callback-guard'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import { makePaneKey, parseLegacyNumericPaneKey } from '../../../../shared/stable-pane-id'
 import {
@@ -263,6 +268,9 @@ const HIDDEN_OUTPUT_RESTORE_FOREGROUND_TIMEOUT_MS = 750
 // markers inside it must not re-arm restores; live bytes write through and
 // ONE deferred repaint (when the window closes) heals the visual gap.
 const HIDDEN_OUTPUT_RESTORE_FLOOD_SUPPRESS_MS = 2000
+// Fallback for the snapshot-restore scroll-intent bracket when the write
+// pipeline wedges and the FIFO completion callback never fires.
+const SNAPSHOT_RESTORE_SCROLL_INTENT_SETTLE_MS = 2000
 // Backstop for the same loop: a single in-flight restore task may re-iterate
 // (fresh-snapshot marks, unmappable slices) only this many times before it
 // abandons and lets live bytes flow.
@@ -5983,6 +5991,25 @@ export function connectPanePty(
       pendingEscapeTailAnsi?: string
     }): void {
       const scrollIntent = captureTerminalWriteScrollIntent(pane.terminal)
+      // Why: the replay below parses asynchronously. Until it has, viewportY/
+      // baseY describe a half-cleared buffer; any intent capture/enforce that
+      // races it (live stream batches, safeFit, visibility resume) latches
+      // "pinned at line 0" and parks the pane at the top of the scrollback.
+      beginTerminalScrollIntentBufferRebuild(pane.terminal)
+      let scrollIntentRestored = false
+      const finishScrollIntentRestore = (): void => {
+        if (scrollIntentRestored) {
+          return
+        }
+        scrollIntentRestored = true
+        endTerminalScrollIntentBufferRebuild(pane.terminal)
+        enforceTerminalWriteScrollIntent(pane.terminal, scrollIntent, {
+          restoreBy: 'bottomOffset'
+        })
+      }
+      // Why: if the write pipeline wedges, the FIFO completion below never
+      // fires; the rebuild bracket must not suppress intent forever.
+      setTimeout(finishScrollIntentRestore, SNAPSHOT_RESTORE_SCROLL_INTENT_SETTLE_MS)
       const colsBeforeReplay = pane.terminal.cols
       const rowsBeforeReplay = pane.terminal.rows
       const hasSnapshotDimensions =
@@ -6062,11 +6089,16 @@ export function connectPanePty(
         }
         scheduleReattachIdleAgentCursorReset()
       }
-      // Why: snapshot replay clears and rebuilds xterm state; re-apply the
-      // user's scroll intent once so hidden catch-up cannot repin the viewport.
-      // Restore by bottom offset — the rebuilt buffer renumbers every row, so
-      // the pre-replay absolute viewport line points at arbitrary content.
-      enforceTerminalWriteScrollIntent(pane.terminal, scrollIntent, { restoreBy: 'bottomOffset' })
+      // Why: re-apply the pre-replay scroll intent only after xterm has parsed
+      // the replay; an empty write's completion is FIFO-certified to run after
+      // every replay byte queued above (same contract as the replay guard).
+      try {
+        pane.terminal.write('', () =>
+          runGuardedWriteCompletionStep('snapshot-restore-scroll-intent', finishScrollIntentRestore)
+        )
+      } catch {
+        finishScrollIntentRestore()
+      }
     }
 
     function requestHiddenOutputRestoreIfNeeded(opts?: { bypassScheduler?: boolean }): boolean {
