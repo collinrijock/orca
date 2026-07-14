@@ -1286,7 +1286,7 @@ export class SshRelaySession {
             ptyId,
             relayInstanceId
           )
-          if (!migrated && !this.store.markSshRemotePtyLease(this.targetId, appPtyId, 'attached')) {
+          if (!migrated) {
             continue
           }
         } else {

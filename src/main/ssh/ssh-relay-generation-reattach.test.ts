@@ -258,6 +258,68 @@ describe('SSH relay generation reattach', () => {
     }
   })
 
+  it('does not publish a stale attach over a replacement lease created in flight', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'orca-ssh-lease-replacement-'))
+    const store = new Store({ dataFile: join(dir, 'state.json') })
+    try {
+      store.upsertSshRemotePtyLease({
+        targetId: 'target-1',
+        ptyId: 'pty-recycled',
+        tabId: 'tab-old',
+        state: 'detached'
+      })
+      const { mockConn, mockPortForward, getMainWindow, mockWindow } = createMockDeps()
+      let resolveAttach!: (value: { replay: string }) => void
+      const attachForReconnect = vi.fn().mockReturnValue(
+        new Promise<{ replay: string }>((resolve) => {
+          resolveAttach = resolve
+        })
+      )
+      vi.mocked(getSshPtyProvider).mockReturnValue({
+        attachForReconnect,
+        getRelayInstanceId: () => 'relay-current',
+        dispose: vi.fn()
+      } as unknown as ReturnType<typeof getSshPtyProvider>)
+      vi.mocked(getPtyIdsForConnection).mockReturnValue([])
+
+      const session = new SshRelaySession('target-1', getMainWindow, store, mockPortForward)
+      const establishing = session.establish(mockConn)
+      await vi.waitFor(() =>
+        expect(attachForReconnect).toHaveBeenCalledWith('pty-recycled', {
+          tabId: 'tab-old'
+        })
+      )
+      store.upsertSshRemotePtyLease({
+        targetId: 'target-1',
+        ptyId: 'ssh:target-1@@relay-current@@pty-recycled',
+        tabId: 'tab-new',
+        state: 'detached'
+      })
+      resolveAttach({ replay: 'stale-output' })
+      await establishing
+
+      expect(store.getSshRemotePtyLeases('target-1')).toEqual([
+        expect.objectContaining({
+          ptyId: 'pty-recycled',
+          relayInstanceId: 'relay-current',
+          tabId: 'tab-new',
+          state: 'detached'
+        })
+      ])
+      expect(setPtyOwnership).not.toHaveBeenCalledWith(
+        'ssh:target-1@@relay-current@@pty-recycled',
+        'target-1'
+      )
+      expect(mockWindow.webContents.send).not.toHaveBeenCalledWith('pty:replay', {
+        id: 'ssh:target-1@@relay-current@@pty-recycled',
+        data: 'stale-output'
+      })
+    } finally {
+      store.flush()
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
   it('expires a failed legacy identity without adopting the current relay generation', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'orca-stale-ssh-lease-'))
     const store = new Store({ dataFile: join(dir, 'state.json') })
