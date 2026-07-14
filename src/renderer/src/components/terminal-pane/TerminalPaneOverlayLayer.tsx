@@ -244,7 +244,10 @@ const TerminalOverlaySlot = memo(function TerminalOverlaySlot({
         if (shouldDeferParkedPtyExitTabClose(terminalTabId, ptyId)) {
           return
         }
-        closeTerminalTab(terminalTabId, { onClosed: leaveWorktreeIfEmpty })
+        closeTerminalTab(terminalTabId, {
+          reason: 'pty-exit',
+          onClosed: leaveWorktreeIfEmpty
+        })
       }}
       onCloseTab={() => {
         // Why: route through closeTerminalTab (not the raw store closeTab) so a
