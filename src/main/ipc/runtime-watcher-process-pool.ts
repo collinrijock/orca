@@ -77,10 +77,7 @@ export class RuntimeWatcherProcessPool {
       if (isWatcherProcessFailure(error) && error.scope === 'supervisor') {
         this.retireSlot(slot)
       } else {
-        releaseAssignment()
-        if (isWatcherProcessFailure(error) && error.code === 'subscribe_timeout') {
-          this.isolatedRoots.add(dir)
-        }
+        this.releaseFailedRoot(assignment, dir, error, releaseAssignment)
       }
       hooks.onTerminalError?.(error)
     }
@@ -94,10 +91,7 @@ export class RuntimeWatcherProcessPool {
       if (isWatcherProcessFailure(error) && error.scope === 'supervisor') {
         this.retireSlot(slot)
       } else {
-        releaseAssignment()
-        if (isWatcherProcessFailure(error) && error.code === 'subscribe_timeout') {
-          this.isolatedRoots.add(dir)
-        }
+        this.releaseFailedRoot(assignment, dir, error, releaseAssignment)
       }
       throw error
     }
@@ -238,6 +232,26 @@ export class RuntimeWatcherProcessPool {
       this.activeSlots.delete(slot)
       this.disposeSlot(slot)
     }
+  }
+
+  private releaseFailedRoot(
+    assignment: RuntimeWatcherPoolAssignment,
+    dir: string,
+    error: unknown,
+    releaseAssignment: () => void
+  ): void {
+    releaseAssignment()
+    if (!isWatcherProcessFailure(error) || error.code !== 'subscribe_timeout') {
+      return
+    }
+    if (assignment.slot.isolated) {
+      // Why: one quarantine crawl is the recovery budget for this watch
+      // lifetime; another timeout must not create another child generation.
+      this.isolatedRoots.delete(dir)
+      this.failedQuarantineRoots.add(dir)
+      return
+    }
+    this.isolatedRoots.add(dir)
   }
 
   private disposeSlot(slot: RuntimeWatcherPoolSlot): void {

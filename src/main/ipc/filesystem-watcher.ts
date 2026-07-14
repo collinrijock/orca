@@ -652,16 +652,16 @@ type RemoteWatcherState = {
 type RemoteWatcherInstallToken = {
   cancelled: boolean
   listeners: Map<number, WebContents>
+  abortController: AbortController
+  abortScheduled: boolean
 }
 
 // Key: `${connectionId}:${worktreePath}`, Value: shared remote watch state.
 const remoteWatchers = new Map<string, RemoteWatcherState>()
 const loggedUnavailableRemoteWatchers = new Set<string>()
 const pendingRemoteWatcherRetries = new Map<string, ReturnType<typeof setTimeout>>()
-// Why: track in-flight `provider.watch()` calls so an unwatch/shutdown that
-// arrives while a watch is still resolving can mark the install cancelled.
-// Without this, the awaited unwatch handle would be installed after the
-// renderer thinks the watch is gone, leaking a native watcher.
+// Why: track in-flight `provider.watch()` calls so last-listener cleanup can
+// abort relay setup, while late success is still unwatched instead of leaked.
 const inFlightRemoteInstalls = new Map<string, RemoteWatcherInstallToken>()
 // Why: dedupe concurrent installRemoteWatcher calls for the same key so
 // overlapping fs:watchWorktree IPCs share one native watcher and one listener
@@ -675,7 +675,7 @@ function addInFlightRemoteInstallListener(
   token: RemoteWatcherInstallToken,
   sender: WebContents
 ): void {
-  if (sender.isDestroyed()) {
+  if (sender.isDestroyed() || token.abortController.signal.aborted) {
     return
   }
   token.listeners.set(sender.id, sender)
@@ -683,12 +683,26 @@ function addInFlightRemoteInstallListener(
   registerSenderCleanup(sender)
 }
 
+function cancelInFlightRemoteInstallIfUnowned(token: RemoteWatcherInstallToken): void {
+  token.cancelled = token.listeners.size === 0
+  if (!token.cancelled || token.abortScheduled || token.abortController.signal.aborted) {
+    return
+  }
+  token.abortScheduled = true
+  // Why: a replacement sender can synchronously revive the shared install
+  // during a renderer handoff; otherwise stop the relay crawl next microtask.
+  queueMicrotask(() => {
+    token.abortScheduled = false
+    if (token.cancelled && token.listeners.size === 0) {
+      token.abortController.abort()
+    }
+  })
+}
+
 function cleanupInFlightRemoteInstallsForSender(senderId: number): void {
   for (const token of inFlightRemoteInstalls.values()) {
     token.listeners.delete(senderId)
-    if (token.listeners.size === 0) {
-      token.cancelled = true
-    }
+    cancelInFlightRemoteInstallIfUnowned(token)
   }
 }
 
@@ -747,7 +761,8 @@ async function installRemoteWatcher(
   const pendingInstall = pendingRemoteInstallPromises.get(key)
   if (pendingInstall) {
     const inFlight = inFlightRemoteInstalls.get(key)
-    if (inFlight) {
+    const canJoinInstall = inFlight && !inFlight.abortController.signal.aborted
+    if (canJoinInstall) {
       // Why: a new watcher can join after all previous pending listeners
       // unwatched but before provider.watch() resolves; revive that install
       // instead of inheriting the stale cancellation.
@@ -762,9 +777,22 @@ async function installRemoteWatcher(
     ) {
       addRemoteWatchListener(key, sender)
     }
+    if (result === 'cancelled' && !canJoinInstall && !sender.isDestroyed()) {
+      // Why: AbortSignal cannot be revived. A listener arriving after physical
+      // cancellation waits out that generation, then owns a fresh install.
+      if (pendingRemoteInstallPromises.get(key) === pendingInstall) {
+        pendingRemoteInstallPromises.delete(key)
+      }
+      return installRemoteWatcher(sender, connectionId, worktreePath)
+    }
     return result
   }
-  const cancelToken: RemoteWatcherInstallToken = { cancelled: false, listeners: new Map() }
+  const cancelToken: RemoteWatcherInstallToken = {
+    cancelled: false,
+    listeners: new Map(),
+    abortController: new AbortController(),
+    abortScheduled: false
+  }
   inFlightRemoteInstalls.set(key, cancelToken)
   addInFlightRemoteInstallListener(cancelToken, sender)
   const installPromise = doInstallRemoteWatcher(provider, key, worktreePath, cancelToken)
@@ -786,22 +814,29 @@ async function doInstallRemoteWatcher(
 ): Promise<RemoteWatcherInstallResult> {
   let unwatch: () => void
   try {
-    unwatch = await provider.watch(worktreePath, (events) => {
-      const state = remoteWatchers.get(key)
-      if (!state) {
-        return
-      }
-      for (const listener of state.listeners.values()) {
-        if (listener.isDestroyed()) {
-          continue
+    unwatch = await provider.watch(
+      worktreePath,
+      (events) => {
+        const state = remoteWatchers.get(key)
+        if (!state) {
+          return
         }
-        listener.send('fs:changed', {
-          worktreePath,
-          events
-        } satisfies FsChangedPayload)
-      }
-    })
+        for (const listener of state.listeners.values()) {
+          if (listener.isDestroyed()) {
+            continue
+          }
+          listener.send('fs:changed', {
+            worktreePath,
+            events
+          } satisfies FsChangedPayload)
+        }
+      },
+      { signal: cancelToken.abortController.signal }
+    )
   } catch (err) {
+    if (cancelToken.cancelled || cancelToken.abortController.signal.aborted) {
+      return 'cancelled'
+    }
     console.warn(`[filesystem-watcher] SSH watcher unavailable for ${key}:`, err)
     return 'unavailable'
   } finally {
@@ -923,7 +958,7 @@ export function registerFilesystemWatcherHandlers(): void {
         const inFlight = inFlightRemoteInstalls.get(key)
         if (inFlight) {
           inFlight.listeners.delete(_event.sender.id)
-          inFlight.cancelled = inFlight.listeners.size === 0
+          cancelInFlightRemoteInstallIfUnowned(inFlight)
         }
         loggedUnavailableRemoteWatchers.delete(key)
         releaseRemoteWatchListener(key, _event?.sender?.id ?? 0)
@@ -954,7 +989,9 @@ export async function closeAllWatchers(): Promise<void> {
   // Why: cancel any in-flight provider.watch() calls so their resolved
   // unwatch handles are discarded instead of being installed after shutdown.
   for (const token of inFlightRemoteInstalls.values()) {
+    token.listeners.clear()
     token.cancelled = true
+    token.abortController.abort()
   }
   for (const token of inFlightLocalInstalls.values()) {
     token.listeners.clear()
