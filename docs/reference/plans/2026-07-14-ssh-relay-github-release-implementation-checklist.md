@@ -9,7 +9,7 @@ work; keep exact commands, runner identities, hashes, metrics, and residual gaps
 Date created: 2026-07-14<br>
 Last updated: 2026-07-14<br>
 Current phase: Milestone 3 / Work Package 2 oldest-supported-baseline and native-trust proof — **In progress — 2026-07-14, Codex implementation owner**; exact-head run [29373507297](https://github.com/stablyai/orca/actions/runs/29373507297) passes all six target-native build, smoke, exact clean-build equality, upload, SBOM, license, provenance, runner/toolchain, and prohibited-content cells, and direct inspection of every downloaded payload passes exact archive/subject hashes, archive-scoped SPDX identity, one-owner-per-file, dependency, commit/run/builder/runner, tool-version/hash, and closure assertions (E-M3-METADATA-CI-001); Windows x64/arm64 record strict `MSVC 14.44.35207` identities and distinct exact linker SHA-256 values despite the Git-for-Windows PATH collision; the all-six metadata/provenance gate is closed, while oldest-baseline execution, native signing/trust, cross-family remotes, and measured legacy baselines remain open; production/default behavior and every tuple state remain unchanged; no bundled-runtime path is enabled and no artifact is published<br>
-Session checkpoint: **In progress — 2026-07-14, Codex implementation owner** — credential-free macOS post-sign strict-codesign and signer-policy verification contracts are implemented at `debb13f30` and locally green under E-M3-MACOS-SIGNATURE-LOCAL-001. Exact-head Node 24 execution on all six native jobs is the active gate; real Apple signing, returned production signatures, Gatekeeper/notarization, missing exact-floor snapshots, and native trust remain separately gated. Nothing is published or enabled, and legacy remains the production default.<br>
+Session checkpoint: **In progress — 2026-07-14, Codex implementation owner** — credential-free macOS post-sign strict-codesign and signer-policy verification contracts are locally green under E-M3-MACOS-SIGNATURE-LOCAL-001 and pass under Node 24 on all six target-native jobs in exact-head run 29386372366 under E-M3-MACOS-SIGNATURE-CI-001. Credential-free Windows Authenticode policy verification is the next bounded artifact-only package; real Apple/SignPath signing, returned production signatures, Gatekeeper/notarization, Defender/WDAC, missing exact-floor snapshots, and native trust remain separately gated. Nothing is published or enabled, and legacy remains the production default.<br>
 Primary design: [SSH relay GitHub Release plan](./2026-07-14-ssh-relay-github-release-plan.html)<br>
 Motivating issues: [#8450](https://github.com/stablyai/orca/issues/8450), [#1693](https://github.com/stablyai/orca/issues/1693)
 
@@ -8384,6 +8384,38 @@ diff --check`.
   Windows logs to show the macOS policy suite under Node 24.18.0 on all six native jobs while every
   prior build/smoke/equality/baseline, PR-check, and Golden control retains its outcome. Keep native
   signing/trust unchecked until real returned bytes pass target-native policy and endpoint gates.
+
+### E-M3-MACOS-SIGNATURE-CI-001 — macOS signature-policy contracts pass on all six native jobs
+
+- Date: 2026-07-14
+- Owner: Codex implementation owner
+- Source: exact head `6d47ef1458a9c57cc96fa26e1745eba8d73a7987`.
+- Runner/remote/network: GitHub-hosted target-native Linux x64/arm64, macOS x64/arm64, and Windows
+  x64/arm64 artifact jobs under Node v24.18.0. This used no SSH remote, signing credential/service,
+  artifact publication, production path, or enabled tuple.
+- Runs:
+  - Artifact: [29386372366](https://github.com/stablyai/orca/actions/runs/29386372366)
+  - PR Checks: [29386372337](https://github.com/stablyai/orca/actions/runs/29386372337)
+  - Golden E2E: [29386372362](https://github.com/stablyai/orca/actions/runs/29386372362)
+- Result: PASS. All six native artifact jobs passed their macOS signature contract step. The macOS
+  arm64 job ran the focused suite 7/7 in 345 ms and the aggregate 28 files/148 tests in 3.95
+  seconds. The Windows x64 job ran the suite 7/7 in 2.944 seconds and the aggregate 29 files/152
+  tests (145 pass, 7 platform skips) in 8.69 seconds. Native job durations were Linux x64 4m09s,
+  Linux arm64 4m37s, macOS x64 10m27s, macOS arm64 2m47s, Windows x64 5m37s, and Windows arm64
+  10m29s.
+- Regression controls: both digest-pinned oldest-Linux-userland supplements passed (x64 35s, arm64
+  53s); Windows x64 build-20348 passed in 1m10s. Windows arm64 retained the expected floor failure:
+  hosted build 10.0.26200 does not prove required build 26100 (`osBuild: false`). PR Checks passed
+  in about 14m05s; Golden Linux/macOS passed in about 4m37s/3m01s.
+- Oracle proved: the credential-free policy suite parses and executes under the pinned release Node
+  on every target-native shell family while prior artifact and repository controls retain their
+  expected outcomes.
+- Does not prove: real Orca Developer ID signatures, actual Apple signing or returned production
+  bytes, Gatekeeper/notarization, macOS 13.5, Windows Authenticode/Defender/WDAC, Windows arm64 build
+  26100, SSH transfer/install, packaged desktop use, fallback/performance, or an enabled tuple.
+- Follow-up: keep native signing/trust and every tuple unchecked. Implement the independent
+  credential-free Windows final-signature policy contract, and require real returned bytes plus
+  target-native endpoint gates before recording native-trust evidence.
 
 ## Accepted Gaps
 
