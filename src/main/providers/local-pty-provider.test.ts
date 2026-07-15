@@ -1059,6 +1059,31 @@ describe('LocalPtyProvider', () => {
       await Promise.all([first, second])
       expect(captureDescendantSnapshotMock).toHaveBeenCalledOnce()
     })
+
+    it('does not signal a captured tree after the tracked root exits naturally', async () => {
+      let resolveSnapshot!: (value: {
+        rootPgid: number
+        descendants: []
+        capturedAtMs: number
+      }) => void
+      captureDescendantSnapshotMock.mockReturnValue(
+        new Promise((resolve) => {
+          resolveSnapshot = resolve
+        })
+      )
+      const { id } = await provider.spawn({
+        cols: 80,
+        rows: 24,
+        launchAgent: 'claude'
+      })
+
+      const shutdown = provider.shutdown(id, { immediate: true })
+      exitCb?.({ exitCode: 0 })
+      resolveSnapshot({ rootPgid: mockProc.pid, descendants: [], capturedAtMs: Date.now() })
+      await shutdown
+
+      expect(terminateDescendantSnapshotMock).not.toHaveBeenCalled()
+    })
   })
 
   describe('hasChildProcesses', () => {

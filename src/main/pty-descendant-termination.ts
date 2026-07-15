@@ -85,7 +85,6 @@ function readFreshProcessTable(
 export function createProcessTableSnapshotReader(
   readFresh: ProcessTableReader
 ): ProcessTableReader {
-  let inFlight: Promise<ProcessTableCapture> | null = null
   let queued: { promise: Promise<ProcessTableCapture>; started: boolean } | null = null
 
   return (timeoutMs) => {
@@ -93,29 +92,16 @@ export function createProcessTableSnapshotReader(
       return queued.promise
     }
 
-    const prior = queued?.promise ?? inFlight
     const entry: { promise: Promise<ProcessTableCapture>; started: boolean } = {
       promise: Promise.resolve(undefined as never),
       started: false
     }
-    entry.promise = Promise.resolve().then(async () => {
-      if (prior) {
-        try {
-          await prior
-        } catch {
-          // The post-request scan below owns this caller's result.
-        }
-      }
+    entry.promise = Promise.resolve().then(() => {
+      // Why: a later caller's deadline starts when it requests a fresh table.
+      // Waiting behind an older scan can consume that entire budget, then run
+      // this subprocess after nobody can use its result.
       entry.started = true
-      const request = readFresh(timeoutMs)
-      inFlight = request
-      try {
-        return await request
-      } finally {
-        if (inFlight === request) {
-          inFlight = null
-        }
-      }
+      return readFresh(timeoutMs)
     })
     queued = entry
     const clearQueued = (): void => {
@@ -229,13 +215,13 @@ export async function captureDescendantSnapshot(
 export async function killWithDescendantSweep(
   rootPid: number,
   killRoot: () => void,
-  deps: SnapshotDeps & TerminateDeps = {}
+  deps: SnapshotDeps & TerminateDeps & { ownsRoot?: () => boolean } = {}
 ): Promise<void> {
   const snapshot = await captureDescendantSnapshot(rootPid, deps)
   try {
     // Signal the captured descendants while their parent links still exist;
     // killing the root first creates a reparent/PID-reuse window.
-    if (snapshot) {
+    if (snapshot && (deps.ownsRoot?.() ?? true)) {
       terminateDescendantSnapshot(snapshot, deps)
     }
   } finally {

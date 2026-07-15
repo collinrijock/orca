@@ -427,7 +427,11 @@ describe('TerminalHost', () => {
 
       // Why order matters: force-killing first would let orphans reparent to
       // pid 1 and escape the sweep's ppid walk entirely.
-      expect(killWithDescendantSweepMock).toHaveBeenCalledWith(99999, expect.any(Function))
+      expect(killWithDescendantSweepMock).toHaveBeenCalledWith(
+        99999,
+        expect.any(Function),
+        expect.objectContaining({ ownsRoot: expect.any(Function) })
+      )
       expect(lastSubprocess.forceKill).not.toHaveBeenCalled()
       expect(host.isKilled('agent-1')).toBe(true)
 

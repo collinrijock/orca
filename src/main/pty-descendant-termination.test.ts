@@ -288,9 +288,12 @@ describe('createProcessTableSnapshotReader', () => {
 
     const laterA = readTable()
     const laterB = readTable()
+    await Promise.resolve()
+    // A successor must begin inside its callers' deadline. Waiting for the
+    // prior scan can make both callers time out before their own scan starts.
+    expect(readFresh).toHaveBeenCalledTimes(2)
     firstGate.resolve(tableCapture([row(10, 1, 10)], CAPTURED_AT_MS))
     await first
-    await vi.waitFor(() => expect(readFresh).toHaveBeenCalledTimes(2))
 
     const newer = tableCapture([row(20, 1, 20)], CAPTURED_AT_MS + 1_000)
     secondGate.resolve(newer)
@@ -348,5 +351,23 @@ describe('killWithDescendantSweep', () => {
     await pending
     expect(killRoot).toHaveBeenCalledOnce()
     expect(sendSignal).not.toHaveBeenCalled()
+  })
+
+  it('does not signal a captured tree after the caller loses root ownership', async () => {
+    const sendSignal = vi.fn()
+    const killRoot = vi.fn()
+    const readTable = vi.fn().mockResolvedValue(tableCapture([row(10, 1, 10), row(20, 10, 20)]))
+    const ownsRoot = vi.fn(() => false)
+
+    await killWithDescendantSweep(10, killRoot, {
+      readTable,
+      sendSignal,
+      platform: 'darwin',
+      ownsRoot
+    })
+
+    expect(ownsRoot).toHaveBeenCalledOnce()
+    expect(sendSignal).not.toHaveBeenCalled()
+    expect(killRoot).toHaveBeenCalledOnce()
   })
 })

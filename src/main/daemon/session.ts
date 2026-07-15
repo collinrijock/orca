@@ -283,9 +283,17 @@ export class Session {
       // shell's SIGHUP never reaches. The bounded snapshot briefly defers the
       // signal; the kill timer below starts now, so force-dispose timing is
       // unaffected.
-      void killWithDescendantSweep(this.subprocess.pid, () => {
-        this.signalTerminationRoot()
-      })
+      void killWithDescendantSweep(
+        this.subprocess.pid,
+        () => {
+          this.signalTerminationRoot()
+        },
+        {
+          // Why: if the root exits during ps, its numeric PID can be recycled.
+          // Never apply that stale snapshot to a different process tree.
+          ownsRoot: () => this.isAlive
+        }
+      )
     }
     this.scheduleForceDisposeFallback()
   }

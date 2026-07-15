@@ -69,18 +69,26 @@ export class TerminalSessionTeardown {
       immediate
     }
     const operation = Promise.resolve(
-      killWithDescendantSweep(session.pid, () => {
-        // Why: natural exit reaps the PID while ps is running. Never signal that
-        // stale numeric PID after the Session no longer represents a live root.
-        if (!session.isAlive) {
-          return
+      killWithDescendantSweep(
+        session.pid,
+        () => {
+          // Why: natural exit reaps the PID while ps is running. Never signal that
+          // stale numeric PID after the Session no longer represents a live root.
+          if (!session.isAlive) {
+            return
+          }
+          if (entry.immediate) {
+            this.finishImmediate(sessionId, session)
+          } else {
+            session.signalTerminationRoot()
+          }
+        },
+        {
+          // Why: the descendant rows are only authoritative while this exact
+          // Session still owns the root PID captured by ps.
+          ownsRoot: () => this.sessions.get(sessionId) === session && session.isAlive
         }
-        if (entry.immediate) {
-          this.finishImmediate(sessionId, session)
-        } else {
-          session.signalTerminationRoot()
-        }
-      })
+      )
     )
     entry.promise = operation
     this.operations.set(sessionId, entry)

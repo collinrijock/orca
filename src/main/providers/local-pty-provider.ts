@@ -936,16 +936,14 @@ export class LocalPtyProvider implements IPtyProvider {
     const descendants = ptyAgentSessionIds.has(id)
       ? await captureDescendantSnapshot(proc.pid)
       : null
-    let descendantsSignalled = false
     // Why the handle re-check: the snapshot is this method's only await, and a
-    // natural exit (or same-id respawn) may have raced it. That path already
-    // ran clearPtyState and notified exit — only the descendant sweep remains.
+    // natural exit may have raced it. Signalling after ownership is lost could
+    // apply the old numeric PID's snapshot to a recycled, unrelated process.
     if (ptyProcesses.get(id) === proc) {
       if (descendants) {
         // Signal captured children before killing the root so parent links do
         // not disappear during the sweep.
         terminateDescendantSnapshot(descendants)
-        descendantsSignalled = true
       }
       // Why: disposePtyListeners removes the onExit callback, so the natural
       // exit cleanup path from node-pty won't fire. Cleanup and notification
@@ -965,11 +963,6 @@ export class LocalPtyProvider implements IPtyProvider {
       for (const cb of exitListeners) {
         cb({ id, code: -1 })
       }
-    }
-    if (descendants && !descendantsSignalled) {
-      // Natural exit may have won while the snapshot was in flight. The
-      // captured descendants still belong to that retired process identity.
-      terminateDescendantSnapshot(descendants)
     }
   }
 
