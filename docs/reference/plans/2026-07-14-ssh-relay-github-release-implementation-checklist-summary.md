@@ -20,7 +20,7 @@ disconnected upload, recovery, materialization, and execution capabilities under
 failure-state tests without a release write or workflow caller. The missing composition boundary is
 recorded under `E-M4-DRAFT-RELEASE-COMPOSITION-LOCAL-RED-001`; the 10-test implementation and full
 local regression set pass under `E-M4-DRAFT-RELEASE-COMPOSITION-LOCAL-001`. Exact-head all-six
-Node 24 proof is pending. Production keys/environment/seed,
+Node 24 proof is pending at local implementation commit `b6bb3dd9a`. Production keys/environment/seed,
 publication, desktop/default consumers, SSH transfer/install, tuple enablement, and merge to `main`
 remain disconnected. Current pushed branch head is `3779838f6`; the implementation owner is authorized to drive
 commits, pushes, CI, and PR-contained rehearsals end to end without merging.
