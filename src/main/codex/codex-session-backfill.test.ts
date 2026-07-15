@@ -23,6 +23,8 @@ const { homedirMock } = vi.hoisted(() => ({
 const { fsMockState } = vi.hoisted(() => ({
   fsMockState: {
     failLink: false,
+    failInstallLink: false,
+    failInstallRename: false,
     failCopy: false,
     failDirectoryPath: null as string | null,
     failLstatPath: null as string | null
@@ -60,7 +62,24 @@ vi.mock('node:fs/promises', async () => {
         error.code = 'EXDEV'
         throw error
       }
+      // Simulate a target filesystem with no hardlink support: even the
+      // same-volume staged-copy install link (.orca-backfill-*.tmp) fails.
+      if (fsMockState.failInstallLink && String(args[0]).includes('.orca-backfill-')) {
+        const error = new Error('EPERM: hardlinks unsupported') as NodeJS.ErrnoException
+        error.code = 'EPERM'
+        throw error
+      }
       return actual.link(...args)
+    },
+    rename: (...args: Parameters<typeof actual.rename>) => {
+      // Simulate an interrupted atomic install (crash/ENOSPC mid-rename) on a
+      // hardlink-less target, exercising the no-partial-stranded guarantee.
+      if (fsMockState.failInstallRename && String(args[0]).includes('.orca-backfill-')) {
+        const error = new Error('EIO: rename interrupted') as NodeJS.ErrnoException
+        error.code = 'EIO'
+        throw error
+      }
+      return actual.rename(...args)
     },
     copyFile: async (...args: Parameters<typeof actual.copyFile>) => {
       if (fsMockState.failCopy) {
@@ -134,6 +153,8 @@ function readAuditActions(): string[] {
 
 beforeEach(() => {
   fsMockState.failLink = false
+  fsMockState.failInstallLink = false
+  fsMockState.failInstallRename = false
   fsMockState.failCopy = false
   fsMockState.failDirectoryPath = null
   fsMockState.failLstatPath = null
@@ -287,6 +308,51 @@ describe('backfillManagedCodexSessionsIntoSystemHome', () => {
     expect(readFileSync(targetPath, 'utf-8')).toBe(readFileSync(managedPath, 'utf-8'))
     expect(lstatSync(targetPath).ino).not.toBe(lstatSync(managedPath).ino)
     expect(readAuditActions()).toEqual(['copy', 'run-summary'])
+  })
+
+  it('installs via atomic rename when the target volume has no hardlink support', async () => {
+    // Why: exFAT/FAT and some network targets support no hardlinks, so even the
+    // staged-copy install link fails and the atomic-rename fallback must run.
+    fsMockState.failLink = true
+    fsMockState.failInstallLink = true
+    const managedPath = writeManagedSession(
+      join('2026', '05', '26', 'rollout-a.jsonl'),
+      '{"id":"a"}\n'
+    )
+
+    const summary = await backfillManagedCodexSessionsIntoSystemHome(
+      resolveCodexSessionBackfillPaths()
+    )
+
+    expect(summary).toMatchObject({ linkedFiles: 0, copiedFiles: 1, failedFiles: 0 })
+    const targetPath = join(getSystemSessionsRoot(), '2026', '05', '26', 'rollout-a.jsonl')
+    expect(readFileSync(targetPath, 'utf-8')).toBe(readFileSync(managedPath, 'utf-8'))
+    // Staged temp file is renamed into place, not stranded in the sessions tree.
+    expect(
+      readdirSync(dirname(targetPath)).filter((name) => name.includes('.orca-backfill-'))
+    ).toEqual([])
+    expect(readAuditActions()).toEqual(['copy', 'run-summary'])
+  })
+
+  it('never strands a partial rollout when the atomic install is interrupted', async () => {
+    // Why: a hardlink-less target plus an interrupted install must leave the
+    // real rollout filename absent (not truncated), so the next run retries
+    // instead of skipping a partial session as already-present.
+    fsMockState.failLink = true
+    fsMockState.failInstallLink = true
+    fsMockState.failInstallRename = true
+    writeManagedSession(join('2026', '05', '26', 'rollout-a.jsonl'), '{"id":"a"}\n')
+
+    const summary = await backfillManagedCodexSessionsIntoSystemHome(
+      resolveCodexSessionBackfillPaths()
+    )
+
+    expect(summary).toMatchObject({ failedFiles: 1, copiedFiles: 0, linkedFiles: 0 })
+    const targetPath = join(getSystemSessionsRoot(), '2026', '05', '26', 'rollout-a.jsonl')
+    expect(existsSync(targetPath)).toBe(false)
+    // No partial rollout and no leftover staging file in the user's tree.
+    expect(readdirSync(dirname(targetPath))).toEqual([])
+    expect(readAuditActions()).toEqual(['failed', 'run-summary'])
   })
 
   it('records per-file failures without aborting the run', async () => {

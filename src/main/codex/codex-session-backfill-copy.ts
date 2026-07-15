@@ -1,6 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { constants } from 'node:fs'
-import { copyFile, link, rm, writeFile } from 'node:fs/promises'
+import { copyFile, link, lstat, rename, rm, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 
 export async function copySessionFileWithoutOverwrite(
@@ -21,9 +20,16 @@ export async function copySessionFileWithoutOverwrite(
       if (isExistsError(installLinkError)) {
         throw installLinkError
       }
-      // Some target filesystems do not support hardlinks at all. COPYFILE_EXCL
-      // preserves the collision contract while retaining the staged snapshot.
-      await copyFile(temporaryPath, targetPath, constants.COPYFILE_EXCL)
+      // Why: some target filesystems support no hardlinks at all. Install the
+      // fully-staged copy with an atomic rename — never a raw copy into the
+      // rollout filename — so an interrupted install cannot strand a truncated
+      // session that a later run skips as already-present. Re-check existence
+      // first because rename, unlike the hardlink above, would clobber a target
+      // that appeared mid-run.
+      if (await pathEntryExists(targetPath)) {
+        throw makeTargetExistsError(targetPath)
+      }
+      await rename(temporaryPath, targetPath)
     }
   } finally {
     try {
@@ -36,6 +42,23 @@ export async function copySessionFileWithoutOverwrite(
   }
 }
 
+/** Existence via lstat so a broken symlink at the target still counts as taken. */
+async function pathEntryExists(entryPath: string): Promise<boolean> {
+  try {
+    await lstat(entryPath)
+    return true
+  } catch {
+    return false
+  }
+}
+
 function isExistsError(error: unknown): boolean {
   return (error as NodeJS.ErrnoException | null)?.code === 'EEXIST'
+}
+
+/** EEXIST so a rename-install collision routes to the skip path, not a failure. */
+function makeTargetExistsError(targetPath: string): NodeJS.ErrnoException {
+  const error = new Error(`EEXIST: backfill target already exists: ${targetPath}`)
+  ;(error as NodeJS.ErrnoException).code = 'EEXIST'
+  return error
 }
