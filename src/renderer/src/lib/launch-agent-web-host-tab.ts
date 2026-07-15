@@ -5,7 +5,7 @@ import {
   createWebRuntimeSessionTerminal,
   isWebTerminalSurfaceTabId
 } from '@/runtime/web-runtime-session'
-import type { TuiAgent } from '../../../shared/types'
+import type { Tab, TuiAgent } from '../../../shared/types'
 import { translate } from '@/i18n/i18n'
 
 function removeStaleLocalAgentTabsForWebHostLaunch(worktreeId: string): void {
@@ -14,7 +14,7 @@ function removeStaleLocalAgentTabsForWebHostLaunch(worktreeId: string): void {
     if (tab.launchAgent && !isWebTerminalSurfaceTabId(tab.id)) {
       // Why: pruning a stale local agent tab is a system close — keep it out of
       // the Cmd+Shift+T reopen stack.
-      state.closeTab(tab.id, { captureRecentlyClosed: false })
+      state.closeTab(tab.id, { reason: 'cleanup' })
     }
   }
 }
@@ -34,16 +34,26 @@ export function launchAgentInWebHostTab(args: {
   groupId?: string
   hasPrompt: boolean
   startupPlan: AgentStartupPlan
+  viewMode?: Tab['viewMode']
   onPromptDelivered?: () => void
 }): void {
-  const { agent, worktreeId, environmentId, groupId, hasPrompt, startupPlan, onPromptDelivered } =
-    args
+  const {
+    agent,
+    worktreeId,
+    environmentId,
+    groupId,
+    hasPrompt,
+    startupPlan,
+    viewMode,
+    onPromptDelivered
+  } = args
   removeStaleLocalAgentTabsForWebHostLaunch(worktreeId)
   void createWebRuntimeSessionTerminal({
     worktreeId,
     environmentId,
     targetGroupId: groupId,
     activate: true,
+    ...(viewMode ? { viewMode } : {}),
     ...(hasPrompt
       ? {
           command: startupPlan.launchCommand,

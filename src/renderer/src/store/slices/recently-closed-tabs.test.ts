@@ -5,6 +5,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
+import { getDefaultSettings } from '../../../../shared/constants'
 
 vi.mock('sonner', () => ({
   toast: { info: vi.fn(), success: vi.fn(), error: vi.fn(), warning: vi.fn() }
@@ -34,6 +35,10 @@ const mockApi = {
 globalThis.window = { api: mockApi }
 
 import { createTestStore, seedStore, makeWorktree, makeOpenFile } from './store-test-helpers'
+import {
+  pushRecentlyClosedTabKind,
+  remapClosedTerminalTabSnapshotCwds
+} from './recently-closed-tabs'
 
 const WT = 'repo1::/path/wt1'
 
@@ -69,7 +74,17 @@ describe('terminal recently-closed capture', () => {
     expect(store.getState().recentlyClosedTabKindsByWorktree[WT]).toEqual(['terminal'])
   })
 
-  it('skips capture when captureRecentlyClosed is false (system closes)', () => {
+  it.each(['cleanup', 'pty-exit'] as const)('skips capture for %s closes', (reason) => {
+    const store = makeSeededStore()
+    const tab = store.getState().createTab(WT)
+
+    store.getState().closeTab(tab.id, { reason })
+
+    expect(store.getState().recentlyClosedTerminalTabsByWorktree[WT]).toBeUndefined()
+    expect(store.getState().recentlyClosedTabKindsByWorktree[WT]).toBeUndefined()
+  })
+
+  it('skips capture for a confirmed parked PTY exit', () => {
     const store = makeSeededStore()
     const tab = store.getState().createTab(WT)
 
@@ -92,6 +107,35 @@ describe('terminal recently-closed capture', () => {
     expect(stack).toHaveLength(10)
     expect(stack[0]?.startupCwd).toBe('/path/wt1/dir-11')
     expect(stack[9]?.startupCwd).toBe('/path/wt1/dir-2')
+  })
+})
+
+describe('recently-closed history bounds', () => {
+  it('caps the bulk kind allocation before constructing it', () => {
+    const result = pushRecentlyClosedTabKind({}, WT, 'editor', Number.MAX_SAFE_INTEGER)
+
+    expect(result[WT]).toHaveLength(30)
+    expect(result[WT]?.every((kind) => kind === 'editor')).toBe(true)
+  })
+})
+
+describe('terminal snapshot cwd remapping', () => {
+  it('handles case-insensitive Windows roots and preserves the new separator style', () => {
+    expect(
+      remapClosedTerminalTabSnapshotCwds(
+        [{ startupCwd: 'c:\\REPO\\old\\packages\\app' }],
+        'C:\\Repo\\Old\\',
+        'D:\\Worktrees\\New'
+      )
+    ).toEqual([{ startupCwd: 'D:\\Worktrees\\New\\packages\\app' }])
+  })
+
+  it('does not treat a POSIX backslash as a directory separator', () => {
+    const snapshot = { startupCwd: '/repo/old\\sibling' }
+
+    expect(remapClosedTerminalTabSnapshotCwds([snapshot], '/repo/old', '/repo/new')).toEqual([
+      snapshot
+    ])
   })
 })
 
@@ -154,6 +198,37 @@ describe('reopenClosedTerminalTab', () => {
     // No local tab spawned, and the snapshot is left intact (not consumed).
     expect(store.getState().tabsByWorktree[WT] ?? []).toHaveLength(0)
     expect(store.getState().recentlyClosedTerminalTabsByWorktree[WT]).toHaveLength(1)
+  })
+
+  it('reopens a legacy local worktree while another runtime is merely focused', () => {
+    const store = makeSeededStore()
+    store.setState({
+      settings: { ...getDefaultSettings('/tmp'), activeRuntimeEnvironmentId: 'env-1' }
+    })
+    const tab = store.getState().createTab(WT)
+    store.getState().closeTab(tab.id)
+
+    expect(store.getState().reopenClosedTerminalTab(WT)).toBe(true)
+    expect(store.getState().tabsByWorktree[WT]).toHaveLength(1)
+  })
+
+  it('reopens SSH terminals through the renderer-owned create path', () => {
+    const store = createTestStore()
+    seedStore(store, {
+      worktreesByRepo: {
+        repo1: [
+          makeWorktree({ id: WT, repoId: 'repo1', path: '/remote/wt1', hostId: 'ssh:host-1' })
+        ]
+      },
+      activeWorktreeId: WT
+    })
+    const tab = store
+      .getState()
+      .createTab(WT, undefined, undefined, { startupCwd: '/remote/wt1/packages/app' })
+    store.getState().closeTab(tab.id)
+
+    expect(store.getState().reopenClosedTerminalTab(WT)).toBe(true)
+    expect(store.getState().tabsByWorktree[WT]?.[0]?.startupCwd).toBe('/remote/wt1/packages/app')
   })
 })
 

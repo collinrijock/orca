@@ -1,6 +1,10 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
-import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { getExplicitRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import {
+  isWindowsAbsolutePathLike,
+  relativePathInsideRoot
+} from '../../../../shared/cross-platform-path'
 
 /** Snapshot of a terminal tab captured at user-initiated close time. Reopen
  *  recreates a fresh shell in the same startup directory (Ghostty semantics) —
@@ -43,13 +47,41 @@ export function pushRecentlyClosedTabKind(
   if (count <= 0) {
     return map ?? {}
   }
+  // Why: close-all may contain thousands of editor tabs, but entries beyond
+  // the retained history cap can never affect reopen ordering.
+  const retainedCount = Math.min(count, MAX_RECENT_CLOSED_TAB_KINDS)
   return {
     ...map,
     [worktreeId]: [
-      ...(Array(count).fill(kind) as RecentlyClosedTabKind[]),
+      ...(Array(retainedCount).fill(kind) as RecentlyClosedTabKind[]),
       ...(map?.[worktreeId] ?? [])
     ].slice(0, MAX_RECENT_CLOSED_TAB_KINDS)
   }
+}
+
+export function remapClosedTerminalTabSnapshotCwds(
+  snapshots: ClosedTerminalTabSnapshot[],
+  oldWorktreePath: string,
+  newWorktreePath: string
+): ClosedTerminalTabSnapshot[] {
+  return snapshots.map((snapshot) => {
+    if (!snapshot.startupCwd) {
+      return snapshot
+    }
+    const relative = relativePathInsideRoot(oldWorktreePath, snapshot.startupCwd)
+    if (relative === null) {
+      return snapshot
+    }
+    if (!relative) {
+      return { ...snapshot, startupCwd: newWorktreePath }
+    }
+    const useBackslash =
+      isWindowsAbsolutePathLike(newWorktreePath) && newWorktreePath.includes('\\')
+    const separator = useBackslash ? '\\' : '/'
+    const base = newWorktreePath.replace(/[\\/]+$/g, '')
+    const suffix = useBackslash ? relative.replace(/\//g, '\\') : relative
+    return { ...snapshot, startupCwd: `${base}${separator}${suffix}` }
+  })
 }
 
 export type RecentlyClosedTabsSlice = {
@@ -72,15 +104,14 @@ export const createRecentlyClosedTabsSlice: StateCreator<
   recentlyClosedTabKindsByWorktree: {},
 
   reopenClosedTerminalTab: (worktreeId) => {
-    // Why: remote-runtime worktrees own their terminals through the host
-    // session (a non-empty runtime env id === host-owned, mirroring
-    // isWebRuntimeSessionActive). A raw local createTab here would leave an
+    // Why: explicitly remote-owned worktrees own terminals through the host
+    // session. A raw local createTab here would leave an
     // unbacked phantom tab that races the next host snapshot, so skip local
     // reopen for those worktrees — the cross-type dispatcher falls through to
     // browser/editor. Imported directly instead of via web-runtime-session to
     // avoid a store slice ↔ store-index import cycle. Remote terminal reopen is
     // deferred (see PR notes); local + SSH worktrees are the covered surface.
-    if (getRuntimeEnvironmentIdForWorktree(get(), worktreeId)?.trim()) {
+    if (getExplicitRuntimeEnvironmentIdForWorktree(get(), worktreeId)?.trim()) {
       return false
     }
     // Why: read and pop atomically inside set() to prevent a TOCTOU race where

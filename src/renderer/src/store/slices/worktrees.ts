@@ -26,11 +26,15 @@ import {
   type WorktreeSlice
 } from './worktree-helpers'
 import { splitWorktreeIdForFilesystem } from '../../../../shared/worktree-id'
-import type { ClosedTerminalTabSnapshot } from './recently-closed-tabs'
+import {
+  remapClosedTerminalTabSnapshotCwds,
+  type ClosedTerminalTabSnapshot
+} from './recently-closed-tabs'
 import { findRepoForHost } from './repo-host-identity'
 import { ensureHooksConfirmed } from '@/lib/ensure-hooks-confirmed'
 import { cleanupEphemeralVmRuntimesForDeleted } from '@/lib/ephemeral-vm-runtime-cleanup'
 import { tabHasLivePty } from '@/lib/tab-has-live-pty'
+import { disposeRemovedWorktreeParkedTerminalWatchers } from '../../components/terminal-pane/terminal-parked-watcher-registry'
 import {
   callRuntimeRpc,
   getActiveRuntimeTarget,
@@ -73,6 +77,11 @@ import {
   worktreeWorkspaceKey
 } from '../../../../shared/workspace-scope'
 import { folderWorkspaceToWorktree } from '../../../../shared/folder-workspace-worktree'
+import {
+  CLIENT_WORKTREE_CREATE_MAX_ATTEMPTS,
+  getClientWorktreeCreateCandidate,
+  isRetryableWorktreeCreateConflict
+} from '../../../../shared/new-workspace/worktree-create-retry-policy'
 import {
   classifyWorktreeForceDeleteReason,
   getLockedWorktreeRemovalReason,
@@ -1829,19 +1838,7 @@ function buildWorktreeRenameState(
   const newWorktreePath = splitWorktreeIdForFilesystem(newWorktreeId)?.worktreePath
   renameKey('recentlyClosedTerminalTabsByWorktree', (snapshots: ClosedTerminalTabSnapshot[]) =>
     oldWorktreePath && newWorktreePath
-      ? snapshots.map((snapshot) => {
-          const cwd = snapshot.startupCwd
-          if (!cwd) {
-            return snapshot
-          }
-          if (cwd === oldWorktreePath) {
-            return { ...snapshot, startupCwd: newWorktreePath }
-          }
-          if (cwd.startsWith(`${oldWorktreePath}/`) || cwd.startsWith(`${oldWorktreePath}\\`)) {
-            return { ...snapshot, startupCwd: newWorktreePath + cwd.slice(oldWorktreePath.length) }
-          }
-          return snapshot
-        })
+      ? remapClosedTerminalTabSnapshotCwds(snapshots, oldWorktreePath, newWorktreePath)
       : snapshots
   )
   renameKey('remoteStatusesByWorktree')
@@ -1930,11 +1927,25 @@ function buildWorktreePurgeState(s: AppState, worktreeIds: string[]): Partial<Ap
 
   // Collect every tab id (and removed file id) we are about to orphan.
   const doomedTabIds = new Set<string>()
-  // Why: some terminal/agent maps are keyed by ptyId, not tabId. Collect the
-  // doomed panes' ptyIds now (while ptyIdsByTabId is still populated) so this
-  // bulk path can evict them the same way shutdownWorktreeTerminals does on the
-  // single-removeWorktree path.
+  // Why: some terminal/agent maps are keyed by ptyId, not tabId. Collect every
+  // durable wake hint too, because slept panes have already left the live index.
   const doomedPtyIds = new Set<string>()
+  const addDoomedPtyId = (ptyId: string | null | undefined): void => {
+    if (!ptyId) {
+      return
+    }
+    doomedPtyIds.add(ptyId)
+  }
+  const addDoomedTabPtyIds = (tabId: string, tabPtyId: string | null | undefined): void => {
+    for (const ptyId of s.ptyIdsByTabId?.[tabId] ?? []) {
+      addDoomedPtyId(ptyId)
+    }
+    addDoomedPtyId(tabPtyId)
+    addDoomedPtyId(s.lastKnownRelayPtyIdByTabId?.[tabId])
+    for (const ptyId of Object.values(s.terminalLayoutsByTabId?.[tabId]?.ptyIdsByLeafId ?? {})) {
+      addDoomedPtyId(ptyId)
+    }
+  }
   const doomedBrowserWorkspaceIds = new Set<string>()
   const doomedPageIds = new Set<string>()
   const removedFileIds = new Set<string>()
@@ -1943,9 +1954,7 @@ function buildWorktreePurgeState(s: AppState, worktreeIds: string[]): Partial<Ap
       doomedTabIds.add(tab.id)
       // Null-tolerant like the omit* helpers below: some callers pass partial
       // state that omits this slice; the production store always inits it to {}.
-      for (const ptyId of s.ptyIdsByTabId?.[tab.id] ?? []) {
-        doomedPtyIds.add(ptyId)
-      }
+      addDoomedTabPtyIds(tab.id, tab.ptyId)
       // Why: a removed worktree's panes are gone for good, so drop their
       // hibernation output epochs from that module-level map (mirrors the
       // hosted-review prune above). A future pane mints a fresh leafId at epoch 0.
@@ -2156,6 +2165,8 @@ function buildWorktreePurgeState(s: AppState, worktreeIds: string[]): Partial<Ap
     pendingStartupByTabId: omitByTabId(s.pendingStartupByTabId),
     codexRestartNoticeByPtyId: omitByPtyId(s.codexRestartNoticeByPtyId),
     migrationUnsupportedByPtyId: omitByPtyId(s.migrationUnsupportedByPtyId),
+    suppressedPtyExitIds: omitByPtyId(s.suppressedPtyExitIds),
+    pendingCodexPaneRestartIds: omitByPtyId(s.pendingCodexPaneRestartIds),
     // Why: these tab/pane-scoped agent-status, unread, and input maps are only
     // cleared on the single removeWorktree path (via shutdownWorktreeTerminals /
     // dropAgentStatusByWorktree / clearPaneForegroundAgentByWorktree, which read
@@ -2968,22 +2979,13 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
     options
   ) => {
     const automationProvenanceRequest = options?.automationProvenanceRequest
-    const retryableConflictPatterns = [
-      /already exists locally/i,
-      /already exists on a remote/i,
-      /^Branch ".+" already exists\./i,
-      /already has pr #\d+/i
-    ]
-    const nextCandidateName = (current: string, attempt: number): string =>
-      attempt === 0 ? current : `${current}-${attempt + 1}`
-
     try {
-      for (let attempt = 0; attempt < 25; attempt += 1) {
-        const candidateName = nextCandidateName(name, attempt)
+      for (let attempt = 0; attempt < CLIENT_WORKTREE_CREATE_MAX_ATTEMPTS; attempt += 1) {
+        const candidateName = getClientWorktreeCreateCandidate(name, attempt)
         // Why: older runtimes may still reject exact PR branch overrides on
         // collision, so the renderer retries both branch and worktree names.
         const candidateBranchNameOverride = branchNameOverride
-          ? nextCandidateName(branchNameOverride, attempt)
+          ? getClientWorktreeCreateCandidate(branchNameOverride, attempt)
           : undefined
         try {
           // Why: Manual sort is user-authored order. Stamp new workspaces
@@ -3144,8 +3146,8 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
           return result
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error)
-          const shouldRetry = retryableConflictPatterns.some((pattern) => pattern.test(message))
-          if (!shouldRetry || attempt === 24) {
+          const shouldRetry = isRetryableWorktreeCreateConflict(message)
+          if (!shouldRetry || attempt === CLIENT_WORKTREE_CREATE_MAX_ATTEMPTS - 1) {
             throw error
           }
         }
@@ -3275,6 +3277,9 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       const worktreeBeforeRemoval = get()
         .allWorktrees()
         .find((entry) => entry.id === worktreeId)
+      const terminalPtyIdsBeforeRemoval = (get().tabsByWorktree[worktreeId] ?? []).flatMap(
+        (tab) => get().ptyIdsByTabId[tab.id] ?? []
+      )
       const currentOwner = resolveWorktreeRemovalHost(get(), worktreeId)
       if (
         currentOwner.ambiguous ||
@@ -3362,6 +3367,10 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       // batch) rather than only the context menu.
       requestVirtualizedScrollAnchorRecord('[data-worktree-sidebar]')
 
+      // Why: explicit deletion provenance is available here before child
+      // unmount cleanup; identity migration and recoverable remounts are not
+      // destructive and must keep their buffered live PTY state.
+      disposeRemovedWorktreeParkedTerminalWatchers(worktreeId, terminalPtyIdsBeforeRemoval)
       set((s) => {
         const next = { ...s.worktreesByRepo }
         for (const repoId of Object.keys(next)) {
@@ -4412,6 +4421,41 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
     set({
       renamingWorktreeId: typeof request === 'string' ? { worktreeId: request } : request
     })
+  },
+
+  remountTerminalTabForRecovery: (tabId) => {
+    let remounted = false
+    set((s) => {
+      for (const [worktreeId, tabs] of Object.entries(s.tabsByWorktree)) {
+        const index = tabs.findIndex((tab) => tab.id === tabId)
+        if (index < 0) {
+          continue
+        }
+        const tab = tabs[index]
+        const nextTabs = tabs.slice()
+        nextTabs[index] = {
+          ...tab,
+          // Why: TerminalPane keys on `${tab.id}-${generation}` — the bump is
+          // the remount. Same mechanism as the dead-transport activation bump
+          // above; here it is health-driven for a pane whose renderer died
+          // while its PTY stayed alive (wedged/disposed xterm, unbound
+          // transport), so the remounted pane reattaches instead of spawning.
+          generation: (tab.generation ?? 0) + 1,
+          // Why: recovery is not a user interaction — suppress the resulting
+          // PTY updates from reshuffling Recent, like activation remounts do.
+          pendingActivationSpawn: getActivationSpawnSuppression(s.terminalLayoutsByTabId[tab.id])
+        }
+        remounted = true
+        return {
+          tabsByWorktree: {
+            ...s.tabsByWorktree,
+            [worktreeId]: nextTabs
+          }
+        }
+      }
+      return {}
+    })
+    return remounted
   },
 
   setActiveWorktree: (worktreeId) => {
