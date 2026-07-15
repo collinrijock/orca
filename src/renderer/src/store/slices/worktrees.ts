@@ -38,6 +38,7 @@ import {
 } from '../../runtime/runtime-rpc-client'
 import { toRuntimeWorktreeSelector } from '../../runtime/runtime-worktree-selector'
 import { getHostedReviewCacheKey, refreshHostedReviewCard } from './hosted-review'
+import { routeListingBranchSwitchesThroughGitIdentity } from './worktree-listing-branch-switch'
 import { isPositiveHostedReviewNumber } from '../../../../shared/hosted-review'
 import { getGitHubPRCacheKey, getLegacyGitHubPRCacheKey } from './github-cache-key'
 import { moveFocusToRendererBeforeFocusedWebviewHidden } from './browser-webview-cleanup'
@@ -2326,6 +2327,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
   fetchWorktrees: async (repoId, options) => {
     try {
       const ownerState = get()
+      const requestStartedWorktrees = ownerState.worktreesByRepo[repoId]
       const hostId = repoHostId(ownerState, repoId)
       const ownerWasMissingAtStart = !ownerState.repos.some((repo) => repo.id === repoId)
       const setup = getProjectHostSetupForRepoHost(ownerState, repoId, hostId)
@@ -2337,11 +2339,21 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       if (options?.requireAuthoritative && !detected.authoritative) {
         return false
       }
+      let incoming = toVisibleWorktrees(detected, hostId, setup)
+      const latestState = get()
+      if (repoHasExecutionHost(latestState, repoId, hostId, ownerWasMissingAtStart)) {
+        const matchOptions = worktreeHostMatchOptions(latestState, repoId, hostId)
+        incoming = routeListingBranchSwitchesThroughGitIdentity({
+          requestStarted: requestStartedWorktrees,
+          current: latestState.worktreesByRepo[repoId],
+          incoming,
+          matchesRefreshHost: (worktree) => worktreeMatchesHost(worktree, hostId, matchOptions),
+          hasBranchScopedReviewContext: hasBranchScopedHostedReviewContext,
+          updateWorktreeGitIdentity: latestState.updateWorktreeGitIdentity
+        })
+      }
       const current = get().worktreesByRepo[repoId]
-      const worktrees = sanitizeHostedReviewLinksForBranchClears(
-        toVisibleWorktrees(detected, hostId, setup),
-        current
-      )
+      const worktrees = sanitizeHostedReviewLinksForBranchClears(incoming, current)
       const currentMatchOptions = worktreeHostMatchOptions(get(), repoId, hostId)
       const currentForHost = (current ?? []).filter((worktree) =>
         worktreeMatchesHost(worktree, hostId, currentMatchOptions)
@@ -2477,15 +2489,30 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
     if (get().hasHydratedWorktreePurge) {
       await mapReposForWorktreeRefresh(repos, async (r) => {
         try {
+          const requestStartedState = get()
+          const requestStartedWorktrees = requestStartedState.worktreesByRepo[r.id]
           const hostId = getRepoExecutionHostId(r)
-          const setup = getProjectHostSetupForRepoHost(get(), r.id, hostId)
-          const settings = settingsForKnownRepoOwner(get().settings, r)
+          const setup = getProjectHostSetupForRepoHost(requestStartedState, r.id, hostId)
+          const settings = settingsForKnownRepoOwner(requestStartedState.settings, r)
           const detected = await listDetectedWorktreesForRepoCoalesced(settings, r.id, {
             executionHostId: hostId,
             reuseRecentCompatibilityFailure: true
           })
+          let incoming = toVisibleWorktrees(detected, hostId, setup)
+          const latestState = get()
+          if (repoHasExecutionHost(latestState, r.id, hostId, false)) {
+            const matchOptions = worktreeHostMatchOptions(latestState, r.id, hostId)
+            incoming = routeListingBranchSwitchesThroughGitIdentity({
+              requestStarted: requestStartedWorktrees,
+              current: latestState.worktreesByRepo[r.id],
+              incoming,
+              matchesRefreshHost: (worktree) => worktreeMatchesHost(worktree, hostId, matchOptions),
+              hasBranchScopedReviewContext: hasBranchScopedHostedReviewContext,
+              updateWorktreeGitIdentity: latestState.updateWorktreeGitIdentity
+            })
+          }
           const worktrees = sanitizeHostedReviewLinksForBranchClears(
-            toVisibleWorktrees(detected, hostId, setup),
+            incoming,
             get().worktreesByRepo[r.id]
           )
           set((s) => {
@@ -2556,18 +2583,30 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
         | { repoId: string; ok: false }
       > => {
         try {
+          const requestStartedState = get()
+          const requestStartedWorktrees = requestStartedState.worktreesByRepo[r.id]
           const hostId = getRepoExecutionHostId(r)
-          const setup = getProjectHostSetupForRepoHost(get(), r.id, hostId)
+          const setup = getProjectHostSetupForRepoHost(requestStartedState, r.id, hostId)
           const detected = await listDetectedWorktreesForRepoCoalesced(
-            settingsForKnownRepoOwner(get().settings, r),
+            settingsForKnownRepoOwner(requestStartedState.settings, r),
             r.id,
             { executionHostId: hostId, reuseRecentCompatibilityFailure: true }
           )
+          let incoming = toVisibleWorktrees(detected, hostId, setup)
+          const latestState = get()
+          if (repoHasExecutionHost(latestState, r.id, hostId, false)) {
+            const matchOptions = worktreeHostMatchOptions(latestState, r.id, hostId)
+            incoming = routeListingBranchSwitchesThroughGitIdentity({
+              requestStarted: requestStartedWorktrees,
+              current: latestState.worktreesByRepo[r.id],
+              incoming,
+              matchesRefreshHost: (worktree) => worktreeMatchesHost(worktree, hostId, matchOptions),
+              hasBranchScopedReviewContext: hasBranchScopedHostedReviewContext,
+              updateWorktreeGitIdentity: latestState.updateWorktreeGitIdentity
+            })
+          }
           const current = get().worktreesByRepo[r.id]
-          const list = sanitizeHostedReviewLinksForBranchClears(
-            toVisibleWorktrees(detected, hostId, setup),
-            current
-          )
+          const list = sanitizeHostedReviewLinksForBranchClears(incoming, current)
           const currentMatchOptions = worktreeHostMatchOptions(get(), r.id, hostId)
           const currentForHost = (current ?? []).filter((worktree) =>
             worktreeMatchesHost(worktree, hostId, currentMatchOptions)
@@ -3928,7 +3967,12 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
 
     try {
       await persistWorktreeMeta(settingsForWorktreeOwner(get(), worktreeId), worktreeId, enriched)
-      if (reviewRepo && reviewBranch && typeof get().fetchHostedReviewForBranch === 'function') {
+      if (
+        !options?.suppressHostedReviewRefresh &&
+        reviewRepo &&
+        reviewBranch &&
+        typeof get().fetchHostedReviewForBranch === 'function'
+      ) {
         // Why: the old cache entry may have been populated by the previous
         // provider link. Refetch against the post-update links so stale lookups
         // cannot keep showing the removed review.
