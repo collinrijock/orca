@@ -28,6 +28,7 @@ describe('electron-builder config', () => {
         '!mobile{,/**/*}',
         '!native{,/**/*}',
         '!skills{,/**/*}',
+        '!skill-guides{,/**/*}',
         '!tests{,/**/*}',
         '!pr-evidence{,/**/*}',
         '!Casks{,/**/*}',
