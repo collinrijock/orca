@@ -9,9 +9,8 @@ keeps commands, hashes, runner identities, timings, and failure details.
 A checked box means the work has evidence in the detailed ledger. Design approval alone does not
 complete a box.
 
-Active checkpoint: **Milestone 5 / Work Package 4 desktop cache boundary — cache
-locking/publication/quarantine/eviction audit and purpose-named RED, 2026-07-15, Codex
-implementation owner.** Exact-head run
+Active checkpoint: **Milestone 5 / Work Package 4 desktop cache boundary — disconnected
+cross-process content-lock all-six native gate, 2026-07-15, Codex implementation owner.** Exact-head run
 [29449869519](https://github.com/stablyai/orca/actions/runs/29449869519) closes deterministic bounded
 `.tar.br` under `E-M5-PORTABLE-ARCHIVE-CI-001`: all six primary Node 24 jobs and both Linux
 oldest-userland supplements pass. PR Checks and Golden E2E are green; Windows x64 floor passes and
@@ -36,10 +35,17 @@ incremental RSS and 1,294.77–5,757.55ms. Both Linux oldest-userland supplement
 floor pass; Windows arm64 runtime/extraction passes before the retained hosted build-26200 versus
 required-26100 floor rejection. Exact-head PR Checks
 [29455294230](https://github.com/stablyai/orca/actions/runs/29455294230) and Golden E2E
-[29455294207](https://github.com/stablyai/orca/actions/runs/29455294207) are green. Next is the
-disconnected cache-state audit and purpose-named RED. Desktop consumers, cache publication, SSH
-transfer/install, mode wiring, tuple enablement, publication, production keys/environment/seed, and
-merge to `main` remain disconnected.
+[29455294207](https://github.com/stablyai/orca/actions/runs/29455294207) are green. The cache audit
+splits lock, immutable publication/quarantine, and in-use eviction into separate gates under
+`E-M5-ARTIFACT-CACHE-AUDIT-001`. The absent-module RED is
+`E-M5-ARTIFACT-CACHE-LOCK-LOCAL-RED-001`; the disconnected implementation and ten focused contracts
+are locally green under `E-M5-ARTIFACT-CACHE-LOCK-LOCAL-001`, including a real second process,
+heartbeat, cancellation, stale-dead reclaim, and live/ambiguous/displaced-owner safety. Artifact,
+relay, release, typecheck, full lint, max-lines, and workflow gates pass. Both native job families
+require the suite under `E-M5-ARTIFACT-CACHE-LOCK-CI-WIRING-LOCAL-001`; next is exact-head all-six
+Node 24 execution. Desktop consumers, cache publication/quarantine/eviction, SSH transfer/install,
+mode wiring, tuple enablement, publication, production keys/environment/seed, and merge to `main`
+remain disconnected.
 
 ## Safety status
 
@@ -338,7 +344,11 @@ merge to `main` remain disconnected.
       Exclusive owned staging and failure/cancellation cleanup are green locally and on all six
       native clients under `E-M5-ARTIFACT-EXTRACTION-LOCAL-001` and
       `E-M5-ARTIFACT-EXTRACTION-CI-001`; publication, quarantine, locking, and eviction are the
-      active audit/RED package and are not implemented yet.
+      active split packages and are not implemented yet. The lock-only audit/RED is recorded under
+      `E-M5-ARTIFACT-CACHE-AUDIT-001` and `E-M5-ARTIFACT-CACHE-LOCK-LOCAL-RED-001`; the implementation
+      is locally green and wired to both native families under `E-M5-ARTIFACT-CACHE-LOCK-LOCAL-001`
+      and `E-M5-ARTIFACT-CACHE-LOCK-CI-WIRING-LOCAL-001`. All-six execution remains required before
+      marking lock coordination complete.
 - [ ] Prove verified cached bytes can be transferred while the client is offline.
 - [ ] Preserve `ORCA_RELAY_PATH` behind the official-build trust boundary.
 

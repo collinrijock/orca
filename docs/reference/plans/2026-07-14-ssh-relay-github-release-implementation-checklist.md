@@ -8,8 +8,8 @@ work; keep exact commands, runner identities, hashes, metrics, and residual gaps
 
 Date created: 2026-07-14<br>
 Last updated: 2026-07-15<br>
-Current phase: Milestone 5 / Work Package 4 desktop cache boundary — **In progress — 2026-07-15, Codex implementation owner: cache locking/publication/quarantine/eviction audit and purpose-named RED**. E-M5-ARTIFACT-EXTRACTION-CI-001 closes the disconnected exclusive-extraction and complete-tree-verification capability on all six native Node 24 clients within the corrected 80 MiB desktop ceiling. Audit the existing app-owned cache and process/window lifecycle, define the narrow publication package, and add purpose-named failing contracts before implementation. Do not add a desktop caller, SSH transfer/install, tuple enablement, mode wiring, release publication, or default behavior.<br>
-Session checkpoint: **In progress — 2026-07-15, Codex implementation owner** — exact-head artifact run 29455294208 proves synthetic hostile contracts and full-size extraction on darwin arm64/x64, Linux arm64/x64, and Windows arm64/x64; incremental RSS is 33,517,568–45,989,888 bytes and duration is 1,294.77–5,757.55ms. Both Linux oldest-userland supplements and Windows x64 floor pass. Windows arm64 runtime execution passes before the retained exact-floor assertion rejects hosted build 26200 as evidence for required build 26100. Exact-head PR Checks 29455294230 and Golden E2E 29455294207 pass. The user authorizes commits, pushes, draft-PR updates, CI runs/reruns, PR-contained rehearsals, and PR-contained release writes where checklist gates require them, but not merging to `main`. There is no release publication, cache consumer, SSH transfer/install, tuple enablement, or production/default behavior change. Legacy remains the production default.<br>
+Current phase: Milestone 5 / Work Package 4 desktop cache boundary — **In progress — 2026-07-15, Codex implementation owner: disconnected cross-process content-lock native gate**. E-M5-ARTIFACT-CACHE-LOCK-LOCAL-001 closes ten local contracts plus broad/static gates; E-M5-ARTIFACT-CACHE-LOCK-CI-WIRING-LOCAL-001 requires the suite on both native job families. Checkpoint and push, then require exact-head Node 24 execution on all six clients before cache-entry publication work. Do not add cache publication/quarantine/eviction, a desktop caller, SSH transfer/install, tuple enablement, mode wiring, release publication, or default behavior.<br>
+Session checkpoint: **In progress — 2026-07-15, Codex implementation owner** — the disconnected content lock uses a fully populated pending directory followed by atomic rename, a nonce-bound heartbeat through the original owner file handle, conservative same-host PID liveness, stale-dead-owner tombstoning, bounded/cancellable wait, directory-inode plus token ownership assertion, and owner-only release. Ten focused tests include a real second Node process; artifact, relay, release, typecheck, full lint, max-lines, workflow, and diff gates pass. The final direct-child harness stays inside the unchanged 30s test bound even while unrelated worktrees heavily saturate the host; broad elapsed times are recorded as contention-affected, not performance baselines. The suite is wired into both native Node 24 job families but exact-head all-six execution remains required. The user authorizes commits, pushes, draft-PR updates, CI runs/reruns, PR-contained rehearsals, and PR-contained release writes where checklist gates require them, but not merging to `main`. There is no release publication, cache entry, cache consumer, SSH transfer/install, tuple enablement, or production/default behavior change. Legacy remains the production default.<br>
 Primary design: [SSH relay GitHub Release plan](./2026-07-14-ssh-relay-github-release-plan.html)<br>
 Motivating issues: [#8450](https://github.com/stablyai/orca/issues/8450), [#1693](https://github.com/stablyai/orca/issues/1693)
 
@@ -137,11 +137,11 @@ same change as the work it records.
   E-M5-PORTABLE-ARCHIVE-PARENT-LOCAL-001, and E-M5-PORTABLE-ARCHIVE-CI-001 prove the selected bounded
   archive, correction, all-six primary jobs, and both Linux oldest-userland supplements. Windows ZIP
   and upstream Node `.tar.xz` remain unchanged.
-- Active package: **In progress — 2026-07-15, Codex implementation owner** — audit cache ownership,
-  locking, atomic publication, quarantine, and bounded eviction after the disconnected extractor
-  closed on all six native clients under E-M5-ARTIFACT-EXTRACTION-CI-001. Add purpose-named RED
-  contracts before implementing the narrow cache-state package. Keep desktop call sites, SSH
-  behavior, mode wiring, tuple enablement, release publication, and defaults intact.
+- Active package: **In progress — 2026-07-15, Codex implementation owner** — checkpoint and collect
+  exact-head all-six Node 24 evidence for the disconnected content lock closed locally by
+  E-M5-ARTIFACT-CACHE-LOCK-LOCAL-001 and wired by
+  E-M5-ARTIFACT-CACHE-LOCK-CI-WIRING-LOCAL-001. Keep cache publication/quarantine/eviction, desktop
+  call sites, SSH behavior, mode wiring, tuple enablement, release publication, and defaults intact.
 - Completed Work Package 2 gate: target-native Windows source-signature reports from exact-head
   artifact jobs 87267322867 and 87267322870 were independently downloaded and matched to their
   identities and signing-stage reports under E-M3-WINDOWS-SOURCE-SIGNATURE-CI-001. PR Checks
@@ -12931,6 +12931,156 @@ sort`; targeted `rg -n` over `cache|extract|atomic|quarantine`; and complete rea
   remain open.
 - Safety oracle: all artifacts remain unpublished Actions evidence. Production/default SSH is still
   legacy-only; no cache consumer, SSH path, mode, or enabled tuple exists.
+
+### E-M5-ARTIFACT-CACHE-AUDIT-001 — Cache ownership and transaction package split
+
+- Date: 2026-07-15
+- Owner: Codex implementation owner
+- Source: exact pushed evidence head `ef76f38d4` on draft PR #8741.
+- Exact audit commands: `rg --files src/main | rg '(cache|ssh-relay-artifact|lock|quarantine|evict)' |
+  sort`; targeted `rg -n` over `app.getPath('userData')|cache|lockfile|rename|quarantine|evict` in
+  `src/main`/`src/shared`; complete reads of the relay downloader, extractor, tree verifier,
+  selector/content-identity/path-policy modules, startup single-instance lock, and Milestone 5 cache
+  contracts.
+- Findings:
+  - there is no relay cache root, cache lookup, publication proof, content lock, quarantine, eviction,
+    in-use lease, embedded-manifest caller, or SSH consumer;
+  - the downloader owns only an exclusive `wx` staging file and removes it on failure; the extractor
+    owns only an exclusive staging directory and returns a complete signed-tree verification result;
+    neither publishes or replaces shared state;
+  - official packaged Orca normally has an Electron single-instance lock per `userData` profile, but
+    development/E2E bypasses exist and separate profiles/builds may share or migrate files. The cache
+    contract therefore cannot rely on one in-memory main process;
+  - the authenticated `sha256:<64 lowercase hex>` content ID is the immutable entry key. A cache
+    path must derive only from its validated hex payload and archive name from the verified selected
+    artifact, never caller-controlled tuple/path text;
+  - publication must place the archive, verified runtime tree, and structured proof inside one
+    same-filesystem staging entry, sync proof/bytes as required, then rename the whole entry under an
+    exclusive content lock. No partial directory or proof written after rename may become selectable;
+  - stale-lock recovery must never delete a possibly active writer. A stale dead-owner lock is first
+    atomically renamed to an unselectable tombstone; every writer must revalidate its nonce-bound
+    ownership immediately before publication. A live or unprovably dead owner is waited out or times
+    out, never reclaimed;
+  - detected identity/proof/tree corruption is an integrity failure. Lookup must atomically move the
+    entry to a quarantine namespace before returning failure; it cannot reinterpret corruption as a
+    miss eligible for automatic legacy;
+  - eviction needs a separate in-use lease/recency contract. The 2 GiB cap may remove only complete,
+    idle entries and must conservatively retain an entry whose lease is active or ambiguous.
+- Evidence-gated implementation split:
+  1. `ssh-relay-artifact-cache-lock.ts`, `ssh-relay-artifact-cache-lock-record.ts`, and
+     `ssh-relay-artifact-cache-lock-lease.ts` — validated content-key paths, nonce-bound
+     cross-process acquisition/reclaim, strict record parsing, cancellation/timeout, heartbeat,
+     conservative liveness, atomic stale tombstoning, ownership assertion, and owner-only release;
+  2. `ssh-relay-artifact-cache-entry.ts` — same-filesystem exclusive staging, structured immutable
+     proof, final archive/tree verification, atomic publication, lookup, and corruption quarantine;
+  3. `ssh-relay-artifact-cache-eviction.ts` — in-use leases, recency, exact byte accounting, and
+     bounded 2 GiB eviction that never removes active/ambiguous entries.
+- Consumer-disconnection oracle: each capability is source-test-only until packaged manifest loading,
+  proxy/certificate behavior, and later resolver gates close. No app startup/index call, SSH path,
+  setting, tuple, release publication, or production/default behavior is connected.
+- Does not prove: any cache implementation, crash/concurrency behavior, disk-full/read-only behavior,
+  packaged Electron path selection, cross-client CI, SSH, native trust, or an enabled tuple.
+- Follow-up: add and run the purpose-named cache-lock RED, implement only package 1, then require
+  focused/broad/static and all-six native evidence before cache-entry publication work begins.
+
+### E-M5-ARTIFACT-CACHE-LOCK-LOCAL-RED-001 — Cross-process content lock is absent
+
+- Date: 2026-07-15
+- Owner: Codex implementation owner
+- Source: purpose-named `src/main/ssh/ssh-relay-artifact-cache-lock.test.ts` atop pushed evidence head
+  `ef76f38d4`; implementation module deliberately absent.
+- Exact command:
+  `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1 src/main/ssh/ssh-relay-artifact-cache-lock.test.ts`
+- Environment: macOS 26.2 arm64 build 25C56, Node v26.0.0, pnpm 10.24.0, Vitest 4.1.5.
+- Result: required RED; one failed suite / zero collected tests in 389ms Vitest / 3.70s wall,
+  132,366,336-byte maximum RSS, zero swaps. Import fails because
+  `./ssh-relay-artifact-cache-lock` does not exist.
+- Contract encoded before implementation:
+  - accept only exact lowercase `sha256:<64 hex>` content IDs and derive a portable lock basename;
+  - serialize same-content writers and transfer ownership only after owner release;
+  - settle an aborted waiter without disturbing the active owner;
+  - reclaim only a stale lock whose same-host process is proven dead, by atomic tombstoning before
+    replacement;
+  - preserve a stale-looking same-host lock while its process remains alive;
+  - nonce-check ownership before later publication and never delete a successor lock after
+    displacement.
+- Does not prove: implementation, heartbeat behavior, crash recovery, cross-process/native clients,
+  cache publication/quarantine/eviction, packaged Electron, SSH, or an enabled tuple.
+- Follow-up: implement only `ssh-relay-artifact-cache-lock.ts`, run the six focused contracts, add
+  heartbeat/timeout/malformed-owner coverage if implementation exposes gaps, then run broad/static
+  gates and require all-six native execution.
+
+### E-M5-ARTIFACT-CACHE-LOCK-LOCAL-001 — Disconnected content lock passes locally
+
+- Date: 2026-07-15
+- Owner: Codex implementation owner
+- Source: uncommitted cache-lock implementation atop pushed evidence head `ef76f38d4`.
+- Implementation: acquisition writes and syncs a complete owner record in a unique pending directory,
+  then atomically renames it to the fixed validated content lock. Active ownership is bound to a
+  random 128-bit nonce, directory device/inode, original owner-file handle, same-host PID, and a 5s
+  heartbeat. Wait is polled at 100ms, cancelled immediately, and bounded at 120s. Only a record stale
+  for 30s whose same-host PID is proven dead may be atomically renamed to a unique tombstone before
+  cleanup/replacement. A live, cross-host, missing, or malformed owner is never guessed dead.
+- Structure gate: the first implementation placed acquisition, record parsing, and active lease in
+  one 331-code-line module; focused `oxlint` correctly failed `eslint(max-lines)` at the 300-line
+  limit. The implementation was split by concrete responsibility into 200-line acquisition/reclaim,
+  80-line record, and 147-line active lease modules. No suppression or ratchet exception was added.
+- Exact focused command:
+  `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1 src/main/ssh/ssh-relay-artifact-cache-lock.test.ts`
+- Final focused result after formatting and child-harness correction: one passed file / 10 passed
+  tests in 22.73s Vitest / 68.66s wall, 110,608,384-byte maximum process RSS, zero swaps on a host
+  heavily saturated by unrelated worktrees. The tests themselves complete inside the unchanged 30s
+  per-test bound. Contracts prove fixed limits and frozen metadata,
+  exact lowercase content paths, same-process and real second-process serialization, cancellation,
+  owner-handle heartbeat, stale-dead-owner tombstoning, live/malformed-owner preservation, and
+  displaced nonce fail-closed/release-without-successor-deletion behavior.
+- Fixture correction: the first post-implementation attempt used a non-hex manual owner token, so
+  strict record parsing intentionally classified it as ambiguous and waited. The run was terminated;
+  changing only the fixture to a valid 128-bit hex nonce made stale-dead and live-owner cases test
+  the intended branches. No production parser or liveness rule was weakened.
+- Child-harness correction: the first exact-commit rerun launched a nested Vitest process for the
+  real second-process cell. Under unrelated host saturation, nested runner startup exceeded the 30s
+  test timeout even though lock logic had not failed. The final harness instead launches Node
+  directly with Node 24's built-in TypeScript stripping and a narrow relative-`.ts` resolver, then
+  imports and exercises the exact production lock module. This removes a package-runner startup
+  dependency without increasing the test timeout or duplicating lock logic.
+- Exact broader commands and results:
+  - `pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1 src/main/ssh/ssh-relay-artifact-*.test.ts`:
+    five passed files / one environment-skipped file, 95 passed / one skipped test in 126.12s Vitest /
+    222.65s wall, 138,002,432-byte maximum RSS, zero swaps under the same unrelated host contention;
+  - `pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1 src/main/ssh/ssh-relay-*.test.ts`:
+    18 passed files / two environment/platform-skipped files, 263 passed / two skipped tests in
+    166.03s Vitest / 276.43s wall, 198,787,072-byte maximum RSS, zero swaps under the same unrelated
+    host contention;
+  - `pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1 config/scripts/ssh-relay-runtime-*.test.mjs`:
+    50 passed files / 279 passed tests in 42.00s Vitest / 44.67s wall, 190,152,704-byte maximum RSS,
+    zero swaps;
+  - `pnpm typecheck`; `pnpm lint`; `pnpm run check:max-lines-ratchet`; `git diff --check`: exit zero.
+    Full lint retains only existing warnings outside this package; reliability, Git compatibility,
+    line-budget, skill, and localization gates pass.
+- Diff/consumer oracle: the preserved Milestone 0 resolver pair and release-required-assets pair have
+  zero diff. No cache entry/publication/quarantine/eviction, app/index caller, SSH path, setting, mode,
+  tuple, release write, or default change exists.
+- Does not prove: Node 24/native clients, abrupt process kill on each OS, network filesystem/PID
+  namespace behavior, cache publication/quarantine/eviction, packaged Electron, SSH, or an enabled
+  tuple.
+
+### E-M5-ARTIFACT-CACHE-LOCK-CI-WIRING-LOCAL-001 — Both native families require lock contracts
+
+- Date: 2026-07-15
+- Owner: Codex implementation owner
+- Purpose RED command:
+  `pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1 config/scripts/ssh-relay-runtime-workflow.test.mjs`
+- RED result: one failed / six passed tests in 519ms; the source contract requires the lock suite
+  twice but the workflow contains zero invocations, so the split count is one instead of three.
+- GREEN result: the same command passes one file / seven tests in 398ms after adding the lock suite
+  to both POSIX and Windows native Node 24 contract steps.
+- Oracle: every primary darwin/Linux/Windows x64/arm64 job must run same-process and real child-process
+  contention, cancellation, heartbeat, stale/live/ambiguous owner, and displaced-owner contracts.
+  It remains source-test-only and runs before unpublished artifact construction/upload.
+- Does not prove: actual runner execution, cache publication, SSH, or an enabled tuple.
+- Follow-up: checkpoint and push, then require exact-head all-six native jobs plus PR Checks and
+  Golden E2E before beginning immutable cache-entry publication/quarantine.
 
 ## Accepted Gaps
 

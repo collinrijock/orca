@@ -122,6 +122,7 @@ describe('SSH relay runtime artifact workflow', () => {
       'ssh-relay-artifact-selector.test.ts',
       'ssh-relay-artifact-download.test.ts',
       'ssh-relay-artifact-extraction.test.ts',
+      'ssh-relay-artifact-cache-lock.test.ts',
       'ssh-relay-runtime-identity.test.ts'
     ]) {
       // Why: portable desktop selection contracts need proof on every native runner family, not
