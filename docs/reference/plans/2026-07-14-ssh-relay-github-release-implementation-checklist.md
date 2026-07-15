@@ -8,8 +8,8 @@ work; keep exact commands, runner identities, hashes, metrics, and residual gaps
 
 Date created: 2026-07-14<br>
 Last updated: 2026-07-15<br>
-Current phase: Milestone 4 / Work Package 3 reusable target-native build-prerequisite contract — **In progress — 2026-07-15, Codex implementation owner**. Semantic post-sign SBOM/provenance regeneration is closed locally and on all six exact-head Node 24 native build jobs under E-M4-POST-SIGN-METADATA-LOCAL-001, E-M4-POST-SIGN-METADATA-LOCAL-002, E-M4-POST-SIGN-METADATA-CORRECTION-LOCAL-001, and E-M4-POST-SIGN-METADATA-CI-001. The active slice defines and tests only a credential-free reusable target-native build-prerequisite interface. Its purpose-named missing-interface RED and local GREEN are recorded under E-M4-BUILD-PREREQUISITE-LOCAL-RED-001 and E-M4-BUILD-PREREQUISITE-LOCAL-001; exact-head proof on all six native build jobs is still required. It must remain disconnected from release-cut and every desktop build until exact floors, native signing/trust, aggregate, publication/read-back, and embedding gates are complete. It may not publish, use production signing credentials, connect a desktop consumer, or enable a tuple. Production/default behavior is unchanged, no bundled-runtime path is enabled, and no artifact is published.<br>
-Session checkpoint: **In progress — 2026-07-15, Codex implementation owner** — the credential-free `workflow_call` interface, exact four-job graph, read-only permissions, secret-free boundary, exact checkout revision, and release-workflow disconnection contract are locally green under E-M4-BUILD-PREREQUISITE-LOCAL-001. The full 234-test release suite, 48-test desktop parity suite, typecheck, lint/reliability/localization gates, formatting, syntax, and diff checks pass; both user-owned Node/npm resolver files have zero diff. The package remains open pending exact-head all-six native CI. Real Apple/SignPath signing, returned production signatures, Gatekeeper/notarization, Defender/WDAC, exact macOS 13.5/Linux kernel 4.18/Windows arm64 build-26100 runners, protected manifest signing, publication wiring, desktop embedding, and native trust remain separately gated. Nothing is published or enabled, release-cut and both desktop release consumers remain disconnected, legacy remains the production default, and merge to `main` remains prohibited.<br>
+Current phase: Milestone 4 / Work Package 3 platform-native signing-job workflow contract — **In progress — 2026-07-15, Codex implementation owner**. The reusable credential-free target-native build-prerequisite package is closed locally and on all six exact-head Node 24 native build jobs under E-M4-BUILD-PREREQUISITE-LOCAL-RED-001, E-M4-BUILD-PREREQUISITE-LOCAL-001, and E-M4-BUILD-PREREQUISITE-CI-001. The active slice begins with a purpose-named RED for disconnected platform-native signing jobs that consume exact native build outputs and return immutable signed bytes before final hashing. A credential-free test path may prove workflow shape and failure behavior but cannot satisfy real Apple/SignPath signing, returned production signatures, or native-trust evidence. Release-cut and every desktop build remain disconnected until exact floors, real signing/trust, aggregate, publication/read-back, and embedding gates are complete. The slice may not publish, connect a desktop consumer, or enable a tuple. Production/default behavior is unchanged, no bundled-runtime path is enabled, and no artifact is published.<br>
+Session checkpoint: **In progress — 2026-07-15, Codex implementation owner** — exact-head artifact run 29412010582 at `994daefabcf9fba8d8d614bb6246d189c34c6b3f` passes the new reusable prerequisite contract, full release-side suite, native build-twice/equality, archive inspection, bundled Node/PTY/watcher smoke, and unpublished evidence upload on all six native build jobs under E-M4-BUILD-PREREQUISITE-CI-001. PR Checks 29412010603 pass. Golden E2E 29412010624 passes on macOS first-attempt and Linux retry; the first Linux attempt failed before tests while compiling `node-pty`, then the unchanged retry passed dependency install, app build, and Golden tests. The artifact run is red only for the declared Windows arm64 oldest-floor mismatch: hosted build 26200 does not equal required build 26100. Real Apple/SignPath signing, returned production signatures, Gatekeeper/notarization, Defender/WDAC, exact macOS 13.5/Linux kernel 4.18/Windows arm64 build-26100 runners, protected manifest signing, publication wiring, desktop embedding, and native trust remain separately gated. Nothing is published or enabled, release-cut and both desktop release consumers remain disconnected, legacy remains the production default, and merge to `main` remains prohibited.<br>
 Primary design: [SSH relay GitHub Release plan](./2026-07-14-ssh-relay-github-release-plan.html)<br>
 Motivating issues: [#8450](https://github.com/stablyai/orca/issues/8450), [#1693](https://github.com/stablyai/orca/issues/1693)
 
@@ -95,14 +95,15 @@ same change as the work it records.
   E-M4-POST-SIGN-METADATA-CORRECTION-LOCAL-001. Replacement exact-head Node 24 evidence passes all
   six native build jobs under E-M4-POST-SIGN-METADATA-CI-001. Production signing credentials,
   publication, desktop consumers, and tuple enablement remain outside this slice.
-- Active package: Work Package 3 reusable target-native build-prerequisite contract. Define and
-  test a credential-free reusable interface over the existing target-native jobs, but do not connect
-  release-cut or a desktop build until exact-floor, native signing/trust, aggregate,
-  publication/read-back, and embedding gates are complete. No broader Milestone 4 box is checked
-  until its complete evidence exists. E-M4-BUILD-PREREQUISITE-LOCAL-RED-001 proves the callable
-  interface was absent; E-M4-BUILD-PREREQUISITE-LOCAL-001 proves the local credential-free
-  implementation and both native test-family integrations while release workflows stay disconnected.
-  Exact-head all-six native CI remains required.
+- Completed package: Work Package 3 reusable target-native build-prerequisite contract. The
+  credential-free callable interface, both native test-family integrations, and exact-head all-six
+  native CI pass under E-M4-BUILD-PREREQUISITE-LOCAL-RED-001,
+  E-M4-BUILD-PREREQUISITE-LOCAL-001, and E-M4-BUILD-PREREQUISITE-CI-001. Release workflows remain
+  disconnected.
+- Active package: Work Package 3 platform-native signing-job workflow contract. Begin with a
+  purpose-named RED for exact native build-input consumption, immutable returned signed bytes,
+  post-return hashing, bounded failure behavior, and release-consumer disconnection. Credential-free
+  tests do not count as real Apple/SignPath signing or native-trust evidence; keep those gates open.
 - Completed Work Package 2 gate: target-native Windows source-signature reports from exact-head
   artifact jobs 87267322867 and 87267322870 were independently downloaded and matched to their
   identities and signing-stage reports under E-M3-WINDOWS-SOURCE-SIGNATURE-CI-001. PR Checks
@@ -948,13 +949,16 @@ Rules:
 
 ## Milestone 4 — Make Relay Artifacts Prerequisites of Desktop Builds
 
-- [ ] **In progress — 2026-07-15, Codex implementation owner:** add a reusable target-native runtime
+- [x] Add a reusable target-native runtime
       build prerequisite contract for every candidate tuple; do not treat a cross-build alone as
       native execution evidence. Keep release-cut and desktop builds disconnected until the
       remaining exact-floor, signing/trust, aggregate, publication/read-back, and embedding gates
-      pass.
-- [ ] Add platform-native signing jobs. Signed macOS and Windows runtime bytes must return as
-      immutable outputs before final hashes are computed.
+      pass. (E-M4-BUILD-PREREQUISITE-LOCAL-RED-001,
+      E-M4-BUILD-PREREQUISITE-LOCAL-001, E-M4-BUILD-PREREQUISITE-CI-001)
+- [ ] **In progress — 2026-07-15, Codex implementation owner:** add platform-native signing jobs.
+      Signed macOS and Windows runtime bytes must return as immutable outputs before final hashes
+      are computed. Start with a disconnected purpose-named RED; real Apple/SignPath and native
+      trust remain required before this box can close.
 - [ ] Add one fail-closed aggregate job that waits for all required native build/signing outputs,
       validates them, computes final hashes, builds the canonical manifest, and signs it.
 - [ ] Make Linux, Windows, and macOS desktop build jobs depend on the successful aggregate output.
@@ -1583,6 +1587,10 @@ focused commands as their scripts/tests are introduced.
 - [x] Exact-head Node 24 native workflow execution of
       `config/scripts/ssh-relay-runtime-post-sign-metadata.test.mjs` on all six runner families
       (E-M4-POST-SIGN-METADATA-CI-001)
+- [x] `pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1 config/scripts/ssh-relay-runtime-build-prerequisite.test.mjs config/scripts/ssh-relay-runtime-workflow.test.mjs` (E-M4-BUILD-PREREQUISITE-LOCAL-RED-001, E-M4-BUILD-PREREQUISITE-LOCAL-001)
+- [x] Exact-head Node 24 native workflow execution of
+      `config/scripts/ssh-relay-runtime-build-prerequisite.test.mjs` on all six runner families
+      (E-M4-BUILD-PREREQUISITE-CI-001)
 - [x] `pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1 config/scripts/ssh-relay*.test.mjs` (E-M4-MANIFEST-HANDOFF-LOCAL-002; all release-side SSH-relay contracts)
 - [x] `pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1 src/main/ssh/ssh-relay-artifact-schema.test.ts src/main/ssh/ssh-relay-manifest-signature.test.ts src/main/ssh/ssh-relay-release-asset.test.ts` (E-M4-MANIFEST-HANDOFF-LOCAL-002; desktop schema/signature parity)
 
@@ -10087,6 +10095,72 @@ diff --check`.
 - Follow-up: commit and push, then require the new prerequisite contract to pass in every native
   build job; retain the known Windows arm64 build-26100 floor failure as a separate enablement gap.
 
+### E-M4-BUILD-PREREQUISITE-CI-001 — Reusable prerequisite passes all six native build jobs
+
+- Date: 2026-07-15
+- Commit SHA / PR: `994daefabcf9fba8d8d614bb6246d189c34c6b3f`; draft PR #8741
+- Workflow/run: SSH Relay Runtime Artifacts run
+  [29412010582](https://github.com/stablyai/orca/actions/runs/29412010582)
+- Exact native build jobs and prerequisite/release-suite results:
+  - Darwin arm64 job
+    [87341066776](https://github.com/stablyai/orca/actions/runs/29412010582/job/87341066776):
+    `macos-15` label, `macos-15-arm64` image `20260706.0213.1`, native ARM64; prerequisite
+    1/1 in 24 ms; 41 files / 230 tests in 7.96 seconds; full build job PASS in 3m7s.
+  - Darwin x64 job
+    [87341066764](https://github.com/stablyai/orca/actions/runs/29412010582/job/87341066764):
+    `macos-15-intel` label, `macos-15` image `20260629.0276.1`, native X64; prerequisite
+    1/1 in 46 ms; 41 files / 230 tests in 24.02 seconds; full build job PASS in 6m56s.
+  - Linux arm64 job
+    [87341066762](https://github.com/stablyai/orca/actions/runs/29412010582/job/87341066762):
+    `ubuntu-24.04-arm` label, image `20260714.61.1`, native ARM64; prerequisite 1/1 in 25 ms;
+    41 files / 230 tests in 4.57 seconds; full build job PASS in 4m31s.
+  - Linux x64 job
+    [87341066775](https://github.com/stablyai/orca/actions/runs/29412010582/job/87341066775):
+    `ubuntu-24.04` label, image `20260705.232.1`, native X64; prerequisite 1/1 in 58 ms;
+    41 files / 230 tests in 6.11 seconds; full build job PASS in 3m39s.
+  - Windows arm64 job
+    [87341066730](https://github.com/stablyai/orca/actions/runs/29412010582/job/87341066730):
+    `windows-11-arm` label, `windows-11-arm64` image `20260706.102.1`, native ARM64;
+    prerequisite 1/1 in 31 ms; 42 files / 225 passed / 9 skipped in 13.29 seconds; full build job
+    PASS in 8m51s.
+  - Windows x64 job
+    [87341066835](https://github.com/stablyai/orca/actions/runs/29412010582/job/87341066835):
+    `windows-2022` image `20260706.237.1`, native X64; prerequisite 1/1 in 48 ms; 42 files /
+    225 passed / 9 skipped in 11.55 seconds; full build job PASS in 5m32s.
+- Every build job checked out the exact source SHA and completed exact Node input verification, two
+  clean native builds, archive inspection, byte-for-byte reproducibility, bundled Node execution,
+  real PTY input/resize/exit, watcher lifecycle smoke, and unpublished evidence upload. The two
+  Linux oldest-userland supplemental jobs also pass: arm64 job
+  [87342399226](https://github.com/stablyai/orca/actions/runs/29412010582/job/87342399226)
+  in 58 seconds and x64 job
+  [87342399251](https://github.com/stablyai/orca/actions/runs/29412010582/job/87342399251)
+  in 1m2s. Windows x64 oldest-floor job
+  [87342761575](https://github.com/stablyai/orca/actions/runs/29412010582/job/87342761575)
+  passes in 1m35s.
+- Adjacent exact-head regressions: PR Checks
+  [29412010603](https://github.com/stablyai/orca/actions/runs/29412010603) PASS in 13m49s.
+  Golden E2E [29412010624](https://github.com/stablyai/orca/actions/runs/29412010624) PASS after one
+  failed-job retry: macOS job 87341066363 passed first-attempt in 3m55s; Linux first-attempt job
+  87341066356 failed during dependency installation while compiling `node-pty`, before app build or
+  tests, while the immediately preceding exact head was green. The unchanged retry job 87343161455
+  passed dependency installation, app build, and Linux Golden tests in 4m29s.
+- Overall artifact-run result: expected FAIL only in Windows arm64 oldest-floor job
+  [87342761223](https://github.com/stablyai/orca/actions/runs/29412010582/job/87342761223):
+  the contract requires build 26100 while the hosted runner reports `10.0.26200`. Platform and
+  architecture checks pass; the OS-build check fails closed. This declared floor gap remains a
+  tuple-enablement blocker independent of the six green build/prerequisite jobs.
+- Oracle proved: GitHub accepts the credential-free callable interface and all six native jobs
+  execute its purpose-named contract. The exact four-job graph, read-only permissions, secret-free
+  boundary, exact source checkout, and release-workflow disconnection invariants hold on macOS,
+  Linux, and Windows x64/arm64. The callable graph still has no release or desktop consumer.
+- Does not prove: a production release caller, real Apple/SignPath returned bytes, native trust,
+  exact macOS 13.5/Linux kernel 4.18/Windows arm64 build-26100 execution, protected manifest signing,
+  publication/read-back, desktop embedding, SSH transfer/install, or an enabled tuple.
+- Checklist items satisfied: reusable target-native runtime build-prerequisite contract. Broader
+  Work Package 3 and Milestone 4 remain open.
+- Follow-up: add a disconnected purpose-named platform-native signing-job workflow RED while
+  preserving every real-signing/native-trust, release-consumer, publication, and tuple gate.
+
 ## Accepted Gaps
 
 No product gap is accepted merely because it appears in this list. Each entry requires explicit
@@ -10144,13 +10218,15 @@ The project is not complete until every applicable item below is checked with ev
 
 ## Next Required Action
 
-Commit and push the locally green credential-free reusable build-prerequisite package, then require
-its purpose-named contract to pass on all six exact-head native build jobs plus adjacent PR Checks
-and Golden E2E. Do not connect release-cut or any desktop build in this slice; the Windows arm64
-build-26100, macOS 13.5, Linux kernel 4.18, native signing/trust, aggregate, publication/read-back,
-and embedding gates remain prerequisites to that connection. Do not merge to `main`, publish, use
-production signing credentials, or enable a tuple. Retain every production/default gate. In
-parallel, provision the qualifying exact-floor and real macOS/Windows signing/trust environments.
+Add a purpose-named RED for disconnected platform-native signing jobs that consume the exact native
+build outputs, return immutable signed bytes before final hashes, settle bounded failure/timeout
+paths, and remain absent from release-cut and desktop consumers. Credential-free test doubles may
+prove workflow shape but cannot satisfy real Apple/SignPath signing or native trust. Do not connect
+release-cut or any desktop build; Windows arm64 build-26100, macOS 13.5, Linux kernel 4.18, real
+signing/trust, aggregate, publication/read-back, and embedding remain prerequisites. Do not merge to
+`main`, publish, use production signing credentials, or enable a tuple. Retain every
+production/default gate. In parallel, provision the qualifying exact-floor and real macOS/Windows
+signing/trust environments.
 
 Cross-family Layer B targets, the protected manifest-signing environment, oldest-baseline/native-
 trust cells, and the paired legacy performance baseline remain release/default-path blockers. No

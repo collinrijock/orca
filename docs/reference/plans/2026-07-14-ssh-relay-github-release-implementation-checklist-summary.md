@@ -189,14 +189,16 @@ complete a box.
       `E-M4-POST-SIGN-METADATA-CORRECTION-LOCAL-001`; production type/mode validation is unchanged.
       Exact-head execution passes on all six native jobs under
       `E-M4-POST-SIGN-METADATA-CI-001`.
-- [ ] **In progress — 2026-07-15, Codex implementation owner:** add a reusable target-native runtime
+- [x] Add a reusable target-native runtime
       build prerequisite contract. Keep it disconnected from release-cut and every desktop build
       until exact floors, native signing/trust, aggregate, and publication gates are complete; no
       tuple is enabled by this slice. The purpose-named RED proves `workflow_call` was absent; the
       credential-free interface and both native test-family integrations are locally green while
       both release workflows remain disconnected (`E-M4-BUILD-PREREQUISITE-LOCAL-RED-001`,
-      `E-M4-BUILD-PREREQUISITE-LOCAL-001`). Exact-head all-six native CI remains required.
-- [ ] Add native signing jobs; hash only the returned signed bytes.
+      `E-M4-BUILD-PREREQUISITE-LOCAL-001`, `E-M4-BUILD-PREREQUISITE-CI-001`).
+- [ ] **In progress — 2026-07-15, Codex implementation owner:** add platform-native signing jobs;
+      hash only the returned signed bytes. Begin with a purpose-named disconnected workflow RED;
+      no test double counts as real signing/native-trust evidence.
 - [ ] Add a fail-closed aggregate and immutable manifest-signing job.
 - [ ] Embed the exact signed manifest and accepted keys in each desktop build.
 - [ ] Upload to a draft release, read back, re-hash, and execute the downloaded archives.
