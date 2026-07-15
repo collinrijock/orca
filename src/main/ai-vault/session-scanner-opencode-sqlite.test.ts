@@ -225,13 +225,18 @@ describe('listOpenCodeSqliteSessions', () => {
     applyOpenCodeSchema(db)
     db.exec(`CREATE TABLE event (id TEXT PRIMARY KEY, data TEXT NOT NULL)`)
     insertSession(db, {
+      id: 'ses_noise',
+      timeCreated: 1_777_633_999_000,
+      timeUpdated: 1_777_634_000_000
+    })
+    insertSession(db, {
       id: 'ses_clean',
       timeCreated: 1_777_634_000_000,
       timeUpdated: 1_777_634_001_000
     })
     db.prepare(
       `INSERT INTO message (id, session_id, time_created, time_updated, data)
-       VALUES ('msg_malformed', 'ses_clean', 1777634000500, 1777634000500, ?)`
+       VALUES ('msg_malformed', 'ses_noise', 1777634000500, 1777634000500, ?)`
     ).run('malformed message JSON')
     db.prepare(`INSERT INTO event (id, data) VALUES ('event_1', ?)`).run('malformed event content')
     db.close()
@@ -245,8 +250,15 @@ describe('listOpenCodeSqliteSessions', () => {
 
     expect(issues).toEqual([])
     expect(candidates.map((candidate) => candidate.file.path)).toEqual([
-      buildOpenCodeSqliteCandidatePath(path, 'ses_clean')
+      buildOpenCodeSqliteCandidatePath(path, 'ses_clean'),
+      buildOpenCodeSqliteCandidatePath(path, 'ses_noise')
     ])
+    const cleanSession = await parseOpenCodeSqliteSession({
+      dbPath: path,
+      sessionId: 'ses_clean',
+      platform: 'darwin'
+    })
+    expect(cleanSession?.sessionId).toBe('ses_clean')
   })
 
   it('dedups matching session ids across databases and keeps the newest row', async () => {
