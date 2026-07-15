@@ -60,12 +60,14 @@ complete a box.
     remain separately gated.
   - Next external proof: kernel 4.18, macOS 13.5, Windows arm64 build 26100, and native signing/trust.
   - No tuple is enabled; every SSH transfer/runtime and rollout cell remains open.
-- [ ] **WP3 active implementation — Correct Windows compatibility-kind parity before canonical
-      manifest assembly.** Native build identities currently emit `kind: "win32"`, but the reviewed
-      manifest schema requires `kind: "windows"`. Add a narrow RED/GREEN contract correction before
-      the signing-handoff slice. Local RED/GREEN, full SSH-relay, type, lint, line-budget, and
-      workflow-wiring gates pass; exact-head native CI is next. No production workflow, publication,
-      desktop consumer, signing credential, or tuple is connected.
+- [ ] **WP3 active implementation — Build the credential-free canonical manifest/signing handoff.**
+      Windows compatibility-kind parity is closed locally and on all six target-native jobs in
+      exact-head run
+      [29393022768](https://github.com/stablyai/orca/actions/runs/29393022768) under
+      `E-M4-WINDOWS-MANIFEST-PARITY-LOCAL-001` and `E-M4-WINDOWS-MANIFEST-PARITY-CI-001`. Next,
+      canonicalize only validated unsigned manifest bytes, create the bounded signing request, and
+      verify returned signatures without production credentials. No production workflow,
+      publication, desktop consumer, signing credential, or tuple is connected.
 
 ## Work packages, in required order
 
@@ -105,11 +107,13 @@ complete a box.
 - [x] Aggregate-input and authenticated draft read-back verification pass locally and on all six
       native build jobs under `E-M4-AGGREGATE-READBACK-LOCAL-001` and
       `E-M4-AGGREGATE-READBACK-CI-001`.
-- [ ] **In progress — 2026-07-15, Codex implementation owner:** correct the Windows runtime
-      compatibility discriminator from `win32` to the manifest-contract `windows`, prove both Windows
-      tuples and full regressions, then resume disconnected canonical manifest/signing handoff. Local
-      proof passes at `707a9da23` under `E-M4-WINDOWS-MANIFEST-PARITY-LOCAL-001`; exact-head native CI
-      is next.
+- [x] Correct the Windows compatibility discriminator and `bin/node.exe` manifest parity; prove both
+      regenerated Windows identities and all-six native regressions
+      (`E-M4-WINDOWS-MANIFEST-PARITY-LOCAL-001`, `E-M4-WINDOWS-MANIFEST-PARITY-CI-001`).
+- [ ] **In progress — 2026-07-15, Codex implementation owner:** add disconnected canonical unsigned
+      manifest assembly, a bounded signing request, and returned-signature verification. Keep final
+      detached-signature asset encoding, production credentials, publication, desktop consumers, and
+      every tuple outside this slice until their contracts and gates are explicit.
 - [ ] Add target-native runtime jobs as desktop release prerequisites.
 - [ ] Add native signing jobs; hash only the returned signed bytes.
 - [ ] Add a fail-closed aggregate and immutable manifest-signing job.

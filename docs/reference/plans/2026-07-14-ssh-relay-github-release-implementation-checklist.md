@@ -8,8 +8,8 @@ work; keep exact commands, runner identities, hashes, metrics, and residual gaps
 
 Date created: 2026-07-14<br>
 Last updated: 2026-07-15<br>
-Current phase: Milestone 4 / Work Package 3 Windows compatibility-kind parity prerequisite — **In progress — 2026-07-15, Codex implementation owner**. The disconnected release-DAG and aggregate/read-back byte boundaries are closed locally and on all six native build jobs under E-M4-RELEASE-DAG-LOCAL-001, E-M4-RELEASE-DAG-CI-001, E-M4-AGGREGATE-READBACK-LOCAL-001, and E-M4-AGGREGATE-READBACK-CI-001. Pre-assembly inspection found that target-native Windows build identities use compatibility `kind: "win32"` while the reviewed manifest schema and desktop consistency verifier require `kind: "windows"`. The active package is limited to a RED/GREEN parity correction and exact regressions before canonical manifest/signature-handoff work resumes; it may not publish, connect desktop consumers, use signing credentials, or enable a tuple. Production/default behavior is unchanged, no bundled-runtime path is enabled, and no artifact is published.<br>
-Session checkpoint: **In progress — 2026-07-15, Codex implementation owner** — exact-head artifact run [29391666358](https://github.com/stablyai/orca/actions/runs/29391666358) executes aggregate-input and authenticated draft read-back suites under Node 24 on all six target-native build jobs at `87a8e4dc3`; every native build and both Linux supplemental userland jobs pass under E-M4-AGGREGATE-READBACK-CI-001. The run remains red only because Windows arm64 runner build 26200 is not the required build 26100, after archive/tree/Node/PTY/watcher smoke settles in 8,032.7284 ms with 49,922,048-byte RSS. Golden E2E [29391666362](https://github.com/stablyai/orca/actions/runs/29391666362) and PR Checks [29391666360](https://github.com/stablyai/orca/actions/runs/29391666360) are green. Inspection for the next manifest slice exposed the unpublished Windows `win32`/`windows` compatibility-kind and root-`node.exe`/`bin/node.exe` verifier mismatches. The narrow correction is committed at `707a9da23e3955bed6ed00ad3afc24b5ab808243` and passes local RED/GREEN, purpose-named workflow wiring, 36-file/203-test full SSH-relay, type, lint, line-budget, formatting, and diff gates under E-M4-WINDOWS-MANIFEST-PARITY-LOCAL-RED-001 and E-M4-WINDOWS-MANIFEST-PARITY-LOCAL-001; push and exact-head native CI are next. Real Apple/SignPath signing, returned production signatures, Gatekeeper/notarization, Defender/WDAC, missing exact-floor snapshots, protected manifest signing, and native trust remain separately gated. Nothing is published or enabled, and legacy remains the production default.<br>
+Current phase: Milestone 4 / Work Package 3 credential-free canonical manifest/signing handoff — **In progress — 2026-07-15, Codex implementation owner**. The disconnected release-DAG, aggregate/read-back byte boundaries, and Windows artifact/manifest parity prerequisite are closed locally and on all six native build jobs under E-M4-RELEASE-DAG-LOCAL-001, E-M4-RELEASE-DAG-CI-001, E-M4-AGGREGATE-READBACK-LOCAL-001, E-M4-AGGREGATE-READBACK-CI-001, E-M4-WINDOWS-MANIFEST-PARITY-LOCAL-001, and E-M4-WINDOWS-MANIFEST-PARITY-CI-001. The active package is limited to canonical unsigned-manifest bytes, a bounded signing request, and returned-signature verification; it may not choose final detached-signature asset encoding, publish, connect desktop consumers, use production signing credentials, or enable a tuple. Production/default behavior is unchanged, no bundled-runtime path is enabled, and no artifact is published.<br>
+Session checkpoint: **In progress — 2026-07-15, Codex implementation owner** — exact-head artifact run [29393022768](https://github.com/stablyai/orca/actions/runs/29393022768) at `c68a99039e4633d41e21fb30afdfeaa06f776369` executes the corrected compatibility/schema/workflow contracts under Node 24.18.0 and rebuilds, verifies, smokes, compares, and uploads all six unpublished target-native artifacts. Both regenerated Windows identities use compatibility `kind: "windows"`; x64 content ID is `sha256:4224aee6de820a94263f05ebfc58edd421921431e8cbdf1d5ec6ddcf783afc26` and arm64 content ID is `sha256:02edf462be83c2864a89546d5344d348f9e07ce10964660342608a8c614e47db`. Both Linux supplemental userland jobs and the Windows x64 floor job pass. The workflow remains red only because Windows arm64 runner build 26200 is not the required build 26100, after complete runtime smoke settles in 8,382.8952 ms with 49,811,456-byte RSS. Golden E2E [29393022784](https://github.com/stablyai/orca/actions/runs/29393022784) and PR Checks [29393022761](https://github.com/stablyai/orca/actions/runs/29393022761) are green. The parity prerequisite is closed under E-M4-WINDOWS-MANIFEST-PARITY-CI-001; canonical manifest/signature-handoff RED tests are next. Real Apple/SignPath signing, returned production signatures, Gatekeeper/notarization, Defender/WDAC, missing exact-floor snapshots, protected manifest signing, and native trust remain separately gated. Nothing is published or enabled, and legacy remains the production default.<br>
 Primary design: [SSH relay GitHub Release plan](./2026-07-14-ssh-relay-github-release-plan.html)<br>
 Motivating issues: [#8450](https://github.com/stablyai/orca/issues/8450), [#1693](https://github.com/stablyai/orca/issues/1693)
 
@@ -69,10 +69,11 @@ same change as the work it records.
   verification binds each input and returned byte to exact name, size, SHA-256, tuple, content
   identity, source draft, approved HTTPS asset origin, and exact HTTP 200 under
   E-M4-AGGREGATE-READBACK-LOCAL-001 and E-M4-AGGREGATE-READBACK-CI-001.
-- Active package: Work Package 3 Windows compatibility-kind parity prerequisite. Correct the
-  artifact builder's compatibility discriminator from `win32` to the manifest contract's `windows`,
-  prove both Windows tuples and content-identity behavior, and run exact regressions before resuming
-  canonical unsigned-manifest/signing-handoff work. No broader Milestone 4 box is checked until the
+- Active package: Work Package 3 disconnected canonical unsigned-manifest/signing handoff. Assemble
+  canonical bytes only from fully validated inputs, create a bounded credential-free signing request,
+  and reconstruct and verify the returned Ed25519 signature before emitting a final manifest. Final
+  detached-signature asset encoding, production credentials, publication, desktop consumers, and
+  tuple enablement remain outside this slice. No broader Milestone 4 box is checked until the
   corresponding implementation and exact tests exist.
 - Completed Work Package 2 gate: target-native Windows source-signature reports from exact-head
   artifact jobs 87267322867 and 87267322870 were independently downloaded and matched to their
@@ -191,11 +192,11 @@ same change as the work it records.
   per-target opt-in selects bundled-preferred behavior, and implementing the setting does not
   authorize default-on rollout or legacy removal (E-M1-ROLLOUT-DECISION-001).
 - Legacy fallback removal: not authorized.
-- Next required action: implement and prove the disconnected credential-free release/signing DAG
-  failure contract, including timeout, retry exhaustion, absent/denied approval, signing failure,
-  incomplete output, and recovered-draft cases. Keep real native-signing credentials, endpoint trust,
-  missing exact-floor snapshots, production workflow wiring, publication, desktop consumers, and
-  every tuple's enabled state outside this slice.
+- Next required action: add RED tests and implement disconnected canonical unsigned-manifest
+  assembly, a bounded credential-free signing request, and returned-signature reconstruction and
+  verification. Keep final detached-signature asset encoding, real native/manifest signing
+  credentials, endpoint trust, missing exact-floor snapshots, production workflow wiring,
+  publication, desktop consumers, and every tuple's enabled state outside this slice.
 
 ## Non-Negotiable Invariants
 
@@ -9148,6 +9149,76 @@ diff --check`.
   head. If green, record the new Windows content IDs and resume credential-free canonical manifest
   assembly/signature handoff.
 
+### E-M4-WINDOWS-MANIFEST-PARITY-CI-001 — Corrected parity passes all six native artifact jobs
+
+- Date: 2026-07-15
+- Owner: Codex implementation owner
+- Source: exact head `c68a99039e4633d41e21fb30afdfeaa06f776369`, containing implementation
+  commit `707a9da23e3955bed6ed00ad3afc24b5ab808243`; draft PR
+  [#8741](https://github.com/stablyai/orca/pull/8741).
+- Runner/network: GitHub-hosted target-native jobs under Node 24.18.0 in artifact run
+  [29393022768](https://github.com/stablyai/orca/actions/runs/29393022768):
+  - Windows arm64 job 87280402068, `windows-11-arm64` image `20260706.102.1`;
+  - Linux x64 job 87280402087, `ubuntu-24.04` image `20260705.232.1`;
+  - macOS arm64 job 87280402091, `macos-15-arm64` image `20260706.0213.1`;
+  - macOS x64 job 87280402092, `macos-15` image `20260629.0276.1`;
+  - Windows x64 job 87280402093, `windows-2022` image `20260706.237.1`;
+  - Linux arm64 job 87280402113, `ubuntu-24.04-arm` image `20260714.61.1`.
+- Commands/evidence inspection:
+
+  ```sh
+  gh run watch 29393022768 --repo stablyai/orca --interval 15 --exit-status
+  gh run view 29393022768 --repo stablyai/orca --json status,conclusion,headSha,url,jobs
+  gh run view 29393022768 --repo stablyai/orca --job <native-job-id> --log
+  gh run download 29393022768 --repo stablyai/orca \
+    -n ssh-relay-runtime-win32-x64 -D <temporary-directory>
+  gh run download 29393022768 --repo stablyai/orca \
+    -n ssh-relay-runtime-win32-arm64 -D <temporary-directory>
+  gh run view 29393022761 --repo stablyai/orca --json status,conclusion,headSha,url,jobs
+  gh run view 29393022784 --repo stablyai/orca --json status,conclusion,headSha,url,jobs
+  ```
+
+- Result: PASS on all six target-native build jobs. The complete contract suite passes 35
+  files/199 tests on each POSIX runner and 36 files/195 passed plus 8 platform-skipped tests on each
+  Windows runner. Total Vitest durations are Linux x64 4.41 s, Linux arm64 3.37 s, macOS arm64
+  6.96 s, macOS x64 29.25 s, Windows x64 8.16 s, and Windows arm64 11.13 s. The purpose-named
+  compatibility suite passes 2/2 tests in 3–8 ms on every runner; the workflow suite passes 6/6 in
+  77–499 ms. Every job then builds twice, verifies archive/tree/Node/native modules, smokes PTY and
+  watcher behavior, compares exact outputs, and uploads unpublished evidence.
+- Downloaded Windows read-back identities:
+  - `win32-x64`: compatibility `kind: "windows"`, content ID
+    `sha256:4224aee6de820a94263f05ebfc58edd421921431e8cbdf1d5ec6ddcf783afc26`, archive
+    `orca-ssh-relay-runtime-v1-win32-x64-4224aee6de820a94263f05ebfc58edd421921431e8cbdf1d5ec6ddcf783afc26.zip`,
+    37,168,778 bytes, archive SHA-256
+    `sha256:473aff5d97d08b0a1deaa5a74940975eb44ab303f88fc2a94d8b9b2f3d594e7b`;
+  - `win32-arm64`: compatibility `kind: "windows"`, content ID
+    `sha256:02edf462be83c2864a89546d5344d348f9e07ce10964660342608a8c614e47db`, archive
+    `orca-ssh-relay-runtime-v1-win32-arm64-02edf462be83c2864a89546d5344d348f9e07ce10964660342608a8c614e47db.zip`,
+    33,204,738 bytes, archive SHA-256
+    `sha256:5f5ffc89d3a1a4fee50ad641c0c9abd063a113269851936eb30b01ab1527fdcd`.
+- Concurrent regression: Linux supplemental userland jobs 87281853967 and 87281853918 pass, as does
+  Windows x64 oldest-floor job 87281706480. Artifact-run conclusion is the expected `failure` only
+  because Windows arm64 floor job 87281706438 observes build 26200 rather than required build 26100;
+  before failing that exact-floor gate, complete runtime execution settles in 8,382.8952 ms, its
+  smoke stage reports 6,055.8004 ms and 49,811,456-byte RSS, and post-observation resources contain
+  only the expected parent `PipeWrap`s. PR Checks run
+  [29393022761](https://github.com/stablyai/orca/actions/runs/29393022761) job 87280377607 and both
+  Golden E2E jobs 87280377578/87280377611 in run
+  [29393022784](https://github.com/stablyai/orca/actions/runs/29393022784) are green at the same head.
+- Oracle proved: the corrected Windows compatibility discriminator and `bin/node.exe` layout are
+  accepted consistently by the build and desktop contracts; both Windows architectures regenerate
+  stable, internally consistent identities/archive names; and no POSIX or Windows native artifact
+  regression appears in the all-six build/equality/smoke gates.
+- Does not prove: Windows arm64 build 26100, macOS 13.5, Linux kernel 4.18, real native signing/trust,
+  canonical manifest assembly/signing, publication, desktop embedding, SSH transfer/install,
+  fallback, performance, or an enabled tuple.
+- Worktree visibility residual: `orca status --json` reports app not running and runtime state
+  `stale_bootstrap`; the required best-effort `orca worktree set --worktree active --comment ...
+--json` retry fails with `runtime_unavailable`. This does not affect repository or CI evidence.
+- Follow-up: begin RED tests for credential-free canonical unsigned-manifest assembly, bounded signing
+  request, and returned-signature verification. Keep final detached-signature asset encoding,
+  production credentials, publication, desktop consumers, and tuple enablement disconnected.
+
 ## Accepted Gaps
 
 No product gap is accepted merely because it appears in this list. Each entry requires explicit
@@ -9205,13 +9276,12 @@ The project is not complete until every applicable item below is checked with ev
 
 ## Next Required Action
 
-Commit and run the disconnected aggregate-input and authenticated draft read-back verifiers on all
-six native jobs at the exact implementation head. If green, record exact job evidence and implement
-the next credential-free canonical-manifest assembly/signature-handoff slice without release
-publication, production signing credentials, or a desktop consumer. In parallel, provision
-qualifying exact-floor execution for Linux kernel 4.18, macOS 13.5, and Windows arm64 build 26100 and
-real macOS/Windows signing and trust. Keep every tuple disabled until the applicable baseline and
-trust cells pass.
+Add RED tests and implement credential-free canonical unsigned-manifest assembly, a bounded signing
+request, and returned-signature reconstruction and verification. Do not choose final detached-
+signature asset encoding, connect release publication, use production signing credentials, or add a
+desktop consumer in this slice. In parallel, provision qualifying exact-floor execution for Linux
+kernel 4.18, macOS 13.5, and Windows arm64 build 26100 and real macOS/Windows signing and trust. Keep
+every tuple disabled until the applicable baseline and trust cells pass.
 
 Cross-family Layer B targets, the protected manifest-signing environment, oldest-baseline/native-
 trust cells, and the paired legacy performance baseline remain release/default-path blockers. No
