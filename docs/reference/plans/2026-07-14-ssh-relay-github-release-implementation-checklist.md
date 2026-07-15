@@ -9,7 +9,7 @@ work; keep exact commands, runner identities, hashes, metrics, and residual gaps
 Date created: 2026-07-14<br>
 Last updated: 2026-07-15<br>
 Current phase: Milestone 4 / Work Package 3 disconnected aggregate and protected manifest-signing workflow contract — **In progress — 2026-07-15, Codex implementation owner**. Linux aggregate-ready finalization is closed locally and on exact-head native x64/arm64 runners under E-M4-LINUX-FINALIZATION-LOCAL-RED-001, E-M4-LINUX-FINALIZATION-LOCAL-001, and E-M4-LINUX-FINALIZATION-CI-001. The active package must consume only the six exact aggregate-ready outputs, prepare canonical bytes credential-free, expose only those bytes to the tag-restricted `relay-runtime-manifest-signing` environment, accept only key ID plus Ed25519 signature, reconstruct and verify before final output, and fail closed on missing/extra/mutated inputs, approval/secret/signing failure, timeout, or partial output. It remains callable and disconnected. Release-cut, desktop builds, publication, and every tuple stay disconnected; production/default behavior is unchanged.<br>
-Session checkpoint: **In progress — 2026-07-15, Codex implementation owner** — the exclusive six-artifact filesystem command is closed locally and on all six exact-head native families under E-M4-MANIFEST-AGGREGATE-COMMAND-LOCAL-RED-001, E-M4-MANIFEST-AGGREGATE-COMMAND-LOCAL-001, and E-M4-MANIFEST-AGGREGATE-COMMAND-CI-001 at pushed head `8cf80a0228ffa095beceec018a0de2e237b89e2d`. The callable three-job workflow is locally green under E-M4-PROTECTED-MANIFEST-WORKFLOW-LOCAL-001 and is the active exact-head CI checkpoint. It stays disconnected and deliberately fails closed before signer exposure because no accepted production key exists. No signing credential, protected environment, release consumer, publication path, desktop consumer, tuple enablement, or production/default change is connected. Legacy remains the production default, and merge to `main` remains prohibited.<br>
+Session checkpoint: **In progress — 2026-07-15, Codex implementation owner** — exact-head artifact run 29426142423 and isolated attempt 2 reproduce the same Ubuntu 24.04 ARM port-80 mirror failure before source dependencies or implementation tests under E-M4-PROTECTED-MANIFEST-WORKFLOW-CI-RED-001 and E-M4-PROTECTED-MANIFEST-WORKFLOW-CI-RED-002. The evidence-driven correction is locally green under E-M4-LINUX-PREREQUISITE-TRANSPORT-LOCAL-RED-001 and E-M4-LINUX-PREREQUISITE-TRANSPORT-LOCAL-001: hosted Linux prerequisite acquisition moves to HTTPS with bounded connection timeouts, retries, lock wait, and TERM-to-KILL command settlement; exhaustion still fails the native build. Focused and broad release contracts, desktop parity, typecheck, full lint, formatting, shell syntax, and diff checks pass. Checkpoint and push the correction, then require a fresh exact-head all-six run. Golden E2E and PR Checks are green on the prior exact head. The user authorizes commits, pushes, draft-PR updates, CI reruns, and protected rehearsals within PRs, but not merging to `main`. The callable protected workflow remains disconnected and deliberately fails closed before signer exposure because no accepted production key exists. No signing credential, protected environment, release consumer, publication path, desktop consumer, tuple enablement, or production/default change is connected. Legacy remains the production default.<br>
 Primary design: [SSH relay GitHub Release plan](./2026-07-14-ssh-relay-github-release-plan.html)<br>
 Motivating issues: [#8450](https://github.com/stablyai/orca/issues/8450), [#1693](https://github.com/stablyai/orca/issues/1693)
 
@@ -10933,6 +10933,131 @@ config/scripts/ssh-relay-runtime-manifest-signing-workflow.test.mjs` — PASS, 1
 - Follow-up: checkpoint and push the workflow contract, require exact-head PR/native CI, and keep
   live signing BLOCKED until accepted keys and the protected environment receive separate review.
 
+### E-M4-PROTECTED-MANIFEST-WORKFLOW-CI-RED-001 — Ubuntu ARM dependency mirror is unreachable
+
+- Date: 2026-07-15
+- Owner: Codex implementation owner
+- Source: exact pushed head `4979bc26c900b83b0f55bab6ebc2b540cde860fc`; draft PR #8741.
+- Workflow/job: [SSH Relay Runtime Artifacts run 29426142423](https://github.com/stablyai/orca/actions/runs/29426142423),
+  first Linux arm64 job
+  [87388934005](https://github.com/stablyai/orca/actions/runs/29426142423/job/87388934005),
+  15:00:30Z–15:02:29Z.
+- Runner/remote/network: GitHub-hosted `ubuntu-24.04-arm` image `20260706.52.2`, runner 2.335.1,
+  image provisioner `20260624.560`. This is a native arm64 artifact-build runner with public package
+  egress; no SSH remote, protected environment, signing seed, release, desktop consumer,
+  publication, or enabled tuple.
+- Evidence command: `gh api repos/stablyai/orca/actions/jobs/87388934005/logs | rg -n -C 2
+"Runner Image|Image:|Architecture|System:|ports\\.ubuntu\\.com|Failed to fetch|Unable to
+fetch|exit code|Process completed"`.
+- Result: expected infrastructure RED. `apt-get update` could not reach IPv6 or IPv4 endpoints for
+  `ports.ubuntu.com`; the later `build-essential_12.10ubuntu1_arm64.deb` fetch timed out and package
+  installation exited 100. Checkout, pnpm setup, Node 24.18.0 setup, and runner identity passed.
+  Source dependency installation and the runtime artifact contract tests were never reached, so no
+  implementation assertion failed and no test count or runtime metric exists for this attempt.
+- Oracle proved: the job fails before producing evidence when its package mirror is unavailable;
+  this attempt cannot satisfy the Linux arm64 exact-head cell and must not be treated as a product
+  regression or erased by a replacement run.
+- Does not prove: the protected-workflow contract on Linux arm64, artifact construction, baseline
+  smoke, signing, publication, desktop embedding, SSH behavior, or an enabled tuple.
+- Follow-up: rerun only failed job 87388934005, retain this RED alongside the replacement job ID and
+  result, then collect exact purpose-suite counts for every native family plus PR Checks and Golden
+  E2E before closing E-M4-PROTECTED-MANIFEST-WORKFLOW-CI-001.
+
+### E-M4-PROTECTED-MANIFEST-WORKFLOW-CI-RED-002 — Isolated Ubuntu ARM rerun reproduces port-80 failure
+
+- Date: 2026-07-15
+- Owner: Codex implementation owner
+- Source: unchanged exact pushed head `4979bc26c900b83b0f55bab6ebc2b540cde860fc`; draft PR
+  #8741.
+- Workflow/job: isolated attempt 2 of
+  [SSH Relay Runtime Artifacts run 29426142423](https://github.com/stablyai/orca/actions/runs/29426142423),
+  Linux arm64 replacement job
+  [87392977597](https://github.com/stablyai/orca/actions/runs/29426142423/job/87392977597),
+  15:16:05Z–15:20:13Z. Command: `gh run rerun --repo stablyai/orca --job 87388934005`.
+- Runner/remote/network: GitHub-hosted `ubuntu-24.04-arm` image `20260706.52.2`, runner 2.335.1,
+  image provisioner `20260624.560`; the same image revision as the first attempt. Public package
+  egress only; no SSH remote, protected environment, signing seed, release, desktop consumer,
+  publication, or enabled tuple.
+- Log command: `gh api repos/stablyai/orca/actions/jobs/87392977597/logs | rg -n -C 2
+"Runner Image|Image:|Version:|ports\\.ubuntu\\.com|Failed to fetch|Unable to fetch|exit
+code|Process completed"`.
+- Result: infrastructure FAIL after 4 minutes 8 seconds. Ubuntu index acquisition spent about 150
+  seconds failing `http://ports.ubuntu.com:80`; the subsequent `build-essential` fetch also timed
+  out and `apt-get` exited 100. As in attempt 1, checkout, pnpm, Node 24.18.0, and runner identity
+  passed, while source dependencies and every implementation test were never reached.
+- Oracle proved: a same-source isolated rerun does not recover the hosted ARM port-80 path. The
+  workflow currently lacks an authenticated mirror transport plus explicit per-request retry and
+  connection-time bounds; relying only on the 20-minute job timeout wastes runner time and leaves
+  the native proof cell empty.
+- Does not prove: that HTTPS is reachable from the hosted runner, the bounded correction, runtime
+  contracts on Linux arm64, native build output, signing, publication, desktop embedding, SSH
+  behavior, or an enabled tuple.
+- Follow-up: add a purpose assertion that fails against the current workflow, then use HTTPS,
+  bounded APT retries/connect timeouts, IPv4 selection, and bounded command settlement for hosted
+  Linux prerequisite acquisition. Require local focused/broad proof and a fresh exact-head native
+  run; keep both infrastructure RED attempts in the ledger.
+
+### E-M4-LINUX-PREREQUISITE-TRANSPORT-LOCAL-RED-001 — Hosted Linux package acquisition is unbounded HTTP
+
+- Date: 2026-07-15
+- Owner: Codex implementation owner
+- Source: uncommitted purpose assertion atop exact pushed head
+  `4979bc26c900b83b0f55bab6ebc2b540cde860fc`; draft PR #8741.
+- Runner/remote/network: local macOS 26.2 arm64, Node v26.0.0 and pnpm 10.24.0. Static workflow YAML
+  parsing only; no APT request, Actions runner, SSH remote, protected environment, release,
+  publication, desktop consumer, or enabled tuple.
+- Command: `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1
+config/scripts/ssh-relay-runtime-workflow.test.mjs`.
+- Result: expected FAIL, 1 file / 1 failed and 6 passed of 7 tests in 180 ms Vitest / 0.86 seconds
+  wall, 131,989,504-byte maximum RSS, 96,196,008-byte peak footprint, zero swaps. The purpose
+  assertion receives only raw `sudo apt-get update` and `install` commands: no HTTPS mirror rewrite,
+  retry, per-request connection timeout, IPv4 selection, lock bound, or command settlement bound.
+- Oracle proved: the workflow contract permits the exact unbounded port-80 behavior reproduced by
+  both native ARM attempts; the 20-minute job timeout is the only surrounding bound.
+- Does not prove: a correction, runner HTTPS reachability, APT execution, runtime contracts, native
+  build output, signing, publication, desktop embedding, SSH behavior, or an enabled tuple.
+- Follow-up: implement the narrowly planned HTTPS and bounded APT acquisition without changing any
+  runtime bytes or product/default behavior.
+
+### E-M4-LINUX-PREREQUISITE-TRANSPORT-LOCAL-001 — HTTPS and bounded APT contract passes locally
+
+- Date: 2026-07-15
+- Owner: Codex implementation owner
+- Source: local correction atop exact pushed head
+  `4979bc26c900b83b0f55bab6ebc2b540cde860fc`; draft PR #8741.
+- Runner/remote/network: local macOS 26.2 arm64, Node v26.0.0 and pnpm 10.24.0. Static YAML and shell
+  syntax validation only; no APT request or Actions runner. No SSH remote, signing credential,
+  protected environment, release, publication, desktop consumer, or enabled tuple.
+- Focused command: `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts
+--maxWorkers=1 config/scripts/ssh-relay-runtime-workflow.test.mjs` — PASS, 1 file / 7 tests in 165
+  ms Vitest / 0.82 seconds wall, 131,923,968-byte maximum RSS, 96,114,064-byte peak footprint, zero
+  swaps. The first post-implementation run failed only because the new test expected a literal
+  `/ubuntu-ports` suffix and prohibited the HTTP source string needed by the `sed` rewrite; the
+  corrected oracle asserts the exact HTTP-to-HTTPS transformation instead.
+- Broad release command: `/usr/bin/time -l sh -c "rg --files config/scripts | rg
+'/ssh-relay.*[.]test[.]mjs$' | xargs pnpm exec vitest run --config config/vitest.config.ts
+--maxWorkers=1"` — PASS, 51 files / 262 tests in 11.73 seconds Vitest / 13.70 seconds wall,
+  189,661,184-byte maximum RSS, zero swaps.
+- Desktop parity: `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts
+--maxWorkers=1 src/main/ssh/ssh-relay-artifact-schema.test.ts
+src/main/ssh/ssh-relay-manifest-signature.test.ts src/main/ssh/ssh-relay-release-asset.test.ts` —
+  PASS, 3 files / 48 tests in 1.87 seconds Vitest / 3.49 seconds wall, 132,857,856-byte maximum RSS,
+  96,998,704-byte peak footprint, zero swaps.
+- Static gates: `pnpm run typecheck` passes. Full `pnpm run lint` passes all 41 reliability gates,
+  the 355-entry max-lines ratchet, bundled-skill, localization catalog/parity, and localization
+  coverage gates; all 26 warnings remain in untouched existing files. Parsed install-step shell
+  source passes `bash -n`; focused five-file `oxfmt --check` and `git diff --check` pass.
+- Oracle proved: Ubuntu ports, archive, security, and Azure archive domains are rewritten from HTTP
+  to HTTPS before APT. Both update and install use three retries, 15-second HTTP/HTTPS connection
+  timeouts, forced IPv4, a 60-second package-lock wait, a 180-second TERM bound, and a 15-second KILL
+  settlement. Nonzero exit or exhaustion still aborts the native job under `set -euo pipefail`.
+  Runtime construction, signing, release, desktop, SSH, and product/default paths are unchanged.
+- Does not prove: HTTPS reachability or package installation on GitHub Linux x64/arm64, exact-head
+  Node 24 execution, artifact construction, native smoke, signing, publication, desktop embedding,
+  SSH behavior, or an enabled tuple.
+- Follow-up: checkpoint and push, then require fresh exact-head Linux x64/arm64 plus all other native
+  contracts, PR Checks, and Golden E2E. Retain both port-80 RED attempts in the final evidence.
+
 ## Accepted Gaps
 
 No product gap is accepted merely because it appears in this list. Each entry requires explicit
@@ -10991,12 +11116,13 @@ The project is not complete until every applicable item below is checked with ev
 
 ## Next Required Action
 
-Checkpoint and push the locally green callable workflow, then require its purpose contract on all
-six exact-head native test families plus PR Checks and Golden E2E. Only canonical request bytes and
-the base64 32-byte seed may enter the tag-restricted `relay-runtime-manifest-signing` environment,
-while credential-free preparation and final reconstruction independently download the six exact
-artifacts. The environment, accepted production keys, and secret remain unprovisioned, so live
-signing evidence must stay BLOCKED. Keep
+Checkpoint and push the locally green Linux prerequisite transport correction, then require fresh
+exact-head Linux x64/arm64 package acquisition and all-six native purpose-suite counts plus PR
+Checks and Golden E2E. Only canonical request bytes and the base64 32-byte seed may enter the
+tag-restricted
+`relay-runtime-manifest-signing` environment, while credential-free preparation and final
+reconstruction independently download the six exact artifacts. The environment, accepted
+production keys, and secret remain unprovisioned, so live signing evidence must stay BLOCKED. Keep
 Windows arm64 build 26100, macOS 13.5, Linux kernel 4.18, release-cut, desktop builds, publication,
 and every tuple separately gated. Do not merge to `main`; retain every production/default gate.
 

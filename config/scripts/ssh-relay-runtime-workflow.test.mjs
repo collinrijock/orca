@@ -51,6 +51,21 @@ describe('SSH relay runtime artifact workflow', () => {
     }
   })
 
+  it('bounds hosted Linux prerequisite acquisition over HTTPS', async () => {
+    const workflow = parse(await readFile(workflowUrl, 'utf8'))
+    const installStep = workflow.jobs['build-posix-runtime'].steps.find(
+      (step) => step.name === 'Install Linux build and verification tools'
+    )
+
+    expect(installStep.run).toContain("'s|http://ports.ubuntu.com|https://ports.ubuntu.com|g'")
+    expect(installStep.run).toContain('Acquire::Retries=3')
+    expect(installStep.run).toContain('Acquire::https::Timeout=15')
+    expect(installStep.run).toContain('Acquire::ForceIPv4=true')
+    expect(
+      installStep.run.match(/timeout --signal=TERM --kill-after=15s 180s sudo apt-get/g)
+    ).toHaveLength(2)
+  })
+
   it('uploads only the first output after two clean builds verify and compare', async () => {
     const source = await readFile(workflowUrl, 'utf8')
     const workflow = parse(source)

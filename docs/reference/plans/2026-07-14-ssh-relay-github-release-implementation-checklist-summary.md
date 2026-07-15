@@ -9,6 +9,17 @@ keeps commands, hashes, runner identities, timings, and failure details.
 A checked box means the work has evidence in the detailed ledger. Design approval alone does not
 complete a box.
 
+Active checkpoint: **Milestone 4 / Work Package 3 Linux prerequisite transport correction — in
+progress, 2026-07-15, Codex implementation owner.** The disconnected protected-manifest workflow is
+locally green at `4979bc26c`. Exact-head artifact run
+[29426142423](https://github.com/stablyai/orca/actions/runs/29426142423) and its isolated attempt 2
+both prove Ubuntu 24.04 ARM port-80 mirror failure before dependencies or tests. The narrow active
+package now passes locally: hosted Linux prerequisite acquisition moves to HTTPS with bounded
+connection timeouts, retries, lock wait, and TERM-to-KILL settlement; exhaustion still fails the
+native build. The correction is ready to checkpoint and push for fresh all-six native proof. Golden
+E2E and PR Checks are green on the prior exact head. Production keys/environment/seed, publication,
+desktop/default consumers, tuple enablement, and merge to `main` remain disconnected.
+
 ## Safety status
 
 - [x] Existing SSH relay installation remains the default for every target.

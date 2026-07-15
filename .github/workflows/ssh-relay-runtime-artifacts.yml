@@ -93,8 +93,26 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq build-essential ca-certificates curl gnupg gpgv python3 xz-utils
+          # Why: hosted ARM runners repeatedly lost port-80 mirror access; bounded HTTPS keeps failures explicit.
+          for source_file in /etc/apt/sources.list /etc/apt/sources.list.d/*.sources; do
+            [ -f "$source_file" ] || continue
+            sudo sed -i \
+              -e 's|http://ports.ubuntu.com|https://ports.ubuntu.com|g' \
+              -e 's|http://archive.ubuntu.com|https://archive.ubuntu.com|g' \
+              -e 's|http://security.ubuntu.com|https://security.ubuntu.com|g' \
+              -e 's|http://azure.archive.ubuntu.com|https://azure.archive.ubuntu.com|g' \
+              "$source_file"
+          done
+          apt_options=(
+            -o Acquire::Retries=3
+            -o Acquire::http::Timeout=15
+            -o Acquire::https::Timeout=15
+            -o Acquire::ForceIPv4=true
+            -o DPkg::Lock::Timeout=60
+          )
+          timeout --signal=TERM --kill-after=15s 180s sudo apt-get "${apt_options[@]}" update -qq
+          timeout --signal=TERM --kill-after=15s 180s sudo apt-get "${apt_options[@]}" install -y -qq \
+            build-essential ca-certificates curl gnupg gpgv python3 xz-utils
 
       - name: Install macOS signature verifier
         if: runner.os == 'macOS'
