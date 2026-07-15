@@ -8,8 +8,8 @@ work; keep exact commands, runner identities, hashes, metrics, and residual gaps
 
 Date created: 2026-07-14<br>
 Last updated: 2026-07-15<br>
-Current phase: Milestone 5 / Work Package 4 desktop cache boundary — **In progress — 2026-07-15, Codex implementation owner: disconnected desktop extraction/cache contract audit and RED**. Exact-head run 29449869519 closes the portable POSIX artifact prerequisite under E-M5-PORTABLE-ARCHIVE-CI-001: all six primary Node 24 jobs and both Linux oldest-userland supplements pass deterministic build, strict inspection/extraction, bundled Node/PTY/watcher smoke, equality, and read-back. Audit the existing desktop boundaries and resource/failure contracts, then add only a purpose-named missing extraction/cache-staging RED. Do not add a desktop caller, cache publication, SSH transfer/install, tuple enablement, mode wiring, or default behavior.<br>
-Session checkpoint: **In progress — 2026-07-15, Codex implementation owner** — exact implementation/evidence head `3080eda77fd6a11ed87f536c1963e5b67abe7621` passes artifact run 29449869519 on all six primary native jobs and both Linux supplements. PR Checks 29449869451 and both Golden E2E jobs in run 29449869407 are green. Windows x64 oldest-floor execution passes; Windows arm64 reconstructs and smokes the exact runtime in 7,884.492ms with 49,733,632-byte RSS, then rejects hosted build 26200 against required build 26100. E-M5-PORTABLE-ARCHIVE-CI-001 records exact jobs, runner images, tests, artifact IDs/sizes/hashes, and smoke metrics. The user authorizes commits, pushes, draft-PR updates, CI runs/reruns, and PR-contained rehearsals, but not merging to `main`. There is no release write, publication caller, desktop consumer, cache publication/extraction, SSH transfer/install, tuple enablement, or production/default behavior change. Legacy remains the production default.<br>
+Current phase: Milestone 5 / Work Package 4 desktop cache boundary — **In progress — 2026-07-15, Codex implementation owner: disconnected desktop extraction exact-head native gate**. Focused, broad, static, exact downloaded-payload, and native-workflow wiring gates pass locally under E-M5-ARTIFACT-EXTRACTION-LOCAL-001, E-M5-ARTIFACT-EXTRACTION-BROAD-LOCAL-001, E-M5-ARTIFACT-EXTRACTION-FULL-SIZE-LOCAL-001, and E-M5-ARTIFACT-EXTRACTION-CI-WIRING-LOCAL-001. Checkpoint the exact implementation SHA, push it, and require all-six Node 24 synthetic cross-family plus native full-size evidence before cache publication begins. Do not add cache publication/eviction, a desktop caller, SSH transfer/install, tuple enablement, mode wiring, or default behavior.<br>
+Session checkpoint: **In progress — 2026-07-15, Codex implementation owner** — the 17-test focused suite, 81-test artifact suite, 249-pass relay suite, 279-test release suite, typecheck, lint, and diff gates pass. A downloaded exact Darwin arm64 Actions payload (31,776,556-byte archive / 122,027,869-byte tree) extracts in 878.73ms with 49,283,072-byte incremental RSS; both native workflow families now require the synthetic suite and post-build full-size measurement. Native Node 24 evidence remains open. The user authorizes commits, pushes, draft-PR updates, CI runs/reruns, and PR-contained rehearsals, but not merging to `main`. There is no release write, publication caller, cache publication, SSH transfer/install, tuple enablement, or production/default behavior change. Legacy remains the production default.<br>
 Primary design: [SSH relay GitHub Release plan](./2026-07-14-ssh-relay-github-release-plan.html)<br>
 Motivating issues: [#8450](https://github.com/stablyai/orca/issues/8450), [#1693](https://github.com/stablyai/orca/issues/1693)
 
@@ -138,10 +138,10 @@ same change as the work it records.
   archive, correction, all-six primary jobs, and both Linux oldest-userland supplements. Windows ZIP
   and upstream Node `.tar.xz` remain unchanged.
 - Active package: **In progress — 2026-07-15, Codex implementation owner** — disconnected desktop
-  extraction/cache contract audit and purpose-named RED. Inventory existing cache/path/atomic-file
-  boundaries, formalize resource and integrity failure oracles, and prove the missing contract before
-  implementation. Keep cache publication, desktop call sites, SSH behavior, mode wiring, tuple
-  enablement, release writes, and defaults intact.
+  extraction capability after E-M5-ARTIFACT-EXTRACTION-AUDIT-001 and
+  E-M5-ARTIFACT-EXTRACTION-LOCAL-RED-001. Implement only strict TAR/Brotli and ZIP staging plus full
+  signed-tree verification and bounded cleanup. Keep cache publication/eviction, desktop call sites,
+  SSH behavior, mode wiring, tuple enablement, release writes, and defaults intact.
 - Completed Work Package 2 gate: target-native Windows source-signature reports from exact-head
   artifact jobs 87267322867 and 87267322870 were independently downloaded and matched to their
   identities and signing-stage reports under E-M3-WINDOWS-SOURCE-SIGNATURE-CI-001. PR Checks
@@ -1084,8 +1084,11 @@ Suggested concrete modules:
 - [x] Verify archive SHA-256 before extraction.
       E-M5-ARTIFACT-DOWNLOAD-LOCAL-001 and E-M5-ARTIFACT-DOWNLOAD-CI-001.
 - [ ] Extract into an exclusive temporary directory with all archive-safety checks from Milestone 2.
-      Begin only after the `.tar.br` prerequisite has exact-head all-six artifact evidence.
+      Implemented locally under E-M5-ARTIFACT-EXTRACTION-LOCAL-001 after the `.tar.br` prerequisite;
+      native cross-client and exact full-size evidence remain required before this item closes.
 - [ ] Verify the exact expanded tree before atomically publishing the cache entry.
+      The disconnected full-tree verifier passes locally under E-M5-ARTIFACT-EXTRACTION-LOCAL-001;
+      atomic cache publication is deliberately absent and remains a later package.
 - [ ] Coordinate cache ownership across multiple Orca processes and windows.
 - [ ] Recover stale download/extraction locks without deleting an active writer.
 - [ ] Never select partial files, partial directories, or entries with a failed verification record.
@@ -12547,6 +12550,222 @@ config/scripts/ssh-relay-runtime-portable-archive.test.mjs`; changed-file `oxfmt
 - Follow-up: checkpoint this evidence and begin only the disconnected desktop extraction/cache
   boundary audit and purpose-named RED.
 
+### E-M5-ARTIFACT-EXTRACTION-AUDIT-001 — Desktop extraction boundary and package split
+
+- Date: 2026-07-15
+- Owner: Codex implementation owner
+- Source: exact local/pushed head `a93e67413a2a1446e8e0f7348af1fdf72737287d` after portable archive
+  evidence; draft PR #8741.
+- Exact audit commands: `rg --files src/main/ssh config/scripts | rg 'ssh-relay|relay-runtime' |
+sort`; targeted `rg -n` over `cache|extract|atomic|quarantine`; and complete reads of the desktop
+  schema/consistency/path-policy/selector/downloader plus release TAR/Brotli, ZIP, extraction, and
+  full-tree verification modules.
+- Findings:
+  - the desktop has a signature-verified immutable selected-artifact value and an exclusive,
+    streaming size/hash-verified downloader, but no extraction or cache module and no consumer;
+  - release-job extractors under `config/scripts` are not packaged desktop modules and use the
+    five-minute release boundary rather than the two-minute desktop extraction budget;
+  - the verified selected artifact already carries the exact content ID, archive name/size/hash,
+    entry paths/types/modes/sizes/hashes, file count, expanded size, and portable native-attestation
+    hashes required for cross-client verification;
+  - extraction must revalidate the regular archive file and its signed size/hash before staging,
+    strictly inspect the authenticated archive family, extract only into an exclusive leaf, stream a
+    complete no-extra-file tree verification, detect source mutation, and remove only staging it
+    created on every failure/cancellation;
+  - native execution/trust probes are deliberately not part of desktop cross-client extraction.
+    Their signed hashes are bound by tuple consistency; target-native execution remains a later
+    remote-install gate.
+- Package split: `ssh-relay-artifact-extraction.ts` owns input state, timeout, exclusive staging, and
+  cleanup; `ssh-relay-artifact-tar-extraction.ts` owns strict bounded TAR/Brotli behavior;
+  `ssh-relay-artifact-zip-extraction.ts` owns strict bounded ZIP behavior; and
+  `ssh-relay-artifact-tree-verification.ts` owns streamed complete-tree verification. Cache locking,
+  publication records, quarantine, eviction, and lookup stay in the later
+  `ssh-relay-artifact-cache.ts` package.
+- Budgets: two-minute extraction timeout; 65,536-byte stream chunks; 64 MiB maximum measured desktop
+  incremental RSS; no buffer over 1 MiB; archive/expanded/file/count/path limits remain signed-schema
+  constraints. This package must expose the constants for contract and measurement tests.
+- Consumer-disconnection oracle: this audit and the next capability do not create a cache root,
+  publish an entry, load an embedded key/manifest, call the downloader, transfer over SSH, enable a
+  tuple/mode, or change the legacy default.
+- Does not prove: implementation, hostile archive behavior, packaged Electron behavior, full-size
+  memory/latency, cache concurrency/publication/quarantine/eviction, live SSH, native trust, or any
+  enabled tuple.
+- Follow-up: add the purpose-named cross-family RED, then implement only the disconnected extraction
+  capability across the concrete modules above.
+
+### E-M5-ARTIFACT-EXTRACTION-LOCAL-RED-001 — Packaged desktop extraction capability is absent
+
+- Date: 2026-07-15
+- Owner: Codex implementation owner
+- Source: uncommitted purpose-named
+  `src/main/ssh/ssh-relay-artifact-extraction.test.ts` atop audit head `a93e67413`.
+- Exact command:
+  `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1 src/main/ssh/ssh-relay-artifact-extraction.test.ts`
+- Environment: macOS 26.2 arm64, Node v26.0.0, pnpm 10.24.0, Vitest 4.1.5.
+- Result: required RED; one failed suite / zero collected tests in 1.75s Vitest / 7.67s wall with
+  132,104,192-byte maximum RSS and zero swaps. Import fails because
+  `./ssh-relay-artifact-extraction` does not exist.
+- Contract encoded before implementation:
+  - synthesize real TAR/Brotli and ZIP archives on every client OS;
+  - expose exact 120,000ms / 65,536-byte / 64 MiB incremental-RSS / 1 MiB maximum-buffer budgets;
+  - revalidate signed archive size/hash, strictly reject mismatched and undeclared entries, verify
+    every extracted file byte, and accept no extra tree entry;
+  - create a fresh parent but an exclusive final staging leaf; settle pre-cancellation; remove only
+    owned partial output and preserve an existing owner.
+- Does not prove: implementation, collected test behavior, Node 24/native clients, full-size memory,
+  packaged Electron extraction, cache publication/concurrency, SSH, or any enabled tuple.
+- Follow-up: implement the smallest disconnected extraction capability without cache or consumer
+  wiring, then run focused/release/desktop/static gates and require native CI.
+
+### E-M5-ARTIFACT-EXTRACTION-LOCAL-001 — Disconnected desktop extraction passes locally
+
+- Date: 2026-07-15
+- Owner: Codex implementation owner
+- Source: uncommitted extraction capability and purpose suite atop pushed head
+  `a93e67413a2a1446e8e0f7348af1fdf72737287d`; the exact implementation SHA will be appended after
+  the local broad gates pass and this evidence is checkpointed.
+- Environment: macOS 26.2 arm64, Node v26.0.0, pnpm 10.24.0, Vitest 4.1.5. Node 24/native client
+  execution remains the next gate.
+- Exact focused command:
+  `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1 src/main/ssh/ssh-relay-artifact-extraction.test.ts`
+- Focused result: one passed file / 17 passed tests in 1.65s Vitest / 4.15s wall; 158,105,600-byte
+  maximum RSS, 96,179,552-byte peak memory footprint, zero swaps, and 353 page faults. The observed
+  process maximum is 26,001,408 bytes above the 132,104,192-byte missing-module RED process baseline,
+  below the 64 MiB incremental contract. This is a synthetic 8 MiB cancellation/mutation fixture,
+  not the separately required exact full-size artifact measurement.
+- Exact static commands:
+  `pnpm exec oxlint src/main/ssh/ssh-relay-artifact-extraction.ts src/main/ssh/ssh-relay-artifact-tar-extraction.ts src/main/ssh/ssh-relay-artifact-tree-verification.ts src/main/ssh/ssh-relay-artifact-zip-reader.ts src/main/ssh/ssh-relay-artifact-zip-extraction.ts src/main/ssh/ssh-relay-artifact-extraction.test.ts`;
+  `pnpm typecheck`.
+- Static result: both commands exit zero. The implementation is split by concrete responsibility;
+  no max-lines disable or vague helper/common module was added.
+- Oracle proved:
+  - only the immutable selected tuple/archive identity crosses the boundary; the exact signed regular
+    archive size/hash and filesystem state are checked before staging and again after extraction;
+  - TAR/Brotli and ZIP are strictly inspected and streamed on every client OS into an exclusive leaf
+    beneath a resolved parent; POSIX modes and every signed path/type/size/hash are revalidated;
+  - extra/traversal/truncated/case-fold-colliding entries, ZIP symbolic links/encryption shapes,
+    wrong bytes, archive mutation, and existing-owner collisions fail closed;
+  - pre-cancellation and cancellation after staging begins settle, remove only owned partial output,
+    and leave no eligible partial runtime tree;
+  - extraction retains the declared 120,000ms timeout, 65,536-byte chunks, 64 MiB measured
+    incremental-RSS budget, and 1 MiB maximum-write-buffer contract.
+- Consumer-disconnection oracle: there is no cache root or publication record, downloader/manifest
+  loader caller, SSH transfer/install, runtime execution, target setting, Beta option, tuple
+  enablement, release write, or artifact publication. Legacy remains the only production/default
+  path.
+- Does not prove: Node 24 or native Windows/Linux/macOS clients, packaged Electron behavior, exact
+  full-size runtime memory/latency, cache locking/publication/quarantine/eviction, live SSH, native
+  trust, or any enabled tuple.
+- Follow-up: run the broad relay/release/static gates, prove the focused source suite is invoked by
+  both POSIX and Windows native artifact job families, then collect all-six Node 24 and exact
+  full-size payload evidence before beginning cache publication.
+
+### E-M5-ARTIFACT-EXTRACTION-BROAD-RED-001 — Broad run exposes late rejection observer
+
+- Date: 2026-07-15
+- Owner: Codex implementation owner
+- Source: uncommitted E-M5-ARTIFACT-EXTRACTION-LOCAL-001 tree atop `a93e67413`.
+- Exact command:
+  `pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1 src/main/ssh/ssh-relay-artifact-*.test.ts`
+- Result: required RED; three passed files / one failed file, 80 passed tests / one failed test, and
+  one unhandled rejection in 2.76s. The authenticated mutation test correctly fails closed with
+  `unexpected EOF`, but can reject during its awaited `writeFile` before the later Vitest assertion
+  attaches, so the runner reports `PromiseRejectionHandledWarning` and an unhandled rejection.
+- Classification: purpose-test timing defect, not a product extraction acceptance. The owned staging
+  tree is still removed and the mutation is rejected.
+- Correction: attach the Vitest rejection observer when extraction starts, before waiting for the
+  staging path or mutating/aborting; accept the valid fail-closed `unexpected EOF` diagnostic.
+- Follow-up: rerun the exact broad artifact command and require zero unhandled errors before any CI
+  checkpoint.
+
+### E-M5-ARTIFACT-EXTRACTION-BROAD-LOCAL-001 — Broad local relay and release gates pass
+
+- Date: 2026-07-15
+- Owner: Codex implementation owner
+- Source: corrected local extraction tree atop `a93e67413`; exact implementation SHA pending the
+  checkpoint commit.
+- Exact commands and results:
+  - `pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1 src/main/ssh/ssh-relay-artifact-*.test.ts`:
+    four passed files / 81 passed tests in 10.40s after the mutation observer correction, with zero
+    unhandled errors;
+  - `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1 src/main/ssh/ssh-relay-*.test.ts`:
+    17 passed files / one platform-skipped file, 249 passed tests / one platform-skipped test in
+    21.60s Vitest / 24.97s wall, 244,383,744-byte maximum process RSS and zero swaps;
+  - `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1 config/scripts/ssh-relay-runtime-*.test.mjs`:
+    50 passed files / 279 passed tests in 45.04s Vitest / 47.58s wall, 190,840,832-byte maximum
+    process RSS and zero swaps;
+  - `pnpm typecheck`; `pnpm lint`; `git diff --check`: all exit zero. Full lint retains only existing
+    warnings outside this package; reliability gates, max-lines ratchet, bundled skills, localization
+    catalog, and localization coverage pass.
+- Diff oracle: no diff exists in the preserved Milestone 0 resolver pair or
+  `config/scripts/verify-release-required-assets.mjs` and its test. Only the concrete extraction,
+  measurement, workflow-wiring, and living-plan files are in scope.
+- Does not prove: Node 24/native clients, exact full-size payload behavior, cache, live SSH, native
+  trust, or any enabled tuple.
+- Follow-up: measure an exact downloaded payload, close native workflow wiring, then checkpoint and
+  push the implementation for all-six execution.
+
+### E-M5-ARTIFACT-EXTRACTION-FULL-SIZE-LOCAL-001 — Exact downloaded payload stays within budget
+
+- Date: 2026-07-15
+- Owner: Codex implementation owner
+- Source artifact: Actions artifact ID 8357083684, `ssh-relay-runtime-darwin-arm64`, downloaded from
+  exact implementation run [29449869519](https://github.com/stablyai/orca/actions/runs/29449869519)
+  using `gh run download 29449869519 --repo stablyai/orca --name ssh-relay-runtime-darwin-arm64`.
+- Payload: `darwin-arm64`, archive SHA-256
+  `2031bea0f820107f8c92ab62a446fe0ebbeb64e78b63b6707c0610216ac68e3d`, 31,776,556 compressed
+  bytes, 122,027,869 expanded bytes, and 35 files.
+- Exact measurement command: set `ORCA_SSH_RELAY_FULL_SIZE_ARCHIVE`,
+  `ORCA_SSH_RELAY_FULL_SIZE_IDENTITY`, and an absent owned `ORCA_SSH_RELAY_FULL_SIZE_OUTPUT`, then
+  run `pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1 --reporter=verbose src/main/ssh/ssh-relay-artifact-extraction-full-size.test.ts`.
+- Result: four consecutive post-harness runs pass locally. The retained verbose run extracts,
+  complete-tree verifies, and cleans the exact payload in 878.731667ms with a 72,679,424-byte
+  baseline RSS, 121,962,496-byte sampled peak RSS, and 49,283,072-byte incremental RSS. This is below
+  the 120,000ms and 67,108,864-byte limits.
+- Harness boundary: the measurement uses the authenticated Actions identity only to construct the
+  top-level selected-artifact shape; its explicit why-comment prohibits product use. The production
+  extractor still rehashes the archive, inspects it, creates exclusive staging, verifies the complete
+  tree, rehashes the archive, and cleans output. Signature selection itself is separately proven by
+  E-M5-OFFLINE-SELECTION-LOCAL-001/CI-001.
+- Does not prove: Node 24, other native clients or archive families at full size, packaged Electron,
+  cache, SSH, or an enabled tuple.
+- Follow-up: require this measurement after native build and before upload on all six artifact jobs;
+  retain synthetic both-family execution on every client runner.
+
+### E-M5-ARTIFACT-EXTRACTION-CI-WIRING-RED-001 — Native jobs omit extraction proof
+
+- Date: 2026-07-15
+- Owner: Codex implementation owner
+- Exact command:
+  `pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1 config/scripts/ssh-relay-runtime-workflow.test.mjs`
+- Result: required RED; one failed / six passed tests in 483ms. The new source contract expects the
+  purpose suite in both native job families, but the workflow contains zero occurrences, so the
+  split count is one rather than three.
+- Follow-up: invoke the synthetic cross-family suite in both native contract steps and add a
+  post-build full-size budget measurement before artifact upload in both job families.
+
+### E-M5-ARTIFACT-EXTRACTION-CI-WIRING-LOCAL-001 — Both native job families require extraction gates
+
+- Date: 2026-07-15
+- Owner: Codex implementation owner
+- Source: local workflow/test/full-size harness atop `a93e67413`; exact implementation SHA pending
+  the checkpoint commit.
+- Exact command:
+  `pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1 config/scripts/ssh-relay-runtime-workflow.test.mjs`
+- Result: one passed file / seven passed tests in 404ms after formatting; typecheck also exits zero.
+- Oracle proved: all four POSIX native clients and both Windows native clients run the 17-test
+  synthetic TAR/Brotli-plus-ZIP suite under Node 24. After each exact native build, a separate step
+  runs the one-test full-size measurement against that job's first verified archive/identity, checks
+  120,000ms / 64 MiB, cleans its owned output, and must pass before upload. The workflow contract
+  requires both measurement steps to occur after build and before upload.
+- Consumer-disconnection oracle: workflow artifacts remain unpublished Actions evidence; no release
+  write, packaged desktop consumer, cache publication, SSH transfer/install, tuple, or mode is
+  connected.
+- Does not prove: actual runner execution, cross-family full-size payloads on every client, packaged
+  Electron, cache, SSH, or any enabled tuple.
+- Follow-up: checkpoint, push, and collect exact-head per-job synthetic/full-size metrics from all six
+  native jobs before beginning the cache-publication package.
+
 ## Accepted Gaps
 
 No product gap is accepted merely because it appears in this list. Each entry requires explicit
@@ -12605,9 +12824,10 @@ The project is not complete until every applicable item below is checked with ev
 
 ## Next Required Action
 
-Audit the disconnected desktop extraction/cache boundary and add only the purpose-named missing
-resource/failure-semantics RED. Do not implement a desktop call site, cache publication, SSH
-transfer/install, mode wiring, tuple enablement, or default behavior in that audit/test package. Keep
+Run the broader release/desktop/static gates for the locally green disconnected extraction
+capability, wire its purpose suite into both native artifact job families, and collect exact-head
+all-six Node 24 plus full-size payload evidence. Do not add a desktop call site, cache
+publication/eviction, SSH transfer/install, mode wiring, tuple enablement, or default behavior. Keep
 Node upstream `.tar.xz` inputs, Windows ZIP,
 `ORCA_RELAY_PATH`, existing desktop required-assets behavior, detached-signature byte encoding,
 Windows arm64 build 26100, macOS 13.5, Linux kernel 4.18, release-cut, desktop builds, publication,
