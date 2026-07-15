@@ -33,7 +33,7 @@ vi.mock('node:fs', async () => {
   return {
     ...actual,
     linkSync: (...args: Parameters<typeof actual.linkSync>) => {
-      if (fsMockState.failLink) {
+      if (fsMockState.failLink && String(args[0]).includes('codex-runtime-home')) {
         const error = new Error('EXDEV: cross-device link') as NodeJS.ErrnoException
         error.code = 'EXDEV'
         throw error
@@ -258,7 +258,7 @@ describe('backfillManagedCodexSessionsIntoSystemHome', () => {
   it('falls back to copy when hardlinking fails across volumes', async () => {
     fsMockState.failLink = true
     const managedPath = writeManagedSession(
-      join('2026', '05', '26', 'rollout-a.jsonl'),
+      join('2026', '05', '26', 'rollout-a ü.jsonl'),
       '{"id":"a"}\n'
     )
 
@@ -267,7 +267,7 @@ describe('backfillManagedCodexSessionsIntoSystemHome', () => {
     )
 
     expect(summary).toMatchObject({ linkedFiles: 0, copiedFiles: 1, failedFiles: 0 })
-    const targetPath = join(getSystemSessionsRoot(), '2026', '05', '26', 'rollout-a.jsonl')
+    const targetPath = join(getSystemSessionsRoot(), '2026', '05', '26', 'rollout-a ü.jsonl')
     expect(readFileSync(targetPath, 'utf-8')).toBe(readFileSync(managedPath, 'utf-8'))
     expect(lstatSync(targetPath).ino).not.toBe(lstatSync(managedPath).ino)
     expect(readAuditActions()).toEqual(['copy', 'run-summary'])
