@@ -104,4 +104,14 @@ describe('useNativeChatInteractiveSend', () => {
       '\x1b'
     )
   })
+
+  it('can cancel delayed writes without interrupting the replacement prompt', () => {
+    const { result } = renderHook(() => useNativeChatInteractiveSend('tab-1', 'pty-1', 'claude'))
+
+    act(() => result.current.sendAnswer(PROMPT, [{ indices: [1] }]))
+    act(() => result.current.cancelPending())
+
+    expect(mocks.cancel).toHaveBeenCalledOnce()
+    expect(mocks.sendRuntimePtyInput).not.toHaveBeenCalled()
+  })
 })

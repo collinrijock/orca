@@ -29,7 +29,9 @@ export function NativeChatQuestionCard({
   answerInputRef
 }: NativeChatQuestionCardProps): React.JSX.Element {
   const [index, setIndex] = useState(0)
-  const [selections, setSelections] = useState<string[][]>(() => prompt.questions.map(() => []))
+  // Keep option identity by index: labels are display text and are not guaranteed
+  // unique, while Claude's selector commits the numbered row (STA-1860).
+  const [selections, setSelections] = useState<number[][]>(() => prompt.questions.map(() => []))
   const [otherText, setOtherText] = useState<string[]>(() => prompt.questions.map(() => ''))
 
   const total = prompt.questions.length
@@ -46,38 +48,30 @@ export function NativeChatQuestionCard({
 
   // The resolved answer for a question: picked labels plus any typed free-text.
   const answerFor = (qi: number, sel = selections, oth = otherText): string => {
-    const picked = sel[qi] ?? []
+    const question = prompt.questions[qi]
+    const picked = (sel[qi] ?? [])
+      .map((optionIndex) => question?.options[optionIndex]?.label ?? '')
+      .filter((label) => label.length > 0)
     const other = (oth[qi] ?? '').trim()
     return [...picked, ...(other ? [other] : [])].join(', ')
   }
 
   const currentAnswered = answerFor(index).length > 0
 
-  // Resolve the card's label-keyed selection state into per-question option
-  // INDICES (in option order) + trimmed free text, the index-based shape the
-  // answer is delivered by (the agent's selector commits by option number, not
-  // by label — STA-1860).
-  const submitAll = (sel: string[][], oth: string[]): void => {
-    const selections: AskAnswerSelection[] = prompt.questions.map((question, i) => {
-      const picked = sel[i] ?? []
-      const indices = question.options.reduce<number[]>((acc, opt, oi) => {
-        if (picked.includes(opt.label)) {
-          acc.push(oi)
-        }
-        return acc
-      }, [])
-      return { indices, other: (oth[i] ?? '').trim() }
+  const submitAll = (sel: number[][], oth: string[]): void => {
+    const resolved: AskAnswerSelection[] = prompt.questions.map((_, i) => {
+      return { indices: [...(sel[i] ?? [])], other: (oth[i] ?? '').trim() }
     })
-    const anyAnswered = selections.some((s) => s.indices.length > 0 || (s.other ?? '').length > 0)
+    const anyAnswered = resolved.some((s) => s.indices.length > 0 || (s.other ?? '').length > 0)
     if (anyAnswered) {
-      onAnswer(selections)
+      onAnswer(resolved)
     }
   }
 
   // Advance to the next question, or submit on the last one — always from an
   // explicit snapshot so a just-committed single-select pick isn't lost to the
   // async setState.
-  const advanceOrSubmit = (sel: string[][], oth: string[]): void => {
+  const advanceOrSubmit = (sel: number[][], oth: string[]): void => {
     if (isLast) {
       submitAll(sel, oth)
     } else {
@@ -88,14 +82,16 @@ export function NativeChatQuestionCard({
   // Selecting only highlights the row; submitting is an explicit step via the
   // trailing Send/Next button. (Auto-submitting on the first click dismissed the
   // card before the user saw any feedback, which read as "nothing happened".)
-  const pickOption = (label: string): void => {
+  const pickOption = (optionIndex: number): void => {
     setSelections((prev) => {
       const next = prev.map((s) => [...s])
       const cur = next[index] ?? []
       if (q.multiSelect) {
-        next[index] = cur.includes(label) ? cur.filter((l) => l !== label) : [...cur, label]
+        next[index] = cur.includes(optionIndex)
+          ? cur.filter((pickedIndex) => pickedIndex !== optionIndex)
+          : [...cur, optionIndex].sort((a, b) => a - b)
       } else {
-        next[index] = cur.includes(label) ? [] : [label]
+        next[index] = cur.includes(optionIndex) ? [] : [optionIndex]
       }
       return next
     })
@@ -177,12 +173,12 @@ export function NativeChatQuestionCard({
           <div className="max-h-[50vh] divide-y divide-border/60 overflow-y-auto border-t border-border scrollbar-sleek">
             {q.options.map((opt, i) => (
               <OptionRow
-                key={opt.label}
+                key={`${i}:${opt.label}`}
                 badge={String(i + 1)}
                 label={opt.label}
                 description={opt.description}
-                selected={(selections[index] ?? []).includes(opt.label)}
-                onSelect={() => pickOption(opt.label)}
+                selected={(selections[index] ?? []).includes(i)}
+                onSelect={() => pickOption(i)}
               />
             ))}
             <div className="flex items-center gap-3 px-3.5 py-2.5">

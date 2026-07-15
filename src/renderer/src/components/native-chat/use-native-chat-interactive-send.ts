@@ -26,6 +26,8 @@ export type NativeChatInteractiveSend = {
   sendAnswer: (prompt: AskPrompt, selections: AskAnswerSelection[]) => number
   /** Send a raw control string (e.g. an approval option number or ESC) as-is. */
   sendRaw: (raw: string) => void
+  /** Stop delayed writes without interrupting the agent. */
+  cancelPending: () => void
   /** Send ESC to interrupt — cancels a question / denies an approval. */
   cancel: () => void
 }
@@ -94,5 +96,5 @@ export function useNativeChatInteractiveSend(
     sendRaw(ESC)
   }, [cancelInFlight, sendRaw])
 
-  return { sendAnswer, sendRaw, cancel }
+  return { sendAnswer, sendRaw, cancelPending: cancelInFlight, cancel }
 }

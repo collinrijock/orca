@@ -47,6 +47,10 @@ function clickOption(label: string): void {
   click(row, `option ${label}`)
 }
 
+function clickOptionAt(index: number): void {
+  click(container.querySelectorAll('button[aria-pressed]')[index], `option index ${index}`)
+}
+
 function clickAction(text: string): void {
   const button = [...container.querySelectorAll('button')].find(
     (b) => b.textContent?.trim() === text
@@ -91,11 +95,32 @@ describe('NativeChatQuestionCard', () => {
       onAnswer
     )
 
-    clickOption('Apple')
     clickOption('Cherry')
+    clickOption('Apple')
     clickAction('Send answer')
 
     expect(onAnswer).toHaveBeenCalledWith([{ indices: [0, 2], other: '' }])
+  })
+
+  it('keeps duplicate labels distinct by their numbered row', () => {
+    const onAnswer = vi.fn()
+    render(
+      {
+        questions: [
+          {
+            question: 'Which duplicate row?',
+            multiSelect: false,
+            options: [{ label: 'Same' }, { label: 'Same' }]
+          }
+        ]
+      },
+      onAnswer
+    )
+
+    clickOptionAt(1)
+    clickAction('Send answer')
+
+    expect(onAnswer).toHaveBeenCalledWith([{ indices: [1], other: '' }])
   })
 
   it('carries free text through as the other answer', () => {

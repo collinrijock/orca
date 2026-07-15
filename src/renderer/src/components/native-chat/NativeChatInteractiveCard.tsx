@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '../../store'
 import { parseInteractivePrompt } from './native-chat-interactive-prompt'
 import { nativeChatCardDismissKey } from './native-chat-dismiss-key'
@@ -43,7 +43,7 @@ export function NativeChatInteractiveCard({
   // Thread the sibling `toolName` from the same status entry so the question
   // parser can dispatch through the tool's registered parser (mobile parity).
   const interactiveToolName = useAppStore((s) => s.agentStatusByPaneKey[paneKey]?.toolName ?? null)
-  const { sendAnswer, sendRaw, cancel } = send
+  const { sendAnswer, sendRaw, cancelPending, cancel } = send
 
   const card = useMemo(
     () => parseInteractivePrompt(interactivePrompt, interactiveToolName ?? undefined),
@@ -56,17 +56,22 @@ export function NativeChatInteractiveCard({
   // vanish mid-send. `submitting` also gates a second submit racing the first.
   const dismissTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const submittingRef = useRef(false)
-  const clearDismissTimer = (): void => {
+  const clearDismissTimer = useCallback((): void => {
     if (dismissTimerRef.current) {
       clearTimeout(dismissTimerRef.current)
       dismissTimerRef.current = null
     }
     submittingRef.current = false
-  }
-  // Keyed on cardKey (and unmount): a new prompt can replace the current one
-  // before the settle timer fires, and a stale `submitting` gate would swallow
-  // the new card's first answer.
-  useEffect(() => clearDismissTimer, [cardKey])
+  }, [])
+  // A replacement prompt or unmount must stop both the UI timer and its external
+  // PTY writes, or the old answer can type into the next prompt.
+  useEffect(
+    () => () => {
+      clearDismissTimer()
+      cancelPending()
+    },
+    [cardKey, cancelPending, clearDismissTimer]
+  )
 
   // Forget the dismissal once the prompt clears so a fresh prompt can show.
   const present = card != null
@@ -75,7 +80,7 @@ export function NativeChatInteractiveCard({
       setDismissedKey(null)
       clearDismissTimer()
     }
-  }, [present])
+  }, [present, clearDismissTimer])
 
   // Tell the view when a question card is up so it can hide the composer (this
   // card supplies its own input). Reset on unmount so the composer comes back.
@@ -100,9 +105,16 @@ export function NativeChatInteractiveCard({
           }
           submittingRef.current = true
           const settleMs = sendAnswer(card.prompt, selections)
+          if (settleMs <= 0) {
+            // Keep the actionable card visible when its PTY disappeared between
+            // render and submit; the next live target update can make it retryable.
+            submittingRef.current = false
+            return
+          }
           // Hold the card until the paced write finishes, then mark it answered
           // (which hides it and restores the composer).
           dismissTimerRef.current = setTimeout(() => {
+            cancelPending()
             setDismissedKey(cardKey)
             submittingRef.current = false
             dismissTimerRef.current = null
