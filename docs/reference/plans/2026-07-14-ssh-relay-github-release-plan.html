@@ -942,7 +942,12 @@
                   compiler/toolchain with executable C and C++ probes; only genuinely missing
                   prerequisites use HTTPS with bounded connection timeouts and retries. Probe or
                   install exhaustion fails the native build before any artifact is accepted. Run
-                  executable runtime smoke probes before archiving.
+                  executable runtime smoke probes before archiving. POSIX relay outputs use
+                  deterministic <code>.tar.br</code> archives produced and consumed with Node's
+                  built-in Brotli streams at quality 9, <code>lgwin=20</code>, and 64 KiB chunks;
+                  Windows relay outputs remain ZIP. This lets every desktop client extract every
+                  remote tuple without a system XZ tool, a packaged native decompressor, or the 64
+                  MiB XZ dictionary that exhausted the desktop extraction budget.
                 </p>
               </div>
               <div class="phase-output">

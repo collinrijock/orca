@@ -8,8 +8,8 @@ work; keep exact commands, runner identities, hashes, metrics, and residual gaps
 
 Date created: 2026-07-14<br>
 Last updated: 2026-07-15<br>
-Current phase: Milestone 5 / Work Package 4 desktop cache boundary — **Disconnected bounded downloader closed; begin isolated extraction/cache contract audit — 2026-07-15, Codex implementation owner**. Exact-head all-six native Node 24 proof is complete under E-M5-ARTIFACT-DOWNLOAD-CI-001. Begin only the next purpose-named RED for desktop archive extraction/cache staging and reconcile it with the already-proven archive-safety contracts. Do not add desktop call sites, SSH transfer/install, tuple enablement, mode wiring, or default behavior.<br>
-Session checkpoint: **In progress — 2026-07-15, Codex implementation owner** — exact implementation/evidence head `fc6b6d2197fa8cc012317a5ea155e57886183c61` passes the downloader-containing contract suite and full runtime build/smoke/equality on all six native jobs in run 29445770009 under E-M5-ARTIFACT-DOWNLOAD-CI-001. PR Checks 29445769922 and both Golden E2E jobs in 29445769934 are green. The artifact run is red only after the hosted Windows arm64 build 26200 passes runtime verification/smoke and fails the retained build-26100 floor. The user authorizes end-to-end commits, pushes, draft-PR updates, CI runs/reruns, and PR-contained rehearsals, but not merging to `main`. There is no real release write, publication caller, desktop consumer, cache publication/extraction, SSH transfer/install, tuple enablement, or production/default behavior change. No accepted production key, protected environment/seed, native-signing trust proof, publication path, or tuple enablement is connected. Legacy remains the production default.<br>
+Current phase: Milestone 5 / Work Package 4 desktop cache boundary — **In progress — 2026-07-15, Codex implementation owner: portable POSIX archive prerequisite correction**. The audit under E-M5-ARCHIVE-PORTABILITY-AUDIT-001 proves the current 64 MiB-dictionary `.tar.xz` output cannot meet the reviewed cross-client and 64 MiB desktop extraction contracts without an unsafe system/native dependency. Correct only the unpublished POSIX relay archive family to bounded Node-native `.tar.br`, replace its exact-head all-six artifact evidence, and then resume the disconnected desktop extraction RED. Windows ZIP, Node upstream input archives, desktop call sites, cache publication, SSH transfer/install, tuple enablement, mode wiring, and default behavior stay unchanged.<br>
+Session checkpoint: **In progress — 2026-07-15, Codex implementation owner** — exact implementation/evidence head `fc6b6d2197fa8cc012317a5ea155e57886183c61` passes the downloader-containing contract suite and full runtime build/smoke/equality on all six native jobs in run 29445770009 under E-M5-ARTIFACT-DOWNLOAD-CI-001. E-M5-ARCHIVE-PORTABILITY-AUDIT-001 measures the exact Linux x64 artifact from that run and selects deterministic Brotli quality 9, `lgwin=20`, and 64 KiB chunks: full 119 MiB extraction through `tar` settles in 533.13ms with a 34,144,256-byte RSS increase. The existing XZ stream alone declares 67,175,032 bytes of decoder memory, already 66,168 bytes over the complete desktop budget. The user authorizes end-to-end commits, pushes, draft-PR updates, CI runs/reruns, and PR-contained rehearsals, but not merging to `main`. There is no real release write, publication caller, desktop consumer, cache publication/extraction, SSH transfer/install, tuple enablement, or production/default behavior change. Legacy remains the production default.<br>
 Primary design: [SSH relay GitHub Release plan](./2026-07-14-ssh-relay-github-release-plan.html)<br>
 Motivating issues: [#8450](https://github.com/stablyai/orca/issues/8450), [#1693](https://github.com/stablyai/orca/issues/1693)
 
@@ -131,11 +131,13 @@ same change as the work it records.
   E-M4-DRAFT-RELEASE-COMPOSITION-LOCAL-RED-001,
   E-M4-DRAFT-RELEASE-COMPOSITION-LOCAL-001, and
   E-M4-DRAFT-RELEASE-COMPOSITION-CI-001.
-- Active package: **In progress — 2026-07-15, Codex implementation owner** — Work Package 4
-  disconnected bounded Electron downloader. Prove exact signed size/hash streaming into an
-  exclusive staging file, cancellation/cleanup, one approved GitHub asset redirect, and fixed
-  credential-free request headers. Keep cache publication/extraction, desktop call sites, SSH
-  behavior, mode wiring, tuple enablement, and default behavior outside this slice.
+- Active package: **In progress — 2026-07-15, Codex implementation owner** — portable POSIX relay
+  archive prerequisite correction exposed by Work Package 4. E-M5-ARCHIVE-PORTABILITY-AUDIT-001
+  rejects system XZ, the off-the-shelf WASM decoder, and the transitive p7zip binary and selects
+  deterministic Node-native `.tar.br` with quality 9, `lgwin=20`, and 64 KiB chunks. First replace
+  the archive builder/schema/inspection contracts and all-six artifact evidence; only then resume
+  disconnected desktop extraction. Keep Node upstream `.tar.xz` inputs, Windows ZIP, cache
+  publication, desktop call sites, SSH behavior, mode wiring, tuple enablement, and defaults intact.
 - Completed Work Package 2 gate: target-native Windows source-signature reports from exact-head
   artifact jobs 87267322867 and 87267322870 were independently downloaded and matched to their
   identities and signing-stage reports under E-M3-WINDOWS-SOURCE-SIGNATURE-CI-001. PR Checks
@@ -942,9 +944,12 @@ Each runtime must contain only the executable closure required by the relay.
       directories, and Orca-built debug symbols unless an approved diagnostics requirement needs
       them. Preserve verified official Node executable bytes without stripping or rewriting them,
       even when the upstream binary contains debug metadata. (E-M3-RUNTIME-CLOSURE-CI-001)
-- [x] Make POSIX `tar.xz` and Windows ZIP output deterministic for the same tree, epoch, and pinned
-      compression toolchain. (E-M3-RUNTIME-LOCAL-001, E-M3-REPRODUCIBILITY-CI-001,
-      E-M3-RUNTIME-CLOSURE-CI-001)
+- [ ] **In progress — 2026-07-15, Codex implementation owner:** make POSIX `.tar.br` and Windows ZIP
+      output deterministic for the same tree, epoch, and pinned compression contract. POSIX uses
+      Node's built-in Brotli quality 9, `lgwin=20`, and 64 KiB chunks so every client architecture
+      can extract within budget without a native/system decompressor. Historical `.tar.xz` evidence
+      remains valid only for its exact unpublished bytes and must be replaced for the new POSIX
+      archive family. (Decision evidence: E-M5-ARCHIVE-PORTABILITY-AUDIT-001.)
 - [x] Verify required executable modes before archiving. (E-M3-RUNTIME-LOCAL-001)
 - [ ] Sign native code according to the platform decisions in Milestone 1.
 - [ ] Verify platform-native signatures/policy on target-native runners after signing and before
@@ -1075,6 +1080,7 @@ Suggested concrete modules:
 - [x] Verify archive SHA-256 before extraction.
       E-M5-ARTIFACT-DOWNLOAD-LOCAL-001 and E-M5-ARTIFACT-DOWNLOAD-CI-001.
 - [ ] Extract into an exclusive temporary directory with all archive-safety checks from Milestone 2.
+      Begin only after the `.tar.br` prerequisite has exact-head all-six artifact evidence.
 - [ ] Verify the exact expanded tree before atomically publishing the cache entry.
 - [ ] Coordinate cache ownership across multiple Orca processes and windows.
 - [ ] Recover stale download/extraction locks without deleting an active writer.
@@ -12225,6 +12231,63 @@ config/scripts/ssh-relay-runtime-workflow.test.mjs` — expected FAIL, 1 failed 
 - Follow-up: checkpoint this evidence, update PR/worktree status, then begin only the isolated
   desktop extraction/cache contract audit and purpose-named RED.
 
+### E-M5-ARCHIVE-PORTABILITY-AUDIT-001 — Current POSIX archive violates the cross-client memory contract
+
+- Date: 2026-07-15
+- Owner: Codex implementation owner
+- Environment: macOS 26.2 build 25C56 arm64; Node v26.0.0; pnpm 10.24.0; XZ Utils/liblzma
+  5.8.3. Source artifact is the exact Linux x64 output from run 29445770009, artifact 8355514197,
+  implementation/evidence head `fc6b6d2197fa8cc012317a5ea155e57886183c61`.
+- Exact acquisition/identity commands:
+  `gh run download 29445770009 -n ssh-relay-runtime-linux-x64-glibc -D /tmp/orca-runtime-artifact-29445770009`;
+  `xz --robot --list -vv /tmp/orca-runtime-artifact-29445770009/orca-ssh-relay-runtime-v1-linux-x64-glibc-fc63ca342a5990f460ec6d72262a8542173dab20ce03c9b9cfb755b1c6057e6d.tar.xz`;
+  `xz --decompress --stdout --single-stream <archive> > /tmp/orca-runtime-real.tar`.
+- Current artifact result: 29,268,104 compressed bytes, 124,881,408 expanded bytes, CRC64, and a
+  declared 67,175,032-byte LZMA2 decoder-memory requirement from `--lzma2=dict=64MiB`. The decoder
+  alone is 66,168 bytes over the complete 64 MiB desktop incremental-memory budget before TAR
+  parsing, hashing, or extraction.
+- Portable WASM audit commands: `npm view xz-decompress@0.2.3 --json` and
+  `npm pack xz-decompress@0.2.3 --pack-destination /tmp/orca-xz-decompress-audit`, followed by a
+  Node `Readable.toWeb(createReadStream(..., { highWaterMark: 64 * 1024 }))` ->
+  `new XzReadableStream(...)` -> counting `Writable` pipeline over 350 MiB generated XZ streams.
+  The maintained dependency is MIT/public-domain, dependency-free, CRC64-capable, and emits 65,536-
+  byte chunks, but measured 104,529,920 bytes above baseline with a 16 MiB dictionary and
+  138,854,400 bytes above baseline with the current 64 MiB dictionary. It is rejected.
+- Packaged-binary audit commands: `pnpm why 7zip-bin`; `node -p "require('7zip-bin').path7za"`;
+  `file <path>`; `codesign -dv --verbose=4 <path>`; `spctl --assess --type execute --verbose=4
+<path>`; and `/usr/bin/time -l <chmodded-temporary-copy> x -so <350MiB.xz> | wc -c`.
+  The only existing package is a transitive dev dependency. Its macOS arm64 binary is p7zip 16.02
+  from 2016, arrives without execute permission, is only ad-hoc linker-signed, and is rejected by
+  macOS assessment. It uses 75,628,544 bytes RSS for the current dictionary before the desktop TAR
+  parser. It is rejected; no production dependency or packaged executable was added.
+- Selected correction command: Node `createReadStream` with a 65,536-byte high-water mark ->
+  `createBrotliCompress({ chunkSize: 65_536, params: { BROTLI_PARAM_QUALITY: 9,
+BROTLI_PARAM_LGWIN: 20 } })` -> exclusive output. The exact real runtime becomes 35,977,664 bytes
+  in 11.78s: 6,709,560 bytes / 22.9245% larger than XZ, but 8,282,308 bytes smaller than gzip-9.
+- Selected extraction command: `/usr/bin/time -l node --expose-gc -e <exclusive mkdir;
+createReadStream(65_536) -> createBrotliDecompress(65_536) -> tar.extract({ strict: true,
+preserveOwner: false, noChmod: false, unlink: false })>` over that exact runtime. It reconstructs
+  124,881,408 bytes / 34 files in 533.13ms. In-process sampling records a 54,968,320-byte baseline,
+  89,112,576-byte peak, and 34,144,256-byte incremental RSS; the decompressed SHA-256 is
+  `b3fe955ae26b9413505c9c614842377851e686802bbb70e5c77397557fbaed6f` with a 65,536-byte maximum
+  output chunk.
+- Decision: unpublished POSIX relay outputs change from `.tar.xz` to deterministic `.tar.br` using
+  Node's built-in Brotli quality 9, `lgwin=20`, and 64 KiB chunks. Windows relay ZIP and Node's
+  upstream `.tar.xz` inputs do not change. No native/WASM decompressor dependency is introduced.
+  The HTML plan and both living checklists are updated before implementation.
+- Evidence invalidation: historical XZ artifact/tree/native evidence remains truthful for its exact
+  unpublished bytes, but it does not prove the new archive family. The POSIX archive builder,
+  schema, strict inspection/extraction, reproducibility, tuple descriptors, release composition,
+  read-back execution, all-six native artifact jobs, and downstream exact-archive evidence must be
+  rerun. Windows ZIP, runtime-tree/native smoke, manifest-signature primitives, downloader, SSH
+  legacy behavior, and production defaults are unchanged.
+- Does not prove: implementation, deterministic repeat output, hostile/truncated Brotli rejection,
+  Linux/Windows/macOS client execution, Node 24 behavior, packaged Electron extraction, cache
+  publication, SSH transfer/install, native trust, oldest floors, or any enabled tuple.
+- Follow-up: add a purpose-named `.tar.br` contract RED, implement only the artifact-format
+  correction, run local archive/release/desktop parity gates, then push and require exact-head
+  all-six native artifact proof before resuming desktop extraction.
+
 ## Accepted Gaps
 
 No product gap is accepted merely because it appears in this list. Each entry requires explicit
@@ -12283,12 +12346,14 @@ The project is not complete until every applicable item below is checked with ev
 
 ## Next Required Action
 
-Checkpoint the downloader's exact-head native evidence, then audit the already-proven release archive
-extraction boundary against desktop constraints and begin only a purpose-named disconnected desktop
-extraction/cache-staging RED. Do not add a desktop call site, SSH transfer/install, mode wiring, tuple
-enablement, or default behavior. Keep `ORCA_RELAY_PATH`, existing desktop required-assets behavior,
-detached-signature byte encoding, Windows arm64 build 26100, macOS 13.5, Linux kernel 4.18,
-release-cut, desktop builds, publication, and every tuple separately gated.
+Add the purpose-named `.tar.br` contract RED selected by E-M5-ARCHIVE-PORTABILITY-AUDIT-001, then
+implement only the POSIX relay artifact-format correction and replace its exact-head all-six native
+archive/reproducibility/execution evidence. Do not begin desktop extraction/cache staging until that
+prerequisite is green. Do not add a desktop call site, SSH transfer/install, mode wiring, tuple
+enablement, or default behavior. Keep Node upstream `.tar.xz` inputs, Windows ZIP,
+`ORCA_RELAY_PATH`, existing desktop required-assets behavior, detached-signature byte encoding,
+Windows arm64 build 26100, macOS 13.5, Linux kernel 4.18, release-cut, desktop builds, publication,
+and every tuple separately gated.
 
 Cross-family Layer B targets, the protected manifest-signing environment, oldest-baseline/native-
 trust cells, and the paired legacy performance baseline remain release/default-path blockers. No
