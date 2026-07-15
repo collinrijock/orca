@@ -8,8 +8,8 @@ work; keep exact commands, runner identities, hashes, metrics, and residual gaps
 
 Date created: 2026-07-14<br>
 Last updated: 2026-07-15<br>
-Current phase: Milestone 4 / Work Package 3 credential-free fail-closed aggregate boundary — **In progress — 2026-07-15, Codex implementation owner**. The disconnected release-DAG, aggregate/read-back byte boundaries, Windows artifact/manifest parity, and canonical manifest/signing handoff are closed locally and on all six native build jobs under E-M4-RELEASE-DAG-LOCAL-001, E-M4-RELEASE-DAG-CI-001, E-M4-AGGREGATE-READBACK-LOCAL-001, E-M4-AGGREGATE-READBACK-CI-001, E-M4-WINDOWS-MANIFEST-PARITY-LOCAL-001, E-M4-WINDOWS-MANIFEST-PARITY-CI-001, E-M4-MANIFEST-HANDOFF-LOCAL-001, E-M4-MANIFEST-HANDOFF-LOCAL-002, and E-M4-MANIFEST-HANDOFF-CI-001. The active package is limited to connecting exact verified aggregate inputs to canonical signing request and verified immutable final-manifest bytes under credential-free tests; it may not publish, connect desktop consumers, use production native/manifest signing credentials, or enable a tuple. Production/default behavior is unchanged, no bundled-runtime path is enabled, and no artifact is published.<br>
-Session checkpoint: **In progress — 2026-07-15, Codex implementation owner** — commit `14355dfe0583f634a6e86ada9e1afcf7abe7a8fb` adds disconnected release-side validation, canonical assembly, bounded request, accepted-key/signature verification, deterministic final manifest emission, and all-six workflow wiring. Exact-head artifact run [29395319239](https://github.com/stablyai/orca/actions/runs/29395319239) executes both new suites under Node 24.18.0 on all six native jobs; every build, smoke, equality, upload, both Linux supplemental userland jobs, and the Windows x64 floor job pass. The overall artifact run remains red only because the Windows arm64 floor job observes build 26200 rather than required build 26100 after successful 5,818.68 ms runtime smoke with 49,385,472-byte RSS. Golden E2E [29395319242](https://github.com/stablyai/orca/actions/runs/29395319242) and PR Checks [29395319119](https://github.com/stablyai/orca/actions/runs/29395319119) are green. The handoff package is closed under E-M4-MANIFEST-HANDOFF-CI-001. Real Apple/SignPath signing, returned production signatures, Gatekeeper/notarization, Defender/WDAC, missing exact-floor snapshots, protected manifest signing, aggregate publication wiring, desktop embedding, and native trust remain separately gated. Nothing is published or enabled, and legacy remains the production default.<br>
+Current phase: Milestone 4 / Work Package 3 credential-free fail-closed aggregate boundary — **In progress — 2026-07-15, Codex implementation owner**. The disconnected release-DAG, aggregate/read-back byte boundaries, Windows artifact/manifest parity, and canonical manifest/signing handoff are closed locally and on all six native build jobs under E-M4-RELEASE-DAG-LOCAL-001, E-M4-RELEASE-DAG-CI-001, E-M4-AGGREGATE-READBACK-LOCAL-001, E-M4-AGGREGATE-READBACK-CI-001, E-M4-WINDOWS-MANIFEST-PARITY-LOCAL-001, E-M4-WINDOWS-MANIFEST-PARITY-CI-001, E-M4-MANIFEST-HANDOFF-LOCAL-001, E-M4-MANIFEST-HANDOFF-LOCAL-002, and E-M4-MANIFEST-HANDOFF-CI-001. The exact-file aggregate boundary is implemented and locally green under E-M4-MANIFEST-AGGREGATE-LOCAL-001 and E-M4-MANIFEST-AGGREGATE-LOCAL-002; exact-head Node 24 native CI remains required. This package may not publish, connect desktop consumers, use production native/manifest signing credentials, or enable a tuple. Production/default behavior is unchanged, no bundled-runtime path is enabled, and no artifact is published.<br>
+Session checkpoint: **In progress — 2026-07-15, Codex implementation owner** — the purpose-named missing-module RED is closed by a bounded aggregate that verifies the exact descriptor/archive/SBOM/provenance file set, derives canonical unsigned bytes only from the hash-verified post-sign tuple descriptor, creates the existing Ed25519 request, reassembles it at finalization, verifies the signer return, and emits one content-addressed final-manifest asset. Focused 20-test and broad 221-test release-side suites, 47 desktop parity tests, syntax, typecheck, full lint, formatting, max-lines, and diff gates pass under E-M4-MANIFEST-AGGREGATE-LOCAL-001 and E-M4-MANIFEST-AGGREGATE-LOCAL-002. The suite is wired into all six native artifact jobs; exact-head Node 24 CI is next. Real Apple/SignPath signing, returned production signatures, Gatekeeper/notarization, Defender/WDAC, missing exact-floor snapshots, protected manifest signing, aggregate publication wiring, desktop embedding, and native trust remain separately gated. Nothing is published or enabled, and legacy remains the production default.<br>
 Primary design: [SSH relay GitHub Release plan](./2026-07-14-ssh-relay-github-release-plan.html)<br>
 Motivating issues: [#8450](https://github.com/stablyai/orca/issues/8450), [#1693](https://github.com/stablyai/orca/issues/1693)
 
@@ -75,9 +75,11 @@ same change as the work it records.
   E-M4-MANIFEST-HANDOFF-LOCAL-002, and E-M4-MANIFEST-HANDOFF-CI-001.
 - Active package: Work Package 3 disconnected fail-closed aggregate boundary. Connect exact verified
   runtime inputs to canonical unsigned bytes, a bounded signing request, verified signer return, and
-  immutable final-manifest output under credential-free tests. Production native/manifest signing
-  credentials, publication, desktop consumers, and tuple enablement remain outside this slice. No
-  broader Milestone 4 box is checked until its evidence exists.
+  immutable final-manifest output under credential-free tests. The implementation and local gates
+  are green under E-M4-MANIFEST-AGGREGATE-LOCAL-001 and E-M4-MANIFEST-AGGREGATE-LOCAL-002; exact-head
+  Node 24 native CI remains open. Production native/manifest signing credentials, publication,
+  desktop consumers, and tuple enablement remain outside this slice. No broader Milestone 4 box is
+  checked until its evidence exists.
 - Completed Work Package 2 gate: target-native Windows source-signature reports from exact-head
   artifact jobs 87267322867 and 87267322870 were independently downloaded and matched to their
   identities and signing-stage reports under E-M3-WINDOWS-SOURCE-SIGNATURE-CI-001. PR Checks
@@ -195,11 +197,10 @@ same change as the work it records.
   per-target opt-in selects bundled-preferred behavior, and implementing the setting does not
   authorize default-on rollout or legacy removal (E-M1-ROLLOUT-DECISION-001).
 - Legacy fallback removal: not authorized.
-- Next required action: add RED tests for the disconnected credential-free aggregate boundary, then
-  connect exact verified runtime inputs through canonical request and verified immutable
-  final-manifest bytes. Keep real native/manifest signing credentials, endpoint trust, missing
-  exact-floor snapshots, production publication, desktop consumers, and every tuple's enabled state
-  outside this slice.
+- Next required action: commit and push the locally green disconnected aggregate boundary, then
+  collect exact-head Node 24 proof from all six native build jobs. Keep real native/manifest signing
+  credentials, endpoint trust, missing exact-floor snapshots, production publication, desktop
+  consumers, and every tuple's enabled state outside this slice.
 
 ## Non-Negotiable Invariants
 
@@ -1541,6 +1542,8 @@ focused commands as their scripts/tests are introduced.
 - [x] `pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1 config/scripts/ssh-relay-runtime-compatibility.test.mjs` (E-M4-WINDOWS-MANIFEST-PARITY-LOCAL-RED-001, E-M4-WINDOWS-MANIFEST-PARITY-LOCAL-001; exact Windows compatibility discriminator and canonical vector)
 - [x] `pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1 config/scripts/ssh-relay-runtime-compatibility.test.mjs config/scripts/ssh-relay-runtime-workflow.test.mjs src/main/ssh/ssh-relay-artifact-schema.test.ts` (E-M4-WINDOWS-MANIFEST-PARITY-LOCAL-RED-001, E-M4-WINDOWS-MANIFEST-PARITY-LOCAL-001; build/desktop contract parity and static native-job wiring)
 - [x] `pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1 config/scripts/ssh-relay-runtime-manifest-assembly.test.mjs config/scripts/ssh-relay-runtime-manifest-signing-handoff.test.mjs` (E-M4-MANIFEST-HANDOFF-LOCAL-RED-001, E-M4-MANIFEST-HANDOFF-LOCAL-001)
+- [x] `pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1 config/scripts/ssh-relay-runtime-manifest-aggregate.test.mjs` (E-M4-MANIFEST-AGGREGATE-LOCAL-RED-001, E-M4-MANIFEST-AGGREGATE-LOCAL-001)
+- [x] `pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1 config/scripts/ssh-relay-runtime-manifest-aggregate.test.mjs config/scripts/ssh-relay-runtime-aggregate-input.test.mjs config/scripts/ssh-relay-runtime-workflow.test.mjs` (E-M4-MANIFEST-AGGREGATE-LOCAL-001; exact-file boundary and all-six workflow-source wiring)
 - [x] `pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1 config/scripts/ssh-relay*.test.mjs` (E-M4-MANIFEST-HANDOFF-LOCAL-002; all release-side SSH-relay contracts)
 - [x] `pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1 src/main/ssh/ssh-relay-artifact-schema.test.ts src/main/ssh/ssh-relay-manifest-signature.test.ts src/main/ssh/ssh-relay-release-asset.test.ts` (E-M4-MANIFEST-HANDOFF-LOCAL-002; desktop schema/signature parity)
 
@@ -9378,6 +9381,111 @@ diff --check`.
 - Follow-up: begin RED tests for the credential-free fail-closed aggregate boundary; retain all
   production/default and credential gates.
 
+### E-M4-MANIFEST-AGGREGATE-LOCAL-RED-001 — Fail-closed manifest aggregate is absent
+
+- Date: 2026-07-15
+- Commit SHA / PR: uncommitted purpose-named RED test atop
+  `127ddbcc154fbdf2641bc80d67a3d68d862ab1ca`; draft PR #8741
+- Runner: macOS 26.2 arm64, native local worktree; repository Node/pnpm toolchain
+- Remote: not applicable; disconnected credential-free release boundary
+- Transport/network: local filesystem only; no network, GitHub release, signer, or credential
+- Exact command:
+
+  ```sh
+  pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1 config/scripts/ssh-relay-runtime-manifest-aggregate.test.mjs
+  ```
+
+- Result: FAIL as required; one suite failed before collection because
+  `ssh-relay-runtime-manifest-aggregate.mjs` does not exist, with zero tests collected.
+- Duration and resource metrics: Vitest duration 210 ms; memory and file-descriptor deltas not
+  measured for this expected import failure.
+- Artifact/log/trace link: local terminal output; no external artifact.
+- Oracle proved: the purpose-named contract cannot pass through an existing permissive or accidental
+  aggregate implementation; the credential-free boundary is genuinely absent before this package.
+- Does not prove: input-byte validation, descriptor binding, deterministic assembly, signing-return
+  verification, publication, credentials, desktop embedding, native trust, or any enabled tuple.
+- Checklist items satisfied: RED prerequisite for the active Work Package 3 aggregate boundary.
+- Follow-up: implement the disconnected boundary, turn this exact suite green, then run broad local
+  and all-six native regression gates without connecting publication or consumers.
+
+### E-M4-MANIFEST-AGGREGATE-LOCAL-001 — Exact-file aggregate and signing boundary pass locally
+
+- Date: 2026-07-15
+- Commit SHA / PR: uncommitted implementation atop
+  `127ddbcc154fbdf2641bc80d67a3d68d862ab1ca`; draft PR #8741
+- Runner: macOS 26.2 arm64, native local worktree; Node v26.0.0 and pnpm 10.24.0
+- Remote: not applicable; disconnected credential-free release boundary
+- Transport/network: local filesystem only; no network, GitHub release, signer service, credential,
+  SSH connection, or publication
+- Exact command:
+
+  ```sh
+  /usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1 config/scripts/ssh-relay-runtime-manifest-aggregate.test.mjs config/scripts/ssh-relay-runtime-aggregate-input.test.mjs config/scripts/ssh-relay-runtime-workflow.test.mjs
+  ```
+
+- Result: PASS; 3 files / 20 tests, including 6 purpose-named aggregate tests, 8 aggregate-input
+  tests, and 6 workflow-source tests.
+- Duration and resource metrics: Vitest 482 ms; 1.04 seconds wall; 132,956,160-byte maximum RSS;
+  96,146,832-byte peak memory footprint; zero swaps.
+- Artifact/log/trace link: local terminal output; no external artifact.
+- Oracle proved: at most eight tuple declarations select one exact regular-file set containing a
+  bounded descriptor, archive, SBOM, and provenance per tuple; missing, extra, linked, mutated,
+  oversized, duplicate, unsupported, or cancelled inputs fail before assembly. Only the hashed
+  descriptor supplies the complete post-sign tuple/native-attestation projection. Descriptor and
+  declared asset drift fail, tuple order is deterministic, the 15-minute boundary is cancellable,
+  finalization reassembles the canonical request, invalid signer returns fail, and the resulting
+  manifest passes the desktop verifier. POSIX and Windows workflow source includes syntax and test
+  execution for the new module.
+- Does not prove: repository Node 24 behavior, a descriptor emitted by a real post-sign native job,
+  Apple/SignPath trust, protected signing credentials, final detached-signature asset encoding,
+  release publication/read-back, desktop embedding, SSH transfer/install, or an enabled tuple.
+- Checklist items satisfied: local implementation gate for the active Work Package 3 credential-free
+  aggregate boundary.
+- Follow-up: run broad local gates, then commit/push and collect all-six exact-head Node 24 CI.
+
+### E-M4-MANIFEST-AGGREGATE-LOCAL-002 — Broad aggregate regressions and static gates pass
+
+- Date: 2026-07-15
+- Commit SHA / PR: same uncommitted package atop
+  `127ddbcc154fbdf2641bc80d67a3d68d862ab1ca`; draft PR #8741
+- Runner: macOS 26.2 arm64, native local worktree; Node v26.0.0 and pnpm 10.24.0
+- Remote: not applicable
+- Transport/network: local filesystem only; no network, credential, release, SSH host, publication,
+  desktop consumer, or production/default call
+- Commands and results:
+  - `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1 config/scripts/ssh-relay*.test.mjs`
+    — PASS, 39 files / 221 tests in 5.70 seconds; 6.49 seconds wall; 187,924,480-byte maximum
+    RSS; 96,081,176-byte peak memory footprint; zero swaps.
+  - `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1 src/main/ssh/ssh-relay-artifact-schema.test.ts src/main/ssh/ssh-relay-manifest-signature.test.ts src/main/ssh/ssh-relay-release-asset.test.ts`
+    — PASS, 3 files / 47 tests in 485 ms; 1.19 seconds wall; 172,572,672-byte maximum RSS;
+    95,819,128-byte peak memory footprint; zero swaps.
+  - `node --check` for the aggregate-input, manifest-aggregate, their tests, and workflow-source test
+    — PASS with no output.
+  - Focused `pnpm exec oxlint` for all five touched script/test files — PASS with no findings.
+  - Focused `pnpm exec oxfmt --check` for the touched code, workflow, and both checklist files — PASS
+    in 1,451 ms.
+  - `/usr/bin/time -l pnpm run typecheck` — PASS in 2.62 seconds wall with 1,266,810,880-byte
+    maximum RSS and zero swaps.
+  - `/usr/bin/time -l pnpm run lint` — PASS in 8.64 seconds wall with 2,023,014,400-byte maximum
+    RSS and zero swaps. All 41 reliability gates, 355-entry max-lines ratchet, bundled-skill guides,
+    localization catalog/parity, and localization coverage pass; all 26 warnings are in untouched
+    existing files.
+  - `pnpm run check:max-lines-ratchet` — PASS, 355 grandfathered suppressions and no new bypasses.
+  - `git diff --check` — PASS with no output.
+- Supplemental command correction: an initial quoted-glob invocation treated
+  `config/scripts/ssh-relay*.test.mjs` as a literal filter and correctly returned “No test files
+  found”; the exact unquoted checklist command above immediately replaced it and is the recorded
+  executable result.
+- Oracle proved: the new boundary preserves every release-side SSH-relay contract, desktop schema
+  and signature parity, repository type/static/reliability/localization gates, formatting, and file
+  line budgets without adding a bypass. No existing Node/npm resolver file was touched.
+- Does not prove: Node 24/native-runner execution, real post-sign tuple outputs, production signing,
+  publication, desktop embedding, SSH behavior, native trust, exact oldest baselines, or any enabled
+  tuple.
+- Checklist items satisfied: broad local regression/static gate for the active Work Package 3
+  package.
+- Follow-up: commit and push the exact package, then record all-six native CI at that exact head.
+
 ## Accepted Gaps
 
 No product gap is accepted merely because it appears in this list. Each entry requires explicit
@@ -9435,12 +9543,12 @@ The project is not complete until every applicable item below is checked with ev
 
 ## Next Required Action
 
-Add RED tests for the disconnected credential-free fail-closed aggregate boundary, then connect exact
-verified runtime inputs through canonical request and verified immutable final-manifest bytes. Do not
-connect release publication, use production signing credentials, or add a desktop consumer in this
-slice. In parallel, provision qualifying exact-floor execution for Linux kernel 4.18, macOS 13.5,
-and Windows arm64 build 26100 and real macOS/Windows signing and trust. Keep every tuple disabled until
-the applicable baseline and trust cells pass.
+Commit and push the locally green disconnected credential-free aggregate boundary, then collect
+exact-head Node 24 proof from all six native build jobs. Do not connect release publication, use
+production signing credentials, or add a desktop consumer in this slice. In parallel, provision
+qualifying exact-floor execution for Linux kernel 4.18, macOS 13.5, and Windows arm64 build 26100 and
+real macOS/Windows signing and trust. Keep every tuple disabled until the applicable baseline and
+trust cells pass.
 
 Cross-family Layer B targets, the protected manifest-signing environment, oldest-baseline/native-
 trust cells, and the paired legacy performance baseline remain release/default-path blockers. No

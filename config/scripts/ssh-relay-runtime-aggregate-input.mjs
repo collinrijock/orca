@@ -9,8 +9,12 @@ const DIGEST_PATTERN = /^sha256:[0-9a-f]{64}$/u
 const ASSET_NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,239}$/u
 const MAX_ARCHIVE_BYTES = 100 * 1024 * 1024
 const MAX_TUPLES = 8
+// Why: each tuple contributes only its descriptor, archive, SBOM, and provenance to this boundary.
+const MAX_INPUT_FILES = MAX_TUPLES * 4
+const MAX_INPUT_BYTES = 1024 * 1024 * 1024
 const AGGREGATE_TIMEOUT_MS = 15 * 60_000
 const ASSET_FIELDS = ['tupleId', 'name', 'contentId', 'sha256', 'size']
+const FILE_FIELDS = ['name', 'sha256', 'size']
 
 function assertObject(value, label) {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) {
@@ -71,6 +75,35 @@ function normalizeAssets(assets) {
   })
 }
 
+function normalizeFiles(files) {
+  if (!Array.isArray(files) || files.length === 0 || files.length > MAX_INPUT_FILES) {
+    throw new Error('SSH relay runtime aggregate files must be a bounded non-empty array')
+  }
+  const names = new Set()
+  let totalSize = 0
+  return files.map((file, index) => {
+    assertExactFields(file, FILE_FIELDS, `file ${index}`)
+    if (typeof file.name !== 'string' || !ASSET_NAME_PATTERN.test(file.name)) {
+      throw new Error('SSH relay runtime aggregate file has an invalid name')
+    }
+    if (names.has(file.name)) {
+      throw new Error(`SSH relay runtime aggregate has a duplicate file: ${file.name}`)
+    }
+    names.add(file.name)
+    if (!DIGEST_PATTERN.test(file.sha256)) {
+      throw new Error('SSH relay runtime aggregate file has an invalid SHA-256')
+    }
+    if (!Number.isSafeInteger(file.size) || file.size <= 0 || file.size > MAX_ARCHIVE_BYTES) {
+      throw new Error('SSH relay runtime aggregate file has an invalid size')
+    }
+    totalSize += file.size
+    if (!Number.isSafeInteger(totalSize) || totalSize > MAX_INPUT_BYTES) {
+      throw new Error('SSH relay runtime aggregate files exceed the total size limit')
+    }
+    return { ...file }
+  })
+}
+
 function sameFileState(before, after) {
   return (
     before.dev === after.dev &&
@@ -81,40 +114,40 @@ function sameFileState(before, after) {
   )
 }
 
-async function hashArchive(path, asset, signal) {
+async function hashFile(path, file, signal) {
   signal?.throwIfAborted()
   const before = await lstat(path, { bigint: true })
   if (!before.isFile() || before.isSymbolicLink()) {
-    throw new Error(`SSH relay runtime aggregate input is not a regular file: ${asset.name}`)
+    throw new Error(`SSH relay runtime aggregate input is not a regular file: ${file.name}`)
   }
-  if (before.size !== BigInt(asset.size)) {
-    throw new Error(`SSH relay runtime aggregate input size mismatch: ${asset.name}`)
+  if (before.size !== BigInt(file.size)) {
+    throw new Error(`SSH relay runtime aggregate input size mismatch: ${file.name}`)
   }
   const hash = createHash('sha256')
   let bytes = 0
   for await (const chunk of createReadStream(path, { signal })) {
     signal?.throwIfAborted()
     bytes += chunk.length
-    if (bytes > asset.size) {
-      throw new Error(`SSH relay runtime aggregate input exceeded its size: ${asset.name}`)
+    if (bytes > file.size) {
+      throw new Error(`SSH relay runtime aggregate input exceeded its size: ${file.name}`)
     }
     hash.update(chunk)
   }
   const after = await lstat(path, { bigint: true })
   // Why: aggregate identity must describe one stable file, not bytes swapped during hashing.
   if (!sameFileState(before, after)) {
-    throw new Error(`SSH relay runtime aggregate input changed while hashing: ${asset.name}`)
+    throw new Error(`SSH relay runtime aggregate input changed while hashing: ${file.name}`)
   }
-  if (bytes !== asset.size) {
-    throw new Error(`SSH relay runtime aggregate input size mismatch: ${asset.name}`)
+  if (bytes !== file.size) {
+    throw new Error(`SSH relay runtime aggregate input size mismatch: ${file.name}`)
   }
   const digest = `sha256:${hash.digest('hex')}`
-  if (digest !== asset.sha256) {
-    throw new Error(`SSH relay runtime aggregate input SHA-256 mismatch: ${asset.name}`)
+  if (digest !== file.sha256) {
+    throw new Error(`SSH relay runtime aggregate input SHA-256 mismatch: ${file.name}`)
   }
 }
 
-export async function verifySshRelayRuntimeAggregateInputs({ inputDirectory, assets, signal }) {
+export async function verifySshRelayRuntimeAggregateFiles({ inputDirectory, files, signal }) {
   const effectiveSignal = signal
     ? AbortSignal.any([signal, AbortSignal.timeout(AGGREGATE_TIMEOUT_MS)])
     : AbortSignal.timeout(AGGREGATE_TIMEOUT_MS)
@@ -122,7 +155,7 @@ export async function verifySshRelayRuntimeAggregateInputs({ inputDirectory, ass
   if (typeof inputDirectory !== 'string' || inputDirectory.length === 0) {
     throw new Error('SSH relay runtime aggregate input directory is required')
   }
-  const normalized = normalizeAssets(assets)
+  const normalized = normalizeFiles(files)
   const root = resolve(inputDirectory)
   const rootMetadata = await lstat(root)
   if (!rootMetadata.isDirectory() || rootMetadata.isSymbolicLink()) {
@@ -130,7 +163,7 @@ export async function verifySshRelayRuntimeAggregateInputs({ inputDirectory, ass
   }
   const entries = await readdir(root, { withFileTypes: true })
   const actualNames = entries.map((entry) => entry.name).sort()
-  const expectedNames = normalized.map((asset) => asset.name).sort()
+  const expectedNames = normalized.map((file) => file.name).sort()
   if (JSON.stringify(actualNames) !== JSON.stringify(expectedNames)) {
     throw new Error('SSH relay runtime aggregate input directory has missing or unexpected files')
   }
@@ -139,12 +172,22 @@ export async function verifySshRelayRuntimeAggregateInputs({ inputDirectory, ass
       throw new Error(`SSH relay runtime aggregate input is not a regular file: ${entry.name}`)
     }
   }
-  for (const asset of normalized) {
-    const path = join(root, asset.name)
-    if (basename(path) !== asset.name) {
-      throw new Error(`SSH relay runtime aggregate asset path is unsafe: ${asset.name}`)
+  for (const file of normalized) {
+    const path = join(root, file.name)
+    if (basename(path) !== file.name) {
+      throw new Error(`SSH relay runtime aggregate file path is unsafe: ${file.name}`)
     }
-    await hashArchive(path, asset, effectiveSignal)
+    await hashFile(path, file, effectiveSignal)
   }
+  return normalized
+}
+
+export async function verifySshRelayRuntimeAggregateInputs({ inputDirectory, assets, signal }) {
+  const normalized = normalizeAssets(assets)
+  await verifySshRelayRuntimeAggregateFiles({
+    inputDirectory,
+    files: normalized.map(({ name, sha256, size }) => ({ name, sha256, size })),
+    signal
+  })
   return normalized
 }

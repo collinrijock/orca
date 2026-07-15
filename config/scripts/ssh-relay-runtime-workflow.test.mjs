@@ -110,7 +110,11 @@ describe('SSH relay runtime artifact workflow', () => {
     expect(
       source.match(/node --check config\/scripts\/ssh-relay-runtime-manifest-validation\.mjs/g)
     ).toHaveLength(2)
-    for (const moduleName of ['manifest-assembly', 'manifest-signing-handoff']) {
+    for (const moduleName of [
+      'manifest-assembly',
+      'manifest-signing-handoff',
+      'manifest-aggregate'
+    ]) {
       const script = `ssh-relay-runtime-${moduleName}`
       expect(source.split(`${script}.test.mjs`)).toHaveLength(5)
       expect(source.split(`node --check config/scripts/${script}.mjs`)).toHaveLength(3)

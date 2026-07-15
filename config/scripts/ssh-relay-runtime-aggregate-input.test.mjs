@@ -4,7 +4,10 @@ import { join } from 'node:path'
 
 import { afterEach, describe, expect, it } from 'vitest'
 
-import { verifySshRelayRuntimeAggregateInputs } from './ssh-relay-runtime-aggregate-input.mjs'
+import {
+  verifySshRelayRuntimeAggregateFiles,
+  verifySshRelayRuntimeAggregateInputs
+} from './ssh-relay-runtime-aggregate-input.mjs'
 
 const temporaryDirectories = []
 
@@ -110,5 +113,30 @@ describe('SSH relay runtime aggregate inputs', () => {
     await expect(
       verifySshRelayRuntimeAggregateInputs({ ...input, signal: controller.signal })
     ).rejects.toThrow(/cancel aggregate/i)
+  })
+
+  it('bounds the generalized aggregate file count and declared total size', async () => {
+    const input = await fixture()
+    const reference = {
+      name: 'file-0.bin',
+      size: 100 * 1024 * 1024,
+      sha256: `sha256:${'a'.repeat(64)}`
+    }
+    const tooMany = Array.from({ length: 33 }, (_, index) => ({
+      ...reference,
+      name: `file-${index}.bin`,
+      size: 1
+    }))
+    await expect(
+      verifySshRelayRuntimeAggregateFiles({ inputDirectory: input.inputDirectory, files: tooMany })
+    ).rejects.toThrow(/bounded/i)
+
+    const tooLarge = Array.from({ length: 11 }, (_, index) => ({
+      ...reference,
+      name: `file-${index}.bin`
+    }))
+    await expect(
+      verifySshRelayRuntimeAggregateFiles({ inputDirectory: input.inputDirectory, files: tooLarge })
+    ).rejects.toThrow(/total size/i)
   })
 })

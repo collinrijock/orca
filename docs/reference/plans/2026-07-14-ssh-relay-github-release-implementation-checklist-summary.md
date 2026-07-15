@@ -71,7 +71,10 @@ complete a box.
       `E-M4-MANIFEST-HANDOFF-CI-001`. Next, connect only the credential-free verified aggregate
       inputs, canonical signing request, verified signer return, and immutable final-manifest output
       behind fail-closed tests. No production workflow, publication, desktop consumer, signing
-      credential, or tuple is connected.
+      credential, or tuple is connected. The purpose-named missing-module RED is recorded under
+      `E-M4-MANIFEST-AGGREGATE-LOCAL-RED-001`; the implementation and broad local gates are green
+      under `E-M4-MANIFEST-AGGREGATE-LOCAL-001` and
+      `E-M4-MANIFEST-AGGREGATE-LOCAL-002`. Exact-head Node 24 native CI remains open.
 
 ## Work packages, in required order
 
@@ -125,7 +128,9 @@ complete a box.
 - [ ] **In progress — 2026-07-15, Codex implementation owner:** add the disconnected, credential-free
       fail-closed aggregate boundary from exact verified runtime inputs through canonical request and
       verified final-manifest bytes. Keep native/manifest credentials, publication, desktop
-      consumers, and every tuple outside this slice.
+      consumers, and every tuple outside this slice. The code and local proof are complete under
+      `E-M4-MANIFEST-AGGREGATE-LOCAL-001` and `E-M4-MANIFEST-AGGREGATE-LOCAL-002`; native CI is the
+      remaining gate.
 - [ ] Add target-native runtime jobs as desktop release prerequisites.
 - [ ] Add native signing jobs; hash only the returned signed bytes.
 - [ ] Add a fail-closed aggregate and immutable manifest-signing job.
