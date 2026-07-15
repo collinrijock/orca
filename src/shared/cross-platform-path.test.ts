@@ -19,6 +19,7 @@ describe('cross-platform path containment', () => {
     expect(normalizeRuntimePathForComparison('/srv/team\\repo')).toBe('/srv/team\\repo')
     expect(normalizeRuntimePathForComparison('/srv/team/repo')).toBe('/srv/team/repo')
     expect(isPathInsideOrEqual('/srv/team\\repo', '/srv/team/repo/file.ts')).toBe(false)
+    expect(relativePathInsideRoot('/srv/repo', '/srv/repo/a\\b.txt')).toBe('a\\b.txt')
   })
 
   it('handles Windows drive roots and sibling drives case-insensitively', () => {

@@ -69,7 +69,9 @@ export function isPathInsideOrEqual(rootPath: string, candidatePath: string): bo
 
 export function relativePathInsideRoot(rootPath: string, candidatePath: string): string | null {
   const normalizedCandidate = trimRuntimePathTrailingSlash(
-    normalizeRuntimePathSeparators(candidatePath)
+    isWindowsAbsolutePathLike(candidatePath)
+      ? normalizeRuntimePathSeparators(candidatePath)
+      : candidatePath.replace(/\/+/g, '/')
   )
   const comparisonRoot = normalizeRuntimePathForComparison(rootPath)
   const comparisonCandidate = normalizeRuntimePathForComparison(candidatePath)

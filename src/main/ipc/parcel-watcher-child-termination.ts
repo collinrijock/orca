@@ -28,7 +28,9 @@ export class WatcherTerminationQueue {
   private current: Promise<void> | null = null
 
   waitFor<T>(operation: () => Promise<T>): Promise<T> | null {
-    return this.current?.then(operation) ?? null
+    // Why: an idle child may miss its exit deadline without poisoning the
+    // reusable supervisor; queued work must re-check state after either result.
+    return this.current?.then(operation, operation) ?? null
   }
 
   getCurrent(): Promise<void> | null {
