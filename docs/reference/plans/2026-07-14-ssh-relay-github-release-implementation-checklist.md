@@ -8,8 +8,8 @@ work; keep exact commands, runner identities, hashes, metrics, and residual gaps
 
 Date created: 2026-07-14<br>
 Last updated: 2026-07-15<br>
-Current phase: Milestone 5 / Work Package 4 desktop download boundary — **Disconnected bounded Electron downloader locally GREEN; exact-head native CI pending — 2026-07-15, Codex implementation owner**. The purpose-named missing-module RED and local GREEN are recorded under E-M5-ARTIFACT-DOWNLOAD-LOCAL-RED-001 and E-M5-ARTIFACT-DOWNLOAD-LOCAL-001. This package remains limited to relay-specific bounded streaming, cancellation, exact signed size/hash, one approved GitHub asset redirect, credential/header stripping, exclusive staging, and failure cleanup. Do not add cache publication/extraction, desktop call sites, SSH transfer/install, tuple enablement, mode wiring, or default behavior.<br>
-Session checkpoint: **In progress — 2026-07-15, Codex implementation owner** — 16 focused downloader tests, 89 adjacent desktop trust-chain tests, 307 broad relay build/release contracts, typecheck, full lint, formatting, protected-file zero-diff, and `git diff --check` pass locally under E-M5-ARTIFACT-DOWNLOAD-LOCAL-001. Exact-head Node 24 execution on Linux, macOS, and Windows x64/arm64 is still required. The user authorizes end-to-end commits, pushes, draft-PR updates, CI runs/reruns, and PR-contained rehearsals, but not merging to `main`. There is no real release write, publication caller, desktop consumer, cache publication/extraction, SSH transfer/install, tuple enablement, or production/default behavior change. No accepted production key, protected environment/seed, native-signing trust proof, publication path, or tuple enablement is connected. Legacy remains the production default.<br>
+Current phase: Milestone 5 / Work Package 4 desktop download boundary — **Downloader native CI wiring locally GREEN; exact-head native CI pending — 2026-07-15, Codex implementation owner**. Both native job families invoke the purpose-named downloader suite under E-M5-ARTIFACT-DOWNLOAD-CI-WIRING-LOCAL-001. Commit/push this test-only wiring and collect all-six exact-head Node 24 evidence. Do not add cache publication/extraction, desktop call sites, SSH transfer/install, tuple enablement, mode wiring, or default behavior.<br>
+Session checkpoint: **In progress — 2026-07-15, Codex implementation owner** — implementation `ef9681d32` and local evidence `6473801e7` are pushed to draft PR #8741. The workflow-contract RED and local GREEN are recorded under E-M5-ARTIFACT-DOWNLOAD-CI-WIRING-RED-001 and E-M5-ARTIFACT-DOWNLOAD-CI-WIRING-LOCAL-001; 7 files / 96 tests pass. Exact-head native execution remains mandatory. The user authorizes end-to-end commits, pushes, draft-PR updates, CI runs/reruns, and PR-contained rehearsals, but not merging to `main`. There is no real release write, publication caller, desktop consumer, cache publication/extraction, SSH transfer/install, tuple enablement, or production/default behavior change. No accepted production key, protected environment/seed, native-signing trust proof, publication path, or tuple enablement is connected. Legacy remains the production default.<br>
 Primary design: [SSH relay GitHub Release plan](./2026-07-14-ssh-relay-github-release-plan.html)<br>
 Motivating issues: [#8450](https://github.com/stablyai/orca/issues/8450), [#1693](https://github.com/stablyai/orca/issues/1693)
 
@@ -12133,6 +12133,44 @@ src/main/ssh/ssh-relay-artifact-download.test.ts` — expected FAIL because
 - Follow-up: commit and push the isolated implementation/evidence, add a workflow-contract RED/GREEN
   requiring the downloader suite in both native job families, and collect exact-head all-six Node 24
   evidence before starting cache/extraction.
+
+### E-M5-ARTIFACT-DOWNLOAD-CI-WIRING-RED-001 — Native jobs omitted downloader contracts
+
+- Date: 2026-07-15
+- Owner: Codex implementation owner
+- Source: uncommitted workflow assertion atop exact pushed downloader head
+  `6473801e7`; draft PR #8741.
+- Command: `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1
+config/scripts/ssh-relay-runtime-workflow.test.mjs` — expected FAIL, 1 failed / 6 passed of 7 tests
+  in 980ms Vitest / 5.28s wall; maximum RSS 132,448,256 bytes and zero swaps. The downloader suite
+  occurred zero times where the contract requires one POSIX-family and one Windows-family invocation.
+- Contract pinned by the RED: `ssh-relay-artifact-download.test.ts` must execute as part of both
+  target-native workflow test families so a generic PR/Linux job cannot be misreported as
+  Linux/macOS/Windows x64/arm64 downloader portability proof.
+- Does not prove: corrected wiring, native execution, live Electron networking, product behavior, or
+  any enabled tuple.
+
+### E-M5-ARTIFACT-DOWNLOAD-CI-WIRING-LOCAL-001 — Both native job families invoke downloader tests
+
+- Date: 2026-07-15
+- Owner: Codex implementation owner
+- Source: workflow/test commit `0d7e0077d` atop exact pushed downloader head `6473801e7`; draft PR
+  #8741.
+- Command: `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1`
+  with the workflow contract plus artifact download, selector, manifest signature, artifact schema,
+  release asset, and runtime identity suites — PASS, 7 files / 96 tests in 11.97s Vitest / 16.98s
+  wall; maximum RSS 141,099,008 bytes and zero swaps. Focused `oxlint`, `oxfmt --check`, protected-
+  file zero-diff, and `git diff --check` pass.
+- Oracle proved: the downloader suite is named exactly once by the four-runner POSIX job family and
+  exactly once by the two-runner Windows job family. YAML parsing, runner labels, and existing
+  credential/publication prohibitions remain covered by the same workflow contract.
+- Consumer-disconnection oracle: this changes test execution only. It adds no network caller,
+  credential, release write, cache/extraction path, desktop consumer, SSH behavior, tuple enablement,
+  or default behavior.
+- Does not prove: actual Linux/macOS/Windows x64/arm64 execution. Replacement exact-head CI after
+  this correction is mandatory.
+- Follow-up: commit/push the workflow/test/evidence correction and collect all-six native Node 24
+  jobs plus PR Checks and Golden E2E.
 
 ## Accepted Gaps
 
