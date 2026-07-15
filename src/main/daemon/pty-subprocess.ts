@@ -64,6 +64,7 @@ import { getAgentForegroundContextPaths } from '../providers/agent-foreground-co
 import { assertSafeAgentStartupCwd, resolveSafePtyDefaultCwd } from '../providers/pty-default-cwd'
 import { ORCA_HERMES_STARTUP_QUERY_ENV } from '../../shared/hermes-startup-query'
 import type { TuiAgent } from '../../shared/types'
+import { forceKillPosixPtyProcessGroups } from '../pty/posix-pty-process-groups'
 
 const PANE_IDENTITY_ENV_KEYS = [
   'ORCA_PANE_KEY',
@@ -1220,7 +1221,9 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
         return
       }
       try {
-        process.kill(proc.pid, 'SIGKILL')
+        forceKillPosixPtyProcessGroups(proc.pid, () => {
+          process.kill(proc.pid, 'SIGKILL')
+        })
       } catch (signalError) {
         try {
           proc.kill()

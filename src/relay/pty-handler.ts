@@ -36,6 +36,7 @@ import {
   mergeGitConfigEnvProtocol
 } from '../shared/git-credential-prompt-env'
 import { isTuiAgent } from '../shared/tui-agent-config'
+import { forceKillPosixPtyProcessGroups } from '../main/pty/posix-pty-process-groups'
 
 // Why: node-pty is a native addon that may not be installed on the remote.
 // Dynamic import keeps the require() lazy so loadPty() returns null gracefully
@@ -106,6 +107,10 @@ type ManagedStartupCommand = {
 function killPtyProcess(pty: IPty, signal: string): void {
   if (process.platform === 'win32') {
     pty.kill()
+    return
+  }
+  if (signal === 'SIGKILL') {
+    forceKillPosixPtyProcessGroups(pty.pid, () => pty.kill(signal))
     return
   }
   pty.kill(signal)

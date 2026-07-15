@@ -55,6 +55,7 @@ import { resolveAgentForegroundProcessWithAvailability } from './agent-foregroun
 import { getAgentForegroundContextPaths } from './agent-foreground-context-paths'
 import { recognizeAgentProcessFromCommandLine } from '../../shared/agent-process-recognition'
 import { readWindowsConptyProcessIds } from './windows-conpty-process-membership'
+import { forceKillPosixPtyProcessGroups } from '../pty/posix-pty-process-groups'
 import { shouldUseShellReadyStartupDelivery } from '../../shared/codex-startup-delivery'
 import { assertSafeAgentStartupCwd, resolveSafePtyDefaultCwd } from './pty-default-cwd'
 import { ORCA_HERMES_STARTUP_QUERY_ENV } from '../../shared/hermes-startup-query'
@@ -232,7 +233,11 @@ function killLocalPtyProcess(proc: pty.IPty, immediate: boolean): void {
     proc.kill()
     return
   }
-  proc.kill(immediate ? 'SIGKILL' : 'SIGTERM')
+  if (!immediate) {
+    proc.kill('SIGTERM')
+    return
+  }
+  forceKillPosixPtyProcessGroups(proc.pid, () => proc.kill('SIGKILL'))
 }
 
 function armLocalPtyForceKill(
