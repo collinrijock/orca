@@ -282,12 +282,14 @@ describe('ModelManager download resume', () => {
     }
   })
 
-  it('bounds pathological advancing range segment requests', async () => {
+  it('bounds a server that advances by pathologically tiny segments forever', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'orca-model-resume-'))
     try {
       const manager = new ModelManager(dir) as unknown as ModelManagerInternals
       const archivePath = join(dir, 'model.tar.bz2')
       let bytesWritten = 0
+      // Advances one byte per request against a total larger than the request
+      // ceiling, so it makes forward progress forever without ever completing.
       const downloadFileMock = vi.spyOn(manager, 'downloadFile').mockImplementation(() => {
         bytesWritten += 1
         writeFileSync(archivePath, Buffer.alloc(bytesWritten))
@@ -298,15 +300,60 @@ describe('ModelManager download resume', () => {
         manager.downloadArchiveWithRetry(
           'https://example.com/model.tar.bz2',
           archivePath,
-          300,
+          1_000_000,
           'm',
           () => false,
           new AbortController().signal
         )
-      ).rejects.toThrow(/after 256 attempts/)
+      ).rejects.toThrow(/too many download requests/)
 
-      expect(downloadFileMock).toHaveBeenCalledTimes(256)
+      // The absolute request ceiling (MAX_TOTAL_DOWNLOAD_REQUESTS) bounds it.
+      expect(downloadFileMock).toHaveBeenCalledTimes(4_096)
     } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('keeps resuming a download that advances across many mid-stream drops', async () => {
+    vi.useFakeTimers()
+    const dir = mkdtempSync(join(tmpdir(), 'orca-model-resume-'))
+    try {
+      // Every attempt delivers a small slice then drops mid-stream — the
+      // classic "dies partway, resumes" pattern. Because each attempt makes
+      // forward progress, the download must complete no matter how many drops
+      // it takes (regression guard: a fixed failure budget used to abandon a
+      // still-advancing large download around attempt 8).
+      const manager = new ModelManager(dir) as unknown as ModelManagerInternals
+      const archivePath = join(dir, 'model.tar.bz2')
+      const SLICE = 2
+      let delivered = 0
+      const downloadFileMock = vi.spyOn(manager, 'downloadFile').mockImplementation(() => {
+        delivered = Math.min(delivered + SLICE, PAYLOAD.length)
+        writeFileSync(archivePath, PAYLOAD.subarray(0, delivered))
+        return Promise.reject(new Error('net::ERR_CONNECTION_RESET'))
+      })
+
+      const download = manager.downloadArchiveWithRetry(
+        'https://example.com/model.tar.bz2',
+        archivePath,
+        PAYLOAD.length,
+        'm',
+        () => false,
+        new AbortController().signal
+      )
+      const outcome = download.then(
+        () => 'resolved',
+        (error: unknown) => (error instanceof Error ? error.message : String(error))
+      )
+      // Drive the per-attempt backoff (1s each, since progress resets the
+      // stall counter) well past the ten attempts this needs.
+      await vi.advanceTimersByTimeAsync(30_000)
+
+      await expect(outcome).resolves.toBe('resolved')
+      expect(downloadFileMock).toHaveBeenCalledTimes(PAYLOAD.length / SLICE)
+      expect(readFileSync(archivePath)).toEqual(PAYLOAD)
+    } finally {
+      vi.useRealTimers()
       rmSync(dir, { recursive: true, force: true })
     }
   })

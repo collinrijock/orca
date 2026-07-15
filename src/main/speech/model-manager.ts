@@ -51,10 +51,17 @@ const DOWNLOAD_IDLE_TIMEOUT_MS = 120_000
 // request lets those connections finish instead of failing the same way on
 // every full restart.
 const DOWNLOAD_RETRY_DELAYS_MS = [1_000, 2_000, 4_000]
-const MAX_DOWNLOAD_FAILURES = 8
-// Why: successful bounded ranges may require more than the failure budget, but
-// a server returning pathological tiny segments must not create an endless loop.
-const MAX_ADVANCING_RANGE_SEGMENTS = 256
+// Why: abandon a download only after this many CONSECUTIVE attempts make no
+// forward progress. A resume that keeps advancing (even across many mid-stream
+// drops) is never given up on — that is the whole point of resumable downloads
+// for large models over flaky networks, and a fixed all-time failure budget
+// would wrongly kill a steadily-progressing large download.
+const MAX_NO_PROGRESS_ATTEMPTS = DOWNLOAD_RETRY_DELAYS_MS.length + 1
+// Why: an absolute backstop so a server handing back pathologically tiny (or
+// zero-net) segments cannot loop forever; sized to cover the largest (~1GB)
+// model even if a proxy caps each range response near ~256KB, far below any
+// real CDN chunk.
+const MAX_TOTAL_DOWNLOAD_REQUESTS = 4_096
 // Why: a longer server window should be surfaced for a later manual retry,
 // rather than leaving the settings download looking stuck for minutes.
 const MAX_RETRY_AFTER_MS = 120_000
@@ -454,8 +461,6 @@ export class ModelManager {
     signal: AbortSignal
   ): Promise<void> {
     let requestCount = 0
-    let retryFailures = 0
-    let advancingRangeSegments = 0
     let noProgressStreak = 0
     const totals: DownloadTotals = { totalBytes: expectedSize }
     for (;;) {
@@ -465,6 +470,16 @@ export class ModelManager {
       // caller's SHA-256 check is the authoritative completion test.
       if (offset === totals.totalBytes) {
         return
+      }
+      // Why: absolute backstop against a server that never lets the download
+      // finish; the stall and abort paths handle the common cases first.
+      if (requestCount > MAX_TOTAL_DOWNLOAD_REQUESTS) {
+        throw describeInterruptedDownload(
+          new Error('too many download requests'),
+          offset,
+          totals.totalBytes,
+          requestCount - 1
+        )
       }
       try {
         // Why: each attempt restarts from the canonical URL rather than the
@@ -495,16 +510,9 @@ export class ModelManager {
         if (receivedBytes > offset) {
           // Why: some proxies return a valid but bounded range segment; request
           // the next segment immediately instead of failing checksum or waiting.
+          // Forward progress resets the stall counter; the total-request ceiling
+          // at the loop top bounds a pathological tiny-segment server.
           noProgressStreak = 0
-          advancingRangeSegments += 1
-          if (advancingRangeSegments >= MAX_ADVANCING_RANGE_SEGMENTS) {
-            throw describeInterruptedDownload(
-              incompleteResponse,
-              receivedBytes,
-              totals.totalBytes,
-              requestCount
-            )
-          }
           continue
         }
         const retryableIncompleteResponse = incompleteResponse as HttpStatusError
@@ -522,11 +530,9 @@ export class ModelManager {
         if (!isRetryableDownloadError(err)) {
           throw err
         }
-        retryFailures += 1
-        if (
-          retryFailures >= MAX_DOWNLOAD_FAILURES ||
-          noProgressStreak > DOWNLOAD_RETRY_DELAYS_MS.length
-        ) {
+        // Why: give up only on a genuine stall (repeated no forward progress);
+        // a download that keeps advancing across drops is allowed to continue.
+        if (noProgressStreak >= MAX_NO_PROGRESS_ATTEMPTS) {
           throw describeInterruptedDownload(err, receivedBytes, totals.totalBytes, requestCount)
         }
         const retryAfterMs = (err as HttpStatusError).retryAfterMs
