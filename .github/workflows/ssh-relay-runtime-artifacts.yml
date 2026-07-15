@@ -261,6 +261,7 @@ jobs:
             src/main/ssh/ssh-relay-manifest-signature.test.ts \
             src/main/ssh/ssh-relay-release-asset.test.ts \
             src/main/ssh/ssh-relay-artifact-selector.test.ts \
+            src/main/ssh/ssh-relay-artifact-download.test.ts \
             src/main/ssh/ssh-relay-runtime-identity.test.ts \
             config/scripts/ssh-relay-runtime-compatibility.test.mjs \
             config/scripts/ssh-relay-node-release-verification.test.mjs \
@@ -763,6 +764,7 @@ jobs:
             src/main/ssh/ssh-relay-manifest-signature.test.ts `
             src/main/ssh/ssh-relay-release-asset.test.ts `
             src/main/ssh/ssh-relay-artifact-selector.test.ts `
+            src/main/ssh/ssh-relay-artifact-download.test.ts `
             src/main/ssh/ssh-relay-runtime-identity.test.ts `
             config/scripts/ssh-relay-runtime-compatibility.test.mjs `
             config/scripts/ssh-relay-node-release-verification.test.mjs `
