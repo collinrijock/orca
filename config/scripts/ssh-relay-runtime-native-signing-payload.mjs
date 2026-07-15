@@ -3,8 +3,8 @@ import { constants, createReadStream } from 'node:fs'
 import { copyFile, lstat, mkdir, readdir, realpath, rm } from 'node:fs/promises'
 import { basename, dirname, isAbsolute, relative, resolve } from 'node:path'
 
-const MAX_SIGNED_FILE_GROWTH_BYTES = 4 * 1024 * 1024
-const MAX_RETURNED_PAYLOAD_BYTES = 64 * 1024 * 1024
+export const MAX_SIGNED_FILE_GROWTH_BYTES = 4 * 1024 * 1024
+export const MAX_RETURNED_PAYLOAD_BYTES = 64 * 1024 * 1024
 
 function localPath(root, portablePath) {
   if (

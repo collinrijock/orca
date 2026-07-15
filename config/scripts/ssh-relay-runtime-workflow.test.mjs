@@ -89,6 +89,9 @@ describe('SSH relay runtime artifact workflow', () => {
     ).toHaveLength(4)
     expect(source.match(/ssh-relay-runtime-native-signing-stage\.test\.mjs/g)).toHaveLength(4)
     expect(source.match(/ssh-relay-runtime-native-signing-apply\.test\.mjs/g)).toHaveLength(4)
+    expect(source.match(/ssh-relay-runtime-macos-signature-verification\.test\.mjs/g)).toHaveLength(
+      4
+    )
     expect(
       source.match(/node --check config\/scripts\/ssh-relay-runtime-native-signing-plan\.mjs/g)
     ).toHaveLength(2)
@@ -108,6 +111,11 @@ describe('SSH relay runtime artifact workflow', () => {
     ).toHaveLength(2)
     expect(
       source.match(/node --check config\/scripts\/ssh-relay-runtime-native-signing-apply\.mjs/g)
+    ).toHaveLength(2)
+    expect(
+      source.match(
+        /node --check config\/scripts\/ssh-relay-runtime-macos-signature-verification\.mjs/g
+      )
     ).toHaveLength(2)
     expect(
       source.match(/node --check config\/scripts\/ssh-relay-runtime-closure\.mjs/g)

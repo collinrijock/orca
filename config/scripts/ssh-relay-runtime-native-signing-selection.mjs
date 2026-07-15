@@ -1,3 +1,5 @@
+import { isDeepStrictEqual } from 'node:util'
+
 import { buildSshRelayRuntimeNativeSigningPlan } from './ssh-relay-runtime-native-signing-plan.mjs'
 
 const SHA256_PATTERN = /^sha256:[0-9a-f]{64}$/
@@ -156,5 +158,38 @@ export function buildSshRelayRuntimeNativeSigningSelection(identity, assessments
       (entry) => entry.action === 'preserve-valid-upstream'
     ),
     verificationFiles
+  }
+}
+
+export function assertSshRelayRuntimeNativeSigningSelection(identity, selection) {
+  if (
+    !selection ||
+    typeof selection !== 'object' ||
+    !Array.isArray(selection.signingFiles) ||
+    !Array.isArray(selection.preservedUpstreamFiles)
+  ) {
+    throw new Error('Runtime native signing requires a complete selection')
+  }
+  const assessments =
+    identity.os === 'win32'
+      ? [
+          ...selection.signingFiles.map((entry) => ({
+            path: entry.path,
+            sourceSha256: entry.sourceSha256,
+            status: 'unsigned'
+          })),
+          ...selection.preservedUpstreamFiles.map((entry) => ({
+            path: entry.path,
+            sourceSha256: entry.sourceSha256,
+            status: 'valid-upstream',
+            signerSubject: entry.signerSubject,
+            signerThumbprint: entry.signerThumbprint
+          }))
+        ]
+      : []
+  const expected = buildSshRelayRuntimeNativeSigningSelection(identity, assessments)
+  if (!isDeepStrictEqual(selection, expected)) {
+    // Why: signing selections cross a job boundary and must remain bound to authenticated bytes.
+    throw new Error('Runtime native signing selection and identity disagree')
   }
 }

@@ -1,12 +1,11 @@
 import { constants } from 'node:fs'
 import { chmod, copyFile, lstat, mkdir, realpath, rm } from 'node:fs/promises'
 import { basename, dirname, isAbsolute, relative, resolve, sep } from 'node:path'
-import { isDeepStrictEqual } from 'node:util'
 
 import { assertSshRelayRuntimeClosureEntries } from './ssh-relay-runtime-closure.mjs'
 import { computeSshRelayRuntimeContentId } from './ssh-relay-runtime-identity.mjs'
 import { verifySshRelayRuntimeNativeSigningReturn } from './ssh-relay-runtime-native-signing-payload.mjs'
-import { buildSshRelayRuntimeNativeSigningSelection } from './ssh-relay-runtime-native-signing-selection.mjs'
+import { assertSshRelayRuntimeNativeSigningSelection } from './ssh-relay-runtime-native-signing-selection.mjs'
 import { verifyRuntimeTree } from './verify-ssh-relay-runtime.mjs'
 
 function containsPath(parent, candidate) {
@@ -60,39 +59,6 @@ export async function assertSshRelayRuntimeNativeSigningApplyRoots({
 
 function localPath(root, portablePath) {
   return resolve(root, ...portablePath.split('/'))
-}
-
-function assertIdentityBoundSelection(identity, selection) {
-  if (
-    !selection ||
-    typeof selection !== 'object' ||
-    !Array.isArray(selection.signingFiles) ||
-    !Array.isArray(selection.preservedUpstreamFiles)
-  ) {
-    throw new Error('Runtime native signing apply requires a complete selection')
-  }
-  const assessments =
-    identity.os === 'win32'
-      ? [
-          ...selection.signingFiles.map((entry) => ({
-            path: entry.path,
-            sourceSha256: entry.sourceSha256,
-            status: 'unsigned'
-          })),
-          ...selection.preservedUpstreamFiles.map((entry) => ({
-            path: entry.path,
-            sourceSha256: entry.sourceSha256,
-            status: 'valid-upstream',
-            signerSubject: entry.signerSubject,
-            signerThumbprint: entry.signerThumbprint
-          }))
-        ]
-      : []
-  const expected = buildSshRelayRuntimeNativeSigningSelection(identity, assessments)
-  if (!isDeepStrictEqual(selection, expected)) {
-    // Why: signing selections cross a job boundary and must remain bound to the authenticated tree.
-    throw new Error('Runtime native signing apply selection and identity disagree')
-  }
 }
 
 function finalIdentity(identity, returnedFiles) {
@@ -158,7 +124,7 @@ export async function applySshRelayRuntimeNativeSigningReturn({
   copyFileImpl = copyFile
 }) {
   assertSshRelayRuntimeClosureEntries(identity)
-  assertIdentityBoundSelection(identity, selection)
+  assertSshRelayRuntimeNativeSigningSelection(identity, selection)
   if (selection.signingFiles.length === 0) {
     throw new Error('Runtime native signing apply selection has no signing files')
   }

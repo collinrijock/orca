@@ -137,6 +137,8 @@ jobs:
           node --check config/scripts/ssh-relay-runtime-native-signing-stage.test.mjs
           node --check config/scripts/ssh-relay-runtime-native-signing-apply.mjs
           node --check config/scripts/ssh-relay-runtime-native-signing-apply.test.mjs
+          node --check config/scripts/ssh-relay-runtime-macos-signature-verification.mjs
+          node --check config/scripts/ssh-relay-runtime-macos-signature-verification.test.mjs
           pnpm exec vitest run --config config/vitest.config.ts \
             config/scripts/ssh-relay-node-release-verification.test.mjs \
             config/scripts/ssh-relay-node-tar-inspection.test.mjs \
@@ -155,6 +157,7 @@ jobs:
             config/scripts/ssh-relay-runtime-windows-authenticode-assessment.test.mjs \
             config/scripts/ssh-relay-runtime-native-signing-stage.test.mjs \
             config/scripts/ssh-relay-runtime-native-signing-apply.test.mjs \
+            config/scripts/ssh-relay-runtime-macos-signature-verification.test.mjs \
             config/scripts/ssh-relay-runtime-closure.test.mjs \
             config/scripts/ssh-relay-runtime-pty-smoke.test.mjs \
             config/scripts/ssh-relay-runtime-reproducibility.test.mjs \
@@ -458,6 +461,10 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'runtime native signing apply script syntax check failed' }
           node --check config/scripts/ssh-relay-runtime-native-signing-apply.test.mjs
           if ($LASTEXITCODE -ne 0) { throw 'runtime native signing apply test syntax check failed' }
+          node --check config/scripts/ssh-relay-runtime-macos-signature-verification.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'runtime macOS signature verification script syntax check failed' }
+          node --check config/scripts/ssh-relay-runtime-macos-signature-verification.test.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'runtime macOS signature verification test syntax check failed' }
           pnpm exec vitest run --config config/vitest.config.ts `
             config/scripts/ssh-relay-node-release-verification.test.mjs `
             config/scripts/ssh-relay-node-tar-inspection.test.mjs `
@@ -476,6 +483,7 @@ jobs:
             config/scripts/ssh-relay-runtime-windows-authenticode-assessment.test.mjs `
             config/scripts/ssh-relay-runtime-native-signing-stage.test.mjs `
             config/scripts/ssh-relay-runtime-native-signing-apply.test.mjs `
+            config/scripts/ssh-relay-runtime-macos-signature-verification.test.mjs `
             config/scripts/ssh-relay-runtime-closure.test.mjs `
             config/scripts/ssh-relay-runtime-pty-smoke.test.mjs `
             config/scripts/ssh-relay-runtime-reproducibility.test.mjs `
