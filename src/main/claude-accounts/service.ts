@@ -30,6 +30,7 @@ import {
   writeManagedClaudeKeychainCredentials
 } from './keychain'
 import { beginClaudeAuthSwitch, endClaudeAuthSwitch } from './live-pty-gate'
+import { findDuplicateClaudeAccount } from './claude-duplicate-account'
 import { parseWslUncPath } from '../../shared/wsl-paths'
 import { toWindowsWslPath } from '../wsl'
 import { buildEncodedWslBashCommand } from '../wsl-bash-command'
@@ -144,6 +145,19 @@ export class ClaudeAccountService {
       const captured = await this.runClaudeLoginAndCapture(managedAuth)
       if (!captured.identity.email) {
         throw new Error('Claude login completed, but Orca could not resolve the account email.')
+      }
+      // Why: re-adding the same identity would create a duplicate row that
+      // confuses account selection and rate-limit tracking (#6616). The per-row
+      // Re-authenticate action already covers users who want to refresh creds.
+      if (
+        findDuplicateClaudeAccount(previousSettings.claudeManagedAccounts, {
+          email: captured.identity.email,
+          organizationUuid: captured.identity.organizationUuid,
+          managedAuthRuntime: managedAuth.managedAuthRuntime,
+          wslDistro: managedAuth.wslDistro
+        })
+      ) {
+        throw new Error('This Claude account is already added.')
       }
       await this.writeManagedAuth(accountId, managedAuthPath, captured)
 
