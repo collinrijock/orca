@@ -259,6 +259,9 @@ describe('listOpenCodeSqliteSessions', () => {
       platform: 'darwin'
     })
     expect(cleanSession?.sessionId).toBe('ses_clean')
+    await expect(
+      parseOpenCodeSqliteSession({ dbPath: path, sessionId: 'ses_noise', platform: 'darwin' })
+    ).rejects.toThrow('malformed JSON')
   })
 
   it('dedups matching session ids across databases and keeps the newest row', async () => {
