@@ -198,6 +198,40 @@ function assertExactReturnedClosure(actual, expectedFiles) {
   }
 }
 
+export async function verifySshRelayRuntimeNativeSigningInput({ stagingRoot, selection }) {
+  if (selection.signingFiles.length === 0) {
+    throw new Error('Runtime native signing selection has no input payload')
+  }
+  const absoluteStagingRoot = resolve(stagingRoot)
+  const rootMetadata = await lstat(absoluteStagingRoot)
+  if (rootMetadata.isSymbolicLink() || !rootMetadata.isDirectory()) {
+    throw new Error('Runtime native signing input root must be a real directory')
+  }
+  const actual = await walkReturnedTree(absoluteStagingRoot)
+  assertExactReturnedClosure(actual, selection.signingFiles)
+  let stagedSize = 0
+  const stagedFiles = []
+  for (const entry of selection.signingFiles) {
+    const staged = actual.files.get(entry.path)
+    if (
+      staged.metadata.size !== entry.sourceSize ||
+      (await sha256File(staged.path)) !== entry.sourceSha256
+    ) {
+      throw new Error(`Runtime native signing input changed after staging: ${entry.path}`)
+    }
+    stagedSize += staged.metadata.size
+    if (stagedSize > MAX_RETURNED_PAYLOAD_BYTES) {
+      throw new Error('Runtime native signing input exceeds total size bound')
+    }
+    stagedFiles.push({
+      path: entry.path,
+      sourceSha256: entry.sourceSha256,
+      sourceSize: entry.sourceSize
+    })
+  }
+  return { tupleId: selection.tupleId, stagedFiles, stagedSize }
+}
+
 export async function verifySshRelayRuntimeNativeSigningReturn({ returnedRoot, selection }) {
   if (selection.signingFiles.length === 0) {
     throw new Error('Runtime native signing selection has no returned payload')

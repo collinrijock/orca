@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 import { createReadStream, createWriteStream } from 'node:fs'
-import { rm, stat } from 'node:fs/promises'
+import { chmod, mkdir, rm, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import { pipeline } from 'node:stream/promises'
 
@@ -123,6 +123,61 @@ export async function inspectSshRelayRuntimeZip(archivePath, identity, { signal 
         if (verified.sha256 !== declared.sha256) {
           throw new Error(`Runtime ZIP file integrity mismatch: ${actual.path}`)
         }
+      }
+    },
+    { signal }
+  )
+  const missing = [...expected.keys()].find((path) => !seen.has(path))
+  if (missing) {
+    throw new Error(`Runtime ZIP is missing declared entry: ${missing}`)
+  }
+  if (result.files !== identity.fileCount || result.expandedBytes !== identity.expandedSize) {
+    throw new Error('Runtime ZIP aggregate size or file-count mismatch')
+  }
+  return result
+}
+
+export async function extractSshRelayRuntimeZip({
+  archivePath,
+  outputDirectory,
+  identity,
+  signal
+}) {
+  const expected = new Map(identity.entries.map((entry) => [entry.path, entry]))
+  const seen = new Set()
+  const result = await visitSshRelayZip(
+    archivePath,
+    ZIP_LIMITS,
+    async (actual, consume) => {
+      const declared = expected.get(actual.path)
+      if (!declared || seen.has(actual.path)) {
+        throw new Error(`Runtime ZIP has extra or duplicate entry: ${actual.path}`)
+      }
+      seen.add(actual.path)
+      if (
+        actual.type !== declared.type ||
+        actual.unixMode === null ||
+        (actual.unixMode & 0o777) !== declared.mode
+      ) {
+        throw new Error(`Runtime ZIP type or mode mismatch: ${actual.path}`)
+      }
+      const outputPath = join(outputDirectory, ...actual.path.split('/'))
+      if (declared.type === 'directory') {
+        await mkdir(outputPath, { recursive: true, mode: declared.mode })
+        if (process.platform !== 'win32') {
+          await chmod(outputPath, declared.mode)
+        }
+        return
+      }
+      if (actual.size !== declared.size) {
+        throw new Error(`Runtime ZIP size mismatch: ${actual.path}`)
+      }
+      const extracted = await consume({ outputPath, mode: declared.mode })
+      if (extracted.sha256 !== declared.sha256) {
+        throw new Error(`Runtime ZIP file integrity mismatch: ${actual.path}`)
+      }
+      if (process.platform !== 'win32') {
+        await chmod(outputPath, declared.mode)
       }
     },
     { signal }
