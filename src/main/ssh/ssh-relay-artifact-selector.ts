@@ -67,6 +67,8 @@ export type SshRelayArtifactSelection =
     }
   | { kind: 'legacy'; reason: SshRelayArtifactLegacyReason }
 
+export type SshRelaySelectedArtifact = Extract<SshRelayArtifactSelection, { kind: 'selected' }>
+
 function selectedArtifact(
   tuple: VerifiedSshRelayRuntimeTuple,
   releaseTag: string
