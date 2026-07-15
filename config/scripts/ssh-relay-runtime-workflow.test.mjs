@@ -88,6 +88,7 @@ describe('SSH relay runtime artifact workflow', () => {
       source.match(/ssh-relay-runtime-windows-authenticode-assessment\.test\.mjs/g)
     ).toHaveLength(4)
     expect(source.match(/ssh-relay-runtime-native-signing-stage\.test\.mjs/g)).toHaveLength(4)
+    expect(source.match(/ssh-relay-runtime-native-signing-apply\.test\.mjs/g)).toHaveLength(4)
     expect(
       source.match(/node --check config\/scripts\/ssh-relay-runtime-native-signing-plan\.mjs/g)
     ).toHaveLength(2)
@@ -104,6 +105,9 @@ describe('SSH relay runtime artifact workflow', () => {
     ).toHaveLength(2)
     expect(
       source.match(/node --check config\/scripts\/ssh-relay-runtime-native-signing-stage\.mjs/g)
+    ).toHaveLength(2)
+    expect(
+      source.match(/node --check config\/scripts\/ssh-relay-runtime-native-signing-apply\.mjs/g)
     ).toHaveLength(2)
     expect(
       source.match(/node --check config\/scripts\/ssh-relay-runtime-closure\.mjs/g)

@@ -135,6 +135,8 @@ jobs:
           node --check config/scripts/ssh-relay-runtime-windows-authenticode-assessment.test.mjs
           node --check config/scripts/ssh-relay-runtime-native-signing-stage.mjs
           node --check config/scripts/ssh-relay-runtime-native-signing-stage.test.mjs
+          node --check config/scripts/ssh-relay-runtime-native-signing-apply.mjs
+          node --check config/scripts/ssh-relay-runtime-native-signing-apply.test.mjs
           pnpm exec vitest run --config config/vitest.config.ts \
             config/scripts/ssh-relay-node-release-verification.test.mjs \
             config/scripts/ssh-relay-node-tar-inspection.test.mjs \
@@ -152,6 +154,7 @@ jobs:
             config/scripts/ssh-relay-runtime-native-signing-payload.test.mjs \
             config/scripts/ssh-relay-runtime-windows-authenticode-assessment.test.mjs \
             config/scripts/ssh-relay-runtime-native-signing-stage.test.mjs \
+            config/scripts/ssh-relay-runtime-native-signing-apply.test.mjs \
             config/scripts/ssh-relay-runtime-closure.test.mjs \
             config/scripts/ssh-relay-runtime-pty-smoke.test.mjs \
             config/scripts/ssh-relay-runtime-reproducibility.test.mjs \
@@ -451,6 +454,10 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'runtime native signing stage script syntax check failed' }
           node --check config/scripts/ssh-relay-runtime-native-signing-stage.test.mjs
           if ($LASTEXITCODE -ne 0) { throw 'runtime native signing stage test syntax check failed' }
+          node --check config/scripts/ssh-relay-runtime-native-signing-apply.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'runtime native signing apply script syntax check failed' }
+          node --check config/scripts/ssh-relay-runtime-native-signing-apply.test.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'runtime native signing apply test syntax check failed' }
           pnpm exec vitest run --config config/vitest.config.ts `
             config/scripts/ssh-relay-node-release-verification.test.mjs `
             config/scripts/ssh-relay-node-tar-inspection.test.mjs `
@@ -468,6 +475,7 @@ jobs:
             config/scripts/ssh-relay-runtime-native-signing-payload.test.mjs `
             config/scripts/ssh-relay-runtime-windows-authenticode-assessment.test.mjs `
             config/scripts/ssh-relay-runtime-native-signing-stage.test.mjs `
+            config/scripts/ssh-relay-runtime-native-signing-apply.test.mjs `
             config/scripts/ssh-relay-runtime-closure.test.mjs `
             config/scripts/ssh-relay-runtime-pty-smoke.test.mjs `
             config/scripts/ssh-relay-runtime-reproducibility.test.mjs `
