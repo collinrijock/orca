@@ -56,7 +56,8 @@ import { getAgentForegroundContextPaths } from './agent-foreground-context-paths
 import { recognizeAgentProcessFromCommandLine } from '../../shared/agent-process-recognition'
 import {
   captureDescendantSnapshot,
-  terminateDescendantSnapshot
+  terminateDescendantSnapshot,
+  type DescendantSnapshot
 } from '../pty-descendant-termination'
 import { readWindowsConptyProcessIds } from './windows-conpty-process-membership'
 import { shouldUseShellReadyStartupDelivery } from '../../shared/codex-startup-delivery'
@@ -940,35 +941,47 @@ export class LocalPtyProvider implements IPtyProvider {
   private async shutdownTrackedPty(id: string, proc: pty.IPty): Promise<void> {
     // Why: the snapshot must precede any signal/destroy — once the shell dies,
     // surviving descendants reparent to pid 1 and a ppid walk can't find them.
-    const descendants = ptyAgentSessionIds.has(id)
-      ? await captureDescendantSnapshot(proc.pid)
-      : null
+    let descendants: DescendantSnapshot | null = null
+    if (ptyAgentSessionIds.has(id)) {
+      try {
+        descendants = await captureDescendantSnapshot(proc.pid)
+      } catch {
+        // Why: an unexpected snapshot failure must degrade to the established
+        // root-only teardown instead of leaving the PTY alive and reattachable.
+      }
+    }
     // Why the handle re-check: the snapshot is this method's only await, and a
     // natural exit may have raced it. Signalling after ownership is lost could
     // apply the old numeric PID's snapshot to a recycled, unrelated process.
     if (ptyProcesses.get(id) === proc) {
-      if (descendants) {
-        // Signal captured children before killing the root so parent links do
-        // not disappear during the sweep.
-        terminateDescendantSnapshot(descendants)
-      }
-      // Why: disposePtyListeners removes the onExit callback, so the natural
-      // exit cleanup path from node-pty won't fire. Cleanup and notification
-      // must happen unconditionally after the try/catch.
-      // Timer/writer cleanup must happen here too: disposing listeners prevents
-      // the natural onExit callback from running the usual clearPtyState path.
-      runPtyCleanup(id)
-      disposePtyListeners(id)
       try {
-        proc.kill()
+        if (descendants) {
+          // Signal captured children before killing the root so parent links do
+          // not disappear during the sweep.
+          terminateDescendantSnapshot(descendants)
+        }
       } catch {
-        /* Process may already be dead */
-      }
-      destroyPtyProcess(proc, { alreadyKilled: true })
-      clearPtyState(id)
-      this.opts.onExit?.(id, -1)
-      for (const cb of exitListeners) {
-        cb({ id, code: -1 })
+        // Why: descendant signalling is best-effort; root teardown remains the
+        // authority that makes this session unavailable to later reattach.
+      } finally {
+        // Why: disposePtyListeners removes the onExit callback, so the natural
+        // exit cleanup path from node-pty won't fire. Cleanup and notification
+        // must happen unconditionally after the try/catch.
+        // Timer/writer cleanup must happen here too: disposing listeners prevents
+        // the natural onExit callback from running the usual clearPtyState path.
+        runPtyCleanup(id)
+        disposePtyListeners(id)
+        try {
+          proc.kill()
+        } catch {
+          /* Process may already be dead */
+        }
+        destroyPtyProcess(proc, { alreadyKilled: true })
+        clearPtyState(id)
+        this.opts.onExit?.(id, -1)
+        for (const cb of exitListeners) {
+          cb({ id, code: -1 })
+        }
       }
     }
   }

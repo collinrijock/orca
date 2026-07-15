@@ -32,6 +32,37 @@ export type ProcessTableCapture = {
 export type ProcessTableReader = (timeoutMs?: number) => Promise<ProcessTableCapture>
 export type SignalSender = (pid: number, signal: NodeJS.Signals) => void
 
+type ProcessTableIndex = {
+  childrenByPpid: Map<number, ProcessTableRow[]>
+  uniqueRowsByPid: Map<number, ProcessTableRow | null>
+}
+
+// Why: coalesced teardown callers share the same rows array. Cache its indexes
+// so a bulk close does not rescan the full host process table per session.
+const processTableIndexes = new WeakMap<ProcessTableRow[], ProcessTableIndex>()
+
+function getProcessTableIndex(table: ProcessTableRow[]): ProcessTableIndex {
+  const cached = processTableIndexes.get(table)
+  if (cached) {
+    return cached
+  }
+  const childrenByPpid = new Map<number, ProcessTableRow[]>()
+  const uniqueRowsByPid = new Map<number, ProcessTableRow | null>()
+  for (const row of table) {
+    const siblings = childrenByPpid.get(row.ppid)
+    if (siblings) {
+      siblings.push(row)
+    } else {
+      childrenByPpid.set(row.ppid, [row])
+    }
+    const pid = row.pid
+    uniqueRowsByPid.set(pid, uniqueRowsByPid.has(pid) ? null : row)
+  }
+  const index = { childrenByPpid, uniqueRowsByPid }
+  processTableIndexes.set(table, index)
+  return index
+}
+
 export function parseProcessTable(psOutput: string): ProcessTableRow[] {
   const rows: ProcessTableRow[] = []
   for (const line of psOutput.split('\n')) {
@@ -148,20 +179,7 @@ export function collectDescendantRows(
   table: ProcessTableRow[],
   capturedAtMs = Date.now()
 ): DescendantSnapshot {
-  const childrenByPpid = new Map<number, ProcessTableRow[]>()
-  let rootRow: ProcessTableRow | null = null
-  for (const row of table) {
-    if (row.pid === rootPid) {
-      rootRow = row
-      continue
-    }
-    const siblings = childrenByPpid.get(row.ppid)
-    if (siblings) {
-      siblings.push(row)
-    } else {
-      childrenByPpid.set(row.ppid, [row])
-    }
-  }
+  const { childrenByPpid, uniqueRowsByPid } = getProcessTableIndex(table)
   const descendants: ProcessTableRow[] = []
   const queue = [rootPid]
   const visited = new Set(queue)
@@ -170,15 +188,16 @@ export function collectDescendantRows(
     for (const child of childrenByPpid.get(pid) ?? []) {
       // Why: ps is not an atomic snapshot. PID reuse can produce duplicate or
       // cyclic-looking rows, which must not hang the Electron main thread.
-      if (visited.has(child.pid)) {
+      const childPid = child.pid
+      if (visited.has(childPid)) {
         continue
       }
-      visited.add(child.pid)
+      visited.add(childPid)
       descendants.push(child)
-      queue.push(child.pid)
+      queue.push(childPid)
     }
   }
-  return { rootPgid: rootRow?.pgid ?? null, descendants, capturedAtMs }
+  return { rootPgid: uniqueRowsByPid.get(rootPid)?.pgid ?? null, descendants, capturedAtMs }
 }
 
 type SnapshotDeps = {
@@ -224,13 +243,16 @@ export async function killWithDescendantSweep(
   killRoot: () => void,
   deps: SnapshotDeps & TerminateDeps & { ownsRoot?: () => boolean } = {}
 ): Promise<void> {
-  const snapshot = await captureDescendantSnapshot(rootPid, deps)
   try {
+    const snapshot = await captureDescendantSnapshot(rootPid, deps)
     // Signal the captured descendants while their parent links still exist;
     // killing the root first creates a reparent/PID-reuse window.
     if (snapshot && (deps.ownsRoot?.() ?? true)) {
       terminateDescendantSnapshot(snapshot, deps)
     }
+  } catch {
+    // Why: descendant cleanup is best-effort; an unexpected scan or signalling
+    // failure must still fall back to the established root-only teardown.
   } finally {
     killRoot()
   }
@@ -287,16 +309,7 @@ export function terminateDescendantSnapshot(
       if (!capture) {
         return
       }
-      const expectedPids = new Set(snapshot.descendants.map((row) => row.pid))
-      const liveTargets = new Map<number, ProcessTableRow | null>()
-      // Why: a process table may be large, while one agent's descendants are
-      // normally few. Index only signal targets instead of duplicating every row.
-      for (const live of capture.rows) {
-        if (expectedPids.has(live.pid)) {
-          // Duplicate PID rows make identity ambiguous, so never escalate them.
-          liveTargets.set(live.pid, liveTargets.has(live.pid) ? null : live)
-        }
-      }
+      const { uniqueRowsByPid: liveTargets } = getProcessTableIndex(capture.rows)
       for (const row of snapshot.descendants) {
         const live = liveTargets.get(row.pid)
         if (

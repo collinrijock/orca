@@ -95,6 +95,35 @@ describe('collectDescendantRows', () => {
     expect(snapshot.rootPgid).toBeNull()
     expect(snapshot.descendants.map((r) => r.pid)).toEqual([20])
   })
+
+  it('indexes shared process rows once across a coalesced teardown burst', () => {
+    let pidReads = 0
+    const countedRow = (pid: number, ppid: number): ProcessTableRow => {
+      const processRow = row(pid, ppid, pid)
+      Object.defineProperty(processRow, 'pid', {
+        configurable: true,
+        enumerable: true,
+        get: () => {
+          pidReads += 1
+          return pid
+        }
+      })
+      return processRow
+    }
+    const roots = Array.from({ length: 20 }, (_, index) => 2_000 + index)
+    const table = [
+      ...Array.from({ length: 1_000 }, (_, index) => countedRow(index + 1, 0)),
+      ...roots.flatMap((rootPid) => [countedRow(rootPid, 0), countedRow(rootPid + 10_000, rootPid)])
+    ]
+
+    for (const rootPid of roots) {
+      expect(collectDescendantRows(rootPid, table).descendants).toHaveLength(1)
+    }
+
+    // One full-table index plus one child visit per root. A per-session rescan
+    // would perform more than 20,000 reads for this same shared capture.
+    expect(pidReads).toBe(table.length + roots.length)
+  })
 })
 
 describe('captureDescendantSnapshot', () => {
@@ -361,6 +390,17 @@ describe('killWithDescendantSweep', () => {
     await pending
     expect(killRoot).toHaveBeenCalledOnce()
     expect(sendSignal).not.toHaveBeenCalled()
+  })
+
+  it('still kills the root when unexpected snapshot processing throws', async () => {
+    const killRoot = vi.fn()
+    const readTable = vi.fn().mockResolvedValue({ rows: null, capturedAtMs: CAPTURED_AT_MS })
+
+    await expect(
+      killWithDescendantSweep(10, killRoot, { readTable, platform: 'darwin' })
+    ).resolves.toBeUndefined()
+
+    expect(killRoot).toHaveBeenCalledOnce()
   })
 
   it('does not signal a captured tree after the caller loses root ownership', async () => {

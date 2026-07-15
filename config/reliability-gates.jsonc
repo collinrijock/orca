@@ -711,7 +711,7 @@
         "ssh",
         "runtime"
       ],
-      "coverageNotes": "Live macOS Electron tests prove exact local PTY disappearance after parked-tab close and detached-pgid descendant death after agent close. Deterministic tests cover daemon and SSH routing, local/daemon pending-snapshot ownership across natural exit, stale-root descendant-signal suppression, graceful-to-immediate kill upgrades, duplicate-kill completion sharing, locale-stable bounded/fresh/coalesced process-table reads, deadline-safe successor scans, cycle-safe linear descendant traversal, target-only escalation indexing, 32-wide bulk teardown, source-scan timestamp identity, same-second PID ambiguity, ordinary runtime close ownership, unified-only hydration, split ownership, pane detach transfer, restart alias hydration, and late-hook suppression; live Linux, Windows, WSL, SSH, and remote-runtime process evidence remains pending.",
+      "coverageNotes": "Live macOS Electron tests prove exact local PTY disappearance after parked-tab close and detached-pgid descendant death after agent close. Deterministic tests cover daemon and SSH routing, local/daemon pending-snapshot ownership across natural exit, stale-root descendant-signal suppression, graceful-to-immediate kill upgrades, duplicate-kill completion sharing, locale-stable bounded/fresh/coalesced process-table reads, one shared row index per coalesced capture, deadline-safe successor scans, cycle-safe linear descendant traversal, 32-wide bulk teardown, source-scan timestamp identity, same-second PID ambiguity, ordinary runtime close ownership, unified-only hydration, split ownership, pane detach transfer, restart alias hydration, and late-hook suppression; live Linux, Windows, WSL, SSH, and remote-runtime process evidence remains pending.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/pull/8628",
         "https://github.com/stablyai/orca/pull/8706"
@@ -770,6 +770,7 @@
             "20 same-turn process-table requests execute one fresh scan while later arrivals start one shared successor inside their own deadline",
             "snapshot and escalation readers stop at their deadline",
             "production ps reads force locale-independent C timestamps",
+            "20 session captures index one shared 1,040-row process table once instead of rescanning it per session",
             "the source scan timestamp survives request resolution and capture-second identities are never escalated with SIGKILL",
             "cyclic-looking duplicate PID rows terminate with each descendant visited once and duplicate escalation identities stay unsignalled",
             "descendant signals are suppressed after the caller loses root ownership"
@@ -824,7 +825,7 @@
           "command": "pnpm run test:e2e -- tests/e2e/agent-descendant-process-kill.spec.ts --workers=1",
           "result": "passed",
           "durationSeconds": 78,
-          "summary": "The cycle-safe, target-indexed, bounded-fanout review head passed from a cold full build; the live detached-pgid descendant test body completed in 4.8 seconds."
+          "summary": "The cycle-safe, shared-indexed, bounded-fanout review head passed from a cold full build; the live detached-pgid descendant test body completed in 4.8 seconds."
         }
       ],
       "runtimeBudget": {
@@ -841,7 +842,7 @@
       },
       "performanceBudget": {
         "required": true,
-        "evidence": "The close path is user-triggered and bounded by canonical live-owner indexing. Production ps has a 1s kill timeout; 20 same-turn requests execute one fresh process-table read, while requests arriving after a scan starts immediately share one successor so their deadline is not consumed waiting and no unusable ps starts after timeout. Completed tables are never reused. Bulk worktree shutdown runs in 32-wide batches so each batch can coalesce its initial scan without unbounded provider fanout. Descendant traversal uses a visited set and index cursor; a Node 24 local 100,000-wide synthetic tree fell from 861ms to 16.7ms, and escalation indexes only the requested descendant PIDs instead of duplicating the full process table. Escalation uses the same bounded coordinator, and kill-all store scale remains covered by terminal-session.kill-all-surface-cleanup."
+        "evidence": "The close path is user-triggered and bounded by canonical live-owner indexing. Production ps has a 1s kill timeout; 20 same-turn requests execute one fresh process-table read, while requests arriving after a scan starts immediately share one successor so their deadline is not consumed waiting and no unusable ps starts after timeout. Completed tables are never reused. Bulk worktree shutdown runs in 32-wide batches so each batch can coalesce its initial scan without unbounded provider fanout. Descendant traversal uses a visited set and index cursor; a Node 24 local 100,000-wide synthetic tree fell from 861ms to 16.7ms. A deterministic count test proves 20 session captures of one 1,040-row table perform 1,060 PID reads instead of more than 20,000; capture and escalation indexes are weakly held by the shared rows array and release with it. Escalation uses the same bounded coordinator, and kill-all store scale remains covered by terminal-session.kill-all-surface-cleanup."
       },
       "promotionCriteria": [
         "Accumulate 100 clean runs or 14 days on required CI platforms.",
