@@ -9,7 +9,15 @@ const workflowUrl = new URL(
 )
 const linuxBuilderUrl = new URL('../ssh-relay-runtime-linux-builder.Containerfile', import.meta.url)
 
+function normalizeCheckoutNewlines(source) {
+  return source.replaceAll('\r\n', '\n')
+}
+
 describe('SSH relay runtime artifact workflow', () => {
+  it('normalizes Windows checkout newlines for text contracts', () => {
+    expect(normalizeCheckoutNewlines('first\r\nsecond\r\n')).toBe('first\nsecond\n')
+  })
+
   it('uses exact native runner labels and SHA-pinned actions without publication authority', async () => {
     const workflow = parse(await readFile(workflowUrl, 'utf8'))
     const posixJob = workflow.jobs['build-posix-runtime']
@@ -149,6 +157,8 @@ describe('SSH relay runtime artifact workflow', () => {
       (step) => step.name === 'Build twice, inspect, smoke, and compare exact runtime'
     )
     const containerfile = await readFile(linuxBuilderUrl, 'utf8')
+    // Why: Git may materialize CRLF on Windows, but the Containerfile contract is newline-agnostic.
+    const normalizedContainerfile = normalizeCheckoutNewlines(containerfile)
 
     expect(prepare.if).toBe("runner.os == 'Linux'")
     expect(prepare.run).toContain('docker pull "$image"')
@@ -161,14 +171,14 @@ describe('SSH relay runtime artifact workflow', () => {
     expect(build.run.indexOf('--network none')).toBeLessThan(
       build.run.indexOf('ssh-relay-runtime-linux-build-evidence.mjs')
     )
-    expect(containerfile).toContain('ARG BASE_IMAGE=scratch\nFROM ${BASE_IMAGE}')
-    expect(containerfile).toContain("getconf GNU_LIBC_VERSION)\" = 'glibc 2.28'")
-    expect(containerfile).toContain('libstdc++.so.6.0.25')
-    expect(containerfile).toContain('dnf module enable -y -q nodejs:20')
-    expect(containerfile).toContain('Number(process.versions.node.split')
-    expect(containerfile).toContain('python39')
-    expect(containerfile).toContain('NODE_GYP_FORCE_PYTHON=/usr/bin/python3.9')
-    expect(containerfile).toContain('      which \\\n')
+    expect(normalizedContainerfile).toContain('ARG BASE_IMAGE=scratch\nFROM ${BASE_IMAGE}')
+    expect(normalizedContainerfile).toContain("getconf GNU_LIBC_VERSION)\" = 'glibc 2.28'")
+    expect(normalizedContainerfile).toContain('libstdc++.so.6.0.25')
+    expect(normalizedContainerfile).toContain('dnf module enable -y -q nodejs:20')
+    expect(normalizedContainerfile).toContain('Number(process.versions.node.split')
+    expect(normalizedContainerfile).toContain('python39')
+    expect(normalizedContainerfile).toContain('NODE_GYP_FORCE_PYTHON=/usr/bin/python3.9')
+    expect(normalizedContainerfile).toContain('      which \\\n')
     expect(source).not.toMatch(/releases\/|gh release|contents:\s*write/i)
   })
 
