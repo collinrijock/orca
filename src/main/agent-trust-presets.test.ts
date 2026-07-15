@@ -299,6 +299,18 @@ describe('markClaudeFolderTrusted', () => {
       rmSync(workspace, { recursive: true, force: true })
     }
   })
+
+  it('refuses to replace a syntactically valid non-object config', () => {
+    const workspace = mkdtempSync(join(tmpdir(), 'orca-claude-ws-'))
+    try {
+      const configPath = join(testState.fakeHomeDir, '.claude.json')
+      writeFileSync(configPath, '["unexpected"]')
+      markClaudeFolderTrusted(workspace)
+      expect(readFileSync(configPath, 'utf-8')).toBe('["unexpected"]')
+    } finally {
+      rmSync(workspace, { recursive: true, force: true })
+    }
+  })
 })
 
 function escapeTomlBasicString(value: string): string {

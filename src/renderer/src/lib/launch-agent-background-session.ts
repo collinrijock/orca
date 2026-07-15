@@ -56,7 +56,10 @@ export async function launchAgentBackgroundSession(
     try {
       await window.api.agentTrust.markTrusted({
         preset: preflight,
-        workspacePath: worktree.path
+        workspacePath: worktree.path,
+        // Why: an SSH worktree's trust state belongs on its execution host;
+        // omitting this would mutate the client's config with a remote path.
+        ...(repo?.connectionId ? { connectionId: repo.connectionId } : {})
       })
     } catch {
       // Best-effort: continue with launch. The user can still accept the trust menu.

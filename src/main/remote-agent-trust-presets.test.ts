@@ -36,6 +36,23 @@ describe('markRemoteAgentWorkspaceTrusted', () => {
     })
   })
 
+  it('does not perform remote I/O for the local-only Claude preset', async () => {
+    const fsProvider = makeFsProvider()
+    mocks.getSshFilesystemProvider.mockReturnValue(fsProvider)
+
+    await markRemoteAgentWorkspaceTrusted({
+      preset: 'claude',
+      connectionId: 'ssh-1',
+      workspacePath: '/repo/worktree'
+    })
+
+    expect(mocks.getActiveMultiplexer).not.toHaveBeenCalled()
+    expect(mocks.getSshFilesystemProvider).not.toHaveBeenCalled()
+    expect(fsProvider.realpath).not.toHaveBeenCalled()
+    expect(fsProvider.readFile).not.toHaveBeenCalled()
+    expect(fsProvider.writeFile).not.toHaveBeenCalled()
+  })
+
   it('writes Codex trust to the remote home and canonicalized workspace path', async () => {
     const fsProvider = makeFsProvider()
     mocks.getSshFilesystemProvider.mockReturnValue(fsProvider)

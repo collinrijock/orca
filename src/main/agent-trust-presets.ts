@@ -139,9 +139,10 @@ export function markClaudeFolderTrusted(workspacePath: string): void {
   try {
     if (existsSync(configPath)) {
       const parsed = JSON.parse(readFileSync(configPath, 'utf-8'))
-      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-        config = parsed as Record<string, unknown>
+      if (!isJsonObject(parsed)) {
+        return
       }
+      config = parsed
     }
   } catch {
     // Why: a corrupted .claude.json is the user's to fix — refuse to overwrite
@@ -171,6 +172,10 @@ export function markClaudeFolderTrusted(workspacePath: string): void {
   // mode-less atomic write would rename a umask-default (0o644) temp file over
   // it and leak that data to other local users on shared/SSH hosts.
   writeFileAtomically(configPath, `${JSON.stringify(config, null, 2)}\n`, { mode: 0o600 })
+}
+
+function isJsonObject(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
 }
 
 function canonicalize(p: string): string {

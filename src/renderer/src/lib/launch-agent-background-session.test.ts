@@ -654,6 +654,12 @@ describe('launchAgentBackgroundSession', () => {
         title: 'Nightly audit'
       })
 
+      expect(mockMarkTrusted).toHaveBeenCalledWith({
+        preset: 'claude',
+        workspacePath: '/repo/worktree',
+        connectionId: 'ssh-1'
+      })
+
       expect(mockSpawn.mock.calls[0]?.[0]?.command).toBe(
         "claude '--dangerously-skip-permissions' 'run the automation'"
       )
