@@ -242,8 +242,11 @@ complete a box.
       signing remains blocked and no release, desktop, publication, or tuple consumer is connected.
       The missing-workflow/seed-signer RED is
       `E-M4-PROTECTED-MANIFEST-WORKFLOW-LOCAL-RED-001`; the seed signer is locally green under
-      `E-M4-PROTECTED-MANIFEST-SEED-LOCAL-001`, while the filesystem aggregate command and workflow
-      remain open.
+      `E-M4-PROTECTED-MANIFEST-SEED-LOCAL-001` and all-six exact-head CI is closed by
+      `E-M4-PROTECTED-MANIFEST-SEED-CI-001`. The filesystem prepare/finalize command is locally
+      green under `E-M4-MANIFEST-AGGREGATE-COMMAND-LOCAL-RED-001` and
+      `E-M4-MANIFEST-AGGREGATE-COMMAND-LOCAL-001`; exact-head CI and the callable workflow remain
+      open.
 - [ ] Embed the exact signed manifest and accepted keys in each desktop build.
 - [ ] Upload to a draft release, read back, re-hash, and execute the downloaded archives.
 - [ ] Test timeouts, retries, approval denial, signing failure, partial output, and draft recovery.
