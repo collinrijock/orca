@@ -8,8 +8,8 @@ work; keep exact commands, runner identities, hashes, metrics, and residual gaps
 
 Date created: 2026-07-14<br>
 Last updated: 2026-07-15<br>
-Current phase: Milestone 5 / Work Package 4 desktop download boundary — **Offline selection closed; begin disconnected bounded-download RED — 2026-07-15, Codex implementation owner**. The verified immutable offline tuple/content/archive/URL selector is closed locally and on all six exact-head native Node 24 jobs under E-M5-OFFLINE-SELECTION-LOCAL-001 and E-M5-OFFLINE-SELECTION-CI-001. Begin only relay-specific Electron download contracts for bounded streaming, cancellation, exact size/hash, approved GitHub redirects, and credential/header stripping. Do not add cache publication/extraction, desktop call sites, SSH transfer/install, tuple enablement, mode wiring, or default behavior.<br>
-Session checkpoint: **In progress — 2026-07-15, Codex implementation owner** — exact pushed head `3be4e68679f6f235165c8784eca61576dc2fd828` passes the portable artifact/manifest/selector suites and full runtime construction/execution on all six target-native jobs in run 29443291349 under E-M5-OFFLINE-SELECTION-CI-001. PR Checks 29443290994 and both Golden E2E jobs in 29443291091 are green. Both Linux supplements and Windows x64 floor pass. Windows arm64 floor smoke passes in 5,982.393ms with 48,451,584-byte RSS; the floor gate then correctly rejects hosted build 26200 versus required 26100. The user authorizes end-to-end commits, pushes, draft-PR updates, CI runs/reruns, and PR-contained rehearsals, but not merging to `main`. There is no real release write, publication caller, desktop consumer, SSH transfer/install, tuple enablement, or production/default behavior change. No accepted production key, protected environment/seed, native-signing trust proof, publication path, or tuple enablement is connected. Legacy remains the production default.<br>
+Current phase: Milestone 5 / Work Package 4 desktop download boundary — **Disconnected bounded Electron downloader locally GREEN; exact-head native CI pending — 2026-07-15, Codex implementation owner**. The purpose-named missing-module RED and local GREEN are recorded under E-M5-ARTIFACT-DOWNLOAD-LOCAL-RED-001 and E-M5-ARTIFACT-DOWNLOAD-LOCAL-001. This package remains limited to relay-specific bounded streaming, cancellation, exact signed size/hash, one approved GitHub asset redirect, credential/header stripping, exclusive staging, and failure cleanup. Do not add cache publication/extraction, desktop call sites, SSH transfer/install, tuple enablement, mode wiring, or default behavior.<br>
+Session checkpoint: **In progress — 2026-07-15, Codex implementation owner** — 16 focused downloader tests, 89 adjacent desktop trust-chain tests, 307 broad relay build/release contracts, typecheck, full lint, formatting, protected-file zero-diff, and `git diff --check` pass locally under E-M5-ARTIFACT-DOWNLOAD-LOCAL-001. Exact-head Node 24 execution on Linux, macOS, and Windows x64/arm64 is still required. The user authorizes end-to-end commits, pushes, draft-PR updates, CI runs/reruns, and PR-contained rehearsals, but not merging to `main`. There is no real release write, publication caller, desktop consumer, cache publication/extraction, SSH transfer/install, tuple enablement, or production/default behavior change. No accepted production key, protected environment/seed, native-signing trust proof, publication path, or tuple enablement is connected. Legacy remains the production default.<br>
 Primary design: [SSH relay GitHub Release plan](./2026-07-14-ssh-relay-github-release-plan.html)<br>
 Motivating issues: [#8450](https://github.com/stablyai/orca/issues/8450), [#1693](https://github.com/stablyai/orca/issues/1693)
 
@@ -131,10 +131,11 @@ same change as the work it records.
   E-M4-DRAFT-RELEASE-COMPOSITION-LOCAL-RED-001,
   E-M4-DRAFT-RELEASE-COMPOSITION-LOCAL-001, and
   E-M4-DRAFT-RELEASE-COMPOSITION-CI-001.
-- Active package: Work Package 4 offline artifact selection. Begin with a purpose-named RED for
-  exact offline tuple/content selection and immutable GitHub release URL construction from an
-  already-verified embedded manifest. Do not add signature key policy, networking, download/cache,
-  desktop call sites, SSH behavior, mode wiring, tuple enablement, or default behavior in this slice.
+- Active package: **In progress — 2026-07-15, Codex implementation owner** — Work Package 4
+  disconnected bounded Electron downloader. Prove exact signed size/hash streaming into an
+  exclusive staging file, cancellation/cleanup, one approved GitHub asset redirect, and fixed
+  credential-free request headers. Keep cache publication/extraction, desktop call sites, SSH
+  behavior, mode wiring, tuple enablement, and default behavior outside this slice.
 - Completed Work Package 2 gate: target-native Windows source-signature reports from exact-head
   artifact jobs 87267322867 and 87267322870 were independently downloaded and matched to their
   identities and signing-stage reports under E-M3-WINDOWS-SOURCE-SIGNATURE-CI-001. PR Checks
@@ -11920,7 +11921,7 @@ config/vitest.config.ts config/scripts/ssh-relay-runtime-draft-release-verificat
   `8c925c24990ac93f6d2dd8de2081a50a74f30d97`; draft PR #8741. Local runner is macOS 26.2 build
   25C56 arm64, Node v26.0.0, and pnpm 10.24.0. No network request or external write occurred.
 - Command: `/usr/bin/time -l pnpm exec vitest run src/main/ssh/ssh-relay-artifact-selector.test.ts
-  src/main/ssh/ssh-relay-manifest-signature.test.ts` — expected FAIL, 2 files / 26 tests, 7 failed
+src/main/ssh/ssh-relay-manifest-signature.test.ts` — expected FAIL, 2 files / 26 tests, 7 failed
   and 19 passed in 430ms Vitest / 1.31s wall, maximum RSS 136,265,728 bytes, zero swaps.
 - Contract failures: a compatible selection returned only tuple ID/tuple and omitted the exact
   content ID, release tag, authenticated archive metadata, and direct release URL. A verified
@@ -11945,16 +11946,16 @@ config/vitest.config.ts config/scripts/ssh-relay-runtime-draft-release-verificat
   25C56 arm64, Node v26.0.0, and pnpm 10.24.0. All accepted keys and manifests are deterministic
   test fixtures; no GitHub request or external write occurs.
 - Focused command: `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts
-  --maxWorkers=1 src/main/ssh/ssh-relay-artifact-selector.test.ts
-  src/main/ssh/ssh-relay-manifest-signature.test.ts` — PASS, 2 files / 27 tests in 1.42s Vitest /
+--maxWorkers=1 src/main/ssh/ssh-relay-artifact-selector.test.ts
+src/main/ssh/ssh-relay-manifest-signature.test.ts` — PASS, 2 files / 27 tests in 1.42s Vitest /
   3.04s wall; maximum RSS 131,923,968 bytes and zero swaps.
 - Adjacent command: `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts
-  --maxWorkers=1` with artifact schema, signature, release asset, selector, runtime identity, manifest
+--maxWorkers=1` with artifact schema, signature, release asset, selector, runtime identity, manifest
   aggregate, aggregate command, and signing-handoff suites — PASS, 8 files / 91 tests in 3.60s
   Vitest / 4.47s wall; maximum RSS 189,333,504 bytes and zero swaps.
 - Broad command: `/usr/bin/time -l sh -c "rg --files config/scripts | rg
-  '/ssh-relay.*[.]test[.]mjs$' | xargs pnpm exec vitest run --config config/vitest.config.ts
-  --maxWorkers=1"` — PASS, 56 files / 307 tests in 16.83s Vitest / 17.93s wall; maximum RSS
+'/ssh-relay.*[.]test[.]mjs$' | xargs pnpm exec vitest run --config config/vitest.config.ts
+--maxWorkers=1"` — PASS, 56 files / 307 tests in 16.83s Vitest / 17.93s wall; maximum RSS
   189,857,792 bytes and zero swaps.
 - Static gates: `/usr/bin/time -l pnpm typecheck` passes in 2.46s wall with 1,252,245,504-byte
   maximum RSS. `/usr/bin/time -l pnpm lint` passes in 26.98s wall with 2,021,146,624-byte maximum
@@ -11987,11 +11988,11 @@ config/vitest.config.ts config/scripts/ssh-relay-runtime-draft-release-verificat
   29443022528, and 29443022549 had started but cannot close the selector package because the native
   artifact workflow lacked its purpose-named source suites.
 - Audit signal: `rg -n "artifact-selector|manifest-signature|artifact-schema|release-asset|vitest.*src/main/ssh"
-  .github/workflows config/scripts` returned no selector/source-suite invocation from
+.github/workflows config/scripts` returned no selector/source-suite invocation from
   `.github/workflows/ssh-relay-runtime-artifacts.yml`.
 - Purpose-named RED command after adding only the workflow assertion:
   `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1
-  config/scripts/ssh-relay-runtime-workflow.test.mjs` — expected FAIL, 1 failed / 6 passed of 7 in
+config/scripts/ssh-relay-runtime-workflow.test.mjs` — expected FAIL, 1 failed / 6 passed of 7 in
   473ms Vitest / 2.07s wall, maximum RSS 131,694,592 bytes, zero swaps. The workflow contained zero
   occurrences where two job-family invocations were required.
 - Contract pinned by the RED: artifact schema, signature, release asset, selector, and runtime
@@ -12070,6 +12071,69 @@ config/vitest.config.ts config/scripts/ssh-relay-runtime-draft-release-verificat
   bounded relay-download RED. Preserve every cache, consumer, SSH, tuple, publication, and default
   disconnection.
 
+### E-M5-ARTIFACT-DOWNLOAD-LOCAL-RED-001 — Relay-specific bounded downloader was absent
+
+- Date: 2026-07-15
+- Owner: Codex implementation owner
+- Source: uncommitted RED atop exact pushed head
+  `1e3356cc6fa4e4090935184879b5a77db94ad2e5`; draft PR #8741. Local runner is macOS 26.2 build
+  25C56 arm64, Node v26.0.0, and pnpm 10.24.0. No GitHub request or external write occurred.
+- Command: `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1
+src/main/ssh/ssh-relay-artifact-download.test.ts` — expected FAIL because
+  `ssh-relay-artifact-download` did not exist, 1 failed suite / 0 tests in 157ms Vitest / 1.05s
+  wall; maximum RSS 132,038,656 bytes and zero swaps.
+- Contract pinned by the RED: consume only an already signature-verified selected artifact; use
+  Electron networking; stream into a caller-named exclusive staging file; impose a five-minute
+  total timeout; enforce signed response size and SHA-256; allow at most one exact approved GitHub
+  asset-host redirect; use fresh fixed credential-free request options; settle cancellation; and
+  remove only incomplete owned output.
+- Does not prove: implementation, GREEN, live networking/proxy/certificates, a production manifest,
+  cache publication/extraction, desktop consumers, SSH transfer/install, or any enabled tuple.
+
+### E-M5-ARTIFACT-DOWNLOAD-LOCAL-001 — Disconnected bounded Electron downloader passes locally
+
+- Date: 2026-07-15
+- Owner: Codex implementation owner
+- Source: implementation commit `ef9681d32` atop exact pushed head
+  `1e3356cc6fa4e4090935184879b5a77db94ad2e5`; draft PR #8741. Local runner is macOS 26.2 build
+  25C56 arm64, Node v26.0.0, and pnpm 10.24.0. Electron `net.fetch` and HTTP responses are mocked;
+  no GitHub request, release write, or artifact publication occurred.
+- Focused command: `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts
+--maxWorkers=1 src/main/ssh/ssh-relay-artifact-download.test.ts` — PASS before the final
+  response-disposal hardening, 1 file / 15 tests in 7.49s Vitest / 30.53s wall; maximum RSS
+  130,990,080 bytes and zero swaps. The adjacent command below includes the final 16-test suite.
+- Adjacent command: `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts
+--maxWorkers=1` with artifact download, selector, manifest signature, artifact schema, release asset,
+  and runtime identity suites — PASS, 6 files / 89 tests in 22.99s Vitest / 40.99s wall; maximum RSS
+  128,516,096 bytes and zero swaps.
+- Broad command: `/usr/bin/time -l sh -c "rg --files config/scripts | rg
+'/ssh-relay.*[.]test[.]mjs$' | xargs pnpm exec vitest run --config config/vitest.config.ts
+--maxWorkers=1"` — PASS, 56 files / 307 tests in 45.84s Vitest / 64.95s wall; maximum RSS
+  189,382,656 bytes and zero swaps.
+- Static gates: `/usr/bin/time -l pnpm typecheck` passes in 33.08s wall with 1,121,845,248-byte
+  maximum RSS. `/usr/bin/time -l pnpm lint` passes in 55.13s wall with 2,071,396,352-byte maximum
+  RSS; all 41 reliability gates and the 355-entry max-lines ratchet pass with the existing 26
+  unrelated warnings. Focused `oxlint` passes in 13.59s wall with 123,125,760-byte maximum RSS.
+  Focused `oxfmt --check`, protected resolver/required-asset zero-diff checks, and `git diff --check`
+  pass.
+- Oracle proved: both direct 200 and a single exact `release-assets.githubusercontent.com` redirect
+  use a fresh `{ credentials: 'omit', redirect: 'manual', Accept: application/octet-stream }`
+  request. HTTP, unapproved-origin, credential-bearing, custom-port, missing-Location, chain,
+  404/429/503, missing-body, invalid Content-Length, truncation, oversize, wrong-hash, cancellation,
+  and pre-existing-destination cases fail without selecting partial output. Rejected response bodies
+  are cancelled, successful bytes are streamed with bounded chunk memory, fully written, fsynced,
+  and returned only after exact signed size/hash verification.
+- Consumer-disconnection oracle: the downloader has no cache publication/extraction, embedded-
+  manifest loader, retry policy, desktop caller, SSH transfer/install, mode, tuple enablement, or
+  default behavior. Legacy remains the only production path.
+- Does not prove: Node 24/native-runner portability, live GitHub/CDN redirects, system proxy or
+  certificate behavior, retry/backoff, cache/extraction/atomic publication, disk-full/readonly/
+  multi-process races, full-size runtime memory, client-offline transfer, live SSH, performance
+  against legacy, or any enabled tuple.
+- Follow-up: commit and push the isolated implementation/evidence, add a workflow-contract RED/GREEN
+  requiring the downloader suite in both native job families, and collect exact-head all-six Node 24
+  evidence before starting cache/extraction.
+
 ## Accepted Gaps
 
 No product gap is accepted merely because it appears in this list. Each entry requires explicit
@@ -12128,12 +12192,13 @@ The project is not complete until every applicable item below is checked with ev
 
 ## Next Required Action
 
-Begin a purpose-named disconnected download-boundary RED for
-bounded streaming, cancellation, archive hash/size, approved GitHub redirect origins, and credential/
-header stripping. Do not add a desktop call site, cache publication, extraction, SSH transfer/install,
-mode wiring, tuple enablement, or default behavior. Keep `ORCA_RELAY_PATH`, existing desktop required-
-assets behavior, detached-signature byte encoding, Windows arm64 build 26100, macOS 13.5, Linux
-kernel 4.18, release-cut, desktop builds, publication, and every tuple separately gated.
+Commit and push the locally green disconnected downloader, add a purpose-named workflow-contract
+RED/GREEN that requires its portable suite in both native job families, then collect exact-head Node
+24 evidence on Linux, macOS, and Windows x64/arm64. Do not add a desktop call site, cache publication,
+extraction, SSH transfer/install, mode wiring, tuple enablement, or default behavior. Keep
+`ORCA_RELAY_PATH`, existing desktop required-assets behavior, detached-signature byte encoding,
+Windows arm64 build 26100, macOS 13.5, Linux kernel 4.18, release-cut, desktop builds, publication,
+and every tuple separately gated.
 
 Cross-family Layer B targets, the protected manifest-signing environment, oldest-baseline/native-
 trust cells, and the paired legacy performance baseline remain release/default-path blockers. No

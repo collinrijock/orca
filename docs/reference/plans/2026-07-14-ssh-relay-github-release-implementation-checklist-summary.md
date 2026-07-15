@@ -9,18 +9,16 @@ keeps commands, hashes, runner identities, timings, and failure details.
 A checked box means the work has evidence in the detailed ledger. Design approval alone does not
 complete a box.
 
-Active checkpoint: **Milestone 5 / Work Package 4 desktop download boundary — offline selection
-closed; begin disconnected bounded-download RED, 2026-07-15, Codex implementation owner.** Exact
-head `3be4e6867` passes verified immutable tuple/content/archive/URL selection and full runtime
-construction on all six native Node 24 jobs in
-[run 29443291349](https://github.com/stablyai/orca/actions/runs/29443291349) under
-`E-M5-OFFLINE-SELECTION-CI-001`. PR Checks and both Golden E2E jobs are green. The artifact run is
-red only after Windows arm64 successfully smokes the runtime and rejects hosted build 26200 against
-the retained 26100 floor. Next, implement only a relay-specific bounded Electron download contract;
-cache publication/extraction, desktop consumers, SSH transfer/install, mode wiring, tuple enablement,
-publication, production keys/environment/seed, and merge to `main` remain disconnected. The
-implementation owner is authorized to drive commits, pushes, CI, and PR-contained rehearsals end to
-end without merging.
+Active checkpoint: **Milestone 5 / Work Package 4 desktop download boundary — disconnected bounded
+Electron downloader locally GREEN; exact-head native CI pending, 2026-07-15, Codex implementation
+owner.** The purpose-named RED and local GREEN are recorded under
+`E-M5-ARTIFACT-DOWNLOAD-LOCAL-RED-001` and `E-M5-ARTIFACT-DOWNLOAD-LOCAL-001`: 16 focused tests, 89
+adjacent trust-chain tests, 307 broad relay contracts, typecheck, full lint, formatting, and static
+gates pass. Next, commit/push the isolated package, require its suite in both native workflow
+families, and collect all-six Node 24 evidence. Cache publication/extraction, desktop consumers, SSH
+transfer/install, mode wiring, tuple enablement, publication, production keys/environment/seed, and
+merge to `main` remain disconnected. The implementation owner is authorized to drive commits,
+pushes, CI, and PR-contained rehearsals end to end without merging.
 
 ## Safety status
 
@@ -301,6 +299,9 @@ end without merging.
       `E-M5-OFFLINE-SELECTION-CI-WIRING-LOCAL-001`, and exact-head all-six native proof is closed by
       `E-M5-OFFLINE-SELECTION-CI-001`. The actual packaged embedded-manifest loader remains open.
 - [ ] Stream bounded downloads; verify signature, size, archive hash, and extracted tree.
+      The disconnected Electron downloader is locally green under
+      `E-M5-ARTIFACT-DOWNLOAD-LOCAL-RED-001` and `E-M5-ARTIFACT-DOWNLOAD-LOCAL-001`; exact-head
+      native CI, packaged signature loading, and extracted-tree verification remain open.
 - [ ] Add exclusive staging, atomic publication, quarantine, locking, and the 2 GiB cache policy.
 - [ ] Prove verified cached bytes can be transferred while the client is offline.
 - [ ] Preserve `ORCA_RELAY_PATH` behind the official-build trust boundary.
