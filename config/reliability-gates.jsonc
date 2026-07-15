@@ -812,8 +812,8 @@
           "platform": "macos",
           "command": "pnpm run test:e2e -- tests/e2e/agent-descendant-process-kill.spec.ts --workers=1",
           "result": "passed",
-          "durationSeconds": 63.5,
-          "summary": "A fresh-build run proved a detached-pgid child was alive before agent PTY kill and absent afterward on the deadline-safe, root-ownership-gated implementation."
+          "durationSeconds": 37.7,
+          "summary": "A current-main integrated fresh-build run proved a detached-pgid child was alive before agent PTY kill and absent afterward on the deadline-safe, root-ownership-gated implementation."
         }
       ],
       "runtimeBudget": {
