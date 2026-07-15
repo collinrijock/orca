@@ -9,7 +9,7 @@ work; keep exact commands, runner identities, hashes, metrics, and residual gaps
 Date created: 2026-07-14<br>
 Last updated: 2026-07-14<br>
 Current phase: Milestone 3 / Work Package 2 oldest-supported-baseline and native-trust proof — **In progress — 2026-07-14, Codex implementation owner**; exact-head run [29373507297](https://github.com/stablyai/orca/actions/runs/29373507297) passes all six target-native build, smoke, exact clean-build equality, upload, SBOM, license, provenance, runner/toolchain, and prohibited-content cells, and direct inspection of every downloaded payload passes exact archive/subject hashes, archive-scoped SPDX identity, one-owner-per-file, dependency, commit/run/builder/runner, tool-version/hash, and closure assertions (E-M3-METADATA-CI-001); Windows x64/arm64 record strict `MSVC 14.44.35207` identities and distinct exact linker SHA-256 values despite the Git-for-Windows PATH collision; the all-six metadata/provenance gate is closed, while oldest-baseline execution, native signing/trust, cross-family remotes, and measured legacy baselines remain open; production/default behavior and every tuple state remain unchanged; no bundled-runtime path is enabled and no artifact is published<br>
-Session checkpoint: **In progress — 2026-07-14, Codex implementation owner** — credential-free native signing selection, exclusive payload staging, exact returned-tree verification, and explicit POSIX/Windows workflow wiring are implemented at `c847c4a11` and pass locally plus all six exact-head native jobs under E-M3-NATIVE-SIGNING-STAGE-LOCAL-001 and E-M3-NATIVE-SIGNING-STAGE-CI-001. The next safe package is target-native pre-sign assessment and real candidate-payload execution without credentials, signing calls, native-trust claims, publication, tuple enablement, or any change to the legacy production default.<br>
+Session checkpoint: **In progress — 2026-07-14, Codex implementation owner** — target-native pre-sign assessment, real first-build candidate staging, unpublished JSON evidence, and cleanup are implemented at `1a79e4921` and locally green under E-M3-NATIVE-ASSESSMENT-LOCAL-001. Exact-head proof must now show Linux hash-only verification, three-file macOS staging, and Windows Authenticode preservation/staging on both architectures. This package uses no credentials or signing service, establishes no native trust, publishes nothing, enables no tuple, and leaves legacy as the production default.<br>
 Primary design: [SSH relay GitHub Release plan](./2026-07-14-ssh-relay-github-release-plan.html)<br>
 Motivating issues: [#8450](https://github.com/stablyai/orca/issues/8450), [#1693](https://github.com/stablyai/orca/issues/1693)
 
@@ -689,6 +689,16 @@ or enable a tuple. Implementation commit `c847c4a11` and local proof
 E-M3-NATIVE-SIGNING-STAGE-LOCAL-001 close the credential-free contract and workflow-source gates;
 exact-head run 29382772805 closes execution on all six native runner families under
 E-M3-NATIVE-SIGNING-STAGE-CI-001.
+
+**Active target-native assessment slice — 2026-07-14, Codex implementation owner:** authenticate
+every real first-build candidate before and after bounded platform inspection. Linux must create no
+payload; macOS must stage exactly three non-Node candidates; Windows must invoke one noninteractive,
+30-second/64-KiB-bounded PowerShell Authenticode probe per exact PE path, accept only `NotSigned` or
+`Valid`, preserve exact `OpenConsole.exe` and `conpty.dll` bytes only when valid, and stage exactly
+the three unsigned Orca-built `.node` files. Candidate paths stay out of PowerShell source, any
+hash/status/certificate drift fails closed, stage JSON is retained only as unpublished evidence,
+and the temporary payload is removed. Local implementation passes at `1a79e4921` under
+E-M3-NATIVE-ASSESSMENT-LOCAL-001; exact-head native execution remains required.
 
 **Baseline correction — 2026-07-14, Codex implementation owner:**
 E-M3-LINUX-BASELINE-LOCAL-RED-001 proves the existing Linux x64 candidate cannot load its patched
@@ -7936,6 +7946,103 @@ diff --check`.
   aggregation, SSH transfer/install, packaged desktop use, fallback/performance, or an enabled tuple.
 - Follow-up: keep every tuple disabled; execute pre-sign assessment and staging against the actual
   target-native candidate tree without credentials before connecting any protected signing job.
+
+### E-M3-NATIVE-ASSESSMENT-LOCAL-RED-001 — Missing native assessment and orchestration modules fail focused contracts
+
+- Date: 2026-07-14
+- Owner: Codex implementation owner
+- Source: pre-implementation head `e478ae458fa634845e9d9a7fd1d5a01cb41ed6ed`.
+- Commands:
+
+  ```sh
+  pnpm exec vitest run --config config/vitest.config.ts \
+    config/scripts/ssh-relay-runtime-windows-authenticode-assessment.test.mjs
+  pnpm exec vitest run --config config/vitest.config.ts \
+    config/scripts/ssh-relay-runtime-native-signing-stage.test.mjs
+  ```
+
+- Result: expected RED. The Authenticode suite failed 1 file/0 tests in 396 ms because
+  `ssh-relay-runtime-windows-authenticode-assessment.mjs` did not exist. The target-native stage
+  suite independently failed 1 file/0 tests in 159 ms because
+  `ssh-relay-runtime-native-signing-stage.mjs` did not exist. No production or artifact behavior
+  changed.
+- Oracle proved: neither actual Windows signature classification nor target-native first-build
+  orchestration was already provided by the credential-free selection/payload modules.
+- Does not prove: any implementation, real native candidate inspection, credentials, signing,
+  native trust, release aggregation, SSH behavior, or an enabled tuple.
+- Correction: add purpose-named bounded Authenticode assessment and target-native stage modules,
+  then wire real first-build candidate execution into all native artifact jobs.
+
+### E-M3-NATIVE-ASSESSMENT-LOCAL-001 — Bounded target-native assessment and first-build staging pass locally
+
+- Date: 2026-07-14
+- Owner: Codex implementation owner
+- Source: implementation commit `1a79e492145a1297949a10ab6870d2118c5f5cd3`, based on exact staging-CI evidence commit
+  `e478ae458fa634845e9d9a7fd1d5a01cb41ed6ed`.
+- Runner/remote/network: local macOS 26.2 build 25C56 arm64, Node v26.0.0, pnpm 10.24.0, and
+  PowerShell 7 at `/opt/homebrew/bin/pwsh`; no remote, network, credential, signing service,
+  native-trust environment, or publication path was used. Windows execution was dependency-injected
+  locally and remains an explicit CI requirement.
+- Commands:
+
+  ```sh
+  pnpm exec vitest run --config config/vitest.config.ts \
+    config/scripts/ssh-relay-runtime-windows-authenticode-assessment.test.mjs \
+    config/scripts/ssh-relay-runtime-native-signing-stage.test.mjs \
+    config/scripts/ssh-relay-runtime-workflow.test.mjs
+  pnpm exec vitest run --config config/vitest.config.ts config/scripts/ssh-relay-*.test.mjs
+  node --check config/scripts/ssh-relay-runtime-windows-authenticode-assessment.mjs
+  node --check config/scripts/ssh-relay-runtime-windows-authenticode-assessment.test.mjs
+  node --check config/scripts/ssh-relay-runtime-native-signing-stage.mjs
+  node --check config/scripts/ssh-relay-runtime-native-signing-stage.test.mjs
+  pnpm run typecheck
+  pnpm run lint
+  pnpm run check:max-lines-ratchet
+  pnpm exec oxfmt --check \
+    .github/workflows/ssh-relay-runtime-artifacts.yml \
+    config/scripts/ssh-relay-runtime-workflow.test.mjs \
+    config/scripts/ssh-relay-runtime-windows-authenticode-assessment.mjs \
+    config/scripts/ssh-relay-runtime-windows-authenticode-assessment.test.mjs \
+    config/scripts/ssh-relay-runtime-native-signing-stage.mjs \
+    config/scripts/ssh-relay-runtime-native-signing-stage.test.mjs
+  node --input-type=module -e \
+    'import {readFile} from "node:fs/promises"; import {parse} from "yaml"; const workflow=parse(await readFile(".github/workflows/ssh-relay-runtime-artifacts.yml","utf8")); process.stdout.write(workflow.jobs["build-windows-runtime"].steps.find((step)=>step.name==="Build twice, inspect, smoke, and compare exact runtime").run)' | \
+    pwsh -NoLogo -NoProfile -NonInteractive -Command \
+    '$source=[Console]::In.ReadToEnd(); $tokens=$null; $errors=$null; [System.Management.Automation.Language.Parser]::ParseInput($source,[ref]$tokens,[ref]$errors)|Out-Null; if($errors.Count){exit 1}'
+  git diff --check
+  ```
+
+- Result: PASS. The assessment, stage, and workflow suites passed 3 files/19 tests in 1.31 seconds;
+  the complete SSH relay script suite passed 27 files/139 tests in 5.82 seconds. Four direct syntax
+  checks, typecheck, full lint/reliability gates, max-lines (355 grandfathered suppressions and no
+  new bypass), bundled-skill verification, localization catalog/coverage, focused formatting,
+  direct PowerShell parsing of the modified Windows step, and `git diff --check` passed. Lint emitted
+  only existing unrelated warnings; local Node 26 emitted the expected repository Node-24 engine
+  warning.
+- Assessment oracle: the Windows module derives exactly five candidates from the authenticated
+  identity, validates every size/hash before the first probe, passes the local path only through a
+  dedicated environment variable, and uses `pwsh -NoLogo -NoProfile -NonInteractive` with a
+  30-second timeout, 64-KiB output bound, and hidden window. It accepts only exact three-field JSON:
+  `NotSigned` without certificate metadata or `Valid` with a bounded non-control subject and exact
+  40-hex thumbprint. Hash mismatch, invalid/unknown status, malformed fields/JSON, stderr, nonzero
+  exit, timeout/error, links, host mismatch, or mutation during the probe reject.
+- Orchestration oracle: host platform must equal the identity OS before assessment. Linux
+  authenticates three native files without creating a stage; macOS stages exactly its three non-Node
+  candidates; Windows runs assessment once, preserves valid-upstream candidates, and stages only
+  unsigned candidates. Official Node remains verification-only.
+- Workflow oracle: both native shell families syntax-check and execute both new suites. The actual
+  first clean-build tree is assessed only after archive/tree verification and clean-build equality.
+  Linux requires no stage, macOS requires three staged files, and Windows requires five assessments,
+  three unsigned staged `.node` files, and the exact preserved upstream `OpenConsole.exe` and
+  `conpty.dll` paths. Every temporary stage excludes official Node, is removed after inspection, and
+  emits one unpublished `.signing-stage.json` evidence file. No signing secret, credential, service,
+  permission, or publication authority was introduced.
+- Does not prove: real Windows PowerShell status/signer output, actual macOS/Linux candidate staging,
+  Node 24 behavior, target-native filesystem behavior, Apple/SignPath calls, returned signed bytes,
+  native trust, final post-signing hashes, missing oldest snapshots, release aggregation, SSH
+  transfer/install, packaged desktop use, fallback/performance, or an enabled tuple.
+- Follow-up: push the implementation and evidence separately; require exact-head logs and downloaded
+  stage reports from all six jobs before accepting real candidate behavior.
 
 ## Accepted Gaps
 

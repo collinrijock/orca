@@ -34,7 +34,8 @@ complete a box.
   - Proven locally and in exact-head run
     [29382772805](https://github.com/stablyai/orca/actions/runs/29382772805): credential-free exact
     signing selection, exclusive staging, returned-tree verification, and POSIX/Windows CI wiring.
-  - Active: target-native pre-sign assessment and real candidate-payload execution without credentials.
+  - Implemented locally at `1a79e4921`: target-native pre-sign assessment and real first-build
+    candidate staging without credentials; exact-head native runner evidence is next.
   - Next external proof: kernel 4.18, macOS 13.5, Windows arm64 build 26100, and native signing/trust.
   - No tuple is enabled; every SSH transfer/runtime and rollout cell remains open.
 
