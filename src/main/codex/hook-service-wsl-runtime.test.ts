@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { spawnSync } from 'node:child_process'
 import { tmpdir } from 'node:os'
@@ -8,7 +8,9 @@ import { MANAGED_HOOK_TIMEOUT_SECONDS } from '../agent-hooks/installer-utils'
 import {
   computeTrustKey,
   computeTrustedHash,
+  normalizeHookTrustKeyForLookup,
   readHookTrustEntries,
+  upsertHookTrustEntries,
   type CodexTrustEntry
 } from './config-toml-trust'
 import {
@@ -16,6 +18,9 @@ import {
   createCodexWslRuntimeHookInstallPlan,
   type CodexWslRuntimeHookInstallPlan
 } from './hook-service'
+import type { CodexHookTrustGrantRequest } from './codex-app-server-client'
+import { codexAppServerCapabilityCache } from './codex-app-server-capability-cache'
+import { _internals as trustGrantInternals } from './codex-hook-trust-grant'
 
 type HooksConfig = {
   hooks: Record<string, { hooks?: { command?: string }[] }[]>
@@ -411,6 +416,103 @@ describe('Codex WSL runtime hook install', () => {
     expect(refreshedTrustEntries.get(unrelatedTrustKey)).toEqual({
       enabled: false,
       trustedHash: 'sha256:user'
+    })
+  })
+})
+
+describe('Codex WSL runtime hook install app-server grant lane', () => {
+  let userDataDir: string
+  let previousUserDataPath: string | undefined
+
+  beforeEach(() => {
+    userDataDir = mkdtempSync(join(tmpdir(), 'orca-wsl-grant-userdata-'))
+    tempRoots.push(userDataDir)
+    previousUserDataPath = process.env.ORCA_USER_DATA_PATH
+    process.env.ORCA_USER_DATA_PATH = userDataDir
+    codexAppServerCapabilityCache.clear()
+  })
+
+  afterEach(() => {
+    trustGrantInternals.setGrantSessionRunnerSync(null)
+    trustGrantInternals.resetDiagnostics()
+    codexAppServerCapabilityCache.clear()
+    if (previousUserDataPath === undefined) {
+      delete process.env.ORCA_USER_DATA_PATH
+    } else {
+      process.env.ORCA_USER_DATA_PATH = previousUserDataPath
+    }
+  })
+
+  it('grants WSL managed trust through codex inside the distro instead of self-computed writes', () => {
+    const plan = createTestPlan()
+    writeFileSync(plan.configPath, '{"hooks":{}}\n', 'utf-8')
+    writeFileSync(plan.tomlPath, '', 'utf-8')
+
+    const runner = vi.fn((request: CodexHookTrustGrantRequest) => {
+      // Simulate codex's side: write trusted_hash blocks the way its config
+      // writer would, then report the entries trusted.
+      upsertHookTrustEntries(
+        plan.tomlPath,
+        request.expectedTrustKeys.map((key) => ({
+          sourcePath: plan.trustConfigPath,
+          eventLabel: key.split(':').at(-3) as CodexTrustEntry['eventLabel'],
+          groupIndex: 0,
+          handlerIndex: 0,
+          command: request.managedCommand,
+          trustedHash: `sha256:codex-${key.split(':').at(-3)}`
+        }))
+      )
+      return {
+        outcome: 'granted' as const,
+        wroteTrust: true,
+        entries: request.expectedTrustKeys.map((key) => ({
+          key,
+          normalizedKey: normalizeHookTrustKeyForLookup(key),
+          trustedHash: `sha256:codex-${key.split(':').at(-3)}`
+        }))
+      }
+    })
+    trustGrantInternals.setGrantSessionRunnerSync(runner)
+
+    expect(_internals.installManagedHooksIntoWslRuntime(plan).state).toBe('installed')
+
+    expect(runner).toHaveBeenCalledTimes(1)
+    const request = runner.mock.calls[0]![0]!
+    expect(request.invocation.command).toBe('wsl.exe')
+    expect(request.invocation.args.slice(0, 2)).toEqual(['-d', 'Ubuntu'])
+    expect(request.hooksListCwd).toBe(plan.linuxRuntimeHome)
+
+    const command = expectedManagedCommand(plan.commandScriptPath)
+    const managedTrustEntry = getManagedTrustEntry(plan, command)
+    const trustEntries = readHookTrustEntries(plan.tomlPath)
+    // Why: the codex-granted hash must be authoritative — the self-computed
+    // hash must not overwrite it after a successful grant.
+    expect(trustEntries.get(computeTrustKey(managedTrustEntry))?.trustedHash).toBe(
+      'sha256:codex-user_prompt_submit'
+    )
+    expect(trustEntries.get(computeTrustKey(managedTrustEntry))?.trustedHash).not.toBe(
+      computeTrustedHash(managedTrustEntry)
+    )
+  })
+
+  it('keeps the unchanged self-computed lane when the WSL grant falls back', () => {
+    const plan = createTestPlan()
+    writeFileSync(plan.configPath, '{"hooks":{}}\n', 'utf-8')
+    writeFileSync(plan.tomlPath, '', 'utf-8')
+
+    const runner = vi.fn(() => {
+      throw new Error('wsl.exe not reachable')
+    })
+    trustGrantInternals.setGrantSessionRunnerSync(runner)
+
+    expect(_internals.installManagedHooksIntoWslRuntime(plan).state).toBe('installed')
+
+    expect(runner).toHaveBeenCalledTimes(1)
+    const command = expectedManagedCommand(plan.commandScriptPath)
+    const managedTrustEntry = getManagedTrustEntry(plan, command)
+    expect(readHookTrustEntries(plan.tomlPath).get(computeTrustKey(managedTrustEntry))).toEqual({
+      enabled: true,
+      trustedHash: computeTrustedHash(managedTrustEntry)
     })
   })
 })
