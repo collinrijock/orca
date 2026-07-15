@@ -17,7 +17,10 @@ target-native Node 24 jobs under `E-M4-READBACK-ARCHIVE-EXECUTION-CI-001`. PR Ch
 are green; the artifact workflow is red only for the retained Windows ARM
 build-26200-versus-26100 floor mismatch after successful runtime smoke. Next, compose the existing
 disconnected upload, recovery, materialization, and execution capabilities under purpose-named
-failure-state tests without a release write or workflow caller. Production keys/environment/seed,
+failure-state tests without a release write or workflow caller. The missing composition boundary is
+recorded under `E-M4-DRAFT-RELEASE-COMPOSITION-LOCAL-RED-001`; the 10-test implementation and full
+local regression set pass under `E-M4-DRAFT-RELEASE-COMPOSITION-LOCAL-001`. Exact-head all-six
+Node 24 proof is pending. Production keys/environment/seed,
 publication, desktop/default consumers, SSH transfer/install, tuple enablement, and merge to `main`
 remain disconnected. Current pushed branch head is `3779838f6`; the implementation owner is authorized to drive
 commits, pushes, CI, and PR-contained rehearsals end to end without merging.
@@ -286,6 +289,10 @@ commits, pushes, CI, and PR-contained rehearsals end to end without merging.
       closed under `E-M4-READBACK-ARCHIVE-EXECUTION-CI-001`; a real authenticated release write/
       read-back remains open.
 - [ ] Test timeouts, retries, approval denial, signing failure, partial output, and draft recovery.
+      Disconnected upload/materialization/execution ordering, timeout/retry/partial-output stops,
+      cancellation, identity drift, ownership-safe cleanup, and later-archive failure pass locally
+      under `E-M4-DRAFT-RELEASE-COMPOSITION-LOCAL-001`. Protected approval and real signing failure
+      evidence remain blocked/open, so this item is not complete.
 
 ### WP4 — Desktop resolver and verified cache
 

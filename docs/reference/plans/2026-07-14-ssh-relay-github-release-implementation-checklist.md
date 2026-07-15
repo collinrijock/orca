@@ -9,7 +9,7 @@ work; keep exact commands, runner identities, hashes, metrics, and residual gaps
 Date created: 2026-07-14<br>
 Last updated: 2026-07-15<br>
 Current phase: Milestone 4 / Work Package 3 disconnected draft-release failure composition — **In progress — 2026-07-15, Codex implementation owner**. Exclusive authenticated draft read-back materialization and exact materialized archive execution are closed locally and on all six exact-head native Node 24 jobs under E-M4-DRAFT-READBACK-MATERIALIZATION-LOCAL-RED-001, E-M4-DRAFT-READBACK-MATERIALIZATION-LOCAL-001, E-M4-DRAFT-READBACK-MATERIALIZATION-CI-001, E-M4-READBACK-ARCHIVE-EXECUTION-LOCAL-RED-001, E-M4-READBACK-ARCHIVE-EXECUTION-LOCAL-001, and E-M4-READBACK-ARCHIVE-EXECUTION-CI-001. Next, compose the existing disconnected upload, recovery, materialization, and execution capabilities under purpose-named timeout/retry/partial-output/failure tests. Do not add a real release write, production workflow caller, publication, desktop consumer, SSH transfer, tuple enablement, or default behavior.<br>
-Session checkpoint: **In progress — 2026-07-15, Codex implementation owner** — exact pushed head `3779838f66a57e3688367256510e096d17d78011` passes real first-build archive reconstruction, full-tree verification, bundled Node/native PTY/watcher smoke, and cleanup on all six target-native jobs in run 29438285824 under E-M4-READBACK-ARCHIVE-EXECUTION-CI-001. PR Checks 29438280473 and both Golden E2E jobs in 29438284781 are green. Both Linux supplements and Windows x64 floor pass. Windows arm64 floor smoke passes in 7,454.2658ms with 49,430,528-byte RSS; the floor gate then correctly rejects hosted build 26200 versus required 26100. The user authorizes end-to-end commits, pushes, draft-PR updates, CI runs/reruns, and PR-contained rehearsals, but not merging to `main`. There is no real release write, publication caller, desktop consumer, SSH transfer/install, tuple enablement, or production/default behavior change. No accepted production key, protected environment/seed, native-signing trust proof, publication path, or tuple enablement is connected. Legacy remains the production default.<br>
+Session checkpoint: **In progress — 2026-07-15, Codex implementation owner** — exact pushed head `3779838f66a57e3688367256510e096d17d78011` passes real first-build archive reconstruction, full-tree verification, bundled Node/native PTY/watcher smoke, and cleanup on all six target-native jobs in run 29438285824 under E-M4-READBACK-ARCHIVE-EXECUTION-CI-001. PR Checks 29438280473 and both Golden E2E jobs in 29438284781 are green. Both Linux supplements and Windows x64 floor pass. Windows arm64 floor smoke passes in 7,454.2658ms with 49,430,528-byte RSS; the floor gate then correctly rejects hosted build 26200 versus required 26100. The disconnected draft-release failure-composition RED and 10-test local implementation are recorded under E-M4-DRAFT-RELEASE-COMPOSITION-LOCAL-RED-001 and E-M4-DRAFT-RELEASE-COMPOSITION-LOCAL-001; exact-head all-six Node 24 proof is next. The user authorizes end-to-end commits, pushes, draft-PR updates, CI runs/reruns, and PR-contained rehearsals, but not merging to `main`. There is no real release write, publication caller, desktop consumer, SSH transfer/install, tuple enablement, or production/default behavior change. No accepted production key, protected environment/seed, native-signing trust proof, publication path, or tuple enablement is connected. Legacy remains the production default.<br>
 Primary design: [SSH relay GitHub Release plan](./2026-07-14-ssh-relay-github-release-plan.html)<br>
 Motivating issues: [#8450](https://github.com/stablyai/orca/issues/8450), [#1693](https://github.com/stablyai/orca/issues/1693)
 
@@ -126,11 +126,12 @@ same change as the work it records.
   all-six native execution are green under E-M4-READBACK-ARCHIVE-EXECUTION-LOCAL-RED-001,
   E-M4-READBACK-ARCHIVE-EXECUTION-LOCAL-001, and
   E-M4-READBACK-ARCHIVE-EXECUTION-CI-001.
-- Active package: Work Package 3 disconnected draft-release failure composition. Begin with a
-  purpose-named RED that composes only the existing upload/recovery/materialization/archive-
-  execution capabilities under explicit timeout, retry exhaustion, partial-output, cancellation,
-  and fail-closed sequencing contracts. Do not add a real release write, publication, desktop
-  consumer, SSH transfer/install, or production caller in this slice.
+- Active package: Work Package 3 disconnected draft-release failure composition. The purpose-named
+  RED and 10-test local implementation are green under
+  E-M4-DRAFT-RELEASE-COMPOSITION-LOCAL-RED-001 and
+  E-M4-DRAFT-RELEASE-COMPOSITION-LOCAL-001; exact-head all-six Node 24 proof is next. Do not add a
+  real release write, publication, desktop consumer, SSH transfer/install, or production caller in
+  this slice.
 - Completed Work Package 2 gate: target-native Windows source-signature reports from exact-head
   artifact jobs 87267322867 and 87267322870 were independently downloaded and matched to their
   identities and signing-stage reports under E-M3-WINDOWS-SOURCE-SIGNATURE-CI-001. PR Checks
@@ -11777,6 +11778,82 @@ config/scripts/ssh-relay-runtime-workflow.test.mjs` — PASS, 4 files / 21 tests
   remains open.
 - Follow-up: checkpoint this evidence, then begin a purpose-named disconnected draft-release
   failure-composition RED. Retain all production/default disconnections.
+
+### E-M4-DRAFT-RELEASE-COMPOSITION-LOCAL-RED-001 — Draft release failure composition is absent
+
+- Date: 2026-07-15
+- Owner: Codex implementation owner
+- Source: local evidence commit `f801d3785` atop exact pushed head
+  `3779838f66a57e3688367256510e096d17d78011`; draft PR #8741. The only new uncommitted file is the
+  purpose-named RED.
+- Command: `pnpm exec vitest run --config config/vitest.config.ts
+config/scripts/ssh-relay-runtime-draft-release-verification.test.mjs`.
+- Result: expected FAIL in 569ms; one suite / zero collected tests because
+  `ssh-relay-runtime-draft-release-verification.mjs` does not exist.
+- Contract pinned by the RED: preflight exact archive/asset identities and exclusive output roots
+  before upload; order upload before authenticated materialization before archive execution; reject
+  upload/read-back/result identity drift between phases; never enter a later phase after timeout,
+  retry exhaustion, partial upload, or cancellation; remove all owned read-back and execution output
+  after materialization, native execution, or cancellation failure.
+- Does not prove: implementation, GREEN, real GitHub requests, retry behavior inside the already-
+  proven upload primitive, authenticated network bytes, real release write/read-back, native signing/
+  trust, desktop/SSH behavior, or any enabled tuple.
+- Follow-up: implement only the disconnected dependency-injected composition boundary. Retain every
+  workflow, release-write, publication, product, tuple, and default disconnection.
+
+### E-M4-DRAFT-RELEASE-COMPOSITION-LOCAL-001 — Failure composition passes locally
+
+- Date: 2026-07-15
+- Owner: Codex implementation owner
+- Source: uncommitted implementation atop local evidence commit `f801d3785`; exact pushed base
+  `3779838f66a57e3688367256510e096d17d78011`; draft PR #8741. Local runner is macOS 26.2 build 25C56
+  arm64, Node v26.0.0, and pnpm 10.24.0. All release/upload/read-back/execution boundaries are test
+  doubles or local temporary files; no GitHub request or external write occurs.
+- First GREEN command: production/test `node --check` plus `pnpm exec vitest run --config
+config/vitest.config.ts config/scripts/ssh-relay-runtime-draft-release-verification.test.mjs` —
+  PASS, 7/7. Safety review then exposed an ownership race in the initial catch path: a failure before
+  materialization must not remove a path merely observed absent before a long upload. Cleanup now
+  removes only directories whose successful lower phase transferred ownership; the already-proven
+  materializer remains responsible for its own rejected partial transaction. A dedicated outsider-
+  path test pins the rule.
+- Workflow-fixture correction signal: the first combined contract/workflow run had 1 failed / 16
+  passed because the test expected six production-module filename occurrences instead of the actual
+  two production syntax checks plus four test-file occurrences. The assertion was corrected; no
+  production code or workflow behavior changed.
+- Focused command: `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts
+--maxWorkers=1 config/scripts/ssh-relay-runtime-draft-release-verification.test.mjs` — PASS, 1 file
+  / 10 tests in 612ms Vitest and 2.75s wall; maximum RSS 132,890,624 bytes and zero swaps.
+- Adjacent command: `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts
+--maxWorkers=1` with draft release verification, upload, recovery, materialization, read-back,
+  archive execution/extraction, release stage, workflow, release assets, and protected required-
+  assets suites — PASS, 11 files / 90 tests in 10.41s Vitest and 13.30s wall; maximum RSS 134,496,256
+  bytes and zero swaps.
+- Broad command: `/usr/bin/time -l sh -c "rg --files config/scripts | rg
+'/ssh-relay.*[.]test[.]mjs$' | xargs pnpm exec vitest run --config config/vitest.config.ts
+--maxWorkers=1"` — PASS, 56 files / 307 tests in 70.53s Vitest and 78.97s wall; maximum RSS
+  189,743,104 bytes and zero swaps.
+- Static gates: production/test `node --check`, focused `oxfmt --check`, and `git diff --check` pass.
+  `/usr/bin/time -l pnpm run typecheck` passes in 9.91s wall with 1,230,274,560-byte maximum RSS.
+  `/usr/bin/time -l pnpm run lint` passes in 24.32s wall with 2,019,295,232-byte maximum RSS; all 41
+  reliability gates and the 355-entry max-lines ratchet pass, with the existing 26 unrelated
+  warnings. The protected Node/npm resolver and desktop required-asset files retain zero diff.
+- Oracle proved: exact bounded release identity, managed asset set, runtime archive coverage, tuple/
+  content/archive identity, and disjoint exclusive output roots are validated before upload. Upload
+  must return one exact reusable/uploaded partition before authenticated materialization starts;
+  materialization must return every exact physical asset before execution starts. Timeout, retry
+  exhaustion, partial upload, cancellation, and phase identity drift prevent later phases. A later
+  archive failure removes earlier verified runtimes and all owned read-back bytes. An upload failure
+  cannot remove a concurrently created path the transaction never owned. The overall timeout is 45
+  minutes and the existing 26-asset, 100 MiB-per-asset, and 1 GiB-total bounds are retained.
+- Consumer-disconnection oracle: both native artifact job families perform only syntax and contract-
+  test execution. There is no CLI, workflow composition caller, token/credential, real release write,
+  publication, desktop consumer, SSH transfer/install, tuple enablement, or default behavior change.
+- Does not prove: Node 24/native-runner portability, real GitHub timeout/retry/partial-release state,
+  authenticated network bytes, real release write/read-back, protected approval/signing failures,
+  native signing/trust, desktop/SSH behavior, performance against legacy, or any enabled tuple.
+- Follow-up: commit and push the isolated package with evidence checkpoint `f801d3785`, then require
+  the 10-test suite to pass on all six exact-head native Node 24 jobs. Preserve every production/
+  default disconnection.
 
 ## Accepted Gaps
 

@@ -219,6 +219,8 @@ jobs:
           node --check config/scripts/ssh-relay-runtime-draft-readback.mjs
           node --check config/scripts/ssh-relay-runtime-draft-readback.test.mjs
           node --check config/scripts/ssh-relay-runtime-draft-readback-materialization.test.mjs
+          node --check config/scripts/ssh-relay-runtime-draft-release-verification.mjs
+          node --check config/scripts/ssh-relay-runtime-draft-release-verification.test.mjs
           node --check config/scripts/ssh-relay-runtime-readback-archive-execution.mjs
           node --check config/scripts/ssh-relay-runtime-readback-archive-execution.test.mjs
           node --check config/scripts/ssh-relay-runtime-draft-upload.mjs
@@ -281,6 +283,7 @@ jobs:
             config/scripts/ssh-relay-runtime-aggregate-input.test.mjs \
             config/scripts/ssh-relay-runtime-draft-readback.test.mjs \
             config/scripts/ssh-relay-runtime-draft-readback-materialization.test.mjs \
+            config/scripts/ssh-relay-runtime-draft-release-verification.test.mjs \
             config/scripts/ssh-relay-runtime-readback-archive-execution.test.mjs \
             config/scripts/ssh-relay-runtime-draft-upload.test.mjs \
             config/scripts/ssh-relay-runtime-release-assets.test.mjs \
@@ -676,6 +679,10 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'runtime draft read-back test syntax check failed' }
           node --check config/scripts/ssh-relay-runtime-draft-readback-materialization.test.mjs
           if ($LASTEXITCODE -ne 0) { throw 'runtime draft read-back materialization test syntax check failed' }
+          node --check config/scripts/ssh-relay-runtime-draft-release-verification.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'runtime draft release verification syntax check failed' }
+          node --check config/scripts/ssh-relay-runtime-draft-release-verification.test.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'runtime draft release verification test syntax check failed' }
           node --check config/scripts/ssh-relay-runtime-readback-archive-execution.mjs
           if ($LASTEXITCODE -ne 0) { throw 'runtime read-back archive execution syntax check failed' }
           node --check config/scripts/ssh-relay-runtime-readback-archive-execution.test.mjs
@@ -773,6 +780,7 @@ jobs:
             config/scripts/ssh-relay-runtime-aggregate-input.test.mjs `
             config/scripts/ssh-relay-runtime-draft-readback.test.mjs `
             config/scripts/ssh-relay-runtime-draft-readback-materialization.test.mjs `
+            config/scripts/ssh-relay-runtime-draft-release-verification.test.mjs `
             config/scripts/ssh-relay-runtime-readback-archive-execution.test.mjs `
             config/scripts/ssh-relay-runtime-draft-upload.test.mjs `
             config/scripts/ssh-relay-runtime-release-assets.test.mjs `
