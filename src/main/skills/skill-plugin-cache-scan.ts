@@ -4,6 +4,8 @@ import { join } from 'node:path'
 
 const MAXIMUM_PLUGIN_SCAN_DEPTH = 9
 const MAXIMUM_PLUGIN_SCAN_ENTRIES = 4_096
+export const MAXIMUM_PLUGIN_SKILL_CANDIDATES = 64
+const MAXIMUM_PLUGIN_INCOMPLETE_PATHS = 16
 
 export type KnownPluginSkillCandidate = {
   name: string
@@ -23,13 +25,29 @@ function errorCode(error: unknown): string | null {
 
 export async function scanKnownPluginSkillCandidates(
   rootPath: string,
-  knownNames: ReadonlySet<string>
+  knownNames: ReadonlySet<string>,
+  maximumCandidates = MAXIMUM_PLUGIN_SKILL_CANDIDATES
 ): Promise<KnownPluginSkillScan> {
   const candidates: KnownPluginSkillCandidate[] = []
   const incompletePaths = new Set<string>()
   const visited = new Set<string>()
   let entryCount = 0
   let limitReached = false
+
+  function recordIncomplete(path: string): void {
+    if (incompletePaths.has(path)) {
+      return
+    }
+    if (incompletePaths.size >= MAXIMUM_PLUGIN_INCOMPLETE_PATHS) {
+      // Why: each incomplete path expands to one conservative row per official
+      // skill. Collapse a hostile cache into one poison sentinel before IPC/render fanout.
+      incompletePaths.clear()
+      incompletePaths.add(rootPath)
+      limitReached = true
+      return
+    }
+    incompletePaths.add(path)
+  }
 
   async function visit(directory: string, depth: number): Promise<void> {
     if (limitReached || depth > MAXIMUM_PLUGIN_SCAN_DEPTH) {
@@ -40,7 +58,7 @@ export async function scanKnownPluginSkillCandidates(
       resolved = await realpath(directory)
     } catch (error) {
       if (errorCode(error) !== 'ENOENT') {
-        incompletePaths.add(directory)
+        recordIncomplete(directory)
       }
       return
     }
@@ -53,7 +71,7 @@ export async function scanKnownPluginSkillCandidates(
     try {
       handle = await opendir(directory)
     } catch {
-      incompletePaths.add(directory)
+      recordIncomplete(directory)
       return
     }
     const entries: Dirent[] = []
@@ -66,17 +84,18 @@ export async function scanKnownPluginSkillCandidates(
         entryCount += 1
         if (entryCount > MAXIMUM_PLUGIN_SCAN_ENTRIES) {
           limitReached = true
-          incompletePaths.add(rootPath)
+          recordIncomplete(rootPath)
           break
         }
         entries.push(entry)
       }
     } catch {
-      incompletePaths.add(directory)
+      recordIncomplete(directory)
     } finally {
       await handle.close().catch(() => undefined)
     }
 
+    entries.sort((left, right) => left.name.localeCompare(right.name, 'en'))
     for (const entry of entries) {
       if (limitReached) {
         return
@@ -88,6 +107,11 @@ export async function scanKnownPluginSkillCandidates(
           directoryEntry = (await stat(entryPath)).isDirectory()
         } catch {
           if (knownNames.has(entry.name)) {
+            if (candidates.length >= maximumCandidates) {
+              limitReached = true
+              recordIncomplete(rootPath)
+              return
+            }
             candidates.push({ name: entry.name, path: entryPath })
           }
           continue
@@ -97,6 +121,11 @@ export async function scanKnownPluginSkillCandidates(
         continue
       }
       if (knownNames.has(entry.name)) {
+        if (candidates.length >= maximumCandidates) {
+          limitReached = true
+          recordIncomplete(rootPath)
+          return
+        }
         candidates.push({ name: entry.name, path: entryPath })
         continue
       }

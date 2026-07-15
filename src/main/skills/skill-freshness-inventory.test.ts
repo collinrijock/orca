@@ -8,7 +8,10 @@ import type {
   SkillCurrentBundleEntry,
   SkillKnownSnapshot
 } from '../../shared/skill-freshness'
-import { inventorySkillFreshness } from './skill-freshness-inventory'
+import {
+  inventorySkillFreshness,
+  MAXIMUM_REPOSITORY_SKILL_ROOTS
+} from './skill-freshness-inventory'
 import { describeObservedSkillFile, skillPackageDigest } from './skill-package-identity'
 
 const temporaryDirectories: string[] = []
@@ -313,5 +316,27 @@ describe('read-only skill freshness inventory', () => {
       installedReleaseRevision: 2,
       installedAppVersion: '2.0.0'
     })
+  })
+
+  it('withholds updates when stored repositories exceed the probe budget', async () => {
+    const test = await fixture()
+    await test.writeSkill(join(test.homeDir, '.agents', 'skills'), test.oldMarkdown)
+    const repos = Array.from(
+      { length: MAXIMUM_REPOSITORY_SKILL_ROOTS / 2 + 1 },
+      (_, index) => ({ id: `repo-${index}`, path: join(test.root, `repo-${index}`) }) as Repo
+    )
+
+    const inventory = await inventorySkillFreshness({
+      homeDir: test.homeDir,
+      repos,
+      resourceRoot: test.resourceRoot
+    })
+
+    expect(inventory.installations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ errorCategory: 'repository-scan-limit', status: 'inaccessible' })
+      ])
+    )
+    expect(inventory.eligibleUpdateNames).toEqual([])
   })
 })

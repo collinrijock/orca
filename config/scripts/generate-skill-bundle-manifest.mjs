@@ -152,35 +152,84 @@ async function collectPackageFiles(packageRoot) {
   return sortManifestFiles(files)
 }
 
-function collectGitPackageFiles(ref, name) {
-  const sourcePrefix = `skills/${name}/`
-  const output = execFileSync('git', ['ls-tree', '-r', '-z', ref, '--', `skills/${name}`])
+function collectGitSkillTreeEntries(treeSha) {
+  const output = execFileSync('git', ['ls-tree', '-r', '-z', treeSha])
     .toString('utf8')
     .split('\0')
     .filter(Boolean)
-  const caseFoldedPaths = new Map()
-  const files = output.map((line) => {
+  const packages = new Map()
+  for (const line of output) {
     const match = /^(\d+) (\w+) ([a-f0-9]+)\t(.+)$/.exec(line)
     if (!match) {
-      throw new Error(`Unexpected git tree entry at ${ref}: ${line}`)
+      throw new Error(`Unexpected git tree entry in ${treeSha}: ${line}`)
     }
     const [, mode, type, objectSha, sourcePath] = match
-    if (type !== 'blob' || (mode !== '100644' && mode !== '100755')) {
-      throw new Error(`Unsupported shipped skill entry at ${ref}: ${line}`)
+    const separator = sourcePath.indexOf('/')
+    if (separator <= 0 || separator === sourcePath.length - 1) {
+      throw new Error(`Unsupported shipped skill path in ${treeSha}: ${sourcePath}`)
     }
-    const manifestPath = sourcePath.slice(sourcePrefix.length)
+    const name = sourcePath.slice(0, separator)
+    const manifestPath = sourcePath.slice(separator + 1)
+    const entries = packages.get(name) ?? []
+    entries.push({ mode, type, objectSha, manifestPath })
+    packages.set(name, entries)
+  }
+  return packages
+}
+
+function readGitBlobs(objectShas) {
+  const uniqueShas = [...new Set(objectShas)]
+  if (uniqueShas.length === 0) {
+    return new Map()
+  }
+  // Why: released history spans hundreds of tags. Batch mode avoids a Git
+  // subprocess per historical file while remaining available on Git 2.25.
+  const output = execFileSync('git', ['cat-file', '--batch'], {
+    input: `${uniqueShas.join('\n')}\n`,
+    maxBuffer: 64 * 1024 * 1024
+  })
+  const blobs = new Map()
+  let offset = 0
+  for (const requestedSha of uniqueShas) {
+    const headerEnd = output.indexOf(10, offset)
+    if (headerEnd < 0) {
+      throw new Error(`Missing git cat-file header for ${requestedSha}`)
+    }
+    const header = output.subarray(offset, headerEnd).toString('utf8')
+    const match = /^([a-f0-9]+) blob (\d+)$/.exec(header)
+    if (!match || match[1] !== requestedSha) {
+      throw new Error(`Unexpected git cat-file header for ${requestedSha}: ${header}`)
+    }
+    const size = Number(match[2])
+    const contentStart = headerEnd + 1
+    const contentEnd = contentStart + size
+    if (contentEnd >= output.length || output[contentEnd] !== 10) {
+      throw new Error(`Truncated git blob for ${requestedSha}`)
+    }
+    blobs.set(requestedSha, Buffer.from(output.subarray(contentStart, contentEnd)))
+    offset = contentEnd + 1
+  }
+  return blobs
+}
+
+function collectGitPackageFiles(treeSha, name, entries, blobs) {
+  const caseFoldedPaths = new Map()
+  const files = entries.map(({ mode, type, objectSha, manifestPath }) => {
+    if (type !== 'blob' || (mode !== '100644' && mode !== '100755')) {
+      throw new Error(`Unsupported shipped skill entry in ${treeSha}: ${name}/${manifestPath}`)
+    }
     assertSafeRelativePath(manifestPath)
     const foldedPath = manifestPath.toLocaleLowerCase('en-US')
     const collision = caseFoldedPaths.get(foldedPath)
     if (collision && collision !== manifestPath) {
-      throw new Error(`Case-colliding skill paths at ${ref}: ${collision} and ${manifestPath}`)
+      throw new Error(`Case-colliding skill paths in ${treeSha}: ${collision} and ${manifestPath}`)
     }
     caseFoldedPaths.set(foldedPath, manifestPath)
-    return describeFile(
-      manifestPath,
-      execFileSync('git', ['cat-file', 'blob', objectSha]),
-      mode === '100755'
-    )
+    const bytes = blobs.get(objectSha)
+    if (!bytes) {
+      throw new Error(`Missing git blob ${objectSha} for ${name}/${manifestPath}`)
+    }
+    return describeFile(manifestPath, bytes, mode === '100755')
   })
   // Why: git ls-tree emits git byte-order, not the canonical walk order.
   return sortManifestFiles(files)
@@ -232,45 +281,61 @@ function releaseTags() {
     .filter((tag) => /^v\d+\.\d+\.\d+(?:[-.][0-9A-Za-z.-]+)?$/.test(tag))
 }
 
-function skillsTreeShaAtRef(ref) {
-  try {
-    const output = execFileSync('git', ['ls-tree', ref, 'skills'], {
-      encoding: 'utf8',
-      stdio: ['ignore', 'pipe', 'ignore']
-    }).trim()
-    return output ? output.split(/\s+/)[2] : null
-  } catch {
-    return null
-  }
-}
-
-function skillNamesAtRef(ref) {
-  try {
-    return execFileSync('git', ['ls-tree', '-d', '--name-only', `${ref}:skills`], {
-      encoding: 'utf8',
-      stdio: ['ignore', 'pipe', 'ignore']
-    })
-      .split('\n')
-      .filter(Boolean)
-      .sort((left, right) => left.localeCompare(right, 'en'))
-  } catch {
+function skillsTreeShasAtRefs(refs) {
+  if (refs.length === 0) {
     return []
   }
+  const output = execFileSync('git', ['cat-file', '--batch-check=%(objectname) %(objecttype)'], {
+    input: `${refs.map((ref) => `${ref}:skills`).join('\n')}\n`,
+    encoding: 'utf8'
+  })
+  const lines = output.trimEnd().split('\n')
+  if (lines.length !== refs.length) {
+    throw new Error(`Expected ${refs.length} skills tree identities, received ${lines.length}`)
+  }
+  return lines.map((line, index) => {
+    if (line.endsWith(' missing')) {
+      return null
+    }
+    const match = /^([a-f0-9]+) tree$/.exec(line)
+    if (!match) {
+      throw new Error(`Unexpected skills tree identity at ${refs[index]}: ${line}`)
+    }
+    return match[1]
+  })
 }
 
 function buildReleasedHistory() {
   const registry = { schemaVersion: SCHEMA_VERSION, skills: {} }
   const mapping = { schemaVersion: SCHEMA_VERSION, releases: [] }
+  const tags = releaseTags()
+  const treeShas = skillsTreeShasAtRefs(tags)
+  const distinctTreeShas = [...new Set(treeShas.filter(Boolean))]
+  const packagesByTree = new Map(
+    distinctTreeShas.map((treeSha) => [treeSha, collectGitSkillTreeEntries(treeSha)])
+  )
+  const blobs = readGitBlobs(
+    [...packagesByTree.values()].flatMap((packages) =>
+      [...packages.values()].flatMap((entries) => entries.map((entry) => entry.objectSha))
+    )
+  )
   let previousSkillsTreeSha = null
-  for (const tag of releaseTags()) {
-    const skillsTreeSha = skillsTreeShaAtRef(tag)
+  for (const [index, tag] of tags.entries()) {
+    const skillsTreeSha = treeShas[index]
     if (!skillsTreeSha || skillsTreeSha === previousSkillsTreeSha) {
       continue
     }
     previousSkillsTreeSha = skillsTreeSha
     const revisions = {}
-    for (const name of skillNamesAtRef(tag)) {
-      const filesWithGitHashes = collectGitPackageFiles(tag, name)
+    const packages = packagesByTree.get(skillsTreeSha)
+    if (!packages) {
+      throw new Error(`Missing released skill tree ${skillsTreeSha} at ${tag}`)
+    }
+    for (const name of [...packages.keys()].sort((left, right) =>
+      left.localeCompare(right, 'en')
+    )) {
+      const entries = packages.get(name)
+      const filesWithGitHashes = collectGitPackageFiles(skillsTreeSha, name, entries, blobs)
       if (!filesWithGitHashes.some((file) => file.path === 'SKILL.md')) {
         continue
       }
