@@ -8,7 +8,7 @@ work; keep exact commands, runner identities, hashes, metrics, and residual gaps
 
 Date created: 2026-07-14<br>
 Last updated: 2026-07-15<br>
-Current phase: Milestone 5 / Work Package 4 desktop cache boundary — **In progress — 2026-07-15, Codex implementation owner: disconnected desktop extraction exact-head native gate**. Focused, broad, static, exact downloaded-payload, and native-workflow wiring gates pass locally under E-M5-ARTIFACT-EXTRACTION-LOCAL-001, E-M5-ARTIFACT-EXTRACTION-BROAD-LOCAL-001, E-M5-ARTIFACT-EXTRACTION-FULL-SIZE-LOCAL-001, and E-M5-ARTIFACT-EXTRACTION-CI-WIRING-LOCAL-001. Checkpoint the exact implementation SHA, push it, and require all-six Node 24 synthetic cross-family plus native full-size evidence before cache publication begins. Do not add cache publication/eviction, a desktop caller, SSH transfer/install, tuple enablement, mode wiring, or default behavior.<br>
+Current phase: Milestone 5 / Work Package 4 desktop cache boundary — **In progress — 2026-07-15, Codex implementation owner: disconnected desktop extraction exact-head native gate**. Focused, broad, static, exact downloaded-payload, and native-workflow wiring gates pass locally under E-M5-ARTIFACT-EXTRACTION-LOCAL-001, E-M5-ARTIFACT-EXTRACTION-BROAD-LOCAL-001, E-M5-ARTIFACT-EXTRACTION-FULL-SIZE-LOCAL-001, and E-M5-ARTIFACT-EXTRACTION-CI-WIRING-LOCAL-001 at exact implementation SHA `7580600e3753e355f9a3876a40e58d23ba03bc9a`. Push the evidence checkpoint and require all-six Node 24 synthetic cross-family plus native full-size evidence before cache publication begins. Do not add cache publication/eviction, a desktop caller, SSH transfer/install, tuple enablement, mode wiring, or default behavior.<br>
 Session checkpoint: **In progress — 2026-07-15, Codex implementation owner** — the 17-test focused suite, 81-test artifact suite, 249-pass relay suite, 279-test release suite, typecheck, lint, and diff gates pass. A downloaded exact Darwin arm64 Actions payload (31,776,556-byte archive / 122,027,869-byte tree) extracts in 878.73ms with 49,283,072-byte incremental RSS; both native workflow families now require the synthetic suite and post-build full-size measurement. Native Node 24 evidence remains open. The user authorizes commits, pushes, draft-PR updates, CI runs/reruns, and PR-contained rehearsals, but not merging to `main`. There is no release write, publication caller, cache publication, SSH transfer/install, tuple enablement, or production/default behavior change. Legacy remains the production default.<br>
 Primary design: [SSH relay GitHub Release plan](./2026-07-14-ssh-relay-github-release-plan.html)<br>
 Motivating issues: [#8450](https://github.com/stablyai/orca/issues/8450), [#1693](https://github.com/stablyai/orca/issues/1693)
@@ -12621,9 +12621,8 @@ sort`; targeted `rg -n` over `cache|extract|atomic|quarantine`; and complete rea
 
 - Date: 2026-07-15
 - Owner: Codex implementation owner
-- Source: uncommitted extraction capability and purpose suite atop pushed head
-  `a93e67413a2a1446e8e0f7348af1fdf72737287d`; the exact implementation SHA will be appended after
-  the local broad gates pass and this evidence is checkpointed.
+- Source: exact implementation commit `7580600e3753e355f9a3876a40e58d23ba03bc9a` atop audit head
+  `a93e67413a2a1446e8e0f7348af1fdf72737287d`.
 - Environment: macOS 26.2 arm64, Node v26.0.0, pnpm 10.24.0, Vitest 4.1.5. Node 24/native client
   execution remains the next gate.
 - Exact focused command:
@@ -12682,8 +12681,7 @@ sort`; targeted `rg -n` over `cache|extract|atomic|quarantine`; and complete rea
 
 - Date: 2026-07-15
 - Owner: Codex implementation owner
-- Source: corrected local extraction tree atop `a93e67413`; exact implementation SHA pending the
-  checkpoint commit.
+- Source: exact implementation commit `7580600e3753e355f9a3876a40e58d23ba03bc9a`.
 - Exact commands and results:
   - `pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1 src/main/ssh/ssh-relay-artifact-*.test.ts`:
     four passed files / 81 passed tests in 10.40s after the mutation observer correction, with zero
@@ -12748,8 +12746,7 @@ sort`; targeted `rg -n` over `cache|extract|atomic|quarantine`; and complete rea
 
 - Date: 2026-07-15
 - Owner: Codex implementation owner
-- Source: local workflow/test/full-size harness atop `a93e67413`; exact implementation SHA pending
-  the checkpoint commit.
+- Source: exact implementation commit `7580600e3753e355f9a3876a40e58d23ba03bc9a`.
 - Exact command:
   `pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1 config/scripts/ssh-relay-runtime-workflow.test.mjs`
 - Result: one passed file / seven passed tests in 404ms after formatting; typecheck also exits zero.
