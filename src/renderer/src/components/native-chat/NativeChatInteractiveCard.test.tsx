@@ -38,15 +38,15 @@ const mocks = {
   cancel: vi.fn<NativeChatInteractiveSend['cancel']>()
 }
 
-function renderCard(): ReturnType<typeof render> {
-  return render(cardElement())
+function renderCard(canSend = true): ReturnType<typeof render> {
+  return render(cardElement(canSend))
 }
 
-function cardElement(): React.JSX.Element {
+function cardElement(canSend = true): React.JSX.Element {
   return (
     <NativeChatInteractiveCard
       paneKey="tab-1:leaf-1"
-      canSend
+      canSend={canSend}
       send={{
         sendAnswer: mocks.sendAnswer,
         sendRaw: mocks.sendRaw,
@@ -92,6 +92,28 @@ describe('NativeChatInteractiveCard answer lifecycle', () => {
 
     rendered.unmount()
     expect(mocks.cancelPending).toHaveBeenCalledOnce()
+  })
+
+  it('cancels delayed PTY writes when desktop send authority is lost', () => {
+    mocks.sendAnswer.mockReturnValue(5_000)
+    const rendered = renderCard()
+
+    chooseSpacesAndSubmit()
+    rendered.rerender(cardElement(false))
+
+    expect(mocks.cancelPending).toHaveBeenCalledOnce()
+  })
+
+  it('shows the paced send as busy and freezes the snapshotted answer', () => {
+    mocks.sendAnswer.mockReturnValue(5_000)
+    renderCard()
+
+    chooseSpacesAndSubmit()
+
+    expect(screen.getByRole('button', { name: 'Sending…' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: /Spaces/ })).toBeDisabled()
+    expect(screen.getByRole('textbox')).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Cancel' })).toBeEnabled()
   })
 
   it('cancels the old answer sequence when a replacement prompt arrives', () => {

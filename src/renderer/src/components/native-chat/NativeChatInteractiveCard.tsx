@@ -11,8 +11,8 @@ import type { NativeChatInteractiveSend } from './use-native-chat-interactive-se
  * `interactivePrompt` is present: a question wizard (precedence) or a tool
  * approval. Cleared by the host once the agent moves on, so it disappears
  * automatically. Sends through the composer's verified runtime path (R8/R6):
- * answers as bracketed-paste + Enter; cancel/deny as ESC. Guarded by `canSend`
- * so a mobile presence-lock blocks desktop sends the same way it guards xterm.
+ * answers via agent-specific paste or selector keystrokes; cancel/deny as ESC.
+ * Guarded by `canSend` so a mobile presence-lock blocks desktop sends too.
  *
  * Dismiss-on-answer (mobile parity): the live status lingers after answering —
  * the agent emits a post-tool event carrying the same prompt — so we track the
@@ -56,21 +56,23 @@ export function NativeChatInteractiveCard({
   // vanish mid-send. `submitting` also gates a second submit racing the first.
   const dismissTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const submittingRef = useRef(false)
+  const [submitting, setSubmitting] = useState(false)
   const clearDismissTimer = useCallback((): void => {
     if (dismissTimerRef.current) {
       clearTimeout(dismissTimerRef.current)
       dismissTimerRef.current = null
     }
     submittingRef.current = false
+    setSubmitting(false)
   }, [])
-  // A replacement prompt or unmount must stop both the UI timer and its external
-  // PTY writes, or the old answer can type into the next prompt.
+  // A replacement prompt, ownership loss, or unmount must stop both timers and
+  // PTY writes, or the old answer can type into a prompt the desktop no longer owns.
   useEffect(
     () => () => {
       clearDismissTimer()
       cancelPending()
     },
-    [cardKey, cancelPending, clearDismissTimer]
+    [canSend, cardKey, cancelPending, clearDismissTimer]
   )
 
   // Forget the dismissal once the prompt clears so a fresh prompt can show.
@@ -98,6 +100,7 @@ export function NativeChatInteractiveCard({
       <NativeChatQuestionCard
         key={cardKey ?? 'question'}
         prompt={card.prompt}
+        isSubmitting={submitting}
         answerInputRef={answerInputRef}
         onAnswer={(selections) => {
           if (submittingRef.current) {
@@ -111,12 +114,14 @@ export function NativeChatInteractiveCard({
             submittingRef.current = false
             return
           }
+          setSubmitting(true)
           // Hold the card until the paced write finishes, then mark it answered
           // (which hides it and restores the composer).
           dismissTimerRef.current = setTimeout(() => {
             cancelPending()
             setDismissedKey(cardKey)
             submittingRef.current = false
+            setSubmitting(false)
             dismissTimerRef.current = null
           }, settleMs)
         }}

@@ -6,6 +6,8 @@ import type { AskAnswerSelection, AskPrompt } from './native-chat-interactive-pr
 
 export type NativeChatQuestionCardProps = {
   prompt: AskPrompt
+  /** Whether the snapshotted answer is still being delivered to the agent. */
+  isSubmitting?: boolean
   /** Deliver the chosen answer (per-question option indices + free text). */
   onAnswer: (selections: AskAnswerSelection[]) => void
   /** Dismiss the prompt (sends Escape to the agent). */
@@ -24,6 +26,7 @@ export type NativeChatQuestionCardProps = {
  */
 export function NativeChatQuestionCard({
   prompt,
+  isSubmitting = false,
   onAnswer,
   onCancel,
   answerInputRef
@@ -120,7 +123,7 @@ export function NativeChatQuestionCard({
     // Part of the composer: docked in the bottom input region, matching the
     // composer's width and padding, rendered as the "ask" dialog card directly
     // above the text input. Its free-text row is the answer input.
-    <div className="shrink-0 bg-background">
+    <div className="shrink-0 bg-background" aria-busy={isSubmitting}>
       <div className="mx-auto w-full max-w-4xl px-3 pt-2 pb-4 sm:px-4">
         {total > 1 ? (
           <div className="mb-2 flex gap-1 overflow-x-auto pb-1 scrollbar-sleek">
@@ -128,9 +131,10 @@ export function NativeChatQuestionCard({
               <button
                 key={i}
                 type="button"
+                disabled={isSubmitting}
                 onClick={() => setIndex(i)}
                 className={cn(
-                  'flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-xs font-medium',
+                  'flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-xs font-medium disabled:pointer-events-none',
                   i === index
                     ? 'bg-accent text-accent-foreground'
                     : 'text-muted-foreground hover:text-foreground'
@@ -178,6 +182,7 @@ export function NativeChatQuestionCard({
                 label={opt.label}
                 description={opt.description}
                 selected={(selections[index] ?? []).includes(i)}
+                disabled={isSubmitting}
                 onSelect={() => pickOption(i)}
               />
             ))}
@@ -187,6 +192,7 @@ export function NativeChatQuestionCard({
               </span>
               <input
                 ref={answerInputRef}
+                disabled={isSubmitting}
                 value={otherText[index]}
                 onChange={(e) => setOther(index, e.target.value)}
                 onKeyDown={(e) => {
@@ -199,23 +205,26 @@ export function NativeChatQuestionCard({
                   'components.native-chat.question.otherPlaceholder',
                   'Type your answer'
                 )}
-                className="min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground/60"
+                className="min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground/60 disabled:cursor-default disabled:opacity-50"
               />
               <button
                 type="button"
+                disabled={isSubmitting}
                 onClick={() => confirm()}
                 className={cn(
-                  'shrink-0 rounded-md px-3 py-1 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                  'w-24 shrink-0 rounded-md px-3 py-1 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-default disabled:opacity-50',
                   currentAnswered
                     ? 'bg-primary text-primary-foreground hover:bg-primary/90'
                     : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
                 )}
               >
-                {currentAnswered
-                  ? isLast
-                    ? translate('components.native-chat.question.send', 'Send answer')
-                    : translate('components.native-chat.question.next', 'Next')
-                  : translate('components.native-chat.question.skip', 'Skip')}
+                {isSubmitting
+                  ? translate('components.native-chat.question.sending', 'Sending…')
+                  : currentAnswered
+                    ? isLast
+                      ? translate('components.native-chat.question.send', 'Send answer')
+                      : translate('components.native-chat.question.next', 'Next')
+                    : translate('components.native-chat.question.skip', 'Skip')}
               </button>
             </div>
           </div>
@@ -236,23 +245,26 @@ function OptionRow({
   label,
   description,
   selected,
+  disabled,
   onSelect
 }: {
   badge: string
   label: string
   description?: string
   selected: boolean
+  disabled: boolean
   onSelect: () => void
 }): React.JSX.Element {
   return (
     <button
       type="button"
+      disabled={disabled}
       onClick={onSelect}
       // Selection is otherwise only the visual check/badge swap; expose it to
       // assistive tech.
       aria-pressed={selected}
       className={cn(
-        'flex w-full items-center gap-3 px-3.5 py-2.5 text-left transition-colors',
+        'flex w-full items-center gap-3 px-3.5 py-2.5 text-left transition-colors disabled:pointer-events-none',
         selected ? 'bg-accent' : 'hover:bg-accent'
       )}
     >
