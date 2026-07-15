@@ -771,6 +771,7 @@
             "snapshot and escalation readers stop at their deadline",
             "production ps reads force locale-independent C timestamps",
             "20 session captures index one shared 1,040-row process table once instead of rescanning it per session",
+            "unexpected snapshot processing still falls back to root teardown",
             "the source scan timestamp survives request resolution and capture-second identities are never escalated with SIGKILL",
             "cyclic-looking duplicate PID rows terminate with each descendant visited once and duplicate escalation identities stay unsignalled",
             "descendant signals are suppressed after the caller loses root ownership"
@@ -783,6 +784,12 @@
             "a naturally exited session id remains reserved until capture finishes without force-killing its retired PID",
             "graceful teardown upgrades to immediate both during and after descendant capture",
             "duplicate immediate kill starts one descendant sweep"
+          ]
+        },
+        {
+          "file": "src/main/providers/local-pty-provider.test.ts",
+          "assertions": [
+            "unexpected descendant capture or signalling failure still kills and untracks the root PTY"
           ]
         },
         {
@@ -825,7 +832,16 @@
           "command": "pnpm run test:e2e -- tests/e2e/agent-descendant-process-kill.spec.ts --workers=1",
           "result": "passed",
           "durationSeconds": 78,
-          "summary": "The cycle-safe, shared-indexed, bounded-fanout review head passed from a cold full build; the live detached-pgid descendant test body completed in 4.8 seconds."
+          "summary": "The cycle-safe, target-indexed, bounded-fanout review head passed from a cold full build; the live detached-pgid descendant test body completed in 4.8 seconds."
+        },
+        {
+          "date": "2026-07-15",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm run test:e2e -- tests/e2e/agent-descendant-process-kill.spec.ts --workers=1",
+          "result": "passed",
+          "durationSeconds": 42.6,
+          "summary": "The latest-main integrated, shared-indexed review head passed from a fresh E2E build; the live detached-pgid descendant test body completed in 4.9 seconds."
         }
       ],
       "runtimeBudget": {
@@ -834,7 +850,7 @@
       },
       "flakeHistory": {
         "status": "unknown",
-        "evidence": "The Electron gate passed three times locally, including the final review-fix head through the registered fresh-build command; CI and soak history are not yet available."
+        "evidence": "The Electron gate passed four times locally, including the final latest-main review-fix head through the registered fresh-build command; CI and soak history are not yet available."
       },
       "redGreenEvidence": {
         "status": "partial",
