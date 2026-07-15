@@ -9,6 +9,7 @@ import {
   type ShellReadyScanState
 } from '../shell-ready-marker-scanner'
 import { isPowerShellProcess } from '../../shared/shell-process-detection'
+import { killWithDescendantSweep } from '../pty-descendant-termination'
 import type { TuiAgent } from '../../shared/types'
 import { PhysicalExitTracker } from '../../shared/physical-exit-tracker'
 import type {
@@ -130,6 +131,7 @@ export class Session {
   private producerPauseFailsafeTimer: ReturnType<typeof setTimeout> | null = null
   private readonly _historySeeded: boolean | undefined
   private forceKillSent = false
+  private subprocessDisposed = false
   private readonly physicalExit = new PhysicalExitTracker()
 
   constructor(opts: SessionOptions) {
@@ -190,6 +192,19 @@ export class Session {
 
   get isTerminating(): boolean {
     return this._isTerminating
+  }
+
+  /** Claims termination synchronously so attach/re-entry cannot race async
+   * teardown preparation. Returns false when another owner already claimed it. */
+  beginTermination(): boolean {
+    if (this._state === 'exited' || this._isTerminating) {
+      return false
+    }
+    this._isTerminating = true
+    // Why: a paused child can be blocked inside write(); resume before any
+    // async snapshot so it can handle termination promptly.
+    this.releaseProducerPause({ resume: true })
+    return true
   }
 
   get pid(): number {
@@ -265,24 +280,68 @@ export class Session {
   }
 
   kill(): void {
-    if (this._state === 'exited' || this._isTerminating) {
+    if (!this.beginTermination()) {
       return
     }
-    this._isTerminating = true
+    if (!this.launchAgent) {
+      this.signalTerminationRoot()
+    } else {
+      // Why: agent tool children live in detached process groups a dying
+      // shell's SIGHUP never reaches. The bounded snapshot briefly defers the
+      // signal; the kill timer below starts now, so force-dispose timing is
+      // unaffected.
+      void Promise.resolve(
+        killWithDescendantSweep(
+          this.subprocess.pid,
+          () => {
+            this.signalTerminationRoot()
+          },
+          {
+            // Why: if the root exits during ps, its numeric PID can be recycled.
+            // Never apply that stale snapshot to a different process tree.
+            ownsRoot: () => this.isAlive
+          }
+        )
+      ).catch((error) => {
+        if (this.isAlive) {
+          this.resetTerminationAfterSignalFailure()
+        }
+        console.warn('[Session] descendant-aware graceful kill failed:', error)
+      })
+    }
+    this.scheduleForceDisposeFallback()
+  }
 
-    // Why: a paused child can be blocked inside write(); resume before
-    // signalling so it can run signal handlers and actually exit.
-    this.releaseProducerPause({ resume: true })
+  /** Signals a root whose descendant snapshot has completed. */
+  signalTerminationRoot(): void {
+    if (this._state === 'exited') {
+      return
+    }
     try {
       this.subprocess.kill()
     } catch (error) {
       // Why: rejected signalling is not termination. Reopen the session so a
       // later graceful or destructive retry can still target the live child.
-      this._isTerminating = false
+      this.resetTerminationAfterSignalFailure()
       throw error
     }
+  }
 
+  /** Starts the existing graceful-kill deadline when a coordinator owns the
+   * snapshot-first portion of teardown. */
+  scheduleForceDisposeFallback(): void {
+    if (this.killTimer) {
+      return
+    }
     this.armForceKillFallback(KILL_TIMEOUT_MS, SESSION_FORCE_KILL_MAX_ATTEMPTS)
+  }
+
+  private resetTerminationAfterSignalFailure(): void {
+    this._isTerminating = false
+    if (this.killTimer) {
+      clearTimeout(this.killTimer)
+      this.killTimer = null
+    }
   }
 
   private armForceKillFallback(delayMs: number, attemptsRemaining: number): void {
@@ -549,6 +608,14 @@ export class Session {
     this.shellReadyScanState = null
     this.preReadyStdinQueue = []
     this.postReadyFlushGate.clear()
+    this.disposeSubprocessHandle()
+  }
+
+  private disposeSubprocessHandle(): void {
+    if (this.subprocessDisposed) {
+      return
+    }
+    this.subprocessDisposed = true
     try {
       this.subprocess.dispose()
     } catch (err) {
@@ -648,12 +715,7 @@ export class Session {
     // that helper flips `_disposed = true`, which would short-circuit the later
     // Session.dispose() call from TerminalHost.reapSession (wired via onExit
     // below) — skipping attachedClients/emulator/postReadyFlushGate cleanup.
-    // Call subprocess.dispose() directly inside try/catch.
-    try {
-      this.subprocess.dispose()
-    } catch {
-      /* swallow — must not prevent exit-code fanout below */
-    }
+    this.disposeSubprocessHandle()
 
     for (const client of this.attachedClients) {
       client.onExit(code)

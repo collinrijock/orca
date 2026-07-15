@@ -3,6 +3,11 @@ import type { OrcaRuntimeService } from './orca-runtime'
 import { listRegisteredPtys } from '../memory/pty-registry'
 import { isPathInsideOrEqual } from '../../shared/cross-platform-path'
 import { splitWorktreeIdForFilesystem } from '../../shared/worktree-id'
+import { mapWithConcurrency } from '../../shared/map-with-concurrency'
+
+// Why: normal inventories still coalesce into one process scan, while a stale
+// or pathological inventory cannot fan out unbounded provider/RPC shutdowns.
+const WORKTREE_TEARDOWN_CONCURRENCY = 32
 
 export type WorktreeTeardownDeps = {
   runtime?: OrcaRuntimeService
@@ -195,39 +200,45 @@ async function sweepProviderByPrefix(
   const sessions = failClosed
     ? await provider.listProcesses()
     : await provider.listProcesses().catch(() => [])
-  let killed = 0
-  for (const s of sessions) {
-    if (Date.now() >= deadline) {
-      break
-    }
+  const ownedSessions = sessions.filter((session) => {
     // Why: older daemon/relay process rows may omit cwd; their established ID
     // and authoritative worktree ownership must remain usable during teardown.
     const cwdOwned =
       worktreePath !== undefined &&
-      s.worktreeId === undefined &&
-      typeof s.cwd === 'string' &&
-      s.cwd.length > 0 &&
-      isPathInsideOrEqual(worktreePath, s.cwd)
-    if (!s.id.startsWith(prefix) && s.worktreeId !== worktreeId && !cwdOwned) {
-      continue
-    }
-    const stopResult = await stopPty(s.id, async () => {
+      session.worktreeId === undefined &&
+      typeof session.cwd === 'string' &&
+      session.cwd.length > 0 &&
+      isPathInsideOrEqual(worktreePath, session.cwd)
+    return session.id.startsWith(prefix) || session.worktreeId === worktreeId || cwdOwned
+  })
+  // Why: agent shutdown snapshots coalesce only when requests begin together;
+  // bounded concurrency avoids serial process scans without unbounded fanout.
+  const stopped = await mapWithConcurrency(
+    ownedSessions,
+    WORKTREE_TEARDOWN_CONCURRENCY,
+    async (session) => {
       if (Date.now() >= deadline) {
-        return false
+        return 0
       }
-      try {
-        await provider.shutdown(s.id, { immediate: true })
-        return Date.now() < deadline
-      } catch {
-        return false
+      const stopResult = await stopPty(session.id, async () => {
+        if (Date.now() >= deadline) {
+          return false
+        }
+        try {
+          await provider.shutdown(session.id, { immediate: true })
+          return Date.now() < deadline
+        } catch {
+          return false
+        }
+      })
+      if (stopResult.owner && Date.now() < deadline) {
+        clearStoppedPtyState(session.id, onPtyStopped)
+        return 1
       }
-    })
-    if (stopResult.owner && Date.now() < deadline) {
-      clearStoppedPtyState(s.id, onPtyStopped)
-      killed += 1
+      return 0
     }
-  }
-  return killed
+  )
+  return stopped.reduce<number>((count, value) => count + value, 0)
 }
 
 async function sweepRegistryForWorktree(
@@ -241,28 +252,32 @@ async function sweepRegistryForWorktree(
   onPtyStopped?: (ptyId: string) => void
 ): Promise<number> {
   const entries = listRegisteredPtys().filter((r) => r.worktreeId === worktreeId)
-  let killed = 0
-  for (const entry of entries) {
-    if (Date.now() >= deadline) {
-      break
-    }
-    const stopResult = await stopPty(entry.ptyId, async () => {
+  const stopped = await mapWithConcurrency(
+    entries,
+    WORKTREE_TEARDOWN_CONCURRENCY,
+    async (entry) => {
       if (Date.now() >= deadline) {
-        return false
+        return 0
       }
-      try {
-        await localProvider.shutdown(entry.ptyId, { immediate: true })
-        return Date.now() < deadline
-      } catch {
-        return false
+      const stopResult = await stopPty(entry.ptyId, async () => {
+        if (Date.now() >= deadline) {
+          return false
+        }
+        try {
+          await localProvider.shutdown(entry.ptyId, { immediate: true })
+          return Date.now() < deadline
+        } catch {
+          return false
+        }
+      })
+      if (stopResult.owner && Date.now() < deadline) {
+        clearStoppedPtyState(entry.ptyId, onPtyStopped)
+        return 1
       }
-    })
-    if (stopResult.owner && Date.now() < deadline) {
-      clearStoppedPtyState(entry.ptyId, onPtyStopped)
-      killed += 1
+      return 0
     }
-  }
-  return killed
+  )
+  return stopped.reduce<number>((count, value) => count + value, 0)
 }
 
 function clearStoppedPtyState(ptyId: string, onPtyStopped?: (ptyId: string) => void): void {

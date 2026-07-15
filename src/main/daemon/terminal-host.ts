@@ -4,10 +4,15 @@ import { shellPathSupportsPtyStartupBarrier } from './shell-ready'
 import { resolveProcessCwd } from '../providers/process-cwd'
 import type { StartupCommandDelivery } from '../../shared/codex-startup-delivery'
 import { buildStartupCommandSubmission } from '../../shared/startup-command-submission'
-import type { SessionInfo, TakePendingOutputResult, TerminalSnapshot } from './types'
-import { SessionNotFoundError } from './types'
+import {
+  SessionNotFoundError,
+  type SessionInfo,
+  type TakePendingOutputResult,
+  type TerminalSnapshot
+} from './types'
 import type { CreateOrAttachOptions, CreateOrAttachResult } from './terminal-host-create-contract'
-import { disposeTerminalHostSessions } from './terminal-host-session-shutdown'
+import { shutdownTerminalHostSessions } from './terminal-host-session-shutdown'
+import { TerminalSessionTeardown } from './terminal-session-teardown'
 
 export type { CreateOrAttachOptions, CreateOrAttachResult } from './terminal-host-create-contract'
 
@@ -42,6 +47,7 @@ export type TerminalHostOptions = {
 
 export class TerminalHost {
   private sessions = new Map<string, Session>()
+  private sessionTeardown = new TerminalSessionTeardown(this.sessions)
   private killedTombstones = new Map<string, number>()
   private spawnSubprocess: TerminalHostOptions['spawnSubprocess']
   private onFinalCheckpoint: TerminalHostOptions['onFinalCheckpoint']
@@ -67,11 +73,13 @@ export class TerminalHost {
     }
     const existing = this.sessions.get(opts.sessionId)
 
-    // Why: a session that has been asked to terminate (kill() called but the
-    // subprocess hasn't exited yet) must not be reattached. Reattaching would
-    // hand the caller a handle that races with the in-flight exit, and any
-    // subsequent operation (write/kill/resize) would fail once the subprocess
-    // finally exits. Treat terminating sessions the same as fully-exited ones.
+    // Why: async descendant capture must finish before anyone can attach or
+    // dispose/recreate this id. Disposing here would kill the root before the
+    // snapshot and reattaching would hand out a doomed session.
+    if (this.sessionTeardown.get(opts.sessionId) || existing?.isTerminating) {
+      throw new SessionNotFoundError(opts.sessionId)
+    }
+
     if (existing && existing.isAlive && !existing.isTerminating) {
       const snapshot = existing.getSnapshot()
       existing.detachAllClients()
@@ -207,12 +215,16 @@ export class TerminalHost {
   }
 
   kill(sessionId: string, opts: { immediate?: boolean } = {}): Promise<void> {
+    const pending = this.sessionTeardown.get(sessionId)
+    if (pending) {
+      return Promise.resolve(
+        opts.immediate ? this.sessionTeardown.requestImmediate(sessionId) : pending
+      )
+    }
     const session = this.getAliveSession(sessionId)
-    const killed = opts.immediate
-      ? session.forceKillAndWaitForExit()
-      : Promise.resolve(session.kill())
+    const killed = this.sessionTeardown.killSession(sessionId, session, opts.immediate === true)
     this.recordTombstone(sessionId)
-    return killed
+    return Promise.resolve(killed)
   }
 
   // Why: dispose a dead session's headless emulator and drop it from the map so
@@ -364,26 +376,7 @@ export class TerminalHost {
   }
 
   private async disposeSessions(): Promise<void> {
-    // Why: write final checkpoints before killing sessions so graceful shutdown
-    // has zero data loss. The checkpoint callback writes synchronously to disk.
-    if (this.onFinalCheckpoint) {
-      for (const [sessionId, session] of this.sessions) {
-        if (!session.isAlive) {
-          continue
-        }
-        const take = session.takePendingOutput(true, { teardownSnapshot: true })
-        if (take?.snapshot) {
-          try {
-            this.onFinalCheckpoint(sessionId, take.snapshot, take.records)
-          } catch {
-            // Best-effort — don't block shutdown
-          }
-        }
-      }
-    }
-
-    await disposeTerminalHostSessions(this.sessions.values())
-    this.sessions.clear()
+    await shutdownTerminalHostSessions(this.sessions, this.onFinalCheckpoint)
     this.killedTombstones.clear()
   }
 

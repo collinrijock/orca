@@ -54,6 +54,10 @@ import { WINDOWS_GIT_BASH_SHELL } from '../../shared/windows-terminal-shell'
 import { resolveAgentForegroundProcessWithAvailability } from './agent-foreground-process'
 import { getAgentForegroundContextPaths } from './agent-foreground-context-paths'
 import { recognizeAgentProcessFromCommandLine } from '../../shared/agent-process-recognition'
+import {
+  captureDescendantSnapshot,
+  terminateDescendantSnapshot
+} from '../pty-descendant-termination'
 import { readWindowsConptyProcessIds } from './windows-conpty-process-membership'
 import { forceKillPosixPtyProcessGroups } from '../pty/posix-pty-process-groups'
 import { shouldUseShellReadyStartupDelivery } from '../../shared/codex-startup-delivery'
@@ -71,6 +75,20 @@ const PANE_IDENTITY_ENV_KEYS = [
 
 let ptyCounter = 0
 const ptyProcesses = new Map<string, pty.IPty>()
+// Why: only agent sessions get descendant tree-kill on shutdown. Agent CLIs
+// spawn tool children in detached process groups the PTY's SIGHUP can never
+// reach; plain user terminals keep classic semantics where deliberately
+// detached (nohup-style) children survive the pane.
+const ptyAgentSessionIds = new Set<string>()
+// Why: descendant capture is async. Reattach and duplicate shutdown must wait
+// for the original owner instead of returning a PTY that is about to die.
+type PtyShutdownOperation = {
+  promise: Promise<void>
+  immediate: boolean
+  rootSignalled: boolean
+  proc: pty.IPty
+}
+const ptyShutdownOperations = new Map<string, PtyShutdownOperation>()
 const ptyShellName = new Map<string, string>()
 const ptyAgentForegroundContextPaths = new Map<string, string[]>()
 const ptyTerminalHandle = new Map<string, string>()
@@ -205,6 +223,7 @@ function clearPtyState(id: string): void {
   disposePtyListeners(id)
   disposePtyExitListener(id)
   ptyProcesses.delete(id)
+  ptyAgentSessionIds.delete(id)
   ptyShellName.delete(id)
   ptyAgentForegroundContextPaths.delete(id)
   ptyTerminalHandle.delete(id)
@@ -446,6 +465,10 @@ export class LocalPtyProvider implements IPtyProvider {
   async spawn(args: PtySpawnOptions): Promise<PtySpawnResult> {
     const reattachId = normalizeLocalCallerSessionId(args.sessionId)
     if (reattachId) {
+      const pendingShutdown = ptyShutdownOperations.get(reattachId)
+      if (pendingShutdown) {
+        await pendingShutdown.promise
+      }
       const existing = ptyProcesses.get(reattachId)
       if (existing) {
         try {
@@ -803,6 +826,12 @@ export class LocalPtyProvider implements IPtyProvider {
     createPtyPhysicalExit(id)
     ptyProcesses.set(id, proc)
     ptyInitialCwd.set(id, cwd)
+    // Why both signals: launchAgent is the caller's explicit intent and
+    // survives command rewriting (e.g. auth env prefixes); recognition covers
+    // callers that pass a bare agent command line without the flag.
+    if (args.launchAgent || startupAgentRecognition) {
+      ptyAgentSessionIds.add(id)
+    }
     ptyShellName.set(id, getSpawnedShellName(shellPath))
     if (finalEnv.ORCA_TERMINAL_HANDLE) {
       ptyTerminalHandle.set(id, finalEnv.ORCA_TERMINAL_HANDLE)
@@ -1003,23 +1032,73 @@ export class LocalPtyProvider implements IPtyProvider {
   }
 
   async shutdown(id: string, opts: { immediate?: boolean; keepHistory?: boolean }): Promise<void> {
+    const pending = ptyShutdownOperations.get(id)
+    if (pending) {
+      if (opts.immediate === true) {
+        pending.immediate = true
+        if (pending.rootSignalled && ptyProcesses.get(id) === pending.proc) {
+          this.requestTrackedPtyShutdown(id, pending.proc, true)
+        }
+      }
+      await pending.promise
+      return
+    }
     const proc = ptyProcesses.get(id)
     if (!proc) {
       return
     }
+    const entry: PtyShutdownOperation = {
+      promise: Promise.resolve(),
+      immediate: opts.immediate === true,
+      rootSignalled: false,
+      proc
+    }
+    entry.promise = this.shutdownTrackedPty(id, proc, entry)
+    ptyShutdownOperations.set(id, entry)
+    try {
+      await entry.promise
+    } finally {
+      if (ptyShutdownOperations.get(id) === entry) {
+        ptyShutdownOperations.delete(id)
+      }
+    }
+  }
+
+  private async shutdownTrackedPty(
+    id: string,
+    proc: pty.IPty,
+    operation: PtyShutdownOperation
+  ): Promise<void> {
     const physicalExit = ptyPhysicalExits.get(id)
-    // Why: cancel startup delivery immediately, but keep node-pty's onExit
-    // listener and all ownership maps until the OS confirms the child reaped.
-    runPtyCleanup(id)
+    // Why: the snapshot must precede any signal — once the shell dies,
+    // surviving descendants reparent to pid 1 and a ppid walk can't find them.
+    const descendants = ptyAgentSessionIds.has(id)
+      ? await captureDescendantSnapshot(proc.pid)
+      : null
+    // Why: a natural exit can race the snapshot. Never signal descendants or
+    // a root PID after this exact PTY has lost ownership.
+    if (ptyProcesses.get(id) === proc) {
+      if (descendants) {
+        terminateDescendantSnapshot(descendants)
+      }
+      // Cancel startup delivery now, but preserve the exit listener and all
+      // ownership maps until node-pty reports the physical process exit.
+      runPtyCleanup(id)
+      operation.rootSignalled = true
+      this.requestTrackedPtyShutdown(id, proc, operation.immediate)
+    }
+    await waitForPtyPhysicalExit(id, physicalExit)
+  }
+
+  private requestTrackedPtyShutdown(id: string, proc: pty.IPty, immediate: boolean): void {
     const previousMode = ptyTerminationMode.get(id)
     // Why: ConPTY has no graceful signal; its first bare node-pty kill closes
     // the pseudoconsole and must be treated as the final force request.
-    const requestedMode =
-      opts.immediate === true || process.platform === 'win32' ? 'force' : 'graceful'
+    const requestedMode = immediate || process.platform === 'win32' ? 'force' : 'graceful'
     if (!previousMode || (requestedMode === 'force' && previousMode !== 'force')) {
       ptyTerminationMode.set(id, requestedMode)
       try {
-        killLocalPtyProcess(proc, opts.immediate === true)
+        killLocalPtyProcess(proc, immediate)
         if (requestedMode === 'graceful') {
           armLocalPtyForceKill(id, proc)
         } else {
@@ -1034,7 +1113,6 @@ export class LocalPtyProvider implements IPtyProvider {
         throw error
       }
     }
-    await waitForPtyPhysicalExit(id, physicalExit)
   }
 
   async sendSignal(id: string, signal: string): Promise<void> {
