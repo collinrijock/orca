@@ -1364,6 +1364,40 @@ describe('registerPtyHandlers', () => {
       expect(env.ORCA_CODEX_HOME).toBe(TEST_CODEX_HOME)
     })
 
+    it('leaves an inherited CODEX_HOME untouched for system default when the flag is OFF', async () => {
+      // Why: flag OFF must stay byte-identical to today. With no managed home
+      // selected (resolver null) and the real-home flag off, no CODEX_HOME
+      // injection or strip happens; an inherited value survives as before.
+      const env = await spawnAndGetEnv(
+        undefined,
+        { CODEX_HOME: '/tmp/system-codex-home' },
+        () => null
+      )
+      expect(env.CODEX_HOME).toBe('/tmp/system-codex-home')
+    })
+
+    it('strips a nested-Orca override for system default when the real-home flag is ON', async () => {
+      const env = await spawnAndGetEnv(
+        { CODEX_HOME: '/managed/home', ORCA_CODEX_HOME: '/managed/home' },
+        undefined,
+        () => null,
+        () => ({ codexSystemDefaultRealHomeEnabled: true }) as never
+      )
+      expect(env.CODEX_HOME).toBeUndefined()
+      expect(env.ORCA_CODEX_HOME).toBeUndefined()
+    })
+
+    it('preserves a user-owned CODEX_HOME for system default when the real-home flag is ON', async () => {
+      const env = await spawnAndGetEnv(
+        { CODEX_HOME: '/home/me/.config/codex' },
+        { ORCA_CODEX_HOME: undefined },
+        () => null,
+        () => ({ codexSystemDefaultRealHomeEnabled: true }) as never
+      )
+      expect(env.CODEX_HOME).toBe('/home/me/.config/codex')
+      expect(env.ORCA_CODEX_HOME).toBeUndefined()
+    })
+
     it('injects explicit proxy settings into local PTY env', async () => {
       const env = await spawnAndGetEnv(undefined, undefined, undefined, () => ({
         httpProxyUrl: 'http://proxy.example:8080',

@@ -734,6 +734,13 @@ function startTerminalRuntimeStartupServices(): Promise<void> {
 
 function prepareCodexRuntimeHomeForLaunch(target?: CodexAccountSelectionTarget): string | null {
   const runtimeHomePath = codexRuntimeHome!.prepareForCodexLaunch(target)
+  if (runtimeHomePath === null && codexRuntimeHome!.isHostSystemDefaultRealHome()) {
+    // Why (flag ON, system default): Codex runs on the user's real ~/.codex, so
+    // the managed-home hook install below would target a home Codex never reads.
+    // The real-home hook installer (trust granted via the app-server client)
+    // owns hook install for this lane and lands with the trust plumbing.
+    return null
+  }
   const hookTarget =
     target?.runtime === 'wsl'
       ? {

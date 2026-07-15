@@ -60,6 +60,7 @@ import {
   type CodexAccountSelectionTarget
 } from './runtime-selection'
 import { getDefaultWslDistro, getWslHome } from '../wsl'
+import { isCodexSystemDefaultRealHomeEnabled } from '../codex/codex-real-home-flag'
 
 type CodexAuthIdentity = {
   email: string | null
@@ -147,6 +148,13 @@ export class CodexRuntimeHomeService {
       this.startWslSessionBridgeForLaunch(wslTarget, runtimeHomePath)
       return runtimeHomePath
     }
+    if (this.isHostSystemDefaultRealHome()) {
+      // Why (flag ON, system default): run Codex on the user's own ~/.codex.
+      // Returning null tells the PTY/env layer to inject no managed CODEX_HOME;
+      // sessions, auth, and config all live in the native home. No system->
+      // managed session bridge runs, so the real home stays the single source.
+      return null
+    }
     this.syncForCurrentSelection()
     syncSystemCodexResourcesIntoManagedHome()
     syncSystemConfigIntoManagedCodexHome()
@@ -190,6 +198,17 @@ export class CodexRuntimeHomeService {
 
   getHostRuntimeHomePath(): string {
     return this.getRuntimeHomePath()
+  }
+
+  // Why: real-home routing applies only to the host system-default selection
+  // (no managed account chosen for host) with the staged flag ON. Managed host
+  // accounts keep the isolated runtime home for hot-swap and token persistence.
+  isHostSystemDefaultRealHome(): boolean {
+    const settings = this.store.getSettings()
+    return (
+      isCodexSystemDefaultRealHomeEnabled(settings) &&
+      normalizeCodexRuntimeSelection(settings).host === null
+    )
   }
 
   syncActiveWslSelectionsBeforeRestart(): void {
@@ -254,6 +273,13 @@ export class CodexRuntimeHomeService {
       const wslTarget = this.resolveWslDefaultTarget(target)
       const syncedRuntimeHomePath = this.getPreparedWslRateLimitHomePath(wslTarget)
       return syncedRuntimeHomePath ?? this.getWslSystemCodexHomePath(wslTarget)
+    }
+    if (this.isHostSystemDefaultRealHome()) {
+      // Why (flag ON, system default): read usage/auth from the user's own
+      // ~/.codex. Returning null makes the fetcher fall back to ~/.codex and
+      // its auth-presence gate check the real auth.json, so the background
+      // poller never spawns Codex against the managed home (the #5370 auth war).
+      return null
     }
     this.syncForCurrentSelection()
     syncSystemCodexResourcesIntoManagedHome()
