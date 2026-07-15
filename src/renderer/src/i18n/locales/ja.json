@@ -3240,7 +3240,10 @@
             "openDetails": "Open usage details",
             "notSignedIn": "not signed in",
             "allAgents": "all agents",
-            "usageDetails": "Usage details & history"
+            "usageDetails": "Usage details & history",
+            "loadingUsage": "Loading usage…",
+            "usageUnavailable": "Usage unavailable",
+            "noUsageData": "No usage data"
           }
         }
       },

@@ -63,6 +63,7 @@ import { ClaudeIcon, GeminiIcon, MiniMaxIcon, OpenAIIcon, OpenCodeGoIcon } from 
 import { AgentIcon } from '@/lib/agent-catalog'
 import { formatWindowLabel } from '@/lib/window-label-formatter'
 import { UsageRosterPanel } from './UsageRosterPanel'
+import { getUsageProviderAccountsSectionId } from './usage-provider-settings-target'
 import { markLiveCodexSessionsForRestart } from '@/lib/codex-session-restart'
 import { UpdateStatusSegment } from './UpdateStatusSegment'
 import { isStatusBarItemAvailable } from './status-bar-agent-gating'
@@ -86,7 +87,6 @@ import {
 } from '@/runtime/runtime-provider-accounts-client'
 import { translate } from '@/i18n/i18n'
 import {
-  getDisplayedUsagePercentage,
   normalizeUsagePercentageDisplay,
   type UsagePercentageDisplay
 } from '../../../../shared/usage-percentage-display'
@@ -749,7 +749,7 @@ export function ClaudeSwitcherMenu({
     void loadAccounts().catch((error) => {
       console.error('Failed to load Claude accounts for status bar:', error)
     })
-  }, [loadAccounts, open, claudeAccountSyncKey])
+  }, [loadAccounts, claudeAccountSyncKey])
 
   const handleOpenChange = useCallback((nextOpen: boolean): void => {
     setOpen(nextOpen)
@@ -1102,7 +1102,8 @@ function WindowLabel({
 }): React.JSX.Element {
   return (
     <span className="tabular-nums">
-      {getDisplayedUsagePercentage(w.usedPercent, display)}%{showLabel ? ` ${label}` : ''}
+      {formatUsagePercentageLabel(w.usedPercent, display)}
+      {showLabel ? ` ${label}` : ''}
     </span>
   )
 }
@@ -1208,20 +1209,18 @@ export function ProviderSegment({
 
   if (p.buckets && p.buckets.length > 0) {
     const visibleBuckets = p.buckets.filter((b) => STATUS_BAR_BUCKET_NAMES.has(b.name))
-    // Roster shows the tightest bucket (highest % used) to stay compact.
-    const tightestBucket =
-      visibleBuckets.length > 0
-        ? visibleBuckets.reduce((a, b) => (b.usedPercent > a.usedPercent ? b : a))
-        : null
     return (
       <span className="inline-flex items-center gap-1.5">
         <ProviderIcon provider={provider} />
-        {tightestBucket ? (
-          <span className="tabular-nums">
-            {tightestBucket.name} {getDisplayedUsagePercentage(tightestBucket.usedPercent, display)}
-            %
-          </span>
-        ) : p.session ? (
+        {visibleBuckets.map((bucket, index) => (
+          <React.Fragment key={bucket.name}>
+            {index > 0 ? <span className="text-muted-foreground">·</span> : null}
+            <span className="tabular-nums">
+              {bucket.name} {formatUsagePercentageLabel(bucket.usedPercent, display)}
+            </span>
+          </React.Fragment>
+        ))}
+        {visibleBuckets.length === 0 && p.session ? (
           <WindowLabel
             w={p.session}
             label={formatWindowLabel(p.session.windowMinutes)}
@@ -1268,24 +1267,20 @@ export function ProviderSegment({
       : null
   ].filter((w): w is { key: string; window: RateLimitWindow; label: string } => w !== null)
 
-  // Roster: show only the tightest window (highest % used) with a threshold-colored
-  // number so the footer stays compact; the dropdown still lists every window.
-  const tightestWindow =
-    visibleWindows.length > 0
-      ? visibleWindows.reduce((a, b) => (b.window.usedPercent > a.window.usedPercent ? b : a))
-      : null
-
   return (
     <span className="inline-flex items-center gap-1.5">
       <ProviderIcon provider={provider} />
-      {tightestWindow && (
-        <WindowLabel
-          w={tightestWindow.window}
-          label={tightestWindow.label}
-          display={display}
-          showLabel={!compact}
-        />
-      )}
+      {visibleWindows.map((window, index) => (
+        <React.Fragment key={window.key}>
+          {index > 0 ? <span className="text-muted-foreground">·</span> : null}
+          <WindowLabel
+            w={window.window}
+            label={window.label}
+            display={display}
+            showLabel={!compact}
+          />
+        </React.Fragment>
+      ))}
       {isStale && <AlertTriangle size={11} className="text-muted-foreground/80" />}
     </span>
   )
@@ -1388,14 +1383,12 @@ export function CodexSwitcherMenu({
   }, [accountsExpanded])
 
   useEffect(() => {
-    // Why: the status bar keeps its own lightweight account snapshot for the
-    // dropdown. Settings account actions mutate the main-process store outside
-    // this component, so we refresh when the persisted account roster changes
-    // or when the menu opens instead of leaving a stale account list mounted.
+    // Why: the roster mounts this switcher on demand, while the sync key covers
+    // account mutations without refetching again when its submenu opens.
     void loadAccounts().catch((error) => {
       console.error('Failed to load Codex accounts for status bar:', error)
     })
-  }, [loadAccounts, open, codexAccountSyncKey])
+  }, [loadAccounts, codexAccountSyncKey])
 
   const handleSelectAccount = async (
     accountId: string | null,
@@ -2160,8 +2153,12 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
     openSettingsPage()
   }
   const handleOpenProviderAccounts = (provider: ProviderRateLimits['provider']): void => {
+    const sectionId = getUsageProviderAccountsSectionId(provider)
+    if (!sectionId) {
+      return
+    }
     setUsageMenuOpen(false)
-    openSettingsTarget({ pane: 'accounts', repoId: null, sectionId: `accounts-${provider}` })
+    openSettingsTarget({ pane: 'accounts', repoId: null, sectionId })
     openSettingsPage()
   }
 
@@ -2237,6 +2234,7 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
                   onRefresh={handleRefresh}
                   onOpenProvider={handleOpenProviderAccounts}
                   onSignIn={handleOpenProviderAccounts}
+                  canSignIn={(provider) => getUsageProviderAccountsSectionId(provider) !== null}
                   onManageAccounts={handleManageAccounts}
                   onUsageDetails={handleUsageDetails}
                   renderRow={(p, rowNode) => {

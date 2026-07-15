@@ -1,5 +1,6 @@
 import React from 'react'
 import { ChevronRight, RefreshCw } from 'lucide-react'
+import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import { translate } from '@/i18n/i18n'
 import { formatWindowLabel } from '@/lib/window-label-formatter'
 import type { ProviderRateLimits, RateLimitWindow } from '../../../../shared/rate-limit-types'
@@ -11,6 +12,7 @@ import {
 import { barColor, formatResetCountdown, getWindowSections, ProviderIcon } from './tooltip'
 import { getProviderDisplayName } from './usage-error-copy'
 import { formatPlanLabel, usageTextColorClass } from './usage-roster-formatting'
+import { getUsageRosterRowState, type UsageRosterRowState } from './usage-roster-row-state'
 
 type ProviderId = ProviderRateLimits['provider']
 type Section = { label: string; window: RateLimitWindow }
@@ -57,17 +59,19 @@ function soonestResetLabel(sections: Section[]): string | null {
 export function UsageRow({
   p,
   display,
-  onSignIn
+  state,
+  showSignInAction
 }: {
   p: ProviderRateLimits
   display: UsagePercentageDisplay
-  onSignIn: (provider: ProviderId) => void
+  state: UsageRosterRowState
+  showSignInAction: boolean
 }): React.JSX.Element {
   const sections = usedSections(p)
-  const signedOut = sections.length === 0
+  const hasUsage = sections.length > 0
   const name = getProviderDisplayName(p.provider)
   const plan = formatPlanLabel(p.planType)
-  const reset = signedOut ? null : soonestResetLabel(sections)
+  const reset = hasUsage ? soonestResetLabel(sections) : null
 
   return (
     <div className="flex min-w-0 flex-1 flex-col gap-1">
@@ -79,30 +83,22 @@ export function UsageRow({
           {name}
           {plan ? <span className="font-normal text-muted-foreground"> · {plan}</span> : null}
         </span>
-        {signedOut ? (
+        {!hasUsage ? (
           <>
             <span className="min-w-0 truncate text-[11px] text-muted-foreground">
-              {translate(
-                'auto.components.status.bar.UsageRosterPanel.notSignedIn',
-                'not signed in'
-              )}
+              {state.statusLabel}
             </span>
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation()
-                onSignIn(p.provider)
-              }}
-              className="ml-auto shrink-0 rounded-md border border-border bg-secondary px-2.5 py-0.5 text-xs text-foreground hover:bg-accent"
-            >
-              {translate('auto.components.status.bar.StatusBar.c35af53b73', 'Sign in')}
-            </button>
+            {showSignInAction ? (
+              <span className="ml-auto shrink-0 rounded-md border border-border bg-secondary px-2.5 py-0.5 text-xs text-foreground">
+                {translate('auto.components.status.bar.StatusBar.c35af53b73', 'Sign in')}
+              </span>
+            ) : null}
           </>
         ) : reset ? (
           <span className="shrink-0 text-[11px] text-muted-foreground">{reset}</span>
         ) : null}
       </div>
-      {signedOut ? null : (
+      {hasUsage ? (
         <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 pl-[30px]">
           {sections.map((s) => {
             const used = clampUsedPercent(s.window.usedPercent)
@@ -123,7 +119,7 @@ export function UsageRow({
             )
           })}
         </div>
-      )}
+      ) : null}
     </div>
   )
 }
@@ -140,6 +136,7 @@ export function UsageRosterPanel({
   onRefresh,
   onOpenProvider,
   onSignIn,
+  canSignIn,
   onManageAccounts,
   onUsageDetails,
   renderRow
@@ -150,6 +147,7 @@ export function UsageRosterPanel({
   onRefresh: () => void
   onOpenProvider: (provider: ProviderId) => void
   onSignIn: (provider: ProviderId) => void
+  canSignIn: (provider: ProviderId) => boolean
   onManageAccounts: () => void
   onUsageDetails: () => void
   // Lets the host wrap a provider's row in a richer control (e.g. the
@@ -172,64 +170,71 @@ export function UsageRosterPanel({
           <span className="text-[11px]">
             {translate('auto.components.status.bar.UsageRosterPanel.allAgents', 'all agents')}
           </span>
-          <button
-            type="button"
-            onClick={onRefresh}
+          <DropdownMenuItem
+            onSelect={(event) => {
+              event.preventDefault()
+              onRefresh()
+            }}
             aria-label={translate(
               'auto.components.status.bar.StatusBar.3325d996cb',
               'Refresh rate limits'
             )}
-            className="rounded p-0.5 hover:bg-accent hover:text-foreground"
+            className="size-5 justify-center p-0"
           >
             <RefreshCw size={12} className={isRefreshing ? 'animate-spin' : ''} />
-          </button>
+          </DropdownMenuItem>
         </div>
       </div>
       <div className="border-t border-border/70" />
       {sorted.map((p) => {
-        const rowNode = <UsageRow p={p} display={display} onSignIn={onSignIn} />
+        const state = getUsageRosterRowState(p, usedSections(p).length > 0)
+        const showSignInAction = state.kind === 'sign-in' && canSignIn(p.provider)
+        const rowNode = (
+          <UsageRow p={p} display={display} state={state} showSignInAction={showSignInAction} />
+        )
+        if (showSignInAction) {
+          return (
+            <DropdownMenuItem
+              key={p.provider}
+              onSelect={() => onSignIn(p.provider)}
+              className="w-full cursor-pointer rounded-none px-3.5 py-2.5"
+            >
+              {rowNode}
+            </DropdownMenuItem>
+          )
+        }
         const custom = renderRow?.(p, rowNode)
         if (custom) {
           return <React.Fragment key={p.provider}>{custom}</React.Fragment>
         }
         return (
-          <div
+          <DropdownMenuItem
             key={p.provider}
-            role="button"
-            tabIndex={0}
-            onClick={() => onOpenProvider(p.provider)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault()
-                onOpenProvider(p.provider)
-              }
-            }}
-            className="flex cursor-pointer items-center px-3.5 py-2.5 hover:bg-accent/60"
+            onSelect={() => onOpenProvider(p.provider)}
+            className="w-full cursor-pointer rounded-none px-3.5 py-2.5"
           >
             {rowNode}
-          </div>
+          </DropdownMenuItem>
         )
       })}
       <div className="border-t border-border/70" />
-      <button
-        type="button"
-        onClick={onUsageDetails}
-        className="flex w-full items-center justify-between px-3.5 py-2.5 text-[13px] text-foreground hover:bg-accent/60"
+      <DropdownMenuItem
+        onSelect={onUsageDetails}
+        className="w-full cursor-pointer justify-between rounded-none px-3.5 py-2.5 text-[13px] text-foreground"
       >
         {translate(
           'auto.components.status.bar.UsageRosterPanel.usageDetails',
           'Usage details & history'
         )}
         <ChevronRight size={14} className="text-muted-foreground" />
-      </button>
-      <button
-        type="button"
-        onClick={onManageAccounts}
-        className="flex w-full items-center justify-between px-3.5 py-2.5 text-[13px] text-foreground hover:bg-accent/60"
+      </DropdownMenuItem>
+      <DropdownMenuItem
+        onSelect={onManageAccounts}
+        className="w-full cursor-pointer justify-between rounded-none px-3.5 py-2.5 text-[13px] text-foreground"
       >
         {translate('auto.components.status.bar.StatusBar.75ded02687', 'Manage Accounts…')}
         <ChevronRight size={14} className="text-muted-foreground" />
-      </button>
+      </DropdownMenuItem>
     </div>
   )
 }

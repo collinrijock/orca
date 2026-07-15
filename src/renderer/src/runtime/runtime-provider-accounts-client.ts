@@ -33,6 +33,13 @@ const REMOTE_ACCOUNTS_FIRST_SNAPSHOT_TIMEOUT_MS = 15_000
 // refreshes, and those refreshes can crawl behind broken auth. Give the call
 // room to finish instead of reporting failure for an applied switch.
 const REMOTE_ACCOUNT_MUTATION_TIMEOUT_MS = 30_000
+const pendingProviderAccountsSnapshots = new Map<string, Promise<ProviderAccountsSnapshot>>()
+
+function getProviderAccountsOwnerKey(
+  settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined
+): string {
+  return settings?.activeRuntimeEnvironmentId?.trim() || 'local'
+}
 
 export function hasRemoteProviderAccountOwner(
   settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined
@@ -194,10 +201,16 @@ export function watchProviderAccounts(
 
 // One-shot convenience over watchProviderAccounts for surfaces that only need
 // the current snapshot (status-bar switcher menus).
-export async function fetchProviderAccountsSnapshot(
+export function fetchProviderAccountsSnapshot(
   settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined
 ): Promise<ProviderAccountsSnapshot> {
-  return await new Promise((resolve, reject) => {
+  const ownerKey = getProviderAccountsOwnerKey(settings)
+  const pending = pendingProviderAccountsSnapshots.get(ownerKey)
+  if (pending) {
+    return pending
+  }
+
+  const request = new Promise<ProviderAccountsSnapshot>((resolve, reject) => {
     const watcher = watchProviderAccounts(settings, {
       onSnapshot: (snapshot) => {
         watcher.close()
@@ -209,6 +222,16 @@ export async function fetchProviderAccountsSnapshot(
       }
     })
   })
+  pendingProviderAccountsSnapshots.set(ownerKey, request)
+  const clearPending = (): void => {
+    if (pendingProviderAccountsSnapshots.get(ownerKey) === request) {
+      pendingProviderAccountsSnapshots.delete(ownerKey)
+    }
+  }
+  // Why: both status-bar switchers mount together; share their in-flight read
+  // without caching the result past completion or across account owners.
+  void request.then(clearPending, clearPending)
+  return request
 }
 
 export async function selectClaudeProviderAccount(
