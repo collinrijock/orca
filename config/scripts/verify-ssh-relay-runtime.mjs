@@ -60,11 +60,13 @@ function parseArguments(argv) {
   return result
 }
 
-async function actualTree(runtimeDirectory) {
+async function actualTree(runtimeDirectory, signal) {
   const results = new Map()
   async function visit(directory) {
+    signal?.throwIfAborted()
     const children = await readdir(directory, { withFileTypes: true })
     for (const child of children) {
+      signal?.throwIfAborted()
       const absolutePath = join(directory, child.name)
       const path = relative(runtimeDirectory, absolutePath).split(sep).join('/')
       if (results.has(path.toLowerCase())) {
@@ -79,7 +81,10 @@ async function actualTree(runtimeDirectory) {
         })
         await visit(absolutePath)
       } else if (child.isFile()) {
-        const [metadata, bytes] = await Promise.all([stat(absolutePath), readFile(absolutePath)])
+        const [metadata, bytes] = await Promise.all([
+          stat(absolutePath),
+          readFile(absolutePath, { signal })
+        ])
         results.set(path.toLowerCase(), {
           path,
           type: 'file',
@@ -96,9 +101,10 @@ async function actualTree(runtimeDirectory) {
   return results
 }
 
-export async function verifyRuntimeTree(runtimeDirectory, identity) {
-  const actual = await actualTree(runtimeDirectory)
+export async function verifyRuntimeTree(runtimeDirectory, identity, { signal } = {}) {
+  const actual = await actualTree(runtimeDirectory, signal)
   for (const expected of identity.entries) {
+    signal?.throwIfAborted()
     const entry = actual.get(expected.path.toLowerCase())
     if (
       !entry ||
@@ -132,7 +138,7 @@ export async function verifyRuntimeTree(runtimeDirectory, identity) {
   }
 }
 
-async function runBundledSmoke(runtimeDirectory, identity) {
+async function runBundledSmoke(runtimeDirectory, identity, signal) {
   const nodePath = join(runtimeDirectory, 'bin', identity.os === 'win32' ? 'node.exe' : 'node')
   const childPath = resolve(scriptDirectory, 'ssh-relay-runtime-smoke-child.cjs')
   let result
@@ -142,7 +148,8 @@ async function runBundledSmoke(runtimeDirectory, identity) {
       encoding: 'utf8',
       maxBuffer: MAX_SMOKE_OUTPUT_BYTES,
       timeout: SMOKE_TIMEOUT_MS,
-      windowsHide: true
+      windowsHide: true,
+      signal
     })
   } catch (error) {
     // The child classifies PTY/watcher failures; retain its bounded tail to avoid blind CI retries.
@@ -155,13 +162,21 @@ async function runBundledSmoke(runtimeDirectory, identity) {
   return smoke
 }
 
-export async function verifySshRelayRuntime({ runtimeDirectory, identityPath, archivePath }) {
-  const identity = JSON.parse(await readFile(identityPath, 'utf8'))
+export async function verifyExtractedSshRelayRuntime({
+  runtimeDirectory,
+  identity,
+  archivePath,
+  signal
+}) {
+  signal?.throwIfAborted()
   const started = process.hrtime.bigint()
-  const archive = archivePath ? await inspectSshRelayRuntimeArchive(archivePath, identity) : null
-  const tree = await verifyRuntimeTree(runtimeDirectory, identity)
+  const archive = archivePath
+    ? await inspectSshRelayRuntimeArchive(archivePath, identity, { signal })
+    : null
+  const tree = await verifyRuntimeTree(runtimeDirectory, identity, { signal })
   // Why: native code runs only after the complete extracted tree matches its content identity.
-  const smoke = await runBundledSmoke(runtimeDirectory, identity)
+  const smoke = await runBundledSmoke(runtimeDirectory, identity, signal)
+  signal?.throwIfAborted()
   return {
     tuple: identity.tupleId,
     archive,
@@ -169,6 +184,16 @@ export async function verifySshRelayRuntime({ runtimeDirectory, identityPath, ar
     smoke,
     durationMs: Number(process.hrtime.bigint() - started) / 1e6
   }
+}
+
+export async function verifySshRelayRuntime({
+  runtimeDirectory,
+  identityPath,
+  archivePath,
+  signal
+}) {
+  const identity = JSON.parse(await readFile(identityPath, { encoding: 'utf8', signal }))
+  return verifyExtractedSshRelayRuntime({ runtimeDirectory, identity, archivePath, signal })
 }
 
 async function main() {

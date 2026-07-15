@@ -15,8 +15,9 @@ in progress, 2026-07-15, Codex implementation owner.** Exact-head run
 target-native artifact jobs and the 4-test materialization suite on every Node 24 runner under
 `E-M4-DRAFT-READBACK-MATERIALIZATION-CI-001`. PR Checks and Golden E2E are green; the artifact
 workflow is red only for the retained Windows ARM build-26200-versus-26100 floor mismatch after
-successful runtime smoke. Next, bind exact materialized paths to the existing exclusive extraction
-and bundled Node/native PTY/watcher execution boundary. Production keys/environment/seed,
+successful runtime smoke. The disconnected execution boundary and a real 24,747,276-byte Darwin
+arm64 Actions artifact pass locally under `E-M4-READBACK-ARCHIVE-EXECUTION-LOCAL-001`; exact-head
+all-six proof is pending. Production keys/environment/seed,
 publication, desktop/default consumers, SSH transfer/install, tuple enablement, and merge to `main`
 remain disconnected. Current pushed branch head is `0fbbac118`; the
 implementation owner is authorized to drive commits, pushes, CI, and PR-contained rehearsals end to
@@ -278,7 +279,12 @@ end without merging.
       temporary/final naming, cancellation/failure cleanup, and exact returned paths pass locally
       under `E-M4-DRAFT-READBACK-MATERIALIZATION-LOCAL-001`. Exact-head all-six Node 24 proof is
       closed under `E-M4-DRAFT-READBACK-MATERIALIZATION-CI-001`; downloaded archive execution and a
-      real release write/read-back are still required.
+      real release write/read-back are still required. The purpose-named missing execution-boundary
+      RED is recorded under `E-M4-READBACK-ARCHIVE-EXECUTION-LOCAL-RED-001`. Exact descriptor/path
+      binding, exclusive extraction, full-tree verification, bundled Node/native smoke, cleanup,
+      and real Darwin arm64 Actions-artifact execution pass locally under
+      `E-M4-READBACK-ARCHIVE-EXECUTION-LOCAL-001`; all-six exact-head CI and a real authenticated
+      release write/read-back remain open.
 - [ ] Test timeouts, retries, approval denial, signing failure, partial output, and draft recovery.
 
 ### WP4 — Desktop resolver and verified cache

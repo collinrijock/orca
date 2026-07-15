@@ -8,8 +8,8 @@ work; keep exact commands, runner identities, hashes, metrics, and residual gaps
 
 Date created: 2026-07-14<br>
 Last updated: 2026-07-15<br>
-Current phase: Milestone 4 / Work Package 3 disconnected downloaded-archive execution — **In progress — 2026-07-15, Codex implementation owner**. Exclusive authenticated draft read-back materialization is closed locally and on all six exact-head native Node 24 jobs under E-M4-DRAFT-READBACK-MATERIALIZATION-LOCAL-RED-001, E-M4-DRAFT-READBACK-MATERIALIZATION-LOCAL-001, and E-M4-DRAFT-READBACK-MATERIALIZATION-CI-001. The next slice must prove that only exact materialized archive paths bound to their verified tuple identity can enter the existing exclusive extraction and bundled Node/native PTY/watcher execution boundary. Begin with a purpose-named disconnected RED; do not add a real release write, production workflow caller, publication, desktop consumer, SSH transfer, tuple enablement, or default behavior.<br>
-Session checkpoint: **In progress — 2026-07-15, Codex implementation owner** — exact pushed head `0fbbac118e08a17f8263ad48f116a8d61362fe92` passes the materialization suite and full runtime construction on all six native jobs in run 29435837082 under E-M4-DRAFT-READBACK-MATERIALIZATION-CI-001. PR Checks 29435836210 and both Golden E2E jobs in 29435835950 are green. Linux supplements and the Windows x64 floor pass. Windows arm64 runtime smoke passes in 6,121.6774ms with 48,623,616-byte RSS; its separate floor job then retains the expected fail-closed hosted-build 26200 versus required 26100 mismatch. The worktree is clean; `git diff --check` passed before commit and the protected resolver/desktop gate files have zero diff. The user authorizes end-to-end commits, pushes, draft-PR updates, CI runs/reruns, and PR-contained rehearsals, but not merging to `main`. There is no real release write, upload/publication caller, downloaded-archive execution consumer, desktop consumer, tuple enablement, or production/default behavior change. No accepted production key, protected environment/seed, native-signing trust proof, publication path, desktop consumer, tuple enablement, or production/default change is connected. Legacy remains the production default.<br>
+Current phase: Milestone 4 / Work Package 3 disconnected downloaded-archive execution — **In progress — 2026-07-15, Codex implementation owner**. Exclusive authenticated draft read-back materialization is closed locally and on all six exact-head native Node 24 jobs under E-M4-DRAFT-READBACK-MATERIALIZATION-LOCAL-RED-001, E-M4-DRAFT-READBACK-MATERIALIZATION-LOCAL-001, and E-M4-DRAFT-READBACK-MATERIALIZATION-CI-001. Exact materialized descriptor/path binding, exclusive extraction, signal propagation, complete tree verification, bundled Node/native PTY/watcher smoke, and cleanup now pass locally under E-M4-READBACK-ARCHIVE-EXECUTION-LOCAL-001, including one real full-size Darwin arm64 Actions artifact. Exact-head all-six native proof remains the active gate; do not add a real release write, production workflow caller, publication, desktop consumer, SSH transfer, tuple enablement, or default behavior.<br>
+Session checkpoint: **In progress — 2026-07-15, Codex implementation owner** — local implementation atop `94d9ee9cb90e4bffd2dafc5b7e8e532d197f70d0` passes 55 SSH-relay files / 297 tests, typecheck, full lint, formatting, diff scope, and a 24,747,276-byte Darwin arm64 artifact execution under E-M4-READBACK-ARCHIVE-EXECUTION-LOCAL-001. The first full-size attempt correctly failed closed on a lexical `/var` temp alias before extraction; the CLI now canonicalizes to the physical path while the core boundary remains strict. The user authorizes end-to-end commits, pushes, draft-PR updates, CI runs/reruns, and PR-contained rehearsals, but not merging to `main`. Exact-head all-six native CI is next. There is no real release write, publication caller, desktop consumer, SSH transfer/install, tuple enablement, or production/default behavior change. No accepted production key, protected environment/seed, native-signing trust proof, publication path, or tuple enablement is connected. Legacy remains the production default.<br>
 Primary design: [SSH relay GitHub Release plan](./2026-07-14-ssh-relay-github-release-plan.html)<br>
 Motivating issues: [#8450](https://github.com/stablyai/orca/issues/8450), [#1693](https://github.com/stablyai/orca/issues/1693)
 
@@ -121,10 +121,12 @@ same change as the work it records.
   E-M4-DRAFT-READBACK-MATERIALIZATION-LOCAL-RED-001,
   E-M4-DRAFT-READBACK-MATERIALIZATION-LOCAL-001, and
   E-M4-DRAFT-READBACK-MATERIALIZATION-CI-001.
-- Active package: Work Package 3 disconnected downloaded-archive execution. Begin with a
-  purpose-named RED binding exact materialized paths to the verified tuple identity, existing
-  exclusive extraction, and bundled Node/native PTY/watcher smoke. Do not add a real release write,
-  publication, desktop consumer, SSH transfer/install, or production caller in this slice.
+- Active package: Work Package 3 disconnected downloaded-archive execution. The purpose-named RED,
+  local contracts, and a real full-size Darwin arm64 Actions-artifact execution are green under
+  E-M4-READBACK-ARCHIVE-EXECUTION-LOCAL-RED-001 and
+  E-M4-READBACK-ARCHIVE-EXECUTION-LOCAL-001. Exact-head all-six native execution is next. Do not add
+  a real release write, publication, desktop consumer, SSH transfer/install, or production caller
+  in this slice.
 - Completed Work Package 2 gate: target-native Windows source-signature reports from exact-head
   artifact jobs 87267322867 and 87267322870 were independently downloaded and matched to their
   identities and signing-stage reports under E-M3-WINDOWS-SOURCE-SIGNATURE-CI-001. PR Checks
@@ -11632,6 +11634,88 @@ pnpm run typecheck` passes in 2.83s wall with 1,257,357,312-byte maximum RSS and
   remain open.
 - Follow-up: checkpoint this evidence, then begin the purpose-named disconnected downloaded-archive
   execution RED. Retain all production/default disconnections.
+
+### E-M4-READBACK-ARCHIVE-EXECUTION-LOCAL-RED-001 — Materialized archive execution boundary is absent
+
+- Date: 2026-07-15
+- Owner: Codex implementation owner
+- Worktree head before implementation: local evidence commit
+  `94d9ee9cb90e4bffd2dafc5b7e8e532d197f70d0` atop pushed code head
+  `0fbbac118e08a17f8263ad48f116a8d61362fe92`; draft PR #8741. The worktree contains only the
+  purpose-named RED and POSIX/Windows native-job syntax/test wiring.
+- Command:
+  `pnpm exec vitest run --config config/vitest.config.ts config/scripts/ssh-relay-runtime-readback-archive-execution.test.mjs`
+- Result: expected FAIL in 0.749s; one suite / zero collected tests because
+  `ssh-relay-runtime-readback-archive-execution.mjs` does not exist.
+- Contract pinned by the RED: accept only an exact four-field materialized archive descriptor whose
+  physical absolute path, name, size, and SHA-256 match the verified tuple identity; invoke existing
+  exclusive extraction before bundled Node/native PTY/watcher verification; reject returned tuple/
+  content identity drift; remove the extracted runtime after smoke failure, cancellation, or result
+  mismatch.
+- Does not prove: implementation, local GREEN, real archive extraction or native execution, Node 24/
+  native-runner portability, a real authenticated GitHub response, full-size network transfer, real
+  release write/publication, desktop/SSH behavior, or any enabled tuple.
+- Follow-up: implement only the disconnected composition boundary and signal propagation into the
+  existing bundled runtime verifier. Preserve all production/default disconnections.
+
+### E-M4-READBACK-ARCHIVE-EXECUTION-LOCAL-001 — Exact archive composition and native execution pass locally
+
+- Date: 2026-07-15
+- Owner: Codex implementation owner
+- Source: uncommitted implementation atop local evidence head
+  `94d9ee9cb90e4bffd2dafc5b7e8e532d197f70d0`; draft PR #8741. Local runner is macOS 26.2 build
+  25C56 arm64, Node v26.0.0, and pnpm 10.24.0.
+- First full-size correction signal: `gh run download 29435837082 --repo stablyai/orca --name
+ssh-relay-runtime-darwin-arm64` followed by `/usr/bin/time -l node
+config/scripts/ssh-relay-runtime-readback-archive-execution.mjs --identity <identity> --archive
+<archive> --output-directory <output>` correctly failed before extraction in 0.08s with
+  `requires a physical materialized path`. macOS exposed the Actions artifact through lexical
+  `/var` while its physical parent is `/private/var`. The CLI adapter now calls `realpath` before
+  constructing the exact materialized descriptor; the core physical-path check was not weakened.
+  A cross-platform directory-alias/junction test pins the correction.
+- Focused command: `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts
+config/scripts/ssh-relay-runtime-readback-archive-execution.test.mjs
+config/scripts/ssh-relay-runtime-archive-extraction.test.mjs
+config/scripts/ssh-relay-runtime-pty-smoke.test.mjs
+config/scripts/ssh-relay-runtime-workflow.test.mjs` — PASS, 4 files / 21 tests in 426ms Vitest and
+  1.15s wall; maximum RSS 131,776,512 bytes and zero swaps.
+- Adjacent command: `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts
+--maxWorkers=1` with the execution, extraction, materialization, verification-only read-back,
+  upload, recovery, release-stage, workflow, release-assets, and protected required-assets suites —
+  PASS, 10 files / 80 tests in 1.83s Vitest and 2.65s wall; maximum RSS 131,760,128 bytes and zero
+  swaps.
+- Broad command: `/usr/bin/time -l sh -c "rg --files config/scripts | rg
+'/ssh-relay.*[.]test[.]mjs$' | xargs pnpm exec vitest run --config config/vitest.config.ts
+--maxWorkers=1"` — PASS, 55 files / 297 tests in 14.19s Vitest and 15.20s wall; maximum RSS
+  191,299,584 bytes and zero swaps.
+- Real archive command: download unpublished artifact `ssh-relay-runtime-darwin-arm64` from exact-
+  head artifact run 29435837082, then execute the purpose-named CLI with its identity, archive, and
+  an exclusive temporary output. PASS: the 24,747,276-byte archive reconstructs 122,027,869 bytes,
+  50 entries, and 35 files at content ID
+  `sha256:40ff5d2036784b794e7b09f78596409f63f3145280c530bece5280d40897f6cb`; bundled Node
+  v24.18.0, modules ABI 137, node-pty input/resize/exit 23, and watcher create/update/delete/rename
+  smoke all pass. Verification/smoke takes 2,975.938625ms; the full command takes 5.16s wall with
+  364,691,456-byte maximum RSS, and the reconstructed output is removed afterward.
+- Static gates: production/test `node --check`, focused `oxfmt --check`, and `git diff --check` pass.
+  `/usr/bin/time -l pnpm run typecheck` passes in 3.39s wall with 1,228,537,856-byte maximum RSS.
+  `/usr/bin/time -l pnpm run lint` passes in 13.20s wall with 2,024,636,416-byte maximum RSS; all 41
+  reliability gates and the 355-entry max-lines ratchet pass, with the existing 26 unrelated
+  warnings. The protected Node/npm resolver and required-asset files retain zero diff.
+- Oracle proved: only an exact four-field descriptor whose physical path, name, size, and SHA-256
+  match the tuple identity can enter the existing exclusive extractor. The actual archive is
+  bounded and hashed before and after extraction; the complete extracted tree is hashed before the
+  bundled Node launches native PTY/watcher smoke. Abort signals reach inspection, extraction, each
+  staged-file read, and the smoke child. Extraction/result/smoke/cancellation failures remove the
+  reconstructed tree. All three native job families invoke this boundary against the real first-
+  build archive and remove the successful output; Linux does so inside the digest-pinned,
+  network-disabled Rocky 8 builder.
+- Does not prove: exact-head Node 24 behavior on all six runners, a real authenticated GitHub release
+  response, upload/read-back composition, full-size release-asset network transfer, native signing/
+  trust, oldest macOS/Linux-kernel/Windows-arm64 floors, desktop resolver/cache, SSH transfer/
+  install, performance against legacy, or any enabled tuple.
+- Follow-up: commit and push the exact package, then require the purpose-named suite and real archive
+  execution to pass on all six exact-head native jobs. Keep release writes and every product/default
+  consumer disconnected.
 
 ## Accepted Gaps
 

@@ -219,6 +219,8 @@ jobs:
           node --check config/scripts/ssh-relay-runtime-draft-readback.mjs
           node --check config/scripts/ssh-relay-runtime-draft-readback.test.mjs
           node --check config/scripts/ssh-relay-runtime-draft-readback-materialization.test.mjs
+          node --check config/scripts/ssh-relay-runtime-readback-archive-execution.mjs
+          node --check config/scripts/ssh-relay-runtime-readback-archive-execution.test.mjs
           node --check config/scripts/ssh-relay-runtime-draft-upload.mjs
           node --check config/scripts/ssh-relay-runtime-draft-upload.test.mjs
           node --check config/scripts/ssh-relay-runtime-release-assets.mjs
@@ -279,6 +281,7 @@ jobs:
             config/scripts/ssh-relay-runtime-aggregate-input.test.mjs \
             config/scripts/ssh-relay-runtime-draft-readback.test.mjs \
             config/scripts/ssh-relay-runtime-draft-readback-materialization.test.mjs \
+            config/scripts/ssh-relay-runtime-readback-archive-execution.test.mjs \
             config/scripts/ssh-relay-runtime-draft-upload.test.mjs \
             config/scripts/ssh-relay-runtime-release-assets.test.mjs \
             config/scripts/ssh-relay-runtime-manifest-assembly.test.mjs \
@@ -376,6 +379,24 @@ jobs:
                 --git-commit "$source_commit"
             first_output="$output_root/first"
             identity="$first_output/orca-ssh-relay-runtime-${{ matrix.tuple }}.identity.json"
+            archive=$(find "$first_output" -maxdepth 1 -name '*.tar.xz' -print -quit)
+            test -n "$archive"
+            executed_runtime="$output_root/readback-executed"
+            # Why: exercise only local verified bytes; release writes and remote consumers stay disconnected.
+            docker run --rm --network none --read-only --cap-drop all \
+              --user "$(id -u):$(id -g)" \
+              --security-opt no-new-privileges --pids-limit 512 --memory 6g --cpus 4 \
+              --tmpfs /tmp:rw,nosuid,size=1g,mode=1777 \
+              --mount "type=bind,src=$GITHUB_WORKSPACE,dst=$GITHUB_WORKSPACE" \
+              --mount "type=bind,src=$RUNNER_TEMP,dst=$RUNNER_TEMP" \
+              --workdir "$GITHUB_WORKSPACE" \
+              "$ORCA_LINUX_BUILDER" \
+              /usr/bin/node config/scripts/ssh-relay-runtime-readback-archive-execution.mjs \
+                --identity "$identity" \
+                --archive "$archive" \
+                --output-directory "$executed_runtime"
+            rm -rf -- "$executed_runtime"
+            test ! -e "$executed_runtime"
             signing_stage="$output_root/signing-stage"
             signing_report="$output_root/orca-ssh-relay-runtime-${{ matrix.tuple }}.signing-stage.json"
             node config/scripts/ssh-relay-runtime-native-signing-stage.mjs \
@@ -436,6 +457,17 @@ jobs:
             --tuple '${{ matrix.tuple }}' \
             --first-output-directory "$first_output" \
             --second-output-directory "$second_output"
+          identity="$first_output/orca-ssh-relay-runtime-${{ matrix.tuple }}.identity.json"
+          archive=$(find "$first_output" -maxdepth 1 -name '*.tar.xz' -print -quit)
+          test -n "$archive"
+          executed_runtime="$output_root/readback-executed"
+          # Why: exercise only local verified bytes; release writes and remote consumers stay disconnected.
+          node config/scripts/ssh-relay-runtime-readback-archive-execution.mjs \
+            --identity "$identity" \
+            --archive "$archive" \
+            --output-directory "$executed_runtime"
+          rm -rf -- "$executed_runtime"
+          test ! -e "$executed_runtime"
           signing_stage="$output_root/signing-stage"
           signing_report="$output_root/orca-ssh-relay-runtime-${{ matrix.tuple }}.signing-stage.json"
           node config/scripts/ssh-relay-runtime-native-signing-stage.mjs \
@@ -644,6 +676,10 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'runtime draft read-back test syntax check failed' }
           node --check config/scripts/ssh-relay-runtime-draft-readback-materialization.test.mjs
           if ($LASTEXITCODE -ne 0) { throw 'runtime draft read-back materialization test syntax check failed' }
+          node --check config/scripts/ssh-relay-runtime-readback-archive-execution.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'runtime read-back archive execution syntax check failed' }
+          node --check config/scripts/ssh-relay-runtime-readback-archive-execution.test.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'runtime read-back archive execution test syntax check failed' }
           node --check config/scripts/ssh-relay-runtime-draft-upload.mjs
           if ($LASTEXITCODE -ne 0) { throw 'runtime draft upload syntax check failed' }
           node --check config/scripts/ssh-relay-runtime-draft-upload.test.mjs
@@ -737,6 +773,7 @@ jobs:
             config/scripts/ssh-relay-runtime-aggregate-input.test.mjs `
             config/scripts/ssh-relay-runtime-draft-readback.test.mjs `
             config/scripts/ssh-relay-runtime-draft-readback-materialization.test.mjs `
+            config/scripts/ssh-relay-runtime-readback-archive-execution.test.mjs `
             config/scripts/ssh-relay-runtime-draft-upload.test.mjs `
             config/scripts/ssh-relay-runtime-release-assets.test.mjs `
             config/scripts/ssh-relay-runtime-manifest-assembly.test.mjs `
@@ -862,6 +899,20 @@ jobs:
               Write-Output 'windows_pe_diagnostic=skipped_missing_input'
             }
             throw 'runtime reproducibility verification failed'
+          }
+          $identity = Join-Path $firstOutput 'orca-ssh-relay-runtime-${{ matrix.tuple }}.identity.json'
+          $archive = Get-ChildItem -LiteralPath $firstOutput -Filter '*.zip' -File | Select-Object -First 1
+          if (-not $archive) { throw 'runtime read-back archive is missing' }
+          $executedRuntime = Join-Path $outputRoot 'readback-executed'
+          # Why: exercise only local verified bytes; release writes and remote consumers stay disconnected.
+          node config/scripts/ssh-relay-runtime-readback-archive-execution.mjs `
+            --identity $identity `
+            --archive $archive.FullName `
+            --output-directory $executedRuntime
+          if ($LASTEXITCODE -ne 0) { throw 'runtime read-back archive execution failed' }
+          Remove-Item -LiteralPath $executedRuntime -Recurse -Force
+          if (Test-Path -LiteralPath $executedRuntime) {
+            throw 'runtime read-back archive execution cleanup failed'
           }
           $signingStage = Join-Path $outputRoot 'signing-stage'
           $signingReport = Join-Path $outputRoot 'orca-ssh-relay-runtime-${{ matrix.tuple }}.signing-stage.json'

@@ -170,7 +170,7 @@ export async function extractSshRelayRuntimeArchive({
           signal: effectiveSignal
         })
       : extractTarXz(absoluteArchive, physicalOutput, effectiveSignal))
-    const tree = await verifyRuntimeTree(physicalOutput, finalIdentity)
+    const tree = await verifyRuntimeTree(physicalOutput, finalIdentity, { signal: effectiveSignal })
     const after = await describeArchive(absoluteArchive, identity.archive.size, effectiveSignal)
     if (!sameFileState(before.state, after.state) || before.sha256 !== after.sha256) {
       throw new Error('Runtime archive extraction input changed during extraction')
