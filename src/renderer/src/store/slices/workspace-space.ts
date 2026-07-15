@@ -167,9 +167,23 @@ export const createWorkspaceSpaceSlice: StateCreator<AppState, [], [], Workspace
       return
     }
     get().recordFeatureInteraction?.('workspace-cleanup')
-    for (const repoId of repoIds) {
-      await window.api.worktrees.pruneStaleRegistrations({ repoId })
+    let firstError: unknown
+    // Why: one project id can appear once per host, while IPC already fans that id out to all hosts.
+    for (const repoId of new Set(repoIds)) {
+      try {
+        await window.api.worktrees.pruneStaleRegistrations({ repoId })
+      } catch (error) {
+        firstError ??= error
+      }
     }
-    await get().refreshWorkspaceSpace()
+    try {
+      // Why: successful repos must disappear from the notice even when another host failed.
+      await get().refreshWorkspaceSpace()
+    } catch (error) {
+      firstError ??= error
+    }
+    if (firstError) {
+      throw firstError
+    }
   }
 })

@@ -2034,30 +2034,42 @@ export function registerWorktreeHandlers(
       if (repos.length === 0) {
         throw new Error(`Repo not found: ${args.repoId}`)
       }
-      for (const repo of repos) {
-        if (isFolderRepo(repo)) {
-          continue
-        }
-        if (repo.connectionId) {
-          const provider = requireSshGitProvider(repo.connectionId)
+      let firstError: unknown
+      let didAttemptPrune = false
+      try {
+        for (const repo of repos) {
+          if (isFolderRepo(repo)) {
+            continue
+          }
+          didAttemptPrune = true
           try {
-            await provider.pruneWorktrees(repo.path)
+            if (repo.connectionId) {
+              const provider = requireSshGitProvider(repo.connectionId)
+              await provider.pruneWorktrees(repo.path)
+            } else {
+              await pruneWorktrees(repo.path, getLocalProjectWorktreeGitOptions(store, repo))
+            }
           } catch (error) {
             // Why: an already-deployed relay predating git.pruneWorktrees
             // rejects with "Method not found"; surface what to do instead.
-            if (/method not found/i.test(error instanceof Error ? error.message : '')) {
-              throw new Error(
-                'The connected SSH host is running an older Orca relay without worktree prune support. Reconnect to update it, or run `git worktree prune` there.'
-              )
-            }
-            throw error
+            firstError ??= /method not found/i.test(error instanceof Error ? error.message : '')
+              ? new Error(
+                  'The connected SSH host is running an older Orca relay without worktree prune support. Reconnect to update it, or run `git worktree prune` there.'
+                )
+              : error
           }
-        } else {
-          await pruneWorktrees(repo.path, getLocalProjectWorktreeGitOptions(store, repo))
         }
-        notifyWorktreesChanged(mainWindow, repo.id)
+      } finally {
+        // Why: Git may prune one host (or part of one registry) before another host fails.
+        invalidateAuthorizedRootsCache()
       }
-      invalidateAuthorizedRootsCache()
+      if (didAttemptPrune) {
+        // Why: one event invalidates all host views, including partial mutations after a Git error.
+        notifyWorktreesChanged(mainWindow, args.repoId)
+      }
+      if (firstError) {
+        throw firstError
+      }
     }
   )
 

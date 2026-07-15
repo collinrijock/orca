@@ -1258,7 +1258,7 @@ export function WorkspaceSpaceManagerPanel(): React.JSX.Element {
   )
   const [isPruningStale, setIsPruningStale] = useState(false)
   const pruneStale = useCallback((): void => {
-    if (!analysis || isPruningStale) {
+    if (!analysis || isPruningStale || isScanning) {
       return
     }
     const repoIds = analysis.repos
@@ -1289,7 +1289,7 @@ export function WorkspaceSpaceManagerPanel(): React.JSX.Element {
       .finally(() => {
         setIsPruningStale(false)
       })
-  }, [analysis, isPruningStale, pruneStaleWorktreeRegistrations])
+  }, [analysis, isPruningStale, isScanning, pruneStaleWorktreeRegistrations])
   const [query, setQuery] = useState('')
   const [onlyDeletable, setOnlyDeletable] = useState(false)
   const [sortKey, setSortKey] = useState<WorkspaceSpaceSortKey>('size')
@@ -1748,7 +1748,7 @@ export function WorkspaceSpaceManagerPanel(): React.JSX.Element {
           variant="outline"
           size="sm"
           onClick={isScanning ? cancelScan : refresh}
-          disabled={progress?.state === 'cancelling'}
+          disabled={isPruningStale || progress?.state === 'cancelling'}
           className="w-28 gap-1.5"
         >
           {isScanning ? (
@@ -1829,7 +1829,7 @@ export function WorkspaceSpaceManagerPanel(): React.JSX.Element {
             variant="outline"
             size="sm"
             onClick={pruneStale}
-            disabled={isPruningStale}
+            disabled={isPruningStale || isScanning}
             className="gap-1.5"
           >
             {isPruningStale ? (

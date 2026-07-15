@@ -256,7 +256,11 @@ import {
   __resetSshWorktreeCreateFetchCacheForTests,
   notifyWorktreesChanged
 } from './worktree-remote'
-import { invalidateAuthorizedRootsCache, resolveRegisteredWorktreePath } from './filesystem-auth'
+import {
+  invalidateAuthorizedRootsCache,
+  registerWorktreeRootsForRepo,
+  resolveRegisteredWorktreePath
+} from './filesystem-auth'
 import {
   __getDetectedWorktreeScanCacheStatsForTests,
   __resetDetectedWorktreeScanCacheForTests,
@@ -6110,6 +6114,55 @@ describe('registerWorktreeHandlers', () => {
     await expect(
       handlers['worktrees:pruneStaleRegistrations'](null, { repoId: 'repo-1' })
     ).rejects.toThrow(/older Orca relay/)
+  })
+
+  it('continues shared-host pruning and invalidates stale roots after a host fails', async () => {
+    const remoteRepo = {
+      id: 'repo-1',
+      path: '/remote/repo',
+      displayName: 'repo',
+      badgeColor: '#000',
+      addedAt: 0,
+      connectionId: 'ssh-1'
+    }
+    const localRepo = {
+      id: 'repo-1',
+      path: '/workspace/repo',
+      displayName: 'repo',
+      badgeColor: '#000',
+      addedAt: 0
+    }
+    store.getRepos.mockReturnValue([remoteRepo, localRepo])
+    listWorktreesMock.mockResolvedValue([
+      {
+        path: localRepo.path,
+        head: 'abc123',
+        branch: 'refs/heads/main',
+        isBare: false,
+        isMainWorktree: true
+      }
+    ])
+    registerWorktreeRootsForRepo(store as never, localRepo.id, [
+      localRepo.path,
+      '/workspace/stale-wt'
+    ])
+    await expect(
+      resolveRegisteredWorktreePath('/workspace/stale-wt', store as never)
+    ).resolves.toBe('/workspace/stale-wt')
+    getSshGitProviderMock.mockReturnValue({
+      pruneWorktrees: vi.fn().mockRejectedValue(new Error('remote unavailable'))
+    })
+    pruneWorktreesMock.mockResolvedValue(undefined)
+
+    await expect(
+      handlers['worktrees:pruneStaleRegistrations'](null, { repoId: 'repo-1' })
+    ).rejects.toThrow('remote unavailable')
+
+    expect(pruneWorktreesMock).toHaveBeenCalledWith(localRepo.path, expect.anything())
+    expect(mainWindow.webContents.send).toHaveBeenCalledTimes(1)
+    await expect(
+      resolveRegisteredWorktreePath('/workspace/stale-wt', store as never)
+    ).rejects.toThrow('unknown repository or worktree path')
   })
 
   it('limits concurrent repo scans in worktrees:listAll while preserving order', async () => {
