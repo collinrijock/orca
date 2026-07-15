@@ -3295,6 +3295,58 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
     expect(worktreeIdReads).toBe(0)
   })
 
+  it('indexes worktrees once for a coordinator outcome with many linked aliases', () => {
+    const store = createTestStore()
+    const repoPath = '/repo'
+    const repoId = 'repo-1'
+    const branch = 'feature/shared'
+    let worktreeIdReads = 0
+    const worktrees = Array.from({ length: 100 }, (_, index) => {
+      const worktree = makePRRefreshWorktree({
+        id: `wt-${index}`,
+        repoId,
+        branch,
+        head: 'shared-head',
+        linkedPR: 12
+      })
+      Object.defineProperty(worktree, 'id', {
+        enumerable: true,
+        get: () => {
+          worktreeIdReads += 1
+          return `wt-${index}`
+        }
+      })
+      return worktree
+    })
+    store.setState({
+      repos: [{ id: repoId, path: repoPath, name: 'repo', kind: 'git' }],
+      worktreesByRepo: { [repoId]: worktrees }
+    } as unknown as Partial<AppState>)
+    worktreeIdReads = 0
+
+    store.getState().applyGitHubPRRefreshEvent({
+      sequence: 1,
+      reason: 'swr',
+      aliases: worktrees.map((_, index) => ({
+        cacheKey: `${repoId}::${branch}::${index}`,
+        repoPath,
+        repoId,
+        branch,
+        worktreeId: `wt-${index}`,
+        linkedPRNumber: 12,
+        currentHeadOid: 'shared-head'
+      })),
+      outcome: {
+        kind: 'found',
+        pr: makePR({ number: 12, state: 'open', headSha: 'shared-head', headRefName: branch }),
+        fetchedAt: 2
+      }
+    })
+
+    // One read per stored row proves aliases share the event-local index.
+    expect(worktreeIdReads).toBe(worktrees.length)
+  })
+
   it('does not unlink from a branch-mismatched outcome rejected by the sequence gate', () => {
     const store = createTestStore()
     const repoPath = '/repo'

@@ -994,25 +994,51 @@ function findWorktreeById(state: AppState, worktreeId: string): Worktree | null 
   return null
 }
 
+type WorktreeLookupEntry = {
+  first: Worktree
+  unique: Worktree | null
+}
+
+type WorktreeLookupIndex = {
+  byId: Map<string, WorktreeLookupEntry>
+  repoHostIdsByRepoId: Map<string, Set<string>>
+}
+
+function buildWorktreeLookupIndex(state: AppState): WorktreeLookupIndex {
+  const byId = new Map<string, WorktreeLookupEntry>()
+  for (const worktrees of Object.values(state.worktreesByRepo)) {
+    for (const worktree of worktrees) {
+      const worktreeId = worktree.id
+      const existing = byId.get(worktreeId)
+      if (existing) {
+        existing.unique = null
+      } else {
+        byId.set(worktreeId, { first: worktree, unique: worktree })
+      }
+    }
+  }
+
+  const repoHostIdsByRepoId = new Map<string, Set<string>>()
+  for (const repo of state.repos ?? []) {
+    let hostIds = repoHostIdsByRepoId.get(repo.id)
+    if (!hostIds) {
+      hostIds = new Set<string>()
+      repoHostIdsByRepoId.set(repo.id, hostIds)
+    }
+    hostIds.add(getRepoExecutionHostId(repo))
+  }
+  return { byId, repoHostIdsByRepoId }
+}
+
 function findUniqueWorktreeById(
   state: AppState,
   worktreeId: string,
-  executionHostId?: string
+  executionHostId?: string,
+  lookupIndex = buildWorktreeLookupIndex(state)
 ): Worktree | null {
-  let match: Worktree | null = null
-  for (const worktrees of Object.values(state.worktreesByRepo)) {
-    for (const worktree of worktrees) {
-      if (worktree.id !== worktreeId) {
-        continue
-      }
-      if (match) {
-        // Why: metadata persistence is keyed only by worktree id. If two hosts
-        // own that id, a destructive linked-PR clear cannot be routed safely.
-        return null
-      }
-      match = worktree
-    }
-  }
+  const match = lookupIndex.byId.get(worktreeId)?.unique ?? null
+  // Why: metadata persistence is keyed only by worktree id. If two hosts own
+  // that id, the index marks it non-unique and destructive clears fail closed.
   if (!match || executionHostId === undefined) {
     return match
   }
@@ -1021,13 +1047,9 @@ function findUniqueWorktreeById(
   if (explicitWorktreeHostId) {
     return explicitWorktreeHostId === expectedHostId ? match : null
   }
-  const repoHostIds = new Set(
-    state.repos
-      .filter((repo) => repo.id === match.repoId)
-      .map((repo) => getRepoExecutionHostId(repo))
-  )
+  const repoHostIds = lookupIndex.repoHostIdsByRepoId.get(match.repoId)
   // Pre-host persisted rows are safe only when their repo has one unambiguous owner.
-  if (repoHostIds.size !== 1 || !repoHostIds.has(expectedHostId)) {
+  if (!repoHostIds || repoHostIds.size !== 1 || !repoHostIds.has(expectedHostId)) {
     return null
   }
   return match
@@ -1036,12 +1058,16 @@ function findUniqueWorktreeById(
 function isStaleExactLinkedPRLookup(
   state: AppState,
   worktreeId: string | undefined,
-  linkedPRNumber: number | null | undefined
+  linkedPRNumber: number | null | undefined,
+  lookupIndex?: WorktreeLookupIndex
 ): boolean {
   if (!worktreeId || linkedPRNumber == null) {
     return false
   }
-  return findWorktreeById(state, worktreeId)?.linkedPR !== linkedPRNumber
+  const worktree = lookupIndex
+    ? (lookupIndex.byId.get(worktreeId)?.first ?? null)
+    : findWorktreeById(state, worktreeId)
+  return worktree?.linkedPR !== linkedPRNumber
 }
 
 function shouldClearDivergedLinkedMergedPR(args: {
@@ -4044,6 +4070,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
     }[] = []
     let didUpdatePRCache = false
     set((s) => {
+      let linkedWorktreeLookupIndex: WorktreeLookupIndex | undefined
       const nextSequences = { ...s.prRefreshSequences }
       const prunedStates = pruneExpiredPRRefreshStates(s.prRefreshStates)
       const nextStates = { ...prunedStates }
@@ -4156,17 +4183,30 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
                   return pr
                 })()
               : null
+          const linkedPRNumber = alias.linkedPRNumber ?? null
+          // Why: one coordinator outcome can fan out to many linked aliases.
+          // Build one lazy index instead of rescanning all worktrees per alias.
+          const worktreeLookupIndex =
+            alias.worktreeId && linkedPRNumber != null
+              ? (linkedWorktreeLookupIndex ??= buildWorktreeLookupIndex(s))
+              : undefined
           // Why: queued local refreshes may finish after the user unlinks an
           // exact PR; those older results must not restore the manual-link UI.
-          if (isStaleExactLinkedPRLookup(s, alias.worktreeId, alias.linkedPRNumber)) {
+          if (
+            isStaleExactLinkedPRLookup(s, alias.worktreeId, linkedPRNumber, worktreeLookupIndex)
+          ) {
             continue
           }
           if (event.outcome.kind === 'found' && alias.worktreeId) {
-            const linkedPRNumber = alias.linkedPRNumber ?? null
             const requestHeadOid = alias.currentHeadOid ?? null
             const worktree =
               linkedPRNumber != null
-                ? findUniqueWorktreeById(s, alias.worktreeId, aliasExecutionHostId)
+                ? findUniqueWorktreeById(
+                    s,
+                    alias.worktreeId,
+                    aliasExecutionHostId,
+                    worktreeLookupIndex
+                  )
                 : null
             // Why: only an event that won the sequence gate above owns metadata
             // side effects; rejected late outcomes must not unlink a newer PR.
