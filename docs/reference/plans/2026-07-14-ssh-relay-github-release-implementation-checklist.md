@@ -9,7 +9,7 @@ work; keep exact commands, runner identities, hashes, metrics, and residual gaps
 Date created: 2026-07-14<br>
 Last updated: 2026-07-14<br>
 Current phase: Milestone 3 / Work Package 2 oldest-supported-baseline and native-trust proof — **In progress — 2026-07-14, Codex implementation owner**; exact-head run [29373507297](https://github.com/stablyai/orca/actions/runs/29373507297) passes all six target-native build, smoke, exact clean-build equality, upload, SBOM, license, provenance, runner/toolchain, and prohibited-content cells, and direct inspection of every downloaded payload passes exact archive/subject hashes, archive-scoped SPDX identity, one-owner-per-file, dependency, commit/run/builder/runner, tool-version/hash, and closure assertions (E-M3-METADATA-CI-001); Windows x64/arm64 record strict `MSVC 14.44.35207` identities and distinct exact linker SHA-256 values despite the Git-for-Windows PATH collision; the all-six metadata/provenance gate is closed, while oldest-baseline execution, native signing/trust, cross-family remotes, and measured legacy baselines remain open; production/default behavior and every tuple state remain unchanged; no bundled-runtime path is enabled and no artifact is published<br>
-Session checkpoint: **In progress — 2026-07-14, Codex implementation owner** — exact returned-file application plus final post-sign runtime identity/closure contracts are implemented at `3eeea7bdb` and locally green under E-M3-NATIVE-SIGNING-APPLY-LOCAL-001. Exact-head Node 24 execution on all six native jobs is the active gate; real Apple/SignPath calls, returned production signatures, and native trust remain separately gated. Nothing is published or enabled, and legacy remains the production default.<br>
+Session checkpoint: **In progress — 2026-07-14, Codex implementation owner** — exact returned-file application plus final post-sign runtime identity/closure contracts are proven locally and on all six native jobs under E-M3-NATIVE-SIGNING-APPLY-LOCAL-001 and E-M3-NATIVE-SIGNING-APPLY-CI-001. The next safe package is remaining credential-free native-trust/release failure contracts; real Apple/SignPath calls, returned production signatures, missing exact-floor snapshots, and native trust remain separately gated. Nothing is published or enabled, and legacy remains the production default.<br>
 Primary design: [SSH relay GitHub Release plan](./2026-07-14-ssh-relay-github-release-plan.html)<br>
 Motivating issues: [#8450](https://github.com/stablyai/orca/issues/8450), [#1693](https://github.com/stablyai/orca/issues/1693)
 
@@ -8222,6 +8222,65 @@ diff --check`.
 - Follow-up: commit this evidence separately, push both commits, and require exact-head POSIX and
   Windows logs to show the apply suite executing under Node 24.18.0 on all six native jobs while all
   prior artifact, smoke, equality, baseline, PR-check, and Golden controls retain their outcomes.
+
+### E-M3-NATIVE-SIGNING-APPLY-CI-001 — Return application executes on all six native jobs
+
+- Date: 2026-07-14 (run timestamps 2026-07-15 UTC)
+- Owner: Codex implementation owner
+- Source/run: exact draft-PR head `a0e9ea91773287bd3779f6fb3c800aa0f5f1be01`, containing apply
+  implementation `3eeea7bdb8b10825416d7f9bac03d5a820a997f5` and local evidence
+  `a0e9ea91773287bd3779f6fb3c800aa0f5f1be01`; Actions run
+  [29385274738](https://github.com/stablyai/orca/actions/runs/29385274738).
+- Commands:
+
+  ```sh
+  gh run view 29385274738 --repo stablyai/orca \
+    --json status,conclusion,headSha,createdAt,updatedAt,url,jobs
+  gh run view 29385274738 --repo stablyai/orca --job 87257092104 --log | \
+    awk -F '\t' '$2 == "Run runtime artifact contract tests"' | \
+    rg 'native-signing-apply|Test Files|Tests|Duration'
+  gh run view 29385274738 --repo stablyai/orca --job 87257092096 --log | \
+    awk -F '\t' '$2 == "Run runtime artifact contract tests"' | \
+    rg 'native-signing-apply|Test Files|Tests|Duration'
+  gh run view 29385274738 --repo stablyai/orca --job 87258165496 --log | \
+    rg 'Operating System|OsBuildNumber|26100|26200|declared Windows floor'
+  gh run view 29385274716 --repo stablyai/orca \
+    --json status,conclusion,headSha,createdAt,updatedAt,url,jobs
+  gh run view 29385274721 --repo stablyai/orca \
+    --json status,conclusion,headSha,createdAt,updatedAt,url,jobs
+  ```
+
+- Contract result: PASS on Linux x64/arm64, macOS x64/arm64, and Windows x64/arm64. Every native
+  build job reports its purpose-named contract step successful under exact Node 24.18.0. The macOS
+  arm64 POSIX log records both apply syntax checks, the apply suite passing 6/6 in 245 ms, and the
+  aggregate 27 files/141 tests in 3.58 seconds. The Windows x64 PowerShell log records both syntax
+  checks, the apply suite passing 6/6 in 1.638 seconds, and the aggregate 28 files/138 passed plus
+  seven declared platform skips out of 145 in 7.13 seconds.
+- Native build/regression controls: all six double-build, smoke, exact-equality, metadata,
+  assessment/stage, cleanup, and unpublished-upload jobs passed. Durations were Linux x64 3m51s,
+  Linux arm64 4m54s, macOS x64 5m58s, macOS arm64 2m31s, Windows x64 5m22s, and Windows arm64
+  8m37s. Digest-pinned Linux x64/arm64 glibc 2.28/libstdc++ 6.0.25 supplements passed in 49s/58s.
+  Windows x64 passed exact build 20348 in 1m39s.
+- Expected aggregate status: the artifact workflow concluded failure only because the Windows arm64
+  hosted image identified itself as Windows 11 build 10.0.26200 and rejected the exact declared
+  build-26100 floor after 3m47s. The report records platform and architecture checks true with
+  `osBuild: false`, preserving E-M3-WINDOWS-ARM64-BASELINE-CI-RED-001 without weakening its oracle.
+- Other exact-head controls: PR Checks
+  [29385274716](https://github.com/stablyai/orca/actions/runs/29385274716) passed in 13m50s after lint,
+  typecheck, Git 2.25 compatibility, full tests, unpacked-app build, and packaged-CLI smoke. Golden
+  E2E [29385274721](https://github.com/stablyai/orca/actions/runs/29385274721) passed Linux/macOS in
+  4m42s/6m54s.
+- Oracle proved: both native shell families parse and execute the exact post-sign application
+  contract on every target-native runner while all existing artifact, bundled-Node, PTY/watcher,
+  clean-build equality, oldest-userland, packaging, and E2E controls retain their prior outcomes.
+- Does not prove: real Apple/SignPath returned bytes, final native trust, Gatekeeper/quarantine or
+  notarized-app provenance, Authenticode/Defender/WDAC policy, exact missing oldest snapshots,
+  release aggregation, SSH transfer/install, packaged desktop use, fallback/performance, or an
+  enabled tuple.
+- Follow-up: keep every tuple disabled and all signing credentials disconnected. Continue with
+  credential-free native-trust and release-DAG failure contracts; require separately provisioned
+  protected signing services and exact-floor runners before any native-signing/trust checkbox or
+  aggregate output can pass.
 
 ## Accepted Gaps
 

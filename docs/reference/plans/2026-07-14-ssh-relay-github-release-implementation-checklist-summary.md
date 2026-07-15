@@ -37,9 +37,11 @@ complete a box.
   - Proven locally and in exact-head run
     [29384042509](https://github.com/stablyai/orca/actions/runs/29384042509): target-native pre-sign
     assessment and real first-build candidate staging without credentials.
-  - Proven locally at `3eeea7bdb` under `E-M3-NATIVE-SIGNING-APPLY-LOCAL-001`: exact returned-file
+  - Proven locally and in exact-head run
+    [29385274738](https://github.com/stablyai/orca/actions/runs/29385274738): exact returned-file
     application into a fresh full runtime and final post-sign content identity contracts.
-  - Active next: exact-head Node 24 CI proof on all six native jobs; no signing credential is used.
+  - Active next: remaining credential-free native-trust/release failure contracts; real signing and
+    missing oldest-floor snapshots remain externally gated.
   - Next external proof: kernel 4.18, macOS 13.5, Windows arm64 build 26100, and native signing/trust.
   - No tuple is enabled; every SSH transfer/runtime and rollout cell remains open.
 
