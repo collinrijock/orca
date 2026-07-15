@@ -12,7 +12,6 @@ function placement(
   return {
     id: `${name}-${overrides.rootId ?? 'home-agents'}`,
     name,
-    description: null,
     rootId: 'home-agents',
     providers: ['agent-skills'],
     sourceKind: 'home',

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { AlertTriangle, CheckCircle2, ChevronDown, Loader2, RefreshCw } from 'lucide-react'
 import type { SkillFreshnessInventory } from '../../../../shared/skill-freshness'
 import { buildTargetedSkillUpdateCommand } from '../../../../shared/skill-freshness'
@@ -126,6 +126,10 @@ function SummaryHeadline({
 export function SkillFreshnessUpdateDialog(): React.JSX.Element {
   const state = useSkillFreshness()
   const [open, setOpen] = useState(false)
+  const [terminalCommand, setTerminalCommand] = useState<string | null>(null)
+  const [awaitingExitRefresh, setAwaitingExitRefresh] = useState(false)
+  const terminalSubmittedRef = useRef(false)
+  const inventoryAtTerminalExitRef = useRef<SkillFreshnessInventory | null>(null)
   const inventory = state.inventory
   const eligibleNames = useMemo(() => inventory?.eligibleUpdateNames ?? [], [inventory])
   const eligibleNameSet = useMemo(() => new Set(eligibleNames), [eligibleNames])
@@ -144,13 +148,62 @@ export function SkillFreshnessUpdateDialog(): React.JSX.Element {
     return subscribeSkillFreshnessUpdateDialog(openIfRequested)
   }, [])
 
+  useEffect(() => {
+    if (!open || state.loading || state.error) {
+      return
+    }
+    if (awaitingExitRefresh) {
+      if (inventory === inventoryAtTerminalExitRef.current) {
+        return
+      }
+      inventoryAtTerminalExitRef.current = null
+      setAwaitingExitRefresh(false)
+      return
+    }
+    if (terminalSubmittedRef.current || terminalCommand === updateCommand) {
+      return
+    }
+    // Why: changing the shared onboarding terminal's command pastes it again.
+    // Replace only an unsubmitted draft; a submitted command owns its PTY until exit.
+    setTerminalCommand(updateCommand)
+  }, [
+    awaitingExitRefresh,
+    inventory,
+    open,
+    state.error,
+    state.loading,
+    terminalCommand,
+    updateCommand
+  ])
+
   const handleOpenChange = (next: boolean): void => {
     setOpen(next)
     // Why: closing is the natural point to re-observe bytes so a completed update
     // clears the state and the lingering nudge does not fire again.
     if (!next) {
+      terminalSubmittedRef.current = false
+      inventoryAtTerminalExitRef.current = null
+      setAwaitingExitRefresh(false)
+      setTerminalCommand(null)
       notifyInstalledAgentSkillsChanged()
     }
+  }
+
+  const handleTerminalInteraction = (
+    method: 'keyboard' | 'pointer',
+    event?: KeyboardEvent<HTMLElement>
+  ): void => {
+    if (method === 'keyboard' && event?.key === 'Enter') {
+      terminalSubmittedRef.current = true
+    }
+  }
+
+  const handleTerminalExit = (): void => {
+    terminalSubmittedRef.current = false
+    inventoryAtTerminalExitRef.current = inventory
+    setAwaitingExitRefresh(true)
+    setTerminalCommand(null)
+    notifyInstalledAgentSkillsChanged()
   }
 
   const hasInstallations = Boolean(inventory && inventory.installations.length > 0)
@@ -177,9 +230,10 @@ export function SkillFreshnessUpdateDialog(): React.JSX.Element {
 
         <SummaryHeadline kind={summaryKind} eligibleCount={eligibleNames.length} />
 
-        {updateCommand ? (
+        {terminalCommand ? (
           <OnboardingInlineCommandTerminal
-            command={updateCommand}
+            key={terminalCommand}
+            command={terminalCommand}
             title={translate(
               'auto.components.skills.SkillFreshnessUpdateDialog.terminalTitle',
               'Update Orca skills'
@@ -196,7 +250,8 @@ export function SkillFreshnessUpdateDialog(): React.JSX.Element {
             terminalHeightPx={200}
             terminalTopMarginPx={0}
             autoScrollIntoView={false}
-            onTerminalExit={notifyInstalledAgentSkillsChanged}
+            onInteracted={handleTerminalInteraction}
+            onTerminalExit={handleTerminalExit}
           />
         ) : null}
 

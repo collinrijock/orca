@@ -28,7 +28,6 @@ function inventory(
     installations: entries.map((entry, index) => ({
       id: `${entry.name}-${index}`,
       name: entry.name,
-      description: null,
       rootId: 'home-agents',
       providers: ['agent-skills'],
       sourceKind: 'home',

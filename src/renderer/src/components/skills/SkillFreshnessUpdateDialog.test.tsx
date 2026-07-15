@@ -17,7 +17,12 @@ const mocks = vi.hoisted(() => ({
   inventory: null as SkillFreshnessInventory | null,
   loading: false,
   refresh: vi.fn(),
-  terminalProps: [] as { command: string; description: string }[],
+  terminalProps: [] as {
+    command: string
+    description: string
+    onInteracted?: (method: 'keyboard' | 'pointer', event?: { key?: string }) => void
+    onTerminalExit?: () => void
+  }[],
   notifyChanged: vi.fn()
 }))
 
@@ -35,7 +40,7 @@ vi.mock('@/hooks/useInstalledAgentSkills', () => ({
 }))
 
 vi.mock('@/components/onboarding/OnboardingInlineCommandTerminal', () => ({
-  OnboardingInlineCommandTerminal: (props: { command: string; description: string }) => {
+  OnboardingInlineCommandTerminal: (props: (typeof mocks.terminalProps)[number]) => {
     mocks.terminalProps.push(props)
     return <div data-testid="update-terminal">{props.command}</div>
   }
@@ -66,7 +71,6 @@ function placement(
   return {
     id: `${name}-${overrides.rootId ?? 'home-agents'}`,
     name,
-    description: null,
     rootId: 'home-agents',
     providers: ['agent-skills'],
     sourceKind: 'home',
@@ -197,6 +201,49 @@ describe('SkillFreshnessUpdateDialog', () => {
 
     expect(container?.textContent).toContain('All installed Orca skills are up to date.')
     expect(container?.querySelector('[data-testid="update-terminal"]')).toBeNull()
+  })
+
+  it('does not replace or tear down a submitted command during a rescan', async () => {
+    await renderDialog()
+    await openViaRequest()
+
+    await act(async () => {
+      mocks.terminalProps.at(-1)?.onInteracted?.('keyboard', { key: 'Enter' })
+    })
+    mocks.inventory = {
+      schemaVersion: 1,
+      installations: [
+        placement('orca-cli', { status: 'current', observedPackageDigest: 'current' })
+      ],
+      eligibleUpdateNames: [],
+      scannedAt: 2
+    }
+    await rerender()
+
+    expect(container?.textContent).toContain('All installed Orca skills are up to date.')
+    expect(container?.querySelector('[data-testid="update-terminal"]')?.textContent).toBe(
+      'npx skills update orca-cli --global'
+    )
+  })
+
+  it('creates a fresh draft after a terminal exits and the rescan still finds an update', async () => {
+    await renderDialog()
+    await openViaRequest()
+    const firstTerminal = mocks.terminalProps.at(-1)
+
+    await act(async () => {
+      firstTerminal?.onTerminalExit?.()
+    })
+    expect(mocks.notifyChanged).toHaveBeenCalledTimes(1)
+    expect(container?.querySelector('[data-testid="update-terminal"]')).toBeNull()
+
+    mocks.inventory = { ...eligibleInventory(), scannedAt: 2 }
+    await rerender()
+
+    expect(container?.querySelector('[data-testid="update-terminal"]')?.textContent).toBe(
+      'npx skills update orca-cli --global'
+    )
+    expect(mocks.terminalProps.at(-1)).not.toBe(firstTerminal)
   })
 
   it('explains a poisoned sibling in Details without offering a command', async () => {

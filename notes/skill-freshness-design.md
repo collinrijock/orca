@@ -155,8 +155,10 @@ Slimmed:
 
 ### D. Surfacing
 
-- **Surfaces (venue decision 2026-07-14):** a lingering toast, an update modal, and one
-  compact CLI-settings re-entry row ("Check for skill updates"). The Skills page was
+- **Surfaces (venue decision 2026-07-14):** a lingering toast, an update modal, and the
+  existing Settings setup rails for CLI, Orchestration, Computer Use, and Per-Workspace
+  Environments. Their installed pills carry safe freshness status, while their existing
+  Update and Re-check actions remain the per-skill path. The Skills page was
   de-linked by #4535 (2026-06-02) — its only entry, the sidebar toolbox menu, was removed —
   so it is no longer a venue; the freshness surface moved off it entirely. The behavior
   contracts below (name-scoped eligibility, no auto-run, dismissal keys, re-inventory
@@ -184,10 +186,12 @@ Slimmed:
 - **One lingering, non-repeating nudge**: count only eligible outdated skill names and offer the
   same targeted action, which opens the update modal. The toast lingers (no auto-close) until the
   user opens the modal or explicitly dismisses it; ignoring it (app quit) records nothing, so a
-  still-outdated skill may prompt once more next launch. An outdated name poisoned by another
-  placement remains visible in the modal's Details but never produces an unsafe nudge action.
-  Dismissal is recorded per (physical identity, name, bundled revision) only on explicit dismissal,
-  so a newly outdated official placement or genuinely newer stub revision may prompt once more. No
+  still-outdated skill may prompt once more next launch. A later inventory that resolves or blocks
+  the offered tuple retracts the stale toast without recording a dismissal. An outdated name
+  poisoned by another placement remains visible in the modal's Details but never produces an
+  unsafe nudge action. Dismissal is recorded per (physical identity, name, bundled revision) only
+  on explicit dismissal, so a newly outdated official placement or genuinely newer stub revision
+  may prompt once more. No
   toggle — nothing automatic happens that would need one.
 
 ### E. Migration (fat → stub)

@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
   dismissed: [] as string[],
   updateSettings: vi.fn(),
   toastInfo: vi.fn(),
+  toastDismiss: vi.fn(),
   requestDialog: vi.fn(),
   settingsLoaded: true,
   inventory: null as SkillFreshnessInventory | null
@@ -24,7 +25,6 @@ function placement(
   return {
     id: 'orca-cli',
     name: 'orca-cli',
-    description: null,
     rootId: 'home-agents',
     providers: ['agent-skills'],
     sourceKind: 'home',
@@ -64,7 +64,7 @@ vi.mock('@/hooks/useSkillFreshness', () => ({
 }))
 
 vi.mock('sonner', () => ({
-  toast: { info: mocks.toastInfo }
+  toast: { info: mocks.toastInfo, dismiss: mocks.toastDismiss }
 }))
 
 vi.mock('./skill-freshness-update-dialog', () => ({
@@ -109,6 +109,8 @@ describe('SkillFreshnessNudge', () => {
     mocks.updateSettings.mockReset()
     mocks.updateSettings.mockResolvedValue(undefined)
     mocks.toastInfo.mockReset()
+    mocks.toastInfo.mockReturnValue('freshness-toast')
+    mocks.toastDismiss.mockReset()
     mocks.requestDialog.mockReset()
   })
 
@@ -136,8 +138,27 @@ describe('SkillFreshnessNudge', () => {
 
     const options = mocks.toastInfo.mock.calls[0]?.[1]
     options.action.onClick()
+    options.onDismiss()
 
     expect(mocks.requestDialog).toHaveBeenCalledTimes(1)
+    expect(mocks.updateSettings).not.toHaveBeenCalled()
+  })
+
+  it('retracts a resolved nudge without recording a dismissal', async () => {
+    await renderNudge()
+    const options = mocks.toastInfo.mock.calls[0]?.[1]
+
+    mocks.inventory = {
+      schemaVersion: 1,
+      installations: [placement({ status: 'current', observedPackageDigest: 'current' })],
+      eligibleUpdateNames: [],
+      scannedAt: 2
+    }
+    await rerenderNudge()
+    // Sonner invokes onDismiss for programmatic dismissals on its next render.
+    options.onDismiss()
+
+    expect(mocks.toastDismiss).toHaveBeenCalledWith('freshness-toast')
     expect(mocks.updateSettings).not.toHaveBeenCalled()
   })
 

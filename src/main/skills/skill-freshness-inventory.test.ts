@@ -142,6 +142,27 @@ describe('read-only skill freshness inventory', () => {
     expect(inventory.eligibleUpdateNames).toEqual([])
   })
 
+  it('retains full-file identity without projecting unused metadata', async () => {
+    const test = await fixture()
+    const lateDescription = 'Description beyond the metadata parsing budget.'
+    await test.writeSkill(
+      join(test.homeDir, '.agents', 'skills'),
+      `${' '.repeat(256 * 1024)}\n${lateDescription}`
+    )
+
+    const inventory = await inventorySkillFreshness({
+      homeDir: test.homeDir,
+      repos: [],
+      resourceRoot: test.resourceRoot
+    })
+
+    expect(inventory.installations[0]).toMatchObject({
+      status: 'unrecognized'
+    })
+    expect(inventory.installations[0]).not.toHaveProperty('description')
+    expect(inventory.installations[0]?.observedPackageDigest).toMatch(/^[a-f0-9]{64}$/)
+  })
+
   it.runIf(process.platform !== 'win32')(
     'deduplicates a provider alias to the canonical copy',
     async () => {

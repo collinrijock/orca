@@ -66,7 +66,6 @@ export const SUPPORTED_GLOBAL_SKILL_TOPOLOGIES: ReadonlySet<SkillInstallationTop
 export type SkillFreshnessInstallation = {
   id: string
   name: string
-  description: string | null
   rootId: string
   providers: SkillProvider[]
   sourceKind: SkillSourceKind

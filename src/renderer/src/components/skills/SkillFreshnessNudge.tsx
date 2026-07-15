@@ -8,6 +8,12 @@ import { requestSkillFreshnessUpdateDialog } from './skill-freshness-update-dial
 const MAX_DISMISSED_FRESHNESS_NUDGES = 512
 const NO_DISMISSED_FRESHNESS_NUDGES: string[] = []
 
+type ActiveFreshnessNudge = {
+  id: string | number
+  fingerprint: string
+  persistDismissal: boolean
+}
+
 function candidateKey(args: {
   physicalIdentity: string
   name: string
@@ -18,15 +24,18 @@ function candidateKey(args: {
 
 export function SkillFreshnessNudge(): null {
   const state = useSkillFreshness()
-  const settings = useAppStore((store) => store.settings)
-  const dismissed = settings?.dismissedSkillFreshnessNudges ?? NO_DISMISSED_FRESHNESS_NUDGES
+  const settingsLoaded = useAppStore((store) => store.settings !== null)
+  const dismissed = useAppStore(
+    (store) => store.settings?.dismissedSkillFreshnessNudges ?? NO_DISMISSED_FRESHNESS_NUDGES
+  )
   const updateSettings = useAppStore((store) => store.updateSettings)
   const shownFingerprints = useRef(new Set<string>())
   const persistedFingerprints = useRef(new Set<string>())
+  const activeNudgeRef = useRef<ActiveFreshnessNudge | null>(null)
 
   useEffect(() => {
     const inventory = state.inventory
-    if (!settings || !inventory || inventory.eligibleUpdateNames.length === 0) {
+    if (!settingsLoaded || !inventory) {
       return
     }
     const eligibleNames = new Set(inventory.eligibleUpdateNames)
@@ -49,12 +58,29 @@ export function SkillFreshnessNudge(): null {
     const dismissedKeys = new Set(dismissed)
     const unseen = candidates.filter((candidate) => !dismissedKeys.has(candidate.key))
     if (unseen.length === 0) {
+      const active = activeNudgeRef.current
+      if (active) {
+        // Why: a resolved/replaced nudge is stale presentation, not an explicit
+        // user dismissal, so retract it without persisting its tuple keys.
+        active.persistDismissal = false
+        activeNudgeRef.current = null
+        toast.dismiss(active.id)
+      }
       return
     }
     const fingerprint = unseen
       .map((candidate) => candidate.key)
       .sort((left, right) => left.localeCompare(right, 'en'))
       .join('\n')
+    const active = activeNudgeRef.current
+    if (active?.fingerprint === fingerprint) {
+      return
+    }
+    if (active) {
+      active.persistDismissal = false
+      activeNudgeRef.current = null
+      toast.dismiss(active.id)
+    }
     if (shownFingerprints.current.has(fingerprint)) {
       return
     }
@@ -74,7 +100,12 @@ export function SkillFreshnessNudge(): null {
       })
     }
     const names = new Set(unseen.map((candidate) => candidate.name))
-    toast.info(
+    const nextActive: ActiveFreshnessNudge = {
+      id: '',
+      fingerprint,
+      persistDismissal: true
+    }
+    nextActive.id = toast.info(
       names.size === 1
         ? translate(
             'auto.components.skills.SkillFreshnessNudge.titleOne',
@@ -95,17 +126,33 @@ export function SkillFreshnessNudge(): null {
         duration: Number.POSITIVE_INFINITY,
         // Why: only an explicit dismissal (the close button) records the keys;
         // opening the review dialog is engagement, not a decision to hide it.
-        onDismiss: persistDismissal,
+        onDismiss: () => {
+          if (nextActive.persistDismissal) {
+            persistDismissal()
+          }
+          if (activeNudgeRef.current === nextActive) {
+            activeNudgeRef.current = null
+          }
+        },
         action: {
           label: translate(
             'auto.components.skills.SkillFreshnessNudge.review',
             'Review update command'
           ),
-          onClick: () => requestSkillFreshnessUpdateDialog()
+          onClick: () => {
+            // Sonner closes action toasts without onDismiss; clear ownership so
+            // a later inventory cannot treat the already-closed toast as active.
+            nextActive.persistDismissal = false
+            if (activeNudgeRef.current === nextActive) {
+              activeNudgeRef.current = null
+            }
+            requestSkillFreshnessUpdateDialog()
+          }
         }
       }
     )
-  }, [dismissed, settings, state.inventory, updateSettings])
+    activeNudgeRef.current = nextActive
+  }, [dismissed, settingsLoaded, state.inventory, updateSettings])
 
   return null
 }

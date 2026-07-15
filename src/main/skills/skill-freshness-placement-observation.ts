@@ -1,6 +1,5 @@
 import type { Stats } from 'node:fs'
 import { join } from 'node:path'
-import { summarizeSkillMarkdown } from '../../shared/skill-metadata'
 import type {
   SkillCurrentBundleEntry,
   SkillFreshnessInstallation,
@@ -69,7 +68,6 @@ export async function observeSkillFreshnessInstallation(args: {
   const base = {
     id: skillPlacementId(args.unresolvedPath, args.current.name),
     name: args.current.name,
-    description: null,
     rootId: args.rootId,
     providers: args.providers,
     sourceKind: args.sourceKind,
@@ -103,12 +101,8 @@ export async function observeSkillFreshnessInstallation(args: {
     // identity is still current, and cannot honestly be attributed to the later tag.
     const snapshot =
       observed.observedDigest === args.current.packageDigest ? args.current : matchedSnapshot
-    const skillMarkdown = observed.files.find((file) => file.path === 'SKILL.md')
     return {
       ...base,
-      description: skillMarkdown
-        ? summarizeSkillMarkdown(skillMarkdown.bytes.toString('utf8')).description
-        : null,
       status: freshnessStatus(snapshot, args.current),
       installedReleaseRevision: snapshot?.releaseRevision ?? null,
       installedAppVersion: snapshot
