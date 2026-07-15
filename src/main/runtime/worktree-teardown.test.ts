@@ -174,6 +174,43 @@ describe('killAllProcessesForWorktree', () => {
     })
   })
 
+  it('bounds provider shutdown fanout while preserving concurrent batches', async () => {
+    const sessions = Array.from({ length: 40 }, (_, index) => ({
+      id: `w1@@${index}`,
+      cwd: '/tmp',
+      title: 'shell'
+    }))
+    const localProvider = createProviderStub(async () => sessions)
+    listRegisteredPtysMock.mockReturnValue([])
+    let active = 0
+    let maxActive = 0
+    const releases: (() => void)[] = []
+    ;(localProvider.shutdown as unknown as ReturnType<typeof vi.fn>).mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          active += 1
+          maxActive = Math.max(maxActive, active)
+          releases.push(() => {
+            active -= 1
+            resolve()
+          })
+        })
+    )
+
+    const teardown = killAllProcessesForWorktree('w1', { localProvider })
+    await vi.waitFor(() => expect(localProvider.shutdown).toHaveBeenCalledTimes(32))
+    expect(maxActive).toBe(32)
+    releases.splice(0).forEach((release) => release())
+    await vi.waitFor(() => expect(localProvider.shutdown).toHaveBeenCalledTimes(40))
+    releases.splice(0).forEach((release) => release())
+
+    await expect(teardown).resolves.toEqual({
+      runtimeStopped: 0,
+      providerStopped: 40,
+      registryStopped: 0
+    })
+  })
+
   it('invokes runtime.stopTerminalsForWorktree when runtime is provided', async () => {
     const stopTerminalsForWorktree = vi.fn().mockResolvedValue({ stopped: 3 })
     const runtime = {

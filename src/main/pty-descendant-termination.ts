@@ -164,9 +164,16 @@ export function collectDescendantRows(
   }
   const descendants: ProcessTableRow[] = []
   const queue = [rootPid]
-  while (queue.length > 0) {
-    const pid = queue.shift()!
+  const visited = new Set(queue)
+  for (let nextIndex = 0; nextIndex < queue.length; nextIndex += 1) {
+    const pid = queue[nextIndex]
     for (const child of childrenByPpid.get(pid) ?? []) {
+      // Why: ps is not an atomic snapshot. PID reuse can produce duplicate or
+      // cyclic-looking rows, which must not hang the Electron main thread.
+      if (visited.has(child.pid)) {
+        continue
+      }
+      visited.add(child.pid)
       descendants.push(child)
       queue.push(child.pid)
     }
@@ -280,9 +287,18 @@ export function terminateDescendantSnapshot(
       if (!capture) {
         return
       }
-      const liveByPid = new Map(capture.rows.map((row) => [row.pid, row]))
+      const expectedPids = new Set(snapshot.descendants.map((row) => row.pid))
+      const liveTargets = new Map<number, ProcessTableRow | null>()
+      // Why: a process table may be large, while one agent's descendants are
+      // normally few. Index only signal targets instead of duplicating every row.
+      for (const live of capture.rows) {
+        if (expectedPids.has(live.pid)) {
+          // Duplicate PID rows make identity ambiguous, so never escalate them.
+          liveTargets.set(live.pid, liveTargets.has(live.pid) ? null : live)
+        }
+      }
       for (const row of snapshot.descendants) {
-        const live = liveByPid.get(row.pid)
+        const live = liveTargets.get(row.pid)
         if (
           hasUnambiguousStartIdentity(row, snapshot.capturedAtMs) &&
           live?.startedAt === row.startedAt &&

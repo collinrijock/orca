@@ -73,7 +73,7 @@ describe('parseProcessTable', () => {
 })
 
 describe('collectDescendantRows', () => {
-  it('walks multi-level descendants including detached-pgid grandchildren', () => {
+  it('walks detached-pgid descendants once even when a non-atomic table looks cyclic', () => {
     // shell(10) -> agent(20, own job pgid) -> detached tool shell(30, own
     // session-style pgid) -> git(31). 99 is unrelated.
     const table = [
@@ -81,6 +81,7 @@ describe('collectDescendantRows', () => {
       row(20, 10, 20),
       row(30, 20, 30),
       row(31, 30, 30),
+      row(20, 31, 20), // PID reuse can make a non-atomic ps read look cyclic.
       row(99, 1, 99)
     ]
     const snapshot = collectDescendantRows(10, table, CAPTURED_AT_MS)
@@ -203,15 +204,24 @@ describe('terminateDescendantSnapshot', () => {
     const survivor = row(30, 20, 30)
     const exited = row(20, 10, 20)
     const recycled = row(40, 30, 40)
+    const ambiguous = row(50, 30, 50)
     const sendSignal = vi.fn()
     // At escalation time: 30 survives unchanged, 20 is gone, 40's pid now
     // belongs to a different (recycled) process with a different start time.
     const readTable = vi
       .fn()
       .mockResolvedValue(
-        tableCapture([survivor, { ...recycled, startedAt: 'Tue Jul 14 09:00:00 2026' }])
+        tableCapture([
+          survivor,
+          { ...recycled, startedAt: 'Tue Jul 14 09:00:00 2026' },
+          ambiguous,
+          { ...ambiguous, startedAt: 'Tue Jul 14 10:00:00 2026' }
+        ])
       )
-    terminateDescendantSnapshot(snapshot([exited, survivor, recycled]), { sendSignal, readTable })
+    terminateDescendantSnapshot(snapshot([exited, survivor, recycled, ambiguous]), {
+      sendSignal,
+      readTable
+    })
     sendSignal.mockClear()
     await vi.advanceTimersByTimeAsync(DESCENDANT_KILL_GRACE_MS)
     expect(sendSignal.mock.calls).toEqual([[30, 'SIGKILL']])
