@@ -104,6 +104,7 @@ import {
   ONBOARDING_FINAL_STEP
 } from '../shared/constants'
 import { parseWorkspaceSession } from '../shared/workspace-session-schema'
+import { AGENT_SESSION_CAPTURE_VERSION } from '../shared/agent-session-upgrade-notice'
 import { normalizeUsagePercentageDisplay } from '../shared/usage-percentage-display'
 import { isExistingPersistedProfile } from '../shared/project-order-manual-default-notice'
 import { resolveUsagePercentageDisplayChangeNoticeDismissed } from '../shared/usage-percentage-display-change-notice'
@@ -5653,12 +5654,21 @@ export class Store {
   }
 
   setWorkspaceSession(session: PersistedState['workspaceSession'], hostId?: string | null): void {
+    // Why: main is the authority for what lands on disk, so stamp the
+    // capture-format version on every full write here. The renderer quit
+    // payload (buildWorkspaceSessionPayload) does not carry it, and a full
+    // write replaces the session — without this, the quit flush would drop the
+    // stamp and re-arm the pre-#5232 upgrade notice (#5356).
+    const stamped: WorkspaceSessionState = {
+      ...session,
+      agentSessionCaptureVersion: AGENT_SESSION_CAPTURE_VERSION
+    }
     const resolved = this.resolveHostId(hostId)
     if (resolved === LOCAL_EXECUTION_HOST_ID) {
-      this.setLocalWorkspaceSession(session)
+      this.setLocalWorkspaceSession(stamped)
       return
     }
-    this.setHostWorkspaceSession(resolved, session)
+    this.setHostWorkspaceSession(resolved, stamped)
   }
 
   /** Persist a non-'local' host partition. The PTY-binding race protections in

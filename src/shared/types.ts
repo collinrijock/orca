@@ -1106,6 +1106,12 @@ export type WorkspaceSessionState = {
   defaultTerminalTabsAppliedByWorktreeId?: Record<string, true>
   /** Provider-session resume records captured when workspaces sleep. */
   sleepingAgentSessionsByPaneKey?: Record<string, SleepingAgentSessionRecord>
+  /** Capability stamp: the agent-session capture format version this session
+   *  was last written with. Builds predating quit-time agent capture (#5232)
+   *  never wrote it, so its absence flags a pre-fix session whose live agent
+   *  sessions could not be preserved across the upgrade (#5356). Never seeded
+   *  into defaults — absence is the signal. */
+  agentSessionCaptureVersion?: number
 }
 
 export type WorkspaceSessionPatch = Partial<WorkspaceSessionState>

@@ -126,7 +126,9 @@
       "fe21e8f6f5": "返回 ({{value0}})",
       "064bd07810": "返回",
       "ce37cf5279": "切换侧边栏 ({{value0}})",
-      "e4b9e7dff7": "切换侧边栏"
+      "e4b9e7dff7": "切换侧边栏",
+      "preUpgradeAgentSessionLossTitle": "Agent sessions could not be restored",
+      "preUpgradeAgentSessionLossBody": "After updating, agent terminals (Claude, Codex, and others) from your previous session started as fresh shells. Older versions could not save agent sessions across an update, so they could not be resumed. This will not happen again."
     },
     "web": {
       "WebConnect": {

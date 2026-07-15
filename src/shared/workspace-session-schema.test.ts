@@ -425,4 +425,33 @@ describe('parseWorkspaceSession', () => {
       expect(result.value.unifiedTabs?.wt[0].viewMode).toBe('terminal')
     }
   })
+
+  it('preserves the agentSessionCaptureVersion capability stamp (#5356)', () => {
+    const result = parseWorkspaceSession({
+      activeRepoId: null,
+      activeWorktreeId: null,
+      activeTabId: null,
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {},
+      agentSessionCaptureVersion: 1
+    })
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.value.agentSessionCaptureVersion).toBe(1)
+    }
+  })
+
+  it('leaves the stamp absent for a pre-fix session (absence is the signal)', () => {
+    const result = parseWorkspaceSession({
+      activeRepoId: null,
+      activeWorktreeId: null,
+      activeTabId: null,
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {}
+    })
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.value.agentSessionCaptureVersion).toBeUndefined()
+    }
+  })
 })

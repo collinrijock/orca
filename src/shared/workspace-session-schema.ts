@@ -295,7 +295,13 @@ export const workspaceSessionStateSchema: z.ZodType<WorkspaceSessionState> = z.o
     )
     .optional(),
   defaultTerminalTabsAppliedByWorktreeId: z.record(z.string(), z.literal(true)).optional(),
-  sleepingAgentSessionsByPaneKey: sleepingAgentSessionsByPaneKeySchema
+  sleepingAgentSessionsByPaneKey: sleepingAgentSessionsByPaneKeySchema,
+  // Why: z.object strips unlisted keys, so the capability stamp must be declared
+  // here or it is dropped on every read and the pre-fix detection never
+  // terminates. `.catch(undefined)` degrades a corrupt value to "absent" (treat
+  // as pre-fix) rather than failing the whole-session parse. Never defaulted —
+  // its absence is the #5356 signal.
+  agentSessionCaptureVersion: z.number().int().nonnegative().optional().catch(undefined)
 })
 
 export type ParsedWorkspaceSession =

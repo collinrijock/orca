@@ -119,6 +119,7 @@ import {
   persistWorkspaceSessionByHostSync
 } from './lib/workspace-session-host-persistence'
 import { collectFolderWorkspaceKeysFromSession } from './lib/workspace-session-hydration-keys'
+import { notifyPreUpgradeAgentSessionLossIfNeeded } from './lib/pre-upgrade-agent-session-loss-notice'
 import {
   getStartupErrorFallbackUI,
   hydratePersistedUIAfterStartupRead
@@ -975,6 +976,11 @@ function App(): React.JSX.Element {
             actions.hydrateEditorSession(sessionRead.session, sessionHydrationOptions)
             actions.hydrateBrowserSession(sessionRead.session, sessionHydrationOptions)
           })
+          // Why: a session written by a build predating quit-time agent capture
+          // (#5232) cannot restore its live agent terminals — they cold-restore
+          // as blank shells. Warn once, non-destructively, off the raw loaded
+          // session rather than letting them vanish silently (#5356).
+          notifyPreUpgradeAgentSessionLossIfNeeded(sessionRead.session)
           // Why: prune lastVisitedAtByWorktreeId entries whose worktrees
           // no longer exist. Must run AFTER hydration — before this point,
           // async repo loads may not have populated worktreesByRepo yet and
