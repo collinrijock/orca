@@ -21,18 +21,15 @@ complete a box.
 ## Active work
 
 - [ ] **WP2 — Prove oldest supported baselines and native trust.**
-  - Proven: all-six artifact metadata gate; local Rocky 8 x64 two-build equality, smoke, and glibc
-    2.28/libstdc++ 6.0.25 execution; Windows checkout-newline contract.
-  - Active red: exact-head run
-    [29378160419](https://github.com/stablyai/orca/actions/runs/29378160419) prepares both native Linux
-    builders, but both builds cannot create exclusive output through the runner-temp bind mount.
-  - Active correction locally passes two complete offline x64 builds, exact equality, archive/tree
-    verification, and bundled Node/PTY/watcher smoke as the host UID/GID with a mode-1777 tmpfs.
-  - Next proof: both native Linux builds, supplemental userland jobs, and direct artifact audit.
+  - Proven: all-six target-native build/equality/smoke/metadata gates and direct payload audit.
+  - Proven: exact-head run
+    [29379227209](https://github.com/stablyai/orca/actions/runs/29379227209) builds both Linux tuples in
+    digest-pinned Rocky 8 on native runners; both downloaded artifacts pass glibc 2.28/libstdc++
+    6.0.25 execution, bundled Node, PTY, and watcher smoke.
   - Windows x64 passes its declared oldest-floor job. The hosted arm64 runner is build 26200, not the
     required build 26100, so its otherwise successful artifact/runtime smoke does not close that cell.
-  - Still open: Windows arm64 build 26100, kernel 4.18, macOS 13.5, native signing/trust, and every SSH
-    transfer/runtime cell.
+  - Next proof: kernel 4.18, macOS 13.5, Windows arm64 build 26100, and native signing/trust.
+  - No tuple is enabled; every SSH transfer/runtime and rollout cell remains open.
 
 ## Work packages, in required order
 
@@ -59,8 +56,8 @@ complete a box.
       Linux, macOS, and Windows on x64 and arm64.
 - [x] Prove exact clean-build equality and exact runtime-tree closure on all six runner families.
 - [x] Complete the all-six SBOM, license, provenance, toolchain, and prohibited-content audit.
-- [ ] Rebuild both Linux artifacts in the digest-pinned glibc 2.28/libstdc++ 6.0.25 userland on
-      native x64/arm64 runners; smoke and compare them there.
+- [x] Rebuild both Linux artifacts in the digest-pinned glibc 2.28/libstdc++ 6.0.25 userland on
+      native x64/arm64 runners; smoke and compare them there. (`E-M3-LINUX-NATIVE-USERLAND-CI-001`)
 - [ ] Prove each candidate on its oldest supported OS/libc/kernel baseline.
 - [ ] Sign macOS and Windows bytes and verify native trust on the target OS.
 - [ ] Merge draft PR [#8741](https://github.com/stablyai/orca/pull/8741).

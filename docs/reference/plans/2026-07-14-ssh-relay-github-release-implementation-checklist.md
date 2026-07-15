@@ -9,7 +9,7 @@ work; keep exact commands, runner identities, hashes, metrics, and residual gaps
 Date created: 2026-07-14<br>
 Last updated: 2026-07-14<br>
 Current phase: Milestone 3 / Work Package 2 oldest-supported-baseline and native-trust proof — **In progress — 2026-07-14, Codex implementation owner**; exact-head run [29373507297](https://github.com/stablyai/orca/actions/runs/29373507297) passes all six target-native build, smoke, exact clean-build equality, upload, SBOM, license, provenance, runner/toolchain, and prohibited-content cells, and direct inspection of every downloaded payload passes exact archive/subject hashes, archive-scoped SPDX identity, one-owner-per-file, dependency, commit/run/builder/runner, tool-version/hash, and closure assertions (E-M3-METADATA-CI-001); Windows x64/arm64 record strict `MSVC 14.44.35207` identities and distinct exact linker SHA-256 values despite the Git-for-Windows PATH collision; the all-six metadata/provenance gate is closed, while oldest-baseline execution, native signing/trust, cross-family remotes, and measured legacy baselines remain open; production/default behavior and every tuple state remain unchanged; no bundled-runtime path is enabled and no artifact is published<br>
-Session checkpoint: **In progress — 2026-07-14, Codex implementation owner** — exact-head run [29378160419](https://github.com/stablyai/orca/actions/runs/29378160419) prepares the digest-pinned Linux builders on both native GitHub architectures, but both Linux jobs fail because the root container cannot create exclusive output through the runner-owned temporary-directory bind mount (E-M3-LINUX-RUNNER-MOUNT-PERMISSION-CI-RED-001); the bounded correction runs the offline container as the runner UID/GID with an explicit mode-1777 tmpfs while preserving every isolation/resource bound and passes a complete local two-build/equality/archive/tree/PTY/watcher proof (E-M3-LINUX-RUNNER-MOUNT-PERMISSION-LOCAL-GREEN-001); the same run proves Windows x64 on its declared floor, while native Windows arm64 artifacts and smoke pass but hosted build 26200 cannot prove required build 26100 (E-M3-WINDOWS-ARM64-BASELINE-CI-RED-001); no tuple is enabled or published.<br>
+Session checkpoint: **In progress — 2026-07-14, Codex implementation owner** — exact-head run [29379227209](https://github.com/stablyai/orca/actions/runs/29379227209) proves the non-root correction and both digest-pinned Linux builders on native x64/arm64 through two clean builds, equality, archive/tree inspection, bundled Node/PTY/watcher smoke, upload, download, direct metadata/closure audit, and supplemental glibc 2.28/libstdc++ 6.0.25 execution (E-M3-LINUX-NATIVE-USERLAND-CI-001); Windows x64 qualifies on exact Server 2022 build 20348 (E-M3-WINDOWS-X64-BASELINE-CI-001), while native Windows arm64 artifacts and smoke pass but hosted build 26200 again fails closed against required build 26100 (E-M3-WINDOWS-ARM64-BASELINE-CI-RED-001); exact kernel 4.18, macOS 13.5, Windows arm64 build 26100, and native signing/trust remain open; no tuple is enabled or published.<br>
 Primary design: [SSH relay GitHub Release plan](./2026-07-14-ssh-relay-github-release-plan.html)<br>
 Motivating issues: [#8450](https://github.com/stablyai/orca/issues/8450), [#1693](https://github.com/stablyai/orca/issues/1693)
 
@@ -650,10 +650,11 @@ archive inspection, bundled-Node/native-module/PTY/watcher smoke, SBOM, and prov
 behind purpose-named scripts and CI artifacts. No release publication, desktop resolver, SSH
 transfer, install, fallback, rollout setting, or tuple enablement belongs in this package.
 
-**Current active gate — 2026-07-14, Codex implementation owner:** exact-head run 29373507297 and
-direct inspection of all six downloaded payloads close target-native metadata/provenance/toolchain
-completeness under E-M3-METADATA-CI-001. The next artifact-only package must prove the declared
-oldest glibc/libstdc++/kernel, macOS, and Windows floors and target-native trust. A newer hosted
+**Current active gate — 2026-07-14, Codex implementation owner:** exact-head run 29379227209 and
+direct inspection of all six downloaded payloads close the native Linux producer plus glibc
+2.28/libstdc++ 6.0.25 userland gates under E-M3-LINUX-NATIVE-USERLAND-CI-001 and the Windows x64
+Server 2022 build-20348 gate under E-M3-WINDOWS-X64-BASELINE-CI-001. Exact Linux kernel 4.18,
+macOS 13.5, Windows arm64 build 26100, and target-native signing/trust remain open. A newer hosted
 runner, static symbol scan, or container may add evidence but cannot silently stand in for an
 unavailable qualifying snapshot. Every tuple remains disabled and no production consumer is
 connected.
@@ -835,16 +836,16 @@ Each runtime must contain only the executable closure required by the relay.
 
 ### Per-tuple build and executable proof
 
-| Runtime tuple     | Build/provenance | Bundled Node | `node-pty` load + real PTY | Watcher events | Oldest baseline | Native trust | Evidence                                                   |
-| ----------------- | ---------------- | ------------ | -------------------------- | -------------- | --------------- | ------------ | ---------------------------------------------------------- |
-| linux-x64-glibc   | [ ]              | [x]          | [ ]                        | [ ]            | [ ]             | [ ]          | E-M3-CI-001; E-M3-LINUX-BASELINE-LOCAL-RED-001             |
-| linux-arm64-glibc | [ ]              | [x]          | [ ]                        | [ ]            | [ ]             | [ ]          | E-M3-RUNTIME-LOCAL-001; E-M3-CI-001; floor rebuild pending |
-| linux-x64-musl    | [ ]              | [ ]          | [ ]                        | [ ]            | [ ]             | [ ]          | —                                                          |
-| linux-arm64-musl  | [ ]              | [ ]          | [ ]                        | [ ]            | [ ]             | [ ]          | —                                                          |
-| darwin-x64        | [x]              | [x]          | [x]                        | [x]            | [ ]             | [ ]          | E-M3-CI-001                                                |
-| darwin-arm64      | [x]              | [x]          | [x]                        | [x]            | [ ]             | [ ]          | E-M3-CI-001                                                |
-| win32-x64         | [x]              | [x]          | [x]                        | [x]            | [ ]             | [ ]          | E-M3-WINDOWS-CI-001                                        |
-| win32-arm64       | [x]              | [x]          | [x]                        | [x]            | [ ]             | [ ]          | E-M3-WINDOWS-CI-001                                        |
+| Runtime tuple     | Build/provenance | Bundled Node | `node-pty` load + real PTY | Watcher events | Oldest baseline | Native trust | Evidence                                            |
+| ----------------- | ---------------- | ------------ | -------------------------- | -------------- | --------------- | ------------ | --------------------------------------------------- |
+| linux-x64-glibc   | [x]              | [x]          | [x]                        | [x]            | [ ]             | [ ]          | E-M3-LINUX-NATIVE-USERLAND-CI-001; kernel 4.18 open |
+| linux-arm64-glibc | [x]              | [x]          | [x]                        | [x]            | [ ]             | [ ]          | E-M3-LINUX-NATIVE-USERLAND-CI-001; kernel 4.18 open |
+| linux-x64-musl    | [ ]              | [ ]          | [ ]                        | [ ]            | [ ]             | [ ]          | —                                                   |
+| linux-arm64-musl  | [ ]              | [ ]          | [ ]                        | [ ]            | [ ]             | [ ]          | —                                                   |
+| darwin-x64        | [x]              | [x]          | [x]                        | [x]            | [ ]             | [ ]          | E-M3-CI-001                                         |
+| darwin-arm64      | [x]              | [x]          | [x]                        | [x]            | [ ]             | [ ]          | E-M3-CI-001                                         |
+| win32-x64         | [x]              | [x]          | [x]                        | [x]            | [x]             | [ ]          | E-M3-WINDOWS-X64-BASELINE-CI-001                    |
+| win32-arm64       | [x]              | [x]          | [x]                        | [x]            | [ ]             | [ ]          | E-M3-WINDOWS-ARM64-BASELINE-CI-RED-001              |
 
 Rules:
 
@@ -7415,6 +7416,117 @@ diff --check`.
 - Follow-up: provision or select a native arm64 build-26100 snapshot/runner before closing this cell;
   keep the tuple disabled and do not weaken the exact oldest-floor oracle.
 
+- Repeat evidence: exact-head run
+  [29379227209](https://github.com/stablyai/orca/actions/runs/29379227209), artifact job
+  [87239051368](https://github.com/stablyai/orca/actions/runs/29379227209/job/87239051368), and baseline
+  job [87240257136](https://github.com/stablyai/orca/actions/runs/29379227209/job/87240257136) reproduce
+  the same bounded result at `cc4c45c8981fd87b5681e8c0be7b3b06f2cfab22`: native build, equality,
+  upload, download, verification, PTY/watcher smoke, and 48,361,472-byte RSS pass; observed build
+  26200 returns `osBuild: false` and the job fails closed. Artifact ID `8329167066`, 33,084,426 bytes,
+  Actions digest `4956ad608ede84372a393248dc90c03b13bd5e28345d8c3940df0419b9fdb192`;
+  archive SHA-256 `87a9c749f6aced6d2c63a3f2b80033dfa3ecc7524c2f232baaa199340c562cf1`.
+
+### E-M3-LINUX-NATIVE-USERLAND-CI-001 — Native Linux producers pass the oldest userland
+
+- Date: 2026-07-14 (job timestamps 2026-07-15 UTC)
+- Owner: Codex implementation owner
+- Source/run: exact draft-PR head `cc4c45c8981fd87b5681e8c0be7b3b06f2cfab22`, containing
+  implementation commit `05b3a4b18`; Actions run
+  [29379227209](https://github.com/stablyai/orca/actions/runs/29379227209). Linux x64 artifact job
+  [87239051400](https://github.com/stablyai/orca/actions/runs/29379227209/job/87239051400), Linux arm64
+  artifact job [87239051434](https://github.com/stablyai/orca/actions/runs/29379227209/job/87239051434),
+  x64 userland job [87240706426](https://github.com/stablyai/orca/actions/runs/29379227209/job/87240706426),
+  and arm64 userland job
+  [87240706430](https://github.com/stablyai/orca/actions/runs/29379227209/job/87240706430) all pass.
+- Aggregate status: the artifact workflow concludes `failure` only because the separately required
+  Windows arm64 build-26100 floor fails closed on hosted build 26200. Exact-head PR Checks
+  [29379227222](https://github.com/stablyai/orca/actions/runs/29379227222) and Golden E2E Experiment
+  [29379227283](https://github.com/stablyai/orca/actions/runs/29379227283) both pass with no failed jobs.
+- Runners/builders: GitHub-hosted native `ubuntu-24.04` / `ubuntu24` `20260705.232.1` x64 and
+  `ubuntu-24.04-arm` / `ubuntu24-arm64` `20260706.52.2` arm64. Digest-pinned Rocky bases are
+  `2d05a926...aa275d` x64 and `3c2d0ce1...61f1a0` arm64; produced builder IDs are
+  `sha256:4e260f8acb74ac4800e31af90160aac0c9eed00c5fc4e8cb1aa83d0f1b1a8f4b` and
+  `sha256:a2f683970a2fcef419610f77bdc0af332d991dc0cf19fa4f239771dfe5b06a94`.
+- Exact evidence commands:
+
+  ```sh
+  gh run view 29379227209 --repo stablyai/orca \
+    --json headSha,status,conclusion,createdAt,updatedAt,url,jobs
+  gh run view 29379227209 --repo stablyai/orca --log | \
+    rg 'requested_runner=|resolved_image_|runner_arch=|linux_floor_|"contentId"|"qualified"|"residualGaps"'
+  gh api repos/stablyai/orca/actions/runs/29379227209/artifacts --paginate
+  gh run download 29379227209 --repo stablyai/orca \
+    --dir /private/tmp/orca-8450-run-29379227209-artifacts
+  # Repeat the fail-closed jq/shasum audit from E-M3-METADATA-CI-RED-003 with:
+  # evidence=/private/tmp/orca-8450-run-29379227209-artifacts
+  # commit=cc4c45c8981fd87b5681e8c0be7b3b06f2cfab22
+  # run_id=29379227209
+  # Extract each exact archive, then repeat the closure verifier command from
+  # E-M3-RUNTIME-CLOSURE-LOCAL-001 against all six extracted directories.
+  ```
+
+- Result: PASS. Both offline, non-root builders preserve the read-only/no-network/capability/resource
+  envelope; build twice; inspect archive/tree; execute bundled Node v24.18.0, native PTY
+  input/resize/exit, and five watcher events twice; compare runtime/archive/identity/SPDX/provenance
+  exactly; and upload. Artifact job wall times were 6m49s x64 and 11m57s arm64, including builder
+  preparation. Clean x64 builds took 67,398.98/64,050.97 ms with 55,918,592/55,955,456-byte smoke
+  RSS; clean arm64 builds took 75,230.87/74,661.31 ms with 52,195,328/52,207,616-byte smoke RSS.
+- Supplemental userland result: PASS after download and fresh byte/tree verification. Both execute in
+  glibc 2.28/libstdc++ 6.0.25 Rocky userland and report `qualified: true`; x64 PTY/watcher smoke takes
+  161.43 ms at 55,611,392 RSS bytes and arm64 takes 161.85 ms at 51,658,752 RSS bytes. Both retain the
+  explicit kernel residual: observed shared runner kernel `6.17.0-1018-azure`, not required 4.18.
+- Downloaded artifacts/direct audit: exact cardinality, archive/identity/provenance/SPDX hashes,
+  archive-scoped namespace, one owner per file, eight dependency relationships, exact
+  commit/run/builder/runner/toolchain identities, prohibited-content rules, and extracted-tree
+  closure all pass for all six run artifacts. Linux x64 artifact `8329137098`, 29,290,715 bytes,
+  Actions digest `4859448ad465600836700884449b56b65cc65b13e71588813a5341c7eee2ef3b`,
+  content ID `fc63ca342a5990f460ec6d72262a8542173dab20ce03c9b9cfb755b1c6057e6d`, archive SHA-256
+  `c771c13d23fb7384ad0b018cb4a91e04066d53d07b021fa2ff4e0ae55f701467`. Linux arm64 artifact
+  `8329223012`, 28,216,772 bytes, Actions digest
+  `f3a834de03714c4bd702d933261cc8c3c8f3ea6472b97d74737904d5b7461a06`, content ID
+  `96f07f62af9b35304bb8ca0870ca4d8095e059bfa61dd1bc57e81b20f3fbca67`, archive SHA-256
+  `ea52c7fadbc100e055e489d14ddf01daca5f90b1f83cdff93c1f3d728cfcaa34`.
+- Six-artifact audit controls:
+
+  | Tuple             | Artifact ID  | Actions digest                                                     | Archive SHA-256                                                    | Content ID prefix | Files |
+  | ----------------- | ------------ | ------------------------------------------------------------------ | ------------------------------------------------------------------ | ----------------- | ----- |
+  | linux-x64-glibc   | `8329137098` | `4859448ad465600836700884449b56b65cc65b13e71588813a5341c7eee2ef3b` | `c771c13d23fb7384ad0b018cb4a91e04066d53d07b021fa2ff4e0ae55f701467` | `fc63ca34…`       | 34    |
+  | linux-arm64-glibc | `8329223012` | `f3a834de03714c4bd702d933261cc8c3c8f3ea6472b97d74737904d5b7461a06` | `ea52c7fadbc100e055e489d14ddf01daca5f90b1f83cdff93c1f3d728cfcaa34` | `96f07f62…`       | 34    |
+  | darwin-x64        | `8329119914` | `d86a6deac1c5f6b38a1824197b19de69c5f5df6bc7081266a636e86cfae34a87` | `470b69a5317d212cab99cf1dc12841b09e0984c70cfbc90c3f46be040a263374` | `585ea603…`       | 35    |
+  | darwin-arm64      | `8329097437` | `d2200b01c983afbc2b7ca0d08d36f9e7962932113c67ab604c1072488b6ebb26` | `54a2fb49a0bc63c04622525bada57ccfa4cf7884e09bfb88c4c87f30a363616d` | `40ff5d20…`       | 35    |
+  | win32-x64         | `8329104979` | `3168b4b29c635502ceb5320fc1e96a19a394b2a36ea5f8083c8502a81a385063` | `e8c1165df331602027f548228f8b09791d27aa353d829c575b9b6dbf86833670` | `7ddad668…`       | 42    |
+  | win32-arm64       | `8329167066` | `4956ad608ede84372a393248dc90c03b13bd5e28345d8c3940df0419b9fdb192` | `87a9c749f6aced6d2c63a3f2b80033dfa3ecc7524c2f232baaa199340c562cf1` | `2955cec7…`       | 42    |
+
+- Oracle proved: the exact native Linux producer bytes are compatible with the declared oldest
+  glibc/libstdc++ userland on both architectures; the original Ubuntu-linked ABI defect and the
+  runner bind-mount defect are closed without weakening isolation.
+- Does not prove: exact kernel 4.18, SSH transfer/install, native trust, release aggregation,
+  packaged desktop use, fallback/performance, or an enabled tuple.
+- Follow-up: retain both tuples disabled until kernel 4.18, native trust, and the remaining required
+  live SSH evidence pass.
+
+### E-M3-WINDOWS-X64-BASELINE-CI-001 — Windows x64 passes the declared Server floor
+
+- Date: 2026-07-14 (job timestamps 2026-07-15 UTC)
+- Owner: Codex implementation owner
+- Source/run: exact head `cc4c45c8981fd87b5681e8c0be7b3b06f2cfab22`, Actions run
+  [29379227209](https://github.com/stablyai/orca/actions/runs/29379227209), artifact job
+  [87239051373](https://github.com/stablyai/orca/actions/runs/29379227209/job/87239051373), and baseline
+  job [87240257128](https://github.com/stablyai/orca/actions/runs/29379227209/job/87240257128).
+- Runner/result: GitHub-hosted native `windows-2022` / `win22` `20260706.237.1` x64 observed exact
+  build `10.0.20348`; archive/tree verification and bundled Node/PTY/watcher smoke pass, then the full
+  baseline evaluator returns `qualified: true` with no residual gaps. Smoke took 5,382.17 ms at
+  50,561,024 RSS bytes; the baseline job wall time was 1m29s.
+- Artifact/audit: artifact `8329104979`, 37,034,298 bytes, Actions digest
+  `3168b4b29c635502ceb5320fc1e96a19a394b2a36ea5f8083c8502a81a385063`; content ID
+  `7ddad668780ce5b2592d86afcebf9d897172bdf07c618ae238b5d51eebfe1596`; archive SHA-256
+  `e8c1165df331602027f548228f8b09791d27aa353d829c575b9b6dbf86833670`. The independent all-six
+  metadata and extracted-closure audit passes.
+- Does not prove: native signature/trust, Windows arm64 build 26100, SSH transfer/install, release
+  aggregation, fallback/performance, or an enabled tuple.
+- Follow-up: keep the tuple disabled until native trust and the remaining required live SSH evidence
+  pass.
+
 ## Accepted Gaps
 
 No product gap is accepted merely because it appears in this list. Each entry requires explicit
@@ -7472,12 +7584,10 @@ The project is not complete until every applicable item below is checked with ev
 
 ## Next Required Action
 
-Correct the native Linux runner bind-mount boundary without weakening isolation: execute the offline
-builder as the runner UID/GID, use an explicit mode-1777 tmpfs, and retain the read-only root,
-no-network, capability, privilege, process, memory, and CPU restrictions. Prove that correction on
-both native GitHub architectures, then run and audit the supplemental oldest-userland cells. Keep the
-exact kernel 4.18, unavailable macOS/Windows floor, and target-native signing/trust cells open before
-connecting any artifact consumer or enabling any tuple.
+Provision or select qualifying exact-floor execution for Linux kernel 4.18, macOS 13.5, and Windows
+arm64 build 26100 without weakening their oracles; in parallel, implement and prove target-native
+macOS/Windows signing and trust as the next independent artifact-only capability. Keep every tuple
+disabled and do not connect an artifact consumer until the applicable baseline and trust cells pass.
 
 Cross-family Layer B targets, the protected manifest-signing environment, oldest-baseline/native-
 trust cells, and the paired legacy performance baseline remain release/default-path blockers. No
