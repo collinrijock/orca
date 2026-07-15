@@ -1,17 +1,9 @@
-import {
-  copyFileSync,
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  renameSync,
-  unlinkSync,
-  writeFileSync
-} from 'node:fs'
+import { copyFileSync, existsSync, mkdirSync, readFileSync, unlinkSync } from 'node:fs'
 import { join } from 'node:path'
+import { writeFileAtomically } from '../codex-accounts/fs-utils'
 import {
   buildManagedCommandHook,
   createManagedCommandMatcher,
-  hookDefinitionHasManagedCommand,
   MANAGED_HOOK_TIMEOUT_SECONDS,
   readHooksJson,
   removeManagedCommands,
@@ -20,12 +12,16 @@ import {
   type HookDefinition,
   type HooksConfig
 } from '../agent-hooks/installer-utils'
-import { getSystemCodexHomePath } from './codex-home-paths'
 import { getCodexManagedScriptFileName } from './codex-hook-identity'
-import { grantManagedCodexHookTrust } from './codex-hook-trust-grant'
-import { removeCodexTrustGrantLedgerHome } from './codex-trust-grant-ledger'
+import {
+  CODEX_TRUST_GRANT_TRANSIENT_RETRY_INTERVAL_MS,
+  grantManagedCodexHookTrust,
+  type CodexTrustGrantFallbackReason
+} from './codex-hook-trust-grant'
+import { removeCodexManagedHookTrustEntries } from './codex-managed-trust-reconciliation'
 import { getCodexManagedHookInstallMaterial } from './hook-service'
-import { computeTrustKey, removeHookTrustEntries, type CodexTrustEntry } from './config-toml-trust'
+import { getSystemCodexHomePath } from './codex-home-paths'
+import type { CodexTrustEntry } from './config-toml-trust'
 
 /**
  * Real-home Codex hook lane for the system-default selection (flag ON).
@@ -42,6 +38,7 @@ import { computeTrustKey, removeHookTrustEntries, type CodexTrustEntry } from '.
 export type RealHomeCodexHookLane = 'pending' | 'installed' | 'unavailable' | 'removed'
 
 let currentLane: RealHomeCodexHookLane = 'pending'
+let installRetryAfterMs = 0
 
 export function getRealHomeCodexHookLane(): RealHomeCodexHookLane {
   return currentLane
@@ -80,13 +77,24 @@ export function ensureRealHomeCodexHookState(args: {
   hooksEnabled: boolean
   userDataPath: string
 }): RealHomeCodexHookLane {
+  // Why: the grant client caches failed probes, but mutating and rolling back
+  // hooks.json before consulting it still adds synchronous work to every pane.
+  if (args.hooksEnabled && currentLane === 'unavailable' && Date.now() < installRetryAfterMs) {
+    return currentLane
+  }
   try {
     currentLane = args.hooksEnabled
       ? installRealHomeCodexHook(args.userDataPath)
       : sweepRealHomeCodexHook()
+    if (!args.hooksEnabled || currentLane === 'installed') {
+      installRetryAfterMs = 0
+    }
   } catch (error) {
     console.warn('[codex-real-home-hooks] ensure failed; staying on managed lane:', error)
     currentLane = args.hooksEnabled ? 'unavailable' : currentLane
+    if (args.hooksEnabled) {
+      installRetryAfterMs = Date.now() + CODEX_TRUST_GRANT_TRANSIENT_RETRY_INTERVAL_MS
+    }
   }
   return currentLane
 }
@@ -99,6 +107,7 @@ function installRealHomeCodexHook(userDataPath: string): RealHomeCodexHookLane {
     // Why: an unparseable user file must never be clobbered; without a hook
     // entry the managed lane keeps status working for this host.
     console.warn('[codex-real-home-hooks] could not parse', hooksJsonPath, '- managed lane kept')
+    installRetryAfterMs = Date.now() + CODEX_TRUST_GRANT_TRANSIENT_RETRY_INTERVAL_MS
     return 'unavailable'
   }
 
@@ -161,10 +170,17 @@ function installRealHomeCodexHook(userDataPath: string): RealHomeCodexHookLane {
   // bytes and keep this host on the managed-home lane; the grant client
   // already logged the fallback reason.
   restoreRealHomeHooksJson(hooksJsonPath, previousRaw)
+  installRetryAfterMs = getInstallRetryAfterMs(grant.reason)
   console.warn(
     `[codex-real-home-hooks] trust grant unavailable (${grant.reason}); entry rolled back, managed lane kept`
   )
   return 'unavailable'
+}
+
+function getInstallRetryAfterMs(reason: CodexTrustGrantFallbackReason): number {
+  return reason === 'unsupported' || reason === 'unsupported-cached' || reason === 'disabled'
+    ? Number.POSITIVE_INFINITY
+    : Date.now() + CODEX_TRUST_GRANT_TRANSIENT_RETRY_INTERVAL_MS
 }
 
 function sweepRealHomeCodexHook(): RealHomeCodexHookLane {
@@ -176,33 +192,16 @@ function sweepRealHomeCodexHook(): RealHomeCodexHookLane {
   const isManagedCommand = createManagedCommandMatcher(getCodexManagedScriptFileName())
   const material = getCodexManagedHookInstallMaterial()
   const nextHooks: Record<string, HookDefinition[]> = { ...config.hooks }
-  const removedTrustKeys: string[] = []
   let removedAny = false
   for (const [eventName, definitions] of Object.entries(nextHooks)) {
     if (!Array.isArray(definitions)) {
       continue
     }
-    definitions.forEach((definition, groupIndex) => {
-      if (!hookDefinitionHasManagedCommand(definition, isManagedCommand)) {
-        return
-      }
-      const eventLabel = material.eventLabel[eventName as (typeof material.events)[number]]
-      if (!eventLabel) {
-        return
-      }
-      removedTrustKeys.push(
-        computeTrustKey({
-          sourcePath: hooksJsonPath,
-          eventLabel,
-          groupIndex,
-          handlerIndex: 0,
-          command: material.command,
-          timeoutSec: MANAGED_HOOK_TIMEOUT_SECONDS
-        })
-      )
-    })
     const cleaned = removeManagedCommands(definitions, isManagedCommand)
-    if (cleaned.length !== definitions.length) {
+    if (
+      cleaned.length !== definitions.length ||
+      cleaned.some((definition, index) => definition !== definitions[index])
+    ) {
       removedAny = true
     }
     if (cleaned.length === 0) {
@@ -215,16 +214,19 @@ function sweepRealHomeCodexHook(): RealHomeCodexHookLane {
     writeHooksJson(hooksJsonPath, { ...config, hooks: nextHooks } as HooksConfig)
     // Why: dead [hooks.state] blocks for a removed hook are Orca-owned records;
     // dropping them keeps the user's config.toml from accumulating orphans.
-    // Their removal never shifts user trust keys because Orca appends last.
+    // Verify ownership by the expected hash or grant ledger: stale/mixed hook
+    // groups must never make Orca delete a user's trust record at the same key.
     try {
-      removeHookTrustEntries(getRealHomeConfigTomlPath(), removedTrustKeys)
+      removeCodexManagedHookTrustEntries({
+        tomlPath: getRealHomeConfigTomlPath(),
+        runtimeHomePath: getSystemCodexHomePath(),
+        sourcePath: hooksJsonPath,
+        command: material.command,
+        managedEventLabels: new Set(Object.values(material.eventLabel)),
+        timeoutSec: MANAGED_HOOK_TIMEOUT_SECONDS
+      })
     } catch (error) {
       console.warn('[codex-real-home-hooks] failed to drop Orca trust entries:', error)
-    }
-    try {
-      removeCodexTrustGrantLedgerHome(getSystemCodexHomePath())
-    } catch {
-      // Ledger cleanup is bookkeeping only; the next grant rebuilds it.
     }
   }
   return 'removed'
@@ -260,9 +262,9 @@ function restoreRealHomeHooksJson(hooksJsonPath: string, previousRaw: string | n
       }
       return
     }
-    const tmpPath = `${hooksJsonPath}.${process.pid}.rollback.tmp`
-    writeFileSync(tmpPath, previousRaw, 'utf-8')
-    renameSync(tmpPath, hooksJsonPath)
+    // Why: rollback is part of the safety boundary. Use the shared atomic
+    // writer so Windows file-lock retries and failed-temp cleanup are covered.
+    writeFileAtomically(hooksJsonPath, previousRaw)
   } catch (error) {
     console.warn('[codex-real-home-hooks] failed to roll back hooks.json:', error)
   }
@@ -271,5 +273,6 @@ function restoreRealHomeHooksJson(hooksJsonPath: string, previousRaw: string | n
 export const _internals = {
   setLaneForTesting(lane: RealHomeCodexHookLane): void {
     currentLane = lane
+    installRetryAfterMs = 0
   }
 }

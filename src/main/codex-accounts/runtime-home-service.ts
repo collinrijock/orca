@@ -61,6 +61,7 @@ import {
 } from './runtime-selection'
 import { getDefaultWslDistro, getWslHome } from '../wsl'
 import { isCodexSystemDefaultRealHomeEnabled } from '../codex/codex-real-home-flag'
+import { hasCustomCodexHomeOverride } from '../codex/codex-real-home-path'
 
 type CodexAuthIdentity = {
   email: string | null
@@ -210,13 +211,14 @@ export class CodexRuntimeHomeService {
   }
 
   // Why: real-home routing applies only to the host system-default selection
-  // (no managed account chosen for host) with the staged flag ON. Managed host
-  // accounts keep the isolated runtime home for hot-swap and token persistence.
+  // with the staged flag ON. Managed accounts keep hot-swap isolation; custom
+  // CODEX_HOMEs stay managed until phase 1 can track cleanup across old homes.
   isHostSystemDefaultRealHomeSelected(): boolean {
     const settings = this.store.getSettings()
     return (
       isCodexSystemDefaultRealHomeEnabled(settings) &&
-      normalizeCodexRuntimeSelection(settings).host === null
+      normalizeCodexRuntimeSelection(settings).host === null &&
+      !hasCustomCodexHomeOverride()
     )
   }
 
@@ -288,11 +290,11 @@ export class CodexRuntimeHomeService {
       return syncedRuntimeHomePath ?? this.getWslSystemCodexHomePath(wslTarget)
     }
     if (this.isHostSystemDefaultRealHome()) {
-      // Why (flag ON, system default): read usage/auth from the user's own
-      // ~/.codex. Returning null makes the fetcher fall back to ~/.codex and
-      // its auth-presence gate check the real auth.json, so the background
-      // poller never spawns Codex against the managed home (the #5370 auth war).
-      return null
+      // Why: null lets the fetcher fall back to the main process's inherited
+      // CODEX_HOME before ~/.codex. Nested Orca launches can inherit the
+      // managed home, restarting the background OAuth conflict (#5370), so
+      // pin this non-interactive lane to the native home explicitly.
+      return getSystemCodexHomePath()
     }
     this.syncForCurrentSelection()
     syncSystemCodexResourcesIntoManagedHome()

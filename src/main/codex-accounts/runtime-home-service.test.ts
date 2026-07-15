@@ -991,14 +991,39 @@ describe('CodexRuntimeHomeService', () => {
     expect(existsSync(getRuntimeCodexHomePath())).toBe(true)
   })
 
-  it('routes host system default to the real home (null) when the flag is ON', async () => {
+  it('routes host system default to the real home when the flag is ON', async () => {
     const store = createStore(createSettings({ codexSystemDefaultRealHomeEnabled: true }))
     const { CodexRuntimeHomeService } = await import('./runtime-home-service')
     const service = new CodexRuntimeHomeService(store as never)
 
     expect(service.isHostSystemDefaultRealHome()).toBe(true)
     expect(service.prepareForCodexLaunch()).toBeNull()
-    expect(service.prepareForRateLimitFetch()).toBeNull()
+    const previousCodexHome = process.env.CODEX_HOME
+    const previousOrcaCodexHome = process.env.ORCA_CODEX_HOME
+    process.env.CODEX_HOME = getRuntimeCodexHomePath()
+    process.env.ORCA_CODEX_HOME = getRuntimeCodexHomePath()
+    try {
+      // Background fetchers prefer ambient CODEX_HOME when passed null, so an
+      // explicit path proves nested Orca launches cannot poll the managed home.
+      expect(service.prepareForRateLimitFetch()).toBe(getSystemCodexHomePath())
+      process.env.CODEX_HOME = getSystemCodexHomePath()
+      delete process.env.ORCA_CODEX_HOME
+      expect(service.isHostSystemDefaultRealHome()).toBe(true)
+      process.env.CODEX_HOME = join(testState.fakeHomeDir, 'user-owned-codex-home')
+      expect(service.isHostSystemDefaultRealHome()).toBe(false)
+      expect(service.prepareForRateLimitFetch()).toBe(getRuntimeCodexHomePath())
+    } finally {
+      if (previousCodexHome === undefined) {
+        delete process.env.CODEX_HOME
+      } else {
+        process.env.CODEX_HOME = previousCodexHome
+      }
+      if (previousOrcaCodexHome === undefined) {
+        delete process.env.ORCA_CODEX_HOME
+      } else {
+        process.env.ORCA_CODEX_HOME = previousOrcaCodexHome
+      }
+    }
   })
 
   it('keeps the managed home for a host MANAGED account even when the flag is ON', async () => {

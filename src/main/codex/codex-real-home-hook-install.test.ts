@@ -4,6 +4,12 @@ import type * as NodeOs from 'node:os'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { CodexManagedTrustGrantPlan } from './codex-hook-trust-grant'
+import {
+  computeTrustKey,
+  readHookTrustEntries,
+  upsertHookTrustEntriesInContent,
+  type CodexTrustEntry
+} from './config-toml-trust'
 
 const { homedirMock, grantMock } = vi.hoisted(() => ({
   homedirMock: vi.fn<() => string>(),
@@ -16,6 +22,7 @@ vi.mock('node:os', async () => {
 })
 
 vi.mock('./codex-hook-trust-grant', () => ({
+  CODEX_TRUST_GRANT_TRANSIENT_RETRY_INTERVAL_MS: 300_000,
   grantManagedCodexHookTrust: grantMock
 }))
 
@@ -32,6 +39,10 @@ let previousUserDataPath: string | undefined
 
 function getRealHooksJsonPath(): string {
   return join(fakeHomeDir, '.codex', 'hooks.json')
+}
+
+function getRealConfigTomlPath(): string {
+  return join(fakeHomeDir, '.codex', 'config.toml')
 }
 
 function readRealHooksJson(): {
@@ -148,6 +159,21 @@ describe('ensureRealHomeCodexHookState (install)', () => {
     expect(existsSync(getRealHooksJsonPath())).toBe(false)
   })
 
+  it('does no hook-file or grant work on repeated unsupported launches', () => {
+    grantUnavailable()
+    expect(ensureRealHomeCodexHookState({ hooksEnabled: true, userDataPath: userDataDir })).toBe(
+      'unavailable'
+    )
+    expect(existsSync(getRealHooksJsonPath())).toBe(false)
+
+    expect(ensureRealHomeCodexHookState({ hooksEnabled: true, userDataPath: userDataDir })).toBe(
+      'unavailable'
+    )
+
+    expect(grantMock).toHaveBeenCalledTimes(1)
+    expect(existsSync(getRealHooksJsonPath())).toBe(false)
+  })
+
   it('leaves an unparseable hooks.json untouched and keeps the managed lane', () => {
     writeFileSync(getRealHooksJsonPath(), '{not json', 'utf-8')
 
@@ -204,5 +230,59 @@ describe('ensureRealHomeCodexHookState (opt-out sweep)', () => {
 
     expect(lane).toBe('removed')
     expect(existsSync(getRealHooksJsonPath())).toBe(false)
+  })
+
+  it('removes only hash-proven Orca trust from a mixed hook group', () => {
+    const material = getCodexManagedHookInstallMaterial()
+    const userCommand = 'my-user-hook.sh'
+    writeFileSync(
+      getRealHooksJsonPath(),
+      `${JSON.stringify(
+        {
+          hooks: {
+            Stop: [
+              {
+                hooks: [
+                  { type: 'command', command: userCommand },
+                  { type: 'command', command: material.command, timeout: 10 }
+                ]
+              }
+            ]
+          }
+        },
+        null,
+        2
+      )}\n`,
+      'utf-8'
+    )
+    const entries: CodexTrustEntry[] = [
+      {
+        sourcePath: getRealHooksJsonPath(),
+        eventLabel: 'stop',
+        groupIndex: 0,
+        handlerIndex: 0,
+        command: userCommand
+      },
+      {
+        sourcePath: getRealHooksJsonPath(),
+        eventLabel: 'stop',
+        groupIndex: 0,
+        handlerIndex: 1,
+        command: material.command,
+        timeoutSec: 10
+      }
+    ]
+    writeFileSync(getRealConfigTomlPath(), upsertHookTrustEntriesInContent('', entries), 'utf-8')
+
+    expect(ensureRealHomeCodexHookState({ hooksEnabled: false, userDataPath: userDataDir })).toBe(
+      'removed'
+    )
+
+    expect(readRealHooksJson().hooks?.Stop).toEqual([
+      { hooks: [{ type: 'command', command: userCommand }] }
+    ])
+    const trust = readHookTrustEntries(getRealConfigTomlPath())
+    expect(trust.has(computeTrustKey(entries[0]!))).toBe(true)
+    expect(trust.has(computeTrustKey(entries[1]!))).toBe(false)
   })
 })
