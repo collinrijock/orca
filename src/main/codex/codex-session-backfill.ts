@@ -6,9 +6,12 @@ import {
   linkSync,
   lstatSync,
   mkdirSync,
-  readFileSync
+  readFileSync,
+  rmSync,
+  writeFileSync
 } from 'node:fs'
-import { dirname, join, relative } from 'node:path'
+import { randomUUID } from 'node:crypto'
+import { dirname, join, relative, sep } from 'node:path'
 import { writeFileAtomically } from '../codex-accounts/fs-utils'
 import {
   getCodexSessionBackfillStateDirPath,
@@ -27,7 +30,9 @@ export type CodexSessionBackfillSummary = {
   linkedFiles: number
   copiedFiles: number
   skippedExistingFiles: number
+  skippedUnexpectedFiles: number
   skippedSymlinkFiles: number
+  failedDirectories: number
   failedFiles: number
 }
 
@@ -93,14 +98,14 @@ async function runCodexSessionBackfillOncePerHost(
   systemCodexHomePathOverride?: string
 ): Promise<CodexSessionBackfillSummary | null> {
   const paths = resolveCodexSessionBackfillPaths(systemCodexHomePathOverride)
-  if (hasCompletedBackfillMarker(paths.markerPath)) {
+  if (hasCompletedBackfillMarker(paths.markerPath, paths.systemSessionsRoot)) {
     return null
   }
   const summary = await backfillManagedCodexSessionsIntoSystemHome(paths, options)
   // Why: per-file failures (locked or unreadable files) leave the marker unset
   // so the next startup retries; skip-existing keeps those retries cheap.
-  if (summary.failedFiles === 0) {
-    writeBackfillMarker(paths.markerPath, summary)
+  if (summary.failedFiles === 0 && summary.failedDirectories === 0) {
+    writeBackfillMarker(paths.markerPath, paths.systemSessionsRoot, summary)
   }
   return summary
 }
@@ -121,20 +126,50 @@ export async function backfillManagedCodexSessionsIntoSystemHome(
     linkedFiles: 0,
     copiedFiles: 0,
     skippedExistingFiles: 0,
+    skippedUnexpectedFiles: 0,
     skippedSymlinkFiles: 0,
+    failedDirectories: 0,
     failedFiles: 0
   }
   if (existsSync(paths.managedSessionsRoot)) {
     for await (const managedSessionFilePath of listCodexSessionJsonlFilesIncrementally(
       paths.managedSessionsRoot,
-      options
+      options,
+      (directoryPath, error) => {
+        // Why: a partial walk must remain retryable; otherwise an unreadable
+        // date directory would be silently omitted behind a completion marker.
+        summary.failedDirectories += 1
+        appendAuditRecord(paths.auditLogPath, {
+          action: 'scan-failed',
+          source: directoryPath,
+          error: describeError(error)
+        })
+      }
     )) {
       summary.scannedFiles += 1
+      if (!isCodexRolloutPath(paths.managedSessionsRoot, managedSessionFilePath)) {
+        summary.skippedUnexpectedFiles += 1
+        continue
+      }
       backfillOneManagedSessionFile(paths, managedSessionFilePath, summary)
     }
   }
   appendAuditRecord(paths.auditLogPath, { action: 'run-summary', ...summary })
   return summary
+}
+
+function isCodexRolloutPath(sessionsRoot: string, filePath: string): boolean {
+  const pathParts = relative(sessionsRoot, filePath).split(sep)
+  if (pathParts.length !== 4) {
+    return false
+  }
+  const [year, month, day, fileName] = pathParts
+  return (
+    /^\d{4}$/.test(year) &&
+    /^\d{2}$/.test(month) &&
+    /^\d{2}$/.test(day) &&
+    /^rollout-.+\.jsonl$/.test(fileName)
+  )
 }
 
 function backfillOneManagedSessionFile(
@@ -170,9 +205,9 @@ function backfillOneManagedSessionFile(
       return
     }
     try {
-      // Why: hardlinks fail across volumes; COPYFILE_EXCL keeps the
-      // never-overwrite contract even if the target appeared mid-run.
-      copyFileSync(managedSessionFilePath, systemSessionFilePath, constants.COPYFILE_EXCL)
+      // Why: cross-volume copies are staged so failures cannot strand a
+      // truncated rollout, then installed without overwriting collisions.
+      copySessionFileWithoutOverwrite(managedSessionFilePath, systemSessionFilePath)
       summary.copiedFiles += 1
       appendAuditRecord(paths.auditLogPath, {
         action: 'copy',
@@ -192,6 +227,36 @@ function backfillOneManagedSessionFile(
         error: describeError(copyError),
         linkError: describeError(linkError)
       })
+    }
+  }
+}
+
+function copySessionFileWithoutOverwrite(sourcePath: string, targetPath: string): void {
+  const temporaryPath = join(dirname(targetPath), `.orca-backfill-${randomUUID()}.tmp`)
+  // Why: stage cross-volume copies away from the rollout filename so a failed
+  // copy cannot strand a truncated session that a later retry would skip.
+  writeFileSync(temporaryPath, '', { encoding: 'utf-8', flag: 'wx', mode: 0o600 })
+  try {
+    copyFileSync(sourcePath, temporaryPath)
+    try {
+      // Why: this same-volume hardlink atomically installs the staged copy
+      // without risking a collision overwrite after an EXDEV fallback.
+      linkSync(temporaryPath, targetPath)
+    } catch (installLinkError) {
+      if (isExistsError(installLinkError)) {
+        throw installLinkError
+      }
+      // Some target filesystems do not support hardlinks at all. COPYFILE_EXCL
+      // preserves the collision contract while retaining the staged snapshot.
+      copyFileSync(temporaryPath, targetPath, constants.COPYFILE_EXCL)
+    }
+  } finally {
+    try {
+      rmSync(temporaryPath, { force: true })
+    } catch (error) {
+      // Why: cleanup trouble must not misreport a successfully installed
+      // rollout as a copy failure; the .tmp file is ignored by Codex.
+      console.warn('[codex-session-backfill] Failed to remove staged copy:', temporaryPath, error)
     }
   }
 }
@@ -239,24 +304,39 @@ function appendAuditRecord(auditLogPath: string, record: Record<string, unknown>
   }
 }
 
-function hasCompletedBackfillMarker(markerPath: string): boolean {
+function hasCompletedBackfillMarker(markerPath: string, systemSessionsRoot: string): boolean {
   try {
     const parsed: unknown = JSON.parse(readFileSync(markerPath, 'utf-8'))
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
       return false
     }
-    return (parsed as { version?: unknown }).version === CODEX_SESSION_BACKFILL_MARKER_VERSION
+    const marker = parsed as { version?: unknown; systemSessionsRoot?: unknown }
+    // Why: changing the configured real Codex home must backfill the new
+    // target instead of honoring a marker written for a different history.
+    return (
+      marker.version === CODEX_SESSION_BACKFILL_MARKER_VERSION &&
+      marker.systemSessionsRoot === systemSessionsRoot
+    )
   } catch {
     return false
   }
 }
 
-function writeBackfillMarker(markerPath: string, summary: CodexSessionBackfillSummary): void {
+function writeBackfillMarker(
+  markerPath: string,
+  systemSessionsRoot: string,
+  summary: CodexSessionBackfillSummary
+): void {
   mkdirSync(dirname(markerPath), { recursive: true })
   writeFileAtomically(
     markerPath,
     `${JSON.stringify(
-      { version: CODEX_SESSION_BACKFILL_MARKER_VERSION, completedAt: Date.now(), summary },
+      {
+        version: CODEX_SESSION_BACKFILL_MARKER_VERSION,
+        systemSessionsRoot,
+        completedAt: Date.now(),
+        summary
+      },
       null,
       2
     )}\n`

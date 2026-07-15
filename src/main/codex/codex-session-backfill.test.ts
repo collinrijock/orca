@@ -4,12 +4,14 @@ import {
   lstatSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   rmSync,
   symlinkSync,
   writeFileSync
 } from 'node:fs'
 import type * as NodeFs from 'node:fs'
+import type * as NodeFsPromises from 'node:fs/promises'
 import type * as NodeOs from 'node:os'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
@@ -21,7 +23,8 @@ const { homedirMock } = vi.hoisted(() => ({
 const { fsMockState } = vi.hoisted(() => ({
   fsMockState: {
     failLink: false,
-    failCopy: false
+    failCopy: false,
+    failDirectoryPath: null as string | null
   }
 }))
 
@@ -39,11 +42,29 @@ vi.mock('node:fs', async () => {
     },
     copyFileSync: (...args: Parameters<typeof actual.copyFileSync>) => {
       if (fsMockState.failCopy) {
+        // Simulate a copy that fails after opening its destination, which is
+        // the dangerous case for resumability rather than a preflight error.
+        actual.writeFileSync(args[1], 'partial copy\n', 'utf-8')
         const error = new Error('EACCES: copy disabled for test') as NodeJS.ErrnoException
         error.code = 'EACCES'
         throw error
       }
       return actual.copyFileSync(...args)
+    }
+  }
+})
+
+vi.mock('node:fs/promises', async () => {
+  const actual = await vi.importActual<typeof NodeFsPromises>('node:fs/promises')
+  return {
+    ...actual,
+    opendir: (...args: Parameters<typeof actual.opendir>) => {
+      if (args[0] === fsMockState.failDirectoryPath) {
+        const error = new Error('EACCES: directory unreadable') as NodeJS.ErrnoException
+        error.code = 'EACCES'
+        throw error
+      }
+      return actual.opendir(...args)
     }
   }
 })
@@ -99,6 +120,7 @@ function readAuditActions(): string[] {
 beforeEach(() => {
   fsMockState.failLink = false
   fsMockState.failCopy = false
+  fsMockState.failDirectoryPath = null
   fakeHomeDir = mkdtempSync(join(tmpdir(), 'orca-codex-backfill-home-'))
   userDataDir = mkdtempSync(join(tmpdir(), 'orca-codex-backfill-user-data-'))
   previousUserDataPath = process.env.ORCA_USER_DATA_PATH
@@ -138,6 +160,32 @@ describe('backfillManagedCodexSessionsIntoSystemHome', () => {
     )
     expect(existsSync(join(getSystemSessionsRoot(), '2026', '05', '26', 'notes.txt'))).toBe(false)
     expect(readAuditActions()).toEqual(['hardlink', 'hardlink', 'run-summary'])
+  })
+
+  it('only backfills rollout files in the exact YYYY/MM/DD layout', async () => {
+    writeManagedSession(join('2026', '05', '26', 'rollout-valid ü.jsonl'), 'valid\n')
+    writeManagedSession(join('2026', '05', '26', 'session-index.jsonl'), 'not a rollout\n')
+    writeManagedSession(join('2026', '5', '26', 'rollout-wrong-month.jsonl'), 'wrong month\n')
+    writeManagedSession(join('scratch', 'rollout-too-shallow.jsonl'), 'too shallow\n')
+    writeManagedSession(join('2026', '05', '26', 'nested', 'rollout-too-deep.jsonl'), 'too deep\n')
+
+    const summary = await backfillManagedCodexSessionsIntoSystemHome(
+      resolveCodexSessionBackfillPaths()
+    )
+
+    expect(summary).toMatchObject({
+      scannedFiles: 5,
+      linkedFiles: 1,
+      skippedUnexpectedFiles: 4,
+      failedFiles: 0
+    })
+    expect(
+      existsSync(join(getSystemSessionsRoot(), '2026', '05', '26', 'rollout-valid ü.jsonl'))
+    ).toBe(true)
+    expect(
+      existsSync(join(getSystemSessionsRoot(), '2026', '05', '26', 'session-index.jsonl'))
+    ).toBe(false)
+    expect(existsSync(join(getSystemSessionsRoot(), 'scratch'))).toBe(false)
   })
 
   it('never overwrites an existing target file, even with different contents', async () => {
@@ -192,9 +240,8 @@ describe('backfillManagedCodexSessionsIntoSystemHome', () => {
     // Why: the session walker skips symlink dirents, so bridge-created links
     // (which point back into the user's own home) never reach the copier.
     expect(summary).toMatchObject({ linkedFiles: 0, copiedFiles: 0, failedFiles: 0 })
-    expect(existsSync(join(getSystemSessionsRoot(), '2026', '05', '26', 'rollout-a.jsonl'))).toBe(
-      false
-    )
+    const targetPath = join(getSystemSessionsRoot(), '2026', '05', '26', 'rollout-a.jsonl')
+    expect(existsSync(targetPath)).toBe(false)
   })
 
   it('is idempotent: a second run links nothing new and changes nothing', async () => {
@@ -236,6 +283,9 @@ describe('backfillManagedCodexSessionsIntoSystemHome', () => {
     )
 
     expect(summary).toMatchObject({ failedFiles: 1, linkedFiles: 0, copiedFiles: 0 })
+    const targetPath = join(getSystemSessionsRoot(), '2026', '05', '26', 'rollout-a.jsonl')
+    expect(existsSync(targetPath)).toBe(false)
+    expect(readdirSync(dirname(targetPath))).toEqual([])
     expect(readAuditActions()).toEqual(['failed', 'run-summary'])
   })
 
@@ -274,11 +324,36 @@ describe('startCodexSessionBackfillInBackground', () => {
     const first = await startCodexSessionBackfillInBackground()
     expect(first).toMatchObject({ failedFiles: 1 })
     expect(existsSync(getMarkerPath())).toBe(false)
+    const targetPath = join(getSystemSessionsRoot(), '2026', '05', '26', 'rollout-a.jsonl')
+    expect(existsSync(targetPath)).toBe(false)
 
     fsMockState.failLink = false
     fsMockState.failCopy = false
     const second = await startCodexSessionBackfillInBackground()
     expect(second).toMatchObject({ linkedFiles: 1, failedFiles: 0 })
+    expect(readFileSync(targetPath, 'utf-8')).toBe('{"id":"a"}\n')
+    expect(existsSync(getMarkerPath())).toBe(true)
+  })
+
+  it('leaves the marker unset when a directory cannot be scanned', async () => {
+    writeManagedSession(join('2026', '05', '26', 'rollout-readable.jsonl'), 'readable\n')
+    const unreadableDirectory = dirname(
+      writeManagedSession(join('2026', '06', '01', 'rollout-unreadable.jsonl'), 'unreadable\n')
+    )
+    fsMockState.failDirectoryPath = unreadableDirectory
+
+    const first = await startCodexSessionBackfillInBackground({ yieldMs: 0 })
+
+    expect(first).toMatchObject({ failedDirectories: 1 })
+    expect(existsSync(getMarkerPath())).toBe(false)
+    expect(readAuditActions()).toContain('scan-failed')
+
+    fsMockState.failDirectoryPath = null
+    const second = await startCodexSessionBackfillInBackground({ yieldMs: 0 })
+    expect(second).toMatchObject({ failedDirectories: 0, failedFiles: 0 })
+    expect(
+      existsSync(join(getSystemSessionsRoot(), '2026', '06', '01', 'rollout-unreadable.jsonl'))
+    ).toBe(true)
     expect(existsSync(getMarkerPath())).toBe(true)
   })
 
@@ -293,5 +368,19 @@ describe('startCodexSessionBackfillInBackground', () => {
       true
     )
     expect(existsSync(getSystemSessionsRoot())).toBe(false)
+  })
+
+  it('re-runs when the configured real Codex home changes', async () => {
+    writeManagedSession(join('2026', '05', '26', 'rollout-a.jsonl'), '{"id":"a"}\n')
+    await startCodexSessionBackfillInBackground()
+    const customHome = join(fakeHomeDir, 'custom Codex ü')
+
+    const moved = await startCodexSessionBackfillInBackground({}, customHome)
+
+    expect(moved).toMatchObject({ linkedFiles: 1, failedFiles: 0 })
+    expect(existsSync(join(customHome, 'sessions', '2026', '05', '26', 'rollout-a.jsonl'))).toBe(
+      true
+    )
+    expect(await startCodexSessionBackfillInBackground({}, customHome)).toBeNull()
   })
 })
