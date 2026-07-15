@@ -192,7 +192,10 @@ complete a box.
 - [ ] **In progress — 2026-07-15, Codex implementation owner:** add a reusable target-native runtime
       build prerequisite contract. Keep it disconnected from release-cut and every desktop build
       until exact floors, native signing/trust, aggregate, and publication gates are complete; no
-      tuple is enabled by this slice.
+      tuple is enabled by this slice. The purpose-named RED proves `workflow_call` was absent; the
+      credential-free interface and both native test-family integrations are locally green while
+      both release workflows remain disconnected (`E-M4-BUILD-PREREQUISITE-LOCAL-RED-001`,
+      `E-M4-BUILD-PREREQUISITE-LOCAL-001`). Exact-head all-six native CI remains required.
 - [ ] Add native signing jobs; hash only the returned signed bytes.
 - [ ] Add a fail-closed aggregate and immutable manifest-signing job.
 - [ ] Embed the exact signed manifest and accepted keys in each desktop build.
