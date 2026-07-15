@@ -3143,7 +3143,10 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
                 ? ({ kind: 'environment', environmentId: parsed.environmentId } as const)
                 : ({ kind: 'local' } as const)
             return target.kind === 'local'
-              ? window.api.repos.reorder({ orderedIds: group.orderedIds })
+              ? window.api.repos.reorderForHost({
+                  hostId: group.hostId,
+                  orderedIds: group.orderedIds
+                })
               : callRuntimeRpc<{ status: 'applied' | 'rejected' }>(
                   target,
                   'repo.reorder',

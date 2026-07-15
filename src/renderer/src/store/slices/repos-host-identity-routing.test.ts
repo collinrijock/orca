@@ -29,6 +29,7 @@ const reposRemove = vi.fn()
 const reposRemoveForHost = vi.fn()
 const reposUpdate = vi.fn()
 const reposReorder = vi.fn()
+const reposReorderForHost = vi.fn()
 const ptyKill = vi.fn()
 const runtimeEnvironmentCall = vi.fn()
 const runtimeEnvironmentTransportCall = vi.fn()
@@ -64,6 +65,7 @@ beforeEach(() => {
   reposRemoveForHost.mockReset()
   reposUpdate.mockReset()
   reposReorder.mockReset()
+  reposReorderForHost.mockReset()
   ptyKill.mockReset()
   runtimeEnvironmentCall.mockReset()
   runtimeEnvironmentTransportCall.mockReset()
@@ -78,7 +80,8 @@ beforeEach(() => {
         remove: reposRemove,
         removeForHost: reposRemoveForHost,
         update: reposUpdate,
-        reorder: reposReorder
+        reorder: reposReorder,
+        reorderForHost: reposReorderForHost
       },
       pty: { kill: ptyKill },
       runtimeEnvironments: { call: runtimeEnvironmentTransportCall },
@@ -461,7 +464,7 @@ describe('repo slice host identity routing', () => {
   })
 
   it('reorders duplicate repo ids once per owning host', async () => {
-    reposReorder.mockResolvedValue({ status: 'applied' })
+    reposReorderForHost.mockResolvedValue({ status: 'applied' })
     runtimeEnvironmentCall.mockResolvedValue({
       id: 'rpc-duplicate-reorder',
       ok: true,
@@ -474,7 +477,11 @@ describe('repo slice host identity routing', () => {
     await store.getState().reorderRepos(['same-repo', 'same-repo'])
 
     expect(store.getState().repos).toEqual([localDuplicate, remoteDuplicate])
-    expect(reposReorder).toHaveBeenCalledWith({ orderedIds: ['same-repo'] })
+    expect(reposReorderForHost).toHaveBeenCalledWith({
+      hostId: 'local',
+      orderedIds: ['same-repo']
+    })
+    expect(reposReorder).not.toHaveBeenCalled()
     expect(uiSet).toHaveBeenCalledWith({
       manualRepoOrder: [
         { hostId: 'local', repoId: 'same-repo' },
@@ -490,7 +497,7 @@ describe('repo slice host identity routing', () => {
   })
 
   it('persists a complete cross-host overlay alongside host-local permutations', async () => {
-    reposReorder.mockResolvedValue({ status: 'applied' })
+    reposReorderForHost.mockResolvedValue({ status: 'applied' })
     runtimeEnvironmentCall.mockResolvedValue({
       id: 'rpc-cross-host-reorder',
       ok: true,
@@ -506,7 +513,11 @@ describe('repo slice host identity routing', () => {
 
     await store.getState().reorderRepos(['alpha', 'charlie', 'bravo', 'delta'])
 
-    expect(reposReorder).toHaveBeenCalledWith({ orderedIds: ['alpha', 'bravo'] })
+    expect(reposReorderForHost).toHaveBeenCalledWith({
+      hostId: 'local',
+      orderedIds: ['alpha', 'bravo']
+    })
+    expect(reposReorder).not.toHaveBeenCalled()
     expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
       selector: 'env-1',
       method: 'repo.reorder',
@@ -521,5 +532,35 @@ describe('repo slice host identity routing', () => {
         { hostId: 'runtime:env-1', repoId: 'delta' }
       ]
     })
+  })
+
+  it('persists local and direct SSH permutations through host-scoped IPC', async () => {
+    reposReorderForHost.mockResolvedValue({ status: 'applied' })
+    const alpha = { ...localDuplicate, id: 'alpha' }
+    const bravo = { ...localDuplicate, id: 'bravo' }
+    const charlie = {
+      ...localDuplicate,
+      id: 'charlie',
+      path: '/ssh/charlie',
+      connectionId: 'target',
+      executionHostId: undefined
+    }
+    const delta = { ...charlie, id: 'delta', path: '/ssh/delta' }
+    const store = createTestStore()
+    store.setState({ repos: [alpha, charlie, bravo, delta] })
+
+    await store.getState().reorderRepos(['bravo', 'delta', 'alpha', 'charlie'])
+
+    expect(reposReorderForHost).toHaveBeenCalledTimes(2)
+    expect(reposReorderForHost).toHaveBeenCalledWith({
+      hostId: 'local',
+      orderedIds: ['bravo', 'alpha']
+    })
+    expect(reposReorderForHost).toHaveBeenCalledWith({
+      hostId: 'ssh:target',
+      orderedIds: ['delta', 'charlie']
+    })
+    expect(reposReorder).not.toHaveBeenCalled()
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
   })
 })

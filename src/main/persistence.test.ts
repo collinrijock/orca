@@ -3317,6 +3317,62 @@ describe('Store', () => {
     expect(store.getWorktreeMeta('shared::/remote/repo/wt')).toBeUndefined()
   })
 
+  it('reorderReposForHost independently reorders local and SSH rows with shared ids', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo({ id: 'shared', path: '/local/shared' }))
+    store.addRepo(
+      makeRepo({
+        id: 'shared',
+        path: '/ssh/shared',
+        connectionId: 'target'
+      })
+    )
+    store.addRepo(makeRepo({ id: 'local-two', path: '/local/two' }))
+    store.addRepo(
+      makeRepo({
+        id: 'ssh-two',
+        path: '/ssh/two',
+        connectionId: 'target'
+      })
+    )
+
+    expect(store.reorderReposForHost(['local-two', 'shared'], 'local')).toBe(true)
+    expect(store.getRepos().map((repo) => repo.path)).toEqual([
+      '/local/two',
+      '/ssh/shared',
+      '/local/shared',
+      '/ssh/two'
+    ])
+
+    expect(store.reorderReposForHost(['ssh-two', 'shared'], 'ssh:target')).toBe(true)
+    expect(store.getRepos().map((repo) => repo.path)).toEqual([
+      '/local/two',
+      '/ssh/two',
+      '/local/shared',
+      '/ssh/shared'
+    ])
+  })
+
+  it('reorderReposForHost rejects stale or duplicate host permutations without mutation', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo({ id: 'local-one', path: '/local/one' }))
+    store.addRepo(makeRepo({ id: 'local-two', path: '/local/two' }))
+    store.addRepo(
+      makeRepo({
+        id: 'ssh-one',
+        path: '/ssh/one',
+        connectionId: 'target',
+        executionHostId: 'ssh:target'
+      })
+    )
+    const originalPaths = store.getRepos().map((repo) => repo.path)
+
+    expect(store.reorderReposForHost(['local-two'], 'local')).toBe(false)
+    expect(store.reorderReposForHost(['local-one', 'local-one'], 'local')).toBe(false)
+    expect(store.reorderReposForHost(['missing', 'local-two'], 'local')).toBe(false)
+    expect(store.getRepos().map((repo) => repo.path)).toEqual(originalPaths)
+  })
+
   it('removeProjectForHost prunes the SSH host meta (tagged hostId) for a shared id', async () => {
     const store = await createStore()
     store.addRepo(makeRepo({ id: 'shared', path: '/local/repo' }))

@@ -4271,6 +4271,37 @@ export class Store {
     return true
   }
 
+  // Why: repo ids are unique only within an execution host, and renderer drags
+  // persist one complete permutation per host when local and SSH repos coexist.
+  reorderReposForHost(orderedIds: string[], hostId: ExecutionHostId): boolean {
+    const current = this.state.repos
+    const hostRepos = current.filter((repo) => getRepoExecutionHostId(repo) === hostId)
+    if (orderedIds.length !== hostRepos.length) {
+      return false
+    }
+    const byId = new Map(hostRepos.map((repo) => [repo.id, repo]))
+    if (byId.size !== hostRepos.length) {
+      return false
+    }
+    const seen = new Set<string>()
+    const reorderedHostRepos: Repo[] = []
+    for (const id of orderedIds) {
+      const repo = typeof id === 'string' && !seen.has(id) ? byId.get(id) : undefined
+      if (!repo) {
+        return false
+      }
+      seen.add(id)
+      reorderedHostRepos.push(repo)
+    }
+    let nextHostIndex = 0
+    this.state.repos = current.map((repo) =>
+      getRepoExecutionHostId(repo) === hostId ? reorderedHostRepos[nextHostIndex++] : repo
+    )
+    this.syncProjectHostSetupCompatibilityState()
+    this.scheduleSave()
+    return true
+  }
+
   removeProject(id: string): void {
     this.state.repos = this.state.repos.filter((r) => r.id !== id)
     this.syncProjectHostSetupCompatibilityState()
