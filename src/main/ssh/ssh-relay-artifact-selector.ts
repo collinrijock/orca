@@ -1,4 +1,7 @@
-import type { SshRelayArtifactManifest, SshRelayRuntimeTuple } from './ssh-relay-artifact-schema'
+import type { VerifiedSshRelayArtifactManifest } from './ssh-relay-manifest-signature'
+import { sshRelayRuntimeDownloadUrl } from './ssh-relay-release-asset'
+
+type VerifiedSshRelayRuntimeTuple = VerifiedSshRelayArtifactManifest['tuples'][number]
 
 type SshRelayHostBase = {
   architecture: 'x64' | 'arm64'
@@ -52,8 +55,36 @@ export type SshRelayArtifactLegacyReason =
   | 'dotnet-too-old'
 
 export type SshRelayArtifactSelection =
-  | { kind: 'selected'; tupleId: SshRelayRuntimeTuple['tupleId']; tuple: SshRelayRuntimeTuple }
+  | {
+      readonly kind: 'selected'
+      readonly tupleId: VerifiedSshRelayRuntimeTuple['tupleId']
+      readonly contentId: VerifiedSshRelayRuntimeTuple['contentId']
+      readonly releaseTag: string
+      readonly archive: VerifiedSshRelayRuntimeTuple['archive'] & {
+        readonly downloadUrl: string
+      }
+      readonly tuple: VerifiedSshRelayRuntimeTuple
+    }
   | { kind: 'legacy'; reason: SshRelayArtifactLegacyReason }
+
+function selectedArtifact(
+  tuple: VerifiedSshRelayRuntimeTuple,
+  releaseTag: string
+): SshRelayArtifactSelection {
+  const archive = Object.freeze({
+    ...tuple.archive,
+    downloadUrl: sshRelayRuntimeDownloadUrl(releaseTag, tuple.archive.name)
+  })
+  // Why: later download code must not be able to drift the authenticated identity selected here.
+  return Object.freeze({
+    kind: 'selected',
+    tupleId: tuple.tupleId,
+    contentId: tuple.contentId,
+    releaseTag,
+    archive,
+    tuple
+  })
+}
 
 function parseNumericVersion(value: string | undefined): number[] | null {
   if (!value) {
@@ -104,8 +135,9 @@ function meetsVersion(
 }
 
 function selectLinux(
-  tuple: SshRelayRuntimeTuple,
-  host: SshRelayLinuxHostEvidence
+  tuple: VerifiedSshRelayRuntimeTuple,
+  host: SshRelayLinuxHostEvidence,
+  releaseTag: string
 ): SshRelayArtifactSelection {
   if (tuple.compatibility.kind !== 'linux') {
     return { kind: 'legacy', reason: 'tuple-inconsistent' }
@@ -147,12 +179,13 @@ function selectLinux(
       return { kind: 'legacy', reason: 'libstdcxx-too-old' }
     }
   }
-  return { kind: 'selected', tupleId: tuple.tupleId, tuple }
+  return selectedArtifact(tuple, releaseTag)
 }
 
 function selectDarwin(
-  tuple: SshRelayRuntimeTuple,
-  host: SshRelayDarwinHostEvidence
+  tuple: VerifiedSshRelayRuntimeTuple,
+  host: SshRelayDarwinHostEvidence,
+  releaseTag: string
 ): SshRelayArtifactSelection {
   if (tuple.compatibility.kind !== 'darwin') {
     return { kind: 'legacy', reason: 'tuple-inconsistent' }
@@ -161,14 +194,13 @@ function selectDarwin(
   if (compatible === null) {
     return { kind: 'legacy', reason: 'unknown-os-version' }
   }
-  return compatible
-    ? { kind: 'selected', tupleId: tuple.tupleId, tuple }
-    : { kind: 'legacy', reason: 'os-too-old' }
+  return compatible ? selectedArtifact(tuple, releaseTag) : { kind: 'legacy', reason: 'os-too-old' }
 }
 
 function selectWindows(
-  tuple: SshRelayRuntimeTuple,
-  host: SshRelayWindowsHostEvidence
+  tuple: VerifiedSshRelayRuntimeTuple,
+  host: SshRelayWindowsHostEvidence,
+  releaseTag: string
 ): SshRelayArtifactSelection {
   if (tuple.compatibility.kind !== 'windows') {
     return { kind: 'legacy', reason: 'tuple-inconsistent' }
@@ -209,11 +241,11 @@ function selectWindows(
   if (host.dotNetFrameworkRelease < tuple.compatibility.minimumDotNetFrameworkRelease) {
     return { kind: 'legacy', reason: 'dotnet-too-old' }
   }
-  return { kind: 'selected', tupleId: tuple.tupleId, tuple }
+  return selectedArtifact(tuple, releaseTag)
 }
 
 export function selectSshRelayArtifact(
-  manifest: SshRelayArtifactManifest,
+  manifest: VerifiedSshRelayArtifactManifest,
   host: SshRelayHostEvidence
 ): SshRelayArtifactSelection {
   // Why: translated and ambiguous process boundaries stay on the proven legacy path until their
@@ -249,10 +281,10 @@ export function selectSshRelayArtifact(
 
   const tuple = candidates[0]
   if (host.os === 'linux') {
-    return selectLinux(tuple, host)
+    return selectLinux(tuple, host, manifest.build.tag)
   }
   if (host.os === 'darwin') {
-    return selectDarwin(tuple, host)
+    return selectDarwin(tuple, host, manifest.build.tag)
   }
-  return selectWindows(tuple, host)
+  return selectWindows(tuple, host, manifest.build.tag)
 }

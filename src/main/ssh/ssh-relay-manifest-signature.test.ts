@@ -89,6 +89,16 @@ describe('SSH relay manifest signatures', () => {
     expect(verified.tuples[0].contentId).toBe(manifest.tuples[0].contentId)
   })
 
+  it('makes verified manifest fields immutable after signature acceptance', () => {
+    const verified = verifySshRelayArtifactManifest(signedManifest(), [
+      { keyId: sshRelayManifestKeyId(keyPair.publicKey), publicKey: keyPair.publicKey }
+    ])
+
+    expect(() => {
+      Object.defineProperty(verified.tuples[0].archive, 'name', { value: 'latest.tar.xz' })
+    }).toThrow(TypeError)
+  })
+
   it('rejects signed content mutation', () => {
     const manifest = signedManifest()
     manifest.build.relayProtocolVersion += 1
