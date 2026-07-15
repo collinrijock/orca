@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { AppState } from '@/store/types'
 import { planMobileTerminalTabMount } from './mobile-terminal-tab-mount'
 
@@ -35,5 +35,19 @@ describe('planMobileTerminalTabMount', () => {
     expect(
       planMobileTerminalTabMount(state(200), { worktreeId: 'wt', ptyId: 'wt@@missing' })
     ).toBeNull()
+  })
+
+  it('does not schedule hidden layout work for an already-mounted tab', () => {
+    const isTabMounted = vi.fn().mockReturnValue(true)
+
+    expect(
+      planMobileTerminalTabMount(
+        state(200),
+        { worktreeId: 'wt', ptyId: 'wt@@173' },
+        { isTabMounted }
+      )
+    ).toBeNull()
+    expect(isTabMounted).toHaveBeenCalledTimes(1)
+    expect(isTabMounted).toHaveBeenCalledWith('tab-173')
   })
 })

@@ -15,6 +15,7 @@ import { OPEN_WORKSPACE_BOARD_EVENT } from '@/components/sidebar/useWorkspaceBoa
 import { SPLIT_TERMINAL_PANE_EVENT, CLOSE_TERMINAL_PANE_EVENT } from '@/constants/terminal'
 import { requestBackgroundTerminalWorktreeMount } from '@/components/terminal/background-terminal-worktree-mount'
 import { planMobileTerminalTabMount } from '@/lib/mobile-terminal-tab-mount'
+import { hasRegisteredRuntimeTerminalTab } from '@/runtime/sync-runtime-graph'
 import type { SplitTerminalPaneDetail, CloseTerminalPaneDetail } from '@/constants/terminal'
 import { getVisibleWorktreeIds } from '@/components/sidebar/visible-worktrees'
 import { activateTabNumberShortcut } from '@/lib/tab-number-shortcuts'
@@ -1676,11 +1677,17 @@ export function useIpcEvents(): void {
         }
         // Why: synthetic pty handles need persisted-tab resolution, but a miss
         // must not mount every saved terminal in a large hidden worktree.
-        const mount = planMobileTerminalTabMount(useAppStore.getState(), {
-          worktreeId,
-          ...(tabId ? { tabId } : {}),
-          ...(ptyId ? { ptyId } : {})
-        })
+        const mount = planMobileTerminalTabMount(
+          useAppStore.getState(),
+          {
+            worktreeId,
+            ...(tabId ? { tabId } : {}),
+            ...(ptyId ? { ptyId } : {})
+          },
+          {
+            isTabMounted: hasRegisteredRuntimeTerminalTab
+          }
+        )
         if (mount) {
           requestBackgroundTerminalWorktreeMount(mount)
         }

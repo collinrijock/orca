@@ -27,14 +27,21 @@ describe('terminal.subscribe blank-tab background mount', () => {
   it('requests a renderer tab mount when a mobile subscribe has no headless model', async () => {
     // Why: stale preview text must not hide the missing live model/attachment.
     const cleanups = new Map<string, () => void>()
-    const requestRendererTerminalTabMount = vi.fn()
+    const callOrder: string[] = []
+    const unsubscribeData = vi.fn()
+    const requestRendererTerminalTabMount = vi.fn(() => {
+      callOrder.push('request-mount')
+    })
     const runtime = stubRuntime({
       resolveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
       requestRendererTerminalTabMount,
       hasHeadlessTerminalState: vi.fn().mockReturnValue(false),
       handleMobileSubscribe: vi.fn().mockResolvedValue(true),
       handleMobileUnsubscribe: vi.fn(),
-      subscribeToTerminalData: vi.fn().mockReturnValue(vi.fn()),
+      subscribeToTerminalData: vi.fn(() => {
+        callOrder.push('subscribe-data')
+        return unsubscribeData
+      }),
       readTerminal: vi.fn().mockResolvedValue({ tail: ['stale preview'], truncated: false }),
       serializeTerminalBuffer: vi
         .fn()
@@ -73,9 +80,11 @@ describe('terminal.subscribe blank-tab background mount', () => {
     await vi.waitFor(() =>
       expect(requestRendererTerminalTabMount).toHaveBeenCalledWith('terminal-1')
     )
+    expect(callOrder).toEqual(['subscribe-data', 'request-mount'])
 
     runtime.cleanupSubscription('terminal-1:phone-1')
     await dispatchPromise
+    expect(unsubscribeData).toHaveBeenCalledTimes(1)
   })
 
   it('does not request a renderer tab mount when an attached terminal is legitimately blank', async () => {
