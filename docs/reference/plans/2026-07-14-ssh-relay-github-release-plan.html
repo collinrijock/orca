@@ -1138,6 +1138,25 @@
               every candidate still needs the complete two-layer evidence.
             </p>
             <p>
+              Implementation evidence on 2026-07-14 rejected Linux native modules built directly on
+              Ubuntu 24.04: the resulting <code>pty.node</code> required <code>GLIBC_2.32</code> and
+              <code>GLIBC_2.34</code> and could not load in the declared glibc 2.28 userland. Linux
+              native modules must therefore be compiled and smoked in the digest-pinned oldest
+              glibc/libstdc++ userland on the tuple-native architecture. A later baseline-container
+              test cannot repair bytes built against a newer ABI, and that userland proof still
+              leaves the exact kernel 4.18 cell open.
+            </p>
+            <p>
+              The prepared Rocky 8 builder pins Python 3.9 because node-gyp 12 cannot run under the
+              distribution's default Python 3.6. GCC 8 uses the draft spelling
+              <code>gnu++2a</code> for the C++20 mode requested by Node v24's build headers, so the
+              Linux-only build step must replace exactly one <code>-std=gnu++20</code> occurrence in
+              the already verified, extracted <code>common.gypi</code> and fail closed on any other
+              count. This build-header compatibility step never changes bundled Node bytes, does not
+              apply to macOS or Windows, and avoids introducing a newer libstdc++ dependency;
+              complete native-module smoke and ABI inspection remain mandatory proof.
+            </p>
+            <p>
               Windows target-native native-module builds use three immutable inputs authenticated by
               that same signed checksum document: the tuple's official Node ZIP, the exact-version
               <code>headers.tar.gz</code>, and the tuple's <code>win-*/node.lib</code>. The Windows
@@ -1777,8 +1796,10 @@
             <article class="risk">
               <strong>Linux baseline mismatch</strong>
               <p>
-                Build against the oldest supported glibc and libstdc++ baseline; run on that exact
-                baseline before promotion.
+                Build native modules in the oldest supported glibc and libstdc++ userland on the
+                tuple-native architecture; run the complete runtime there, then separately run on
+                the exact oldest kernel before promotion. Reject newer-userland producer output even
+                when it smokes successfully on the producer runner.
               </p>
             </article>
             <article class="risk">

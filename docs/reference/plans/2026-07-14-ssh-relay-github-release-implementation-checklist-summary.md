@@ -21,14 +21,19 @@ complete a box.
 ## Active work
 
 - [ ] **WP2 — Prove oldest supported baselines and native trust.**
+  - Session checkpoint: a local x64 Rocky 8 build now passes two complete offline builds, exact
+    equality, archive/tree verification, PTY/watcher smoke, and the glibc 2.28/libstdc++ 6.0.25
+    userland verifier. This is supplemental local emulation evidence, not a qualifying native cell.
+  - Local focused tests pass 100/100; typecheck, lint, max-lines, formatting, and diff checks pass.
+  - Artifact-only implementation commit: `0cb3f7510` (`build(ssh): prove Linux runtime floor`).
   - All six target-native artifact, smoke, equality, SBOM, license, provenance, toolchain, and
     prohibited-content cells pass in
     [run 29373507297](https://github.com/stablyai/orca/actions/runs/29373507297); every downloaded
     payload passed direct audit.
   - No tuple is enabled: the artifacts still need execution on each declared oldest OS/libc/kernel
     baseline and target-native signing/trust proof.
-  - Next gate: add the purpose-named baseline verification capability and GitHub-runner cells that
-    can qualify, while keeping unavailable snapshot/trust cells explicit and disabled.
+  - Next gate: run the corrected builder on native GitHub x64/arm64 runners. Kernel 4.18, macOS
+    13.5, and native signing/trust remain explicit open cells.
 
 ## Work packages, in required order
 
@@ -55,6 +60,8 @@ complete a box.
       Linux, macOS, and Windows on x64 and arm64.
 - [x] Prove exact clean-build equality and exact runtime-tree closure on all six runner families.
 - [x] Complete the all-six SBOM, license, provenance, toolchain, and prohibited-content audit.
+- [ ] Rebuild both Linux artifacts in the digest-pinned glibc 2.28/libstdc++ 6.0.25 userland on
+      native x64/arm64 runners; smoke and compare them there.
 - [ ] Prove each candidate on its oldest supported OS/libc/kernel baseline.
 - [ ] Sign macOS and Windows bytes and verify native trust on the target OS.
 - [ ] Merge draft PR [#8741](https://github.com/stablyai/orca/pull/8741).

@@ -9,6 +9,7 @@ work; keep exact commands, runner identities, hashes, metrics, and residual gaps
 Date created: 2026-07-14<br>
 Last updated: 2026-07-14<br>
 Current phase: Milestone 3 / Work Package 2 oldest-supported-baseline and native-trust proof — **In progress — 2026-07-14, Codex implementation owner**; exact-head run [29373507297](https://github.com/stablyai/orca/actions/runs/29373507297) passes all six target-native build, smoke, exact clean-build equality, upload, SBOM, license, provenance, runner/toolchain, and prohibited-content cells, and direct inspection of every downloaded payload passes exact archive/subject hashes, archive-scoped SPDX identity, one-owner-per-file, dependency, commit/run/builder/runner, tool-version/hash, and closure assertions (E-M3-METADATA-CI-001); Windows x64/arm64 record strict `MSVC 14.44.35207` identities and distinct exact linker SHA-256 values despite the Git-for-Windows PATH collision; the all-six metadata/provenance gate is closed, while oldest-baseline execution, native signing/trust, cross-family remotes, and measured legacy baselines remain open; production/default behavior and every tuple state remain unchanged; no bundled-runtime path is enabled and no artifact is published<br>
+Session checkpoint: **In progress — 2026-07-14, Codex implementation owner** — artifact-only implementation commit `0cb3f7510` packages the correction after E-M3-LINUX-BASELINE-LOCAL-GREEN-001 proved the Linux x64 builder through two complete offline Rocky 8 builds, exact output equality, archive/tree verification, bundled PTY/watcher smoke, and the glibc 2.28/libstdc++ 6.0.25 userland verifier; this local Docker Desktop x64-emulation cell is supplemental only, so exact-head native GitHub x64/arm64 repetitions, exact kernel 4.18, macOS 13.5, and native-trust cells remain open; no tuple is enabled or published.<br>
 Primary design: [SSH relay GitHub Release plan](./2026-07-14-ssh-relay-github-release-plan.html)<br>
 Motivating issues: [#8450](https://github.com/stablyai/orca/issues/8450), [#1693](https://github.com/stablyai/orca/issues/1693)
 
@@ -657,6 +658,15 @@ runner, static symbol scan, or container may add evidence but cannot silently st
 unavailable qualifying snapshot. Every tuple remains disabled and no production consumer is
 connected.
 
+**Baseline correction — 2026-07-14, Codex implementation owner:**
+E-M3-LINUX-BASELINE-LOCAL-RED-001 proves the existing Linux x64 candidate cannot load its patched
+`node-pty` on Rocky 8.9/glibc 2.28 because the Ubuntu 24.04 producer emitted references to
+`GLIBC_2.32` and `GLIBC_2.34`. This exposes a producer flaw, not permission to weaken the declared
+floor. The Linux jobs must compile and smoke native modules inside the digest-pinned oldest
+glibc/libstdc++ userland on native x64/arm64 runners, repeat exact clean-build equality and metadata
+gates for the new bytes, and retain the exact kernel 4.18 cell as an explicit residual gap. A newer
+host build followed by container execution is not qualifying evidence.
+
 **Active sub-gate — 2026-07-14, Codex implementation owner:** exact-head run 29345126283 proves all
 six target-native artifact/executable jobs, including normal Windows x64/arm64 settlement and
 unpublished upload. E-M3-REPRODUCIBILITY-LOCAL-001 proves the bounded comparator requires two
@@ -825,16 +835,16 @@ Each runtime must contain only the executable closure required by the relay.
 
 ### Per-tuple build and executable proof
 
-| Runtime tuple     | Build/provenance | Bundled Node | `node-pty` load + real PTY | Watcher events | Oldest baseline | Native trust | Evidence                            |
-| ----------------- | ---------------- | ------------ | -------------------------- | -------------- | --------------- | ------------ | ----------------------------------- |
-| linux-x64-glibc   | [x]              | [x]          | [x]                        | [x]            | [ ]             | [ ]          | E-M3-CI-001                         |
-| linux-arm64-glibc | [x]              | [x]          | [x]                        | [x]            | [ ]             | [ ]          | E-M3-RUNTIME-LOCAL-001; E-M3-CI-001 |
-| linux-x64-musl    | [ ]              | [ ]          | [ ]                        | [ ]            | [ ]             | [ ]          | —                                   |
-| linux-arm64-musl  | [ ]              | [ ]          | [ ]                        | [ ]            | [ ]             | [ ]          | —                                   |
-| darwin-x64        | [x]              | [x]          | [x]                        | [x]            | [ ]             | [ ]          | E-M3-CI-001                         |
-| darwin-arm64      | [x]              | [x]          | [x]                        | [x]            | [ ]             | [ ]          | E-M3-CI-001                         |
-| win32-x64         | [x]              | [x]          | [x]                        | [x]            | [ ]             | [ ]          | E-M3-WINDOWS-CI-001                 |
-| win32-arm64       | [x]              | [x]          | [x]                        | [x]            | [ ]             | [ ]          | E-M3-WINDOWS-CI-001                 |
+| Runtime tuple     | Build/provenance | Bundled Node | `node-pty` load + real PTY | Watcher events | Oldest baseline | Native trust | Evidence                                                   |
+| ----------------- | ---------------- | ------------ | -------------------------- | -------------- | --------------- | ------------ | ---------------------------------------------------------- |
+| linux-x64-glibc   | [ ]              | [x]          | [ ]                        | [ ]            | [ ]             | [ ]          | E-M3-CI-001; E-M3-LINUX-BASELINE-LOCAL-RED-001             |
+| linux-arm64-glibc | [ ]              | [x]          | [ ]                        | [ ]            | [ ]             | [ ]          | E-M3-RUNTIME-LOCAL-001; E-M3-CI-001; floor rebuild pending |
+| linux-x64-musl    | [ ]              | [ ]          | [ ]                        | [ ]            | [ ]             | [ ]          | —                                                          |
+| linux-arm64-musl  | [ ]              | [ ]          | [ ]                        | [ ]            | [ ]             | [ ]          | —                                                          |
+| darwin-x64        | [x]              | [x]          | [x]                        | [x]            | [ ]             | [ ]          | E-M3-CI-001                                                |
+| darwin-arm64      | [x]              | [x]          | [x]                        | [x]            | [ ]             | [ ]          | E-M3-CI-001                                                |
+| win32-x64         | [x]              | [x]          | [x]                        | [x]            | [ ]             | [ ]          | E-M3-WINDOWS-CI-001                                        |
+| win32-arm64       | [x]              | [x]          | [x]                        | [x]            | [ ]             | [ ]          | E-M3-WINDOWS-CI-001                                        |
 
 Rules:
 
@@ -6994,6 +7004,297 @@ bounded version line: <empty>`. The PE lookup returned successfully but the `Fil
   tracker's all-six SBOM/license/provenance/toolchain/prohibited-content item.
 - Follow-up: implement and run purpose-named oldest-supported-baseline checks, then prove native
   signing/trust before connecting any artifact consumer or enabling any tuple.
+
+### E-M3-LINUX-BASELINE-LOCAL-RED-001 — Ubuntu-built Linux candidate fails the glibc 2.28 floor
+
+- Date: 2026-07-14
+- Owner: Codex implementation owner
+- Source artifact: exact-head Actions run
+  [29373507297](https://github.com/stablyai/orca/actions/runs/29373507297), unpublished
+  `linux-x64-glibc` artifact `8327034796`, archive SHA-256
+  `177ad16222b08beb972bf66910bbafd32bf1e820deb007fef3304057cb6a01b8`, content ID
+  `960546cd96c67fcf9bb0a61e96ecdbecbffd9104d3a495578f8bb19dd810649a`.
+- Runner/environment: local macOS arm64 controller, Docker 29.2.1, native artifact architecture
+  executed through Docker Desktop's bounded `linux/amd64` VM; container
+  `docker.io/library/rockylinux@sha256:2d05a9266523bbf24f33ebc3a9832e4d5fd74b973c220f2204ca802286aa275d`
+  (Rocky Linux 8.9, glibc 2.28, libstdc++.so.6.0.25). This is local red evidence only; native
+  GitHub x64/arm64 repetition remains required.
+- Remote and transport: no SSH remote; read-only bind-mounted unpublished runtime, container
+  networking disabled, all capabilities dropped, `no-new-privileges`, 128 PIDs, 1 GiB memory, two
+  CPUs, and a 64 MiB `/tmp` tmpfs.
+- Commands:
+
+  ```bash
+  tar -xJf orca-ssh-relay-runtime-v1-linux-x64-glibc-960546cd….tar.xz -C "$runtime"
+  docker run --rm --platform linux/amd64 --network none --read-only --cap-drop all \
+    --security-opt no-new-privileges --pids-limit 128 --memory 1g --cpus 2 \
+    --tmpfs /tmp:rw,nosuid,size=64m \
+    --mount "type=bind,src=$PWD,dst=/workspace,readonly" \
+    --mount "type=bind,src=$runtime,dst=/runtime,readonly" \
+    --workdir /workspace "$image" \
+    /runtime/bin/node config/scripts/ssh-relay-runtime-smoke-child.cjs /runtime
+  docker run --rm --platform linux/amd64 --network none --read-only --cap-drop all \
+    --security-opt no-new-privileges --pids-limit 128 --memory 1g --cpus 2 \
+    --tmpfs /tmp:rw,nosuid,size=64m \
+    --mount "type=bind,src=$runtime,dst=/runtime,readonly" "$image" \
+    /runtime/bin/node -e "require('/runtime/node_modules/node-pty/build/Release/pty.node')"
+  ```
+
+- Result: expected RED. The complete smoke stops before PTY/watcher evidence because patched
+  `node-pty` cannot load. Direct loading reports `/lib64/libc.so.6: version 'GLIBC_2.34' not found`;
+  `ldd` additionally reports `GLIBC_2.32` missing. The file exists and is the identity-authenticated
+  x64 ELF, so this is an ABI-floor mismatch rather than a missing archive entry.
+- Verifier defect exposed: the first baseline CLI run also rejected with `Runtime baseline did not
+resolve one bounded libstdc++ ABI library`; inspection found its filename parser accidentally
+  removed the SONAME `6` from `libstdc++.so.6.0.25`. This is
+  E-M3-BASELINE-VERIFIER-LOCAL-RED-001 and requires a focused parser test/correction before CI.
+- Oracle proved: Ubuntu 24.04 producer smoke and target-native architecture alone do not prove the
+  declared Linux ABI floor; current Linux candidate bytes are ineligible.
+- Does not prove: native x64 timing, Linux arm64 behavior, kernel 4.18, SSH transfer/install, native
+  trust, or any enabled tuple.
+- Follow-up: build both Linux tuples in the digest-pinned Rocky 8.9 userland on native runners,
+  correct the bounded libstdc++ filename parser, repeat smoke/baseline/equality/metadata gates, and
+  keep kernel 4.18 explicitly open.
+
+### E-M3-LINUX-BUILDER-PYTHON-LOCAL-RED-001 — Rocky 8 default Python is too old for node-gyp 12
+
+- Date: 2026-07-14
+- Owner: Codex implementation owner
+- Source: uncommitted local WP2 correction at Git HEAD
+  `775f2cbcc7f66f6e728fa06ae2d6822edd50f7b0`; no artifact was emitted or published.
+- Runner/environment: local macOS arm64 controller, Docker 29.2.1, `linux/amd64` Docker Desktop
+  emulation; builder base
+  `docker.io/library/rockylinux@sha256:2d05a9266523bbf24f33ebc3a9832e4d5fd74b973c220f2204ca802286aa275d`
+  (Rocky Linux 8.9, glibc 2.28, libstdc++.so.6.0.25), derived local builder image ID
+  `sha256:1f06eda13b33be5d30aa1b256895516b322d329753f9743614a5c8ebf1286291`.
+- Remote and transport: no SSH remote; workflow-equivalent local container with networking
+  disabled, read-only root, all capabilities dropped, `no-new-privileges`, 512 PIDs, 6 GiB memory,
+  four CPUs, and a 1 GiB `/tmp` tmpfs.
+- Command:
+
+  ```bash
+  docker run --rm --platform linux/amd64 --network none --read-only --cap-drop all \
+    --security-opt no-new-privileges --pids-limit 512 --memory 6g --cpus 4 \
+    --tmpfs /tmp:rw,nosuid,size=1g <builder> \
+    /usr/bin/node config/scripts/ssh-relay-runtime-linux-build-evidence.mjs \
+      --tuple linux-x64-glibc --inputs-directory /evidence/inputs \
+      --output-root /evidence/native-output --work-directory /evidence/native-work \
+      --evidence-directory /evidence/verified-output \
+      --source-date-epoch 1784069324 \
+      --git-commit 775f2cbcc7f66f6e728fa06ae2d6822edd50f7b0
+  ```
+
+- Result: expected RED. The evidence driver stopped during the first `node-pty` native build before
+  creating or copying any candidate. node-gyp 12.3.0 selected `/usr/bin/python3` version 3.6.8 and
+  failed parsing its own `if flags := ...` syntax. The container capability probe then proved
+  distro package `python39-3.9.25-2.module+el8.10.0+40046+11e46e10` installs as
+  `/usr/bin/python3.9` without changing the glibc/libstdc++ floor.
+- Correction: the digest-pinned prepared builder installs `python39`, asserts Python 3.9, and sets
+  `NODE_GYP_FORCE_PYTHON=/usr/bin/python3.9`; the focused workflow contract passes 4/4. Package
+  installation remains in the networked preparation phase, while both native builds remain
+  network-disabled.
+- Oracle proved: the earlier builder definition could not build the artifact and failed before
+  output; a modern build controller is compatible with the old runtime ABI userland when installed
+  before the isolated compilation phase.
+- Does not prove: a complete x64 build, x64 reproducibility/smoke/baseline, native arm64, kernel
+  4.18, SSH transfer/install, signing/trust, or any enabled tuple.
+- Follow-up: repeat the full two-build x64 evidence command with the corrected builder, run the
+  purpose-named Linux userland verifier over its verified output, then repeat on native GitHub x64
+  and arm64 runners.
+
+### E-M3-LINUX-BUILDER-GCC-LOCAL-RED-001 — Rocky GCC 8 rejects Node v24's final C++20 spelling
+
+- Date: 2026-07-14
+- Owner: Codex implementation owner
+- Source: uncommitted local WP2 correction at Git HEAD
+  `775f2cbcc7f66f6e728fa06ae2d6822edd50f7b0`; no artifact was emitted or published.
+- Runner/environment: the same local macOS arm64/Docker `linux/amd64` emulation and digest-pinned
+  Rocky 8.9 base as E-M3-LINUX-BUILDER-PYTHON-LOCAL-RED-001; corrected builder selected Python
+  3.9.25 and retained glibc 2.28/libstdc++.so.6.0.25.
+- Command: the E-M3-LINUX-BUILDER-PYTHON-LOCAL-RED-001 two-build evidence command, repeated with
+  `NODE_GYP_FORCE_PYTHON=/usr/bin/python3.9` in the corrected builder.
+- Result: expected RED after 36.42 seconds, 148,564 KiB peak RSS. node-gyp 12.3.0 successfully
+  selected Python 3.9.25, then GCC 8.5.0 rejected Node v24's generated `-std=gnu++20` argument and
+  suggested its supported draft spelling, `-std=gnu++2a`. The evidence driver removed the failed
+  first output and copied no candidate.
+- Correction: the Linux-only build now replaces exactly one `'-std=gnu++20',` entry with
+  `'-std=gnu++2a',` in the already signature/hash-verified extracted Node `common.gypi`; zero or
+  multiple matches fail closed and non-Linux inputs are unchanged. The extracted headers are build
+  inputs only, so bundled official Node bytes remain unchanged. Four focused compatibility tests
+  cover replace, non-Linux preservation, and both rejected counts.
+- Oracle proved: the oldest declared GCC/libstdc++ toolchain cannot consume the unmodified Node v24
+  header spelling; silently selecting a newer compiler could narrow the libstdc++ floor.
+- Does not prove: successful native compilation with the corrected flag, runtime smoke, exact
+  equality, x64/arm64 native runners, kernel 4.18, SSH transfer/install, signing/trust, or an enabled
+  tuple.
+
+### E-M3-LINUX-BUILDER-TOOLCHAIN-LOCAL-RED-001 — Minimal builder cannot record its compiler
+
+- Date: 2026-07-14
+- Owner: Codex implementation owner
+- Source and environment: the same uncommitted source, base digest, local controller, and bounded
+  offline container as E-M3-LINUX-BUILDER-GCC-LOCAL-RED-001.
+- Command: the same two-build evidence command after the exact Linux C++ flag correction.
+- Result: expected RED after 1 minute 40.14 seconds, 694,188 KiB peak RSS. The first native module
+  compiled and the runtime reached metadata collection, but the minimal Rocky image lacked the
+  `which` locator used by the fail-closed toolchain collector. It therefore refused to claim a
+  compiler identity and removed the incomplete output. The collector would also have probed
+  generic `python3` instead of the exact forced node-gyp interpreter.
+- Correction: the prepared builder explicitly installs distro-signed `which`, and Linux provenance
+  resolves and hashes `NODE_GYP_FORCE_PYTHON` (`/usr/bin/python3.9`) rather than a generic alias.
+  The focused toolchain/workflow suite passes 15/15 and asserts both contracts.
+- Oracle proved: artifact compilation alone is insufficient; missing or inaccurate toolchain
+  identity fails the build before any candidate is copied.
+- Does not prove: a complete first build, a second equal build, runtime smoke, baseline execution,
+  native runner behavior, kernel 4.18, or any enabled tuple.
+
+### E-M3-LINUX-BASELINE-LOCAL-GREEN-001 — Corrected x64 bytes pass the oldest Linux userland
+
+- Date: 2026-07-14
+- Owner: Codex implementation owner
+- Source: uncommitted local WP2 correction at Git HEAD
+  `775f2cbcc7f66f6e728fa06ae2d6822edd50f7b0`; the artifact-affecting correction was subsequently
+  committed as `0cb3f7510`, while later fail-closed artifact-selection, `ldd` stderr, and test-cleanup
+  hardening did not change built bytes. This remains unpublished local evidence only.
+- Runner/environment: local macOS arm64 controller, Docker 29.2.1, Docker Desktop bounded
+  `linux/amd64` emulation. Build base and separate baseline image:
+  `docker.io/library/rockylinux@sha256:2d05a9266523bbf24f33ebc3a9832e4d5fd74b973c220f2204ca802286aa275d`;
+  corrected builder image
+  `sha256:9c32993d7a91557657593ae8258568a71f9832b0ce7c8824a1229b939ef49968`.
+  Compilation used glibc 2.28, libstdc++.so.6.0.25, GCC 8.5.0, Python 3.9.25, GNU Make 4.2.1,
+  GNU strip 2.30, distro Node 20.20.2 as controller, and verified bundled Node v24.18.0.
+- Build command:
+
+  ```bash
+  repo=$PWD
+  root=/private/tmp/orca-8450-linux-floor-build-v6
+  docker run --rm --platform linux/amd64 --network none --read-only --cap-drop all \
+    --security-opt no-new-privileges --pids-limit 512 --memory 6g --cpus 4 \
+    --tmpfs /tmp:rw,nosuid,size=1g \
+    --mount type=bind,src=/private/tmp/orca-8450-linux-floor-build/workspace,dst=/workspace \
+    --mount type=bind,src=$repo/node_modules,dst=/workspace/node_modules,readonly \
+    --mount type=bind,src=$repo/config/scripts,dst=/workspace/config/scripts,readonly \
+    --mount type=bind,src=/private/tmp/orca-8450-linux-floor-build/inputs,dst=/inputs,readonly \
+    --mount type=bind,src=$root,dst=/evidence \
+    --workdir /workspace orca-ssh-relay-linux-builder:local-x64-python39 \
+    /usr/bin/time -v /usr/bin/node \
+      config/scripts/ssh-relay-runtime-linux-build-evidence.mjs \
+      --tuple linux-x64-glibc --inputs-directory /inputs \
+      --output-root /evidence/output --work-directory /evidence/work \
+      --evidence-directory /evidence/verified --source-date-epoch 1784069324 \
+      --git-commit 775f2cbcc7f66f6e728fa06ae2d6822edd50f7b0
+  ```
+
+- Build result: PASS in 6 minutes 48.16 seconds with 694,196 KiB peak RSS. Both complete builds
+  produced content ID `fc63ca342a5990f460ec6d72262a8542173dab20ce03c9b9cfb755b1c6057e6d`
+  and byte-identical 29,268,776-byte archive SHA-256
+  `8f9095d1017fda387d66762ca6ccdd10a05d0138ff1b4ca6835d4b2a6eb7be83`.
+  Reproducibility compared 54 entries, 38 files, and 154,157,598 bytes. First/second build durations
+  were 256,687.12/127,672.46 ms; verifier durations were 9,541.30/5,525.82 ms. Both smokes reported
+  Node v24.18.0, modules ABI 137, PTY exit 23 after resize to 101x37, the required five watcher
+  events, 377.22/378.81 ms smoke duration, and 58,380,288/58,052,608 RSS bytes.
+- Verified metadata SHA-256 values: identity
+  `edc57658e5d245b4652f4418a70f0b8a519d287ab570ceac582ba6ead0221715`, SPDX
+  `a7b58dc14ea671c60d5111eb9ade8141e502a4562161ed540b4de75f9703346b`, and provenance
+  `c19086b3fb511cca04a31311d6677df58f47d0f10d91e30b180b88b6775b839d`.
+- Separate boundary/baseline commands:
+
+  ```bash
+  repo=$PWD
+  root=/private/tmp/orca-8450-linux-floor-build-v6
+  runtime=$root/baseline-runtime
+  archive=orca-ssh-relay-runtime-v1-linux-x64-glibc-fc63ca342a5990f460ec6d72262a8542173dab20ce03c9b9cfb755b1c6057e6d.tar.xz
+  identity=orca-ssh-relay-runtime-linux-x64-glibc.identity.json
+  mkdir $runtime
+  tar -xJf $root/verified/$archive -C $runtime
+  docker run --rm --platform linux/amd64 --network none --read-only --cap-drop all \
+    --security-opt no-new-privileges --pids-limit 128 --memory 1g --cpus 2 \
+    --tmpfs /tmp:rw,nosuid,size=64m \
+    --mount type=bind,src=$repo/config/scripts,dst=/workspace/config/scripts,readonly \
+    --mount type=bind,src=$repo/node_modules,dst=/workspace/node_modules,readonly \
+    --mount type=bind,src=$root/verified,dst=/evidence,readonly \
+    --mount type=bind,src=$runtime,dst=/runtime,readonly \
+    --workdir /workspace orca-ssh-relay-linux-builder:local-x64-python39 \
+    /runtime/bin/node config/scripts/verify-ssh-relay-runtime.mjs \
+      --runtime-directory /runtime --identity /evidence/$identity --archive /evidence/$archive
+  image=docker.io/library/rockylinux@sha256:2d05a9266523bbf24f33ebc3a9832e4d5fd74b973c220f2204ca802286aa275d
+  docker run --rm --platform linux/amd64 --network none --read-only --cap-drop all \
+    --security-opt no-new-privileges --pids-limit 128 --memory 1g --cpus 2 \
+    --tmpfs /tmp:rw,nosuid,size=64m \
+    --mount type=bind,src=$repo/config/scripts,dst=/workspace/config/scripts,readonly \
+    --mount type=bind,src=$runtime,dst=/runtime,readonly --workdir /workspace $image \
+    /runtime/bin/node config/scripts/ssh-relay-runtime-smoke-child.cjs /runtime
+  docker run --rm --platform linux/amd64 --network none --read-only --cap-drop all \
+    --security-opt no-new-privileges --pids-limit 128 --memory 1g --cpus 2 \
+    --tmpfs /tmp:rw,nosuid,size=64m \
+    --mount type=bind,src=$repo/config/scripts,dst=/workspace/config/scripts,readonly \
+    --mount type=bind,src=$runtime,dst=/runtime,readonly --workdir /workspace $image \
+    /runtime/bin/node config/scripts/ssh-relay-runtime-baseline.mjs \
+      --tuple linux-x64-glibc --scope linux-userland --runtime-directory /runtime
+  ```
+
+- Boundary/baseline result: PASS. Fresh archive/tree verification matched 49 entries, 34 files,
+  124,846,430 expanded bytes, and the exact content ID; smoke took 280.64 ms at 58,208,256 RSS
+  bytes. The separate unmodified Rocky base smoke took 438.55 ms at 58,908,672 RSS bytes. The
+  baseline evaluator returned `qualified: true` for platform x64, glibc 2.28, and libstdc++ 6.0.25,
+  with explicit residual gap `kernel`: observed shared Docker kernel 6.12.72-linuxkit versus required
+  4.18.
+- Oracle proved: corrected x64 artifacts can be built twice without egress in the oldest declared
+  Linux userland, remain byte-identical, pass archive/tree/Node/PTY/watcher checks, and execute in an
+  unmodified glibc 2.28/libstdc++ 6.0.25 userland.
+- Does not prove: a target-native x64 runner, native arm64, exact kernel 4.18, SSH transfer/install,
+  native trust, release aggregation, packaged desktop use, fallback, performance against legacy, or
+  an enabled tuple.
+- Follow-up: push the exact correction to draft PR #8741, require the native x64 and arm64 build and
+  supplemental userland cells to pass, audit the downloaded artifacts, and retain the kernel 4.18
+  and native-trust blockers.
+
+### E-M3-LINUX-BUILDER-LOCAL-VALIDATION-001 — Corrected WP2 source gates pass locally
+
+- Date: 2026-07-14
+- Owner: Codex implementation owner
+- Source: the same uncommitted WP2 source and Git HEAD as
+  E-M3-LINUX-BASELINE-LOCAL-GREEN-001.
+- Commands:
+
+  ```bash
+  pnpm exec vitest run --config config/vitest.config.ts config/scripts/ssh-relay-*.test.mjs
+  pnpm run typecheck
+  pnpm run lint
+  pnpm run check:max-lines-ratchet
+  pnpm exec oxfmt --check \
+    .github/workflows/ssh-relay-runtime-artifacts.yml \
+    config/ssh-relay-runtime-linux-builder.Containerfile \
+    config/scripts/build-ssh-relay-runtime.mjs \
+    config/scripts/ssh-relay-linux-node-gyp-compiler.mjs \
+    config/scripts/ssh-relay-linux-node-gyp-compiler.test.mjs \
+    config/scripts/ssh-relay-runtime-baseline.mjs \
+    config/scripts/ssh-relay-runtime-baseline.test.mjs \
+    config/scripts/ssh-relay-runtime-compatibility.mjs \
+    config/scripts/ssh-relay-runtime-linux-build-evidence.mjs \
+    config/scripts/ssh-relay-runtime-linux-build-evidence.test.mjs \
+    config/scripts/ssh-relay-runtime-toolchain.mjs \
+    config/scripts/ssh-relay-runtime-toolchain.test.mjs \
+    config/scripts/ssh-relay-runtime-tree.mjs \
+    config/scripts/ssh-relay-runtime-workflow.test.mjs \
+    docs/reference/plans/2026-07-14-ssh-relay-github-release-implementation-checklist-summary.md \
+    docs/reference/plans/2026-07-14-ssh-relay-github-release-implementation-checklist.md \
+    docs/reference/plans/2026-07-14-ssh-relay-github-release-plan.html
+  git diff --check
+  ```
+
+- Result: PASS. The expanded focused suite passed 22 files/100 tests. Typecheck passed. Lint passed
+  with only existing unrelated repository warnings; its reliability, max-lines, bundled-skill,
+  localization-catalog, and localization-coverage sub-gates all passed. The direct max-lines ratchet
+  passed with 355 grandfathered suppressions and no new bypass. Focused formatting and
+  `git diff --check` passed.
+- Runner detail: local macOS arm64 shell used Node v26.0.0 and pnpm 10.24.0, which emitted the
+  expected package-engine warning because repository CI requires Node 24. Draft-PR jobs install
+  exact Node 24.18.0 and remain the qualifying contract cells.
+- Does not prove: GitHub workflow parsing/execution, native x64/arm64 builds, oldest kernel 4.18,
+  native signing/trust, SSH transfer/install, or any enabled tuple.
+- Follow-up: commit this evidence update, push both reviewable commits, and audit every draft-PR job
+  and downloaded artifact before closing any runner-backed cell.
 
 ## Accepted Gaps
 
