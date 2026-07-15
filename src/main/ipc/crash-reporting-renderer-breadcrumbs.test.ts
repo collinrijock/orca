@@ -107,7 +107,7 @@ describe('renderer breadcrumb IPC routing', () => {
     expect(recordCoalescedCrashBreadcrumbMock).toHaveBeenCalledWith({
       name: 'renderer_error',
       data: { message: 'boom', count: 2, ok: true, empty: null },
-      coalesceKey: 'renderer_error:boom',
+      coalesceKey: expect.stringContaining('boom'),
       minIntervalMs: 30_000
     })
     expect(recordCrashBreadcrumbMock).not.toHaveBeenCalled()
@@ -130,7 +130,7 @@ describe('renderer breadcrumb IPC routing', () => {
     expect(recordCoalescedCrashBreadcrumbMock).toHaveBeenCalledWith({
       name: 'renderer_unhandled_rejection',
       data: { reasonType: 'string', reasonMessage: 'Remote connection dropped/reconnecting' },
-      coalesceKey: 'renderer_unhandled_rejection:Remote connection dropped/reconnecting',
+      coalesceKey: expect.stringContaining('Remote connection dropped/reconnecting'),
       minIntervalMs: 30_000
     })
     expect(recordCrashBreadcrumbMock).not.toHaveBeenCalled()
@@ -144,9 +144,41 @@ describe('renderer breadcrumb IPC routing', () => {
     expect(recordCoalescedCrashBreadcrumbMock).toHaveBeenCalledWith({
       name: 'renderer_error',
       data: { message },
-      coalesceKey: `renderer_error:${message}`,
+      coalesceKey: expect.stringContaining(message),
       minIntervalMs: 30_000
     })
+  })
+
+  it('does not coalesce same-message errors from different source sites', () => {
+    emitRendererBreadcrumb({
+      name: 'renderer_error',
+      data: { message: 'boom', filename: 'file:///first.js', lineno: 10, colno: 2 }
+    })
+    emitRendererBreadcrumb({
+      name: 'renderer_error',
+      data: { message: 'boom', filename: 'file:///second.js', lineno: 20, colno: 4 }
+    })
+
+    const [first, second] = recordCoalescedCrashBreadcrumbMock.mock.calls.map(
+      ([args]) => args.coalesceKey
+    )
+    expect(first).not.toBe(second)
+  })
+
+  it('does not coalesce same-message rejections from different stacks', () => {
+    emitRendererBreadcrumb({
+      name: 'renderer_unhandled_rejection',
+      data: { reasonMessage: 'boom', reasonStack: 'Error: boom\n at first' }
+    })
+    emitRendererBreadcrumb({
+      name: 'renderer_unhandled_rejection',
+      data: { reasonMessage: 'boom', reasonStack: 'Error: boom\n at second' }
+    })
+
+    const [first, second] = recordCoalescedCrashBreadcrumbMock.mock.calls.map(
+      ([args]) => args.coalesceKey
+    )
+    expect(first).not.toBe(second)
   })
 
   it('records message-less errors without coalescing unrelated failures', () => {
@@ -171,7 +203,7 @@ describe('renderer breadcrumb IPC routing', () => {
     expect(recordCoalescedCrashBreadcrumbMock).toHaveBeenCalledWith({
       name: 'renderer_error',
       data: { message: '', errorMessage: 'fallback failure' },
-      coalesceKey: 'renderer_error:fallback failure',
+      coalesceKey: expect.stringContaining('fallback failure'),
       minIntervalMs: 30_000
     })
   })

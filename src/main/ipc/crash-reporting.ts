@@ -344,7 +344,26 @@ function rendererErrorBreadcrumbCoalesceKey(
         : undefined
   // Why: message-less failures have no stable identity, so grouping them could
   // erase unrelated crash evidence. Sanitization already caps messages at 240 chars.
-  return message ? `${name}:${message}` : undefined
+  if (!message) {
+    return undefined
+  }
+
+  // Why: common messages such as "Script error" or "Cannot read properties"
+  // can come from unrelated sites. Include sanitized source evidence so one
+  // failure cannot suppress the breadcrumb for another.
+  const sourceIdentity =
+    name === 'renderer_error'
+      ? [
+          data?.errorStack,
+          data?.filename,
+          data?.lineno,
+          data?.colno,
+          data?.errorType,
+          data?.errorName,
+          data?.errorMessage
+        ]
+      : [data?.reasonStack, data?.reasonType, data?.reasonName]
+  return JSON.stringify([name, message, ...sourceIdentity])
 }
 
 export function registerCrashReportingHandlers(store: CrashReportStore): void {
