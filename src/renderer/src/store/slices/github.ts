@@ -3281,6 +3281,9 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
               options.worktreeId,
               { linkedPR: null },
               {
+                // Why: the branch-scoped PR refetch below updates both GitHub
+                // caches; the generic metadata refresh would duplicate provider work.
+                suppressHostedReviewRefresh: true,
                 shouldApply: () =>
                   shouldApplyBranchMismatchedLinkedPRClear({
                     worktree:

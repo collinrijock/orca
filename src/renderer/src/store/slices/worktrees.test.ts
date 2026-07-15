@@ -4474,6 +4474,40 @@ describe('worktree remote runtime mutations', () => {
     expect(store.getState().worktreesByRepo.repo1[0]?.pushTarget).toBeUndefined()
   })
 
+  it('skips duplicate hosted-review work when the unlinking caller owns the refresh', async () => {
+    const store = createTestStore()
+    const fetchHostedReviewForBranch = vi.fn().mockResolvedValue(null)
+    const wt = makeWorktree({
+      id: 'repo1::/path/wt1',
+      repoId: 'repo1',
+      path: '/path/wt1',
+      branch: 'refs/heads/review-branch',
+      linkedPR: 2548,
+      pushTarget: { remoteName: 'fork', branchName: 'owner/old-pr' }
+    })
+    store.setState({
+      repos: [
+        { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
+      ],
+      worktreesByRepo: { repo1: [wt] },
+      fetchHostedReviewForBranch
+    } as Partial<AppState>)
+
+    await store
+      .getState()
+      .updateWorktreeMeta(wt.id, { linkedPR: null }, { suppressHostedReviewRefresh: true })
+
+    expect(fetchHostedReviewForBranch).not.toHaveBeenCalled()
+    expect(mockApi.worktrees.updateMeta).toHaveBeenCalledWith({
+      worktreeId: wt.id,
+      updates: { linkedPR: null, pushTarget: undefined }
+    })
+    expect(store.getState().worktreesByRepo.repo1[0]).toMatchObject({
+      linkedPR: null,
+      pushTarget: undefined
+    })
+  })
+
   it('clears an older GitHub link and target when replacing it with a GitLab MR', async () => {
     const store = createTestStore()
     const oldPushTarget = { remoteName: 'fork', branchName: 'owner/old-pr' }

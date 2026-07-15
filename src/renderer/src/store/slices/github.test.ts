@@ -2225,6 +2225,71 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
     expect(store.getState().prCache[`${repoId}::${branch}`]).toBeUndefined()
   })
 
+  it('unlinks a stale open PR and re-resolves the current branch with one follow-up lookup', async () => {
+    const store = createTestStore()
+    const repoPath = '/repo'
+    const repoId = 'repo-1'
+    const branch = 'feature/current'
+    const worktreeId = 'wt-stale-open-pr'
+    const stalePR = makePR({
+      number: 12,
+      title: 'Stale linked PR',
+      headSha: 'old-head',
+      headRefName: 'feature/old'
+    })
+    const currentPR = makePR({
+      number: 13,
+      title: 'Current branch PR',
+      headSha: 'current-head',
+      headRefName: branch
+    })
+    const updateWorktreeMeta = installLinkedPRClearStub(store, {
+      repoId,
+      repoPath,
+      branch,
+      worktree: makePRRefreshWorktree({
+        id: worktreeId,
+        repoId,
+        branch,
+        head: 'current-head',
+        linkedPR: 12
+      })
+    })
+    mockApi.gh.refreshPRNow
+      .mockResolvedValueOnce({ kind: 'found', pr: stalePR, fetchedAt: 2 })
+      .mockResolvedValueOnce({ kind: 'found', pr: currentPR, fetchedAt: 3 })
+
+    await expect(
+      store.getState().fetchPRForBranch(repoPath, branch, {
+        force: true,
+        repoId,
+        worktreeId,
+        linkedPRNumber: 12
+      })
+    ).resolves.toEqual(stalePR)
+
+    await vi.waitFor(() => {
+      expect(mockApi.gh.refreshPRNow).toHaveBeenCalledTimes(2)
+      expect(store.getState().prCache[`${repoId}::${branch}`]?.data).toEqual(currentPR)
+    })
+    expect(updateWorktreeMeta).toHaveBeenCalledWith(
+      worktreeId,
+      { linkedPR: null },
+      {
+        suppressHostedReviewRefresh: true,
+        shouldApply: expect.any(Function)
+      }
+    )
+    expect(mockApi.gh.refreshPRNow.mock.calls[1]?.[0]).toMatchObject({
+      candidate: expect.objectContaining({
+        branch,
+        linkedPRNumber: null,
+        worktreeId
+      })
+    })
+    expect(store.getState().worktreesByRepo[repoId]?.[0]?.linkedPR).toBeNull()
+  })
+
   it('clears a linked merged PR on a fresh cache hit that already carries a head-scoped divergence signal', async () => {
     const store = createTestStore()
     const repoPath = '/repo'

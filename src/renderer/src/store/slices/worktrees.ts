@@ -3967,7 +3967,12 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
 
     try {
       await persistWorktreeMeta(settingsForWorktreeOwner(get(), worktreeId), worktreeId, enriched)
-      if (reviewRepo && reviewBranch && typeof get().fetchHostedReviewForBranch === 'function') {
+      if (
+        !options?.suppressHostedReviewRefresh &&
+        reviewRepo &&
+        reviewBranch &&
+        typeof get().fetchHostedReviewForBranch === 'function'
+      ) {
         // Why: the old cache entry may have been populated by the previous
         // provider link. Refetch against the post-update links so stale lookups
         // cannot keep showing the removed review.
