@@ -228,7 +228,10 @@ function collectManagedTrustEntries(
   return entries
 }
 
-function removeMatchingTrustEntries(configPath: string, entries: readonly CodexTrustEntry[]): void {
+function removeSelfComputedMatchingTrustEntries(
+  configPath: string,
+  entries: readonly CodexTrustEntry[]
+): void {
   if (entries.length === 0) {
     return
   }
@@ -573,6 +576,17 @@ function dedupeHookDefinitions(definitions: readonly HookDefinition[]): HookDefi
   })
 }
 
+function removeSystemManagedHookTrustEntries(systemHomePath: string, hooksJsonPath: string): void {
+  removeCodexManagedHookTrustEntries({
+    tomlPath: getSystemCodexConfigTomlPath(),
+    runtimeHomePath: systemHomePath,
+    sourcePath: hooksJsonPath,
+    command: getManagedCommand(getManagedScriptPath()),
+    managedEventLabels: CODEX_MANAGED_EVENT_LABELS,
+    timeoutSec: MANAGED_HOOK_TIMEOUT_SECONDS
+  })
+}
+
 function cleanupLegacySystemManagedHooks(): void {
   if (systemCodexHomeHookSweepSuppressed()) {
     return
@@ -583,8 +597,14 @@ function cleanupLegacySystemManagedHooks(): void {
     return
   }
 
+  const systemHomePath = getSystemCodexHomePath()
+  const hasRecordedRealHomeGrant =
+    readCodexTrustGrantLedgerHomeForReconciliation(systemHomePath) !== null
   const config = readHooksJson(legacyConfigPath)
   if (!config?.hooks) {
+    if (hasRecordedRealHomeGrant) {
+      removeSystemManagedHookTrustEntries(systemHomePath, legacyConfigPath)
+    }
     return
   }
 
@@ -623,8 +643,15 @@ function cleanupLegacySystemManagedHooks(): void {
     // Why: this is the user's system hooks file, not Orca's runtime copy.
     // Remove only stale Orca hook entries and preserve other managers' metadata.
     writeHooksJson(legacyConfigPath, { ...config, hooks: nextHooks })
+    // Why: stale dev/version entries can reference an older managed script
+    // path that is not represented by the current grant ledger.
+    removeSelfComputedMatchingTrustEntries(getSystemCodexConfigTomlPath(), trustEntries)
   }
-  removeMatchingTrustEntries(getSystemCodexConfigTomlPath(), trustEntries)
+  if (removedManagedHook || hasRecordedRealHomeGrant) {
+    // Why: the ledger recognizes Codex-computed hashes and remains a retry
+    // marker if a prior cleanup removed hooks.json but could not update TOML.
+    removeSystemManagedHookTrustEntries(systemHomePath, legacyConfigPath)
+  }
 }
 
 function stripLegacyManagedProfileBlock(content: string): string {

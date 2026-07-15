@@ -3093,12 +3093,14 @@ export function registerPtyHandlers(
         isDaemonHostSpawn &&
         shouldSkipCodexHomeEnvForWindowsShell(daemonShellOverride, cwd) &&
         !selectedCodexHomePath
-      const stripInheritedOrcaCodexHome = shouldStripInheritedOrcaCodexHome({
-        target: codexSelectionTarget,
-        selectedCodexHomePath,
-        skipCodexHomeEnv,
-        settings: getSettings?.()
-      })
+      const stripInheritedOrcaCodexHome =
+        isDaemonHostSpawn &&
+        shouldStripInheritedOrcaCodexHome({
+          target: codexSelectionTarget,
+          selectedCodexHomePath,
+          skipCodexHomeEnv,
+          settings: getSettings?.()
+        })
       if (isDaemonHostSpawn && sessionId) {
         if (!isSafePtySessionId(sessionId, app.getPath('userData'))) {
           throw new Error('Invalid PTY session id')
@@ -3974,12 +3976,14 @@ export function registerPtyHandlers(
         isDaemonHostSpawn &&
         shouldSkipCodexHomeEnvForWindowsShell(effectiveShellOverride, cwd) &&
         !selectedCodexHomePath
-      const stripInheritedOrcaCodexHome = shouldStripInheritedOrcaCodexHome({
-        target: codexSelectionTarget,
-        selectedCodexHomePath,
-        skipCodexHomeEnv,
-        settings: getSettings?.()
-      })
+      const stripInheritedOrcaCodexHome =
+        isDaemonHostSpawn &&
+        shouldStripInheritedOrcaCodexHome({
+          target: codexSelectionTarget,
+          selectedCodexHomePath,
+          skipCodexHomeEnv,
+          settings: getSettings?.()
+        })
       if (isDaemonHostSpawn) {
         if (effectiveSessionId === undefined) {
           // Should be unreachable: the expression above returns a string when

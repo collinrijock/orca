@@ -2383,7 +2383,12 @@ describe('registerPtyHandlers', () => {
 
       it('does NOT inject host-local env on SSH spawns (connectionId set)', async () => {
         const sshSpawn = vi.fn(
-          async (_opts: { env: Record<string, string>; paneKey?: string; tabId?: string }) => ({
+          async (_opts: {
+            env: Record<string, string>
+            envToDelete?: string[]
+            paneKey?: string
+            tabId?: string
+          }) => ({
             id: 'ssh-pty'
           })
         )
@@ -2420,7 +2425,8 @@ describe('registerPtyHandlers', () => {
           undefined,
           (() => ({
             httpProxyUrl: 'http://proxy.example:8080',
-            httpProxyBypassRules: 'localhost'
+            httpProxyBypassRules: 'localhost',
+            codexSystemDefaultRealHomeEnabled: true
           })) as never,
           undefined,
           store as never
@@ -2459,6 +2465,10 @@ describe('registerPtyHandlers', () => {
         expect(env.HTTPS_PROXY).toBeUndefined()
         expect(env.NO_PROXY).toBeUndefined()
         expect(env.FOO).toBe('bar')
+        // Why: real-home routing is host-only. A null local-home resolver on
+        // SSH must not become a request to alter the remote Codex environment.
+        expect(spawnOptions.envToDelete ?? []).not.toContain('CODEX_HOME')
+        expect(spawnOptions.envToDelete ?? []).not.toContain('ORCA_CODEX_HOME')
         expect(spawnOptions.paneKey).toBe(makePaneKey('tab-1', leafId))
         expect(spawnOptions.tabId).toBe('tab-1')
         expect(openCodeBuildPtyEnvMock).not.toHaveBeenCalled()
@@ -5635,9 +5645,11 @@ describe('registerPtyHandlers', () => {
     }
     const savedRemoteHooks = process.env.ORCA_FEATURE_REMOTE_AGENT_HOOKS
     process.env.ORCA_FEATURE_REMOTE_AGENT_HOOKS = '0'
-    const remoteSpawn = vi.fn(async (_opts: { env?: Record<string, string> }) => ({
-      id: 'ssh:ssh-runtime-env@@relay-pty'
-    }))
+    const remoteSpawn = vi.fn(
+      async (_opts: { env?: Record<string, string>; envToDelete?: string[] }) => ({
+        id: 'ssh:ssh-runtime-env@@relay-pty'
+      })
+    )
     registerSshPtyProvider('ssh-runtime-env', {
       spawn: remoteSpawn,
       write: vi.fn(),
@@ -5683,7 +5695,10 @@ describe('registerPtyHandlers', () => {
         mainWindow as never,
         runtime as never,
         undefined,
-        undefined,
+        (() => ({
+          agentStatusHooksEnabled: false,
+          codexSystemDefaultRealHomeEnabled: true
+        })) as never,
         undefined,
         store as never
       )
@@ -5705,11 +5720,14 @@ describe('registerPtyHandlers', () => {
         persistHostSessionBinding: true
       })
 
-      const env = remoteSpawn.mock.calls[0]?.[0].env
+      const spawnOptions = remoteSpawn.mock.calls[0]?.[0]
+      const env = spawnOptions.env
       expect(env).toMatchObject({ FOO: 'bar' })
       expect(env?.ORCA_PANE_KEY).toBeUndefined()
       expect(env?.ORCA_TAB_ID).toBeUndefined()
       expect(env?.ORCA_WORKTREE_ID).toBeUndefined()
+      expect(spawnOptions.envToDelete ?? []).not.toContain('CODEX_HOME')
+      expect(spawnOptions.envToDelete ?? []).not.toContain('ORCA_CODEX_HOME')
       expect(store.upsertSshRemotePtyLease).toHaveBeenCalledWith(
         expect.objectContaining({
           targetId: 'ssh-runtime-env',

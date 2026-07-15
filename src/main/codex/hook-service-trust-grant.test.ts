@@ -5,8 +5,10 @@ import type * as Os from 'node:os'
 import { join } from 'node:path'
 import { wrapPosixHookCommand } from '../agent-hooks/installer-utils'
 import {
+  computeTrustKey,
   computeTrustedHash,
   parseTrustKey,
+  readHookTrustEntries,
   upsertHookTrustEntries,
   type CodexTrustEntry
 } from './config-toml-trust'
@@ -17,6 +19,7 @@ import {
   writeCodexTrustGrantLedgerHome
 } from './codex-trust-grant-ledger'
 import type { CodexHookTrustGrantRequest } from './codex-app-server-client'
+import { getCodexHookTrustSignature } from './codex-hook-identity'
 
 const { getPathMock, homedirMock } = vi.hoisted(() => ({
   getPathMock: vi.fn<(name: string) => string>(),
@@ -29,7 +32,7 @@ vi.mock('os', async (importOriginal) => {
   return { ...actual, homedir: homedirMock }
 })
 
-import { CodexHookService } from './hook-service'
+import { CodexHookService, getCodexManagedHookInstallMaterial } from './hook-service'
 
 let tmpHome: string
 let userDataDir: string
@@ -134,6 +137,42 @@ describe('CodexHookService app-server trust grant lane', () => {
     expect(service.install().state).toBe('installed')
     expect(runner).toHaveBeenCalledTimes(1)
     expect(readFileSync(join(managedHome, 'config.toml'))).toEqual(firstToml)
+  })
+
+  it('retries ledger-proven real-home trust cleanup after the hook is already gone', () => {
+    prepareSystemHome()
+    const systemHome = join(tmpHome, '.codex')
+    const hooksPath = join(systemHome, 'hooks.json')
+    const configPath = join(systemHome, 'config.toml')
+    const material = getCodexManagedHookInstallMaterial()
+    const trustedHash = 'sha256:codex-real-home-stop'
+    const entry: CodexTrustEntry = {
+      sourcePath: hooksPath,
+      eventLabel: 'stop',
+      groupIndex: 0,
+      handlerIndex: 0,
+      command: material.command,
+      timeoutSec: 10,
+      trustedHash
+    }
+    const trustKey = computeTrustKey(entry)
+    writeFileSync(hooksPath, `${JSON.stringify({ hooks: {} }, null, 2)}\n`)
+    upsertHookTrustEntries(configPath, [entry])
+    writeCodexTrustGrantLedgerHome(systemHome, {
+      binary: null,
+      entries: {
+        [trustKey]: {
+          signature: getCodexHookTrustSignature(entry),
+          trustedHash
+        }
+      }
+    })
+    installCodexLikeGrantRunner()
+
+    expect(new CodexHookService().install().state).toBe('installed')
+
+    expect(readHookTrustEntries(configPath).has(trustKey)).toBe(false)
+    expect(readCodexTrustGrantLedgerHome(systemHome)).toBeNull()
   })
 
   it('does not accept a ledger hash after the recorded Codex binary stamp changes', () => {
