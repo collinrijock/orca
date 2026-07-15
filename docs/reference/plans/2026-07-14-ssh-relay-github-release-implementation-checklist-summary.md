@@ -44,8 +44,9 @@ complete a box.
     [29386372366](https://github.com/stablyai/orca/actions/runs/29386372366): final-tree-first,
     bounded strict-codesign and exact Node/Orca Developer ID policy contracts run under Node 24 on
     all six native jobs. This is contract proof, not proof of real Orca signatures or native trust.
-  - Active next: credential-free Windows Authenticode policy verification; real signing and missing
-    oldest-floor snapshots remain externally gated.
+  - Proven locally: credential-free Windows final-tree-first Authenticode policy contracts under
+    `E-M3-WINDOWS-SIGNATURE-LOCAL-001`. Exact-head execution on all six native jobs is next. Real
+    signing and missing oldest-floor snapshots remain externally gated.
   - Next external proof: kernel 4.18, macOS 13.5, Windows arm64 build 26100, and native signing/trust.
   - No tuple is enabled; every SSH transfer/runtime and rollout cell remains open.
 

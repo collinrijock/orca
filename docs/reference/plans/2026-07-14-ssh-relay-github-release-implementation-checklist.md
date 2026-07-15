@@ -9,7 +9,7 @@ work; keep exact commands, runner identities, hashes, metrics, and residual gaps
 Date created: 2026-07-14<br>
 Last updated: 2026-07-14<br>
 Current phase: Milestone 3 / Work Package 2 oldest-supported-baseline and native-trust proof — **In progress — 2026-07-14, Codex implementation owner**; exact-head run [29373507297](https://github.com/stablyai/orca/actions/runs/29373507297) passes all six target-native build, smoke, exact clean-build equality, upload, SBOM, license, provenance, runner/toolchain, and prohibited-content cells, and direct inspection of every downloaded payload passes exact archive/subject hashes, archive-scoped SPDX identity, one-owner-per-file, dependency, commit/run/builder/runner, tool-version/hash, and closure assertions (E-M3-METADATA-CI-001); Windows x64/arm64 record strict `MSVC 14.44.35207` identities and distinct exact linker SHA-256 values despite the Git-for-Windows PATH collision; the all-six metadata/provenance gate is closed, while oldest-baseline execution, native signing/trust, cross-family remotes, and measured legacy baselines remain open; production/default behavior and every tuple state remain unchanged; no bundled-runtime path is enabled and no artifact is published<br>
-Session checkpoint: **In progress — 2026-07-14, Codex implementation owner** — credential-free macOS post-sign strict-codesign and signer-policy verification contracts are locally green under E-M3-MACOS-SIGNATURE-LOCAL-001 and pass under Node 24 on all six target-native jobs in exact-head run 29386372366 under E-M3-MACOS-SIGNATURE-CI-001. Credential-free Windows Authenticode policy verification is the next bounded artifact-only package; real Apple/SignPath signing, returned production signatures, Gatekeeper/notarization, Defender/WDAC, missing exact-floor snapshots, and native trust remain separately gated. Nothing is published or enabled, and legacy remains the production default.<br>
+Session checkpoint: **In progress — 2026-07-14, Codex implementation owner** — credential-free macOS post-sign strict-codesign and signer-policy verification contracts are locally green under E-M3-MACOS-SIGNATURE-LOCAL-001 and pass under Node 24 on all six target-native jobs in exact-head run 29386372366 under E-M3-MACOS-SIGNATURE-CI-001. E-M3-WINDOWS-SIGNATURE-LOCAL-RED-001 proves the final Windows Authenticode policy verifier was absent; its final-tree-first implementation and POSIX/PowerShell workflow contracts are locally green under E-M3-WINDOWS-SIGNATURE-LOCAL-001. Exact-head execution on all six target-native jobs is the active gate. Real Apple/SignPath signing, returned production signatures, Gatekeeper/notarization, Defender/WDAC, missing exact-floor snapshots, and native trust remain separately gated. Nothing is published or enabled, and legacy remains the production default.<br>
 Primary design: [SSH relay GitHub Release plan](./2026-07-14-ssh-relay-github-release-plan.html)<br>
 Motivating issues: [#8450](https://github.com/stablyai/orca/issues/8450), [#1693](https://github.com/stablyai/orca/issues/1693)
 
@@ -8416,6 +8416,107 @@ diff --check`.
 - Follow-up: keep native signing/trust and every tuple unchecked. Implement the independent
   credential-free Windows final-signature policy contract, and require real returned bytes plus
   target-native endpoint gates before recording native-trust evidence.
+
+### E-M3-WINDOWS-SIGNATURE-LOCAL-RED-001 — Missing final Windows signature verifier fails focused contract
+
+- Date: 2026-07-14
+- Owner: Codex implementation owner
+- Source: pre-implementation head `0efd19c9c3e82979554804d4e72b6fb5a3cbff7e` plus the new
+  uncommitted purpose-named test.
+- Command:
+
+  ```sh
+  pnpm exec vitest run --config config/vitest.config.ts \
+    config/scripts/ssh-relay-runtime-windows-signature-verification.test.mjs
+  ```
+
+- Result: expected RED. The focused suite failed 1 file/0 tests in 463 ms because
+  `ssh-relay-runtime-windows-signature-verification.mjs` did not exist. No credential, signing
+  service, workflow, publication, tuple, SSH, or production behavior changed.
+- Oracle proved: the existing pre-sign assessment and return-application modules did not already
+  authenticate the complete final Windows tree and enforce final official-Node, Orca SignPath, and
+  preserved-upstream signer policy.
+- Does not prove: the implementation, real SignPath returned bytes, Windows trust, Defender/WDAC,
+  target-native behavior, SSH transfer/install, fallback/performance, or an enabled tuple.
+- Correction: authenticate the complete final tree before native probes; require `Valid` on every
+  native file; pin the exact official Node and SignPath subjects; require preserved files to retain
+  their assessed subject and thumbprint; bound PowerShell; and hash every target before and after
+  probing.
+
+### E-M3-WINDOWS-SIGNATURE-LOCAL-001 — Final-tree-first Windows signer policy passes locally
+
+- Date: 2026-07-14
+- Owner: Codex implementation owner
+- Source: implementation commit `072c0d434e91013fc29ce16059da82c1ac7bfc12`, based on local
+  evidence commit `0efd19c9c3e82979554804d4e72b6fb5a3cbff7e`.
+- Runner/remote/network: local macOS 26.2 build 25C56 arm64, Node v26.0.0 and pnpm 10.24.0. No SSH
+  remote, credential, signing service, PowerShell trust execution, publication, or production path
+  was used. Synthetic `Get-AuthenticodeSignature` output was dependency-injected. Exact unpublished
+  win32 x64/arm64 artifacts were downloaded from run 29386372366 solely for authenticated embedded
+  certificate inspection.
+- Commands:
+
+  ```sh
+  node --check config/scripts/ssh-relay-runtime-windows-signature-verification.mjs
+  node --check config/scripts/ssh-relay-runtime-windows-signature-verification.test.mjs
+  pnpm exec vitest run --config config/vitest.config.ts \
+    config/scripts/ssh-relay-runtime-native-signing-selection.test.mjs \
+    config/scripts/ssh-relay-runtime-native-signing-apply.test.mjs \
+    config/scripts/ssh-relay-runtime-windows-authenticode-assessment.test.mjs \
+    config/scripts/ssh-relay-runtime-windows-signature-verification.test.mjs \
+    config/scripts/ssh-relay-runtime-workflow.test.mjs
+  pnpm exec vitest run --config config/vitest.config.ts config/scripts/ssh-relay-*.test.mjs
+  pnpm run typecheck
+  pnpm run lint
+  pnpm run check:max-lines-ratchet
+  pnpm exec oxfmt --check \
+    .github/workflows/ssh-relay-runtime-artifacts.yml \
+    config/scripts/ssh-relay-runtime-workflow.test.mjs \
+    config/scripts/ssh-relay-runtime-windows-signature-verification.mjs \
+    config/scripts/ssh-relay-runtime-windows-signature-verification.test.mjs \
+    docs/reference/plans/2026-07-14-ssh-relay-github-release-implementation-checklist.md \
+    docs/reference/plans/2026-07-14-ssh-relay-github-release-implementation-checklist-summary.md
+  gh run download 29386372366 --repo stablyai/orca --pattern 'ssh-relay-runtime-win32-*'
+  unzip -p <authenticated-runtime.zip> bin/node.exe | shasum -a 256
+  unzip -p <authenticated-runtime.zip> bin/node.exe | node -e <bounded-PE-certificate-table-slice> | \
+    openssl pkcs7 -inform DER -print_certs -noout
+  git diff --check
+  ```
+
+- Result: PASS. The focused five-suite command passed 5 files/32 tests in 3.89 seconds. The complete
+  purpose-named SSH relay suite passed 30 files/158 tests in 5.39 seconds; the final post-format
+  verifier/workflow rerun passed 2 files/12 tests in 368 ms. Both syntax checks, typecheck, full lint
+  and reliability/localization/bundled-skill gates, max-lines (355 grandfathered suppressions and no
+  new bypass), focused formatting, and `git diff --check` passed. Lint emitted only existing
+  unrelated warnings; local Node 26 emitted the expected repository Node-24 engine warning.
+- Verification oracle: the verifier accepts only Windows, reconstructs and authenticates the
+  signing selection, enforces the bounded source-to-final identity transition and final content ID,
+  and verifies the complete physical final tree before any native command. It probes all six native
+  files through the existing argument-array PowerShell contract bounded to 30 seconds and 64 KiB,
+  requires `Valid`, and hashes each file before and after probing. Official Node requires exact
+  subject `CN=OpenJS Foundation, O=OpenJS Foundation, L=San Francisco, S=California, C=US`; every
+  returned Orca file requires exact SignPath Foundation subject; preserved Microsoft files must
+  retain both their source-assessed subject and 40-hex thumbprint. Wrong/malformed status or signer,
+  stale selection/identity/archive metadata, unbounded growth, tree mutation, and probe-time mutation
+  fail closed.
+- Exact official-Node certificate evidence: the arm64/x64 `bin/node.exe` bytes match their identities
+  at SHA-256 `c7225670c3f477778e18c43a55867f7a0d76468221245e5981ab80eb953c8102` (81,067,848
+  bytes) and `9a4eb5f1c29c6a2e93852ead46b999e284a6a5ca8bab4d4e241d587d025a52de` (92,534,088
+  bytes). Both PE certificate tables contain the OpenJS Foundation subject in San Francisco,
+  California, issued by Microsoft ID Verified CS AOC CA 04. This establishes the signer subject
+  encoded in the exact authenticated inputs; local OpenSSL inspection does not establish Windows
+  Authenticode `Valid` status or endpoint trust.
+- Workflow oracle: both POSIX and Windows artifact job families syntax-check the verifier source and
+  test and run the suite. Four test-path and two source-check occurrences are locked. No job invokes
+  SignPath, fabricates final bytes, accepts native trust, publishes, or enables a tuple.
+- Does not prove: real SignPath signatures on the three returned Orca files, target-native final-tree
+  execution, Windows Server 2022/Windows 11 trust, Defender/WDAC, the arm64 build-26100 floor, signing
+  approval/timeout behavior, release aggregation, SSH transfer/install, packaged desktop use,
+  fallback/performance, or an enabled tuple.
+- Follow-up: commit and push the implementation/evidence separately, then require exact-head POSIX
+  and PowerShell logs to show the new suite under Node 24.18.0 on all six native jobs while every
+  prior artifact, baseline, PR-check, and Golden control retains its expected outcome. Keep native
+  signing/trust unchecked until real returned bytes pass target-native policy and endpoint gates.
 
 ## Accepted Gaps
 
