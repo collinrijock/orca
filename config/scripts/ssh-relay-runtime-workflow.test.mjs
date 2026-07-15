@@ -134,7 +134,8 @@ describe('SSH relay runtime artifact workflow', () => {
       'draft-recovery',
       'aggregate-input',
       'draft-readback',
-      'draft-upload'
+      'draft-upload',
+      'release-assets'
     ]) {
       const script = `ssh-relay-runtime-${moduleName}`
       expect(source.split(`${script}.test.mjs`)).toHaveLength(5)

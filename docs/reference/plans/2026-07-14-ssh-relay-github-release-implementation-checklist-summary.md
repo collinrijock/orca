@@ -15,9 +15,11 @@ in progress, 2026-07-15, Codex implementation owner.** Exact-head run
 target-native artifact jobs and the uploader's eight-test suite on every Node 24 runner under
 `E-M4-DRAFT-UPLOAD-CI-001`. PR Checks and Golden E2E are green; the artifact workflow is red only for
 the retained Windows ARM build-26200-versus-26100 floor mismatch after successful runtime smoke.
-Next, add the disconnected relay-specific release required-asset gate for exact manifest coverage,
-names, sizes, signature, upload state, and channel identity. Production keys/environment/seed,
-publication, desktop/default consumers, tuple enablement, and merge to `main` remain disconnected.
+The disconnected relay-specific release required-asset gate is locally green under
+`E-M4-RELEASE-ASSETS-LOCAL-RED-001` and `E-M4-RELEASE-ASSETS-LOCAL-001`: exact manifest coverage,
+names, sizes, signature binding, upload state, and stable/RC/perf identity. Exact-head all-six native
+CI is required. Production keys/environment/seed, publication, desktop/default consumers, tuple
+enablement, and merge to `main` remain disconnected.
 
 ## Safety status
 
@@ -261,6 +263,10 @@ publication, desktop/default consumers, tuple enablement, and merge to `main` re
       `E-M4-PROTECTED-MANIFEST-WORKFLOW-LOCAL-001`, and exact-head execution passes on all six native
       jobs under `E-M4-PROTECTED-MANIFEST-WORKFLOW-CI-001`. Live protected signing remains open; no
       accepted production key, environment, or seed is provisioned.
+- [ ] Add the relay-specific required-asset gate to the release composition. The disconnected pure
+      gate is locally green under `E-M4-RELEASE-ASSETS-LOCAL-RED-001` and
+      `E-M4-RELEASE-ASSETS-LOCAL-001`; exact-head all-six native CI is required before closing the
+      capability, and release/default workflow composition remains separately gated.
 - [ ] Embed the exact signed manifest and accepted keys in each desktop build.
 - [ ] Upload to a draft release, read back, re-hash, and execute the downloaded archives.
       A disconnected bounded upload/recovery implementation is locally green under

@@ -8,8 +8,8 @@ work; keep exact commands, runner identities, hashes, metrics, and residual gaps
 
 Date created: 2026-07-14<br>
 Last updated: 2026-07-15<br>
-Current phase: Milestone 4 / Work Package 3 disconnected relay required-asset gate — **In progress — 2026-07-15, Codex implementation owner**. The bounded draft upload/recovery capability is closed locally and on all six exact-head native jobs under E-M4-DRAFT-UPLOAD-LOCAL-RED-001, E-M4-DRAFT-UPLOAD-LOCAL-001, and E-M4-DRAFT-UPLOAD-CI-001. The active package must add a disconnected relay-specific release gate that consumes only an already verified signed manifest plus authenticated draft metadata and rejects missing, extra managed, non-uploaded, empty, wrong-size, uncovered, cross-tag/channel, or signature-disagreeing assets. Keep the existing desktop required-asset gate unchanged until composition is explicitly reviewed. Release-cut, desktop builds, publication, and every tuple stay disconnected; production/default behavior is unchanged.<br>
-Session checkpoint: **In progress — 2026-07-15, Codex implementation owner** — exact pushed head `b37cacecf8f1c865f09c118f274ab62302e951ad` passes all six target-native artifact jobs and the eight-test uploader suite in run 29431510990 under E-M4-DRAFT-UPLOAD-CI-001. Both Linux oldest-userland supplements and Windows x64 floor pass. Windows arm64 runtime smoke passes in 7,752.6288ms with 49,684,480-byte RSS, then its floor job retains the expected fail-closed hosted-build 26200 versus required 26100 mismatch. PR Checks 29431510764 and Golden E2E 29431510883 are green. The user authorizes commits, pushes, draft-PR updates, CI reruns, and protected rehearsals within PRs, but not merging to `main`. No accepted production key, protected environment/seed, native-signing trust proof, release write, publication path, desktop consumer, tuple enablement, or production/default change is connected. Legacy remains the production default.<br>
+Current phase: Milestone 4 / Work Package 3 disconnected relay required-asset gate — **In progress — 2026-07-15, Codex implementation owner**. The bounded draft upload/recovery capability is closed locally and on all six exact-head native jobs under E-M4-DRAFT-UPLOAD-LOCAL-RED-001, E-M4-DRAFT-UPLOAD-LOCAL-001, and E-M4-DRAFT-UPLOAD-CI-001. The active package's purpose-named missing-module RED and locally green implementation are recorded under E-M4-RELEASE-ASSETS-LOCAL-RED-001 and E-M4-RELEASE-ASSETS-LOCAL-001. Exact-head execution on all six native Node 24 jobs is required before closing this package. The gate remains a disconnected pure metadata boundary; detached-signature byte encoding, the existing desktop required-asset gate, and workflow composition are unchanged. Release-cut, desktop builds, publication, and every tuple stay disconnected; production/default behavior is unchanged.<br>
+Session checkpoint: **In progress — 2026-07-15, Codex implementation owner** — the locally green release-asset gate pins exact release ID/tag/channel/prerelease, derives the complete managed set from a validated already-verified signed-manifest envelope, binds opaque manifest/signature descriptors by hash and signer IDs, and rejects missing, extra managed, duplicate, non-uploaded, empty, wrong-size, uncovered, or cross-identity metadata under E-M4-RELEASE-ASSETS-LOCAL-001. The final local run passes 13 focused tests, 64 adjacent release tests, all 283 SSH-relay script tests, typecheck, lint, formatting, and diff checks. Only syntax/test execution is added to the six native artifact jobs; there is no command-line entrypoint, release API call, upload/publication caller, desktop consumer, or tuple enablement. The user authorizes commits, pushes, draft-PR updates, CI reruns, and protected rehearsals within PRs, but not merging to `main`. No accepted production key, protected environment/seed, native-signing trust proof, release write, publication path, desktop consumer, tuple enablement, or production/default change is connected. Legacy remains the production default.<br>
 Primary design: [SSH relay GitHub Release plan](./2026-07-14-ssh-relay-github-release-plan.html)<br>
 Motivating issues: [#8450](https://github.com/stablyai/orca/issues/8450), [#1693](https://github.com/stablyai/orca/issues/1693)
 
@@ -113,8 +113,11 @@ same change as the work it records.
   is no CLI entrypoint or workflow caller, and no real release write occurred.
 - Active package: Work Package 3 disconnected relay required-asset gate. Begin with a purpose-named
   missing-module RED for exact verified-manifest coverage, signature, name, size, upload state,
-  managed-asset closure, tag/channel identity, and consumer disconnection. Keep the existing desktop
-  required-asset gate unchanged in this slice.
+  managed-asset closure, tag/channel identity, and consumer disconnection. The missing-module RED is
+  recorded under E-M4-RELEASE-ASSETS-LOCAL-RED-001. The locally green pure gate and test-only native
+  workflow wiring are recorded under E-M4-RELEASE-ASSETS-LOCAL-001; require exact-head all-six CI.
+  Keep the existing desktop required-asset gate and detached-signature byte encoding unchanged in
+  this slice.
 - Completed Work Package 2 gate: target-native Windows source-signature reports from exact-head
   artifact jobs 87267322867 and 87267322870 were independently downloaded and matched to their
   identities and signing-stage reports under E-M3-WINDOWS-SOURCE-SIGNATURE-CI-001. PR Checks
@@ -11355,6 +11358,88 @@ lint` passes all 41 reliability gates, the 355-entry max-lines ratchet, bundled-
 - Checklist items satisfied: exact-head all-six CI gate for the disconnected draft upload/recovery
   capability. The broader draft upload/read-back/execution and Work Package 3 boxes remain open.
 
+### E-M4-RELEASE-ASSETS-LOCAL-RED-001 — Relay-specific release required-asset gate is absent
+
+- Date: 2026-07-15
+- Owner: Codex implementation owner
+- Source: uncommitted purpose-named test
+  `config/scripts/ssh-relay-runtime-release-assets.test.mjs`; draft PR #8741.
+- Runner/remote/network: local macOS 26.2 arm64, Node v26.0.0 and pnpm 10.24.0. No network request,
+  credential, release write, signer, protected environment, SSH remote, desktop consumer,
+  publication, or enabled tuple.
+- Command:
+  - `/usr/bin/time -l pnpm exec vitest run config/scripts/ssh-relay-runtime-release-assets.test.mjs`
+- Result: expected FAIL, one suite / zero imported tests, 200ms Vitest and 0.97s wall. Maximum RSS
+  132,022,272 bytes; peak memory footprint 95,950,176 bytes.
+- Failure oracle: Vitest reports only `Cannot find module './ssh-relay-runtime-release-assets.mjs'`
+  at the purpose-named import. No production module existed that derived exact archive/SBOM/
+  provenance/manifest/signature coverage from an already verified signed manifest and compared it
+  with authenticated draft metadata.
+- Does not prove: implementation correctness, exact tag/channel closure, managed-asset closure,
+  upload state/size enforcement, signature-asset binding, native runner behavior, real GitHub
+  metadata, read-back byte identity, publication, desktop embedding, SSH behavior, or an enabled
+  tuple.
+- Follow-up: implement only the disconnected metadata gate, retain the detached-signature encoding
+  decision and existing desktop release gate unchanged, then run the focused GREEN and broader
+  local regressions before adding native test-job integration.
+
+### E-M4-RELEASE-ASSETS-LOCAL-001 — Exact signed-manifest release coverage passes locally
+
+- Date: 2026-07-15
+- Owner: Codex implementation owner
+- Source: uncommitted `config/scripts/ssh-relay-runtime-release-assets.mjs`, its purpose-named test,
+  and POSIX/Windows native test-job wiring atop exact pushed head
+  `88a77eee91a34f8936882d096e568f499e9160e6`; draft PR #8741.
+- Runner/remote/network: local macOS 26.2 arm64, Node v26.0.0 and pnpm 10.24.0. In-memory manifest and
+  authenticated-release-metadata fixtures only. No network request, credential, release write,
+  signer, protected environment, SSH remote, desktop consumer, publication, or enabled tuple.
+- Focused command: `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts
+--maxWorkers=1 config/scripts/ssh-relay-runtime-release-assets.test.mjs` — PASS, one file / 13
+  tests in 203ms Vitest and 0.92s wall; maximum RSS 152,403,968 bytes, peak footprint 96,114,064
+  bytes, and zero swaps.
+- Adjacent release command: `/usr/bin/time -l pnpm exec vitest run --config
+config/vitest.config.ts --maxWorkers=1 config/scripts/ssh-relay-runtime-release-assets.test.mjs
+config/scripts/ssh-relay-runtime-draft-upload.test.mjs
+config/scripts/ssh-relay-runtime-draft-recovery.test.mjs
+config/scripts/ssh-relay-runtime-draft-readback.test.mjs
+config/scripts/ssh-relay-runtime-release-stage-gate.test.mjs
+config/scripts/ssh-relay-runtime-workflow.test.mjs
+config/scripts/verify-release-required-assets.test.mjs` — PASS, 7 files / 64 tests in 988ms
+  Vitest and 1.72s wall; maximum RSS 135,806,976 bytes, peak footprint 95,802,744 bytes, and zero
+  swaps.
+- Broad release command: `/usr/bin/time -l sh -c "rg --files config/scripts | rg
+'/ssh-relay.*[.]test[.]mjs$' | xargs pnpm exec vitest run --config config/vitest.config.ts
+--maxWorkers=1"` — PASS, 53 files / 283 tests in 9.97s Vitest and 10.94s wall; maximum RSS
+  189,071,360 bytes and zero swaps.
+- Static gates: `node --check` passes both new files. `pnpm run typecheck` passes. `pnpm run lint`
+  passes all 41 reliability gates, the 355-entry max-lines ratchet, bundled-skill verification,
+  localization catalog/parity, and localization coverage; all 26 warnings remain in untouched
+  existing files. Focused `oxfmt --check` and `git diff --check` pass. The protected Node/npm
+  resolver files and existing `verify-release-required-assets.mjs` plus its tests have zero diff.
+- Oracle proved: the pure gate accepts only an exact release ID and stable/RC/perf tag whose
+  authenticated metadata remains a draft with channel-correct prerelease state. It revalidates the
+  already-verified signed-manifest schema, derives every tuple archive/SBOM/provenance plus exact
+  manifest/signature descriptors, bounds count/per-file/aggregate sizes, and requires unique
+  managed names. The opaque detached-signature descriptor must bind the exact manifest SHA-256 and
+  exact embedded signer key IDs without deciding its byte encoding. Missing, unexpected managed,
+  duplicate, non-uploaded, empty, wrong-size, malformed, signature-disagreeing, cross-release,
+  cross-tag, and cross-channel states fail closed; unrelated desktop assets remain untouched.
+- Consumer-disconnection oracle: repository search finds the new production module only in its own
+  focused test and POSIX/Windows artifact-job syntax checks; only the test file is executed. There is
+  no CLI entrypoint, API fetch, release-cut/default workflow caller, upload, publication, desktop
+  consumer, tuple enablement, or change to the legacy SSH path.
+- Does not prove: Node 24/native-runner behavior, real authenticated GitHub metadata, cryptographic
+  verification before envelope construction, final detached-signature byte encoding, byte
+  read-back, downloaded archive execution, a real release draft/write, native signing/trust,
+  publication, desktop embedding, SSH transfer/install, performance against legacy, or any enabled
+  tuple.
+- Checklist items satisfied: local implementation gate for the disconnected relay-specific
+  required-asset capability. The broader Milestone 4 release composition/publication box remains
+  open.
+- Follow-up: commit and push the exact package, then require syntax and 13-test execution on all six
+  exact-head native Node 24 jobs plus PR Checks and Golden E2E. Keep every production/default
+  consumer disconnected.
+
 ## Accepted Gaps
 
 No product gap is accepted merely because it appears in this list. Each entry requires explicit
@@ -11413,13 +11498,12 @@ The project is not complete until every applicable item below is checked with ev
 
 ## Next Required Action
 
-Checkpoint and push E-M4-DRAFT-UPLOAD-CI-001. Then begin a purpose-named disconnected RED for the
-relay-specific release required-asset gate: consume only an already verified signed manifest and
-authenticated draft metadata; require exact manifest/signature coverage, asset names, sizes, upload
-state, managed-asset closure, and stable/RC/perf tag identity. Keep the existing desktop
-`verify-release-required-assets.mjs` behavior unchanged until composition is separately reviewed.
-Do not add a workflow caller or perform a real release write. The protected environment, accepted
-production keys, and secret remain unprovisioned, so live signing evidence stays BLOCKED.
+Checkpoint and push E-M4-RELEASE-ASSETS-LOCAL-RED-001 and E-M4-RELEASE-ASSETS-LOCAL-001. Require
+exact-head syntax and 13-test execution on all six native artifact jobs plus PR Checks and Golden
+E2E. Do not add a workflow caller or perform a real release write; keep the existing desktop
+`verify-release-required-assets.mjs` behavior and detached-signature byte encoding unchanged until
+composition is separately reviewed. The protected environment, accepted production keys, and
+secret remain unprovisioned, so live signing evidence stays BLOCKED.
 Keep Windows arm64 build 26100, macOS 13.5, Linux kernel 4.18, release-cut, desktop builds,
 publication, and every tuple separately gated. Do not merge to `main`; retain every
 production/default gate.

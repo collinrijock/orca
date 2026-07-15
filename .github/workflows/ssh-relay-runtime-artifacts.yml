@@ -220,6 +220,8 @@ jobs:
           node --check config/scripts/ssh-relay-runtime-draft-readback.test.mjs
           node --check config/scripts/ssh-relay-runtime-draft-upload.mjs
           node --check config/scripts/ssh-relay-runtime-draft-upload.test.mjs
+          node --check config/scripts/ssh-relay-runtime-release-assets.mjs
+          node --check config/scripts/ssh-relay-runtime-release-assets.test.mjs
           node --check config/scripts/ssh-relay-runtime-manifest-validation.mjs
           node --check config/scripts/ssh-relay-runtime-manifest-assembly.mjs
           node --check config/scripts/ssh-relay-runtime-manifest-assembly.test.mjs
@@ -276,6 +278,7 @@ jobs:
             config/scripts/ssh-relay-runtime-aggregate-input.test.mjs \
             config/scripts/ssh-relay-runtime-draft-readback.test.mjs \
             config/scripts/ssh-relay-runtime-draft-upload.test.mjs \
+            config/scripts/ssh-relay-runtime-release-assets.test.mjs \
             config/scripts/ssh-relay-runtime-manifest-assembly.test.mjs \
             config/scripts/ssh-relay-runtime-manifest-signing-handoff.test.mjs \
             config/scripts/ssh-relay-runtime-manifest-seed-signing.test.mjs \
@@ -641,6 +644,10 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'runtime draft upload syntax check failed' }
           node --check config/scripts/ssh-relay-runtime-draft-upload.test.mjs
           if ($LASTEXITCODE -ne 0) { throw 'runtime draft upload test syntax check failed' }
+          node --check config/scripts/ssh-relay-runtime-release-assets.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'runtime release assets syntax check failed' }
+          node --check config/scripts/ssh-relay-runtime-release-assets.test.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'runtime release assets test syntax check failed' }
           node --check config/scripts/ssh-relay-runtime-manifest-validation.mjs
           if ($LASTEXITCODE -ne 0) { throw 'runtime manifest validation syntax check failed' }
           node --check config/scripts/ssh-relay-runtime-manifest-assembly.mjs
@@ -726,6 +733,7 @@ jobs:
             config/scripts/ssh-relay-runtime-aggregate-input.test.mjs `
             config/scripts/ssh-relay-runtime-draft-readback.test.mjs `
             config/scripts/ssh-relay-runtime-draft-upload.test.mjs `
+            config/scripts/ssh-relay-runtime-release-assets.test.mjs `
             config/scripts/ssh-relay-runtime-manifest-assembly.test.mjs `
             config/scripts/ssh-relay-runtime-manifest-signing-handoff.test.mjs `
             config/scripts/ssh-relay-runtime-manifest-seed-signing.test.mjs `
