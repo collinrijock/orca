@@ -12810,9 +12810,8 @@ sort`; targeted `rg -n` over `cache|extract|atomic|quarantine`; and complete rea
 
 - Date: 2026-07-15
 - Owner: Codex implementation owner
-- Source: uncommitted correction atop evidence head
-  `39793be9e7d21d84be5bb2673e7b631f733d2224`; exact correction SHA will be appended after the
-  checkpoint commit.
+- Source: exact correction commit `2d5785ef6fe4f8014907d23c2f0880ab459deeff` atop evidence head
+  `39793be9e7d21d84be5bb2673e7b631f733d2224`.
 - Correction: `ssh-relay-artifact-tar-inspection.ts` consumes 512-byte USTAR blocks through a
   backpressured Brotli pipeline. It validates canonical UTF-8 name/prefix fields, header checksum,
   USTAR marker/version, octal mode/size, signed path/type/mode/size/hash, zero file padding, exact
@@ -12852,6 +12851,7 @@ sort`; targeted `rg -n` over `cache|extract|atomic|quarantine`; and complete rea
 - Date: 2026-07-15
 - Owner/decision owner: Codex implementation owner under the user's end-to-end PR-contained
   implementation authority. Merge to `main` remains prohibited.
+- Source: exact correction commit `2d5785ef6fe4f8014907d23c2f0880ab459deeff`.
 - Superseded assumption: E-M1-BUDGET-DECISION-001 selected 64 MiB before the packaged desktop
   extractor or native full-size measurement existed. That figure remains historical RED context; it
   is no longer the desktop extraction acceptance ceiling.
