@@ -51,4 +51,20 @@ describe('Codex trust config rollback', () => {
       expect(statSync(configPath).mode & 0o777).toBe(0o640)
     }
   })
+
+  it.skipIf(process.platform === 'win32')(
+    'restores the captured mode when the contents already match',
+    () => {
+      const configPath = tempConfigPath()
+      writeFileSync(configPath, '[hooks]\n')
+      chmodSync(configPath, 0o640)
+      const snapshot = captureCodexTrustConfig(configPath)
+      chmodSync(configPath, 0o600)
+
+      restoreCodexTrustConfig(configPath, snapshot)
+
+      expect(readFileSync(configPath, 'utf8')).toBe('[hooks]\n')
+      expect(statSync(configPath).mode & 0o777).toBe(0o640)
+    }
+  )
 })
