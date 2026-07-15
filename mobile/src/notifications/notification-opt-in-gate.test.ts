@@ -27,7 +27,8 @@ describe('notification opt-in gate', () => {
     vi.mocked(getNotificationPermissionState).mockResolvedValue({
       granted: false,
       status: 'undetermined',
-      canAskAgain: true
+      canAskAgain: true,
+      authorizationReflectsUserChoice: false
     })
 
     await expect(shouldPresentNotificationOptIn()).resolves.toBe(true)
@@ -46,11 +47,25 @@ describe('notification opt-in gate', () => {
     vi.mocked(getNotificationPermissionState).mockResolvedValue({
       granted: true,
       status: 'granted',
-      canAskAgain: true
+      canAskAgain: true,
+      authorizationReflectsUserChoice: true
     })
 
     await expect(shouldPresentNotificationOptIn()).resolves.toBe(false)
     expect(savePushNotificationsEnabled).toHaveBeenCalledWith(true)
+  })
+
+  it('still presents when a pre-Android 13 default grant is not an opt-in decision', async () => {
+    vi.mocked(readPushNotificationsPreference).mockResolvedValue({ value: null, loaded: true })
+    vi.mocked(getNotificationPermissionState).mockResolvedValue({
+      granted: true,
+      status: 'granted',
+      canAskAgain: true,
+      authorizationReflectsUserChoice: false
+    })
+
+    await expect(shouldPresentNotificationOptIn()).resolves.toBe(true)
+    expect(savePushNotificationsEnabled).not.toHaveBeenCalled()
   })
 
   it('skips the gate when iOS has already denied permission', async () => {
@@ -58,7 +73,8 @@ describe('notification opt-in gate', () => {
     vi.mocked(getNotificationPermissionState).mockResolvedValue({
       granted: false,
       status: 'denied',
-      canAskAgain: false
+      canAskAgain: false,
+      authorizationReflectsUserChoice: false
     })
 
     await expect(shouldPresentNotificationOptIn()).resolves.toBe(false)

@@ -13,6 +13,9 @@ export async function shouldPresentNotificationOptIn(): Promise<boolean> {
   try {
     const permission = await getNotificationPermissionState()
     if (permission.granted) {
+      if (!permission.authorizationReflectsUserChoice) {
+        return true
+      }
       // Why: an already-authorized device should inherit the useful default
       // without seeing an onboarding decision it has effectively made.
       await savePushNotificationsEnabled(true)
