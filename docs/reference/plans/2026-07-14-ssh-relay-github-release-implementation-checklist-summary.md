@@ -234,6 +234,11 @@ complete a box.
       `E-M4-NATIVE-SIGNING-REHEARSAL-CI-001`; PR Checks and Golden E2E are green. The artifact run is
       red only for the retained Windows arm64 build-26100 floor mismatch.
 - [ ] Add a fail-closed aggregate and immutable manifest-signing job.
+      First emit the missing aggregate-ready Linux hash-only tuple descriptors; macOS/Windows
+      already emit equivalent post-sign descriptors. This prerequisite is in progress and remains
+      artifact-only; its missing-module RED and local GREEN are
+      `E-M4-LINUX-FINALIZATION-LOCAL-RED-001` and `E-M4-LINUX-FINALIZATION-LOCAL-001`. Exact-head
+      Linux runner proof remains open.
 - [ ] Embed the exact signed manifest and accepted keys in each desktop build.
 - [ ] Upload to a draft release, read back, re-hash, and execute the downloaded archives.
 - [ ] Test timeouts, retries, approval denial, signing failure, partial output, and draft recovery.

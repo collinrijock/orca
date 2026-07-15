@@ -8,8 +8,8 @@ work; keep exact commands, runner identities, hashes, metrics, and residual gaps
 
 Date created: 2026-07-14<br>
 Last updated: 2026-07-15<br>
-Current phase: Milestone 4 / Work Package 3 manual platform-native signing rehearsal caller — **Closed as a capability; real dispatch blocked — 2026-07-15, Codex implementation owner**. The disconnected signing workflow and its authenticated reconstruction/finalization contracts are closed locally and on all six exact-head Node 24 native build jobs under E-M4-NATIVE-SIGNING-WORKFLOW-LOCAL-RED-001, E-M4-NATIVE-SIGNING-WORKFLOW-LOCAL-001, E-M4-NATIVE-SIGNING-WORKFLOW-CI-RED-001, and E-M4-NATIVE-SIGNING-WORKFLOW-CI-001. The manual-only caller is closed locally and on all six native build jobs under E-M4-NATIVE-SIGNING-REHEARSAL-LOCAL-RED-001, E-M4-NATIVE-SIGNING-REHEARSAL-LOCAL-001, and E-M4-NATIVE-SIGNING-REHEARSAL-CI-001. It binds typed authorization to the exact source, serializes rehearsals without cancelling approval in flight, and leaves ordinary baseline qualification default-on. Real dispatch remains blocked by GitHub's default-branch rule under E-M4-NATIVE-SIGNING-REHEARSAL-DISPATCH-BLOCKED-001; merging to `main` is prohibited. The next safe package is the disconnected fail-closed aggregate/immutable-manifest-signing job contract. Release-cut, desktop builds, publication, and every tuple remain disconnected. Production/default behavior is unchanged.<br>
-Session checkpoint: **In progress — 2026-07-15, Codex implementation owner** — exact head `c2db2b62e544139176d0993b1340f9d0c706e017` passes the new rehearsal/build contracts on all six native jobs in artifact run 29417449971 under `E-M4-NATIVE-SIGNING-REHEARSAL-CI-001`; all six full runtime builds, both Linux supplements, Windows x64 baseline, Golden E2E 29417449936, and PR Checks 29417449960 pass. The artifact run fails only because the unchanged Windows arm64 gate observes hosted build 26200 instead of required build 26100 after successful runtime verification/smoke. The confirmation-bound live dispatch is still refused before run creation under `E-M4-NATIVE-SIGNING-REHEARSAL-DISPATCH-BLOCKED-001`, so no credential was used and real Apple/SignPath/native-trust evidence stays open. Release-cut, desktop builds, publication, tuple enablement, Gatekeeper/notarization, Defender/WDAC, and exact floor gates remain disconnected and open. Legacy remains the production default, and merge to `main` remains prohibited.<br>
+Current phase: Milestone 4 / Work Package 3 Linux aggregate-ready hash-only finalization — **In progress — 2026-07-15, Codex implementation owner**. Exact-head signing-workflow and manual-caller capabilities are closed, while live credentialed dispatch remains blocked by GitHub's default-branch rule under E-M4-NATIVE-SIGNING-REHEARSAL-DISPATCH-BLOCKED-001. Aggregate design inspection found that macOS/Windows finalization emits verified four-file tuple inputs but Linux build artifacts stop before the same tuple-descriptor boundary. The active narrow package adds Linux-only full archive/tree/Node/PTY/watcher verification, derives the complete hash-only native report, re-verifies tree/assets, and emits the aggregate descriptor/receipt. It must fail closed on non-Linux, stale identity, mutation, smoke failure, or partial output. The fail-closed aggregate/manifest-signing job remains next. Release-cut, desktop builds, publication, and every tuple stay disconnected; production/default behavior is unchanged.<br>
+Session checkpoint: **In progress — 2026-07-15, Codex implementation owner** — Linux aggregate-ready finalization is locally green under `E-M4-LINUX-FINALIZATION-LOCAL-RED-001` and `E-M4-LINUX-FINALIZATION-LOCAL-001`. The Linux-only module copies the three stable build assets into exclusive output, verifies archive/full tree and bundled Node/PTY/watcher, derives every native hash from the validated signing plan, then invokes the existing tuple producer to re-verify tree/archive/SBOM/provenance before emitting the descriptor and bound receipt. Any failure removes the entire candidate. Both Linux native build jobs invoke it before upload, and both POSIX/Windows contract families execute its tests. Focused 3 files / 18 tests, broad 48 files / 246 tests, desktop parity 3 files / 48 tests, typecheck, full lint/reliability/localization/max-lines, focused syntax/lint/format, and `git diff --check` pass. Exact-head native runner execution remains required. No aggregate workflow, credential, release consumer, publication path, desktop consumer, tuple enablement, or production/default change is connected. Legacy remains the production default, and merge to `main` remains prohibited.<br>
 Primary design: [SSH relay GitHub Release plan](./2026-07-14-ssh-relay-github-release-plan.html)<br>
 Motivating issues: [#8450](https://github.com/stablyai/orca/issues/8450), [#1693](https://github.com/stablyai/orca/issues/1693)
 
@@ -10534,6 +10534,78 @@ ssh-relay-runtime-native-signing-rehearsal.yml not found on the default branch`.
   signing/native trust is blocked.
 - Follow-up: checkpoint this evidence, keep the dispatch blocker open, and begin the next
   disconnected aggregate/manifest-signing job contract without credentials or production consumers.
+
+### E-M4-LINUX-FINALIZATION-LOCAL-RED-001 — Linux aggregate-ready finalization is absent
+
+- Date: 2026-07-15
+- Owner: Codex implementation owner
+- Source: uncommitted purpose-named test atop pushed head `0be32c5cc`; draft PR #8741.
+- Runner/remote/network: local macOS 26.2 arm64, Node v26.0.0 and pnpm 10.24.0. Local test import
+  only; no Actions runner, credential, signer, SSH host, publication, desktop consumer, or enabled
+  tuple.
+- Command:
+  `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1 config/scripts/ssh-relay-runtime-linux-finalization.test.mjs`.
+- Result: expected FAIL before collection because
+  `config/scripts/ssh-relay-runtime-linux-finalization.mjs` is absent; 157 ms Vitest / 0.89 seconds
+  wall, 131,891,200-byte maximum RSS, 96,048,480-byte peak footprint, zero swaps.
+- Oracle proved: existing Linux build output has no capability that converts its already verified
+  hash-only runtime into the same exact four-file aggregate boundary emitted after macOS/Windows
+  signing. The RED defines Linux-only validation, verify-before-descriptor ordering, complete native
+  hash projection, exclusive output, failure cleanup, receipt binding, and strict CLI arguments.
+- Does not prove: implementation, real runtime/archive execution, native CI, aggregate workflow,
+  manifest signing, publication, desktop embedding, SSH behavior, or an enabled tuple.
+- Follow-up: implement the Linux-only finalizer, wire it into both Linux native build jobs, and run
+  focused/broad local gates before exact-head runner execution.
+
+### E-M4-LINUX-FINALIZATION-LOCAL-001 — Linux aggregate-ready finalization passes locally
+
+- Date: 2026-07-15
+- Owner: Codex implementation owner
+- Source: local implementation atop pushed head `0be32c5cc`; draft PR #8741.
+- Runner/remote/network: local macOS 26.2 arm64, Node v26.0.0 and pnpm 10.24.0. Local generated
+  fixtures and workflow-source contracts only; no Linux runtime execution, Actions credential,
+  signer, SSH host, publication, desktop consumer, or enabled tuple.
+- Implementation-iteration evidence: the first implementation run rejects the old abbreviated test
+  manifest through the production closure validator and rejects the non-Linux spoof before output;
+  the test is corrected to inject only the already-proven signing-plan dependency. Subsequent REDs
+  expose macOS `/var` → `/private/var` physical-path assumptions in the test; production comparison
+  is corrected to real paths before GREEN. No production closure, identity, or path validation is
+  weakened.
+- Commands and final results:
+  - Focused finalizer/tuple/workflow suite:
+    `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1 config/scripts/ssh-relay-runtime-linux-finalization.test.mjs config/scripts/ssh-relay-runtime-manifest-tuple.test.mjs config/scripts/ssh-relay-runtime-workflow.test.mjs`
+    — PASS, 3 files / 18 tests in 896 ms test / 1.59 seconds wall, 140,427,264-byte maximum RSS,
+    96,261,496-byte peak footprint, zero swaps. The final post-format rerun also passes 3/18 in
+    833 ms.
+  - Broad release suite:
+    `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1 config/scripts/ssh-relay*.test.mjs`
+    — PASS, 48 files / 246 tests in 8.61 seconds test / 9.56 seconds wall,
+    189,005,824-byte maximum RSS, 96,097,680-byte peak footprint, zero swaps.
+  - Desktop manifest/signature parity:
+    `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1 src/main/ssh/ssh-relay-artifact-schema.test.ts src/main/ssh/ssh-relay-manifest-signature.test.ts src/main/ssh/ssh-relay-release-asset.test.ts`
+    — PASS, 3 files / 48 tests in 504 ms test / 1.19 seconds wall, 131,973,120-byte maximum RSS,
+    96,097,584-byte peak footprint, zero swaps.
+  - `/usr/bin/time -l pnpm run typecheck` — PASS in 1.99 seconds wall,
+    1,254,457,344-byte maximum RSS, 95,835,440-byte peak footprint, zero swaps.
+  - `/usr/bin/time -l pnpm run lint` — PASS in 9.42 seconds wall, 2,000,797,696-byte maximum RSS,
+    95,720,656-byte peak footprint, zero swaps. All 41 reliability gates, 355-entry max-lines ratchet,
+    bundled-skill guides, localization catalog/parity, and localization coverage pass; all 26
+    warnings are in untouched existing files.
+  - Focused `node --check`, `oxlint`, `oxfmt --check`, `git diff --check`, and zero diff in the two
+    user-owned Node/npm resolver files — PASS.
+- Oracle proved: only exact Linux identities from the named physical source output are accepted.
+  Source and exclusive output are physically disjoint; symlinked/empty/mutating input assets fail.
+  The existing archive/tree/bundled smoke runs before descriptor generation. The complete native
+  file report is derived from the validated hash-only plan, and the existing tuple producer rechecks
+  tree/archive/metadata before the descriptor. A receipt binds tuple/content identity, verification,
+  and exact aggregate input. Any failure removes all candidate output. Linux build jobs copy only the
+  descriptor/receipt into their existing unpublished evidence after success; ordinary baseline jobs
+  remain unchanged.
+- Does not prove: execution on Linux x64/arm64, a real archive/tree/smoke through the new call,
+  aggregate workflow, manifest credential/signature, publication/read-back, desktop embedding, SSH
+  behavior, or an enabled tuple.
+- Follow-up: commit/push and require both Linux native jobs plus all-six contract families to pass at
+  the exact head. Inspect the emitted descriptor/receipt before starting aggregate job wiring.
 
 ## Accepted Gaps
 

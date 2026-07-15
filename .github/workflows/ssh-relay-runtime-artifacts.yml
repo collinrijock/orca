@@ -179,6 +179,8 @@ jobs:
           node --check config/scripts/ssh-relay-runtime-macos-signing.test.mjs
           node --check config/scripts/ssh-relay-runtime-native-signing-finalization.mjs
           node --check config/scripts/ssh-relay-runtime-native-signing-finalization.test.mjs
+          node --check config/scripts/ssh-relay-runtime-linux-finalization.mjs
+          node --check config/scripts/ssh-relay-runtime-linux-finalization.test.mjs
           node --check config/scripts/ssh-relay-runtime-native-signing-workflow.test.mjs
           node --check config/scripts/ssh-relay-runtime-native-signing-rehearsal-workflow.test.mjs
           node --check config/scripts/ssh-relay-runtime-build-prerequisite.test.mjs
@@ -216,6 +218,7 @@ jobs:
             config/scripts/ssh-relay-runtime-archive-extraction.test.mjs \
             config/scripts/ssh-relay-runtime-macos-signing.test.mjs \
             config/scripts/ssh-relay-runtime-native-signing-finalization.test.mjs \
+            config/scripts/ssh-relay-runtime-linux-finalization.test.mjs \
             config/scripts/ssh-relay-runtime-native-signing-workflow.test.mjs \
             config/scripts/ssh-relay-runtime-native-signing-rehearsal-workflow.test.mjs \
             config/scripts/ssh-relay-runtime-build-prerequisite.test.mjs \
@@ -316,6 +319,17 @@ jobs:
             ' "$signing_report"
             test ! -e "$signing_stage"
             cp "$signing_report" "$GITHUB_WORKSPACE/runtime-evidence/${{ matrix.tuple }}/"
+            verified_at=$(node -e 'process.stdout.write(new Date().toISOString())')
+            final_output="$output_root/linux-final"
+            node config/scripts/ssh-relay-runtime-linux-finalization.mjs \
+              --source-output-directory "$first_output" \
+              --identity "$identity" \
+              --output-directory "$final_output" \
+              --verified-at "$verified_at" \
+              --native-verification-tool-version "$(node -p 'process.versions.node')"
+            cp "$final_output/assets/orca-ssh-relay-runtime-${{ matrix.tuple }}.manifest-tuple.json" \
+              "$final_output/evidence/${{ matrix.tuple }}.linux-finalization.json" \
+              "$GITHUB_WORKSPACE/runtime-evidence/${{ matrix.tuple }}/"
             exit 0
           fi
           mkdir -p "$output_root"
@@ -590,6 +604,10 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'runtime signing finalization syntax check failed' }
           node --check config/scripts/ssh-relay-runtime-native-signing-finalization.test.mjs
           if ($LASTEXITCODE -ne 0) { throw 'runtime signing finalization test syntax check failed' }
+          node --check config/scripts/ssh-relay-runtime-linux-finalization.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'runtime Linux finalization syntax check failed' }
+          node --check config/scripts/ssh-relay-runtime-linux-finalization.test.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'runtime Linux finalization test syntax check failed' }
           node --check config/scripts/ssh-relay-runtime-native-signing-workflow.test.mjs
           if ($LASTEXITCODE -ne 0) { throw 'runtime native signing workflow test syntax check failed' }
           node --check config/scripts/ssh-relay-runtime-native-signing-rehearsal-workflow.test.mjs
@@ -630,6 +648,7 @@ jobs:
             config/scripts/ssh-relay-runtime-archive-extraction.test.mjs `
             config/scripts/ssh-relay-runtime-macos-signing.test.mjs `
             config/scripts/ssh-relay-runtime-native-signing-finalization.test.mjs `
+            config/scripts/ssh-relay-runtime-linux-finalization.test.mjs `
             config/scripts/ssh-relay-runtime-native-signing-workflow.test.mjs `
             config/scripts/ssh-relay-runtime-native-signing-rehearsal-workflow.test.mjs `
             config/scripts/ssh-relay-runtime-build-prerequisite.test.mjs `
