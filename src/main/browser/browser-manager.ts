@@ -39,6 +39,10 @@ import {
 } from './browser-guest-ui'
 import { ANTI_DETECTION_SCRIPT } from './anti-detection'
 import { openPopupWithOriginBar, type PopupChildWindowOptions } from './popup-origin-bar-window'
+import {
+  BROWSER_CLICKED_LINK_ROUTING_WORLD_ID,
+  buildBrowserClickedLinkRoutingScript
+} from './browser-clicked-link-routing'
 import { cleanElectronUserAgent } from './browser-session-ua'
 import type { BrowserViewportOverride } from '../../shared/types'
 import {
@@ -146,6 +150,10 @@ type PopupOwnerContext = {
   browserTabId: string
   rootGuestWebContentsId: number
 }
+type ClickedLinkFrameNames = {
+  foreground: string
+  background: string
+}
 
 const SAFE_POPUP_WINDOW_OPTIONS = {
   alwaysOnTop: false,
@@ -235,6 +243,7 @@ export class BrowserManager {
   private readonly worktreeIdByTabId = new Map<string, string>()
   private readonly policyAttachedGuestIds = new Set<number>()
   private readonly policyCleanupByGuestId = new Map<number, () => void>()
+  private readonly clickedLinkFrameNamesByGuestId = new Map<number, ClickedLinkFrameNames>()
   private shouldForwardDictationShortcut: (() => boolean) | null = null
   private readonly pendingLoadFailuresByGuestId = new Map<
     number,
@@ -620,6 +629,17 @@ export class BrowserManager {
     if (inheritedOwnerContext) {
       this.popupOwnerContextByGuestId.set(guest.id, inheritedOwnerContext)
     }
+    // Why: OAuth child windows must retain normal link/window relationships;
+    // only the primary embedded browser converts new-tab clicks to Orca tabs.
+    const clickedLinkFrameNames = inheritedOwnerContext
+      ? null
+      : {
+          foreground: `__orca_clicked_link_foreground_${randomUUID()}`,
+          background: `__orca_clicked_link_background_${randomUUID()}`
+        }
+    if (clickedLinkFrameNames) {
+      this.clickedLinkFrameNamesByGuestId.set(guest.id, clickedLinkFrameNames)
+    }
 
     // Why: Cloudflare Turnstile and similar bot detectors probe browser APIs
     // (navigator.webdriver, plugins, window.chrome) that differ in Electron
@@ -632,16 +652,65 @@ export class BrowserManager {
     // Orca window is not the focused foreground app. With throttling enabled,
     // the compositor stops producing frames and capturePage() returns empty.
     guest.setBackgroundThrottling(false)
+    const installClickedLinkRouting = (): void => {
+      if (!clickedLinkFrameNames || guest.isDestroyed()) {
+        return
+      }
+      // Why: an isolated-world click listener can label real anchor clicks
+      // without exposing the private frame name to untrusted page scripts.
+      void guest
+        .executeJavaScriptInIsolatedWorld(
+          BROWSER_CLICKED_LINK_ROUTING_WORLD_ID,
+          [
+            {
+              // Why: mobile emulation spoofs the guest UA as iOS, so modifier
+              // routing must use the actual desktop host platform from main.
+              code: buildBrowserClickedLinkRoutingScript(
+                clickedLinkFrameNames.foreground,
+                clickedLinkFrameNames.background,
+                process.platform === 'darwin'
+              )
+            }
+          ],
+          false
+        )
+        .catch(() => {})
+    }
+    if (clickedLinkFrameNames) {
+      guest.on('dom-ready', installClickedLinkRouting)
+    }
     const handleDidCreateWindow = (window: Electron.BrowserWindow): void => {
       // Why: popup descendants inherit the opener's owner context for routing,
       // but must not replace its primary guest registration.
       this.attachGuestPolicies(window.webContents, this.resolvePopupOwnerContext(guest.id))
     }
     guest.on('did-create-window', handleDidCreateWindow)
-    guest.setWindowOpenHandler(({ url }) => {
+    guest.setWindowOpenHandler(({ url, frameName }) => {
       const browserTabId = this.resolveBrowserTabIdForGuestWebContentsId(guest.id)
       const browserUrl = normalizeBrowserNavigationUrl(url)
       const externalUrl = normalizeExternalBrowserUrl(url)
+      const expectedClickedLinkFrameNames = this.clickedLinkFrameNamesByGuestId.get(guest.id)
+      let activate: boolean | null = null
+      if (expectedClickedLinkFrameNames) {
+        if (frameName === expectedClickedLinkFrameNames.foreground) {
+          activate = true
+        } else if (frameName === expectedClickedLinkFrameNames.background) {
+          activate = false
+        }
+      }
+
+      if (
+        browserTabId &&
+        browserUrl &&
+        activate !== null &&
+        this.openLinkInOrcaTab(browserTabId, browserUrl, activate)
+      ) {
+        this.forwardOrQueuePopupEvent(guest.id, {
+          origin: safeOrigin(browserUrl),
+          action: 'opened-in-orca'
+        })
+        return { action: 'deny' }
+      }
 
       // Why: file URLs are valid for user-opened in-pane previews, but remote
       // content must not create native child windows targeting local paths.
@@ -739,6 +808,9 @@ export class BrowserManager {
       try {
         guest.off('destroyed', handleDestroyed)
         guest.off('did-create-window', handleDidCreateWindow)
+        if (clickedLinkFrameNames) {
+          guest.off('dom-ready', installClickedLinkRouting)
+        }
       } catch {
         // guest may already be destroyed
       }
@@ -795,6 +867,7 @@ export class BrowserManager {
       this.policyCleanupByGuestId.delete(guestWebContentsId)
     }
     this.policyAttachedGuestIds.delete(guestWebContentsId)
+    this.clickedLinkFrameNamesByGuestId.delete(guestWebContentsId)
     this.popupOwnerContextByGuestId.delete(guestWebContentsId)
     // Why: a popup must stop inheriting authorization as soon as its primary
     // owner is retired, even if Chromium has not destroyed the child yet.
@@ -989,6 +1062,7 @@ export class BrowserManager {
       cleanup()
     }
     this.policyCleanupByGuestId.clear()
+    this.clickedLinkFrameNamesByGuestId.clear()
     this.tabIdByWebContentsId.clear()
     this.popupOwnerContextByGuestId.clear()
     this.worktreeIdByTabId.clear()
@@ -1880,6 +1954,25 @@ export class BrowserManager {
         validatedUrl: redactKagiSessionToken(loadError.validatedUrl)
       }
     })
+  }
+
+  private openLinkInOrcaTab(browserTabId: string, rawUrl: string, activate: boolean): boolean {
+    const renderer = this.resolveRendererForBrowserTab(browserTabId)
+    if (!renderer) {
+      return false
+    }
+    const normalizedUrl = normalizeBrowserNavigationUrl(rawUrl)
+    if (!normalizedUrl || normalizedUrl === ORCA_BROWSER_BLANK_URL) {
+      return false
+    }
+    // Why: only the renderer owns Orca's worktree/tab model. Main forwards a
+    // validated URL instead of letting arbitrary guest content mutate it.
+    renderer.send('browser:open-link-in-orca-tab', {
+      browserPageId: browserTabId,
+      url: normalizedUrl,
+      activate
+    })
+    return true
   }
 }
 

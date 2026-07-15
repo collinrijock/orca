@@ -2258,7 +2258,7 @@ const api = {
       callback: (event: {
         browserPageId: string
         origin: string
-        action: 'opened-external' | 'blocked'
+        action: 'opened-in-orca' | 'opened-external' | 'blocked'
       }) => void
     ): (() => void) => {
       const listener = (
@@ -2266,7 +2266,7 @@ const api = {
         data: {
           browserPageId: string
           origin: string
-          action: 'opened-external' | 'blocked'
+          action: 'opened-in-orca' | 'opened-external' | 'blocked'
         }
       ) => callback(data)
       ipcRenderer.on('browser:popup', listener)
@@ -2424,11 +2424,11 @@ const api = {
     },
 
     onOpenLinkInOrcaTab: (
-      callback: (event: { browserPageId: string; url: string }) => void
+      callback: (event: { browserPageId: string; url: string; activate: boolean }) => void
     ): (() => void) => {
       const listener = (
         _event: Electron.IpcRendererEvent,
-        data: { browserPageId: string; url: string }
+        data: { browserPageId: string; url: string; activate: boolean }
       ) => callback(data)
       ipcRenderer.on('browser:open-link-in-orca-tab', listener)
       return () => ipcRenderer.removeListener('browser:open-link-in-orca-tab', listener)

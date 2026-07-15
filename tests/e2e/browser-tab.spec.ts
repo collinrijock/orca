@@ -97,6 +97,15 @@ async function switchToBrowserTab(
   )
 }
 
+async function getActiveBrowserTabId(
+  page: Parameters<typeof getActiveWorktreeId>[0],
+  worktreeId: string
+): Promise<string | null> {
+  return page.evaluate((targetWorktreeId) => {
+    return window.__store?.getState().activeBrowserTabIdByWorktree[targetWorktreeId] ?? null
+  }, worktreeId)
+}
+
 async function startBrowserFormServer(): Promise<{
   url: (label: string) => string
   close: () => Promise<void>
@@ -121,6 +130,59 @@ async function startBrowserFormServer(): Promise<{
   }
 }
 
+async function startBrowserLinkServer(): Promise<{
+  sourceUrl: string
+  close: () => Promise<void>
+}> {
+  const server = createServer((request, response) => {
+    const origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`
+    const pathname = new URL(request.url ?? '/', origin).pathname
+    response.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' })
+    if (pathname === '/destination') {
+      response.end(
+        '<!doctype html><html><head><title>Linked destination</title></head><body>Destination</body></html>'
+      )
+      return
+    }
+    if (pathname === '/modifier-destination') {
+      response.end(
+        '<!doctype html><html><head><title>Modifier destination</title></head><body>Modifier destination</body></html>'
+      )
+      return
+    }
+    if (pathname === '/middle-destination') {
+      response.end(
+        '<!doctype html><html><head><title>Middle-click destination</title></head><body>Middle-click destination</body></html>'
+      )
+      return
+    }
+    response.end(`
+      <!doctype html>
+      <html>
+        <head><title>Source page</title></head>
+        <body>
+          <a id="external-link" href="${origin}/destination" target="_blank">Open destination</a>
+          <a id="modifier-link" href="${origin}/modifier-destination">Open with modifier</a>
+          <a id="middle-link" href="${origin}/middle-destination">Open with middle click</a>
+          <a id="cancelled-link" href="${origin}/destination" target="_blank">Handle in page</a>
+          <script>
+            document.querySelector('#cancelled-link').addEventListener('click', (event) => {
+              event.preventDefault()
+              document.title = 'Click handled in page'
+            })
+          </script>
+        </body>
+      </html>
+    `)
+  })
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
+  const port = (server.address() as AddressInfo).port
+  return {
+    sourceUrl: `http://127.0.0.1:${port}/source`,
+    close: () => closeServer(server)
+  }
+}
+
 async function closeServer(server: Server): Promise<void> {
   await new Promise<void>((resolve, reject) =>
     server.close((error) => {
@@ -130,6 +192,56 @@ async function closeServer(server: Server): Promise<void> {
       }
       resolve()
     })
+  )
+}
+
+async function clickBrowserLink(
+  page: Parameters<typeof getActiveWorktreeId>[0],
+  browserTabId: string,
+  selector: string,
+  options: {
+    modifiers?: ('meta' | 'control')[]
+    button?: 'left' | 'middle'
+  } = {}
+): Promise<void> {
+  await page.evaluate(
+    async ({ targetBrowserTabId, targetSelector, inputModifiers, button }) => {
+      const slot = [...document.querySelectorAll('[data-browser-overlay-tab-id]')].find(
+        (candidate) => candidate.getAttribute('data-browser-overlay-tab-id') === targetBrowserTabId
+      )
+      const webview = slot?.querySelector('webview') as Electron.WebviewTag | null
+      if (!webview) {
+        throw new Error(`Missing webview for browser tab ${targetBrowserTabId}`)
+      }
+      const point = (await webview.executeJavaScript(`(() => {
+        const rect = document.querySelector(${JSON.stringify(targetSelector)})?.getBoundingClientRect()
+        return rect ? { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 } : null
+      })()`)) as { x: number; y: number } | null
+      if (!point) {
+        throw new Error(`Missing browser link ${targetSelector}`)
+      }
+      await webview.sendInputEvent({ type: 'mouseMove', modifiers: inputModifiers, ...point })
+      await webview.sendInputEvent({
+        type: 'mouseDown',
+        button,
+        clickCount: 1,
+        modifiers: inputModifiers,
+        ...point
+      })
+      await webview.sendInputEvent({
+        type: 'mouseUp',
+        button,
+        clickCount: 1,
+        modifiers: inputModifiers,
+        ...point
+      })
+    },
+    {
+      targetBrowserTabId: browserTabId,
+      targetSelector: selector,
+      inputModifiers: options.modifiers ?? [],
+      button: options.button ?? 'left'
+    }
   )
 }
 
@@ -298,6 +410,62 @@ test.describe('Browser Tab', () => {
         .toBe('second typed value')
     } finally {
       await formServer.close()
+    }
+  })
+
+  test('new-tab link clicks open in Orca worktree tabs instead of popup windows', async ({
+    electronApp,
+    orcaPage
+  }) => {
+    const linkServer = await startBrowserLinkServer()
+    try {
+      const worktreeId = (await getActiveWorktreeId(orcaPage))!
+      const sourceTab = await createBrowserTab(
+        orcaPage,
+        worktreeId,
+        linkServer.sourceUrl,
+        'Source page'
+      )
+      expect(sourceTab?.id).toBeTruthy()
+
+      const baseWindowCount = await electronApp.evaluate(
+        ({ BaseWindow }) => BaseWindow.getAllWindows().length
+      )
+      await clickBrowserLink(orcaPage, sourceTab!.id, '#external-link')
+
+      await expect(
+        orcaPage.locator('[data-tab-id]').filter({ hasText: 'Linked destination' })
+      ).toBeVisible({ timeout: 10_000 })
+
+      await switchToBrowserTab(orcaPage, worktreeId, sourceTab!.id)
+      await clickBrowserLink(orcaPage, sourceTab!.id, '#modifier-link', {
+        modifiers: process.platform === 'darwin' ? ['meta'] : ['control']
+      })
+      await expect(
+        orcaPage.locator('[data-tab-id]').filter({ hasText: 'Modifier destination' })
+      ).toBeVisible({ timeout: 10_000 })
+      await expect.poll(() => getActiveBrowserTabId(orcaPage, worktreeId)).toBe(sourceTab!.id)
+
+      await switchToBrowserTab(orcaPage, worktreeId, sourceTab!.id)
+      const tabCountBeforeCancelledClick = await orcaPage.locator('[data-tab-id]').count()
+      await clickBrowserLink(orcaPage, sourceTab!.id, '#cancelled-link')
+      await expect(
+        orcaPage.locator('[data-tab-id]').filter({ hasText: 'Click handled in page' })
+      ).toBeVisible({ timeout: 10_000 })
+      await expect(orcaPage.locator('[data-tab-id]')).toHaveCount(tabCountBeforeCancelledClick)
+
+      await clickBrowserLink(orcaPage, sourceTab!.id, '#middle-link', { button: 'middle' })
+      await expect(
+        orcaPage.locator('[data-tab-id]').filter({ hasText: 'Middle-click destination' })
+      ).toBeVisible({ timeout: 10_000 })
+      await expect.poll(() => getActiveBrowserTabId(orcaPage, worktreeId)).toBe(sourceTab!.id)
+      await expect
+        .poll(() => electronApp.evaluate(({ BaseWindow }) => BaseWindow.getAllWindows().length), {
+          timeout: 5_000
+        })
+        .toBe(baseWindowCount)
+    } finally {
+      await linkServer.close()
     }
   })
 

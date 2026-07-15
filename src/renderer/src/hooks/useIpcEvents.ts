@@ -2089,7 +2089,7 @@ export function useIpcEvents(): void {
     )
 
     unsubs.push(
-      window.api.browser.onOpenLinkInOrcaTab(({ browserPageId, url }) => {
+      window.api.browser.onOpenLinkInOrcaTab(({ browserPageId, url, activate }) => {
         const store = useAppStore.getState()
         const sourcePage = Object.values(store.browserPagesByWorkspace)
           .flat()
@@ -2100,11 +2100,9 @@ export function useIpcEvents(): void {
         if (getRuntimeEnvironmentIdForWorktree(store, sourcePage.worktreeId)) {
           return
         }
-        // Why: the guest process can request "open this link in Orca", but it
-        // does not own Orca's worktree/tab model. Resolve the source page's
-        // worktree and create a new outer browser tab so the link opens as a
-        // separate tab in the outer Orca tab bar.
-        store.createBrowserTab(sourcePage.worktreeId, url, { title: url })
+        // Why: only the renderer owns Orca's tab model; it also preserves the
+        // guest's foreground/background intent in the outer worktree tab bar.
+        store.createBrowserTab(sourcePage.worktreeId, url, { title: url, activate })
       })
     )
 
