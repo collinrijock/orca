@@ -5,6 +5,15 @@ import { parseSshRelayArtifactManifest } from './ssh-relay-artifact-schema'
 import { sshRelayRuntimeArchiveName } from './ssh-relay-release-asset'
 import { computeSshRelayRuntimeContentId } from './ssh-relay-runtime-identity'
 
+function finalizeTuple(manifest: ReturnType<typeof createSshRelayArtifactTestManifest>): void {
+  const tuple = manifest.tuples[0]
+  const files = tuple.entries.filter((entry) => entry.type === 'file')
+  tuple.contentId = computeSshRelayRuntimeContentId(tuple)
+  tuple.archive.name = sshRelayRuntimeArchiveName(tuple.tupleId, tuple.contentId)
+  tuple.archive.fileCount = files.length
+  tuple.archive.expandedSize = files.reduce((total, entry) => total + entry.size, 0)
+}
+
 function createWindowsManifest() {
   const manifest = createSshRelayArtifactTestManifest()
   const tuple = manifest.tuples[0]
@@ -22,15 +31,67 @@ function createWindowsManifest() {
     entry.path = entry.path
       .replace('bin/node', 'bin/node.exe')
       .replace('watcher-linux-x64-glibc', 'watcher-win32-x64')
+      .replace(
+        'node_modules/node-pty/build/Release/pty.node',
+        'node_modules/node-pty/build/Release/conpty.node'
+      )
   }
+  tuple.entries.push(
+    {
+      path: 'node_modules/node-pty/build/Release/conpty',
+      type: 'directory',
+      mode: 0o755
+    },
+    {
+      path: 'node_modules/node-pty/build/Release/conpty_console_list.node',
+      type: 'file',
+      role: 'node-pty-native',
+      size: 31,
+      mode: 0o755,
+      sha256: `sha256:${'9'.repeat(64)}`
+    },
+    {
+      path: 'node_modules/node-pty/build/Release/conpty/OpenConsole.exe',
+      type: 'file',
+      role: 'native-runtime',
+      size: 32,
+      mode: 0o755,
+      sha256: `sha256:${'a'.repeat(64)}`
+    },
+    {
+      path: 'node_modules/node-pty/build/Release/conpty/conpty.dll',
+      type: 'file',
+      role: 'native-runtime',
+      size: 33,
+      mode: 0o755,
+      sha256: `sha256:${'b'.repeat(64)}`
+    }
+  )
   tuple.nativeVerification.policy = 'signpath-authenticode-v1'
   for (const file of tuple.nativeVerification.files) {
     file.path = file.path
       .replace('bin/node', 'bin/node.exe')
       .replace('watcher-linux-x64-glibc', 'watcher-win32-x64')
+      .replace(
+        'node_modules/node-pty/build/Release/pty.node',
+        'node_modules/node-pty/build/Release/conpty.node'
+      )
   }
-  tuple.contentId = computeSshRelayRuntimeContentId(tuple)
-  tuple.archive.name = sshRelayRuntimeArchiveName(tuple.tupleId, tuple.contentId)
+  tuple.nativeVerification.files.push(
+    {
+      path: 'node_modules/node-pty/build/Release/conpty_console_list.node',
+      sha256: `sha256:${'9'.repeat(64)}`
+    },
+    {
+      path: 'node_modules/node-pty/build/Release/conpty/OpenConsole.exe',
+      sha256: `sha256:${'a'.repeat(64)}`
+    },
+    {
+      path: 'node_modules/node-pty/build/Release/conpty/conpty.dll',
+      sha256: `sha256:${'b'.repeat(64)}`
+    }
+  )
+  finalizeTuple(manifest)
   return manifest
 }
 
@@ -42,13 +103,46 @@ describe('SSH relay artifact manifest schema', () => {
     expect(parsed.tuples[0].tupleId).toBe('linux-x64-glibc')
   })
 
-  it('accepts the target-native Windows Node path and compatibility discriminator', () => {
+  it('accepts the exact target-native Windows native closure and compatibility discriminator', () => {
     const parsed = parseSshRelayArtifactManifest(createWindowsManifest())
+    const files = parsed.tuples[0].entries.filter((entry) => entry.type === 'file')
 
     expect(parsed.tuples[0].compatibility.kind).toBe('windows')
     expect(parsed.tuples[0].entries).toContainEqual(
       expect.objectContaining({ path: 'bin/node.exe', role: 'node' })
     )
+    expect(files.filter((entry) => entry.role === 'node-pty-native')).toHaveLength(2)
+    expect(files.filter((entry) => entry.role === 'native-runtime')).toHaveLength(2)
+    expect(parsed.tuples[0].nativeVerification.files).toHaveLength(6)
+  })
+
+  it('rejects missing or extra tuple-specific Windows native role members', () => {
+    const missing = createWindowsManifest()
+    const missingPath = 'node_modules/node-pty/build/Release/conpty_console_list.node'
+    missing.tuples[0].entries = missing.tuples[0].entries.filter(
+      (entry) => entry.path !== missingPath
+    )
+    missing.tuples[0].nativeVerification.files = missing.tuples[0].nativeVerification.files.filter(
+      (entry) => entry.path !== missingPath
+    )
+    finalizeTuple(missing)
+    expect(() => parseSshRelayArtifactManifest(missing)).toThrow(/node-pty-native.*closure/i)
+
+    const extra = createWindowsManifest()
+    extra.tuples[0].entries.push({
+      path: 'node_modules/node-pty/build/Release/conpty/unexpected.dll',
+      type: 'file',
+      role: 'native-runtime',
+      size: 34,
+      mode: 0o755,
+      sha256: `sha256:${'c'.repeat(64)}`
+    })
+    extra.tuples[0].nativeVerification.files.push({
+      path: 'node_modules/node-pty/build/Release/conpty/unexpected.dll',
+      sha256: `sha256:${'c'.repeat(64)}`
+    })
+    finalizeTuple(extra)
+    expect(() => parseSshRelayArtifactManifest(extra)).toThrow(/native-runtime.*closure/i)
   })
 
   it('rejects unsupported schema versions, extra fields, and non-canonical timestamps', () => {

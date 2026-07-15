@@ -8,8 +8,8 @@ work; keep exact commands, runner identities, hashes, metrics, and residual gaps
 
 Date created: 2026-07-14<br>
 Last updated: 2026-07-15<br>
-Current phase: Milestone 4 / Work Package 3 credential-free fail-closed aggregate boundary — **In progress — 2026-07-15, Codex implementation owner**. The disconnected release-DAG, aggregate/read-back byte boundaries, Windows artifact/manifest parity, and canonical manifest/signing handoff are closed locally and on all six native build jobs under E-M4-RELEASE-DAG-LOCAL-001, E-M4-RELEASE-DAG-CI-001, E-M4-AGGREGATE-READBACK-LOCAL-001, E-M4-AGGREGATE-READBACK-CI-001, E-M4-WINDOWS-MANIFEST-PARITY-LOCAL-001, E-M4-WINDOWS-MANIFEST-PARITY-CI-001, E-M4-MANIFEST-HANDOFF-LOCAL-001, E-M4-MANIFEST-HANDOFF-LOCAL-002, and E-M4-MANIFEST-HANDOFF-CI-001. The exact-file aggregate boundary is implemented and locally green under E-M4-MANIFEST-AGGREGATE-LOCAL-001 and E-M4-MANIFEST-AGGREGATE-LOCAL-002; exact-head Node 24 native CI remains required. This package may not publish, connect desktop consumers, use production native/manifest signing credentials, or enable a tuple. Production/default behavior is unchanged, no bundled-runtime path is enabled, and no artifact is published.<br>
-Session checkpoint: **In progress — 2026-07-15, Codex implementation owner** — the purpose-named missing-module RED is closed by a bounded aggregate that verifies the exact descriptor/archive/SBOM/provenance file set, derives canonical unsigned bytes only from the hash-verified post-sign tuple descriptor, creates the existing Ed25519 request, reassembles it at finalization, verifies the signer return, and emits one content-addressed final-manifest asset. Focused 20-test and broad 221-test release-side suites, 47 desktop parity tests, syntax, typecheck, full lint, formatting, max-lines, and diff gates pass under E-M4-MANIFEST-AGGREGATE-LOCAL-001 and E-M4-MANIFEST-AGGREGATE-LOCAL-002. The suite is wired into all six native artifact jobs; exact-head Node 24 CI is next. Real Apple/SignPath signing, returned production signatures, Gatekeeper/notarization, Defender/WDAC, missing exact-floor snapshots, protected manifest signing, aggregate publication wiring, desktop embedding, and native trust remain separately gated. Nothing is published or enabled, and legacy remains the production default.<br>
+Current phase: Milestone 4 / Work Package 3 post-sign tuple descriptor plus exact closure/schema parity correction — **In progress — 2026-07-15, Codex implementation owner**. The tuple-specific native role correction and credential-free producer are locally green under E-M4-MANIFEST-TUPLE-LOCAL-001 and E-M4-MANIFEST-TUPLE-LOCAL-002. The producer verifies a physically disjoint final runtime tree before and after archive inspection, accepts only a complete platform-specific native-verifier report bound to the final content ID, hashes bounded stable archive/SBOM/provenance inputs, writes one exclusive tuple descriptor, and re-verifies the exact closed four-file aggregate set. Exact-head Node 24 execution on all six native jobs remains required before this slice closes. It may not publish, connect desktop consumers, use production signing credentials, or enable a tuple. Production/default behavior is unchanged, no bundled-runtime path is enabled, and no artifact is published.<br>
+Session checkpoint: **In progress — 2026-07-15, Codex implementation owner** — focused producer/aggregate/workflow/desktop parity passes 4 files / 50 tests, the release-side suite passes 40 files / 228 tests, desktop parity passes 3 files / 48 tests, and typecheck, full lint, formatting, syntax, max-lines, and diff gates pass under E-M4-MANIFEST-TUPLE-LOCAL-001 and E-M4-MANIFEST-TUPLE-LOCAL-002. The HTML plan, release validator, and desktop validator now share exact Linux/macOS/Windows native role cardinality. The user authorized Codex to drive PR-contained commit, push, CI, and publication-preparation work end to end while explicitly prohibiting merge to `main`; committing and pushing this package for exact-head Node 24 native CI is the active gate. Real Apple/SignPath signing, returned production signatures, Gatekeeper/notarization, Defender/WDAC, missing exact-floor snapshots, protected manifest signing, publication wiring, semantic regeneration of post-sign SBOM/provenance, desktop embedding, and native trust remain separately gated. Nothing is published or enabled, and legacy remains the production default.<br>
 Primary design: [SSH relay GitHub Release plan](./2026-07-14-ssh-relay-github-release-plan.html)<br>
 Motivating issues: [#8450](https://github.com/stablyai/orca/issues/8450), [#1693](https://github.com/stablyai/orca/issues/1693)
 
@@ -73,13 +73,18 @@ same change as the work it records.
   request, accepted-key/signature verification, deterministic final bytes, and all-six Node 24
   workflow parity are green under E-M4-MANIFEST-HANDOFF-LOCAL-001,
   E-M4-MANIFEST-HANDOFF-LOCAL-002, and E-M4-MANIFEST-HANDOFF-CI-001.
-- Active package: Work Package 3 disconnected fail-closed aggregate boundary. Connect exact verified
-  runtime inputs to canonical unsigned bytes, a bounded signing request, verified signer return, and
-  immutable final-manifest output under credential-free tests. The implementation and local gates
-  are green under E-M4-MANIFEST-AGGREGATE-LOCAL-001 and E-M4-MANIFEST-AGGREGATE-LOCAL-002; exact-head
-  Node 24 native CI remains open. Production native/manifest signing credentials, publication,
-  desktop consumers, and tuple enablement remain outside this slice. No broader Milestone 4 box is
-  checked until its evidence exists.
+- Completed Work Package 3 gate: the disconnected fail-closed aggregate boundary is green locally
+  and on all six exact-head Node 24 native jobs under E-M4-MANIFEST-AGGREGATE-LOCAL-001,
+  E-M4-MANIFEST-AGGREGATE-LOCAL-002, and E-M4-MANIFEST-AGGREGATE-CI-001.
+- Active package: Work Package 3 credential-free post-sign tuple-descriptor producer and
+  native-verification handoff. The descriptor must be derived only after returned-tree identity and
+  native policy verification and must bind the exact archive, SBOM, provenance, native assessment,
+  and content identity. E-M4-MANIFEST-TUPLE-SCHEMA-RED-001 requires an in-package release/desktop
+  correction for tuple-specific native role counts before the producer can pass the real Windows
+  closure. The correction and producer are locally green under E-M4-MANIFEST-TUPLE-LOCAL-001 and
+  E-M4-MANIFEST-TUPLE-LOCAL-002; exact-head Node 24 native CI remains open. Production signing
+  credentials, publication, desktop consumers, and tuple enablement remain outside this slice. No
+  broader Milestone 4 box is checked until its evidence exists.
 - Completed Work Package 2 gate: target-native Windows source-signature reports from exact-head
   artifact jobs 87267322867 and 87267322870 were independently downloaded and matched to their
   identities and signing-stage reports under E-M3-WINDOWS-SOURCE-SIGNATURE-CI-001. PR Checks
@@ -197,10 +202,12 @@ same change as the work it records.
   per-target opt-in selects bundled-preferred behavior, and implementing the setting does not
   authorize default-on rollout or legacy removal (E-M1-ROLLOUT-DECISION-001).
 - Legacy fallback removal: not authorized.
-- Next required action: commit and push the locally green disconnected aggregate boundary, then
-  collect exact-head Node 24 proof from all six native build jobs. Keep real native/manifest signing
-  credentials, endpoint trust, missing exact-floor snapshots, production publication, desktop
-  consumers, and every tuple's enabled state outside this slice.
+- Next required action: commit and push the locally green post-sign tuple package, then collect
+  exact-head Node 24 proof from all six native build jobs. Commit/push and PR-contained CI work are
+  authorized; merging to `main` is not. Keep semantic
+  post-sign metadata generation, real native/manifest signing credentials, endpoint trust, missing
+  exact-floor snapshots, production publication, desktop consumers, and every tuple's enabled state
+  outside this slice.
 
 ## Non-Negotiable Invariants
 
@@ -1544,6 +1551,10 @@ focused commands as their scripts/tests are introduced.
 - [x] `pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1 config/scripts/ssh-relay-runtime-manifest-assembly.test.mjs config/scripts/ssh-relay-runtime-manifest-signing-handoff.test.mjs` (E-M4-MANIFEST-HANDOFF-LOCAL-RED-001, E-M4-MANIFEST-HANDOFF-LOCAL-001)
 - [x] `pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1 config/scripts/ssh-relay-runtime-manifest-aggregate.test.mjs` (E-M4-MANIFEST-AGGREGATE-LOCAL-RED-001, E-M4-MANIFEST-AGGREGATE-LOCAL-001)
 - [x] `pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1 config/scripts/ssh-relay-runtime-manifest-aggregate.test.mjs config/scripts/ssh-relay-runtime-aggregate-input.test.mjs config/scripts/ssh-relay-runtime-workflow.test.mjs` (E-M4-MANIFEST-AGGREGATE-LOCAL-001; exact-file boundary and all-six workflow-source wiring)
+- [x] Exact-head Node 24 native workflow execution of
+      `config/scripts/ssh-relay-runtime-manifest-aggregate.test.mjs` on all six runner families
+      (E-M4-MANIFEST-AGGREGATE-CI-001)
+- [x] `pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1 config/scripts/ssh-relay-runtime-manifest-tuple.test.mjs` (E-M4-MANIFEST-TUPLE-LOCAL-RED-001, E-M4-MANIFEST-TUPLE-SCHEMA-RED-001, E-M4-MANIFEST-TUPLE-LOCAL-001)
 - [x] `pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1 config/scripts/ssh-relay*.test.mjs` (E-M4-MANIFEST-HANDOFF-LOCAL-002; all release-side SSH-relay contracts)
 - [x] `pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1 src/main/ssh/ssh-relay-artifact-schema.test.ts src/main/ssh/ssh-relay-manifest-signature.test.ts src/main/ssh/ssh-relay-release-asset.test.ts` (E-M4-MANIFEST-HANDOFF-LOCAL-002; desktop schema/signature parity)
 
@@ -9411,8 +9422,7 @@ diff --check`.
 ### E-M4-MANIFEST-AGGREGATE-LOCAL-001 — Exact-file aggregate and signing boundary pass locally
 
 - Date: 2026-07-15
-- Commit SHA / PR: uncommitted implementation atop
-  `127ddbcc154fbdf2641bc80d67a3d68d862ab1ca`; draft PR #8741
+- Commit SHA / PR: `5e0c776d017b3cf4d57011cb1f4cdc919bbc8782`; draft PR #8741
 - Runner: macOS 26.2 arm64, native local worktree; Node v26.0.0 and pnpm 10.24.0
 - Remote: not applicable; disconnected credential-free release boundary
 - Transport/network: local filesystem only; no network, GitHub release, signer service, credential,
@@ -9446,8 +9456,7 @@ diff --check`.
 ### E-M4-MANIFEST-AGGREGATE-LOCAL-002 — Broad aggregate regressions and static gates pass
 
 - Date: 2026-07-15
-- Commit SHA / PR: same uncommitted package atop
-  `127ddbcc154fbdf2641bc80d67a3d68d862ab1ca`; draft PR #8741
+- Commit SHA / PR: `5e0c776d017b3cf4d57011cb1f4cdc919bbc8782`; draft PR #8741
 - Runner: macOS 26.2 arm64, native local worktree; Node v26.0.0 and pnpm 10.24.0
 - Remote: not applicable
 - Transport/network: local filesystem only; no network, credential, release, SSH host, publication,
@@ -9484,7 +9493,218 @@ diff --check`.
   tuple.
 - Checklist items satisfied: broad local regression/static gate for the active Work Package 3
   package.
-- Follow-up: commit and push the exact package, then record all-six native CI at that exact head.
+- Follow-up: collect and record all-six native CI at that exact head.
+
+### E-M4-MANIFEST-AGGREGATE-CI-001 — Exact-file aggregate passes all six native Node 24 jobs
+
+- Date: 2026-07-15
+- Commit SHA / PR: `5e0c776d017b3cf4d57011cb1f4cdc919bbc8782`; draft PR #8741
+- Workflow and source: exact-head SSH Relay Runtime Artifacts run
+  [29397871159](https://github.com/stablyai/orca/actions/runs/29397871159), checked out from the PR
+  head rather than GitHub's synthetic merge; Node v24.18.0
+- Native runners and results:
+  - macOS arm64: `macos15` image `20260706.0213.1`, job
+    [87295382518](https://github.com/stablyai/orca/actions/runs/29397871159/job/87295382518), PASS
+    in 2m55s; aggregate suite 6/6 in 119 ms.
+  - Windows x64: `win22` image `20260706.237.1`, job
+    [87295382522](https://github.com/stablyai/orca/actions/runs/29397871159/job/87295382522), PASS
+    in 5m00s; aggregate suite 6/6 in 342 ms.
+  - macOS x64: `macos15` image `20260629.0276.1`, job
+    [87295382539](https://github.com/stablyai/orca/actions/runs/29397871159/job/87295382539), PASS
+    in 5m17s; aggregate suite 6/6 in 675 ms.
+  - Linux x64: `ubuntu24` image `20260705.232.1`, job
+    [87295382567](https://github.com/stablyai/orca/actions/runs/29397871159/job/87295382567), PASS
+    in 4m22s; aggregate suite 6/6 in 257 ms.
+  - Windows arm64: `win11-arm64` image `20260706.102.1`, job
+    [87295382578](https://github.com/stablyai/orca/actions/runs/29397871159/job/87295382578), PASS
+    in 9m46s; aggregate suite 6/6 in 553 ms.
+  - Linux arm64: `ubuntu24-arm64` image `20260714.61.1`, job
+    [87295382626](https://github.com/stablyai/orca/actions/runs/29397871159/job/87295382626), PASS
+    in 5m21s; aggregate suite 6/6 in 188 ms.
+- Exact workflow command: the POSIX and Windows native jobs run `node --check` for the aggregate
+  module and suite, then include
+  `config/scripts/ssh-relay-runtime-manifest-aggregate.test.mjs` in the purpose-named Vitest artifact
+  contract command. POSIX jobs report 38 files / 217 passed; Windows jobs report 39 files / 213
+  passed plus 8 explicitly platform-skipped tests.
+- Supplemental exact-head results:
+  - Rocky 8 oldest-userland jobs pass on Linux x64
+    [87296348785](https://github.com/stablyai/orca/actions/runs/29397871159/job/87296348785) in 35s and
+    Linux arm64
+    [87296348786](https://github.com/stablyai/orca/actions/runs/29397871159/job/87296348786) in 58s.
+  - Windows x64 oldest-floor job
+    [87297136187](https://github.com/stablyai/orca/actions/runs/29397871159/job/87297136187) passes.
+    Content ID is `sha256:4224aee6de820a94263f05ebfc58edd421921431e8cbdf1d5ec6ddcf783afc26`;
+    smoke is 8,788.4616 ms, RSS is 49,508,352 bytes, and total verification is 9,909.3156 ms.
+  - Windows arm64 oldest-floor job
+    [87297136099](https://github.com/stablyai/orca/actions/runs/29397871159/job/87297136099) fails only
+    the declared OS-build oracle because the hosted image is build 26200 rather than required build 26100. Before that rejection, the runtime passes platform/architecture and full smoke with 60
+    entries, 42 files, 85,213,511 expanded bytes, content ID
+    `sha256:02edf462be83c2864a89546d5344d348f9e07ce10964660342608a8c614e47db`,
+    5,835.1398 ms smoke, 49,713,152-byte RSS, and 7,680.2139 ms total verification.
+- Broad exact-head regressions: PR Checks
+  [29397871156](https://github.com/stablyai/orca/actions/runs/29397871156) job
+  [87295381961](https://github.com/stablyai/orca/actions/runs/29397871156/job/87295381961) passes;
+  Golden E2E
+  [29397871176](https://github.com/stablyai/orca/actions/runs/29397871176) passes on macOS job
+  [87295382080](https://github.com/stablyai/orca/actions/runs/29397871176/job/87295382080) and Linux job
+  [87295382148](https://github.com/stablyai/orca/actions/runs/29397871176/job/87295382148).
+- Oracle proved: syntax and the complete exact-file aggregate contract execute under repository Node
+  24 on every native target family without regressing native runtime construction, smoke, artifact
+  upload, PR verification, or Golden E2E. The expected overall artifact-workflow failure is solely
+  the pre-existing Windows arm64 exact-floor gap and occurs after the native arm64 aggregate and
+  runtime jobs succeed.
+- Does not prove: a descriptor produced from real signed returned bytes, Apple/SignPath signing,
+  native trust, protected manifest signing, detached-signature encoding, publication/read-back,
+  desktop embedding, SSH transfer/install, or any enabled tuple.
+- Checklist items satisfied: all-six exact-head CI gate for the disconnected credential-free
+  aggregate boundary. Broader Work Package 3 and Milestone 4 boxes remain open.
+- Follow-up: add the credential-free post-sign tuple-descriptor producer/native-verification handoff
+  under a purpose-named RED before wiring any signing credential, publication, or desktop consumer.
+
+### E-M4-MANIFEST-TUPLE-LOCAL-RED-001 — Post-sign tuple producer is absent
+
+- Date: 2026-07-15
+- Commit SHA / PR: uncommitted purpose-named test atop
+  `5e0c776d017b3cf4d57011cb1f4cdc919bbc8782`; draft PR #8741
+- Runner: macOS 26.2 arm64, native local worktree; repository Node/pnpm toolchain
+- Remote: not applicable; disconnected credential-free release boundary
+- Transport/network: local filesystem only; no network, signer, credential, release, SSH host,
+  publication, desktop consumer, or production/default call
+- Exact command:
+
+  ```sh
+  /usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1 config/scripts/ssh-relay-runtime-manifest-tuple.test.mjs
+  ```
+
+- Result: FAIL as required; one suite failed before collection because
+  `ssh-relay-runtime-manifest-tuple.mjs` does not exist, with zero tests collected.
+- Duration and resource metrics: Vitest 179 ms; 1.27 seconds wall; 132,268,032-byte maximum RSS;
+  96,425,312-byte peak memory footprint; zero swaps.
+- Artifact/log/trace link: local terminal output; no external artifact.
+- Oracle proved: the complete post-sign tree/archive/native-report to aggregate-descriptor contract
+  cannot pass through an existing permissive or accidental implementation; the producer is
+  genuinely absent before this package.
+- Does not prove: any producer behavior, metadata semantics, real signed bytes, native trust,
+  publication, desktop embedding, SSH transfer/install, or an enabled tuple.
+- Checklist items satisfied: RED prerequisite for the active Work Package 3 post-sign tuple package.
+- Follow-up: implement the disconnected credential-free producer, turn the exact six-case suite
+  green, then run focused aggregate and broad release/static regressions before requesting native CI.
+
+### E-M4-MANIFEST-TUPLE-SCHEMA-RED-001 — Real Windows closure exposes stale manifest cardinality
+
+- Date: 2026-07-15
+- Commit SHA / PR: uncommitted implementation atop
+  `5e0c776d017b3cf4d57011cb1f4cdc919bbc8782`; draft PR #8741
+- Runner: macOS 26.2 arm64, native local worktree; Node v26.0.0 and pnpm 10.24.0
+- Remote: not applicable; disconnected credential-free release boundary
+- Transport/network: local filesystem and generated Windows ZIP only; no network, signer,
+  credential, release, SSH host, publication, desktop consumer, or production/default call
+- Exact command:
+
+  ```sh
+  /usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1 config/scripts/ssh-relay-runtime-manifest-tuple.test.mjs
+  ```
+
+- Result: expected evidence-gate failure; 5 tests pass and the complete real-closure case fails with
+  `SSH relay runtime manifest requires one valid node-pty-native entry`. The fixture contains the
+  exact proven Windows x64 closure, including both `conpty.node` and
+  `conpty_console_list.node` plus the two ConPTY runtime files.
+- Duration and resource metrics: Vitest 504 ms total with 265 ms test time; 1.24 seconds wall;
+  137,576,448-byte maximum RSS; 95,933,816-byte peak memory footprint; zero swaps.
+- Root cause: release-side `assertTupleEntries` and desktop-side
+  `assertRequiredRuntimeEntries` use a platform-agnostic exactly-one rule for `node-pty-native`.
+  That rule accepts the simplified Windows test conversion but cannot accept the target-native
+  artifact closure already proven in Work Package 2. Neither validator also enforces exact
+  tuple-specific `native-runtime` counts.
+- Plan correction: the HTML plan now states the exact cardinality contract: Linux has one
+  node-pty-native and zero native-runtime files; macOS has one and one; Windows has two and two.
+  Both release and desktop validators must enforce the same role counts, and tests must use the real
+  Windows closure rather than a path-renamed Linux fixture.
+- Does not prove: the correction, producer GREEN, native runner behavior, real signed bytes, native
+  trust, publication, desktop embedding, SSH transfer/install, or any enabled tuple.
+- Checklist items satisfied: evidence-backed design correction prerequisite for the active package.
+- Follow-up: add paired release/desktop RED-to-GREEN tests for exact role counts, make the narrow
+  validator correction, rerun the post-sign producer suite, and preserve all non-production gates.
+
+### E-M4-MANIFEST-TUPLE-LOCAL-001 — Post-sign descriptor and exact role parity pass locally
+
+- Date: 2026-07-15
+- Commit SHA / PR: uncommitted package atop
+  `5e0c776d017b3cf4d57011cb1f4cdc919bbc8782`; draft PR #8741
+- Runner: macOS 26.2 arm64, native local worktree; Node v26.0.0 and pnpm 10.24.0
+- Remote: not applicable; disconnected credential-free release boundary
+- Transport/network: local filesystem and generated Windows ZIP only; no network, signer,
+  credential, release, SSH host, publication, desktop consumer, or production/default call
+- Exact command:
+
+  ```sh
+  /usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1 config/scripts/ssh-relay-runtime-manifest-tuple.test.mjs config/scripts/ssh-relay-runtime-manifest-aggregate.test.mjs config/scripts/ssh-relay-runtime-workflow.test.mjs src/main/ssh/ssh-relay-artifact-schema.test.ts
+  ```
+
+- Result: PASS; 4 files / 50 tests: 7 post-sign tuple cases, 6 aggregate cases, 6 workflow-source
+  cases, and 31 desktop manifest-schema cases.
+- Duration and resource metrics: Vitest 989 ms with 377 ms test time; 1.68 seconds wall;
+  132,825,088-byte maximum RSS; 96,048,576-byte peak memory footprint; zero swaps.
+- Oracle proved:
+  - the final runtime and aggregate-input roots must be real, physically disjoint directories;
+  - the complete final tree is content-ID verified before and after bounded archive inspection;
+  - Windows reports cover exact authenticated Node, both node-pty native modules, and both ConPTY
+    runtime files with required signer evidence; Linux and macOS reports derive their own exact
+    policies and three/four-file native closures;
+  - stale content IDs, source identity drift, missing/duplicate/mismatched native reports, malformed
+    tool/time data, runtime/archive mutation, extra/existing/linked inputs, oversized metadata, and
+    cancellation fail before a usable descriptor remains;
+  - stable bounded archive/SBOM/provenance bytes are hashed, the manifest tuple passes the same
+    release schema used by aggregation, one exclusive descriptor is written, and the exact closed
+    four-file set is rehashed before return;
+  - release and desktop validators accept the exact target-native Windows closure and reject missing
+    or extra node-pty/native-runtime members with matching tuple-specific rules;
+  - POSIX and Windows workflow source syntax-check and execute the new suite under the existing
+    credential-free native jobs.
+- Does not prove: Node 24/native-runner execution, semantic regeneration or validation of post-sign
+  SBOM/provenance content, a report from real Apple/SignPath returned bytes, native trust, protected
+  signing, publication/read-back, desktop embedding, SSH transfer/install, or any enabled tuple.
+- Checklist items satisfied: local functional/schema/workflow gate for the active Work Package 3
+  post-sign tuple package.
+- Follow-up: run broad release, desktop parity, and repository static gates, then require all-six
+  exact-head Node 24 CI before closing the package.
+
+### E-M4-MANIFEST-TUPLE-LOCAL-002 — Broad post-sign tuple regressions and static gates pass
+
+- Date: 2026-07-15
+- Commit SHA / PR: same uncommitted package atop
+  `5e0c776d017b3cf4d57011cb1f4cdc919bbc8782`; draft PR #8741
+- Runner: macOS 26.2 arm64, native local worktree; Node v26.0.0 and pnpm 10.24.0
+- Remote: not applicable
+- Transport/network: local filesystem only; no signer, credential, release, SSH host, publication,
+  desktop consumer, or production/default call
+- Commands and results:
+  - `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1 config/scripts/ssh-relay*.test.mjs`
+    — PASS, 40 files / 228 tests in 8.25 seconds; 9.15 seconds wall; 188,055,552-byte maximum
+    RSS; 96,474,536-byte peak memory footprint; zero swaps.
+  - `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1 src/main/ssh/ssh-relay-artifact-schema.test.ts src/main/ssh/ssh-relay-manifest-signature.test.ts src/main/ssh/ssh-relay-release-asset.test.ts`
+    — PASS, 3 files / 48 tests in 528 ms; 1.19 seconds wall; 172,195,840-byte maximum RSS;
+    96,245,160-byte peak memory footprint; zero swaps.
+  - `/usr/bin/time -l pnpm run typecheck` — PASS in 8.46 seconds wall with
+    1,181,024,256-byte maximum RSS and zero swaps.
+  - `/usr/bin/time -l pnpm run lint` — PASS in 18.95 seconds wall with
+    2,071,773,184-byte maximum RSS and zero swaps. All 41 reliability gates, the 355-entry max-lines
+    ratchet, bundled-skill guides, localization catalog/parity, and localization coverage pass; all
+    26 warnings are in untouched existing files.
+  - Focused `node --check` for manifest validation, tuple source/test, and workflow test — PASS.
+  - Focused `pnpm exec oxfmt --check` for all ten touched code/workflow/plan files — PASS.
+  - `pnpm run check:max-lines-ratchet` — PASS, 355 grandfathered suppressions and no new bypasses.
+  - `git diff --check` — PASS with no output.
+- Oracle proved: the post-sign producer and evidence-backed schema correction preserve every
+  release-side SSH-relay contract, desktop signature/asset parity, repository type/static/reliability
+  gates, localization, formatting, and file line budgets without a bypass. The user-owned
+  Node/npm resolver files are untouched.
+- Does not prove: repository Node 24 or native-runner execution, real post-sign metadata/signatures,
+  oldest baselines, native trust, publication, desktop embedding, SSH behavior, or an enabled tuple.
+- Checklist items satisfied: broad local regression/static gate for the active package.
+- Follow-up: commit and push the authorized PR-contained package, then require all six exact-head
+  Node 24 native jobs before marking this package complete. Keep every production/default gate
+  unchanged and do not merge to `main`.
 
 ## Accepted Gaps
 
@@ -9543,12 +9763,14 @@ The project is not complete until every applicable item below is checked with ev
 
 ## Next Required Action
 
-Commit and push the locally green disconnected credential-free aggregate boundary, then collect
-exact-head Node 24 proof from all six native build jobs. Do not connect release publication, use
-production signing credentials, or add a desktop consumer in this slice. In parallel, provision
-qualifying exact-floor execution for Linux kernel 4.18, macOS 13.5, and Windows arm64 build 26100 and
-real macOS/Windows signing and trust. Keep every tuple disabled until the applicable baseline and
-trust cells pass.
+Commit and push the authorized, locally green post-sign tuple package, then collect exact-head Node
+24 proof from all six native build jobs. Do not check the package complete before that CI exists and
+do not merge to `main`. Retain every production/default gate. The next independent artifact-only slice after
+CI is semantic regeneration and verification of the post-sign SBOM/provenance bytes consumed here;
+do not connect release publication, production signing credentials, or a desktop consumer. In
+parallel, provision qualifying exact-floor execution for Linux kernel 4.18, macOS 13.5, and Windows
+arm64 build 26100 and real macOS/Windows signing and trust. Keep every tuple disabled until the
+applicable baseline and trust cells pass.
 
 Cross-family Layer B targets, the protected manifest-signing environment, oldest-baseline/native-
 trust cells, and the paired legacy performance baseline remain release/default-path blockers. No

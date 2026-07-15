@@ -60,7 +60,7 @@ complete a box.
     remain separately gated.
   - Next external proof: kernel 4.18, macOS 13.5, Windows arm64 build 26100, and native signing/trust.
   - No tuple is enabled; every SSH transfer/runtime and rollout cell remains open.
-- [ ] **WP3 active implementation — Build the credential-free fail-closed aggregate boundary.**
+- [ ] **WP3 active implementation — Supply verified post-sign tuple descriptors to the aggregate.**
       Windows compatibility-kind parity is closed locally and on all six target-native jobs in
       exact-head run
       [29393022768](https://github.com/stablyai/orca/actions/runs/29393022768) under
@@ -68,13 +68,24 @@ complete a box.
       Disconnected canonical assembly and signing-handoff modules are closed locally and on all six
       Node 24 native jobs in exact-head run
       [29395319239](https://github.com/stablyai/orca/actions/runs/29395319239) under
-      `E-M4-MANIFEST-HANDOFF-CI-001`. Next, connect only the credential-free verified aggregate
-      inputs, canonical signing request, verified signer return, and immutable final-manifest output
-      behind fail-closed tests. No production workflow, publication, desktop consumer, signing
-      credential, or tuple is connected. The purpose-named missing-module RED is recorded under
-      `E-M4-MANIFEST-AGGREGATE-LOCAL-RED-001`; the implementation and broad local gates are green
-      under `E-M4-MANIFEST-AGGREGATE-LOCAL-001` and
-      `E-M4-MANIFEST-AGGREGATE-LOCAL-002`. Exact-head Node 24 native CI remains open.
+      `E-M4-MANIFEST-HANDOFF-CI-001`. The disconnected credential-free aggregate boundary is closed
+      locally and on all six Node 24 native jobs in exact-head run
+      [29397871159](https://github.com/stablyai/orca/actions/runs/29397871159) under
+      `E-M4-MANIFEST-AGGREGATE-LOCAL-001`, `E-M4-MANIFEST-AGGREGATE-LOCAL-002`, and
+      `E-M4-MANIFEST-AGGREGATE-CI-001`. Next, produce the exact post-sign tuple descriptor only from
+      a fully verified returned runtime tree and bind it to the archive, SBOM, provenance, native
+      assessment, and content identity under credential-free fail-closed tests. No production
+      workflow, publication, desktop consumer, signing credential, or tuple is connected. The
+      purpose-named missing-module RED is recorded under
+      `E-M4-MANIFEST-TUPLE-LOCAL-RED-001`. The first implementation run exposed that both manifest
+      validators incorrectly require one node-pty native file for Windows even though the proven
+      closure contains `conpty.node` and `conpty_console_list.node`; correct and parity-test the exact
+      per-platform role counts first (`E-M4-MANIFEST-TUPLE-SCHEMA-RED-001`). The correction,
+      credential-free producer, 228-test release suite, 48-test desktop parity suite, and static gates
+      are locally green under `E-M4-MANIFEST-TUPLE-LOCAL-001` and
+      `E-M4-MANIFEST-TUPLE-LOCAL-002`. Commit/push authorization for PR-contained work was granted
+      on 2026-07-15; committing, pushing, and collecting exact-head Node 24 native CI is the active
+      gate. Merging to `main` remains prohibited without separate user action.
 
 ## Work packages, in required order
 
@@ -125,12 +136,21 @@ complete a box.
       `E-M4-MANIFEST-HANDOFF-LOCAL-RED-001`, `E-M4-MANIFEST-HANDOFF-LOCAL-001`, and
       `E-M4-MANIFEST-HANDOFF-LOCAL-002`; all-six Node 24 proof is recorded under
       `E-M4-MANIFEST-HANDOFF-CI-001`.
-- [ ] **In progress — 2026-07-15, Codex implementation owner:** add the disconnected, credential-free
+- [x] Add the disconnected, credential-free
       fail-closed aggregate boundary from exact verified runtime inputs through canonical request and
       verified final-manifest bytes. Keep native/manifest credentials, publication, desktop
-      consumers, and every tuple outside this slice. The code and local proof are complete under
-      `E-M4-MANIFEST-AGGREGATE-LOCAL-001` and `E-M4-MANIFEST-AGGREGATE-LOCAL-002`; native CI is the
-      remaining gate.
+      consumers, and every tuple outside this slice
+      (`E-M4-MANIFEST-AGGREGATE-LOCAL-001`, `E-M4-MANIFEST-AGGREGATE-LOCAL-002`,
+      `E-M4-MANIFEST-AGGREGATE-CI-001`).
+- [ ] **In progress — 2026-07-15, Codex implementation owner:** add the credential-free post-sign
+      tuple-descriptor producer and native-verification handoff needed to supply the aggregate.
+      Derive it only from a fully verified returned runtime tree; keep real signing, publication,
+      desktop consumers, and every tuple outside this slice. The missing-module RED is recorded under
+      `E-M4-MANIFEST-TUPLE-LOCAL-RED-001`. Before GREEN, correct release/desktop tuple-role
+      cardinality for the real Windows closure under `E-M4-MANIFEST-TUPLE-SCHEMA-RED-001`. Code and
+      local proof are complete under `E-M4-MANIFEST-TUPLE-LOCAL-001` and
+      `E-M4-MANIFEST-TUPLE-LOCAL-002`; commit/push is authorized and exact-head Node 24 native CI is
+      now the active gate. Do not merge to `main`.
 - [ ] Add target-native runtime jobs as desktop release prerequisites.
 - [ ] Add native signing jobs; hash only the returned signed bytes.
 - [ ] Add a fail-closed aggregate and immutable manifest-signing job.

@@ -160,6 +160,8 @@ jobs:
           node --check config/scripts/ssh-relay-runtime-manifest-signing-handoff.test.mjs
           node --check config/scripts/ssh-relay-runtime-manifest-aggregate.mjs
           node --check config/scripts/ssh-relay-runtime-manifest-aggregate.test.mjs
+          node --check config/scripts/ssh-relay-runtime-manifest-tuple.mjs
+          node --check config/scripts/ssh-relay-runtime-manifest-tuple.test.mjs
           pnpm exec vitest run --config config/vitest.config.ts \
             config/scripts/ssh-relay-runtime-compatibility.test.mjs \
             config/scripts/ssh-relay-node-release-verification.test.mjs \
@@ -189,6 +191,7 @@ jobs:
             config/scripts/ssh-relay-runtime-manifest-assembly.test.mjs \
             config/scripts/ssh-relay-runtime-manifest-signing-handoff.test.mjs \
             config/scripts/ssh-relay-runtime-manifest-aggregate.test.mjs \
+            config/scripts/ssh-relay-runtime-manifest-tuple.test.mjs \
             config/scripts/ssh-relay-runtime-closure.test.mjs \
             config/scripts/ssh-relay-runtime-pty-smoke.test.mjs \
             config/scripts/ssh-relay-runtime-reproducibility.test.mjs \
@@ -538,6 +541,10 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'runtime manifest aggregate syntax check failed' }
           node --check config/scripts/ssh-relay-runtime-manifest-aggregate.test.mjs
           if ($LASTEXITCODE -ne 0) { throw 'runtime manifest aggregate test syntax check failed' }
+          node --check config/scripts/ssh-relay-runtime-manifest-tuple.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'runtime manifest tuple syntax check failed' }
+          node --check config/scripts/ssh-relay-runtime-manifest-tuple.test.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'runtime manifest tuple test syntax check failed' }
           pnpm exec vitest run --config config/vitest.config.ts `
             config/scripts/ssh-relay-runtime-compatibility.test.mjs `
             config/scripts/ssh-relay-node-release-verification.test.mjs `
@@ -567,6 +574,7 @@ jobs:
             config/scripts/ssh-relay-runtime-manifest-assembly.test.mjs `
             config/scripts/ssh-relay-runtime-manifest-signing-handoff.test.mjs `
             config/scripts/ssh-relay-runtime-manifest-aggregate.test.mjs `
+            config/scripts/ssh-relay-runtime-manifest-tuple.test.mjs `
             config/scripts/ssh-relay-runtime-closure.test.mjs `
             config/scripts/ssh-relay-runtime-pty-smoke.test.mjs `
             config/scripts/ssh-relay-runtime-reproducibility.test.mjs `

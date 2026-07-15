@@ -230,19 +230,39 @@ function assertTupleEntries(tuple) {
     ['relay', 'relay.js'],
     ['relay-watcher', 'relay-watcher.js']
   ])
-  for (const role of [
-    'node',
-    'relay',
-    'relay-watcher',
-    'node-pty-native',
-    'parcel-watcher-native'
-  ]) {
+  for (const role of ['node', 'relay', 'relay-watcher', 'parcel-watcher-native']) {
     const matching = files.filter((entry) => entry.role === role)
     if (
       matching.length !== 1 ||
       (expectedPaths.has(role) && matching[0].path !== expectedPaths.get(role))
     ) {
       throw new Error(`SSH relay runtime manifest requires one valid ${role} entry`)
+    }
+  }
+  const nativePaths =
+    tuple.os === 'win32'
+      ? {
+          'node-pty-native': [
+            'node_modules/node-pty/build/Release/conpty.node',
+            'node_modules/node-pty/build/Release/conpty_console_list.node'
+          ],
+          'native-runtime': [
+            'node_modules/node-pty/build/Release/conpty/OpenConsole.exe',
+            'node_modules/node-pty/build/Release/conpty/conpty.dll'
+          ]
+        }
+      : {
+          'node-pty-native': ['node_modules/node-pty/build/Release/pty.node'],
+          'native-runtime':
+            tuple.os === 'darwin' ? ['node_modules/node-pty/build/Release/spawn-helper'] : []
+        }
+  for (const [role, expected] of Object.entries(nativePaths)) {
+    const actual = files
+      .filter((entry) => entry.role === role)
+      .map((entry) => entry.path)
+      .sort()
+    if (JSON.stringify(actual) !== JSON.stringify(expected)) {
+      throw new Error(`SSH relay runtime manifest has invalid ${role} closure`)
     }
   }
   if (
@@ -337,6 +357,12 @@ function assertTupleConsistency(tuple) {
   }
 }
 
+export function parseSshRelayRuntimeManifestTuple(input) {
+  const parsed = tupleSchema.parse(input)
+  assertTupleConsistency(parsed)
+  return parsed
+}
+
 function parseReleaseTag(tag) {
   for (const [pattern, channel] of [
     [/^v(\d+\.\d+\.\d+)$/u, 'stable'],
@@ -363,7 +389,7 @@ export function parseSshRelayRuntimeUnsignedManifest(input) {
       throw new Error(`SSH relay runtime manifest has a duplicate tuple: ${tuple.tupleId}`)
     }
     tupleIds.add(tuple.tupleId)
-    assertTupleConsistency(tuple)
+    parseSshRelayRuntimeManifestTuple(tuple)
   }
   return parsed
 }

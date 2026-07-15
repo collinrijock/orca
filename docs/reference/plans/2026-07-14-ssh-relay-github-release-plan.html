@@ -1196,6 +1196,15 @@
                   than silently exercising system ConPTY.
                 </li>
                 <li>
+                  Manifest role cardinality must match the exact target-native closure: Linux has
+                  one node-pty native file and no native-runtime files, macOS has one node-pty
+                  native file plus <code>spawn-helper</code>, and Windows has both
+                  <code>conpty.node</code> and <code>conpty_console_list.node</code> plus
+                  <code>conpty.dll</code> and <code>OpenConsole.exe</code>. Release and desktop
+                  validators reject either missing or extra role members with the same
+                  tuple-specific rules.
+                </li>
+                <li>
                   <code>@parcel/watcher@2.5.6</code> with exactly one native optional package.
                 </li>
                 <li>Runtime metadata, dependency licenses, and a file-level SHA-256 manifest.</li>
