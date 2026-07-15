@@ -1,4 +1,12 @@
-import { closeSync, fstatSync, openSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs'
+import {
+  chmodSync,
+  closeSync,
+  fstatSync,
+  openSync,
+  readFileSync,
+  unlinkSync,
+  writeFileSync
+} from 'node:fs'
 import { randomUUID } from 'node:crypto'
 import { renameFileWithWindowsRetry } from '../codex-accounts/fs-utils'
 
@@ -45,6 +53,9 @@ export function restoreCodexTrustConfig(
   }
   try {
     if (readFileSync(tomlPath).equals(snapshot.contents)) {
+      // Why: the RPC may change permissions without changing bytes; rollback
+      // restores the complete captured file state, not only its contents.
+      chmodSync(tomlPath, snapshot.mode)
       return
     }
   } catch (error) {
