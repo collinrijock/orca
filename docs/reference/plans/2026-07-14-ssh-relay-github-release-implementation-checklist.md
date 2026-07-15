@@ -9,7 +9,7 @@ work; keep exact commands, runner identities, hashes, metrics, and residual gaps
 Date created: 2026-07-14<br>
 Last updated: 2026-07-14<br>
 Current phase: Milestone 3 / Work Package 2 oldest-supported-baseline and native-trust proof — **In progress — 2026-07-14, Codex implementation owner**; exact-head run [29373507297](https://github.com/stablyai/orca/actions/runs/29373507297) passes all six target-native build, smoke, exact clean-build equality, upload, SBOM, license, provenance, runner/toolchain, and prohibited-content cells, and direct inspection of every downloaded payload passes exact archive/subject hashes, archive-scoped SPDX identity, one-owner-per-file, dependency, commit/run/builder/runner, tool-version/hash, and closure assertions (E-M3-METADATA-CI-001); Windows x64/arm64 record strict `MSVC 14.44.35207` identities and distinct exact linker SHA-256 values despite the Git-for-Windows PATH collision; the all-six metadata/provenance gate is closed, while oldest-baseline execution, native signing/trust, cross-family remotes, and measured legacy baselines remain open; production/default behavior and every tuple state remain unchanged; no bundled-runtime path is enabled and no artifact is published<br>
-Session checkpoint: **In progress — 2026-07-14, Codex implementation owner** — credential-free macOS post-sign strict-codesign and signer-policy verification contracts are locally green under E-M3-MACOS-SIGNATURE-LOCAL-001 and pass under Node 24 on all six target-native jobs in exact-head run 29386372366 under E-M3-MACOS-SIGNATURE-CI-001. E-M3-WINDOWS-SIGNATURE-LOCAL-RED-001 proves the final Windows Authenticode policy verifier was absent; its final-tree-first implementation and POSIX/PowerShell workflow contracts are locally green under E-M3-WINDOWS-SIGNATURE-LOCAL-001. Exact-head execution on all six target-native jobs is the active gate. Real Apple/SignPath signing, returned production signatures, Gatekeeper/notarization, Defender/WDAC, missing exact-floor snapshots, and native trust remain separately gated. Nothing is published or enabled, and legacy remains the production default.<br>
+Session checkpoint: **In progress — 2026-07-14, Codex implementation owner** — credential-free macOS post-sign strict-codesign and signer-policy verification contracts are locally green under E-M3-MACOS-SIGNATURE-LOCAL-001 and pass under Node 24 on all six target-native jobs in exact-head run 29386372366 under E-M3-MACOS-SIGNATURE-CI-001. E-M3-WINDOWS-SIGNATURE-LOCAL-RED-001 proves the final Windows Authenticode policy verifier was absent; its final-tree-first implementation and POSIX/PowerShell workflow contracts pass locally under E-M3-WINDOWS-SIGNATURE-LOCAL-001 and under Node 24 on all six target-native jobs in exact-head run 29387668264 under E-M3-WINDOWS-SIGNATURE-CI-001. Target-native official-Node and preserved-upstream Windows source-signature policy is the next credential-free gate. Real Apple/SignPath signing, returned production signatures, Gatekeeper/notarization, Defender/WDAC, missing exact-floor snapshots, and native trust remain separately gated. Nothing is published or enabled, and legacy remains the production default.<br>
 Primary design: [SSH relay GitHub Release plan](./2026-07-14-ssh-relay-github-release-plan.html)<br>
 Motivating issues: [#8450](https://github.com/stablyai/orca/issues/8450), [#1693](https://github.com/stablyai/orca/issues/1693)
 
@@ -8517,6 +8517,65 @@ diff --check`.
   and PowerShell logs to show the new suite under Node 24.18.0 on all six native jobs while every
   prior artifact, baseline, PR-check, and Golden control retains its expected outcome. Keep native
   signing/trust unchecked until real returned bytes pass target-native policy and endpoint gates.
+
+### E-M3-WINDOWS-SIGNATURE-CI-001 — Windows signer-policy contracts pass on all six native jobs
+
+- Date: 2026-07-14 (run timestamps 2026-07-15 UTC)
+- Owner: Codex implementation owner
+- Source/run: exact draft-PR head `cce37cd415600e9bd77093d250b5cb8e3ad9f3ce`, containing
+  implementation `072c0d434e91013fc29ce16059da82c1ac7bfc12`; Actions run
+  [29387668264](https://github.com/stablyai/orca/actions/runs/29387668264).
+- Commands:
+
+  ```sh
+  gh run view 29387668264 --repo stablyai/orca \
+    --json status,conclusion,headSha,createdAt,updatedAt,url,jobs
+  gh run view 29387668264 --repo stablyai/orca --job 87264193814 --log | \
+    awk -F '\t' '$2 == "Run runtime artifact contract tests"' | \
+    rg 'windows-signature-verification|Test Files|Tests|Duration'
+  gh run view 29387668264 --repo stablyai/orca --job 87264193803 --log | \
+    awk -F '\t' '$2 == "Run runtime artifact contract tests"' | \
+    rg 'windows-signature-verification|Test Files|Tests|Duration'
+  gh run view 29387668264 --repo stablyai/orca --job 87264193809 --log | \
+    awk -F '\t' '$2 == "Run runtime artifact contract tests"' | \
+    rg 'windows-signature-verification|Test Files|Tests|Duration'
+  gh run view 29387668264 --repo stablyai/orca --job 87265321571 --log | \
+    rg 'OsBuildNumber|26100|26200|osBuild'
+  gh run view 29387668227 --repo stablyai/orca \
+    --json status,conclusion,headSha,createdAt,updatedAt,url,jobs
+  gh run view 29387668205 --repo stablyai/orca \
+    --json status,conclusion,headSha,createdAt,updatedAt,url,jobs
+  ```
+
+- Contract result: PASS on Linux x64/arm64, macOS x64/arm64, and Windows x64/arm64. Every native
+  build job syntax-checked the source/test and executed the new suite under exact Node 24.18.0. The
+  macOS arm64 log records 6/6 in 372 ms and aggregate 29 files/154 tests in 4.86 seconds. Windows
+  x64 records 6/6 in 2.643 seconds and aggregate 30 files/158 tests (151 pass, 7 platform skips) in
+  8.13 seconds; Windows arm64 records 6/6 in 3.722 seconds and the same aggregate in 11.35 seconds.
+- Native build/regression controls: all six double-build, smoke, exact-equality, metadata, stage,
+  cleanup, and unpublished-upload jobs passed. Durations were Linux x64 4m08s, Linux arm64 4m20s,
+  macOS x64 9m42s, macOS arm64 2m58s, Windows x64 5m14s, and Windows arm64 9m13s. Linux x64/arm64
+  digest-pinned glibc 2.28/libstdc++ 6.0.25 supplements passed in 52s/52s. Windows x64 exact
+  build-20348 passed in 1m17s.
+- Expected aggregate status: the artifact workflow concluded failure only because the Windows arm64
+  hosted image is build 10.0.26200 rather than the declared 10.0.26100 floor (`osBuild: false`) in
+  4m41s. This retains E-M3-WINDOWS-ARM64-BASELINE-CI-RED-001 and is not a verifier regression.
+- Other exact-head controls: PR Checks
+  [29387668227](https://github.com/stablyai/orca/actions/runs/29387668227) passed in about 13m27s,
+  including lint, reliability/max-lines, typecheck, Git 2.25 compatibility, full tests, unpacked app,
+  and packaged-CLI smoke. Golden E2E
+  [29387668205](https://github.com/stablyai/orca/actions/runs/29387668205) passed Linux/macOS in about
+  4m49s/5m18s.
+- Oracle proved: both native shell families parse and execute the exact final-tree/signer-policy
+  contract on every target-native runner while all prior artifact, bundled-Node, PTY/watcher,
+  clean-build equality, oldest-userland, packaging, and E2E controls retain their expected outcome.
+- Does not prove: a real final signed Windows runtime, SignPath invocation or returned Orca bytes,
+  target-native `Valid` status for those returned bytes, Defender/WDAC, exact Windows arm64 build
+  26100, Apple signing/trust, release aggregation, SSH transfer/install, packaged desktop use,
+  fallback/performance, or an enabled tuple.
+- Follow-up: keep native signing/trust and every tuple unchecked. Prove exact official-Node and
+  preserved-upstream source signatures target-natively without credentials, then keep real returned
+  SignPath bytes plus Defender/WDAC and exact-floor execution as separate required gates.
 
 ## Accepted Gaps
 
