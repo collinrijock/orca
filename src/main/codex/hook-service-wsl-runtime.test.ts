@@ -429,6 +429,7 @@ describe('Codex WSL runtime hook install app-server grant lane', () => {
     tempRoots.push(userDataDir)
     previousUserDataPath = process.env.ORCA_USER_DATA_PATH
     process.env.ORCA_USER_DATA_PATH = userDataDir
+    trustGrantInternals.resetDiagnostics()
     codexAppServerCapabilityCache.clear()
   })
 

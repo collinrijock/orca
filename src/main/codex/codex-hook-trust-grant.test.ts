@@ -1,14 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
   CodexAppServerUnsupportedError,
-  type CodexHookTrustGrantRequest
+  type CodexHookTrustGrantRequest,
+  type CodexHookTrustGrantSessionResult
 } from './codex-app-server-client'
 import { codexAppServerCapabilityCache } from './codex-app-server-capability-cache'
 import {
   _internals,
+  CODEX_TRUST_GRANT_TRANSIENT_RETRY_INTERVAL_MS,
   getCodexTrustGrantDiagnostics,
   grantManagedCodexHookTrust,
   type CodexManagedTrustGrantPlan
@@ -35,6 +37,7 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  vi.useRealTimers()
   _internals.setGrantSessionRunnerSync(null)
   codexAppServerCapabilityCache.clear()
   if (previousUserDataPath === undefined) {
@@ -158,7 +161,7 @@ describe('grantManagedCodexHookTrust', () => {
 
   it('marks the host unsupported only for the unsupported error class', () => {
     const entries = [managedEntry('session_start')]
-    const runner = vi.fn(() => {
+    const runner = vi.fn((): CodexHookTrustGrantSessionResult => {
       throw new CodexAppServerUnsupportedError('no such method')
     })
     _internals.setGrantSessionRunnerSync(runner)
@@ -178,16 +181,27 @@ describe('grantManagedCodexHookTrust', () => {
     expect(runner).toHaveBeenCalledTimes(1)
   })
 
-  it('falls back without poisoning the capability on transient errors', () => {
+  it('backs off transient failures without poisoning the capability', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(1_000)
     const entries = [managedEntry('session_start')]
-    const runner = vi.fn(() => {
+    const runner = vi.fn((): CodexHookTrustGrantSessionResult => {
       throw new Error('spawn ETIMEDOUT')
     })
     _internals.setGrantSessionRunnerSync(runner)
     const plan = buildPlan(entries)
 
     expect(grantManagedCodexHookTrust(plan)).toMatchObject({ lane: 'fallback', reason: 'error' })
-    expect(grantManagedCodexHookTrust(plan)).toMatchObject({ lane: 'fallback', reason: 'error' })
+    expect(grantManagedCodexHookTrust(plan)).toMatchObject({
+      lane: 'fallback',
+      reason: 'retry-cached'
+    })
+    expect(runner).toHaveBeenCalledTimes(1)
+    expect(codexAppServerCapabilityCache.shouldTry('native')).toBe(true)
+
+    runner.mockImplementation(() => grantedSessionResult(entries))
+    vi.setSystemTime(1_000 + CODEX_TRUST_GRANT_TRANSIENT_RETRY_INTERVAL_MS)
+    expect(grantManagedCodexHookTrust(plan)).toMatchObject({ lane: 'rpc' })
     expect(runner).toHaveBeenCalledTimes(2)
   })
 
@@ -202,6 +216,37 @@ describe('grantManagedCodexHookTrust', () => {
     })
     expect(codexAppServerCapabilityCache.shouldTry('native')).toBe(true)
     expect(getCodexTrustGrantDiagnostics()).toMatchObject({ verifyFailed: 1 })
+  })
+
+  it('restores exact config bytes before fallback after a mutating RPC error', () => {
+    const entries = [managedEntry('session_start')]
+    const plan = buildPlan(entries)
+    const original = '# user formatting\r\n[hooks]\r\n'
+    mkdirSync(runtimeHomeDir, { recursive: true })
+    writeFileSync(plan.tomlPath, original)
+    _internals.setGrantSessionRunnerSync(() => {
+      writeFileSync(plan.tomlPath, '[hooks.state."rpc-partial"]\ntrusted_hash = "changed"\n')
+      throw new Error('post-write transport failure')
+    })
+
+    expect(grantManagedCodexHookTrust(plan)).toMatchObject({ lane: 'fallback', reason: 'error' })
+    expect(readFileSync(plan.tomlPath, 'utf8')).toBe(original)
+  })
+
+  it('removes an RPC-created config before fallback when none existed', () => {
+    const entries = [managedEntry('session_start')]
+    const plan = buildPlan(entries)
+    mkdirSync(runtimeHomeDir, { recursive: true })
+    _internals.setGrantSessionRunnerSync(() => {
+      writeFileSync(plan.tomlPath, '[hooks.state."rpc-partial"]\ntrusted_hash = "changed"\n')
+      return { outcome: 'verify-failed', reason: 'post-write listing failed' }
+    })
+
+    expect(grantManagedCodexHookTrust(plan)).toMatchObject({
+      lane: 'fallback',
+      reason: 'verify-failed'
+    })
+    expect(existsSync(plan.tomlPath)).toBe(false)
   })
 
   it('honors the ops kill switch env flag', () => {

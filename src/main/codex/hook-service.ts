@@ -649,10 +649,11 @@ function readLedgerHomeForCleanup(runtimeHomePath: string): CodexTrustGrantLedge
 function addLedgerRecognizedHash(
   recognizedHashes: Set<string>,
   ledgerHome: CodexTrustGrantLedgerHome | null,
-  key: string
+  key: string,
+  expectedEntry: CodexTrustEntry
 ): void {
   const granted = ledgerHome?.entries[normalizeHookTrustKeyForLookup(key)]
-  if (granted?.trustedHash) {
+  if (granted?.trustedHash && granted.signature === getCodexHookTrustSignature(expectedEntry)) {
     recognizedHashes.add(granted.trustedHash)
   }
 }
@@ -698,7 +699,7 @@ function removeRuntimeManagedHookTrustEntries(configPath: string): void {
         computeTrustedHash(expectedEntry),
         computeTrustedHash({ ...expectedEntry, timeoutSec: undefined })
       ])
-      addLedgerRecognizedHash(recognizedHashes, ledgerHome, key)
+      addLedgerRecognizedHash(recognizedHashes, ledgerHome, key, expectedEntry)
       if (!state.trustedHash || !recognizedHashes.has(state.trustedHash)) {
         continue
       }
@@ -748,7 +749,7 @@ function removeWslRuntimeManagedHookTrustEntries(plan: CodexWslRuntimeHookInstal
         computeTrustedHash(expectedEntry),
         computeTrustedHash({ ...expectedEntry, timeoutSec: undefined })
       ])
-      addLedgerRecognizedHash(recognizedHashes, ledgerHome, key)
+      addLedgerRecognizedHash(recognizedHashes, ledgerHome, key, expectedEntry)
       if (state.trustedHash && recognizedHashes.has(state.trustedHash)) {
         ourKeys.push(key)
       }
@@ -802,7 +803,7 @@ function removeStaleWslRuntimeManagedHookTrustEntries(
       computeTrustedHash(expectedEntry),
       computeTrustedHash({ ...expectedEntry, timeoutSec: undefined })
     ])
-    addLedgerRecognizedHash(recognizedHashes, ledgerHome, key)
+    addLedgerRecognizedHash(recognizedHashes, ledgerHome, key, expectedEntry)
     if (state.trustedHash && recognizedHashes.has(state.trustedHash)) {
       ourKeys.push(key)
     }

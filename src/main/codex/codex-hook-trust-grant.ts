@@ -26,12 +26,16 @@ import {
   type CodexTrustEntry
 } from './config-toml-trust'
 import { getCodexHookTrustSignature } from './codex-hook-identity'
+import { captureCodexTrustConfig, restoreCodexTrustConfig } from './codex-trust-config-rollback'
 
 // Why: grants must never make launch prep slower than the codex TUI's own
 // startup on the same host. Native sessions complete in ~100ms; WSL pays
 // wsl.exe + login-shell + possible cold-distro costs, so it gets more room.
 const NATIVE_GRANT_TIMEOUT_MS = 10_000
 const WSL_GRANT_TIMEOUT_MS = 30_000
+// Why: a transiently hung app-server must not block launch prep on every pane.
+// The legacy lane remains available while a short, host-scoped cooldown runs.
+export const CODEX_TRUST_GRANT_TRANSIENT_RETRY_INTERVAL_MS = 5 * 60_000
 
 /** Ops escape hatch (not a setting): forces the unchanged fallback lane. */
 const DISABLE_ENV_FLAG = 'ORCA_DISABLE_CODEX_TRUST_RPC'
@@ -58,6 +62,7 @@ export type CodexTrustGrantFallbackReason =
   | 'unsupported'
   | 'unsupported-cached'
   | 'verify-failed'
+  | 'retry-cached'
   | 'error'
 
 export type CodexManagedTrustGrantOutcome =
@@ -79,6 +84,7 @@ const diagnostics: CodexTrustGrantDiagnostics = {
   verifyFailed: 0,
   lastFallbackReason: null
 }
+const transientRetryAfterByHost = new Map<string, number>()
 
 export function getCodexTrustGrantDiagnostics(): CodexTrustGrantDiagnostics {
   return { ...diagnostics }
@@ -244,22 +250,44 @@ export function grantManagedCodexHookTrust(
     if (!codexAppServerCapabilityCache.shouldTry(hostKey)) {
       return fallback(plan, 'unsupported-cached')
     }
+    const transientRetryAfter = transientRetryAfterByHost.get(hostKey)
+    if (transientRetryAfter !== undefined) {
+      if (Date.now() < transientRetryAfter) {
+        return fallback(plan, 'retry-cached')
+      }
+      transientRetryAfterByHost.delete(hostKey)
+    }
 
     const startedAtMs = Date.now()
+    // Why: the RPC may rewrite config.toml before a later RPC fails. Restore
+    // its exact pre-session bytes before the legacy lane runs so every fallback
+    // has the same input and output as the pre-RPC implementation.
+    const configSnapshot = captureCodexTrustConfig(plan.tomlPath)
     let result: CodexHookTrustGrantSessionResult
     try {
       result = runSessionSync(buildGrantRequest(plan, expected))
     } catch (error) {
+      restoreCodexTrustConfig(plan.tomlPath, configSnapshot)
       if (isCodexAppServerUnsupportedError(error)) {
+        transientRetryAfterByHost.delete(hostKey)
         codexAppServerCapabilityCache.rememberUnsupported(hostKey)
         return fallback(plan, 'unsupported', error)
       }
+      transientRetryAfterByHost.set(
+        hostKey,
+        Date.now() + CODEX_TRUST_GRANT_TRANSIENT_RETRY_INTERVAL_MS
+      )
       return fallback(plan, 'error', error)
     }
     // Why: the RPC surface answered, even if our entries were not verifiable —
     // remember support so a later drift event retries the preferred lane.
     codexAppServerCapabilityCache.rememberSupported(hostKey)
     if (result.outcome === 'verify-failed') {
+      restoreCodexTrustConfig(plan.tomlPath, configSnapshot)
+      transientRetryAfterByHost.set(
+        hostKey,
+        Date.now() + CODEX_TRUST_GRANT_TRANSIENT_RETRY_INTERVAL_MS
+      )
       return fallback(plan, 'verify-failed', result.reason)
     }
 
@@ -269,6 +297,11 @@ export function grantManagedCodexHookTrust(
     for (const granted of result.entries) {
       const match = byNormalizedKey.get(granted.normalizedKey)
       if (!match) {
+        restoreCodexTrustConfig(plan.tomlPath, configSnapshot)
+        transientRetryAfterByHost.set(
+          hostKey,
+          Date.now() + CODEX_TRUST_GRANT_TRANSIENT_RETRY_INTERVAL_MS
+        )
         return fallback(plan, 'verify-failed', `unexpected granted key ${granted.key}`)
       }
       grantedEntries.push({ ...match.entry, trustedHash: granted.trustedHash })
@@ -278,8 +311,14 @@ export function grantManagedCodexHookTrust(
       }
     }
     if (grantedEntries.length !== expected.length) {
+      restoreCodexTrustConfig(plan.tomlPath, configSnapshot)
+      transientRetryAfterByHost.set(
+        hostKey,
+        Date.now() + CODEX_TRUST_GRANT_TRANSIENT_RETRY_INTERVAL_MS
+      )
       return fallback(plan, 'verify-failed', 'granted entry set did not cover expected entries')
     }
+    transientRetryAfterByHost.delete(hostKey)
     try {
       writeCodexTrustGrantLedgerHome(plan.runtimeHomePath, {
         binary: currentStamp,
@@ -311,5 +350,6 @@ export const _internals = {
     diagnostics.fellBack = 0
     diagnostics.verifyFailed = 0
     diagnostics.lastFallbackReason = null
+    transientRetryAfterByHost.clear()
   }
 }

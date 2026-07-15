@@ -1466,6 +1466,11 @@ describe('CodexHookService', () => {
 })
 
 describe('CodexHookService app-server trust grant lane', () => {
+  beforeEach(() => {
+    trustGrantInternals.resetDiagnostics()
+    codexAppServerCapabilityCache.clear()
+  })
+
   afterEach(() => {
     trustGrantInternals.setGrantSessionRunnerSync(null)
     trustGrantInternals.resetDiagnostics()
@@ -1648,5 +1653,34 @@ describe('CodexHookService app-server trust grant lane', () => {
         timeoutSec: 10
       })
     )
+  })
+
+  it('keeps fallback output byte-identical after an RPC mutates config and then fails', () => {
+    const systemCodexHome = join(tmpHome, '.codex')
+    mkdirSync(systemCodexHome, { recursive: true })
+    const service = new CodexHookService()
+
+    process.env.ORCA_DISABLE_CODEX_TRUST_RPC = '1'
+    expect(service.install().state).toBe('installed')
+    const managedCodexHome = join(userDataDir, 'codex-runtime-home', 'home')
+    const baseline = readFileSync(join(managedCodexHome, 'config.toml'))
+
+    delete process.env.ORCA_DISABLE_CODEX_TRUST_RPC
+    rmSync(managedCodexHome, { recursive: true, force: true })
+    trustGrantInternals.resetDiagnostics()
+    const runner = vi.fn((request: CodexHookTrustGrantRequest) => {
+      const codexHome = request.invocation.env?.CODEX_HOME
+      expect(codexHome).toBeTruthy()
+      writeFileSync(
+        join(codexHome!, 'config.toml'),
+        '[hooks.state."rpc-partial"]\ntrusted_hash = "sha256:changed"\n'
+      )
+      throw new Error('transport failed after config/batchWrite')
+    })
+    trustGrantInternals.setGrantSessionRunnerSync(runner)
+
+    expect(service.install().state).toBe('installed')
+    expect(runner).toHaveBeenCalledTimes(1)
+    expect(readFileSync(join(managedCodexHome, 'config.toml'))).toEqual(baseline)
   })
 })
