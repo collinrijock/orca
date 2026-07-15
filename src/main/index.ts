@@ -134,6 +134,8 @@ import {
   isRealHomeCodexHookLaneUsable
 } from './codex/codex-real-home-hook-install'
 import { setCodexTrustGrantTelemetry } from './codex/codex-hook-trust-grant'
+import { startCodexSessionBackfillInBackground } from './codex/codex-session-backfill'
+import { resolveHostCodexSessionSourceHome } from './codex/codex-session-source-home'
 import { getDefaultWslDistro } from './wsl'
 import { ClaudeAccountService } from './claude-accounts/service'
 import { ClaudeRuntimeAuthService } from './claude-accounts/runtime-auth-service'
@@ -1800,6 +1802,16 @@ app.whenReady().then(async () => {
       isAgentStatusHooksEnabled(store?.getSettings())
   )
   codexAccounts = new CodexAccountService(store, rateLimits, codexRuntimeHome)
+  // Why: one-time per-host backfill makes historical Orca-managed Codex
+  // sessions visible to the user's own resume picker and app history (#4444,
+  // #8612). Deferred so startup and first PTY spawns never compete with the
+  // sessions tree walk.
+  setTimeout(() => {
+    void startCodexSessionBackfillInBackground(
+      {},
+      resolveHostCodexSessionSourceHome(store!.getSettings())
+    )
+  }, 15_000)
   claudeRuntimeAuth = new ClaudeRuntimeAuthService(store)
   claudeAccounts = new ClaudeAccountService(store, rateLimits, claudeRuntimeAuth)
   rateLimits.setCodexHomePathResolver((target) =>
