@@ -33,6 +33,18 @@ describe('resolveDialogContentClassName', () => {
     expect(cls).not.toContain('sm:max-w-lg')
   })
 
+  it('keeps the default below a later responsive override', () => {
+    const cls = resolveDialogContentClassName('md:max-w-2xl')
+    expect(cls).toContain('sm:max-w-lg')
+    expect(cls).toContain('md:max-w-2xl')
+  })
+
+  it('does not treat a descendant max-width as a dialog width override', () => {
+    const cls = resolveDialogContentClassName('[&_pre]:max-w-full')
+    expect(cls).toContain('sm:max-w-lg')
+    expect(cls).toContain('[&_pre]:max-w-full')
+  })
+
   it('preserves an intentionally uncapped (max-w-none) dialog', () => {
     const cls = resolveDialogContentClassName('max-w-none sm:max-w-none')
     expect(cls).toContain('max-w-none')
@@ -43,6 +55,12 @@ describe('resolveDialogContentClassName', () => {
   it('respects an important max-width override', () => {
     const cls = resolveDialogContentClassName('!max-w-[360px]')
     expect(cls).toContain('!max-w-[360px]')
+    expect(cls).not.toContain('sm:max-w-lg')
+  })
+
+  it('respects Tailwind v4 suffix-important max-width overrides', () => {
+    const cls = resolveDialogContentClassName('max-w-[360px]!')
+    expect(cls).toContain('max-w-[360px]!')
     expect(cls).not.toContain('sm:max-w-lg')
   })
 
