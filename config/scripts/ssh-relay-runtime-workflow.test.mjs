@@ -96,6 +96,7 @@ describe('SSH relay runtime artifact workflow', () => {
       source.match(/ssh-relay-runtime-windows-signature-verification\.test\.mjs/g)
     ).toHaveLength(4)
     for (const moduleName of [
+      'compatibility',
       'windows-source-signature-verification',
       'release-stage-gate',
       'draft-recovery',

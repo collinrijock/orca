@@ -8,8 +8,8 @@ work; keep exact commands, runner identities, hashes, metrics, and residual gaps
 
 Date created: 2026-07-14<br>
 Last updated: 2026-07-15<br>
-Current phase: Milestone 4 / Work Package 3 credential-free canonical manifest assembly and signature handoff — **In progress — 2026-07-15, Codex implementation owner**. The disconnected release-DAG and aggregate/read-back byte boundaries are closed locally and on all six native build jobs under E-M4-RELEASE-DAG-LOCAL-001, E-M4-RELEASE-DAG-CI-001, E-M4-AGGREGATE-READBACK-LOCAL-001, and E-M4-AGGREGATE-READBACK-CI-001. Exact-floor gaps and real native signing/trust remain open external gates, so the active package may add only canonical unsigned-manifest assembly plus credential-free signing-request and returned-signature verification; it may not publish, connect desktop consumers, use signing credentials, or enable a tuple. Production/default behavior is unchanged, no bundled-runtime path is enabled, and no artifact is published.<br>
-Session checkpoint: **In progress — 2026-07-15, Codex implementation owner** — exact-head artifact run [29391666358](https://github.com/stablyai/orca/actions/runs/29391666358) executes aggregate-input and authenticated draft read-back suites under Node 24 on all six target-native build jobs at `87a8e4dc3`; every native build and both Linux supplemental userland jobs pass under E-M4-AGGREGATE-READBACK-CI-001. The run remains red only because Windows arm64 runner build 26200 is not the required build 26100, after archive/tree/Node/PTY/watcher smoke settles in 8,032.7284 ms with 49,922,048-byte RSS. Golden E2E [29391666362](https://github.com/stablyai/orca/actions/runs/29391666362) and PR Checks [29391666360](https://github.com/stablyai/orca/actions/runs/29391666360) are green. The next disconnected package is canonical unsigned-manifest assembly plus credential-free signing-request/returned-signature verification. Real Apple/SignPath signing, returned production signatures, Gatekeeper/notarization, Defender/WDAC, missing exact-floor snapshots, protected manifest signing, and native trust remain separately gated. Nothing is published or enabled, and legacy remains the production default.<br>
+Current phase: Milestone 4 / Work Package 3 Windows compatibility-kind parity prerequisite — **In progress — 2026-07-15, Codex implementation owner**. The disconnected release-DAG and aggregate/read-back byte boundaries are closed locally and on all six native build jobs under E-M4-RELEASE-DAG-LOCAL-001, E-M4-RELEASE-DAG-CI-001, E-M4-AGGREGATE-READBACK-LOCAL-001, and E-M4-AGGREGATE-READBACK-CI-001. Pre-assembly inspection found that target-native Windows build identities use compatibility `kind: "win32"` while the reviewed manifest schema and desktop consistency verifier require `kind: "windows"`. The active package is limited to a RED/GREEN parity correction and exact regressions before canonical manifest/signature-handoff work resumes; it may not publish, connect desktop consumers, use signing credentials, or enable a tuple. Production/default behavior is unchanged, no bundled-runtime path is enabled, and no artifact is published.<br>
+Session checkpoint: **In progress — 2026-07-15, Codex implementation owner** — exact-head artifact run [29391666358](https://github.com/stablyai/orca/actions/runs/29391666358) executes aggregate-input and authenticated draft read-back suites under Node 24 on all six target-native build jobs at `87a8e4dc3`; every native build and both Linux supplemental userland jobs pass under E-M4-AGGREGATE-READBACK-CI-001. The run remains red only because Windows arm64 runner build 26200 is not the required build 26100, after archive/tree/Node/PTY/watcher smoke settles in 8,032.7284 ms with 49,922,048-byte RSS. Golden E2E [29391666362](https://github.com/stablyai/orca/actions/runs/29391666362) and PR Checks [29391666360](https://github.com/stablyai/orca/actions/runs/29391666360) are green. Inspection for the next manifest slice exposed the unpublished Windows `win32`/`windows` compatibility-kind and root-`node.exe`/`bin/node.exe` verifier mismatches. The narrow correction now passes local RED/GREEN, purpose-named workflow wiring, 36-file/203-test full SSH-relay, type, lint, line-budget, formatting, and diff gates under E-M4-WINDOWS-MANIFEST-PARITY-LOCAL-RED-001 and E-M4-WINDOWS-MANIFEST-PARITY-LOCAL-001; exact-head native CI is next. Real Apple/SignPath signing, returned production signatures, Gatekeeper/notarization, Defender/WDAC, missing exact-floor snapshots, protected manifest signing, and native trust remain separately gated. Nothing is published or enabled, and legacy remains the production default.<br>
 Primary design: [SSH relay GitHub Release plan](./2026-07-14-ssh-relay-github-release-plan.html)<br>
 Motivating issues: [#8450](https://github.com/stablyai/orca/issues/8450), [#1693](https://github.com/stablyai/orca/issues/1693)
 
@@ -69,11 +69,11 @@ same change as the work it records.
   verification binds each input and returned byte to exact name, size, SHA-256, tuple, content
   identity, source draft, approved HTTPS asset origin, and exact HTTP 200 under
   E-M4-AGGREGATE-READBACK-LOCAL-001 and E-M4-AGGREGATE-READBACK-CI-001.
-- Active package: Work Package 3 credential-free canonical unsigned-manifest assembly and signing
-  handoff. It may build and validate canonical bytes, construct a bounded signing request, and verify
-  injected returned signatures without credentials, protected-environment access, publication,
-  production workflow wiring, desktop consumers, or tuple enablement. No broader Milestone 4 box is
-  checked until the corresponding implementation and exact tests exist.
+- Active package: Work Package 3 Windows compatibility-kind parity prerequisite. Correct the
+  artifact builder's compatibility discriminator from `win32` to the manifest contract's `windows`,
+  prove both Windows tuples and content-identity behavior, and run exact regressions before resuming
+  canonical unsigned-manifest/signing-handoff work. No broader Milestone 4 box is checked until the
+  corresponding implementation and exact tests exist.
 - Completed Work Package 2 gate: target-native Windows source-signature reports from exact-head
   artifact jobs 87267322867 and 87267322870 were independently downloaded and matched to their
   identities and signing-stage reports under E-M3-WINDOWS-SOURCE-SIGNATURE-CI-001. PR Checks
@@ -1534,6 +1534,8 @@ focused commands as their scripts/tests are introduced.
 - [x] `pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1 config/scripts/ssh-relay-runtime-release-stage-gate.test.mjs config/scripts/ssh-relay-runtime-draft-recovery.test.mjs config/scripts/ssh-relay-runtime-workflow.test.mjs` (E-M4-RELEASE-DAG-LOCAL-001; static native-job wiring only, no real release/signing execution)
 - [x] `pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1 config/scripts/ssh-relay-runtime-aggregate-input.test.mjs config/scripts/ssh-relay-runtime-draft-readback.test.mjs` (E-M4-AGGREGATE-READBACK-LOCAL-RED-001, E-M4-AGGREGATE-READBACK-LOCAL-001; local filesystem plus mocked GitHub responses only)
 - [x] `pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1 config/scripts/ssh-relay-runtime-aggregate-input.test.mjs config/scripts/ssh-relay-runtime-draft-readback.test.mjs config/scripts/ssh-relay-runtime-workflow.test.mjs` (E-M4-AGGREGATE-READBACK-LOCAL-001; static native-job wiring only)
+- [x] `pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1 config/scripts/ssh-relay-runtime-compatibility.test.mjs` (E-M4-WINDOWS-MANIFEST-PARITY-LOCAL-RED-001, E-M4-WINDOWS-MANIFEST-PARITY-LOCAL-001; exact Windows compatibility discriminator and canonical vector)
+- [x] `pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1 config/scripts/ssh-relay-runtime-compatibility.test.mjs config/scripts/ssh-relay-runtime-workflow.test.mjs src/main/ssh/ssh-relay-artifact-schema.test.ts` (E-M4-WINDOWS-MANIFEST-PARITY-LOCAL-RED-001, E-M4-WINDOWS-MANIFEST-PARITY-LOCAL-001; build/desktop contract parity and static native-job wiring)
 
 ### Commands/scripts that must be added or formally identified
 
@@ -9054,6 +9056,97 @@ diff --check`.
 - Follow-up: implement credential-free canonical unsigned-manifest assembly plus bounded signing
   request and returned-signature verification. Do not connect production credentials, publication,
   desktop consumers, or tuple enablement.
+
+### E-M4-WINDOWS-MANIFEST-PARITY-LOCAL-RED-001 — Windows artifact/manifest identity mismatch
+
+- Date: 2026-07-15
+- Owner: Codex implementation owner
+- Source: exact base `90da7e14b` plus uncommitted purpose-named tests; draft PR
+  [#8741](https://github.com/stablyai/orca/pull/8741).
+- Runner/network: local macOS 26.2 build 25C56 arm64, Node v26.0.0 and pnpm 10.24.0; no network,
+  runner, signing, release, SSH, publication, desktop consumer, or production call.
+- Commands:
+
+  ```sh
+  pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1 \
+    config/scripts/ssh-relay-runtime-compatibility.test.mjs
+  pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1 \
+    src/main/ssh/ssh-relay-artifact-schema.test.ts
+  ```
+
+- Result: expected RED. The compatibility suite fails 2/2 tests in 144 ms: both Windows tuple
+  contracts return `kind: "win32"` rather than manifest-compatible `kind: "windows"`, and the actual
+  canonical content ID `sha256:704e9381bc99c97dfbdc4cfc902101879ab6990aa202114120855a5eb02aa6f5`
+  disagrees with the fixed `windows` vector
+  `sha256:b3eb5c89f079ed735cb83cf2595102fe010b8dd78d3096ddf592109b2ac222b0`.
+  After correcting only that discriminator locally, the schema suite's new Windows fixture fails
+  1/30 tests in 196 ms because the desktop consistency verifier expects root `node.exe`; every
+  target-native Windows artifact and the detailed plan use `bin/node.exe`.
+- Oracle proved: the artifact builder's Windows identities could not be consumed by the reviewed
+  signed-manifest schema even though both sides were individually tested. The failure was caught
+  before canonical assembly, publication, desktop embedding, or tuple enablement.
+- Does not prove: the correction, target-native regeneration, archive equality after the intentional
+  content-ID change, native signing/trust, manifest assembly/signing, SSH behavior, or an enabled
+  tuple.
+- Correction: use `windows` only as the compatibility-union discriminator while retaining `win32`
+  as the tuple OS, and make the desktop verifier accept the already-reviewed `bin/node.exe` archive
+  layout. Add both contracts to every native artifact job.
+
+### E-M4-WINDOWS-MANIFEST-PARITY-LOCAL-001 — Windows artifact and manifest identities align locally
+
+- Date: 2026-07-15
+- Owner: Codex implementation owner
+- Source: uncommitted correction based on exact head `90da7e14b`; draft PR
+  [#8741](https://github.com/stablyai/orca/pull/8741).
+- Runner/network: local macOS 26.2 build 25C56 arm64, Node v26.0.0 and pnpm 10.24.0; no network,
+  native runner, signing, release, SSH, publication, desktop consumer, or production call. The
+  repository emits its expected Node-24 engine warning.
+- Commands:
+
+  ```sh
+  node --check config/scripts/ssh-relay-runtime-compatibility.mjs
+  node --check config/scripts/ssh-relay-runtime-compatibility.test.mjs
+  /usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1 \
+    config/scripts/ssh-relay-runtime-compatibility.test.mjs \
+    config/scripts/ssh-relay-runtime-workflow.test.mjs \
+    src/main/ssh/ssh-relay-artifact-schema.test.ts
+  pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1 \
+    config/scripts/ssh-relay-runtime-compatibility.test.mjs \
+    config/scripts/ssh-relay-runtime-zip.test.mjs \
+    config/scripts/ssh-relay-runtime-artifact.test.mjs \
+    config/scripts/ssh-relay-runtime-native-signing-apply.test.mjs \
+    config/scripts/ssh-relay-runtime-windows-signature-verification.test.mjs \
+    config/scripts/ssh-relay-runtime-windows-source-signature-verification.test.mjs \
+    src/main/ssh/ssh-relay-artifact-schema.test.ts \
+    src/main/ssh/ssh-relay-runtime-identity.test.ts
+  pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1 \
+    config/scripts/ssh-relay-*.test.mjs
+  pnpm run typecheck
+  pnpm run lint
+  pnpm run check:max-lines-ratchet
+  pnpm exec oxfmt --check <nine touched implementation/workflow/checklist files>
+  git diff --check
+  ```
+
+- Result: PASS. Both syntax checks pass. The compatibility/schema/workflow focus passes 3 files/38
+  tests in 1.59 s; `/usr/bin/time -l` records 3.41 seconds wall time, 133,152,768-byte maximum RSS,
+  zero swaps, and 96,572,816-byte peak memory footprint. The eight affected contract files pass 62
+  tests in 5.46 s. The complete SSH-relay suite passes 36 files/203 tests in 14.88 s. Typecheck, full
+  lint/reliability/localization/bundled-skill gates, max-lines (355 grandfathered suppressions and no
+  new bypass), focused formatting, and `git diff --check` pass; lint emits only existing unrelated
+  warnings.
+- Oracle proved: both target-native Windows tuple definitions now use the manifest schema's
+  `windows` compatibility discriminator while preserving `win32` tuple IDs/OS values. The MJS
+  canonical identity matches the fixed Windows vector, the TypeScript schema accepts the exact
+  `bin/node.exe` archive layout, and both POSIX and Windows workflow families syntax-check and run
+  the parity suite. The intentional content-ID/archive-name change occurs before publication or
+  enablement.
+- Does not prove: target-native Windows rebuild/reproducibility with the new content IDs, macOS/Linux
+  non-regression on native runners, native signing/trust, canonical manifest assembly/signing,
+  publication, desktop embedding, SSH transfer/install, fallback, performance, or an enabled tuple.
+- Follow-up: run the parity suite and regenerate all six native artifacts at the exact implementation
+  head. If green, record the new Windows content IDs and resume credential-free canonical manifest
+  assembly/signature handoff.
 
 ## Accepted Gaps
 

@@ -16,7 +16,8 @@ function expectedTupleId(tuple: SshRelayRuntimeTuple): string {
 function assertRequiredRuntimeEntries(tuple: SshRelayRuntimeTuple): void {
   const files = tuple.entries.filter((entry) => entry.type === 'file')
   const expectedPaths = new Map([
-    ['node', tuple.os === 'win32' ? 'node.exe' : 'bin/node'],
+    // Why: every archive keeps bundled Node under `bin`, including the Windows ZIP.
+    ['node', tuple.os === 'win32' ? 'bin/node.exe' : 'bin/node'],
     ['relay', 'relay.js'],
     ['relay-watcher', 'relay-watcher.js']
   ])

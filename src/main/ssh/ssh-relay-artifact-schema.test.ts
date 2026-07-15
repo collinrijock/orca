@@ -2,6 +2,37 @@ import { describe, expect, it } from 'vitest'
 
 import { createSshRelayArtifactTestManifest } from './ssh-relay-artifact-test-manifest'
 import { parseSshRelayArtifactManifest } from './ssh-relay-artifact-schema'
+import { sshRelayRuntimeArchiveName } from './ssh-relay-release-asset'
+import { computeSshRelayRuntimeContentId } from './ssh-relay-runtime-identity'
+
+function createWindowsManifest() {
+  const manifest = createSshRelayArtifactTestManifest()
+  const tuple = manifest.tuples[0]
+  tuple.tupleId = 'win32-x64'
+  tuple.os = 'win32'
+  tuple.architecture = 'x64'
+  tuple.compatibility = {
+    kind: 'windows',
+    minimumBuild: 19045,
+    minimumOpenSshVersion: '8.1p1',
+    minimumPowerShellVersion: '5.1',
+    minimumDotNetFrameworkRelease: 528040
+  }
+  for (const entry of tuple.entries) {
+    entry.path = entry.path
+      .replace('bin/node', 'bin/node.exe')
+      .replace('watcher-linux-x64-glibc', 'watcher-win32-x64')
+  }
+  tuple.nativeVerification.policy = 'signpath-authenticode-v1'
+  for (const file of tuple.nativeVerification.files) {
+    file.path = file.path
+      .replace('bin/node', 'bin/node.exe')
+      .replace('watcher-linux-x64-glibc', 'watcher-win32-x64')
+  }
+  tuple.contentId = computeSshRelayRuntimeContentId(tuple)
+  tuple.archive.name = sshRelayRuntimeArchiveName(tuple.tupleId, tuple.contentId)
+  return manifest
+}
 
 describe('SSH relay artifact manifest schema', () => {
   it('accepts a complete internally consistent manifest', () => {
@@ -9,6 +40,15 @@ describe('SSH relay artifact manifest schema', () => {
 
     expect(parsed.schemaVersion).toBe(1)
     expect(parsed.tuples[0].tupleId).toBe('linux-x64-glibc')
+  })
+
+  it('accepts the target-native Windows Node path and compatibility discriminator', () => {
+    const parsed = parseSshRelayArtifactManifest(createWindowsManifest())
+
+    expect(parsed.tuples[0].compatibility.kind).toBe('windows')
+    expect(parsed.tuples[0].entries).toContainEqual(
+      expect.objectContaining({ path: 'bin/node.exe', role: 'node' })
+    )
   })
 
   it('rejects unsupported schema versions, extra fields, and non-canonical timestamps', () => {

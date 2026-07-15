@@ -33,7 +33,7 @@ async function fixture() {
     os: 'win32',
     architecture: 'x64',
     compatibility: {
-      kind: 'win32',
+      kind: 'windows',
       minimumBuild: 19045,
       minimumOpenSshVersion: '8.1p1',
       minimumPowerShellVersion: '5.1',

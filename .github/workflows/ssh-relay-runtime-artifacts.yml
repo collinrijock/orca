@@ -108,6 +108,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          node --check config/scripts/ssh-relay-runtime-compatibility.mjs
+          node --check config/scripts/ssh-relay-runtime-compatibility.test.mjs
           node --check config/scripts/ssh-relay-runtime-reproducibility.mjs
           node --check config/scripts/ssh-relay-runtime-reproducibility.test.mjs
           node --check config/scripts/ssh-relay-runtime-baseline.mjs
@@ -152,6 +154,7 @@ jobs:
           node --check config/scripts/ssh-relay-runtime-draft-readback.mjs
           node --check config/scripts/ssh-relay-runtime-draft-readback.test.mjs
           pnpm exec vitest run --config config/vitest.config.ts \
+            config/scripts/ssh-relay-runtime-compatibility.test.mjs \
             config/scripts/ssh-relay-node-release-verification.test.mjs \
             config/scripts/ssh-relay-node-tar-inspection.test.mjs \
             config/scripts/ssh-relay-linux-node-gyp-compiler.test.mjs \
@@ -417,6 +420,10 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
+          node --check config/scripts/ssh-relay-runtime-compatibility.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'runtime compatibility syntax check failed' }
+          node --check config/scripts/ssh-relay-runtime-compatibility.test.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'runtime compatibility test syntax check failed' }
           node --check config/scripts/ssh-relay-runtime-reproducibility.mjs
           if ($LASTEXITCODE -ne 0) { throw 'runtime reproducibility script syntax check failed' }
           node --check config/scripts/ssh-relay-runtime-reproducibility.test.mjs
@@ -508,6 +515,7 @@ jobs:
           node --check config/scripts/ssh-relay-runtime-draft-readback.test.mjs
           if ($LASTEXITCODE -ne 0) { throw 'runtime draft read-back test syntax check failed' }
           pnpm exec vitest run --config config/vitest.config.ts `
+            config/scripts/ssh-relay-runtime-compatibility.test.mjs `
             config/scripts/ssh-relay-node-release-verification.test.mjs `
             config/scripts/ssh-relay-node-tar-inspection.test.mjs `
             config/scripts/ssh-relay-linux-node-gyp-compiler.test.mjs `
