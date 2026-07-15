@@ -116,16 +116,13 @@ async function verifyLocalAsset(asset, signal) {
   }
 }
 
-function validateDraft(release, expected, { releaseId, tag, sourceCommit }) {
+function validateDraft(release, expected, { releaseId, tag }) {
   assertObject(release, 'release')
   if (release.id !== releaseId || release.draft !== true) {
     throw new Error('SSH relay runtime release must remain the requested draft during upload')
   }
   if (release.tag_name !== tag) {
     throw new Error('SSH relay runtime draft upload tag does not match')
-  }
-  if (release.target_commitish !== sourceCommit) {
-    throw new Error('SSH relay runtime draft upload source commit does not match')
   }
   if (!Array.isArray(release.assets)) {
     throw new Error('SSH relay runtime draft upload release assets must be an array')
@@ -145,15 +142,62 @@ function validateDraft(release, expected, { releaseId, tag, sourceCommit }) {
   return existing
 }
 
-async function fetchDraft(context, signal) {
-  const response = await context.fetchImpl(
-    `https://api.github.com/repos/${context.repo}/releases/${context.releaseId}`,
-    { headers: authenticatedHeaders(undefined, context.token), redirect: 'error', signal }
-  )
+async function fetchJson(context, url, signal) {
+  const response = await context.fetchImpl(url, {
+    headers: authenticatedHeaders(undefined, context.token),
+    redirect: 'error',
+    signal
+  })
   if (!response.ok) {
     throw await responseError(response)
   }
-  return validateDraft(await response.json(), context.assets, context)
+  return response.json()
+}
+
+async function resolveTagCommit(context, signal) {
+  const reference = await fetchJson(
+    context,
+    `https://api.github.com/repos/${context.repo}/git/ref/tags/${encodeURIComponent(context.tag)}`,
+    signal
+  )
+  let object = reference?.object
+  const seen = new Set()
+  for (let depth = 0; depth < 5; depth += 1) {
+    if (
+      !object ||
+      typeof object !== 'object' ||
+      typeof object.sha !== 'string' ||
+      !COMMIT_PATTERN.test(object.sha) ||
+      (object.type !== 'commit' && object.type !== 'tag') ||
+      seen.has(object.sha)
+    ) {
+      throw new Error('SSH relay runtime draft upload tag reference is invalid')
+    }
+    if (object.type === 'commit') {
+      return object.sha
+    }
+    seen.add(object.sha)
+    const tag = await fetchJson(
+      context,
+      `https://api.github.com/repos/${context.repo}/git/tags/${object.sha}`,
+      signal
+    )
+    object = tag?.object
+  }
+  throw new Error('SSH relay runtime draft upload annotated tag depth exceeded')
+}
+
+async function fetchDraft(context, signal) {
+  const release = await fetchJson(
+    context,
+    `https://api.github.com/repos/${context.repo}/releases/${context.releaseId}`,
+    signal
+  )
+  const existing = validateDraft(release, context.assets, context)
+  if ((await resolveTagCommit(context, signal)) !== context.sourceCommit) {
+    throw new Error('SSH relay runtime draft upload source commit does not match the tag')
+  }
+  return existing
 }
 
 async function fetchExistingAsset(context, remote, signal) {

@@ -8,7 +8,7 @@ work; keep exact commands, runner identities, hashes, metrics, and residual gaps
 
 Date created: 2026-07-14<br>
 Last updated: 2026-07-15<br>
-Current phase: Milestone 4 / Work Package 3 disconnected draft-asset upload/recovery command — **In progress — 2026-07-15, Codex implementation owner**. The callable aggregate and protected manifest-signing workflow contract is closed locally and on all six exact-head native jobs under E-M4-PROTECTED-MANIFEST-WORKFLOW-LOCAL-001 and E-M4-PROTECTED-MANIFEST-WORKFLOW-CI-001. Existing E-M4-RELEASE-DAG and E-M4-AGGREGATE-READBACK contracts already cover the declared timeout, retry, approval, failure, recovery, and returned-byte taxonomy. The missing bounded draft upload side is locally green under E-M4-DRAFT-UPLOAD-LOCAL-RED-001 and E-M4-DRAFT-UPLOAD-LOCAL-001: exact local-byte hashing, same-draft/source recovery, immutable retry reconciliation, authenticated metadata/upload calls, partial-draft recovery, injected GitHub responses, and no workflow caller or release write in tests. Fresh all-six native CI is required. Release-cut, desktop builds, publication, and every tuple stay disconnected; production/default behavior is unchanged.<br>
+Current phase: Milestone 4 / Work Package 3 disconnected draft-asset upload/recovery command — **In progress — 2026-07-15, Codex implementation owner**. The callable aggregate and protected manifest-signing workflow contract is closed locally and on all six exact-head native jobs under E-M4-PROTECTED-MANIFEST-WORKFLOW-LOCAL-001 and E-M4-PROTECTED-MANIFEST-WORKFLOW-CI-001. Existing E-M4-RELEASE-DAG and E-M4-AGGREGATE-READBACK contracts already cover the declared timeout, retry, approval, failure, recovery, and returned-byte taxonomy. The missing bounded draft upload side is locally green under E-M4-DRAFT-UPLOAD-LOCAL-RED-001 and E-M4-DRAFT-UPLOAD-LOCAL-001: exact local-byte hashing, same-draft recovery, authenticated lightweight/annotated tag-to-source binding, immutable retry reconciliation, authenticated metadata/upload calls, partial-draft recovery, injected GitHub responses, and no workflow caller or release write in tests. Fresh all-six native CI is required. Release-cut, desktop builds, publication, and every tuple stay disconnected; production/default behavior is unchanged.<br>
 Session checkpoint: **In progress — 2026-07-15, Codex implementation owner** — exact pushed head `bb4b527e4ea030cbd94f11ca9b6e284900ab8c8a` passes all six target-native artifact jobs in run 29428772206 under E-M4-LINUX-PREREQUISITE-CAPABILITY-CI-001 and E-M4-PROTECTED-MANIFEST-WORKFLOW-CI-001. Linux x64/arm64 capability probes complete in about four seconds, never enter APT, and proceed through full runtime construction; the all-six workflow source contract and broad runtime suites pass. Both Linux oldest-userland supplements and Windows x64 floor pass. Windows arm64 runtime smoke succeeds but the floor job retains the expected fail-closed 26200-versus-26100 mismatch. PR Checks 29428772127 and Golden E2E 29428772389 are green. The user authorizes commits, pushes, draft-PR updates, CI reruns, and protected rehearsals within PRs, but not merging to `main`. No accepted production key, protected environment/seed, native-signing trust proof, release consumer, publication path, desktop consumer, tuple enablement, or production/default change is connected. Legacy remains the production default.<br>
 Primary design: [SSH relay GitHub Release plan](./2026-07-14-ssh-relay-github-release-plan.html)<br>
 Motivating issues: [#8450](https://github.com/stablyai/orca/issues/8450), [#1693](https://github.com/stablyai/orca/issues/1693)
@@ -11256,45 +11256,48 @@ config/scripts/ssh-relay-runtime-draft-upload.test.mjs`.
 
 - Date: 2026-07-15
 - Owner: Codex implementation owner
-- Source: local implementation atop exact pushed head
-  `9b83971866cd5f7fc71de20a3e09ab2a120e01bd`; draft PR #8741.
+- Source: implementation commit `8d9013cd106734ecd979f785b515dd9640841330` plus the local
+  authenticated tag-binding correction; draft PR #8741.
 - Runner/remote/network: local macOS 26.2 arm64, Node v26.0.0 and pnpm 10.24.0. Local temporary
   files and injected GitHub API/upload/CDN responses only. No network request, real token, release
   write, signer, protected environment, SSH remote, desktop consumer, publication, or enabled tuple.
 - Focused command: `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts
---maxWorkers=1 config/scripts/ssh-relay-runtime-draft-upload.test.mjs` — PASS, 1 file / 7 tests in
-  174ms Vitest and 0.85s wall, with 131,776,512-byte maximum RSS, 95,983,016-byte peak footprint,
+--maxWorkers=1 config/scripts/ssh-relay-runtime-draft-upload.test.mjs` — PASS, 1 file / 8 tests in
+  183ms Vitest and 0.87s wall, with 131,694,592-byte maximum RSS, 95,868,280-byte peak footprint,
   and zero swaps.
 - Adjacent release command: `/usr/bin/time -l pnpm exec vitest run --config
 config/vitest.config.ts --maxWorkers=1 config/scripts/ssh-relay-runtime-draft-upload.test.mjs
 config/scripts/ssh-relay-runtime-draft-recovery.test.mjs
 config/scripts/ssh-relay-runtime-draft-readback.test.mjs
 config/scripts/ssh-relay-runtime-release-stage-gate.test.mjs
-config/scripts/ssh-relay-runtime-workflow.test.mjs` — PASS, 5 files / 45 tests in 1.16s Vitest and
-  2.27s wall, with 132,694,016-byte maximum RSS, 96,966,128-byte peak footprint, and zero swaps.
+  config/scripts/ssh-relay-runtime-workflow.test.mjs` — PASS, 5 files / 46 tests in 1.80s Vitest and
+  3.44s wall, with 131,940,352-byte maximum RSS, 96,179,648-byte peak footprint, and zero swaps.
 - Broad release command: `/usr/bin/time -l sh -c "rg --files config/scripts | rg
 '/ssh-relay.*[.]test[.]mjs$' | xargs pnpm exec vitest run --config config/vitest.config.ts
---maxWorkers=1"` — PASS, 52 files / 269 tests in 11.39s Vitest and 13.43s wall, with
-  191,807,488-byte maximum RSS and zero swaps.
+  --maxWorkers=1"` — PASS, 52 files / 270 tests in 11.71s Vitest and 13.66s wall, with
+  188,841,984-byte maximum RSS and zero swaps.
 - Static gates: `node --check` passes both new files. `pnpm run typecheck` passes. Full `pnpm run
 lint` passes all 41 reliability gates, the 355-entry max-lines ratchet, bundled-skill verification,
   localization catalog/parity, and localization coverage; all 26 warnings remain in untouched
   existing files. Focused `oxfmt --check` and `git diff --check` pass.
 - Oracle proved: only bounded regular files with exact declared name, path, size, SHA-256, per-file
-  size, aggregate size, and count may enter. The release must remain the exact ID/tag/40-hex source
-  commit draft. Existing managed assets are reused only after authenticated metadata and complete
-  downloaded-byte verification; only an approved HTTPS CDN redirect drops authorization. Missing
-  assets upload as bounded streams with exact length and content type. Retryable 408/429/5xx or
-  transport ambiguity is reconciled against downloaded draft bytes before another POST, every retry
-  re-hashes the local file, three-attempt exhaustion fails closed, non-retryable authorization
-  failure does not retry, cancellation settles, and partial drafts recover without replacing exact
-  already uploaded bytes. The capability has no command-line entrypoint or workflow caller.
+  size, aggregate size, and count may enter. The release must remain the exact ID/tag draft, and its
+  authenticated lightweight or recursively peeled annotated tag must resolve to the exact 40-hex
+  source commit; `target_commitish` is not trusted because existing-tag release creation does not
+  reliably preserve that SHA there. Existing managed assets are reused only after authenticated
+  metadata and complete downloaded-byte verification; only an approved HTTPS CDN redirect drops
+  authorization. Missing assets upload as bounded streams with exact length and content type.
+  Retryable 408/429/5xx or transport ambiguity is reconciled against downloaded draft bytes before
+  another POST, every retry re-hashes the local file, three-attempt exhaustion fails closed,
+  non-retryable authorization failure does not retry, cancellation settles, and partial drafts
+  recover without replacing exact already uploaded bytes. The capability has no command-line
+  entrypoint or workflow caller.
 - Does not prove: Node 24 or Windows execution, live GitHub API/upload/CDN behavior, a real token or
   release write, rate-limit timing, full-size artifact throughput/memory, final authenticated
   read-back, downloaded archive execution, release publication, native signing/trust, desktop
   embedding, SSH transfer/install, packaged RPC behavior, performance against legacy, or an enabled
   tuple.
-- Follow-up: checkpoint and push, then require exact-head syntax and seven-test execution on all six
+- Follow-up: checkpoint and push, then require exact-head syntax and eight-test execution on all six
   native artifact jobs plus PR Checks and Golden E2E. Retain all production/default disconnections.
 
 ## Accepted Gaps
@@ -11356,7 +11359,7 @@ The project is not complete until every applicable item below is checked with ev
 ## Next Required Action
 
 Checkpoint and push the locally green E-M4-DRAFT-UPLOAD-LOCAL-001 implementation, then require
-exact-head syntax and seven-test execution on all six native artifact jobs plus PR Checks and Golden
+exact-head syntax and eight-test execution on all six native artifact jobs plus PR Checks and Golden
 E2E. Do not add a command-line entrypoint or workflow caller and do not perform a real release write.
 The protected environment, accepted production keys, and secret remain unprovisioned, so live
 signing evidence stays BLOCKED.

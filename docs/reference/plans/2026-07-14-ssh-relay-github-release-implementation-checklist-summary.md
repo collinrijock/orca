@@ -17,9 +17,10 @@ unreachable APT; the protected manifest-workflow source contract passes on every
 and Golden E2E are green. Existing release-stage and draft-recovery contracts already cover the
 failure taxonomy. Their missing bounded upload side is locally green under
 `E-M4-DRAFT-UPLOAD-LOCAL-RED-001` and `E-M4-DRAFT-UPLOAD-LOCAL-001`: exact same-draft reuse,
-immutable local-byte verification, retry reconciliation, partial-draft recovery, and no workflow
-caller. Fresh all-six native CI is required. Production keys/environment/seed, publication,
-desktop/default consumers, tuple enablement, and merge to `main` remain disconnected.
+immutable local-byte verification, authenticated lightweight/annotated tag-to-source binding, retry
+reconciliation, partial-draft recovery, and no workflow caller. Fresh all-six native CI is required.
+Production keys/environment/seed, publication, desktop/default consumers, tuple enablement, and
+merge to `main` remain disconnected.
 
 ## Safety status
 

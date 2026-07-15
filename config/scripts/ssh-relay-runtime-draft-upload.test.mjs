@@ -37,11 +37,15 @@ function draft(assets = [], overrides = {}) {
   return {
     id: RELEASE_ID,
     tag_name: TAG,
-    target_commitish: SOURCE_COMMIT,
+    target_commitish: 'main',
     draft: true,
     assets,
     ...overrides
   }
+}
+
+function tagReference(sha = SOURCE_COMMIT, type = 'commit') {
+  return { object: { sha, type } }
 }
 
 function uploadedAsset(overrides = {}) {
@@ -92,6 +96,9 @@ describe('SSH relay runtime draft upload', () => {
         bodies.push(await requestBytes(options))
         return json(uploadedAsset(), 201)
       }
+      if (url.includes('/git/ref/tags/')) {
+        return json(tagReference())
+      }
       return json(draft())
     })
 
@@ -119,6 +126,7 @@ describe('SSH relay runtime draft upload', () => {
     const fetchImpl = vi
       .fn()
       .mockResolvedValueOnce(json(draft([uploadedAsset()])))
+      .mockResolvedValueOnce(json(tagReference()))
       .mockResolvedValueOnce(new Response(null, { status: 302, headers: { location } }))
       .mockResolvedValueOnce(new Response(BYTES))
 
@@ -126,18 +134,34 @@ describe('SSH relay runtime draft upload', () => {
       reusedAssets: [{ name: NAME, sha256: digest(), size: BYTES.length }],
       uploadedAssets: []
     })
-    expect(fetchImpl).toHaveBeenCalledTimes(3)
+    expect(fetchImpl).toHaveBeenCalledTimes(4)
     expect(fetchImpl.mock.calls.some(([, options]) => options.method === 'POST')).toBe(false)
-    expect(fetchImpl.mock.calls[1][1].headers.Authorization).toBe(`Bearer ${TOKEN}`)
-    expect(fetchImpl.mock.calls[2][0]).toBe(location)
-    expect(fetchImpl.mock.calls[2][1].headers).not.toHaveProperty('Authorization')
+    expect(fetchImpl.mock.calls[2][1].headers.Authorization).toBe(`Bearer ${TOKEN}`)
+    expect(fetchImpl.mock.calls[3][0]).toBe(location)
+    expect(fetchImpl.mock.calls[3][1].headers).not.toHaveProperty('Authorization')
+  })
+
+  it('peels annotated tags to the exact source commit', async () => {
+    const tagSha = 'b'.repeat(40)
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce(json(draft()))
+      .mockResolvedValueOnce(json(tagReference(tagSha, 'tag')))
+      .mockResolvedValueOnce(json(tagReference()))
+      .mockResolvedValueOnce(json(uploadedAsset(), 201))
+
+    await expect(uploadSshRelayRuntimeDraftAssets(input(fetchImpl))).resolves.toMatchObject({
+      uploadedAssets: [{ name: NAME, sha256: digest(), size: BYTES.length }]
+    })
+    expect(fetchImpl.mock.calls[2][0]).toBe(
+      `https://api.github.com/repos/${REPO}/git/tags/${tagSha}`
+    )
   })
 
   it('fails closed on unsafe draft state or existing managed bytes', async () => {
     for (const release of [
       draft([], { draft: false }),
       draft([], { tag_name: 'v1.5.0-rc.2' }),
-      draft([], { target_commitish: 'b'.repeat(40) }),
       draft([uploadedAsset({ name: 'orca-ssh-relay-runtime-unexpected.zip' })])
     ]) {
       await expect(
@@ -145,9 +169,18 @@ describe('SSH relay runtime draft upload', () => {
       ).rejects.toThrow(/draft|tag|source commit|unexpected managed asset/i)
     }
 
+    const wrongSourceFetch = vi
+      .fn()
+      .mockResolvedValueOnce(json(draft()))
+      .mockResolvedValueOnce(json(tagReference('b'.repeat(40))))
+    await expect(uploadSshRelayRuntimeDraftAssets(input(wrongSourceFetch))).rejects.toThrow(
+      /source commit.*tag/i
+    )
+
     const changedFetch = vi
       .fn()
       .mockResolvedValueOnce(json(draft([uploadedAsset()])))
+      .mockResolvedValueOnce(json(tagReference()))
       .mockResolvedValueOnce(new Response(Buffer.from('changed bytes')))
     await expect(uploadSshRelayRuntimeDraftAssets(input(changedFetch))).rejects.toThrow(
       /size|sha-?256/i
@@ -158,8 +191,10 @@ describe('SSH relay runtime draft upload', () => {
     const fetchImpl = vi
       .fn()
       .mockResolvedValueOnce(json(draft()))
+      .mockResolvedValueOnce(json(tagReference()))
       .mockResolvedValueOnce(new Response('unavailable', { status: 503 }))
       .mockResolvedValueOnce(json(draft([uploadedAsset()])))
+      .mockResolvedValueOnce(json(tagReference()))
       .mockResolvedValueOnce(new Response(BYTES))
 
     await expect(uploadSshRelayRuntimeDraftAssets(input(fetchImpl))).resolves.toMatchObject({
@@ -183,6 +218,7 @@ describe('SSH relay runtime draft upload', () => {
     const firstAttempt = vi
       .fn()
       .mockResolvedValueOnce(json(draft()))
+      .mockResolvedValueOnce(json(tagReference()))
       .mockResolvedValueOnce(json(uploadedAsset(), 201))
       .mockResolvedValueOnce(new Response('denied', { status: 403 }))
     await expect(uploadSshRelayRuntimeDraftAssets(input(firstAttempt, { assets }))).rejects.toThrow(
@@ -192,6 +228,7 @@ describe('SSH relay runtime draft upload', () => {
     const recovery = vi
       .fn()
       .mockResolvedValueOnce(json(draft([uploadedAsset()])))
+      .mockResolvedValueOnce(json(tagReference()))
       .mockResolvedValueOnce(new Response(BYTES))
       .mockResolvedValueOnce(
         json(uploadedAsset({ id: 102, name: SECOND_NAME, size: SECOND_BYTES.length }), 201)
@@ -207,9 +244,12 @@ describe('SSH relay runtime draft upload', () => {
   })
 
   it('bounds retries and detects local mutation before another upload attempt', async () => {
-    const retryingFetch = vi.fn(async (url, options = {}) =>
-      options.method === 'POST' ? new Response('unavailable', { status: 503 }) : json(draft())
-    )
+    const retryingFetch = vi.fn(async (url, options = {}) => {
+      if (options.method === 'POST') {
+        return new Response('unavailable', { status: 503 })
+      }
+      return url.includes('/git/ref/tags/') ? json(tagReference()) : json(draft())
+    })
     const delayImpl = vi.fn(async () => {})
     await expect(
       uploadSshRelayRuntimeDraftAssets(input(retryingFetch, { delayImpl }))
@@ -219,9 +259,12 @@ describe('SSH relay runtime draft upload', () => {
     ).toHaveLength(3)
     expect(delayImpl).toHaveBeenCalledTimes(2)
 
-    const mutationFetch = vi.fn(async (url, options = {}) =>
-      options.method === 'POST' ? new Response('unavailable', { status: 503 }) : json(draft())
-    )
+    const mutationFetch = vi.fn(async (url, options = {}) => {
+      if (options.method === 'POST') {
+        return new Response('unavailable', { status: 503 })
+      }
+      return url.includes('/git/ref/tags/') ? json(tagReference()) : json(draft())
+    })
     const mutateBeforeRetry = vi.fn(async () => {
       await writeFile(join(root, NAME), Buffer.from('mutated relay runtime bytes'))
     })
@@ -237,6 +280,7 @@ describe('SSH relay runtime draft upload', () => {
     const deniedFetch = vi
       .fn()
       .mockResolvedValueOnce(json(draft()))
+      .mockResolvedValueOnce(json(tagReference()))
       .mockResolvedValueOnce(new Response('denied', { status: 403 }))
     await expect(uploadSshRelayRuntimeDraftAssets(input(deniedFetch))).rejects.toThrow(/403/i)
     expect(deniedFetch.mock.calls.filter(([, options]) => options.method === 'POST')).toHaveLength(
