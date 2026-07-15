@@ -9,7 +9,7 @@ work; keep exact commands, runner identities, hashes, metrics, and residual gaps
 Date created: 2026-07-14<br>
 Last updated: 2026-07-14<br>
 Current phase: Milestone 3 / Work Package 2 oldest-supported-baseline and native-trust proof — **In progress — 2026-07-14, Codex implementation owner**; exact-head run [29373507297](https://github.com/stablyai/orca/actions/runs/29373507297) passes all six target-native build, smoke, exact clean-build equality, upload, SBOM, license, provenance, runner/toolchain, and prohibited-content cells, and direct inspection of every downloaded payload passes exact archive/subject hashes, archive-scoped SPDX identity, one-owner-per-file, dependency, commit/run/builder/runner, tool-version/hash, and closure assertions (E-M3-METADATA-CI-001); Windows x64/arm64 record strict `MSVC 14.44.35207` identities and distinct exact linker SHA-256 values despite the Git-for-Windows PATH collision; the all-six metadata/provenance gate is closed, while oldest-baseline execution, native signing/trust, cross-family remotes, and measured legacy baselines remain open; production/default behavior and every tuple state remain unchanged; no bundled-runtime path is enabled and no artifact is published<br>
-Session checkpoint: **In progress — 2026-07-14, Codex implementation owner** — target-native pre-sign assessment, real first-build candidate staging, unpublished JSON evidence, and cleanup are implemented at `1a79e4921` and pass locally plus all six exact-head native jobs under E-M3-NATIVE-ASSESSMENT-LOCAL-001 and E-M3-NATIVE-ASSESSMENT-CI-001. The next safe credential-free package is exact returned-file application plus final post-sign runtime identity/closure contracts; real Apple/SignPath calls and native trust remain separately gated. Nothing is published or enabled, and legacy remains the production default.<br>
+Session checkpoint: **In progress — 2026-07-14, Codex implementation owner** — exact returned-file application plus final post-sign runtime identity/closure contracts are implemented at `3eeea7bdb` and locally green under E-M3-NATIVE-SIGNING-APPLY-LOCAL-001. Exact-head Node 24 execution on all six native jobs is the active gate; real Apple/SignPath calls, returned production signatures, and native trust remain separately gated. Nothing is published or enabled, and legacy remains the production default.<br>
 Primary design: [SSH relay GitHub Release plan](./2026-07-14-ssh-relay-github-release-plan.html)<br>
 Motivating issues: [#8450](https://github.com/stablyai/orca/issues/8450), [#1693](https://github.com/stablyai/orca/issues/1693)
 
@@ -8128,6 +8128,100 @@ diff --check`.
   desktop use, fallback/performance, or an enabled tuple.
 - Follow-up: keep every tuple disabled; implement exact returned-file application and final runtime
   identity/closure contracts before any credentialed signing job is allowed to feed aggregation.
+
+### E-M3-NATIVE-SIGNING-APPLY-LOCAL-RED-001 — Missing return-application module fails the focused contract
+
+- Date: 2026-07-14
+- Owner: Codex implementation owner
+- Source: pre-implementation head `6b93976909f9df6373414ecc65daf6e3eaff29b9`.
+- Command:
+
+  ```sh
+  pnpm exec vitest run --config config/vitest.config.ts \
+    config/scripts/ssh-relay-runtime-native-signing-apply.test.mjs
+  ```
+
+- Result: expected RED. The purpose-named test file failed to load because
+  `ssh-relay-runtime-native-signing-apply.mjs` did not exist: 1 failed file/0 tests in 525 ms. No
+  runtime, workflow, signing, publication, or production behavior changed.
+- Oracle proved: the existing payload verifier authenticated the returned file closure but did not
+  yet construct and re-authenticate a complete post-sign runtime or derive its final content ID.
+- Does not prove: any implementation behavior, native runner execution, signed bytes, native trust,
+  release aggregation, SSH behavior, or an enabled tuple.
+- Correction: add a purpose-named apply module that keeps all roots physically disjoint, copies into
+  an exclusive candidate, substitutes only the exact verified returned files, derives the new full
+  identity, and deletes any candidate that fails final-tree verification.
+
+### E-M3-NATIVE-SIGNING-APPLY-LOCAL-001 — Exact returned-file application and final identity contracts pass locally
+
+- Date: 2026-07-14
+- Owner: Codex implementation owner
+- Source: implementation commit `3eeea7bdb8b10825416d7f9bac03d5a820a997f5`, based on exact
+  native-assessment evidence head `6b93976909f9df6373414ecc65daf6e3eaff29b9`.
+- Runner/remote/network: local macOS 26.2 build 25C56 arm64, Node v26.0.0 and pnpm 10.24.0; no
+  remote, network, credential, signing service, native-trust environment, artifact publication, or
+  production path was used.
+- Commands:
+
+  ```sh
+  node --check config/scripts/ssh-relay-runtime-native-signing-apply.mjs
+  node --check config/scripts/ssh-relay-runtime-native-signing-apply.test.mjs
+  pnpm exec vitest run --config config/vitest.config.ts \
+    config/scripts/ssh-relay-runtime-workflow.test.mjs \
+    config/scripts/ssh-relay-runtime-native-signing-plan.test.mjs \
+    config/scripts/ssh-relay-runtime-native-signing-selection.test.mjs \
+    config/scripts/ssh-relay-runtime-native-signing-payload.test.mjs \
+    config/scripts/ssh-relay-runtime-windows-authenticode-assessment.test.mjs \
+    config/scripts/ssh-relay-runtime-native-signing-stage.test.mjs \
+    config/scripts/ssh-relay-runtime-native-signing-apply.test.mjs
+  pnpm exec vitest run --config config/vitest.config.ts config/scripts/ssh-relay-*.test.mjs
+  pnpm run typecheck
+  pnpm run lint
+  pnpm run check:max-lines-ratchet
+  pnpm exec oxfmt --check \
+    .github/workflows/ssh-relay-runtime-artifacts.yml \
+    config/scripts/ssh-relay-runtime-workflow.test.mjs \
+    config/scripts/ssh-relay-runtime-native-signing-apply.mjs \
+    config/scripts/ssh-relay-runtime-native-signing-apply.test.mjs \
+    docs/reference/plans/2026-07-14-ssh-relay-github-release-implementation-checklist.md \
+    docs/reference/plans/2026-07-14-ssh-relay-github-release-implementation-checklist-summary.md
+  git diff --check
+  ```
+
+- Result: PASS. The complete signing-contract family passed 7 files/48 tests in 721 ms; the final
+  apply-plus-workflow check passed 2 files/12 tests in 319 ms; and the complete purpose-named SSH
+  relay script suite passed 28 files/145 tests in 3.79 seconds. Both direct syntax checks, typecheck,
+  full lint/reliability gates, max-lines (355 grandfathered suppressions and no new bypass),
+  bundled-skill verification, localization catalog/coverage, focused formatting, and
+  `git diff --check` passed. Lint emitted only existing unrelated warnings; local Node 26 emitted the
+  expected repository Node-24 engine warning. An intermediate focused run exposed a macOS `/var`
+  versus `/private/var` test-oracle alias and an intermediate lint run rejected three missing braces;
+  both were corrected without weakening assertions or adding a disable, and the complete gates were
+  rerun green.
+- Apply oracle: source, returned, and exclusive output roots must be physically disjoint real
+  locations. The complete unsigned source tree is authenticated first; the selection is
+  independently reconstructed from and deeply matched to that identity; and the exact bounded
+  returned closure is reverified. The implementation creates a fresh full-runtime candidate,
+  substitutes only the returned signer files, preserves official Node and valid upstream Windows
+  bytes exactly, drops stale unsigned-archive metadata, recalculates file sizes, hashes, expanded
+  size, file count, and content ID, then re-verifies the complete final tree before returning it.
+  It never mutates the unsigned source and removes the whole output on partial copy, source race,
+  returned-file race, mode failure, or final integrity failure.
+- Root/race oracle: existing, nested, overlapping, or physically redirected roots reject before an
+  output is owned. The output is cleaned only after this invocation wins its exclusive creation, so
+  a racing pre-existing path is never removed. Tests force returned and unsigned-source mutation
+  after initial verification and require final-tree failure plus complete output cleanup.
+- Workflow oracle: POSIX and Windows native contract jobs each syntax-check the source and test and
+  explicitly execute the suite. The workflow lock requires four test-path occurrences and two
+  source syntax-check occurrences. No fake signer output is produced and no post-sign artifact is
+  built until a real protected signing job returns bytes.
+- Does not prove: parsing or execution under Node 24/GitHub Actions, real Apple or SignPath returned
+  bytes, native signature/trust policy, Gatekeeper/quarantine/notarized-app provenance,
+  Authenticode/Defender/WDAC policy, exact missing oldest snapshots, release aggregation, SSH
+  transfer/install, packaged desktop use, fallback/performance, or an enabled tuple.
+- Follow-up: commit this evidence separately, push both commits, and require exact-head POSIX and
+  Windows logs to show the apply suite executing under Node 24.18.0 on all six native jobs while all
+  prior artifact, smoke, equality, baseline, PR-check, and Golden controls retain their outcomes.
 
 ## Accepted Gaps
 
