@@ -8,8 +8,8 @@ work; keep exact commands, runner identities, hashes, metrics, and residual gaps
 
 Date created: 2026-07-14<br>
 Last updated: 2026-07-15<br>
-Current phase: Milestone 5 / Work Package 4 desktop download boundary — **Downloader native CI wiring locally GREEN; exact-head native CI pending — 2026-07-15, Codex implementation owner**. Both native job families invoke the purpose-named downloader suite under E-M5-ARTIFACT-DOWNLOAD-CI-WIRING-LOCAL-001. Commit/push this test-only wiring and collect all-six exact-head Node 24 evidence. Do not add cache publication/extraction, desktop call sites, SSH transfer/install, tuple enablement, mode wiring, or default behavior.<br>
-Session checkpoint: **In progress — 2026-07-15, Codex implementation owner** — implementation `ef9681d32` and local evidence `6473801e7` are pushed to draft PR #8741. The workflow-contract RED and local GREEN are recorded under E-M5-ARTIFACT-DOWNLOAD-CI-WIRING-RED-001 and E-M5-ARTIFACT-DOWNLOAD-CI-WIRING-LOCAL-001; 7 files / 96 tests pass. Exact-head native execution remains mandatory. The user authorizes end-to-end commits, pushes, draft-PR updates, CI runs/reruns, and PR-contained rehearsals, but not merging to `main`. There is no real release write, publication caller, desktop consumer, cache publication/extraction, SSH transfer/install, tuple enablement, or production/default behavior change. No accepted production key, protected environment/seed, native-signing trust proof, publication path, or tuple enablement is connected. Legacy remains the production default.<br>
+Current phase: Milestone 5 / Work Package 4 desktop cache boundary — **Disconnected bounded downloader closed; begin isolated extraction/cache contract audit — 2026-07-15, Codex implementation owner**. Exact-head all-six native Node 24 proof is complete under E-M5-ARTIFACT-DOWNLOAD-CI-001. Begin only the next purpose-named RED for desktop archive extraction/cache staging and reconcile it with the already-proven archive-safety contracts. Do not add desktop call sites, SSH transfer/install, tuple enablement, mode wiring, or default behavior.<br>
+Session checkpoint: **In progress — 2026-07-15, Codex implementation owner** — exact implementation/evidence head `fc6b6d2197fa8cc012317a5ea155e57886183c61` passes the downloader-containing contract suite and full runtime build/smoke/equality on all six native jobs in run 29445770009 under E-M5-ARTIFACT-DOWNLOAD-CI-001. PR Checks 29445769922 and both Golden E2E jobs in 29445769934 are green. The artifact run is red only after the hosted Windows arm64 build 26200 passes runtime verification/smoke and fails the retained build-26100 floor. The user authorizes end-to-end commits, pushes, draft-PR updates, CI runs/reruns, and PR-contained rehearsals, but not merging to `main`. There is no real release write, publication caller, desktop consumer, cache publication/extraction, SSH transfer/install, tuple enablement, or production/default behavior change. No accepted production key, protected environment/seed, native-signing trust proof, publication path, or tuple enablement is connected. Legacy remains the production default.<br>
 Primary design: [SSH relay GitHub Release plan](./2026-07-14-ssh-relay-github-release-plan.html)<br>
 Motivating issues: [#8450](https://github.com/stablyai/orca/issues/8450), [#1693](https://github.com/stablyai/orca/issues/1693)
 
@@ -1057,17 +1057,23 @@ Suggested concrete modules:
 - [x] Construct the exact `/releases/download/<tag>/<asset>` URL without an API lookup.
       E-M5-OFFLINE-SELECTION-LOCAL-001 derives the tag-qualified direct URL from authenticated
       fields and proves that no `latest` lookup is present.
-- [ ] Reject redirects that violate the approved GitHub release-asset origin policy.
-- [ ] Ensure authorization, cookies, proxy credentials, and custom headers do not leak across redirect
-      origins.
+- [x] Reject redirects that violate the approved GitHub release-asset origin policy.
+      E-M5-ARTIFACT-DOWNLOAD-LOCAL-001 and E-M5-ARTIFACT-DOWNLOAD-CI-001 prove one exact approved
+      asset host and fail-closed protocol/origin/credential/port/chain cases.
+- [x] Ensure authorization, cookies, proxy credentials, and custom headers do not leak across redirect
+      origins. E-M5-ARTIFACT-DOWNLOAD-LOCAL-001 and E-M5-ARTIFACT-DOWNLOAD-CI-001 prove fresh fixed
+      credential-free options on both requests.
 - [ ] Use Electron networking that respects supported system proxy and certificate behavior.
 
 ### Download and local cache
 
 - [ ] Store archives and extracted trees under an app-owned cache, keyed by signed content identity.
-- [ ] Stream downloads into exclusive temporary files; never buffer a full runtime in memory.
-- [ ] Apply download size and time budgets while streaming.
-- [ ] Verify archive SHA-256 before extraction.
+- [x] Stream downloads into exclusive temporary files; never buffer a full runtime in memory.
+      E-M5-ARTIFACT-DOWNLOAD-LOCAL-001 and E-M5-ARTIFACT-DOWNLOAD-CI-001.
+- [x] Apply download size and time budgets while streaming.
+      E-M5-ARTIFACT-DOWNLOAD-LOCAL-001 and E-M5-ARTIFACT-DOWNLOAD-CI-001.
+- [x] Verify archive SHA-256 before extraction.
+      E-M5-ARTIFACT-DOWNLOAD-LOCAL-001 and E-M5-ARTIFACT-DOWNLOAD-CI-001.
 - [ ] Extract into an exclusive temporary directory with all archive-safety checks from Milestone 2.
 - [ ] Verify the exact expanded tree before atomically publishing the cache entry.
 - [ ] Coordinate cache ownership across multiple Orca processes and windows.
@@ -12172,6 +12178,53 @@ config/scripts/ssh-relay-runtime-workflow.test.mjs` — expected FAIL, 1 failed 
 - Follow-up: commit/push the workflow/test/evidence correction and collect all-six native Node 24
   jobs plus PR Checks and Golden E2E.
 
+### E-M5-ARTIFACT-DOWNLOAD-CI-001 — Bounded downloader contracts pass all six native Node 24 jobs
+
+- Date: 2026-07-15
+- Owner: Codex implementation owner
+- Source: exact pushed head `fc6b6d2197fa8cc012317a5ea155e57886183c61`; downloader
+  implementation `ef9681d32`, native test wiring `0d7e0077d`; draft PR #8741.
+- Workflow: [SSH Relay Runtime Artifacts run 29445770009](https://github.com/stablyai/orca/actions/runs/29445770009),
+  19:46:32Z–20:00:26Z. The aggregate conclusion is the expected failure only because the separate
+  Windows arm64 floor job rejects hosted build 26200 after successful runtime verification/smoke.
+- Native jobs and downloader-containing portable/release contract suites:
+  - Linux x64 job 87455756464, image `ubuntu-24.04` `20260714.240.1`, PASS in 5m49s; 61 files /
+    392 tests in 10.20s.
+  - Linux arm64 job 87455756439, image `ubuntu-24.04-arm` `20260714.61.1`, PASS in 4m39s; 61 files /
+    392 tests in 7.70s.
+  - Darwin x64 job 87455756475, image `macos-15` `20260629.0276.1`, PASS in 5m26s; 61 files /
+    392 tests in 23.13s.
+  - Darwin arm64 job 87455756647, image `macos-15-arm64` `20260706.0213.1`, PASS in 5m13s; 61
+    files / 392 tests in 15.96s.
+  - Windows x64 job 87455756492, image `windows-2022` `20260706.237.1`, PASS in 4m36s; 62 files /
+    386 passed + 10 platform skips of 396 in 13.78s.
+  - Windows arm64 job 87455756474, image `windows-11-arm64` `20260714.109.1`, PASS in 9m32s; 62
+    files / 386 passed + 10 platform skips of 396 in 15.26s.
+- Downstream/adjacent evidence: Linux x64 supplement job 87456995626 and Linux arm64 supplement job
+  87456995632 pass. Windows x64 floor job 87457773650 passes. Windows arm64 floor job 87457773621
+  passes Node v24.18.0, PTY, watcher, resource settlement, and full-tree verification; smoke takes
+  5,781.9983ms with 47,329,280-byte RSS and the complete verifier takes 7,750.6872ms before the floor
+  gate rejects observed build 26200 versus required build 26100.
+- PR Checks [run 29445769922](https://github.com/stablyai/orca/actions/runs/29445769922), job
+  87455727487, passes in 11m12s. Golden E2E
+  [run 29445769934](https://github.com/stablyai/orca/actions/runs/29445769934) passes Linux job
+  87455727461 in 4m32s and macOS job 87455727503 in 4m01s.
+- Oracle proved: the relay-specific downloader consumes only the verified selected-artifact type and
+  its direct immutable URL; exact signed size/hash, fixed credential-free requests, one approved
+  redirect, rejected-response disposal, bounded chunk streaming, exclusive output, cancellation,
+  fsync, and failure cleanup contracts execute consistently under Node 24 on Linux, macOS, and
+  Windows x64/arm64. Full artifact build, smoke, equality, and adjacent product gates remain green.
+- Consumer-disconnection oracle: there is no live network caller, packaged manifest/key, cache
+  publication/extraction, desktop consumer, SSH transfer/install, mode, tuple enablement, release
+  write, or default behavior. No runtime artifact is published. Legacy remains the only production
+  path.
+- Does not prove: live Electron/GitHub/CDN/proxy/certificate behavior, production manifest keys or
+  packaged embedding, retry/backoff, cache/extraction/atomic publication, disk/resource/concurrency
+  failures, full-size downloader memory, client-offline transfer, live SSH, performance against
+  legacy, oldest Windows arm64/macOS/Linux-kernel floors, native signing/trust, or any enabled tuple.
+- Follow-up: checkpoint this evidence, update PR/worktree status, then begin only the isolated
+  desktop extraction/cache contract audit and purpose-named RED.
+
 ## Accepted Gaps
 
 No product gap is accepted merely because it appears in this list. Each entry requires explicit
@@ -12230,13 +12283,12 @@ The project is not complete until every applicable item below is checked with ev
 
 ## Next Required Action
 
-Commit and push the locally green disconnected downloader, add a purpose-named workflow-contract
-RED/GREEN that requires its portable suite in both native job families, then collect exact-head Node
-24 evidence on Linux, macOS, and Windows x64/arm64. Do not add a desktop call site, cache publication,
-extraction, SSH transfer/install, mode wiring, tuple enablement, or default behavior. Keep
-`ORCA_RELAY_PATH`, existing desktop required-assets behavior, detached-signature byte encoding,
-Windows arm64 build 26100, macOS 13.5, Linux kernel 4.18, release-cut, desktop builds, publication,
-and every tuple separately gated.
+Checkpoint the downloader's exact-head native evidence, then audit the already-proven release archive
+extraction boundary against desktop constraints and begin only a purpose-named disconnected desktop
+extraction/cache-staging RED. Do not add a desktop call site, SSH transfer/install, mode wiring, tuple
+enablement, or default behavior. Keep `ORCA_RELAY_PATH`, existing desktop required-assets behavior,
+detached-signature byte encoding, Windows arm64 build 26100, macOS 13.5, Linux kernel 4.18,
+release-cut, desktop builds, publication, and every tuple separately gated.
 
 Cross-family Layer B targets, the protected manifest-signing environment, oldest-baseline/native-
 trust cells, and the paired legacy performance baseline remain release/default-path blockers. No

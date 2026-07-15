@@ -9,15 +9,17 @@ keeps commands, hashes, runner identities, timings, and failure details.
 A checked box means the work has evidence in the detailed ledger. Design approval alone does not
 complete a box.
 
-Active checkpoint: **Milestone 5 / Work Package 4 desktop download boundary — downloader native CI
-wiring locally GREEN; exact-head native CI pending, 2026-07-15, Codex implementation owner.** The
-workflow-contract RED/GREEN is recorded under `E-M5-ARTIFACT-DOWNLOAD-CI-WIRING-RED-001` and
-`E-M5-ARTIFACT-DOWNLOAD-CI-WIRING-LOCAL-001`; both native job families now invoke the 16-test
-downloader suite. Next, commit/push this test-only wiring and collect all-six Node 24 evidence. Cache
-publication/extraction, desktop consumers, SSH transfer/install, mode wiring, tuple enablement,
-publication, production keys/environment/seed, and merge to `main` remain disconnected. The
-implementation owner is authorized to drive commits, pushes, CI, and PR-contained rehearsals end to
-end without merging.
+Active checkpoint: **Milestone 5 / Work Package 4 desktop cache boundary — disconnected bounded
+downloader closed; begin isolated extraction/cache contract audit, 2026-07-15, Codex implementation
+owner.** Exact-head run
+[29445770009](https://github.com/stablyai/orca/actions/runs/29445770009) passes the
+downloader-containing contracts and full runtime build/smoke/equality on all six native Node 24 jobs
+under `E-M5-ARTIFACT-DOWNLOAD-CI-001`. PR Checks and both Golden E2E jobs are green; the artifact run
+is red only after Windows arm64 passes smoke and rejects hosted build 26200 against the retained
+26100 floor. Next, audit the proven release extraction boundary against desktop constraints and begin
+an isolated extraction/cache-staging RED. Desktop consumers, SSH transfer/install, mode wiring,
+tuple enablement, publication, production keys/environment/seed, and merge to `main` remain
+disconnected.
 
 ## Safety status
 
@@ -300,7 +302,8 @@ end without merging.
 - [ ] Stream bounded downloads; verify signature, size, archive hash, and extracted tree.
       The disconnected Electron downloader is locally green under
       `E-M5-ARTIFACT-DOWNLOAD-LOCAL-RED-001` and `E-M5-ARTIFACT-DOWNLOAD-LOCAL-001`; exact-head
-      native CI, packaged signature loading, and extracted-tree verification remain open.
+      all-six native CI is closed under `E-M5-ARTIFACT-DOWNLOAD-CI-001`. Packaged signature loading
+      and extracted-tree verification remain open.
 - [ ] Add exclusive staging, atomic publication, quarantine, locking, and the 2 GiB cache policy.
 - [ ] Prove verified cached bytes can be transferred while the client is offline.
 - [ ] Preserve `ORCA_RELAY_PATH` behind the official-build trust boundary.
