@@ -142,6 +142,38 @@ function getManagedCommand(scriptPath: string): string {
     : wrapPosixHookCommand(scriptPath)
 }
 
+export type CodexManagedHookInstallMaterial = {
+  events: readonly (typeof CODEX_EVENTS)[number][]
+  eventLabel: Record<(typeof CODEX_EVENTS)[number], CodexEventLabel>
+  scriptPath: string
+  command: string
+  script: string
+}
+
+// Why: the real-home installer must byte-match the managed lane's events,
+// command, and script, or trust signatures diverge between the two homes.
+export function getCodexManagedHookInstallMaterial(): CodexManagedHookInstallMaterial {
+  const scriptPath = getManagedScriptPath()
+  return {
+    events: CODEX_EVENTS,
+    eventLabel: CODEX_EVENT_LABEL,
+    scriptPath,
+    command: getManagedCommand(scriptPath),
+    script: getManagedScript()
+  }
+}
+
+// Why: when the real-home lane owns ~/.codex/hooks.json (system-default flag ON
+// with hooks enabled), the legacy system-home sweep must stand down or every
+// managed install would delete the entry the real-home installer just wrote.
+// Injected as a gate because this module is bundled into plain-node CLI entries
+// that have no settings store; the CLI default keeps the sweep active.
+let systemCodexHomeHookSweepSuppressed: () => boolean = () => false
+
+export function setSystemCodexHomeHookSweepSuppressed(gate: () => boolean): void {
+  systemCodexHomeHookSweepSuppressed = gate
+}
+
 export { createCodexWslRuntimeHookInstallPlan }
 export type { CodexWslRuntimeHookInstallPlan }
 
@@ -539,6 +571,9 @@ function dedupeHookDefinitions(definitions: readonly HookDefinition[]): HookDefi
 }
 
 function cleanupLegacySystemManagedHooks(): void {
+  if (systemCodexHomeHookSweepSuppressed()) {
+    return
+  }
   const legacyConfigPath = getSystemConfigPath()
   const runtimeConfigPath = getConfigPath()
   if (legacyConfigPath === runtimeConfigPath) {

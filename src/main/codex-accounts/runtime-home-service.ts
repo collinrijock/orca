@@ -200,15 +200,28 @@ export class CodexRuntimeHomeService {
     return this.getRuntimeHomePath()
   }
 
+  // Why: the real-home hook installer flips this gate off when the trust-grant
+  // client reports the host incapable, keeping that host byte-identical to the
+  // managed lane instead of shipping status-blind panes.
+  private realHomeLaneGate: () => boolean = () => true
+
+  setRealHomeLaneGate(gate: () => boolean): void {
+    this.realHomeLaneGate = gate
+  }
+
   // Why: real-home routing applies only to the host system-default selection
   // (no managed account chosen for host) with the staged flag ON. Managed host
   // accounts keep the isolated runtime home for hot-swap and token persistence.
-  isHostSystemDefaultRealHome(): boolean {
+  isHostSystemDefaultRealHomeSelected(): boolean {
     const settings = this.store.getSettings()
     return (
       isCodexSystemDefaultRealHomeEnabled(settings) &&
       normalizeCodexRuntimeSelection(settings).host === null
     )
+  }
+
+  isHostSystemDefaultRealHome(): boolean {
+    return this.isHostSystemDefaultRealHomeSelected() && this.realHomeLaneGate()
   }
 
   syncActiveWslSelectionsBeforeRestart(): void {

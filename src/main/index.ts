@@ -128,7 +128,11 @@ import {
   type CodexAccountSelectionTarget
 } from './codex-accounts/runtime-selection'
 import { normalizeClaudeRuntimeSelection } from './claude-accounts/runtime-selection'
-import { codexHookService } from './codex/hook-service'
+import { codexHookService, setSystemCodexHomeHookSweepSuppressed } from './codex/hook-service'
+import {
+  ensureRealHomeCodexHookState,
+  isRealHomeCodexHookLaneUsable
+} from './codex/codex-real-home-hook-install'
 import { setCodexTrustGrantTelemetry } from './codex/codex-hook-trust-grant'
 import { getDefaultWslDistro } from './wsl'
 import { ClaudeAccountService } from './claude-accounts/service'
@@ -734,12 +738,20 @@ function startTerminalRuntimeStartupServices(): Promise<void> {
 }
 
 function prepareCodexRuntimeHomeForLaunch(target?: CodexAccountSelectionTarget): string | null {
+  if (target?.runtime !== 'wsl' && codexRuntimeHome!.isHostSystemDefaultRealHomeSelected()) {
+    // Why (flag ON, system default): the hook entry must exist — appended last
+    // and trusted by codex's own app-server grant — in the real ~/.codex before
+    // the pane spawns. An incapable grant flips the lane gate so the launch
+    // below falls back to the managed home instead of a status-blind pane.
+    ensureRealHomeCodexHookState({
+      hooksEnabled: isAgentStatusHooksEnabled(store?.getSettings()),
+      userDataPath: app.getPath('userData')
+    })
+  }
   const runtimeHomePath = codexRuntimeHome!.prepareForCodexLaunch(target)
   if (runtimeHomePath === null && codexRuntimeHome!.isHostSystemDefaultRealHome()) {
-    // Why (flag ON, system default): Codex runs on the user's real ~/.codex, so
-    // the managed-home hook install below would target a home Codex never reads.
-    // The real-home hook installer (trust granted via the app-server client)
-    // owns hook install for this lane and lands with the trust plumbing.
+    // Why: Codex runs on the user's real ~/.codex; the managed-home hook
+    // install below would target a home Codex never reads on this lane.
     return null
   }
   const hookTarget =
@@ -1766,6 +1778,21 @@ app.whenReady().then(async () => {
   openCodeUsage = new OpenCodeUsageStore(store)
   rateLimits = new RateLimitService()
   codexRuntimeHome = new CodexRuntimeHomeService(store)
+  // Why: an incapable trust-grant host must fall back to the managed home for
+  // every consumer (PTY env, rate limits, commit messages) in one place.
+  codexRuntimeHome.setRealHomeLaneGate(() =>
+    isRealHomeCodexHookLaneUsable(isAgentStatusHooksEnabled(store?.getSettings()))
+  )
+  // Why: while the real-home lane owns ~/.codex/hooks.json, the legacy
+  // system-home sweep inside managed installs would delete the entry the
+  // real-home installer just appended. Flag OFF or hooks off re-arms the sweep,
+  // which is also what removes the entry again on downgrade or opt-out.
+  setSystemCodexHomeHookSweepSuppressed(
+    () =>
+      codexRuntimeHome !== null &&
+      codexRuntimeHome.isHostSystemDefaultRealHomeSelected() &&
+      isAgentStatusHooksEnabled(store?.getSettings())
+  )
   codexAccounts = new CodexAccountService(store, rateLimits, codexRuntimeHome)
   claudeRuntimeAuth = new ClaudeRuntimeAuthService(store)
   claudeAccounts = new ClaudeAccountService(store, rateLimits, claudeRuntimeAuth)
@@ -1991,6 +2018,15 @@ app.whenReady().then(async () => {
     } else {
       removeManagedAgentHooks()
     }
+  }
+  if (codexRuntimeHome.isHostSystemDefaultRealHomeSelected()) {
+    // Why: host-connect seam — install (or sweep, when opted out) the trusted
+    // real-home status hook before the first pane can spawn, so the very first
+    // launch already knows whether this host's grant lane is usable.
+    ensureRealHomeCodexHookState({
+      hooksEnabled: isAgentStatusHooksEnabled(store.getSettings()),
+      userDataPath: app.getPath('userData')
+    })
   }
 
   app.on('child-process-gone', (_event, details) => {
