@@ -368,16 +368,26 @@ export function registerCrashReportingHandlers(store: CrashReportStore): void {
       }
       const data = sanitizeRendererBreadcrumbData(args.data)
       if (COALESCED_RENDERER_ERROR_BREADCRUMB_NAMES.has(args.name)) {
-        recordCoalescedCrashBreadcrumb({
+        const coalesceResult = recordCoalescedCrashBreadcrumb({
           name: args.name,
           data,
           coalesceKey: rendererErrorBreadcrumbCoalesceKey(args.name, data),
           minIntervalMs: RENDERER_ERROR_BREADCRUMB_COALESCE_MS
         })
+        // Why: tracing every suppressed duplicate would preserve the same
+        // serialization and disk churn that breadcrumb coalescing removes.
+        if (coalesceResult) {
+          recordRendererBreadcrumbTrace(
+            args.name,
+            coalesceResult.suppressedSinceLast > 0
+              ? { ...data, suppressedSinceLast: coalesceResult.suppressedSinceLast }
+              : data
+          )
+        }
       } else {
         recordCrashBreadcrumb(args.name, data)
+        recordRendererBreadcrumbTrace(args.name, data)
       }
-      recordRendererBreadcrumbTrace(args.name, data)
     }
   )
 

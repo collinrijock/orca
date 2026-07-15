@@ -84,6 +84,7 @@ describe('renderer breadcrumb IPC routing', () => {
   beforeEach(() => {
     listeners.clear()
     recordCoalescedCrashBreadcrumbMock.mockReset()
+    recordCoalescedCrashBreadcrumbMock.mockReturnValue({ suppressedSinceLast: 0 })
     recordCrashBreadcrumbMock.mockReset()
     startSpanMock.mockClear()
     spanEndMock.mockClear()
@@ -133,6 +134,34 @@ describe('renderer breadcrumb IPC routing', () => {
       minIntervalMs: 30_000
     })
     expect(recordCrashBreadcrumbMock).not.toHaveBeenCalled()
+  })
+
+  it('does not emit durable trace spans for errors suppressed by coalescing', () => {
+    recordCoalescedCrashBreadcrumbMock
+      .mockReturnValueOnce({ suppressedSinceLast: 0 })
+      .mockReturnValue(undefined)
+
+    for (let index = 0; index < 1_000; index += 1) {
+      emitRendererBreadcrumb({ name: 'renderer_error', data: { message: 'storm' } })
+    }
+
+    expect(recordCoalescedCrashBreadcrumbMock).toHaveBeenCalledTimes(1_000)
+    expect(startSpanMock).toHaveBeenCalledTimes(1)
+    expect(spanEndMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('includes the suppressed count when durable tracing resumes', () => {
+    recordCoalescedCrashBreadcrumbMock.mockReturnValueOnce({ suppressedSinceLast: 999 })
+
+    emitRendererBreadcrumb({ name: 'renderer_error', data: { message: 'storm' } })
+
+    expect(startSpanMock).toHaveBeenCalledWith('renderer.breadcrumb', {
+      attributes: {
+        kind: 'crash-breadcrumb',
+        'breadcrumb.name': 'renderer_error',
+        'breadcrumb.data': { message: 'storm', suppressedSinceLast: 999 }
+      }
+    })
   })
 
   it('records non-error renderer breadcrumbs without coalescing', () => {
