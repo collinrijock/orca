@@ -9,18 +9,17 @@ keeps commands, hashes, runner identities, timings, and failure details.
 A checked box means the work has evidence in the detailed ledger. Design approval alone does not
 complete a box.
 
-Active checkpoint: **Milestone 4 / Work Package 3 disconnected downloaded-archive execution —
+Active checkpoint: **Milestone 4 / Work Package 3 disconnected draft-release failure composition —
 in progress, 2026-07-15, Codex implementation owner.** Exact-head run
-[29435837082](https://github.com/stablyai/orca/actions/runs/29435837082) at `0fbbac118` passes all six
-target-native artifact jobs and the 4-test materialization suite on every Node 24 runner under
-`E-M4-DRAFT-READBACK-MATERIALIZATION-CI-001`. PR Checks and Golden E2E are green; the artifact
-workflow is red only for the retained Windows ARM build-26200-versus-26100 floor mismatch after
-successful runtime smoke. The disconnected execution boundary and a real 24,747,276-byte Darwin
-arm64 Actions artifact pass locally under `E-M4-READBACK-ARCHIVE-EXECUTION-LOCAL-001`; exact-head
-all-six proof is pending. Production keys/environment/seed,
+[29438285824](https://github.com/stablyai/orca/actions/runs/29438285824) at `3779838f6` passes the
+10-test execution contract and real first-build archive reconstruction/native smoke on all six
+target-native Node 24 jobs under `E-M4-READBACK-ARCHIVE-EXECUTION-CI-001`. PR Checks and Golden E2E
+are green; the artifact workflow is red only for the retained Windows ARM
+build-26200-versus-26100 floor mismatch after successful runtime smoke. Next, compose the existing
+disconnected upload, recovery, materialization, and execution capabilities under purpose-named
+failure-state tests without a release write or workflow caller. Production keys/environment/seed,
 publication, desktop/default consumers, SSH transfer/install, tuple enablement, and merge to `main`
-remain disconnected. Current pushed branch head is `0fbbac118`; the
-local implementation commit is `b8c42f92a`. The implementation owner is authorized to drive
+remain disconnected. Current pushed branch head is `3779838f6`; the implementation owner is authorized to drive
 commits, pushes, CI, and PR-contained rehearsals end to end without merging.
 
 ## Safety status
@@ -283,8 +282,9 @@ commits, pushes, CI, and PR-contained rehearsals end to end without merging.
       RED is recorded under `E-M4-READBACK-ARCHIVE-EXECUTION-LOCAL-RED-001`. Exact descriptor/path
       binding, exclusive extraction, full-tree verification, bundled Node/native smoke, cleanup,
       and real Darwin arm64 Actions-artifact execution pass locally under
-      `E-M4-READBACK-ARCHIVE-EXECUTION-LOCAL-001`; all-six exact-head CI and a real authenticated
-      release write/read-back remain open.
+      `E-M4-READBACK-ARCHIVE-EXECUTION-LOCAL-001`. All-six exact-head Node 24 archive execution is
+      closed under `E-M4-READBACK-ARCHIVE-EXECUTION-CI-001`; a real authenticated release write/
+      read-back remains open.
 - [ ] Test timeouts, retries, approval denial, signing failure, partial output, and draft recovery.
 
 ### WP4 — Desktop resolver and verified cache
