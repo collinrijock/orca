@@ -32,6 +32,7 @@ const reposReorder = vi.fn()
 const ptyKill = vi.fn()
 const runtimeEnvironmentCall = vi.fn()
 const runtimeEnvironmentTransportCall = vi.fn()
+const uiSet = vi.fn()
 
 function deferred<T>() {
   let resolve!: (value: T) => void
@@ -66,6 +67,8 @@ beforeEach(() => {
   ptyKill.mockReset()
   runtimeEnvironmentCall.mockReset()
   runtimeEnvironmentTransportCall.mockReset()
+  uiSet.mockReset()
+  uiSet.mockResolvedValue(undefined)
   runtimeEnvironmentTransportCall.mockImplementation((args: RuntimeEnvironmentCallRequest) => {
     return createCompatibleRuntimeStatusResponseIfNeeded(args) ?? runtimeEnvironmentCall(args)
   })
@@ -78,7 +81,8 @@ beforeEach(() => {
         reorder: reposReorder
       },
       pty: { kill: ptyKill },
-      runtimeEnvironments: { call: runtimeEnvironmentTransportCall }
+      runtimeEnvironments: { call: runtimeEnvironmentTransportCall },
+      ui: { set: uiSet }
     }
   })
 })
@@ -471,11 +475,51 @@ describe('repo slice host identity routing', () => {
 
     expect(store.getState().repos).toEqual([localDuplicate, remoteDuplicate])
     expect(reposReorder).toHaveBeenCalledWith({ orderedIds: ['same-repo'] })
+    expect(uiSet).toHaveBeenCalledWith({
+      manualRepoOrder: [
+        { hostId: 'local', repoId: 'same-repo' },
+        { hostId: 'runtime:env-1', repoId: 'same-repo' }
+      ]
+    })
     expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
       selector: 'env-1',
       method: 'repo.reorder',
       params: { orderedIds: ['same-repo'] },
       timeoutMs: 15_000
+    })
+  })
+
+  it('persists a complete cross-host overlay alongside host-local permutations', async () => {
+    reposReorder.mockResolvedValue({ status: 'applied' })
+    runtimeEnvironmentCall.mockResolvedValue({
+      id: 'rpc-cross-host-reorder',
+      ok: true,
+      result: { status: 'applied' },
+      _meta: { runtimeId: 'runtime-remote' }
+    })
+    const alpha = { ...localDuplicate, id: 'alpha' }
+    const bravo = { ...localDuplicate, id: 'bravo' }
+    const charlie = { ...remoteDuplicate, id: 'charlie' }
+    const delta = { ...remoteDuplicate, id: 'delta' }
+    const store = createTestStore()
+    store.setState({ repos: [alpha, bravo, charlie, delta] })
+
+    await store.getState().reorderRepos(['alpha', 'charlie', 'bravo', 'delta'])
+
+    expect(reposReorder).toHaveBeenCalledWith({ orderedIds: ['alpha', 'bravo'] })
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
+      selector: 'env-1',
+      method: 'repo.reorder',
+      params: { orderedIds: ['charlie', 'delta'] },
+      timeoutMs: 15_000
+    })
+    expect(uiSet).toHaveBeenCalledWith({
+      manualRepoOrder: [
+        { hostId: 'local', repoId: 'alpha' },
+        { hostId: 'runtime:env-1', repoId: 'charlie' },
+        { hostId: 'local', repoId: 'bravo' },
+        { hostId: 'runtime:env-1', repoId: 'delta' }
+      ]
     })
   })
 })

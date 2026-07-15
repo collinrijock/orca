@@ -54,6 +54,7 @@ export const ptyKill: Mock = vi.fn()
 export const runtimeEnvironmentCall: Mock = vi.fn()
 export const runtimeEnvironmentTransportCall: Mock = vi.fn()
 export const orcaProfileFindProjectProfiles: Mock = vi.fn()
+export const uiSet: Mock = vi.fn()
 
 // Registers the per-test reset + window stub. Call once inside the suite's module scope.
 export function installReposRuntimeRoutingHarness(): void {
@@ -81,6 +82,8 @@ export function installReposRuntimeRoutingHarness(): void {
     orcaProfileFindProjectProfiles.mockReset()
     runtimeEnvironmentCall.mockReset()
     runtimeEnvironmentTransportCall.mockReset()
+    uiSet.mockReset()
+    uiSet.mockResolvedValue(undefined)
     runtimeEnvironmentTransportCall.mockImplementation((args: RuntimeEnvironmentCallRequest) => {
       return createCompatibleRuntimeStatusResponseIfNeeded(args) ?? runtimeEnvironmentCall(args)
     })
@@ -110,7 +113,8 @@ export function installReposRuntimeRoutingHarness(): void {
           findProjectProfiles: orcaProfileFindProjectProfiles
         },
         pty: { kill: ptyKill },
-        runtimeEnvironments: { call: runtimeEnvironmentTransportCall }
+        runtimeEnvironments: { call: runtimeEnvironmentTransportCall },
+        ui: { set: uiSet }
       }
     })
   })

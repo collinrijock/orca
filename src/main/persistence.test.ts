@@ -5298,6 +5298,25 @@ describe('Store', () => {
     expect(ui.dismissedUpdateVersion).toBeNull()
   })
 
+  it('round-trips and normalizes the host-qualified manual repo order', async () => {
+    const store = await createStore()
+    store.updateUI({
+      manualRepoOrder: [
+        { hostId: 'runtime:node-b', repoId: 'shared' },
+        { hostId: 'bogus', repoId: 'ignored' },
+        { hostId: 'runtime:node-b', repoId: 'shared' },
+        { hostId: 'local', repoId: 'alpha' }
+      ] as never
+    })
+    store.flush()
+
+    const reloaded = await createStore()
+    expect(reloaded.getUI().manualRepoOrder).toEqual([
+      { hostId: 'runtime:node-b', repoId: 'shared' },
+      { hostId: 'local', repoId: 'alpha' }
+    ])
+  })
+
   it('updateUI persists sanitized per-worktree dotfile visibility', async () => {
     const store = await createStore()
     store.updateUI({

@@ -172,6 +172,7 @@ import {
 } from '../shared/feature-interactions'
 import { normalizeContextualTourIds } from '../shared/contextual-tours'
 import { normalizeFeatureTipIds } from '../shared/feature-tips'
+import { normalizeManualRepoOrder } from '../shared/manual-repo-order'
 import {
   DEFAULT_WORKSPACE_STATUS_ID,
   clampWorkspaceBoardColumnWidth,
@@ -5409,6 +5410,7 @@ export class Store {
         this.state.ui?.visibleWorkspaceHostIds
       ),
       workspaceHostOrder: normalizeExecutionHostOrder(this.state.ui?.workspaceHostOrder),
+      manualRepoOrder: normalizeManualRepoOrder(this.state.ui?.manualRepoOrder),
       browserDefaultZoomLevel: normalizeBrowserPageZoomLevel(
         this.state.ui?.browserDefaultZoomLevel
       ),
@@ -5494,6 +5496,10 @@ export class Store {
         updates.workspaceHostOrder !== undefined
           ? normalizeExecutionHostOrder(updates.workspaceHostOrder)
           : normalizeExecutionHostOrder(this.state.ui?.workspaceHostOrder),
+      manualRepoOrder:
+        updates.manualRepoOrder !== undefined
+          ? normalizeManualRepoOrder(updates.manualRepoOrder)
+          : normalizeManualRepoOrder(this.state.ui?.manualRepoOrder),
       browserDefaultZoomLevel: normalizeBrowserPageZoomLevel(
         updates.browserDefaultZoomLevel ?? this.state.ui?.browserDefaultZoomLevel
       ),
