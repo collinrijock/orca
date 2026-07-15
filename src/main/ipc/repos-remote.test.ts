@@ -9,9 +9,11 @@ import { existsSync } from 'node:fs'
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import type * as GitRunner from '../git/runner'
 import type * as RepoModule from '../git/repo'
 import { DEFAULT_REPO_BADGE_COLOR } from '../../shared/constants'
 import { getGitRepoRoot, isGitRepo } from '../git/repo'
+import { clearGitCapabilityStateForTests } from '../git/git-capability-state'
 
 const {
   handleMock,
@@ -19,6 +21,7 @@ const {
   mockGitProvider,
   mockFilesystemProvider,
   mockMultiplexer,
+  gitExecFileAsyncMock,
   gitSpawnMock,
   listWorktreeGraphMock,
   invalidateAuthorizedRootsCacheMock,
@@ -70,6 +73,7 @@ const {
     notify: vi.fn()
   },
   gitSpawnMock: vi.fn(),
+  gitExecFileAsyncMock: vi.fn(),
   listWorktreeGraphMock: vi.fn(),
   invalidateAuthorizedRootsCacheMock: vi.fn(),
   prepareLocalWorktreeRootForRepoMock: vi.fn()
@@ -94,7 +98,6 @@ vi.mock('../git/repo', async () => {
     // Stub only the functions that spawn git / touch the filesystem.
     isGitRepo: vi.fn().mockReturnValue(true),
     getGitRepoRoot: vi.fn((path: string) => path),
-    getGitUsername: vi.fn().mockReturnValue(''),
     getRepoName: vi.fn().mockImplementation((path: string) => path.split('/').pop()),
     getBaseRefDefault: vi.fn().mockResolvedValue('origin/main'),
     getRemoteCount: vi.fn().mockResolvedValue(1),
@@ -102,8 +105,14 @@ vi.mock('../git/repo', async () => {
   }
 })
 
-vi.mock('../git/runner', () => ({
-  gitExecFileAsync: vi.fn(),
+vi.mock('../git/runner', async () => ({
+  // Why: keep the real env builders (nonInteractiveGitEnv,
+  // gitOptionalLocksDisabledEnv) so the clone regression test (#7652) asserts
+  // the actual guard's markers, not a mock echoing itself.
+  ...(await vi.importActual<typeof GitRunner>('../git/runner')),
+  gitExecFileAsync: gitExecFileAsyncMock,
+  gitExecFileAsyncBuffer: vi.fn(),
+  gitStreamStdout: vi.fn(),
   gitSpawn: gitSpawnMock
 }))
 
@@ -147,6 +156,11 @@ vi.mock('./ssh', () => ({
 }))
 
 import { registerRepoHandlers } from './repos'
+import { clearSubmodulePathsCacheForTests, listSubmodulePaths } from '../git/status'
+
+beforeEach(() => {
+  clearGitCapabilityStateForTests()
+})
 
 describe('projectGroups IPC validation', () => {
   const handlers = new Map<string, (_event: unknown, args: unknown) => unknown>()
@@ -1007,6 +1021,8 @@ describe('repos:addRemote', () => {
     mockMultiplexer.request.mockReset()
     mockMultiplexer.notify.mockReset()
     gitSpawnMock.mockReset()
+    gitExecFileAsyncMock.mockReset().mockResolvedValue({ stdout: '', stderr: '' })
+    clearSubmodulePathsCacheForTests()
     prepareLocalWorktreeRootForRepoMock.mockReset().mockResolvedValue(undefined)
     gitSpawnMock.mockImplementation(() => {
       const proc = new EventEmitter() as EventEmitter & { stderr: EventEmitter }
@@ -1965,6 +1981,41 @@ describe('repos:add + repos:clone', () => {
     expect(result).toHaveProperty('externalWorktreeVisibility', 'hide')
   })
 
+  it('drops a same-path negative submodule cache before a local clone', async () => {
+    const destination = await createTempRoot()
+    const clonePath = join(destination, 'orca')
+    let cloned = false
+    gitExecFileAsyncMock.mockImplementation((args: string[]) =>
+      Promise.resolve({
+        stdout:
+          args[0] === 'config' && args.includes('.gitmodules') && cloned
+            ? 'submodule.lib.path vendor/lib\n'
+            : '',
+        stderr: ''
+      })
+    )
+    gitSpawnMock.mockImplementationOnce(() => {
+      const proc = createMockCloneProcess()
+      queueMicrotask(() => {
+        cloned = true
+        proc.emit('close', 0, null)
+      })
+      return proc
+    })
+
+    await expect(listSubmodulePaths(clonePath)).resolves.toEqual([])
+    await handlers.get('repos:clone')!(null, {
+      url: 'https://example.com/orca.git',
+      destination
+    })
+    await expect(listSubmodulePaths(clonePath)).resolves.toEqual(['vendor/lib'])
+
+    const configReads = gitExecFileAsyncMock.mock.calls.filter(
+      ([args]) => args[0] === 'config' && args.includes('.gitmodules')
+    )
+    expect(configReads).toHaveLength(2)
+  })
+
   it('preserves existing badgeColor when repos:clone upgrades folder->git after dedupe', async () => {
     const destination = await createTempRoot()
     const clonePath = join(destination, 'orca')
@@ -2066,6 +2117,28 @@ describe('repos:add + repos:clone', () => {
       expect.objectContaining({ cwd: destination })
     )
     expect(result).toHaveProperty('path', join(destination, 'orca'))
+  })
+
+  it('clones with the non-interactive credential guard so Git Credential Manager cannot pop its OAuth window (#7652)', async () => {
+    const destination = await createTempRoot()
+
+    await handlers.get('repos:clone')!(null, {
+      url: 'https://example.com/orca.git',
+      destination
+    })
+
+    // Without this env, a clone that needs GitHub auth makes Git Credential
+    // Manager pop its "Connect to GitHub" OAuth window on Windows and loop it
+    // when the network cannot complete the flow.
+    expect(gitSpawnMock).toHaveBeenCalledWith(
+      ['clone', '--progress', '--', 'https://example.com/orca.git', join(destination, 'orca')],
+      expect.objectContaining({
+        env: expect.objectContaining({
+          GIT_TERMINAL_PROMPT: '0',
+          GCM_INTERACTIVE: 'never'
+        })
+      })
+    )
   })
 
   it('treats cloneAbort with no active clone as a no-op', async () => {
@@ -2414,13 +2487,13 @@ describe('repos:getBaseRefDefault envelope', () => {
   // independent of which Promise in the Promise.all resolves first.
   type ExecResponse = { stdout: string; stderr: string }
   type ExecRule = {
-    match: (argv: string[]) => boolean
+    matches: (argv: string[]) => boolean
     respond: () => Promise<ExecResponse>
   }
   const dispatchExec = (rules: ExecRule[]): ((argv: string[]) => Promise<ExecResponse>) => {
     return (argv: string[]) => {
       for (const rule of rules) {
-        if (rule.match(argv)) {
+        if (rule.matches(argv)) {
           return rule.respond()
         }
       }
@@ -2439,11 +2512,17 @@ describe('repos:getBaseRefDefault envelope', () => {
     mockGitProvider.exec = vi.fn().mockImplementation(
       dispatchExec([
         {
-          match: isSymbolicRef,
+          matches: isSymbolicRef,
           respond: () => Promise.resolve({ stdout: 'refs/remotes/origin/main\n', stderr: '' })
         },
+        // The origin/HEAD target is verified before it is trusted, so the
+        // symbolic-ref result must also resolve via rev-parse.
         {
-          match: isRemoteList,
+          matches: isRevParseFor('refs/remotes/origin/main'),
+          respond: () => Promise.resolve({ stdout: '', stderr: '' })
+        },
+        {
+          matches: isRemoteList,
           respond: () => Promise.resolve({ stdout: 'origin\nupstream\n', stderr: '' })
         }
       ])
@@ -2469,11 +2548,17 @@ describe('repos:getBaseRefDefault envelope', () => {
     mockGitProvider.exec = vi.fn().mockImplementation(
       dispatchExec([
         {
-          match: isSymbolicRef,
+          matches: isSymbolicRef,
           respond: () => Promise.resolve({ stdout: 'refs/remotes/origin/main\n', stderr: '' })
         },
+        // The origin/HEAD target is verified before it is trusted, so the
+        // symbolic-ref result must also resolve via rev-parse.
         {
-          match: isRemoteList,
+          matches: isRevParseFor('refs/remotes/origin/main'),
+          respond: () => Promise.resolve({ stdout: '', stderr: '' })
+        },
+        {
+          matches: isRemoteList,
           respond: () => Promise.reject(new Error('relay exec failed'))
         }
       ])
@@ -2501,18 +2586,21 @@ describe('repos:getBaseRefDefault envelope', () => {
     mockGitProvider.exec = vi.fn().mockImplementation(
       dispatchExec([
         // symbolic-ref rejects (no origin/HEAD on the remote)
-        { match: isSymbolicRef, respond: () => Promise.reject(new Error('no symbolic-ref')) },
+        { matches: isSymbolicRef, respond: () => Promise.reject(new Error('no symbolic-ref')) },
         // probe 1: refs/remotes/origin/main — rejects
         {
-          match: isRevParseFor('refs/remotes/origin/main'),
+          matches: isRevParseFor('refs/remotes/origin/main'),
           respond: () => Promise.reject(new Error('missing'))
         },
         // probe 2: refs/remotes/origin/master — succeeds
         {
-          match: isRevParseFor('refs/remotes/origin/master'),
+          matches: isRevParseFor('refs/remotes/origin/master'),
           respond: () => Promise.resolve({ stdout: 'abc123\n', stderr: '' })
         },
-        { match: isRemoteList, respond: () => Promise.resolve({ stdout: 'origin\n', stderr: '' }) }
+        {
+          matches: isRemoteList,
+          respond: () => Promise.resolve({ stdout: 'origin\n', stderr: '' })
+        }
       ])
     )
 
@@ -2684,15 +2772,22 @@ describe('repos:searchBaseRefs SSH relay', () => {
       query: '',
       limit: 1
     })
+    const repeatedResult = await handlers.get('repos:searchBaseRefs')!(null, {
+      repoId: 'r1',
+      query: '',
+      limit: 1
+    })
 
     expect(result).toEqual(['origin/main'])
+    expect(repeatedResult).toEqual(['origin/main'])
     const forEachRefCalls = mockGitProvider.exec.mock.calls.filter(
       (call) => (call[0] as string[])[0] === 'for-each-ref'
     )
-    expect(forEachRefCalls).toHaveLength(2)
+    expect(forEachRefCalls).toHaveLength(3)
     expect(forEachRefCalls[0][0]).toContain('--exclude=refs/remotes/**/HEAD')
     expect(forEachRefCalls[1][0]).not.toContain('--exclude=refs/remotes/**/HEAD')
     expect(forEachRefCalls[1][0]).toContain('--count=104')
+    expect(forEachRefCalls[2][0]).not.toContain('--exclude=refs/remotes/**/HEAD')
   })
 
   it('sends the widened `**` argv so all remotes and slash-named branches are discoverable', async () => {

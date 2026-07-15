@@ -11,6 +11,7 @@ import {
 } from 'react'
 import { createPortal } from 'react-dom'
 import { cn } from '@/lib/utils'
+import { createBrowserUuid } from '@/lib/browser-uuid'
 import { getConnectionId } from '@/lib/connection-context'
 import { detectLanguage } from '@/lib/language-detect'
 import { isPathInsideWorktree, toWorktreeRelativePath } from '@/lib/terminal-links'
@@ -45,8 +46,7 @@ import {
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
-import { QuickLaunchAgentMenuItems } from '@/components/tab-bar/QuickLaunchButton'
-import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
+import { BrowserAnnotationSendMenuContent } from './BrowserAnnotationSendMenuContent'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -61,6 +61,7 @@ import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover'
 import { useAppStore } from '@/store'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { ORCA_BROWSER_BLANK_URL, ORCA_BROWSER_PARTITION } from '../../../../shared/constants'
+import { getOrcaProfileBrowserDefaultPartition } from '../../../../shared/orca-profiles'
 import type {
   BrowserLoadError,
   BrowserPage as BrowserPageState,
@@ -77,14 +78,12 @@ import {
   browserViewportPresetToOverride,
   getBrowserViewportPreset
 } from '../../../../shared/browser-viewport-presets'
-import { ORCA_BROWSER_GUEST_WEB_PREFERENCES_ATTRIBUTE } from '../../../../shared/browser-guest-web-preferences'
 import { rememberLiveBrowserUrl } from './browser-runtime'
+import { ensureBrowserPageWebview } from './browser-page-webview'
 import {
   destroyPersistentWebview,
   moveFocusToRendererBeforeWebviewDetach,
-  registerPersistentWebview,
-  registeredWebContentsIds,
-  webviewRegistry
+  registeredWebContentsIds
 } from './webview-registry'
 import {
   applyBrowserPageViewportLayout,
@@ -183,6 +182,10 @@ import { shouldPollChromiumErrorPage } from './chromium-error-page-polling'
 import { useContextualTour } from '@/components/contextual-tours/use-contextual-tour'
 import { translate } from '@/i18n/i18n'
 import { isBrowserPagePanePaintable } from './browser-page-paintability'
+import { useMarkupMode, type MarkupCaptureContext } from './markup/useMarkupMode'
+import { MarkupOverlay } from './markup/MarkupOverlay'
+import { MarkupDrawButton } from './markup/MarkupDrawButton'
+import { deliverMarkupToClipboard } from './markup/markup-clipboard-delivery'
 
 type BrowserTabPageState = Partial<
   Pick<
@@ -283,6 +286,7 @@ type RemoteBrowserContextMenu = {
   y: number
   linkUrl: string | null
   pageUrl: string
+  selectionText: string
 }
 
 type RemoteBrowserViewportSize = {
@@ -617,16 +621,21 @@ function buildRemoteContextMenuExpression(x: number, y: number): string {
   return `(() => {
     const target = document.elementFromPoint(${JSON.stringify(x)}, ${JSON.stringify(y)});
     const anchor = target && typeof target.closest === 'function' ? target.closest('a[href]') : null;
+    // Why: read the guest selection here so the remote/paired browser can offer
+    // the same Copy affordance as the local webview (there is no ContextMenuParams
+    // over the runtime RPC).
+    const selection = typeof window.getSelection === 'function' ? window.getSelection() : null;
     return JSON.stringify({
       linkUrl: anchor && anchor.href ? anchor.href : null,
-      pageUrl: location.href || 'about:blank'
+      pageUrl: location.href || 'about:blank',
+      selectionText: selection ? String(selection) : ''
     });
   })()`
 }
 
 function readRemoteContextMenuResult(
   result: unknown
-): Pick<RemoteBrowserContextMenu, 'linkUrl' | 'pageUrl'> | null {
+): Pick<RemoteBrowserContextMenu, 'linkUrl' | 'pageUrl' | 'selectionText'> | null {
   if (!result || typeof result !== 'object') {
     return null
   }
@@ -635,10 +644,16 @@ function readRemoteContextMenuResult(
     return null
   }
   try {
-    const parsed = JSON.parse(raw) as { linkUrl?: unknown; pageUrl?: unknown }
+    const parsed = JSON.parse(raw) as {
+      linkUrl?: unknown
+      pageUrl?: unknown
+      selectionText?: unknown
+    }
     return {
       linkUrl: typeof parsed.linkUrl === 'string' && parsed.linkUrl ? parsed.linkUrl : null,
-      pageUrl: typeof parsed.pageUrl === 'string' && parsed.pageUrl ? parsed.pageUrl : 'about:blank'
+      pageUrl:
+        typeof parsed.pageUrl === 'string' && parsed.pageUrl ? parsed.pageUrl : 'about:blank',
+      selectionText: typeof parsed.selectionText === 'string' ? parsed.selectionText : ''
     }
   } catch {
     return null
@@ -869,6 +884,7 @@ export default function BrowserPane({
               workspaceId={browserTab.id}
               worktreeId={browserTab.worktreeId}
               sessionProfileId={browserTab.sessionProfileId ?? null}
+              sessionPartition={browserTab.sessionPartition ?? null}
               isActive={isActive && page.id === activeBrowserPage?.id}
               isAutomationVisible={automationVisiblePageIds.has(page.id)}
               isMobileDriven={mobileDrivenPageIds.has(page.id)}
@@ -2159,7 +2175,9 @@ function RemoteBrowserPagePane({
       x: event.clientX,
       y: event.clientY,
       linkUrl: null,
-      pageUrl: browserTab.url || 'about:blank'
+      pageUrl: browserTab.url || 'about:blank',
+      // Why: filled in below once the async eval reads the guest selection.
+      selectionText: ''
     })
     enqueueRemoteInput(async () => {
       const operationToken = createRemoteOperationToken(pageId)
@@ -2184,7 +2202,8 @@ function RemoteBrowserPagePane({
               ? {
                   ...current,
                   linkUrl: parsed.linkUrl,
-                  pageUrl: redactKagiSessionToken(parsed.pageUrl)
+                  pageUrl: redactKagiSessionToken(parsed.pageUrl),
+                  selectionText: parsed.selectionText
                 }
               : current
           )
@@ -2380,6 +2399,30 @@ function RemoteBrowserPagePane({
 
   const remoteFrameStyle = useMemo(() => getRemoteBrowserFrameStyle(frameMetadata), [frameMetadata])
 
+  // Why: markup works on remote panes by snapshotting the already-displayed
+  // screencast <img> — no in-page injection needed, so it is enabled here even
+  // though element-grab annotations are not.
+  const markup = useMarkupMode({
+    getCaptureContext: useCallback((): MarkupCaptureContext | null => {
+      const element = imageRef.current
+      const container = remoteViewportRef.current
+      if (!element || !container) {
+        return null
+      }
+      const rect = container.getBoundingClientRect()
+      if (rect.width <= 0 || rect.height <= 0) {
+        return null
+      }
+      return {
+        source: { kind: 'image', element },
+        cssWidth: rect.width,
+        cssHeight: rect.height,
+        outputScale: window.devicePixelRatio || 1
+      }
+    }, []),
+    onDeliver: deliverMarkupToClipboard
+  })
+
   return (
     <div className="relative flex h-full min-h-0 flex-1 flex-col bg-background">
       {contextMenu
@@ -2438,6 +2481,21 @@ function RemoteBrowserPagePane({
                         'auto.components.browser.pane.BrowserPane.efb0e8f7f3',
                         'Copy Link Address'
                       )}
+                    </button>
+                    <div className="my-1 h-px bg-border/70" />
+                  </>
+                ) : null}
+                {contextMenu.selectionText.trim() ? (
+                  <>
+                    <button
+                      role="menuitem"
+                      className="relative flex w-full cursor-default items-center gap-2 rounded-[7px] px-2 py-0.5 text-[12px] leading-5 font-medium outline-none select-none hover:bg-black/8 dark:hover:bg-white/14"
+                      onClick={() => {
+                        void window.api.ui.writeClipboardText(contextMenu.selectionText)
+                        setContextMenu(null)
+                      }}
+                    >
+                      {translate('auto.components.browser.pane.BrowserPane.2a4c4b8e1f', 'Copy')}
                     </button>
                     <div className="my-1 h-px bg-border/70" />
                   </>
@@ -2571,12 +2629,27 @@ function RemoteBrowserPagePane({
             )}
           </TooltipContent>
         </Tooltip>
+        <MarkupDrawButton
+          onClick={() => (markup.isActive ? markup.cancel() : void markup.start())}
+          disabled={!frameUrl}
+          active={markup.isActive}
+          surfaceActive={isActive}
+          className="h-7 w-7"
+        />
       </div>
       <div
         ref={remoteViewportRef}
         tabIndex={-1}
         className="relative min-h-0 flex-1 overflow-hidden bg-background"
       >
+        {markup.isActive && markup.baseImage ? (
+          <MarkupOverlay
+            baseImage={markup.baseImage}
+            busy={markup.state === 'composing'}
+            onComplete={(input) => void markup.complete(input)}
+            onCancel={markup.cancel}
+          />
+        ) : null}
         {frameUrl ? (
           <img
             ref={imageRef}
@@ -2648,6 +2721,7 @@ function BrowserPagePane({
   workspaceId,
   worktreeId,
   sessionProfileId,
+  sessionPartition,
   isActive,
   isAutomationVisible,
   isMobileDriven,
@@ -2659,6 +2733,7 @@ function BrowserPagePane({
   workspaceId: string
   worktreeId: string
   sessionProfileId: string | null
+  sessionPartition: string | null
   isActive: boolean
   isAutomationVisible: boolean
   isMobileDriven: boolean
@@ -2760,10 +2835,32 @@ function BrowserPagePane({
     y: number
     linkUrl: string | null
     pageUrl: string
+    selectionText: string
   } | null>(null)
   const contextMenuRef = useRef<HTMLDivElement>(null)
   const [findOpen, setFindOpen] = useState(false)
   const grab = useGrabMode(browserTab.id)
+
+  const markup = useMarkupMode({
+    getCaptureContext: useCallback((): MarkupCaptureContext | null => {
+      const webview = webviewRef.current
+      const container = containerRef.current
+      if (!webview || !container) {
+        return null
+      }
+      const rect = container.getBoundingClientRect()
+      if (rect.width <= 0 || rect.height <= 0) {
+        return null
+      }
+      return {
+        source: { kind: 'webview', webview },
+        cssWidth: rect.width,
+        cssHeight: rect.height,
+        outputScale: window.devicePixelRatio || 1
+      }
+    }, []),
+    onDeliver: deliverMarkupToClipboard
+  })
   const [grabIntent, setGrabIntent] = useState<GrabIntent>('copy')
   const grabIntentRef = useRef(grabIntent)
   grabIntentRef.current = grabIntent
@@ -2778,11 +2875,7 @@ function BrowserPagePane({
   })
   const isActiveRef = useRef(isActive)
   isActiveRef.current = isActive
-  const annotationViewportBridgeTokenRef = useRef(
-    typeof crypto.randomUUID === 'function'
-      ? crypto.randomUUID().replaceAll('-', '')
-      : `${Date.now().toString(36)}${Math.random().toString(36).slice(2)}`
-  )
+  const annotationViewportBridgeTokenRef = useRef(createBrowserUuid().replaceAll('-', ''))
   const browserAnnotations = useAppStore(
     (s) => s.browserAnnotationsByPageId[browserTab.id] ?? EMPTY_BROWSER_ANNOTATIONS
   )
@@ -2811,10 +2904,20 @@ function BrowserPagePane({
   const createBrowserTab = useAppStore((s) => s.createBrowserTab)
   const consumeAddressBarFocusRequest = useAppStore((s) => s.consumeAddressBarFocusRequest)
   const browserSessionProfiles = useAppStore((s) => s.browserSessionProfiles)
+  const activeOrcaProfileId = useAppStore((s) => s.activeOrcaProfileId)
+  const fallbackBrowserPartition = activeOrcaProfileId
+    ? getOrcaProfileBrowserDefaultPartition(activeOrcaProfileId)
+    : null
+  const defaultSessionProfile = browserSessionProfiles.find((p) => p.id === 'default') ?? null
   const sessionProfile = sessionProfileId
     ? (browserSessionProfiles.find((p) => p.id === sessionProfileId) ?? null)
-    : null
-  const webviewPartition = sessionProfile?.partition ?? ORCA_BROWSER_PARTITION
+    : defaultSessionProfile
+  const webviewPartition =
+    sessionPartition ??
+    sessionProfile?.partition ??
+    defaultSessionProfile?.partition ??
+    fallbackBrowserPartition ??
+    ORCA_BROWSER_PARTITION
   const browserSessionImportState = useAppStore((s) => s.browserSessionImportState)
   const clearBrowserSessionImportState = useAppStore((s) => s.clearBrowserSessionImportState)
   const showBrowserZoomFeedback = useCallback((level: number): void => {
@@ -3070,7 +3173,8 @@ function BrowserPagePane({
         x,
         y,
         linkUrl: event.linkUrl,
-        pageUrl: event.pageUrl
+        pageUrl: event.pageUrl,
+        selectionText: event.selectionText ?? ''
       })
     })
   }, [browserTab.id])
@@ -3576,32 +3680,25 @@ function BrowserPagePane({
       return
     }
 
-    let webview = webviewRegistry.get(browserTab.id)
-    let needsInitialNavigation = false
-    let needsInitialDefaultZoom = false
-    if (webview && webview.parentElement !== container) {
-      // Why: moving an Electron webview between DOM parents can recreate the
-      // guest document. Treat unexpected parent drift as stale state instead.
-      destroyPersistentWebview(browserTab.id)
-      webview = undefined
-      container = ensureBrowserPageViewport(browserTab.id, workspaceId)?.container ?? null
-      if (!container) {
-        return
-      }
+    const ensuredWebview = ensureBrowserPageWebview({
+      browserTabId: browserTab.id,
+      container,
+      inputLocked: inputLockedRef.current,
+      webviewPartition,
+      resolveContainer: () =>
+        ensureBrowserPageViewport(browserTab.id, workspaceId)?.container ?? null
+    })
+    if (!ensuredWebview) {
+      return
     }
-    if (webview && webview.getAttribute('partition') !== webviewPartition) {
-      // Why: Electron partitions are immutable after creation. If restored state
-      // or another store path changes the profile, the persisted guest must be
-      // replaced rather than parked/reused with the stale session.
-      destroyPersistentWebview(browserTab.id)
-      webview = undefined
-      container = ensureBrowserPageViewport(browserTab.id, workspaceId)?.container ?? null
-      if (!container) {
-        return
-      }
-    }
-    if (webview) {
-      webview.style.pointerEvents = inputLockedRef.current ? 'none' : 'auto'
+    container = ensuredWebview.container
+    const webview = ensuredWebview.webview
+    const needsInitialNavigation = ensuredWebview.created
+    let needsInitialDefaultZoom = ensuredWebview.created
+
+    if (!ensuredWebview.created) {
+      // pointerEvents is already applied inside ensureBrowserPageWebview for the
+      // reused-webview path, so it isn't repeated here.
       syncNavigationState(webview)
       // Why: seed the ref with the store URL so the URL sync effect does not
       // force-navigate an already-mounted webview that is on the right page.
@@ -3609,35 +3706,6 @@ function BrowserPagePane({
       // last navigation event.
       lastKnownWebviewUrlRef.current =
         normalizeBrowserNavigationUrl(browserTabUrlRef.current) ?? null
-    } else {
-      webview = document.createElement('webview') as Electron.WebviewTag
-      webview.setAttribute('partition', webviewPartition)
-      webview.setAttribute('allowpopups', '')
-      // Why: keep HTML fullscreen contained to the <webview> element instead of
-      // letting guest content resize the host BrowserWindow into native macOS
-      // fullscreen. Without this, requestFullscreen() resizes the OS window but
-      // exitFullscreen() has nothing to restore, leaving the pane stuck
-      // fullscreen (issue #6442). Containing fullscreen to the element makes
-      // exit reliable and fires fullscreenchange as guests expect.
-      // Why: the key must be camelCase — Electron's <webview> webpreferences
-      // parser spreads keys verbatim into WebPreferences, so a lowercase key is
-      // silently ignored.
-      webview.setAttribute('webpreferences', ORCA_BROWSER_GUEST_WEB_PREFERENCES_ATTRIBUTE)
-      webview.style.display = 'flex'
-      webview.style.flex = '1'
-      webview.style.width = '100%'
-      webview.style.height = '100%'
-      webview.style.border = 'none'
-      webview.style.pointerEvents = inputLockedRef.current ? 'none' : 'auto'
-      // Why: default to white so sites that don't set an html/body background
-      // (e.g. httpbin.org/html) don't show through to Orca's dark chrome. Real
-      // browsers paint the viewport white by default; sites that specify their
-      // own background (including dark ones) still override this.
-      webview.style.background = '#ffffff'
-      registerPersistentWebview(browserTab.id, webview)
-      container.appendChild(webview)
-      needsInitialNavigation = true
-      needsInitialDefaultZoom = true
     }
 
     webviewRef.current = webview
@@ -4142,14 +4210,19 @@ function BrowserPagePane({
       if (isEditableKeyboardTarget(e.target)) {
         return
       }
-      if (keybindingMatchesAction('browser.grabElement', e, shortcutPlatform, keybindings)) {
+      // Why: while the markup overlay is open, don't let the grab shortcut start
+      // the in-guest picker behind it — matching the disabled grab toolbar buttons.
+      if (
+        !markup.isActive &&
+        keybindingMatchesAction('browser.grabElement', e, shortcutPlatform, keybindings)
+      ) {
         e.preventDefault()
         startGrabIntent('copy')
       }
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [isActive, keybindings, startGrabIntent])
+  }, [isActive, keybindings, markup.isActive, startGrabIntent])
 
   useEffect(() => {
     if (!isActive) {
@@ -4816,6 +4889,21 @@ function BrowserPagePane({
                     <div className="my-1 h-px bg-border/70" />
                   </>
                 ) : null}
+                {contextMenu.selectionText.trim() ? (
+                  <>
+                    <button
+                      role="menuitem"
+                      className="relative flex w-full cursor-default items-center gap-2 rounded-[7px] px-2 py-0.5 text-[12px] leading-5 font-medium outline-none select-none hover:bg-black/8 dark:hover:bg-white/14"
+                      onClick={() => {
+                        void window.api.ui.writeClipboardText(contextMenu.selectionText)
+                        setContextMenu(null)
+                      }}
+                    >
+                      {translate('auto.components.browser.pane.BrowserPane.2a4c4b8e1f', 'Copy')}
+                    </button>
+                    <div className="my-1 h-px bg-border/70" />
+                  </>
+                ) : null}
                 <button
                   role="menuitem"
                   disabled={!browserTab.canGoBack}
@@ -4967,7 +5055,7 @@ function BrowserPagePane({
                       'bg-foreground/80 text-background hover:bg-foreground/90'
                   )}
                   onClick={() => startGrabIntent('copy')}
-                  disabled={isBlankTab}
+                  disabled={isBlankTab || markup.isActive}
                   aria-label={translate(
                     'auto.components.browser.pane.BrowserPane.fdfc7fe0ef',
                     'Grab page element'
@@ -5004,7 +5092,7 @@ function BrowserPagePane({
                       'bg-foreground/80 text-background hover:bg-foreground/90'
                   )}
                   onClick={() => startGrabIntent('annotate')}
-                  disabled={isBlankTab}
+                  disabled={isBlankTab || markup.isActive}
                   aria-label={translate(
                     'auto.components.browser.pane.BrowserPane.fc9be38f6f',
                     'Annotate page element'
@@ -5027,6 +5115,13 @@ function BrowserPagePane({
               )}
             </TooltipContent>
           </Tooltip>
+
+          <MarkupDrawButton
+            onClick={() => (markup.isActive ? markup.cancel() : void markup.start())}
+            disabled={isBlankTab || grab.state !== 'idle'}
+            active={markup.isActive}
+            surfaceActive={isActive}
+          />
 
           <Button
             size="icon"
@@ -5285,7 +5380,7 @@ function BrowserPagePane({
                     <TooltipContent side="bottom" sideOffset={6}>
                       {translate(
                         'auto.components.browser.pane.BrowserPane.95af781091',
-                        'Send feedback to a new agent'
+                        'Send feedback to an agent'
                       )}
                     </TooltipContent>
                   </Tooltip>
@@ -5295,13 +5390,10 @@ function BrowserPagePane({
                     onInteractOutside={preventAgentSendTargetOutsideDismiss}
                     onPointerDownOutside={preventAgentSendTargetOutsideDismiss}
                   >
-                    <QuickLaunchAgentMenuItems
+                    <BrowserAnnotationSendMenuContent
                       worktreeId={worktreeId}
                       groupId={activeGroupId ?? worktreeId}
-                      onFocusTerminal={focusTerminalTabSurface}
                       prompt={browserAnnotationsPrompt}
-                      promptDelivery="submit-after-ready"
-                      launchSource="notes_send"
                       onPromptDelivered={handleBrowserAnnotationsSentToAgent}
                     />
                   </DropdownMenuContent>
@@ -5360,6 +5452,14 @@ function BrowserPagePane({
       {pageViewport?.container
         ? createPortal(
             <>
+              {markup.isActive && markup.baseImage ? (
+                <MarkupOverlay
+                  baseImage={markup.baseImage}
+                  busy={markup.state === 'composing'}
+                  onComplete={(input) => void markup.complete(input)}
+                  onCancel={markup.cancel}
+                />
+              ) : null}
               <div
                 role="status"
                 aria-live="polite"
@@ -5559,7 +5659,7 @@ function BrowserPagePane({
                         <TooltipContent side="bottom" sideOffset={6}>
                           {translate(
                             'auto.components.browser.pane.BrowserPane.95af781091',
-                            'Send feedback to a new agent'
+                            'Send feedback to an agent'
                           )}
                         </TooltipContent>
                       </Tooltip>
@@ -5569,13 +5669,10 @@ function BrowserPagePane({
                         onInteractOutside={preventAgentSendTargetOutsideDismiss}
                         onPointerDownOutside={preventAgentSendTargetOutsideDismiss}
                       >
-                        <QuickLaunchAgentMenuItems
+                        <BrowserAnnotationSendMenuContent
                           worktreeId={worktreeId}
                           groupId={activeGroupId ?? worktreeId}
-                          onFocusTerminal={focusTerminalTabSurface}
                           prompt={browserAnnotationsPrompt}
-                          promptDelivery="submit-after-ready"
-                          launchSource="notes_send"
                           onPromptDelivered={handleBrowserAnnotationsSentToAgent}
                         />
                       </DropdownMenuContent>

@@ -504,6 +504,129 @@ describe('staged background worktree creation', () => {
     })
   })
 
+  it('reveals the completed workspace after the user switches to another workspace', async () => {
+    let resolveCreate!: (result: { worktree: { id: string; repoId: string } }) => void
+    store.createWorktree.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveCreate = resolve
+      })
+    )
+
+    const started = continueBackgroundWorktreeCreation('creation-1', makeRequest(), {
+      revealCreationSurface: false
+    })
+
+    expect(started).toBe(true)
+    await vi.waitFor(() => expect(store.createWorktree).toHaveBeenCalledTimes(1))
+    // Why: selecting a real workspace clears only the pending surface pointer;
+    // completion should still finish the task-launch handoff once it is ready.
+    store.activePendingCreationId = null
+    resolveCreate({ worktree: { id: 'wt-1', repoId: 'repo-1' } })
+    await flushAsyncWorktreeCreation()
+
+    expect(activateAndRevealWorktree).toHaveBeenCalledWith('wt-1', {
+      sidebarRevealBehavior: 'auto'
+    })
+    expect(ensureWorktreeHasInitialTerminal).not.toHaveBeenCalled()
+    expect(store.removePendingWorktreeCreation).toHaveBeenCalledWith('creation-1', {
+      cleanupVm: false
+    })
+  })
+
+  it('does not reveal a workspace cancelled during post-create trust preflight', async () => {
+    let resolveTrust!: () => void
+    const markTrusted = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveTrust = resolve
+        })
+    )
+    globalThis.window = { api: { agentTrust: { markTrusted } } } as never
+    store.repos = [{ id: 'repo-1', connectionId: null }]
+    store.createWorktree.mockResolvedValueOnce({
+      worktree: { id: 'wt-1', repoId: 'repo-1', path: '/repo/wt-1' }
+    })
+
+    const started = continueBackgroundWorktreeCreation(
+      'creation-1',
+      makeRequest({ agent: 'codex' }),
+      { revealCreationSurface: false }
+    )
+
+    expect(started).toBe(true)
+    await vi.waitFor(() => expect(markTrusted).toHaveBeenCalledTimes(1))
+    delete store.pendingWorktreeCreations['creation-1']
+    store.activePendingCreationId = null
+    resolveTrust()
+    await vi.waitFor(() => expect(ensureWorktreeHasInitialTerminal).toHaveBeenCalledTimes(1))
+
+    expect(activateAndRevealWorktree).not.toHaveBeenCalled()
+  })
+
+  // Why: one-click "Start workspace from issue" commonly backgrounds, so the
+  // user-moved-on path is the common delivery for the repo's issue command; it
+  // must thread through as the 5th positional arg, not be dropped to undefined.
+  it('threads the request issue command into the background terminal seed', async () => {
+    store.activeView = 'tasks'
+    store.createWorktree.mockResolvedValueOnce({
+      worktree: {
+        id: 'wt-1',
+        repoId: 'repo-1'
+      }
+    })
+
+    const started = continueBackgroundWorktreeCreation(
+      'creation-1',
+      makeRequest({ issueCommand: { command: 'gh issue view 42' } }),
+      { revealCreationSurface: false }
+    )
+
+    expect(started).toBe(true)
+    // Why: vi.waitFor instead of a fixed microtask flush — the await count in
+    // executeWorktreeCreation grows over time (e.g. VM preflight), and a fixed
+    // flush silently starves this assertion in merged builds.
+    await vi.waitFor(() =>
+      expect(ensureWorktreeHasInitialTerminal).toHaveBeenCalledWith(
+        store,
+        'wt-1',
+        undefined,
+        undefined,
+        { command: 'gh issue view 42' },
+        undefined,
+        { activateCreatedTabs: false }
+      )
+    )
+  })
+
+  // Why: the still-watching path activates the worktree directly, so the issue
+  // command must reach activateAndRevealWorktree too — both branches carry it.
+  it('threads the request issue command into the active reveal', async () => {
+    store.activeView = 'terminal'
+    store.activePendingCreationId = 'creation-1'
+    store.createWorktree.mockResolvedValueOnce({
+      worktree: {
+        id: 'wt-1',
+        repoId: 'repo-1',
+        path: '/repo/wt-1'
+      }
+    })
+    vi.mocked(activateAndRevealWorktree).mockReturnValueOnce({ primaryTabId: 'tab-1' })
+
+    const started = continueBackgroundWorktreeCreation(
+      'creation-1',
+      makeRequest({ issueCommand: { command: 'gh issue view 42' } })
+    )
+
+    expect(started).toBe(true)
+    await vi.waitFor(() =>
+      expect(activateAndRevealWorktree).toHaveBeenCalledWith(
+        'wt-1',
+        expect.objectContaining({ issueCommand: { command: 'gh issue view 42' } })
+      )
+    )
+    expect(ensureWorktreeHasInitialTerminal).not.toHaveBeenCalled()
+  })
+
   it('toasts a staged create error after the user leaves the creation surface', async () => {
     store.activeView = 'tasks'
     store.createWorktree.mockRejectedValueOnce(new Error('create failed'))

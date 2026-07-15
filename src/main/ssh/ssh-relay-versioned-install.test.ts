@@ -88,11 +88,32 @@ describe('isRelayAlreadyInstalled', () => {
     expect(await isRelayAlreadyInstalled(conn, '/r')).toBe(false)
   })
 
-  it('checks for relay.js AND .install-complete in addition to the dir', async () => {
+  it('keeps default probe failures as not installed for SSH session-limit-shaped errors', async () => {
+    const sessionLimitError = Object.assign(new Error('(SSH) Channel open failure: open failed'), {
+      reason: 4
+    })
+    mockExec.mockRejectedValueOnce(sessionLimitError)
+
+    await expect(isRelayAlreadyInstalled(conn, '/r')).resolves.toBe(false)
+  })
+
+  it('rethrows SSH session-limit errors in strict mode', async () => {
+    const sessionLimitError = Object.assign(new Error('(SSH) Channel open failure: open failed'), {
+      reason: 4
+    })
+    mockExec.mockRejectedValueOnce(sessionLimitError)
+
+    await expect(
+      isRelayAlreadyInstalled(conn, '/r', undefined, { rethrowSessionLimitErrors: true })
+    ).rejects.toBe(sessionLimitError)
+  })
+
+  it('checks for both relay process artifacts and .install-complete', async () => {
     mockExec.mockResolvedValueOnce('OK')
     await isRelayAlreadyInstalled(conn, '/r')
     const cmd = mockExec.mock.calls.at(-1)?.[1] ?? ''
     expect(cmd).toContain('relay.js')
+    expect(cmd).toContain('relay-watcher.js')
     expect(cmd).toContain('.install-complete')
   })
 })

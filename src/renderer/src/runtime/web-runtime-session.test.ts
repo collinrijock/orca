@@ -37,6 +37,8 @@ vi.mock('../store', () => ({
 
 vi.mock('./web-session-tabs-sync', () => ({
   applyFreshWebSessionTabsSnapshot: mocks.applyFreshWebSessionTabsSnapshot,
+  applyWebSessionTabsStorePatch: (buildPatch: (state: unknown) => unknown) =>
+    mocks.setState(buildPatch),
   resolveHostSessionTabIdForWebSessionTab: mocks.resolveHostSessionTabIdForWebSessionTab
 }))
 
@@ -480,6 +482,7 @@ describe('createWebRuntimeSessionTerminal', () => {
         afterTabId: 'web-terminal-host-tab-1%3A%3Aleaf-1',
         targetGroupId: 'group-left',
         command: "codex 'linked issue context'",
+        cwd: '/repo/packages/app',
         env: { CODEX_PROFILE: 'captured' },
         startupCommandDelivery: 'shell-ready',
         launchConfig: {
@@ -487,6 +490,7 @@ describe('createWebRuntimeSessionTerminal', () => {
           agentEnv: { CODEX_PROFILE: 'captured' }
         },
         launchAgent: 'codex',
+        viewMode: 'chat',
         activate: true
       })
     ).resolves.toBe(true)
@@ -499,6 +503,7 @@ describe('createWebRuntimeSessionTerminal', () => {
         afterTabId: 'host-tab-1::leaf-1',
         targetGroupId: 'group-left',
         command: "codex 'linked issue context'",
+        cwd: '/repo/packages/app',
         env: { CODEX_PROFILE: 'captured' },
         startupCommandDelivery: 'shell-ready',
         launchConfig: {
@@ -506,6 +511,7 @@ describe('createWebRuntimeSessionTerminal', () => {
           agentEnv: { CODEX_PROFILE: 'captured' }
         },
         launchAgent: 'codex',
+        viewMode: 'chat',
         activate: true
       },
       timeoutMs: 15_000

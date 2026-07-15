@@ -102,11 +102,21 @@ export function setRuntimeGraphStoreStateGetter(getter: (() => AppState) | null)
   getStoreState = getter
 }
 
+/** True while a TerminalPane for this tab is mounted (lifecycle effect ran). */
+export function hasRegisteredRuntimeTerminalTab(tabId: string): boolean {
+  return registeredTabs.has(tabId)
+}
+
 export function registerRuntimeTerminalTab(tab: RegisteredTerminalTab): () => void {
   registeredTabs.set(tab.tabId, tab)
   tabRegisteredAt.set(tab.tabId, Date.now())
   scheduleRuntimeGraphSync()
   return () => {
+    // Why: React can mount a replacement surface before the prior effect
+    // cleans up. Stale cleanup must not erase the successor's live registry.
+    if (registeredTabs.get(tab.tabId) !== tab) {
+      return
+    }
     registeredTabs.delete(tab.tabId)
     tabRegisteredAt.delete(tab.tabId)
     scheduleRuntimeGraphSync()
@@ -1191,9 +1201,9 @@ function hexToRgba(hex: string, alpha: number): string {
       .map((c) => c + c)
       .join('')
   }
-  const r = parseInt(clean.slice(0, 2), 16)
-  const g = parseInt(clean.slice(2, 4), 16)
-  const b = parseInt(clean.slice(4, 6), 16)
+  const r = Number.parseInt(clean.slice(0, 2), 16)
+  const g = Number.parseInt(clean.slice(2, 4), 16)
+  const b = Number.parseInt(clean.slice(4, 6), 16)
   return `rgba(${r}, ${g}, ${b}, ${alpha})`
 }
 

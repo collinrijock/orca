@@ -50,6 +50,7 @@ type FloatingPanelStoreState = {
       activate?: boolean
       focusAddressBar?: boolean
       sessionProfileId?: string | null
+      sessionPartition?: string | null
       title?: string
       targetGroupId?: string
     }
@@ -1241,6 +1242,7 @@ describe('FloatingTerminalPanel close behavior', () => {
           canGoForward: false,
           loadError: null,
           sessionProfileId: 'profile-1',
+          sessionPartition: 'persist:orca-browser-session-profile-1',
           createdAt: 1
         }
       ]
@@ -1272,6 +1274,7 @@ describe('FloatingTerminalPanel close behavior', () => {
       {
         title: 'Example',
         sessionProfileId: 'profile-1',
+        sessionPartition: 'persist:orca-browser-session-profile-1',
         targetGroupId: 'floating-group',
         browserRuntimeEnvironmentId: null
       }
@@ -1952,7 +1955,7 @@ describe('FloatingTerminalPanel close behavior', () => {
       target
     })
 
-    expect(mocks.closeTab).toHaveBeenCalledWith('tab-1')
+    expect(mocks.closeTab).toHaveBeenCalledWith('tab-1', { reason: 'cleanup' })
     expect(panelElement.focus).toHaveBeenCalledWith({ preventScroll: true })
   })
 
@@ -1999,7 +2002,7 @@ describe('FloatingTerminalPanel close behavior', () => {
     })
     attachRef(panel.props.ref, null)
 
-    expect(mocks.closeTab).toHaveBeenCalledWith('tab-1')
+    expect(mocks.closeTab).toHaveBeenCalledWith('tab-1', { reason: 'cleanup' })
     expect(cancelAnimationFrame).toHaveBeenCalledWith(42)
     expect(panelElement.focus).not.toHaveBeenCalled()
   })
@@ -2043,7 +2046,7 @@ describe('FloatingTerminalPanel close behavior', () => {
       target
     })
 
-    expect(mocks.closeTab).toHaveBeenCalledWith('tab-1')
+    expect(mocks.closeTab).toHaveBeenCalledWith('tab-1', { reason: 'cleanup' })
     expect(panelElement.focus).not.toHaveBeenCalled()
   })
 
@@ -2194,7 +2197,7 @@ describe('FloatingTerminalPanel close behavior', () => {
     const tabBar = findByTypeName(element, 'TabBar')
     ;(tabBar.props.onClose as (tabId: string) => void)('tab-1')
 
-    expect(mocks.closeTab).toHaveBeenCalledWith('tab-1')
+    expect(mocks.closeTab).toHaveBeenCalledWith('tab-1', { reason: 'cleanup' })
     expect(onOpenChange).not.toHaveBeenCalled()
   })
 
@@ -2209,7 +2212,7 @@ describe('FloatingTerminalPanel close behavior', () => {
     const tabBar = findByTypeName(element, 'TabBar')
     ;(tabBar.props.onClose as (tabId: string) => void)('tab-2')
 
-    expect(mocks.closeTab).toHaveBeenCalledWith('tab-2')
+    expect(mocks.closeTab).toHaveBeenCalledWith('tab-2', { reason: 'cleanup' })
     expect(onOpenChange).not.toHaveBeenCalled()
   })
 
@@ -2224,12 +2227,12 @@ describe('FloatingTerminalPanel close behavior', () => {
     const terminalPane = findByTypeName(element, 'TerminalPane')
 
     ;(terminalPane.props.onPtyExit as () => void)()
-    expect(mocks.closeTab).toHaveBeenCalledWith('tab-1')
+    expect(mocks.closeTab).toHaveBeenCalledWith('tab-1', { reason: 'pty-exit' })
     expect(onOpenChange).not.toHaveBeenCalled()
 
     mocks.closeTab.mockClear()
     ;(terminalPane.props.onCloseTab as () => void)()
-    expect(mocks.closeTab).toHaveBeenCalledWith('tab-1')
+    expect(mocks.closeTab).toHaveBeenCalledWith('tab-1', { reason: 'cleanup' })
     expect(onOpenChange).not.toHaveBeenCalled()
   })
 
@@ -2328,7 +2331,7 @@ describe('FloatingTerminalPanel close behavior', () => {
 
     ;(tabBar.props.onClose as (tabId: string) => void)('tab-1')
     expect(mocks.closeWebRuntimeSessionTab).not.toHaveBeenCalled()
-    expect(mocks.closeTab).toHaveBeenCalledWith('tab-1')
+    expect(mocks.closeTab).toHaveBeenCalledWith('tab-1', { reason: 'cleanup' })
     expect(onOpenChange).not.toHaveBeenCalled()
   })
 
@@ -2381,14 +2384,14 @@ describe('FloatingTerminalPanel close behavior', () => {
     ])
 
     ;(tabBar.props.onCloseOthers as (tabId: string) => void)('new-keep')
-    expect(mocks.closeTab).toHaveBeenCalledWith('new-left')
-    expect(mocks.closeTab).toHaveBeenCalledWith('new-right')
+    expect(mocks.closeTab).toHaveBeenCalledWith('new-left', { reason: 'cleanup' })
+    expect(mocks.closeTab).toHaveBeenCalledWith('new-right', { reason: 'cleanup' })
     expect(mocks.closeTab).not.toHaveBeenCalledWith('old-left')
 
     mocks.closeTab.mockClear()
     ;(tabBar.props.onCloseToRight as (tabId: string) => void)('new-left')
-    expect(mocks.closeTab).toHaveBeenCalledWith('new-keep')
-    expect(mocks.closeTab).toHaveBeenCalledWith('new-right')
+    expect(mocks.closeTab).toHaveBeenCalledWith('new-keep', { reason: 'cleanup' })
+    expect(mocks.closeTab).toHaveBeenCalledWith('new-right', { reason: 'cleanup' })
     expect(mocks.closeTab).not.toHaveBeenCalledWith('old-keep')
   })
 
@@ -2409,8 +2412,8 @@ describe('FloatingTerminalPanel close behavior', () => {
     const tabBar = findByTypeName(element, 'TabBar')
     ;(tabBar.props.onCloseToRight as (tabId: string) => void)('tab-c')
 
-    expect(mocks.closeTab).toHaveBeenCalledWith('tab-a')
-    expect(mocks.closeTab).toHaveBeenCalledWith('tab-b')
+    expect(mocks.closeTab).toHaveBeenCalledWith('tab-a', { reason: 'cleanup' })
+    expect(mocks.closeTab).toHaveBeenCalledWith('tab-b', { reason: 'cleanup' })
     expect(mocks.closeTab).not.toHaveBeenCalledWith('tab-c')
   })
 })

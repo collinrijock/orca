@@ -23,6 +23,10 @@ export type ServeSimStateDetectedEvent = {
 }
 
 const DEFAULT_STATE_DIR = join(tmpdir(), 'serve-sim')
+// Why: this only waits for a rarely-created dir to appear; sub-second detection
+// of a detached emulator is not user-perceptible, so a coarse interval avoids
+// waking the daemon 4x/sec for the whole session on machines that never use it.
+export const SERVE_SIM_STATE_DIR_EXISTENCE_POLL_MS = 2_000
 const STATE_FILE_RE = /^server-([0-9A-F-]{36})\.json$/i
 const PTY_JSON_RE = /\{[^{}]*"streamUrl"\s*:\s*"[^"]+"[^{}]*"wsUrl"\s*:\s*"[^"]+"[^{}]*\}/g
 
@@ -66,21 +70,29 @@ function helperInstanceKey(info: ServeSimHelperInfo): string {
   return `${info.deviceUdid}::${info.helperPid ?? 'pidless'}::${info.wsUrl}::${info.streamUrl}`
 }
 
+function trailingIncompletePtyJsonObject(data: string): string {
+  const lastObjectStart = data.lastIndexOf('{')
+  return lastObjectStart > data.lastIndexOf('}') ? data.slice(lastObjectStart) : ''
+}
+
 export class ServeSimStateWatcher {
   private readonly stateDir: string
-  private readonly parentDir: string
+  private readonly platform: NodeJS.Platform
+  private readonly existencePollMs: number
   private readonly ptyToWorktree = new Map<string, string>()
   private readonly ptyBuffers = new Map<string, string>()
   private readonly seenExternalKeys = new Set<string>()
   private readonly orcaManagedHelperKeys = new Set<string>()
   private readonly listeners = new Set<(event: ServeSimStateDetectedEvent) => void>()
-  private parentWatcher: FSWatcher | null = null
   private stateWatcher: FSWatcher | null = null
   private stateDirPoll: ReturnType<typeof setInterval> | null = null
 
-  constructor(options: { stateDir?: string; parentDir?: string } = {}) {
+  constructor(
+    options: { stateDir?: string; platform?: NodeJS.Platform; existencePollMs?: number } = {}
+  ) {
     this.stateDir = options.stateDir ?? DEFAULT_STATE_DIR
-    this.parentDir = options.parentDir ?? tmpdir()
+    this.platform = options.platform ?? process.platform
+    this.existencePollMs = options.existencePollMs ?? SERVE_SIM_STATE_DIR_EXISTENCE_POLL_MS
   }
 
   onDetected(listener: (event: ServeSimStateDetectedEvent) => void): () => void {
@@ -135,9 +147,19 @@ export class ServeSimStateWatcher {
       return
     }
 
-    const prev = this.ptyBuffers.get(ptyId) ?? ''
-    const combined = (prev + data).slice(-16_384)
-    this.ptyBuffers.set(ptyId, combined)
+    const previous = this.ptyBuffers.get(ptyId)
+    if (!previous && !data.includes('{')) {
+      // Why: serve-sim metadata is a JSON object, while ordinary PTY output is
+      // the hot path. Stay idle instead of rebuilding and regex-scanning 16 KiB.
+      return
+    }
+    const combined = `${previous ?? ''}${data}`.slice(-16_384)
+    const trailingObject = trailingIncompletePtyJsonObject(combined)
+    if (trailingObject) {
+      this.ptyBuffers.set(ptyId, trailingObject)
+    } else {
+      this.ptyBuffers.delete(ptyId)
+    }
 
     const matches = combined.match(PTY_JSON_RE)
     if (!matches) {
@@ -156,42 +178,45 @@ export class ServeSimStateWatcher {
   }
 
   start(): void {
-    if (this.parentWatcher || this.stateWatcher) {
+    if (this.stateDirPoll || this.stateWatcher) {
+      return
+    }
+    // Why: serve-sim (the iOS Simulator bridge) only ever writes state on macOS,
+    // so $TMPDIR/serve-sim never appears on Windows/Linux. Skip arming the
+    // existence poll there instead of waking the daemon every interval for a
+    // directory that can never exist.
+    if (this.platform !== 'darwin') {
       return
     }
     try {
       // Why: $TMPDIR/serve-sim/ may not exist until the first terminal `serve-sim --detach`.
-      // Watch the parent tmpdir and attach to serve-sim/ when it appears (or watch it directly if present).
+      // Poll for it instead of fs.watch on the parent tmpdir: watching $TMPDIR
+      // registers a permanent FSEvents client on the system's highest-churn
+      // directory, while an existence poll costs the daemon nothing.
       this.attachStateDirWatch()
       if (this.stateWatcher) {
         this.scanExistingStateFiles()
         return
       }
 
-      this.parentWatcher = watch(this.parentDir, (_event, filename) => {
-        if (!filename || String(filename) !== 'serve-sim') {
-          return
-        }
-        this.attachStateDirWatch()
-        this.scanExistingStateFiles()
-      })
+      // attachStateDirWatch() clears this poll once the dir appears and the
+      // native watcher takes over, so it only ticks while waiting for a
+      // rarely-created dir — a coarse interval keeps that wait off the idle floor.
       this.stateDirPoll = setInterval(() => {
         this.attachStateDirWatch()
         this.scanExistingStateFiles()
-      }, 250)
+      }, this.existencePollMs)
       this.stateDirPoll.unref?.()
     } catch {
-      // Non-mac or permission issues: watcher is best-effort.
+      // Permission issues: watcher is best-effort.
     }
   }
 
   stop(): void {
-    this.parentWatcher?.close()
     this.stateWatcher?.close()
     if (this.stateDirPoll) {
       clearInterval(this.stateDirPoll)
     }
-    this.parentWatcher = null
     this.stateWatcher = null
     this.stateDirPoll = null
     this.ptyToWorktree.clear()

@@ -46,6 +46,8 @@ async function usePollingOnce(
     sshStatus?: string
     enabled?: boolean
     expectStatusCall?: boolean
+    stateOverrides?: Partial<PollState>
+    documentStub?: object
   } = {}
 ): Promise<{ state: PollState; gitStatus: ReturnType<typeof vi.fn> }> {
   vi.resetModules()
@@ -67,6 +69,7 @@ async function usePollingOnce(
     rightSidebarTab: 'source-control',
     openFiles: []
   }
+  Object.assign(state, options.stateOverrides)
   const mockedRepo = { ...repo, connectionId: options.connectionId ?? null }
   const gitStatus = vi.fn().mockResolvedValue(status)
 
@@ -112,18 +115,24 @@ async function usePollingOnce(
         watchWorktree: vi.fn().mockResolvedValue(undefined),
         unwatchWorktree: vi.fn().mockResolvedValue(undefined),
         onFsChanged: vi.fn(() => vi.fn())
+      },
+      worktrees: {
+        onChanged: vi.fn(() => vi.fn())
       }
     },
     addEventListener: vi.fn(),
     removeEventListener: vi.fn()
   })
 
-  vi.stubGlobal('document', {
-    visibilityState: 'visible',
-    hasFocus: () => true,
-    addEventListener: vi.fn(),
-    removeEventListener: vi.fn()
-  })
+  vi.stubGlobal(
+    'document',
+    options.documentStub ?? {
+      visibilityState: 'visible',
+      hasFocus: () => true,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn()
+    }
+  )
   vi.stubGlobal('setInterval', vi.fn())
   vi.stubGlobal('clearInterval', vi.fn())
 
@@ -226,6 +235,27 @@ describe('useGitStatusPolling', () => {
 
     expect(gitStatus).not.toHaveBeenCalled()
     expect(state.setGitStatus).not.toHaveBeenCalled()
+    expect(globalThis.setInterval).not.toHaveBeenCalled()
+  })
+
+  it('uses a slower git status cadence when only terminal branch detection needs polling', async () => {
+    const { gitStatus } = await usePollingOnce(
+      {
+        entries: [],
+        conflictOperation: 'unknown',
+        head: 'abc123',
+        branch: 'refs/heads/main'
+      },
+      {
+        stateOverrides: {
+          rightSidebarOpen: false,
+          openFiles: []
+        }
+      }
+    )
+
+    expect(gitStatus).toHaveBeenCalledTimes(1)
+    expect(globalThis.setInterval).toHaveBeenCalledWith(expect.any(Function), 30_000)
   })
 
   it('does not install the visible git status poll while disabled', async () => {
@@ -339,6 +369,9 @@ describe('useGitStatusPolling', () => {
           watchWorktree: vi.fn().mockResolvedValue(undefined),
           unwatchWorktree: vi.fn().mockResolvedValue(undefined),
           onFsChanged: vi.fn(() => vi.fn())
+        },
+        worktrees: {
+          onChanged: vi.fn(() => vi.fn())
         }
       },
       addEventListener: vi.fn((type: string, listener: EventListener) => {
@@ -448,6 +481,9 @@ describe('useGitStatusPolling', () => {
           watchWorktree: vi.fn().mockResolvedValue(undefined),
           unwatchWorktree: vi.fn().mockResolvedValue(undefined),
           onFsChanged: vi.fn(() => vi.fn())
+        },
+        worktrees: {
+          onChanged: vi.fn(() => vi.fn())
         }
       },
       addEventListener: vi.fn((type: string, listener: EventListener) => {
@@ -569,6 +605,9 @@ describe('useGitStatusPolling', () => {
           watchWorktree: vi.fn().mockResolvedValue(undefined),
           unwatchWorktree: vi.fn().mockResolvedValue(undefined),
           onFsChanged: vi.fn(() => vi.fn())
+        },
+        worktrees: {
+          onChanged: vi.fn(() => vi.fn())
         }
       },
       addEventListener: vi.fn((type: string, listener: EventListener) => {
@@ -617,6 +656,73 @@ describe('useGitStatusPolling', () => {
     await vi.waitFor(() => expect(gitStatus).toHaveBeenCalledTimes(callsBeforeDebounceFires + 1))
 
     vi.useRealTimers()
+  })
+
+  it('refreshes on repo metadata push signals while the huge flag is set so the flag can clear', async () => {
+    const { gitStatus } = await usePollingOnce(
+      {
+        entries: [],
+        conflictOperation: 'unknown',
+        head: 'abc123',
+        branch: 'refs/heads/main'
+      },
+      {
+        expectStatusCall: false,
+        stateOverrides: {
+          gitStatusHugeByWorktree: { [worktree.id]: { limit: 10_000 } }
+        }
+      }
+    )
+
+    // The huge flag must only pause evidence-free interval polling.
+    expect(globalThis.setInterval).not.toHaveBeenCalled()
+    expect(gitStatus).not.toHaveBeenCalled()
+
+    // Push signals (e.g. a commit's metadata write) must stay subscribed while
+    // huge — a fresh non-huge status result is the only way the flag clears.
+    const onChanged = window.api.worktrees.onChanged as ReturnType<typeof vi.fn>
+    expect(onChanged).toHaveBeenCalledTimes(1)
+    const handleRepoSignal = onChanged.mock.calls[0][0] as (payload: { repoId: string }) => void
+    handleRepoSignal({ repoId: repo.id })
+
+    await vi.waitFor(() => expect(gitStatus).toHaveBeenCalledTimes(1))
+  })
+
+  it('catches up on becoming visible while the huge flag is set', async () => {
+    const documentListeners = new Map<string, EventListener[]>()
+    const visibilityDocument = {
+      visibilityState: 'hidden',
+      hasFocus: () => false,
+      addEventListener: vi.fn((type: string, listener: EventListener) => {
+        documentListeners.set(type, [...(documentListeners.get(type) ?? []), listener])
+      }),
+      removeEventListener: vi.fn()
+    }
+    const { gitStatus } = await usePollingOnce(
+      {
+        entries: [],
+        conflictOperation: 'unknown',
+        head: 'abc123',
+        branch: 'refs/heads/main'
+      },
+      {
+        expectStatusCall: false,
+        documentStub: visibilityDocument,
+        stateOverrides: {
+          gitStatusHugeByWorktree: { [worktree.id]: { limit: 10_000 } }
+        }
+      }
+    )
+    // Signals dropped while the window was hidden must be caught up on
+    // reveal so the huge flag can still clear.
+    expect(gitStatus).not.toHaveBeenCalled()
+
+    visibilityDocument.visibilityState = 'visible'
+    for (const listener of documentListeners.get('visibilitychange') ?? []) {
+      listener(new Event('visibilitychange'))
+    }
+
+    await vi.waitFor(() => expect(gitStatus).toHaveBeenCalledTimes(1))
   })
 
   it('does not overlap slow visible git status polls and runs one trailing refresh', async () => {
@@ -684,6 +790,9 @@ describe('useGitStatusPolling', () => {
           watchWorktree: vi.fn().mockResolvedValue(undefined),
           unwatchWorktree: vi.fn().mockResolvedValue(undefined),
           onFsChanged: vi.fn(() => vi.fn())
+        },
+        worktrees: {
+          onChanged: vi.fn(() => vi.fn())
         }
       },
       addEventListener: vi.fn(),

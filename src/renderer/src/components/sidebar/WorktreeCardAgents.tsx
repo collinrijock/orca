@@ -1,13 +1,15 @@
-/* eslint-disable max-lines -- Why: this component keeps compact/full inline
-   agent rendering and lineage disclosure behavior together; splitting during
-   this bug fix would risk divergent parent-child row behavior. */
-import React, { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import React, { useCallback, useLayoutEffect, useMemo, useRef } from 'react'
+import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { activateTabAndFocusPane } from '@/lib/activate-tab-and-focus-pane'
 import DashboardAgentRow from '@/components/dashboard/DashboardAgentRow'
 import { useNow } from '@/components/dashboard/useNow'
 import { deriveRunningAgentSendTargets } from '@/lib/running-agent-targets'
+import {
+  selectSendTargetControlInputs,
+  selectSendTargetInputs
+} from './worktree-card-send-target-inputs'
 import { useWorktreeAgentRows } from './useWorktreeAgentRows'
 import { cn } from '@/lib/utils'
 import type { DashboardAgentRow as DashboardAgentRowData } from '@/components/dashboard/useDashboardData'
@@ -22,6 +24,7 @@ import {
 import { buildAgentRowLineageTree } from '@/components/dashboard/agent-row-lineage-model'
 import { DEFAULT_AGENT_ACTIVITY_DISPLAY_MODE } from '../../../../shared/constants'
 import { revealElementInScrollContainer } from './worktree-sidebar-reveal'
+import { useWorktreeAgentExpansionState } from './worktree-card-agents-expansion-state'
 import { translate } from '@/i18n/i18n'
 
 export const SUPPRESS_WORKTREE_LIST_SCROLL_ADJUSTMENT_EVENT =
@@ -88,13 +91,17 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
     useAppStore((s) => s.agentActivityDisplayMode) ?? DEFAULT_AGENT_ACTIVITY_DISPLAY_MODE
   const dropAgentStatus = useAppStore((s) => s.dropAgentStatus)
   const dismissRetainedAgent = useAppStore((s) => s.dismissRetainedAgent)
-  const agentSendPopoverTargetMode = useAppStore((s) => s.agentSendPopoverTargetMode)
-  const agentStatusByPaneKey = useAppStore((s) => s.agentStatusByPaneKey)
-  const agentStatusEpoch = useAppStore((s) => s.agentStatusEpoch)
-  const tabsByWorktree = useAppStore((s) => s.tabsByWorktree)
-  const terminalLayoutsByTabId = useAppStore((s) => s.terminalLayoutsByTabId)
-  const ptyIdsByTabId = useAppStore((s) => s.ptyIdsByTabId)
-  const runtimePaneTitlesByTabId = useAppStore((s) => s.runtimePaneTitlesByTabId)
+  const { targetMode: agentSendPopoverTargetMode, agentStatusEpoch } = useAppStore(
+    useShallow((s) => selectSendTargetControlInputs(s, worktreeId))
+  )
+  // Why: these five maps are read only to derive send-target eligibility, which
+  // matters only while the send-target popover targets THIS card. Two of them
+  // (runtimePaneTitlesByTabId, agentStatusByPaneKey) churn on every pane-title
+  // and agent-status write app-wide, so subscribing to them unconditionally made
+  // every mounted agent body re-render on unrelated terminals. Gate the
+  // subscription: return a stable empty constant when the popover isn't ours, so
+  // useShallow keeps the same result and idle bodies stop reacting to the churn.
+  const sendTargetInputs = useAppStore(useShallow((s) => selectSendTargetInputs(s, worktreeId)))
   const sendPromptToSidebarAgentTarget = useAppStore((s) => s.sendPromptToSidebarAgentTarget)
   const focusedAgentPaneKey = useFocusedAgentPaneKey(worktreeId)
   const compactAgentListRootRef = useRef<HTMLDivElement | null>(null)
@@ -123,7 +130,7 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
     [dropAgentStatus, dismissRetainedAgent]
   )
 
-  const isAgentSendTargetModeActive = agentSendPopoverTargetMode?.worktreeId === worktreeId
+  const isAgentSendTargetModeActive = agentSendPopoverTargetMode !== null
   const sendTargetsByPaneKey = useMemo(() => {
     void agentStatusEpoch
     if (!isAgentSendTargetModeActive) {
@@ -134,16 +141,7 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
     }
 
     return new Map(
-      deriveRunningAgentSendTargets(
-        {
-          agentStatusByPaneKey,
-          tabsByWorktree,
-          terminalLayoutsByTabId,
-          ptyIdsByTabId,
-          runtimePaneTitlesByTabId
-        },
-        worktreeId
-      ).map((target) => [
+      deriveRunningAgentSendTargets(sendTargetInputs, worktreeId).map((target) => [
         target.paneKey,
         agentSendPopoverTargetMode?.status === 'sending' &&
         agentSendPopoverTargetMode.sendingPaneKey === target.paneKey
@@ -159,12 +157,11 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
     agentStatusEpoch,
     agentSendPopoverTargetMode?.sendingPaneKey,
     agentSendPopoverTargetMode?.status,
-    agentStatusByPaneKey,
     isAgentSendTargetModeActive,
-    ptyIdsByTabId,
-    runtimePaneTitlesByTabId,
-    tabsByWorktree,
-    terminalLayoutsByTabId,
+    // sendTargetInputs is a stable empty constant while inactive and a
+    // shallow-compared bundle of the five maps while active, so it covers all
+    // five former deps in one reference.
+    sendTargetInputs,
     worktreeId
   ])
 
@@ -235,13 +232,24 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
     [agents]
   )
   const hasLineage = childrenByParentPaneKey.size > 0
-  const [collapsedLineageParents, setCollapsedLineageParents] = useState<ReadonlySet<string>>(
-    () => new Set()
-  )
-  const [compactRootListExpanded, setCompactRootListExpanded] = useState(false)
+  // Why: keep disclosure state out of raw local useState so the WorktreeCard
+  // remount that fires on virtualizer recycle or a sibling child-worktrees
+  // toggle no longer resets it (which read as one section expanding the other).
+  const {
+    collapsedLineageParents,
+    compactRootListExpanded,
+    toggleLineageParent: toggleLineageParentState,
+    toggleCompactRootList
+  } = useWorktreeAgentExpansionState(worktreeId)
 
+  // Why: reveal only on a genuine user collapse→expand within this mount.
+  // Seeding an already-expanded panel from the durable cache on a remount must
+  // not re-trigger the reveal scroll, or recycled cards would fight the scroll.
+  const previousCompactExpandedRef = useRef(compactRootListExpanded)
   useLayoutEffect(() => {
-    if (compactRootListExpanded && agentActivityDisplayMode === 'compact') {
+    const wasExpanded = previousCompactExpandedRef.current
+    previousCompactExpandedRef.current = compactRootListExpanded
+    if (!wasExpanded && compactRootListExpanded && agentActivityDisplayMode === 'compact') {
       dispatchSuppressScrollAdjustment()
       // Why: defer the reveal scroll out of the expand commit. Running it inline
       // forces a synchronous sidebar layout that blocks the animation's opening
@@ -254,18 +262,13 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
     }
     return undefined
   }, [agentActivityDisplayMode, compactRootListExpanded])
-  const toggleLineageParent = useCallback((paneKey: string) => {
-    dispatchSuppressScrollAdjustment()
-    setCollapsedLineageParents((current) => {
-      const next = new Set(current)
-      if (next.has(paneKey)) {
-        next.delete(paneKey)
-      } else {
-        next.add(paneKey)
-      }
-      return next
-    })
-  }, [])
+  const toggleLineageParent = useCallback(
+    (paneKey: string) => {
+      dispatchSuppressScrollAdjustment()
+      toggleLineageParentState(paneKey)
+    },
+    [toggleLineageParentState]
+  )
 
   const stopBubble = useCallback((e: React.MouseEvent) => {
     e.stopPropagation()
@@ -449,7 +452,7 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
               expanded={compactRootListExpanded}
               onToggle={() => {
                 dispatchSuppressScrollAdjustment()
-                setCompactRootListExpanded((expanded) => !expanded)
+                toggleCompactRootList()
               }}
             />
             <CompactAgentExpansion expanded={compactRootListExpanded}>

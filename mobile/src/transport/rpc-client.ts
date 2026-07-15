@@ -15,11 +15,9 @@ import {
   decryptBytes
 } from './e2ee'
 import {
-  TerminalStreamOpcode,
-  decodeTerminalStreamFrame,
-  decodeTerminalStreamJson,
-  decodeTerminalStreamText
-} from './terminal-stream-protocol'
+  handleTerminalBinaryFrame,
+  type TerminalSnapshotState
+} from './rpc-client-terminal-binary-frame'
 import {
   decodeBrowserScreencastFrame,
   type BrowserScreencastFrame
@@ -61,12 +59,6 @@ type StreamRequest = {
   subscriptionId?: string
   cancelled?: boolean
   sent?: boolean
-}
-
-type TerminalSnapshotState = {
-  streamId: number
-  meta: Record<string, unknown>
-  chunks: string[]
 }
 
 export type RpcClient = {
@@ -111,16 +103,22 @@ export type RpcClient = {
 // time across all 12 attempts is ≈ 6 minutes before the give-up cap
 // fires (0.5+1+2+4+8+15+30+60+60+60+60+60 ≈ 360s).
 const RECONNECT_DELAYS = [500, 1000, 2000, 4000, 8000, 15_000, 30_000, 60_000]
-// Why: cap auto-retry once we're clearly unreachable for a long time.
+// Why: cap fast auto-retry once we're clearly unreachable for a long time.
 // With the tiered backoff above this is ≈ 6 minutes of continuous
-// failure before we stop and surface the re-pair banner. The longer
+// failure before the UI surfaces the re-pair banner. The longer
 // runway tolerates flaky AP-isolation routers and laptop sleep cycles
 // that briefly drop the LAN path. MUST stay aligned with
 // connection-health.ts UNREACHABLE_ATTEMPTS so the "unreachable"
-// verdict matches the moment the loop actually pauses — if these
-// drift the user sees "Reconnecting…" while the loop is silently
-// parked.
+// verdict matches the moment the loop slows to the trickle cadence.
 const GIVE_UP_AFTER_ATTEMPTS = 12
+// Why: past the cap the loop must never park permanently. A wedged
+// Tailscale/VPN tunnel produces no AppState or network-type transition
+// (still Wi-Fi, still "online"), so no revival nudge ever fires — users
+// had to toggle Tailscale off/on just to force one. A slow trickle dial
+// self-heals once the tunnel recovers while staying cheap: one TCP
+// attempt per 90s, foreground-only (iOS/Android suspend JS timers in
+// the background).
+const TRICKLE_RECONNECT_DELAY_MS = 90_000
 // Why: a single `unauthorized`/`e2ee_error` is not proof the pairing is dead.
 // Issue #5200: a tablet showed "Auth failed" and forced a needless re-pair
 // while the desktop still listed it as paired with a valid token — a transient
@@ -288,9 +286,11 @@ export function connect(
     if (intentionallyClosed) {
       return Promise.reject(new Error('Client closed'))
     }
-    if (state === 'reconnecting' && reconnectAttempt >= GIVE_UP_AFTER_ATTEMPTS && !reconnectTimer) {
-      // Why: after the retry cap there is no future state transition to
-      // release callers waiting before their per-request timeout starts.
+    if (state === 'reconnecting' && reconnectAttempt >= GIVE_UP_AFTER_ATTEMPTS) {
+      // Why: past the retry cap the loop only trickles every 90s — callers
+      // must fail fast rather than hang on a host that's been unreachable
+      // for minutes. A trickle dial that succeeds flips state to 'connected'
+      // and later requests go through normally.
       return Promise.reject(new Error('Connection retry limit reached'))
     }
     return new Promise((resolve, reject) => {
@@ -490,6 +490,7 @@ export function connect(
                 pendingBrowserScreencastRequestId = id
                 activeBrowserScreencastRequestId = null
               }
+              resetTerminalStreamRoutingForRequest(id)
               if (
                 sendEncrypted({ id, deviceToken, method: stream.method, params: stream.params })
               ) {
@@ -566,10 +567,10 @@ export function connect(
         const stream = streamListeners.get(response.id)
         if (stream && response.ok) {
           const result = (response as RpcSuccess).result
-          if (isBrowserScreencastReadyResult(result)) {
+          if (isStreamingSubscriptionReadyResult(result)) {
             stream.subscriptionId = result.subscriptionId
             if (stream.cancelled) {
-              sendBrowserScreencastUnsubscribe(result.subscriptionId)
+              sendServerSubscriptionUnsubscribe(stream)
               removeStreamListener(response.id)
               return
             }
@@ -708,7 +709,7 @@ export function connect(
     sharedKey = null
     activeBrowserScreencastRequestId = null
     pendingBrowserScreencastRequestId = null
-    streamListeners.forEach((stream) => (stream.sent = false))
+    markStreamsForReplay()
     if (handshakeTimer) {
       clearTimeout(handshakeTimer)
       handshakeTimer = null
@@ -759,7 +760,7 @@ export function connect(
       ws = null
       sharedKey = null
       // Why: close cleanup stale-bails here, so mark active streams for replay.
-      streamListeners.forEach((stream) => (stream.sent = false))
+      markStreamsForReplay()
       rejectAllPending(reason)
       if (closing) {
         closing.close()
@@ -780,27 +781,35 @@ export function connect(
   }
 
   function scheduleReconnect() {
-    // Why: spinning reconnect forever drains battery and floods logs
+    // Why: spinning fast reconnects forever drains battery and floods logs
     // when the host is genuinely unreachable (wrong IP, port closed,
-    // host moved). Cap at GIVE_UP_AFTER_ATTEMPTS — the UI surfaces a
-    // "Can't reach desktop, re-pair?" banner at this point and the
-    // user can tap Retry (forceReconnect creates a fresh client,
-    // resetting the counter) or Re-pair. Without an explicit cap the
-    // worst-case is a phone left on the home screen burning a socket
-    // open every 4s indefinitely.
-    if (reconnectAttempt >= GIVE_UP_AFTER_ATTEMPTS) {
-      console.log('[net] reconnect-paused', {
-        attempt: reconnectAttempt,
-        reason: 'give-up-cap',
-        endpoint: redactedEndpoint(endpoint)
-      })
+    // host moved). Past GIVE_UP_AFTER_ATTEMPTS the UI surfaces a
+    // "Can't reach desktop, re-pair?" banner and the loop drops to the
+    // 90s trickle cadence instead of parking — a permanently parked loop
+    // could only be revived by an AppState/network transition, which a
+    // wedged VPN tunnel never produces.
+    const pastGiveUpCap = reconnectAttempt >= GIVE_UP_AFTER_ATTEMPTS
+    let delay: number
+    if (pastGiveUpCap) {
+      // Why: the counter holds at the cap — connection-health thresholds and
+      // the "Can't reach desktop" verdict key off attempts >= 12, and a
+      // successful open resets it to 0 anyway.
+      delay = TRICKLE_RECONNECT_DELAY_MS
       rejectConnectWaiters('Connection retry limit reached')
-      return
+    } else {
+      delay = RECONNECT_DELAYS[Math.min(reconnectAttempt, RECONNECT_DELAYS.length - 1)]!
+      reconnectAttempt++
     }
-    const delay = RECONNECT_DELAYS[Math.min(reconnectAttempt, RECONNECT_DELAYS.length - 1)]!
-    reconnectAttempt++
-    console.log('[net] scheduleReconnect', { delayMs: delay, attempt: reconnectAttempt })
-    emitLog('info', `Reconnect scheduled in ${delay}ms`, `Attempt ${reconnectAttempt}`)
+    console.log('[net] scheduleReconnect', {
+      delayMs: delay,
+      attempt: reconnectAttempt,
+      trickle: pastGiveUpCap
+    })
+    emitLog(
+      'info',
+      `Reconnect scheduled in ${delay}ms`,
+      pastGiveUpCap ? `Attempt ${reconnectAttempt} (slow retry)` : `Attempt ${reconnectAttempt}`
+    )
     reconnectTimer = setTimeout(() => {
       reconnectTimer = null
       openConnection()
@@ -900,6 +909,25 @@ export function connect(
     }
   }
 
+  function markStreamsForReplay(): void {
+    for (const [id, stream] of streamListeners) {
+      stream.sent = false
+      resetTerminalStreamRoutingForRequest(id)
+    }
+  }
+
+  function resetTerminalStreamRoutingForRequest(id: string): void {
+    const terminalStreamIds = terminalStreamIdsByRequest.get(id)
+    if (!terminalStreamIds) {
+      return
+    }
+    for (const streamId of terminalStreamIds) {
+      terminalStreamListeners.delete(streamId)
+      terminalSnapshots.delete(streamId)
+    }
+    terminalStreamIdsByRequest.delete(id)
+  }
+
   function emitStreamError(stream: StreamRequest, message: string, error?: unknown): void {
     if (stream.cancelled) {
       return
@@ -919,8 +947,21 @@ export function connect(
     if (pendingBrowserScreencastRequestId === id) {
       pendingBrowserScreencastRequestId = null
     }
+    disposeServerSubscriptionStream(id, stream)
+  }
+
+  function disposeRuntimeClientEventsStream(id: string): void {
+    const stream = streamListeners.get(id)
+    if (!stream || stream.method !== 'runtime.clientEvents.subscribe') {
+      return
+    }
+    disposeServerSubscriptionStream(id, stream)
+  }
+
+  function disposeServerSubscriptionStream(id: string, stream: StreamRequest): void {
+    stream.cancelled = true
     if (stream.subscriptionId) {
-      sendBrowserScreencastUnsubscribe(stream.subscriptionId)
+      sendServerSubscriptionUnsubscribe(stream)
       removeStreamListener(id)
       return
     }
@@ -942,7 +983,11 @@ export function connect(
       handleBrowserBinaryFrame(browserFrame)
       return
     }
-    handleTerminalBinaryFrame(bytes)
+    handleTerminalBinaryFrame(bytes, {
+      terminalSnapshots,
+      getListener: (streamId) => terminalStreamListeners.get(streamId),
+      recordValidatedInboundTraffic
+    })
   }
 
   function handleBrowserBinaryFrame(frame: BrowserScreencastFrame) {
@@ -954,82 +999,6 @@ export function connect(
       return
     }
     stream.onBinaryFrame?.(frame)
-  }
-
-  function handleTerminalBinaryFrame(bytes: Uint8Array): void {
-    const frame = decodeTerminalStreamFrame(bytes)
-    if (!frame) {
-      return
-    }
-    const listener = terminalStreamListeners.get(frame.streamId)
-    if (!listener) {
-      recordValidatedInboundTraffic()
-      return
-    }
-    if (frame.opcode === TerminalStreamOpcode.Output) {
-      recordValidatedInboundTraffic()
-      listener({
-        type: 'data',
-        streamId: frame.streamId,
-        chunk: decodeTerminalStreamText(frame.payload)
-      })
-      return
-    }
-    if (frame.opcode === TerminalStreamOpcode.SnapshotStart) {
-      const meta = decodeTerminalStreamJson<Record<string, unknown>>(frame.payload)
-      if (!meta) {
-        return
-      }
-      recordValidatedInboundTraffic()
-      terminalSnapshots.set(frame.streamId, { streamId: frame.streamId, meta, chunks: [] })
-      return
-    }
-    if (frame.opcode === TerminalStreamOpcode.SnapshotChunk) {
-      recordValidatedInboundTraffic()
-      const snapshot = terminalSnapshots.get(frame.streamId)
-      if (!snapshot) {
-        return
-      }
-      snapshot.chunks.push(decodeTerminalStreamText(frame.payload))
-      return
-    }
-    if (frame.opcode === TerminalStreamOpcode.SnapshotEnd) {
-      recordValidatedInboundTraffic()
-      const snapshot = terminalSnapshots.get(frame.streamId)
-      if (!snapshot) {
-        return
-      }
-      terminalSnapshots.delete(frame.streamId)
-      const kind = snapshot.meta.kind === 'resized' ? 'resized' : 'scrollback'
-      listener({
-        ...snapshot.meta,
-        type: kind,
-        streamId: frame.streamId,
-        serialized: snapshot.chunks.join('')
-      })
-      return
-    }
-    if (frame.opcode === TerminalStreamOpcode.Resized) {
-      const meta = decodeTerminalStreamJson<Record<string, unknown>>(frame.payload)
-      if (!meta) {
-        return
-      }
-      recordValidatedInboundTraffic()
-      listener({
-        ...meta,
-        type: 'resized',
-        streamId: frame.streamId
-      })
-      return
-    }
-    if (frame.opcode === TerminalStreamOpcode.Error) {
-      recordValidatedInboundTraffic()
-      listener({
-        type: 'error',
-        streamId: frame.streamId,
-        message: decodeTerminalStreamText(frame.payload)
-      })
-    }
   }
 
   function sendEncrypted(request: unknown): boolean {
@@ -1064,6 +1033,24 @@ export function connect(
       method: 'browser.screencast.unsubscribe',
       params: { subscriptionId }
     })
+  }
+
+  function sendServerSubscriptionUnsubscribe(stream: StreamRequest): void {
+    if (!stream.subscriptionId) {
+      return
+    }
+    if (stream.method === 'browser.screencast') {
+      sendBrowserScreencastUnsubscribe(stream.subscriptionId)
+      return
+    }
+    if (stream.method === 'runtime.clientEvents.subscribe') {
+      sendEncrypted({
+        id: nextId(),
+        deviceToken,
+        method: 'runtime.clientEvents.unsubscribe',
+        params: { subscriptionId: stream.subscriptionId }
+      })
+    }
   }
 
   openConnection()
@@ -1164,6 +1151,10 @@ export function connect(
           disposeBrowserScreencastStream(id)
           return
         }
+        if (stream?.method === 'runtime.clientEvents.subscribe') {
+          disposeRuntimeClientEventsStream(id)
+          return
+        }
         if (stream?.method === 'terminal.subscribe') {
           // Why: the runtime registers cleanup under the composite key
           // `${terminal}:${clientId}` so two phones subscribing to the same
@@ -1236,10 +1227,10 @@ export function connect(
         return
       }
       if (state === 'reconnecting') {
-        // Why: while backgrounded the retry loop may have parked at the
-        // give-up cap or be sitting on a 60s backoff timer. Returning to
-        // the foreground is a strong user signal — restart with a fresh
-        // attempt budget immediately instead of requiring an app restart.
+        // Why: while backgrounded the retry loop may be sitting on a 60s
+        // backoff or 90s trickle timer. Returning to the foreground is a
+        // strong user signal — restart with a fresh attempt budget
+        // immediately instead of waiting out the timer.
         console.log('[net] foreground — restarting reconnect loop', {
           attempt: reconnectAttempt,
           hadTimer: !!reconnectTimer
@@ -1287,7 +1278,7 @@ function isTerminalSubscribedResult(
   )
 }
 
-function isBrowserScreencastReadyResult(
+function isStreamingSubscriptionReadyResult(
   value: unknown
 ): value is { type: 'ready'; subscriptionId: string } {
   return (

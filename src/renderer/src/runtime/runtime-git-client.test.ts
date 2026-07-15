@@ -1,4 +1,3 @@
-/* eslint-disable max-lines -- Why: runtime git routing tests share compatibility-cache and IPC stubs; splitting would hide cross-environment contract drift. */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   bulkDiscardRuntimeGitPaths,
@@ -103,6 +102,44 @@ describe('runtime git client', () => {
 
     expect(gitStatus).toHaveBeenCalledWith({ worktreePath: '/repo', connectionId: 'ssh-1' })
     expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+  })
+
+  it('uses the backing folder path for local folder-workspace status', async () => {
+    gitStatus.mockResolvedValue({ entries: [], conflictOperation: 'unknown' })
+    const workspaceId = '123e4567-e89b-12d3-a456-426614174000'
+
+    await getRuntimeGitStatus({
+      settings: { activeRuntimeEnvironmentId: null },
+      worktreeId: `folder-repo::/home/user::workspace:${workspaceId}`,
+      worktreePath: `/home/user::workspace:${workspaceId}`
+    })
+
+    expect(gitStatus).toHaveBeenCalledWith({
+      worktreePath: '/home/user',
+      connectionId: undefined
+    })
+  })
+
+  it('uses the backing folder path for other local folder-workspace git ops', async () => {
+    // Why: status is not the only command run as a subprocess cwd. Every local
+    // op (diff, submodule status, upstream, stage, …) must strip the synthetic
+    // `::workspace:<uuid>` suffix or Git spawns against a nonexistent directory.
+    gitDiff.mockResolvedValue({ hunks: [] })
+    gitSubmoduleStatus.mockResolvedValue({ entries: [], conflictOperation: 'unknown' })
+    const workspaceId = '123e4567-e89b-12d3-a456-426614174000'
+    const context = {
+      settings: { activeRuntimeEnvironmentId: null },
+      worktreeId: `folder-repo::/home/user::workspace:${workspaceId}`,
+      worktreePath: `/home/user::workspace:${workspaceId}`
+    }
+
+    await getRuntimeGitDiff(context, { filePath: 'a.ts', staged: false })
+    await getRuntimeGitSubmoduleStatus(context, 'sub')
+
+    expect(gitDiff).toHaveBeenCalledWith(expect.objectContaining({ worktreePath: '/home/user' }))
+    expect(gitSubmoduleStatus).toHaveBeenCalledWith(
+      expect.objectContaining({ worktreePath: '/home/user' })
+    )
   })
 
   it('forwards includeIgnored to local git status only when enabled', async () => {
