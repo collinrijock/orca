@@ -9,7 +9,7 @@ work; keep exact commands, runner identities, hashes, metrics, and residual gaps
 Date created: 2026-07-14<br>
 Last updated: 2026-07-14<br>
 Current phase: Milestone 3 / Work Package 2 oldest-supported-baseline and native-trust proof — **In progress — 2026-07-14, Codex implementation owner**; exact-head run [29373507297](https://github.com/stablyai/orca/actions/runs/29373507297) passes all six target-native build, smoke, exact clean-build equality, upload, SBOM, license, provenance, runner/toolchain, and prohibited-content cells, and direct inspection of every downloaded payload passes exact archive/subject hashes, archive-scoped SPDX identity, one-owner-per-file, dependency, commit/run/builder/runner, tool-version/hash, and closure assertions (E-M3-METADATA-CI-001); Windows x64/arm64 record strict `MSVC 14.44.35207` identities and distinct exact linker SHA-256 values despite the Git-for-Windows PATH collision; the all-six metadata/provenance gate is closed, while oldest-baseline execution, native signing/trust, cross-family remotes, and measured legacy baselines remain open; production/default behavior and every tuple state remain unchanged; no bundled-runtime path is enabled and no artifact is published<br>
-Session checkpoint: **In progress — 2026-07-14, Codex implementation owner** — credential-free native signing selection, exclusive payload staging, exact returned-tree verification, and explicit POSIX/Windows workflow wiring are implemented at `c847c4a11` and locally green under E-M3-NATIVE-SIGNING-STAGE-LOCAL-001. Replacement exact-head GitHub-runner proof must explicitly execute both new suites in every native job family before this slice is complete. The slice uses no credentials or signing service, establishes no native trust, publishes nothing, enables no tuple, and leaves legacy as the production default.<br>
+Session checkpoint: **In progress — 2026-07-14, Codex implementation owner** — credential-free native signing selection, exclusive payload staging, exact returned-tree verification, and explicit POSIX/Windows workflow wiring are implemented at `c847c4a11` and pass locally plus all six exact-head native jobs under E-M3-NATIVE-SIGNING-STAGE-LOCAL-001 and E-M3-NATIVE-SIGNING-STAGE-CI-001. The next safe package is target-native pre-sign assessment and real candidate-payload execution without credentials, signing calls, native-trust claims, publication, tuple enablement, or any change to the legacy production default.<br>
 Primary design: [SSH relay GitHub Release plan](./2026-07-14-ssh-relay-github-release-plan.html)<br>
 Motivating issues: [#8450](https://github.com/stablyai/orca/issues/8450), [#1693](https://github.com/stablyai/orca/issues/1693)
 
@@ -687,7 +687,8 @@ special entries, remain within explicit size/growth bounds, and change every sta
 This slice does not invoke Apple/SignPath, mutate a runtime, accept native trust, publish, aggregate,
 or enable a tuple. Implementation commit `c847c4a11` and local proof
 E-M3-NATIVE-SIGNING-STAGE-LOCAL-001 close the credential-free contract and workflow-source gates;
-exact-head execution on all six native runner families remains required.
+exact-head run 29382772805 closes execution on all six native runner families under
+E-M3-NATIVE-SIGNING-STAGE-CI-001.
 
 **Baseline correction — 2026-07-14, Codex implementation owner:**
 E-M3-LINUX-BASELINE-LOCAL-RED-001 proves the existing Linux x64 candidate cannot load its patched
@@ -7877,6 +7878,64 @@ diff --check`.
 - Follow-up: push the implementation and evidence separately, then inspect an exact-head run to prove
   both suites executed under Node 24.18.0 in all six native jobs while existing build/smoke/equality
   controls retain their outcomes.
+
+### E-M3-NATIVE-SIGNING-STAGE-CI-001 — Both staging suites execute on all six native jobs
+
+- Date: 2026-07-14 (run timestamps 2026-07-15 UTC)
+- Owner: Codex implementation owner
+- Source/run: exact draft-PR head `9e08ac123039b827ebacbe1918ef8d3c3b989ae9`, containing
+  implementation `c847c4a11d60ee37d161564ca3685955ce3c2d6d` and local evidence
+  `9e08ac123039b827ebacbe1918ef8d3c3b989ae9`; Actions run
+  [29382772805](https://github.com/stablyai/orca/actions/runs/29382772805).
+- Commands:
+
+  ```sh
+  gh run view 29382772805 --repo stablyai/orca \
+    --json status,conclusion,headSha,createdAt,updatedAt,url,jobs
+  gh run view 29382772805 --repo stablyai/orca --job 87249764747 --log | \
+    awk -F '\t' '$2 == "Run runtime artifact contract tests"' | \
+    rg 'native-signing-(selection|payload)|Test Files|Tests|Duration'
+  gh run view 29382772805 --repo stablyai/orca --job 87249764693 --log | \
+    awk -F '\t' '$2 == "Run runtime artifact contract tests"' | \
+    rg 'native-signing-(selection|payload)|Test Files|Tests|Duration'
+  gh run view 29382772805 --repo stablyai/orca --job 87251086934 --log | \
+    rg 'Operating System|OsBuildNumber|26100|26200'
+  gh run view 29382772825 --repo stablyai/orca \
+    --json status,conclusion,headSha,createdAt,updatedAt,url,jobs
+  gh run view 29382772821 --repo stablyai/orca \
+    --json status,conclusion,headSha,createdAt,updatedAt,url,jobs
+  ```
+
+- Contract result: PASS on Linux x64/arm64, macOS x64/arm64, and Windows x64/arm64. Every native
+  build job reports `Run runtime artifact contract tests` successful under exact Node 24.18.0. The
+  shared POSIX log on macOS arm64 records four new syntax checks, selection 7/7 in 9 ms, payload
+  11/11 in 204 ms, and aggregate 24 files/121 tests in 3.94 seconds. The shared PowerShell log on
+  Windows x64 records the same four syntax checks, selection 7/7 in 27 ms, payload 8 passed plus the
+  three declared POSIX-only symlink skips in 1.736 seconds, and aggregate 25 files/119 passed plus
+  six total platform skips out of 125 in 6.04 seconds.
+- Native build/regression controls: all six two-build, smoke, exact-equality, metadata, and
+  unpublished-upload jobs passed. Durations were Linux x64 4m16s, Linux arm64 4m26s, macOS x64
+  5m16s, macOS arm64 2m58s, Windows x64 4m58s, and Windows arm64 10m40s. Linux x64/arm64
+  digest-pinned glibc 2.28/libstdc++ 6.0.25 supplemental jobs passed in 37s/54s. Windows x64 exact
+  build-20348 floor passed in 1m23s.
+- Expected aggregate status: the artifact workflow concluded failure only because Windows arm64
+  hosted image 10.0.26200 again failed the exact declared 10.0.26100 floor in 4m9s. This preserves
+  E-M3-WINDOWS-ARM64-BASELINE-CI-RED-001 and is not a signing-stage regression.
+- Other exact-head controls: PR Checks
+  [29382772825](https://github.com/stablyai/orca/actions/runs/29382772825) passed in 14m8s after lint,
+  typecheck, Git 2.25 compatibility, full tests, unpacked-app build, and packaged-CLI smoke. Golden
+  E2E [29382772821](https://github.com/stablyai/orca/actions/runs/29382772821) passed macOS/Linux in
+  3m00s/4m29s.
+- Oracle proved: both shell families parse and execute the exact credential-free selection and
+  payload contracts on every target-native runner while the artifact build, executable smoke,
+  clean-build equality, oldest-userland, packaging, and E2E regression controls retain their prior
+  outcomes.
+- Does not prove: real candidate assessment or staging, Apple/SignPath credentials or calls,
+  returned signed bytes, native trust, final post-signing hashes, Gatekeeper/quarantine/notarized-app
+  provenance, Authenticode/Defender/WDAC policy, exact missing oldest snapshots, release
+  aggregation, SSH transfer/install, packaged desktop use, fallback/performance, or an enabled tuple.
+- Follow-up: keep every tuple disabled; execute pre-sign assessment and staging against the actual
+  target-native candidate tree without credentials before connecting any protected signing job.
 
 ## Accepted Gaps
 
