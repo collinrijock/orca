@@ -41,6 +41,7 @@ import {
   assertWorktreeCleanForRemoval,
   forceDeleteLocalBranch,
   listWorktreesStrict as listGitWorktreesStrict,
+  pruneWorktrees,
   removeWorktree
 } from '../git/worktree'
 import { gitExecFileAsync } from '../git/runner'
@@ -1003,6 +1004,7 @@ export function registerWorktreeHandlers(
   ipcMain.removeHandler('worktrees:resolveMrBase')
   ipcMain.removeHandler('worktrees:remove')
   ipcMain.removeHandler('worktrees:forgetLocal')
+  ipcMain.removeHandler('worktrees:pruneStaleRegistrations')
   ipcMain.removeHandler('worktrees:forceDeletePreservedBranch')
   ipcMain.removeHandler('worktrees:updateMeta')
   ipcMain.removeHandler('worktrees:listLineage')
@@ -2018,6 +2020,44 @@ export function registerWorktreeHandlers(
           worktreeRemovalsInFlight.delete(inFlightKey)
         }
       }
+    }
+  )
+
+  // Why: a prunable registration (directory deleted without `git worktree
+  // prune`) is hidden from workspace/Space listings, but it still pins its
+  // branch as checked out. This runs git's own prune, which drops only dead
+  // registrations and never touches locked ones (active agent sessions).
+  ipcMain.handle(
+    'worktrees:pruneStaleRegistrations',
+    async (_event, args: { repoId: string }): Promise<void> => {
+      const repos = store.getRepos().filter((candidate) => candidate.id === args.repoId)
+      if (repos.length === 0) {
+        throw new Error(`Repo not found: ${args.repoId}`)
+      }
+      for (const repo of repos) {
+        if (isFolderRepo(repo)) {
+          continue
+        }
+        if (repo.connectionId) {
+          const provider = requireSshGitProvider(repo.connectionId)
+          try {
+            await provider.pruneWorktrees(repo.path)
+          } catch (error) {
+            // Why: an already-deployed relay predating git.pruneWorktrees
+            // rejects with "Method not found"; surface what to do instead.
+            if (/method not found/i.test(error instanceof Error ? error.message : '')) {
+              throw new Error(
+                'The connected SSH host is running an older Orca relay without worktree prune support. Reconnect to update it, or run `git worktree prune` there.'
+              )
+            }
+            throw error
+          }
+        } else {
+          await pruneWorktrees(repo.path, getLocalProjectWorktreeGitOptions(store, repo))
+        }
+        notifyWorktreesChanged(mainWindow, repo.id)
+      }
+      invalidateAuthorizedRootsCache()
     }
   )
 

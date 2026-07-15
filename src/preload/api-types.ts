@@ -1183,6 +1183,9 @@ export type PreloadApi = {
       worktreeId: string
       hostId?: ExecutionHostId
     }) => Promise<RemoveWorktreeResult>
+    // Run `git worktree prune` for a repo, dropping stale registrations whose
+    // directory was deleted. Locked registrations are preserved by git.
+    pruneStaleRegistrations: (args: { repoId: string }) => Promise<void>
     forceDeletePreservedBranch: (args: {
       worktreeId: string
       branchName: string

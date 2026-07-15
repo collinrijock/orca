@@ -672,6 +672,12 @@ export class SshGitProvider implements IGitProvider {
     )
   }
 
+  async pruneWorktrees(repoPath: string): Promise<void> {
+    await this.runWithDiffDedupeClear(async () => {
+      await this.mux.request('git.pruneWorktrees', { repoPath })
+    })
+  }
+
   async worktreeIsClean(
     worktreePath: string,
     options: { includeUntracked?: boolean } = {}

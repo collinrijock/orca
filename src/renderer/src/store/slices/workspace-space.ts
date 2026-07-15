@@ -16,6 +16,7 @@ export type WorkspaceSpaceSlice = {
   cancelWorkspaceSpaceScan: () => Promise<boolean>
   refreshWorkspaceSpace: () => Promise<WorkspaceSpaceAnalysis>
   removeWorkspaceSpaceWorktrees: (worktreeIds: readonly string[]) => void
+  pruneStaleWorktreeRegistrations: (repoIds: readonly string[]) => Promise<void>
 }
 
 function removeDeletedWorktreesFromAnalysis(
@@ -160,5 +161,15 @@ export const createWorkspaceSpaceSlice: StateCreator<AppState, [], [], Workspace
           }
         : state
     )
+  },
+  pruneStaleWorktreeRegistrations: async (repoIds) => {
+    if (repoIds.length === 0) {
+      return
+    }
+    get().recordFeatureInteraction?.('workspace-cleanup')
+    for (const repoId of repoIds) {
+      await window.api.worktrees.pruneStaleRegistrations({ repoId })
+    }
+    await get().refreshWorkspaceSpace()
   }
 })

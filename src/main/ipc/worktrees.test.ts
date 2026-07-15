@@ -27,6 +27,7 @@ const {
   addWorktreeMock,
   addSparseWorktreeMock,
   removeWorktreeMock,
+  pruneWorktreesMock,
   forceDeleteLocalBranchMock,
   resolveLocalGitUsernameMock,
   getBaseRefDefaultMock,
@@ -77,6 +78,7 @@ const {
   addWorktreeMock: vi.fn(),
   addSparseWorktreeMock: vi.fn(),
   removeWorktreeMock: vi.fn(),
+  pruneWorktreesMock: vi.fn(),
   forceDeleteLocalBranchMock: vi.fn(),
   resolveLocalGitUsernameMock: vi.fn(),
   getBaseRefDefaultMock: vi.fn(),
@@ -124,6 +126,7 @@ vi.mock('../git/worktree', () => ({
   addWorktree: addWorktreeMock,
   addSparseWorktree: addSparseWorktreeMock,
   removeWorktree: removeWorktreeMock,
+  pruneWorktrees: pruneWorktreesMock,
   forceDeleteLocalBranch: forceDeleteLocalBranchMock
 }))
 
@@ -6058,6 +6061,55 @@ describe('registerWorktreeHandlers', () => {
 
     expect(listedIds).toContain('repo-1::/workspace/live-wt')
     expect(listedIds).not.toContain('repo-1::/workspace/stale-wt')
+  })
+
+  it('runs git worktree prune for a local repo via worktrees:pruneStaleRegistrations', async () => {
+    pruneWorktreesMock.mockResolvedValue(undefined)
+
+    await handlers['worktrees:pruneStaleRegistrations'](null, { repoId: 'repo-1' })
+
+    expect(pruneWorktreesMock).toHaveBeenCalledWith('/workspace/repo', expect.anything())
+  })
+
+  it('routes worktrees:pruneStaleRegistrations to the SSH provider for remote repos', async () => {
+    const repo = {
+      id: 'repo-1',
+      path: '/remote/repo',
+      displayName: 'repo',
+      badgeColor: '#000',
+      addedAt: 0,
+      connectionId: 'ssh-1'
+    }
+    store.getRepos.mockReturnValue([repo])
+    pruneWorktreesMock.mockClear()
+    const providerPrune = vi.fn().mockResolvedValue(undefined)
+    getSshGitProviderMock.mockReturnValue({ pruneWorktrees: providerPrune })
+
+    await handlers['worktrees:pruneStaleRegistrations'](null, { repoId: 'repo-1' })
+
+    expect(providerPrune).toHaveBeenCalledWith('/remote/repo')
+    expect(pruneWorktreesMock).not.toHaveBeenCalled()
+  })
+
+  it('fails worktrees:pruneStaleRegistrations clearly when the relay lacks prune support', async () => {
+    const repo = {
+      id: 'repo-1',
+      path: '/remote/repo',
+      displayName: 'repo',
+      badgeColor: '#000',
+      addedAt: 0,
+      connectionId: 'ssh-1'
+    }
+    store.getRepos.mockReturnValue([repo])
+    // Why: an already-deployed relay predating git.pruneWorktrees rejects the
+    // RPC with "Method not found"; the error must say what to do instead.
+    getSshGitProviderMock.mockReturnValue({
+      pruneWorktrees: vi.fn().mockRejectedValue(new Error('Method not found: git.pruneWorktrees'))
+    })
+
+    await expect(
+      handlers['worktrees:pruneStaleRegistrations'](null, { repoId: 'repo-1' })
+    ).rejects.toThrow(/older Orca relay/)
   })
 
   it('limits concurrent repo scans in worktrees:listAll while preserving order', async () => {

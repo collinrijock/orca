@@ -21,6 +21,7 @@ function makeAnalysis(): WorkspaceSpaceAnalysis {
     worktreeCount: 2,
     scannedWorktreeCount: 2,
     unavailableWorktreeCount: 0,
+    staleRegistrationCount: 0,
     repos: [
       {
         repoId: 'repo-1',
@@ -30,6 +31,7 @@ function makeAnalysis(): WorkspaceSpaceAnalysis {
         worktreeCount: 2,
         scannedWorktreeCount: 2,
         unavailableWorktreeCount: 0,
+        staleRegistrationCount: 0,
         totalSizeBytes: 300,
         reclaimableBytes: 300,
         error: null

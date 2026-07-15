@@ -1179,6 +1179,21 @@ export async function moveWorktree(
 /**
  * Remove a worktree.
  */
+export async function pruneWorktrees(
+  repoPath: string,
+  options: GitWorktreeExecOptions = {}
+): Promise<void> {
+  // Why: prune only drops registrations whose directory is gone; git itself
+  // preserves locked registrations, so agent-locked worktrees survive.
+  try {
+    await runWithGitReadCacheInvalidation(() =>
+      gitExecFileAsync(['worktree', 'prune'], gitExecOptions(repoPath, options))
+    )
+  } finally {
+    bumpWorktreeScanGeneration(repoPath)
+  }
+}
+
 export async function removeWorktree(
   repoPath: string,
   worktreePath: string,
