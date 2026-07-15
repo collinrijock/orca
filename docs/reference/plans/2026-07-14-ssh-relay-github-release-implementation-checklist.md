@@ -8,8 +8,8 @@ work; keep exact commands, runner identities, hashes, metrics, and residual gaps
 
 Date created: 2026-07-14<br>
 Last updated: 2026-07-15<br>
-Current phase: Milestone 4 / Work Package 3 Linux aggregate-ready hash-only finalization — **In progress — 2026-07-15, Codex implementation owner**. Exact-head signing-workflow and manual-caller capabilities are closed, while live credentialed dispatch remains blocked by GitHub's default-branch rule under E-M4-NATIVE-SIGNING-REHEARSAL-DISPATCH-BLOCKED-001. Aggregate design inspection found that macOS/Windows finalization emits verified four-file tuple inputs but Linux build artifacts stop before the same tuple-descriptor boundary. The active narrow package adds Linux-only full archive/tree/Node/PTY/watcher verification, derives the complete hash-only native report, re-verifies tree/assets, and emits the aggregate descriptor/receipt. It must fail closed on non-Linux, stale identity, mutation, smoke failure, or partial output. The fail-closed aggregate/manifest-signing job remains next. Release-cut, desktop builds, publication, and every tuple stay disconnected; production/default behavior is unchanged.<br>
-Session checkpoint: **In progress — 2026-07-15, Codex implementation owner** — Linux aggregate-ready finalization is locally green under `E-M4-LINUX-FINALIZATION-LOCAL-RED-001` and `E-M4-LINUX-FINALIZATION-LOCAL-001`. The Linux-only module copies the three stable build assets into exclusive output, verifies archive/full tree and bundled Node/PTY/watcher, derives every native hash from the validated signing plan, then invokes the existing tuple producer to re-verify tree/archive/SBOM/provenance before emitting the descriptor and bound receipt. Any failure removes the entire candidate. Both Linux native build jobs invoke it before upload, and both POSIX/Windows contract families execute its tests. Focused 3 files / 18 tests, broad 48 files / 246 tests, desktop parity 3 files / 48 tests, typecheck, full lint/reliability/localization/max-lines, focused syntax/lint/format, and `git diff --check` pass. Exact-head native runner execution remains required. No aggregate workflow, credential, release consumer, publication path, desktop consumer, tuple enablement, or production/default change is connected. Legacy remains the production default, and merge to `main` remains prohibited.<br>
+Current phase: Milestone 4 / Work Package 3 disconnected aggregate and protected manifest-signing workflow contract — **In progress — 2026-07-15, Codex implementation owner**. Linux aggregate-ready finalization is closed locally and on exact-head native x64/arm64 runners under E-M4-LINUX-FINALIZATION-LOCAL-RED-001, E-M4-LINUX-FINALIZATION-LOCAL-001, and E-M4-LINUX-FINALIZATION-CI-001. The active package must consume only the six exact aggregate-ready outputs, prepare canonical bytes credential-free, expose only those bytes to the tag-restricted `relay-runtime-manifest-signing` environment, accept only key ID plus Ed25519 signature, reconstruct and verify before final output, and fail closed on missing/extra/mutated inputs, approval/secret/signing failure, timeout, or partial output. It remains callable and disconnected. Release-cut, desktop builds, publication, and every tuple stay disconnected; production/default behavior is unchanged.<br>
+Session checkpoint: **In progress — 2026-07-15, Codex implementation owner** — exact-head run 29419759256 at `91f59d19e5251fb7b6c9f6d397cd9cd82b43cbdf` passes all six native builds, both Linux userland supplements, and Windows x64 baseline. Windows arm64 fails only the retained build-floor gate after successful runtime verification (hosted 26200 versus required 26100). Downloaded artifacts 8344803641 and 8344824674 contain the expected Linux x64/arm64 descriptors and finalization receipts, whose tuple/content/archive/metadata bindings and smoke/resource metrics were inspected under E-M4-LINUX-FINALIZATION-CI-001. Golden E2E passes. PR Checks attempt 1 exposed one unrelated terminal-routing assertion after 29,944 tests passed; the focused test passes locally and exact-head attempt 2 passes all 29,945 tests, unpacked build, and packaged CLI smoke under E-M4-LINUX-FINALIZATION-PR-CHECKS-RED-001 and E-M4-LINUX-FINALIZATION-PR-CHECKS-001. No signing credential, aggregate workflow, release consumer, publication path, desktop consumer, tuple enablement, or production/default change is connected. Legacy remains the production default, and merge to `main` remains prohibited.<br>
 Primary design: [SSH relay GitHub Release plan](./2026-07-14-ssh-relay-github-release-plan.html)<br>
 Motivating issues: [#8450](https://github.com/stablyai/orca/issues/8450), [#1693](https://github.com/stablyai/orca/issues/1693)
 
@@ -100,10 +100,12 @@ same change as the work it records.
   native CI pass under E-M4-BUILD-PREREQUISITE-LOCAL-RED-001,
   E-M4-BUILD-PREREQUISITE-LOCAL-001, and E-M4-BUILD-PREREQUISITE-CI-001. Release workflows remain
   disconnected.
-- Active package: Work Package 3 platform-native signing-job workflow contract. Begin with a
-  purpose-named RED for exact native build-input consumption, immutable returned signed bytes,
-  post-return hashing, bounded failure behavior, and release-consumer disconnection. Credential-free
-  tests do not count as real Apple/SignPath signing or native-trust evidence; keep those gates open.
+- Active package: Work Package 3 callable, disconnected aggregate/manifest-signing workflow
+  contract. Begin with a purpose-named RED for all-six exact aggregate input consumption,
+  credential-free canonical preparation, protected environment isolation, seed decoding and
+  signature-only return, reconstruction/verification, bounded failure cleanup, and complete
+  release/desktop/publication disconnection. The environment and seed are unprovisioned; static and
+  test-key proof do not count as live protected signing evidence.
 - Completed Work Package 2 gate: target-native Windows source-signature reports from exact-head
   artifact jobs 87267322867 and 87267322870 were independently downloaded and matched to their
   identities and signing-stage reports under E-M3-WINDOWS-SOURCE-SIGNATURE-CI-001. PR Checks
@@ -10607,6 +10609,101 @@ ssh-relay-runtime-native-signing-rehearsal.yml not found on the default branch`.
 - Follow-up: commit/push and require both Linux native jobs plus all-six contract families to pass at
   the exact head. Inspect the emitted descriptor/receipt before starting aggregate job wiring.
 
+### E-M4-LINUX-FINALIZATION-CI-001 — Native Linux finalization emits inspected aggregate inputs
+
+- Date: 2026-07-15
+- Owner: Codex implementation owner
+- Source: exact pushed head `91f59d19e5251fb7b6c9f6d397cd9cd82b43cbdf`; draft PR #8741.
+- Workflow: [SSH Relay Runtime Artifacts run 29419759256](https://github.com/stablyai/orca/actions/runs/29419759256),
+  13:34:30Z–13:50:21Z. The workflow conclusion is the expected failure solely because the separately
+  declared Windows arm64 oldest-build gate rejects hosted 26200 versus required 26100 after runtime
+  verification. It is not reported as an all-green aggregate.
+- Native build jobs: all six succeed — Linux arm64 87366900226 on `ubuntu-24.04-arm` in 4m50s;
+  Windows x64 87366900246 in 6m14s; macOS x64 87366900262 in 6m55s; macOS arm64 87366900276 in
+  4m59s; Windows arm64 87366900296 in 11m59s; and Linux x64 87366900347 on `ubuntu-24.04` in
+  4m10s. Each exact native family runs the purpose suite including Linux-finalization syntax and
+  tests; both Linux jobs report 47 files / 242 tests passed under Node 24.18.0.
+- Supplemental gates: Linux x64 job 87368626081 and Linux arm64 job 87368626106 pass the
+  digest-pinned Rocky Linux glibc 2.28/libstdc++ 6.0.25 userland proof; the explicit kernel 4.18 gap
+  remains because hosted kernels are newer. Windows x64 baseline job 87369854311 passes. Windows
+  arm64 job 87369854133 authenticates and executes the runtime, records 6,242.0644 ms smoke,
+  48,771,072-byte RSS, and 10,149.9713 ms total verification, then fails only the exact OS-build
+  check (`10.0.26200` versus required 26100).
+- Downloaded proof: `gh run download 29419759256 --repo stablyai/orca -n
+ssh-relay-runtime-linux-x64-glibc -n ssh-relay-runtime-linux-arm64-glibc`. Artifact
+  [8344803641](https://github.com/stablyai/orca/actions/runs/29419759256/artifacts/8344803641)
+  is 29,292,240 bytes and artifact
+  [8344824674](https://github.com/stablyai/orca/actions/runs/29419759256/artifacts/8344824674)
+  is 28,222,689 bytes. Each contains exactly the runtime archive, identity, SBOM, provenance,
+  signing-stage evidence, `.manifest-tuple.json`, and `.linux-finalization.json` receipt expected by
+  the unpublished evidence contract.
+- x64 receipt: tuple `linux-x64-glibc`, content
+  `sha256:fc63ca342a5990f460ec6d72262a8542173dab20ce03c9b9cfb755b1c6057e6d`, archive
+  `sha256:8b9e77fe5f33acbee4a2d532f0be564d8eceb36acaf22deec08cccdd14834d78`, descriptor
+  `sha256:855d83a9f0b0bb5878de335703c4398dc72420b220b31efb5786af59da0587ec`, 49 tree
+  entries / 34 files / 124,846,430 expanded bytes, 159.336194 ms smoke, 56,758,272-byte RSS, and
+  1,749.137209 ms final verification.
+- arm64 receipt: tuple `linux-arm64-glibc`, content
+  `sha256:96f07f62af9b35304bb8ca0870ca4d8095e059bfa61dd1bc57e81b20f3fbca67`, archive
+  `sha256:f2bfe798097a24a113abd37d32008d542c1ed0772ed8ccce53fb51c807d84c3f`, descriptor
+  `sha256:253dac72cb97e32c6fa68f886ac7c73cf00b7a03b1e87d189c490559bf1c071e`, 49 tree
+  entries / 34 files / 122,865,324 expanded bytes, 188.430108 ms smoke, 52,727,808-byte RSS, and
+  1,700.548606 ms final verification.
+- Adjacent regressions: [Golden E2E 29419759379](https://github.com/stablyai/orca/actions/runs/29419759379)
+  passes its macOS and Linux jobs at the exact head. PR Checks attempt 1 has the separately recorded
+  unrelated suite-order RED `E-M4-LINUX-FINALIZATION-PR-CHECKS-RED-001`; attempt 2 passes under
+  `E-M4-LINUX-FINALIZATION-PR-CHECKS-001`.
+- Oracle proved: both real native Linux architectures execute the new verify-before-descriptor path,
+  preserve exact archive/tree/native hashes, run bundled Node/PTY/watcher smoke, emit the complete
+  hash-only native report, and upload receipts that bind exact aggregate inputs. The inspected
+  receipts agree with their descriptors, assets, tuple IDs, and content IDs.
+- Does not prove: Linux kernel 4.18, native Apple/SignPath signing or trust, protected manifest
+  signing, aggregate workflow execution, publication/read-back, desktop embedding, SSH behavior,
+  performance parity, or any enabled tuple.
+- Checklist items satisfied: Linux aggregate-ready prerequisite for the Work Package 3 aggregate
+  workflow. The broader aggregate/manifest-signing item remains open.
+- Follow-up: implement the purpose-named callable/disconnected aggregate and protected signing
+  workflow contract. Do not connect release, desktop, publication, or tuple consumers.
+
+### E-M4-LINUX-FINALIZATION-PR-CHECKS-RED-001 — Adjacent full suite exposes unrelated routing flake
+
+- Date: 2026-07-15
+- Owner: Codex implementation owner
+- Source: exact pushed head `91f59d19e5251fb7b6c9f6d397cd9cd82b43cbdf`; draft PR #8741.
+- Workflow: [PR Checks run 29419759287 attempt 1](https://github.com/stablyai/orca/actions/runs/29419759287),
+  job 87366900240. Lint, typecheck, Git compatibility, and every pre-test gate pass. The test step
+  reports 2,850 files / 29,944 tests passed, nine files / 55 tests skipped, and one failure after
+  421.95 seconds.
+- Failure: untouched
+  `src/renderer/src/components/terminal-pane/pty-connection.test.ts` case `keeps Droid routing visible
+through command-finished foreground confirmation` receives `csi-u` instead of `alt-enter` at line 5284. Neither the Linux finalizer nor its workflow edits touch that production/test domain.
+- Focused command:
+  `pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/pty-connection.test.ts -t 'keeps Droid routing visible through command-finished foreground confirmation'`
+  — PASS locally, 1 file / 1 test with 423 skipped in 1.22 seconds.
+- Oracle proved: the exact failure is identified and is not hidden by a blind retry; it is not a
+  Linux finalizer assertion. Exact-head attempt 2 was explicitly requested only after log inspection.
+- Does not prove: that the unrelated test has no latent ordering defect.
+- Follow-up: replacement attempt 2 passes under E-M4-LINUX-FINALIZATION-PR-CHECKS-001. Retain this
+  RED rather than erasing the observed suite-order failure.
+
+### E-M4-LINUX-FINALIZATION-PR-CHECKS-001 — Exact-head full-suite replacement passes
+
+- Date: 2026-07-15
+- Owner: Codex implementation owner
+- Source: exact pushed head `91f59d19e5251fb7b6c9f6d397cd9cd82b43cbdf`; draft PR #8741.
+- Workflow: [PR Checks run 29419759287 attempt 2](https://github.com/stablyai/orca/actions/runs/29419759287),
+  job 87369995158, 13:47:10Z–14:01:35Z — PASS.
+- Result: lint, reliability, max-lines, localization, typecheck, Git 2.25 compatibility, and all
+  other pre-test gates pass. The full suite passes 2,851 files / 29,945 tests with nine files / 55
+  tests skipped in 537.22 seconds. The unpacked Linux app builds, packaged daemon entry loads under
+  plain Node, and the packaged CLI `--help` smoke succeeds outside the repository.
+- Oracle proved: the exact-head replacement is green, including the assertion that failed in
+  attempt 1, without any code or test change and without weakening the Linux finalizer contract.
+- Does not prove: real Linux kernel 4.18, signing, publication, desktop embedding, SSH behavior, or
+  an enabled tuple.
+- Follow-up: checkpoint the Linux finalization evidence and start the disconnected aggregate and
+  protected manifest-signing workflow RED.
+
 ## Accepted Gaps
 
 No product gap is accepted merely because it appears in this list. Each entry requires explicit
@@ -10665,15 +10762,15 @@ The project is not complete until every applicable item below is checked with ev
 
 ## Next Required Action
 
-Commit and push the locally proven manual rehearsal caller under
-E-M4-NATIVE-SIGNING-REHEARSAL-LOCAL-001, then require its purpose-named contracts to pass on both
-native test families at the exact head. Record GitHub's expected default-branch dispatch refusal;
-do not route secrets through an existing routine workflow as a workaround. Real Apple/SignPath
-request, approval/return, changed-byte identity, and native-trust evidence remain gated until a
-separately authorized merge makes the reviewed caller dispatchable. While blocked, begin the next
-purpose-named disconnected aggregate/immutable-manifest job package. Keep Windows arm64 build 26100,
-macOS 13.5, Linux kernel 4.18, release-cut, desktop builds, publication, and every tuple separately
-gated. Do not merge to `main`; retain every production/default gate.
+Checkpoint E-M4-LINUX-FINALIZATION-CI-001 and the green PR Checks replacement. Then begin a
+purpose-named RED for the callable, disconnected aggregate/immutable-manifest workflow: consume all
+six exact aggregate-ready artifacts, prepare canonical bytes without credentials, isolate the
+base64 32-byte seed in the tag-restricted `relay-runtime-manifest-signing` environment, return only
+key ID plus signature, reconstruct and verify before emitting final output, and remove partial
+output on every failure. The environment and secret remain unprovisioned, so live signing evidence
+must stay BLOCKED. Keep Windows arm64 build 26100, macOS 13.5, Linux kernel 4.18, release-cut,
+desktop builds, publication, and every tuple separately gated. Do not merge to `main`; retain every
+production/default gate.
 
 Cross-family Layer B targets, the protected manifest-signing environment, oldest-baseline/native-
 trust cells, and the paired legacy performance baseline remain release/default-path blockers. No
