@@ -9,7 +9,7 @@ work; keep exact commands, runner identities, hashes, metrics, and residual gaps
 Date created: 2026-07-14<br>
 Last updated: 2026-07-14<br>
 Current phase: Milestone 3 / Work Package 2 oldest-supported-baseline and native-trust proof — **In progress — 2026-07-14, Codex implementation owner**; exact-head run [29373507297](https://github.com/stablyai/orca/actions/runs/29373507297) passes all six target-native build, smoke, exact clean-build equality, upload, SBOM, license, provenance, runner/toolchain, and prohibited-content cells, and direct inspection of every downloaded payload passes exact archive/subject hashes, archive-scoped SPDX identity, one-owner-per-file, dependency, commit/run/builder/runner, tool-version/hash, and closure assertions (E-M3-METADATA-CI-001); Windows x64/arm64 record strict `MSVC 14.44.35207` identities and distinct exact linker SHA-256 values despite the Git-for-Windows PATH collision; the all-six metadata/provenance gate is closed, while oldest-baseline execution, native signing/trust, cross-family remotes, and measured legacy baselines remain open; production/default behavior and every tuple state remain unchanged; no bundled-runtime path is enabled and no artifact is published<br>
-Session checkpoint: **In progress — 2026-07-14, Codex implementation owner** — implementation commit `9bdae7f5b` and native-CI correction `9c0357235` now pass the full local and replacement exact-head gate under E-M3-NATIVE-SIGNING-PLAN-CI-001: all six native jobs syntax-check and execute the 6-test plan suite, all six artifact builds pass, PR Checks and Golden E2E pass, and only the unchanged Windows arm64 build-26100 floor rejects hosted build 26200. Credentialed native signing, returned-byte verification, and target trust remain open; no tuple is enabled or published.<br>
+Session checkpoint: **In progress — 2026-07-14, Codex implementation owner** — credential-free native signing selection, exclusive payload staging, exact returned-tree verification, and explicit POSIX/Windows workflow wiring are implemented at `c847c4a11` and locally green under E-M3-NATIVE-SIGNING-STAGE-LOCAL-001. Replacement exact-head GitHub-runner proof must explicitly execute both new suites in every native job family before this slice is complete. The slice uses no credentials or signing service, establishes no native trust, publishes nothing, enables no tuple, and leaves legacy as the production default.<br>
 Primary design: [SSH relay GitHub Release plan](./2026-07-14-ssh-relay-github-release-plan.html)<br>
 Motivating issues: [#8450](https://github.com/stablyai/orca/issues/8450), [#1693](https://github.com/stablyai/orca/issues/1693)
 
@@ -674,6 +674,20 @@ native job families is implemented at `9c0357235` and locally green under
 E-M3-NATIVE-SIGNING-PLAN-WORKFLOW-LOCAL-001. Replacement exact-head proof passes under
 E-M3-NATIVE-SIGNING-PLAN-CI-001; the next safe package is credential-free exact signing-stage and
 returned-byte verification, without credentials or publication.
+
+**Active signing-stage contract slice — 2026-07-14, Codex implementation owner:** consume the proven
+plan to normalize one exact candidate selection before filesystem or signing side effects. macOS
+must select every Developer ID target. Windows may preserve an exact source file only when a native
+assessment classifies its existing Authenticode signature as valid upstream; it may stage only a
+truly unsigned candidate, while invalid, unknown, malformed, missing, duplicate, or extra assessment
+states fail closed. Verify every native source file against its identity size/hash before creating an
+exclusive payload tree, never stage official Node, preserve portable relative paths, and clean up a
+partial stage on failure. A returned tree must contain exactly the staged regular files, no links or
+special entries, remain within explicit size/growth bounds, and change every staged source hash.
+This slice does not invoke Apple/SignPath, mutate a runtime, accept native trust, publish, aggregate,
+or enable a tuple. Implementation commit `c847c4a11` and local proof
+E-M3-NATIVE-SIGNING-STAGE-LOCAL-001 close the credential-free contract and workflow-source gates;
+exact-head execution on all six native runner families remains required.
 
 **Baseline correction — 2026-07-14, Codex implementation owner:**
 E-M3-LINUX-BASELINE-LOCAL-RED-001 proves the existing Linux x64 candidate cannot load its patched
@@ -7767,6 +7781,102 @@ diff --check`.
   transfer/install, packaged desktop use, fallback/performance, or an enabled tuple.
 - Follow-up: keep every tuple disabled; implement a credential-free exact signing-stage/returned-byte
   contract that consumes the proven plan before any protected Apple or SignPath job is connected.
+
+### E-M3-NATIVE-SIGNING-STAGE-LOCAL-RED-001 — Missing signing-stage modules fail the focused contract
+
+- Date: 2026-07-14
+- Owner: Codex implementation owner
+- Source: pre-implementation head `30496bacf11a7e727ca6bf97c23ececd89c351ad`.
+- Command:
+
+  ```sh
+  pnpm exec vitest run --config config/vitest.config.ts \
+    config/scripts/ssh-relay-runtime-native-signing-selection.test.mjs \
+    config/scripts/ssh-relay-runtime-native-signing-payload.test.mjs
+  ```
+
+- Result: expected RED. Both purpose-named test files failed to load because
+  `ssh-relay-runtime-native-signing-selection.mjs` and
+  `ssh-relay-runtime-native-signing-payload.mjs` did not exist. No production or artifact behavior
+  changed. The exact RED duration was not retained and is deliberately not reconstructed.
+- Oracle proved: the new selection, staging, and returned-tree requirements were not already
+  satisfied by the signing-plan module or an unrelated artifact test.
+- Does not prove: any implementation behavior, native runner execution, signing, native trust,
+  release aggregation, SSH behavior, or an enabled tuple.
+- Correction: implement the two purpose-named modules, keep official Node out of signing payloads,
+  and require both native workflow families to execute their contracts explicitly.
+
+### E-M3-NATIVE-SIGNING-STAGE-LOCAL-001 — Exact selection, exclusive staging, and returned-tree contracts pass
+
+- Date: 2026-07-14
+- Owner: Codex implementation owner
+- Source: implementation commit `c847c4a11d60ee37d161564ca3685955ce3c2d6d`, based on
+  `30496bacf11a7e727ca6bf97c23ececd89c351ad`.
+- Runner/remote/network: local macOS 26.2 build 25C56 arm64, Node v26.0.0 and pnpm 10.24.0; no
+  remote, network, credential, signing service, native-trust environment, or publication path was
+  used.
+- Commands:
+
+  ```sh
+  pnpm exec vitest run --config config/vitest.config.ts \
+    config/scripts/ssh-relay-runtime-native-signing-selection.test.mjs \
+    config/scripts/ssh-relay-runtime-native-signing-payload.test.mjs
+  pnpm exec vitest run --config config/vitest.config.ts \
+    config/scripts/ssh-relay-runtime-native-signing-selection.test.mjs \
+    config/scripts/ssh-relay-runtime-native-signing-payload.test.mjs \
+    config/scripts/ssh-relay-runtime-workflow.test.mjs
+  pnpm exec vitest run --config config/vitest.config.ts config/scripts/ssh-relay-*.test.mjs
+  node --check config/scripts/ssh-relay-runtime-native-signing-selection.mjs
+  node --check config/scripts/ssh-relay-runtime-native-signing-selection.test.mjs
+  node --check config/scripts/ssh-relay-runtime-native-signing-payload.mjs
+  node --check config/scripts/ssh-relay-runtime-native-signing-payload.test.mjs
+  pnpm run typecheck
+  pnpm run lint
+  pnpm run check:max-lines-ratchet
+  pnpm exec oxfmt --check \
+    .github/workflows/ssh-relay-runtime-artifacts.yml \
+    config/scripts/ssh-relay-runtime-workflow.test.mjs \
+    config/scripts/ssh-relay-runtime-native-signing-selection.mjs \
+    config/scripts/ssh-relay-runtime-native-signing-selection.test.mjs \
+    config/scripts/ssh-relay-runtime-native-signing-payload.mjs \
+    config/scripts/ssh-relay-runtime-native-signing-payload.test.mjs \
+    docs/reference/plans/2026-07-14-ssh-relay-github-release-implementation-checklist.md
+  git diff --check
+  ```
+
+- Result: PASS. The focused selection/payload command passed 2 files/18 tests in 247 ms. The two
+  suites plus workflow contract passed 3 files/23 tests in 264 ms. The complete purpose-named SSH
+  relay script suite passed 25 files/125 tests in 2.55 seconds. Four direct syntax checks, typecheck,
+  full lint and reliability gates, max-lines (355 grandfathered suppressions with no new bypass),
+  bundled-skill verification, localization catalog/coverage, focused formatting, and
+  `git diff --check` passed. Lint emitted only existing unrelated warnings; local Node 26 emitted the
+  expected repository Node-24 engine warning. An intermediate lint run rejected an ASCII-control
+  regular expression and formatting check rejected all four new files; the implementation was
+  corrected without a disable and the complete gate was rerun green.
+- Selection oracle: Linux accepts no assessments and creates no signing payload. macOS selects all
+  three non-Node Developer ID candidates. Windows requires exactly one hash-bound assessment per PE
+  candidate, stages only `unsigned`, preserves only `valid-upstream` with a bounded non-control
+  signer subject and exact 40-hex thumbprint, and rejects invalid/unknown status, missing, duplicate,
+  extra, hash-mismatched, malformed, or status-incompatible fields.
+- Payload oracle: every native source file is authenticated by safe-integer size and SHA-256 before
+  an exclusive stage is created; official Node is never copied. The physical stage must be outside
+  the runtime, source/staged files must be regular, portable relative paths are preserved, and a
+  partial stage is removed on copy/authentication failure. Linux verifies without creating a stage.
+- Returned-tree oracle: the root and every entry must be real directories or regular files; links,
+  special entries, unexpected/missing files or directories, unchanged hashes, per-file growth over
+  4 MiB, or aggregate size over 64 MiB reject. Every accepted returned file records its exact new
+  size and SHA-256 without mutating the runtime.
+- Workflow oracle: POSIX and Windows native job families each syntax-check both sources and tests and
+  explicitly name both suites. The workflow contract locks four occurrences per test and two source
+  syntax-check occurrences so one shell family cannot silently omit the package.
+- Does not prove: Node 24 behavior or parsing on GitHub Actions, native filesystem behavior on all
+  six runners, Apple/SignPath credentials or calls, native trust, final signed-byte identity,
+  Gatekeeper/quarantine/notarized-app provenance, Authenticode/Defender/WDAC policy, oldest missing
+  snapshots, release aggregation, SSH transfer/install, packaged desktop use, fallback/performance,
+  or an enabled tuple.
+- Follow-up: push the implementation and evidence separately, then inspect an exact-head run to prove
+  both suites executed under Node 24.18.0 in all six native jobs while existing build/smoke/equality
+  controls retain their outcomes.
 
 ## Accepted Gaps
 

@@ -31,7 +31,8 @@ complete a box.
   - Proven: native-signing plan commit `9bdae7f5b` and CI correction `9c0357235` pass locally and on
     all six native jobs in exact-head run
     [29381495240](https://github.com/stablyai/orca/actions/runs/29381495240).
-  - Active: add credential-free exact signing-stage and returned-byte verification contracts.
+  - Implemented locally at `c847c4a11`: credential-free exact signing selection, exclusive staging,
+    returned-tree verification, and explicit POSIX/Windows CI wiring; exact-head runner proof is next.
   - Next external proof: kernel 4.18, macOS 13.5, Windows arm64 build 26100, and native signing/trust.
   - No tuple is enabled; every SSH transfer/runtime and rollout cell remains open.
 
