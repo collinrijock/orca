@@ -396,13 +396,6 @@ describe('launchWorkItemDirect', () => {
       'Linked Linear issue: ENG-42',
       'https://linear.app/acme/issue/ENG-42/ship-linear-parity'
     ].join('\n')
-    expect(mockApi.agentTrust.markTrusted).toHaveBeenCalledWith({
-      preset: 'claude',
-      workspacePath: '/repo/worktree'
-    })
-    expect(mockApi.agentTrust.markTrusted.mock.invocationCallOrder[0]).toBeLessThan(
-      mocks.activateAndRevealWorktree.mock.invocationCallOrder[0] ?? 0
-    )
     expect(buildAgentDraftLaunchPlan).toHaveBeenCalledWith({
       agent: 'claude',
       draft: `${expectedDraft}\n`,

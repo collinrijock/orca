@@ -1,7 +1,6 @@
 import { ipcMain } from 'electron'
 import {
   type AgentTrustPreset,
-  markClaudeFolderTrusted,
   markCodexProjectTrusted,
   markCopilotFolderTrusted,
   markCursorWorkspaceTrusted
@@ -44,8 +43,6 @@ export function registerAgentTrustHandlers(): void {
           markCopilotFolderTrusted(args.workspacePath)
         } else if (args.preset === 'codex') {
           markCodexProjectTrusted(args.workspacePath)
-        } else if (args.preset === 'claude') {
-          markClaudeFolderTrusted(args.workspacePath)
         }
       } catch {
         // Best-effort: see Why above. The user can still accept the trust

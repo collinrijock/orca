@@ -2006,7 +2006,7 @@ const api = {
 
   agentTrust: {
     markTrusted: (args: {
-      preset: 'cursor' | 'copilot' | 'codex' | 'claude'
+      preset: 'cursor' | 'copilot' | 'codex'
       workspacePath: string
       connectionId?: string
     }): Promise<void> => ipcRenderer.invoke('agentTrust:markTrusted', args)

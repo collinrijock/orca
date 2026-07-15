@@ -232,7 +232,6 @@ import {
 import { createDraftPasteReadyScanner } from '../../shared/draft-paste-ready-scanner'
 import { detectInstalledAgentsWithShellPathHydration, detectRemoteAgents } from '../ipc/preflight'
 import {
-  markClaudeFolderTrusted,
   markCodexProjectTrusted,
   markCopilotFolderTrusted,
   markCursorWorkspaceTrusted
@@ -14702,8 +14701,6 @@ export class OrcaRuntimeService {
         markCopilotFolderTrusted(workspacePath)
       } else if (preset === 'codex') {
         markCodexProjectTrusted(workspacePath)
-      } else if (preset === 'claude') {
-        markClaudeFolderTrusted(workspacePath)
       }
     } catch {
       // Best-effort: the user can still accept the agent trust prompt manually.

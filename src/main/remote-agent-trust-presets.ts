@@ -13,11 +13,6 @@ export async function markRemoteAgentWorkspaceTrusted(args: {
   connectionId: string
   workspacePath: string
 }): Promise<void> {
-  // Why: #6613 is local-only and SSH already delivers Claude drafts. The
-  // remote filesystem API cannot create ~/.claude.json with owner-only mode.
-  if (args.preset === 'claude') {
-    return
-  }
   const home = await resolveRemoteHome(args.connectionId)
   const fsProvider = getSshFilesystemProvider(args.connectionId)
   if (!home || !fsProvider) {
