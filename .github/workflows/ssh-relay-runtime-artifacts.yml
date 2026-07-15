@@ -171,6 +171,7 @@ jobs:
           node --check config/scripts/ssh-relay-runtime-manifest-artifact-collection.mjs
           node --check config/scripts/ssh-relay-runtime-manifest-aggregate-command.mjs
           node --check config/scripts/ssh-relay-runtime-manifest-aggregate-command.test.mjs
+          node --check config/scripts/ssh-relay-runtime-manifest-signing-workflow.test.mjs
           node --check config/scripts/ssh-relay-runtime-manifest-aggregate.mjs
           node --check config/scripts/ssh-relay-runtime-manifest-aggregate.test.mjs
           node --check config/scripts/ssh-relay-runtime-manifest-tuple.mjs
@@ -219,6 +220,7 @@ jobs:
             config/scripts/ssh-relay-runtime-manifest-signing-handoff.test.mjs \
             config/scripts/ssh-relay-runtime-manifest-seed-signing.test.mjs \
             config/scripts/ssh-relay-runtime-manifest-aggregate-command.test.mjs \
+            config/scripts/ssh-relay-runtime-manifest-signing-workflow.test.mjs \
             config/scripts/ssh-relay-runtime-manifest-aggregate.test.mjs \
             config/scripts/ssh-relay-runtime-manifest-tuple.test.mjs \
             config/scripts/ssh-relay-runtime-post-sign-metadata.test.mjs \
@@ -595,6 +597,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'runtime manifest aggregate command syntax check failed' }
           node --check config/scripts/ssh-relay-runtime-manifest-aggregate-command.test.mjs
           if ($LASTEXITCODE -ne 0) { throw 'runtime manifest aggregate command test syntax check failed' }
+          node --check config/scripts/ssh-relay-runtime-manifest-signing-workflow.test.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'runtime manifest signing workflow test syntax check failed' }
           node --check config/scripts/ssh-relay-runtime-manifest-aggregate.mjs
           if ($LASTEXITCODE -ne 0) { throw 'runtime manifest aggregate syntax check failed' }
           node --check config/scripts/ssh-relay-runtime-manifest-aggregate.test.mjs
@@ -661,6 +665,7 @@ jobs:
             config/scripts/ssh-relay-runtime-manifest-signing-handoff.test.mjs `
             config/scripts/ssh-relay-runtime-manifest-seed-signing.test.mjs `
             config/scripts/ssh-relay-runtime-manifest-aggregate-command.test.mjs `
+            config/scripts/ssh-relay-runtime-manifest-signing-workflow.test.mjs `
             config/scripts/ssh-relay-runtime-manifest-aggregate.test.mjs `
             config/scripts/ssh-relay-runtime-manifest-tuple.test.mjs `
             config/scripts/ssh-relay-runtime-post-sign-metadata.test.mjs `

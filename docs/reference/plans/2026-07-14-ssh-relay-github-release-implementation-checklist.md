@@ -9,7 +9,7 @@ work; keep exact commands, runner identities, hashes, metrics, and residual gaps
 Date created: 2026-07-14<br>
 Last updated: 2026-07-15<br>
 Current phase: Milestone 4 / Work Package 3 disconnected aggregate and protected manifest-signing workflow contract — **In progress — 2026-07-15, Codex implementation owner**. Linux aggregate-ready finalization is closed locally and on exact-head native x64/arm64 runners under E-M4-LINUX-FINALIZATION-LOCAL-RED-001, E-M4-LINUX-FINALIZATION-LOCAL-001, and E-M4-LINUX-FINALIZATION-CI-001. The active package must consume only the six exact aggregate-ready outputs, prepare canonical bytes credential-free, expose only those bytes to the tag-restricted `relay-runtime-manifest-signing` environment, accept only key ID plus Ed25519 signature, reconstruct and verify before final output, and fail closed on missing/extra/mutated inputs, approval/secret/signing failure, timeout, or partial output. It remains callable and disconnected. Release-cut, desktop builds, publication, and every tuple stay disconnected; production/default behavior is unchanged.<br>
-Session checkpoint: **In progress — 2026-07-15, Codex implementation owner** — protected seed-signer exact-head CI is closed by E-M4-PROTECTED-MANIFEST-SEED-CI-001 at pushed head `4180e04ac4e732f082dc576af69364325a678d2b`: all six native build jobs, PR Checks, and Golden E2E pass, with the artifact workflow red only for the retained Windows arm64 build-floor mismatch. The exclusive six-artifact filesystem command is locally green under E-M4-MANIFEST-AGGREGATE-COMMAND-LOCAL-RED-001 and E-M4-MANIFEST-AGGREGATE-COMMAND-LOCAL-001. Exact-head CI for that command is the next checkpoint, after which the still-red callable workflow may be implemented. No signing credential, aggregate workflow, release consumer, publication path, desktop consumer, tuple enablement, or production/default change is connected. Legacy remains the production default, and merge to `main` remains prohibited.<br>
+Session checkpoint: **In progress — 2026-07-15, Codex implementation owner** — the exclusive six-artifact filesystem command is closed locally and on all six exact-head native families under E-M4-MANIFEST-AGGREGATE-COMMAND-LOCAL-RED-001, E-M4-MANIFEST-AGGREGATE-COMMAND-LOCAL-001, and E-M4-MANIFEST-AGGREGATE-COMMAND-CI-001 at pushed head `8cf80a0228ffa095beceec018a0de2e237b89e2d`. The callable three-job workflow is locally green under E-M4-PROTECTED-MANIFEST-WORKFLOW-LOCAL-001 and is the active exact-head CI checkpoint. It stays disconnected and deliberately fails closed before signer exposure because no accepted production key exists. No signing credential, protected environment, release consumer, publication path, desktop consumer, tuple enablement, or production/default change is connected. Legacy remains the production default, and merge to `main` remains prohibited.<br>
 Primary design: [SSH relay GitHub Release plan](./2026-07-14-ssh-relay-github-release-plan.html)<br>
 Motivating issues: [#8450](https://github.com/stablyai/orca/issues/8450), [#1693](https://github.com/stablyai/orca/issues/1693)
 
@@ -10866,6 +10866,73 @@ config/scripts/ssh-relay-runtime-manifest-aggregate-command.test.mjs` — PASS, 
 - Follow-up: checkpoint and push this command, require it on all six exact-head native jobs, then
   implement the still-red callable workflow without connecting release or product consumers.
 
+### E-M4-MANIFEST-AGGREGATE-COMMAND-CI-001 — Filesystem aggregation passes all native families
+
+- Date: 2026-07-15
+- Owner: Codex implementation owner
+- Source: exact pushed head `8cf80a0228ffa095beceec018a0de2e237b89e2d`; draft PR #8741.
+- Workflow: [SSH Relay Runtime Artifacts run 29424084956](https://github.com/stablyai/orca/actions/runs/29424084956),
+  14:33:33Z–14:53:05Z. The expected workflow failure is solely Windows arm64 baseline job
+  87385641582: runtime verification passes in 8,318.1202 ms with 6,107.7828 ms smoke and
+  49,930,240-byte RSS, then the exact floor gate rejects observed build 26200 versus required 26100.
+- Native jobs: macOS x64 87381843694, Linux arm64 87381843705, macOS arm64 87381843796, Linux x64
+  87381843825, Windows x64 87381843853, and Windows arm64 87381844294 all pass complete artifact
+  construction. POSIX reports 49 files / 256 tests. Windows reports 50 files / 250 passed and ten
+  skipped of 260; only the POSIX-only symlink case is skipped by the new command suite on Windows.
+- Supplemental jobs: Linux arm64 87383766220, Linux x64 87383766265, and Windows x64 87385641378
+  pass. The sole Windows arm64 failure is the retained exact-build mismatch described above.
+- Adjacent regressions: [PR Checks 29424084938](https://github.com/stablyai/orca/actions/runs/29424084938)
+  job 87381832092 passes 14:33:36Z–14:48:09Z. [Golden E2E 29424085004](https://github.com/stablyai/orca/actions/runs/29424085004)
+  passes macOS job 87381832460 and Linux job 87381832629.
+- Oracle proved: every target-native Node 24 family executes the exact six-artifact collection,
+  accepted-key, canonical request, independent reconstruction, signature verification, hostile
+  input, cancellation, and cleanup suite without regressing runtime construction or adjacent CI.
+- Does not prove: real downloaded signed macOS/Windows outputs, a provisioned accepted production
+  key, protected environment/seed/reviewer approval, live workflow execution, native trust, exact
+  oldest floors, publication, desktop embedding, SSH behavior, or an enabled tuple.
+- Follow-up: implement the callable three-job workflow contract. Keep it disconnected and fail
+  closed while accepted production keys, the environment, and seed remain unprovisioned.
+
+### E-M4-PROTECTED-MANIFEST-WORKFLOW-LOCAL-001 — Disconnected protected workflow contract passes locally
+
+- Date: 2026-07-15
+- Owner: Codex implementation owner
+- Source: local implementation atop pushed head
+  `8cf80a0228ffa095beceec018a0de2e237b89e2d`; draft PR #8741.
+- Runner/remote/network: local macOS 26.2 arm64, Node v26.0.0 and pnpm 10.24.0. Static workflow
+  parsing only; no Actions runner, artifact download, accepted production key, GitHub Environment,
+  seed, approval, release, desktop consumer, SSH host, publication, or enabled tuple.
+- Focused command: `pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1
+config/scripts/ssh-relay-runtime-manifest-signing-workflow.test.mjs` — PASS, 1 file / 1 test in
+  159 ms on the final contract/static-gate rerun (the first green implementation run passed in 169
+  ms).
+- Broad release command: `/usr/bin/time -l sh -c "rg --files config/scripts | rg
+'/ssh-relay.*[.]test[.]mjs$' | xargs pnpm exec vitest run --config config/vitest.config.ts
+--maxWorkers=1"` — PASS, 51 files / 261 tests in 10.23 seconds Vitest / 11.41 seconds wall,
+  188,825,600-byte maximum RSS, zero swaps.
+- Desktop parity/static results: manifest schema/signature/release-asset parity passes 3 files / 48
+  tests; typecheck, `node --check`, and workflow/source formatting pass. Full lint passes all 41
+  reliability gates, the 355-entry max-lines ratchet, bundled-skill, and localization gates; all 26
+  warnings remain in untouched existing files.
+- Oracle proved: the reusable interface has only the exact source SHA, tag, timestamp, and protocol
+  inputs plus one required seed secret. Preparation and finalization are credential-free, download
+  six exact artifacts separately, and use 15-minute bounds. The sole five-minute protected job sees
+  no runtime artifacts, references the seed exactly once, and returns only key ID/signature. Final
+  reconstruction independently recollects all six inputs. Actions are SHA-pinned, permissions are
+  read-only, no wildcard merge/continue-on-error/write publication exists, and no release,
+  desktop, or rehearsal workflow calls it.
+- Fail-closed provisioning gate: both credential-free stages reference the absent
+  `config/ssh-relay-runtime-manifest-accepted-keys.json`; the purpose test requires that absence so
+  no placeholder trust root can look provisioned. Consequently the workflow cannot expose a
+  signing request or reach the protected environment until a separately reviewed accepted key is
+  committed. The environment/seed/reviewer restrictions remain external and unprovisioned.
+- Does not prove: GitHub accepts/executes the YAML, actual artifact downloads, accepted-key
+  provisioning, environment/tag policy, secret isolation at runtime, approval denial/timeout,
+  signature generation, final output, native trust, publication, desktop embedding, SSH behavior,
+  or an enabled tuple.
+- Follow-up: checkpoint and push the workflow contract, require exact-head PR/native CI, and keep
+  live signing BLOCKED until accepted keys and the protected environment receive separate review.
+
 ## Accepted Gaps
 
 No product gap is accepted merely because it appears in this list. Each entry requires explicit
@@ -10924,12 +10991,12 @@ The project is not complete until every applicable item below is checked with ev
 
 ## Next Required Action
 
-Checkpoint the locally proven filesystem prepare/finalize command and require its purpose suite on
-all six exact-head native test families. After that CI evidence is green, implement the still-red
-callable workflow so only canonical request bytes and the base64 32-byte seed enter the
-tag-restricted `relay-runtime-manifest-signing` environment, while credential-free preparation and
-final reconstruction independently download the six exact artifacts. The environment, accepted
-production keys, and secret remain unprovisioned, so live signing evidence must stay BLOCKED. Keep
+Checkpoint and push the locally green callable workflow, then require its purpose contract on all
+six exact-head native test families plus PR Checks and Golden E2E. Only canonical request bytes and
+the base64 32-byte seed may enter the tag-restricted `relay-runtime-manifest-signing` environment,
+while credential-free preparation and final reconstruction independently download the six exact
+artifacts. The environment, accepted production keys, and secret remain unprovisioned, so live
+signing evidence must stay BLOCKED. Keep
 Windows arm64 build 26100, macOS 13.5, Linux kernel 4.18, release-cut, desktop builds, publication,
 and every tuple separately gated. Do not merge to `main`; retain every production/default gate.
 

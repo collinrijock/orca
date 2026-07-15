@@ -245,8 +245,11 @@ complete a box.
       `E-M4-PROTECTED-MANIFEST-SEED-LOCAL-001` and all-six exact-head CI is closed by
       `E-M4-PROTECTED-MANIFEST-SEED-CI-001`. The filesystem prepare/finalize command is locally
       green under `E-M4-MANIFEST-AGGREGATE-COMMAND-LOCAL-RED-001` and
-      `E-M4-MANIFEST-AGGREGATE-COMMAND-LOCAL-001`; exact-head CI and the callable workflow remain
-      open.
+      `E-M4-MANIFEST-AGGREGATE-COMMAND-LOCAL-001`, with all-six exact-head CI closed by
+      `E-M4-MANIFEST-AGGREGATE-COMMAND-CI-001`. The callable workflow remains open.
+      Its disconnected three-job source contract is locally green under
+      `E-M4-PROTECTED-MANIFEST-WORKFLOW-LOCAL-001`, but exact-head CI and live protected signing
+      remain open; no accepted production key, environment, or seed is provisioned.
 - [ ] Embed the exact signed manifest and accepted keys in each desktop build.
 - [ ] Upload to a draft release, read back, re-hash, and execute the downloaded archives.
 - [ ] Test timeouts, retries, approval denial, signing failure, partial output, and draft recovery.
