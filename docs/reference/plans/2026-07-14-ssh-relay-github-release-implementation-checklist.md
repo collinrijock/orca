@@ -9,7 +9,7 @@ work; keep exact commands, runner identities, hashes, metrics, and residual gaps
 Date created: 2026-07-14<br>
 Last updated: 2026-07-15<br>
 Current phase: Milestone 4 / Work Package 3 disconnected aggregate and protected manifest-signing workflow contract — **In progress — 2026-07-15, Codex implementation owner**. Linux aggregate-ready finalization is closed locally and on exact-head native x64/arm64 runners under E-M4-LINUX-FINALIZATION-LOCAL-RED-001, E-M4-LINUX-FINALIZATION-LOCAL-001, and E-M4-LINUX-FINALIZATION-CI-001. The active package must consume only the six exact aggregate-ready outputs, prepare canonical bytes credential-free, expose only those bytes to the tag-restricted `relay-runtime-manifest-signing` environment, accept only key ID plus Ed25519 signature, reconstruct and verify before final output, and fail closed on missing/extra/mutated inputs, approval/secret/signing failure, timeout, or partial output. It remains callable and disconnected. Release-cut, desktop builds, publication, and every tuple stay disconnected; production/default behavior is unchanged.<br>
-Session checkpoint: **In progress — 2026-07-15, Codex implementation owner** — exact-head run 29419759256 at `91f59d19e5251fb7b6c9f6d397cd9cd82b43cbdf` passes all six native builds, both Linux userland supplements, and Windows x64 baseline. Windows arm64 fails only the retained build-floor gate after successful runtime verification (hosted 26200 versus required 26100). Downloaded artifacts 8344803641 and 8344824674 contain the expected Linux x64/arm64 descriptors and finalization receipts, whose tuple/content/archive/metadata bindings and smoke/resource metrics were inspected under E-M4-LINUX-FINALIZATION-CI-001. Golden E2E passes. PR Checks attempt 1 exposed one unrelated terminal-routing assertion after 29,944 tests passed; the focused test passes locally and exact-head attempt 2 passes all 29,945 tests, unpacked build, and packaged CLI smoke under E-M4-LINUX-FINALIZATION-PR-CHECKS-RED-001 and E-M4-LINUX-FINALIZATION-PR-CHECKS-001. No signing credential, aggregate workflow, release consumer, publication path, desktop consumer, tuple enablement, or production/default change is connected. Legacy remains the production default, and merge to `main` remains prohibited.<br>
+Session checkpoint: **In progress — 2026-07-15, Codex implementation owner** — exact-head run 29419759256 at `91f59d19e5251fb7b6c9f6d397cd9cd82b43cbdf` passes all six native builds, both Linux userland supplements, and Windows x64 baseline. Windows arm64 fails only the retained build-floor gate after successful runtime verification (hosted 26200 versus required 26100). Downloaded artifacts 8344803641 and 8344824674 contain the expected Linux x64/arm64 descriptors and finalization receipts, whose tuple/content/archive/metadata bindings and smoke/resource metrics were inspected under E-M4-LINUX-FINALIZATION-CI-001. Golden E2E and replacement PR Checks pass. The protected seed signer is now locally green under E-M4-PROTECTED-MANIFEST-WORKFLOW-LOCAL-RED-001 and E-M4-PROTECTED-MANIFEST-SEED-LOCAL-001: canonical request serialization, exact base64 32-byte seed validation, signature-only output, drift/symlink rejection, and exclusive failure cleanup pass, and both native contract families execute the tests. The callable workflow remains intentionally absent/red while the filesystem prepare/finalize command is implemented next. No signing credential, aggregate workflow, release consumer, publication path, desktop consumer, tuple enablement, or production/default change is connected. Legacy remains the production default, and merge to `main` remains prohibited.<br>
 Primary design: [SSH relay GitHub Release plan](./2026-07-14-ssh-relay-github-release-plan.html)<br>
 Motivating issues: [#8450](https://github.com/stablyai/orca/issues/8450), [#1693](https://github.com/stablyai/orca/issues/1693)
 
@@ -10704,6 +10704,78 @@ through command-finished foreground confirmation` receives `csi-u` instead of `a
 - Follow-up: checkpoint the Linux finalization evidence and start the disconnected aggregate and
   protected manifest-signing workflow RED.
 
+### E-M4-PROTECTED-MANIFEST-WORKFLOW-LOCAL-RED-001 — Callable protected signing workflow is absent
+
+- Date: 2026-07-15
+- Owner: Codex implementation owner
+- Source: uncommitted purpose-named test atop pushed head
+  `e5dfffaaa2df55b221c5ee30699ff8fe814b91aa`; draft PR #8741.
+- Runner/remote/network: local macOS 26.2 arm64, Node v26.0.0 and pnpm 10.24.0. Static repository
+  workflow-source read only; no Actions runner, environment approval, secret, signer, artifact
+  download, release, desktop consumer, SSH host, or enabled tuple.
+- Command:
+  `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1 config/scripts/ssh-relay-runtime-manifest-signing-workflow.test.mjs`.
+- Result: expected FAIL, 1 file / 1 test in 182 ms Vitest / 0.89 seconds wall,
+  131,743,744-byte maximum RSS, 95,966,656-byte peak footprint, zero swaps. The only failure is
+  `ENOENT` for `.github/workflows/ssh-relay-runtime-manifest-signing.yml`.
+- Seed-signer prerequisite RED:
+  `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1 config/scripts/ssh-relay-runtime-manifest-seed-signing.test.mjs`
+  — expected FAIL before collection because
+  `config/scripts/ssh-relay-runtime-manifest-seed-signing.mjs` is absent; 196 ms Vitest / 0.90
+  seconds wall, 132,022,272-byte maximum RSS, 96,228,776-byte peak footprint, zero swaps. The test
+  defines canonical request serialization, exact 32-byte base64 seed handling, signature-only
+  output, request/seed drift rejection, exclusive output cleanup, and symlink rejection.
+- Oracle proved: no callable workflow currently enforces the required three-stage boundary: exact
+  six-artifact credential-free preparation; one protected `relay-runtime-manifest-signing` job with
+  the sole seed reference and signature-only output; then credential-free reconstruction and final
+  verification. The RED also requires SHA-pinned actions, strict timeouts, no wildcard artifact
+  merge, read-only permissions, and complete release/desktop/rehearsal disconnection.
+- Does not prove: implementation, signer seed validation, file-based prepare/finalize behavior,
+  Actions execution, environment protection, real signatures, publication, desktop embedding, SSH
+  behavior, or an enabled tuple.
+- Follow-up: implement the seed signer and exclusive filesystem prepare/finalize commands with
+  hostile-input tests, then add the callable workflow and make this contract green without
+  connecting any consumer.
+
+### E-M4-PROTECTED-MANIFEST-SEED-LOCAL-001 — Protected seed signer passes locally
+
+- Date: 2026-07-15
+- Owner: Codex implementation owner
+- Source: local implementation atop pushed head `e5dfffaaa2df55b221c5ee30699ff8fe814b91aa`;
+  draft PR #8741.
+- Runner/remote/network: local macOS 26.2 arm64, Node v26.0.0 and pnpm 10.24.0. Test-only in-memory
+  Ed25519 seeds and local temporary files; no GitHub Environment, Actions secret, release, desktop
+  consumer, publication, SSH host, or enabled tuple.
+- Focused command:
+  `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1 config/scripts/ssh-relay-runtime-manifest-seed-signing.test.mjs config/scripts/ssh-relay-runtime-manifest-signing-handoff.test.mjs config/scripts/ssh-relay-runtime-manifest-assembly.test.mjs`
+  — PASS, 3 files / 20 tests in 638 ms Vitest / 1.30 seconds wall, 188,612,608-byte maximum RSS,
+  96,163,336-byte peak footprint, zero swaps.
+- Broad release command excluding the deliberately still-red workflow-source test:
+  `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1 $(rg --files config/scripts | rg '/ssh-relay.*\\.test\\.mjs$' | rg -v 'ssh-relay-runtime-manifest-signing-workflow\\.test\\.mjs$')`
+  — PASS, 49 files / 255 tests in 8.54 seconds Vitest / 9.46 seconds wall,
+  188,858,368-byte maximum RSS, 96,523,568-byte peak footprint, zero swaps. The unfiltered 50-file
+  run passes the same 49 files / 255 tests and fails only the recorded missing-workflow RED.
+- Desktop parity:
+  `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1 src/main/ssh/ssh-relay-artifact-schema.test.ts src/main/ssh/ssh-relay-manifest-signature.test.ts src/main/ssh/ssh-relay-release-asset.test.ts`
+  — PASS, 3 files / 48 tests in 493 ms Vitest / 1.12 seconds wall, 131,858,432-byte maximum RSS,
+  96,032,120-byte peak footprint, zero swaps.
+- Static results: `node --check`, focused `oxlint`, and focused `oxfmt --check` pass. `pnpm run
+typecheck` passes in 1.88 seconds wall. Full `pnpm run lint` passes in 9.26 seconds wall with all 41
+  reliability gates, the 355-entry max-lines ratchet, bundled-skill, localization catalog/parity,
+  and localization coverage gates; all 26 warnings are in untouched existing files.
+- Oracle proved: request artifacts contain only the exact canonical payload plus algorithm/hash/size
+  bindings; malformed fields, noncanonical base64, payload drift, and noncanonical manifest bytes
+  fail. Only a canonical base64 32-byte seed is accepted. Output contains exactly key ID plus the
+  detached 64-byte signature, is created in an exclusive directory, and is removed on failure.
+  Symlinked request files are rejected. Both POSIX and Windows native artifact contract families now
+  syntax-check and run the purpose suite without exposing a secret.
+- Does not prove: a real GitHub Environment or seed, reviewer approval, the filesystem aggregate
+  prepare/finalize boundary, the callable workflow, Actions execution, publication, desktop
+  embedding, SSH behavior, or an enabled tuple.
+- Follow-up: implement the exclusive six-artifact filesystem prepare/finalize command, including
+  receipt/path/mutation/accepted-key/signature/partial-output failures, before adding the callable
+  workflow.
+
 ## Accepted Gaps
 
 No product gap is accepted merely because it appears in this list. Each entry requires explicit
@@ -10762,14 +10834,15 @@ The project is not complete until every applicable item below is checked with ev
 
 ## Next Required Action
 
-Checkpoint E-M4-LINUX-FINALIZATION-CI-001 and the green PR Checks replacement. Then begin a
-purpose-named RED for the callable, disconnected aggregate/immutable-manifest workflow: consume all
-six exact aggregate-ready artifacts, prepare canonical bytes without credentials, isolate the
-base64 32-byte seed in the tag-restricted `relay-runtime-manifest-signing` environment, return only
-key ID plus signature, reconstruct and verify before emitting final output, and remove partial
-output on every failure. The environment and secret remain unprovisioned, so live signing evidence
-must stay BLOCKED. Keep Windows arm64 build 26100, macOS 13.5, Linux kernel 4.18, release-cut,
-desktop builds, publication, and every tuple separately gated. Do not merge to `main`; retain every
+Checkpoint the locally proven protected seed signer and require its contract on all six native test
+families. Then implement the exclusive filesystem prepare/finalize command that collects only the
+six exact aggregate-ready artifacts, binds receipts and accepted public keys, serializes canonical
+bytes without credentials, reconstructs after signature return, and removes partial output on every
+failure. Only after that command is green may the still-red callable workflow isolate the base64
+32-byte seed in the tag-restricted `relay-runtime-manifest-signing` environment. The environment,
+accepted production keys, and secret remain unprovisioned, so live signing evidence must stay
+BLOCKED. Keep Windows arm64 build 26100, macOS 13.5, Linux kernel 4.18, release-cut, desktop builds,
+publication, and every tuple separately gated. Do not merge to `main`; retain every
 production/default gate.
 
 Cross-family Layer B targets, the protected manifest-signing environment, oldest-baseline/native-

@@ -166,6 +166,8 @@ jobs:
           node --check config/scripts/ssh-relay-runtime-manifest-assembly.test.mjs
           node --check config/scripts/ssh-relay-runtime-manifest-signing-handoff.mjs
           node --check config/scripts/ssh-relay-runtime-manifest-signing-handoff.test.mjs
+          node --check config/scripts/ssh-relay-runtime-manifest-seed-signing.mjs
+          node --check config/scripts/ssh-relay-runtime-manifest-seed-signing.test.mjs
           node --check config/scripts/ssh-relay-runtime-manifest-aggregate.mjs
           node --check config/scripts/ssh-relay-runtime-manifest-aggregate.test.mjs
           node --check config/scripts/ssh-relay-runtime-manifest-tuple.mjs
@@ -212,6 +214,7 @@ jobs:
             config/scripts/ssh-relay-runtime-draft-readback.test.mjs \
             config/scripts/ssh-relay-runtime-manifest-assembly.test.mjs \
             config/scripts/ssh-relay-runtime-manifest-signing-handoff.test.mjs \
+            config/scripts/ssh-relay-runtime-manifest-seed-signing.test.mjs \
             config/scripts/ssh-relay-runtime-manifest-aggregate.test.mjs \
             config/scripts/ssh-relay-runtime-manifest-tuple.test.mjs \
             config/scripts/ssh-relay-runtime-post-sign-metadata.test.mjs \
@@ -578,6 +581,10 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'runtime manifest signing handoff syntax check failed' }
           node --check config/scripts/ssh-relay-runtime-manifest-signing-handoff.test.mjs
           if ($LASTEXITCODE -ne 0) { throw 'runtime manifest signing handoff test syntax check failed' }
+          node --check config/scripts/ssh-relay-runtime-manifest-seed-signing.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'runtime manifest seed signing syntax check failed' }
+          node --check config/scripts/ssh-relay-runtime-manifest-seed-signing.test.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'runtime manifest seed signing test syntax check failed' }
           node --check config/scripts/ssh-relay-runtime-manifest-aggregate.mjs
           if ($LASTEXITCODE -ne 0) { throw 'runtime manifest aggregate syntax check failed' }
           node --check config/scripts/ssh-relay-runtime-manifest-aggregate.test.mjs
@@ -642,6 +649,7 @@ jobs:
             config/scripts/ssh-relay-runtime-draft-readback.test.mjs `
             config/scripts/ssh-relay-runtime-manifest-assembly.test.mjs `
             config/scripts/ssh-relay-runtime-manifest-signing-handoff.test.mjs `
+            config/scripts/ssh-relay-runtime-manifest-seed-signing.test.mjs `
             config/scripts/ssh-relay-runtime-manifest-aggregate.test.mjs `
             config/scripts/ssh-relay-runtime-manifest-tuple.test.mjs `
             config/scripts/ssh-relay-runtime-post-sign-metadata.test.mjs `

@@ -240,6 +240,10 @@ complete a box.
       hash-bound descriptors/receipts. The active slice is the callable, disconnected aggregate and
       protected Ed25519-signing workflow contract. The environment/seed are not provisioned, so live
       signing remains blocked and no release, desktop, publication, or tuple consumer is connected.
+      The missing-workflow/seed-signer RED is
+      `E-M4-PROTECTED-MANIFEST-WORKFLOW-LOCAL-RED-001`; the seed signer is locally green under
+      `E-M4-PROTECTED-MANIFEST-SEED-LOCAL-001`, while the filesystem aggregate command and workflow
+      remain open.
 - [ ] Embed the exact signed manifest and accepted keys in each desktop build.
 - [ ] Upload to a draft release, read back, re-hash, and execute the downloaded archives.
 - [ ] Test timeouts, retries, approval denial, signing failure, partial output, and draft recovery.
