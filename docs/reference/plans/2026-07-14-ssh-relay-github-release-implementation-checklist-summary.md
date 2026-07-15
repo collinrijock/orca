@@ -18,7 +18,10 @@ is red only after Windows arm64 passes smoke and rejects hosted build 26200 agai
 26100 floor. `E-M5-ARCHIVE-PORTABILITY-AUDIT-001` proves the unpublished `.tar.xz` output cannot
 meet the cross-client 64 MiB extraction contract and selects bounded Node-native `.tar.br`. Replace
 the archive contracts and all-six artifact evidence before the isolated extraction/cache-staging
-RED. Desktop consumers, SSH transfer/install, mode wiring,
+RED. The purpose-named missing-contract RED is recorded under
+`E-M5-PORTABLE-ARCHIVE-LOCAL-RED-001`; commit `c9f6da55e` is locally green under
+`E-M5-PORTABLE-ARCHIVE-LOCAL-001`. Exact-head all-six Node 24 proof is the current gate. Desktop
+consumers, SSH transfer/install, mode wiring,
 tuple enablement, publication, production keys/environment/seed, and merge to `main` remain
 disconnected.
 
@@ -156,7 +159,9 @@ disconnected.
 - [x] Prove exact clean-build equality and exact runtime-tree closure on all six runner families.
 - [ ] Replace unpublished POSIX `.tar.xz` outputs with deterministic bounded `.tar.br` and rerun
       exact clean-build/archive/execution proof on all six native jobs
-      (`E-M5-ARCHIVE-PORTABILITY-AUDIT-001` selects the correction; implementation evidence open).
+      (`E-M5-ARCHIVE-PORTABILITY-AUDIT-001` selects the correction;
+      `E-M5-PORTABLE-ARCHIVE-LOCAL-RED-001` proves the old boundary fails;
+      `E-M5-PORTABLE-ARCHIVE-LOCAL-001` passes locally; exact-head native evidence open).
 - [x] Complete the all-six SBOM, license, provenance, toolchain, and prohibited-content audit.
 - [x] Rebuild both Linux artifacts in the digest-pinned glibc 2.28/libstdc++ 6.0.25 userland on
       native x64/arm64 runners; smoke and compare them there. (`E-M3-LINUX-NATIVE-USERLAND-CI-001`)

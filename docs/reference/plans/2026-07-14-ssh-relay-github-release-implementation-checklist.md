@@ -8,8 +8,8 @@ work; keep exact commands, runner identities, hashes, metrics, and residual gaps
 
 Date created: 2026-07-14<br>
 Last updated: 2026-07-15<br>
-Current phase: Milestone 5 / Work Package 4 desktop cache boundary — **In progress — 2026-07-15, Codex implementation owner: portable POSIX archive prerequisite correction**. The audit under E-M5-ARCHIVE-PORTABILITY-AUDIT-001 proves the current 64 MiB-dictionary `.tar.xz` output cannot meet the reviewed cross-client and 64 MiB desktop extraction contracts without an unsafe system/native dependency. Correct only the unpublished POSIX relay archive family to bounded Node-native `.tar.br`, replace its exact-head all-six artifact evidence, and then resume the disconnected desktop extraction RED. Windows ZIP, Node upstream input archives, desktop call sites, cache publication, SSH transfer/install, tuple enablement, mode wiring, and default behavior stay unchanged.<br>
-Session checkpoint: **In progress — 2026-07-15, Codex implementation owner** — exact implementation/evidence head `fc6b6d2197fa8cc012317a5ea155e57886183c61` passes the downloader-containing contract suite and full runtime build/smoke/equality on all six native jobs in run 29445770009 under E-M5-ARTIFACT-DOWNLOAD-CI-001. E-M5-ARCHIVE-PORTABILITY-AUDIT-001 measures the exact Linux x64 artifact from that run and selects deterministic Brotli quality 9, `lgwin=20`, and 64 KiB chunks: full 119 MiB extraction through `tar` settles in 533.13ms with a 34,144,256-byte RSS increase. The existing XZ stream alone declares 67,175,032 bytes of decoder memory, already 66,168 bytes over the complete desktop budget. The user authorizes end-to-end commits, pushes, draft-PR updates, CI runs/reruns, and PR-contained rehearsals, but not merging to `main`. There is no real release write, publication caller, desktop consumer, cache publication/extraction, SSH transfer/install, tuple enablement, or production/default behavior change. Legacy remains the production default.<br>
+Current phase: Milestone 5 / Work Package 4 desktop cache boundary — **In progress — 2026-07-15, Codex implementation owner: portable POSIX archive prerequisite exact-head CI**. The audit under E-M5-ARCHIVE-PORTABILITY-AUDIT-001 proves the current 64 MiB-dictionary `.tar.xz` output cannot meet the reviewed cross-client and 64 MiB desktop extraction contracts. Commit `c9f6da55e` implements bounded Node-native `.tar.br` and is locally green under E-M5-PORTABLE-ARCHIVE-LOCAL-001. Push the exact implementation/evidence commits and replace all-six native artifact proof before resuming the disconnected desktop extraction RED. Windows ZIP, Node upstream input archives, desktop call sites, cache publication, SSH transfer/install, tuple enablement, mode wiring, and default behavior stay unchanged.<br>
+Session checkpoint: **In progress — 2026-07-15, Codex implementation owner** — implementation commit `c9f6da55e41d2f201684e967ce4c3db37150571f` streams deterministic Brotli/TAR creation and strict inspection/extraction without system/native XZ, updates exact relay-archive consumers, and wires the purpose suite into both native job families. E-M5-PORTABLE-ARCHIVE-LOCAL-001 passes 278 release tests, 233 desktop SSH-relay tests including one existing skip, typecheck, full lint/reliability/line gates, and a two-build exact-runtime byte comparison. Native Node 24 execution at this exact head remains required. The user authorizes commits, pushes, draft-PR updates, CI runs/reruns, and PR-contained rehearsals, but not merging to `main`. There is no release write, publication caller, desktop consumer, cache publication/extraction, SSH transfer/install, tuple enablement, or production/default behavior change. Legacy remains the production default.<br>
 Primary design: [SSH relay GitHub Release plan](./2026-07-14-ssh-relay-github-release-plan.html)<br>
 Motivating issues: [#8450](https://github.com/stablyai/orca/issues/8450), [#1693](https://github.com/stablyai/orca/issues/1693)
 
@@ -132,12 +132,12 @@ same change as the work it records.
   E-M4-DRAFT-RELEASE-COMPOSITION-LOCAL-001, and
   E-M4-DRAFT-RELEASE-COMPOSITION-CI-001.
 - Active package: **In progress — 2026-07-15, Codex implementation owner** — portable POSIX relay
-  archive prerequisite correction exposed by Work Package 4. E-M5-ARCHIVE-PORTABILITY-AUDIT-001
-  rejects system XZ, the off-the-shelf WASM decoder, and the transitive p7zip binary and selects
-  deterministic Node-native `.tar.br` with quality 9, `lgwin=20`, and 64 KiB chunks. First replace
-  the archive builder/schema/inspection contracts and all-six artifact evidence; only then resume
-  disconnected desktop extraction. Keep Node upstream `.tar.xz` inputs, Windows ZIP, cache
-  publication, desktop call sites, SSH behavior, mode wiring, tuple enablement, and defaults intact.
+  archive exact-head native proof. The audit, purpose RED, and local implementation are closed under
+  E-M5-ARCHIVE-PORTABILITY-AUDIT-001, E-M5-PORTABLE-ARCHIVE-LOCAL-RED-001, and
+  E-M5-PORTABLE-ARCHIVE-LOCAL-001. Push `c9f6da55e` plus exact evidence metadata and require all six
+  Node 24 build/smoke/equality jobs before resuming disconnected desktop extraction. Keep Node
+  upstream `.tar.xz` inputs, Windows ZIP, cache publication, desktop call sites, SSH behavior, mode
+  wiring, tuple enablement, and defaults intact.
 - Completed Work Package 2 gate: target-native Windows source-signature reports from exact-head
   artifact jobs 87267322867 and 87267322870 were independently downloaded and matched to their
   identities and signing-stage reports under E-M3-WINDOWS-SOURCE-SIGNATURE-CI-001. PR Checks
@@ -12288,6 +12288,91 @@ preserveOwner: false, noChmod: false, unlink: false })>` over that exact runtime
   correction, run local archive/release/desktop parity gates, then push and require exact-head
   all-six native artifact proof before resuming desktop extraction.
 
+### E-M5-PORTABLE-ARCHIVE-LOCAL-RED-001 — Portable POSIX archive contract fails against XZ builder
+
+- Date: 2026-07-15
+- Owner: Codex implementation owner
+- Source: uncommitted purpose-named contract test
+  `config/scripts/ssh-relay-runtime-portable-archive.test.mjs` atop local plan-decision commit
+  `c5fe474e6`.
+- Exact command:
+  `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1 config/scripts/ssh-relay-runtime-portable-archive.test.mjs`
+- Environment: macOS 26.2 arm64, Node v26.0.0, pnpm 10.24.0, Vitest 4.1.5.
+- Result: required RED; one file / three tests fail in 189ms Vitest / 1.04s wall; maximum RSS
+  131,629,056 bytes, zero swaps.
+- Failure oracles:
+  - the builder returns the exact old `.tar.xz` name instead of `.tar.br`;
+  - `SSH_RELAY_RUNTIME_POSIX_ARCHIVE_LIMITS` is absent instead of declaring 65,536-byte chunks,
+    quality 9, and window bits 20;
+  - the source imports `node:child_process`, spawns system `xz`, and has no built-in Brotli
+    compressor/decompressor.
+- Does not prove: implementation, GREEN, hostile archive behavior, deterministic real full-size
+  output, Node 24 or native-runner behavior, schema/release parity, desktop extraction, cache, SSH,
+  publication, or any tuple.
+- Follow-up: implement the smallest Node-native archive builder/inspector correction, then update
+  exact relay-archive naming consumers without changing Node upstream archives or Windows ZIP.
+
+### E-M5-PORTABLE-ARCHIVE-LOCAL-001 — Bounded Node-native relay archives pass locally
+
+- Date: 2026-07-15
+- Owner: Codex implementation owner
+- Source: implementation commit `c9f6da55e41d2f201684e967ce4c3db37150571f` atop plan-decision
+  commit `c5fe474e6f3f84e8b6c0fed930dd6dc580454e74`; draft PR #8741. Evidence metadata
+  is the following docs-only commit.
+- Environment: macOS 26.2 build 25C56 arm64; Node v26.0.0; pnpm 10.24.0; Vitest 4.1.5.
+- Implementation oracle:
+  - POSIX relay output is `.tar.br`; Windows remains ZIP and upstream Node inputs remain `.tar.xz`.
+  - deterministic TAR is streamed directly through Node's built-in Brotli quality 9,
+    `lgwin=20`, and 65,536-byte chunks into an exclusive mode-0600 output, avoiding both system XZ
+    and a full uncompressed temporary TAR;
+  - caller cancellation is combined with the five-minute artifact timeout and checked before output
+    creation; failure removes only an output this invocation opened, never an existing file;
+  - strict inspection and release-side exclusive extraction use the same bounded built-in Brotli
+    stream before exact path/type/mode/size/hash and full-tree verification;
+  - aggregate, manifest, tuple, post-sign, draft/read-back, direct-URL, reproducibility, workflow,
+    and canonical-vector contracts use the new exact archive name; the canonical manifest SHA-256 is
+    updated from the changed authenticated filename, not bypassed;
+  - both native job families syntax-check and execute the five-test purpose suite. The Linux
+    supplement and native-signing reconstruction use the strict Node extractor; CI-only `tar -xJf`
+    and native-signing XZ installation are removed and guarded against regression.
+- Purpose/workflow command:
+  `pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1 config/scripts/ssh-relay-runtime-portable-archive.test.mjs config/scripts/ssh-relay-runtime-workflow.test.mjs config/scripts/ssh-relay-runtime-native-signing-workflow.test.mjs`
+  passes three files / 13 tests in 462ms. It covers deterministic output, exact rehash, bounded
+  constants, no system/native XZ, truncated Brotli rejection, existing-output preservation,
+  pre-cancel settlement/cleanup, and both native workflow families.
+- Release regression command:
+  `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1 config/scripts/ssh-relay-runtime-*.test.mjs`
+  passes 50 files / 278 tests in 9.62s Vitest / 10.63s wall; maximum RSS 188,940,288 bytes, zero
+  swaps.
+- Desktop parity command:
+  `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1 src/main/ssh/ssh-relay-*.test.ts`
+  passes 16 files and skips one existing file; 232 tests pass and one is skipped in 6.09s Vitest /
+  7.46s wall; maximum RSS 297,877,504 bytes, zero swaps.
+- Full-size deterministic command: run the committed
+  `createSshRelayRuntimeArchive` twice with source epoch 1788739200 over the exact reconstructed Linux
+  x64 artifact 8355514197 from run 29445770009, then call `inspectSshRelayRuntimeArchive`, `cmp`,
+  `shasum -a 256`, and `stat -f '%N %z'` on both outputs. The 124,846,430 declared file bytes / 49
+  entries / 34 files produce two byte-identical 36,411,047-byte archives with SHA-256
+  `23a35a0db4b36166c6ad327c4986978b79f0281ef979dcd5f16525428e9ecdaa`. Builds take
+  7,824.18ms and 8,683.93ms; strict inspection takes 321.16ms. The combined two-build/inspection
+  process completes in 16.92s with 226,557,952-byte maximum RSS and zero swaps. This is release-job
+  construction memory, not desktop extraction memory; the separately measured complete extraction
+  delta is 34,144,256 bytes under E-M5-ARCHIVE-PORTABILITY-AUDIT-001.
+- Static commands: changed-file `oxlint`; `pnpm typecheck`; `pnpm lint`; `node --check
+config/scripts/ssh-relay-runtime-portable-archive.test.mjs`; changed-file `oxfmt`; purpose/workflow
+  Vitest; `git diff --check`; and protected-file zero-diff all pass. Full lint retains only unrelated
+  pre-existing warnings and passes switch exhaustiveness, 41 reliability gates, max-lines ratchet,
+  bundled guides, localization catalog, and localization coverage.
+- Consumer-disconnection oracle: there is no desktop extraction/cache module, caller, SSH
+  transfer/install, release write, production key, published artifact, tuple enablement, mode, or
+  default change. Legacy remains the only production path.
+- Does not prove: Node 24, Linux/Windows/macOS x64/arm64 native execution, exact clean-build equality
+  for new archive bytes, packaged Electron extraction, desktop two-minute timeout, live SSH,
+  release publication/signing/native trust, oldest floors, or any enabled tuple.
+- Follow-up: push the exact implementation/evidence heads and require the new purpose suite plus
+  complete runtime build/smoke/equality/read-back to pass on all six native Node 24 jobs before
+  checking the archive item or resuming desktop extraction.
+
 ## Accepted Gaps
 
 No product gap is accepted merely because it appears in this list. Each entry requires explicit
@@ -12346,11 +12431,10 @@ The project is not complete until every applicable item below is checked with ev
 
 ## Next Required Action
 
-Add the purpose-named `.tar.br` contract RED selected by E-M5-ARCHIVE-PORTABILITY-AUDIT-001, then
-implement only the POSIX relay artifact-format correction and replace its exact-head all-six native
+Push implementation `c9f6da55e` and its evidence checkpoint, then replace exact-head all-six native
 archive/reproducibility/execution evidence. Do not begin desktop extraction/cache staging until that
-prerequisite is green. Do not add a desktop call site, SSH transfer/install, mode wiring, tuple
-enablement, or default behavior. Keep Node upstream `.tar.xz` inputs, Windows ZIP,
+prerequisite is green on Node 24. Do not add a desktop call site, SSH transfer/install, mode wiring,
+tuple enablement, or default behavior. Keep Node upstream `.tar.xz` inputs, Windows ZIP,
 `ORCA_RELAY_PATH`, existing desktop required-assets behavior, detached-signature byte encoding,
 Windows arm64 build 26100, macOS 13.5, Linux kernel 4.18, release-cut, desktop builds, publication,
 and every tuple separately gated.
