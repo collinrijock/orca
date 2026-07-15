@@ -28,7 +28,8 @@ complete a box.
     6.0.25 execution, bundled Node, PTY, and watcher smoke.
   - Windows x64 passes its declared oldest-floor job. The hosted arm64 runner is build 26200, not the
     required build 26100, so its otherwise successful artifact/runtime smoke does not close that cell.
-  - Active: native-signing plan commit `9bdae7f5b` passes locally; exact-head CI is next.
+  - Active: native-signing plan commit `9bdae7f5b` and CI-wiring correction `9c0357235` pass locally;
+    replacement exact-head CI is next.
   - Next external proof: kernel 4.18, macOS 13.5, Windows arm64 build 26100, and native signing/trust.
   - No tuple is enabled; every SSH transfer/runtime and rollout cell remains open.
 

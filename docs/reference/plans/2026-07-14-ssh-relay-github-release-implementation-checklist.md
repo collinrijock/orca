@@ -9,7 +9,7 @@ work; keep exact commands, runner identities, hashes, metrics, and residual gaps
 Date created: 2026-07-14<br>
 Last updated: 2026-07-14<br>
 Current phase: Milestone 3 / Work Package 2 oldest-supported-baseline and native-trust proof — **In progress — 2026-07-14, Codex implementation owner**; exact-head run [29373507297](https://github.com/stablyai/orca/actions/runs/29373507297) passes all six target-native build, smoke, exact clean-build equality, upload, SBOM, license, provenance, runner/toolchain, and prohibited-content cells, and direct inspection of every downloaded payload passes exact archive/subject hashes, archive-scoped SPDX identity, one-owner-per-file, dependency, commit/run/builder/runner, tool-version/hash, and closure assertions (E-M3-METADATA-CI-001); Windows x64/arm64 record strict `MSVC 14.44.35207` identities and distinct exact linker SHA-256 values despite the Git-for-Windows PATH collision; the all-six metadata/provenance gate is closed, while oldest-baseline execution, native signing/trust, cross-family remotes, and measured legacy baselines remain open; production/default behavior and every tuple state remain unchanged; no bundled-runtime path is enabled and no artifact is published<br>
-Session checkpoint: **In progress — 2026-07-14, Codex implementation owner** — implementation commit `9bdae7f5b` defines the credential-free native-signing plan contract and is locally green against hostile fixtures and all six downloaded exact-run identities under E-M3-NATIVE-SIGNING-PLAN-LOCAL-001; it preserves official Node bytes, selects the exact non-Node native signing set, enumerates every native verification file, and rejects closure/path/role/count/extension drift before credentials or signing side effects. Exact-head CI and every credentialed native-signing/trust cell remain open; no tuple is enabled or published.<br>
+Session checkpoint: **In progress — 2026-07-14, Codex implementation owner** — implementation commit `9bdae7f5b` defines the locally green credential-free native-signing plan contract, but exact-head run [29380684866](https://github.com/stablyai/orca/actions/runs/29380684866) exposed that the native workflow's explicit command omitted its new 6-test suite (E-M3-NATIVE-SIGNING-PLAN-CI-RED-001). Correction commit `9c0357235` explicitly syntax-checks and executes it in both native job families and passes local static gates under E-M3-NATIVE-SIGNING-PLAN-WORKFLOW-LOCAL-001; a replacement exact head remains required. Every credentialed native-signing/trust cell is open and no tuple is enabled or published.<br>
 Primary design: [SSH relay GitHub Release plan](./2026-07-14-ssh-relay-github-release-plan.html)<br>
 Motivating issues: [#8450](https://github.com/stablyai/orca/issues/8450), [#1693](https://github.com/stablyai/orca/issues/1693)
 
@@ -668,7 +668,10 @@ candidate whose already-valid upstream signature may be preserved. Unknown roles
 duplicates, missing expected files, or identity/closure drift fail before credentials or signing
 side effects. This package is contract/test-only and cannot sign, publish, aggregate, or enable a
 tuple. The local contract and all-six actual-identity proof pass under
-E-M3-NATIVE-SIGNING-PLAN-LOCAL-001; exact-head CI is the next gate.
+E-M3-NATIVE-SIGNING-PLAN-LOCAL-001. E-M3-NATIVE-SIGNING-PLAN-CI-RED-001 proves the first exact-head
+workflow omitted the new suite despite otherwise healthy builds; explicitly wiring it into both
+native job families is implemented at `9c0357235` and locally green under
+E-M3-NATIVE-SIGNING-PLAN-WORKFLOW-LOCAL-001; passing a replacement exact head is the active gate.
 
 **Baseline correction — 2026-07-14, Codex implementation owner:**
 E-M3-LINUX-BASELINE-LOCAL-RED-001 proves the existing Linux x64 candidate cannot load its patched
@@ -7633,6 +7636,87 @@ diff --check`.
   performance, or an enabled tuple.
 - Follow-up: commit this evidence separately, require exact-head CI, then make native signing staging
   consume this plan without weakening any remaining credential/snapshot gate.
+
+### E-M3-NATIVE-SIGNING-PLAN-CI-RED-001 — First exact-head workflow omitted the new suite
+
+- Date: 2026-07-14 (run timestamps 2026-07-15 UTC)
+- Owner: Codex implementation owner
+- Source/run: exact draft-PR head `8ac54159c6f9d95858358f11746117c5480440cf`, containing
+  implementation commit `9bdae7f5bd7d5df838ab8c59af9346fc2282443c`; Actions run
+  [29380684866](https://github.com/stablyai/orca/actions/runs/29380684866).
+- Commands:
+
+  ```sh
+  gh run view 29380684866 --repo stablyai/orca \
+    --json headSha,status,conclusion,createdAt,updatedAt,url,jobs
+  gh run view 29380684866 --repo stablyai/orca --job 87243480614 --log | \
+    rg 'Run runtime artifact contract tests|Test Files|Tests|Duration|24.18.0'
+  gh run view 29380684866 --repo stablyai/orca --job 87243480598 --log | \
+    rg 'Run runtime artifact contract tests|Test Files|Tests|Duration'
+  ```
+
+- Result: expected RED evidence for the new contract's CI gate. All six native build jobs and their
+  existing contract steps passed; both Linux userland supplements, Windows x64 build-20348 floor,
+  exact-head PR Checks
+  [29380684876](https://github.com/stablyai/orca/actions/runs/29380684876), and Golden E2E
+  [29380684872](https://github.com/stablyai/orca/actions/runs/29380684872) also passed. The artifact
+  workflow concluded failure only because Windows arm64 correctly rejected hosted build 26200
+  against required build 26100.
+- Missing oracle: inspection of the exact command/log showed the POSIX job ran 21 files/97 tests and
+  the Windows job ran 22 files/98 passed plus 3 skipped; neither explicit list named
+  `ssh-relay-runtime-native-signing-plan.test.mjs`, and neither syntax-checked its source. Healthy
+  builds cannot substitute for a test that did not run, so this exact head does not qualify the new
+  package.
+- Native build job controls: Linux x64/arm64, macOS x64/arm64, and Windows x64/arm64 jobs all passed
+  at 3m43s/9m57s, 7m30s/2m41s, and 5m27s/8m7s respectively. PR Checks passed in 14m57s; Golden Linux
+  and macOS passed in 4m37s/5m25s. These are regression controls only, not the omitted contract proof.
+- Does not prove: the new suite on Node 24/native runners, signing credentials, returned signed bytes,
+  native trust, release aggregation, SSH behavior, or an enabled tuple.
+- Correction: explicitly syntax-check the source/test and name the suite in both POSIX and Windows
+  native workflow commands; lock all four test references and both source syntax checks in the
+  workflow contract before repeating the exact head.
+
+### E-M3-NATIVE-SIGNING-PLAN-WORKFLOW-LOCAL-001 — Both native job families now execute the suite
+
+- Date: 2026-07-14
+- Owner: Codex implementation owner
+- Source: correction commit `9c0357235867cb2ff1ab8cbeed4901e6f013cf1d`, based on
+  `8ac54159c6f9d95858358f11746117c5480440cf`.
+- Runner: local macOS arm64 shell, Node v26.0.0 and pnpm 10.24.0; no remote, network, credential,
+  artifact, or signing service was used.
+- Commands:
+
+  ```sh
+  pnpm exec vitest run --config config/vitest.config.ts \
+    config/scripts/ssh-relay-runtime-workflow.test.mjs \
+    config/scripts/ssh-relay-runtime-native-signing-plan.test.mjs
+  pnpm exec vitest run --config config/vitest.config.ts config/scripts/ssh-relay-*.test.mjs
+  node --check config/scripts/ssh-relay-runtime-native-signing-plan.mjs
+  node --check config/scripts/ssh-relay-runtime-native-signing-plan.test.mjs
+  pnpm run typecheck
+  pnpm run lint
+  pnpm run check:max-lines-ratchet
+  pnpm exec oxfmt --check \
+    .github/workflows/ssh-relay-runtime-artifacts.yml \
+    config/scripts/ssh-relay-runtime-workflow.test.mjs \
+    docs/reference/plans/2026-07-14-ssh-relay-github-release-implementation-checklist.md \
+    docs/reference/plans/2026-07-14-ssh-relay-github-release-implementation-checklist-summary.md
+  git diff --check
+  ```
+
+- Result: PASS. The workflow plus signing-plan suites passed 2 files/11 tests in 1.53 seconds; the
+  aggregate SSH relay artifact suite passed 23 files/107 tests in 4.64 seconds. Both files passed
+  direct syntax checks. Typecheck, full lint, reliability gates, max-lines (355 grandfathered
+  suppressions and no new bypass), bundled-skill verification, localization catalog/coverage,
+  focused formatting, and `git diff --check` passed with only existing unrelated lint warnings and
+  the expected local Node-24 engine warning.
+- Workflow oracle: POSIX and Windows each syntax-check the plan source and test, and each exact Vitest
+  command names the purpose-built suite. The workflow test requires four test-path occurrences and
+  two source syntax-check occurrences, preventing one native family from silently dropping it.
+- Does not prove: GitHub workflow parsing/execution, Node 24, any native runner, native signing/trust,
+  returned signed bytes, release aggregation, SSH behavior, or an enabled tuple.
+- Follow-up: push the correction plus this evidence separately and require the replacement exact-head
+  POSIX and Windows logs to contain the 6-test suite before accepting CI proof.
 
 ## Accepted Gaps
 
