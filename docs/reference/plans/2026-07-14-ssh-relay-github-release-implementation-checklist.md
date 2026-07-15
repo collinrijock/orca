@@ -8,8 +8,8 @@ work; keep exact commands, runner identities, hashes, metrics, and residual gaps
 
 Date created: 2026-07-14<br>
 Last updated: 2026-07-15<br>
-Current phase: Milestone 4 / Work Package 3 disconnected draft-release failure composition — **In progress — 2026-07-15, Codex implementation owner**. Exclusive authenticated draft read-back materialization and exact materialized archive execution are closed locally and on all six exact-head native Node 24 jobs under E-M4-DRAFT-READBACK-MATERIALIZATION-LOCAL-RED-001, E-M4-DRAFT-READBACK-MATERIALIZATION-LOCAL-001, E-M4-DRAFT-READBACK-MATERIALIZATION-CI-001, E-M4-READBACK-ARCHIVE-EXECUTION-LOCAL-RED-001, E-M4-READBACK-ARCHIVE-EXECUTION-LOCAL-001, and E-M4-READBACK-ARCHIVE-EXECUTION-CI-001. Next, compose the existing disconnected upload, recovery, materialization, and execution capabilities under purpose-named timeout/retry/partial-output/failure tests. Do not add a real release write, production workflow caller, publication, desktop consumer, SSH transfer, tuple enablement, or default behavior.<br>
-Session checkpoint: **In progress — 2026-07-15, Codex implementation owner** — exact pushed head `3779838f66a57e3688367256510e096d17d78011` passes real first-build archive reconstruction, full-tree verification, bundled Node/native PTY/watcher smoke, and cleanup on all six target-native jobs in run 29438285824 under E-M4-READBACK-ARCHIVE-EXECUTION-CI-001. PR Checks 29438280473 and both Golden E2E jobs in 29438284781 are green. Both Linux supplements and Windows x64 floor pass. Windows arm64 floor smoke passes in 7,454.2658ms with 49,430,528-byte RSS; the floor gate then correctly rejects hosted build 26200 versus required 26100. The disconnected draft-release failure-composition RED and 10-test local implementation at `b6bb3dd9a` are recorded under E-M4-DRAFT-RELEASE-COMPOSITION-LOCAL-RED-001 and E-M4-DRAFT-RELEASE-COMPOSITION-LOCAL-001; exact-head all-six Node 24 proof is next. The user authorizes end-to-end commits, pushes, draft-PR updates, CI runs/reruns, and PR-contained rehearsals, but not merging to `main`. There is no real release write, publication caller, desktop consumer, SSH transfer/install, tuple enablement, or production/default behavior change. No accepted production key, protected environment/seed, native-signing trust proof, publication path, or tuple enablement is connected. Legacy remains the production default.<br>
+Current phase: Milestone 5 / Work Package 4 offline artifact selection — **In progress — 2026-07-15, Codex implementation owner**. Milestone 4 disconnected upload/recovery/materialization/execution composition is closed locally and on all six exact-head native Node 24 jobs under E-M4-DRAFT-RELEASE-COMPOSITION-LOCAL-RED-001, E-M4-DRAFT-RELEASE-COMPOSITION-LOCAL-001, and E-M4-DRAFT-RELEASE-COMPOSITION-CI-001. A real draft release write/read-back is not PR-contained and remains blocked by the unprovisioned production signer/environment; safe default is no write. Begin only offline tuple/content/immutable-URL selection contracts; do not add download, cache, desktop consumer, SSH transfer, tuple enablement, mode wiring, or default behavior.<br>
+Session checkpoint: **In progress — 2026-07-15, Codex implementation owner** — exact pushed head `8c925c24990ac93f6d2dd8de2081a50a74f30d97` passes the 10-test draft-release composition suite and full runtime construction/execution on all six target-native jobs in run 29440806947 under E-M4-DRAFT-RELEASE-COMPOSITION-CI-001. PR Checks 29440804969 and both Golden E2E jobs in 29440804978 are green. Both Linux supplements and Windows x64 floor pass. Windows arm64 floor smoke passes in 6,178.8338ms with 49,881,088-byte RSS; the floor gate then correctly rejects hosted build 26200 versus required 26100. The user authorizes end-to-end commits, pushes, draft-PR updates, CI runs/reruns, and PR-contained rehearsals, but not merging to `main`. There is no real release write, publication caller, desktop consumer, SSH transfer/install, tuple enablement, or production/default behavior change. No accepted production key, protected environment/seed, native-signing trust proof, publication path, or tuple enablement is connected. Legacy remains the production default.<br>
 Primary design: [SSH relay GitHub Release plan](./2026-07-14-ssh-relay-github-release-plan.html)<br>
 Motivating issues: [#8450](https://github.com/stablyai/orca/issues/8450), [#1693](https://github.com/stablyai/orca/issues/1693)
 
@@ -126,12 +126,15 @@ same change as the work it records.
   all-six native execution are green under E-M4-READBACK-ARCHIVE-EXECUTION-LOCAL-RED-001,
   E-M4-READBACK-ARCHIVE-EXECUTION-LOCAL-001, and
   E-M4-READBACK-ARCHIVE-EXECUTION-CI-001.
-- Active package: Work Package 3 disconnected draft-release failure composition. The purpose-named
-  RED and 10-test local implementation are green under
-  E-M4-DRAFT-RELEASE-COMPOSITION-LOCAL-RED-001 and
-  E-M4-DRAFT-RELEASE-COMPOSITION-LOCAL-001; exact-head all-six Node 24 proof is next. Do not add a
-  real release write, publication, desktop consumer, SSH transfer/install, or production caller in
-  this slice.
+- Completed package: Work Package 3 disconnected draft-release failure composition. The purpose-
+  named RED, 10-test local implementation, and exact-head all-six Node 24 proof are green under
+  E-M4-DRAFT-RELEASE-COMPOSITION-LOCAL-RED-001,
+  E-M4-DRAFT-RELEASE-COMPOSITION-LOCAL-001, and
+  E-M4-DRAFT-RELEASE-COMPOSITION-CI-001.
+- Active package: Work Package 4 offline artifact selection. Begin with a purpose-named RED for
+  exact offline tuple/content selection and immutable GitHub release URL construction from an
+  already-verified embedded manifest. Do not add signature key policy, networking, download/cache,
+  desktop call sites, SSH behavior, mode wiring, tuple enablement, or default behavior in this slice.
 - Completed Work Package 2 gate: target-native Windows source-signature reports from exact-head
   artifact jobs 87267322867 and 87267322870 were independently downloaded and matched to their
   identities and signing-stage reports under E-M3-WINDOWS-SOURCE-SIGNATURE-CI-001. PR Checks
@@ -11855,6 +11858,52 @@ config/vitest.config.ts config/scripts/ssh-relay-runtime-draft-release-verificat
   the 10-test suite to pass on all six exact-head native Node 24 jobs. Preserve every production/
   default disconnection.
 
+### E-M4-DRAFT-RELEASE-COMPOSITION-CI-001 — Failure composition passes all six native Node 24 jobs
+
+- Date: 2026-07-15
+- Owner: Codex implementation owner
+- Source: exact pushed head `8c925c24990ac93f6d2dd8de2081a50a74f30d97`; implementation commit
+  `b6bb3dd9a`; draft PR #8741.
+- Workflow: [SSH Relay Runtime Artifacts run 29440806947](https://github.com/stablyai/orca/actions/runs/29440806947),
+  18:30:21Z–18:47:19Z. The aggregate conclusion is the expected failure only because the separate
+  Windows arm64 floor job rejects hosted build 26200 after successful runtime execution.
+- Native jobs and 10-test suite timings:
+  - Linux x64 job 87438955106, `ubuntu-24.04`, image `ubuntu24` `20260714.240.1`, PASS in 4m33s;
+    suite 57ms.
+  - Linux arm64 job 87438955082, `ubuntu-24.04-arm`, image `ubuntu24-arm64` `20260706.52.2`, PASS in
+    4m56s; suite 48ms.
+  - Darwin x64 job 87438955142, `macos-15-intel`, image `macos15` `20260629.0276.1`, PASS in 7m10s;
+    suite 103ms.
+  - Darwin arm64 job 87438955086, `macos-15`, image `macos15` `20260706.0213.1`, PASS in 4m24s;
+    suite 83ms.
+  - Windows x64 job 87438955074, `windows-2022`, image `win22` `20260706.237.1`, PASS in 5m44s;
+    suite 151ms.
+  - Windows arm64 job 87438955084, `windows-11-arm`, image `win11-arm64` `20260714.109.1`, PASS in
+    11m17s; suite 165ms.
+- Broad contract counts: each POSIX job passes 55 files / 303 tests; durations are Linux x64 7.81s,
+  Linux arm64 6.43s, Darwin x64 23.67s, and Darwin arm64 12.01s. Each Windows job passes 56 files /
+  297 tests plus 10 platform skips of 307; x64 takes 13.76s and arm64 17.76s. Every job also rebuilds,
+  compares, reconstructs, and executes its real target-native archive successfully.
+- Downstream/adjacent evidence: both Linux supplement jobs pass; Windows x64 floor passes. Windows
+  arm64 floor job 87441657346 uses image `20260706.102.1`; bundled Node/PTY/watcher smoke passes in
+  6,178.8338ms with 49,881,088-byte RSS and the complete verifier takes 8,186.4482ms before the gate
+  rejects observed OS/kernel build 26200 versus required build 26100. PR Checks run
+  [29440804969](https://github.com/stablyai/orca/actions/runs/29440804969), job 87438947689, passes in
+  13m57s. Golden E2E run [29440804978](https://github.com/stablyai/orca/actions/runs/29440804978)
+  passes macOS job 87438947704 in 3m12s and Linux job 87438947780 in 4m25s.
+- Oracle proved: both native workflow families parse and execute the exact 10-test bounded asset/
+  archive coverage, phase ordering, timeout/retry/partial-output stop, cancellation, identity drift,
+  ownership-safe cleanup, and later-archive failure contract consistently on x64 and arm64. Full
+  artifact construction/execution and adjacent product regressions remain green.
+- Consumer-disconnection oracle: the workflow invokes only syntax and contract tests. There is no
+  CLI, release/workflow caller, credential, GitHub write, publication, desktop/SSH consumer, tuple
+  enablement, or default behavior change.
+- Does not prove: real GitHub timeout/retry/partial-release behavior, a real draft write/read-back,
+  protected approval/signing failures, native trust, desktop resolver/cache, SSH transfer/install,
+  performance against legacy, or any enabled tuple.
+- Follow-up: checkpoint this evidence. A real release write is not PR-contained and remains blocked;
+  retain no-write as the safe default and begin the independent Milestone 5 offline selector RED.
+
 ## Accepted Gaps
 
 No product gap is accepted merely because it appears in this list. Each entry requires explicit
@@ -11913,15 +11962,15 @@ The project is not complete until every applicable item below is checked with ev
 
 ## Next Required Action
 
-Begin a purpose-named disconnected draft-release failure-composition RED. It must orchestrate only
-the existing bounded upload/recovery, authenticated materialization, and exact archive-execution
-capabilities through injected credential-free boundaries. Pin phase ordering and cleanup for timeout,
-retry exhaustion, partial upload/output, cancellation, release-identity drift, materialization
-failure, and archive-execution failure. Do not add a real release write, publication, desktop
-consumer, SSH transfer/install, tuple enablement, production caller, or workflow connection in this
-package. Keep the existing desktop `verify-release-required-assets.mjs` behavior and detached-
-signature byte encoding unchanged. The protected environment, accepted production keys, and secret
-remain unprovisioned, so live signing evidence stays BLOCKED.
+Begin a purpose-named Milestone 5 offline artifact-selection RED. It must accept only an already-
+verified immutable embedded manifest, map the existing detected relay OS/architecture plus explicit
+libc classification to one exact tuple/content ID, and construct the exact immutable
+`/releases/download/<tag>/<asset>` URL without an API/latest/freshness lookup. Unknown, ambiguous,
+unsupported, musl, or inconsistent inputs must return a classified unavailable result suitable for
+the still-disconnected legacy path; manifest/identity drift must fail closed. Do not add signature
+key policy, networking, redirect handling, download/cache, desktop call sites, SSH transfer/install,
+mode wiring, tuple enablement, or default behavior in this package. Keep `ORCA_RELAY_PATH`, existing
+desktop required-assets behavior, and detached-signature byte encoding unchanged.
 Keep Windows arm64 build 26100, macOS 13.5, Linux kernel 4.18, release-cut, desktop builds,
 publication, and every tuple separately gated. Do not merge to `main`; retain every
 production/default gate.

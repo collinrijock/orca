@@ -9,20 +9,18 @@ keeps commands, hashes, runner identities, timings, and failure details.
 A checked box means the work has evidence in the detailed ledger. Design approval alone does not
 complete a box.
 
-Active checkpoint: **Milestone 4 / Work Package 3 disconnected draft-release failure composition —
+Active checkpoint: **Milestone 5 / Work Package 4 offline artifact selection —
 in progress, 2026-07-15, Codex implementation owner.** Exact-head run
-[29438285824](https://github.com/stablyai/orca/actions/runs/29438285824) at `3779838f6` passes the
-10-test execution contract and real first-build archive reconstruction/native smoke on all six
-target-native Node 24 jobs under `E-M4-READBACK-ARCHIVE-EXECUTION-CI-001`. PR Checks and Golden E2E
-are green; the artifact workflow is red only for the retained Windows ARM
-build-26200-versus-26100 floor mismatch after successful runtime smoke. Next, compose the existing
-disconnected upload, recovery, materialization, and execution capabilities under purpose-named
-failure-state tests without a release write or workflow caller. The missing composition boundary is
-recorded under `E-M4-DRAFT-RELEASE-COMPOSITION-LOCAL-RED-001`; the 10-test implementation and full
-local regression set pass under `E-M4-DRAFT-RELEASE-COMPOSITION-LOCAL-001`. Exact-head all-six
-Node 24 proof is pending at local implementation commit `b6bb3dd9a`. Production keys/environment/seed,
+[29440806947](https://github.com/stablyai/orca/actions/runs/29440806947) at `8c925c249` passes the
+10-test draft-release composition contract and full runtime construction/execution on all six
+target-native Node 24 jobs under `E-M4-DRAFT-RELEASE-COMPOSITION-CI-001`. PR Checks and Golden E2E
+are green; the artifact workflow is red only for the retained Windows ARM build-26200-versus-26100
+floor mismatch after successful runtime smoke. A real draft release write/read-back remains blocked
+because it is not PR-contained and the production signer/environment are unprovisioned; the safe
+default is no write. Next, begin the purpose-named offline tuple/content/immutable-URL selector RED
+without download, cache, desktop consumer, or mode wiring. Production keys/environment/seed,
 publication, desktop/default consumers, SSH transfer/install, tuple enablement, and merge to `main`
-remain disconnected. Current pushed branch head is `3779838f6`; the implementation owner is authorized to drive
+remain disconnected. Current pushed branch head is `8c925c249`; the implementation owner is authorized to drive
 commits, pushes, CI, and PR-contained rehearsals end to end without merging.
 
 ## Safety status
@@ -291,8 +289,9 @@ commits, pushes, CI, and PR-contained rehearsals end to end without merging.
 - [ ] Test timeouts, retries, approval denial, signing failure, partial output, and draft recovery.
       Disconnected upload/materialization/execution ordering, timeout/retry/partial-output stops,
       cancellation, identity drift, ownership-safe cleanup, and later-archive failure pass locally
-      under `E-M4-DRAFT-RELEASE-COMPOSITION-LOCAL-001`. Protected approval and real signing failure
-      evidence remain blocked/open, so this item is not complete.
+      under `E-M4-DRAFT-RELEASE-COMPOSITION-LOCAL-001` and on all six native Node 24 jobs under
+      `E-M4-DRAFT-RELEASE-COMPOSITION-CI-001`. Protected approval and real signing failure evidence
+      remain blocked/open, so this item is not complete.
 
 ### WP4 — Desktop resolver and verified cache
 
