@@ -495,6 +495,107 @@ describe('TerminalHost', () => {
       expect(second).toBe(first)
       expect(lastSubprocess.forceKill).not.toHaveBeenCalled()
     })
+
+    it('keeps a naturally-exited id reserved until teardown finishes without re-killing its pid', async () => {
+      let completeSweep!: () => void
+      killWithDescendantSweepMock.mockImplementation(
+        (_pid: number, finish: () => void) =>
+          new Promise<void>((resolve) => {
+            completeSweep = () => {
+              finish()
+              resolve()
+            }
+          })
+      )
+      await host.createOrAttach({
+        sessionId: 'agent-natural-exit',
+        cols: 80,
+        rows: 24,
+        launchAgent: 'claude',
+        streamClient: { onData: vi.fn(), onExit: vi.fn() }
+      })
+      const retiredSubprocess = lastSubprocess
+
+      const killing = host.kill('agent-natural-exit', { immediate: true })
+      retiredSubprocess._onExitCb?.(0)
+      await expect(
+        host.createOrAttach({
+          sessionId: 'agent-natural-exit',
+          cols: 80,
+          rows: 24,
+          launchAgent: 'claude',
+          streamClient: { onData: vi.fn(), onExit: vi.fn() }
+        })
+      ).rejects.toThrow('Session not found')
+
+      completeSweep()
+      await killing
+      expect(retiredSubprocess.forceKill).not.toHaveBeenCalled()
+
+      await expect(
+        host.createOrAttach({
+          sessionId: 'agent-natural-exit',
+          cols: 80,
+          rows: 24,
+          launchAgent: 'claude',
+          streamClient: { onData: vi.fn(), onExit: vi.fn() }
+        })
+      ).resolves.toEqual(expect.objectContaining({ isNew: true }))
+      expect(spawnFn).toHaveBeenCalledTimes(2)
+    })
+
+    it('upgrades a pending graceful agent teardown when immediate kill arrives', async () => {
+      let completeSweep!: () => void
+      killWithDescendantSweepMock.mockImplementation(
+        (_pid: number, finish: () => void) =>
+          new Promise<void>((resolve) => {
+            completeSweep = () => {
+              finish()
+              resolve()
+            }
+          })
+      )
+      await host.createOrAttach({
+        sessionId: 'agent-upgrade-kill',
+        cols: 80,
+        rows: 24,
+        launchAgent: 'claude',
+        streamClient: { onData: vi.fn(), onExit: vi.fn() }
+      })
+
+      const graceful = host.kill('agent-upgrade-kill')
+      const immediate = host.kill('agent-upgrade-kill', { immediate: true })
+      expect(immediate).toBe(graceful)
+      expect(lastSubprocess.kill).not.toHaveBeenCalled()
+      expect(lastSubprocess.forceKill).not.toHaveBeenCalled()
+
+      completeSweep()
+      await Promise.all([graceful, immediate])
+      expect(lastSubprocess.kill).not.toHaveBeenCalled()
+      expect(lastSubprocess.forceKill).toHaveBeenCalledOnce()
+      expect(lastSubprocess.dispose).toHaveBeenCalledOnce()
+    })
+
+    it('force-kills when immediate teardown follows a completed graceful snapshot', async () => {
+      killWithDescendantSweepMock.mockImplementation(async (_pid: number, finish: () => void) =>
+        finish()
+      )
+      await host.createOrAttach({
+        sessionId: 'agent-post-snapshot-upgrade',
+        cols: 80,
+        rows: 24,
+        launchAgent: 'claude',
+        streamClient: { onData: vi.fn(), onExit: vi.fn() }
+      })
+
+      await host.kill('agent-post-snapshot-upgrade')
+      expect(lastSubprocess.kill).toHaveBeenCalledOnce()
+      expect(lastSubprocess.forceKill).not.toHaveBeenCalled()
+
+      host.kill('agent-post-snapshot-upgrade', { immediate: true })
+      expect(lastSubprocess.forceKill).toHaveBeenCalledOnce()
+      expect(lastSubprocess.dispose).toHaveBeenCalledOnce()
+    })
   })
 
   describe('signal', () => {

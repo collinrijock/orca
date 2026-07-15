@@ -64,7 +64,10 @@ function readFreshProcessTable(
       {
         maxBuffer: PS_MAX_BUFFER_BYTES,
         timeout: timeoutMs,
-        killSignal: 'SIGKILL'
+        killSignal: 'SIGKILL',
+        // Why: ps localizes lstart, but delayed identity checks must parse it
+        // identically for every user locale.
+        env: { ...process.env, LANG: 'C', LC_ALL: 'C' }
       },
       (error, stdout) => {
         if (error) {

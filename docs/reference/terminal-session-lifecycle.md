@@ -81,9 +81,11 @@ could invalidate intentional long-lived `worktree-sleep` checkpoints.
   reach — via `pty-descendant-termination.ts` (bounded fresh snapshot with
   same-turn coalescing, SIGTERM, grace window, then identity-safe SIGKILL).
   Completed process tables are never reused as signal targets, and identity
-  checks use the source scan's timestamp. A session is marked as terminating
-  before capture so reattach cannot race teardown. Windows and SSH-hosted PTYs
-  keep the previous foreground-tree contract for now.
+  checks use C-locale timestamps from the source scan. A session is marked as
+  terminating before capture and keeps teardown ownership through natural exit,
+  so reattach, duplicate kill, and graceful-to-immediate upgrade cannot race the
+  snapshot. Windows and SSH-hosted PTYs keep the previous foreground-tree
+  contract for now.
 - Changing agent-provider resume commands or permission flags.
 - Making a UI close wait for a remote process to exit before the tab disappears.
 - Replacing worktree sleep with tab close. Sleep remains resumable by design.

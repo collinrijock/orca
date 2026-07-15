@@ -72,21 +72,20 @@ async function sweepProviderByPrefix(
 ): Promise<number> {
   const prefix = `${worktreeId}@@`
   const sessions = await provider.listProcesses().catch(() => [])
-  let killed = 0
-  for (const s of sessions) {
-    if (!s.id.startsWith(prefix)) {
-      continue
-    }
-    try {
-      await provider.shutdown(s.id, { immediate: true })
-      clearStoppedPtyState(s.id, onPtyStopped)
-      killed += 1
-    } catch {
-      // Already dead, or the backend dropped the session — treat as success.
-      killed += 1
-    }
-  }
-  return killed
+  const ownedSessions = sessions.filter((session) => session.id.startsWith(prefix))
+  // Why: agent shutdown snapshots coalesce only when requests begin together;
+  // serial awaits multiply process-table scans and worktree-delete latency.
+  await Promise.all(
+    ownedSessions.map(async (session) => {
+      try {
+        await provider.shutdown(session.id, { immediate: true })
+        clearStoppedPtyState(session.id, onPtyStopped)
+      } catch {
+        // Already dead, or the backend dropped the session — treat as success.
+      }
+    })
+  )
+  return ownedSessions.length
 }
 
 async function sweepRegistryForWorktree(
@@ -95,17 +94,18 @@ async function sweepRegistryForWorktree(
   onPtyStopped?: (ptyId: string) => void
 ): Promise<number> {
   const entries = listRegisteredPtys().filter((r) => r.worktreeId === worktreeId)
-  let killed = 0
-  for (const entry of entries) {
-    try {
-      await localProvider.shutdown(entry.ptyId, { immediate: true })
-      clearStoppedPtyState(entry.ptyId, onPtyStopped)
-      killed += 1
-    } catch {
-      /* ignore — best-effort */
-    }
-  }
-  return killed
+  const stopped = await Promise.all(
+    entries.map(async (entry) => {
+      try {
+        await localProvider.shutdown(entry.ptyId, { immediate: true })
+        clearStoppedPtyState(entry.ptyId, onPtyStopped)
+        return 1
+      } catch {
+        return 0
+      }
+    })
+  )
+  return stopped.reduce<number>((count, value) => count + value, 0)
 }
 
 function clearStoppedPtyState(ptyId: string, onPtyStopped?: (ptyId: string) => void): void {

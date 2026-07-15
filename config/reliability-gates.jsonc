@@ -711,16 +711,16 @@
         "ssh",
         "runtime"
       ],
-      "coverageNotes": "Live macOS Electron tests prove exact local PTY disappearance after parked-tab close and detached-pgid descendant death after agent close. Deterministic tests cover daemon and SSH routing, local/daemon pending-snapshot ownership, duplicate-kill completion sharing, bounded/fresh/coalesced process-table reads, source-scan timestamp identity, same-second PID ambiguity, ordinary runtime close ownership, unified-only hydration, split ownership, pane detach transfer, restart alias hydration, and late-hook suppression; live Linux, Windows, WSL, SSH, and remote-runtime process evidence remains pending.",
+      "coverageNotes": "Live macOS Electron tests prove exact local PTY disappearance after parked-tab close and detached-pgid descendant death after agent close. Deterministic tests cover daemon and SSH routing, local/daemon pending-snapshot ownership across natural exit, graceful-to-immediate kill upgrades, duplicate-kill completion sharing, locale-stable bounded/fresh/coalesced process-table reads, concurrent bulk teardown, source-scan timestamp identity, same-second PID ambiguity, ordinary runtime close ownership, unified-only hydration, split ownership, pane detach transfer, restart alias hydration, and late-hook suppression; live Linux, Windows, WSL, SSH, and remote-runtime process evidence remains pending.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/pull/8628",
         "https://github.com/stablyai/orca/pull/8706"
       ],
-      "invariant": "Close permanently removes the owned provider session, agent descendants, and resume authority even when no TerminalPane is mounted; a terminating id cannot reattach or start duplicate cleanup, and duplicate callers await the same completion; process-table work is bounded, fresh for each post-start request, and same-turn coalesced; detach and park preserve ownership; aliases prevent a detached agent's immutable physical pane key from being retired with its former tab.",
-      "oracle": "Capture the exact PTY before parking, prove it remains listed while the view is absent, close through the product state boundary, and poll the provider inventory until that exact ID disappears; an agent-marked PTY's detached-pgid child is alive before close and absent afterward; unit tests reject pending-capture reattach, share duplicate teardown completion, coalesce 20 same-turn process-table requests, force a successor scan for later arrivals, retain the source scan's timestamp, bound both read phases, avoid ambiguous SIGKILL, and assert canonical owner dedupe, exact pane tombstones, chained detach transfer, and restart alias restoration.",
+      "invariant": "Close permanently removes the owned provider session, agent descendants, and resume authority even when no TerminalPane is mounted; a terminating id remains reserved through natural exit, duplicate callers await the same completion, and immediate teardown upgrades any graceful request without signalling a recycled PID; process-table work is locale-stable, bounded, fresh for each post-start request, and same-turn coalesced, including bulk worktree cleanup; detach and park preserve ownership; aliases prevent a detached agent's immutable physical pane key from being retired with its former tab.",
+      "oracle": "Capture the exact PTY before parking, prove it remains listed while the view is absent, close through the product state boundary, and poll the provider inventory until that exact ID disappears; an agent-marked PTY's detached-pgid child is alive before close and absent afterward; unit tests keep a naturally exited id reserved without re-killing its PID, upgrade pending and post-snapshot graceful kills to immediate, force ps into the C locale, begin bulk shutdowns together, share duplicate teardown completion, coalesce 20 same-turn process-table requests, force a successor scan for later arrivals, retain the source scan's timestamp, bound both read phases, avoid ambiguous SIGKILL, and assert canonical owner dedupe, exact pane tombstones, chained detach transfer, and restart alias restoration.",
       "commands": [
         "pnpm dlx node@24 ./node_modules/vitest/vitest.mjs run --config config/vitest.config.ts src/main/agent-hooks/server-pane-authority.test.ts src/main/ipc/agent-hooks.test.ts src/main/ipc/agent-pane-authority-ownership.test.ts src/main/ipc/pty-management.test.ts src/main/persistence.test.ts src/renderer/src/store/slices/agent-pane-authority.test.ts src/renderer/src/store/slices/terminal-pane-detach-agent-identity.test.ts src/renderer/src/store/slices/terminal-tab-retirement.test.ts src/renderer/src/store/slices/terminal-tab-retirement-store.test.ts src/renderer/src/components/shared/kill-all-terminal-surfaces.test.ts",
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/pty-descendant-termination.test.ts src/main/daemon/session.test.ts src/main/daemon/terminal-host.test.ts src/main/providers/local-pty-provider.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/pty-descendant-termination.test.ts src/main/daemon/session.test.ts src/main/daemon/terminal-host.test.ts src/main/providers/local-pty-provider.test.ts src/main/runtime/worktree-teardown.test.ts",
         "pnpm run test:e2e -- tests/e2e/terminal-parked-close-retirement.spec.ts --workers=1",
         "pnpm run test:e2e -- tests/e2e/agent-descendant-process-kill.spec.ts --workers=1"
       ],
@@ -734,6 +734,7 @@
         "src/main/daemon/session.test.ts",
         "src/main/daemon/terminal-host.test.ts",
         "src/main/providers/local-pty-provider.test.ts",
+        "src/main/runtime/worktree-teardown.test.ts",
         "src/renderer/src/store/slices/agent-pane-authority.test.ts",
         "src/renderer/src/store/slices/terminal-pane-detach-agent-identity.test.ts",
         "src/renderer/src/store/slices/terminal-tab-retirement.test.ts",
@@ -768,6 +769,7 @@
           "assertions": [
             "20 same-turn process-table requests execute one fresh scan while later arrivals receive a successor scan",
             "snapshot and escalation readers stop at their deadline",
+            "production ps reads force locale-independent C timestamps",
             "the source scan timestamp survives request resolution and capture-second identities are never escalated with SIGKILL"
           ]
         },
@@ -775,7 +777,15 @@
           "file": "src/main/daemon/terminal-host.test.ts",
           "assertions": [
             "agent immediate kill rejects reattach while descendant capture is pending",
+            "a naturally exited session id remains reserved until capture finishes without force-killing its retired PID",
+            "graceful teardown upgrades to immediate both during and after descendant capture",
             "duplicate immediate kill starts one descendant sweep"
+          ]
+        },
+        {
+          "file": "src/main/runtime/worktree-teardown.test.ts",
+          "assertions": [
+            "all owned provider shutdowns start before any completes so process-table snapshots can coalesce"
           ]
         },
         {
@@ -810,7 +820,7 @@
       },
       "performanceBudget": {
         "required": true,
-        "evidence": "The close path is user-triggered and bounded by canonical live-owner indexing. Production ps has a 1s kill timeout; 20 same-turn requests execute one fresh process-table read, while a request arriving after a scan starts queues one successor rather than consuming stale signal targets. Completed tables are never reused. Escalation uses the same bounded coordinator, and kill-all store scale remains covered by terminal-session.kill-all-surface-cleanup."
+        "evidence": "The close path is user-triggered and bounded by canonical live-owner indexing. Production ps has a 1s kill timeout; 20 same-turn requests execute one fresh process-table read, while a request arriving after a scan starts queues one successor rather than consuming stale signal targets. Completed tables are never reused. Bulk worktree shutdown begins owned sessions concurrently so the production coordinator can coalesce the initial scan instead of serializing one subprocess per session. Escalation uses the same bounded coordinator, and kill-all store scale remains covered by terminal-session.kill-all-surface-cleanup."
       },
       "promotionCriteria": [
         "Accumulate 100 clean runs or 14 days on required CI platforms.",

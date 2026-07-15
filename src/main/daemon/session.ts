@@ -284,12 +284,25 @@ export class Session {
       // signal; the kill timer below starts now, so force-dispose timing is
       // unaffected.
       void killWithDescendantSweep(this.subprocess.pid, () => {
-        if (this._state !== 'exited') {
-          this.subprocess.kill()
-        }
+        this.signalTerminationRoot()
       })
     }
+    this.scheduleForceDisposeFallback()
+  }
 
+  /** Signals a root whose descendant snapshot has completed. */
+  signalTerminationRoot(): void {
+    if (this._state !== 'exited') {
+      this.subprocess.kill()
+    }
+  }
+
+  /** Starts the existing graceful-kill deadline when a coordinator owns the
+   * snapshot-first portion of teardown. */
+  scheduleForceDisposeFallback(): void {
+    if (this.killTimer) {
+      return
+    }
     this.killTimer = setTimeout(() => {
       if (this._state !== 'exited') {
         this.forceDispose()
