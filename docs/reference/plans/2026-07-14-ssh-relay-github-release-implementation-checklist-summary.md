@@ -9,8 +9,9 @@ keeps commands, hashes, runner identities, timings, and failure details.
 A checked box means the work has evidence in the detailed ledger. Design approval alone does not
 complete a box.
 
-Active checkpoint: **Milestone 5 / Work Package 4 desktop cache boundary — in-progress replacement
-native gate for bounded TAR inspection, 2026-07-15, Codex implementation owner.** Exact-head run
+Active checkpoint: **Milestone 5 / Work Package 4 desktop cache boundary — cache
+locking/publication/quarantine/eviction audit and purpose-named RED, 2026-07-15, Codex
+implementation owner.** Exact-head run
 [29449869519](https://github.com/stablyai/orca/actions/runs/29449869519) closes deterministic bounded
 `.tar.br` under `E-M5-PORTABLE-ARCHIVE-CI-001`: all six primary Node 24 jobs and both Linux
 oldest-userland supplements pass. PR Checks and Golden E2E are green; Windows x64 floor passes and
@@ -28,7 +29,15 @@ pre-implementation 64 MiB assumption and blocking upload under
 `E-M5-ARTIFACT-EXTRACTION-BUDGET-CORRECTION-001` selects 80 MiB for cold desktop extraction only;
 remote remains 32 MiB and no buffer exceeds 1 MiB. The strict bounded replacement is locally green
 under `E-M5-ARTIFACT-EXTRACTION-TAR-MEMORY-LOCAL-001`: 21 focused tests and five exact payload runs
-use at most 69,402,624 bytes. Next is replacement all-six Node 24 evidence. Desktop consumers, cache publication, SSH
+use at most 69,402,624 bytes. Replacement exact-head run
+[29455294208](https://github.com/stablyai/orca/actions/runs/29455294208) closes all six native
+extraction/full-tree cells under `E-M5-ARTIFACT-EXTRACTION-CI-001`: 33,517,568–45,989,888-byte
+incremental RSS and 1,294.77–5,757.55ms. Both Linux oldest-userland supplements and Windows x64
+floor pass; Windows arm64 runtime/extraction passes before the retained hosted build-26200 versus
+required-26100 floor rejection. Exact-head PR Checks
+[29455294230](https://github.com/stablyai/orca/actions/runs/29455294230) and Golden E2E
+[29455294207](https://github.com/stablyai/orca/actions/runs/29455294207) are green. Next is the
+disconnected cache-state audit and purpose-named RED. Desktop consumers, cache publication, SSH
 transfer/install, mode wiring, tuple enablement, publication, production keys/environment/seed, and
 merge to `main` remain disconnected.
 
@@ -322,12 +331,14 @@ merge to `main` remain disconnected.
       all-six native CI is closed under `E-M5-ARTIFACT-DOWNLOAD-CI-001`. Disconnected strict
       TAR/Brotli and ZIP extraction plus complete-tree verification are locally green under
       `E-M5-ARTIFACT-EXTRACTION-LOCAL-001`; an exact full-size Actions payload is locally within time
-      and memory budgets under `E-M5-ARTIFACT-EXTRACTION-FULL-SIZE-LOCAL-001`. Native all-six
-      execution and packaged signature loading remain open.
+      and memory budgets under `E-M5-ARTIFACT-EXTRACTION-FULL-SIZE-LOCAL-001`; all-six native
+      execution is closed under `E-M5-ARTIFACT-EXTRACTION-CI-001`. Packaged signature loading
+      remains open.
 - [ ] Add exclusive staging, atomic publication, quarantine, locking, and the 2 GiB cache policy.
-      Exclusive owned staging and failure/cancellation cleanup are locally green under
-      `E-M5-ARTIFACT-EXTRACTION-LOCAL-001`; publication, quarantine, locking, and eviction are not
-      implemented yet.
+      Exclusive owned staging and failure/cancellation cleanup are green locally and on all six
+      native clients under `E-M5-ARTIFACT-EXTRACTION-LOCAL-001` and
+      `E-M5-ARTIFACT-EXTRACTION-CI-001`; publication, quarantine, locking, and eviction are the
+      active audit/RED package and are not implemented yet.
 - [ ] Prove verified cached bytes can be transferred while the client is offline.
 - [ ] Preserve `ORCA_RELAY_PATH` behind the official-build trust boundary.
 

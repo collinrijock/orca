@@ -8,8 +8,8 @@ work; keep exact commands, runner identities, hashes, metrics, and residual gaps
 
 Date created: 2026-07-14<br>
 Last updated: 2026-07-15<br>
-Current phase: Milestone 5 / Work Package 4 desktop cache boundary — **In progress — 2026-07-15, Codex implementation owner: replacement exact-head native gate preparation**. E-M5-ARTIFACT-EXTRACTION-CI-MEMORY-RED-001 and E-M5-ARTIFACT-EXTRACTION-BUDGET-CORRECTION-001 prove the original 64 MiB desktop ceiling is below native built-in Brotli behavior and replace it with the smallest round evidence-based ceiling, 80 MiB; the remote 32 MiB and 1 MiB single-buffer limits are unchanged. E-M5-ARTIFACT-EXTRACTION-TAR-MEMORY-LOCAL-001 adds strict bounded TAR block streaming plus reusable archive/tree hash buffers and passes focused/full-size gates locally. Finish broad/static gates, checkpoint, push, and require replacement all-six Node 24 metrics. Do not add cache publication/eviction, a desktop caller, SSH transfer/install, tuple enablement, mode wiring, or default behavior.<br>
-Session checkpoint: **In progress — 2026-07-15, Codex implementation owner** — 21 focused tests pass. Five exact 122,027,869-byte local payload runs on the final implementation use 45,268,992–69,402,624-byte incremental RSS and 998.04–1,977.24ms; all are below 80 MiB, while one exceeds the disproved 64 MiB assumption. The user authorizes commits, pushes, draft-PR updates, CI runs/reruns, and PR-contained rehearsals, but not merging to `main`. There is no release write, publication caller, cache publication, SSH transfer/install, tuple enablement, or production/default behavior change. Legacy remains the production default.<br>
+Current phase: Milestone 5 / Work Package 4 desktop cache boundary — **In progress — 2026-07-15, Codex implementation owner: cache locking/publication/quarantine/eviction audit and purpose-named RED**. E-M5-ARTIFACT-EXTRACTION-CI-001 closes the disconnected exclusive-extraction and complete-tree-verification capability on all six native Node 24 clients within the corrected 80 MiB desktop ceiling. Audit the existing app-owned cache and process/window lifecycle, define the narrow publication package, and add purpose-named failing contracts before implementation. Do not add a desktop caller, SSH transfer/install, tuple enablement, mode wiring, release publication, or default behavior.<br>
+Session checkpoint: **In progress — 2026-07-15, Codex implementation owner** — exact-head artifact run 29455294208 proves synthetic hostile contracts and full-size extraction on darwin arm64/x64, Linux arm64/x64, and Windows arm64/x64; incremental RSS is 33,517,568–45,989,888 bytes and duration is 1,294.77–5,757.55ms. Both Linux oldest-userland supplements and Windows x64 floor pass. Windows arm64 runtime execution passes before the retained exact-floor assertion rejects hosted build 26200 as evidence for required build 26100. Exact-head PR Checks 29455294230 and Golden E2E 29455294207 pass. The user authorizes commits, pushes, draft-PR updates, CI runs/reruns, PR-contained rehearsals, and PR-contained release writes where checklist gates require them, but not merging to `main`. There is no release publication, cache consumer, SSH transfer/install, tuple enablement, or production/default behavior change. Legacy remains the production default.<br>
 Primary design: [SSH relay GitHub Release plan](./2026-07-14-ssh-relay-github-release-plan.html)<br>
 Motivating issues: [#8450](https://github.com/stablyai/orca/issues/8450), [#1693](https://github.com/stablyai/orca/issues/1693)
 
@@ -137,11 +137,11 @@ same change as the work it records.
   E-M5-PORTABLE-ARCHIVE-PARENT-LOCAL-001, and E-M5-PORTABLE-ARCHIVE-CI-001 prove the selected bounded
   archive, correction, all-six primary jobs, and both Linux oldest-userland supplements. Windows ZIP
   and upstream Node `.tar.xz` remain unchanged.
-- Active package: **In progress — 2026-07-15, Codex implementation owner** — disconnected desktop
-  extraction capability after E-M5-ARTIFACT-EXTRACTION-AUDIT-001 and
-  E-M5-ARTIFACT-EXTRACTION-LOCAL-RED-001. Implement only strict TAR/Brotli and ZIP staging plus full
-  signed-tree verification and bounded cleanup. Keep cache publication/eviction, desktop call sites,
-  SSH behavior, mode wiring, tuple enablement, release writes, and defaults intact.
+- Active package: **In progress — 2026-07-15, Codex implementation owner** — audit cache ownership,
+  locking, atomic publication, quarantine, and bounded eviction after the disconnected extractor
+  closed on all six native clients under E-M5-ARTIFACT-EXTRACTION-CI-001. Add purpose-named RED
+  contracts before implementing the narrow cache-state package. Keep desktop call sites, SSH
+  behavior, mode wiring, tuple enablement, release publication, and defaults intact.
 - Completed Work Package 2 gate: target-native Windows source-signature reports from exact-head
   artifact jobs 87267322867 and 87267322870 were independently downloaded and matched to their
   identities and signing-stage reports under E-M3-WINDOWS-SOURCE-SIGNATURE-CI-001. PR Checks
@@ -1084,12 +1084,14 @@ Suggested concrete modules:
       E-M5-ARTIFACT-DOWNLOAD-LOCAL-001 and E-M5-ARTIFACT-DOWNLOAD-CI-001.
 - [x] Verify archive SHA-256 before extraction.
       E-M5-ARTIFACT-DOWNLOAD-LOCAL-001 and E-M5-ARTIFACT-DOWNLOAD-CI-001.
-- [ ] Extract into an exclusive temporary directory with all archive-safety checks from Milestone 2.
-      Implemented locally under E-M5-ARTIFACT-EXTRACTION-LOCAL-001 after the `.tar.br` prerequisite;
-      native cross-client and exact full-size evidence remain required before this item closes.
+- [x] Extract into an exclusive temporary directory with all archive-safety checks from Milestone 2.
+      E-M5-ARTIFACT-EXTRACTION-LOCAL-001 and E-M5-ARTIFACT-EXTRACTION-CI-001 prove strict
+      TAR/Brotli and ZIP inspection, exclusive owned staging, cancellation/failure cleanup, and
+      exact full-size execution on all six native Node 24 clients.
 - [ ] Verify the exact expanded tree before atomically publishing the cache entry.
-      The disconnected full-tree verifier passes locally under E-M5-ARTIFACT-EXTRACTION-LOCAL-001;
-      atomic cache publication is deliberately absent and remains a later package.
+      The disconnected full-tree verifier passes locally and on all six native clients under
+      E-M5-ARTIFACT-EXTRACTION-LOCAL-001 and E-M5-ARTIFACT-EXTRACTION-CI-001; atomic cache
+      publication is deliberately absent and keeps this combined item open.
 - [ ] Coordinate cache ownership across multiple Orca processes and windows.
 - [ ] Recover stale download/extraction locks without deleting an active writer.
 - [ ] Never select partial files, partial directories, or entries with a failed verification record.
@@ -12875,6 +12877,61 @@ sort`; targeted `rg -n` over `cache|extract|atomic|quarantine`; and complete rea
   not an automatic budget increase.
 - Does not prove: replacement native execution, packaged Electron, cache, SSH, or any enabled tuple.
 
+### E-M5-ARTIFACT-EXTRACTION-CI-001 — All-six native extraction and full-tree gates pass
+
+- Date: 2026-07-15
+- Owner: Codex implementation owner
+- Source: exact pushed head `39ae077f9b1cf59dc260f45d32d4bd24f3c97c94`, including extraction
+  implementation commit `7580600e3753e355f9a3876a40e58d23ba03bc9a` and bounded-memory
+  correction commit `2d5785ef6fe4f8014907d23c2f0880ab459deeff`.
+- Run: [SSH Relay Runtime Artifacts 29455294208](https://github.com/stablyai/orca/actions/runs/29455294208),
+  created 2026-07-15T22:24:26Z and completed 2026-07-15T22:39:19Z. The aggregate conclusion is the
+  expected `failure` only because the separate Windows arm64 exact-floor job fails closed after
+  successful runtime/extraction proof.
+- Commands on every primary native job: the workflow's Node 24 contract step includes
+  `src/main/ssh/ssh-relay-artifact-extraction.test.ts`; after exact two-build equality and runtime
+  smoke, the first verified native archive and identity run through
+  `pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1 --reporter=verbose src/main/ssh/ssh-relay-artifact-extraction-full-size.test.ts`.
+  The measurement must clean its owned output and pass before unpublished artifact upload.
+- Exact full-size results:
+
+  | Client tuple | Job | Job duration | Incremental RSS | Extraction/tree time | Result |
+  | --- | --- | ---: | ---: | ---: | --- |
+  | darwin-arm64 | [87487012482](https://github.com/stablyai/orca/actions/runs/29455294208/job/87487012482) | 2m01s | 45,989,888 bytes | 1,345.51ms | PASS |
+  | darwin-x64 | [87487012496](https://github.com/stablyai/orca/actions/runs/29455294208/job/87487012496) | 7m02s | 40,116,224 bytes | 5,757.55ms | PASS |
+  | linux-arm64-glibc | [87487012507](https://github.com/stablyai/orca/actions/runs/29455294208/job/87487012507) | 2m51s | 36,732,928 bytes | 1,294.77ms | PASS |
+  | linux-x64-glibc | [87487012518](https://github.com/stablyai/orca/actions/runs/29455294208/job/87487012518) | 2m52s | 38,420,480 bytes | 1,727.80ms | PASS |
+  | win32-arm64 | [87487012510](https://github.com/stablyai/orca/actions/runs/29455294208/job/87487012510) | 11m07s | 33,517,568 bytes | 2,467.74ms | PASS |
+  | win32-x64 | [87487012515](https://github.com/stablyai/orca/actions/runs/29455294208/job/87487012515) | 5m24s | 40,140,800 bytes | 1,683.02ms | PASS |
+
+- Adjacent native gates: Linux arm64 oldest-userland job
+  [87488270107](https://github.com/stablyai/orca/actions/runs/29455294208/job/87488270107) passes in
+  1m02s; Linux x64 oldest-userland job
+  [87488270154](https://github.com/stablyai/orca/actions/runs/29455294208/job/87488270154) passes in
+  43s; Windows x64 floor job
+  [87488952123](https://github.com/stablyai/orca/actions/runs/29455294208/job/87488952123) passes on
+  Server 2022 build 20348 in 1m38s.
+- Retained exact-floor gap: Windows arm64 job
+  [87488952022](https://github.com/stablyai/orca/actions/runs/29455294208/job/87488952022) checks out
+  the exact source, reconstructs and verifies the exact archive, runs Node v24.18.0, PTY, watcher,
+  resource-settlement, and complete-tree smoke, then reports observed Windows `10.0.26200` and
+  `osBuild: false` against the required build `26100`. It fails with `runner does not prove the
+  declared Windows floor` after 3m40s. This is correct fail-closed evidence and does not close the
+  Windows arm64 oldest-floor cell.
+- Repository regression gates: exact-head PR Checks
+  [29455294230](https://github.com/stablyai/orca/actions/runs/29455294230), job
+  [87487012165](https://github.com/stablyai/orca/actions/runs/29455294230/job/87487012165), pass lint,
+  reliability/static guards, typecheck, Git 2.25 compatibility, full test, unpacked app build, and
+  packaged CLI smoke in 12m08s. Exact-head Golden E2E run
+  [29455294207](https://github.com/stablyai/orca/actions/runs/29455294207) also passes.
+- Closure: strict exclusive TAR/Brotli and ZIP extraction, authenticated archive/tree matching,
+  mutation/cancellation/failure cleanup, and full-size native-client execution are complete. Atomic
+  cache publication, cache locking/quarantine/eviction, packaged manifest loading, desktop callers,
+  SSH transfer/install, native trust, Windows arm64 build-26100 proof, tuple enablement, and rollout
+  remain open.
+- Safety oracle: all artifacts remain unpublished Actions evidence. Production/default SSH is still
+  legacy-only; no cache consumer, SSH path, mode, or enabled tuple exists.
+
 ## Accepted Gaps
 
 No product gap is accepted merely because it appears in this list. Each entry requires explicit
@@ -12933,11 +12990,12 @@ The project is not complete until every applicable item below is checked with ev
 
 ## Next Required Action
 
-Run the broader release/desktop/static gates for the locally green disconnected extraction
-capability, wire its purpose suite into both native artifact job families, and collect exact-head
-all-six Node 24 plus full-size payload evidence. Do not add a desktop call site, cache
-publication/eviction, SSH transfer/install, mode wiring, tuple enablement, or default behavior. Keep
-Node upstream `.tar.xz` inputs, Windows ZIP,
+Audit cache ownership across processes/windows, immutable entry naming/proofs, exclusive locking,
+stale-lock recovery, atomic publication, corruption quarantine, in-use protection, and bounded 2 GiB
+eviction. Record the audit and add purpose-named failing contracts before implementing this narrow,
+disconnected cache-state package. Do not add a desktop call site, SSH transfer/install, mode wiring,
+tuple enablement, release publication, or default behavior. Keep Node upstream `.tar.xz` inputs,
+Windows ZIP,
 `ORCA_RELAY_PATH`, existing desktop required-assets behavior, detached-signature byte encoding,
 Windows arm64 build 26100, macOS 13.5, Linux kernel 4.18, release-cut, desktop builds, publication,
 and every tuple separately gated.
