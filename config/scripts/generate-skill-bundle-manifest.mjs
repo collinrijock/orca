@@ -18,6 +18,10 @@ function sha256(bytes) {
   return createHash('sha256').update(bytes).digest('hex')
 }
 
+function compareCodeUnits(left, right) {
+  return left === right ? 0 : left < right ? -1 : 1
+}
+
 function gitObjectSha(kind, bytes) {
   return createHash('sha1').update(`${kind} ${bytes.length}\0`).update(bytes).digest()
 }
@@ -116,7 +120,9 @@ async function collectPackageFiles(packageRoot) {
 
   async function visit(directory) {
     const entries = await readdir(directory, { withFileTypes: true })
-    entries.sort((left, right) => left.name.localeCompare(right.name, 'en'))
+    // Why: build-time Node and packaged Electron may ship different ICU data;
+    // package identity order must use the same locale-independent comparison.
+    entries.sort((left, right) => compareCodeUnits(left.name, right.name))
     for (const entry of entries) {
       const absolutePath = path.join(directory, entry.name)
       const relativePath = path.relative(packageRoot, absolutePath)
@@ -243,7 +249,7 @@ function compareManifestPaths(left, right) {
   const rightParts = right.split('/')
   const shared = Math.min(leftParts.length, rightParts.length)
   for (let index = 0; index < shared; index += 1) {
-    const order = leftParts[index].localeCompare(rightParts[index], 'en')
+    const order = compareCodeUnits(leftParts[index], rightParts[index])
     if (order !== 0) {
       return order
     }
@@ -331,9 +337,7 @@ function buildReleasedHistory() {
     if (!packages) {
       throw new Error(`Missing released skill tree ${skillsTreeSha} at ${tag}`)
     }
-    for (const name of [...packages.keys()].sort((left, right) =>
-      left.localeCompare(right, 'en')
-    )) {
+    for (const name of [...packages.keys()].sort(compareCodeUnits)) {
       const entries = packages.get(name)
       const filesWithGitHashes = collectGitPackageFiles(skillsTreeSha, name, entries, blobs)
       if (!filesWithGitHashes.some((file) => file.path === 'SKILL.md')) {
@@ -369,7 +373,7 @@ async function buildArtifacts(appVersion) {
   const skillDirectories = (await readdir(SKILLS_ROOT, { withFileTypes: true }))
     .filter((entry) => entry.isDirectory())
     .map((entry) => entry.name)
-    .sort((left, right) => left.localeCompare(right, 'en'))
+    .sort(compareCodeUnits)
   const currentSkills = []
   for (const name of skillDirectories) {
     const filesWithGitHashes = await collectPackageFiles(path.join(SKILLS_ROOT, name))

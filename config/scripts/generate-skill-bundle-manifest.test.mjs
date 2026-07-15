@@ -44,10 +44,11 @@ describe('skill bundle manifest generator', () => {
 
   it('uses normalized text identity but exact executable identity', () => {
     const skillFile = describeFile('SKILL.md', Buffer.from('line one\r\nline two\r\n'), false)
-    const executable = describeFile('run.sh', Buffer.from('#!/bin/sh\necho ok\n'), true)
+    const executable = describeFile('run.sh', Buffer.from('#!/bin/sh\r\necho ok\r\n'), true)
 
     expect(skillFile.identitySha256).toBe(skillFile.textNormalizedSha256)
     expect(skillFile.identitySha256).not.toBe(skillFile.exactSha256)
+    expect(executable.exactSha256).not.toBe(executable.textNormalizedSha256)
     expect(executable.identitySha256).toBe(executable.exactSha256)
     expect(packageDigest([skillFile, executable])).toMatch(/^[a-f0-9]{64}$/)
   })
@@ -69,10 +70,10 @@ describe('skill bundle manifest generator', () => {
     expect(sortManifestFiles(gitOrdered)).toEqual(walked)
     expect(packageDigest(sortManifestFiles(gitOrdered))).toBe(packageDigest(walked))
     expect(walked.map((file) => file.path)).toEqual([
+      'Zebra.md',
       'apple.md',
       'sub/inner.txt',
-      'sub.md',
-      'Zebra.md'
+      'sub.md'
     ])
   })
 

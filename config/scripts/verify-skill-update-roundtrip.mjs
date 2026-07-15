@@ -210,6 +210,13 @@ try {
   execSkills(['update', targetName, '--global'])
   await assertCurrentCanonical(targetName)
   const targetProviderAfter = await packageDigestAt(await realpath(targetProvider))
+  const targetProviderStat = await lstat(targetProvider)
+  if (shape === 'symlink' && !targetProviderStat.isSymbolicLink()) {
+    throw new Error(`${targetName} provider alias was replaced with an independent copy`)
+  }
+  if (shape === 'copy' && targetProviderStat.isSymbolicLink()) {
+    throw new Error(`${targetName} independent provider copy was replaced with an alias`)
+  }
   if (shape === 'symlink' && targetProviderAfter !== currentSkill(targetName).packageDigest) {
     throw new Error(`${targetName} provider alias did not converge with the canonical update`)
   }

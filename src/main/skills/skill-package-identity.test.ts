@@ -48,6 +48,16 @@ describe('skill package identity', () => {
     expect(binary.classification).toBe('binary')
   })
 
+  it('orders package files by locale-independent code units', async () => {
+    const root = await temporarySkill()
+    await writeFile(join(root, 'apple.md'), 'apple')
+    await writeFile(join(root, 'Zebra.md'), 'zebra')
+
+    const observed = await observeSkillPackage(root)
+
+    expect(observed.files.map((file) => file.path)).toEqual(['Zebra.md', 'apple.md'])
+  })
+
   it('rejects links and bounded-observation overflows', async () => {
     const root = await temporarySkill()
     await writeFile(join(root, 'SKILL.md'), 'skill')

@@ -63,6 +63,10 @@ function sha256(bytes: Buffer): string {
   return createHash('sha256').update(bytes).digest('hex')
 }
 
+function compareCodeUnits(left: string, right: string): number {
+  return left === right ? 0 : left < right ? -1 : 1
+}
+
 function normalizedText(bytes: Buffer): Buffer {
   const text = new TextDecoder('utf-8', { fatal: true }).decode(bytes)
   return Buffer.from(text.replace(/\r\n/g, '\n').replace(/\r/g, '\n'), 'utf8')
@@ -154,7 +158,9 @@ export async function observeSkillPackage(
     } finally {
       await directoryHandle.close().catch(() => undefined)
     }
-    entries.sort((left, right) => left.name.localeCompare(right.name, 'en'))
+    // Why: runtime Electron and the build's Node may carry different ICU data;
+    // identity order must match the generator without locale-sensitive collation.
+    entries.sort((left, right) => compareCodeUnits(left.name, right.name))
     for (const entry of entries) {
       const absolutePath = join(directory, entry.name)
       const relativePath = relative(packageRoot, absolutePath)

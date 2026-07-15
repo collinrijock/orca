@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { SkillFreshnessInventory } from '../../../shared/skill-freshness'
+import { INSTALLED_AGENT_SKILLS_CHANGED_EVENT } from './installed-agent-skills-change-event'
 import { useMountedRef } from './useMountedRef'
 
-const INSTALLED_SKILLS_CHANGED_EVENT = 'orca:installed-agent-skills-changed'
 // Why: window focus fires on every alt-tab, and each scan re-reads and re-hashes
 // every installed package; a just-completed scan stays authoritative briefly.
 const FOCUS_RESCAN_COOLDOWN_MS = 15_000
@@ -100,10 +100,10 @@ export function useSkillFreshness(): SkillFreshnessState {
     const onFocus = (): void => invalidate(true)
     const onInstalledSkillsChanged = (): void => invalidate(false)
     window.addEventListener('focus', onFocus)
-    window.addEventListener(INSTALLED_SKILLS_CHANGED_EVENT, onInstalledSkillsChanged)
+    window.addEventListener(INSTALLED_AGENT_SKILLS_CHANGED_EVENT, onInstalledSkillsChanged)
     return () => {
       window.removeEventListener('focus', onFocus)
-      window.removeEventListener(INSTALLED_SKILLS_CHANGED_EVENT, onInstalledSkillsChanged)
+      window.removeEventListener(INSTALLED_AGENT_SKILLS_CHANGED_EVENT, onInstalledSkillsChanged)
     }
   }, [refresh])
 

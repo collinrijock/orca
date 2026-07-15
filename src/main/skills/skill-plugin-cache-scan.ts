@@ -50,7 +50,11 @@ export async function scanKnownPluginSkillCandidates(
   }
 
   async function visit(directory: string, depth: number): Promise<void> {
-    if (limitReached || depth > MAXIMUM_PLUGIN_SCAN_DEPTH) {
+    if (limitReached) {
+      return
+    }
+    if (depth > MAXIMUM_PLUGIN_SCAN_DEPTH) {
+      recordIncomplete(directory)
       return
     }
     let resolved: string
@@ -95,7 +99,7 @@ export async function scanKnownPluginSkillCandidates(
       await handle.close().catch(() => undefined)
     }
 
-    entries.sort((left, right) => left.name.localeCompare(right.name, 'en'))
+    entries.sort((left, right) => (left.name === right.name ? 0 : left.name < right.name ? -1 : 1))
     for (const entry of entries) {
       if (limitReached) {
         return

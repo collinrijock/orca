@@ -30,7 +30,7 @@ function snapshot(releaseRevision: number, markdown: string): SkillKnownSnapshot
   return {
     releaseRevision,
     packageDigest: skillPackageDigest([file]),
-    gitTreeSha: `tree-${releaseRevision}`,
+    gitTreeSha: releaseRevision.toString(16).padStart(40, '0'),
     files: [file]
   }
 }
