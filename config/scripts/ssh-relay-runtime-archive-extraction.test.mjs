@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 
@@ -87,6 +87,27 @@ afterEach(async () => {
 })
 
 describe('SSH relay runtime archive extraction', () => {
+  it('prepares a fresh staging parent while keeping the output leaf exclusive', async () => {
+    const tupleId = process.platform === 'win32' ? `win32-${process.arch}` : 'darwin-arm64'
+    const value = await fixture(tupleId)
+    const outputDirectory = join(value.root, 'fresh-parent', 'reconstructed')
+
+    const result = await extractSshRelayRuntimeArchive({
+      archivePath: value.archive.path,
+      outputDirectory,
+      identity: value.identity
+    })
+    expect(result.runtimeRoot).toBe(await realpath(outputDirectory))
+
+    await expect(
+      extractSshRelayRuntimeArchive({
+        archivePath: value.archive.path,
+        outputDirectory,
+        identity: value.identity
+      })
+    ).rejects.toThrow(/exclusive/i)
+  })
+
   it('reconstructs exact POSIX and Windows runtime trees into exclusive directories', async () => {
     // Why: NTFS cannot materialize the executable modes needed to construct a POSIX tar fixture.
     const tuples =

@@ -132,7 +132,10 @@ export async function extractSshRelayRuntimeArchive({
   const absoluteArchive = resolve(archivePath)
   const absoluteOutput = resolve(outputDirectory)
   const finalIdentity = assertIdentityArchive(identity, absoluteArchive)
-  const physicalParent = await realpath(dirname(absoluteOutput))
+  const outputParent = dirname(absoluteOutput)
+  // Why: clean signing/floor runners supply a fresh parent; only the final staging leaf is exclusive.
+  await mkdir(outputParent, { recursive: true, mode: 0o700 })
+  const physicalParent = await realpath(outputParent)
   const physicalOutput = resolve(physicalParent, basename(absoluteOutput))
   await assertOutputAbsent(physicalOutput)
   const before = await describeArchive(absoluteArchive, identity.archive.size, effectiveSignal)

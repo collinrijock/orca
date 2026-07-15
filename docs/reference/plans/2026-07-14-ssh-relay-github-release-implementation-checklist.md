@@ -8,8 +8,8 @@ work; keep exact commands, runner identities, hashes, metrics, and residual gaps
 
 Date created: 2026-07-14<br>
 Last updated: 2026-07-15<br>
-Current phase: Milestone 5 / Work Package 4 desktop cache boundary — **In progress — 2026-07-15, Codex implementation owner: portable POSIX archive prerequisite exact-head CI**. The audit under E-M5-ARCHIVE-PORTABILITY-AUDIT-001 proves the current 64 MiB-dictionary `.tar.xz` output cannot meet the reviewed cross-client and 64 MiB desktop extraction contracts. Commit `c9f6da55e` implements bounded Node-native `.tar.br` and is locally green under E-M5-PORTABLE-ARCHIVE-LOCAL-001. Push the exact implementation/evidence commits and replace all-six native artifact proof before resuming the disconnected desktop extraction RED. Windows ZIP, Node upstream input archives, desktop call sites, cache publication, SSH transfer/install, tuple enablement, mode wiring, and default behavior stay unchanged.<br>
-Session checkpoint: **In progress — 2026-07-15, Codex implementation owner** — implementation commit `c9f6da55e41d2f201684e967ce4c3db37150571f` streams deterministic Brotli/TAR creation and strict inspection/extraction without system/native XZ, updates exact relay-archive consumers, and wires the purpose suite into both native job families. E-M5-PORTABLE-ARCHIVE-LOCAL-001 passes 278 release tests, 233 desktop SSH-relay tests including one existing skip, typecheck, full lint/reliability/line gates, and a two-build exact-runtime byte comparison. Native Node 24 execution at this exact head remains required. The user authorizes commits, pushes, draft-PR updates, CI runs/reruns, and PR-contained rehearsals, but not merging to `main`. There is no release write, publication caller, desktop consumer, cache publication/extraction, SSH transfer/install, tuple enablement, or production/default behavior change. Legacy remains the production default.<br>
+Current phase: Milestone 5 / Work Package 4 desktop cache boundary — **In progress — 2026-07-15, Codex implementation owner: portable POSIX archive fresh-parent correction**. Exact-head run 29448792600 proves all six primary native jobs but exposes one implementation defect in both Linux oldest-userland supplements: strict extraction resolves a fresh staging parent before preparing it. E-M5-PORTABLE-ARCHIVE-CI-RED-001 and the local RED/GREEN correction evidence are recorded; checkpoint and push only that precondition correction without weakening exclusive leaf creation or archive/tree verification. Then replace the all-six native artifact proof before resuming disconnected desktop extraction. Windows ZIP, Node upstream input archives, desktop call sites, cache publication, SSH transfer/install, tuple enablement, mode wiring, and default behavior stay unchanged.<br>
+Session checkpoint: **In progress — 2026-07-15, Codex implementation owner** — exact implementation/evidence head `cdb318df339941325a1055d841c6ae7d5484dfaf` is complete under artifact run 29448792600, PR Checks 29448792389, and Golden E2E 29448792403. All six primary native jobs, PR Checks, Golden E2E, and Windows x64 floor are green. Windows arm64 passes runtime smoke and then rejects hosted build 26200 against the retained build-26100 floor. Supplement jobs 87466788553 and 87466788626 fail before extraction with `ENOENT` from `realpath(.../baseline-runtime)`, because the immediate parent is intentionally fresh. The local correction preserves authenticated-input inspection, exclusive final-leaf staging, cleanup ownership, full-tree verification, and all existing cancellation/bounds and is green under E-M5-PORTABLE-ARCHIVE-PARENT-LOCAL-001. This is an implementation correction, not a design change. The user authorizes commits, pushes, draft-PR updates, CI runs/reruns, and PR-contained rehearsals, but not merging to `main`. There is no release write, publication caller, desktop consumer, cache publication/extraction, SSH transfer/install, tuple enablement, or production/default behavior change. Legacy remains the production default.<br>
 Primary design: [SSH relay GitHub Release plan](./2026-07-14-ssh-relay-github-release-plan.html)<br>
 Motivating issues: [#8450](https://github.com/stablyai/orca/issues/8450), [#1693](https://github.com/stablyai/orca/issues/1693)
 
@@ -132,12 +132,13 @@ same change as the work it records.
   E-M4-DRAFT-RELEASE-COMPOSITION-LOCAL-001, and
   E-M4-DRAFT-RELEASE-COMPOSITION-CI-001.
 - Active package: **In progress — 2026-07-15, Codex implementation owner** — portable POSIX relay
-  archive exact-head native proof. The audit, purpose RED, and local implementation are closed under
-  E-M5-ARCHIVE-PORTABILITY-AUDIT-001, E-M5-PORTABLE-ARCHIVE-LOCAL-RED-001, and
-  E-M5-PORTABLE-ARCHIVE-LOCAL-001. Push `c9f6da55e` plus exact evidence metadata and require all six
-  Node 24 build/smoke/equality jobs before resuming disconnected desktop extraction. Keep Node
-  upstream `.tar.xz` inputs, Windows ZIP, cache publication, desktop call sites, SSH behavior, mode
-  wiring, tuple enablement, and defaults intact.
+  archive fresh-parent staging correction. Exact-head run 29448792600 passes all six primary native
+  jobs but both Linux oldest-userland supplements fail under
+  E-M5-PORTABLE-ARCHIVE-CI-RED-001 because strict extraction resolves an intentionally fresh parent
+  before preparing it. Add the missing regression contract and correct only parent preparation;
+  keep exclusive final-leaf creation, authenticated archive/tree verification, cleanup ownership,
+  cache publication, desktop call sites, SSH behavior, mode wiring, tuple enablement, and defaults
+  intact. Replacement all-six Node 24 proof remains required.
 - Completed Work Package 2 gate: target-native Windows source-signature reports from exact-head
   artifact jobs 87267322867 and 87267322870 were independently downloaded and matched to their
   identities and signing-stage reports under E-M3-WINDOWS-SOURCE-SIGNATURE-CI-001. PR Checks
@@ -12373,6 +12374,92 @@ config/scripts/ssh-relay-runtime-portable-archive.test.mjs`; changed-file `oxfmt
   complete runtime build/smoke/equality/read-back to pass on all six native Node 24 jobs before
   checking the archive item or resuming desktop extraction.
 
+### E-M5-PORTABLE-ARCHIVE-CI-RED-001 — Fresh Linux floor staging parent breaks strict extraction
+
+- Date: 2026-07-15
+- Owner: Codex implementation owner
+- Source: exact pushed head `cdb318df339941325a1055d841c6ae7d5484dfaf`; draft PR #8741.
+- Workflows: [SSH Relay Runtime Artifacts run
+  29448792600](https://github.com/stablyai/orca/actions/runs/29448792600), [PR Checks run
+  29448792389](https://github.com/stablyai/orca/actions/runs/29448792389), and [Golden E2E run
+  29448792403](https://github.com/stablyai/orca/actions/runs/29448792403).
+- Passing boundary: all six primary Node 24 target-native jobs pass the portable-archive contract
+  suite and complete two-build inspection, bundled Node/PTY/watcher smoke, exact archive equality,
+  read-back execution, and unpublished evidence upload. Primary job IDs are Linux x64 87465865029,
+  Linux arm64 87465865049, macOS x64 87465865021, macOS arm64 87465865039, Windows x64 87465865008,
+  and Windows arm64 87465865028. PR Checks and Golden E2E are green. Windows x64 oldest-floor job
+  87467928882 is green. Windows arm64 floor job 87467928866 passes exact archive reconstruction and
+  bundled Node/PTY/watcher smoke in 8,112.4613ms overall / 5,970.8928ms smoke with 49,889,280-byte
+  RSS, then fails only the retained floor oracle because hosted image `windows-11-arm64/20260714.109`
+  is build 26200 rather than required build 26100.
+- Required RED: Linux oldest-userland supplement jobs
+  [87466788626](https://github.com/stablyai/orca/actions/runs/29448792600/job/87466788626) and
+  [87466788553](https://github.com/stablyai/orca/actions/runs/29448792600/job/87466788553)
+  authenticate and download the exact 36,327,346-byte x64 / 36,261,822-byte arm64 Actions artifacts,
+  then both fail before archive extraction with `ENOENT` from `realpath(.../baseline-runtime)`.
+  The workflow intentionally supplies fresh nested output paths, but
+  `extractSshRelayRuntimeArchive` resolves the immediate parent before preparing it.
+- Security oracle: this is not an archive/hash/tree/native-smoke failure and does not justify a
+  fallback or weakened verifier. The correction must prepare only the parent hierarchy while
+  retaining exclusive final-leaf creation, physical-path resolution, authenticated input
+  inspection, cleanup ownership, complete-tree verification, and cancellation/timeout bounds.
+- Does not prove: the correction, replacement Linux supplement execution, packaged Electron
+  extraction/cache behavior, live SSH, native signing/trust, Windows arm64 build 26100, publication,
+  tuple enablement, or any default-path change.
+- Follow-up: add a local missing-parent RED, implement the narrow parent-preparation correction, and
+  replace the exact-head native run rather than rerunning only the failed jobs on the old SHA.
+
+### E-M5-PORTABLE-ARCHIVE-PARENT-LOCAL-RED-001 — Missing-parent extraction contract reproduces CI
+
+- Date: 2026-07-15
+- Owner: Codex implementation owner
+- Source: uncommitted regression test atop exact CI RED head `cdb318df3`.
+- Exact command:
+  `pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1 config/scripts/ssh-relay-runtime-archive-extraction.test.mjs`
+- Environment: macOS 26.2 arm64, Node v26.0.0, pnpm 10.24.0, Vitest 4.1.5.
+- Result: required RED; one file / three tests runs in 1.52s, with the new test failing in 86ms and
+  the two existing extraction tests passing. The failure is the same `ENOENT` from `realpath` of a
+  deliberately absent `fresh-parent` directory observed in both Linux supplement jobs.
+- Does not prove: the correction, Linux/Windows behavior, exclusive-leaf preservation, Node 24,
+  full-size extraction, supplements, desktop cache, SSH, or any tuple.
+
+### E-M5-PORTABLE-ARCHIVE-PARENT-LOCAL-001 — Fresh parent and exclusive leaf pass locally
+
+- Date: 2026-07-15
+- Owner: Codex implementation owner
+- Source: uncommitted correction following E-M5-PORTABLE-ARCHIVE-CI-RED-001 and
+  E-M5-PORTABLE-ARCHIVE-PARENT-LOCAL-RED-001; its commit SHA is recorded after commit creation.
+- Implementation oracle: prepare the resolved output's parent hierarchy with mode 0700 where newly
+  created, then resolve its physical path and preserve the existing exclusive final-leaf `mkdir`.
+  A second extraction to the same leaf remains rejected. Archive identity/hash/size inspection,
+  bounded Brotli/ZIP extraction, full-tree verification, input mutation detection, cleanup
+  ownership, timeout, and cancellation code are unchanged.
+- Focused command:
+  `pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1 config/scripts/ssh-relay-runtime-archive-extraction.test.mjs config/scripts/ssh-relay-runtime-portable-archive.test.mjs config/scripts/ssh-relay-runtime-native-signing-workflow.test.mjs`
+  passes three files / nine tests in 7.22s. POSIX runners exercise TAR/Brotli and Windows runners
+  exercise ZIP for the platform-selected fresh-parent contract.
+- Release regression command:
+  `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1 config/scripts/ssh-relay-runtime-*.test.mjs`
+  passes 50 files / 279 tests in 18.70s Vitest / 20.75s wall with 189,284,352-byte maximum RSS and
+  zero swaps.
+- Desktop parity command:
+  `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1 src/main/ssh/ssh-relay-*.test.ts`
+  passes 16 files and skips one existing file; 232 tests pass and one is skipped in 15.66s Vitest /
+  17.10s wall with 257,802,240-byte maximum RSS and zero swaps.
+- Static commands: `node --check` for the extractor and its test, `pnpm typecheck`, and `pnpm lint`
+  pass. Full lint retains only unrelated pre-existing warnings and passes switch exhaustiveness, 41
+  reliability gates, max-lines ratchet, bundled guides, localization catalog, and localization
+  coverage. Changed-file formatting, `git diff --check`, and protected-file zero-diff remain required
+  before commit.
+- Consumer-disconnection oracle: no desktop consumer, cache publication, SSH transfer/install,
+  release write, production key, tuple, mode, or default changes. Legacy remains the only production
+  path.
+- Does not prove: Node 24/native-runner behavior, corrected Linux supplements, packaged Electron
+  extraction, desktop cache, live SSH, native signing/trust, oldest incomplete floors, publication,
+  or any enabled tuple.
+- Follow-up: format/checkpoint the correction, push it, and require replacement exact-head all-six
+  primary jobs plus both Linux supplements before resuming disconnected desktop extraction.
+
 ## Accepted Gaps
 
 No product gap is accepted merely because it appears in this list. Each entry requires explicit
@@ -12431,7 +12518,8 @@ The project is not complete until every applicable item below is checked with ev
 
 ## Next Required Action
 
-Push implementation `c9f6da55e` and its evidence checkpoint, then replace exact-head all-six native
+Format/checkpoint the fresh-parent correction under E-M5-PORTABLE-ARCHIVE-PARENT-LOCAL-001, push it,
+and replace exact-head all-six primary plus both Linux supplement
 archive/reproducibility/execution evidence. Do not begin desktop extraction/cache staging until that
 prerequisite is green on Node 24. Do not add a desktop call site, SSH transfer/install, mode wiring,
 tuple enablement, or default behavior. Keep Node upstream `.tar.xz` inputs, Windows ZIP,

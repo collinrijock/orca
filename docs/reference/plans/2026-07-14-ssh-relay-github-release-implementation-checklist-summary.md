@@ -20,8 +20,12 @@ meet the cross-client 64 MiB extraction contract and selects bounded Node-native
 the archive contracts and all-six artifact evidence before the isolated extraction/cache-staging
 RED. The purpose-named missing-contract RED is recorded under
 `E-M5-PORTABLE-ARCHIVE-LOCAL-RED-001`; commit `c9f6da55e` is locally green under
-`E-M5-PORTABLE-ARCHIVE-LOCAL-001`. Exact-head all-six Node 24 proof is the current gate. Desktop
-consumers, SSH transfer/install, mode wiring,
+`E-M5-PORTABLE-ARCHIVE-LOCAL-001`. Exact-head run
+[29448792600](https://github.com/stablyai/orca/actions/runs/29448792600) passes all six primary native
+jobs but exposes a fresh-parent staging defect in both Linux oldest-userland supplements:
+strict extraction calls `realpath` before preparing the non-existent parent
+(`E-M5-PORTABLE-ARCHIVE-CI-RED-001`). Correct and prove only that exclusive-staging precondition,
+then replace the all-six Node 24 evidence. Desktop consumers, SSH transfer/install, mode wiring,
 tuple enablement, publication, production keys/environment/seed, and merge to `main` remain
 disconnected.
 
