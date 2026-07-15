@@ -13,6 +13,11 @@ export type CodexWslRuntimeHookInstallPlan = {
   scriptPath: string
   commandScriptPath: string
   trustConfigPath: string
+  /** Distro that executes Codex for this runtime home (RPC trust grants run
+   *  codex inside it). */
+  wslDistro: string
+  /** Canonical Linux-side runtime home — CODEX_HOME for in-distro codex runs. */
+  linuxRuntimeHome: string
 }
 
 export type WslCanonicalPathSettlement =
@@ -184,7 +189,9 @@ export function createCodexWslRuntimeHookInstallPlan(
     tomlPath: pathWin32.join(runtimeHomePath, 'config.toml'),
     scriptPath: pathWin32.join(runtimeHomePath, '.orca', 'agent-hooks', 'codex-hook.sh'),
     commandScriptPath: `${linuxRuntimeHome}/.orca/agent-hooks/codex-hook.sh`,
-    trustConfigPath: `${linuxRuntimeHome}/hooks.json`
+    trustConfigPath: `${linuxRuntimeHome}/hooks.json`,
+    wslDistro: distro,
+    linuxRuntimeHome
   }
 }
 

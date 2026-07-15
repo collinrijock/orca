@@ -129,6 +129,7 @@ import {
 } from './codex-accounts/runtime-selection'
 import { normalizeClaudeRuntimeSelection } from './claude-accounts/runtime-selection'
 import { codexHookService } from './codex/hook-service'
+import { setCodexTrustGrantTelemetry } from './codex/codex-hook-trust-grant'
 import { getDefaultWslDistro } from './wsl'
 import { ClaudeAccountService } from './claude-accounts/service'
 import { ClaudeRuntimeAuthService } from './claude-accounts/runtime-auth-service'
@@ -1727,6 +1728,16 @@ app.whenReady().then(async () => {
   // the Store reference, seeds common props, and resets per-session burst
   // caps. Actual transport initialization is still gated by both flags.
   initTelemetry(store)
+  // Why: the trust-grant module is bundled into plain-node CLI entries where
+  // the telemetry client cannot load, so the tracker is injected here instead
+  // of imported there.
+  setCodexTrustGrantTelemetry(({ outcome, hostKind, reason }) => {
+    track('codex_trust_grant', {
+      outcome,
+      host_kind: hostKind,
+      ...(reason !== undefined ? { fallback_reason: reason } : {})
+    })
+  })
   // Why: the error-tracking lane (telemetry-error-tracking.md) is its own
   // composition root — independent of product telemetry — and must
   // initialize before any IPC handler / runtime span is created so the
