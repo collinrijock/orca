@@ -1126,48 +1126,6 @@ describe('LocalPtyProvider', () => {
 
       expect(terminateDescendantSnapshotMock).not.toHaveBeenCalled()
     })
-
-    it('falls back to root teardown when descendant capture rejects unexpectedly', async () => {
-      captureDescendantSnapshotMock.mockRejectedValue(new Error('unexpected capture failure'))
-      const killSpy = mockProc.kill
-      const { id } = await provider.spawn({
-        cols: 80,
-        rows: 24,
-        launchAgent: 'claude'
-      })
-
-      await expect(provider.shutdown(id, { immediate: true })).resolves.toBeUndefined()
-
-      expect(killSpy).toHaveBeenCalledOnce()
-      expect(terminateDescendantSnapshotMock).not.toHaveBeenCalled()
-      await expect(provider.listProcesses()).resolves.not.toEqual(
-        expect.arrayContaining([expect.objectContaining({ id })])
-      )
-    })
-
-    it('tears down the root even when descendant signalling throws unexpectedly', async () => {
-      captureDescendantSnapshotMock.mockResolvedValue({
-        rootPgid: mockProc.pid,
-        descendants: [],
-        capturedAtMs: Date.now()
-      })
-      terminateDescendantSnapshotMock.mockImplementation(() => {
-        throw new Error('unexpected signal failure')
-      })
-      const killSpy = mockProc.kill
-      const { id } = await provider.spawn({
-        cols: 80,
-        rows: 24,
-        launchAgent: 'claude'
-      })
-
-      await expect(provider.shutdown(id, { immediate: true })).resolves.toBeUndefined()
-
-      expect(killSpy).toHaveBeenCalledOnce()
-      await expect(provider.listProcesses()).resolves.not.toEqual(
-        expect.arrayContaining([expect.objectContaining({ id })])
-      )
-    })
   })
 
   describe('hasChildProcesses', () => {

@@ -80,16 +80,14 @@ could invalidate intentional long-lived `worktree-sleep` checkpoints.
   descendant tree — including detached-pgid children the PTY's SIGHUP cannot
   reach — via `pty-descendant-termination.ts` (bounded fresh snapshot with
   same-turn coalescing, SIGTERM, grace window, then identity-safe SIGKILL).
-  Coalesced consumers share one weakly held process-table index instead of
-  rescanning the same rows per session. Completed process tables are never
-  reused as signal targets, and identity checks use C-locale timestamps from the
-  source scan. Later requests start a fresh same-turn-coalesced successor inside
-  their own deadline instead of waiting behind older scans. A session is marked
-  as terminating before capture and keeps request ownership through natural
-  exit, so reattach, duplicate kill, and graceful-to-immediate upgrade cannot
-  race the snapshot; descendant signals still require the exact root
-  session/handle to be live. Windows and SSH-hosted PTYs keep the previous
-  foreground-tree contract for now.
+  Completed process tables are never reused as signal targets, and identity
+  checks use C-locale timestamps from the source scan. Later requests start a
+  fresh same-turn-coalesced successor inside their own deadline instead of
+  waiting behind older scans. A session is marked as terminating before capture
+  and keeps request ownership through natural exit, so reattach, duplicate kill,
+  and graceful-to-immediate upgrade cannot race the snapshot; descendant signals
+  still require the exact root session/handle to be live. Windows and SSH-hosted
+  PTYs keep the previous foreground-tree contract for now.
 - Changing agent-provider resume commands or permission flags.
 - Making a UI close wait for a remote process to exit before the tab disappears.
 - Replacing worktree sleep with tab close. Sleep remains resumable by design.
