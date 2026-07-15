@@ -226,7 +226,13 @@ complete a box.
       and PR Checks are green at the exact head. The manual credentialed rehearsal starts with the
       missing-caller RED `E-M4-NATIVE-SIGNING-REHEARSAL-LOCAL-RED-001` and is locally green under
       `E-M4-NATIVE-SIGNING-REHEARSAL-LOCAL-001`. GitHub cannot dispatch a new workflow before it
-      exists on the default branch, so real signing/native trust remains blocked without merging.
+      exists on the default branch; the exact confirmation-bound refusal is recorded under
+      `E-M4-NATIVE-SIGNING-REHEARSAL-DISPATCH-BLOCKED-001`, so real signing/native trust remains
+      blocked without merging. Exact-head run
+      [29417449971](https://github.com/stablyai/orca/actions/runs/29417449971) passes the caller and
+      default-preservation contracts plus full builds on all six native jobs under
+      `E-M4-NATIVE-SIGNING-REHEARSAL-CI-001`; PR Checks and Golden E2E are green. The artifact run is
+      red only for the retained Windows arm64 build-26100 floor mismatch.
 - [ ] Add a fail-closed aggregate and immutable manifest-signing job.
 - [ ] Embed the exact signed manifest and accepted keys in each desktop build.
 - [ ] Upload to a draft release, read back, re-hash, and execute the downloaded archives.

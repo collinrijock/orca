@@ -8,8 +8,8 @@ work; keep exact commands, runner identities, hashes, metrics, and residual gaps
 
 Date created: 2026-07-14<br>
 Last updated: 2026-07-15<br>
-Current phase: Milestone 4 / Work Package 3 manual platform-native signing rehearsal caller — **In progress — 2026-07-15, Codex implementation owner**. The disconnected signing workflow and its authenticated reconstruction/finalization contracts are closed locally and on all six exact-head Node 24 native build jobs under E-M4-NATIVE-SIGNING-WORKFLOW-LOCAL-RED-001, E-M4-NATIVE-SIGNING-WORKFLOW-LOCAL-001, E-M4-NATIVE-SIGNING-WORKFLOW-CI-RED-001, and E-M4-NATIVE-SIGNING-WORKFLOW-CI-001. The manual-only rehearsal caller is locally green under E-M4-NATIVE-SIGNING-REHEARSAL-LOCAL-RED-001 and E-M4-NATIVE-SIGNING-REHEARSAL-LOCAL-001. It binds typed authorization to the exact selected source, serializes rehearsals without cancelling an approval in flight, reuses unpublished native artifacts, and invokes the callable signing workflow without connecting release-cut, desktop builds, publication, or any tuple. Real credentialed dispatch is blocked until this new workflow exists on GitHub's default branch; merging to `main` remains outside the implementation owner's authority. Release-cut and every desktop build remain disconnected until exact floors, real signing/trust, aggregate, publication/read-back, and embedding gates are complete. Production/default behavior is unchanged, no bundled-runtime path is enabled, and no artifact is published.<br>
-Session checkpoint: **In progress — 2026-07-15, Codex implementation owner** — the rehearsal caller, default-preserving qualification input, and both native-family contract integrations pass locally under `E-M4-NATIVE-SIGNING-REHEARSAL-LOCAL-001`: focused 3 files / 3 tests, broad 47 files / 242 tests, desktop parity 3 files / 48 tests, typecheck, full lint/reliability/localization/max-lines, focused syntax/lint/formatting, and `git diff --check`. The qualification supplements remain default-on for pull requests, direct manual artifact runs, and ordinary reusable calls; only the explicit rehearsal passes `false`, so the known hosted Windows-arm64 floor mismatch remains open rather than being reclassified. GitHub requires a `workflow_dispatch` file to exist on the default branch before dispatch, so real Apple/SignPath requests cannot be triggered from this unmerged PR. The safe default is to keep credentials unused, publish nothing, retain the caller for post-merge rehearsal, and continue independent disconnected work. Release-cut, desktop builds, tuple enablement, Gatekeeper/notarization, Defender/WDAC, and exact floor gates remain disconnected and open. Legacy remains the production default, and merge to `main` remains prohibited.<br>
+Current phase: Milestone 4 / Work Package 3 manual platform-native signing rehearsal caller — **Closed as a capability; real dispatch blocked — 2026-07-15, Codex implementation owner**. The disconnected signing workflow and its authenticated reconstruction/finalization contracts are closed locally and on all six exact-head Node 24 native build jobs under E-M4-NATIVE-SIGNING-WORKFLOW-LOCAL-RED-001, E-M4-NATIVE-SIGNING-WORKFLOW-LOCAL-001, E-M4-NATIVE-SIGNING-WORKFLOW-CI-RED-001, and E-M4-NATIVE-SIGNING-WORKFLOW-CI-001. The manual-only caller is closed locally and on all six native build jobs under E-M4-NATIVE-SIGNING-REHEARSAL-LOCAL-RED-001, E-M4-NATIVE-SIGNING-REHEARSAL-LOCAL-001, and E-M4-NATIVE-SIGNING-REHEARSAL-CI-001. It binds typed authorization to the exact source, serializes rehearsals without cancelling approval in flight, and leaves ordinary baseline qualification default-on. Real dispatch remains blocked by GitHub's default-branch rule under E-M4-NATIVE-SIGNING-REHEARSAL-DISPATCH-BLOCKED-001; merging to `main` is prohibited. The next safe package is the disconnected fail-closed aggregate/immutable-manifest-signing job contract. Release-cut, desktop builds, publication, and every tuple remain disconnected. Production/default behavior is unchanged.<br>
+Session checkpoint: **In progress — 2026-07-15, Codex implementation owner** — exact head `c2db2b62e544139176d0993b1340f9d0c706e017` passes the new rehearsal/build contracts on all six native jobs in artifact run 29417449971 under `E-M4-NATIVE-SIGNING-REHEARSAL-CI-001`; all six full runtime builds, both Linux supplements, Windows x64 baseline, Golden E2E 29417449936, and PR Checks 29417449960 pass. The artifact run fails only because the unchanged Windows arm64 gate observes hosted build 26200 instead of required build 26100 after successful runtime verification/smoke. The confirmation-bound live dispatch is still refused before run creation under `E-M4-NATIVE-SIGNING-REHEARSAL-DISPATCH-BLOCKED-001`, so no credential was used and real Apple/SignPath/native-trust evidence stays open. Release-cut, desktop builds, publication, tuple enablement, Gatekeeper/notarization, Defender/WDAC, and exact floor gates remain disconnected and open. Legacy remains the production default, and merge to `main` remains prohibited.<br>
 Primary design: [SSH relay GitHub Release plan](./2026-07-14-ssh-relay-github-release-plan.html)<br>
 Motivating issues: [#8450](https://github.com/stablyai/orca/issues/8450), [#1693](https://github.com/stablyai/orca/issues/1693)
 
@@ -10452,6 +10452,88 @@ mismatch`. NTFS cannot materialize the fixture's declared POSIX executable mode.
   the exact head. Attempting the caller by file after push may record GitHub's default-branch refusal
   but must not use an alternate secret-bearing path. Continue the next independent disconnected
   artifact-only package while the real signing gate remains open.
+
+### E-M4-NATIVE-SIGNING-REHEARSAL-DISPATCH-BLOCKED-001 — Default branch blocks dispatch
+
+- Date: 2026-07-15
+- Owner: Codex implementation owner
+- Source: exact pushed head `c2db2b62e544139176d0993b1340f9d0c706e017`; draft PR #8741.
+- Command:
+  `gh workflow run ssh-relay-runtime-native-signing-rehearsal.yml --repo stablyai/orca --ref Jinwoo-H/bug-8450-ssh-relay-runtime-builds -f expected-source-sha=c2db2b62e544139176d0993b1340f9d0c706e017 -f 'confirmation=SIGN SSH RELAY RUNTIME ARTIFACTS'`.
+- Result: expected refusal before run creation: `HTTP 404: workflow
+ssh-relay-runtime-native-signing-rehearsal.yml not found on the default branch`. No Actions run,
+  job, artifact, secret read, Apple/SignPath request, approver notification, publication, or enabled
+  tuple was created.
+- Oracle proved: the reviewed caller cannot be live-rehearsed while it exists only in this PR. The
+  user's no-merge boundary and GitHub's default-branch dispatch rule jointly gate real signing.
+- Safe default: do not add a temporary secret-bearing path to an existing routine workflow. Keep the
+  caller reviewable in the PR, leave real signing/native trust open, and continue only independent
+  disconnected work until a separately authorized merge makes the workflow dispatchable.
+- Does not prove: Actions schema execution, credential availability, signing, approval/timeout,
+  returned-byte identity, native trust, exact floors, publication, desktop embedding, SSH behavior,
+  or an enabled tuple.
+
+### E-M4-NATIVE-SIGNING-REHEARSAL-CI-001 — Rehearsal contracts pass all six native builds
+
+- Date: 2026-07-15
+- Owner: Codex implementation owner
+- Commit SHA / PR: exact head `c2db2b62e544139176d0993b1340f9d0c706e017`; capability commit
+  `c2db2b62e`; draft PR #8741.
+- Workflow/run: SSH Relay Runtime Artifacts
+  [29417449971](https://github.com/stablyai/orca/actions/runs/29417449971),
+  13:00:47Z–13:15:32Z. Credential-free PR execution only; it does not invoke the manual rehearsal
+  caller or any signing credential.
+- Target-native jobs and resolved images:
+  - Windows arm64
+    [87359106832](https://github.com/stablyai/orca/actions/runs/29417449971/job/87359106832):
+    `windows-11-arm`, `win11-arm64` image `20260714.109.1`, ARM64,
+    13:01:01Z–13:11:17Z.
+  - Windows x64
+    [87359106887](https://github.com/stablyai/orca/actions/runs/29417449971/job/87359106887):
+    `windows-2022`, `win22` image `20260714.244.1`, X64, 13:01:01Z–13:07:22Z.
+  - Linux x64
+    [87359106853](https://github.com/stablyai/orca/actions/runs/29417449971/job/87359106853):
+    `ubuntu-24.04`, `ubuntu24` image `20260705.232.1`, X64, 13:01:01Z–13:05:10Z.
+  - Linux arm64
+    [87359106916](https://github.com/stablyai/orca/actions/runs/29417449971/job/87359106916):
+    `ubuntu-24.04-arm`, `ubuntu24-arm64` image `20260714.61.1`, ARM64,
+    13:01:04Z–13:06:06Z.
+  - macOS x64
+    [87359106864](https://github.com/stablyai/orca/actions/runs/29417449971/job/87359106864):
+    `macos-15-intel`, `macos15` image `20260629.0276.1`, X64,
+    13:01:02Z–13:07:29Z.
+  - macOS arm64
+    [87359106894](https://github.com/stablyai/orca/actions/runs/29417449971/job/87359106894):
+    `macos-15`, `macos15` image `20260706.0213.1`, ARM64, 13:01:02Z–13:05:38Z.
+- Contract results: each POSIX job passes 46 files / 238 tests, including the new caller contract;
+  durations are 6.42 seconds Linux x64, 6.18 seconds Linux arm64, 28.42 seconds macOS x64, and 11.49
+  seconds macOS arm64. Each Windows job passes 47 files / 233 tests with nine declared skips out of
+  242; durations are 15.23 seconds x64 and 14.23 seconds arm64. Every job then completes two exact
+  native builds, equality, inspection, Node/PTY/watcher smoke, and unpublished upload.
+- Default-preservation oracle: both Linux supplements pass in jobs
+  [87360607215](https://github.com/stablyai/orca/actions/runs/29417449971/job/87360607215)
+  and [87360607155](https://github.com/stablyai/orca/actions/runs/29417449971/job/87360607155),
+  and Windows x64 baseline job
+  [87361449973](https://github.com/stablyai/orca/actions/runs/29417449971/job/87361449973)
+  passes. The ordinary PR call therefore retains qualification jobs by default.
+- Expected retained failure: Windows arm64 baseline job
+  [87361450070](https://github.com/stablyai/orca/actions/runs/29417449971/job/87361450070)
+  authenticates the unchanged 85,213,511-byte tree/content ID, passes Node/PTY/watcher/resource
+  smoke in 6,177.5851 ms with 48,345,088-byte RSS and 7,942.833 ms total verification, then fails
+  only because `10.0.26200` is not required build 26100. Platform and architecture pass; exact OS
+  build fails closed.
+- Adjacent exact-head regressions: PR Checks
+  [29417449960](https://github.com/stablyai/orca/actions/runs/29417449960) pass from
+  13:00:51Z–13:13:15Z. Golden E2E
+  [29417449936](https://github.com/stablyai/orca/actions/runs/29417449936) passes macOS and Linux.
+- Does not prove: a dispatch of the new caller, any secret access, Apple/SignPath signing or approval,
+  returned signed bytes, native trust, exact oldest floors, protected manifest signing,
+  publication/read-back, desktop embedding, SSH behavior, or an enabled tuple.
+- Checklist items satisfied: exact-head schema/contract and default-preservation CI prerequisite for
+  the manual rehearsal capability. The broader native-signing item remains open because real
+  signing/native trust is blocked.
+- Follow-up: checkpoint this evidence, keep the dispatch blocker open, and begin the next
+  disconnected aggregate/manifest-signing job contract without credentials or production consumers.
 
 ## Accepted Gaps
 
