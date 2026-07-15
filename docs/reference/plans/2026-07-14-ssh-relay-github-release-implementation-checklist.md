@@ -8,8 +8,8 @@ work; keep exact commands, runner identities, hashes, metrics, and residual gaps
 
 Date created: 2026-07-14<br>
 Last updated: 2026-07-15<br>
-Current phase: Milestone 4 / Work Package 3 disconnected aggregate and protected manifest-signing workflow contract — **In progress — 2026-07-15, Codex implementation owner**. Linux aggregate-ready finalization is closed locally and on exact-head native x64/arm64 runners under E-M4-LINUX-FINALIZATION-LOCAL-RED-001, E-M4-LINUX-FINALIZATION-LOCAL-001, and E-M4-LINUX-FINALIZATION-CI-001. The active package must consume only the six exact aggregate-ready outputs, prepare canonical bytes credential-free, expose only those bytes to the tag-restricted `relay-runtime-manifest-signing` environment, accept only key ID plus Ed25519 signature, reconstruct and verify before final output, and fail closed on missing/extra/mutated inputs, approval/secret/signing failure, timeout, or partial output. It remains callable and disconnected. Release-cut, desktop builds, publication, and every tuple stay disconnected; production/default behavior is unchanged.<br>
-Session checkpoint: **In progress — 2026-07-15, Codex implementation owner** — fresh exact-head ARM job 87395626746 at `c9ffa26a90751fb0941e44066c36722d9c6ee49d` proves HTTPS to `ports.ubuntu.com` is also unavailable; the new TERM/KILL bound settles the command with exit 124 after 3 minutes 40 seconds under E-M4-LINUX-PREREQUISITE-HTTPS-CI-RED-001. The capability-first refinement is locally green under E-M4-LINUX-PREREQUISITE-CAPABILITY-LOCAL-RED-001 and E-M4-LINUX-PREREQUISITE-CAPABILITY-LOCAL-001: it checks all declared command/CA primitives, runs native C and C++ compile/link/execute probes before skipping APT, retains bounded HTTPS fallback only for missing requirements, and revalidates after fallback. Focused/broad release tests, desktop parity, typecheck, full lint, shell syntax, formatting, and diff checks pass. Checkpoint and push, then require fresh exact-head native proof. Other jobs in run 29428082375 are still settling. The user authorizes commits, pushes, draft-PR updates, CI reruns, and protected rehearsals within PRs, but not merging to `main`. The callable protected workflow remains disconnected and deliberately fails closed before signer exposure because no accepted production key exists. No signing credential, protected environment, release consumer, publication path, desktop consumer, tuple enablement, or production/default change is connected. Legacy remains the production default.<br>
+Current phase: Milestone 4 / Work Package 3 disconnected release failure/recovery contracts — **In progress — 2026-07-15, Codex implementation owner**. The callable aggregate and protected manifest-signing workflow contract is closed locally and on all six exact-head native jobs under E-M4-PROTECTED-MANIFEST-WORKFLOW-LOCAL-001 and E-M4-PROTECTED-MANIFEST-WORKFLOW-CI-001. The active package must add purpose-named disconnected failure contracts for timeout, bounded retry success/exhaustion, approval absence/denial/timeout, signing failure, aggregate failure, partial output, and exact unpublished-draft recovery without connecting credentials, publication, desktop builds, or any tuple. Release-cut, desktop builds, publication, and every tuple stay disconnected; production/default behavior is unchanged.<br>
+Session checkpoint: **In progress — 2026-07-15, Codex implementation owner** — exact pushed head `bb4b527e4ea030cbd94f11ca9b6e284900ab8c8a` passes all six target-native artifact jobs in run 29428772206 under E-M4-LINUX-PREREQUISITE-CAPABILITY-CI-001 and E-M4-PROTECTED-MANIFEST-WORKFLOW-CI-001. Linux x64/arm64 capability probes complete in about four seconds, never enter APT, and proceed through full runtime construction; the all-six workflow source contract and broad runtime suites pass. Both Linux oldest-userland supplements and Windows x64 floor pass. Windows arm64 runtime smoke succeeds but the floor job retains the expected fail-closed 26200-versus-26100 mismatch. PR Checks 29428772127 and Golden E2E 29428772389 are green. The user authorizes commits, pushes, draft-PR updates, CI reruns, and protected rehearsals within PRs, but not merging to `main`. No accepted production key, protected environment/seed, native-signing trust proof, release consumer, publication path, desktop consumer, tuple enablement, or production/default change is connected. Legacy remains the production default.<br>
 Primary design: [SSH relay GitHub Release plan](./2026-07-14-ssh-relay-github-release-plan.html)<br>
 Motivating issues: [#8450](https://github.com/stablyai/orca/issues/8450), [#1693](https://github.com/stablyai/orca/issues/1693)
 
@@ -100,12 +100,16 @@ same change as the work it records.
   native CI pass under E-M4-BUILD-PREREQUISITE-LOCAL-RED-001,
   E-M4-BUILD-PREREQUISITE-LOCAL-001, and E-M4-BUILD-PREREQUISITE-CI-001. Release workflows remain
   disconnected.
-- Active package: Work Package 3 callable, disconnected aggregate/manifest-signing workflow
-  contract. Begin with a purpose-named RED for all-six exact aggregate input consumption,
-  credential-free canonical preparation, protected environment isolation, seed decoding and
-  signature-only return, reconstruction/verification, bounded failure cleanup, and complete
-  release/desktop/publication disconnection. The environment and seed are unprovisioned; static and
-  test-key proof do not count as live protected signing evidence.
+- Completed Work Package 3 gate: callable, disconnected aggregate/manifest-signing workflow source
+  contract. Exact aggregate input names, credential-free preparation/finalization, protected signer
+  isolation, signature-only return, SHA-pinned actions, bounds, and complete consumer disconnection
+  pass locally and on all six exact-head native jobs under E-M4-PROTECTED-MANIFEST-WORKFLOW-LOCAL-001
+  and E-M4-PROTECTED-MANIFEST-WORKFLOW-CI-001. The environment and seed remain unprovisioned; static
+  and test-key proof do not count as live protected signing evidence.
+- Active package: Work Package 3 disconnected release failure/recovery contracts. Add a purpose-named
+  RED and credential-free harness for the declared timeout, retry exhaustion, approval failure,
+  signing failure, aggregate failure, partial-output cleanup, and same-unpublished-draft recovery
+  states. Keep every real credential, release write, desktop consumer, and tuple disconnected.
 - Completed Work Package 2 gate: target-native Windows source-signature reports from exact-head
   artifact jobs 87267322867 and 87267322870 were independently downloaded and matched to their
   identities and signing-stage reports under E-M3-WINDOWS-SOURCE-SIGNATURE-CI-001. PR Checks
@@ -11152,6 +11156,80 @@ src/main/ssh/ssh-relay-manifest-signature.test.ts src/main/ssh/ssh-relay-release
   native contracts, PR Checks, and Golden E2E. Retain all three mirror REDs and the bounded-settlement
   result.
 
+### E-M4-LINUX-PREREQUISITE-CAPABILITY-CI-001 — Native Linux capability gates avoid unavailable mirrors
+
+- Date: 2026-07-15
+- Owner: Codex implementation owner
+- Source: exact pushed head `bb4b527e4ea030cbd94f11ca9b6e284900ab8c8a`; draft PR #8741.
+- Workflow/jobs: [SSH Relay Runtime Artifacts run 29428772206](https://github.com/stablyai/orca/actions/runs/29428772206),
+  15:35:38Z–15:49:34Z. Linux x64 job
+  [87398040874](https://github.com/stablyai/orca/actions/runs/29428772206/job/87398040874)
+  passes in 4m39s; Linux arm64 job
+  [87398040969](https://github.com/stablyai/orca/actions/runs/29428772206/job/87398040969)
+  passes in 4m14s.
+- Runner/remote/network: GitHub-hosted Ubuntu 24.04.4, runner 2.335.1. X64 uses
+  `ubuntu-24.04` image `20260714.240.1`, provisioner `20260707.563`, Azure `westus`; arm64 uses
+  `ubuntu-24.04-arm` image `20260706.52.2`, provisioner `20260624.560`, Azure `northcentralus`.
+  There is no SSH remote, protected environment, signing seed, release, desktop consumer,
+  publication, or enabled tuple.
+- Log command: `gh run view 29428772206 --repo stablyai/orca --log` followed by job-scoped `rg` for
+  runner identity, prerequisite-step boundaries, `missing Linux prerequisites`, test counts, and
+  durations.
+- Result: PASS. The x64 gate runs from 15:36:34.048Z until the next step at 15:36:38.449Z; arm64
+  runs from 15:36:22.134Z until the next step at 15:36:26.177Z. In each complete job log, the exact
+  text `missing Linux prerequisites` appears only once in the echoed shell source and never as
+  runtime output, so neither runner enters APT. Native C and C++ compile/link/execute probes, final revalidation,
+  dependency installation, both clean runtime builds, exact equality, bundled Node, PTY/watcher
+  smoke, metadata, aggregate-ready finalization, and artifact upload all pass.
+- Contract counts: each Linux job passes 50 files / 258 tests. Vitest duration is 8.12s on x64 and
+  6.42s on arm64. Both Linux oldest-userland supplements pass: arm64 job 87399667498 in 1m05s and
+  x64 job 87399667523 in 52s.
+- Adjacent exact-head evidence: macOS x64 job 87398040917 passes in 6m21s (50 files / 258 tests,
+  28.75s Vitest), macOS arm64 job 87398040906 passes in 3m30s (50 / 258, 7.71s), Windows x64 job
+  87398040936 passes in 5m10s (51 files / 252 passed plus 10 skipped of 262, 11.49s), and Windows
+  arm64 job 87398041157 passes in 9m17s (51 / 252 plus 10 skipped, 13.70s). Windows x64 floor job
+  87400400656 passes in 2m11s. Windows arm64 floor job 87400400701 executes the runtime successfully
+  and then fails exactly because hosted build 26200 is not the required build 26100.
+- Oracle proved: both GitHub Linux architectures possess and can execute the declared compiler,
+  linker, archive, strip, crypto, download, Python, XZ, and CA capabilities without package egress;
+  unavailable mirrors no longer block a complete native artifact job. A genuinely absent or broken
+  capability still enters the bounded HTTPS fallback and fails closed if installation cannot settle.
+- Does not prove: the missing-capability APT success branch, Linux kernel 4.18, native signing/trust,
+  protected manifest signing, release publication/read-back, desktop embedding, SSH transfer/install,
+  packaged RPC behavior, performance against legacy, or any enabled tuple.
+
+### E-M4-PROTECTED-MANIFEST-WORKFLOW-CI-001 — Protected workflow source contract passes all six native jobs
+
+- Date: 2026-07-15
+- Owner: Codex implementation owner
+- Source and jobs: exact pushed head `bb4b527e4ea030cbd94f11ca9b6e284900ab8c8a` in artifact run
+  [29428772206](https://github.com/stablyai/orca/actions/runs/29428772206); build jobs
+  87398040874, 87398040969, 87398040917, 87398040906, 87398040936, and 87398041157.
+- Native runners: Linux x64 `ubuntu-24.04` image `20260714.240.1`; Linux arm64
+  `ubuntu-24.04-arm` `20260706.52.2`; macOS x64 `macos-15` `20260629.0276.1` on macOS 15.7.7;
+  macOS arm64 `macos-15-arm64` `20260706.0213.1` on macOS 15.7.7; Windows x64 `windows-2022`
+  `20260706.237.1` on Windows Server 2022 build 20348; Windows arm64 `windows-11-arm64`
+  `20260706.102.1` on Windows 11 build 26200. Every job uses runner 2.335.1 and Node 24.18.0.
+- Result: PASS. `config/scripts/ssh-relay-runtime-manifest-signing-workflow.test.mjs` passes 1/1 on
+  Linux x64 in 44ms, Linux arm64 in 27ms, macOS x64 in 67ms, macOS arm64 in 15ms, Windows x64 in
+  45ms, and Windows arm64 in 30ms. The all-six broad counts and durations are recorded in
+  E-M4-LINUX-PREREQUISITE-CAPABILITY-CI-001.
+- Adjacent exact-head workflows: PR Checks run
+  [29428772127](https://github.com/stablyai/orca/actions/runs/29428772127), job 87398002184, passes
+  15:35:42Z–15:49:26Z. Golden E2E run
+  [29428772389](https://github.com/stablyai/orca/actions/runs/29428772389) passes Linux job
+  87398002948 and macOS job 87398003007.
+- Oracle proved: the callable workflow YAML parses identically on every target-native runner family;
+  accepts only the four exact inputs and one required seed; downloads six explicit artifacts in both
+  credential-free stages; exposes no runtime artifacts to the signer; exposes the seed only to the
+  environment-gated signer; accepts only the signature result; uses SHA-pinned actions and strict
+  job bounds; omits write permissions and publication commands; has no accepted-key placeholder;
+  and remains disconnected from release-cut, macOS release, and native-signing rehearsal consumers.
+- Does not prove: workflow-call execution, environment/tag/reviewer policy, seed availability or
+  secrecy at runtime, approval denial/timeout, a real signature, accepted production keys, native
+  signing/trust, aggregate artifact passage, publication/read-back, desktop embedding, SSH behavior,
+  or any enabled tuple. Those gates remain open and fail closed.
+
 ## Accepted Gaps
 
 No product gap is accepted merely because it appears in this list. Each entry requires explicit
@@ -11210,14 +11288,16 @@ The project is not complete until every applicable item below is checked with ev
 
 ## Next Required Action
 
-Checkpoint and push the locally green capability-first Linux prerequisite gate, then require fresh
-exact-head Linux x64/arm64 and all-six native purpose-suite counts plus PR Checks and Golden E2E.
-Only canonical request bytes and the base64 32-byte seed may enter the tag-restricted
-`relay-runtime-manifest-signing` environment, while credential-free preparation and final
-reconstruction independently download the six exact artifacts. The environment, accepted
-production keys, and secret remain unprovisioned, so live signing evidence must stay BLOCKED. Keep
-Windows arm64 build 26100, macOS 13.5, Linux kernel 4.18, release-cut, desktop builds, publication,
-and every tuple separately gated. Do not merge to `main`; retain every production/default gate.
+Checkpoint and push E-M4-LINUX-PREREQUISITE-CAPABILITY-CI-001 and
+E-M4-PROTECTED-MANIFEST-WORKFLOW-CI-001. Then begin a purpose-named disconnected RED for the
+release failure/recovery harness: timeout, bounded retry success/exhaustion, approval
+absence/denial/timeout, signing failure, aggregate failure, partial-output cleanup, and exact
+unpublished-draft recovery. Reuse the reviewed budgets and same-draft identity constraints; do not
+connect credentials, release writes, desktop consumers, or tuples. The protected environment,
+accepted production keys, and secret remain unprovisioned, so live signing evidence stays BLOCKED.
+Keep Windows arm64 build 26100, macOS 13.5, Linux kernel 4.18, release-cut, desktop builds,
+publication, and every tuple separately gated. Do not merge to `main`; retain every
+production/default gate.
 
 Cross-family Layer B targets, the protected manifest-signing environment, oldest-baseline/native-
 trust cells, and the paired legacy performance baseline remain release/default-path blockers. No

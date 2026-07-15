@@ -9,14 +9,15 @@ keeps commands, hashes, runner identities, timings, and failure details.
 A checked box means the work has evidence in the detailed ledger. Design approval alone does not
 complete a box.
 
-Active checkpoint: **Milestone 4 / Work Package 3 Linux prerequisite capability gate — in progress,
-2026-07-15, Codex implementation owner.** Port 80 failed twice at `4979bc26c`; fresh ARM job
-[87395626746](https://github.com/stablyai/orca/actions/runs/29428082375/job/87395626746)
-at `c9ffa26a9` proves port 443 is also unavailable and that the new command bound settles with exit 124. The narrow capability-first refinement is locally green: it verifies preinstalled primitives
-and executable C/C++ probes, and invokes bounded HTTPS APT only when a prerequisite is missing. It
-is ready to checkpoint and push for fresh native proof. Other `c9ffa26a9` jobs are still settling.
-Production keys/environment/seed, publication, desktop/default consumers, tuple enablement, and
-merge to `main` remain disconnected.
+Active checkpoint: **Milestone 4 / Work Package 3 disconnected release failure/recovery contracts —
+in progress, 2026-07-15, Codex implementation owner.** Exact-head run
+[29428772206](https://github.com/stablyai/orca/actions/runs/29428772206) at `bb4b527e4` passes all six
+target-native artifact jobs. Both Linux runners prove the complete preinstalled toolchain and skip
+unreachable APT; the protected manifest-workflow source contract passes on every runner. PR Checks
+and Golden E2E are green. Next, add purpose-named disconnected failure contracts for timeout, retry
+exhaustion, approval failure, signing failure, partial output, aggregate failure, and exact-draft
+recovery. Production keys/environment/seed, publication, desktop/default consumers, tuple
+enablement, and merge to `main` remain disconnected.
 
 ## Safety status
 
@@ -257,8 +258,9 @@ merge to `main` remain disconnected.
       `E-M4-MANIFEST-AGGREGATE-COMMAND-LOCAL-001`, with all-six exact-head CI closed by
       `E-M4-MANIFEST-AGGREGATE-COMMAND-CI-001`. The callable workflow remains open.
       Its disconnected three-job source contract is locally green under
-      `E-M4-PROTECTED-MANIFEST-WORKFLOW-LOCAL-001`, but exact-head CI and live protected signing
-      remain open; no accepted production key, environment, or seed is provisioned.
+      `E-M4-PROTECTED-MANIFEST-WORKFLOW-LOCAL-001`, and exact-head execution passes on all six native
+      jobs under `E-M4-PROTECTED-MANIFEST-WORKFLOW-CI-001`. Live protected signing remains open; no
+      accepted production key, environment, or seed is provisioned.
 - [ ] Embed the exact signed manifest and accepted keys in each desktop build.
 - [ ] Upload to a draft release, read back, re-hash, and execute the downloaded archives.
 - [ ] Test timeouts, retries, approval denial, signing failure, partial output, and draft recovery.
