@@ -8,8 +8,8 @@ work; keep exact commands, runner identities, hashes, metrics, and residual gaps
 
 Date created: 2026-07-14<br>
 Last updated: 2026-07-15<br>
-Current phase: Milestone 5 / Work Package 4 desktop cache boundary — **In progress — 2026-07-15, Codex implementation owner: portable POSIX archive fresh-parent replacement CI**. Exact-head run 29448792600 proves all six primary native jobs but exposes one implementation defect in both Linux oldest-userland supplements: strict extraction resolves a fresh staging parent before preparing it. E-M5-PORTABLE-ARCHIVE-CI-RED-001 records the failure; commit `af181dcc7` and E-M5-PORTABLE-ARCHIVE-PARENT-LOCAL-001 correct and locally prove only that precondition without weakening exclusive leaf creation or archive/tree verification. Push and replace the all-six native artifact proof before resuming disconnected desktop extraction. Windows ZIP, Node upstream input archives, desktop call sites, cache publication, SSH transfer/install, tuple enablement, mode wiring, and default behavior stay unchanged.<br>
-Session checkpoint: **In progress — 2026-07-15, Codex implementation owner** — correction head `af181dcc7` prepares a fresh mode-0700 parent hierarchy, then preserves physical-path resolution and exclusive final-leaf creation. It passes 279 release tests, 233 desktop parity tests including one existing skip, typecheck, full lint/reliability/line/localization gates, formatting, and protected-file zero-diff under E-M5-PORTABLE-ARCHIVE-PARENT-LOCAL-001. The previous exact head `cdb318df3` passed all six primary native jobs, PR Checks, Golden E2E, and Windows x64 floor; Windows arm64 passed runtime smoke before rejecting hosted build 26200 against build 26100. Replacement exact-head Node 24 primary and Linux-supplement proof is required. This is an implementation correction, not a design change. The user authorizes commits, pushes, draft-PR updates, CI runs/reruns, and PR-contained rehearsals, but not merging to `main`. There is no release write, publication caller, desktop consumer, cache publication/extraction, SSH transfer/install, tuple enablement, or production/default behavior change. Legacy remains the production default.<br>
+Current phase: Milestone 5 / Work Package 4 desktop cache boundary — **In progress — 2026-07-15, Codex implementation owner: disconnected desktop extraction/cache contract audit and RED**. Exact-head run 29449869519 closes the portable POSIX artifact prerequisite under E-M5-PORTABLE-ARCHIVE-CI-001: all six primary Node 24 jobs and both Linux oldest-userland supplements pass deterministic build, strict inspection/extraction, bundled Node/PTY/watcher smoke, equality, and read-back. Audit the existing desktop boundaries and resource/failure contracts, then add only a purpose-named missing extraction/cache-staging RED. Do not add a desktop caller, cache publication, SSH transfer/install, tuple enablement, mode wiring, or default behavior.<br>
+Session checkpoint: **In progress — 2026-07-15, Codex implementation owner** — exact implementation/evidence head `3080eda77fd6a11ed87f536c1963e5b67abe7621` passes artifact run 29449869519 on all six primary native jobs and both Linux supplements. PR Checks 29449869451 and both Golden E2E jobs in run 29449869407 are green. Windows x64 oldest-floor execution passes; Windows arm64 reconstructs and smokes the exact runtime in 7,884.492ms with 49,733,632-byte RSS, then rejects hosted build 26200 against required build 26100. E-M5-PORTABLE-ARCHIVE-CI-001 records exact jobs, runner images, tests, artifact IDs/sizes/hashes, and smoke metrics. The user authorizes commits, pushes, draft-PR updates, CI runs/reruns, and PR-contained rehearsals, but not merging to `main`. There is no release write, publication caller, desktop consumer, cache publication/extraction, SSH transfer/install, tuple enablement, or production/default behavior change. Legacy remains the production default.<br>
 Primary design: [SSH relay GitHub Release plan](./2026-07-14-ssh-relay-github-release-plan.html)<br>
 Motivating issues: [#8450](https://github.com/stablyai/orca/issues/8450), [#1693](https://github.com/stablyai/orca/issues/1693)
 
@@ -131,15 +131,17 @@ same change as the work it records.
   E-M4-DRAFT-RELEASE-COMPOSITION-LOCAL-RED-001,
   E-M4-DRAFT-RELEASE-COMPOSITION-LOCAL-001, and
   E-M4-DRAFT-RELEASE-COMPOSITION-CI-001.
-- Active package: **In progress — 2026-07-15, Codex implementation owner** — portable POSIX relay
-  archive fresh-parent staging correction. Exact-head run 29448792600 passes all six primary native
-  jobs but both Linux oldest-userland supplements fail under
-  E-M5-PORTABLE-ARCHIVE-CI-RED-001 because strict extraction resolves an intentionally fresh parent
-  before preparing it. Commit `af181dcc7` adds the missing regression contract and corrects only
-  parent preparation under E-M5-PORTABLE-ARCHIVE-PARENT-LOCAL-001; keep exclusive final-leaf
-  creation, authenticated archive/tree verification, cleanup ownership, cache publication, desktop
-  call sites, SSH behavior, mode wiring, tuple enablement, and defaults intact. Replacement all-six
-  Node 24 proof remains required.
+- Completed package: portable POSIX relay archive correction. E-M5-ARCHIVE-PORTABILITY-AUDIT-001,
+  E-M5-PORTABLE-ARCHIVE-LOCAL-RED-001, E-M5-PORTABLE-ARCHIVE-LOCAL-001,
+  E-M5-PORTABLE-ARCHIVE-CI-RED-001, E-M5-PORTABLE-ARCHIVE-PARENT-LOCAL-RED-001,
+  E-M5-PORTABLE-ARCHIVE-PARENT-LOCAL-001, and E-M5-PORTABLE-ARCHIVE-CI-001 prove the selected bounded
+  archive, correction, all-six primary jobs, and both Linux oldest-userland supplements. Windows ZIP
+  and upstream Node `.tar.xz` remain unchanged.
+- Active package: **In progress — 2026-07-15, Codex implementation owner** — disconnected desktop
+  extraction/cache contract audit and purpose-named RED. Inventory existing cache/path/atomic-file
+  boundaries, formalize resource and integrity failure oracles, and prove the missing contract before
+  implementation. Keep cache publication, desktop call sites, SSH behavior, mode wiring, tuple
+  enablement, release writes, and defaults intact.
 - Completed Work Package 2 gate: target-native Windows source-signature reports from exact-head
   artifact jobs 87267322867 and 87267322870 were independently downloaded and matched to their
   identities and signing-stage reports under E-M3-WINDOWS-SOURCE-SIGNATURE-CI-001. PR Checks
@@ -12462,6 +12464,89 @@ config/scripts/ssh-relay-runtime-portable-archive.test.mjs`; changed-file `oxfmt
 - Follow-up: format/checkpoint the correction, push it, and require replacement exact-head all-six
   primary jobs plus both Linux supplements before resuming disconnected desktop extraction.
 
+### E-M5-PORTABLE-ARCHIVE-CI-001 — Portable archives pass all-six native and Linux floor gates
+
+- Date: 2026-07-15
+- Owner: Codex implementation owner
+- Source: exact pushed head `3080eda77fd6a11ed87f536c1963e5b67abe7621`; archive implementation
+  `c9f6da55e41d2f201684e967ce4c3db37150571f`; fresh-parent correction
+  `af181dcc7dfce1321434466fe0917789a4de8bd9`; draft PR #8741.
+- Workflow: [SSH Relay Runtime Artifacts run
+  29449869519](https://github.com/stablyai/orca/actions/runs/29449869519), starting 20:51:36Z. The
+  aggregate conclusion is the expected failure only because the separate Windows arm64 floor job
+  rejects hosted build 26200 after successful archive reconstruction and runtime smoke.
+- Native job/runtime-contract evidence:
+  - Linux x64 job 87469418941, `ubuntu-24.04` `20260705.232.1`, passes in 2m34s; 62 files / 398 tests
+    in 9.34s. Final read-back smoke is 160.642692ms with 56,541,184-byte RSS; the complete verifier is
+    1,014.651163ms.
+  - Linux arm64 job 87469419077, `ubuntu-24.04-arm` `20260706.52.2`, passes in 5m55s; 62 files / 398
+    tests in 7.91s. Final read-back smoke is 209.703393ms with 52,625,408-byte RSS; the complete
+    verifier is 853.006072ms.
+  - macOS x64 job 87469418977, `macos-15` `20260629.0276.1`, passes in 4m25s; 62 files / 398 tests in
+    20.32s. Final read-back smoke is 362.966426ms with 40,611,840-byte RSS; the complete verifier is
+    2,565.85366ms.
+  - macOS arm64 job 87469418947, `macos-15-arm64` `20260706.0213.1`, passes in 3m11s; 62 files / 398
+    tests in 21.43s. Final read-back smoke is 444.272042ms with 51,445,760-byte RSS; the complete
+    verifier is 1,217.196375ms.
+  - Windows x64 job 87469419062, `windows-2022` `20260706.237.1`, passes in 5m32s; 63 files / 389
+    passed + 13 platform skips of 402 in 14.82s. Final read-back smoke is 5,333.875ms with
+    53,739,520-byte RSS; the complete verifier is 6,388.1631ms.
+  - Windows arm64 job 87469418940, `windows-11-arm64` `20260714.109.1`, passes in 11m21s; 63 files /
+    389 passed + 13 platform skips of 402 in 15.97s. Final read-back smoke is 5,434.1993ms with
+    52,772,864-byte RSS; the complete verifier is 8,194.2032ms.
+- Authenticated archive bytes independently downloaded with
+  `gh run download 29449869519 --repo stablyai/orca --dir /tmp/orca-run-29449869519-evidence`, then
+  checked with `stat -f '%N\t%z'` and `shasum -a 256`; every result exactly matches its uploaded
+  identity:
+  - Linux x64 `.tar.br`: 36,412,421 bytes,
+    `3cb5abb37eb5e288addb4b8e9219176a052eccc1de64f639effa615ca2e762e1`;
+  - Linux arm64 `.tar.br`: 36,363,113 bytes,
+    `8b0e324325ccff3f58d4fb1952073a8cb1b5af3d4d2a2d429f00f7e7b19f4906`;
+  - macOS x64 `.tar.br`: 32,922,873 bytes,
+    `fd539f2acfa84342c4bd2e42e84d75a746da4b68254b2842bb90975da843c41f`;
+  - macOS arm64 `.tar.br`: 31,776,556 bytes,
+    `2031bea0f820107f8c92ab62a446fe0ebbeb64e78b63b6707c0610216ac68e3d`;
+  - Windows x64 ZIP: 37,168,778 bytes,
+    `1db7477d727d14672a919ec5ac35fb6a92ccdabdd80cf4228e877c648be8f466`;
+  - Windows arm64 ZIP: 33,204,738 bytes,
+    `0c79ac88aef8b73d6230c2995585449d4b14feddb4021f2c09bbd3ddf8b58acf`.
+- GitHub artifact IDs/container evidence: Linux x64 8357070191 / 36,327,344 bytes / digest
+  `db611cf63a1925ecd715fd59573e4388a3dd51a0ad2e23f56f4380f328dd3e1a`; Linux arm64 8357149220 /
+  36,261,905 / `e21e8e1662d5d608194b2f6bee48bee1de0c738c4bc0a117cd80ea9bd7730db2`; macOS x64
+  8357112462 / 32,786,285 / `874c3154b4e6e0c1766a2acecab7b0b0c920d165e11c89932759dc7b2a811615`;
+  macOS arm64 8357083684 / 31,651,122 /
+  `86f96887f5295404d3232a7630f88f82647c0f3ad6d5bbdbee232e1002b35393`; Windows x64 8357138535 /
+  37,036,207 / `bab660412a7b88c01e77d8b12e2405586cbd2b26f80ab8bca91343642b5a6bf7`; Windows arm64
+  8357270708 / 33,086,421 / `7f8c89f0a405aab29cd4b5f3866f309ef6471492b981fcc04b495b3f6c2e60dc`.
+- Fresh-parent regression/floor evidence: Linux x64 supplement job 87470575028 passes in 32s and
+  Linux arm64 supplement job 87470575020 passes in 1m08s. Each downloads its exact artifact,
+  reconstructs into the previously failing fresh `$RUNNER_TEMP/baseline-runtime/<tuple>` path, and
+  re-verifies the complete tree. Rocky 8 execution proves glibc 2.28 and libstdc++ 6.0.25: x64 smoke
+  is 163.723423ms / 55,521,280-byte RSS and arm64 is 187.308458ms / 51,802,112-byte RSS. The shared
+  hosted kernel remains 6.17 rather than the separately required 4.18 floor.
+- Windows floors: x64 job 87471620643 on `windows-2022` `20260714.244.1` observes build 20348 and
+  passes; smoke is 5,357.7362ms / 49,979,392-byte RSS and the complete verifier is 6,548.5886ms.
+  Arm64 job 87471620692 on `windows-11-arm64` `20260706.102.1` reconstructs and executes successfully;
+  smoke is 5,879.2748ms / 49,733,632-byte RSS and the complete verifier is 7,884.492ms, then the job
+  fails only because observed build 26200 does not prove required build 26100.
+- Adjacent product evidence: [PR Checks run
+  29449869451](https://github.com/stablyai/orca/actions/runs/29449869451), job 87469418118, passes in
+  14m14s. [Golden E2E run 29449869407](https://github.com/stablyai/orca/actions/runs/29449869407)
+  passes Linux job 87469417960 in 4m26s and macOS job 87469417915 in 6m25s.
+- Oracle proved: deterministic bounded POSIX Brotli/TAR and Windows ZIP construction, strict archive
+  inspection/extraction, exact clean-build equality, identity/SBOM/provenance closure, bundled
+  Node/PTY/watcher smoke, read-back execution, fresh-parent exclusive staging, and Linux glibc /
+  libstdc++ floors execute on all required native build families under Node 24.
+- Consumer-disconnection oracle: there is no packaged manifest/key, desktop extraction/cache caller,
+  cache publication, SSH transfer/install, mode, tuple enablement, release write, or default behavior.
+  No runtime artifact is published. Legacy remains the only production path.
+- Does not prove: packaged Electron extraction/cache concurrency and resource bounds, live
+  GitHub/CDN/proxy behavior, client-offline transfer, live SSH/SFTP/system-SSH paths, Linux kernel
+  4.18, macOS 13.5, Windows arm64 build 26100, real native signatures/trust, publication, or any
+  enabled tuple.
+- Follow-up: checkpoint this evidence and begin only the disconnected desktop extraction/cache
+  boundary audit and purpose-named RED.
+
 ## Accepted Gaps
 
 No product gap is accepted merely because it appears in this list. Each entry requires explicit
@@ -12520,11 +12605,10 @@ The project is not complete until every applicable item below is checked with ev
 
 ## Next Required Action
 
-Push fresh-parent correction `af181dcc7` and this evidence checkpoint, then replace exact-head
-all-six primary plus both Linux supplement
-archive/reproducibility/execution evidence. Do not begin desktop extraction/cache staging until that
-prerequisite is green on Node 24. Do not add a desktop call site, SSH transfer/install, mode wiring,
-tuple enablement, or default behavior. Keep Node upstream `.tar.xz` inputs, Windows ZIP,
+Audit the disconnected desktop extraction/cache boundary and add only the purpose-named missing
+resource/failure-semantics RED. Do not implement a desktop call site, cache publication, SSH
+transfer/install, mode wiring, tuple enablement, or default behavior in that audit/test package. Keep
+Node upstream `.tar.xz` inputs, Windows ZIP,
 `ORCA_RELAY_PATH`, existing desktop required-assets behavior, detached-signature byte encoding,
 Windows arm64 build 26100, macOS 13.5, Linux kernel 4.18, release-cut, desktop builds, publication,
 and every tuple separately gated.

@@ -9,24 +9,14 @@ keeps commands, hashes, runner identities, timings, and failure details.
 A checked box means the work has evidence in the detailed ledger. Design approval alone does not
 complete a box.
 
-Active checkpoint: **Milestone 5 / Work Package 4 desktop cache boundary — in-progress portable
-POSIX archive prerequisite correction, 2026-07-15, Codex implementation owner.** Exact-head run
-[29445770009](https://github.com/stablyai/orca/actions/runs/29445770009) passes the
-downloader-containing contracts and full runtime build/smoke/equality on all six native Node 24 jobs
-under `E-M5-ARTIFACT-DOWNLOAD-CI-001`. PR Checks and both Golden E2E jobs are green; the artifact run
-is red only after Windows arm64 passes smoke and rejects hosted build 26200 against the retained
-26100 floor. `E-M5-ARCHIVE-PORTABILITY-AUDIT-001` proves the unpublished `.tar.xz` output cannot
-meet the cross-client 64 MiB extraction contract and selects bounded Node-native `.tar.br`. Replace
-the archive contracts and all-six artifact evidence before the isolated extraction/cache-staging
-RED. The purpose-named missing-contract RED is recorded under
-`E-M5-PORTABLE-ARCHIVE-LOCAL-RED-001`; commit `c9f6da55e` is locally green under
-`E-M5-PORTABLE-ARCHIVE-LOCAL-001`. Exact-head run
-[29448792600](https://github.com/stablyai/orca/actions/runs/29448792600) passes all six primary native
-jobs but exposes a fresh-parent staging defect in both Linux oldest-userland supplements:
-strict extraction calls `realpath` before preparing the non-existent parent
-(`E-M5-PORTABLE-ARCHIVE-CI-RED-001`). Commit `af181dcc7` corrects and locally proves only that
-exclusive-staging precondition under `E-M5-PORTABLE-ARCHIVE-PARENT-LOCAL-001`; replacement all-six
-Node 24 evidence is the current gate. Desktop consumers, SSH transfer/install, mode wiring,
+Active checkpoint: **Milestone 5 / Work Package 4 desktop cache boundary — in-progress disconnected
+extraction/cache contract audit, 2026-07-15, Codex implementation owner.** Exact-head run
+[29449869519](https://github.com/stablyai/orca/actions/runs/29449869519) closes deterministic bounded
+`.tar.br` under `E-M5-PORTABLE-ARCHIVE-CI-001`: all six primary Node 24 jobs and both Linux
+oldest-userland supplements pass. PR Checks and Golden E2E are green; Windows x64 floor passes and
+Windows arm64 passes smoke before the retained hosted build-26200 versus required-26100 rejection.
+The next safe slice is only the isolated desktop extraction/cache resource and failure-semantics
+audit followed by a purpose-named RED. Desktop consumers, SSH transfer/install, mode wiring,
 tuple enablement, publication, production keys/environment/seed, and merge to `main` remain
 disconnected.
 
@@ -162,11 +152,12 @@ disconnected.
 - [x] Build and smoke-test Node, patched `node-pty`, and `@parcel/watcher` on GitHub runners for
       Linux, macOS, and Windows on x64 and arm64.
 - [x] Prove exact clean-build equality and exact runtime-tree closure on all six runner families.
-- [ ] Replace unpublished POSIX `.tar.xz` outputs with deterministic bounded `.tar.br` and rerun
+- [x] Replace unpublished POSIX `.tar.xz` outputs with deterministic bounded `.tar.br` and rerun
       exact clean-build/archive/execution proof on all six native jobs
       (`E-M5-ARCHIVE-PORTABILITY-AUDIT-001` selects the correction;
       `E-M5-PORTABLE-ARCHIVE-LOCAL-RED-001` proves the old boundary fails;
-      `E-M5-PORTABLE-ARCHIVE-LOCAL-001` passes locally; exact-head native evidence open).
+      `E-M5-PORTABLE-ARCHIVE-LOCAL-001`, `E-M5-PORTABLE-ARCHIVE-PARENT-LOCAL-001`, and
+      `E-M5-PORTABLE-ARCHIVE-CI-001`).
 - [x] Complete the all-six SBOM, license, provenance, toolchain, and prohibited-content audit.
 - [x] Rebuild both Linux artifacts in the digest-pinned glibc 2.28/libstdc++ 6.0.25 userland on
       native x64/arm64 runners; smoke and compare them there. (`E-M3-LINUX-NATIVE-USERLAND-CI-001`)
