@@ -125,6 +125,8 @@ jobs:
           node --check config/scripts/ssh-relay-runtime-provenance.test.mjs
           node --check config/scripts/ssh-relay-runtime-toolchain.mjs
           node --check config/scripts/ssh-relay-runtime-toolchain.test.mjs
+          node --check config/scripts/ssh-relay-runtime-native-signing-plan.mjs
+          node --check config/scripts/ssh-relay-runtime-native-signing-plan.test.mjs
           pnpm exec vitest run --config config/vitest.config.ts \
             config/scripts/ssh-relay-node-release-verification.test.mjs \
             config/scripts/ssh-relay-node-tar-inspection.test.mjs \
@@ -137,6 +139,7 @@ jobs:
             config/scripts/ssh-relay-runtime-baseline.test.mjs \
             config/scripts/ssh-relay-runtime-build.test.mjs \
             config/scripts/ssh-relay-runtime-linux-build-evidence.test.mjs \
+            config/scripts/ssh-relay-runtime-native-signing-plan.test.mjs \
             config/scripts/ssh-relay-runtime-closure.test.mjs \
             config/scripts/ssh-relay-runtime-pty-smoke.test.mjs \
             config/scripts/ssh-relay-runtime-reproducibility.test.mjs \
@@ -379,6 +382,10 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'runtime toolchain script syntax check failed' }
           node --check config/scripts/ssh-relay-runtime-toolchain.test.mjs
           if ($LASTEXITCODE -ne 0) { throw 'runtime toolchain test syntax check failed' }
+          node --check config/scripts/ssh-relay-runtime-native-signing-plan.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'runtime native signing plan script syntax check failed' }
+          node --check config/scripts/ssh-relay-runtime-native-signing-plan.test.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'runtime native signing plan test syntax check failed' }
           pnpm exec vitest run --config config/vitest.config.ts `
             config/scripts/ssh-relay-node-release-verification.test.mjs `
             config/scripts/ssh-relay-node-tar-inspection.test.mjs `
@@ -391,6 +398,7 @@ jobs:
             config/scripts/ssh-relay-runtime-baseline.test.mjs `
             config/scripts/ssh-relay-runtime-build.test.mjs `
             config/scripts/ssh-relay-runtime-linux-build-evidence.test.mjs `
+            config/scripts/ssh-relay-runtime-native-signing-plan.test.mjs `
             config/scripts/ssh-relay-runtime-closure.test.mjs `
             config/scripts/ssh-relay-runtime-pty-smoke.test.mjs `
             config/scripts/ssh-relay-runtime-reproducibility.test.mjs `

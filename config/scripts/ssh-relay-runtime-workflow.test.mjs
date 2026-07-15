@@ -81,6 +81,10 @@ describe('SSH relay runtime artifact workflow', () => {
     expect(source.match(/ssh-relay-runtime-sbom\.test\.mjs/g)).toHaveLength(4)
     expect(source.match(/ssh-relay-runtime-provenance\.test\.mjs/g)).toHaveLength(4)
     expect(source.match(/ssh-relay-runtime-toolchain\.test\.mjs/g)).toHaveLength(4)
+    expect(source.match(/ssh-relay-runtime-native-signing-plan\.test\.mjs/g)).toHaveLength(4)
+    expect(
+      source.match(/node --check config\/scripts\/ssh-relay-runtime-native-signing-plan\.mjs/g)
+    ).toHaveLength(2)
     expect(
       source.match(/node --check config\/scripts\/ssh-relay-runtime-closure\.mjs/g)
     ).toHaveLength(2)
