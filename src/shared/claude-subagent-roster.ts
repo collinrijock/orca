@@ -232,23 +232,13 @@ export function claudeTeammateIdMatchesName(id: string, name: string): boolean {
 /** Remove a teammate's rows from a TeammateIdle hook, which is keyed by name.
  *  Idle means not working, and only working children keep rows — this is the
  *  fallback finish signal when a SubagentStop was lost. Named teammates embed
- *  their name in `agent_id` (`a<name>-<hex>`); prefer that exact signal. Fall
- *  back to `agent_type === name` only when no id matches, so a one-shot
- *  subagent whose agent_type happens to collide with a teammate's name isn't
- *  wrongly removed alongside it. */
+ *  their name in `agent_id` (`a<name>-<hex>`), which is the only unambiguous
+ *  mapping. Agent types are independent of teammate names, so a type fallback
+ *  could remove unrelated live work when the teammate's start hook was lost. */
 export function removeClaudeTeammateByName(roster: ClaudeSubagentRoster, name: string): boolean {
   let changed = false
   for (const id of roster.keys()) {
     if (claudeTeammateIdMatchesName(id, name)) {
-      roster.delete(id)
-      changed = true
-    }
-  }
-  if (changed) {
-    return true
-  }
-  for (const [id, tracked] of roster) {
-    if (tracked.agentType === name) {
       roster.delete(id)
       changed = true
     }

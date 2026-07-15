@@ -319,7 +319,7 @@ describe('claude-subagent-roster', () => {
     expect(claudeTeammateIdMatchesName('aprobe1', 'probe1')).toBe(false)
   })
 
-  it('removes teammates by name via agent_id prefix or agent_type fallback', () => {
+  it('removes teammates by the name embedded in agent_id', () => {
     const roster: ClaudeSubagentRoster = new Map()
     upsertWorkingClaudeSubagent(roster, 'aprobe1-6d3cb5b5', { agentType: 'probe1' }, 100)
     upsertWorkingClaudeSubagent(roster, 'aother-123', { agentType: 'other' }, 100)
@@ -333,14 +333,14 @@ describe('claude-subagent-roster', () => {
     expect(removeClaudeTeammateByName(roster, 'ghost')).toBe(false)
   })
 
-  it('falls back to agent_type only when no id matches the teammate name', () => {
+  it('does not remove an unrelated one-shot whose agent_type matches the teammate name', () => {
     const roster: ClaudeSubagentRoster = new Map()
-    // A one-shot whose agent_type collides with a teammate name, plus the
-    // real teammate. The id match wins; the colliding one-shot is spared.
-    upsertWorkingClaudeSubagent(roster, 'areviewer-6d3cb5b5', { agentType: 'reviewer' }, 100)
+    // Why: a teammate's start hook may be missing (restart, cap, or lost
+    // delivery). Agent type is not identity, so its idle hook must not reap
+    // another live child that happens to use the same type name.
     upsertWorkingClaudeSubagent(roster, 'aoneshot00000001', { agentType: 'reviewer' }, 100)
-    removeClaudeTeammateByName(roster, 'reviewer')
-    expect(roster.has('areviewer-6d3cb5b5')).toBe(false)
+
+    expect(removeClaudeTeammateByName(roster, 'reviewer')).toBe(false)
     expect(roster.has('aoneshot00000001')).toBe(true)
   })
 
