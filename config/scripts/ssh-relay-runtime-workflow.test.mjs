@@ -95,9 +95,15 @@ describe('SSH relay runtime artifact workflow', () => {
     expect(
       source.match(/ssh-relay-runtime-windows-signature-verification\.test\.mjs/g)
     ).toHaveLength(4)
-    expect(
-      source.match(/ssh-relay-runtime-windows-source-signature-verification\.test\.mjs/g)
-    ).toHaveLength(4)
+    for (const moduleName of [
+      'windows-source-signature-verification',
+      'release-stage-gate',
+      'draft-recovery'
+    ]) {
+      const script = `ssh-relay-runtime-${moduleName}`
+      expect(source.split(`${script}.test.mjs`)).toHaveLength(5)
+      expect(source.split(`node --check config/scripts/${script}.mjs`)).toHaveLength(3)
+    }
     expect(
       source.match(/node --check config\/scripts\/ssh-relay-runtime-native-signing-plan\.mjs/g)
     ).toHaveLength(2)
@@ -126,11 +132,6 @@ describe('SSH relay runtime artifact workflow', () => {
     expect(
       source.match(
         /node --check config\/scripts\/ssh-relay-runtime-windows-signature-verification\.mjs/g
-      )
-    ).toHaveLength(2)
-    expect(
-      source.match(
-        /node --check config\/scripts\/ssh-relay-runtime-windows-source-signature-verification\.mjs/g
       )
     ).toHaveLength(2)
     expect(

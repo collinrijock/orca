@@ -143,6 +143,10 @@ jobs:
           node --check config/scripts/ssh-relay-runtime-windows-signature-verification.test.mjs
           node --check config/scripts/ssh-relay-runtime-windows-source-signature-verification.mjs
           node --check config/scripts/ssh-relay-runtime-windows-source-signature-verification.test.mjs
+          node --check config/scripts/ssh-relay-runtime-release-stage-gate.mjs
+          node --check config/scripts/ssh-relay-runtime-release-stage-gate.test.mjs
+          node --check config/scripts/ssh-relay-runtime-draft-recovery.mjs
+          node --check config/scripts/ssh-relay-runtime-draft-recovery.test.mjs
           pnpm exec vitest run --config config/vitest.config.ts \
             config/scripts/ssh-relay-node-release-verification.test.mjs \
             config/scripts/ssh-relay-node-tar-inspection.test.mjs \
@@ -164,6 +168,8 @@ jobs:
             config/scripts/ssh-relay-runtime-macos-signature-verification.test.mjs \
             config/scripts/ssh-relay-runtime-windows-signature-verification.test.mjs \
             config/scripts/ssh-relay-runtime-windows-source-signature-verification.test.mjs \
+            config/scripts/ssh-relay-runtime-release-stage-gate.test.mjs \
+            config/scripts/ssh-relay-runtime-draft-recovery.test.mjs \
             config/scripts/ssh-relay-runtime-closure.test.mjs \
             config/scripts/ssh-relay-runtime-pty-smoke.test.mjs \
             config/scripts/ssh-relay-runtime-reproducibility.test.mjs \
@@ -479,6 +485,14 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'runtime Windows source signature verification script syntax check failed' }
           node --check config/scripts/ssh-relay-runtime-windows-source-signature-verification.test.mjs
           if ($LASTEXITCODE -ne 0) { throw 'runtime Windows source signature verification test syntax check failed' }
+          node --check config/scripts/ssh-relay-runtime-release-stage-gate.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'runtime release stage gate syntax check failed' }
+          node --check config/scripts/ssh-relay-runtime-release-stage-gate.test.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'runtime release stage gate test syntax check failed' }
+          node --check config/scripts/ssh-relay-runtime-draft-recovery.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'runtime draft recovery syntax check failed' }
+          node --check config/scripts/ssh-relay-runtime-draft-recovery.test.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'runtime draft recovery test syntax check failed' }
           pnpm exec vitest run --config config/vitest.config.ts `
             config/scripts/ssh-relay-node-release-verification.test.mjs `
             config/scripts/ssh-relay-node-tar-inspection.test.mjs `
@@ -500,6 +514,8 @@ jobs:
             config/scripts/ssh-relay-runtime-macos-signature-verification.test.mjs `
             config/scripts/ssh-relay-runtime-windows-signature-verification.test.mjs `
             config/scripts/ssh-relay-runtime-windows-source-signature-verification.test.mjs `
+            config/scripts/ssh-relay-runtime-release-stage-gate.test.mjs `
+            config/scripts/ssh-relay-runtime-draft-recovery.test.mjs `
             config/scripts/ssh-relay-runtime-closure.test.mjs `
             config/scripts/ssh-relay-runtime-pty-smoke.test.mjs `
             config/scripts/ssh-relay-runtime-reproducibility.test.mjs `

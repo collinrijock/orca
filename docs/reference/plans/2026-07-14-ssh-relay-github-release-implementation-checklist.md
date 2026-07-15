@@ -7,9 +7,9 @@ This file is the detailed evidence ledger. Use the tracker above for project sta
 work; keep exact commands, runner identities, hashes, metrics, and residual gaps here.
 
 Date created: 2026-07-14<br>
-Last updated: 2026-07-14<br>
-Current phase: Milestone 3 / Work Package 2 oldest-supported-baseline and native-trust proof — **In progress — 2026-07-14, Codex implementation owner**; exact-head run [29373507297](https://github.com/stablyai/orca/actions/runs/29373507297) passes all six target-native build, smoke, exact clean-build equality, upload, SBOM, license, provenance, runner/toolchain, and prohibited-content cells, and direct inspection of every downloaded payload passes exact archive/subject hashes, archive-scoped SPDX identity, one-owner-per-file, dependency, commit/run/builder/runner, tool-version/hash, and closure assertions (E-M3-METADATA-CI-001); Windows x64/arm64 record strict `MSVC 14.44.35207` identities and distinct exact linker SHA-256 values despite the Git-for-Windows PATH collision; the all-six metadata/provenance gate is closed, while oldest-baseline execution, native signing/trust, cross-family remotes, and measured legacy baselines remain open; production/default behavior and every tuple state remain unchanged; no bundled-runtime path is enabled and no artifact is published<br>
-Session checkpoint: **In progress — 2026-07-14, Codex implementation owner** — credential-free macOS post-sign strict-codesign and signer-policy verification contracts are locally green under E-M3-MACOS-SIGNATURE-LOCAL-001 and pass under Node 24 on all six target-native jobs in exact-head run 29386372366 under E-M3-MACOS-SIGNATURE-CI-001. E-M3-WINDOWS-SIGNATURE-LOCAL-RED-001 proves the final Windows Authenticode policy verifier was absent; its final-tree-first implementation and POSIX/PowerShell workflow contracts pass locally under E-M3-WINDOWS-SIGNATURE-LOCAL-001 and under Node 24 on all six target-native jobs in exact-head run 29387668264 under E-M3-WINDOWS-SIGNATURE-CI-001. Target-native official-Node and preserved-upstream source-signature verification is implemented at `6ef2943de` and locally green under E-M3-WINDOWS-SOURCE-SIGNATURE-LOCAL-001; exact x64/arm64 `Valid` reports are the active gate. Real Apple/SignPath signing, returned production signatures, Gatekeeper/notarization, Defender/WDAC, missing exact-floor snapshots, and native trust remain separately gated. Nothing is published or enabled, and legacy remains the production default.<br>
+Last updated: 2026-07-15<br>
+Current phase: Milestone 4 / Work Package 3 credential-free release/signing DAG failure contracts — **In progress — 2026-07-15, Codex implementation owner**. Work Package 2's target-native Windows official-Node and preserved-upstream source-signature gate is closed under E-M3-WINDOWS-SOURCE-SIGNATURE-CI-001. Exact-floor gaps and real native signing/trust remain open external gates, so the active package is limited to disconnected fail-closed release-DAG contracts and tests; it may not publish, connect desktop consumers, or enable a tuple. Production/default behavior is unchanged, no bundled-runtime path is enabled, and no artifact is published.<br>
+Session checkpoint: **In progress — 2026-07-15, Codex implementation owner** — exact-head artifact jobs 87267322867 and 87267322870 in run [29388734922](https://github.com/stablyai/orca/actions/runs/29388734922) passed target-native Windows source-signature verification and uploaded independently inspected reports under E-M3-WINDOWS-SOURCE-SIGNATURE-CI-001. PR Checks [29388734935](https://github.com/stablyai/orca/actions/runs/29388734935) and Golden E2E [29388734914](https://github.com/stablyai/orca/actions/runs/29388734914) are green at exact head `be32653a7`; the artifact run's only failure is the retained Windows arm64 build-26200-versus-26100 floor gate. E-M4-RELEASE-DAG-LOCAL-RED-001 proves the disconnected release-stage and draft-recovery modules were absent; their implementation and native-workflow test wiring now pass locally under E-M4-RELEASE-DAG-LOCAL-001. Exact-head CI for the new package is the active gate. Real Apple/SignPath signing, returned production signatures, Gatekeeper/notarization, Defender/WDAC, missing exact-floor snapshots, and native trust remain separately gated. Nothing is published or enabled, and legacy remains the production default.<br>
 Primary design: [SSH relay GitHub Release plan](./2026-07-14-ssh-relay-github-release-plan.html)<br>
 Motivating issues: [#8450](https://github.com/stablyai/orca/issues/8450), [#1693](https://github.com/stablyai/orca/issues/1693)
 
@@ -64,7 +64,16 @@ same change as the work it records.
   E-M2-CONTRACT-001, and E-M2-CI-001. They remain isolated in stacked draft PR
   [#8728](https://github.com/stablyai/orca/pull/8728) at implementation commit `b9d80a4cb`; no
   deploy/resolver call site is connected and no tuple is enabled.
-- Active package: Work Package 2 target-native runtime assembly, archive inspection, executable
+- Active package: Work Package 3 credential-free release/signing DAG failure contracts. The package
+  must model fail-closed build, approval, signing, aggregate, upload, read-back, and recovered-draft
+  outcomes without credentials, production workflow wiring, publication, desktop consumers, or
+  tuple enablement. No Milestone 4 box is checked until an implemented contract and exact tests exist.
+- Completed Work Package 2 gate: target-native Windows source-signature reports from exact-head
+  artifact jobs 87267322867 and 87267322870 were independently downloaded and matched to their
+  identities and signing-stage reports under E-M3-WINDOWS-SOURCE-SIGNATURE-CI-001. PR Checks
+  29388734935 and Golden E2E 29388734914 are green. Exact floors and real native signing/trust remain
+  open, so Work Package 2 as a whole is not complete and no tuple is enabled.
+- Historical Work Package 2 progression: target-native runtime assembly, archive inspection, executable
   smoke, SBOM, and provenance only. The Windows x64/arm64 artifact candidate and portability
   corrections are implemented through `b6903b220`, with bounded smoke diagnostics in `3aab5aff8`,
   explicit PTY smoke settlement in `ddf28eb8d`, and bounded active-resource diagnostics in
@@ -86,7 +95,7 @@ same change as the work it records.
   window, exited normally, and uploaded unpublished evidence (E-M3-WINDOWS-CI-001). This package
   may produce test artifacts but must not publish, resolve, transfer, install, launch, or enable
   them.
-- Active evidence gate: the immutable Node v24.18.0 contract, pinned release key, bounded verifier,
+- Historical evidence progression: the immutable Node v24.18.0 contract, pinned release key, bounded verifier,
   and artifact-only CLI are locally green under E-M3-NODE-RED-001 and E-M3-NODE-PROVENANCE-001.
   E-M3-RUNTIME-LOCAL-001 additionally proves one unpublished Linux arm64 glibc assembly, exact-tree
   archive inspection, deterministic repack, bundled Node 24.18.0 execution, real patched PTY, and
@@ -176,12 +185,11 @@ same change as the work it records.
   per-target opt-in selects bundled-preferred behavior, and implementing the setting does not
   authorize default-on rollout or legacy removal (E-M1-ROLLOUT-DECISION-001).
 - Legacy fallback removal: not authorized.
-- Next required action: implement purpose-named oldest-supported-baseline verification and its
-  artifact-only workflow cells. Use GitHub-hosted native runners where they satisfy the declared
-  floor, add static libc/libstdc++/kernel eligibility oracles where execution alone is insufficient,
-  and keep unavailable macOS/Windows snapshot and native-trust cells explicitly open rather than
-  substituting newer runners. Preserve the artifact-only boundary, legacy/default path, and every
-  tuple's disabled state.
+- Next required action: implement and prove the disconnected credential-free release/signing DAG
+  failure contract, including timeout, retry exhaustion, absent/denied approval, signing failure,
+  incomplete output, and recovered-draft cases. Keep real native-signing credentials, endpoint trust,
+  missing exact-floor snapshots, production workflow wiring, publication, desktop consumers, and
+  every tuple's enabled state outside this slice.
 
 ## Non-Negotiable Invariants
 
@@ -1445,16 +1453,16 @@ Baseline measurements must be captured before product behavior changes.
 
 Update status and evidence as work begins. Do not combine these into one large behavior switch.
 
-| Work package              | Scope                                                                                      | Default behavior change     | Status                                                              | PR/evidence                                                             |
-| ------------------------- | ------------------------------------------------------------------------------------------ | --------------------------- | ------------------------------------------------------------------- | ----------------------------------------------------------------------- |
-| 0. #8450 legacy fix       | Coherent Node/npm selection and live repro                                                 | Fixes legacy selection only | Complete and CI-green in draft PR #8724                             | E-M0-UNIT-002, E-M0-LIVE-002, E-M0-STATIC-002, E-M0-PR-001, E-M0-CI-001 |
-| 1. Contract and selectors | Manifest schema, identity, platform/libc selection, hostile inputs                         | None                        | Complete and CI-green in draft PR #8728                             | `b9d80a4cb`; E-M2-RED-001, E-M2-CONTRACT-001, E-M2-CI-001               |
-| 2. Runtime builds         | Per-tuple assembly, native smoke, SBOM/provenance/signing                                  | None                        | Draft PR #8741; native closure green; metadata local; trust pending | `26bbd7b67`; E-M3-RUNTIME-CLOSURE-CI-001, E-M3-METADATA-LOCAL-001       |
-| 3. Release publication    | Prerequisite DAG, embedded manifest, draft upload/read-back gates                          | Asset-only                  | Not started                                                         | —                                                                       |
-| 4. Desktop resolver/cache | Verified download, extraction, cache, offline behavior                                     | None/forced mode only       | Not started                                                         | —                                                                       |
-| 5. Transfer/install       | Bounded transports, structured sentinel, bundled launch behind per-target Beta/forced mode | Per-target opt-in only      | Not started                                                         | —                                                                       |
-| 6. Fallback/diagnostics   | Abort-and-join state machine, mode isolation, reason codes, target-mode configuration/UI   | Per-target Beta only        | Not started                                                         | —                                                                       |
-| 7. Live gates/rollout     | Matrix, security, performance, release promotion                                           | Per-tuple staged            | Not started                                                         | —                                                                       |
+| Work package              | Scope                                                                                      | Default behavior change     | Status                                                                      | PR/evidence                                                             |
+| ------------------------- | ------------------------------------------------------------------------------------------ | --------------------------- | --------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| 0. #8450 legacy fix       | Coherent Node/npm selection and live repro                                                 | Fixes legacy selection only | Complete and CI-green in draft PR #8724                                     | E-M0-UNIT-002, E-M0-LIVE-002, E-M0-STATIC-002, E-M0-PR-001, E-M0-CI-001 |
+| 1. Contract and selectors | Manifest schema, identity, platform/libc selection, hostile inputs                         | None                        | Complete and CI-green in draft PR #8728                                     | `b9d80a4cb`; E-M2-RED-001, E-M2-CONTRACT-001, E-M2-CI-001               |
+| 2. Runtime builds         | Per-tuple assembly, native smoke, SBOM/provenance/signing                                  | None                        | Draft PR #8741; native build/source trust green; real signing/trust pending | `be32653a7`; E-M3-METADATA-CI-001, E-M3-WINDOWS-SOURCE-SIGNATURE-CI-001 |
+| 3. Release publication    | Prerequisite DAG, embedded manifest, draft upload/read-back gates                          | Asset-only                  | **In progress — 2026-07-15, Codex implementation owner**                    | E-M4-RELEASE-DAG-LOCAL-001; exact-head CI pending                       |
+| 4. Desktop resolver/cache | Verified download, extraction, cache, offline behavior                                     | None/forced mode only       | Not started                                                                 | —                                                                       |
+| 5. Transfer/install       | Bounded transports, structured sentinel, bundled launch behind per-target Beta/forced mode | Per-target opt-in only      | Not started                                                                 | —                                                                       |
+| 6. Fallback/diagnostics   | Abort-and-join state machine, mode isolation, reason codes, target-mode configuration/UI   | Per-target Beta only        | Not started                                                                 | —                                                                       |
+| 7. Live gates/rollout     | Matrix, security, performance, release promotion                                           | Per-tuple staged            | Not started                                                                 | —                                                                       |
 
 Every PR must document:
 
@@ -1514,6 +1522,11 @@ focused commands as their scripts/tests are introduced.
 - [x] `pnpm exec vitest run --config config/vitest.config.ts config/scripts/ssh-relay-*.test.mjs` (E-M3-RUNTIME-CLOSURE-LOCAL-001; 68 local artifact-contract tests plus static reuse of six prior candidate archives; new target-native builder execution remains pending)
 - [x] `pnpm exec vitest run --config config/vitest.config.ts config/scripts/ssh-relay-*.test.mjs && pnpm run typecheck && pnpm run lint && pnpm run check:max-lines-ratchet` (E-M3-METADATA-LOCAL-001; 76 local artifact-contract tests, typecheck, full lint, reliability gates, localization gates, and max-lines ratchet; native metadata/toolchain proof remains pending)
 
+### Milestone 4 commands added
+
+- [x] `pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1 config/scripts/ssh-relay-runtime-release-stage-gate.test.mjs config/scripts/ssh-relay-runtime-draft-recovery.test.mjs` (E-M4-RELEASE-DAG-LOCAL-RED-001, E-M4-RELEASE-DAG-LOCAL-001; disconnected credential-free stage/recovery contract only)
+- [x] `pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1 config/scripts/ssh-relay-runtime-release-stage-gate.test.mjs config/scripts/ssh-relay-runtime-draft-recovery.test.mjs config/scripts/ssh-relay-runtime-workflow.test.mjs` (E-M4-RELEASE-DAG-LOCAL-001; static native-job wiring only, no real release/signing execution)
+
 ### Commands/scripts that must be added or formally identified
 
 - [x] Manifest/schema/identity/signature/selector unit-test command. (E-M2-CONTRACT-001)
@@ -1521,8 +1534,9 @@ focused commands as their scripts/tests are introduced.
 - [x] Per-tuple POSIX archive inspection and native smoke command. (E-M3-RUNTIME-LOCAL-001; Windows command remains open)
 - [ ] Embedded-manifest extraction/comparison command for every packaged app.
 - [ ] Draft release relay-asset completeness/read-back command.
-- [ ] Release-DAG failure rehearsal covering native signing, aggregate, timeout/retry/manual approval,
-      and recovered draft behavior.
+- [ ] Live release-DAG failure rehearsal covering native signing, aggregate, timeout/retry/manual
+      approval, and recovered draft behavior. The disconnected contract is implemented under
+      E-M4-RELEASE-DAG-LOCAL-001; real workflow/service evidence remains open.
 - [ ] Hostile-archive and cache fault suite.
 - [ ] Full-size transfer memory/cancellation suite for SFTP, POSIX system SSH, and Windows system SSH.
 - [ ] Remote primitive/binary-fidelity suite for missing commands, BusyBox variants, no-tar POSIX,
@@ -8662,6 +8676,175 @@ diff --check`.
   runner logs, and keep returned-byte/native-trust boxes unchecked until the separately gated real
   SignPath and endpoint checks pass.
 
+### E-M3-WINDOWS-SOURCE-SIGNATURE-CI-001 — Native Windows source signatures match retained identity
+
+- Date: 2026-07-15
+- Owner: Codex implementation owner
+- Source: exact head `be32653a7b77eeaed168d91b790fc2e006b438db`; artifact run
+  [29388734922](https://github.com/stablyai/orca/actions/runs/29388734922), PR Checks
+  [29388734935](https://github.com/stablyai/orca/actions/runs/29388734935), and Golden E2E
+  [29388734914](https://github.com/stablyai/orca/actions/runs/29388734914).
+- Native jobs:
+  - `win32-x64`: job
+    [87267322870](https://github.com/stablyai/orca/actions/runs/29388734922/job/87267322870),
+    GitHub-hosted `windows-2022`, resolved `win22` image `20260706.237.1`, native `X64`,
+    runner `GitHub Actions 1000055156`; PASS in 5 minutes 23 seconds. Its combined two-build,
+    verify, smoke, compare, signing-stage, and source-signature step ran for 3 minutes 45 seconds.
+  - `win32-arm64`: job
+    [87267322867](https://github.com/stablyai/orca/actions/runs/29388734922/job/87267322867),
+    GitHub-hosted `windows-11-arm`, resolved `win11-arm64` image `20260706.102.1`, native `ARM64`,
+    runner `GitHub Actions 1000055154`; PASS in 11 minutes 7 seconds. Its combined two-build,
+    verify, smoke, compare, signing-stage, and source-signature step ran for 5 minutes 30 seconds.
+  - The workflow does not time the three source-signature probes separately. Each probe retains the
+    implemented 30-second process timeout and 64-KiB output bound; the combined step timings above
+    are the narrowest exact native timing available from this run.
+- Artifact retrieval and identity command:
+
+  ```sh
+  gh run download 29388734922 --repo stablyai/orca \
+    --name ssh-relay-runtime-win32-x64 --dir <exclusive-x64-directory>
+  gh run download 29388734922 --repo stablyai/orca \
+    --name ssh-relay-runtime-win32-arm64 --dir <exclusive-arm64-directory>
+  node --input-type=module -e '<bounded identity/signing-report comparison>' <artifact-directory>
+  shasum -a 256 <artifact-directory>/*.source-signatures.json
+  wc -c <artifact-directory>/*.source-signatures.json
+  ```
+
+- Result: PASS. Each artifact contains exactly one identity, archive, SPDX statement, provenance
+  statement, signing-stage report, and source-signature report. The bounded comparison requires one
+  report, exact tuple/content identity, exactly three verified files, one `official-node`, two
+  `preserved-upstream`, identity-entry hash equality for every verified file, and exact preserved
+  subject/thumbprint equality with the authenticated signing-stage report.
+- Retained report identities:
+  - x64 report: 1,401 bytes, SHA-256
+    `9ceb6b3dadf85ea7d338dbd11e1397e58b83455842378f3465ccb945b5ec0805`, source content ID
+    `sha256:7ddad668780ce5b2592d86afcebf9d897172bdf07c618ae238b5d51eebfe1596`.
+  - arm64 report: 1,403 bytes, SHA-256
+    `5a63a7f31d64cc6a8b825461e9729f59f0176d8d03293fa0ce2c05df39734d22`, source content ID
+    `sha256:2955cec7f22447a1303dad548df6c2fa2470b62ba1d70924b8b169e718a7701e`.
+- Exact native signer evidence:
+  - Both official Node files report `Valid` with subject
+    `CN=OpenJS Foundation, O=OpenJS Foundation, L=San Francisco, S=California, C=US` and thumbprint
+    `CECD9673E955CA766047DD43706D31E48A6BD3B5`. The x64 Node hash is
+    `sha256:9a4eb5f1c29c6a2e93852ead46b999e284a6a5ca8bab4d4e241d587d025a52de`; arm64 is
+    `sha256:c7225670c3f477778e18c43a55867f7a0d76468221245e5981ab80eb953c8102`.
+  - Every preserved file reports `Valid` with subject
+    `CN=Microsoft Corporation, O=Microsoft Corporation, L=Redmond, S=Washington, C=US`. x64
+    `OpenConsole.exe` and `conpty.dll` use thumbprint
+    `3F56A45111684D454E231CFDC4DA5C8D370F9816`. Arm64 `OpenConsole.exe` uses
+    `F5877012FBD62FABCBDC8D8CEE9C9585BA30DF79`; arm64 `conpty.dll` uses
+    `3F56A45111684D454E231CFDC4DA5C8D370F9816`.
+- Concurrent regression result: PR Checks and both Golden E2E jobs completed successfully at the
+  exact head. The artifact run concluded `failure` solely because its separate Windows arm64
+  oldest-baseline job observed `10.0.26200` rather than the exact required build `26100`, after the
+  runtime itself passed bundled Node, PTY, watcher, and settlement smoke in 8,275.5554 ms with a
+  49,852,416-byte RSS measurement. This is the retained
+  E-M3-WINDOWS-ARM64-BASELINE-CI-RED-001 gap, not a source-signature failure.
+- Does not prove: real SignPath returned Orca signatures, final-tree Authenticode trust, Defender or
+  WDAC policy, Windows arm64 build 26100, macOS trust, draft release aggregation/read-back, SSH
+  transfer/install, fallback/performance, or an enabled tuple. Nothing was published or connected to
+  production behavior.
+
+### E-M4-RELEASE-DAG-LOCAL-RED-001 — Missing release-stage and draft-recovery gates fail imports
+
+- Date: 2026-07-15
+- Owner: Codex implementation owner
+- Source: exact implementation base `be32653a7b77eeaed168d91b790fc2e006b438db` plus the two new
+  uncommitted purpose-named test files.
+- Command:
+
+  ```sh
+  pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1 \
+    config/scripts/ssh-relay-runtime-release-stage-gate.test.mjs \
+    config/scripts/ssh-relay-runtime-draft-recovery.test.mjs
+  ```
+
+- Result: expected RED in 346 ms. Both suites fail before collecting tests with
+  `ERR_MODULE_NOT_FOUND` for `ssh-relay-runtime-release-stage-gate.mjs` and
+  `ssh-relay-runtime-draft-recovery.mjs`.
+- Oracle proved: the current worktree has no reusable contract that requires a complete immutable
+  build → native-signing approval/return → aggregate/manifest-signature → upload → authenticated
+  read-back chain, and no contract that permits same-draft recovery only for exact already-uploaded
+  runtime bytes.
+- Does not prove: implementation, workflow wiring, GitHub release behavior, signing-service behavior,
+  a real draft recovery, publication, desktop embedding, SSH behavior, or an enabled tuple.
+- Correction: implement bounded exact-stage validation and hash/size-bound same-draft reuse as
+  disconnected credential-free modules; retain every production/default and tuple state unchanged.
+
+### E-M4-RELEASE-DAG-LOCAL-001 — Fail-closed release stages and same-draft recovery pass locally
+
+- Date: 2026-07-15
+- Owner: Codex implementation owner
+- Source: uncommitted implementation based on exact head
+  `be32653a7b77eeaed168d91b790fc2e006b438db`.
+- Runner/remote/network: local macOS 26.2 build 25C56 arm64, Node v26.0.0 and pnpm 10.24.0. No
+  GitHub release, signing service, credential, approval environment, SSH remote, publication, or
+  production consumer was used. The repository emits its expected Node-24 engine warning.
+- Commands:
+
+  ```sh
+  node --check config/scripts/ssh-relay-runtime-release-stage-gate.mjs
+  node --check config/scripts/ssh-relay-runtime-release-stage-gate.test.mjs
+  node --check config/scripts/ssh-relay-runtime-draft-recovery.mjs
+  node --check config/scripts/ssh-relay-runtime-draft-recovery.test.mjs
+  /usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1 \
+    config/scripts/ssh-relay-runtime-release-stage-gate.test.mjs \
+    config/scripts/ssh-relay-runtime-draft-recovery.test.mjs
+  pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1 \
+    config/scripts/ssh-relay-runtime-release-stage-gate.test.mjs \
+    config/scripts/ssh-relay-runtime-draft-recovery.test.mjs \
+    config/scripts/ssh-relay-runtime-workflow.test.mjs
+  pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1 \
+    config/scripts/ssh-relay-*.test.mjs
+  pnpm run typecheck
+  pnpm run lint
+  pnpm run check:max-lines-ratchet
+  pnpm exec oxfmt --check \
+    .github/workflows/ssh-relay-runtime-artifacts.yml \
+    config/scripts/ssh-relay-runtime-release-stage-gate.mjs \
+    config/scripts/ssh-relay-runtime-release-stage-gate.test.mjs \
+    config/scripts/ssh-relay-runtime-draft-recovery.mjs \
+    config/scripts/ssh-relay-runtime-draft-recovery.test.mjs \
+    config/scripts/ssh-relay-runtime-workflow.test.mjs \
+    docs/reference/plans/2026-07-14-ssh-relay-github-release-implementation-checklist.md \
+    docs/reference/plans/2026-07-14-ssh-relay-github-release-implementation-checklist-summary.md
+  git diff --check
+  ```
+
+- Result: PASS. The two purpose-named suites pass 2 files/21 tests in 245 ms; `/usr/bin/time -l`
+  records 0.91 seconds wall time, 131,825,664-byte maximum RSS, zero swaps, and 95,933,720-byte peak
+  memory footprint for the Vitest process tree. The workflow-inclusive focus passes 3 files/27
+  tests; the final complete SSH-relay suite passes 33 files/184 tests in 8.52 seconds. All four syntax
+  checks, typecheck, full lint/reliability/localization/bundled-skill gates, max-lines (355
+  grandfathered suppressions and no new bypass), focused formatting, and `git diff --check` pass.
+  Lint emits only existing unrelated warnings.
+- Stage oracle: candidate tuples must use exact supported identities; every candidate requires one
+  bounded successful build, every macOS/Windows candidate requires one single-attempt approved
+  native-signing return that changes immutable identity, and Linux cannot invent a signing stage.
+  Aggregate inputs must exactly equal final per-tuple outputs and produce bounded manifest/signature
+  assets. Upload and authenticated read-back must reproduce the complete ordered hash/size chain.
+  Missing, duplicate, unexpected, failed, cancelled, timed-out, retry-exhausted, over-budget,
+  approval-absent, approval-denied, approval-timed-out, input-drifted, incomplete, or byte-drifted
+  results fail closed.
+- Bound policy: build is at most 30 minutes and three attempts; native signing is one attempt and at
+  most four hours; aggregate is one attempt and 15 minutes; upload and read-back are each at most
+  three attempts and 15 minutes. Signing is deliberately single-attempt so one approval cannot
+  silently authorize a second set of bytes after timeout or service failure.
+- Recovery oracle: only the same draft tag and exact 40-hex source commit may be resumed. Existing
+  managed assets are reusable only when name, SHA-256, and non-zero size exactly match expected
+  immutable output. Changed, empty, duplicate, unexpected managed, published, cross-tag, and
+  cross-commit states fail closed; unrelated desktop assets are ignored rather than overwritten.
+- Workflow oracle: both POSIX and Windows artifact jobs syntax-check and execute the new suites under
+  the same Node 24 native job families. The workflow retains read-only contents permission and has
+  no release, signing credential, or publication authority.
+- Does not prove: a real native-signing approval/timeout, signing-service retry behavior, a real
+  aggregate or signed manifest, upload/read-back through GitHub's draft release API, recovered-draft
+  execution, desktop prerequisites/embedding, native trust, SSH transfer/install, fallback,
+  performance, or an enabled tuple. Production release workflow wiring remains absent.
+- Follow-up: run the contract on all six native jobs at the exact implementation head, then add the
+  credential-free aggregate-input/read-back implementation without connecting publication or a
+  desktop consumer.
+
 ## Accepted Gaps
 
 No product gap is accepted merely because it appears in this list. Each entry requires explicit
@@ -8719,10 +8902,12 @@ The project is not complete until every applicable item below is checked with ev
 
 ## Next Required Action
 
-Provision or select qualifying exact-floor execution for Linux kernel 4.18, macOS 13.5, and Windows
-arm64 build 26100 without weakening their oracles; in parallel, implement and prove target-native
-macOS/Windows signing and trust as the next independent artifact-only capability. Keep every tuple
-disabled and do not connect an artifact consumer until the applicable baseline and trust cells pass.
+Run the disconnected credential-free release/signing DAG and draft-recovery contracts on all six
+native jobs at the exact implementation head. If green, implement the next artifact-only
+aggregate-input/read-back capability without release publication or a desktop consumer. In parallel,
+provision qualifying exact-floor execution for Linux kernel 4.18, macOS 13.5, and Windows arm64 build
+26100 and real macOS/Windows signing and trust. Keep every tuple disabled until the applicable
+baseline and trust cells pass.
 
 Cross-family Layer B targets, the protected manifest-signing environment, oldest-baseline/native-
 trust cells, and the paired legacy performance baseline remain release/default-path blockers. No

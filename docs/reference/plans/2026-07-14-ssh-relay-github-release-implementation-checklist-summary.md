@@ -1,6 +1,6 @@
 # SSH Relay Runtime Distribution — Short Implementation Checklist
 
-Last updated: 2026-07-14
+Last updated: 2026-07-15
 
 Use this file to track the project. The
 [detailed evidence ledger](./2026-07-14-ssh-relay-github-release-implementation-checklist.md)
@@ -48,9 +48,16 @@ complete a box.
     [29387668264](https://github.com/stablyai/orca/actions/runs/29387668264): credential-free Windows
     final-tree-first Authenticode policy contracts execute under Node 24 on all six native jobs.
     This is contract proof, not proof of real SignPath returns or native trust.
-  - Proven locally: target-native official-Node and preserved-upstream Windows source-signature
-    verification contracts. Exact x64/arm64 `Valid` signer reports are the active CI gate; real
-    SignPath returns and missing oldest-floor snapshots remain separately gated.
+  - Proven locally and on native x64/arm64 Windows jobs in exact-head run
+    [29388734922](https://github.com/stablyai/orca/actions/runs/29388734922): official Node and both
+    preserved Microsoft ConPTY files report `Valid`; downloaded reports match the exact identity,
+    hashes, subjects, thumbprints, and signing-stage selection
+    (`E-M3-WINDOWS-SOURCE-SIGNATURE-CI-001`). PR Checks
+    [29388734935](https://github.com/stablyai/orca/actions/runs/29388734935) and Golden E2E
+    [29388734914](https://github.com/stablyai/orca/actions/runs/29388734914) are green at `be32653a7`.
+    The artifact workflow remains red only for the declared Windows arm64 floor mismatch (hosted
+    build 26200 versus required 26100). Real SignPath returns and missing oldest-floor snapshots
+    remain separately gated.
   - Next external proof: kernel 4.18, macOS 13.5, Windows arm64 build 26100, and native signing/trust.
   - No tuple is enabled; every SSH transfer/runtime and rollout cell remains open.
 
@@ -87,6 +94,10 @@ complete a box.
 
 ### WP3 — Release build and signing
 
+- [ ] **In progress — 2026-07-15, Codex implementation owner:** add disconnected credential-free
+      fail-closed release/signing DAG contracts before production workflow wiring. Local red/green,
+      full SSH-relay, type, lint, formatting, and native-job wiring gates pass under
+      `E-M4-RELEASE-DAG-LOCAL-001`; exact-head CI is next.
 - [ ] Add target-native runtime jobs as desktop release prerequisites.
 - [ ] Add native signing jobs; hash only the returned signed bytes.
 - [ ] Add a fail-closed aggregate and immutable manifest-signing job.
