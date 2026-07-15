@@ -40,8 +40,10 @@ complete a box.
   - Proven locally and in exact-head run
     [29385274738](https://github.com/stablyai/orca/actions/runs/29385274738): exact returned-file
     application into a fresh full runtime and final post-sign content identity contracts.
-  - Active next: remaining credential-free native-trust/release failure contracts; real signing and
-    missing oldest-floor snapshots remain externally gated.
+  - Proven locally at `debb13f30` under `E-M3-MACOS-SIGNATURE-LOCAL-001`: final-tree-first, bounded
+    strict-codesign and exact Node/Orca Developer ID policy contracts.
+  - Active next: exact-head Node 24 execution on all six native jobs; real signing and missing
+    oldest-floor snapshots remain externally gated.
   - Next external proof: kernel 4.18, macOS 13.5, Windows arm64 build 26100, and native signing/trust.
   - No tuple is enabled; every SSH transfer/runtime and rollout cell remains open.
 

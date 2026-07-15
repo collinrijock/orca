@@ -9,7 +9,7 @@ work; keep exact commands, runner identities, hashes, metrics, and residual gaps
 Date created: 2026-07-14<br>
 Last updated: 2026-07-14<br>
 Current phase: Milestone 3 / Work Package 2 oldest-supported-baseline and native-trust proof — **In progress — 2026-07-14, Codex implementation owner**; exact-head run [29373507297](https://github.com/stablyai/orca/actions/runs/29373507297) passes all six target-native build, smoke, exact clean-build equality, upload, SBOM, license, provenance, runner/toolchain, and prohibited-content cells, and direct inspection of every downloaded payload passes exact archive/subject hashes, archive-scoped SPDX identity, one-owner-per-file, dependency, commit/run/builder/runner, tool-version/hash, and closure assertions (E-M3-METADATA-CI-001); Windows x64/arm64 record strict `MSVC 14.44.35207` identities and distinct exact linker SHA-256 values despite the Git-for-Windows PATH collision; the all-six metadata/provenance gate is closed, while oldest-baseline execution, native signing/trust, cross-family remotes, and measured legacy baselines remain open; production/default behavior and every tuple state remain unchanged; no bundled-runtime path is enabled and no artifact is published<br>
-Session checkpoint: **In progress — 2026-07-14, Codex implementation owner** — exact returned-file application plus final post-sign runtime identity/closure contracts are proven locally and on all six native jobs under E-M3-NATIVE-SIGNING-APPLY-LOCAL-001 and E-M3-NATIVE-SIGNING-APPLY-CI-001. The next safe package is remaining credential-free native-trust/release failure contracts; real Apple/SignPath calls, returned production signatures, missing exact-floor snapshots, and native trust remain separately gated. Nothing is published or enabled, and legacy remains the production default.<br>
+Session checkpoint: **In progress — 2026-07-14, Codex implementation owner** — credential-free macOS post-sign strict-codesign and signer-policy verification contracts are implemented at `debb13f30` and locally green under E-M3-MACOS-SIGNATURE-LOCAL-001. Exact-head Node 24 execution on all six native jobs is the active gate; real Apple signing, returned production signatures, Gatekeeper/notarization, missing exact-floor snapshots, and native trust remain separately gated. Nothing is published or enabled, and legacy remains the production default.<br>
 Primary design: [SSH relay GitHub Release plan](./2026-07-14-ssh-relay-github-release-plan.html)<br>
 Motivating issues: [#8450](https://github.com/stablyai/orca/issues/8450), [#1693](https://github.com/stablyai/orca/issues/1693)
 
@@ -8281,6 +8281,109 @@ diff --check`.
   credential-free native-trust and release-DAG failure contracts; require separately provisioned
   protected signing services and exact-floor runners before any native-signing/trust checkbox or
   aggregate output can pass.
+
+### E-M3-MACOS-SIGNATURE-LOCAL-RED-001 — Missing macOS signature verifier fails the focused contract
+
+- Date: 2026-07-14
+- Owner: Codex implementation owner
+- Source: pre-implementation head `2d4eab2c592adb0fd6396d6312394dddc6be6bc2`.
+- Command:
+
+  ```sh
+  pnpm exec vitest run --config config/vitest.config.ts \
+    config/scripts/ssh-relay-runtime-macos-signature-verification.test.mjs
+  ```
+
+- Result: expected RED. The purpose-named test file failed to load because
+  `ssh-relay-runtime-macos-signature-verification.mjs` did not exist: 1 failed file/0 tests in
+  385 ms. No runtime, workflow, credential, signing, publication, or production behavior changed.
+- Oracle proved: final-tree application did not yet enforce strict native macOS signature validity
+  or exact upstream Node/Orca signer policy after returned bytes were substituted.
+- Does not prove: any implementation, signed Orca bytes, native trust, Gatekeeper/notarization,
+  release aggregation, SSH behavior, or an enabled tuple.
+- Correction: authenticate the complete final runtime before native probes, bind the selection and
+  unsigned/final identities, run bounded argument-array codesign probes on every native file, pin
+  official Node policy, require the configured Orca team, and hash each file again after probing.
+
+### E-M3-MACOS-SIGNATURE-LOCAL-001 — Final-tree-first macOS Developer ID policy passes locally
+
+- Date: 2026-07-14
+- Owner: Codex implementation owner
+- Source: implementation commit `debb13f3011dc750e54826a4820f109e7d80f959`, based on exact
+  apply-CI evidence commit `2d4eab2c592adb0fd6396d6312394dddc6be6bc2`.
+- Runner/remote/network: local macOS 26.2 build 25C56 arm64, Node v26.0.0 and pnpm 10.24.0; no
+  remote, network, credential, signing service, artifact publication, Gatekeeper/notarization, or
+  production path was used. Synthetic Developer ID output was dependency-injected; the two real
+  official Node checks used previously downloaded unpublished artifacts from run 29384042509.
+- Commands:
+
+  ```sh
+  node --check config/scripts/ssh-relay-runtime-macos-signature-verification.mjs
+  node --check config/scripts/ssh-relay-runtime-macos-signature-verification.test.mjs
+  pnpm exec vitest run --config config/vitest.config.ts \
+    config/scripts/ssh-relay-runtime-native-signing-payload.test.mjs \
+    config/scripts/ssh-relay-runtime-native-signing-selection.test.mjs \
+    config/scripts/ssh-relay-runtime-native-signing-apply.test.mjs \
+    config/scripts/ssh-relay-runtime-macos-signature-verification.test.mjs \
+    config/scripts/ssh-relay-runtime-workflow.test.mjs
+  pnpm exec vitest run --config config/vitest.config.ts config/scripts/ssh-relay-*.test.mjs
+  pnpm run typecheck
+  pnpm run lint
+  pnpm run check:max-lines-ratchet
+  pnpm exec oxfmt --check \
+    .github/workflows/ssh-relay-runtime-artifacts.yml \
+    config/scripts/ssh-relay-runtime-workflow.test.mjs \
+    config/scripts/ssh-relay-runtime-native-signing-payload.mjs \
+    config/scripts/ssh-relay-runtime-native-signing-selection.mjs \
+    config/scripts/ssh-relay-runtime-native-signing-apply.mjs \
+    config/scripts/ssh-relay-runtime-macos-signature-verification.mjs \
+    config/scripts/ssh-relay-runtime-macos-signature-verification.test.mjs \
+    docs/reference/plans/2026-07-14-ssh-relay-github-release-implementation-checklist.md \
+    docs/reference/plans/2026-07-14-ssh-relay-github-release-implementation-checklist-summary.md
+  for archive in <downloaded-darwin-arm64.tar.xz> <downloaded-darwin-x64.tar.xz>; do
+    tar -xJf "$archive" -C <exclusive-temp-directory>
+    /usr/bin/codesign --verify --strict --verbose=4 <exclusive-temp-directory>/bin/node
+    /usr/bin/codesign --display --verbose=4 <exclusive-temp-directory>/bin/node
+  done
+  git diff --check
+  ```
+
+- Result: PASS. The signing payload/selection/application/macOS/workflow command passed 5 files/36
+  tests in 1.08 seconds; the final macOS-plus-workflow check passed 2 files/13 tests in 2.32
+  seconds; and the complete purpose-named SSH relay script suite passed 29 files/152 tests in 8.81
+  seconds. Both direct syntax checks, typecheck, full lint/reliability gates, max-lines (355
+  grandfathered suppressions and no new bypass), bundled-skill verification, localization
+  catalog/coverage, focused formatting, and `git diff --check` passed. Lint emitted only existing
+  unrelated warnings; local Node 26 emitted the expected repository Node-24 engine warning.
+- Real official-Node result: PASS for both previously audited Node v24.18.0 candidates. Strict
+  codesign reports each file valid on disk and satisfying its designated requirement. The arm64 and
+  x86_64 display output both record signature size 8,986, exact first authority
+  `Developer ID Application: Node.js Foundation (HX7739G8FX)`, the Developer ID Certification
+  Authority and Apple Root CA chain, and team identifier `HX7739G8FX`. This authenticates the pinned
+  vendor policy only; the three Orca-built files in those unsigned candidates remain ad-hoc signed.
+- Verification oracle: the verifier runs only on macOS, requires an exact ten-character configured
+  Orca team ID, reconstructs the selection from the authenticated unsigned identity, rejects stale
+  unsigned archive metadata, and permits changes only to the exact three selected files within the
+  established 4-MiB/file and 64-MiB/return bounds. It verifies final totals/content identity and the
+  complete physical tree before any native command. Every target is a regular file whose SHA-256
+  matches before and after two `/usr/bin/codesign` argument-array probes bounded to 30 seconds and
+  64 KiB. Node requires the exact pinned authority/team; every Orca-built target requires the Apple
+  Developer ID chain and configured Orca team. Ad-hoc, malformed/duplicate output, wrong authority,
+  wrong team, command error/nonzero/oversized output, source/final/selection drift, and probe-time
+  mutation fail closed.
+- Workflow oracle: POSIX and Windows native contract jobs each syntax-check the source/test and
+  explicitly execute the suite. Four test-path and two source-check occurrences are locked by the
+  workflow contract. No job invokes codesign on fake returned bytes, connects credentials, signs,
+  publishes, aggregates, or enables a tuple.
+- Does not prove: real Developer ID signatures on the three returned Orca files, the actual Orca
+  team/authority, target-native post-sign execution, macOS 13.5, quarantine/Gatekeeper, notarized
+  containing-app provenance, Apple credential/timeout behavior, Windows final trust, release
+  aggregation, SSH transfer/install, packaged desktop use, fallback/performance, or an enabled
+  tuple.
+- Follow-up: commit this evidence separately, push both commits, and require exact-head POSIX and
+  Windows logs to show the macOS policy suite under Node 24.18.0 on all six native jobs while every
+  prior build/smoke/equality/baseline, PR-check, and Golden control retains its outcome. Keep native
+  signing/trust unchecked until real returned bytes pass target-native policy and endpoint gates.
 
 ## Accepted Gaps
 
