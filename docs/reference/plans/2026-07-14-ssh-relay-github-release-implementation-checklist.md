@@ -8,8 +8,8 @@ work; keep exact commands, runner identities, hashes, metrics, and residual gaps
 
 Date created: 2026-07-14<br>
 Last updated: 2026-07-15<br>
-Current phase: Milestone 6 / Work Package 5 bounded runtime transfer — **In progress — 2026-07-15, Codex implementation owner: disconnected SFTP per-file destination is exact-head green; SFTP session/tree orchestration audit is next**. Keep every capability disconnected from every production/default SSH path. Real Apple/SignPath rehearsals remain an explicit late gate and are not on this package's critical path.<br>
-Session checkpoint: **SFTP PER-FILE DESTINATION EXACT-HEAD GREEN — 2026-07-15, Codex implementation owner** — `E-M6-SFTP-FILE-DESTINATION-CI-001` closes all-six native and adjacent proof for exact implementation commit `72d482201`. Every client passes all 13 cases; exact full-size client artifact metrics and baselines remain within their gates, with only the declared Windows arm64 hosted build-26200 versus required-26100 floor rejection. Audit the smallest disconnected SFTP session/tree orchestrator next; do not credit live SFTP, session cancellation, directory/tree cleanup, remote transfer, or mode behavior from this callback-mock package. Do not add a product caller, settings/fallback wiring, tuple enablement, publication, or default behavior. Merging to `main` remains prohibited, SignPath is deferred, and legacy remains the production default.<br>
+Current phase: Milestone 6 / Work Package 5 bounded runtime transfer — **In progress — 2026-07-15, Codex implementation owner: disconnected SFTP session/tree orchestration is locally green; exact-head native proof is next**. Keep every capability disconnected from every production/default SSH path. Real Apple/SignPath rehearsals remain an explicit late gate and are not on this package's critical path.<br>
+Session checkpoint: **SFTP SESSION/TREE ORCHESTRATION LOCAL GREEN — 2026-07-15, Codex implementation owner** — `E-M6-SFTP-TREE-TRANSFER-LOCAL-001` passes purpose, focused/broad relay, release-contract, typecheck, full-lint, format, max-lines, diff, protected-resolver, and no-product-import gates. It proves one exclusive manifest staging tree, one-to-four composed file streams, reverse proved-owned cleanup, and cancellation-driven awaited session close at a mockable abstraction. Commit/push this disconnected package and require exact-head all-six native and adjacent CI before auditing the raw `ssh2` session adapter. Do not credit live SFTP/server transfer, raw-session callback settlement, full-size remote metrics, product/settings/fallback wiring, tuple enablement, publication, or default behavior. Merging to `main` remains prohibited, SignPath is deferred, and legacy remains the production default.<br>
 Primary design: [SSH relay GitHub Release plan](./2026-07-14-ssh-relay-github-release-plan.html)<br>
 Motivating issues: [#8450](https://github.com/stablyai/orca/issues/8450), [#1693](https://github.com/stablyai/orca/issues/1693)
 
@@ -16876,6 +16876,112 @@ config/scripts/ssh-relay-runtime-workflow.test.mjs` — PASS, 7/7 in 356 ms. The
   transfer, and POSIX/Windows server-mode behavior remain unproved. The adapter still has no non-
   test importer. Remote verification/install/launch, product/Beta/fallback/tuple/publication/default
   behavior, and SignPath remain absent; legacy remains the sole production path.
+
+### E-M6-SFTP-TREE-TRANSFER-AUDIT-001 — disconnected bounded SFTP staging-tree orchestration
+
+- Date/owner/base: 2026-07-15, Codex implementation owner; exact clean base `c03b8c988` after
+  `E-M6-SFTP-FILE-DESTINATION-CI-001` closure.
+- Exact input boundary: accept one scanned and lease-backed source tree, one already validated
+  absolute remote staging-root string, the same required caller-owned `AbortSignal`, an explicit
+  one-to-four maximum concurrency already reduced to one by a later host-scoped `MaxSessions=1`
+  decision, an explicit POSIX-mode flag, and an `openSession(signal)` factory. The factory returns
+  only callback-shaped SFTP file/directory primitives plus an idempotent awaited `close(reason)`
+  operation. Its later raw-`ssh2` adapter must bound channel open and prove that close forces every
+  retained operation callback to settle before resolving.
+- Ownership/path contract: exclusively create the staging root with mode `0o700`; a failed root
+  create owns nothing and must never remove a pre-existing path. Create every signed directory in
+  parent-before-child order with its declared `0o755` mode before opening a file. Construct remote
+  children only from the validated staging root and slash-delimited signed manifest segments, using
+  remote-path checks rather than client-native path utilities. Do not list, traverse, or delete
+  unknown remote content.
+- Stream/lifecycle contract: compose `streamSshRelayRuntimeSourceTree` with
+  `openSshRelayRuntimeSftpFileDestination` and the exact shared signal. Allow one through four file
+  handles on one SFTP session; preserve the source stream's callback-bounded 64 KiB buffer lifetime,
+  exact per-file exclusive open, offsets, hash, progress, POSIX mode proof, and explicit Windows
+  mode skip. Return only after the exact source result and successful awaited session close.
+- Failure/cancellation contract: track only directories successfully created below the exclusively
+  owned root and files whose exclusive open succeeded. On ordinary failure, attempt file unlink and
+  then directory removal in reverse order, treating only SFTP no-such-file status 2 as already
+  clean. Preserve the primary failure and join cleanup/session-close failures. On signal abort,
+  start idempotent session close immediately so a stalled open/write/mode/cleanup callback cannot
+  retain a source buffer forever; still await the source task and close promise. No operation may
+  begin after cancellation, and the package creates no hidden timeout.
+- Required purpose RED/green: pre-open cancellation; bounded/cancellable session open boundary;
+  exclusive root collision without deletion; parent-first manifest directory modes; POSIX and
+  Windows remote-path construction; exact one/four file concurrency; source progress/result
+  passthrough; session close after success; reverse known-tree cleanup after directory/open/write/
+  mode/source failures; no-such-file cleanup tolerance; joined cleanup and close failures;
+  cancellation that closes the session, settles a retained callback, awaits all work, and causes no
+  later writes; path-free orchestrator-authored diagnostics; and exact suite inclusion once in both
+  native workflow families before implementation.
+- Explicit residual boundary: this package stops at a mockable session abstraction. A production
+  importer, raw `SFTPWrapper` adapter, live SSH authentication/channel/server proof, full-size remote
+  transfer and high-latency comparison, server mode behavior, `MaxSessions=1` capability wiring,
+  remote bundled-Node tree verification/install/publish/launch, product Beta/settings/fallback/
+  tuple/publication/default behavior, and SignPath remain absent. Legacy remains the sole
+  production/default path.
+
+### E-M6-SFTP-TREE-TRANSFER-LOCAL-RED-001 — audited SFTP tree orchestrator is absent
+
+- Date/owner/environment: 2026-07-15, Codex implementation owner; local macOS arm64, Node 26.0.0,
+  pnpm 10.24.0, atop clean evidence base `c03b8c988` plus the audit/test/workflow-only diff.
+- Purpose command: `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts
+--maxWorkers=1 src/main/ssh/ssh-relay-runtime-sftp-tree-transfer.test.ts` — EXPECTED FAIL, exit 1:
+  one failed suite and zero collected tests because `./ssh-relay-runtime-sftp-tree-transfer` is
+  absent; 530 ms Vitest / 1.82 seconds wall and 133,808,128-byte maximum RSS.
+- Workflow-oracle command: the same prefix with
+  `config/scripts/ssh-relay-runtime-workflow.test.mjs` — PASS, 7/7 in 302 ms Vitest / 1.26 seconds
+  wall and 132,939,776-byte maximum RSS. The new purpose suite occurs exactly once in both the POSIX
+  and Windows native commands before implementation.
+- RED scope: the test scaffold covers exclusive root/directory ordering, POSIX and Windows paths,
+  one/four concurrency, exact result/progress, awaited close, collision ownership, reverse cleanup,
+  joined path-free failures, callback-retaining cancellation, and pre-open cancellation. The
+  protected resolver files remain untouched. No implementation, raw SFTP adapter, live SSH,
+  product importer, settings/fallback/tuple/publication/default behavior, or SignPath work exists.
+
+### E-M6-SFTP-TREE-TRANSFER-LOCAL-001 — disconnected bounded SFTP staging tree is locally green
+
+- Date/owner/environment: 2026-07-15, Codex implementation owner; local macOS arm64, Node 26.0.0,
+  pnpm 10.24.0, atop clean evidence base `c03b8c988` plus this isolated implementation/checklist
+  diff. Exact Node 24 remains the required native CI gate.
+- Implementation: the 250-line `ssh-relay-runtime-sftp-tree-transfer.ts` accepts only the audited
+  scanned tree, validated staging root, exact signal/mode policy/concurrency, progress observer, and
+  mockable session factory. It creates the root exclusively at `0o700`, creates signed directories
+  parent-first, constructs slash-safe POSIX/Windows remote paths, composes the proven source stream
+  and per-file destination at one-to-four concurrency, tracks only successful exclusive opens,
+  reverse-cleans known owned files/directories, tolerates only status-2 already-clean responses,
+  joins failures, and awaits one idempotent session close. Signal abort starts close immediately so
+  the future raw adapter can release retained callbacks and source buffers.
+- Purpose command: `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts
+--maxWorkers=1 src/main/ssh/ssh-relay-runtime-sftp-tree-transfer.test.ts` — PASS, 8/8 in 830 ms
+  Vitest / 2.80 seconds wall, 139,919,360-byte maximum RSS, zero swaps. It covers POSIX and Windows
+  path/mode policy, exact result/progress, parent-before-file order, four-file peak concurrency,
+  awaited successful close, root collision without deletion, reverse cleanup, joined path-free
+  cleanup/close failures, cancellation-driven retained-write settlement with no later writes, and
+  pre-open cancellation.
+- Focused command: the source tree/scan/stream, per-file destination, new tree transfer,
+  acquisition/cache resolution/population/integration, and workflow-oracle eleven-file command —
+  PASS, 111 passed / one declared platform skip in 8.01 seconds Vitest / 9.09 seconds wall,
+  160,235,520-byte maximum RSS, zero swaps.
+- Broad commands: `src/main/ssh/ssh-relay-*.test.ts` — PASS, 44 files passed / three declared skipped,
+  587 tests passed / five declared platform/full-size skips in 25.86 seconds Vitest / 27.44 seconds
+  wall, 251,985,920-byte maximum RSS; `config/scripts/ssh-relay-runtime-*.test.mjs` — PASS, 50 files
+  / 280 tests in 17.10 seconds Vitest / 18.66 seconds wall, 190,300,160-byte maximum RSS. The only
+  broad output is the established stale-lock diagnostic and local Node 26 module deprecation.
+- Static/isolation commands: `pnpm typecheck` passes in 3.86 seconds wall at 1,224,179,712-byte
+  maximum RSS. Targeted `oxlint` and `oxfmt --check`, `pnpm lint`, standalone max-lines ratchet,
+  `git diff --check`, protected-resolver empty diff, and no non-test importer pass. Full lint takes
+  18.28 seconds at 2,102,476,800-byte maximum RSS and passes switch exhaustiveness, 41 reliability
+  gates, 355-entry max-lines ratchet, bundled-skill verification, 9,837 localization references,
+  locale parity, and zero-candidate localization coverage; only pre-existing unrelated warnings
+  remain. Module/test sizes are 250/375 lines with no bypass or vague module.
+- Boundary/residual gaps: the session is a callback mock whose `close()` is stipulated to settle
+  retained callbacks. This is not a raw `SFTPWrapper` adapter, live SSH authentication/channel/SFTP
+  server, full-size remote transfer, high-latency comparison, real POSIX/Windows server mode proof,
+  or `MaxSessions=1` wiring. Remote bundled-Node verification/install/publish/launch and every
+  product/Beta/settings/fallback/tuple/publication/default path remain absent; legacy remains the
+  sole production/default path and SignPath remains deferred. Exact-head all-six Node 24 and
+  adjacent CI evidence is required before the raw-session adapter audit.
 
 ## Accepted Gaps
 

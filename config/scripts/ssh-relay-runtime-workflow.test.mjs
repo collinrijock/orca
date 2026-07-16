@@ -144,6 +144,7 @@ describe('SSH relay runtime artifact workflow', () => {
       'ssh-relay-runtime-source-scan.test.ts',
       'ssh-relay-runtime-source-stream.test.ts',
       'ssh-relay-runtime-sftp-file-destination.test.ts',
+      'ssh-relay-runtime-sftp-tree-transfer.test.ts',
       'ssh-relay-compiled-manifest-trust.test.ts',
       'ssh-relay-official-manifest.test.ts',
       'ssh-relay-manifest-accepted-keys.test.ts',

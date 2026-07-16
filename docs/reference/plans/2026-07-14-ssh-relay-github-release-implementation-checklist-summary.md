@@ -10,8 +10,15 @@ A checked box means the work has evidence in the detailed ledger. Design approva
 complete a box.
 
 Active checkpoint: **Milestone 6 / Work Package 5 bounded runtime transfer — disconnected SFTP
-per-file destination is exact-head green; SFTP session/tree orchestration audit is next,
-2026-07-15, Codex implementation owner.** `E-M6-SFTP-FILE-DESTINATION-AUDIT-001` fixes exclusive `wx` open, callback-bounded
+session/tree orchestration is locally green; exact-head native proof is next, 2026-07-15, Codex
+implementation owner.** `E-M6-SFTP-TREE-TRANSFER-LOCAL-001` passes 8/8 purpose cases, 111 focused
+cases with one declared skip, 587 broad relay cases with five declared skips, 280/280 release
+contracts, typecheck, full lint, formatting, max-lines, diff, protected-resolver, and no-product-
+import gates. `E-M6-SFTP-TREE-TRANSFER-AUDIT-001` limits the package to one caller-owned signal and session
+abstraction, one exclusive staging root, manifest-only directory creation, one-to-four composed file
+streams, proved-owned reverse cleanup, and awaited session close. Cancellation starts session close
+immediately; a later raw-`ssh2` adapter must prove that close settles retained callbacks. No live
+SFTP/server or product/default claim is made. `E-M6-SFTP-FILE-DESTINATION-AUDIT-001` fixes exclusive `wx` open, callback-bounded
 positional writes, explicit POSIX mode repair/handle-stat proof, and joined close-before-unlink
 cleanup. It deliberately borrows but does not acquire/end an SFTP session and does not create
 directories, clean a whole staging tree, or publish/launch anything. Session-wide cancellation,
