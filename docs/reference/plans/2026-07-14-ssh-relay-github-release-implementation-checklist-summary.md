@@ -9,9 +9,9 @@ keeps commands, hashes, runner identities, timings, and failure details.
 A checked box means the work has evidence in the detailed ledger. Design approval alone does not
 complete a box.
 
-Active checkpoint: **Milestone 5 / Work Package 4 desktop resolver/cache — audit the smallest
-disconnected full host-evidence composition boundary after native acceptance of every individual
-compatibility detector, 2026-07-15, Codex implementation owner.**
+Active checkpoint: **Milestone 5 / Work Package 4 desktop resolver/cache — disconnected host-
+evidence composition is locally green; exact-head all-six native CI is next, 2026-07-15, Codex
+implementation owner.**
 `E-M5-ARTIFACT-CACHE-RESOLUTION-CI-001` closes warm-cache commit
 `22031fa68` on all six native clients, both Linux supplements, Windows x64 baseline, PR Checks,
 Golden E2E, and computer-use; Windows arm64 remains the expected build-26200 rejection against 26100. `E-M5-ARTIFACT-CACHE-RESOLUTION-LOCAL-001` passes 9/9 purpose tests,
@@ -269,6 +269,25 @@ format, max-lines, diff, and protected-resolver gates pass; replacement native C
 clients, both Linux supplements, Windows x64 baseline, PR Checks, Golden E2E, and computer-use pass.
 Both Windows architectures pass all 32 detector cases under native Windows PowerShell. Windows
 arm64 completes full runtime proof and retains only the declared hosted build-26200 rejection against 26100. No live SSH, composer, product caller, setting/fallback, tuple, publication, or default exists.
+`E-M5-HOST-EVIDENCE-COMPOSITION-AUDIT-001` fixes the next disconnected boundary: consume an explicit
+canonical detected platform, SSH connection, and signal; run only that OS family's already-proven
+detectors with at most three concurrent bounded channels; and return frozen selector-shaped evidence.
+Darwin translation unknown returns no evidence rather than inventing native/translated state.
+Inconsistent platform identity, product/startup callers, selector changes, live SSH, settings,
+fallback, transfer/install, tuple enablement, publication, defaults, and SignPath stay absent.
+RED is recorded before implementation: the purpose suite exits 1 because its module is absent
+(0 tests, 316 ms, 132,235,264-byte max RSS), and the workflow oracle exits 1 because the suite has
+only its POSIX native-family occurrence (6 passed/1 failed, 409 ms, 131,743,744-byte max RSS).
+Pre-RED diff and protected-resolver checks pass.
+`E-M5-HOST-EVIDENCE-COMPOSITION-LOCAL-001` is green: 20/20 purpose and 193/193 focused assertions,
+512/512 broader relay assertions, 280/280 release-script assertions, typecheck, lint, format,
+max-lines, diff, no-product-import, and protected-resolver gates pass. The disconnected composer
+validates canonical platform identity before probes; invokes only Linux's three, Darwin's two, or
+Windows' one accepted bounded detector; runs multi-probe families concurrently; preserves
+conservative unknowns; refuses unknown Darwin translation; propagates cancellation/errors; and
+deeply freezes evidence. It is required in both native workflow families. Exact-head all-six Node 24
+client proof remains mandatory; no live SSH, product caller, settings/fallback, transfer/install,
+tuple, publication, default, or SignPath work is included.
 `E-M5-ARTIFACT-CACHE-ROOT-CI-001` closes the pure cache-root contract at exact head `aefcaa9a9`:
 all six primary native Node 24 jobs, both Linux supplements, Windows x64 baseline, PR Checks, Golden
 E2E, and computer-use pass; Windows arm64 build 26200 remains correctly gated against 26100. The

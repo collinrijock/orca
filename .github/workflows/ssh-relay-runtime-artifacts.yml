@@ -264,6 +264,7 @@ jobs:
             src/main/ssh/ssh-relay-artifact-selector.test.ts \
             src/main/ssh/ssh-relay-libc-detection.test.ts \
             src/main/ssh/ssh-relay-linux-kernel-detection.test.ts \
+            src/main/ssh/ssh-relay-host-evidence-detection.test.ts \
             src/main/ssh/ssh-relay-darwin-version-detection.test.ts \
             src/main/ssh/ssh-relay-darwin-translation-detection.test.ts \
             src/main/ssh/ssh-relay-linux-libstdcxx-detection.test.ts \
@@ -815,6 +816,7 @@ jobs:
             src/main/ssh/ssh-relay-artifact-selector.test.ts `
             src/main/ssh/ssh-relay-libc-detection.test.ts `
             src/main/ssh/ssh-relay-linux-kernel-detection.test.ts `
+            src/main/ssh/ssh-relay-host-evidence-detection.test.ts `
             src/main/ssh/ssh-relay-darwin-version-detection.test.ts `
             src/main/ssh/ssh-relay-darwin-translation-detection.test.ts `
             src/main/ssh/ssh-relay-linux-libstdcxx-detection.test.ts `

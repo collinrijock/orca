@@ -8,8 +8,8 @@ work; keep exact commands, runner identities, hashes, metrics, and residual gaps
 
 Date created: 2026-07-14<br>
 Last updated: 2026-07-15<br>
-Current phase: Milestone 5 / Work Package 4 desktop resolver/cache — **In progress — 2026-07-15, Codex implementation owner: audit the smallest disconnected full host-evidence composition boundary after native acceptance of every individual detector**. Keep every capability disconnected from every production/default SSH path. Real Apple/SignPath rehearsals remain an explicit late gate and are not on this package's critical path.<br>
-Session checkpoint: **WINDOWS COMPATIBILITY CI CLOSED / HOST COMPOSITION AUDIT NEXT — 2026-07-15, Codex implementation owner** — `E-M5-WINDOWS-COMPATIBILITY-DETECTION-CI-001` proves both native Windows architectures pass the strict detector, all six primary clients and both Linux supplements pass, Windows x64 baseline passes, and Windows arm64 retains only the declared build-26200/26100 runner mismatch after full runtime proof. Audit only the next disconnected composition boundary; do not add a product caller, settings/fallback wiring, tuple enablement, publication, or default behavior. Merging to `main` remains prohibited, SignPath is deferred, and legacy remains the production default.<br>
+Current phase: Milestone 5 / Work Package 4 desktop resolver/cache — **In progress — 2026-07-15, Codex implementation owner: disconnected host-evidence composition is locally green; exact-head native CI is the next gate**. Keep every capability disconnected from every production/default SSH path. Real Apple/SignPath rehearsals remain an explicit late gate and are not on this package's critical path.<br>
+Session checkpoint: **HOST COMPOSITION LOCAL GREEN / NATIVE CI NEXT — 2026-07-15, Codex implementation owner** — `E-M5-HOST-EVIDENCE-COMPOSITION-LOCAL-001` proves canonical six-tuple mapping, conservative unknowns, Darwin translation policy, bounded concurrency, cancellation/error propagation, deep freezing, workflow-family inclusion, and all local static/broad/release gates. Commit and push this isolated package, then require exact-head all-six native client proof before accepting it or opening another package. Do not add a product caller, settings/fallback wiring, tuple enablement, publication, or default behavior. Merging to `main` remains prohibited, SignPath is deferred, and legacy remains the production default.<br>
 Primary design: [SSH relay GitHub Release plan](./2026-07-14-ssh-relay-github-release-plan.html)<br>
 Motivating issues: [#8450](https://github.com/stablyai/orca/issues/8450), [#1693](https://github.com/stablyai/orca/issues/1693)
 
@@ -147,11 +147,10 @@ same change as the work it records.
   local gates, and all-six native Node 24 proof are green under
   E-M5-ARTIFACT-CACHE-ROOT-LOCAL-RED-001, E-M5-ARTIFACT-CACHE-ROOT-LOCAL-001, and
   E-M5-ARTIFACT-CACHE-ROOT-CI-001. No Electron or product caller exists.
-- Active package: **In progress — 2026-07-15, Codex implementation owner** — audit the smallest
-  disconnected full host-evidence composition boundary after
-  E-M5-WINDOWS-COMPATIBILITY-DETECTION-CI-001 closes every individual detector on native clients.
-  Keep live SSH, transfer/install, settings, fallback wiring, tuple enablement, publication,
-  defaults, and SignPath separately gated.
+- Active package: **In progress — 2026-07-15, Codex implementation owner** — disconnected full host-
+  evidence composition is locally green under E-M5-HOST-EVIDENCE-COMPOSITION-LOCAL-001. Exact-head
+  all-six native client proof is the next acceptance gate. Keep live SSH, transfer/install,
+  settings, fallback wiring, tuple enablement, publication, defaults, and SignPath separately gated.
 - Completed Work Package 2 gate: target-native Windows source-signature reports from exact-head
   artifact jobs 87267322867 and 87267322870 were independently downloaded and matched to their
   identities and signing-stage reports under E-M3-WINDOWS-SOURCE-SIGNATURE-CI-001. PR Checks
@@ -15926,6 +15925,108 @@ config/scripts/ssh-relay-runtime-workflow.test.mjs` — PASS, two files, 38 pass
   tuple enablement, release publication, defaults, and SignPath remain absent. Legacy remains the
   sole production/default path and every tuple stays disabled.
 
+### E-M5-HOST-EVIDENCE-COMPOSITION-AUDIT-001 — disconnected platform-specific evidence composition
+
+- Date/owner: 2026-07-15, Codex implementation owner.
+- Audit: complete reads of the canonical remote-platform type/detector and tests, all six accepted
+  platform-specific compatibility detectors and purpose suites, selector host-evidence union and
+  conservative legacy classifications, native workflow commands/oracle, and the current production-
+  caller graph. The detector functions remain imported only by purpose tests and no host composer
+  exists. The existing platform detector has no cancellation input and must remain unchanged here.
+- Finding: add one purpose-named `ssh-relay-host-evidence-detection` module consuming an explicit
+  already-detected `RemoteHostPlatform`, SSH connection, and optional cancellation signal. First
+  require the platform object's relay-platform identity to agree with its canonical OS/architecture;
+  inconsistent input returns undefined without a probe. Then invoke only the accepted detector family:
+  Linux kernel/libc/libstdc++ concurrently (at most three channels), Darwin version/translation
+  concurrently (at most two), or the single Windows compatibility detector. Return a deeply frozen
+  `SshRelayHostEvidence` object with canonical OS/architecture.
+- Conservative mapping: Linux and Windows are not subject to the reviewed Darwin/Rosetta process-
+  translation policy, so their composed `processTranslated` value is false. Linux preserves
+  `{ family: 'unknown' }` and missing optional fields for later selector classification. A missing
+  complete Windows segment yields Windows evidence with all optional compatibility fields absent so
+  selection remains legacy. Darwin preserves explicit true/false translation and optional version;
+  unknown translation returns no host evidence because inventing either boolean could select a native
+  artifact or misdiagnose a translated process. No selector/type change is needed.
+- Failure/concurrency contract: pass the exact signal to every invoked detector. Pre-abort and
+  `AbortError` propagate; unexpected detector rejection propagates unchanged rather than becoming
+  fallback eligibility. Ordinary probe failures retain each accepted detector's existing unknown
+  return. All OS-specific calls start before composition awaits their results, bounding the composed
+  probe to the slowest existing 15-second detector instead of their sum. No unsupported detector,
+  platform re-probe, retry, network/download, Node, or filesystem operation is introduced.
+- Required RED/green proof: canonical Linux/Darwin/Windows x64 and arm64 mapping; exact detector
+  family/call count; complete and missing/unknown fields; native/translated/unknown Darwin behavior;
+  inconsistent platform rejection with zero probes; deep freezing; all relevant calls starting
+  concurrently; exact signal forwarding; cancellation/unexpected rejection propagation; absence of
+  production imports; and both native workflow families requiring the purpose suite.
+- Deliberately absent: platform-detection modification, full startup/official-manifest/cache
+  orchestration, live SSH/remote cells, semantic transfer capability, transfer/install, settings,
+  fallback classification/wiring, Electron, `ORCA_RELAY_PATH`, tuple enablement, publication,
+  defaults, and SignPath. Legacy remains the sole production/default path and every tuple stays
+  disabled.
+- RED evidence, 2026-07-15:
+  - `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1
+src/main/ssh/ssh-relay-host-evidence-detection.test.ts` — EXPECTED FAIL, exit 1: purpose suite
+    could not import absent `ssh-relay-host-evidence-detection`; zero tests collected in 316 ms,
+    1.76 s wall time, 132,235,264-byte maximum RSS, 96,490,992-byte peak memory footprint.
+  - `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1
+config/scripts/ssh-relay-runtime-workflow.test.mjs` — EXPECTED FAIL, exit 1: 6 passed and the
+    native-family inclusion oracle failed because the purpose suite had only the POSIX workflow
+    occurrence (`source.split(...)` length 2 instead of 3); 409 ms suite duration, 1.84 s wall time,
+    131,743,744-byte maximum RSS, 95,851,800-byte peak memory footprint.
+  - Scope check before RED: `git diff --check` passed; protected
+    `ssh-remote-node-resolution.ts` and `.test.ts` diff remained empty. No implementation or product
+    caller existed.
+
+### E-M5-HOST-EVIDENCE-COMPOSITION-LOCAL-001 — bounded immutable host evidence is locally green
+
+- Date/owner/environment: 2026-07-15, Codex implementation owner; local macOS arm64, Node 26.0.0,
+  pnpm 10.24.0, atop pushed head `cfe56d0fd` plus this isolated uncommitted package. The expected
+  Node-24 engine warning means exact Node 24 remains a native CI gate.
+- Implementation: the new 92-line `ssh-relay-host-evidence-detection.ts` accepts only an explicit
+  already-detected platform, connection, and optional signal. It rejects canonical OS/architecture
+  inconsistency before any probe; starts only the selected OS family's accepted bounded detectors;
+  runs Linux's three and Darwin's two probes concurrently; preserves Linux/Windows unknowns for
+  conservative legacy selection; refuses to invent Darwin translation; propagates cancellation and
+  unexpected rejection; and returns deeply frozen selector-shaped evidence. It has no production
+  import or caller.
+- Purpose command: `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts
+--maxWorkers=1 src/main/ssh/ssh-relay-host-evidence-detection.test.ts` — PASS, one file / 20 tests in
+  337 ms Vitest, 1.69 seconds wall, 132,431,872-byte maximum RSS, zero swaps. It covers all six
+  canonical tuples and exact family call counts, full/unknown/missing mapping, native/translated/
+  unknown Darwin behavior, inconsistent input with zero probes, deep freezing, concurrency, exact
+  signal forwarding, cancellation, and unexpected rejection.
+- Workflow-oracle command: `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts
+--maxWorkers=1 config/scripts/ssh-relay-runtime-workflow.test.mjs` — PASS, one file / seven tests in
+  384 ms Vitest, 1.73 seconds wall, 132,972,544-byte maximum RSS, zero swaps. The purpose suite now
+  occurs exactly once in both POSIX and PowerShell native contract commands.
+- Post-format focused command: `/usr/bin/time -l pnpm exec vitest run --config
+config/vitest.config.ts --maxWorkers=1` plus the composer, Windows compatibility, libc, kernel,
+  Darwin version/translation, libstdc++, selector, platform detection, and workflow-oracle suites —
+  PASS, 10 files / 193 passed / one declared native-Windows skip in 4.66 seconds Vitest, 7.18 seconds
+  wall, 138,493,952-byte maximum RSS, zero swaps.
+- Broader relay command: `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts
+--maxWorkers=1 --silent=true src/main/ssh/ssh-relay-*.test.ts` — PASS, 39 files passed / three
+  declared skipped files, 512 tests passed / four declared platform skips in 25.68 seconds Vitest,
+  27.42 seconds wall, 281,608,192-byte maximum RSS, zero swaps. Only the established stale-lock
+  diagnostic and local Node 26 `module.register()` deprecation warning appear.
+- Release-script command: `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts
+--maxWorkers=1 --silent=true config/scripts/ssh-relay-runtime-*.test.mjs` — PASS, 50 files / 280 tests
+  in 24.51 seconds Vitest, 27.61 seconds wall, 188,825,600-byte maximum RSS, zero swaps.
+- Static gates: `/usr/bin/time -l pnpm typecheck` passes in 5.81 seconds wall with
+  1,262,075,904-byte maximum RSS. `/usr/bin/time -l pnpm lint` passes in 27.03 seconds wall with
+  2,034,597,888-byte maximum RSS; all switch-exhaustiveness, 41 reliability, 355-entry max-lines,
+  bundled-skill, 9,837 localization-reference, locale-parity, and zero-candidate localization gates
+  pass, with the existing 26 warnings only in untouched files. Explicit max-lines, targeted
+  `oxlint`, targeted `oxfmt --check`, `git diff --check`, no-production-import, and protected-
+  resolver empty-diff checks pass. The 92-line implementation and 229-line purpose suite add no
+  max-lines suppression or vague module.
+- Boundary/residual gaps: this is local mock/composition proof, not live SSH or native detector
+  execution. Exact-head all-six Node 24 client proof is mandatory next. Platform detection,
+  manifest/cache startup composition, live SSH/remote cells, semantic transfer capability,
+  transfer/install, Electron/settings, fallback classification/wiring, `ORCA_RELAY_PATH`, tuple
+  enablement, publication, defaults, and SignPath remain absent. Legacy remains the sole production/
+  default path and every tuple stays disabled.
+
 ## Accepted Gaps
 
 No product gap is accepted merely because it appears in this list. Each entry requires explicit
@@ -15984,10 +16085,10 @@ The project is not complete until every applicable item below is checked with ev
 
 ## Next Required Action
 
-Audit only the smallest disconnected Windows compatibility-evidence boundary for the already-reviewed
-OS build, OpenSSH for Windows, Windows PowerShell, and .NET Framework selector fields. Record the
-exact acquisition/parsing/failure contract before adding purpose tests or implementation. Do not
-compose full host evidence, provision production secrets or environments, add an Electron/startup
+Commit and push only the locally green disconnected host-evidence composition package under
+E-M5-HOST-EVIDENCE-COMPOSITION-LOCAL-001, then require exact-head all-six Node 24 native client proof
+and adjacent PR checks before accepting it or auditing the next package. Do not modify platform
+detection or selectors, provision production secrets or environments, add an Electron/startup
 consumer, embed unreviewed keys or manifest bytes, add SSH transfer/install, mode wiring, fallback,
 tuple enablement, release publication, or default behavior.
 Keep Node upstream `.tar.xz` inputs, Windows ZIP, `ORCA_RELAY_PATH`, existing desktop required-assets
