@@ -1651,6 +1651,23 @@
                   </td>
                 </tr>
                 <tr>
+                  <td>Hosted Windows OpenSSH fixture trust</td>
+                  <td>
+                    When the hosted ARM64 OS capability is unavailable, use one immutable official
+                    Microsoft Win32-OpenSSH release with exact per-architecture archive hashes.
+                    Require valid Microsoft Authenticode on every executable. The release's sole
+                    upstream native library, <code>libcrypto.dll</code>, is accepted only when it is
+                    the only unsigned PE and matches its separately pinned per-architecture hash;
+                    any added, missing, differently signed, or differently hashed native file fails
+                    closed.
+                  </td>
+                  <td>
+                    This trust exception provisions only the loopback CI server. Production clients
+                    and SSH hosts perform no fixture download, and it does not weaken runtime
+                    artifact, native-signing, transfer, install, or launch trust.
+                  </td>
+                </tr>
+                <tr>
                   <td>PTY and watcher</td>
                   <td>
                     Spawn, input, resize, exit, shell environment, create/rename/modify/delete

@@ -9,7 +9,7 @@ work; keep exact commands, runner identities, hashes, metrics, and residual gaps
 Date created: 2026-07-14<br>
 Last updated: 2026-07-15<br>
 Current phase: Milestone 6 / Work Package 5 bounded runtime transfer — **In progress — 2026-07-15, Codex implementation owner: bounded official Windows OpenSSH fixture correction**. Keep every capability disconnected from every production/default SSH path. Real Apple/SignPath rehearsals remain an explicit late gate and are not on this package's critical path.<br>
-Session checkpoint: **PINNED MICROSOFT FIXTURE LOCALLY GREEN / EXACT-HEAD NATIVE PROOF NEXT — 2026-07-15, Codex implementation owner** — exact-head run `29535299209` proves x64 needs explicit host-key ownership and the hosted ARM64 image cannot install `OpenSSH.Server~~~~0.0.1.0` within the 30-minute job. `E-M6-WINDOWS-SYSTEM-SSH-TREE-LIVE-PORTABLE-FIXTURE-LOCAL-001` records the local correction that replaces that OS-capability dependency on both architectures with one immutable official Microsoft Win32-OpenSSH release, per-architecture SHA-256 pins, target-native Authenticode checks, bounded download/extraction, explicit key owners, and an ownership-marked fixed-name `sshd` service removed in teardown. The workflow oracle permits only that exact external Microsoft fixture release URL while continuing to forbid Orca release URLs, `gh release`, and `contents: write`. This is CI fixture provisioning only; production runtime bytes still cross authenticated SSH and no product remote downloads anything. Push the isolated correction and require fresh exact-head x64/arm64 proof. Do not connect a product caller, change legacy upload/fallback/default behavior, enable a tuple, publish an artifact, or perform SignPath work. Merging to `main` remains prohibited, SignPath is deferred, and legacy remains the production default.<br>
+Session checkpoint: **ROLE-BASED LIBCRYPTO FIXTURE TRUST LOCALLY GREEN / EXACT-HEAD NATIVE PROOF NEXT — 2026-07-15, Codex implementation owner** — exact-head run `29535299209` proves x64 needs explicit host-key ownership and the hosted ARM64 image cannot install `OpenSSH.Server~~~~0.0.1.0` within the 30-minute job. `E-M6-WINDOWS-SYSTEM-SSH-TREE-LIVE-PORTABLE-FIXTURE-LOCAL-001` records the local correction that replaces that OS-capability dependency on both architectures with one immutable official Microsoft Win32-OpenSSH release. Exact head `bcbd9d6b36dc8cc2e917fa88eb30f87ab1d88657`, artifact run `29538044827`, x64 job `87753850628`, and ARM64 job `87753850663` prove both archive pins but expose each official bundle's sole unsigned upstream `libcrypto.dll` under `E-M6-WINDOWS-SYSTEM-SSH-TREE-LIVE-LIBCRYPTO-CI-RED-001`; both cleanups pass before any account/service creation. The HTML plan and checklist record the narrow CI-fixture-only trust rule before code changes. `E-M6-WINDOWS-SYSTEM-SSH-TREE-LIVE-LIBCRYPTO-CORRECTION-LOCAL-001` now records exact native-file closure, per-architecture library pins, sole `NotSigned` status, mandatory valid Microsoft Authenticode for every executable, and all local/static gates green. Push the isolated correction for fresh exact-head x64/arm64 proof. Production runtime bytes still cross authenticated SSH and no product remote downloads anything. Do not connect a product caller, change legacy upload/fallback/default behavior, enable a tuple, publish an artifact, or perform SignPath work. Merging to `main` remains prohibited, SignPath is deferred, and legacy remains the production default.<br>
 Primary design: [SSH relay GitHub Release plan](./2026-07-14-ssh-relay-github-release-plan.html)<br>
 Motivating issues: [#8450](https://github.com/stablyai/orca/issues/8450), [#1693](https://github.com/stablyai/orca/issues/1693)
 
@@ -159,13 +159,15 @@ same change as the work it records.
 - Completed package: the disconnected POSIX system-SSH tree/root composition is green locally and
   on all six primary Node 24 native clients under E-M6-POSIX-SYSTEM-SSH-TREE-LOCAL-001 and
   E-M6-POSIX-SYSTEM-SSH-TREE-CI-001. It has no live/full-size SSH or product caller.
-- Active package: **Official portable fixture correction in progress — 2026-07-15, Codex
-  implementation owner** — the ARM64 capability install times out under
+- Active package: **Role-based official portable fixture trust correction in progress — 2026-07-15,
+  Codex implementation owner** — the ARM64 capability install times out under
   `E-M6-WINDOWS-SYSTEM-SSH-TREE-LIVE-ARM64-CAPABILITY-CI-RED-001`. Provision the same exact official
-  Microsoft Win32-OpenSSH release on x64/arm64 with pinned archive hashes and target-native
-  Authenticode checks, create/delete only an ownership-marked fixed-name `sshd` service, retain the
-  explicit key owners, and rerun local plus both native architectures. Do not add product, settings,
-  fallback, tuple, publication, default behavior, or signing.
+  Microsoft Win32-OpenSSH release on x64/arm64 with pinned archive hashes, valid Microsoft
+  Authenticode for every executable, and a separate per-architecture hash for its sole upstream
+  `libcrypto.dll`, which must be the only `NotSigned` PE. Create/delete only an ownership-marked
+  fixed-name `sshd` service, retain the explicit key owners, and rerun local plus both native
+  architectures. Do not add product, settings, fallback, tuple, publication, default behavior, or
+  signing.
 - Completed Work Package 2 gate: target-native Windows source-signature reports from exact-head
   artifact jobs 87267322867 and 87267322870 were independently downloaded and matched to their
   identities and signing-stage reports under E-M3-WINDOWS-SOURCE-SIGNATURE-CI-001. PR Checks
@@ -18786,6 +18788,75 @@ config/scripts/ssh-relay-runtime-workflow.test.mjs` passes 10/10 workflow cases 
   release publication, Apple signing, and SignPath remain absent; legacy remains the sole
   production/default path.
 
+### E-M6-WINDOWS-SYSTEM-SSH-TREE-LIVE-LIBCRYPTO-CI-RED-001 — official upstream library invalidates every-PE signing assumption
+
+- Date/owner/head/run: 2026-07-15, Codex implementation owner; exact pushed head
+  `bcbd9d6b36dc8cc2e917fa88eb30f87ab1d88657`, artifact run `29538044827`, native Windows x64 job
+  `87753850628` on `windows-2022`, and native Windows ARM64 job `87753850663` on `windows-11-arm`.
+- Prior-boundary proof: checkout, native MSVC/Node/pnpm, all 283 runtime artifact contracts, exact
+  Node inputs, two clean runtime builds/equality/smoke, and full-size desktop extraction/cache pass.
+  The fixture downloads 5,570 KiB in under one second and passes the exact archive SHA-256
+  `23f50f3458c4c5d0b12217c6a5ddfde0137210a30fa870e98b29827f7b43aba5`; failure occurs later at the
+  target-native signature loop, so no live SSH claim follows.
+- Exact RED: the start step fails after five seconds with `Official Windows OpenSSH fixture signature
+is invalid: libcrypto.dll`. The fail-closed every-PE policy correctly rejects the official
+  bundle's only DLL before creating an account, service, key, config, or SSH connection. The
+  `always()` teardown passes in four seconds and removes only the ownership-marked fixture root.
+- Independent ARM64 RED: after all the same prior artifact/runtime/full-size cache gates pass, the
+  ARM64 start step downloads its 4.79 MiB pinned archive and fails after three seconds on the same
+  `libcrypto.dll` signature assertion. Its ownership-safe teardown passes in three seconds. The
+  complete ARM64 job takes 12m43s; no capability-install hang, live SSH, or transfer claim follows.
+- Independent immutable-byte audit: bounded local downloads reproduce both pinned archive hashes.
+  Each archive contains exactly 14 executables plus one DLL named `libcrypto.dll`; there is no
+  `libssl.dll`. The x64 library is 1,769,032 bytes with SHA-256
+  `4652e861c0335ee80a51306ceab75aa35c8865b235f97ce7dd5a0fd9dab44b5d`; the ARM64 library is
+  1,729,072 bytes with SHA-256
+  `7ad2b7721893c54ad6e4fec1a3477701fb48975323c2c4ac6cd0b8c972ab242a`.
+- Evidence-driven plan correction: the portable server is only a loopback CI fixture, not a product
+  runtime asset or remote-host dependency. The HTML plan and checklist now require exact archive
+  plus `libcrypto.dll` hashes, exactly one library with that name, target-native `NotSigned` status
+  for that pinned upstream library, and valid Microsoft Authenticode for every executable. Any
+  additional/missing native file, different signature state, signer, or hash fails closed. This does
+  not weaken product runtime/native-signing/transfer/install/launch trust.
+- Residual boundary: implement only this role-based fixture trust policy, rerun local/static gates,
+  and require fresh exact-head x64/arm64
+  archive/signature/service/auth/full-size/cancellation/cleanup proof. No product/Beta/settings/
+  fallback/default, tuple, publication, Apple signing, or SignPath change is authorized; legacy
+  remains the sole production/default path.
+
+### E-M6-WINDOWS-SYSTEM-SSH-TREE-LIVE-LIBCRYPTO-CORRECTION-LOCAL-001 — role-based immutable fixture trust is locally green
+
+- Date/owner/base/runner: 2026-07-15, Codex implementation owner; uncommitted workflow, oracle,
+  HTML-plan, and checklist correction atop exact RED head
+  `bcbd9d6b36dc8cc2e917fa88eb30f87ab1d88657` on Apple arm64, macOS 26.2 build 25C56,
+  Node 26.5.0, pnpm 10.24.0. Native Windows execution remains required.
+- Correction: require the exact 15-name PE closure in both pinned archives. Require exactly one
+  `libcrypto.dll`, its per-architecture SHA-256 from the independent byte audit, and target-native
+  `NotSigned` status. Every one of the other 14 executables must retain `Valid` Microsoft
+  Authenticode. An added/missing/duplicated PE, library signer-state change, library hash change,
+  executable signer/status change, or archive hash change fails before any account/service/key or
+  SSH execution. The HTML plan records this CI-fixture-only rule; no product trust policy changes.
+- Purpose/oracle command: `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts
+--maxWorkers=1 src/main/ssh/ssh-relay-runtime-windows-system-ssh-openssh-full-size.test.ts
+config/scripts/ssh-relay-runtime-workflow.test.mjs` passes 10/10 workflow cases with one declared
+  live-suite skip in 4.76 seconds real; maximum RSS is 144,359,424 bytes and peak footprint is
+  98,146,160 bytes. Independent YAML extraction plus PowerShell `[scriptblock]::Create()` parses all
+  three start/measure/stop blocks.
+- Release-contract command: `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts
+--maxWorkers=1 config/scripts/ssh-relay-runtime-*.test.mjs` passes 50 files and 283/283 cases in
+  25.19 seconds real; maximum RSS is 195,805,184 bytes and peak footprint is 97,785,664 bytes.
+- Static evidence: `/usr/bin/time -l pnpm typecheck` passes in 3.29 seconds real. Final
+  `/usr/bin/time -l pnpm lint` passes in 20.69 seconds real with only the 26 pre-existing warnings,
+  all 41 reliability gates, the 355-entry max-lines ratchet, localization, and bundled-guide checks;
+  maximum RSS is 2,040,971,264 bytes and peak footprint is 97,113,848 bytes. The prior 694-case broad
+  relay result remains anchored to `E-M6-WINDOWS-SYSTEM-SSH-TREE-LIVE-PORTABLE-FIXTURE-LOCAL-001`;
+  this correction changes only workflow fixture trust, its oracle, and planning content.
+- Residual boundary: local contracts/syntax cannot prove the native `NotSigned`/Microsoft signature
+  statuses, service/auth, Windows PowerShell 5.1, full-size transfer, cancellation, collision,
+  connection reuse, or teardown. Format/diff/isolation-check, commit, and push the isolated
+  correction, then require fresh exact-head Windows x64/arm64 proof. Legacy remains the sole
+  production/default path; product/Beta/settings/fallback/tuple/publication/signing remain absent.
+
 ## Accepted Gaps
 
 No product gap is accepted merely because it appears in this list. Each entry requires explicit
@@ -18844,10 +18915,9 @@ The project is not complete until every applicable item below is checked with ev
 
 ## Next Required Action
 
-Replace only the timed-out OS-capability fixture dependency with the pinned official Microsoft
-portable release contract in
-`E-M6-WINDOWS-SYSTEM-SSH-TREE-LIVE-ARM64-CAPABILITY-CI-RED-001`, retain the explicit key owners, rerun
-local gates, and push for fresh x64/arm64 ACL, PowerShell 5.1, exact full-size serial/four-channel/
+Commit and push the locally green role-based fixture trust correction in
+`E-M6-WINDOWS-SYSTEM-SSH-TREE-LIVE-LIBCRYPTO-CORRECTION-LOCAL-001`, then require fresh exact-head
+x64/arm64 archive/native-closure/signature, ACL, PowerShell 5.1, exact full-size serial/four-channel/
 cancellation, collision, connection-reuse, and teardown evidence. Do not check the broad Milestone
 6 Windows system-SSH item yet. Do not add an Electron/startup/product importer, per-target mode
 wiring, fallback, tuple enablement, release publication, or default behavior.

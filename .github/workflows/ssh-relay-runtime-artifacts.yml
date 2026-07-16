@@ -1335,16 +1335,18 @@ jobs:
             throw 'Windows OpenSSH fixed service name is already registered'
           }
           $releaseTag = '10.0.0.0p2-Preview'
-          $archiveName, $expandedName, $expectedArchiveSha256 = switch ($env:RUNNER_ARCH) {
+          $archiveName, $expandedName, $expectedArchiveSha256, $expectedLibcryptoSha256 = switch ($env:RUNNER_ARCH) {
             'X64' {
               'OpenSSH-Win64.zip'
               'OpenSSH-Win64'
               '23f50f3458c4c5d0b12217c6a5ddfde0137210a30fa870e98b29827f7b43aba5'
+              '4652e861c0335ee80a51306ceab75aa35c8865b235f97ce7dd5a0fd9dab44b5d'
             }
             'ARM64' {
               'OpenSSH-ARM64.zip'
               'OpenSSH-ARM64'
               '698c6aec31c1dd0fb996206e8741f4531a97355686b5431ef347d531b07fcd42'
+              '7ad2b7721893c54ad6e4fec1a3477701fb48975323c2c4ac6cd0b8c972ab242a'
             }
             default { throw "Unsupported Windows OpenSSH fixture architecture: $env:RUNNER_ARCH" }
           }
@@ -1363,8 +1365,43 @@ jobs:
           $nativeFiles = @(Get-ChildItem -LiteralPath $openSshRoot -Recurse -File | Where-Object {
             $_.Extension -in @('.exe', '.dll')
           })
-          if ($nativeFiles.Count -lt 10) { throw 'Official Windows OpenSSH fixture is incomplete' }
+          $expectedNativeNames = @(
+            'libcrypto.dll',
+            'scp.exe',
+            'sftp-server.exe',
+            'sftp.exe',
+            'ssh-add.exe',
+            'ssh-agent.exe',
+            'ssh-keygen.exe',
+            'ssh-keyscan.exe',
+            'ssh-pkcs11-helper.exe',
+            'ssh-shellhost.exe',
+            'ssh-sk-helper.exe',
+            'ssh.exe',
+            'sshd-auth.exe',
+            'sshd-session.exe',
+            'sshd.exe'
+          ) | Sort-Object
+          $actualNativeNames = @($nativeFiles.Name | Sort-Object)
+          if (($actualNativeNames -join "`n") -ne ($expectedNativeNames -join "`n")) {
+            throw "Official Windows OpenSSH fixture native-file closure changed: $($actualNativeNames -join ',')"
+          }
+          $libcryptoFiles = @($nativeFiles | Where-Object { $_.Name -eq 'libcrypto.dll' })
+          if ($libcryptoFiles.Count -ne 1) {
+            throw 'Official Windows OpenSSH fixture must contain exactly one libcrypto.dll'
+          }
+          $libcrypto = $libcryptoFiles[0]
+          $libcryptoSha256 = (Get-FileHash -LiteralPath $libcrypto.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($libcryptoSha256 -ne $expectedLibcryptoSha256) {
+            throw "Official Windows OpenSSH libcrypto.dll hash mismatch: $libcryptoSha256"
+          }
+          # Why: Microsoft's immutable bundle preserves one unsigned upstream OpenSSL library.
+          $libcryptoSignature = Get-AuthenticodeSignature -LiteralPath $libcrypto.FullName
+          if ($libcryptoSignature.Status -ne 'NotSigned') {
+            throw "Official Windows OpenSSH libcrypto.dll signature changed: $($libcryptoSignature.Status)"
+          }
           foreach ($nativeFile in $nativeFiles) {
+            if ($nativeFile.Name -eq 'libcrypto.dll') { continue }
             $signature = Get-AuthenticodeSignature -LiteralPath $nativeFile.FullName
             if (
               $signature.Status -ne 'Valid' -or

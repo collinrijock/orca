@@ -17,6 +17,19 @@ Microsoft fixture release URL while Orca release URLs, `gh release`, and `conten
 forbidden; 10/10 focused workflow contracts, 283/283 release contracts, 694 relay cases with ten
 declared skips, typecheck, full lint/reliability/max-lines, PowerShell syntax, formatting, diff, and
 protected-resolver isolation pass. Fresh exact-head x64/arm64 proof is still required.
+`E-M6-WINDOWS-SYSTEM-SSH-TREE-LIVE-LIBCRYPTO-CI-RED-001` records exact head
+`bcbd9d6b36dc8cc2e917fa88eb30f87ab1d88657`, artifact run `29538044827`, and native x64 job
+`87753850628`: the archive hash passes, but the fail-closed every-PE Authenticode policy rejects the
+official bundle's sole upstream `libcrypto.dll`; teardown passes before any account/service creation.
+Pin that library's exact per-architecture hash and require it to be the only `NotSigned` PE while
+every executable remains valid Microsoft Authenticode. Native ARM64 job `87753850663` independently
+reproduces the same archive-green/`libcrypto.dll` RED and passes teardown after all prior runtime
+gates, confirming one architecture-consistent correction.
+`E-M6-WINDOWS-SYSTEM-SSH-TREE-LIVE-LIBCRYPTO-CORRECTION-LOCAL-001` records the role-based trust
+correction locally green: exact 15-file native closure, both library hashes, sole `NotSigned`
+library, valid Microsoft Authenticode for every executable, 10/10 workflow contracts, 283/283
+release contracts, typecheck, full lint/reliability/max-lines, and PowerShell syntax pass. Push its
+exact head for fresh native x64/arm64 proof.
 `E-M6-WINDOWS-SYSTEM-SSH-TREE-LIVE-AUDIT-001` fixes the loopback-only official Microsoft
 server, fixture-owned non-admin account/ACL, exact host-key trust, Windows PowerShell 5.1,
 serial/default and four-channel metrics, cancellation/collision/cleanup, and deterministic teardown
@@ -52,8 +65,9 @@ Preserve the original arm64 result, then push for fresh x64/arm64 proof.
 all prior native build/runtime gates pass, but `Add-WindowsCapability OpenSSH.Server` emits no result
 for 19m16s and the existing 30-minute job cancels it; ownership-safe teardown still passes. Do not
 increase the timeout. Provision the same immutable official Microsoft Win32-OpenSSH release on both
-architectures with per-architecture SHA-256 pins, target-native Authenticode, bounded download,
-fixed-name service ownership/deletion, and no production or remote-host HTTP behavior.
+architectures with per-architecture archive and sole-upstream-library SHA-256 pins, role-based
+target-native Authenticode, bounded download, fixed-name service ownership/deletion, and no
+production or remote-host HTTP behavior.
 `E-M6-WINDOWS-SYSTEM-SSH-TREE-LIVE-PORTABLE-FIXTURE-LOCAL-001` closes the local correction gate;
 push its exact head and require both native architectures before closing the live Windows package.
 `E-M6-WINDOWS-SYSTEM-SSH-TREE-LOCAL-RED-001` proves the native workflow oracle passes 9/9 and the
