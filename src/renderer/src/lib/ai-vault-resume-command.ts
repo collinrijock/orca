@@ -1,6 +1,7 @@
 import {
   buildAiVaultResumeCommand,
   buildAiVaultResumeShellCommand,
+  realHomeCodexResumeEnvDeletion,
   type AiVaultSession
 } from '../../../shared/ai-vault-types'
 import {
@@ -143,17 +144,6 @@ function buildAiVaultResumeForWorktree(args: AiVaultResumeWorktreeArgs): AiVault
     }),
     ...realHomeCodexResumeEnvDeletion(args.session)
   }
-}
-
-function realHomeCodexResumeEnvDeletion(
-  session: AiVaultResumeCommandSession
-): { envToDelete: string[] } | Record<string, never> {
-  if (session.agent !== 'codex' || session.codexHome !== null) {
-    return {}
-  }
-  // Why: a bare real-home resume must override workspace account routing and
-  // the persistent daemon's inherited Orca home, not only its sparse env patch.
-  return { envToDelete: ['CODEX_HOME', 'ORCA_CODEX_HOME'] }
 }
 
 function getAiVaultResumeCodexHome(
