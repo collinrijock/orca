@@ -1,12 +1,4 @@
-import {
-  existsSync,
-  lstatSync,
-  mkdirSync,
-  readFileSync,
-  realpathSync,
-  statSync,
-  unlinkSync
-} from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, statSync, unlinkSync } from 'node:fs'
 import { join } from 'node:path'
 import { writeFileAtomically } from '../codex-accounts/fs-utils'
 import {
@@ -20,6 +12,7 @@ import {
   type HookDefinition,
   type HooksConfig
 } from '../agent-hooks/installer-utils'
+import { resolveHooksJsonWritePath } from '../agent-hooks/hook-config-write-path'
 import { getCodexManagedScriptFileName } from './codex-hook-identity'
 import {
   CODEX_TRUST_GRANT_TRANSIENT_RETRY_INTERVAL_MS,
@@ -30,6 +23,8 @@ import { removeCodexManagedHookTrustEntries } from './codex-managed-trust-reconc
 import { getCodexManagedHookInstallMaterial } from './hook-service'
 import { getSystemCodexHomePath } from './codex-home-paths'
 import type { CodexTrustEntry } from './config-toml-trust'
+import { restoreCodexTrustConfig } from './codex-trust-config-rollback'
+import { mutateRealHomeHooksPreservingUserTrust } from './codex-user-hook-trust-rebase'
 
 /**
  * Real-home Codex hook lane for the system-default selection (flag ON).
@@ -53,12 +48,12 @@ export function getRealHomeCodexHookLane(): RealHomeCodexHookLane {
 }
 
 /**
- * Routing gate consumed by CodexRuntimeHomeService: the real home is usable
- * whenever hooks are opted out (nothing to install) or the grant lane has not
- * proven incapable on this host.
+ * Routing gate consumed by CodexRuntimeHomeService. Both a failed install and
+ * a failed opt-out cleanup use the managed lane so no half-mutated hook state
+ * can diverge from PTY, rate-limit, or commit-message routing.
  */
-export function isRealHomeCodexHookLaneUsable(hooksEnabled: boolean): boolean {
-  return !hooksEnabled || currentLane !== 'unavailable'
+export function isRealHomeCodexHookLaneUsable(_hooksEnabled: boolean): boolean {
+  return currentLane !== 'unavailable'
 }
 
 function getRealHomeHooksJsonPath(): string {
@@ -69,33 +64,22 @@ function getRealHomeConfigTomlPath(): string {
   return join(getSystemCodexHomePath(), 'config.toml')
 }
 
-function resolveRealHomeHooksWritePath(hooksJsonPath: string): string {
-  let isSymlink = false
-  try {
-    isSymlink = lstatSync(hooksJsonPath).isSymbolicLink()
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-      return hooksJsonPath
-    }
-    throw error
-  }
-  if (!isSymlink) {
-    return hooksJsonPath
-  }
-  try {
-    // Why: replacing the link itself would silently disconnect a user's
-    // dotfiles-managed hooks.json. Atomic writes belong at its real target.
-    return realpathSync.native(hooksJsonPath)
-  } catch (error) {
-    throw new Error(`Could not resolve symlinked Codex hooks file ${hooksJsonPath}`, {
-      cause: error
-    })
-  }
-}
-
 /** Orca-side state dir; nothing extra is ever written into the user's ~/.codex. */
 function getRealHomeHookStateDir(userDataPath: string): string {
   return join(userDataPath, 'codex-real-home-hooks')
+}
+
+function assertHooksJsonGeneration(
+  hooksJsonPath: string,
+  hooksWritePath: string,
+  expectedRaw: string | null
+): void {
+  const currentRaw = existsSync(hooksJsonPath) ? readFileSync(hooksJsonPath, 'utf-8') : null
+  if (currentRaw !== expectedRaw || resolveHooksJsonWritePath(hooksJsonPath) !== hooksWritePath) {
+    // Why: the pre-mutation RPC can overlap a user's editor save. Abort rather
+    // than atomically replacing a newer file with the stale parsed snapshot.
+    throw new Error('Codex hooks.json changed while Orca prepared its trust repair')
+  }
 }
 
 /**
@@ -123,7 +107,7 @@ export function ensureRealHomeCodexHookState(args: {
     }
   } catch (error) {
     console.warn('[codex-real-home-hooks] ensure failed; staying on managed lane:', error)
-    currentLane = args.hooksEnabled ? 'unavailable' : currentLane
+    currentLane = 'unavailable'
     if (args.hooksEnabled) {
       installRetryAfterMs = Date.now() + CODEX_TRUST_GRANT_TRANSIENT_RETRY_INTERVAL_MS
     }
@@ -134,7 +118,7 @@ export function ensureRealHomeCodexHookState(args: {
 function installRealHomeCodexHook(userDataPath: string): RealHomeCodexHookLane {
   const material = getCodexManagedHookInstallMaterial()
   const hooksJsonPath = getRealHomeHooksJsonPath()
-  const hooksWritePath = resolveRealHomeHooksWritePath(hooksJsonPath)
+  const hooksWritePath = resolveHooksJsonWritePath(hooksJsonPath)
   const config = readHooksJson(hooksJsonPath)
   if (!config) {
     // Why: an unparseable user file must never be clobbered; without a hook
@@ -183,8 +167,19 @@ function installRealHomeCodexHook(userDataPath: string): RealHomeCodexHookLane {
   backupRealHomeHooksJsonOnce(userDataPath, previousRaw)
   // Why: unknown top-level fields belong to the user (other managers'
   // metadata); unlike the managed-home writer, preserve them verbatim.
-  writeHooksJson(hooksWritePath, { ...config, hooks: nextHooks } as HooksConfig, {
-    preserveMode: true
+  const trustConfigSnapshot = mutateRealHomeHooksPreservingUserTrust({
+    sourcePath: hooksJsonPath,
+    runtimeHomePath: getSystemCodexHomePath(),
+    tomlPath: getRealHomeConfigTomlPath(),
+    beforeHooks: config.hooks ?? {},
+    afterHooks: nextHooks,
+    writeHooks: () => {
+      assertHooksJsonGeneration(hooksJsonPath, hooksWritePath, previousRaw)
+      writeHooksJson(hooksWritePath, { ...config, hooks: nextHooks } as HooksConfig, {
+        preserveMode: true
+      })
+    },
+    restoreHooks: () => restoreRealHomeHooksJson(hooksWritePath, previousRaw, previousMode)
   })
 
   const grant = grantManagedCodexHookTrust({
@@ -202,7 +197,15 @@ function installRealHomeCodexHook(userDataPath: string): RealHomeCodexHookLane {
   // would surface as "Hooks need review". Roll the file back to its prior
   // bytes and keep this host on the managed-home lane; the grant client
   // already logged the fallback reason.
-  restoreRealHomeHooksJson(hooksWritePath, previousRaw, previousMode)
+  try {
+    restoreRealHomeHooksJson(hooksWritePath, previousRaw, previousMode)
+  } finally {
+    // Why: a user-trust rebase may have succeeded before the managed grant
+    // failed. Roll both files back to the same pre-mutation generation.
+    if (trustConfigSnapshot) {
+      restoreCodexTrustConfig(getRealHomeConfigTomlPath(), trustConfigSnapshot)
+    }
+  }
   installRetryAfterMs = getInstallRetryAfterMs(grant.reason)
   console.warn(
     `[codex-real-home-hooks] trust grant unavailable (${grant.reason}); entry rolled back, managed lane kept`
@@ -284,14 +287,28 @@ function sweepRealHomeCodexHook(): RealHomeCodexHookLane {
     }
   }
   if (removedAny) {
-    writeHooksJson(
-      resolveRealHomeHooksWritePath(hooksJsonPath),
-      {
-        ...config,
-        hooks: nextHooks
-      } as HooksConfig,
-      { preserveMode: true }
-    )
+    const hooksWritePath = resolveHooksJsonWritePath(hooksJsonPath)
+    const previousRaw = readFileSync(hooksJsonPath, 'utf-8')
+    const previousMode = statSync(hooksWritePath).mode
+    mutateRealHomeHooksPreservingUserTrust({
+      sourcePath: hooksJsonPath,
+      runtimeHomePath: getSystemCodexHomePath(),
+      tomlPath: getRealHomeConfigTomlPath(),
+      beforeHooks: config.hooks,
+      afterHooks: nextHooks,
+      writeHooks: () => {
+        assertHooksJsonGeneration(hooksJsonPath, hooksWritePath, previousRaw)
+        writeHooksJson(
+          hooksWritePath,
+          {
+            ...config,
+            hooks: nextHooks
+          } as HooksConfig,
+          { preserveMode: true }
+        )
+      },
+      restoreHooks: () => restoreRealHomeHooksJson(hooksWritePath, previousRaw, previousMode)
+    })
     // Why: dead [hooks.state] blocks for a removed hook are Orca-owned records;
     // dropping them keeps the user's config.toml from accumulating orphans.
     // Verify ownership by the expected hash or grant ledger: stale/mixed hook
@@ -333,19 +350,15 @@ function restoreRealHomeHooksJson(
   previousRaw: string | null,
   previousMode?: number
 ): void {
-  try {
-    if (previousRaw === null) {
-      if (existsSync(hooksJsonPath)) {
-        unlinkSync(hooksJsonPath)
-      }
-      return
+  if (previousRaw === null) {
+    if (existsSync(hooksJsonPath)) {
+      unlinkSync(hooksJsonPath)
     }
-    // Why: rollback is part of the safety boundary. Use the shared atomic
-    // writer so Windows file-lock retries and failed-temp cleanup are covered.
-    writeFileAtomically(hooksJsonPath, previousRaw, { mode: previousMode })
-  } catch (error) {
-    console.warn('[codex-real-home-hooks] failed to roll back hooks.json:', error)
+    return
   }
+  // Why: rollback is part of the safety boundary. Use the shared atomic
+  // writer so Windows file-lock retries and failed-temp cleanup are covered.
+  writeFileAtomically(hooksJsonPath, previousRaw, { mode: previousMode })
 }
 
 export const _internals = {

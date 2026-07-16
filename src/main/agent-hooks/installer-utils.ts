@@ -15,6 +15,7 @@ import { randomUUID } from 'node:crypto'
 import type { AgentHookSource } from '../../shared/agent-hook-relay'
 import { grantDirAcl, isPermissionError } from '../win32-utils'
 import { POSIX_HOOK_STDIN_DRAIN_COMMAND } from './hook-stdin-contract'
+import { resolveHooksJsonWritePath } from './hook-config-write-path'
 
 export type HookCommandConfig = {
   type: 'command'
@@ -359,7 +360,8 @@ export function writeHooksJson(
   config: HooksConfig,
   options?: { preserveMode?: boolean }
 ): void {
-  const dir = dirname(configPath)
+  const writePath = resolveHooksJsonWritePath(configPath)
+  const dir = dirname(writePath)
   mkdirSync(dir, { recursive: true })
 
   // Why: write to a temp file then rename so a crash or disk-full mid-write
@@ -374,15 +376,15 @@ export function writeHooksJson(
   const tmpPath = join(dir, `.${Date.now()}-${randomUUID()}.tmp`)
   const serialized = `${JSON.stringify(config, null, 2)}\n`
   const existingMode =
-    options?.preserveMode === true && existsSync(configPath) ? statSync(configPath).mode : undefined
+    options?.preserveMode === true && existsSync(writePath) ? statSync(writePath).mode : undefined
 
   // Why: skip the write (and therefore the .bak rotation) when the on-disk
   // content is already identical. Without this, every install() rewrites the
   // file and rolls the backup forward, which can silently destroy the last
   // recoverable copy if install() is called repeatedly (e.g. on app start).
-  if (existsSync(configPath)) {
+  if (existsSync(writePath)) {
     try {
-      if (readFileSync(configPath, 'utf-8') === serialized) {
+      if (readFileSync(writePath, 'utf-8') === serialized) {
         return
       }
     } catch {
@@ -397,10 +399,10 @@ export function writeHooksJson(
     // Why: single rolling backup — one file, no accumulation in ~/.claude.
     // Protects against a merge-logic bug producing bad JSON; the original is
     // always recoverable from <configPath>.bak until the next write.
-    if (existsSync(configPath)) {
-      copyFileSync(configPath, `${configPath}.bak`)
+    if (existsSync(writePath)) {
+      copyFileSync(writePath, `${writePath}.bak`)
     }
-    renameSync(tmpPath, configPath)
+    renameSync(tmpPath, writePath)
   } finally {
     // Clean up temp file if rename failed.
     if (existsSync(tmpPath)) {

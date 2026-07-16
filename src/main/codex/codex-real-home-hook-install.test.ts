@@ -43,6 +43,7 @@ import {
   _internals
 } from './codex-real-home-hook-install'
 import { getCodexManagedHookInstallMaterial } from './hook-service'
+import { _internals as rebaseInternals } from './codex-user-hook-trust-rebase'
 
 let fakeHomeDir: string
 let userDataDir: string
@@ -86,6 +87,7 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  rebaseInternals.setSessionRunnerSync(null)
   rmSync(fakeHomeDir, { recursive: true, force: true })
   rmSync(userDataDir, { recursive: true, force: true })
   if (previousUserDataPath === undefined) {
@@ -312,6 +314,44 @@ describe('ensureRealHomeCodexHookState (install)', () => {
 })
 
 describe('ensureRealHomeCodexHookState (opt-out sweep)', () => {
+  it('rebases trust when a user appended hooks after Orca installed', () => {
+    grantSucceeds()
+    const before = { type: 'command', command: 'before.sh' }
+    writeFileSync(
+      getRealHooksJsonPath(),
+      `${JSON.stringify({ hooks: { Stop: [{ hooks: [before] }] } }, null, 2)}\n`
+    )
+    ensureRealHomeCodexHookState({ hooksEnabled: true, userDataPath: userDataDir })
+    const installed = readRealHooksJson()
+    const after = { type: 'command', command: 'after.sh' }
+    installed.hooks!.Stop!.push({ hooks: [after] })
+    writeFileSync(getRealHooksJsonPath(), `${JSON.stringify(installed, null, 2)}\n`)
+    const operations: string[] = []
+    rebaseInternals.setSessionRunnerSync((request) => {
+      operations.push(request.operation)
+      if (request.operation === 'inspect-user-hook-trust') {
+        expect(readRealHooksJson().hooks?.Stop?.[2]?.hooks?.[0]?.command).toBe('after.sh')
+        return {
+          outcome: 'inspected',
+          moves: request.moves.map((move) => ({
+            ...move,
+            reportedOldKey: move.oldKey,
+            wasTrusted: true,
+            enabled: true
+          }))
+        }
+      }
+      expect(readRealHooksJson().hooks?.Stop?.[1]?.hooks?.[0]?.command).toBe('after.sh')
+      return { outcome: 'repaired', repaired: 1 }
+    })
+
+    expect(ensureRealHomeCodexHookState({ hooksEnabled: false, userDataPath: userDataDir })).toBe(
+      'removed'
+    )
+    expect(operations).toEqual(['inspect-user-hook-trust', 'repair-user-hook-trust'])
+    expect(readRealHooksJson().hooks?.Stop).toEqual([{ hooks: [before] }, { hooks: [after] }])
+  })
+
   it('removes only Orca entries and reports the removed lane', () => {
     grantSucceeds()
     const userStop = {

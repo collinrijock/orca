@@ -1,5 +1,5 @@
 /* eslint-disable max-lines -- Why: getStatus + install + remove all share the managed-command and trust-key derivation. Splitting would hide that the three operations must agree on group index, event label, and command bytes. */
-import { existsSync, readFileSync, unlinkSync } from 'node:fs'
+import { existsSync, readFileSync, statSync, unlinkSync } from 'node:fs'
 import { join, win32 as pathWin32 } from 'node:path'
 import type { SFTPWrapper } from 'ssh2'
 import type { AgentHookInstallState, AgentHookInstallStatus } from '../../shared/agent-hook-types'
@@ -18,6 +18,8 @@ import {
   writeManagedScript,
   type HookDefinition
 } from '../agent-hooks/installer-utils'
+import { resolveHooksJsonWritePath } from '../agent-hooks/hook-config-write-path'
+import { writeFileAtomically } from '../codex-accounts/fs-utils'
 import {
   readHooksJsonRemote,
   readTextFileRemote,
@@ -75,6 +77,7 @@ import {
   removeStaleWslCodexManagedHookTrustEntries
 } from './codex-managed-trust-reconciliation'
 import type { CodexTrustGrantLedgerHome } from './codex-trust-grant-ledger'
+import { mutateRealHomeHooksPreservingUserTrust } from './codex-user-hook-trust-rebase'
 
 // Why: PreToolUse/PostToolUse give the dashboard a live readout of the
 // in-flight tool (name + input preview) between UserPromptSubmit and Stop.
@@ -642,7 +645,28 @@ function cleanupLegacySystemManagedHooks(): void {
   if (removedManagedHook) {
     // Why: this is the user's system hooks file, not Orca's runtime copy.
     // Remove only stale Orca hook entries and preserve other managers' metadata.
-    writeHooksJson(legacyConfigPath, { ...config, hooks: nextHooks })
+    const hooksWritePath = resolveHooksJsonWritePath(legacyConfigPath)
+    const previousRaw = readFileSync(legacyConfigPath, 'utf-8')
+    const previousMode = statSync(hooksWritePath).mode
+    mutateRealHomeHooksPreservingUserTrust({
+      sourcePath: legacyConfigPath,
+      runtimeHomePath: systemHomePath,
+      tomlPath: getSystemCodexConfigTomlPath(),
+      beforeHooks: config.hooks,
+      afterHooks: nextHooks,
+      writeHooks: () => {
+        if (
+          readFileSync(legacyConfigPath, 'utf-8') !== previousRaw ||
+          resolveHooksJsonWritePath(legacyConfigPath) !== hooksWritePath
+        ) {
+          // Why: the pre-mutation RPC may overlap a user save; downgrade must
+          // never replace that newer dotfiles generation with our stale parse.
+          throw new Error('System Codex hooks changed during trust repair')
+        }
+        writeHooksJson(hooksWritePath, { ...config, hooks: nextHooks })
+      },
+      restoreHooks: () => writeFileAtomically(hooksWritePath, previousRaw, { mode: previousMode })
+    })
     // Why: stale dev/version entries can reference an older managed script
     // path that is not represented by the current grant ledger.
     removeSelfComputedMatchingTrustEntries(getSystemCodexConfigTomlPath(), trustEntries)

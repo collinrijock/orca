@@ -1,5 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  lstatSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import type * as Os from 'node:os'
 import { join } from 'node:path'
@@ -22,6 +30,7 @@ import {
 } from './codex-trust-grant-ledger'
 import type { CodexHookTrustGrantRequest } from './codex-app-server-client'
 import { getCodexHookTrustSignature } from './codex-hook-identity'
+import { _internals as rebaseInternals } from './codex-user-hook-trust-rebase'
 
 const { getPathMock, homedirMock, resolveCodexCommandMock } = vi.hoisted(() => ({
   getPathMock: vi.fn<(name: string) => string>(),
@@ -60,6 +69,7 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  rebaseInternals.setSessionRunnerSync(null)
   trustGrantInternals.setGrantSessionRunnerSync(null)
   trustGrantInternals.resetDiagnostics()
   codexAppServerCapabilityCache.clear()
@@ -207,6 +217,56 @@ describe('CodexHookService app-server trust grant lane', () => {
 
     expect(readHookTrustEntries(configPath).has(trustKey)).toBe(false)
     expect(readCodexTrustGrantLedgerHome(systemHome)).toBeNull()
+  })
+
+  it('keeps a real-home symlink and rebases later user trust during flag-off cleanup', () => {
+    prepareSystemHome()
+    const systemHome = join(tmpHome, '.codex')
+    const hooksPath = join(systemHome, 'hooks.json')
+    const targetPath = join(tmpHome, 'dotfiles-hooks.json')
+    const material = getCodexManagedHookInstallMaterial()
+    const userHook = { type: 'command' as const, command: 'after-orca.sh' }
+    writeFileSync(
+      targetPath,
+      `${JSON.stringify(
+        {
+          hooks: {
+            Stop: [
+              { hooks: [{ type: 'command', command: material.command }] },
+              { hooks: [userHook] }
+            ]
+          }
+        },
+        null,
+        2
+      )}\n`
+    )
+    symlinkSync(targetPath, hooksPath)
+    const operations: string[] = []
+    rebaseInternals.setSessionRunnerSync((request) => {
+      operations.push(request.operation)
+      if (request.operation === 'inspect-user-hook-trust') {
+        return {
+          outcome: 'inspected',
+          moves: request.moves.map((move) => ({
+            ...move,
+            reportedOldKey: move.oldKey,
+            wasTrusted: true,
+            enabled: true
+          }))
+        }
+      }
+      return { outcome: 'repaired', repaired: 1 }
+    })
+    installCodexLikeGrantRunner()
+
+    expect(new CodexHookService().install().state).toBe('installed')
+
+    expect(lstatSync(hooksPath).isSymbolicLink()).toBe(true)
+    expect(JSON.parse(readFileSync(targetPath, 'utf-8')).hooks.Stop).toEqual([
+      { hooks: [userHook] }
+    ])
+    expect(operations).toEqual(['inspect-user-hook-trust', 'repair-user-hook-trust'])
   })
 
   it('does not accept a ledger hash after the recorded Codex binary stamp changes', () => {

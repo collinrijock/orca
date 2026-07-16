@@ -1,6 +1,7 @@
 /* eslint-disable max-lines -- Why: Codex hook trust parsing, hashing, and byte-preserving TOML edits share one fragile file-format contract; splitting would make the compatibility shim harder to audit. */
 import {
   existsSync,
+  lstatSync,
   mkdirSync,
   readFileSync,
   realpathSync,
@@ -780,16 +781,30 @@ function isCompleteTableHeader(line: string): boolean {
 // tmp and rename. Random-suffix tmp name avoids cross-process races on
 // rapid reinstalls.
 export function writeConfigAtomically(configPath: string, contents: string): void {
-  const dir = dirname(configPath)
+  let writePath = configPath
+  let isSymlink = false
+  try {
+    isSymlink = lstatSync(configPath).isSymbolicLink()
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+      throw error
+    }
+  }
+  if (isSymlink) {
+    // Why: atomic rename at the lexical path replaces the user's dotfiles
+    // link. A dangling link must fail closed rather than be replaced.
+    writePath = realpathSync.native(configPath)
+  }
+  const dir = dirname(writePath)
   mkdirSync(dir, { recursive: true })
   const tmpPath = join(dir, `.${Date.now()}-${randomUUID()}.tmp`)
   let renamed = false
   try {
     writeFileSync(tmpPath, contents, 'utf-8')
-    if (existsSync(configPath)) {
-      copyFileWithWindowsRetry(configPath, `${configPath}.bak`)
+    if (existsSync(writePath)) {
+      copyFileWithWindowsRetry(writePath, `${writePath}.bak`)
     }
-    renameFileWithWindowsRetry(tmpPath, configPath)
+    renameFileWithWindowsRetry(tmpPath, writePath)
     renamed = true
   } finally {
     if (!renamed && existsSync(tmpPath)) {

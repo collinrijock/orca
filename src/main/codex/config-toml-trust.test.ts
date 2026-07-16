@@ -2,11 +2,13 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
   existsSync,
+  lstatSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
   realpathSync,
   rmSync,
+  symlinkSync,
   writeFileSync
 } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -1300,6 +1302,44 @@ describe('normalizeCodexProjectPathForRevocationLookup', () => {
 })
 
 describe('removeHookTrustEntries', () => {
+  it('updates a symlink target without replacing config.toml', () => {
+    const targetPath = join(tmpDir, 'dotfiles-config.toml')
+    const entry: CodexTrustEntry = {
+      sourcePath: '/x/hooks.json',
+      eventLabel: 'stop',
+      groupIndex: 0,
+      handlerIndex: 0,
+      command: 'echo trusted'
+    }
+    upsertHookTrustEntries(targetPath, [entry])
+    symlinkSync(targetPath, configPath)
+
+    removeHookTrustEntries(configPath, [computeTrustKey(entry)])
+
+    expect(lstatSync(configPath).isSymbolicLink()).toBe(true)
+    expect(readHookTrustEntries(targetPath).has(computeTrustKey(entry))).toBe(false)
+  })
+
+  it('does not replace a dangling config.toml symlink', () => {
+    const targetPath = join(tmpDir, 'missing-dotfiles-config.toml')
+    symlinkSync(targetPath, configPath)
+
+    expect(() =>
+      upsertHookTrustEntries(configPath, [
+        {
+          sourcePath: '/x/hooks.json',
+          eventLabel: 'stop',
+          groupIndex: 0,
+          handlerIndex: 0,
+          command: 'echo trusted'
+        }
+      ])
+    ).toThrow()
+
+    expect(lstatSync(configPath).isSymbolicLink()).toBe(true)
+    expect(existsSync(targetPath)).toBe(false)
+  })
+
   it('is a no-op (creates no file) when the config does not exist', () => {
     removeHookTrustEntries(configPath, ['/x/hooks.json:pre_tool_use:0:0'])
     expect(existsSync(configPath)).toBe(false)

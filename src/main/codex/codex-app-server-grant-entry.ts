@@ -4,12 +4,13 @@
 // JSONL RPC session itself needs a live event loop. Reads the request JSON
 // from stdin, writes a single result-envelope JSON line to stdout, and never
 // imports electron (see PLAIN_NODE_ENTRY_NAMES in the build guard).
-import { buildGrantEntryEnvelope } from './codex-app-server-grant-envelope'
-import { writeSync } from 'node:fs'
 import {
-  runCodexHookTrustGrantSession,
-  type CodexHookTrustGrantRequest
-} from './codex-app-server-client'
+  buildGrantEntryEnvelope,
+  type CodexAppServerEntryRequest
+} from './codex-app-server-grant-envelope'
+import { writeSync } from 'node:fs'
+import { runCodexHookTrustGrantSession } from './codex-app-server-client'
+import { runCodexUserHookTrustRebaseSession } from './codex-user-hook-trust-rebase-client'
 
 const HARD_EXIT_MARGIN_MS = 2_000
 
@@ -23,9 +24,9 @@ async function readStdin(): Promise<string> {
 
 async function main(): Promise<void> {
   const raw = await readStdin()
-  let request: CodexHookTrustGrantRequest
+  let request: CodexAppServerEntryRequest
   try {
-    request = JSON.parse(raw) as CodexHookTrustGrantRequest
+    request = JSON.parse(raw) as CodexAppServerEntryRequest
   } catch (error) {
     process.stdout.write(
       `${JSON.stringify({
@@ -52,7 +53,11 @@ async function main(): Promise<void> {
     )
     process.exit(3)
   }, request.invocation.timeoutMs + HARD_EXIT_MARGIN_MS)
-  const envelope = await buildGrantEntryEnvelope(runCodexHookTrustGrantSession(request))
+  const run =
+    'operation' in request
+      ? runCodexUserHookTrustRebaseSession(request)
+      : runCodexHookTrustGrantSession(request)
+  const envelope = await buildGrantEntryEnvelope(run)
   clearTimeout(hardExit)
   process.stdout.write(`${JSON.stringify(envelope)}\n`)
 }
