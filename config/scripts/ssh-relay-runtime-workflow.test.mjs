@@ -121,6 +121,7 @@ describe('SSH relay runtime artifact workflow', () => {
       'ssh-relay-release-asset.test.ts',
       'ssh-relay-artifact-selector.test.ts',
       'ssh-relay-libc-detection.test.ts',
+      'ssh-relay-linux-kernel-detection.test.ts',
       'ssh-relay-artifact-download.test.ts',
       'ssh-relay-artifact-extraction.test.ts',
       'ssh-relay-artifact-cache-lock-release.test.ts',

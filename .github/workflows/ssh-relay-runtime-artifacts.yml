@@ -263,6 +263,7 @@ jobs:
             src/main/ssh/ssh-relay-release-asset.test.ts \
             src/main/ssh/ssh-relay-artifact-selector.test.ts \
             src/main/ssh/ssh-relay-libc-detection.test.ts \
+            src/main/ssh/ssh-relay-linux-kernel-detection.test.ts \
             src/main/ssh/ssh-relay-artifact-download.test.ts \
             src/main/ssh/ssh-relay-artifact-extraction.test.ts \
             src/main/ssh/ssh-relay-artifact-cache-lock-release.test.ts \
@@ -809,6 +810,7 @@ jobs:
             src/main/ssh/ssh-relay-release-asset.test.ts `
             src/main/ssh/ssh-relay-artifact-selector.test.ts `
             src/main/ssh/ssh-relay-libc-detection.test.ts `
+            src/main/ssh/ssh-relay-linux-kernel-detection.test.ts `
             src/main/ssh/ssh-relay-artifact-download.test.ts `
             src/main/ssh/ssh-relay-artifact-extraction.test.ts `
             src/main/ssh/ssh-relay-artifact-cache-lock-release.test.ts `

@@ -102,6 +102,57 @@ describe('SSH relay artifact selector', () => {
     ).toBe('selected')
   })
 
+  it.each(['4.18.0-553.5.1.el8_10.x86_64', '5.15.0-107-generic', '6.6.15-0-lts'])(
+    'accepts a supported Linux distro kernel release %s',
+    (kernelVersion) => {
+      expect(
+        selectSshRelayArtifact(verifiedManifest(), {
+          ...compatibleLinuxHost,
+          kernelVersion
+        }).kind
+      ).toBe('selected')
+    }
+  )
+
+  it.each([
+    ['4.18.0-553.5.1.el8_10.x86_64', 'selected'],
+    ['4.17.99-553.5.1.el8_10.x86_64', 'kernel-too-old'],
+    ['4.18.0 bad', 'unknown-kernel'],
+    ['4.18.0/bad', 'unknown-kernel'],
+    ['4.18.0:bad', 'unknown-kernel'],
+    ['4.18.0@bad', 'unknown-kernel']
+  ] as const)('classifies the kernel suffix boundary for %s', (kernelVersion, expected) => {
+    const result = selectSshRelayArtifact(verifiedManifest(), {
+      ...compatibleLinuxHost,
+      kernelVersion
+    })
+
+    expect(result.kind === 'selected' ? result.kind : result.reason).toBe(expected)
+  })
+
+  it('keeps non-kernel version grammars strict', () => {
+    expect(
+      selectSshRelayArtifact(verifiedManifest(), {
+        ...compatibleLinuxHost,
+        libc: { family: 'glibc', version: '2.28_bad' }
+      })
+    ).toEqual({ kind: 'legacy', reason: 'unknown-libc' })
+    expect(
+      selectSshRelayArtifact(verifiedManifest(createSshRelayDarwinArtifactTestManifest()), {
+        os: 'darwin',
+        architecture: 'arm64',
+        processTranslated: false,
+        version: '13.5_bad'
+      })
+    ).toEqual({ kind: 'legacy', reason: 'unknown-os-version' })
+    expect(
+      selectSshRelayArtifact(verifiedManifest(windowsManifest()), {
+        ...compatibleWindowsHost,
+        powerShellVersion: '5.1_bad'
+      })
+    ).toEqual({ kind: 'legacy', reason: 'unknown-powershell' })
+  })
+
   it('selects the detected libc family when both Linux variants exist', () => {
     const manifest = createSshRelayArtifactTestManifest()
     const musl = structuredClone(manifest.tuples[0])

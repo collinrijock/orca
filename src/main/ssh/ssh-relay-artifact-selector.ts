@@ -3,6 +3,8 @@ import { sshRelayRuntimeDownloadUrl } from './ssh-relay-release-asset'
 
 type VerifiedSshRelayRuntimeTuple = VerifiedSshRelayArtifactManifest['tuples'][number]
 
+const LINUX_KERNEL_RELEASE_MAX_CHARS = 256
+
 type SshRelayHostBase = {
   architecture: 'x64' | 'arm64'
   processTranslated: boolean
@@ -100,6 +102,24 @@ function parseNumericVersion(value: string | undefined): number[] | null {
   return components.every(Number.isSafeInteger) ? components : null
 }
 
+function parseLinuxKernelVersion(value: string | undefined): number[] | null {
+  if (!value || value.length > LINUX_KERNEL_RELEASE_MAX_CHARS) {
+    return null
+  }
+  // Why: real distro kernels include `_`, `+`, and `~`; other version fields keep the stricter
+  // generic grammar so this compatibility exception cannot weaken unrelated host evidence.
+  const match = /^(\d+(?:\.\d+){1,3})(?:-[0-9A-Za-z._+~-]+)?$/.exec(value)
+  if (!match) {
+    return null
+  }
+  const components = match[1].split('.').map(Number)
+  return components.every(Number.isSafeInteger) ? components : null
+}
+
+export function isSshRelayLinuxKernelRelease(value: string | undefined): value is string {
+  return parseLinuxKernelVersion(value) !== null
+}
+
 function parseOpenSshVersion(value: string | undefined): number[] | null {
   if (!value) {
     return null
@@ -144,7 +164,11 @@ function selectLinux(
   if (tuple.compatibility.kind !== 'linux') {
     return { kind: 'legacy', reason: 'tuple-inconsistent' }
   }
-  const kernel = meetsVersion(host.kernelVersion, tuple.compatibility.minimumKernelVersion)
+  const kernel = meetsVersion(
+    host.kernelVersion,
+    tuple.compatibility.minimumKernelVersion,
+    parseLinuxKernelVersion
+  )
   if (kernel === null) {
     return { kind: 'legacy', reason: 'unknown-kernel' }
   }

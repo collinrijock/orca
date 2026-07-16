@@ -8,8 +8,8 @@ work; keep exact commands, runner identities, hashes, metrics, and residual gaps
 
 Date created: 2026-07-14<br>
 Last updated: 2026-07-15<br>
-Current phase: Milestone 5 / Work Package 4 desktop resolver/cache — **In progress — 2026-07-15, Codex implementation owner: audit the next smallest remaining disconnected host-evidence boundary after exact-head acceptance of Linux libc detection**. Keep every capability disconnected from host-evidence composition and every production/default SSH path. Real Apple/SignPath rehearsals remain an explicit late gate and are not on this package's critical path.<br>
-Session checkpoint: **CI CLOSED / NEXT AUDIT — 2026-07-15, Codex implementation owner** — `E-M5-LIBC-DETECTION-CI-001` closes implementation commit `d8b17a354`: all six primary native Node 24 jobs, both Linux supplements, Windows x64 baseline, PR Checks, Golden E2E, and computer-use pass. Windows arm64 executes the full runtime smoke and retains only the declared hosted build-26200 rejection against required 26100. Every native client runs the new 15-case marked/no-Node libc contract. This remains contract evidence, not live SSH/distro evidence; no host-evidence composer, product caller, setting, transfer/install, fallback classifier, tuple enablement, release publication, or default behavior is connected. Merging to `main` remains prohibited, SignPath is deferred, and legacy remains the production default.<br>
+Current phase: Milestone 5 / Work Package 4 desktop resolver/cache — **In progress — 2026-07-15, Codex implementation owner: require exact-head all-six native CI for the disconnected marked Linux kernel probe and kernel-only distro-suffix parser accepted locally by E-M5-LINUX-KERNEL-DETECTION-LOCAL-001**. Keep every capability disconnected from host-evidence composition and every production/default SSH path. Real Apple/SignPath rehearsals remain an explicit late gate and are not on this package's critical path.<br>
+Session checkpoint: **LOCAL CLOSED / CI NEXT — 2026-07-15, Codex implementation owner** — `E-M5-LINUX-KERNEL-DETECTION-LOCAL-001` passes the 19-case purpose contract, selector and native-workflow gates, 394 non-full-size relay cases, 280 release-script cases, typecheck, lint, format, reliability, localization, max-lines, diff, and protected-resolver gates. The reviewed Linux 4.18 floor is unchanged. No host-evidence composer, product caller, setting, transfer/install, fallback classifier, tuple enablement, release publication, or default behavior is connected. Merging to `main` remains prohibited, SignPath is deferred, and legacy remains the production default.<br>
 Primary design: [SSH relay GitHub Release plan](./2026-07-14-ssh-relay-github-release-plan.html)<br>
 Motivating issues: [#8450](https://github.com/stablyai/orca/issues/8450), [#1693](https://github.com/stablyai/orca/issues/1693)
 
@@ -15077,6 +15077,102 @@ config/scripts/ssh-relay-runtime-*.test.mjs` — PASS, 50 files / 280 tests in 2
   settings, fallback, tuple enablement, publication, or defaults. Legacy remains the sole production
   path; no tuple is enabled.
 
+### E-M5-LINUX-KERNEL-DETECTION-AUDIT-001 — marked kernel evidence and distro suffix boundary
+
+- Date/owner: 2026-07-15, Codex implementation owner.
+- Audit: complete rereads of current OS/architecture detection, the accepted marked libc probe, the
+  signed-manifest selector/version parser, and their purpose tests. Common supported Rocky/RHEL 8
+  kernels report releases such as `4.18.0-553.5.1.el8_10.x86_64`; the selector's generic numeric
+  parser rejects `_` in that suffix and would return `unknown-kernel` despite a valid supported
+  numeric prefix. This is an implementation-detail gap, not a change to the reviewed 4.18 floor or
+  the primary plan.
+- Finding: add one purpose-named `ssh-relay-linux-kernel-detection` module that consumes an explicit
+  SSH connection and optional cancellation signal, executes one 15-second POSIX-shell/no-Node
+  marked `uname -r`, and returns an exact bounded release string or undefined. Add a kernel-specific
+  parser to the selector that compares only the authenticated probe's strict numeric prefix while
+  admitting the bounded real-world suffix alphabet `[0-9A-Za-z._+~-]`; keep the generic libc/macOS/
+  PowerShell version grammar unchanged.
+- Safety contract: only one complete marker-qualified line counts; arbitrary or marker-concatenated
+  startup noise, duplicate/unterminated markers, whitespace/control characters, oversized releases,
+  missing commands, and unparseable numeric prefixes yield unknown. Ordinary execution failure is
+  compatibility evidence; `AbortError` propagates. The parser must accept exact-minimum Rocky/RHEL,
+  Ubuntu, and Alpine suffixes but reject whitespace, slash, colon, and arbitrary punctuation.
+- Required RED: missing purpose module plus a selector assertion showing a supported Rocky-style
+  `4.18.0-...el8_10...` release currently returns `unknown-kernel`; then marked valid/noisy/
+  malformed/bounded/unavailable/cancelled probe cases, kernel-suffix accept/reject boundaries,
+  existing selector regressions, and native-workflow inclusion.
+- Deliberately absent: libc composition, libstdc++/GLIBCXX, macOS/Windows/translation evidence,
+  Electron/startup/product callers, live SSH or distro cells, cache acquisition, transfer/install,
+  settings, fallback, tuple enablement, release publication, and defaults. Legacy remains the sole
+  production path and the primary HTML plan is unchanged.
+
+### E-M5-LINUX-KERNEL-DETECTION-LOCAL-RED-001 — kernel probe and Rocky suffix boundaries fail first
+
+- Date/owner: 2026-07-15, Codex implementation owner.
+- Source: uncommitted RED tests atop exact accepted evidence head `54d523a81`.
+- Command: `pnpm vitest run src/main/ssh/ssh-relay-linux-kernel-detection.test.ts src/main/ssh/ssh-relay-artifact-selector.test.ts`.
+- Expected result: FAIL, 2 failed files; the purpose suite has zero collected tests because
+  `ssh-relay-linux-kernel-detection` does not exist, and the selector has 24 passed / 3 failed.
+  Supported `4.18.0-553.5.1.el8_10.x86_64` returns legacy/`unknown-kernel`; the equivalent
+  below-floor `4.17.99-553.5.1.el8_10.x86_64` also returns `unknown-kernel` instead of
+  `kernel-too-old`.
+- Environment: local macOS arm64 worktree; pnpm 10.24.0 under Node 26.0.0 emits the repository's
+  expected Node-24 engine warning. Exact Node 24 and all-six native execution remain required after
+  local green.
+- Boundary: this is failure-before-implementation evidence only. It authorizes only the audited
+  disconnected probe, selector parser, purpose tests, and native workflow inclusion; no production
+  caller or behavior is connected.
+
+### E-M5-LINUX-KERNEL-DETECTION-LOCAL-001 — disconnected marked kernel probe and strict selector
+
+- Date/owner: 2026-07-15, Codex implementation owner.
+- Implementation: `ssh-relay-linux-kernel-detection.ts` performs one 15-second cancellable POSIX
+  command, brackets the optional `uname -r` result with exact Orca markers, and returns only one
+  complete, unique, strict release or undefined. Startup noise outside the markers is ignored;
+  empty/multi-line/duplicate/unterminated/marker-concatenated evidence, releases above 256
+  characters, invalid numeric prefixes, whitespace/control characters, slash, colon, and arbitrary
+  punctuation are rejected. Ordinary execution failure returns undefined and `AbortError`
+  propagates. The selector's kernel-only parser admits the audited distro suffix alphabet after a
+  numeric kernel prefix and compares the prefix to the unchanged reviewed 4.18 floor. The generic
+  libc/macOS/PowerShell grammar remains strict, with direct underscore-regression assertions.
+- Purpose command: `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts
+--maxWorkers=1 src/main/ssh/ssh-relay-linux-kernel-detection.test.ts` — PASS, 1 file / 19 tests in
+  209 ms Vitest, 1.08 s wall, 132,005,888-byte maximum RSS. Rocky/RHEL, Ubuntu, and Alpine releases;
+  outside noise; empty/multiple/duplicate/unterminated/concatenated/oversized/malformed evidence;
+  invalid suffixes; missing command; cancellation; one signal-qualified 15-second exec; marked
+  `uname -r`; and no Node/npm/Python/Perl/archive/checksum dependency all pass.
+- Focused plus native-workflow oracle: `/usr/bin/time -l pnpm exec vitest run --config
+config/vitest.config.ts --maxWorkers=1 src/main/ssh/ssh-relay-linux-kernel-detection.test.ts
+src/main/ssh/ssh-relay-artifact-selector.test.ts
+src/main/ssh/ssh-remote-platform-detection.test.ts
+config/scripts/ssh-relay-runtime-workflow.test.mjs` — PASS, 4 files / 60 tests in 3.32 s Vitest,
+  5.26 s wall, 132,300,800-byte maximum RSS while run beside independent typecheck/format gates.
+  Both POSIX and PowerShell native commands now require the purpose suite exactly once. Supported
+  Rocky/RHEL, Ubuntu, and Alpine suffixes select; a Rocky release below 4.18 reports
+  `kernel-too-old`; invalid suffixes report `unknown-kernel`; libc, macOS, and PowerShell versions
+  do not inherit the kernel grammar.
+- Broader relay command: `/usr/bin/time -l pnpm exec vitest run --config
+config/vitest.config.ts --maxWorkers=1 --silent=true src/main/ssh/ssh-relay-*.test.ts` — PASS,
+  34 files / 394 tests; 3 declared full-size files/tests skipped; 15.00 s Vitest, 16.38 s wall,
+  246,890,496-byte maximum RSS. One preceding diagnostic invocation quoted the shell glob, selected
+  zero files, and exited 1; the exact checklist command above was then run unquoted and passed.
+- Release-script command: `/usr/bin/time -l pnpm exec vitest run --config
+config/vitest.config.ts --maxWorkers=1 --silent=true
+config/scripts/ssh-relay-runtime-*.test.mjs` — PASS, 50 files / 280 tests in 18.76 s Vitest,
+  20.26 s wall, 190,480,384-byte maximum RSS.
+- Repository gates: `pnpm run typecheck`, targeted `oxlint`, targeted `oxfmt --check`, `pnpm lint`,
+  and `pnpm run check:max-lines-ratchet` pass. Full lint includes switch exhaustiveness, 41
+  reliability gates, no new max-lines bypass, bundled skill-guide verification, 9,837 localization
+  references and locale parity, and zero localization coverage candidates; existing unrelated lint
+  warnings remain warnings. `git diff --check` passes and the protected Node/npm resolver pair has
+  zero diff. Local Node 26.0.0 emits only the expected Node-24 engine warning; exact Node 24 proof
+  remains the native CI gate.
+- Boundary/residual gaps: the new detector is imported only by its purpose tests. This is contract
+  evidence, not live SSH/GNU/BusyBox/Rocky/Ubuntu/Alpine execution. It does not compose libc,
+  libstdc++/GLIBCXX, macOS/Windows/translation evidence and adds no Electron/startup/product caller,
+  transfer/install, mode, setting, fallback, tuple, publication, or default behavior. Legacy remains
+  the sole production path. Require exact-head all-six native proof before advancing.
+
 ## Accepted Gaps
 
 No product gap is accepted merely because it appears in this list. Each entry requires explicit
@@ -15135,10 +15231,12 @@ The project is not complete until every applicable item below is checked with ev
 
 ## Next Required Action
 
-Audit the next smallest disconnected host-evidence slice after exact-head acceptance of Linux libc
-detection. Do not compose full host evidence, provision production secrets/environments, add an
-Electron/startup consumer, embed unreviewed keys or manifest bytes, add SSH transfer/install, mode
-wiring, fallback, tuple enablement, release publication, or default behavior.
+Commit and push the locally accepted disconnected Linux kernel package, then require exact-head
+Node 24 proof on all six native clients plus adjacent PR, Golden E2E, and computer-use checks before
+auditing another host-evidence slice. Do not compose full host evidence, provision production
+secrets/environments, add an Electron/startup consumer, embed unreviewed keys or manifest bytes, add
+SSH transfer/install, mode wiring, fallback, tuple enablement, release publication, or default
+behavior.
 Keep Node upstream `.tar.xz` inputs, Windows ZIP, `ORCA_RELAY_PATH`, existing desktop required-assets
 behavior, detached-signature byte encoding, Windows arm64 build 26100, macOS 13.5, Linux kernel 4.18,
 release-cut, desktop builds, publication, and every tuple separately gated.

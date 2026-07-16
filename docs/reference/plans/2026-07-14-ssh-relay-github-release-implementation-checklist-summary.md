@@ -9,9 +9,10 @@ keeps commands, hashes, runner identities, timings, and failure details.
 A checked box means the work has evidence in the detailed ledger. Design approval alone does not
 complete a box.
 
-Active checkpoint: **Milestone 5 / Work Package 4 desktop resolver/cache — audit the next smallest
-remaining disconnected host-evidence boundary after exact-head acceptance of Linux libc detection,
-2026-07-15, Codex implementation owner.**
+Active checkpoint: **Milestone 5 / Work Package 4 desktop resolver/cache — require exact-head
+all-six native CI for the disconnected marked Linux kernel probe and kernel-only distro-suffix
+parser accepted locally by `E-M5-LINUX-KERNEL-DETECTION-LOCAL-001`, 2026-07-15, Codex implementation
+owner.**
 `E-M5-ARTIFACT-CACHE-RESOLUTION-CI-001` closes warm-cache commit
 `22031fa68` on all six native clients, both Linux supplements, Windows x64 baseline, PR Checks,
 Golden E2E, and computer-use; Windows arm64 remains the expected build-26200 rejection against 26100. `E-M5-ARTIFACT-CACHE-RESOLUTION-LOCAL-001` passes 9/9 purpose tests,
@@ -118,6 +119,30 @@ inside budget. Windows arm64 completes exact-byte PTY/watcher smoke, then retain
 hosted build-26200 rejection against required 26100; this is the aggregate workflow's sole failure.
 Real SSH/distro behavior, remaining host evidence, composition, and every production/default path
 remain open; legacy remains the sole production path.
+`E-M5-LINUX-KERNEL-DETECTION-AUDIT-001` fixes the next narrow boundary: one disconnected,
+15-second cancellable POSIX-shell/no-Node marked `uname -r` probe plus a kernel-only numeric-prefix
+parser. Common supported Rocky/RHEL releases such as `4.18.0-553.5.1.el8_10.x86_64` currently fail
+the generic parser because its suffix grammar excludes `_`; the kernel parser will admit only the
+bounded distro suffix alphabet `[0-9A-Za-z._+~-]` without relaxing libc, macOS, or Windows version
+parsing. Missing, noisy, incomplete, duplicate, malformed, oversized, or invalid evidence returns
+unknown; ordinary probe failure remains availability evidence and cancellation propagates. The
+reviewed 4.18 floor is unchanged. Host-evidence composition, product callers, live SSH/distro
+proof, transfer/install, settings, fallback, tuple enablement, publication, and defaults stay
+absent; legacy remains the sole production path.
+`E-M5-LINUX-KERNEL-DETECTION-LOCAL-RED-001` records the expected two-file failure before
+implementation: the purpose suite collects zero tests because its detection module is absent, and
+the existing selector passes 24 cases but fails three Rocky/RHEL assertions. Supported and
+below-floor `el8_10` releases both return `unknown-kernel`, proving the underscore suffix gap. Exact
+Node 24 and all-six native execution remain required after local green.
+`E-M5-LINUX-KERNEL-DETECTION-LOCAL-001` is green: 19/19 purpose tests, 60/60 focused+workflow tests,
+394/394 non-full-size relay tests with three declared skips, 280/280 release-script tests, typecheck,
+lint, format, reliability, max-lines, localization, diff, and protected-resolver gates pass. One
+15-second cancellable marked POSIX command returns only a unique strict `uname -r`; supported
+Rocky/RHEL, Ubuntu, and Alpine suffixes select against the unchanged 4.18 floor, while malformed,
+oversized, noisy, unavailable, or invalid evidence returns unknown and cancellation propagates.
+Libc, macOS, and PowerShell grammars remain strict. This is contract evidence, not live SSH/distro
+proof; full host composition and every production/default path remain absent. Exact-head all-six
+native proof is next.
 `E-M5-ARTIFACT-CACHE-ROOT-CI-001` closes the pure cache-root contract at exact head `aefcaa9a9`:
 all six primary native Node 24 jobs, both Linux supplements, Windows x64 baseline, PR Checks, Golden
 E2E, and computer-use pass; Windows arm64 build 26200 remains correctly gated against 26100. The
