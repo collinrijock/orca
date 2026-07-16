@@ -9,9 +9,10 @@ keeps commands, hashes, runner identities, timings, and failure details.
 A checked box means the work has evidence in the detailed ledger. Design approval alone does not
 complete a box.
 
-Active checkpoint: **Milestone 5 / Work Package 4 desktop resolver/cache — disconnected cold-cache
-population locally green and wired; commit/all-six native proof next, 2026-07-15, Codex
-implementation owner.** `E-M5-ARTIFACT-CACHE-RESOLUTION-CI-001` closes warm-cache commit
+Active checkpoint: **Milestone 5 / Work Package 4 desktop resolver/cache — prove the locally green
+Windows active-owner cache-lock release correction on replacement all-six native CI before
+accepting cold-cache population, 2026-07-15, Codex implementation owner.**
+`E-M5-ARTIFACT-CACHE-RESOLUTION-CI-001` closes warm-cache commit
 `22031fa68` on all six native clients, both Linux supplements, Windows x64 baseline, PR Checks,
 Golden E2E, and computer-use; Windows arm64 remains the expected build-26200 rejection against 26100. `E-M5-ARTIFACT-CACHE-RESOLUTION-LOCAL-001` passes 9/9 purpose tests,
 16/16 focused+workflow-oracle tests, 323/323 non-full-size SSH relay tests, 280/280 release-script
@@ -38,6 +39,24 @@ implementation now canonicalizes lease identity/locking/recency to the existing 
 `E-M5-ARTIFACT-CACHE-PHYSICAL-ROOT-CORRECTION-LOCAL-001`: 7/7 correction tests and 21/21 focused+
 workflow-oracle tests pass while missing/misplaced entries remain rejected. Broader exact-head proof
 is still required before checkpointing.
+Exact-head cold-cache artifact run 29475848463 then repeated the prior Windows x64 active-owner
+release race in job 87548519537: the new real Linux/Windows cold→warm integration cases pass, but
+lock tombstone rename receives `EPERM` and the live waiter later receives teardown `ENOENT`
+(`E-M5-ARTIFACT-CACHE-LOCK-RELEASE-CI-RED-001`). The prior ledger explicitly required correction if
+this recurred. The bounded sharing-error correction below is locally green, but replacement all-six
+native proof remains required; do not advance to acquisition, Electron/startup, SSH, settings,
+fallback, tuple, publication, or default behavior.
+`E-M5-ARTIFACT-CACHE-LOCK-RELEASE-LOCAL-RED-001` records the expected missing-module failure for the
+fixed bounded retry/displacement/exhaustion contract before implementation.
+`E-M5-ARTIFACT-CACHE-LOCK-RELEASE-LOCAL-001` is now locally green: only `EPERM`/`EACCES` rename
+failures retry for at most 5 s at 50 ms intervals; every retry rechecks exact directory/nonce
+ownership, displacement preserves the successor, absent paths settle, and unexpected or exhausted
+failures propagate closed. Focused plus workflow-oracle proof passes 24/24, broader non-full-size
+relay proof passes 339/339 with the three declared full-size skips, release scripts pass 280/280,
+and typecheck, lint, format, diff, and protected-resolver gates pass. A replacement exact-head
+all-six native run plus adjacent PR/E2E checks is still mandatory before this correction or the
+cold-cache population package is accepted; do not advance to acquisition, Electron/startup, SSH,
+settings, fallback, tuple, publication, or default behavior yet.
 `E-M5-ARTIFACT-CACHE-ROOT-CI-001` closes the pure cache-root contract at exact head `aefcaa9a9`:
 all six primary native Node 24 jobs, both Linux supplements, Windows x64 baseline, PR Checks, Golden
 E2E, and computer-use pass; Windows arm64 build 26200 remains correctly gated against 26100. The

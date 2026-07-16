@@ -8,8 +8,8 @@ work; keep exact commands, runner identities, hashes, metrics, and residual gaps
 
 Date created: 2026-07-14<br>
 Last updated: 2026-07-15<br>
-Current phase: Milestone 5 / Work Package 4 desktop resolver/cache — **In progress — 2026-07-15, Codex implementation owner: prove disconnected cold-cache population**. Require the eventual startup caller to supply Orca's pre-`app.setName()` canonical user-data path; keep filesystem orchestration outside import time and production manifest/resources, proxy, SSH/settings/tuples/release publication/default behavior absent. Real Apple/SignPath rehearsals remain an explicit late gate and are not on this package's critical path.<br>
-Session checkpoint: **In progress — 2026-07-15, Codex implementation owner** — `E-M5-ARTIFACT-CACHE-RESOLUTION-CI-001` closes warm-cache commit `22031fa686d2a7c96e687bc02c16fdb08bc987d7` on all six primary native clients, both Linux supplements, Windows x64 baseline, PR Checks, Golden E2E, and computer-use; Windows arm64 remains the expected build-26200 rejection against 26100. The disconnected cold population is locally green under `E-M5-ARTIFACT-CACHE-POPULATION-LOCAL-001`: exclusive cache-local download staging → strict existing immutable publication → staging cleanup → in-use lease, with failures propagating closed. Merging to `main` remains prohibited and SignPath is deferred. No Electron/startup, SSH, setting, tuple enablement, release publication, fallback, or default-path consumer exists. Legacy remains the production default.<br>
+Current phase: Milestone 5 / Work Package 4 desktop resolver/cache — **In progress — 2026-07-15, Codex implementation owner: prove the locally green Windows cache-lock release correction on replacement all-six native CI before accepting cold-cache population**. Keep the correction independently evidenced and bounded; require the eventual startup caller to supply Orca's pre-`app.setName()` canonical user-data path; keep production manifest/resources, proxy, SSH/settings/tuples/release publication/default behavior absent. Real Apple/SignPath rehearsals remain an explicit late gate and are not on this package's critical path.<br>
+Session checkpoint: **LOCAL GREEN / CI REQUIRED — 2026-07-15, Codex implementation owner** — `E-M5-ARTIFACT-CACHE-LOCK-RELEASE-LOCAL-001` implements and proves a 5 s/50 ms ownership-preserving retry only for Windows sharing-style `EPERM`/`EACCES`; displaced ownership stops without deletion and exhaustion fails closed. Focused/workflow, 339/339 non-full-size relay, 280/280 release-script, typecheck, lint, format, diff, and protected-resolver gates pass locally. The correction is not accepted until a new exact-head run replaces failing job 87548519537 across all six primary native jobs and adjacent checks. Merging to `main` remains prohibited and SignPath is deferred. No Electron/startup, SSH, setting, tuple enablement, release publication, fallback, or default-path consumer exists. Legacy remains the production default.<br>
 Primary design: [SSH relay GitHub Release plan](./2026-07-14-ssh-relay-github-release-plan.html)<br>
 Motivating issues: [#8450](https://github.com/stablyai/orca/issues/8450), [#1693](https://github.com/stablyai/orca/issues/1693)
 
@@ -147,10 +147,11 @@ same change as the work it records.
   local gates, and all-six native Node 24 proof are green under
   E-M5-ARTIFACT-CACHE-ROOT-LOCAL-RED-001, E-M5-ARTIFACT-CACHE-ROOT-LOCAL-001, and
   E-M5-ARTIFACT-CACHE-ROOT-CI-001. No Electron or product caller exists.
-- Active package: **In progress — 2026-07-15, Codex implementation owner** — audit the smallest
-  disconnected resolver/cache composition over explicit dependencies. The eventual startup caller,
-  not an SSH module, must supply `getCanonicalUserDataPath()` captured before `app.setName()`.
-  Keep proxy integration, SSH, mode, tuple, publication, and defaults separately gated.
+- Active package: **In progress — 2026-07-15, Codex implementation owner** — prove the bounded
+  ownership-preserving cache-lock release correction on all six native clients before accepting
+  cold-cache population or auditing the next acquisition composition. The eventual startup caller,
+  not an SSH module, must supply `getCanonicalUserDataPath()` captured before `app.setName()`; keep
+  proxy integration, SSH, mode, tuple, publication, and defaults separately gated.
 - Completed Work Package 2 gate: target-native Windows source-signature reports from exact-head
   artifact jobs 87267322867 and 87267322870 were independently downloaded and matched to their
   identities and signing-stage reports under E-M3-WINDOWS-SOURCE-SIGNATURE-CI-001. PR Checks
@@ -14602,6 +14603,84 @@ config/scripts/ssh-relay-runtime-workflow.test.mjs` — PASS, 4 files / 21 tests
   7.89 s wall, 138,723,328-byte maximum RSS.
 - Boundary: this corrects physical path identity only. It adds no network, Electron/startup caller,
   SSH, setting, fallback, tuple, release publication, or default behavior.
+
+### E-M5-ARTIFACT-CACHE-LOCK-RELEASE-CI-RED-001 — repeated Windows active-owner release race
+
+- Date/owner: 2026-07-15, Codex implementation owner.
+- Exact source/job: `3018977c113926addcbb97b5715242ed86d820d2`, artifact run
+  [29475848463](https://github.com/stablyai/orca/actions/runs/29475848463), Windows x64 job
+  [87548519537](https://github.com/stablyai/orca/actions/runs/29475848463/job/87548519537).
+- Runner/runtime: GitHub-hosted Windows Server 2022 build 20348 x64, `windows-2022` image
+  `20260706.237.1`, Actions runner 2.335.1, Node 24.18.0.
+- New-path result: both real cold-cache integration cases pass on the Windows client, including the
+  actual bounded downloader, Linux tar/Brotli and Windows ZIP strict publication, complete-tree
+  verification, physical-root cold→warm lookup, and in-use lease.
+- Failure: the pre-existing `serializes concurrent writers and transfers ownership only after owner
+  release` test received `EPERM` renaming the owned lock to its release tombstone after the owner
+  handle closed. Test teardown then removed the root while the waiter was live, producing the
+  secondary `ENOENT` creating its next pending directory. Combined contract result: 1 failed, 489
+  passed, 13 skipped across 76 files in 26.94 s.
+- Repetition/decision: this matches `E-M5-COMPILED-TRUST-WINDOWS-CI-RED-001` (job 87532052082), whose
+  disposition required a separately evidenced correction if it repeated. It is no longer accepted
+  as a non-repeating runner event. Add a bounded retry only for Windows sharing-style `EPERM`/
+  `EACCES`, re-check exact nonce/directory ownership before every retry, never delete a displaced
+  successor, retain unexpected-error propagation, and prove retry exhaustion is bounded. No test-
+  only relaxation or blind recursive deletion is allowed.
+- Gate: do not accept `3018977c1` or begin the next acquisition package until a correction commit
+  passes replacement all-six native contracts and adjacent PR/E2E gates.
+
+### E-M5-ARTIFACT-CACHE-LOCK-RELEASE-LOCAL-RED-001 — bounded release retry is absent
+
+- Date/owner: 2026-07-15, Codex implementation owner.
+- Command: `pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1
+  src/main/ssh/ssh-relay-artifact-cache-lock-release.test.ts`.
+- Result: expected FAIL, one failed suite / zero tests in 237 ms because the purpose-named
+  `ssh-relay-artifact-cache-lock-release` module does not exist.
+- Fixed contract: 5 s/50 ms frozen bounds; retry only `EPERM`/`EACCES`; exact ownership recheck
+  before every retry; stop without deletion on displacement; fail closed at exact exhaustion;
+  already-absent path settles; unexpected errors propagate without retry. The test seam controls
+  time and filesystem operations, so exhaustion proof has no real delay or platform conditional.
+
+### E-M5-ARTIFACT-CACHE-LOCK-RELEASE-LOCAL-001 — bounded ownership-preserving release retry
+
+- Date/owner: 2026-07-15, Codex implementation owner.
+- Implementation: lock release still closes its owned heartbeat handle before renaming the live
+  lock to its exact nonce-specific tombstone. Only rename `EPERM`/`EACCES` enters a frozen 50 ms,
+  5 s retry policy. Each retry re-reads the exact directory identity and owner nonce immediately
+  before rename; displacement settles without deleting the successor. `ENOENT` is already
+  released, unexpected rename/ownership errors propagate, exact exhaustion fails closed, and only
+  a successfully renamed tombstone is recursively removed. There is no blind deletion of the live
+  lock path.
+- Focused plus native-workflow oracle: `/usr/bin/time -l pnpm exec vitest run --config
+  config/vitest.config.ts --maxWorkers=1
+  src/main/ssh/ssh-relay-artifact-cache-lock-release.test.ts
+  src/main/ssh/ssh-relay-artifact-cache-lock.test.ts
+  config/scripts/ssh-relay-runtime-workflow.test.mjs` — PASS, 3 files / 24 tests in 1.42 s Vitest,
+  2.69 s wall, 132,562,944-byte maximum RSS. Seven purpose cases cover both sharing codes, exact
+  ownership rechecks, displaced-successor preservation, 100 controlled waits over the exact 5 s
+  budget, absent-path settlement, and unexpected rename/ownership error propagation. The workflow
+  oracle proves the purpose suite occurs exactly once in both POSIX and PowerShell native commands.
+- Broader relay command: `/usr/bin/time -l pnpm exec vitest run --config
+  config/vitest.config.ts --maxWorkers=1 --silent=true src/main/ssh/ssh-relay-*.test.ts` — PASS,
+  30 files / 339 tests; 3 declared full-size files/tests skipped; 21.01 s Vitest, 23.06 s wall,
+  335,773,696-byte maximum RSS. An earlier quoted-glob invocation matched no files and exited 1;
+  the exact unquoted checklist command above was then run and passed.
+- Release-script command: `/usr/bin/time -l pnpm exec vitest run --config
+  config/vitest.config.ts --maxWorkers=1 --silent=true
+  config/scripts/ssh-relay-runtime-*.test.mjs` — PASS, 50 files / 280 tests in 22.20 s Vitest,
+  25.44 s wall, 194,150,400-byte maximum RSS.
+- Repository gates: targeted `pnpm exec oxfmt --write` completes on five implementation/workflow
+  files in 428 ms; the post-format focused/workflow suite passes 24/24. `pnpm typecheck` and
+  `pnpm lint` pass; lint includes switch exhaustiveness, 41 reliability gates, no new max-lines
+  bypass, bundled skill-guide verification, 9,837 localization references and locale parity, and
+  zero localization coverage candidates. `git diff --check` passes and the protected
+  `ssh-remote-node-resolution.ts`/test pair has zero correction diff. Local Node 26.0.0 emits only
+  the expected Node-24 engine warning; exact Node 24 proof remains the native CI gate.
+- Boundary/gate: the correction changes only cache-lock release settlement and native contract
+  execution. It adds no Electron/startup, network/proxy, SSH, setting, fallback classification,
+  tuple enablement, release publication, or default behavior. Require a replacement exact-head
+  all-six native run plus adjacent PR/E2E checks before accepting cold-cache population or starting
+  the next acquisition package.
 
 ### E-M5-ARTIFACT-CACHE-POPULATION-LOCAL-001 — disconnected cold-cache population
 

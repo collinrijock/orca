@@ -1,8 +1,11 @@
-import { lstat, rename, rm, type FileHandle } from 'node:fs/promises'
+import { lstat, type FileHandle } from 'node:fs/promises'
+
+import { releaseSshRelayArtifactCacheLockPath } from './ssh-relay-artifact-cache-lock-release'
 
 import {
   readSshRelayArtifactCacheLockOwner,
   sameSshRelayArtifactCacheLockDirectory,
+  sshRelayArtifactCacheErrorCode,
   sshRelayArtifactCacheLockOwnerBytes,
   type SshRelayArtifactCacheLockDirectoryIdentity,
   type SshRelayArtifactCacheLockOwnerRecord
@@ -72,14 +75,23 @@ class SshRelayArtifactCacheLockLease {
     })
   }
 
-  private async assertPathOwnership(): Promise<void> {
-    const metadata = await lstat(this.lockPath, { bigint: true }).catch(() => null)
+  private async ownsPath(): Promise<boolean> {
+    const metadata = await lstat(this.lockPath, { bigint: true }).catch((error) => {
+      if (sshRelayArtifactCacheErrorCode(error) === 'ENOENT') {
+        return null
+      }
+      throw error
+    })
     const current = await readSshRelayArtifactCacheLockOwner(this.lockPath, this.contentId)
-    if (
-      !metadata?.isDirectory() ||
-      !sameSshRelayArtifactCacheLockDirectory(this.directory, metadata) ||
-      current?.token !== this.token
-    ) {
+    return Boolean(
+      metadata?.isDirectory() &&
+      sameSshRelayArtifactCacheLockDirectory(this.directory, metadata) &&
+      current?.token === this.token
+    )
+  }
+
+  private async assertPathOwnership(): Promise<void> {
+    if (!(await this.ownsPath())) {
       throw new Error('SSH relay artifact cache lock ownership was displaced')
     }
   }
@@ -118,9 +130,11 @@ class SshRelayArtifactCacheLockLease {
 
     // Windows cannot rename a directory containing an open file; ownership is final-checked first.
     await this.ownerHandle.close()
-    const tombstone = `${this.lockPath}.released-${this.token}`
-    await rename(this.lockPath, tombstone)
-    await rm(tombstone, { recursive: true, force: true })
+    await releaseSshRelayArtifactCacheLockPath({
+      lockPath: this.lockPath,
+      token: this.token,
+      checkOwnership: async () => ((await this.ownsPath()) ? 'owned' : 'displaced')
+    })
   }
 }
 

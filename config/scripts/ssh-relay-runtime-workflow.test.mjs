@@ -122,6 +122,7 @@ describe('SSH relay runtime artifact workflow', () => {
       'ssh-relay-artifact-selector.test.ts',
       'ssh-relay-artifact-download.test.ts',
       'ssh-relay-artifact-extraction.test.ts',
+      'ssh-relay-artifact-cache-lock-release.test.ts',
       'ssh-relay-artifact-cache-lock.test.ts',
       'ssh-relay-artifact-cache-entry.test.ts',
       'ssh-relay-artifact-cache-in-use-lease.test.ts',
