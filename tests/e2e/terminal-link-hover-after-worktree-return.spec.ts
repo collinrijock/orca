@@ -30,7 +30,7 @@ import { waitForPtyShellEcho } from './terminal-pty-readiness'
  * re-established — `currentLink` stays null. File-path links are the worst case
  * because their geometry click fallback does not compensate after reveal.
  */
-type HoverProbe = { clientX: number; clientY: number; tabId: string }
+type HoverProbe = { col: number; row: number; tabId: string }
 
 async function locateHoverProbe(page: Page, needle: string): Promise<HoverProbe> {
   return page.evaluate((needle) => {
@@ -68,15 +68,11 @@ async function locateHoverProbe(page: Page, needle: string): Promise<HoverProbe>
     if (!screen) {
       throw new Error('xterm-screen element unavailable')
     }
-    const rect = screen.getBoundingClientRect()
-    const cellWidth = rect.width / terminal.cols
-    const cellHeight = rect.height / terminal.rows
     // Aim at the middle of the link text so the pointer lands squarely inside
     // the link range regardless of rounding.
-    const targetCol = hit.col + Math.floor(needle.length / 2)
     return {
-      clientX: rect.left + (targetCol + 0.5) * cellWidth,
-      clientY: rect.top + (hit.row + 0.5) * cellHeight,
+      col: hit.col + Math.floor(needle.length / 2),
+      row: hit.row,
       tabId
     }
   }, needle)
@@ -88,11 +84,17 @@ async function locateHoverProbe(page: Page, needle: string): Promise<HoverProbe>
  * Orca's file-path provider resolves link candidates asynchronously.
  */
 async function hoverAndReadActiveLinkText(page: Page, probe: HoverProbe): Promise<string | null> {
-  await page.evaluate(({ clientX, clientY, tabId }) => {
+  await page.evaluate(({ col, row, tabId }) => {
     const manager = window.__paneManagers?.get(tabId)
     const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
     const screen = pane?.terminal.element?.querySelector<HTMLElement>('.xterm-screen')
-    screen?.dispatchEvent(
+    if (!pane || !screen) {
+      throw new Error('xterm-screen element unavailable')
+    }
+    const rect = screen.getBoundingClientRect()
+    const clientX = rect.left + (col + 0.5) * (rect.width / pane.terminal.cols)
+    const clientY = rect.top + (row + 0.5) * (rect.height / pane.terminal.rows)
+    screen.dispatchEvent(
       new MouseEvent('mousemove', { bubbles: true, cancelable: true, clientX, clientY })
     )
   }, probe)
@@ -103,6 +105,60 @@ async function hoverAndReadActiveLinkText(page: Page, probe: HoverProbe): Promis
       | { _core?: { linkifier?: { currentLink?: { link?: { text?: string } } } } }
       | undefined
     return core?._core?.linkifier?.currentLink?.link?.text ?? null
+  }, probe)
+}
+
+async function readTerminalCursor(page: Page, tabId: string): Promise<string | null> {
+  return page.evaluate((tabId) => {
+    const manager = window.__paneManagers?.get(tabId)
+    const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
+    const screen = pane?.terminal.element?.querySelector<HTMLElement>('.xterm-screen')
+    return screen ? getComputedStyle(screen).cursor : null
+  }, tabId)
+}
+
+async function isTerminalSurfaceVisible(page: Page, tabId: string): Promise<boolean> {
+  return page.evaluate((tabId) => {
+    const manager = window.__paneManagers?.get(tabId)
+    const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
+    return Boolean(pane?.container.isConnected && pane.container.getClientRects().length > 0)
+  }, tabId)
+}
+
+async function activateHoveredLink(page: Page, probe: HoverProbe): Promise<void> {
+  await page.evaluate(({ col, row, tabId }) => {
+    const manager = window.__paneManagers?.get(tabId)
+    const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
+    const screen = pane?.terminal.element?.querySelector<HTMLElement>('.xterm-screen')
+    if (!pane || !screen) {
+      throw new Error('xterm-screen element unavailable')
+    }
+    const rect = screen.getBoundingClientRect()
+    const clientX = rect.left + (col + 0.5) * (rect.width / pane.terminal.cols)
+    const clientY = rect.top + (row + 0.5) * (rect.height / pane.terminal.rows)
+    const isMac = navigator.userAgent.includes('Mac')
+    const modifier = { metaKey: isMac, ctrlKey: !isMac }
+    screen.dispatchEvent(
+      new MouseEvent('mousedown', {
+        bubbles: true,
+        cancelable: true,
+        button: 0,
+        buttons: 1,
+        clientX,
+        clientY,
+        ...modifier
+      })
+    )
+    screen.dispatchEvent(
+      new MouseEvent('mouseup', {
+        bubbles: true,
+        cancelable: true,
+        button: 0,
+        clientX,
+        clientY,
+        ...modifier
+      })
+    )
   }, probe)
 }
 
@@ -142,7 +198,7 @@ async function assertLinkRecoversAfterReturn(
     needle: string
     expectContains: string
   }
-): Promise<void> {
+): Promise<HoverProbe> {
   const probe = await locateHoverProbe(page, args.needle)
 
   // Baseline: hovering establishes the link before any switch.
@@ -156,12 +212,14 @@ async function assertLinkRecoversAfterReturn(
   await dispatchScreenMouseLeave(page, probe.tabId)
   await switchToWorktree(page, args.secondWorktreeId)
   await waitForActiveTerminalManager(page, 30_000)
-  await page.waitForTimeout(200)
+  // Wait for React to commit the intermediate hidden surface; switching back
+  // before that commit would batch away the lifecycle transition under test.
+  await expect.poll(() => isTerminalSurfaceVisible(page, probe.tabId)).toBe(false)
 
   await switchToWorktree(page, args.firstWorktreeId)
   await ensureTerminalVisible(page)
   await waitForActiveTerminalManager(page, 30_000)
-  await page.waitForTimeout(250)
+  await expect.poll(() => isTerminalSurfaceVisible(page, probe.tabId)).toBe(true)
 
   // Hover the SAME cell without scrolling. Pre-fix this never re-establishes
   // the link (dead until a scroll); post-fix the reveal reset re-linkifies.
@@ -171,6 +229,11 @@ async function assertLinkRecoversAfterReturn(
       message: 'link did not re-establish on hover after returning to the worktree'
     })
     .toContain(args.expectContains)
+
+  // The pointer cursor is the user-visible hover affordance; currentLink is
+  // also checked above because it is the backing state xterm requires to click.
+  await expect.poll(() => readTerminalCursor(page, probe.tabId)).toBe('pointer')
+  return probe
 }
 
 test.describe('Terminal link hover after worktree return', () => {
@@ -197,7 +260,8 @@ test.describe('Terminal link hover after worktree return', () => {
 
     const worktreePath = await activeWorktreePath(orcaPage)
     const fileName = `orca-linkfile-${randomUUID().slice(0, 8)}.txt`
-    writeFileSync(path.join(worktreePath, fileName), 'orca file link target\n')
+    const filePath = path.join(worktreePath, fileName)
+    writeFileSync(filePath, 'orca file link target\n')
     const needle = `./${fileName}`
 
     try {
@@ -209,14 +273,26 @@ test.describe('Terminal link hover after worktree return', () => {
         })
         .toContain(fileName)
 
-      await assertLinkRecoversAfterReturn(orcaPage, {
+      const probe = await assertLinkRecoversAfterReturn(orcaPage, {
         firstWorktreeId,
         secondWorktreeId,
         needle,
         expectContains: fileName
       })
+      await activateHoveredLink(orcaPage, probe)
+      // The editor header is the user-visible result of a successful terminal
+      // link activation; store state alone could pass with a blank editor.
+      await expect(orcaPage.locator('.editor-header-path').first()).toContainText(fileName, {
+        timeout: 20_000
+      })
     } finally {
-      rmSync(path.join(worktreePath, fileName), { force: true })
+      await orcaPage.evaluate((filePath) => {
+        const state = window.__store?.getState()
+        if (state?.openFiles.some((file) => file.filePath === filePath)) {
+          state.closeFile(filePath)
+        }
+      }, filePath)
+      rmSync(filePath, { force: true })
     }
   })
 
