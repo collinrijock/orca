@@ -123,7 +123,8 @@
       "fe21e8f6f5": "돌아가기({{value0}})",
       "064bd07810": "돌아가기",
       "ce37cf5279": "사이드바 표시/숨기기({{value0}})",
-      "e4b9e7dff7": "사이드바 표시/숨기기"
+      "e4b9e7dff7": "사이드바 표시/숨기기",
+      "rightSidebarEdgePeekHint": "Hover the right edge to peek"
     },
     "web": {
       "WebConnect": {
@@ -7068,6 +7069,10 @@
               "cardLayout": "카드 레이아웃",
               "workspaceOptions": "워크스페이스 옵션",
               "detailed": "상세"
+            },
+            "rightSidebarEdgePeek": {
+              "title": "Right Sidebar Edge Peek",
+              "description": "Hover the window edge to temporarily reveal a closed right sidebar."
             }
           }
         },
@@ -9540,7 +9545,8 @@
             "fc3095d2ed": "탐색기",
             "aiVaultSessionHistory": "에이전트",
             "folderWorkspaces": "연결된 워크트리",
-            "parentPrChecks": "PR 검사"
+            "parentPrChecks": "PR 검사",
+            "edgePeekHint": "Hover the right edge to peek"
           },
           "right": {
             "panel": {
@@ -9925,6 +9931,14 @@
             "archivedJumpUnavailable": "이 세션은 보관된 작업 트리에 있습니다.",
             "noActiveWorktreeMatch": "이 세션과 일치하는 활성 작업 트리가 없습니다.",
             "noActiveWorktreeTarget": "사용 가능한 활성 작업 트리가 없습니다."
+          },
+          "edge": {
+            "peek": {
+              "tip": {
+                "title": "Hover the right edge to peek",
+                "description": "The right sidebar slides over the editor without reflowing it. Click the toggle or use the shortcut to pin it open. Change this anytime in Settings › Appearance."
+              }
+            }
           }
         }
       },

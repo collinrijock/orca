@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   canShowRightSidebarForView,
+  isRightSidebarRevealed,
   rightSidebarShowsPullRequestData
 } from './right-sidebar-visibility'
 import type { AppState } from '@/store/types'
@@ -22,6 +23,7 @@ function makeState(
       }
     ],
     rightSidebarOpen: true,
+    rightSidebarPeek: false,
     rightSidebarTab: 'checks',
     worktreesByRepo: { 'repo-1': [{ id: 'wt-1', repoId: 'repo-1' }] },
     ...overrides
@@ -45,6 +47,12 @@ describe('right sidebar visibility helpers', () => {
 
   it('allows right sidebar controls on workspace views', () => {
     expect(canShowRightSidebarForView('terminal')).toBe(true)
+  })
+
+  it('treats both pinned and peeked sidebars as revealed', () => {
+    expect(isRightSidebarRevealed({ rightSidebarOpen: true, rightSidebarPeek: false })).toBe(true)
+    expect(isRightSidebarRevealed({ rightSidebarOpen: false, rightSidebarPeek: true })).toBe(true)
+    expect(isRightSidebarRevealed({ rightSidebarOpen: false, rightSidebarPeek: false })).toBe(false)
   })
 
   it('does not treat hidden full-page sidebars as visible PR panels', () => {
@@ -76,6 +84,14 @@ describe('right sidebar visibility helpers', () => {
         makeState({
           rightSidebarTab: 'source-control'
         })
+      )
+    ).toBe(true)
+  })
+
+  it('detects PR panels revealed by an edge peek', () => {
+    expect(
+      rightSidebarShowsPullRequestData(
+        makeState({ rightSidebarOpen: false, rightSidebarPeek: true })
       )
     ).toBe(true)
   })

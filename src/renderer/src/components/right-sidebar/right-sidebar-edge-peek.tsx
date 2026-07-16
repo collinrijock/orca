@@ -55,6 +55,12 @@ export function RightSidebarEdgePeekZone(): React.JSX.Element | null {
       }
     }
     const onMouseMove = (event: MouseEvent): void => {
+      // Why: scrollbar and resize drags can remain in the edge band longer
+      // than the hover delay; pressed buttons must never arm an overlay.
+      if (event.buttons !== 0) {
+        clearOpenTimer()
+        return
+      }
       // Why: exclude the top 36px titlebar row so the peek never arms over
       // window controls (Windows/Linux custom chrome).
       const inEdgeBand =
@@ -72,9 +78,13 @@ export function RightSidebarEdgePeekZone(): React.JSX.Element | null {
       }
     }
     window.addEventListener('mousemove', onMouseMove)
+    window.addEventListener('mousedown', clearOpenTimer)
+    window.addEventListener('blur', clearOpenTimer)
     return () => {
       clearOpenTimer()
       window.removeEventListener('mousemove', onMouseMove)
+      window.removeEventListener('mousedown', clearOpenTimer)
+      window.removeEventListener('blur', clearOpenTimer)
     }
   }, [edgePeekEnabled, rightSidebarOpen, rightSidebarPeek, setRightSidebarPeek])
 

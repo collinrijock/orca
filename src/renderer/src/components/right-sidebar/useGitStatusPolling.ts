@@ -15,6 +15,7 @@ import {
 import { getRightSidebarWorktreeRuntimeSettings } from './file-explorer-runtime-owner'
 import { useGitStatusFileWatchRefresh } from './git-status-file-watch-refresh'
 import { useGitStatusPushSignalRefresh } from './git-status-push-signal-refresh'
+import { isRightSidebarRevealed } from '@/lib/right-sidebar-visibility'
 
 const MIN_STATUS_REFRESH_INTERVAL_MS = 3000
 const INTERACTIVE_STATUS_POLL_INTERVAL_MS = MIN_STATUS_REFRESH_INTERVAL_MS
@@ -36,7 +37,7 @@ export function useGitStatusPolling(options: { enabled?: boolean } = {}): void {
   const setConflictOperation = useAppStore((s) => s.setConflictOperation)
   const conflictOperationByWorktree = useAppStore((s) => s.gitConflictOperationByWorktree)
   const sshConnectionStates = useAppStore((s) => s.sshConnectionStates)
-  const rightSidebarOpen = useAppStore((s) => s.rightSidebarOpen)
+  const rightSidebarRevealed = useAppStore(isRightSidebarRevealed)
   const rightSidebarTab = useAppStore((s) => s.rightSidebarTab)
   const rightSidebarExplorerView = useAppStore((s) => s.rightSidebarExplorerView)
   const openFiles = useAppStore((s) => s.openFiles)
@@ -56,7 +57,7 @@ export function useGitStatusPolling(options: { enabled?: boolean } = {}): void {
   const activeGitStatusPollingArgs = {
     activeWorktreeId,
     worktreePath,
-    rightSidebarOpen,
+    rightSidebarOpen: rightSidebarRevealed,
     rightSidebarTab,
     rightSidebarExplorerView,
     openFiles
@@ -179,7 +180,7 @@ export function useGitStatusPolling(options: { enabled?: boolean } = {}): void {
     isConnectionReady,
     openFiles,
     rightSidebarExplorerView,
-    rightSidebarOpen,
+    rightSidebarOpen: rightSidebarRevealed,
     rightSidebarTab,
     worktreePath
   })

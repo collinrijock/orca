@@ -69,6 +69,41 @@ describe('RightSidebarEdgePeekZone', () => {
     expect(useAppStore.getState().rightSidebarPeek).toBe(false)
   })
 
+  it('does not arm while a mouse button is pressed at the edge', () => {
+    render(<RightSidebarEdgePeekZone />)
+
+    act(() => {
+      fireEvent.mouseMove(window, {
+        clientX: RIGHT_EDGE_X,
+        clientY: BELOW_TITLEBAR_Y,
+        buttons: 1
+      })
+    })
+    vi.advanceTimersByTime(PEEK_OPEN_DELAY_MS)
+
+    expect(useAppStore.getState().rightSidebarPeek).toBe(false)
+  })
+
+  it('cancels an armed peek when a scrollbar drag starts', () => {
+    render(<RightSidebarEdgePeekZone />)
+
+    moveMouse(RIGHT_EDGE_X, BELOW_TITLEBAR_Y)
+    fireEvent.mouseDown(window, { buttons: 1 })
+    vi.advanceTimersByTime(PEEK_OPEN_DELAY_MS)
+
+    expect(useAppStore.getState().rightSidebarPeek).toBe(false)
+  })
+
+  it('cancels an armed peek when the window loses focus', () => {
+    render(<RightSidebarEdgePeekZone />)
+
+    moveMouse(RIGHT_EDGE_X, BELOW_TITLEBAR_Y)
+    fireEvent.blur(window)
+    vi.advanceTimersByTime(PEEK_OPEN_DELAY_MS)
+
+    expect(useAppStore.getState().rightSidebarPeek).toBe(false)
+  })
+
   it('ignores the top titlebar zone so window controls stay clickable', () => {
     render(<RightSidebarEdgePeekZone />)
 

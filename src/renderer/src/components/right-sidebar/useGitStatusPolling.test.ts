@@ -15,6 +15,7 @@ type PollState = {
   gitConflictOperationByWorktree: Record<string, unknown>
   sshConnectionStates: Map<string, { status: string }>
   rightSidebarOpen?: boolean
+  rightSidebarPeek?: boolean
   rightSidebarTab?: string
   rightSidebarExplorerView?: string
   openFiles?: unknown[]
@@ -252,6 +253,27 @@ describe('useGitStatusPolling', () => {
 
     expect(gitStatus).toHaveBeenCalledTimes(1)
     expect(globalThis.setInterval).toHaveBeenCalledWith(expect.any(Function), 30_000)
+  })
+
+  it('uses the interactive git status cadence while the sidebar is peeked', async () => {
+    const { gitStatus } = await usePollingOnce(
+      {
+        entries: [],
+        conflictOperation: 'unknown',
+        head: 'abc123',
+        branch: 'refs/heads/main'
+      },
+      {
+        stateOverrides: {
+          rightSidebarOpen: false,
+          rightSidebarPeek: true,
+          openFiles: []
+        }
+      }
+    )
+
+    expect(gitStatus).toHaveBeenCalledTimes(1)
+    expect(globalThis.setInterval).toHaveBeenCalledWith(expect.any(Function), 3000)
   })
 
   it('does not install the visible git status poll while disabled', async () => {
