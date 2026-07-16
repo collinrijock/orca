@@ -8,8 +8,8 @@ work; keep exact commands, runner identities, hashes, metrics, and residual gaps
 
 Date created: 2026-07-14<br>
 Last updated: 2026-07-15<br>
-Current phase: Milestone 5 / Work Package 4 desktop resolver/cache — **In progress — 2026-07-15, Codex implementation owner: prove the locally green Windows cache-lock release correction on replacement all-six native CI before accepting cold-cache population**. Keep the correction independently evidenced and bounded; require the eventual startup caller to supply Orca's pre-`app.setName()` canonical user-data path; keep production manifest/resources, proxy, SSH/settings/tuples/release publication/default behavior absent. Real Apple/SignPath rehearsals remain an explicit late gate and are not on this package's critical path.<br>
-Session checkpoint: **LOCAL GREEN / CI REQUIRED — 2026-07-15, Codex implementation owner** — `E-M5-ARTIFACT-CACHE-LOCK-RELEASE-LOCAL-001` implements and proves a 5 s/50 ms ownership-preserving retry only for Windows sharing-style `EPERM`/`EACCES`; displaced ownership stops without deletion and exhaustion fails closed. Focused/workflow, 339/339 non-full-size relay, 280/280 release-script, typecheck, lint, format, diff, and protected-resolver gates pass locally. The correction is not accepted until a new exact-head run replaces failing job 87548519537 across all six primary native jobs and adjacent checks. Merging to `main` remains prohibited and SignPath is deferred. No Electron/startup, SSH, setting, tuple enablement, release publication, fallback, or default-path consumer exists. Legacy remains the production default.<br>
+Current phase: Milestone 5 / Work Package 4 desktop resolver/cache — **In progress — 2026-07-15, Codex implementation owner: audit the next smallest disconnected acquisition composition after exact-head acceptance of cold-cache population**. Require the eventual startup caller to supply Orca's pre-`app.setName()` canonical user-data path; keep production manifest/resources, proxy, SSH/settings/tuples/release publication/default behavior absent. Real Apple/SignPath rehearsals remain an explicit late gate and are not on this package's critical path.<br>
+Session checkpoint: **CI CLOSED / NEXT AUDIT — 2026-07-15, Codex implementation owner** — `E-M5-ARTIFACT-CACHE-LOCK-RELEASE-CI-001` closes correction commit `bd240049ffb9de196ce7cbd0f772639f4ba310f3` and accepts the cold-cache population package: all six primary native Node 24 jobs, both Linux oldest-userland supplements, Windows x64 baseline, PR Checks, Golden E2E, and computer-use pass. Windows arm64 retains only the declared hosted build-26200 rejection against required 26100. The next package may audit a disconnected acquisition boundary only; do not add Electron/startup, SSH, setting, fallback, tuple enablement, release publication, or default-path behavior. Merging to `main` remains prohibited, SignPath is deferred, and legacy remains the production default.<br>
 Primary design: [SSH relay GitHub Release plan](./2026-07-14-ssh-relay-github-release-plan.html)<br>
 Motivating issues: [#8450](https://github.com/stablyai/orca/issues/8450), [#1693](https://github.com/stablyai/orca/issues/1693)
 
@@ -147,11 +147,11 @@ same change as the work it records.
   local gates, and all-six native Node 24 proof are green under
   E-M5-ARTIFACT-CACHE-ROOT-LOCAL-RED-001, E-M5-ARTIFACT-CACHE-ROOT-LOCAL-001, and
   E-M5-ARTIFACT-CACHE-ROOT-CI-001. No Electron or product caller exists.
-- Active package: **In progress — 2026-07-15, Codex implementation owner** — prove the bounded
-  ownership-preserving cache-lock release correction on all six native clients before accepting
-  cold-cache population or auditing the next acquisition composition. The eventual startup caller,
-  not an SSH module, must supply `getCanonicalUserDataPath()` captured before `app.setName()`; keep
-  proxy integration, SSH, mode, tuple, publication, and defaults separately gated.
+- Active package: **In progress — 2026-07-15, Codex implementation owner** — audit the next
+  smallest disconnected acquisition composition now that the cache-lock correction and cold-cache
+  population are exact-head accepted. The eventual startup caller, not an SSH module, must supply
+  `getCanonicalUserDataPath()` captured before `app.setName()`; keep proxy integration, SSH, mode,
+  tuple, publication, fallback, and defaults separately gated.
 - Completed Work Package 2 gate: target-native Windows source-signature reports from exact-head
   artifact jobs 87267322867 and 87267322870 were independently downloaded and matched to their
   identities and signing-stage reports under E-M3-WINDOWS-SOURCE-SIGNATURE-CI-001. PR Checks
@@ -14681,6 +14681,60 @@ config/scripts/ssh-relay-runtime-workflow.test.mjs` — PASS, 4 files / 21 tests
   tuple enablement, release publication, or default behavior. Require a replacement exact-head
   all-six native run plus adjacent PR/E2E checks before accepting cold-cache population or starting
   the next acquisition package.
+
+### E-M5-ARTIFACT-CACHE-LOCK-RELEASE-CI-001 — replacement native correction and cold-cache acceptance
+
+- Date/owner: 2026-07-15, Codex implementation owner.
+- Exact source/run: correction commit `bd240049ffb9de196ce7cbd0f772639f4ba310f3`, artifact run
+  [29476740292](https://github.com/stablyai/orca/actions/runs/29476740292). The six primary build
+  jobs all pass with Node 24.18.0 and the exact source commit: Linux x64 job
+  [87551250555](https://github.com/stablyai/orca/actions/runs/29476740292/job/87551250555)
+  (`ubuntu-24.04`, `ubuntu24` image `20260714.240.1`, x64); Linux arm64 job
+  [87551250534](https://github.com/stablyai/orca/actions/runs/29476740292/job/87551250534)
+  (`ubuntu-24.04-arm`, `ubuntu24-arm64` image `20260706.52.2`); macOS x64 job
+  [87551250530](https://github.com/stablyai/orca/actions/runs/29476740292/job/87551250530)
+  (`macos-15-intel`, `macos15` image `20260629.0276.1`, Darwin 24.6.0); macOS arm64 job
+  [87551250627](https://github.com/stablyai/orca/actions/runs/29476740292/job/87551250627)
+  (`macos-15`, `macos15` image `20260706.0213.1`, Darwin 24.6.0); Windows x64 job
+  [87551250538](https://github.com/stablyai/orca/actions/runs/29476740292/job/87551250538)
+  (`windows-2022`, `win22` image `20260714.244.1`, Windows Server 2022 Datacenter build 20348); and
+  Windows arm64 job
+  [87551250513](https://github.com/stablyai/orca/actions/runs/29476740292/job/87551250513)
+  (`windows-11-arm`, `win11-arm64` image `20260714.109.1`, Windows 10 Enterprise build 26200).
+- Contract result: every POSIX client passes 76 files / 506 tests; every Windows client passes 77
+  files / 497 tests with 13 declared platform/full-size skips. Windows x64 completes in 26.55 s and
+  directly replaces failing job 87548519537: the concurrent lock handoff, seven bounded-release
+  purpose cases, real Linux tar/Brotli and Windows ZIP cold→warm population, exact physical-root
+  lease, strict tree proof, and all other runtime contracts pass. Windows arm64 completes the same
+  contract in 24.80 s; Linux x64/arm64 in 10.34/10.71 s and macOS x64/arm64 in 26.29/22.81 s.
+- Full-size result: every primary job passes native extraction and immutable cache lifecycle. Across
+  all six clients, extraction is 1,050.16–3,613.00 ms with 32,280,576–48,705,536 bytes incremental
+  RSS; cold publication is 1,316.89–4,810.28 ms with 40,620,032–52,109,312 bytes incremental RSS;
+  warm verified lookup is 138.28–656.65 ms with 0–6,438,912 bytes incremental RSS; active retention
+  is 9.46–44.46 ms with 0–1,847,296 bytes incremental RSS; and eviction is 18.36–90.42 ms with
+  65,536–2,166,784 bytes incremental RSS while reclaiming each exact 118,418,686–161,259,304-byte
+  entry. These remain within the recorded desktop budgets and show no latency/memory regression.
+- Supplemental/baseline result: oldest-userland Linux x64 job
+  [87552366350](https://github.com/stablyai/orca/actions/runs/29476740292/job/87552366350) and arm64
+  job [87552366347](https://github.com/stablyai/orca/actions/runs/29476740292/job/87552366347)
+  pass. Windows x64 baseline job
+  [87552698722](https://github.com/stablyai/orca/actions/runs/29476740292/job/87552698722) passes.
+  Windows arm64 baseline job
+  [87552698719](https://github.com/stablyai/orca/actions/runs/29476740292/job/87552698719) executes
+  the full runtime smoke, then fails closed only because the hosted image reports kernel/OS build
+  26200 while the immutable tuple contract requires exact build 26100; platform and architecture
+  match. This is the existing declared runner-floor gap, not a cache-lock or cold-population failure.
+- Adjacent exact-head result: PR Checks
+  [29476740298](https://github.com/stablyai/orca/actions/runs/29476740298), Golden E2E
+  [29476740309](https://github.com/stablyai/orca/actions/runs/29476740309), and computer-use
+  [29476740291](https://github.com/stablyai/orca/actions/runs/29476740291) pass. Computer-use includes
+  successful Ubuntu 22.04 and Windows native smoke jobs; the selector-only mac/Linux/Windows rows
+  are expected skips.
+- Acceptance/boundary: this evidence supersedes `E-M5-ARTIFACT-CACHE-LOCK-RELEASE-CI-RED-001` and
+  accepts the disconnected cold-cache population package. It does not prove Electron/startup,
+  proxy/live network, SSH transfer/install/launch, Beta settings, fallback classification, tuple
+  enablement, release publication, or default behavior. Legacy remains the only production path;
+  the next package may only audit the next disconnected acquisition composition.
 
 ### E-M5-ARTIFACT-CACHE-POPULATION-LOCAL-001 — disconnected cold-cache population
 

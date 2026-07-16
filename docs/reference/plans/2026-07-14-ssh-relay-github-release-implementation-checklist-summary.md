@@ -9,9 +9,9 @@ keeps commands, hashes, runner identities, timings, and failure details.
 A checked box means the work has evidence in the detailed ledger. Design approval alone does not
 complete a box.
 
-Active checkpoint: **Milestone 5 / Work Package 4 desktop resolver/cache — prove the locally green
-Windows active-owner cache-lock release correction on replacement all-six native CI before
-accepting cold-cache population, 2026-07-15, Codex implementation owner.**
+Active checkpoint: **Milestone 5 / Work Package 4 desktop resolver/cache — audit the next smallest
+disconnected acquisition composition after exact-head acceptance of cold-cache population,
+2026-07-15, Codex implementation owner.**
 `E-M5-ARTIFACT-CACHE-RESOLUTION-CI-001` closes warm-cache commit
 `22031fa68` on all six native clients, both Linux supplements, Windows x64 baseline, PR Checks,
 Golden E2E, and computer-use; Windows arm64 remains the expected build-26200 rejection against 26100. `E-M5-ARTIFACT-CACHE-RESOLUTION-LOCAL-001` passes 9/9 purpose tests,
@@ -53,10 +53,17 @@ failures retry for at most 5 s at 50 ms intervals; every retry rechecks exact di
 ownership, displacement preserves the successor, absent paths settle, and unexpected or exhausted
 failures propagate closed. Focused plus workflow-oracle proof passes 24/24, broader non-full-size
 relay proof passes 339/339 with the three declared full-size skips, release scripts pass 280/280,
-and typecheck, lint, format, diff, and protected-resolver gates pass. A replacement exact-head
-all-six native run plus adjacent PR/E2E checks is still mandatory before this correction or the
-cold-cache population package is accepted; do not advance to acquisition, Electron/startup, SSH,
-settings, fallback, tuple, publication, or default behavior yet.
+and typecheck, lint, format, diff, and protected-resolver gates pass. This local evidence was not
+sufficient until the replacement exact-head all-six native run and adjacent checks recorded below.
+`E-M5-ARTIFACT-CACHE-LOCK-RELEASE-CI-001` now closes correction commit `bd240049f` and accepts the
+cold-cache population package: all six primary native Node 24 jobs and both Linux supplements pass;
+Windows x64 baseline, PR Checks, Golden E2E, and computer-use pass. Windows arm64 executes the full
+runtime smoke and retains only the declared hosted build-26200 rejection against required 26100.
+Every primary client passes its contract command and full-size extraction/cache lifecycle; the
+repeated Windows x64 lock-release race is closed. The next package is an audit of the smallest
+disconnected acquisition composition only. Electron/startup, live proxy/network, SSH, settings,
+fallback, tuple enablement, release publication, and default behavior remain absent, and legacy
+remains the sole production path.
 `E-M5-ARTIFACT-CACHE-ROOT-CI-001` closes the pure cache-root contract at exact head `aefcaa9a9`:
 all six primary native Node 24 jobs, both Linux supplements, Windows x64 baseline, PR Checks, Golden
 E2E, and computer-use pass; Windows arm64 build 26200 remains correctly gated against 26100. The
