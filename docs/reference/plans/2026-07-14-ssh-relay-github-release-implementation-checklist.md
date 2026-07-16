@@ -8,7 +8,7 @@ work; keep exact commands, runner identities, hashes, metrics, and residual gaps
 
 Date created: 2026-07-14<br>
 Last updated: 2026-07-15<br>
-Current phase: Milestone 5 / Work Package 4 desktop cache boundary — **In progress — 2026-07-15, Codex implementation owner: immutable cache-entry native/full-size gate**. E-M5-ARTIFACT-CACHE-ENTRY-LOCAL-001 closes 17 local transaction contracts plus broad/static gates; E-M5-ARTIFACT-CACHE-ENTRY-CI-WIRING-LOCAL-001 requires both the source suite and exact full-size cold-publication/verified-lookup measurement in both native job families. Checkpoint/push, then require all six Node 24 jobs and full-size time/RSS cells before cache-entry closure or any eviction/consumer work.<br>
+Current phase: Milestone 5 / Work Package 4 desktop cache boundary — **Checkpoint — 2026-07-15, Codex implementation owner: immutable cache-entry gate closed; evidence checkpoint/push required before in-use lease/eviction work**. E-M5-ARTIFACT-CACHE-ENTRY-CI-001 closes all six primary Node 24 source and exact full-size cold-publication/warm-verified-lookup cells at `3c1ead8fb1e1f3b64abaf78705abb0c801a1d64b`. PR Checks and Golden E2E pass. No cache consumer, eviction, SSH path, mode, tuple, release write, or default behavior is connected.<br>
 Session checkpoint: **In progress — 2026-07-15, Codex implementation owner** — resumed with user authority for end-to-end PR-contained implementation, commits, pushes, CI, rehearsals, and release writes, with merging to `main` explicitly prohibited. The first native run exposed and recorded Windows open-handle rename and equivalent zlib-error-oracle REDs; narrow corrections passed locally and at exact-head CI. In replacement run `29459424864`, all six primary jobs pass the 10 lock and 21 extraction contracts plus deterministic artifact build/smoke. The workflow's sole failure is the retained Windows arm64 hosted build-26200 versus required-26100 floor rejection after runtime/archive/tree/Node/PTTY/watcher proof; no tuple is enabled from it. PR Checks `29459424977` and Golden E2E `29459424789` pass. There is no release publication, cache entry, cache consumer, SSH transfer/install, tuple enablement, or production/default behavior change. Legacy remains the production default.<br>
 Primary design: [SSH relay GitHub Release plan](./2026-07-14-ssh-relay-github-release-plan.html)<br>
 Motivating issues: [#8450](https://github.com/stablyai/orca/issues/8450), [#1693](https://github.com/stablyai/orca/issues/1693)
@@ -1077,7 +1077,8 @@ Suggested concrete modules:
 
 ### Download and local cache
 
-- [ ] Store archives and extracted trees under an app-owned cache, keyed by signed content identity.
+- [x] Store archives and extracted trees under an app-owned cache, keyed by signed content identity.
+      E-M5-ARTIFACT-CACHE-ENTRY-LOCAL-001 and E-M5-ARTIFACT-CACHE-ENTRY-CI-001.
 - [x] Stream downloads into exclusive temporary files; never buffer a full runtime in memory.
       E-M5-ARTIFACT-DOWNLOAD-LOCAL-001 and E-M5-ARTIFACT-DOWNLOAD-CI-001.
 - [x] Apply download size and time budgets while streaming.
@@ -1088,10 +1089,9 @@ Suggested concrete modules:
       E-M5-ARTIFACT-EXTRACTION-LOCAL-001 and E-M5-ARTIFACT-EXTRACTION-CI-001 prove strict
       TAR/Brotli and ZIP inspection, exclusive owned staging, cancellation/failure cleanup, and
       exact full-size execution on all six native Node 24 clients.
-- [ ] Verify the exact expanded tree before atomically publishing the cache entry.
-      The disconnected full-tree verifier passes locally and on all six native clients under
-      E-M5-ARTIFACT-EXTRACTION-LOCAL-001 and E-M5-ARTIFACT-EXTRACTION-CI-001; atomic cache
-      publication is deliberately absent and keeps this combined item open.
+- [x] Verify the exact expanded tree before atomically publishing the cache entry.
+      E-M5-ARTIFACT-CACHE-ENTRY-LOCAL-001 and E-M5-ARTIFACT-CACHE-ENTRY-CI-001 prove complete staged
+      archive/tree revalidation before same-filesystem atomic publication on all six native clients.
 - [x] Coordinate cache ownership across multiple Orca processes and windows.
       E-M5-ARTIFACT-CACHE-LOCK-LOCAL-001 and E-M5-ARTIFACT-CACHE-LOCK-CI-001 prove real
       second-process contention and ownership transfer on all six native client tuples. Cache-entry
@@ -1100,9 +1100,12 @@ Suggested concrete modules:
       E-M5-ARTIFACT-CACHE-LOCK-LOCAL-001 and E-M5-ARTIFACT-CACHE-LOCK-CI-001 prove conservative
       same-host liveness, stale-dead-owner tombstoning, live/ambiguous-owner preservation, and
       displaced-owner successor safety. No downloader/extractor consumer is connected yet.
-- [ ] Never select partial files, partial directories, or entries with a failed verification record.
-- [ ] Re-verify cached metadata and expected identity before use; define when full file rehashing is
-      required.
+- [x] Never select partial files, partial directories, or entries with a failed verification record.
+      E-M5-ARTIFACT-CACHE-ENTRY-LOCAL-001 and E-M5-ARTIFACT-CACHE-ENTRY-CI-001.
+- [x] Re-verify cached metadata and expected identity before use; define when full file rehashing is
+      required. E-M5-ARTIFACT-CACHE-ENTRY-LOCAL-001 and E-M5-ARTIFACT-CACHE-ENTRY-CI-001 require a
+      strict proof/archive/full-tree rehash on every disconnected lookup; warm-launch proof trust is
+      a later remote-install contract and is not inferred here.
 - [ ] Implement bounded eviction that never removes an in-use entry.
 - [ ] Handle read-only cache, permission failures, disk full, quota, inode exhaustion, cancellation,
       crash, corruption, and concurrent download deterministically.
@@ -12901,14 +12904,14 @@ sort`; targeted `rg -n` over `cache|extract|atomic|quarantine`; and complete rea
   The measurement must clean its owned output and pass before unpublished artifact upload.
 - Exact full-size results:
 
-  | Client tuple | Job | Job duration | Incremental RSS | Extraction/tree time | Result |
-  | --- | --- | ---: | ---: | ---: | --- |
-  | darwin-arm64 | [87487012482](https://github.com/stablyai/orca/actions/runs/29455294208/job/87487012482) | 2m01s | 45,989,888 bytes | 1,345.51ms | PASS |
-  | darwin-x64 | [87487012496](https://github.com/stablyai/orca/actions/runs/29455294208/job/87487012496) | 7m02s | 40,116,224 bytes | 5,757.55ms | PASS |
-  | linux-arm64-glibc | [87487012507](https://github.com/stablyai/orca/actions/runs/29455294208/job/87487012507) | 2m51s | 36,732,928 bytes | 1,294.77ms | PASS |
-  | linux-x64-glibc | [87487012518](https://github.com/stablyai/orca/actions/runs/29455294208/job/87487012518) | 2m52s | 38,420,480 bytes | 1,727.80ms | PASS |
-  | win32-arm64 | [87487012510](https://github.com/stablyai/orca/actions/runs/29455294208/job/87487012510) | 11m07s | 33,517,568 bytes | 2,467.74ms | PASS |
-  | win32-x64 | [87487012515](https://github.com/stablyai/orca/actions/runs/29455294208/job/87487012515) | 5m24s | 40,140,800 bytes | 1,683.02ms | PASS |
+  | Client tuple      | Job                                                                                      | Job duration |  Incremental RSS | Extraction/tree time | Result |
+  | ----------------- | ---------------------------------------------------------------------------------------- | -----------: | ---------------: | -------------------: | ------ |
+  | darwin-arm64      | [87487012482](https://github.com/stablyai/orca/actions/runs/29455294208/job/87487012482) |        2m01s | 45,989,888 bytes |           1,345.51ms | PASS   |
+  | darwin-x64        | [87487012496](https://github.com/stablyai/orca/actions/runs/29455294208/job/87487012496) |        7m02s | 40,116,224 bytes |           5,757.55ms | PASS   |
+  | linux-arm64-glibc | [87487012507](https://github.com/stablyai/orca/actions/runs/29455294208/job/87487012507) |        2m51s | 36,732,928 bytes |           1,294.77ms | PASS   |
+  | linux-x64-glibc   | [87487012518](https://github.com/stablyai/orca/actions/runs/29455294208/job/87487012518) |        2m52s | 38,420,480 bytes |           1,727.80ms | PASS   |
+  | win32-arm64       | [87487012510](https://github.com/stablyai/orca/actions/runs/29455294208/job/87487012510) |       11m07s | 33,517,568 bytes |           2,467.74ms | PASS   |
+  | win32-x64         | [87487012515](https://github.com/stablyai/orca/actions/runs/29455294208/job/87487012515) |        5m24s | 40,140,800 bytes |           1,683.02ms | PASS   |
 
 - Adjacent native gates: Linux arm64 oldest-userland job
   [87488270107](https://github.com/stablyai/orca/actions/runs/29455294208/job/87488270107) passes in
@@ -12922,7 +12925,7 @@ sort`; targeted `rg -n` over `cache|extract|atomic|quarantine`; and complete rea
   the exact source, reconstructs and verifies the exact archive, runs Node v24.18.0, PTY, watcher,
   resource-settlement, and complete-tree smoke, then reports observed Windows `10.0.26200` and
   `osBuild: false` against the required build `26100`. It fails with `runner does not prove the
-  declared Windows floor` after 3m40s. This is correct fail-closed evidence and does not close the
+declared Windows floor` after 3m40s. This is correct fail-closed evidence and does not close the
   Windows arm64 oldest-floor cell.
 - Repository regression gates: exact-head PR Checks
   [29455294230](https://github.com/stablyai/orca/actions/runs/29455294230), job
@@ -12944,7 +12947,7 @@ sort`; targeted `rg -n` over `cache|extract|atomic|quarantine`; and complete rea
 - Owner: Codex implementation owner
 - Source: exact pushed evidence head `ef76f38d4` on draft PR #8741.
 - Exact audit commands: `rg --files src/main | rg '(cache|ssh-relay-artifact|lock|quarantine|evict)' |
-  sort`; targeted `rg -n` over `app.getPath('userData')|cache|lockfile|rename|quarantine|evict` in
+sort`; targeted `rg -n` over `app.getPath('userData')|cache|lockfile|rename|quarantine|evict` in
   `src/main`/`src/shared`; complete reads of the relay downloader, extractor, tree verifier,
   selector/content-identity/path-policy modules, startup single-instance lock, and Milestone 5 cache
   contracts.
@@ -13157,18 +13160,18 @@ sort`; targeted `rg -n` over `cache|extract|atomic|quarantine`; and complete rea
   cleanup, verification, and fallback classification are unchanged.
 - Exact commands/results:
   - `pnpm exec oxfmt --check src/main/ssh/ssh-relay-artifact-cache-lock-lease.ts
-    src/main/ssh/ssh-relay-artifact-cache-lock.test.ts
-    src/main/ssh/ssh-relay-artifact-extraction.test.ts`: pass;
+src/main/ssh/ssh-relay-artifact-cache-lock.test.ts
+src/main/ssh/ssh-relay-artifact-extraction.test.ts`: pass;
   - `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1
-    src/main/ssh/ssh-relay-artifact-cache-lock.test.ts
-    src/main/ssh/ssh-relay-artifact-extraction.test.ts`: two passed files / 31 passed tests in 2.88s
+src/main/ssh/ssh-relay-artifact-cache-lock.test.ts
+src/main/ssh/ssh-relay-artifact-extraction.test.ts`: two passed files / 31 passed tests in 2.88s
     Vitest / 8.25s wall, 156,925,952-byte maximum RSS, zero swaps;
   - `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1
-    src/main/ssh/ssh-relay-artifact-*.test.ts`: five passed files / one environment-skipped file,
+src/main/ssh/ssh-relay-artifact-*.test.ts`: five passed files / one environment-skipped file,
     95 passed / one skipped tests in 23.52s Vitest / 26.47s wall, 143,228,928-byte maximum RSS,
     zero swaps;
   - `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1
-    config/scripts/ssh-relay-runtime-*.test.mjs`: 50 passed files / 279 passed tests in 105.46s
+config/scripts/ssh-relay-runtime-*.test.mjs`: 50 passed files / 279 passed tests in 105.46s
     Vitest / 109.78s wall, 193,576,960-byte maximum RSS, zero swaps;
   - `pnpm typecheck`; `pnpm lint`; `pnpm run check:max-lines-ratchet`; `git diff --check`: pass. Full
     lint retains only existing unrelated warnings.
@@ -13190,21 +13193,21 @@ sort`; targeted `rg -n` over `cache|extract|atomic|quarantine`; and complete rea
   - `gh api 'repos/stablyai/orca/actions/runs/29459424864/jobs?per_page=100' --jq ...` for job,
     runner, label, step, and timestamp identity;
   - `gh api repos/stablyai/orca/actions/jobs/<job-id>/logs 2>&1 | rg
-    "ssh-relay-artifact-cache-lock.test.ts|ssh-relay-artifact-extraction.test.ts|Test Files|Tests  " |
-    tail -8` for each primary job;
+"ssh-relay-artifact-cache-lock.test.ts|ssh-relay-artifact-extraction.test.ts|Test Files|Tests  " |
+tail -8` for each primary job;
   - `gh api repos/stablyai/orca/actions/jobs/87500906175/logs 2>&1 | rg -n
-    "Node runtime version|archive|tree|PTY|watcher|Windows|osBuild|26100|26200|runner does not prove|Process completed"
-    | tail -100` for the retained Windows arm64 floor gap.
+"Node runtime version|archive|tree|PTY|watcher|Windows|osBuild|26100|26200|runner does not prove|Process completed"
+| tail -100` for the retained Windows arm64 floor gap.
 - Primary native results:
 
-  | Client tuple | Job / runner | Job duration | Contract duration | Lock suite | Extraction suite | Result |
-  | --- | --- | ---: | ---: | ---: | ---: | --- |
-  | darwin-arm64 | [87499607559](https://github.com/stablyai/orca/actions/runs/29459424864/job/87499607559), `GitHub Actions 1000056437`, `macos-15` | 1m52s | 13s | 10 pass, 530ms | 21 pass, 524ms | PASS |
-  | darwin-x64 | [87499607640](https://github.com/stablyai/orca/actions/runs/29459424864/job/87499607640), `GitHub Actions 1000056435`, `macos-15-intel` | 6m45s | 1m03s | 10 pass, 825ms | 21 pass, 3,062ms | PASS |
-  | linux-arm64-glibc | [87499607604](https://github.com/stablyai/orca/actions/runs/29459424864/job/87499607604), `GitHub Actions 1000056440`, `ubuntu-24.04-arm` | 12m20s | 11s | 10 pass, 514ms | 21 pass, 784ms | PASS |
-  | linux-x64-glibc | [87499607591](https://github.com/stablyai/orca/actions/runs/29459424864/job/87499607591), `GitHub Actions 1000056439`, `ubuntu-24.04` | 3m38s | 14s | 10 pass, 569ms | 21 pass, 949ms | PASS |
-  | win32-arm64 | [87499607605](https://github.com/stablyai/orca/actions/runs/29459424864/job/87499607605), `GitHub Actions 1000056441`, `windows-11-arm` | 9m01s | 29s | 10 pass, 801ms | 21 pass, 1,152ms | PASS |
-  | win32-x64 | [87499607584](https://github.com/stablyai/orca/actions/runs/29459424864/job/87499607584), `GitHub Actions 1000056438`, `windows-2022` | 5m29s | 22s | 10 pass, 751ms | 21 pass, 1,698ms | PASS |
+  | Client tuple      | Job / runner                                                                                                                              | Job duration | Contract duration |     Lock suite | Extraction suite | Result |
+  | ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | -----------: | ----------------: | -------------: | ---------------: | ------ |
+  | darwin-arm64      | [87499607559](https://github.com/stablyai/orca/actions/runs/29459424864/job/87499607559), `GitHub Actions 1000056437`, `macos-15`         |        1m52s |               13s | 10 pass, 530ms |   21 pass, 524ms | PASS   |
+  | darwin-x64        | [87499607640](https://github.com/stablyai/orca/actions/runs/29459424864/job/87499607640), `GitHub Actions 1000056435`, `macos-15-intel`   |        6m45s |             1m03s | 10 pass, 825ms | 21 pass, 3,062ms | PASS   |
+  | linux-arm64-glibc | [87499607604](https://github.com/stablyai/orca/actions/runs/29459424864/job/87499607604), `GitHub Actions 1000056440`, `ubuntu-24.04-arm` |       12m20s |               11s | 10 pass, 514ms |   21 pass, 784ms | PASS   |
+  | linux-x64-glibc   | [87499607591](https://github.com/stablyai/orca/actions/runs/29459424864/job/87499607591), `GitHub Actions 1000056439`, `ubuntu-24.04`     |        3m38s |               14s | 10 pass, 569ms |   21 pass, 949ms | PASS   |
+  | win32-arm64       | [87499607605](https://github.com/stablyai/orca/actions/runs/29459424864/job/87499607605), `GitHub Actions 1000056441`, `windows-11-arm`   |        9m01s |               29s | 10 pass, 801ms | 21 pass, 1,152ms | PASS   |
+  | win32-x64         | [87499607584](https://github.com/stablyai/orca/actions/runs/29459424864/job/87499607584), `GitHub Actions 1000056438`, `windows-2022`     |        5m29s |               22s | 10 pass, 751ms | 21 pass, 1,698ms | PASS   |
 
 - Aggregate contract results: each POSIX job passes 64 files; each Windows job passes 65 files. The
   suite includes same-process contention, a real second Node process, bounded cancellation,
@@ -13304,7 +13307,7 @@ sort`; targeted `rg -n` over `cache|extract|atomic|quarantine`; and complete rea
   entry modules deliberately absent.
 - Exact command:
   `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1
-  src/main/ssh/ssh-relay-artifact-cache-entry.test.ts`.
+src/main/ssh/ssh-relay-artifact-cache-entry.test.ts`.
 - Result: required RED; one failed suite / zero collected tests in 153ms Vitest / 1.11s wall,
   132,071,424-byte maximum RSS, zero swaps. Import fails only because
   `./ssh-relay-artifact-cache-entry` does not exist.
@@ -13354,7 +13357,7 @@ sort`; targeted `rg -n` over `cache|extract|atomic|quarantine`; and complete rea
   No corruption behavior was weakened.
 - Exact focused command:
   `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1
-  src/main/ssh/ssh-relay-artifact-cache-entry.test.ts`.
+src/main/ssh/ssh-relay-artifact-cache-entry.test.ts`.
 - Final focused result: one passed file / 17 passed tests in 1.87s Vitest / 3.10s wall,
   137,035,776-byte maximum RSS, zero swaps. Contracts prove fixed 5m/80 MiB/64 KiB/16 KiB limits,
   exact paths, Linux and Windows archive families, atomic complete publication, exact miss,
@@ -13363,14 +13366,14 @@ sort`; targeted `rg -n` over `cache|extract|atomic|quarantine`; and complete rea
   recovery only from freshly reverified bytes.
 - Exact broader commands/results:
   - `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1
-    src/main/ssh/ssh-relay-artifact-*.test.ts`: final tree passes six files / two environment-skipped
+src/main/ssh/ssh-relay-artifact-*.test.ts`: final tree passes six files / two environment-skipped
     full-size files, 112 passed / two skipped tests in 164.85s Vitest / 194.56s wall,
     123,568,128-byte maximum RSS, zero swaps under severe unrelated host contention;
   - `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1
-    src/main/ssh/ssh-relay-*.test.ts`: 19 passed files / two skipped files, 280 passed / two skipped
+src/main/ssh/ssh-relay-*.test.ts`: 19 passed files / two skipped files, 280 passed / two skipped
     tests in 78.76s Vitest / 95.05s wall, 215,089,152-byte maximum RSS, zero swaps;
   - `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1
-    config/scripts/ssh-relay-runtime-*.test.mjs`: 50 passed files / 279 passed tests in 41.66s Vitest /
+config/scripts/ssh-relay-runtime-*.test.mjs`: 50 passed files / 279 passed tests in 41.66s Vitest /
     45.35s wall, 190,808,064-byte maximum RSS, zero swaps;
   - `pnpm typecheck`; `pnpm lint`; `pnpm run check:max-lines-ratchet`: pass. Full lint retains only
     existing unrelated warnings; no max-lines disable or ratchet exception was added;
@@ -13403,9 +13406,9 @@ sort`; targeted `rg -n` over `cache|extract|atomic|quarantine`; and complete rea
   measurement step also required the ordering oracle's exact name to follow the expanded boundary.
 - Final GREEN command/result:
   `pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1
-  config/scripts/ssh-relay-runtime-workflow.test.mjs
-  src/main/ssh/ssh-relay-artifact-cache-entry.test.ts
-  src/main/ssh/ssh-relay-artifact-cache-entry-full-size.test.ts`: workflow and focused source suites
+config/scripts/ssh-relay-runtime-workflow.test.mjs
+src/main/ssh/ssh-relay-artifact-cache-entry.test.ts
+src/main/ssh/ssh-relay-artifact-cache-entry-full-size.test.ts`: workflow and focused source suites
   pass; the environment-only full-size file is skipped locally, for 24 passed / one skipped tests.
 - Native oracle: every primary client job must run all 17 transaction/corruption contracts before
   artifact construction. After constructing the exact full-size artifact, every job must measure cold
@@ -13417,6 +13420,75 @@ sort`; targeted `rg -n` over `cache|extract|atomic|quarantine`; and complete rea
   tuple.
 - Follow-up: checkpoint/push and require all six primary jobs plus companion PR Checks/Golden E2E
   before cache-entry closure.
+
+### E-M5-ARTIFACT-CACHE-ENTRY-CI-001 — Immutable publication and verified lookup pass all six native cells
+
+- Date: 2026-07-15
+- Owner: Codex implementation owner
+- Exact source: `3c1ead8fb1e1f3b64abaf78705abb0c801a1d64b` on draft PR #8741.
+- Workflow: SSH Relay Runtime Artifacts run
+  [29462394311](https://github.com/stablyai/orca/actions/runs/29462394311). All six primary Node 24
+  jobs pass their complete source-contract step, including all 17 immutable cache-entry transaction,
+  corruption, quarantine, concurrency, and recovery tests. POSIX jobs pass 65 source files and
+  Windows jobs pass 66 source files.
+- Exact native cells and `ssh_relay_full_size_cache` results:
+  - linux-x64-glibc job
+    [87508477435](https://github.com/stablyai/orca/actions/runs/29462394311/job/87508477435):
+    `ubuntu-24.04`, image `ubuntu24` `20260705.232.1`, X64; 36,412,425-byte archive,
+    124,846,430 expanded bytes / 34 files; cold 2,244.83ms / 40,214,528-byte incremental RSS; warm
+    239.44ms / 0 bytes;
+  - linux-arm64-glibc job
+    [87508477441](https://github.com/stablyai/orca/actions/runs/29462394311/job/87508477441):
+    `ubuntu-24.04-arm`, image `ubuntu24-arm64` `20260706.52.2`, ARM64; 36,363,087-byte archive,
+    122,865,324 expanded bytes / 34 files; cold 1,703.97ms / 46,911,488 bytes; warm 195.47ms /
+    131,072 bytes;
+  - darwin-arm64 job
+    [87508477446](https://github.com/stablyai/orca/actions/runs/29462394311/job/87508477446):
+    `macos-15`, image `macos15` `20260706.0213.1`, ARM64; 31,776,560-byte archive,
+    122,027,869 expanded bytes / 35 files; cold 1,173.97ms / 47,104,000 bytes; warm 123.58ms /
+    212,992 bytes;
+  - darwin-x64 job
+    [87508477453](https://github.com/stablyai/orca/actions/runs/29462394311/job/87508477453):
+    `macos-15-intel`, image `macos15` `20260629.0276.1`, X64; 32,922,888-byte archive,
+    124,316,655 expanded bytes / 35 files; cold 6,171.98ms / 43,335,680 bytes; warm 702.78ms /
+    372,736 bytes;
+  - win32-x64 job
+    [87508477439](https://github.com/stablyai/orca/actions/runs/29462394311/job/87508477439):
+    `windows-2022`, image `win22` `20260714.244.1`, X64; 37,168,778-byte archive,
+    96,527,161 expanded bytes / 42 files; cold 2,682.54ms / 48,775,168 bytes; warm 233.89ms /
+    466,944 bytes;
+  - win32-arm64 job
+    [87508477458](https://github.com/stablyai/orca/actions/runs/29462394311/job/87508477458):
+    `windows-11-arm`, image `win11-arm64` `20260714.109.1`, ARM64; 33,204,738-byte archive,
+    85,213,511 expanded bytes / 42 files; cold 3,535.96ms / 34,484,224 bytes; warm 513.02ms /
+    6,926,336 bytes.
+- Budget result: every cold and warm phase is below the separate five-minute and 80 MiB incremental
+  RSS ceilings; every environment-only full-size test reports one passed file and removes its owned
+  cache root. Observed cold range is 1,173.97–6,171.98ms and 34,484,224–48,775,168 bytes; warm range
+  is 123.58–702.78ms and 0–6,926,336 bytes.
+- Companion regressions: PR Checks run
+  [29462394310](https://github.com/stablyai/orca/actions/runs/29462394310), job
+  [87508477369](https://github.com/stablyai/orca/actions/runs/29462394310/job/87508477369), passes in
+  14m02s. Golden E2E run
+  [29462394344](https://github.com/stablyai/orca/actions/runs/29462394344) passes Linux job
+  [87508477410](https://github.com/stablyai/orca/actions/runs/29462394344/job/87508477410) in 4m18s
+  and macOS job
+  [87508477409](https://github.com/stablyai/orca/actions/runs/29462394344/job/87508477409) in 3m06s.
+- Supplemental/floor result: both Linux oldest-userland supplements pass. Windows x64 oldest-floor
+  job [87509946279](https://github.com/stablyai/orca/actions/runs/29462394311/job/87509946279)
+  passes. Windows arm64 primary runtime/source/cache proof passes, then oldest-floor job
+  [87509946287](https://github.com/stablyai/orca/actions/runs/29462394311/job/87509946287)
+  retains the declared build-26200 versus required-26100 rejection; therefore the overall artifact
+  workflow is expected red and no Windows arm64 tuple is enabled.
+- Closure: exact content-key paths, same-filesystem exclusive staging, full archive/tree revalidation
+  before atomic publication, strict proof/archive/tree lookup, corruption quarantine, concurrent
+  serialization, and fresh-byte recovery are proven locally and on all six native clients.
+- Residual gaps: crash/power-loss durability, disk-full/quota/inode/read-only faults, in-use leases,
+  recency/2 GiB eviction, packaged Electron/cache-root selection, proxy/certificate behavior, SSH,
+  and every tuple/default path remain open. No artifact is published and no production consumer is
+  connected.
+- Follow-up: checkpoint and push this evidence, then audit and RED-test only the disconnected in-use
+  lease/recency/2 GiB eviction package. Keep consumers and SSH behavior separate.
 
 ## Accepted Gaps
 

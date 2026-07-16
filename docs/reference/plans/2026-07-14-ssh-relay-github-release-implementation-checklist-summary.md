@@ -9,58 +9,17 @@ keeps commands, hashes, runner identities, timings, and failure details.
 A checked box means the work has evidence in the detailed ledger. Design approval alone does not
 complete a box.
 
-Active checkpoint: **Milestone 5 / Work Package 4 desktop cache boundary — disconnected
-cross-process content-lock all-six native gate, 2026-07-15, Codex implementation owner.** Exact-head run
-[29449869519](https://github.com/stablyai/orca/actions/runs/29449869519) closes deterministic bounded
-`.tar.br` under `E-M5-PORTABLE-ARCHIVE-CI-001`: all six primary Node 24 jobs and both Linux
-oldest-userland supplements pass. PR Checks and Golden E2E are green; Windows x64 floor passes and
-Windows arm64 passes smoke before the retained hosted build-26200 versus required-26100 rejection.
-The isolated desktop extractor is locally green under `E-M5-ARTIFACT-EXTRACTION-LOCAL-001` and
-`E-M5-ARTIFACT-EXTRACTION-BROAD-LOCAL-001`: 17 focused tests cover both archive families, hostile
-inputs, exact tree/modes, mutation, cancellation, cleanup, and ownership; broad relay/release/static
-gates pass. An exact downloaded 122,027,869-byte Darwin arm64 tree extracts in 878.73ms with
-49,283,072-byte incremental RSS under `E-M5-ARTIFACT-EXTRACTION-FULL-SIZE-LOCAL-001`. Both native job
-families now require synthetic cross-family and post-build full-size gates under
-`E-M5-ARTIFACT-EXTRACTION-CI-WIRING-LOCAL-001`. Exact-head Darwin arm64 then supplied the required
-native RED: Darwin arm64 uses 71,368,704 bytes and Linux x64 uses 68,505,600 bytes, disproving the
-pre-implementation 64 MiB assumption and blocking upload under
-`E-M5-ARTIFACT-EXTRACTION-CI-MEMORY-RED-001`. Evidence decision
-`E-M5-ARTIFACT-EXTRACTION-BUDGET-CORRECTION-001` selects 80 MiB for cold desktop extraction only;
-remote remains 32 MiB and no buffer exceeds 1 MiB. The strict bounded replacement is locally green
-under `E-M5-ARTIFACT-EXTRACTION-TAR-MEMORY-LOCAL-001`: 21 focused tests and five exact payload runs
-use at most 69,402,624 bytes. Replacement exact-head run
-[29455294208](https://github.com/stablyai/orca/actions/runs/29455294208) closes all six native
-extraction/full-tree cells under `E-M5-ARTIFACT-EXTRACTION-CI-001`: 33,517,568–45,989,888-byte
-incremental RSS and 1,294.77–5,757.55ms. Both Linux oldest-userland supplements and Windows x64
-floor pass; Windows arm64 runtime/extraction passes before the retained hosted build-26200 versus
-required-26100 floor rejection. Exact-head PR Checks
-[29455294230](https://github.com/stablyai/orca/actions/runs/29455294230) and Golden E2E
-[29455294207](https://github.com/stablyai/orca/actions/runs/29455294207) are green. The cache audit
-splits lock, immutable publication/quarantine, and in-use eviction into separate gates under
-`E-M5-ARTIFACT-CACHE-AUDIT-001`. The absent-module RED is
-`E-M5-ARTIFACT-CACHE-LOCK-LOCAL-RED-001`; the disconnected implementation and ten focused contracts
-are locally green under `E-M5-ARTIFACT-CACHE-LOCK-LOCAL-001`, including a real second process,
-heartbeat, cancellation, stale-dead reclaim, and live/ambiguous/displaced-owner safety. Artifact,
-relay, release, typecheck, full lint, max-lines, and workflow gates pass. Both native job families
-require the suite under `E-M5-ARTIFACT-CACHE-LOCK-CI-WIRING-LOCAL-001`. Exact-head Windows x64 then
-found the open-heartbeat-handle directory-rename incompatibility under
-`E-M5-ARTIFACT-CACHE-LOCK-CI-WINDOWS-RED-001`; Windows arm64 also found equivalent zlib truncation
-wording outside the extraction test oracle under `E-M5-ARTIFACT-EXTRACTION-CI-WINDOWS-ARM64-RED-001`.
-The ownership-preserving release order and equivalent-error assertion are locally green under
-`E-M5-WINDOWS-NATIVE-GATE-CORRECTIONS-LOCAL-001`. Replacement exact-head run
-[29459424864](https://github.com/stablyai/orca/actions/runs/29459424864) closes the content lock on all
-six primary native Node 24 jobs under `E-M5-ARTIFACT-CACHE-LOCK-CI-001`; both Linux supplements,
-PR Checks [29459424977](https://github.com/stablyai/orca/actions/runs/29459424977), and Golden E2E
-[29459424789](https://github.com/stablyai/orca/actions/runs/29459424789) pass. Windows arm64 retains
-only the explicit hosted build-26200 versus required-26100 floor rejection after runtime/tree smoke.
-`E-M5-ARTIFACT-CACHE-ENTRY-AUDIT-001` fixes the disconnected immutable
-publication/lookup/quarantine transaction; the absent-module contract RED is
-`E-M5-ARTIFACT-CACHE-ENTRY-LOCAL-RED-001`. Seventeen local contracts plus broad/static gates are
-green under `E-M5-ARTIFACT-CACHE-ENTRY-LOCAL-001`; both native families require the source suite and
-exact full-size cold/warm measurement under `E-M5-ARTIFACT-CACHE-ENTRY-CI-WIRING-LOCAL-001`. Native
-execution is next. Desktop consumers, cache eviction, SSH transfer/install,
-mode wiring, tuple enablement, publication, production keys/environment/seed, and merge to `main`
-remain disconnected.
+Active checkpoint: **Milestone 5 / Work Package 4 desktop cache boundary — immutable cache entry
+closed; in-use lease/2 GiB eviction is next, 2026-07-15, Codex implementation owner.** Exact-head
+run [29462394311](https://github.com/stablyai/orca/actions/runs/29462394311) passes all 17 cache-entry
+contracts and exact full-size cold/warm measurements on Linux, macOS, and Windows, x64 and arm64,
+under `E-M5-ARTIFACT-CACHE-ENTRY-CI-001`. Cold publication is 1.17–6.17s and 34.5–48.8 MiB
+incremental RSS; warm verified lookup is 0.12–0.70s and 0–6.9 MiB. PR Checks
+[29462394310](https://github.com/stablyai/orca/actions/runs/29462394310) and Golden E2E
+[29462394344](https://github.com/stablyai/orca/actions/runs/29462394344) pass. Windows arm64 retains
+only the declared hosted build-26200 versus required-26100 floor gap after its primary runtime/cache
+proof. Desktop consumers, eviction, SSH transfer/install, mode wiring, tuple enablement, publication,
+production keys/environment/seed, and merge to `main` remain disconnected.
 
 ## Safety status
 
@@ -356,14 +315,10 @@ remain disconnected.
       execution is closed under `E-M5-ARTIFACT-EXTRACTION-CI-001`. Packaged signature loading
       remains open.
 - [ ] Add exclusive staging, atomic publication, quarantine, locking, and the 2 GiB cache policy.
-      Exclusive owned staging and failure/cancellation cleanup are green locally and on all six
-      native clients under `E-M5-ARTIFACT-EXTRACTION-LOCAL-001` and
-      `E-M5-ARTIFACT-EXTRACTION-CI-001`; publication, quarantine, locking, and eviction are the
-      active split packages and are not implemented yet. The lock-only audit/RED is recorded under
-      `E-M5-ARTIFACT-CACHE-AUDIT-001` and `E-M5-ARTIFACT-CACHE-LOCK-LOCAL-RED-001`; the implementation
-      is locally green and wired to both native families under `E-M5-ARTIFACT-CACHE-LOCK-LOCAL-001`
-      and `E-M5-ARTIFACT-CACHE-LOCK-CI-WIRING-LOCAL-001`; all-six native execution is closed by
-      `E-M5-ARTIFACT-CACHE-LOCK-CI-001`. Immutable publication/lookup/quarantine remains next.
+      Locking and immutable publication/lookup/quarantine are closed locally and on all six native
+      clients under `E-M5-ARTIFACT-CACHE-LOCK-CI-001` and
+      `E-M5-ARTIFACT-CACHE-ENTRY-CI-001`. In-use leases, recency, and bounded 2 GiB eviction remain
+      the only open part of this combined item.
 - [ ] Prove verified cached bytes can be transferred while the client is offline.
 - [ ] Preserve `ORCA_RELAY_PATH` behind the official-build trust boundary.
 
