@@ -982,11 +982,19 @@ describe('CodexRuntimeHomeService', () => {
   })
 
   it('returns the Orca-managed runtime home for Codex launch and rate-limit preparation', async () => {
+    const markerPath = join(
+      testState.userDataDir,
+      'codex-session-backfill',
+      'backfill-complete.json'
+    )
+    mkdirSync(join(testState.userDataDir, 'codex-session-backfill'), { recursive: true })
+    writeFileSync(markerPath, '{}\n', 'utf-8')
     const store = createStore(createSettings())
     const { CodexRuntimeHomeService } = await import('./runtime-home-service')
     const service = new CodexRuntimeHomeService(store as never)
 
     expect(service.prepareForCodexLaunch()).toBe(getRuntimeCodexHomePath())
+    expect(existsSync(markerPath)).toBe(false)
     expect(service.prepareForRateLimitFetch()).toBe(getRuntimeCodexHomePath())
     expect(service.getHostCodexHomePathsForSessionDiscovery()).toEqual([getRuntimeCodexHomePath()])
     expect(existsSync(getRuntimeCodexHomePath())).toBe(true)
@@ -1005,12 +1013,23 @@ describe('CodexRuntimeHomeService', () => {
     ])
     service.setRealHomeLaneGate(() => false)
     expect(service.getHostCodexHomePathsForSessionDiscovery()).toEqual([getRuntimeCodexHomePath()])
+    const markerPath = join(
+      testState.userDataDir,
+      'codex-session-backfill',
+      'backfill-complete.json'
+    )
+    mkdirSync(join(testState.userDataDir, 'codex-session-backfill'), { recursive: true })
+    writeFileSync(markerPath, '{}\n', 'utf-8')
+    expect(service.prepareForCodexLaunch()).toBe(getRuntimeCodexHomePath())
+    expect(existsSync(markerPath)).toBe(false)
     service.setRealHomeLaneGate(() => true)
     const perSpawnCustomHome = join(testState.fakeHomeDir, 'per-spawn-custom-codex-home')
+    writeFileSync(markerPath, '{}\n', 'utf-8')
     expect(service.isHostSystemDefaultRealHome({ CODEX_HOME: perSpawnCustomHome })).toBe(false)
     expect(service.prepareForCodexLaunch(undefined, { CODEX_HOME: perSpawnCustomHome })).toBe(
       getRuntimeCodexHomePath()
     )
+    expect(existsSync(markerPath)).toBe(true)
     writeFileSync(
       join(testState.fakeHomeDir, '.zshrc'),
       'export CODEX_HOME="$HOME/shell-custom-codex-home"\n',

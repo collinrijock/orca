@@ -6,7 +6,9 @@ import {
   getSystemCodexHomePath
 } from './codex-home-paths'
 import {
+  appendCodexSessionHealAuditRecord,
   createCodexSessionBackfillAuditWriter,
+  recordExistingCodexSessionForHeal,
   type CodexSessionBackfillAuditWriter
 } from './codex-session-backfill-audit'
 import {
@@ -93,6 +95,7 @@ async function runCodexSessionBackfillOncePerHost(
   // startup retries; skip-existing keeps those retries cheap.
   if (
     !summary.stopped &&
+    options.shouldStop?.() !== true &&
     summary.failedFiles === 0 &&
     summary.failedDirectories === 0 &&
     summary.failedHealAuditRecords === 0
@@ -172,6 +175,9 @@ export async function backfillManagedCodexSessionsIntoSystemHome(
   }
   summary.stopped ||= options.shouldStop?.() === true
   await appendAuditRecord({ action: 'run-summary', ...summary })
+  // Why: opt-out can land while the async summary append is pending; carry it
+  // back to the marker gate so a managed launch cannot be hidden by stale completion.
+  summary.stopped ||= options.shouldStop?.() === true
   return summary
 }
 
@@ -229,14 +235,12 @@ async function backfillOneManagedSessionFile(
   const relativePath = relative(paths.managedSessionsRoot, managedSessionFilePath)
   const systemSessionFilePath = join(paths.systemSessionsRoot, relativePath)
   if (await pathEntryExists(systemSessionFilePath)) {
-    summary.skippedExistingFiles += 1
-    // Why: this also recovers a rollout installed before a crash or audit
-    // failure; thread/read is idempotent for a pre-existing real-home file.
-    await appendHealAuditRecord(appendAuditRecord, summary, {
-      action: 'existing',
-      source: managedSessionFilePath,
-      target: systemSessionFilePath
-    })
+    await recordExistingCodexSessionForHeal(
+      appendAuditRecord,
+      summary,
+      managedSessionFilePath,
+      systemSessionFilePath
+    )
     return
   }
 
@@ -250,14 +254,21 @@ async function backfillOneManagedSessionFile(
     }
     await link(managedSessionFilePath, systemSessionFilePath)
     summary.linkedFiles += 1
-    await appendHealAuditRecord(appendAuditRecord, summary, {
+    await appendCodexSessionHealAuditRecord(appendAuditRecord, summary, {
       action: 'hardlink',
       source: managedSessionFilePath,
       target: systemSessionFilePath
     })
   } catch (linkError) {
     if (isExistsError(linkError)) {
-      summary.skippedExistingFiles += 1
+      // Why: another window can publish the target after our existence probe;
+      // enqueue it here too in case that writer died before its audit append.
+      await recordExistingCodexSessionForHeal(
+        appendAuditRecord,
+        summary,
+        managedSessionFilePath,
+        systemSessionFilePath
+      )
       return
     }
     if (isNotFoundError(linkError)) {
@@ -268,14 +279,19 @@ async function backfillOneManagedSessionFile(
       // truncated rollout, then installed without overwriting collisions.
       await copySessionFileWithoutOverwrite(managedSessionFilePath, systemSessionFilePath)
       summary.copiedFiles += 1
-      await appendHealAuditRecord(appendAuditRecord, summary, {
+      await appendCodexSessionHealAuditRecord(appendAuditRecord, summary, {
         action: 'copy',
         source: managedSessionFilePath,
         target: systemSessionFilePath
       })
     } catch (copyError) {
       if (isExistsError(copyError)) {
-        summary.skippedExistingFiles += 1
+        await recordExistingCodexSessionForHeal(
+          appendAuditRecord,
+          summary,
+          managedSessionFilePath,
+          systemSessionFilePath
+        )
         return
       }
       if (isAtomicNoReplaceUnsupportedError(copyError)) {
@@ -296,16 +312,6 @@ async function backfillOneManagedSessionFile(
         linkError: describeError(linkError)
       })
     }
-  }
-}
-
-async function appendHealAuditRecord(
-  appendAuditRecord: CodexSessionBackfillAuditWriter,
-  summary: CodexSessionBackfillSummary,
-  record: Record<string, unknown>
-): Promise<void> {
-  if (!(await appendAuditRecord(record))) {
-    summary.failedHealAuditRecords += 1
   }
 }
 

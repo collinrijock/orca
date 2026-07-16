@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   appendFileSync,
   existsSync,
@@ -184,8 +184,12 @@ function readLedgerOutcomes(paths: CodexSessionIndexHealPaths): Record<string, s
   }
   const outcomes: Record<string, string> = {}
   for (const line of contents.split('\n').filter(Boolean)) {
-    const record = JSON.parse(line) as { threadId: string; outcome: string }
-    outcomes[record.threadId] = record.outcome
+    try {
+      const record = JSON.parse(line) as { threadId: string; outcome: string }
+      outcomes[record.threadId] = record.outcome
+    } catch {
+      // Torn tails are quarantined by the next append and ignored by readers.
+    }
   }
   return outcomes
 }
@@ -269,7 +273,7 @@ describe('runCodexSessionIndexHeal', () => {
     expect(rig.readLog().threadIds).toEqual([threadId('1'), threadId('4')])
   })
 
-  it('records missing and failed sessions without retrying them next run', async () => {
+  it('backs off failed sessions and retries them later while missing stays terminal', async () => {
     const rig = createHealRig({
       auditedThreads: [
         { stamp: '2026-07-01T10-00-00', id: threadId('1') },
@@ -302,6 +306,54 @@ describe('runCodexSessionIndexHeal', () => {
       interBatchDelayMs: 0
     })
     expect(again.outcome).toBe('up-to-date')
+
+    const marker = JSON.parse(readFileSync(rig.paths.healMarkerPath, 'utf-8')) as {
+      retryableFailureAt: number
+    }
+    marker.retryableFailureAt = 0
+    writeFileSync(rig.paths.healMarkerPath, `${JSON.stringify(marker)}\n`, 'utf-8')
+    const retried = await runCodexSessionIndexHeal(rig.paths, {
+      buildInvocation: (home, timeoutMs) => {
+        const invocation = rig.buildInvocation(home, timeoutMs)
+        return {
+          ...invocation,
+          env: {
+            STUB_CONFIG: JSON.stringify({
+              scenario: 'ok',
+              readLogFile: rig.readLogFile,
+              missingThreadIds: [],
+              failingThreadIds: []
+            })
+          }
+        }
+      },
+      interBatchDelayMs: 0
+    })
+    expect(retried).toMatchObject({ outcome: 'completed', pendingThreads: 1, healedThreads: 1 })
+    expect(rig.readLog().threadIds.at(-1)).toBe(threadId('1'))
+    expect(readLedgerOutcomes(rig.paths)[threadId('1')]).toBe('healed')
+  })
+
+  it('keeps a processed outcome readable after a torn heal-ledger tail', async () => {
+    const id = threadId('1')
+    const rig = createHealRig({
+      auditedThreads: [{ stamp: '2026-07-01T10-00-00', id }]
+    })
+    writeFileSync(rig.paths.healLedgerPath, '{"torn":', 'utf-8')
+
+    const first = await runCodexSessionIndexHeal(rig.paths, {
+      buildInvocation: rig.buildInvocation,
+      interBatchDelayMs: 0
+    })
+    expect(first).toMatchObject({ outcome: 'completed', healedThreads: 1 })
+
+    rmSync(rig.paths.healMarkerPath)
+    const resumed = await runCodexSessionIndexHeal(rig.paths, {
+      buildInvocation: rig.buildInvocation,
+      interBatchDelayMs: 0
+    })
+    expect(resumed).toMatchObject({ outcome: 'completed', pendingThreads: 0 })
+    expect(rig.readLog().serverStarts).toBe(1)
   })
 
   it('splits work into batches with one server session each and bounded concurrency', async () => {
@@ -412,6 +464,30 @@ describe('runCodexSessionIndexHeal', () => {
     })
     expect(again.outcome).toBe('up-to-date')
     expect(rig.readLog().serverStarts).toBe(1)
+
+    const marker = JSON.parse(readFileSync(rig.paths.healMarkerPath, 'utf-8')) as {
+      unsupportedAt: number
+    }
+    marker.unsupportedAt = 0
+    writeFileSync(rig.paths.healMarkerPath, `${JSON.stringify(marker)}\n`, 'utf-8')
+    const retried = await runCodexSessionIndexHeal(rig.paths, {
+      buildInvocation: (home, timeoutMs) => {
+        const invocation = rig.buildInvocation(home, timeoutMs)
+        return {
+          ...invocation,
+          env: {
+            STUB_CONFIG: JSON.stringify({
+              scenario: 'ok',
+              readLogFile: rig.readLogFile,
+              missingThreadIds: [],
+              failingThreadIds: []
+            })
+          }
+        }
+      },
+      interBatchDelayMs: 0
+    })
+    expect(retried).toMatchObject({ outcome: 'completed', healedThreads: 1 })
   })
 
   it('marks the pass unsupported when the CLI lacks the app-server subcommand', async () => {
@@ -602,5 +678,33 @@ describe('runCodexSessionIndexHeal', () => {
     })
     expect(retried).toMatchObject({ outcome: 'completed', healedThreads: 1 })
     expect(rig.readLog().threadIds).toEqual([id, id])
+  })
+
+  it('rebuilds a failed completion marker without repeating processed reads', async () => {
+    const id = threadId('1')
+    const rig = createHealRig({
+      auditedThreads: [{ stamp: '2026-07-01T10-00-00', id }]
+    })
+    mkdirSync(rig.paths.healMarkerPath, { recursive: true })
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    const first = await runCodexSessionIndexHeal(rig.paths, {
+      buildInvocation: rig.buildInvocation,
+      interBatchDelayMs: 0
+    })
+    expect(first).toMatchObject({ outcome: 'completed', healedThreads: 1 })
+
+    rmSync(rig.paths.healMarkerPath, { recursive: true })
+    const resumed = await runCodexSessionIndexHeal(rig.paths, {
+      buildInvocation: rig.buildInvocation,
+      interBatchDelayMs: 0
+    })
+    expect(resumed).toMatchObject({ outcome: 'completed', pendingThreads: 0 })
+    expect(rig.readLog().threadIds).toEqual([id])
+    expect(JSON.parse(readFileSync(rig.paths.healMarkerPath, 'utf-8'))).toMatchObject({
+      version: 3
+    })
+    expect(warnSpy).toHaveBeenCalled()
+    warnSpy.mockRestore()
   })
 })

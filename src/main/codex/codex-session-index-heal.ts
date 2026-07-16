@@ -174,9 +174,13 @@ export async function runCodexSessionIndexHeal(
       )
     } catch (error) {
       if (isCodexAppServerUnsupportedError(error)) {
+        if (shouldStop()) {
+          summary.outcome = 'stopped'
+          return summary
+        }
         // Why: no retry churn on old CLIs — remember unsupported and re-probe
         // after the retry interval or a version bump; nothing is marked healed.
-        writeHealMarker(paths, auditBytes, summary, Date.now())
+        writeHealMarker(paths, auditBytes, summary, { unsupportedAt: Date.now() })
         summary.outcome = 'unsupported'
         return summary
       }
@@ -192,7 +196,12 @@ export async function runCodexSessionIndexHeal(
     summary.outcome = 'stopped'
     return summary
   }
-  writeHealMarker(paths, auditBytes, summary)
+  writeHealMarker(
+    paths,
+    auditBytes,
+    summary,
+    summary.failedThreads > 0 ? { retryableFailureAt: Date.now() } : undefined
+  )
   return summary
 }
 

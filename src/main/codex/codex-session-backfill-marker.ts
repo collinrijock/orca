@@ -1,11 +1,11 @@
-import { mkdirSync, readFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, rmSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { writeFileAtomically } from '../codex-accounts/fs-utils'
 import type { CodexSessionBackfillSummary } from './codex-session-backfill-types'
 
 // Why: bump to re-run the backfill for every host after a layout or semantics
 // change; the run itself stays skip-existing so re-runs never overwrite.
-const CODEX_SESSION_BACKFILL_MARKER_VERSION = 2
+const CODEX_SESSION_BACKFILL_MARKER_VERSION = 3
 
 export function hasCompletedCodexSessionBackfillMarker(
   markerPath: string,
@@ -47,4 +47,14 @@ export function writeCodexSessionBackfillMarker(
       2
     )}\n`
   )
+}
+
+export function invalidateCodexSessionBackfillMarker(markerPath: string): void {
+  try {
+    // Why: a managed-lane system-default launch can create new source
+    // rollouts, so a prior one-time marker must not suppress the next opt-in.
+    rmSync(markerPath, { force: true })
+  } catch (error) {
+    console.warn('[codex-session-backfill] Failed to invalidate completion marker:', error)
+  }
 }

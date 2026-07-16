@@ -37,6 +37,7 @@ import { WSL_CODEX_RUNTIME_HOME_SEGMENTS } from '../pty/codex-home-wsl-env'
 import { writeFileAtomically } from './fs-utils'
 import {
   getOrcaManagedCodexHomePath,
+  getCodexSessionBackfillStateDirPath,
   getSystemCodexHomePath,
   syncCodexGlobalInstructionsIntoManagedHome,
   syncSystemCodexResourcesIntoManagedHome
@@ -62,6 +63,7 @@ import {
 import { getDefaultWslDistro, getWslHome } from '../wsl'
 import { isCodexSystemDefaultRealHomeEnabled } from '../codex/codex-real-home-flag'
 import { hasCustomCodexHomeOverride } from '../codex/codex-real-home-path'
+import { invalidateCodexSessionBackfillMarker } from '../codex/codex-session-backfill-marker'
 import { readShellStartupEnvVar } from '../pty/shell-startup-env'
 
 type CodexAuthIdentity = {
@@ -174,6 +176,7 @@ export class CodexRuntimeHomeService {
       // managed session bridge runs, so the real home stays the single source.
       return null
     }
+    this.invalidateBackfillAfterManagedSystemDefaultLaunch(launchEnv)
     this.syncForCurrentSelection()
     syncSystemCodexResourcesIntoManagedHome()
     syncSystemConfigIntoManagedCodexHome()
@@ -184,6 +187,19 @@ export class CodexRuntimeHomeService {
       resolveHostCodexSessionSourceHome(this.store.getSettings())
     )
     return this.getRuntimeHomePath()
+  }
+
+  private invalidateBackfillAfterManagedSystemDefaultLaunch(launchEnv?: NodeJS.ProcessEnv): void {
+    const settings = this.store.getSettings()
+    if (normalizeCodexRuntimeSelection(settings).host !== null) {
+      return
+    }
+    const realHomeSelected = this.isHostSystemDefaultRealHomeSelected(launchEnv)
+    if (realHomeSelected || !isCodexSystemDefaultRealHomeEnabled(settings)) {
+      invalidateCodexSessionBackfillMarker(
+        join(getCodexSessionBackfillStateDirPath(), 'backfill-complete.json')
+      )
+    }
   }
 
   private startWslSessionBridgeForLaunch(

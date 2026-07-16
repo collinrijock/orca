@@ -25,6 +25,7 @@ const { fsMockState } = vi.hoisted(() => ({
     failLink: false,
     failInstallLink: false,
     failInstallLinkTransiently: false,
+    raceTargetIntoExistence: false,
     failCopy: false,
     failAuditMkdirOnce: false,
     failAuditWrites: false,
@@ -77,7 +78,14 @@ vi.mock('node:fs/promises', async () => {
       }
       return actual.lstat(...args)
     },
-    link: (...args: Parameters<typeof actual.link>) => {
+    link: async (...args: Parameters<typeof actual.link>) => {
+      if (fsMockState.raceTargetIntoExistence && String(args[0]).includes('codex-runtime-home')) {
+        fsMockState.raceTargetIntoExistence = false
+        await actual.writeFile(args[1], 'concurrent target\n', 'utf-8')
+        const error = new Error('EEXIST: concurrent target') as NodeJS.ErrnoException
+        error.code = 'EEXIST'
+        throw error
+      }
       if (fsMockState.failLink && String(args[0]).includes('codex-runtime-home')) {
         const error = new Error('EXDEV: cross-device link') as NodeJS.ErrnoException
         error.code = 'EXDEV'
@@ -164,13 +172,20 @@ function readAuditActions(): string[] {
   return readFileSync(getAuditLogPath(), 'utf-8')
     .split('\n')
     .filter(Boolean)
-    .map((line) => (JSON.parse(line) as { action: string }).action)
+    .flatMap((line) => {
+      try {
+        return [(JSON.parse(line) as { action: string }).action]
+      } catch {
+        return []
+      }
+    })
 }
 
 beforeEach(() => {
   fsMockState.failLink = false
   fsMockState.failInstallLink = false
   fsMockState.failInstallLinkTransiently = false
+  fsMockState.raceTargetIntoExistence = false
   fsMockState.failCopy = false
   fsMockState.failAuditMkdirOnce = false
   fsMockState.failAuditWrites = false
@@ -255,6 +270,36 @@ describe('backfillManagedCodexSessionsIntoSystemHome', () => {
 
     expect(summary).toMatchObject({ scannedFiles: 1, linkedFiles: 0, skippedExistingFiles: 1 })
     expect(readFileSync(collidingPath, 'utf-8')).toBe('user contents\n')
+    expect(readAuditActions()).toEqual(['existing', 'run-summary'])
+  })
+
+  it('enqueues a target that appears after the existence probe', async () => {
+    fsMockState.raceTargetIntoExistence = true
+    writeManagedSession(join('2026', '05', '26', 'rollout-a.jsonl'), 'managed contents\n')
+
+    const summary = await backfillManagedCodexSessionsIntoSystemHome(
+      resolveCodexSessionBackfillPaths()
+    )
+
+    const targetPath = join(getSystemSessionsRoot(), '2026', '05', '26', 'rollout-a.jsonl')
+    expect(summary).toMatchObject({ linkedFiles: 0, skippedExistingFiles: 1 })
+    expect(readFileSync(targetPath, 'utf-8')).toBe('concurrent target\n')
+    expect(readAuditActions()).toEqual(['existing', 'run-summary'])
+  })
+
+  it('keeps recovery records parseable after a torn audit tail', async () => {
+    writeManagedSession(join('2026', '05', '26', 'rollout-a.jsonl'), 'managed contents\n')
+    const targetPath = join(getSystemSessionsRoot(), '2026', '05', '26', 'rollout-a.jsonl')
+    mkdirSync(dirname(targetPath), { recursive: true })
+    writeFileSync(targetPath, 'existing target\n', 'utf-8')
+    mkdirSync(dirname(getAuditLogPath()), { recursive: true })
+    writeFileSync(getAuditLogPath(), '{"torn":', 'utf-8')
+
+    const summary = await backfillManagedCodexSessionsIntoSystemHome(
+      resolveCodexSessionBackfillPaths()
+    )
+
+    expect(summary).toMatchObject({ skippedExistingFiles: 1, failedHealAuditRecords: 0 })
     expect(readAuditActions()).toEqual(['existing', 'run-summary'])
   })
 
@@ -422,13 +467,25 @@ describe('startCodexSessionBackfillInBackground', () => {
     expect(existsSync(getMarkerPath())).toBe(true)
   })
 
+  it('does not publish completion when opt-out lands during final audit', async () => {
+    writeManagedSession(join('2026', '05', '26', 'rollout-a.jsonl'), '{"id":"a"}\n')
+    let stopChecks = 0
+
+    const stopped = await startCodexSessionBackfillInBackground({
+      shouldStop: () => stopChecks++ >= 2
+    })
+
+    expect(stopped).toMatchObject({ stopped: true, linkedFiles: 1 })
+    expect(existsSync(getMarkerPath())).toBe(false)
+  })
+
   it('writes a completion marker and skips the walk on later runs', async () => {
     writeManagedSession(join('2026', '05', '26', 'rollout-a.jsonl'), '{"id":"a"}\n')
 
     const first = await startCodexSessionBackfillInBackground()
     expect(first).toMatchObject({ linkedFiles: 1, failedFiles: 0 })
     expect(existsSync(getMarkerPath())).toBe(true)
-    expect(JSON.parse(readFileSync(getMarkerPath(), 'utf-8'))).toMatchObject({ version: 2 })
+    expect(JSON.parse(readFileSync(getMarkerPath(), 'utf-8'))).toMatchObject({ version: 3 })
 
     // A file appearing after the marker must not be backfilled again.
     writeManagedSession(join('2026', '07', '01', 'rollout-later.jsonl'), '{"id":"later"}\n')
@@ -437,6 +494,25 @@ describe('startCodexSessionBackfillInBackground', () => {
     expect(
       existsSync(join(getSystemSessionsRoot(), '2026', '07', '01', 'rollout-later.jsonl'))
     ).toBe(false)
+  })
+
+  it('recovers an installed rollout after the completion marker write fails', async () => {
+    writeManagedSession(join('2026', '05', '26', 'rollout-a.jsonl'), '{"id":"a"}\n')
+    mkdirSync(getMarkerPath(), { recursive: true })
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    const first = await startCodexSessionBackfillInBackground()
+    expect(first).toBeNull()
+    expect(existsSync(join(getSystemSessionsRoot(), '2026', '05', '26', 'rollout-a.jsonl'))).toBe(
+      true
+    )
+
+    rmSync(getMarkerPath(), { recursive: true })
+    const resumed = await startCodexSessionBackfillInBackground()
+    expect(resumed).toMatchObject({ skippedExistingFiles: 1, failedHealAuditRecords: 0 })
+    expect(JSON.parse(readFileSync(getMarkerPath(), 'utf-8'))).toMatchObject({ version: 3 })
+    expect(warnSpy).toHaveBeenCalled()
+    warnSpy.mockRestore()
   })
 
   it('re-enqueues an installed rollout after its audit write fails', async () => {

@@ -13,11 +13,12 @@ import { writeFileAtomically } from '../codex-accounts/fs-utils'
 
 // Bump to re-drive the heal for every host after a semantics change; already
 // processed thread ids are re-read because ledger lines are version-scoped.
-export const CODEX_SESSION_INDEX_HEAL_VERSION = 2
+export const CODEX_SESSION_INDEX_HEAL_VERSION = 3
 
 // Why: an unsupported CLI stays unsupported until upgraded; re-probing once a
 // day is enough to notice an upgrade without a per-startup spawn.
 const HEAL_UNSUPPORTED_RETRY_INTERVAL_MS = 24 * 60 * 60 * 1000
+const HEAL_FAILED_THREAD_RETRY_INTERVAL_MS = 24 * 60 * 60 * 1000
 
 const CODEX_ROLLOUT_THREAD_ID_PATTERN =
   /^rollout-(.+)-([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\.jsonl$/i
@@ -89,6 +90,7 @@ function readProcessedHealThreadIds(paths: CodexSessionIndexHealPaths): Set<stri
       line.v === CODEX_SESSION_INDEX_HEAL_VERSION &&
       typeof line.threadId === 'string' &&
       typeof line.systemSessionsRoot === 'string' &&
+      (line.outcome === 'healed' || line.outcome === 'missing') &&
       normalizeRuntimePathForComparison(line.systemSessionsRoot) === expectedRoot
     ) {
       processed.add(line.threadId.toLowerCase())
@@ -106,7 +108,9 @@ export function appendHealLedgerRecord(
     mkdirSync(dirname(paths.healLedgerPath), { recursive: true })
     appendFileSync(
       paths.healLedgerPath,
-      `${JSON.stringify({
+      // Why: a killed process can leave a torn tail. Start on a fresh line so
+      // the durable outcome cannot be swallowed by that corrupt fragment.
+      `\n${JSON.stringify({
         v: CODEX_SESSION_INDEX_HEAL_VERSION,
         systemSessionsRoot: paths.systemSessionsRoot,
         threadId,
@@ -181,6 +185,7 @@ export function isHealMarkerCurrent(
       systemSessionsRoot?: unknown
       auditBytes?: unknown
       unsupportedAt?: unknown
+      retryableFailureAt?: unknown
     }
     if (
       marker.version !== CODEX_SESSION_INDEX_HEAL_VERSION ||
@@ -190,6 +195,14 @@ export function isHealMarkerCurrent(
     }
     if (typeof marker.unsupportedAt === 'number') {
       return Date.now() - marker.unsupportedAt < HEAL_UNSUPPORTED_RETRY_INTERVAL_MS
+    }
+    if (typeof marker.retryableFailureAt === 'number') {
+      // Why: malformed or still-growing rollouts must be retried eventually,
+      // but a permanently bad file must not spawn an app-server every launch.
+      return (
+        marker.auditBytes === auditBytes &&
+        Date.now() - marker.retryableFailureAt < HEAL_FAILED_THREAD_RETRY_INTERVAL_MS
+      )
     }
     // Why: the audit ledger is append-only, so an unchanged byte size means no
     // new backfilled sessions since this marker was written.
@@ -203,7 +216,7 @@ export function writeHealMarker(
   paths: CodexSessionIndexHealPaths,
   auditBytes: number,
   summary: HealMarkerSummary,
-  unsupportedAt?: number
+  retry?: { unsupportedAt?: number; retryableFailureAt?: number }
 ): void {
   try {
     mkdirSync(dirname(paths.healMarkerPath), { recursive: true })
@@ -217,7 +230,10 @@ export function writeHealMarker(
           healedThreads: summary.healedThreads,
           missingThreads: summary.missingThreads,
           failedThreads: summary.failedThreads,
-          ...(unsupportedAt === undefined ? {} : { unsupportedAt }),
+          ...(retry?.unsupportedAt === undefined ? {} : { unsupportedAt: retry.unsupportedAt }),
+          ...(retry?.retryableFailureAt === undefined
+            ? {}
+            : { retryableFailureAt: retry.retryableFailureAt }),
           completedAt: Date.now()
         },
         null,

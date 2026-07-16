@@ -1,5 +1,6 @@
 import { appendFile, mkdir } from 'node:fs/promises'
 import { dirname } from 'node:path'
+import type { CodexSessionBackfillSummary } from './codex-session-backfill-types'
 
 export type CodexSessionBackfillAuditWriter = (record: Record<string, unknown>) => Promise<boolean>
 
@@ -18,7 +19,9 @@ export function createCodexSessionBackfillAuditWriter(
     await appendFile(auditLogPath, serializedRecord, { encoding: 'utf-8' })
   }
   return async (record): Promise<boolean> => {
-    const serializedRecord = `${JSON.stringify({ at: new Date().toISOString(), ...record })}\n`
+    // Why: a crash can leave a partial final JSON object. A leading newline
+    // quarantines that torn tail so this recovery record remains parseable.
+    const serializedRecord = `\n${JSON.stringify({ at: new Date().toISOString(), ...record })}\n`
     try {
       await appendRecord(serializedRecord)
       return true
@@ -36,4 +39,30 @@ export function createCodexSessionBackfillAuditWriter(
       return false
     }
   }
+}
+
+export async function appendCodexSessionHealAuditRecord(
+  writer: CodexSessionBackfillAuditWriter,
+  summary: CodexSessionBackfillSummary,
+  record: Record<string, unknown>
+): Promise<void> {
+  if (!(await writer(record))) {
+    summary.failedHealAuditRecords += 1
+  }
+}
+
+export async function recordExistingCodexSessionForHeal(
+  writer: CodexSessionBackfillAuditWriter,
+  summary: CodexSessionBackfillSummary,
+  source: string,
+  target: string
+): Promise<void> {
+  summary.skippedExistingFiles += 1
+  // Why: this also recovers a rollout installed before a crash or audit
+  // failure; thread/read is idempotent for a pre-existing real-home file.
+  await appendCodexSessionHealAuditRecord(writer, summary, {
+    action: 'existing',
+    source,
+    target
+  })
 }
