@@ -8,8 +8,8 @@ work; keep exact commands, runner identities, hashes, metrics, and residual gaps
 
 Date created: 2026-07-14<br>
 Last updated: 2026-07-15<br>
-Current phase: Milestone 6 / Work Package 5 bounded runtime transfer — **In progress — 2026-07-15, Codex implementation owner: bounded client source streaming is exact-head green; the smallest disconnected SFTP adapter audit is next**. Keep every capability disconnected from every production/default SSH path. Real Apple/SignPath rehearsals remain an explicit late gate and are not on this package's critical path.<br>
-Session checkpoint: **BOUNDED SOURCE STREAM EXACT-HEAD GREEN / SFTP ADAPTER AUDIT NEXT — 2026-07-15, Codex implementation owner** — `E-M6-SOURCE-STREAM-CI-001` closes all-six native purpose and exact full-size client-stream proof. The first adjacent computer-use Windows attempt exposed only two unrelated five-second launcher timeouts under `E-M6-SOURCE-STREAM-ADJACENT-CI-RED-001`; its same-SHA failed-job rerun is fully green without changing timeouts or code. Audit the smallest SFTP destination/session boundary before writing its RED tests. Do not add a product caller, settings/fallback wiring, tuple enablement, publication, or default behavior. Merging to `main` remains prohibited, SignPath is deferred, and legacy remains the production default.<br>
+Current phase: Milestone 6 / Work Package 5 bounded runtime transfer — **In progress — 2026-07-15, Codex implementation owner: disconnected SFTP per-file destination is locally green; exact-head native proof is next**. Keep every capability disconnected from every production/default SSH path. Real Apple/SignPath rehearsals remain an explicit late gate and are not on this package's critical path.<br>
+Session checkpoint: **SFTP PER-FILE DESTINATION LOCAL GREEN — 2026-07-15, Codex implementation owner** — `E-M6-SFTP-FILE-DESTINATION-LOCAL-001` passes the hardened 13-case purpose contract, focused/broad/workflow tests, and all static/isolation gates. It proves exclusive remote open, exact callback-bounded offsets, in-flight cancellation joining, explicit POSIX mode repair/handle-stat proof, Windows mode skip, close-before-unlink cleanup, and idempotent aggregation. Commit/push this disconnected package and require exact-head all-six native/adjacent CI before advancing to SFTP session/tree orchestration. The adapter borrows but does not acquire/end an SFTP session and does not create directories or publish/launch a tree; session-wide cancellation and whole-staging cleanup remain later gates. Do not add a product caller, settings/fallback wiring, tuple enablement, publication, or default behavior. Merging to `main` remains prohibited, SignPath is deferred, and legacy remains the production default.<br>
 Primary design: [SSH relay GitHub Release plan](./2026-07-14-ssh-relay-github-release-plan.html)<br>
 Motivating issues: [#8450](https://github.com/stablyai/orca/issues/8450), [#1693](https://github.com/stablyai/orca/issues/1693)
 
@@ -16737,6 +16737,91 @@ runtime source stream destination is incomplete`. The contract step failed after
   remote cleanup. It is not live transfer or remote proof. Every transport adapter, remote hash/
   install/launch step, product/Beta/fallback/tuple/publication/default path, and SignPath remain
   open. Legacy remains the sole production/default path and every tuple remains disabled.
+
+### E-M6-SFTP-FILE-DESTINATION-AUDIT-001 — exclusive bounded SFTP file lifecycle boundary
+
+- Date/owner: 2026-07-15, Codex implementation owner.
+- Exact input boundary: accept only a caller-owned SFTP file primitive set, one already validated
+  exact remote staging-file path, the signed `0o644` or `0o755` mode, an explicit POSIX-mode flag,
+  and the same required caller-owned `AbortSignal` used by the source streamer. Do not derive any
+  remote path from a client-native local path and do not acquire or end the SFTP session here.
+- Open/write contract: check cancellation before open; use only exclusive `wx` open; once the handle
+  exists this adapter owns that new file. Each `write(chunk)` issues exactly one positional SFTP
+  write and resolves only from its callback, making that callback the source stream's reusable
+  64-KiB buffer-lifetime boundary. Writes are sequential, offsets are exact, empty/concurrent/late
+  writes are rejected, and no chunk/tree concatenation or base64 representation exists.
+- Completion contract: for POSIX remotes, apply the signed mode through the owned handle, re-read
+  handle attributes, and require the exact permission bits before closing. Windows/non-POSIX
+  remotes skip POSIX mode operations explicitly. A close is successful only after the remote handle
+  callback settles and a final signal check passes.
+- Failure/cancellation contract: an open failure never unlinks because no ownership was obtained.
+  Any later write, mode, verification, close, or cancellation failure leaves the destination
+  abortable; abort attempts owned-handle close before unlink, joins cleanup failures, and is
+  idempotent. Cancellation during an in-flight SFTP callback remains joined until that callback is
+  forced to settle by the later session owner, preventing reuse of a possibly retained source
+  buffer.
+- Required purpose RED: missing destination module; exclusive open and exact offsets; deferred
+  callback/buffer lifetime; pre-open and post-open cancellation; write/mode/stat/close failures;
+  POSIX exact-mode verification; explicit Windows mode skip; no deletion on failed exclusive open;
+  close-before-unlink order; joined/idempotent cleanup; illegal concurrent/empty/late operations;
+  and path-free adapter-authored diagnostics. Add the suite exactly once to both native artifact
+  command families before implementation.
+- Explicit residual boundary: this is a per-file primitive, not an SFTP transfer. SFTP session
+  acquisition/end/error ownership, bounded tree concurrency, remote directory creation, remote-path
+  policy, session-wide timeout/cancellation, full-staging cleanup, real server behavior, full-size
+  transfer, mode behavior across servers, and later remote tree verification/install/publish/launch
+  all remain open. No production importer, setting, fallback, tuple, release, or default path may be
+  added by this package; legacy remains the sole production path.
+
+### E-M6-SFTP-FILE-DESTINATION-LOCAL-RED-001 — destination lifecycle is absent
+
+- Date/owner/environment: 2026-07-15, Codex implementation owner; local macOS arm64, Node 26.0.0,
+  pnpm 10.24.0, atop exact checkpoint commit `705bca2db` plus the purpose/workflow/checklist RED diff.
+- Purpose command: `pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1
+src/main/ssh/ssh-relay-runtime-sftp-file-destination.test.ts` — expected RED, exit 1: one failed
+  suite, zero collected tests, because `./ssh-relay-runtime-sftp-file-destination` does not exist.
+  The 260-line source contract declares 12 cases including two parameterized failure cells.
+- Native workflow oracle: `pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1
+config/scripts/ssh-relay-runtime-workflow.test.mjs` — PASS, 7/7 in 356 ms. The workflow source and
+  oracle already require the purpose suite exactly once in both POSIX and PowerShell native command
+  families, so implementation cannot become locally green while native coverage remains omitted.
+- Static precondition: `git diff --check` passes and the test remains below the max-lines ratchet at
+  260 lines. Protected resolver files remain untouched. No production importer, SFTP session owner,
+  remote directory/tree orchestrator, product caller, setting, fallback, tuple, publication, or
+  default behavior exists in the RED diff.
+
+### E-M6-SFTP-FILE-DESTINATION-LOCAL-001 — per-file SFTP lifecycle is locally green
+
+- Date/owner/environment: 2026-07-15, Codex implementation owner; local macOS arm64, Node 26.0.0,
+  pnpm 10.24.0, atop exact checkpoint commit `705bca2db` plus the implementation/checklist diff.
+- Implementation: the 210-line `ssh-relay-runtime-sftp-file-destination.ts` accepts only the audited
+  primitive boundary. It opens with `wx` and signed mode, awaits one SFTP positional-write callback
+  per source chunk before advancing the exact offset, checks the same signal around every callback,
+  repairs and verifies POSIX permission bits before close, and skips those operations only from the
+  explicit non-POSIX flag. Adapter-authored state/input errors contain no remote path.
+- Purpose command: `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts
+--maxWorkers=1 src/main/ssh/ssh-relay-runtime-sftp-file-destination.test.ts` — PASS, 13/13 in
+  431 ms Vitest / 2.36 seconds wall, 133,005,312-byte maximum RSS, zero swaps. The additional
+  hardening case proves cancellation during a pending write cannot settle or begin cleanup until the
+  SFTP callback releases the borrowed source buffer; it then closes before unlinking.
+- Focused command: the destination, source stream/scan/tree, acquisition/cache population and
+  resolution, integration, and workflow-oracle ten-file command — PASS, 103 tests with one declared
+  platform skip in 8.28 seconds.
+- Broad commands: `src/main/ssh/ssh-relay-*.test.ts` — PASS, 579 tests with five declared platform/
+  full-size skips in 27.25 seconds; `config/scripts/ssh-relay-runtime-*.test.mjs` — PASS, 280/280 in
+  20.82 seconds. The first quoted-glob invocations matched no files and were discarded as command
+  syntax mistakes; the unquoted exact checklist commands above are the credited results.
+- Static/isolation commands: `pnpm typecheck`, targeted `pnpm exec oxlint`, `pnpm lint`, targeted
+  `pnpm exec oxfmt --check`, `pnpm run check:max-lines-ratchet`, `git diff --check`, the protected-
+  resolver diff gate, and the no-non-test-importer `rg` gate pass. Full lint includes switch
+  exhaustiveness, styled-scrollbar, 41 reliability, bundled-skill, max-lines, and localization gates;
+  only pre-existing unrelated warnings remain. The module/test are 210/289 lines with no bypass.
+- Residual: this is callback-contract proof with mocked primitives, not a live SFTP server, session,
+  SSH connection, remote directory/staging tree, bounded multi-file transfer, session-wide abort/
+  timeout, whole-tree cleanup, or full-size remote measurement. It has no non-test importer. Exact-
+  head all-six Node 24 and adjacent Actions evidence is required before auditing the session/tree
+  adapter. Product/Beta/fallback/tuple/publication/default behavior and SignPath remain absent;
+  legacy remains the sole production path.
 
 ## Accepted Gaps
 

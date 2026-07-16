@@ -9,9 +9,21 @@ keeps commands, hashes, runner identities, timings, and failure details.
 A checked box means the work has evidence in the detailed ledger. Design approval alone does not
 complete a box.
 
-Active checkpoint: **Milestone 6 / Work Package 5 bounded runtime transfer — bounded client source
-streaming is exact-head green; the smallest disconnected SFTP adapter audit is next, 2026-07-15,
-Codex implementation owner.**
+Active checkpoint: **Milestone 6 / Work Package 5 bounded runtime transfer — disconnected SFTP
+per-file destination is locally green; exact-head native proof is next, 2026-07-15, Codex
+implementation owner.** `E-M6-SFTP-FILE-DESTINATION-AUDIT-001` fixes exclusive `wx` open, callback-bounded
+positional writes, explicit POSIX mode repair/handle-stat proof, and joined close-before-unlink
+cleanup. It deliberately borrows but does not acquire/end an SFTP session and does not create
+directories, clean a whole staging tree, or publish/launch anything. Session-wide cancellation,
+full-size live SFTP, product/default wiring, and SignPath remain later gates.
+`E-M6-SFTP-FILE-DESTINATION-LOCAL-RED-001` records the expected missing-module failure for the
+12-case purpose contract; the 7/7 native workflow oracle already pins it once in both command
+families. Protected resolvers remain untouched and no production importer exists.
+`E-M6-SFTP-FILE-DESTINATION-LOCAL-001` passes the hardened 13-case purpose suite, 103 focused cases
+with one declared skip, 579 broad relay cases with five declared skips, 280/280 workflow cases,
+typecheck, full lint, targeted format, max-lines, diff, protected-resolver, and no-product-import
+gates. It proves the exact per-file lifecycle only; SFTP session/tree orchestration, live/full-size
+remote proof, and every product/default path remain open.
 `E-M6-SOURCE-STREAM-CI-001` closes exact commit `df39c287d`: all six primary native clients pass the
 27-case source-stream suite (Windows has only the declared POSIX-mode skip), exact 85–125 MB trees
 stream in 103.663–530.937 ms with 0–5,492,736 incremental RSS bytes, both Linux supplements and the
