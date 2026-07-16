@@ -8,7 +8,8 @@ import {
   HOST_SIDEBAR_MIN_WIDTH,
   clampHostDockWidth,
   clampHostSidebarWidth,
-  loadNativeChatTabIds,
+  loadDefaultSessionView,
+  loadSessionViewOverrides,
   loadDisabledTerminalLiveInputHandles,
   loadHostSidebarWidth,
   loadPushNotificationsEnabled,
@@ -16,9 +17,10 @@ import {
   loadTerminalLinkOpenMode,
   readPushNotificationsPreference,
   readDisabledTerminalLiveInputHandlesPreference,
+  saveDefaultSessionView,
   saveDisabledTerminalLiveInputHandles,
   saveHostSidebarWidth,
-  saveNativeChatTabIds,
+  saveSessionViewOverrides,
   savePushNotificationsEnabled,
   saveTerminalAutocompleteEnabled,
   saveTerminalLinkOpenMode
@@ -31,28 +33,57 @@ vi.mock('@react-native-async-storage/async-storage', () => ({
   }
 }))
 
-describe('native chat tab preference', () => {
+describe('session view preference', () => {
   beforeEach(() => {
     vi.mocked(AsyncStorage.getItem).mockReset()
     vi.mocked(AsyncStorage.setItem).mockReset()
   })
 
-  it('loads and saves tab ids under a host-and-worktree scoped key', async () => {
-    vi.mocked(AsyncStorage.getItem).mockResolvedValue(JSON.stringify(['tab-1', 42, 'tab-2']))
+  it('defaults to terminal and persists the chat default', async () => {
+    vi.mocked(AsyncStorage.getItem).mockResolvedValue(null)
+    await expect(loadDefaultSessionView()).resolves.toBe('terminal')
+    expect(AsyncStorage.getItem).toHaveBeenCalledWith('orca:defaultSessionView')
 
-    await expect(loadNativeChatTabIds('host/one', 'folder:C:\\repo')).resolves.toEqual([
-      'tab-1',
-      'tab-2'
+    await saveDefaultSessionView('chat')
+    expect(AsyncStorage.setItem).toHaveBeenCalledWith('orca:defaultSessionView', 'chat')
+
+    vi.mocked(AsyncStorage.getItem).mockResolvedValue('bogus')
+    await expect(loadDefaultSessionView()).resolves.toBe('terminal')
+  })
+
+  it('loads and saves per-tab overrides under a host-and-worktree scoped key', async () => {
+    vi.mocked(AsyncStorage.getItem).mockResolvedValue(
+      JSON.stringify({ 'tab-1': 'chat', 'tab-2': 'terminal', 'tab-3': 'bogus' })
+    )
+
+    const loaded = await loadSessionViewOverrides('host/one', 'folder:C:\\repo')
+    expect([...loaded.entries()]).toEqual([
+      ['tab-1', 'chat'],
+      ['tab-2', 'terminal']
     ])
     expect(AsyncStorage.getItem).toHaveBeenCalledWith(
       'orca:nativeChatTabs:host%2Fone:folder%3AC%3A%5Crepo'
     )
 
-    await saveNativeChatTabIds('host/one', 'folder:C:\\repo', ['tab-2'])
+    await saveSessionViewOverrides(
+      'host/one',
+      'folder:C:\\repo',
+      new Map([['tab-2', 'chat' as const]])
+    )
     expect(AsyncStorage.setItem).toHaveBeenCalledWith(
       'orca:nativeChatTabs:host%2Fone:folder%3AC%3A%5Crepo',
-      JSON.stringify(['tab-2'])
+      JSON.stringify({ 'tab-2': 'chat' })
     )
+  })
+
+  it('migrates the legacy array format to chat overrides', async () => {
+    vi.mocked(AsyncStorage.getItem).mockResolvedValue(JSON.stringify(['tab-1', 42, 'tab-2']))
+
+    const loaded = await loadSessionViewOverrides('host', 'wt')
+    expect([...loaded.entries()]).toEqual([
+      ['tab-1', 'chat'],
+      ['tab-2', 'chat']
+    ])
   })
 })
 

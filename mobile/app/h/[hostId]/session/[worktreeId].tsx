@@ -1200,7 +1200,8 @@ export default function SessionScreen() {
     nativeChatInputLeaseReady,
     onSendError: showNativeChatSendError
   })
-  const { chatTabIds, toggleTabChatView, showNativeChat, showNativeChatRef } = nativeChatController
+  const { isTabChatView, toggleTabChatView, showNativeChat, showNativeChatRef } =
+    nativeChatController
 
   const dictation = useMobileDictation({
     client,
@@ -5416,7 +5417,7 @@ export default function SessionScreen() {
         actions={getMobileTerminalActionSheetActions({
           target: actionTarget,
           tabs: sessionTabs.filter((tab) => tab.type === 'terminal'),
-          chatTabIds,
+          isTabChatView,
           nativeChatTranscriptIsLocalReadable,
           onDismiss: () => setActionTarget(null),
           onToggleChat: toggleTabChatView,
