@@ -930,12 +930,19 @@ function getWslHookReconciliationAction(args: {
   isCurrentGeneration: boolean
   installedTrustConfigPath: string | null
   resolvedTrustConfigPath: string | null
+  /** Whether the synchronous install for this generation wrote trust. */
+  installSucceeded: boolean
 }): 'none' | 'remove' | 'reinstall' {
   if (!args.isCurrentGeneration) {
     return 'none'
   }
   if (args.settlement.status === 'missing') {
-    return 'remove'
+    // Why: a `missing` directory probe right after a verified install/grant is
+    // a false negative — the RPC (or fallback) just wrote and read trust in
+    // that home, so it exists. Revoking here would delete the fresh grant the
+    // launching pane needs, resurfacing "hooks need review". A genuinely moved
+    // home resolves to a different path and takes the `reinstall` branch below.
+    return args.installSucceeded ? 'none' : 'remove'
   }
   if (
     args.settlement.status !== 'resolved' ||
@@ -972,6 +979,10 @@ export class CodexHookService {
   ): AgentHookInstallStatus | null {
     const generation = this.supersedeWslReconciliation(runtimeHomePath)
     let installedTrustConfigPath: string | null = null
+    // Why: JS is single-threaded, so the synchronous install below finishes
+    // before any async `wsl.exe` settlement callback runs — this flag is
+    // always set by the time the callback reads it.
+    let installSucceeded = false
     const onCanonicalPathSettled = (settlement: WslCanonicalPathSettlement): void => {
       if (!runtimeHomePath) {
         return
@@ -989,7 +1000,8 @@ export class CodexHookService {
         settlement,
         isCurrentGeneration: this.wslReconciliationGeneration.get(key) === generation,
         installedTrustConfigPath,
-        resolvedTrustConfigPath: resolvedPlan?.trustConfigPath ?? null
+        resolvedTrustConfigPath: resolvedPlan?.trustConfigPath ?? null,
+        installSucceeded
       })
       if (action === 'none') {
         return
@@ -1014,6 +1026,7 @@ export class CodexHookService {
         return
       }
       installedTrustConfigPath = resolvedPlan.trustConfigPath
+      installSucceeded = status.state === 'installed'
     }
     const wslPlan = createCodexWslRuntimeHookInstallPlan(
       runtimeHomePath,
@@ -1022,7 +1035,9 @@ export class CodexHookService {
       onCanonicalPathSettled
     )
     installedTrustConfigPath = wslPlan?.trustConfigPath ?? null
-    return wslPlan ? installManagedHooksIntoWslRuntime(wslPlan) : null
+    const status = wslPlan ? installManagedHooksIntoWslRuntime(wslPlan) : null
+    installSucceeded = status?.state === 'installed'
+    return status
   }
 
   refreshRuntimeUserHooksForRuntimeHome(
