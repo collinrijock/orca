@@ -9,13 +9,15 @@ keeps commands, hashes, runner identities, timings, and failure details.
 A checked box means the work has evidence in the detailed ledger. Design approval alone does not
 complete a box.
 
-Active checkpoint: **Milestone 6 / Work Package 5 bounded runtime transfer — disconnected live
-OpenSSH SFTP runner fixture auth correction is in progress, 2026-07-15, Codex implementation owner.**
-`E-M6-SFTP-LIVE-COMPOSITION-CI-RED-001` records both target-native Linux jobs passing build,
-contracts, and existing full-size measurement before stock sshd rejected GitHub's shadow-locked
-`runner` account ahead of public-key validation. No SFTP bytes were sent and no live cell is credited.
-The narrow rerun keeps password authentication disabled and gives only the ephemeral account a fresh
-random password hash so public-key authentication can proceed.
+Active checkpoint: **Milestone 6 / Work Package 5 bounded runtime transfer — exact full-size Linux
+x64/arm64 OpenSSH SFTP is green; repeated adjacent Windows compiler-test timeout correction is in
+progress, 2026-07-15, Codex implementation owner.** `E-M6-SFTP-LIVE-COMPOSITION-CI-001` records
+complete exact-tree/mode/exclusive-root/cancellation/RSS proof against stock OpenSSH on native Linux
+x64 and arm64. `E-M6-SFTP-LIVE-COMPOSITION-ADJACENT-CI-RED-001` records the only adjacent failure:
+the unchanged real Windows C# compiler integration case exceeded Vitest's five-second default twice.
+Current main already fixes that pre-existing test under reviewed commit `45a772cb4` / PR #8897 by
+scoping 15 seconds only to the real compiler cases. Apply that exact test-only patch and require a
+fresh exact-head computer-use pass before starting disconnected POSIX system-SSH transfer.
 `E-M6-SFTP-LIVE-COMPOSITION-AUDIT-001` limits this package to one authenticated built-in
 `SshConnection`, one raw SFTP channel, the existing one-to-four file transfer, captured-transport-
 only force close with awaited teardown, and exact full-size Linux x64/arm64 runtime transfer against

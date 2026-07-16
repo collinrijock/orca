@@ -8,8 +8,8 @@ work; keep exact commands, runner identities, hashes, metrics, and residual gaps
 
 Date created: 2026-07-14<br>
 Last updated: 2026-07-15<br>
-Current phase: Milestone 6 / Work Package 5 bounded runtime transfer — **In progress — 2026-07-15, Codex implementation owner: disconnected authenticated-connection/SFTP-tree composition and live OpenSSH proof**. Keep every capability disconnected from every production/default SSH path. Real Apple/SignPath rehearsals remain an explicit late gate and are not on this package's critical path.<br>
-Session checkpoint: **LIVE SFTP RUNNER FIXTURE RED / NARROW AUTH-FIX IN PROGRESS — 2026-07-15, Codex implementation owner** — `E-M6-SFTP-LIVE-COMPOSITION-CI-RED-001` proves both target-native Linux builds and all pre-live contracts passed, then the loopback stock-OpenSSH fixture rejected GitHub's shadow-locked `runner` account before public-key validation. No SFTP bytes were sent and no live cell is credited. Keep password authentication disabled; assign only a fresh random ephemeral password hash so stock sshd accepts the runner account for public-key authentication, fix failure-log readability, rerun exact head, and require full metrics. Do not credit Windows/POSIX system SSH, high-RTT, `MaxSessions=1`, product/settings/fallback wiring, tuple enablement, publication, or default behavior. Merging to `main` remains prohibited, SignPath is deferred, and legacy remains the production default.<br>
+Current phase: Milestone 6 / Work Package 5 bounded runtime transfer — **In progress — 2026-07-15, Codex implementation owner: close exact-head live-SFTP adjacent regression evidence before starting disconnected POSIX system-SSH transfer**. Keep every capability disconnected from every production/default SSH path. Real Apple/SignPath rehearsals remain an explicit late gate and are not on this package's critical path.<br>
+Session checkpoint: **LIVE SFTP GREEN / REPEATED ADJACENT WINDOWS TIMEOUT DIAGNOSED — 2026-07-15, Codex implementation owner** — `E-M6-SFTP-LIVE-COMPOSITION-CI-001` proves exact full-size Linux x64/arm64 transfer through stock OpenSSH with complete tree/mode/exclusive-root/cancellation/RSS evidence. `E-M6-SFTP-LIVE-COMPOSITION-ADJACENT-CI-RED-001` records the only adjacent failure: the unchanged real Windows launcher compilation case exceeded Vitest's five-second default on both attempts. Current `main` independently fixed that exact pre-existing test in reviewed commit `45a772cb4` / PR #8897 by scoping 15 seconds only to the real compiler integration cases. Apply that exact test-only patch, rerun exact head, and do not credit Windows/POSIX system SSH, high-RTT, `MaxSessions=1`, product/settings/fallback wiring, tuple enablement, publication, or default behavior. Merging to `main` remains prohibited, SignPath is deferred, and legacy remains the production default.<br>
 Primary design: [SSH relay GitHub Release plan](./2026-07-14-ssh-relay-github-release-plan.html)<br>
 Motivating issues: [#8450](https://github.com/stablyai/orca/issues/8450), [#1693](https://github.com/stablyai/orca/issues/1693)
 
@@ -17349,6 +17349,75 @@ src/main/ssh/ssh-relay-runtime-sftp-tree-transfer.test.ts` — PASS, 15/15 in 1.
 - Residual: no live SFTP transfer/filesystem/mode/RSS/cancellation evidence is credited from this
   run. Exact-head Linux x64/arm64 rerun plus all-six/adjacent regression proof remains mandatory.
 
+### E-M6-SFTP-LIVE-COMPOSITION-CI-001 — exact full-size Linux x64/arm64 OpenSSH transfer passes
+
+- Date/owner/head/run: 2026-07-15, Codex implementation owner; exact fixture-correction commit
+  `a72c32f630712547b4b51ff9eda5e073ea010ca5`, SSH Relay Runtime Artifacts run
+  [29513599328](https://github.com/stablyai/orca/actions/runs/29513599328).
+- Native contract/build results: all six primary Node 24.18.0 jobs pass their runtime contract,
+  target-native build, reproducibility, read-back, bundled-Node/native-module/PTY/watcher smoke, and
+  evidence upload: Darwin arm64
+  [87672984492](https://github.com/stablyai/orca/actions/runs/29513599328/job/87672984492), Darwin x64
+  [87672984529](https://github.com/stablyai/orca/actions/runs/29513599328/job/87672984529), Windows x64
+  [87672984544](https://github.com/stablyai/orca/actions/runs/29513599328/job/87672984544), Windows arm64
+  [87672984568](https://github.com/stablyai/orca/actions/runs/29513599328/job/87672984568), Linux arm64
+  [87672984606](https://github.com/stablyai/orca/actions/runs/29513599328/job/87672984606), and Linux x64
+  [87672984630](https://github.com/stablyai/orca/actions/runs/29513599328/job/87672984630). Linux arm64
+  supplement [87674335272](https://github.com/stablyai/orca/actions/runs/29513599328/job/87674335272),
+  Linux x64 supplement
+  [87674335444](https://github.com/stablyai/orca/actions/runs/29513599328/job/87674335444), and Windows
+  x64 floor [87675902858](https://github.com/stablyai/orca/actions/runs/29513599328/job/87675902858)
+  pass. Windows arm64 floor
+  [87675902918](https://github.com/stablyai/orca/actions/runs/29513599328/job/87675902918) completes the
+  exact 42-file / 85,213,511-byte runtime smoke in 5,871.70 ms and 48,713,728 incremental RSS bytes,
+  then retains only the declared hosted build-26200 versus required-26100 rejection.
+- Linux x64 live cell: `ubuntu-24.04` / `ubuntu24` image `20260714.240.1`, X64, stock
+  `OpenSSH_9.6p1 Ubuntu-3ubuntu13.18`, public-key authentication only. Exact
+  `linux-x64-glibc` content `sha256:fc63ca342a5990f460ec6d72262a8542173dab20ce03c9b9cfb755b1c6057e6d`,
+  34 files / 124,846,430 bytes. Serial transfer is 1,539.61 ms / 57,503,744 incremental RSS bytes;
+  four-file transfer is 1,420.82 ms / 5,488,640 bytes; cancellation settles in 9.99 ms / zero
+  incremental RSS bytes.
+- Linux arm64 live cell: `ubuntu-24.04-arm` / `ubuntu24-arm64` image `20260714.61.1`, ARM64, the
+  same stock OpenSSH version and public-key-only policy. Exact `linux-arm64-glibc` content
+  `sha256:96f07f62af9b35304bb8ca0870ca4d8095e059bfa61dd1bc57e81b20f3fbca67`, 34 files /
+  122,865,324 bytes. Serial transfer is 1,497.40 ms / 58,568,704 incremental RSS bytes; four-file
+  transfer is 1,385.27 ms / 5,984,256 bytes; cancellation settles in 9.13 ms / zero incremental RSS
+  bytes.
+- Live assertions: each cell transfers the exact runtime built in that job; validates every path,
+  SHA-256, byte count, and POSIX mode; proves exclusive-root refusal preserves the first tree;
+  cleans an aborted owned stage with no later writes; and stays below the 80 MiB desktop transfer
+  ceiling. PR Checks run
+  [29513598690](https://github.com/stablyai/orca/actions/runs/29513598690) and Golden E2E run
+  [29513600476](https://github.com/stablyai/orca/actions/runs/29513600476) pass at the same SHA.
+- Residual boundary: this closes only the two same-family Linux SFTP cells. Windows remote,
+  cross-client coverage, high RTT, `MaxSessions=1`, peak live channel/handle counts, fault injection,
+  POSIX/Windows system SSH, remote verification/install/publish/launch, and every product/Beta/
+  settings/fallback/tuple/publication/default path remain open. The adjacent computer-use workflow
+  is separately RED below, so the package does not advance yet. Legacy remains the only production
+  path and SignPath remains deferred.
+
+### E-M6-SFTP-LIVE-COMPOSITION-ADJACENT-CI-RED-001 — repeated pre-existing Windows compiler timeout
+
+- Date/owner/head/run: 2026-07-15, Codex implementation owner; exact commit `a72c32f630712547b4b51ff9eda5e073ea010ca5`,
+  computer-use run [29513600918](https://github.com/stablyai/orca/actions/runs/29513600918), first
+  Windows job [87672944323](https://github.com/stablyai/orca/actions/runs/29513600918/job/87672944323)
+  and same-SHA failed-job rerun
+  [87677479785](https://github.com/stablyai/orca/actions/runs/29513600918/job/87677479785).
+- Result: both attempts pass 400 of 401 applicable tests with four declared skips, but
+  `src/main/ssh/ssh-remote-cli-launcher.test.ts:55` exceeds Vitest's unchanged five-second default
+  while synchronously invoking the real .NET Framework compiler. The first attempt lasts 11.76
+  seconds overall; the rerun lasts 12.23 seconds. Neither the launcher source/test nor its imports
+  overlap this package. The same workflow's Ubuntu job passes, and the independent all-six native
+  artifact jobs plus PR Checks and Golden E2E pass.
+- Independent diagnosis: current `origin/main` commit
+  `45a772cb42f8525ce0189fe63a509e562c5b6928` (`test(windows): allow native launcher compilation
+time`, reviewed PR #8897) changes only the two real Windows compiler integration tests and scopes a
+  15-second timeout to them because cold hosted `csc.exe` startup exceeds the unit default. It is
+  not an SFTP change and changes no production behavior. This feature branch predates that commit.
+- Disposition: apply the exact reviewed test-only patch without broad timeout relaxation, then
+  require a fresh exact-head computer-use pass before advancing. No adjacent green evidence is
+  credited from either failed attempt.
+
 ## Accepted Gaps
 
 No product gap is accepted merely because it appears in this list. Each entry requires explicit
@@ -17407,9 +17476,11 @@ The project is not complete until every applicable item below is checked with ev
 
 ## Next Required Action
 
-Commit and push the locally green disconnected SFTP composition package, then require exact-head
-target-native Linux x64/arm64 OpenSSH full-size evidence and all-six native/adjacent regression CI
-before checking any Milestone 6 SFTP item or advancing. Do not add an Electron/startup/product
+Apply current-main commit `45a772cb4`'s exact scoped Windows compiler-test timeout patch, commit and
+push this evidence checkpoint, and require a fresh exact-head computer-use pass. Then audit the next
+smallest disconnected POSIX system-SSH/no-tar transfer package before changing code. Do not check
+the broad Milestone 6 SFTP item yet: Windows remote, cross-client, high-RTT, `MaxSessions=1`, live
+channel/handle, and fault-injection cells remain open. Do not add an Electron/startup/product
 importer, per-target mode wiring, fallback, tuple enablement, release publication, or default behavior.
 Keep Node upstream `.tar.xz` inputs, Windows ZIP, `ORCA_RELAY_PATH`, existing desktop required-assets
 behavior, detached-signature byte encoding, Windows arm64 build 26100, macOS 13.5, Linux kernel 4.18,
