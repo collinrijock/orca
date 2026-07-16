@@ -8,8 +8,8 @@ work; keep exact commands, runner identities, hashes, metrics, and residual gaps
 
 Date created: 2026-07-14<br>
 Last updated: 2026-07-15<br>
-Current phase: Milestone 5 / Work Package 4 desktop resolver/cache — **In progress — 2026-07-15, Codex implementation owner: require exact-head all-six native CI for the disconnected marked Linux kernel probe and kernel-only distro-suffix parser accepted locally by E-M5-LINUX-KERNEL-DETECTION-LOCAL-001**. Keep every capability disconnected from host-evidence composition and every production/default SSH path. Real Apple/SignPath rehearsals remain an explicit late gate and are not on this package's critical path.<br>
-Session checkpoint: **LOCAL CLOSED / CI NEXT — 2026-07-15, Codex implementation owner** — `E-M5-LINUX-KERNEL-DETECTION-LOCAL-001` passes the 19-case purpose contract, selector and native-workflow gates, 394 non-full-size relay cases, 280 release-script cases, typecheck, lint, format, reliability, localization, max-lines, diff, and protected-resolver gates. The reviewed Linux 4.18 floor is unchanged. No host-evidence composer, product caller, setting, transfer/install, fallback classifier, tuple enablement, release publication, or default behavior is connected. Merging to `main` remains prohibited, SignPath is deferred, and legacy remains the production default.<br>
+Current phase: Milestone 5 / Work Package 4 desktop resolver/cache — **In progress — 2026-07-15, Codex implementation owner: audit the next smallest remaining disconnected host-evidence boundary after exact-head acceptance of Linux kernel detection**. Keep every capability disconnected from host-evidence composition and every production/default SSH path. Real Apple/SignPath rehearsals remain an explicit late gate and are not on this package's critical path.<br>
+Session checkpoint: **CI CLOSED / NEXT AUDIT — 2026-07-15, Codex implementation owner** — `E-M5-LINUX-KERNEL-DETECTION-CI-001` closes implementation commit `d1eb0eb63`: all six primary native Node 24 jobs, both Linux supplements, Windows x64 baseline, PR Checks, Golden E2E, and computer-use pass. Windows arm64 executes the full runtime smoke and retains only the declared hosted build-26200 rejection against required 26100. Every native client runs the new 19-case kernel contract and strict selector cases. This remains contract evidence, not live SSH/distro evidence; no host-evidence composer, product caller, setting, transfer/install, fallback classifier, tuple enablement, release publication, or default behavior is connected. Merging to `main` remains prohibited, SignPath is deferred, and legacy remains the production default.<br>
 Primary design: [SSH relay GitHub Release plan](./2026-07-14-ssh-relay-github-release-plan.html)<br>
 Motivating issues: [#8450](https://github.com/stablyai/orca/issues/8450), [#1693](https://github.com/stablyai/orca/issues/1693)
 
@@ -15173,6 +15173,60 @@ config/scripts/ssh-relay-runtime-*.test.mjs` — PASS, 50 files / 280 tests in 1
   transfer/install, mode, setting, fallback, tuple, publication, or default behavior. Legacy remains
   the sole production path. Require exact-head all-six native proof before advancing.
 
+### E-M5-LINUX-KERNEL-DETECTION-CI-001 — all-six native marked kernel contract
+
+- Date/owner: 2026-07-15, Codex implementation owner.
+- Exact source/run: implementation commit `d1eb0eb63e56255d151f2f263e47fa420b970875`, artifact run
+  [29482651735](https://github.com/stablyai/orca/actions/runs/29482651735). All six primary jobs pass
+  under Node 24.18.0 with that exact source: Linux x64 job
+  [87569723013](https://github.com/stablyai/orca/actions/runs/29482651735/job/87569723013)
+  (`ubuntu-24.04`, `ubuntu24` image `20260714.240`, x64); Linux arm64 job
+  [87569723055](https://github.com/stablyai/orca/actions/runs/29482651735/job/87569723055)
+  (`ubuntu-24.04-arm`, `ubuntu24-arm64` image `20260714.61`, native arm64); macOS x64 job
+  [87569723110](https://github.com/stablyai/orca/actions/runs/29482651735/job/87569723110)
+  (`macos-15-intel`, `macos15` image `20260629.0276`, x64); macOS arm64 job
+  [87569723016](https://github.com/stablyai/orca/actions/runs/29482651735/job/87569723016)
+  (`macos-15`, `macos15` image `20260706.0213`, native arm64); Windows x64 job
+  [87569722968](https://github.com/stablyai/orca/actions/runs/29482651735/job/87569722968)
+  (`windows-2022`, `win22` image `20260714.244`, x64); and Windows arm64 job
+  [87569722974](https://github.com/stablyai/orca/actions/runs/29482651735/job/87569722974)
+  (`windows-11-arm`, `win11-arm64` image `20260706.102`, native arm64).
+- Contract result: every POSIX client passes 80 files / 561 tests. Linux x64/arm64 complete in
+  13.35/11.69 s and macOS x64/arm64 in 59.66/18.45 s. Every Windows client passes 81 files / 552
+  tests with the 13 declared platform/full-size skips, in 27.01/25.25 s for x64/arm64. The new
+  19-case kernel suite and strict selector cases are required by both native workflow families and
+  therefore run on every client architecture under Node 24; all existing selector, cache, release,
+  runtime, and workflow contracts remain green.
+- Full-size result: extraction spans 1,304.99–4,880.08 ms with 34,021,376–48,541,696 bytes
+  incremental RSS. Cold immutable-cache publication spans 1,774.51–5,929.28 ms with
+  40,210,432–60,735,488 bytes; warm verified lookup 196.12–1,197.59 ms with 0–6,352,896 bytes;
+  active retention 11.17–50.44 ms with 0–991,232 bytes; and eviction 25.97–99.14 ms with
+  0–1,052,672 bytes while reclaiming each exact 118,418,686–161,259,305-byte entry. All remain
+  within recorded budgets; this kernel-only package adds no full-size latency or memory path.
+- Supplemental/baseline result: oldest-userland Linux x64 job
+  [87570980242](https://github.com/stablyai/orca/actions/runs/29482651735/job/87570980242)
+  (`ubuntu-24.04`, image `20260714.240`) and Linux arm64 job
+  [87570980244](https://github.com/stablyai/orca/actions/runs/29482651735/job/87570980244)
+  (`ubuntu-24.04-arm`, image `20260714.61`) pass. Windows x64 baseline job
+  [87571636418](https://github.com/stablyai/orca/actions/runs/29482651735/job/87571636418)
+  (`windows-2022`, image `20260714.244`) passes on observed build 20348. Windows arm64 baseline job
+  [87571636619](https://github.com/stablyai/orca/actions/runs/29482651735/job/87571636619)
+  (`windows-11-arm`, image `20260714.109`) verifies the exact bytes and completes Node 24, PTY, and
+  watcher smoke in 8,038.87 ms, then fails closed only because the observed OS/kernel build is
+  26200 while the immutable contract requires 26100; platform and architecture checks pass. That
+  declared hosted-runner floor gap is the sole reason the aggregate workflow conclusion is failure.
+- Adjacent exact-head result: PR Checks
+  [29482650752](https://github.com/stablyai/orca/actions/runs/29482650752), Golden E2E
+  [29482651866](https://github.com/stablyai/orca/actions/runs/29482651866), and computer-use
+  [29482650759](https://github.com/stablyai/orca/actions/runs/29482650759) pass, including unpacked
+  app, packaged CLI, Ubuntu 22.04, Windows native, Linux E2E, and macOS E2E gates.
+- Acceptance/boundary: this accepts only the disconnected marked/no-Node Linux kernel capability
+  and kernel-specific selector grammar. It does not prove a real SSH server, GNU/BusyBox/Rocky/
+  Ubuntu/Alpine remote behavior, localization, `MaxSessions=1`, remote output/channel-size limits,
+  libc composition, libstdc++/GLIBCXX evidence, macOS/Windows/process-translation evidence, host
+  composition, Electron/startup, transfer/install, settings, fallback, tuple enablement,
+  publication, or defaults. Legacy remains the sole production path; no tuple is enabled.
+
 ## Accepted Gaps
 
 No product gap is accepted merely because it appears in this list. Each entry requires explicit
@@ -15231,12 +15285,10 @@ The project is not complete until every applicable item below is checked with ev
 
 ## Next Required Action
 
-Commit and push the locally accepted disconnected Linux kernel package, then require exact-head
-Node 24 proof on all six native clients plus adjacent PR, Golden E2E, and computer-use checks before
-auditing another host-evidence slice. Do not compose full host evidence, provision production
-secrets/environments, add an Electron/startup consumer, embed unreviewed keys or manifest bytes, add
-SSH transfer/install, mode wiring, fallback, tuple enablement, release publication, or default
-behavior.
+Audit the next smallest disconnected host-evidence slice after exact-head acceptance of Linux
+kernel detection. Do not compose full host evidence, provision production secrets/environments, add
+an Electron/startup consumer, embed unreviewed keys or manifest bytes, add SSH transfer/install,
+mode wiring, fallback, tuple enablement, release publication, or default behavior.
 Keep Node upstream `.tar.xz` inputs, Windows ZIP, `ORCA_RELAY_PATH`, existing desktop required-assets
 behavior, detached-signature byte encoding, Windows arm64 build 26100, macOS 13.5, Linux kernel 4.18,
 release-cut, desktop builds, publication, and every tuple separately gated.

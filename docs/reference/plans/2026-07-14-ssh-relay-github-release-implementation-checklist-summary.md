@@ -9,10 +9,9 @@ keeps commands, hashes, runner identities, timings, and failure details.
 A checked box means the work has evidence in the detailed ledger. Design approval alone does not
 complete a box.
 
-Active checkpoint: **Milestone 5 / Work Package 4 desktop resolver/cache — require exact-head
-all-six native CI for the disconnected marked Linux kernel probe and kernel-only distro-suffix
-parser accepted locally by `E-M5-LINUX-KERNEL-DETECTION-LOCAL-001`, 2026-07-15, Codex implementation
-owner.**
+Active checkpoint: **Milestone 5 / Work Package 4 desktop resolver/cache — audit the next smallest
+remaining disconnected host-evidence boundary after exact-head acceptance of Linux kernel
+detection, 2026-07-15, Codex implementation owner.**
 `E-M5-ARTIFACT-CACHE-RESOLUTION-CI-001` closes warm-cache commit
 `22031fa68` on all six native clients, both Linux supplements, Windows x64 baseline, PR Checks,
 Golden E2E, and computer-use; Windows arm64 remains the expected build-26200 rejection against 26100. `E-M5-ARTIFACT-CACHE-RESOLUTION-LOCAL-001` passes 9/9 purpose tests,
@@ -143,6 +142,15 @@ oversized, noisy, unavailable, or invalid evidence returns unknown and cancellat
 Libc, macOS, and PowerShell grammars remain strict. This is contract evidence, not live SSH/distro
 proof; full host composition and every production/default path remain absent. Exact-head all-six
 native proof is next.
+`E-M5-LINUX-KERNEL-DETECTION-CI-001` closes implementation commit `d1eb0eb63`: all six primary
+native Node 24 jobs, both Linux supplements, Windows x64 baseline, PR Checks, Golden E2E, and
+computer-use pass. Every POSIX client passes 80 files / 561 tests and every Windows client passes 81
+files / 552 tests with 13 declared skips, including the new 19-case kernel suite and strict selector
+cases. Full-size extraction/cache metrics stay inside budget. Windows arm64 completes exact-byte
+Node/PTY/watcher smoke, then retains only the declared hosted build-26200 rejection against required
+26100; this is the aggregate workflow's sole failure. Real SSH/distro behavior, remaining host
+evidence, composition, and every production/default path remain open; legacy remains the sole
+production path.
 `E-M5-ARTIFACT-CACHE-ROOT-CI-001` closes the pure cache-root contract at exact head `aefcaa9a9`:
 all six primary native Node 24 jobs, both Linux supplements, Windows x64 baseline, PR Checks, Golden
 E2E, and computer-use pass; Windows arm64 build 26200 remains correctly gated against 26100. The
