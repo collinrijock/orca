@@ -16,30 +16,21 @@ import {
   isAtomicNoReplaceUnsupportedError
 } from './codex-session-backfill-copy'
 import { listCodexSessionJsonlFilesIncrementally } from './codex-session-file-listing'
-import type { CodexSessionBridgeIncrementalOptions } from './codex-session-file-listing'
+import type {
+  CodexSessionBackfillOptions,
+  CodexSessionBackfillPaths,
+  CodexSessionBackfillSummary
+} from './codex-session-backfill-types'
+
+export type {
+  CodexSessionBackfillOptions,
+  CodexSessionBackfillPaths,
+  CodexSessionBackfillSummary
+} from './codex-session-backfill-types'
 
 // Why: bump to re-run the backfill for every host after a layout or semantics
 // change; the run itself stays skip-existing so re-runs never overwrite.
 const CODEX_SESSION_BACKFILL_MARKER_VERSION = 1
-
-export type CodexSessionBackfillSummary = {
-  scannedFiles: number
-  linkedFiles: number
-  copiedFiles: number
-  skippedExistingFiles: number
-  skippedUnexpectedFiles: number
-  skippedSymlinkFiles: number
-  skippedUnsupportedFilesystemFiles: number
-  failedDirectories: number
-  failedFiles: number
-}
-
-export type CodexSessionBackfillPaths = {
-  managedSessionsRoot: string
-  systemSessionsRoot: string
-  auditLogPath: string
-  markerPath: string
-}
 
 let backgroundBackfillTask: Promise<CodexSessionBackfillSummary | null> | null = null
 
@@ -70,7 +61,7 @@ export function resolveCodexSessionBackfillPaths(
  * to null without walking the sessions tree.
  */
 export function startCodexSessionBackfillInBackground(
-  options: CodexSessionBridgeIncrementalOptions = {},
+  options: CodexSessionBackfillOptions = {},
   systemCodexHomePathOverride?: string
 ): Promise<CodexSessionBackfillSummary | null> {
   if (backgroundBackfillTask) {
@@ -92,7 +83,7 @@ export function startCodexSessionBackfillInBackground(
 }
 
 async function runCodexSessionBackfillOncePerHost(
-  options: CodexSessionBridgeIncrementalOptions,
+  options: CodexSessionBackfillOptions,
   systemCodexHomePathOverride?: string
 ): Promise<CodexSessionBackfillSummary | null> {
   const paths = resolveCodexSessionBackfillPaths(systemCodexHomePathOverride)
@@ -102,7 +93,7 @@ async function runCodexSessionBackfillOncePerHost(
   const summary = await backfillManagedCodexSessionsIntoSystemHome(paths, options)
   // Why: per-file failures (locked or unreadable files) leave the marker unset
   // so the next startup retries; skip-existing keeps those retries cheap.
-  if (summary.failedFiles === 0 && summary.failedDirectories === 0) {
+  if (!summary.stopped && summary.failedFiles === 0 && summary.failedDirectories === 0) {
     writeBackfillMarker(paths.markerPath, paths.systemSessionsRoot, summary)
   }
   return summary
@@ -117,9 +108,10 @@ async function runCodexSessionBackfillOncePerHost(
  */
 export async function backfillManagedCodexSessionsIntoSystemHome(
   paths: CodexSessionBackfillPaths,
-  options: CodexSessionBridgeIncrementalOptions = {}
+  options: CodexSessionBackfillOptions = {}
 ): Promise<CodexSessionBackfillSummary> {
   const summary: CodexSessionBackfillSummary = {
+    stopped: false,
     scannedFiles: 0,
     linkedFiles: 0,
     copiedFiles: 0,
@@ -152,6 +144,12 @@ export async function backfillManagedCodexSessionsIntoSystemHome(
         })
       }
     )) {
+      if (options.shouldStop?.()) {
+        // Why: disabling the real-home lane must bound further writes to at
+        // most the single file mutation already in flight.
+        summary.stopped = true
+        break
+      }
       summary.scannedFiles += 1
       if (!isCodexRolloutPath(paths.managedSessionsRoot, managedSessionFilePath)) {
         summary.skippedUnexpectedFiles += 1
@@ -168,6 +166,7 @@ export async function backfillManagedCodexSessionsIntoSystemHome(
       )
     }
   }
+  summary.stopped ||= options.shouldStop?.() === true
   await appendAuditRecord({ action: 'run-summary', ...summary })
   return summary
 }

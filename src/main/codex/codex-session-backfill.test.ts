@@ -394,6 +394,24 @@ describe('backfillManagedCodexSessionsIntoSystemHome', () => {
 })
 
 describe('startCodexSessionBackfillInBackground', () => {
+  it('stops target mutations after real-home opt-out and leaves the run retryable', async () => {
+    writeManagedSession(join('2026', '05', '26', 'rollout-a.jsonl'), '{"id":"a"}\n')
+    writeManagedSession(join('2026', '05', '26', 'rollout-b.jsonl'), '{"id":"b"}\n')
+    let stopChecks = 0
+
+    const stopped = await startCodexSessionBackfillInBackground({
+      yieldMs: 0,
+      shouldStop: () => stopChecks++ >= 1
+    })
+
+    expect(stopped).toMatchObject({ stopped: true, linkedFiles: 1 })
+    expect(existsSync(getMarkerPath())).toBe(false)
+
+    const resumed = await startCodexSessionBackfillInBackground({ yieldMs: 0 })
+    expect(resumed).toMatchObject({ stopped: false, linkedFiles: 1, skippedExistingFiles: 1 })
+    expect(existsSync(getMarkerPath())).toBe(true)
+  })
+
   it('writes a completion marker and skips the walk on later runs', async () => {
     writeManagedSession(join('2026', '05', '26', 'rollout-a.jsonl'), '{"id":"a"}\n')
 

@@ -1815,10 +1815,15 @@ app.whenReady().then(async () => {
       return
     }
     const systemCodexHomePathOverride = resolveHostCodexSessionSourceHome(store!.getSettings())
+    const shouldStopSessionMigration = (): boolean =>
+      isQuitting || codexRuntimeHome?.isHostSystemDefaultRealHome() !== true
     // Why: the heal pass chains after the backfill settles so thread/read only
     // runs once the audit ledger covers this startup's newly linked rollouts;
     // it also drains sessions left pending by an interrupted earlier pass.
-    void startCodexSessionBackfillInBackground({}, systemCodexHomePathOverride).then(() => {
+    void startCodexSessionBackfillInBackground(
+      { shouldStop: shouldStopSessionMigration },
+      systemCodexHomePathOverride
+    ).then(() => {
       // Why: flag-OFF, managed-account, and custom-home lanes must never spawn
       // an app-server against the user's real sqlite index.
       if (!codexRuntimeHome?.isHostSystemDefaultRealHome()) {
@@ -1826,7 +1831,7 @@ app.whenReady().then(async () => {
       }
       return startCodexSessionIndexHealInBackground(
         {
-          shouldStop: () => isQuitting || codexRuntimeHome?.isHostSystemDefaultRealHome() !== true
+          shouldStop: shouldStopSessionMigration
         },
         systemCodexHomePathOverride
       )
