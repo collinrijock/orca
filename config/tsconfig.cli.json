@@ -12,6 +12,7 @@
     "../src/main/claude/hook-settings.ts",
     "../src/main/claude/hook-service.ts",
     "../src/main/codex/codex-app-server-capability-cache.ts",
+    "../src/main/codex/codex-app-server-capability-signal.ts",
     "../src/main/codex/codex-app-server-client.ts",
     "../src/main/codex/codex-app-server-grant-bridge.ts",
     "../src/main/codex/codex-app-server-grant-envelope.ts",

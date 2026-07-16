@@ -1,6 +1,7 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { normalizeHookTrustKeyForLookup } from './config-toml-trust'
 import { waitForProcessExitUntil } from './codex-process-exit-deadline'
+import { stderrIndicatesMissingAppServer } from './codex-app-server-capability-signal'
 
 // Why: Codex gates hooks on a `trusted_hash` it computes from a private
 // canonical-JSON identity. Orca used to replicate that algorithm
@@ -92,12 +93,6 @@ const STDOUT_LINE_MAX_BYTES = 1024 * 1024
 
 function isMethodNotFoundError(error: { code?: number; message?: string }): boolean {
   return error.code === JSON_RPC_METHOD_NOT_FOUND || /method not found/i.test(error.message ?? '')
-}
-
-// Why: a CLI predating the app-server subcommand fails argv parsing before
-// speaking any JSON-RPC; that shape is a capability signal, not a transient.
-function stderrIndicatesMissingAppServer(stderrTail: string): boolean {
-  return /unrecognized subcommand|unexpected argument|invalid subcommand/i.test(stderrTail)
 }
 
 function collectHookListings(result: unknown): CodexHookListing[] {
