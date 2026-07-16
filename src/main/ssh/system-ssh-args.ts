@@ -5,6 +5,7 @@ export type SystemSshBuildArgsOptions = {
   resolvedConfig?: SystemSshResolvedConfig | null
   disableControlMaster?: boolean
   suppressOrcaControlMaster?: boolean
+  noInput?: boolean
 }
 
 export function buildSshArgs(target: SshTarget, options?: SystemSshBuildArgsOptions): string[] {
@@ -13,6 +14,11 @@ export function buildSshArgs(target: SshTarget, options?: SystemSshBuildArgsOpti
   args.push('-o', 'BatchMode=no')
   // Forward stdin/stdout for relay communication
   args.push('-T')
+  if (options?.noInput === true) {
+    // Why: closing a parent pipe does not reliably detach native Windows
+    // OpenSSH's input worker for commands that can never consume stdin.
+    args.push('-n')
+  }
 
   // Why: ControlMaster multiplexes all SSH exec commands over a single connection,
   // eliminating the ~9s handshake overhead per command. Without this, each
@@ -90,6 +96,9 @@ export function getSystemSshBuildArgsFromOperationOptions(
   }
   if (options?.suppressOrcaControlMaster === true) {
     buildArgsOptions.suppressOrcaControlMaster = true
+  }
+  if (options?.noInput === true) {
+    buildArgsOptions.noInput = true
   }
   return Object.keys(buildArgsOptions).length === 0 ? undefined : buildArgsOptions
 }

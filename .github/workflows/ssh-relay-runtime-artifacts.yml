@@ -1697,9 +1697,40 @@ jobs:
           if (Test-Path -LiteralPath $log) { Get-Content -LiteralPath $log -Tail 200 }
           try {
             if ($ownsAccount -and $userSid) {
+              function Dismount-FixtureRegistryHive([string]$hiveName) {
+                $registryPath = "Registry::HKEY_USERS\$hiveName"
+                if (-not (Test-Path -LiteralPath $registryPath)) { return }
+                $regPath = Join-Path $env:SystemRoot 'System32/reg.exe'
+                $process = Start-Process -FilePath $regPath `
+                  -ArgumentList @('unload', "HKU\$hiveName") -PassThru -WindowStyle Hidden
+                try {
+                  if (-not $process.WaitForExit(2000)) {
+                    $process.Kill()
+                    if (-not $process.WaitForExit(2000)) {
+                      throw "Fixture registry hive unload did not stop: $hiveName"
+                    }
+                    throw "Fixture registry hive unload timed out: $hiveName"
+                  }
+                  if ($process.ExitCode -ne 0) {
+                    throw "Fixture registry hive unload failed ($($process.ExitCode)): $hiveName"
+                  }
+                } finally {
+                  $process.Dispose()
+                }
+              }
               $escapedSid = $userSid.Replace("'", "''")
               $profileFailure = $null
               for ($attempt = 1; $attempt -le 20; $attempt += 1) {
+                try {
+                  # Why: the fixture's UsrClass hive can outlive sshd; unload only
+                  # this owned SID before asking Windows to delete its profile.
+                  Dismount-FixtureRegistryHive "${userSid}_Classes"
+                  Dismount-FixtureRegistryHive $userSid
+                } catch {
+                  $profileFailure = $_.Exception.Message
+                  Start-Sleep -Milliseconds 500
+                  continue
+                }
                 $profile = Get-CimInstance Win32_UserProfile -Filter "SID='$escapedSid'" `
                   -ErrorAction SilentlyContinue
                 if (-not $profile) { break }

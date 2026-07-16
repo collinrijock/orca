@@ -391,9 +391,26 @@ describe('spawnSystemSsh', () => {
     expect(args).toContain('ServerAliveCountMax=3')
   })
 
+  it('places no-input mode before the destination without disabling connection reuse', () => {
+    const args = buildSshArgs(createTarget(), {
+      noInput: true,
+      resolvedConfig: createResolvedConfig()
+    })
+    const noInputIdx = args.indexOf('-n')
+    const terminatorIdx = args.indexOf('--')
+
+    expect(noInputIdx).toBeGreaterThan(-1)
+    expect(noInputIdx).toBeLessThan(terminatorIdx)
+    expect(args).toContain('ControlMaster=auto')
+    expect(args).toContain('ControlPersist=300')
+    expect(args).not.toContain('-S')
+  })
+
   it('spawns a remote command through the system ssh target', () => {
     spawnSystemSshCommand(createTarget({ configHost: 'fdpass-host' }), 'echo hello')
 
+    const args = spawnMock.mock.calls[0][1] as string[]
+    expect(args).not.toContain('-n')
     expect(spawnMock).toHaveBeenCalledWith(
       SYSTEM_SSH_PATH,
       expect.arrayContaining(['--', 'deploy@fdpass-host', "exec /bin/sh -c 'echo hello'"]),

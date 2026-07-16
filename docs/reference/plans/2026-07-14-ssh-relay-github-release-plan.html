@@ -1642,7 +1642,10 @@
                   <td>
                     Full-size runtime over SFTP and POSIX/Windows system SSH; tar/no-tar; no remote
                     hash tools; corrupted upload; bundled-Node corruption/failure; bounded memory
-                    and concurrency; no-input system-SSH probe stdin/child settlement;
+                    and concurrency; no-input system-SSH probe uses native OpenSSH <code>-n</code>
+                    before the destination terminator and proves child settlement without disabling
+                    connection reuse; fixture-owned Windows profile hives are boundedly unloaded
+                    before native profile deletion;
                     <code>MaxSessions=1</code>; interrupted upload; stale lock
                   </td>
                   <td>

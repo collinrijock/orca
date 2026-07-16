@@ -949,6 +949,7 @@ describe('SshConnection', () => {
       'echo ORCA-SYSTEM-SSH-OK',
       {
         wrapCommand: false,
+        noInput: true,
         resolvedConfig: expect.objectContaining({ proxyUseFdpass: true })
       }
     )
@@ -1002,6 +1003,7 @@ describe('SshConnection', () => {
       'echo ORCA-SYSTEM-SSH-OK',
       expect.objectContaining({
         wrapCommand: false,
+        noInput: true,
         resolvedConfig: expect.objectContaining({ proxyUseFdpass: true })
       })
     )
@@ -1012,6 +1014,7 @@ describe('SshConnection', () => {
       expect.objectContaining({
         disableControlMaster: true,
         wrapCommand: false,
+        noInput: true,
         resolvedConfig: expect.objectContaining({ proxyUseFdpass: true })
       })
     )
@@ -1050,7 +1053,7 @@ describe('SshConnection', () => {
     expect(spawnSystemSshCommandMock).toHaveBeenCalledWith(
       expect.objectContaining({ proxyCommand: 'ssh -W %h:%p bastion.example.com' }),
       'echo ORCA-SYSTEM-SSH-OK',
-      { wrapCommand: false }
+      { wrapCommand: false, noInput: true }
     )
   })
 
@@ -1071,7 +1074,7 @@ describe('SshConnection', () => {
     expect(spawnSystemSshCommandMock).toHaveBeenCalledWith(
       expect.objectContaining({ host: '192.168.0.210' }),
       'echo ORCA-SYSTEM-SSH-OK',
-      { wrapCommand: false }
+      { wrapCommand: false, noInput: true }
     )
   })
 

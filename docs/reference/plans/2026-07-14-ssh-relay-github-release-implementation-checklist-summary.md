@@ -66,8 +66,28 @@ are atomically replaced with exact protected allow-only rules independent of dri
 owned `Win32_UserProfile` is deleted through a bounded native lifecycle before account/filesystem
 teardown. Focused tests pass 71 cases with one declared live skip, all three PowerShell blocks parse,
 all 283 artifact contracts pass, typecheck and full lint/reliability/max-lines pass, formatting/diff
-are clean, and the protected resolver files remain unchanged. Commit/push this isolated package and
-require fresh x64/arm64 live proof before advancing.
+are clean, and the protected resolver files remain unchanged. Exact head
+`b652c1ebcce3803443d84c89811146366cdbdd5b` is pushed. Artifact run `29542292712` preserves all
+non-Windows gates and independently reaches the Windows fixture on x64, but job `87766845800` is
+RED: exact ACL replacement, official OpenSSH setup, authentication, and PowerShell 5.1 pass before
+the production probe times out after 32.064 seconds. Closing the Node stdin pipe is insufficient;
+the no-input probe needs native OpenSSH `-n` without disabling connection reuse. Teardown also
+finds the owned fixture SID's `UsrClass.dat` hive still loaded after the bounded profile-removal
+loop. Add probe-only `-n`, boundedly unload only that SID's `_Classes` and primary hives before
+retrying `Win32_UserProfile` removal, and require fresh x64/arm64 live proof before advancing.
+ARM64 job `87766845741` independently reaches the same boundary: official OpenSSH setup passes,
+the production probe times out after 34.01 seconds, and teardown catches the same owned
+`UsrClass.dat` lock after the bounded profile loop. This is a shared native OpenSSH/profile
+lifecycle correction, not an x64-only exception.
+`E-M6-WINDOWS-SYSTEM-SSH-TREE-LIVE-NOINPUT-PROFILE-CORRECTION-LOCAL-001` records the narrow
+correction locally green: only the no-input connection probe emits OpenSSH `-n` before `--`, reuse
+flags remain enabled, ordinary commands exclude `-n`, and teardown boundedly unloads only the
+fixture SID's `_Classes` and primary hives before retrying native profile deletion. The Windows
+workflow oracle is split by concrete domain responsibility without a max-lines bypass. Focused
+tests pass 115 cases with one declared native skip, all three PowerShell blocks parse, 283/283
+artifact contracts pass, typecheck and full lint/reliability/max-lines pass, formatting/diff are
+clean, and the protected resolver files remain unchanged. Commit/push this isolated package and
+require fresh native x64/arm64 proof before advancing.
 `E-M6-WINDOWS-SYSTEM-SSH-TREE-LIVE-AUDIT-001` fixes the loopback-only official Microsoft
 server, fixture-owned non-admin account/ACL, exact host-key trust, Windows PowerShell 5.1,
 serial/default and four-channel metrics, cancellation/collision/cleanup, and deterministic teardown

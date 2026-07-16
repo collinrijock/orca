@@ -694,7 +694,8 @@ export class SshConnection {
     // Why: this probe runs before remote platform detection. A raw echo works
     // under POSIX shells, cmd.exe, and PowerShell; `/bin/sh` wrapping does not.
     const channel = this.spawnTrackedSystemSshCommand('echo ORCA-SYSTEM-SSH-OK', {
-      wrapCommand: false
+      wrapCommand: false,
+      noInput: true
     })
     try {
       await new Promise<void>((resolve, reject) => {
@@ -908,7 +909,10 @@ export class SshConnection {
     return new Error('SSH connection attempt was cancelled')
   }
 
-  private spawnTrackedSystemSshCommand(command: string, options?: SshExecOptions): ClientChannel {
+  private spawnTrackedSystemSshCommand(
+    command: string,
+    options?: SshExecOptions & Pick<SystemSshBuildArgsOptions, 'noInput'>
+  ): ClientChannel {
     if (options?.signal?.aborted) {
       throw createSshOperationAbortError()
     }
