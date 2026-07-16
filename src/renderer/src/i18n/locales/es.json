@@ -13184,7 +13184,28 @@
         "pastedImageLabel": "Imagen pegada",
         "imagePasteFailed": "Error al pegar imagen.",
         "worktreeNotReady": "Worktree no está listo — intenta de nuevo en un momento.",
-        "uploadingAttachments": "Subiendo {{value0}} archivo(s) al remoto…"
+        "uploadingAttachments": "Subiendo {{value0}} archivo(s) al remoto…",
+        "model": "Modelo",
+        "effort": "Esfuerzo",
+        "fastMode": "Modo rápido",
+        "thinking": "Razonamiento",
+        "options": "Opciones",
+        "sessionOptions": "Opciones de sesión",
+        "chooseInAgentPicker": "Elegir en el selector del agente…",
+        "toggleOption": "Alternar {{value0}}",
+        "sentNotConfirmed": "Enviado al agente — sin confirmar",
+        "setWhenSessionStarts": "Configúralo al iniciar la sesión.",
+        "availableAfterSessionStarts": "Disponible después de iniciar la sesión.",
+        "optionUpdateFailed": "No se pudo actualizar la opción",
+        "optionValue": {
+          "fast": "Rápido",
+          "minimal": "Mínimo",
+          "low": "Bajo",
+          "medium": "Medio",
+          "high": "Alto",
+          "xhigh": "Muy alto",
+          "max": "Máximo"
+        }
       },
       "tool": {
         "running": "Ejecutando…",

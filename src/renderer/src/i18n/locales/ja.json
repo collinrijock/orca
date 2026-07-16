@@ -13184,7 +13184,28 @@
         "pastedImageLabel": "貼り付けた画像",
         "imagePasteFailed": "画像の貼り付けに失敗しました。",
         "worktreeNotReady": "Worktreeが準備できていません — しばらくしてから再試行してください。",
-        "uploadingAttachments": "{{value0}}個のファイルをリモートにアップロード中…"
+        "uploadingAttachments": "{{value0}}個のファイルをリモートにアップロード中…",
+        "model": "モデル",
+        "effort": "推論レベル",
+        "fastMode": "高速モード",
+        "thinking": "思考",
+        "options": "オプション",
+        "sessionOptions": "セッションオプション",
+        "chooseInAgentPicker": "エージェントの選択画面で選ぶ…",
+        "toggleOption": "{{value0}}を切り替える",
+        "sentNotConfirmed": "エージェントに送信済み — 未確認",
+        "setWhenSessionStarts": "セッション開始時に設定してください。",
+        "availableAfterSessionStarts": "セッション開始後に利用できます。",
+        "optionUpdateFailed": "オプションを更新できませんでした",
+        "optionValue": {
+          "fast": "高速",
+          "minimal": "最小",
+          "low": "低",
+          "medium": "中",
+          "high": "高",
+          "xhigh": "最高",
+          "max": "最大"
+        }
       },
       "tool": {
         "running": "実行中…",

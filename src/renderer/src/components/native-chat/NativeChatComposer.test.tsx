@@ -2,20 +2,31 @@
 
 import { act, cleanup, render } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { SessionOptionsSurface } from '../../../../shared/native-chat-session-options'
 
 const mocks = vi.hoisted(() => ({
   cancelPendingSends: vi.fn(),
-  fieldProps: null as { onSend?: () => void; onStop?: () => void } | null,
+  fieldProps: null as {
+    onSend?: () => void
+    onStop?: () => void
+    sessionOptionsSurface?: SessionOptionsSurface | null
+  } | null,
   sendHandle: { cancel: vi.fn(), settleAfterMs: 500 },
   sendNativeChatMessage: vi.fn(),
   trackPendingSend: vi.fn(),
   setDraft: vi.fn()
 }))
 
-vi.mock('../../store', () => ({
-  useAppStore: (selector: (state: unknown) => unknown) =>
-    selector({ dictationState: 'idle', settings: { voice: { enabled: false } } })
-}))
+vi.mock('../../store', () => {
+  const state = {
+    dictationState: 'idle',
+    settings: { voice: { enabled: false }, nativeChatSessionOptions: {} },
+    updateSettings: vi.fn()
+  }
+  const useAppStore = (selector: (value: typeof state) => unknown) => selector(state)
+  useAppStore.getState = () => state
+  return { useAppStore }
+})
 
 vi.mock('@/runtime/runtime-terminal-inspection', () => ({
   isRemoteRuntimePtyId: () => false,
@@ -77,6 +88,7 @@ describe('NativeChatComposer', () => {
     vi.clearAllMocks()
     mocks.fieldProps = null
     mocks.sendNativeChatMessage.mockReturnValue(mocks.sendHandle)
+    mocks.sendHandle.settleAfterMs = 500
     Object.defineProperty(window, 'api', {
       configurable: true,
       value: { ui: { onFileDrop: () => vi.fn() } }
@@ -121,5 +133,48 @@ describe('NativeChatComposer', () => {
 
     expect(onOptimisticSend).toHaveBeenCalledWith('hello', [])
     expect(mocks.trackPendingSend).toHaveBeenCalledWith(mocks.sendHandle, 'pending-1')
+  })
+
+  it('dispatches a model pick through the slash path without a user bubble', async () => {
+    mocks.sendHandle.settleAfterMs = 0
+    const onSlashCommand = vi.fn()
+    const onOptimisticSend = vi.fn()
+    render(
+      <NativeChatComposer
+        terminalTabId="tab-1"
+        targetPtyId="pty-1"
+        agent="claude"
+        onSlashCommand={onSlashCommand}
+        onOptimisticSend={onOptimisticSend}
+      />
+    )
+
+    await act(async () => {
+      await mocks.fieldProps?.sessionOptionsSurface?.setOption('model', 'opus')
+    })
+
+    expect(mocks.sendNativeChatMessage).toHaveBeenCalledWith({}, 'pty-1', '/model opus')
+    expect(onSlashCommand).toHaveBeenCalledWith('/model opus')
+    expect(onOptimisticSend).not.toHaveBeenCalled()
+  })
+
+  it('waits for the Codex picker command before switching to the terminal', async () => {
+    mocks.sendHandle.settleAfterMs = 0
+    const onSwitchToTerminal = vi.fn()
+    render(
+      <NativeChatComposer
+        terminalTabId="tab-1"
+        targetPtyId="pty-1"
+        agent="codex"
+        onSwitchToTerminal={onSwitchToTerminal}
+      />
+    )
+
+    await act(async () => {
+      await mocks.fieldProps?.sessionOptionsSurface?.setOption('model', '')
+    })
+
+    expect(mocks.sendNativeChatMessage).toHaveBeenCalledWith({}, 'pty-1', '/model')
+    expect(onSwitchToTerminal).toHaveBeenCalledOnce()
   })
 })

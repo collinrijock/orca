@@ -460,6 +460,7 @@ function NativeChatResolvedView({
           onOptimisticSend={onOptimisticSend}
           onOptimisticSendCanceled={onOptimisticSendCanceled}
           onSlashCommand={onSlashCommand}
+          onSwitchToTerminal={onSwitchToTerminal}
         />
       )}
       {contextMenu.menu}
