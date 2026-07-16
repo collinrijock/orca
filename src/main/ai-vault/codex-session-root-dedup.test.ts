@@ -71,8 +71,8 @@ describe('dedupeCodexRolloutFileAliases', () => {
   it('prefers the managed runtime home over other non-default homes', () => {
     const managed = {
       agent: 'codex',
-      path: MANAGED_HOME_ROLLOUT,
-      codexHome: MANAGED_HOME,
+      path: `\\\\wsl$\\Ubuntu\\home\\ada\\.local\\share\\orca\\codex-runtime-home\\home\\sessions\\2026\\07\\01\\rollout-2026-07-01T10-00-00-019f0000-1111-7222-8333-444444444444.jsonl`,
+      codexHome: '\\\\wsl$\\Ubuntu\\home\\ada\\.local\\share\\orca\\codex-runtime-home\\home',
       hardlinkIdentity: '1:42'
     }
     const wslReal = {
@@ -148,6 +148,24 @@ describe('dedupeCodexRolloutFileAliases', () => {
       real,
       unprovenCopy
     ])
+  })
+
+  it('never treats matching host and WSL inode tuples as one hardlink', () => {
+    const rolloutName = REAL_HOME_ROLLOUT.split('/').at(-1)
+    const host = {
+      agent: 'codex',
+      path: `C:\\Users\\ada\\.codex\\sessions\\${rolloutName}`,
+      codexHome: null,
+      hardlinkIdentity: '1:42'
+    }
+    const wsl = {
+      agent: 'codex',
+      path: `\\\\wsl$\\Ubuntu\\home\\ada\\.codex\\sessions\\${rolloutName}`,
+      codexHome: '\\\\wsl$\\Ubuntu\\home\\ada\\.codex',
+      hardlinkIdentity: '1:42'
+    }
+
+    expect(dedupeCodexRolloutFileAliases([host, wsl], accessors)).toEqual([host, wsl])
   })
 })
 
@@ -246,5 +264,22 @@ describe('dedupeCodexSessionsBySessionId', () => {
       codexHome: '\\\\wsl$\\Ubuntu\\home\\ada\\.codex'
     })
     expect(dedupeCodexSessionsBySessionId([wslReal, wslManaged])).toEqual([wslManaged])
+  })
+
+  it('never collapses matching host and WSL session identities', () => {
+    const rolloutName = REAL_HOME_ROLLOUT.split('/').at(-1)
+    const host = codexSession({
+      sessionId: 'shared-id',
+      filePath: `C:\\Users\\ada\\.codex\\sessions\\${rolloutName}`,
+      codexHome: null
+    })
+    const wsl = codexSession({
+      sessionId: 'shared-id',
+      filePath: `\\\\wsl.localhost\\Ubuntu\\home\\ada\\.local\\share\\orca\\codex-runtime-home\\home\\sessions\\${rolloutName}`,
+      codexHome:
+        '\\\\wsl.localhost\\Ubuntu\\home\\ada\\.local\\share\\orca\\codex-runtime-home\\home'
+    })
+
+    expect(dedupeCodexSessionsBySessionId([host, wsl])).toEqual([host, wsl])
   })
 })

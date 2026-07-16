@@ -1,4 +1,4 @@
-import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
+import { spawn, type ChildProcess, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { waitForProcessExitUntil } from './codex-process-exit-deadline'
 
 // Why: `codex app-server` is Orca's sanctioned RPC surface into Codex-owned
@@ -50,6 +50,42 @@ export type CodexAppServerRpc = {
 const JSON_RPC_METHOD_NOT_FOUND = -32601
 const STDERR_TAIL_MAX_BYTES = 8192
 const STDOUT_LINE_MAX_BYTES = 1024 * 1024
+
+export function killCodexAppServerProcessTree(
+  child: Pick<ChildProcess, 'pid' | 'kill'>,
+  options: { platform?: NodeJS.Platform; spawnImpl?: typeof spawn } = {}
+): void {
+  const platform = options.platform ?? process.platform
+  const spawnImpl = options.spawnImpl ?? spawn
+  if (platform === 'win32' && child.pid) {
+    try {
+      // Why: npm-installed Codex runs behind cmd.exe; killing only that wrapper
+      // leaves the app-server child alive after a timeout or failed shutdown.
+      const killer = spawnImpl('taskkill', ['/pid', String(child.pid), '/t', '/f'], {
+        stdio: 'ignore',
+        windowsHide: true
+      })
+      let fellBack = false
+      const killDirectChild = (): void => {
+        if (!fellBack) {
+          fellBack = true
+          child.kill('SIGKILL')
+        }
+      }
+      killer.on('error', killDirectChild)
+      killer.on('exit', (code) => {
+        if (code !== 0) {
+          killDirectChild()
+        }
+      })
+      killer.unref()
+      return
+    } catch {
+      // Fall through to the direct-child best effort when taskkill cannot start.
+    }
+  }
+  child.kill('SIGKILL')
+}
 
 function isMethodNotFoundError(error: { code?: number; message?: string }): boolean {
   return error.code === JSON_RPC_METHOD_NOT_FOUND || /method not found/i.test(error.message ?? '')
@@ -120,7 +156,7 @@ export async function runCodexAppServerSession<T>(
   child.stdout.setEncoding('utf8').on('data', (chunk: string) => {
     stdoutBuffer += chunk
     if (Buffer.byteLength(stdoutBuffer) > STDOUT_LINE_MAX_BYTES) {
-      child.kill('SIGKILL')
+      killCodexAppServerProcessTree(child)
       failPending(new Error('codex app-server emitted an oversized JSONL response'))
       return
     }
@@ -161,7 +197,7 @@ export async function runCodexAppServerSession<T>(
     const error = new CodexAppServerTimeoutError(
       `codex app-server session exceeded ${invocation.timeoutMs}ms (${invocation.command})`
     )
-    child.kill('SIGKILL')
+    killCodexAppServerProcessTree(child)
     failPending(error)
     rejectDeadline(error)
   }, invocation.timeoutMs)
@@ -264,7 +300,7 @@ export async function runCodexAppServerSession<T>(
       // bounds a wedged child before the guaranteed SIGKILL reap.
       await waitForProcessExitUntil(exitPromise, 1500)
       if (!exited) {
-        child.kill('SIGKILL')
+        killCodexAppServerProcessTree(child)
         await waitForProcessExitUntil(exitPromise, 1000)
       }
     }

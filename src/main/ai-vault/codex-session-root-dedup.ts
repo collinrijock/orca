@@ -1,4 +1,5 @@
 import type { AiVaultSession } from '../../shared/ai-vault-types'
+import { parseWslUncPath } from '../../shared/wsl-paths'
 import { sessionSortTime } from './session-scanner-accumulator'
 
 // Why: the session bridge and the real-home backfill hardlink one physical
@@ -15,6 +16,14 @@ const CODEX_ROLLOUT_FILE_NAME_PATTERN = /^rollout-.+\.jsonl$/
 // separators must be handled independently of the local platform.
 function lastPathSegment(filePath: string): string {
   return filePath.split(/[\\/]/).at(-1) ?? ''
+}
+
+// Why: local Windows discovery scans both the host and every WSL distro under
+// one `local` host id, even though hardlinks and resume identity cannot cross
+// those execution boundaries.
+function codexPathExecutionNamespace(filePath: string): string {
+  const wslPath = parseWslUncPath(filePath)
+  return wslPath ? `wsl:${wslPath.distro.toLowerCase()}` : 'native'
 }
 
 /** Returns a pre-parse alias key only when metadata proves a shared hardlink. */
@@ -84,7 +93,7 @@ export function dedupeCodexRolloutFileAliases<T>(
     if (!hardlinkIdentity) {
       continue
     }
-    const aliasKey = `${fileName}\0${hardlinkIdentity}`
+    const aliasKey = `${codexPathExecutionNamespace(filePath)}\0${fileName}\0${hardlinkIdentity}`
     const rank = codexSessionRootRank(accessors.getCodexHome(candidate))
     const best = bestByAlias.get(aliasKey)
     if (!best || rank < best.rank || (rank === best.rank && filePath < best.filePath)) {
@@ -100,7 +109,9 @@ export function dedupeCodexRolloutFileAliases<T>(
     if (!hardlinkIdentity) {
       return true
     }
-    const best = bestByAlias.get(`${fileName}\0${hardlinkIdentity}`)
+    const best = bestByAlias.get(
+      `${codexPathExecutionNamespace(accessors.getFilePath(candidate))}\0${fileName}\0${hardlinkIdentity}`
+    )
     return !best || best.candidate === candidate
   })
 }
@@ -142,7 +153,7 @@ function codexSessionAliasKey(session: AiVaultSession): string | null {
   if (!CODEX_ROLLOUT_FILE_NAME_PATTERN.test(fileName)) {
     return null
   }
-  return `${session.executionHostId}\0${session.sessionId}\0${fileName}`
+  return `${session.executionHostId}\0${codexPathExecutionNamespace(session.filePath)}\0${session.sessionId}\0${fileName}`
 }
 
 function codexSessionAliasBeats(candidate: AiVaultSession, best: AiVaultSession): boolean {

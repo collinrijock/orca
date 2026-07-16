@@ -1,3 +1,5 @@
+import { EventEmitter } from 'node:events'
+import type { ChildProcess, spawn } from 'node:child_process'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -9,7 +11,7 @@ import {
   runCodexHookTrustGrantSession,
   type CodexHookTrustGrantRequest
 } from './codex-app-server-client'
-import { runCodexAppServerSession } from './codex-app-server-session'
+import { killCodexAppServerProcessTree, runCodexAppServerSession } from './codex-app-server-session'
 import {
   resolveCodexGrantEntryPath,
   runCodexHookTrustGrantSessionSync
@@ -148,6 +150,58 @@ const MANAGED_COMMAND = "/bin/sh '/tmp/orca/codex-hook.sh'"
 function managedHook(key: string, trustStatus = 'untrusted'): StubHook {
   return { key, command: MANAGED_COMMAND, currentHash: `sha256:hash-of-${key}`, trustStatus }
 }
+
+describe('killCodexAppServerProcessTree', () => {
+  it('kills the Windows wrapper and all app-server descendants', () => {
+    const child = {
+      pid: 1234,
+      kill: vi.fn(() => true) as ChildProcess['kill']
+    }
+    const killer = new EventEmitter() as EventEmitter & { unref: ReturnType<typeof vi.fn> }
+    killer.unref = vi.fn()
+    const spawnImpl = vi.fn(() => killer) as unknown as typeof spawn
+
+    killCodexAppServerProcessTree(child, { platform: 'win32', spawnImpl })
+
+    expect(spawnImpl).toHaveBeenCalledWith('taskkill', ['/pid', '1234', '/t', '/f'], {
+      stdio: 'ignore',
+      windowsHide: true
+    })
+    expect(killer.unref).toHaveBeenCalledOnce()
+    expect(child.kill).not.toHaveBeenCalled()
+
+    killer.emit('error', new Error('taskkill unavailable'))
+    expect(child.kill).toHaveBeenCalledWith('SIGKILL')
+  })
+
+  it('falls back when taskkill starts but cannot terminate the process tree', () => {
+    const child = {
+      pid: 1234,
+      kill: vi.fn(() => true) as ChildProcess['kill']
+    }
+    const killer = new EventEmitter() as EventEmitter & { unref: ReturnType<typeof vi.fn> }
+    killer.unref = vi.fn()
+    const spawnImpl = vi.fn(() => killer) as unknown as typeof spawn
+
+    killCodexAppServerProcessTree(child, { platform: 'win32', spawnImpl })
+    killer.emit('exit', 1)
+
+    expect(child.kill).toHaveBeenCalledWith('SIGKILL')
+  })
+
+  it('kills the direct app-server process on non-Windows hosts', () => {
+    const child = {
+      pid: 1234,
+      kill: vi.fn(() => true) as ChildProcess['kill']
+    }
+    const spawnImpl = vi.fn() as unknown as typeof spawn
+
+    killCodexAppServerProcessTree(child, { platform: 'linux', spawnImpl })
+
+    expect(spawnImpl).not.toHaveBeenCalled()
+    expect(child.kill).toHaveBeenCalledWith('SIGKILL')
+  })
+})
 
 describe('runCodexHookTrustGrantSession', () => {
   it('grants and verifies exactly the expected managed entries', async () => {
