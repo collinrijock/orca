@@ -1,21 +1,22 @@
 import { extname } from 'node:path'
 import type {
-  AiVaultAgent,
   AiVaultListResult,
   AiVaultScanIssue,
   AiVaultSession
 } from '../../shared/ai-vault-types'
 import { isPathInsideOrEqual } from '../../shared/cross-platform-path'
 import type { ExecutionHostId } from '../../shared/execution-host'
-import type { FileStat, IFilesystemProvider } from '../providers/types'
+import type { IFilesystemProvider } from '../providers/types'
 import type { RemoteHostPlatform } from '../ssh/ssh-remote-platform'
 import { joinRemotePath } from '../ssh/ssh-remote-platform'
 import { sessionSortTime } from './session-scanner-accumulator'
 import {
+  codexRolloutHardlinkIdentity,
   dedupeCodexRolloutFileAliases,
   dedupeCodexSessionsBySessionId
 } from './codex-session-root-dedup'
 import { partitionSubagentTranscriptPaths } from './session-scanner-subagent-transcripts'
+import { statRemoteSessionFile } from './remote-session-file-stat'
 import type { FileWithMtime } from './session-scanner-types'
 import { errorMessage } from './session-scanner-values'
 import { remoteSessionSources } from './remote-session-scanner-sources'
@@ -57,7 +58,8 @@ export async function scanRemoteAiVaultSessions(args: {
     {
       isCodex: (candidate) => candidate.source.agent === 'codex',
       getFilePath: (candidate) => candidate.file.path,
-      getCodexHome: (candidate) => candidate.source.codexHome ?? null
+      getCodexHome: (candidate) => candidate.source.codexHome ?? null,
+      getHardlinkIdentity: (candidate) => codexRolloutHardlinkIdentity(candidate.file)
     }
   )
 
@@ -77,9 +79,13 @@ export async function scanRemoteAiVaultSessions(args: {
     scopePaths,
     alreadyParsedFilePaths: parsed.parsedFilePaths
   })
+  const scopeSessions = dedupeCodexSessionsBySessionId([
+    ...parsedScopeSessions,
+    ...extraScopeSessions
+  ])
 
   return {
-    sessions: mergeRemoteSessions(cappedSessions, [...parsedScopeSessions, ...extraScopeSessions]),
+    sessions: mergeRemoteSessions(cappedSessions, scopeSessions),
     issues,
     scannedAt: new Date().toISOString()
   }
@@ -100,7 +106,7 @@ async function discoverRemoteSourceCandidates(args: {
     : null
   const paths = partition ? partition.sessionFilePaths : walked
   const files = await mapRemoteScanConcurrently(paths, (path) =>
-    statRemoteFile(
+    statRemoteSessionFile(
       args.context.provider,
       path,
       args.source.agent,
@@ -172,6 +178,8 @@ async function parseRemoteSessionCandidates(args: {
       batch.map((candidate) => parseRemoteSessionCandidate(candidate, args.context, args.issues))
     )
     sessions.push(...results.filter(isAiVaultSession))
+    const uniqueSessions = dedupeCodexSessionsBySessionId(sessions)
+    sessions.splice(0, sessions.length, ...uniqueSessions)
     index += batch.length
   }
 
@@ -264,30 +272,6 @@ function isRemoteSessionInScope(session: AiVaultSession, scopePaths: readonly st
 
 function normalizeRemoteScopePaths(scopePaths: readonly string[]): string[] {
   return scopePaths.map((scopePath) => scopePath.trim()).filter(Boolean)
-}
-
-async function statRemoteFile(
-  provider: IFilesystemProvider,
-  path: string,
-  agent: AiVaultAgent,
-  executionHostId: ExecutionHostId,
-  issues: AiVaultScanIssue[]
-): Promise<FileWithMtime | null> {
-  try {
-    const stat = await provider.stat(path)
-    const mtimeMs = remoteStatMtimeMs(stat)
-    return { path, mtimeMs, modifiedAt: new Date(mtimeMs).toISOString() }
-  } catch (err) {
-    issues.push({ executionHostId, agent, path, message: errorMessage(err) })
-    return null
-  }
-}
-
-function remoteStatMtimeMs(stat: FileStat): number {
-  if (typeof stat.mtimeMs === 'number' && Number.isFinite(stat.mtimeMs)) {
-    return stat.mtimeMs
-  }
-  return stat.mtime > 10_000_000_000 ? stat.mtime : stat.mtime * 1000
 }
 
 function canStopParsingRemoteSessions(

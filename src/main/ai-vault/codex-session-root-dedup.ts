@@ -7,14 +7,36 @@ import { sessionSortTime } from './session-scanner-accumulator'
 // per root (#7521). These helpers collapse those aliases to one canonical row.
 
 // Matches Codex rollout logs: rollout-<timestamp>-<session uuid>.jsonl. The
-// bridge and backfill both preserve the sessions/YYYY/MM/DD layout, so an
-// identical rollout file name across Codex roots is the same session.
+// bridge and backfill preserve the name, but the name alone is not identity:
+// pre-parse dedup also requires a shared inode and post-parse requires the id.
 const CODEX_ROLLOUT_FILE_NAME_PATTERN = /^rollout-.+\.jsonl$/
 
 // Why: not node:path.basename — a posix host scans remote/WSL win32 paths, so
 // separators must be handled independently of the local platform.
 function lastPathSegment(filePath: string): string {
   return filePath.split(/[\\/]/).at(-1) ?? ''
+}
+
+/** Returns a pre-parse alias key only when metadata proves a shared hardlink. */
+export function codexRolloutHardlinkIdentity(file: {
+  dev?: number
+  ino?: number
+  nlink?: number
+}): string | null {
+  const { dev, ino, nlink } = file
+  if (
+    typeof dev !== 'number' ||
+    typeof ino !== 'number' ||
+    typeof nlink !== 'number' ||
+    !Number.isSafeInteger(dev) ||
+    !Number.isSafeInteger(ino) ||
+    !Number.isSafeInteger(nlink) ||
+    nlink <= 1 ||
+    (dev === 0 && ino === 0)
+  ) {
+    return null
+  }
+  return `${dev}:${ino}`
 }
 
 /**
@@ -36,8 +58,8 @@ function codexSessionRootRank(codexHome: string | null): number {
 
 /**
  * Drops pre-parse Codex rollout candidates that alias an already-kept rollout
- * file name in a preferred root, so duplicate aliases never consume the parse
- * budget or crowd the capped listing.
+ * hardlink in a preferred root, so proven aliases never consume the parse
+ * budget. Same-name copies remain until parsed identity proves they alias.
  */
 export function dedupeCodexRolloutFileAliases<T>(
   candidates: readonly T[],
@@ -45,9 +67,10 @@ export function dedupeCodexRolloutFileAliases<T>(
     isCodex: (candidate: T) => boolean
     getFilePath: (candidate: T) => string
     getCodexHome: (candidate: T) => string | null
+    getHardlinkIdentity: (candidate: T) => string | null
   }
 ): T[] {
-  const bestByFileName = new Map<string, { candidate: T; rank: number; filePath: string }>()
+  const bestByAlias = new Map<string, { candidate: T; rank: number; filePath: string }>()
   for (const candidate of candidates) {
     if (!accessors.isCodex(candidate)) {
       continue
@@ -57,10 +80,15 @@ export function dedupeCodexRolloutFileAliases<T>(
     if (!CODEX_ROLLOUT_FILE_NAME_PATTERN.test(fileName)) {
       continue
     }
+    const hardlinkIdentity = accessors.getHardlinkIdentity(candidate)
+    if (!hardlinkIdentity) {
+      continue
+    }
+    const aliasKey = `${fileName}\0${hardlinkIdentity}`
     const rank = codexSessionRootRank(accessors.getCodexHome(candidate))
-    const best = bestByFileName.get(fileName)
+    const best = bestByAlias.get(aliasKey)
     if (!best || rank < best.rank || (rank === best.rank && filePath < best.filePath)) {
-      bestByFileName.set(fileName, { candidate, rank, filePath })
+      bestByAlias.set(aliasKey, { candidate, rank, filePath })
     }
   }
   return candidates.filter((candidate) => {
@@ -68,37 +96,53 @@ export function dedupeCodexRolloutFileAliases<T>(
       return true
     }
     const fileName = lastPathSegment(accessors.getFilePath(candidate))
-    const best = bestByFileName.get(fileName)
+    const hardlinkIdentity = accessors.getHardlinkIdentity(candidate)
+    if (!hardlinkIdentity) {
+      return true
+    }
+    const best = bestByAlias.get(`${fileName}\0${hardlinkIdentity}`)
     return !best || best.candidate === candidate
   })
 }
 
 /**
- * Collapses parsed Codex sessions that share a session id on one execution
- * host, keeping the canonical root's row (see codexSessionRootRank). Catches
- * aliases the file-name pass cannot see: cross-volume backfill copies and
- * session_meta ids that differ from the rollout file name.
+ * Collapses parsed Codex sessions that share a rollout name and session id on
+ * one execution host, keeping the canonical root's row. Requiring both the
+ * parsed id and rollout name preserves id collisions and same-name files whose
+ * parsed ids differ.
  */
 export function dedupeCodexSessionsBySessionId(
   sessions: readonly AiVaultSession[]
 ): AiVaultSession[] {
   const bestByKey = new Map<string, AiVaultSession>()
   for (const session of sessions) {
-    if (session.agent !== 'codex') {
+    const key = codexSessionAliasKey(session)
+    if (!key) {
       continue
     }
-    const key = `${session.executionHostId}:${session.sessionId}`
     const best = bestByKey.get(key)
     if (!best || codexSessionAliasBeats(session, best)) {
       bestByKey.set(key, session)
     }
   }
   return sessions.filter((session) => {
-    if (session.agent !== 'codex') {
+    const key = codexSessionAliasKey(session)
+    if (!key) {
       return true
     }
-    return bestByKey.get(`${session.executionHostId}:${session.sessionId}`) === session
+    return bestByKey.get(key) === session
   })
+}
+
+function codexSessionAliasKey(session: AiVaultSession): string | null {
+  if (session.agent !== 'codex') {
+    return null
+  }
+  const fileName = lastPathSegment(session.filePath)
+  if (!CODEX_ROLLOUT_FILE_NAME_PATTERN.test(fileName)) {
+    return null
+  }
+  return `${session.executionHostId}\0${session.sessionId}\0${fileName}`
 }
 
 function codexSessionAliasBeats(candidate: AiVaultSession, best: AiVaultSession): boolean {

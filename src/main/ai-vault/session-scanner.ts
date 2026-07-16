@@ -7,6 +7,7 @@ import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../shared/exec
 import { withSpan } from '../observability/tracer'
 import { sessionSortTime } from './session-scanner-accumulator'
 import {
+  codexRolloutHardlinkIdentity,
   dedupeCodexRolloutFileAliases,
   dedupeCodexSessionsBySessionId
 } from './codex-session-root-dedup'
@@ -81,7 +82,8 @@ export async function scanAiVaultSessions(
       {
         isCodex: (candidate) => candidate.agent === 'codex',
         getFilePath: (candidate) => candidate.file.path,
-        getCodexHome: (candidate) => candidate.codexHome
+        getCodexHome: (candidate) => candidate.codexHome,
+        getHardlinkIdentity: (candidate) => codexRolloutHardlinkIdentity(candidate.file)
       }
     )
 
@@ -216,6 +218,11 @@ async function parseSessionCandidates(args: {
         sessions.push(result.session)
       }
     }
+
+    // Why: cross-volume backfill copies have no shared inode, so collapse
+    // parsed aliases before they can crowd the unique-session parse budget.
+    const uniqueSessions = dedupeCodexSessionsBySessionId(sessions)
+    sessions.splice(0, sessions.length, ...uniqueSessions)
 
     index += batchSize
   }

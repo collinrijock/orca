@@ -10,6 +10,7 @@ import {
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { CodexAppServerInvocation } from './codex-app-server-session'
+import { CODEX_SESSION_INDEX_HEAL_VERSION } from './codex-session-index-heal-state'
 import {
   runCodexSessionIndexHeal,
   type CodexSessionIndexHealPaths
@@ -66,6 +67,10 @@ process.stdin.on('data', (chunk) => {
           send({ id: message.id, error: { code: -32600, message: 'failed to parse rollout' } })
           return
         }
+        if ((config.busyThreadIds || []).includes(threadId)) {
+          send({ id: message.id, error: { code: -32600, message: 'database is locked' } })
+          return
+        }
         if (config.scenario === 'die-mid-batch' && threadId === config.dieOnThreadId) {
           process.exit(7)
         }
@@ -100,6 +105,7 @@ function createHealRig(options: {
   auditedThreads?: { stamp: string; id: string; action?: string }[]
   missingThreadIds?: string[]
   failingThreadIds?: string[]
+  busyThreadIds?: string[]
   dieOnThreadId?: string
 }): {
   paths: CodexSessionIndexHealPaths
@@ -145,6 +151,7 @@ function createHealRig(options: {
           readLogFile,
           missingThreadIds: options.missingThreadIds ?? [],
           failingThreadIds: options.failingThreadIds ?? [],
+          busyThreadIds: options.busyThreadIds ?? [],
           dieOnThreadId: options.dieOnThreadId
         })
       },
@@ -317,6 +324,25 @@ describe('runCodexSessionIndexHeal', () => {
     expect(log.maxInFlight).toBeLessThanOrEqual(2)
   })
 
+  it('caps overrides at the production batch and concurrency limits', async () => {
+    const rig = createHealRig({
+      auditedThreads: Array.from({ length: 51 }, (_, index) => ({
+        stamp: `2026-07-${String(index + 1).padStart(2, '0')}T10-00-00`,
+        id: threadId(String(index + 1))
+      }))
+    })
+
+    const summary = await runCodexSessionIndexHeal(rig.paths, {
+      buildInvocation: rig.buildInvocation,
+      readsPerServerSession: 1_000,
+      readConcurrency: 1_000,
+      interBatchDelayMs: 0
+    })
+
+    expect(summary).toMatchObject({ outcome: 'completed', healedThreads: 51 })
+    expect(rig.readLog()).toMatchObject({ serverStarts: 2, maxInFlight: 2 })
+  })
+
   it('stops promptly when shouldStop flips and resumes on the next pass', async () => {
     const rig = createHealRig({
       auditedThreads: Array.from({ length: 4 }, (_, index) => ({
@@ -416,6 +442,39 @@ describe('runCodexSessionIndexHeal', () => {
     expect(retried.healedThreads).toBe(2)
   })
 
+  it('retries transient sqlite contention instead of marking the thread failed', async () => {
+    const rig = createHealRig({
+      auditedThreads: [{ stamp: '2026-07-01T10-00-00', id: threadId('1') }],
+      busyThreadIds: [threadId('1')]
+    })
+    const summary = await runCodexSessionIndexHeal(rig.paths, {
+      buildInvocation: rig.buildInvocation,
+      interBatchDelayMs: 0
+    })
+    expect(summary.outcome).toBe('aborted')
+    expect(readLedgerOutcomes(rig.paths)).toEqual({})
+
+    const retried = await runCodexSessionIndexHeal(rig.paths, {
+      buildInvocation: (home, timeoutMs) => {
+        const invocation = rig.buildInvocation(home, timeoutMs)
+        return {
+          ...invocation,
+          env: {
+            STUB_CONFIG: JSON.stringify({
+              scenario: 'ok',
+              readLogFile: rig.readLogFile,
+              missingThreadIds: [],
+              failingThreadIds: [],
+              busyThreadIds: []
+            })
+          }
+        }
+      },
+      interBatchDelayMs: 0
+    })
+    expect(retried).toMatchObject({ outcome: 'completed', healedThreads: 1 })
+  })
+
   it('completes immediately with no server spawn when there is nothing to heal', async () => {
     const rig = createHealRig({ auditedThreads: [] })
     const summary = await runCodexSessionIndexHeal(rig.paths, {
@@ -447,5 +506,38 @@ describe('runCodexSessionIndexHeal', () => {
     })
     expect(summary).toMatchObject({ outcome: 'completed', pendingThreads: 0 })
     expect(rig.readLog().serverStarts).toBe(0)
+  })
+
+  it('scopes audit and processed ledger records to the current Codex home', async () => {
+    const currentId = threadId('1')
+    const foreignId = threadId('2')
+    const rig = createHealRig({
+      auditedThreads: [{ stamp: '2026-07-01T10-00-00', id: currentId }]
+    })
+    const foreignRoot = `${rig.paths.systemSessionsRoot}-other`
+    appendFileSync(
+      rig.paths.auditLogPath,
+      `${JSON.stringify({
+        action: 'hardlink',
+        target: rolloutTarget(foreignRoot, '2026-07-02T10-00-00', foreignId)
+      })}\n`
+    )
+    appendFileSync(
+      rig.paths.healLedgerPath,
+      `${JSON.stringify({
+        v: CODEX_SESSION_INDEX_HEAL_VERSION,
+        systemSessionsRoot: foreignRoot,
+        threadId: currentId,
+        outcome: 'healed'
+      })}\n`
+    )
+
+    const summary = await runCodexSessionIndexHeal(rig.paths, {
+      buildInvocation: rig.buildInvocation,
+      interBatchDelayMs: 0
+    })
+
+    expect(summary).toMatchObject({ outcome: 'completed', healedThreads: 1 })
+    expect(rig.readLog().threadIds).toEqual([currentId])
   })
 })

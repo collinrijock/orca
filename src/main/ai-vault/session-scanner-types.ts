@@ -47,8 +47,13 @@ export type FileWithMtime = {
   modifiedAt: string
   // Present when discovery statted the file; lets the parse cache detect
   // unchanged/truncated files without a second stat. Synthetic candidates
-  // (OpenCode SQLite rows, remote files) omit it.
+  // such as OpenCode SQLite rows omit it.
   sizeBytes?: number
+  // Present when discovery can prove filesystem identity. Codex dual-root
+  // scans use a multi-link inode to collapse only actual hardlink aliases.
+  dev?: number
+  ino?: number
+  nlink?: number
 }
 
 export type SessionFileCandidate = {

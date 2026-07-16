@@ -1,5 +1,9 @@
 import { appendFileSync, mkdirSync, readFileSync, statSync } from 'node:fs'
 import { dirname } from 'node:path'
+import {
+  isPathInsideOrEqual,
+  normalizeRuntimePathForComparison
+} from '../../shared/cross-platform-path'
 import { writeFileAtomically } from '../codex-accounts/fs-utils'
 
 // State files for the session index heal: which backfilled rollouts exist
@@ -9,7 +13,7 @@ import { writeFileAtomically } from '../codex-accounts/fs-utils'
 
 // Bump to re-drive the heal for every host after a semantics change; already
 // processed thread ids are re-read because ledger lines are version-scoped.
-export const CODEX_SESSION_INDEX_HEAL_VERSION = 1
+export const CODEX_SESSION_INDEX_HEAL_VERSION = 2
 
 // Why: an unsupported CLI stays unsupported until upgraded; re-probing once a
 // day is enough to notice an upgrade without a per-startup spawn.
@@ -44,10 +48,15 @@ export type HealMarkerSummary = {
  * copied rollout whose thread id has not been processed yet, most recent first.
  */
 export function collectPendingHealThreads(paths: CodexSessionIndexHealPaths): PendingHealThread[] {
-  const processedThreadIds = readProcessedHealThreadIds(paths.healLedgerPath)
+  const processedThreadIds = readProcessedHealThreadIds(paths)
   const pendingByThreadId = new Map<string, PendingHealThread>()
   for (const line of readJsonlLines(paths.auditLogPath)) {
     if ((line.action !== 'hardlink' && line.action !== 'copy') || typeof line.target !== 'string') {
+      continue
+    }
+    // Why: the append-only audit can contain runs for several custom Codex
+    // homes; only thread/read ids whose rollout lives in this invocation's DB.
+    if (!isPathInsideOrEqual(paths.systemSessionsRoot, line.target)) {
       continue
     }
     const match = CODEX_ROLLOUT_THREAD_ID_PATTERN.exec(lastPathSegment(line.target))
@@ -69,10 +78,16 @@ function lastPathSegment(filePath: string): string {
   return filePath.split(/[\\/]/).at(-1) ?? ''
 }
 
-function readProcessedHealThreadIds(healLedgerPath: string): Set<string> {
+function readProcessedHealThreadIds(paths: CodexSessionIndexHealPaths): Set<string> {
   const processed = new Set<string>()
-  for (const line of readJsonlLines(healLedgerPath)) {
-    if (line.v === CODEX_SESSION_INDEX_HEAL_VERSION && typeof line.threadId === 'string') {
+  const expectedRoot = normalizeRuntimePathForComparison(paths.systemSessionsRoot)
+  for (const line of readJsonlLines(paths.healLedgerPath)) {
+    if (
+      line.v === CODEX_SESSION_INDEX_HEAL_VERSION &&
+      typeof line.threadId === 'string' &&
+      typeof line.systemSessionsRoot === 'string' &&
+      normalizeRuntimePathForComparison(line.systemSessionsRoot) === expectedRoot
+    ) {
       processed.add(line.threadId.toLowerCase())
     }
   }
@@ -80,16 +95,17 @@ function readProcessedHealThreadIds(healLedgerPath: string): Set<string> {
 }
 
 export function appendHealLedgerRecord(
-  healLedgerPath: string,
+  paths: CodexSessionIndexHealPaths,
   threadId: string,
   outcome: HealLedgerOutcome
 ): void {
   try {
-    mkdirSync(dirname(healLedgerPath), { recursive: true })
+    mkdirSync(dirname(paths.healLedgerPath), { recursive: true })
     appendFileSync(
-      healLedgerPath,
+      paths.healLedgerPath,
       `${JSON.stringify({
         v: CODEX_SESSION_INDEX_HEAL_VERSION,
+        systemSessionsRoot: paths.systemSessionsRoot,
         threadId,
         outcome,
         at: new Date().toISOString()

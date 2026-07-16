@@ -132,8 +132,11 @@ export async function runCodexSessionIndexHeal(
 
   const systemCodexHomePath = dirname(paths.systemSessionsRoot)
   const buildInvocation = options.buildInvocation ?? buildNativeHealInvocation
-  const readsPerServerSession = options.readsPerServerSession ?? HEAL_READS_PER_SERVER_SESSION
-  const readConcurrency = options.readConcurrency ?? HEAL_READ_CONCURRENCY
+  const readsPerServerSession = resolveHealWorkLimit(
+    options.readsPerServerSession,
+    HEAL_READS_PER_SERVER_SESSION
+  )
+  const readConcurrency = resolveHealWorkLimit(options.readConcurrency, HEAL_READ_CONCURRENCY)
   const interBatchDelayMs = options.interBatchDelayMs ?? HEAL_INTER_BATCH_DELAY_MS
   const shouldStop = options.shouldStop ?? ((): boolean => false)
 
@@ -159,7 +162,7 @@ export async function runCodexSessionIndexHeal(
               await healOneThread(rpc, thread, paths, summary)
             }
           }
-          await Promise.all(Array.from({ length: Math.max(1, readConcurrency) }, () => worker()))
+          await Promise.all(Array.from({ length: readConcurrency }, () => worker()))
         }
       )
     } catch (error) {
@@ -195,7 +198,7 @@ async function healOneThread(
   try {
     await rpc.request('thread/read', { threadId: thread.threadId })
     summary.healedThreads += 1
-    appendHealLedgerRecord(paths.healLedgerPath, thread.threadId, 'healed')
+    appendHealLedgerRecord(paths, thread.threadId, 'healed')
   } catch (error) {
     if (isCodexAppServerUnsupportedError(error)) {
       throw error
@@ -209,12 +212,24 @@ async function healOneThread(
     if (/no rollout found/i.test(message)) {
       // The backfilled rollout was deleted after the audit was written.
       summary.missingThreads += 1
-      appendHealLedgerRecord(paths.healLedgerPath, thread.threadId, 'missing')
+      appendHealLedgerRecord(paths, thread.threadId, 'missing')
       return
     }
+    if (/SQLITE_(?:BUSY|LOCKED)|database (?:is )?(?:busy|locked)/i.test(message)) {
+      // Why: an active Codex process can briefly own sqlite; leave the id off
+      // the ledger and abort this pass so a later startup resumes it.
+      throw error
+    }
     summary.failedThreads += 1
-    appendHealLedgerRecord(paths.healLedgerPath, thread.threadId, 'failed')
+    appendHealLedgerRecord(paths, thread.threadId, 'failed')
   }
+}
+
+function resolveHealWorkLimit(value: number | undefined, maximum: number): number {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) {
+    return maximum
+  }
+  return Math.min(Math.floor(value), maximum)
 }
 
 function buildNativeHealInvocation(
