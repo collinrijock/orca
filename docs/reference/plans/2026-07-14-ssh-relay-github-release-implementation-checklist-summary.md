@@ -9,9 +9,9 @@ keeps commands, hashes, runner identities, timings, and failure details.
 A checked box means the work has evidence in the detailed ledger. Design approval alone does not
 complete a box.
 
-Active checkpoint: **Milestone 5 / Work Package 4 desktop resolver/cache — checkpoint and prove the
-locally green disconnected warm/cold acquisition composition on exact-head native CI, 2026-07-15,
-Codex implementation owner.**
+Active checkpoint: **Milestone 5 / Work Package 4 desktop resolver/cache — audit the next smallest
+remaining resolver/cache boundary after exact-head acceptance of disconnected warm/cold
+acquisition, 2026-07-15, Codex implementation owner.**
 `E-M5-ARTIFACT-CACHE-RESOLUTION-CI-001` closes warm-cache commit
 `22031fa68` on all six native clients, both Linux supplements, Windows x64 baseline, PR Checks,
 Golden E2E, and computer-use; Windows arm64 remains the expected build-26200 rejection against 26100. `E-M5-ARTIFACT-CACHE-RESOLUTION-LOCAL-001` passes 9/9 purpose tests,
@@ -81,7 +81,15 @@ ZIP paths perform exactly one verified cold fetch, release the lease, then acqui
 next client fetch is configured offline. Ready results are source-qualified and leased; identity,
 cancellation, and all lower-layer errors fail closed without classification. The package remains
 disconnected from manifest loading, Electron/startup, proxy policy, SSH, settings, fallback, tuple
-enablement, publication, and defaults. Exact-head all-six native proof is next.
+enablement, publication, and defaults. Exact-head all-six native proof is recorded immediately below.
+`E-M5-ARTIFACT-ACQUISITION-CI-001` closes acquisition commit `c170ff92c`: all six primary native
+Node 24 jobs, both Linux supplements, Windows x64 baseline, PR Checks, Golden E2E, and computer-use
+pass. Windows arm64 retains only the declared hosted build-26200 rejection against required 26100
+after full runtime smoke. Every native contract command proves real Linux/Windows cold→warm client-
+offline acquisition, and every full-size extraction/cache lifecycle remains inside its latency and
+memory budgets. Live GitHub/CDN/proxy/certificate behavior, manifest/startup adaptation, SSH,
+settings, fallback, tuple enablement, publication, and defaults remain open; legacy remains the sole
+production path.
 `E-M5-ARTIFACT-CACHE-ROOT-CI-001` closes the pure cache-root contract at exact head `aefcaa9a9`:
 all six primary native Node 24 jobs, both Linux supplements, Windows x64 baseline, PR Checks, Golden
 E2E, and computer-use pass; Windows arm64 build 26200 remains correctly gated against 26100. The
