@@ -1655,11 +1655,13 @@
                   <td>
                     When the hosted ARM64 OS capability is unavailable, use one immutable official
                     Microsoft Win32-OpenSSH release with exact per-architecture archive hashes.
-                    Require valid Microsoft Authenticode on every executable. The release's sole
-                    upstream native library, <code>libcrypto.dll</code>, is accepted only when it is
-                    the only unsigned PE and matches its separately pinned per-architecture hash;
-                    any added, missing, differently signed, or differently hashed native file fails
-                    closed.
+                    Require valid Microsoft Authenticode on every PE. The release's sole upstream
+                    native library, <code>libcrypto.dll</code>, must match its separately pinned
+                    per-architecture hash, expected Microsoft 3rd Party Application Component common
+                    name, and exact audited leaf-certificate thumbprint. Every executable must match
+                    the expected Microsoft Corporation common name and one of the audited leaf
+                    thumbprints; any added, missing, differently signed, or differently hashed
+                    native file fails closed.
                   </td>
                   <td>
                     This trust exception provisions only the loopback CI server. Production clients

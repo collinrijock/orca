@@ -1395,19 +1395,47 @@ jobs:
           if ($libcryptoSha256 -ne $expectedLibcryptoSha256) {
             throw "Official Windows OpenSSH libcrypto.dll hash mismatch: $libcryptoSha256"
           }
-          # Why: Microsoft's immutable bundle preserves one unsigned upstream OpenSSL library.
+          # Why: the pinned fixture uses a distinct Microsoft-managed leaf for its upstream library.
+          $expectedLibcryptoSignerThumbprint = '587116075365AA15BCD8E4FA9CB31BE372B5DE51'
           $libcryptoSignature = Get-AuthenticodeSignature -LiteralPath $libcrypto.FullName
-          if ($libcryptoSignature.Status -ne 'NotSigned') {
-            throw "Official Windows OpenSSH libcrypto.dll signature changed: $($libcryptoSignature.Status)"
+          $libcryptoCertificate = $libcryptoSignature.SignerCertificate
+          $libcryptoThumbprint = if ($null -eq $libcryptoCertificate) {
+            '<none>'
+          } else {
+            $libcryptoCertificate.Thumbprint.ToUpperInvariant()
           }
+          $libcryptoSubject = if ($null -eq $libcryptoCertificate) {
+            '<none>'
+          } else {
+            $libcryptoCertificate.Subject
+          }
+          if (
+            $libcryptoSignature.Status -ne 'Valid' -or
+            $libcryptoThumbprint -ne $expectedLibcryptoSignerThumbprint -or
+            $libcryptoSubject -notmatch '(^|,\s*)CN=Microsoft 3rd Party Application Component(,|$)'
+          ) {
+            throw "Official Windows OpenSSH libcrypto.dll signature identity is invalid: $($libcryptoSignature.Status), $libcryptoThumbprint, $libcryptoSubject"
+          }
+          $expectedExecutableSignerThumbprints = @(
+            'F5877012FBD62FABCBDC8D8CEE9C9585BA30DF79',
+            '3F56A45111684D454E231CFDC4DA5C8D370F9816'
+          )
           foreach ($nativeFile in $nativeFiles) {
             if ($nativeFile.Name -eq 'libcrypto.dll') { continue }
             $signature = Get-AuthenticodeSignature -LiteralPath $nativeFile.FullName
+            $certificate = $signature.SignerCertificate
+            $thumbprint = if ($null -eq $certificate) {
+              '<none>'
+            } else {
+              $certificate.Thumbprint.ToUpperInvariant()
+            }
+            $subject = if ($null -eq $certificate) { '<none>' } else { $certificate.Subject }
             if (
               $signature.Status -ne 'Valid' -or
-              $signature.SignerCertificate.Subject -notmatch 'CN=Microsoft Corporation'
+              $expectedExecutableSignerThumbprints -notcontains $thumbprint -or
+              $subject -notmatch '(^|,\s*)CN=Microsoft Corporation(,|$)'
             ) {
-              throw "Official Windows OpenSSH fixture signature is invalid: $($nativeFile.Name)"
+              throw "Official Windows OpenSSH fixture signature identity is invalid: $($nativeFile.Name), $($signature.Status), $thumbprint, $subject"
             }
           }
           $sshd = Join-Path $openSshRoot 'sshd.exe'

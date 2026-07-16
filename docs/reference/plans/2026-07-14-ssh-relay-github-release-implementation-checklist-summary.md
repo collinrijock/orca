@@ -18,18 +18,27 @@ forbidden; 10/10 focused workflow contracts, 283/283 release contracts, 694 rela
 declared skips, typecheck, full lint/reliability/max-lines, PowerShell syntax, formatting, diff, and
 protected-resolver isolation pass. Fresh exact-head x64/arm64 proof is still required.
 `E-M6-WINDOWS-SYSTEM-SSH-TREE-LIVE-LIBCRYPTO-CI-RED-001` records exact head
-`bcbd9d6b36dc8cc2e917fa88eb30f87ab1d88657`, artifact run `29538044827`, and native x64 job
-`87753850628`: the archive hash passes, but the fail-closed every-PE Authenticode policy rejects the
-official bundle's sole upstream `libcrypto.dll`; teardown passes before any account/service creation.
-Pin that library's exact per-architecture hash and require it to be the only `NotSigned` PE while
-every executable remains valid Microsoft Authenticode. Native ARM64 job `87753850663` independently
-reproduces the same archive-green/`libcrypto.dll` RED and passes teardown after all prior runtime
-gates, confirming one architecture-consistent correction.
+`bcbd9d6b36dc8cc2e917fa88eb30f87ab1d88657`, artifact run `29538044827`, and native x64/arm64 jobs
+`87753850628`/`87753850663`: both archive hashes pass, but the one-subject Authenticode policy rejects
+the official bundle's `libcrypto.dll`; both teardowns pass before any account/service creation.
 `E-M6-WINDOWS-SYSTEM-SSH-TREE-LIVE-LIBCRYPTO-CORRECTION-LOCAL-001` records the role-based trust
-correction locally green: exact 15-file native closure, both library hashes, sole `NotSigned`
-library, valid Microsoft Authenticode for every executable, 10/10 workflow contracts, 283/283
-release contracts, typecheck, full lint/reliability/max-lines, and PowerShell syntax pass. Push its
-exact head for fresh native x64/arm64 proof.
+correction locally green under the initial hypothesis: exact 15-file native closure, both library
+hashes, 10/10 workflow contracts, 283/283 release contracts, typecheck, full
+lint/reliability/max-lines, and PowerShell syntax pass. Exact head
+`85731b3feff90047f67b716363b1549b0d79ee2c`, artifact run `29539266437`, and x64 job
+`87757772975` disprove only the guessed `NotSigned` policy: the archive/hash/closure gates pass,
+`libcrypto.dll` is target-natively `Valid`, and ownership-safe teardown passes. ARM64 job
+`87757772957` independently reports the same exact RED after all prior gates and also passes teardown.
+`E-M6-WINDOWS-SYSTEM-SSH-TREE-LIVE-SIGNER-AUDIT-001` records both pinned archives and all 30 PE
+assessments: `libcrypto.dll` uses the expected Microsoft 3rd Party common name and exact leaf thumbprint
+`587116075365AA15BCD8E4FA9CB31BE372B5DE51`; every executable uses the expected Microsoft Corporation
+common name plus audited thumbprint `F5877012FBD62FABCBDC8D8CEE9C9585BA30DF79` or
+`3F56A45111684D454E231CFDC4DA5C8D370F9816`.
+`E-M6-WINDOWS-SYSTEM-SSH-TREE-LIVE-EXACT-SIGNER-CORRECTION-LOCAL-001` implements that fixture-only
+policy and is locally green: 10/10 focused workflow cases with one declared live skip, all three
+PowerShell blocks parsed, 283/283 artifact contracts, typecheck, full lint/reliability/max-lines,
+formatting, diff, and protected-resolver isolation. Commit/push the isolated correction and require
+fresh exact-head native x64/arm64 proof.
 `E-M6-WINDOWS-SYSTEM-SSH-TREE-LIVE-AUDIT-001` fixes the loopback-only official Microsoft
 server, fixture-owned non-admin account/ACL, exact host-key trust, Windows PowerShell 5.1,
 serial/default and four-channel metrics, cancellation/collision/cleanup, and deterministic teardown
