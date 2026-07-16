@@ -9,12 +9,16 @@ keeps commands, hashes, runner identities, timings, and failure details.
 A checked box means the work has evidence in the detailed ledger. Design approval alone does not
 complete a box.
 
-Active checkpoint: **Milestone 5 / Work Package 4 desktop cache boundary — local lease/recency/
-eviction contracts are green; wiring full-size all-six native proof, 2026-07-15, Codex implementation
-owner.** Fourteen focused contracts, workflow wiring, broad relay/release suites, typecheck, lint, and
-static gates pass locally under `E-M5-ARTIFACT-CACHE-EVICTION-LOCAL-001` and
-`E-M5-ARTIFACT-CACHE-EVICTION-CI-WIRING-LOCAL-001`; the package remains open until exact-head native
-CI supplies all-six full-size retention/eviction metrics. Exact-head
+Active checkpoint: **Milestone 5 / Work Package 4 desktop resolver/cache — bounded disconnected
+cache gate closed; auditing the next packaged-manifest/cache-root boundary, 2026-07-15, Codex
+implementation owner.** Exact-head run
+[29464742446](https://github.com/stablyai/orca/actions/runs/29464742446) passes the lease/eviction
+source contracts and exact full-size active-retention/release/eviction lifecycle on Linux, macOS,
+and Windows, x64 and arm64, under `E-M5-ARTIFACT-CACHE-EVICTION-CI-001`. Retention is 11.14–47.88ms
+and 0–1.99 MiB incremental RSS; eviction is 19.02–92.90ms and 0–2.08 MiB, reclaiming each exact
+118.4–161.3 MB entry. PR Checks
+[29464742361](https://github.com/stablyai/orca/actions/runs/29464742361) and Golden E2E
+[29464742368](https://github.com/stablyai/orca/actions/runs/29464742368) pass. Prior exact-head
 run [29462394311](https://github.com/stablyai/orca/actions/runs/29462394311) passes all 17 cache-entry
 contracts and exact full-size cold/warm measurements on Linux, macOS, and Windows, x64 and arm64,
 under `E-M5-ARTIFACT-CACHE-ENTRY-CI-001`. Cold publication is 1.17–6.17s and 34.5–48.8 MiB
@@ -318,12 +322,12 @@ production keys/environment/seed, and merge to `main` remain disconnected.
       and memory budgets under `E-M5-ARTIFACT-EXTRACTION-FULL-SIZE-LOCAL-001`; all-six native
       execution is closed under `E-M5-ARTIFACT-EXTRACTION-CI-001`. Packaged signature loading
       remains open.
-- [ ] Add exclusive staging, atomic publication, quarantine, locking, and the 2 GiB cache policy.
+- [x] Add exclusive staging, atomic publication, quarantine, locking, and the 2 GiB cache policy.
       Locking and immutable publication/lookup/quarantine are closed locally and on all six native
       clients under `E-M5-ARTIFACT-CACHE-LOCK-CI-001` and
       `E-M5-ARTIFACT-CACHE-ENTRY-CI-001`. In-use leases, recency, exact byte accounting, and bounded
-      eviction pass locally under `E-M5-ARTIFACT-CACHE-EVICTION-LOCAL-001`; all-six native/full-size
-      eviction evidence remains the only open part of this combined item.
+      eviction pass locally and on all six native/full-size clients under
+      `E-M5-ARTIFACT-CACHE-EVICTION-LOCAL-001` and `E-M5-ARTIFACT-CACHE-EVICTION-CI-001`.
 - [ ] Prove verified cached bytes can be transferred while the client is offline.
 - [ ] Preserve `ORCA_RELAY_PATH` behind the official-build trust boundary.
 

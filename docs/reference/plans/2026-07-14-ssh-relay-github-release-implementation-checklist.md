@@ -8,8 +8,8 @@ work; keep exact commands, runner identities, hashes, metrics, and residual gaps
 
 Date created: 2026-07-14<br>
 Last updated: 2026-07-15<br>
-Current phase: Milestone 5 / Work Package 4 desktop cache boundary — **In progress — 2026-07-15, Codex implementation owner: wire and prove disconnected in-use lease/recency/2 GiB eviction on all six native runners**. The purpose-named RED is recorded, 14 focused contracts and the 126-test artifact source suite are locally green, and the next gate is full-size eviction measurement plus workflow-contract and all-six native evidence. Keep every Electron, downloader, SSH, setting, tuple, publication, and default-path consumer disconnected.<br>
-Session checkpoint: **In progress — 2026-07-15, Codex implementation owner** — user authority covers end-to-end PR-contained implementation, commits, pushes, CI, rehearsals, and release writes; merging to `main` remains explicitly prohibited. The active uncommitted package implements only cross-process in-use leases, persistent recency, exact logical-byte accounting, and bounded eviction. It has no Electron, downloader, SSH, setting, tuple, publication, or default-path consumer. Legacy remains the production default.<br>
+Current phase: Milestone 5 / Work Package 4 desktop resolver/cache — **In progress — 2026-07-15, Codex implementation owner: audit the next disconnected packaged-manifest/cache-root boundary**. Exact-head `b79bcbd04` closes the bounded cache gate on all six native clients under E-M5-ARTIFACT-CACHE-EVICTION-CI-001. Before adding a consumer, audit official-build manifest/key loading, app-owned cache-root selection, proxy/certificate behavior, and downloader/cache orchestration; add purpose-named RED contracts for only the next coherent package. Keep SSH, settings, tuples, publication, and default behavior disconnected.<br>
+Session checkpoint: **In progress — 2026-07-15, Codex implementation owner** — user authority covers end-to-end PR-contained implementation, commits, pushes, CI, rehearsals, and release writes; merging to `main` remains explicitly prohibited. Commit `b79bcbd04` passes all six native source/full-size cache jobs, PR Checks, and Golden E2E. The artifact workflow is red only for the retained hosted Windows arm64 build-26200 versus required-26100 floor rejection after its primary proof. No Electron, downloader, SSH, setting, tuple, publication, or default-path consumer exists. Legacy remains the production default.<br>
 Primary design: [SSH relay GitHub Release plan](./2026-07-14-ssh-relay-github-release-plan.html)<br>
 Motivating issues: [#8450](https://github.com/stablyai/orca/issues/8450), [#1693](https://github.com/stablyai/orca/issues/1693)
 
@@ -137,11 +137,15 @@ same change as the work it records.
   E-M5-PORTABLE-ARCHIVE-PARENT-LOCAL-001, and E-M5-PORTABLE-ARCHIVE-CI-001 prove the selected bounded
   archive, correction, all-six primary jobs, and both Linux oldest-userland supplements. Windows ZIP
   and upstream Node `.tar.xz` remain unchanged.
-- Active package: **In progress — 2026-07-15, Codex implementation owner** — checkpoint and collect
-  exact-head all-six Node 24 evidence for the disconnected content lock closed locally by
-  E-M5-ARTIFACT-CACHE-LOCK-LOCAL-001 and wired by
-  E-M5-ARTIFACT-CACHE-LOCK-CI-WIRING-LOCAL-001. Keep cache publication/quarantine/eviction, desktop
-  call sites, SSH behavior, mode wiring, tuple enablement, release publication, and defaults intact.
+- Completed Work Package 4 cache gate: content locking, immutable entry publication/lookup,
+  corruption quarantine, cross-process in-use leases, persistent recency, exact logical-byte
+  accounting, and bounded 2 GiB eviction pass locally and on all six native clients under
+  E-M5-ARTIFACT-CACHE-LOCK-CI-001, E-M5-ARTIFACT-CACHE-ENTRY-CI-001, and
+  E-M5-ARTIFACT-CACHE-EVICTION-CI-001. No production consumer exists.
+- Active package: **In progress — 2026-07-15, Codex implementation owner** — audit the smallest
+  disconnected official-build packaged-manifest/key and app-owned cache-root boundary before adding
+  purpose-named RED contracts. Keep downloader orchestration, SSH behavior, mode wiring, tuple
+  enablement, release publication, and defaults intact until their separate gates.
 - Completed Work Package 2 gate: target-native Windows source-signature reports from exact-head
   artifact jobs 87267322867 and 87267322870 were independently downloaded and matched to their
   identities and signing-stage reports under E-M3-WINDOWS-SOURCE-SIGNATURE-CI-001. PR Checks
@@ -1106,7 +1110,11 @@ Suggested concrete modules:
       required. E-M5-ARTIFACT-CACHE-ENTRY-LOCAL-001 and E-M5-ARTIFACT-CACHE-ENTRY-CI-001 require a
       strict proof/archive/full-tree rehash on every disconnected lookup; warm-launch proof trust is
       a later remote-install contract and is not inferred here.
-- [ ] Implement bounded eviction that never removes an in-use entry.
+- [x] Implement bounded eviction that never removes an in-use entry.
+      E-M5-ARTIFACT-CACHE-EVICTION-LOCAL-001 and E-M5-ARTIFACT-CACHE-EVICTION-CI-001 prove
+      cross-process references, conservative ambiguous-owner retention, persistent recency, exact
+      logical-byte accounting, deterministic LRU, and full-size active retention/release/eviction on
+      all six native client tuples.
 - [ ] Handle read-only cache, permission failures, disk full, quota, inode exhaustion, cancellation,
       crash, corruption, and concurrent download deterministically.
 - [ ] Preserve `ORCA_RELAY_PATH` for explicit development/test use with an official-build safety
@@ -1567,16 +1575,16 @@ Baseline measurements must be captured before product behavior changes.
 
 Update status and evidence as work begins. Do not combine these into one large behavior switch.
 
-| Work package              | Scope                                                                                      | Default behavior change     | Status                                                                      | PR/evidence                                                             |
-| ------------------------- | ------------------------------------------------------------------------------------------ | --------------------------- | --------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
-| 0. #8450 legacy fix       | Coherent Node/npm selection and live repro                                                 | Fixes legacy selection only | Complete and CI-green in draft PR #8724                                     | E-M0-UNIT-002, E-M0-LIVE-002, E-M0-STATIC-002, E-M0-PR-001, E-M0-CI-001 |
-| 1. Contract and selectors | Manifest schema, identity, platform/libc selection, hostile inputs                         | None                        | Complete and CI-green in draft PR #8728                                     | `b9d80a4cb`; E-M2-RED-001, E-M2-CONTRACT-001, E-M2-CI-001               |
-| 2. Runtime builds         | Per-tuple assembly, native smoke, SBOM/provenance/signing                                  | None                        | Draft PR #8741; native build/source trust green; real signing/trust pending | `be32653a7`; E-M3-METADATA-CI-001, E-M3-WINDOWS-SOURCE-SIGNATURE-CI-001 |
-| 3. Release publication    | Prerequisite DAG, embedded manifest, draft upload/read-back gates                          | Asset-only                  | **In progress — 2026-07-15, Codex implementation owner**                    | E-M4-RELEASE-DAG-CI-001; E-M4-AGGREGATE-READBACK-CI-001                 |
-| 4. Desktop resolver/cache | Verified download, extraction, cache, offline behavior                                     | None/forced mode only       | Not started                                                                 | —                                                                       |
-| 5. Transfer/install       | Bounded transports, structured sentinel, bundled launch behind per-target Beta/forced mode | Per-target opt-in only      | Not started                                                                 | —                                                                       |
-| 6. Fallback/diagnostics   | Abort-and-join state machine, mode isolation, reason codes, target-mode configuration/UI   | Per-target Beta only        | Not started                                                                 | —                                                                       |
-| 7. Live gates/rollout     | Matrix, security, performance, release promotion                                           | Per-tuple staged            | Not started                                                                 | —                                                                       |
+| Work package              | Scope                                                                                      | Default behavior change     | Status                                                                        | PR/evidence                                                             |
+| ------------------------- | ------------------------------------------------------------------------------------------ | --------------------------- | ----------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| 0. #8450 legacy fix       | Coherent Node/npm selection and live repro                                                 | Fixes legacy selection only | Complete and CI-green in draft PR #8724                                       | E-M0-UNIT-002, E-M0-LIVE-002, E-M0-STATIC-002, E-M0-PR-001, E-M0-CI-001 |
+| 1. Contract and selectors | Manifest schema, identity, platform/libc selection, hostile inputs                         | None                        | Complete and CI-green in draft PR #8728                                       | `b9d80a4cb`; E-M2-RED-001, E-M2-CONTRACT-001, E-M2-CI-001               |
+| 2. Runtime builds         | Per-tuple assembly, native smoke, SBOM/provenance/signing                                  | None                        | Draft PR #8741; native build/source trust green; real signing/trust pending   | `be32653a7`; E-M3-METADATA-CI-001, E-M3-WINDOWS-SOURCE-SIGNATURE-CI-001 |
+| 3. Release publication    | Prerequisite DAG, embedded manifest, draft upload/read-back gates                          | Asset-only                  | Disconnected contracts green; protected signing/publication gates open        | E-M4-RELEASE-DAG-CI-001; E-M4-AGGREGATE-READBACK-CI-001                 |
+| 4. Desktop resolver/cache | Verified download, extraction, cache, offline behavior                                     | None/forced mode only       | **In progress — 2026-07-15, Codex implementation owner; bounded cache green** | E-M5-ARTIFACT-CACHE-EVICTION-CI-001                                     |
+| 5. Transfer/install       | Bounded transports, structured sentinel, bundled launch behind per-target Beta/forced mode | Per-target opt-in only      | Not started                                                                   | —                                                                       |
+| 6. Fallback/diagnostics   | Abort-and-join state machine, mode isolation, reason codes, target-mode configuration/UI   | Per-target Beta only        | Not started                                                                   | —                                                                       |
+| 7. Live gates/rollout     | Matrix, security, performance, release promotion                                           | Per-tuple staged            | Not started                                                                   | —                                                                       |
 
 Every PR must document:
 
@@ -13654,6 +13662,76 @@ src/main/ssh/ssh-relay-artifact-cache-entry-full-size.test.ts`.
   runner images/architectures, per-tuple retention/eviction timings and RSS, exact reclaimed bytes,
   cleanup results, and residual floor gaps under a new CI evidence ID.
 
+### E-M5-ARTIFACT-CACHE-EVICTION-CI-001 — All-six native in-use and exact full-size eviction gate
+
+- Date: 2026-07-15
+- Owner: Codex implementation owner
+- Exact source: commit `b79bcbd04e50b86186645bcba04d811671eb3035` on draft PR #8741.
+- Artifact run: [29464742446](https://github.com/stablyai/orca/actions/runs/29464742446).
+- Native source-contract results under Node 24.18.0:
+  - Linux x64/arm64 and macOS x64/arm64 each pass 67 files / 460 tests;
+  - Windows x64/arm64 each pass 68 files / 451 tests with 13 declared platform-inapplicable skips;
+  - all six include the 14 lease/recency/eviction contracts and complete deterministic artifact
+    build, archive/tree/Node/PTTY/watcher smoke, and exact full-size measurement before success.
+- Exact primary jobs and runner identities:
+  - Linux x64 job [87515421304](https://github.com/stablyai/orca/actions/runs/29464742446/job/87515421304),
+    `ubuntu-24.04`, image `ubuntu24` `20260714.240.1`, X64 GitHub-hosted, passes in 2m46s;
+  - Linux arm64 job [87515421305](https://github.com/stablyai/orca/actions/runs/29464742446/job/87515421305),
+    `ubuntu-24.04-arm`, image `ubuntu24-arm64` `20260706.52.2`, ARM64 GitHub-hosted, passes in
+    2m48s;
+  - macOS x64 job [87515421313](https://github.com/stablyai/orca/actions/runs/29464742446/job/87515421313),
+    `macos-15-intel`, image `macos15` `20260629.0276.1`, X64 GitHub-hosted, passes in 4m02s;
+  - macOS arm64 job [87515421317](https://github.com/stablyai/orca/actions/runs/29464742446/job/87515421317),
+    `macos-15`, image `macos15` `20260706.0213.1`, ARM64 GitHub-hosted, passes in 1m50s;
+  - Windows x64 job [87515421346](https://github.com/stablyai/orca/actions/runs/29464742446/job/87515421346),
+    `windows-2022`, image `win22` `20260714.244.1`, X64 GitHub-hosted, passes in 6m04s;
+  - Windows arm64 job [87515421308](https://github.com/stablyai/orca/actions/runs/29464742446/job/87515421308),
+    `windows-11-arm`, image `win11-arm64` `20260706.102.1`, ARM64 GitHub-hosted, passes in 9m57s.
+- Exact full-size cache measurements (bytes are logical complete-entry bytes and are fully reclaimed):
+
+  | Tuple             | Retain ms | Retain RSS | Evict ms | Evict RSS | Initial/reclaimed bytes |
+  | ----------------- | --------: | ---------: | -------: | --------: | ----------------------: |
+  | linux-x64-glibc   |     11.14 |    262,144 |    32.79 |         0 |             161,259,308 |
+  | linux-arm64-glibc |     18.65 |          0 |    36.87 |         0 |             159,228,899 |
+  | darwin-x64        |     36.39 |     81,920 |    64.32 |    90,112 |             157,239,968 |
+  | darwin-arm64      |     11.57 |     32,768 |    19.02 |    49,152 |             153,804,850 |
+  | win32-x64         |     27.37 |    991,232 |    54.78 |   417,792 |             133,696,372 |
+  | win32-arm64       |     47.88 |  2,088,960 |    92.90 | 2,183,168 |             118,418,686 |
+
+- Each retention transaction passes only by reporting zero reclaimed bytes, the exact content ID as
+  blocked, and a still-present entry. Each subsequent release/eviction passes only by reporting exact
+  initial equals reclaimed bytes, zero final bytes, that content ID as evicted, no blocked IDs, exact
+  entry absence, and complete workflow-level measurement-root cleanup.
+- Existing cold/warm fields remain regression-comparable. In this run cold publication is
+  1.46–5.17s with 40,120,320–57,077,760 incremental RSS; warm full verification is 130.05–648.88ms
+  with 131,072–5,906,432 incremental RSS. All remain below the fixed 5m/80 MiB per-operation budgets.
+- Repository gates: PR Checks run
+  [29464742361](https://github.com/stablyai/orca/actions/runs/29464742361), job
+  [87515420888](https://github.com/stablyai/orca/actions/runs/29464742361/job/87515420888), passes in
+  13m30s. Golden E2E run
+  [29464742368](https://github.com/stablyai/orca/actions/runs/29464742368) passes Linux job
+  [87515420922](https://github.com/stablyai/orca/actions/runs/29464742368/job/87515420922) in 4m35s
+  and macOS job
+  [87515420928](https://github.com/stablyai/orca/actions/runs/29464742368/job/87515420928) in 3m54s.
+- Supplemental/floor result: both Linux oldest-userland jobs and Windows x64 build-20348 job
+  [87516657331](https://github.com/stablyai/orca/actions/runs/29464742446/job/87516657331) pass.
+  Windows arm64 primary source/runtime/cache proof passes; its separate oldest-floor job
+  [87516657323](https://github.com/stablyai/orca/actions/runs/29464742446/job/87516657323) reconstructs
+  and executes the exact bytes, then rejects observed `10.0.26200` with `osBuild: false` against the
+  required build 26100. Therefore the overall artifact workflow is expected red and no Windows arm64
+  tuple is enabled.
+- Closure: disconnected cross-process leases, bounded recency, exact accounting, LRU/protection,
+  cancellation settlement, full-size active retention, owner release, atomic eviction, and cleanup
+  are proven on all six native client families. This closes only the combined bounded local-cache
+  implementation item.
+- Residual gaps: read-only/disk-full/quota/inode faults, abrupt crash/power-loss durability, network
+  filesystems/PID namespaces, packaged manifest/key and cache-root loading, Electron proxy/
+  certificate behavior, downloader/cache orchestration, client-offline transfer, SSH install/launch,
+  native trust, per-target Beta wiring, and every tuple/default path remain open. No release asset is
+  published and no production consumer exists.
+- Follow-up: checkpoint this evidence, then audit the smallest disconnected packaged-manifest/
+  official-build/cache-root boundary and add purpose-named RED contracts before implementation.
+
 ## Accepted Gaps
 
 No product gap is accepted merely because it appears in this list. Each entry requires explicit
@@ -13712,10 +13790,10 @@ The project is not complete until every applicable item below is checked with ev
 
 ## Next Required Action
 
-Commit and push the disconnected in-use lease/recency/2 GiB eviction package, then require both
-purpose suites and exact full-size active-retention/release/eviction measurements on all six native
-jobs. Do not add a desktop call site, SSH transfer/install, mode wiring, tuple enablement, release
-publication, or default behavior until that CI evidence is complete.
+Audit official-build manifest/key loading, app-owned cache-root selection, proxy/certificate behavior,
+and downloader/cache orchestration. Select only the next coherent disconnected capability, record its
+boundary and purpose-named RED, then implement it without adding SSH transfer/install, mode wiring,
+tuple enablement, release publication, or default behavior.
 Keep Node upstream `.tar.xz` inputs, Windows ZIP, `ORCA_RELAY_PATH`, existing desktop required-assets
 behavior, detached-signature byte encoding, Windows arm64 build 26100, macOS 13.5, Linux kernel 4.18,
 release-cut, desktop builds, publication, and every tuple separately gated.
