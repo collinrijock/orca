@@ -9,9 +9,26 @@ keeps commands, hashes, runner identities, timings, and failure details.
 A checked box means the work has evidence in the detailed ledger. Design approval alone does not
 complete a box.
 
-Active checkpoint: **Milestone 6 / Work Package 5 bounded runtime transfer — host-evidence
-composition CI is closed; audit only a disconnected transport-neutral verified source-tree contract
-next, 2026-07-15, Codex implementation owner.**
+Active checkpoint: **Milestone 6 / Work Package 5 bounded runtime transfer — disconnected
+transport-neutral source-tree contract is locally green; exact-head native proof next, 2026-07-15,
+Codex implementation owner.**
+`E-M6-SOURCE-TREE-CONTRACT-AUDIT-001` fixes a pure ready-acquisition → immutable descriptor
+boundary: exact verified manifest/cache identity and signed limits, deterministic ASCII ordering,
+client-native paths, borrowed live-lease assertion, and later shared use by pre-scan plus SFTP,
+POSIX tar/no-tar, and Windows PowerShell/.NET transfer. It performs no I/O and owns no cleanup;
+filesystem enumeration, streaming, SSH, remote writes/install, product/mode/fallback/default wiring,
+publication, and SignPath remain absent.
+`E-M6-SOURCE-TREE-CONTRACT-LOCAL-RED-001` records the expected missing-module failure for ten purpose
+cases and the native-workflow oracle's six-pass/one-fail result: the suite occurs only in the oracle,
+not either runner command. `E-M6-SOURCE-TREE-CONTRACT-LOCAL-CONTENTION-001` rejects an overlapping
+local broad run whose existing suites hit 30-second timeouts under four concurrent heavy commands;
+timeouts were not relaxed. `E-M6-SOURCE-TREE-CONTRACT-LOCAL-001` is green after isolated reruns:
+10/10 purpose, 85/85 focused, 522/522 broader relay with four declared skips, 280/280 release-script,
+typecheck, full lint, format, max-lines, diff, protected-resolver, and no-product-import gates pass.
+The pure 123-line module rechecks ready acquisition identity/aggregates/root, freezes deterministic
+signed descriptors, and borrows without releasing the live cache lease. Exact-head native proof is
+next; filesystem pre-scan/streaming, SSH, remote writes/install, product/mode/fallback/default wiring,
+publication, and SignPath remain absent.
 `E-M5-ARTIFACT-CACHE-RESOLUTION-CI-001` closes warm-cache commit
 `22031fa68` on all six native clients, both Linux supplements, Windows x64 baseline, PR Checks,
 Golden E2E, and computer-use; Windows arm64 remains the expected build-26200 rejection against 26100. `E-M5-ARTIFACT-CACHE-RESOLUTION-LOCAL-001` passes 9/9 purpose tests,

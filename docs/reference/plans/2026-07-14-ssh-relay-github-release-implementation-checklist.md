@@ -8,8 +8,8 @@ work; keep exact commands, runner identities, hashes, metrics, and residual gaps
 
 Date created: 2026-07-14<br>
 Last updated: 2026-07-15<br>
-Current phase: Milestone 6 / Work Package 5 bounded runtime transfer — **In progress — 2026-07-15, Codex implementation owner: audit only the smallest disconnected transport-neutral verified source-tree contract after host-composition CI closure**. Keep every capability disconnected from every production/default SSH path. Real Apple/SignPath rehearsals remain an explicit late gate and are not on this package's critical path.<br>
-Session checkpoint: **HOST COMPOSITION CI CLOSED / TRANSFER CONTRACT AUDIT NEXT — 2026-07-15, Codex implementation owner** — `E-M5-HOST-EVIDENCE-COMPOSITION-CI-001` closes exact-head all-six native client proof, both Linux supplements, Windows x64 baseline, PR Checks, Golden E2E, and computer-use; Windows arm64 retains only the declared build-26200/26100 runner mismatch after full runtime proof. Audit only a pure verified source-tree contract next. Do not open SSH channels, transfer/install bytes, add a product caller, settings/fallback wiring, tuple enablement, publication, or default behavior. Merging to `main` remains prohibited, SignPath is deferred, and legacy remains the production default.<br>
+Current phase: Milestone 6 / Work Package 5 bounded runtime transfer — **In progress — 2026-07-15, Codex implementation owner: exact-head native proof for the locally green disconnected transport-neutral verified source-tree contract**. Keep every capability disconnected from every production/default SSH path. Real Apple/SignPath rehearsals remain an explicit late gate and are not on this package's critical path.<br>
+Session checkpoint: **SOURCE-TREE CONTRACT LOCAL GREEN / EXACT-HEAD CI NEXT — 2026-07-15, Codex implementation owner** — `E-M6-SOURCE-TREE-CONTRACT-LOCAL-001` passes purpose, workflow, focused, broad relay, release-script, typecheck, lint, format, max-lines, diff, protected-resolver, and no-product-caller gates after separately rerunning two contention-invalidated broad commands. Commit and push the isolated package, then require exact-head all-six native proof before checking the Milestone 6 item or advancing to pre-scan. Do not enumerate the filesystem, open SSH channels, transfer/install bytes, add a product caller, settings/fallback wiring, tuple enablement, publication, or default behavior. Merging to `main` remains prohibited, SignPath is deferred, and legacy remains the production default.<br>
 Primary design: [SSH relay GitHub Release plan](./2026-07-14-ssh-relay-github-release-plan.html)<br>
 Motivating issues: [#8450](https://github.com/stablyai/orca/issues/8450), [#1693](https://github.com/stablyai/orca/issues/1693)
 
@@ -150,9 +150,10 @@ same change as the work it records.
 - Completed package: disconnected full host-evidence composition is green locally and on every
   primary native client under E-M5-HOST-EVIDENCE-COMPOSITION-LOCAL-001 and
   E-M5-HOST-EVIDENCE-COMPOSITION-CI-001. It has no product caller.
-- Active package: **In progress — 2026-07-15, Codex implementation owner** — audit only Milestone
-  6's smallest transport-neutral verified source-tree contract. Do not open SSH channels, transfer
-  or install bytes, or add product/settings/fallback/tuple/publication/default behavior.
+- Active package: **In progress — 2026-07-15, Codex implementation owner** — exact-head native proof
+  for Milestone 6's locally green pure transport-neutral verified source-tree contract. Do not
+  enumerate the filesystem, open SSH channels, transfer or install bytes, or add product/settings/
+  fallback/tuple/publication/default behavior.
 - Completed Work Package 2 gate: target-native Windows source-signature reports from exact-head
   artifact jobs 87267322867 and 87267322870 were independently downloaded and matched to their
   identities and signing-stage reports under E-M3-WINDOWS-SOURCE-SIGNATURE-CI-001. PR Checks
@@ -1153,7 +1154,11 @@ Current behavior must not be assumed adequate for a much larger runtime:
 
 ### Shared transfer contract
 
-- [ ] Define one transport-neutral source-tree contract based on the verified manifest.
+- [ ] Define one transport-neutral source-tree contract based on the verified manifest. **In
+      progress — 2026-07-15, Codex implementation owner; audit complete under
+      E-M6-SOURCE-TREE-CONTRACT-AUDIT-001; RED and local green proof recorded under
+      E-M6-SOURCE-TREE-CONTRACT-LOCAL-RED-001 and E-M6-SOURCE-TREE-CONTRACT-LOCAL-001; exact-head
+      native proof required before completion.**
 - [ ] Pre-scan and reject local source mutation, symlinks, special files, extra files, and path
       collisions before creating remote files.
 - [ ] Stream files with bounded buffers; prohibit whole-tree memory materialization.
@@ -16080,6 +16085,126 @@ config/vitest.config.ts --maxWorkers=1` plus the composer, Windows compatibility
   `ORCA_RELAY_PATH`, tuple enablement, publication, defaults, and SignPath remain open. Legacy
   remains the sole production/default path and every tuple stays disabled.
 
+### E-M6-SOURCE-TREE-CONTRACT-AUDIT-001 — disconnected authenticated source-tree projection
+
+- Date/owner: 2026-07-15, Codex implementation owner.
+- Exact input boundary: accept only the `ready` result from the existing artifact acquisition. That
+  result already binds a selected tuple from a signature-verified immutable manifest, a strict
+  fully verified cache entry, and a live content-scoped in-use lease. Do not accept a raw manifest,
+  tuple, cache path, archive, or caller-created file list.
+- Immutable projection: recheck tuple/content identity, cache aggregate counts, and the canonical
+  `runtime` root before exposure. Project the authenticated entries into deeply frozen directory
+  and file descriptors with client-native absolute paths. Use one explicit ASCII path order,
+  independent of manifest insertion order and filesystem enumeration order. Preserve signed file
+  role, exact size, SHA-256, and only the declared 0644/0755 modes.
+- Limits: inherit the already authenticated schema ceilings rather than adding a second policy:
+  5,000 total entries, 250 MiB per file, 350 MiB expanded bytes, and exact signed file-count/
+  expanded-byte aggregates. A mismatch fails closed before a descriptor is returned.
+- Ownership/cancellation: the projection is synchronous and performs no filesystem or network I/O,
+  so it has no cancellation point and creates no resource to clean up. It exposes only a borrowed
+  lease-ownership assertion; it never releases the acquisition's lease. The later orchestration
+  owner must retain and release that lease only after pre-scan, the selected transfer family, and
+  cleanup have all settled. The next asynchronous pre-scan/transfer package must accept one exact
+  `AbortSignal`, check it throughout, and assert the borrowed lease before and after source reads.
+- Later consumers: the same contract is the sole expected-tree input for pre-scan and for bounded
+  SFTP, POSIX tar/no-tar system-SSH, and Windows PowerShell/.NET system-SSH transfer. Transport code
+  may choose framing/concurrency but may not reorder or weaken the authenticated descriptors.
+- Required RED/green proof: Linux and Windows signed tuples; deterministic ordering and native path
+  construction; exact modes/roles/sizes/hashes/aggregates; deep freezing; ready-only input; identity,
+  aggregate, and runtime-root rejection; borrowed lease assertion with zero implicit release; no
+  filesystem/SSH/product import or caller; and exact inclusion in both native workflow families.
+- Deliberately absent: filesystem enumeration or mutation detection, file opening/streaming,
+  channels/SFTP/child processes, remote paths/writes/install, progress, cleanup, settings/modes,
+  fallback, Electron/startup, `ORCA_RELAY_PATH`, tuple enablement, publication, defaults, and
+  SignPath. Legacy remains the sole production/default path and every tuple stays disabled.
+
+### E-M6-SOURCE-TREE-CONTRACT-LOCAL-RED-001 — missing source-tree contract and native proof
+
+- Date/owner/environment: 2026-07-15, Codex implementation owner; local macOS arm64, Node 26.0.0,
+  pnpm 10.24.0, atop local evidence commit `e76c5f9e8` and the audit/test-only working diff. Exact
+  Node 24 remains a later native CI gate.
+- Purpose command: `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts
+--maxWorkers=1 src/main/ssh/ssh-relay-runtime-source-tree.test.ts` — EXPECTED FAIL, exit 1: the
+  absent `ssh-relay-runtime-source-tree` module prevents collection of the ten audited cases; zero
+  tests run in 600 ms Vitest / 3.20 seconds wall, 132,104,192-byte maximum RSS and 96,212,248-byte
+  peak memory footprint.
+- Workflow-oracle command: `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts
+--maxWorkers=1 config/scripts/ssh-relay-runtime-workflow.test.mjs` — EXPECTED FAIL, exit 1: six
+  workflow cases pass and the native-family inclusion oracle fails because the new purpose suite has
+  one source occurrence rather than the required three; 544 ms Vitest / 3.18 seconds wall,
+  131,956,736-byte maximum RSS and 96,245,280-byte peak memory footprint.
+- Scope at RED: `git diff --check` passed before the package; protected resolver files had no diff.
+  No source-tree module, production import/caller, filesystem enumeration, SSH operation, transfer,
+  remote write, settings/fallback, tuple, publication, or default behavior exists.
+
+### E-M6-SOURCE-TREE-CONTRACT-LOCAL-CONTENTION-001 — rejected concurrent broad-gate run
+
+- Date/owner/environment: 2026-07-15, Codex implementation owner; local macOS arm64. The first broad
+  relay, release-script, and full-lint commands were launched together while an unrelated local
+  Vitest process was also active. Process inspection showed all four CPU/I/O-heavy commands
+  overlapping for more than six minutes; these results are not accepted as implementation evidence.
+- Relay command: `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts
+--maxWorkers=1 --silent=true src/main/ssh/ssh-relay-*.test.ts` — INVALID/FAIL, 39 files passed,
+  three skipped, and one existing cache-entry suite failed seven cases only at their 30-second test
+  timeout; 515 tests passed and four were skipped in 449.11 seconds Vitest / 453.40 seconds wall.
+- Release-script command: `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts
+--maxWorkers=1 --silent=true config/scripts/ssh-relay-runtime-*.test.mjs` — INVALID/FAIL, 48 files
+  passed and two existing suites failed nine cases at 30-second timeouts/teardown races; 271 tests
+  passed with four unhandled cleanup errors in 445.50 seconds Vitest / 449.76 seconds wall.
+- Full lint nevertheless passed every command in 448.00 seconds wall. Because the two test failures
+  were resource-contention artifacts outside this package, both broad test commands were rerun alone
+  after process inspection confirmed no competing Vitest/lint process; only those isolated reruns
+  count below. No timeout was increased and no test or production behavior was weakened.
+
+### E-M6-SOURCE-TREE-CONTRACT-LOCAL-001 — pure authenticated source-tree contract is locally green
+
+- Date/owner/environment: 2026-07-15, Codex implementation owner; local macOS arm64, Node 26.0.0,
+  pnpm 10.24.0, atop local evidence commit `e76c5f9e8` plus this isolated package. Exact Node 24 and
+  every client OS/architecture remain mandatory in native CI.
+- Implementation: the 123-line `ssh-relay-runtime-source-tree.ts` accepts only an acquisition-ready
+  type exported by the existing acquisition module. It rechecks signed tuple/content identity,
+  verified cache aggregates, and the exact cache `runtime` root; then projects Linux/Darwin/Windows
+  manifest entries into separately ASCII-sorted, deeply frozen client-native directory/file
+  descriptors. It preserves signed roles, modes, sizes, and hashes, exposes only a borrowed lease
+  assertion, and never releases the owner lease. It imports only `node:path`, acquisition types, and
+  runtime identity types; it performs no I/O and has no product caller.
+- Post-format purpose command: `/usr/bin/time -l pnpm exec vitest run --config
+config/vitest.config.ts --maxWorkers=1 src/main/ssh/ssh-relay-runtime-source-tree.test.ts` — PASS,
+  one file / ten tests in 1.64 seconds Vitest / 6.64 seconds wall, 132,792,320-byte maximum RSS and
+  96,998,776-byte peak memory footprint. It covers signed Linux/Windows tuples, reversed insertion
+  order, client-native paths, exact descriptors/aggregates, deep freezing, lease borrowing, and
+  ready/identity/aggregate/runtime-root rejection.
+- Workflow-oracle command: `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts
+--maxWorkers=1 config/scripts/ssh-relay-runtime-workflow.test.mjs` — PASS, one file / seven tests in
+  1.24 seconds Vitest / 6.23 seconds wall, 133,103,616-byte maximum RSS. Both native workflow command
+  families now execute the purpose suite exactly once.
+- Focused command: `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts
+--maxWorkers=1` plus the source-tree, acquisition unit/integration, cache-entry, schema, signature,
+  and workflow-oracle suites — PASS, seven files / 85 tests in 39.79 seconds Vitest. The observed
+  188.64-second wrapper wall time came from the same local command scheduling period, but no focused
+  test failed or timed out.
+- Isolated broader relay rerun: `/usr/bin/time -l pnpm exec vitest run --config
+config/vitest.config.ts --maxWorkers=1 --silent=true src/main/ssh/ssh-relay-*.test.ts` — PASS, 40
+  files passed / three declared full-size skips, 522 tests passed / four declared platform skips in
+  54.54 seconds Vitest / 57.40 seconds wall, 222,511,104-byte maximum RSS. Only the established stale
+  lock diagnostic and local Node 26 `module.register()` deprecation warning appear.
+- Isolated release-script rerun: `/usr/bin/time -l pnpm exec vitest run --config
+config/vitest.config.ts --maxWorkers=1 --silent=true config/scripts/ssh-relay-runtime-*.test.mjs` —
+  PASS, 50 files / 280 tests in 35.05 seconds Vitest / 39.91 seconds wall, 190,300,160-byte maximum
+  RSS.
+- Static gates: `/usr/bin/time -l pnpm typecheck` passes in 9.32 seconds wall with
+  1,238,499,328-byte maximum RSS. `/usr/bin/time -l pnpm lint` passes every full lint,
+  switch-exhaustiveness, 41 reliability, 355-entry max-lines, bundled-skill, 9,837 localization-
+  reference, locale-parity, and zero-candidate localization gate; the 26 warnings remain only in
+  untouched files. Targeted `oxlint`, targeted `oxfmt --check`, `git diff --check`, protected-
+  resolver empty diff, no other `src/main` importer, and the 123/226-line implementation/test size
+  checks pass. No max-lines suppression or vague module is added.
+- Boundary/residual gaps: this is a synchronous descriptor contract, not filesystem pre-scan,
+  mutation detection, streaming, live SSH, SFTP/system-SSH, remote staging/install, or a full-size
+  transfer. Exact-head all-six Node 24 client proof is required before accepting the item. Every
+  product/startup/settings/fallback/tuple/publication/default path remains absent; legacy remains the
+  sole production/default path, every tuple stays disabled, and SignPath stays deferred.
+
 ## Accepted Gaps
 
 No product gap is accepted merely because it appears in this list. Each entry requires explicit
@@ -16138,12 +16263,12 @@ The project is not complete until every applicable item below is checked with ev
 
 ## Next Required Action
 
-Audit only Milestone 6's smallest disconnected transport-neutral verified source-tree contract.
-Determine the exact authenticated cache-entry/manifest inputs, immutable file ordering, mode and
-size/count limits, ownership/cancellation semantics, and which later transfer families consume it
-before adding tests or implementation. Do not open an SSH channel, transfer or install bytes, modify
-platform detection/selectors, add an Electron/startup consumer, mode wiring, fallback, tuple
-enablement, release publication, or default behavior.
+Commit and push the locally green Milestone 6 disconnected transport-neutral verified source-tree
+contract, then require exact-head all-six native client proof plus adjacent PR checks before accepting
+the item or advancing to the filesystem pre-scan package.
+Do not enumerate the filesystem, open an SSH channel, transfer or install bytes, modify platform
+detection/selectors, add an Electron/startup consumer, mode wiring, fallback, tuple enablement,
+release publication, or default behavior.
 Keep Node upstream `.tar.xz` inputs, Windows ZIP, `ORCA_RELAY_PATH`, existing desktop required-assets
 behavior, detached-signature byte encoding, Windows arm64 build 26100, macOS 13.5, Linux kernel 4.18,
 release-cut, desktop builds, publication, and every tuple separately gated.

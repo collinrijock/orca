@@ -22,16 +22,18 @@ const DEFAULT_OPERATIONS: SshRelayArtifactAcquisitionOperations = Object.freeze(
   populate: populateSshRelayArtifactCache
 })
 
+export type SshRelayArtifactReadyAcquisition = Readonly<{
+  kind: 'ready'
+  source: 'cache' | 'download'
+  artifact: SshRelaySelectedArtifact
+  entry: Readonly<SshRelayArtifactCacheEntry>
+  lease: SshRelayArtifactCacheInUseLease
+}>
+
 export type SshRelayArtifactAcquisition =
   | Readonly<{ kind: 'unavailable'; reason: 'official-manifest-unavailable' }>
   | Readonly<{ kind: 'legacy'; reason: SshRelayArtifactLegacyReason }>
-  | Readonly<{
-      kind: 'ready'
-      source: 'cache' | 'download'
-      artifact: SshRelaySelectedArtifact
-      entry: Readonly<SshRelayArtifactCacheEntry>
-      lease: SshRelayArtifactCacheInUseLease
-    }>
+  | SshRelayArtifactReadyAcquisition
 
 function sameArtifactIdentity(
   expected: SshRelaySelectedArtifact,
