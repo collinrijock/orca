@@ -10,12 +10,17 @@ A checked box means the work has evidence in the detailed ledger. Design approva
 complete a box.
 
 Active checkpoint: **Milestone 6 / Work Package 5 bounded runtime transfer — disconnected Windows
-system-SSH tree-composition contract audit, 2026-07-15, Codex implementation owner.**
-The next slice is limited to composing the proven staging control, per-file receiver, source stream,
-and existing system-SSH channel adapter into one exclusive Windows staging tree with parent-first
-directories, bounded concurrency/progress, and joined owned-root cleanup. Live OpenSSH, product
-callers, legacy upload/fallback/default behavior, tuple enablement, publication, and SignPath remain
-out of scope.
+system-SSH tree-composition native CI proof, 2026-07-15, Codex implementation owner.**
+The local package is green; push its isolated commit and require exact-head all-six native artifact
+and adjacent workflow evidence before auditing any live/full-size Windows OpenSSH package. Live
+OpenSSH, product callers, legacy upload/fallback/default behavior, tuple enablement, publication,
+and SignPath remain out of scope.
+`E-M6-WINDOWS-SYSTEM-SSH-TREE-LOCAL-RED-001` proves the native workflow oracle passes 9/9 and the
+purpose suite fails solely because the audited production tree-composition module is absent.
+`E-M6-WINDOWS-SYSTEM-SSH-TREE-LOCAL-001` records 8/8 purpose and 9/9 workflow-oracle cases, 258
+focused passes with three declared skips, 694 broad relay passes with nine declared skips, 282/282
+release contracts, typecheck, full lint, formatting, max-lines, diff, protected-resolver, and
+no-product-consumer gates. Exact-head native CI remains required.
 `E-M6-WINDOWS-SYSTEM-SSH-CONTROL-LOCAL-RED-001` proves the native workflow oracle passes 9/9 and
 the purpose suite fails solely because the audited production staging-control module is absent.
 `E-M6-WINDOWS-SYSTEM-SSH-CONTROL-LOCAL-001` records 16/17 purpose cases locally with the real

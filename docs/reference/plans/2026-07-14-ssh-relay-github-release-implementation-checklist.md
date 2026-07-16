@@ -8,8 +8,8 @@ work; keep exact commands, runner identities, hashes, metrics, and residual gaps
 
 Date created: 2026-07-14<br>
 Last updated: 2026-07-15<br>
-Current phase: Milestone 6 / Work Package 5 bounded runtime transfer — **In progress — 2026-07-15, Codex implementation owner: disconnected Windows system-SSH tree-composition contract audit**. Keep every capability disconnected from every production/default SSH path. Real Apple/SignPath rehearsals remain an explicit late gate and are not on this package's critical path.<br>
-Session checkpoint: **WINDOWS STAGING CONTROL NATIVE PROOF CLOSED / TREE COMPOSITION AUDIT ACTIVE — 2026-07-15, Codex implementation owner** — `E-M6-WINDOWS-SYSTEM-SSH-CONTROL-CI-001` proves the real PowerShell staging-control contract on native Windows x64/arm64 and all adjacent exact-head gates, with only the declared hosted Windows arm64 floor gap. Audit the next disconnected tree owner before writing RED tests. Do not connect a product caller, change legacy upload/fallback/default behavior, enable a tuple, publish an artifact, or perform SignPath work. Merging to `main` remains prohibited, SignPath is deferred, and legacy remains the production default.<br>
+Current phase: Milestone 6 / Work Package 5 bounded runtime transfer — **In progress — 2026-07-15, Codex implementation owner: disconnected Windows system-SSH tree-composition native CI proof**. Keep every capability disconnected from every production/default SSH path. Real Apple/SignPath rehearsals remain an explicit late gate and are not on this package's critical path.<br>
+Session checkpoint: **WINDOWS TREE COMPOSITION LOCAL GREEN / EXACT-HEAD NATIVE CI NEXT — 2026-07-15, Codex implementation owner** — `E-M6-WINDOWS-SYSTEM-SSH-TREE-LOCAL-001` proves the disconnected composer and every audited local lifecycle gate. Commit and push the isolated package, then require all-six native artifact and adjacent exact-head workflows before auditing live/full-size Windows OpenSSH. Do not connect a product caller, change legacy upload/fallback/default behavior, enable a tuple, publish an artifact, or perform SignPath work. Merging to `main` remains prohibited, SignPath is deferred, and legacy remains the production default.<br>
 Primary design: [SSH relay GitHub Release plan](./2026-07-14-ssh-relay-github-release-plan.html)<br>
 Motivating issues: [#8450](https://github.com/stablyai/orca/issues/8450), [#1693](https://github.com/stablyai/orca/issues/1693)
 
@@ -18410,6 +18410,79 @@ src/main/ssh/ssh-remote-node-resolution.test.ts` is empty. A non-test reference 
   remote bundled-Node verification/install/publish/launch, product/Beta/settings/fallback/tuple/
   publication/default behavior, or SignPath. Legacy remains the sole production/default path and
   every tuple stays disabled.
+
+### E-M6-WINDOWS-SYSTEM-SSH-TREE-LOCAL-RED-001 — audited tree composer is absent
+
+- Date/owner/base: 2026-07-15, Codex implementation owner; uncommitted test/workflow package atop
+  `c39e20cc6ccdfc66dbac25bd17d86fd4e53fdacd`.
+- Format command:
+  `pnpm exec oxfmt --check .github/workflows/ssh-relay-runtime-artifacts.yml config/scripts/ssh-relay-runtime-workflow.test.mjs src/main/ssh/ssh-relay-runtime-windows-tree-transfer.test.ts docs/reference/plans/2026-07-14-ssh-relay-github-release-implementation-checklist.md docs/reference/plans/2026-07-14-ssh-relay-github-release-implementation-checklist-summary.md`
+  passes all five files in 9.616 seconds.
+- RED command:
+  `pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1 src/main/ssh/ssh-relay-runtime-windows-tree-transfer.test.ts config/scripts/ssh-relay-runtime-workflow.test.mjs`.
+  The workflow oracle passes 9/9 in 215 ms. The purpose suite collects zero tests and fails at its
+  production import only with `Cannot find module '/src/main/ssh/ssh-relay-runtime-windows-tree-transfer'`;
+  there is no assertion, fixture, workflow-oracle, or adjacent failure.
+- Disposition: the RED state matches `E-M6-WINDOWS-SYSTEM-SSH-TREE-AUDIT-001`. Implement only the
+  disconnected composer and expand the green suite to every audited lifecycle case. No product
+  consumer, live Windows OpenSSH claim, default/fallback change, tuple enablement, publication, or
+  SignPath work is authorized by this evidence.
+
+### E-M6-WINDOWS-SYSTEM-SSH-TREE-LOCAL-001 — disconnected tree composer is locally green
+
+- Date/owner/base/runner: 2026-07-15, Codex implementation owner; uncommitted implementation,
+  purpose-test, native-workflow, and checklist package atop exact base
+  `c39e20cc6ccdfc66dbac25bd17d86fd4e53fdacd` on Apple arm64, macOS 26.2 build 25C56, Node
+  26.5.0, pnpm 10.24.0. Local Node is newer than the repository's Node 24 contract, so exact-head
+  all-six native proof remains mandatory.
+- Implementation: add one disconnected Windows tree owner over the proven staging-control,
+  per-file receiver, source-stream scheduler, and authenticated system-SSH channel adapter. It
+  validates a Windows scanned tree, rooted drive/UNC staging path, system transport, exact signal,
+  and one-to-four concurrency before I/O; defaults to one file; creates one exclusive root and every
+  declared directory parent-first; streams exact descendant paths/sizes; and returns only frozen
+  aggregate progress. Root ownership begins only after successful exclusive creation. Later failure
+  or cancellation joins all source workers before a separate five-second owned-root cleanup, and
+  joins primary plus cleanup errors.
+- Purpose command: `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts
+--maxWorkers=1 src/main/ssh/ssh-relay-runtime-windows-tree-transfer.test.ts
+config/scripts/ssh-relay-runtime-workflow.test.mjs`. Result: two files and 17/17 cases pass: 8/8
+  composer lifecycle cases plus the 9/9 workflow oracle; 2.17 seconds real, 139,853,824-byte maximum
+  RSS, 98,866,936-byte peak footprint, zero swaps and block I/O. Proof covers hostile/pre-aborted
+  input before I/O, exact root/parent-first directories/files/bytes/counts/path-free progress,
+  default-one and maximum-four destinations, collision preservation, directory/file failure,
+  retained-write cancellation before cleanup, joined cleanup failure, five-second cleanup timeout,
+  and no later progress.
+- Focused command: `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts
+--maxWorkers=1` with the Windows tree/control/file, POSIX tree/control/file, system-channel,
+  source-tree/scan/stream, system-fallback, connection, and workflow-oracle suites. Result: 13 files,
+  258 passed and three declared platform skips out of 261; 20.40 seconds real, 186,826,752-byte
+  maximum RSS, 97,179,360-byte peak footprint, zero swaps and block I/O.
+- Broad relay command: `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts
+--maxWorkers=1 src/main/ssh/ssh-relay-*.test.ts`. Result: 53 files passed, five files skipped; 694
+  passed and nine declared skips out of 703; 46.75 seconds real, 324,173,824-byte maximum RSS,
+  97,146,592-byte peak footprint, zero swaps and block I/O.
+- Release-contract command: `/usr/bin/time -l pnpm exec vitest run --config
+config/vitest.config.ts --maxWorkers=1 config/scripts/ssh-relay-runtime-*.test.mjs`. Result: 50
+  files and 282/282 cases pass; 19.62 seconds real, 195,706,880-byte maximum RSS, 97,900,328-byte
+  peak footprint, zero swaps and block I/O.
+- Static evidence: final-code `pnpm typecheck` passes. `/usr/bin/time -l pnpm lint` passes in 23.95
+  seconds real with 2,073,870,336-byte maximum RSS and 97,949,456-byte peak footprint; its 26
+  warnings pre-exist outside this diff. Full lint proves switch exhaustiveness, 41 reliability gates,
+  the 355-entry max-lines ratchet with no new bypass, bundled guides, and localization checks.
+  Targeted `oxlint` and six-file `oxfmt --check` pass.
+- Isolation evidence: `git diff --check` passes; `git diff --exit-code HEAD --
+src/main/ssh/ssh-remote-node-resolution.ts src/main/ssh/ssh-remote-node-resolution.test.ts` is
+  empty. An asserted non-test reference search finds the new export only in its owning production
+  module. The intended diff is limited to the disconnected composer/purpose test, its one entry in
+  each native workflow command family and oracle, and both checklist documents. No legacy uploader,
+  Electron/startup/product importer, settings, Beta mode, fallback, tuple, publication, default-path,
+  or signing behavior changes.
+- Residual boundary: this is adapter-backed composition, not live Windows OpenSSH, a full-size
+  runtime transfer/measurement, long-path or endpoint-protection proof, primitive classification/
+  cache, remote bundled-Node verification/install/publish/launch, product/Beta/fallback/default
+  behavior, tuple enablement, publication, Apple signing, or SignPath. Exact-head all-six native and
+  adjacent workflow proof remains required before this package closes. Legacy remains the sole
+  production/default path and every tuple stays disabled.
 
 ## Accepted Gaps
 
