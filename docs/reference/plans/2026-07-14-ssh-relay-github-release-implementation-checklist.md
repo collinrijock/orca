@@ -18042,23 +18042,23 @@ config/scripts/ssh-relay-runtime-workflow.test.mjs`.
   active-file count. No production module changes.
 - Targeted command: `pnpm exec oxfmt --check` for the new test, workflow oracle, and artifact workflow;
   `pnpm exec oxlint` for the new test and oracle; then `/usr/bin/time -l pnpm exec vitest run --config
-  config/vitest.config.ts --maxWorkers=1 src/main/ssh/ssh-relay-runtime-posix-system-ssh-openssh-full-size.test.ts
-  config/scripts/ssh-relay-runtime-workflow.test.mjs`. Result: formatting/lint pass; the workflow
+config/vitest.config.ts --maxWorkers=1 src/main/ssh/ssh-relay-runtime-posix-system-ssh-openssh-full-size.test.ts
+config/scripts/ssh-relay-runtime-workflow.test.mjs`. Result: formatting/lint pass; the workflow
   oracle passes 9/9 while the one live case is explicitly skipped because its seven CI inputs are
   absent. Vitest 12.53 seconds; 25.90 seconds real; 131,907,584-byte maximum RSS; 96,146,904-byte
   peak footprint; zero swaps and block I/O. The skip earns no live/full-size transfer evidence.
 - Focused composition command: `/usr/bin/time -l pnpm exec vitest run --config
-  config/vitest.config.ts --maxWorkers=1` with the control/tree/file-destination/system-channel,
+config/vitest.config.ts --maxWorkers=1` with the control/tree/file-destination/system-channel,
   source-tree/scan/stream, system-fallback, connection, and workflow-oracle suites. Result: 10 files,
   220 passed and one declared platform skip; Vitest 13.07 seconds; 14.67 seconds real;
   178,061,312-byte maximum RSS; 96,277,904-byte peak footprint; zero swaps and block I/O.
 - Broad relay command: `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts
-  --maxWorkers=1 src/main/ssh/ssh-relay-*.test.ts`. Result: 50 files passed, five files skipped; 656
+--maxWorkers=1 src/main/ssh/ssh-relay-*.test.ts`. Result: 50 files passed, five files skipped; 656
   passed and seven declared skips out of 663. Vitest 59.16 seconds; 64.28 seconds real;
   269,565,952-byte maximum RSS; 96,114,160-byte peak footprint; zero swaps and block I/O. The new
   live case is one of the declared skips and is not counted as proof.
 - Release-contract command: `/usr/bin/time -l pnpm exec vitest run --config
-  config/vitest.config.ts --maxWorkers=1 config/scripts/ssh-relay-runtime-*.test.mjs`. Result: 50 files
+config/vitest.config.ts --maxWorkers=1 config/scripts/ssh-relay-runtime-*.test.mjs`. Result: 50 files
   and 282/282 cases pass; Vitest 35.69 seconds; 39.36 seconds real; 190,201,856-byte maximum RSS;
   96,638,376-byte peak footprint; zero swaps and block I/O.
 - Static evidence: `/usr/bin/time -l pnpm typecheck` passes in 6.13 seconds real with
@@ -18069,7 +18069,7 @@ config/scripts/ssh-relay-runtime-workflow.test.mjs`.
   localization checks. Standalone max-lines and targeted formatting pass after formatting this
   ledger entry; the new test is 377 lines with no suppression.
 - Isolation evidence: `git diff --check` passes; `git diff --exit-code HEAD --
-  src/main/ssh/ssh-remote-node-resolution.ts src/main/ssh/ssh-remote-node-resolution.test.ts` is empty.
+src/main/ssh/ssh-remote-node-resolution.ts src/main/ssh/ssh-remote-node-resolution.test.ts` is empty.
   An asserted non-test reference search finds the tree-transfer export only in its owning production
   module; this package adds no product importer. The intended diff is limited to the live test,
   artifact workflow, workflow oracle, and both checklist documents. No settings, Beta, legacy
