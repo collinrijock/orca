@@ -1,5 +1,6 @@
 import { spawn, type ChildProcess, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { waitForProcessExitUntil } from './codex-process-exit-deadline'
+import { stderrIndicatesMissingAppServer } from './codex-app-server-capability-signal'
 
 // Why: `codex app-server` is Orca's sanctioned RPC surface into Codex-owned
 // state (hook trust hashes, the sqlite thread index). This module owns the
@@ -94,12 +95,6 @@ function isMethodNotFoundError(error: { code?: number; message?: string }): bool
   return error.code === JSON_RPC_METHOD_NOT_FOUND || /method not found/i.test(error.message ?? '')
 }
 
-// Why: a CLI predating the app-server subcommand fails argv parsing before
-// speaking any JSON-RPC; that shape is a capability signal, not a transient.
-function stderrIndicatesMissingAppServer(stderrTail: string): boolean {
-  return /unrecognized subcommand|unexpected argument|invalid subcommand/i.test(stderrTail)
-}
-
 /**
  * Runs one short-lived `codex app-server` session over stdio JSON-RPC (JSONL):
  * spawn → initialize → initialized → body(rpc) → EOF/reap. The child is reaped
@@ -110,8 +105,14 @@ export async function runCodexAppServerSession<T>(
   body: (rpc: CodexAppServerRpc) => Promise<T>,
   spawnImpl: typeof spawn = spawn
 ): Promise<T> {
+  // Why: a default-home grant must run against the real ~/.codex, so strip an
+  // inherited CODEX_HOME (envToDelete) after applying the overlay, not before.
+  const childEnv: NodeJS.ProcessEnv = { ...process.env, ...invocation.env }
+  for (const key of invocation.envToDelete ?? []) {
+    delete childEnv[key]
+  }
   const child = spawnImpl(invocation.command, invocation.args, {
-    env: { ...process.env, ...invocation.env },
+    env: childEnv,
     stdio: ['pipe', 'pipe', 'pipe'],
     windowsHide: true
   }) as ChildProcessWithoutNullStreams

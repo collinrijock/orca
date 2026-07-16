@@ -104,7 +104,7 @@ function quotedKeyPath(key: string): string {
 async function inspectUserHookTrust(
   request: CodexUserHookTrustInspectRequest
 ): Promise<CodexUserHookTrustRebaseResult> {
-  return runCodexAppServerSession(request.invocation, async (requestRpc) => {
+  return runCodexAppServerSession(request.invocation, async ({ request: requestRpc }) => {
     const result = await requestRpc('hooks/list', { cwds: [request.hooksListCwd] })
     const byOldKey = matchingListings(collectCodexHookListings(result), request.moves, 'oldKey')
     if (byOldKey.size !== request.moves.length) {
@@ -130,7 +130,7 @@ async function inspectUserHookTrust(
 async function repairUserHookTrust(
   request: CodexUserHookTrustRepairRequest
 ): Promise<CodexUserHookTrustRebaseResult> {
-  return runCodexAppServerSession(request.invocation, async (requestRpc) => {
+  return runCodexAppServerSession(request.invocation, async ({ request: requestRpc }) => {
     const result = await requestRpc('hooks/list', { cwds: [request.hooksListCwd] })
     const byNewKey = matchingListings(collectCodexHookListings(result), request.moves, 'newKey')
     if (byNewKey.size !== request.moves.length) {

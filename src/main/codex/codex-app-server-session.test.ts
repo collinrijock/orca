@@ -33,7 +33,7 @@ describe('runCodexAppServerSession environment', () => {
         envToDelete: ['CODEX_HOME'],
         timeoutMs: 5_000
       },
-      (requestRpc) => requestRpc('env/get')
+      ({ request }) => request('env/get')
     )
 
     expect(result).toEqual({ codexHome: null })

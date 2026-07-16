@@ -1,13 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as CodexAppServerSession from './codex-app-server-session'
-import type { CodexAppServerRequestRpc } from './codex-app-server-session'
+import type { CodexAppServerRpc } from './codex-app-server-session'
 
-const requestRpcMock = vi.hoisted(() => vi.fn<CodexAppServerRequestRpc>())
+const requestRpcMock = vi.hoisted(() => vi.fn<CodexAppServerRpc['request']>())
 vi.mock('./codex-app-server-session', async (importOriginal) => {
   const actual = await importOriginal<typeof CodexAppServerSession>()
   return {
     ...actual,
-    runCodexAppServerSession: vi.fn((_invocation, run) => run(requestRpcMock))
+    runCodexAppServerSession: vi.fn((_invocation, run) =>
+      run({ request: requestRpcMock, notify: vi.fn() })
+    )
   }
 })
 
