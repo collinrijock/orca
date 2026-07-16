@@ -200,6 +200,68 @@ describe('GitHub PR refresh owner consistency', () => {
     expect(enqueuePRRefresh).not.toHaveBeenCalled()
   })
 
+  it('does not stale the paired local cache when refreshing after a runtime push', async () => {
+    let resolveRuntimeCall: (response: unknown) => void = () => {}
+    runtimeEnvironmentCall.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveRuntimeCall = resolve
+        })
+    )
+    const store = createTestStore()
+    const repoId = 'repo-paired'
+    const branch = 'feature/runtime-push'
+    const fetchedAt = Date.now()
+    const runtimeWorktree = makeRuntimeWorktree(repoId, branch)
+    const localWorktree: Worktree = {
+      ...runtimeWorktree,
+      id: 'wt-local',
+      path: '/local/repo/worktrees/feature',
+      hostId: 'local'
+    }
+    seed(store, {
+      repos: [
+        makeRepo({ id: repoId, path: '/local/repo' }),
+        makeRepo({
+          id: repoId,
+          path: '/runtime/repo',
+          executionHostId: 'runtime:env-1'
+        })
+      ],
+      worktreesByRepo: { [repoId]: [localWorktree, runtimeWorktree] },
+      prCache: {
+        [`${repoId}::${branch}`]: {
+          data: makePR({ number: 7 }),
+          fetchedAt
+        },
+        [`runtime:env-1::${repoId}::${branch}`]: {
+          data: makePR({ number: 34 }),
+          fetchedAt
+        }
+      }
+    })
+
+    store.getState().refreshGitHubForWorktree('wt-runtime')
+    await vi.waitFor(() => expect(runtimeEnvironmentCall).toHaveBeenCalledTimes(1))
+    expect(store.getState().prCache[`${repoId}::${branch}`]?.fetchedAt).toBe(fetchedAt)
+    expect(store.getState().prCache[`runtime:env-1::${repoId}::${branch}`]?.fetchedAt).toBe(0)
+
+    store.getState().refreshAllGitHub()
+
+    expect(enqueuePRRefresh).not.toHaveBeenCalled()
+    expect(runtimeEnvironmentCall).toHaveBeenCalledTimes(1)
+
+    resolveRuntimeCall({
+      id: 'rpc-1',
+      ok: true,
+      result: makePR({ number: 35 }),
+      _meta: { runtimeId: 'remote-runtime' }
+    })
+    await vi.waitFor(() =>
+      expect(store.getState().prCache[`runtime:env-1::${repoId}::${branch}`]?.data?.number).toBe(35)
+    )
+  })
+
   it('routes paired-host checks and comments through the runtime path owner', async () => {
     runtimeEnvironmentCall
       .mockResolvedValueOnce({

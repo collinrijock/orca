@@ -4546,7 +4546,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
       return
     }
 
-    const repo = state.repos.find((r) => r.id === worktree.repoId)
+    const repo = findWorktreeOwnerRepo(state, worktree)
     if (!repo) {
       return
     }
