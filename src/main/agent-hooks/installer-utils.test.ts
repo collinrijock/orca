@@ -95,6 +95,22 @@ describe('writeHooksJson', () => {
     expect(bak).toEqual(original)
   })
 
+  it('does not follow an existing .bak symlink', () => {
+    const original = '{"hooks":{}}\n'
+    const backupTarget = join(tmpDir, 'dotfiles-backup.json')
+    writeFileSync(configPath, original, 'utf-8')
+    writeFileSync(backupTarget, 'pristine backup target\n', 'utf-8')
+    symlinkSync(backupTarget, `${configPath}.bak`)
+
+    expect(() => writeHooksJson(configPath, { hooks: { Stop: [] } })).toThrow(
+      'Refusing to overwrite symlinked backup'
+    )
+
+    expect(readFileSync(configPath, 'utf-8')).toBe(original)
+    expect(lstatSync(`${configPath}.bak`).isSymbolicLink()).toBe(true)
+    expect(readFileSync(backupTarget, 'utf-8')).toBe('pristine backup target\n')
+  })
+
   it('does not create a .bak file when the config does not yet exist', () => {
     writeHooksJson(configPath, {})
     expect(existsSync(`${configPath}.bak`)).toBe(false)

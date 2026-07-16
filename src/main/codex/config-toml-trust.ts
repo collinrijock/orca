@@ -11,8 +11,9 @@ import {
 } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { createHash, randomUUID } from 'node:crypto'
-import { copyFileWithWindowsRetry, renameFileWithWindowsRetry } from '../codex-accounts/fs-utils'
+import { renameFileWithWindowsRetry } from '../codex-accounts/fs-utils'
 import { foldWslUncPathCaseInsensitiveParts } from '../../shared/wsl-paths'
+import { writeRollingFileBackup } from '../rolling-file-backup'
 import {
   createTomlLineScanState,
   isTomlStructuralLine,
@@ -806,7 +807,7 @@ export function writeConfigAtomically(configPath: string, contents: string): voi
     // restrictive permissions when the atomic rename installs new bytes.
     writeFileSync(tmpPath, contents, { encoding: 'utf-8', mode: existingMode })
     if (existsSync(writePath)) {
-      copyFileWithWindowsRetry(writePath, `${writePath}.bak`)
+      writeRollingFileBackup(writePath, `${writePath}.bak`)
     }
     renameFileWithWindowsRetry(tmpPath, writePath)
     renamed = true

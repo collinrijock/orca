@@ -5,7 +5,6 @@ import {
   statSync,
   writeFileSync,
   chmodSync,
-  copyFileSync,
   renameSync,
   unlinkSync
 } from 'node:fs'
@@ -16,6 +15,7 @@ import type { AgentHookSource } from '../../shared/agent-hook-relay'
 import { grantDirAcl, isPermissionError } from '../win32-utils'
 import { POSIX_HOOK_STDIN_DRAIN_COMMAND } from './hook-stdin-contract'
 import { resolveHooksJsonWritePath } from './hook-config-write-path'
+import { writeRollingFileBackup } from '../rolling-file-backup'
 
 export type HookCommandConfig = {
   type: 'command'
@@ -400,7 +400,7 @@ export function writeHooksJson(
     // Protects against a merge-logic bug producing bad JSON; the original is
     // always recoverable from <configPath>.bak until the next write.
     if (existsSync(writePath)) {
-      copyFileSync(writePath, `${writePath}.bak`)
+      writeRollingFileBackup(writePath, `${writePath}.bak`)
     }
     renameSync(tmpPath, writePath)
   } finally {

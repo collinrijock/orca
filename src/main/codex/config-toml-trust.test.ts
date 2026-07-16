@@ -501,6 +501,30 @@ describe('upsertHookTrustEntries', () => {
     expect(readFileSync(`${configPath}.bak`, 'utf-8')).toBe('model = "old"\n')
   })
 
+  it('does not follow an existing .bak symlink', () => {
+    const original = 'model = "old"\n'
+    const backupTarget = join(tmpDir, 'dotfiles-config-backup.toml')
+    writeFileSync(configPath, original, 'utf-8')
+    writeFileSync(backupTarget, 'pristine backup target\n', 'utf-8')
+    symlinkSync(backupTarget, `${configPath}.bak`)
+
+    expect(() =>
+      upsertHookTrustEntries(configPath, [
+        {
+          sourcePath: '/x/hooks.json',
+          eventLabel: 'pre_tool_use',
+          groupIndex: 0,
+          handlerIndex: 0,
+          command: 'echo'
+        }
+      ])
+    ).toThrow('Refusing to overwrite symlinked backup')
+
+    expect(readFileSync(configPath, 'utf-8')).toBe(original)
+    expect(lstatSync(`${configPath}.bak`).isSymbolicLink()).toBe(true)
+    expect(readFileSync(backupTarget, 'utf-8')).toBe('pristine backup target\n')
+  })
+
   it('does not write at all when the file already has the right hash', () => {
     const entry: CodexTrustEntry = {
       sourcePath: '/x/hooks.json',
