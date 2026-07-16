@@ -9,9 +9,19 @@ keeps commands, hashes, runner identities, timings, and failure details.
 A checked box means the work has evidence in the detailed ledger. Design approval alone does not
 complete a box.
 
-Active checkpoint: **Milestone 6 / Work Package 5 bounded runtime transfer — disconnected bounded
-client source stream is locally green; commit/push and exact-head native/full-size CI are next,
+Active checkpoint: **Milestone 6 / Work Package 5 bounded runtime transfer — the Windows-only POSIX-
+mode test correction is locally green; commit/push and fresh all-six native/full-size proof are next,
 2026-07-15, Codex implementation owner.**
+`E-M6-SOURCE-STREAM-CI-RED-001` records run `29501986883` / Windows x64 job `87632962424`: the
+hostile wrong-mode case incorrectly expected POSIX mode enforcement on Windows, then production
+correctly rejected the test's incomplete destination. Linux x64/arm64 and Darwin x64/arm64 purpose
+commands passed before cancellation. Make only that case POSIX-only; no production behavior is
+relaxed and no cell is credited from the superseded run.
+`E-M6-SOURCE-STREAM-WINDOWS-ORACLE-CORRECTION-LOCAL-001` passes 27/27 purpose cases on macOS, 107
+focused cases with one declared skip, 566 broad relay cases with five declared skips, 280/280
+workflow cases, typecheck, full lint, format, max-lines, diff, protected-resolver, and isolation
+gates. Only the POSIX-mode case changed; fresh Windows and all-six native/full-size CI remain
+mandatory.
 `E-M6-SOURCE-STREAM-AUDIT-001` fixes the next artifact-only boundary: exact scanned tree plus one
 signal, maximum four 64-KiB readers, local snapshot proof before destination open, hash/size and
 post-read snapshot proof before destination finalization, joined abort/close cleanup, and path-free

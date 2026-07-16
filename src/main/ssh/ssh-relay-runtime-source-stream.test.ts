@@ -320,10 +320,6 @@ describe('SSH relay runtime bounded source stream', () => {
     ],
     ['wrong type', (metadata) => Object.assign(Object.create(metadata), { isFile: () => false })],
     [
-      'wrong mode',
-      (metadata) => Object.assign(Object.create(metadata), { mode: metadata.mode ^ 1n })
-    ],
-    [
       'state drift',
       (metadata) => Object.assign(Object.create(metadata), { mtimeNs: metadata.mtimeNs + 1n })
     ]
@@ -346,6 +342,31 @@ describe('SSH relay runtime bounded source stream', () => {
     ).rejects.toThrow(/changed|mode/i)
     expect(openDestination).not.toHaveBeenCalled()
   })
+
+  it.skipIf(process.platform === 'win32')(
+    'rejects POSIX mode metadata before destination creation',
+    async () => {
+      const { tree } = await sourceStreamFixture()
+      const target = tree.files[0].localPath
+      const openDestination = vi.fn()
+      await expect(
+        streamSshRelayRuntimeSourceTree(
+          { tree, signal: new AbortController().signal, openDestination },
+          {
+            lstat: async (path) => {
+              const metadata = (await lstat(path, {
+                bigint: true
+              })) as SshRelayRuntimeSourceMetadata
+              return path === target
+                ? Object.assign(Object.create(metadata), { mode: metadata.mode ^ 1n })
+                : metadata
+            }
+          }
+        )
+      ).rejects.toThrow(/mode/i)
+      expect(openDestination).not.toHaveBeenCalled()
+    }
+  )
 
   it('rejects source mutation before destination creation', async () => {
     const { tree } = await sourceStreamFixture()

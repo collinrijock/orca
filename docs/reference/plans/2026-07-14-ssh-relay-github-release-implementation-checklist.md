@@ -8,8 +8,8 @@ work; keep exact commands, runner identities, hashes, metrics, and residual gaps
 
 Date created: 2026-07-14<br>
 Last updated: 2026-07-15<br>
-Current phase: Milestone 6 / Work Package 5 bounded runtime transfer — **In progress — 2026-07-15, Codex implementation owner: disconnected bounded client source stream is locally green; exact-head native/full-size CI is next**. Keep every capability disconnected from every production/default SSH path. Real Apple/SignPath rehearsals remain an explicit late gate and are not on this package's critical path.<br>
-Session checkpoint: **BOUNDED SOURCE STREAM LOCAL GREEN / EXACT-HEAD CI NEXT — 2026-07-15, Codex implementation owner** — `E-M6-SOURCE-STREAM-LOCAL-001` proves the filesystem-snapshot split, bounded reader/destination lifecycle, failure settlement, purpose/full-size wiring, adjacent suites, static gates, and isolation locally. Commit and push this package, then require all-six native artifact/full-size jobs plus adjacent CI before checking the package or advancing to an SSH transport adapter. Do not add a product caller, settings/fallback wiring, tuple enablement, publication, or default behavior. Merging to `main` remains prohibited, SignPath is deferred, and legacy remains the production default.<br>
+Current phase: Milestone 6 / Work Package 5 bounded runtime transfer — **In progress — 2026-07-15, Codex implementation owner: Windows source-stream oracle correction is locally green; fresh exact-head native/full-size CI is next**. Keep every capability disconnected from every production/default SSH path. Real Apple/SignPath rehearsals remain an explicit late gate and are not on this package's critical path.<br>
+Session checkpoint: **BOUNDED SOURCE STREAM WINDOWS ORACLE CORRECTION LOCAL GREEN — 2026-07-15, Codex implementation owner** — `E-M6-SOURCE-STREAM-CI-RED-001` records the Windows-only POSIX-mode oracle mismatch and `E-M6-SOURCE-STREAM-WINDOWS-ORACLE-CORRECTION-LOCAL-001` proves the test-only correction plus focused/broad/static gates. Commit/push the correction and require fresh all-six native/full-size and adjacent CI. Do not add a product caller, settings/fallback wiring, tuple enablement, publication, or default behavior. Merging to `main` remains prohibited, SignPath is deferred, and legacy remains the production default.<br>
 Primary design: [SSH relay GitHub Release plan](./2026-07-14-ssh-relay-github-release-plan.html)<br>
 Motivating issues: [#8450](https://github.com/stablyai/orca/issues/8450), [#1693](https://github.com/stablyai/orca/issues/1693)
 
@@ -152,10 +152,12 @@ same change as the work it records.
   E-M5-HOST-EVIDENCE-COMPOSITION-CI-001. It has no product caller.
 - Active package: **In progress — 2026-07-15, Codex implementation owner** — audit, RED, and local
   GREEN complete under E-M6-SOURCE-STREAM-AUDIT-001, E-M6-SOURCE-STREAM-LOCAL-RED-001, and
-  E-M6-SOURCE-STREAM-LOCAL-001. Commit and push the disconnected bounded client source stream, then
-  require exact-head all-six native/full-size and adjacent CI. Do not import SSH, open channels,
-  construct remote paths, create remote staging, or add product/settings/fallback/tuple/publication/
-  default behavior.
+  E-M6-SOURCE-STREAM-LOCAL-001. E-M6-SOURCE-STREAM-CI-RED-001 exposes a Windows-only test-oracle
+  mismatch; its POSIX-only correction is locally green under
+  E-M6-SOURCE-STREAM-WINDOWS-ORACLE-CORRECTION-LOCAL-001. Commit/push it, then require fresh
+  exact-head all-six native/full-size and adjacent CI. Do not import SSH, open channels, construct
+  remote paths, create remote staging, or add product/settings/fallback/tuple/publication/default
+  behavior.
 - Completed Work Package 2 gate: target-native Windows source-signature reports from exact-head
   artifact jobs 87267322867 and 87267322870 were independently downloaded and matched to their
   identities and signing-stage reports under E-M3-WINDOWS-SOURCE-SIGNATURE-CI-001. PR Checks
@@ -16602,6 +16604,51 @@ src/main/ssh/ssh-relay-*.test.ts` — PASS, exit 0: 41 files passed, three skipp
   measurement, not SFTP/system-SSH or remote proof. Remote channels, paths, staging/install,
   product/Beta/fallback/tuple/publication/default wiring, and SignPath remain absent.
 
+### E-M6-SOURCE-STREAM-CI-RED-001 — Windows exposes a POSIX-only mode-test oracle
+
+- Date/owner/source: 2026-07-15, Codex implementation owner; exact commit `59997b1383ef51d390d811b17e235917b51e4a69`,
+  artifact run [29501986883](https://github.com/stablyai/orca/actions/runs/29501986883), Windows x64
+  job [87632962424](https://github.com/stablyai/orca/actions/runs/29501986883/job/87632962424).
+- Result: expected CI RED in the newly added cross-platform purpose suite. Windows x64 reached the
+  `rejects wrong mode source metadata before destination creation` case and failed its
+  `/changed|mode/i` assertion because Windows deliberately does not compare POSIX mode bits. The
+  test then reached the mock factory, whose undefined result was correctly rejected as `SSH relay
+runtime source stream destination is incomplete`. The contract step failed after 31 seconds and
+  the job after 1 minute 42 seconds; artifact download/build/full-size measurement did not run.
+- Cross-run observation: Linux x64, Linux arm64, Darwin arm64, and Darwin x64 purpose commands
+  passed before cancellation. Darwin arm64 also completed its build/full-size measurement, but this
+  superseded run is not closure evidence. Windows arm64 had not reached the purpose command.
+- Classification/correction: production snapshot behavior is correct and unchanged: POSIX compares
+  signed mode, while Windows relies on type and identity/state. Make only the wrong-mode oracle
+  `skipIf(process.platform === 'win32')`; linked/type/state/digest/mutation checks remain mandatory
+  on Windows. The run was cancelled after evidence capture to conserve native runner time.
+- Safety/residual: the failure occurred in disconnected tests with no SSH/product importer, remote
+  resource, publication, tuple, setting, fallback, or default behavior. Fresh exact-head all-six
+  purpose/full-size and adjacent evidence is required; no cell is credited from this run.
+
+### E-M6-SOURCE-STREAM-WINDOWS-ORACLE-CORRECTION-LOCAL-001 — POSIX mode case is locally corrected
+
+- Date/owner/environment: 2026-07-15, Codex implementation owner; local macOS arm64, Node 26.0.0,
+  pnpm 10.24.0, atop exact implementation commit `59997b138` plus the test/checklist correction diff.
+- Correction: remove only `wrong mode` from the cross-platform hostile-metadata table and add the
+  same assertion as `skipIf(process.platform === 'win32')`. POSIX still requires signed mode before
+  destination creation. Windows still requires linked/type/state/digest/mutation rejection and now
+  declares exactly one purpose-case skip. No production source changed.
+- Purpose command: `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts
+--maxWorkers=1 src/main/ssh/ssh-relay-runtime-source-stream.test.ts` — PASS, 27/27 in 2.61 seconds
+  Vitest / 3.80 seconds wall, 141,737,984-byte maximum RSS, zero swaps.
+- Adjacent/broad commands: the ten-file focused source/cache/acquisition/workflow command passes
+  107 tests with one declared platform skip in 8.29 seconds; `src/main/ssh/ssh-relay-*.test.ts`
+  passes 566 with five declared platform/full-size skips in 25.38 seconds; and
+  `config/scripts/ssh-relay-runtime-*.test.mjs` passes 280/280 in 17.13 seconds.
+- Static/isolation commands: `pnpm typecheck`, targeted `pnpm exec oxlint`, `pnpm lint`,
+  `pnpm run check:max-lines-ratchet`, targeted `pnpm exec oxfmt --check`, `git diff --check`, the
+  protected-resolver diff gate, and the non-test importer `rg` gate pass. Existing unrelated lint
+  warnings remain warnings; no max-lines bypass was added.
+- Residual: a native Windows runner must prove 26 passes plus exactly the one POSIX-mode skip. Fresh
+  all-six full-size metrics and adjacent Actions remain mandatory; no evidence cell is closed by
+  local macOS proof.
+
 ## Accepted Gaps
 
 No product gap is accepted merely because it appears in this list. Each entry requires explicit
@@ -16660,10 +16707,9 @@ The project is not complete until every applicable item below is checked with ev
 
 ## Next Required Action
 
-Commit and push only the locally green Milestone 6 disconnected bounded client source stream and its
-purpose/full-size native workflow wiring, then require all-six exact-head native/full-size and
-adjacent CI before checking the package or advancing. The stream must create no remote files or open
-SSH channels.
+Commit/push the locally green Windows test-oracle correction, then require fresh all-six exact-head
+native/full-size and adjacent CI before checking the package or advancing. The stream must create no
+remote files or open SSH channels.
 Do not open an SSH channel, transfer to or install on a remote, modify platform detection/selectors,
 add an Electron/startup consumer, mode wiring, fallback, tuple enablement, release publication, or
 default behavior.
