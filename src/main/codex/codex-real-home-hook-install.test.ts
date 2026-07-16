@@ -43,6 +43,7 @@ import {
   _internals
 } from './codex-real-home-hook-install'
 import { getCodexManagedHookInstallMaterial } from './hook-service'
+import { _internals as rebaseInternals } from './codex-user-hook-trust-rebase'
 
 let fakeHomeDir: string
 let userDataDir: string
@@ -86,6 +87,7 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  rebaseInternals.setSessionRunnerSync(null)
   rmSync(fakeHomeDir, { recursive: true, force: true })
   rmSync(userDataDir, { recursive: true, force: true })
   if (previousUserDataPath === undefined) {
@@ -114,10 +116,29 @@ describe('ensureRealHomeCodexHookState (install)', () => {
     const plan = grantMock.mock.calls[0]![0] as CodexManagedTrustGrantPlan
     expect(plan.runtimeHomePath).toBe(join(fakeHomeDir, '.codex'))
     expect(plan.host).toEqual({ kind: 'native' })
+    expect(plan.useDefaultCodexHome).toBe(true)
     expect(plan.managedEntries.every((entry) => entry.groupIndex === 0)).toBe(true)
   })
 
-  it('appends LAST and preserves user entries, unknown fields, and trust positions', () => {
+  it('keeps a symlinked default home logical in the keys sent to Codex', () => {
+    grantSucceeds()
+    const logicalHome = join(fakeHomeDir, '.codex')
+    const targetHome = join(fakeHomeDir, 'dotfiles-codex')
+    rmSync(logicalHome, { recursive: true })
+    mkdirSync(targetHome)
+    symlinkSync(targetHome, logicalHome)
+
+    expect(ensureRealHomeCodexHookState({ hooksEnabled: true, userDataPath: userDataDir })).toBe(
+      'installed'
+    )
+
+    const plan = grantMock.mock.calls[0]![0] as CodexManagedTrustGrantPlan
+    expect(
+      plan.managedEntries.map(computeTrustKey).every((key) => key.startsWith(logicalHome))
+    ).toBe(true)
+  })
+
+  it('keeps the managed lane for unknown top-level fields Codex cannot load', () => {
     grantSucceeds()
     const userConfig = {
       hooks: {
@@ -126,27 +147,43 @@ describe('ensureRealHomeCodexHookState (install)', () => {
       },
       _pluginManagerMetadata: { owner: 'someone-else' }
     }
-    writeFileSync(getRealHooksJsonPath(), `${JSON.stringify(userConfig, null, 2)}\n`, 'utf-8')
+    const original = `${JSON.stringify(userConfig, null, 2)}\n`
+    writeFileSync(getRealHooksJsonPath(), original, 'utf-8')
 
     const lane = ensureRealHomeCodexHookState({ hooksEnabled: true, userDataPath: userDataDir })
 
-    expect(lane).toBe('installed')
+    expect(lane).toBe('unavailable')
+    expect(readFileSync(getRealHooksJsonPath(), 'utf-8')).toBe(original)
+    expect(grantMock).not.toHaveBeenCalled()
+    expect(existsSync(join(userDataDir, 'codex-real-home-hooks', 'hooks.json.pre-orca'))).toBe(
+      false
+    )
+  })
+
+  it('appends LAST and preserves user entries and trust positions', () => {
+    grantSucceeds()
+    const userConfig = {
+      hooks: {
+        Stop: [{ matcher: 'deploy-*', hooks: [{ type: 'command', command: 'my-stop-hook.sh' }] }],
+        PreCompact: [{ hooks: [{ type: 'command', command: 'my-compact-hook.sh' }] }]
+      }
+    }
+    const original = `${JSON.stringify(userConfig, null, 2)}\n`
+    writeFileSync(getRealHooksJsonPath(), original, 'utf-8')
+
+    expect(ensureRealHomeCodexHookState({ hooksEnabled: true, userDataPath: userDataDir })).toBe(
+      'installed'
+    )
+
     const config = readRealHooksJson()
-    // User's Stop entry keeps position 0; Orca's entry is appended after it.
     expect(config.hooks?.Stop).toHaveLength(2)
     expect(config.hooks?.Stop?.[0]).toEqual(userConfig.hooks.Stop[0])
-    // Non-managed events Orca does not subscribe to stay untouched.
     expect(config.hooks?.PreCompact).toEqual(userConfig.hooks.PreCompact)
-    // Unknown top-level metadata survives, unlike the managed-home writer.
-    expect(config._pluginManagerMetadata).toEqual(userConfig._pluginManagerMetadata)
-    // The appended entry's trust key uses its appended position.
     const plan = grantMock.mock.calls[0]![0] as CodexManagedTrustGrantPlan
-    const stopEntry = plan.managedEntries.find((entry) => entry.eventLabel === 'stop')
-    expect(stopEntry?.groupIndex).toBe(1)
-    // Pristine pre-Orca backup lands under userData, not in ~/.codex.
+    expect(plan.managedEntries.find((entry) => entry.eventLabel === 'stop')?.groupIndex).toBe(1)
     expect(
       readFileSync(join(userDataDir, 'codex-real-home-hooks', 'hooks.json.pre-orca'), 'utf-8')
-    ).toBe(`${JSON.stringify(userConfig, null, 2)}\n`)
+    ).toBe(original)
   })
 
   it('updates a symlinked hooks.json target without replacing the symlink', () => {
@@ -330,6 +367,44 @@ describe('ensureRealHomeCodexHookState (install)', () => {
 })
 
 describe('ensureRealHomeCodexHookState (opt-out sweep)', () => {
+  it('rebases trust when a user appended hooks after Orca installed', () => {
+    grantSucceeds()
+    const before = { type: 'command', command: 'before.sh' }
+    writeFileSync(
+      getRealHooksJsonPath(),
+      `${JSON.stringify({ hooks: { Stop: [{ hooks: [before] }] } }, null, 2)}\n`
+    )
+    ensureRealHomeCodexHookState({ hooksEnabled: true, userDataPath: userDataDir })
+    const installed = readRealHooksJson()
+    const after = { type: 'command', command: 'after.sh' }
+    installed.hooks!.Stop!.push({ hooks: [after] })
+    writeFileSync(getRealHooksJsonPath(), `${JSON.stringify(installed, null, 2)}\n`)
+    const operations: string[] = []
+    rebaseInternals.setSessionRunnerSync((request) => {
+      operations.push(request.operation)
+      if (request.operation === 'inspect-user-hook-trust') {
+        expect(readRealHooksJson().hooks?.Stop?.[2]?.hooks?.[0]?.command).toBe('after.sh')
+        return {
+          outcome: 'inspected',
+          moves: request.moves.map((move) => ({
+            ...move,
+            reportedOldKey: move.oldKey,
+            wasTrusted: true,
+            enabled: true
+          }))
+        }
+      }
+      expect(readRealHooksJson().hooks?.Stop?.[1]?.hooks?.[0]?.command).toBe('after.sh')
+      return { outcome: 'repaired', repaired: 1 }
+    })
+
+    expect(ensureRealHomeCodexHookState({ hooksEnabled: false, userDataPath: userDataDir })).toBe(
+      'removed'
+    )
+    expect(operations).toEqual(['inspect-user-hook-trust', 'repair-user-hook-trust'])
+    expect(readRealHooksJson().hooks?.Stop).toEqual([{ hooks: [before] }, { hooks: [after] }])
+  })
+
   it('removes only Orca entries and reports the removed lane', () => {
     grantSucceeds()
     const userStop = {

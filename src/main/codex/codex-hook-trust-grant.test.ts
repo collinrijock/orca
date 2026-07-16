@@ -31,6 +31,10 @@ let previousUserDataPath: string | undefined
 beforeEach(() => {
   userDataDir = mkdtempSync(join(tmpdir(), 'orca-trust-grant-userdata-'))
   runtimeHomeDir = join(userDataDir, 'codex-runtime-home', 'home')
+  // Why: production writes hooks.json before granting trust; keeping that
+  // ordering prevents test-only canonical-path drift during ledger setup.
+  mkdirSync(runtimeHomeDir, { recursive: true })
+  writeFileSync(join(runtimeHomeDir, 'hooks.json'), '{"hooks":{}}\n', 'utf-8')
   previousUserDataPath = process.env.ORCA_USER_DATA_PATH
   process.env.ORCA_USER_DATA_PATH = userDataDir
   codexAppServerCapabilityCache.clear()
@@ -114,6 +118,19 @@ describe('grantManagedCodexHookTrust', () => {
     expect(ledgerHome).not.toBeNull()
     expect(Object.keys(ledgerHome!.entries)).toHaveLength(2)
     expect(getCodexTrustGrantDiagnostics()).toMatchObject({ granted: 1, fellBack: 0 })
+  })
+
+  it('builds a default-home grant invocation without an inherited CODEX_HOME', () => {
+    const entries = [managedEntry('stop')]
+    const runner = vi.fn((_request: CodexHookTrustGrantRequest) => grantedSessionResult(entries))
+    _internals.setGrantSessionRunnerSync(runner)
+
+    expect(
+      grantManagedCodexHookTrust({ ...buildPlan(entries), useDefaultCodexHome: true })
+    ).toMatchObject({ lane: 'rpc' })
+    const invocation = runner.mock.calls[0]![0]!.invocation
+    expect(invocation.env?.CODEX_HOME).toBeUndefined()
+    expect(invocation.envToDelete).toContain('CODEX_HOME')
   })
 
   it('skips the RPC session while the ledger grant still holds, and re-grants on config drift', () => {

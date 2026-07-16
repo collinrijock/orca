@@ -7,7 +7,15 @@ import {
   type CodexHookTrustGrantRequest,
   type CodexHookTrustGrantSessionResult
 } from './codex-app-server-client'
-import type { GrantEntryEnvelope } from './codex-app-server-grant-envelope'
+import type {
+  CodexAppServerEntryRequest,
+  CodexAppServerEntryResult,
+  GrantEntryEnvelope
+} from './codex-app-server-grant-envelope'
+import type {
+  CodexUserHookTrustRebaseRequest,
+  CodexUserHookTrustRebaseResult
+} from './codex-user-hook-trust-rebase-client'
 
 // Why: hook install/refresh is synchronous launch prep — a Codex pane must
 // not start before its trust is settled — but a stdio JSON-RPC session needs
@@ -63,6 +71,20 @@ export function runCodexHookTrustGrantSessionSync(
   request: CodexHookTrustGrantRequest,
   options: RunGrantSessionSyncOptions = {}
 ): CodexHookTrustGrantSessionResult {
+  return runCodexAppServerEntrySync(request, options) as CodexHookTrustGrantSessionResult
+}
+
+export function runCodexUserHookTrustRebaseSessionSync(
+  request: CodexUserHookTrustRebaseRequest,
+  options: RunGrantSessionSyncOptions = {}
+): CodexUserHookTrustRebaseResult {
+  return runCodexAppServerEntrySync(request, options) as CodexUserHookTrustRebaseResult
+}
+
+function runCodexAppServerEntrySync(
+  request: CodexAppServerEntryRequest,
+  options: RunGrantSessionSyncOptions
+): CodexAppServerEntryResult {
   const entryPath = options.entryPath ?? resolveCodexGrantEntryPath()
   if (!entryPath) {
     throw new Error('codex trust-grant entry bundle not found')

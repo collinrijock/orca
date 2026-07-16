@@ -7,7 +7,8 @@ import {
 } from '../agent-hooks/installer-utils'
 import { getOrcaManagedCodexHomePath, getSystemCodexHomePath } from './codex-home-paths'
 import {
-  getCodexCanonicalTrustPath,
+  getCodexExplicitHomeHookSourcePath,
+  normalizeCodexHookSourcePath,
   normalizeHookTrustKeyForLookup,
   parseTrustKey,
   readHookTrustEntries,
@@ -81,11 +82,14 @@ export function snapshotCodexRuntimeHookTrustProvenance(): void {
   try {
     const runtimeHomePath = getOrcaManagedCodexHomePath()
     const runtimeHooksPath = join(runtimeHomePath, 'hooks.json')
-    const canonicalRuntimeHooksPath = getCodexCanonicalTrustPath(runtimeHooksPath)
+    const canonicalRuntimeHooksPath = getCodexExplicitHomeHookSourcePath(runtimeHooksPath)
     const entries: Record<string, HookTrustProvenanceEntry> = {}
     for (const [key, state] of readHookTrustEntries(join(runtimeHomePath, 'config.toml'))) {
       const parsed = parseTrustKey(key)
-      if (!parsed || getCodexCanonicalTrustPath(parsed.sourcePath) !== canonicalRuntimeHooksPath) {
+      if (
+        !parsed ||
+        normalizeCodexHookSourcePath(parsed.sourcePath) !== canonicalRuntimeHooksPath
+      ) {
         continue
       }
       entries[normalizeHookTrustKeyForLookup(key)] = {
@@ -126,8 +130,8 @@ function promoteCodexRuntimeHookApprovalsToSystemUnsafe(): void {
   const systemHomePath = getSystemCodexHomePath()
   const runtimeHooksPath = join(runtimeHomePath, 'hooks.json')
   const systemHooksPath = join(systemHomePath, 'hooks.json')
-  const canonicalRuntimeHooksPath = getCodexCanonicalTrustPath(runtimeHooksPath)
-  if (canonicalRuntimeHooksPath === getCodexCanonicalTrustPath(systemHooksPath)) {
+  const canonicalRuntimeHooksPath = getCodexExplicitHomeHookSourcePath(runtimeHooksPath)
+  if (canonicalRuntimeHooksPath === normalizeCodexHookSourcePath(systemHooksPath)) {
     return
   }
   const runtimeTomlPath = join(runtimeHomePath, 'config.toml')
@@ -164,7 +168,7 @@ function promoteCodexRuntimeHookApprovalsToSystemUnsafe(): void {
       continue
     }
     const parsed = parseTrustKey(key)
-    if (!parsed || getCodexCanonicalTrustPath(parsed.sourcePath) !== canonicalRuntimeHooksPath) {
+    if (!parsed || normalizeCodexHookSourcePath(parsed.sourcePath) !== canonicalRuntimeHooksPath) {
       continue
     }
     const previous = provenance.get(normalizeHookTrustKeyForLookup(key))
@@ -191,7 +195,7 @@ function promoteCodexRuntimeHookApprovalsToSystemUnsafe(): void {
       continue
     }
     const runtimeEntry = createCodexHookTrustEntry(
-      runtimeHooksPath,
+      canonicalRuntimeHooksPath,
       eventName,
       parsed.groupIndex,
       parsed.handlerIndex,

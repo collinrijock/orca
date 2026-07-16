@@ -1,12 +1,16 @@
 /* eslint-disable max-lines -- Why: this suite keeps the hash fixture, TOML edit edge cases, and trust-state parser regressions together so Codex compatibility failures are easy to audit. */
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
+  chmodSync,
   existsSync,
+  lstatSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
   realpathSync,
   rmSync,
+  symlinkSync,
+  statSync,
   writeFileSync
 } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -16,7 +20,8 @@ import {
   computeTrustKey,
   computeTrustedHash,
   escapeTomlString,
-  getCodexCanonicalTrustPath,
+  getCodexExplicitHomeHookSourcePath,
+  normalizeCodexHookSourcePath,
   normalizeCodexProjectPathForLookup,
   normalizeCodexProjectPathForRevocationLookup,
   parseTrustKey,
@@ -273,7 +278,7 @@ describe('computeTrustKey', () => {
     ).toBe('/Users/thebr/.codex/hooks.json:pre_tool_use:0:0')
   })
 
-  it('uses Codex canonicalized source paths when hooks.json exists', () => {
+  it('lexically normalizes source paths without resolving default-home aliases', () => {
     const nestedDir = join(tmpDir, 'nested')
     mkdirSync(nestedDir)
     const hooksPath = join(nestedDir, '..', 'hooks.json')
@@ -287,8 +292,35 @@ describe('computeTrustKey', () => {
         handlerIndex: 0,
         command: 'irrelevant'
       })
-    ).toBe(`${realpathSync.native(hooksPath)}:user_prompt_submit:0:0`)
+    ).toBe(`${join(tmpDir, 'hooks.json')}:user_prompt_submit:0:0`)
   })
+
+  it('preserves a hooks.json leaf symlink in the trust key', () => {
+    const hooksPath = join(tmpDir, 'hooks.json')
+    const targetPath = join(tmpDir, 'dotfiles-hooks.json')
+    writeFileSync(targetPath, '{"hooks":{}}\n', 'utf-8')
+    symlinkSync(targetPath, hooksPath)
+
+    expect(
+      computeTrustKey({
+        sourcePath: hooksPath,
+        eventLabel: 'stop',
+        groupIndex: 0,
+        handlerIndex: 0,
+        command: 'irrelevant'
+      })
+    ).toBe(`${hooksPath}:stop:0:0`)
+  })
+
+  it.skipIf(process.platform === 'win32')(
+    'canonicalizes an existing POSIX path with two leading slashes',
+    () => {
+      const hooksPath = `/${join(tmpDir, 'hooks.json')}`
+      writeFileSync(hooksPath, '{"hooks":{}}\n', 'utf-8')
+
+      expect(normalizeCodexHookSourcePath(hooksPath)).toBe(join(tmpDir, 'hooks.json'))
+    }
+  )
 
   it('uses native Windows backslashes in the trust key Codex looks up', () => {
     // Why: Codex 0.140 writes approved Windows hook trust keys as raw native
@@ -308,8 +340,22 @@ describe('computeTrustKey', () => {
   it('preserves literal backslashes in non-Windows-style fallback paths', () => {
     // Why: SSH/POSIX paths can legally contain `\` as a filename character;
     // only Windows-style separators should be normalized.
-    expect(getCodexCanonicalTrustPath('/tmp/with\\literal/hooks.json')).toBe(
+    expect(normalizeCodexHookSourcePath('/tmp/with\\literal/hooks.json')).toBe(
       '/tmp/with\\literal/hooks.json'
+    )
+  })
+
+  it('resolves an explicit home parent while preserving its hooks.json leaf symlink', () => {
+    const logicalHome = join(tmpDir, 'logical-home')
+    const targetHome = join(tmpDir, 'target-home')
+    const targetHooks = join(tmpDir, 'target-hooks.json')
+    mkdirSync(targetHome)
+    writeFileSync(targetHooks, '{"hooks":{}}\n', 'utf-8')
+    symlinkSync(targetHome, logicalHome)
+    symlinkSync(targetHooks, join(targetHome, 'hooks.json'))
+
+    expect(getCodexExplicitHomeHookSourcePath(join(logicalHome, 'hooks.json'))).toBe(
+      join(realpathSync.native(targetHome), 'hooks.json')
     )
   })
 })
@@ -495,6 +541,30 @@ describe('upsertHookTrustEntries', () => {
     ])
     expect(existsSync(`${configPath}.bak`)).toBe(true)
     expect(readFileSync(`${configPath}.bak`, 'utf-8')).toBe('model = "old"\n')
+  })
+
+  it('does not follow an existing .bak symlink', () => {
+    const original = 'model = "old"\n'
+    const backupTarget = join(tmpDir, 'dotfiles-config-backup.toml')
+    writeFileSync(configPath, original, 'utf-8')
+    writeFileSync(backupTarget, 'pristine backup target\n', 'utf-8')
+    symlinkSync(backupTarget, `${configPath}.bak`)
+
+    expect(() =>
+      upsertHookTrustEntries(configPath, [
+        {
+          sourcePath: '/x/hooks.json',
+          eventLabel: 'pre_tool_use',
+          groupIndex: 0,
+          handlerIndex: 0,
+          command: 'echo'
+        }
+      ])
+    ).toThrow('Refusing to overwrite symlinked backup')
+
+    expect(readFileSync(configPath, 'utf-8')).toBe(original)
+    expect(lstatSync(`${configPath}.bak`).isSymbolicLink()).toBe(true)
+    expect(readFileSync(backupTarget, 'utf-8')).toBe('pristine backup target\n')
   })
 
   it('does not write at all when the file already has the right hash', () => {
@@ -1300,6 +1370,60 @@ describe('normalizeCodexProjectPathForRevocationLookup', () => {
 })
 
 describe('removeHookTrustEntries', () => {
+  it.skipIf(process.platform === 'win32')('preserves restrictive config permissions', () => {
+    const entry: CodexTrustEntry = {
+      sourcePath: '/x/hooks.json',
+      eventLabel: 'stop',
+      groupIndex: 0,
+      handlerIndex: 0,
+      command: 'echo trusted'
+    }
+    upsertHookTrustEntries(configPath, [entry])
+    chmodSync(configPath, 0o600)
+
+    removeHookTrustEntries(configPath, [computeTrustKey(entry)])
+
+    expect(statSync(configPath).mode & 0o777).toBe(0o600)
+  })
+
+  it('updates a symlink target without replacing config.toml', () => {
+    const targetPath = join(tmpDir, 'dotfiles-config.toml')
+    const entry: CodexTrustEntry = {
+      sourcePath: '/x/hooks.json',
+      eventLabel: 'stop',
+      groupIndex: 0,
+      handlerIndex: 0,
+      command: 'echo trusted'
+    }
+    upsertHookTrustEntries(targetPath, [entry])
+    symlinkSync(targetPath, configPath)
+
+    removeHookTrustEntries(configPath, [computeTrustKey(entry)])
+
+    expect(lstatSync(configPath).isSymbolicLink()).toBe(true)
+    expect(readHookTrustEntries(targetPath).has(computeTrustKey(entry))).toBe(false)
+  })
+
+  it('does not replace a dangling config.toml symlink', () => {
+    const targetPath = join(tmpDir, 'missing-dotfiles-config.toml')
+    symlinkSync(targetPath, configPath)
+
+    expect(() =>
+      upsertHookTrustEntries(configPath, [
+        {
+          sourcePath: '/x/hooks.json',
+          eventLabel: 'stop',
+          groupIndex: 0,
+          handlerIndex: 0,
+          command: 'echo trusted'
+        }
+      ])
+    ).toThrow()
+
+    expect(lstatSync(configPath).isSymbolicLink()).toBe(true)
+    expect(existsSync(targetPath)).toBe(false)
+  })
+
   it('is a no-op (creates no file) when the config does not exist', () => {
     removeHookTrustEntries(configPath, ['/x/hooks.json:pre_tool_use:0:0'])
     expect(existsSync(configPath)).toBe(false)

@@ -1868,12 +1868,12 @@ app.whenReady().then(async () => {
   )
   // Why: while the real-home lane owns ~/.codex/hooks.json, the legacy
   // system-home sweep inside managed installs would delete the entry the
-  // real-home installer just appended. Flag OFF or hooks off re-arms the sweep,
-  // which is also what removes the entry again on downgrade or opt-out.
+  // real-home installer just appended. Flag OFF, hooks off, or an incapable
+  // trust lane re-arms the sweep so downgrade, opt-out, and rollback converge.
   setSystemCodexHomeHookSweepSuppressed(
     () =>
       codexRuntimeHome !== null &&
-      codexRuntimeHome.isHostSystemDefaultRealHomeSelected() &&
+      codexRuntimeHome.isHostSystemDefaultRealHome() &&
       isAgentStatusHooksEnabled(store?.getSettings())
   )
   codexAccounts = new CodexAccountService(store, rateLimits, codexRuntimeHome)
@@ -2124,6 +2124,14 @@ app.whenReady().then(async () => {
   const emulatorBridge = new EmulatorBridge()
   runtimeService.setEmulatorBridge(emulatorBridge)
   nativeTheme.themeSource = store.getSettings().theme ?? 'system'
+  if (codexRuntimeHome.isHostSystemDefaultRealHomeSelected()) {
+    // Why: establish capability before managed-hook reconciliation so an
+    // incapable host re-arms and completes the legacy real-home sweep now.
+    ensureRealHomeCodexHookState({
+      hooksEnabled: isAgentStatusHooksEnabled(store.getSettings()),
+      userDataPath: app.getPath('userData')
+    })
+  }
   if (shouldInstallManagedHooks(is.dev)) {
     // Why: the persisted off switch must run before any auto-install path so
     // users who removed Orca-managed hooks do not see them silently reappear on launch.
@@ -2132,14 +2140,6 @@ app.whenReady().then(async () => {
     } else {
       removeManagedAgentHooks()
     }
-  }
-  if (codexRuntimeHome.isHostSystemDefaultRealHomeSelected()) {
-    // Why: establish the lane before background rate-limit polling starts, so
-    // an incapable grant host never polls a home its PTYs will not use.
-    ensureRealHomeCodexHookState({
-      hooksEnabled: isAgentStatusHooksEnabled(store.getSettings()),
-      userDataPath: app.getPath('userData')
-    })
   }
   app.on('child-process-gone', (_event, details) => {
     recordProcessGoneCrash('child', details.type, details.reason, details.exitCode ?? null, {

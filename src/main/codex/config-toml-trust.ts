@@ -1,16 +1,19 @@
 /* eslint-disable max-lines -- Why: Codex hook trust parsing, hashing, and byte-preserving TOML edits share one fragile file-format contract; splitting would make the compatibility shim harder to audit. */
 import {
   existsSync,
+  lstatSync,
   mkdirSync,
   readFileSync,
   realpathSync,
+  statSync,
   unlinkSync,
   writeFileSync
 } from 'node:fs'
-import { dirname, join } from 'node:path'
+import { basename, dirname, join, posix as pathPosix, win32 as pathWin32 } from 'node:path'
 import { createHash, randomUUID } from 'node:crypto'
-import { copyFileWithWindowsRetry, renameFileWithWindowsRetry } from '../codex-accounts/fs-utils'
+import { renameFileWithWindowsRetry } from '../codex-accounts/fs-utils'
 import { foldWslUncPathCaseInsensitiveParts } from '../../shared/wsl-paths'
+import { writeRollingFileBackup } from '../rolling-file-backup'
 import {
   createTomlLineScanState,
   isTomlStructuralLine,
@@ -161,20 +164,62 @@ export function computeTrustedHash(entry: CodexTrustEntry): string {
   return `sha256:${createHash('sha256').update(serialized).digest('hex')}`
 }
 
+// Why: key_source is already home-derived by discovery. Realpath here would
+// change default-home keys; explicit-home callers canonicalize the home first.
 export function computeTrustKey(entry: CodexTrustEntry): string {
-  return `${getCodexCanonicalTrustPath(entry.sourcePath)}:${entry.eventLabel}:${entry.groupIndex}:${entry.handlerIndex}`
+  return `${normalizeCodexHookSourcePath(entry.sourcePath)}:${entry.eventLabel}:${entry.groupIndex}:${entry.handlerIndex}`
 }
 
-export function getCodexCanonicalTrustPath(sourcePath: string): string {
-  try {
-    // Why: Codex canonicalizes trust paths before building config keys. On
-    // macOS, /var is a symlink to /private/var; trusting the raw path still
-    // leaves the TUI in review/trust prompts. On Windows, Codex 0.140 writes
-    // hook state keys with native raw backslashes under an explicit parent table.
-    return realpathSync.native(sourcePath)
-  } catch {
-    return normalizeWindowsPathForCodexLookup(sourcePath)
+/**
+ * Returns the hook source path Codex derives after an explicit CODEX_HOME is
+ * canonicalized. The source leaf remains logical because hook discovery only
+ * normalizes the joined path lexically.
+ */
+export function getCodexExplicitHomeHookSourcePath(sourcePath: string): string {
+  if (process.platform !== 'win32' && isUnambiguousWindowsPath(sourcePath)) {
+    return normalizeCodexHookSourcePath(sourcePath)
   }
+  try {
+    // Why: explicit CODEX_HOME resolves the home directory before hooks.json
+    // is appended, so a symlinked leaf must remain logical in the reported key.
+    return normalizeCodexHookSourcePath(
+      join(realpathSync.native(dirname(sourcePath)), basename(sourcePath))
+    )
+  } catch {
+    return normalizeCodexHookSourcePath(sourcePath)
+  }
+}
+
+/** Matches the platform-native lexical path displayed by hook discovery. */
+export function normalizeCodexHookSourcePath(sourcePath: string): string {
+  if (isWindowsPathForTrustSource(sourcePath)) {
+    const withoutDevicePrefix = stripWindowsDevicePrefix(sourcePath)
+    const normalized = pathWin32.isAbsolute(withoutDevicePrefix)
+      ? pathWin32.normalize(withoutDevicePrefix)
+      : pathWin32.resolve(withoutDevicePrefix)
+    return trimNonRootTrailingSeparators(normalized, pathWin32.parse(normalized).root, /[\\/]/)
+  }
+  const normalized = pathPosix.isAbsolute(sourcePath)
+    ? pathPosix.normalize(sourcePath)
+    : pathPosix.resolve(sourcePath)
+  return trimNonRootTrailingSeparators(normalized, pathPosix.parse(normalized).root, /\//)
+}
+
+function trimNonRootTrailingSeparators(path: string, root: string, separators: RegExp): string {
+  let end = path.length
+  while (end > root.length && separators.test(path[end - 1]!)) {
+    end -= 1
+  }
+  return path.slice(0, end)
+}
+
+function stripWindowsDevicePrefix(sourcePath: string): string {
+  const unc = /^(?:\\\\\?|\\\\\.)\\UNC\\/i.exec(sourcePath)
+  if (unc) {
+    return `\\\\${sourcePath.slice(unc[0].length)}`
+  }
+  const drive = /^(?:\\\\\?|\\\\\.)\\(?=[A-Za-z]:[\\/])/i.exec(sourcePath)
+  return drive ? sourcePath.slice(drive[0].length) : sourcePath
 }
 
 function getCodexCanonicalProjectPath(projectPath: string): string {
@@ -187,13 +232,6 @@ function getCodexCanonicalProjectPath(projectPath: string): string {
   }
 }
 
-function normalizeWindowsPathForCodexLookup(sourcePath: string): string {
-  if (!usesWindowsPathSeparators(sourcePath)) {
-    return sourcePath
-  }
-  return sourcePath.replace(/\//g, '\\')
-}
-
 function normalizeWindowsPathSeparators(sourcePath: string): string {
   if (!usesWindowsPathSeparators(sourcePath)) {
     return sourcePath
@@ -202,10 +240,18 @@ function normalizeWindowsPathSeparators(sourcePath: string): string {
 }
 
 function usesWindowsPathSeparators(sourcePath: string): boolean {
+  return isUnambiguousWindowsPath(sourcePath) || sourcePath.startsWith('//')
+}
+
+function isUnambiguousWindowsPath(sourcePath: string): boolean {
+  return /^[A-Za-z]:[\\/]/.test(sourcePath) || sourcePath.startsWith('\\\\')
+}
+
+function isWindowsPathForTrustSource(sourcePath: string): boolean {
   return (
-    /^[A-Za-z]:[\\/]/.test(sourcePath) ||
-    sourcePath.startsWith('\\\\') ||
-    sourcePath.startsWith('//')
+    isUnambiguousWindowsPath(sourcePath) ||
+    (process.platform === 'win32' &&
+      (sourcePath.startsWith('//') || !pathPosix.isAbsolute(sourcePath)))
   )
 }
 
@@ -330,7 +376,7 @@ export function upsertHookTrustEntriesInContent(
   const existing =
     existingContent.charCodeAt(0) === 0xfeff ? existingContent.slice(1) : existingContent
   let updated = entries.some((entry) =>
-    usesWindowsPathSeparators(getCodexCanonicalTrustPath(entry.sourcePath))
+    usesWindowsPathSeparators(normalizeCodexHookSourcePath(entry.sourcePath))
   )
     ? ensureHooksStateParentTable(existing)
     : existing
@@ -540,7 +586,13 @@ export function normalizeHookTrustKeyForLookup(key: string): string {
   const parsed = parseTrustKey(key)
   // Why: fold by path shape, not host platform — hook sources on WSL and SSH
   // Windows remotes need the same folding when Orca runs on macOS or Linux.
-  const foldedPath = normalizeCodexProjectPathForLookup(parsed ? parsed.sourcePath : key)
+  const foldedPath = normalizeCodexProjectPathForLookup(
+    parsed
+      ? parsed.sourcePath.startsWith('//')
+        ? parsed.sourcePath
+        : normalizeCodexHookSourcePath(parsed.sourcePath)
+      : key
+  )
   return parsed
     ? `${foldedPath}:${parsed.eventLabel}:${parsed.groupIndex}:${parsed.handlerIndex}`
     : foldedPath
@@ -780,16 +832,33 @@ function isCompleteTableHeader(line: string): boolean {
 // tmp and rename. Random-suffix tmp name avoids cross-process races on
 // rapid reinstalls.
 export function writeConfigAtomically(configPath: string, contents: string): void {
-  const dir = dirname(configPath)
+  let writePath = configPath
+  let isSymlink = false
+  try {
+    isSymlink = lstatSync(configPath).isSymbolicLink()
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+      throw error
+    }
+  }
+  if (isSymlink) {
+    // Why: atomic rename at the lexical path replaces the user's dotfiles
+    // link. A dangling link must fail closed rather than be replaced.
+    writePath = realpathSync.native(configPath)
+  }
+  const dir = dirname(writePath)
   mkdirSync(dir, { recursive: true })
   const tmpPath = join(dir, `.${Date.now()}-${randomUUID()}.tmp`)
+  const existingMode = existsSync(writePath) ? statSync(writePath).mode : undefined
   let renamed = false
   try {
-    writeFileSync(tmpPath, contents, 'utf-8')
-    if (existsSync(configPath)) {
-      copyFileWithWindowsRetry(configPath, `${configPath}.bak`)
+    // Why: real-home trust cleanup must not widen a dotfiles-managed config's
+    // restrictive permissions when the atomic rename installs new bytes.
+    writeFileSync(tmpPath, contents, { encoding: 'utf-8', mode: existingMode })
+    if (existsSync(writePath)) {
+      writeRollingFileBackup(writePath, `${writePath}.bak`)
     }
-    renameFileWithWindowsRetry(tmpPath, configPath)
+    renameFileWithWindowsRetry(tmpPath, writePath)
     renamed = true
   } finally {
     if (!renamed && existsSync(tmpPath)) {
