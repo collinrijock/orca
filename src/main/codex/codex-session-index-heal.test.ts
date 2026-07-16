@@ -11,6 +11,7 @@ import {
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import type { CodexAppServerInvocation } from './codex-app-server-session'
+import { createCodexSessionBackfillAuditWriter } from './codex-session-backfill-audit'
 import { CODEX_SESSION_INDEX_HEAL_VERSION } from './codex-session-index-heal-state'
 import {
   runCodexSessionIndexHeal,
@@ -125,14 +126,15 @@ function createHealRig(options: {
     healLedgerPath: join(stateDir, 'index-heal-ledger.jsonl'),
     healMarkerPath: join(stateDir, 'index-heal-complete.json')
   }
-  for (const audited of options.auditedThreads ?? []) {
+  for (const [index, audited] of (options.auditedThreads ?? []).entries()) {
     appendFileSync(
       paths.auditLogPath,
       `${JSON.stringify({
         at: '2026-07-01T00:00:00.000Z',
         action: audited.action ?? 'hardlink',
         source: '/managed/sessions/x.jsonl',
-        target: rolloutTarget(systemSessionsRoot, audited.stamp, audited.id)
+        target: rolloutTarget(systemSessionsRoot, audited.stamp, audited.id),
+        recordId: `audit-record-${index}`
       })}\n`
     )
   }
@@ -332,6 +334,45 @@ describe('runCodexSessionIndexHeal', () => {
     expect(retried).toMatchObject({ outcome: 'completed', pendingThreads: 1, healedThreads: 1 })
     expect(rig.readLog().threadIds.at(-1)).toBe(threadId('1'))
     expect(readLedgerOutcomes(rig.paths)[threadId('1')]).toBe('healed')
+  })
+
+  it('retries a missing thread when a later backfill republishes its rollout', async () => {
+    const id = threadId('1')
+    const rig = createHealRig({
+      auditedThreads: [{ stamp: '2026-07-01T10-00-00', id }],
+      missingThreadIds: [id]
+    })
+
+    const missing = await runCodexSessionIndexHeal(rig.paths, {
+      buildInvocation: rig.buildInvocation,
+      interBatchDelayMs: 0
+    })
+    expect(missing).toMatchObject({ outcome: 'completed', missingThreads: 1 })
+
+    await createCodexSessionBackfillAuditWriter(rig.paths.auditLogPath)({
+      action: 'existing',
+      target: rolloutTarget(rig.paths.systemSessionsRoot, '2026-07-01T10-00-00', id)
+    })
+    const healed = await runCodexSessionIndexHeal(rig.paths, {
+      buildInvocation: (home, timeoutMs) => {
+        const invocation = rig.buildInvocation(home, timeoutMs)
+        return {
+          ...invocation,
+          env: {
+            STUB_CONFIG: JSON.stringify({
+              scenario: 'ok',
+              readLogFile: rig.readLogFile,
+              missingThreadIds: [],
+              failingThreadIds: []
+            })
+          }
+        }
+      },
+      interBatchDelayMs: 0
+    })
+
+    expect(healed).toMatchObject({ outcome: 'completed', pendingThreads: 1, healedThreads: 1 })
+    expect(rig.readLog().threadIds).toEqual([id, id])
   })
 
   it('keeps a processed outcome readable after a torn heal-ledger tail', async () => {

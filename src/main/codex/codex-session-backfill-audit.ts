@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import { appendFile, mkdir } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import type { CodexSessionBackfillSummary } from './codex-session-backfill-types'
@@ -21,7 +22,13 @@ export function createCodexSessionBackfillAuditWriter(
   return async (record): Promise<boolean> => {
     // Why: a crash can leave a partial final JSON object. A leading newline
     // quarantines that torn tail so this recovery record remains parseable.
-    const serializedRecord = `\n${JSON.stringify({ at: new Date().toISOString(), ...record })}\n`
+    const serializedRecord = `\n${JSON.stringify({
+      at: new Date().toISOString(),
+      ...record,
+      // Why: a later managed-lane pass can recreate the same thread id, so a
+      // terminal heal outcome must identify this particular publication event.
+      recordId: randomUUID()
+    })}\n`
     try {
       await appendRecord(serializedRecord)
       return true

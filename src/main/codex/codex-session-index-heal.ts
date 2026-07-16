@@ -214,7 +214,7 @@ async function healOneThread(
   try {
     await rpc.request('thread/read', { threadId: thread.threadId })
     summary.healedThreads += 1
-    recordHealOutcome(paths, thread.threadId, 'healed')
+    recordHealOutcome(paths, thread, 'healed')
   } catch (error) {
     if (isCodexAppServerUnsupportedError(error)) {
       throw error
@@ -228,7 +228,7 @@ async function healOneThread(
     if (/no rollout found/i.test(message)) {
       // The backfilled rollout was deleted after the audit was written.
       summary.missingThreads += 1
-      recordHealOutcome(paths, thread.threadId, 'missing')
+      recordHealOutcome(paths, thread, 'missing')
       return
     }
     if (/SQLITE_(?:BUSY|LOCKED)|database (?:is )?(?:busy|locked)/i.test(message)) {
@@ -237,17 +237,17 @@ async function healOneThread(
       throw error
     }
     summary.failedThreads += 1
-    recordHealOutcome(paths, thread.threadId, 'failed')
+    recordHealOutcome(paths, thread, 'failed')
   }
 }
 
 function recordHealOutcome(
   paths: CodexSessionIndexHealPaths,
-  threadId: string,
+  thread: PendingHealThread,
   outcome: HealLedgerOutcome
 ): void {
-  if (!appendHealLedgerRecord(paths, threadId, outcome)) {
-    throw new Error(`Failed to persist Codex session index-heal outcome for ${threadId}`)
+  if (!appendHealLedgerRecord(paths, thread.threadId, outcome, thread.auditRecordId)) {
+    throw new Error(`Failed to persist Codex session index-heal outcome for ${thread.threadId}`)
   }
 }
 

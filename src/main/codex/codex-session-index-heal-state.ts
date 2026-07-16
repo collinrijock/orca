@@ -36,6 +36,8 @@ export type PendingHealThread = {
   threadId: string
   /** Timestamp segment of the rollout file name; lexicographic recency order. */
   rolloutStamp: string
+  /** Publication event identity; null only for audit records written before event ids. */
+  auditRecordId: string | null
 }
 
 export type HealMarkerSummary = {
@@ -49,7 +51,7 @@ export type HealMarkerSummary = {
  * copied rollout whose thread id has not been processed yet, most recent first.
  */
 export function collectPendingHealThreads(paths: CodexSessionIndexHealPaths): PendingHealThread[] {
-  const processedThreadIds = readProcessedHealThreadIds(paths)
+  const processed = readProcessedHealThreads(paths)
   const pendingByThreadId = new Map<string, PendingHealThread>()
   for (const line of readJsonlLines(paths.auditLogPath, true)) {
     if (line.action !== 'hardlink' && line.action !== 'copy' && line.action !== 'existing') {
@@ -68,10 +70,19 @@ export function collectPendingHealThreads(paths: CodexSessionIndexHealPaths): Pe
       continue
     }
     const threadId = match[2].toLowerCase()
-    if (processedThreadIds.has(threadId)) {
+    const auditRecordId = typeof line.recordId === 'string' ? line.recordId : null
+    if (
+      processed.healedThreadIds.has(threadId) ||
+      (auditRecordId
+        ? processed.missingAuditRecords.has(`${threadId}\0${auditRecordId}`)
+        : processed.legacyMissingThreadIds.has(threadId))
+    ) {
+      // Why: only the newest publication event for a thread matters. A later
+      // processed event must displace an older pending event from this scan.
+      pendingByThreadId.delete(threadId)
       continue
     }
-    pendingByThreadId.set(threadId, { threadId, rolloutStamp: match[1] })
+    pendingByThreadId.set(threadId, { threadId, rolloutStamp: match[1], auditRecordId })
   }
   return [...pendingByThreadId.values()].sort((left, right) =>
     left.rolloutStamp < right.rolloutStamp ? 1 : left.rolloutStamp > right.rolloutStamp ? -1 : 0
@@ -82,8 +93,14 @@ function lastPathSegment(filePath: string): string {
   return filePath.split(/[\\/]/).at(-1) ?? ''
 }
 
-function readProcessedHealThreadIds(paths: CodexSessionIndexHealPaths): Set<string> {
-  const processed = new Set<string>()
+function readProcessedHealThreads(paths: CodexSessionIndexHealPaths): {
+  healedThreadIds: Set<string>
+  missingAuditRecords: Set<string>
+  legacyMissingThreadIds: Set<string>
+} {
+  const healedThreadIds = new Set<string>()
+  const missingAuditRecords = new Set<string>()
+  const legacyMissingThreadIds = new Set<string>()
   const expectedRoot = normalizeRuntimePathForComparison(paths.systemSessionsRoot)
   for (const line of readJsonlLines(paths.healLedgerPath)) {
     if (
@@ -93,16 +110,24 @@ function readProcessedHealThreadIds(paths: CodexSessionIndexHealPaths): Set<stri
       (line.outcome === 'healed' || line.outcome === 'missing') &&
       normalizeRuntimePathForComparison(line.systemSessionsRoot) === expectedRoot
     ) {
-      processed.add(line.threadId.toLowerCase())
+      const threadId = line.threadId.toLowerCase()
+      if (line.outcome === 'healed') {
+        healedThreadIds.add(threadId)
+      } else if (typeof line.auditRecordId === 'string') {
+        missingAuditRecords.add(`${threadId}\0${line.auditRecordId}`)
+      } else {
+        legacyMissingThreadIds.add(threadId)
+      }
     }
   }
-  return processed
+  return { healedThreadIds, missingAuditRecords, legacyMissingThreadIds }
 }
 
 export function appendHealLedgerRecord(
   paths: CodexSessionIndexHealPaths,
   threadId: string,
-  outcome: HealLedgerOutcome
+  outcome: HealLedgerOutcome,
+  auditRecordId?: string | null
 ): boolean {
   try {
     mkdirSync(dirname(paths.healLedgerPath), { recursive: true })
@@ -115,6 +140,7 @@ export function appendHealLedgerRecord(
         systemSessionsRoot: paths.systemSessionsRoot,
         threadId,
         outcome,
+        ...(auditRecordId ? { auditRecordId } : {}),
         at: new Date().toISOString()
       })}\n`
     )
