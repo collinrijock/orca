@@ -8,8 +8,8 @@ work; keep exact commands, runner identities, hashes, metrics, and residual gaps
 
 Date created: 2026-07-14<br>
 Last updated: 2026-07-15<br>
-Current phase: Milestone 5 / Work Package 4 desktop resolver/cache — **In progress — 2026-07-15, Codex implementation owner: audit the disconnected Windows build/OpenSSH/PowerShell/.NET compatibility-evidence boundary**. Keep every capability disconnected from host-evidence composition and every production/default SSH path. Real Apple/SignPath rehearsals remain an explicit late gate and are not on this package's critical path.<br>
-Session checkpoint: **LINUX LIBSTDCXX CI CLOSED / WINDOWS COMPATIBILITY AUDIT ACTIVE — 2026-07-15, Codex implementation owner** — `E-M5-LINUX-LIBSTDCXX-DETECTION-CI-001` closes the detector and client-offline correction on all six primary native clients, both Linux supplements, Windows x64 baseline, PR Checks, Golden E2E, and computer-use. Windows arm64 completes exact bytes/tree/Node/PTY/watcher/resource proof and retains only the declared hosted build-26200 rejection against required 26100. The next package may audit only one disconnected Windows compatibility probe and purpose tests. No host composer, product caller, setting, transfer/install, fallback wiring, tuple enablement, publication, or default behavior is connected. Merging to `main` remains prohibited, SignPath is deferred, and legacy remains the production default.<br>
+Current phase: Milestone 5 / Work Package 4 desktop resolver/cache — **In progress — 2026-07-15, Codex implementation owner: prove the locally-green disconnected Windows build/OpenSSH/PowerShell/.NET compatibility detector on exact-head native runners**. Keep every capability disconnected from host-evidence composition and every production/default SSH path. Real Apple/SignPath rehearsals remain an explicit late gate and are not on this package's critical path.<br>
+Session checkpoint: **WINDOWS COMPATIBILITY LOCAL GREEN / EXACT-HEAD CI NEXT — 2026-07-15, Codex implementation owner** — `E-M5-WINDOWS-COMPATIBILITY-DETECTION-LOCAL-001` proves the bounded strict detector, purpose cases, workflow-family oracle, broader relay/release regressions, and static gates locally. The native Windows execution case remains a declared macOS skip and must pass on Windows x64 and arm64 runners before this package closes. No host composer, product caller, setting, transfer/install, fallback wiring, tuple enablement, publication, or default behavior is connected. Merging to `main` remains prohibited, SignPath is deferred, and legacy remains the production default.<br>
 Primary design: [SSH relay GitHub Release plan](./2026-07-14-ssh-relay-github-release-plan.html)<br>
 Motivating issues: [#8450](https://github.com/stablyai/orca/issues/8450), [#1693](https://github.com/stablyai/orca/issues/1693)
 
@@ -147,11 +147,11 @@ same change as the work it records.
   local gates, and all-six native Node 24 proof are green under
   E-M5-ARTIFACT-CACHE-ROOT-LOCAL-RED-001, E-M5-ARTIFACT-CACHE-ROOT-LOCAL-001, and
   E-M5-ARTIFACT-CACHE-ROOT-CI-001. No Electron or product caller exists.
-- Active package: **In progress — 2026-07-15, Codex implementation owner** — audit the next
-  smallest remaining resolver/cache boundary after exact-head acceptance of disconnected warm/cold
-  acquisition. The eventual startup caller, not an SSH module, must supply
-  `getCanonicalUserDataPath()` captured before `app.setName()`; keep proxy integration, SSH, mode,
-  tuple, publication, fallback, and defaults separately gated.
+- Active package: **In progress — 2026-07-15, Codex implementation owner** — exact-head native proof
+  for the disconnected Windows build/OpenSSH/PowerShell/.NET compatibility detector under
+  E-M5-WINDOWS-COMPATIBILITY-DETECTION-LOCAL-001. Native Windows PowerShell execution must pass on
+  x64 and arm64; keep host composition, live SSH, transfer/install, settings, fallback wiring,
+  tuple enablement, publication, defaults, and SignPath separately gated.
 - Completed Work Package 2 gate: target-native Windows source-signature reports from exact-head
   artifact jobs 87267322867 and 87267322870 were independently downloaded and matched to their
   identities and signing-stage reports under E-M3-WINDOWS-SOURCE-SIGNATURE-CI-001. PR Checks
@@ -15713,6 +15713,114 @@ config/vitest.config.ts --maxWorkers=1` plus the new purpose suite, libc, kernel
   Rocky/Ubuntu multilib, Windows remote, transfer, install, fallback, or bundled launch evidence.
   The detector remains disconnected, every tuple remains disabled, and legacy remains the sole
   production/default path.
+
+### E-M5-WINDOWS-COMPATIBILITY-DETECTION-AUDIT-001 — disconnected bootstrap compatibility evidence
+
+- Date/owner: 2026-07-15, Codex implementation owner.
+- Audit: the selector already requires four Windows values fixed by Milestone 1 — OS build,
+  OpenSSH for Windows version, Windows PowerShell version, and .NET Framework release — but no
+  desktop SSH module acquires them. Existing remote platform detection establishes only OS and
+  architecture and must remain unchanged by this package.
+- Finding: add one purpose-named `ssh-relay-windows-compatibility-detection` module that consumes an
+  explicit SSH connection and optional cancellation signal. One 15-second encoded, noninteractive
+  Windows PowerShell command reads `CurrentBuildNumber` and .NET Framework v4 `Release` from the
+  64-bit local-machine registry, reads `$PSVersionTable.PSVersion`, and invokes the exact discovered
+  `sshd.exe -V` binary only to extract an `X.YpZ` OpenSSH version. It emits only one fixed marked
+  segment with four key/value lines; raw registry values and native command output are never emitted.
+- Parsing/safety contract: accept only one complete segment containing exactly one of each field.
+  OS build and .NET release must be positive safe integers, PowerShell must be a strict two-to-four-
+  component numeric version, and OpenSSH must be exact `X.YpZ`; each line and segment is bounded.
+  Missing `sshd`, registry keys, fields, or PowerShell data; malformed/duplicate/unknown fields;
+  incomplete/duplicate/nested markers; oversized values; and ordinary command failure return
+  unknown. `AbortError` propagates. Use the existing UTF-16LE `powerShellCommand` boundary with
+  `wrapCommand: false`; do not interpolate remote values or paths into command source.
+- Required RED/green proof: valid Windows 10/Server 2022 x64 and Windows 11 arm64 evidence;
+  unordered fields; strict noisy/empty/missing/malformed/duplicate/unknown/overflow rejection;
+  cancellation and exact signal-qualified 15-second exec; encoded noninteractive command
+  construction; absence of Node, npm, Python, Perl, tar, checksum tools, or GitHub/network access;
+  native Windows PowerShell execution; and both native workflow families requiring the suite.
+- Deliberately absent: process-translation policy, full host-evidence composition, selector changes,
+  live Windows SSH/OpenSSH-service evidence, semantic file-transfer capability probing, Electron/
+  startup, cache acquisition, transfer/install, settings, fallback, tuple enablement, publication,
+  and defaults. SignPath is unrelated to this package and remains deferred; legacy remains the sole
+  production path.
+
+### E-M5-WINDOWS-COMPATIBILITY-DETECTION-RED-001 — purpose and workflow gates fail before implementation
+
+- Date/owner: 2026-07-15, Codex implementation owner; local macOS arm64 worktree at exact head
+  `6209151dd9e817ee765eeee2f7020e879571707b` plus the uncommitted audit/test gate.
+- Purpose RED command:
+  `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts src/main/ssh/ssh-relay-windows-compatibility-detection.test.ts`.
+  Result: expected exit 1; Vitest 1.13 seconds, 3.93 seconds wall, 131,874,816-byte maximum RSS.
+  Collection stops at the awaited purpose import with only `Cannot find module
+'/src/main/ssh/ssh-relay-windows-compatibility-detection'`; zero tests collect because no
+  implementation module exists.
+- Workflow-oracle RED command:
+  `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts config/scripts/ssh-relay-runtime-workflow.test.mjs`.
+  Result: expected exit 1; 6 pass / 1 fail, Vitest 1.41 seconds, 4.14 seconds wall,
+  131,956,736-byte maximum RSS. The new purpose suite has one workflow occurrence, so the portable
+  native-family oracle receives split length 2 and rejects it against required length 3. This proves
+  the Windows workflow family is not yet wired.
+- Interpretation: both failures are narrow and expected. No implementation module, product import,
+  production caller, selector/default change, or second workflow occurrence exists at this RED gate;
+  the protected Node/npm resolver diff remains empty.
+
+### E-M5-WINDOWS-COMPATIBILITY-DETECTION-LOCAL-001 — strict bounded Windows compatibility evidence
+
+- Date/owner/environment: 2026-07-15, Codex implementation owner; local macOS arm64, Node 26.0.0,
+  pnpm 10.24.0, atop head `6209151dd9e817ee765eeee2f7020e879571707b` plus this uncommitted
+  package. The expected Node-24 engine warning means exact Node 24 remains a CI gate.
+- Implementation: `ssh-relay-windows-compatibility-detection.ts` executes one signal-qualified,
+  15-second, UTF-16LE encoded Windows PowerShell command with `wrapCommand: false`. It reads the
+  64-bit HKLM Windows build and .NET Framework v4 release keys, reads the current Windows
+  PowerShell version, discovers the exact `sshd.exe` application, and bounds its `-V` capture to
+  eight records/4,096 characters before accepting one normalized OpenSSH-for-Windows version. It
+  emits one fixed six-line marked segment and never emits raw registry or native-command output.
+  The streaming parser accepts exactly four unique fields, positive safe build/release integers,
+  a two-to-four-component numeric PowerShell version, exact `X.YpZ` OpenSSH, and at most 128
+  characters per field line. Missing, empty, malformed, duplicate, unknown, nested, incomplete,
+  oversized, ambiguous, unsafe-integer, or ordinary command-failure evidence returns undefined;
+  `AbortError` propagates.
+- Purpose command: `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts
+--maxWorkers=1 src/main/ssh/ssh-relay-windows-compatibility-detection.test.ts` — PASS, one file,
+  26 passed / one declared macOS skip in 572 ms Vitest, 16.45 seconds wall under concurrent local
+  load, 132,448,256-byte maximum RSS, zero swaps. It covers Windows 10 x64, Server 2022 x64,
+  Windows 11 arm64, unordered evidence, every strict rejection class above, ordinary failure,
+  cancellation, exact exec options, encoding, registry view, bounded exact-binary version capture,
+  and forbidden runtime/network dependency absence. The skipped case executes the exact encoded
+  probe under native Windows PowerShell, requires exit 0, and requires exactly six bounded output
+  lines; only native Windows CI may satisfy it.
+- Workflow-oracle command: `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts
+--maxWorkers=1 config/scripts/ssh-relay-runtime-workflow.test.mjs` — PASS, one file / seven tests
+  in 1.04 seconds Vitest, 3.24 seconds wall, 132,759,552-byte maximum RSS, zero swaps. The suite now
+  occurs exactly once in both POSIX and PowerShell native contract commands.
+- Focused command: `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts
+--maxWorkers=1` plus the Windows purpose suite, libc, kernel, Darwin version, Darwin translation,
+  libstdc++, selector, platform detection, and workflow-oracle suites — PASS, nine files, 168 passed
+  / one declared macOS skip in 5.38 seconds Vitest, 7.61 seconds wall, 138,067,968-byte maximum RSS,
+  zero swaps.
+- Broader relay command: `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts
+--maxWorkers=1 --silent=true src/main/ssh/ssh-relay-*.test.ts` — PASS, 38 files passed / three
+  declared skipped files, 487 tests passed / four declared platform skips in 42.76 seconds Vitest,
+  46.28 seconds wall, 251,150,336-byte maximum RSS, zero swaps. The unchanged stale-lock diagnostic
+  and local Node 26 `module.register()` deprecation warning remain expected.
+- Release-script command: `/usr/bin/time -l pnpm exec vitest run --config
+config/vitest.config.ts --maxWorkers=1 --silent=true
+config/scripts/ssh-relay-runtime-*.test.mjs` — PASS, 50 files / 280 tests in 30.55 seconds Vitest,
+  33.07 seconds wall, 190,562,304-byte maximum RSS, zero swaps.
+- Static gates: `pnpm typecheck`; `pnpm lint`; explicit `pnpm run check:max-lines-ratchet`;
+  targeted `pnpm exec oxlint`; targeted `pnpm exec oxfmt --check`; `git diff --check`; and the
+  protected-resolver empty-diff assertion pass. Full lint includes switch exhaustiveness, 41
+  reliability gates, 355 grandfathered max-lines entries with no new bypass, bundled-skill checks,
+  9,837 localization references and locale parity, and zero localization coverage candidates. Its
+  26 warnings are in untouched files. Both new purpose-named files stay under 300 lines.
+- Boundary/residual gaps: the module has no import outside its purpose test and no production caller.
+  Local macOS does not execute native Windows PowerShell, prove the hosted runner has complete
+  `sshd.exe` evidence, or establish live Windows SSH/OpenSSH-service behavior. Exact-head all-six
+  Node 24 client proof is mandatory next. Full host composition, process translation policy,
+  semantic transfer capability, Electron/startup, cache acquisition, transfer/install, settings,
+  fallback wiring, tuple enablement, release publication, defaults, and SignPath remain absent;
+  legacy remains the sole production/default path.
 
 ## Accepted Gaps
 

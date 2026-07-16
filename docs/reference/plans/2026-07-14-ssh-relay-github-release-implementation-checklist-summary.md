@@ -9,9 +9,9 @@ keeps commands, hashes, runner identities, timings, and failure details.
 A checked box means the work has evidence in the detailed ledger. Design approval alone does not
 complete a box.
 
-Active checkpoint: **Milestone 5 / Work Package 4 desktop resolver/cache — audit the disconnected
-Windows build/OpenSSH/PowerShell/.NET compatibility-evidence boundary, 2026-07-15, Codex
-implementation owner.**
+Active checkpoint: **Milestone 5 / Work Package 4 desktop resolver/cache — prove the locally-green,
+disconnected Windows build/OpenSSH/PowerShell/.NET compatibility detector on exact-head native
+runners, 2026-07-15, Codex implementation owner.**
 `E-M5-ARTIFACT-CACHE-RESOLUTION-CI-001` closes warm-cache commit
 `22031fa68` on all six native clients, both Linux supplements, Windows x64 baseline, PR Checks,
 Golden E2E, and computer-use; Windows arm64 remains the expected build-26200 rejection against 26100. `E-M5-ARTIFACT-CACHE-RESOLUTION-LOCAL-001` passes 9/9 purpose tests,
@@ -239,6 +239,23 @@ declared skips. Windows arm64 completes 60-entry/42-file/85,213,511-byte tree, N
 resource proof and retains only the declared hosted build-26200 rejection against required 26100.
 Full-size extraction/cache metrics stay inside budget. This is not live SSH/remote evidence; the
 detector stays disconnected, every tuple stays disabled, and legacy remains the sole default.
+`E-M5-WINDOWS-COMPATIBILITY-DETECTION-AUDIT-001` fixes the next smallest package: one disconnected,
+15-second cancellable encoded Windows PowerShell probe for the already-reviewed OS build, OpenSSH
+for Windows, Windows PowerShell, and .NET Framework selector fields. Only one complete, bounded,
+strict four-field segment counts; missing tools/registry data, malformed/duplicate/unknown/overflow
+evidence, or ordinary command failure returns unknown, while cancellation propagates. Native
+Windows syntax/execution and both workflow families are required. Host composition, live SSH,
+transfer capability, settings, fallback, tuple enablement, publication, and defaults stay absent.
+`E-M5-WINDOWS-COMPATIBILITY-DETECTION-RED-001` proves both gates fail before implementation at head
+`6209151dd`: the purpose suite cannot import the absent detector (zero collected tests), while the
+workflow oracle passes 6/7 and rejects the suite's single native-family occurrence against the two
+required occurrences. No production caller or protected-resolver diff exists at the RED gate.
+`E-M5-WINDOWS-COMPATIBILITY-DETECTION-LOCAL-001` is locally green: 26 purpose cases pass with the
+native-Windows execution case declared skipped on macOS; 168/168 focused cases, 487/487 broader
+relay cases, and 280/280 release-script cases pass. Typecheck, full lint, reliability, max-lines,
+localization, format, diff, and protected-resolver gates pass. The module remains disconnected;
+native Windows execution and all-six Node 24 proof are the next gate, while live SSH, composition,
+settings, fallback wiring, tuple enablement, publication, defaults, and SignPath remain absent.
 `E-M5-ARTIFACT-CACHE-ROOT-CI-001` closes the pure cache-root contract at exact head `aefcaa9a9`:
 all six primary native Node 24 jobs, both Linux supplements, Windows x64 baseline, PR Checks, Golden
 E2E, and computer-use pass; Windows arm64 build 26200 remains correctly gated against 26100. The
