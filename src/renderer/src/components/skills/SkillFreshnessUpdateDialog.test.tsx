@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 
-import { act, useState, type ReactNode } from 'react'
+import { act, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
@@ -24,6 +24,7 @@ const mocks = vi.hoisted(() => ({
     onInteracted?: (method: 'keyboard' | 'pointer', event?: { key?: string }) => void
     onTerminalExit?: () => void
   }[],
+  terminalCommits: [] as [command: string, inert: boolean][],
   notifyChanged: vi.fn()
 }))
 
@@ -42,8 +43,20 @@ vi.mock('@/hooks/useInstalledAgentSkills', () => ({
 
 vi.mock('@/components/onboarding/OnboardingInlineCommandTerminal', () => ({
   OnboardingInlineCommandTerminal: (props: (typeof mocks.terminalProps)[number]) => {
+    const terminalRef = useRef<HTMLDivElement>(null)
     mocks.terminalProps.push(props)
-    return <div data-testid="update-terminal">{props.command}</div>
+    useLayoutEffect(() => {
+      mocks.terminalCommits.push([
+        props.command,
+        terminalRef.current?.parentElement?.inert ?? false
+      ])
+    })
+    return (
+      <div ref={terminalRef} data-testid="update-terminal">
+        {props.command}
+        <textarea data-testid="update-terminal-input" />
+      </div>
+    )
   }
 }))
 
@@ -155,6 +168,7 @@ describe('SkillFreshnessUpdateDialog', () => {
     mocks.refresh.mockReset()
     mocks.notifyChanged.mockReset()
     mocks.terminalProps.length = 0
+    mocks.terminalCommits.length = 0
   })
 
   afterEach(async () => {
@@ -200,6 +214,7 @@ describe('SkillFreshnessUpdateDialog', () => {
   it('shows the up-to-date state once every installation is current', async () => {
     await renderDialog()
     await openViaRequest()
+    mocks.terminalCommits.length = 0
 
     mocks.inventory = {
       schemaVersion: 1,
@@ -211,6 +226,7 @@ describe('SkillFreshnessUpdateDialog', () => {
     }
     await rerender()
 
+    expect(mocks.terminalCommits).toContainEqual(['npx skills update orca-cli --global', true])
     expect(container?.textContent).toContain('All installed Orca skills are up to date.')
     expect(container?.querySelector('[data-testid="update-terminal"]')).toBeNull()
   })
@@ -267,7 +283,11 @@ describe('SkillFreshnessUpdateDialog', () => {
     await renderDialog()
     await openViaRequest()
     const firstTerminal = container?.querySelector('[data-testid="update-terminal"]')
+    const terminalInput = container?.querySelector<HTMLTextAreaElement>(
+      '[data-testid="update-terminal-input"]'
+    )
     const terminalWrapper = container?.querySelector<HTMLElement>('[data-skill-update-terminal]')
+    terminalInput?.focus()
     expect(firstTerminal).not.toBeNull()
     expect(terminalWrapper?.hasAttribute('inert')).toBe(false)
 
@@ -278,6 +298,7 @@ describe('SkillFreshnessUpdateDialog', () => {
     expect(container?.textContent).toContain('Checking installed Orca skills')
     expect(container?.querySelector('[data-testid="update-terminal"]')).toBe(firstTerminal)
     expect(terminalWrapper?.hasAttribute('inert')).toBe(true)
+    terminalInput?.blur()
 
     mocks.inventory = { ...eligibleInventory(), scannedAt: 2 }
     mocks.loading = false
@@ -285,6 +306,20 @@ describe('SkillFreshnessUpdateDialog', () => {
 
     expect(container?.querySelector('[data-testid="update-terminal"]')).toBe(firstTerminal)
     expect(terminalWrapper?.hasAttribute('inert')).toBe(false)
+    expect(document.activeElement).toBe(terminalInput)
+
+    mocks.inventory = null
+    mocks.loading = true
+    await rerender()
+    const closeButton = Array.from(container?.querySelectorAll('button') ?? []).find(
+      (candidate) => candidate.textContent?.trim() === 'Close'
+    )
+    closeButton?.focus()
+    mocks.inventory = { ...eligibleInventory(), scannedAt: 3 }
+    mocks.loading = false
+    await rerender()
+
+    expect(document.activeElement).toBe(closeButton)
   })
 
   it('shows a failed scan as an error instead of indefinite progress', async () => {
