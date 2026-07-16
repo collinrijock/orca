@@ -21,6 +21,10 @@ import {
   scanSshRelayRuntimeSourceTree,
   SSH_RELAY_RUNTIME_SOURCE_SCAN_LIMITS
 } from './ssh-relay-runtime-source-scan'
+import {
+  streamSshRelayRuntimeSourceTree,
+  SSH_RELAY_RUNTIME_SOURCE_STREAM_LIMITS
+} from './ssh-relay-runtime-source-stream'
 import { createSshRelayRuntimeSourceTree } from './ssh-relay-runtime-source-tree'
 
 type MeasurementIdentity = {
@@ -126,7 +130,7 @@ describe.skipIf(!hasMeasurementInput)('SSH relay full-size immutable artifact ca
           cacheRoot: cacheRoot as string,
           entry: warmEntry
         })
-        const { scan, retained } = await (async () => {
+        const { scan, stream, retained } = await (async () => {
           try {
             const sourceTree = createSshRelayRuntimeSourceTree({
               kind: 'ready',
@@ -138,10 +142,22 @@ describe.skipIf(!hasMeasurementInput)('SSH relay full-size immutable artifact ca
             const scan = await measure(() =>
               scanSshRelayRuntimeSourceTree(sourceTree, new AbortController().signal)
             )
+            const stream = await measure(() =>
+              streamSshRelayRuntimeSourceTree({
+                tree: scan.result,
+                signal: new AbortController().signal,
+                maximumConcurrency: 4,
+                openDestination: async () => ({
+                  write: async () => {},
+                  close: async () => {},
+                  abort: async () => {}
+                })
+              })
+            )
             const retained = await measure(() =>
               evictSshRelayArtifactCache({ cacheRoot: cacheRoot as string, maximumBytes: 0 })
             )
-            return { scan, retained }
+            return { scan, stream, retained }
           } finally {
             await lease.release()
           }
@@ -161,6 +177,8 @@ describe.skipIf(!hasMeasurementInput)('SSH relay full-size immutable artifact ca
             warmIncrementalRssBytes: warm.incrementalRssBytes,
             scanElapsedMs: scan.elapsedMs,
             scanIncrementalRssBytes: scan.incrementalRssBytes,
+            streamElapsedMs: stream.elapsedMs,
+            streamIncrementalRssBytes: stream.incrementalRssBytes,
             retainedElapsedMs: retained.elapsedMs,
             retainedIncrementalRssBytes: retained.incrementalRssBytes,
             evictionElapsedMs: eviction.elapsedMs,
@@ -181,6 +199,14 @@ describe.skipIf(!hasMeasurementInput)('SSH relay full-size immutable artifact ca
           contentId: identity.contentId,
           fileCount: identity.archive.fileCount,
           expandedBytes: identity.archive.expandedSize
+        })
+        expect(stream.result).toEqual({
+          tupleId: identity.tupleId,
+          contentId: identity.contentId,
+          filesCompleted: identity.archive.fileCount,
+          totalFiles: identity.archive.fileCount,
+          bytesTransferred: identity.archive.expandedSize,
+          totalBytes: identity.archive.expandedSize
         })
         expect(retained.result).toMatchObject({
           initialBytes: expect.any(Number),
@@ -214,6 +240,12 @@ describe.skipIf(!hasMeasurementInput)('SSH relay full-size immutable artifact ca
         )
         expect(scan.incrementalRssBytes).toBeLessThanOrEqual(
           SSH_RELAY_RUNTIME_SOURCE_SCAN_LIMITS.maximumIncrementalMemoryBytes
+        )
+        expect(stream.elapsedMs).toBeLessThanOrEqual(
+          SSH_RELAY_RUNTIME_SOURCE_STREAM_LIMITS.measurementTimeoutMs
+        )
+        expect(stream.incrementalRssBytes).toBeLessThanOrEqual(
+          SSH_RELAY_RUNTIME_SOURCE_STREAM_LIMITS.maximumIncrementalMemoryBytes
         )
         for (const measurement of [retained, eviction]) {
           expect(measurement.elapsedMs).toBeLessThanOrEqual(

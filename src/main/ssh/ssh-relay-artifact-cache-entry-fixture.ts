@@ -110,10 +110,12 @@ export type SshRelayArtifactCacheEntryFixture = {
 
 export async function createSshRelayArtifactCacheEntryFixture({
   root,
-  os
+  os,
+  fileBytes: fileByteOverrides = new Map()
 }: {
   root: string
   os: 'linux' | 'win32'
+  fileBytes?: ReadonlyMap<string, Buffer>
 }): Promise<SshRelayArtifactCacheEntryFixture> {
   const manifest: SshRelayArtifactManifest =
     os === 'win32'
@@ -125,7 +127,9 @@ export async function createSshRelayArtifactCacheEntryFixture({
     if (entry.type !== 'file') {
       continue
     }
-    const bytes = Buffer.from(`cache entry fixture:${tuple.tupleId}:${entry.path}`)
+    const bytes =
+      fileByteOverrides.get(entry.path) ??
+      Buffer.from(`cache entry fixture:${tuple.tupleId}:${entry.path}`)
     fileBytes.set(entry.path, bytes)
     entry.size = bytes.length
     entry.sha256 = sha256(bytes)

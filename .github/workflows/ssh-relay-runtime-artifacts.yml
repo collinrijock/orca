@@ -284,6 +284,7 @@ jobs:
             src/main/ssh/ssh-relay-artifact-acquisition-integration.test.ts \
             src/main/ssh/ssh-relay-runtime-source-tree.test.ts \
             src/main/ssh/ssh-relay-runtime-source-scan.test.ts \
+            src/main/ssh/ssh-relay-runtime-source-stream.test.ts \
             src/main/ssh/ssh-relay-compiled-manifest-trust.test.ts \
             src/main/ssh/ssh-relay-official-manifest.test.ts \
             src/main/ssh/ssh-relay-manifest-accepted-keys.test.ts \
@@ -838,6 +839,7 @@ jobs:
             src/main/ssh/ssh-relay-artifact-acquisition-integration.test.ts `
             src/main/ssh/ssh-relay-runtime-source-tree.test.ts `
             src/main/ssh/ssh-relay-runtime-source-scan.test.ts `
+            src/main/ssh/ssh-relay-runtime-source-stream.test.ts `
             src/main/ssh/ssh-relay-compiled-manifest-trust.test.ts `
             src/main/ssh/ssh-relay-official-manifest.test.ts `
             src/main/ssh/ssh-relay-manifest-accepted-keys.test.ts `

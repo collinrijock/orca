@@ -9,9 +9,25 @@ keeps commands, hashes, runner identities, timings, and failure details.
 A checked box means the work has evidence in the detailed ledger. Design approval alone does not
 complete a box.
 
-Active checkpoint: **Milestone 6 / Work Package 5 bounded runtime transfer — disconnected source
-pre-scan CI is closed; audit only the bounded client streaming boundary next, 2026-07-15, Codex
-implementation owner.**
+Active checkpoint: **Milestone 6 / Work Package 5 bounded runtime transfer — disconnected bounded
+client source stream is locally green; commit/push and exact-head native/full-size CI are next,
+2026-07-15, Codex implementation owner.**
+`E-M6-SOURCE-STREAM-AUDIT-001` fixes the next artifact-only boundary: exact scanned tree plus one
+signal, maximum four 64-KiB readers, local snapshot proof before destination open, hash/size and
+post-read snapshot proof before destination finalization, joined abort/close cleanup, and path-free
+aggregate progress. It deliberately contains no SSH, remote path/staging, product caller, setting,
+fallback, tuple, publication, or default behavior.
+`E-M6-SOURCE-STREAM-LOCAL-RED-001` records the expected missing-module failures for the purpose and
+full-size suites plus the workflow oracle's six-pass/one-fail proof that neither native command ran
+the new suite.
+`E-M6-SOURCE-STREAM-LOCAL-001` passes 27/27 purpose cases, 107 focused cases with one declared skip,
+566 broad relay cases with five declared skips, 280/280 release/workflow cases, typecheck, full lint,
+targeted format, max-lines, diff, protected-resolver, and no-product-import gates. It proves bounded
+one-to-four-worker/64-KiB reads, complete pre-destination snapshots, exact digest/size checks,
+hostile metadata and mutation rejection, cancellation, destination uniqueness/completeness, joined
+cleanup, path-free progress, lease ownership, and concurrent settlement. The local full-size case
+correctly skips without an exact native artifact; all-six native metrics and adjacent CI remain
+required before checking the package. No SSH/product/default caller exists.
 `E-M6-SOURCE-PRESCAN-AUDIT-001` fixes the next local-only boundary: consume only the accepted source
 tree plus one exact signal; assert its borrowed lease; boundedly enumerate and hash every real entry;
 reject mutation, symlink/junction, special, missing/extra/colliding, mode/size/hash/aggregate drift;

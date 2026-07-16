@@ -8,8 +8,8 @@ work; keep exact commands, runner identities, hashes, metrics, and residual gaps
 
 Date created: 2026-07-14<br>
 Last updated: 2026-07-15<br>
-Current phase: Milestone 6 / Work Package 5 bounded runtime transfer — **In progress — 2026-07-15, Codex implementation owner: disconnected source pre-scan CI is closed; audit only the bounded client streaming boundary next**. Keep every capability disconnected from every production/default SSH path. Real Apple/SignPath rehearsals remain an explicit late gate and are not on this package's critical path.<br>
-Session checkpoint: **SOURCE PRE-SCAN CLOSED / BOUNDED STREAM AUDIT NEXT — 2026-07-15, Codex implementation owner** — `E-M6-SOURCE-PRESCAN-CI-001` proves the corrected complete local scan on all six native clients and every exact full-size artifact. Audit the next transport-neutral bounded read/hash/progress boundary and record RED before implementation; do not open SSH channels or create remote staging in that package. Do not add a product caller, settings/fallback wiring, tuple enablement, publication, or default behavior. Merging to `main` remains prohibited, SignPath is deferred, and legacy remains the production default.<br>
+Current phase: Milestone 6 / Work Package 5 bounded runtime transfer — **In progress — 2026-07-15, Codex implementation owner: disconnected bounded client source stream is locally green; exact-head native/full-size CI is next**. Keep every capability disconnected from every production/default SSH path. Real Apple/SignPath rehearsals remain an explicit late gate and are not on this package's critical path.<br>
+Session checkpoint: **BOUNDED SOURCE STREAM LOCAL GREEN / EXACT-HEAD CI NEXT — 2026-07-15, Codex implementation owner** — `E-M6-SOURCE-STREAM-LOCAL-001` proves the filesystem-snapshot split, bounded reader/destination lifecycle, failure settlement, purpose/full-size wiring, adjacent suites, static gates, and isolation locally. Commit and push this package, then require all-six native artifact/full-size jobs plus adjacent CI before checking the package or advancing to an SSH transport adapter. Do not add a product caller, settings/fallback wiring, tuple enablement, publication, or default behavior. Merging to `main` remains prohibited, SignPath is deferred, and legacy remains the production default.<br>
 Primary design: [SSH relay GitHub Release plan](./2026-07-14-ssh-relay-github-release-plan.html)<br>
 Motivating issues: [#8450](https://github.com/stablyai/orca/issues/8450), [#1693](https://github.com/stablyai/orca/issues/1693)
 
@@ -150,10 +150,12 @@ same change as the work it records.
 - Completed package: disconnected full host-evidence composition is green locally and on every
   primary native client under E-M5-HOST-EVIDENCE-COMPOSITION-LOCAL-001 and
   E-M5-HOST-EVIDENCE-COMPOSITION-CI-001. It has no product caller.
-- Active package: **In progress — 2026-07-15, Codex implementation owner** — add RED proof, then
-  implement only Milestone 6's audited disconnected full-tree source pre-scan. Do not open SSH
-  channels, transfer or install bytes, or add product/settings/fallback/tuple/publication/default
-  behavior.
+- Active package: **In progress — 2026-07-15, Codex implementation owner** — audit, RED, and local
+  GREEN complete under E-M6-SOURCE-STREAM-AUDIT-001, E-M6-SOURCE-STREAM-LOCAL-RED-001, and
+  E-M6-SOURCE-STREAM-LOCAL-001. Commit and push the disconnected bounded client source stream, then
+  require exact-head all-six native/full-size and adjacent CI. Do not import SSH, open channels,
+  construct remote paths, create remote staging, or add product/settings/fallback/tuple/publication/
+  default behavior.
 - Completed Work Package 2 gate: target-native Windows source-signature reports from exact-head
   artifact jobs 87267322867 and 87267322870 were independently downloaded and matched to their
   identities and signing-stage reports under E-M3-WINDOWS-SOURCE-SIGNATURE-CI-001. PR Checks
@@ -16484,6 +16486,122 @@ src/main/ssh/ssh-relay-*.test.ts` — PASS, exit 0: 41 files passed, three skipp
   transport, product/settings/fallback/tuple/publication/default path, and SignPath remain open.
   Legacy remains the sole production/default path and every tuple remains disabled.
 
+### E-M6-SOURCE-STREAM-AUDIT-001 — bounded transport-neutral source read and destination lifecycle
+
+- Date/owner: 2026-07-15, Codex implementation owner.
+- Exact boundary: accept only one `SshRelayRuntimeScannedSourceTree`, its one required caller-owned
+  `AbortSignal`, a destination factory, a concurrency value from one through four, and an optional
+  synchronous progress observer. The factory receives only the authenticated file descriptor and
+  exact signal and returns a domain-shaped destination with awaited `write`, `close`, and `abort`
+  operations. No raw source path/list/manifest/cache entry or independently replaceable signal is
+  accepted.
+- Pre-write sequence: assert the borrowed lease, then for each file recheck the scanned root, every
+  signed parent directory, and file path/type/mode/state. Open the local file read-only with
+  `O_NOFOLLOW` where supported and require the opened handle to match the exact scanned state. Only
+  after those checks may the destination factory run. This lets later transports create an
+  exclusive staged remote file without doing so for a rejected local source.
+- Bounded transfer: use a fixed worker pool of at most four. Each worker owns one reusable 64 KiB
+  buffer and at most one local file handle plus one destination; never materialize a whole file or
+  tree. Await each destination write before reusing its buffer. Hash the exact bytes presented to
+  successful writes and require exact signed size and SHA-256 before completing the file.
+- Post-write sequence: after the final chunk, recheck the open handle, close it, and recheck the file,
+  signed parents, and root against the scanned bigint snapshots. Only then close/finalize the
+  destination. A local mutation, replacement, short/long read, digest mismatch, lease loss, or
+  cancellation aborts the destination; it never reports the file complete.
+- Lifecycle/error contract: check the exact signal before lease/filesystem/destination operations and
+  every chunk. Await local close and destination abort/close on success, failure, cancellation, and
+  callback failure. Preserve the primary failure and join cleanup failures in `AggregateError`; the
+  source stream borrows but never releases the cache lease. A caller timeout is expressed only by
+  aborting the same signal; the module creates no hidden timer.
+- Progress/result: emit deeply frozen aggregate snapshots only after a destination accepts bytes and
+  after a file finalizes. Include tuple/content IDs, total/completed file counts, total/transferred
+  bytes, and active file count; never include local or signed paths. Return the final frozen proof
+  and do not log. Concurrent updates must be monotonic and exact.
+- Required RED/green proof: signed Linux/Windows scanned trees; zero-byte, multi-chunk, and concurrent
+  reads; maximum four handles/destinations and 64 KiB chunks; ordering that forbids destination open
+  before local proof; mutation/symlink/type/mode/state/size/hash rejection before and during read;
+  exact transmitted-byte hash; duplicate/missing destination settlement; pre/mid-read/mid-write
+  cancellation; local/destination open/write/close/abort failures and joined cleanup; monotonic
+  path-free progress; lease ordering/ownership; exact full-size all-six latency/RSS/handle metrics;
+  both native workflow families; and no SSH/product importer.
+- Measurement budgets: 20-minute caller-owned transfer ceiling, 80 MiB incremental desktop RSS,
+  four concurrent files/destinations, eight total process handles, and 64 KiB per worker buffer. The
+  exact-artifact harness may use an in-process hashing/discard destination solely to measure client
+  source streaming; it is not SSH or remote-transfer proof.
+- Deliberately absent: SSH target/connection/channel/SFTP/child process, remote platform/path/command,
+  framing protocol, remote write/permission/cleanup/staging/install/launch, settings/modes/fallback,
+  Electron/startup, `ORCA_RELAY_PATH`, tuple enablement, publication, defaults, and SignPath. Later
+  POSIX, Windows, and SFTP packages must adapt this boundary and independently prove their remote
+  resource settlement and full-size live behavior.
+
+### E-M6-SOURCE-STREAM-LOCAL-RED-001 — bounded stream and native/full-size proof are absent
+
+- Date/owner/environment: 2026-07-15, Codex implementation owner; local macOS arm64, Node 26.0.0,
+  pnpm 10.24.0, atop evidence commit `16a58a234` plus the audit/test-only diff.
+- Purpose command: `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts
+--maxWorkers=1 src/main/ssh/ssh-relay-runtime-source-stream.test.ts` — EXPECTED FAIL, exit 1: the
+  absent source-stream module prevents collection; zero tests in 1.36 seconds Vitest / 4.00 seconds
+  wall and 135,544,832-byte maximum RSS.
+- Full-size command: the same prefix with
+  `src/main/ssh/ssh-relay-artifact-cache-entry-full-size.test.ts` — EXPECTED FAIL, exit 1: its exact
+  artifact stream measurement cannot import the absent module; zero tests in 1.22 seconds Vitest /
+  3.84 seconds wall and 131,989,504-byte maximum RSS.
+- Workflow-oracle command: the same prefix with
+  `config/scripts/ssh-relay-runtime-workflow.test.mjs` — EXPECTED FAIL, exit 1: six cases pass and
+  native inclusion fails because the purpose suite occurs only in the oracle, not the POSIX or
+  Windows runner command; 881 ms Vitest / 3.52 seconds wall and 132,841,472-byte maximum RSS.
+- Scope at RED: test scaffolding adds signed zero/multi-chunk fixture bytes, destination lifecycle/
+  mutation/cancellation/progress cases, and full-size measurement expectations only. The protected
+  resolver files have no diff. No source-stream module, SSH/product importer, remote resource/path/
+  staging, settings/fallback, tuple, publication, or default behavior exists.
+
+### E-M6-SOURCE-STREAM-LOCAL-001 — disconnected bounded client source stream is locally green
+
+- Date/owner/environment: 2026-07-15, Codex implementation owner; local macOS arm64, Node 26.0.0,
+  pnpm 10.24.0, atop evidence commit `16a58a234` plus the uncommitted implementation/checklist diff.
+- Implementation/result: `ssh-relay-runtime-source-snapshot.ts` owns exact root/parent/file/handle
+  snapshot checks and the client-native `O_NOFOLLOW` open operation; the 298-physical-line stream
+  module owns the one-to-four-worker lifecycle, one reusable 64 KiB buffer per worker, exact written-
+  byte hash/size checks, destination validation/uniqueness, frozen path-free progress, final full-
+  tree/lease proof, and joined cleanup. It accepts only an exact scanned tree, caller signal,
+  concurrency, destination factory, and optional observer. It has no SSH/product/default caller.
+- Purpose command: `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts
+--maxWorkers=1 src/main/ssh/ssh-relay-runtime-source-stream.test.ts` — PASS, 27/27 in 2.43 seconds
+  Vitest / 3.45 seconds wall, 145,375,232-byte maximum RSS, zero swaps. It proves signed Linux and
+  Windows trees; complete tree/path/handle proof before a destination; zero/multi-chunk/concurrent
+  reads; four-handle/destination and 64 KiB limits; linked/type/mode/state/digest/mutation rejection;
+  incomplete/reused destination rejection; pre/mid-read/mid-write cancellation; local open/read/
+  close and destination open/write/close/abort failures; joined three-error cleanup; path-free
+  monotonic progress; lease borrowing; immediate peer-stop before slow cleanup; and all-worker
+  settlement before rejection.
+- Full-size harness command: the same prefix with
+  `src/main/ssh/ssh-relay-artifact-cache-entry-full-size.test.ts` — PASS with one expected local
+  skip because no exact native artifact environment was supplied; 404 ms Vitest / 1.40 seconds wall
+  and 132,022,272-byte maximum RSS. The harness now measures `streamElapsedMs` and
+  `streamIncrementalRssBytes`, checks the exact final aggregate, and retains the 20-minute/80 MiB
+  budgets; this local skip is not full-size proof.
+- Native workflow oracle: the same prefix with
+  `config/scripts/ssh-relay-runtime-workflow.test.mjs` — PASS, 7/7 in 295 ms Vitest / 1.38 seconds
+  wall and 132,464,640-byte maximum RSS. Both POSIX and Windows native commands contain the purpose
+  suite, and the shared full-size case executes the stream measurement against each exact artifact.
+- Adjacent/broad commands: the ten-file focused source/cache/acquisition/workflow command passes
+  107 tests with one declared platform skip in 8.26 seconds; `src/main/ssh/ssh-relay-*.test.ts`
+  passes 566 with five declared platform/full-size skips in 24.06 seconds; and
+  `config/scripts/ssh-relay-runtime-*.test.mjs` passes 280/280 in 18.92 seconds.
+- Static/isolation commands: `pnpm typecheck`, targeted `pnpm exec oxlint ...`, `pnpm lint`,
+  `pnpm run check:max-lines-ratchet`, targeted `pnpm exec oxfmt --check ...`, `git diff --check`, the
+  protected-resolver `git diff --exit-code -- ...`, and the non-test importer `rg` gate all pass.
+  Full `pnpm exec oxfmt --check .` remains red on 31 pre-existing unrelated files; all nine changed
+  files pass the targeted formatter check and none of those baseline files is modified.
+- Hardening note: the first four-case hostile-metadata oracle used object spread on Node `Stats`,
+  which dropped prototype methods and correctly failed four tests plus typecheck; the fixture was
+  corrected to preserve the prototype. No production relaxation was made. The corrected suite then
+  passed 24 cases before the final local-open, digest, and concurrent-settlement cases raised it to 27.
+- Residual gaps: exact-head all-six full-size latency/RSS/handle evidence and adjacent Actions jobs
+  remain required before this package is checked. The hashing/discard destination is client-only
+  measurement, not SFTP/system-SSH or remote proof. Remote channels, paths, staging/install,
+  product/Beta/fallback/tuple/publication/default wiring, and SignPath remain absent.
+
 ## Accepted Gaps
 
 No product gap is accepted merely because it appears in this list. Each entry requires explicit
@@ -16542,12 +16660,13 @@ The project is not complete until every applicable item below is checked with ev
 
 ## Next Required Action
 
-Implement only the RED-proven Milestone 6 disconnected full-tree source pre-scan and wire its purpose
-suite into both native workflow families, then run local/full-size evidence gates. The pre-scan must
-create no remote files or open SSH channels.
-Do not enumerate the filesystem, open an SSH channel, transfer or install bytes, modify platform
-detection/selectors, add an Electron/startup consumer, mode wiring, fallback, tuple enablement,
-release publication, or default behavior.
+Commit and push only the locally green Milestone 6 disconnected bounded client source stream and its
+purpose/full-size native workflow wiring, then require all-six exact-head native/full-size and
+adjacent CI before checking the package or advancing. The stream must create no remote files or open
+SSH channels.
+Do not open an SSH channel, transfer to or install on a remote, modify platform detection/selectors,
+add an Electron/startup consumer, mode wiring, fallback, tuple enablement, release publication, or
+default behavior.
 Keep Node upstream `.tar.xz` inputs, Windows ZIP, `ORCA_RELAY_PATH`, existing desktop required-assets
 behavior, detached-signature byte encoding, Windows arm64 build 26100, macOS 13.5, Linux kernel 4.18,
 release-cut, desktop builds, publication, and every tuple separately gated.
