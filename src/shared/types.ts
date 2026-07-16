@@ -1606,6 +1606,7 @@ export type LinearIssue = {
   workspaceName?: string
   identifier: string
   title: string
+  branchName?: string
   description?: string
   url: string
   state: {
@@ -1862,6 +1863,7 @@ export type {
 } from './gitlab-types'
 
 export type {
+  JiraAuthType,
   JiraComment,
   JiraConnectArgs,
   JiraConnectionStatus,
@@ -2597,6 +2599,9 @@ export type GlobalSettings = {
    *  system tray instead of quitting Orca; off keeps the default quit-on-close.
    *  The tray icon itself is always present on Windows regardless of this flag. */
   minimizeToTrayOnClose?: boolean
+  /** Why: macOS keeps Orca running after its last window closes, so this
+   *  controls the additive menu-bar entry without changing Dock behavior. */
+  showMenuBarIcon?: boolean
   /** Why: Windows terminals conventionally use right-click as a paste gesture,
    *  while macOS/Linux default to their existing context menu behavior. */
   terminalRightClickToPaste: boolean
@@ -2870,6 +2875,9 @@ export type GlobalSettings = {
   /** Why: disabling must persist so startup does not reinstall global agent
    *  hook entries right after the user removes them from Settings or CLI. */
   agentStatusHooksEnabled: boolean
+  /** Dismissed freshness tuples grant no write authority; they only keep the
+   *  same exact official placement/revision from nudging more than once. */
+  dismissedSkillFreshnessNudges?: string[]
   /** Why: generated tab titles are semantic but subjective, so they stay opt-in
    *  and manual renames remain the stronger user intent. */
   tabAutoGenerateTitle: boolean
