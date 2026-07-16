@@ -260,6 +260,21 @@ function findRepoForGitHubOwner(
   )
 }
 
+function findRepoForGitHubPathOwner(
+  state: Partial<Pick<AppState, 'repos'>>,
+  repoId: string | undefined,
+  repoPath: string
+): Repo | undefined {
+  const repos = state.repos ?? []
+  // Why: paired hosts can share a repo id. PR detail callers carry the concrete
+  // owner path, while the id-only lookup preserves legacy missing-path behavior.
+  return (
+    repos.find(
+      (candidate) => candidate.path === repoPath && (!repoId || candidate.id === repoId)
+    ) ?? (repoId ? repos.find((candidate) => candidate.id === repoId) : undefined)
+  )
+}
+
 function getGitHubFocusedRepoOwnerHostId(
   settings: AppState['settings'],
   repo: Pick<Repo, 'connectionId' | 'executionHostId'> | undefined
@@ -3527,9 +3542,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
     prRepo,
     options
   ): Promise<PRCheckDetail[]> => {
-    const repo = get().repos?.find((candidate) =>
-      options?.repoId ? candidate.id === options.repoId : candidate.path === repoPath
-    )
+    const repo = findRepoForGitHubPathOwner(get(), options?.repoId, repoPath)
     const repoId = options?.repoId ?? repo?.id
     const requestSettings = getGitHubRepoSourceSettings(
       get().settings,
@@ -3682,9 +3695,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
   },
 
   fetchPRCheckDetails: async (repoPath, args, options): Promise<PRCheckRunDetails | null> => {
-    const repo = get().repos?.find((candidate) =>
-      options?.repoId ? candidate.id === options.repoId : candidate.path === repoPath
-    )
+    const repo = findRepoForGitHubPathOwner(get(), options?.repoId, repoPath)
     const repoId = options?.repoId ?? repo?.id
     const requestSettings = getGitHubRepoSourceSettings(
       get().settings,
@@ -3725,9 +3736,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
   },
 
   fetchPRComments: async (repoPath, prNumber, options): Promise<PRComment[]> => {
-    const repo = get().repos?.find((candidate) =>
-      options?.repoId ? candidate.id === options.repoId : candidate.path === repoPath
-    )
+    const repo = findRepoForGitHubPathOwner(get(), options?.repoId, repoPath)
     const repoId = options?.repoId ?? repo?.id
     const requestSettings = getGitHubRepoSourceSettings(
       get().settings,
@@ -3804,9 +3813,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
   },
 
   addPRConversationComment: async (repoPath, prNumber, body, options) => {
-    const repo = get().repos?.find((candidate) =>
-      options?.repoId ? candidate.id === options.repoId : candidate.path === repoPath
-    )
+    const repo = findRepoForGitHubPathOwner(get(), options?.repoId, repoPath)
     const repoId = options?.repoId ?? repo?.id
     const requestSettings = getGitHubRepoSourceSettings(
       get().settings,
@@ -3883,9 +3890,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
   },
 
   addPRReviewCommentReply: async (repoPath, prNumber, commentId, body, options) => {
-    const repo = get().repos?.find((candidate) =>
-      options?.repoId ? candidate.id === options.repoId : candidate.path === repoPath
-    )
+    const repo = findRepoForGitHubPathOwner(get(), options?.repoId, repoPath)
     const repoId = options?.repoId ?? repo?.id
     const requestSettings = getGitHubRepoSourceSettings(
       get().settings,
@@ -3974,9 +3979,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
   },
 
   resolveReviewThread: async (repoPath, prNumber, threadId, resolve, options) => {
-    const repo = get().repos?.find((candidate) =>
-      options?.repoId ? candidate.id === options.repoId : candidate.path === repoPath
-    )
+    const repo = findRepoForGitHubPathOwner(get(), options?.repoId, repoPath)
     const repoId = options?.repoId ?? repo?.id
     const requestSettings = getGitHubRepoSourceSettings(
       get().settings,

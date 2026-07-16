@@ -17,6 +17,8 @@ const enqueuePRRefresh = vi.fn().mockResolvedValue(undefined)
 const mockApi = {
   gh: {
     prForBranch: vi.fn().mockResolvedValue(null),
+    prChecks: vi.fn().mockResolvedValue([]),
+    prComments: vi.fn().mockResolvedValue([]),
     refreshPRNow: vi.fn().mockResolvedValue({ kind: 'no-pr', fetchedAt: 1 }),
     enqueuePRRefresh,
     issue: vi.fn().mockResolvedValue(null)
@@ -196,6 +198,72 @@ describe('GitHub PR refresh owner consistency', () => {
     expect(fetchPRForBranchSpy).not.toHaveBeenCalled()
     expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
     expect(enqueuePRRefresh).not.toHaveBeenCalled()
+  })
+
+  it('routes paired-host checks and comments through the runtime path owner', async () => {
+    runtimeEnvironmentCall
+      .mockResolvedValueOnce({
+        id: 'rpc-checks',
+        ok: true,
+        result: [{ name: 'build', status: 'completed', conclusion: 'success', url: null }],
+        _meta: { runtimeId: 'remote-runtime' }
+      })
+      .mockResolvedValueOnce({
+        id: 'rpc-comments',
+        ok: true,
+        result: [],
+        _meta: { runtimeId: 'remote-runtime' }
+      })
+    const store = createTestStore()
+    const repoId = 'repo-paired'
+    const branch = 'feature/runtime-details'
+    seed(store, {
+      repos: [
+        makeRepo({ id: repoId, path: '/local/repo' }),
+        makeRepo({
+          id: repoId,
+          path: '/runtime/repo',
+          executionHostId: 'runtime:env-1'
+        })
+      ],
+      worktreesByRepo: { [repoId]: [makeRuntimeWorktree(repoId, branch)] }
+    })
+
+    await store.getState().fetchPRChecks('/runtime/repo', 42, branch, 'head-oid', null, {
+      force: true,
+      repoId
+    })
+    await store.getState().fetchPRComments('/runtime/repo', 42, {
+      force: true,
+      repoId
+    })
+
+    expect(runtimeEnvironmentCall).toHaveBeenNthCalledWith(1, {
+      selector: 'env-1',
+      method: 'github.prChecks',
+      params: {
+        repo: repoId,
+        prNumber: 42,
+        headSha: 'head-oid',
+        prRepo: null,
+        noCache: true
+      },
+      timeoutMs: 30_000
+    })
+    expect(runtimeEnvironmentCall).toHaveBeenNthCalledWith(2, {
+      selector: 'env-1',
+      method: 'github.prComments',
+      params: { repo: repoId, prNumber: 42, prRepo: null, noCache: true },
+      timeoutMs: 30_000
+    })
+    expect(mockApi.gh.prChecks).not.toHaveBeenCalled()
+    expect(mockApi.gh.prComments).not.toHaveBeenCalled()
+    expect(
+      store.getState().checksCache[`runtime:env-1::${repoId}::pr-checks::42::head::head-oid`]?.data
+    ).toHaveLength(1)
+    expect(
+      store.getState().commentsCache[`runtime:env-1::${repoId}::pr-comments::42`]?.data
+    ).toEqual([])
   })
 
   it('drops an in-flight result when the explicit owner path changes', async () => {
