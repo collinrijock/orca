@@ -60,6 +60,14 @@ vi.mock('./github-enterprise-repository', () => ({
 
 import { createGitHubPullRequest } from './client'
 
+import { _resetOriginGitHubApiRepositoryCache } from './github-api-repository'
+
+// The origin-repository cache is module-level state; reset it so slugs
+// resolved by one test cannot leak into the next.
+beforeEach(() => {
+  _resetOriginGitHubApiRepositoryCache()
+})
+
 describe('createGitHubPullRequest', () => {
   beforeEach(() => {
     ghExecFileAsyncMock.mockReset()
@@ -259,7 +267,7 @@ describe('createGitHubPullRequest', () => {
       url: 'https://github.com/acme/widgets/pull/45'
     })
 
-    expect(getOwnerRepoMock).toHaveBeenCalledWith('/remote/repo-root', 'ssh-1')
+    expect(getOwnerRepoMock).toHaveBeenCalledWith('/remote/repo-root', 'ssh-1', {})
     const [args, options] = ghExecFileAsyncMock.mock.calls[0]
     expect(args).toEqual(
       expect.arrayContaining([
@@ -417,7 +425,9 @@ describe('createGitHubPullRequest', () => {
         '--json',
         'number,url'
       ],
-      { cwd: '/repo-root' }
+      // Why: dotcom slugs resolve with host:'github.com' so creation stays
+      // pinned against a process-level GH_HOST.
+      { cwd: '/repo-root', host: 'github.com' }
     ])
   })
 

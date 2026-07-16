@@ -79,7 +79,6 @@ import {
   rememberGhCwdResolutionFailure
 } from './gh-cwd-repo-negative-cache'
 import type { GitHubRepoContext } from './github-repository-identity'
-import { getEnterpriseGitHubRepoSlug } from './github-enterprise-repository'
 import {
   getOriginGitHubApiRepository,
   githubHostExecOptions,
@@ -111,7 +110,6 @@ import {
 import { mapGraphQLReactionGroups, type GitHubGraphQLReactionGroup } from './comment-reactions'
 import {
   getRateLimit,
-  noteRateLimitSpend,
   noteRepositoryRateLimitSpend,
   rateLimitGuard,
   repositoryRateLimitGuard,
@@ -1520,7 +1518,7 @@ async function countWorkItemsForQuery(
   )
   // Why: over-counts gh cache hits, which is the safe direction — the search
   // bucket is only 30/min and the next probe corrects the estimate.
-  noteRateLimitSpend('search')
+  noteRepositoryRateLimitSpend(ownerRepo, 'search', 1, localGitOptions)
   return Number.parseInt(stdout.trim(), 10) || 0
 }
 
@@ -1580,8 +1578,11 @@ export async function countWorkItems(
   // 30/min, so a multi-repo Tasks page must stop counting when the budget is
   // gone instead of converting the remaining repos into 403 spawns. getRateLimit
   // is 30s-cached and single-flight, so priming here is one spawn per window.
-  await getRateLimit()
-  if (rateLimitGuard('search').blocked) {
+  // Only shared github.com traffic consults the snapshot; other scopes bypass.
+  if (spendsSharedGitHubComQuota(ownerRepo, localGitOptions)) {
+    await getRateLimit()
+  }
+  if (repositoryRateLimitGuard(ownerRepo, 'search', localGitOptions).blocked) {
     return 0
   }
 
@@ -1876,11 +1877,14 @@ export async function createGitHubPullRequest(
     }
   }
 
-  // Why: github.com-only slug parsing returns null for GHES, so fall back to the
-  // enterprise resolver (gh-authenticated custom host) before giving up (#8312).
-  const ownerRepo =
-    (await getOwnerRepo(repoPath, connectionId, ...hostedReviewLocalGitOptionArgs(options))) ??
-    (await getEnterpriseGitHubRepoSlug(repoPath, connectionId, options))
+  // Why: the shared origin resolver covers GHES fallback and stamps
+  // host:'github.com' on dotcom slugs, keeping creation pinned against GH_HOST
+  // like every other PR path (#8312).
+  const ownerRepo = await getOriginGitHubApiRepository(
+    repoPath,
+    connectionId,
+    getHostedReviewLocalGitOptions(options)
+  )
   if (!ownerRepo) {
     return {
       ok: false,
@@ -4359,7 +4363,7 @@ export async function getPRComments(
       ['pr', 'view', String(prNumber), '--json', 'comments'],
       ghOptions
     )
-    noteRateLimitSpend('graphql')
+    noteRepositoryRateLimitSpend(ownerRepo, 'graphql', 1, ghOptions)
     const data = JSON.parse(stdout) as {
       comments: {
         author: { login: string }
