@@ -10,6 +10,10 @@ import type {
 } from '../shared/hosted-review'
 import type { NativeFileDropPayload } from '../shared/native-file-drop'
 import type {
+  TerminalTabCloseRequest,
+  TerminalTabCloseResponse
+} from '../shared/terminal-tab-close'
+import type {
   LocalLogTailChangedPayload,
   LocalLogTailReadArgs,
   LocalLogTailReadResult,
@@ -828,10 +832,15 @@ export type NativeChatReadSessionResult =
 /** Messages appended to a live-tailed transcript since the previous emit. */
 export type NativeChatAppendedMessages = NativeChatMessage[]
 
+export type NativeChatSubscriptionFrame =
+  | { type: 'snapshot'; messages: NativeChatMessage[]; hasMore: boolean; error?: string }
+  | { type: 'replacement'; messages: NativeChatMessage[]; hasMore: boolean }
+  | { type: 'appended'; messages: NativeChatMessage[] }
+
 /** Wire payload for the `nativeChat:appended` push channel. */
 export type NativeChatAppendedPayload = {
   subscriptionId: string
-  messages: NativeChatAppendedMessages
+  frame: NativeChatSubscriptionFrame
 }
 
 export type NativeChatSubscribeArgs = {
@@ -842,6 +851,8 @@ export type NativeChatSubscribeArgs = {
   sessionId: string
   /** Authoritative transcript path from the agent hook (providerSession). */
   transcriptPath?: string
+  /** First snapshot size; later readSession calls grow this for pagination. */
+  limit?: number
 }
 
 export type NativeChatApi = {
@@ -855,11 +866,11 @@ export type NativeChatApi = {
     limit?: number,
     transcriptPath?: string
   ) => Promise<NativeChatReadSessionResult>
-  /** Live-tail a transcript: `onAppended` fires with only newly-appended
-   *  messages. Returns an unsubscribe fn that closes the main-process watcher. */
+  /** Live-tail a transcript. The first frame is a bounded race-safe snapshot;
+   *  later frames contain only newly appended messages. */
   subscribe: (
     args: NativeChatSubscribeArgs,
-    onAppended: (messages: NativeChatAppendedMessages) => void
+    onFrame: (frame: NativeChatSubscriptionFrame) => void
   ) => () => void
 }
 
@@ -1411,11 +1422,18 @@ export type PreloadApi = {
     onClearBufferRequest: (callback: (data: { ptyId: string }) => void) => () => void
     sendSerializedBuffer: (
       requestId: string,
-      snapshot: { data: string; cols: number; rows: number; lastTitle?: string } | null
+      snapshot: {
+        data: string
+        cols: number
+        rows: number
+        seq?: number
+        lastTitle?: string
+      } | null
     ) => void
     declarePendingPaneSerializer: (paneKey: string) => Promise<number>
     settlePaneSerializer: (paneKey: string, gen: number) => Promise<void>
     clearPendingPaneSerializer: (paneKey: string, gen: number) => Promise<void>
+    reportRendererSerializerReady?: (ptyId: string) => Promise<void>
     management: PtyManagementApi
   }
   feedback: {
@@ -1533,7 +1551,7 @@ export type PreloadApi = {
       repoId?: string
       limit?: number
       query?: string
-      before?: string
+      page?: number
       noCache?: boolean
     }) => Promise<ListWorkItemsResult<Omit<GitHubWorkItem, 'repoId'>>>
     prChecks: (
@@ -1996,6 +2014,7 @@ export type PreloadApi = {
       siteUrl: string
       email: string
       apiToken: string
+      authType?: 'cloud' | 'server'
     }) => Promise<{ ok: true; viewer: JiraViewer } | { ok: false; error: string }>
     disconnect: (args?: { siteId?: string }) => Promise<void>
     selectSite: (args: { siteId: JiraSiteSelection }) => Promise<JiraConnectionStatus>
@@ -2354,6 +2373,7 @@ export type PreloadApi = {
     get: (hostId?: ExecutionHostId) => Promise<WorkspaceSessionState>
     set: (args: WorkspaceSessionState, hostId?: ExecutionHostId) => Promise<void>
     patch: (args: WorkspaceSessionPatch, hostId?: ExecutionHostId) => Promise<void>
+    flush: () => Promise<void>
     readTerminalScrollback: (args: { ref: string }) => string | null
     setSync: (args: WorkspaceSessionState, hostId?: ExecutionHostId) => void
   }
@@ -2538,7 +2558,10 @@ export type PreloadApi = {
       connectionId?: string
       includeIgnored?: boolean
       bypassEffectiveUpstreamNegativeCache?: boolean
+      reuseLineStats?: boolean
+      requestToken?: string
     }) => Promise<GitStatusResult>
+    cancelStatus: (args: { requestToken: string }) => Promise<void>
     submoduleStatus: (args: {
       worktreePath: string
       submodulePath: string
@@ -2742,6 +2765,8 @@ export type PreloadApi = {
     recordFeatureInteraction: (id: FeatureInteractionId) => Promise<PersistedUIState>
     onStateChanged: (callback: (ui: PersistedUIState) => void) => () => void
     onOpenSettings: (callback: () => void) => () => void
+    /** Consumes a one-shot tray/menu-bar "open settings" intent queued before mount. */
+    consumePendingOpenSettings: () => Promise<boolean>
     onOpenSetupGuide: (callback: () => void) => () => void
     onOpenFeatureTour: (callback: () => void) => () => void
     onOpenCrashReport: (callback: () => void) => () => void
@@ -2841,6 +2866,9 @@ export type PreloadApi = {
     onRequestTerminalCreate: (
       callback: (data: RuntimeTerminalCreateRequestPayload) => void
     ) => () => void
+    onRequestTerminalTabMount: (
+      callback: (data: { worktreeId: string; tabId?: string; ptyId?: string }) => void
+    ) => () => void
     replyTerminalCreate: (reply: {
       requestId: string
       tabId?: string
@@ -2902,6 +2930,8 @@ export type PreloadApi = {
     onCloseTerminal: (
       callback: (data: { tabId: string; paneRuntimeId?: number }) => void
     ) => () => void
+    onTerminalTabCloseRequest: (callback: (request: TerminalTabCloseRequest) => void) => () => void
+    respondTerminalTabClose: (response: TerminalTabCloseResponse) => void
     onSleepWorktree: (callback: (data: { worktreeId: string }) => void) => () => void
     onResumeSleepingAgents: (callback: (data: { worktreeId: string }) => void) => () => void
     onTerminalZoom: (callback: (direction: 'in' | 'out' | 'reset') => void) => () => void

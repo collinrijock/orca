@@ -31,6 +31,10 @@
         "portsToggleDescription": "Muestra los puertos activos de los espacios de trabajo. Haz clic para ver los puertos de cada espacio de trabajo y los puertos externos.",
         "antigravityToggleDescription": "Muestra el uso de suscripción de Antigravity para el espacio de trabajo activo.",
         "grokToggleDescription": "Muestra el uso de créditos de suscripción de Grok cuando has iniciado sesión con Grok CLI."
+      },
+      "menuBarIcon": {
+        "title": "Mostrar icono en la barra de menús",
+        "description": "Mantén un acceso directo de Orca e indicador de actividad en la barra de menús de macOS."
       }
     }
   },
@@ -67,7 +71,8 @@
     "quit": "Salir",
     "minimizeNotice": {
       "body": "Orca sigue ejecutándose en la bandeja del sistema"
-    }
+    },
+    "activityWaiting": "Orca: actividad en espera"
   },
   "worktreeJumpPalette": {
     "matchLabel": {
@@ -8670,7 +8675,9 @@
                 "fe9231215b": "Comprobando el acceso a Linear antes de mostrar las acciones de configuración.",
                 "e1f5e6424c": "Conexión completada para {{value0}} workspace{{value1}}",
                 "disconnect_all": "Desconectar todo",
-                "account_scope_prefix": "Alcance de la cuenta"
+                "account_scope_prefix": "Alcance de la cuenta",
+                "2d60ec7921": "Connect a Jira Cloud site with an API token, or a self-hosted Jira with a personal access token or username and password. Credentials are sent to the selected remote runtime and stored there with runtime-supported encryption.",
+                "977e360b71": "Connect a Jira Cloud site with an API token, or a self-hosted Jira with a personal access token or username and password. Credentials are stored locally and encrypted when local runtime storage supports it."
               }
             }
           }
@@ -12692,7 +12699,24 @@
             "70fcd360c4": "https://example.atlassian.net",
             "e176f9d0c5": "URL del sitio de Jira Cloud",
             "d785c42b8b": "Usa una URL de Jira Cloud, email de Atlassian y token API para explorar issues.",
-            "8388bdea2b": "Conectar sitio de Jira"
+            "8388bdea2b": "Conectar sitio de Jira",
+            "2e2b69e48e": "Use a self-hosted Jira base URL and a personal access token to browse issues.",
+            "b67e919bd5": "Jira instance type",
+            "17787d6e4b": "Atlassian Cloud",
+            "bc7a831773": "Self-hosted",
+            "3489e186d6": "Jira site URL",
+            "cbc27fa599": "https://jira.example.com",
+            "730d973bae": "Personal access token",
+            "8b9c7b9e7b": "Jira personal access token",
+            "ccfb086d3e": "Create a personal access token in your Jira profile under Personal Access Tokens.",
+            "1d947a07ab": "Use a self-hosted Jira base URL, username, and password to browse issues.",
+            "f49708c369": "Jira authentication method",
+            "84a810dd0e": "Username & password",
+            "8d1223fa5c": "Username",
+            "be9eba0a1b": "username",
+            "70035652d7": "Password",
+            "c50abbf340": "Jira account password",
+            "d8737db691": "Use your Jira Server or Data Center account username and password."
           }
         }
       },
@@ -13119,6 +13143,7 @@
           "title": "No se pudo cargar la conversación",
           "subtitle": "No se pudo leer la transcripción. Vuelva a la terminal para seguir trabajando."
         },
+        "pairHost": "Empareje un host para ver el historial de chat del agente.",
         "notAgent": {
           "title": "No hay conversación aquí",
           "subtitle": "Este terminal no está ejecutando un agente de código reconocido."

@@ -31,6 +31,10 @@
         "portsToggleDescription": "라이브 워크스페이스 포트를 표시합니다. 워크스페이스 범위 포트 및 외부 수신기를 보려면 클릭하세요.",
         "antigravityToggleDescription": "활성 워크스페이스에 대한 Antigravity 구독 사용량을 표시합니다.",
         "grokToggleDescription": "Grok CLI로 로그인한 경우 Grok 구독 크레딧 사용량을 표시합니다."
+      },
+      "menuBarIcon": {
+        "title": "메뉴 바 아이콘 표시",
+        "description": "macOS 메뉴 바에 Orca 바로가기 및 활동 표시기를 유지합니다."
       }
     }
   },
@@ -67,7 +71,8 @@
     "quit": "종료",
     "minimizeNotice": {
       "body": "Orca가 시스템 트레이에서 계속 실행 중입니다"
-    }
+    },
+    "activityWaiting": "Orca - 활동 대기 중"
   },
   "worktreeJumpPalette": {
     "matchLabel": {
@@ -8670,7 +8675,9 @@
                 "fe9231215b": "설정 작업을 표시하기 전에 Linear 액세스를 확인하는 중입니다.",
                 "e1f5e6424c": "{{value0}}개 워크스페이스{{value1}} 연결됨",
                 "disconnect_all": "연결 해제",
-                "account_scope_prefix": "계정 범위"
+                "account_scope_prefix": "계정 범위",
+                "2d60ec7921": "Connect a Jira Cloud site with an API token, or a self-hosted Jira with a personal access token or username and password. Credentials are sent to the selected remote runtime and stored there with runtime-supported encryption.",
+                "977e360b71": "Connect a Jira Cloud site with an API token, or a self-hosted Jira with a personal access token or username and password. Credentials are stored locally and encrypted when local runtime storage supports it."
               }
             }
           }
@@ -12692,7 +12699,24 @@
             "70fcd360c4": "https://example.atlassian.net",
             "e176f9d0c5": "Jira Cloud 사이트 URL",
             "d785c42b8b": "Jira Cloud 사이트 URL, Atlassian 이메일, API 토큰을 사용해 이슈를 탐색합니다.",
-            "8388bdea2b": "Jira 사이트 연결"
+            "8388bdea2b": "Jira 사이트 연결",
+            "2e2b69e48e": "Use a self-hosted Jira base URL and a personal access token to browse issues.",
+            "b67e919bd5": "Jira instance type",
+            "17787d6e4b": "Atlassian Cloud",
+            "bc7a831773": "Self-hosted",
+            "3489e186d6": "Jira site URL",
+            "cbc27fa599": "https://jira.example.com",
+            "730d973bae": "Personal access token",
+            "8b9c7b9e7b": "Jira personal access token",
+            "ccfb086d3e": "Create a personal access token in your Jira profile under Personal Access Tokens.",
+            "1d947a07ab": "Use a self-hosted Jira base URL, username, and password to browse issues.",
+            "f49708c369": "Jira authentication method",
+            "84a810dd0e": "Username & password",
+            "8d1223fa5c": "Username",
+            "be9eba0a1b": "username",
+            "70035652d7": "Password",
+            "c50abbf340": "Jira account password",
+            "d8737db691": "Use your Jira Server or Data Center account username and password."
           }
         }
       },
@@ -13119,6 +13143,7 @@
           "title": "대화를 로드할 수 없습니다.",
           "subtitle": "스크립트를 읽을 수 없습니다. 계속 작업하려면 terminal로 다시 전환하세요."
         },
+        "pairHost": "호스트를 페어링하여 에이전트 채팅 기록을 확인하세요.",
         "notAgent": {
           "title": "여기에는 대화가 없습니다.",
           "subtitle": "이 terminal은 인식된 코딩 agent를 실행하고 있지 않습니다."

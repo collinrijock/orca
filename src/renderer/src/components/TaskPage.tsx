@@ -27,7 +27,6 @@ import {
   GitPullRequestDraft,
   List,
   LoaderCircle,
-  Lock,
   Minus,
   Plus,
   RefreshCw,
@@ -90,6 +89,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import TaskProjectSourceCombobox from '@/components/task-project-source-combobox'
+import { JiraConnectDialog } from '@/components/jira-connect-dialog'
 import { LinearApiKeyDialog } from '@/components/linear-api-key-dialog'
 import { LinearScopeSelector } from '@/components/linear-scope-selector'
 import RepoBadgeLabel from '@/components/repo/RepoBadgeLabel'
@@ -143,9 +143,9 @@ import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { useRepoAssigneesBySlug } from '@/hooks/useGitHubSlugMetadata'
 import { useTaskPageGitHubWorkItemMutation } from '@/hooks/useTaskPageGitHubWorkItemMutation'
 import {
+  applyPendingTaskPageGitHubMutationsToItems,
   materializeTaskPageItemList,
   MAX_LAG_TRAILS,
-  overlayPendingOnTaskPagePages,
   processTaskPageQuietRevalidateSettle,
   reapplyPendingTaskPageGitHubMutationsToCache
 } from '@/components/task-page-github-work-item-mutations'
@@ -220,7 +220,11 @@ import {
   type TaskPageRepoSourceState
 } from '@/components/task-page-cache-selectors'
 import { shouldHideTaskPageListChrome } from '@/components/task-page-list-chrome-visibility'
-import { accumulateWorkItemPages } from '@/components/task-page-work-item-pagination'
+import {
+  getTaskPagePerRepoLimit,
+  taskPageToGitHubApiPage
+} from '@/components/task-page-work-item-pagination'
+import { sortWorkItemsByNumber } from '../../../shared/work-items'
 import LinearIssueAttributeFilterDropdowns from '@/components/linear-issue-attribute-filter-dropdowns'
 import { resolveLinearIssueAttributeFilterPrimaryTeam } from '@/components/linear-issue-attribute-filter-primary-team'
 import {
@@ -3097,7 +3101,6 @@ export default function TaskPage(): React.JSX.Element {
   const jiraStatus = useAppStore((s) => s.jiraStatus)
   const jiraStatusChecked = useAppStore((s) => s.jiraStatusChecked)
   const jiraStatusContextKey = useAppStore((s) => s.jiraStatusContextKey)
-  const connectJira = useAppStore((s) => s.connectJira)
   const selectJiraSite = useAppStore((s) => s.selectJiraSite)
   const searchJiraIssues = useAppStore((s) => s.searchJiraIssues)
   const listJiraIssues = useAppStore((s) => s.listJiraIssues)
@@ -3788,15 +3791,23 @@ export default function TaskPage(): React.JSX.Element {
   // once, but the result is reconciled into existing rows to avoid a full
   // table shuffle when only status/key fields changed.
   const landingGitHubRefreshKeysRef = useRef<ReadonlySet<string>>(new Set())
-  // Why: pages holds all fetched pages of work items. Page 0 is seeded from
-  // cache for instant first paint; subsequent pages are loaded via date cursors.
-  const [pages, setPages] = useState<GitHubWorkItem[][]>(() => {
+  // Why: divide the display budget between repos so one provider page maps to
+  // one UI page without truncating rows that later provider pages cannot return.
+  const githubPerRepoPageLimit = getTaskPagePerRepoLimit(
+    selectedRepos.length,
+    PER_REPO_FETCH_LIMIT,
+    CROSS_REPO_DISPLAY_LIMIT
+  )
+  const githubPageSize = githubPerRepoPageLimit * Math.max(1, selectedRepos.length)
+  // Why: null entries are pages not fetched yet. Numbered provider pages let a
+  // high-page click load that page directly without rate-limiting intermediate reads.
+  const [pages, setPages] = useState<(GitHubWorkItem[] | null)[]>(() => {
     const trimmed = initialTaskQuery.trim()
     const merged: GitHubWorkItem[] = []
     for (const r of selectedRepos) {
       const cached = getCachedWorkItems(
         r.id,
-        PER_REPO_FETCH_LIMIT,
+        githubPerRepoPageLimit,
         trimmed,
         r.path,
         getTaskPageRepoSourceContext(r, 'github')
@@ -3808,15 +3819,13 @@ export default function TaskPage(): React.JSX.Element {
     if (merged.length === 0) {
       return [[]]
     }
-    const page0 = [...merged]
-      .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
-      .slice(0, CROSS_REPO_DISPLAY_LIMIT)
+    const page0 = sortWorkItemsByNumber(merged).slice(0, githubPageSize)
     return [page0]
   })
   const [currentPage, setCurrentPage] = useState(0)
   const [paginationLoading, setPaginationLoading] = useState(false)
   const [loadingTargetPage, setLoadingTargetPage] = useState<number | null>(null)
-  const [totalItemCount, setTotalItemCount] = useState<number | null>(null)
+  const [countedTotalPages, setCountedTotalPages] = useState<number | null>(null)
   const fetchWorkItemsNextPage = useAppStore((s) => s.fetchWorkItemsNextPage)
   const countWorkItemsAcrossRepos = useAppStore((s) => s.countWorkItemsAcrossRepos)
 
@@ -3846,7 +3855,7 @@ export default function TaskPage(): React.JSX.Element {
       selectTaskPageWorkItemsCacheEntries(
         s.workItemsCache,
         selectedRepos.map(getTaskPageRepoCacheInput),
-        PER_REPO_FETCH_LIMIT,
+        githubPerRepoPageLimit,
         appliedWorkItemsCacheQuery
       )
     )
@@ -3969,6 +3978,9 @@ export default function TaskPage(): React.JSX.Element {
       setPages((current) => {
         let changed = false
         const nextPages = current.map((page) => {
+          if (!page) {
+            return page
+          }
           let pageChanged = false
           const nextPage = page.map((item) => {
             if (item.id !== itemKey.id || item.repoId !== itemKey.repoId) {
@@ -4018,8 +4030,8 @@ export default function TaskPage(): React.JSX.Element {
     // Hard guarantee (K4): always overlay pending after reconcile so list
     // fetch clobbers never paint unprotected coordinator fields.
     setPages((current) =>
-      overlayPendingOnTaskPagePages(
-        reconcileTaskPagePagesWithWorkItemsCache(current, selectedWorkItemsCacheEntries)
+      reconcileTaskPagePagesWithWorkItemsCache(current, selectedWorkItemsCacheEntries).map((page) =>
+        page ? applyPendingTaskPageGitHubMutationsToItems(page) : null
       )
     )
   }, [githubMode, selectedWorkItemsCacheEntries, taskSource])
@@ -5827,6 +5839,7 @@ export default function TaskPage(): React.JSX.Element {
   }, [newLinearStates.data, newLinearIssueStateId])
 
   const [linearConnectOpen, setLinearConnectOpen] = useState(false)
+  const [jiraConnectOpen, setJiraConnectOpen] = useState(false)
   useContextualTour(
     'tasks',
     !dialogWorkItem &&
@@ -5836,6 +5849,7 @@ export default function TaskPage(): React.JSX.Element {
       !newLinearProjectOpen &&
       !newLinearIssueOpen &&
       !linearConnectOpen &&
+      !jiraConnectOpen &&
       activeModal === 'none',
     'tasks_open'
   )
@@ -5925,12 +5939,6 @@ export default function TaskPage(): React.JSX.Element {
   const [newJiraIssueCustomFieldValues, setNewJiraIssueCustomFieldValues] = useState<
     Record<string, string>
   >({})
-  const [jiraConnectOpen, setJiraConnectOpen] = useState(false)
-  const [jiraSiteUrlDraft, setJiraSiteUrlDraft] = useState('')
-  const [jiraEmailDraft, setJiraEmailDraft] = useState('')
-  const [jiraApiTokenDraft, setJiraApiTokenDraft] = useState('')
-  const [jiraConnectState, setJiraConnectState] = useState<'idle' | 'connecting' | 'error'>('idle')
-  const [jiraConnectError, setJiraConnectError] = useState<string | null>(null)
   const includeJiraSiteNameInProjectLabel = selectedJiraSiteId === 'all'
   const previousProviderRuntimeContextKeyRef = useRef(providerRuntimeContextKey)
 
@@ -6213,6 +6221,9 @@ export default function TaskPage(): React.JSX.Element {
     const seen = new Set<string>()
     const logins: string[] = []
     for (const page of pages) {
+      if (!page) {
+        continue
+      }
       for (const item of page) {
         if (
           !item.author ||
@@ -6286,43 +6297,29 @@ export default function TaskPage(): React.JSX.Element {
     }
   }, [ensurePRChecksLoaded, filteredWorkItems, githubMode, showPRManagementColumns, taskSource])
 
-  // Why: each page is bounded by both the per-repo fetch budget (so a single
-  // repo can yield at most PER_REPO_FETCH_LIMIT rows per page) and the
-  // post-merge display cap. Dividing the total by CROSS_REPO_DISPLAY_LIMIT
-  // alone under-counts pages when the per-repo budget is the tighter bound —
-  // e.g. one repo with 60 open PRs yielded 36 rows on page 0 and ceil(60/100)
-  // = 1 total pages, hiding the pager entirely.
-  const effectivePageSize = Math.max(
-    1,
-    Math.min(PER_REPO_FETCH_LIMIT * Math.max(1, selectedRepos.length), CROSS_REPO_DISPLAY_LIMIT)
-  )
-  // Why: if the search-API count is unavailable (rate-limited, transient
-  // failure — `countWorkItemsAcrossRepos` swallows errors and returns 0),
-  // infer there's at least one more page whenever the last loaded page
-  // filled to the per-page capacity. Otherwise pagination would silently
-  // hide and trap the user on page 0 with no way to advance.
-  const lastPageFull = (pages.at(-1)?.length ?? 0) >= effectivePageSize
+  let lastLoadedPageIndex = 0
+  for (let index = 0; index < pages.length; index += 1) {
+    if (pages[index] !== null) {
+      lastLoadedPageIndex = index
+    }
+  }
+  // Why: when counts fail, a full loaded page is enough evidence to expose one
+  // more page without pretending unfetched sparse entries are empty results.
+  const lastLoadedPageFull =
+    (pages[lastLoadedPageIndex]?.length ?? 0) >= Math.max(1, githubPageSize)
+  const fallbackTotalPages = lastLoadedPageFull
+    ? Math.max(pages.length, lastLoadedPageIndex + 2)
+    : Math.max(1, pages.length)
   const totalPages =
-    totalItemCount && totalItemCount > 0
-      ? Math.max(pages.length, Math.ceil(totalItemCount / effectivePageSize))
-      : lastPageFull
-        ? pages.length + 1
-        : pages.length
+    countedTotalPages && countedTotalPages > 0
+      ? Math.max(pages.length, countedTotalPages)
+      : fallbackTotalPages
 
-  // Why: loads the next page using the oldest item's updatedAt as a cursor.
-  // When targetPage is provided (from clicking a numbered page beyond loaded
-  // pages), it chains fetches until that page is loaded.
+  // Why: numbered provider pages support random access. Load only the clicked
+  // page so a high-page jump does not exhaust GitHub's Search API rate bucket.
   const handleLoadNextPage = useCallback(
     async (targetPage?: number) => {
       if (paginationLoading || selectedRepos.length === 0) {
-        return
-      }
-      const lastPage = pages.at(-1)
-      if (!lastPage || lastPage.length === 0) {
-        return
-      }
-      const oldestItem = lastPage.at(-1)
-      if (!oldestItem?.updatedAt) {
         return
       }
       const q = stripRepoQualifiers(appliedTaskSearch.trim())
@@ -6334,38 +6331,34 @@ export default function TaskPage(): React.JSX.Element {
       }))
       const requestGeneration = paginationGenerationRef.current
 
-      const target = targetPage ?? pages.length
+      const target = targetPage ?? currentPage + 1
       setPaginationLoading(true)
       setLoadingTargetPage(target)
       try {
-        const result = await accumulateWorkItemPages({
-          existingPages: pages,
-          initialCursor: oldestItem.updatedAt,
-          targetPage: target,
-          // Why: uniform page size keeps deduped pages from shrinking below the
-          // size `totalPages` (count ÷ effectivePageSize) assumes — otherwise
-          // the per-page overlap loss would strand the tail items.
-          pageSize: effectivePageSize,
-          isCancelled: () => paginationGenerationRef.current !== requestGeneration,
-          fetchPage: async (cursor) => {
-            const { items } = await fetchWorkItemsNextPage(
-              repoArgs,
-              PER_REPO_FETCH_LIMIT,
-              CROSS_REPO_DISPLAY_LIMIT,
-              q,
-              cursor
-            )
-            return { items }
-          }
-        })
-        if (result.cancelled) {
+        const { items } = await fetchWorkItemsNextPage(
+          repoArgs,
+          githubPerRepoPageLimit,
+          githubPageSize,
+          q,
+          taskPageToGitHubApiPage(target)
+        )
+        if (paginationGenerationRef.current !== requestGeneration) {
           return
         }
-        if (result.newPages.length > 0) {
-          // Why: load-more overlays pending only — no retain (K18 full-replace only).
-          setPages((prev) => [...prev, ...overlayPendingOnTaskPagePages(result.newPages)])
-          setCurrentPage(target < result.loadedPages ? target : result.loadedPages - 1)
+        if (items.length === 0) {
+          return
         }
+        setPages((previous) => {
+          const next = [...previous]
+          while (next.length <= target) {
+            next.push(null)
+          }
+          // Why: numbered pages preserve their provider slot; pending edits
+          // overlay the fetched rows without retaining rows from another page.
+          next[target] = applyPendingTaskPageGitHubMutationsToItems(items)
+          return next
+        })
+        setCurrentPage(target)
       } catch (err) {
         console.error('Failed to load next page:', err)
       } finally {
@@ -6378,10 +6371,11 @@ export default function TaskPage(): React.JSX.Element {
     [
       paginationLoading,
       selectedRepos,
-      pages,
+      currentPage,
       appliedTaskSearch,
       fetchWorkItemsNextPage,
-      effectivePageSize
+      githubPageSize,
+      githubPerRepoPageLimit
     ]
   )
 
@@ -6457,7 +6451,7 @@ export default function TaskPage(): React.JSX.Element {
     for (const r of selectedRepos) {
       const cached = getCachedWorkItems(
         r.id,
-        PER_REPO_FETCH_LIMIT,
+        githubPerRepoPageLimit,
         q,
         r.path,
         getTaskPageRepoSourceContext(r, 'github')
@@ -6473,21 +6467,19 @@ export default function TaskPage(): React.JSX.Element {
     // no repo has a cache entry for it), we clear the previous query's rows
     // rather than leaving them on screen under the spinner.
     const page0Raw =
-      preMerged.length > 0
-        ? [...preMerged]
-            .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
-            .slice(0, CROSS_REPO_DISPLAY_LIMIT)
-        : []
+      preMerged.length > 0 ? sortWorkItemsByNumber(preMerged).slice(0, githubPageSize) : []
     // Why: pre-paint must still overlay in-flight mutations (K4/K18).
     setPages((previous) => [
-      materializeTaskPageItemList({
-        networkItems: page0Raw,
-        previousItems: previous.flat(),
-        queryKey: githubWorkItemMutationQueryKey
-      })
+      sortWorkItemsByNumber(
+        materializeTaskPageItemList({
+          networkItems: page0Raw,
+          previousItems: previous.flatMap((page) => page ?? []),
+          queryKey: githubWorkItemMutationQueryKey
+        })
+      )
     ])
     setCurrentPage(0)
-    setTotalItemCount(null)
+    setCountedTotalPages(null)
     setTasksError(null)
     setFailedCount(0) // reset so a prior failure banner doesn't linger
     setTasksLoading(anyUncached)
@@ -6529,7 +6521,7 @@ export default function TaskPage(): React.JSX.Element {
     // newer retry's source from the set. Clearing only the keys captured
     // when this effect dispatched preserves later additions.
     const dispatchedRetrySourceKeys = retryingSourceKeys
-    void fetchWorkItemsAcrossRepos(repoArgs, PER_REPO_FETCH_LIMIT, CROSS_REPO_DISPLAY_LIMIT, q, {
+    void fetchWorkItemsAcrossRepos(repoArgs, githubPerRepoPageLimit, githubPageSize, q, {
       ...deriveTaskPageGitHubWorkItemsFetchOptions(forcedFetch, shouldProbeOnLanding)
     })
       .then(({ items, failedCount: failed }) => {
@@ -6571,18 +6563,22 @@ export default function TaskPage(): React.JSX.Element {
           const replaceFirstPage = shouldReplaceTaskPageItemsAfterRefresh(page0Raw, items)
           const resetPagination = shouldResetTaskPagePaginationAfterLandingRefresh(page0Raw, items)
           setPages((current) =>
-            overlayPendingOnTaskPagePages(reconcileTaskPagePagesAfterLandingRefresh(current, items))
+            reconcileTaskPagePagesAfterLandingRefresh(current, items).map((page) =>
+              page ? applyPendingTaskPageGitHubMutationsToItems(page) : null
+            )
           )
           if (replaceFirstPage || resetPagination) {
             setCurrentPage(0)
           }
         } else {
           setPages((previous) => [
-            materializeTaskPageItemList({
-              networkItems: items,
-              previousItems: previous.flat(),
-              queryKey: githubWorkItemMutationQueryKey
-            })
+            sortWorkItemsByNumber(
+              materializeTaskPageItemList({
+                networkItems: items,
+                previousItems: previous.flatMap((page) => page ?? []),
+                queryKey: githubWorkItemMutationQueryKey
+              })
+            )
           ])
           setCurrentPage(0)
         }
@@ -6630,10 +6626,11 @@ export default function TaskPage(): React.JSX.Element {
         executionHostId: r.executionHostId,
         sourceContext: getTaskPageRepoSourceContext(r, 'github')
       })),
-      q
-    ).then((count) => {
+      q,
+      githubPerRepoPageLimit
+    ).then(({ totalPages: countedPages }) => {
       if (!cancelled) {
-        setTotalItemCount(count)
+        setCountedTotalPages(countedPages)
       }
     })
 
@@ -6685,7 +6682,7 @@ export default function TaskPage(): React.JSX.Element {
     }))
     const sourceContextByRepoId = new Map(repoArgs.map((r) => [r.repoId, r.sourceContext] as const))
     const lagBackoffMs = [500, 1000, 2000, 4000, 8000] as const
-    void fetchWorkItemsAcrossRepos(repoArgs, PER_REPO_FETCH_LIMIT, CROSS_REPO_DISPLAY_LIMIT, q, {
+    void fetchWorkItemsAcrossRepos(repoArgs, githubPerRepoPageLimit, githubPageSize, q, {
       force: true,
       noCache: true
     })
@@ -6707,11 +6704,13 @@ export default function TaskPage(): React.JSX.Element {
           scheduleTrailing: false
         })
         setPages((previous) => [
-          materializeTaskPageItemList({
-            networkItems: items,
-            previousItems: previous.flat(),
-            queryKey: githubWorkItemMutationQueryKey
-          })
+          sortWorkItemsByNumber(
+            materializeTaskPageItemList({
+              networkItems: items,
+              previousItems: previous.flatMap((page) => page ?? []),
+              queryKey: githubWorkItemMutationQueryKey
+            })
+          )
         ])
         const lagValues = [...quietState.lagSkipAttempts.values()]
         const attempts = lagValues.length === 0 ? 0 : Math.max(...lagValues)
@@ -8302,33 +8301,6 @@ export default function TaskPage(): React.JSX.Element {
     },
     [openComposerForJiraItem]
   )
-
-  const handleJiraConnect = useCallback(async (): Promise<void> => {
-    const siteUrl = jiraSiteUrlDraft.trim()
-    const email = jiraEmailDraft.trim()
-    const apiToken = jiraApiTokenDraft.trim()
-    if (!siteUrl || !email || !apiToken) {
-      return
-    }
-    setJiraConnectState('connecting')
-    setJiraConnectError(null)
-    try {
-      const result = await connectJira({ siteUrl, email, apiToken })
-      if (result.ok) {
-        setJiraSiteUrlDraft('')
-        setJiraEmailDraft('')
-        setJiraApiTokenDraft('')
-        setJiraConnectState('idle')
-        setJiraConnectOpen(false)
-      } else {
-        setJiraConnectState('error')
-        setJiraConnectError(result.error)
-      }
-    } catch (error) {
-      setJiraConnectState('error')
-      setJiraConnectError(error instanceof Error ? error.message : 'Connection failed')
-    }
-  }, [connectJira, jiraApiTokenDraft, jiraEmailDraft, jiraSiteUrlDraft])
 
   const taskPageListChromeHidden = shouldHideTaskPageListChrome({
     taskSource,
@@ -10035,7 +10007,7 @@ export default function TaskPage(): React.JSX.Element {
                     totalPages={totalPages}
                     loadingTarget={loadingTargetPage}
                     onPageChange={(page) => {
-                      if (page < pages.length) {
+                      if (pages[page] !== null && pages[page] !== undefined) {
                         setCurrentPage(page)
                       } else {
                         void handleLoadNextPage(page)
@@ -10291,16 +10263,7 @@ export default function TaskPage(): React.JSX.Element {
                   )}
                 </p>
                 <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
-                  <Button
-                    onClick={() => {
-                      setJiraSiteUrlDraft('')
-                      setJiraEmailDraft('')
-                      setJiraApiTokenDraft('')
-                      setJiraConnectState('idle')
-                      setJiraConnectError(null)
-                      setJiraConnectOpen(true)
-                    }}
-                  >
+                  <Button onClick={() => setJiraConnectOpen(true)}>
                     {translate('auto.components.TaskPage.83bce6be5c', 'Connect Jira')}
                   </Button>
                   <Button variant="outline" onClick={() => hideTaskSource('jira', 'Jira')}>
@@ -12906,137 +12869,7 @@ export default function TaskPage(): React.JSX.Element {
         onConnected={handleLinearAccessConnected}
       />
 
-      <Dialog
-        open={jiraConnectOpen}
-        onOpenChange={(open) => {
-          if (jiraConnectState !== 'connecting') {
-            setJiraConnectOpen(open)
-          }
-        }}
-      >
-        <DialogContent
-          className="sm:max-w-md"
-          onKeyDown={(e) => {
-            if (
-              e.key === 'Enter' &&
-              jiraSiteUrlDraft.trim() &&
-              jiraEmailDraft.trim() &&
-              jiraApiTokenDraft.trim() &&
-              jiraConnectState !== 'connecting'
-            ) {
-              e.preventDefault()
-              void handleJiraConnect()
-            }
-          }}
-        >
-          <DialogHeader className="gap-3">
-            <DialogTitle className="leading-tight">
-              {translate('auto.components.TaskPage.60f806ce99', 'Connect Jira site')}
-            </DialogTitle>
-            <DialogDescription>
-              {translate(
-                'auto.components.TaskPage.33fc2bcb30',
-                'Use a Jira Cloud site URL, Atlassian email, and API token to browse issues.'
-              )}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="flex flex-col gap-3">
-            <Input
-              autoFocus
-              placeholder={translate(
-                'auto.components.TaskPage.163df31e0e',
-                'https://example.atlassian.net'
-              )}
-              value={jiraSiteUrlDraft}
-              onChange={(e) => {
-                setJiraSiteUrlDraft(e.target.value)
-                if (jiraConnectState === 'error') {
-                  setJiraConnectState('idle')
-                  setJiraConnectError(null)
-                }
-              }}
-              disabled={jiraConnectState === 'connecting'}
-            />
-            <Input
-              type="email"
-              placeholder={translate('auto.components.TaskPage.68df347677', 'you@example.com')}
-              value={jiraEmailDraft}
-              onChange={(e) => {
-                setJiraEmailDraft(e.target.value)
-                if (jiraConnectState === 'error') {
-                  setJiraConnectState('idle')
-                  setJiraConnectError(null)
-                }
-              }}
-              disabled={jiraConnectState === 'connecting'}
-            />
-            <Input
-              type="password"
-              placeholder={translate('auto.components.TaskPage.b95623e93f', 'Atlassian API token')}
-              value={jiraApiTokenDraft}
-              onChange={(e) => {
-                setJiraApiTokenDraft(e.target.value)
-                if (jiraConnectState === 'error') {
-                  setJiraConnectState('idle')
-                  setJiraConnectError(null)
-                }
-              }}
-              disabled={jiraConnectState === 'connecting'}
-            />
-            {jiraConnectState === 'error' && jiraConnectError && (
-              <p className="text-xs text-destructive">{jiraConnectError}</p>
-            )}
-            <p className="text-xs text-muted-foreground">
-              {translate('auto.components.TaskPage.59c14d34a2', 'Create a token in')}{' '}
-              <button
-                className="text-primary underline-offset-2 hover:underline"
-                onClick={() =>
-                  window.api.shell.openUrl(
-                    'https://id.atlassian.com/manage-profile/security/api-tokens'
-                  )
-                }
-              >
-                {translate('auto.components.TaskPage.246c2b3dd3', 'Atlassian account settings')}
-              </button>
-              .
-            </p>
-            <p className="flex items-center gap-1.5 text-[11px] text-muted-foreground/70">
-              <Lock className="size-3 shrink-0" />
-              {translate(
-                'auto.components.TaskPage.2abe22ef76',
-                'Your token is encrypted via the OS keychain and stored locally.'
-              )}
-            </p>
-          </div>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setJiraConnectOpen(false)}
-              disabled={jiraConnectState === 'connecting'}
-            >
-              {translate('auto.components.TaskPage.ff69a30681', 'Cancel')}
-            </Button>
-            <Button
-              onClick={() => void handleJiraConnect()}
-              disabled={
-                !jiraSiteUrlDraft.trim() ||
-                !jiraEmailDraft.trim() ||
-                !jiraApiTokenDraft.trim() ||
-                jiraConnectState === 'connecting'
-              }
-            >
-              {jiraConnectState === 'connecting' ? (
-                <>
-                  <LoaderCircle className="size-4 animate-spin" />
-                  {translate('auto.components.TaskPage.513cddfa7a', 'Verifying…')}
-                </>
-              ) : (
-                translate('auto.components.TaskPage.887efe9140', 'Connect')
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <JiraConnectDialog open={jiraConnectOpen} onOpenChange={setJiraConnectOpen} />
     </div>
   )
 }
