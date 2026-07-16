@@ -140,6 +140,49 @@ describe('SSH relay runtime artifact workflow', () => {
     expect(stop.if).toBe("always() && runner.os == 'Linux'")
   })
 
+  it('runs full-size Windows system SSH against loopback native OpenSSH', async () => {
+    const workflow = parse(await readFile(workflowUrl, 'utf8'))
+    const steps = workflow.jobs['build-windows-runtime'].steps
+    const start = steps.find(
+      (step) => step.name === 'Start loopback Windows OpenSSH system-SSH fixture'
+    )
+    const measure = steps.find(
+      (step) => step.name === 'Measure exact full-size runtime over Windows system SSH'
+    )
+    const stop = steps.find(
+      (step) => step.name === 'Stop loopback Windows OpenSSH system-SSH fixture'
+    )
+
+    expect(start).toBeDefined()
+    expect(measure).toBeDefined()
+    expect(stop).toBeDefined()
+    expect(start.shell).toBe('pwsh')
+    expect(start.run).toContain('OpenSSH.Server~~~~0.0.1.0')
+    expect(start.run).toContain('Add-WindowsCapability')
+    expect(start.run).toContain('New-LocalUser')
+    expect(start.run).toContain('ListenAddress 127.0.0.1')
+    expect(start.run).toContain('PasswordAuthentication no')
+    expect(start.run).toContain('StrictModes yes')
+    expect(start.run).toContain('StrictHostKeyChecking=yes')
+    expect(start.run).toContain('powershell.exe')
+    expect(start.run).toContain('([Version]$remotePowerShellVersion).Major -ne 5')
+    expect(start.run).not.toContain('administrators_authorized_keys')
+    expect(start.run).not.toContain('New-Service')
+    expect(measure.shell).toBe('pwsh')
+    expect(measure.run).toContain("$env:ORCA_SSH_FORCE_SYSTEM_TRANSPORT = '1'")
+    expect(measure.run).toContain('ssh-relay-runtime-windows-system-ssh-openssh-full-size.test.ts')
+    expect(measure.run).toContain("Join-Path $firstOutput 'runtime'")
+    expect(stop.if).toBe("always() && runner.os == 'Windows'")
+    expect(stop.shell).toBe('pwsh')
+    expect(stop.run).toContain('fixture-owned')
+    expect(stop.run).toContain('service-owned')
+    expect(stop.run).toContain('account-owned')
+    expect(stop.run).toContain('service-backup.json')
+    expect(stop.run).toContain('sc.exe config')
+    expect(stop.run).not.toContain('sc.exe delete')
+    expect(stop.run).toContain('Remove-LocalUser')
+  })
+
   it('uploads only the first output after two clean builds verify and compare', async () => {
     const source = await readFile(workflowUrl, 'utf8')
     const workflow = parse(source)

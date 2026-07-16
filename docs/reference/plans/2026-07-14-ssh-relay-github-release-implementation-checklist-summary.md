@@ -10,16 +10,33 @@ A checked box means the work has evidence in the detailed ledger. Design approva
 complete a box.
 
 Active checkpoint: **Milestone 6 / Work Package 5 bounded runtime transfer — live/full-size Windows
-system-SSH contract audit, 2026-07-15, Codex implementation owner.**
-Audit a purpose-named native Windows OpenSSH/full-size proof over the now-proven disconnected tree
-composer before writing its RED suite or workflow fixture. Product callers, legacy upload/fallback/
-default behavior, tuple enablement, publication, and SignPath remain out of scope.
+system-SSH exact-head native proof, 2026-07-15, Codex implementation owner.**
+`E-M6-WINDOWS-SYSTEM-SSH-TREE-LIVE-AUDIT-001` fixes the loopback-only Windows optional-capability
+server, fixture-owned non-admin account/ACL, exact host-key trust, Windows PowerShell 5.1,
+serial/default and four-channel metrics, cancellation/collision/cleanup, and deterministic teardown
+contracts. `E-M6-WINDOWS-SYSTEM-SSH-TREE-LIVE-LOCAL-RED-001` proves the purpose suite skips without
+native inputs, the existing workflow oracle passes 9/9, and the new case fails only because the
+audited start step is absent. Add only start/measure/stop wiring, then require native x64/arm64
+evidence. Product callers, legacy upload/fallback/default behavior, tuple enablement, publication,
+and SignPath remain out of scope.
+
+Pre-push fixture review found that native Windows `sshd.exe` may require the fixed `sshd` service
+name. The audited contract now requires a stopped capability-owned service, exact image-path/start-
+mode snapshot and restoration, and ownership-marked cleanup; it does not create/delete an arbitrary
+custom service or touch an already-running server.
+
+`E-M6-WINDOWS-SYSTEM-SSH-TREE-LIVE-LOCAL-001` records the final local package green: 10/10 workflow
+contracts with one honest live-suite skip, 259 focused passes with five skips, 694 broad relay passes
+with ten skips, 283/283 release contracts, typecheck, full lint, 355-entry max-lines ratchet,
+PowerShell syntax, formatting, isolation, and protected-resolver checks pass. Native x64/arm64
+capability, ACL, full-size, cancellation, and teardown proof remains required before this package
+closes.
 `E-M6-WINDOWS-SYSTEM-SSH-TREE-LOCAL-RED-001` proves the native workflow oracle passes 9/9 and the
 purpose suite fails solely because the audited production tree-composition module is absent.
 `E-M6-WINDOWS-SYSTEM-SSH-TREE-LOCAL-001` records 8/8 purpose and 9/9 workflow-oracle cases, 258
 focused passes with three declared skips, 694 broad relay passes with nine declared skips, 282/282
 release contracts, typecheck, full lint, formatting, max-lines, diff, protected-resolver, and
-no-product-consumer gates. Exact-head native CI remains required.
+no-product-consumer gates. The following exact-head native evidence closes its CI gate.
 `E-M6-WINDOWS-SYSTEM-SSH-TREE-CI-001` closes that gate at exact implementation head `139bcd16d3`:
 all six primary native jobs, both Linux supplements, Windows x64 floor, PR Checks, Golden E2E, and
 computer-use pass. Windows arm64 retains only hosted build 26200 versus required 26100 after complete

@@ -8,8 +8,8 @@ work; keep exact commands, runner identities, hashes, metrics, and residual gaps
 
 Date created: 2026-07-14<br>
 Last updated: 2026-07-15<br>
-Current phase: Milestone 6 / Work Package 5 bounded runtime transfer — **In progress — 2026-07-15, Codex implementation owner: live/full-size Windows system-SSH contract audit**. Keep every capability disconnected from every production/default SSH path. Real Apple/SignPath rehearsals remain an explicit late gate and are not on this package's critical path.<br>
-Session checkpoint: **WINDOWS TREE COMPOSITION NATIVE PROOF CLOSED / LIVE WINDOWS OPENSSH AUDIT ACTIVE — 2026-07-15, Codex implementation owner** — `E-M6-WINDOWS-SYSTEM-SSH-TREE-CI-001` closes the disconnected composer at exact implementation head `139bcd16d36bfa6d0b8db16ab8f2f2223325a7f6`; all six primary native jobs and every adjacent gate pass except the declared Windows arm64 hosted build-26200 versus required-26100 floor check after complete runtime proof. Audit the first real full-size Windows OpenSSH package before writing RED tests or workflow fixture code. Do not connect a product caller, change legacy upload/fallback/default behavior, enable a tuple, publish an artifact, or perform SignPath work. Merging to `main` remains prohibited, SignPath is deferred, and legacy remains the production default.<br>
+Current phase: Milestone 6 / Work Package 5 bounded runtime transfer — **In progress — 2026-07-15, Codex implementation owner: live/full-size Windows system-SSH exact-head native proof**. Keep every capability disconnected from every production/default SSH path. Real Apple/SignPath rehearsals remain an explicit late gate and are not on this package's critical path.<br>
+Session checkpoint: **LIVE WINDOWS OPENSSH FIXTURE LOCALLY GREEN / NATIVE X64+ARM64 PROOF NEXT — 2026-07-15, Codex implementation owner** — `E-M6-WINDOWS-SYSTEM-SSH-TREE-LIVE-LOCAL-001` records the audited loopback fixture, purpose suite, workflow oracle, fixed-name service snapshot/restoration, focused/broad/release regression suites, typecheck, full lint, PowerShell parse, formatting, isolation, and protected-resolver gates locally green. The full-size live suite remains one honest local skip and earns no Windows claim. Commit and push the isolated package, then require exact-head `windows-2022` x64 and `windows-11-arm` arm64 logs before crediting capability installation/start, ACLs, PowerShell 5.1, full-size transfer, or teardown. Do not connect a product caller, change legacy upload/fallback/default behavior, enable a tuple, publish an artifact, or perform SignPath work. Merging to `main` remains prohibited, SignPath is deferred, and legacy remains the production default.<br>
 Primary design: [SSH relay GitHub Release plan](./2026-07-14-ssh-relay-github-release-plan.html)<br>
 Motivating issues: [#8450](https://github.com/stablyai/orca/issues/8450), [#1693](https://github.com/stablyai/orca/issues/1693)
 
@@ -159,10 +159,12 @@ same change as the work it records.
 - Completed package: the disconnected POSIX system-SSH tree/root composition is green locally and
   on all six primary Node 24 native clients under E-M6-POSIX-SYSTEM-SSH-TREE-LOCAL-001 and
   E-M6-POSIX-SYSTEM-SSH-TREE-CI-001. It has no live/full-size SSH or product caller.
-- Active package: **Audit in progress — 2026-07-15, Codex implementation owner** — establish the
-  smallest purpose-named live/full-size loopback OpenSSH proof for the exact disconnected POSIX
-  system-SSH tree owner, initially on target-native Linux x64/arm64 runners. Do not add product,
-  settings, fallback, tuple, publication, default behavior, a semantic probe, or a tar fast path.
+- Active package: **Exact-head native proof in progress — 2026-07-15, Codex implementation owner** —
+  the audited purpose suite, loopback workflow wiring, fixed-name service restoration, and every
+  local regression/isolation gate pass under `E-M6-WINDOWS-SYSTEM-SSH-TREE-LIVE-LOCAL-001`. Commit
+  and push only this package, then collect native x64/arm64 capability, ACL, PowerShell 5.1,
+  full-size serial/four-channel/cancellation, and teardown evidence. Do not add product, settings,
+  fallback, tuple, publication, default behavior, or signing.
 - Completed Work Package 2 gate: target-native Windows source-signature reports from exact-head
   artifact jobs 87267322867 and 87267322870 were independently downloaded and matched to their
   identities and signing-stage reports under E-M3-WINDOWS-SOURCE-SIGNATURE-CI-001. PR Checks
@@ -18522,6 +18524,132 @@ src/main/ssh/ssh-remote-node-resolution.ts src/main/ssh/ssh-remote-node-resoluti
   launch, product/Beta/fallback/default behavior, tuple enablement, publication, Apple signing, or
   SignPath. Legacy remains the sole production/default path and every tuple stays disabled.
 
+### E-M6-WINDOWS-SYSTEM-SSH-TREE-LIVE-AUDIT-001 — full-size native Windows OpenSSH proof contract
+
+- Date/owner/base: 2026-07-15, Codex implementation owner; audit-only package atop exact head
+  `8018152043a982f0d2c8d2907208858551c01176`. The published `windows-2022` and
+  `windows-11-arm` runner manifests identify the native OS/PowerShell images but do not promise an
+  installed OpenSSH Server. The fixture therefore queries `OpenSSH.Server~~~~0.0.1.0`, installs that
+  Windows capability only when absent, and fails closed if its native `sshd.exe` cannot validate or
+  start. It never substitutes a third-party server or credits a mocked/local-PowerShell-only path.
+- Fixture ownership/authentication: create a purpose-named non-admin local account with a random
+  in-memory password used only to keep the Windows account enabled; authenticate SSH solely with a
+  freshly generated Ed25519 client key. Put the explicit `AuthorizedKeysFile`, host key, config,
+  PID/service metadata, and log under one fixture root. Remove inherited ACLs and grant only the
+  fixture user, LocalSystem, and built-in Administrators as required. Grant that account Modify only
+  on the fixture remote root. Never use `administrators_authorized_keys` or mutate the runner user's
+  profile/config.
+- Server/trust/shell boundary: require the capability-owned `sshd` service to exist and be stopped;
+  fail without mutation if it is already running. Snapshot its exact image path and start mode,
+  temporarily point that fixed-name LocalSystem service at the fixture config, then restore both
+  values. This avoids assuming Windows `sshd.exe` can register under an arbitrary service name. The
+  custom config uses a dedicated port and `ListenAddress 127.0.0.1`; disables password,
+  keyboard-interactive, and challenge-response authentication; enables `StrictModes`; and allows
+  only the fixture account. Generate a unique server Ed25519 key and pin its exact public key in a
+  private `known_hosts`; readiness uses `BatchMode=yes`, `IdentitiesOnly=yes`, and
+  `StrictHostKeyChecking=yes`. Prove the remote command resolves Windows PowerShell 5.1 before any
+  runtime bytes. The production receiver remains the existing encoded `powershell.exe -NoProfile
+-NonInteractive -ExecutionPolicy Bypass`/.NET stream implementation.
+- Required measurement: on both native `windows-2022` x64 and `windows-11-arm` arm64 runtime jobs,
+  scan the exact target-native runtime, transfer its complete declared tree serially through the
+  default-one path and at maximum concurrency four, hash every transferred file locally through the
+  loopback runner, and assert exact path/file/byte counts. Record elapsed time, incremental RSS,
+  peak active files, OpenSSH/PowerShell/image/architecture identities, collision preservation, and
+  connection reuse. Abort the four-channel path after observed progress; require joined settlement
+  and owned-root removal below ten seconds, no later progress after 500 ms, and no leaked stage.
+- Teardown: explicit root/account/service-mutation ownership markers prevent collision cleanup. The
+  `always()` step stops only the fixture-started run, waits for its PID/process tree, restores the
+  capability service's exact prior image path/start mode, deletes only the marked fixture account/
+  profile/root, and prints bounded server logs. It may leave the Windows capability and its restored
+  stopped service installed on the disposable hosted runner, but must leave no account, key, stage,
+  connection, service mutation, or process owned by the test.
+- RED/green sequencing and residual boundary: first add a suite that honestly skips without all
+  exact runner inputs and an oracle that fails solely for absent audited start/measure/stop steps.
+  Then add the fixture wiring. Native capability installation/start, ACL behavior, PowerShell 5.1,
+  full-size transfer, metrics, and teardown earn evidence only from exact-head x64 and arm64 logs.
+  This loopback Layer A proof does not cover external Windows hosts, long paths, endpoint protection,
+  high RTT, cross-client Layer B, remote verify/install/publish/launch, product/Beta/fallback/default
+  behavior, tuple enablement, publication, Apple signing, or SignPath. Legacy remains the sole
+  production/default path and every tuple stays disabled.
+
+### E-M6-WINDOWS-SYSTEM-SSH-TREE-LIVE-LOCAL-RED-001 — audited native fixture steps are absent
+
+- Date/owner/base: 2026-07-15, Codex implementation owner; uncommitted purpose-test, workflow-oracle,
+  and checklist package atop exact base `8018152043a982f0d2c8d2907208858551c01176` on Apple arm64,
+  macOS 26.2 build 25C56, Node 26.5.0, pnpm 10.24.0. Local execution cannot credit native Windows
+  OpenSSH or the full-size transfer.
+- Format command: `pnpm exec oxfmt --write
+src/main/ssh/ssh-relay-runtime-windows-system-ssh-openssh-full-size.test.ts
+config/scripts/ssh-relay-runtime-workflow.test.mjs
+docs/reference/plans/2026-07-14-ssh-relay-github-release-implementation-checklist.md
+docs/reference/plans/2026-07-14-ssh-relay-github-release-implementation-checklist-summary.md`
+  completes in 4.813 seconds.
+- RED command: `pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1
+src/main/ssh/ssh-relay-runtime-windows-system-ssh-openssh-full-size.test.ts
+config/scripts/ssh-relay-runtime-workflow.test.mjs`. Result: the purpose suite is one declared skip
+  because none of its exact runner inputs are present; the existing workflow oracle cases pass 9/9;
+  the new tenth case fails in 11 ms only at `expect(start).toBeDefined()` because
+  `Start loopback Windows OpenSSH system-SSH fixture` is absent. There is no production-module,
+  assertion, fixture-input, or adjacent failure.
+- Disposition: add only the three audited native workflow steps and pin the purpose suite in the
+  Windows command family. Do not weaken the oracle, synthesize local evidence, substitute another
+  server, or claim x64/arm64 capability/ACL/transfer proof until exact-head Actions logs exist. No
+  product/Beta/fallback/default behavior, tuple, publication, or signing work is authorized.
+
+### E-M6-WINDOWS-SYSTEM-SSH-TREE-LIVE-LOCAL-001 — audited native fixture package is locally green
+
+- Date/owner/base/runner: 2026-07-15, Codex implementation owner; uncommitted purpose-test,
+  native-workflow, oracle, and checklist package atop exact base
+  `8018152043a982f0d2c8d2907208858551c01176` on Apple arm64, macOS 26.2 build 25C56, Node 26.5.0,
+  pnpm 10.24.0. Local Node is newer than the repository's Node 24 contract and macOS cannot execute
+  the Windows OpenSSH fixture, so exact-head native proof remains mandatory.
+- Implementation: add no production module. The Windows runtime job now installs only the native
+  `OpenSSH.Server~~~~0.0.1.0` capability when absent, creates a non-admin/key-only fixture account,
+  applies SID-scoped ACLs, generates and pins exact client/host Ed25519 keys, and uses a loopback-only
+  custom config. It refuses an already-running capability service, snapshots the fixed `sshd`
+  service's exact image path/start mode, marks each owned mutation, temporarily starts it as
+  LocalSystem, proves Windows PowerShell 5.1 remotely, and restores the exact stopped service state
+  in `always()` teardown. The live suite transfers the exact runtime serially/default-one and at
+  four channels, validates all paths/sizes/hashes, preserves a collision, aborts only after progress,
+  requires cleanup/no-late-progress, records latency/RSS/channels, and proves connection reuse.
+- Purpose/oracle command: `pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1
+src/main/ssh/ssh-relay-runtime-windows-system-ssh-openssh-full-size.test.ts
+config/scripts/ssh-relay-runtime-workflow.test.mjs`. Result after the final service-restoration
+  correction: 10/10 workflow cases pass in 66 ms; the purpose suite is one declared local skip;
+  total Vitest duration is 572 ms. Independent YAML extraction plus PowerShell
+  `[scriptblock]::Create()` parses all three start/measure/stop blocks.
+- Focused command: `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts
+--maxWorkers=1` with the Windows live/tree/control/file, POSIX live/tree/control/file,
+  system-channel, source-tree/scan/stream, system-fallback, connection, and workflow-oracle suites.
+  Result: 13 files pass, two live files skip; 259 passed and five declared skips out of 264; 14.82
+  seconds real, 178,028,544-byte maximum RSS, 97,670,928-byte peak footprint, zero swaps and block
+  I/O. The final service-only workflow correction is covered by the later 10/10 oracle rerun.
+- Broad relay command: `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts
+--maxWorkers=1 src/main/ssh/ssh-relay-*.test.ts`. Result: 53 files pass, six files skip; 694 passed
+  and ten declared skips out of 704; 47.05 seconds real, 303,251,456-byte maximum RSS,
+  98,031,496-byte peak footprint, zero swaps and block I/O.
+- Final release-contract command: `/usr/bin/time -l pnpm exec vitest run --config
+config/vitest.config.ts --maxWorkers=1 config/scripts/ssh-relay-runtime-*.test.mjs`. Result: 50
+  files and 283/283 cases pass; 18.93 seconds real, 195,936,256-byte maximum RSS, 97,359,680-byte
+  peak footprint, zero swaps and block I/O.
+- Static evidence: `pnpm typecheck` passes. Final `/usr/bin/time -l pnpm lint` passes in 19.25
+  seconds real with 2,114,486,272-byte maximum RSS and 96,933,600-byte peak footprint; its 26
+  warnings pre-exist outside this diff. Full lint proves switch exhaustiveness, 41 reliability gates,
+  the 355-entry max-lines ratchet with no new bypass, bundled guides, and localization checks. The
+  purpose test is 380 lines and adds no max-lines suppression.
+- Isolation evidence: targeted `oxfmt --check`, `git diff --check`, protected resolver equality, and
+  an asserted non-test consumer search pass. The intended diff is limited to one purpose-named test,
+  three Windows native-workflow steps, one workflow oracle, and both checklist documents. No legacy
+  uploader, Electron/startup/product importer, settings, Beta mode, fallback, tuple, publication,
+  default-path, or signing behavior changes.
+- Residual boundary: local execution proves only contracts and syntax, not Windows capability
+  availability/start, SID ACL behavior, real SSH authentication, Windows PowerShell 5.1 over SSH,
+  target-native full-size transfer, cancellation metrics, or service/account teardown. Both native
+  x64 and arm64 exact-head jobs must pass before this package closes. External Windows hosts, long
+  paths, endpoint protection, high RTT, cross-client Layer B, remote verify/install/publish/launch,
+  product/Beta/fallback/default behavior, tuple enablement, publication, Apple signing, and SignPath
+  remain open. Legacy remains the sole production/default path and every tuple stays disabled.
+
 ## Accepted Gaps
 
 No product gap is accepted merely because it appears in this list. Each entry requires explicit
@@ -18580,13 +18708,11 @@ The project is not complete until every applicable item below is checked with ev
 
 ## Next Required Action
 
-Audit a purpose-named full-size Windows system-SSH proof against a real native Windows OpenSSH server.
-Fix its exact fixture ownership, authentication/host-key trust, local account/ACLs, PowerShell 5.1/
-.NET receiver command, full runtime bytes/counts, serial/default and four-channel measurements,
-cancellation settlement, collision/cleanup cases, x64/arm64 runner coverage, and teardown behavior
-before writing a RED suite or workflow steps. Do not check the broad Milestone 6 Windows system-SSH
-item yet. Do not add an Electron/startup/product importer, per-target mode wiring, fallback, tuple
-enablement, release publication, or default behavior.
+Commit and push only the locally green live Windows OpenSSH package, then collect exact-head
+`windows-2022` x64 and `windows-11-arm` arm64 capability, ACL, PowerShell 5.1, exact full-size
+serial/four-channel/cancellation, collision, connection-reuse, and teardown evidence. Do not check
+the broad Milestone 6 Windows system-SSH item yet. Do not add an Electron/startup/product importer,
+per-target mode wiring, fallback, tuple enablement, release publication, or default behavior.
 Keep Node upstream `.tar.xz` inputs, Windows ZIP, `ORCA_RELAY_PATH`, existing desktop required-assets
 behavior, detached-signature byte encoding, Windows arm64 build 26100, macOS 13.5, Linux kernel 4.18,
 release-cut, desktop builds, publication, and every tuple separately gated.
