@@ -8,8 +8,8 @@ work; keep exact commands, runner identities, hashes, metrics, and residual gaps
 
 Date created: 2026-07-14<br>
 Last updated: 2026-07-15<br>
-Current phase: Milestone 5 / Work Package 4 desktop resolver/cache — **In progress — 2026-07-15, Codex implementation owner: implement the disconnected marked Darwin process-translation probe fixed by E-M5-DARWIN-TRANSLATION-DETECTION-AUDIT-001**. Keep every capability disconnected from host-evidence composition and every production/default SSH path. Real Apple/SignPath rehearsals remain an explicit late gate and are not on this package's critical path.<br>
-Session checkpoint: **LOCAL GREEN / EXACT-HEAD CI NEXT — 2026-07-15, Codex implementation owner** — `E-M5-DARWIN-TRANSLATION-DETECTION-LOCAL-001` passes 23 purpose tests, 85 focused/workflow tests, 438 relay tests with three declared skips, 280 release-script tests, typecheck, lint, format, max-lines, diff, and protected-resolver gates. The detector returns translated/native/unknown evidence without changing the selector type or composing host evidence. Exact Node 24/all-six native execution remains open. Live Rosetta SSH remains mandatory before any translated tuple could be considered and translated hosts remain legacy-only. No product caller, setting, transfer/install, fallback wiring, tuple enablement, publication, or default behavior is connected. Merging to `main` remains prohibited, SignPath is deferred, and legacy remains the production default.<br>
+Current phase: Milestone 5 / Work Package 4 desktop resolver/cache — **In progress — 2026-07-15, Codex implementation owner: audit the disconnected Linux libstdc++/GLIBCXX host-evidence boundary**. Keep every capability disconnected from host-evidence composition and every production/default SSH path. Real Apple/SignPath rehearsals remain an explicit late gate and are not on this package's critical path.<br>
+Session checkpoint: **DARWIN TRANSLATION CI CLOSED / NEXT AUDIT ACTIVE — 2026-07-15, Codex implementation owner** — `E-M5-DARWIN-TRANSLATION-DETECTION-CI-001` closes exact-head portable contract proof on all six native clients, both Linux supplements, Windows x64, PR Checks, Golden E2E, and computer-use. Windows arm64 retains only the declared hosted build-26200 rejection against required 26100 after complete byte/tree/Node/PTY/watcher/resource proof. Live Rosetta SSH remains mandatory before any translated tuple could be considered and translated hosts remain legacy-only. The active audit may authorize only a disconnected Linux libstdc++/GLIBCXX probe and purpose tests; no product caller, setting, transfer/install, fallback wiring, tuple enablement, publication, or default behavior may be connected. Merging to `main` remains prohibited, SignPath is deferred, and legacy remains the production default.<br>
 Primary design: [SSH relay GitHub Release plan](./2026-07-14-ssh-relay-github-release-plan.html)<br>
 Motivating issues: [#8450](https://github.com/stablyai/orca/issues/8450), [#1693](https://github.com/stablyai/orca/issues/1693)
 
@@ -15457,6 +15457,62 @@ config/scripts/ssh-relay-runtime-*.test.mjs` — PASS, 50 files / 280 tests in 1
 - Residual gap: exact Node 24/all-six native client execution, live Intel/Apple Silicon/Rosetta SSH,
   host composition, and every production/default path remain unproven and disconnected. Unknown
   evidence is not coerced to false. No tuple is enabled and legacy remains the only default.
+
+### E-M5-DARWIN-TRANSLATION-DETECTION-CI-001 — exact-head native translation contract
+
+- Date/owner: 2026-07-15, Codex implementation owner.
+- Source: implementation commit `c8d4acb2cca0e4ddbab21bf6f85eda2a9fca1272` on draft PR
+  [#8741](https://github.com/stablyai/orca/pull/8741). Artifact run
+  [29486003082](https://github.com/stablyai/orca/actions/runs/29486003082) checks out that exact SHA
+  and uses Node 24.18.0. Its aggregate conclusion is failure only because the already-declared
+  Windows arm64 floor job rejects hosted build 26200 against required 26100.
+- Six primary native jobs pass: Windows arm64
+  [87580520842](https://github.com/stablyai/orca/actions/runs/29486003082/job/87580520842), macOS
+  arm64 [87580520848](https://github.com/stablyai/orca/actions/runs/29486003082/job/87580520848),
+  Linux arm64 [87580520849](https://github.com/stablyai/orca/actions/runs/29486003082/job/87580520849),
+  Windows x64 [87580520869](https://github.com/stablyai/orca/actions/runs/29486003082/job/87580520869),
+  macOS x64 [87580520874](https://github.com/stablyai/orca/actions/runs/29486003082/job/87580520874),
+  and Linux x64
+  [87580520925](https://github.com/stablyai/orca/actions/runs/29486003082/job/87580520925). Every job
+  passes checkout, dependencies, the new 23-case purpose suite, exact inputs, two clean builds,
+  archive/tree verification, exact-byte Node/PTY/watcher smoke, full-size extraction/cache gates,
+  and unpublished evidence upload. POSIX clients pass 82 files / 605 tests; Windows clients pass 83
+  files / 596 tests with 13 declared skips.
+- Primary full-size metrics: extraction spans 1,277.58–3,499.69 ms and
+  31,014,912–50,987,008 incremental RSS bytes for 31,776,498–37,168,778-byte archives,
+  85,213,511–124,846,430 expanded bytes, and 34–42 files. Cold immutable publication spans
+  1,747.60–4,960.67 ms and 41,283,584–59,977,728 incremental RSS bytes; warm verified lookup spans
+  177.70–912.37 ms and 0–5,861,376 bytes. Active retention spans 10.40–46.41 ms and 0–2,748,416
+  bytes; eviction spans 29.26–91.28 ms and 0–1,712,128 bytes, reclaiming each complete
+  118,418,686–161,259,369-byte entry. All remain inside the existing budgets.
+- Supplemental Linux jobs: x64
+  [87581673366](https://github.com/stablyai/orca/actions/runs/29486003082/job/87581673366) passes in
+  43 seconds and arm64
+  [87581673420](https://github.com/stablyai/orca/actions/runs/29486003082/job/87581673420) passes in
+  49 seconds. Both re-authenticate the exact unpublished runtime and pass the digest-pinned glibc
+  2.28/libstdc++ 6.0.25 Node/PTY/watcher userland proof; the shared hosted kernel gap remains.
+- Windows baseline jobs: x64
+  [87582483921](https://github.com/stablyai/orca/actions/runs/29486003082/job/87582483921) passes on
+  Windows Server build 20348 after verifying 60 entries / 42 files / 96,527,161 bytes, Node
+  24.18.0 ABI 137, PTY resize/exit, five watcher events, resource settlement after 2,000 ms, and
+  5,354.977 ms smoke at 50,012,160-byte RSS. Arm64
+  [87582484015](https://github.com/stablyai/orca/actions/runs/29486003082/job/87582484015) verifies 60
+  entries / 42 files / 85,213,511 bytes, Node 24.18.0 ABI 137, the same PTY/watcher/resource
+  contract, and 5,914.7293 ms smoke at 49,098,752-byte RSS, then fails only `osBuild: false` for
+  observed 10.0.26200 versus required 26100.
+- Exact-head adjacent runs pass: PR Checks
+  [29486003131](https://github.com/stablyai/orca/actions/runs/29486003131) job
+  [87580520678](https://github.com/stablyai/orca/actions/runs/29486003131/job/87580520678), Golden
+  E2E [29486003110](https://github.com/stablyai/orca/actions/runs/29486003110) macOS job
+  [87580520501](https://github.com/stablyai/orca/actions/runs/29486003110/job/87580520501) and Linux
+  job [87580520516](https://github.com/stablyai/orca/actions/runs/29486003110/job/87580520516), and
+  computer-use [29486003157](https://github.com/stablyai/orca/actions/runs/29486003157) Ubuntu job
+  [87580520599](https://github.com/stablyai/orca/actions/runs/29486003157/job/87580520599) and Windows
+  job [87580520621](https://github.com/stablyai/orca/actions/runs/29486003157/job/87580520621).
+- Boundary: this is contract and target-native client evidence, not live SSH/Intel/Rosetta/macOS
+  remote proof. The detector remains disconnected. No host composer, product caller, setting,
+  transfer/install, fallback classifier, tuple enablement, publication, or default behavior is
+  added; legacy remains the sole production path and no tuple is enabled.
 
 ## Accepted Gaps
 
