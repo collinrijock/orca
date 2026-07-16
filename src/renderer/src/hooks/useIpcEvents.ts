@@ -2128,10 +2128,8 @@ export function useIpcEvents(): void {
         if (getRuntimeEnvironmentIdForWorktree(store, sourcePage.worktreeId)) {
           return
         }
-        // Why: the guest process can request "open this link in Orca", but it
-        // does not own Orca's worktree/tab model. Resolve the source page's
-        // worktree and create a new outer browser tab so the link opens as a
-        // separate tab in the outer Orca tab bar.
+        // Why: only the renderer owns Orca's tab model. Creating the tab with
+        // the default activation behavior brings the clicked link forward.
         store.createBrowserTab(sourcePage.worktreeId, url, { title: url })
       })
     )
