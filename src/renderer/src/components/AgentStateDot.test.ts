@@ -22,8 +22,11 @@ describe('AgentStateDot', () => {
 
     expect(markup).toContain('border-yellow-500')
     expect(markup).toContain('border-t-transparent')
-    expect(markup).toContain('[animation:spin_1s_steps(12,end)_infinite]')
-    expect(markup).toContain('motion-reduce:animate-none')
+    // Why: the shared phase-locked ring class replaces the per-instance
+    // inline `[animation:spin…]`; reduced-motion/visibility are handled by
+    // WorkingRing (see WorkingRing.test.tsx), not a Tailwind variant here.
+    expect(markup).toContain('working-ring-spin')
+    expect(markup).not.toContain('[animation:spin')
     expect(markup).not.toContain('animate-spin')
   })
 

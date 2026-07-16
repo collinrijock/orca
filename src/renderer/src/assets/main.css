@@ -1384,6 +1384,31 @@
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--ring) 50%, transparent);
 }
 
+/* Why: one shared stepped ring for every visible "working" spinner (aggregate
+   worktree StatusIndicator, per-agent AgentStateDot, terminal tabs). The
+   `.working-ring-spin` class is the single cadence source; callers add a JS
+   `animation-delay` (see working-ring-phase.ts) that anchors each ring to the
+   document timeline origin so independently mounted rings phase-lock onto the
+   same frames and stop spraying staggered compositor wakeups. */
+@keyframes working-ring-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.working-ring-spin {
+  animation: working-ring-spin 1s steps(12, end) infinite;
+}
+
+/* Why: reduced motion is an explicit accessibility choice — disable the ring
+   for both the aggregate and per-agent indicators. WorkingRing also drops the
+   class in JS; this backstops any ring rendered before that state settles. */
+@media (prefers-reduced-motion: reduce) {
+  .working-ring-spin {
+    animation: none;
+  }
+}
+
 /* Why: the virtualized card row is height-measured; animate the grid track
    instead of explicit height so the reveal stays CSS-owned and interruptible. */
 .compact-agent-expansion-grid {

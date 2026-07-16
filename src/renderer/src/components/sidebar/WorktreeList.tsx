@@ -226,6 +226,7 @@ import {
 } from '../../../../shared/worktree-ownership'
 import { RepoIconGlyph } from '@/components/repo/repo-icon'
 import { RepoForkIndicator } from '@/components/repo/repo-fork-indicator'
+import { WorkingRingOffscreenContext } from '@/components/WorkingRing'
 import ImportedWorktreesVisibilityLine from './ImportedWorktreesVisibilityLine'
 import NewExternalWorktreesInboxLine from './NewExternalWorktreesInboxLine'
 import SuppressExternalWorktreeInboxDialog from './SuppressExternalWorktreeInboxDialog'
@@ -1751,6 +1752,10 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
   const activeStickyHeaderIndexRef = useRef<number | null>(null)
   const activeStickyHostIndexRef = useRef<number | null>(null)
   const stickyRangeStartIndexRef = useRef(0)
+  // Why: the real (pre-overscan) visible row range. Rows mounted only as
+  // virtualizer overscan are offscreen, so their working spinners pause while
+  // the mounted overscan stays put for smooth scrolling.
+  const realVisibleRangeRef = useRef({ start: 0, end: 0 })
   const sshConnectionStates = useAppStore((s) => s.sshConnectionStates)
   const {
     folderWorkspacePathStatuses,
@@ -1961,6 +1966,10 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
     rangeExtractor: useCallback(
       (range: Range) => {
         stickyRangeStartIndexRef.current = range.startIndex
+        // Capture the visible range before overscan widens it (defaultRange-
+        // Extractor adds `overscan` on either side); overscan-only rows fall
+        // outside [start, end] and pause their spinners.
+        realVisibleRangeRef.current = { start: range.startIndex, end: range.endIndex }
         return extractWorktreeVirtualRowIndexes({
           range,
           stickyHeaderIndexes,
@@ -4758,6 +4767,13 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
               const isPinnedOverlayRow = itemRow.sectionKey === PINNED_GROUP_KEY
               const isActiveWorktree = activeWorktreeId === itemRow.worktree.id
               const activeSurfaceVariant = getActiveSurfaceVariant(itemRow)
+              // Why: pause this row's working spinners when it is mounted only
+              // as virtualizer overscan (outside the real visible range). All
+              // rows in one virtual entry share vItem.index, so nested lineage
+              // children inherit the same visibility.
+              const rowOffscreen =
+                vItem.index < realVisibleRangeRef.current.start ||
+                vItem.index > realVisibleRangeRef.current.end
               return (
                 <div
                   key={itemRow.rowKey}
@@ -4799,51 +4815,53 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                     paddingLeft: surfaceInset > 0 ? `${surfaceInset}px` : undefined
                   }}
                 >
-                  <WorktreeCard
-                    worktree={itemRow.worktree}
-                    repo={itemRow.repo}
-                    isActive={isActiveWorktree}
-                    isCurrentWorktree={currentWorktreeId === itemRow.worktree.id}
-                    // Why: a child-active parent should look active without
-                    // running active-card side effects such as SSH reconnect UI.
-                    isActiveSurface={forceActiveSurface || isActiveWorktree}
-                    activeSurfaceVariant={
-                      isActiveWorktree && !forceActiveSurface ? activeSurfaceVariant : 'primary'
-                    }
-                    isMultiSelected={selectedWorktreeIds.has(itemRow.worktree.id)}
-                    revealHighlight={highlightedRevealRowKey === itemRow.rowKey}
-                    revealHighlightTone={revealHighlightTone}
-                    selectedWorktrees={selectedWorktrees}
-                    nativeDragEnabled={false}
-                    isLineageDropTarget={Boolean(isLineageDropTarget)}
-                    contentIndent={cardContentIndent}
-                    flushSurface
-                    activationRowKey={itemRow.rowKey}
-                    onImmediateActivate={handleImmediateWorktreeRowActivate}
-                    onSelectionGesture={onSelectionGesture}
-                    onContextMenuSelect={onContextMenuSelect}
-                    onCardDragStart={handleWorktreeCardDragStart}
-                    onCardDragEnd={clearWorktreeDrag}
-                    hideRepoBadge={groupBy === 'repo'}
-                    // Why: pinned worktrees also render in their natural group;
-                    // only the overlay row is the mixed-repo section needing icons.
-                    hostContextLabel={itemRow.hostContextLabel}
-                    inPinnedSection={isPinnedOverlayRow}
-                    renameRowKey={itemRow.rowKey}
-                    lineageChildCount={itemRow.lineageChildCount}
-                    lineageCollapsed={itemRow.lineageCollapsed}
-                    lineageChildren={lineageChildren}
-                    lineageChildrenStyle={lineageChildrenStyle}
-                    onLineageToggle={
-                      lineageToggleGroupKey
-                        ? (event) => {
-                            event.preventDefault()
-                            event.stopPropagation()
-                            toggleGroupWithScrollAnchor(lineageToggleGroupKey)
-                          }
-                        : undefined
-                    }
-                  />
+                  <WorkingRingOffscreenContext.Provider value={rowOffscreen}>
+                    <WorktreeCard
+                      worktree={itemRow.worktree}
+                      repo={itemRow.repo}
+                      isActive={isActiveWorktree}
+                      isCurrentWorktree={currentWorktreeId === itemRow.worktree.id}
+                      // Why: a child-active parent should look active without
+                      // running active-card side effects such as SSH reconnect UI.
+                      isActiveSurface={forceActiveSurface || isActiveWorktree}
+                      activeSurfaceVariant={
+                        isActiveWorktree && !forceActiveSurface ? activeSurfaceVariant : 'primary'
+                      }
+                      isMultiSelected={selectedWorktreeIds.has(itemRow.worktree.id)}
+                      revealHighlight={highlightedRevealRowKey === itemRow.rowKey}
+                      revealHighlightTone={revealHighlightTone}
+                      selectedWorktrees={selectedWorktrees}
+                      nativeDragEnabled={false}
+                      isLineageDropTarget={Boolean(isLineageDropTarget)}
+                      contentIndent={cardContentIndent}
+                      flushSurface
+                      activationRowKey={itemRow.rowKey}
+                      onImmediateActivate={handleImmediateWorktreeRowActivate}
+                      onSelectionGesture={onSelectionGesture}
+                      onContextMenuSelect={onContextMenuSelect}
+                      onCardDragStart={handleWorktreeCardDragStart}
+                      onCardDragEnd={clearWorktreeDrag}
+                      hideRepoBadge={groupBy === 'repo'}
+                      // Why: pinned worktrees also render in their natural group;
+                      // only the overlay row is the mixed-repo section needing icons.
+                      hostContextLabel={itemRow.hostContextLabel}
+                      inPinnedSection={isPinnedOverlayRow}
+                      renameRowKey={itemRow.rowKey}
+                      lineageChildCount={itemRow.lineageChildCount}
+                      lineageCollapsed={itemRow.lineageCollapsed}
+                      lineageChildren={lineageChildren}
+                      lineageChildrenStyle={lineageChildrenStyle}
+                      onLineageToggle={
+                        lineageToggleGroupKey
+                          ? (event) => {
+                              event.preventDefault()
+                              event.stopPropagation()
+                              toggleGroupWithScrollAnchor(lineageToggleGroupKey)
+                            }
+                          : undefined
+                      }
+                    />
+                  </WorkingRingOffscreenContext.Provider>
                 </div>
               )
             }

@@ -22,7 +22,9 @@ describe('StatusIndicator', () => {
 
     expect(classNames).toContain('border-yellow-500')
     expect(classNames).toContain('border-t-transparent')
-    expect(classNames).toContain('[animation:spin_1s_steps(12,end)_infinite]')
+    // Why: shares the phase-locked ring class with AgentStateDot instead of
+    // an inline `[animation:spin…]`.
+    expect(classNames).toContain('working-ring-spin')
     expect(classNames).not.toContain('animate-spin')
   })
 
