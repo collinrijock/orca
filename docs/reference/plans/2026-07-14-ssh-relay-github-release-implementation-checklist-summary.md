@@ -9,15 +9,21 @@ keeps commands, hashes, runner identities, timings, and failure details.
 A checked box means the work has evidence in the detailed ledger. Design approval alone does not
 complete a box.
 
-Active checkpoint: **Milestone 6 / Work Package 5 bounded runtime transfer — exact full-size Linux
-x64/arm64 OpenSSH SFTP is green; repeated adjacent Windows compiler-test timeout correction is in
-progress, 2026-07-15, Codex implementation owner.** `E-M6-SFTP-LIVE-COMPOSITION-CI-001` records
-complete exact-tree/mode/exclusive-root/cancellation/RSS proof against stock OpenSSH on native Linux
-x64 and arm64. `E-M6-SFTP-LIVE-COMPOSITION-ADJACENT-CI-RED-001` records the only adjacent failure:
-the unchanged real Windows C# compiler integration case exceeded Vitest's five-second default twice.
-Current main already fixes that pre-existing test under reviewed commit `45a772cb4` / PR #8897 by
-scoping 15 seconds only to the real compiler cases. Apply that exact test-only patch and require a
-fresh exact-head computer-use pass before starting disconnected POSIX system-SSH transfer.
+Active checkpoint: **Milestone 6 / Work Package 5 bounded runtime transfer — disconnected POSIX
+system-SSH/no-tar per-file boundary is locally green and exact-head CI is next, 2026-07-15, Codex
+implementation owner.** `E-M6-POSIX-SYSTEM-SSH-FILE-LOCAL-001` records 25/25 purpose cases, 87 focused
+cases with one declared skip, 628 broad relay cases with six declared skips, 281/281 release
+contracts, typecheck, full lint, formatting, max-lines, diff, protected-resolver, and no-product-
+consumer gates. The command uses only the four declared POSIX primitives and cancellation is bounded
+to a 250 ms graceful / 2,000 ms total ceiling. Exact-head all-six native and adjacent Actions proof
+is required before the next package.
+`E-M6-SFTP-LIVE-COMPOSITION-CI-001` records complete exact-tree/mode/exclusive-root/cancellation/RSS
+proof against stock OpenSSH on native Linux x64 and arm64. The repeated unrelated Windows compiler
+timeout is closed at exact head `4945645e8` by computer-use run `29515352845` under
+`E-M6-SFTP-LIVE-COMPOSITION-ADJACENT-CI-001`. `E-M6-POSIX-SYSTEM-SSH-FILE-AUDIT-001` limits the next
+slice to one injected command channel and one exclusively created manifest file with bounded chunk,
+EOF, mode, cancellation, and forced-settlement contracts. No real SSH connection, remote tree,
+semantic probe, live/full-size claim, product path, mode/fallback, or default behavior is included.
 `E-M6-SFTP-LIVE-COMPOSITION-AUDIT-001` limits this package to one authenticated built-in
 `SshConnection`, one raw SFTP channel, the existing one-to-four file transfer, captured-transport-
 only force close with awaited teardown, and exact full-size Linux x64/arm64 runtime transfer against

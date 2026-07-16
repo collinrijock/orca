@@ -8,8 +8,8 @@ work; keep exact commands, runner identities, hashes, metrics, and residual gaps
 
 Date created: 2026-07-14<br>
 Last updated: 2026-07-15<br>
-Current phase: Milestone 6 / Work Package 5 bounded runtime transfer — **In progress — 2026-07-15, Codex implementation owner: close exact-head live-SFTP adjacent regression evidence before starting disconnected POSIX system-SSH transfer**. Keep every capability disconnected from every production/default SSH path. Real Apple/SignPath rehearsals remain an explicit late gate and are not on this package's critical path.<br>
-Session checkpoint: **LIVE SFTP GREEN / REPEATED ADJACENT WINDOWS TIMEOUT DIAGNOSED — 2026-07-15, Codex implementation owner** — `E-M6-SFTP-LIVE-COMPOSITION-CI-001` proves exact full-size Linux x64/arm64 transfer through stock OpenSSH with complete tree/mode/exclusive-root/cancellation/RSS evidence. `E-M6-SFTP-LIVE-COMPOSITION-ADJACENT-CI-RED-001` records the only adjacent failure: the unchanged real Windows launcher compilation case exceeded Vitest's five-second default on both attempts. Current `main` independently fixed that exact pre-existing test in reviewed commit `45a772cb4` / PR #8897 by scoping 15 seconds only to the real compiler integration cases. Apply that exact test-only patch, rerun exact head, and do not credit Windows/POSIX system SSH, high-RTT, `MaxSessions=1`, product/settings/fallback wiring, tuple enablement, publication, or default behavior. Merging to `main` remains prohibited, SignPath is deferred, and legacy remains the production default.<br>
+Current phase: Milestone 6 / Work Package 5 bounded runtime transfer — **In progress — 2026-07-15, Codex implementation owner: disconnected POSIX system-SSH/no-tar per-file command and destination contract**. Keep every capability disconnected from every production/default SSH path. Real Apple/SignPath rehearsals remain an explicit late gate and are not on this package's critical path.<br>
+Session checkpoint: **POSIX NO-TAR FILE BOUNDARY LOCALLY GREEN / EXACT-HEAD CI NEXT — 2026-07-15, Codex implementation owner** — `E-M6-POSIX-SYSTEM-SSH-FILE-LOCAL-001` proves the isolated destination across 25 purpose cases, 628 broad relay cases, 281 release contracts, typecheck, lint, formatting, max-lines, diff, protected-resolver, and no-product-consumer gates. The module still accepts only an injected command channel and has no real SSH/tree/product caller, so exact-head all-six native and adjacent Actions evidence is required before the next package. Merging to `main` remains prohibited, SignPath is deferred, and legacy remains the production default.<br>
 Primary design: [SSH relay GitHub Release plan](./2026-07-14-ssh-relay-github-release-plan.html)<br>
 Motivating issues: [#8450](https://github.com/stablyai/orca/issues/8450), [#1693](https://github.com/stablyai/orca/issues/1693)
 
@@ -150,14 +150,12 @@ same change as the work it records.
 - Completed package: disconnected full host-evidence composition is green locally and on every
   primary native client under E-M5-HOST-EVIDENCE-COMPOSITION-LOCAL-001 and
   E-M5-HOST-EVIDENCE-COMPOSITION-CI-001. It has no product caller.
-- Active package: **In progress — 2026-07-15, Codex implementation owner** — audit, RED, and local
-  GREEN complete under E-M6-SOURCE-STREAM-AUDIT-001, E-M6-SOURCE-STREAM-LOCAL-RED-001, and
-  E-M6-SOURCE-STREAM-LOCAL-001. E-M6-SOURCE-STREAM-CI-RED-001 exposes a Windows-only test-oracle
-  mismatch; its POSIX-only correction is locally green under
-  E-M6-SOURCE-STREAM-WINDOWS-ORACLE-CORRECTION-LOCAL-001. Commit/push it, then require fresh
-  exact-head all-six native/full-size and adjacent CI. Do not import SSH, open channels, construct
-  remote paths, create remote staging, or add product/settings/fallback/tuple/publication/default
-  behavior.
+- Active package: **Local implementation complete / exact-head CI pending — 2026-07-15, Codex
+  implementation owner** — the disconnected POSIX no-tar per-file command/destination boundary is
+  green under E-M6-POSIX-SYSTEM-SSH-FILE-LOCAL-001. It consumes the existing source-stream
+  destination interface and an injected command-channel factory only. Do not import or modify the
+  legacy tar/base64 directory uploader, wire `SshConnection`, create a remote tree, add a semantic
+  probe, or add product/settings/fallback/tuple/publication/default behavior.
 - Completed Work Package 2 gate: target-native Windows source-signature reports from exact-head
   artifact jobs 87267322867 and 87267322870 were independently downloaded and matched to their
   identities and signing-stage reports under E-M3-WINDOWS-SOURCE-SIGNATURE-CI-001. PR Checks
@@ -17410,13 +17408,170 @@ src/main/ssh/ssh-relay-runtime-sftp-tree-transfer.test.ts` — PASS, 15/15 in 1.
   overlap this package. The same workflow's Ubuntu job passes, and the independent all-six native
   artifact jobs plus PR Checks and Golden E2E pass.
 - Independent diagnosis: current `origin/main` commit
-  `45a772cb42f8525ce0189fe63a509e562c5b6928` (`test(windows): allow native launcher compilation
-time`, reviewed PR #8897) changes only the two real Windows compiler integration tests and scopes a
+  `45a772cb42f8525ce0189fe63a509e562c5b6928`
+  (`test(windows): allow native launcher compilation time`, reviewed PR #8897) changes only the two
+  real Windows compiler integration tests and scopes a
   15-second timeout to them because cold hosted `csc.exe` startup exceeds the unit default. It is
   not an SFTP change and changes no production behavior. This feature branch predates that commit.
 - Disposition: apply the exact reviewed test-only patch without broad timeout relaxation, then
   require a fresh exact-head computer-use pass before advancing. No adjacent green evidence is
   credited from either failed attempt.
+
+### E-M6-SFTP-LIVE-COMPOSITION-ADJACENT-CI-001 — scoped upstream test budget closes exact-head adjacent gate
+
+- Date/owner/head/run: 2026-07-15, Codex implementation owner; exact evidence/test-only commit
+  `4945645e81af971d8ba874d83ee5975abfd6e79d`, computer-use run
+  [29515352845](https://github.com/stablyai/orca/actions/runs/29515352845).
+- Windows result: job
+  [87678882484](https://github.com/stablyai/orca/actions/runs/29515352845/job/87678882484) passes the
+  401 applicable tests with four declared skips, including both real Windows C# compiler integration
+  cases under their exact reviewed 15-second budgets. It then passes native verification, CLI and
+  packaged Electron builds, daemon boot, Windows daemon workspace-close repro, and Windows
+  computer-use E2E in 4 minutes 38 seconds. No product source or timeout outside the two compiler
+  cases changed.
+- Control result: Ubuntu job
+  [87678882558](https://github.com/stablyai/orca/actions/runs/29515352845/job/87678882558) passes its
+  unit/native/build/daemon/Linux E2E path in 2 minutes 49 seconds. Local macOS runs passed three
+  applicable launcher cases with the two Windows cases declared skipped plus the eight-case relay
+  workflow oracle; formatting and diff gates passed before commit.
+- Disposition: the repeated adjacent RED is resolved by the exact independently reviewed upstream
+  test-only correction. Prior live SFTP evidence remains anchored to `a72c32f63`; this commit changes
+  no SFTP/runtime/product code. The separately triggered all-six artifact rerun is redundant control
+  evidence and may continue while the next disconnected package begins.
+
+### E-M6-SFTP-LIVE-COMPOSITION-CONTROL-CI-001 — redundant exact-head control classified
+
+- Date/owner/head: 2026-07-15, Codex implementation owner; exact test/docs-only head
+  `4945645e81af971d8ba874d83ee5975abfd6e79d` after the adjacent correction above.
+- Runtime artifact run: [29515352928](https://github.com/stablyai/orca/actions/runs/29515352928).
+  All six primary native jobs pass: Windows arm64 [87678883773](https://github.com/stablyai/orca/actions/runs/29515352928/job/87678883773),
+  Windows x64 [87678883819](https://github.com/stablyai/orca/actions/runs/29515352928/job/87678883819),
+  macOS arm64 [87678883853](https://github.com/stablyai/orca/actions/runs/29515352928/job/87678883853),
+  Linux arm64 [87678883887](https://github.com/stablyai/orca/actions/runs/29515352928/job/87678883887),
+  Linux x64 [87678883950](https://github.com/stablyai/orca/actions/runs/29515352928/job/87678883950),
+  and macOS x64 [87678883952](https://github.com/stablyai/orca/actions/runs/29515352928/job/87678883952).
+  Both Linux oldest-userland supplements pass in jobs 87680141129 and 87680141145, as does the
+  Windows x64 floor in job 87681071541.
+- Declared residual: only Windows arm64 floor job
+  [87681071534](https://github.com/stablyai/orca/actions/runs/29515352928/job/87681071534) fails after
+  complete runtime smoke because the hosted runner reports build 26200 while the immutable contract
+  requires build 26100; platform and architecture pass, `osBuild` fails. This is the already recorded
+  runner gap, not a test-only correction or SFTP regression.
+- Adjacent controls: PR Checks run
+  [29515352911](https://github.com/stablyai/orca/actions/runs/29515352911) passes lint, typecheck, Git
+  compatibility, tests, unpacked app build, and packaged CLI smoke. Golden E2E run
+  [29515352860](https://github.com/stablyai/orca/actions/runs/29515352860) passes both macOS job
+  87678882828 and Linux job 87678882845.
+- Disposition: this closes classification of the redundant control run only. Live SFTP evidence
+  remains anchored to `a72c32f63`; no POSIX system-SSH claim or later-package evidence is inferred.
+
+### E-M6-POSIX-SYSTEM-SSH-FILE-AUDIT-001 — isolated no-tar file channel boundary
+
+- Date/owner/base: 2026-07-15, Codex implementation owner; clean exact base
+  `4945645e81af971d8ba874d83ee5975abfd6e79d` after the adjacent gate above.
+- Existing-code audit: `system-ssh-file-transfer.ts` is the proven legacy/default uploader and uses
+  local plus remote tar on POSIX and a whole-tree JSON/base64 buffer on Windows. Those paths remain
+  available but violate the new runtime bootstrap contract and must not be reused, narrowed, or
+  modified in this slice. `ssh-relay-runtime-source-stream.ts` already owns the exact scanned source,
+  one 64 KiB buffer per worker, hash/size/snapshot checks, and joined destination cleanup.
+- New boundary: add one purpose-named POSIX file-destination module that implements only
+  `SshRelayRuntimeSourceDestination`. It receives an absolute POSIX manifest path, authenticated
+  mode (`0644` or `0755`), the exact caller signal, and an injected command-channel factory. The
+  generated POSIX `sh` command uses only `umask`, `set -C`, byte-preserving `cat`, and `chmod`; it
+  shell-quotes the path, exclusively creates the file with mode `0600` during transfer, and applies
+  the authenticated final mode only after stdin EOF and successful `cat` settlement. It never uses
+  Node, Python, Perl, tar, base64, a checksum tool, a whole-file buffer, or a remote download.
+- Lifecycle contract: one write may be active; each write resolves only after the channel accepts
+  the exact non-empty chunk so the source worker may safely reuse its buffer. Close sends EOF once
+  and awaits a successful remote exit before declaring completion. Abort is idempotent, settles any
+  active write, requests graceful channel termination, escalates after a short fixed grace to forced
+  termination, and fails closed if the bounded total settlement window expires. A later tree owner,
+  not this file boundary, owns removal of an incomplete proved-owned path after the channel settles.
+- Layer-A proof: purpose tests must cover hostile/relative/newline/NUL paths, invalid modes, exact
+  shell quoting and forbidden-command absence, exclusive/restrictive/final-mode command order,
+  zero-byte EOF, multi-chunk buffer callback order, concurrent-operation rejection, remote nonzero
+  exit, pre/mid-write/mid-close cancellation, graceful and forced settlement, final timeout, cleanup
+  failure propagation, idempotent abort, and no write after cancellation. Pin the purpose suite once
+  in both native workflow command families before implementation.
+- Explicit residual boundary: no real SSH process or connection, directory/tree staging, primitive
+  semantic probe, `MaxSessions=1`, one-versus-four policy, tar optimization, full-size/live transfer,
+  bundled-Node remote verification/install/publish/launch, product/Beta/settings/fallback/tuple/
+  publication/default behavior, Windows PowerShell path, or SignPath is included. Legacy remains the
+  sole production/default path.
+
+### E-M6-POSIX-SYSTEM-SSH-FILE-LOCAL-RED-001 — missing production boundary fails as designed
+
+- Date/owner/base: 2026-07-15, Codex implementation owner; exact uncommitted test/workflow state on
+  base `4945645e81af971d8ba874d83ee5975abfd6e79d` after
+  `E-M6-POSIX-SYSTEM-SSH-FILE-AUDIT-001`.
+- Command: `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts
+--maxWorkers=1 src/main/ssh/ssh-relay-runtime-posix-file-destination.test.ts
+config/scripts/ssh-relay-runtime-workflow.test.mjs`.
+- Result: expected RED, exit 1. The new purpose suite collects zero cases and fails solely with
+  `Cannot find module './ssh-relay-runtime-posix-file-destination'`; that production module does not
+  exist yet. The independent release-workflow oracle passes all 8/8 cases, proving the purpose suite
+  appears exactly once in each native command family before implementation.
+- Resource evidence: Vitest duration 671 ms; `/usr/bin/time -l` reports 1.86 seconds real,
+  132,153,344 bytes maximum resident set size, zero swaps, and zero block input/output operations.
+- Disposition: RED is causally narrow and accepted. Implement only the audited injected-channel
+  destination, then require purpose GREEN plus focused, broad, static, isolation, and exact-head
+  native workflow evidence. No live SSH, tree transfer, product path, or default-path claim follows
+  from this evidence.
+
+### E-M6-POSIX-SYSTEM-SSH-FILE-LOCAL-TYPE-RED-001 — test-only type boundary corrected
+
+- Date/owner/state: 2026-07-15, Codex implementation owner; first static pass on the uncommitted
+  implementation atop `4945645e81af971d8ba874d83ee5975abfd6e79d`.
+- Command/result: `/usr/bin/time -l pnpm typecheck` — expected gate RED after runtime tests were
+  already green, exit 1 in 3.23 seconds real with 1,032,896,512-byte maximum RSS. TypeScript reports
+  only three purpose-test errors: the intentionally invalid numeric mode crosses the production
+  literal union, and two zero-argument `vi.fn` channel factories expose no command tuple to the
+  assertions. No production line fails typechecking.
+- Correction: constrain the deliberate runtime-invalid mode at the test call boundary and declare
+  the two mock command/signal parameters. The 25-case purpose suite and repeated typecheck below pass
+  after that test-only correction. No product, transport, or runtime behavior changed.
+
+### E-M6-POSIX-SYSTEM-SSH-FILE-LOCAL-001 — isolated file channel boundary is locally green
+
+- Date/owner/environment/base: 2026-07-15, Codex implementation owner; local macOS arm64, Node
+  26.0.0, pnpm 10.24.0, uncommitted package atop exact base
+  `4945645e81af971d8ba874d83ee5975abfd6e79d`.
+- Implementation: the 318-line purpose-named module accepts one absolute normalized POSIX manifest
+  path, authenticated `0644`/`0755`, exact signal, and injected channel factory. Its exact command
+  uses only `umask 077`, `set -C`, byte-preserving `cat`, and `chmod`; single-quote escaping is
+  covered. It awaits every non-empty write callback, sends EOF once, requires successful remote
+  settlement, and bounds cancellation to a 250 ms graceful window plus a 2,000 ms total ceiling with
+  force-close escalation. Cancellation never sends EOF and does not release an active retained
+  chunk until channel settlement or the fail-closed ceiling.
+- Purpose command: `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts
+--maxWorkers=1 src/main/ssh/ssh-relay-runtime-posix-file-destination.test.ts` — PASS, 25/25 in
+  275 ms Vitest / 1.31 seconds real, 132,743,168-byte maximum RSS, zero swaps, and zero block I/O.
+  Cases cover both final modes; exact/forbidden command content; hostile paths; empty/write-error/
+  retained chunks; concurrent operations; zero-byte EOF; nonzero remote exit; pre-open, mid-open,
+  mid-write, and mid-close cancellation; graceful/forced/timeout settlement; cleanup failure; and
+  idempotent abort/no later EOF or write.
+- Focused command: purpose, source stream/scan/tree, and native-workflow oracle — PASS, five files,
+  87 cases plus one declared platform skip in 7.49 seconds Vitest / 8.98 seconds real with
+  144,556,032-byte maximum RSS. The workflow oracle passes 8/8 and pins the suite exactly once in
+  both POSIX and PowerShell native command families.
+- Broad commands: `src/main/ssh/ssh-relay-*.test.ts` — PASS, 47 files plus four declared skipped,
+  628 cases plus six declared skips in 25.04 seconds Vitest / 26.50 seconds real with
+  244,596,736-byte maximum RSS; `config/scripts/ssh-relay-runtime-*.test.mjs` — PASS, 50 files and
+  281/281 cases in 22.34 seconds Vitest / 24.48 seconds real with 190,545,920-byte maximum RSS. Only
+  the established stale-lock diagnostic and local Node 26 module deprecation appear.
+- Static/isolation commands: repeated `/usr/bin/time -l pnpm typecheck` passes in 3.32 seconds real
+  with 1,241,726,976-byte maximum RSS. Targeted `oxlint`, targeted `oxfmt --check`, standalone
+  max-lines ratchet, `git diff --check`, protected-resolver empty diff, and no non-test consumer pass.
+  Full `pnpm lint` passes in 18.10 seconds real with 2,052,751,360-byte maximum RSS: switch
+  exhaustiveness, 41 reliability gates, the 355-entry max-lines ratchet, bundled-skill verification,
+  9,837 localization references, locale parity, and zero-candidate localization coverage pass; only
+  pre-existing unrelated warnings remain. Module/test sizes are 318/325 lines with no bypass.
+- Residual: this is an injected callback-channel contract, not a real SSH process, `SshConnection`
+  adapter, tree/root staging owner, semantic primitive probe, tar optimization, `MaxSessions=1`,
+  full-size/live transfer, or Windows PowerShell path. It has no non-test consumer. Remote bundled-
+  Node verification/install/publish/launch, product/Beta/fallback/tuple/publication/default behavior,
+  and SignPath remain absent; legacy remains the sole production/default path. Exact-head all-six
+  native and adjacent Actions evidence is required before the next bounded package.
 
 ## Accepted Gaps
 
@@ -17476,11 +17631,10 @@ The project is not complete until every applicable item below is checked with ev
 
 ## Next Required Action
 
-Apply current-main commit `45a772cb4`'s exact scoped Windows compiler-test timeout patch, commit and
-push this evidence checkpoint, and require a fresh exact-head computer-use pass. Then audit the next
-smallest disconnected POSIX system-SSH/no-tar transfer package before changing code. Do not check
-the broad Milestone 6 SFTP item yet: Windows remote, cross-client, high-RTT, `MaxSessions=1`, live
-channel/handle, and fault-injection cells remain open. Do not add an Electron/startup/product
+Commit and push the locally green isolated POSIX no-tar per-file boundary, then require exact-head
+all-six native artifact jobs, both Linux supplements, the Windows x64 floor, PR Checks, Golden E2E,
+and computer-use evidence before auditing the next system-SSH adapter/tree slice. Do not
+check the broad Milestone 6 SFTP or POSIX system-SSH items yet. Do not add an Electron/startup/product
 importer, per-target mode wiring, fallback, tuple enablement, release publication, or default behavior.
 Keep Node upstream `.tar.xz` inputs, Windows ZIP, `ORCA_RELAY_PATH`, existing desktop required-assets
 behavior, detached-signature byte encoding, Windows arm64 build 26100, macOS 13.5, Linux kernel 4.18,
