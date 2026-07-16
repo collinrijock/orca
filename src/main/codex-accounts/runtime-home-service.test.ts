@@ -982,13 +982,121 @@ describe('CodexRuntimeHomeService', () => {
   })
 
   it('returns the Orca-managed runtime home for Codex launch and rate-limit preparation', async () => {
+    const markerPath = join(
+      testState.userDataDir,
+      'codex-session-backfill',
+      'backfill-complete.json'
+    )
+    mkdirSync(join(testState.userDataDir, 'codex-session-backfill'), { recursive: true })
+    writeFileSync(markerPath, '{}\n', 'utf-8')
     const store = createStore(createSettings())
     const { CodexRuntimeHomeService } = await import('./runtime-home-service')
     const service = new CodexRuntimeHomeService(store as never)
 
     expect(service.prepareForCodexLaunch()).toBe(getRuntimeCodexHomePath())
+    expect(existsSync(markerPath)).toBe(false)
     expect(service.prepareForRateLimitFetch()).toBe(getRuntimeCodexHomePath())
+    expect(service.getHostCodexHomePathsForSessionDiscovery()).toEqual([getRuntimeCodexHomePath()])
     expect(existsSync(getRuntimeCodexHomePath())).toBe(true)
+  })
+
+  it('routes host system default to the real home when the flag is ON', async () => {
+    const store = createStore(createSettings({ codexSystemDefaultRealHomeEnabled: true }))
+    const { CodexRuntimeHomeService } = await import('./runtime-home-service')
+    const service = new CodexRuntimeHomeService(store as never)
+
+    expect(service.isHostSystemDefaultRealHome()).toBe(true)
+    expect(service.prepareForCodexLaunch()).toBeNull()
+    expect(service.getHostCodexHomePathsForSessionDiscovery()).toEqual([
+      getRuntimeCodexHomePath(),
+      getSystemCodexHomePath()
+    ])
+    service.setRealHomeLaneGate(() => false)
+    expect(service.getHostCodexHomePathsForSessionDiscovery()).toEqual([getRuntimeCodexHomePath()])
+    const markerPath = join(
+      testState.userDataDir,
+      'codex-session-backfill',
+      'backfill-complete.json'
+    )
+    mkdirSync(join(testState.userDataDir, 'codex-session-backfill'), { recursive: true })
+    writeFileSync(markerPath, '{}\n', 'utf-8')
+    expect(service.prepareForCodexLaunch()).toBe(getRuntimeCodexHomePath())
+    expect(existsSync(markerPath)).toBe(false)
+    service.setRealHomeLaneGate(() => true)
+    const perSpawnCustomHome = join(testState.fakeHomeDir, 'per-spawn-custom-codex-home')
+    writeFileSync(markerPath, '{}\n', 'utf-8')
+    expect(service.isHostSystemDefaultRealHome({ CODEX_HOME: perSpawnCustomHome })).toBe(false)
+    expect(service.prepareForCodexLaunch(undefined, { CODEX_HOME: perSpawnCustomHome })).toBe(
+      getRuntimeCodexHomePath()
+    )
+    expect(existsSync(markerPath)).toBe(true)
+    writeFileSync(
+      join(testState.fakeHomeDir, '.zshrc'),
+      'export CODEX_HOME="$HOME/shell-custom-codex-home"\n',
+      'utf-8'
+    )
+    const shellLaunchEnv = { HOME: testState.fakeHomeDir, SHELL: '/bin/zsh' }
+    expect(service.isHostSystemDefaultRealHome(shellLaunchEnv)).toBe(false)
+    expect(service.prepareForCodexLaunch(undefined, shellLaunchEnv)).toBe(getRuntimeCodexHomePath())
+    const previousCodexHome = process.env.CODEX_HOME
+    const previousOrcaCodexHome = process.env.ORCA_CODEX_HOME
+    process.env.CODEX_HOME = getRuntimeCodexHomePath()
+    process.env.ORCA_CODEX_HOME = getRuntimeCodexHomePath()
+    try {
+      // Background fetchers prefer ambient CODEX_HOME when passed null, so an
+      // explicit path proves nested Orca launches cannot poll the managed home.
+      expect(service.prepareForRateLimitFetch()).toBe(getSystemCodexHomePath())
+      process.env.CODEX_HOME = getSystemCodexHomePath()
+      delete process.env.ORCA_CODEX_HOME
+      expect(service.isHostSystemDefaultRealHome()).toBe(true)
+      process.env.CODEX_HOME = join(testState.fakeHomeDir, 'user-owned-codex-home')
+      expect(service.isHostSystemDefaultRealHome()).toBe(false)
+      expect(service.prepareForRateLimitFetch()).toBe(getRuntimeCodexHomePath())
+    } finally {
+      if (previousCodexHome === undefined) {
+        delete process.env.CODEX_HOME
+      } else {
+        process.env.CODEX_HOME = previousCodexHome
+      }
+      if (previousOrcaCodexHome === undefined) {
+        delete process.env.ORCA_CODEX_HOME
+      } else {
+        process.env.ORCA_CODEX_HOME = previousOrcaCodexHome
+      }
+    }
+  })
+
+  it('keeps the managed home for a host MANAGED account even when the flag is ON', async () => {
+    const managedHomePath = createManagedAuth(
+      testState.userDataDir,
+      'account-1',
+      '{"account":"managed"}\n'
+    )
+    const store = createStore(
+      createSettings({
+        codexSystemDefaultRealHomeEnabled: true,
+        codexManagedAccounts: [
+          {
+            id: 'account-1',
+            email: 'user@example.com',
+            managedHomePath,
+            providerAccountId: null,
+            workspaceLabel: null,
+            workspaceAccountId: null,
+            createdAt: 1,
+            updatedAt: 1,
+            lastAuthenticatedAt: 1
+          }
+        ],
+        activeCodexManagedAccountId: 'account-1',
+        activeCodexManagedAccountIdsByRuntime: { host: 'account-1', wsl: {} }
+      })
+    )
+    const { CodexRuntimeHomeService } = await import('./runtime-home-service')
+    const service = new CodexRuntimeHomeService(store as never)
+
+    expect(service.isHostSystemDefaultRealHome()).toBe(false)
+    expect(service.prepareForCodexLaunch()).toBe(getRuntimeCodexHomePath())
   })
 
   it('uses the same host CODEX_HOME after switching managed Codex accounts', async () => {

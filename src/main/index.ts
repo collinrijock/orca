@@ -135,7 +135,15 @@ import {
   type CodexAccountSelectionTarget
 } from './codex-accounts/runtime-selection'
 import { normalizeClaudeRuntimeSelection } from './claude-accounts/runtime-selection'
-import { codexHookService } from './codex/hook-service'
+import { codexHookService, setSystemCodexHomeHookSweepSuppressed } from './codex/hook-service'
+import {
+  ensureRealHomeCodexHookState,
+  isRealHomeCodexHookLaneUsable
+} from './codex/codex-real-home-hook-install'
+import { setCodexTrustGrantTelemetry } from './codex/codex-hook-trust-grant'
+import { startCodexSessionBackfillInBackground } from './codex/codex-session-backfill'
+import { startCodexSessionIndexHealInBackground } from './codex/codex-session-index-heal'
+import { resolveHostCodexSessionSourceHome } from './codex/codex-session-source-home'
 import { getDefaultWslDistro } from './wsl'
 import { ClaudeAccountService } from './claude-accounts/service'
 import { ClaudeRuntimeAuthService } from './claude-accounts/runtime-auth-service'
@@ -748,8 +756,29 @@ function startTerminalRuntimeStartupServices(): Promise<void> {
   return firstWindowStartupServicesReady
 }
 
-function prepareCodexRuntimeHomeForLaunch(target?: CodexAccountSelectionTarget): string | null {
-  const runtimeHomePath = codexRuntimeHome!.prepareForCodexLaunch(target)
+function prepareCodexRuntimeHomeForLaunch(
+  target?: CodexAccountSelectionTarget,
+  launchEnv?: NodeJS.ProcessEnv
+): string | null {
+  if (
+    target?.runtime !== 'wsl' &&
+    codexRuntimeHome!.isHostSystemDefaultRealHomeSelected(launchEnv)
+  ) {
+    // Why (flag ON, system default): the hook entry must exist — appended last
+    // and trusted by codex's own app-server grant — in the real ~/.codex before
+    // the pane spawns. An incapable grant flips the lane gate so the launch
+    // below falls back to the managed home instead of a status-blind pane.
+    ensureRealHomeCodexHookState({
+      hooksEnabled: isAgentStatusHooksEnabled(store?.getSettings()),
+      userDataPath: app.getPath('userData')
+    })
+  }
+  const runtimeHomePath = codexRuntimeHome!.prepareForCodexLaunch(target, launchEnv)
+  if (runtimeHomePath === null && target?.runtime !== 'wsl') {
+    // Why: Codex runs on the user's real ~/.codex; the managed-home hook
+    // install below would target a home Codex never reads on this lane.
+    return null
+  }
   const hookTarget =
     target?.runtime === 'wsl'
       ? {
@@ -1047,7 +1076,7 @@ function openMainWindow(): BrowserWindow {
     keybindings,
     {
       getAdditionalAiVaultCodexHomePaths: () =>
-        codexRuntimeHome ? [codexRuntimeHome.getHostRuntimeHomePath()] : [],
+        codexRuntimeHome ? codexRuntimeHome.getHostCodexHomePathsForSessionDiscovery() : [],
       onBeforeRelaunch: async () => {
         isQuitting = true
         desktopRelayService?.fenceAndCloseNow()
@@ -1801,6 +1830,16 @@ app.whenReady().then(async () => {
   // the Store reference, seeds common props, and resets per-session burst
   // caps. Actual transport initialization is still gated by both flags.
   initTelemetry(store)
+  // Why: the trust-grant module is bundled into plain-node CLI entries where
+  // the telemetry client cannot load, so the tracker is injected here instead
+  // of imported there.
+  setCodexTrustGrantTelemetry(({ outcome, hostKind, reason }) => {
+    track('codex_trust_grant', {
+      outcome,
+      host_kind: hostKind,
+      ...(reason !== undefined ? { fallback_reason: reason } : {})
+    })
+  })
   // Why: the error-tracking lane (telemetry-error-tracking.md) is its own
   // composition root — independent of product telemetry — and must
   // initialize before any IPC handler / runtime span is created so the
@@ -1822,7 +1861,56 @@ app.whenReady().then(async () => {
   openCodeUsage = new OpenCodeUsageStore(store)
   rateLimits = new RateLimitService()
   codexRuntimeHome = new CodexRuntimeHomeService(store)
+  // Why: an incapable trust-grant host must fall back to the managed home for
+  // every consumer (PTY env, rate limits, commit messages) in one place.
+  codexRuntimeHome.setRealHomeLaneGate(() =>
+    isRealHomeCodexHookLaneUsable(isAgentStatusHooksEnabled(store?.getSettings()))
+  )
+  // Why: while the real-home lane owns ~/.codex/hooks.json, the legacy
+  // system-home sweep inside managed installs would delete the entry the
+  // real-home installer just appended. Flag OFF or hooks off re-arms the sweep,
+  // which is also what removes the entry again on downgrade or opt-out.
+  setSystemCodexHomeHookSweepSuppressed(
+    () =>
+      codexRuntimeHome !== null &&
+      codexRuntimeHome.isHostSystemDefaultRealHomeSelected() &&
+      isAgentStatusHooksEnabled(store?.getSettings())
+  )
   codexAccounts = new CodexAccountService(store, rateLimits, codexRuntimeHome)
+  // Why: one-time per-host backfill makes historical Orca-managed Codex
+  // sessions visible to the user's own resume picker and app history (#4444,
+  // #8612). Deferred so startup and first PTY spawns never compete with the
+  // sessions tree walk.
+  setTimeout(() => {
+    // Why: reverse-backfilling into the user's Codex home belongs exclusively
+    // to the real-home lane; flag-off, managed-account, and custom-CODEX_HOME
+    // launch lanes must remain byte-identical and leave that history untouched.
+    if (!codexRuntimeHome?.isHostSystemDefaultRealHome()) {
+      return
+    }
+    const systemCodexHomePathOverride = resolveHostCodexSessionSourceHome(store!.getSettings())
+    const shouldStopSessionMigration = (): boolean =>
+      isQuitting || codexRuntimeHome?.isHostSystemDefaultRealHome() !== true
+    // Why: the heal pass chains after the backfill settles so thread/read only
+    // runs once the audit ledger covers this startup's newly linked rollouts;
+    // it also drains sessions left pending by an interrupted earlier pass.
+    void startCodexSessionBackfillInBackground(
+      { shouldStop: shouldStopSessionMigration },
+      systemCodexHomePathOverride
+    ).then(() => {
+      // Why: flag-OFF, managed-account, and custom-home lanes must never spawn
+      // an app-server against the user's real sqlite index.
+      if (!codexRuntimeHome?.isHostSystemDefaultRealHome()) {
+        return
+      }
+      return startCodexSessionIndexHealInBackground(
+        {
+          shouldStop: shouldStopSessionMigration
+        },
+        systemCodexHomePathOverride
+      )
+    })
+  }, 15_000)
   claudeRuntimeAuth = new ClaudeRuntimeAuthService(store)
   claudeAccounts = new ClaudeAccountService(store, rateLimits, claudeRuntimeAuth)
   rateLimits.setCodexHomePathResolver((target) =>
@@ -1914,7 +2002,7 @@ app.whenReady().then(async () => {
     // aiVault.listSessions RPC includes managed-Codex sessions on remote/SSH
     // hosts; the window-only registerCoreHandlers path never runs under serve.
     getAdditionalAiVaultCodexHomePaths: () =>
-      codexRuntimeHome ? [codexRuntimeHome.getHostRuntimeHomePath()] : [],
+      codexRuntimeHome ? codexRuntimeHome.getHostCodexHomePathsForSessionDiscovery() : [],
     buildAgentHookPtyEnv: () =>
       isAgentStatusHooksEnabled(store?.getSettings()) ? agentHookServer.buildPtyEnv() : {}
   })
@@ -2045,7 +2133,14 @@ app.whenReady().then(async () => {
       removeManagedAgentHooks()
     }
   }
-
+  if (codexRuntimeHome.isHostSystemDefaultRealHomeSelected()) {
+    // Why: establish the lane before background rate-limit polling starts, so
+    // an incapable grant host never polls a home its PTYs will not use.
+    ensureRealHomeCodexHookState({
+      hooksEnabled: isAgentStatusHooksEnabled(store.getSettings()),
+      userDataPath: app.getPath('userData')
+    })
+  }
   app.on('child-process-gone', (_event, details) => {
     recordProcessGoneCrash('child', details.type, details.reason, details.exitCode ?? null, {
       name: details.name,

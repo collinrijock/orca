@@ -2854,6 +2854,11 @@ export type GlobalSettings = {
   /** Whether to extract OAuth credentials from the local Gemini CLI installation
    *  for rate-limit fetching. Disabled by default for explicit opt-in. */
   geminiCliOAuthEnabled: boolean
+  /** Staged internal flag (default OFF, no settings UI): route the system-default
+   *  Codex account at the user's real ~/.codex instead of Orca's managed runtime
+   *  home. OFF is byte-identical to today; managed accounts are unaffected.
+   *  See src/main/codex/codex-real-home-flag.ts. */
+  codexSystemDefaultRealHomeEnabled?: boolean
   /** Per-agent CLI command overrides. A missing key means use the catalog default binary name. */
   agentCmdOverrides: Partial<Record<TuiAgent, string>>
   /** Why: Orca bridges Codex session history from the user's real Codex home into

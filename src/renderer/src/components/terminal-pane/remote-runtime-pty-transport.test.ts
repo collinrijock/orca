@@ -780,6 +780,7 @@ describe('createRemoteRuntimePtyTransport', () => {
       tabId: 'tab-1',
       leafId: 'pane:1',
       command: "codex 'linked issue context'",
+      envToDelete: ['CODEX_HOME', 'ORCA_CODEX_HOME'],
       startupCommandDelivery: 'shell-ready'
     })
 
@@ -791,6 +792,7 @@ describe('createRemoteRuntimePtyTransport', () => {
         method: 'terminal.create',
         params: expect.objectContaining({
           command: "codex 'linked issue context'",
+          envToDelete: ['CODEX_HOME', 'ORCA_CODEX_HOME'],
           startupCommandDelivery: 'shell-ready'
         })
       })
