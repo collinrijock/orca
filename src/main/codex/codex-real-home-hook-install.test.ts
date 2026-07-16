@@ -119,7 +119,7 @@ describe('ensureRealHomeCodexHookState (install)', () => {
     expect(plan.managedEntries.every((entry) => entry.groupIndex === 0)).toBe(true)
   })
 
-  it('appends LAST and preserves user entries, unknown fields, and trust positions', () => {
+  it('keeps the managed lane for unknown top-level fields Codex cannot load', () => {
     grantSucceeds()
     const userConfig = {
       hooks: {
@@ -128,27 +128,43 @@ describe('ensureRealHomeCodexHookState (install)', () => {
       },
       _pluginManagerMetadata: { owner: 'someone-else' }
     }
-    writeFileSync(getRealHooksJsonPath(), `${JSON.stringify(userConfig, null, 2)}\n`, 'utf-8')
+    const original = `${JSON.stringify(userConfig, null, 2)}\n`
+    writeFileSync(getRealHooksJsonPath(), original, 'utf-8')
 
     const lane = ensureRealHomeCodexHookState({ hooksEnabled: true, userDataPath: userDataDir })
 
-    expect(lane).toBe('installed')
+    expect(lane).toBe('unavailable')
+    expect(readFileSync(getRealHooksJsonPath(), 'utf-8')).toBe(original)
+    expect(grantMock).not.toHaveBeenCalled()
+    expect(existsSync(join(userDataDir, 'codex-real-home-hooks', 'hooks.json.pre-orca'))).toBe(
+      false
+    )
+  })
+
+  it('appends LAST and preserves user entries and trust positions', () => {
+    grantSucceeds()
+    const userConfig = {
+      hooks: {
+        Stop: [{ matcher: 'deploy-*', hooks: [{ type: 'command', command: 'my-stop-hook.sh' }] }],
+        PreCompact: [{ hooks: [{ type: 'command', command: 'my-compact-hook.sh' }] }]
+      }
+    }
+    const original = `${JSON.stringify(userConfig, null, 2)}\n`
+    writeFileSync(getRealHooksJsonPath(), original, 'utf-8')
+
+    expect(ensureRealHomeCodexHookState({ hooksEnabled: true, userDataPath: userDataDir })).toBe(
+      'installed'
+    )
+
     const config = readRealHooksJson()
-    // User's Stop entry keeps position 0; Orca's entry is appended after it.
     expect(config.hooks?.Stop).toHaveLength(2)
     expect(config.hooks?.Stop?.[0]).toEqual(userConfig.hooks.Stop[0])
-    // Non-managed events Orca does not subscribe to stay untouched.
     expect(config.hooks?.PreCompact).toEqual(userConfig.hooks.PreCompact)
-    // Unknown top-level metadata survives, unlike the managed-home writer.
-    expect(config._pluginManagerMetadata).toEqual(userConfig._pluginManagerMetadata)
-    // The appended entry's trust key uses its appended position.
     const plan = grantMock.mock.calls[0]![0] as CodexManagedTrustGrantPlan
-    const stopEntry = plan.managedEntries.find((entry) => entry.eventLabel === 'stop')
-    expect(stopEntry?.groupIndex).toBe(1)
-    // Pristine pre-Orca backup lands under userData, not in ~/.codex.
+    expect(plan.managedEntries.find((entry) => entry.eventLabel === 'stop')?.groupIndex).toBe(1)
     expect(
       readFileSync(join(userDataDir, 'codex-real-home-hooks', 'hooks.json.pre-orca'), 'utf-8')
-    ).toBe(`${JSON.stringify(userConfig, null, 2)}\n`)
+    ).toBe(original)
   })
 
   it('updates a symlinked hooks.json target without replacing the symlink', () => {

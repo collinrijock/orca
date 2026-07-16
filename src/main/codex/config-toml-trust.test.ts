@@ -1,6 +1,7 @@
 /* eslint-disable max-lines -- Why: this suite keeps the hash fixture, TOML edit edge cases, and trust-state parser regressions together so Codex compatibility failures are easy to audit. */
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
+  chmodSync,
   existsSync,
   lstatSync,
   mkdirSync,
@@ -9,6 +10,7 @@ import {
   realpathSync,
   rmSync,
   symlinkSync,
+  statSync,
   writeFileSync
 } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -1302,6 +1304,22 @@ describe('normalizeCodexProjectPathForRevocationLookup', () => {
 })
 
 describe('removeHookTrustEntries', () => {
+  it.skipIf(process.platform === 'win32')('preserves restrictive config permissions', () => {
+    const entry: CodexTrustEntry = {
+      sourcePath: '/x/hooks.json',
+      eventLabel: 'stop',
+      groupIndex: 0,
+      handlerIndex: 0,
+      command: 'echo trusted'
+    }
+    upsertHookTrustEntries(configPath, [entry])
+    chmodSync(configPath, 0o600)
+
+    removeHookTrustEntries(configPath, [computeTrustKey(entry)])
+
+    expect(statSync(configPath).mode & 0o777).toBe(0o600)
+  })
+
   it('updates a symlink target without replacing config.toml', () => {
     const targetPath = join(tmpDir, 'dotfiles-config.toml')
     const entry: CodexTrustEntry = {

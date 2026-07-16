@@ -1,11 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
+  chmodSync,
   lstatSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
   rmSync,
   symlinkSync,
+  statSync,
   writeFileSync
 } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -268,6 +270,25 @@ describe('CodexHookService app-server trust grant lane', () => {
     ])
     expect(operations).toEqual(['inspect-user-hook-trust', 'repair-user-hook-trust'])
   })
+
+  it.skipIf(process.platform === 'win32')(
+    'preserves restrictive real-home hooks permissions during flag-off cleanup',
+    () => {
+      prepareSystemHome()
+      const hooksPath = join(tmpHome, '.codex', 'hooks.json')
+      const material = getCodexManagedHookInstallMaterial()
+      writeFileSync(
+        hooksPath,
+        `${JSON.stringify({ hooks: { Stop: [{ hooks: [{ type: 'command', command: material.command }] }] } }, null, 2)}\n`
+      )
+      chmodSync(hooksPath, 0o600)
+      installCodexLikeGrantRunner()
+
+      expect(new CodexHookService().install().state).toBe('installed')
+
+      expect(statSync(hooksPath).mode & 0o777).toBe(0o600)
+    }
+  )
 
   it('does not accept a ledger hash after the recorded Codex binary stamp changes', () => {
     prepareSystemHome()

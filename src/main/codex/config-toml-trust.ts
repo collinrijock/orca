@@ -5,6 +5,7 @@ import {
   mkdirSync,
   readFileSync,
   realpathSync,
+  statSync,
   unlinkSync,
   writeFileSync
 } from 'node:fs'
@@ -798,9 +799,12 @@ export function writeConfigAtomically(configPath: string, contents: string): voi
   const dir = dirname(writePath)
   mkdirSync(dir, { recursive: true })
   const tmpPath = join(dir, `.${Date.now()}-${randomUUID()}.tmp`)
+  const existingMode = existsSync(writePath) ? statSync(writePath).mode : undefined
   let renamed = false
   try {
-    writeFileSync(tmpPath, contents, 'utf-8')
+    // Why: real-home trust cleanup must not widen a dotfiles-managed config's
+    // restrictive permissions when the atomic rename installs new bytes.
+    writeFileSync(tmpPath, contents, { encoding: 'utf-8', mode: existingMode })
     if (existsSync(writePath)) {
       copyFileWithWindowsRetry(writePath, `${writePath}.bak`)
     }

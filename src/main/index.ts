@@ -1791,12 +1791,12 @@ app.whenReady().then(async () => {
   )
   // Why: while the real-home lane owns ~/.codex/hooks.json, the legacy
   // system-home sweep inside managed installs would delete the entry the
-  // real-home installer just appended. Flag OFF or hooks off re-arms the sweep,
-  // which is also what removes the entry again on downgrade or opt-out.
+  // real-home installer just appended. Flag OFF, hooks off, or an incapable
+  // trust lane re-arms the sweep so downgrade, opt-out, and rollback converge.
   setSystemCodexHomeHookSweepSuppressed(
     () =>
       codexRuntimeHome !== null &&
-      codexRuntimeHome.isHostSystemDefaultRealHomeSelected() &&
+      codexRuntimeHome.isHostSystemDefaultRealHome() &&
       isAgentStatusHooksEnabled(store?.getSettings())
   )
   codexAccounts = new CodexAccountService(store, rateLimits, codexRuntimeHome)

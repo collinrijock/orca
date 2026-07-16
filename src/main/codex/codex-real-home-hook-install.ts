@@ -127,6 +127,12 @@ function installRealHomeCodexHook(userDataPath: string): RealHomeCodexHookLane {
     installRetryAfterMs = Date.now() + CODEX_TRUST_GRANT_TRANSIENT_RETRY_INTERVAL_MS
     return 'unavailable'
   }
+  if (Object.keys(config).some((key) => key !== 'hooks')) {
+    // Why: Codex rejects unknown root keys instead of ignoring them. Avoid a
+    // transient rewrite of a user-owned file that the trust RPC cannot load.
+    installRetryAfterMs = Date.now() + CODEX_TRUST_GRANT_TRANSIENT_RETRY_INTERVAL_MS
+    return 'unavailable'
+  }
 
   // Why: the same script the managed lane maintains; deploying here too keeps
   // host-connect ordering independent of the managed installer loop.

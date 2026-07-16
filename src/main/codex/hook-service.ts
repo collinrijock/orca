@@ -663,7 +663,7 @@ function cleanupLegacySystemManagedHooks(): void {
           // never replace that newer dotfiles generation with our stale parse.
           throw new Error('System Codex hooks changed during trust repair')
         }
-        writeHooksJson(hooksWritePath, { ...config, hooks: nextHooks })
+        writeHooksJson(hooksWritePath, { ...config, hooks: nextHooks }, { preserveMode: true })
       },
       restoreHooks: () => writeFileAtomically(hooksWritePath, previousRaw, { mode: previousMode })
     })
