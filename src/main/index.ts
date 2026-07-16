@@ -1812,12 +1812,19 @@ app.whenReady().then(async () => {
     // Why: the heal pass chains after the backfill settles so thread/read only
     // runs once the audit ledger covers this startup's newly linked rollouts;
     // it also drains sessions left pending by an interrupted earlier pass.
-    void startCodexSessionBackfillInBackground({}, systemCodexHomePathOverride).then(() =>
-      startCodexSessionIndexHealInBackground(
-        { shouldStop: () => isQuitting },
+    void startCodexSessionBackfillInBackground({}, systemCodexHomePathOverride).then(() => {
+      // Why: flag-OFF, managed-account, and custom-home lanes must never spawn
+      // an app-server against the user's real sqlite index.
+      if (!codexRuntimeHome?.isHostSystemDefaultRealHome()) {
+        return
+      }
+      return startCodexSessionIndexHealInBackground(
+        {
+          shouldStop: () => isQuitting || codexRuntimeHome?.isHostSystemDefaultRealHome() !== true
+        },
         systemCodexHomePathOverride
       )
-    )
+    })
   }, 15_000)
   claudeRuntimeAuth = new ClaudeRuntimeAuthService(store)
   claudeAccounts = new ClaudeAccountService(store, rateLimits, claudeRuntimeAuth)
