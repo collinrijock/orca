@@ -9644,7 +9644,8 @@
               "a9bf7c171a": "推送失败",
               "834cb3f23d": "使用 AI 修复",
               "783a808870": "关闭"
-            }
+            },
+            "createPrIntentDetailGenerationFailed": "Couldn’t generate {{value0}} details: {{value1}} Retry Create PR."
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "无法启动选定的智能体。",

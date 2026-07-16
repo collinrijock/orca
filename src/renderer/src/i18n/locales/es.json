@@ -9644,7 +9644,8 @@
               "a9bf7c171a": "Push fallido",
               "834cb3f23d": "Corregir con AI",
               "783a808870": "Cerrar"
-            }
+            },
+            "createPrIntentDetailGenerationFailed": "Couldn’t generate {{value0}} details: {{value1}} Retry Create PR."
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "No se pudo iniciar el agente seleccionado.",
