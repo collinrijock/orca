@@ -573,6 +573,10 @@ jobs:
           cp "$fixture/client-key.pub" "$HOME/.ssh/authorized_keys"
           chmod 600 "$HOME/.ssh/authorized_keys" "$fixture/client-key" "$fixture/host-key"
           sudo chown root:root "$fixture/host-key"
+          # Why: hosted runner accounts are shadow-locked, which sshd rejects before public-key auth.
+          random_password=$(openssl rand -hex 32)
+          sudo usermod --password "$(openssl passwd -6 "$random_password")" "$USER"
+          unset random_password
           port=22222
           server_version=$(/usr/sbin/sshd -V 2>&1 | head -1)
           config="$fixture/sshd_config"
@@ -599,7 +603,7 @@ jobs:
               break
             fi
             if test "$attempt" = 20; then
-              cat "$fixture/sshd.log"
+              sudo tail -200 "$fixture/sshd.log"
               exit 1
             fi
             sleep 0.25

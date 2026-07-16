@@ -10,7 +10,12 @@ A checked box means the work has evidence in the detailed ledger. Design approva
 complete a box.
 
 Active checkpoint: **Milestone 6 / Work Package 5 bounded runtime transfer — disconnected live
-OpenSSH SFTP composition is in progress, 2026-07-15, Codex implementation owner.**
+OpenSSH SFTP runner fixture auth correction is in progress, 2026-07-15, Codex implementation owner.**
+`E-M6-SFTP-LIVE-COMPOSITION-CI-RED-001` records both target-native Linux jobs passing build,
+contracts, and existing full-size measurement before stock sshd rejected GitHub's shadow-locked
+`runner` account ahead of public-key validation. No SFTP bytes were sent and no live cell is credited.
+The narrow rerun keeps password authentication disabled and gives only the ephemeral account a fresh
+random password hash so public-key authentication can proceed.
 `E-M6-SFTP-LIVE-COMPOSITION-AUDIT-001` limits this package to one authenticated built-in
 `SshConnection`, one raw SFTP channel, the existing one-to-four file transfer, captured-transport-
 only force close with awaited teardown, and exact full-size Linux x64/arm64 runtime transfer against

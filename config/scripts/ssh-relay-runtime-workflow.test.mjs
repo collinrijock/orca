@@ -95,6 +95,8 @@ describe('SSH relay runtime artifact workflow', () => {
     expect(start.if).toBe("runner.os == 'Linux'")
     expect(start.run).toContain('ListenAddress 127.0.0.1')
     expect(start.run).toContain('Subsystem sftp internal-sftp')
+    expect(start.run).toContain('sudo usermod --password')
+    expect(start.run).toContain('PasswordAuthentication no')
     expect(start.run).toContain('timeout --signal=TERM --kill-after=15s 180s sudo apt-get')
     expect(measure.if).toBe("runner.os == 'Linux'")
     expect(measure.run).toContain('ssh-relay-runtime-sftp-openssh-full-size.test.ts')

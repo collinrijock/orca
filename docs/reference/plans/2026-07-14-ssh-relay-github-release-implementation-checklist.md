@@ -9,7 +9,7 @@ work; keep exact commands, runner identities, hashes, metrics, and residual gaps
 Date created: 2026-07-14<br>
 Last updated: 2026-07-15<br>
 Current phase: Milestone 6 / Work Package 5 bounded runtime transfer — **In progress — 2026-07-15, Codex implementation owner: disconnected authenticated-connection/SFTP-tree composition and live OpenSSH proof**. Keep every capability disconnected from every production/default SSH path. Real Apple/SignPath rehearsals remain an explicit late gate and are not on this package's critical path.<br>
-Session checkpoint: **LIVE SFTP COMPOSITION LOCALLY GREEN / EXACT-HEAD RUNNER PROOF NEXT — 2026-07-15, Codex implementation owner** — `E-M6-SFTP-LIVE-COMPOSITION-LOCAL-001` proves the disconnected authenticated-connection owner, captured-client force close, cancellation cleanup/breaker ordering, workflow oracle, focused/broad/release suites, typecheck, full lint, formatting, max-lines, diff, protected-resolver, and no-product-import gates locally. The purpose suite is 15/15; the live full-size suite is deliberately skipped locally because no runner OpenSSH/runtime inputs are present and therefore earns no live cell. Push this isolated package and require exact-head Linux x64/arm64 stock-OpenSSH full-size metrics before crediting live SFTP. Do not credit Windows/POSIX system SSH, high-RTT, `MaxSessions=1`, product/settings/fallback wiring, tuple enablement, publication, or default behavior. Merging to `main` remains prohibited, SignPath is deferred, and legacy remains the production default.<br>
+Session checkpoint: **LIVE SFTP RUNNER FIXTURE RED / NARROW AUTH-FIX IN PROGRESS — 2026-07-15, Codex implementation owner** — `E-M6-SFTP-LIVE-COMPOSITION-CI-RED-001` proves both target-native Linux builds and all pre-live contracts passed, then the loopback stock-OpenSSH fixture rejected GitHub's shadow-locked `runner` account before public-key validation. No SFTP bytes were sent and no live cell is credited. Keep password authentication disabled; assign only a fresh random ephemeral password hash so stock sshd accepts the runner account for public-key authentication, fix failure-log readability, rerun exact head, and require full metrics. Do not credit Windows/POSIX system SSH, high-RTT, `MaxSessions=1`, product/settings/fallback wiring, tuple enablement, publication, or default behavior. Merging to `main` remains prohibited, SignPath is deferred, and legacy remains the production default.<br>
 Primary design: [SSH relay GitHub Release plan](./2026-07-14-ssh-relay-github-release-plan.html)<br>
 Motivating issues: [#8450](https://github.com/stablyai/orca/issues/8450), [#1693](https://github.com/stablyai/orca/issues/1693)
 
@@ -17322,6 +17322,32 @@ src/main/ssh/ssh-relay-runtime-sftp-tree-transfer.test.ts` — PASS, 15/15 in 1.
   or Windows system-SSH path, remote bundled-Node verification/install/publish/launch, product/Beta/
   settings/fallback wiring, tuple enablement, publication, or default behavior is proved. Legacy
   remains the sole production/default path and SignPath remains deferred.
+
+### E-M6-SFTP-LIVE-COMPOSITION-CI-RED-001 — stock sshd rejects the hosted runner's locked account
+
+- Date/owner/head/run: 2026-07-15, Codex implementation owner; exact implementation commit
+  `32f78d720febdb5581282cfbc64b6aae374930f4`, SSH Relay Runtime Artifacts run
+  [29513130758](https://github.com/stablyai/orca/actions/runs/29513130758).
+- Passing boundary before RED: Linux x64 job
+  [87671358587](https://github.com/stablyai/orca/actions/runs/29513130758/job/87671358587) and Linux
+  arm64 job [87671358592](https://github.com/stablyai/orca/actions/runs/29513130758/job/87671358592)
+  both pass checkout, exact Node 24.18.0 setup, native identity, prerequisites, the complete runtime
+  contract suite including all five new connection-owner cases, exact Node input download, target-
+  native build/reproducibility/read-back/smoke, and full-size extraction/cache/scan/stream measurement.
+- Expected evidence failure: both jobs then fail `Start loopback OpenSSH SFTP fixture`; the live
+  transfer step is skipped and sends zero SFTP bytes. The server binds only `127.0.0.1:22222`, but
+  every key-auth probe is rejected with `User runner not allowed because account is locked` before
+  public-key validation. The arm64 cleanup log confirms stock sshd accepted the config/listener and
+  rejected only the shadow account state. The x64 runner is Ubuntu 24.04.4 image
+  `20260714.240.1`, X64, kernel `6.17.0-1020-azure`; arm64 is the target-native hosted counterpart.
+- Narrow correction: retain `PasswordAuthentication no`, `KbdInteractiveAuthentication no`,
+  loopback-only listen, one ephemeral Ed25519 client key, and strict modes. Generate a fresh random
+  32-byte password, store only its SHA-512 shadow hash on the ephemeral runner account, immediately
+  unset the plaintext shell variable, and continue to authenticate only with the generated public
+  key. Also read root-owned sshd logs through `sudo` on failure. This changes only CI fixture account
+  eligibility; no product authentication, connection, transfer, or fallback code changes.
+- Residual: no live SFTP transfer/filesystem/mode/RSS/cancellation evidence is credited from this
+  run. Exact-head Linux x64/arm64 rerun plus all-six/adjacent regression proof remains mandatory.
 
 ## Accepted Gaps
 
