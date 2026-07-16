@@ -1164,18 +1164,18 @@ function shouldApplyBranchMismatchedLinkedPRClear(args: {
 function buildPRRefreshCandidate(
   state: AppState,
   worktree: Worktree,
-  repoPath?: string
+  ownerRepo?: Repo
 ): GitHubPRRefreshCandidate | null {
-  const repo = findWorktreeOwnerRepo(state, worktree)
+  const repo = ownerRepo ?? findWorktreeOwnerRepo(state, worktree)
   if (!repo) {
     return null
   }
-  if (isMacAppDataPath(repoPath ?? repo.path)) {
+  if (isMacAppDataPath(repo.path)) {
     return null
   }
   const branch = worktree.branch.replace(/^refs\/heads\//, '')
   const cacheKey = prCacheKey(
-    repoPath ?? repo.path,
+    repo.path,
     repo.id,
     branch,
     settingsForGitHubRepoOwner(state.settings, repo),
@@ -1186,7 +1186,7 @@ function buildPRRefreshCandidate(
   const cachedPR = state.prCache[cacheKey]?.data ?? null
   const hostedReviewFallbackPRNumber = githubHostedReviewFallbackPRNumber(
     state,
-    repoPath ?? repo.path,
+    repo.path,
     repo.id,
     branch,
     repo.connectionId,
@@ -1217,7 +1217,7 @@ function buildPRRefreshCandidate(
     : null
   return {
     repoId: repo.id,
-    repoPath: repoPath ?? repo.path,
+    repoPath: repo.path,
     repoKind: repo.kind ?? 'git',
     branch,
     cacheKey,
@@ -1256,6 +1256,43 @@ function findWorktreeOwnerRepo(
     hostId: worktree.hostId,
     settings: state.settings
   }) as Repo | null
+}
+
+function findPRFetchRepoOwner(
+  state: Pick<AppState, 'settings'> & Partial<Pick<AppState, 'repos'>>,
+  repoPath: string,
+  repoId?: string,
+  hostId?: ExecutionHostId
+): Repo | undefined {
+  const repos = state.repos ?? []
+  if (hostId) {
+    // Why: refresh candidates carry the complete owner identity. Resolve it in
+    // one pass and fail closed instead of consulting focus or another same-id row.
+    let match: Repo | undefined
+    for (const candidate of repos) {
+      if (
+        candidate.path !== repoPath ||
+        (repoId && candidate.id !== repoId) ||
+        getRepoExecutionHostId(candidate) !== hostId
+      ) {
+        continue
+      }
+      if (match) {
+        return undefined
+      }
+      match = candidate as Repo
+    }
+    return match
+  }
+  if (!repoId) {
+    return repos.find((candidate) => candidate.path === repoPath) as Repo | undefined
+  }
+  const reposAtPath = repos.filter((candidate) => candidate.path === repoPath)
+  return (
+    (findRepoForHost(reposAtPath, repoId, {
+      settings: state.settings
+    }) as Repo | null) ?? undefined
+  )
 }
 
 function githubHostedReviewFallbackPRNumber(
@@ -3057,20 +3094,10 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
 
   fetchPRForBranch: async (repoPath, branch, options): Promise<PRInfo | null> => {
     const requestState = get()
-    const reposAtPath = (requestState.repos ?? []).filter(
-      (candidate) => candidate.path === repoPath
-    )
-    const repo = (
-      options?.repoId
-        ? findRepoForHost(reposAtPath, options.repoId, {
-            hostId: options.hostId,
-            settings: requestState.settings
-          })
-        : reposAtPath[0]
-    ) as Repo | null | undefined
+    const repo = findPRFetchRepoOwner(requestState, repoPath, options?.repoId, options?.hostId)
     // Why: an explicit refresh owner must not silently fall back to another
     // same-id repo if its catalog row or path disappears mid-request.
-    if (options?.hostId && repo?.path !== repoPath) {
+    if (options?.hostId && !repo) {
       return null
     }
     const repoId = options?.repoId ?? repo?.id
@@ -3251,6 +3278,11 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
             })()
         const pr: PRInfo | null =
           outcome.kind === 'found' ? outcome.pr : outcome.kind === 'no-pr' ? null : null
+        // Why: repo ids and cache keys survive path changes; an old response
+        // must not become the replacement owner's PR data.
+        if (options?.hostId && !findPRFetchRepoOwner(get(), repoPath, repoId, options.hostId)) {
+          return null
+        }
         if (outcome.kind === 'upstream-error') {
           return cached?.data ?? null
         }
@@ -4432,11 +4464,10 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
 
     for (const worktrees of Object.values(state.worktreesByRepo)) {
       for (const wt of worktrees) {
-        const repo = state.repos.find((r) => r.id === wt.repoId)
+        const repo = findWorktreeOwnerRepo(state, wt)
         if (!repo) {
           continue
         }
-
         const branch = wt.branch.replace(/^refs\/heads\//, '')
         if (shouldRefreshPRs && !wt.isBare && branch) {
           const ownerSettings = settingsForGitHubRepoOwner(state.settings, repo)
@@ -4446,11 +4477,12 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
             branch,
             ownerSettings,
             repo.connectionId,
-            repo.executionHostId
+            repo.executionHostId,
+            true
           )
           const prEntry = state.prCache[prKey]
           if (!prEntry || now - prEntry.fetchedAt >= CACHE_TTL) {
-            const candidate = buildPRRefreshCandidate(state, wt)
+            const candidate = buildPRRefreshCandidate(state, wt, repo)
             if (candidate) {
               stalePRCandidates.push({
                 candidate,
