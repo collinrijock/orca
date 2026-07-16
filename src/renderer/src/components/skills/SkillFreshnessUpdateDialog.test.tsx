@@ -24,11 +24,8 @@ const mocks = vi.hoisted(() => ({
     onInteracted?: (method: 'keyboard' | 'pointer', event?: { key?: string }) => void
     onTerminalExit?: () => void
   }[],
-  notifyChanged: vi.fn(),
-  releaseFocusRescan: vi.fn(),
-  suspendFocusRescan: vi.fn()
+  notifyChanged: vi.fn()
 }))
-mocks.suspendFocusRescan.mockReturnValue(mocks.releaseFocusRescan)
 
 vi.mock('@/hooks/useSkillFreshness', () => ({
   useSkillFreshness: () => ({
@@ -36,8 +33,7 @@ vi.mock('@/hooks/useSkillFreshness', () => ({
     loading: mocks.loading,
     error: mocks.error,
     refresh: mocks.refresh
-  }),
-  suspendSkillFreshnessFocusRescan: mocks.suspendFocusRescan
+  })
 }))
 
 vi.mock('@/hooks/useInstalledAgentSkills', () => ({
@@ -158,9 +154,6 @@ describe('SkillFreshnessUpdateDialog', () => {
     mocks.error = null
     mocks.refresh.mockReset()
     mocks.notifyChanged.mockReset()
-    mocks.releaseFocusRescan.mockReset()
-    mocks.suspendFocusRescan.mockReset()
-    mocks.suspendFocusRescan.mockReturnValue(mocks.releaseFocusRescan)
     mocks.terminalProps.length = 0
   })
 
@@ -188,19 +181,6 @@ describe('SkillFreshnessUpdateDialog', () => {
       command: 'npx skills update orca-cli --global',
       description: 'Review the pre-filled command, then press Enter to run it.'
     })
-  })
-
-  it('holds the focus rescan while the update terminal shows and releases it on close', async () => {
-    await renderDialog()
-    await openViaRequest()
-
-    expect(container?.querySelector('[data-testid="update-terminal"]')).not.toBeNull()
-    expect(mocks.suspendFocusRescan).toHaveBeenCalledTimes(1)
-    expect(mocks.releaseFocusRescan).not.toHaveBeenCalled()
-
-    await clickButton('Close')
-
-    expect(mocks.releaseFocusRescan).toHaveBeenCalledTimes(1)
   })
 
   it('resolves a request made before inventory loads once a safe command arrives', async () => {
@@ -283,17 +263,28 @@ describe('SkillFreshnessUpdateDialog', () => {
     )
   })
 
-  it('removes an unsubmitted draft as soon as its inventory is invalidated', async () => {
+  it('keeps the same terminal inert while inventory is revalidated', async () => {
     await renderDialog()
     await openViaRequest()
-    expect(container?.querySelector('[data-testid="update-terminal"]')).not.toBeNull()
+    const firstTerminal = container?.querySelector('[data-testid="update-terminal"]')
+    const terminalWrapper = container?.querySelector<HTMLElement>('[data-skill-update-terminal]')
+    expect(firstTerminal).not.toBeNull()
+    expect(terminalWrapper?.hasAttribute('inert')).toBe(false)
 
     mocks.inventory = null
     mocks.loading = true
     await rerender()
 
     expect(container?.textContent).toContain('Checking installed Orca skills')
-    expect(container?.querySelector('[data-testid="update-terminal"]')).toBeNull()
+    expect(container?.querySelector('[data-testid="update-terminal"]')).toBe(firstTerminal)
+    expect(terminalWrapper?.hasAttribute('inert')).toBe(true)
+
+    mocks.inventory = { ...eligibleInventory(), scannedAt: 2 }
+    mocks.loading = false
+    await rerender()
+
+    expect(container?.querySelector('[data-testid="update-terminal"]')).toBe(firstTerminal)
+    expect(terminalWrapper?.hasAttribute('inert')).toBe(false)
   })
 
   it('shows a failed scan as an error instead of indefinite progress', async () => {

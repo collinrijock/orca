@@ -44,7 +44,7 @@ function renderOverlay({
   paneTitles,
   paneCount = 2,
   showAlwaysOnHeaders = true,
-  allowSplit = true,
+  showSplitButton = true,
   onClosePane = vi.fn(),
   onRemoveTitle = vi.fn(),
   onRenameSubmit = vi.fn(),
@@ -54,7 +54,7 @@ function renderOverlay({
   paneTitles: Record<number, string>
   paneCount?: number
   showAlwaysOnHeaders?: boolean
-  allowSplit?: boolean
+  showSplitButton?: boolean
   onClosePane?: ReturnType<typeof vi.fn>
   onRemoveTitle?: ReturnType<typeof vi.fn>
   onRenameSubmit?: ReturnType<typeof vi.fn>
@@ -77,7 +77,7 @@ function renderOverlay({
         worktreeId="wt-1"
         cwd={path.join(path.sep, 'tmp')}
         showAlwaysOnHeaders={showAlwaysOnHeaders}
-        allowSplit={allowSplit}
+        showSplitButton={showSplitButton}
         paneCount={paneCount}
         activePaneId={1}
         panes={panes}
@@ -170,11 +170,11 @@ describe('TerminalPaneHeaderOverlay', () => {
     expect(onRemoveTitle).not.toHaveBeenCalled()
   })
 
-  it('omits the split control when splitting is disallowed', () => {
+  it('omits the split control when the header affordance is hidden', () => {
     const { container } = renderOverlay({
       paneTitles: { 1: '', 2: '' },
       paneCount: 1,
-      allowSplit: false
+      showSplitButton: false
     })
 
     expect(container.querySelector('button[aria-label="Split Terminal Right"]')).toBeNull()

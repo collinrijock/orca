@@ -7,7 +7,6 @@ import type { SkillFreshnessInventory } from '../../../shared/skill-freshness'
 import {
   _skillFreshnessCacheForTests,
   type SkillFreshnessState,
-  suspendSkillFreshnessFocusRescan,
   useSkillFreshness
 } from './useSkillFreshness'
 
@@ -121,34 +120,6 @@ describe('useSkillFreshness', () => {
     expect(state?.loading).toBe(true)
 
     await act(async () => vi.advanceTimersByTimeAsync(15_000))
-    expect(freshnessInventory).toHaveBeenCalledTimes(2)
-    await act(async () => second.resolve(inventory(2)))
-    expect(state?.inventory?.scannedAt).toBe(2)
-  })
-
-  it('holds focus rescans while suspended and resumes after release', async () => {
-    vi.useFakeTimers()
-    vi.setSystemTime(new Date('2026-07-15T00:00:00Z'))
-    const second = deferred<SkillFreshnessInventory>()
-    const freshnessInventory = vi
-      .fn()
-      .mockResolvedValueOnce(inventory(1, ['orca-cli']))
-      .mockReturnValueOnce(second.promise)
-    window.api = { skills: { freshnessInventory } } as never
-
-    await act(async () => root?.render(<Probe />))
-    expect(freshnessInventory).toHaveBeenCalledTimes(1)
-
-    const release = suspendSkillFreshnessFocusRescan()
-    // Past the cooldown a focus event would normally rescan immediately; the
-    // suspension must hold it so a live update terminal is not respawned.
-    await act(async () => vi.advanceTimersByTimeAsync(15_000))
-    await act(async () => window.dispatchEvent(new Event('focus')))
-    expect(freshnessInventory).toHaveBeenCalledTimes(1)
-    expect(state?.inventory?.eligibleUpdateNames).toEqual(['orca-cli'])
-
-    release()
-    await act(async () => window.dispatchEvent(new Event('focus')))
     expect(freshnessInventory).toHaveBeenCalledTimes(2)
     await act(async () => second.resolve(inventory(2)))
     expect(state?.inventory?.scannedAt).toBe(2)

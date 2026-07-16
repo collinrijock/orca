@@ -12,23 +12,6 @@ let completedRevision = -1
 let lastCompletedScanAt = 0
 let refreshSequence = 0
 let scheduledFocusRescan: number | null = null
-let focusRescanSuspensionCount = 0
-
-// Why: a focus rescan republishes {inventory: null, loading: true}, which tears
-// down and remounts any live update terminal (respawning its PTY) under the user
-// when they alt-tab back. Callers showing that terminal hold focus rescans until
-// it closes; explicit Re-check and install-changed refreshes still run.
-export function suspendSkillFreshnessFocusRescan(): () => void {
-  focusRescanSuspensionCount += 1
-  let released = false
-  return () => {
-    if (released) {
-      return
-    }
-    released = true
-    focusRescanSuspensionCount = Math.max(0, focusRescanSuspensionCount - 1)
-  }
-}
 
 type SkillFreshnessSnapshot = {
   inventory: SkillFreshnessInventory | null
@@ -113,11 +96,6 @@ async function refreshSkillFreshness(force = true): Promise<void> {
 }
 
 function onWindowFocus(): void {
-  // Why: a live update terminal is showing; skip the rescan so it isn't
-  // remounted (and its PTY respawned) just because the app regained focus.
-  if (focusRescanSuspensionCount > 0) {
-    return
-  }
   const cooldownRemaining = FOCUS_RESCAN_COOLDOWN_MS - (Date.now() - lastCompletedScanAt)
   if (cooldownRemaining <= 0) {
     void refreshSkillFreshness(true)
@@ -191,7 +169,6 @@ export const _skillFreshnessCacheForTests = {
     completedRevision = -1
     lastCompletedScanAt = 0
     refreshSequence = 0
-    focusRescanSuspensionCount = 0
     if (scheduledFocusRescan !== null) {
       window.clearTimeout(scheduledFocusRescan)
       scheduledFocusRescan = null

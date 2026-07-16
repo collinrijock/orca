@@ -20,9 +20,8 @@ type TerminalPaneHeaderOverlayProps = {
   worktreeId: string
   cwd: string
   showAlwaysOnHeaders: boolean
-  /** When false, the header omits its split button — used by ephemeral one-off
-   *  command terminals (skill install, feature tips) that can't be split. */
-  allowSplit?: boolean
+  /** Used by ephemeral one-off command terminals that omit the header affordance. */
+  showSplitButton?: boolean
   paneCount: number
   activePaneId: number | null | undefined
   panes: readonly ManagedPane[]
@@ -63,7 +62,7 @@ export default function TerminalPaneHeaderOverlay({
   worktreeId,
   cwd,
   showAlwaysOnHeaders,
-  allowSplit = true,
+  showSplitButton = true,
   paneCount,
   activePaneId,
   panes,
@@ -276,7 +275,7 @@ export default function TerminalPaneHeaderOverlay({
                       </TooltipContent>
                     </Tooltip>
                   ) : null}
-                  {showAlwaysOnHeaders && allowSplit ? (
+                  {showAlwaysOnHeaders && showSplitButton ? (
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <Button

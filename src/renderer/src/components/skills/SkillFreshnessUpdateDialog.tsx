@@ -9,7 +9,7 @@ import {
 import { AlertTriangle, CheckCircle2, ChevronDown, Loader2, RefreshCw } from 'lucide-react'
 import type { SkillFreshnessInventory } from '../../../../shared/skill-freshness'
 import { buildTargetedSkillUpdateCommand } from '../../../../shared/skill-freshness'
-import { suspendSkillFreshnessFocusRescan, useSkillFreshness } from '@/hooks/useSkillFreshness'
+import { useSkillFreshness } from '@/hooks/useSkillFreshness'
 import { notifyInstalledAgentSkillsChanged } from '@/hooks/useInstalledAgentSkills'
 import { translate } from '@/i18n/i18n'
 import { Button } from '@/components/ui/button'
@@ -149,14 +149,23 @@ export function SkillFreshnessUpdateDialog(): React.JSX.Element {
   const hasBlockedGroup = groups.some((group) => group.status === 'cannot-update')
   const updateCommand = buildTargetedSkillUpdateCommand(eligibleNames)
   const summaryKind = summarizeInventory(inventory, hasBlockedGroup)
+  const terminalAuthorizationPending =
+    terminalCommand !== null &&
+    !terminalSubmittedRef.current &&
+    (state.loading || state.error !== null || inventory === null)
 
   useEffect(() => {
     if (!open) {
       return
     }
-    if (state.loading || state.error || !inventory) {
+    if (state.loading) {
+      // Why: keep the PTY mounted across focus revalidation, but the inert
+      // wrapper below prevents stale draft input until fresh authority returns.
+      return
+    }
+    if (state.error || !inventory) {
       // Why: a scan invalidates the authorization behind an unsubmitted draft.
-      // A running command keeps its PTY until exit, but stale drafts fail closed.
+      // A failed scan cannot restore it, so stale drafts fail closed.
       if (!terminalSubmittedRef.current && terminalCommand !== null) {
         setTerminalCommand(null)
       }
@@ -185,15 +194,6 @@ export function SkillFreshnessUpdateDialog(): React.JSX.Element {
     terminalCommand,
     updateCommand
   ])
-
-  useEffect(() => {
-    // Why: while a live update terminal is showing, hold the shared focus rescan
-    // so alt-tabbing back into Orca doesn't retract the draft and respawn its PTY.
-    if (!open || terminalCommand === null) {
-      return undefined
-    }
-    return suspendSkillFreshnessFocusRescan()
-  }, [open, terminalCommand])
 
   const handleOpenChange = (next: boolean): void => {
     // Why: closing is the natural point to re-observe bytes so a completed update
@@ -246,28 +246,35 @@ export function SkillFreshnessUpdateDialog(): React.JSX.Element {
         )}
 
         {terminalCommand ? (
-          <OnboardingInlineCommandTerminal
-            key={terminalCommand}
-            command={terminalCommand}
-            title={translate(
-              'auto.components.skills.SkillFreshnessUpdateDialog.terminalTitle',
-              'Update Orca skills'
-            )}
-            description={translate(
-              'auto.components.skills.SkillFreshnessUpdateDialog.terminalDescription',
-              'Review the pre-filled command, then press Enter to run it.'
-            )}
-            ariaLabel={translate(
-              'auto.components.skills.SkillFreshnessUpdateDialog.terminalAria',
-              'Orca skill update terminal'
-            )}
-            worktreeId="skill-freshness-update-terminal"
-            terminalHeightPx={200}
-            terminalTopMarginPx={0}
-            autoScrollIntoView={false}
-            onInteracted={handleTerminalInteraction}
-            onTerminalExit={handleTerminalExit}
-          />
+          <div
+            data-skill-update-terminal=""
+            aria-busy={terminalAuthorizationPending}
+            inert={terminalAuthorizationPending}
+            className={terminalAuthorizationPending ? 'opacity-50' : undefined}
+          >
+            <OnboardingInlineCommandTerminal
+              key={terminalCommand}
+              command={terminalCommand}
+              title={translate(
+                'auto.components.skills.SkillFreshnessUpdateDialog.terminalTitle',
+                'Update Orca skills'
+              )}
+              description={translate(
+                'auto.components.skills.SkillFreshnessUpdateDialog.terminalDescription',
+                'Review the pre-filled command, then press Enter to run it.'
+              )}
+              ariaLabel={translate(
+                'auto.components.skills.SkillFreshnessUpdateDialog.terminalAria',
+                'Orca skill update terminal'
+              )}
+              worktreeId="skill-freshness-update-terminal"
+              terminalHeightPx={200}
+              terminalTopMarginPx={0}
+              autoScrollIntoView={false}
+              onInteracted={handleTerminalInteraction}
+              onTerminalExit={handleTerminalExit}
+            />
+          </div>
         ) : null}
 
         {/* Why: Radix reads defaultOpen only on mount. Remount when a scan
