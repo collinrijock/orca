@@ -19,6 +19,7 @@ const {
   const makeImage = (name: string) => ({
     name,
     addRepresentation: vi.fn(),
+    getScaleFactors: vi.fn(() => [1, 2]),
     getSize: vi.fn(() => ({ width: 16, height: 16 })),
     setTemplateImage: vi.fn(),
     toBitmap: vi.fn(() => Buffer.alloc(16 * 16 * 4)),
@@ -135,6 +136,7 @@ beforeEach(() => {
   )
   for (const image of [baseMacImage, retinaMacImage, tintedMacImage, attentionImage]) {
     image.addRepresentation.mockClear()
+    image.getScaleFactors.mockReset().mockReturnValue([1, 2])
     image.getSize.mockReset().mockReturnValue({ width: 16, height: 16 })
     image.setTemplateImage.mockClear()
     image.toBitmap.mockClear()
@@ -190,7 +192,7 @@ describe('createSystemTray', () => {
     expect(builtMenuItems().map((item) => item.label)).toEqual([
       'Open Orca',
       undefined,
-      'Settings...',
+      'Settings',
       'Check for Updates...',
       undefined,
       'Quit'
@@ -200,7 +202,7 @@ describe('createSystemTray', () => {
 
     for (const [label, callback] of [
       ['Open Orca', options.onOpen],
-      ['Settings...', options.onOpenSettings],
+      ['Settings', options.onOpenSettings],
       ['Check for Updates...', options.onCheckForUpdates],
       ['Quit', options.onQuit]
     ] as const) {
@@ -278,6 +280,13 @@ describe('setTrayAttention', () => {
     setTrayAttention(true)
     expect(tintTemplateMock).toHaveBeenCalledWith(baseMacImage, false)
     expect(composeAttentionMock).toHaveBeenCalledWith(tintedMacImage)
+    // Why: the attention image is rebuilt from 1x pixels, so the @2x
+    // representation must be re-added or the glyph blurs on Retina.
+    expect(tintTemplateMock).toHaveBeenCalledWith(baseMacImage, false, 2)
+    expect(attentionImage.addRepresentation).toHaveBeenCalledWith({
+      scaleFactor: 2,
+      dataURL: 'data:image/png;base64,attention'
+    })
     expect(attentionImage.setTemplateImage).toHaveBeenCalledWith(false)
     expect(created.setImage).toHaveBeenCalledWith(attentionImage)
     expect(created.setToolTip).toHaveBeenCalledWith('Orca - activity waiting')
@@ -308,6 +317,33 @@ describe('setTrayAttention', () => {
     createSystemTray(createOptions())
 
     expect(trayInstances[0].setImage).toHaveBeenCalledWith(attentionImage)
+  })
+
+  it('ignores repeated same-state attention calls', async () => {
+    setPlatform('win32')
+    const { createSystemTray, setTrayAttention } = await loadModule()
+    createSystemTray(createOptions())
+    const created = trayInstances[0]
+    created.setImage.mockClear()
+
+    setTrayAttention(true)
+    setTrayAttention(true)
+
+    expect(created.setImage).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps a pending attention dot across a macOS hide/show toggle', async () => {
+    setPlatform('darwin')
+    const { setMacMenuBarIconVisible, setTrayAttention } = await loadModule()
+    const options = createOptions()
+    setMacMenuBarIconVisible(true, options)
+    setTrayAttention(true)
+
+    setMacMenuBarIconVisible(false, options)
+    setMacMenuBarIconVisible(true, options)
+
+    expect(trayInstances).toHaveLength(2)
+    expect(trayInstances[1].setImage).toHaveBeenCalledWith(attentionImage)
   })
 })
 
@@ -372,7 +408,7 @@ describe('macOS hardening', () => {
     })
     createSystemTray(options)
 
-    const settingsItem = builtMenuItems().find((item) => item.label === 'Settings...')
+    const settingsItem = builtMenuItems().find((item) => item.label === 'Settings')
     expect(() => settingsItem?.click?.()).not.toThrow()
     expect(error).toHaveBeenCalledWith('[system-tray] menu action failed', expect.any(Error))
   })

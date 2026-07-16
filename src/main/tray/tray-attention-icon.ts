@@ -13,22 +13,28 @@ const RING_RGB = { r: 0xff, g: 0xff, b: 0xff }
  */
 export function tintTrayTemplateForAttention(
   base: NativeImage,
-  useLightGlyph: boolean
+  useLightGlyph: boolean,
+  scaleFactor = 1
 ): NativeImage {
   const { width, height } = base.getSize()
   if (width <= 0 || height <= 0) {
     return base
   }
 
-  const bitmap = Buffer.from(base.toBitmap())
-  const channel = useLightGlyph ? 0xff : 0x00
+  const bitmap = Buffer.from(base.toBitmap({ scaleFactor }))
   for (let offset = 0; offset < bitmap.length; offset += 4) {
+    // Why: the bitmap is premultiplied, so a light glyph must write the pixel's
+    // alpha (not 0xff) or antialiased edges become invalid over-bright pixels.
+    const channel = useLightGlyph ? bitmap[offset + 3] : 0x00
     bitmap[offset] = channel
     bitmap[offset + 1] = channel
     bitmap[offset + 2] = channel
   }
 
-  return nativeImage.createFromBitmap(bitmap, { width, height })
+  return nativeImage.createFromBitmap(bitmap, {
+    width: width * scaleFactor,
+    height: height * scaleFactor
+  })
 }
 
 /**

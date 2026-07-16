@@ -72,9 +72,7 @@
     "minimizeNotice": {
       "body": "Orca is still running in the system tray"
     },
-    "activityWaiting": "Orca - activity waiting",
-    "settings": "Settings...",
-    "checkForUpdates": "Check for Updates..."
+    "activityWaiting": "Orca - activity waiting"
   },
   "worktreeJumpPalette": {
     "matchLabel": {

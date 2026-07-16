@@ -34,7 +34,7 @@
       },
       "menuBarIcon": {
         "title": "Mostrar icono en la barra de menús",
-        "description": "Manten un acceso directo de Orca e indicador de actividad en la barra de menús de macOS."
+        "description": "Mantén un acceso directo de Orca e indicador de actividad en la barra de menús de macOS."
       }
     }
   },
@@ -72,9 +72,7 @@
     "minimizeNotice": {
       "body": "Orca sigue ejecutándose en la bandeja del sistema"
     },
-    "activityWaiting": "Orca: actividad en espera",
-    "settings": "Ajustes...",
-    "checkForUpdates": "Buscar actualizaciones..."
+    "activityWaiting": "Orca: actividad en espera"
   },
   "worktreeJumpPalette": {
     "matchLabel": {

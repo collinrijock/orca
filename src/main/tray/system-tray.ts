@@ -49,11 +49,21 @@ function applyTrayImage(): void {
       try {
         // Why: disabling template tinting makes the amber dot possible, but the
         // glyph then needs literal pixels chosen for the current menu-bar theme.
-        const tintedGlyph = tintTrayTemplateForAttention(
-          baseTrayImage,
-          nativeTheme.shouldUseDarkColors
+        const useLightGlyph = nativeTheme.shouldUseDarkColors
+        const attentionImage = composeTrayAttentionIcon(
+          tintTrayTemplateForAttention(baseTrayImage, useLightGlyph)
         )
-        const attentionImage = composeTrayAttentionIcon(tintedGlyph)
+        if (baseTrayImage.getScaleFactors().includes(2)) {
+          // Why: toBitmap reads only the 1x pixels, so rebuild the @2x
+          // representation or the glyph blurs on Retina during attention.
+          const retinaAttentionImage = composeTrayAttentionIcon(
+            tintTrayTemplateForAttention(baseTrayImage, useLightGlyph, 2)
+          )
+          attentionImage.addRepresentation({
+            scaleFactor: 2,
+            dataURL: retinaAttentionImage.toDataURL()
+          })
+        }
         attentionImage.setTemplateImage(false)
         tray.setImage(attentionImage)
         tray.setToolTip(translateMain('tray.activityWaiting', 'Orca - activity waiting'))
@@ -168,34 +178,28 @@ export function createSystemTray(opts: SystemTrayOptions): Tray | null {
   // Why: reflect any attention event that fired before the tray existed.
   applyTrayImage()
 
-  const menu = Menu.buildFromTemplate(
-    process.platform === 'darwin'
-      ? [
+  const menu = Menu.buildFromTemplate([
+    {
+      label: translateMain('tray.openOrca', 'Open Orca'),
+      click: safeMenuAction(() => opts.onOpen())
+    },
+    { type: 'separator' },
+    // Why: reuse the app menu's keys so the two entry points never drift.
+    ...(process.platform === 'darwin'
+      ? ([
           {
-            label: translateMain('tray.openOrca', 'Open Orca'),
-            click: safeMenuAction(() => opts.onOpen())
-          },
-          { type: 'separator' },
-          {
-            label: translateMain('tray.settings', 'Settings...'),
+            label: translateMain('menu.settings', 'Settings'),
             click: safeMenuAction(() => opts.onOpenSettings())
           },
           {
-            label: translateMain('tray.checkForUpdates', 'Check for Updates...'),
+            label: translateMain('menu.checkForUpdates', 'Check for Updates...'),
             click: safeMenuAction(() => opts.onCheckForUpdates())
           },
-          { type: 'separator' },
-          { label: translateMain('tray.quit', 'Quit'), click: safeMenuAction(() => opts.onQuit()) }
-        ]
-      : [
-          {
-            label: translateMain('tray.openOrca', 'Open Orca'),
-            click: safeMenuAction(() => opts.onOpen())
-          },
-          { type: 'separator' },
-          { label: translateMain('tray.quit', 'Quit'), click: safeMenuAction(() => opts.onQuit()) }
-        ]
-  )
+          { type: 'separator' }
+        ] as Electron.MenuItemConstructorOptions[])
+      : []),
+    { label: translateMain('tray.quit', 'Quit'), click: safeMenuAction(() => opts.onQuit()) }
+  ])
   tray.setContextMenu(menu)
   if (process.platform === 'win32') {
     tray.setToolTip('Orca')
@@ -245,5 +249,6 @@ export function destroySystemTray(): void {
   }
   tray = null
   baseTrayImage = null
-  attentionActive = false
+  // Why: attention is owned by the notification/visibility flow, and must
+  // survive the macOS hide/show toggle so a re-shown icon keeps its dot.
 }

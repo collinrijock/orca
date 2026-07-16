@@ -72,9 +72,7 @@
     "minimizeNotice": {
       "body": "Orca 仍在系统托盘中运行"
     },
-    "activityWaiting": "Orca - 活动等待中",
-    "settings": "设置...",
-    "checkForUpdates": "检查更新..."
+    "activityWaiting": "Orca - 活动等待中"
   },
   "worktreeJumpPalette": {
     "matchLabel": {

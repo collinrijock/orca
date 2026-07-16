@@ -72,9 +72,7 @@
     "minimizeNotice": {
       "body": "Orca가 시스템 트레이에서 계속 실행 중입니다"
     },
-    "activityWaiting": "Orca - 활동 대기 중",
-    "settings": "설정...",
-    "checkForUpdates": "업데이트 확인..."
+    "activityWaiting": "Orca - 활동 대기 중"
   },
   "worktreeJumpPalette": {
     "matchLabel": {

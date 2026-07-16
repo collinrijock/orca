@@ -5,7 +5,7 @@
 import { existsSync, statSync } from 'node:fs'
 import { isAbsolute, join } from 'node:path'
 import os from 'node:os'
-import { app, BrowserWindow, dialog, ipcMain, nativeTheme } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, nativeTheme, type Tray } from 'electron'
 import { electronApp, is } from '@electron-toolkit/utils'
 import * as QRCode from 'qrcode'
 import {
@@ -54,6 +54,7 @@ import {
   rebuildAppMenu
 } from './menu/register-app-menu'
 import { checkForUpdatesFromMenu, isQuittingForUpdate } from './updater'
+import type { UpdateCheckOptions } from '../shared/types'
 import { recordUpdaterLifecycle } from './updater-lifecycle-diagnostics'
 import {
   configureElectronNetworkCompatibility,
@@ -246,9 +247,8 @@ let keybindings: KeybindingService | null = null
 // sweep spare live sessions across that one reload (#5787).
 const expectedRendererReload = createWebContentsTimedFlag()
 const recoveryReloadInFlight = createWebContentsTimedFlag()
-// Why: the tray/menu-bar "Settings…" item can fire before a freshly created
-// renderer has attached its ui:openSettings listener, so leave a one-shot
-// intent the renderer pulls on mount instead of racing a time-based push.
+// Why: a tray/menu-bar "Settings…" click can precede the renderer attaching
+// its ui:openSettings listener; the renderer pulls this one-shot on mount.
 const pendingOpenSettings = createWebContentsTimedFlag()
 let firstWindowStartupServicesReady: Promise<void> = Promise.resolve()
 let managedWslCliReconciliationReady: Promise<void> = Promise.resolve()
@@ -806,7 +806,6 @@ function showMainWindowFromTray(): void {
 }
 
 function openSettingsFromSystemMenu(): void {
-  const existingWindow = mainWindow && !mainWindow.isDestroyed() ? mainWindow : null
   showMainWindowFromTray()
   const targetWindow = mainWindow && !mainWindow.isDestroyed() ? mainWindow : null
   if (!targetWindow) {
@@ -814,16 +813,13 @@ function openSettingsFromSystemMenu(): void {
   }
   recordCrashBreadcrumb('settings_opened')
 
-  // Why: an already-mounted renderer has its ui:openSettings listener attached,
-  // so a direct push lands. A freshly recreated or still-loading renderer has
-  // not subscribed yet — a time-based push would race its useEffect and could
-  // be dropped (with no fallback if the load fails), so leave a one-shot intent
-  // it consumes on mount instead.
-  if (existingWindow === targetWindow && !targetWindow.webContents.isLoadingMainFrame()) {
-    targetWindow.webContents.send('ui:openSettings')
-    return
-  }
-  pendingOpenSettings.mark(targetWindow.webContents.id)
+  // Why: no main-side signal proves the renderer listener is attached, so push
+  // and leave a one-shot intent — a mounted renderer acts on the push, an
+  // unmounted one pulls the intent at mount; only one fires per renderer life.
+  targetWindow.webContents.send('ui:openSettings')
+  // Why: 60s outlives the default flag TTL, which a cold renderer start can
+  // exceed — an expired flag silently drops the Settings click.
+  pendingOpenSettings.mark(targetWindow.webContents.id, 60_000)
 }
 
 function quitFromSystemTray(): void {
@@ -838,6 +834,13 @@ function quitFromSystemTray(): void {
   app.quit()
 }
 
+// Why: a manual check must run against a configured updater; the menu and
+// tray are both clickable before anything else configures it.
+function runUserInitiatedUpdateCheck(options?: UpdateCheckOptions): void {
+  ensureAutoUpdaterConfigured()
+  checkForUpdatesFromMenu(options)
+}
+
 function getSystemTrayOptions(): SystemTrayOptions | null {
   if (!store) {
     return null
@@ -847,21 +850,21 @@ function getSystemTrayOptions(): SystemTrayOptions | null {
     onOpen: showMainWindowFromTray,
     onOpenSettings: openSettingsFromSystemMenu,
     onCheckForUpdates: () => {
-      ensureAutoUpdaterConfigured()
-      checkForUpdatesFromMenu()
+      // Why: updater status renders in the main window; with every window
+      // closed a bare check would complete invisibly.
+      showMainWindowFromTray()
+      runUserInitiatedUpdateCheck()
     },
     onQuit: quitFromSystemTray
   }
 }
 
-function syncMacMenuBarIcon(showMenuBarIcon: boolean): void {
+function syncMacMenuBarIcon(showMenuBarIcon: boolean): Tray | null {
   if (process.platform !== 'darwin' || isServeMode) {
-    return
+    return null
   }
   const options = getSystemTrayOptions()
-  if (options) {
-    setMacMenuBarIconVisible(showMenuBarIcon, options)
-  }
+  return options ? setMacMenuBarIconVisible(showMenuBarIcon, options) : null
 }
 
 function openMainWindow(): BrowserWindow {
@@ -976,26 +979,21 @@ function openMainWindow(): BrowserWindow {
   recordCrashBreadcrumb('main_window_created')
   logStartupMilestone('window-created')
   // Why: Windows Tray construction can synchronously block on Shell_NotifyIcon,
-  // so both desktop status-item platforms share post-paint creation. The timer
-  // fallback also covers windows revealed without ready-to-show ever firing;
-  // Windows still needs its close target and macOS still needs its entry point.
+  // so both desktop status-item platforms defer creation to after first paint.
   let trayCreated = false
   const createSystemTrayDeferred = (): void => {
     if (trayCreated || window.isDestroyed() || isQuitting || !store) {
       return
     }
     trayCreated = true
-    // Why: keep the two macOS visibility paths in agreement — syncMacMenuBarIcon
-    // refuses serve mode, so the deferred creator must too, or an activated
-    // headless host would show an icon the live toggle can't manage.
-    if (
-      process.platform === 'darwin' &&
-      (isServeMode || store.getSettings().showMenuBarIcon === false)
-    ) {
+    if (process.platform === 'darwin') {
+      // Why: route through syncMacMenuBarIcon so startup and the live toggle
+      // share one serve-mode/visibility policy.
+      if (syncMacMenuBarIcon(store.getSettings().showMenuBarIcon !== false)) {
+        logStartupMilestone('tray-created')
+      }
       return
     }
-    // Why: Windows notification-area creation can block before first paint;
-    // macOS shares the deferred path to keep startup ordering identical.
     const options = getSystemTrayOptions()
     if (options && createSystemTray(options)) {
       logStartupMilestone('tray-created')
@@ -2077,12 +2075,7 @@ app.whenReady().then(async () => {
   logStartupMilestone('i18n-ready')
 
   registerAppMenu({
-    onCheckForUpdates: (options) => {
-      // Why: the menu is clickable before first paint; a manual check must
-      // run against a configured updater (see attach-main-window-services).
-      ensureAutoUpdaterConfigured()
-      return checkForUpdatesFromMenu(options)
-    },
+    onCheckForUpdates: (options) => runUserInitiatedUpdateCheck(options),
     onBeforeReload: ({ ignoreCache, webContentsId }) => {
       if (mainWindow?.webContents.id === webContentsId) {
         markExpectedRendererReload(webContentsId)

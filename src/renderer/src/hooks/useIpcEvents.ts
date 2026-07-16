@@ -1214,14 +1214,17 @@ export function useIpcEvents(): void {
       })
     )
 
-    // Why: the tray/menu-bar "Settings…" item can fire before this listener
-    // attaches on a freshly created window; pull any one-shot intent left for
-    // us so the request is not lost to that race.
-    void window.api.ui.consumePendingOpenSettings().then((open) => {
-      if (open) {
-        useAppStore.getState().openSettingsPage()
-      }
-    })
+    // Why: a tray/menu-bar "Settings…" click can fire before this listener
+    // attaches on a fresh window; consume any intent queued for us. Guarded
+    // with `?.` so a stale preload bundle doesn't crash the listener set.
+    void window.api.ui
+      .consumePendingOpenSettings?.()
+      .then((open) => {
+        if (open) {
+          useAppStore.getState().openSettingsPage()
+        }
+      })
+      .catch(() => {})
 
     unsubs.push(
       window.api.ui.onOpenSetupGuide?.(() => {
