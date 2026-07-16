@@ -2286,35 +2286,41 @@ describe('shared agent-hook-listener', () => {
       expect(finalStop?.payload.subagents).toBeUndefined()
     })
 
-    it('reports Stop as working while a Monitor background task is still running', () => {
+    it('reports Stop as working while a Monitor (backgrounded shell) still runs', () => {
       claudeEvent({ hook_event_name: 'UserPromptSubmit', prompt: 'watch staging' })
+      // Why: the exact shape of a live 2.1.211 Stop payload once the Monitor
+      // tool is watching — the monitor is a running `shell` task (kind dropped),
+      // never type "monitor". The pane must keep spinning, not read a done ✅.
       const stop = claudeEvent({
         hook_event_name: 'Stop',
-        background_tasks: [{ id: 'm1', type: 'monitor', status: 'running' }]
+        background_tasks: [
+          {
+            id: 'b32v7rxmz',
+            type: 'shell',
+            status: 'running',
+            description: 'sleep 300 background command',
+            command: 'sleep 300'
+          }
+        ]
       })
-      // Why: a Monitor watching in the background means the lead's turn will
-      // resume when it fires — the sidebar keeps spinning, not a done ✅.
       expect(stop?.payload.state).toBe('working')
-      // Why: a monitor is not an agent, so it contributes no subagent rows.
+      // Why: a shell/monitor is not an agent, so it contributes no child rows.
       expect(stop?.payload.subagents).toBeUndefined()
 
-      // Why: the monitor ending wakes the lead; the next Stop no longer lists
-      // it as running, so the pane settles to done.
-      const finalStop = claudeEvent({
-        hook_event_name: 'Stop',
-        background_tasks: [{ id: 'm1', type: 'monitor', status: 'completed' }]
-      })
+      // Why: the monitor ending wakes the lead; the next Stop's list no longer
+      // shows a running shell/monitor, so the pane settles to done.
+      const finalStop = claudeEvent({ hook_event_name: 'Stop', background_tasks: [] })
       expect(finalStop?.payload.state).toBe('done')
     })
 
-    it('retains a running Monitor across a later Stop whose payload omits background_tasks', () => {
+    it('retains a running Monitor across a later Stop that omits background_tasks', () => {
       claudeEvent({ hook_event_name: 'UserPromptSubmit', prompt: 'watch staging' })
       claudeEvent({
         hook_event_name: 'Stop',
-        background_tasks: [{ id: 'm1', type: 'monitor', status: 'running' }]
+        background_tasks: [{ id: 's1', type: 'shell', status: 'running', command: 'sleep 300' }]
       })
       // Why: an older payload without the field must not clear the tracked
-      // monitor (mirrors how the roster is retained), so the pane stays working.
+      // shell/monitor (mirrors roster retention), so the pane stays working.
       const stop = claudeEvent({ hook_event_name: 'Stop' })
       expect(stop?.payload.state).toBe('working')
     })
@@ -2326,14 +2332,27 @@ describe('shared agent-hook-listener', () => {
         agent_id: 'a1',
         agent_type: 'general-purpose'
       })
-      // Why: the subagent finished but the monitor is still watching — the pane
-      // must stay working on the monitor alone, with no leftover child rows.
+      // Why: the subagent is gone from this list (finished) but the monitor is
+      // still watching — the pane must stay working on the monitor alone, with
+      // no leftover child rows.
       const stop = claudeEvent({
         hook_event_name: 'Stop',
-        background_tasks: [{ id: 'm1', type: 'monitor', status: 'running' }]
+        background_tasks: [{ id: 's1', type: 'shell', status: 'running', command: 'sleep 300' }]
       })
       expect(stop?.payload.state).toBe('working')
       expect(stop?.payload.subagents).toBeUndefined()
+    })
+
+    it('keeps Stop done for a backgrounded shell that has finished', () => {
+      claudeEvent({ hook_event_name: 'UserPromptSubmit', prompt: 'build once' })
+      // Why: a completed shell is filtered out of Claude's list, so a Stop with
+      // an empty list must resolve to done — the flag must not stick 'working'.
+      claudeEvent({
+        hook_event_name: 'Stop',
+        background_tasks: [{ id: 's1', type: 'shell', status: 'running', command: 'sleep 1' }]
+      })
+      const finalStop = claudeEvent({ hook_event_name: 'Stop', background_tasks: [] })
+      expect(finalStop?.payload.state).toBe('done')
     })
 
     it('emits a status refresh with the lead state on subagent lifecycle events', () => {

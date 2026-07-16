@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { AGENT_STATUS_MAX_SUBAGENTS } from './agent-status-types'
 import {
-  claudeBackgroundTasksHaveRunningMonitor,
+  claudeBackgroundTasksHaveRunningShellOrMonitor,
   claudeRosterHasWorkingSubagent,
   claudeRosterToSnapshots,
   claudeTeammateIdMatchesName,
@@ -187,38 +187,59 @@ describe('claude-subagent-roster', () => {
     expect(readClaudeBackgroundAgentTasks({ background_tasks: 'nope' }).present).toBe(false)
   })
 
-  it('detects a running Monitor background task (incl. ws/mcp variants)', () => {
+  it('detects a running Monitor, which surfaces as a running shell task', () => {
+    // Why: this is the exact shape of a live 2.1.211 Stop payload after the
+    // Monitor tool starts — type "shell" (its kind:"monitor" is dropped), NOT
+    // type "monitor". Matching only "monitor" here was the shipped bug.
     expect(
-      claudeBackgroundTasksHaveRunningMonitor({
-        background_tasks: [{ id: 'm1', type: 'monitor', status: 'running' }]
+      claudeBackgroundTasksHaveRunningShellOrMonitor({
+        background_tasks: [
+          {
+            id: 'b32v7rxmz',
+            type: 'shell',
+            status: 'running',
+            description: 'sleep 300 background command',
+            command: 'sleep 300'
+          }
+        ]
       })
     ).toBe(true)
-    // Why: match on the `monitor` prefix so ws/mcp monitor variants gate too.
+    // Why: a pending shell/monitor is queued background work — also keep-alive.
     expect(
-      claudeBackgroundTasksHaveRunningMonitor({
-        background_tasks: [{ id: 'm2', type: 'monitor_ws', status: 'running' }]
+      claudeBackgroundTasksHaveRunningShellOrMonitor({
+        background_tasks: [{ id: 's1', type: 'shell', status: 'pending' }]
+      })
+    ).toBe(true)
+    // Why: websocket/MCP monitors surface as type "monitor" — cover them too.
+    expect(
+      claudeBackgroundTasksHaveRunningShellOrMonitor({
+        background_tasks: [{ id: 'm1', type: 'monitor', status: 'running' }]
       })
     ).toBe(true)
   })
 
-  it('ignores finished monitors and non-monitor running tasks', () => {
-    // Why: a monitor that has stopped no longer holds the pane working.
+  it('ignores finished shells, subagents, and forever-running teammates', () => {
+    // Why: a shell/monitor that has stopped no longer holds the pane working.
     expect(
-      claudeBackgroundTasksHaveRunningMonitor({
-        background_tasks: [{ id: 'm1', type: 'monitor', status: 'completed' }]
+      claudeBackgroundTasksHaveRunningShellOrMonitor({
+        background_tasks: [{ id: 's1', type: 'shell', status: 'completed' }]
       })
     ).toBe(false)
-    // Why: only monitors gate here — running shells/workflows/subagents do not.
+    // Why: subagents are the roster's job — excluded here to avoid double logic.
     expect(
-      claudeBackgroundTasksHaveRunningMonitor({
-        background_tasks: [
-          { id: 's1', type: 'shell', status: 'running' },
-          { id: 'a1', type: 'subagent', status: 'running' }
-        ]
+      claudeBackgroundTasksHaveRunningShellOrMonitor({
+        background_tasks: [{ id: 'a1', type: 'subagent', status: 'running' }]
       })
     ).toBe(false)
-    expect(claudeBackgroundTasksHaveRunningMonitor({})).toBe(false)
-    expect(claudeBackgroundTasksHaveRunningMonitor({ background_tasks: 'nope' })).toBe(false)
+    // Why: teammate entries read "running" forever even after the named agent
+    // finished — gating on them would pin the pane 'working' permanently.
+    expect(
+      claudeBackgroundTasksHaveRunningShellOrMonitor({
+        background_tasks: [{ id: 't1', type: 'teammate', status: 'running' }]
+      })
+    ).toBe(false)
+    expect(claudeBackgroundTasksHaveRunningShellOrMonitor({})).toBe(false)
+    expect(claudeBackgroundTasksHaveRunningShellOrMonitor({ background_tasks: 'nope' })).toBe(false)
   })
 
   it('marks a background task inventory truncated after the snapshot cap', () => {

@@ -172,15 +172,22 @@ export function readClaudeBackgroundAgentTasks(hookPayload: Record<string, unkno
 }
 
 /** Whether a Stop/SubagentStop payload's `background_tasks` still lists a
- *  running Monitor. Monitors (Claude's `Monitor` tool) are non-agent
- *  background tasks — they never enter the subagent roster — but a running
- *  monitor means the lead's turn is not truly done: Claude wakes the lead when
- *  the monitor fires. Callers use this to keep the pane 'working' so the
- *  sidebar keeps spinning while a monitor watches, mirroring the existing
- *  subagent gate. Matched on the `monitor` type prefix (covers the ws/mcp
- *  monitor variants) so a single string tweak adapts if the wire type shifts;
- *  deliberately excludes shells/workflows/crons — only monitors gate here. */
-export function claudeBackgroundTasksHaveRunningMonitor(
+ *  running (or pending) backgrounded shell/monitor task — background work that
+ *  keeps the lead's turn alive (Claude wakes the lead when the task fires or
+ *  finishes), so the pane stays 'working' rather than reading a finished ✅.
+ *
+ *  The `Monitor` tool registers its watch as a backgrounded shell, so in the
+ *  hook payload it arrives as `{ type: "shell", status: "running" }` — NOT
+ *  `type: "monitor"`. The payload builder drops the internal `kind: "monitor"`
+ *  marker, so a Monitor is indistinguishable from any other backgrounded shell;
+ *  both are treated as keep-alive work. WebSocket/MCP monitors instead surface
+ *  as `type: "monitor"`, so match both labels. (Verified against a live 2.1.211
+ *  Stop payload: `type: "shell"`, `status: "running"`, with a `command`.)
+ *
+ *  Subagent/teammate types are deliberately excluded — the roster owns them,
+ *  and teammate entries report `status: "running"` forever even after the named
+ *  agent finished, which would pin the pane 'working' permanently. */
+export function claudeBackgroundTasksHaveRunningShellOrMonitor(
   hookPayload: Record<string, unknown>
 ): boolean {
   const raw = hookPayload['background_tasks']
@@ -192,11 +199,10 @@ export function claudeBackgroundTasksHaveRunningMonitor(
       continue
     }
     const obj = item as Record<string, unknown>
-    if (
-      typeof obj.type === 'string' &&
-      obj.type.startsWith('monitor') &&
-      obj.status === 'running'
-    ) {
+    if (obj.type !== 'shell' && obj.type !== 'monitor') {
+      continue
+    }
+    if (obj.status === 'running' || obj.status === 'pending') {
       return true
     }
   }
