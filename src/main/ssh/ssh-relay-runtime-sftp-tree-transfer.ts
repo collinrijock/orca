@@ -39,6 +39,7 @@ export type SshRelayRuntimeSftpTreeTransferResult = Readonly<
 >
 
 const MAXIMUM_CONCURRENT_FILES = 4
+const ABORTED_CALLBACK_BREAKER_MS = 250
 
 function waitForSftpCallback(register: (callback: SftpCallback) => void): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -169,13 +170,24 @@ export async function transferSshRelayRuntimeTreeViaSftp(
   signal.throwIfAborted()
   const session = await openSession(signal)
   let closePromise: Promise<void> | undefined
+  let abortedCallbackBreaker: ReturnType<typeof setTimeout> | undefined
   const closeSession = (reason?: unknown): Promise<void> => {
     closePromise ??= Promise.resolve().then(() => session.close(reason))
     return closePromise
   }
+  const clearAbortedCallbackBreaker = (): void => {
+    clearTimeout(abortedCallbackBreaker)
+    abortedCallbackBreaker = undefined
+  }
   const onAbort = (): void => {
-    // Why: closing the session is what releases callbacks and their borrowed source buffers.
-    void closeSession(signal.reason).catch(() => {})
+    if (abortedCallbackBreaker || closePromise) {
+      return
+    }
+    // Why: normal cancellation gets a cleanup opportunity, but a retained raw callback needs close.
+    abortedCallbackBreaker = setTimeout(() => {
+      abortedCallbackBreaker = undefined
+      void closeSession(signal.reason).catch(() => {})
+    }, ABORTED_CALLBACK_BREAKER_MS)
   }
   signal.addEventListener('abort', onAbort, { once: true })
   if (signal.aborted) {
@@ -239,6 +251,8 @@ export async function transferSshRelayRuntimeTreeViaSftp(
     signal.throwIfAborted()
     return Object.freeze({ remoteStagingRoot, ...result })
   } catch (error) {
+    // The stream reached a settled callback boundary, so reverse cleanup can safely own shutdown.
+    clearAbortedCallbackBreaker()
     const cleanupFailures =
       ownedDirectories.length === 0
         ? []
@@ -246,6 +260,12 @@ export async function transferSshRelayRuntimeTreeViaSftp(
     await closeSession(error).catch((closeError) => cleanupFailures.push(closeError))
     throw joinedFailure(error, cleanupFailures)
   } finally {
+    clearAbortedCallbackBreaker()
     signal.removeEventListener('abort', onAbort)
   }
 }
+
+export const SSH_RELAY_RUNTIME_SFTP_TREE_TRANSFER_LIMITS = Object.freeze({
+  maximumConcurrentFiles: MAXIMUM_CONCURRENT_FILES,
+  abortedCallbackBreakerMs: ABORTED_CALLBACK_BREAKER_MS
+})

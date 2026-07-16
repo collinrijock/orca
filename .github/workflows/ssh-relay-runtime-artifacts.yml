@@ -13,6 +13,7 @@ on:
       - 'package.json'
       - 'pnpm-lock.yaml'
       - 'src/main/ipc/parcel-watcher-process-entry.ts'
+      - 'src/main/ssh/ssh-relay-runtime-*'
       - 'src/relay/**'
   workflow_dispatch:
   # Why: callers may gate on the native graph only after separate release wiring is reviewed.
@@ -286,6 +287,7 @@ jobs:
             src/main/ssh/ssh-relay-runtime-source-scan.test.ts \
             src/main/ssh/ssh-relay-runtime-source-stream.test.ts \
             src/main/ssh/ssh-relay-runtime-sftp-file-destination.test.ts \
+            src/main/ssh/ssh-relay-runtime-sftp-connection-transfer.test.ts \
             src/main/ssh/ssh-relay-runtime-sftp-session.test.ts \
             src/main/ssh/ssh-relay-runtime-sftp-tree-transfer.test.ts \
             src/main/ssh/ssh-relay-compiled-manifest-trust.test.ts \
@@ -552,6 +554,88 @@ jobs:
             pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1 --reporter=verbose \
               src/main/ssh/ssh-relay-artifact-cache-entry-full-size.test.ts
           test ! -e "$extraction_output"
+
+      - name: Start loopback OpenSSH SFTP fixture
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! test -x /usr/sbin/sshd; then
+            apt_options=(-o Acquire::Retries=3 -o Acquire::https::Timeout=15 -o Acquire::ForceIPv4=true)
+            timeout --signal=TERM --kill-after=15s 180s sudo apt-get "${apt_options[@]}" update -qq
+            timeout --signal=TERM --kill-after=15s 180s sudo apt-get "${apt_options[@]}" install -y -qq openssh-server
+          fi
+          fixture="$RUNNER_TEMP/orca-live-sftp"
+          mkdir -p "$fixture" "$HOME/.ssh" "$fixture/remote"
+          chmod 700 "$HOME/.ssh" "$fixture"
+          ssh-keygen -q -t ed25519 -N '' -f "$fixture/client-key"
+          ssh-keygen -q -t ed25519 -N '' -f "$fixture/host-key"
+          cp "$fixture/client-key.pub" "$HOME/.ssh/authorized_keys"
+          chmod 600 "$HOME/.ssh/authorized_keys" "$fixture/client-key" "$fixture/host-key"
+          sudo chown root:root "$fixture/host-key"
+          port=22222
+          server_version=$(/usr/sbin/sshd -V 2>&1 | head -1)
+          config="$fixture/sshd_config"
+          printf '%s\n' \
+            "Port $port" \
+            'ListenAddress 127.0.0.1' \
+            "HostKey $fixture/host-key" \
+            "PidFile $fixture/sshd.pid" \
+            "AuthorizedKeysFile $HOME/.ssh/authorized_keys" \
+            "AllowUsers $USER" \
+            'PasswordAuthentication no' \
+            'KbdInteractiveAuthentication no' \
+            'ChallengeResponseAuthentication no' \
+            'UsePAM no' \
+            'StrictModes yes' \
+            'LogLevel VERBOSE' \
+            'Subsystem sftp internal-sftp' > "$config"
+          sudo mkdir -p /run/sshd
+          sudo /usr/sbin/sshd -f "$config" -E "$fixture/sshd.log"
+          for attempt in {1..20}; do
+            if ssh -F /dev/null -i "$fixture/client-key" -p "$port" \
+              -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+              "$USER@127.0.0.1" true; then
+              break
+            fi
+            if test "$attempt" = 20; then
+              cat "$fixture/sshd.log"
+              exit 1
+            fi
+            sleep 0.25
+          done
+          {
+            printf 'ORCA_SSH_RELAY_LIVE_SFTP_HOST=127.0.0.1\n'
+            printf 'ORCA_SSH_RELAY_LIVE_SFTP_PORT=%s\n' "$port"
+            printf 'ORCA_SSH_RELAY_LIVE_SFTP_USER=%s\n' "$USER"
+            printf 'ORCA_SSH_RELAY_LIVE_SFTP_IDENTITY=%s\n' "$fixture/client-key"
+            printf 'ORCA_SSH_RELAY_LIVE_SFTP_REMOTE_ROOT=%s\n' "$fixture/remote"
+            printf 'ORCA_SSH_RELAY_LIVE_SFTP_SERVER_VERSION=%s\n' "$server_version"
+          } >> "$GITHUB_ENV"
+
+      - name: Measure exact full-size runtime over live OpenSSH SFTP
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          first_output="$RUNNER_TEMP/ssh-relay-runtime/${{ matrix.tuple }}/first"
+          ORCA_SSH_RELAY_FULL_SIZE_RUNTIME_ROOT="$first_output/runtime" \
+            ORCA_SSH_RELAY_FULL_SIZE_IDENTITY="$first_output/orca-ssh-relay-runtime-${{ matrix.tuple }}.identity.json" \
+            pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1 --reporter=verbose \
+              src/main/ssh/ssh-relay-runtime-sftp-openssh-full-size.test.ts
+
+      - name: Stop loopback OpenSSH SFTP fixture
+        if: always() && runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          fixture="$RUNNER_TEMP/orca-live-sftp"
+          if test -s "$fixture/sshd.pid"; then
+            sudo kill "$(cat "$fixture/sshd.pid")" || true
+          fi
+          if test -f "$fixture/sshd.log"; then
+            sudo tail -200 "$fixture/sshd.log"
+          fi
 
       - name: Upload unpublished artifact evidence
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
@@ -844,6 +928,7 @@ jobs:
             src/main/ssh/ssh-relay-runtime-source-scan.test.ts `
             src/main/ssh/ssh-relay-runtime-source-stream.test.ts `
             src/main/ssh/ssh-relay-runtime-sftp-file-destination.test.ts `
+            src/main/ssh/ssh-relay-runtime-sftp-connection-transfer.test.ts `
             src/main/ssh/ssh-relay-runtime-sftp-session.test.ts `
             src/main/ssh/ssh-relay-runtime-sftp-tree-transfer.test.ts `
             src/main/ssh/ssh-relay-compiled-manifest-trust.test.ts `

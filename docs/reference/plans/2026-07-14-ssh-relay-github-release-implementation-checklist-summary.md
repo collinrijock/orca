@@ -9,9 +9,20 @@ keeps commands, hashes, runner identities, timings, and failure details.
 A checked box means the work has evidence in the detailed ledger. Design approval alone does not
 complete a box.
 
-Active checkpoint: **Milestone 6 / Work Package 5 bounded runtime transfer — disconnected raw `ssh2`
-session adapter is exact-head green; live adapter/tree composition audit is next, 2026-07-15, Codex
-implementation owner.** `E-M6-SFTP-SESSION-ADAPTER-CI-001` closes all six primary native jobs, both
+Active checkpoint: **Milestone 6 / Work Package 5 bounded runtime transfer — disconnected live
+OpenSSH SFTP composition is in progress, 2026-07-15, Codex implementation owner.**
+`E-M6-SFTP-LIVE-COMPOSITION-AUDIT-001` limits this package to one authenticated built-in
+`SshConnection`, one raw SFTP channel, the existing one-to-four file transfer, captured-transport-
+only force close with awaited teardown, and exact full-size Linux x64/arm64 runtime transfer against
+target-native OpenSSH runners. It also requires ordinary cancellation cleanup to run before a short
+retained-callback breaker closes the session. No product/default, system-SSH, Windows-remote,
+high-RTT, `MaxSessions=1`, or tuple-enablement claim is made. SignPath remains deferred.
+`E-M6-SFTP-LIVE-COMPOSITION-LOCAL-001` is locally green: 15/15 purpose cases, 189 focused cases
+with two declared skips, 603 broad relay cases with six declared skips, 281/281 release contracts,
+typecheck, full lint, formatting, max-lines, diff, protected-resolver, and isolation gates pass. The
+full-size live suite is deliberately skipped without runner OpenSSH/runtime inputs, so exact-head
+Linux x64/arm64 live CI remains the next gate.
+`E-M6-SFTP-SESSION-ADAPTER-CI-001` closes all six primary native jobs, both
 Linux supplements, Windows x64 floor, PR Checks, Golden E2E, and computer-use on exact commit
 `fbec34cf1`; Windows arm64 retains only the declared hosted build-26200 versus required-26100
 rejection after complete runtime smoke. No live SFTP/tree or product/default claim is made.

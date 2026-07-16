@@ -83,6 +83,25 @@ describe('SSH relay runtime artifact workflow', () => {
     )
   })
 
+  it('runs exact full-size Linux runtime transfer against loopback-only stock OpenSSH', async () => {
+    const workflow = parse(await readFile(workflowUrl, 'utf8'))
+    const steps = workflow.jobs['build-posix-runtime'].steps
+    const start = steps.find((step) => step.name === 'Start loopback OpenSSH SFTP fixture')
+    const measure = steps.find(
+      (step) => step.name === 'Measure exact full-size runtime over live OpenSSH SFTP'
+    )
+    const stop = steps.find((step) => step.name === 'Stop loopback OpenSSH SFTP fixture')
+
+    expect(start.if).toBe("runner.os == 'Linux'")
+    expect(start.run).toContain('ListenAddress 127.0.0.1')
+    expect(start.run).toContain('Subsystem sftp internal-sftp')
+    expect(start.run).toContain('timeout --signal=TERM --kill-after=15s 180s sudo apt-get')
+    expect(measure.if).toBe("runner.os == 'Linux'")
+    expect(measure.run).toContain('ssh-relay-runtime-sftp-openssh-full-size.test.ts')
+    expect(measure.run).toContain('first_output/runtime')
+    expect(stop.if).toBe("always() && runner.os == 'Linux'")
+  })
+
   it('uploads only the first output after two clean builds verify and compare', async () => {
     const source = await readFile(workflowUrl, 'utf8')
     const workflow = parse(source)
@@ -144,6 +163,7 @@ describe('SSH relay runtime artifact workflow', () => {
       'ssh-relay-runtime-source-scan.test.ts',
       'ssh-relay-runtime-source-stream.test.ts',
       'ssh-relay-runtime-sftp-file-destination.test.ts',
+      'ssh-relay-runtime-sftp-connection-transfer.test.ts',
       'ssh-relay-runtime-sftp-session.test.ts',
       'ssh-relay-runtime-sftp-tree-transfer.test.ts',
       'ssh-relay-compiled-manifest-trust.test.ts',

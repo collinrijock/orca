@@ -325,33 +325,68 @@ describe('SSH relay runtime SFTP tree transfer', () => {
   })
 
   it('closes the session to settle a retained write callback on cancellation', async () => {
+    vi.useFakeTimers()
+    try {
+      const tree = await treeFixture()
+      const { session } = createSession()
+      const controller = new AbortController()
+      let retainedCallback: Callback | undefined
+      let writes = 0
+      vi.mocked(session.operations.write).mockImplementationOnce(
+        (_handle, _buffer, _offset, _length, _position, callback) => {
+          writes += 1
+          retainedCallback = callback
+        }
+      )
+      vi.mocked(session.close).mockImplementationOnce(async () => {
+        retainedCallback?.(new Error('session closed'))
+      })
+      const transfer = transferSshRelayRuntimeTreeViaSftp({
+        tree,
+        remoteStagingRoot: '/staging/content',
+        enforcePosixMode: true,
+        maximumConcurrency: 1,
+        signal: controller.signal,
+        openSession: async () => session
+      })
+
+      await vi.waitFor(() => expect(writes).toBe(1))
+      controller.abort(new Error('cancelled'))
+      const rejected = expect(transfer).rejects.toThrow(/cancelled|session closed/)
+      await vi.advanceTimersByTimeAsync(250)
+      await rejected
+      expect(session.close).toHaveBeenCalledOnce()
+      expect(writes).toBe(1)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('reverse-cleans owned paths before session close when cancellation is not callback-stuck', async () => {
     const tree = await treeFixture()
-    const { session } = createSession()
+    const { session, events } = createSession()
     const controller = new AbortController()
-    let retainedCallback: Callback | undefined
     let writes = 0
-    vi.mocked(session.operations.write).mockImplementationOnce(
-      (_handle, _buffer, _offset, _length, _position, callback) => {
-        writes += 1
-        retainedCallback = callback
-      }
-    )
-    vi.mocked(session.close).mockImplementationOnce(async () => {
-      retainedCallback?.(new Error('session closed'))
-    })
     const transfer = transferSshRelayRuntimeTreeViaSftp({
       tree,
-      remoteStagingRoot: '/staging/content',
+      remoteStagingRoot: '/staging/cancelled-content',
       enforcePosixMode: true,
       maximumConcurrency: 1,
       signal: controller.signal,
-      openSession: async () => session
+      openSession: async () => session,
+      onProgress: ({ bytesTransferred }) => {
+        writes += 1
+        if (bytesTransferred > 0) {
+          controller.abort(new Error('ordinary cancellation'))
+        }
+      }
     })
 
-    await vi.waitFor(() => expect(writes).toBe(1))
-    controller.abort(new Error('cancelled'))
-    await expect(transfer).rejects.toThrow(/cancelled|session closed/)
-    expect(session.close).toHaveBeenCalledOnce()
+    await expect(transfer).rejects.toThrow('ordinary cancellation')
+    expect(events.findLastIndex((event) => event.startsWith('rmdir:'))).toBeLessThan(
+      events.indexOf('close-session')
+    )
+    expect(events).toContain('rmdir:/staging/cancelled-content')
     expect(writes).toBe(1)
   })
 

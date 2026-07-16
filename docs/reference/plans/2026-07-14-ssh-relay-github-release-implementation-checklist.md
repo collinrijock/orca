@@ -8,8 +8,8 @@ work; keep exact commands, runner identities, hashes, metrics, and residual gaps
 
 Date created: 2026-07-14<br>
 Last updated: 2026-07-15<br>
-Current phase: Milestone 6 / Work Package 5 bounded runtime transfer — **In progress — 2026-07-15, Codex implementation owner: disconnected raw `ssh2` session adapter is exact-head green; live adapter/tree composition audit is next**. Keep every capability disconnected from every production/default SSH path. Real Apple/SignPath rehearsals remain an explicit late gate and are not on this package's critical path.<br>
-Session checkpoint: **RAW SFTP SESSION ADAPTER EXACT-HEAD GREEN — 2026-07-15, Codex implementation owner** — `E-M6-SFTP-SESSION-ADAPTER-CI-001` closes all-six primary native, both Linux supplement, Windows x64 floor, PR Checks, Golden E2E, and computer-use proof for exact implementation commit `fbec34cf1`; Windows arm64 retains only the declared hosted build-26200 versus required-26100 rejection after complete runtime smoke. Audit the smallest disconnected live adapter/tree composition next, including a concrete real connection-force-close owner and OpenSSH SFTP server. Do not credit live transfer, server filesystem/modes, full-size network metrics, product/settings/fallback wiring, tuple enablement, publication, or default behavior from native callback mocks. Merging to `main` remains prohibited, SignPath is deferred, and legacy remains the production default.<br>
+Current phase: Milestone 6 / Work Package 5 bounded runtime transfer — **In progress — 2026-07-15, Codex implementation owner: disconnected authenticated-connection/SFTP-tree composition and live OpenSSH proof**. Keep every capability disconnected from every production/default SSH path. Real Apple/SignPath rehearsals remain an explicit late gate and are not on this package's critical path.<br>
+Session checkpoint: **LIVE SFTP COMPOSITION LOCALLY GREEN / EXACT-HEAD RUNNER PROOF NEXT — 2026-07-15, Codex implementation owner** — `E-M6-SFTP-LIVE-COMPOSITION-LOCAL-001` proves the disconnected authenticated-connection owner, captured-client force close, cancellation cleanup/breaker ordering, workflow oracle, focused/broad/release suites, typecheck, full lint, formatting, max-lines, diff, protected-resolver, and no-product-import gates locally. The purpose suite is 15/15; the live full-size suite is deliberately skipped locally because no runner OpenSSH/runtime inputs are present and therefore earns no live cell. Push this isolated package and require exact-head Linux x64/arm64 stock-OpenSSH full-size metrics before crediting live SFTP. Do not credit Windows/POSIX system SSH, high-RTT, `MaxSessions=1`, product/settings/fallback wiring, tuple enablement, publication, or default behavior. Merging to `main` remains prohibited, SignPath is deferred, and legacy remains the production default.<br>
 Primary design: [SSH relay GitHub Release plan](./2026-07-14-ssh-relay-github-release-plan.html)<br>
 Motivating issues: [#8450](https://github.com/stablyai/orca/issues/8450), [#1693](https://github.com/stablyai/orca/issues/1693)
 
@@ -17207,6 +17207,122 @@ config/scripts/ssh-relay-runtime-workflow.test.mjs` — PASS, 7/7 in 356 ms. The
   publish/launch and every product/Beta/settings/fallback/tuple/publication/default path remain
   absent; legacy remains the sole production/default path and SignPath remains deferred.
 
+### E-M6-SFTP-LIVE-COMPOSITION-AUDIT-001 — authenticated connection ownership and live OpenSSH boundary
+
+- Date/owner/base: 2026-07-15, Codex implementation owner; exact clean evidence base `d11261706`
+  after `E-M6-SFTP-SESSION-ADAPTER-CI-001` closure.
+- Audit commands: `sed -n '1,290p' src/main/ssh/ssh-relay-runtime-sftp-tree-transfer.ts`,
+  `sed -n '1,280p' src/main/ssh/ssh-relay-runtime-sftp-session.ts`, relevant lifecycle ranges from
+  `ssh-connection.ts`, and searches for existing live-SSH/OpenSSH/workflow fixtures. Result: the raw
+  adapter and tree contracts compose without changing authentication or relay RPC, but no
+  non-test owner captures the exact `ssh2` transport that opened the raw SFTP channel or awaits
+  connection teardown if channel close exceeds its grace.
+- Composition boundary: add one purpose-named module that accepts the existing authenticated
+  `SshConnection`, captures its exact current built-in `ssh2` client, opens exactly one signal-bound
+  raw SFTP session, rejects a connection-generation race after closing the returned channel, and
+  delegates to the existing session adapter and tree orchestrator. Force-close may destroy only the
+  captured client, must await that client's public `close` event with a bounded timeout, and must not
+  dispose the `SshConnection` or destroy a replacement client; the existing disconnect handler owns
+  reconnect state. System-SSH targets reject this composition without opening anything.
+- Cancellation correction: current tree abort starts session close immediately. That is required to
+  release a retained raw callback, but it can race and prevent reverse cleanup when the active
+  callback settles normally. On abort, arm a short breaker below the 10-second cancellation-and-join
+  ceiling; when the stream reaches its catch boundary, cancel the breaker before reverse cleanup.
+  A genuinely retained callback is still released by timed session close, while normal cancellation
+  gets one opportunity to remove proved-owned paths before closing the session. Tests must prove
+  both orders and that no write begins after abort.
+- Layer-A proof: purpose tests cover exact signal and connection identity, one SFTP open, system-SSH
+  rejection, connection replacement race, captured-client-only destroy/await-close, force-close
+  timeout/failure, normal owned-tree cancellation cleanup before close, and retained-callback breaker
+  settlement. Existing focused/broad/static/isolation gates remain mandatory.
+- Layer-B proof: on target-native Ubuntu x64 and arm64 GitHub runners, start a loopback-only stock
+  OpenSSH `sshd` with key authentication and internal SFTP, then transfer the exact runtime produced
+  by that runner's build job. Validate the complete staged tree bytes/count/modes, exclusive-root
+  behavior, serial and four-file measurements, full-size incremental desktop RSS under 80 MiB,
+  cancellation settlement under 10 seconds, no later writes, and owned-stage cleanup. Record runner
+  image, architecture, OpenSSH version, runtime tuple/content/size/count, duration, RSS, and gaps.
+- Explicit residual boundary: this package does not prove a Windows remote, cross-client matrix,
+  high-RTT comparison, `MaxSessions=1`, network interruption/disk/quota/inode/noexec/AV failures,
+  POSIX or Windows system-SSH transfer, remote bundled-Node verification/install/publish/launch,
+  product/Beta/settings/fallback wiring, tuple enablement, publication, or default behavior. Legacy
+  remains the sole production/default path and SignPath remains deferred.
+
+### E-M6-SFTP-LIVE-COMPOSITION-LOCAL-RED-001 — missing owner and cancellation ordering fail as audited
+
+- Date/owner/environment: 2026-07-15, Codex implementation owner; local macOS arm64, Node 26.0.0,
+  pnpm 10.24.0, exact base `d11261706` plus audit/test/workflow-only diff. Exact Node 24 remains CI.
+- Command: `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts
+--maxWorkers=1 src/main/ssh/ssh-relay-runtime-sftp-connection-transfer.test.ts
+src/main/ssh/ssh-relay-runtime-sftp-tree-transfer.test.ts` — EXPECTED FAIL: the five-case
+  connection suite collects zero tests because the purpose-named composition module is absent, and
+  the new ordinary-cancellation case observes the final owned-tree `rmdir` after session close
+  (event indices 23 versus 11). Nine prior tree cases pass. Vitest 1.87 seconds / 3.24 seconds wall,
+  141,524,992-byte maximum RSS. The temporary unhandled-rejection diagnostic came from attaching
+  the retained-callback test's rejection expectation after advancing fake time and was corrected in
+  the test before GREEN; it is not counted as product evidence.
+- RED scope: tests and native workflow inclusion only. Protected resolver files remain untouched;
+  no owner module, live server, product importer, settings/fallback/tuple/default behavior, or
+  SignPath work exists.
+
+### E-M6-SFTP-LIVE-COMPOSITION-LOCAL-001 — disconnected owner and live-runner oracle are locally green
+
+- Date/owner/environment: 2026-07-15, Codex implementation owner; local macOS arm64, Node 26.0.0,
+  pnpm 10.24.0, atop exact evidence base `d11261706` plus this isolated diff. Exact Node 24 and stock
+  OpenSSH remain the native CI gate.
+- Implementation: the 140-line connection module accepts only the existing authenticated built-in
+  connection boundary, captures the exact current `ssh2` client, opens one signal-bound raw SFTP
+  channel, and rejects/awaits cleanup if the connection changes during open. Its escalation destroys
+  only the captured client and awaits public client close for five seconds; a replacement client is
+  never touched, normal raw-session close leaves the connection open, and existing disconnect logic
+  retains reconnect ownership. No `SshConnection` auth/RPC/default behavior changes.
+- Cancellation correction: the tree orchestrator arms a 250 ms raw-callback breaker on abort. If the
+  callback settles and the stream reaches its catch boundary, it cancels the breaker, reverse-cleans
+  proved-owned files/directories, then closes the session. If a callback remains retained, the
+  breaker closes the raw session to release the borrowed 64 KiB source buffer. Tests prove both
+  orders and no second write after abort; the overall 10-second cancellation-and-join ceiling is
+  unchanged.
+- Purpose command: `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts
+--maxWorkers=1 src/main/ssh/ssh-relay-runtime-sftp-connection-transfer.test.ts
+src/main/ssh/ssh-relay-runtime-sftp-tree-transfer.test.ts` — PASS, 15/15 in 1.59 seconds Vitest /
+  2.68 seconds wall, 139,755,520-byte maximum RSS. Five owner cases cover exact signal/one open,
+  normal connection retention, system-SSH rejection, generation replacement cleanup, captured-only
+  force close, awaited raw/client close, and bounded missing-close failure. Ten tree cases include
+  ordinary cancellation cleanup before close and retained-callback breaker settlement.
+- Focused command: connection, source tree/scan/stream, three SFTP boundaries, acquisition/cache
+  resolution/population/integration, live-suite skip oracle, and workflow contract — PASS, 14 files
+  plus one declared live-input skip; 189 passed / two declared skips in 14.22 seconds Vitest /
+  15.70 seconds wall, 172,146,688-byte maximum RSS.
+- Broad commands: `src/main/ssh/ssh-relay-*.test.ts` — PASS, 46 files passed / four declared skipped,
+  603 tests passed / six declared skipped in 25.09 seconds Vitest / 27.10 seconds wall,
+  301,694,976-byte maximum RSS; `config/scripts/ssh-relay-runtime-*.test.mjs` — PASS, 50 files /
+  281 tests in 22.94 seconds Vitest / 24.87 seconds wall, 190,398,464-byte maximum RSS. Only the
+  established stale-lock diagnostic and local Node 26 module deprecation appear.
+- Static/isolation commands: `pnpm typecheck` passes in 4.75 seconds wall with 1,249,492,992-byte
+  maximum RSS; targeted `oxlint`, targeted `oxfmt --check`, standalone max-lines ratchet,
+  `git diff --check`, protected-resolver empty diff, workflow YAML/oracle, and no non-test consumer
+  outside this disconnected module pass. Full `pnpm lint` passes in 17.44 seconds wall with
+  2,025,259,008-byte maximum RSS: switch exhaustiveness, 41 reliability gates, 355-entry max-lines
+  ratchet, bundled-skill verification, 9,837 localization references, locale parity, and zero-
+  candidate coverage pass with only pre-existing warnings. Module/purpose/live-test sizes are
+  140/170/311 lines, and the updated tree module/test are 271/426 lines, with no new bypass.
+- Live runner oracle: the existing artifact workflow now triggers for runtime-transfer changes and
+  includes the five owner cases once in each native command family. Linux x64 and arm64 build jobs,
+  after producing and locally verifying the exact runtime, start a loopback-only stock OpenSSH
+  `sshd` with key authentication/internal SFTP. The purpose-named full-size suite scans the exact
+  identity/runtime, transfers it serially and with four files, validates every path/byte/hash/mode,
+  proves exclusive-root refusal leaves the tree intact, cancels after the first completed write,
+  requires cleanup/no later writes and sub-10-second settlement, enforces the 80 MiB desktop RSS
+  ceiling, and emits tuple/content/file/byte/server/runner/duration/RSS metrics. The fixture setup is
+  bounded and cleanup runs under `always()`.
+- Local live result: deliberately SKIP, one case, because the required seven OpenSSH/runtime environment
+  inputs are absent. This proves the skip gate only and earns no live/server/filesystem/full-size
+  evidence. Exact-head Linux x64/arm64 CI is mandatory next.
+- Residual gaps: no Windows remote, cross-client matrix, high-RTT comparison, `MaxSessions=1`, live
+  peak channel/open-handle instrumentation, interruption/disk/quota/inode/noexec/AV failure, POSIX
+  or Windows system-SSH path, remote bundled-Node verification/install/publish/launch, product/Beta/
+  settings/fallback wiring, tuple enablement, publication, or default behavior is proved. Legacy
+  remains the sole production/default path and SignPath remains deferred.
+
 ## Accepted Gaps
 
 No product gap is accepted merely because it appears in this list. Each entry requires explicit
@@ -17265,12 +17381,10 @@ The project is not complete until every applicable item below is checked with ev
 
 ## Next Required Action
 
-Commit/push the locally green Windows test-oracle correction, then require fresh all-six exact-head
-native/full-size and adjacent CI before checking the package or advancing. The stream must create no
-remote files or open SSH channels.
-Do not open an SSH channel, transfer to or install on a remote, modify platform detection/selectors,
-add an Electron/startup consumer, mode wiring, fallback, tuple enablement, release publication, or
-default behavior.
+Commit and push the locally green disconnected SFTP composition package, then require exact-head
+target-native Linux x64/arm64 OpenSSH full-size evidence and all-six native/adjacent regression CI
+before checking any Milestone 6 SFTP item or advancing. Do not add an Electron/startup/product
+importer, per-target mode wiring, fallback, tuple enablement, release publication, or default behavior.
 Keep Node upstream `.tar.xz` inputs, Windows ZIP, `ORCA_RELAY_PATH`, existing desktop required-assets
 behavior, detached-signature byte encoding, Windows arm64 build 26100, macOS 13.5, Linux kernel 4.18,
 release-cut, desktop builds, publication, and every tuple separately gated.
