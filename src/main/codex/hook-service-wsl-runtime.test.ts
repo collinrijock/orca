@@ -209,7 +209,8 @@ describe('Codex WSL runtime hook install', () => {
         settlement: { status: 'unavailable' },
         isCurrentGeneration: true,
         installedTrustConfigPath: '/mnt/d/home/hooks.json',
-        resolvedTrustConfigPath: null
+        resolvedTrustConfigPath: null,
+        installSucceeded: false
       })
     ).toBe('none')
 
@@ -218,7 +219,8 @@ describe('Codex WSL runtime hook install', () => {
         settlement: { status: 'missing' },
         isCurrentGeneration: false,
         installedTrustConfigPath: '/mnt/d/home/hooks.json',
-        resolvedTrustConfigPath: null
+        resolvedTrustConfigPath: null,
+        installSucceeded: false
       })
     ).toBe('none')
 
@@ -227,16 +229,20 @@ describe('Codex WSL runtime hook install', () => {
         settlement: { status: 'missing' },
         isCurrentGeneration: true,
         installedTrustConfigPath: '/mnt/d/home/hooks.json',
-        resolvedTrustConfigPath: null
+        resolvedTrustConfigPath: null,
+        installSucceeded: false
       })
     ).toBe('remove')
 
+    // Why: a `missing` probe right after a verified grant is a false negative;
+    // revoking would delete the fresh trust the launching pane reads (#8847).
     expect(
       _internals.getWslHookReconciliationAction({
-        settlement: { status: 'resolved', canonicalPath: '/windows/d/home' },
+        settlement: { status: 'missing' },
         isCurrentGeneration: true,
-        installedTrustConfigPath: '/windows/d/home/hooks.json',
-        resolvedTrustConfigPath: '/windows/d/home/hooks.json'
+        installedTrustConfigPath: '/mnt/d/home/hooks.json',
+        resolvedTrustConfigPath: null,
+        installSucceeded: true
       })
     ).toBe('none')
 
@@ -244,8 +250,21 @@ describe('Codex WSL runtime hook install', () => {
       _internals.getWslHookReconciliationAction({
         settlement: { status: 'resolved', canonicalPath: '/windows/d/home' },
         isCurrentGeneration: true,
+        installedTrustConfigPath: '/windows/d/home/hooks.json',
+        resolvedTrustConfigPath: '/windows/d/home/hooks.json',
+        installSucceeded: true
+      })
+    ).toBe('none')
+
+    // Why: a genuinely moved home resolves to a different path and still
+    // reinstalls, even though the original install succeeded.
+    expect(
+      _internals.getWslHookReconciliationAction({
+        settlement: { status: 'resolved', canonicalPath: '/windows/d/home' },
+        isCurrentGeneration: true,
         installedTrustConfigPath: '/mnt/d/home/hooks.json',
-        resolvedTrustConfigPath: '/windows/d/home/hooks.json'
+        resolvedTrustConfigPath: '/windows/d/home/hooks.json',
+        installSucceeded: true
       })
     ).toBe('reinstall')
   })
@@ -522,7 +541,11 @@ describe('Codex WSL runtime hook install app-server grant lane', () => {
     const basePlan = createTestPlan()
     writeFileSync(basePlan.configPath, '{"hooks":{}}\n', 'utf-8')
     writeFileSync(basePlan.tomlPath, '', 'utf-8')
+    let staleKeyExpectedRemoved: string | null = null
     const runner = vi.fn((request: CodexHookTrustGrantRequest) => {
+      if (staleKeyExpectedRemoved) {
+        expect(readHookTrustEntries(basePlan.tomlPath).has(staleKeyExpectedRemoved)).toBe(false)
+      }
       const entries = request.expectedTrustKeys.map((key) => {
         const parsed = parseTrustKey(key)!
         return {
@@ -557,6 +580,7 @@ describe('Codex WSL runtime hook install app-server grant lane', () => {
     const oldKey = computeTrustKey(
       getManagedTrustEntry(oldPlan, expectedManagedCommand(oldPlan.commandScriptPath))
     )
+    staleKeyExpectedRemoved = oldKey
 
     const newPlan = {
       ...basePlan,

@@ -1,5 +1,15 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { chmodSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import {
+  chmodSync,
+  lstatSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  symlinkSync,
+  writeFileSync
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { captureCodexTrustConfig, restoreCodexTrustConfig } from './codex-trust-config-rollback'
@@ -36,6 +46,21 @@ describe('Codex trust config rollback', () => {
     expect(() => readFileSync(configPath)).toThrowError(/ENOENT/)
   })
 
+  it('removes an RPC-created dangling-symlink target without deleting the user link', () => {
+    const configPath = tempConfigPath()
+    const targetDir = join(configPath, '..', 'dotfiles')
+    const targetPath = join(targetDir, 'codex-config.toml')
+    mkdirSync(targetDir)
+    symlinkSync(join('dotfiles', 'codex-config.toml'), configPath)
+    const snapshot = captureCodexTrustConfig(configPath)
+    writeFileSync(targetPath, 'rpc mutation')
+
+    restoreCodexTrustConfig(configPath, snapshot)
+
+    expect(lstatSync(configPath).isSymbolicLink()).toBe(true)
+    expect(() => readFileSync(targetPath)).toThrowError(/ENOENT/)
+  })
+
   it('atomically recreates exact contents and mode after the file disappears', () => {
     const configPath = tempConfigPath()
     const original = Buffer.from('# comment\r\n[hooks]\r\n')
@@ -50,6 +75,22 @@ describe('Codex trust config rollback', () => {
     if (process.platform !== 'win32') {
       expect(statSync(configPath).mode & 0o777).toBe(0o640)
     }
+  })
+
+  it('restores a symlink target without replacing the config.toml symlink', () => {
+    const configPath = tempConfigPath()
+    const targetDir = join(configPath, '..', 'dotfiles')
+    const targetPath = join(targetDir, 'codex-config.toml')
+    mkdirSync(targetDir)
+    writeFileSync(targetPath, '# original\n')
+    symlinkSync(targetPath, configPath)
+    const snapshot = captureCodexTrustConfig(configPath)
+    rmSync(targetPath)
+
+    restoreCodexTrustConfig(configPath, snapshot)
+
+    expect(lstatSync(configPath).isSymbolicLink()).toBe(true)
+    expect(readFileSync(targetPath, 'utf8')).toBe('# original\n')
   })
 
   it.skipIf(process.platform === 'win32')(

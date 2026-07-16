@@ -1,4 +1,5 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
+import { waitForProcessExitUntil } from './codex-process-exit-deadline'
 
 // Why: `codex app-server` is Orca's sanctioned RPC surface into Codex-owned
 // state (hook trust hashes, the sqlite thread index). This module owns the
@@ -252,11 +253,10 @@ export async function runCodexAppServerSession<T>(
     if (!exited) {
       // Why: the server exits promptly on stdin EOF; the grace period only
       // bounds a wedged child before the guaranteed SIGKILL reap.
-      const grace = new Promise<void>((resolve) => setTimeout(resolve, 1500))
-      await Promise.race([exitPromise, grace])
+      await waitForProcessExitUntil(exitPromise, 1500)
       if (!exited) {
         child.kill('SIGKILL')
-        await Promise.race([exitPromise, new Promise<void>((resolve) => setTimeout(resolve, 1000))])
+        await waitForProcessExitUntil(exitPromise, 1000)
       }
     }
     clearTimeout(deadline)
