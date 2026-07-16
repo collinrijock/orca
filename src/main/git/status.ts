@@ -390,6 +390,14 @@ async function runGetStatus(
     clearGitStatusLineStatsCacheKey(lineStatsCacheKey, lineStatsWriteToken)
   }
 
+  // Why: abort after the stream (e.g. during unmerged/upstream/line-stats work)
+  // must still reject — never resolve a cancelled scan as a completed result.
+  if (options.signal?.aborted) {
+    const error = new Error('The operation was aborted.')
+    error.name = 'AbortError'
+    throw error
+  }
+
   return {
     entries,
     conflictOperation,

@@ -195,6 +195,14 @@ export async function getStatusOp(
     clearGitStatusLineStatsCacheKey(lineStatsCacheKey, lineStatsWriteToken)
   }
 
+  // Why: abort after the porcelain read (e.g. during unmerged/upstream/line-stats
+  // work) must still reject — never resolve a cancelled scan as completed.
+  if (options.signal?.aborted) {
+    const error = new Error('The operation was aborted.')
+    error.name = 'AbortError'
+    throw error
+  }
+
   return {
     entries,
     conflictOperation,

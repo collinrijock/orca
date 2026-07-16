@@ -230,7 +230,9 @@ describe('runtime git client', () => {
     const statusArgs = gitStatus.mock.calls[0]?.[0] as { requestToken?: string }
     controller.abort()
     resolveStatus({ entries: [], conflictOperation: 'unknown' })
-    await request
+    // Why: cancel is best-effort on the main process; even if status still
+    // settles, the aborted local call must reject rather than look fresh.
+    await expect(request).rejects.toMatchObject({ name: 'AbortError' })
 
     expect(gitStatus).toHaveBeenCalledWith({
       worktreePath: '/repo',

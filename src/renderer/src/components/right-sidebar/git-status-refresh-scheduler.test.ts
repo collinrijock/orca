@@ -211,6 +211,34 @@ describe('createGitStatusRefreshScheduler', () => {
     await flushMicrotasks()
   })
 
+  it('does not stretch catch-up pacing with an aborted slow scan duration', async () => {
+    vi.useFakeTimers()
+    const calls: ReturnType<typeof deferred>[] = []
+    const task = vi.fn(() => {
+      const call = deferred()
+      calls.push(call)
+      return call.promise
+    })
+    const scheduler = createScheduler(task)
+
+    scheduler.resumeSafety()
+    // A long scan is aborted by pause (window hide). Its wall time must not
+    // become the next activity idle gap, or reveal catch-up waits tens of
+    // seconds for work that never applied.
+    await vi.advanceTimersByTimeAsync(30_000)
+    scheduler.pause()
+    scheduler.resumeSafety()
+    calls[0]?.resolve()
+    await flushMicrotasks()
+
+    await vi.advanceTimersByTimeAsync(2999)
+    expect(task).toHaveBeenCalledTimes(1)
+    await vi.advanceTimersByTimeAsync(1)
+    expect(task).toHaveBeenCalledTimes(2)
+    calls[1]?.resolve()
+    await flushMicrotasks()
+  })
+
   it('keeps huge-status signal mode active without a safety timeout', async () => {
     vi.useFakeTimers()
     const task = vi.fn(async () => {})

@@ -182,6 +182,12 @@ export async function getRuntimeGitStatus(
 
 let nextGitStatusRequestToken = 0
 
+function createGitStatusAbortError(): Error {
+  const error = new Error('Git status request aborted')
+  error.name = 'AbortError'
+  return error
+}
+
 async function callLocalGitStatus(
   args: Parameters<Window['api']['git']['status']>[0],
   signal?: AbortSignal
@@ -190,9 +196,7 @@ async function callLocalGitStatus(
     return window.api.git.status(args)
   }
   if (signal.aborted) {
-    const error = new Error('Git status request aborted')
-    error.name = 'AbortError'
-    throw error
+    throw createGitStatusAbortError()
   }
   const requestToken = `git-status-${Date.now()}-${++nextGitStatusRequestToken}`
   const cancel = (): void => {
@@ -200,7 +204,13 @@ async function callLocalGitStatus(
   }
   signal.addEventListener('abort', cancel, { once: true })
   try {
-    return await window.api.git.status({ ...args, requestToken })
+    const status = await window.api.git.status({ ...args, requestToken })
+    // Why: cancel is best-effort; a scan that finished after abort must still
+    // reject so callers never treat a cancelled request as a fresh result.
+    if (signal.aborted) {
+      throw createGitStatusAbortError()
+    }
+    return status
   } finally {
     signal.removeEventListener('abort', cancel)
   }

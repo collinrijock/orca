@@ -135,7 +135,11 @@ export function createGitStatusRefreshScheduler(
       })
       .finally(() => {
         lastRunEndedAt = Date.now()
-        lastRunDurationMs = Math.max(0, lastRunEndedAt - startedAt)
+        // Why: cancelled scans never delivered a useful result, so their wall
+        // time must not stretch the next activity/safety gap. Otherwise hide →
+        // reveal after a slow abort waits out the aborted scan's full duration
+        // before the catch-up refresh can start.
+        lastRunDurationMs = controller.signal.aborted ? 0 : Math.max(0, lastRunEndedAt - startedAt)
         if (activeController === controller) {
           activeController = null
         }

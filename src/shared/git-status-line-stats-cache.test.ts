@@ -116,15 +116,21 @@ describe('git status line stats cache', () => {
 
     // A later scan begins and recomputes but is aborted before it can store.
     const abortedWrite = beginGitStatusLineStatsCacheWrite('native\0/repo')
-    await reuseOrRecomputeGitStatusLineStats({
-      cacheKey: 'native\0/repo',
-      head: 'head-1',
-      entries: [{ path: 'src/a.ts', status: 'modified', area: 'unstaged' }],
-      writeToken: abortedWrite,
-      reuse: false,
-      isAborted: () => true,
-      recompute: async () => true
-    })
+    let aborted = false
+    await expect(
+      reuseOrRecomputeGitStatusLineStats({
+        cacheKey: 'native\0/repo',
+        head: 'head-1',
+        entries: [{ path: 'src/a.ts', status: 'modified', area: 'unstaged' }],
+        writeToken: abortedWrite,
+        reuse: false,
+        isAborted: () => aborted,
+        recompute: async () => {
+          aborted = true
+          return true
+        }
+      })
+    ).rejects.toMatchObject({ name: 'AbortError' })
 
     // The aborted pass persisted nothing, so it must not evict the healthy
     // snapshot — a following safety read still reuses the stored counts.
@@ -135,6 +141,22 @@ describe('git status line stats cache', () => {
       applyCachedGitStatusLineStats({ cacheKey: 'native\0/repo', head: 'head-1', entries })
     ).toBe(true)
     expect(entries[0]?.added).toBe(3)
+  })
+
+  it('rejects a reuse-only read that is already aborted', async () => {
+    storeGitStatusLineStats({ cacheKey: 'native\0/repo', head: 'head-1', entries: cachedEntries })
+    const writeToken = beginGitStatusLineStatsCacheWrite('native\0/repo')
+    await expect(
+      reuseOrRecomputeGitStatusLineStats({
+        cacheKey: 'native\0/repo',
+        head: 'head-1',
+        entries: [{ path: 'src/a.ts', status: 'modified', area: 'unstaged' }],
+        writeToken,
+        reuse: true,
+        isAborted: () => true,
+        recompute: async () => true
+      })
+    ).rejects.toMatchObject({ name: 'AbortError' })
   })
 
   it('rejects stale cache writes and writes started before invalidation', () => {

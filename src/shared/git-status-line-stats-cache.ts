@@ -175,6 +175,12 @@ export function storeGitStatusLineStats(input: {
  * transient numstat failure) so a failed pass never replaces or pins a
  * snapshot, and the previous good counts stay reusable.
  */
+function createGitStatusLineStatsAbortError(): Error {
+  const error = new Error('The operation was aborted.')
+  error.name = 'AbortError'
+  return error
+}
+
 export async function reuseOrRecomputeGitStatusLineStats(input: {
   cacheKey: string
   head?: string
@@ -184,6 +190,11 @@ export async function reuseOrRecomputeGitStatusLineStats(input: {
   isAborted: () => boolean
   recompute: () => Promise<boolean>
 }): Promise<void> {
+  if (input.isAborted()) {
+    // Why: reject rather than resolve — a cancelled scan must not look like a
+    // completed status result (including a cache-hit reuse path).
+    throw createGitStatusLineStatsAbortError()
+  }
   if (
     input.reuse &&
     applyCachedGitStatusLineStats({
@@ -192,6 +203,9 @@ export async function reuseOrRecomputeGitStatusLineStats(input: {
       entries: input.entries
     })
   ) {
+    if (input.isAborted()) {
+      throw createGitStatusLineStatsAbortError()
+    }
     return
   }
   const complete = await input.recompute()
@@ -199,7 +213,8 @@ export async function reuseOrRecomputeGitStatusLineStats(input: {
     // Why: an aborted pass never reached storeGitStatusLineStats, so there is
     // nothing partial to undo; clearing here would instead evict a concurrent
     // scan's healthy snapshot and force a redundant numstat on the next read.
-    return
+    // Reject so the caller cannot treat this pass as a successful status.
+    throw createGitStatusLineStatsAbortError()
   }
   if (!complete) {
     return
