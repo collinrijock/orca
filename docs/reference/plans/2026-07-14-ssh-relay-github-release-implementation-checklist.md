@@ -8,8 +8,8 @@ work; keep exact commands, runner identities, hashes, metrics, and residual gaps
 
 Date created: 2026-07-14<br>
 Last updated: 2026-07-15<br>
-Current phase: Milestone 6 / Work Package 5 bounded runtime transfer — **In progress — 2026-07-15, Codex implementation owner: order-independent collision correction is locally green; fresh exact-head native/full-size CI is next**. Keep every capability disconnected from every production/default SSH path. Real Apple/SignPath rehearsals remain an explicit late gate and are not on this package's critical path.<br>
-Session checkpoint: **SOURCE PRE-SCAN COLLISION FIX LOCAL GREEN / COMMIT AND CI NEXT — 2026-07-15, Codex implementation owner** — `E-M6-SOURCE-PRESCAN-COLLISION-FIX-LOCAL-001` proves the Linux finding is corrected independently of filesystem enumeration order and without child metadata access. Commit and push the narrow correction, then require a fresh exact-head all-six native/full-size run. Do not open SSH channels, transfer/install bytes, add a product caller, settings/fallback wiring, tuple enablement, publication, or default behavior. Merging to `main` remains prohibited, SignPath is deferred, and legacy remains the production default.<br>
+Current phase: Milestone 6 / Work Package 5 bounded runtime transfer — **In progress — 2026-07-15, Codex implementation owner: disconnected source pre-scan CI is closed; audit only the bounded client streaming boundary next**. Keep every capability disconnected from every production/default SSH path. Real Apple/SignPath rehearsals remain an explicit late gate and are not on this package's critical path.<br>
+Session checkpoint: **SOURCE PRE-SCAN CLOSED / BOUNDED STREAM AUDIT NEXT — 2026-07-15, Codex implementation owner** — `E-M6-SOURCE-PRESCAN-CI-001` proves the corrected complete local scan on all six native clients and every exact full-size artifact. Audit the next transport-neutral bounded read/hash/progress boundary and record RED before implementation; do not open SSH channels or create remote staging in that package. Do not add a product caller, settings/fallback wiring, tuple enablement, publication, or default behavior. Merging to `main` remains prohibited, SignPath is deferred, and legacy remains the production default.<br>
 Primary design: [SSH relay GitHub Release plan](./2026-07-14-ssh-relay-github-release-plan.html)<br>
 Motivating issues: [#8450](https://github.com/stablyai/orca/issues/8450), [#1693](https://github.com/stablyai/orca/issues/1693)
 
@@ -1157,10 +1157,11 @@ Current behavior must not be assumed adequate for a much larger runtime:
 - [x] Define one transport-neutral source-tree contract based on the verified manifest. Completed by
       E-M6-SOURCE-TREE-CONTRACT-AUDIT-001, E-M6-SOURCE-TREE-CONTRACT-LOCAL-RED-001,
       E-M6-SOURCE-TREE-CONTRACT-LOCAL-001, and E-M6-SOURCE-TREE-CONTRACT-CI-001.
-- [ ] Pre-scan and reject local source mutation, symlinks, special files, extra files, and path
-      collisions before creating remote files. **In progress — 2026-07-15, Codex implementation
-      owner: audit complete under E-M6-SOURCE-PRESCAN-AUDIT-001; RED proof recorded under
-      E-M6-SOURCE-PRESCAN-LOCAL-RED-001.**
+- [x] Pre-scan and reject local source mutation, symlinks, special files, extra files, and path
+      collisions before creating remote files. Completed by E-M6-SOURCE-PRESCAN-AUDIT-001,
+      E-M6-SOURCE-PRESCAN-LOCAL-RED-001, E-M6-SOURCE-PRESCAN-LOCAL-001,
+      E-M6-SOURCE-PRESCAN-CI-RED-001, E-M6-SOURCE-PRESCAN-COLLISION-FIX-LOCAL-001, and
+      E-M6-SOURCE-PRESCAN-CI-001.
 - [ ] Stream files with bounded buffers; prohibit whole-tree memory materialization.
 - [ ] Pass one AbortSignal through enumeration, channel creation, reads, writes, permission repair,
       and remote cleanup.
@@ -16418,6 +16419,70 @@ src/main/ssh/ssh-relay-*.test.ts` — PASS, exit 0: 41 files passed, three skipp
   the correction, then require that case plus the full purpose suite on both Linux native jobs and
   every other native client, and require the complete exact-artifact scan metrics before closing the
   package. The failed/cancelled run supplies no green cell.
+
+### E-M6-SOURCE-PRESCAN-CI-001 — all-six native and exact full-size pre-scan gates pass
+
+- Date/owner/head: 2026-07-15, Codex implementation owner; exact correction commit
+  `724ed6295551a63cd710b4da3749548ac787a0ad` on draft PR
+  [#8741](https://github.com/stablyai/orca/pull/8741).
+- Native workflow: SSH Relay Runtime Artifacts run
+  [29498740510](https://github.com/stablyai/orca/actions/runs/29498740510). All six primary Node
+  24.18.0 jobs pass their contract, deterministic-build/smoke, full-size extraction/cache/pre-scan,
+  and evidence-upload steps: win32 x64
+  [87621972614](https://github.com/stablyai/orca/actions/runs/29498740510/job/87621972614),
+  win32 arm64
+  [87621972692](https://github.com/stablyai/orca/actions/runs/29498740510/job/87621972692),
+  Darwin x64
+  [87621972687](https://github.com/stablyai/orca/actions/runs/29498740510/job/87621972687),
+  Darwin arm64
+  [87621972703](https://github.com/stablyai/orca/actions/runs/29498740510/job/87621972703),
+  Linux x64
+  [87621972727](https://github.com/stablyai/orca/actions/runs/29498740510/job/87621972727), and
+  Linux arm64
+  [87621972772](https://github.com/stablyai/orca/actions/runs/29498740510/job/87621972772).
+- Purpose suite: both Linux jobs pass all 18 source pre-scan cases, including the real
+  case-sensitive collision; each macOS job passes 17 with the Linux-only case skipped; each Windows
+  job passes 15 with three declared POSIX/Linux-only skips. Overall native contract totals are
+  707 passed / one skipped on Linux, 706 passed / two skipped on macOS, and 695 passed / 17 skipped
+  on Windows. The suite takes 1.415–7.117 seconds across the six clients.
+- Exact full-size metrics, reported by the cache measurement JSON after hashing the complete signed
+  tree while its lease is held:
+  - Linux x64: 34 files / 124,846,430 bytes; scan 145.534 ms / 131,072 incremental RSS bytes.
+  - Linux arm64: 34 files / 122,865,324 bytes; scan 155.329 ms / 262,144 incremental RSS bytes.
+  - Darwin x64: 35 files / 124,316,655 bytes; scan 724.753 ms / 139,264 incremental RSS bytes.
+  - Darwin arm64: 35 files / 122,027,869 bytes; scan 161.363 ms / 81,920 incremental RSS bytes.
+  - Windows x64: 42 files / 96,527,161 bytes; scan 194.877 ms / 3,239,936 incremental RSS bytes.
+  - Windows arm64: 42 files / 85,213,511 bytes; scan 375.761 ms / 2,289,664 incremental RSS bytes.
+    Every cell is below the 120-second and 80-MiB scan budgets; observed ranges are 145.534–724.753
+    ms and 81,920–3,239,936 incremental RSS bytes. Cold/warm cache, extraction, retention, and eviction
+    also remain within their existing budgets.
+- Baselines: Linux x64 supplement
+  [87623008534](https://github.com/stablyai/orca/actions/runs/29498740510/job/87623008534) and Linux
+  arm64 supplement
+  [87623008618](https://github.com/stablyai/orca/actions/runs/29498740510/job/87623008618) pass.
+  Windows x64 oldest baseline
+  [87624256480](https://github.com/stablyai/orca/actions/runs/29498740510/job/87624256480) passes.
+  Windows arm64 oldest baseline
+  [87624256574](https://github.com/stablyai/orca/actions/runs/29498740510/job/87624256574) has only
+  the declared hosted-image build rejection: observed 26200 versus required 26100. Before that
+  rejection it verifies the complete 60-entry / 42-file / 85,213,511-byte tree, Node 24.18.0 ABI
+  137, PTY exit 23 and resize 37x101, five watcher events, two-second resource settlement, and smoke
+  5,898.6823 ms / 49,664,000 RSS; complete verification is 8,024.2681 ms. The workflow is therefore
+  red only by the already-declared runner-floor evidence gap, not the source pre-scan package.
+- Adjacent exact-head workflows pass: PR Checks run
+  [29498740486](https://github.com/stablyai/orca/actions/runs/29498740486), verify job
+  [87621971980](https://github.com/stablyai/orca/actions/runs/29498740486/job/87621971980); Golden E2E
+  run [29498740519](https://github.com/stablyai/orca/actions/runs/29498740519), Linux job
+  [87621971899](https://github.com/stablyai/orca/actions/runs/29498740519/job/87621971899) and macOS job
+  [87621971841](https://github.com/stablyai/orca/actions/runs/29498740519/job/87621971841);
+  computer-use run [29498740483](https://github.com/stablyai/orca/actions/runs/29498740483), Windows
+  job [87621971772](https://github.com/stablyai/orca/actions/runs/29498740483/job/87621971772) and
+  Ubuntu job [87621971790](https://github.com/stablyai/orca/actions/runs/29498740483/job/87621971790).
+- Boundary/residual gaps: GitHub clients prove native filesystem and artifact contracts, not live
+  SSH, SFTP or system-SSH channel behavior, remote staging/install, or post-scan transfer races. The
+  scanned-tree type still has no non-test `src/main` importer. Bounded client streaming, every remote
+  transport, product/settings/fallback/tuple/publication/default path, and SignPath remain open.
+  Legacy remains the sole production/default path and every tuple remains disabled.
 
 ## Accepted Gaps
 

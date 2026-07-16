@@ -9,9 +9,9 @@ keeps commands, hashes, runner identities, timings, and failure details.
 A checked box means the work has evidence in the detailed ledger. Design approval alone does not
 complete a box.
 
-Active checkpoint: **Milestone 6 / Work Package 5 bounded runtime transfer — order-independent
-case-collision correction is locally green; commit and fresh exact-head all-six proof are next,
-2026-07-15, Codex implementation owner.**
+Active checkpoint: **Milestone 6 / Work Package 5 bounded runtime transfer — disconnected source
+pre-scan CI is closed; audit only the bounded client streaming boundary next, 2026-07-15, Codex
+implementation owner.**
 `E-M6-SOURCE-PRESCAN-AUDIT-001` fixes the next local-only boundary: consume only the accepted source
 tree plus one exact signal; assert its borrowed lease; boundedly enumerate and hash every real entry;
 reject mutation, symlink/junction, special, missing/extra/colliding, mode/size/hash/aggregate drift;
@@ -34,6 +34,14 @@ must become order-independent and receive fresh all-six native/full-size proof.
 order and adds a platform-neutral case proving rejection before child metadata access. It passes 17
 purpose cases with one Linux-only local skip, 80 focused cases, 539 broad relay cases, typecheck,
 full lint, and diff gates. Fresh exact-head Linux and all-six full-size proof remain required.
+`E-M6-SOURCE-PRESCAN-CI-001` closes exact correction commit `724ed6295`: all six primary native jobs,
+both Linux supplements, Windows x64 baseline, PR Checks, Golden E2E, and computer-use pass. Every
+Linux client passes all 18 pre-scan cases; macOS/Windows retain only declared platform skips. Exact
+full-size scans cover 34–42 files and 85,213,511–124,846,430 bytes in 145.534–724.753 ms with
+81,920–3,239,936 incremental RSS bytes, all within budget. Windows arm64 retains only the declared
+hosted build-26200 rejection against 26100 after full Node/PTY/watcher/tree proof. Live SSH,
+streaming, remote staging/install, product/mode/fallback/default wiring, publication, and SignPath
+remain absent.
 `E-M6-SOURCE-TREE-CONTRACT-AUDIT-001` fixes a pure ready-acquisition → immutable descriptor
 boundary: exact verified manifest/cache identity and signed limits, deterministic ASCII ordering,
 client-native paths, borrowed live-lease assertion, and later shared use by pre-scan plus SFTP,
