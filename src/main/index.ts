@@ -817,9 +817,10 @@ function openSettingsFromSystemMenu(): void {
   // and leave a one-shot intent — a mounted renderer acts on the push, an
   // unmounted one pulls the intent at mount; only one fires per renderer life.
   targetWindow.webContents.send('ui:openSettings')
-  // Why: 60s outlives the default flag TTL, which a cold renderer start can
-  // exceed — an expired flag silently drops the Settings click.
-  pendingOpenSettings.mark(targetWindow.webContents.id, 60_000)
+  // Why: leave an untimed intent — any TTL can be outrun by a slow cold start and
+  // would silently drop the Settings click. webContents-id scoping plus consume-on-
+  // read still prevents the intent from leaking to a later, unrelated renderer.
+  pendingOpenSettings.mark(targetWindow.webContents.id, Number.POSITIVE_INFINITY)
 }
 
 function quitFromSystemTray(): void {

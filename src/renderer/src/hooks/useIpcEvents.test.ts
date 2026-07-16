@@ -1300,6 +1300,130 @@ describe('useIpcEvents updater integration', () => {
     expect(removeSshCredentialRequest).toHaveBeenCalledWith('req-1')
   })
 
+  it('opens Settings from a Settings intent queued before the listener attached', async () => {
+    const openSettingsPage = vi.fn()
+    let onOpenSettingsRegistered = false
+
+    vi.doMock('react', async () => {
+      const actual = await vi.importActual<typeof ReactModule>('react')
+      return {
+        ...actual,
+        useEffect: (effect: () => void | (() => void)) => {
+          effect()
+        }
+      }
+    })
+
+    vi.doMock('../store', () => ({
+      useAppStore: {
+        subscribe: vi.fn(() => () => {}),
+        getState: () => ({
+          openSettingsPage,
+          fetchRepos: vi.fn(),
+          fetchWorktrees: vi.fn(),
+          setActiveView: vi.fn(),
+          activeModal: null,
+          closeModal: vi.fn(),
+          openModal: vi.fn(),
+          activeWorktreeId: 'wt-1',
+          activeView: 'terminal',
+          setActiveRepo: vi.fn(),
+          setActiveWorktree: vi.fn(),
+          revealWorktreeInSidebar: vi.fn(),
+          setIsFullScreen: vi.fn(),
+          setUpdateStatus: vi.fn(),
+          setRateLimitsFromPush: vi.fn(),
+          settings: { terminalFontSize: 13 }
+        })
+      }
+    }))
+
+    vi.doMock('@/lib/ui-zoom', () => ({ applyUIZoom: vi.fn() }))
+    vi.doMock('@/lib/worktree-activation', () => ({
+      activateAndRevealWorktree: vi.fn(),
+      ensureWorktreeHasInitialTerminal: vi.fn()
+    }))
+    vi.doMock('@/components/sidebar/visible-worktrees', () => ({
+      getVisibleWorktreeIds: () => []
+    }))
+    vi.doMock('@/lib/editor-font-zoom', () => ({
+      nextEditorFontZoomLevel: vi.fn(() => 0),
+      computeEditorFontSize: vi.fn(() => 13)
+    }))
+    vi.doMock('@/components/settings/SettingsConstants', () => ({
+      zoomLevelToPercent: vi.fn(() => 100),
+      ZOOM_MIN: -3,
+      ZOOM_MAX: 3
+    }))
+    vi.doMock('@/lib/zoom-events', () => ({ dispatchZoomLevelChanged: vi.fn() }))
+
+    const makeEvents = (target: Record<string, unknown> = {}): Record<string, unknown> =>
+      new Proxy(target, {
+        get: (namespace, prop) =>
+          prop in namespace ? Reflect.get(namespace, prop) : () => () => {}
+      })
+
+    vi.stubGlobal('window', {
+      api: {
+        repos: makeEvents(),
+        worktrees: makeEvents(),
+        keybindings: makeEvents(),
+        settings: makeEvents(),
+        browser: makeEvents(),
+        updater: {
+          getStatus: () => Promise.resolve({ state: 'idle' }),
+          onStatus: () => () => {},
+          onClearDismissal: () => () => {}
+        },
+        rateLimits: {
+          get: () => Promise.resolve({ limits: {}, lastUpdatedAt: Date.now() }),
+          onUpdate: () => () => {}
+        },
+        runtime: {
+          getTerminalFitOverrides: () => Promise.resolve([]),
+          getTerminalDrivers: () => Promise.resolve([]),
+          getBrowserDrivers: () => Promise.resolve([]),
+          onTerminalFitOverrideChanged: () => () => {},
+          onTerminalDriverChanged: () => () => {},
+          onBrowserDriverChanged: () => () => {}
+        },
+        ssh: {
+          listTargets: () => Promise.resolve([]),
+          listPortForwards: () => Promise.resolve([]),
+          listDetectedPorts: () => Promise.resolve([]),
+          getState: () => Promise.resolve(null),
+          onStateChanged: () => () => {},
+          onCredentialRequest: () => () => {},
+          onCredentialResolved: () => () => {},
+          onPortForwardsChanged: () => () => {},
+          onDetectedPortsChanged: () => () => {}
+        },
+        agentStatus: { onSet: () => () => {} },
+        ui: makeEvents({
+          onOpenSettings: () => {
+            onOpenSettingsRegistered = true
+            return () => {}
+          },
+          // Why: exercise the positive branch — an intent queued before mount is
+          // pulled once the renderer's onOpenSettings listener is attached.
+          consumePendingOpenSettings: () => Promise.resolve(true),
+          getZoomLevel: () => 0,
+          set: vi.fn()
+        })
+      }
+    })
+
+    const { useIpcEvents } = await import('./useIpcEvents')
+
+    useIpcEvents()
+    // Why: the pending-intent pull is a Promise; flush microtasks before asserting.
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(onOpenSettingsRegistered).toBe(true)
+    expect(openSettingsPage).toHaveBeenCalledTimes(1)
+  })
+
   it('clears stale remote PTYs when an SSH connection fully disconnects', async () => {
     const clearTabPtyId = vi.fn()
     const setSshConnectionState = vi.fn()
