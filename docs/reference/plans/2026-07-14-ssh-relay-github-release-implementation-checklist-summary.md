@@ -9,9 +9,9 @@ keeps commands, hashes, runner identities, timings, and failure details.
 A checked box means the work has evidence in the detailed ledger. Design approval alone does not
 complete a box.
 
-Active checkpoint: **Milestone 5 / Work Package 4 desktop resolver/cache — close replacement all-six
-native evidence after the client-offline cache-test correction, 2026-07-15, Codex implementation
-owner.**
+Active checkpoint: **Milestone 5 / Work Package 4 desktop resolver/cache — audit the disconnected
+Windows build/OpenSSH/PowerShell/.NET compatibility-evidence boundary, 2026-07-15, Codex
+implementation owner.**
 `E-M5-ARTIFACT-CACHE-RESOLUTION-CI-001` closes warm-cache commit
 `22031fa68` on all six native clients, both Linux supplements, Windows x64 baseline, PR Checks,
 Golden E2E, and computer-use; Windows arm64 remains the expected build-26200 rejection against 26100. `E-M5-ARTIFACT-CACHE-RESOLUTION-LOCAL-001` passes 9/9 purpose tests,
@@ -232,6 +232,13 @@ dependency-injected cache suites now mock Electron and assert `net.fetch` is nev
 proof passes 46/46, broader relay proof passes 461/461 with three declared skips, release scripts
 pass 280/280, and typecheck, lint, format, max-lines, diff, and protected-resolver gates pass.
 Production code remains unchanged. Replacement exact Node 24/all-six native CI is next.
+`E-M5-LINUX-LIBSTDCXX-DETECTION-CI-001` closes exact head `1182bcdc5`: all six primary native Node
+24 jobs, both Linux supplements, Windows x64 baseline, PR Checks, Golden E2E, and computer-use pass.
+POSIX clients pass 83 files / 628 tests and Windows clients pass 84 files / 618 tests with 14
+declared skips. Windows arm64 completes 60-entry/42-file/85,213,511-byte tree, Node/PTY/watcher/
+resource proof and retains only the declared hosted build-26200 rejection against required 26100.
+Full-size extraction/cache metrics stay inside budget. This is not live SSH/remote evidence; the
+detector stays disconnected, every tuple stays disabled, and legacy remains the sole default.
 `E-M5-ARTIFACT-CACHE-ROOT-CI-001` closes the pure cache-root contract at exact head `aefcaa9a9`:
 all six primary native Node 24 jobs, both Linux supplements, Windows x64 baseline, PR Checks, Golden
 E2E, and computer-use pass; Windows arm64 build 26200 remains correctly gated against 26100. The

@@ -8,8 +8,8 @@ work; keep exact commands, runner identities, hashes, metrics, and residual gaps
 
 Date created: 2026-07-14<br>
 Last updated: 2026-07-15<br>
-Current phase: Milestone 5 / Work Package 4 desktop resolver/cache — **In progress — 2026-07-15, Codex implementation owner: close replacement all-six native evidence after the client-offline cache-test correction**. Keep every capability disconnected from host-evidence composition and every production/default SSH path. Real Apple/SignPath rehearsals remain an explicit late gate and are not on this package's critical path.<br>
-Session checkpoint: **CLIENT-OFFLINE TEST CORRECTION LOCAL GREEN / REPLACEMENT EXACT-HEAD CI NEXT — 2026-07-15, Codex implementation owner** — `E-M5-LINUX-LIBSTDCXX-DETECTION-CLIENT-OFFLINE-CORRECTION-LOCAL-001` adds purpose-scoped Electron mocks and proves the dependency-injected cache suites never call `electron.net.fetch`. Focused 46-case, broader 461-case, release-script 280-case, typecheck, lint, formatting, max-lines, diff, and protected-resolver gates pass. Replacement all-six Node 24 CI remains required; the failed run is not accepted. No host composer, product caller, setting, transfer/install, fallback wiring, tuple enablement, publication, or default behavior is connected. Merging to `main` remains prohibited, SignPath is deferred, and legacy remains the production default.<br>
+Current phase: Milestone 5 / Work Package 4 desktop resolver/cache — **In progress — 2026-07-15, Codex implementation owner: audit the disconnected Windows build/OpenSSH/PowerShell/.NET compatibility-evidence boundary**. Keep every capability disconnected from host-evidence composition and every production/default SSH path. Real Apple/SignPath rehearsals remain an explicit late gate and are not on this package's critical path.<br>
+Session checkpoint: **LINUX LIBSTDCXX CI CLOSED / WINDOWS COMPATIBILITY AUDIT ACTIVE — 2026-07-15, Codex implementation owner** — `E-M5-LINUX-LIBSTDCXX-DETECTION-CI-001` closes the detector and client-offline correction on all six primary native clients, both Linux supplements, Windows x64 baseline, PR Checks, Golden E2E, and computer-use. Windows arm64 completes exact bytes/tree/Node/PTY/watcher/resource proof and retains only the declared hosted build-26200 rejection against required 26100. The next package may audit only one disconnected Windows compatibility probe and purpose tests. No host composer, product caller, setting, transfer/install, fallback wiring, tuple enablement, publication, or default behavior is connected. Merging to `main` remains prohibited, SignPath is deferred, and legacy remains the production default.<br>
 Primary design: [SSH relay GitHub Release plan](./2026-07-14-ssh-relay-github-release-plan.html)<br>
 Motivating issues: [#8450](https://github.com/stablyai/orca/issues/8450), [#1693](https://github.com/stablyai/orca/issues/1693)
 
@@ -15664,6 +15664,56 @@ config/vitest.config.ts --maxWorkers=1` plus the new purpose suite, libc, kernel
   24 on all six native clients remains mandatory. This correction changes tests only and proves no
   production SSH, cache, fallback, or default behavior.
 
+### E-M5-LINUX-LIBSTDCXX-DETECTION-CI-001 — replacement native loader ABI and client-offline proof
+
+- Date/owner: 2026-07-15, Codex implementation owner.
+- Source/run: exact head `1182bcdc5e3df9034f06cf796bd2db6afb36f56d`; SSH Relay Runtime
+  Artifacts run `29488827561`. All six primary jobs and both Linux oldest-userland supplements pass.
+  Windows x64 baseline passes; Windows arm64 retains only the declared hosted-build mismatch after
+  completing the full runtime proof.
+- Native source-contract jobs:
+
+  | Tuple               | Job           | Requested/resolved runner                            | Architecture | Contract result               |
+  | ------------------- | ------------- | ---------------------------------------------------- | ------------ | ----------------------------- |
+  | `linux-x64-glibc`   | `87589717854` | `ubuntu-24.04`; `ubuntu24` `20260705.232.1`          | X64          | 83 files / 628 tests pass     |
+  | `linux-arm64-glibc` | `87589717829` | `ubuntu-24.04-arm`; `ubuntu24-arm64` `20260706.52.2` | ARM64        | 83 files / 628 tests pass     |
+  | `darwin-x64`        | `87589717843` | `macos-15-intel`; `macos15` `20260629.0276.1`        | X64          | 83 files / 628 tests pass     |
+  | `darwin-arm64`      | `87589717839` | `macos-15`; `macos15` `20260706.0213.1`              | ARM64        | 83 files / 628 tests pass     |
+  | `win32-x64`         | `87589717812` | `windows-2022`; `win22` `20260706.237.1`             | X64          | 84 files / 618 pass / 14 skip |
+  | `win32-arm64`       | `87589717826` | `windows-11-arm`; `win11-arm64` `20260706.102.1`     | ARM64        | 84 files / 618 pass / 14 skip |
+
+  Every job records GitHub-hosted execution, Node 24.18.0, and the exact source commit. The detector
+  purpose suite passes 23/23 on POSIX and 22/22 with the one declared POSIX-syntax skip on Windows.
+  The corrected cache suites collect and pass normally without an Electron install/download.
+
+- Oldest-userland supplements: x64 job `87590861147` on `ubuntu24` `20260705.232.1` and arm64 job
+  `87590861158` on `ubuntu24-arm64` `20260706.52.2` pass the digest-pinned glibc 2.28 / libstdc++
+  6.0.25 evidence. Exact kernel 4.18 remains the already-declared residual gap.
+- Full-size desktop metrics across the six primary jobs: extraction is 1,278.08–3,734.91 ms with
+  32,448,512–45,395,968 incremental RSS; cold cache is 1,749.64–5,442.50 ms with
+  40,873,984–48,943,104 incremental RSS; warm cache is 174.30–862.23 ms with 0–6,070,272
+  incremental RSS; active retention is 11.65–42.60 ms; eviction is 25.03–90.56 ms. All remain
+  within the recorded desktop time, 80 MiB incremental-memory, and 2 GiB cache budgets.
+- Windows x64 baseline: job `87591565355`, `windows-2022` / `win22` `20260714.244.1`, X64, build
+  20348 — PASS. It verifies 60 entries / 42 files / 96,527,161 expanded bytes, Node 24.18.0 ABI
+  137, PTY exit/resize behavior, five watcher events, and two-second resource settlement. Smoke is
+  5,310.5246 ms / 50,552,832 RSS; complete verification is 6,473.4959 ms. The declared 19045 or
+  20348 build contract qualifies.
+- Windows arm64 baseline: job `87591565305`, `windows-11-arm` / `win11-arm64`
+  `20260714.109.1`, ARM64, build 26200. Before the expected final rejection it verifies 60 entries /
+  42 files / 85,213,511 expanded bytes, Node 24.18.0 ABI 137, PTY exit/resize behavior, five watcher
+  events, and two-second resource settlement. Smoke is 6,064.0717 ms / 49,815,552 RSS; complete
+  verification is 8,098.9394 ms. Platform and architecture checks pass; only build 26200 differs
+  from the reviewed 26100 evidence cell, so this remains a residual hosted-runner gap and not a
+  tuple enablement.
+- Adjacent exact-head proof: PR Checks run `29488826783`, job `87589715319`; Golden E2E run
+  `29488826838`, macOS job `87589715177` and Linux job `87589715191`; computer-use run
+  `29488826924`, Windows job `87589715474` and Ubuntu job `87589715539` — all pass.
+- Boundary/residual gaps: this is portable source/native-client contract evidence, not live SSH,
+  Rocky/Ubuntu multilib, Windows remote, transfer, install, fallback, or bundled launch evidence.
+  The detector remains disconnected, every tuple remains disabled, and legacy remains the sole
+  production/default path.
+
 ## Accepted Gaps
 
 No product gap is accepted merely because it appears in this list. Each entry requires explicit
@@ -15722,12 +15772,12 @@ The project is not complete until every applicable item below is checked with ev
 
 ## Next Required Action
 
-Commit the client-offline cache-test correction proven by
-`E-M5-LINUX-LIBSTDCXX-DETECTION-CLIENT-OFFLINE-CORRECTION-LOCAL-001`, push it to the draft PR, and
-require replacement exact-head all-six native artifact CI before advancing. Do not compose full host
-evidence, provision production secrets or environments, add an Electron/startup consumer, embed
-unreviewed keys or manifest bytes, add SSH transfer/install, mode wiring, fallback, tuple enablement,
-release publication, or default behavior.
+Audit only the smallest disconnected Windows compatibility-evidence boundary for the already-reviewed
+OS build, OpenSSH for Windows, Windows PowerShell, and .NET Framework selector fields. Record the
+exact acquisition/parsing/failure contract before adding purpose tests or implementation. Do not
+compose full host evidence, provision production secrets or environments, add an Electron/startup
+consumer, embed unreviewed keys or manifest bytes, add SSH transfer/install, mode wiring, fallback,
+tuple enablement, release publication, or default behavior.
 Keep Node upstream `.tar.xz` inputs, Windows ZIP, `ORCA_RELAY_PATH`, existing desktop required-assets
 behavior, detached-signature byte encoding, Windows arm64 build 26100, macOS 13.5, Linux kernel 4.18,
 release-cut, desktop builds, publication, and every tuple separately gated.
