@@ -1,6 +1,48 @@
-import { collectCodexHookListings, type CodexHookListing } from './codex-app-server-client'
 import { runCodexAppServerSession, type CodexAppServerInvocation } from './codex-app-server-session'
 import { normalizeHookTrustKeyForLookup } from './config-toml-trust'
+
+type CodexHookListing = {
+  key: string
+  command: string | null
+  currentHash: string
+  trustStatus: string
+  enabled: boolean
+}
+
+function collectCodexHookListings(result: unknown): CodexHookListing[] {
+  const data =
+    result && typeof result === 'object' && Array.isArray((result as { data?: unknown }).data)
+      ? ((result as { data: unknown[] }).data as { hooks?: unknown }[])
+      : []
+  const listings: CodexHookListing[] = []
+  const seenKeys = new Set<string>()
+  for (const entry of data) {
+    const hooks = Array.isArray(entry?.hooks) ? entry.hooks : []
+    for (const hook of hooks as Record<string, unknown>[]) {
+      if (
+        typeof hook?.key !== 'string' ||
+        typeof hook.currentHash !== 'string' ||
+        typeof hook.trustStatus !== 'string'
+      ) {
+        continue
+      }
+      // Why: hooks/list repeats user-scope hooks per requested cwd; trust
+      // rebasing must consider each key once.
+      if (seenKeys.has(hook.key)) {
+        continue
+      }
+      seenKeys.add(hook.key)
+      listings.push({
+        key: hook.key,
+        command: typeof hook.command === 'string' ? hook.command : null,
+        currentHash: hook.currentHash,
+        trustStatus: hook.trustStatus,
+        enabled: typeof hook.enabled === 'boolean' ? hook.enabled : true
+      })
+    }
+  }
+  return listings
+}
 
 export type CodexUserHookTrustMove = {
   oldKey: string

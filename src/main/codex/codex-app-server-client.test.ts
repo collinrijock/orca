@@ -49,6 +49,11 @@ if (config.scenario === 'no-subcommand') {
   process.stderr.write("error: unrecognized subcommand 'app-server'\\n")
   process.exit(2)
 }
+if (config.scenario === 'transient-stderr') {
+  process.stderr.write('config loader: unexpected argument in value\\n')
+  process.exit(1)
+}
+if (config.scenario === 'silent-exit-0') process.exit(0)
 process.stdin.setEncoding('utf8')
 process.stdin.on('data', (chunk) => {
   buffer += chunk
@@ -276,6 +281,32 @@ describe('runCodexHookTrustGrantSession', () => {
 
     const error = await runCodexHookTrustGrantSession(request).catch((caught: unknown) => caught)
     expect(isCodexAppServerUnsupportedError(error)).toBe(true)
+  })
+
+  it('does not classify unrelated stderr as a missing app-server capability', async () => {
+    const { request } = createStubRequest({
+      scenario: 'transient-stderr',
+      hooks: [],
+      expectedTrustKeys: ['k'],
+      managedCommand: MANAGED_COMMAND
+    })
+
+    const error = await runCodexHookTrustGrantSession(request).catch((caught: unknown) => caught)
+    expect(error).toBeInstanceOf(Error)
+    expect(isCodexAppServerUnsupportedError(error)).toBe(false)
+  })
+
+  it('treats a silent exit zero before initialize as transient', async () => {
+    const { request } = createStubRequest({
+      scenario: 'silent-exit-0',
+      hooks: [],
+      expectedTrustKeys: ['k'],
+      managedCommand: MANAGED_COMMAND
+    })
+
+    const error = await runCodexHookTrustGrantSession(request).catch((caught: unknown) => caught)
+    expect(error).toBeInstanceOf(Error)
+    expect(isCodexAppServerUnsupportedError(error)).toBe(false)
   })
 
   it('kills a hung server at the session deadline', async () => {
