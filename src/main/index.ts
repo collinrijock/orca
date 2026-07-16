@@ -1808,6 +1808,12 @@ app.whenReady().then(async () => {
   // #8612). Deferred so startup and first PTY spawns never compete with the
   // sessions tree walk.
   setTimeout(() => {
+    // Why: reverse-backfilling into the user's Codex home belongs exclusively
+    // to the real-home lane; flag-off, managed-account, and custom-CODEX_HOME
+    // launch lanes must remain byte-identical and leave that history untouched.
+    if (!codexRuntimeHome?.isHostSystemDefaultRealHome()) {
+      return
+    }
     const systemCodexHomePathOverride = resolveHostCodexSessionSourceHome(store!.getSettings())
     // Why: the heal pass chains after the backfill settles so thread/read only
     // runs once the audit ledger covers this startup's newly linked rollouts;
