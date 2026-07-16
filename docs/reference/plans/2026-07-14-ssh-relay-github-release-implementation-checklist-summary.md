@@ -10,8 +10,8 @@ A checked box means the work has evidence in the detailed ledger. Design approva
 complete a box.
 
 Active checkpoint: **Milestone 6 / Work Package 5 bounded runtime transfer — disconnected SFTP
-per-file destination is locally green; exact-head native proof is next, 2026-07-15, Codex
-implementation owner.** `E-M6-SFTP-FILE-DESTINATION-AUDIT-001` fixes exclusive `wx` open, callback-bounded
+per-file destination is exact-head green; SFTP session/tree orchestration audit is next,
+2026-07-15, Codex implementation owner.** `E-M6-SFTP-FILE-DESTINATION-AUDIT-001` fixes exclusive `wx` open, callback-bounded
 positional writes, explicit POSIX mode repair/handle-stat proof, and joined close-before-unlink
 cleanup. It deliberately borrows but does not acquire/end an SFTP session and does not create
 directories, clean a whole staging tree, or publish/launch anything. Session-wide cancellation,
@@ -24,6 +24,11 @@ with one declared skip, 579 broad relay cases with five declared skips, 280/280 
 typecheck, full lint, targeted format, max-lines, diff, protected-resolver, and no-product-import
 gates. It proves the exact per-file lifecycle only; SFTP session/tree orchestration, live/full-size
 remote proof, and every product/default path remain open.
+`E-M6-SFTP-FILE-DESTINATION-CI-001` closes exact commit `72d482201`: all six primary native clients
+pass all 13 cases and complete full runtime proof; both Linux supplements, Windows x64 floor, PR
+Checks, Golden E2E, and computer-use pass. Windows arm64 retains only the declared hosted build-26200
+rejection against 26100 after complete runtime smoke. The suite uses callback mocks and does not
+credit a live SFTP/server/remote cell.
 `E-M6-SOURCE-STREAM-CI-001` closes exact commit `df39c287d`: all six primary native clients pass the
 27-case source-stream suite (Windows has only the declared POSIX-mode skip), exact 85–125 MB trees
 stream in 103.663–530.937 ms with 0–5,492,736 incremental RSS bytes, both Linux supplements and the
