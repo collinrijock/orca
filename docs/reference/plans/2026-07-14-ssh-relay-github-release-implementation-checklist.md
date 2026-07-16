@@ -8,7 +8,7 @@ work; keep exact commands, runner identities, hashes, metrics, and residual gaps
 
 Date created: 2026-07-14<br>
 Last updated: 2026-07-15<br>
-Current phase: Milestone 5 / Work Package 4 desktop resolver/cache — **In progress — 2026-07-15, Codex implementation owner: audit the next disconnected packaged-manifest/cache-root boundary**. Exact-head `b79bcbd04` closes the bounded cache gate on all six native clients under E-M5-ARTIFACT-CACHE-EVICTION-CI-001. Before adding a consumer, audit official-build manifest/key loading, app-owned cache-root selection, proxy/certificate behavior, and downloader/cache orchestration; add purpose-named RED contracts for only the next coherent package. Keep SSH, settings, tuples, publication, and default behavior disconnected.<br>
+Current phase: Milestone 5 / Work Package 4 desktop resolver/cache — **In progress — 2026-07-15, Codex implementation owner: checkpoint and obtain all-six native evidence for the locally proven disconnected official-build manifest loader**. `E-M5-PACKAGED-MANIFEST-LOCAL-001` and `E-M5-PACKAGED-MANIFEST-CI-WIRING-LOCAL-001` prove the fixed-resource loader and its native source-test wiring locally. Keep resource embedding, production keys, Electron/cache-root/downloader/SSH/settings/tuples/publication/default behavior disconnected until the exact-head native jobs pass.<br>
 Session checkpoint: **In progress — 2026-07-15, Codex implementation owner** — user authority covers end-to-end PR-contained implementation, commits, pushes, CI, rehearsals, and release writes; merging to `main` remains explicitly prohibited. Commit `b79bcbd04` passes all six native source/full-size cache jobs, PR Checks, and Golden E2E. The artifact workflow is red only for the retained hosted Windows arm64 build-26200 versus required-26100 floor rejection after its primary proof. No Electron, downloader, SSH, setting, tuple, publication, or default-path consumer exists. Legacy remains the production default.<br>
 Primary design: [SSH relay GitHub Release plan](./2026-07-14-ssh-relay-github-release-plan.html)<br>
 Motivating issues: [#8450](https://github.com/stablyai/orca/issues/8450), [#1693](https://github.com/stablyai/orca/issues/1693)
@@ -13732,6 +13732,148 @@ src/main/ssh/ssh-relay-artifact-cache-entry-full-size.test.ts`.
 - Follow-up: checkpoint this evidence, then audit the smallest disconnected packaged-manifest/
   official-build/cache-root boundary and add purpose-named RED contracts before implementation.
 
+### E-M5-PACKAGED-MANIFEST-AUDIT-001 — Fixed official-build manifest loading boundary
+
+- Date: 2026-07-15
+- Owner: Codex implementation owner
+- Source: exact pushed evidence head `20728605330b0320e2ea6ec3c5a4380e68d1a0d8` on draft PR
+  #8741.
+- Exact audit commands: complete reads of the desktop manifest schema/signature/release-identity
+  modules, artifact selector/downloader, relay path resolution, Electron builder config and tests,
+  release required-assets/manifest composition, application startup/version seeding, and Electron
+  proxy bridge; targeted `rg -n` over `app.isPackaged`, `process.resourcesPath`, `app.getVersion()`,
+  `extraResources`, `ORCA_RELAY_PATH`, manifest consumers, accepted keys, `net.fetch`, proxy, and
+  certificate behavior.
+- Findings:
+  - no packaged relay-runtime manifest resource, production accepted-key set, manifest filesystem
+    loader, Electron adapter, cache root, or product consumer exists. Existing manifest verification
+    is pure and branded/frozen; all callers are tests or release scripts;
+  - `config/` is intentionally excluded from `app.asar`, while real runtime resources use explicit
+    `extraResources` and `process.resourcesPath`. The future official manifest must therefore be a
+    fixed real resource, never a mutable user-data file, environment-selected path, GitHub lookup, or
+    `latest` result;
+  - the smallest safe next capability is a dependency-injected official-build loader. It derives
+    exactly `<resourcesPath>/ssh-relay-runtime/orca-ssh-relay-runtime-manifest.json`, requires an
+    absolute resources path and real non-link resource directory/file, bounds the file at 1 MiB,
+    reads through a stable file handle, parses JSON, and verifies the existing strict schema and
+    accepted-key Ed25519 signatures;
+  - only after signature verification may it compare manifest tag `v<appVersion>`, version,
+    channel, and relay protocol to the caller-supplied compiled desktop identity. Stable, RC, and perf
+    identities use the already-proven release-tag parser. Missing, malformed, replaced, unknown-key,
+    invalid-signature, build-mismatch, or protocol-mismatch state is an explicit fail-closed error;
+  - accepted keys remain compile-time inputs to this capability. The real production public key,
+    protected signing seed/environment, signed manifest bytes, builder `extraResources` mapping, and
+    release required-assets composition are absent and remain blocking gates before any official
+    client or tuple can use it;
+  - current Electron `net.fetch` already uses Chromium's certificate/session stack and the app has a
+    separate tested system/settings/environment proxy bridge. Network orchestration is deliberately
+    excluded from this filesystem/trust package and will be audited separately;
+  - existing `ORCA_RELAY_PATH` legacy development behavior remains untouched. This package adds no
+    development environment override and no product call site.
+- Required purpose-named contracts: exact fixed cross-platform path; packaged-only guard; absolute
+  resources path; stable regular resource directory/file; 1 MiB bound; partial-read loop; accepted
+  signature and deep-frozen result; empty/unknown/mismatched key; malformed/oversized/replaced/link
+  resource; exact stable/RC/perf identity; tag/version/channel/protocol mismatch; and proof that no
+  network, cache, Electron startup, SSH, mode, tuple, or default caller is introduced.
+- Deliberately separate: production key generation/provisioning/rotation, signed release manifest,
+  builder/resource embedding, packaged-app smoke, release required-assets composition, app.getPath
+  cache-root selection, proxy/certificate/live download, offline behavior, ORCA_RELAY_PATH trust
+  changes, SSH transfer/install, fallback classification, settings/Beta UI, tuple enablement,
+  publication, and default behavior.
+- Follow-up: add `ssh-relay-packaged-manifest.test.ts` while the production loader is absent, run and
+  record the missing-module RED, then implement only this audited loader and require focused, broad,
+  static, and all-six native source evidence before resource embedding or a consumer.
+
+### E-M5-PACKAGED-MANIFEST-LOCAL-RED-001 — Official-build manifest loader is absent
+
+- Date: 2026-07-15
+- Owner: Codex implementation owner
+- Source: purpose-named `src/main/ssh/ssh-relay-packaged-manifest.test.ts` atop exact pushed evidence
+  head `20728605330b0320e2ea6ec3c5a4380e68d1a0d8`; production loader deliberately absent.
+- Exact command: `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts
+--maxWorkers=1 src/main/ssh/ssh-relay-packaged-manifest.test.ts`.
+- Environment: macOS 26.2 arm64 build 25C56, Node v26.0.0, pnpm 10.24.0, Vitest 4.1.5.
+- Result: required RED; one failed suite / zero collected tests in 168ms Vitest / 0.99s wall,
+  131,743,744-byte maximum RSS, zero swaps. Import fails because
+  `./ssh-relay-packaged-manifest` does not exist.
+- Contracts encoded before implementation: fixed absolute resource path and 1 MiB limit;
+  packaged-only guard; accepted signature and deep-frozen stable/RC/perf identities; missing,
+  malformed, oversized, or linked resource rejection; empty/unknown/mismatched/invalid key state;
+  and signed tag/version/channel/protocol drift rejection.
+- Consumer-disconnection oracle: the test imports only the absent source capability and uses isolated
+  temporary resource roots and test keys. It adds no Electron, builder, cache, downloader, SSH,
+  setting, tuple, release, or default call site.
+- Follow-up: implement only the audited fixed-resource loader and make this suite green without
+  adding a production key, resource mapping, or consumer.
+
+### E-M5-PACKAGED-MANIFEST-LOCAL-001 — Fixed official-build manifest loader
+
+- Date: 2026-07-15
+- Owner: Codex implementation owner
+- Source: six-file working package atop exact pushed evidence head
+  `20728605330b0320e2ea6ec3c5a4380e68d1a0d8`; implementation and purpose-named tests are
+  `src/main/ssh/ssh-relay-packaged-manifest.ts` and
+  `src/main/ssh/ssh-relay-packaged-manifest.test.ts`.
+- Exact focused command: `/usr/bin/time -l pnpm exec vitest run --config
+config/vitest.config.ts --maxWorkers=1 src/main/ssh/ssh-relay-packaged-manifest.test.ts`.
+- Environment: macOS 26.2 arm64 build 25C56, Node v26.0.0, pnpm 10.24.0, Vitest 4.1.5.
+- Result: 1 file / 6 tests pass in 348ms Vitest / 1.06s wall with 131,989,504-byte maximum RSS,
+  96,179,600-byte peak memory footprint, and zero swaps. The repository requires Node 24; final
+  native workflow proof therefore remains required and is not inferred from this local Node 26 run.
+- Proven behavior: packaged-only and absolute-path guards; one fixed cross-platform resource path;
+  real non-link directory/file checks; non-empty 1 MiB bound; stable-handle identity checks;
+  deterministic seven-byte partial reads; mutation rejection before JSON/signature processing;
+  strict JSON/schema and accepted-key Ed25519 verification; deep-frozen branded output; and exact
+  stable/RC/perf tag, version, channel, and relay-protocol binding after signature verification.
+- Fail-closed cases: missing, malformed, oversized, linked, partial/mutated resources;
+  empty/unknown/mismatched accepted keys; invalid signatures; and signed build/protocol drift.
+- Broad exact commands and results on the final source/test state:
+  - `pnpm exec vitest run --config config/vitest.config.ts
+src/main/ssh/ssh-relay-*.test.ts`: 22 files / 300 tests pass, with three declared full-size
+    fixture suites / three tests skipped, in 28.04s;
+  - `pnpm exec vitest run --config config/vitest.config.ts
+config/scripts/ssh-relay-runtime-*.test.mjs`: 50 files / 279 tests pass in 24.75s;
+  - `pnpm typecheck`: passes all Node, CLI, and web projects;
+  - `pnpm lint`: passes oxlint, type-aware switch exhaustiveness, reliability gates (41), max-lines
+    ratchet (355 grandfathered, no new bypass), bundled-skill guides, and localization gates. Only
+    pre-existing warnings outside this package are reported;
+  - `pnpm exec oxfmt --check src/main/ssh/ssh-relay-packaged-manifest.ts
+src/main/ssh/ssh-relay-packaged-manifest.test.ts
+config/scripts/ssh-relay-runtime-workflow.test.mjs
+.github/workflows/ssh-relay-runtime-artifacts.yml
+docs/reference/plans/2026-07-14-ssh-relay-github-release-implementation-checklist.md
+docs/reference/plans/2026-07-14-ssh-relay-github-release-implementation-checklist-summary.md`
+    and `git diff --check`: pass.
+- Consumer-disconnection oracle: repository `rg` finds the production module imported only by its
+  purpose-named test. The loader imports no Electron, network, cache, SSH, settings, or relay-path
+  module. The protected Node/npm resolver pair has zero diff. No product call site, accepted
+  production key, resource bytes, builder mapping, cache root, mode, tuple, publication, or default
+  behavior is present.
+- Residual gaps: all-six Node 24 native execution, production accepted-key lifecycle, signed
+  embedded bytes, builder `extraResources`, release required-assets composition, packaged-app
+  smoke, cache-root/downloader orchestration, offline transfer, SSH install/launch, per-target Beta,
+  fallback, tuple enablement, publication, and default behavior remain open.
+
+### E-M5-PACKAGED-MANIFEST-CI-WIRING-LOCAL-001 — Native source-test wiring
+
+- Date: 2026-07-15
+- Owner: Codex implementation owner
+- Source: same six-file working package as `E-M5-PACKAGED-MANIFEST-LOCAL-001`.
+- Implementation: add `ssh-relay-packaged-manifest.test.ts` to the POSIX and PowerShell native build
+  command lists in `.github/workflows/ssh-relay-runtime-artifacts.yml`; add it to the workflow
+  occurrence oracle, which requires exactly two workflow occurrences.
+- Exact command: `pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1
+src/main/ssh/ssh-relay-packaged-manifest.test.ts
+config/scripts/ssh-relay-runtime-workflow.test.mjs`.
+- Result: 2 files / 13 tests pass in 646ms. The standalone workflow suite is also included in the
+  50-file / 279-test release-script result above.
+- Closure rule: this proves wiring shape only. Do not close the native gate until the exact pushed
+  implementation head executes the source suite successfully on Linux x64/arm64, macOS x64/arm64,
+  and Windows x64/arm64 under Node 24.
+- Follow-up: format/diff checkpoint, commit and push the isolated package, then record each native
+  job/run ID and result under `E-M5-PACKAGED-MANIFEST-CI-001` before adding resource embedding,
+  production keys, cache-root selection, or a consumer.
+
 ## Accepted Gaps
 
 No product gap is accepted merely because it appears in this list. Each entry requires explicit
@@ -13790,10 +13932,11 @@ The project is not complete until every applicable item below is checked with ev
 
 ## Next Required Action
 
-Audit official-build manifest/key loading, app-owned cache-root selection, proxy/certificate behavior,
-and downloader/cache orchestration. Select only the next coherent disconnected capability, record its
-boundary and purpose-named RED, then implement it without adding SSH transfer/install, mode wiring,
-tuple enablement, release publication, or default behavior.
+Add and run the purpose-named official-build manifest-loader RED fixed by
+E-M5-PACKAGED-MANIFEST-AUDIT-001, then implement only stable fixed-resource loading, accepted-key
+signature verification, and exact desktop build/protocol identity. Do not add resource embedding,
+production keys, cache-root/downloader orchestration, SSH transfer/install, mode wiring, tuple
+enablement, release publication, or default behavior.
 Keep Node upstream `.tar.xz` inputs, Windows ZIP, `ORCA_RELAY_PATH`, existing desktop required-assets
 behavior, detached-signature byte encoding, Windows arm64 build 26100, macOS 13.5, Linux kernel 4.18,
 release-cut, desktop builds, publication, and every tuple separately gated.
