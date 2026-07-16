@@ -23,6 +23,7 @@ type CodexTrustGrantRequestInput = {
   runtimeHomePath: string
   managedCommand: string
   expectedTrustKeys: string[]
+  useDefaultCodexHome?: boolean
 }
 
 export type ResolvedCodexTrustGrantHost = {
@@ -54,11 +55,14 @@ export function resolveCodexTrustGrantHost(host: CodexTrustGrantHost): ResolvedC
     binaryStamp: command === 'codex' ? null : buildNativeCodexBinaryStamp(command),
     buildRequest: (input) => {
       const { spawnCmd, spawnArgs } = getSpawnArgsForWindows(command, ['app-server'])
+      const useDefaultCodexHome = input.useDefaultCodexHome === true
       return {
         invocation: {
           command: spawnCmd,
           args: spawnArgs,
-          env: { CODEX_HOME: input.runtimeHomePath },
+          ...(useDefaultCodexHome
+            ? { envToDelete: ['CODEX_HOME'] }
+            : { env: { CODEX_HOME: input.runtimeHomePath } }),
           timeoutMs: NATIVE_GRANT_TIMEOUT_MS
         },
         hooksListCwd: input.runtimeHomePath,

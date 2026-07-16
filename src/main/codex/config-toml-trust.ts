@@ -9,7 +9,7 @@ import {
   unlinkSync,
   writeFileSync
 } from 'node:fs'
-import { basename, dirname, join } from 'node:path'
+import { basename, dirname, join, posix as pathPosix, win32 as pathWin32 } from 'node:path'
 import { createHash, randomUUID } from 'node:crypto'
 import { renameFileWithWindowsRetry } from '../codex-accounts/fs-utils'
 import { foldWslUncPathCaseInsensitiveParts } from '../../shared/wsl-paths'
@@ -164,23 +164,62 @@ export function computeTrustedHash(entry: CodexTrustEntry): string {
   return `sha256:${createHash('sha256').update(serialized).digest('hex')}`
 }
 
+// Why: key_source is already home-derived by discovery. Realpath here would
+// change default-home keys; explicit-home callers canonicalize the home first.
 export function computeTrustKey(entry: CodexTrustEntry): string {
-  return `${getCodexCanonicalTrustPath(entry.sourcePath)}:${entry.eventLabel}:${entry.groupIndex}:${entry.handlerIndex}`
+  return `${normalizeCodexHookSourcePath(entry.sourcePath)}:${entry.eventLabel}:${entry.groupIndex}:${entry.handlerIndex}`
 }
 
-export function getCodexCanonicalTrustPath(sourcePath: string): string {
-  if (process.platform !== 'win32' && isWindowsDriveOrBackslashUncPath(sourcePath)) {
-    // Why: an existing `//` path is valid on POSIX, so let realpath distinguish
-    // it from forward-slash UNC before falling back to Windows normalization.
-    return normalizeWindowsPathForCodexLookup(sourcePath)
+/**
+ * Returns the hook source path Codex derives after an explicit CODEX_HOME is
+ * canonicalized. The source leaf remains logical because hook discovery only
+ * normalizes the joined path lexically.
+ */
+export function getCodexExplicitHomeHookSourcePath(sourcePath: string): string {
+  if (process.platform !== 'win32' && isUnambiguousWindowsPath(sourcePath)) {
+    return normalizeCodexHookSourcePath(sourcePath)
   }
   try {
-    // Why: Codex canonicalizes parent directories but preserves a hooks.json
-    // leaf symlink in trust keys, so resolving the whole path misses its RPC listing.
-    return join(realpathSync.native(dirname(sourcePath)), basename(sourcePath))
+    // Why: explicit CODEX_HOME resolves the home directory before hooks.json
+    // is appended, so a symlinked leaf must remain logical in the reported key.
+    return normalizeCodexHookSourcePath(
+      join(realpathSync.native(dirname(sourcePath)), basename(sourcePath))
+    )
   } catch {
-    return normalizeWindowsPathForCodexLookup(sourcePath)
+    return normalizeCodexHookSourcePath(sourcePath)
   }
+}
+
+/** Matches the platform-native lexical path displayed by hook discovery. */
+export function normalizeCodexHookSourcePath(sourcePath: string): string {
+  if (isWindowsPathForTrustSource(sourcePath)) {
+    const withoutDevicePrefix = stripWindowsDevicePrefix(sourcePath)
+    const normalized = pathWin32.isAbsolute(withoutDevicePrefix)
+      ? pathWin32.normalize(withoutDevicePrefix)
+      : pathWin32.resolve(withoutDevicePrefix)
+    return trimNonRootTrailingSeparators(normalized, pathWin32.parse(normalized).root, /[\\/]/)
+  }
+  const normalized = pathPosix.isAbsolute(sourcePath)
+    ? pathPosix.normalize(sourcePath)
+    : pathPosix.resolve(sourcePath)
+  return trimNonRootTrailingSeparators(normalized, pathPosix.parse(normalized).root, /\//)
+}
+
+function trimNonRootTrailingSeparators(path: string, root: string, separators: RegExp): string {
+  let end = path.length
+  while (end > root.length && separators.test(path[end - 1]!)) {
+    end -= 1
+  }
+  return path.slice(0, end)
+}
+
+function stripWindowsDevicePrefix(sourcePath: string): string {
+  const unc = /^(?:\\\\\?|\\\\\.)\\UNC\\/i.exec(sourcePath)
+  if (unc) {
+    return `\\\\${sourcePath.slice(unc[0].length)}`
+  }
+  const drive = /^(?:\\\\\?|\\\\\.)\\(?=[A-Za-z]:[\\/])/i.exec(sourcePath)
+  return drive ? sourcePath.slice(drive[0].length) : sourcePath
 }
 
 function getCodexCanonicalProjectPath(projectPath: string): string {
@@ -193,13 +232,6 @@ function getCodexCanonicalProjectPath(projectPath: string): string {
   }
 }
 
-function normalizeWindowsPathForCodexLookup(sourcePath: string): string {
-  if (!usesWindowsPathSeparators(sourcePath)) {
-    return sourcePath
-  }
-  return sourcePath.replace(/\//g, '\\')
-}
-
 function normalizeWindowsPathSeparators(sourcePath: string): string {
   if (!usesWindowsPathSeparators(sourcePath)) {
     return sourcePath
@@ -208,11 +240,19 @@ function normalizeWindowsPathSeparators(sourcePath: string): string {
 }
 
 function usesWindowsPathSeparators(sourcePath: string): boolean {
-  return isWindowsDriveOrBackslashUncPath(sourcePath) || sourcePath.startsWith('//')
+  return isUnambiguousWindowsPath(sourcePath) || sourcePath.startsWith('//')
 }
 
-function isWindowsDriveOrBackslashUncPath(sourcePath: string): boolean {
+function isUnambiguousWindowsPath(sourcePath: string): boolean {
   return /^[A-Za-z]:[\\/]/.test(sourcePath) || sourcePath.startsWith('\\\\')
+}
+
+function isWindowsPathForTrustSource(sourcePath: string): boolean {
+  return (
+    isUnambiguousWindowsPath(sourcePath) ||
+    (process.platform === 'win32' &&
+      (sourcePath.startsWith('//') || !pathPosix.isAbsolute(sourcePath)))
+  )
 }
 
 // Why: Codex and Orca can disagree on quote style, separators, and casing for
@@ -336,7 +376,7 @@ export function upsertHookTrustEntriesInContent(
   const existing =
     existingContent.charCodeAt(0) === 0xfeff ? existingContent.slice(1) : existingContent
   let updated = entries.some((entry) =>
-    usesWindowsPathSeparators(getCodexCanonicalTrustPath(entry.sourcePath))
+    usesWindowsPathSeparators(normalizeCodexHookSourcePath(entry.sourcePath))
   )
     ? ensureHooksStateParentTable(existing)
     : existing
@@ -546,7 +586,13 @@ export function normalizeHookTrustKeyForLookup(key: string): string {
   const parsed = parseTrustKey(key)
   // Why: fold by path shape, not host platform — hook sources on WSL and SSH
   // Windows remotes need the same folding when Orca runs on macOS or Linux.
-  const foldedPath = normalizeCodexProjectPathForLookup(parsed ? parsed.sourcePath : key)
+  const foldedPath = normalizeCodexProjectPathForLookup(
+    parsed
+      ? parsed.sourcePath.startsWith('//')
+        ? parsed.sourcePath
+        : normalizeCodexHookSourcePath(parsed.sourcePath)
+      : key
+  )
   return parsed
     ? `${foldedPath}:${parsed.eventLabel}:${parsed.groupIndex}:${parsed.handlerIndex}`
     : foldedPath

@@ -151,7 +151,8 @@ export function mutateRealHomeHooksPreservingUserTrust(args: {
   const baseRequest = resolveCodexTrustGrantHost({ kind: 'native' }).buildRequest({
     runtimeHomePath: args.runtimeHomePath,
     managedCommand: '',
-    expectedTrustKeys: []
+    expectedTrustKeys: [],
+    useDefaultCodexHome: true
   })
   // Why: inspection happens before the write, so an unavailable RPC aborts
   // without shifting a user's positional trust key.

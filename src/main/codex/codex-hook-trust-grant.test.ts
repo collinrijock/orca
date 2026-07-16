@@ -120,6 +120,19 @@ describe('grantManagedCodexHookTrust', () => {
     expect(getCodexTrustGrantDiagnostics()).toMatchObject({ granted: 1, fellBack: 0 })
   })
 
+  it('builds a default-home grant invocation without an inherited CODEX_HOME', () => {
+    const entries = [managedEntry('stop')]
+    const runner = vi.fn((_request: CodexHookTrustGrantRequest) => grantedSessionResult(entries))
+    _internals.setGrantSessionRunnerSync(runner)
+
+    expect(
+      grantManagedCodexHookTrust({ ...buildPlan(entries), useDefaultCodexHome: true })
+    ).toMatchObject({ lane: 'rpc' })
+    const invocation = runner.mock.calls[0]![0]!.invocation
+    expect(invocation.env?.CODEX_HOME).toBeUndefined()
+    expect(invocation.envToDelete).toContain('CODEX_HOME')
+  })
+
   it('skips the RPC session while the ledger grant still holds, and re-grants on config drift', () => {
     const entries = [managedEntry('session_start')]
     const runner = vi.fn(() => grantedSessionResult(entries))

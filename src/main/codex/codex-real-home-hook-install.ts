@@ -193,7 +193,8 @@ function installRealHomeCodexHook(userDataPath: string): RealHomeCodexHookLane {
     tomlPath: getRealHomeConfigTomlPath(),
     managedCommand: material.command,
     managedEntries,
-    host: { kind: 'native' }
+    host: { kind: 'native' },
+    useDefaultCodexHome: true
   })
   if (grant.lane === 'rpc') {
     return 'installed'

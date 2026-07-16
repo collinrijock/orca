@@ -1,8 +1,9 @@
 import {
   computeTrustKey,
   computeTrustedHash,
-  getCodexCanonicalTrustPath,
+  getCodexExplicitHomeHookSourcePath,
   normalizeHookTrustKeyForLookup,
+  normalizeCodexHookSourcePath,
   parseTrustKey,
   readHookTrustEntries,
   removeHookTrustEntries,
@@ -58,22 +59,26 @@ export function removeCodexManagedHookTrustEntries(options: {
   command: string
   managedEventLabels: ReadonlySet<CodexEventLabel>
   timeoutSec: number
+  /** Explicit native homes resolve their parent before hook discovery. */
+  sourceUsesExplicitCodexHome?: boolean
 }): void {
   const existingEntries = readHookTrustEntries(options.tomlPath)
   const ledgerHome = readCodexTrustGrantLedgerHomeForReconciliation(options.runtimeHomePath)
-  const canonicalSourcePath = getCodexCanonicalTrustPath(options.sourcePath)
+  const expectedSourcePath = options.sourceUsesExplicitCodexHome
+    ? getCodexExplicitHomeHookSourcePath(options.sourcePath)
+    : normalizeCodexHookSourcePath(options.sourcePath)
   const ownedKeys: string[] = []
   for (const [key, state] of existingEntries) {
     const parts = parseTrustKey(key)
     if (
       !parts ||
-      getCodexCanonicalTrustPath(parts.sourcePath) !== canonicalSourcePath ||
+      normalizeCodexHookSourcePath(parts.sourcePath) !== expectedSourcePath ||
       !options.managedEventLabels.has(parts.eventLabel)
     ) {
       continue
     }
     const expectedEntry: CodexTrustEntry = {
-      sourcePath: options.sourcePath,
+      sourcePath: expectedSourcePath,
       eventLabel: parts.eventLabel,
       groupIndex: parts.groupIndex,
       handlerIndex: parts.handlerIndex,

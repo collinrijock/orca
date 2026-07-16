@@ -116,7 +116,26 @@ describe('ensureRealHomeCodexHookState (install)', () => {
     const plan = grantMock.mock.calls[0]![0] as CodexManagedTrustGrantPlan
     expect(plan.runtimeHomePath).toBe(join(fakeHomeDir, '.codex'))
     expect(plan.host).toEqual({ kind: 'native' })
+    expect(plan.useDefaultCodexHome).toBe(true)
     expect(plan.managedEntries.every((entry) => entry.groupIndex === 0)).toBe(true)
+  })
+
+  it('keeps a symlinked default home logical in the keys sent to Codex', () => {
+    grantSucceeds()
+    const logicalHome = join(fakeHomeDir, '.codex')
+    const targetHome = join(fakeHomeDir, 'dotfiles-codex')
+    rmSync(logicalHome, { recursive: true })
+    mkdirSync(targetHome)
+    symlinkSync(targetHome, logicalHome)
+
+    expect(ensureRealHomeCodexHookState({ hooksEnabled: true, userDataPath: userDataDir })).toBe(
+      'installed'
+    )
+
+    const plan = grantMock.mock.calls[0]![0] as CodexManagedTrustGrantPlan
+    expect(
+      plan.managedEntries.map(computeTrustKey).every((key) => key.startsWith(logicalHome))
+    ).toBe(true)
   })
 
   it('keeps the managed lane for unknown top-level fields Codex cannot load', () => {

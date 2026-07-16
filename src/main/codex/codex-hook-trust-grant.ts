@@ -44,6 +44,8 @@ export type CodexManagedTrustGrantPlan = {
   /** Managed trust identities Orca just wrote (no trustedHash). */
   managedEntries: readonly CodexTrustEntry[]
   host: CodexTrustGrantHost
+  /** Match a pane where CODEX_HOME is absent instead of an explicit managed home. */
+  useDefaultCodexHome?: boolean
 }
 
 export type CodexTrustGrantFallbackReason =
@@ -226,7 +228,8 @@ export function grantManagedCodexHookTrust(
         resolvedHost.buildRequest({
           runtimeHomePath: plan.runtimeHomePath,
           managedCommand: plan.managedCommand,
-          expectedTrustKeys: expected.map(({ normalizedKey }) => normalizedKey)
+          expectedTrustKeys: expected.map(({ normalizedKey }) => normalizedKey),
+          useDefaultCodexHome: plan.useDefaultCodexHome
         })
       )
     } catch (error) {

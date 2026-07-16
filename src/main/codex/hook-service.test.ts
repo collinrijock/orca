@@ -5,7 +5,6 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
-  realpathSync,
   rmSync,
   symlinkSync,
   writeFileSync
@@ -17,7 +16,12 @@ import { spawn } from 'node:child_process'
 import { createServer } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { createManagedCommandMatcher, wrapPosixHookCommand } from '../agent-hooks/installer-utils'
-import { computeTrustedHash, upsertHookTrustEntriesInContent } from './config-toml-trust'
+import {
+  computeTrustedHash,
+  getCodexExplicitHomeHookSourcePath,
+  normalizeCodexHookSourcePath,
+  upsertHookTrustEntriesInContent
+} from './config-toml-trust'
 
 const { getPathMock, homedirMock } = vi.hoisted(() => ({
   getPathMock: vi.fn<(name: string) => string>(),
@@ -81,14 +85,14 @@ function escapeTomlBasicString(value: string): string {
   return value.replaceAll('\\', '\\\\').replaceAll('"', '\\"')
 }
 
-function hookTrustHeader(key: string): string {
-  const canonicalKey = canonicalizeHookTrustKeyForTest(key)
+function hookTrustHeader(key: string, useDefaultCodexHome = false): string {
+  const canonicalKey = canonicalizeHookTrustKeyForTest(key, useDefaultCodexHome)
   return /^[A-Za-z]:[\\/]|^\\\\/.test(canonicalKey) && !canonicalKey.includes("'")
     ? `[hooks.state.'${canonicalKey}']`
     : `[hooks.state."${escapeTomlBasicString(canonicalKey)}"]`
 }
 
-function canonicalizeHookTrustKeyForTest(key: string): string {
+function canonicalizeHookTrustKeyForTest(key: string, useDefaultCodexHome: boolean): string {
   const lastColon = key.lastIndexOf(':')
   const secondLast = lastColon === -1 ? -1 : key.lastIndexOf(':', lastColon - 1)
   const thirdLast = secondLast === -1 ? -1 : key.lastIndexOf(':', secondLast - 1)
@@ -96,15 +100,10 @@ function canonicalizeHookTrustKeyForTest(key: string): string {
     return key
   }
   const sourcePath = key.slice(0, thirdLast)
-  try {
-    // Why: mirrors getCodexCanonicalTrustPath so test expectations match the
-    // native raw-backslash keys Codex writes after hook approval on Windows.
-    return `${realpathSync.native(sourcePath)}${key.slice(thirdLast)}`
-  } catch {
-    return /^[A-Za-z]:[\\/]|^\\\\/.test(sourcePath)
-      ? `${sourcePath.replace(/\//g, '\\')}${key.slice(thirdLast)}`
-      : key
-  }
+  const trustSourcePath = useDefaultCodexHome
+    ? normalizeCodexHookSourcePath(sourcePath)
+    : getCodexExplicitHomeHookSourcePath(sourcePath)
+  return `${trustSourcePath}${key.slice(thirdLast)}`
 }
 
 function markHookTrustDisabled(toml: string, header: string): string {
@@ -473,7 +472,7 @@ describe('CodexHookService', () => {
     const runtimeToml = readFileSync(join(managedCodexHome, 'config.toml'), 'utf-8')
     expect(runtimeToml).toContain(hookTrustHeader(`${managedHooksPath}:stop:1:0`))
     expect(runtimeToml).toContain(hookTrustHeader(`${managedHooksPath}:stop:0:0`))
-    expect(runtimeToml).not.toContain(hookTrustHeader(`${systemHooksPath}:stop:0:0`))
+    expect(runtimeToml).not.toContain(hookTrustHeader(`${systemHooksPath}:stop:0:0`, true))
   })
 
   it('runs managed PostToolUse status before mirrored user hooks', () => {
@@ -521,7 +520,7 @@ describe('CodexHookService', () => {
     const runtimeToml = readFileSync(join(managedCodexHome, 'config.toml'), 'utf-8')
     expect(runtimeToml).toContain(hookTrustHeader(`${managedHooksPath}:post_tool_use:0:0`))
     expect(runtimeToml).toContain(hookTrustHeader(`${managedHooksPath}:post_tool_use:1:0`))
-    expect(runtimeToml).not.toContain(hookTrustHeader(`${systemHooksPath}:post_tool_use:0:0`))
+    expect(runtimeToml).not.toContain(hookTrustHeader(`${systemHooksPath}:post_tool_use:0:0`, true))
   })
 
   it('mirrors system user hook approvals when the system trust indices are stale', () => {
@@ -573,8 +572,8 @@ describe('CodexHookService', () => {
     expect(runtimeToml).toContain(hookTrustHeader(`${managedHooksPath}:stop:0:0`))
     expect(runtimeToml).toContain(hookTrustHeader(`${managedHooksPath}:stop:1:0`))
     expect(runtimeToml).toContain(hookTrustHeader(`${managedHooksPath}:stop:2:0`))
-    expect(runtimeToml).not.toContain(hookTrustHeader(`${systemHooksPath}:stop:0:0`))
-    expect(runtimeToml).not.toContain(hookTrustHeader(`${systemHooksPath}:stop:1:0`))
+    expect(runtimeToml).not.toContain(hookTrustHeader(`${systemHooksPath}:stop:0:0`, true))
+    expect(runtimeToml).not.toContain(hookTrustHeader(`${systemHooksPath}:stop:1:0`, true))
   })
 
   it('skips plugin-placeholder system hooks when mirroring into runtime CODEX_HOME', () => {
@@ -679,7 +678,7 @@ describe('CodexHookService', () => {
       )}\n`,
       'utf-8'
     )
-    const disabledPostCompactHeader = hookTrustHeader(`${systemHooksPath}:post_compact:0:0`)
+    const disabledPostCompactHeader = hookTrustHeader(`${systemHooksPath}:post_compact:0:0`, true)
     const systemToml = upsertHookTrustEntriesInContent('model = "system-model"\n', [
       {
         sourcePath: systemHooksPath,
@@ -719,8 +718,8 @@ describe('CodexHookService', () => {
     expect(runtimeToml).toContain(
       `${hookTrustHeader(`${managedHooksPath}:post_compact:0:0`)}\nenabled = false`
     )
-    expect(runtimeToml).not.toContain(hookTrustHeader(`${systemHooksPath}:pre_compact:0:0`))
-    expect(runtimeToml).not.toContain(hookTrustHeader(`${systemHooksPath}:post_compact:0:0`))
+    expect(runtimeToml).not.toContain(hookTrustHeader(`${systemHooksPath}:pre_compact:0:0`, true))
+    expect(runtimeToml).not.toContain(hookTrustHeader(`${systemHooksPath}:post_compact:0:0`, true))
   })
 
   it('removes runtime user hook trust after system approval is revoked', () => {
@@ -813,7 +812,7 @@ describe('CodexHookService', () => {
       })}\n`,
       'utf-8'
     )
-    const disabledStopHeader = hookTrustHeader(`${systemHooksPath}:stop:0:0`)
+    const disabledStopHeader = hookTrustHeader(`${systemHooksPath}:stop:0:0`, true)
     const systemToml = upsertHookTrustEntriesInContent('model = "system-model"\n', [
       {
         sourcePath: systemHooksPath,
@@ -1336,7 +1335,7 @@ describe('CodexHookService', () => {
         `${managedHooksPath}:permission_request:0:0`
       )
       const legacyPermissionHeader = `[hooks.state."${escapeTomlBasicString(
-        `${realpathSync.native(managedHooksPath).replace(/\\/g, '/')}:permission_request:0:0`
+        `${getCodexExplicitHomeHookSourcePath(managedHooksPath).replace(/\\/g, '/')}:permission_request:0:0`
       )}"]`
       const installedToml = readFileSync(runtimeTomlPath, 'utf-8')
       expect(installedToml).toContain(canonicalPermissionHeader)

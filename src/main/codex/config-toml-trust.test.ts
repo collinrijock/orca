@@ -14,13 +14,14 @@ import {
   writeFileSync
 } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { dirname, join } from 'node:path'
+import { join } from 'node:path'
 import { escapeRegex } from '../../shared/string-utils'
 import {
   computeTrustKey,
   computeTrustedHash,
   escapeTomlString,
-  getCodexCanonicalTrustPath,
+  getCodexExplicitHomeHookSourcePath,
+  normalizeCodexHookSourcePath,
   normalizeCodexProjectPathForLookup,
   normalizeCodexProjectPathForRevocationLookup,
   parseTrustKey,
@@ -277,7 +278,7 @@ describe('computeTrustKey', () => {
     ).toBe('/Users/thebr/.codex/hooks.json:pre_tool_use:0:0')
   })
 
-  it('uses Codex canonicalized source paths when hooks.json exists', () => {
+  it('lexically normalizes source paths without resolving default-home aliases', () => {
     const nestedDir = join(tmpDir, 'nested')
     mkdirSync(nestedDir)
     const hooksPath = join(nestedDir, '..', 'hooks.json')
@@ -291,7 +292,7 @@ describe('computeTrustKey', () => {
         handlerIndex: 0,
         command: 'irrelevant'
       })
-    ).toBe(`${realpathSync.native(hooksPath)}:user_prompt_submit:0:0`)
+    ).toBe(`${join(tmpDir, 'hooks.json')}:user_prompt_submit:0:0`)
   })
 
   it('preserves a hooks.json leaf symlink in the trust key', () => {
@@ -308,7 +309,7 @@ describe('computeTrustKey', () => {
         handlerIndex: 0,
         command: 'irrelevant'
       })
-    ).toBe(`${join(realpathSync.native(dirname(hooksPath)), 'hooks.json')}:stop:0:0`)
+    ).toBe(`${hooksPath}:stop:0:0`)
   })
 
   it.skipIf(process.platform === 'win32')(
@@ -317,7 +318,7 @@ describe('computeTrustKey', () => {
       const hooksPath = `/${join(tmpDir, 'hooks.json')}`
       writeFileSync(hooksPath, '{"hooks":{}}\n', 'utf-8')
 
-      expect(getCodexCanonicalTrustPath(hooksPath)).toBe(realpathSync.native(hooksPath))
+      expect(normalizeCodexHookSourcePath(hooksPath)).toBe(join(tmpDir, 'hooks.json'))
     }
   )
 
@@ -339,8 +340,22 @@ describe('computeTrustKey', () => {
   it('preserves literal backslashes in non-Windows-style fallback paths', () => {
     // Why: SSH/POSIX paths can legally contain `\` as a filename character;
     // only Windows-style separators should be normalized.
-    expect(getCodexCanonicalTrustPath('/tmp/with\\literal/hooks.json')).toBe(
+    expect(normalizeCodexHookSourcePath('/tmp/with\\literal/hooks.json')).toBe(
       '/tmp/with\\literal/hooks.json'
+    )
+  })
+
+  it('resolves an explicit home parent while preserving its hooks.json leaf symlink', () => {
+    const logicalHome = join(tmpDir, 'logical-home')
+    const targetHome = join(tmpDir, 'target-home')
+    const targetHooks = join(tmpDir, 'target-hooks.json')
+    mkdirSync(targetHome)
+    writeFileSync(targetHooks, '{"hooks":{}}\n', 'utf-8')
+    symlinkSync(targetHome, logicalHome)
+    symlinkSync(targetHooks, join(targetHome, 'hooks.json'))
+
+    expect(getCodexExplicitHomeHookSourcePath(join(logicalHome, 'hooks.json'))).toBe(
+      join(realpathSync.native(targetHome), 'hooks.json')
     )
   })
 })

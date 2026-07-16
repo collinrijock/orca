@@ -136,6 +136,7 @@ describe('real-home user hook trust rebasing', () => {
     })
 
     expect(requests).toHaveLength(2)
+    expect(requests[0]?.invocation.envToDelete).toContain('CODEX_HOME')
     const repair = requests[1]
     expect(repair?.operation).toBe('repair-user-hook-trust')
     if (repair?.operation === 'repair-user-hook-trust') {

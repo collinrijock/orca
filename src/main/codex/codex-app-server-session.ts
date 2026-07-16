@@ -6,6 +6,8 @@ export type CodexAppServerInvocation = {
   args: string[]
   /** Overlay applied on top of the inherited environment (for example, CODEX_HOME). */
   env?: Record<string, string>
+  /** Variables that would make this child select a different runtime than its caller. */
+  envToDelete?: readonly string[]
   /** Whole-session deadline; the Codex child is killed when it lapses. */
   timeoutMs: number
 }
@@ -52,8 +54,14 @@ export async function runCodexAppServerSession<T>(
   run: (requestRpc: CodexAppServerRequestRpc) => Promise<T>,
   spawnImpl: typeof spawn = spawn
 ): Promise<T> {
+  const childEnv = { ...process.env, ...invocation.env }
+  // Why: default-home RPCs must observe the same missing CODEX_HOME as the
+  // pane whose hook keys they inspect; omission alone would inherit Orca's value.
+  for (const key of invocation.envToDelete ?? []) {
+    delete childEnv[key]
+  }
   const child = spawnImpl(invocation.command, invocation.args, {
-    env: { ...process.env, ...invocation.env },
+    env: childEnv,
     stdio: ['pipe', 'pipe', 'pipe'],
     windowsHide: true
   }) as ChildProcessWithoutNullStreams
