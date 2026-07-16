@@ -8,8 +8,8 @@ work; keep exact commands, runner identities, hashes, metrics, and residual gaps
 
 Date created: 2026-07-14<br>
 Last updated: 2026-07-15<br>
-Current phase: Milestone 6 / Work Package 5 bounded runtime transfer — **In progress — 2026-07-15, Codex implementation owner: disconnected raw `ssh2` session adapter is locally green; exact-head native proof is next**. Keep every capability disconnected from every production/default SSH path. Real Apple/SignPath rehearsals remain an explicit late gate and are not on this package's critical path.<br>
-Session checkpoint: **RAW SFTP SESSION ADAPTER LOCAL GREEN — 2026-07-15, Codex implementation owner** — `E-M6-SFTP-SESSION-ADAPTER-LOCAL-001` passes the nine-case purpose contract, optional-signal connection lifecycle, focused/broad/release tests, typecheck, full lint, format, max-lines, diff, protected-resolver, and isolation gates. It proves bound raw operations, raw-close callback settlement, and five-second force-close escalation at a disconnected factory; existing no-argument `SshConnection.sftp()` behavior is preserved. Commit/push and require exact-head all-six native and adjacent CI before any live adapter/tree composition. Do not add a tree-transfer importer, live SFTP/server claim, product/settings/fallback wiring, tuple enablement, publication, or default behavior. Merging to `main` remains prohibited, SignPath is deferred, and legacy remains the production default.<br>
+Current phase: Milestone 6 / Work Package 5 bounded runtime transfer — **In progress — 2026-07-15, Codex implementation owner: disconnected raw `ssh2` session adapter is exact-head green; live adapter/tree composition audit is next**. Keep every capability disconnected from every production/default SSH path. Real Apple/SignPath rehearsals remain an explicit late gate and are not on this package's critical path.<br>
+Session checkpoint: **RAW SFTP SESSION ADAPTER EXACT-HEAD GREEN — 2026-07-15, Codex implementation owner** — `E-M6-SFTP-SESSION-ADAPTER-CI-001` closes all-six primary native, both Linux supplement, Windows x64 floor, PR Checks, Golden E2E, and computer-use proof for exact implementation commit `fbec34cf1`; Windows arm64 retains only the declared hosted build-26200 versus required-26100 rejection after complete runtime smoke. Audit the smallest disconnected live adapter/tree composition next, including a concrete real connection-force-close owner and OpenSSH SFTP server. Do not credit live transfer, server filesystem/modes, full-size network metrics, product/settings/fallback wiring, tuple enablement, publication, or default behavior from native callback mocks. Merging to `main` remains prohibited, SignPath is deferred, and legacy remains the production default.<br>
 Primary design: [SSH relay GitHub Release plan](./2026-07-14-ssh-relay-github-release-plan.html)<br>
 Motivating issues: [#8450](https://github.com/stablyai/orca/issues/8450), [#1693](https://github.com/stablyai/orca/issues/1693)
 
@@ -17149,6 +17149,63 @@ config/scripts/ssh-relay-runtime-workflow.test.mjs` — PASS, 7/7 in 356 ms. The
   bundled-Node verification/install/publish/launch and every product/Beta/settings/fallback/tuple/
   publication/default path remain absent; legacy remains the sole production/default path and
   SignPath remains deferred. Exact-head all-six native and adjacent CI is required next.
+
+### E-M6-SFTP-SESSION-ADAPTER-CI-001 — all-six clients accept raw-session lifecycle contracts
+
+- Date/owner/head: 2026-07-15, Codex implementation owner; exact implementation commit
+  `fbec34cf128c3800738d48264ab8b471148b7d57` on draft PR
+  [#8741](https://github.com/stablyai/orca/pull/8741).
+- Native workflow: SSH Relay Runtime Artifacts run
+  [29510291373](https://github.com/stablyai/orca/actions/runs/29510291373). All six primary Node
+  24.18.0 jobs pass the nine-case raw-session suite, complete contract set, deterministic build/
+  smoke, full-size extraction/cache/scan/stream, and evidence upload: Linux x64
+  [87661707668](https://github.com/stablyai/orca/actions/runs/29510291373/job/87661707668), Darwin arm64
+  [87661707691](https://github.com/stablyai/orca/actions/runs/29510291373/job/87661707691), Darwin x64
+  [87661707695](https://github.com/stablyai/orca/actions/runs/29510291373/job/87661707695), Windows arm64
+  [87661707709](https://github.com/stablyai/orca/actions/runs/29510291373/job/87661707709), Linux arm64
+  [87661707745](https://github.com/stablyai/orca/actions/runs/29510291373/job/87661707745), and Windows x64
+  [87661707769](https://github.com/stablyai/orca/actions/runs/29510291373/job/87661707769).
+- Purpose/native totals: every client passes all nine new cases with no suite skip: Linux x64 20 ms,
+  Linux arm64 15 ms, Darwin x64 26 ms, Darwin arm64 9 ms, Windows x64 26 ms, and Windows arm64
+  18 ms. Overall totals are 765 passed / one declared skip on each Linux client, 764 passed / two
+  declared skips on each Darwin client, and 752 passed / 18 declared skips on each Windows client.
+- Exact full-size client baselines remain green: Linux x64 34 files / 124,846,430 bytes, stream
+  186.439686 ms / 262,144 incremental RSS bytes; Linux arm64 34 / 122,865,324,
+  139.640399 ms / 655,360; Darwin x64 35 / 124,316,655, 463.918131 ms / 294,912; Darwin arm64
+  35 / 122,027,869, 150.561458 ms / 98,304; Windows x64 42 / 96,527,161, 188.4208 ms /
+  4,845,568; Windows arm64 42 / 85,213,511, 357.8897 ms / 1,687,552. Every existing cold/warm/
+  scan/stream/retention/eviction budget passes. These remain client-source regression baselines, not
+  live SFTP network measurements.
+- Baselines: Linux arm64 supplement
+  [87662625445](https://github.com/stablyai/orca/actions/runs/29510291373/job/87662625445), Linux x64
+  supplement
+  [87662625495](https://github.com/stablyai/orca/actions/runs/29510291373/job/87662625495), and Windows
+  x64 floor [87664691249](https://github.com/stablyai/orca/actions/runs/29510291373/job/87664691249)
+  pass. Windows x64 verifies 42 files / 96,527,161 bytes, Node/PTY/watcher/two-second settlement in
+  5,367.371 ms at 49,827,840 RSS, and completes verification in 6,575.312 ms on build 20348. Windows
+  arm64 floor [87664691235](https://github.com/stablyai/orca/actions/runs/29510291373/job/87664691235)
+  retains only the declared hosted-image rejection: build 26200 observed versus 26100 required.
+  Before that rejection it verifies 42 files / 85,213,511 bytes and Node/PTY/watcher/two-second
+  settlement in 6,086.7266 ms at 48,390,144 RSS; complete verification is 7,972.4327 ms.
+- Adjacent exact-head workflows pass: PR Checks run
+  [29510290584](https://github.com/stablyai/orca/actions/runs/29510290584), verify job
+  [87661655083](https://github.com/stablyai/orca/actions/runs/29510290584/job/87661655083); Golden E2E
+  run [29510290671](https://github.com/stablyai/orca/actions/runs/29510290671), Linux job
+  [87661655199](https://github.com/stablyai/orca/actions/runs/29510290671/job/87661655199) and macOS
+  job [87661655233](https://github.com/stablyai/orca/actions/runs/29510290671/job/87661655233);
+  computer-use run [29510290118](https://github.com/stablyai/orca/actions/runs/29510290118), Ubuntu
+  native-smoke job
+  [87661653654](https://github.com/stablyai/orca/actions/runs/29510290118/job/87661653654) and Windows
+  native-smoke job
+  [87661653716](https://github.com/stablyai/orca/actions/runs/29510290118/job/87661653716).
+- Boundary/residual gaps: the suite uses an EventEmitter callback fake and does not create a raw
+  `SFTPWrapper` from an authenticated connection. Native clients therefore do not prove real
+  `ssh2` open/end/error/close ordering, connection-force-close, reconnect effects, or adapter/tree
+  composition against OpenSSH. They also do not prove server filesystem/mode behavior, full-size
+  network memory/cancellation, high-RTT one-versus-four transfer, `MaxSessions=1`, or a live remote
+  matrix cell. The adapter still has no non-test importer. Remote bundled-Node verification/install/
+  publish/launch and every product/Beta/settings/fallback/tuple/publication/default path remain
+  absent; legacy remains the sole production/default path and SignPath remains deferred.
 
 ## Accepted Gaps
 

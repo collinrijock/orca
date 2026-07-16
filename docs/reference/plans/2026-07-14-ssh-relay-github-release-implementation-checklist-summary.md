@@ -10,8 +10,12 @@ A checked box means the work has evidence in the detailed ledger. Design approva
 complete a box.
 
 Active checkpoint: **Milestone 6 / Work Package 5 bounded runtime transfer — disconnected raw `ssh2`
-session adapter is locally green; exact-head native proof is next, 2026-07-15, Codex implementation
-owner.** `E-M6-SFTP-SESSION-ADAPTER-LOCAL-001` passes 9/9 purpose, 70/70 adapter+connection,
+session adapter is exact-head green; live adapter/tree composition audit is next, 2026-07-15, Codex
+implementation owner.** `E-M6-SFTP-SESSION-ADAPTER-CI-001` closes all six primary native jobs, both
+Linux supplements, Windows x64 floor, PR Checks, Golden E2E, and computer-use on exact commit
+`fbec34cf1`; Windows arm64 retains only the declared hosted build-26200 versus required-26100
+rejection after complete runtime smoke. No live SFTP/tree or product/default claim is made.
+`E-M6-SFTP-SESSION-ADAPTER-LOCAL-001` passes 9/9 purpose, 70/70 adapter+connection,
 182 focused cases with one declared skip, 597 broad relay cases with five declared skips, 280/280
 release contracts, typecheck, full lint, formatting, max-lines, diff, protected-resolver, and
 isolation gates. No live SFTP/tree or product/default claim is made.
