@@ -3,12 +3,14 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os'
 import type * as Os from 'node:os'
 import { join } from 'node:path'
+import { existsSync } from 'node:fs'
 import { wrapPosixHookCommand } from '../agent-hooks/installer-utils'
 import {
+  computeTrustKey,
   computeTrustedHash,
+  escapeTomlString,
   parseTrustKey,
   readHookTrustEntries,
-  upsertHookTrustEntries,
   type CodexTrustEntry
 } from './config-toml-trust'
 import { codexAppServerCapabilityCache } from './codex-app-server-capability-cache'
@@ -70,6 +72,32 @@ afterEach(() => {
   vi.clearAllMocks()
 })
 
+// Why: model codex's own config/batchWrite — exactly one
+// `[hooks.state."<key>"]` table per reported key, keyed verbatim, blank-line
+// separated (the shape the real 0.144.x binary writes). Orca's
+// upsertHookTrustEntries writes BOTH separator variants for a Windows key (a
+// fallback-lane compat shim real codex never does), which would fabricate
+// duplicate tables on win32 that the RPC path never produces.
+function writeCodexLikeTrust(configPath: string, entries: CodexTrustEntry[]): void {
+  let content = existsSync(configPath) ? readFileSync(configPath, 'utf-8') : ''
+  if (!/^\[hooks\.state\][ \t]*$/m.test(content)) {
+    const separator = content.length === 0 ? '' : content.endsWith('\n') ? '' : '\n'
+    content += `${separator}[hooks.state]\n`
+  }
+  for (const entry of entries) {
+    const header = `[hooks.state."${escapeTomlString(computeTrustKey(entry))}"]`
+    // Why: replace any existing table for this exact key so re-grants upgrade
+    // in place instead of duplicating (mirrors codex's upsert merge strategy).
+    const existingBlock = new RegExp(
+      `(?:\\n)?${header.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\n(?:[^[\\n].*\\n?|\\n)*`,
+      'g'
+    )
+    content = content.replace(existingBlock, '')
+    content += `${content.endsWith('\n') ? '' : '\n'}\n${header}\ntrusted_hash = "${escapeTomlString(entry.trustedHash!)}"\n`
+  }
+  writeFileSync(configPath, content)
+}
+
 function installCodexLikeGrantRunner(): ReturnType<typeof vi.fn> {
   const codexHash = (key: string): string =>
     `sha256:codex-${parseTrustKey(key)?.eventLabel ?? 'unknown'}`
@@ -84,7 +112,7 @@ function installCodexLikeGrantRunner(): ReturnType<typeof vi.fn> {
         trustedHash: codexHash(key)
       }
     })
-    upsertHookTrustEntries(join(codexHome!, 'config.toml'), entries)
+    writeCodexLikeTrust(join(codexHome!, 'config.toml'), entries)
     return {
       outcome: 'granted' as const,
       wroteTrust: true,
