@@ -1879,8 +1879,9 @@ describe('generateBranchNameFromContext', () => {
       }
     )
 
-    expect(prompt).toContain('Additional user prompt:')
+    expect(prompt.startsWith('Prefer auth terminology.')).toBe(true)
     expect(prompt).toContain('Prefer auth terminology.')
+    expect(prompt).not.toContain('Additional user prompt:')
   })
 })
 
