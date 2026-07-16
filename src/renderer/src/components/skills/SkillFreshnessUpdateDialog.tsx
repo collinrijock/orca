@@ -16,14 +16,15 @@ import { Button } from '@/components/ui/button'
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle
 } from '@/components/ui/dialog'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { OnboardingInlineCommandTerminal } from '@/components/onboarding/OnboardingInlineCommandTerminal'
-import { FreshnessRow } from './skill-freshness-row'
+import { TooltipProvider } from '@/components/ui/tooltip'
+import { groupSkillFreshness } from './skill-freshness-grouping'
+import { SkillFreshnessGroup } from './skill-freshness-group'
 import {
   consumeSkillFreshnessUpdateDialogRequest,
   getSkillFreshnessUpdateDialogRequest,
@@ -32,7 +33,10 @@ import {
 
 type FreshnessSummaryKind = 'loading' | 'empty' | 'eligible' | 'current' | 'attention'
 
-function summarizeInventory(inventory: SkillFreshnessInventory | null): FreshnessSummaryKind {
+function summarizeInventory(
+  inventory: SkillFreshnessInventory | null,
+  hasBlockedGroup: boolean
+): FreshnessSummaryKind {
   if (!inventory) {
     return 'loading'
   }
@@ -42,11 +46,10 @@ function summarizeInventory(inventory: SkillFreshnessInventory | null): Freshnes
   if (inventory.eligibleUpdateNames.length > 0) {
     return 'eligible'
   }
-  // Why: an empty eligible set is either genuine success (everything current) or
-  // a blocked/unrecognized placement the safe rail cannot converge; say which.
-  return inventory.installations.every((installation) => installation.status === 'current')
-    ? 'current'
-    : 'attention'
+  // Why: with nothing eligible, the modal is either genuinely all-clear or has
+  // out-of-date skills it can't safely update; the group filter already dropped
+  // the up-to-date and unrecognized-only noise, so a blocked group is the signal.
+  return hasBlockedGroup ? 'attention' : 'current'
 }
 
 function SummaryHeadline({
@@ -101,7 +104,7 @@ function SummaryHeadline({
         <p className="text-xs text-muted-foreground">
           {translate(
             'auto.components.skills.SkillFreshnessUpdateDialog.attentionDescription',
-            'Open Details to see why a safe global update is not offered for each copy.'
+            'Open Update details to see why each one can’t be updated.'
           )}
         </p>
       </div>
@@ -121,12 +124,6 @@ function SummaryHeadline({
               { value0: eligibleCount }
             )}
       </p>
-      <p className="text-xs text-muted-foreground">
-        {translate(
-          'auto.components.skills.SkillFreshnessUpdateDialog.updateDescription',
-          'The command is pre-filled below. Review it, then press Enter yourself to run it.'
-        )}
-      </p>
     </div>
   )
 }
@@ -144,9 +141,14 @@ export function SkillFreshnessUpdateDialog(): React.JSX.Element {
   const inventoryAtTerminalExitRef = useRef<SkillFreshnessInventory | null>(null)
   const inventory = state.inventory
   const eligibleNames = useMemo(() => inventory?.eligibleUpdateNames ?? [], [inventory])
-  const eligibleNameSet = useMemo(() => new Set(eligibleNames), [eligibleNames])
+  const groups = useMemo(
+    () =>
+      inventory ? groupSkillFreshness(inventory.installations, inventory.eligibleUpdateNames) : [],
+    [inventory]
+  )
+  const hasBlockedGroup = groups.some((group) => group.status === 'cannot-update')
   const updateCommand = buildTargetedSkillUpdateCommand(eligibleNames)
-  const summaryKind = summarizeInventory(inventory)
+  const summaryKind = summarizeInventory(inventory, hasBlockedGroup)
 
   useEffect(() => {
     if (!open) {
@@ -214,24 +216,18 @@ export function SkillFreshnessUpdateDialog(): React.JSX.Element {
     notifyInstalledAgentSkillsChanged()
   }
 
-  const hasInstallations = Boolean(inventory && inventory.installations.length > 0)
+  const hasVisibleGroups = groups.length > 0
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="scrollbar-sleek max-h-[85vh] overflow-y-auto sm:max-w-xl">
+      <DialogContent
+        aria-describedby={undefined}
+        className="scrollbar-sleek max-h-[85vh] overflow-y-auto sm:max-w-xl"
+      >
         <DialogHeader>
           <DialogTitle>
-            {translate(
-              'auto.components.skills.SkillFreshnessUpdateDialog.title',
-              'Orca skill freshness'
-            )}
+            {translate('auto.components.skills.SkillFreshnessUpdateDialog.title', 'Update skills')}
           </DialogTitle>
-          <DialogDescription>
-            {translate(
-              'auto.components.skills.SkillFreshnessUpdateDialog.description',
-              'Orca compares installed copies with official snapshots. It never writes to skill folders or runs update commands automatically.'
-            )}
-          </DialogDescription>
         </DialogHeader>
 
         {state.error ? (
@@ -250,7 +246,7 @@ export function SkillFreshnessUpdateDialog(): React.JSX.Element {
             )}
             description={translate(
               'auto.components.skills.SkillFreshnessUpdateDialog.terminalDescription',
-              'The targeted command is pre-filled but not running. Review it and press Enter to continue.'
+              'Review the pre-filled command, then press Enter to run it.'
             )}
             ariaLabel={translate(
               'auto.components.skills.SkillFreshnessUpdateDialog.terminalAria',
@@ -267,11 +263,8 @@ export function SkillFreshnessUpdateDialog(): React.JSX.Element {
 
         {/* Why: Radix reads defaultOpen only on mount. Remount when a scan
             becomes blocked so the required diagnostic details actually open. */}
-        {hasInstallations ? (
-          <Collapsible
-            key={summaryKind === 'attention' ? 'attention' : 'default'}
-            defaultOpen={summaryKind === 'attention'}
-          >
+        {hasVisibleGroups ? (
+          <Collapsible key={hasBlockedGroup ? 'blocked' : 'default'} defaultOpen={hasBlockedGroup}>
             <CollapsibleTrigger asChild>
               <Button
                 type="button"
@@ -280,17 +273,18 @@ export function SkillFreshnessUpdateDialog(): React.JSX.Element {
                 className="group -ml-2 gap-1.5 text-muted-foreground"
               >
                 <ChevronDown className="size-3.5 transition-transform group-data-[state=open]:rotate-180" />
-                {translate('auto.components.skills.SkillFreshnessUpdateDialog.details', 'Details')}
+                {translate(
+                  'auto.components.skills.SkillFreshnessUpdateDialog.details',
+                  'Update details'
+                )}
               </Button>
             </CollapsibleTrigger>
-            <CollapsibleContent className="mt-1 divide-y divide-border/40 rounded-md border border-border/60 px-3">
-              {inventory?.installations.map((installation) => (
-                <FreshnessRow
-                  key={installation.id}
-                  installation={installation}
-                  eligibleNames={eligibleNameSet}
-                />
-              ))}
+            <CollapsibleContent className="mt-1 divide-y divide-border/40 rounded-md border border-border/60 p-3">
+              <TooltipProvider>
+                {groups.map((group) => (
+                  <SkillFreshnessGroup key={group.name} group={group} />
+                ))}
+              </TooltipProvider>
             </CollapsibleContent>
           </Collapsible>
         ) : null}

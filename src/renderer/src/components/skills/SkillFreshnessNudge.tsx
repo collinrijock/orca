@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react'
+import { Terminal } from 'lucide-react'
 import { toast } from 'sonner'
 import { useSkillFreshness } from '@/hooks/useSkillFreshness'
 import { translate } from '@/i18n/i18n'
@@ -111,6 +112,11 @@ export function SkillFreshnessNudge(): null {
       })
     }
     const names = new Set(unseen.map((candidate) => candidate.name))
+    // Why: name the outdated skills so the nudge is actionable without opening
+    // the modal; the sentence is translatable but the identifiers interpolate as-is.
+    const outdatedNames = [...names]
+      .sort((left, right) => left.localeCompare(right, 'en'))
+      .join(', ')
     const nextActive: ActiveFreshnessNudge = {
       id: '',
       fingerprint,
@@ -130,7 +136,8 @@ export function SkillFreshnessNudge(): null {
       {
         description: translate(
           'auto.components.skills.SkillFreshnessNudge.description',
-          'Orca recognized exact older official copies. Review the targeted update command before running it.'
+          'Update {{value0}} so agents follow the current instructions for this version of Orca.',
+          { value0: outdatedNames }
         ),
         // Why: the nudge lingers until the user acts. Ignoring it (app quit)
         // records nothing, so a still-outdated skill may prompt once next launch.
@@ -146,9 +153,16 @@ export function SkillFreshnessNudge(): null {
           }
         },
         action: {
-          label: translate(
-            'auto.components.skills.SkillFreshnessNudge.review',
-            'Review update command'
+          label: (
+            <span className="inline-flex items-center gap-1.5">
+              <Terminal className="size-3.5" />
+              {names.size === 1
+                ? translate('auto.components.skills.SkillFreshnessNudge.updateOne', 'Update skill')
+                : translate(
+                    'auto.components.skills.SkillFreshnessNudge.updateMany',
+                    'Update skills'
+                  )}
+            </span>
           ),
           onClick: () => {
             // Sonner closes action toasts without onDismiss; clear ownership so

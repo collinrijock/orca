@@ -175,12 +175,11 @@ describe('SkillFreshnessUpdateDialog', () => {
     await renderDialog()
     await openViaRequest()
 
+    expect(container?.textContent).toContain('Update skills')
     expect(container?.textContent).toContain('1 skill can be updated safely')
-    expect(container?.textContent).toContain('never writes to skill folders')
     expect(mocks.terminalProps.at(-1)).toMatchObject({
       command: 'npx skills update orca-cli --global',
-      description:
-        'The targeted command is pre-filled but not running. Review it and press Enter to continue.'
+      description: 'Review the pre-filled command, then press Enter to run it.'
     })
   })
 
@@ -328,10 +327,8 @@ describe('SkillFreshnessUpdateDialog', () => {
     await renderDialog()
     await openViaRequest()
 
-    expect(container?.textContent).toContain(
-      'another placement of this name prevents a safe global update'
-    )
-    expect(container?.textContent).toContain('Repository scope')
+    expect(container?.textContent).toContain('This skill is installed somewhere Orca')
+    expect(container?.textContent).toContain('Unrecognized')
     expect(container?.querySelector('[data-testid="update-terminal"]')).toBeNull()
   })
 
@@ -345,8 +342,7 @@ describe('SkillFreshnessUpdateDialog', () => {
     await renderDialog()
     await openViaRequest()
 
-    expect(container?.textContent).toContain('this placement cannot be updated safely in place')
-    expect(container?.textContent).not.toContain('another placement of this name')
+    expect(container?.textContent).toContain('This skill is installed somewhere Orca')
     expect(container?.textContent).toContain('Read only')
   })
 
