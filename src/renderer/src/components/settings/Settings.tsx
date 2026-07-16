@@ -216,7 +216,9 @@ function getSkillNavInstallStatus(skill: {
   if (!skill.installed) {
     return 'install'
   }
-  return skill.updateAvailable ? 'update-available' : 'installed'
+  // A freshness-tracked skill that's present with no eligible update is current, so it
+  // reads "Up to date" (pairs with "Update available"). Voice sets 'installed' directly.
+  return skill.updateAvailable ? 'update-available' : 'up-to-date'
 }
 
 function hasReadyVoiceModel(
