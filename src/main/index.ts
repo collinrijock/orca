@@ -2016,6 +2016,14 @@ app.whenReady().then(async () => {
     runtimeService.notifyEmulatorAutoAttachFromWatcher(worktreeId, info)
   })
   nativeTheme.themeSource = store.getSettings().theme ?? 'system'
+  if (codexRuntimeHome.isHostSystemDefaultRealHomeSelected()) {
+    // Why: establish capability before managed-hook reconciliation so an
+    // incapable host re-arms and completes the legacy real-home sweep now.
+    ensureRealHomeCodexHookState({
+      hooksEnabled: isAgentStatusHooksEnabled(store.getSettings()),
+      userDataPath: app.getPath('userData')
+    })
+  }
   if (shouldInstallManagedHooks(is.dev)) {
     // Why: the persisted off switch must run before any auto-install path so
     // users who removed Orca-managed hooks do not see them silently reappear on launch.
@@ -2024,14 +2032,6 @@ app.whenReady().then(async () => {
     } else {
       removeManagedAgentHooks()
     }
-  }
-  if (codexRuntimeHome.isHostSystemDefaultRealHomeSelected()) {
-    // Why: establish the lane before background rate-limit polling starts, so
-    // an incapable grant host never polls a home its PTYs will not use.
-    ensureRealHomeCodexHookState({
-      hooksEnabled: isAgentStatusHooksEnabled(store.getSettings()),
-      userDataPath: app.getPath('userData')
-    })
   }
   app.on('child-process-gone', (_event, details) => {
     recordProcessGoneCrash('child', details.type, details.reason, details.exitCode ?? null, {
