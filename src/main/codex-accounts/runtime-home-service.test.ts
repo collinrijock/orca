@@ -1003,6 +1003,9 @@ describe('CodexRuntimeHomeService', () => {
       getRuntimeCodexHomePath(),
       getSystemCodexHomePath()
     ])
+    service.setRealHomeLaneGate(() => false)
+    expect(service.getHostCodexHomePathsForSessionDiscovery()).toEqual([getRuntimeCodexHomePath()])
+    service.setRealHomeLaneGate(() => true)
     const perSpawnCustomHome = join(testState.fakeHomeDir, 'per-spawn-custom-codex-home')
     expect(service.isHostSystemDefaultRealHome({ CODEX_HOME: perSpawnCustomHome })).toBe(false)
     expect(service.prepareForCodexLaunch(undefined, { CODEX_HOME: perSpawnCustomHome })).toBe(

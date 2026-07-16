@@ -5,12 +5,16 @@ import { getSystemCodexHomePath } from './codex-home-paths'
 export function hasCustomCodexHomeOverride(env: NodeJS.ProcessEnv = process.env): boolean {
   const codexHome = env.CODEX_HOME?.trim()
   const orcaCodexHome = env.ORCA_CODEX_HOME?.trim()
+  const normalizedCodexHome = codexHome ? normalizePathForComparison(codexHome) : undefined
+  const normalizedOrcaCodexHome = orcaCodexHome
+    ? normalizePathForComparison(orcaCodexHome)
+    : undefined
   // Why: phase 1 owns only ~/.codex and can clean that path on downgrade. A
   // custom home needs cross-home ownership tracking before Orca may mutate it.
   return Boolean(
-    codexHome &&
-    codexHome !== orcaCodexHome &&
-    normalizePathForComparison(codexHome) !== normalizePathForComparison(getSystemCodexHomePath())
+    normalizedCodexHome &&
+    normalizedCodexHome !== normalizedOrcaCodexHome &&
+    normalizedCodexHome !== normalizePathForComparison(getSystemCodexHomePath())
   )
 }
 

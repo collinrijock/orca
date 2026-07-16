@@ -152,14 +152,18 @@ export async function runCodexAppServerSession<T>(
     pending.clear()
   }
 
+  let rejectDeadline: (error: Error) => void = () => {}
+  const deadlinePromise = new Promise<never>((_resolve, reject) => {
+    rejectDeadline = reject
+  })
   const deadline = setTimeout(() => {
     timedOut = true
-    child.kill('SIGKILL')
-    failPending(
-      new CodexAppServerTimeoutError(
-        `codex app-server session exceeded ${invocation.timeoutMs}ms (${invocation.command})`
-      )
+    const error = new CodexAppServerTimeoutError(
+      `codex app-server session exceeded ${invocation.timeoutMs}ms (${invocation.command})`
     )
+    child.kill('SIGKILL')
+    failPending(error)
+    rejectDeadline(error)
   }, invocation.timeoutMs)
 
   function sendLine(payload: Record<string, unknown>): void {
@@ -227,11 +231,16 @@ export async function runCodexAppServerSession<T>(
   }
 
   try {
-    await requestRpc('initialize', {
-      clientInfo: { name: 'orca_desktop', title: 'Orca', version: '0.0.0' }
-    })
-    notify('initialized')
-    return await body({ request: requestRpc, notify })
+    const session = async (): Promise<T> => {
+      await requestRpc('initialize', {
+        clientInfo: { name: 'orca_desktop', title: 'Orca', version: '0.0.0' }
+      })
+      notify('initialized')
+      return body({ request: requestRpc, notify })
+    }
+    // Why: the timeout owns the whole callback, including time between RPCs;
+    // killing the child alone cannot settle a callback awaiting unrelated work.
+    return await Promise.race([session(), deadlinePromise])
   } catch (error) {
     if (
       error instanceof Error &&

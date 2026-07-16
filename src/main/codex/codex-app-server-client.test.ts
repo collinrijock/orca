@@ -9,6 +9,7 @@ import {
   runCodexHookTrustGrantSession,
   type CodexHookTrustGrantRequest
 } from './codex-app-server-client'
+import { runCodexAppServerSession } from './codex-app-server-session'
 import {
   resolveCodexGrantEntryPath,
   runCodexHookTrustGrantSessionSync
@@ -234,6 +235,24 @@ describe('runCodexHookTrustGrantSession', () => {
     expect(result.outcome).toBe('verify-failed')
   })
 
+  it('rejects duplicate normalized aliases that conceal a missing expected key', async () => {
+    const aliasedKey = 'C:\\Users\\Ada\\.codex\\hooks.json:session_start:0:0'
+    const { request, recordFile } = createStubRequest({
+      scenario: 'happy',
+      hooks: [
+        managedHook(aliasedKey),
+        managedHook('c:/users/ada/.codex/hooks.json:session_start:0:0')
+      ],
+      expectedTrustKeys: [aliasedKey, 'C:\\Users\\Ada\\.codex\\hooks.json:stop:0:0'],
+      managedCommand: MANAGED_COMMAND
+    })
+
+    await expect(runCodexHookTrustGrantSession(request)).resolves.toMatchObject({
+      outcome: 'verify-failed'
+    })
+    expect(existsSync(recordFile)).toBe(false)
+  })
+
   it('decodes JSONL when a non-ASCII hook path is split across stdout chunks', async () => {
     const command = "/bin/sh '/tmp/rené/codex-hook.sh'"
     const key = '/home/rené/.codex/hooks.json:session_start:0:0'
@@ -294,6 +313,24 @@ describe('runCodexHookTrustGrantSession', () => {
     )
     // Why: the reap path must not stack the grace periods on top of the
     // deadline — a wedged server may ignore everything but SIGKILL.
+    expect(Date.now() - startedAt).toBeLessThan(5_000)
+    const childPid = Number(readFileSync(pidFile, 'utf8'))
+    expect(() => process.kill(childPid, 0)).toThrow()
+  })
+
+  it('bounds a callback that stalls between RPC requests', async () => {
+    const { request, pidFile } = createStubRequest({
+      scenario: 'happy',
+      hooks: [],
+      expectedTrustKeys: [],
+      managedCommand: MANAGED_COMMAND,
+      timeoutMs: 500
+    })
+
+    const startedAt = Date.now()
+    await expect(
+      runCodexAppServerSession(request.invocation, async () => new Promise<never>(() => {}))
+    ).rejects.toBeInstanceOf(CodexAppServerTimeoutError)
     expect(Date.now() - startedAt).toBeLessThan(5_000)
     const childPid = Number(readFileSync(pidFile, 'utf8'))
     expect(() => process.kill(childPid, 0)).toThrow()

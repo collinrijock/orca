@@ -50,7 +50,7 @@ export type HealMarkerSummary = {
 export function collectPendingHealThreads(paths: CodexSessionIndexHealPaths): PendingHealThread[] {
   const processedThreadIds = readProcessedHealThreadIds(paths)
   const pendingByThreadId = new Map<string, PendingHealThread>()
-  for (const line of readJsonlLines(paths.auditLogPath)) {
+  for (const line of readJsonlLines(paths.auditLogPath, true)) {
     if ((line.action !== 'hardlink' && line.action !== 'copy') || typeof line.target !== 'string') {
       continue
     }
@@ -118,11 +118,16 @@ export function appendHealLedgerRecord(
   }
 }
 
-function readJsonlLines(filePath: string): Record<string, unknown>[] {
+function readJsonlLines(filePath: string, throwOnReadFailure = false): Record<string, unknown>[] {
   let contents: string
   try {
     contents = readFileSync(filePath, 'utf-8')
-  } catch {
+  } catch (error) {
+    if (throwOnReadFailure && !isNotFoundError(error)) {
+      // Why: the audit is the heal work queue. Treating EACCES/EIO as empty
+      // would write a completion marker that permanently skips every session.
+      throw error
+    }
     return []
   }
   const lines: Record<string, unknown>[] = []
@@ -145,9 +150,16 @@ function readJsonlLines(filePath: string): Record<string, unknown>[] {
 export function readAuditLogSize(auditLogPath: string): number {
   try {
     return statSync(auditLogPath).size
-  } catch {
+  } catch (error) {
+    if (!isNotFoundError(error)) {
+      throw error
+    }
     return 0
   }
+}
+
+function isNotFoundError(error: unknown): boolean {
+  return (error as NodeJS.ErrnoException | null)?.code === 'ENOENT'
 }
 
 export function isHealMarkerCurrent(

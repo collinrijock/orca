@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import {
   appendFileSync,
+  existsSync,
   mkdtempSync,
   mkdirSync,
   readFileSync,
@@ -8,7 +9,7 @@ import {
   writeFileSync
 } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import type { CodexAppServerInvocation } from './codex-app-server-session'
 import { CODEX_SESSION_INDEX_HEAL_VERSION } from './codex-session-index-heal-state'
 import {
@@ -539,5 +540,20 @@ describe('runCodexSessionIndexHeal', () => {
 
     expect(summary).toMatchObject({ outcome: 'completed', healedThreads: 1 })
     expect(rig.readLog().threadIds).toEqual([currentId])
+  })
+
+  it('does not mark the heal complete when the audit cannot be read', async () => {
+    const rig = createHealRig({})
+    rig.paths.auditLogPath = dirname(rig.paths.auditLogPath)
+
+    await expect(
+      runCodexSessionIndexHeal(rig.paths, {
+        buildInvocation: rig.buildInvocation,
+        interBatchDelayMs: 0
+      })
+    ).rejects.toBeInstanceOf(Error)
+
+    expect(rig.readLog().serverStarts).toBe(0)
+    expect(existsSync(rig.paths.healMarkerPath)).toBe(false)
   })
 })

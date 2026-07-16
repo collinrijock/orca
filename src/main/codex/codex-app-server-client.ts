@@ -110,10 +110,14 @@ export async function runCodexHookTrustGrantSession(
 
       const listResult = await rpc.request('hooks/list', { cwds: [request.hooksListCwd] })
       const managedListings = collectHookListings(listResult).filter(matchManaged)
-      if (managedListings.length !== expectedKeys.size) {
+      const managedKeyCoverage = normalizedKeyCoverage(managedListings)
+      if (
+        managedListings.length !== expectedKeys.size ||
+        !setContainsEvery(managedKeyCoverage, expectedKeys)
+      ) {
         return {
           outcome: 'verify-failed',
-          reason: `hooks/list reported ${managedListings.length} of ${expectedKeys.size} expected managed entries`
+          reason: `hooks/list reported ${managedListings.length} entries covering ${managedKeyCoverage.size} of ${expectedKeys.size} expected managed entries`
         }
       }
 
@@ -133,14 +137,19 @@ export async function runCodexHookTrustGrantSession(
 
       const verifyResult = await rpc.request('hooks/list', { cwds: [request.hooksListCwd] })
       const verifiedListings = collectHookListings(verifyResult).filter(matchManaged)
+      const verifiedKeyCoverage = normalizedKeyCoverage(verifiedListings)
       const untrusted = verifiedListings.filter((listing) => listing.trustStatus !== 'trusted')
-      if (verifiedListings.length !== expectedKeys.size || untrusted.length > 0) {
+      if (
+        verifiedListings.length !== expectedKeys.size ||
+        !setContainsEvery(verifiedKeyCoverage, expectedKeys) ||
+        untrusted.length > 0
+      ) {
         return {
           outcome: 'verify-failed',
           reason:
             untrusted.length > 0
               ? `post-grant verify left ${untrusted.length} entries ${untrusted[0].trustStatus}`
-              : `post-grant verify reported ${verifiedListings.length} of ${expectedKeys.size} entries`
+              : `post-grant verify reported ${verifiedListings.length} entries covering ${verifiedKeyCoverage.size} of ${expectedKeys.size} expected entries`
         }
       }
       return {
@@ -155,4 +164,17 @@ export async function runCodexHookTrustGrantSession(
     },
     spawnImpl
   )
+}
+
+function normalizedKeyCoverage(listings: readonly CodexHookListing[]): Set<string> {
+  return new Set(listings.map((listing) => normalizeHookTrustKeyForLookup(listing.key)))
+}
+
+function setContainsEvery(values: ReadonlySet<string>, expected: ReadonlySet<string>): boolean {
+  for (const value of expected) {
+    if (!values.has(value)) {
+      return false
+    }
+  }
+  return true
 }

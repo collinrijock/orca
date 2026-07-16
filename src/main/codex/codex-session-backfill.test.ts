@@ -26,6 +26,7 @@ const { fsMockState } = vi.hoisted(() => ({
     failInstallLink: false,
     failInstallRename: false,
     failCopy: false,
+    failAuditMkdirOnce: false,
     failDirectoryPath: null as string | null,
     failLstatPath: null as string | null
   }
@@ -48,6 +49,17 @@ vi.mock('node:fs/promises', async () => {
   const actual = await vi.importActual<typeof NodeFsPromises>('node:fs/promises')
   return {
     ...actual,
+    mkdir: (...args: Parameters<typeof actual.mkdir>) => {
+      if (fsMockState.failAuditMkdirOnce && String(args[0]).includes('codex-session-backfill')) {
+        fsMockState.failAuditMkdirOnce = false
+        const error = new Error(
+          'EACCES: transient audit directory failure'
+        ) as NodeJS.ErrnoException
+        error.code = 'EACCES'
+        throw error
+      }
+      return actual.mkdir(...args)
+    },
     lstat: (...args: Parameters<typeof actual.lstat>) => {
       if (args[0] === fsMockState.failLstatPath) {
         const error = new Error('EACCES: path inaccessible') as NodeJS.ErrnoException
@@ -156,6 +168,7 @@ beforeEach(() => {
   fsMockState.failInstallLink = false
   fsMockState.failInstallRename = false
   fsMockState.failCopy = false
+  fsMockState.failAuditMkdirOnce = false
   fsMockState.failDirectoryPath = null
   fsMockState.failLstatPath = null
   fakeHomeDir = mkdtempSync(join(tmpdir(), 'orca-codex-backfill-home-'))
@@ -290,6 +303,18 @@ describe('backfillManagedCodexSessionsIntoSystemHome', () => {
 
     expect(first).toMatchObject({ linkedFiles: 1 })
     expect(second).toMatchObject({ linkedFiles: 0, copiedFiles: 0, skippedExistingFiles: 1 })
+  })
+
+  it('retries the same audit record after a transient directory failure', async () => {
+    fsMockState.failAuditMkdirOnce = true
+    writeManagedSession(join('2026', '05', '26', 'rollout-a.jsonl'), '{"id":"a"}\n')
+
+    const summary = await backfillManagedCodexSessionsIntoSystemHome(
+      resolveCodexSessionBackfillPaths()
+    )
+
+    expect(summary).toMatchObject({ linkedFiles: 1, failedFiles: 0 })
+    expect(readAuditActions()).toEqual(['hardlink', 'run-summary'])
   })
 
   it('falls back to copy when hardlinking fails across volumes', async () => {

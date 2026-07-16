@@ -217,7 +217,7 @@ export class CodexRuntimeHomeService {
 
   getHostCodexHomePathsForSessionDiscovery(): string[] {
     const homes = [this.getRuntimeHomePath()]
-    if (this.isHostSystemDefaultRealHomeSelected()) {
+    if (this.isHostSystemDefaultRealHome()) {
       // Why: nested Orca processes can retain an ambient managed CODEX_HOME;
       // explicitly include the real lane so its sessions remain discoverable.
       homes.push(getSystemCodexHomePath())
