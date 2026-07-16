@@ -9,7 +9,7 @@ import {
   unlinkSync,
   writeFileSync
 } from 'node:fs'
-import { dirname, join } from 'node:path'
+import { basename, dirname, join } from 'node:path'
 import { createHash, randomUUID } from 'node:crypto'
 import { renameFileWithWindowsRetry } from '../codex-accounts/fs-utils'
 import { foldWslUncPathCaseInsensitiveParts } from '../../shared/wsl-paths'
@@ -169,12 +169,13 @@ export function computeTrustKey(entry: CodexTrustEntry): string {
 }
 
 export function getCodexCanonicalTrustPath(sourcePath: string): string {
+  if (process.platform !== 'win32' && usesWindowsPathSeparators(sourcePath)) {
+    return normalizeWindowsPathForCodexLookup(sourcePath)
+  }
   try {
-    // Why: Codex canonicalizes trust paths before building config keys. On
-    // macOS, /var is a symlink to /private/var; trusting the raw path still
-    // leaves the TUI in review/trust prompts. On Windows, Codex 0.140 writes
-    // hook state keys with native raw backslashes under an explicit parent table.
-    return realpathSync.native(sourcePath)
+    // Why: Codex canonicalizes parent directories but preserves a hooks.json
+    // leaf symlink in trust keys, so resolving the whole path misses its RPC listing.
+    return join(realpathSync.native(dirname(sourcePath)), basename(sourcePath))
   } catch {
     return normalizeWindowsPathForCodexLookup(sourcePath)
   }

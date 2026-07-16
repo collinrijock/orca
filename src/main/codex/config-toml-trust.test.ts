@@ -14,7 +14,7 @@ import {
   writeFileSync
 } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { escapeRegex } from '../../shared/string-utils'
 import {
   computeTrustKey,
@@ -292,6 +292,23 @@ describe('computeTrustKey', () => {
         command: 'irrelevant'
       })
     ).toBe(`${realpathSync.native(hooksPath)}:user_prompt_submit:0:0`)
+  })
+
+  it('preserves a hooks.json leaf symlink in the trust key', () => {
+    const hooksPath = join(tmpDir, 'hooks.json')
+    const targetPath = join(tmpDir, 'dotfiles-hooks.json')
+    writeFileSync(targetPath, '{"hooks":{}}\n', 'utf-8')
+    symlinkSync(targetPath, hooksPath)
+
+    expect(
+      computeTrustKey({
+        sourcePath: hooksPath,
+        eventLabel: 'stop',
+        groupIndex: 0,
+        handlerIndex: 0,
+        command: 'irrelevant'
+      })
+    ).toBe(`${join(realpathSync.native(dirname(hooksPath)), 'hooks.json')}:stop:0:0`)
   })
 
   it('uses native Windows backslashes in the trust key Codex looks up', () => {
