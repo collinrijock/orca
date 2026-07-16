@@ -1,6 +1,11 @@
+import { execFileSync } from 'node:child_process'
 import { resolveCodexCommand } from '../codex-cli/command'
 import { getSpawnArgsForWindows } from '../win32-utils'
-import { buildWslCodexAppServerArgs } from '../codex-accounts/wsl-codex-command'
+import {
+  buildWslCodexAppServerArgs,
+  buildWslCodexIdentityArgs,
+  WSL_CODEX_AVAILABILITY_TIMEOUT_MS
+} from '../codex-accounts/wsl-codex-command'
 import type { CodexHookTrustGrantRequest } from './codex-app-server-client'
 import {
   binaryStampsMatch,
@@ -33,7 +38,7 @@ export type ResolvedCodexTrustGrantHost = {
 export function resolveCodexTrustGrantHost(host: CodexTrustGrantHost): ResolvedCodexTrustGrantHost {
   if (host.kind === 'wsl') {
     return {
-      binaryStamp: { kind: 'wsl', distro: host.distro },
+      binaryStamp: buildWslCodexBinaryStamp(host.distro),
       buildRequest: (input) => ({
         invocation: {
           command: 'wsl.exe',
@@ -66,6 +71,24 @@ export function resolveCodexTrustGrantHost(host: CodexTrustGrantHost): ResolvedC
         managedCommand: input.managedCommand
       }
     }
+  }
+}
+
+function buildWslCodexBinaryStamp(distro: string): CodexTrustGrantBinaryStamp | null {
+  try {
+    // Why: WSL PATH resolution happens inside the distro's login shell. The
+    // resolved path plus CLI version detects upgrades without assuming UNC access.
+    const output = execFileSync('wsl.exe', buildWslCodexIdentityArgs(distro), {
+      encoding: 'utf-8',
+      timeout: WSL_CODEX_AVAILABILITY_TIMEOUT_MS,
+      windowsHide: true
+    })
+    const lineBreak = output.indexOf('\n')
+    const path = lineBreak === -1 ? '' : output.slice(0, lineBreak).trim()
+    const version = lineBreak === -1 ? '' : output.slice(lineBreak + 1).trim()
+    return path && version ? { kind: 'wsl', distro, path, version } : null
+  } catch {
+    return null
   }
 }
 

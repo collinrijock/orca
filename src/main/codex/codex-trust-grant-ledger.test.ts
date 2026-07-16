@@ -37,7 +37,12 @@ describe('codex trust grant ledger', () => {
       entries: { 'k1:session_start:0:0': { signature: 'sig-1', trustedHash: 'sha256:a' } }
     })
     writeCodexTrustGrantLedgerHome(wslHome, {
-      binary: { kind: 'wsl', distro: 'Ubuntu' },
+      binary: {
+        kind: 'wsl',
+        distro: 'Ubuntu',
+        path: '/home/alice/.local/bin/codex',
+        version: 'codex-cli 1.2.3'
+      },
       entries: {
         '/home/alice/hooks.json:stop:0:0': { signature: 'sig-2', trustedHash: 'sha256:b' }
       }
@@ -49,7 +54,9 @@ describe('codex trust grant ledger', () => {
     })
     expect(readCodexTrustGrantLedgerHome(wslHome)?.binary).toEqual({
       kind: 'wsl',
-      distro: 'Ubuntu'
+      distro: 'Ubuntu',
+      path: '/home/alice/.local/bin/codex',
+      version: 'codex-cli 1.2.3'
     })
 
     removeCodexTrustGrantLedgerHome(hostHome)
@@ -76,18 +83,22 @@ describe('codex trust grant ledger', () => {
 
   it('matches binary stamps only on identical identity', () => {
     const stamp = { kind: 'native' as const, path: '/bin/codex', size: 1, mtimeMs: 2 }
+    const wslStamp = {
+      kind: 'wsl' as const,
+      distro: 'Ubuntu',
+      path: '/home/alice/.local/bin/codex',
+      version: 'codex-cli 1.2.3'
+    }
     expect(binaryStampsMatch(stamp, { ...stamp })).toBe(true)
     expect(binaryStampsMatch(stamp, { ...stamp, mtimeMs: 3 })).toBe(false)
     expect(binaryStampsMatch(stamp, { ...stamp, size: 9 })).toBe(false)
     expect(binaryStampsMatch(stamp, { ...stamp, path: '/other/codex' })).toBe(false)
     expect(binaryStampsMatch(stamp, null)).toBe(false)
     expect(binaryStampsMatch(null, null)).toBe(true)
-    expect(
-      binaryStampsMatch({ kind: 'wsl', distro: 'Ubuntu' }, { kind: 'wsl', distro: 'Ubuntu' })
-    ).toBe(true)
-    expect(
-      binaryStampsMatch({ kind: 'wsl', distro: 'Ubuntu' }, { kind: 'wsl', distro: 'Debian' })
-    ).toBe(false)
-    expect(binaryStampsMatch({ kind: 'wsl', distro: 'Ubuntu' }, stamp)).toBe(false)
+    expect(binaryStampsMatch(wslStamp, { ...wslStamp })).toBe(true)
+    expect(binaryStampsMatch(wslStamp, { ...wslStamp, distro: 'Debian' })).toBe(false)
+    expect(binaryStampsMatch(wslStamp, { ...wslStamp, path: '/opt/codex' })).toBe(false)
+    expect(binaryStampsMatch(wslStamp, { ...wslStamp, version: 'codex-cli 1.2.4' })).toBe(false)
+    expect(binaryStampsMatch(wslStamp, stamp)).toBe(false)
   })
 })

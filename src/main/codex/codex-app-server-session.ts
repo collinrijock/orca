@@ -156,6 +156,9 @@ export async function runCodexAppServerSession<T>(
   child.stdout.setEncoding('utf8').on('data', (chunk: string) => {
     stdoutBuffer += chunk
     if (Buffer.byteLength(stdoutBuffer) > STDOUT_LINE_MAX_BYTES) {
+      // Why: Windows process-tree termination is asynchronous; stop buffered
+      // chunks from spawning another taskkill for the same oversized response.
+      child.stdout.destroy()
       killCodexAppServerProcessTree(child)
       failPending(new Error('codex app-server emitted an oversized JSONL response'))
       return

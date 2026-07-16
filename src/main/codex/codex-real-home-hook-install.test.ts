@@ -231,6 +231,24 @@ describe('ensureRealHomeCodexHookState (install)', () => {
     expect(existsSync(getRealHooksJsonPath())).toBe(false)
   })
 
+  it('surfaces rollback failures to the retry boundary', () => {
+    const warning = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    grantMock.mockImplementation(() => {
+      rmSync(getRealHooksJsonPath())
+      mkdirSync(getRealHooksJsonPath())
+      return { lane: 'fallback', reason: 'unsupported' }
+    })
+
+    expect(ensureRealHomeCodexHookState({ hooksEnabled: true, userDataPath: userDataDir })).toBe(
+      'unavailable'
+    )
+
+    expect(warning).toHaveBeenCalledWith(
+      '[codex-real-home-hooks] ensure failed; staying on managed lane:',
+      expect.any(Error)
+    )
+  })
+
   it('does no hook-file or grant work on repeated unsupported launches', () => {
     grantUnavailable()
     expect(ensureRealHomeCodexHookState({ hooksEnabled: true, userDataPath: userDataDir })).toBe(

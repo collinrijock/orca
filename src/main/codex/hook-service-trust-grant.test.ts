@@ -41,8 +41,11 @@ import { CodexHookService, getCodexManagedHookInstallMaterial } from './hook-ser
 let tmpHome: string
 let userDataDir: string
 let previousUserDataPath: string | undefined
+let previousDisableTrustRpc: string | undefined
 
 beforeEach(() => {
+  previousDisableTrustRpc = process.env.ORCA_DISABLE_CODEX_TRUST_RPC
+  delete process.env.ORCA_DISABLE_CODEX_TRUST_RPC
   tmpHome = mkdtempSync(join(tmpdir(), 'orca-codex-home-'))
   userDataDir = mkdtempSync(join(tmpdir(), 'orca-codex-user-data-'))
   previousUserDataPath = process.env.ORCA_USER_DATA_PATH
@@ -63,7 +66,11 @@ afterEach(() => {
   trustGrantInternals.setGrantSessionRunnerSync(null)
   trustGrantInternals.resetDiagnostics()
   codexAppServerCapabilityCache.clear()
-  delete process.env.ORCA_DISABLE_CODEX_TRUST_RPC
+  if (previousDisableTrustRpc === undefined) {
+    delete process.env.ORCA_DISABLE_CODEX_TRUST_RPC
+  } else {
+    process.env.ORCA_DISABLE_CODEX_TRUST_RPC = previousDisableTrustRpc
+  }
   rmSync(tmpHome, { recursive: true, force: true })
   rmSync(userDataDir, { recursive: true, force: true })
   if (previousUserDataPath === undefined) {

@@ -333,19 +333,15 @@ function restoreRealHomeHooksJson(
   previousRaw: string | null,
   previousMode?: number
 ): void {
-  try {
-    if (previousRaw === null) {
-      if (existsSync(hooksJsonPath)) {
-        unlinkSync(hooksJsonPath)
-      }
-      return
+  if (previousRaw === null) {
+    if (existsSync(hooksJsonPath)) {
+      unlinkSync(hooksJsonPath)
     }
-    // Why: rollback is part of the safety boundary. Use the shared atomic
-    // writer so Windows file-lock retries and failed-temp cleanup are covered.
-    writeFileAtomically(hooksJsonPath, previousRaw, { mode: previousMode })
-  } catch (error) {
-    console.warn('[codex-real-home-hooks] failed to roll back hooks.json:', error)
+    return
   }
+  // Why: rollback is part of the safety boundary. Use the shared atomic
+  // writer so Windows file-lock retries and failed-temp cleanup are covered.
+  writeFileAtomically(hooksJsonPath, previousRaw, { mode: previousMode })
 }
 
 export const _internals = {

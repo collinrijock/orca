@@ -12,6 +12,19 @@ export function buildWslCodexAvailabilityArgs(distro: string): string[] {
   return buildWslCodexShellArgs(distro, command)
 }
 
+export function buildWslCodexIdentityArgs(distro: string): string[] {
+  const command = [
+    buildCodexPathLookup(),
+    'if [ -z "$resolved" ]; then',
+    "  printf '%s\\n' 'Codex CLI not found in the WSL login-shell PATH.' >&2",
+    '  exit 127',
+    'fi',
+    'printf \'%s\\n\' "$resolved"',
+    'exec "$resolved" --version'
+  ].join('\n')
+  return buildWslCodexShellArgs(distro, command)
+}
+
 export function buildWslCodexAppServerArgs(distro: string, linuxHomePath: string): string[] {
   const command = [
     buildCodexPathLookup(),

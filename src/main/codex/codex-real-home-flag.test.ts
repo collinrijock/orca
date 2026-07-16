@@ -1,10 +1,20 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { isCodexSystemDefaultRealHomeEnabled } from './codex-real-home-flag'
 
 const ENV_FLAG = 'ORCA_CODEX_SYSTEM_DEFAULT_REAL_HOME'
+let previousEnvFlag: string | undefined
+
+beforeEach(() => {
+  previousEnvFlag = process.env[ENV_FLAG]
+  delete process.env[ENV_FLAG]
+})
 
 afterEach(() => {
-  delete process.env[ENV_FLAG]
+  if (previousEnvFlag === undefined) {
+    delete process.env[ENV_FLAG]
+  } else {
+    process.env[ENV_FLAG] = previousEnvFlag
+  }
 })
 
 describe('isCodexSystemDefaultRealHomeEnabled', () => {

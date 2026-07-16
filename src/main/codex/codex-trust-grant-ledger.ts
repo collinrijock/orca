@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, statSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { getOrcaManagedCodexHomePath } from './codex-home-paths'
 import { normalizeCodexProjectPathForLookup } from './config-toml-trust'
@@ -12,11 +12,7 @@ import { normalizeCodexProjectPathForLookup } from './config-toml-trust'
 
 export type CodexTrustGrantBinaryStamp =
   | { kind: 'native'; path: string; size: number; mtimeMs: number }
-  // Why: there is no cheap way to stat the codex binary inside a WSL distro
-  // from the host, so WSL grants revalidate only on hook/config drift. A WSL
-  // codex upgrade that changes the hash algorithm re-grants on verify-fail of
-  // the next launch's status rather than pre-emptively.
-  | { kind: 'wsl'; distro: string }
+  | { kind: 'wsl'; distro: string; path: string; version: string }
 
 export type CodexTrustGrantLedgerEntry = {
   /** getCodexHookTrustSignature() of the granted hook identity. */
@@ -71,6 +67,14 @@ function readLedgerFile(ledgerPath: string): CodexTrustGrantLedgerFile {
   }
 }
 
+function persistLedgerFile(ledgerPath: string, file: CodexTrustGrantLedgerFile): void {
+  mkdirSync(dirname(ledgerPath), { recursive: true, mode: 0o700 })
+  writeFileSync(ledgerPath, `${JSON.stringify(file, null, 2)}\n`, {
+    encoding: 'utf-8',
+    mode: 0o600
+  })
+}
+
 export function readCodexTrustGrantLedgerHome(
   runtimeHomePath: string,
   ledgerPath = getCodexTrustGrantLedgerPath()
@@ -92,10 +96,7 @@ export function writeCodexTrustGrantLedgerHome(
 ): void {
   const file = readLedgerFile(ledgerPath)
   file.homes[getCodexTrustGrantHomeKey(runtimeHomePath)] = home
-  writeFileSync(ledgerPath, `${JSON.stringify(file, null, 2)}\n`, {
-    encoding: 'utf-8',
-    mode: 0o600
-  })
+  persistLedgerFile(ledgerPath, file)
 }
 
 export function removeCodexTrustGrantLedgerHome(
@@ -108,10 +109,7 @@ export function removeCodexTrustGrantLedgerHome(
     return
   }
   delete file.homes[homeKey]
-  writeFileSync(ledgerPath, `${JSON.stringify(file, null, 2)}\n`, {
-    encoding: 'utf-8',
-    mode: 0o600
-  })
+  persistLedgerFile(ledgerPath, file)
 }
 
 export function buildNativeCodexBinaryStamp(binaryPath: string): CodexTrustGrantBinaryStamp | null {
@@ -133,7 +131,13 @@ export function binaryStampsMatch(
     return recorded === null && current === null
   }
   if (recorded.kind === 'wsl' || current.kind === 'wsl') {
-    return recorded.kind === 'wsl' && current.kind === 'wsl' && recorded.distro === current.distro
+    return (
+      recorded.kind === 'wsl' &&
+      current.kind === 'wsl' &&
+      recorded.distro === current.distro &&
+      recorded.path === current.path &&
+      recorded.version === current.version
+    )
   }
   return (
     recorded.path === current.path &&
