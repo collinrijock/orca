@@ -8,8 +8,8 @@ work; keep exact commands, runner identities, hashes, metrics, and residual gaps
 
 Date created: 2026-07-14<br>
 Last updated: 2026-07-15<br>
-Current phase: Milestone 5 / Work Package 4 desktop resolver/cache — **In progress — 2026-07-15, Codex implementation owner: audit the next smallest remaining resolver/cache boundary after exact-head acceptance of disconnected warm/cold acquisition**. Require the eventual startup caller to supply Orca's pre-`app.setName()` canonical user-data path; keep production manifest/resources, proxy, SSH/settings/tuples/release publication/default behavior absent. Real Apple/SignPath rehearsals remain an explicit late gate and are not on this package's critical path.<br>
-Session checkpoint: **CI CLOSED / NEXT AUDIT — 2026-07-15, Codex implementation owner** — `E-M5-ARTIFACT-ACQUISITION-CI-001` closes acquisition commit `c170ff92c1c5c82c31048cf9a9245c13efdaddd1`: all six primary native Node 24 jobs, both Linux supplements, Windows x64 baseline, PR Checks, Golden E2E, and computer-use pass. Windows arm64 retains only the declared hosted build-26200 rejection against required 26100 after full runtime smoke. Real Linux/Windows cold→warm client-offline acquisition passes in every native contract command. No Electron/startup state, fallback classification, SSH/settings, tuple enablement, release publication, or default behavior is connected. Merging to `main` remains prohibited, SignPath is deferred, and legacy remains the production default.<br>
+Current phase: Milestone 5 / Work Package 4 desktop resolver/cache — **In progress — 2026-07-15, Codex implementation owner: checkpoint and prove the locally green disconnected marked Linux libc probe on exact-head native CI**. Keep this capability disconnected from host-evidence composition and every production/default SSH path. Real Apple/SignPath rehearsals remain an explicit late gate and are not on this package's critical path.<br>
+Session checkpoint: **LOCAL GREEN / CI REQUIRED — 2026-07-15, Codex implementation owner** — `E-M5-LIBC-DETECTION-LOCAL-001` passes 15/15 purpose, 46/46 focused+workflow, 365/365 non-full-size relay, 280/280 release-script, typecheck, lint, format, max-lines, reliability, localization, diff, and protected-resolver gates. Marked getconf/glibc, ldd glibc/musl, known-loader musl, noise/conflict/bounds, missing-command classification, and cancellation are covered. This is not live SSH/remote-distro evidence and no host-evidence composer, product caller, setting, transfer/install, fallback classifier, tuple enablement, release publication, or default behavior is connected. Merging to `main` remains prohibited, SignPath is deferred, and legacy remains the production default.<br>
 Primary design: [SSH relay GitHub Release plan](./2026-07-14-ssh-relay-github-release-plan.html)<br>
 Motivating issues: [#8450](https://github.com/stablyai/orca/issues/8450), [#1693](https://github.com/stablyai/orca/issues/1693)
 
@@ -1052,10 +1052,11 @@ Suggested concrete modules:
 ### Platform and libc selection
 
 - [ ] Reuse current OS/architecture detection without changing supported relay-platform parsing.
-- [ ] Add marked, noise-resistant, no-Node libc probes.
-- [ ] Prefer `getconf GNU_LIBC_VERSION` when present; parse only output following Orca’s marker.
-- [ ] Detect musl through marked `ldd --version` output and known loader paths without treating
-      arbitrary startup text as evidence.
+- [x] Add marked, noise-resistant, no-Node libc probes. (E-M5-LIBC-DETECTION-LOCAL-001)
+- [x] Prefer `getconf GNU_LIBC_VERSION` when present; parse only output following Orca’s marker.
+      (E-M5-LIBC-DETECTION-LOCAL-001)
+- [x] Detect musl through marked `ldd --version` output and known loader paths without treating
+      arbitrary startup text as evidence. (E-M5-LIBC-DETECTION-LOCAL-001)
 - [x] Validate required libc/libstdc++/kernel/OS versions against manifest constraints.
       E-M5-OFFLINE-SELECTION-LOCAL-001 validates Linux kernel/glibc/libstdc++/GLIBCXX, macOS, and
       Windows build/OpenSSH/PowerShell/.NET exact minima from a signature-verified manifest.
@@ -14616,7 +14617,7 @@ config/scripts/ssh-relay-runtime-workflow.test.mjs` — PASS, 4 files / 21 tests
   actual bounded downloader, Linux tar/Brotli and Windows ZIP strict publication, complete-tree
   verification, physical-root cold→warm lookup, and in-use lease.
 - Failure: the pre-existing `serializes concurrent writers and transfers ownership only after owner
-  release` test received `EPERM` renaming the owned lock to its release tombstone after the owner
+release` test received `EPERM` renaming the owned lock to its release tombstone after the owner
   handle closed. Test teardown then removed the root while the waiter was live, producing the
   secondary `ENOENT` creating its next pending directory. Combined contract result: 1 failed, 489
   passed, 13 skipped across 76 files in 26.94 s.
@@ -14633,7 +14634,7 @@ config/scripts/ssh-relay-runtime-workflow.test.mjs` — PASS, 4 files / 21 tests
 
 - Date/owner: 2026-07-15, Codex implementation owner.
 - Command: `pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1
-  src/main/ssh/ssh-relay-artifact-cache-lock-release.test.ts`.
+src/main/ssh/ssh-relay-artifact-cache-lock-release.test.ts`.
 - Result: expected FAIL, one failed suite / zero tests in 237 ms because the purpose-named
   `ssh-relay-artifact-cache-lock-release` module does not exist.
 - Fixed contract: 5 s/50 ms frozen bounds; retry only `EPERM`/`EACCES`; exact ownership recheck
@@ -14652,22 +14653,22 @@ config/scripts/ssh-relay-runtime-workflow.test.mjs` — PASS, 4 files / 21 tests
   a successfully renamed tombstone is recursively removed. There is no blind deletion of the live
   lock path.
 - Focused plus native-workflow oracle: `/usr/bin/time -l pnpm exec vitest run --config
-  config/vitest.config.ts --maxWorkers=1
-  src/main/ssh/ssh-relay-artifact-cache-lock-release.test.ts
-  src/main/ssh/ssh-relay-artifact-cache-lock.test.ts
-  config/scripts/ssh-relay-runtime-workflow.test.mjs` — PASS, 3 files / 24 tests in 1.42 s Vitest,
+config/vitest.config.ts --maxWorkers=1
+src/main/ssh/ssh-relay-artifact-cache-lock-release.test.ts
+src/main/ssh/ssh-relay-artifact-cache-lock.test.ts
+config/scripts/ssh-relay-runtime-workflow.test.mjs` — PASS, 3 files / 24 tests in 1.42 s Vitest,
   2.69 s wall, 132,562,944-byte maximum RSS. Seven purpose cases cover both sharing codes, exact
   ownership rechecks, displaced-successor preservation, 100 controlled waits over the exact 5 s
   budget, absent-path settlement, and unexpected rename/ownership error propagation. The workflow
   oracle proves the purpose suite occurs exactly once in both POSIX and PowerShell native commands.
 - Broader relay command: `/usr/bin/time -l pnpm exec vitest run --config
-  config/vitest.config.ts --maxWorkers=1 --silent=true src/main/ssh/ssh-relay-*.test.ts` — PASS,
+config/vitest.config.ts --maxWorkers=1 --silent=true src/main/ssh/ssh-relay-*.test.ts` — PASS,
   30 files / 339 tests; 3 declared full-size files/tests skipped; 21.01 s Vitest, 23.06 s wall,
   335,773,696-byte maximum RSS. An earlier quoted-glob invocation matched no files and exited 1;
   the exact unquoted checklist command above was then run and passed.
 - Release-script command: `/usr/bin/time -l pnpm exec vitest run --config
-  config/vitest.config.ts --maxWorkers=1 --silent=true
-  config/scripts/ssh-relay-runtime-*.test.mjs` — PASS, 50 files / 280 tests in 22.20 s Vitest,
+config/vitest.config.ts --maxWorkers=1 --silent=true
+config/scripts/ssh-relay-runtime-*.test.mjs` — PASS, 50 files / 280 tests in 22.20 s Vitest,
   25.44 s wall, 194,150,400-byte maximum RSS.
 - Repository gates: targeted `pnpm exec oxfmt --write` completes on five implementation/workflow
   files in 428 ms; the post-format focused/workflow suite passes 24/24. `pnpm typecheck` and
@@ -14769,8 +14770,8 @@ config/scripts/ssh-relay-runtime-workflow.test.mjs` — PASS, 4 files / 21 tests
 
 - Date/owner: 2026-07-15, Codex implementation owner.
 - Command: `pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1
-  src/main/ssh/ssh-relay-artifact-acquisition.test.ts
-  src/main/ssh/ssh-relay-artifact-acquisition-integration.test.ts`.
+src/main/ssh/ssh-relay-artifact-acquisition.test.ts
+src/main/ssh/ssh-relay-artifact-acquisition-integration.test.ts`.
 - Result: expected FAIL, two failed suites / zero tests in 616 ms because the purpose-named
   `ssh-relay-artifact-acquisition` module does not exist.
 - Fixed contract: nine purpose cases define unavailable/legacy zero-population short circuits,
@@ -14792,8 +14793,8 @@ config/scripts/ssh-relay-runtime-workflow.test.mjs` — PASS, 4 files / 21 tests
   checked before exposure. Cancellation or identity failure after lease acquisition releases the
   lease; every lower-layer error propagates without fallback classification.
 - Purpose/integration command: `pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1
-  src/main/ssh/ssh-relay-artifact-acquisition.test.ts
-  src/main/ssh/ssh-relay-artifact-acquisition-integration.test.ts` — PASS, 2 files / 11 tests in
+src/main/ssh/ssh-relay-artifact-acquisition.test.ts
+src/main/ssh/ssh-relay-artifact-acquisition-integration.test.ts` — PASS, 2 files / 11 tests in
   1.66 s. Nine purpose cases cover both short circuits, warm/download result shape and operation
   order, pre-abort, warm/cold post-lease cancellation, identity failure/release, and unclassified
   resolver/population errors. Two real Linux tar/Brotli and Windows ZIP cases pass exact signed
@@ -14801,21 +14802,21 @@ config/scripts/ssh-relay-runtime-workflow.test.mjs` — PASS, 4 files / 21 tests
   warm lookup: cold fetch count is one, the lease is released, and a second acquisition succeeds
   from cache while the next client fetch is configured to fail; total fetch count remains one.
 - Focused plus native workflow oracle: `/usr/bin/time -l pnpm exec vitest run --config
-  config/vitest.config.ts --maxWorkers=1
-  src/main/ssh/ssh-relay-artifact-acquisition.test.ts
-  src/main/ssh/ssh-relay-artifact-acquisition-integration.test.ts
-  config/scripts/ssh-relay-runtime-workflow.test.mjs` — PASS, 3 files / 18 tests in 2.90 s Vitest,
+config/vitest.config.ts --maxWorkers=1
+src/main/ssh/ssh-relay-artifact-acquisition.test.ts
+src/main/ssh/ssh-relay-artifact-acquisition-integration.test.ts
+config/scripts/ssh-relay-runtime-workflow.test.mjs` — PASS, 3 files / 18 tests in 2.90 s Vitest,
   5.50 s wall, 132,792,320-byte maximum RSS. Both purpose suites occur exactly once in POSIX and
   PowerShell native commands.
 - Broader relay command: `/usr/bin/time -l pnpm exec vitest run --config
-  config/vitest.config.ts --maxWorkers=1 --silent=true src/main/ssh/ssh-relay-*.test.ts` — PASS,
+config/vitest.config.ts --maxWorkers=1 --silent=true src/main/ssh/ssh-relay-*.test.ts` — PASS,
   32 files / 350 tests; 3 declared full-size files/tests skipped; accepted rerun 28.77 s Vitest,
   30.56 s wall, 243,253,248-byte maximum RSS. An earlier completed invocation returned only partial
   captured output from the command runner and is not counted; the exact command was rerun to an
   observed exit code 0 and complete summary.
 - Release-script command: `/usr/bin/time -l pnpm exec vitest run --config
-  config/vitest.config.ts --maxWorkers=1 --silent=true
-  config/scripts/ssh-relay-runtime-*.test.mjs` — PASS, 50 files / 280 tests in 22.48 s Vitest,
+config/vitest.config.ts --maxWorkers=1 --silent=true
+config/scripts/ssh-relay-runtime-*.test.mjs` — PASS, 50 files / 280 tests in 22.48 s Vitest,
   27.42 s wall, 195,969,024-byte maximum RSS.
 - Repository gates: targeted `pnpm exec oxfmt --write` completes on six implementation/workflow
   files in 472 ms. `pnpm typecheck` and `pnpm lint` pass; lint includes switch exhaustiveness, 41
@@ -14926,6 +14927,102 @@ config/vitest.config.ts --maxWorkers=1 --silent=true config/scripts/ssh-relay-ru
 - Remaining proof for this slice: commit the coherent package and require all six primary native
   Node 24 jobs plus adjacent PR/E2E gates before adding another desktop orchestration boundary.
 
+### E-M5-LIBC-DETECTION-AUDIT-001 — disconnected marked Linux libc evidence boundary
+
+- Date/owner: 2026-07-15, Codex implementation owner.
+- Audit: complete reads of the existing remote OS/architecture detection and tests, the signed-
+  manifest artifact selector and tests, the bounded process-output field scanner, the accepted
+  acquisition boundary, and every Milestone 5 platform/libc checklist requirement. The existing
+  platform parser must remain unchanged and the protected Node/npm resolver pair remains untouched.
+- Finding: the smallest coherent next package is the suggested purpose-named
+  `ssh-relay-libc-detection` module, not full host-evidence composition. It consumes an explicit SSH
+  connection and optional cancellation signal, performs one POSIX-shell/no-Node probe, and returns
+  only `{ family: glibc|musl, version? }` or `{ family: unknown }`. It prefers marked
+  `getconf GNU_LIBC_VERSION`; marked `ldd --version` and executable known musl-loader paths provide
+  conservative fallback evidence. Only complete Orca-marked segments count.
+- Safety contract: arbitrary startup text and unterminated/duplicated marker segments are ignored;
+  malformed, ambiguous, or conflicting marked candidates return unknown. A supported numeric libc
+  version grammar is exact. Ordinary missing commands/nonzero probe execution return unknown so a
+  later selector can classify compatibility; an `AbortError` propagates so cancellation can never
+  masquerade as legacy eligibility. The probe invokes no remote Node, npm, Python, Perl, checksum,
+  archive, download, or package operation.
+- Required RED: marked getconf preference; marked glibc and musl ldd cases; known-loader musl case;
+  unmarked startup-noise rejection; incomplete/duplicate/conflicting/malformed result rejection;
+  unavailable command classification; cancellation propagation; exact signal/command construction;
+  and native-workflow inclusion on POSIX and Windows clients. Record the executable missing-module
+  failure before adding implementation.
+- Deliberately absent: kernel/libstdc++/GLIBCXX/macOS/Windows/process-translation composition,
+  Electron/startup/product callers, live SSH evidence, SFTP/system-SSH transfer, cache acquisition
+  wiring, `ORCA_RELAY_PATH`, per-target Beta settings, fallback classification, tuple enablement,
+  release publication, and default behavior. The primary HTML plan is unchanged.
+
+### E-M5-LIBC-DETECTION-LOCAL-RED-001 — marked Linux libc probe is absent
+
+- Date/owner: 2026-07-15, Codex implementation owner.
+- Command: `pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1
+src/main/ssh/ssh-relay-libc-detection.test.ts`.
+- Result: expected FAIL, one failed suite / zero tests in 243 ms because the purpose-named
+  `ssh-relay-libc-detection` module does not exist.
+- Fixed contract: the initial 12 cases cover marked getconf/glibc, marked ldd glibc/musl,
+  known-loader musl,
+  unmarked noise, unterminated/malformed/duplicate/conflicting evidence, missing-command
+  classification, `AbortError` propagation, one 15-second cancellable exec, preferred source order,
+  exact known-loader globs, and absence of Node/npm/Python/Perl/archive/checksum commands. Three
+  bounded/concatenated-noise cases were added during implementation review and belong to the green
+  evidence below, not this recorded RED run.
+- Consumer disconnection: only the purpose suite imports the absent module. No platform parser,
+  host-evidence composer, product/SSH caller, setting, fallback, tuple, publication, or default path
+  changes.
+
+### E-M5-LIBC-DETECTION-LOCAL-001 — disconnected marked/no-Node Linux libc probe
+
+- Date/owner: 2026-07-15, Codex implementation owner.
+- Implementation: `ssh-relay-libc-detection.ts` performs one 15-second cancellable POSIX-shell
+  command and returns only exact glibc/musl family+version evidence or unknown. It emits complete
+  source-qualified markers around preferred `getconf GNU_LIBC_VERSION`, fallback `ldd --version`,
+  and the first executable known musl-loader glob. The client accepts only complete, unique marked
+  segments, bounds each segment to eight lines and each line to the shared 4,096-character scan
+  ceiling, requires strict two-to-four-component numeric versions, deduplicates identical evidence,
+  and returns unknown for absent, malformed, oversized, ambiguous, or conflicting candidates.
+  Ordinary execution failure returns unknown; `AbortError` propagates.
+- Purpose command: `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts
+--maxWorkers=1 src/main/ssh/ssh-relay-libc-detection.test.ts` — PASS, 1 file / 15 tests in 193 ms
+  Vitest, 1.02 s wall, 131,973,120-byte maximum RSS. Cases cover marked getconf/glibc, common ldd
+  glibc, ldd musl, known-loader musl, unmarked and marker-concatenated startup noise, unterminated/
+  malformed/duplicate/conflicting evidence, oversized line/segment rejection, ordinary failure,
+  cancellation propagation, one exact signal/15-second exec, source order, known-loader globs, and
+  absence of Node/npm/Python/Perl/archive/checksum commands.
+- Focused plus native-workflow oracle: `/usr/bin/time -l pnpm exec vitest run --config
+config/vitest.config.ts --maxWorkers=1 src/main/ssh/ssh-relay-libc-detection.test.ts
+src/main/ssh/ssh-relay-artifact-selector.test.ts
+src/main/ssh/ssh-remote-platform-detection.test.ts
+config/scripts/ssh-relay-runtime-workflow.test.mjs` — PASS, 4 files / 46 tests in 1.44 s Vitest,
+  2.67 s wall, 136,740,864-byte maximum RSS. The existing OS/architecture parser remains green and
+  unchanged; the workflow oracle requires this purpose suite exactly once in both POSIX and
+  PowerShell native commands.
+- Broader relay command: `/usr/bin/time -l pnpm exec vitest run --config
+config/vitest.config.ts --maxWorkers=1 --silent=true src/main/ssh/ssh-relay-*.test.ts` — PASS,
+  33 files / 365 tests; 3 declared full-size files/tests skipped; 19.61 s Vitest, 21.61 s wall,
+  261,455,872-byte maximum RSS.
+- Release-script command: `/usr/bin/time -l pnpm exec vitest run --config
+config/vitest.config.ts --maxWorkers=1 --silent=true
+config/scripts/ssh-relay-runtime-*.test.mjs` — PASS, 50 files / 280 tests in 23.82 s Vitest,
+  25.76 s wall, 190,906,368-byte maximum RSS.
+- Repository gates: `pnpm run typecheck`, targeted `oxlint`, targeted `oxfmt --check`, `pnpm lint`,
+  and `pnpm run check:max-lines-ratchet` pass. Lint includes switch exhaustiveness, 41 reliability
+  gates, no new max-lines bypass, bundled skill-guide verification, 9,837 localization references
+  and locale parity, and zero localization coverage candidates. Existing unrelated lint warnings
+  remain warnings. `git diff --check` passes and the protected Node/npm resolver pair has zero diff.
+  Local Node 26.0.0 emits only the expected Node-24 engine warning; exact Node 24 proof remains the
+  native CI gate.
+- Boundary/residual gaps: the new module is imported only by its purpose tests. It does not compose
+  kernel/libstdc++/GLIBCXX, macOS/Windows, or translation evidence and has no Electron/startup,
+  product SSH, cache acquisition, `ORCA_RELAY_PATH`, setting, transfer/install, fallback, tuple,
+  publication, or default caller. This local package does not prove real SSH, GNU/BusyBox/Alpine,
+  localization, `MaxSessions=1`, or remote output/channel-size behavior. Those live cells remain
+  open; legacy remains the sole production path. Require exact-head all-six native proof before the
+  next package.
+
 ## Accepted Gaps
 
 No product gap is accepted merely because it appears in this list. Each entry requires explicit
@@ -14984,11 +15081,11 @@ The project is not complete until every applicable item below is checked with ev
 
 ## Next Required Action
 
-Checkpoint the disconnected cold-cache population package and require exact-head Node 24 proof on
-Linux, macOS, and Windows x64/arm64. After that proof, audit the next smallest non-signing desktop
-orchestration boundary; do not provision production secrets/environments, add an Electron/startup
-consumer, embed unreviewed keys or manifest bytes, add SSH transfer/install, mode wiring, fallback,
-tuple enablement, release publication, or default behavior.
+Checkpoint the disconnected marked Linux libc probe and require exact-head Node 24 proof on Linux,
+macOS, and Windows x64/arm64 before auditing the next host-evidence slice. Do not compose full host
+evidence, provision production secrets/environments, add an Electron/startup consumer, embed
+unreviewed keys or manifest bytes, add SSH transfer/install, mode wiring, fallback, tuple enablement,
+release publication, or default behavior.
 Keep Node upstream `.tar.xz` inputs, Windows ZIP, `ORCA_RELAY_PATH`, existing desktop required-assets
 behavior, detached-signature byte encoding, Windows arm64 build 26100, macOS 13.5, Linux kernel 4.18,
 release-cut, desktop builds, publication, and every tuple separately gated.

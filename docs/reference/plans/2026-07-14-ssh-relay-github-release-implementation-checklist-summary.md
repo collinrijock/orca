@@ -9,9 +9,9 @@ keeps commands, hashes, runner identities, timings, and failure details.
 A checked box means the work has evidence in the detailed ledger. Design approval alone does not
 complete a box.
 
-Active checkpoint: **Milestone 5 / Work Package 4 desktop resolver/cache — audit the next smallest
-remaining resolver/cache boundary after exact-head acceptance of disconnected warm/cold
-acquisition, 2026-07-15, Codex implementation owner.**
+Active checkpoint: **Milestone 5 / Work Package 4 desktop resolver/cache — checkpoint and prove the
+locally green disconnected marked Linux libc probe on exact-head native CI, 2026-07-15, Codex
+implementation owner.**
 `E-M5-ARTIFACT-CACHE-RESOLUTION-CI-001` closes warm-cache commit
 `22031fa68` on all six native clients, both Linux supplements, Windows x64 baseline, PR Checks,
 Golden E2E, and computer-use; Windows arm64 remains the expected build-26200 rejection against 26100. `E-M5-ARTIFACT-CACHE-RESOLUTION-LOCAL-001` passes 9/9 purpose tests,
@@ -90,6 +90,26 @@ offline acquisition, and every full-size extraction/cache lifecycle remains insi
 memory budgets. Live GitHub/CDN/proxy/certificate behavior, manifest/startup adaptation, SSH,
 settings, fallback, tuple enablement, publication, and defaults remain open; legacy remains the sole
 production path.
+`E-M5-LIBC-DETECTION-AUDIT-001` fixes the next smallest package: one disconnected POSIX-shell,
+no-Node Linux libc probe. Only complete Orca-marked `getconf GNU_LIBC_VERSION`, `ldd --version`, or
+known musl-loader segments count; unmarked startup noise, incomplete/duplicate/malformed segments,
+and ambiguous/conflicting candidates return unknown. Ordinary unavailable probes remain
+compatibility evidence, while cancellation propagates. Kernel/libstdc++/GLIBCXX and macOS/Windows
+host-evidence composition, Electron/startup, live SSH, transfer/install, settings, fallback, tuple
+enablement, publication, and defaults stay absent.
+`E-M5-LIBC-DETECTION-LOCAL-RED-001` records the expected one-suite/zero-test missing-module failure
+before implementation; its initial 12-case contract fixes marked glibc/musl sources, noise and
+malformed/duplicate/conflict rejection, unavailable-command classification, cancellation
+propagation, one 15-second exec, and exact no-Node command construction. Three bounded/concatenated-
+noise cases are implementation-review hardening recorded only by the later green evidence.
+`E-M5-LIBC-DETECTION-LOCAL-001` passes 15/15 purpose, 46/46 focused+workflow, 365/365 non-full-size
+relay, 280/280 release-script, typecheck, lint, format, reliability, max-lines, localization, diff,
+and protected-resolver gates. One 15-second cancellable POSIX command prefers marked getconf,
+accepts exact marked glibc/musl ldd or known-loader evidence, bounds parsed segments/lines, returns
+unknown for missing/malformed/oversized/ambiguous/conflicting evidence, and propagates cancellation.
+The purpose suite now runs in both native workflow families. This remains unit/contract evidence,
+not live SSH or GNU/BusyBox/Alpine proof; full host composition and every production/default path
+remain absent. Exact-head all-six native proof is next.
 `E-M5-ARTIFACT-CACHE-ROOT-CI-001` closes the pure cache-root contract at exact head `aefcaa9a9`:
 all six primary native Node 24 jobs, both Linux supplements, Windows x64 baseline, PR Checks, Golden
 E2E, and computer-use pass; Windows arm64 build 26200 remains correctly gated against 26100. The
