@@ -8,6 +8,30 @@ const DOT_RGB = { r: 0xf5, g: 0x9e, b: 0x0b }
 const RING_RGB = { r: 0xff, g: 0xff, b: 0xff }
 
 /**
+ * Converts a template mask into a literal glyph for the attention state. A
+ * non-template image needs real RGB values because macOS no longer tints it.
+ */
+export function tintTrayTemplateForAttention(
+  base: NativeImage,
+  useLightGlyph: boolean
+): NativeImage {
+  const { width, height } = base.getSize()
+  if (width <= 0 || height <= 0) {
+    return base
+  }
+
+  const bitmap = Buffer.from(base.toBitmap())
+  const channel = useLightGlyph ? 0xff : 0x00
+  for (let offset = 0; offset < bitmap.length; offset += 4) {
+    bitmap[offset] = channel
+    bitmap[offset + 1] = channel
+    bitmap[offset + 2] = channel
+  }
+
+  return nativeImage.createFromBitmap(bitmap, { width, height })
+}
+
+/**
  * Returns a copy of `base` with a small amber attention dot composited into the
  * top-right corner. Electron's NativeImage has no compositing API, so we merge
  * the dot directly into the raw BGRA bitmap. Returns `base` unchanged if it has

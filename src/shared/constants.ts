@@ -186,7 +186,10 @@ function getDefaultWorkspaceDir(homeDir: string): string {
   return [trimmedHomeDir, 'orca', 'workspaces'].join(separator)
 }
 
-export function getDefaultSettings(homedir: string): GlobalSettings {
+export function getDefaultSettings(
+  homedir: string,
+  platform: NodeJS.Platform = typeof process === 'undefined' ? 'win32' : process.platform
+): GlobalSettings {
   return {
     workspaceDir: getDefaultWorkspaceDir(homedir),
     nestWorkspaces: true,
@@ -266,6 +269,7 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     terminalFocusFollowsMouse: false,
     windowBackgroundBlur: false,
     minimizeToTrayOnClose: false,
+    showMenuBarIcon: platform === 'darwin',
     terminalClipboardOnSelect: false,
     // Why: OSC 52 is a classic data-exfiltration vector (any process piping
     // untrusted output into the terminal can rewrite the clipboard). Keep the

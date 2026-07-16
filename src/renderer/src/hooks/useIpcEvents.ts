@@ -1214,6 +1214,15 @@ export function useIpcEvents(): void {
       })
     )
 
+    // Why: the tray/menu-bar "Settings…" item can fire before this listener
+    // attaches on a freshly created window; pull any one-shot intent left for
+    // us so the request is not lost to that race.
+    void window.api.ui.consumePendingOpenSettings().then((open) => {
+      if (open) {
+        useAppStore.getState().openSettingsPage()
+      }
+    })
+
     unsubs.push(
       window.api.ui.onOpenSetupGuide?.(() => {
         useAppStore.getState().openModal('setup-guide', { telemetrySource: 'help_menu' })

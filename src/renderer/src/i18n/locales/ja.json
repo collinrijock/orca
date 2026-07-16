@@ -31,6 +31,10 @@
         "portsToggleDescription": "ライブワークスペースポートを表示します。ワークスペーススコープのポートと外部リスナーの場合はこれをクリックします。",
         "antigravityToggleDescription": "アクティブなワークスペースの Antigravity サブスクリプション使用量を表示します。",
         "grokToggleDescription": "Grok CLI でサインインしている場合に Grok サブスクリプションのクレジット使用量を表示します。"
+      },
+      "menuBarIcon": {
+        "title": "メニューバーアイコンを表示",
+        "description": "macOS メニューバーに Orca のショートカットとアクティビティインジケーターを表示します。"
       }
     }
   },
@@ -67,7 +71,10 @@
     "quit": "終了",
     "minimizeNotice": {
       "body": "Orcaはシステムトレイで実行中です"
-    }
+    },
+    "activityWaiting": "Orca - アクティビティ待機中",
+    "settings": "設定...",
+    "checkForUpdates": "アップデートを確認..."
   },
   "worktreeJumpPalette": {
     "matchLabel": {

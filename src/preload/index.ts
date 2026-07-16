@@ -3167,6 +3167,8 @@ const api = {
       ipcRenderer.on('ui:openSettings', listener)
       return () => ipcRenderer.removeListener('ui:openSettings', listener)
     },
+    consumePendingOpenSettings: (): Promise<boolean> =>
+      ipcRenderer.invoke('ui:consumePendingOpenSettings'),
     onOpenSetupGuide: (callback: () => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent) => callback()
       ipcRenderer.on('ui:openSetupGuide', listener)

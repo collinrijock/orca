@@ -31,6 +31,10 @@
         "portsToggleDescription": "Show live workspace ports. Click it for workspace-scoped ports and external listeners.",
         "antigravityToggleDescription": "Show Antigravity subscription usage for the active workspace.",
         "grokToggleDescription": "Show Grok subscription credit usage when signed in via Grok CLI."
+      },
+      "menuBarIcon": {
+        "title": "Show Menu Bar Icon",
+        "description": "Keep an Orca shortcut and activity indicator in the macOS menu bar."
       }
     }
   },
@@ -67,7 +71,10 @@
     "quit": "Quit",
     "minimizeNotice": {
       "body": "Orca is still running in the system tray"
-    }
+    },
+    "activityWaiting": "Orca - activity waiting",
+    "settings": "Settings...",
+    "checkForUpdates": "Check for Updates..."
   },
   "worktreeJumpPalette": {
     "matchLabel": {

@@ -2752,6 +2752,8 @@ export type PreloadApi = {
     recordFeatureInteraction: (id: FeatureInteractionId) => Promise<PersistedUIState>
     onStateChanged: (callback: (ui: PersistedUIState) => void) => () => void
     onOpenSettings: (callback: () => void) => () => void
+    /** Consumes a one-shot tray/menu-bar "open settings" intent queued before mount. */
+    consumePendingOpenSettings: () => Promise<boolean>
     onOpenSetupGuide: (callback: () => void) => () => void
     onOpenFeatureTour: (callback: () => void) => () => void
     onOpenCrashReport: (callback: () => void) => () => void

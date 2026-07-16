@@ -313,6 +313,7 @@ describe('useIpcEvents zoom routing', () => {
         },
         agentStatus: { onSet: () => () => {} },
         ui: makeEvents({
+          consumePendingOpenSettings: () => Promise.resolve(false),
           onTerminalZoom: (listener: (direction: 'in' | 'out' | 'reset') => void) => {
             terminalZoomListenerRef.current = listener
             return () => {}
@@ -455,6 +456,7 @@ describe('useIpcEvents zoom routing', () => {
         },
         agentStatus: { onSet: () => () => {} },
         ui: makeEvents({
+          consumePendingOpenSettings: () => Promise.resolve(false),
           onTerminalZoom: (listener: (direction: 'in' | 'out' | 'reset') => void) => {
             terminalZoomListenerRef.current = listener
             return () => {}
@@ -666,6 +668,7 @@ describe('useIpcEvents rate-limit hydration', () => {
         },
         agentStatus: { onSet: () => () => {} },
         ui: makeEvents({
+          consumePendingOpenSettings: () => Promise.resolve(false),
           getZoomLevel: vi.fn(() => 0)
         })
       }
@@ -954,6 +957,7 @@ describe('useIpcEvents browser tab create routing', () => {
         ui: {
           onStateChanged: () => () => {},
           onOpenSettings: () => () => {},
+          consumePendingOpenSettings: () => Promise.resolve(false),
           onOpenFeatureTour: () => () => {},
           onToggleLeftSidebar: () => () => {},
           onToggleRightSidebar: () => () => {},
@@ -1176,6 +1180,7 @@ describe('useIpcEvents updater integration', () => {
         ui: {
           onStateChanged: () => () => {},
           onOpenSettings: () => () => {},
+          consumePendingOpenSettings: () => Promise.resolve(false),
           onOpenFeatureTour: () => () => {},
           onToggleLeftSidebar: () => () => {},
           onToggleRightSidebar: () => () => {},
@@ -1421,6 +1426,7 @@ describe('useIpcEvents updater integration', () => {
         ui: {
           onStateChanged: () => () => {},
           onOpenSettings: () => () => {},
+          consumePendingOpenSettings: () => Promise.resolve(false),
           onOpenFeatureTour: () => () => {},
           onToggleLeftSidebar: () => () => {},
           onToggleRightSidebar: () => () => {},
@@ -1862,6 +1868,7 @@ describe('useIpcEvents updater integration', () => {
         ui: {
           onStateChanged: () => () => {},
           onOpenSettings: () => () => {},
+          consumePendingOpenSettings: () => Promise.resolve(false),
           onOpenFeatureTour: () => () => {},
           onToggleLeftSidebar: () => () => {},
           onToggleRightSidebar: () => () => {},
@@ -2796,6 +2803,7 @@ describe('useIpcEvents browser tab close routing', () => {
         ui: {
           onStateChanged: () => () => {},
           onOpenSettings: () => () => {},
+          consumePendingOpenSettings: () => Promise.resolve(false),
           onOpenFeatureTour: () => () => {},
           onToggleLeftSidebar: () => () => {},
           onToggleRightSidebar: () => () => {},
@@ -3286,6 +3294,7 @@ describe('useIpcEvents browser tab close routing', () => {
         ui: {
           onStateChanged: () => () => {},
           onOpenSettings: () => () => {},
+          consumePendingOpenSettings: () => Promise.resolve(false),
           onOpenFeatureTour: () => () => {},
           onToggleLeftSidebar: () => () => {},
           onToggleRightSidebar: () => () => {},
@@ -3504,6 +3513,7 @@ describe('useIpcEvents browser tab close routing', () => {
         ui: {
           onStateChanged: () => () => {},
           onOpenSettings: () => () => {},
+          consumePendingOpenSettings: () => Promise.resolve(false),
           onOpenFeatureTour: () => () => {},
           onToggleLeftSidebar: () => () => {},
           onToggleRightSidebar: () => () => {},
@@ -3717,6 +3727,7 @@ describe('useIpcEvents browser tab close routing', () => {
         ui: {
           onStateChanged: () => () => {},
           onOpenSettings: () => () => {},
+          consumePendingOpenSettings: () => Promise.resolve(false),
           onOpenFeatureTour: () => () => {},
           onToggleLeftSidebar: () => () => {},
           onToggleRightSidebar: () => () => {},
@@ -3948,6 +3959,7 @@ describe('useIpcEvents CLI-created worktree activation', () => {
         ui: {
           onStateChanged: () => () => {},
           onOpenSettings: () => () => {},
+          consumePendingOpenSettings: () => Promise.resolve(false),
           onOpenFeatureTour: () => () => {},
           onToggleLeftSidebar: () => () => {},
           onToggleRightSidebar: () => () => {},
@@ -4205,6 +4217,7 @@ describe('useIpcEvents CLI-created worktree activation', () => {
         ui: {
           onStateChanged: () => () => {},
           onOpenSettings: () => () => {},
+          consumePendingOpenSettings: () => Promise.resolve(false),
           onOpenFeatureTour: () => () => {},
           onToggleLeftSidebar: () => () => {},
           onToggleRightSidebar: () => () => {},
@@ -4439,6 +4452,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
         ui: {
           onStateChanged: () => () => {},
           onOpenSettings: () => () => {},
+          consumePendingOpenSettings: () => Promise.resolve(false),
           onOpenFeatureTour: () => () => {},
           onToggleLeftSidebar: () => () => {},
           onToggleRightSidebar: () => () => {},
