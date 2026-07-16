@@ -1,5 +1,5 @@
 import type { ClientChannel } from 'ssh2'
-import type { SshRelayRuntimePosixFileChannel } from './ssh-relay-runtime-posix-file-destination'
+import type { SshRelayRuntimeCommandFileChannel } from './ssh-relay-runtime-command-file-destination'
 import type { SystemSshCommandChannel } from './system-ssh-command'
 
 export type SshRelayRuntimeSystemSshConnection = Readonly<{
@@ -134,7 +134,7 @@ function waitForSettlement(channel: SystemSshCommandChannel): Promise<void> {
   })
 }
 
-function adaptChannel(channel: SystemSshCommandChannel): SshRelayRuntimePosixFileChannel {
+function adaptChannel(channel: SystemSshCommandChannel): SshRelayRuntimeCommandFileChannel {
   validateChannel(channel)
   const settled = waitForSettlement(channel)
   const input = channel.stdin as unknown as {
@@ -184,7 +184,7 @@ export async function openSshRelayRuntimeSystemSshFileChannel(
   connection: SshRelayRuntimeSystemSshConnection,
   command: string,
   signal: AbortSignal
-): Promise<SshRelayRuntimePosixFileChannel> {
+): Promise<SshRelayRuntimeCommandFileChannel> {
   validateInput(connection, command, signal)
   // Why: the file destination owns this signal's bounded teardown; forwarding it would double-kill.
   const channel = (await connection.exec(command)) as SystemSshCommandChannel

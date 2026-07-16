@@ -8,8 +8,8 @@ work; keep exact commands, runner identities, hashes, metrics, and residual gaps
 
 Date created: 2026-07-14<br>
 Last updated: 2026-07-15<br>
-Current phase: Milestone 6 / Work Package 5 bounded runtime transfer — **In progress — 2026-07-15, Codex implementation owner: disconnected POSIX system-SSH/no-tar transfer composition**. Keep every capability disconnected from every production/default SSH path. Real Apple/SignPath rehearsals remain an explicit late gate and are not on this package's critical path.<br>
-Session checkpoint: **POSIX SYSTEM-SSH LIVE FULL-SIZE EXACT-HEAD GREEN / EVIDENCE COMMIT NEXT — 2026-07-15, Codex implementation owner** — `E-M6-POSIX-SYSTEM-SSH-TREE-LIVE-CI-001` proves restricted-primitive exact full-size transfer, tree integrity, exclusive collision behavior, cancellation cleanup, connection reuse, latency, RSS, and one/four-channel bounds on native Linux x64 and arm64. All six primary native jobs, both Linux supplements, Windows x64 floor, PR Checks, Golden E2E, and computer-use pass; the artifact run is red only for the declared Windows arm64 hosted build 26200 versus required 26100 mismatch after complete runtime verification. Commit and push this evidence only, then audit the next disconnected transfer package. Merging to `main` remains prohibited, SignPath is deferred, and legacy remains the production default.<br>
+Current phase: Milestone 6 / Work Package 5 bounded runtime transfer — **In progress — 2026-07-15, Codex implementation owner: disconnected Windows system-SSH bounded binary per-file destination**. Keep every capability disconnected from every production/default SSH path. Real Apple/SignPath rehearsals remain an explicit late gate and are not on this package's critical path.<br>
+Session checkpoint: **WINDOWS SYSTEM-SSH PER-FILE DESTINATION LOCALLY GREEN / NATIVE WINDOWS CI NEXT — 2026-07-15, Codex implementation owner** — `E-M6-WINDOWS-SYSTEM-SSH-FILE-LOCAL-001` proves the disconnected fixed-command binary receiver contract, bounded header ownership, generic lifecycle extraction, every prior POSIX regression, broad relay/release/static gates, and production isolation locally. The real PowerShell 5.1 case is explicitly skipped on macOS and earns no native claim; commit and push the exact package, then require native Windows x64/arm64 proof before closing it. Do not compose a remote tree, connect a product caller, change legacy upload/fallback/default behavior, enable a tuple, publish an artifact, or perform SignPath work in this package. Merging to `main` remains prohibited, SignPath is deferred, and legacy remains the production default.<br>
 Primary design: [SSH relay GitHub Release plan](./2026-07-14-ssh-relay-github-release-plan.html)<br>
 Motivating issues: [#8450](https://github.com/stablyai/orca/issues/8450), [#1693](https://github.com/stablyai/orca/issues/1693)
 
@@ -18135,6 +18135,98 @@ src/main/ssh/ssh-remote-node-resolution.ts src/main/ssh/ssh-remote-node-resoluti
   publish/launch, product/Beta/fallback/default behavior, tuple enablement, publication, Apple
   signing, or SignPath. Legacy remains the only production/default path.
 
+### E-M6-WINDOWS-SYSTEM-SSH-FILE-AUDIT-001 — bounded per-file receiver contract
+
+- Date/owner/base: 2026-07-15, Codex implementation owner; audit and purpose-test package atop exact
+  base `aba3f7c649b8412b40871d8c3a82938e0094739e`.
+- Scope: one disconnected per-file destination over the existing authenticated command-channel
+  abstraction. The client sends one fixed PowerShell 5.1/.NET receiver command, then a bounded binary
+  header containing protocol magic/version, strict UTF-8 path length, safe-integer payload length,
+  and path bytes, followed by exact raw payload bytes. No path or payload is embedded in PowerShell
+  source, a command argument, JSON, base64, or a whole-file buffer.
+- Remote contract: use `[Console]::OpenStandardInput()`, strict UTF-8 decoding, a 64 KiB payload
+  buffer, and `FileStream` with `FileMode.CreateNew`, `FileAccess.Write`, `FileShare.None`, and
+  sequential-scan intent. Reject malformed headers, path bounds, early EOF, and one extra byte. On
+  any post-create failure, close the stream before deleting only the file this receiver created.
+- Lifecycle contract: extract the already-proven command-file write/EOF/cancellation/forced-
+  settlement owner from the POSIX wrapper without changing behavior. Header acceptance is awaited
+  before returning the Windows destination; a header/open failure is joined with bounded channel
+  cleanup. The exact caller signal remains single-owned.
+- Required RED/green proof: purpose cases for fixed command/path separation, exact header bytes,
+  invalid input before channel open, retained-header cancellation, remote nonzero settlement,
+  zero-byte and chunked binary payloads, collision preservation, early EOF/extra-byte cleanup, and a
+  native Windows PowerShell 5.1 process oracle. Pin the suite exactly once in both native artifact
+  workflow command families and update the workflow oracle before implementation.
+- Explicit residual boundary: no Windows remote-tree/staging-root owner, case-collision scan, remote
+  capability classification/cache, live OpenSSH remote, full-size/runtime measurement, endpoint-
+  protection fault, long-path qualification, bundled-Node verification/install/publish/launch,
+  product/Beta/settings/fallback/tuple/publication/default behavior, or SignPath is included. Legacy
+  remains the only production/default path and every tuple stays disabled.
+
+### E-M6-WINDOWS-SYSTEM-SSH-FILE-LOCAL-RED-001 — audited destination is absent
+
+- Date/owner/base: 2026-07-15, Codex implementation owner; purpose test, native-workflow wiring, and
+  checklist-only diff atop exact base `aba3f7c649b8412b40871d8c3a82938e0094739e` on Apple arm64,
+  macOS 26.2 build 25C56, Node 26.0.0, pnpm 10.24.0.
+- Command: `pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1
+src/main/ssh/ssh-relay-runtime-windows-file-destination.test.ts
+config/scripts/ssh-relay-runtime-workflow.test.mjs`.
+- Result: the 9/9 native-workflow oracle cases pass and prove the purpose suite occurs exactly once
+  in both native artifact command families. The purpose suite fails before collection solely because
+  `./ssh-relay-runtime-windows-file-destination` does not exist. This is the intended RED boundary;
+  no production module has been added or changed.
+- Residual boundary: no PowerShell behavior or Windows runner claim follows from missing-module RED.
+  All audit, purpose, native Windows, POSIX regression, broad relay, static, and isolation gates remain
+  required.
+
+### E-M6-WINDOWS-SYSTEM-SSH-FILE-LOCAL-001 — bounded receiver package is locally green
+
+- Date/owner/base/runner: 2026-07-15, Codex implementation owner; uncommitted implementation,
+  purpose-test, workflow, and checklist package atop exact base
+  `aba3f7c649b8412b40871d8c3a82938e0094739e` on Apple arm64, macOS 26.2 build 25C56, Node 26.0.0,
+  pnpm 10.24.0. The local Node version is newer than the repository's Node 24 contract, and the real
+  PowerShell 5.1 purpose case is skipped off Windows, so exact-head native workflow proof remains
+  mandatory.
+- Implementation: extract the proven 250 ms graceful/2-second forced command-file lifecycle into
+  `ssh-relay-runtime-command-file-destination.ts` while retaining POSIX error identity and all 25
+  POSIX purpose cases. Add a disconnected Windows wrapper with an at-most 32,788-byte header,
+  32-KiB strict UTF-8 path bound, safe-integer payload size, fixed encoded receiver command,
+  64-KiB remote buffer, `CreateNew`/`FileShare.None`/sequential-scan stream, exact EOF/extra-byte
+  rejection, and owned-file cleanup. The existing legacy Windows uploader is unchanged.
+- Focused command: `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts
+--maxWorkers=1` with the Windows purpose, POSIX control/file/tree, system-channel, source-tree/scan/
+  stream, system-fallback, connection, and workflow-oracle suites. Result: 11 files, 234 passed and two
+  declared platform skips out of 236; 7.95 seconds real, 171,311,104-byte maximum RSS, 96,097,560-byte
+  peak footprint, zero swaps and block I/O. The Windows file suite contributes 14 passed plus one
+  macOS-skipped real-PowerShell case; the workflow oracle passes 9/9.
+- Broad relay command: `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts
+--maxWorkers=1 src/main/ssh/ssh-relay-*.test.ts`. Result: 51 files passed, five files skipped; 670
+  passed and eight declared skips out of 678; 23.96 seconds real, 248,102,912-byte maximum RSS,
+  96,163,264-byte peak footprint, zero swaps and block I/O.
+- Release-contract command: `/usr/bin/time -l pnpm exec vitest run --config
+config/vitest.config.ts --maxWorkers=1 config/scripts/ssh-relay-runtime-*.test.mjs`. Result: 50 files
+  and 282/282 cases pass; 14.35 seconds real, 189,628,416-byte maximum RSS, 95,769,976-byte peak
+  footprint, zero swaps and block I/O.
+- Static evidence: `/usr/bin/time -l pnpm typecheck` passes in 2.45 seconds real with
+  1,241,055,232-byte maximum RSS and 96,146,784-byte peak footprint. `/usr/bin/time -l pnpm lint`
+  passes in 20.18 seconds real with 2,063,761,408-byte maximum RSS and 96,343,488-byte peak footprint;
+  its 26 warnings are pre-existing outside this diff. Full lint proves switch exhaustiveness, 41
+  reliability gates, the 355-entry max-lines ratchet with no new bypass, bundled guides, and all
+  localization checks. Targeted `oxlint` and `oxfmt --check` pass.
+- Isolation evidence: `git diff --check` passes; `git diff --exit-code HEAD --
+src/main/ssh/ssh-remote-node-resolution.ts src/main/ssh/ssh-remote-node-resolution.test.ts` is empty.
+  An asserted non-test reference search finds the Windows destination export only in its owning
+  production module. The intended diff is limited to the generic lifecycle extraction, POSIX type/
+  wrapper delegation, system-channel type generalization, disconnected Windows module/purpose test,
+  native workflow/oracle wiring, and both checklist documents. No legacy uploader, product importer,
+  settings, Beta, fallback, tuple, publication, default-path, or signing behavior changes.
+- Residual boundary: local execution does not prove that the fixed script parses or behaves under
+  Windows PowerShell 5.1/.NET Framework 4.8. Exact-head native Windows x64/arm64 purpose proof and all
+  adjacent native regression cells remain required. A Windows remote tree/staging owner, live
+  OpenSSH, full-size runtime, endpoint-protection faults, long-path qualification, capability
+  classification/cache, remote verification/install/publish/launch, product/Beta/fallback/default
+  wiring, tuple enablement, publication, Apple signing, and SignPath remain absent.
+
 ## Accepted Gaps
 
 No product gap is accepted merely because it appears in this list. Each entry requires explicit
@@ -18193,10 +18285,11 @@ The project is not complete until every applicable item below is checked with ev
 
 ## Next Required Action
 
-Audit and RED-test only the smallest purpose-named live/full-size loopback OpenSSH proof that calls
-the exact disconnected POSIX system-SSH tree owner on target-native Linux x64/arm64 CI. Do not
-check the broad Milestone 6 SFTP or POSIX system-SSH items yet. Do not add an Electron/startup/product
-importer, per-target mode wiring, fallback, tuple enablement, release publication, or default behavior.
+Commit and push the exact `E-M6-WINDOWS-SYSTEM-SSH-FILE-LOCAL-001` package, then require the real
+PowerShell 5.1 process oracle on native Windows x64/arm64 plus all-six native and adjacent repository
+regression cells. Do not check the broad Milestone 6 Windows system-SSH item yet. Do not add a remote-
+tree owner, Electron/startup/product importer, per-target mode wiring, fallback, tuple enablement,
+release publication, or default behavior.
 Keep Node upstream `.tar.xz` inputs, Windows ZIP, `ORCA_RELAY_PATH`, existing desktop required-assets
 behavior, detached-signature byte encoding, Windows arm64 build 26100, macOS 13.5, Linux kernel 4.18,
 release-cut, desktop builds, publication, and every tuple separately gated.

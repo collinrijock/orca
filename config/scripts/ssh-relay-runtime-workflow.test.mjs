@@ -202,6 +202,7 @@ describe('SSH relay runtime artifact workflow', () => {
       'ssh-relay-runtime-source-stream.test.ts',
       'ssh-relay-runtime-posix-control-command.test.ts',
       'ssh-relay-runtime-posix-file-destination.test.ts',
+      'ssh-relay-runtime-windows-file-destination.test.ts',
       'ssh-relay-runtime-posix-tree-transfer.test.ts',
       'ssh-relay-runtime-system-ssh-file-channel.test.ts',
       'ssh-relay-runtime-sftp-file-destination.test.ts',
