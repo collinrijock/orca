@@ -124,7 +124,14 @@ export function hasReusableSessionParseCacheEntry(
   candidate: SessionFileCandidate,
   platform: NodeJS.Platform
 ): boolean {
-  return reusableEntry(candidate, platform) !== undefined
+  const entry = reusableEntry(candidate, platform)
+  if (!entry) {
+    return false
+  }
+  // Why: keep a prefetched cache hit resident until its later frontier slot is
+  // parsed; otherwise intervening misses could evict it after metadata was skipped.
+  storeEntry(candidate.file.path, entry)
+  return true
 }
 
 /**
