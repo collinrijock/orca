@@ -842,6 +842,13 @@ function installManagedHooksIntoWslRuntime(
     // Why: a successful re-grant replaces the ledger. Keep the previous
     // records long enough to prove ownership of stale canonical-path keys.
     const previousLedgerHome = readCodexTrustGrantLedgerHomeForReconciliation(runtimeHomePath)
+    // Why: Codex's verified RPC write must be the final config mutation. A
+    // host-side rewrite after verification can race or invalidate that grant.
+    removeStaleWslRuntimeManagedHookTrustEntries(
+      plan.tomlPath,
+      trustEntries,
+      previousLedgerHome ? [previousLedgerHome] : []
+    )
     const grant = grantManagedCodexHookTrust({
       runtimeHomePath,
       tomlPath: plan.tomlPath,
@@ -849,17 +856,10 @@ function installManagedHooksIntoWslRuntime(
       managedEntries: trustEntries,
       host: { kind: 'wsl', distro: plan.wslDistro, linuxRuntimeHome: plan.linuxRuntimeHome }
     })
-    if (grant.lane === 'rpc') {
-      removeStaleWslRuntimeManagedHookTrustEntries(
-        plan.tomlPath,
-        grant.entries,
-        previousLedgerHome ? [previousLedgerHome] : []
-      )
-    } else {
+    if (grant.lane === 'fallback') {
       // Why: WSL runtime homes may carry user hook approvals we did not rebuild
       // here; only upsert Orca's entries instead of sweeping the whole source.
       upsertHookTrustEntries(plan.tomlPath, trustEntries)
-      removeStaleWslRuntimeManagedHookTrustEntries(plan.tomlPath, trustEntries)
     }
   } catch (error) {
     return {

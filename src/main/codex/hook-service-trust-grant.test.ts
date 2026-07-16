@@ -7,6 +7,7 @@ import { wrapPosixHookCommand } from '../agent-hooks/installer-utils'
 import {
   computeTrustedHash,
   parseTrustKey,
+  readHookTrustEntries,
   upsertHookTrustEntries,
   type CodexTrustEntry
 } from './config-toml-trust'
@@ -160,7 +161,7 @@ describe('CodexHookService app-server trust grant lane', () => {
     })
   })
 
-  it('upgrades self-computed trust in place without duplicate tables', () => {
+  it('upgrades self-computed trust in place without duplicate logical entries', () => {
     prepareSystemHome()
     const service = new CodexHookService()
     process.env.ORCA_DISABLE_CODEX_TRUST_RPC = '1'
@@ -171,6 +172,9 @@ describe('CodexHookService app-server trust grant lane', () => {
 
     expect(service.install().state).toBe('installed')
     const upgraded = readFileSync(join(managedHome, 'config.toml'), 'utf-8')
+    // Why: the legacy Windows fallback intentionally writes slash variants;
+    // duplicate detection is about the normalized trust identity.
+    const upgradedEntries = readHookTrustEntries(join(managedHome, 'config.toml'))
     for (const eventLabel of [
       'session_start',
       'user_prompt_submit',
@@ -179,13 +183,12 @@ describe('CodexHookService app-server trust grant lane', () => {
       'post_tool_use',
       'stop'
     ]) {
-      const count = upgraded
-        .split('\n')
-        .filter(
-          (line) => line.startsWith('[hooks.state.') && line.includes(`:${eventLabel}:0:0`)
-        ).length
-      expect(count, `duplicate trust tables for ${eventLabel}`).toBe(1)
+      const count = [...upgradedEntries.keys()].filter((key) =>
+        key.endsWith(`:${eventLabel}:0:0`)
+      ).length
+      expect(count, `duplicate trust entries for ${eventLabel}`).toBe(1)
     }
+    expect(upgraded).toContain('sha256:codex-session_start')
   })
 
   it('leaves user trust byte-untouched while granting managed entries', () => {

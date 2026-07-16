@@ -522,7 +522,11 @@ describe('Codex WSL runtime hook install app-server grant lane', () => {
     const basePlan = createTestPlan()
     writeFileSync(basePlan.configPath, '{"hooks":{}}\n', 'utf-8')
     writeFileSync(basePlan.tomlPath, '', 'utf-8')
+    let staleKeyExpectedRemoved: string | null = null
     const runner = vi.fn((request: CodexHookTrustGrantRequest) => {
+      if (staleKeyExpectedRemoved) {
+        expect(readHookTrustEntries(basePlan.tomlPath).has(staleKeyExpectedRemoved)).toBe(false)
+      }
       const entries = request.expectedTrustKeys.map((key) => {
         const parsed = parseTrustKey(key)!
         return {
@@ -557,6 +561,7 @@ describe('Codex WSL runtime hook install app-server grant lane', () => {
     const oldKey = computeTrustKey(
       getManagedTrustEntry(oldPlan, expectedManagedCommand(oldPlan.commandScriptPath))
     )
+    staleKeyExpectedRemoved = oldKey
 
     const newPlan = {
       ...basePlan,

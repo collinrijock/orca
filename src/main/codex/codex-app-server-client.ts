@@ -1,5 +1,6 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { normalizeHookTrustKeyForLookup } from './config-toml-trust'
+import { waitForProcessExitUntil } from './codex-process-exit-deadline'
 
 // Why: Codex gates hooks on a `trusted_hash` it computes from a private
 // canonical-JSON identity. Orca used to replicate that algorithm
@@ -363,11 +364,10 @@ export async function runCodexHookTrustGrantSession(
     if (!exited) {
       // Why: the server exits promptly on stdin EOF; the grace period only
       // bounds a wedged child before the guaranteed SIGKILL reap.
-      const grace = new Promise<void>((resolve) => setTimeout(resolve, 1500))
-      await Promise.race([exitPromise, grace])
+      await waitForProcessExitUntil(exitPromise, 1500)
       if (!exited) {
         child.kill('SIGKILL')
-        await Promise.race([exitPromise, new Promise<void>((resolve) => setTimeout(resolve, 1000))])
+        await waitForProcessExitUntil(exitPromise, 1000)
       }
     }
     clearTimeout(deadline)
