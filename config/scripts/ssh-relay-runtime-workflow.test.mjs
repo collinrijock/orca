@@ -95,13 +95,13 @@ describe('SSH relay runtime artifact workflow', () => {
       (step) => step.name === 'Upload unpublished artifact evidence'
     )
     const measurementIndex = steps.findIndex(
-      (step) => step.name === 'Measure full-size desktop extraction boundary'
+      (step) => step.name === 'Measure full-size desktop extraction and cache boundaries'
     )
     const windowsBuildIndex = windowsSteps.findIndex(
       (step) => step.name === 'Build twice, inspect, smoke, and compare exact runtime'
     )
     const windowsMeasurementIndex = windowsSteps.findIndex(
-      (step) => step.name === 'Measure full-size desktop extraction boundary'
+      (step) => step.name === 'Measure full-size desktop extraction and cache boundaries'
     )
     const windowsUploadIndex = windowsSteps.findIndex(
       (step) => step.name === 'Upload unpublished artifact evidence'
@@ -123,6 +123,7 @@ describe('SSH relay runtime artifact workflow', () => {
       'ssh-relay-artifact-download.test.ts',
       'ssh-relay-artifact-extraction.test.ts',
       'ssh-relay-artifact-cache-lock.test.ts',
+      'ssh-relay-artifact-cache-entry.test.ts',
       'ssh-relay-runtime-identity.test.ts'
     ]) {
       // Why: portable desktop selection contracts need proof on every native runner family, not
@@ -131,6 +132,9 @@ describe('SSH relay runtime artifact workflow', () => {
     }
     expect(
       source.split('src/main/ssh/ssh-relay-artifact-extraction-full-size.test.ts')
+    ).toHaveLength(3)
+    expect(
+      source.split('src/main/ssh/ssh-relay-artifact-cache-entry-full-size.test.ts')
     ).toHaveLength(3)
     expect(source).toContain('pnpm install --frozen-lockfile --ignore-scripts')
     expect(source).toContain('--connect-timeout 20 --max-time 300 --retry 2')

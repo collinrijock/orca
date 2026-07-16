@@ -265,6 +265,7 @@ jobs:
             src/main/ssh/ssh-relay-artifact-download.test.ts \
             src/main/ssh/ssh-relay-artifact-extraction.test.ts \
             src/main/ssh/ssh-relay-artifact-cache-lock.test.ts \
+            src/main/ssh/ssh-relay-artifact-cache-entry.test.ts \
             src/main/ssh/ssh-relay-runtime-identity.test.ts \
             config/scripts/ssh-relay-runtime-compatibility.test.mjs \
             config/scripts/ssh-relay-node-release-verification.test.mjs \
@@ -503,7 +504,7 @@ jobs:
           cp "$first_output"/*.tar.br "$first_output"/*.spdx.json "$first_output"/*.provenance.json "$first_output"/*.identity.json \
             "$signing_report" "$GITHUB_WORKSPACE/runtime-evidence/${{ matrix.tuple }}/"
 
-      - name: Measure full-size desktop extraction boundary
+      - name: Measure full-size desktop extraction and cache boundaries
         shell: bash
         run: |
           set -euo pipefail
@@ -518,6 +519,12 @@ jobs:
             ORCA_SSH_RELAY_FULL_SIZE_OUTPUT="$extraction_output" \
             pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1 --reporter=verbose \
               src/main/ssh/ssh-relay-artifact-extraction-full-size.test.ts
+          test ! -e "$extraction_output"
+          ORCA_SSH_RELAY_FULL_SIZE_ARCHIVE="$archive" \
+            ORCA_SSH_RELAY_FULL_SIZE_IDENTITY="$identity" \
+            ORCA_SSH_RELAY_FULL_SIZE_OUTPUT="$extraction_output" \
+            pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1 --reporter=verbose \
+              src/main/ssh/ssh-relay-artifact-cache-entry-full-size.test.ts
           test ! -e "$extraction_output"
 
       - name: Upload unpublished artifact evidence
@@ -790,6 +797,7 @@ jobs:
             src/main/ssh/ssh-relay-artifact-download.test.ts `
             src/main/ssh/ssh-relay-artifact-extraction.test.ts `
             src/main/ssh/ssh-relay-artifact-cache-lock.test.ts `
+            src/main/ssh/ssh-relay-artifact-cache-entry.test.ts `
             src/main/ssh/ssh-relay-runtime-identity.test.ts `
             config/scripts/ssh-relay-runtime-compatibility.test.mjs `
             config/scripts/ssh-relay-node-release-verification.test.mjs `
@@ -1031,7 +1039,7 @@ jobs:
           Copy-Item -LiteralPath $signingReport -Destination $evidence
           Copy-Item -LiteralPath $sourceSignatureReport -Destination $evidence
 
-      - name: Measure full-size desktop extraction boundary
+      - name: Measure full-size desktop extraction and cache boundaries
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
@@ -1049,6 +1057,12 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'full-size desktop extraction measurement failed' }
           if (Test-Path -LiteralPath $extractionOutput) {
             throw 'full-size desktop extraction measurement cleanup failed'
+          }
+          pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1 --reporter=verbose `
+            src/main/ssh/ssh-relay-artifact-cache-entry-full-size.test.ts
+          if ($LASTEXITCODE -ne 0) { throw 'full-size desktop cache measurement failed' }
+          if (Test-Path -LiteralPath $extractionOutput) {
+            throw 'full-size desktop cache measurement cleanup failed'
           }
 
       - name: Upload unpublished artifact evidence

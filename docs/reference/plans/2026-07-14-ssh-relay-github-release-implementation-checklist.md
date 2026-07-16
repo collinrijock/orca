@@ -8,7 +8,7 @@ work; keep exact commands, runner identities, hashes, metrics, and residual gaps
 
 Date created: 2026-07-14<br>
 Last updated: 2026-07-15<br>
-Current phase: Milestone 5 / Work Package 4 desktop cache boundary — **In progress — 2026-07-15, Codex implementation owner: immutable cache-entry publication/lookup/quarantine package**. E-M5-ARTIFACT-CACHE-LOCK-CI-001 closes the disconnected lock capability on exact head `44ef150da39b3977f4a462dbf52f55c5988b6bf7`: all six primary native Node 24 jobs, both Linux oldest-userland supplements, PR Checks, and Golden E2E pass. Begin only the audited package-2 boundary: refine immutable-entry contracts, add a purpose-named RED, then implement exclusive same-filesystem staging, structured proof, final archive/tree revalidation, atomic publication, lookup, and corruption quarantine. Keep eviction/in-use leases and every consumer/default path separate.<br>
+Current phase: Milestone 5 / Work Package 4 desktop cache boundary — **In progress — 2026-07-15, Codex implementation owner: immutable cache-entry native/full-size gate**. E-M5-ARTIFACT-CACHE-ENTRY-LOCAL-001 closes 17 local transaction contracts plus broad/static gates; E-M5-ARTIFACT-CACHE-ENTRY-CI-WIRING-LOCAL-001 requires both the source suite and exact full-size cold-publication/verified-lookup measurement in both native job families. Checkpoint/push, then require all six Node 24 jobs and full-size time/RSS cells before cache-entry closure or any eviction/consumer work.<br>
 Session checkpoint: **In progress — 2026-07-15, Codex implementation owner** — resumed with user authority for end-to-end PR-contained implementation, commits, pushes, CI, rehearsals, and release writes, with merging to `main` explicitly prohibited. The first native run exposed and recorded Windows open-handle rename and equivalent zlib-error-oracle REDs; narrow corrections passed locally and at exact-head CI. In replacement run `29459424864`, all six primary jobs pass the 10 lock and 21 extraction contracts plus deterministic artifact build/smoke. The workflow's sole failure is the retained Windows arm64 hosted build-26200 versus required-26100 floor rejection after runtime/archive/tree/Node/PTTY/watcher proof; no tuple is enabled from it. PR Checks `29459424977` and Golden E2E `29459424789` pass. There is no release publication, cache entry, cache consumer, SSH transfer/install, tuple enablement, or production/default behavior change. Legacy remains the production default.<br>
 Primary design: [SSH relay GitHub Release plan](./2026-07-14-ssh-relay-github-release-plan.html)<br>
 Motivating issues: [#8450](https://github.com/stablyai/orca/issues/8450), [#1693](https://github.com/stablyai/orca/issues/1693)
@@ -13238,6 +13238,185 @@ sort`; targeted `rg -n` over `cache|extract|atomic|quarantine`; and complete rea
   packaged Electron path selection, SSH, and every tuple/default path remain absent.
 - Follow-up: checkpoint the evidence, then begin only audited package 2 with a purpose-named immutable
   cache-entry RED. Keep eviction/in-use leases and consumers separate.
+
+### E-M5-ARTIFACT-CACHE-ENTRY-AUDIT-001 — Immutable entry transaction and corruption boundary
+
+- Date: 2026-07-15
+- Owner: Codex implementation owner
+- Source: exact pushed evidence head `5e742e4df305cc7ea883864e6d5569dc2e6f5d5d`, after
+  E-M5-ARTIFACT-CACHE-LOCK-CI-001 closes the prerequisite lock gate.
+- Exact audit commands: complete reads of `ssh-relay-artifact-extraction.ts`,
+  `ssh-relay-artifact-tree-verification.ts`, `ssh-relay-runtime-identity.ts`,
+  `ssh-relay-artifact-selector.ts`, `ssh-relay-artifact-schema.ts`,
+  `ssh-relay-artifact-download.ts`, `ssh-relay-artifact-consistency.ts`, the extraction fixtures and
+  hostile tests, and the Milestone 5/7 cache/proof contracts; targeted `rg -n` over cache entry,
+  proof, same-filesystem, quarantine, integrity-error, file-sync, and atomic-rename patterns.
+- Findings and fixed transaction:
+  - the caller supplies only a recursively frozen signature-verified selected artifact, an exact
+    verified archive path, an app-owned cache root, and optional cancellation. No Electron path or
+    SSH consumer is introduced in this package;
+  - the exact lowercase content ID alone derives `entries/<content-hex>`. The signed archive name is
+    the only archive basename. Tuple IDs, release tags, and caller-controlled text never derive
+    paths;
+  - publication acquires the proven content lock, removes only same-content token-shaped stale
+    staging left by a prior reclaimed owner, creates an exclusive sibling pending entry, streams and
+    syncs the archive through bounded SHA-256/size/state verification, extracts into `runtime`, and
+    writes a strict versioned `proof.json` last;
+  - proof binds schema, tuple/content identity, release tag, archive name/size/hash, file count, and
+    expanded bytes. Unknown/missing/duplicate-meaning fields are rejected; matching proof alone is
+    never treated as ongoing byte integrity;
+  - before publication, the implementation re-opens the proof and archive and full-tree rehashes the
+    complete staged runtime against the selected signed tuple. Only then may one same-filesystem
+    directory rename make the entry selectable. Failure/cancellation removes only owned staging;
+  - lookup acquires the same content lock and treats only an absent exact final path as a cache miss.
+    It strictly revalidates root shape, allowed members, proof, full archive, and full runtime tree;
+  - any detected partial entry, proof/identity mismatch, archive mutation, unexpected member, or tree
+    mutation is an integrity failure. The exact final entry is first atomically renamed into the
+    cache-root quarantine namespace, then an explicit integrity error is thrown. Quarantine failure
+    also fails closed and never becomes a miss;
+  - publication encountering a valid existing entry returns it unchanged. Publication encountering
+    corrupt existing state quarantines it and may replace it only from the freshly reverified source
+    archive in the same call;
+  - archive/tree verification remains intentionally expensive on cache selection because these bytes
+    can become the client-offline transfer source. Remote warm launch proof/latency policy is a later
+    Milestone 7 concern and is not weakened here.
+- Concrete module split: `ssh-relay-artifact-cache-entry-proof.ts` owns strict proof bytes/parsing;
+  `ssh-relay-artifact-cache-entry-verification.ts` owns bounded archive copy/hash and complete entry
+  validation; `ssh-relay-artifact-cache-entry.ts` owns lock-scoped staging, publication, lookup,
+  quarantine, and cleanup. No vague helper/common module is permitted.
+- Required RED contracts: exact path derivation; Linux and Windows archive publication; no visible
+  final path on failure/cancellation; strict proof and allowed-member validation; final archive/tree
+  revalidation; valid-existing reuse; concurrent same-content serialization; stale staging cleanup;
+  proof/archive/missing/unexpected/tree corruptions quarantined with an integrity error; and corrupt
+  existing recovery only from freshly verified bytes.
+- Deliberately separate: in-use leases, recency, 2 GiB eviction, Electron cache-root selection,
+  proxy/certificate behavior, packaged manifest loading, ORCA_RELAY_PATH, SSH transfer/install,
+  fallback classification, setting/mode, tuple enablement, and release/default behavior.
+- Follow-up: add the purpose-named cache-entry test with production modules absent, record the RED,
+  then implement only this transaction and require focused/broad/static/all-six native evidence.
+
+### E-M5-ARTIFACT-CACHE-ENTRY-LOCAL-RED-001 — Immutable cache-entry capability is absent
+
+- Date: 2026-07-15
+- Owner: Codex implementation owner
+- Source: purpose-named `ssh-relay-artifact-cache-entry.test.ts` and its concrete Linux/Windows
+  archive fixture atop exact pushed evidence head `5e742e4df305cc7ea883864e6d5569dc2e6f5d5d`; production
+  entry modules deliberately absent.
+- Exact command:
+  `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1
+  src/main/ssh/ssh-relay-artifact-cache-entry.test.ts`.
+- Result: required RED; one failed suite / zero collected tests in 153ms Vitest / 1.11s wall,
+  132,071,424-byte maximum RSS, zero swaps. Import fails only because
+  `./ssh-relay-artifact-cache-entry` does not exist.
+- Contracts encoded before implementation:
+  - exact lowercase content-key path derivation and rejection of path-bearing/uppercase/malformed IDs;
+  - complete Linux TAR/Brotli and Windows ZIP publication with exact archive/runtime/proof members,
+    signed aggregate metadata, full file bytes, and successful revalidated lookup;
+  - exact miss without creating/quarantining state; no final entry after archive failure or
+    cancellation; concurrent publisher serialization and byte-identical existing-entry reuse;
+  - same-content stale token staging cleanup only after ownership;
+  - proof, archive, runtime-file, unexpected-member, missing-member, and partial-final corruption each
+    move the final entry to quarantine and raise the explicit integrity error rather than a miss;
+  - corrupt existing state can be republished only by passing the fresh source archive through the
+    complete verified publication transaction again.
+- Consumer-disconnection oracle: tests import the capability directly. No index/app/Electron cache
+  root, downloader, SSH, setting, mode, tuple, release write, or default path is connected.
+- Does not prove: implementation, native client behavior, full-size resource budgets, disk faults,
+  crash timing, in-use leases/eviction, packaged Electron, SSH, or any enabled tuple.
+- Follow-up: implement only the audited proof/verification/transaction modules, make the focused
+  suite green without weakening any corruption oracle, then run broad/static and all-six native gates.
+
+### E-M5-ARTIFACT-CACHE-ENTRY-LOCAL-001 — Disconnected immutable publication and quarantine pass locally
+
+- Date: 2026-07-15
+- Owner: Codex implementation owner
+- Source: uncommitted package atop exact pushed evidence head
+  `5e742e4df305cc7ea883864e6d5569dc2e6f5d5d`, following
+  E-M5-ARTIFACT-CACHE-ENTRY-AUDIT-001 and E-M5-ARTIFACT-CACHE-ENTRY-LOCAL-RED-001.
+- Implementation:
+  - `ssh-relay-artifact-cache-entry-proof.ts` owns a strict 16 KiB-bounded schema-1 proof binding
+    tuple/content/release, archive name/size/hash, and runtime file/expanded-byte aggregates;
+  - `ssh-relay-artifact-cache-entry-verification.ts` streams exact regular archives with a 64 KiB
+    buffer, SHA-256, stable file-state checks, destination sync, and failure cleanup; complete entry
+    validation strictly checks allowed root members, proof, archive, and the entire signed runtime tree;
+  - `ssh-relay-artifact-cache-entry.ts` validates physical app-owned directories, derives paths only
+    from exact content hex, acquires the proven content lock, cleans only token-shaped same-content
+    stale staging, publishes by one same-filesystem directory rename after final revalidation, and
+    atomically quarantines detected corruption before raising
+    `SshRelayArtifactCacheIntegrityError`;
+  - publication reuses a fully revalidated existing entry unchanged. A corrupt existing entry is
+    replaceable only after quarantine and a complete fresh-source copy/extract/proof/revalidation
+    transaction. Lookup treats only absent exact final state as a miss and full-rehashes archive/tree.
+- Review correction: focused tests first passed 14 contracts. Manual handle-path review found that a
+  destination-open failure could leave the already-open source archive handle alive; the source now
+  closes on that branch. Proof tests were expanded to identity mismatch and unknown-field rejection,
+  directory-order assertions were made portable, and fixed transaction/copy/proof budgets were added.
+  No corruption behavior was weakened.
+- Exact focused command:
+  `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1
+  src/main/ssh/ssh-relay-artifact-cache-entry.test.ts`.
+- Final focused result: one passed file / 17 passed tests in 1.87s Vitest / 3.10s wall,
+  137,035,776-byte maximum RSS, zero swaps. Contracts prove fixed 5m/80 MiB/64 KiB/16 KiB limits,
+  exact paths, Linux and Windows archive families, atomic complete publication, exact miss,
+  failure/cancellation invisibility, concurrent serialization/reuse, stale staging cleanup, strict
+  proof identity/fields, proof/archive/runtime/unexpected/missing/partial corruption quarantine, and
+  recovery only from freshly reverified bytes.
+- Exact broader commands/results:
+  - `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1
+    src/main/ssh/ssh-relay-artifact-*.test.ts`: final tree passes six files / two environment-skipped
+    full-size files, 112 passed / two skipped tests in 164.85s Vitest / 194.56s wall,
+    123,568,128-byte maximum RSS, zero swaps under severe unrelated host contention;
+  - `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1
+    src/main/ssh/ssh-relay-*.test.ts`: 19 passed files / two skipped files, 280 passed / two skipped
+    tests in 78.76s Vitest / 95.05s wall, 215,089,152-byte maximum RSS, zero swaps;
+  - `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1
+    config/scripts/ssh-relay-runtime-*.test.mjs`: 50 passed files / 279 passed tests in 41.66s Vitest /
+    45.35s wall, 190,808,064-byte maximum RSS, zero swaps;
+  - `pnpm typecheck`; `pnpm lint`; `pnpm run check:max-lines-ratchet`: pass. Full lint retains only
+    existing unrelated warnings; no max-lines disable or ratchet exception was added;
+  - `/usr/bin/git diff --check`: pass. The Orca-attributed Git wrapper first failed to create its
+    here-document temporary file because the shared host had only 115 MiB free; the system Git binary
+    proved the diff itself clean without deleting user data. Host-contention elapsed times are not
+    performance baselines.
+- Consumer/diff oracle: direct source tests are the only caller. The preserved Milestone 0 resolver
+  pair and release-required-assets pair have zero diff. No Electron cache root, index/app caller,
+  downloader connection, eviction, SSH path, setting/mode, tuple, release write, or default change
+  exists.
+- Does not prove: exact full-size cold/warm resources, Node 24/native clients, crash/power-loss
+  durability, read-only/disk-full/quota/inode behavior, in-use lease/eviction, packaged Electron, SSH,
+  or any enabled tuple.
+- Follow-up: require source and exact full-size measurement on all six native jobs. Do not check the
+  combined publication item or begin eviction/consumer work until that evidence is recorded.
+
+### E-M5-ARTIFACT-CACHE-ENTRY-CI-WIRING-LOCAL-001 — Both native families require source and full-size cache gates
+
+- Date: 2026-07-15
+- Owner: Codex implementation owner
+- Source-suite purpose RED: after adding `ssh-relay-artifact-cache-entry.test.ts` to the workflow
+  source oracle, the exact workflow test fails one / passes six because the workflow has zero native
+  invocations and the source split count is one instead of three.
+- Source-suite GREEN: adding the purpose suite to both POSIX and PowerShell native Node 24 contract
+  commands makes the workflow suite pass seven tests.
+- Full-size purpose RED: after adding
+  `ssh-relay-artifact-cache-entry-full-size.test.ts` to the source oracle, the same workflow suite
+  fails one / passes six because the measurement has zero native invocations. The renamed combined
+  measurement step also required the ordering oracle's exact name to follow the expanded boundary.
+- Final GREEN command/result:
+  `pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1
+  config/scripts/ssh-relay-runtime-workflow.test.mjs
+  src/main/ssh/ssh-relay-artifact-cache-entry.test.ts
+  src/main/ssh/ssh-relay-artifact-cache-entry-full-size.test.ts`: workflow and focused source suites
+  pass; the environment-only full-size file is skipped locally, for 24 passed / one skipped tests.
+- Native oracle: every primary client job must run all 17 transaction/corruption contracts before
+  artifact construction. After constructing the exact full-size artifact, every job must measure cold
+  copy/extract/proof/two-layer revalidation and warm proof/archive/full-tree lookup, log exact time and
+  incremental RSS, stay within 5m and 80 MiB per phase, and remove its owned cache root.
+- Consumer-disconnection oracle: all artifacts remain unpublished Actions evidence and no desktop or
+  SSH caller exists.
+- Does not prove: runner execution, exact full-size metrics, eviction/in-use safety, SSH, or an enabled
+  tuple.
+- Follow-up: checkpoint/push and require all six primary jobs plus companion PR Checks/Golden E2E
+  before cache-entry closure.
 
 ## Accepted Gaps
 

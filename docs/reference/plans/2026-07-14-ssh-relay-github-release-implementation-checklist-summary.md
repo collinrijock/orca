@@ -53,7 +53,12 @@ six primary native Node 24 jobs under `E-M5-ARTIFACT-CACHE-LOCK-CI-001`; both Li
 PR Checks [29459424977](https://github.com/stablyai/orca/actions/runs/29459424977), and Golden E2E
 [29459424789](https://github.com/stablyai/orca/actions/runs/29459424789) pass. Windows arm64 retains
 only the explicit hosted build-26200 versus required-26100 floor rejection after runtime/tree smoke.
-Next is the disconnected immutable publication/lookup/quarantine package. Desktop consumers, cache eviction, SSH transfer/install,
+`E-M5-ARTIFACT-CACHE-ENTRY-AUDIT-001` fixes the disconnected immutable
+publication/lookup/quarantine transaction; the absent-module contract RED is
+`E-M5-ARTIFACT-CACHE-ENTRY-LOCAL-RED-001`. Seventeen local contracts plus broad/static gates are
+green under `E-M5-ARTIFACT-CACHE-ENTRY-LOCAL-001`; both native families require the source suite and
+exact full-size cold/warm measurement under `E-M5-ARTIFACT-CACHE-ENTRY-CI-WIRING-LOCAL-001`. Native
+execution is next. Desktop consumers, cache eviction, SSH transfer/install,
 mode wiring, tuple enablement, publication, production keys/environment/seed, and merge to `main`
 remain disconnected.
 
