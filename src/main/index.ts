@@ -2119,7 +2119,15 @@ app.whenReady().then(async () => {
     enableWebSocket: true,
     ...(isE2E ? { wsPort: 0 } : {}),
     ...(devWsPort !== undefined ? { wsPort: devWsPort } : {}),
-    ...(serveOptions?.wsPort !== undefined ? { wsPort: serveOptions.wsPort } : {}),
+    ...(serveOptions?.wsPort !== undefined
+      ? {
+          wsPort: serveOptions.wsPort,
+          // Why: only an explicit `orca serve --port` pin prefers the requested
+          // port over a stale STA-1511 fallback (issue #8535). Default 6768 /
+          // dev 6769 keep fallback-first so mobile pairings stay stable.
+          preferPinnedWsPort: true
+        }
+      : {}),
     webClientRoot: getBundledWebClientRoot()
   })
   registerMobileHandlers(runtimeRpc, { getRelayStatus: () => desktopRelayStatus })
