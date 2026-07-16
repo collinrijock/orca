@@ -9,7 +9,7 @@ work; keep exact commands, runner identities, hashes, metrics, and residual gaps
 Date created: 2026-07-14<br>
 Last updated: 2026-07-15<br>
 Current phase: Milestone 6 / Work Package 5 bounded runtime transfer — **In progress — 2026-07-15, Codex implementation owner: disconnected POSIX system-SSH/no-tar transfer composition**. Keep every capability disconnected from every production/default SSH path. Real Apple/SignPath rehearsals remain an explicit late gate and are not on this package's critical path.<br>
-Session checkpoint: **POSIX SYSTEM-SSH LIVE FULL-SIZE LOCAL PACKAGE GREEN / COMMIT AND EXACT-HEAD CI NEXT — 2026-07-15, Codex implementation owner** — `E-M6-POSIX-SYSTEM-SSH-TREE-LIVE-LOCAL-001` records the bounded workflow oracle, focused/broad/release suites, typecheck, lint, max-lines, formatting, diff, protected-resolver, and no-product-consumer gates green. The purpose suite remains honestly skipped without its seven CI inputs and earns no live proof locally. Commit and push only this test/workflow/docs package, then require exact-head Linux x64/arm64 live metrics and all-six adjacent regression cells. Merging to `main` remains prohibited, SignPath is deferred, and legacy remains the production default.<br>
+Session checkpoint: **POSIX SYSTEM-SSH LIVE FULL-SIZE EXACT-HEAD GREEN / EVIDENCE COMMIT NEXT — 2026-07-15, Codex implementation owner** — `E-M6-POSIX-SYSTEM-SSH-TREE-LIVE-CI-001` proves restricted-primitive exact full-size transfer, tree integrity, exclusive collision behavior, cancellation cleanup, connection reuse, latency, RSS, and one/four-channel bounds on native Linux x64 and arm64. All six primary native jobs, both Linux supplements, Windows x64 floor, PR Checks, Golden E2E, and computer-use pass; the artifact run is red only for the declared Windows arm64 hosted build 26200 versus required 26100 mismatch after complete runtime verification. Commit and push this evidence only, then audit the next disconnected transfer package. Merging to `main` remains prohibited, SignPath is deferred, and legacy remains the production default.<br>
 Primary design: [SSH relay GitHub Release plan](./2026-07-14-ssh-relay-github-release-plan.html)<br>
 Motivating issues: [#8450](https://github.com/stablyai/orca/issues/8450), [#1693](https://github.com/stablyai/orca/issues/1693)
 
@@ -18079,6 +18079,61 @@ src/main/ssh/ssh-remote-node-resolution.ts src/main/ssh/ssh-remote-node-resoluti
   cells remain required. High RTT, `MaxSessions=1`, cross-family remotes, Windows transfer, primitive
   probe/cache, remote bundled-Node verification/install/publish/launch, product/Beta/fallback/default
   wiring, tuple enablement, publication, Apple signing, and SignPath remain absent.
+
+### E-M6-POSIX-SYSTEM-SSH-TREE-LIVE-CI-001 — exact-head restricted OpenSSH proof
+
+- Date/owner/head: 2026-07-15, Codex implementation owner; exact head
+  `cdc25b2d1339fae9c4508b5b7453bb77fe9b9abc` on draft PR #8741. Implementation commit
+  `a56dded6ff0b10046e58e8ff2a3a99b8d6578291`; the exact-head follow-up
+  `cdc25b2d1339fae9c4508b5b7453bb77fe9b9abc` changes only Markdown formatting. Artifact run
+  `29524562239` uses Node 24.18.0 and stock `OpenSSH_9.6p1 Ubuntu-3ubuntu13.18` on both live cells.
+- Linux x64 live job `87709667467`: Ubuntu 24 image `20260714.240.1`, X64; tuple
+  `linux-x64-glibc`, content `sha256:fc63ca342a5990f460ec6d72262a8542173dab20ce03c9b9cfb755b1c6057e6d`,
+  34 files and 124,846,430 bytes. The default-one transfer takes 976.400 ms with 4,415,488
+  incremental RSS bytes and peak active files 1. The explicit-four transfer takes 677.967 ms with
+  1,777,664 incremental RSS bytes and peak active files 4. Cancellation settles in 27.553 ms with
+  3,538,944 incremental RSS bytes and one progress update. The full purpose case passes in 3.84
+  seconds.
+- Linux arm64 live job `87709667417`: Ubuntu 24 arm64 image `20260714.61.1`, ARM64; tuple
+  `linux-arm64-glibc`, content `sha256:96f07f62af9b35304bb8ca0870ca4d8095e059bfa61dd1bc57e81b20f3fbca67`,
+  34 files and 122,865,324 bytes. The default-one transfer takes 796.017 ms with 4,956,160
+  incremental RSS bytes and peak active files 1. The explicit-four transfer takes 568.454 ms with
+  1,048,576 incremental RSS bytes and peak active files 4. Cancellation settles in 15.614 ms with
+  131,072 incremental RSS bytes and one progress update. The full purpose case passes in 3.23
+  seconds.
+- Boundary proved in both live jobs: the forced remote environment exposes only absolute `/bin/sh`,
+  `mkdir`, `chmod`, `cat`, and `rm`; host trust uses the generated pinned key and public-key-only
+  loopback OpenSSH. Each job verifies every exact path, byte, SHA-256, mode, file/byte aggregate,
+  default-one/four-channel bounds, preservation of a complete tree after exclusive-root collision,
+  cancellation after first bytes, no later progress, owned-root removal, and a still-usable
+  authenticated connection. Both serial and concurrent incremental RSS values are below the 80 MiB
+  ceiling and both cancellation settlements are below 10 seconds. The adjacent exact full-size SFTP
+  case also passes in each job.
+- Six primary native contract cells pass at this exact head: Linux x64 `87709667467` and Linux arm64
+  `87709667417` each report 96 files, 826 passed/one declared skip; Darwin arm64 `87709667400` and
+  Darwin x64 `87709667493` each report 96 files, 825 passed/two declared skips; Windows x64
+  `87709667451` and Windows arm64 `87709667453` each report 97 files, 813 passed/18 declared skips.
+  The live test is skipped off Linux and earns evidence only from the two explicit live steps.
+- Adjacent artifact cells: Linux arm64 oldest-userland supplement `87710915918`, Linux x64 supplement
+  `87710916014`, and Windows x64 floor `87711893263` pass. Windows arm64 floor `87711893219` is the
+  only artifact failure: the hosted image is Windows build 26200 while the contract requires 26100;
+  platform and architecture pass and only `osBuild` is false. Before rejection it verifies the exact
+  artifact digest, 60 entries/42 files/85,213,511 bytes, content
+  `sha256:02edf462be83c2864a89546d5344d348f9e07ce10964660342608a8c614e47db`, Node
+  24.18.0/ABI 137, resized PTY exit 23, watcher lifecycle, two-second resource settlement, 49,242,112
+  RSS bytes, 6,511.513 ms smoke, and 8,268.018 ms total. This is the declared hosted-runner gap, not a
+  change regression.
+- Repository/adjacent runs: PR Checks `29524562195`, job `87709594108`, passes. Golden E2E run
+  `29524562284` passes Linux `87709594188` and macOS `87709594317`. Computer-use run `29524562096`
+  passes Windows and, on same-head failed-job attempt 2, Ubuntu `87713234187`. Attempt 1 Ubuntu job
+  `87709593614` passed its first two gedit cases but lost focus during `paste-text` with
+  `window_not_focused`; the unchanged rerun passes the complete job, so no code or timeout change is
+  attributed to that UI-focus flake.
+- Disposition/residual boundary: this disconnected live package is complete. It proves native Linux
+  loopback OpenSSH, not high RTT, `MaxSessions=1`, proxy jumps, cross-family remotes, primitive
+  probe/cache, optional tar fast path, Windows transfer, remote bundled-Node verification/install/
+  publish/launch, product/Beta/fallback/default behavior, tuple enablement, publication, Apple
+  signing, or SignPath. Legacy remains the only production/default path.
 
 ## Accepted Gaps
 

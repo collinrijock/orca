@@ -9,9 +9,9 @@ keeps commands, hashes, runner identities, timings, and failure details.
 A checked box means the work has evidence in the detailed ledger. Design approval alone does not
 complete a box.
 
-Active checkpoint: **Milestone 6 / Work Package 5 bounded runtime transfer — disconnected POSIX
-system-SSH tree/root composition is exact-head green; audit a live/full-size loopback OpenSSH proof
-next, 2026-07-15, Codex implementation owner.**
+Active checkpoint: **Milestone 6 / Work Package 5 bounded runtime transfer — restricted-primitive
+live/full-size POSIX system-SSH proof is exact-head green; record evidence and audit the next
+disconnected transfer package, 2026-07-15, Codex implementation owner.**
 `E-M6-POSIX-SYSTEM-SSH-TREE-AUDIT-001` requires a bounded no-input control-command owner rather than
 the legacy unbounded-output command helper, exclusive `0700` root creation, parent-first declared
 directories, exact per-file source-stream composition, owned-root cleanup, and a worst-case
@@ -56,6 +56,15 @@ Linux x64/arm64 live evidence remain required.
 oracle, 220 focused, 656 broad relay, 282 release-contract, typecheck, lint, 355-entry max-lines,
 formatting, diff, protected-resolver, and no-product-consumer gates pass. The live case is explicitly
 skipped locally and earns no proof; exact-head Linux x64/arm64 live evidence is still required.
+`E-M6-POSIX-SYSTEM-SSH-TREE-LIVE-CI-001` closes that live package at exact head `cdc25b2d1`: native
+Linux x64 transfers 124,846,430 bytes/34 files in 976 ms serial or 678 ms at four channels; native
+Linux arm64 transfers 122,865,324 bytes/34 files in 796 ms serial or 568 ms at four channels. Peak
+incremental RSS is 4,956,160 bytes and cancellation settles in 15.6–27.6 ms with no later progress;
+both trees, modes, hashes, collision preservation, cleanup, and connection reuse pass against pinned
+stock OpenSSH exposing only `/bin/sh`, `mkdir`, `chmod`, `cat`, and `rm`. All six primary native
+jobs, both Linux supplements, Windows x64 floor, PR Checks, Golden E2E, and computer-use pass after
+one unchanged Ubuntu UI-focus rerun. Windows arm64 retains only hosted build 26200 versus required
+26100 after full runtime proof. No product/default path is connected.
 `E-M6-POSIX-SYSTEM-SSH-FILE-LOCAL-001` records 25/25 purpose, 628 broad relay, 281/281 release, and all
 static/isolation gates.
 `E-M6-POSIX-SYSTEM-SSH-FILE-CI-001` proves the 25 cases on all six primary native clients; both Linux
