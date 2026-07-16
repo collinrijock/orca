@@ -9,9 +9,18 @@ keeps commands, hashes, runner identities, timings, and failure details.
 A checked box means the work has evidence in the detailed ledger. Design approval alone does not
 complete a box.
 
-Active checkpoint: **Milestone 6 / Work Package 5 bounded runtime transfer — the Windows-only POSIX-
-mode test correction is locally green; commit/push and fresh all-six native/full-size proof are next,
-2026-07-15, Codex implementation owner.**
+Active checkpoint: **Milestone 6 / Work Package 5 bounded runtime transfer — bounded client source
+streaming is exact-head green; the smallest disconnected SFTP adapter audit is next, 2026-07-15,
+Codex implementation owner.**
+`E-M6-SOURCE-STREAM-CI-001` closes exact commit `df39c287d`: all six primary native clients pass the
+27-case source-stream suite (Windows has only the declared POSIX-mode skip), exact 85–125 MB trees
+stream in 103.663–530.937 ms with 0–5,492,736 incremental RSS bytes, both Linux supplements and the
+Windows x64 floor pass, and PR Checks/Golden E2E pass. The first computer-use Windows attempt hit two
+unrelated unchanged five-second launcher timeouts under `E-M6-SOURCE-STREAM-ADJACENT-CI-RED-001`;
+its same-SHA failed-job rerun passes the tests, packaged build, daemon smoke, and Windows E2E without
+code or timeout changes. Windows arm64 retains only the declared hosted build-26200 rejection against
+26100 after complete runtime proof. SFTP/system-SSH channels, remote staging/install/mode repair,
+product/Beta/fallback/default wiring, publication, and SignPath remain absent.
 `E-M6-SOURCE-STREAM-CI-RED-001` records run `29501986883` / Windows x64 job `87632962424`: the
 hostile wrong-mode case incorrectly expected POSIX mode enforcement on Windows, then production
 correctly rejected the test's incomplete destination. Linux x64/arm64 and Darwin x64/arm64 purpose

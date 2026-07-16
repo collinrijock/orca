@@ -8,8 +8,8 @@ work; keep exact commands, runner identities, hashes, metrics, and residual gaps
 
 Date created: 2026-07-14<br>
 Last updated: 2026-07-15<br>
-Current phase: Milestone 6 / Work Package 5 bounded runtime transfer — **In progress — 2026-07-15, Codex implementation owner: Windows source-stream oracle correction is locally green; fresh exact-head native/full-size CI is next**. Keep every capability disconnected from every production/default SSH path. Real Apple/SignPath rehearsals remain an explicit late gate and are not on this package's critical path.<br>
-Session checkpoint: **BOUNDED SOURCE STREAM WINDOWS ORACLE CORRECTION LOCAL GREEN — 2026-07-15, Codex implementation owner** — `E-M6-SOURCE-STREAM-CI-RED-001` records the Windows-only POSIX-mode oracle mismatch and `E-M6-SOURCE-STREAM-WINDOWS-ORACLE-CORRECTION-LOCAL-001` proves the test-only correction plus focused/broad/static gates. Commit/push the correction and require fresh all-six native/full-size and adjacent CI. Do not add a product caller, settings/fallback wiring, tuple enablement, publication, or default behavior. Merging to `main` remains prohibited, SignPath is deferred, and legacy remains the production default.<br>
+Current phase: Milestone 6 / Work Package 5 bounded runtime transfer — **In progress — 2026-07-15, Codex implementation owner: bounded client source streaming is exact-head green; the smallest disconnected SFTP adapter audit is next**. Keep every capability disconnected from every production/default SSH path. Real Apple/SignPath rehearsals remain an explicit late gate and are not on this package's critical path.<br>
+Session checkpoint: **BOUNDED SOURCE STREAM EXACT-HEAD GREEN / SFTP ADAPTER AUDIT NEXT — 2026-07-15, Codex implementation owner** — `E-M6-SOURCE-STREAM-CI-001` closes all-six native purpose and exact full-size client-stream proof. The first adjacent computer-use Windows attempt exposed only two unrelated five-second launcher timeouts under `E-M6-SOURCE-STREAM-ADJACENT-CI-RED-001`; its same-SHA failed-job rerun is fully green without changing timeouts or code. Audit the smallest SFTP destination/session boundary before writing its RED tests. Do not add a product caller, settings/fallback wiring, tuple enablement, publication, or default behavior. Merging to `main` remains prohibited, SignPath is deferred, and legacy remains the production default.<br>
 Primary design: [SSH relay GitHub Release plan](./2026-07-14-ssh-relay-github-release-plan.html)<br>
 Motivating issues: [#8450](https://github.com/stablyai/orca/issues/8450), [#1693](https://github.com/stablyai/orca/issues/1693)
 
@@ -1166,7 +1166,11 @@ Current behavior must not be assumed adequate for a much larger runtime:
       E-M6-SOURCE-PRESCAN-LOCAL-RED-001, E-M6-SOURCE-PRESCAN-LOCAL-001,
       E-M6-SOURCE-PRESCAN-CI-RED-001, E-M6-SOURCE-PRESCAN-COLLISION-FIX-LOCAL-001, and
       E-M6-SOURCE-PRESCAN-CI-001.
-- [ ] Stream files with bounded buffers; prohibit whole-tree memory materialization.
+- [x] Stream files with bounded buffers; prohibit whole-tree memory materialization. Completed by
+      E-M6-SOURCE-STREAM-AUDIT-001, E-M6-SOURCE-STREAM-LOCAL-RED-001,
+      E-M6-SOURCE-STREAM-LOCAL-001, E-M6-SOURCE-STREAM-CI-RED-001,
+      E-M6-SOURCE-STREAM-WINDOWS-ORACLE-CORRECTION-LOCAL-001, and
+      E-M6-SOURCE-STREAM-CI-001.
 - [ ] Pass one AbortSignal through enumeration, channel creation, reads, writes, permission repair,
       and remote cleanup.
 - [ ] Close and await every local stream, SSH channel, child process, SFTP session, and cleanup task
@@ -16648,6 +16652,91 @@ runtime source stream destination is incomplete`. The contract step failed after
 - Residual: a native Windows runner must prove 26 passes plus exactly the one POSIX-mode skip. Fresh
   all-six full-size metrics and adjacent Actions remain mandatory; no evidence cell is closed by
   local macOS proof.
+
+### E-M6-SOURCE-STREAM-ADJACENT-CI-RED-001 — unrelated Windows launcher timeouts require rerun
+
+- Date/owner/source: 2026-07-15, Codex implementation owner; exact commit
+  `df39c287d63ae5f2cc8a3f4e2023558d8c4fefe3`, computer-use run
+  [29502462430](https://github.com/stablyai/orca/actions/runs/29502462430), first-attempt Windows job
+  [87634610647](https://github.com/stablyai/orca/actions/runs/29502462430/job/87634610647).
+- Result: the broad computer-use job's initial Windows attempt failed because the pre-existing
+  `config/scripts/build-windows-cli-launcher.test.mjs:29` and
+  `src/main/ssh/ssh-remote-cli-launcher.test.ts:55` cases each exceeded their unchanged five-second
+  timeout. Neither file imports the new source-tree, pre-scan, or source-stream modules. The exact
+  source-stream Windows contract job separately passed its 26 applicable cases with one declared
+  POSIX-mode skip and completed its exact full-size proof.
+- Disposition: do not raise timeouts and do not credit the adjacent workflow from this attempt.
+  Rerun only the failed Windows job on the same SHA; a repeat would require independent diagnosis
+  before accepting the source-stream checkpoint.
+
+### E-M6-SOURCE-STREAM-CI-001 — all-six native and exact full-size source streaming passes
+
+- Date/owner/head: 2026-07-15, Codex implementation owner; exact correction commit
+  `df39c287d63ae5f2cc8a3f4e2023558d8c4fefe3` on draft PR
+  [#8741](https://github.com/stablyai/orca/pull/8741).
+- Native workflow: SSH Relay Runtime Artifacts run
+  [29502462515](https://github.com/stablyai/orca/actions/runs/29502462515). All six primary Node
+  24.18.0 jobs pass the contract, deterministic-build/smoke, exact full-size extraction/cache/scan/
+  stream, and evidence-upload steps: Darwin arm64
+  [87634610869](https://github.com/stablyai/orca/actions/runs/29502462515/job/87634610869), Windows x64
+  [87634610874](https://github.com/stablyai/orca/actions/runs/29502462515/job/87634610874), Windows arm64
+  [87634610969](https://github.com/stablyai/orca/actions/runs/29502462515/job/87634610969), Linux arm64
+  [87634610973](https://github.com/stablyai/orca/actions/runs/29502462515/job/87634610973), Linux x64
+  [87634611056](https://github.com/stablyai/orca/actions/runs/29502462515/job/87634611056), and Darwin x64
+  [87634611171](https://github.com/stablyai/orca/actions/runs/29502462515/job/87634611171).
+- Runner identities: Darwin arm64 uses `macos-15` / `macos15` image `20260706.0213.1`; Darwin x64
+  uses `macos-15-intel` / `macos15` image `20260715.0340.1`; Linux arm64 uses `ubuntu-24.04-arm` /
+  `ubuntu24-arm64` image `20260714.61.1`; Linux x64 uses `ubuntu-24.04` / `ubuntu24` image
+  `20260705.232.1`; Windows arm64 uses `windows-11-arm` / `win11-arm64` image `20260706.102.1`;
+  Windows x64 uses `windows-2022` / `win22` image `20260714.244.1`. Every job reports
+  `github-hosted`, its matching native architecture, and the exact source SHA above.
+- Purpose results: every POSIX client passes all 27 cases; each Windows client passes 26 with only
+  the declared POSIX-mode case skipped. Suite times are 2.077 seconds Darwin arm64, 5.956 seconds
+  Darwin x64, 3.703 seconds Linux arm64, 2.412 seconds Linux x64, 13.744 seconds Windows x64, and
+  9.814 seconds Windows arm64. Overall native contract totals are 733 passed / two skipped on each
+  Darwin client, 734 passed / one skipped on each Linux client, and 721 passed / 18 skipped on each
+  Windows client.
+- Exact full-size stream metrics, after complete-tree pre-scan and while the verified cache lease is
+  held:
+  - Linux x64: 34 files / 124,846,430 bytes; stream 177.507 ms / 131,072 incremental RSS bytes.
+  - Linux arm64: 34 files / 122,865,324 bytes; stream 147.701 ms / 393,216 incremental RSS bytes.
+  - Darwin x64: 35 files / 124,316,655 bytes; stream 530.937 ms / 266,240 incremental RSS bytes.
+  - Darwin arm64: 35 files / 122,027,869 bytes; stream 103.663 ms / 163,840 incremental RSS bytes.
+  - Windows x64: 42 files / 96,527,161 bytes; stream 180.443 ms / 5,492,736 incremental RSS bytes.
+  - Windows arm64: 42 files / 85,213,511 bytes; stream 353.213 ms / zero incremental RSS bytes.
+    Every cell is below the 120-second and 80-MiB stream budgets; observed ranges are
+    103.663–530.937 ms and 0–5,492,736 incremental RSS bytes. The source-stream contract separately
+    proves one reusable 64-KiB buffer per one-to-four workers, exact file/destination counts, and
+    joined local-handle/destination settlement on success, failure, and cancellation.
+- Baselines: Linux arm64 supplement
+  [87635652453](https://github.com/stablyai/orca/actions/runs/29502462515/job/87635652453) and Linux
+  x64 supplement
+  [87635652461](https://github.com/stablyai/orca/actions/runs/29502462515/job/87635652461) pass.
+  Windows x64 oldest baseline
+  [87637747935](https://github.com/stablyai/orca/actions/runs/29502462515/job/87637747935) passes.
+  Windows arm64 oldest baseline
+  [87637747923](https://github.com/stablyai/orca/actions/runs/29502462515/job/87637747923) retains only
+  the declared hosted-image floor rejection: observed build 26200 versus required 26100. Before
+  that rejection it verifies the 60-entry / 42-file / 85,213,511-byte tree, Node/PTY/watcher smoke,
+  two-second resource settlement, and 5,768.3331-ms smoke at 48,476,160 RSS; complete verification
+  is 7,684.2782 ms. The aggregate workflow is therefore red only by the known runner-floor evidence
+  gap, not the source-stream package.
+- Adjacent exact-head evidence: PR Checks run
+  [29502462631](https://github.com/stablyai/orca/actions/runs/29502462631), verify job
+  [87634610912](https://github.com/stablyai/orca/actions/runs/29502462631/job/87634610912), and Golden
+  E2E run [29502462423](https://github.com/stablyai/orca/actions/runs/29502462423), Linux job
+  [87634610095](https://github.com/stablyai/orca/actions/runs/29502462423/job/87634610095) and macOS job
+  [87634610096](https://github.com/stablyai/orca/actions/runs/29502462423/job/87634610096), pass.
+  Computer-use run [29502462430](https://github.com/stablyai/orca/actions/runs/29502462430) passes
+  after the evidence-gated same-SHA failed-job rerun: Windows job
+  [87639449051](https://github.com/stablyai/orca/actions/runs/29502462430/job/87639449051) passes the
+  previously timed-out tests plus packaged build/daemon/E2E; Ubuntu job
+  [87639450403](https://github.com/stablyai/orca/actions/runs/29502462430/job/87639450403) passes.
+- Boundary/residual gaps: this hashes into a client-only discard destination; it creates no SSH
+  connection, SFTP session, system-SSH channel, remote path, staging/install state, mode repair, or
+  remote cleanup. It is not live transfer or remote proof. Every transport adapter, remote hash/
+  install/launch step, product/Beta/fallback/tuple/publication/default path, and SignPath remain
+  open. Legacy remains the sole production/default path and every tuple remains disabled.
 
 ## Accepted Gaps
 
