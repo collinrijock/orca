@@ -176,6 +176,32 @@ describe('SSH relay runtime source pre-scan', () => {
     )
   })
 
+  it('classifies a case-fold variant before its signed peer is enumerated', async () => {
+    const { tree } = await sourceFixture()
+    const close = vi.fn(async () => {})
+    const scanLstat = vi.fn((path: string) => lstat(path, { bigint: true }))
+    let returnedVariant = false
+    const operations: Partial<SshRelayRuntimeSourceScanOperations> = {
+      lstat: scanLstat,
+      openDirectory: async () => ({
+        read: async () => {
+          if (returnedVariant) {
+            return null
+          }
+          returnedVariant = true
+          return { name: 'RELAY.JS' }
+        },
+        close
+      })
+    }
+
+    await expect(
+      scanSshRelayRuntimeSourceTree(tree, new AbortController().signal, operations)
+    ).rejects.toThrow(/collision/i)
+    expect(scanLstat).toHaveBeenCalledTimes(1)
+    expect(close).toHaveBeenCalledTimes(1)
+  })
+
   it.skipIf(process.platform === 'win32')('rejects executable mode drift', async () => {
     const { tree } = await sourceFixture()
     const executable = tree.files.find((file) => file.mode === 0o755)!

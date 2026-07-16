@@ -228,6 +228,9 @@ export async function scanSshRelayRuntimeSourceTree(
         }
         const declared = expected.get(path)
         if (!declared) {
+          if (expectedFolded.has(folded)) {
+            throw new Error(`SSH relay runtime source has a path collision: ${path}`)
+          }
           throw new Error(`SSH relay runtime source has an undeclared entry: ${path}`)
         }
         signal.throwIfAborted()

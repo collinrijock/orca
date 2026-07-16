@@ -8,8 +8,8 @@ work; keep exact commands, runner identities, hashes, metrics, and residual gaps
 
 Date created: 2026-07-14<br>
 Last updated: 2026-07-15<br>
-Current phase: Milestone 6 / Work Package 5 bounded runtime transfer — **In progress — 2026-07-15, Codex implementation owner: disconnected full-tree source pre-scan is locally green; exact-head native/full-size CI is the next gate**. Keep every capability disconnected from every production/default SSH path. Real Apple/SignPath rehearsals remain an explicit late gate and are not on this package's critical path.<br>
-Session checkpoint: **SOURCE PRE-SCAN LOCAL GREEN / COMMIT AND CI NEXT — 2026-07-15, Codex implementation owner** — `E-M6-SOURCE-PRESCAN-LOCAL-001` proves bounded complete source authentication, immutable snapshots, cancellation/close behavior, adjacent and broad regressions, workflow inclusion, and isolation from product callers. Commit and push the package, then require all-six native purpose suites and exact full-size artifact scan metrics before checking the item. Do not open SSH channels, transfer/install bytes, add a product caller, settings/fallback wiring, tuple enablement, publication, or default behavior. Merging to `main` remains prohibited, SignPath is deferred, and legacy remains the production default.<br>
+Current phase: Milestone 6 / Work Package 5 bounded runtime transfer — **In progress — 2026-07-15, Codex implementation owner: order-independent collision correction is locally green; fresh exact-head native/full-size CI is next**. Keep every capability disconnected from every production/default SSH path. Real Apple/SignPath rehearsals remain an explicit late gate and are not on this package's critical path.<br>
+Session checkpoint: **SOURCE PRE-SCAN COLLISION FIX LOCAL GREEN / COMMIT AND CI NEXT — 2026-07-15, Codex implementation owner** — `E-M6-SOURCE-PRESCAN-COLLISION-FIX-LOCAL-001` proves the Linux finding is corrected independently of filesystem enumeration order and without child metadata access. Commit and push the narrow correction, then require a fresh exact-head all-six native/full-size run. Do not open SSH channels, transfer/install bytes, add a product caller, settings/fallback wiring, tuple enablement, publication, or default behavior. Merging to `main` remains prohibited, SignPath is deferred, and legacy remains the production default.<br>
 Primary design: [SSH relay GitHub Release plan](./2026-07-14-ssh-relay-github-release-plan.html)<br>
 Motivating issues: [#8450](https://github.com/stablyai/orca/issues/8450), [#1693](https://github.com/stablyai/orca/issues/1693)
 
@@ -16371,6 +16371,53 @@ config/vitest.config.ts --maxWorkers=1 --silent=true config/scripts/ssh-relay-ru
   outcome, and adjacent PR/Golden/computer-use checks. GitHub runners still do not prove live SSH,
   SFTP/system-SSH transfer, remote staging/install, or post-scan transfer races. Streaming and every
   product/mode/fallback/tuple/publication/default path remain absent; legacy remains the sole default.
+
+### E-M6-SOURCE-PRESCAN-CI-RED-001 — Linux exposes order-dependent collision classification
+
+- Date/owner/head: 2026-07-15, Codex implementation owner; exact implementation commit
+  `74104b623511164d7c6b6ae3bd2ee25d6734cb53` on draft PR
+  [#8741](https://github.com/stablyai/orca/pull/8741).
+- Workflow/job: SSH Relay Runtime Artifacts run
+  [29498296906](https://github.com/stablyai/orca/actions/runs/29498296906), native Linux arm64 job
+  [87620486364](https://github.com/stablyai/orca/actions/runs/29498296906/job/87620486364), Node
+  24.18.0. The artifact contract step fails after about one minute.
+- Exact failure: the real case-sensitive filesystem enumerates added `RELAY.JS` before signed
+  `relay.js`; the scan rejects it as `SSH relay runtime source has an undeclared entry: RELAY.JS`,
+  while the purpose case requires `/collision/i`. Integrity still fails closed before hashing,
+  transfer, remote staging, or execution; the defect is classification order, not an acceptance or
+  fallback bypass.
+- Action: the implementation owner cancelled the remaining already-doomed artifact run after
+  capturing the failure. Make an undeclared spelling whose case fold matches the authenticated set
+  a collision even when its signed peer has not yet been enumerated, and add a platform-neutral
+  enumeration-order test before requesting fresh exact-head proof. No box is checked from this run.
+
+### E-M6-SOURCE-PRESCAN-COLLISION-FIX-LOCAL-001 — classification is order-independent locally
+
+- Date/owner/environment: 2026-07-15, Codex implementation owner; local macOS arm64, Node 26.0.0,
+  pnpm 10.24.0, atop failed exact-head commit `74104b623` plus the narrow correction diff.
+- Correction: when an enumerated spelling is absent from the exact authenticated map but present in
+  its case-folded set, reject it as a collision before any child metadata operation. A new
+  platform-neutral operations-seam case presents `RELAY.JS` before signed `relay.js`, requires the
+  collision classification, observes only the root `lstat`, and proves the directory handle closes.
+  The real Linux filesystem case remains enabled on Linux.
+- Purpose command: `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts
+--maxWorkers=1 src/main/ssh/ssh-relay-runtime-source-scan.test.ts` — PASS, exit 0: 17 passed and the
+  real-filesystem Linux case skipped locally; 10.65 seconds Vitest / 18.64 seconds wall and
+  128,745,472-byte maximum RSS.
+- Focused adjacent command: the E-M6-SOURCE-PRESCAN-LOCAL-001 nine-file command — PASS, exit 0: 80
+  passed and one platform skip in 11.14 seconds Vitest. The native-workflow oracle remains included.
+- Broad relay command: `pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1
+src/main/ssh/ssh-relay-*.test.ts` — PASS, exit 0: 41 files passed, three skipped; 539 tests passed and
+  five skipped in 33.88 seconds Vitest. Existing stale-lock and Node 26 deprecation diagnostics are
+  unchanged.
+- Static gates: `pnpm typecheck`, targeted `oxlint`, `git diff --check`, and full `pnpm lint` pass;
+  full lint retains only the pre-existing warnings and again passes reliability, max-lines, bundled
+  guide, and localization gates. Protected resolver files remain untouched and no production
+  importer exists.
+- Residual gate: local macOS cannot execute the real case-sensitive filesystem case. Commit and push
+  the correction, then require that case plus the full purpose suite on both Linux native jobs and
+  every other native client, and require the complete exact-artifact scan metrics before closing the
+  package. The failed/cancelled run supplies no green cell.
 
 ## Accepted Gaps
 

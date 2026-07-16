@@ -9,9 +9,9 @@ keeps commands, hashes, runner identities, timings, and failure details.
 A checked box means the work has evidence in the detailed ledger. Design approval alone does not
 complete a box.
 
-Active checkpoint: **Milestone 6 / Work Package 5 bounded runtime transfer — disconnected full-tree
-source pre-scan is locally green; commit and exact-head native/full-size CI are next, 2026-07-15,
-Codex implementation owner.**
+Active checkpoint: **Milestone 6 / Work Package 5 bounded runtime transfer — order-independent
+case-collision correction is locally green; commit and fresh exact-head all-six proof are next,
+2026-07-15, Codex implementation owner.**
 `E-M6-SOURCE-PRESCAN-AUDIT-001` fixes the next local-only boundary: consume only the accepted source
 tree plus one exact signal; assert its borrowed lease; boundedly enumerate and hash every real entry;
 reject mutation, symlink/junction, special, missing/extra/colliding, mode/size/hash/aggregate drift;
@@ -26,6 +26,14 @@ snapshots, and both native workflow invocations. The local full-size case correc
 native artifact; exact-head all-six native metrics remain required before checking the item.
 `E-M6-SOURCE-PRESCAN-LOCAL-RED-001` records the earlier expected missing-module failures for purpose
 and full-size measurement plus the workflow oracle's six-pass/one-fail result.
+`E-M6-SOURCE-PRESCAN-CI-RED-001` records the Linux arm64 Node 24 runner finding: `RELAY.JS`
+enumerated before signed `relay.js` fails closed as undeclared rather than collision. No SSH or
+execution occurs. The remaining artifact run was cancelled after capture; collision classification
+must become order-independent and receive fresh all-six native/full-size proof.
+`E-M6-SOURCE-PRESCAN-COLLISION-FIX-LOCAL-001` makes the classification independent of enumeration
+order and adds a platform-neutral case proving rejection before child metadata access. It passes 17
+purpose cases with one Linux-only local skip, 80 focused cases, 539 broad relay cases, typecheck,
+full lint, and diff gates. Fresh exact-head Linux and all-six full-size proof remain required.
 `E-M6-SOURCE-TREE-CONTRACT-AUDIT-001` fixes a pure ready-acquisition → immutable descriptor
 boundary: exact verified manifest/cache identity and signed limits, deterministic ASCII ordering,
 client-native paths, borrowed live-lease assertion, and later shared use by pre-scan plus SFTP,
