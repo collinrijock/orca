@@ -172,6 +172,7 @@ import {
 } from '../shared/feature-interactions'
 import { normalizeContextualTourIds } from '../shared/contextual-tours'
 import { normalizeFeatureTipIds } from '../shared/feature-tips'
+import { normalizeManualRepoOrder } from '../shared/manual-repo-order'
 import {
   DEFAULT_WORKSPACE_STATUS_ID,
   clampWorkspaceBoardColumnWidth,
@@ -3199,6 +3200,9 @@ export class Store {
             // Why: persisted settings can be user-edited or written by older
             // builds; keep tray-minimize false unless the stored value is true.
             minimizeToTrayOnClose: parsed.settings?.minimizeToTrayOnClose === true,
+            // Why: missing means default-on, and the value must round-trip
+            // unchanged on non-mac hosts; the darwin consumers gate the effect.
+            showMenuBarIcon: parsed.settings?.showMenuBarIcon !== false,
             uiLanguage: normalizeUiLanguage(parsed.settings?.uiLanguage),
             defaultTaskSource: taskProviderSettings.defaultTaskSource,
             visibleTaskProviders: taskProviderSettings.visibleTaskProviders,
@@ -3805,7 +3809,7 @@ export class Store {
     }
   }
 
-  private flushOrThrow(): void {
+  flushOrThrow(): void {
     if (this.writeTimer) {
       clearTimeout(this.writeTimer)
       this.writeTimer = null
@@ -4265,6 +4269,37 @@ export class Store {
       next.push(repo)
     }
     this.state.repos = next
+    this.syncProjectHostSetupCompatibilityState()
+    this.scheduleSave()
+    return true
+  }
+
+  // Why: repo ids are unique only within an execution host, and renderer drags
+  // persist one complete permutation per host when local and SSH repos coexist.
+  reorderReposForHost(orderedIds: string[], hostId: ExecutionHostId): boolean {
+    const current = this.state.repos
+    const hostRepos = current.filter((repo) => getRepoExecutionHostId(repo) === hostId)
+    if (orderedIds.length !== hostRepos.length) {
+      return false
+    }
+    const byId = new Map(hostRepos.map((repo) => [repo.id, repo]))
+    if (byId.size !== hostRepos.length) {
+      return false
+    }
+    const seen = new Set<string>()
+    const reorderedHostRepos: Repo[] = []
+    for (const id of orderedIds) {
+      const repo = typeof id === 'string' && !seen.has(id) ? byId.get(id) : undefined
+      if (!repo) {
+        return false
+      }
+      seen.add(id)
+      reorderedHostRepos.push(repo)
+    }
+    let nextHostIndex = 0
+    this.state.repos = current.map((repo) =>
+      getRepoExecutionHostId(repo) === hostId ? reorderedHostRepos[nextHostIndex++] : repo
+    )
     this.syncProjectHostSetupCompatibilityState()
     this.scheduleSave()
     return true
@@ -5233,6 +5268,9 @@ export class Store {
     if ('minimizeToTrayOnClose' in updates) {
       sanitizedUpdates.minimizeToTrayOnClose = updates.minimizeToTrayOnClose === true
     }
+    if ('showMenuBarIcon' in updates) {
+      sanitizedUpdates.showMenuBarIcon = updates.showMenuBarIcon === true
+    }
     if ('disabledTuiAgents' in updates) {
       sanitizedUpdates.disabledTuiAgents = normalizeDisabledTuiAgents(updates.disabledTuiAgents)
     }
@@ -5409,6 +5447,7 @@ export class Store {
         this.state.ui?.visibleWorkspaceHostIds
       ),
       workspaceHostOrder: normalizeExecutionHostOrder(this.state.ui?.workspaceHostOrder),
+      manualRepoOrder: normalizeManualRepoOrder(this.state.ui?.manualRepoOrder),
       browserDefaultZoomLevel: normalizeBrowserPageZoomLevel(
         this.state.ui?.browserDefaultZoomLevel
       ),
@@ -5494,6 +5533,10 @@ export class Store {
         updates.workspaceHostOrder !== undefined
           ? normalizeExecutionHostOrder(updates.workspaceHostOrder)
           : normalizeExecutionHostOrder(this.state.ui?.workspaceHostOrder),
+      manualRepoOrder:
+        updates.manualRepoOrder !== undefined
+          ? normalizeManualRepoOrder(updates.manualRepoOrder)
+          : normalizeManualRepoOrder(this.state.ui?.manualRepoOrder),
       browserDefaultZoomLevel: normalizeBrowserPageZoomLevel(
         updates.browserDefaultZoomLevel ?? this.state.ui?.browserDefaultZoomLevel
       ),

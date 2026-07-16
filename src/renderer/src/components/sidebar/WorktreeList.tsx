@@ -142,7 +142,10 @@ import {
   type ScrollToCurrentWorkspaceRevealRequestDetail
 } from '@/lib/scroll-to-current-workspace-status'
 import { isRepoHeaderActionTarget, useRepoHeaderDrag } from './project-header-drag'
-import { getSidebarOrderedRepoHeaderIdsByBucket } from './project-header-drop'
+import {
+  getLogicalRepoOrderRankById,
+  getSidebarOrderedRepoHeaderIdsByBucket
+} from './project-header-drop'
 import { useProjectGroupHeaderDrag } from './project-group-header-drag'
 import { getSidebarOrderedProjectGroupHeaderIdsByBucket } from './project-group-header-drop'
 import {
@@ -269,7 +272,7 @@ import { buildSidebarHostOptions } from './sidebar-host-options'
 import { HostSectionHeaderMenu } from './HostSectionHeaderMenu'
 import { ProjectHeaderActions } from './ProjectHeaderActions'
 import { translate } from '@/i18n/i18n'
-import { folderWorkspaceKey, parseWorkspaceKey } from '../../../../shared/workspace-scope'
+import { folderWorkspaceKey, getActiveSidebarWorkspaceId } from '../../../../shared/workspace-scope'
 import { getHostDisplayLabelOverrides } from '../../../../shared/host-setting-overrides'
 import {
   isConfirmedStaleFolderPathStatus,
@@ -405,22 +408,6 @@ function shouldIgnoreRepoHeaderToggle(event: React.SyntheticEvent<HTMLElement>):
 
 function getWorktreeOptionId(rowKey: string): string {
   return `worktree-list-option-${encodeURIComponent(rowKey)}`
-}
-
-// Why: folder workspaces are tracked by the scoped active key, while older
-// worktree-only paths still read activeWorktreeId.
-function getActiveSidebarWorkspaceId(
-  activeWorkspaceKey: string | null,
-  activeWorktreeId: string | null
-): string | null {
-  const scope = activeWorkspaceKey ? parseWorkspaceKey(activeWorkspaceKey) : null
-  if (scope?.type === 'folder') {
-    return folderWorkspaceKey(scope.folderWorkspaceId)
-  }
-  if (scope?.type === 'worktree') {
-    return scope.worktreeId
-  }
-  return activeWorktreeId
 }
 
 function getMountedWorktreeOptions(worktreeId: string, root?: ParentNode | null): HTMLElement[] {
@@ -5686,9 +5673,7 @@ const WorktreeList = React.memo(function WorktreeList({
     })
   }, [defaultHostId, folderWorkspaces, projectGroups, visibleHostIdSet])
   const repoOrder = useMemo(() => {
-    const map = new Map<string, number>()
-    repos.forEach((r, i) => map.set(r.id, i))
-    return map
+    return getLogicalRepoOrderRankById(repos.map((repo) => repo.id))
   }, [repos])
   const [importedWorktreeCardActionState, setImportedWorktreeCardActionState] = useState<
     Map<string, ImportedWorktreeCardActionState>
