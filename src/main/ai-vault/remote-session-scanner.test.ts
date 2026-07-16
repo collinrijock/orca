@@ -6,6 +6,7 @@ import { scanRemoteAiVaultSessions } from './remote-session-scanner'
 
 class MemoryRemoteProvider implements IFilesystemProvider {
   private readonly files = new Map<string, { content: string; mtimeMs: number }>()
+  private readonly readDirErrors = new Map<string, Error>()
   private readonly statErrors = new Map<string, Error>()
   readonly readDirPaths: string[] = []
 
@@ -17,9 +18,17 @@ class MemoryRemoteProvider implements IFilesystemProvider {
     this.statErrors.set(normalize(path), error)
   }
 
+  failReadDir(path: string, error: Error): void {
+    this.readDirErrors.set(normalize(path), error)
+  }
+
   async readDir(dirPath: string): Promise<DirEntry[]> {
     const dir = normalize(dirPath)
     this.readDirPaths.push(dir)
+    const readDirError = this.readDirErrors.get(dir)
+    if (readDirError) {
+      throw readDirError
+    }
     const prefix = dir.endsWith('/') ? dir : `${dir}/`
     const entries = new Map<string, DirEntry>()
     for (const path of this.files.keys()) {
@@ -336,6 +345,58 @@ describe('scanRemoteAiVaultSessions', () => {
         message: expect.stringContaining('EACCES')
       })
     ])
+  })
+
+  it('reports non-missing fixed and recursive remote directory failures', async () => {
+    const provider = new MemoryRemoteProvider()
+    const brainDir = '/home/ada/.gemini/antigravity-cli/brain'
+    const claudeProjectDir = '/home/ada/.claude/projects/repo'
+    provider.addFile(`${claudeProjectDir}/session.jsonl`, 'unreadable', 1)
+    provider.failReadDir(brainDir, new Error(`EACCES: permission denied, scandir '${brainDir}'`))
+    provider.failReadDir(
+      claudeProjectDir,
+      new Error(`ECONNRESET: connection lost while reading '${claudeProjectDir}'`)
+    )
+
+    const result = await scanRemoteAiVaultSessions({
+      provider,
+      executionHostId: 'ssh:dev-box',
+      remoteHome: '/home/ada',
+      hostPlatform: getRemoteHostPlatform('linux-x64')
+    })
+
+    expect(result.sessions).toEqual([])
+    expect(result.issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          agent: 'antigravity',
+          path: brainDir,
+          message: expect.stringContaining('EACCES')
+        }),
+        expect.objectContaining({
+          agent: 'claude',
+          path: claudeProjectDir,
+          message: expect.stringContaining('ECONNRESET')
+        })
+      ])
+    )
+    expect(result.issues).toHaveLength(2)
+  })
+
+  it('keeps missing optional remote directories silent', async () => {
+    const provider = new MemoryRemoteProvider()
+    const brainDir = '/home/ada/.gemini/antigravity-cli/brain'
+    provider.failReadDir(brainDir, new Error(`ENOENT: no such directory, scandir '${brainDir}'`))
+
+    const result = await scanRemoteAiVaultSessions({
+      provider,
+      executionHostId: 'ssh:dev-box',
+      remoteHome: '/home/ada',
+      hostPlatform: getRemoteHostPlatform('linux-x64')
+    })
+
+    expect(result.sessions).toEqual([])
+    expect(result.issues).toEqual([])
   })
 
   it('excludes Claude subagent transcripts from remote scans', async () => {

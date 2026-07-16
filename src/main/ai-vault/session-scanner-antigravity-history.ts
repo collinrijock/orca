@@ -1,5 +1,5 @@
 import type { AiVaultSession } from '../../shared/ai-vault-types'
-import { normalizeTitleText, parseJsonObject } from './session-scanner-values'
+import { normalizeTitleText, parseJsonObject, timestampMs } from './session-scanner-values'
 
 const HISTORY_MATCH_WINDOW_MS = 2_000
 
@@ -41,12 +41,12 @@ function indexAntigravityHistory(content: string | null): AntigravityHistoryInde
     const record = parseJsonObject(line)
     const display = typeof record?.display === 'string' ? normalizeTitleText(record.display) : null
     const workspace = typeof record?.workspace === 'string' ? record.workspace.trim() : ''
-    const timestampMs = typeof record?.timestamp === 'number' ? record.timestamp : Number.NaN
-    if (!display || !workspace || !Number.isFinite(timestampMs)) {
+    const entryTimestampMs = timestampMs(record?.timestamp)
+    if (!display || !workspace || !Number.isFinite(entryTimestampMs)) {
       continue
     }
     const entries = index.get(display) ?? []
-    entries.push({ timestampMs, workspace })
+    entries.push({ timestampMs: entryTimestampMs, workspace })
     index.set(display, entries)
   }
   return index
@@ -64,7 +64,7 @@ function findAntigravityWorkspace(
   const firstTitledUserTimestamp = session.previewMessages.find(
     (message) => message.role === 'user' && normalizeTitleText(message.text) === session.title
   )?.timestamp
-  const promptTimestampMs = Date.parse(firstTitledUserTimestamp ?? session.createdAt ?? '')
+  const promptTimestampMs = timestampMs(firstTitledUserTimestamp ?? session.createdAt)
   if (!Number.isFinite(promptTimestampMs)) {
     return null
   }

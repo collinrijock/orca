@@ -2,7 +2,6 @@ import { extname } from 'node:path'
 import type { AiVaultAgent, AiVaultScanIssue } from '../../shared/ai-vault-types'
 import type { ExecutionHostId } from '../../shared/execution-host'
 import type { FileStat, IFilesystemProvider } from '../providers/types'
-import type { RemoteHostPlatform } from '../ssh/ssh-remote-platform'
 import { joinRemotePath } from '../ssh/ssh-remote-platform'
 import { partitionSubagentTranscriptPaths } from './session-scanner-subagent-transcripts'
 import type { FileWithMtime } from './session-scanner-types'
@@ -21,8 +20,8 @@ export async function discoverRemoteSourceCandidates(args: {
   issues: AiVaultScanIssue[]
 }): Promise<RemoteSessionCandidate[]> {
   const walked = args.source.fixedChildFileSegments
-    ? await listRemoteFixedChildFiles(args.source, args.context.provider, args.context.hostPlatform)
-    : await walkRemoteSessionFiles(args.source, args.context.provider, args.context.hostPlatform)
+    ? await listRemoteFixedChildFiles(args.source, args.context, args.issues)
+    : await walkRemoteSessionFiles(args.source, args.context, args.issues)
   const partition = args.source.collectSubagentSiblingCounts
     ? partitionSubagentTranscriptPaths(walked)
     : null
@@ -48,13 +47,14 @@ export async function discoverRemoteSourceCandidates(args: {
 
 async function listRemoteFixedChildFiles(
   source: RemoteSessionSource,
-  provider: IFilesystemProvider,
-  hostPlatform: RemoteHostPlatform
+  context: RemoteScannerContext,
+  issues: AiVaultScanIssue[]
 ): Promise<string[]> {
   let entries
   try {
-    entries = await provider.readDir(source.rootDir)
-  } catch {
+    entries = await context.provider.readDir(source.rootDir)
+  } catch (err) {
+    recordRemoteDirectoryIssue(source, context.executionHostId, issues, source.rootDir, err)
     return []
   }
   const segments = source.fixedChildFileSegments ?? []
@@ -62,36 +62,35 @@ async function listRemoteFixedChildFiles(
   // serialized SSH readDir round trips for every conversation directory.
   return entries
     .filter((entry) => entry.isDirectory && !entry.isSymlink)
-    .map((entry) => joinRemotePath(hostPlatform, source.rootDir, entry.name, ...segments))
+    .map((entry) => joinRemotePath(context.hostPlatform, source.rootDir, entry.name, ...segments))
     .filter((path) => source.filePredicate?.(path) ?? true)
 }
 
 async function walkRemoteSessionFiles(
   source: RemoteSessionSource,
-  provider: IFilesystemProvider,
-  hostPlatform: RemoteHostPlatform,
+  context: RemoteScannerContext,
+  issues: AiVaultScanIssue[],
   dirPath = source.rootDir,
   depth = 0
 ): Promise<string[]> {
   let entries
   try {
-    entries = await provider.readDir(dirPath)
-  } catch {
+    entries = await context.provider.readDir(dirPath)
+  } catch (err) {
+    recordRemoteDirectoryIssue(source, context.executionHostId, issues, dirPath, err)
     return []
   }
 
   const extensions = new Set(source.extensions)
   const files: string[] = []
   for (const entry of entries) {
-    const fullPath = joinRemotePath(hostPlatform, dirPath, entry.name)
+    const fullPath = joinRemotePath(context.hostPlatform, dirPath, entry.name)
     if (
       entry.isDirectory &&
       !entry.isSymlink &&
       (source.directoryPredicate?.(entry.name, depth) ?? true)
     ) {
-      files.push(
-        ...(await walkRemoteSessionFiles(source, provider, hostPlatform, fullPath, depth + 1))
-      )
+      files.push(...(await walkRemoteSessionFiles(source, context, issues, fullPath, depth + 1)))
       continue
     }
     if (
@@ -118,14 +117,26 @@ async function statRemoteFile(
     const mtimeMs = remoteStatMtimeMs(stat)
     return { path, mtimeMs, modifiedAt: new Date(mtimeMs).toISOString() }
   } catch (err) {
-    if (!missingIsExpected || !isMissingRemoteFileError(err)) {
+    if (!missingIsExpected || !isMissingRemotePathError(err)) {
       issues.push({ executionHostId, agent, path, message: errorMessage(err) })
     }
     return null
   }
 }
 
-function isMissingRemoteFileError(err: unknown): boolean {
+function recordRemoteDirectoryIssue(
+  source: RemoteSessionSource,
+  executionHostId: ExecutionHostId,
+  issues: AiVaultScanIssue[],
+  path: string,
+  err: unknown
+): void {
+  if (!isMissingRemotePathError(err)) {
+    issues.push({ executionHostId, agent: source.agent, path, message: errorMessage(err) })
+  }
+}
+
+function isMissingRemotePathError(err: unknown): boolean {
   const code =
     err && typeof err === 'object' && 'code' in err && typeof err.code === 'string'
       ? err.code

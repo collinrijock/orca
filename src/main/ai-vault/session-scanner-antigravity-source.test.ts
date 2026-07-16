@@ -40,7 +40,7 @@ describe('Antigravity AI Vault discovery', () => {
     await writeAntigravityHistory(join(wslHome, '.gemini', 'antigravity-cli', 'brain'), [
       {
         display: 'Index the WSL conversation',
-        timestamp: Date.parse('2026-07-15T11:39:10.100Z'),
+        timestamp: Date.parse('2026-07-15T11:39:10.100Z') / 1000,
         workspace: '/home/ada/project'
       }
     ])
