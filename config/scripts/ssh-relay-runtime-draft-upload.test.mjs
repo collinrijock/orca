@@ -121,6 +121,23 @@ describe('SSH relay runtime draft upload', () => {
     })
   })
 
+  it('settles an unconsumed upload stream before returning', async () => {
+    let uploadBody
+    const fetchImpl = vi.fn(async (url, options = {}) => {
+      if (options.method === 'POST') {
+        uploadBody = options.body
+        return json(uploadedAsset(), 201)
+      }
+      return url.includes('/git/ref/tags/') ? json(tagReference()) : json(draft())
+    })
+
+    await expect(uploadSshRelayRuntimeDraftAssets(input(fetchImpl))).resolves.toMatchObject({
+      uploadedAssets: [{ name: NAME, sha256: digest(), size: BYTES.length }]
+    })
+    expect(uploadBody).toBeDefined()
+    expect(uploadBody.closed).toBe(true)
+  })
+
   it('reuses only same-draft assets whose downloaded bytes match', async () => {
     const location = 'https://release-assets.githubusercontent.com/example/runtime?sig=signed'
     const fetchImpl = vi

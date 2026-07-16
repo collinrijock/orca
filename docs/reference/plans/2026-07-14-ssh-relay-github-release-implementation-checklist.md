@@ -9,7 +9,7 @@ work; keep exact commands, runner identities, hashes, metrics, and residual gaps
 Date created: 2026-07-14<br>
 Last updated: 2026-07-15<br>
 Current phase: Milestone 5 / Work Package 4 desktop resolver/cache — **In progress — 2026-07-15, Codex implementation owner: checkpoint and obtain all-six native proof for the locally green, disconnected compile-time manifest trust-root provider**. The build constant remains hardcoded to `null`; keep the production key file/seed/environment, signed embedded bytes, builder/resource/consumer/cache/downloader/SSH/settings/tuples/publication/default behavior absent. Real Apple/SignPath rehearsals remain an explicit late gate and are not on this package's critical path.<br>
-Session checkpoint: **In progress — 2026-07-15, Codex implementation owner** — `E-M5-ACCEPTED-KEYS-CI-001` closes all-six native accepted-key parser proof at exact head `11f367e6613b0cae61a1153b77a5be332fd4e763`; Golden E2E passes and the artifact workflow is red only for the retained hosted Windows arm64 build-26200 versus required-26100 floor rejection. The first PR Checks attempt reached 30,100 passing tests and failed one unrelated renderer PTY ownership race test in untouched code; attempt 2 passes the complete job, including full tests, unpacked build, and packaged CLI smoke. `E-M5-COMPILED-TRUST-LOCAL-001` is green locally and wired into both native job families. User authority covers end-to-end PR-contained implementation, commits, pushes, CI, rehearsals, and release writes; merging to `main` remains explicitly prohibited. No Electron resource, downloader, SSH, setting, tuple, publication, or default-path consumer exists. Legacy remains the production default.<br>
+Session checkpoint: **In progress — 2026-07-15, Codex implementation owner** — `E-M5-ACCEPTED-KEYS-CI-001` closes all-six native accepted-key parser proof at exact head `11f367e6613b0cae61a1153b77a5be332fd4e763`; Golden E2E passes and the artifact workflow is red only for the retained hosted Windows arm64 build-26200 versus required-26100 floor rejection. `E-M5-COMPILED-TRUST-LOCAL-001` is green locally and wired into both native job families. Exact-head artifact run 29470322099 is not yet accepted: Linux arm64 job 87532052107 exposed an unawaited draft-upload request-stream lifecycle (`E-M5-COMPILED-TRUST-CI-RED-001`), now reproduced and locally corrected under `E-M5-DRAFT-UPLOAD-STREAM-SETTLEMENT-LOCAL-001`; Windows x64 job 87532052082 independently failed an existing cache-lock concurrency test with `EPERM` plus teardown `ENOENT` (`E-M5-COMPILED-TRUST-WINDOWS-CI-RED-001`). Require replacement exact-head proof before recording all-six success. User authority covers end-to-end PR-contained implementation, commits, pushes, CI, rehearsals, and release writes; merging to `main` remains explicitly prohibited. Real Apple/SignPath work is deferred to its late gate. No Electron resource, downloader, SSH, setting, tuple, publication, or default-path consumer exists. Legacy remains the production default.<br>
 Primary design: [SSH relay GitHub Release plan](./2026-07-14-ssh-relay-github-release-plan.html)<br>
 Motivating issues: [#8450](https://github.com/stablyai/orca/issues/8450), [#1693](https://github.com/stablyai/orca/issues/1693)
 
@@ -14120,6 +14120,70 @@ src/main/ssh/ssh-relay-compiled-manifest-trust.test.ts`.
   search and `test ! -e config/ssh-relay-runtime-manifest-accepted-keys.json` confirm that no real
   key file, mutable trust lookup, resource bytes/mapping, manifest consumer, cache/network/SSH/mode,
   tuple, publication, or default behavior exists.
+
+### E-M5-COMPILED-TRUST-CI-RED-001 — exact-head Linux arm64 upload-stream lifecycle failure
+
+- Date/owner: 2026-07-15, Codex implementation owner.
+- Exact source: `4c09902c040af2c29d207aa9b6ea8e03421607a3`; artifact run
+  [29470322099](https://github.com/stablyai/orca/actions/runs/29470322099), failed primary job
+  [87532052107](https://github.com/stablyai/orca/actions/runs/29470322099/job/87532052107).
+- Runner/runtime: GitHub-hosted `ubuntu-24.04-arm`, image `20260714.61.1`, Ubuntu 24.04.4 arm64,
+  Actions runner 2.335.1, Node 24.18.0.
+- Result: the new compiled-manifest trust suite passed 1 file / 3 tests in 6 ms and the complete
+  contract command passed all 70 files / 473 tests, but Vitest then failed the step after 9.16 s
+  with one unhandled `ENOENT` opening the draft-upload suite's temporary local archive. Vitest
+  attributed the asynchronous exception to
+  `config/scripts/ssh-relay-runtime-draft-upload.test.mjs`, most recently while
+  `fails closed on unsafe draft state or existing managed bytes` ran.
+- Interpretation: this is not evidence against the compiled trust contract, but the exact-head job
+  remains RED. The draft uploader creates a request `ReadStream`, destroys it when an injected or
+  early HTTP response does not consume it, and does not await terminal stream settlement before the
+  caller/test may remove the source directory. A purpose-named local RED and bounded lifecycle fix
+  are required before rerunning and accepting all-six native proof.
+- Residual gap: the other exact-head jobs and workflows were still settling when recorded. Do not
+  issue `E-M5-COMPILED-TRUST-CI-001` until every primary native contract step, PR Checks, and Golden
+  E2E result is inspected and this failure is replaced by green exact-head evidence.
+
+### E-M5-DRAFT-UPLOAD-STREAM-SETTLEMENT-LOCAL-001 — request stream closes before caller cleanup
+
+- Date/owner: 2026-07-15, Codex implementation owner.
+- Purpose-named RED command: `pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1
+config/scripts/ssh-relay-runtime-draft-upload.test.mjs` — FAIL before the correction, 1 failed / 8
+  passed in 547 ms; `settles an unconsumed upload stream before returning` observed
+  `ReadStream.closed === false` after the uploader resolved.
+- Correction: attach the file-stream error/close observers before invoking the injectable fetch,
+  destroy an unconsumed request body, await its terminal close, and fail closed on a source-stream
+  error. This prevents caller/test staging cleanup from racing a delayed file open and preserves the
+  existing bounded retry, cancellation, exact-byte verification, and draft-reconciliation policy.
+- Focused GREEN: `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts
+--maxWorkers=1 config/scripts/ssh-relay-runtime-draft-upload.test.mjs` — PASS, 1 file / 9 tests in
+  639 ms Vitest / 4.10 s wall, 132,366,336-byte maximum RSS, 96,572,840-byte peak footprint, zero
+  swaps.
+- Regression GREEN: `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts
+--maxWorkers=1 config/scripts/ssh-relay-runtime-*.test.mjs` — PASS, 50 files / 280 tests in 42.16 s
+  Vitest / 45.49 s wall, 189,628,416-byte maximum RSS, 96,179,528-byte peak footprint, zero swaps.
+  `pnpm typecheck`, `pnpm lint`, focused `oxfmt --check`, `git diff --check`, and protected resolver
+  zero-diff checks pass; lint includes 41 reliability gates, the 355-entry max-lines ratchet with no
+  new bypass, bundled-skill verification, and localization parity/coverage.
+- Does not prove: replacement native CI, a real GitHub release write, publication, signing, desktop
+  manifest consumption, cache/download behavior, SSH transfer, mode wiring, or tuple enablement.
+
+### E-M5-COMPILED-TRUST-WINDOWS-CI-RED-001 — exact-head Windows x64 cache-lock race
+
+- Date/owner: 2026-07-15, Codex implementation owner.
+- Exact source/job: `4c09902c040af2c29d207aa9b6ea8e03421607a3`, artifact run 29470322099,
+  [Windows x64 job 87532052082](https://github.com/stablyai/orca/actions/runs/29470322099/job/87532052082).
+- Runner/runtime: GitHub-hosted Windows Server 2022 10.0.20348 x64, `windows-2022` image
+  `20260706.237.1`, Actions runner 2.335.1, Node 24.18.0.
+- Result: the new compiled-trust suite passed 3/3. The combined command then ended with 1 failed,
+  463 passed, 13 skipped, and one unhandled error in 17.80 s. The untouched
+  `serializes concurrent writers and transfers ownership only after owner release` cache-lock test
+  received `EPERM` renaming the released lock; its still-running waiter then received `ENOENT` after
+  test cleanup removed the lock root.
+- Disposition: prior all-six cache-lock evidence exists, but this exact-head failure is not waived.
+  The replacement run must settle green without a test-only relaxation. If the `EPERM` repeats,
+  diagnose Windows handle ownership and implement a separately evidenced cache-lock correction
+  before accepting the compiled-trust checkpoint.
 
 ## Accepted Gaps
 

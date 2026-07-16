@@ -10,11 +10,19 @@ A checked box means the work has evidence in the detailed ledger. Design approva
 complete a box.
 
 Active checkpoint: **Milestone 5 / Work Package 4 desktop resolver/cache — disconnected compile-time
-manifest trust-root provider locally green and wired; isolated commit/all-six native proof next,
+manifest trust-root provider locally green and wired; CI RED corrected locally, replacement native proof next,
 2026-07-15, Codex implementation owner.** `E-M5-COMPILED-TRUST-AUDIT-001` and its RED precede
 `E-M5-COMPILED-TRUST-LOCAL-001`: 3/3 focused, 22/22 trust, 307/307 non-full-size SSH relay, 279/279
 release-script, workflow-oracle, typecheck, lint, format, max-lines, and diff gates pass. The build
 constant is literal `null`; no production key file, resource bytes, or consumer exists. Prior exact
+head artifact run 29470322099 is not yet accepted: Linux arm64 job 87532052107 exposed an unawaited
+draft-upload request-stream lifecycle (`E-M5-COMPILED-TRUST-CI-RED-001`), now deterministically
+reproduced and locally corrected with 9/9 focused and 280/280 release-script tests under
+`E-M5-DRAFT-UPLOAD-STREAM-SETTLEMENT-LOCAL-001`. Windows x64 job 87532052082 independently failed an
+existing cache-lock concurrency test with `EPERM` plus teardown `ENOENT`
+(`E-M5-COMPILED-TRUST-WINDOWS-CI-RED-001`). Replacement exact-head native proof is required; a
+repeat Windows failure requires a separate correction. Real Apple/SignPath work remains deferred to
+its late gate. Prior exact
 head `11f367e66` passes all six primary native accepted-key jobs under
 `E-M5-ACCEPTED-KEYS-CI-001` and Golden E2E; the artifact workflow is red only for the retained
 Windows arm64 hosted build-26200 versus required-26100 floor gap. PR Checks attempt 1 failed one

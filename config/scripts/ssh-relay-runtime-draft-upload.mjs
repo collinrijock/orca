@@ -295,6 +295,13 @@ async function uploadAsset(context, asset, signal, delayImpl) {
     let failure
     let response
     const body = createReadStream(asset.path)
+    let bodyFailure
+    const bodyClosed = new Promise((resolve) => {
+      body.once('error', (error) => {
+        bodyFailure = error
+      })
+      body.once('close', resolve)
+    })
     try {
       response = await context.fetchImpl(
         `https://uploads.github.com/repos/${context.repo}/releases/${context.releaseId}/assets?name=${encodeURIComponent(asset.name)}`,
@@ -317,6 +324,12 @@ async function uploadAsset(context, asset, signal, delayImpl) {
     } finally {
       // Why: injected failures and early HTTP responses may not consume the request stream.
       body.destroy()
+      await bodyClosed
+    }
+    if (bodyFailure) {
+      throw new Error(`SSH relay runtime draft upload local asset stream failed: ${asset.name}`, {
+        cause: bodyFailure
+      })
     }
     if (response?.status === 201) {
       const result = await response.json()
