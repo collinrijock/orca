@@ -31,6 +31,10 @@ let previousUserDataPath: string | undefined
 beforeEach(() => {
   userDataDir = mkdtempSync(join(tmpdir(), 'orca-trust-grant-userdata-'))
   runtimeHomeDir = join(userDataDir, 'codex-runtime-home', 'home')
+  // Why: production writes hooks.json before granting trust; keeping that
+  // ordering prevents test-only canonical-path drift during ledger setup.
+  mkdirSync(runtimeHomeDir, { recursive: true })
+  writeFileSync(join(runtimeHomeDir, 'hooks.json'), '{"hooks":{}}\n', 'utf-8')
   previousUserDataPath = process.env.ORCA_USER_DATA_PATH
   process.env.ORCA_USER_DATA_PATH = userDataDir
   codexAppServerCapabilityCache.clear()

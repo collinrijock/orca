@@ -311,6 +311,16 @@ describe('computeTrustKey', () => {
     ).toBe(`${join(realpathSync.native(dirname(hooksPath)), 'hooks.json')}:stop:0:0`)
   })
 
+  it.skipIf(process.platform === 'win32')(
+    'canonicalizes an existing POSIX path with two leading slashes',
+    () => {
+      const hooksPath = `/${join(tmpDir, 'hooks.json')}`
+      writeFileSync(hooksPath, '{"hooks":{}}\n', 'utf-8')
+
+      expect(getCodexCanonicalTrustPath(hooksPath)).toBe(realpathSync.native(hooksPath))
+    }
+  )
+
   it('uses native Windows backslashes in the trust key Codex looks up', () => {
     // Why: Codex 0.140 writes approved Windows hook trust keys as raw native
     // paths under [hooks.state].

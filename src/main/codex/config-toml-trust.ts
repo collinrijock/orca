@@ -169,7 +169,9 @@ export function computeTrustKey(entry: CodexTrustEntry): string {
 }
 
 export function getCodexCanonicalTrustPath(sourcePath: string): string {
-  if (process.platform !== 'win32' && usesWindowsPathSeparators(sourcePath)) {
+  if (process.platform !== 'win32' && isWindowsDriveOrBackslashUncPath(sourcePath)) {
+    // Why: an existing `//` path is valid on POSIX, so let realpath distinguish
+    // it from forward-slash UNC before falling back to Windows normalization.
     return normalizeWindowsPathForCodexLookup(sourcePath)
   }
   try {
@@ -206,11 +208,11 @@ function normalizeWindowsPathSeparators(sourcePath: string): string {
 }
 
 function usesWindowsPathSeparators(sourcePath: string): boolean {
-  return (
-    /^[A-Za-z]:[\\/]/.test(sourcePath) ||
-    sourcePath.startsWith('\\\\') ||
-    sourcePath.startsWith('//')
-  )
+  return isWindowsDriveOrBackslashUncPath(sourcePath) || sourcePath.startsWith('//')
+}
+
+function isWindowsDriveOrBackslashUncPath(sourcePath: string): boolean {
+  return /^[A-Za-z]:[\\/]/.test(sourcePath) || sourcePath.startsWith('\\\\')
 }
 
 // Why: Codex and Orca can disagree on quote style, separators, and casing for
