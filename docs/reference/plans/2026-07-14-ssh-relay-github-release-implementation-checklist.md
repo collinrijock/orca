@@ -8,8 +8,8 @@ work; keep exact commands, runner identities, hashes, metrics, and residual gaps
 
 Date created: 2026-07-14<br>
 Last updated: 2026-07-15<br>
-Current phase: Milestone 5 / Work Package 4 desktop resolver/cache — **In progress — 2026-07-15, Codex implementation owner: checkpoint and prove the locally green disconnected marked Linux libc probe on exact-head native CI**. Keep this capability disconnected from host-evidence composition and every production/default SSH path. Real Apple/SignPath rehearsals remain an explicit late gate and are not on this package's critical path.<br>
-Session checkpoint: **LOCAL GREEN / CI REQUIRED — 2026-07-15, Codex implementation owner** — `E-M5-LIBC-DETECTION-LOCAL-001` passes 15/15 purpose, 46/46 focused+workflow, 365/365 non-full-size relay, 280/280 release-script, typecheck, lint, format, max-lines, reliability, localization, diff, and protected-resolver gates. Marked getconf/glibc, ldd glibc/musl, known-loader musl, noise/conflict/bounds, missing-command classification, and cancellation are covered. This is not live SSH/remote-distro evidence and no host-evidence composer, product caller, setting, transfer/install, fallback classifier, tuple enablement, release publication, or default behavior is connected. Merging to `main` remains prohibited, SignPath is deferred, and legacy remains the production default.<br>
+Current phase: Milestone 5 / Work Package 4 desktop resolver/cache — **In progress — 2026-07-15, Codex implementation owner: audit the next smallest remaining disconnected host-evidence boundary after exact-head acceptance of Linux libc detection**. Keep every capability disconnected from host-evidence composition and every production/default SSH path. Real Apple/SignPath rehearsals remain an explicit late gate and are not on this package's critical path.<br>
+Session checkpoint: **CI CLOSED / NEXT AUDIT — 2026-07-15, Codex implementation owner** — `E-M5-LIBC-DETECTION-CI-001` closes implementation commit `d8b17a354`: all six primary native Node 24 jobs, both Linux supplements, Windows x64 baseline, PR Checks, Golden E2E, and computer-use pass. Windows arm64 executes the full runtime smoke and retains only the declared hosted build-26200 rejection against required 26100. Every native client runs the new 15-case marked/no-Node libc contract. This remains contract evidence, not live SSH/distro evidence; no host-evidence composer, product caller, setting, transfer/install, fallback classifier, tuple enablement, release publication, or default behavior is connected. Merging to `main` remains prohibited, SignPath is deferred, and legacy remains the production default.<br>
 Primary design: [SSH relay GitHub Release plan](./2026-07-14-ssh-relay-github-release-plan.html)<br>
 Motivating issues: [#8450](https://github.com/stablyai/orca/issues/8450), [#1693](https://github.com/stablyai/orca/issues/1693)
 
@@ -15023,6 +15023,60 @@ config/scripts/ssh-relay-runtime-*.test.mjs` — PASS, 50 files / 280 tests in 2
   open; legacy remains the sole production path. Require exact-head all-six native proof before the
   next package.
 
+### E-M5-LIBC-DETECTION-CI-001 — all-six native marked Linux libc contract
+
+- Date/owner: 2026-07-15, Codex implementation owner.
+- Exact source/run: implementation commit `d8b17a354bd4c5566381d514c42c9f68e657de8a`, artifact run
+  [29480364900](https://github.com/stablyai/orca/actions/runs/29480364900). All six primary jobs pass
+  under Node 24.18.0 with that exact source: Linux x64 job
+  [87562476656](https://github.com/stablyai/orca/actions/runs/29480364900/job/87562476656)
+  (`ubuntu-24.04`, `ubuntu24` image `20260705.232.1`, x64); Linux arm64 job
+  [87562476613](https://github.com/stablyai/orca/actions/runs/29480364900/job/87562476613)
+  (`ubuntu-24.04-arm`, `ubuntu24-arm64` image `20260714.61.1`, native arm64); macOS x64 job
+  [87562476686](https://github.com/stablyai/orca/actions/runs/29480364900/job/87562476686)
+  (`macos-15-intel`, `macos15` image `20260629.0276.1`, x64); macOS arm64 job
+  [87562476665](https://github.com/stablyai/orca/actions/runs/29480364900/job/87562476665)
+  (`macos-15`, `macos15` image `20260706.0213.1`, native arm64); Windows x64 job
+  [87562476713](https://github.com/stablyai/orca/actions/runs/29480364900/job/87562476713)
+  (`windows-2022`, `win22` image `20260714.244.1`, x64); and Windows arm64 job
+  [87562476682](https://github.com/stablyai/orca/actions/runs/29480364900/job/87562476682)
+  (`windows-11-arm`, `win11-arm64` image `20260714.109.1`, native arm64).
+- Contract result: every POSIX client passes 79 files / 532 tests. Linux x64/arm64 complete in
+  13.83/11.37 s and macOS x64/arm64 in 40.50/35.84 s. Every Windows client passes 80 files / 523
+  tests with the 13 declared platform/full-size skips, in 24.78/28.55 s for x64/arm64. The new
+  15-case libc suite is required exactly once by both native workflow families and therefore runs on
+  every client architecture under Node 24; all existing selector, cache, release, runtime, and
+  workflow contracts remain green.
+- Full-size result: extraction spans 1,239.81–4,316.50 ms with 33,431,552–48,717,824 bytes
+  incremental RSS. Cold immutable-cache publication spans 1,730.07–6,529.74 ms with
+  32,653,312–50,659,328 bytes; warm verified lookup 147.39–883.09 ms with 0–6,361,088 bytes; active
+  retention 11.88–57.61 ms with 0–1,310,720 bytes; and eviction 28.58–119.18 ms with 0–860,160
+  bytes while reclaiming each exact 118,418,686–161,259,376-byte entry. All remain within the
+  recorded budgets; this libc-only package adds no full-size latency or memory path.
+- Supplemental/baseline result: oldest-userland Linux x64 job
+  [87563395186](https://github.com/stablyai/orca/actions/runs/29480364900/job/87563395186)
+  (`ubuntu-24.04`, image `20260705.232.1`) and Linux arm64 job
+  [87563395287](https://github.com/stablyai/orca/actions/runs/29480364900/job/87563395287)
+  (`ubuntu-24.04-arm`, image `20260714.61.1`) pass. Windows x64 baseline job
+  [87564525786](https://github.com/stablyai/orca/actions/runs/29480364900/job/87564525786)
+  (`windows-2022`, image `20260706.237.1`) passes. Windows arm64 baseline job
+  [87564525789](https://github.com/stablyai/orca/actions/runs/29480364900/job/87564525789)
+  (`windows-11-arm`, image `20260714.109.1`) verifies the exact bytes and completes PTY/watcher
+  smoke in 8,077.57 ms, then fails closed only because the observed OS/kernel build is 26200 while
+  the immutable contract requires 26100; platform and architecture checks pass. That declared
+  hosted-runner floor gap is the sole reason the aggregate workflow conclusion is failure.
+- Adjacent exact-head result: PR Checks
+  [29480364896](https://github.com/stablyai/orca/actions/runs/29480364896), Golden E2E
+  [29480365058](https://github.com/stablyai/orca/actions/runs/29480365058), and computer-use
+  [29480365013](https://github.com/stablyai/orca/actions/runs/29480365013) pass, including unpacked
+  app, packaged CLI, Ubuntu 22.04, Windows native, Linux E2E, and macOS E2E gates.
+- Acceptance/boundary: this accepts only the disconnected marked/no-Node Linux libc capability. It
+  does not prove a real SSH server, GNU/BusyBox/Alpine remote behavior, localization,
+  `MaxSessions=1`, remote output/channel-size limits, kernel/libstdc++/GLIBCXX evidence, macOS/
+  Windows/process-translation evidence, host composition, Electron/startup, transfer/install,
+  settings, fallback, tuple enablement, publication, or defaults. Legacy remains the sole production
+  path; no tuple is enabled.
+
 ## Accepted Gaps
 
 No product gap is accepted merely because it appears in this list. Each entry requires explicit
@@ -15081,11 +15135,10 @@ The project is not complete until every applicable item below is checked with ev
 
 ## Next Required Action
 
-Checkpoint the disconnected marked Linux libc probe and require exact-head Node 24 proof on Linux,
-macOS, and Windows x64/arm64 before auditing the next host-evidence slice. Do not compose full host
-evidence, provision production secrets/environments, add an Electron/startup consumer, embed
-unreviewed keys or manifest bytes, add SSH transfer/install, mode wiring, fallback, tuple enablement,
-release publication, or default behavior.
+Audit the next smallest disconnected host-evidence slice after exact-head acceptance of Linux libc
+detection. Do not compose full host evidence, provision production secrets/environments, add an
+Electron/startup consumer, embed unreviewed keys or manifest bytes, add SSH transfer/install, mode
+wiring, fallback, tuple enablement, release publication, or default behavior.
 Keep Node upstream `.tar.xz` inputs, Windows ZIP, `ORCA_RELAY_PATH`, existing desktop required-assets
 behavior, detached-signature byte encoding, Windows arm64 build 26100, macOS 13.5, Linux kernel 4.18,
 release-cut, desktop builds, publication, and every tuple separately gated.
