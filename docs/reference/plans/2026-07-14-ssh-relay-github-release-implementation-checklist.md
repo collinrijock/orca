@@ -8,8 +8,8 @@ work; keep exact commands, runner identities, hashes, metrics, and residual gaps
 
 Date created: 2026-07-14<br>
 Last updated: 2026-07-15<br>
-Current phase: Milestone 5 / Work Package 4 desktop resolver/cache — **In progress — 2026-07-15, Codex implementation owner: audit the next smallest remaining disconnected host-evidence boundary after exact-head acceptance of macOS product-version detection**. Keep every capability disconnected from host-evidence composition and every production/default SSH path. Real Apple/SignPath rehearsals remain an explicit late gate and are not on this package's critical path.<br>
-Session checkpoint: **CI CLOSED / NEXT AUDIT — 2026-07-15, Codex implementation owner** — `E-M5-DARWIN-VERSION-DETECTION-CI-001` closes implementation commit `bcda04389`: all six primary native Node 24 jobs, both Linux supplements, Windows x64 baseline, PR Checks, Golden E2E, and computer-use pass. Windows arm64 verifies the complete runtime tree and exact-byte Node/PTY/watcher/resource-settlement smoke, then retains only the declared hosted build-26200 rejection against required 26100. Every native client runs the new 21-case contract. Rosetta/process translation, real SSH/macOS, host-evidence composition, product callers, settings, transfer/install, fallback, tuple enablement, publication, and default behavior remain absent. Merging to `main` remains prohibited, SignPath is deferred, and legacy remains the production default.<br>
+Current phase: Milestone 5 / Work Package 4 desktop resolver/cache — **In progress — 2026-07-15, Codex implementation owner: implement the disconnected marked Darwin process-translation probe fixed by E-M5-DARWIN-TRANSLATION-DETECTION-AUDIT-001**. Keep every capability disconnected from host-evidence composition and every production/default SSH path. Real Apple/SignPath rehearsals remain an explicit late gate and are not on this package's critical path.<br>
+Session checkpoint: **LOCAL GREEN / EXACT-HEAD CI NEXT — 2026-07-15, Codex implementation owner** — `E-M5-DARWIN-TRANSLATION-DETECTION-LOCAL-001` passes 23 purpose tests, 85 focused/workflow tests, 438 relay tests with three declared skips, 280 release-script tests, typecheck, lint, format, max-lines, diff, and protected-resolver gates. The detector returns translated/native/unknown evidence without changing the selector type or composing host evidence. Exact Node 24/all-six native execution remains open. Live Rosetta SSH remains mandatory before any translated tuple could be considered and translated hosts remain legacy-only. No product caller, setting, transfer/install, fallback wiring, tuple enablement, publication, or default behavior is connected. Merging to `main` remains prohibited, SignPath is deferred, and legacy remains the production default.<br>
 Primary design: [SSH relay GitHub Release plan](./2026-07-14-ssh-relay-github-release-plan.html)<br>
 Motivating issues: [#8450](https://github.com/stablyai/orca/issues/8450), [#1693](https://github.com/stablyai/orca/issues/1693)
 
@@ -15362,6 +15362,102 @@ config/scripts/ssh-relay-runtime-*.test.mjs` — PASS, 50 files / 280 tests in 1
   fallback classifier, tuple enablement, publication, or default behavior is added; legacy remains
   the sole production path and no tuple is enabled.
 
+### E-M5-DARWIN-TRANSLATION-DETECTION-AUDIT-001 — disconnected Darwin translation evidence
+
+- Date/owner: 2026-07-15, Codex implementation owner.
+- Audit: current platform detection reports the remote process architecture from marked `uname -sm`
+  but cannot distinguish an x64 process on Intel hardware from an x64 process translated by Rosetta
+  on Apple Silicon. The selector already rejects explicit `processTranslated: true` as
+  `translated-process`, and the reviewed policy keeps Rosetta legacy-only until a separate live
+  Rosetta SSH cell passes. No desktop SSH module currently invokes `sysctl.proc_translated`.
+- Finding: add one purpose-named `ssh-relay-darwin-translation-detection` module that consumes an
+  explicit SSH connection and optional cancellation signal, executes one 15-second POSIX-shell/
+  no-Node marked probe, and returns `true`, `false`, or undefined. Query
+  `sysctl.proc_translated` and `hw.optional.arm64` within the same bounded command. An explicit
+  translation value of 1 is translated unless it conflicts with explicit non-arm64 hardware; an
+  explicit 0 is native. When the translation key is absent, explicit `hw.optional.arm64=0` proves
+  native Intel; missing translation on arm64-capable or unknown hardware remains unknown. Any
+  conflicting, malformed, duplicate, incomplete, noisy, or oversized evidence remains unknown.
+- Local audit evidence: native macOS arm64 reports `uname -m` = `arm64`,
+  `/usr/sbin/sysctl -in sysctl.proc_translated` = `0`, and
+  `/usr/sbin/sysctl -in hw.optional.arm64` = `1`. This proves only the local native response, not
+  Rosetta or SSH execution.
+- Safety contract: startup noise outside exact markers is ignored; only one complete unique line
+  containing the two exact bounded fields counts. Ordinary command failure is unavailable evidence;
+  `AbortError` propagates. The probe uses no Node, npm, Python, Perl, archive, checksum, or
+  localization-sensitive parsing. It does not change `SshRelayHostEvidence` or invent a value for
+  unknown evidence; conservative composition remains a separate package.
+- Required RED: missing purpose module, native Apple Silicon, translated Apple Silicon, native
+  Intel-key-absent, unknown/missing/conflicting/malformed/multi-line/duplicate/unterminated/
+  concatenated/oversized evidence, unavailable command, cancellation, exact signal/15-second exec,
+  no-Node command construction, and both native-workflow families requiring the suite.
+- Deliberately absent: live Rosetta/Intel/macOS SSH cells, full host-evidence composition, Linux
+  libstdc++/GLIBCXX, Windows evidence, Electron/startup/product callers, transfer/install, settings,
+  fallback wiring, tuple enablement, publication, and defaults. Legacy remains the sole production
+  path and the primary HTML plan is unchanged.
+
+### E-M5-DARWIN-TRANSLATION-DETECTION-LOCAL-RED-001 — Darwin translation probe fails first
+
+- Date/owner: 2026-07-15, Codex implementation owner.
+- Source: uncommitted RED tests atop evidence head `5e7f8e5f5`; protected resolver files have zero
+  diff.
+- Purpose command: `pnpm vitest run
+src/main/ssh/ssh-relay-darwin-translation-detection.test.ts` — expected FAIL, 1 failed suite / zero
+  collected tests because `ssh-relay-darwin-translation-detection` does not exist; 336 ms Vitest.
+- Native-workflow command: `pnpm vitest run
+config/scripts/ssh-relay-runtime-workflow.test.mjs` — expected FAIL, 1 file / 6 passed / 1 failed
+  in 393 ms. The source split has length 1 rather than the required 3 until both POSIX and
+  PowerShell native commands include the purpose suite.
+- Environment: local macOS arm64, Node 26.0.0 / pnpm 10.24.0 with the expected Node-24 engine
+  warning. Exact Node 24 and all-six native execution remain required after local green.
+- Boundary: failure-before-implementation evidence only. It authorizes only the audited disconnected
+  probe, purpose tests, and native-workflow inclusion; no selector/composer/product behavior is
+  connected.
+
+### E-M5-DARWIN-TRANSLATION-DETECTION-LOCAL-001 — bounded Darwin translation evidence
+
+- Date/owner: 2026-07-15, Codex implementation owner.
+- Implementation: `ssh-relay-darwin-translation-detection.ts` executes one 15-second cancellable
+  marked POSIX command, guards `sysctl`, and captures `sysctl.proc_translated` plus
+  `hw.optional.arm64` in one exact bounded line. Explicit non-conflicting translation/native values
+  return true/false; absent translation with explicit non-arm64 hardware returns false for native
+  Intel; arm64-capable/unknown missing evidence and conflicts return undefined. Startup noise is
+  ignored outside markers; empty, multi-line, duplicate, unterminated, marker-concatenated, extra,
+  non-canonical, invalid, or oversized evidence returns undefined. Ordinary execution failure is
+  unavailable and cancellation propagates. No selector/composer is connected.
+- Purpose command: `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts
+--maxWorkers=1 src/main/ssh/ssh-relay-darwin-translation-detection.test.ts` — PASS, 1 file / 23
+  tests in 212 ms Vitest, 1.08 s wall, 132,104,192-byte maximum RSS, zero swaps. Translated/native
+  Apple Silicon, explicit native/translated signals, Intel absent-key behavior, malformed/conflict/
+  unavailable/cancellation boundaries, exact 15-second signal-qualified exec, and no forbidden
+  runtime dependency pass.
+- Focused plus workflow command: `/usr/bin/time -l pnpm exec vitest run --config
+config/vitest.config.ts --maxWorkers=1
+src/main/ssh/ssh-relay-darwin-translation-detection.test.ts
+src/main/ssh/ssh-relay-darwin-version-detection.test.ts
+src/main/ssh/ssh-relay-artifact-selector.test.ts
+src/main/ssh/ssh-remote-platform-detection.test.ts
+config/scripts/ssh-relay-runtime-workflow.test.mjs` — PASS, 5 files / 85 tests in 2.23 s Vitest,
+  3.21 s wall, 136,921,088-byte maximum RSS, zero swaps. Both native workflow command families
+  require the purpose suite exactly once; current platform and selector behavior remains unchanged.
+- Broader relay command: `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts
+--maxWorkers=1 --silent=true src/main/ssh/ssh-relay-*.test.ts` — PASS, 36 files passed / 3 declared
+  skipped, 438 tests passed / 3 declared skipped in 16.43 s Vitest, 17.55 s wall, 303,955,968-byte
+  maximum RSS, zero swaps. Expected stale-lock and local Node 26 deprecation diagnostics remain.
+- Release-script command: `/usr/bin/time -l pnpm exec vitest run --config
+config/vitest.config.ts --maxWorkers=1 --silent=true
+config/scripts/ssh-relay-runtime-*.test.mjs` — PASS, 50 files / 280 tests in 14.47 s Vitest,
+  16.26 s wall, 195,428,352-byte maximum RSS, zero swaps.
+- Static gates: `pnpm typecheck`, targeted `oxlint`, targeted `oxfmt --check` after formatting its two
+  reported files, `pnpm lint`, `pnpm run check:max-lines-ratchet`, and `git diff --check` pass. Full
+  lint includes switch exhaustiveness, 41 reliability gates, 355 grandfathered max-lines entries
+  with no new bypass, bundled-skill verification, 9,837 localization references and locale parity,
+  and zero coverage candidates. Its 26 warnings are in untouched files. Protected resolver files
+  have zero diff.
+- Residual gap: exact Node 24/all-six native client execution, live Intel/Apple Silicon/Rosetta SSH,
+  host composition, and every production/default path remain unproven and disconnected. Unknown
+  evidence is not coerced to false. No tuple is enabled and legacy remains the only default.
+
 ## Accepted Gaps
 
 No product gap is accepted merely because it appears in this list. Each entry requires explicit
@@ -15420,9 +15516,9 @@ The project is not complete until every applicable item below is checked with ev
 
 ## Next Required Action
 
-Audit the next smallest disconnected host-evidence slice after exact-head acceptance of macOS
-product-version detection. Do not compose full host evidence, provision production secrets or
-environments, add
+Commit the locally proven disconnected Darwin process-translation package, push it to the draft PR,
+and require exact-head all-six native artifact CI before advancing. Do not compose full host evidence,
+provision production secrets or environments, add
 Rosetta detection, provision production secrets/environments, add an Electron/startup consumer,
 embed unreviewed keys or manifest bytes, add SSH transfer/install, mode wiring, fallback, tuple
 enablement, release publication, or default behavior.

@@ -9,9 +9,9 @@ keeps commands, hashes, runner identities, timings, and failure details.
 A checked box means the work has evidence in the detailed ledger. Design approval alone does not
 complete a box.
 
-Active checkpoint: **Milestone 5 / Work Package 4 desktop resolver/cache — audit the next smallest
-remaining disconnected host-evidence boundary after exact-head acceptance of macOS product-version
-detection, 2026-07-15, Codex implementation owner.**
+Active checkpoint: **Milestone 5 / Work Package 4 desktop resolver/cache — implement the
+disconnected marked Darwin process-translation probe fixed by
+`E-M5-DARWIN-TRANSLATION-DETECTION-AUDIT-001`, 2026-07-15, Codex implementation owner.**
 `E-M5-ARTIFACT-CACHE-RESOLUTION-CI-001` closes warm-cache commit
 `22031fa68` on all six native clients, both Linux supplements, Windows x64 baseline, PR Checks,
 Golden E2E, and computer-use; Windows arm64 remains the expected build-26200 rejection against 26100. `E-M5-ARTIFACT-CACHE-RESOLUTION-LOCAL-001` passes 9/9 purpose tests,
@@ -177,6 +177,25 @@ computer-use pass. Every native client runs the 21-case purpose suite; POSIX job
 the complete 85,213,511-byte runtime plus Node/PTY/watcher/resource settlement and retains only the
 known hosted build-26200 rejection against required 26100. This is contract evidence, not live SSH/
 macOS or Rosetta proof; composition and every production/default path remain absent.
+`E-M5-DARWIN-TRANSLATION-DETECTION-AUDIT-001` fixes the next smallest package: one disconnected,
+15-second cancellable POSIX-shell/no-Node marked probe of `sysctl.proc_translated` plus
+`hw.optional.arm64`. Explicit non-conflicting 1/0 values return translated/native; a missing
+translation key with explicit non-arm64 hardware proves native Intel; missing/conflicting/
+malformed evidence remains unknown. The detector does not change selector types or compose an
+unknown into a boolean. Live Rosetta SSH remains a separate required cell; product callers,
+transfer/install, settings, fallback wiring, tuple enablement, publication, and defaults stay
+absent.
+`E-M5-DARWIN-TRANSLATION-DETECTION-LOCAL-RED-001` records the expected missing-module failure and
+the native-workflow oracle's 6/7 result before implementation. Neither runner command contains the
+new suite, so its source occurrence count is one instead of three. Protected resolver files remain
+untouched; no selector, composer, caller, or default behavior is connected.
+`E-M5-DARWIN-TRANSLATION-DETECTION-LOCAL-001` is green: 23/23 purpose tests, 85/85 focused+workflow
+tests, 438/438 non-full-size relay tests with three declared skips, 280/280 release-script tests,
+typecheck, lint, format, max-lines, diff, and protected-resolver gates pass. Explicit
+non-conflicting Darwin sysctl evidence returns translated/native; Intel absent-key evidence is
+handled without coercing arm64-capable or unknown probe loss to native. Both native workflow
+families require the suite. Exact Node 24/all-six native proof is next; live Rosetta SSH,
+composition, and all production/default behavior remain absent.
 `E-M5-ARTIFACT-CACHE-ROOT-CI-001` closes the pure cache-root contract at exact head `aefcaa9a9`:
 all six primary native Node 24 jobs, both Linux supplements, Windows x64 baseline, PR Checks, Golden
 E2E, and computer-use pass; Windows arm64 build 26200 remains correctly gated against 26100. The

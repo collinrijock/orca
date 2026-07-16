@@ -123,6 +123,7 @@ describe('SSH relay runtime artifact workflow', () => {
       'ssh-relay-libc-detection.test.ts',
       'ssh-relay-linux-kernel-detection.test.ts',
       'ssh-relay-darwin-version-detection.test.ts',
+      'ssh-relay-darwin-translation-detection.test.ts',
       'ssh-relay-artifact-download.test.ts',
       'ssh-relay-artifact-extraction.test.ts',
       'ssh-relay-artifact-cache-lock-release.test.ts',
