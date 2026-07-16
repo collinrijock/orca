@@ -8,8 +8,8 @@ work; keep exact commands, runner identities, hashes, metrics, and residual gaps
 
 Date created: 2026-07-14<br>
 Last updated: 2026-07-15<br>
-Current phase: Milestone 5 / Work Package 4 desktop resolver/cache — **In progress — 2026-07-15, Codex implementation owner: audit the disconnected Linux libstdc++/GLIBCXX host-evidence boundary**. Keep every capability disconnected from host-evidence composition and every production/default SSH path. Real Apple/SignPath rehearsals remain an explicit late gate and are not on this package's critical path.<br>
-Session checkpoint: **DARWIN TRANSLATION CI CLOSED / NEXT AUDIT ACTIVE — 2026-07-15, Codex implementation owner** — `E-M5-DARWIN-TRANSLATION-DETECTION-CI-001` closes exact-head portable contract proof on all six native clients, both Linux supplements, Windows x64, PR Checks, Golden E2E, and computer-use. Windows arm64 retains only the declared hosted build-26200 rejection against required 26100 after complete byte/tree/Node/PTY/watcher/resource proof. Live Rosetta SSH remains mandatory before any translated tuple could be considered and translated hosts remain legacy-only. The active audit may authorize only a disconnected Linux libstdc++/GLIBCXX probe and purpose tests; no product caller, setting, transfer/install, fallback wiring, tuple enablement, publication, or default behavior may be connected. Merging to `main` remains prohibited, SignPath is deferred, and legacy remains the production default.<br>
+Current phase: Milestone 5 / Work Package 4 desktop resolver/cache — **In progress — 2026-07-15, Codex implementation owner: close exact-head native CI evidence for the disconnected Linux libstdc++/GLIBCXX detector**. Keep every capability disconnected from host-evidence composition and every production/default SSH path. Real Apple/SignPath rehearsals remain an explicit late gate and are not on this package's critical path.<br>
+Session checkpoint: **LOCAL GREEN / EXACT-HEAD CI NEXT — 2026-07-15, Codex implementation owner** — `E-M5-LINUX-LIBSTDCXX-DETECTION-LOCAL-001` passes the 23-case purpose contract, 142 focused/workflow cases, 461 broader relay tests with three declared skips, 280 release-script tests, typecheck, lint, format, max-lines, diff, and protected-resolver gates. The detector remains disconnected and returns unknown for loader overrides, missing tools, malformed/overflow evidence, or conflicting candidates. Exact Node 24/all-six native execution remains open. No host composer, product caller, setting, transfer/install, fallback wiring, tuple enablement, publication, or default behavior is connected. Merging to `main` remains prohibited, SignPath is deferred, and legacy remains the production default.<br>
 Primary design: [SSH relay GitHub Release plan](./2026-07-14-ssh-relay-github-release-plan.html)<br>
 Motivating issues: [#8450](https://github.com/stablyai/orca/issues/8450), [#1693](https://github.com/stablyai/orca/issues/1693)
 
@@ -15513,6 +15513,104 @@ config/scripts/ssh-relay-runtime-*.test.mjs` — PASS, 50 files / 280 tests in 1
   remote proof. The detector remains disconnected. No host composer, product caller, setting,
   transfer/install, fallback classifier, tuple enablement, publication, or default behavior is
   added; legacy remains the sole production path and no tuple is enabled.
+
+### E-M5-LINUX-LIBSTDCXX-DETECTION-AUDIT-001 — disconnected loader ABI evidence
+
+- Date/owner: 2026-07-15, Codex implementation owner.
+- Audit: the selector already requires both the reviewed physical libstdc++ 6.0.25 floor and
+  `GLIBCXX_3.4.25`, but no desktop SSH module acquires either value. Requiring `strings` would be a
+  portability regression: the unmodified `ubuntu:22.04` arm64 image has `ldconfig`, `readlink`,
+  `grep`, and `sed` but no `strings`. Its loader cache resolves
+  `/usr/lib/aarch64-linux-gnu/libstdc++.so.6.0.30`, and binary-safe `grep -ao` yields bounded
+  `GLIBCXX_3.4` through `GLIBCXX_3.4.30` evidence.
+- Oldest-floor audit: the existing digest-pinned Rocky Linux 8.9 image
+  `docker.io/library/rockylinux@sha256:2d05a9266523bbf24f33ebc3a9832e4d5fd74b973c220f2204ca802286aa275d`
+  resolves `/usr/lib64/libstdc++.so.6.0.25` and yields `GLIBCXX_3.4` through
+  `GLIBCXX_3.4.25`. Both Docker probes ran with `--network none`; Rocky x64 ran through Docker
+  Desktop emulation on the local macOS arm64 controller. An Ubuntu repetition with
+  `LD_LIBRARY_PATH=/tmp` intentionally produced no candidate evidence.
+- Finding: add one purpose-named `ssh-relay-linux-libstdcxx-detection` module that consumes an
+  explicit SSH connection and optional cancellation signal. One 15-second marked POSIX-shell probe
+  locates `ldconfig` in `PATH`, `/sbin`, or `/usr/sbin`, resolves loader-cache `libstdc++.so.6`
+  candidates with `readlink -f`, and scans version symbols with `LC_ALL=C grep -ao`. Cap the probe
+  at eight candidate libraries and 256 symbols per library. The parser accepts only bounded safe
+  absolute paths, exact `libstdc++.so.X.Y.Z` basenames, exact `GLIBCXX_X.Y[.Z]` symbols, complete
+  nesting, and a single consistent version pair across distinct candidates.
+- Safety contract: missing tools/candidates, non-empty `LD_LIBRARY_PATH` or `LD_PRELOAD`, duplicate
+  paths, malformed/incomplete/duplicate/overflow segments, and conflicting multilib evidence return
+  unknown. Ordinary command failure is unavailable compatibility evidence; `AbortError` propagates.
+  The probe uses no Node, npm, Python, Perl, tar, checksum tool, `strings`, package manager,
+  compiler, or locale-sensitive package output. The later staged bundled-Node execution remains the
+  authoritative pre-install compatibility proof; this probe only supports conservative pre-download
+  selection and does not settle the future launch-environment sanitization contract.
+- Required RED: missing purpose module; valid Rocky/Ubuntu and consistent-multilib evidence;
+  unavailable/override/empty/noisy/malformed/unsafe/duplicate/conflicting/overflow rejection;
+  cancellation and exact 15-second signal-qualified exec; exact no-`strings` command construction;
+  and both native workflow families requiring the suite.
+- Deliberately absent: live SSH/Rocky/Ubuntu/multilib cells, host-evidence composition, libc/kernel/
+  macOS/Windows callers, Electron/startup, cache acquisition, transfer/install, launch-environment
+  policy, settings, fallback, tuple enablement, publication, and defaults. Legacy remains the sole
+  production path and the primary HTML plan is unchanged.
+
+### E-M5-LINUX-LIBSTDCXX-DETECTION-LOCAL-RED-001 — loader ABI probe fails first
+
+- Date/owner: 2026-07-15, Codex implementation owner.
+- Source: uncommitted RED tests atop evidence head `dcf26940e`; protected resolver files have zero
+  diff.
+- Purpose command: `pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1
+src/main/ssh/ssh-relay-linux-libstdcxx-detection.test.ts` — expected FAIL, one failed suite / zero
+  collected tests in 274 ms because `ssh-relay-linux-libstdcxx-detection` does not exist.
+- Native-workflow command: `pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1
+config/scripts/ssh-relay-runtime-workflow.test.mjs` — expected FAIL, one file / six passed / one
+  failed in 348 ms. The new suite occurs once in the workflow oracle instead of three times until
+  both POSIX and PowerShell native commands are wired.
+- Environment/boundary: local macOS arm64, Node 26.0.0 / pnpm 10.24.0. This is
+  failure-before-implementation evidence only; exact Node 24/all-six proof remains required after
+  local green. It authorizes only the audited disconnected probe, purpose tests, and workflow
+  inclusion; no composer/product/default behavior is connected.
+
+### E-M5-LINUX-LIBSTDCXX-DETECTION-LOCAL-001 — bounded loader ABI evidence
+
+- Date/owner: 2026-07-15, Codex implementation owner.
+- Implementation: `ssh-relay-linux-libstdcxx-detection.ts` executes one 15-second cancellable marked
+  POSIX command. It refuses `LD_LIBRARY_PATH`/`LD_PRELOAD`, locates the glibc loader cache, resolves
+  at most eight `libstdc++.so.6` candidates, and emits at most 256 binary-safe GLIBCXX matches per
+  library. The streaming parser accepts only safe normalized absolute paths, exact physical
+  basenames, numeric ABI symbols, complete marker nesting, unique paths, and a single consistent
+  version pair. It computes the maximum GLIBCXX version without trusting output order. Missing
+  tools/candidates, ordinary exec failure, malformed/duplicate/conflicting/overflow evidence, or
+  loader overrides return undefined; cancellation propagates. The module has no production import.
+- Purpose command: `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts
+--maxWorkers=1 src/main/ssh/ssh-relay-linux-libstdcxx-detection.test.ts` — PASS, one file / 23
+  tests in 229 ms Vitest, 1.28 s wall, 132,055,040-byte maximum RSS, zero swaps. Rocky 8 floor,
+  Ubuntu 22.04, consistent/conflicting multilib, unordered maximum, missing/override/malformed/
+  unsafe/duplicate/overflow evidence, cancellation, exact 15-second signal-qualified exec,
+  forbidden-dependency absence, and exact POSIX syntax pass. The POSIX syntax case is a declared
+  Windows skip when the purpose suite runs there.
+- Focused compatibility/workflow command: `/usr/bin/time -l pnpm exec vitest run --config
+config/vitest.config.ts --maxWorkers=1` plus the new purpose suite, libc, kernel, Darwin version,
+  Darwin translation, selector, platform detection, and native-workflow suites — PASS, eight files /
+  142 tests in 5.06 s Vitest, 7.36 s wall, 134,283,264-byte maximum RSS, zero swaps. Both native
+  workflow families require the new suite exactly once.
+- Broader relay command: `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts
+--maxWorkers=1 --silent=true src/main/ssh/ssh-relay-*.test.ts` — PASS, 37 files passed / three
+  declared skipped, 461 tests passed / three declared skipped in 25.67 s Vitest, 28.53 s wall,
+  236,781,568-byte maximum RSS, zero swaps. The expected stale-lock and local Node 26 deprecation
+  diagnostics remain unchanged.
+- Release-script command: `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts
+--maxWorkers=1 --silent=true config/scripts/ssh-relay-runtime-*.test.mjs` — PASS, 50 files / 280
+  tests in 17.82 s Vitest, 19.97 s wall, 195,592,192-byte maximum RSS, zero swaps.
+- Static gates: `pnpm typecheck`, targeted `oxlint`, targeted `oxfmt --check`, `pnpm lint`,
+  `pnpm run check:max-lines-ratchet`, and `git diff --check` pass. Full lint includes switch
+  exhaustiveness, 41 reliability gates, 355 grandfathered max-lines entries with no new bypass,
+  bundled-skill verification, 9,837 localization references and locale parity, and zero coverage
+  candidates. Its 26 warnings are in untouched files. Protected resolver files have zero diff.
+- Boundary/residual gaps: the exact command has POSIX syntax proof and the audited primitives
+  produce the expected Rocky/Ubuntu ABI evidence, but this package is not live SSH/distro/multilib
+  proof and does not establish remote output/channel limits. Exact Node 24 on all six native clients
+  remains required. Host composition, future launch-environment sanitization, Electron/startup,
+  product SSH, cache acquisition, transfer/install, settings, fallback, tuple enablement,
+  publication, and defaults remain absent; legacy remains the sole production path.
 
 ## Accepted Gaps
 

@@ -9,8 +9,9 @@ keeps commands, hashes, runner identities, timings, and failure details.
 A checked box means the work has evidence in the detailed ledger. Design approval alone does not
 complete a box.
 
-Active checkpoint: **Milestone 5 / Work Package 4 desktop resolver/cache — audit the disconnected
-Linux libstdc++/GLIBCXX host-evidence boundary, 2026-07-15, Codex implementation owner.**
+Active checkpoint: **Milestone 5 / Work Package 4 desktop resolver/cache — close exact-head native
+CI evidence for the disconnected Linux libstdc++/GLIBCXX detector, 2026-07-15, Codex
+implementation owner.**
 `E-M5-ARTIFACT-CACHE-RESOLUTION-CI-001` closes warm-cache commit
 `22031fa68` on all six native clients, both Linux supplements, Windows x64 baseline, PR Checks,
 Golden E2E, and computer-use; Windows arm64 remains the expected build-26200 rejection against 26100. `E-M5-ARTIFACT-CACHE-RESOLUTION-LOCAL-001` passes 9/9 purpose tests,
@@ -202,6 +203,23 @@ and computer-use pass. POSIX clients pass 82 files / 605 tests and Windows clien
 complete 85,213,511-byte runtime plus Node/PTY/watcher/resource settlement and retains only the
 declared hosted build-26200 rejection against required 26100. This is contract evidence, not live
 SSH/Intel/Rosetta proof; composition and every production/default path remain absent.
+`E-M5-LINUX-LIBSTDCXX-DETECTION-AUDIT-001` fixes the next smallest package: one disconnected,
+15-second cancellable marked Linux loader-cache probe using `ldconfig`, `readlink -f`, and bounded
+binary-safe `grep -ao`. It does not require `strings`, which is absent from the audited minimal
+Ubuntu image. Only complete, bounded, consistent physical libstdc++ and maximum GLIBCXX evidence
+counts; loader overrides, missing tools, malformed/duplicate/overflow evidence, and conflicting
+multilib candidates return unknown. Host composition, product callers, transfer/install, settings,
+fallback, tuple enablement, publication, and defaults stay absent.
+`E-M5-LINUX-LIBSTDCXX-DETECTION-LOCAL-RED-001` records the expected missing-module failure and the
+native-workflow oracle's 6/7 result. Neither runner family contains the new suite yet; no product
+caller or default behavior is connected.
+`E-M5-LINUX-LIBSTDCXX-DETECTION-LOCAL-001` is green: 23/23 purpose tests, 142/142 focused+workflow
+tests, 461/461 broader relay tests with three declared skips, 280/280 release-script tests,
+typecheck, lint, format, max-lines, diff, and protected-resolver gates pass. The single bounded probe
+refuses loader overrides, requires strict consistent loader-cache/physical-file/GLIBCXX evidence,
+and has exact POSIX syntax proof without `strings` or a runtime dependency. Both native workflow
+families require the suite. Exact Node 24/all-six native proof is next; host composition, live SSH,
+and every production/default path remain absent.
 `E-M5-ARTIFACT-CACHE-ROOT-CI-001` closes the pure cache-root contract at exact head `aefcaa9a9`:
 all six primary native Node 24 jobs, both Linux supplements, Windows x64 baseline, PR Checks, Golden
 E2E, and computer-use pass; Windows arm64 build 26200 remains correctly gated against 26100. The
