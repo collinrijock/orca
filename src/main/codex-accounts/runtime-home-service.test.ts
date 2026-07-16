@@ -42,6 +42,9 @@ function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings
   const agentStatusHooksEnabled = overrides.agentStatusHooksEnabled ?? true
   const tabAutoGenerateTitle = overrides.tabAutoGenerateTitle ?? false
   return {
+    // Managed-home tests assert the mirror path; the RC defaults the real-home
+    // flag ON, so opt these managed cases out unless a test overrides it.
+    codexSystemDefaultRealHomeEnabled: overrides.codexSystemDefaultRealHomeEnabled ?? false,
     workspaceDir: testState.fakeHomeDir,
     nestWorkspaces: false,
     refreshLocalBaseRefOnWorktreeCreate: false,

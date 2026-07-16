@@ -18,10 +18,10 @@ afterEach(() => {
 })
 
 describe('isCodexSystemDefaultRealHomeEnabled', () => {
-  it('is OFF by default (undefined settings)', () => {
-    expect(isCodexSystemDefaultRealHomeEnabled(undefined)).toBe(false)
-    expect(isCodexSystemDefaultRealHomeEnabled(null)).toBe(false)
-    expect(isCodexSystemDefaultRealHomeEnabled({})).toBe(false)
+  it('is ON by default on this RC (undefined settings)', () => {
+    expect(isCodexSystemDefaultRealHomeEnabled(undefined)).toBe(true)
+    expect(isCodexSystemDefaultRealHomeEnabled(null)).toBe(true)
+    expect(isCodexSystemDefaultRealHomeEnabled({})).toBe(true)
   })
 
   it('honors the settings flag when set to true', () => {

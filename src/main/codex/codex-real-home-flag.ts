@@ -5,8 +5,9 @@ import type { GlobalSettings } from '../../shared/types'
  * real ~/.codex instead of Orca's managed runtime home.
  *
  * Why a flag: this moves where user Codex state lives (auth, config, sessions,
- * hooks). It ships dark, default OFF, with NO settings UI, so flag-OFF stays
- * byte-identical to today's managed-home behavior. Managed (multi-account)
+ * hooks). It is ENABLED BY DEFAULT on this RC for the staged rollout; a user can
+ * still opt out by setting codexSystemDefaultRealHomeEnabled to false, which
+ * stays byte-identical to today's managed-home behavior. Managed (multi-account)
  * selections are unaffected either way.
  *
  * The env override exists only so isolated dev/CDP verification can exercise
@@ -21,7 +22,7 @@ export function isCodexSystemDefaultRealHomeEnabled(
   if (envOverride !== null) {
     return envOverride
   }
-  return settings?.codexSystemDefaultRealHomeEnabled === true
+  return settings?.codexSystemDefaultRealHomeEnabled !== false
 }
 
 function readCodexRealHomeEnvOverride(): boolean | null {
