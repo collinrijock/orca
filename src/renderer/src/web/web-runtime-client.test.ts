@@ -205,6 +205,49 @@ describe('WebRuntimeClient', () => {
     }
   })
 
+  it('delivers plain unary responses to their subscription instead of dropping them', async () => {
+    const client = new WebRuntimeClient({
+      v: 2,
+      endpoint: 'ws://127.0.0.1:6768',
+      deviceToken: 'token',
+      publicKeyB64: Buffer.alloc(32).toString('base64')
+    })
+    try {
+      const keyPair = generateKeyPair()
+      const sharedKey = deriveSharedKey(keyPair.secretKey, keyPair.publicKey)
+      const internals = client as unknown as {
+        state: string
+        sharedKey: Uint8Array | null
+        subscriptions: Map<
+          string,
+          { callbacks: { onResponse: (response: unknown) => void; onClose?: () => void } }
+        >
+        handleSocketMessage: (rawData: unknown, sourceWs?: unknown) => Promise<void>
+      }
+      internals.state = 'connected'
+      internals.sharedKey = sharedKey
+      const onResponse = vi.fn()
+      internals.subscriptions.set('req-1', { callbacks: { onResponse } })
+
+      // A unary RPC (e.g. abortable git.status) answered over the subscription
+      // bridge: not streaming and neither an end nor a scrollback frame.
+      const response = {
+        id: 'req-1',
+        ok: true,
+        result: { entries: [], conflictOperation: 'unknown' },
+        _meta: { runtimeId: 'runtime-1' }
+      }
+      await internals.handleSocketMessage(encrypt(JSON.stringify(response), sharedKey))
+
+      expect(onResponse).toHaveBeenCalledWith(response)
+      // The caller owns the unsubscribe; a plain reply must not close it.
+      expect(internals.subscriptions.has('req-1')).toBe(true)
+      internals.subscriptions.delete('req-1')
+    } finally {
+      client.close()
+    }
+  })
+
   it('keeps file watches on the owning WebSocket instead of opening child clients', async () => {
     const client = new WebRuntimeClient({
       v: 2,

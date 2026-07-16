@@ -178,10 +178,16 @@ function rememberUntrackedStats(
 // We count their contents directly to show an additions magnitude.
 export async function collectUntrackedAdditions(
   worktreePath: string,
-  untrackedPaths: readonly string[]
+  untrackedPaths: readonly string[],
+  signal?: AbortSignal
 ): Promise<Map<string, GitLineStats>> {
   const result = new Map<string, GitLineStats>()
   for (let i = 0; i < untrackedPaths.length; i += UNTRACKED_READ_CONCURRENCY) {
+    // Why: an aborted refresh discards its result, so stop reading here rather
+    // than keep burning (possibly remote-host) file I/O after cancellation.
+    if (signal?.aborted) {
+      return result
+    }
     const chunk = untrackedPaths.slice(i, i + UNTRACKED_READ_CONCURRENCY)
     await Promise.all(
       chunk.map(async (relativePath) => {

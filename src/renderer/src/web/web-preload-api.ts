@@ -1634,13 +1634,21 @@ function createFileApi(): NonNullable<Partial<PreloadApi>['fs']> {
 
 function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
   return {
-    status: async ({ worktreePath, includeIgnored }) => {
+    status: async ({
+      worktreePath,
+      includeIgnored,
+      bypassEffectiveUpstreamNegativeCache,
+      reuseLineStats
+    }) => {
       const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
       return callRuntimeResult('git.status', {
         worktree: toRuntimeWorktreeSelector(worktree.id),
-        includeIgnored
+        includeIgnored,
+        bypassEffectiveUpstreamNegativeCache,
+        reuseLineStats
       })
     },
+    cancelStatus: async () => {},
     submoduleStatus: async ({ worktreePath, submodulePath, area }) => {
       const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
       return callRuntimeResult('git.submoduleStatus', {

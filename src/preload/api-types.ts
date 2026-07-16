@@ -2512,7 +2512,10 @@ export type PreloadApi = {
       connectionId?: string
       includeIgnored?: boolean
       bypassEffectiveUpstreamNegativeCache?: boolean
+      reuseLineStats?: boolean
+      requestToken?: string
     }) => Promise<GitStatusResult>
+    cancelStatus: (args: { requestToken: string }) => Promise<void>
     submoduleStatus: (args: {
       worktreePath: string
       submodulePath: string

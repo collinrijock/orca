@@ -306,6 +306,7 @@ export type TerminalArtifactAccessOptions = {
 export type GitProviderStatusOptions = {
   includeIgnored?: boolean
   bypassEffectiveUpstreamNegativeCache?: boolean
+  reuseLineStats?: boolean
   signal?: AbortSignal
 }
 

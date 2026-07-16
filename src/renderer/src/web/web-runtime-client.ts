@@ -511,9 +511,14 @@ export class WebRuntimeClient {
     }
 
     const subscription = this.subscriptions.get(response.id)
-    if (subscription && isSubscriptionResponse(response)) {
-      subscription.callbacks.onResponse(response)
-      if (response.ok && isEndResult(response.result)) {
+    if (subscription) {
+      // Why: a unary RPC carried over the subscription bridge (e.g. an
+      // abortable git.status) answers with a plain response frame. Every frame
+      // for a subscribed id belongs to that subscription, so deliver it
+      // instead of dropping it on the pending-call map.
+      const subscriptionResponse = response as RuntimeRpcResponse<unknown>
+      subscription.callbacks.onResponse(subscriptionResponse)
+      if (subscriptionResponse.ok && isEndResult(subscriptionResponse.result)) {
         this.subscriptions.delete(response.id)
         subscription.callbacks.onClose?.()
       }
@@ -765,24 +770,6 @@ export class WebRuntimeClient {
   }
 }
 
-function isSubscriptionResponse(
-  response: RuntimeRpcResponse<unknown> | Record<string, unknown>
-): response is RuntimeRpcResponse<unknown> {
-  if (!('ok' in response)) {
-    return false
-  }
-  if (response.ok === false) {
-    return true
-  }
-  if (response.ok === false) {
-    return true
-  }
-  const success = response as RuntimeRpcResponse<unknown> & { ok: true; streaming?: true }
-  return (
-    success.streaming === true || isEndResult(success.result) || isScrollbackResult(success.result)
-  )
-}
-
 function isRuntimeFailureResponse(
   response: RuntimeRpcResponse<unknown> | Record<string, unknown>
 ): response is RuntimeRpcResponse<unknown> & { ok: false } {
@@ -813,10 +800,6 @@ function isFileWatchReadyResponse(
 
 function isEndResult(value: unknown): value is { type: 'end' } {
   return !!value && typeof value === 'object' && (value as { type?: unknown }).type === 'end'
-}
-
-function isScrollbackResult(value: unknown): value is { type: 'scrollback' } {
-  return !!value && typeof value === 'object' && (value as { type?: unknown }).type === 'scrollback'
 }
 
 async function websocketPayloadToUint8(

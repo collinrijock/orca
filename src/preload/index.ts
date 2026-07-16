@@ -2943,7 +2943,11 @@ const api = {
       connectionId?: string
       includeIgnored?: boolean
       bypassEffectiveUpstreamNegativeCache?: boolean
+      reuseLineStats?: boolean
+      requestToken?: string
     }): Promise<unknown> => ipcRenderer.invoke('git:status', args),
+    cancelStatus: (args: { requestToken: string }): Promise<void> =>
+      ipcRenderer.invoke('git:cancelStatus', args),
     submoduleStatus: (args: {
       worktreePath: string
       submodulePath: string
