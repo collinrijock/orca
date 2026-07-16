@@ -8,8 +8,8 @@ work; keep exact commands, runner identities, hashes, metrics, and residual gaps
 
 Date created: 2026-07-14<br>
 Last updated: 2026-07-15<br>
-Current phase: Milestone 6 / Work Package 5 bounded runtime transfer — **In progress — 2026-07-15, Codex implementation owner: disconnected Windows system-SSH staging-control contract audit**. Keep every capability disconnected from every production/default SSH path. Real Apple/SignPath rehearsals remain an explicit late gate and are not on this package's critical path.<br>
-Session checkpoint: **WINDOWS PER-FILE NATIVE PROOF CLOSED / STAGING CONTROL AUDIT ACTIVE — 2026-07-15, Codex implementation owner** — `E-M6-WINDOWS-SYSTEM-SSH-FILE-CI-001` proves the real PowerShell receiver on native Windows x64/arm64 and closes the adjacent watcher flake with a same-SHA rerun; only the declared hosted Windows arm64 build-26200 versus required-26100 floor rejection remains. Audit the next disconnected fixed-command staging-root/directory/cleanup contract before writing RED tests. Do not compose file streaming into a tree, connect a product caller, change legacy upload/fallback/default behavior, enable a tuple, publish an artifact, or perform SignPath work in this package. Merging to `main` remains prohibited, SignPath is deferred, and legacy remains the production default.<br>
+Current phase: Milestone 6 / Work Package 5 bounded runtime transfer — **In progress — 2026-07-15, Codex implementation owner: disconnected Windows system-SSH staging-control native proof**. Keep every capability disconnected from every production/default SSH path. Real Apple/SignPath rehearsals remain an explicit late gate and are not on this package's critical path.<br>
+Session checkpoint: **WINDOWS STAGING CONTROL LOCALLY GREEN / NATIVE WINDOWS CI NEXT — 2026-07-15, Codex implementation owner** — `E-M6-WINDOWS-SYSTEM-SSH-CONTROL-LOCAL-001` proves the fixed-command bounded request, strict rooted-path/descendant validation, exclusive root/directory creation, parent-first enforcement, owned-root removal primitive, 30-second ceiling, joined command-channel lifecycle, prior transfer regressions, and production isolation locally. The real PowerShell 5.1 case is skipped on macOS and earns no native claim; commit and push the exact package, then require native Windows x64/arm64 proof. Do not compose file streaming into a tree, connect a product caller, change legacy upload/fallback/default behavior, enable a tuple, publish an artifact, or perform SignPath work in this package. Merging to `main` remains prohibited, SignPath is deferred, and legacy remains the production default.<br>
 Primary design: [SSH relay GitHub Release plan](./2026-07-14-ssh-relay-github-release-plan.html)<br>
 Motivating issues: [#8450](https://github.com/stablyai/orca/issues/8450), [#1693](https://github.com/stablyai/orca/issues/1693)
 
@@ -18286,6 +18286,73 @@ src/main/ssh/ssh-remote-node-resolution.ts src/main/ssh/ssh-remote-node-resoluti
   settings/fallback/tuple/publication/default behavior, or SignPath is included. Legacy remains the
   sole production/default path and every tuple stays disabled.
 
+### E-M6-WINDOWS-SYSTEM-SSH-CONTROL-LOCAL-RED-001 — audited staging control is absent
+
+- Date/owner/base/runner: 2026-07-15, Codex implementation owner; purpose test, native-workflow
+  wiring, and checklist-only diff atop exact base
+  `d24f877d96f07d691508cc686c0791a86d3dd308` on Apple arm64, macOS 26.2 build 25C56, Node
+  26.0.0, pnpm 10.24.0.
+- Command: `pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1
+src/main/ssh/ssh-relay-runtime-windows-staging-control.test.ts
+config/scripts/ssh-relay-runtime-workflow.test.mjs`.
+- Result: expected failure in 1.39 seconds. The workflow oracle passes 9/9 and proves the new purpose
+  suite occurs exactly once in both native artifact command families. The purpose suite fails before
+  collection solely because `./ssh-relay-runtime-windows-staging-control` does not exist; zero
+  production modules are added or changed at this boundary.
+- Residual boundary: no PowerShell staging behavior or Windows runner claim follows from a missing
+  module. Purpose, native Windows, prior Windows/POSIX regression, broad relay/release, static,
+  isolation, and no-product-consumer gates remain required.
+
+### E-M6-WINDOWS-SYSTEM-SSH-CONTROL-LOCAL-001 — bounded staging control is locally green
+
+- Date/owner/base/runner: 2026-07-15, Codex implementation owner; uncommitted implementation,
+  purpose-test, native-workflow, and checklist package atop exact base
+  `d24f877d96f07d691508cc686c0791a86d3dd308` on Apple arm64, macOS 26.2 build 25C56, Node
+  26.0.0, pnpm 10.24.0. The local Node version is newer than the repository's Node 24 contract and
+  the real Windows PowerShell case is skipped off Windows, so exact-head native proof remains
+  mandatory.
+- Implementation: add one disconnected fixed encoded PowerShell receiver with an at-most
+  65,556-byte request, two independently bounded 32-KiB strict-UTF-8 path fields, operation byte and
+  zeroed reserved bytes. Client validation rejects non-rooted, reserved, traversal, non-descendant,
+  and oversized paths before channel open. The receiver rejects malformed framing/extra bytes,
+  requires each direct parent to exist, uses fail-on-existing `New-Item` for root/directories, and
+  removes only a root whose ownership is tracked by a later tree caller. Each operation has a
+  30-second ceiling and reuses the proven 250 ms graceful/2-second forced channel settlement.
+- Focused command: `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts
+--maxWorkers=1` with the staging-control, Windows/POSIX file/control/tree, system-channel,
+  source-tree/scan/stream, system-fallback, connection, and workflow-oracle suites. Result: 11 files,
+  207 passed and three declared platform skips out of 210; 8.85 seconds real, 184,500,224-byte
+  maximum RSS, 96,818,624-byte peak footprint, zero swaps and block I/O. The staging-control suite
+  contributes 16 passed plus one macOS-skipped real-PowerShell case; the workflow oracle passes 9/9.
+- Broad relay command: `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts
+--maxWorkers=1 src/main/ssh/ssh-relay-*.test.ts`. Result: 52 files passed, five files skipped; 686
+  passed and nine declared skips out of 695; 113.77 seconds real, 257,605,632-byte maximum RSS,
+  97,572,312-byte peak footprint, zero swaps and block I/O. This and the release/lint commands ran
+  concurrently, so their wall times are recorded but are not standalone performance baselines.
+- Release-contract command: `/usr/bin/time -l pnpm exec vitest run --config
+config/vitest.config.ts --maxWorkers=1 config/scripts/ssh-relay-runtime-*.test.mjs`. Result: 50 files
+  and 282/282 cases pass; 81.81 seconds real, 189,317,120-byte maximum RSS, 96,146,808-byte peak
+  footprint, zero swaps and block I/O. Two prior quoted-wildcard invocations found no literal file;
+  they were command errors and were immediately replaced by these exact checklist commands.
+- Static evidence: `pnpm typecheck` passes. `/usr/bin/time -l pnpm lint` passes in 78.78 seconds real
+  with 2,106,277,888-byte maximum RSS and 96,081,152-byte peak footprint; its 26 warnings are
+  pre-existing outside this diff. Full lint proves switch exhaustiveness, 41 reliability gates, the
+  355-entry max-lines ratchet with no new bypass, bundled guides, and localization checks. Targeted
+  `oxlint` and `oxfmt --check` pass.
+- Isolation evidence: `git diff --check` passes; `git diff --exit-code
+d24f877d96f07d691508cc686c0791a86d3dd308 -- src/main/ssh/ssh-remote-node-resolution.ts
+src/main/ssh/ssh-remote-node-resolution.test.ts` is empty. A non-test reference search finds the
+  staging-control export only in its owning production module. The intended diff is limited to the
+  disconnected staging-control module/purpose test, native workflow/oracle wiring, and both
+  checklist documents. No existing file receiver, POSIX/SFTP transfer, legacy uploader, product
+  importer, settings, Beta, fallback, tuple, publication, default-path, or signing behavior changes.
+- Residual boundary: local execution does not prove Windows PowerShell 5.1 parsing, exclusive
+  directory semantics, or cleanup on native Windows. Exact-head native Windows x64/arm64 purpose
+  proof and all-six adjacent native regression cells remain required. File/tree composition, live
+  Windows OpenSSH, full-size runtime transfer, long paths, endpoint-protection faults, capability
+  classification/cache, bundled-Node verification/install/publish/launch, product/Beta/fallback/
+  default behavior, tuple enablement, publication, Apple signing, and SignPath remain absent.
+
 ## Accepted Gaps
 
 No product gap is accepted merely because it appears in this list. Each entry requires explicit
@@ -18344,9 +18411,9 @@ The project is not complete until every applicable item below is checked with ev
 
 ## Next Required Action
 
-Write and run the purpose-named RED suite and native-workflow oracle for
-`E-M6-WINDOWS-SYSTEM-SSH-CONTROL-AUDIT-001`, proving failure solely because the audited production
-module is absent. Do not check the broad Milestone 6 Windows system-SSH item yet. Do not compose file
+Commit and push the exact `E-M6-WINDOWS-SYSTEM-SSH-CONTROL-LOCAL-001` package, then require the real
+PowerShell 5.1 process oracle on native Windows x64/arm64 plus all-six native and adjacent repository
+regression cells. Do not check the broad Milestone 6 Windows system-SSH item yet. Do not compose file
 streaming into a remote-tree owner or add an Electron/startup/product importer, per-target mode
 wiring, fallback, tuple enablement, release publication, or default behavior.
 Keep Node upstream `.tar.xz` inputs, Windows ZIP, `ORCA_RELAY_PATH`, existing desktop required-assets
