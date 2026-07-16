@@ -33,6 +33,20 @@ function decodePowerShellCommand(command: string): { encoded: string; script: st
   return { encoded, script: Buffer.from(encoded, 'base64').toString('utf16le') }
 }
 
+function isExpectedPowerShellStartupStderr(stderr: string): boolean {
+  if (stderr === '') {
+    return true
+  }
+  // Why: hosted Windows emits bounded first-use progress CLIXML before the encoded script starts.
+  return (
+    stderr.length <= 4096 &&
+    stderr.startsWith('#< CLIXML') &&
+    stderr.includes('S="progress"') &&
+    stderr.includes('Preparing modules for first use.') &&
+    !stderr.includes('S="Error"')
+  )
+}
+
 describe('detectSshRelayWindowsCompatibility', () => {
   beforeEach(() => {
     execCommandMock.mockReset()
@@ -164,6 +178,30 @@ describe('detectSshRelayWindowsCompatibility', () => {
     )
   })
 
+  it.each([
+    { label: 'empty', stderr: '', expected: true },
+    {
+      label: 'bounded first-use progress',
+      stderr:
+        '#< CLIXML\r\n<Objs><Obj S="progress"><AV>Preparing modules for first use.</AV></Obj></Objs>',
+      expected: true
+    },
+    { label: 'unknown', stderr: 'unexpected stderr', expected: false },
+    {
+      label: 'error CLIXML',
+      stderr:
+        '#< CLIXML\r\n<Objs><Obj S="progress"><AV>Preparing modules for first use.</AV></Obj><Obj S="Error" /></Objs>',
+      expected: false
+    },
+    {
+      label: 'oversized progress',
+      stderr: `#< CLIXML\r\n<Obj S="progress">Preparing modules for first use.${'x'.repeat(4096)}`,
+      expected: false
+    }
+  ])('classifies $label PowerShell startup stderr', ({ stderr, expected }) => {
+    expect(isExpectedPowerShellStartupStderr(stderr)).toBe(expected)
+  })
+
   it.runIf(process.platform === 'win32')(
     'executes the encoded probe under native Windows PowerShell with bounded marker output',
     async () => {
@@ -177,10 +215,14 @@ describe('detectSshRelayWindowsCompatibility', () => {
         { encoding: 'utf8', timeout: 15_000 }
       )
 
-      expect({ status: result.status, error: result.error, stderr: result.stderr }).toEqual({
+      expect({
+        status: result.status,
+        error: result.error,
+        expectedStartupStderr: isExpectedPowerShellStartupStderr(result.stderr)
+      }).toEqual({
         status: 0,
         error: undefined,
-        stderr: ''
+        expectedStartupStderr: true
       })
       const outputLines = result.stdout.split(/\r?\n/u).filter(Boolean)
       expect(outputLines[0]).toBe(`${marker} BEGIN`)

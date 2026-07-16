@@ -8,8 +8,8 @@ work; keep exact commands, runner identities, hashes, metrics, and residual gaps
 
 Date created: 2026-07-14<br>
 Last updated: 2026-07-15<br>
-Current phase: Milestone 5 / Work Package 4 desktop resolver/cache — **In progress — 2026-07-15, Codex implementation owner: prove the locally-green disconnected Windows build/OpenSSH/PowerShell/.NET compatibility detector on exact-head native runners**. Keep every capability disconnected from host-evidence composition and every production/default SSH path. Real Apple/SignPath rehearsals remain an explicit late gate and are not on this package's critical path.<br>
-Session checkpoint: **WINDOWS COMPATIBILITY LOCAL GREEN / EXACT-HEAD CI NEXT — 2026-07-15, Codex implementation owner** — `E-M5-WINDOWS-COMPATIBILITY-DETECTION-LOCAL-001` proves the bounded strict detector, purpose cases, workflow-family oracle, broader relay/release regressions, and static gates locally. The native Windows execution case remains a declared macOS skip and must pass on Windows x64 and arm64 runners before this package closes. No host composer, product caller, setting, transfer/install, fallback wiring, tuple enablement, publication, or default behavior is connected. Merging to `main` remains prohibited, SignPath is deferred, and legacy remains the production default.<br>
+Current phase: Milestone 5 / Work Package 4 desktop resolver/cache — **In progress — 2026-07-15, Codex implementation owner: run replacement exact-head native proof for the corrected Windows first-use progress assertion**. Keep every capability disconnected from host-evidence composition and every production/default SSH path. Real Apple/SignPath rehearsals remain an explicit late gate and are not on this package's critical path.<br>
+Session checkpoint: **WINDOWS COMPATIBILITY CORRECTION LOCAL GREEN / REPLACEMENT CI NEXT — 2026-07-15, Codex implementation owner** — `E-M5-WINDOWS-COMPATIBILITY-DETECTION-CORRECTION-LOCAL-001` accepts only empty or bounded known first-use progress stderr without an error record and rejects unknown, error, or oversized stderr. Purpose/workflow and static gates pass locally; require replacement native x64/arm64 plus all-six proof. Production code and every product/default path remain unchanged. Merging to `main` remains prohibited, SignPath is deferred, and legacy remains the production default.<br>
 Primary design: [SSH relay GitHub Release plan](./2026-07-14-ssh-relay-github-release-plan.html)<br>
 Motivating issues: [#8450](https://github.com/stablyai/orca/issues/8450), [#1693](https://github.com/stablyai/orca/issues/1693)
 
@@ -147,11 +147,11 @@ same change as the work it records.
   local gates, and all-six native Node 24 proof are green under
   E-M5-ARTIFACT-CACHE-ROOT-LOCAL-RED-001, E-M5-ARTIFACT-CACHE-ROOT-LOCAL-001, and
   E-M5-ARTIFACT-CACHE-ROOT-CI-001. No Electron or product caller exists.
-- Active package: **In progress — 2026-07-15, Codex implementation owner** — exact-head native proof
-  for the disconnected Windows build/OpenSSH/PowerShell/.NET compatibility detector under
-  E-M5-WINDOWS-COMPATIBILITY-DETECTION-LOCAL-001. Native Windows PowerShell execution must pass on
-  x64 and arm64; keep host composition, live SSH, transfer/install, settings, fallback wiring,
-  tuple enablement, publication, defaults, and SignPath separately gated.
+- Active package: **In progress — 2026-07-15, Codex implementation owner** — replacement exact-head
+  native proof for the locally-green test-only correction under
+  E-M5-WINDOWS-COMPATIBILITY-DETECTION-CORRECTION-LOCAL-001. Require native Windows x64 and arm64
+  plus all-six client proof; keep host composition, live SSH, transfer/install, settings, fallback
+  wiring, tuple enablement, publication, defaults, and SignPath separately gated.
 - Completed Work Package 2 gate: target-native Windows source-signature reports from exact-head
   artifact jobs 87267322867 and 87267322870 were independently downloaded and matched to their
   identities and signing-stage reports under E-M3-WINDOWS-SOURCE-SIGNATURE-CI-001. PR Checks
@@ -15821,6 +15821,56 @@ config/scripts/ssh-relay-runtime-*.test.mjs` — PASS, 50 files / 280 tests in 3
   semantic transfer capability, Electron/startup, cache acquisition, transfer/install, settings,
   fallback wiring, tuple enablement, release publication, defaults, and SignPath remain absent;
   legacy remains the sole production/default path.
+
+### E-M5-WINDOWS-COMPATIBILITY-DETECTION-CI-RED-001 — hosted first-use progress is not probe failure
+
+- Date/owner/source: 2026-07-15, Codex implementation owner; exact implementation head
+  `30bf908f2477d3f4b568811469e04f2009c13b28`, SSH Relay Runtime Artifacts run
+  [29491051007](https://github.com/stablyai/orca/actions/runs/29491051007), Windows x64 job
+  [87597009005](https://github.com/stablyai/orca/actions/runs/29491051007/job/87597009005), hosted
+  Windows Server 2022 / Node 24.18.0.
+- Passing evidence: the runtime contract reaches 84 passed files, 644 passed tests, and 14 declared
+  skips. Every parser, strict-rejection, cancellation, command-construction, and dependency-absence
+  detector case passes. The native encoded probe itself completes in 8,035 ms with process status
+  0, no spawn error, and the exact six bounded stdout lines required by the test.
+- Sole failure: one native-execution assertion requires `stderr === ''`. Hosted Windows PowerShell
+  emits a bounded `#< CLIXML` progress stream containing only three `S="progress"` records for
+  `Preparing modules for first use.` before the encoded script starts. It contains no `S="Error"`
+  record. The production `execCommand` success path returns stdout on exit 0 and does not parse
+  stderr as detector evidence, so this is a purpose-test portability defect rather than a
+  production detector or runtime failure.
+- Correction contract: retain process status 0, no spawn error, exact six-line/128-character stdout,
+  and the existing 15-second process bound. Accept stderr only when empty or at most 4,096
+  characters of first-use CLIXML containing the known progress record and no PowerShell error
+  record. Unknown, oversized, or error CLIXML must still fail the native test. Production code,
+  workflow composition, and every product/default path remain unchanged. Replacement native x64
+  and arm64 plus all-six Node 24 proof is mandatory.
+
+### E-M5-WINDOWS-COMPATIBILITY-DETECTION-CORRECTION-LOCAL-001 — bounded known progress only
+
+- Date/owner/environment: 2026-07-15, Codex implementation owner; local macOS arm64, Node 26.0.0 /
+  pnpm 10.24.0, test-only correction atop exact implementation head `30bf908f2`. Production source
+  and native workflow commands are unchanged.
+- Correction: `isExpectedPowerShellStartupStderr` accepts empty stderr or at most 4,096 characters
+  starting with `#< CLIXML`, containing the observed `S="progress"` and `Preparing modules for first
+use.` record, and containing no `S="Error"` record. Five explicit local cases accept empty/known
+  progress and reject unknown text, error CLIXML, and oversized progress. The native case retains
+  process status 0, no spawn error, exact six stdout lines, 128-character line bounds, and the
+  15-second process timeout.
+- Focused command: `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts
+--maxWorkers=1 src/main/ssh/ssh-relay-windows-compatibility-detection.test.ts
+config/scripts/ssh-relay-runtime-workflow.test.mjs` — PASS, two files, 38 passed / one declared
+  macOS skip in 651 ms Vitest, 1.94 seconds wall, 133,087,232-byte maximum RSS, zero swaps. This is
+  31 purpose assertions plus the seven-case native-workflow oracle.
+- Static commands: `pnpm typecheck`; targeted `pnpm exec oxlint`; targeted `pnpm exec oxfmt --check`;
+  `pnpm run check:max-lines-ratchet`; `git diff --check`; and the protected-resolver empty-diff
+  assertion pass. The expected local Node-24 engine warning remains; exact Node 24 is the native CI
+  gate.
+- Boundary: this corrects only the native test's handling of hosted PowerShell startup progress. It
+  does not relax the production parser, change the detector command, add a product import/caller, or
+  alter any legacy/default behavior. Replacement x64/arm64 and all-six exact-head proof remains
+  mandatory; live SSH, host composition, settings/fallback, tuple enablement, publication, and
+  SignPath remain absent.
 
 ## Accepted Gaps
 

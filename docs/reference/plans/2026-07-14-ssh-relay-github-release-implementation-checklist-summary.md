@@ -9,9 +9,9 @@ keeps commands, hashes, runner identities, timings, and failure details.
 A checked box means the work has evidence in the detailed ledger. Design approval alone does not
 complete a box.
 
-Active checkpoint: **Milestone 5 / Work Package 4 desktop resolver/cache — prove the locally-green,
-disconnected Windows build/OpenSSH/PowerShell/.NET compatibility detector on exact-head native
-runners, 2026-07-15, Codex implementation owner.**
+Active checkpoint: **Milestone 5 / Work Package 4 desktop resolver/cache — run replacement
+exact-head native proof for the corrected Windows first-use progress assertion, 2026-07-15, Codex
+implementation owner.**
 `E-M5-ARTIFACT-CACHE-RESOLUTION-CI-001` closes warm-cache commit
 `22031fa68` on all six native clients, both Linux supplements, Windows x64 baseline, PR Checks,
 Golden E2E, and computer-use; Windows arm64 remains the expected build-26200 rejection against 26100. `E-M5-ARTIFACT-CACHE-RESOLUTION-LOCAL-001` passes 9/9 purpose tests,
@@ -256,6 +256,15 @@ relay cases, and 280/280 release-script cases pass. Typecheck, full lint, reliab
 localization, format, diff, and protected-resolver gates pass. The module remains disconnected;
 native Windows execution and all-six Node 24 proof are the next gate, while live SSH, composition,
 settings, fallback wiring, tuple enablement, publication, defaults, and SignPath remain absent.
+`E-M5-WINDOWS-COMPATIBILITY-DETECTION-CI-RED-001` records the first native x64 gate at exact head
+`30bf908f2`: 84 files/644 tests pass, including every detector parser/command case, and only the
+native execution assertion fails. The encoded probe exits 0 with the exact bounded stdout; hosted
+Windows adds bounded first-use progress CLIXML on stderr. The narrow correction accepts only empty
+stderr or that bounded progress shape with no error record; production code remains unchanged.
+`E-M5-WINDOWS-COMPATIBILITY-DETECTION-CORRECTION-LOCAL-001` passes 31 purpose cases plus the seven-
+case workflow oracle, with only native execution skipped on macOS. Five explicit cases accept empty/
+bounded-known progress and reject unknown, error, or oversized stderr. Typecheck, targeted lint/
+format, max-lines, diff, and protected-resolver gates pass; replacement native CI is mandatory.
 `E-M5-ARTIFACT-CACHE-ROOT-CI-001` closes the pure cache-root contract at exact head `aefcaa9a9`:
 all six primary native Node 24 jobs, both Linux supplements, Windows x64 baseline, PR Checks, Golden
 E2E, and computer-use pass; Windows arm64 build 26200 remains correctly gated against 26100. The
