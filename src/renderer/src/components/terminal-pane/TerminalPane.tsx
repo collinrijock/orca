@@ -215,6 +215,10 @@ type TerminalPaneProps = {
   // or persist to the layout snapshot, so returning to the workspace shows
   // the original split layout unchanged.
   isolatedPaneKey?: string | null
+  // Why: ephemeral one-off command terminals (skill install, feature tips) run a
+  // single pre-filled command and aren't meant to be split; when false the pane
+  // header omits its split button.
+  allowSplit?: boolean
   onPtyExit: (ptyId: string) => void
   onCloseTab: () => void
 }
@@ -281,6 +285,7 @@ export default function TerminalPane({
   isVisible = true,
   isWorktreeActive = isVisible,
   isolatedPaneKey = null,
+  allowSplit = true,
   onPtyExit,
   onCloseTab
 }: TerminalPaneProps): React.JSX.Element {
@@ -3200,6 +3205,7 @@ export default function TerminalPane({
         worktreeId={worktreeId}
         cwd={cwd ?? ''}
         showAlwaysOnHeaders={isActive && terminalContentVisible}
+        allowSplit={allowSplit}
         paneCount={paneCount}
         activePaneId={activePane?.id}
         panes={managedPanes}

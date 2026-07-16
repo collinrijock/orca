@@ -9,7 +9,7 @@ import {
 import { AlertTriangle, CheckCircle2, ChevronDown, Loader2, RefreshCw } from 'lucide-react'
 import type { SkillFreshnessInventory } from '../../../../shared/skill-freshness'
 import { buildTargetedSkillUpdateCommand } from '../../../../shared/skill-freshness'
-import { useSkillFreshness } from '@/hooks/useSkillFreshness'
+import { suspendSkillFreshnessFocusRescan, useSkillFreshness } from '@/hooks/useSkillFreshness'
 import { notifyInstalledAgentSkillsChanged } from '@/hooks/useInstalledAgentSkills'
 import { translate } from '@/i18n/i18n'
 import { Button } from '@/components/ui/button'
@@ -185,6 +185,15 @@ export function SkillFreshnessUpdateDialog(): React.JSX.Element {
     terminalCommand,
     updateCommand
   ])
+
+  useEffect(() => {
+    // Why: while a live update terminal is showing, hold the shared focus rescan
+    // so alt-tabbing back into Orca doesn't retract the draft and respawn its PTY.
+    if (!open || terminalCommand === null) {
+      return undefined
+    }
+    return suspendSkillFreshnessFocusRescan()
+  }, [open, terminalCommand])
 
   const handleOpenChange = (next: boolean): void => {
     // Why: closing is the natural point to re-observe bytes so a completed update
