@@ -5,6 +5,10 @@ import { join } from 'node:path'
 import nacl from 'tweetnacl'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+// Why: injected cache composition tests must stay client-offline and never install Electron.
+const electronNetFetchMock = vi.hoisted(() => vi.fn())
+vi.mock('electron', () => ({ net: { fetch: electronNetFetchMock } }))
+
 import {
   populateSshRelayArtifactCache,
   type SshRelayArtifactCachePopulationOperations
@@ -80,6 +84,7 @@ const operations = {
 }
 
 beforeEach(() => {
+  electronNetFetchMock.mockReset()
   operations.download.mockReset()
   operations.publish.mockReset()
   operations.acquireInUseLease.mockReset()
@@ -91,6 +96,7 @@ afterEach(async () => {
       .splice(0)
       .map((directory) => rm(directory, { recursive: true, force: true }))
   )
+  expect(electronNetFetchMock).not.toHaveBeenCalled()
 })
 
 async function expectEmptyDownloadStaging(cacheRoot: string): Promise<void> {

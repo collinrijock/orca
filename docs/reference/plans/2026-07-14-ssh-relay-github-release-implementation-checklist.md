@@ -8,8 +8,8 @@ work; keep exact commands, runner identities, hashes, metrics, and residual gaps
 
 Date created: 2026-07-14<br>
 Last updated: 2026-07-15<br>
-Current phase: Milestone 5 / Work Package 4 desktop resolver/cache — **In progress — 2026-07-15, Codex implementation owner: close exact-head native CI evidence for the disconnected Linux libstdc++/GLIBCXX detector**. Keep every capability disconnected from host-evidence composition and every production/default SSH path. Real Apple/SignPath rehearsals remain an explicit late gate and are not on this package's critical path.<br>
-Session checkpoint: **LOCAL GREEN / EXACT-HEAD CI NEXT — 2026-07-15, Codex implementation owner** — `E-M5-LINUX-LIBSTDCXX-DETECTION-LOCAL-001` passes the 23-case purpose contract, 142 focused/workflow cases, 461 broader relay tests with three declared skips, 280 release-script tests, typecheck, lint, format, max-lines, diff, and protected-resolver gates. The detector remains disconnected and returns unknown for loader overrides, missing tools, malformed/overflow evidence, or conflicting candidates. Exact Node 24/all-six native execution remains open. No host composer, product caller, setting, transfer/install, fallback wiring, tuple enablement, publication, or default behavior is connected. Merging to `main` remains prohibited, SignPath is deferred, and legacy remains the production default.<br>
+Current phase: Milestone 5 / Work Package 4 desktop resolver/cache — **In progress — 2026-07-15, Codex implementation owner: close replacement all-six native evidence after the client-offline cache-test correction**. Keep every capability disconnected from host-evidence composition and every production/default SSH path. Real Apple/SignPath rehearsals remain an explicit late gate and are not on this package's critical path.<br>
+Session checkpoint: **CLIENT-OFFLINE TEST CORRECTION LOCAL GREEN / REPLACEMENT EXACT-HEAD CI NEXT — 2026-07-15, Codex implementation owner** — `E-M5-LINUX-LIBSTDCXX-DETECTION-CLIENT-OFFLINE-CORRECTION-LOCAL-001` adds purpose-scoped Electron mocks and proves the dependency-injected cache suites never call `electron.net.fetch`. Focused 46-case, broader 461-case, release-script 280-case, typecheck, lint, formatting, max-lines, diff, and protected-resolver gates pass. Replacement all-six Node 24 CI remains required; the failed run is not accepted. No host composer, product caller, setting, transfer/install, fallback wiring, tuple enablement, publication, or default behavior is connected. Merging to `main` remains prohibited, SignPath is deferred, and legacy remains the production default.<br>
 Primary design: [SSH relay GitHub Release plan](./2026-07-14-ssh-relay-github-release-plan.html)<br>
 Motivating issues: [#8450](https://github.com/stablyai/orca/issues/8450), [#1693](https://github.com/stablyai/orca/issues/1693)
 
@@ -15612,6 +15612,58 @@ config/vitest.config.ts --maxWorkers=1` plus the new purpose suite, libc, kernel
   product SSH, cache acquisition, transfer/install, settings, fallback, tuple enablement,
   publication, and defaults remain absent; legacy remains the sole production path.
 
+### E-M5-LINUX-LIBSTDCXX-DETECTION-CI-RED-001 — cache unit suites attempt Electron installation
+
+- Date/owner: 2026-07-15, Codex implementation owner.
+- Source/run: exact implementation head `156ea35c0`; SSH Relay Runtime Artifacts run
+  `29487742612`, Darwin x64 job `87586158910`.
+- Passing detector evidence: the new `ssh-relay-linux-libstdcxx-detection` suite passes all 23 cases
+  in 31 ms on the native `macos-15-intel` job. The job reaches 81 passing files and 612 passing
+  tests before the adjacent failure; this is not accepted as the required all-six gate.
+- Failure: `ssh-relay-artifact-cache-population.test.ts` and
+  `ssh-relay-artifact-acquisition.test.ts` each collect zero tests. Both consume only injected
+  operations but import the production download module transitively; without an Electron mock,
+  `electron/index.js` starts `install-electron` because artifact CI intentionally installs source
+  dependencies with `--ignore-scripts`. Two bounded fetch attempts report `TypeError: fetch failed`,
+  followed by `Electron failed to install correctly`; the job exits 1 with two failed / 81 passed
+  files and 612 passed tests in 49.39 s.
+- Classification/correction gate: this is a test-isolation and client-offline determinism defect.
+  Rerunning until the Electron download happens to succeed would hide the dependency and is not
+  acceptable evidence. Add a purpose-scoped `electron.net.fetch` mock to the two dependency-injected
+  unit suites, retain the real Electron fetch coverage in downloader/integration suites, then pass
+  focused local tests and a replacement all-six exact-head run. Production code and behavior must
+  remain unchanged.
+
+### E-M5-LINUX-LIBSTDCXX-DETECTION-CLIENT-OFFLINE-CORRECTION-LOCAL-001 — cache suites are network-independent
+
+- Date/owner: 2026-07-15, Codex implementation owner.
+- Correction: `ssh-relay-artifact-cache-population.test.ts` and
+  `ssh-relay-artifact-acquisition.test.ts` now provide a purpose-scoped `electron.net.fetch` mock
+  before importing their dependency-injected composition modules. Every case asserts the mock was
+  never called. Downloader and real cold→warm integration suites retain their existing explicit
+  Electron fetch mocks and byte-stream behavior; production code is unchanged.
+- Focused command: `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts
+--maxWorkers=1` plus the two corrected suites, the Linux libstdc++ purpose suite, and the native
+  workflow oracle — PASS, four files / 46 tests in 1.52 s Vitest, 2.73 s wall,
+  138,412,032-byte maximum RSS, zero swaps. No Electron binary installation or fetch occurs.
+- Broader relay command: `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts
+--maxWorkers=1 --silent=true src/main/ssh/ssh-relay-*.test.ts` — PASS, 37 files / 461 tests with
+  three declared skipped files/tests in 24.58 s Vitest, 27.49 s wall, 248,905,728-byte maximum RSS,
+  zero swaps. The expected stale-lock and local Node 26 deprecation diagnostics remain unchanged. A
+  first invocation quoted the glob, correctly found no files, and is not treated as evidence; this
+  recorded command uses shell expansion.
+- Release-script command: `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts
+--maxWorkers=1 --silent=true config/scripts/ssh-relay-runtime-*.test.mjs` — PASS, 50 files / 280
+  tests in 20.37 s Vitest, 22.12 s wall, 190,201,856-byte maximum RSS, zero swaps.
+- Static gates: `pnpm typecheck`, `pnpm lint`, `pnpm run check:max-lines-ratchet`, targeted `oxlint`,
+  targeted `oxfmt --check`, and `git diff --check` pass. Full lint retains the same 26 warnings in
+  untouched files, 41 reliability gates, 355 grandfathered max-lines entries with no new bypass,
+  9,837 localization references and locale parity, and zero localization candidates. Protected
+  resolver files have zero diff.
+- Boundary/residual gaps: local macOS arm64 uses Node 26.0.0 / pnpm 10.24.0; replacement exact Node
+  24 on all six native clients remains mandatory. This correction changes tests only and proves no
+  production SSH, cache, fallback, or default behavior.
+
 ## Accepted Gaps
 
 No product gap is accepted merely because it appears in this list. Each entry requires explicit
@@ -15670,12 +15722,12 @@ The project is not complete until every applicable item below is checked with ev
 
 ## Next Required Action
 
-Commit the locally proven disconnected Darwin process-translation package, push it to the draft PR,
-and require exact-head all-six native artifact CI before advancing. Do not compose full host evidence,
-provision production secrets or environments, add
-Rosetta detection, provision production secrets/environments, add an Electron/startup consumer,
-embed unreviewed keys or manifest bytes, add SSH transfer/install, mode wiring, fallback, tuple
-enablement, release publication, or default behavior.
+Commit the client-offline cache-test correction proven by
+`E-M5-LINUX-LIBSTDCXX-DETECTION-CLIENT-OFFLINE-CORRECTION-LOCAL-001`, push it to the draft PR, and
+require replacement exact-head all-six native artifact CI before advancing. Do not compose full host
+evidence, provision production secrets or environments, add an Electron/startup consumer, embed
+unreviewed keys or manifest bytes, add SSH transfer/install, mode wiring, fallback, tuple enablement,
+release publication, or default behavior.
 Keep Node upstream `.tar.xz` inputs, Windows ZIP, `ORCA_RELAY_PATH`, existing desktop required-assets
 behavior, detached-signature byte encoding, Windows arm64 build 26100, macOS 13.5, Linux kernel 4.18,
 release-cut, desktop builds, publication, and every tuple separately gated.

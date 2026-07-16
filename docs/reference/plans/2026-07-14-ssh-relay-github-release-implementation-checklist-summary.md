@@ -9,9 +9,9 @@ keeps commands, hashes, runner identities, timings, and failure details.
 A checked box means the work has evidence in the detailed ledger. Design approval alone does not
 complete a box.
 
-Active checkpoint: **Milestone 5 / Work Package 4 desktop resolver/cache — close exact-head native
-CI evidence for the disconnected Linux libstdc++/GLIBCXX detector, 2026-07-15, Codex
-implementation owner.**
+Active checkpoint: **Milestone 5 / Work Package 4 desktop resolver/cache — close replacement all-six
+native evidence after the client-offline cache-test correction, 2026-07-15, Codex implementation
+owner.**
 `E-M5-ARTIFACT-CACHE-RESOLUTION-CI-001` closes warm-cache commit
 `22031fa68` on all six native clients, both Linux supplements, Windows x64 baseline, PR Checks,
 Golden E2E, and computer-use; Windows arm64 remains the expected build-26200 rejection against 26100. `E-M5-ARTIFACT-CACHE-RESOLUTION-LOCAL-001` passes 9/9 purpose tests,
@@ -220,6 +220,18 @@ refuses loader overrides, requires strict consistent loader-cache/physical-file/
 and has exact POSIX syntax proof without `strings` or a runtime dependency. Both native workflow
 families require the suite. Exact Node 24/all-six native proof is next; host composition, live SSH,
 and every production/default path remain absent.
+`E-M5-LINUX-LIBSTDCXX-DETECTION-CI-RED-001` records exact-head run `29487742612`: the native Darwin
+x64 job passes the new 23-case detector suite, then two dependency-injected cache unit suites collect
+zero cases because their transitive Electron import attempts an uninstalled-binary network fetch.
+The job exits with two failed / 81 passed files and 612 passed tests. This is a client-offline test
+isolation defect; rerun-until-green is rejected. Add only purpose-scoped Electron mocks to those two
+unit suites, retain real downloader/integration coverage, and repeat all-six native CI. Production
+code, host composition, SSH, settings, fallback, tuple enablement, and defaults remain unchanged.
+`E-M5-LINUX-LIBSTDCXX-DETECTION-CLIENT-OFFLINE-CORRECTION-LOCAL-001` is green: the two
+dependency-injected cache suites now mock Electron and assert `net.fetch` is never called. Focused
+proof passes 46/46, broader relay proof passes 461/461 with three declared skips, release scripts
+pass 280/280, and typecheck, lint, format, max-lines, diff, and protected-resolver gates pass.
+Production code remains unchanged. Replacement exact Node 24/all-six native CI is next.
 `E-M5-ARTIFACT-CACHE-ROOT-CI-001` closes the pure cache-root contract at exact head `aefcaa9a9`:
 all six primary native Node 24 jobs, both Linux supplements, Windows x64 baseline, PR Checks, Golden
 E2E, and computer-use pass; Windows arm64 build 26200 remains correctly gated against 26100. The
