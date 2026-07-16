@@ -9,9 +9,9 @@ keeps commands, hashes, runner identities, timings, and failure details.
 A checked box means the work has evidence in the detailed ledger. Design approval alone does not
 complete a box.
 
-Active checkpoint: **Milestone 5 / Work Package 4 desktop resolver/cache — run replacement
-exact-head native proof for the corrected Windows first-use progress assertion, 2026-07-15, Codex
-implementation owner.**
+Active checkpoint: **Milestone 5 / Work Package 4 desktop resolver/cache — audit the smallest
+disconnected full host-evidence composition boundary after native acceptance of every individual
+compatibility detector, 2026-07-15, Codex implementation owner.**
 `E-M5-ARTIFACT-CACHE-RESOLUTION-CI-001` closes warm-cache commit
 `22031fa68` on all six native clients, both Linux supplements, Windows x64 baseline, PR Checks,
 Golden E2E, and computer-use; Windows arm64 remains the expected build-26200 rejection against 26100. `E-M5-ARTIFACT-CACHE-RESOLUTION-LOCAL-001` passes 9/9 purpose tests,
@@ -265,6 +265,10 @@ stderr or that bounded progress shape with no error record; production code rema
 case workflow oracle, with only native execution skipped on macOS. Five explicit cases accept empty/
 bounded-known progress and reject unknown, error, or oversized stderr. Typecheck, targeted lint/
 format, max-lines, diff, and protected-resolver gates pass; replacement native CI is mandatory.
+`E-M5-WINDOWS-COMPATIBILITY-DETECTION-CI-001` closes exact head `c489ee9f7`: all six primary native
+clients, both Linux supplements, Windows x64 baseline, PR Checks, Golden E2E, and computer-use pass.
+Both Windows architectures pass all 32 detector cases under native Windows PowerShell. Windows
+arm64 completes full runtime proof and retains only the declared hosted build-26200 rejection against 26100. No live SSH, composer, product caller, setting/fallback, tuple, publication, or default exists.
 `E-M5-ARTIFACT-CACHE-ROOT-CI-001` closes the pure cache-root contract at exact head `aefcaa9a9`:
 all six primary native Node 24 jobs, both Linux supplements, Windows x64 baseline, PR Checks, Golden
 E2E, and computer-use pass; Windows arm64 build 26200 remains correctly gated against 26100. The

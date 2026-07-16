@@ -8,8 +8,8 @@ work; keep exact commands, runner identities, hashes, metrics, and residual gaps
 
 Date created: 2026-07-14<br>
 Last updated: 2026-07-15<br>
-Current phase: Milestone 5 / Work Package 4 desktop resolver/cache — **In progress — 2026-07-15, Codex implementation owner: run replacement exact-head native proof for the corrected Windows first-use progress assertion**. Keep every capability disconnected from host-evidence composition and every production/default SSH path. Real Apple/SignPath rehearsals remain an explicit late gate and are not on this package's critical path.<br>
-Session checkpoint: **WINDOWS COMPATIBILITY CORRECTION LOCAL GREEN / REPLACEMENT CI NEXT — 2026-07-15, Codex implementation owner** — `E-M5-WINDOWS-COMPATIBILITY-DETECTION-CORRECTION-LOCAL-001` accepts only empty or bounded known first-use progress stderr without an error record and rejects unknown, error, or oversized stderr. Purpose/workflow and static gates pass locally; require replacement native x64/arm64 plus all-six proof. Production code and every product/default path remain unchanged. Merging to `main` remains prohibited, SignPath is deferred, and legacy remains the production default.<br>
+Current phase: Milestone 5 / Work Package 4 desktop resolver/cache — **In progress — 2026-07-15, Codex implementation owner: audit the smallest disconnected full host-evidence composition boundary after native acceptance of every individual detector**. Keep every capability disconnected from every production/default SSH path. Real Apple/SignPath rehearsals remain an explicit late gate and are not on this package's critical path.<br>
+Session checkpoint: **WINDOWS COMPATIBILITY CI CLOSED / HOST COMPOSITION AUDIT NEXT — 2026-07-15, Codex implementation owner** — `E-M5-WINDOWS-COMPATIBILITY-DETECTION-CI-001` proves both native Windows architectures pass the strict detector, all six primary clients and both Linux supplements pass, Windows x64 baseline passes, and Windows arm64 retains only the declared build-26200/26100 runner mismatch after full runtime proof. Audit only the next disconnected composition boundary; do not add a product caller, settings/fallback wiring, tuple enablement, publication, or default behavior. Merging to `main` remains prohibited, SignPath is deferred, and legacy remains the production default.<br>
 Primary design: [SSH relay GitHub Release plan](./2026-07-14-ssh-relay-github-release-plan.html)<br>
 Motivating issues: [#8450](https://github.com/stablyai/orca/issues/8450), [#1693](https://github.com/stablyai/orca/issues/1693)
 
@@ -147,11 +147,11 @@ same change as the work it records.
   local gates, and all-six native Node 24 proof are green under
   E-M5-ARTIFACT-CACHE-ROOT-LOCAL-RED-001, E-M5-ARTIFACT-CACHE-ROOT-LOCAL-001, and
   E-M5-ARTIFACT-CACHE-ROOT-CI-001. No Electron or product caller exists.
-- Active package: **In progress — 2026-07-15, Codex implementation owner** — replacement exact-head
-  native proof for the locally-green test-only correction under
-  E-M5-WINDOWS-COMPATIBILITY-DETECTION-CORRECTION-LOCAL-001. Require native Windows x64 and arm64
-  plus all-six client proof; keep host composition, live SSH, transfer/install, settings, fallback
-  wiring, tuple enablement, publication, defaults, and SignPath separately gated.
+- Active package: **In progress — 2026-07-15, Codex implementation owner** — audit the smallest
+  disconnected full host-evidence composition boundary after
+  E-M5-WINDOWS-COMPATIBILITY-DETECTION-CI-001 closes every individual detector on native clients.
+  Keep live SSH, transfer/install, settings, fallback wiring, tuple enablement, publication,
+  defaults, and SignPath separately gated.
 - Completed Work Package 2 gate: target-native Windows source-signature reports from exact-head
   artifact jobs 87267322867 and 87267322870 were independently downloaded and matched to their
   identities and signing-stage reports under E-M3-WINDOWS-SOURCE-SIGNATURE-CI-001. PR Checks
@@ -15871,6 +15871,60 @@ config/scripts/ssh-relay-runtime-workflow.test.mjs` — PASS, two files, 38 pass
   alter any legacy/default behavior. Replacement x64/arm64 and all-six exact-head proof remains
   mandatory; live SSH, host composition, settings/fallback, tuple enablement, publication, and
   SignPath remain absent.
+
+### E-M5-WINDOWS-COMPATIBILITY-DETECTION-CI-001 — both native Windows detector contracts close
+
+- Date/owner/source: 2026-07-15, Codex implementation owner; exact correction head
+  `c489ee9f712c275b755fa33d2bf72f99253b53b2` on draft PR
+  [#8741](https://github.com/stablyai/orca/pull/8741). Replacement SSH Relay Runtime Artifacts run
+  [29491431906](https://github.com/stablyai/orca/actions/runs/29491431906) checks out that exact SHA
+  and uses Node 24.18.0.
+- All six primary native jobs pass: Windows x64
+  [87598281195](https://github.com/stablyai/orca/actions/runs/29491431906/job/87598281195), Windows
+  arm64 [87598281158](https://github.com/stablyai/orca/actions/runs/29491431906/job/87598281158),
+  Darwin arm64 [87598281186](https://github.com/stablyai/orca/actions/runs/29491431906/job/87598281186),
+  Darwin x64 [87598281198](https://github.com/stablyai/orca/actions/runs/29491431906/job/87598281198),
+  Linux arm64 [87598281211](https://github.com/stablyai/orca/actions/runs/29491431906/job/87598281211),
+  and Linux x64 [87598281215](https://github.com/stablyai/orca/actions/runs/29491431906/job/87598281215).
+- Native detector proof: each Windows job passes the 32-case
+  `ssh-relay-windows-compatibility-detection` suite under native Windows PowerShell — x64 in 2,213
+  ms and arm64 in 3,610 ms. Each Windows native contract passes 85 files / 650 tests with 14
+  declared skips. Each POSIX native contract passes 84 files / 659 tests with the one native-Windows
+  execution skip. This closes encoded syntax/execution, registry access, `sshd.exe -V`, bounded
+  first-use progress handling, strict parsing/rejection, cancellation, and command-construction on
+  both Windows architectures; it is still client/native-command evidence rather than live SSH.
+- Both Linux oldest-userland supplements pass: x64
+  [87599209993](https://github.com/stablyai/orca/actions/runs/29491431906/job/87599209993) and arm64
+  [87599209998](https://github.com/stablyai/orca/actions/runs/29491431906/job/87599209998). The Windows
+  x64 oldest-baseline job
+  [87600150054](https://github.com/stablyai/orca/actions/runs/29491431906/job/87600150054) passes.
+- The Windows arm64 oldest-baseline job
+  [87600150042](https://github.com/stablyai/orca/actions/runs/29491431906/job/87600150042) verifies the
+  full 60-entry / 42-file / 85,213,511-expanded-byte tree and content identity, Node v24.18.0 ABI
+  137, PTY exit/resize, five watcher events, and two-second resource settlement. Smoke takes
+  6,101.9951 ms at 50,077,696-byte RSS and complete verification takes 8,303.8299 ms. Its only
+  rejection is the previously declared hosted OS build 26200 against required build 26100; platform
+  and arm64 architecture checks pass and no new residual gap is reported.
+- Full-size extraction stays at 1,319.09–3,574.53 ms and 31,191,040–47,452,160 incremental RSS
+  bytes across the six primary clients. Cold immutable-cache publication stays at
+  1,789.86–4,013.22 ms and 32,522,240–50,397,184 incremental RSS bytes; warm lookup stays at
+  191.14–589.48 ms and 0–6,123,520 incremental RSS bytes. Retention stays at 12.53–46.41 ms and
+  eviction at 32.54–91.28 ms. Every measurement remains within its existing budget.
+- Adjacent exact-head checks pass: PR Checks run
+  [29491430511](https://github.com/stablyai/orca/actions/runs/29491430511), job
+  [87598223319](https://github.com/stablyai/orca/actions/runs/29491430511/job/87598223319); Golden E2E
+  run [29491430552](https://github.com/stablyai/orca/actions/runs/29491430552), Linux job
+  [87598223336](https://github.com/stablyai/orca/actions/runs/29491430552/job/87598223336) and macOS
+  job [87598223374](https://github.com/stablyai/orca/actions/runs/29491430552/job/87598223374);
+  computer-use run [29491430223](https://github.com/stablyai/orca/actions/runs/29491430223), Windows
+  job [87598222661](https://github.com/stablyai/orca/actions/runs/29491430223/job/87598222661) and
+  Ubuntu job [87598222670](https://github.com/stablyai/orca/actions/runs/29491430223/job/87598222670).
+- Boundary/residual gaps: the detector remains imported only by its purpose test, with no host
+  composer or product caller. Hosted native PowerShell does not prove live Windows OpenSSH service,
+  remote startup noise/channel behavior, system-SSH/SFTP transfer capability, or representative
+  remote Windows versions. Full host composition, live SSH, transfer/install, settings/fallback,
+  tuple enablement, release publication, defaults, and SignPath remain absent. Legacy remains the
+  sole production/default path and every tuple stays disabled.
 
 ## Accepted Gaps
 
