@@ -9,7 +9,7 @@ work; keep exact commands, runner identities, hashes, metrics, and residual gaps
 Date created: 2026-07-14<br>
 Last updated: 2026-07-15<br>
 Current phase: Milestone 6 / Work Package 5 bounded runtime transfer — **In progress — 2026-07-15, Codex implementation owner: disconnected POSIX system-SSH/no-tar transfer composition**. Keep every capability disconnected from every production/default SSH path. Real Apple/SignPath rehearsals remain an explicit late gate and are not on this package's critical path.<br>
-Session checkpoint: **POSIX SYSTEM-SSH TREE/ROOT LOCAL GREEN / EXACT-HEAD NATIVE EVIDENCE NEXT — 2026-07-15, Codex implementation owner** — `E-M6-POSIX-SYSTEM-SSH-TREE-LOCAL-001` proves the disconnected bounded control-command and tree-transfer owners with 15/15 purpose, 219 focused cases with one declared skip, 656 broad relay cases with six declared skips, 281/281 release contracts, full lint/typecheck, and static/isolation gates. Commit and push only this package, then require exact-head native evidence before selecting another package. Merging to `main` remains prohibited, SignPath is deferred, and legacy remains the production default.<br>
+Session checkpoint: **POSIX SYSTEM-SSH TREE/ROOT EXACT-HEAD GREEN / LIVE FULL-SIZE AUDIT NEXT — 2026-07-15, Codex implementation owner** — `E-M6-POSIX-SYSTEM-SSH-TREE-CI-001` proves the 15-case disconnected composition on all six primary Node 24 native clients at exact head `ec51e36b7`; Linux supplements, Windows x64 floor, PR Checks, computer-use, and Golden E2E pass. The artifact run remains red only for the declared Windows arm64 hosted build 26200 versus required 26100 floor mismatch after complete runtime verification. Audit only a purpose-named live/full-size loopback OpenSSH proof next; do not connect production behavior. Merging to `main` remains prohibited, SignPath is deferred, and legacy remains the production default.<br>
 Primary design: [SSH relay GitHub Release plan](./2026-07-14-ssh-relay-github-release-plan.html)<br>
 Motivating issues: [#8450](https://github.com/stablyai/orca/issues/8450), [#1693](https://github.com/stablyai/orca/issues/1693)
 
@@ -156,12 +156,13 @@ same change as the work it records.
 - Completed package: the disconnected authenticated system-SSH command-channel adapter is green
   locally and on every primary native client under E-M6-POSIX-SYSTEM-SSH-CHANNEL-LOCAL-001 and
   E-M6-POSIX-SYSTEM-SSH-CHANNEL-CI-001. It has no tree/live/product caller.
-- Active package: **Local green / exact-head native evidence pending — 2026-07-15, Codex
-  implementation owner** — the smallest disconnected POSIX system-SSH tree/root composition combines
-  only the proven authenticated source stream, exclusive per-file destination, and command-channel
-  adapter under E-M6-POSIX-SYSTEM-SSH-TREE-LOCAL-001. Do not import or modify the legacy tar/base64
-  directory uploader, add a semantic probe, or add product/settings/fallback/tuple/publication/
-  default behavior.
+- Completed package: the disconnected POSIX system-SSH tree/root composition is green locally and
+  on all six primary Node 24 native clients under E-M6-POSIX-SYSTEM-SSH-TREE-LOCAL-001 and
+  E-M6-POSIX-SYSTEM-SSH-TREE-CI-001. It has no live/full-size SSH or product caller.
+- Active package: **Audit in progress — 2026-07-15, Codex implementation owner** — establish the
+  smallest purpose-named live/full-size loopback OpenSSH proof for the exact disconnected POSIX
+  system-SSH tree owner, initially on target-native Linux x64/arm64 runners. Do not add product,
+  settings, fallback, tuple, publication, default behavior, a semantic probe, or a tar fast path.
 - Completed Work Package 2 gate: target-native Windows source-signature reports from exact-head
   artifact jobs 87267322867 and 87267322870 were independently downloaded and matched to their
   identities and signing-stage reports under E-M3-WINDOWS-SOURCE-SIGNATURE-CI-001. PR Checks
@@ -17929,6 +17930,47 @@ config/scripts/ssh-relay-runtime-workflow.test.mjs`.
   release publication, and SignPath remain absent. Exact-head native workflow, PR Checks,
   computer-use, and Golden E2E run IDs are still required before this package is closed.
 
+### E-M6-POSIX-SYSTEM-SSH-TREE-CI-001 — exact-head native composition proof
+
+- Date/owner/head: 2026-07-15, Codex implementation owner; exact implementation commit
+  `ec51e36b77d8f3ca1c3505e509e0c7f909dcd3cf` on draft PR #8741. All run/job IDs below report this
+  exact head and use Node 24.18.0 where the relay artifact workflow installs Node.
+- Artifact run: `29521889962`. All six primary target-native build jobs pass the complete runtime
+  contract command with both new purpose suites present exactly once:
+  - Linux x64 `87700712386` (`ubuntu-24.04`): tree 8/8 in 1,035 ms and control 7/7 in 272 ms;
+    aggregate 96 files, 825 passed/1 declared skip, 16.09 seconds.
+  - Linux arm64 `87700712339` (`ubuntu-24.04-arm`): tree 8/8 in 1,429 ms and control 7/7 in 276 ms;
+    aggregate 96 files, 825 passed/1 declared skip, 15.00 seconds.
+  - macOS x64 `87700712350` (`macos-15-intel`): tree 8/8 in 2,416 ms and control 7/7 in 287 ms;
+    aggregate 96 files, 824 passed/2 declared skips, 35.45 seconds.
+  - macOS arm64 `87700712336` (`macos-15`): tree 8/8 in 918 ms and control 7/7 in 272 ms;
+    aggregate 96 files, 824 passed/2 declared skips, 22.18 seconds.
+  - Windows x64 `87700712271` (`windows-2022`): tree 8/8 in 3,278 ms and control 7/7 in 319 ms;
+    aggregate 97 files, 812 passed/18 declared skips, 27.88 seconds.
+  - Windows arm64 `87700712395` (`windows-11-arm`): tree 8/8 in 2,866 ms and control 7/7 in 334 ms;
+    aggregate 97 files, 812 passed/18 declared skips, 30.77 seconds.
+- Adjacent artifact cells: Linux x64 oldest-userland supplement `87701645841`, Linux arm64
+  supplement `87701645883`, and Windows x64 build-20348 floor `87703087692` pass. The workflow's
+  overall conclusion is failure solely because Windows arm64 floor job `87703087689` correctly
+  rejects hosted Windows 10.0.26200 against the required build 26100. Before that floor comparison,
+  it verifies the exact downloaded artifact digest, 60 entries/42 files/85,213,511 expanded bytes,
+  Node 24.18.0, modules ABI 137, resized PTY exit 23, watcher create/update/delete/rename events,
+  2,000 ms resource settlement, 48,619,520-byte RSS, and 5,889 ms smoke duration. Platform and
+  architecture checks pass; only `osBuild` is false. This is the same declared runner-availability
+  gap as the preceding exact-head packages, not a regression from this change.
+- Repository/adjacent runs: PR Checks run `29521889985`, job `87700711608`, passes lint,
+  reliability/max-lines, typecheck, Git compatibility, full tests, unpacked build, and packaged CLI
+  smoke. Computer-use run `29521890044` passes Ubuntu job `87700711776` and Windows job
+  `87700711824`. Golden E2E run `29521890004` passes Linux job `87700711722` and macOS job
+  `87700711721`.
+- Disposition/residual boundary: the disconnected tree/root package is exact-head green on all six
+  primary native clients, with the known floor-runner mismatch retained explicitly. These native
+  cases still use the realistic fake command channel over the production adapter; they do not prove
+  a live or full-size POSIX system-SSH transfer. Semantic primitive probe/cache, optional tar fast
+  path, dynamic `MaxSessions=1`, high-RTT remotes, Windows transfer, remote bundled-Node install/
+  publish/launch, product/Beta/fallback/default wiring, tuple enablement, release publication, and
+  SignPath remain absent.
+
 ## Accepted Gaps
 
 No product gap is accepted merely because it appears in this list. Each entry requires explicit
@@ -17987,9 +18029,8 @@ The project is not complete until every applicable item below is checked with ev
 
 ## Next Required Action
 
-Commit and push only the locally green bounded control-command/tree composition package proven by
-E-M6-POSIX-SYSTEM-SSH-TREE-LOCAL-001, then require exact-head native workflow, PR Checks,
-computer-use, and Golden E2E evidence. Do not
+Audit and RED-test only the smallest purpose-named live/full-size loopback OpenSSH proof that calls
+the exact disconnected POSIX system-SSH tree owner on target-native Linux x64/arm64 CI. Do not
 check the broad Milestone 6 SFTP or POSIX system-SSH items yet. Do not add an Electron/startup/product
 importer, per-target mode wiring, fallback, tuple enablement, release publication, or default behavior.
 Keep Node upstream `.tar.xz` inputs, Windows ZIP, `ORCA_RELAY_PATH`, existing desktop required-assets

@@ -10,8 +10,8 @@ A checked box means the work has evidence in the detailed ledger. Design approva
 complete a box.
 
 Active checkpoint: **Milestone 6 / Work Package 5 bounded runtime transfer — disconnected POSIX
-system-SSH tree/root composition is locally green and exact-head native evidence is next,
-2026-07-15, Codex implementation owner.**
+system-SSH tree/root composition is exact-head green; audit a live/full-size loopback OpenSSH proof
+next, 2026-07-15, Codex implementation owner.**
 `E-M6-POSIX-SYSTEM-SSH-TREE-AUDIT-001` requires a bounded no-input control-command owner rather than
 the legacy unbounded-output command helper, exclusive `0700` root creation, parent-first declared
 directories, exact per-file source-stream composition, owned-root cleanup, and a worst-case
@@ -23,6 +23,12 @@ skip, 656 broad relay cases with six declared skips, 281/281 release contracts, 
 and static/isolation proof. The new tree owner has no production consumer and the protected legacy
 Node/npm resolver diff remains untouched. Live/full-size/high-RTT OpenSSH and every product/default
 path remain explicit gaps until later packages.
+`E-M6-POSIX-SYSTEM-SSH-TREE-CI-001` proves all 15 purpose cases on all six primary Node 24 native
+clients at exact head `ec51e36b7`; both Linux supplements, Windows x64 floor, PR Checks,
+computer-use Windows/Ubuntu, and Golden E2E macOS/Linux pass. The artifact run is red only because
+the Windows arm64 hosted floor runner is build 26200 instead of required 26100; it first verified the
+complete 85,213,511-byte/42-file runtime, ABI 137, PTY, watcher, and two-second settlement. No live
+POSIX system-SSH claim follows from these adapter-backed native cases.
 `E-M6-POSIX-SYSTEM-SSH-CHANNEL-LOCAL-001` records 13/13
 purpose, 150/150 focused, 641 broad relay cases with six declared skips, 281/281 release contracts,
 and all static/isolation gates. `E-M6-POSIX-SYSTEM-SSH-CHANNEL-CI-001` proves the 13 cases on all six
@@ -34,8 +40,9 @@ versus required 26100 rejection after the complete 85,213,511-byte/42-file runti
 settlement, and idempotent SIGTERM/SIGKILL hooks consumed by the proven single per-file cancellation
 owner. The adapter prechecks but does not forward that signal into `exec`, avoiding a duplicate
 immediate SIGTERM listener.
-No direct spawn, legacy uploader change, live claim, or product path is included. Collect exact-head
-native evidence next; legacy remains the only production/default path and SignPath remains deferred.
+No direct spawn, legacy uploader change, live claim, or product path is included. Audit only a
+disconnected live/full-size POSIX system-SSH proof next; legacy remains the only production/default
+path and SignPath remains deferred.
 `E-M6-POSIX-SYSTEM-SSH-FILE-LOCAL-001` records 25/25 purpose, 628 broad relay, 281/281 release, and all
 static/isolation gates.
 `E-M6-POSIX-SYSTEM-SSH-FILE-CI-001` proves the 25 cases on all six primary native clients; both Linux
