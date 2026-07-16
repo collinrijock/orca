@@ -11,6 +11,7 @@ export type CodexSessionBackfillSummary = {
   skippedUnsupportedFilesystemFiles: number
   failedDirectories: number
   failedFiles: number
+  failedHealAuditRecords: number
 }
 
 export type CodexSessionBackfillPaths = {

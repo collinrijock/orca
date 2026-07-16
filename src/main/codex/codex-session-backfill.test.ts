@@ -27,6 +27,7 @@ const { fsMockState } = vi.hoisted(() => ({
     failInstallLinkTransiently: false,
     failCopy: false,
     failAuditMkdirOnce: false,
+    failAuditWrites: false,
     failDirectoryPath: null as string | null,
     failLstatPath: null as string | null
   }
@@ -59,6 +60,14 @@ vi.mock('node:fs/promises', async () => {
         throw error
       }
       return actual.mkdir(...args)
+    },
+    appendFile: (...args: Parameters<typeof actual.appendFile>) => {
+      if (fsMockState.failAuditWrites && String(args[0]).includes('codex-session-backfill')) {
+        const error = new Error('ENOSPC: audit write failed') as NodeJS.ErrnoException
+        error.code = 'ENOSPC'
+        throw error
+      }
+      return actual.appendFile(...args)
     },
     lstat: (...args: Parameters<typeof actual.lstat>) => {
       if (args[0] === fsMockState.failLstatPath) {
@@ -164,6 +173,7 @@ beforeEach(() => {
   fsMockState.failInstallLinkTransiently = false
   fsMockState.failCopy = false
   fsMockState.failAuditMkdirOnce = false
+  fsMockState.failAuditWrites = false
   fsMockState.failDirectoryPath = null
   fsMockState.failLstatPath = null
   fakeHomeDir = mkdtempSync(join(tmpdir(), 'orca-codex-backfill-home-'))
@@ -245,7 +255,7 @@ describe('backfillManagedCodexSessionsIntoSystemHome', () => {
 
     expect(summary).toMatchObject({ scannedFiles: 1, linkedFiles: 0, skippedExistingFiles: 1 })
     expect(readFileSync(collidingPath, 'utf-8')).toBe('user contents\n')
-    expect(readAuditActions()).toEqual(['run-summary'])
+    expect(readAuditActions()).toEqual(['existing', 'run-summary'])
   })
 
   it('treats a broken symlink at the target as taken', async () => {
@@ -418,6 +428,7 @@ describe('startCodexSessionBackfillInBackground', () => {
     const first = await startCodexSessionBackfillInBackground()
     expect(first).toMatchObject({ linkedFiles: 1, failedFiles: 0 })
     expect(existsSync(getMarkerPath())).toBe(true)
+    expect(JSON.parse(readFileSync(getMarkerPath(), 'utf-8'))).toMatchObject({ version: 2 })
 
     // A file appearing after the marker must not be backfilled again.
     writeManagedSession(join('2026', '07', '01', 'rollout-later.jsonl'), '{"id":"later"}\n')
@@ -426,6 +437,23 @@ describe('startCodexSessionBackfillInBackground', () => {
     expect(
       existsSync(join(getSystemSessionsRoot(), '2026', '07', '01', 'rollout-later.jsonl'))
     ).toBe(false)
+  })
+
+  it('re-enqueues an installed rollout after its audit write fails', async () => {
+    writeManagedSession(join('2026', '05', '26', 'rollout-a.jsonl'), '{"id":"a"}\n')
+    fsMockState.failAuditWrites = true
+
+    const first = await startCodexSessionBackfillInBackground()
+
+    expect(first).toMatchObject({ linkedFiles: 1, failedHealAuditRecords: 1 })
+    expect(existsSync(getMarkerPath())).toBe(false)
+
+    fsMockState.failAuditWrites = false
+    const second = await startCodexSessionBackfillInBackground()
+
+    expect(second).toMatchObject({ skippedExistingFiles: 1, failedHealAuditRecords: 0 })
+    expect(readAuditActions()).toEqual(['existing', 'run-summary'])
+    expect(existsSync(getMarkerPath())).toBe(true)
   })
 
   it('does not retry a stable hardlink-less filesystem limitation', async () => {

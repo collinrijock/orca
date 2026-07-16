@@ -196,7 +196,7 @@ describe('runCodexSessionIndexHeal', () => {
       auditedThreads: [
         { stamp: '2026-07-01T10-00-00', id: threadId('1') },
         { stamp: '2026-07-03T10-00-00', id: threadId('3'), action: 'copy' },
-        { stamp: '2026-07-02T10-00-00', id: threadId('2') }
+        { stamp: '2026-07-02T10-00-00', id: threadId('2'), action: 'existing' }
       ]
     })
 
@@ -577,5 +577,30 @@ describe('runCodexSessionIndexHeal', () => {
 
     expect(rig.readLog().serverStarts).toBe(0)
     expect(existsSync(rig.paths.healMarkerPath)).toBe(false)
+  })
+
+  it('does not mark the heal complete when a processed outcome cannot be persisted', async () => {
+    const id = threadId('1')
+    const rig = createHealRig({
+      auditedThreads: [{ stamp: '2026-07-01T10-00-00', id }]
+    })
+    const healLedgerPath = rig.paths.healLedgerPath
+    rig.paths.healLedgerPath = dirname(healLedgerPath)
+
+    const failed = await runCodexSessionIndexHeal(rig.paths, {
+      buildInvocation: rig.buildInvocation,
+      interBatchDelayMs: 0
+    })
+
+    expect(failed.outcome).toBe('aborted')
+    expect(existsSync(rig.paths.healMarkerPath)).toBe(false)
+
+    rig.paths.healLedgerPath = healLedgerPath
+    const retried = await runCodexSessionIndexHeal(rig.paths, {
+      buildInvocation: rig.buildInvocation,
+      interBatchDelayMs: 0
+    })
+    expect(retried).toMatchObject({ outcome: 'completed', healedThreads: 1 })
+    expect(rig.readLog().threadIds).toEqual([id, id])
   })
 })

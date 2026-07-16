@@ -1,7 +1,5 @@
-import { mkdirSync, readFileSync } from 'node:fs'
 import { link, lstat, mkdir } from 'node:fs/promises'
 import { dirname, join, relative, sep } from 'node:path'
-import { writeFileAtomically } from '../codex-accounts/fs-utils'
 import {
   getCodexSessionBackfillStateDirPath,
   getOrcaManagedCodexHomePath,
@@ -16,6 +14,10 @@ import {
   isAtomicNoReplaceUnsupportedError
 } from './codex-session-backfill-copy'
 import { listCodexSessionJsonlFilesIncrementally } from './codex-session-file-listing'
+import {
+  hasCompletedCodexSessionBackfillMarker,
+  writeCodexSessionBackfillMarker
+} from './codex-session-backfill-marker'
 import type {
   CodexSessionBackfillOptions,
   CodexSessionBackfillPaths,
@@ -27,10 +29,6 @@ export type {
   CodexSessionBackfillPaths,
   CodexSessionBackfillSummary
 } from './codex-session-backfill-types'
-
-// Why: bump to re-run the backfill for every host after a layout or semantics
-// change; the run itself stays skip-existing so re-runs never overwrite.
-const CODEX_SESSION_BACKFILL_MARKER_VERSION = 1
 
 let backgroundBackfillTask: Promise<CodexSessionBackfillSummary | null> | null = null
 
@@ -87,14 +85,19 @@ async function runCodexSessionBackfillOncePerHost(
   systemCodexHomePathOverride?: string
 ): Promise<CodexSessionBackfillSummary | null> {
   const paths = resolveCodexSessionBackfillPaths(systemCodexHomePathOverride)
-  if (hasCompletedBackfillMarker(paths.markerPath, paths.systemSessionsRoot)) {
+  if (hasCompletedCodexSessionBackfillMarker(paths.markerPath, paths.systemSessionsRoot)) {
     return null
   }
   const summary = await backfillManagedCodexSessionsIntoSystemHome(paths, options)
-  // Why: per-file failures (locked or unreadable files) leave the marker unset
-  // so the next startup retries; skip-existing keeps those retries cheap.
-  if (!summary.stopped && summary.failedFiles === 0 && summary.failedDirectories === 0) {
-    writeBackfillMarker(paths.markerPath, paths.systemSessionsRoot, summary)
+  // Why: file or heal-queue failures leave the marker unset so the next
+  // startup retries; skip-existing keeps those retries cheap.
+  if (
+    !summary.stopped &&
+    summary.failedFiles === 0 &&
+    summary.failedDirectories === 0 &&
+    summary.failedHealAuditRecords === 0
+  ) {
+    writeCodexSessionBackfillMarker(paths.markerPath, paths.systemSessionsRoot, summary)
   }
   return summary
 }
@@ -120,7 +123,8 @@ export async function backfillManagedCodexSessionsIntoSystemHome(
     skippedSymlinkFiles: 0,
     skippedUnsupportedFilesystemFiles: 0,
     failedDirectories: 0,
-    failedFiles: 0
+    failedFiles: 0,
+    failedHealAuditRecords: 0
   }
   const appendAuditRecord = createCodexSessionBackfillAuditWriter(paths.auditLogPath)
   const ensuredTargetDirectories = new Set<string>()
@@ -226,6 +230,13 @@ async function backfillOneManagedSessionFile(
   const systemSessionFilePath = join(paths.systemSessionsRoot, relativePath)
   if (await pathEntryExists(systemSessionFilePath)) {
     summary.skippedExistingFiles += 1
+    // Why: this also recovers a rollout installed before a crash or audit
+    // failure; thread/read is idempotent for a pre-existing real-home file.
+    await appendHealAuditRecord(appendAuditRecord, summary, {
+      action: 'existing',
+      source: managedSessionFilePath,
+      target: systemSessionFilePath
+    })
     return
   }
 
@@ -239,7 +250,7 @@ async function backfillOneManagedSessionFile(
     }
     await link(managedSessionFilePath, systemSessionFilePath)
     summary.linkedFiles += 1
-    await appendAuditRecord({
+    await appendHealAuditRecord(appendAuditRecord, summary, {
       action: 'hardlink',
       source: managedSessionFilePath,
       target: systemSessionFilePath
@@ -257,7 +268,7 @@ async function backfillOneManagedSessionFile(
       // truncated rollout, then installed without overwriting collisions.
       await copySessionFileWithoutOverwrite(managedSessionFilePath, systemSessionFilePath)
       summary.copiedFiles += 1
-      await appendAuditRecord({
+      await appendHealAuditRecord(appendAuditRecord, summary, {
         action: 'copy',
         source: managedSessionFilePath,
         target: systemSessionFilePath
@@ -285,6 +296,16 @@ async function backfillOneManagedSessionFile(
         linkError: describeError(linkError)
       })
     }
+  }
+}
+
+async function appendHealAuditRecord(
+  appendAuditRecord: CodexSessionBackfillAuditWriter,
+  summary: CodexSessionBackfillSummary,
+  record: Record<string, unknown>
+): Promise<void> {
+  if (!(await appendAuditRecord(record))) {
+    summary.failedHealAuditRecords += 1
   }
 }
 
@@ -316,43 +337,4 @@ function isNotFoundError(error: unknown): boolean {
 
 function describeError(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
-}
-
-function hasCompletedBackfillMarker(markerPath: string, systemSessionsRoot: string): boolean {
-  try {
-    const parsed: unknown = JSON.parse(readFileSync(markerPath, 'utf-8'))
-    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-      return false
-    }
-    const marker = parsed as { version?: unknown; systemSessionsRoot?: unknown }
-    // Why: changing the configured real Codex home must backfill the new
-    // target instead of honoring a marker written for a different history.
-    return (
-      marker.version === CODEX_SESSION_BACKFILL_MARKER_VERSION &&
-      marker.systemSessionsRoot === systemSessionsRoot
-    )
-  } catch {
-    return false
-  }
-}
-
-function writeBackfillMarker(
-  markerPath: string,
-  systemSessionsRoot: string,
-  summary: CodexSessionBackfillSummary
-): void {
-  mkdirSync(dirname(markerPath), { recursive: true })
-  writeFileAtomically(
-    markerPath,
-    `${JSON.stringify(
-      {
-        version: CODEX_SESSION_BACKFILL_MARKER_VERSION,
-        systemSessionsRoot,
-        completedAt: Date.now(),
-        summary
-      },
-      null,
-      2
-    )}\n`
-  )
 }

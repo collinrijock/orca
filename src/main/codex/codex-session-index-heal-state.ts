@@ -51,7 +51,10 @@ export function collectPendingHealThreads(paths: CodexSessionIndexHealPaths): Pe
   const processedThreadIds = readProcessedHealThreadIds(paths)
   const pendingByThreadId = new Map<string, PendingHealThread>()
   for (const line of readJsonlLines(paths.auditLogPath, true)) {
-    if ((line.action !== 'hardlink' && line.action !== 'copy') || typeof line.target !== 'string') {
+    if (line.action !== 'hardlink' && line.action !== 'copy' && line.action !== 'existing') {
+      continue
+    }
+    if (typeof line.target !== 'string') {
       continue
     }
     // Why: the append-only audit can contain runs for several custom Codex
@@ -98,7 +101,7 @@ export function appendHealLedgerRecord(
   paths: CodexSessionIndexHealPaths,
   threadId: string,
   outcome: HealLedgerOutcome
-): void {
+): boolean {
   try {
     mkdirSync(dirname(paths.healLedgerPath), { recursive: true })
     appendFileSync(
@@ -111,10 +114,12 @@ export function appendHealLedgerRecord(
         at: new Date().toISOString()
       })}\n`
     )
+    return true
   } catch (error) {
-    // Why: losing a ledger line only costs one redundant thread/read on the
-    // next pass; it must not fail the heal.
+    // Why: the completion marker may only cover durably recorded outcomes;
+    // otherwise its audit-size fast path permanently suppresses the retry.
     console.warn('[codex-session-index-heal] Failed to append heal ledger record:', error)
+    return false
   }
 }
 
