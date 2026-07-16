@@ -10,14 +10,21 @@ A checked box means the work has evidence in the detailed ledger. Design approva
 complete a box.
 
 Active checkpoint: **Milestone 6 / Work Package 5 bounded runtime transfer — disconnected
-transport-neutral source-tree contract is locally green; exact-head native proof next, 2026-07-15,
-Codex implementation owner.**
+transport-neutral source-tree contract CI is closed; audit only the full-tree source pre-scan next,
+2026-07-15, Codex implementation owner.**
 `E-M6-SOURCE-TREE-CONTRACT-AUDIT-001` fixes a pure ready-acquisition → immutable descriptor
 boundary: exact verified manifest/cache identity and signed limits, deterministic ASCII ordering,
 client-native paths, borrowed live-lease assertion, and later shared use by pre-scan plus SFTP,
 POSIX tar/no-tar, and Windows PowerShell/.NET transfer. It performs no I/O and owns no cleanup;
 filesystem enumeration, streaming, SSH, remote writes/install, product/mode/fallback/default wiring,
 publication, and SignPath remain absent.
+`E-M6-SOURCE-TREE-CONTRACT-CI-001` closes exact implementation commit `2f38700b9`: all six primary
+native Node 24 clients, both Linux supplements, Windows x64 baseline, PR Checks, Golden E2E, and
+computer-use pass. Windows arm64 retains only the declared hosted build-26200 rejection against
+26100 after complete Node/PTY/watcher/tree proof. Every client passes the ten-case source-tree suite;
+Windows totals are 87 files / 680 passed / 14 skipped and POSIX totals are 86 files / 689 passed / one
+skip. Full-size extraction/cache metrics remain in budget. Filesystem pre-scan/mutation proof, SSH,
+remote writes/install, product/mode/fallback/default wiring, publication, and SignPath remain absent.
 `E-M6-SOURCE-TREE-CONTRACT-LOCAL-RED-001` records the expected missing-module failure for ten purpose
 cases and the native-workflow oracle's six-pass/one-fail result: the suite occurs only in the oracle,
 not either runner command. `E-M6-SOURCE-TREE-CONTRACT-LOCAL-CONTENTION-001` rejects an overlapping

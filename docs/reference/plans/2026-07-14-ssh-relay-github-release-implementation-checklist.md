@@ -8,8 +8,8 @@ work; keep exact commands, runner identities, hashes, metrics, and residual gaps
 
 Date created: 2026-07-14<br>
 Last updated: 2026-07-15<br>
-Current phase: Milestone 6 / Work Package 5 bounded runtime transfer — **In progress — 2026-07-15, Codex implementation owner: exact-head native proof for the locally green disconnected transport-neutral verified source-tree contract**. Keep every capability disconnected from every production/default SSH path. Real Apple/SignPath rehearsals remain an explicit late gate and are not on this package's critical path.<br>
-Session checkpoint: **SOURCE-TREE CONTRACT LOCAL GREEN / EXACT-HEAD CI NEXT — 2026-07-15, Codex implementation owner** — `E-M6-SOURCE-TREE-CONTRACT-LOCAL-001` passes purpose, workflow, focused, broad relay, release-script, typecheck, lint, format, max-lines, diff, protected-resolver, and no-product-caller gates after separately rerunning two contention-invalidated broad commands. Commit and push the isolated package, then require exact-head all-six native proof before checking the Milestone 6 item or advancing to pre-scan. Do not enumerate the filesystem, open SSH channels, transfer/install bytes, add a product caller, settings/fallback wiring, tuple enablement, publication, or default behavior. Merging to `main` remains prohibited, SignPath is deferred, and legacy remains the production default.<br>
+Current phase: Milestone 6 / Work Package 5 bounded runtime transfer — **In progress — 2026-07-15, Codex implementation owner: audit only the smallest disconnected full-tree source pre-scan after source-tree CI closure**. Keep every capability disconnected from every production/default SSH path. Real Apple/SignPath rehearsals remain an explicit late gate and are not on this package's critical path.<br>
+Session checkpoint: **SOURCE-TREE CONTRACT CI CLOSED / PRE-SCAN AUDIT NEXT — 2026-07-15, Codex implementation owner** — `E-M6-SOURCE-TREE-CONTRACT-CI-001` closes exact-head all-six native client proof, both Linux supplements, Windows x64 baseline, PR Checks, Golden E2E, and computer-use; Windows arm64 retains only the declared build-26200/26100 runner mismatch after full runtime proof. Audit only a disconnected filesystem pre-scan that consumes the accepted source-tree contract and creates no remote files. Do not open SSH channels, transfer/install bytes, add a product caller, settings/fallback wiring, tuple enablement, publication, or default behavior. Merging to `main` remains prohibited, SignPath is deferred, and legacy remains the production default.<br>
 Primary design: [SSH relay GitHub Release plan](./2026-07-14-ssh-relay-github-release-plan.html)<br>
 Motivating issues: [#8450](https://github.com/stablyai/orca/issues/8450), [#1693](https://github.com/stablyai/orca/issues/1693)
 
@@ -150,10 +150,10 @@ same change as the work it records.
 - Completed package: disconnected full host-evidence composition is green locally and on every
   primary native client under E-M5-HOST-EVIDENCE-COMPOSITION-LOCAL-001 and
   E-M5-HOST-EVIDENCE-COMPOSITION-CI-001. It has no product caller.
-- Active package: **In progress — 2026-07-15, Codex implementation owner** — exact-head native proof
-  for Milestone 6's locally green pure transport-neutral verified source-tree contract. Do not
-  enumerate the filesystem, open SSH channels, transfer or install bytes, or add product/settings/
-  fallback/tuple/publication/default behavior.
+- Active package: **In progress — 2026-07-15, Codex implementation owner** — audit only Milestone
+  6's smallest disconnected full-tree source pre-scan after source-tree CI closure. Do not open SSH
+  channels, transfer or install bytes, or add product/settings/fallback/tuple/publication/default
+  behavior.
 - Completed Work Package 2 gate: target-native Windows source-signature reports from exact-head
   artifact jobs 87267322867 and 87267322870 were independently downloaded and matched to their
   identities and signing-stage reports under E-M3-WINDOWS-SOURCE-SIGNATURE-CI-001. PR Checks
@@ -1154,13 +1154,12 @@ Current behavior must not be assumed adequate for a much larger runtime:
 
 ### Shared transfer contract
 
-- [ ] Define one transport-neutral source-tree contract based on the verified manifest. **In
-      progress — 2026-07-15, Codex implementation owner; audit complete under
-      E-M6-SOURCE-TREE-CONTRACT-AUDIT-001; RED and local green proof recorded under
-      E-M6-SOURCE-TREE-CONTRACT-LOCAL-RED-001 and E-M6-SOURCE-TREE-CONTRACT-LOCAL-001; exact-head
-      native proof required before completion.**
+- [x] Define one transport-neutral source-tree contract based on the verified manifest. Completed by
+      E-M6-SOURCE-TREE-CONTRACT-AUDIT-001, E-M6-SOURCE-TREE-CONTRACT-LOCAL-RED-001,
+      E-M6-SOURCE-TREE-CONTRACT-LOCAL-001, and E-M6-SOURCE-TREE-CONTRACT-CI-001.
 - [ ] Pre-scan and reject local source mutation, symlinks, special files, extra files, and path
-      collisions before creating remote files.
+      collisions before creating remote files. **In progress — 2026-07-15, Codex implementation
+      owner: audit only; no tests or implementation yet.**
 - [ ] Stream files with bounded buffers; prohibit whole-tree memory materialization.
 - [ ] Pass one AbortSignal through enumeration, channel creation, reads, writes, permission repair,
       and remote cleanup.
@@ -16205,6 +16204,58 @@ config/vitest.config.ts --maxWorkers=1 --silent=true config/scripts/ssh-relay-ru
   product/startup/settings/fallback/tuple/publication/default path remains absent; legacy remains the
   sole production/default path, every tuple stays disabled, and SignPath stays deferred.
 
+### E-M6-SOURCE-TREE-CONTRACT-CI-001 — all six native clients accept the source-tree contract
+
+- Date/owner/source: 2026-07-15, Codex implementation owner; exact implementation commit
+  `2f38700b9844a5e8fd1afa6750d7793bcd57e69c` on draft PR
+  [#8741](https://github.com/stablyai/orca/pull/8741). SSH Relay Runtime Artifacts run
+  [29496035270](https://github.com/stablyai/orca/actions/runs/29496035270) checks out that exact SHA
+  and uses Node 24.18.0.
+- All six primary native jobs pass: Windows x64
+  [87613081678](https://github.com/stablyai/orca/actions/runs/29496035270/job/87613081678), Windows
+  arm64 [87613081711](https://github.com/stablyai/orca/actions/runs/29496035270/job/87613081711),
+  Darwin arm64 [87613081693](https://github.com/stablyai/orca/actions/runs/29496035270/job/87613081693),
+  Darwin x64 [87613081698](https://github.com/stablyai/orca/actions/runs/29496035270/job/87613081698),
+  Linux arm64 [87613081803](https://github.com/stablyai/orca/actions/runs/29496035270/job/87613081803),
+  and Linux x64 [87613081783](https://github.com/stablyai/orca/actions/runs/29496035270/job/87613081783).
+- Native contract proof: every client passes all ten purpose cases in 104–442 ms. Both Windows jobs
+  pass 87 files / 680 tests with 14 declared skips; all four POSIX jobs pass 86 files / 689 tests
+  with one declared native-Windows skip. This executes signed Linux/Windows descriptor projection,
+  deterministic ordering, native paths, deep freezing, borrowed lease semantics, and all fail-closed
+  identity/aggregate/root cases on every supported client OS/architecture.
+- Both Linux oldest-userland supplements pass: x64
+  [87614003979](https://github.com/stablyai/orca/actions/runs/29496035270/job/87614003979) and arm64
+  [87614004039](https://github.com/stablyai/orca/actions/runs/29496035270/job/87614004039). The Windows
+  x64 oldest-baseline job
+  [87615011157](https://github.com/stablyai/orca/actions/runs/29496035270/job/87615011157) passes.
+- The Windows arm64 oldest-baseline job
+  [87615011206](https://github.com/stablyai/orca/actions/runs/29496035270/job/87615011206) verifies
+  the 60-entry / 42-file / 85,213,511-expanded-byte tree and content identity, Node v24.18.0 ABI 137,
+  PTY exit 23 and 37x101 resize, five watcher events, and two-second resource settlement. Smoke takes
+  6,063.5099 ms at 48,398,336-byte RSS and full verification takes 8,392.7748 ms. Its only rejection
+  is observed Windows build 26200 against required 26100; platform/arm64 checks pass and residual
+  gaps are empty. The aggregate run conclusion is failure only because this declared runner mismatch
+  remains intentionally fail-closed.
+- Full-size extraction remains within budgets at 1,162.28–5,633.09 ms and
+  33,939,456–46,018,560 incremental RSS bytes. Cold immutable-cache publication stays at
+  1,384.24–7,156.65 ms and 39,288,832–60,940,288 incremental RSS bytes; warm lookup stays at
+  167.72–1,193.01 ms and 0–6,414,336 incremental RSS bytes. Retention stays at 10.56–126.99 ms and
+  eviction at 19.54–100.30 ms. Every measurement passes its existing budget.
+- Adjacent exact-head checks pass: PR Checks run
+  [29496035043](https://github.com/stablyai/orca/actions/runs/29496035043), job
+  [87613080471](https://github.com/stablyai/orca/actions/runs/29496035043/job/87613080471); Golden E2E
+  run [29496036617](https://github.com/stablyai/orca/actions/runs/29496036617), macOS job
+  [87613085499](https://github.com/stablyai/orca/actions/runs/29496036617/job/87613085499) and Linux
+  job [87613085648](https://github.com/stablyai/orca/actions/runs/29496036617/job/87613085648);
+  computer-use run [29496035157](https://github.com/stablyai/orca/actions/runs/29496035157), Windows
+  job [87613080650](https://github.com/stablyai/orca/actions/runs/29496035157/job/87613080650) and
+  Ubuntu job [87613080659](https://github.com/stablyai/orca/actions/runs/29496035157/job/87613080659).
+- Boundary/residual gaps: the accepted source-tree module still has no other `src/main` importer and
+  performs no I/O. GitHub client runners do not prove filesystem mutation races, live SSH, SFTP or
+  system-SSH channel behavior, remote staging/install, or full-size transfer. Pre-scan, streaming,
+  every product/settings/fallback/tuple/publication/default path, and SignPath remain open. Legacy
+  remains the sole production/default path and every tuple stays disabled.
+
 ## Accepted Gaps
 
 No product gap is accepted merely because it appears in this list. Each entry requires explicit
@@ -16263,9 +16314,11 @@ The project is not complete until every applicable item below is checked with ev
 
 ## Next Required Action
 
-Commit and push the locally green Milestone 6 disconnected transport-neutral verified source-tree
-contract, then require exact-head all-six native client proof plus adjacent PR checks before accepting
-the item or advancing to the filesystem pre-scan package.
+Audit only Milestone 6's smallest disconnected full-tree source pre-scan. Determine the exact
+source-tree and lease inputs; bounded traversal and file-state snapshots; before/after mutation,
+symlink/special/extra/missing/collision rejection; cancellation and resource ownership; and the
+immutable output consumed by later transfer families before adding tests or implementation. The
+pre-scan must create no remote files or open SSH channels.
 Do not enumerate the filesystem, open an SSH channel, transfer or install bytes, modify platform
 detection/selectors, add an Electron/startup consumer, mode wiring, fallback, tuple enablement,
 release publication, or default behavior.
