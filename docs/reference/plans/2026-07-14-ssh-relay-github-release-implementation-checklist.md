@@ -9,7 +9,7 @@ work; keep exact commands, runner identities, hashes, metrics, and residual gaps
 Date created: 2026-07-14<br>
 Last updated: 2026-07-15<br>
 Current phase: Milestone 6 / Work Package 5 bounded runtime transfer — **In progress — 2026-07-15, Codex implementation owner: disconnected POSIX system-SSH/no-tar transfer composition**. Keep every capability disconnected from every production/default SSH path. Real Apple/SignPath rehearsals remain an explicit late gate and are not on this package's critical path.<br>
-Session checkpoint: **SYSTEM-SSH COMMAND-CHANNEL ADAPTER EXACT-HEAD GREEN / TREE-ROOT COMPOSITION AUDIT NEXT — 2026-07-15, Codex implementation owner** — `E-M6-POSIX-SYSTEM-SSH-CHANNEL-LOCAL-001` and `E-M6-POSIX-SYSTEM-SSH-CHANNEL-CI-001` prove the adapter and per-file composition locally and on all six primary native clients, both Linux supplements, Windows x64 floor, PR Checks, computer-use, and Golden E2E. Windows arm64 retains only the declared hosted build-26200 versus required-26100 gap after complete runtime smoke. The package remains disconnected and has no tree or live system-SSH claim. Audit the next smallest disconnected tree/root composition package before adding RED tests. Merging to `main` remains prohibited, SignPath is deferred, and legacy remains the production default.<br>
+Session checkpoint: **POSIX SYSTEM-SSH TREE/ROOT LOCAL GREEN / EXACT-HEAD NATIVE EVIDENCE NEXT — 2026-07-15, Codex implementation owner** — `E-M6-POSIX-SYSTEM-SSH-TREE-LOCAL-001` proves the disconnected bounded control-command and tree-transfer owners with 15/15 purpose, 219 focused cases with one declared skip, 656 broad relay cases with six declared skips, 281/281 release contracts, full lint/typecheck, and static/isolation gates. Commit and push only this package, then require exact-head native evidence before selecting another package. Merging to `main` remains prohibited, SignPath is deferred, and legacy remains the production default.<br>
 Primary design: [SSH relay GitHub Release plan](./2026-07-14-ssh-relay-github-release-plan.html)<br>
 Motivating issues: [#8450](https://github.com/stablyai/orca/issues/8450), [#1693](https://github.com/stablyai/orca/issues/1693)
 
@@ -153,12 +153,15 @@ same change as the work it records.
 - Completed package: the disconnected POSIX no-tar per-file command/destination boundary is green
   locally and on every primary native client under E-M6-POSIX-SYSTEM-SSH-FILE-LOCAL-001 and
   E-M6-POSIX-SYSTEM-SSH-FILE-CI-001. It has no real SSH or product caller.
-- Active package: **Local implementation complete / exact-head CI pending — 2026-07-15, Codex
-  implementation owner** — the purpose-named adapter fixed by
-  E-M6-POSIX-SYSTEM-SSH-CHANNEL-AUDIT-001 is green under
-  E-M6-POSIX-SYSTEM-SSH-CHANNEL-LOCAL-001. Do not import or modify the legacy tar/base64 directory
-  uploader, create a remote tree, add a semantic probe, or add product/settings/fallback/tuple/
-  publication/default behavior.
+- Completed package: the disconnected authenticated system-SSH command-channel adapter is green
+  locally and on every primary native client under E-M6-POSIX-SYSTEM-SSH-CHANNEL-LOCAL-001 and
+  E-M6-POSIX-SYSTEM-SSH-CHANNEL-CI-001. It has no tree/live/product caller.
+- Active package: **Local green / exact-head native evidence pending — 2026-07-15, Codex
+  implementation owner** — the smallest disconnected POSIX system-SSH tree/root composition combines
+  only the proven authenticated source stream, exclusive per-file destination, and command-channel
+  adapter under E-M6-POSIX-SYSTEM-SSH-TREE-LOCAL-001. Do not import or modify the legacy tar/base64
+  directory uploader, add a semantic probe, or add product/settings/fallback/tuple/publication/
+  default behavior.
 - Completed Work Package 2 gate: target-native Windows source-signature reports from exact-head
   artifact jobs 87267322867 and 87267322870 were independently downloaded and matched to their
   identities and signing-stage reports under E-M3-WINDOWS-SOURCE-SIGNATURE-CI-001. PR Checks
@@ -17797,6 +17800,135 @@ config/scripts/ssh-relay-runtime-workflow.test.mjs`.
   product path. No setting, Beta mode, fallback, tuple, publication, default behavior, or SignPath
   work exists; legacy remains the only production path.
 
+### E-M6-POSIX-SYSTEM-SSH-TREE-AUDIT-001 — disconnected POSIX system-SSH staging-tree composition
+
+- Date/owner/base: 2026-07-15, Codex implementation owner; exact clean evidence base
+  `3cf9bae8f1ac8dd3d0ede4fdbb5c80e90cfe636b` after closing the authenticated channel adapter.
+- Existing boundaries: compose only the scanned lease-backed source tree,
+  `streamSshRelayRuntimeSourceTree`, `openSshRelayRuntimePosixFileDestination`, and
+  `openSshRelayRuntimeSystemSshFileChannel`. Reject `execCommand`, `waitForChannelClose`, the legacy
+  tar uploader, and the legacy buffer/file uploader: they respectively retain unbounded output,
+  settle timeout/abort before forced child settlement, require remote tar, or implement a different
+  whole-buffer/default-path contract.
+- Control-command prerequisite: add one purpose-named no-input POSIX control-command owner over the
+  proven channel adapter. It drains stdout and inherits the adapter's copied 16 KiB stderr bound,
+  ends stdin exactly once, requires exit zero, has a 30-second command ceiling, and on cancellation
+  or timeout requests SIGTERM, waits 250 ms, requests SIGKILL, and fails closed if settlement has
+  not completed by 2,000 ms. It preserves the primary abort/timeout/nonzero failure and joins close,
+  force, and settlement failures without putting the command or remote path in orchestrator-authored
+  diagnostics.
+- Path/ownership contract: accept only a Linux/Darwin scanned tree, one normalized absolute non-root
+  POSIX staging path with no empty, dot, traversal, NUL, CR, or LF segment, one already-authenticated
+  system-SSH connection, the exact caller signal, and explicit one-to-four concurrency defaulting to
+  one. Use only POSIX `sh`, `mkdir`, `chmod`, `cat`, and `rm`: exclusively create the root under
+  `umask 077`, mark it owned only after successful command settlement, create signed directories in
+  parent-before-child order, and build child paths only from safe slash-delimited manifest segments.
+- Stream/cleanup contract: open every file through the proven exclusive per-file destination and
+  authenticated command-channel adapter using the same caller signal. Preserve the source stream's
+  64 KiB borrowed-buffer boundary, local SHA-256/source-mutation proof, exact 0644/0755 repair,
+  progress, counts, and one-to-four ceiling. On any post-ownership failure, wait for every active
+  destination to settle, then remove only the exclusively owned root with `rm -rf` and join cleanup
+  failure. A cleanup controller is deliberately distinct because the caller signal has already
+  requested cleanup; it aborts after 5 seconds and its control channel still has the 2-second forced
+  settlement ceiling. Together with the active per-file ceiling, worst-case cancellation and cleanup
+  join remains below the plan's 10-second budget.
+- Required purpose RED/green: control success/nonzero/error, exact EOF, pre-abort, mid-command abort,
+  timeout, SIGTERM/SIGKILL order, missing process/false kill/settlement ceiling, and listener/timer
+  cleanup; tree OS/path/concurrency rejection before exec; exact quoted primitive-only commands;
+  root collision without cleanup; parent-first directories; exact file bytes/modes/result/progress;
+  one/four peak channels; source mutation/write failure/cancellation with no later writes; owned-root
+  cleanup after all active files settle; cleanup timeout/failure joining; lease assertions; and exact
+  inclusion of both purpose suites once in both native workflow command families before production.
+- Explicit residual boundary: no semantic primitive probe/cache or compatibility classification,
+  optional tar fast path, dynamic `MaxSessions=1` policy, live/full-size/high-RTT system-SSH remote,
+  Windows PowerShell path, remote bundled-Node tree verification/install/publish/launch, product/
+  Beta/settings/fallback/tuple/publication/default behavior, or SignPath is included. Legacy remains
+  the only production/default path and every tuple stays disabled.
+
+### E-M6-POSIX-SYSTEM-SSH-TREE-LOCAL-RED-001 — audited control and tree owners are absent
+
+- Date/owner/base: 2026-07-15, Codex implementation owner; audit, test, and native-workflow-only diff
+  atop exact clean evidence base `3cf9bae8f1ac8dd3d0ede4fdbb5c80e90cfe636b`.
+- Command: `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1
+src/main/ssh/ssh-relay-runtime-posix-control-command.test.ts
+src/main/ssh/ssh-relay-runtime-posix-tree-transfer.test.ts
+config/scripts/ssh-relay-runtime-workflow.test.mjs`.
+- Result: expected RED, exit 1. Both new purpose suites collect zero cases and each fails solely with
+  `Cannot find module` for its audited production module. The independent workflow oracle passes all
+  8/8 cases and proves both suites are pinned exactly once in both native command families.
+- Resource evidence: Vitest duration 978 ms; `/usr/bin/time -l` reports 2.17 seconds real,
+  141,410,304-byte maximum RSS, 96,310,792-byte peak memory footprint, zero swaps, and zero block I/O.
+- Disposition: RED is causally narrow and accepted. Implement only the audited bounded control and
+  tree modules, then require purpose composition GREEN plus focused, broad, static, isolation, and
+  exact-head native evidence. No semantic probe, live/full-size system SSH, product path, fallback,
+  tuple, publication, default behavior, or SignPath claim follows from this evidence.
+
+### E-M6-POSIX-SYSTEM-SSH-TREE-LOCAL-001 — disconnected bounded staging-tree composition is green
+
+- Date/owner/base/runner: 2026-07-15, Codex implementation owner; uncommitted package atop exact base
+  `3cf9bae8f1ac8dd3d0ede4fdbb5c80e90cfe636b` on Apple arm64, macOS 26.2 build 25C56, Node 26.0.0,
+  pnpm 10.24.0. The local Node version is newer than the repository's Node 24 contract; exact-head
+  native workflow jobs remain required before closing the package.
+- Implementation: `ssh-relay-runtime-posix-control-command.ts` owns exact EOF/exit settlement, a
+  30-second ceiling, 250 ms graceful close, and 2,000 ms forced-settlement ceiling over the proven
+  copied-diagnostic/drained-output adapter. `ssh-relay-runtime-posix-tree-transfer.ts` validates an
+  absolute normalized POSIX staging root, exclusively creates it under `umask 077`, creates signed
+  directories parent-first with mode `0755`, streams every signed file through the exclusive
+  destination with one-to-four channels defaulting to one, and cleans only its owned root with a
+  separate five-second abort controller. Runtime-invalid staging-root input was corrected before
+  final GREEN so validation cannot throw an incidental `.split` type error.
+- Purpose command: `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts
+  --maxWorkers=1 src/main/ssh/ssh-relay-runtime-posix-control-command.test.ts
+  src/main/ssh/ssh-relay-runtime-posix-tree-transfer.test.ts`. Result: 2 files and 15/15 cases pass;
+  Vitest 1.95 seconds, 2.96 seconds real, 139,640,832-byte maximum RSS, 95,851,848-byte peak memory
+  footprint, zero swaps and block I/O. Cases cover exact/no-input success, nonzero/error, pre/mid
+  abort, timeout, graceful/forced settlement and joined failures; invalid OS/path/concurrency before
+  exec; exact quoted primitive-only root/directory/file commands, parent-first order, bytes/modes/
+  progress, default-one/four-channel bounds, collision ownership, cancellation settlement, and
+  cleanup failure/timeout joining.
+- Focused composition command: `/usr/bin/time -l pnpm exec vitest run --config
+  config/vitest.config.ts --maxWorkers=1` with the two new purpose suites plus
+  `ssh-relay-runtime-posix-file-destination.test.ts`,
+  `ssh-relay-runtime-system-ssh-file-channel.test.ts`, the source-tree/scan/stream suites,
+  `ssh-system-fallback.test.ts`, `ssh-connection.test.ts`, and
+  `config/scripts/ssh-relay-runtime-workflow.test.mjs`. Result: 10 files, 219 passed and one declared
+  platform skip; Vitest 9.02 seconds, 10.51 seconds real, 156,794,880-byte maximum RSS,
+  97,457,504-byte peak memory footprint, zero swaps and block I/O. This includes source mutation,
+  lease, retained-buffer/no-later-write, missing process/false kill, diagnostic, child settlement,
+  and exact native-workflow-family contracts inherited from the composed boundaries.
+- Broad relay command: `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts
+  --maxWorkers=1 src/main/ssh/ssh-relay-*.test.ts`. Result: 50 files passed, four files skipped;
+  656 passed and six declared skips out of 662. Vitest 55.58 seconds, 58.05 seconds real,
+  254,115,840-byte maximum RSS, 96,458,248-byte peak memory footprint, zero swaps and block I/O.
+  Skips remain the declared case-fold/full-size/live SSH cells and are not treated as this package's
+  evidence.
+- Release-contract command: `/usr/bin/time -l pnpm exec vitest run --config
+  config/vitest.config.ts --maxWorkers=1 config/scripts/ssh-relay-runtime-*.test.mjs`. Result: 50
+  files and 281/281 cases pass; Vitest 37.74 seconds, 41.85 seconds real, 190,676,992-byte maximum
+  RSS, 97,195,384-byte peak memory footprint, zero swaps and block I/O.
+- Static commands/results: `/usr/bin/time -l pnpm typecheck` passes in 8.38 seconds real with
+  1,225,637,888-byte maximum RSS and 97,588,552-byte peak footprint. `/usr/bin/time -l pnpm lint`
+  passes in 61.60 seconds real with 2,049,687,552-byte maximum RSS and 96,621,872-byte peak
+  footprint; its warnings are pre-existing outside this diff. The lint aggregate proves 41
+  reliability gates, the 355-entry max-lines ratchet with no new bypass, bundled guides, and all
+  localization checks. Targeted `oxlint` and `oxfmt --check` pass. The obsolete attempted
+  `pnpm lint:max-lines` spelling was replaced by the repository's current
+  `pnpm check:max-lines-ratchet` command; no checklist box was credited to the failed spelling.
+- Isolation evidence: `git diff --check` and no-index whitespace checks for all four new files are
+  clean. `git diff --exit-code HEAD -- src/main/ssh/ssh-remote-node-resolution.ts
+  src/main/ssh/ssh-remote-node-resolution.test.ts` is empty, preserving the protected Milestone 0
+  resolver. The only implementation references to the exported tree owner are its definition and
+  purpose test; the control owner is consumed only by that disconnected tree owner and its test.
+  No product, settings, legacy uploader, fallback, tuple, publication, or default-path importer
+  exists. The four implementation/test files are 159/196/193/375 lines and contain no max-lines
+  bypass.
+- Residual boundary: this evidence uses a realistic fake `ClientChannel` over the real adapter, not
+  a live OpenSSH daemon or full-size runtime. Semantic primitive probe/cache, optional tar fast path,
+  dynamic `MaxSessions=1`, live/full-size/high-RTT POSIX system SSH, Windows transfer, remote bundled-
+  Node verification/install/publish/launch, Beta/product/fallback/default wiring, tuple enablement,
+  release publication, and SignPath remain absent. Exact-head native workflow, PR Checks,
+  computer-use, and Golden E2E run IDs are still required before this package is closed.
+
 ## Accepted Gaps
 
 No product gap is accepted merely because it appears in this list. Each entry requires explicit
@@ -17855,10 +17987,9 @@ The project is not complete until every applicable item below is checked with ev
 
 ## Next Required Action
 
-Audit the smallest disconnected POSIX system-SSH tree/root composition package that can combine the
-proven authenticated exec-channel adapter, per-file destination, and authenticated source stream.
-Record exact ownership, exclusivity, cancellation, memory, concurrency, and residual boundaries
-before adding a purpose-named RED suite. Do not
+Commit and push only the locally green bounded control-command/tree composition package proven by
+E-M6-POSIX-SYSTEM-SSH-TREE-LOCAL-001, then require exact-head native workflow, PR Checks,
+computer-use, and Golden E2E evidence. Do not
 check the broad Milestone 6 SFTP or POSIX system-SSH items yet. Do not add an Electron/startup/product
 importer, per-target mode wiring, fallback, tuple enablement, release publication, or default behavior.
 Keep Node upstream `.tar.xz` inputs, Windows ZIP, `ORCA_RELAY_PATH`, existing desktop required-assets
