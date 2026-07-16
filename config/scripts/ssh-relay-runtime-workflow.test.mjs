@@ -126,6 +126,7 @@ describe('SSH relay runtime artifact workflow', () => {
       'ssh-relay-artifact-cache-entry.test.ts',
       'ssh-relay-artifact-cache-in-use-lease.test.ts',
       'ssh-relay-artifact-cache-eviction.test.ts',
+      'ssh-relay-artifact-cache-root.test.ts',
       'ssh-relay-compiled-manifest-trust.test.ts',
       'ssh-relay-official-manifest.test.ts',
       'ssh-relay-manifest-accepted-keys.test.ts',

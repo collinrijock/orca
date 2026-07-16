@@ -9,9 +9,22 @@ keeps commands, hashes, runner identities, timings, and failure details.
 A checked box means the work has evidence in the detailed ledger. Design approval alone does not
 complete a box.
 
-Active checkpoint: **Milestone 5 / Work Package 4 desktop resolver/cache — disconnected official
-manifest composition locally green and wired; commit/all-six native proof next, 2026-07-15, Codex
-implementation owner.** `E-M5-OFFICIAL-MANIFEST-COMPOSITION-LOCAL-001` passes 4/4 focused, 26/26
+Active checkpoint: **Milestone 5 / Work Package 4 desktop resolver/cache — disconnected app-owned
+cache-root locally green and wired; commit/all-six native proof next, 2026-07-15, Codex
+implementation owner.** `E-M5-ARTIFACT-CACHE-ROOT-LOCAL-001` passes 3/3 purpose tests, the native
+workflow oracle, 314/314 non-full-size SSH relay tests, 280/280 release-script tests, typecheck,
+lint, format, reliability, max-lines, localization, and diff gates. Both POSIX and PowerShell native
+artifact commands now run the purpose suite. The pure function accepts only an absolute
+caller-supplied native user-data path and returns a fixed `ssh-relay-runtime-cache/v1` namespace;
+an environment variable cannot redirect it. No Electron caller, filesystem I/O, cache operation,
+downloader, SSH/Beta mode/tuple/publication/default behavior exists.
+`E-M5-OFFICIAL-MANIFEST-COMPOSITION-CI-001` closes the official-manifest composition at exact head
+`749f775f1`: all six primary native jobs, both Linux supplements, Windows x64 baseline, PR Checks,
+Golden E2E, and computer-use pass; Windows arm64 build 26200 remains correctly gated against 26100.
+The next slice may derive only a pure fixed cache root from an absolute caller-supplied native
+user-data path; it must add no Electron caller, filesystem I/O, cache orchestration, environment
+override, downloader/SSH/Beta mode/tuple/publication/default behavior.
+`E-M5-OFFICIAL-MANIFEST-COMPOSITION-LOCAL-001` passes 4/4 focused, 26/26
 trust, 311/311 non-full-size SSH relay, 280/280 release-script, workflow-oracle, typecheck, lint,
 format, max-lines, and diff gates. An unprovisioned build returns unavailable before resource access;
 provisioned trust is the only accepted-key source and binds the verified fixed-resource manifest to
