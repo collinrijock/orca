@@ -9,9 +9,9 @@ keeps commands, hashes, runner identities, timings, and failure details.
 A checked box means the work has evidence in the detailed ledger. Design approval alone does not
 complete a box.
 
-Active checkpoint: **Milestone 5 / Work Package 4 desktop resolver/cache — audit the next smallest
-disconnected acquisition composition after exact-head acceptance of cold-cache population,
-2026-07-15, Codex implementation owner.**
+Active checkpoint: **Milestone 5 / Work Package 4 desktop resolver/cache — checkpoint and prove the
+locally green disconnected warm/cold acquisition composition on exact-head native CI, 2026-07-15,
+Codex implementation owner.**
 `E-M5-ARTIFACT-CACHE-RESOLUTION-CI-001` closes warm-cache commit
 `22031fa68` on all six native clients, both Linux supplements, Windows x64 baseline, PR Checks,
 Golden E2E, and computer-use; Windows arm64 remains the expected build-26200 rejection against 26100. `E-M5-ARTIFACT-CACHE-RESOLUTION-LOCAL-001` passes 9/9 purpose tests,
@@ -64,6 +64,24 @@ repeated Windows x64 lock-release race is closed. The next package is an audit o
 disconnected acquisition composition only. Electron/startup, live proxy/network, SSH, settings,
 fallback, tuple enablement, release publication, and default behavior remain absent, and legacy
 remains the sole production path.
+`E-M5-ARTIFACT-CACHE-ACQUISITION-AUDIT-001` fixes the next narrow boundary: explicit verified
+manifest/host/cache-root inputs; unavailable/compatibility short circuits; a source-qualified leased
+ready result from a warm hit without download; and exactly one accepted cold-population call on a
+verified miss. Final identity and cancellation are checked before exposure, with lease release on
+failure. A real Linux/Windows cold→warm client-offline integration must fetch exactly once. Manifest
+loading, Electron/startup, proxy policy, SSH, settings, fallback classification, tuple enablement,
+publication, and defaults remain absent.
+`E-M5-ARTIFACT-ACQUISITION-LOCAL-RED-001` records the expected two-suite missing-module failure for
+nine purpose cases plus real Linux/Windows cold→warm client-offline integration before
+implementation.
+`E-M5-ARTIFACT-ACQUISITION-LOCAL-001` is green: 11/11 purpose/integration and 18/18 focused+
+workflow-oracle tests pass; 350/350 non-full-size relay and 280/280 release-script tests plus
+typecheck, lint, format, diff, and protected-resolver gates pass. Real Linux tar/Brotli and Windows
+ZIP paths perform exactly one verified cold fetch, release the lease, then acquire warm while the
+next client fetch is configured offline. Ready results are source-qualified and leased; identity,
+cancellation, and all lower-layer errors fail closed without classification. The package remains
+disconnected from manifest loading, Electron/startup, proxy policy, SSH, settings, fallback, tuple
+enablement, publication, and defaults. Exact-head all-six native proof is next.
 `E-M5-ARTIFACT-CACHE-ROOT-CI-001` closes the pure cache-root contract at exact head `aefcaa9a9`:
 all six primary native Node 24 jobs, both Linux supplements, Windows x64 baseline, PR Checks, Golden
 E2E, and computer-use pass; Windows arm64 build 26200 remains correctly gated against 26100. The

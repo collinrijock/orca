@@ -16,6 +16,7 @@ import {
   type SshRelayHostEvidence,
   type SshRelaySelectedArtifact
 } from './ssh-relay-artifact-selector'
+import type { SshRelayOfficialManifest } from './ssh-relay-official-manifest'
 import {
   signSshRelayArtifactManifest,
   sshRelayManifestKeyId,
@@ -103,6 +104,8 @@ export type SshRelayArtifactCacheEntryFixture = {
   archivePath: string
   artifact: SshRelaySelectedArtifact
   fileBytes: ReadonlyMap<string, Buffer>
+  host: SshRelayHostEvidence
+  officialManifest: SshRelayOfficialManifest
 }
 
 export async function createSshRelayArtifactCacheEntryFixture({
@@ -172,5 +175,14 @@ export async function createSshRelayArtifactCacheEntryFixture({
   }
   const archivePath = join(root, tuple.archive.name)
   await writeFile(archivePath, archive, { mode: 0o600 })
-  return { archivePath, artifact, fileBytes }
+  return {
+    archivePath,
+    artifact,
+    fileBytes,
+    host,
+    officialManifest: Object.freeze({
+      manifest: verified,
+      acceptedKeysSha256: sha256(keyPair.publicKey)
+    })
+  }
 }

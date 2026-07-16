@@ -8,8 +8,8 @@ work; keep exact commands, runner identities, hashes, metrics, and residual gaps
 
 Date created: 2026-07-14<br>
 Last updated: 2026-07-15<br>
-Current phase: Milestone 5 / Work Package 4 desktop resolver/cache — **In progress — 2026-07-15, Codex implementation owner: audit the next smallest disconnected acquisition composition after exact-head acceptance of cold-cache population**. Require the eventual startup caller to supply Orca's pre-`app.setName()` canonical user-data path; keep production manifest/resources, proxy, SSH/settings/tuples/release publication/default behavior absent. Real Apple/SignPath rehearsals remain an explicit late gate and are not on this package's critical path.<br>
-Session checkpoint: **CI CLOSED / NEXT AUDIT — 2026-07-15, Codex implementation owner** — `E-M5-ARTIFACT-CACHE-LOCK-RELEASE-CI-001` closes correction commit `bd240049ffb9de196ce7cbd0f772639f4ba310f3` and accepts the cold-cache population package: all six primary native Node 24 jobs, both Linux oldest-userland supplements, Windows x64 baseline, PR Checks, Golden E2E, and computer-use pass. Windows arm64 retains only the declared hosted build-26200 rejection against required 26100. The next package may audit a disconnected acquisition boundary only; do not add Electron/startup, SSH, setting, fallback, tuple enablement, release publication, or default-path behavior. Merging to `main` remains prohibited, SignPath is deferred, and legacy remains the production default.<br>
+Current phase: Milestone 5 / Work Package 4 desktop resolver/cache — **In progress — 2026-07-15, Codex implementation owner: checkpoint and prove the locally green disconnected warm/cold acquisition composition on exact-head native CI**. Require the eventual startup caller to supply Orca's pre-`app.setName()` canonical user-data path; keep production manifest/resources, proxy, SSH/settings/tuples/release publication/default behavior absent. Real Apple/SignPath rehearsals remain an explicit late gate and are not on this package's critical path.<br>
+Session checkpoint: **LOCAL GREEN / CI REQUIRED — 2026-07-15, Codex implementation owner** — `E-M5-ARTIFACT-ACQUISITION-LOCAL-RED-001` precedes `E-M5-ARTIFACT-ACQUISITION-LOCAL-001`: 11/11 purpose/integration, 18/18 focused+workflow-oracle, 350/350 non-full-size relay, 280/280 release-script, typecheck, lint, format, diff, and protected-resolver gates pass. Real Linux tar/Brotli and Windows ZIP cases prove one cold verified fetch followed by warm acquisition while the client fetch is offline. No Electron/startup state, fallback classification, SSH/settings, tuple enablement, release publication, or default behavior is connected. Exact-head all-six native proof is required before the next package. Merging to `main` remains prohibited, SignPath is deferred, and legacy remains the production default.<br>
 Primary design: [SSH relay GitHub Release plan](./2026-07-14-ssh-relay-github-release-plan.html)<br>
 Motivating issues: [#8450](https://github.com/stablyai/orca/issues/8450), [#1693](https://github.com/stablyai/orca/issues/1693)
 
@@ -147,11 +147,11 @@ same change as the work it records.
   local gates, and all-six native Node 24 proof are green under
   E-M5-ARTIFACT-CACHE-ROOT-LOCAL-RED-001, E-M5-ARTIFACT-CACHE-ROOT-LOCAL-001, and
   E-M5-ARTIFACT-CACHE-ROOT-CI-001. No Electron or product caller exists.
-- Active package: **In progress — 2026-07-15, Codex implementation owner** — audit the next
-  smallest disconnected acquisition composition now that the cache-lock correction and cold-cache
-  population are exact-head accepted. The eventual startup caller, not an SSH module, must supply
-  `getCanonicalUserDataPath()` captured before `app.setName()`; keep proxy integration, SSH, mode,
-  tuple, publication, fallback, and defaults separately gated.
+- Active package: **In progress — 2026-07-15, Codex implementation owner** — checkpoint and prove
+  the locally green disconnected warm/cold acquisition composition on all six native clients. The
+  eventual startup caller, not an SSH module, must supply `getCanonicalUserDataPath()` captured
+  before `app.setName()`; keep proxy integration, SSH, mode, tuple, publication, fallback, and
+  defaults separately gated.
 - Completed Work Package 2 gate: target-native Windows source-signature reports from exact-head
   artifact jobs 87267322867 and 87267322870 were independently downloaded and matched to their
   identities and signing-stage reports under E-M3-WINDOWS-SOURCE-SIGNATURE-CI-001. PR Checks
@@ -14735,6 +14735,100 @@ config/scripts/ssh-relay-runtime-workflow.test.mjs` — PASS, 4 files / 21 tests
   proxy/live network, SSH transfer/install/launch, Beta settings, fallback classification, tuple
   enablement, release publication, or default behavior. Legacy remains the only production path;
   the next package may only audit the next disconnected acquisition composition.
+
+### E-M5-ARTIFACT-CACHE-ACQUISITION-AUDIT-001 — warm/cold leased acquisition boundary
+
+- Date/owner: 2026-07-15, Codex implementation owner.
+- Audit: complete reads of the accepted warm resolution and cold population implementations/tests,
+  official-manifest and cache-root boundaries, selected-artifact identity, real Linux/Windows cache
+  fixtures, and the native workflow oracle. A production-caller search confirms both accepted
+  capabilities remain disconnected outside tests.
+- Finding: the smallest next composition consumes an explicit already-verified official manifest,
+  probed host evidence, absolute cache root, and optional cancellation signal. It returns
+  unavailable/compatibility-legacy unchanged, maps a verified warm hit to a source-qualified leased
+  ready result without download, and invokes the accepted cold population exactly once only for a
+  verified miss. A successful cold result is mapped to the same leased ready shape with `download`
+  source. No cache miss escapes this boundary.
+- Safety contract: final artifact/entry tuple and content identities must match; every returned entry
+  snapshot/result is frozen; cancellation or identity failure after a warm/cold lease is acquired
+  releases that lease before rejecting. Resolution, download, integrity, publication, lease, and
+  cleanup failures propagate unchanged without availability/fallback classification. Concurrent
+  cold misses retain the accepted unique staging and content-lock publication safety; download
+  deduplication is deliberately not invented in this composition.
+- Required RED: unavailable and compatibility short circuits, warm zero-download result, exact
+  miss→population order/call identity, warm/cold post-lease cancellation release, inconsistent
+  population identity failure/release, and fail-closed resolution/population errors. A real
+  Linux/Windows integration must prove cold download followed by warm client-offline acquisition
+  with exactly one client fetch.
+- Deliberately absent: official-manifest loading, canonical user-data/Electron/startup adaptation,
+  proxy/certificate policy, eviction scheduling, SSH transfer/install/launch, `ORCA_RELAY_PATH`,
+  per-target Beta settings, fallback state machine/reason classification, tuple enablement, release
+  publication, production resources, and default behavior. The primary HTML plan is unchanged.
+
+### E-M5-ARTIFACT-ACQUISITION-LOCAL-RED-001 — warm/cold composition is absent
+
+- Date/owner: 2026-07-15, Codex implementation owner.
+- Command: `pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1
+  src/main/ssh/ssh-relay-artifact-acquisition.test.ts
+  src/main/ssh/ssh-relay-artifact-acquisition-integration.test.ts`.
+- Result: expected FAIL, two failed suites / zero tests in 616 ms because the purpose-named
+  `ssh-relay-artifact-acquisition` module does not exist.
+- Fixed contract: nine purpose cases define unavailable/legacy zero-population short circuits,
+  frozen cache/download ready results, exact resolve→populate miss ordering, pre-abort, warm/cold
+  post-lease cancellation release, inconsistent-entry rejection/release, and unclassified error
+  propagation. Two real Linux tar/Brotli and Windows ZIP cases require a cold verified fetch followed
+  by a warm acquisition while the client fetch is configured offline, with exactly one fetch total.
+- Consumer disconnection: only the two purpose/integration suites import the absent module. No
+  Electron/startup, product/SSH, setting, fallback, tuple, publication, or default caller exists.
+
+### E-M5-ARTIFACT-ACQUISITION-LOCAL-001 — disconnected warm/cold client acquisition
+
+- Date/owner: 2026-07-15, Codex implementation owner.
+- Implementation: `ssh-relay-artifact-acquisition.ts` composes only accepted cache resolution and
+  cold population behind explicit verified-manifest, host-evidence, cache-root, and cancellation
+  inputs. Unavailable/compatibility results return frozen without population; a warm hit returns a
+  frozen `ready/cache` leased entry; only a verified miss invokes population and returns the same
+  shape as `ready/download`. Artifact release/content/archive and entry tuple/content identities are
+  checked before exposure. Cancellation or identity failure after lease acquisition releases the
+  lease; every lower-layer error propagates without fallback classification.
+- Purpose/integration command: `pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1
+  src/main/ssh/ssh-relay-artifact-acquisition.test.ts
+  src/main/ssh/ssh-relay-artifact-acquisition-integration.test.ts` — PASS, 2 files / 11 tests in
+  1.66 s. Nine purpose cases cover both short circuits, warm/download result shape and operation
+  order, pre-abort, warm/cold post-lease cancellation, identity failure/release, and unclassified
+  resolver/population errors. Two real Linux tar/Brotli and Windows ZIP cases pass exact signed
+  fixture bytes through the default selector, downloader, strict publication/tree proof, lease, and
+  warm lookup: cold fetch count is one, the lease is released, and a second acquisition succeeds
+  from cache while the next client fetch is configured to fail; total fetch count remains one.
+- Focused plus native workflow oracle: `/usr/bin/time -l pnpm exec vitest run --config
+  config/vitest.config.ts --maxWorkers=1
+  src/main/ssh/ssh-relay-artifact-acquisition.test.ts
+  src/main/ssh/ssh-relay-artifact-acquisition-integration.test.ts
+  config/scripts/ssh-relay-runtime-workflow.test.mjs` — PASS, 3 files / 18 tests in 2.90 s Vitest,
+  5.50 s wall, 132,792,320-byte maximum RSS. Both purpose suites occur exactly once in POSIX and
+  PowerShell native commands.
+- Broader relay command: `/usr/bin/time -l pnpm exec vitest run --config
+  config/vitest.config.ts --maxWorkers=1 --silent=true src/main/ssh/ssh-relay-*.test.ts` — PASS,
+  32 files / 350 tests; 3 declared full-size files/tests skipped; accepted rerun 28.77 s Vitest,
+  30.56 s wall, 243,253,248-byte maximum RSS. An earlier completed invocation returned only partial
+  captured output from the command runner and is not counted; the exact command was rerun to an
+  observed exit code 0 and complete summary.
+- Release-script command: `/usr/bin/time -l pnpm exec vitest run --config
+  config/vitest.config.ts --maxWorkers=1 --silent=true
+  config/scripts/ssh-relay-runtime-*.test.mjs` — PASS, 50 files / 280 tests in 22.48 s Vitest,
+  27.42 s wall, 195,969,024-byte maximum RSS.
+- Repository gates: targeted `pnpm exec oxfmt --write` completes on six implementation/workflow
+  files in 472 ms. `pnpm typecheck` and `pnpm lint` pass; lint includes switch exhaustiveness, 41
+  reliability gates, no new max-lines bypass, bundled skill-guide verification, 9,837 localization
+  references and locale parity, and zero localization coverage candidates. `git diff --check`
+  passes and the protected `ssh-remote-node-resolution.ts`/test pair has zero package diff. Local
+  Node 26.0.0 emits only the expected Node-24 engine warning; exact Node 24 proof remains pending.
+- Boundary/gate: the fixture exposes its already-verified manifest and exact host evidence only to
+  support real acquisition tests. There is still no official-manifest loader, Electron/startup or
+  product caller, proxy policy/live credential path, eviction scheduler, SSH transfer/install,
+  `ORCA_RELAY_PATH`, Beta setting, fallback classification, tuple enablement, release publication,
+  production resource, or default-path change. Legacy remains unchanged. Require exact-head all-six
+  native and adjacent PR/E2E proof before advancing.
 
 ### E-M5-ARTIFACT-CACHE-POPULATION-LOCAL-001 — disconnected cold-cache population
 
