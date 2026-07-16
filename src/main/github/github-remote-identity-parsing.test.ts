@@ -1,9 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import {
-  parseGitHubOwnerRepo,
-  parseGitHubRemoteIdentity
-} from './github-remote-identity-parsing'
+import { parseGitHubOwnerRepo, parseGitHubRemoteIdentity } from './github-remote-identity-parsing'
 
 describe('parseGitHubRemoteIdentity', () => {
   it('parses a plain github.com https remote', () => {
@@ -22,7 +19,7 @@ describe('parseGitHubRemoteIdentity', () => {
     })
   })
 
-  it('preserves a custom port on a GHES https remote (P2)', () => {
+  it('preserves a custom port on a GHES https remote', () => {
     // The port IS the Enterprise web/API endpoint, so gh must target
     // ghe.acme.com:8443, not the portless hostname.
     expect(parseGitHubRemoteIdentity('https://ghe.acme.com:8443/team/orca.git')).toEqual({

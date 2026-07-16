@@ -79,7 +79,7 @@ describe('getEnterpriseGitHubRepoSlug', () => {
     })
   })
 
-  it('preserves a custom GHES port when probing gh auth and in the slug (P2)', async () => {
+  it('preserves a custom GHES port when probing gh auth and in the slug', async () => {
     mockOriginRemote('https://ghe.acme.com:8443/team/orca.git')
     mockHostAuthenticated('ghe.acme.com:8443')
 

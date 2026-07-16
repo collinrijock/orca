@@ -156,7 +156,7 @@ describe('createGitHubPullRequest', () => {
     expect(args[args.indexOf('--repo') + 1]).toBe('github.acme-corp.com/team/orca')
   })
 
-  it('keeps a custom GHES port in the host-qualified --repo (P2)', async () => {
+  it('keeps a custom GHES port in the host-qualified --repo', async () => {
     getOwnerRepoMock.mockResolvedValueOnce(null)
     getEnterpriseGitHubRepoSlugMock.mockResolvedValueOnce({
       owner: 'team',
