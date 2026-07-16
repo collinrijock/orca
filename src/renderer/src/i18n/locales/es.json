@@ -8721,7 +8721,9 @@
                 "fe9231215b": "Comprobando el acceso a Linear antes de mostrar las acciones de configuración.",
                 "e1f5e6424c": "Conexión completada para {{value0}} workspace{{value1}}",
                 "disconnect_all": "Desconectar todo",
-                "account_scope_prefix": "Alcance de la cuenta"
+                "account_scope_prefix": "Alcance de la cuenta",
+                "2d60ec7921": "Connect a Jira Cloud site with an API token, or a self-hosted Jira with a personal access token or username and password. Credentials are sent to the selected remote runtime and stored there with runtime-supported encryption.",
+                "977e360b71": "Connect a Jira Cloud site with an API token, or a self-hosted Jira with a personal access token or username and password. Credentials are stored locally and encrypted when local runtime storage supports it."
               }
             }
           }
@@ -10754,14 +10756,18 @@
         },
         "WindowsFirewallNotice": {
           "repair-success": "Windows Firewall now allows Orca Mobile on private networks",
-          "repair-failed": "Could not add the Windows Firewall rule",
+          "repair-failed": "Could not update the Windows Firewall rules",
           "public-title": "Windows marks this network as public",
           "missing-title": "Allow phone connections through Windows Firewall",
           "public-description": "Change this trusted Wi-Fi network to Private before allowing Orca Mobile connections.",
           "missing-description": "Windows may block the pairing server. Add a rule for this Orca app and TCP port {{port}} on Private networks.",
           "open-settings": "Open network settings",
           "waiting": "Waiting for Windows…",
-          "allow": "Allow phone connections"
+          "allow": "Allow phone connections",
+          "repair-unverified": "Windows Firewall access could not be verified",
+          "blocked-title": "Windows may be blocking Orca Mobile",
+          "blocked-description": "An existing inbound Block rule can override the pairing exception. Repair removes conflicting TCP rules for this Orca app, then allows port {{port}} on Private networks.",
+          "repair": "Repair firewall access"
         }
       },
       "gitlab": {
@@ -12739,7 +12745,24 @@
             "70fcd360c4": "https://example.atlassian.net",
             "e176f9d0c5": "URL del sitio de Jira Cloud",
             "d785c42b8b": "Usa una URL de Jira Cloud, email de Atlassian y token API para explorar issues.",
-            "8388bdea2b": "Conectar sitio de Jira"
+            "8388bdea2b": "Conectar sitio de Jira",
+            "2e2b69e48e": "Use a self-hosted Jira base URL and a personal access token to browse issues.",
+            "b67e919bd5": "Jira instance type",
+            "17787d6e4b": "Atlassian Cloud",
+            "bc7a831773": "Self-hosted",
+            "3489e186d6": "Jira site URL",
+            "cbc27fa599": "https://jira.example.com",
+            "730d973bae": "Personal access token",
+            "8b9c7b9e7b": "Jira personal access token",
+            "ccfb086d3e": "Create a personal access token in your Jira profile under Personal Access Tokens.",
+            "1d947a07ab": "Use a self-hosted Jira base URL, username, and password to browse issues.",
+            "f49708c369": "Jira authentication method",
+            "84a810dd0e": "Username & password",
+            "8d1223fa5c": "Username",
+            "be9eba0a1b": "username",
+            "70035652d7": "Password",
+            "c50abbf340": "Jira account password",
+            "d8737db691": "Use your Jira Server or Data Center account username and password."
           }
         }
       },
@@ -13190,7 +13213,8 @@
         "cancel": "Cancelar",
         "send": "Enviar respuesta",
         "next": "Siguiente",
-        "skip": "Omitir"
+        "skip": "Omitir",
+        "sending": "Enviando…"
       },
       "approval": {
         "title": "¿Permitir {{value0}}?",

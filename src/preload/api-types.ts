@@ -10,6 +10,10 @@ import type {
 } from '../shared/hosted-review'
 import type { NativeFileDropPayload } from '../shared/native-file-drop'
 import type {
+  TerminalTabCloseRequest,
+  TerminalTabCloseResponse
+} from '../shared/terminal-tab-close'
+import type {
   LocalLogTailChangedPayload,
   LocalLogTailReadArgs,
   LocalLogTailReadResult,
@@ -965,6 +969,10 @@ export type PreloadApi = {
     // other hosts (local or a re-added SSH target) intact.
     removeForHost: (args: { repoId: string; hostId: string }) => Promise<void>
     reorder: (args: { orderedIds: string[] }) => Promise<{ status: 'applied' | 'rejected' }>
+    reorderForHost: (args: {
+      orderedIds: string[]
+      hostId: string
+    }) => Promise<{ status: 'applied' | 'rejected' }>
     update: (args: {
       repoId: string
       updates: Partial<
@@ -1408,11 +1416,18 @@ export type PreloadApi = {
     onClearBufferRequest: (callback: (data: { ptyId: string }) => void) => () => void
     sendSerializedBuffer: (
       requestId: string,
-      snapshot: { data: string; cols: number; rows: number; lastTitle?: string } | null
+      snapshot: {
+        data: string
+        cols: number
+        rows: number
+        seq?: number
+        lastTitle?: string
+      } | null
     ) => void
     declarePendingPaneSerializer: (paneKey: string) => Promise<number>
     settlePaneSerializer: (paneKey: string, gen: number) => Promise<void>
     clearPendingPaneSerializer: (paneKey: string, gen: number) => Promise<void>
+    reportRendererSerializerReady?: (ptyId: string) => Promise<void>
     management: PtyManagementApi
   }
   feedback: {
@@ -1530,7 +1545,7 @@ export type PreloadApi = {
       repoId?: string
       limit?: number
       query?: string
-      before?: string
+      page?: number
       noCache?: boolean
     }) => Promise<ListWorkItemsResult<Omit<GitHubWorkItem, 'repoId'>>>
     prChecks: (
@@ -1993,6 +2008,7 @@ export type PreloadApi = {
       siteUrl: string
       email: string
       apiToken: string
+      authType?: 'cloud' | 'server'
     }) => Promise<{ ok: true; viewer: JiraViewer } | { ok: false; error: string }>
     disconnect: (args?: { siteId?: string }) => Promise<void>
     selectSite: (args: { siteId: JiraSiteSelection }) => Promise<JiraConnectionStatus>
@@ -2352,6 +2368,7 @@ export type PreloadApi = {
     get: (hostId?: ExecutionHostId) => Promise<WorkspaceSessionState>
     set: (args: WorkspaceSessionState, hostId?: ExecutionHostId) => Promise<void>
     patch: (args: WorkspaceSessionPatch, hostId?: ExecutionHostId) => Promise<void>
+    flush: () => Promise<void>
     readTerminalScrollback: (args: { ref: string }) => string | null
     setSync: (args: WorkspaceSessionState, hostId?: ExecutionHostId) => void
   }
@@ -2536,7 +2553,10 @@ export type PreloadApi = {
       connectionId?: string
       includeIgnored?: boolean
       bypassEffectiveUpstreamNegativeCache?: boolean
+      reuseLineStats?: boolean
+      requestToken?: string
     }) => Promise<GitStatusResult>
+    cancelStatus: (args: { requestToken: string }) => Promise<void>
     submoduleStatus: (args: {
       worktreePath: string
       submodulePath: string
@@ -2839,6 +2859,9 @@ export type PreloadApi = {
     onRequestTerminalCreate: (
       callback: (data: RuntimeTerminalCreateRequestPayload) => void
     ) => () => void
+    onRequestTerminalTabMount: (
+      callback: (data: { worktreeId: string; tabId?: string; ptyId?: string }) => void
+    ) => () => void
     replyTerminalCreate: (reply: {
       requestId: string
       tabId?: string
@@ -2900,6 +2923,8 @@ export type PreloadApi = {
     onCloseTerminal: (
       callback: (data: { tabId: string; paneRuntimeId?: number }) => void
     ) => () => void
+    onTerminalTabCloseRequest: (callback: (request: TerminalTabCloseRequest) => void) => () => void
+    respondTerminalTabClose: (response: TerminalTabCloseResponse) => void
     onSleepWorktree: (callback: (data: { worktreeId: string }) => void) => () => void
     onResumeSleepingAgents: (callback: (data: { worktreeId: string }) => void) => () => void
     onTerminalZoom: (callback: (direction: 'in' | 'out' | 'reset') => void) => () => void
@@ -3182,6 +3207,7 @@ export type PreloadApi = {
           supported: true
           port: number
           ruleAllowed: boolean
+          blockingRuleDetected: boolean
           privateFirewallEnabled: boolean
           networkCategory: 'private' | 'public' | 'domain' | 'unknown'
           inspectionAvailable: boolean

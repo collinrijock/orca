@@ -67,6 +67,7 @@ import {
   type ExecutionHostId
 } from '../../../shared/execution-host'
 import { toRuntimeWorktreeSelector } from '../runtime/runtime-worktree-selector'
+import { callAbortableRuntimeEnvironment } from '../runtime/abortable-runtime-environment-call'
 import { normalizeDisabledTuiAgents } from '../../../shared/tui-agent-selection'
 import {
   normalizeTuiAgentArgsRecord,
@@ -650,6 +651,8 @@ function createWebPreloadApi(): Partial<PreloadApi> {
           })
         )
       },
+      // localStorage writes synchronously, so there is no deferred web flush.
+      flush: async () => {},
       readTerminalScrollback: () => null,
       setSync: (session, hostId) => {
         writeJson(sessionStorageKeyForHost(hostId), sanitizeWebRuntimeWorkspaceSession(session))
@@ -1265,6 +1268,11 @@ function createReposApi(): NonNullable<Partial<PreloadApi>['repos']> {
       throw new Error('Forgetting a host is unavailable in paired web clients.')
     },
     reorder: async ({ orderedIds }) => callRuntimeResult('repo.reorder', { orderedIds }),
+    // Why: this path persists desktop-owned local or SSH rows. Paired web
+    // clients own only their single runtime, which uses repo.reorder directly.
+    reorderForHost: async () => {
+      throw new Error('Host-scoped project reordering is unavailable in paired web clients.')
+    },
     update: async ({ repoId, updates }) =>
       (await callRuntimeResult<{ repo: Repo }>('repo.update', { repo: repoId, updates })).repo,
     pickFolder: () => Promise.resolve(null),
@@ -1638,14 +1646,64 @@ function createFileApi(): NonNullable<Partial<PreloadApi>['fs']> {
   }
 }
 
+// Why: track the in-flight abortable status request per token so cancelStatus
+// can abort the matching subscription and close its remote request context.
+const webGitStatusAbortControllers = new Map<string, AbortController>()
+
+async function callAbortableRuntimeStatus<TResult>(
+  requestToken: string,
+  params: unknown
+): Promise<TResult> {
+  const environment = requireActiveEnvironment()
+  webGitStatusAbortControllers.get(requestToken)?.abort()
+  const controller = new AbortController()
+  webGitStatusAbortControllers.set(requestToken, controller)
+  try {
+    const response = await callAbortableRuntimeEnvironment(
+      environment.id,
+      'git.status',
+      params,
+      undefined,
+      controller.signal
+    )
+    updateEnvironmentFromResponse(environment, response)
+    if (!response.ok) {
+      throw new Error(response.error.message)
+    }
+    return response.result as TResult
+  } finally {
+    if (webGitStatusAbortControllers.get(requestToken) === controller) {
+      webGitStatusAbortControllers.delete(requestToken)
+    }
+  }
+}
+
 function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
   return {
-    status: async ({ worktreePath, includeIgnored }) => {
+    status: async ({
+      worktreePath,
+      includeIgnored,
+      bypassEffectiveUpstreamNegativeCache,
+      reuseLineStats,
+      requestToken
+    }) => {
       const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
-      return callRuntimeResult('git.status', {
+      const params = {
         worktree: toRuntimeWorktreeSelector(worktree.id),
-        includeIgnored
-      })
+        includeIgnored,
+        bypassEffectiveUpstreamNegativeCache,
+        reuseLineStats
+      }
+      // Why: without a token there's nothing to cancel, so stay on the pooled
+      // call transport. With one, route through the subscription bridge so
+      // cancelStatus can close the request context and abort the remote scan.
+      if (!requestToken) {
+        return callRuntimeResult('git.status', params)
+      }
+      return callAbortableRuntimeStatus(requestToken, params)
+    },
+    cancelStatus: async ({ requestToken }) => {
+      webGitStatusAbortControllers.get(requestToken)?.abort()
     },
     submoduleStatus: async ({ worktreePath, submodulePath, area }) => {
       const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
@@ -2369,6 +2427,7 @@ function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     onActivateWorktree: () => noopUnsubscribe,
     onCreateTerminal: () => noopUnsubscribe,
     onRequestTerminalCreate: () => noopUnsubscribe,
+    onRequestTerminalTabMount: () => noopUnsubscribe,
     replyTerminalCreate: () => {},
     onSplitTerminal: () => noopUnsubscribe,
     onRenameTerminal: () => noopUnsubscribe,
@@ -2381,6 +2440,8 @@ function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     onMobileMarkdownRequest: () => noopUnsubscribe,
     respondMobileMarkdownRequest: () => {},
     onCloseTerminal: () => noopUnsubscribe,
+    onTerminalTabCloseRequest: () => noopUnsubscribe,
+    respondTerminalTabClose: () => {},
     onSleepWorktree: () => noopUnsubscribe,
     // Why: paired web is a full renderer that wakes on activation; mobile wake is
     // desktop-host-scoped, so the web client never receives this signal.
@@ -2819,6 +2880,7 @@ function createPtyApi(): NonNullable<Partial<PreloadApi>['pty']> {
     declarePendingPaneSerializer: () => Promise.resolve(0),
     settlePaneSerializer: () => Promise.resolve(),
     clearPendingPaneSerializer: () => Promise.resolve(),
+    reportRendererSerializerReady: () => Promise.resolve(),
     management: {
       listSessions: () => Promise.resolve({ sessions: [], degraded: false }),
       killAll: () => Promise.resolve({ killedCount: 0, remainingCount: 0, killedSessionIds: [] }),

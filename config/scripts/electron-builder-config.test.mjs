@@ -31,6 +31,7 @@ describe('electron-builder config', () => {
         '!skill-guides{,/**/*}',
         '!resources/skills/**',
         '!tests{,/**/*}',
+        '!pr-evidence{,/**/*}',
         '!Casks{,/**/*}',
         '!{AGENTS.md,CLAUDE.md,DEVELOPING.md,bundle-size-progress.md}',
         '!out/**/*.test.js'
