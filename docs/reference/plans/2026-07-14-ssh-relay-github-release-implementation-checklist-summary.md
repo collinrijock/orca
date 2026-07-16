@@ -9,9 +9,9 @@ keeps commands, hashes, runner identities, timings, and failure details.
 A checked box means the work has evidence in the detailed ledger. Design approval alone does not
 complete a box.
 
-Active checkpoint: **Milestone 5 / Work Package 4 desktop resolver/cache — disconnected host-
-evidence composition is locally green; exact-head all-six native CI is next, 2026-07-15, Codex
-implementation owner.**
+Active checkpoint: **Milestone 6 / Work Package 5 bounded runtime transfer — host-evidence
+composition CI is closed; audit only a disconnected transport-neutral verified source-tree contract
+next, 2026-07-15, Codex implementation owner.**
 `E-M5-ARTIFACT-CACHE-RESOLUTION-CI-001` closes warm-cache commit
 `22031fa68` on all six native clients, both Linux supplements, Windows x64 baseline, PR Checks,
 Golden E2E, and computer-use; Windows arm64 remains the expected build-26200 rejection against 26100. `E-M5-ARTIFACT-CACHE-RESOLUTION-LOCAL-001` passes 9/9 purpose tests,
@@ -288,6 +288,13 @@ conservative unknowns; refuses unknown Darwin translation; propagates cancellati
 deeply freezes evidence. It is required in both native workflow families. Exact-head all-six Node 24
 client proof remains mandatory; no live SSH, product caller, settings/fallback, transfer/install,
 tuple, publication, default, or SignPath work is included.
+`E-M5-HOST-EVIDENCE-COMPOSITION-CI-001` closes exact implementation head `a7fd19de5`: all six
+primary native Node 24 clients pass the 20-case composer suite, both Linux supplements and Windows
+x64 baseline pass, and PR Checks, Golden E2E, and computer-use pass. Windows arm64 completes full
+tree/Node/PTY/watcher/resource proof and retains only the declared hosted build-26200 rejection
+against required build 26100. Full-size extraction/cache metrics remain within their existing
+budgets. This is native client composition evidence, not live SSH; no product caller, transfer,
+settings/fallback, tuple, publication, default, or SignPath behavior exists.
 `E-M5-ARTIFACT-CACHE-ROOT-CI-001` closes the pure cache-root contract at exact head `aefcaa9a9`:
 all six primary native Node 24 jobs, both Linux supplements, Windows x64 baseline, PR Checks, Golden
 E2E, and computer-use pass; Windows arm64 build 26200 remains correctly gated against 26100. The

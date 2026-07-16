@@ -8,8 +8,8 @@ work; keep exact commands, runner identities, hashes, metrics, and residual gaps
 
 Date created: 2026-07-14<br>
 Last updated: 2026-07-15<br>
-Current phase: Milestone 5 / Work Package 4 desktop resolver/cache — **In progress — 2026-07-15, Codex implementation owner: disconnected host-evidence composition is locally green; exact-head native CI is the next gate**. Keep every capability disconnected from every production/default SSH path. Real Apple/SignPath rehearsals remain an explicit late gate and are not on this package's critical path.<br>
-Session checkpoint: **HOST COMPOSITION LOCAL GREEN / NATIVE CI NEXT — 2026-07-15, Codex implementation owner** — `E-M5-HOST-EVIDENCE-COMPOSITION-LOCAL-001` proves canonical six-tuple mapping, conservative unknowns, Darwin translation policy, bounded concurrency, cancellation/error propagation, deep freezing, workflow-family inclusion, and all local static/broad/release gates. Commit and push this isolated package, then require exact-head all-six native client proof before accepting it or opening another package. Do not add a product caller, settings/fallback wiring, tuple enablement, publication, or default behavior. Merging to `main` remains prohibited, SignPath is deferred, and legacy remains the production default.<br>
+Current phase: Milestone 6 / Work Package 5 bounded runtime transfer — **In progress — 2026-07-15, Codex implementation owner: audit only the smallest disconnected transport-neutral verified source-tree contract after host-composition CI closure**. Keep every capability disconnected from every production/default SSH path. Real Apple/SignPath rehearsals remain an explicit late gate and are not on this package's critical path.<br>
+Session checkpoint: **HOST COMPOSITION CI CLOSED / TRANSFER CONTRACT AUDIT NEXT — 2026-07-15, Codex implementation owner** — `E-M5-HOST-EVIDENCE-COMPOSITION-CI-001` closes exact-head all-six native client proof, both Linux supplements, Windows x64 baseline, PR Checks, Golden E2E, and computer-use; Windows arm64 retains only the declared build-26200/26100 runner mismatch after full runtime proof. Audit only a pure verified source-tree contract next. Do not open SSH channels, transfer/install bytes, add a product caller, settings/fallback wiring, tuple enablement, publication, or default behavior. Merging to `main` remains prohibited, SignPath is deferred, and legacy remains the production default.<br>
 Primary design: [SSH relay GitHub Release plan](./2026-07-14-ssh-relay-github-release-plan.html)<br>
 Motivating issues: [#8450](https://github.com/stablyai/orca/issues/8450), [#1693](https://github.com/stablyai/orca/issues/1693)
 
@@ -147,10 +147,12 @@ same change as the work it records.
   local gates, and all-six native Node 24 proof are green under
   E-M5-ARTIFACT-CACHE-ROOT-LOCAL-RED-001, E-M5-ARTIFACT-CACHE-ROOT-LOCAL-001, and
   E-M5-ARTIFACT-CACHE-ROOT-CI-001. No Electron or product caller exists.
-- Active package: **In progress — 2026-07-15, Codex implementation owner** — disconnected full host-
-  evidence composition is locally green under E-M5-HOST-EVIDENCE-COMPOSITION-LOCAL-001. Exact-head
-  all-six native client proof is the next acceptance gate. Keep live SSH, transfer/install,
-  settings, fallback wiring, tuple enablement, publication, defaults, and SignPath separately gated.
+- Completed package: disconnected full host-evidence composition is green locally and on every
+  primary native client under E-M5-HOST-EVIDENCE-COMPOSITION-LOCAL-001 and
+  E-M5-HOST-EVIDENCE-COMPOSITION-CI-001. It has no product caller.
+- Active package: **In progress — 2026-07-15, Codex implementation owner** — audit only Milestone
+  6's smallest transport-neutral verified source-tree contract. Do not open SSH channels, transfer
+  or install bytes, or add product/settings/fallback/tuple/publication/default behavior.
 - Completed Work Package 2 gate: target-native Windows source-signature reports from exact-head
   artifact jobs 87267322867 and 87267322870 were independently downloaded and matched to their
   identities and signing-stage reports under E-M3-WINDOWS-SOURCE-SIGNATURE-CI-001. PR Checks
@@ -16027,6 +16029,57 @@ config/vitest.config.ts --maxWorkers=1` plus the composer, Windows compatibility
   enablement, publication, defaults, and SignPath remain absent. Legacy remains the sole production/
   default path and every tuple stays disabled.
 
+### E-M5-HOST-EVIDENCE-COMPOSITION-CI-001 — all six native clients accept host composition
+
+- Date/owner/source: 2026-07-15, Codex implementation owner; exact implementation commit
+  `a7fd19de5f2d0b8b7243259fa0a2ea669b5323d7` on draft PR
+  [#8741](https://github.com/stablyai/orca/pull/8741). SSH Relay Runtime Artifacts run
+  [29493317298](https://github.com/stablyai/orca/actions/runs/29493317298) checks out that exact SHA
+  and uses Node 24.18.0.
+- All six primary native jobs pass: Windows x64
+  [87604401012](https://github.com/stablyai/orca/actions/runs/29493317298/job/87604401012), Windows
+  arm64 [87604401042](https://github.com/stablyai/orca/actions/runs/29493317298/job/87604401042),
+  Darwin arm64 [87604401020](https://github.com/stablyai/orca/actions/runs/29493317298/job/87604401020),
+  Darwin x64 [87604401024](https://github.com/stablyai/orca/actions/runs/29493317298/job/87604401024),
+  Linux arm64 [87604401102](https://github.com/stablyai/orca/actions/runs/29493317298/job/87604401102),
+  and Linux x64 [87604401073](https://github.com/stablyai/orca/actions/runs/29493317298/job/87604401073).
+- Native composition proof: each primary client passes all 20 purpose cases in 9–19 ms. Both Windows
+  jobs pass 86 files / 670 tests with 14 declared skips; all four POSIX jobs pass 85 files / 679
+  tests with one declared native-Windows skip. This executes the canonical six-tuple mapping,
+  conservative missing evidence, Darwin translation policy, concurrent family startup, signal/
+  rejection propagation, and deep-freeze contract under every supported client OS/architecture.
+- Both Linux oldest-userland supplements pass: arm64
+  [87605280551](https://github.com/stablyai/orca/actions/runs/29493317298/job/87605280551) and x64
+  [87605280565](https://github.com/stablyai/orca/actions/runs/29493317298/job/87605280565). The Windows
+  x64 oldest-baseline job
+  [87606310152](https://github.com/stablyai/orca/actions/runs/29493317298/job/87606310152) passes.
+- The Windows arm64 oldest-baseline job
+  [87606310179](https://github.com/stablyai/orca/actions/runs/29493317298/job/87606310179) first
+  verifies the 60-entry / 42-file / 85,213,511-expanded-byte tree and content identity, Node
+  v24.18.0 ABI 137, PTY exit 23 and 37x101 resize, five watcher events, and two-second resource
+  settlement. Smoke takes 5,816.3487 ms at 48,713,728-byte RSS and full verification takes
+  7,868.3114 ms. Its only rejection is observed Windows build 26200 against the required build
+  26100; platform and arm64 architecture checks pass and residual gaps are empty.
+- Full-size extraction remains inside its existing budgets at 1,119.77–2,601.01 ms and
+  29,687,808–47,091,712 incremental RSS bytes. Cold immutable-cache publication stays at
+  1,347.36–5,064.87 ms and 34,258,944–52,510,720 incremental RSS bytes; warm lookup stays at
+  128.45–873.41 ms and 131,072–5,505,024 incremental RSS bytes. Retention stays at 8.97–45.85 ms and
+  eviction at 15.92–90.46 ms. Every measurement passes its existing budget.
+- Adjacent exact-head checks pass: PR Checks run
+  [29493317294](https://github.com/stablyai/orca/actions/runs/29493317294), job
+  [87604344252](https://github.com/stablyai/orca/actions/runs/29493317294/job/87604344252); Golden E2E
+  run [29493317248](https://github.com/stablyai/orca/actions/runs/29493317248), Linux job
+  [87604343968](https://github.com/stablyai/orca/actions/runs/29493317248/job/87604343968) and macOS
+  job [87604343988](https://github.com/stablyai/orca/actions/runs/29493317248/job/87604343988);
+  computer-use run [29493317269](https://github.com/stablyai/orca/actions/runs/29493317269), Ubuntu
+  job [87604343943](https://github.com/stablyai/orca/actions/runs/29493317269/job/87604343943) and
+  Windows job [87604343949](https://github.com/stablyai/orca/actions/runs/29493317269/job/87604343949).
+- Boundary/residual gaps: this is native client composition proof, not live SSH remote behavior. The
+  composer still has no product caller. Remote distro/OS evidence, `MaxSessions=1`, live channel
+  behavior, transport capability, transfer/install, Electron/settings, fallback wiring,
+  `ORCA_RELAY_PATH`, tuple enablement, publication, defaults, and SignPath remain open. Legacy
+  remains the sole production/default path and every tuple stays disabled.
+
 ## Accepted Gaps
 
 No product gap is accepted merely because it appears in this list. Each entry requires explicit
@@ -16085,12 +16138,12 @@ The project is not complete until every applicable item below is checked with ev
 
 ## Next Required Action
 
-Commit and push only the locally green disconnected host-evidence composition package under
-E-M5-HOST-EVIDENCE-COMPOSITION-LOCAL-001, then require exact-head all-six Node 24 native client proof
-and adjacent PR checks before accepting it or auditing the next package. Do not modify platform
-detection or selectors, provision production secrets or environments, add an Electron/startup
-consumer, embed unreviewed keys or manifest bytes, add SSH transfer/install, mode wiring, fallback,
-tuple enablement, release publication, or default behavior.
+Audit only Milestone 6's smallest disconnected transport-neutral verified source-tree contract.
+Determine the exact authenticated cache-entry/manifest inputs, immutable file ordering, mode and
+size/count limits, ownership/cancellation semantics, and which later transfer families consume it
+before adding tests or implementation. Do not open an SSH channel, transfer or install bytes, modify
+platform detection/selectors, add an Electron/startup consumer, mode wiring, fallback, tuple
+enablement, release publication, or default behavior.
 Keep Node upstream `.tar.xz` inputs, Windows ZIP, `ORCA_RELAY_PATH`, existing desktop required-assets
 behavior, detached-signature byte encoding, Windows arm64 build 26100, macOS 13.5, Linux kernel 4.18,
 release-cut, desktop builds, publication, and every tuple separately gated.
