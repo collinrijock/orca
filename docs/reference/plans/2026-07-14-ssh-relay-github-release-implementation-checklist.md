@@ -8,8 +8,8 @@ work; keep exact commands, runner identities, hashes, metrics, and residual gaps
 
 Date created: 2026-07-14<br>
 Last updated: 2026-07-15<br>
-Current phase: Milestone 6 / Work Package 5 bounded runtime transfer — **In progress — 2026-07-15, Codex implementation owner: disconnected Windows system-SSH tree-composition native CI proof**. Keep every capability disconnected from every production/default SSH path. Real Apple/SignPath rehearsals remain an explicit late gate and are not on this package's critical path.<br>
-Session checkpoint: **WINDOWS TREE COMPOSITION LOCAL GREEN / EXACT-HEAD NATIVE CI NEXT — 2026-07-15, Codex implementation owner** — `E-M6-WINDOWS-SYSTEM-SSH-TREE-LOCAL-001` proves the disconnected composer and every audited local lifecycle gate. Commit and push the isolated package, then require all-six native artifact and adjacent exact-head workflows before auditing live/full-size Windows OpenSSH. Do not connect a product caller, change legacy upload/fallback/default behavior, enable a tuple, publish an artifact, or perform SignPath work. Merging to `main` remains prohibited, SignPath is deferred, and legacy remains the production default.<br>
+Current phase: Milestone 6 / Work Package 5 bounded runtime transfer — **In progress — 2026-07-15, Codex implementation owner: live/full-size Windows system-SSH contract audit**. Keep every capability disconnected from every production/default SSH path. Real Apple/SignPath rehearsals remain an explicit late gate and are not on this package's critical path.<br>
+Session checkpoint: **WINDOWS TREE COMPOSITION NATIVE PROOF CLOSED / LIVE WINDOWS OPENSSH AUDIT ACTIVE — 2026-07-15, Codex implementation owner** — `E-M6-WINDOWS-SYSTEM-SSH-TREE-CI-001` closes the disconnected composer at exact implementation head `139bcd16d36bfa6d0b8db16ab8f2f2223325a7f6`; all six primary native jobs and every adjacent gate pass except the declared Windows arm64 hosted build-26200 versus required-26100 floor check after complete runtime proof. Audit the first real full-size Windows OpenSSH package before writing RED tests or workflow fixture code. Do not connect a product caller, change legacy upload/fallback/default behavior, enable a tuple, publish an artifact, or perform SignPath work. Merging to `main` remains prohibited, SignPath is deferred, and legacy remains the production default.<br>
 Primary design: [SSH relay GitHub Release plan](./2026-07-14-ssh-relay-github-release-plan.html)<br>
 Motivating issues: [#8450](https://github.com/stablyai/orca/issues/8450), [#1693](https://github.com/stablyai/orca/issues/1693)
 
@@ -18484,6 +18484,44 @@ src/main/ssh/ssh-remote-node-resolution.ts src/main/ssh/ssh-remote-node-resoluti
   adjacent workflow proof remains required before this package closes. Legacy remains the sole
   production/default path and every tuple stays disabled.
 
+### E-M6-WINDOWS-SYSTEM-SSH-TREE-CI-001 — exact-head native tree-composition proof
+
+- Date/owner/head: 2026-07-15, Codex implementation owner; exact implementation head
+  `139bcd16d36bfa6d0b8db16ab8f2f2223325a7f6` on draft PR #8741. Artifact run
+  `29532537623`; PR Checks `29532537644`, Golden E2E `29532537556`, and computer-use
+  `29532537582`. The three adjacent workflows complete successfully.
+- All six primary Node 24.18.0 contract/build/full-size cells pass. Linux x64 job `87736017311`
+  (`ubuntu24`, image `20260714.240.1`, X64) passes 99 files, 864 cases with three declared skips;
+  Linux arm64 `87736017380` (`ubuntu24-arm64`, image `20260714.61.1`, ARM64) passes the same totals.
+  Darwin arm64 `87736017303` (`macos15`, image `20260715.0234.1`, ARM64) and Darwin x64
+  `87736017358` pass 99 files, 863 cases with four declared skips. The complete jobs finish in
+  2m38s, 3m42s, 2m34s, and 4m22s respectively. Both Linux jobs also pass their existing exact
+  full-size live SFTP and restricted POSIX system-SSH regressions; these are adjacent proof, not a
+  Windows-live claim.
+- Windows x64 job `87736017345`: requested `windows-2022`, resolved `win22` image
+  `20260714.244.1`, X64. Windows arm64 job `87736017295`: requested `windows-11-arm`, resolved
+  `win11-arm64` image `20260714.109.1`, ARM64. Each passes 100 contract files, 853 cases with 18
+  declared skips, exact clean-build/runtime smoke and full-size cache/extraction boundaries. The
+  complete x64 job finishes in 6m24s and arm64 in 9m51s. The workflow command contains the new
+  eight-case Windows tree-composition suite exactly once, as locked by the 9/9 workflow oracle.
+- Both Linux oldest-userland supplements pass: arm64 `87736995346` and x64 `87736995358`.
+  Windows x64 floor job `87738195646` passes on Windows Server build 20348 and confirms
+  `osBuild=true` for the x64 contract.
+- Windows arm64 floor job `87738195657` downloads and digest-verifies the exact unpublished native
+  artifact, then verifies 60 entries, 42 files, 85,213,511 expanded bytes, content
+  `sha256:02edf462be83c2864a89546d5344d348f9e07ce10964660342608a8c614e47db`, Node
+  24.18.0/ABI 137, PTY exit 23 and 37x101 resize, watcher create/update/delete/rename lifecycle,
+  2,000 ms resource settlement, 49,307,648 RSS bytes, 6,557.614 ms smoke, and 8,513.024 ms total.
+  It then rejects only hosted Windows build 26200 against required build 26100:
+  `platform=true`, `architecture=true`, `osBuild=false`. The runner is `win11-arm64` image
+  `20260714.109.1`; this remains the declared hosted-runner gap rather than a package regression.
+- Disposition/residual boundary: the disconnected Windows tree-composition package is complete.
+  This proves native Node/client behavior plus previously proven local PowerShell primitives, not a
+  real Windows OpenSSH server, full-size Windows system-SSH transfer, long paths, endpoint-protection
+  interference, primitive classification/cache, remote bundled-Node verification/install/publish/
+  launch, product/Beta/fallback/default behavior, tuple enablement, publication, Apple signing, or
+  SignPath. Legacy remains the sole production/default path and every tuple stays disabled.
+
 ## Accepted Gaps
 
 No product gap is accepted merely because it appears in this list. Each entry requires explicit
@@ -18542,11 +18580,13 @@ The project is not complete until every applicable item below is checked with ev
 
 ## Next Required Action
 
-Write and run the purpose-named RED suite and native-workflow oracle for
-`E-M6-WINDOWS-SYSTEM-SSH-TREE-AUDIT-001`, proving failure solely because the audited production
-module is absent. Do not check the broad Milestone 6 Windows system-SSH item yet. Do not add an
-Electron/startup/product importer, per-target mode wiring, fallback, tuple enablement, release
-publication, or default behavior.
+Audit a purpose-named full-size Windows system-SSH proof against a real native Windows OpenSSH server.
+Fix its exact fixture ownership, authentication/host-key trust, local account/ACLs, PowerShell 5.1/
+.NET receiver command, full runtime bytes/counts, serial/default and four-channel measurements,
+cancellation settlement, collision/cleanup cases, x64/arm64 runner coverage, and teardown behavior
+before writing a RED suite or workflow steps. Do not check the broad Milestone 6 Windows system-SSH
+item yet. Do not add an Electron/startup/product importer, per-target mode wiring, fallback, tuple
+enablement, release publication, or default behavior.
 Keep Node upstream `.tar.xz` inputs, Windows ZIP, `ORCA_RELAY_PATH`, existing desktop required-assets
 behavior, detached-signature byte encoding, Windows arm64 build 26100, macOS 13.5, Linux kernel 4.18,
 release-cut, desktop builds, publication, and every tuple separately gated.
