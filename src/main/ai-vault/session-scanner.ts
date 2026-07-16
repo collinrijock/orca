@@ -7,7 +7,10 @@ import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../shared/exec
 import { withSpan } from '../observability/tracer'
 import { sessionSortTime } from './session-scanner-accumulator'
 import { codexHomeForSessionsDir } from './session-scanner-codex-paths'
-import { loadOpenCodeSqliteCandidateMetadata } from './session-scanner-opencode-sqlite-metadata'
+import {
+  createOpenCodeSqliteMetadataFrontier,
+  prefetchOpenCodeSqliteMetadataFrontier
+} from './session-scanner-opencode-sqlite-frontier'
 import {
   createSessionParseStats,
   parseAgentSessionFileCached,
@@ -72,11 +75,7 @@ export async function scanAiVaultSessions(
       )
       .sort((left, right) => right.file.mtimeMs - left.file.mtimeMs)
 
-    const metadataLoad = loadOpenCodeSqliteCandidateMetadata(discoveredCandidates)
-    const candidates = metadataLoad.candidates
-    for (const failure of metadataLoad.failures) {
-      issues.push({ agent: 'opencode', path: failure.dbPath, message: failure.message })
-    }
+    const candidates = discoveredCandidates
 
     const parsedSessions = await parseSessionCandidates({
       candidates,
@@ -184,6 +183,7 @@ async function parseSessionCandidates(args: {
   parseStats: SessionParseStats
 }): Promise<AiVaultSession[]> {
   const sessions: AiVaultSession[] = []
+  const metadataFrontier = createOpenCodeSqliteMetadataFrontier()
   let index = 0
 
   while (index < args.candidates.length) {
@@ -193,6 +193,16 @@ async function parseSessionCandidates(args: {
 
     const remaining = args.candidates.length - index
     const needed = Math.max(args.limit - sessions.length, 1)
+    const metadataFailures = prefetchOpenCodeSqliteMetadataFrontier({
+      candidates: args.candidates,
+      startIndex: index,
+      remainingSessionSlots: needed,
+      platform: args.platform,
+      frontier: metadataFrontier
+    })
+    for (const failure of metadataFailures) {
+      args.issues.push({ agent: 'opencode', path: failure.dbPath, message: failure.message })
+    }
     const batchSize = Math.min(SESSION_PARSE_CONCURRENCY, needed, remaining)
     const batch = args.candidates.slice(index, index + batchSize)
     const results = await Promise.all(

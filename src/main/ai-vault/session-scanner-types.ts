@@ -59,7 +59,9 @@ export type SessionFileCandidate = {
 
 export type OpenCodeSqlitePreviewMetadata = {
   role: AiVaultSessionPreviewMessage['role']
-  partData: string
+  // Normalized before batching retains the row so large foreign JSON blobs do
+  // not accumulate in memory across the visible-session frontier.
+  text: string | null
   timeCreated: number
   summaryTitle: string | null
   summaryBody: string | null
@@ -68,6 +70,9 @@ export type OpenCodeSqlitePreviewMetadata = {
 export type OpenCodeSqliteSessionMetadata = {
   sessionRow?: OpenCodeSqliteSessionRowMetadata | null
   messageCount: number
+  // Exact user/assistant evidence used for resumability when messageCount is
+  // deliberately a blob-free foreign-table row-count indicator.
+  hasConversationMessages: boolean
   // Chronological, matching the accumulator's preview ring-buffer contract.
   previewRows: readonly OpenCodeSqlitePreviewMetadata[]
 }

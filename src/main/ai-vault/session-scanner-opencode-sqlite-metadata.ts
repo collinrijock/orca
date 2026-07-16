@@ -1,77 +1,58 @@
 import SyncDatabase from '../sqlite/sync-database'
 import { columnExists, tableExists } from '../opencode-usage/schema-helpers'
 import { splitOpenCodeSqliteCandidate } from './session-scanner-opencode-sqlite-paths'
+import {
+  loadDirectOpenCodeSqlitePreviews,
+  loadOpenCodeSqlitePreviewMetadata
+} from './session-scanner-opencode-sqlite-preview-metadata'
 import type {
-  OpenCodeSqlitePreviewMetadata,
   OpenCodeSqliteSessionMetadata,
   OpenCodeSqliteSessionRowMetadata,
   SessionFileCandidate
 } from './session-scanner-types'
-import { asRecord, errorMessage, normalizeTitleText } from './session-scanner-values'
+import { errorMessage } from './session-scanner-values'
 
-const OPENCODE_SQLITE_PREVIEW_LIMIT = 5
+const OPENCODE_SQLITE_METADATA_BATCH_LIMIT = 1000
 
+// Why: COUNT(*) can stay on table leaf pages even when data blobs are huge;
+// bounded role probes separately protect resume/hide-empty semantics.
 const COUNT_QUERY = `SELECT session_id, COUNT(*) AS message_count
   FROM message
   WHERE session_id IN (SELECT value FROM json_each(?))
   GROUP BY session_id`
 
-// Why: materializing the batch-wide folds prevents an unindexed foreign DB
-// from turning the preview window back into correlated per-session scans.
-const PREVIEW_QUERY = `WITH candidate_messages AS MATERIALIZED (
-    SELECT id,
-           session_id,
-           CASE WHEN json_valid(data) THEN json_extract(data, '$.role') END AS role
-    FROM message
-    WHERE session_id IN (SELECT value FROM json_each(?))
-  ),
-  ranked_previews AS MATERIALIZED (
-    SELECT p.id AS part_id,
-           candidate_messages.id AS message_id,
-           candidate_messages.session_id,
-           candidate_messages.role,
-           p.time_created,
-           ROW_NUMBER() OVER (
-             PARTITION BY candidate_messages.session_id
-             ORDER BY p.time_created DESC
-           ) AS preview_rank
-    FROM candidate_messages
-    JOIN part p ON p.message_id = candidate_messages.id
-    WHERE candidate_messages.role IN ('user', 'assistant')
-      AND CASE WHEN json_valid(p.data) THEN json_extract(p.data, '$.type') END = 'text'
-  ),
-  selected_previews AS MATERIALIZED (
-    SELECT * FROM ranked_previews WHERE preview_rank <= ?
-  )
-  SELECT selected_previews.session_id,
-         selected_previews.message_id,
-         selected_previews.role,
-         p.data AS part_data,
-         selected_previews.time_created
-  FROM selected_previews
-  CROSS JOIN part p ON p.id = selected_previews.part_id
-  ORDER BY selected_previews.session_id, selected_previews.preview_rank DESC`
+const DIRECT_COUNT_QUERY = `SELECT COUNT(*) AS message_count
+  FROM message
+  WHERE session_id = ?
+    AND CASE WHEN json_valid(data) THEN json_extract(data, '$.role') END
+        IN ('user', 'assistant')`
 
 type CountRow = { session_id: string; message_count: number }
-
-type PreviewRow = {
-  session_id: string
-  message_id: string
-  role: string
-  part_data: string
-  time_created: number
-}
-
-type SummaryRow = { id: string; data: string }
 
 function openReadonlyDatabase(dbPath: string): SyncDatabase {
   const db = new SyncDatabase(dbPath, { readonly: true, fileMustExist: true })
   db.pragma('query_only = ON')
+  // Why: paged preview rows are resolved by a stable row key in later SELECTs;
+  // one read snapshot prevents a foreign writer from recycling it mid-load.
+  db.exec('BEGIN')
   return db
 }
 
+function closeReadonlyDatabase(db: SyncDatabase): void {
+  try {
+    db.exec('ROLLBACK')
+  } finally {
+    db.close()
+  }
+}
+
 function emptyMetadata(): OpenCodeSqliteSessionMetadata {
-  return { sessionRow: null, messageCount: 0, previewRows: [] }
+  return {
+    sessionRow: null,
+    messageCount: 0,
+    hasConversationMessages: false,
+    previewRows: []
+  }
 }
 
 function sessionColumnSelect(db: SyncDatabase, columnName: string): string {
@@ -82,31 +63,42 @@ function sessionNumberColumnSelect(db: SyncDatabase, columnName: string): string
   return columnExists(db, 'session', columnName) ? columnName : '0'
 }
 
+function canReadSessionRows(db: SyncDatabase): boolean {
+  return (
+    tableExists(db, 'session') &&
+    columnExists(db, 'session', 'id') &&
+    columnExists(db, 'session', 'time_created') &&
+    columnExists(db, 'session', 'time_updated')
+  )
+}
+
+function buildSessionSelect(db: SyncDatabase, predicate: string): string {
+  return `SELECT id,
+          ${sessionColumnSelect(db, 'title')} AS title,
+          ${sessionColumnSelect(db, 'directory')} AS directory,
+          time_created,
+          time_updated,
+          ${sessionColumnSelect(db, 'model')} AS model_json,
+          ${sessionColumnSelect(db, 'agent')} AS agent,
+          ${sessionNumberColumnSelect(db, 'tokens_input')} AS tokens_input,
+          ${sessionNumberColumnSelect(db, 'tokens_output')} AS tokens_output,
+          ${sessionNumberColumnSelect(db, 'tokens_reasoning')} AS tokens_reasoning,
+          ${sessionNumberColumnSelect(db, 'tokens_cache_read')} AS tokens_cache_read,
+          ${sessionNumberColumnSelect(db, 'cost')} AS cost
+    FROM session
+    WHERE ${predicate}`
+}
+
 function loadSessionRows(
   db: SyncDatabase,
   sessionIdsJson: string,
   metadata: Map<string, OpenCodeSqliteSessionMetadata>
 ): void {
-  if (!tableExists(db, 'session')) {
+  if (!canReadSessionRows(db)) {
     return
   }
   const rows = db
-    .prepare(
-      `SELECT id,
-              ${sessionColumnSelect(db, 'title')} AS title,
-              ${sessionColumnSelect(db, 'directory')} AS directory,
-              time_created,
-              time_updated,
-              ${sessionColumnSelect(db, 'model')} AS model_json,
-              ${sessionColumnSelect(db, 'agent')} AS agent,
-              ${sessionNumberColumnSelect(db, 'tokens_input')} AS tokens_input,
-              ${sessionNumberColumnSelect(db, 'tokens_output')} AS tokens_output,
-              ${sessionNumberColumnSelect(db, 'tokens_reasoning')} AS tokens_reasoning,
-              ${sessionNumberColumnSelect(db, 'tokens_cache_read')} AS tokens_cache_read,
-              ${sessionNumberColumnSelect(db, 'cost')} AS cost
-       FROM session
-       WHERE id IN (SELECT value FROM json_each(?))`
-    )
+    .prepare(buildSessionSelect(db, 'id IN (SELECT value FROM json_each(?))'))
     .all(sessionIdsJson) as OpenCodeSqliteSessionRowMetadata[]
   for (const row of rows) {
     const current = metadata.get(row.id)
@@ -116,84 +108,29 @@ function loadSessionRows(
   }
 }
 
-function canCountMessages(db: SyncDatabase): boolean {
-  return tableExists(db, 'message') && columnExists(db, 'message', 'session_id')
-}
-
-function canLoadPreviews(db: SyncDatabase): boolean {
-  return (
-    canCountMessages(db) &&
-    columnExists(db, 'message', 'id') &&
-    columnExists(db, 'message', 'data') &&
-    tableExists(db, 'part') &&
-    columnExists(db, 'part', 'id') &&
-    columnExists(db, 'part', 'message_id') &&
-    columnExists(db, 'part', 'time_created') &&
-    columnExists(db, 'part', 'data')
-  )
-}
-
-function sessionIdsNeedingSummary(
-  sessionIds: readonly string[],
-  metadata: ReadonlyMap<string, OpenCodeSqliteSessionMetadata>
-): Set<string> {
-  return new Set(
-    sessionIds.filter((sessionId) => {
-      const title = metadata.get(sessionId)?.sessionRow?.title
-      return !normalizeTitleText(typeof title === 'string' ? title : '')
-    })
-  )
-}
-
-function summariesByMessageId(
+function loadDirectSessionRow(
   db: SyncDatabase,
-  previewRows: readonly PreviewRow[],
-  fallbackSessionIds: ReadonlySet<string>
-): Map<string, { title: string | null; body: string | null }> {
-  const messageIds = [
-    ...new Set(
-      previewRows
-        .filter((row) => row.role === 'user' && fallbackSessionIds.has(row.session_id))
-        .map((row) => row.message_id)
-    )
-  ]
-  if (messageIds.length === 0) {
-    return new Map()
+  sessionId: string
+): OpenCodeSqliteSessionRowMetadata | null {
+  if (!canReadSessionRows(db)) {
+    return null
   }
-  const rows = db
-    .prepare(`SELECT id, data FROM message WHERE id IN (SELECT value FROM json_each(?))`)
-    .all(JSON.stringify(messageIds)) as SummaryRow[]
-  return new Map(rows.map((row) => [row.id, extractSummary(row.data)]))
+  return (
+    (db.prepare(`${buildSessionSelect(db, 'id = ?')} LIMIT 1`).get(sessionId) as
+      | OpenCodeSqliteSessionRowMetadata
+      | undefined) ?? null
+  )
 }
 
-function extractSummary(data: string): { title: string | null; body: string | null } {
-  try {
-    const message = asRecord(JSON.parse(data) as unknown)
-    const summary = asRecord(message?.summary)
-    return {
-      title: typeof summary?.title === 'string' ? summary.title : null,
-      body: typeof summary?.body === 'string' ? summary.body : null
-    }
-  } catch {
-    return { title: null, body: null }
-  }
+function canCountMessages(db: SyncDatabase): boolean {
+  return (
+    tableExists(db, 'message') &&
+    columnExists(db, 'message', 'session_id') &&
+    columnExists(db, 'message', 'data')
+  )
 }
 
-function previewMetadata(
-  row: PreviewRow,
-  summaries: ReadonlyMap<string, { title: string | null; body: string | null }>
-): OpenCodeSqlitePreviewMetadata {
-  const summary = summaries.get(row.message_id)
-  return {
-    role: row.role === 'user' || row.role === 'assistant' ? row.role : 'unknown',
-    partData: row.part_data,
-    timeCreated: row.time_created,
-    summaryTitle: summary?.title ?? null,
-    summaryBody: summary?.body ?? null
-  }
-}
-
-/** Load count and preview metadata for many sessions with fixed batch-wide passes. */
+/** Load bounded count and preview metadata for many sessions in fixed passes. */
 export function loadOpenCodeSqliteSessionMetadata(args: {
   dbPath: string
   sessionIds: readonly string[]
@@ -208,52 +145,72 @@ export function loadOpenCodeSqliteSessionMetadata(args: {
   try {
     const sessionIdsJson = JSON.stringify(sessionIds)
     loadSessionRows(db, sessionIdsJson, metadata)
-    if (!canCountMessages(db)) {
-      return metadata
-    }
-    const countRows = db.prepare(COUNT_QUERY).all(sessionIdsJson) as CountRow[]
-    for (const row of countRows) {
-      const current = metadata.get(row.session_id)
-      if (current) {
-        metadata.set(row.session_id, { ...current, messageCount: row.message_count })
+    if (canCountMessages(db)) {
+      const countRows = db.prepare(COUNT_QUERY).all(sessionIdsJson) as CountRow[]
+      for (const row of countRows) {
+        const current = metadata.get(row.session_id)
+        if (current) {
+          metadata.set(row.session_id, { ...current, messageCount: row.message_count })
+        }
       }
     }
-    if (!canLoadPreviews(db)) {
-      return metadata
-    }
 
-    // Why: malformed rows belong to another app; skip them instead of losing
-    // every otherwise-readable session in the batch.
-    const rows = db
-      .prepare(PREVIEW_QUERY)
-      .all(sessionIdsJson, OPENCODE_SQLITE_PREVIEW_LIMIT) as PreviewRow[]
-    const fallbackSessionIds = sessionIdsNeedingSummary(sessionIds, metadata)
-    const summaries = summariesByMessageId(db, rows, fallbackSessionIds)
-    for (const row of rows) {
-      const current = metadata.get(row.session_id)
+    const conversation = loadOpenCodeSqlitePreviewMetadata({ db, sessionIds })
+    for (const sessionId of sessionIds) {
+      const current = metadata.get(sessionId)
       if (current) {
-        metadata.set(row.session_id, {
+        metadata.set(sessionId, {
           ...current,
-          previewRows: [...current.previewRows, previewMetadata(row, summaries)]
+          hasConversationMessages: conversation.conversationSessionIds.has(sessionId),
+          previewRows: conversation.previews.get(sessionId) ?? []
         })
       }
     }
     return metadata
   } finally {
-    db.close()
+    closeReadonlyDatabase(db)
+  }
+}
+
+/** Preserve the former per-session behavior when a batch cannot be loaded. */
+export function loadOpenCodeSqliteSessionMetadataDirect(args: {
+  dbPath: string
+  sessionId: string
+}): OpenCodeSqliteSessionMetadata {
+  const db = openReadonlyDatabase(args.dbPath)
+  try {
+    const sessionRow = loadDirectSessionRow(db, args.sessionId)
+    if (!sessionRow) {
+      return emptyMetadata()
+    }
+    let messageCount = 0
+    if (canCountMessages(db)) {
+      const count = db.prepare(DIRECT_COUNT_QUERY).get(args.sessionId) as {
+        message_count?: number
+      }
+      messageCount = count.message_count ?? 0
+    }
+    return {
+      sessionRow,
+      messageCount,
+      hasConversationMessages: messageCount > 0,
+      previewRows: loadDirectOpenCodeSqlitePreviews(db, args.sessionId)
+    }
+  } finally {
+    closeReadonlyDatabase(db)
   }
 }
 
 export type OpenCodeSqliteMetadataLoadFailure = { dbPath: string; message: string }
 
-/** Attach one batched metadata result to each synthetic SQLite candidate. */
+/** Attach bounded batched metadata results to synthetic SQLite candidates. */
 export function loadOpenCodeSqliteCandidateMetadata(candidates: readonly SessionFileCandidate[]): {
   candidates: SessionFileCandidate[]
   failures: OpenCodeSqliteMetadataLoadFailure[]
 } {
   const batches = new Map<string, { index: number; sessionId: string }[]>()
   candidates.forEach((candidate, index) => {
-    if (candidate.agent !== 'opencode') {
+    if (candidate.agent !== 'opencode' || candidate.opencodeSqliteMetadata) {
       return
     }
     const parsed = splitOpenCodeSqliteCandidate(candidate.file.path)
@@ -267,25 +224,28 @@ export function loadOpenCodeSqliteCandidateMetadata(candidates: readonly Session
 
   const hydrated = [...candidates]
   const failures: OpenCodeSqliteMetadataLoadFailure[] = []
-  for (const [dbPath, batch] of batches) {
-    let loaded: ReadonlyMap<string, OpenCodeSqliteSessionMetadata> | null = null
-    try {
-      loaded = loadOpenCodeSqliteSessionMetadata({
-        dbPath,
-        sessionIds: batch.map((item) => item.sessionId)
-      })
-    } catch (err) {
-      failures.push({ dbPath, message: errorMessage(err) })
-    }
-    if (!loaded) {
-      continue
-    }
-    for (const item of batch) {
-      const candidate = hydrated[item.index]
-      if (candidate) {
-        hydrated[item.index] = {
-          ...candidate,
-          opencodeSqliteMetadata: loaded.get(item.sessionId) ?? emptyMetadata()
+  for (const [dbPath, dbBatch] of batches) {
+    for (let offset = 0; offset < dbBatch.length; offset += OPENCODE_SQLITE_METADATA_BATCH_LIMIT) {
+      const batch = dbBatch.slice(offset, offset + OPENCODE_SQLITE_METADATA_BATCH_LIMIT)
+      let loaded: ReadonlyMap<string, OpenCodeSqliteSessionMetadata>
+      try {
+        loaded = loadOpenCodeSqliteSessionMetadata({
+          dbPath,
+          sessionIds: batch.map((item) => item.sessionId)
+        })
+      } catch (err) {
+        if (!failures.some((failure) => failure.dbPath === dbPath)) {
+          failures.push({ dbPath, message: errorMessage(err) })
+        }
+        continue
+      }
+      for (const item of batch) {
+        const candidate = hydrated[item.index]
+        if (candidate) {
+          hydrated[item.index] = {
+            ...candidate,
+            opencodeSqliteMetadata: loaded.get(item.sessionId) ?? emptyMetadata()
+          }
         }
       }
     }

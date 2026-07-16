@@ -198,6 +198,7 @@ function metadataFor(dbPath: string, sessionId: string): OpenCodeSqliteSessionMe
   return (
     loadOpenCodeSqliteSessionMetadata({ dbPath, sessionIds: [sessionId] }).get(sessionId) ?? {
       messageCount: 0,
+      hasConversationMessages: false,
       previewRows: []
     }
   )
@@ -237,9 +238,10 @@ function legacyMetadataFor(dbPath: string, sessionId: string): OpenCodeSqliteSes
     }[]
     return {
       messageCount: count.value,
+      hasConversationMessages: count.value > 0,
       previewRows: rows.toReversed().map((row) => ({
         role: row.role,
-        partData: row.part_data,
+        text: (JSON.parse(row.part_data) as { text?: string }).text ?? null,
         timeCreated: row.time_created,
         summaryTitle: row.summary_title,
         summaryBody: row.summary_body
@@ -355,6 +357,7 @@ describe('listOpenCodeSqliteSessions', () => {
       metadata: pathMetadata.get('ses_noise')
     })
     expect(noisySession?.messageCount).toBe(1)
+    expect(noisySession?.hasConversationMessages).toBe(false)
     expect(noisySession?.previewMessages).toEqual([])
 
     const malformedPartSession = await parseOpenCodeSqliteSession({
@@ -508,12 +511,11 @@ describe('loadOpenCodeSqliteSessionMetadata', () => {
       const actual = batched.get(sessionId)
       expect({
         messageCount: actual?.messageCount,
+        hasConversationMessages: actual?.hasConversationMessages,
         previewRows: actual?.previewRows
       }).toEqual(legacyMetadataFor(path, sessionId))
     }
-    expect(
-      batched.get('ses_batch_a')?.previewRows.map((row) => JSON.parse(row.partData).text)
-    ).toEqual([
+    expect(batched.get('ses_batch_a')?.previewRows.map((row) => row.text)).toEqual([
       'ses_batch_a preview 3',
       'ses_batch_a preview 4',
       'ses_batch_a preview 5',
