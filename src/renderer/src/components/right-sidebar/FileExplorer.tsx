@@ -54,7 +54,7 @@ import { translate } from '@/i18n/i18n'
 import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/components/tab-bar/SortableTab'
 import type { RightSidebarExplorerView } from '../../../../shared/types'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
-import { createNewTerminalTab } from '@/components/terminal/terminal-tab-actions'
+import { createNewTerminalTab } from '@/components/terminal/terminal-tab-create'
 import { isRightSidebarRevealed } from '@/lib/right-sidebar-visibility'
 
 function FileExplorerFiles(): React.JSX.Element {
@@ -164,6 +164,7 @@ function FileExplorerFiles(): React.JSX.Element {
       hasNameFilter
         ? {
             query: nameFilterQuery,
+            operationOwner: nameFilterFiles.operationOwner,
             relativePaths: nameFilterQueryTooLarge
               ? []
               : nameFilterFiles.loading && nameFilterFiles.files.length === 0
@@ -175,6 +176,7 @@ function FileExplorerFiles(): React.JSX.Element {
       hasNameFilter,
       nameFilterFiles.files,
       nameFilterFiles.loading,
+      nameFilterFiles.operationOwner,
       nameFilterQuery,
       nameFilterQueryTooLarge
     ]

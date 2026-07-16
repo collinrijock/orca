@@ -33,6 +33,21 @@ function makeMovingOverlayRef(readLeft: () => number): React.RefObject<HTMLEleme
   }
 }
 
+function renderDismissHook(args: {
+  setPeek: (peek: boolean) => void
+  isResizing?: boolean
+  overlayRef?: React.RefObject<HTMLElement | null>
+}): void {
+  renderHook(() =>
+    useRightSidebarEdgePeekDismiss({
+      isPeeking: true,
+      isResizing: args.isResizing ?? false,
+      setPeek: args.setPeek,
+      overlayRef: args.overlayRef ?? makeOverlayRef(1000)
+    })
+  )
+}
+
 const RIGHT_EDGE_X = window.innerWidth - 1
 const BELOW_TITLEBAR_Y = 100
 
@@ -94,11 +109,14 @@ describe('RightSidebarEdgePeekZone', () => {
     expect(useAppStore.getState().rightSidebarPeek).toBe(false)
   })
 
-  it('cancels an armed peek when the window loses focus', () => {
+  it.each([
+    ['the window loses focus', () => fireEvent.blur(window)],
+    ['the pointer leaves the window', () => fireEvent.mouseLeave(document.documentElement)]
+  ])('cancels an armed peek when %s', (_reason, leaveWindow) => {
     render(<RightSidebarEdgePeekZone />)
 
     moveMouse(RIGHT_EDGE_X, BELOW_TITLEBAR_Y)
-    fireEvent.blur(window)
+    leaveWindow()
     vi.advanceTimersByTime(PEEK_OPEN_DELAY_MS)
 
     expect(useAppStore.getState().rightSidebarPeek).toBe(false)
@@ -182,14 +200,7 @@ describe('RightSidebarEdgePeekZone', () => {
 describe('useRightSidebarEdgePeekDismiss', () => {
   it('dismisses after the pointer stays left of the overlay for the close delay', () => {
     const setPeek = vi.fn()
-    renderHook(() =>
-      useRightSidebarEdgePeekDismiss({
-        isPeeking: true,
-        isResizing: false,
-        setPeek,
-        overlayRef: makeOverlayRef(1000)
-      })
-    )
+    renderDismissHook({ setPeek })
 
     fireEvent.mouseMove(window, { clientX: 400 })
     vi.advanceTimersByTime(PEEK_CLOSE_DELAY_MS)
@@ -199,14 +210,7 @@ describe('useRightSidebarEdgePeekDismiss', () => {
 
   it('keeps the peek when the pointer returns to the overlay before the delay', () => {
     const setPeek = vi.fn()
-    renderHook(() =>
-      useRightSidebarEdgePeekDismiss({
-        isPeeking: true,
-        isResizing: false,
-        setPeek,
-        overlayRef: makeOverlayRef(1000)
-      })
-    )
+    renderDismissHook({ setPeek })
 
     fireEvent.mouseMove(window, { clientX: 400 })
     vi.advanceTimersByTime(PEEK_CLOSE_DELAY_MS - 1)
@@ -216,24 +220,36 @@ describe('useRightSidebarEdgePeekDismiss', () => {
     expect(setPeek).not.toHaveBeenCalled()
   })
 
+  it('keeps the peek while the pointer uses portaled sidebar content', () => {
+    const setPeek = vi.fn()
+    const portalContent = document.createElement('div')
+    portalContent.dataset.slot = 'dropdown-menu-content'
+    document.body.appendChild(portalContent)
+    renderDismissHook({ setPeek })
+
+    fireEvent.mouseMove(portalContent, { clientX: 400 })
+    vi.advanceTimersByTime(PEEK_CLOSE_DELAY_MS)
+    expect(setPeek).not.toHaveBeenCalled()
+
+    fireEvent.mouseMove(window, { clientX: 400 })
+    vi.advanceTimersByTime(PEEK_CLOSE_DELAY_MS)
+    expect(setPeek).toHaveBeenCalledWith(false)
+    portalContent.remove()
+  })
+
   it('does not dismiss when the boundary was measured mid entrance animation', () => {
     const setPeek = vi.fn()
     // First read happens during the slide-in: the overlay still sits near the
     // window's right edge. By the time the close timer re-measures, the
     // animation has settled at its real position.
     let overlayLeft = 1590
-    renderHook(() =>
-      useRightSidebarEdgePeekDismiss({
-        isPeeking: true,
-        isResizing: false,
-        setPeek,
-        overlayRef: makeMovingOverlayRef(() => overlayLeft)
-      })
-    )
+    const readOverlayLeft = vi.fn(() => overlayLeft)
+    renderDismissHook({ setPeek, overlayRef: makeMovingOverlayRef(readOverlayLeft) })
 
     // The pointer moves into the settled overlay area (left of the stale
     // mid-animation boundary), which schedules a close against stale geometry.
     fireEvent.mouseMove(window, { clientX: 1200 })
+    expect(readOverlayLeft).toHaveBeenCalledTimes(1)
     overlayLeft = 1000
     vi.advanceTimersByTime(PEEK_CLOSE_DELAY_MS)
 
@@ -244,6 +260,7 @@ describe('useRightSidebarEdgePeekDismiss', () => {
     // The refreshed cache now classifies the same position as inside.
     fireEvent.mouseMove(window, { clientX: 1200 })
     vi.advanceTimersByTime(PEEK_CLOSE_DELAY_MS)
+    expect(readOverlayLeft).toHaveBeenCalledTimes(2)
     expect(setPeek).not.toHaveBeenCalled()
 
     // A genuine exit still dismisses.
@@ -254,14 +271,7 @@ describe('useRightSidebarEdgePeekDismiss', () => {
 
   it('does not dismiss while a resize drag travels past the overlay edge', () => {
     const setPeek = vi.fn()
-    renderHook(() =>
-      useRightSidebarEdgePeekDismiss({
-        isPeeking: true,
-        isResizing: true,
-        setPeek,
-        overlayRef: makeOverlayRef(1000)
-      })
-    )
+    renderDismissHook({ setPeek, isResizing: true })
 
     fireEvent.mouseMove(window, { clientX: 100 })
     vi.advanceTimersByTime(PEEK_CLOSE_DELAY_MS)
@@ -269,18 +279,14 @@ describe('useRightSidebarEdgePeekDismiss', () => {
     expect(setPeek).not.toHaveBeenCalled()
   })
 
-  it('dismisses immediately when the window loses focus', () => {
+  it.each([
+    ['the window loses focus', () => fireEvent.blur(window)],
+    ['the pointer leaves the window', () => fireEvent.mouseLeave(document.documentElement)]
+  ])('dismisses immediately when %s', (_reason, leaveWindow) => {
     const setPeek = vi.fn()
-    renderHook(() =>
-      useRightSidebarEdgePeekDismiss({
-        isPeeking: true,
-        isResizing: false,
-        setPeek,
-        overlayRef: makeOverlayRef(1000)
-      })
-    )
+    renderDismissHook({ setPeek })
 
-    fireEvent.blur(window)
+    leaveWindow()
 
     expect(setPeek).toHaveBeenCalledWith(false)
   })

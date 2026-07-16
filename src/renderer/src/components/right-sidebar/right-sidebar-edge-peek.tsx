@@ -10,6 +10,15 @@ export const PEEK_CLOSE_DELAY_MS = 300
 // The rightmost band that arms the peek, and the top zone it excludes.
 const PEEK_EDGE_TRIGGER_PX = 6
 const PEEK_TITLEBAR_ZONE_PX = 36
+const PEEK_INTERACTIVE_PORTAL_SELECTOR = [
+  '[data-slot="context-menu-content"]',
+  '[data-slot="context-menu-sub-content"]',
+  '[data-slot="dropdown-menu-content"]',
+  '[data-slot="dropdown-menu-sub-content"]',
+  '[data-slot="hover-card-content"]',
+  '[data-slot="popover-content"]',
+  '[data-slot="select-content"]'
+].join(',')
 
 /**
  * Arms the edge peek while the sidebar is fully hidden. Detection is
@@ -80,11 +89,13 @@ export function RightSidebarEdgePeekZone(): React.JSX.Element | null {
     window.addEventListener('mousemove', onMouseMove)
     window.addEventListener('mousedown', clearOpenTimer)
     window.addEventListener('blur', clearOpenTimer)
+    document.documentElement.addEventListener('mouseleave', clearOpenTimer)
     return () => {
       clearOpenTimer()
       window.removeEventListener('mousemove', onMouseMove)
       window.removeEventListener('mousedown', clearOpenTimer)
       window.removeEventListener('blur', clearOpenTimer)
+      document.documentElement.removeEventListener('mouseleave', clearOpenTimer)
     }
   }, [edgePeekEnabled, rightSidebarOpen, rightSidebarPeek, setRightSidebarPeek])
 
@@ -158,19 +169,31 @@ export function useRightSidebarEdgePeekDismiss(args: {
       }
       if (cachedOverlayLeft === null || event.clientX >= cachedOverlayLeft) {
         cancelClose()
+      } else if (
+        // Why: only inspect the DOM after the cheap geometry check; Radix
+        // portals can extend left but ordinary in-panel moves stay O(1).
+        event.target instanceof Element &&
+        event.target.closest(PEEK_INTERACTIVE_PORTAL_SELECTOR)
+      ) {
+        cancelClose()
       } else {
         scheduleClose()
       }
     }
-    const onWindowBlur = (): void => setPeek(false)
+    const dismissPeek = (): void => {
+      cancelClose()
+      setPeek(false)
+    }
     window.addEventListener('mousemove', onMouseMove)
-    window.addEventListener('blur', onWindowBlur)
+    window.addEventListener('blur', dismissPeek)
     window.addEventListener('resize', invalidateOverlayLeft)
+    document.documentElement.addEventListener('mouseleave', dismissPeek)
     return () => {
       cancelClose()
       window.removeEventListener('mousemove', onMouseMove)
-      window.removeEventListener('blur', onWindowBlur)
+      window.removeEventListener('blur', dismissPeek)
       window.removeEventListener('resize', invalidateOverlayLeft)
+      document.documentElement.removeEventListener('mouseleave', dismissPeek)
     }
   }, [isPeeking, overlayRef, setPeek])
 }
