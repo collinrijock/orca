@@ -9,9 +9,9 @@ keeps commands, hashes, runner identities, timings, and failure details.
 A checked box means the work has evidence in the detailed ledger. Design approval alone does not
 complete a box.
 
-Active checkpoint: **Milestone 5 / Work Package 4 desktop resolver/cache — exact-head native CI for
-the locally green disconnected marked macOS product-version probe, 2026-07-15, Codex implementation
-owner.**
+Active checkpoint: **Milestone 5 / Work Package 4 desktop resolver/cache — audit the next smallest
+remaining disconnected host-evidence boundary after exact-head acceptance of macOS product-version
+detection, 2026-07-15, Codex implementation owner.**
 `E-M5-ARTIFACT-CACHE-RESOLUTION-CI-001` closes warm-cache commit
 `22031fa68` on all six native clients, both Linux supplements, Windows x64 baseline, PR Checks,
 Golden E2E, and computer-use; Windows arm64 remains the expected build-26200 rejection against 26100. `E-M5-ARTIFACT-CACHE-RESOLUTION-LOCAL-001` passes 9/9 purpose tests,
@@ -170,6 +170,13 @@ cancellable marked POSIX command returns only a unique bounded numeric `sw_vers 
 malformed, noisy, duplicate, unavailable, or oversized evidence returns unknown and cancellation
 propagates. Both native runner families require the suite. Exact Node 24/all-six native proof is
 next; real SSH/macOS, Rosetta, composition, and all production/default behavior remain absent.
+`E-M5-DARWIN-VERSION-DETECTION-CI-001` closes implementation commit `bcda04389`: all six primary
+native Node 24 jobs, both Linux supplements, Windows x64 baseline, PR Checks, Golden E2E, and
+computer-use pass. Every native client runs the 21-case purpose suite; POSIX jobs pass 81 files /
+582 tests and Windows jobs pass 82 files / 573 tests with 13 declared skips. Windows arm64 verifies
+the complete 85,213,511-byte runtime plus Node/PTY/watcher/resource settlement and retains only the
+known hosted build-26200 rejection against required 26100. This is contract evidence, not live SSH/
+macOS or Rosetta proof; composition and every production/default path remain absent.
 `E-M5-ARTIFACT-CACHE-ROOT-CI-001` closes the pure cache-root contract at exact head `aefcaa9a9`:
 all six primary native Node 24 jobs, both Linux supplements, Windows x64 baseline, PR Checks, Golden
 E2E, and computer-use pass; Windows arm64 build 26200 remains correctly gated against 26100. The
