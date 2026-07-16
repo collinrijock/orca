@@ -346,6 +346,16 @@ Expected result: for passive tiny chunks, xterm writes and foreground drain acti
 number of displayed frames rather than the number of PTY deliveries, with byte-for-byte output,
 zero additional drops, stable ACK progress, and no material regression in interactive latency.
 
+Reproduction harnesses (all skipped in CI):
+
+- Drain ceiling: `ORCA_TERMINAL_PERF_BENCH=1` with
+  `pane-terminal-output-scheduler-throughput.bench.test.ts`.
+- Writes/drain tasks vs chunk rate: `ORCA_TERMINAL_CADENCE_BENCH=1` with
+  `pane-terminal-output-cadence-ab.bench.test.ts`.
+- Renderer CPU/wakeups/energy (macOS): `config/scripts/terminal-output-watt-ab-macos.sh
+  <baseline-ref>`, which drives `tests/e2e/watt-ab-workload.spec.ts` headful on the baseline and
+  the current checkout. Use WPA (Windows) or perf/PowerTOP (Linux) with the same workload spec.
+
 Status animations must be controlled as a separate variable. Repeat the steady-state portion of the
 measurement with:
 
