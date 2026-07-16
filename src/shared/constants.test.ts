@@ -48,10 +48,8 @@ describe('getDefaultSettings', () => {
     expect(getDefaultSettings('/tmp').uiLanguage).toBe('system')
   })
 
-  it('defaults the menu bar icon on only for macOS', () => {
-    expect(getDefaultSettings('/tmp', 'darwin').showMenuBarIcon).toBe(true)
-    expect(getDefaultSettings('/tmp', 'win32').showMenuBarIcon).toBe(false)
-    expect(getDefaultSettings('/tmp', 'linux').showMenuBarIcon).toBe(false)
+  it('defaults the menu bar icon on so the value round-trips across platforms', () => {
+    expect(getDefaultSettings('/tmp').showMenuBarIcon).toBe(true)
   })
 
   it('confirms before closing pinned tabs by default', () => {

@@ -649,7 +649,7 @@ describe('Store', () => {
     expect(store.getSettings().minimizeToTrayOnClose).toBe(false)
   })
 
-  it('defaults the menu bar icon on only for macOS', async () => {
+  it('defaults the menu bar icon on regardless of platform', async () => {
     await withPlatform('darwin', async () => {
       const store = await createStore()
       expect(store.getSettings().showMenuBarIcon).toBe(true)
@@ -657,7 +657,7 @@ describe('Store', () => {
 
     await withPlatform('linux', async () => {
       const store = await createStore()
-      expect(store.getSettings().showMenuBarIcon).toBe(false)
+      expect(store.getSettings().showMenuBarIcon).toBe(true)
     })
   })
 
@@ -684,7 +684,7 @@ describe('Store', () => {
     })
   })
 
-  it('normalizes menu bar icon writes to a platform-scoped boolean', async () => {
+  it('normalizes menu bar icon writes to a strict boolean', async () => {
     await withPlatform('darwin', async () => {
       const store = await createStore()
       store.updateSettings({ showMenuBarIcon: 'true' as unknown as boolean })
@@ -692,11 +692,26 @@ describe('Store', () => {
       store.updateSettings({ showMenuBarIcon: true })
       expect(store.getSettings().showMenuBarIcon).toBe(true)
     })
+  })
 
+  it('round-trips a macOS menu bar opt-out through a non-mac host unchanged', async () => {
+    await withPlatform('darwin', async () => {
+      const store = await createStore()
+      store.updateSettings({ showMenuBarIcon: false })
+      store.flush()
+    })
+
+    // Why: a profile opened on another OS must not rewrite the mac preference
+    // on its next flush; only the darwin consumers act on the value.
     await withPlatform('win32', async () => {
       const store = await createStore()
-      store.updateSettings({ showMenuBarIcon: true })
-      expect(store.getSettings().showMenuBarIcon).toBe(false)
+      store.updateSettings({ minimizeToTrayOnClose: true })
+      store.flush()
+      expect((readDataFile() as PersistedState).settings.showMenuBarIcon).toBe(false)
+    })
+
+    await withPlatform('darwin', async () => {
+      expect((await createStore()).getSettings().showMenuBarIcon).toBe(false)
     })
   })
 

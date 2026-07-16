@@ -368,10 +368,7 @@ describe('AppearancePane', () => {
     mocks.state.appPlatform = 'darwin'
     mocks.state.settingsSearchQuery = 'menu bar'
     const updateSettings = vi.fn()
-    const container = await renderAppearancePane(
-      getDefaultSettings('/tmp', 'darwin'),
-      updateSettings
-    )
+    const container = await renderAppearancePane(getDefaultSettings('/tmp'), updateSettings)
     const toggle = container.querySelector<HTMLButtonElement>(
       'button[role="switch"][aria-label="Show Menu Bar Icon"]'
     )
