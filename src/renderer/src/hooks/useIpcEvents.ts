@@ -2089,7 +2089,7 @@ export function useIpcEvents(): void {
     )
 
     unsubs.push(
-      window.api.browser.onOpenLinkInOrcaTab(({ browserPageId, url, activate }) => {
+      window.api.browser.onOpenLinkInOrcaTab(({ browserPageId, url }) => {
         const store = useAppStore.getState()
         const sourcePage = Object.values(store.browserPagesByWorkspace)
           .flat()
@@ -2100,9 +2100,9 @@ export function useIpcEvents(): void {
         if (getRuntimeEnvironmentIdForWorktree(store, sourcePage.worktreeId)) {
           return
         }
-        // Why: only the renderer owns Orca's tab model; it also preserves the
-        // guest's foreground/background intent in the outer worktree tab bar.
-        store.createBrowserTab(sourcePage.worktreeId, url, { title: url, activate })
+        // Why: only the renderer owns Orca's tab model. Creating the tab with
+        // the default activation behavior brings the clicked link forward.
+        store.createBrowserTab(sourcePage.worktreeId, url, { title: url })
       })
     )
 

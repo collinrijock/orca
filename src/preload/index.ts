@@ -2424,11 +2424,11 @@ const api = {
     },
 
     onOpenLinkInOrcaTab: (
-      callback: (event: { browserPageId: string; url: string; activate: boolean }) => void
+      callback: (event: { browserPageId: string; url: string }) => void
     ): (() => void) => {
       const listener = (
         _event: Electron.IpcRendererEvent,
-        data: { browserPageId: string; url: string; activate: boolean }
+        data: { browserPageId: string; url: string }
       ) => callback(data)
       ipcRenderer.on('browser:open-link-in-orca-tab', listener)
       return () => ipcRenderer.removeListener('browser:open-link-in-orca-tab', listener)

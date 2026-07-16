@@ -4,17 +4,20 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
   buildBrowserClickedLinkRoutingScript,
+  buildBrowserIframeClickedLinkRoutingScript,
+  installBrowserIframeClickedLinkRouting,
   installBrowserClickedLinkRouting
 } from './browser-clicked-link-routing'
 
 const FOREGROUND_FRAME_NAME = '__orca_clicked_link_foreground_test'
-const BACKGROUND_FRAME_NAME = '__orca_clicked_link_background_test'
 
 type RoutingGlobal = typeof globalThis & {
   __orcaBrowserClickedLinkRouting?: {
     listener: (event: MouseEvent) => void
   }
 }
+
+let cleanupIframeRouting: (() => void) | null = null
 
 function resetRouting(): void {
   const routingGlobal = globalThis as RoutingGlobal
@@ -24,10 +27,12 @@ function resetRouting(): void {
     window.removeEventListener('auxclick', state.listener)
   }
   delete routingGlobal.__orcaBrowserClickedLinkRouting
+  cleanupIframeRouting?.()
+  cleanupIframeRouting = null
 }
 
 function installRouting(isMac = true): void {
-  installBrowserClickedLinkRouting(FOREGROUND_FRAME_NAME, BACKGROUND_FRAME_NAME, isMac)
+  installBrowserClickedLinkRouting(FOREGROUND_FRAME_NAME, isMac, true)
 }
 
 function clickLink(
@@ -59,7 +64,7 @@ describe('browser clicked-link routing', () => {
     vi.restoreAllMocks()
   })
 
-  it('routes target=_blank links through the private frame name', () => {
+  it('routes plain target=_blank links back into the current Orca tab', () => {
     const link = document.createElement('a')
     link.href = 'https://docs.example.com/guide'
     link.target = '_blank'
@@ -68,9 +73,9 @@ describe('browser clicked-link routing', () => {
 
     const { event, open } = clickLink(link)
 
-    expect(event.defaultPrevented).toBe(true)
-    expect(open).toHaveBeenCalledOnce()
-    expect(open).toHaveBeenCalledWith('https://docs.example.com/guide', FOREGROUND_FRAME_NAME)
+    expect(event.defaultPrevented).toBe(false)
+    expect(open).not.toHaveBeenCalled()
+    expect(link.getAttribute('target')).toBe('_self')
   })
 
   it('routes the host-platform modifier without trusting an emulated guest user agent', () => {
@@ -86,7 +91,7 @@ describe('browser clicked-link routing', () => {
     expect(clickLink(link, { metaKey: true }).open).not.toHaveBeenCalled()
     expect(clickLink(link, { ctrlKey: true }).open).toHaveBeenCalledWith(
       'https://example.com/reference',
-      BACKGROUND_FRAME_NAME
+      FOREGROUND_FRAME_NAME
     )
   })
 
@@ -98,7 +103,7 @@ describe('browser clicked-link routing', () => {
 
     expect(clickLink(link, { type: 'auxclick' }).open).toHaveBeenCalledWith(
       'https://example.com/reference',
-      BACKGROUND_FRAME_NAME
+      FOREGROUND_FRAME_NAME
     )
     expect(clickLink(link, { metaKey: true, shiftKey: true }).open).toHaveBeenCalledWith(
       'https://example.com/reference',
@@ -121,10 +126,10 @@ describe('browser clicked-link routing', () => {
     installRouting()
 
     expect(clickLink(cancelled).open).not.toHaveBeenCalled()
-    expect(clickLink(rewritten).open).toHaveBeenCalledWith(
-      'https://example.com/rewritten',
-      FOREGROUND_FRAME_NAME
-    )
+    expect(cancelled.getAttribute('target')).toBe('_blank')
+    expect(clickLink(rewritten).open).not.toHaveBeenCalled()
+    expect(rewritten.href).toBe('https://example.com/rewritten')
+    expect(rewritten.getAttribute('target')).toBe('_self')
   })
 
   it('routes SVG links but leaves download links and links without href alone', () => {
@@ -140,10 +145,8 @@ describe('browser clicked-link routing', () => {
     document.body.append(svgLink, areaDownload, noHref)
     installRouting()
 
-    expect(clickLink(svgLink).open).toHaveBeenCalledWith(
-      'https://example.com/svg',
-      FOREGROUND_FRAME_NAME
-    )
+    expect(clickLink(svgLink).open).not.toHaveBeenCalled()
+    expect(svgLink.getAttribute('target')).toBe('_self')
     expect(clickLink(areaDownload).open).not.toHaveBeenCalled()
     expect(clickLink(noHref).open).not.toHaveBeenCalled()
   })
@@ -174,33 +177,96 @@ describe('browser clicked-link routing', () => {
     const link = document.createElement('a')
     link.href = 'https://example.com/reference'
     document.body.append(link)
-    installBrowserClickedLinkRouting(
-      '__orca_clicked_link_old_fg',
-      '__orca_clicked_link_old_bg',
-      true
-    )
-    installBrowserClickedLinkRouting(
-      '__orca_clicked_link_new_fg',
-      '__orca_clicked_link_new_bg',
-      false
-    )
+    installBrowserClickedLinkRouting('__orca_clicked_link_old_fg', true, true)
+    installBrowserClickedLinkRouting('__orca_clicked_link_new_fg', false, true)
 
     expect(addEventListener.mock.calls.filter(([event]) => event === 'click')).toHaveLength(1)
     expect(clickLink(link, { ctrlKey: true }).open).toHaveBeenCalledWith(
       'https://example.com/reference',
-      '__orca_clicked_link_new_bg'
+      '__orca_clicked_link_new_fg'
     )
   })
 
   it('builds a self-contained isolated-world script', () => {
-    const script = buildBrowserClickedLinkRoutingScript(
-      FOREGROUND_FRAME_NAME,
-      BACKGROUND_FRAME_NAME,
-      false
-    )
+    const script = buildBrowserClickedLinkRoutingScript(FOREGROUND_FRAME_NAME, false)
 
     expect(script).toContain('installBrowserClickedLinkRouting')
-    expect(script).toContain(`"${FOREGROUND_FRAME_NAME}","${BACKGROUND_FRAME_NAME}",false`)
+    expect(script).toContain(`"${FOREGROUND_FRAME_NAME}",false`)
     expect(script).not.toContain('BrowserClickedLinkRoutingState')
+  })
+
+  it('routes plain iframe target=_blank links into the top-level guest', () => {
+    const link = document.createElement('a')
+    link.href = 'https://example.com/from-frame'
+    link.target = '_blank'
+    document.body.append(link)
+    cleanupIframeRouting = installBrowserIframeClickedLinkRouting(FOREGROUND_FRAME_NAME, true, true)
+
+    const { event, open } = clickLink(link)
+
+    expect(event.defaultPrevented).toBe(false)
+    expect(open).not.toHaveBeenCalled()
+    expect(link.getAttribute('target')).toBe('_top')
+  })
+
+  it('routes explicit iframe new-tab gestures through one-use frame names', () => {
+    const blank = document.createElement('a')
+    blank.href = 'https://example.com/new-context'
+    blank.target = '_blank'
+    document.body.append(blank)
+    cleanupIframeRouting = installBrowserIframeClickedLinkRouting(FOREGROUND_FRAME_NAME, true, true)
+
+    expect(clickLink(blank, { metaKey: true }).open).toHaveBeenCalledWith(
+      'https://example.com/new-context',
+      FOREGROUND_FRAME_NAME
+    )
+
+    cleanupIframeRouting = installBrowserIframeClickedLinkRouting(FOREGROUND_FRAME_NAME, true, true)
+    expect(clickLink(blank, { type: 'auxclick' }).open).toHaveBeenCalledWith(
+      'https://example.com/new-context',
+      FOREGROUND_FRAME_NAME
+    )
+
+    cleanupIframeRouting = installBrowserIframeClickedLinkRouting(FOREGROUND_FRAME_NAME, true, true)
+    expect(clickLink(blank, { metaKey: true, shiftKey: true }).open).toHaveBeenCalledWith(
+      'https://example.com/new-context',
+      FOREGROUND_FRAME_NAME
+    )
+  })
+
+  it('leaves other-platform, Shift-window, and ordinary iframe clicks to Chromium', () => {
+    const blank = document.createElement('a')
+    blank.href = 'https://example.com/new-context'
+    blank.target = '_blank'
+    const ordinary = document.createElement('a')
+    ordinary.href = 'https://example.com/current'
+    document.body.append(blank, ordinary)
+    cleanupIframeRouting = installBrowserIframeClickedLinkRouting(FOREGROUND_FRAME_NAME, true, true)
+
+    expect(clickLink(blank, { ctrlKey: true }).open).not.toHaveBeenCalled()
+    expect(clickLink(blank, { shiftKey: true }).open).not.toHaveBeenCalled()
+    expect(clickLink(ordinary).open).not.toHaveBeenCalled()
+  })
+
+  it('ignores synthetic main-frame and iframe clicks in production mode', () => {
+    const mainLink = document.createElement('a')
+    mainLink.href = 'https://example.com/main-synthetic'
+    const frameLink = document.createElement('a')
+    frameLink.href = 'https://example.com/frame-synthetic'
+    frameLink.target = '_blank'
+    document.body.append(mainLink, frameLink)
+    installBrowserClickedLinkRouting(FOREGROUND_FRAME_NAME, true)
+    cleanupIframeRouting = installBrowserIframeClickedLinkRouting(FOREGROUND_FRAME_NAME, true)
+
+    expect(clickLink(mainLink, { metaKey: true }).open).not.toHaveBeenCalled()
+    expect(clickLink(frameLink).open).not.toHaveBeenCalled()
+    expect(frameLink.getAttribute('target')).toBe('_blank')
+  })
+
+  it('builds a self-contained iframe script with per-frame routing tokens', () => {
+    const script = buildBrowserIframeClickedLinkRoutingScript(FOREGROUND_FRAME_NAME, false)
+
+    expect(script).toContain('installBrowserIframeClickedLinkRouting')
+    expect(script).toContain(`"${FOREGROUND_FRAME_NAME}",false`)
   })
 })
