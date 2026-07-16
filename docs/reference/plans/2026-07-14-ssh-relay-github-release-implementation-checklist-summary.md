@@ -9,9 +9,12 @@ keeps commands, hashes, runner identities, timings, and failure details.
 A checked box means the work has evidence in the detailed ledger. Design approval alone does not
 complete a box.
 
-Active checkpoint: **Milestone 5 / Work Package 4 desktop resolver/cache — disconnected
-official-build manifest loader proven on all six native clients; accepted-key/resource-input audit
-next, 2026-07-15, Codex implementation owner.** `E-M5-PACKAGED-MANIFEST-LOCAL-001` passes 6/6
+Active checkpoint: **Milestone 5 / Work Package 4 desktop resolver/cache — disconnected desktop
+accepted-public-key parser locally proven and wired; isolated commit/all-six native proof next,
+2026-07-15, Codex implementation owner.** `E-M5-ACCEPTED-KEYS-AUDIT-001` and its RED precede
+`E-M5-ACCEPTED-KEYS-LOCAL-001`: 4/4 focused, 19/19 trust, 304/304 non-full-size SSH relay, 12/12
+workflow/aggregate, typecheck, and lint gates pass. No production public key file or secret exists,
+and no resource or consumer is connected. The prior `E-M5-PACKAGED-MANIFEST-LOCAL-001` passes 6/6
 purpose-named tests, 300/300 non-full-size SSH relay tests, 279/279 release-script tests, typecheck,
 lint, format, max-lines, and diff gates. `E-M5-PACKAGED-MANIFEST-CI-WIRING-LOCAL-001` pins the suite
 into both native job families; exact-head run

@@ -8,7 +8,7 @@ work; keep exact commands, runner identities, hashes, metrics, and residual gaps
 
 Date created: 2026-07-14<br>
 Last updated: 2026-07-15<br>
-Current phase: Milestone 5 / Work Package 4 desktop resolver/cache — **In progress — 2026-07-15, Codex implementation owner: all-six native packaged-manifest source gate closed; audit the next disconnected accepted-key/resource-embedding prerequisite**. `E-M5-PACKAGED-MANIFEST-CI-001` proves the fixed-resource loader on Linux, macOS, and Windows, x64 and arm64, under Node 24.18.0. Keep production keys/secrets, signed embedded bytes, Electron/cache-root/downloader/SSH/settings/tuples/publication/default behavior disconnected while selecting the next purpose-named RED.<br>
+Current phase: Milestone 5 / Work Package 4 desktop resolver/cache — **In progress — 2026-07-15, Codex implementation owner: checkpoint and obtain all-six native evidence for the locally proven disconnected accepted-public-key parser**. `E-M5-ACCEPTED-KEYS-LOCAL-001` proves strict protected-aggregate document parity and both native workflow command lists locally. Keep the production key file/seed/environment, signed embedded bytes, builder/resource/consumer/cache/downloader/SSH/settings/tuples/publication/default behavior absent until exact-head native proof passes.<br>
 Session checkpoint: **In progress — 2026-07-15, Codex implementation owner** — user authority covers end-to-end PR-contained implementation, commits, pushes, CI, rehearsals, and release writes; merging to `main` remains explicitly prohibited. Commit `b79bcbd04` passes all six native source/full-size cache jobs, PR Checks, and Golden E2E. The artifact workflow is red only for the retained hosted Windows arm64 build-26200 versus required-26100 floor rejection after its primary proof. No Electron, downloader, SSH, setting, tuple, publication, or default-path consumer exists. Legacy remains the production default.<br>
 Primary design: [SSH relay GitHub Release plan](./2026-07-14-ssh-relay-github-release-plan.html)<br>
 Motivating issues: [#8450](https://github.com/stablyai/orca/issues/8450), [#1693](https://github.com/stablyai/orca/issues/1693)
@@ -13932,6 +13932,81 @@ config/scripts/ssh-relay-runtime-workflow.test.mjs`.
 - Follow-up: commit this evidence-only checkpoint, then audit the smallest PR-contained accepted-key
   and immutable resource-input contract. External protected-environment/secret provisioning remains
   a separate repository-administrator gate and must not be inferred from source tests.
+
+### E-M5-ACCEPTED-KEYS-AUDIT-001 — Desktop accepted-public-key document parity
+
+- Date: 2026-07-15
+- Owner: Codex implementation owner
+- Source: exact pushed evidence head `6358fb466b2b2099f4c9add9b8e2f772664ec3ea`.
+- Audit: complete reads of the desktop signature/loader modules and tests, protected manifest
+  workflow, aggregate command/signing handoff and tests, Electron builder config/tests, package
+  release scripts, and Linux/Windows/macOS release workflow build/package boundaries; targeted `rg`
+  over accepted keys, public-key encoding, `extraResources`, manifest signing, desktop build inputs,
+  and release packaging.
+- Findings:
+  - the protected aggregate already defines the authoritative source format: exact
+    `{schemaVersion, keys}` fields, schema version 1, one to four keys, exact
+    `{keyId, publicKeyBase64}` entries, canonical base64 for exactly 32 Ed25519 public-key bytes,
+    derived SHA-256 key IDs, uniqueness, key-ID sorting, and a SHA-256 fingerprint over canonical
+    JSON;
+  - the protected workflow deliberately references an absent
+    `config/ssh-relay-runtime-manifest-accepted-keys.json` and tests ENOENT so no placeholder can be
+    mistaken for a reviewed trust root. Release-cut and macOS release workflows remain disconnected;
+  - the desktop signature verifier accepts decoded key bytes but has no strict parser for the
+    aggregate document. Adding that parser with deterministic test keys is the smallest useful
+    PR-contained parity boundary before production key review or immutable resource embedding;
+  - accepted keys must ultimately be compile-time desktop inputs. Loading a mutable adjacent key
+    file beside the manifest would let the trust root move with untrusted bytes and is not allowed;
+  - builder mapping, aggregate-to-desktop artifact download, tag checkout dependencies, byte-identical
+    packaged extraction, real public key review, and protected seed/environment provisioning remain
+    separate gates.
+- Selected package: pure desktop parser returning cloned/sorted accepted key bytes plus the canonical
+  accepted-key document fingerprint; strict hostile-input tests and release-format parity; no file
+  I/O, Electron, resource mapping, manifest, signer, secret, cache, network, SSH, mode, or consumer.
+
+### E-M5-ACCEPTED-KEYS-LOCAL-RED-001 — Desktop accepted-key parser is absent
+
+- Date: 2026-07-15
+- Owner: Codex implementation owner
+- Source: purpose-named `src/main/ssh/ssh-relay-manifest-accepted-keys.test.ts` atop exact pushed
+  evidence head `6358fb466b2b2099f4c9add9b8e2f772664ec3ea`; production parser deliberately absent.
+- Exact command: `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts
+--maxWorkers=1 src/main/ssh/ssh-relay-manifest-accepted-keys.test.ts`.
+- Environment: macOS 26.2 arm64 build 25C56, Node v26.0.0, pnpm 10.24.0, Vitest 4.1.5.
+- Result: required RED; one failed suite / zero collected tests in 174ms Vitest / 1.16s wall,
+  131,989,504-byte maximum RSS, 96,179,600-byte peak memory footprint, and zero swaps. Import fails
+  because `./ssh-relay-manifest-accepted-keys` does not exist.
+- Contracts encoded before implementation: canonical sort/fingerprint, cloned key bytes, frozen
+  container/records, one-to-four bound, exact fields/schema, canonical base64/32-byte keys, derived
+  identity, duplicate rejection, and input-order independence.
+- Consumer-disconnection oracle: only the purpose-named test imports the absent module; fixtures use
+  deterministic test seeds. No production key file/seed/environment, resource mapping, Electron,
+  cache, network, SSH, setting, tuple, publication, or default call site is added.
+
+### E-M5-ACCEPTED-KEYS-LOCAL-001 — Desktop accepted-key parser and native wiring
+
+- Date: 2026-07-15
+- Owner: Codex implementation owner
+- Source: working package atop exact pushed evidence head
+  `6358fb466b2b2099f4c9add9b8e2f772664ec3ea`; implementation/test are
+  `src/main/ssh/ssh-relay-manifest-accepted-keys.ts` and its purpose-named test.
+- Focused command/result: `/usr/bin/time -l pnpm exec vitest run --config
+config/vitest.config.ts --maxWorkers=1 src/main/ssh/ssh-relay-manifest-accepted-keys.test.ts` passes
+  1 file / 4 tests in 301ms Vitest / 1.23s wall, 131,874,816-byte maximum RSS,
+  96,048,504-byte peak memory footprint, and zero swaps.
+- Proven: exact schema/fields; one-to-four bound; canonical 32-byte base64; derived SHA-256 IDs;
+  duplicate rejection; input-order-independent sorting; cloned bytes; frozen container/records; and
+  the exact canonical JSON fingerprint used by the protected aggregate.
+- Regression commands/results: accepted-keys/signature/packaged-loader trust suites pass 19/19;
+  complete `src/main/ssh/ssh-relay-*.test.ts` passes 23 files / 304 tests with three declared
+  full-size skips; workflow plus aggregate-command suites pass 12/12; full `pnpm typecheck` and
+  `pnpm lint` pass, including 41 reliability gates and no new max-lines bypass.
+- Native wiring: the purpose-named suite is present once in each POSIX/PowerShell command list; the
+  workflow oracle requires exactly two occurrences. Exact-head all-six Node 24 execution remains
+  required before this source gate closes.
+- Consumer-disconnection oracle: repository consumers remain test-only. The protected workflow still
+  requires the production accepted-key file to be absent; no key/seed/environment, resource bytes,
+  builder mapping, Electron/cache/network/SSH/mode/tuple/publication/default caller is added.
 
 ## Accepted Gaps
 
