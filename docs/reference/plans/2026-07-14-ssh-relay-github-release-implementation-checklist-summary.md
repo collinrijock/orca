@@ -10,13 +10,14 @@ A checked box means the work has evidence in the detailed ledger. Design approva
 complete a box.
 
 Active checkpoint: **Milestone 6 / Work Package 5 bounded runtime transfer — disconnected POSIX
-system-SSH/no-tar per-file boundary is locally green and exact-head CI is next, 2026-07-15, Codex
-implementation owner.** `E-M6-POSIX-SYSTEM-SSH-FILE-LOCAL-001` records 25/25 purpose cases, 87 focused
-cases with one declared skip, 628 broad relay cases with six declared skips, 281/281 release
-contracts, typecheck, full lint, formatting, max-lines, diff, protected-resolver, and no-product-
-consumer gates. The command uses only the four declared POSIX primitives and cancellation is bounded
-to a 250 ms graceful / 2,000 ms total ceiling. Exact-head all-six native and adjacent Actions proof
-is required before the next package.
+system-SSH/no-tar per-file boundary is exact-head green; command-channel adapter audit is next,
+2026-07-15, Codex implementation owner.** `E-M6-POSIX-SYSTEM-SSH-FILE-LOCAL-001` records 25/25 purpose,
+628 broad relay, 281/281 release, and all static/isolation gates.
+`E-M6-POSIX-SYSTEM-SSH-FILE-CI-001` proves the 25 cases on all six primary native clients; both Linux
+supplements, Windows x64 floor, PR Checks, computer-use Windows/Ubuntu, and Golden E2E macOS/Linux
+pass. Windows arm64 retains only hosted build 26200 versus required 26100 after complete runtime
+smoke. The module still has no real SSH/tree/product consumer. Audit the next smallest disconnected
+exec-channel adapter; legacy remains the only production/default path and SignPath remains deferred.
 `E-M6-SFTP-LIVE-COMPOSITION-CI-001` records complete exact-tree/mode/exclusive-root/cancellation/RSS
 proof against stock OpenSSH on native Linux x64 and arm64. The repeated unrelated Windows compiler
 timeout is closed at exact head `4945645e8` by computer-use run `29515352845` under

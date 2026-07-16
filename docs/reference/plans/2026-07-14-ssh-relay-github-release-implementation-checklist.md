@@ -9,7 +9,7 @@ work; keep exact commands, runner identities, hashes, metrics, and residual gaps
 Date created: 2026-07-14<br>
 Last updated: 2026-07-15<br>
 Current phase: Milestone 6 / Work Package 5 bounded runtime transfer — **In progress — 2026-07-15, Codex implementation owner: disconnected POSIX system-SSH/no-tar per-file command and destination contract**. Keep every capability disconnected from every production/default SSH path. Real Apple/SignPath rehearsals remain an explicit late gate and are not on this package's critical path.<br>
-Session checkpoint: **POSIX NO-TAR FILE BOUNDARY LOCALLY GREEN / EXACT-HEAD CI NEXT — 2026-07-15, Codex implementation owner** — `E-M6-POSIX-SYSTEM-SSH-FILE-LOCAL-001` proves the isolated destination across 25 purpose cases, 628 broad relay cases, 281 release contracts, typecheck, lint, formatting, max-lines, diff, protected-resolver, and no-product-consumer gates. The module still accepts only an injected command channel and has no real SSH/tree/product caller, so exact-head all-six native and adjacent Actions evidence is required before the next package. Merging to `main` remains prohibited, SignPath is deferred, and legacy remains the production default.<br>
+Session checkpoint: **POSIX NO-TAR FILE BOUNDARY EXACT-HEAD GREEN / COMMAND-CHANNEL ADAPTER AUDIT NEXT — 2026-07-15, Codex implementation owner** — `E-M6-POSIX-SYSTEM-SSH-FILE-CI-001` proves the 25-case purpose suite on all six primary native clients; both Linux supplements, Windows x64 floor, PR Checks, computer-use, and Golden E2E pass. Windows arm64 retains only the declared hosted build-26200 versus required-26100 rejection after full runtime smoke. The completed module has no real SSH/tree/product caller. Audit the next smallest disconnected command-channel adapter slice before adding RED tests; do not connect a product/default path. Merging to `main` remains prohibited, SignPath is deferred, and legacy remains the production default.<br>
 Primary design: [SSH relay GitHub Release plan](./2026-07-14-ssh-relay-github-release-plan.html)<br>
 Motivating issues: [#8450](https://github.com/stablyai/orca/issues/8450), [#1693](https://github.com/stablyai/orca/issues/1693)
 
@@ -150,12 +150,13 @@ same change as the work it records.
 - Completed package: disconnected full host-evidence composition is green locally and on every
   primary native client under E-M5-HOST-EVIDENCE-COMPOSITION-LOCAL-001 and
   E-M5-HOST-EVIDENCE-COMPOSITION-CI-001. It has no product caller.
-- Active package: **Local implementation complete / exact-head CI pending — 2026-07-15, Codex
-  implementation owner** — the disconnected POSIX no-tar per-file command/destination boundary is
-  green under E-M6-POSIX-SYSTEM-SSH-FILE-LOCAL-001. It consumes the existing source-stream
-  destination interface and an injected command-channel factory only. Do not import or modify the
-  legacy tar/base64 directory uploader, wire `SshConnection`, create a remote tree, add a semantic
-  probe, or add product/settings/fallback/tuple/publication/default behavior.
+- Completed package: the disconnected POSIX no-tar per-file command/destination boundary is green
+  locally and on every primary native client under E-M6-POSIX-SYSTEM-SSH-FILE-LOCAL-001 and
+  E-M6-POSIX-SYSTEM-SSH-FILE-CI-001. It has no real SSH or product caller.
+- Active package: **Audit next — 2026-07-15, Codex implementation owner** — establish the smallest
+  disconnected adapter between one authenticated system-SSH exec channel and the proven per-file
+  destination. Do not import or modify the legacy tar/base64 directory uploader, create a remote
+  tree, add a semantic probe, or add product/settings/fallback/tuple/publication/default behavior.
 - Completed Work Package 2 gate: target-native Windows source-signature reports from exact-head
   artifact jobs 87267322867 and 87267322870 were independently downloaded and matched to their
   identities and signing-stage reports under E-M3-WINDOWS-SOURCE-SIGNATURE-CI-001. PR Checks
@@ -17573,6 +17574,52 @@ config/scripts/ssh-relay-runtime-workflow.test.mjs`.
   and SignPath remain absent; legacy remains the sole production/default path. Exact-head all-six
   native and adjacent Actions evidence is required before the next bounded package.
 
+### E-M6-POSIX-SYSTEM-SSH-FILE-CI-001 — all-six native clients prove the isolated boundary
+
+- Date/owner/head: 2026-07-15, Codex implementation owner; exact implementation commit
+  `fac052b7714e2c93c5c84b41b784869d4b3fe125` on draft PR
+  [#8741](https://github.com/stablyai/orca/pull/8741).
+- Native workflow: SSH Relay Runtime Artifacts run
+  [29516746498](https://github.com/stablyai/orca/actions/runs/29516746498). The exact 25-case purpose
+  suite passes on all six primary Node 24.18.0 clients: Linux x64 job
+  [87683577951](https://github.com/stablyai/orca/actions/runs/29516746498/job/87683577951) in 40 ms,
+  macOS arm64 job [87683577985](https://github.com/stablyai/orca/actions/runs/29516746498/job/87683577985)
+  in 23 ms, Windows arm64 job
+  [87683577998](https://github.com/stablyai/orca/actions/runs/29516746498/job/87683577998) in 30 ms,
+  Windows x64 job [87683578029](https://github.com/stablyai/orca/actions/runs/29516746498/job/87683578029)
+  in 24 ms, macOS x64 job
+  [87683578046](https://github.com/stablyai/orca/actions/runs/29516746498/job/87683578046) in 69 ms,
+  and Linux arm64 job
+  [87683578064](https://github.com/stablyai/orca/actions/runs/29516746498/job/87683578064) in 27 ms.
+  POSIX jobs pass 93/93 runtime contract files and Windows jobs pass 94/94; all six then pass native
+  deterministic build/smoke and full-size extraction/cache evidence. Linux x64/arm64 additionally
+  retain their independent exact-runtime live SFTP proof.
+- Supplemental/baseline result: Linux x64 job 87684783571 and Linux arm64 job 87684783588 pass the
+  oldest-userland supplements. Windows x64 floor job
+  [87685969814](https://github.com/stablyai/orca/actions/runs/29516746498/job/87685969814) passes. Only
+  Windows arm64 floor job
+  [87685969791](https://github.com/stablyai/orca/actions/runs/29516746498/job/87685969791) rejects the
+  hosted runner's build 26200 versus the immutable required build 26100 after complete
+  85,213,511-byte / 42-file runtime, Node 24.18.0 ABI 137, native PTY, watcher, and two-second resource-
+  settlement smoke. Platform and architecture checks pass; only `osBuild` is false. This is the
+  declared runner gap, not a boundary regression.
+- Adjacent Actions: Computer-use run
+  [29516746536](https://github.com/stablyai/orca/actions/runs/29516746536) passes Windows job
+  [87683577620](https://github.com/stablyai/orca/actions/runs/29516746536/job/87683577620) in 4 minutes
+  46 seconds and Ubuntu job
+  [87683577703](https://github.com/stablyai/orca/actions/runs/29516746536/job/87683577703) in 2 minutes
+  53 seconds. PR Checks run
+  [29516748161](https://github.com/stablyai/orca/actions/runs/29516748161), job 87683582762, passes
+  lint, typecheck, Git compatibility, tests, unpacked Electron build, and packaged CLI smoke in
+  11 minutes 55 seconds. Golden E2E run
+  [29516747231](https://github.com/stablyai/orca/actions/runs/29516747231) passes macOS job 87683580560
+  in 3 minutes 59 seconds and Linux job 87683580641 in 4 minutes 22 seconds.
+- Disposition/residual: the isolated file destination package is exact-head green and may close.
+  This evidence does not prove a real POSIX system-SSH exec adapter, remote tree/root staging,
+  primitive semantics, full-size system-SSH transfer, `MaxSessions=1`, or a product path. No setting,
+  Beta mode, fallback, tuple, publication, default behavior, or SignPath work exists; legacy remains
+  the only production path.
+
 ## Accepted Gaps
 
 No product gap is accepted merely because it appears in this list. Each entry requires explicit
@@ -17631,9 +17678,9 @@ The project is not complete until every applicable item below is checked with ev
 
 ## Next Required Action
 
-Commit and push the locally green isolated POSIX no-tar per-file boundary, then require exact-head
-all-six native artifact jobs, both Linux supplements, the Windows x64 floor, PR Checks, Golden E2E,
-and computer-use evidence before auditing the next system-SSH adapter/tree slice. Do not
+Audit the smallest disconnected authenticated system-SSH exec-channel adapter that can satisfy the
+proven POSIX per-file boundary, record its exact ownership/cancellation/residual contract, then add
+the purpose-named RED suite and native workflow oracle. Do not
 check the broad Milestone 6 SFTP or POSIX system-SSH items yet. Do not add an Electron/startup/product
 importer, per-target mode wiring, fallback, tuple enablement, release publication, or default behavior.
 Keep Node upstream `.tar.xz` inputs, Windows ZIP, `ORCA_RELAY_PATH`, existing desktop required-assets
