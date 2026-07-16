@@ -49,6 +49,7 @@ import { forgetAgentHibernationTabOutput } from '@/lib/agent-hibernation-output-
 import { forgetForegroundTerminalTabs } from '@/lib/foreground-terminal-tabs'
 import { forgetAgentStartupDeliveriesForTabs } from '@/lib/agent-startup-delivery-guards'
 import { clearTransientTerminalState, emptyLayoutSnapshot } from './terminal-helpers'
+import { pushClosedTerminalTabSnapshot, pushRecentlyClosedTabKind } from './recently-closed-tabs'
 import { isClaudeAgent } from '@/lib/agent-status'
 import { classifyTitleActivity } from '@/lib/pane-agent-evidence'
 import { buildOrphanTerminalCleanupPatch, getOrphanTerminalIds } from './terminal-orphan-helpers'
@@ -609,6 +610,7 @@ export type TerminalSlice = {
     opts?: {
       recordInteraction?: boolean
       reason?: TerminalTabCloseReason
+      captureRecentlyClosed?: boolean
       remoteCloseOwnedByHost?: boolean
       localPtyTeardownOwnedExternally?: boolean
       precomputedRetirementPlan?: TerminalTabRetirementPlan
@@ -1277,17 +1279,39 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
 
     set((s) => {
       const next = { ...s.tabsByWorktree }
+      let closedTab: TerminalTab | null = null
+      let closedWorktreeId: string | null = null
       for (const wId of Object.keys(next)) {
         const before = next[wId]
-        const closingTab = before.find((t) => t.id === tabId)
-        if (closingTab) {
+        const closing = before.find((t) => t.id === tabId)
+        if (closing) {
           closingWorktreeId = wId
+          // Why: capture the first-matched tab's snapshot for the Cmd+Shift+T
+          // reopen stack (see capturedSnapshot below).
+          if (!closedTab) {
+            closedTab = closing
+            closedWorktreeId = wId
+          }
         }
         const after = before.filter((t) => t.id !== tabId)
         if (after.length !== before.length) {
           next[wId] = after
         }
       }
+      // Why: only explicit user closes feed the Cmd+Shift+T reopen stack.
+      // Cleanup and PTY-exit closes must not pollute user undo history.
+      const capturedSnapshot =
+        closeReason === 'user' &&
+        opts?.captureRecentlyClosed !== false &&
+        closedTab &&
+        closedWorktreeId
+          ? {
+              ...(closedTab.startupCwd ? { startupCwd: closedTab.startupCwd } : {}),
+              ...(closedTab.shellOverride ? { shellOverride: closedTab.shellOverride } : {}),
+              ...(closedTab.customTitle ? { customTitle: closedTab.customTitle } : {}),
+              ...(closedTab.color ? { color: closedTab.color } : {})
+            }
+          : null
       const nextExpanded = { ...s.expandedPaneByTabId }
       delete nextExpanded[tabId]
       const nextCanExpand = { ...s.canExpandPaneByTabId }
@@ -1441,7 +1465,21 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         cacheTimerByKey: nextCacheTimer,
         tabBarOrderByWorktree: nextTabBarOrderByWorktree,
         pendingSnapshotByPtyId: nextSnapshots,
-        pendingColdRestoreByPtyId: nextColdRestores
+        pendingColdRestoreByPtyId: nextColdRestores,
+        ...(capturedSnapshot && closedWorktreeId
+          ? {
+              recentlyClosedTerminalTabsByWorktree: pushClosedTerminalTabSnapshot(
+                s.recentlyClosedTerminalTabsByWorktree,
+                closedWorktreeId,
+                capturedSnapshot
+              ),
+              recentlyClosedTabKindsByWorktree: pushRecentlyClosedTabKind(
+                s.recentlyClosedTabKindsByWorktree,
+                closedWorktreeId,
+                'terminal'
+              )
+            }
+          : {})
       }
     })
     // Why: sweep live AND retained agent-status entries for this tab — closing

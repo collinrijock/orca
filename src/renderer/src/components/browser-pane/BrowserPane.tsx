@@ -11,6 +11,7 @@ import {
 } from 'react'
 import { createPortal } from 'react-dom'
 import { cn } from '@/lib/utils'
+import { createBrowserUuid } from '@/lib/browser-uuid'
 import { getConnectionId } from '@/lib/connection-context'
 import { detectLanguage } from '@/lib/language-detect'
 import { isPathInsideWorktree, toWorktreeRelativePath } from '@/lib/terminal-links'
@@ -2632,6 +2633,7 @@ function RemoteBrowserPagePane({
           onClick={() => (markup.isActive ? markup.cancel() : void markup.start())}
           disabled={!frameUrl}
           active={markup.isActive}
+          surfaceActive={isActive}
           className="h-7 w-7"
         />
       </div>
@@ -2873,11 +2875,7 @@ function BrowserPagePane({
   })
   const isActiveRef = useRef(isActive)
   isActiveRef.current = isActive
-  const annotationViewportBridgeTokenRef = useRef(
-    typeof crypto.randomUUID === 'function'
-      ? crypto.randomUUID().replaceAll('-', '')
-      : `${Date.now().toString(36)}${Math.random().toString(36).slice(2)}`
-  )
+  const annotationViewportBridgeTokenRef = useRef(createBrowserUuid().replaceAll('-', ''))
   const browserAnnotations = useAppStore(
     (s) => s.browserAnnotationsByPageId[browserTab.id] ?? EMPTY_BROWSER_ANNOTATIONS
   )
@@ -5122,6 +5120,7 @@ function BrowserPagePane({
             onClick={() => (markup.isActive ? markup.cancel() : void markup.start())}
             disabled={isBlankTab || grab.state !== 'idle'}
             active={markup.isActive}
+            surfaceActive={isActive}
           />
 
           <Button

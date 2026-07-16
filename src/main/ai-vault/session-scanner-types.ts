@@ -15,6 +15,7 @@ export type AiVaultScanOptions = {
   defaultCodexHomeDir?: string
   wslHomeDirs?: readonly string[]
   geminiSessionsDir?: string
+  antigravityBrainDir?: string
   copilotSessionsDir?: string
   cursorProjectsDir?: string
   opencodeStorageDir?: string
@@ -60,6 +61,7 @@ export type SessionFileCandidate = {
   agent: AiVaultAgent
   file: FileWithMtime
   codexHome: string | null
+  antigravityHistoryPath?: string
 }
 
 export type SessionFileDiscovery = {
