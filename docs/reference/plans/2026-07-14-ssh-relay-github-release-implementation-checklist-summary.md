@@ -9,9 +9,23 @@ keeps commands, hashes, runner identities, timings, and failure details.
 A checked box means the work has evidence in the detailed ledger. Design approval alone does not
 complete a box.
 
-Active checkpoint: **Milestone 6 / Work Package 5 bounded runtime transfer — disconnected
-transport-neutral source-tree contract CI is closed; audit only the full-tree source pre-scan next,
-2026-07-15, Codex implementation owner.**
+Active checkpoint: **Milestone 6 / Work Package 5 bounded runtime transfer — disconnected full-tree
+source pre-scan is locally green; commit and exact-head native/full-size CI are next, 2026-07-15,
+Codex implementation owner.**
+`E-M6-SOURCE-PRESCAN-AUDIT-001` fixes the next local-only boundary: consume only the accepted source
+tree plus one exact signal; assert its borrowed lease; boundedly enumerate and hash every real entry;
+reject mutation, symlink/junction, special, missing/extra/colliding, mode/size/hash/aggregate drift;
+return frozen bigint state snapshots for mandatory later transfer-time comparisons; and close every
+local handle. Full-size latency/RSS/handle proof is required. No remote resource or product path is
+introduced.
+`E-M6-SOURCE-PRESCAN-LOCAL-001` passes 16 purpose cases with one Linux-only local skip, 79 adjacent
+cases, 538 broad relay cases, 280 release/workflow cases, typecheck, full lint, formatting, diff,
+protected-resolver, and no-product-import gates. It proves one-directory/one-file/64-KiB bounds,
+cancellation and close failures, complete tree hashing, mutation/integrity rejection, frozen state
+snapshots, and both native workflow invocations. The local full-size case correctly skips without a
+native artifact; exact-head all-six native metrics remain required before checking the item.
+`E-M6-SOURCE-PRESCAN-LOCAL-RED-001` records the earlier expected missing-module failures for purpose
+and full-size measurement plus the workflow oracle's six-pass/one-fail result.
 `E-M6-SOURCE-TREE-CONTRACT-AUDIT-001` fixes a pure ready-acquisition → immutable descriptor
 boundary: exact verified manifest/cache identity and signed limits, deterministic ASCII ordering,
 client-native paths, borrowed live-lease assertion, and later shared use by pre-scan plus SFTP,

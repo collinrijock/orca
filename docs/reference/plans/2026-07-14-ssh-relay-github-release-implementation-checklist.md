@@ -8,8 +8,8 @@ work; keep exact commands, runner identities, hashes, metrics, and residual gaps
 
 Date created: 2026-07-14<br>
 Last updated: 2026-07-15<br>
-Current phase: Milestone 6 / Work Package 5 bounded runtime transfer — **In progress — 2026-07-15, Codex implementation owner: audit only the smallest disconnected full-tree source pre-scan after source-tree CI closure**. Keep every capability disconnected from every production/default SSH path. Real Apple/SignPath rehearsals remain an explicit late gate and are not on this package's critical path.<br>
-Session checkpoint: **SOURCE-TREE CONTRACT CI CLOSED / PRE-SCAN AUDIT NEXT — 2026-07-15, Codex implementation owner** — `E-M6-SOURCE-TREE-CONTRACT-CI-001` closes exact-head all-six native client proof, both Linux supplements, Windows x64 baseline, PR Checks, Golden E2E, and computer-use; Windows arm64 retains only the declared build-26200/26100 runner mismatch after full runtime proof. Audit only a disconnected filesystem pre-scan that consumes the accepted source-tree contract and creates no remote files. Do not open SSH channels, transfer/install bytes, add a product caller, settings/fallback wiring, tuple enablement, publication, or default behavior. Merging to `main` remains prohibited, SignPath is deferred, and legacy remains the production default.<br>
+Current phase: Milestone 6 / Work Package 5 bounded runtime transfer — **In progress — 2026-07-15, Codex implementation owner: disconnected full-tree source pre-scan is locally green; exact-head native/full-size CI is the next gate**. Keep every capability disconnected from every production/default SSH path. Real Apple/SignPath rehearsals remain an explicit late gate and are not on this package's critical path.<br>
+Session checkpoint: **SOURCE PRE-SCAN LOCAL GREEN / COMMIT AND CI NEXT — 2026-07-15, Codex implementation owner** — `E-M6-SOURCE-PRESCAN-LOCAL-001` proves bounded complete source authentication, immutable snapshots, cancellation/close behavior, adjacent and broad regressions, workflow inclusion, and isolation from product callers. Commit and push the package, then require all-six native purpose suites and exact full-size artifact scan metrics before checking the item. Do not open SSH channels, transfer/install bytes, add a product caller, settings/fallback wiring, tuple enablement, publication, or default behavior. Merging to `main` remains prohibited, SignPath is deferred, and legacy remains the production default.<br>
 Primary design: [SSH relay GitHub Release plan](./2026-07-14-ssh-relay-github-release-plan.html)<br>
 Motivating issues: [#8450](https://github.com/stablyai/orca/issues/8450), [#1693](https://github.com/stablyai/orca/issues/1693)
 
@@ -150,8 +150,8 @@ same change as the work it records.
 - Completed package: disconnected full host-evidence composition is green locally and on every
   primary native client under E-M5-HOST-EVIDENCE-COMPOSITION-LOCAL-001 and
   E-M5-HOST-EVIDENCE-COMPOSITION-CI-001. It has no product caller.
-- Active package: **In progress — 2026-07-15, Codex implementation owner** — audit only Milestone
-  6's smallest disconnected full-tree source pre-scan after source-tree CI closure. Do not open SSH
+- Active package: **In progress — 2026-07-15, Codex implementation owner** — add RED proof, then
+  implement only Milestone 6's audited disconnected full-tree source pre-scan. Do not open SSH
   channels, transfer or install bytes, or add product/settings/fallback/tuple/publication/default
   behavior.
 - Completed Work Package 2 gate: target-native Windows source-signature reports from exact-head
@@ -1159,7 +1159,8 @@ Current behavior must not be assumed adequate for a much larger runtime:
       E-M6-SOURCE-TREE-CONTRACT-LOCAL-001, and E-M6-SOURCE-TREE-CONTRACT-CI-001.
 - [ ] Pre-scan and reject local source mutation, symlinks, special files, extra files, and path
       collisions before creating remote files. **In progress — 2026-07-15, Codex implementation
-      owner: audit only; no tests or implementation yet.**
+      owner: audit complete under E-M6-SOURCE-PRESCAN-AUDIT-001; RED proof recorded under
+      E-M6-SOURCE-PRESCAN-LOCAL-RED-001.**
 - [ ] Stream files with bounded buffers; prohibit whole-tree memory materialization.
 - [ ] Pass one AbortSignal through enumeration, channel creation, reads, writes, permission repair,
       and remote cleanup.
@@ -16256,6 +16257,121 @@ config/vitest.config.ts --maxWorkers=1 --silent=true config/scripts/ssh-relay-ru
   every product/settings/fallback/tuple/publication/default path, and SignPath remain open. Legacy
   remains the sole production/default path and every tuple stays disabled.
 
+### E-M6-SOURCE-PRESCAN-AUDIT-001 — bounded complete local source authentication and snapshot
+
+- Date/owner: 2026-07-15, Codex implementation owner.
+- Exact input/output boundary: accept only the immutable `SshRelayRuntimeSourceTree` closed by
+  E-M6-SOURCE-TREE-CONTRACT-CI-001 plus one required caller-owned `AbortSignal`. Return a deeply
+  frozen scanned tree that preserves the same authenticated identity/order/descriptors and adds an
+  immutable root, directory, and file state snapshot for later transfer-time comparison. Do not
+  accept a raw path, manifest, cache entry, or file list.
+- Complete pre-remote scan: assert the borrowed cache lease before any filesystem operation and
+  after all final state checks. Require the runtime root and every declared directory/file to remain
+  exact real entries; reject symlinks/junctions, special files, missing/extra entries, exact and
+  case-fold collisions, mode drift on POSIX, size/count/aggregate drift, and SHA-256 disagreement.
+  Hash every file before any future transport creates remote staging.
+- Bounded traversal: use one open directory handle at a time, one open regular-file handle at a
+  time, one reusable 64 KiB buffer, and the authenticated maximum of 5,000 total entries / 350 MiB
+  expanded bytes / 250 MiB per file. Stop immediately when actual entries exceed the expected set;
+  do not materialize file contents or an unbounded directory listing.
+- Race/snapshot contract: capture bigint device, inode, size, mtime, and ctime state around each file
+  open/read/hash and compare the path again after close. Capture root/directory state before
+  traversal and recheck every directory plus every file after all hashes. A replacement or mutation
+  at any point fails closed. Later transfer must compare these exact snapshots before opening any
+  remote file, hash the transmitted bytes while reading, compare again after each read, and abort
+  remote work on drift; pre-scan alone does not claim to close post-scan races.
+- Cancellation/ownership: check the exact signal before lease assertion, directory open/read,
+  metadata operations, every file chunk, final state checks, and final lease assertion. Await every
+  directory/file close on success, failure, and cancellation; close failures propagate. The scan
+  borrows but never releases the acquisition lease and owns no remote resource or cleanup.
+- Test seam: a narrow domain-named filesystem-operations injection may wrap real `lstat`, directory
+  read/close, and file stat/read/close so mutation, cancellation, and close ordering are deterministic
+  in purpose tests. Production uses fixed defaults; injection cannot change signed expectations.
+- Required RED/green proof: real signed Linux and Windows cache trees; deterministic immutable
+  snapshots; exact signal and lease ordering; root/directory/file mutation; symlink/junction,
+  special, extra, missing, collision, mode, size, hash, and aggregate rejection; mid-enumeration and
+  mid-read cancellation; handle-close success/failure ordering; 64 KiB maximum reads; zero whole-file
+  materialization; exact full-size native artifact latency/RSS/open-handle measurements; no SSH/
+  product caller; and inclusion in both native workflow families.
+- Deliberately absent: remote path construction, directory/file creation, SSH/SFTP/child process,
+  transfer framing/writes/progress, permission repair, cleanup, install/launch, settings/modes,
+  fallback, Electron/startup, `ORCA_RELAY_PATH`, tuple enablement, publication, defaults, and
+  SignPath. Legacy remains the sole production/default path and every tuple stays disabled.
+
+### E-M6-SOURCE-PRESCAN-LOCAL-RED-001 — missing pre-scan and native/full-size proof
+
+- Date/owner/environment: 2026-07-15, Codex implementation owner; local macOS arm64, Node 26.0.0,
+  pnpm 10.24.0, atop local evidence commit `fea8e4ad1` plus the audit/test-only diff.
+- Purpose command: `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts
+--maxWorkers=1 src/main/ssh/ssh-relay-runtime-source-scan.test.ts` — EXPECTED FAIL, exit 1: the
+  absent module prevents collection; zero tests in 808 ms Vitest / 2.55 seconds wall,
+  137,756,672-byte maximum RSS.
+- Full-size command: the same command with
+  `src/main/ssh/ssh-relay-artifact-cache-entry-full-size.test.ts` — EXPECTED FAIL, exit 1: its new
+  exact-artifact scan measurement cannot import the absent module; zero tests in 690 ms Vitest /
+  2.43 seconds wall, 132,317,184-byte maximum RSS.
+- Workflow-oracle command: the same command with
+  `config/scripts/ssh-relay-runtime-workflow.test.mjs` — EXPECTED FAIL, exit 1: six cases pass and
+  native inclusion fails because the purpose suite has one source occurrence rather than three;
+  512 ms Vitest / 2.25 seconds wall, 133,005,312-byte maximum RSS.
+- Scope at RED: the protected resolver files have no diff. No scan module, SSH/product caller,
+  remote resource, transfer/install, settings/fallback, tuple, publication, or default behavior
+  exists.
+
+### E-M6-SOURCE-PRESCAN-LOCAL-001 — disconnected bounded source pre-scan is locally green
+
+- Date/owner/environment: 2026-07-15, Codex implementation owner; local macOS arm64, Node 26.0.0,
+  pnpm 10.24.0, atop evidence commit `fea8e4ad1` plus the implementation diff. Native Node 24 and
+  exact artifact-size measurements remain the next CI gate.
+- Implemented boundary: `ssh-relay-runtime-source-scan.ts` consumes only the accepted source tree,
+  one exact signal, and its narrow test operations seam. It asserts but never releases the borrowed
+  lease; enumerates with at most one directory handle; hashes every file through at most one file
+  handle and one reusable 64 KiB buffer; rejects linked/special/missing/extra/colliding/mode/size/
+  hash/state drift; rechecks root, every directory, every file, and the lease; and returns frozen
+  bigint device/inode/size/mtime/ctime snapshots for later transfer-time comparison.
+- Purpose command: `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts
+--maxWorkers=1 src/main/ssh/ssh-relay-runtime-source-scan.test.ts` — PASS, exit 0: 16 passed and one
+  Linux-only case-fold test skipped on macOS; 4.49 seconds Vitest / 8.27 seconds wall and
+  134,807,552-byte maximum RSS. The cases cover signed Linux/Windows cache trees, deep freezing,
+  exact lease ordering, pre/mid-enumeration/mid-read cancellation, no post-cancel child metadata
+  lookup, directory/file close failure propagation, symlink/special/missing/extra/hash/mode/
+  collision rejection, post-hash mutation, and handle/buffer bounds. Instrumentation observes peak
+  one directory plus one file handle, zero remaining handles, and reads no larger than 65,536 bytes.
+- Workflow oracle: the exact command above with
+  `config/scripts/ssh-relay-runtime-workflow.test.mjs` — PASS, exit 0: 7/7 in 869 ms Vitest / 2.66
+  seconds wall and 132,349,952-byte maximum RSS. Both POSIX and Windows native commands include the
+  source pre-scan purpose suite.
+- Focused adjacent command: the exact Vitest prefix above with source-scan, source-tree, cache-entry,
+  cache-population, cache-population-integration, cache-resolution, acquisition,
+  acquisition-integration, and workflow-oracle tests — PASS, exit 0: 9 files, 79 passed and one
+  platform skip; 10.59 seconds Vitest / 12.47 seconds wall and 140,689,408-byte maximum RSS.
+- Broad relay command: `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts
+--maxWorkers=1 src/main/ssh/ssh-relay-*.test.ts` — PASS, exit 0: 41 files passed, three skipped;
+  538 tests passed and five skipped in 34.97 seconds Vitest / 37.78 seconds wall with
+  262,488,064-byte maximum RSS. Existing stale-lock diagnostics and the Node 26 `module.register()`
+  deprecation warning are unchanged.
+- Release/workflow command: the same prefix with
+  `config/scripts/ssh-relay-runtime-*.test.mjs` — PASS, exit 0: 50 files and 280 tests in 29.32
+  seconds Vitest / 31.23 seconds wall with 190,332,928-byte maximum RSS.
+- Static gates: `pnpm typecheck`, targeted `oxlint`, and full `pnpm lint` all pass. Full lint retains
+  only pre-existing warnings and passes 41 reliability gates, the 355-suppression max-lines ratchet,
+  bundled skill guides, 9,837 localization references, locale parity, and zero allowlisted coverage
+  candidates. `git diff --check` and changed-file `oxfmt --check` pass.
+- Isolation gates: protected `ssh-remote-node-resolution.ts` and its test have an empty diff. Searches
+  for `scanSshRelayRuntimeSourceTree`, its module, and its scanned type find no non-test importer in
+  `src/main`; therefore this package opens no SSH channel or remote resource and changes no product,
+  settings, fallback, tuple, publication, or default path.
+- Full-size local command: the exact Vitest prefix with
+  `ssh-relay-artifact-cache-entry-full-size.test.ts` exits 0 with its one measurement case skipped
+  because no exact native artifact input is present; 1.11 seconds Vitest / 3.23 seconds wall and
+  132,169,728-byte maximum RSS. This is not full-size proof.
+- Residual gate: do not check the Milestone 6 pre-scan item until the committed exact head passes the
+  purpose suite on all six native clients and reports scan latency/RSS over every exact full-size
+  artifact, both Linux supplements, Windows x64 baseline, the declared Windows arm64 build-only
+  outcome, and adjacent PR/Golden/computer-use checks. GitHub runners still do not prove live SSH,
+  SFTP/system-SSH transfer, remote staging/install, or post-scan transfer races. Streaming and every
+  product/mode/fallback/tuple/publication/default path remain absent; legacy remains the sole default.
+
 ## Accepted Gaps
 
 No product gap is accepted merely because it appears in this list. Each entry requires explicit
@@ -16314,11 +16430,9 @@ The project is not complete until every applicable item below is checked with ev
 
 ## Next Required Action
 
-Audit only Milestone 6's smallest disconnected full-tree source pre-scan. Determine the exact
-source-tree and lease inputs; bounded traversal and file-state snapshots; before/after mutation,
-symlink/special/extra/missing/collision rejection; cancellation and resource ownership; and the
-immutable output consumed by later transfer families before adding tests or implementation. The
-pre-scan must create no remote files or open SSH channels.
+Implement only the RED-proven Milestone 6 disconnected full-tree source pre-scan and wire its purpose
+suite into both native workflow families, then run local/full-size evidence gates. The pre-scan must
+create no remote files or open SSH channels.
 Do not enumerate the filesystem, open an SSH channel, transfer or install bytes, modify platform
 detection/selectors, add an Electron/startup consumer, mode wiring, fallback, tuple enablement,
 release publication, or default behavior.
