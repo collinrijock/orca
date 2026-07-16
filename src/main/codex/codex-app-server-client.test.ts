@@ -208,7 +208,8 @@ describe('runCodexHookTrustGrantSession', () => {
   it('stops stdout before killing a server with an oversized response', async () => {
     const child = new EventEmitter() as ChildProcessWithoutNullStreams
     child.stdin = new PassThrough()
-    child.stdout = new PassThrough()
+    const stdout = new PassThrough()
+    child.stdout = stdout
     child.stderr = new PassThrough()
     const kill = vi.fn(() => {
       queueMicrotask(() => {
@@ -225,8 +226,8 @@ describe('runCodexHookTrustGrantSession', () => {
       async () => undefined,
       spawnImpl
     )
-    child.stdout.write('x'.repeat(1024 * 1024 + 1))
-    child.stdout.write('more buffered output')
+    stdout.write('x'.repeat(1024 * 1024 + 1))
+    stdout.write('more buffered output')
 
     await expect(session).rejects.toThrow('oversized JSONL response')
     expect(child.stdout.destroyed).toBe(true)
