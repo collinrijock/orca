@@ -9,9 +9,15 @@ keeps commands, hashes, runner identities, timings, and failure details.
 A checked box means the work has evidence in the detailed ledger. Design approval alone does not
 complete a box.
 
-Active checkpoint: **Milestone 6 / Work Package 5 bounded runtime transfer — live/full-size Windows
-system-SSH exact-head native proof, 2026-07-15, Codex implementation owner.**
-`E-M6-WINDOWS-SYSTEM-SSH-TREE-LIVE-AUDIT-001` fixes the loopback-only Windows optional-capability
+Active checkpoint: **Milestone 6 / Work Package 5 bounded runtime transfer — bounded official
+Windows OpenSSH fixture correction, 2026-07-15, Codex implementation owner.**
+`E-M6-WINDOWS-SYSTEM-SSH-TREE-LIVE-PORTABLE-FIXTURE-LOCAL-001` records the portable-fixture
+correction locally green: the no-Orca-publication workflow oracle permits the one exact pinned
+Microsoft fixture release URL while Orca release URLs, `gh release`, and `contents: write` remain
+forbidden; 10/10 focused workflow contracts, 283/283 release contracts, 694 relay cases with ten
+declared skips, typecheck, full lint/reliability/max-lines, PowerShell syntax, formatting, diff, and
+protected-resolver isolation pass. Fresh exact-head x64/arm64 proof is still required.
+`E-M6-WINDOWS-SYSTEM-SSH-TREE-LIVE-AUDIT-001` fixes the loopback-only official Microsoft
 server, fixture-owned non-admin account/ACL, exact host-key trust, Windows PowerShell 5.1,
 serial/default and four-channel metrics, cancellation/collision/cleanup, and deterministic teardown
 contracts. `E-M6-WINDOWS-SYSTEM-SSH-TREE-LIVE-LOCAL-RED-001` proves the purpose suite skips without
@@ -20,10 +26,8 @@ audited start step is absent. Add only start/measure/stop wiring, then require n
 evidence. Product callers, legacy upload/fallback/default behavior, tuple enablement, publication,
 and SignPath remain out of scope.
 
-Pre-push fixture review found that native Windows `sshd.exe` may require the fixed `sshd` service
-name. The audited contract now requires a stopped capability-owned service, exact image-path/start-
-mode snapshot and restoration, and ownership-marked cleanup; it does not create/delete an arbitrary
-custom service or touch an already-running server.
+Pre-push fixture review found that native Windows `sshd.exe` requires the fixed `sshd` service name.
+The corrected audit uses only a collision-checked, ownership-marked fixed-name fixture service.
 
 `E-M6-WINDOWS-SYSTEM-SSH-TREE-LIVE-LOCAL-001` records the final local package green: 10/10 workflow
 contracts with one honest live-suite skip, 259 focused passes with five skips, 694 broad relay passes
@@ -31,6 +35,27 @@ with ten skips, 283/283 release contracts, typecheck, full lint, 355-entry max-l
 PowerShell syntax, formatting, isolation, and protected-resolver checks pass. Native x64/arm64
 capability, ACL, full-size, cancellation, and teardown proof remains required before this package
 closes.
+
+`E-M6-WINDOWS-SYSTEM-SSH-TREE-LIVE-CI-RED-001` records exact-head x64 job `87745066045`: every
+prior build/runtime boundary and native capability/config step passes, but Windows `sshd` rejects
+the generated host private key because its owner remains the runner account despite narrow SYSTEM/
+Administrators ACL entries. Ownership-marked teardown restores the stock service and passes. Set
+that key's owner to LocalSystem and `authorized_keys` owner to the fixture user, without broadening
+ACLs or changing production behavior, then rerun both native architectures.
+
+`E-M6-WINDOWS-SYSTEM-SSH-TREE-LIVE-OWNER-CORRECTION-LOCAL-001` records that exact owner correction
+locally green: 10/10 workflow and 283/283 release contracts, PowerShell syntax, targeted lint,
+formatting, diff, and protected-resolver checks pass; the live suite remains one honest local skip.
+Preserve the original arm64 result, then push for fresh x64/arm64 proof.
+
+`E-M6-WINDOWS-SYSTEM-SSH-TREE-LIVE-ARM64-CAPABILITY-CI-RED-001` records arm64 job `87745066052`:
+all prior native build/runtime gates pass, but `Add-WindowsCapability OpenSSH.Server` emits no result
+for 19m16s and the existing 30-minute job cancels it; ownership-safe teardown still passes. Do not
+increase the timeout. Provision the same immutable official Microsoft Win32-OpenSSH release on both
+architectures with per-architecture SHA-256 pins, target-native Authenticode, bounded download,
+fixed-name service ownership/deletion, and no production or remote-host HTTP behavior.
+`E-M6-WINDOWS-SYSTEM-SSH-TREE-LIVE-PORTABLE-FIXTURE-LOCAL-001` closes the local correction gate;
+push its exact head and require both native architectures before closing the live Windows package.
 `E-M6-WINDOWS-SYSTEM-SSH-TREE-LOCAL-RED-001` proves the native workflow oracle passes 9/9 and the
 purpose suite fails solely because the audited production tree-composition module is absent.
 `E-M6-WINDOWS-SYSTEM-SSH-TREE-LOCAL-001` records 8/8 purpose and 9/9 workflow-oracle cases, 258

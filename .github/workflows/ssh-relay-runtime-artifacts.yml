@@ -1314,26 +1314,6 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          $capabilityName = 'OpenSSH.Server~~~~0.0.1.0'
-          $capability = Get-WindowsCapability -Online -Name $capabilityName
-          if ($capability.State -ne 'Installed') {
-            # Why: use the target OS's native server on both architectures; substitutes earn no proof.
-            Add-WindowsCapability -Online -Name $capabilityName | Out-Null
-            $capability = Get-WindowsCapability -Online -Name $capabilityName
-          }
-          if ($capability.State -ne 'Installed') {
-            throw "Windows OpenSSH Server capability is unavailable: $($capability.State)"
-          }
-
-          $openSshRoot = Join-Path $env:WINDIR 'System32/OpenSSH'
-          $sshd = Join-Path $openSshRoot 'sshd.exe'
-          $ssh = Join-Path $openSshRoot 'ssh.exe'
-          $sshKeygen = Join-Path $openSshRoot 'ssh-keygen.exe'
-          foreach ($binary in @($sshd, $ssh, $sshKeygen)) {
-            if (-not (Test-Path -LiteralPath $binary -PathType Leaf)) {
-              throw "Windows OpenSSH capability is missing $binary"
-            }
-          }
           $windowsPowerShell = Join-Path $env:WINDIR 'System32/WindowsPowerShell/v1.0/powershell.exe'
           if (-not (Test-Path -LiteralPath $windowsPowerShell -PathType Leaf)) {
             throw 'Windows PowerShell 5.1 executable is missing'
@@ -1350,14 +1330,67 @@ jobs:
           $rootMarker = Join-Path $fixture 'fixture-owned'
           New-Item -ItemType File -Path $rootMarker | Out-Null
 
+          $serviceName = 'sshd'
+          if (Get-Service -Name $serviceName -ErrorAction SilentlyContinue) {
+            throw 'Windows OpenSSH fixed service name is already registered'
+          }
+          $releaseTag = '10.0.0.0p2-Preview'
+          $archiveName, $expandedName, $expectedArchiveSha256 = switch ($env:RUNNER_ARCH) {
+            'X64' {
+              'OpenSSH-Win64.zip'
+              'OpenSSH-Win64'
+              '23f50f3458c4c5d0b12217c6a5ddfde0137210a30fa870e98b29827f7b43aba5'
+            }
+            'ARM64' {
+              'OpenSSH-ARM64.zip'
+              'OpenSSH-ARM64'
+              '698c6aec31c1dd0fb996206e8741f4531a97355686b5431ef347d531b07fcd42'
+            }
+            default { throw "Unsupported Windows OpenSSH fixture architecture: $env:RUNNER_ARCH" }
+          }
+          $archive = Join-Path $fixture $archiveName
+          $releaseUrl = "https://github.com/PowerShell/Win32-OpenSSH/releases/download/$releaseTag/$archiveName"
+          # Why: this provisions only the CI SSH server; product remotes never perform HTTP downloads.
+          & curl.exe -fL --connect-timeout 20 --max-time 300 --retry 2 -o $archive $releaseUrl
+          if ($LASTEXITCODE -ne 0) { throw 'Official Windows OpenSSH fixture download failed' }
+          $archiveSha256 = (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($archiveSha256 -ne $expectedArchiveSha256) {
+            throw "Official Windows OpenSSH fixture archive hash mismatch: $archiveSha256"
+          }
+          $portableRoot = Join-Path $fixture 'portable'
+          Expand-Archive -LiteralPath $archive -DestinationPath $portableRoot
+          $openSshRoot = Join-Path $portableRoot $expandedName
+          $nativeFiles = @(Get-ChildItem -LiteralPath $openSshRoot -Recurse -File | Where-Object {
+            $_.Extension -in @('.exe', '.dll')
+          })
+          if ($nativeFiles.Count -lt 10) { throw 'Official Windows OpenSSH fixture is incomplete' }
+          foreach ($nativeFile in $nativeFiles) {
+            $signature = Get-AuthenticodeSignature -LiteralPath $nativeFile.FullName
+            if (
+              $signature.Status -ne 'Valid' -or
+              $signature.SignerCertificate.Subject -notmatch 'CN=Microsoft Corporation'
+            ) {
+              throw "Official Windows OpenSSH fixture signature is invalid: $($nativeFile.Name)"
+            }
+          }
+          $sshd = Join-Path $openSshRoot 'sshd.exe'
+          $ssh = Join-Path $openSshRoot 'ssh.exe'
+          $sshKeygen = Join-Path $openSshRoot 'ssh-keygen.exe'
+          foreach ($binary in @($sshd, $ssh, $sshKeygen)) {
+            if (-not (Test-Path -LiteralPath $binary -PathType Leaf)) {
+              throw "Official Windows OpenSSH fixture is missing $binary"
+            }
+          }
+
           $fixtureUser = 'orca_ssh_fixture'
           if (Get-LocalUser -Name $fixtureUser -ErrorAction SilentlyContinue) {
             throw "Windows OpenSSH fixture account already exists: $fixtureUser"
           }
           $password = ConvertTo-SecureString "$([Guid]::NewGuid().ToString('N'))aA!7" -AsPlainText -Force
+          # Why: collision rejection makes this marker safe to use for partial-creation cleanup.
+          New-Item -ItemType File -Path (Join-Path $fixture 'account-owned') | Out-Null
           $account = New-LocalUser -Name $fixtureUser -Password $password -PasswordNeverExpires `
             -UserMayNotChangePassword -AccountNeverExpires
-          New-Item -ItemType File -Path (Join-Path $fixture 'account-owned') | Out-Null
           $userSid = $account.SID.Value
 
           function Set-FixtureAcl([string]$Path, [string[]]$Grants) {
@@ -1366,6 +1399,10 @@ jobs:
             $arguments = @($Path, '/grant:r') + $Grants
             & icacls.exe @arguments | Out-Host
             if ($LASTEXITCODE -ne 0) { throw "Failed to grant fixture ACLs on $Path" }
+          }
+          function Set-FixtureOwner([string]$Path, [string]$OwnerSid) {
+            & icacls.exe $Path /setowner "*$OwnerSid" | Out-Host
+            if ($LASTEXITCODE -ne 0) { throw "Failed to set fixture owner on $Path" }
           }
           $systemFull = '*S-1-5-18:(OI)(CI)F'
           $administratorsFull = '*S-1-5-32-544:(OI)(CI)F'
@@ -1385,7 +1422,9 @@ jobs:
             '*S-1-5-32-544:F',
             "*$userSid`:R"
           )
+          Set-FixtureOwner $authorizedKeys $userSid
           Set-FixtureAcl $hostKey @('*S-1-5-18:F', '*S-1-5-32-544:F')
+          Set-FixtureOwner $hostKey 'S-1-5-18'
 
           $port = 22224
           $knownHosts = Join-Path $clientSsh 'known_hosts'
@@ -1426,27 +1465,11 @@ jobs:
           & $sshd -t -f $config
           if ($LASTEXITCODE -ne 0) { throw 'Windows OpenSSH fixture config validation failed' }
 
-          $serviceName = 'sshd'
-          $service = Get-CimInstance Win32_Service -Filter "Name='$serviceName'" -ErrorAction SilentlyContinue
-          if (-not $service) { throw 'Windows OpenSSH capability did not register the sshd service' }
-          if ($service.State -ne 'Stopped') {
-            throw "Windows OpenSSH service must be stopped before the fixture: $($service.State)"
-          }
-          $serviceBackup = [ordered]@{
-            pathName = $service.PathName
-            startMode = $service.StartMode
-          } | ConvertTo-Json -Compress
-          $serviceBackupPath = Join-Path $fixture 'service-backup.json'
-          [IO.File]::WriteAllText(
-            $serviceBackupPath,
-            "$serviceBackup`n",
-            [Text.UTF8Encoding]::new($false)
-          )
-          # Why: mark the reversible service mutation before attempting it so failure still restores.
-          New-Item -ItemType File -Path (Join-Path $fixture 'service-owned') | Out-Null
           $binaryPath = "`"$sshd`" -f `"$config`" -E `"$log`""
-          & sc.exe config $serviceName binPath= $binaryPath start= demand | Out-Host
-          if ($LASTEXITCODE -ne 0) { throw 'Windows OpenSSH fixture service configuration failed' }
+          # Why: collision rejection makes this marker safe to use for partial-creation cleanup.
+          New-Item -ItemType File -Path (Join-Path $fixture 'service-owned') | Out-Null
+          New-Service -Name $serviceName -DisplayName 'Orca live Windows OpenSSH fixture' `
+            -BinaryPathName $binaryPath -StartupType Manual | Out-Null
           Start-Service -Name $serviceName
 
           $ready = $false
@@ -1479,12 +1502,14 @@ jobs:
             "ORCA_SSH_RELAY_LIVE_WINDOWS_SYSTEM_SSH_IDENTITY=$clientKey",
             "ORCA_SSH_RELAY_LIVE_WINDOWS_SYSTEM_SSH_REMOTE_ROOT=$remoteRootSshPath",
             "ORCA_SSH_RELAY_LIVE_WINDOWS_SYSTEM_SSH_SERVER_VERSION=$serverVersion",
+            "ORCA_SSH_RELAY_LIVE_WINDOWS_SYSTEM_SSH_ARCHIVE_SHA256=$archiveSha256",
             "ORCA_SSH_RELAY_LIVE_WINDOWS_SYSTEM_SSH_POWERSHELL_VERSION=$remotePowerShellVersion",
             "ORCA_SSH_RELAY_LIVE_WINDOWS_SYSTEM_SSH_CLIENT_HOME=$clientHome",
             "ORCA_SSH_RELAY_LIVE_WINDOWS_SYSTEM_SSH_SERVICE=$serviceName",
             "ORCA_SSH_RELAY_LIVE_WINDOWS_SYSTEM_SSH_ACCOUNT=$fixtureUser"
           ) | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           "windows_openssh_server=$serverVersion"
+          "windows_openssh_archive_sha256=$archiveSha256"
           "windows_powershell=$remotePowerShellVersion"
 
       - name: Measure exact full-size runtime over Windows system SSH
@@ -1531,24 +1556,15 @@ jobs:
                 }
               }
             }
-            if ($ownsService) {
-              $backupPath = Join-Path $fixture 'service-backup.json'
-              $backup = Get-Content -LiteralPath $backupPath -Raw | ConvertFrom-Json
-              $startToken = switch ($backup.startMode) {
-                'Auto' { 'auto' }
-                'Manual' { 'demand' }
-                'Disabled' { 'disabled' }
-                default { throw "Unsupported original sshd start mode: $($backup.startMode)" }
+            if ($ownsService -and $service) {
+              & sc.exe delete $serviceName | Out-Host
+              if ($LASTEXITCODE -ne 0) { throw 'Windows OpenSSH fixture service deletion failed' }
+              for ($attempt = 1; $attempt -le 20; $attempt += 1) {
+                if (-not (Get-Service -Name $serviceName -ErrorAction SilentlyContinue)) { break }
+                Start-Sleep -Milliseconds 100
               }
-              & sc.exe config $serviceName binPath= $backup.pathName start= $startToken | Out-Host
-              if ($LASTEXITCODE -ne 0) { throw 'Windows OpenSSH service restoration failed' }
-              $restored = Get-CimInstance Win32_Service -Filter "Name='$serviceName'" -ErrorAction Stop
-              if (
-                $restored.State -ne 'Stopped' -or
-                $restored.PathName -ne $backup.pathName -or
-                $restored.StartMode -ne $backup.startMode
-              ) {
-                throw 'Windows OpenSSH service did not return to its exact prior state'
+              if (Get-Service -Name $serviceName -ErrorAction SilentlyContinue) {
+                throw 'Windows OpenSSH fixture service remains registered'
               }
             }
           } catch { $failures.Add("service teardown: $($_.Exception.Message)") }

@@ -8,8 +8,8 @@ work; keep exact commands, runner identities, hashes, metrics, and residual gaps
 
 Date created: 2026-07-14<br>
 Last updated: 2026-07-15<br>
-Current phase: Milestone 6 / Work Package 5 bounded runtime transfer — **In progress — 2026-07-15, Codex implementation owner: live/full-size Windows system-SSH exact-head native proof**. Keep every capability disconnected from every production/default SSH path. Real Apple/SignPath rehearsals remain an explicit late gate and are not on this package's critical path.<br>
-Session checkpoint: **LIVE WINDOWS OPENSSH FIXTURE LOCALLY GREEN / NATIVE X64+ARM64 PROOF NEXT — 2026-07-15, Codex implementation owner** — `E-M6-WINDOWS-SYSTEM-SSH-TREE-LIVE-LOCAL-001` records the audited loopback fixture, purpose suite, workflow oracle, fixed-name service snapshot/restoration, focused/broad/release regression suites, typecheck, full lint, PowerShell parse, formatting, isolation, and protected-resolver gates locally green. The full-size live suite remains one honest local skip and earns no Windows claim. Commit and push the isolated package, then require exact-head `windows-2022` x64 and `windows-11-arm` arm64 logs before crediting capability installation/start, ACLs, PowerShell 5.1, full-size transfer, or teardown. Do not connect a product caller, change legacy upload/fallback/default behavior, enable a tuple, publish an artifact, or perform SignPath work. Merging to `main` remains prohibited, SignPath is deferred, and legacy remains the production default.<br>
+Current phase: Milestone 6 / Work Package 5 bounded runtime transfer — **In progress — 2026-07-15, Codex implementation owner: bounded official Windows OpenSSH fixture correction**. Keep every capability disconnected from every production/default SSH path. Real Apple/SignPath rehearsals remain an explicit late gate and are not on this package's critical path.<br>
+Session checkpoint: **PINNED MICROSOFT FIXTURE LOCALLY GREEN / EXACT-HEAD NATIVE PROOF NEXT — 2026-07-15, Codex implementation owner** — exact-head run `29535299209` proves x64 needs explicit host-key ownership and the hosted ARM64 image cannot install `OpenSSH.Server~~~~0.0.1.0` within the 30-minute job. `E-M6-WINDOWS-SYSTEM-SSH-TREE-LIVE-PORTABLE-FIXTURE-LOCAL-001` records the local correction that replaces that OS-capability dependency on both architectures with one immutable official Microsoft Win32-OpenSSH release, per-architecture SHA-256 pins, target-native Authenticode checks, bounded download/extraction, explicit key owners, and an ownership-marked fixed-name `sshd` service removed in teardown. The workflow oracle permits only that exact external Microsoft fixture release URL while continuing to forbid Orca release URLs, `gh release`, and `contents: write`. This is CI fixture provisioning only; production runtime bytes still cross authenticated SSH and no product remote downloads anything. Push the isolated correction and require fresh exact-head x64/arm64 proof. Do not connect a product caller, change legacy upload/fallback/default behavior, enable a tuple, publish an artifact, or perform SignPath work. Merging to `main` remains prohibited, SignPath is deferred, and legacy remains the production default.<br>
 Primary design: [SSH relay GitHub Release plan](./2026-07-14-ssh-relay-github-release-plan.html)<br>
 Motivating issues: [#8450](https://github.com/stablyai/orca/issues/8450), [#1693](https://github.com/stablyai/orca/issues/1693)
 
@@ -159,11 +159,12 @@ same change as the work it records.
 - Completed package: the disconnected POSIX system-SSH tree/root composition is green locally and
   on all six primary Node 24 native clients under E-M6-POSIX-SYSTEM-SSH-TREE-LOCAL-001 and
   E-M6-POSIX-SYSTEM-SSH-TREE-CI-001. It has no live/full-size SSH or product caller.
-- Active package: **Exact-head native proof in progress — 2026-07-15, Codex implementation owner** —
-  the audited purpose suite, loopback workflow wiring, fixed-name service restoration, and every
-  local regression/isolation gate pass under `E-M6-WINDOWS-SYSTEM-SSH-TREE-LIVE-LOCAL-001`. Commit
-  and push only this package, then collect native x64/arm64 capability, ACL, PowerShell 5.1,
-  full-size serial/four-channel/cancellation, and teardown evidence. Do not add product, settings,
+- Active package: **Official portable fixture correction in progress — 2026-07-15, Codex
+  implementation owner** — the ARM64 capability install times out under
+  `E-M6-WINDOWS-SYSTEM-SSH-TREE-LIVE-ARM64-CAPABILITY-CI-RED-001`. Provision the same exact official
+  Microsoft Win32-OpenSSH release on x64/arm64 with pinned archive hashes and target-native
+  Authenticode checks, create/delete only an ownership-marked fixed-name `sshd` service, retain the
+  explicit key owners, and rerun local plus both native architectures. Do not add product, settings,
   fallback, tuple, publication, default behavior, or signing.
 - Completed Work Package 2 gate: target-native Windows source-signature reports from exact-head
   artifact jobs 87267322867 and 87267322870 were independently downloaded and matched to their
@@ -18527,11 +18528,15 @@ src/main/ssh/ssh-remote-node-resolution.ts src/main/ssh/ssh-remote-node-resoluti
 ### E-M6-WINDOWS-SYSTEM-SSH-TREE-LIVE-AUDIT-001 — full-size native Windows OpenSSH proof contract
 
 - Date/owner/base: 2026-07-15, Codex implementation owner; audit-only package atop exact head
-  `8018152043a982f0d2c8d2907208858551c01176`. The published `windows-2022` and
-  `windows-11-arm` runner manifests identify the native OS/PowerShell images but do not promise an
-  installed OpenSSH Server. The fixture therefore queries `OpenSSH.Server~~~~0.0.1.0`, installs that
-  Windows capability only when absent, and fails closed if its native `sshd.exe` cannot validate or
-  start. It never substitutes a third-party server or credits a mocked/local-PowerShell-only path.
+  `8018152043a982f0d2c8d2907208858551c01176`, corrected after native evidence from run
+  `29535299209`. The published `windows-2022` and `windows-11-arm` runner manifests identify native
+  OS/PowerShell images but do not promise an installed OpenSSH Server; ARM64 capability installation
+  later consumed 19m16s until job timeout. The fixture therefore downloads one exact official
+  Microsoft Win32-OpenSSH release before starting the loopback host, pins the architecture-specific
+  archive SHA-256, verifies every extracted native PE with target-native Authenticode, and fails
+  closed on timeout/hash/signature/shape/start failure. This is CI infrastructure provisioning, not
+  the production runtime/bootstrap path or a remote-host egress requirement. No third-party server,
+  mutable latest lookup, mock, or local-PowerShell-only path earns proof.
 - Fixture ownership/authentication: create a purpose-named non-admin local account with a random
   in-memory password used only to keep the Windows account enabled; authenticate SSH solely with a
   freshly generated Ed25519 client key. Put the explicit `AuthorizedKeysFile`, host key, config,
@@ -18539,11 +18544,11 @@ src/main/ssh/ssh-remote-node-resolution.ts src/main/ssh/ssh-remote-node-resoluti
   fixture user, LocalSystem, and built-in Administrators as required. Grant that account Modify only
   on the fixture remote root. Never use `administrators_authorized_keys` or mutate the runner user's
   profile/config.
-- Server/trust/shell boundary: require the capability-owned `sshd` service to exist and be stopped;
-  fail without mutation if it is already running. Snapshot its exact image path and start mode,
-  temporarily point that fixed-name LocalSystem service at the fixture config, then restore both
-  values. This avoids assuming Windows `sshd.exe` can register under an arbitrary service name. The
-  custom config uses a dedicated port and `ListenAddress 127.0.0.1`; disables password,
+- Server/trust/shell boundary: require the fixed service name `sshd` to be absent; fail without
+  mutation on collision. Register only that fixture-owned LocalSystem service against the verified
+  portable binary/config, mark ownership before start, and delete it after PID settlement. This
+  avoids assuming Windows `sshd.exe` can register under an arbitrary service name. The custom config
+  uses a dedicated port and `ListenAddress 127.0.0.1`; disables password,
   keyboard-interactive, and challenge-response authentication; enables `StrictModes`; and allows
   only the fixture account. Generate a unique server Ed25519 key and pin its exact public key in a
   private `known_hosts`; readiness uses `BatchMode=yes`, `IdentitiesOnly=yes`, and
@@ -18557,12 +18562,10 @@ src/main/ssh/ssh-remote-node-resolution.ts src/main/ssh/ssh-remote-node-resoluti
   peak active files, OpenSSH/PowerShell/image/architecture identities, collision preservation, and
   connection reuse. Abort the four-channel path after observed progress; require joined settlement
   and owned-root removal below ten seconds, no later progress after 500 ms, and no leaked stage.
-- Teardown: explicit root/account/service-mutation ownership markers prevent collision cleanup. The
-  `always()` step stops only the fixture-started run, waits for its PID/process tree, restores the
-  capability service's exact prior image path/start mode, deletes only the marked fixture account/
-  profile/root, and prints bounded server logs. It may leave the Windows capability and its restored
-  stopped service installed on the disposable hosted runner, but must leave no account, key, stage,
-  connection, service mutation, or process owned by the test.
+- Teardown: explicit root/account/service ownership markers prevent collision cleanup. The
+  `always()` step stops only the fixture-started run, waits for its PID/process tree, deletes only the
+  marked fixed-name service/account/profile/root, and prints bounded server logs. It must leave no
+  account, key, stage, connection, registered service, or process owned by the test.
 - RED/green sequencing and residual boundary: first add a suite that honestly skips without all
   exact runner inputs and an oracle that fails solely for absent audited start/measure/stop steps.
   Then add the fixture wiring. Native capability installation/start, ACL behavior, PowerShell 5.1,
@@ -18650,6 +18653,139 @@ config/vitest.config.ts --maxWorkers=1 config/scripts/ssh-relay-runtime-*.test.m
   product/Beta/fallback/default behavior, tuple enablement, publication, Apple signing, and SignPath
   remain open. Legacy remains the sole production/default path and every tuple stays disabled.
 
+### E-M6-WINDOWS-SYSTEM-SSH-TREE-LIVE-CI-RED-001 — native x64 rejects implicit host-key ownership
+
+- Date/owner/head/run: 2026-07-15, Codex implementation owner; exact head
+  `0a85f88003fee626cbeb91d9ed65880e4b566991` on draft PR #8741, artifact run
+  `29535299209`, native Windows x64 job `87745066045` (`windows-2022`). The run remains in progress
+  while arm64 executes; this entry credits only the completed x64 RED and successful teardown.
+- Prior-boundary proof: setup, exact checkout, native MSVC/Node/pnpm, all runtime artifact contracts,
+  exact Node downloads, two clean runtime builds/equality/smoke, and full-size desktop extraction/
+  cache measurements pass. The new start step installs the OS OpenSSH Server capability, creates the
+  non-admin account/keys/ACLs, validates the custom `sshd_config`, and successfully applies the
+  reversible fixed-name service configuration. These facts do not credit a live SSH transfer.
+- Exact RED: `Start-Service sshd` fails after 84 seconds. The service log says
+  `Permissions for 'D:/a/_temp/orca-live-windows-system-ssh/host-key' are too open`,
+  `Unable to load host key ...: bad permissions`, and `sshd: no hostkeys available -- exiting`.
+  The file already has inheritance removed and only LocalSystem plus built-in Administrators full
+  access, but its owner remains the runner account that generated it. Windows OpenSSH host-key trust
+  requires the private-key owner itself to be an accepted service principal, not only narrow ACEs.
+- Cleanup proof: the `always()` teardown passes, restores the capability-owned `sshd` service's exact
+  prior image path/start mode, removes only ownership-marked account/root resources, and leaves no
+  fixture service process. The measure/upload steps correctly skip; no collision or unrelated state
+  is deleted.
+- Correction/residual boundary: explicitly set the host private-key owner to LocalSystem after
+  removing inheritance and set `authorized_keys` ownership to the non-admin fixture SID before its
+  first authentication attempt. Do not broaden either ACL, weaken `StrictModes`, use the admin key
+  file, substitute a server, or change any production code. Rerun the local oracle/static gates and
+  require fresh native x64 plus arm64 full-size evidence. This RED proves neither live auth nor
+  transfer and authorizes no product/Beta/fallback/default, tuple, publication, or signing change.
+
+### E-M6-WINDOWS-SYSTEM-SSH-TREE-LIVE-OWNER-CORRECTION-LOCAL-001 — explicit key owners are locally green
+
+- Date/owner/base: 2026-07-15, Codex implementation owner; uncommitted workflow-oracle/checklist
+  correction atop exact RED head `0a85f88003fee626cbeb91d9ed65880e4b566991` on Apple arm64,
+  macOS 26.2 build 25C56, Node 26.5.0, pnpm 10.24.0. Native Windows execution remains required.
+- Correction: after preserving the proven inheritance-free ACLs, call Windows `icacls /setowner`
+  with LocalSystem SID `S-1-5-18` for the host private key and the exact new local-user SID for
+  `authorized_keys`. No ACE, account, password, key bytes, service, config, transport, production
+  module, or product behavior changes. The workflow oracle pins both owner calls.
+- Purpose/oracle command: `pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1
+src/main/ssh/ssh-relay-runtime-windows-system-ssh-openssh-full-size.test.ts
+config/scripts/ssh-relay-runtime-workflow.test.mjs`. Result: 10/10 workflow cases pass in 63 ms;
+  the live suite remains one honest local skip; total Vitest duration is 540 ms. Extracted
+  start/measure/stop blocks all parse through PowerShell `[scriptblock]::Create()`.
+- Release-contract command: `pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1
+config/scripts/ssh-relay-runtime-*.test.mjs` passes 50 files and 283/283 cases in 11.32 seconds.
+  Targeted `oxlint` for the changed oracle passes. `oxfmt`, `git diff --check`, and exact protected
+  resolver equality pass.
+- Residual boundary: local syntax/contracts do not prove Windows accepts either owner, SSH auth,
+  PowerShell 5.1, full-size transfer, cancellation, collision, service restoration, or account/root
+  teardown. Preserve the original arm64 run result, then push the narrow correction and require
+  fresh exact-head native x64/arm64 evidence. No product/Beta/fallback/default, tuple, publication,
+  or signing claim follows.
+
+### E-M6-WINDOWS-SYSTEM-SSH-TREE-LIVE-ARM64-CAPABILITY-CI-RED-001 — hosted ARM64 capability install times out
+
+- Date/owner/head/run: 2026-07-15, Codex implementation owner; exact head
+  `0a85f88003fee626cbeb91d9ed65880e4b566991`, artifact run `29535299209`, native Windows arm64 job
+  `87745066052` on `windows-11-arm`. The job starts at 21:14:48Z and is cancelled at 21:45:11Z by
+  its existing 30-minute bound.
+- Prior-boundary proof: native setup, exact checkout, Node/pnpm/MSVC, all runtime artifact contracts,
+  exact Node inputs, two clean builds/equality/runtime smoke, and full-size desktop extraction/cache
+  pass. The new start step begins at 21:25:43Z. Its last executed command is
+  `Add-WindowsCapability -Online -Name OpenSSH.Server~~~~0.0.1.0`; it emits no completion or error
+  before cancellation at 21:44:59Z, 19m16s later. No fixture root/account/key/service is created
+  because capability installation precedes them; measure/upload correctly skip.
+- Teardown proof: the `always()` teardown runs for four seconds and passes after job cancellation.
+  Ownership markers are absent, so it removes no collision or unrelated account/service/root. The
+  runner is ephemeral and no production/external host state is touched.
+- Evidence-driven correction: do not increase the job timeout or retry an unbounded OS servicing
+  dependency. Use one immutable official Microsoft Win32-OpenSSH release on both architectures;
+  pin `OpenSSH-Win64.zip` to
+  `sha256:23f50f3458c4c5d0b12217c6a5ddfde0137210a30fa870e98b29827f7b43aba5` and
+  `OpenSSH-ARM64.zip` to
+  `sha256:698c6aec31c1dd0fb996206e8741f4531a97355686b5431ef347d531b07fcd42` for tag
+  `10.0.0.0p2-Preview`; bound curl retries/time, verify the archive before extraction, and require
+  target-native `Valid` Microsoft Authenticode on every extracted PE. Register/delete only the
+  collision-checked fixed-name `sshd` service. The GitHub download provisions the loopback CI
+  fixture before testing; the product runtime transfer remains client-to-host over authenticated SSH
+  with no remote HTTP/GitHub operation.
+- Residual boundary: no arm64 SSH authentication/PowerShell/full-size/teardown claim exists yet, and
+  x64 still needs its explicit key-owner rerun. Add workflow-oracle coverage for release tag, both
+  hashes, bounded download, Authenticode, fixed-name service ownership/deletion, and product
+  isolation; rerun local gates and fresh x64/arm64 jobs. No product/Beta/fallback/default, tuple,
+  publication, or signing change is authorized.
+
+### E-M6-WINDOWS-SYSTEM-SSH-TREE-LIVE-PORTABLE-FIXTURE-LOCAL-001 — pinned portable fixture correction is locally green
+
+- Date/owner/base/runner: 2026-07-15, Codex implementation owner; uncommitted workflow, purpose-test,
+  oracle, and checklist correction atop exact pushed head
+  `0a85f88003fee626cbeb91d9ed65880e4b566991` on Apple arm64, macOS 26.2 build 25C56, Node 26.5.0,
+  pnpm 10.24.0. Local Node is newer than the repository's Node 24 contract and macOS cannot execute
+  the Windows fixture, so exact-head native proof remains mandatory.
+- Correction: remove only `Add-WindowsCapability` fixture provisioning. Both Windows architectures
+  download the same immutable official Microsoft Win32-OpenSSH tag `10.0.0.0p2-Preview` with bounded
+  curl (20-second connect, 300-second total, two retries), verify their exact pinned archive SHA-256,
+  require target-native `Valid` Microsoft Authenticode on every extracted PE, and create/delete only
+  a collision-checked, ownership-marked fixed-name `sshd` service. The proven LocalSystem host-key
+  owner and fixture-SID `authorized_keys` owner remain. Account/service ownership markers are
+  written after collision rejection but before creation so partial failures remain teardown-owned.
+  This external download provisions only the loopback CI server; no production module or
+  remote-host HTTP behavior changes.
+- Oracle correction: the three no-publication assertions now reject exact Orca release URLs,
+  `gh release`, and `contents: write` rather than every third-party path containing `releases/`.
+  The Windows fixture oracle separately pins the exact Microsoft repository/tag, both hashes,
+  download bounds, Authenticode policy, owners, service creation/deletion, and absence of
+  `Add-WindowsCapability`. This permits no mutable URL or Orca publication path.
+- Purpose/oracle command: `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts
+--maxWorkers=1 src/main/ssh/ssh-relay-runtime-windows-system-ssh-openssh-full-size.test.ts
+config/scripts/ssh-relay-runtime-workflow.test.mjs` passes 10/10 workflow cases with one declared
+  live-suite skip in 1.86 seconds real; maximum RSS is 141,148,160 bytes and peak footprint is
+  97,261,280 bytes. Independent YAML extraction plus PowerShell `[scriptblock]::Create()` parses all
+  three start/measure/stop blocks.
+- Release-contract command: `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts
+--maxWorkers=1 config/scripts/ssh-relay-runtime-*.test.mjs` passes 50 files and 283/283 cases in
+  16.36 seconds real; maximum RSS is 195,674,112 bytes and peak footprint is 97,539,904 bytes.
+- Broad relay command: `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts
+--maxWorkers=1 src/main/ssh/ssh-relay-*.test.ts` passes 53 files with six declared file skips and
+  694 cases with ten declared skips in 26.11 seconds real; maximum RSS is 299,728,896 bytes and peak
+  footprint is 97,146,640 bytes.
+- Static/isolation evidence: `/usr/bin/time -l pnpm typecheck` passes in 4.35 seconds real.
+  `/usr/bin/time -l pnpm lint` passes in 21.83 seconds real with only the 26 pre-existing warnings,
+  41 reliability gates, the 355-entry max-lines ratchet, localization, and bundled-guide checks;
+  maximum RSS is 2,037,121,024 bytes and peak footprint is 98,310,024 bytes. Changed-file
+  `oxfmt --check`, `git diff --check`, and exact protected-resolver equality against `HEAD` pass.
+  The intended diff contains only the CI workflow, its workflow oracle, its purpose-named live test,
+  and both checklists; no production consumer exists.
+- Residual boundary: local contracts and parsing do not prove the archive download, every extracted
+  PE's Authenticode status, service start, SID ownership, SSH authentication, remote Windows
+  PowerShell 5.1, full-size serial/four-channel transfer, cancellation, collision preservation,
+  connection reuse, or teardown. Commit/push the isolated correction and require fresh exact-head
+  Windows x64 plus arm64 jobs. Product/Beta/settings/fallback/default behavior, tuple enablement,
+  release publication, Apple signing, and SignPath remain absent; legacy remains the sole
+  production/default path.
+
 ## Accepted Gaps
 
 No product gap is accepted merely because it appears in this list. Each entry requires explicit
@@ -18708,11 +18844,13 @@ The project is not complete until every applicable item below is checked with ev
 
 ## Next Required Action
 
-Commit and push only the locally green live Windows OpenSSH package, then collect exact-head
-`windows-2022` x64 and `windows-11-arm` arm64 capability, ACL, PowerShell 5.1, exact full-size
-serial/four-channel/cancellation, collision, connection-reuse, and teardown evidence. Do not check
-the broad Milestone 6 Windows system-SSH item yet. Do not add an Electron/startup/product importer,
-per-target mode wiring, fallback, tuple enablement, release publication, or default behavior.
+Replace only the timed-out OS-capability fixture dependency with the pinned official Microsoft
+portable release contract in
+`E-M6-WINDOWS-SYSTEM-SSH-TREE-LIVE-ARM64-CAPABILITY-CI-RED-001`, retain the explicit key owners, rerun
+local gates, and push for fresh x64/arm64 ACL, PowerShell 5.1, exact full-size serial/four-channel/
+cancellation, collision, connection-reuse, and teardown evidence. Do not check the broad Milestone
+6 Windows system-SSH item yet. Do not add an Electron/startup/product importer, per-target mode
+wiring, fallback, tuple enablement, release publication, or default behavior.
 Keep Node upstream `.tar.xz` inputs, Windows ZIP, `ORCA_RELAY_PATH`, existing desktop required-assets
 behavior, detached-signature byte encoding, Windows arm64 build 26100, macOS 13.5, Linux kernel 4.18,
 release-cut, desktop builds, publication, and every tuple separately gated.

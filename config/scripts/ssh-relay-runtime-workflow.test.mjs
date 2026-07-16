@@ -157,17 +157,32 @@ describe('SSH relay runtime artifact workflow', () => {
     expect(measure).toBeDefined()
     expect(stop).toBeDefined()
     expect(start.shell).toBe('pwsh')
-    expect(start.run).toContain('OpenSSH.Server~~~~0.0.1.0')
-    expect(start.run).toContain('Add-WindowsCapability')
+    expect(start.run).toContain('10.0.0.0p2-Preview')
+    expect(start.run).toContain('23f50f3458c4c5d0b12217c6a5ddfde0137210a30fa870e98b29827f7b43aba5')
+    expect(start.run).toContain('698c6aec31c1dd0fb996206e8741f4531a97355686b5431ef347d531b07fcd42')
+    expect(start.run).toContain('--connect-timeout 20 --max-time 300 --retry 2')
+    expect(start.run).toContain('Get-AuthenticodeSignature')
+    expect(start.run).toContain("$signature.Status -ne 'Valid'")
+    expect(start.run).toContain('CN=Microsoft Corporation')
+    expect(start.run).not.toContain('Add-WindowsCapability')
     expect(start.run).toContain('New-LocalUser')
+    expect(start.run.indexOf("Join-Path $fixture 'account-owned'")).toBeLessThan(
+      start.run.indexOf('New-LocalUser')
+    )
     expect(start.run).toContain('ListenAddress 127.0.0.1')
     expect(start.run).toContain('PasswordAuthentication no')
     expect(start.run).toContain('StrictModes yes')
     expect(start.run).toContain('StrictHostKeyChecking=yes')
     expect(start.run).toContain('powershell.exe')
     expect(start.run).toContain('([Version]$remotePowerShellVersion).Major -ne 5')
+    expect(start.run).toContain('/setowner')
+    expect(start.run).toContain("Set-FixtureOwner $hostKey 'S-1-5-18'")
+    expect(start.run).toContain('Set-FixtureOwner $authorizedKeys $userSid')
     expect(start.run).not.toContain('administrators_authorized_keys')
-    expect(start.run).not.toContain('New-Service')
+    expect(start.run).toContain('New-Service')
+    expect(start.run.indexOf("Join-Path $fixture 'service-owned'")).toBeLessThan(
+      start.run.indexOf('New-Service')
+    )
     expect(measure.shell).toBe('pwsh')
     expect(measure.run).toContain("$env:ORCA_SSH_FORCE_SYSTEM_TRANSPORT = '1'")
     expect(measure.run).toContain('ssh-relay-runtime-windows-system-ssh-openssh-full-size.test.ts')
@@ -177,9 +192,9 @@ describe('SSH relay runtime artifact workflow', () => {
     expect(stop.run).toContain('fixture-owned')
     expect(stop.run).toContain('service-owned')
     expect(stop.run).toContain('account-owned')
-    expect(stop.run).toContain('service-backup.json')
-    expect(stop.run).toContain('sc.exe config')
-    expect(stop.run).not.toContain('sc.exe delete')
+    expect(stop.run).not.toContain('service-backup.json')
+    expect(stop.run).not.toContain('sc.exe config')
+    expect(stop.run).toContain('sc.exe delete')
     expect(stop.run).toContain('Remove-LocalUser')
   })
 
@@ -430,7 +445,9 @@ describe('SSH relay runtime artifact workflow', () => {
       windowsRun.indexOf("throw 'runtime reproducibility verification failed'")
     )
     expect(steps[uploadIndex].with.path).toBe('runtime-evidence/${{ matrix.tuple }}/')
-    expect(source).not.toMatch(/releases\/|gh release|contents:\s*write/i)
+    expect(source).not.toMatch(
+      /github\.com\/stablyai\/orca\/releases\/|gh release|contents:\s*write/i
+    )
   })
 
   it('assesses and stages real first-build candidates without signing authority', async () => {
@@ -514,7 +531,9 @@ describe('SSH relay runtime artifact workflow', () => {
     expect(normalizedContainerfile).toContain('python39')
     expect(normalizedContainerfile).toContain('NODE_GYP_FORCE_PYTHON=/usr/bin/python3.9')
     expect(normalizedContainerfile).toContain('      which \\\n')
-    expect(source).not.toMatch(/releases\/|gh release|contents:\s*write/i)
+    expect(source).not.toMatch(
+      /github\.com\/stablyai\/orca\/releases\/|gh release|contents:\s*write/i
+    )
   })
 
   it('separates qualifying Windows floors from supplemental Linux userland evidence', async () => {
@@ -577,6 +596,8 @@ describe('SSH relay runtime artifact workflow', () => {
     expect(windowsRun).toContain('--scope full')
     expect(windowsRun).toContain('$identities.Count -ne 1')
     expect(windowsRun).toContain('$archives.Count -ne 1')
-    expect(source).not.toMatch(/releases\/|gh release|contents:\s*write/i)
+    expect(source).not.toMatch(
+      /github\.com\/stablyai\/orca\/releases\/|gh release|contents:\s*write/i
+    )
   })
 })

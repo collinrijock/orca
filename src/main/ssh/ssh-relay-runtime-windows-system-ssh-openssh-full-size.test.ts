@@ -53,6 +53,7 @@ const user = process.env.ORCA_SSH_RELAY_LIVE_WINDOWS_SYSTEM_SSH_USER
 const identityFile = process.env.ORCA_SSH_RELAY_LIVE_WINDOWS_SYSTEM_SSH_IDENTITY
 const remoteRoot = process.env.ORCA_SSH_RELAY_LIVE_WINDOWS_SYSTEM_SSH_REMOTE_ROOT
 const serverVersion = process.env.ORCA_SSH_RELAY_LIVE_WINDOWS_SYSTEM_SSH_SERVER_VERSION
+const fixtureArchiveSha256 = process.env.ORCA_SSH_RELAY_LIVE_WINDOWS_SYSTEM_SSH_ARCHIVE_SHA256
 const powerShellVersion = process.env.ORCA_SSH_RELAY_LIVE_WINDOWS_SYSTEM_SSH_POWERSHELL_VERSION
 const runtimeRoot = process.env.ORCA_SSH_RELAY_FULL_SIZE_RUNTIME_ROOT
 const identityPath = process.env.ORCA_SSH_RELAY_FULL_SIZE_IDENTITY
@@ -63,6 +64,7 @@ const hasLiveInput = Boolean(
   identityFile &&
   remoteRoot &&
   serverVersion &&
+  fixtureArchiveSha256 &&
   powerShellVersion &&
   runtimeRoot &&
   identityPath &&
@@ -242,6 +244,7 @@ describe.skipIf(!hasLiveInput)(
         expect(process.platform).toBe('win32')
         expect(process.env.ORCA_SSH_FORCE_SYSTEM_TRANSPORT).toBe('1')
         expect(powerShellVersion).toMatch(/^5\.1\./u)
+        expect(fixtureArchiveSha256).toMatch(/^[0-9a-f]{64}$/u)
         const identity = parseIdentity(JSON.parse(await readFile(identityPath as string, 'utf8')))
         expect(identity.os).toBe('win32')
         const tree = await scanSshRelayRuntimeSourceTree(
@@ -344,6 +347,7 @@ describe.skipIf(!hasLiveInput)(
             files: tree.fileCount,
             bytes: tree.expandedBytes,
             serverVersion,
+            fixtureArchiveSha256,
             powerShellVersion,
             runnerImage: process.env.ImageOS,
             runnerVersion: process.env.ImageVersion,
