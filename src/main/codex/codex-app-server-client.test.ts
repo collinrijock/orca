@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -90,6 +90,7 @@ function writeFileSyncSafe(file, contents) { require('node:fs').writeFileSync(fi
 let tempRoots: string[] = []
 
 afterEach(() => {
+  vi.restoreAllMocks()
   for (const root of tempRoots) {
     rmSync(root, { recursive: true, force: true })
   }
@@ -149,6 +150,8 @@ function managedHook(key: string, trustStatus = 'untrusted'): StubHook {
 
 describe('runCodexHookTrustGrantSession', () => {
   it('grants and verifies exactly the expected managed entries', async () => {
+    const setTimeoutSpy = vi.spyOn(globalThis, 'setTimeout')
+    const clearTimeoutSpy = vi.spyOn(globalThis, 'clearTimeout')
     const keys = [
       '/home/a/.codex/hooks.json:session_start:0:0',
       '/home/a/.codex/hooks.json:stop:0:0'
@@ -191,6 +194,13 @@ describe('runCodexHookTrustGrantSession', () => {
     expect(written.edits[0].mergeStrategy).toBe('upsert')
     expect(Object.keys(written.edits[0].value).sort()).toEqual([...keys].sort())
     expect(written.reloadUserConfig).toBe(true)
+    // Why: the entry process waits on these handles after setting exitCode, so
+    // an uncleared grace timer adds its full delay to synchronous launch prep.
+    const timerHandles = setTimeoutSpy.mock.results.map(({ value }) => value)
+    expect(timerHandles).toHaveLength(2)
+    expect(clearTimeoutSpy.mock.calls.map(([handle]) => handle)).toEqual(
+      expect.arrayContaining(timerHandles)
+    )
   })
 
   it('skips config/batchWrite when every expected entry is already trusted', async () => {
