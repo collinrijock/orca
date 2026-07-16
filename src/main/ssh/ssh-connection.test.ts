@@ -932,6 +932,11 @@ describe('SshConnection', () => {
 
   it('uses system SSH transport when ProxyUseFdpass is resolved by OpenSSH', async () => {
     vi.mocked(resolveWithSshG).mockResolvedValueOnce(createResolvedConfig())
+    let probeChannel: ReturnType<typeof createSystemCommandChannel> | undefined
+    spawnSystemSshCommandMock.mockImplementationOnce(() => {
+      probeChannel = createSystemCommandChannel()
+      return probeChannel
+    })
     const conn = new SshConnection(createTarget({ configHost: 'fdpass-host' }), createCallbacks())
 
     await conn.connect()
@@ -947,6 +952,7 @@ describe('SshConnection', () => {
         resolvedConfig: expect.objectContaining({ proxyUseFdpass: true })
       }
     )
+    expect(probeChannel?.stdin.end).toHaveBeenCalledOnce()
   })
 
   it('allows concurrent exec commands for system SSH with an Orca ControlMaster socket', async () => {

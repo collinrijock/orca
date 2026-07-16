@@ -9,8 +9,8 @@ keeps commands, hashes, runner identities, timings, and failure details.
 A checked box means the work has evidence in the detailed ledger. Design approval alone does not
 complete a box.
 
-Active checkpoint: **Milestone 6 / Work Package 5 bounded runtime transfer — bounded official
-Windows OpenSSH fixture correction, 2026-07-15, Codex implementation owner.**
+Active checkpoint: **Milestone 6 / Work Package 5 bounded runtime transfer — exact-head Windows
+OpenSSH live-proof diagnosis and fixture correction, 2026-07-15, Codex implementation owner.**
 `E-M6-WINDOWS-SYSTEM-SSH-TREE-LIVE-PORTABLE-FIXTURE-LOCAL-001` records the portable-fixture
 correction locally green: the no-Orca-publication workflow oracle permits the one exact pinned
 Microsoft fixture release URL while Orca release URLs, `gh release`, and `contents: write` remain
@@ -50,7 +50,24 @@ SID, assert the exact allowed SID closure, and rerun.
 correction locally green: protected allow-only ACLs remove the creator and require exact trustee SID
 closure; 10/10 focused workflow cases, all three PowerShell blocks, 283/283 artifact contracts,
 typecheck, full lint/reliability/max-lines, format, diff, and protected-resolver isolation pass. Push
-for fresh exact-head x64/arm64 proof.
+for fresh exact-head x64/arm64 proof. Exact head
+`d28552f0d953e40d96a4c24cdcdb5ba7d85b7c9f` is pushed; artifact run `29541119819` is RED after
+independently proving all archive/hash/closure/signer/build/cache gates. Windows x64 job
+`87763404467` starts OpenSSH 10.0p2, proves PowerShell 5.1 and pinned-key authentication, then the
+production system-SSH connection probe times out before transfer metrics; teardown also detects a
+loaded fixture profile instead of silently leaving it. Windows ARM64 job `87763404492` stops earlier
+at the exact ACL oracle because the C: fixture root retains explicit Authenticated Users and Users
+ACEs in addition to the intended SYSTEM, Administrators, and fixture-user closure; ownership-safe
+teardown passes. Diagnose and correct both fixture-exposed contracts, preserving connection reuse
+and bounded deterministic teardown, then require fresh exact-head x64/arm64 proof.
+`E-M6-WINDOWS-SYSTEM-SSH-TREE-LIVE-EXACT-HEAD-CORRECTION-LOCAL-001` records the three bounded
+corrections locally green: the no-input production probe closes native OpenSSH stdin, fixture DACLs
+are atomically replaced with exact protected allow-only rules independent of drive defaults, and an
+owned `Win32_UserProfile` is deleted through a bounded native lifecycle before account/filesystem
+teardown. Focused tests pass 71 cases with one declared live skip, all three PowerShell blocks parse,
+all 283 artifact contracts pass, typecheck and full lint/reliability/max-lines pass, formatting/diff
+are clean, and the protected resolver files remain unchanged. Commit/push this isolated package and
+require fresh x64/arm64 live proof before advancing.
 `E-M6-WINDOWS-SYSTEM-SSH-TREE-LIVE-AUDIT-001` fixes the loopback-only official Microsoft
 server, fixture-owned non-admin account/ACL, exact host-key trust, Windows PowerShell 5.1,
 serial/default and four-channel metrics, cancellation/collision/cleanup, and deterministic teardown

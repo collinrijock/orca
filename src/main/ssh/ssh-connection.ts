@@ -755,6 +755,9 @@ export class SshConnection {
         channel.stderr.on('data', onStderrData)
         channel.on('error', onError)
         channel.on('close', onClose)
+        // Why: native Windows OpenSSH keeps its input worker alive while the
+        // pipe is open, even though this probe can never consume stdin.
+        ;(channel as ClientChannel & { stdin: NodeJS.WritableStream }).stdin.end()
       })
     } catch (err) {
       this.useSystemSshTransport = false

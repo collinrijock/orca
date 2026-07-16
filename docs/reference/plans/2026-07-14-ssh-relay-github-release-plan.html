@@ -1642,7 +1642,8 @@
                   <td>
                     Full-size runtime over SFTP and POSIX/Windows system SSH; tar/no-tar; no remote
                     hash tools; corrupted upload; bundled-Node corruption/failure; bounded memory
-                    and concurrency; <code>MaxSessions=1</code>; interrupted upload; stale lock
+                    and concurrency; no-input system-SSH probe stdin/child settlement;
+                    <code>MaxSessions=1</code>; interrupted upload; stale lock
                   </td>
                   <td>
                     Bundled Node hashes the full staged tree before sentinel write;
@@ -1666,9 +1667,11 @@
                   <td>
                     This trust exception provisions only the loopback CI server. Production clients
                     and SSH hosts perform no fixture download. Fixture host-key and authorized-key
-                    ACL creation removes creator-specific access and asserts the exact allowed SID
-                    closure before service start; none of this weakens runtime artifact,
-                    native-signing, transfer, install, or launch trust.
+                    ACL creation replaces volume-specific defaults with the exact allowed,
+                    protected, allow-only SID closure before service start. Owned fixture profiles
+                    are unloaded and removed through a bounded native lifecycle before exact
+                    teardown assertions; none of this weakens runtime artifact, native-signing,
+                    transfer, install, or launch trust.
                   </td>
                 </tr>
                 <tr>
