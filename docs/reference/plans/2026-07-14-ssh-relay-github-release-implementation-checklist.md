@@ -9,7 +9,7 @@ work; keep exact commands, runner identities, hashes, metrics, and residual gaps
 Date created: 2026-07-14<br>
 Last updated: 2026-07-15<br>
 Current phase: Milestone 6 / Work Package 5 bounded runtime transfer — **In progress — 2026-07-15, Codex implementation owner: disconnected POSIX system-SSH/no-tar transfer composition**. Keep every capability disconnected from every production/default SSH path. Real Apple/SignPath rehearsals remain an explicit late gate and are not on this package's critical path.<br>
-Session checkpoint: **POSIX SYSTEM-SSH TREE/ROOT EXACT-HEAD GREEN / LIVE FULL-SIZE AUDIT NEXT — 2026-07-15, Codex implementation owner** — `E-M6-POSIX-SYSTEM-SSH-TREE-CI-001` proves the 15-case disconnected composition on all six primary Node 24 native clients at exact head `ec51e36b7`; Linux supplements, Windows x64 floor, PR Checks, computer-use, and Golden E2E pass. The artifact run remains red only for the declared Windows arm64 hosted build 26200 versus required 26100 floor mismatch after complete runtime verification. Audit only a purpose-named live/full-size loopback OpenSSH proof next; do not connect production behavior. Merging to `main` remains prohibited, SignPath is deferred, and legacy remains the production default.<br>
+Session checkpoint: **POSIX SYSTEM-SSH LIVE FULL-SIZE LOCAL PACKAGE GREEN / COMMIT AND EXACT-HEAD CI NEXT — 2026-07-15, Codex implementation owner** — `E-M6-POSIX-SYSTEM-SSH-TREE-LIVE-LOCAL-001` records the bounded workflow oracle, focused/broad/release suites, typecheck, lint, max-lines, formatting, diff, protected-resolver, and no-product-consumer gates green. The purpose suite remains honestly skipped without its seven CI inputs and earns no live proof locally. Commit and push only this test/workflow/docs package, then require exact-head Linux x64/arm64 live metrics and all-six adjacent regression cells. Merging to `main` remains prohibited, SignPath is deferred, and legacy remains the production default.<br>
 Primary design: [SSH relay GitHub Release plan](./2026-07-14-ssh-relay-github-release-plan.html)<br>
 Motivating issues: [#8450](https://github.com/stablyai/orca/issues/8450), [#1693](https://github.com/stablyai/orca/issues/1693)
 
@@ -17879,8 +17879,8 @@ config/scripts/ssh-relay-runtime-workflow.test.mjs`.
   separate five-second abort controller. Runtime-invalid staging-root input was corrected before
   final GREEN so validation cannot throw an incidental `.split` type error.
 - Purpose command: `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts
-  --maxWorkers=1 src/main/ssh/ssh-relay-runtime-posix-control-command.test.ts
-  src/main/ssh/ssh-relay-runtime-posix-tree-transfer.test.ts`. Result: 2 files and 15/15 cases pass;
+--maxWorkers=1 src/main/ssh/ssh-relay-runtime-posix-control-command.test.ts
+src/main/ssh/ssh-relay-runtime-posix-tree-transfer.test.ts`. Result: 2 files and 15/15 cases pass;
   Vitest 1.95 seconds, 2.96 seconds real, 139,640,832-byte maximum RSS, 95,851,848-byte peak memory
   footprint, zero swaps and block I/O. Cases cover exact/no-input success, nonzero/error, pre/mid
   abort, timeout, graceful/forced settlement and joined failures; invalid OS/path/concurrency before
@@ -17888,7 +17888,7 @@ config/scripts/ssh-relay-runtime-workflow.test.mjs`.
   progress, default-one/four-channel bounds, collision ownership, cancellation settlement, and
   cleanup failure/timeout joining.
 - Focused composition command: `/usr/bin/time -l pnpm exec vitest run --config
-  config/vitest.config.ts --maxWorkers=1` with the two new purpose suites plus
+config/vitest.config.ts --maxWorkers=1` with the two new purpose suites plus
   `ssh-relay-runtime-posix-file-destination.test.ts`,
   `ssh-relay-runtime-system-ssh-file-channel.test.ts`, the source-tree/scan/stream suites,
   `ssh-system-fallback.test.ts`, `ssh-connection.test.ts`, and
@@ -17898,13 +17898,13 @@ config/scripts/ssh-relay-runtime-workflow.test.mjs`.
   lease, retained-buffer/no-later-write, missing process/false kill, diagnostic, child settlement,
   and exact native-workflow-family contracts inherited from the composed boundaries.
 - Broad relay command: `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts
-  --maxWorkers=1 src/main/ssh/ssh-relay-*.test.ts`. Result: 50 files passed, four files skipped;
+--maxWorkers=1 src/main/ssh/ssh-relay-*.test.ts`. Result: 50 files passed, four files skipped;
   656 passed and six declared skips out of 662. Vitest 55.58 seconds, 58.05 seconds real,
   254,115,840-byte maximum RSS, 96,458,248-byte peak memory footprint, zero swaps and block I/O.
   Skips remain the declared case-fold/full-size/live SSH cells and are not treated as this package's
   evidence.
 - Release-contract command: `/usr/bin/time -l pnpm exec vitest run --config
-  config/vitest.config.ts --maxWorkers=1 config/scripts/ssh-relay-runtime-*.test.mjs`. Result: 50
+config/vitest.config.ts --maxWorkers=1 config/scripts/ssh-relay-runtime-*.test.mjs`. Result: 50
   files and 281/281 cases pass; Vitest 37.74 seconds, 41.85 seconds real, 190,676,992-byte maximum
   RSS, 97,195,384-byte peak memory footprint, zero swaps and block I/O.
 - Static commands/results: `/usr/bin/time -l pnpm typecheck` passes in 8.38 seconds real with
@@ -17917,7 +17917,7 @@ config/scripts/ssh-relay-runtime-workflow.test.mjs`.
   `pnpm check:max-lines-ratchet` command; no checklist box was credited to the failed spelling.
 - Isolation evidence: `git diff --check` and no-index whitespace checks for all four new files are
   clean. `git diff --exit-code HEAD -- src/main/ssh/ssh-remote-node-resolution.ts
-  src/main/ssh/ssh-remote-node-resolution.test.ts` is empty, preserving the protected Milestone 0
+src/main/ssh/ssh-remote-node-resolution.test.ts` is empty, preserving the protected Milestone 0
   resolver. The only implementation references to the exported tree owner are its definition and
   purpose test; the control owner is consumed only by that disconnected tree owner and its test.
   No product, settings, legacy uploader, fallback, tuple, publication, or default-path importer
@@ -17970,6 +17970,115 @@ config/scripts/ssh-relay-runtime-workflow.test.mjs`.
   path, dynamic `MaxSessions=1`, high-RTT remotes, Windows transfer, remote bundled-Node install/
   publish/launch, product/Beta/fallback/default wiring, tuple enablement, release publication, and
   SignPath remain absent.
+
+### E-M6-POSIX-SYSTEM-SSH-TREE-LIVE-AUDIT-001 — restricted-primitive full-size OpenSSH proof
+
+- Date/owner/base: 2026-07-15, Codex implementation owner; exact clean evidence base
+  `3fbf2339badb7bab0308a6daadb80e7d5444e280` after recording the disconnected tree package's
+  exact-head evidence.
+- Existing-boundary audit: the exact tree owner already composes production `SshConnection.exec`,
+  the system-SSH child/channel adapter, exclusive POSIX destinations, the scanned lease-backed
+  source stream, and bounded owned-root cleanup. No production change is necessary for live proof.
+  The existing live SFTP fixture cannot force a restricted command environment because its
+  `internal-sftp` subsystem shares the daemon, so do not alter or weaken it.
+- Live fixture: on only the Linux x64/arm64 target-native artifact jobs, start a second stock
+  loopback-only `sshd` on its own port/PID/log with the already-generated ephemeral Ed25519 client
+  and host keys. Pin the generated public host key into the runner user's `known_hosts`; retain
+  `StrictModes yes`, disable password/keyboard-interactive authentication, and never expose a
+  non-loopback listener. `ForceCommand` invokes a fixed fixture-owned POSIX wrapper whose remote
+  `PATH` contains symlinks only for `mkdir`, `chmod`, `cat`, and `rm`; `/bin/sh` is absolute. This
+  proves transfer without remote Node, Python, Perl, tar, base64, `sha256sum`, or `shasum`, while
+  preserving normal production system-SSH argument/channel behavior and authenticated transport.
+- Purpose suite: build a scanned source tree from the exact full-size runtime identity produced in
+  the same native job, force the existing `SshConnection` into system transport only for the test,
+  and call `transferSshRelayRuntimeTreeViaPosixSystemSsh` directly. Measure serial/default-one and
+  explicit-four transfers; validate every remote path, byte, SHA-256, mode, file count, and total;
+  prove a root collision cannot alter the complete tree; cancel after the first transferred bytes,
+  require no later progress and owned-root removal after settlement; and prove the connection remains
+  usable. Record tuple/content/server/runner, bytes/files, elapsed time, peak progress concurrency,
+  incremental RSS, cancellation delay, and residual gaps. Enforce the existing 80 MiB incremental
+  RSS and 10-second cancellation ceilings under the workflow's 20-minute job budget.
+- Evidence sequence: add only the skipped-without-input purpose suite plus workflow oracle first and
+  accept RED only when the oracle reports the three missing start/measure/stop steps. Then add the
+  bounded workflow fixture/wiring, require local skip/oracle GREEN plus broad/static/isolation gates,
+  commit, and require exact-head Linux x64/arm64 live metrics and all-six adjacent regression cells.
+- Explicit residual boundary: no high-RTT host, `MaxSessions=1`, cross-client/remote family matrix,
+  network interruption/disk/quota/inode/noexec/AV fault injection, semantic probe/cache, optional tar
+  fast path, Windows transfer, remote bundled-Node verification/install/publish/launch, product/Beta/
+  settings/fallback/default behavior, tuple enablement, publication, or SignPath is included. Legacy
+  remains the only production/default path.
+
+### E-M6-POSIX-SYSTEM-SSH-TREE-LIVE-LOCAL-RED-001 — audited workflow fixture is absent
+
+- Date/owner/base: 2026-07-15, Codex implementation owner; audit, purpose suite, and workflow-oracle-
+  only diff atop exact clean evidence base `3fbf2339badb7bab0308a6daadb80e7d5444e280`.
+- Command: `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1
+src/main/ssh/ssh-relay-runtime-posix-system-ssh-openssh-full-size.test.ts
+config/scripts/ssh-relay-runtime-workflow.test.mjs`.
+- Result: expected RED, exit 1. The purpose-named live suite declares its single case skipped because
+  the seven full-size/OpenSSH inputs are absent locally and earns no transfer evidence. The workflow
+  oracle passes 8/9 existing cases and its only failure is `expected undefined to be defined` for
+  the audited restricted POSIX system-SSH start step; measure and stop are consequently absent too.
+- Resource evidence: Vitest 1.50 seconds, 3.73 seconds real, 143,818,752-byte maximum RSS,
+  96,146,808-byte peak memory footprint, zero swaps and block I/O.
+- Disposition: RED is causal and accepted. Add only the second loopback daemon, restricted primitive
+  wrapper, exact known-host pin, purpose measurement, and always-run cleanup steps. No production,
+  product/default, fallback, tuple, publication, tar optimization, Windows transfer, or SignPath
+  change is authorized by this evidence.
+
+### E-M6-POSIX-SYSTEM-SSH-TREE-LIVE-LOCAL-001 — bounded live fixture package is locally green
+
+- Date/owner/base/runner: 2026-07-15, Codex implementation owner; uncommitted test/workflow/docs
+  package atop exact base `3fbf2339badb7bab0308a6daadb80e7d5444e280` on Apple arm64, macOS 26.2
+  build 25C56, Node 26.0.0, pnpm 10.24.0. The local Node version is newer than the repository's Node
+  24 contract, so exact-head native workflow evidence remains mandatory.
+- Package: add one purpose-named live/full-size test and three audited Linux-only artifact-workflow
+  steps. The fixture starts a second stock loopback `sshd`, pins the generated host key, permits only
+  public-key authentication, and forces a wrapper whose `PATH` contains only `mkdir`, `chmod`, `cat`,
+  and `rm` while invoking absolute `/bin/sh`. The test uses the exact native runtime tree and existing
+  production system-SSH composition to measure default-one and explicit-four transfer, exact tree
+  bytes/hashes/modes/paths/counts, exclusive-root collision preservation, cancellation settlement,
+  no later progress, owned-root cleanup, post-cancellation connection usability, latency, RSS, and
+  active-file count. No production module changes.
+- Targeted command: `pnpm exec oxfmt --check` for the new test, workflow oracle, and artifact workflow;
+  `pnpm exec oxlint` for the new test and oracle; then `/usr/bin/time -l pnpm exec vitest run --config
+  config/vitest.config.ts --maxWorkers=1 src/main/ssh/ssh-relay-runtime-posix-system-ssh-openssh-full-size.test.ts
+  config/scripts/ssh-relay-runtime-workflow.test.mjs`. Result: formatting/lint pass; the workflow
+  oracle passes 9/9 while the one live case is explicitly skipped because its seven CI inputs are
+  absent. Vitest 12.53 seconds; 25.90 seconds real; 131,907,584-byte maximum RSS; 96,146,904-byte
+  peak footprint; zero swaps and block I/O. The skip earns no live/full-size transfer evidence.
+- Focused composition command: `/usr/bin/time -l pnpm exec vitest run --config
+  config/vitest.config.ts --maxWorkers=1` with the control/tree/file-destination/system-channel,
+  source-tree/scan/stream, system-fallback, connection, and workflow-oracle suites. Result: 10 files,
+  220 passed and one declared platform skip; Vitest 13.07 seconds; 14.67 seconds real;
+  178,061,312-byte maximum RSS; 96,277,904-byte peak footprint; zero swaps and block I/O.
+- Broad relay command: `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts
+  --maxWorkers=1 src/main/ssh/ssh-relay-*.test.ts`. Result: 50 files passed, five files skipped; 656
+  passed and seven declared skips out of 663. Vitest 59.16 seconds; 64.28 seconds real;
+  269,565,952-byte maximum RSS; 96,114,160-byte peak footprint; zero swaps and block I/O. The new
+  live case is one of the declared skips and is not counted as proof.
+- Release-contract command: `/usr/bin/time -l pnpm exec vitest run --config
+  config/vitest.config.ts --maxWorkers=1 config/scripts/ssh-relay-runtime-*.test.mjs`. Result: 50 files
+  and 282/282 cases pass; Vitest 35.69 seconds; 39.36 seconds real; 190,201,856-byte maximum RSS;
+  96,638,376-byte peak footprint; zero swaps and block I/O.
+- Static evidence: `/usr/bin/time -l pnpm typecheck` passes in 6.13 seconds real with
+  1,241,317,376-byte maximum RSS and 96,163,192-byte peak footprint. `/usr/bin/time -l pnpm lint`
+  passes in 36.12 seconds real with 2,111,471,616-byte maximum RSS and 95,868,232-byte peak footprint;
+  its 26 warnings are pre-existing outside this diff. Full lint proves switch exhaustiveness, 41
+  reliability gates, the 355-entry max-lines ratchet with no new bypass, bundled guides, and all
+  localization checks. Standalone max-lines and targeted formatting pass after formatting this
+  ledger entry; the new test is 377 lines with no suppression.
+- Isolation evidence: `git diff --check` passes; `git diff --exit-code HEAD --
+  src/main/ssh/ssh-remote-node-resolution.ts src/main/ssh/ssh-remote-node-resolution.test.ts` is empty.
+  An asserted non-test reference search finds the tree-transfer export only in its owning production
+  module; this package adds no product importer. The intended diff is limited to the live test,
+  artifact workflow, workflow oracle, and both checklist documents. No settings, Beta, legacy
+  uploader, fallback, tuple, publication, default-path, or signing behavior changes.
+- Residual boundary: local execution does not supply a Linux OpenSSH daemon or the exact full-size
+  native runtime, so exact-head Linux x64/arm64 live metrics and all-six adjacent native regression
+  cells remain required. High RTT, `MaxSessions=1`, cross-family remotes, Windows transfer, primitive
+  probe/cache, remote bundled-Node verification/install/publish/launch, product/Beta/fallback/default
+  wiring, tuple enablement, publication, Apple signing, and SignPath remain absent.
 
 ## Accepted Gaps
 

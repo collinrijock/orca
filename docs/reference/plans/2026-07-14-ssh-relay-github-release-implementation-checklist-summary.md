@@ -43,6 +43,19 @@ immediate SIGTERM listener.
 No direct spawn, legacy uploader change, live claim, or product path is included. Audit only a
 disconnected live/full-size POSIX system-SSH proof next; legacy remains the only production/default
 path and SignPath remains deferred.
+`E-M6-POSIX-SYSTEM-SSH-TREE-LIVE-AUDIT-001` limits that proof to a second loopback-only stock
+`sshd` on Linux x64/arm64 artifact runners, exact generated host-key trust, public-key auth, and a
+forced remote `PATH` containing only `mkdir`, `chmod`, `cat`, and `rm` plus absolute `/bin/sh`.
+It adds only a purpose-named full-size test and workflow/oracle wiring; no production module changes.
+`E-M6-POSIX-SYSTEM-SSH-TREE-LIVE-LOCAL-RED-001` proves the live suite skips without its seven CI
+inputs while the independent workflow oracle fails only because the audited start/measure/stop
+steps are absent. That bounded fixture wiring now passes the local 9/9 workflow oracle while the
+purpose suite remains honestly skipped without CI inputs; broad regression gates and exact-head
+Linux x64/arm64 live evidence remain required.
+`E-M6-POSIX-SYSTEM-SSH-TREE-LIVE-LOCAL-001` records that bounded package locally green: 9/9 workflow
+oracle, 220 focused, 656 broad relay, 282 release-contract, typecheck, lint, 355-entry max-lines,
+formatting, diff, protected-resolver, and no-product-consumer gates pass. The live case is explicitly
+skipped locally and earns no proof; exact-head Linux x64/arm64 live evidence is still required.
 `E-M6-POSIX-SYSTEM-SSH-FILE-LOCAL-001` records 25/25 purpose, 628 broad relay, 281/281 release, and all
 static/isolation gates.
 `E-M6-POSIX-SYSTEM-SSH-FILE-CI-001` proves the 25 cases on all six primary native clients; both Linux

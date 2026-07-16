@@ -104,6 +104,42 @@ describe('SSH relay runtime artifact workflow', () => {
     expect(stop.if).toBe("always() && runner.os == 'Linux'")
   })
 
+  it('runs full-size POSIX system SSH against loopback OpenSSH with restricted primitives', async () => {
+    const workflow = parse(await readFile(workflowUrl, 'utf8'))
+    const steps = workflow.jobs['build-posix-runtime'].steps
+    const start = steps.find(
+      (step) => step.name === 'Start restricted loopback OpenSSH POSIX system-SSH fixture'
+    )
+    const measure = steps.find(
+      (step) => step.name === 'Measure exact full-size runtime over POSIX system SSH'
+    )
+    const stop = steps.find(
+      (step) => step.name === 'Stop restricted loopback OpenSSH POSIX system-SSH fixture'
+    )
+
+    expect(start).toBeDefined()
+    expect(measure).toBeDefined()
+    expect(stop).toBeDefined()
+    expect(start.if).toBe("runner.os == 'Linux'")
+    expect(start.run).toContain('ListenAddress 127.0.0.1')
+    expect(start.run).toContain('ForceCommand $wrapper')
+    expect(start.run).toContain('PasswordAuthentication no')
+    expect(start.run).toContain('StrictModes yes')
+    expect(start.run).toContain('known_hosts')
+    expect(start.run).toContain('StrictHostKeyChecking=yes')
+    for (const primitive of ['mkdir', 'chmod', 'cat', 'rm']) {
+      expect(start.run).toContain(`command -v ${primitive}`)
+    }
+    for (const forbidden of ['node', 'python', 'perl', 'tar', 'base64', 'sha256sum', 'shasum']) {
+      expect(start.run).not.toContain(`command -v ${forbidden}`)
+    }
+    expect(measure.if).toBe("runner.os == 'Linux'")
+    expect(measure.run).toContain('ORCA_SSH_FORCE_SYSTEM_TRANSPORT=1')
+    expect(measure.run).toContain('ssh-relay-runtime-posix-system-ssh-openssh-full-size.test.ts')
+    expect(measure.run).toContain('first_output/runtime')
+    expect(stop.if).toBe("always() && runner.os == 'Linux'")
+  })
+
   it('uploads only the first output after two clean builds verify and compare', async () => {
     const source = await readFile(workflowUrl, 'utf8')
     const workflow = parse(source)

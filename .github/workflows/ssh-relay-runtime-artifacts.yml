@@ -632,6 +632,96 @@ jobs:
             pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1 --reporter=verbose \
               src/main/ssh/ssh-relay-runtime-sftp-openssh-full-size.test.ts
 
+      - name: Start restricted loopback OpenSSH POSIX system-SSH fixture
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          fixture="$RUNNER_TEMP/orca-live-sftp"
+          test -x /usr/sbin/sshd
+          test -s "$fixture/client-key"
+          test -s "$fixture/host-key"
+          system_fixture="$fixture/system-ssh"
+          primitives="$system_fixture/primitives"
+          mkdir -p "$primitives"
+          ln -s "$(command -v mkdir)" "$primitives/mkdir"
+          ln -s "$(command -v chmod)" "$primitives/chmod"
+          ln -s "$(command -v cat)" "$primitives/cat"
+          ln -s "$(command -v rm)" "$primitives/rm"
+          wrapper="$system_fixture/restricted-command"
+          printf '%s\n' \
+            '#!/bin/sh' \
+            'PATH="${0%/*}/primitives"' \
+            'export PATH' \
+            'exec /bin/sh -c "$SSH_ORIGINAL_COMMAND"' > "$wrapper"
+          chmod 755 "$wrapper"
+          port=22223
+          known_hosts="$HOME/.ssh/known_hosts"
+          printf '[127.0.0.1]:%s %s\n' "$port" "$(cat "$fixture/host-key.pub")" >> "$known_hosts"
+          chmod 600 "$known_hosts"
+          config="$system_fixture/sshd_config"
+          printf '%s\n' \
+            "Port $port" \
+            'ListenAddress 127.0.0.1' \
+            "HostKey $fixture/host-key" \
+            "PidFile $system_fixture/sshd.pid" \
+            "AuthorizedKeysFile $HOME/.ssh/authorized_keys" \
+            "AllowUsers $USER" \
+            'PasswordAuthentication no' \
+            'KbdInteractiveAuthentication no' \
+            'ChallengeResponseAuthentication no' \
+            'UsePAM no' \
+            'StrictModes yes' \
+            'LogLevel VERBOSE' \
+            "ForceCommand $wrapper" > "$config"
+          sudo /usr/sbin/sshd -f "$config" -E "$system_fixture/sshd.log"
+          for attempt in {1..20}; do
+            if ssh -F /dev/null -i "$fixture/client-key" -p "$port" \
+              -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+              -o UserKnownHostsFile="$known_hosts" "$USER@127.0.0.1" true; then
+              break
+            fi
+            if test "$attempt" = 20; then
+              sudo tail -200 "$system_fixture/sshd.log"
+              exit 1
+            fi
+            sleep 0.25
+          done
+          server_version=$(/usr/sbin/sshd -V 2>&1 | head -1)
+          {
+            printf 'ORCA_SSH_RELAY_LIVE_SYSTEM_SSH_HOST=127.0.0.1\n'
+            printf 'ORCA_SSH_RELAY_LIVE_SYSTEM_SSH_PORT=%s\n' "$port"
+            printf 'ORCA_SSH_RELAY_LIVE_SYSTEM_SSH_USER=%s\n' "$USER"
+            printf 'ORCA_SSH_RELAY_LIVE_SYSTEM_SSH_IDENTITY=%s\n' "$fixture/client-key"
+            printf 'ORCA_SSH_RELAY_LIVE_SYSTEM_SSH_REMOTE_ROOT=%s\n' "$fixture/remote"
+            printf 'ORCA_SSH_RELAY_LIVE_SYSTEM_SSH_SERVER_VERSION=%s\n' "$server_version"
+          } >> "$GITHUB_ENV"
+
+      - name: Measure exact full-size runtime over POSIX system SSH
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          first_output="$RUNNER_TEMP/ssh-relay-runtime/${{ matrix.tuple }}/first"
+          ORCA_SSH_FORCE_SYSTEM_TRANSPORT=1 \
+            ORCA_SSH_RELAY_FULL_SIZE_RUNTIME_ROOT="$first_output/runtime" \
+            ORCA_SSH_RELAY_FULL_SIZE_IDENTITY="$first_output/orca-ssh-relay-runtime-${{ matrix.tuple }}.identity.json" \
+            pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1 --reporter=verbose \
+              src/main/ssh/ssh-relay-runtime-posix-system-ssh-openssh-full-size.test.ts
+
+      - name: Stop restricted loopback OpenSSH POSIX system-SSH fixture
+        if: always() && runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          system_fixture="$RUNNER_TEMP/orca-live-sftp/system-ssh"
+          if test -s "$system_fixture/sshd.pid"; then
+            sudo kill "$(cat "$system_fixture/sshd.pid")" || true
+          fi
+          if test -f "$system_fixture/sshd.log"; then
+            sudo tail -200 "$system_fixture/sshd.log"
+          fi
+
       - name: Stop loopback OpenSSH SFTP fixture
         if: always() && runner.os == 'Linux'
         shell: bash
