@@ -8,8 +8,8 @@ work; keep exact commands, runner identities, hashes, metrics, and residual gaps
 
 Date created: 2026-07-14<br>
 Last updated: 2026-07-15<br>
-Current phase: Milestone 5 / Work Package 4 desktop resolver/cache — **In progress — 2026-07-15, Codex implementation owner: checkpoint and obtain all-six native proof for the locally green, disconnected compile-time manifest trust-root provider**. The build constant remains hardcoded to `null`; keep the production key file/seed/environment, signed embedded bytes, builder/resource/consumer/cache/downloader/SSH/settings/tuples/publication/default behavior absent. Real Apple/SignPath rehearsals remain an explicit late gate and are not on this package's critical path.<br>
-Session checkpoint: **In progress — 2026-07-15, Codex implementation owner** — `E-M5-ACCEPTED-KEYS-CI-001` closes all-six native accepted-key parser proof at exact head `11f367e6613b0cae61a1153b77a5be332fd4e763`; Golden E2E passes and the artifact workflow is red only for the retained hosted Windows arm64 build-26200 versus required-26100 floor rejection. `E-M5-COMPILED-TRUST-LOCAL-001` is green locally and wired into both native job families. Exact-head artifact run 29470322099 is not yet accepted: Linux arm64 job 87532052107 exposed an unawaited draft-upload request-stream lifecycle (`E-M5-COMPILED-TRUST-CI-RED-001`), now reproduced and locally corrected under `E-M5-DRAFT-UPLOAD-STREAM-SETTLEMENT-LOCAL-001`; Windows x64 job 87532052082 independently failed an existing cache-lock concurrency test with `EPERM` plus teardown `ENOENT` (`E-M5-COMPILED-TRUST-WINDOWS-CI-RED-001`). Require replacement exact-head proof before recording all-six success. User authority covers end-to-end PR-contained implementation, commits, pushes, CI, rehearsals, and release writes; merging to `main` remains explicitly prohibited. Real Apple/SignPath work is deferred to its late gate. No Electron resource, downloader, SSH, setting, tuple, publication, or default-path consumer exists. Legacy remains the production default.<br>
+Current phase: Milestone 5 / Work Package 4 desktop resolver/cache — **In progress — 2026-07-15, Codex implementation owner: checkpoint and obtain all-six native proof for the locally green disconnected official-manifest composition**. Keep the build constant hardcoded to `null` and the production key file/seed/environment, signed embedded bytes, builder/resource/product consumer/cache/downloader/SSH/settings/tuples/publication/default behavior absent. Real Apple/SignPath rehearsals remain an explicit late gate and are not on this package's critical path.<br>
+Session checkpoint: **In progress — 2026-07-15, Codex implementation owner** — `E-M5-COMPILED-TRUST-CI-001` closes the prior provider/stream package at exact head `bb74936148c851a65da43e50364a7afa52c9eba1`. `E-M5-OFFICIAL-MANIFEST-COMPOSITION-LOCAL-001` is now locally green and wired into both native job families: absent trust does not inspect resources; present trust is the only signature authority and binds the verified manifest to its canonical key fingerprint. Commit/push and require replacement all-six Node 24 proof before advancing. Merging to `main` remains prohibited and SignPath is deferred. No Electron resource, downloader, SSH, setting, tuple, publication, or default-path consumer exists. Legacy remains the production default.<br>
 Primary design: [SSH relay GitHub Release plan](./2026-07-14-ssh-relay-github-release-plan.html)<br>
 Motivating issues: [#8450](https://github.com/stablyai/orca/issues/8450), [#1693](https://github.com/stablyai/orca/issues/1693)
 
@@ -142,10 +142,10 @@ same change as the work it records.
   accounting, and bounded 2 GiB eviction pass locally and on all six native clients under
   E-M5-ARTIFACT-CACHE-LOCK-CI-001, E-M5-ARTIFACT-CACHE-ENTRY-CI-001, and
   E-M5-ARTIFACT-CACHE-EVICTION-CI-001. No production consumer exists.
-- Active package: **In progress — 2026-07-15, Codex implementation owner** — audit the smallest
-  disconnected official-build packaged-manifest/key and app-owned cache-root boundary before adding
-  purpose-named RED contracts. Keep downloader orchestration, SSH behavior, mode wiring, tuple
-  enablement, release publication, and defaults intact until their separate gates.
+- Active package: **In progress — 2026-07-15, Codex implementation owner** — checkpoint the locally
+  green immutable-trust/fixed-resource composition and require all-six Node 24 native proof. Keep
+  every Electron/product caller, resource mapping, production key/manifest,
+  cache/downloader/SSH/mode/tuple/publication/default intact until separate gates.
 - Completed Work Package 2 gate: target-native Windows source-signature reports from exact-head
   artifact jobs 87267322867 and 87267322870 were independently downloaded and matched to their
   identities and signing-stage reports under E-M3-WINDOWS-SOURCE-SIGNATURE-CI-001. PR Checks
@@ -14184,6 +14184,91 @@ config/scripts/ssh-relay-runtime-draft-upload.test.mjs` — FAIL before the corr
   The replacement run must settle green without a test-only relaxation. If the `EPERM` repeats,
   diagnose Windows handle ownership and implement a separately evidenced cache-lock correction
   before accepting the compiled-trust checkpoint.
+
+### E-M5-COMPILED-TRUST-CI-001 — replacement all-six native trust and stream proof
+
+- Date/owner: 2026-07-15, Codex implementation owner.
+- Exact source: `bb74936148c851a65da43e50364a7afa52c9eba1`; artifact run
+  [29470805823](https://github.com/stablyai/orca/actions/runs/29470805823).
+- Primary native jobs: Windows x64 87533468657 (5m58s), Windows arm64 87533468659 (11m16s), Linux
+  x64 87533468688 (2m31s), Linux arm64 87533468710 (6m25s), macOS x64 87533468740 (5m06s), and
+  macOS arm64 87533468700 (1m51s) all pass. Every contract step runs the purpose-named compiled
+  trust suite 3/3 and corrected draft-upload suite 9/9; combined contract files are 70/70 on POSIX
+  and 71/71 on Windows. Full-size extraction/cache measurements and unpublished artifact upload
+  also pass in every primary job.
+- Supplemental result: Linux x64/arm64 oldest-userland jobs 87534233310/87534233331 and Windows x64
+  baseline job 87534771591 pass. Windows arm64 baseline job 87534771618 correctly rejects hosted
+  Windows 11 build 26200 against the required exact build 26100 (`osBuild: false`), leaving the
+  workflow deliberately red and that tuple disabled.
+- Adjacent proof: PR Checks run
+  [29470805820](https://github.com/stablyai/orca/actions/runs/29470805820), job 87533468500, passes in
+  15m00s including lint/static gates, typecheck, Git 2.25 matrix, full tests, unpacked app build, and
+  packaged CLI smoke. Golden E2E run
+  [29470805841](https://github.com/stablyai/orca/actions/runs/29470805841) passes Linux job
+  87533468519 and macOS job 87533468514. Computer-use run 29470805828 attempt 1 timed out an
+  untouched Windows SSH-launcher test at 5.137s against its 5s bound; unchanged attempt 2 passes
+  Windows native smoke/E2E in job 87534149625, so no source relaxation was made.
+- Closure: the compile-time trust provider and stream-settlement correction are proven on all six
+  native Node 24 families. No production accepted key, manifest resource, Electron/product caller,
+  cache/downloader, SSH path, mode, tuple, release write, or default behavior was added.
+
+### E-M5-OFFICIAL-MANIFEST-COMPOSITION-AUDIT-001 — disconnected trusted-loader boundary
+
+- Date/owner: 2026-07-15, Codex implementation owner.
+- Audit: complete reads of `ssh-relay-compiled-manifest-trust.ts`,
+  `ssh-relay-packaged-manifest.ts`, their tests, the accepted-key parser/signature verifier, build
+  constant declaration/injection, workflow wiring, and all non-test imports/callers.
+- Findings: the immutable provider and fixed-resource loader are individually proven but have no
+  composition. The loader still requires caller-supplied accepted keys, and neither module has a
+  non-test consumer. The smallest safe next capability is a concrete
+  `ssh-relay-official-manifest.ts` boundary that obtains trust only from
+  `loadSshRelayCompiledManifestTrust`, returns unavailable before filesystem access when the build
+  constant is `null`, otherwise invokes the real packaged loader, and returns a frozen verified
+  manifest plus the canonical accepted-key fingerprint.
+- Required RED: unavailable trust does not inspect a resource path; provisioned test trust verifies
+  an exact signed packaged manifest and desktop identity; unknown signatures, malformed resources,
+  and unpackaged use fail closed; callers cannot supply alternate accepted keys. Wire the suite into
+  both native job families.
+- Deliberately absent: Electron `app`/`process.resourcesPath` adapter, `extraResources`, production
+  key/manifest bytes, cache root/orchestration, downloader, `ORCA_RELAY_PATH`, SSH, Beta setting,
+  fallback, tuple enablement, publication, and every default-path change.
+
+### E-M5-OFFICIAL-MANIFEST-COMPOSITION-LOCAL-RED-001 — composition module is absent
+
+- Date/owner: 2026-07-15, Codex implementation owner.
+- Command: `pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1
+src/main/ssh/ssh-relay-official-manifest.test.ts`.
+- Result: expected FAIL, 1 failed suite / 0 tests in 3.26 s because
+  `./ssh-relay-official-manifest` did not exist. The purpose-named suite defines unavailable-trust,
+  real signed-resource/fingerprint, hostile caller-key override, malformed resource, and unpackaged
+  fail-closed contracts before implementation.
+- Consumer-disconnection oracle: only the purpose test imports the absent module; there is no
+  Electron/product/resource/cache/downloader/SSH/mode/tuple/publication/default call site.
+
+### E-M5-OFFICIAL-MANIFEST-COMPOSITION-LOCAL-001 — compiled trust owns packaged verification
+
+- Date/owner: 2026-07-15, Codex implementation owner.
+- Implementation: `src/main/ssh/ssh-relay-official-manifest.ts` owns only the official trust/loader
+  composition. It returns `null` before filesystem access when compiled trust is unavailable;
+  otherwise it passes only the compiled accepted keys to the proven fixed-resource loader and
+  returns a frozen verified manifest plus canonical accepted-key fingerprint.
+- Focused command: `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts
+--maxWorkers=1 src/main/ssh/ssh-relay-official-manifest.test.ts` — PASS, 1 file / 4 tests in 656 ms
+  Vitest / 2.73 s wall, 133,300,224-byte maximum RSS, 96,097,800-byte peak footprint, zero swaps.
+- Trust regression: compiled trust, official composition, packaged loader, accepted-key parser, and
+  signature suites pass 5 files / 26 tests in 9.87 s. Complete non-full-size SSH relay tests pass 25
+  files / 311 tests with three declared full-size skips in 20.55 s Vitest / 22.52 s wall,
+  263,864,320-byte maximum RSS, 95,802,624-byte peak footprint, zero swaps.
+- Release/static regression: 50 release-script files / 280 tests pass in 32.28 s Vitest / 38.56 s
+  wall, 193,921,024-byte maximum RSS, 97,146,304-byte peak footprint, zero swaps; workflow oracle
+  passes 7/7. `pnpm typecheck`, full `pnpm lint`, focused `oxfmt --check`, `git diff --check`, and
+  protected resolver zero-diff checks pass. Lint includes 41 reliability gates, 355 grandfathered
+  max-lines entries with no new bypass, bundled-skill verification, and localization parity/coverage.
+- Native wiring: the purpose suite appears once in each POSIX/PowerShell command family and the
+  workflow oracle requires both occurrences. Exact-head all-six Node 24 proof remains required.
+- Consumer disconnection: outside the purpose test/workflow references, repository search finds only
+  the new module's export. There is no Electron/app adapter, resource mapping, production key or
+  manifest, cache/downloader/SSH/mode/tuple/publication/default consumer. Legacy remains unchanged.
 
 ## Accepted Gaps
 

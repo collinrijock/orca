@@ -9,20 +9,30 @@ keeps commands, hashes, runner identities, timings, and failure details.
 A checked box means the work has evidence in the detailed ledger. Design approval alone does not
 complete a box.
 
-Active checkpoint: **Milestone 5 / Work Package 4 desktop resolver/cache — disconnected compile-time
-manifest trust-root provider locally green and wired; CI RED corrected locally, replacement native proof next,
-2026-07-15, Codex implementation owner.** `E-M5-COMPILED-TRUST-AUDIT-001` and its RED precede
+Active checkpoint: **Milestone 5 / Work Package 4 desktop resolver/cache — disconnected official
+manifest composition locally green and wired; commit/all-six native proof next, 2026-07-15, Codex
+implementation owner.** `E-M5-OFFICIAL-MANIFEST-COMPOSITION-LOCAL-001` passes 4/4 focused, 26/26
+trust, 311/311 non-full-size SSH relay, 280/280 release-script, workflow-oracle, typecheck, lint,
+format, max-lines, and diff gates. An unprovisioned build returns unavailable before resource access;
+provisioned trust is the only accepted-key source and binds the verified fixed-resource manifest to
+its canonical key fingerprint. No resource or product consumer exists. `E-M5-COMPILED-TRUST-CI-001`
+closes the prior compiled trust and stream-settlement checkpoint at exact
+head `bb7493614`: all six primary native artifact jobs, both Linux supplements, Windows x64
+baseline, PR Checks, Golden E2E, and unchanged computer-use retry pass. The artifact workflow is
+red only because hosted Windows arm64 build 26200 correctly fails the required 26100 floor. The
+next slice may compose immutable trust with the fixed-resource loader, but must add no resource,
+production key/manifest, Electron/product consumer, cache/downloader, SSH, Beta mode, tuple,
+publication, or default behavior. `E-M5-COMPILED-TRUST-AUDIT-001` and its RED precede
 `E-M5-COMPILED-TRUST-LOCAL-001`: 3/3 focused, 22/22 trust, 307/307 non-full-size SSH relay, 279/279
 release-script, workflow-oracle, typecheck, lint, format, max-lines, and diff gates pass. The build
-constant is literal `null`; no production key file, resource bytes, or consumer exists. Prior exact
-head artifact run 29470322099 is not yet accepted: Linux arm64 job 87532052107 exposed an unawaited
+constant is literal `null`; no production key file, resource bytes, or consumer exists. Superseded
+artifact run 29470322099 exposed an unawaited
 draft-upload request-stream lifecycle (`E-M5-COMPILED-TRUST-CI-RED-001`), now deterministically
 reproduced and locally corrected with 9/9 focused and 280/280 release-script tests under
 `E-M5-DRAFT-UPLOAD-STREAM-SETTLEMENT-LOCAL-001`. Windows x64 job 87532052082 independently failed an
 existing cache-lock concurrency test with `EPERM` plus teardown `ENOENT`
-(`E-M5-COMPILED-TRUST-WINDOWS-CI-RED-001`). Replacement exact-head native proof is required; a
-repeat Windows failure requires a separate correction. Real Apple/SignPath work remains deferred to
-its late gate. Prior exact
+(`E-M5-COMPILED-TRUST-WINDOWS-CI-RED-001`); neither failure repeated at the accepted replacement
+head. Real Apple/SignPath work remains deferred to its late gate. Prior exact
 head `11f367e66` passes all six primary native accepted-key jobs under
 `E-M5-ACCEPTED-KEYS-CI-001` and Golden E2E; the artifact workflow is red only for the retained
 Windows arm64 hosted build-26200 versus required-26100 floor gap. PR Checks attempt 1 failed one
