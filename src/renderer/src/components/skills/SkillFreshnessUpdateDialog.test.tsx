@@ -327,7 +327,9 @@ describe('SkillFreshnessUpdateDialog', () => {
     await renderDialog()
     await openViaRequest()
 
-    expect(container?.textContent).toContain('This skill is installed somewhere Orca')
+    expect(container?.textContent).toContain(
+      'it may be modified, or a different skill with the same name'
+    )
     expect(container?.textContent).toContain('Unrecognized')
     expect(container?.querySelector('[data-testid="update-terminal"]')).toBeNull()
   })
@@ -342,7 +344,9 @@ describe('SkillFreshnessUpdateDialog', () => {
     await renderDialog()
     await openViaRequest()
 
-    expect(container?.textContent).toContain('This skill is installed somewhere Orca')
+    expect(container?.textContent).toContain(
+      'read-only location, so Orca left it out of the update'
+    )
     expect(container?.textContent).toContain('Read only')
   })
 
@@ -356,11 +360,11 @@ describe('SkillFreshnessUpdateDialog', () => {
     expect(container?.querySelector('[data-dialog-open]')).toBeNull()
   })
 
-  it('forces a re-check from the Check now affordance', async () => {
+  it('forces a re-check from the Re-check affordance', async () => {
     await renderDialog()
     await openViaRequest()
 
-    await clickButton('Check now')
+    await clickButton('Re-check')
 
     expect(mocks.refresh).toHaveBeenCalledTimes(1)
   })

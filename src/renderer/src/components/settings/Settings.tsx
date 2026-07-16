@@ -100,6 +100,7 @@ import {
   useInstalledAgentSkill
 } from '@/hooks/useInstalledAgentSkills'
 import { useActiveProjectSkillRuntime } from '@/hooks/useActiveProjectSkillRuntime'
+import { useSkillFreshness } from '@/hooks/useSkillFreshness'
 import { deriveNeededSectionIds, getInitialMountedSectionIds } from './settings-load-performance'
 import { translate } from '@/i18n/i18n'
 import { getProjectHostSetupProjectionFromState } from '../../store/selectors'
@@ -207,11 +208,15 @@ function getSettingsNavGroupDefinitionsForSearch(
 function getSkillNavInstallStatus(skill: {
   installed: boolean
   loading: boolean
+  updateAvailable?: boolean
 }): SettingsNavInstallStatus {
   if (skill.loading) {
     return 'checking'
   }
-  return skill.installed ? 'installed' : 'install'
+  if (!skill.installed) {
+    return 'install'
+  }
+  return skill.updateAvailable ? 'update-available' : 'installed'
 }
 
 function hasReadyVoiceModel(
@@ -346,6 +351,10 @@ function Settings(): React.JSX.Element {
     discoveryTarget: activeSkillRuntime.discoveryTarget,
     sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS
   })
+  // Why: mirror the setup cards — freshness only speaks for the validated global
+  // rail, which doesn't run under WSL, so the nav pill stays presence-only there.
+  const { inventory: skillFreshnessInventory } = useSkillFreshness()
+  const skillFreshnessApplies = activeSkillRuntime.agentRuntime?.runtime !== 'wsl'
   const [voiceModelStatesLoading, setVoiceModelStatesLoading] = useState(showDesktopOnlySettings)
   // Why: the Terminal settings section shares one search index with the
   // sidebar. We trim platform-only entries on other platforms so search never
@@ -724,13 +733,16 @@ function Settings(): React.JSX.Element {
     orchestrationSkill
   const { installed: computerUseSkillInstalled, loading: computerUseSkillLoading } =
     computerUseSkill
+  const eligibleUpdateSkillNames = skillFreshnessInventory?.eligibleUpdateNames
   const capabilityInstallStatusBySectionId = useMemo(() => {
+    const eligibleUpdates = new Set(skillFreshnessApplies ? (eligibleUpdateSkillNames ?? []) : [])
     const next = new Map<string, SettingsNavInstallStatus>([
       [
         'orchestration',
         getSkillNavInstallStatus({
           installed: orchestrationSkillInstalled,
-          loading: orchestrationSkillLoading
+          loading: orchestrationSkillLoading,
+          updateAvailable: eligibleUpdates.has(ORCHESTRATION_SKILL_NAME)
         })
       ]
     ])
@@ -739,7 +751,8 @@ function Settings(): React.JSX.Element {
         'computer-use',
         getSkillNavInstallStatus({
           installed: computerUseSkillInstalled,
-          loading: computerUseSkillLoading
+          loading: computerUseSkillLoading,
+          updateAvailable: eligibleUpdates.has(COMPUTER_USE_SKILL_NAME)
         })
       )
       if (settings) {
@@ -757,11 +770,13 @@ function Settings(): React.JSX.Element {
   }, [
     computerUseSkillInstalled,
     computerUseSkillLoading,
+    eligibleUpdateSkillNames,
     modelStates,
     orchestrationSkillInstalled,
     orchestrationSkillLoading,
     settings,
     showDesktopOnlySettings,
+    skillFreshnessApplies,
     voiceModelStatesLoading
   ])
   const navSections = useMemo(

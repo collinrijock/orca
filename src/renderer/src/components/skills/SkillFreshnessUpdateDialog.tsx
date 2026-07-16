@@ -98,13 +98,13 @@ function SummaryHeadline({
           <AlertTriangle className="size-4 text-amber-600 dark:text-amber-400" />
           {translate(
             'auto.components.skills.SkillFreshnessUpdateDialog.attention',
-            'Some installed Orca skills cannot be updated automatically.'
+            'Some installed Orca skills were left out of the update.'
           )}
         </div>
         <p className="text-xs text-muted-foreground">
           {translate(
             'auto.components.skills.SkillFreshnessUpdateDialog.attentionDescription',
-            'Open Update details to see why each one can’t be updated.'
+            'Open Update details to see why each one was skipped.'
           )}
         </p>
       </div>
@@ -298,7 +298,7 @@ export function SkillFreshnessUpdateDialog(): React.JSX.Element {
             onClick={() => void state.refresh()}
           >
             <RefreshCw className={state.loading ? 'animate-spin' : undefined} />
-            {translate('auto.components.skills.SkillFreshnessUpdateDialog.checkNow', 'Check now')}
+            {translate('auto.components.skills.SkillFreshnessUpdateDialog.checkNow', 'Re-check')}
           </Button>
           <Button type="button" variant="outline" size="sm" onClick={() => handleOpenChange(false)}>
             {translate('auto.components.skills.SkillFreshnessUpdateDialog.close', 'Close')}

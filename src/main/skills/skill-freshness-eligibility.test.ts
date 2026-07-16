@@ -51,7 +51,6 @@ describe('skill freshness name-scoped update eligibility', () => {
     ['newer-known', 'independent-copy'],
     ['unrecognized', 'independent-copy'],
     ['inaccessible', 'broken-link'],
-    ['current', 'independent-copy'],
     ['current', 'external-link'],
     ['current', 'read-only'],
     ['current', 'repo-scope'],
@@ -61,6 +60,40 @@ describe('skill freshness name-scoped update eligibility', () => {
       eligibleSkillUpdateNames([
         placement('orca-cli'),
         placement('orca-cli', { id: `poison-${status}-${topology}`, status, topology })
+      ])
+    ).toEqual([])
+  })
+
+  it('still updates the canonical copy when a clean standalone duplicate exists', () => {
+    // Why: a duplicate no longer omits the whole name — the canonical copy converges
+    // and the duplicate row is flagged as maybe-not-reached rather than blocking.
+    expect(
+      eligibleSkillUpdateNames([
+        placement('orca-cli'),
+        placement('orca-cli', {
+          id: 'orca-cli-gemini',
+          rootId: 'home-gemini',
+          unresolvedPath: '/home/.gemini/skills/orca-cli',
+          resolvedPath: '/home/.gemini/skills/orca-cli',
+          topology: 'independent-copy',
+          status: 'current'
+        })
+      ])
+    ).toEqual(['orca-cli'])
+  })
+
+  it('does not offer a skill that exists only as a standalone copy', () => {
+    // Why: with no canonical or alias to anchor `--global`, the command has no
+    // reliable target, so a duplicate-only skill stays unoffered.
+    expect(
+      eligibleSkillUpdateNames([
+        placement('orca-cli', {
+          rootId: 'home-gemini',
+          unresolvedPath: '/home/.gemini/skills/orca-cli',
+          resolvedPath: '/home/.gemini/skills/orca-cli',
+          topology: 'independent-copy',
+          status: 'outdated'
+        })
       ])
     ).toEqual([])
   })

@@ -3625,7 +3625,14 @@
           "tipBrokenLink": "더 이상 존재하지 않는 대상을 가리키는 바로 가기입니다. 삭제해도 됩니다.",
           "tipReadOnly": "여기 있는 스킬은 읽기 전용 위치에 있어 권한을 변경해야 업데이트할 수 있습니다.",
           "tipInRepo": "여기 있는 스킬은 전역 스킬이 아니라 프로젝트 안에 있습니다. Orca는 전역 스킬만 업데이트합니다.",
-          "tipPluginCache": "여기 있는 스킬은 플러그인이 관리합니다. 대신 플러그인을 업데이트하세요."
+          "tipPluginCache": "여기 있는 스킬은 플러그인이 관리합니다. 대신 플러그인을 업데이트하세요.",
+          "skippedReasonUnrecognized": "The copy here doesn’t match the official version — it may be modified, or a different skill with the same name. Orca left it out of the update so it won’t overwrite it. Remove it if you want Orca to update this skill.",
+          "skippedReasonReadOnly": "This copy is in a read-only location, so Orca left it out of the update. Change its permissions to let Orca update it.",
+          "skippedReasonInaccessible": "Orca couldn’t read this copy, so it left the skill out of the update.",
+          "skippedReasonInRepo": "This is a project skill, not a global one — Orca only updates your global skills, so it left this out of the update.",
+          "skippedReasonPluginCache": "A plugin manages this skill, so Orca left it out of the update — update the plugin instead.",
+          "skippedReasonExternalLink": "This copy is a shortcut pointing outside Orca’s skill folders, so Orca left it out of the update.",
+          "skippedReasonBrokenLink": "This copy is a shortcut to something that no longer exists, so Orca left it out — you can safely delete it."
         },
         "SkillFreshnessUpdateDialog": {
           "title": "스킬 업데이트",
