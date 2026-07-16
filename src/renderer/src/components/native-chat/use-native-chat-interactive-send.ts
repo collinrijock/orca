@@ -1,4 +1,5 @@
 import { useCallback, useLayoutEffect, useRef } from 'react'
+import { useAppStore } from '../../store'
 import { sendRuntimePtyInput } from '@/runtime/runtime-terminal-inspection'
 import { getSettingsForAgentTabRuntimeOwner } from '@/lib/agent-paste-draft'
 import type { AgentType } from '../../../../shared/native-chat-types'
@@ -15,6 +16,7 @@ import {
   sendNativeChatMessage,
   type NativeChatSendHandle
 } from './native-chat-runtime-send'
+import { inferQuestionAnsweredFromCurrentStatus } from '../terminal-pane/agent-question-answered-inference'
 
 // ESC is the agent-TUI interrupt/cancel key over the PTY (matches how the
 // composer forwards Escape). Used to cancel a question or deny an approval.
@@ -44,6 +46,7 @@ export type NativeChatInteractiveSend = {
  */
 export function useNativeChatInteractiveSend(
   terminalTabId: string,
+  paneKey: string,
   targetPtyId: string | null,
   agent: AgentType
 ): NativeChatInteractiveSend {
@@ -83,13 +86,38 @@ export function useNativeChatInteractiveSend(
       // Other agents' question tools commit a pasted answer, so send label text.
       // Gate on the transcript agent (not `=== 'claude'`) so OpenClaude — which
       // runs the same selector — takes the keystroke path too.
+      const onSettled =
+        agent === 'claude'
+          ? (delivered: boolean): void => {
+              if (!delivered) {
+                return
+              }
+              inferQuestionAnsweredFromCurrentStatus({
+                paneKey,
+                getStatusEntry: () => useAppStore.getState().agentStatusByPaneKey[paneKey],
+                inferQuestionAnswered: (request) =>
+                  window.api.agentStatus.inferQuestionAnswered(request).catch((err) => {
+                    console.warn('[agent-question] native-chat inference failed:', err)
+                    return false
+                  })
+              })
+            }
+          : undefined
       const handle: NativeChatSendHandle = shouldStepNativeChatAskAnswer(agent)
-        ? sendNativeChatAskAnswer(settings, targetPtyId, buildAskAnswerKeys(prompt, selections))
+        ? sendNativeChatAskAnswer(
+            settings,
+            targetPtyId,
+            buildAskAnswerKeys(prompt, selections),
+            onSettled
+          )
         : sendNativeChatMessage(settings, targetPtyId, formatAskAnswer(prompt, selections))
+      // Why: native-chat answer writes bypass xterm.onData. Infer only after
+      // every paced selector write has fired, so an early digit in a multi-step
+      // answer cannot dismiss the wait or cancel the remaining writes.
       inFlightRef.current = handle
       return handle.settleAfterMs
     },
-    [terminalTabId, targetPtyId, agent, cancelInFlight]
+    [terminalTabId, paneKey, targetPtyId, agent, cancelInFlight]
   )
 
   // Stop/cancel: drop any pending answer writes, then send ESC to interrupt.

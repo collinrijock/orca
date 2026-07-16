@@ -30,6 +30,7 @@ describe('sendNativeChatMessage', () => {
   beforeEach(() => {
     vi.useFakeTimers()
     sendRuntimePtyInput.mockClear()
+    sendRuntimePtyInput.mockReturnValue(true)
   })
   afterEach(() => {
     vi.useRealTimers()
@@ -156,6 +157,7 @@ describe('sendNativeChatAskAnswer', () => {
   beforeEach(() => {
     vi.useFakeTimers()
     sendRuntimePtyInput.mockClear()
+    sendRuntimePtyInput.mockReturnValue(true)
   })
   afterEach(() => {
     vi.useRealTimers()
@@ -228,5 +230,20 @@ describe('sendNativeChatAskAnswer', () => {
     vi.runAllTimers()
     // Only the first keystroke landed; the rest were cancelled.
     expect(sendRuntimePtyInput).toHaveBeenCalledTimes(1)
+  })
+
+  it('reports delivery only after settling and suppresses it after cancellation', () => {
+    const onSettled = vi.fn()
+    sendRuntimePtyInput.mockReturnValueOnce(true).mockReturnValueOnce(false)
+    const handle = sendNativeChatAskAnswer(SETTINGS, PTY, [{ raw: '1' }, { raw: '\r' }], onSettled)
+
+    vi.advanceTimersByTime(handle.settleAfterMs)
+    expect(onSettled).toHaveBeenCalledExactlyOnceWith(false)
+
+    const canceledSettled = vi.fn()
+    const canceled = sendNativeChatAskAnswer(SETTINGS, PTY, [{ raw: '1' }], canceledSettled)
+    canceled.cancel()
+    vi.runAllTimers()
+    expect(canceledSettled).not.toHaveBeenCalled()
   })
 })

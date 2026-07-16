@@ -19,21 +19,63 @@ export function isAskUserQuestionTool(toolName: string | undefined): boolean {
   return toolName?.replaceAll(/[^a-z0-9]/gi, '').toLowerCase() === 'askuserquestion'
 }
 
-// Why: answering an interactive question emits no hook event, so the submit
-// keystroke is the only signal that the question was dealt with. Enter (plus
-// kitty-keyboard Enter encodings some agent TUIs enable) confirms the
-// highlighted option, and a bare digit is the selector's quick-select, which
-// submits immediately without Enter. Exact single-keystroke matches only —
-// batched input or pasted text must never clear a pending question card.
-const QUESTION_ANSWER_SUBMIT_INPUTS = new Set([
+const QUESTION_ANSWER_ENTER_INPUTS: ReadonlySet<string> = new Set([
   '\r',
   '\n',
   '\r\n',
   '\x1b[13u',
-  '\x1b[13;1u',
-  ...'123456789'
+  '\x1b[13;1u'
 ])
+const QUESTION_ANSWER_DIGIT_INPUTS: ReadonlySet<string> = new Set('123456789')
 
-export function isQuestionAnsweredSubmitInput(data: string): boolean {
-  return QUESTION_ANSWER_SUBMIT_INPUTS.has(data)
+export function isPotentialQuestionAnsweredSubmitInput(data: string): boolean {
+  return QUESTION_ANSWER_ENTER_INPUTS.has(data) || QUESTION_ANSWER_DIGIT_INPUTS.has(data)
+}
+
+function readSingleSelectOptionCount(interactivePrompt: string | undefined): number | null {
+  if (!interactivePrompt) {
+    return null
+  }
+  try {
+    const parsed = JSON.parse(interactivePrompt) as { questions?: unknown }
+    if (!Array.isArray(parsed.questions) || parsed.questions.length !== 1) {
+      return -1
+    }
+    const [question] = parsed.questions as { multiSelect?: unknown; options?: unknown }[]
+    if (!question || question.multiSelect === true || !Array.isArray(question.options)) {
+      return -1
+    }
+    return question.options.length
+  } catch {
+    return null
+  }
+}
+
+/** True only when one keystroke is enough to finish the whole prompt.
+ *  Why: digits merely advance multi-question prompts and toggle multi-selects;
+ *  the synthetic "Type something" row also opens an editor instead of
+ *  submitting. Without the prompt-shape gate those partial choices clear the
+ *  waiting indicator while Claude is still blocked on more input. */
+export function isQuestionAnsweredSubmitInput(
+  data: string,
+  interactivePrompt: string | undefined
+): boolean {
+  if (!isPotentialQuestionAnsweredSubmitInput(data)) {
+    return false
+  }
+  const optionCount = readSingleSelectOptionCount(interactivePrompt)
+  if (optionCount === -1) {
+    return false
+  }
+  if (QUESTION_ANSWER_ENTER_INPUTS.has(data)) {
+    // Older hook payloads can omit tool input; Enter remains the conservative
+    // fallback because it is the ordinary submit path for a question.
+    return true
+  }
+  if (optionCount === null) {
+    return false
+  }
+  // Claude adds a final "Type something" row after the declared options.
+  // Only declared option numbers complete a single-select immediately.
+  return Number(data) <= optionCount
 }

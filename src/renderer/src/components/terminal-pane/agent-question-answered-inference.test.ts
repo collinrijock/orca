@@ -3,6 +3,15 @@ import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import { createAgentQuestionAnsweredInference } from './agent-question-answered-inference'
 
 const PANE_KEY = 'tab-1:11111111-1111-4111-8111-111111111111'
+const SINGLE_SELECT_PROMPT = JSON.stringify({
+  questions: [
+    {
+      question: 'pick a color',
+      multiSelect: false,
+      options: [{ label: 'red' }, { label: 'blue' }]
+    }
+  ]
+})
 
 function makeWaitingQuestionEntry(overrides: Partial<AgentStatusEntry> = {}): AgentStatusEntry {
   return {
@@ -14,6 +23,7 @@ function makeWaitingQuestionEntry(overrides: Partial<AgentStatusEntry> = {}): Ag
     paneKey: PANE_KEY,
     stateHistory: [],
     toolName: 'AskUserQuestion',
+    interactivePrompt: SINGLE_SELECT_PROMPT,
     ...overrides
   }
 }
@@ -58,6 +68,59 @@ describe('agent question-answered inference', () => {
     inference.observeSentTerminalInput('2')
 
     expect(inferQuestionAnswered).toHaveBeenCalledOnce()
+  })
+
+  it('keeps waiting when a digit only advances or toggles a partial answer', () => {
+    const prompts = [
+      JSON.stringify({
+        questions: [
+          { question: 'first?', multiSelect: false, options: [{ label: 'A' }] },
+          { question: 'second?', multiSelect: false, options: [{ label: 'B' }] }
+        ]
+      }),
+      JSON.stringify({
+        questions: [
+          {
+            question: 'pick several',
+            multiSelect: true,
+            options: [{ label: 'A' }, { label: 'B' }]
+          }
+        ]
+      })
+    ]
+
+    for (const interactivePrompt of prompts) {
+      const { inference, inferQuestionAnswered } = makeInference(
+        makeWaitingQuestionEntry({ interactivePrompt })
+      )
+      inference.observeSentTerminalInput('1')
+      inference.observeSentTerminalInput('\r')
+      expect(inferQuestionAnswered).not.toHaveBeenCalled()
+    }
+  })
+
+  it('keeps waiting when the synthetic free-text row is selected', () => {
+    const { inference, inferQuestionAnswered } = makeInference(makeWaitingQuestionEntry())
+
+    // Two declared options means 3 opens Claude's synthetic "Type something" row.
+    inference.observeSentTerminalInput('3')
+
+    expect(inferQuestionAnswered).not.toHaveBeenCalled()
+  })
+
+  it('does not read status for ordinary terminal input', () => {
+    const getStatusEntry = vi.fn(() => makeWaitingQuestionEntry())
+    const inferQuestionAnswered = vi.fn()
+    const inference = createAgentQuestionAnsweredInference({
+      paneKey: PANE_KEY,
+      getStatusEntry,
+      inferQuestionAnswered
+    })
+
+    inference.observeSentTerminalInput('ordinary typing')
+
+    expect(getStatusEntry).not.toHaveBeenCalled()
+    expect(inferQuestionAnswered).not.toHaveBeenCalled()
   })
 
   it('ignores non-submit input, batched keystrokes, and pastes', () => {

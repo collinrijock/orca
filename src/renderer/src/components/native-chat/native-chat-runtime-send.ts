@@ -20,7 +20,6 @@ export { NATIVE_CHAT_ADVANCE_BUFFER_MS, NATIVE_CHAT_QUESTION_STEP_MS, NATIVE_CHA
 
 export const NATIVE_CHAT_IMAGE_ATTACHMENT_SETTLE_MS = 300
 
-
 /** Cancels an in-flight send's pending pty writes (the delayed Enter, and any
  *  later question bodies/Enters). Safe to call after the send completes. */
 export type NativeChatSendHandle = {
@@ -113,20 +112,31 @@ export function submitNativeChatPrompt(
 export function sendNativeChatAskAnswer(
   settings: ReturnType<typeof getSettingsForAgentTabRuntimeOwner>,
   ptyId: string,
-  groups: AskAnswerKeyGroup[]
+  groups: AskAnswerKeyGroup[],
+  onSettled?: (delivered: boolean) => void
 ): NativeChatSendHandle {
   if (groups.length === 0) {
     return { cancel: () => {}, settleAfterMs: 0 }
   }
   const timers: ReturnType<typeof setTimeout>[] = []
+  let delivered = true
   groups.forEach((group, index) => {
     timers.push(
       setTimeout(() => {
         const bytes = 'raw' in group ? group.raw : buildNativeChatPasteBytes(group.text)
-        sendRuntimePtyInput(settings, ptyId, bytes)
+        if (!sendRuntimePtyInput(settings, ptyId, bytes)) {
+          delivered = false
+        }
       }, index * NATIVE_CHAT_QUESTION_STEP_MS)
     )
   })
+  const settleAfterMs =
+    (groups.length - 1) * NATIVE_CHAT_QUESTION_STEP_MS + NATIVE_CHAT_SUBMIT_DELAY_MS
+  if (onSettled) {
+    // Why: status inference must wait for every paced write and must not run
+    // after cancellation or a rejected runtime write.
+    timers.push(setTimeout(() => onSettled(delivered), settleAfterMs))
+  }
   return {
     cancel: () => {
       for (const timer of timers) {
@@ -134,6 +144,6 @@ export function sendNativeChatAskAnswer(
       }
     },
     // Hold the card until the last keystroke has fired and its submit gap passed.
-    settleAfterMs: (groups.length - 1) * NATIVE_CHAT_QUESTION_STEP_MS + NATIVE_CHAT_SUBMIT_DELAY_MS
+    settleAfterMs
   }
 }

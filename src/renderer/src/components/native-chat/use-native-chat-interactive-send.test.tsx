@@ -5,9 +5,28 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
   cancel: vi.fn(),
+  inferQuestionAnswered: vi.fn(() => Promise.resolve(true)),
   sendRuntimePtyInput: vi.fn(),
   sendNativeChatAskAnswer: vi.fn(),
   sendNativeChatMessage: vi.fn()
+}))
+
+const PANE_KEY = 'tab-1:11111111-1111-4111-8111-111111111111'
+const waitingQuestion = {
+  state: 'waiting' as const,
+  prompt: 'pick one',
+  updatedAt: Date.now(),
+  stateStartedAt: Date.now(),
+  agentType: 'claude' as const,
+  paneKey: PANE_KEY,
+  stateHistory: [],
+  toolName: 'AskUserQuestion'
+}
+
+vi.mock('../../store', () => ({
+  useAppStore: {
+    getState: () => ({ agentStatusByPaneKey: { [PANE_KEY]: waitingQuestion } })
+  }
 }))
 
 vi.mock('@/runtime/runtime-terminal-inspection', () => ({
@@ -33,13 +52,19 @@ const PROMPT: AskPrompt = {
 describe('useNativeChatInteractiveSend', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: { agentStatus: { inferQuestionAnswered: mocks.inferQuestionAnswered } }
+    })
     const handle = { cancel: mocks.cancel, settleAfterMs: 500 }
     mocks.sendNativeChatAskAnswer.mockReturnValue(handle)
     mocks.sendNativeChatMessage.mockReturnValue(handle)
   })
 
   it('routes a non-Claude answer through the pasted-text send path', () => {
-    const { result } = renderHook(() => useNativeChatInteractiveSend('tab-1', 'pty-1', 'codex'))
+    const { result } = renderHook(() =>
+      useNativeChatInteractiveSend('tab-1', PANE_KEY, 'pty-1', 'codex')
+    )
 
     act(() => result.current.sendAnswer(PROMPT, [{ indices: [1] }]))
 
@@ -53,7 +78,9 @@ describe('useNativeChatInteractiveSend', () => {
   })
 
   it('routes a Claude answer through the option-number keystroke path', () => {
-    const { result } = renderHook(() => useNativeChatInteractiveSend('tab-1', 'pty-1', 'claude'))
+    const { result } = renderHook(() =>
+      useNativeChatInteractiveSend('tab-1', PANE_KEY, 'pty-1', 'claude')
+    )
 
     act(() => result.current.sendAnswer(PROMPT, [{ indices: [1] }]))
 
@@ -61,13 +88,16 @@ describe('useNativeChatInteractiveSend', () => {
     expect(mocks.sendNativeChatAskAnswer).toHaveBeenCalledWith(
       { terminalTabId: 'tab-1' },
       'pty-1',
-      [{ raw: '2' }]
+      [{ raw: '2' }],
+      expect.any(Function)
     )
     expect(mocks.sendNativeChatMessage).not.toHaveBeenCalled()
   })
 
   it('does nothing when no option is answered', () => {
-    const { result } = renderHook(() => useNativeChatInteractiveSend('tab-1', 'pty-1', 'claude'))
+    const { result } = renderHook(() =>
+      useNativeChatInteractiveSend('tab-1', PANE_KEY, 'pty-1', 'claude')
+    )
 
     let settleMs = -1
     act(() => {
@@ -81,7 +111,7 @@ describe('useNativeChatInteractiveSend', () => {
 
   it('cancels delayed answer writes when the PTY target changes', () => {
     const { result, rerender } = renderHook(
-      ({ targetPtyId }) => useNativeChatInteractiveSend('tab-1', targetPtyId, 'codex'),
+      ({ targetPtyId }) => useNativeChatInteractiveSend('tab-1', PANE_KEY, targetPtyId, 'codex'),
       { initialProps: { targetPtyId: 'pty-1' as string | null } }
     )
 
@@ -92,7 +122,9 @@ describe('useNativeChatInteractiveSend', () => {
   })
 
   it('cancels delayed answer writes before interrupting the active PTY', () => {
-    const { result } = renderHook(() => useNativeChatInteractiveSend('tab-1', 'pty-1', 'claude'))
+    const { result } = renderHook(() =>
+      useNativeChatInteractiveSend('tab-1', PANE_KEY, 'pty-1', 'claude')
+    )
 
     act(() => result.current.sendAnswer(PROMPT, [{ indices: [1] }]))
     act(() => result.current.cancel())
@@ -106,12 +138,37 @@ describe('useNativeChatInteractiveSend', () => {
   })
 
   it('can cancel delayed writes without interrupting the replacement prompt', () => {
-    const { result } = renderHook(() => useNativeChatInteractiveSend('tab-1', 'pty-1', 'claude'))
+    const { result } = renderHook(() =>
+      useNativeChatInteractiveSend('tab-1', PANE_KEY, 'pty-1', 'claude')
+    )
 
     act(() => result.current.sendAnswer(PROMPT, [{ indices: [1] }]))
     act(() => result.current.cancelPending())
 
     expect(mocks.cancel).toHaveBeenCalledOnce()
     expect(mocks.sendRuntimePtyInput).not.toHaveBeenCalled()
+  })
+
+  it('infers a Claude question answer only after every runtime write was delivered', () => {
+    const { result } = renderHook(() =>
+      useNativeChatInteractiveSend('tab-1', PANE_KEY, 'pty-1', 'claude')
+    )
+
+    act(() => result.current.sendAnswer(PROMPT, [{ indices: [1] }]))
+    expect(mocks.inferQuestionAnswered).not.toHaveBeenCalled()
+
+    const onSettled = mocks.sendNativeChatAskAnswer.mock.calls[0]?.[3]
+    expect(onSettled).toBeTypeOf('function')
+    onSettled?.(false)
+    expect(mocks.inferQuestionAnswered).not.toHaveBeenCalled()
+    onSettled?.(true)
+
+    expect(mocks.inferQuestionAnswered).toHaveBeenCalledExactlyOnceWith({
+      paneKey: PANE_KEY,
+      baselineUpdatedAt: waitingQuestion.updatedAt,
+      baselineStateStartedAt: waitingQuestion.stateStartedAt,
+      baselinePrompt: 'pick one',
+      baselineAgentType: 'claude'
+    })
   })
 })
