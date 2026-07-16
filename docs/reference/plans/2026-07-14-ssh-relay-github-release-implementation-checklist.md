@@ -8,8 +8,8 @@ work; keep exact commands, runner identities, hashes, metrics, and residual gaps
 
 Date created: 2026-07-14<br>
 Last updated: 2026-07-15<br>
-Current phase: Milestone 6 / Work Package 5 bounded runtime transfer — **In progress — 2026-07-15, Codex implementation owner: disconnected SFTP session/tree orchestration is locally green; exact-head native proof is next**. Keep every capability disconnected from every production/default SSH path. Real Apple/SignPath rehearsals remain an explicit late gate and are not on this package's critical path.<br>
-Session checkpoint: **SFTP SESSION/TREE ORCHESTRATION LOCAL GREEN — 2026-07-15, Codex implementation owner** — `E-M6-SFTP-TREE-TRANSFER-LOCAL-001` passes purpose, focused/broad relay, release-contract, typecheck, full-lint, format, max-lines, diff, protected-resolver, and no-product-import gates. It proves one exclusive manifest staging tree, one-to-four composed file streams, reverse proved-owned cleanup, and cancellation-driven awaited session close at a mockable abstraction. Commit/push this disconnected package and require exact-head all-six native and adjacent CI before auditing the raw `ssh2` session adapter. Do not credit live SFTP/server transfer, raw-session callback settlement, full-size remote metrics, product/settings/fallback wiring, tuple enablement, publication, or default behavior. Merging to `main` remains prohibited, SignPath is deferred, and legacy remains the production default.<br>
+Current phase: Milestone 6 / Work Package 5 bounded runtime transfer — **In progress — 2026-07-15, Codex implementation owner: disconnected SFTP session/tree orchestration is exact-head green; raw `ssh2` session-adapter audit is next**. Keep every capability disconnected from every production/default SSH path. Real Apple/SignPath rehearsals remain an explicit late gate and are not on this package's critical path.<br>
+Session checkpoint: **SFTP SESSION/TREE ORCHESTRATION EXACT-HEAD GREEN — 2026-07-15, Codex implementation owner** — `E-M6-SFTP-TREE-TRANSFER-CI-001` closes all-six primary native, both Linux supplement, Windows x64 floor, PR Checks, Golden E2E, and computer-use proof for exact implementation commit `28e7a6e5f`; Windows arm64 retains only the declared hosted build-26200 versus required-26100 floor rejection after complete runtime smoke. Audit the smallest disconnected raw `ssh2` session adapter next. Do not credit a live SFTP server/remote cell, full-size network transfer, high-latency comparison, product/settings/fallback wiring, tuple enablement, publication, or default behavior from the callback abstraction. Merging to `main` remains prohibited, SignPath is deferred, and legacy remains the production default.<br>
 Primary design: [SSH relay GitHub Release plan](./2026-07-14-ssh-relay-github-release-plan.html)<br>
 Motivating issues: [#8450](https://github.com/stablyai/orca/issues/8450), [#1693](https://github.com/stablyai/orca/issues/1693)
 
@@ -16985,6 +16985,64 @@ config/scripts/ssh-relay-runtime-workflow.test.mjs` — PASS, 7/7 in 356 ms. The
   product/Beta/settings/fallback/tuple/publication/default path remain absent; legacy remains the
   sole production/default path and SignPath remains deferred. Exact-head all-six Node 24 and
   adjacent CI evidence is required before the raw-session adapter audit.
+
+### E-M6-SFTP-TREE-TRANSFER-CI-001 — all-six clients accept disconnected SFTP tree orchestration
+
+- Date/owner/head: 2026-07-15, Codex implementation owner; exact hardened implementation commit
+  `28e7a6e5f92be98514dbd3a62bc9d5aae9331888` on draft PR
+  [#8741](https://github.com/stablyai/orca/pull/8741).
+- Native workflow: SSH Relay Runtime Artifacts run
+  [29507821804](https://github.com/stablyai/orca/actions/runs/29507821804). All six primary Node
+  24.18.0 jobs pass the nine-case tree suite, complete contract set, deterministic build/smoke,
+  full-size extraction/cache/scan/stream, and evidence upload: Windows arm64
+  [87653187734](https://github.com/stablyai/orca/actions/runs/29507821804/job/87653187734), Darwin arm64
+  [87653187777](https://github.com/stablyai/orca/actions/runs/29507821804/job/87653187777), Linux arm64
+  [87653187857](https://github.com/stablyai/orca/actions/runs/29507821804/job/87653187857), Windows x64
+  [87653187877](https://github.com/stablyai/orca/actions/runs/29507821804/job/87653187877), Darwin x64
+  [87653187906](https://github.com/stablyai/orca/actions/runs/29507821804/job/87653187906), and Linux x64
+  [87653187933](https://github.com/stablyai/orca/actions/runs/29507821804/job/87653187933).
+- Purpose/native totals: every client passes all nine new cases with no suite skip: Linux x64
+  1,196 ms, Linux arm64 2,155 ms, Darwin x64 3,646 ms, Darwin arm64 1,186 ms, Windows x64
+  2,799 ms, and Windows arm64 4,981 ms. Overall contract totals are 756 passed / one declared skip on
+  each Linux client, 755 passed / two declared skips on each Darwin client, and 743 passed / 18
+  declared skips on each Windows client.
+- Exact full-size client baselines remain green: Linux x64 34 files / 124,846,430 bytes, stream
+  183.762342 ms / 786,432 incremental RSS bytes; Linux arm64 34 / 122,865,324,
+  142.800937 ms / 131,072; Darwin x64 35 / 124,316,655, 548.450994 ms / 282,624; Darwin arm64
+  35 / 122,027,869, 115.096708 ms / 688,128; Windows x64 42 / 96,527,161, 182.7795 ms /
+  5,341,184; Windows arm64 42 / 85,213,511, 360.4851 ms / 1,482,752. Every existing cold/warm/
+  scan/stream/retention/eviction budget passes. These are client-source regression baselines, not
+  live SFTP network measurements.
+- Baselines: Linux arm64 supplement
+  [87654529646](https://github.com/stablyai/orca/actions/runs/29507821804/job/87654529646), Linux x64
+  supplement
+  [87654529663](https://github.com/stablyai/orca/actions/runs/29507821804/job/87654529663), and Windows
+  x64 floor [87655923525](https://github.com/stablyai/orca/actions/runs/29507821804/job/87655923525)
+  pass. Windows x64 verifies 42 files / 96,527,161 bytes, Node/PTY/watcher/two-second settlement in
+  5,400.4459 ms at 50,401,280 RSS, and completes verification in 6,610.5719 ms on build 20348.
+  Windows arm64 floor
+  [87655923544](https://github.com/stablyai/orca/actions/runs/29507821804/job/87655923544) retains only
+  the declared hosted-image rejection: build 26200 observed versus 26100 required. Before that
+  rejection it verifies 42 files / 85,213,511 bytes and Node/PTY/watcher/two-second settlement in
+  6,860.7918 ms at 48,672,768 RSS; complete verification is 9,414.1715 ms.
+- Adjacent exact-head workflows pass: PR Checks run
+  [29507822115](https://github.com/stablyai/orca/actions/runs/29507822115), verify job
+  [87653099635](https://github.com/stablyai/orca/actions/runs/29507822115/job/87653099635); Golden E2E
+  run [29507828242](https://github.com/stablyai/orca/actions/runs/29507828242), macOS job
+  [87653119889](https://github.com/stablyai/orca/actions/runs/29507828242/job/87653119889) and Linux
+  job [87653119935](https://github.com/stablyai/orca/actions/runs/29507828242/job/87653119935);
+  computer-use run [29507829190](https://github.com/stablyai/orca/actions/runs/29507829190), Ubuntu
+  native-smoke job
+  [87653123437](https://github.com/stablyai/orca/actions/runs/29507829190/job/87653123437) and Windows
+  native-smoke job
+  [87653123462](https://github.com/stablyai/orca/actions/runs/29507829190/job/87653123462).
+- Boundary/residual gaps: native clients run callback mocks, not a raw `SFTPWrapper` or server. They
+  do not prove SFTP channel open/end/error behavior, that raw session termination settles retained
+  callbacks, real remote directory/mode semantics, full-size network memory/cancellation, high-RTT
+  one-versus-four behavior, `MaxSessions=1` wiring, or a live remote matrix cell. The module still
+  has no non-test importer. Remote bundled-Node verification/install/publish/launch and every
+  product/Beta/settings/fallback/tuple/publication/default path remain absent; legacy remains the
+  sole production/default path and SignPath remains deferred.
 
 ## Accepted Gaps
 
