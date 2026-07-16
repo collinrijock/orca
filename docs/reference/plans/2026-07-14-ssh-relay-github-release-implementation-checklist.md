@@ -8,8 +8,8 @@ work; keep exact commands, runner identities, hashes, metrics, and residual gaps
 
 Date created: 2026-07-14<br>
 Last updated: 2026-07-15<br>
-Current phase: Milestone 6 / Work Package 5 bounded runtime transfer — **In progress — 2026-07-15, Codex implementation owner: disconnected Windows system-SSH staging-control native proof**. Keep every capability disconnected from every production/default SSH path. Real Apple/SignPath rehearsals remain an explicit late gate and are not on this package's critical path.<br>
-Session checkpoint: **WINDOWS STAGING CONTROL LOCALLY GREEN / NATIVE WINDOWS CI NEXT — 2026-07-15, Codex implementation owner** — `E-M6-WINDOWS-SYSTEM-SSH-CONTROL-LOCAL-001` proves the fixed-command bounded request, strict rooted-path/descendant validation, exclusive root/directory creation, parent-first enforcement, owned-root removal primitive, 30-second ceiling, joined command-channel lifecycle, prior transfer regressions, and production isolation locally. The real PowerShell 5.1 case is skipped on macOS and earns no native claim; commit and push the exact package, then require native Windows x64/arm64 proof. Do not compose file streaming into a tree, connect a product caller, change legacy upload/fallback/default behavior, enable a tuple, publish an artifact, or perform SignPath work in this package. Merging to `main` remains prohibited, SignPath is deferred, and legacy remains the production default.<br>
+Current phase: Milestone 6 / Work Package 5 bounded runtime transfer — **In progress — 2026-07-15, Codex implementation owner: disconnected Windows system-SSH tree-composition contract audit**. Keep every capability disconnected from every production/default SSH path. Real Apple/SignPath rehearsals remain an explicit late gate and are not on this package's critical path.<br>
+Session checkpoint: **WINDOWS STAGING CONTROL NATIVE PROOF CLOSED / TREE COMPOSITION AUDIT ACTIVE — 2026-07-15, Codex implementation owner** — `E-M6-WINDOWS-SYSTEM-SSH-CONTROL-CI-001` proves the real PowerShell staging-control contract on native Windows x64/arm64 and all adjacent exact-head gates, with only the declared hosted Windows arm64 floor gap. Audit the next disconnected tree owner before writing RED tests. Do not connect a product caller, change legacy upload/fallback/default behavior, enable a tuple, publish an artifact, or perform SignPath work. Merging to `main` remains prohibited, SignPath is deferred, and legacy remains the production default.<br>
 Primary design: [SSH relay GitHub Release plan](./2026-07-14-ssh-relay-github-release-plan.html)<br>
 Motivating issues: [#8450](https://github.com/stablyai/orca/issues/8450), [#1693](https://github.com/stablyai/orca/issues/1693)
 
@@ -18353,6 +18353,64 @@ src/main/ssh/ssh-remote-node-resolution.test.ts` is empty. A non-test reference 
   classification/cache, bundled-Node verification/install/publish/launch, product/Beta/fallback/
   default behavior, tuple enablement, publication, Apple signing, and SignPath remain absent.
 
+### E-M6-WINDOWS-SYSTEM-SSH-CONTROL-CI-001 — exact-head native staging-control proof
+
+- Date/owner/head: 2026-07-15, Codex implementation owner; exact head
+  `68737239b98d88c5b60995935fcadadb60bf5b43` on draft PR #8741. Artifact run
+  `29529608561`; PR Checks `29529608567`, Golden E2E `29529608624`, and computer-use
+  `29529608564` all complete successfully on that head.
+- Windows x64 job `87726531814`: requested `windows-2022`, resolved `win22` image
+  `20260714.244.1`, X64, Node 24.18.0. The staging-control suite passes 17/17 in 4.674 seconds;
+  its real `powershell.exe` exclusive-root/Unicode/owned-cleanup case passes in 4.310 seconds. The
+  primary set passes 99 files and 845 tests with 18 declared skips in 29.44 seconds.
+- Windows arm64 job `87726531789`: requested `windows-11-arm`, resolved `win11-arm64` image
+  `20260714.109.1`, ARM64, Node 24.18.0. The staging-control suite passes 17/17 in 5.790 seconds;
+  its real `powershell.exe` case passes in 5.439 seconds. The primary set passes 99 files and 845
+  tests with 18 declared skips in 34.11 seconds.
+- First-attempt Linux x64 `87726531841`, Linux arm64 `87726531859`, and Darwin arm64
+  `87726531848` pass. Darwin x64 `87726531879` times out only in the adjacent
+  `ssh-relay-runtime-toolchain.test.mjs` 30-second toolchain digest case. No timeout or product code
+  changes; unchanged attempt-2 Darwin x64 job `87730137143` passes. Both Linux supplements
+  `87731258107` and `87731258215` and Windows x64 floor `87728977786` pass.
+- Windows arm64 floor jobs `87728977738` and unchanged rerun `87730137293` verify the complete
+  60-entry/42-file/85,213,511-byte runtime, content
+  `sha256:02edf462be83c2864a89546d5344d348f9e07ce10964660342608a8c614e47db`, Node
+  24.18.0/ABI 137, PTY exit 23/resize, and watcher create/update/delete smoke. Both then reject only
+  hosted build 26200 against required build 26100 (`platform=true`, `architecture=true`,
+  `osBuild=false`). This remains the declared hosted-runner gap.
+- Disposition/residual boundary: the disconnected staging-control package is complete. This proves
+  native local Windows PowerShell semantics on x64/arm64 clients, not a Windows OpenSSH remote,
+  full-size transfer, tree composition, long paths, endpoint-protection locks, primitive detection,
+  remote verification/install/publish/launch, product/Beta/fallback/default behavior, tuple
+  enablement, publication, Apple signing, or SignPath. Legacy remains the sole production/default
+  path and every tuple stays disabled.
+
+### E-M6-WINDOWS-SYSTEM-SSH-TREE-AUDIT-001 — bounded disconnected tree composition
+
+- Date/owner/base: 2026-07-15, Codex implementation owner; audit-only package atop exact base
+  `68737239b98d88c5b60995935fcadadb60bf5b43`.
+- Scope: compose one verified Windows scanned source tree, the proven staging-control primitive, the
+  proven per-file binary receiver, the source-stream scheduler, and the existing authenticated
+  system-SSH file-channel adapter. Create one exclusive root, create declared directories
+  parent-first, then stream each declared file to its exact descendant path. Default concurrency is
+  one and the existing package maximum remains four; return only aggregate progress and counts.
+- Ownership/lifecycle: mark the root owned only after exclusive creation settles successfully. Never
+  clean a collision root. On every later failure or cancellation, stop and join source workers, then
+  run bounded cleanup with a separate five-second signal and join any cleanup failure with the
+  primary error. Every control/file channel uses the same operation signal; cleanup is the only
+  deliberately separate bounded signal.
+- Required RED/green proof: reject non-Windows trees, unsafe roots, non-system transports, invalid
+  concurrency, and pre-abort before exec; exact root/directory/file request order and paths; exact
+  bytes/counts/progress; default-one and maximum-four active files; collision preservation; directory
+  and file failures clean only an owned root; retained-write cancellation settles before cleanup;
+  cleanup timeout is joined below ten seconds; no later progress; and no production consumer. Pin
+  the suite once in both native workflow command families before implementation.
+- Explicit residual boundary: adapter-backed composition is not live Windows OpenSSH, a full-size
+  runtime measurement, long-path or endpoint-protection proof, primitive classification/cache,
+  remote bundled-Node verification/install/publish/launch, product/Beta/settings/fallback/tuple/
+  publication/default behavior, or SignPath. Legacy remains the sole production/default path and
+  every tuple stays disabled.
+
 ## Accepted Gaps
 
 No product gap is accepted merely because it appears in this list. Each entry requires explicit
@@ -18411,11 +18469,11 @@ The project is not complete until every applicable item below is checked with ev
 
 ## Next Required Action
 
-Commit and push the exact `E-M6-WINDOWS-SYSTEM-SSH-CONTROL-LOCAL-001` package, then require the real
-PowerShell 5.1 process oracle on native Windows x64/arm64 plus all-six native and adjacent repository
-regression cells. Do not check the broad Milestone 6 Windows system-SSH item yet. Do not compose file
-streaming into a remote-tree owner or add an Electron/startup/product importer, per-target mode
-wiring, fallback, tuple enablement, release publication, or default behavior.
+Write and run the purpose-named RED suite and native-workflow oracle for
+`E-M6-WINDOWS-SYSTEM-SSH-TREE-AUDIT-001`, proving failure solely because the audited production
+module is absent. Do not check the broad Milestone 6 Windows system-SSH item yet. Do not add an
+Electron/startup/product importer, per-target mode wiring, fallback, tuple enablement, release
+publication, or default behavior.
 Keep Node upstream `.tar.xz` inputs, Windows ZIP, `ORCA_RELAY_PATH`, existing desktop required-assets
 behavior, detached-signature byte encoding, Windows arm64 build 26100, macOS 13.5, Linux kernel 4.18,
 release-cut, desktop builds, publication, and every tuple separately gated.

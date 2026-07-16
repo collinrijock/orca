@@ -10,19 +10,23 @@ A checked box means the work has evidence in the detailed ledger. Design approva
 complete a box.
 
 Active checkpoint: **Milestone 6 / Work Package 5 bounded runtime transfer — disconnected Windows
-system-SSH staging control is locally green; native Windows CI is next, 2026-07-15, Codex
-implementation owner.**
-The next slice is limited to fixed-command, bounded binary PowerShell 5.1 requests for exclusive
-staging-root creation, declared-directory creation, and owned-root cleanup. It must preserve a
-pre-existing root, bound and strictly decode paths, join cancellation/settlement, and remain
-disconnected. File/tree composition, live OpenSSH, product callers, legacy upload/fallback/default
-behavior, tuple enablement, publication, and SignPath remain out of scope.
+system-SSH tree-composition contract audit, 2026-07-15, Codex implementation owner.**
+The next slice is limited to composing the proven staging control, per-file receiver, source stream,
+and existing system-SSH channel adapter into one exclusive Windows staging tree with parent-first
+directories, bounded concurrency/progress, and joined owned-root cleanup. Live OpenSSH, product
+callers, legacy upload/fallback/default behavior, tuple enablement, publication, and SignPath remain
+out of scope.
 `E-M6-WINDOWS-SYSTEM-SSH-CONTROL-LOCAL-RED-001` proves the native workflow oracle passes 9/9 and
 the purpose suite fails solely because the audited production staging-control module is absent.
 `E-M6-WINDOWS-SYSTEM-SSH-CONTROL-LOCAL-001` records 16/17 purpose cases locally with the real
 PowerShell case honestly skipped, 207 focused cases, 686 broad relay cases, 282/282 release
 contracts, typecheck, full lint, formatting, diff, protected-resolver, and no-product-consumer
 gates. Native Windows x64/arm64 `powershell.exe` proof remains required.
+`E-M6-WINDOWS-SYSTEM-SSH-CONTROL-CI-001` closes that native gate: Windows x64/arm64 pass all
+17 staging-control cases through real `powershell.exe`; all six primary cells, both Linux
+supplements, Windows x64 floor, PR Checks, Golden E2E, and computer-use pass after an unchanged
+Darwin x64 toolchain-timeout rerun. Windows arm64 retains only hosted build 26200 versus required
+26100 after complete runtime smoke.
 `E-M6-WINDOWS-SYSTEM-SSH-FILE-LOCAL-RED-001` proves the workflow oracle passes 9/9 and the new
 purpose suite fails solely because the audited production destination is absent.
 `E-M6-WINDOWS-SYSTEM-SSH-FILE-LOCAL-001` records 14/15 Windows purpose cases locally with the real
