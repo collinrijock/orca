@@ -16946,26 +16946,29 @@ config/scripts/ssh-relay-runtime-workflow.test.mjs` — PASS, 7/7 in 356 ms. The
   diff. Exact Node 24 remains the required native CI gate.
 - Implementation: the 250-line `ssh-relay-runtime-sftp-tree-transfer.ts` accepts only the audited
   scanned tree, validated staging root, exact signal/mode policy/concurrency, progress observer, and
-  mockable session factory. It creates the root exclusively at `0o700`, creates signed directories
+  mockable session factory. It rejects non-absolute roots before session acquisition, creates the
+  root exclusively at `0o700`, creates signed directories
   parent-first, constructs slash-safe POSIX/Windows remote paths, composes the proven source stream
   and per-file destination at one-to-four concurrency, tracks only successful exclusive opens,
   reverse-cleans known owned files/directories, tolerates only status-2 already-clean responses,
   joins failures, and awaits one idempotent session close. Signal abort starts close immediately so
   the future raw adapter can release retained callbacks and source buffers.
 - Purpose command: `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts
---maxWorkers=1 src/main/ssh/ssh-relay-runtime-sftp-tree-transfer.test.ts` — PASS, 8/8 in 830 ms
-  Vitest / 2.80 seconds wall, 139,919,360-byte maximum RSS, zero swaps. It covers POSIX and Windows
+--maxWorkers=1 src/main/ssh/ssh-relay-runtime-sftp-tree-transfer.test.ts` — PASS after absolute-root
+  hardening, 9/9 in 1.97 seconds tests / 2.81 seconds Vitest / 5.05 seconds wall, 139,231,232-byte
+  maximum RSS, zero swaps. It covers POSIX and Windows
   path/mode policy, exact result/progress, parent-before-file order, four-file peak concurrency,
   awaited successful close, root collision without deletion, reverse cleanup, joined path-free
   cleanup/close failures, cancellation-driven retained-write settlement with no later writes, and
-  pre-open cancellation.
+  pre-open cancellation, and relative-root rejection before session acquisition.
 - Focused command: the source tree/scan/stream, per-file destination, new tree transfer,
   acquisition/cache resolution/population/integration, and workflow-oracle eleven-file command —
-  PASS, 111 passed / one declared platform skip in 8.01 seconds Vitest / 9.09 seconds wall,
-  160,235,520-byte maximum RSS, zero swaps.
+  PASS after hardening, 112 passed / one declared platform skip in 9.97 seconds Vitest. The earlier
+  timed 111-case run was 8.01 seconds Vitest / 9.09 seconds wall at 160,235,520-byte maximum RSS.
 - Broad commands: `src/main/ssh/ssh-relay-*.test.ts` — PASS, 44 files passed / three declared skipped,
-  587 tests passed / five declared platform/full-size skips in 25.86 seconds Vitest / 27.44 seconds
-  wall, 251,985,920-byte maximum RSS; `config/scripts/ssh-relay-runtime-*.test.mjs` — PASS, 50 files
+  588 tests passed / five declared platform/full-size skips in 25.57 seconds Vitest after hardening;
+  the earlier timed 587-case run was 25.86 seconds Vitest / 27.44 seconds wall at 251,985,920-byte
+  maximum RSS. `config/scripts/ssh-relay-runtime-*.test.mjs` — PASS, 50 files
   / 280 tests in 17.10 seconds Vitest / 18.66 seconds wall, 190,300,160-byte maximum RSS. The only
   broad output is the established stale-lock diagnostic and local Node 26 module deprecation.
 - Static/isolation commands: `pnpm typecheck` passes in 3.86 seconds wall at 1,224,179,712-byte
@@ -16974,7 +16977,7 @@ config/scripts/ssh-relay-runtime-workflow.test.mjs` — PASS, 7/7 in 356 ms. The
   18.28 seconds at 2,102,476,800-byte maximum RSS and passes switch exhaustiveness, 41 reliability
   gates, 355-entry max-lines ratchet, bundled-skill verification, 9,837 localization references,
   locale parity, and zero-candidate localization coverage; only pre-existing unrelated warnings
-  remain. Module/test sizes are 250/375 lines with no bypass or vague module.
+  remain. Module/test sizes after hardening are 251/391 lines with no bypass or vague module.
 - Boundary/residual gaps: the session is a callback mock whose `close()` is stipulated to settle
   retained callbacks. This is not a raw `SFTPWrapper` adapter, live SSH authentication/channel/SFTP
   server, full-size remote transfer, high-latency comparison, real POSIX/Windows server mode proof,

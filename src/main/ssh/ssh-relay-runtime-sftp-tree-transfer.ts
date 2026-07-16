@@ -65,6 +65,7 @@ function normalizeStagingRoot(tree: SshRelayRuntimeScannedSourceTree, value: str
   if (
     trimmed === '' ||
     trimmed === '/' ||
+    (tree.os !== 'win32' && !trimmed.startsWith('/')) ||
     (tree.os === 'win32' && !(/^[A-Za-z]:\//u.test(trimmed) || trimmed.startsWith('//')))
   ) {
     throw new Error('SSH relay runtime SFTP staging root is invalid')

@@ -11,8 +11,8 @@ complete a box.
 
 Active checkpoint: **Milestone 6 / Work Package 5 bounded runtime transfer — disconnected SFTP
 session/tree orchestration is locally green; exact-head native proof is next, 2026-07-15, Codex
-implementation owner.** `E-M6-SFTP-TREE-TRANSFER-LOCAL-001` passes 8/8 purpose cases, 111 focused
-cases with one declared skip, 587 broad relay cases with five declared skips, 280/280 release
+implementation owner.** `E-M6-SFTP-TREE-TRANSFER-LOCAL-001` passes 9/9 purpose cases after absolute-
+root hardening, 112 focused cases with one declared skip, 588 broad relay cases with five declared skips, 280/280 release
 contracts, typecheck, full lint, formatting, max-lines, diff, protected-resolver, and no-product-
 import gates. `E-M6-SFTP-TREE-TRANSFER-AUDIT-001` limits the package to one caller-owned signal and session
 abstraction, one exclusive staging root, manifest-only directory creation, one-to-four composed file

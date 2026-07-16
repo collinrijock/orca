@@ -372,4 +372,20 @@ describe('SSH relay runtime SFTP tree transfer', () => {
     ).rejects.toThrow('cancelled before session open')
     expect(openSession).not.toHaveBeenCalled()
   })
+
+  it('rejects a relative staging root before acquiring a session', async () => {
+    const tree = await treeFixture()
+    const openSession = vi.fn()
+
+    await expect(
+      transferSshRelayRuntimeTreeViaSftp({
+        tree,
+        remoteStagingRoot: 'relative/staging/content',
+        enforcePosixMode: true,
+        signal: new AbortController().signal,
+        openSession
+      })
+    ).rejects.toThrow(/staging root/i)
+    expect(openSession).not.toHaveBeenCalled()
+  })
 })
