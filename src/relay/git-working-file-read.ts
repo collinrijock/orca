@@ -16,7 +16,9 @@ export async function readWorkingDiffFile(
       return { content: '', isBinary: true }
     }
     const buffer = await readFile(absPath)
-    return bufferToBlob(buffer)
+    // Why: bufferToBlob needs the path's extension to know an image is
+    // previewable; omitting it made every relay-side binary diff empty.
+    return bufferToBlob(buffer, absPath)
   } catch {
     return { content: '', isBinary: false }
   }

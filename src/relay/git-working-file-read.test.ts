@@ -35,4 +35,16 @@ describe('readWorkingDiffFile', () => {
       isBinary: true
     })
   })
+
+  it('base64-encodes a previewable image by its extension', async () => {
+    tmpDir = await mkdtemp(path.join(tmpdir(), 'relay-working-file-'))
+    const filePath = path.join(tmpDir, 'icon.png')
+    const pngBytes = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x01])
+    await writeFile(filePath, pngBytes)
+
+    await expect(readWorkingDiffFile(filePath)).resolves.toEqual({
+      content: pngBytes.toString('base64'),
+      isBinary: true
+    })
+  })
 })

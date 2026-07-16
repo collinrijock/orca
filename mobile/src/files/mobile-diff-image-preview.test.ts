@@ -26,16 +26,35 @@ describe('mobileDiffImageDataUri', () => {
     ).toBe('data:image/png;base64,bmV3')
   })
 
-  it('falls back to the original bytes for a deleted image', () => {
+  it('falls back to the original bytes for a deleted image (modified side absent)', () => {
     expect(
       mobileDiffImageDataUri({
         kind: 'binary',
         originalContent: 'b2xk',
+        originalIsBinary: true,
         modifiedContent: '',
+        modifiedIsBinary: false,
         isImage: true,
         mimeType: 'image/jpeg'
       })
     ).toBe('data:image/jpeg;base64,b2xk')
+  })
+
+  // Guards the SSH/relay + >size-cap case: the modified side IS a binary image but
+  // its bytes arrive empty. Falling back to the original would render the stale
+  // pre-change image; "unavailable" is the honest result.
+  it('returns null for a modify whose binary modified side is empty (no stale fallback)', () => {
+    expect(
+      mobileDiffImageDataUri({
+        kind: 'binary',
+        originalContent: 'b2xk',
+        originalIsBinary: true,
+        modifiedContent: '',
+        modifiedIsBinary: true,
+        isImage: true,
+        mimeType: 'image/png'
+      })
+    ).toBeNull()
   })
 
   it('returns null for a non-previewable binary (no isImage/mimeType)', () => {
@@ -56,6 +75,29 @@ describe('mobileDiffImageDataUri', () => {
         modifiedContent: '',
         isImage: true,
         mimeType: 'image/png'
+      })
+    ).toBeNull()
+  })
+
+  it('returns null for application/pdf even when flagged as previewable', () => {
+    expect(
+      mobileDiffImageDataUri({
+        kind: 'binary',
+        originalContent: '',
+        modifiedContent: 'JVBER',
+        isImage: true,
+        mimeType: 'application/pdf'
+      })
+    ).toBeNull()
+  })
+
+  it('returns null when flagged as image but mimeType is missing', () => {
+    expect(
+      mobileDiffImageDataUri({
+        kind: 'binary',
+        originalContent: '',
+        modifiedContent: 'bmV3',
+        isImage: true
       })
     ).toBeNull()
   })
