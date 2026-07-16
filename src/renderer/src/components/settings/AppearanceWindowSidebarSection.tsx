@@ -16,8 +16,10 @@ import { getLayoutEntries, getSidebarEntries, getStatusBarToggles } from './appe
 import { LeftSidebarAppearanceSetting } from './LeftSidebarAppearanceSetting'
 import {
   getLeftSidebarAppearanceEntry,
+  getRightSidebarEdgePeekEntry,
   getWorkspaceCardLayoutEntry
 } from './appearance-sidebar-search'
+import { isRightSidebarEdgePeekEnabled } from '../right-sidebar/right-sidebar-edge-peek-preference'
 import { translate } from '@/i18n/i18n'
 import { matchesSettingsSearch, normalizeSettingsSearchQuery } from './settings-search'
 
@@ -62,9 +64,16 @@ export function AppearanceWindowSidebarSection({
   const setWorktreeCardMode = useAppStore((state) => state.setWorktreeCardMode)
   const visibleStatusBarToggles = useAvailableStatusBarToggles(getStatusBarToggles())
   const leftSidebarAppearanceEntry = getLeftSidebarAppearanceEntry()
+  const rightSidebarEdgePeekEntry = getRightSidebarEdgePeekEntry()
   const sidebarEntries = getSidebarEntries()
   const workspaceCardLayoutEntry = getWorkspaceCardLayoutEntry()
   const layoutEntries = getLayoutEntries()
+  // Why: sidebarEntries[0] is the edge-peek entry; later indices keep the
+  // existing left-sidebar button toggles that this section already renders.
+  const showTasksEntry = sidebarEntries[1]
+  const showAutomationsEntry = sidebarEntries[2]
+  const showMobileEntry = sidebarEntries[3]
+  const edgePeekEnabled = isRightSidebarEdgePeekEnabled(settings)
   const statusBarTitle = translate(
     'auto.components.settings.AppearancePane.3e4175e5c6',
     'Status Bar'
@@ -192,12 +201,28 @@ export function AppearanceWindowSidebarSection({
                   </SearchableSetting>
 
                   <SearchableSetting
+                    title={rightSidebarEdgePeekEntry.title}
+                    description={rightSidebarEdgePeekEntry.description}
+                    keywords={rightSidebarEdgePeekEntry.keywords}
+                  >
+                    <SettingsSwitchRow
+                      label={rightSidebarEdgePeekEntry.title}
+                      description={rightSidebarEdgePeekEntry.description}
+                      checked={edgePeekEnabled}
+                      onChange={() =>
+                        updateSettings({ rightSidebarEdgePeekEnabled: !edgePeekEnabled })
+                      }
+                      ariaLabel={rightSidebarEdgePeekEntry.title}
+                    />
+                  </SearchableSetting>
+
+                  <SearchableSetting
                     title={translate(
                       'auto.components.settings.AppearancePane.cf81907069',
                       'Show Tasks Button'
                     )}
-                    description={sidebarEntries[0]?.description}
-                    keywords={sidebarEntries[0]?.keywords ?? ['tasks', 'sidebar', 'button']}
+                    description={showTasksEntry?.description}
+                    keywords={showTasksEntry?.keywords ?? ['tasks', 'sidebar', 'button']}
                   >
                     <SettingsSwitchRow
                       label={translate(
@@ -216,9 +241,9 @@ export function AppearanceWindowSidebarSection({
                       'auto.components.settings.AppearancePane.511f270ebb',
                       'Show Automations Button'
                     )}
-                    description={sidebarEntries[1]?.description}
+                    description={showAutomationsEntry?.description}
                     keywords={
-                      sidebarEntries[1]?.keywords ?? ['automations', 'automation', 'schedule']
+                      showAutomationsEntry?.keywords ?? ['automations', 'automation', 'schedule']
                     }
                   >
                     <SettingsSwitchRow
@@ -240,8 +265,8 @@ export function AppearanceWindowSidebarSection({
                       'auto.components.settings.AppearancePane.9da1020447',
                       'Show Orca Mobile Button'
                     )}
-                    description={sidebarEntries[2]?.description}
-                    keywords={sidebarEntries[2]?.keywords ?? ['mobile', 'phone', 'sidebar']}
+                    description={showMobileEntry?.description}
+                    keywords={showMobileEntry?.keywords ?? ['mobile', 'phone', 'sidebar']}
                   >
                     <SettingsSwitchRow
                       label={translate(

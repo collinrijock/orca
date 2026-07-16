@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react'
 import { useAppStore } from '@/store'
+import { isRightSidebarEdgePeekEnabled } from './right-sidebar-edge-peek-preference'
 
 // Arc-style edge peek: hovering the window's right edge while the sidebar is
 // closed reveals it as a floating overlay instead of reflowing the editor.
@@ -21,6 +22,7 @@ export function RightSidebarEdgePeekZone(): React.JSX.Element | null {
   const rightSidebarOpen = useAppStore((s) => s.rightSidebarOpen)
   const rightSidebarPeek = useAppStore((s) => s.rightSidebarPeek)
   const setRightSidebarPeek = useAppStore((s) => s.setRightSidebarPeek)
+  const edgePeekEnabled = useAppStore((s) => isRightSidebarEdgePeekEnabled(s.settings))
 
   useEffect(() => {
     // Why: the zone unmounts when the active view loses sidebar controls; a
@@ -30,10 +32,19 @@ export function RightSidebarEdgePeekZone(): React.JSX.Element | null {
   }, [setRightSidebarPeek])
 
   useEffect(() => {
+    // Why: an active peek must collapse immediately when the user turns the
+    // setting off mid-gesture so the overlay doesn't stick without a dismiss
+    // path that matches their preference.
+    if (!edgePeekEnabled && rightSidebarPeek) {
+      setRightSidebarPeek(false)
+    }
+  }, [edgePeekEnabled, rightSidebarPeek, setRightSidebarPeek])
+
+  useEffect(() => {
     // The revealed overlay covers the edge, so arming is only needed while the
     // sidebar is fully hidden. Skipping the listener here also guarantees an
     // armed timer can't fire after the sidebar opens (the cleanup clears it).
-    if (rightSidebarOpen || rightSidebarPeek) {
+    if (!edgePeekEnabled || rightSidebarOpen || rightSidebarPeek) {
       return
     }
     let openTimer: number | null = null
@@ -65,7 +76,7 @@ export function RightSidebarEdgePeekZone(): React.JSX.Element | null {
       clearOpenTimer()
       window.removeEventListener('mousemove', onMouseMove)
     }
-  }, [rightSidebarOpen, rightSidebarPeek, setRightSidebarPeek])
+  }, [edgePeekEnabled, rightSidebarOpen, rightSidebarPeek, setRightSidebarPeek])
 
   return null
 }

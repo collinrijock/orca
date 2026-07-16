@@ -56,6 +56,8 @@ import {
 } from './components/terminal-pane/use-system-prefers-dark'
 import RightSidebar from './components/right-sidebar'
 import { RightSidebarEdgePeekZone } from './components/right-sidebar/right-sidebar-edge-peek'
+import { RightSidebarEdgePeekTipHost } from './components/right-sidebar/right-sidebar-edge-peek-tip-host'
+import { isRightSidebarEdgePeekEnabled } from './components/right-sidebar/right-sidebar-edge-peek-preference'
 import { StarNagCard } from './components/StarNagCard'
 import { StarNagAgentValueMomentObserver } from './components/star-nag/StarNagAgentValueMomentObserver'
 import { StarNagToastHost } from './components/star-nag/StarNagToastHost'
@@ -2098,6 +2100,7 @@ function App(): React.JSX.Element {
     </div>
   )
 
+  const rightSidebarEdgePeekEnabled = isRightSidebarEdgePeekEnabled(settings)
   const rightSidebarToggle = showRightSidebarControls ? (
     <Tooltip>
       <TooltipTrigger asChild>
@@ -2109,10 +2112,19 @@ function App(): React.JSX.Element {
           <PanelRight size={16} />
         </button>
       </TooltipTrigger>
-      <TooltipContent side="bottom" sideOffset={6}>
-        {translate('auto.App.c184e056de', 'Toggle right sidebar ({{value0}})', {
-          value0: rightSidebarShortcutLabel
-        })}
+      <TooltipContent side="bottom" sideOffset={6} className="max-w-[220px]">
+        <div className="flex flex-col gap-0.5">
+          <span>
+            {translate('auto.App.c184e056de', 'Toggle right sidebar ({{value0}})', {
+              value0: rightSidebarShortcutLabel
+            })}
+          </span>
+          {rightSidebarEdgePeekEnabled ? (
+            <span className="opacity-80">
+              {translate('auto.App.rightSidebarEdgePeekHint', 'Hover the right edge to peek')}
+            </span>
+          ) : null}
+        </div>
       </TooltipContent>
     </Tooltip>
   ) : null
@@ -2433,6 +2445,7 @@ function App(): React.JSX.Element {
               responsive. Unmount on the tasks view since that surface is
               intentionally distraction-free. */}
                 {showRightSidebarControls ? <RightSidebarEdgePeekZone /> : null}
+                {showRightSidebarControls ? <RightSidebarEdgePeekTipHost /> : null}
                 {showRightSidebarControls ? (
                   <RecoverableRenderErrorBoundary
                     boundaryId="right-sidebar"

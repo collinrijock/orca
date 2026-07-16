@@ -40,6 +40,7 @@ import {
 import { translate } from '@/i18n/i18n'
 import { RightSidebarPanelContent } from './right-sidebar-panel-content'
 import { useRightSidebarEdgePeekDismiss } from './right-sidebar-edge-peek'
+import { isRightSidebarEdgePeekEnabled } from './right-sidebar-edge-peek-preference'
 import { useMeasuredWidth } from './right-sidebar-measured-width'
 import { normalizeRightSidebarRoute } from '@/store/right-sidebar-route'
 import { AgentSessionHistoryIcon } from './agent-session-history-icon'
@@ -65,6 +66,7 @@ function RightSidebarInner(): React.JSX.Element {
   const rightSidebarOpen = useAppStore((s) => s.rightSidebarOpen)
   const rightSidebarPeek = useAppStore((s) => s.rightSidebarPeek)
   const setRightSidebarPeek = useAppStore((s) => s.setRightSidebarPeek)
+  const rightSidebarEdgePeekEnabled = useAppStore((s) => isRightSidebarEdgePeekEnabled(s.settings))
   const rightSidebarWidth = useAppStore((s) => s.rightSidebarWidth)
   const setRightSidebarWidth = useAppStore((s) => s.setRightSidebarWidth)
   const rightSidebarTab = useAppStore((s) => s.rightSidebarTab)
@@ -280,12 +282,24 @@ function RightSidebarInner(): React.JSX.Element {
           <PanelRight size={16} />
         </button>
       </TooltipTrigger>
-      <TooltipContent side="bottom" sideOffset={6}>
-        {translate(
-          'auto.components.right.sidebar.index.9fffaf17c1',
-          'Toggle right sidebar ({{value0}})',
-          { value0: rightSidebarShortcut }
-        )}
+      <TooltipContent side="bottom" sideOffset={6} className="max-w-[220px]">
+        <div className="flex flex-col gap-0.5">
+          <span>
+            {translate(
+              'auto.components.right.sidebar.index.9fffaf17c1',
+              'Toggle right sidebar ({{value0}})',
+              { value0: rightSidebarShortcut }
+            )}
+          </span>
+          {rightSidebarEdgePeekEnabled ? (
+            <span className="opacity-80">
+              {translate(
+                'auto.components.right.sidebar.index.edgePeekHint',
+                'Hover the right edge to peek'
+              )}
+            </span>
+          ) : null}
+        </div>
       </TooltipContent>
     </Tooltip>
   ) : null

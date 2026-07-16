@@ -88,6 +88,33 @@ describe('RightSidebarEdgePeekZone', () => {
     expect(useAppStore.getState().rightSidebarPeek).toBe(false)
   })
 
+  it('does not arm when edge peek is disabled in settings', () => {
+    useAppStore.setState({
+      settings: { rightSidebarEdgePeekEnabled: false } as never
+    })
+    render(<RightSidebarEdgePeekZone />)
+
+    moveMouse(RIGHT_EDGE_X, BELOW_TITLEBAR_Y)
+    vi.advanceTimersByTime(PEEK_OPEN_DELAY_MS)
+
+    expect(useAppStore.getState().rightSidebarPeek).toBe(false)
+  })
+
+  it('clears an active peek when edge peek is turned off', () => {
+    useAppStore.setState({ rightSidebarPeek: true })
+    const { rerender } = render(<RightSidebarEdgePeekZone />)
+    expect(useAppStore.getState().rightSidebarPeek).toBe(true)
+
+    act(() => {
+      useAppStore.setState({
+        settings: { rightSidebarEdgePeekEnabled: false } as never
+      })
+    })
+    rerender(<RightSidebarEdgePeekZone />)
+
+    expect(useAppStore.getState().rightSidebarPeek).toBe(false)
+  })
+
   it('clears an active peek when the zone unmounts on a view change', () => {
     const { unmount } = render(<RightSidebarEdgePeekZone />)
 

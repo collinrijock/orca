@@ -79,7 +79,48 @@ export const getWorkspaceCardLayoutEntry = createLocalizedCatalog(
   })
 )
 
+export const getRightSidebarEdgePeekEntry = createLocalizedCatalog(
+  (): SettingsSearchEntry => ({
+    title: translate(
+      'auto.components.settings.appearance.search.rightSidebarEdgePeek.title',
+      'Right Sidebar Edge Peek'
+    ),
+    description: translate(
+      'auto.components.settings.appearance.search.rightSidebarEdgePeek.description',
+      'Hover the window edge to temporarily reveal a closed right sidebar.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('auto.components.settings.appearance.search.5bff6a2ef0', 'sidebar'),
+      ...translateSearchKeyword(
+        'auto.components.settings.appearance.search.rightSidebarEdgePeek.right',
+        'right sidebar'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.appearance.search.rightSidebarEdgePeek.peek',
+        'peek'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.appearance.search.rightSidebarEdgePeek.hover',
+        'hover'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.appearance.search.rightSidebarEdgePeek.edge',
+        'edge'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.appearance.search.rightSidebarEdgePeek.overlay',
+        'overlay'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.appearance.search.rightSidebarEdgePeek.arc',
+        'arc'
+      )
+    ]
+  })
+)
+
 export const getSidebarEntries = createLocalizedCatalog((): SettingsSearchEntry[] => [
+  getRightSidebarEdgePeekEntry(),
   {
     title: translate('auto.components.settings.appearance.search.155a1e7438', 'Show Tasks Button'),
     description: translate(
