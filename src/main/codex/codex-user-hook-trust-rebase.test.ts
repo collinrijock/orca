@@ -8,6 +8,8 @@ import type { CodexUserHookTrustRebaseRequest } from './codex-user-hook-trust-re
 const resolveCodexCommandMock = vi.hoisted(() => vi.fn(() => process.execPath))
 vi.mock('../codex-cli/command', () => ({ resolveCodexCommand: resolveCodexCommandMock }))
 
+import { codexAppServerCapabilityCache } from './codex-app-server-capability-cache'
+import { CodexAppServerUnsupportedError } from './codex-app-server-session'
 import {
   _internals,
   getMovedCodexUserHookTrust,
@@ -26,6 +28,8 @@ beforeEach(() => {
 
 afterEach(() => {
   _internals.setSessionRunnerSync(null)
+  _internals.resetRetryState()
+  codexAppServerCapabilityCache.clear()
   rmSync(root, { recursive: true, force: true })
 })
 
@@ -140,6 +144,69 @@ describe('real-home user hook trust rebasing', () => {
         expect.objectContaining({ command: 'untrusted-user', wasTrusted: false, enabled: false })
       ])
     }
+  })
+
+  it('marks the host unsupported and skips further codex sessions', () => {
+    const orca = command('orca-hook')
+    const user = command('user-hook')
+    const before = { Stop: [{ hooks: [orca] }, { hooks: [user] }] }
+    const after = { Stop: [{ hooks: [user] }] }
+    writeFileSync(configPath, '# config\n')
+    let sessions = 0
+    _internals.setSessionRunnerSync(() => {
+      sessions += 1
+      throw new CodexAppServerUnsupportedError('unrecognized subcommand app-server')
+    })
+    const args = {
+      sourcePath: hooksPath,
+      runtimeHomePath: root,
+      tomlPath: configPath,
+      beforeHooks: before,
+      afterHooks: after,
+      writeHooks: () => {
+        throw new Error('write must not run')
+      },
+      restoreHooks: () => {
+        throw new Error('restore must not run')
+      }
+    }
+
+    expect(() => mutateRealHomeHooksPreservingUserTrust(args)).toThrow('unrecognized subcommand')
+    expect(() => mutateRealHomeHooksPreservingUserTrust(args)).toThrow('marked unsupported')
+    expect(sessions).toBe(1)
+    expect(codexAppServerCapabilityCache.shouldTry('native')).toBe(false)
+  })
+
+  it('cools down after a transient session failure instead of retrying every launch prep', () => {
+    const orca = command('orca-hook')
+    const user = command('user-hook')
+    const before = { Stop: [{ hooks: [orca] }, { hooks: [user] }] }
+    const after = { Stop: [{ hooks: [user] }] }
+    writeFileSync(configPath, '# config\n')
+    let sessions = 0
+    _internals.setSessionRunnerSync(() => {
+      sessions += 1
+      throw new Error('pre-mutation hooks/list reported 0 of 1 moved user hooks')
+    })
+    const args = {
+      sourcePath: hooksPath,
+      runtimeHomePath: root,
+      tomlPath: configPath,
+      beforeHooks: before,
+      afterHooks: after,
+      writeHooks: () => {
+        throw new Error('write must not run')
+      },
+      restoreHooks: () => {
+        throw new Error('restore must not run')
+      }
+    }
+
+    expect(() => mutateRealHomeHooksPreservingUserTrust(args)).toThrow('0 of 1 moved user hooks')
+    expect(() => mutateRealHomeHooksPreservingUserTrust(args)).toThrow('cooling down')
+    expect(sessions).toBe(1)
+    // Why: a transient failure must not poison the shared capability signal.
+    expect(codexAppServerCapabilityCache.shouldTry('native')).toBe(true)
   })
 
   it('restores both files byte-exactly when post-mutation repair fails', () => {
