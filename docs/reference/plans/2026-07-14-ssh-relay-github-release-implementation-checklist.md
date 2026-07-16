@@ -8,8 +8,8 @@ work; keep exact commands, runner identities, hashes, metrics, and residual gaps
 
 Date created: 2026-07-14<br>
 Last updated: 2026-07-15<br>
-Current phase: Milestone 5 / Work Package 4 desktop cache boundary — **In progress — 2026-07-15, Codex implementation owner: checkpoint and fresh all-six Windows-native correction proof**. E-M5-WINDOWS-NATIVE-GATE-CORRECTIONS-LOCAL-001 closes the narrow local release-order and equivalent truncation-oracle corrections exposed by run `29458719333`. Checkpoint and push the exact tree, then require all six primary Node 24 jobs plus companion PR Checks and Golden E2E to pass before beginning immutable cache-entry publication/quarantine. Do not add a desktop caller, SSH transfer/install, tuple enablement, mode wiring, release publication, or default behavior.<br>
-Session checkpoint: **In progress — 2026-07-15, Codex implementation owner** — resumed with user authority for end-to-end PR-contained implementation, commits, pushes, CI, rehearsals, and release writes, with merging to `main` explicitly prohibited. The worktree was clean and exactly matched pushed head `869603a3e86933cc9985f9e4d240e615146d86d8` at session start. Both Windows jobs then reproduced the open-handle `EPERM`; Windows arm64 also exposed equivalent zlib truncation wording outside the assertion oracle. The corrected local tree passes 31 focused lock/extraction tests, 95 artifact tests with one environment skip, all 279 release-runtime tests, typecheck, full lint, formatting, max-lines, and diff gates. Cache publication remains gated; there is no release publication, cache entry, cache consumer, SSH transfer/install, tuple enablement, or production/default behavior change. Legacy remains the production default.<br>
+Current phase: Milestone 5 / Work Package 4 desktop cache boundary — **In progress — 2026-07-15, Codex implementation owner: immutable cache-entry publication/lookup/quarantine package**. E-M5-ARTIFACT-CACHE-LOCK-CI-001 closes the disconnected lock capability on exact head `44ef150da39b3977f4a462dbf52f55c5988b6bf7`: all six primary native Node 24 jobs, both Linux oldest-userland supplements, PR Checks, and Golden E2E pass. Begin only the audited package-2 boundary: refine immutable-entry contracts, add a purpose-named RED, then implement exclusive same-filesystem staging, structured proof, final archive/tree revalidation, atomic publication, lookup, and corruption quarantine. Keep eviction/in-use leases and every consumer/default path separate.<br>
+Session checkpoint: **In progress — 2026-07-15, Codex implementation owner** — resumed with user authority for end-to-end PR-contained implementation, commits, pushes, CI, rehearsals, and release writes, with merging to `main` explicitly prohibited. The first native run exposed and recorded Windows open-handle rename and equivalent zlib-error-oracle REDs; narrow corrections passed locally and at exact-head CI. In replacement run `29459424864`, all six primary jobs pass the 10 lock and 21 extraction contracts plus deterministic artifact build/smoke. The workflow's sole failure is the retained Windows arm64 hosted build-26200 versus required-26100 floor rejection after runtime/archive/tree/Node/PTTY/watcher proof; no tuple is enabled from it. PR Checks `29459424977` and Golden E2E `29459424789` pass. There is no release publication, cache entry, cache consumer, SSH transfer/install, tuple enablement, or production/default behavior change. Legacy remains the production default.<br>
 Primary design: [SSH relay GitHub Release plan](./2026-07-14-ssh-relay-github-release-plan.html)<br>
 Motivating issues: [#8450](https://github.com/stablyai/orca/issues/8450), [#1693](https://github.com/stablyai/orca/issues/1693)
 
@@ -1092,8 +1092,14 @@ Suggested concrete modules:
       The disconnected full-tree verifier passes locally and on all six native clients under
       E-M5-ARTIFACT-EXTRACTION-LOCAL-001 and E-M5-ARTIFACT-EXTRACTION-CI-001; atomic cache
       publication is deliberately absent and keeps this combined item open.
-- [ ] Coordinate cache ownership across multiple Orca processes and windows.
-- [ ] Recover stale download/extraction locks without deleting an active writer.
+- [x] Coordinate cache ownership across multiple Orca processes and windows.
+      E-M5-ARTIFACT-CACHE-LOCK-LOCAL-001 and E-M5-ARTIFACT-CACHE-LOCK-CI-001 prove real
+      second-process contention and ownership transfer on all six native client tuples. Cache-entry
+      integration remains separately gated.
+- [x] Recover stale download/extraction locks without deleting an active writer.
+      E-M5-ARTIFACT-CACHE-LOCK-LOCAL-001 and E-M5-ARTIFACT-CACHE-LOCK-CI-001 prove conservative
+      same-host liveness, stale-dead-owner tombstoning, live/ambiguous-owner preservation, and
+      displaced-owner successor safety. No downloader/extractor consumer is connected yet.
 - [ ] Never select partial files, partial directories, or entries with a failed verification record.
 - [ ] Re-verify cached metadata and expected identity before use; define when full file rehashing is
       required.
@@ -13173,6 +13179,65 @@ sort`; targeted `rg -n` over `cache|extract|atomic|quarantine`; and complete rea
   an enabled tuple. Fresh exact-head all-six native execution remains mandatory.
 - Follow-up: checkpoint/push, require all six primary native jobs plus PR Checks and Golden E2E, and
   record exact runner/job evidence before opening the immutable cache-entry publication package.
+
+### E-M5-ARTIFACT-CACHE-LOCK-CI-001 — Content lock and corrected extraction contracts pass all six native clients
+
+- Date: 2026-07-15
+- Owner: Codex implementation owner
+- Source: exact pushed correction head `44ef150da39b3977f4a462dbf52f55c5988b6bf7`; SSH Relay
+  Runtime Artifacts run [29459424864](https://github.com/stablyai/orca/actions/runs/29459424864).
+- Exact evidence commands:
+  - `gh api 'repos/stablyai/orca/actions/runs/29459424864/jobs?per_page=100' --jq ...` for job,
+    runner, label, step, and timestamp identity;
+  - `gh api repos/stablyai/orca/actions/jobs/<job-id>/logs 2>&1 | rg
+    "ssh-relay-artifact-cache-lock.test.ts|ssh-relay-artifact-extraction.test.ts|Test Files|Tests  " |
+    tail -8` for each primary job;
+  - `gh api repos/stablyai/orca/actions/jobs/87500906175/logs 2>&1 | rg -n
+    "Node runtime version|archive|tree|PTY|watcher|Windows|osBuild|26100|26200|runner does not prove|Process completed"
+    | tail -100` for the retained Windows arm64 floor gap.
+- Primary native results:
+
+  | Client tuple | Job / runner | Job duration | Contract duration | Lock suite | Extraction suite | Result |
+  | --- | --- | ---: | ---: | ---: | ---: | --- |
+  | darwin-arm64 | [87499607559](https://github.com/stablyai/orca/actions/runs/29459424864/job/87499607559), `GitHub Actions 1000056437`, `macos-15` | 1m52s | 13s | 10 pass, 530ms | 21 pass, 524ms | PASS |
+  | darwin-x64 | [87499607640](https://github.com/stablyai/orca/actions/runs/29459424864/job/87499607640), `GitHub Actions 1000056435`, `macos-15-intel` | 6m45s | 1m03s | 10 pass, 825ms | 21 pass, 3,062ms | PASS |
+  | linux-arm64-glibc | [87499607604](https://github.com/stablyai/orca/actions/runs/29459424864/job/87499607604), `GitHub Actions 1000056440`, `ubuntu-24.04-arm` | 12m20s | 11s | 10 pass, 514ms | 21 pass, 784ms | PASS |
+  | linux-x64-glibc | [87499607591](https://github.com/stablyai/orca/actions/runs/29459424864/job/87499607591), `GitHub Actions 1000056439`, `ubuntu-24.04` | 3m38s | 14s | 10 pass, 569ms | 21 pass, 949ms | PASS |
+  | win32-arm64 | [87499607605](https://github.com/stablyai/orca/actions/runs/29459424864/job/87499607605), `GitHub Actions 1000056441`, `windows-11-arm` | 9m01s | 29s | 10 pass, 801ms | 21 pass, 1,152ms | PASS |
+  | win32-x64 | [87499607584](https://github.com/stablyai/orca/actions/runs/29459424864/job/87499607584), `GitHub Actions 1000056438`, `windows-2022` | 5m29s | 22s | 10 pass, 751ms | 21 pass, 1,698ms | PASS |
+
+- Aggregate contract results: each POSIX job passes 64 files; each Windows job passes 65 files. The
+  suite includes same-process contention, a real second Node process, bounded cancellation,
+  owner-handle heartbeat, same-host stale-dead reclaim, live/malformed-owner preservation, and
+  nonce-displacement fail-closed behavior. Both Windows architectures therefore prove the corrected
+  close-after-final-ownership-check release ordering on native NTFS semantics.
+- Supplemental results: Windows x64 oldest-baseline job
+  [87500906186](https://github.com/stablyai/orca/actions/runs/29459424864/job/87500906186) passes. Linux
+  x64 job [87501380503](https://github.com/stablyai/orca/actions/runs/29459424864/job/87501380503)
+  and Linux arm64 job
+  [87501380508](https://github.com/stablyai/orca/actions/runs/29459424864/job/87501380508) pass their
+  pinned oldest-userland supplements.
+- Retained floor gap: Windows arm64 job
+  [87500906175](https://github.com/stablyai/orca/actions/runs/29459424864/job/87500906175) reconstructs
+  and verifies the exact runtime, archive, and tree and records Node/PTTY/watcher proof, then correctly
+  rejects hosted Windows build `10.0.26200` because the manifest requires build `26100`. This expected
+  fail-closed evidence is the workflow's sole failure and does not enable or close that floor cell.
+- Companion regression evidence: PR Checks run
+  [29459424977](https://github.com/stablyai/orca/actions/runs/29459424977), job
+  [87499607955](https://github.com/stablyai/orca/actions/runs/29459424977/job/87499607955), runner
+  `GitHub Actions 1000056436` / `ubuntu-latest`, passes in 13m56s. Golden E2E run
+  [29459424789](https://github.com/stablyai/orca/actions/runs/29459424789) passes Linux job
+  [87499607002](https://github.com/stablyai/orca/actions/runs/29459424789/job/87499607002) in 4m31s and
+  macOS job [87499607004](https://github.com/stablyai/orca/actions/runs/29459424789/job/87499607004)
+  in 4m31s.
+- Closure: cross-process content ownership, bounded wait/cancellation, heartbeat, conservative stale
+  recovery, owner-only release, native Windows release ordering, and equivalent truncation diagnostics
+  are closed for the disconnected cache-lock capability.
+- Residual gaps: abrupt process kill was not separately injected on every OS; network filesystems and
+  PID namespaces remain unproved. Cache-entry publication/lookup/quarantine, in-use lease/eviction,
+  packaged Electron path selection, SSH, and every tuple/default path remain absent.
+- Follow-up: checkpoint the evidence, then begin only audited package 2 with a purpose-named immutable
+  cache-entry RED. Keep eviction/in-use leases and consumers separate.
 
 ## Accepted Gaps
 

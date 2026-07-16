@@ -47,7 +47,13 @@ found the open-heartbeat-handle directory-rename incompatibility under
 `E-M5-ARTIFACT-CACHE-LOCK-CI-WINDOWS-RED-001`; Windows arm64 also found equivalent zlib truncation
 wording outside the extraction test oracle under `E-M5-ARTIFACT-EXTRACTION-CI-WINDOWS-ARM64-RED-001`.
 The ownership-preserving release order and equivalent-error assertion are locally green under
-`E-M5-WINDOWS-NATIVE-GATE-CORRECTIONS-LOCAL-001`; a fresh all-six Node 24 run is now required. Desktop consumers, cache publication/quarantine/eviction, SSH transfer/install,
+`E-M5-WINDOWS-NATIVE-GATE-CORRECTIONS-LOCAL-001`. Replacement exact-head run
+[29459424864](https://github.com/stablyai/orca/actions/runs/29459424864) closes the content lock on all
+six primary native Node 24 jobs under `E-M5-ARTIFACT-CACHE-LOCK-CI-001`; both Linux supplements,
+PR Checks [29459424977](https://github.com/stablyai/orca/actions/runs/29459424977), and Golden E2E
+[29459424789](https://github.com/stablyai/orca/actions/runs/29459424789) pass. Windows arm64 retains
+only the explicit hosted build-26200 versus required-26100 floor rejection after runtime/tree smoke.
+Next is the disconnected immutable publication/lookup/quarantine package. Desktop consumers, cache eviction, SSH transfer/install,
 mode wiring, tuple enablement, publication, production keys/environment/seed, and merge to `main`
 remain disconnected.
 
@@ -351,8 +357,8 @@ remain disconnected.
       active split packages and are not implemented yet. The lock-only audit/RED is recorded under
       `E-M5-ARTIFACT-CACHE-AUDIT-001` and `E-M5-ARTIFACT-CACHE-LOCK-LOCAL-RED-001`; the implementation
       is locally green and wired to both native families under `E-M5-ARTIFACT-CACHE-LOCK-LOCAL-001`
-      and `E-M5-ARTIFACT-CACHE-LOCK-CI-WIRING-LOCAL-001`. All-six execution remains required before
-      marking lock coordination complete.
+      and `E-M5-ARTIFACT-CACHE-LOCK-CI-WIRING-LOCAL-001`; all-six native execution is closed by
+      `E-M5-ARTIFACT-CACHE-LOCK-CI-001`. Immutable publication/lookup/quarantine remains next.
 - [ ] Prove verified cached bytes can be transferred while the client is offline.
 - [ ] Preserve `ORCA_RELAY_PATH` behind the official-build trust boundary.
 
