@@ -8,8 +8,8 @@ work; keep exact commands, runner identities, hashes, metrics, and residual gaps
 
 Date created: 2026-07-14<br>
 Last updated: 2026-07-15<br>
-Current phase: Milestone 5 / Work Package 4 desktop resolver/cache — **In progress — 2026-07-15, Codex implementation owner: audit the smallest disconnected app-owned relay artifact cache-root contract**. Keep Electron/product consumers, cache orchestration, the build constant, production key/manifest/resources, downloader/SSH/settings/tuples/publication/default behavior absent. Real Apple/SignPath rehearsals remain an explicit late gate and are not on this package's critical path.<br>
-Session checkpoint: **In progress — 2026-07-15, Codex implementation owner** — `E-M5-OFFICIAL-MANIFEST-COMPOSITION-CI-001` closes the immutable-trust/fixed-resource composition at exact head `749f775f15cbd92354fe43e4c142900d4b921614`: all six primary native jobs, both Linux supplements, Windows x64 baseline, PR Checks, Golden E2E, and computer-use pass. Hosted Windows arm64 build 26200 remains correctly rejected against required 26100. Begin only the disconnected cache-root audit/RED; merging to `main` remains prohibited and SignPath is deferred. No Electron resource, downloader, SSH, setting, tuple, publication, or default-path consumer exists. Legacy remains the production default.<br>
+Current phase: Milestone 5 / Work Package 4 desktop resolver/cache — **In progress — 2026-07-15, Codex implementation owner: audit the smallest disconnected resolver/cache composition**. Require the eventual startup caller to supply Orca's pre-`app.setName()` canonical user-data path; keep filesystem orchestration outside import time and production manifest/resources, proxy, SSH/settings/tuples/publication/default behavior absent. Real Apple/SignPath rehearsals remain an explicit late gate and are not on this package's critical path.<br>
+Session checkpoint: **In progress — 2026-07-15, Codex implementation owner** — `E-M5-ARTIFACT-CACHE-ROOT-CI-001` closes the pure cache-root contract at exact head `aefcaa9a938710e275e3b49ab71446f73b01e075`: all six primary native Node 24 jobs, both Linux supplements, Windows x64 baseline, PR Checks, Golden E2E, and computer-use pass. `E-M5-ARTIFACT-CACHE-STARTUP-BOUNDARY-AUDIT-001` rejects a late direct Electron adapter because `app.setName()` can change `app.getPath('userData')`; the eventual startup caller must pass `getCanonicalUserDataPath()`. Begin only the disconnected resolver/cache composition audit; merging to `main` remains prohibited and SignPath is deferred. No SSH, setting, tuple, publication, or default-path consumer exists. Legacy remains the production default.<br>
 Primary design: [SSH relay GitHub Release plan](./2026-07-14-ssh-relay-github-release-plan.html)<br>
 Motivating issues: [#8450](https://github.com/stablyai/orca/issues/8450), [#1693](https://github.com/stablyai/orca/issues/1693)
 
@@ -142,10 +142,15 @@ same change as the work it records.
   accounting, and bounded 2 GiB eviction pass locally and on all six native clients under
   E-M5-ARTIFACT-CACHE-LOCK-CI-001, E-M5-ARTIFACT-CACHE-ENTRY-CI-001, and
   E-M5-ARTIFACT-CACHE-EVICTION-CI-001. No production consumer exists.
-- Active package: **In progress — 2026-07-15, Codex implementation owner** — audit a pure app-owned
-  relay artifact cache-root derivation from a caller-supplied native user-data path. Keep Electron
-  `app.getPath`, directory creation, cache lookup/publication/eviction orchestration, environment
-  overrides, downloader, SSH, mode, tuple, publication, and defaults separately gated.
+- Completed package: pure app-owned relay artifact cache-root derivation. An absolute
+  caller-supplied native user-data path, fixed versioned namespace, environment non-redirection,
+  local gates, and all-six native Node 24 proof are green under
+  E-M5-ARTIFACT-CACHE-ROOT-LOCAL-RED-001, E-M5-ARTIFACT-CACHE-ROOT-LOCAL-001, and
+  E-M5-ARTIFACT-CACHE-ROOT-CI-001. No Electron or product caller exists.
+- Active package: **In progress — 2026-07-15, Codex implementation owner** — audit the smallest
+  disconnected resolver/cache composition over explicit dependencies. The eventual startup caller,
+  not an SSH module, must supply `getCanonicalUserDataPath()` captured before `app.setName()`.
+  Keep proxy integration, SSH, mode, tuple, publication, and defaults separately gated.
 - Completed Work Package 2 gate: target-native Windows source-signature reports from exact-head
   artifact jobs 87267322867 and 87267322870 were independently downloaded and matched to their
   identities and signing-stage reports under E-M3-WINDOWS-SOURCE-SIGNATURE-CI-001. PR Checks
@@ -14358,6 +14363,130 @@ config/vitest.config.ts --maxWorkers=1 config/scripts/ssh-relay-runtime-*.test.m
   publication, or default-path change. Legacy behavior remains unchanged.
 - Remaining proof for this slice: commit the coherent package and require all six primary native
   Node 24 jobs plus the existing adjacent PR/E2E gates before advancing to another desktop adapter.
+
+### E-M5-ARTIFACT-CACHE-ROOT-CI-001 — all-six native cache-root proof
+
+- Date/owner: 2026-07-15, Codex implementation owner.
+- Exact source/workflow: `aefcaa9a938710e275e3b49ab71446f73b01e075`, artifact run
+  [29472780636](https://github.com/stablyai/orca/actions/runs/29472780636). The purpose suite passes
+  within the complete runtime contract step under Node 24.18.0 on all six primary native clients.
+- Primary jobs: Linux arm64 87539171165 passes in 3m02s; Linux x64 87539171175 in 2m26s; Windows
+  x64 87539171177 in 5m53s; macOS arm64 87539171184 in 1m48s; Windows arm64 87539171191 in 10m53s;
+  and macOS x64 87539171195 in 6m15s. Every job completes deterministic artifact build, exact runtime
+  smoke, full-size extraction/cache measurement, and unpublished artifact upload after the contract
+  step.
+- Supplements/floors: Linux arm64/x64 supplement jobs 87540022894/87540022920 pass. Windows x64
+  baseline job 87540654596 passes. Windows arm64 baseline job 87540654549 verifies and executes the
+  exact 85,213,511-byte expanded runtime with Node 24.18.0, PTY, watcher, and resource settlement,
+  then correctly rejects observed build `10.0.26200` against required build 26100
+  (`qualified: false`, `osBuild: false`). The tuple remains disabled and this retained floor gate is
+  the artifact workflow's sole expected failure.
+- Adjacent gates: PR Checks run
+  [29472780621](https://github.com/stablyai/orca/actions/runs/29472780621), job 87539170670, passes in
+  14m48s including lint, typecheck, Git compatibility, full tests, unpacked app, and packaged CLI
+  smoke. Golden E2E run
+  [29472780625](https://github.com/stablyai/orca/actions/runs/29472780625) passes Linux job
+  87539170813 in 4m55s and macOS job 87539170863 in 5m06s. Computer-use run
+  [29472780628](https://github.com/stablyai/orca/actions/runs/29472780628) passes Windows job
+  87539170947 in 4m30s and Ubuntu job 87539170974 in 3m04s.
+- Closure: native `node:path` semantics, the fixed versioned namespace, absolute-path rejection,
+  frozen metadata, and environment non-redirection are proven on Linux, macOS, and Windows x64/
+  arm64. No Electron/product caller, filesystem/cache operation, proxy/downloader, SSH, setting,
+  tuple, publication, or default-path behavior exists; legacy remains unchanged.
+- Residual gaps: Electron user-data adaptation, filesystem/cache orchestration, read-only/disk-full/
+  quota/inode faults, proxy/certificate/live download, offline transfer, SSH install/launch, native
+  trust, oldest Windows arm64/macOS/Linux-kernel floors, per-target Beta wiring, and every tuple
+  remain open.
+
+### E-M5-ARTIFACT-CACHE-STARTUP-BOUNDARY-AUDIT-001 — canonical user-data path correction
+
+- Date/owner: 2026-07-15, Codex implementation owner.
+- Audit: complete reads of `configureDevUserDataPath`, `initDataPath`, and
+  `getCanonicalUserDataPath`; startup-order search over `configureDevUserDataPath`, `app.setName`,
+  and all existing `app.getPath('userData')` consumers; import/caller search for the new cache-root
+  module. No HTML-plan text prescribes a direct Electron adapter, so the clean primary plan requires
+  no content correction.
+- Finding: Orca deliberately captures canonical user data after dev/E2E `app.setPath` handling but
+  before `app.setName()`, because a late `app.getPath('userData')` can resolve to a different
+  directory on case-sensitive filesystems. A new SSH module that calls Electron directly would
+  therefore risk split cache ownership and bypass the established startup boundary.
+- Correction: do not implement the proposed late Electron adapter. Keep
+  `sshRelayArtifactCacheRoot(userDataPath)` dependency-injected. The eventual startup/product caller
+  must pass `getCanonicalUserDataPath()` after initialization; tests may pass isolated absolute
+  paths. No environment variable may replace that path.
+- Next package: audit the smallest disconnected resolver/cache composition over the already-proven
+  official manifest, selector, download, extraction, cache-entry, lease, and eviction capabilities.
+  It must accept explicit dependencies and add no import-time I/O, Electron/startup caller, proxy,
+  SSH, setting, tuple, publication, or default behavior.
+
+### E-M5-ARTIFACT-CACHE-RESOLUTION-AUDIT-001 — warm-cache acquisition seam
+
+- Date/owner: 2026-07-15, Codex implementation owner.
+- Audit: complete reads of official-manifest composition, platform selector, downloader, extractor,
+  cache entry verification/publication, in-use lease, and eviction modules; export/caller search
+  confirms every capability remains disconnected outside tests/fixtures.
+- Findings: the smallest useful composition is selection plus verified cache lookup plus in-use
+  lease acquisition. Missing compiled trust and compatibility-selected legacy results must return
+  before cache I/O. A cache miss must return the immutable selected artifact without downloading;
+  a verified hit must acquire a lease before exposing a frozen entry snapshot. Relative cache roots,
+  cancellation, integrity/quarantine errors, and lease failures must propagate without becoming a
+  miss or legacy result.
+- Deliberately separate: download staging, proxy/certificate integration, cold publication,
+  eviction, availability/fallback classification, canonical startup caller, SSH transfer/install,
+  `ORCA_RELAY_PATH`, Beta settings, tuples, publication, and defaults.
+- Required RED: exact operation order and call counts for unavailable, legacy, miss, and hit;
+  immutable returned identity; absolute-root and pre-aborted guards; fail-closed lookup-integrity and
+  lease errors; proof that no downloader, Electron, startup, SSH, or fallback caller is introduced.
+
+### E-M5-ARTIFACT-CACHE-RESOLUTION-LOCAL-RED-001 — cache resolution composition is absent
+
+- Date/owner: 2026-07-15, Codex implementation owner.
+- Command: `pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1
+src/main/ssh/ssh-relay-artifact-cache-resolution.test.ts`.
+- Result: expected FAIL, one failed suite / zero tests in 403 ms because
+  `./ssh-relay-artifact-cache-resolution` does not exist. Seven purpose cases define unavailable and
+  compatibility short circuits, immutable miss/hit identity, lease-before-hit exposure,
+  absolute-root and cancellation guards, and fail-closed integrity/lease propagation.
+- Consumer disconnection: only the purpose test imports the absent module. No downloader, Electron,
+  startup, SSH, setting, fallback, tuple, publication, or default caller exists.
+
+### E-M5-ARTIFACT-CACHE-RESOLUTION-LOCAL-001 — disconnected warm-cache resolution
+
+- Date/owner: 2026-07-15, Codex implementation owner.
+- Implementation: `ssh-relay-artifact-cache-resolution.ts` composes only the verified official
+  manifest, compatibility selector, strict cache lookup, and in-use lease. Missing trust and legacy
+  selections return before cache I/O; cache miss returns the immutable selected artifact; cache hit
+  returns a frozen verified entry snapshot only after lease acquisition. Integrity/quarantine and
+  lease errors are not classified or converted here.
+- Focused command: `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts
+--maxWorkers=1 src/main/ssh/ssh-relay-artifact-cache-resolution.test.ts` — PASS, 1 file / 9 tests
+  in 855 ms Vitest, 2.54 s wall, 131,825,664-byte maximum RSS. Cases cover unavailable/legacy zero-
+  I/O short circuits, immutable miss, real default cache miss, exact lookup-before-lease hit, frozen
+  entry identity, absolute root, pre-abort, post-acquisition cancellation release, and fail-closed
+  integrity/lease errors.
+- Native workflow wiring/oracle: the purpose suite is present once in each POSIX and PowerShell
+  native artifact command. `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts
+--maxWorkers=1 src/main/ssh/ssh-relay-artifact-cache-resolution.test.ts
+config/scripts/ssh-relay-runtime-workflow.test.mjs` — PASS, 2 files / 16 tests in 1.68 s Vitest,
+  3.58 s wall, 131,989,504-byte maximum RSS.
+- Broader SSH relay command: `/usr/bin/time -l pnpm exec vitest run --config
+config/vitest.config.ts --maxWorkers=1 --silent=true src/main/ssh/ssh-relay-*.test.ts` — PASS, 27
+  files / 323 tests; 3 declared full-size files/tests skipped; 18.04 s Vitest, 19.47 s wall,
+  301,465,600-byte maximum RSS.
+- Release-script command: `/usr/bin/time -l pnpm exec vitest run --config
+config/vitest.config.ts --maxWorkers=1 --silent=true config/scripts/ssh-relay-runtime-*.test.mjs`
+  — PASS, 50 files / 280 tests in 19.47 s Vitest, 21.25 s wall, 188,203,008-byte maximum RSS.
+- Repository gates: targeted `oxfmt --write` completes on six files in 1.895 s; `pnpm typecheck` and
+  `pnpm lint` pass. Lint includes switch exhaustiveness, 41 reliability gates, no new max-lines
+  bypass, bundled skill-guide verification, 9,837 localization references and locale parity, and
+  zero localization coverage candidates. Local Node 26.0.0 emits only the expected engine warning;
+  exact Node 24 native proof remains pending.
+- Boundary: no download staging, proxy/certificate integration, cold publication, eviction,
+  availability/fallback classification, Electron/startup caller, SSH transfer/install/launch,
+  `ORCA_RELAY_PATH`, Beta setting, tuple, publication, or default-path change. Legacy remains
+  unchanged.
+- Remaining proof for this slice: commit the coherent package and require all six primary native
+  Node 24 jobs plus adjacent PR/E2E gates before adding cold download/publication composition.
 
 ## Accepted Gaps
 

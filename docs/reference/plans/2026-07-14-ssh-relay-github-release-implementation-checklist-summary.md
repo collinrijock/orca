@@ -9,9 +9,23 @@ keeps commands, hashes, runner identities, timings, and failure details.
 A checked box means the work has evidence in the detailed ledger. Design approval alone does not
 complete a box.
 
-Active checkpoint: **Milestone 5 / Work Package 4 desktop resolver/cache — disconnected app-owned
-cache-root locally green and wired; commit/all-six native proof next, 2026-07-15, Codex
-implementation owner.** `E-M5-ARTIFACT-CACHE-ROOT-LOCAL-001` passes 3/3 purpose tests, the native
+Active checkpoint: **Milestone 5 / Work Package 4 desktop resolver/cache — disconnected warm-cache
+resolution locally green and wired; commit/all-six native proof next, 2026-07-15, Codex
+implementation owner.** `E-M5-ARTIFACT-CACHE-RESOLUTION-LOCAL-001` passes 9/9 purpose tests,
+16/16 focused+workflow-oracle tests, 323/323 non-full-size SSH relay tests, 280/280 release-script
+tests, typecheck, lint, format, reliability, max-lines, localization, and diff gates. Missing trust
+and compatibility legacy results perform no cache I/O; a miss returns only the immutable selected
+artifact; a verified hit acquires an in-use lease before exposure; corruption and lease failures
+propagate closed. No download, Electron/startup, SSH/Beta mode/tuple/publication/default caller
+exists.
+`E-M5-ARTIFACT-CACHE-ROOT-CI-001` closes the pure cache-root contract at exact head `aefcaa9a9`:
+all six primary native Node 24 jobs, both Linux supplements, Windows x64 baseline, PR Checks, Golden
+E2E, and computer-use pass; Windows arm64 build 26200 remains correctly gated against 26100. The
+startup-boundary audit found that a late direct `app.getPath('userData')` adapter would be unsafe
+because `app.setName()` can change that path. The eventual startup caller must supply Orca's
+pre-`app.setName()` canonical path. The next slice may only compose explicit resolver/cache
+dependencies; it must add no proxy, SSH/Beta mode/tuple/publication/default behavior.
+`E-M5-ARTIFACT-CACHE-ROOT-LOCAL-001` passes 3/3 purpose tests, the native
 workflow oracle, 314/314 non-full-size SSH relay tests, 280/280 release-script tests, typecheck,
 lint, format, reliability, max-lines, localization, and diff gates. Both POSIX and PowerShell native
 artifact commands now run the purpose suite. The pure function accepts only an absolute
