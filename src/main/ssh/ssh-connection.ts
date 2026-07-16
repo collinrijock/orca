@@ -161,7 +161,7 @@ export class SshConnection {
     )
   }
 
-  async sftp(): Promise<SFTPWrapper> {
+  async sftp(signal?: AbortSignal): Promise<SFTPWrapper> {
     if (this.useSystemSshTransport) {
       throw new Error('SFTP is not available when using system SSH transport')
     }
@@ -169,12 +169,15 @@ export class SshConnection {
       throw new Error('Not connected')
     }
     const client = this.client
-    return this.openSessionChannelWithRetry(() =>
-      this.waitForSshCallback(
-        'SSH SFTP channel timed out',
-        (callback) => client.sftp(callback),
-        (sftp) => sftp.end()
-      )
+    return this.openSessionChannelWithRetry(
+      () =>
+        this.waitForSshCallback(
+          'SSH SFTP channel timed out',
+          (callback) => client.sftp(callback),
+          (sftp) => sftp.end(),
+          signal
+        ),
+      signal
     )
   }
 

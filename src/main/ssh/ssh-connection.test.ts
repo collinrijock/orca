@@ -900,6 +900,36 @@ describe('SshConnection', () => {
     }
   })
 
+  it('rejects pre-open SFTP cancellation without requesting a channel', async () => {
+    const conn = new SshConnection(createTarget(), createCallbacks())
+    await conn.connect()
+    sftpBehavior = 'pending'
+    const controller = new AbortController()
+    controller.abort()
+
+    await expect(conn.sftp(controller.signal)).rejects.toMatchObject({ name: 'AbortError' })
+    expect(pendingSftpCallback).toBeNull()
+  })
+
+  it('ends and awaits a late SFTP channel after mid-open cancellation', async () => {
+    const conn = new SshConnection(createTarget(), createCallbacks())
+    await conn.connect()
+    sftpBehavior = 'pending'
+    const controller = new AbortController()
+    const lateSftp = Object.assign(new EventEmitter(), { end: vi.fn() })
+    const outcome = conn
+      .sftp(controller.signal)
+      .then(() => 'opened')
+      .catch((error: Error) => error.name)
+
+    controller.abort()
+    pendingSftpCallback?.(undefined, lateSftp)
+    expect(await Promise.race([outcome, Promise.resolve('pending')])).toBe('pending')
+    expect(lateSftp.end).toHaveBeenCalledOnce()
+    lateSftp.emit('close')
+    await expect(outcome).resolves.toBe('AbortError')
+  })
+
   it('uses system SSH transport when ProxyUseFdpass is resolved by OpenSSH', async () => {
     vi.mocked(resolveWithSshG).mockResolvedValueOnce(createResolvedConfig())
     const conn = new SshConnection(createTarget({ configHost: 'fdpass-host' }), createCallbacks())

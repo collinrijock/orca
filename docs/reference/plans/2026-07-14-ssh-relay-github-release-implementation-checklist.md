@@ -8,8 +8,8 @@ work; keep exact commands, runner identities, hashes, metrics, and residual gaps
 
 Date created: 2026-07-14<br>
 Last updated: 2026-07-15<br>
-Current phase: Milestone 6 / Work Package 5 bounded runtime transfer — **In progress — 2026-07-15, Codex implementation owner: disconnected SFTP session/tree orchestration is exact-head green; raw `ssh2` session-adapter audit is next**. Keep every capability disconnected from every production/default SSH path. Real Apple/SignPath rehearsals remain an explicit late gate and are not on this package's critical path.<br>
-Session checkpoint: **SFTP SESSION/TREE ORCHESTRATION EXACT-HEAD GREEN — 2026-07-15, Codex implementation owner** — `E-M6-SFTP-TREE-TRANSFER-CI-001` closes all-six primary native, both Linux supplement, Windows x64 floor, PR Checks, Golden E2E, and computer-use proof for exact implementation commit `28e7a6e5f`; Windows arm64 retains only the declared hosted build-26200 versus required-26100 floor rejection after complete runtime smoke. Audit the smallest disconnected raw `ssh2` session adapter next. Do not credit a live SFTP server/remote cell, full-size network transfer, high-latency comparison, product/settings/fallback wiring, tuple enablement, publication, or default behavior from the callback abstraction. Merging to `main` remains prohibited, SignPath is deferred, and legacy remains the production default.<br>
+Current phase: Milestone 6 / Work Package 5 bounded runtime transfer — **In progress — 2026-07-15, Codex implementation owner: disconnected raw `ssh2` session adapter is locally green; exact-head native proof is next**. Keep every capability disconnected from every production/default SSH path. Real Apple/SignPath rehearsals remain an explicit late gate and are not on this package's critical path.<br>
+Session checkpoint: **RAW SFTP SESSION ADAPTER LOCAL GREEN — 2026-07-15, Codex implementation owner** — `E-M6-SFTP-SESSION-ADAPTER-LOCAL-001` passes the nine-case purpose contract, optional-signal connection lifecycle, focused/broad/release tests, typecheck, full lint, format, max-lines, diff, protected-resolver, and isolation gates. It proves bound raw operations, raw-close callback settlement, and five-second force-close escalation at a disconnected factory; existing no-argument `SshConnection.sftp()` behavior is preserved. Commit/push and require exact-head all-six native and adjacent CI before any live adapter/tree composition. Do not add a tree-transfer importer, live SFTP/server claim, product/settings/fallback wiring, tuple enablement, publication, or default behavior. Merging to `main` remains prohibited, SignPath is deferred, and legacy remains the production default.<br>
 Primary design: [SSH relay GitHub Release plan](./2026-07-14-ssh-relay-github-release-plan.html)<br>
 Motivating issues: [#8450](https://github.com/stablyai/orca/issues/8450), [#1693](https://github.com/stablyai/orca/issues/1693)
 
@@ -17043,6 +17043,112 @@ config/scripts/ssh-relay-runtime-workflow.test.mjs` — PASS, 7/7 in 356 ms. The
   has no non-test importer. Remote bundled-Node verification/install/publish/launch and every
   product/Beta/settings/fallback/tuple/publication/default path remain absent; legacy remains the
   sole production/default path and SignPath remains deferred.
+
+### E-M6-SFTP-SESSION-ADAPTER-AUDIT-001 — raw ssh2 channel acquisition and callback settlement
+
+- Date/owner/base: 2026-07-15, Codex implementation owner; exact clean evidence base `d82a8abb1`
+  after `E-M6-SFTP-TREE-TRANSFER-CI-001` closure.
+- Dependency evidence: audited installed `ssh2` 1.17.0. `SFTP.end()` delegates to `destroy()` and
+  sends channel close. `onCHANNEL_CLOSE` invokes the SFTP channel's `push(null)`; SFTP `push(null)`
+  runs `cleanupRequests`, invoking every pending request callback with an error, before emitting
+  `end`; only afterward does the channel emit `close`. Therefore the public raw `close` event is the
+  minimum safe normal-close boundary for retained callback/source-buffer release and session-slot
+  settlement. Do not call or depend on private `_requests` or synthesize stream events.
+- Acquisition boundary: extend `SshConnection.sftp` with an optional `AbortSignal` only, preserving
+  all existing no-argument behavior. Pass it through the existing session-limit retry and bounded
+  callback-open lifecycle so pre-open abort performs no channel request, abort during open awaits a
+  late channel's close up to the established five-second grace, and timeout still ends a late SFTP
+  channel. No authentication, connection selection, retry classification, or transport default
+  changes.
+- Adapter input/output: accept the same required caller-owned signal, an `openRawSession(signal)`
+  factory, and a required `forceCloseConnection(reason)` hook. Return the exact tree-session shape
+  with explicitly bound raw `mkdir`, `rmdir`, `open`, `write`, `fchmod`, `fstat`, `close`, and
+  `unlink` callbacks. Do not spread unbound ssh2 methods, copy/source-buffer chunks, expose remote
+  paths in adapter-authored diagnostics, or acquire any second channel.
+- Close/error contract: install a raw error listener before exposing operations. Session close is
+  idempotent, calls raw `end()` once, and resolves only after raw `close`, which is the audited point
+  after pending callback cleanup. If close is absent for five seconds, invoke the caller-owned
+  force-close hook and still require the raw close event before settlement. Preserve raw/end/force
+  failures and replace the listener with a late-error sink only after close. Reject operations that
+  begin after closing without invoking raw methods.
+- Required purpose RED/green: exact signal forwarding; bound-operation receiver/argument/callback
+  fidelity; normal end-to-close ordering; a retained write callback settles before session close;
+  idempotent concurrent close; raw error joined after close; synchronous end failure; five-second
+  force-close escalation that still awaits raw close; failed force close; post-open cancellation;
+  pre-open cancellation through `SshConnection.sftp`; mid-open abort with late session end/close;
+  no later raw operations; path-free adapter diagnostics; and suite inclusion exactly once in both
+  native workflow families before implementation.
+- Explicit residual boundary: the force-close hook remains caller-provided and has no product
+  implementation in this package. Live OpenSSH server behavior, real connection-force-close and
+  reconnect effects, full-size network transfer, high-RTT concurrency, `MaxSessions=1`, tree
+  importer, bundled-Node verification/install/publish/launch, and every product/Beta/settings/
+  fallback/tuple/publication/default path remain absent. Legacy remains the sole production/default
+  path and SignPath remains deferred.
+
+### E-M6-SFTP-SESSION-ADAPTER-LOCAL-RED-001 — audited raw ssh2 adapter is absent
+
+- Date/owner/environment: 2026-07-15, Codex implementation owner; local macOS arm64, Node 26.0.0,
+  pnpm 10.24.0, atop exact evidence base `d82a8abb1` plus the audit/test/workflow-only diff.
+- Purpose command: `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts
+--maxWorkers=1 src/main/ssh/ssh-relay-runtime-sftp-session.test.ts` — EXPECTED FAIL, exit 1: one
+  failed suite and zero collected tests because `./ssh-relay-runtime-sftp-session` is absent; 234 ms
+  Vitest / 1.44 seconds wall and 131,432,448-byte maximum RSS.
+- Workflow-oracle command: the same prefix with
+  `config/scripts/ssh-relay-runtime-workflow.test.mjs` — PASS, 7/7 in 289 ms Vitest / 1.21 seconds
+  wall and 132,595,712-byte maximum RSS. The purpose suite occurs exactly once in both native
+  command families before implementation.
+- RED scope: the adapter scaffold covers signal forwarding, bound receiver/callback fidelity,
+  retained callback before close, idempotent close, raw error ordering, five-second force-close
+  escalation/failure, post-open cancellation, late-operation rejection, and path-free diagnostics.
+  Two connection lifecycle cases cover pre-open and mid-open SFTP cancellation. The protected
+  resolver files remain untouched. No adapter implementation, tree importer, live SSH, product/
+  settings/fallback/tuple/publication/default behavior, or SignPath work exists.
+
+### E-M6-SFTP-SESSION-ADAPTER-LOCAL-001 — disconnected raw ssh2 session lifecycle is locally green
+
+- Date/owner/environment: 2026-07-15, Codex implementation owner; local macOS arm64, Node 26.0.0,
+  pnpm 10.24.0, atop exact evidence base `d82a8abb1` plus this isolated implementation/checklist
+  diff. Exact Node 24 remains the native CI gate.
+- Implementation: the 208-line `ssh-relay-runtime-sftp-session.ts` accepts only the exact signal,
+  raw opener, and required connection-force-close hook. It attaches error/close listeners before
+  exposing a deeply frozen session, binds all eight operations to the raw receiver, preserves raw
+  callbacks as source-buffer boundaries, rejects late operations, calls raw `end()` exactly once,
+  waits for audited raw close, escalates after five seconds, still requires raw close after a
+  successful force hook, and joins raw/end/force failures with path-free adapter diagnostics. The
+  optional signal added to `SshConnection.sftp` flows through its existing retry/open/late-close
+  lifecycle; every existing no-argument caller is unchanged.
+- Purpose command: `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts
+--maxWorkers=1 src/main/ssh/ssh-relay-runtime-sftp-session.test.ts` — PASS, 9/9 in 240 ms Vitest /
+  1.46 seconds wall, 132,349,952-byte maximum RSS, zero swaps. Cases cover exact signal and bound
+  receiver fidelity, retained callback before close, concurrent idempotent close, raw-error order,
+  five-second escalation that still awaits raw close, synchronous raw-end and force-hook failures,
+  post-open cancellation cleanup, late-operation rejection, and path-free diagnostics.
+- Connection lifecycle command: the purpose suite plus `ssh-connection.test.ts` — PASS, 70/70 in
+  1.19 seconds Vitest / 2.18 seconds wall, 144,179,200-byte maximum RSS. The two new connection
+  cases prove pre-open abort creates no SFTP request and mid-open abort ends a late session but does
+  not settle until its close event frees the session slot.
+- Focused command: connection, source tree/scan/stream, per-file destination, raw session, tree
+  transfer, acquisition/cache resolution/population/integration, and workflow-oracle thirteen-file
+  command — PASS, 182 passed / one declared platform skip in 9.05 seconds Vitest / 10.12 seconds
+  wall, 167,854,080-byte maximum RSS, zero swaps.
+- Broad commands: `src/main/ssh/ssh-relay-*.test.ts` — PASS, 45 files passed / three declared skipped,
+  597 tests passed / five declared platform/full-size skips in 24.42 seconds Vitest / 25.82 seconds
+  wall, 249,495,552-byte maximum RSS; `config/scripts/ssh-relay-runtime-*.test.mjs` — PASS, 50 files
+  / 280 tests in 17.40 seconds Vitest / 18.76 seconds wall, 195,608,576-byte maximum RSS. Only the
+  established stale-lock diagnostic and local Node 26 module deprecation appear.
+- Static/isolation commands: `pnpm typecheck`, targeted `oxlint`, targeted `oxfmt --check`, full
+  `pnpm lint`, standalone max-lines ratchet, `git diff --check`, protected-resolver empty diff, and
+  no non-test importer pass. Full lint takes 19.75 seconds at 2,089,172,992-byte maximum RSS and
+  passes switch exhaustiveness, 41 reliability gates, 355-entry max-lines ratchet, bundled-skill
+  verification, 9,837 localization references, locale parity, and zero-candidate coverage; only
+  pre-existing warnings remain. Module/test sizes are 208/263 lines with no bypass or vague module.
+- Boundary/residual gaps: the raw object and force-close hook are mocked. This does not prove live
+  OpenSSH/SFTP channel behavior, a real connection-force-close implementation, reconnect effects,
+  full-size network memory/cancellation, server filesystem/modes, high-RTT concurrency,
+  `MaxSessions=1`, or raw adapter/tree composition. The adapter has no non-test importer. Remote
+  bundled-Node verification/install/publish/launch and every product/Beta/settings/fallback/tuple/
+  publication/default path remain absent; legacy remains the sole production/default path and
+  SignPath remains deferred. Exact-head all-six native and adjacent CI is required next.
 
 ## Accepted Gaps
 

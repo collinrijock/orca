@@ -286,6 +286,7 @@ jobs:
             src/main/ssh/ssh-relay-runtime-source-scan.test.ts \
             src/main/ssh/ssh-relay-runtime-source-stream.test.ts \
             src/main/ssh/ssh-relay-runtime-sftp-file-destination.test.ts \
+            src/main/ssh/ssh-relay-runtime-sftp-session.test.ts \
             src/main/ssh/ssh-relay-runtime-sftp-tree-transfer.test.ts \
             src/main/ssh/ssh-relay-compiled-manifest-trust.test.ts \
             src/main/ssh/ssh-relay-official-manifest.test.ts \
@@ -843,6 +844,7 @@ jobs:
             src/main/ssh/ssh-relay-runtime-source-scan.test.ts `
             src/main/ssh/ssh-relay-runtime-source-stream.test.ts `
             src/main/ssh/ssh-relay-runtime-sftp-file-destination.test.ts `
+            src/main/ssh/ssh-relay-runtime-sftp-session.test.ts `
             src/main/ssh/ssh-relay-runtime-sftp-tree-transfer.test.ts `
             src/main/ssh/ssh-relay-compiled-manifest-trust.test.ts `
             src/main/ssh/ssh-relay-official-manifest.test.ts `

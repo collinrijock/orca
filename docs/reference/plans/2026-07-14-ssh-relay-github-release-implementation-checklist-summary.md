@@ -9,9 +9,16 @@ keeps commands, hashes, runner identities, timings, and failure details.
 A checked box means the work has evidence in the detailed ledger. Design approval alone does not
 complete a box.
 
-Active checkpoint: **Milestone 6 / Work Package 5 bounded runtime transfer — disconnected SFTP
-session/tree orchestration is exact-head green; raw `ssh2` session-adapter audit is next, 2026-07-15,
-Codex implementation owner.** `E-M6-SFTP-TREE-TRANSFER-CI-001` closes all six primary native jobs,
+Active checkpoint: **Milestone 6 / Work Package 5 bounded runtime transfer — disconnected raw `ssh2`
+session adapter is locally green; exact-head native proof is next, 2026-07-15, Codex implementation
+owner.** `E-M6-SFTP-SESSION-ADAPTER-LOCAL-001` passes 9/9 purpose, 70/70 adapter+connection,
+182 focused cases with one declared skip, 597 broad relay cases with five declared skips, 280/280
+release contracts, typecheck, full lint, formatting, max-lines, diff, protected-resolver, and
+isolation gates. No live SFTP/tree or product/default claim is made.
+`E-M6-SFTP-SESSION-ADAPTER-AUDIT-001` limits the package to optional-signal channel acquisition,
+bound raw operations, raw-close callback settlement, and a five-second grace followed by a required
+caller-owned connection-force-close hook. No tree importer or live/product claim is included.
+`E-M6-SFTP-TREE-TRANSFER-CI-001` closes all six primary native jobs,
 both Linux supplements, Windows x64 floor, PR Checks, Golden E2E, and computer-use on exact commit
 `28e7a6e5f`; Windows arm64 retains only the declared hosted build-26200 versus required-26100
 rejection after complete runtime smoke. No live SFTP/server or product/default claim is made.
