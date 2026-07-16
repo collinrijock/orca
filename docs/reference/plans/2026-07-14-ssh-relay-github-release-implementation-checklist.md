@@ -9,7 +9,7 @@ work; keep exact commands, runner identities, hashes, metrics, and residual gaps
 Date created: 2026-07-14<br>
 Last updated: 2026-07-15<br>
 Current phase: Milestone 6 / Work Package 5 bounded runtime transfer — **In progress — 2026-07-15, Codex implementation owner: disconnected POSIX system-SSH/no-tar per-file command and destination contract**. Keep every capability disconnected from every production/default SSH path. Real Apple/SignPath rehearsals remain an explicit late gate and are not on this package's critical path.<br>
-Session checkpoint: **POSIX NO-TAR FILE BOUNDARY EXACT-HEAD GREEN / COMMAND-CHANNEL ADAPTER AUDIT NEXT — 2026-07-15, Codex implementation owner** — `E-M6-POSIX-SYSTEM-SSH-FILE-CI-001` proves the 25-case purpose suite on all six primary native clients; both Linux supplements, Windows x64 floor, PR Checks, computer-use, and Golden E2E pass. Windows arm64 retains only the declared hosted build-26200 versus required-26100 rejection after full runtime smoke. The completed module has no real SSH/tree/product caller. Audit the next smallest disconnected command-channel adapter slice before adding RED tests; do not connect a product/default path. Merging to `main` remains prohibited, SignPath is deferred, and legacy remains the production default.<br>
+Session checkpoint: **SYSTEM-SSH COMMAND-CHANNEL ADAPTER LOCALLY GREEN / EXACT-HEAD CI NEXT — 2026-07-15, Codex implementation owner** — `E-M6-POSIX-SYSTEM-SSH-CHANNEL-LOCAL-001` proves the adapter and per-file composition across 13 purpose cases, 150 focused cases, 641 broad relay cases, 281 release contracts, typecheck, lint, formatting, max-lines, diff, protected-resolver, and no-product-consumer gates. It remains disconnected and has no tree or live system-SSH claim. Commit/push and require all-six native plus adjacent exact-head evidence before the next package. Merging to `main` remains prohibited, SignPath is deferred, and legacy remains the production default.<br>
 Primary design: [SSH relay GitHub Release plan](./2026-07-14-ssh-relay-github-release-plan.html)<br>
 Motivating issues: [#8450](https://github.com/stablyai/orca/issues/8450), [#1693](https://github.com/stablyai/orca/issues/1693)
 
@@ -153,10 +153,12 @@ same change as the work it records.
 - Completed package: the disconnected POSIX no-tar per-file command/destination boundary is green
   locally and on every primary native client under E-M6-POSIX-SYSTEM-SSH-FILE-LOCAL-001 and
   E-M6-POSIX-SYSTEM-SSH-FILE-CI-001. It has no real SSH or product caller.
-- Active package: **Audit next — 2026-07-15, Codex implementation owner** — establish the smallest
-  disconnected adapter between one authenticated system-SSH exec channel and the proven per-file
-  destination. Do not import or modify the legacy tar/base64 directory uploader, create a remote
-  tree, add a semantic probe, or add product/settings/fallback/tuple/publication/default behavior.
+- Active package: **Local implementation complete / exact-head CI pending — 2026-07-15, Codex
+  implementation owner** — the purpose-named adapter fixed by
+  E-M6-POSIX-SYSTEM-SSH-CHANNEL-AUDIT-001 is green under
+  E-M6-POSIX-SYSTEM-SSH-CHANNEL-LOCAL-001. Do not import or modify the legacy tar/base64 directory
+  uploader, create a remote tree, add a semantic probe, or add product/settings/fallback/tuple/
+  publication/default behavior.
 - Completed Work Package 2 gate: target-native Windows source-signature reports from exact-head
   artifact jobs 87267322867 and 87267322870 were independently downloaded and matched to their
   identities and signing-stage reports under E-M3-WINDOWS-SOURCE-SIGNATURE-CI-001. PR Checks
@@ -17620,6 +17622,125 @@ config/scripts/ssh-relay-runtime-workflow.test.mjs`.
   Beta mode, fallback, tuple, publication, default behavior, or SignPath work exists; legacy remains
   the only production path.
 
+### E-M6-POSIX-SYSTEM-SSH-CHANNEL-AUDIT-001 — authenticated exec-channel adapter boundary
+
+- Date/owner/base: 2026-07-15, Codex implementation owner; clean exact base
+  `62ffaec98df827a5a502f55a2c4a7e1cb7d03d03` after recording the completed file-boundary evidence.
+- Existing-code audit: `SshConnection.exec(command)` already preserves the connected
+  target, resolved OpenSSH configuration, host-scoped ControlMaster disable/retry state, command
+  tracking, and disconnect/reconnect teardown. Guarding `usesSystemSshTransport()` before that call
+  prevents accidental ssh2/SFTP-family use. `spawnSystemSshCommand` then wraps the local OpenSSH
+  child as a `ClientChannel`, exposes stdin/stderr plus its owned child process, forwards close/error,
+  and keeps stdout backpressure bounded when a consumer drains it.
+- Rejected reuse: `system-ssh-file-binary-transfer.ts` is a proven legacy/default whole-buffer/local-
+  file uploader and must remain unchanged. `waitForChannelClose` accumulates arbitrary stderr, while
+  `awaitWithSystemSshAbort` deliberately returns immediately after SIGTERM instead of awaiting
+  process settlement. Those contracts are correct for legacy callers but do not meet the new
+  bootstrap's capped-memory and pre-execution cancellation boundary; do not import or modify them.
+- New boundary: add one purpose-named disconnected adapter module that accepts only a connection,
+  exact command, and exact signal. It rejects a non-system transport or pre-aborted signal before
+  exec, calls `connection.exec(command)` exactly once, drains unused stdout immediately,
+  and returns `SshRelayRuntimePosixFileChannel`. Writes forward the exact borrowed chunk and callback
+  to child stdin; EOF ends child stdin once; settlement listens to child error/close, requires exit
+  zero, and includes at most a small fixed copied stderr prefix plus a truncation marker without
+  retaining an attacker-sized chunk.
+- Single cancellation owner: do not pass the signal into `SshConnection.exec`. The proven per-file
+  destination already owns that exact signal and its bounded SIGTERM/SIGKILL sequence; passing it to
+  the connection would install a second immediate SIGTERM listener on the same child. Connection-
+  level disconnect/reconnect still closes every tracked command independently.
+- Cancellation ownership: the adapter exposes idempotent graceful close through the tracked
+  channel's SIGTERM `close()` and idempotent forced close through its owned child process's
+  `kill('SIGKILL')`. Missing child-process ownership or a thrown kill fails closed. The proven
+  `ssh-relay-runtime-posix-file-destination.ts` owner retains the 250 ms graceful / 2,000 ms total
+  settlement timers and decides when to escalate; the adapter must not add a second timer or return
+  success before the process emits close.
+- Layer-A RED/green proof: purpose cases must cover system-transport/pre-abort rejection with zero
+  exec; exact command, signal precheck, and one exec; stdout drain; exact non-empty chunk/callback and
+  stdin EOF;
+  zero/nonzero/signal/error settlement; bounded copied stderr/truncation; listener cleanup; duplicate
+  graceful/forced calls; SIGTERM before SIGKILL; exited-child force no-op; missing process and thrown
+  close/kill failures; and composition with the per-file owner for retained-write cancellation and
+  forced/timeout settlement. Pin the purpose suite exactly once in both native workflow families
+  before implementation.
+- Explicit residual boundary: no direct spawn, SshConnection modification, ssh2/SFTP path, directory
+  or tree/root staging, primitive semantic probe, tar optimization, `MaxSessions=1` concurrency
+  policy, full-size/live system-SSH transfer, Windows PowerShell path, remote verification/install/
+  publish/launch, product/Beta/settings/fallback/tuple/publication/default behavior, or SignPath is
+  included. Legacy remains the sole production/default path.
+
+### E-M6-POSIX-SYSTEM-SSH-CHANNEL-LOCAL-RED-001 — missing adapter fails as designed
+
+- Date/owner/base: 2026-07-15, Codex implementation owner; exact uncommitted test/workflow state on
+  base `62ffaec98df827a5a502f55a2c4a7e1cb7d03d03` after
+  E-M6-POSIX-SYSTEM-SSH-CHANNEL-AUDIT-001.
+- Command: `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts
+--maxWorkers=1 src/main/ssh/ssh-relay-runtime-system-ssh-file-channel.test.ts
+config/scripts/ssh-relay-runtime-workflow.test.mjs`.
+- Result: expected RED, exit 1. The new 311-line purpose suite collects zero cases and fails solely
+  with `Cannot find module './ssh-relay-runtime-system-ssh-file-channel'`; that production module does
+  not exist yet. The independent release-workflow oracle passes all 8/8 cases and proves the suite is
+  pinned exactly once in both native command families.
+- Resource evidence: Vitest duration 539 ms; `/usr/bin/time -l` reports 1.69 seconds real,
+  133,103,616 bytes maximum resident set size, zero swaps, and zero block I/O.
+- Disposition: RED is causally narrow and accepted. Implement only the audited adapter, then require
+  purpose composition GREEN plus focused, broad, static, isolation, and exact-head native evidence.
+  No live system-SSH, tree, product, or default-path claim follows from this evidence.
+
+### E-M6-POSIX-SYSTEM-SSH-CHANNEL-LOCAL-TYPE-RED-001 — typed stream boundary corrected
+
+- Date/owner/state: 2026-07-15, Codex implementation owner; first static pass on the uncommitted
+  adapter atop `62ffaec98df827a5a502f55a2c4a7e1cb7d03d03` after runtime purpose GREEN.
+- Command/result: `/usr/bin/time -l pnpm typecheck` — gate RED, exit 1 in 1.93 seconds real with
+  1,044,365,312-byte maximum RSS. TypeScript reports fake `ClientChannel`/stream intersections,
+  deliberate rejected-promise narrowing, a readonly fake exit field, and the overloaded Node stdin
+  callback signature; no runtime assertion fails.
+- Correction: keep the fake structural until the `ClientChannel` return boundary, narrow the already-
+  validated child stdin to the exact Buffer/callback/end shape, explicitly narrow the caught error,
+  and retain mutable fake process state. The repeated 13-case purpose suite and typecheck below pass.
+  No behavior, lifecycle timer, product path, or legacy module changed.
+
+### E-M6-POSIX-SYSTEM-SSH-CHANNEL-LOCAL-001 — authenticated child-channel adapter is locally green
+
+- Date/owner/environment/base: 2026-07-15, Codex implementation owner; local macOS arm64, Node
+  26.0.0, pnpm 10.24.0, uncommitted package atop exact base
+  `62ffaec98df827a5a502f55a2c4a7e1cb7d03d03`.
+- Implementation: the 192-line adapter rejects non-system transport and pre-abort before exec, calls
+  the already-authenticated/tracked `connection.exec(command)` exactly once, and deliberately keeps
+  cancellation single-owned by the per-file destination. It drains unused stdout, forwards the exact
+  borrowed Buffer/callback and EOF to child stdin, requires exit zero, copies/caps stderr at 16 KiB,
+  cleans all diagnostic/settlement listeners, and exposes idempotent SIGTERM/SIGKILL hooks. Missing
+  process ownership, false/throwing force signals, and termination failures fail closed.
+- Purpose command: `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts
+--maxWorkers=1 src/main/ssh/ssh-relay-runtime-system-ssh-file-channel.test.ts` — PASS, 13/13 in
+  346 ms Vitest / 1.33 seconds real, 131,727,360-byte maximum RSS, zero swaps, and zero block I/O.
+  Cases cover transport/pre-abort rejection, exact one exec, stdout drain, retained chunk callback,
+  EOF, successful/nonzero/signaled/error settlement, copied capped diagnostic, listener cleanup,
+  idempotent ordered termination, exited/missing/unsignaled/thrown process cases, graceful retained-
+  write composition, and forced composition using only the file owner's timer.
+- Focused command: adapter, per-file destination, existing system-SSH fallback, `SshConnection`, and
+  native workflow oracle — PASS, five files and 150/150 cases in 2.95 seconds Vitest / 4.31 seconds
+  real with 156,680,192-byte maximum RSS. The workflow oracle passes 8/8 and pins the purpose suite
+  exactly once in POSIX and PowerShell native command families.
+- Broad commands: `src/main/ssh/ssh-relay-*.test.ts` — PASS, 48 files plus four declared skipped,
+  641 cases plus six declared skips in 32.50 seconds Vitest / 34.59 seconds real with
+  248,201,216-byte maximum RSS; `config/scripts/ssh-relay-runtime-*.test.mjs` — PASS, 50 files and
+  281/281 cases in 21.88 seconds Vitest / 23.87 seconds real with 190,169,088-byte maximum RSS. Only
+  the established stale-lock diagnostic and local Node 26 module deprecation appear.
+- Static/isolation commands: repeated `/usr/bin/time -l pnpm typecheck` passes in 3.11 seconds real
+  with 1,209,237,504-byte maximum RSS. Targeted `oxlint`, targeted `oxfmt --check`, standalone
+  max-lines ratchet, `git diff --check`, protected-resolver empty diff, and no non-test consumer pass.
+  Full `pnpm lint` passes in 19.61 seconds real with 2,067,415,040-byte maximum RSS: switch
+  exhaustiveness, 41 reliability gates, the 355-entry max-lines ratchet, bundled-skill verification,
+  9,837 localization references, locale parity, and zero-candidate localization coverage pass; only
+  pre-existing unrelated warnings remain. Module/test sizes are 192/329 lines with no bypass.
+- Residual: this proves an authenticated connection/child callback contract and its file-owner
+  composition, not a real local OpenSSH process, remote shell, directory/tree/root staging,
+  primitive semantics, full-size system-SSH transfer, `MaxSessions=1`, or Windows PowerShell path.
+  It has no non-test consumer. Remote verification/install/publish/launch, product/Beta/settings/
+  fallback/tuple/publication/default behavior, and SignPath remain absent; legacy remains the only
+  production path. Exact-head all-six native and adjacent Actions evidence is required before the
+  next package.
+
 ## Accepted Gaps
 
 No product gap is accepted merely because it appears in this list. Each entry requires explicit
@@ -17678,9 +17799,9 @@ The project is not complete until every applicable item below is checked with ev
 
 ## Next Required Action
 
-Audit the smallest disconnected authenticated system-SSH exec-channel adapter that can satisfy the
-proven POSIX per-file boundary, record its exact ownership/cancellation/residual contract, then add
-the purpose-named RED suite and native workflow oracle. Do not
+Commit and push the locally green authenticated system-SSH exec-channel adapter, then require exact-
+head all-six native artifact jobs, both Linux supplements, Windows x64 floor, PR Checks, computer-
+use, and Golden E2E before auditing the next tree/root composition package. Do not
 check the broad Milestone 6 SFTP or POSIX system-SSH items yet. Do not add an Electron/startup/product
 importer, per-target mode wiring, fallback, tuple enablement, release publication, or default behavior.
 Keep Node upstream `.tar.xz` inputs, Windows ZIP, `ORCA_RELAY_PATH`, existing desktop required-assets

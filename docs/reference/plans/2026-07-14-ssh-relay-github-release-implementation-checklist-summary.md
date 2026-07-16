@@ -9,10 +9,21 @@ keeps commands, hashes, runner identities, timings, and failure details.
 A checked box means the work has evidence in the detailed ledger. Design approval alone does not
 complete a box.
 
-Active checkpoint: **Milestone 6 / Work Package 5 bounded runtime transfer — disconnected POSIX
-system-SSH/no-tar per-file boundary is exact-head green; command-channel adapter audit is next,
-2026-07-15, Codex implementation owner.** `E-M6-POSIX-SYSTEM-SSH-FILE-LOCAL-001` records 25/25 purpose,
-628 broad relay, 281/281 release, and all static/isolation gates.
+Active checkpoint: **Milestone 6 / Work Package 5 bounded runtime transfer — authenticated system-SSH
+command-channel adapter is locally green and exact-head CI is next, 2026-07-15, Codex implementation
+owner.** `E-M6-POSIX-SYSTEM-SSH-CHANNEL-LOCAL-001` records 13/13 purpose, 150/150 focused, 641 broad
+relay cases with six declared skips, 281/281 release contracts, typecheck, full lint, formatting,
+max-lines, diff, protected-resolver, and no-product-consumer gates. It retains a single cancellation
+owner, drains stdout, caps copied stderr at 16 KiB, and exposes idempotent SIGTERM/SIGKILL hooks. It
+has no real tree/live/product consumer; exact-head all-six and adjacent Actions evidence is next.
+`E-M6-POSIX-SYSTEM-SSH-CHANNEL-AUDIT-001` limits this slice to one already-authenticated system-SSH
+`SshConnection.exec()` channel, bounded copied stderr, drained stdout, exact stdin callback/EOF/
+settlement, and idempotent SIGTERM/SIGKILL hooks consumed by the proven single per-file cancellation
+owner. The adapter prechecks but does not forward that signal into `exec`, avoiding a duplicate
+immediate SIGTERM listener.
+No direct spawn, legacy uploader change, real tree/live claim, or product path is included.
+`E-M6-POSIX-SYSTEM-SSH-FILE-LOCAL-001` records 25/25 purpose, 628 broad relay, 281/281 release, and all
+static/isolation gates.
 `E-M6-POSIX-SYSTEM-SSH-FILE-CI-001` proves the 25 cases on all six primary native clients; both Linux
 supplements, Windows x64 floor, PR Checks, computer-use Windows/Ubuntu, and Golden E2E macOS/Linux
 pass. Windows arm64 retains only hosted build 26200 versus required 26100 after complete runtime
