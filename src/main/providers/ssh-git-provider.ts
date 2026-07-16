@@ -673,9 +673,19 @@ export class SshGitProvider implements IGitProvider {
   }
 
   async pruneWorktrees(repoPath: string): Promise<void> {
-    await this.runWithDiffDedupeClear(async () => {
-      await this.mux.request('git.pruneWorktrees', { repoPath })
-    })
+    try {
+      await this.runWithDiffDedupeClear(async () => {
+        await this.mux.request('git.pruneWorktrees', { repoPath })
+      })
+    } catch (error) {
+      if (isJsonRpcMethodNotFoundError(error)) {
+        // Why: older relays predate the narrow prune RPC; tell the user how to recover.
+        throw new Error(
+          'The connected SSH host is running an older Orca relay without worktree prune support. Reconnect to update it, or run `git worktree prune` there.'
+        )
+      }
+      throw error
+    }
   }
 
   async worktreeIsClean(

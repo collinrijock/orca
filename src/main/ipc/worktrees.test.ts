@@ -6095,7 +6095,7 @@ describe('registerWorktreeHandlers', () => {
     expect(pruneWorktreesMock).not.toHaveBeenCalled()
   })
 
-  it('fails worktrees:pruneStaleRegistrations clearly when the relay lacks prune support', async () => {
+  it('surfaces the provider error when the relay lacks prune support', async () => {
     const repo = {
       id: 'repo-1',
       path: '/remote/repo',
@@ -6105,15 +6105,16 @@ describe('registerWorktreeHandlers', () => {
       connectionId: 'ssh-1'
     }
     store.getRepos.mockReturnValue([repo])
-    // Why: an already-deployed relay predating git.pruneWorktrees rejects the
-    // RPC with "Method not found"; the error must say what to do instead.
+    const oldRelayError = new Error(
+      'The connected SSH host is running an older Orca relay without worktree prune support. Reconnect to update it, or run `git worktree prune` there.'
+    )
     getSshGitProviderMock.mockReturnValue({
-      pruneWorktrees: vi.fn().mockRejectedValue(new Error('Method not found: git.pruneWorktrees'))
+      pruneWorktrees: vi.fn().mockRejectedValue(oldRelayError)
     })
 
     await expect(
       handlers['worktrees:pruneStaleRegistrations'](null, { repoId: 'repo-1' })
-    ).rejects.toThrow(/older Orca relay/)
+    ).rejects.toBe(oldRelayError)
   })
 
   it('continues shared-host pruning and invalidates stale roots after a host fails', async () => {

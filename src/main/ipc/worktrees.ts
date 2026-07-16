@@ -2050,13 +2050,8 @@ export function registerWorktreeHandlers(
               await pruneWorktrees(repo.path, getLocalProjectWorktreeGitOptions(store, repo))
             }
           } catch (error) {
-            // Why: an already-deployed relay predating git.pruneWorktrees
-            // rejects with "Method not found"; surface what to do instead.
-            firstError ??= /method not found/i.test(error instanceof Error ? error.message : '')
-              ? new Error(
-                  'The connected SSH host is running an older Orca relay without worktree prune support. Reconnect to update it, or run `git worktree prune` there.'
-                )
-              : error
+            // Why: shared project ids can span hosts; attempt every host before surfacing a failure.
+            firstError ??= error
           }
         }
       } finally {
