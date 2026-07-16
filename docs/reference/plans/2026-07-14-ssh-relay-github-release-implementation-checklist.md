@@ -8,8 +8,8 @@ work; keep exact commands, runner identities, hashes, metrics, and residual gaps
 
 Date created: 2026-07-14<br>
 Last updated: 2026-07-15<br>
-Current phase: Milestone 5 / Work Package 4 desktop resolver/cache — **In progress — 2026-07-15, Codex implementation owner: audit the next smallest remaining disconnected host-evidence boundary after exact-head acceptance of Linux kernel detection**. Keep every capability disconnected from host-evidence composition and every production/default SSH path. Real Apple/SignPath rehearsals remain an explicit late gate and are not on this package's critical path.<br>
-Session checkpoint: **CI CLOSED / NEXT AUDIT — 2026-07-15, Codex implementation owner** — `E-M5-LINUX-KERNEL-DETECTION-CI-001` closes implementation commit `d1eb0eb63`: all six primary native Node 24 jobs, both Linux supplements, Windows x64 baseline, PR Checks, Golden E2E, and computer-use pass. Windows arm64 executes the full runtime smoke and retains only the declared hosted build-26200 rejection against required 26100. Every native client runs the new 19-case kernel contract and strict selector cases. This remains contract evidence, not live SSH/distro evidence; no host-evidence composer, product caller, setting, transfer/install, fallback classifier, tuple enablement, release publication, or default behavior is connected. Merging to `main` remains prohibited, SignPath is deferred, and legacy remains the production default.<br>
+Current phase: Milestone 5 / Work Package 4 desktop resolver/cache — **In progress — 2026-07-15, Codex implementation owner: implement the disconnected marked macOS product-version probe fixed by E-M5-DARWIN-VERSION-DETECTION-AUDIT-001**. Keep every capability disconnected from host-evidence composition and every production/default SSH path. Real Apple/SignPath rehearsals remain an explicit late gate and are not on this package's critical path.<br>
+Session checkpoint: **LOCAL GREEN / EXACT-HEAD CI NEXT — 2026-07-15, Codex implementation owner** — `E-M5-DARWIN-VERSION-DETECTION-LOCAL-001` passes the 21-case purpose contract, 62 focused/workflow tests, 415 relay tests with three declared skips, 280 release-script tests, typecheck, lint, format, max-lines, diff, and protected-resolver gates. Both native workflow families require the suite, but exact Node 24/all-six native execution remains open until the implementation commit is pushed. Rosetta/process-translation detection remains a separate uncomposed gate. No host-evidence composer, product caller, setting, transfer/install, fallback classifier, tuple enablement, release publication, or default behavior is connected. Merging to `main` remains prohibited, SignPath is deferred, and legacy remains the production default.<br>
 Primary design: [SSH relay GitHub Release plan](./2026-07-14-ssh-relay-github-release-plan.html)<br>
 Motivating issues: [#8450](https://github.com/stablyai/orca/issues/8450), [#1693](https://github.com/stablyai/orca/issues/1693)
 
@@ -15227,6 +15227,98 @@ config/scripts/ssh-relay-runtime-*.test.mjs` — PASS, 50 files / 280 tests in 1
   composition, Electron/startup, transfer/install, settings, fallback, tuple enablement,
   publication, or defaults. Legacy remains the sole production path; no tuple is enabled.
 
+### E-M5-DARWIN-VERSION-DETECTION-AUDIT-001 — disconnected marked macOS version boundary
+
+- Date/owner: 2026-07-15, Codex implementation owner.
+- Audit: complete rereads of current OS/architecture detection, the accepted marked libc and Linux
+  kernel probes, the signed-manifest selector/version grammar, baseline build evidence, and their
+  purpose tests. Desktop SSH code has no `sw_vers` caller; only target-native release baseline CI
+  reads macOS product version. The selector accepts explicit `SshRelayDarwinHostEvidence.version`
+  against the reviewed 13.5 floor, so the smallest missing acquisition boundary is one disconnected
+  product-version probe. Linux libstdc++/GLIBCXX evidence requires a separate external-tool and
+  ambiguity audit; Windows bootstrap evidence and Rosetta translation are also larger independent
+  slices.
+- Finding: add one purpose-named `ssh-relay-darwin-version-detection` module that consumes an
+  explicit SSH connection and optional cancellation signal, executes one 15-second POSIX-shell/
+  no-Node marked `sw_vers -productVersion`, and returns an exact bounded two-to-four-component
+  numeric version or undefined. Do not change the selector grammar or reviewed macOS 13.5 floor.
+- Safety contract: only one complete marker-qualified line counts; arbitrary or marker-concatenated
+  startup noise, empty/multi-line/duplicate/unterminated segments, whitespace/control characters,
+  suffixes, oversized values, missing commands, and malformed versions yield unknown. Ordinary
+  execution failure is availability evidence; `AbortError` propagates. The probe uses no Node, npm,
+  Python, Perl, archive, checksum, or localization-sensitive parsing.
+- Required RED: missing purpose module, then exact 13.5/10.15.7/15.x versions, startup noise,
+  concatenated/duplicate/unterminated/multi-line/oversized/malformed rejection, unavailable command,
+  cancellation, exact signal/15-second exec, no-Node command construction, and both native-workflow
+  families requiring the suite.
+- Deliberately absent: Rosetta/process-translation detection, Linux libstdc++/GLIBCXX, Windows
+  OpenSSH/PowerShell/.NET/build evidence, host-evidence composition, Electron/startup/product
+  callers, live SSH/macOS cells, cache acquisition, transfer/install, settings, fallback, tuple
+  enablement, release publication, and defaults. Legacy remains the sole production path and the
+  primary HTML plan is unchanged.
+
+### E-M5-DARWIN-VERSION-DETECTION-LOCAL-RED-001 — macOS version probe fails first
+
+- Date/owner: 2026-07-15, Codex implementation owner.
+- Source: uncommitted RED test atop exact accepted evidence head `e6383cbcd`; protected resolver
+  files have zero diff and `git diff --check` passes.
+- Command: `pnpm vitest run src/main/ssh/ssh-relay-darwin-version-detection.test.ts`.
+- Expected result: FAIL, 1 failed suite / zero collected tests because
+  `ssh-relay-darwin-version-detection` does not exist. Duration: 288 ms Vitest. The repository's
+  expected Node-24 engine warning is present under local Node 26.0.0 / pnpm 10.24.0.
+- Native-workflow RED command: `pnpm vitest run
+config/scripts/ssh-relay-runtime-workflow.test.mjs` — expected FAIL, 1 file / 6 passed / 1 failed
+  in 268 ms. The workflow oracle requires `ssh-relay-darwin-version-detection.test.ts` exactly once
+  in each POSIX and PowerShell native command family; the source split has length 1 rather than the
+  required 3 until both commands are wired.
+- Boundary: this is failure-before-implementation evidence only. It authorizes only the audited
+  disconnected probe, purpose tests, and native-workflow inclusion; no production caller or
+  behavior is connected.
+
+### E-M5-DARWIN-VERSION-DETECTION-LOCAL-001 — disconnected marked macOS version probe
+
+- Date/owner: 2026-07-15, Codex implementation owner.
+- Implementation: `ssh-relay-darwin-version-detection.ts` executes one 15-second cancellable
+  POSIX-shell command, guards `sw_vers -productVersion`, and brackets its result with exact Orca
+  markers. It returns only one complete unique two-to-four-component numeric version of at most 64
+  characters. Startup noise outside markers is ignored; empty, multi-line, duplicate,
+  unterminated, marker-concatenated, suffixed, whitespace/control, slash, colon, oversized, or
+  malformed evidence returns undefined. Ordinary execution failure returns undefined and
+  `AbortError` propagates. The command has no Node, npm, Python, Perl, tar, or checksum dependency.
+- Purpose command: `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts
+--maxWorkers=1 src/main/ssh/ssh-relay-darwin-version-detection.test.ts` — PASS, 1 file / 21 tests
+  in 265 ms Vitest, 1.35 s wall, 132,022,272-byte maximum RSS, zero swaps. Valid 13.5, 10.15.7,
+  15.4.1, and 15.4.1.2 values; noisy/missing/malformed/bounded evidence; unavailable command;
+  cancellation; exact signal/15-second exec; guarded marked command; and forbidden-runtime absence
+  all pass.
+- Focused plus native-workflow oracle: `/usr/bin/time -l pnpm exec vitest run --config
+config/vitest.config.ts --maxWorkers=1
+src/main/ssh/ssh-relay-darwin-version-detection.test.ts
+src/main/ssh/ssh-relay-artifact-selector.test.ts
+src/main/ssh/ssh-remote-platform-detection.test.ts
+config/scripts/ssh-relay-runtime-workflow.test.mjs` — PASS, 4 files / 62 tests in 1.67 s Vitest,
+  2.86 s wall, 137,003,008-byte maximum RSS, zero swaps. Both POSIX and PowerShell native commands
+  require the purpose suite exactly once; existing platform and reviewed selector behavior passes.
+- Broader relay command: `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts
+--maxWorkers=1 --silent=true src/main/ssh/ssh-relay-*.test.ts` — PASS, 35 files passed / 3 declared
+  skipped, 415 tests passed / 3 declared skipped in 20.76 s Vitest, 23.12 s wall, 259,325,952-byte
+  maximum RSS, zero swaps. The expected stale-lock diagnostic and Node 26 `module.register()`
+  deprecation warning are unchanged.
+- Release-script command: `/usr/bin/time -l pnpm exec vitest run --config
+config/vitest.config.ts --maxWorkers=1 --silent=true
+config/scripts/ssh-relay-runtime-*.test.mjs` — PASS, 50 files / 280 tests in 19.48 s Vitest,
+  21.47 s wall, 189,300,736-byte maximum RSS, zero swaps.
+- Static gates: `pnpm typecheck`; targeted `pnpm exec oxlint`; targeted `pnpm exec oxfmt --check`;
+  `pnpm lint`; `pnpm run check:max-lines-ratchet`; and `git diff --check` pass after formatting the
+  two reported files. Full lint includes switch exhaustiveness, 41 reliability gates, 355
+  grandfathered max-lines entries with no new bypass, bundled-skill verification, 9,837
+  localization references and locale parity, and zero localization coverage candidates. Its 26
+  warnings are in untouched files. Protected resolver files have zero diff.
+- Residual gap: local execution uses Node 26.0.0 / pnpm 10.24.0; exact Node 24 on all six native
+  client runners, both Linux supplements, and Windows baselines remains required at the exact
+  implementation head. No real SSH/macOS host, Rosetta, full host composition, product caller,
+  transfer/install, setting, fallback, tuple, publication, or default behavior is proven or added.
+
 ## Accepted Gaps
 
 No product gap is accepted merely because it appears in this list. Each entry requires explicit
@@ -15285,10 +15377,12 @@ The project is not complete until every applicable item below is checked with ev
 
 ## Next Required Action
 
-Audit the next smallest disconnected host-evidence slice after exact-head acceptance of Linux
-kernel detection. Do not compose full host evidence, provision production secrets/environments, add
-an Electron/startup consumer, embed unreviewed keys or manifest bytes, add SSH transfer/install,
-mode wiring, fallback, tuple enablement, release publication, or default behavior.
+Commit the locally proven disconnected marked macOS product-version package, push it to the draft
+PR, and require exact-head all-six native artifact CI before advancing. Do not compose full host
+evidence, add
+Rosetta detection, provision production secrets/environments, add an Electron/startup consumer,
+embed unreviewed keys or manifest bytes, add SSH transfer/install, mode wiring, fallback, tuple
+enablement, release publication, or default behavior.
 Keep Node upstream `.tar.xz` inputs, Windows ZIP, `ORCA_RELAY_PATH`, existing desktop required-assets
 behavior, detached-signature byte encoding, Windows arm64 build 26100, macOS 13.5, Linux kernel 4.18,
 release-cut, desktop builds, publication, and every tuple separately gated.

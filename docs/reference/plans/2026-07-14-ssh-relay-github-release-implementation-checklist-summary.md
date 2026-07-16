@@ -9,9 +9,9 @@ keeps commands, hashes, runner identities, timings, and failure details.
 A checked box means the work has evidence in the detailed ledger. Design approval alone does not
 complete a box.
 
-Active checkpoint: **Milestone 5 / Work Package 4 desktop resolver/cache — audit the next smallest
-remaining disconnected host-evidence boundary after exact-head acceptance of Linux kernel
-detection, 2026-07-15, Codex implementation owner.**
+Active checkpoint: **Milestone 5 / Work Package 4 desktop resolver/cache — exact-head native CI for
+the locally green disconnected marked macOS product-version probe, 2026-07-15, Codex implementation
+owner.**
 `E-M5-ARTIFACT-CACHE-RESOLUTION-CI-001` closes warm-cache commit
 `22031fa68` on all six native clients, both Linux supplements, Windows x64 baseline, PR Checks,
 Golden E2E, and computer-use; Windows arm64 remains the expected build-26200 rejection against 26100. `E-M5-ARTIFACT-CACHE-RESOLUTION-LOCAL-001` passes 9/9 purpose tests,
@@ -151,6 +151,25 @@ Node/PTY/watcher smoke, then retains only the declared hosted build-26200 reject
 26100; this is the aggregate workflow's sole failure. Real SSH/distro behavior, remaining host
 evidence, composition, and every production/default path remain open; legacy remains the sole
 production path.
+`E-M5-DARWIN-VERSION-DETECTION-AUDIT-001` fixes the next smallest package: one disconnected,
+15-second cancellable POSIX-shell/no-Node marked `sw_vers -productVersion` probe. Only one complete
+strict two-to-four-component numeric version counts; missing, noisy, incomplete, duplicate,
+malformed, suffixed, or oversized evidence returns unknown and cancellation propagates. The
+reviewed macOS 13.5 floor and selector grammar stay unchanged. Rosetta/process translation, Linux
+libstdc++/GLIBCXX, Windows evidence, full host composition, product callers, live SSH, transfer/
+install, settings, fallback, tuple enablement, publication, and defaults remain absent.
+`E-M5-DARWIN-VERSION-DETECTION-LOCAL-RED-001` records the expected missing-module failure before
+implementation: the purpose suite has one failed file and zero collected tests because the audited
+detection module does not exist. The native-workflow oracle now also requires that purpose suite
+exactly once in both POSIX and PowerShell runner commands and remains red until they are wired.
+Protected resolver files have zero diff; no production caller or default behavior is connected.
+`E-M5-DARWIN-VERSION-DETECTION-LOCAL-001` is green: 21/21 purpose tests, 62/62 focused+workflow
+tests, 415/415 non-full-size relay tests with three declared skips, 280/280 release-script tests,
+typecheck, lint, format, max-lines, diff, and protected-resolver gates pass. One 15-second
+cancellable marked POSIX command returns only a unique bounded numeric `sw_vers -productVersion`;
+malformed, noisy, duplicate, unavailable, or oversized evidence returns unknown and cancellation
+propagates. Both native runner families require the suite. Exact Node 24/all-six native proof is
+next; real SSH/macOS, Rosetta, composition, and all production/default behavior remain absent.
 `E-M5-ARTIFACT-CACHE-ROOT-CI-001` closes the pure cache-root contract at exact head `aefcaa9a9`:
 all six primary native Node 24 jobs, both Linux supplements, Windows x64 baseline, PR Checks, Golden
 E2E, and computer-use pass; Windows arm64 build 26200 remains correctly gated against 26100. The
