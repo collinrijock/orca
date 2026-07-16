@@ -9,7 +9,7 @@ work; keep exact commands, runner identities, hashes, metrics, and residual gaps
 Date created: 2026-07-14<br>
 Last updated: 2026-07-15<br>
 Current phase: Milestone 6 / Work Package 5 bounded runtime transfer — **In progress — 2026-07-15, Codex implementation owner: bounded official Windows OpenSSH fixture correction**. Keep every capability disconnected from every production/default SSH path. Real Apple/SignPath rehearsals remain an explicit late gate and are not on this package's critical path.<br>
-Session checkpoint: **EXACT-SIGNER FIXTURE TRUST LOCALLY GREEN / EXACT-HEAD NATIVE PROOF NEXT — 2026-07-15, Codex implementation owner** — exact head `85731b3feff90047f67b716363b1549b0d79ee2c`, artifact run `29539266437`, and x64/arm64 jobs `87757772975`/`87757772957` pass their pinned archive hashes, exact 15-file native closures, pinned `libcrypto.dll` hashes, prior runtime contracts/build/smoke, and full-size cache gates before both disproving only the guessed `NotSigned` policy: target-native Authenticode reports `libcrypto.dll` as `Valid`. Both ownership-safe teardowns pass before any SSH account/service creation. `E-M6-WINDOWS-SYSTEM-SSH-TREE-LIVE-SIGNER-AUDIT-001` audits all 30 pinned PEs; `E-M6-WINDOWS-SYSTEM-SSH-TREE-LIVE-EXACT-SIGNER-CORRECTION-LOCAL-001` implements the exact common-name/thumbprint fixture policy and passes focused, PowerShell syntax, 283 artifact-contract, typecheck, lint/reliability/max-lines, format, diff, and isolation gates. Commit/push the isolated correction and obtain fresh exact-head native proof. Production runtime bytes still cross authenticated SSH and no product remote downloads anything. Do not connect a product caller, change legacy upload/fallback/default behavior, enable a tuple, publish an artifact, or perform SignPath work. Merging to `main` remains prohibited, SignPath is deferred, and legacy remains the production default.<br>
+Session checkpoint: **PORTABLE HOST-KEY ACL CORRECTION LOCALLY GREEN / EXACT-HEAD PROOF NEXT — 2026-07-15, Codex implementation owner** — exact pushed head `130d57d951b5e5cfb0e1e21183ce116684924e2b`, artifact run `29540409361`, and x64/arm64 jobs `87761260157`/`87761260166` pass checkout/toolchain, 283 contracts, clean-build equality/smoke, full-size cache, both pinned archive/library hashes, exact 15-file closure, and every audited common-name/thumbprint check before independently exposing the same narrower RED. Portable OpenSSH rejects the generated host key because `icacls /grant:r` leaves each key creator's explicit runner-account ACE; both service starts fail and both ownership-safe teardowns pass. `E-M6-WINDOWS-SYSTEM-SSH-TREE-LIVE-PORTABLE-ACL-CORRECTION-LOCAL-001` removes the known creator SID from every protected fixture ACL, asserts protected/allow-only exact trustee SID closure before service start, and passes focused, PowerShell syntax, 283 artifact-contract, typecheck, lint/reliability/max-lines, format, diff, and isolation gates. Commit/push and obtain fresh x64/arm64 proof. Production runtime bytes still cross authenticated SSH and no product remote downloads anything. Do not connect a product caller, change legacy upload/fallback/default behavior, enable a tuple, publish an artifact, or perform SignPath work. Merging to `main` remains prohibited, SignPath is deferred, and legacy remains the production default.<br>
 Primary design: [SSH relay GitHub Release plan](./2026-07-14-ssh-relay-github-release-plan.html)<br>
 Motivating issues: [#8450](https://github.com/stablyai/orca/issues/8450), [#1693](https://github.com/stablyai/orca/issues/1693)
 
@@ -18942,6 +18942,79 @@ config/vitest.config.ts --maxWorkers=1 --reporter=dot config/scripts/ssh-relay-r
   or teardown. Commit/push this isolated correction and require fresh exact-head x64/arm64 proof.
   Legacy remains the sole production/default path; product/Beta/settings/fallback/tuple/publication/
   signing remain absent.
+
+### E-M6-WINDOWS-SYSTEM-SSH-TREE-LIVE-PORTABLE-ACL-CI-RED-001 — creator ACE survives grant replacement
+
+- Date/owner/head/run: 2026-07-15, Codex implementation owner; exact pushed head
+  `130d57d951b5e5cfb0e1e21183ce116684924e2b`, artifact run
+  [29540409361](https://github.com/stablyai/orca/actions/runs/29540409361), x64 job `87761260157`
+  on `windows-2022`, runner `GitHub Actions 1000058197`; ARM64 job `87761260166` on
+  `windows-11-arm`, runner `GitHub Actions 1000058198`.
+- Prior-boundary proof: checkout/toolchain, all 283 artifact contracts, exact Node inputs, two clean
+  runtime builds/equality/native smoke, full-size desktop extraction/cache, pinned archive and
+  `libcrypto.dll` hashes, exact 15-name native closure, `Valid` Authenticode, the exact third-party
+  library identity, and both exact accepted executable identities all pass. The signer correction is
+  therefore target-natively proven on x64.
+- Exact RED: fixture account/key/config/service creation proceeds, then `Start-Service sshd` fails.
+  The captured portable OpenSSH diagnostic names explicit creator access for runner SID
+  `S-1-5-21-4137868374-391603265-4009536220-500` on `host-key`, reports `UNPROTECTED PRIVATE KEY
+FILE`, ignores the key, and exits with no host keys. `icacls /inheritance:r` removed inherited
+  access, but `/grant:r` replaced only the named SYSTEM/Administrators grants and did not remove the
+  creator-specific explicit ACE added by key generation.
+- Independent ARM64 RED: all the same prior runtime/cache/archive/closure/exact-signer gates pass.
+  `Start-Service sshd` fails in five seconds, and the portable diagnostic names its native runner's
+  distinct creator SID `S-1-5-21-1882319117-3219095328-2125279949-500` on `host-key`, followed by
+  the same `UNPROTECTED PRIVATE KEY FILE` and no-host-keys exit. This confirms an
+  architecture-independent ACL-construction defect rather than a binary/signer difference.
+- Cleanup: the two-second `always()` teardown passes, deletes the owned fixed-name service, account,
+  client state, and ownership-marked fixture root, and reports no cleanup failure. ARM64's teardown
+  independently passes in four seconds. No SSH connection or transfer begins on either architecture.
+- Evidence-driven correction: retain all signer/archive/closure gates. Remove the known current
+  creator SID from each protected fixture ACL before applying exact grants, then enumerate ACL
+  trustees by SID and fail unless the resulting set exactly matches the path's declared SYSTEM,
+  Administrators, and optional fixture-user closure. Perform this before config validation/service
+  creation. The HTML plan records this fixture-only requirement; product runtime/transfer trust is
+  unchanged.
+- Residual boundary: implement only exact fixture ACL closure plus its workflow oracle, rerun
+  local/static/PowerShell gates, and require fresh exact-head x64/arm64 live
+  service/auth/full-size/cancellation/collision/connection-reuse/cleanup proof. Legacy remains the
+  sole production/default path; product/Beta/settings/fallback/tuple/publication/signing remain absent.
+
+### E-M6-WINDOWS-SYSTEM-SSH-TREE-LIVE-PORTABLE-ACL-CORRECTION-LOCAL-001 — creator-free exact fixture ACL closure is locally green
+
+- Date/owner/base/runner: 2026-07-15, Codex implementation owner; uncommitted workflow, oracle,
+  HTML-plan, and checklist correction atop exact RED head
+  `130d57d951b5e5cfb0e1e21183ce116684924e2b` on Apple arm64, macOS 26.2 build 25C56,
+  Node 26.5.0, pnpm 10.24.0. Native Windows execution remains required.
+- Correction: capture the current Windows creator SID, protect each fixture DACL from inheritance,
+  remove every ACE for that known creator, and apply only the declared SYSTEM, Administrators, and
+  optional fixture-user grants. Before config validation/service creation, `Get-Acl` must report a
+  protected DACL, zero inherited rules, allow-only rules, and an exact sorted SID trustee set. The
+  host key permits only SYSTEM/Administrators; the fixture root, remote root, and `authorized_keys`
+  also permit only the fixture user. Existing exact owner assignments remain unchanged.
+- Focused purpose/oracle command: `/usr/bin/time -l pnpm exec vitest run --config
+config/vitest.config.ts --maxWorkers=1
+src/main/ssh/ssh-relay-runtime-windows-system-ssh-openssh-full-size.test.ts
+config/scripts/ssh-relay-runtime-workflow.test.mjs` passes 10/10 workflow cases with one declared
+  live-suite skip in 2.61 seconds real; maximum RSS is 141,869,056 bytes and peak footprint is
+  97,261,400 bytes. Independent YAML extraction passes all three start/measure/stop blocks through
+  PowerShell `[scriptblock]::Create()`.
+- Release-contract command: `/usr/bin/time -l pnpm exec vitest run --config
+config/vitest.config.ts --maxWorkers=1 --reporter=dot config/scripts/ssh-relay-runtime-*.test.mjs`
+  passes 50 files and 283/283 cases in 16.78 seconds real; maximum RSS is 195,395,584 bytes and peak
+  footprint is 98,047,736 bytes.
+- Static evidence: `/usr/bin/time -l pnpm typecheck` passes in 4.02 seconds real; maximum RSS is
+  1,280,770,048 bytes and peak footprint is 97,425,144 bytes. `/usr/bin/time -l pnpm lint` passes in
+  20.52 seconds real with only the 26 pre-existing warnings, all 41 reliability gates, the 355-entry
+  max-lines ratchet, localization, and bundled-guide checks; maximum RSS is 2,103,885,824 bytes and
+  peak footprint is 97,015,616 bytes. Targeted formatting, `git diff --check`, and exact
+  protected-file equality against `130d57d951b5e5cfb0e1e21183ce116684924e2b` pass; only the fixture
+  workflow, its oracle, and three planning artifacts are modified.
+- Residual boundary: local macOS syntax/contracts cannot prove Windows ACL mutation/translation,
+  service/auth, PowerShell 5.1, full-size transfer, cancellation, collision, connection reuse, or
+  teardown. Commit/push the isolated correction and require fresh exact-head x64/arm64 proof. Legacy
+  remains the sole production/default path; product/Beta/settings/fallback/tuple/publication/signing
+  remain absent.
 
 ## Accepted Gaps
 

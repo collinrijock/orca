@@ -1457,13 +1457,34 @@ jobs:
           $account = New-LocalUser -Name $fixtureUser -Password $password -PasswordNeverExpires `
             -UserMayNotChangePassword -AccountNeverExpires
           $userSid = $account.SID.Value
+          $creatorSid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+          $systemSid = 'S-1-5-18'
+          $administratorsSid = 'S-1-5-32-544'
 
-          function Set-FixtureAcl([string]$Path, [string[]]$Grants) {
+          function Set-FixtureAcl([string]$Path, [string[]]$Grants, [string[]]$ExpectedSids) {
             & icacls.exe $Path /inheritance:r | Out-Host
             if ($LASTEXITCODE -ne 0) { throw "Failed to remove inherited ACLs from $Path" }
+            # Why: key generation adds a creator ACE that /grant:r does not replace for other trustees.
+            & icacls.exe $Path /remove "*$creatorSid" | Out-Host
+            if ($LASTEXITCODE -ne 0) { throw "Failed to remove creator ACL from $Path" }
             $arguments = @($Path, '/grant:r') + $Grants
             & icacls.exe @arguments | Out-Host
             if ($LASTEXITCODE -ne 0) { throw "Failed to grant fixture ACLs on $Path" }
+            $acl = Get-Acl -LiteralPath $Path
+            $rules = @($acl.Access)
+            if (-not $acl.AreAccessRulesProtected -or @($rules | Where-Object { $_.IsInherited }).Count -ne 0) {
+              throw "Fixture ACL inheritance remains enabled on $Path"
+            }
+            if (@($rules | Where-Object { $_.AccessControlType -ne 'Allow' }).Count -ne 0) {
+              throw "Fixture ACL contains a deny rule on $Path"
+            }
+            $actualSids = @($rules | ForEach-Object {
+              $_.IdentityReference.Translate([Security.Principal.SecurityIdentifier]).Value
+            } | Sort-Object -Unique)
+            $expected = @($ExpectedSids | Sort-Object -Unique)
+            if (($actualSids -join "`n") -ne ($expected -join "`n")) {
+              throw "Fixture ACL trustee closure changed on $Path`: $($actualSids -join ',')"
+            }
           }
           function Set-FixtureOwner([string]$Path, [string]$OwnerSid) {
             & icacls.exe $Path /setowner "*$OwnerSid" | Out-Host
@@ -1471,8 +1492,13 @@ jobs:
           }
           $systemFull = '*S-1-5-18:(OI)(CI)F'
           $administratorsFull = '*S-1-5-32-544:(OI)(CI)F'
-          Set-FixtureAcl $fixture @($systemFull, $administratorsFull, "*$userSid`:RX")
-          Set-FixtureAcl $remoteRoot @($systemFull, $administratorsFull, "*$userSid`:(OI)(CI)M")
+          $fixtureTrustees = @($systemSid, $administratorsSid, $userSid)
+          Set-FixtureAcl $fixture @($systemFull, $administratorsFull, "*$userSid`:RX") $fixtureTrustees
+          Set-FixtureAcl $remoteRoot @(
+            $systemFull,
+            $administratorsFull,
+            "*$userSid`:(OI)(CI)M"
+          ) $fixtureTrustees
 
           $clientKey = Join-Path $fixture 'client-key'
           $hostKey = Join-Path $fixture 'host-key'
@@ -1486,9 +1512,12 @@ jobs:
             '*S-1-5-18:F',
             '*S-1-5-32-544:F',
             "*$userSid`:R"
-          )
+          ) $fixtureTrustees
           Set-FixtureOwner $authorizedKeys $userSid
-          Set-FixtureAcl $hostKey @('*S-1-5-18:F', '*S-1-5-32-544:F')
+          Set-FixtureAcl $hostKey @(
+            '*S-1-5-18:F',
+            '*S-1-5-32-544:F'
+          ) @($systemSid, $administratorsSid)
           Set-FixtureOwner $hostKey 'S-1-5-18'
 
           $port = 22224

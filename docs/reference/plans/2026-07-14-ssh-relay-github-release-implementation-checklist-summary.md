@@ -38,7 +38,19 @@ common name plus audited thumbprint `F5877012FBD62FABCBDC8D8CEE9C9585BA30DF79` o
 policy and is locally green: 10/10 focused workflow cases with one declared live skip, all three
 PowerShell blocks parsed, 283/283 artifact contracts, typecheck, full lint/reliability/max-lines,
 formatting, diff, and protected-resolver isolation. Commit/push the isolated correction and require
-fresh exact-head native x64/arm64 proof.
+fresh exact-head native x64/arm64 proof. Exact head
+`130d57d951b5e5cfb0e1e21183ce116684924e2b`, artifact run `29540409361`, and x64 job
+`87761260157` prove the complete exact-signer policy before exposing a narrower ACL RED: portable
+OpenSSH rejects the host key because `icacls /grant:r` did not remove the key creator's explicit
+runner-account ACE. Service start fails, and ownership-safe teardown passes. ARM64 job `87761260166`
+independently reaches the same RED with creator SID
+`S-1-5-21-1882319117-3219095328-2125279949-500`; its teardown also passes. Remove the known creator
+SID, assert the exact allowed SID closure, and rerun.
+`E-M6-WINDOWS-SYSTEM-SSH-TREE-LIVE-PORTABLE-ACL-CORRECTION-LOCAL-001` records that isolated
+correction locally green: protected allow-only ACLs remove the creator and require exact trustee SID
+closure; 10/10 focused workflow cases, all three PowerShell blocks, 283/283 artifact contracts,
+typecheck, full lint/reliability/max-lines, format, diff, and protected-resolver isolation pass. Push
+for fresh exact-head x64/arm64 proof.
 `E-M6-WINDOWS-SYSTEM-SSH-TREE-LIVE-AUDIT-001` fixes the loopback-only official Microsoft
 server, fixture-owned non-admin account/ACL, exact host-key trust, Windows PowerShell 5.1,
 serial/default and four-channel metrics, cancellation/collision/cleanup, and deterministic teardown

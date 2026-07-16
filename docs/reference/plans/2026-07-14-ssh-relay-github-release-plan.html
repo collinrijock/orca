@@ -1665,8 +1665,10 @@
                   </td>
                   <td>
                     This trust exception provisions only the loopback CI server. Production clients
-                    and SSH hosts perform no fixture download, and it does not weaken runtime
-                    artifact, native-signing, transfer, install, or launch trust.
+                    and SSH hosts perform no fixture download. Fixture host-key and authorized-key
+                    ACL creation removes creator-specific access and asserts the exact allowed SID
+                    closure before service start; none of this weakens runtime artifact,
+                    native-signing, transfer, install, or launch trust.
                   </td>
                 </tr>
                 <tr>

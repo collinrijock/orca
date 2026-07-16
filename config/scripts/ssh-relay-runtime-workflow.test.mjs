@@ -179,6 +179,11 @@ describe('SSH relay runtime artifact workflow', () => {
     expect(start.run).toContain("if ($nativeFile.Name -eq 'libcrypto.dll') { continue }")
     expect(start.run).toContain("$signature.Status -ne 'Valid'")
     expect(start.run).toContain('CN=Microsoft Corporation')
+    expect(start.run).toContain('[Security.Principal.WindowsIdentity]::GetCurrent().User.Value')
+    expect(start.run).toContain('& icacls.exe $Path /remove "*$creatorSid"')
+    expect(start.run).toContain('$acl.AreAccessRulesProtected')
+    expect(start.run).toContain('Fixture ACL trustee closure changed')
+    expect(start.run).toContain('@($systemSid, $administratorsSid)')
     expect(start.run).not.toContain('Add-WindowsCapability')
     expect(start.run).toContain('New-LocalUser')
     expect(start.run.indexOf("Join-Path $fixture 'account-owned'")).toBeLessThan(
