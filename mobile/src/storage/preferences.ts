@@ -2,33 +2,82 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 
 const PINS_PREFIX = 'orca:pins:'
 const NOTIF_KEY = 'orca:pushNotificationsEnabled'
-const NATIVE_CHAT_TABS_PREFIX = 'orca:nativeChatTabs:'
+/** How a supported agent session opens: the raw terminal or the native chat view. */
+export type MobileSessionView = 'terminal' | 'chat'
 
-function nativeChatTabIdsKey(hostId: string, worktreeId: string): string {
-  return `${NATIVE_CHAT_TABS_PREFIX}${encodeURIComponent(hostId)}:${encodeURIComponent(worktreeId)}`
-}
+const DEFAULT_SESSION_VIEW_KEY = 'orca:defaultSessionView'
 
-/** Tab ids currently showing native chat, scoped to the paired host and worktree
- *  so colliding remote ids cannot activate a transcript watcher on another host. */
-export async function loadNativeChatTabIds(hostId: string, worktreeId: string): Promise<string[]> {
+// Why: default stays terminal so the toggle is strictly opt-in — flipping it to
+// chat is what makes new/unpinned supported sessions open in the native chat view.
+export const DEFAULT_SESSION_VIEW: MobileSessionView = 'terminal'
+
+/** Global (per-device) default for how supported agent sessions open. */
+export async function loadDefaultSessionView(): Promise<MobileSessionView> {
   try {
-    const raw = await AsyncStorage.getItem(nativeChatTabIdsKey(hostId, worktreeId))
-    const parsed = raw ? (JSON.parse(raw) as unknown) : null
-    return Array.isArray(parsed) ? parsed.filter((id): id is string => typeof id === 'string') : []
+    const raw = await AsyncStorage.getItem(DEFAULT_SESSION_VIEW_KEY)
+    return raw === 'chat' || raw === 'terminal' ? raw : DEFAULT_SESSION_VIEW
   } catch {
-    return []
+    return DEFAULT_SESSION_VIEW
   }
 }
 
-export async function saveNativeChatTabIds(
+export async function saveDefaultSessionView(view: MobileSessionView): Promise<void> {
+  await AsyncStorage.setItem(DEFAULT_SESSION_VIEW_KEY, view)
+}
+
+const NATIVE_CHAT_TABS_PREFIX = 'orca:nativeChatTabs:'
+
+function sessionViewOverridesKey(hostId: string, worktreeId: string): string {
+  return `${NATIVE_CHAT_TABS_PREFIX}${encodeURIComponent(hostId)}:${encodeURIComponent(worktreeId)}`
+}
+
+/** Per-tab session-view overrides that win over the global default, scoped to the
+ *  paired host and worktree so colliding remote ids cannot activate a transcript
+ *  watcher on another host. Absent tabs follow the default; an explicit entry
+ *  pins a tab to terminal or chat regardless of what the default later becomes. */
+export async function loadSessionViewOverrides(
+  hostId: string,
+  worktreeId: string
+): Promise<Map<string, MobileSessionView>> {
+  try {
+    const raw = await AsyncStorage.getItem(sessionViewOverridesKey(hostId, worktreeId))
+    if (!raw) {
+      return new Map()
+    }
+    const parsed = JSON.parse(raw) as unknown
+    // Legacy format: an array of tab ids that were showing native chat.
+    if (Array.isArray(parsed)) {
+      return new Map(
+        parsed
+          .filter((id): id is string => typeof id === 'string')
+          .map((id) => [id, 'chat' as const])
+      )
+    }
+    if (parsed && typeof parsed === 'object') {
+      const entries = Object.entries(parsed as Record<string, unknown>).filter(
+        (entry): entry is [string, MobileSessionView] =>
+          entry[1] === 'terminal' || entry[1] === 'chat'
+      )
+      return new Map(entries)
+    }
+    return new Map()
+  } catch {
+    return new Map()
+  }
+}
+
+export async function saveSessionViewOverrides(
   hostId: string,
   worktreeId: string,
-  ids: string[]
+  overrides: ReadonlyMap<string, MobileSessionView>
 ): Promise<void> {
   try {
-    await AsyncStorage.setItem(nativeChatTabIdsKey(hostId, worktreeId), JSON.stringify(ids))
+    await AsyncStorage.setItem(
+      sessionViewOverridesKey(hostId, worktreeId),
+      JSON.stringify(Object.fromEntries(overrides))
+    )
   } catch {
-    // Best-effort persistence; a failed write just forgets the view choice.
+    // Best-effort persistence; a failed write just forgets the per-session view choice.
   }
 }
 
