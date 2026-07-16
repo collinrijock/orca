@@ -10,19 +10,22 @@ A checked box means the work has evidence in the detailed ledger. Design approva
 complete a box.
 
 Active checkpoint: **Milestone 6 / Work Package 5 bounded runtime transfer — disconnected Windows
-system-SSH bounded binary per-file destination is locally green; native Windows CI is next,
-2026-07-15, Codex implementation owner.**
-The active slice is limited to a fixed PowerShell 5.1/.NET receiver, a bounded binary stdin header,
-one exact raw payload, exclusive `FileMode.CreateNew`, 64 KiB reads/writes, early-EOF and extra-byte
-rejection, and owned-file cleanup. It must reuse the proven command-channel lifecycle without
-changing POSIX behavior. Remote-tree composition, product callers, legacy upload/fallback/default
+system-SSH staging-control contract audit, 2026-07-15, Codex implementation owner.**
+The next slice is limited to fixed-command, bounded binary PowerShell 5.1 requests for exclusive
+staging-root creation, declared-directory creation, and owned-root cleanup. It must preserve a
+pre-existing root, bound and strictly decode paths, join cancellation/settlement, and remain
+disconnected. File/tree composition, live OpenSSH, product callers, legacy upload/fallback/default
 behavior, tuple enablement, publication, and SignPath remain out of scope.
 `E-M6-WINDOWS-SYSTEM-SSH-FILE-LOCAL-RED-001` proves the workflow oracle passes 9/9 and the new
 purpose suite fails solely because the audited production destination is absent.
 `E-M6-WINDOWS-SYSTEM-SSH-FILE-LOCAL-001` records 14/15 Windows purpose cases locally with the real
 PowerShell case honestly skipped, all 25 prior POSIX destination cases, 234 focused cases, 670 broad
 relay cases, 282/282 release contracts, typecheck, full lint, formatting, diff, protected-resolver,
-and no-product-consumer gates. Native Windows x64/arm64 PowerShell 5.1 proof remains required.
+and no-product-consumer gates. `E-M6-WINDOWS-SYSTEM-SSH-FILE-CI-001` closes native proof: Windows
+x64 and arm64 each pass all 15 cases through real `powershell.exe`; all six primary jobs, both Linux
+supplements, Windows x64 floor, PR Checks, Golden E2E, and computer-use pass. The same-SHA rerun
+closes an adjacent watcher flake and retains only the declared hosted Windows arm64 build-26200
+versus required-26100 rejection after complete runtime smoke.
 `E-M6-POSIX-SYSTEM-SSH-TREE-AUDIT-001` requires a bounded no-input control-command owner rather than
 the legacy unbounded-output command helper, exclusive `0700` root creation, parent-first declared
 directories, exact per-file source-stream composition, owned-root cleanup, and a worst-case
