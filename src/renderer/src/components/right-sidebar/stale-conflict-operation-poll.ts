@@ -62,6 +62,10 @@ export function useStaleConflictOperationPolling(args: {
       return
     }
 
+    // Why: dispose() cannot interrupt an in-flight probe; without this guard a
+    // request resolving after cleanup would overwrite newer conflict state.
+    let active = true
+
     const pollStale = async (): Promise<void> => {
       // Why: a backoff-deferred run can fire long after the window hides; skip
       // the probe instead of running SSH/RPC work nobody can see. The
@@ -83,6 +87,9 @@ export function useStaleConflictOperationPolling(args: {
             worktreePath: path,
             connectionId
           })) as GitConflictOperation
+          if (!active) {
+            return
+          }
           setConflictOperation(id, op)
         } catch {
           // ignore — worktree may have been removed
@@ -106,6 +113,7 @@ export function useStaleConflictOperationPolling(args: {
       intervalMs: CONFLICT_POLL_INTERVAL_MS
     })
     return () => {
+      active = false
       pollRunner.dispose()
       stopVisiblePoll()
     }

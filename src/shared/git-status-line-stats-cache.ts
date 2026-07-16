@@ -247,6 +247,10 @@ export function clearGitStatusLineStatsCacheKey(
       cacheKey,
       (keyInvalidationGenerationByWorktree.get(cacheKey) ?? 0) + 1
     )
+  } else {
+    // Why: a token-scoped purge must retire scans that began before it, so an
+    // older in-flight scan can't store pre-purge counts and repopulate this key.
+    bumpBoundedKeyMap(lastStoredBeginSeqByWorktree, cacheKey, writeToken.beginSeq)
   }
   lineStatsByWorktree.delete(cacheKey)
 }

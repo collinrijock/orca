@@ -190,7 +190,10 @@ export function useGitStatusPolling(options: { enabled?: boolean } = {}): void {
         statusSchedulerRef.current = null
       }
     }
-  }, [activeExecutionHostId, activeWorktreeId, worktreePath])
+    // Why: push-target changes must bump the generation so an in-flight refresh
+    // captured against the old remote/branch can't apply or cache stale upstream
+    // status for the new one.
+  }, [activeExecutionHostId, activePushTarget, activeWorktreeId, worktreePath])
 
   useEffect(() => {
     const reconcile = (catchUp: boolean): void => {
