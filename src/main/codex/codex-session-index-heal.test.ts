@@ -369,6 +369,28 @@ describe('runCodexSessionIndexHeal', () => {
     expect(resumed.healedThreads + summary.healedThreads).toBe(4)
   })
 
+  it('does not spawn another server when stop flips during the inter-batch delay', async () => {
+    const rig = createHealRig({
+      auditedThreads: [
+        { stamp: '2026-07-02T10-00-00', id: threadId('2') },
+        { stamp: '2026-07-01T10-00-00', id: threadId('1') }
+      ]
+    })
+    let stopChecks = 0
+
+    const summary = await runCodexSessionIndexHeal(rig.paths, {
+      buildInvocation: rig.buildInvocation,
+      readsPerServerSession: 1,
+      interBatchDelayMs: 1,
+      // False through the second batch's pre-delay check, then model opt-out
+      // while the delay is in progress.
+      shouldStop: () => stopChecks++ >= 3
+    })
+
+    expect(summary).toMatchObject({ outcome: 'stopped', healedThreads: 1 })
+    expect(rig.readLog()).toMatchObject({ serverStarts: 1, threadIds: [threadId('2')] })
+  })
+
   it('marks the pass unsupported without ledger writes when thread/read is unavailable', async () => {
     const rig = createHealRig({
       scenario: 'unknown-method',

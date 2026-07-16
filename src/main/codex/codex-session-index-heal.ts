@@ -147,6 +147,12 @@ export async function runCodexSessionIndexHeal(
     }
     if (offset > 0 && interBatchDelayMs > 0) {
       await new Promise((resolve) => setTimeout(resolve, interBatchDelayMs))
+      if (shouldStop()) {
+        // Why: opt-out can happen during the throttle delay; do not spawn a
+        // real-home app-server after the lane has been disabled.
+        summary.outcome = 'stopped'
+        return summary
+      }
     }
     const batch = pending.slice(offset, offset + readsPerServerSession)
     const timeoutMs = HEAL_BATCH_TIMEOUT_BASE_MS + HEAL_BATCH_TIMEOUT_PER_READ_MS * batch.length
