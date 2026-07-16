@@ -248,14 +248,14 @@ export const NativeChatComposer = forwardRef<NativeChatComposerHandle, NativeCha
     const { pickAttachment } = useNativeChatFileAttachmentActions(attachExternalPaths)
     const { toggleDictation, startHoldDictation, stopHoldDictation } =
       useNativeChatDictationActions({ textareaRef, setDictationPressed })
-    const dispatchSessionOptionCommand = useNativeChatSessionOptionCommand({
-      agent,
-      disabled,
-      onSlashCommand,
-      resolveTarget,
-      setHistory,
-      trackPendingSend
-    })
+    const { dispatch: dispatchSessionOptionCommand, isDispatching: isDispatchingSessionOption } =
+      useNativeChatSessionOptionCommand({
+        agent,
+        disabled,
+        onSlashCommand,
+        resolveTarget,
+        setHistory
+      })
 
     const { surface: sessionOptionsSurface, snapshot: sessionOptionsSnapshot } =
       useNativeChatSessionOptions({
@@ -270,6 +270,12 @@ export const NativeChatComposer = forwardRef<NativeChatComposerHandle, NativeCha
       const text = draft
       const imagePaths = imageAttachments.map((attachment) => attachment.path)
       if ((text.trim() === '' && imagePaths.length === 0) || disabled) {
+        return
+      }
+      // Why: block a normal send while a session-option command (e.g. /model) is
+      // still writing its body+delayed-Enter to the same pty, so the two write
+      // sequences can't interleave on one input line.
+      if (isDispatchingSessionOption) {
         return
       }
       const target = resolveTarget()
@@ -328,6 +334,7 @@ export const NativeChatComposer = forwardRef<NativeChatComposerHandle, NativeCha
       draft,
       imageAttachments,
       disabled,
+      isDispatchingSessionOption,
       resolveTarget,
       onOptimisticSend,
       onSlashCommand,

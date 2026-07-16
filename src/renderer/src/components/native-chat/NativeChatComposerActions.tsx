@@ -65,13 +65,15 @@ export function NativeChatComposerActions({
             {translate('components.native-chat.composer.attach', 'Attach file')}
           </TooltipContent>
         </Tooltip>
+      </div>
+      <div className="ml-auto flex items-center gap-1.5">
+        {/* Why: keep session controls beside the actions they affect; the
+        model trigger is ordered last so it sits directly next to dictation. */}
         <NativeChatSessionOptionPickers
           surface={sessionOptionsSurface}
           snapshot={sessionOptionsSnapshot}
           isWorking={isWorking}
         />
-      </div>
-      <div className="ml-auto flex items-center gap-1.5">
         <Tooltip>
           <TooltipTrigger asChild>
             <Button

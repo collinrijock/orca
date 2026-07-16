@@ -92,7 +92,14 @@ export const CLAUDE_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
   modelApply: {
     launchArgs: (value) => ['--model', String(value)],
     agentArgsOverride: (tokens) => hasFlag(tokens, ['--model']),
-    midSession: { kind: 'command', build: (value) => `/model ${String(value)}` }
+    midSession: {
+      kind: 'command',
+      build: (value) => `/model ${String(value)}`,
+      pickerCommand: '/model',
+      // Why: Claude sometimes confirms a cached-history switch. Detect the
+      // actual prompt so ordinary model changes stay in native chat.
+      detectAgentInteraction: 'claude-model-switch-confirmation'
+    }
   }
 }
 

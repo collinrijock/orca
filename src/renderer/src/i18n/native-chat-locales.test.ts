@@ -29,7 +29,9 @@ describe('native chat locale copy', () => {
       const composer = catalog.components['native-chat'].composer
       for (const key of [
         'model',
+        'modelWithValue',
         'effort',
+        'effortWithValue',
         'fastMode',
         'thinking',
         'options',

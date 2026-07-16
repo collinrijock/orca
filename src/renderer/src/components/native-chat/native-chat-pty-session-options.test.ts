@@ -16,7 +16,10 @@ describe('native chat PTY session options', () => {
       dispatchCommand: vi.fn()
     })!
     expect(surface.getSnapshot()).toHaveLength(1)
-    expect(surface.getSnapshot()[0]).toMatchObject({ id: 'model', valueSource: 'unknown' })
+    expect(surface.getSnapshot()[0]).toMatchObject({
+      id: 'model',
+      valueSource: 'unknown'
+    })
   })
 
   it('restores launch-backed values through the tab-to-PTY cache handoff', () => {
@@ -40,7 +43,11 @@ describe('native chat PTY session options', () => {
     )
   })
 
-  it('dispatches Claude setters and publishes full dependent snapshots', async () => {
+  it('dispatches a Claude effort setter and publishes the full snapshot', async () => {
+    seedNativeChatAppliedSessionOptions('pty-1', 'claude', {
+      model: 'opus',
+      effort: 'xhigh'
+    })
     const dispatch = vi.fn()
     const persist = vi.fn()
     const listener = vi.fn()
@@ -53,25 +60,132 @@ describe('native chat PTY session options', () => {
     })!
     surface.subscribe(listener)
 
-    const modelResult = await surface.setOption('model', 'opus')
-    expect(dispatch).toHaveBeenCalledWith('/model opus')
-    expect(modelResult.snapshot.map(({ id }) => id)).toEqual(['model', 'effort', 'fastMode'])
-    expect(modelResult.snapshot[0]).toMatchObject({ valueSource: 'dispatched' })
-    expect(modelResult.snapshot[1]).toMatchObject({ valueSource: 'unknown' })
-
     const effortResult = await surface.setOption('effort', 'high')
-    expect(dispatch).toHaveBeenLastCalledWith('/effort high')
+    expect(dispatch).toHaveBeenCalledWith('/effort high')
+    expect(effortResult.snapshot.map(({ id }) => id)).toEqual(['model', 'effort', 'fastMode'])
     expect(effortResult.snapshot.find(({ id }) => id === 'effort')).toMatchObject({
       valueSource: 'dispatched',
       kind: { currentValue: 'high' }
     })
-    expect(listener).toHaveBeenCalledTimes(2)
+    expect(listener).toHaveBeenCalledOnce()
     expect(listener.mock.calls.every(([snapshot]) => Array.isArray(snapshot))).toBe(true)
-    expect(persist).toHaveBeenCalledWith({ modelId: 'opus', optionId: 'effort', value: 'high' })
+    expect(persist).toHaveBeenCalledWith({
+      modelId: 'opus',
+      optionId: 'effort',
+      value: 'high'
+    })
+  })
+
+  it('keeps a normal Claude model choice native and dispatches the selected model', async () => {
+    seedNativeChatAppliedSessionOptions('pty-1', 'claude', {
+      model: 'sonnet',
+      effort: 'high'
+    })
+    const dispatch = vi.fn().mockResolvedValue({ outcome: 'applied' })
+    const onAgentPicker = vi.fn()
+    const surface = createNativeChatPtySessionOptions({
+      agent: 'claude',
+      scopeKey: 'pty-1',
+      mode: 'live',
+      dispatchCommand: dispatch,
+      onAgentPicker
+    })!
+    expect(surface.getSnapshot()[0]?.action).toBeUndefined()
+
+    const result = await surface.setOption('model', 'fable')
+
+    expect(dispatch).toHaveBeenCalledWith('/model fable', {
+      detectAgentInteraction: 'claude-model-switch-confirmation',
+      expectedChoiceLabel: 'Fable 5'
+    })
+    expect(onAgentPicker).not.toHaveBeenCalled()
+    expect(result.snapshot[0]).toMatchObject({
+      valueSource: 'dispatched',
+      kind: { currentValue: 'fable' }
+    })
+  })
+
+  it('reveals the terminal only when Claude actually requires model-switch interaction', async () => {
+    seedNativeChatAppliedSessionOptions('pty-1', 'claude', { model: 'sonnet' })
+    const dispatch = vi.fn().mockResolvedValue({ outcome: 'interaction-required' })
+    const onAgentPicker = vi.fn()
+    const surface = createNativeChatPtySessionOptions({
+      agent: 'claude',
+      scopeKey: 'pty-1',
+      mode: 'live',
+      dispatchCommand: dispatch,
+      onAgentPicker
+    })!
+
+    const result = await surface.setOption('model', 'haiku')
+
+    expect(dispatch).toHaveBeenCalledWith('/model haiku', {
+      detectAgentInteraction: 'claude-model-switch-confirmation',
+      expectedChoiceLabel: 'Haiku'
+    })
+    expect(onAgentPicker).toHaveBeenCalledOnce()
+    expect(result.snapshot[0]).toMatchObject({ valueSource: 'unknown' })
+  })
+
+  it('keeps the prior model and persistence when Claude rejects the switch', async () => {
+    seedNativeChatAppliedSessionOptions('pty-1', 'claude', {
+      model: 'fable',
+      effort: 'high'
+    })
+    const persist = vi.fn()
+    const onAgentPicker = vi.fn()
+    const surface = createNativeChatPtySessionOptions({
+      agent: 'claude',
+      scopeKey: 'pty-1',
+      mode: 'live',
+      dispatchCommand: vi.fn().mockResolvedValue({ outcome: 'rejected' }),
+      persistSelection: persist,
+      onAgentPicker
+    })!
+
+    await expect(surface.setOption('model', 'haiku')).rejects.toThrow(
+      'Claude kept the current model.'
+    )
+
+    expect(surface.getSnapshot()[0]).toMatchObject({
+      valueSource: 'applied',
+      kind: { currentValue: 'fable' }
+    })
+    expect(persist).not.toHaveBeenCalled()
+    expect(onAgentPicker).not.toHaveBeenCalled()
+  })
+
+  it('stays native and clears stale truth when the switch cannot be verified', async () => {
+    seedNativeChatAppliedSessionOptions('pty-1', 'claude', {
+      model: 'fable',
+      effort: 'high'
+    })
+    const persist = vi.fn()
+    const onAgentPicker = vi.fn()
+    const surface = createNativeChatPtySessionOptions({
+      agent: 'claude',
+      scopeKey: 'pty-1',
+      mode: 'live',
+      dispatchCommand: vi.fn().mockResolvedValue({ outcome: 'unknown' }),
+      persistSelection: persist,
+      onAgentPicker
+    })!
+
+    await expect(surface.setOption('model', 'haiku')).rejects.toThrow(
+      'Could not verify the model change; open the terminal to check.'
+    )
+
+    expect(surface.getSnapshot()).toHaveLength(1)
+    expect(surface.getSnapshot()[0]).toMatchObject({ valueSource: 'unknown' })
+    expect(persist).not.toHaveBeenCalled()
+    expect(onAgentPicker).not.toHaveBeenCalled()
   })
 
   it('keeps an unknown toggle unknown after the one-shot action', async () => {
-    seedNativeChatAppliedSessionOptions('pty-1', 'claude', { model: 'opus', effort: 'high' })
+    seedNativeChatAppliedSessionOptions('pty-1', 'claude', {
+      model: 'opus',
+      effort: 'high'
+    })
     const dispatch = vi.fn()
     const surface = createNativeChatPtySessionOptions({
       agent: 'claude',
@@ -115,30 +229,7 @@ describe('native chat PTY session options', () => {
     expect(result.snapshot[0]).toMatchObject({ valueSource: 'unknown' })
   })
 
-  it('tracks typed direct commands and downgrades typed toggles', () => {
-    seedNativeChatAppliedSessionOptions('pty-1', 'claude', {
-      model: 'sonnet',
-      effort: 'high'
-    })
-    const surface = createNativeChatPtySessionOptions({
-      agent: 'claude',
-      scopeKey: 'pty-1',
-      mode: 'live',
-      dispatchCommand: vi.fn()
-    })!
-    surface.recordOutgoingCommand('/model opus')
-    expect(surface.getSnapshot().map(({ id }) => id)).toEqual(['model', 'effort', 'fastMode'])
-    expect(surface.getSnapshot()[0]).toMatchObject({
-      valueSource: 'dispatched',
-      kind: { currentValue: 'opus' }
-    })
-    surface.recordOutgoingCommand('/fast')
-    expect(surface.getSnapshot().find(({ id }) => id === 'fastMode')).toMatchObject({
-      valueSource: 'unknown'
-    })
-  })
-
-  it('drops stale model-scoped truth when typed model commands switch away and back', () => {
+  it('tracks typed effort commands and downgrades typed toggles', () => {
     seedNativeChatAppliedSessionOptions('pty-1', 'claude', {
       model: 'opus',
       effort: 'xhigh'
@@ -149,17 +240,42 @@ describe('native chat PTY session options', () => {
       mode: 'live',
       dispatchCommand: vi.fn()
     })!
+    surface.recordOutgoingCommand('/effort high')
+    expect(surface.getSnapshot().find(({ id }) => id === 'effort')).toMatchObject({
+      valueSource: 'dispatched',
+      kind: { currentValue: 'high' }
+    })
+    surface.recordOutgoingCommand('/fast')
+    expect(surface.getSnapshot().find(({ id }) => id === 'fastMode')).toMatchObject({
+      valueSource: 'unknown'
+    })
+  })
 
-    surface.recordOutgoingCommand('/model sonnet')
-    surface.recordOutgoingCommand('/model opus')
+  it('switches to the terminal and drops stale truth for a typed picker command', () => {
+    seedNativeChatAppliedSessionOptions('pty-1', 'claude', {
+      model: 'opus',
+      effort: 'xhigh'
+    })
+    const onAgentPicker = vi.fn()
+    const surface = createNativeChatPtySessionOptions({
+      agent: 'claude',
+      scopeKey: 'pty-1',
+      mode: 'live',
+      dispatchCommand: vi.fn(),
+      onAgentPicker
+    })!
 
-    const effort = surface.getSnapshot().find(({ id }) => id === 'effort')
-    expect(effort).toMatchObject({ valueSource: 'unknown' })
-    expect(effort?.kind).not.toHaveProperty('currentValue')
+    surface.recordOutgoingCommand('/model')
+
+    expect(onAgentPicker).toHaveBeenCalledOnce()
+    expect(surface.getSnapshot()).toHaveLength(1)
+    expect(surface.getSnapshot()[0]).toMatchObject({ valueSource: 'unknown' })
   })
 
   it('passes an unknown persisted model through as a literal choice', () => {
-    seedNativeChatAppliedSessionOptions('pty-1', 'claude', { model: 'future-model' })
+    seedNativeChatAppliedSessionOptions('pty-1', 'claude', {
+      model: 'future-model'
+    })
     const surface = createNativeChatPtySessionOptions({
       agent: 'claude',
       scopeKey: 'pty-1',

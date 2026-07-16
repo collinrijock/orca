@@ -38,7 +38,7 @@ function settableState(args: {
   if (args.mode === 'draft') {
     return args.apply.launchArgs || args.apply.composedIntoModel
       ? { settable: true }
-      : { settable: false, disabledReason: 'Available after the session starts.' }
+      : { settable: false, disabledReason: 'available-after-session-start' }
   }
   const midSession = args.apply.midSession
   if (args.apply.composedIntoModel && args.composedModelApply?.midSession?.kind === 'command') {
@@ -46,7 +46,7 @@ function settableState(args: {
   }
   return midSession && midSession.kind !== 'unsupported'
     ? { settable: true }
-    : { settable: false, disabledReason: 'Set when the session starts.' }
+    : { settable: false, disabledReason: 'set-when-session-starts' }
 }
 
 function actionForApply(

@@ -23,6 +23,7 @@ import type {
 import {
   nativeChatModelPillLabel,
   nativeChatOptionsPillLabel,
+  nativeChatOptionsPillTitle,
   nativeChatSessionChoiceLabel,
   nativeChatSessionOptionDisabledReason,
   nativeChatSessionOptionLabel
@@ -211,10 +212,7 @@ function NativeChatSessionOptionPickersInner({
 
   const modelReason = nativeChatSessionOptionDisabledReason(model.disabledReason)
   const modelTooltip = translate('components.native-chat.composer.model', 'Model')
-  const optionsTooltip = translate(
-    'components.native-chat.composer.sessionOptions',
-    'Session options'
-  )
+  const optionsTooltip = nativeChatOptionsPillTitle(options)
   const optionsReason =
     options.length > 0 && options.every((descriptor) => !descriptor.settable)
       ? nativeChatSessionOptionDisabledReason(options[0]?.disabledReason)
@@ -222,25 +220,6 @@ function NativeChatSessionOptionPickersInner({
 
   return (
     <div className="flex min-w-0 items-center gap-0.5">
-      <DropdownMenu>
-        <PickerTrigger
-          label={nativeChatModelPillLabel(model)}
-          tooltipLabel={modelTooltip}
-          disabled={isWorking || pendingId !== null}
-          disabledReason={modelReason}
-          dispatched={model.valueSource === 'dispatched'}
-        />
-        <DropdownMenuContent align="start" className="w-64">
-          {modelReason && !model.settable ? (
-            <DropdownMenuLabel className="font-normal">{modelReason}</DropdownMenuLabel>
-          ) : null}
-          <DescriptorMenuRows
-            descriptor={model}
-            pending={pendingId !== null}
-            setValue={(value) => setOption(model, value)}
-          />
-        </DropdownMenuContent>
-      </DropdownMenu>
       {options.length > 0 ? (
         <DropdownMenu>
           <PickerTrigger
@@ -271,6 +250,25 @@ function NativeChatSessionOptionPickersInner({
           </DropdownMenuContent>
         </DropdownMenu>
       ) : null}
+      <DropdownMenu>
+        <PickerTrigger
+          label={nativeChatModelPillLabel(model)}
+          tooltipLabel={modelTooltip}
+          disabled={isWorking || pendingId !== null}
+          disabledReason={modelReason}
+          dispatched={model.valueSource === 'dispatched'}
+        />
+        <DropdownMenuContent align="start" className="w-64">
+          {modelReason && !model.settable ? (
+            <DropdownMenuLabel className="font-normal">{modelReason}</DropdownMenuLabel>
+          ) : null}
+          <DescriptorMenuRows
+            descriptor={model}
+            pending={pendingId !== null}
+            setValue={(value) => setOption(model, value)}
+          />
+        </DropdownMenuContent>
+      </DropdownMenu>
     </div>
   )
 }

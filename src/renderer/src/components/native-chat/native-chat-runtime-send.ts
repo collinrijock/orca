@@ -2,7 +2,10 @@
 // as a SEPARATE delayed pty write. Kept apart from the pure byte builders in
 // native-chat-send.ts so those stay IO-free and unit-testable without aliases.
 
-import { sendRuntimePtyInput } from '@/runtime/runtime-terminal-inspection'
+import {
+  sendRuntimePtyInput,
+  sendRuntimePtyInputVerified
+} from '@/runtime/runtime-terminal-inspection'
 import type { getSettingsForAgentTabRuntimeOwner } from '@/lib/agent-paste-draft'
 import type { AskAnswerKeyGroup } from './native-chat-interactive-prompt'
 import {
@@ -45,6 +48,46 @@ export function sendNativeChatMessage(
     sendRuntimePtyInput(settings, ptyId, NATIVE_CHAT_SUBMIT)
   }, NATIVE_CHAT_SUBMIT_DELAY_MS)
   return { cancel: () => clearTimeout(timer), settleAfterMs: NATIVE_CHAT_SUBMIT_DELAY_MS }
+}
+
+function waitForNativeChatSubmit(signal?: AbortSignal): Promise<boolean> {
+  if (signal?.aborted) {
+    return Promise.resolve(false)
+  }
+  return new Promise((resolve) => {
+    let timer: ReturnType<typeof setTimeout> | null = null
+    const finish = (completed: boolean): void => {
+      if (timer === null) {
+        return
+      }
+      clearTimeout(timer)
+      timer = null
+      signal?.removeEventListener('abort', onAbort)
+      resolve(completed)
+    }
+    const onAbort = (): void => finish(false)
+    timer = setTimeout(() => finish(true), NATIVE_CHAT_SUBMIT_DELAY_MS)
+    signal?.addEventListener('abort', onAbort, { once: true })
+  })
+}
+
+export async function sendNativeChatMessageVerified(
+  settings: ReturnType<typeof getSettingsForAgentTabRuntimeOwner>,
+  ptyId: string,
+  text: string,
+  signal?: AbortSignal
+): Promise<boolean> {
+  // Why: option commands await remote/SSH acceptance so the Enter cannot race
+  // ahead of the body while a model-change observer is already armed.
+  const bodyAccepted = await sendRuntimePtyInputVerified(
+    settings,
+    ptyId,
+    buildNativeChatPasteBytes(text)
+  )
+  if (!bodyAccepted || signal?.aborted || !(await waitForNativeChatSubmit(signal))) {
+    return false
+  }
+  return sendRuntimePtyInputVerified(settings, ptyId, NATIVE_CHAT_SUBMIT)
 }
 
 export function sendNativeChatMessageWithImageAttachments(

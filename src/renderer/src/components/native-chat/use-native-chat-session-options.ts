@@ -7,6 +7,7 @@ import {
   createNativeChatPtySessionOptions,
   type NativeChatPtySessionOptionsSurface
 } from './native-chat-pty-session-options'
+import type { NativeChatSessionOptionDispatchCommand } from './native-chat-session-option-command-dispatch'
 import {
   ensureNativeChatModelEnrichment,
   readNativeChatEnrichedModels,
@@ -25,7 +26,7 @@ export function useNativeChatSessionOptions(args: {
   agent: AgentType
   terminalTabId: string
   targetPtyId: string | null
-  dispatchCommand: (command: string) => Promise<void> | void
+  dispatchCommand: NativeChatSessionOptionDispatchCommand
   onAgentPicker?: () => void
 }): {
   surface: NativeChatPtySessionOptionsSurface | null
@@ -42,7 +43,6 @@ export function useNativeChatSessionOptions(args: {
       return null
     }
     const scopeKey = args.targetPtyId ?? args.terminalTabId
-    let persisted = useAppStore.getState().settings?.nativeChatSessionOptions
     let settingsWrite = Promise.resolve()
     return createNativeChatPtySessionOptions({
       agent: args.agent,
@@ -58,21 +58,25 @@ export function useNativeChatSessionOptions(args: {
       dispatchCommand: args.dispatchCommand,
       onAgentPicker: args.onAgentPicker,
       persistSelection: async ({ modelId, optionId, value }) => {
-        persisted = updateNativeChatSessionOptionDefaults({
-          persisted,
-          agent: args.agent,
-          modelId,
-          optionId,
-          value
-        })
-        const nextPersisted = persisted
-        // Why: rapid consecutive picks must reach electron-store in selection
-        // order or a slower older write can erase the newer model-scoped value.
+        // Why: read the live persisted defaults at write time (after any prior
+        // write in this chain settles) and merge only this selection onto them,
+        // rather than a baseline captured once at surface creation. A frozen
+        // baseline would let a second same-agent pane's write be clobbered,
+        // since updateSettings shallow-merges nativeChatSessionOptions. Chaining
+        // still keeps rapid consecutive picks in selection order.
         settingsWrite = settingsWrite
           .catch(() => undefined)
-          .then(() =>
-            useAppStore.getState().updateSettings({ nativeChatSessionOptions: nextPersisted })
-          )
+          .then(() => {
+            const base = useAppStore.getState().settings?.nativeChatSessionOptions
+            const next = updateNativeChatSessionOptionDefaults({
+              persisted: base,
+              agent: args.agent,
+              modelId,
+              optionId,
+              value
+            })
+            return useAppStore.getState().updateSettings({ nativeChatSessionOptions: next })
+          })
         await settingsWrite
       }
     })

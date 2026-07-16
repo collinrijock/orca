@@ -1,5 +1,6 @@
 import type {
   SessionOptionDescriptor,
+  SessionOptionDisabledReason,
   SessionOptionSelectChoice
 } from '../../../../shared/native-chat-session-options'
 import { translate } from '@/i18n/i18n'
@@ -38,37 +39,61 @@ export function nativeChatSessionChoiceLabel(choice: SessionOptionSelectChoice):
   }
 }
 
-export function nativeChatSessionOptionDisabledReason(reason: string | undefined): string | null {
-  if (reason === 'Set when the session starts.') {
-    return translate(
-      'components.native-chat.composer.setWhenSessionStarts',
-      'Set when the session starts.'
-    )
+export function nativeChatSessionOptionDisabledReason(
+  reason: SessionOptionDisabledReason | undefined
+): string | null {
+  // Exhaustive over SessionOptionDisabledReason: a new key is a compile error
+  // here, so the localized label can never silently drift from the producer.
+  switch (reason) {
+    case 'set-when-session-starts':
+      return translate(
+        'components.native-chat.composer.setWhenSessionStarts',
+        'Set when the session starts.'
+      )
+    case 'available-after-session-start':
+      return translate(
+        'components.native-chat.composer.availableAfterSessionStarts',
+        'Available after the session starts.'
+      )
+    default:
+      return null
   }
-  if (reason === 'Available after the session starts.') {
-    return translate(
-      'components.native-chat.composer.availableAfterSessionStarts',
-      'Available after the session starts.'
-    )
-  }
-  return reason ?? null
 }
 
 export function nativeChatModelPillLabel(descriptor: SessionOptionDescriptor): string {
-  if (descriptor.valueSource === 'unknown' || descriptor.kind.type !== 'select') {
-    return translate('components.native-chat.composer.model', 'Model')
+  const modelLabel = translate('components.native-chat.composer.model', 'Model')
+  if (
+    descriptor.valueSource === 'unknown' ||
+    descriptor.kind.type !== 'select' ||
+    !descriptor.kind.currentValue
+  ) {
+    return modelLabel
   }
-  return nativeChatSessionChoiceLabel(
+  const valueLabel = nativeChatSessionChoiceLabel(
     descriptor.kind.choices.find((choice) => choice.value === descriptor.kind.currentValue) ?? {
-      value: descriptor.kind.currentValue ?? '',
-      label: descriptor.kind.currentValue ?? ''
+      value: descriptor.kind.currentValue,
+      label: descriptor.kind.currentValue
     }
   )
+  return translate('components.native-chat.composer.modelWithValue', 'Model: {{value0}}', {
+    value0: valueLabel
+  })
+}
+
+export function nativeChatOptionsPillTitle(
+  descriptors: readonly SessionOptionDescriptor[]
+): string {
+  const effort = descriptors.find((descriptor) => descriptor.id === 'effort')
+  // Why: an effort-backed group is primarily the effort picker, even when it also reports modes.
+  return effort
+    ? nativeChatSessionOptionLabel(effort)
+    : translate('components.native-chat.composer.sessionOptions', 'Session options')
 }
 
 export function nativeChatOptionsPillLabel(
   descriptors: readonly SessionOptionDescriptor[]
 ): string {
+  const effort = descriptors.find((descriptor) => descriptor.id === 'effort')
   const labels: string[] = []
   for (const descriptor of descriptors) {
     if (descriptor.valueSource === 'unknown') {
@@ -94,7 +119,17 @@ export function nativeChatOptionsPillLabel(
       )
     }
   }
-  return labels.length > 0
-    ? labels.join(' · ')
-    : translate('components.native-chat.composer.options', 'Options')
+  if (labels.length > 0) {
+    const joinedLabels = labels.join(' · ')
+    if (effort) {
+      return translate('components.native-chat.composer.effortWithValue', 'Effort: {{value0}}', {
+        value0: joinedLabels
+      })
+    }
+    return joinedLabels
+  }
+  if (effort) {
+    return nativeChatSessionOptionLabel(effort)
+  }
+  return translate('components.native-chat.composer.options', 'Options')
 }

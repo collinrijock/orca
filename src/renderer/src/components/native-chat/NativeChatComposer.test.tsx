@@ -11,8 +11,18 @@ const mocks = vi.hoisted(() => ({
     onStop?: () => void
     sessionOptionsSurface?: SessionOptionsSurface | null
   } | null,
+  modelSwitchOutcome: 'applied' as 'applied' | 'rejected' | 'interaction-required' | 'unknown',
+  confirmationObserver: null as {
+    ready: Promise<void>
+    result: Promise<'applied' | 'rejected' | 'interaction-required' | 'unknown'>
+    arm: ReturnType<typeof vi.fn>
+    startDetection: ReturnType<typeof vi.fn>
+    dispose: ReturnType<typeof vi.fn>
+  } | null,
+  createClaudeModelSwitchConfirmationObserver: vi.fn(),
   sendHandle: { cancel: vi.fn(), settleAfterMs: 500 },
   sendNativeChatMessage: vi.fn(),
+  sendNativeChatMessageVerified: vi.fn(),
   trackPendingSend: vi.fn(),
   setDraft: vi.fn()
 }))
@@ -37,15 +47,27 @@ vi.mock('@/lib/agent-paste-draft', () => ({
 }))
 vi.mock('./native-chat-runtime-send', () => ({
   sendNativeChatMessage: (...args: unknown[]) => mocks.sendNativeChatMessage(...args),
+  sendNativeChatMessageVerified: (...args: unknown[]) =>
+    mocks.sendNativeChatMessageVerified(...args),
   sendNativeChatMessageWithImageAttachments: vi.fn(),
   submitNativeChatPrompt: vi.fn()
 }))
-vi.mock('./native-chat-agent-commands', () => ({ getAgentSlashCommands: () => [] }))
-vi.mock('@/lib/native-chat-telemetry', () => ({ emitNativeChatMessageSent: vi.fn() }))
+vi.mock('./claude-model-switch-confirmation', () => ({
+  createClaudeModelSwitchConfirmationObserver: (...args: unknown[]) =>
+    mocks.createClaudeModelSwitchConfirmationObserver(...args)
+}))
+vi.mock('./native-chat-agent-commands', () => ({
+  getAgentSlashCommands: () => []
+}))
+vi.mock('@/lib/native-chat-telemetry', () => ({
+  emitNativeChatMessageSent: vi.fn()
+}))
 vi.mock('./use-native-chat-draft', () => ({
   useNativeChatDraft: () => ({ draft: 'hello', setDraft: mocks.setDraft })
 }))
-vi.mock('./native-chat-draft-cache', () => ({ readNativeChatDraftCache: () => '' }))
+vi.mock('./native-chat-draft-cache', () => ({
+  readNativeChatDraftCache: () => ''
+}))
 vi.mock('./NativeChatComposerField', () => ({
   NativeChatComposerField: (props: { onSend?: () => void; onStop?: () => void }) => {
     mocks.fieldProps = props
@@ -62,7 +84,10 @@ vi.mock('./use-native-chat-composer-attachments', () => ({
   })
 }))
 vi.mock('./use-native-chat-composer-paste', () => ({
-  useNativeChatComposerPaste: () => ({ handlePaste: vi.fn(), pasteFromClipboard: vi.fn() })
+  useNativeChatComposerPaste: () => ({
+    handlePaste: vi.fn(),
+    pasteFromClipboard: vi.fn()
+  })
 }))
 vi.mock('./use-native-chat-external-attachments', () => ({
   useNativeChatExternalAttachments: () => ({
@@ -70,7 +95,9 @@ vi.mock('./use-native-chat-external-attachments', () => ({
     resolveAttachmentOwner: vi.fn()
   })
 }))
-vi.mock('../dictation/dictation-control-events', () => ({ dispatchDictationControl: vi.fn() }))
+vi.mock('../dictation/dictation-control-events', () => ({
+  dispatchDictationControl: vi.fn()
+}))
 vi.mock('./use-native-chat-composer-keydown', () => ({
   useNativeChatComposerKeyDown: () => vi.fn()
 }))
@@ -87,7 +114,21 @@ describe('NativeChatComposer', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mocks.fieldProps = null
+    mocks.modelSwitchOutcome = 'applied'
+    mocks.confirmationObserver = null
+    mocks.createClaudeModelSwitchConfirmationObserver.mockImplementation(() => {
+      const observer = {
+        ready: Promise.resolve(),
+        result: Promise.resolve(mocks.modelSwitchOutcome),
+        arm: vi.fn(),
+        startDetection: vi.fn(),
+        dispose: vi.fn()
+      }
+      mocks.confirmationObserver = observer
+      return observer
+    })
     mocks.sendNativeChatMessage.mockReturnValue(mocks.sendHandle)
+    mocks.sendNativeChatMessageVerified.mockResolvedValue(true)
     mocks.sendHandle.settleAfterMs = 500
     Object.defineProperty(window, 'api', {
       configurable: true,
@@ -135,10 +176,11 @@ describe('NativeChatComposer', () => {
     expect(mocks.trackPendingSend).toHaveBeenCalledWith(mocks.sendHandle, 'pending-1')
   })
 
-  it('dispatches a model pick through the slash path without a user bubble', async () => {
+  it('observes a fresh Claude model choice and stays native on success', async () => {
     mocks.sendHandle.settleAfterMs = 0
     const onSlashCommand = vi.fn()
     const onOptimisticSend = vi.fn()
+    const onSwitchToTerminal = vi.fn()
     render(
       <NativeChatComposer
         terminalTabId="tab-1"
@@ -146,6 +188,7 @@ describe('NativeChatComposer', () => {
         agent="claude"
         onSlashCommand={onSlashCommand}
         onOptimisticSend={onOptimisticSend}
+        onSwitchToTerminal={onSwitchToTerminal}
       />
     )
 
@@ -153,9 +196,85 @@ describe('NativeChatComposer', () => {
       await mocks.fieldProps?.sessionOptionsSurface?.setOption('model', 'opus')
     })
 
-    expect(mocks.sendNativeChatMessage).toHaveBeenCalledWith({}, 'pty-1', '/model opus')
+    expect(mocks.sendNativeChatMessageVerified).toHaveBeenCalledWith(
+      {},
+      'pty-1',
+      '/model opus',
+      expect.any(AbortSignal)
+    )
     expect(onSlashCommand).toHaveBeenCalledWith('/model opus')
     expect(onOptimisticSend).not.toHaveBeenCalled()
+    expect(mocks.createClaudeModelSwitchConfirmationObserver).toHaveBeenCalledWith({
+      ptyId: 'pty-1',
+      settings: {},
+      expectedModelLabel: 'Opus 4.8'
+    })
+    expect(onSwitchToTerminal).not.toHaveBeenCalled()
+  })
+
+  it('keeps a successful Claude model change after a conversation in native chat', async () => {
+    mocks.sendHandle.settleAfterMs = 0
+    const onSwitchToTerminal = vi.fn()
+    render(
+      <NativeChatComposer
+        terminalTabId="tab-1"
+        targetPtyId="pty-1"
+        agent="claude"
+        onSwitchToTerminal={onSwitchToTerminal}
+      />
+    )
+
+    await act(async () => {
+      await mocks.fieldProps?.sessionOptionsSurface?.setOption('model', 'fable')
+    })
+
+    expect(mocks.sendNativeChatMessageVerified).toHaveBeenCalledWith(
+      {},
+      'pty-1',
+      '/model fable',
+      expect.any(AbortSignal)
+    )
+    expect(mocks.createClaudeModelSwitchConfirmationObserver).toHaveBeenCalledWith({
+      ptyId: 'pty-1',
+      settings: {},
+      expectedModelLabel: 'Fable 5'
+    })
+    expect(mocks.confirmationObserver?.arm).toHaveBeenCalledOnce()
+    expect(mocks.confirmationObserver?.arm.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.sendNativeChatMessageVerified.mock.invocationCallOrder[0] ?? Number.POSITIVE_INFINITY
+    )
+    expect(mocks.confirmationObserver?.startDetection).toHaveBeenCalledOnce()
+    expect(mocks.confirmationObserver?.startDetection.mock.invocationCallOrder[0]).toBeGreaterThan(
+      mocks.sendNativeChatMessageVerified.mock.invocationCallOrder[0] ?? Number.NEGATIVE_INFINITY
+    )
+    expect(mocks.confirmationObserver?.dispose).toHaveBeenCalledOnce()
+    expect(onSwitchToTerminal).not.toHaveBeenCalled()
+  })
+
+  it('reveals Claude interaction only when the model switch needs user input', async () => {
+    mocks.sendHandle.settleAfterMs = 0
+    mocks.modelSwitchOutcome = 'interaction-required'
+    const onSwitchToTerminal = vi.fn()
+    render(
+      <NativeChatComposer
+        terminalTabId="tab-1"
+        targetPtyId="pty-1"
+        agent="claude"
+        onSwitchToTerminal={onSwitchToTerminal}
+      />
+    )
+
+    await act(async () => {
+      await mocks.fieldProps?.sessionOptionsSurface?.setOption('model', 'fable')
+    })
+
+    expect(mocks.sendNativeChatMessageVerified).toHaveBeenCalledWith(
+      {},
+      'pty-1',
+      '/model fable',
+      expect.any(AbortSignal)
+    )
+    expect(onSwitchToTerminal).toHaveBeenCalledOnce()
   })
 
   it('waits for the Codex picker command before switching to the terminal', async () => {
@@ -174,7 +293,12 @@ describe('NativeChatComposer', () => {
       await mocks.fieldProps?.sessionOptionsSurface?.setOption('model', '')
     })
 
-    expect(mocks.sendNativeChatMessage).toHaveBeenCalledWith({}, 'pty-1', '/model')
+    expect(mocks.sendNativeChatMessageVerified).toHaveBeenCalledWith(
+      {},
+      'pty-1',
+      '/model',
+      expect.any(AbortSignal)
+    )
     expect(onSwitchToTerminal).toHaveBeenCalledOnce()
   })
 })

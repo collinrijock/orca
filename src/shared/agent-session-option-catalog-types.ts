@@ -5,8 +5,15 @@ import type {
   SessionOptionValue
 } from './native-chat-session-options'
 
+export type CatalogAgentInteractionDetection = 'claude-model-switch-confirmation'
+
 export type CatalogMidSessionApply =
-  | { kind: 'command'; build: (value: SessionOptionValue) => string }
+  | {
+      kind: 'command'
+      build: (value: SessionOptionValue) => string
+      pickerCommand?: string
+      detectAgentInteraction?: CatalogAgentInteractionDetection
+    }
   | { kind: 'toggle-command'; command: string }
   | { kind: 'agent-picker'; command: string }
   | { kind: 'unsupported' }

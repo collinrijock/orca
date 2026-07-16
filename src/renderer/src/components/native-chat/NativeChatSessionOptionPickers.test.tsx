@@ -117,15 +117,36 @@ describe('NativeChatSessionOptionPickers', () => {
         isWorking={false}
       />
     )
-    expect(screen.getByRole('button', { name: 'Model' }).textContent).toContain('Opus 4.8')
-    expect(screen.getByRole('button', { name: 'Session options' }).textContent).toContain(
-      'High · Fast'
+    expect(screen.getByRole('button', { name: 'Model' }).textContent).toContain('Model: Opus 4.8')
+    expect(screen.getByRole('button', { name: 'Effort' }).textContent).toContain(
+      'Effort: High · Fast'
     )
+    expect(
+      screen
+        .getByRole('button', { name: 'Effort' })
+        .compareDocumentPosition(screen.getByRole('button', { name: 'Model' })) &
+        Node.DOCUMENT_POSITION_FOLLOWING
+    ).not.toBe(0)
 
     rerender(
       <NativeChatSessionOptionPickers surface={surface} snapshot={[model()]} isWorking={false} />
     )
-    expect(screen.queryByRole('button', { name: 'Session options' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Effort' })).toBeNull()
+  })
+
+  it('names a lone unknown effort control explicitly', () => {
+    render(
+      <NativeChatSessionOptionPickers
+        surface={surface}
+        snapshot={[
+          model(),
+          { ...effort, kind: { ...effort.kind, currentValue: undefined }, valueSource: 'unknown' }
+        ]}
+        isWorking={false}
+      />
+    )
+
+    expect(screen.getByRole('button', { name: 'Effort' }).textContent).toContain('Effort')
   })
 
   it('disables both picker triggers while the agent is working', () => {
@@ -136,10 +157,39 @@ describe('NativeChatSessionOptionPickers', () => {
       screen.getByRole('button', { name: 'Model' }).parentElement?.getAttribute('data-disabled')
     ).toBe('true')
     expect(
-      screen
-        .getByRole('button', { name: 'Session options' })
-        .parentElement?.getAttribute('data-disabled')
+      screen.getByRole('button', { name: 'Effort' }).parentElement?.getAttribute('data-disabled')
     ).toBe('true')
+  })
+
+  it('does not duplicate titles for unknown values or misname generic controls', () => {
+    const { rerender } = render(
+      <NativeChatSessionOptionPickers
+        surface={surface}
+        snapshot={[
+          model({
+            kind: { type: 'select', choices: [] },
+            valueSource: 'unknown'
+          }),
+          { ...effort, kind: { ...effort.kind, currentValue: undefined }, valueSource: 'unknown' }
+        ]}
+        isWorking={false}
+      />
+    )
+    expect(screen.getByRole('button', { name: 'Model' }).textContent).toContain('Model')
+    expect(screen.getByRole('button', { name: 'Model' }).textContent).not.toContain('Model: Model')
+    expect(screen.getByRole('button', { name: 'Effort' }).textContent).not.toContain(
+      'Effort: Effort'
+    )
+
+    rerender(
+      <NativeChatSessionOptionPickers
+        surface={surface}
+        snapshot={[model(), fast]}
+        isWorking={false}
+      />
+    )
+    expect(screen.getByRole('button', { name: 'Session options' }).textContent).toContain('Fast')
+    expect(screen.queryByRole('button', { name: 'Effort' })).toBeNull()
   })
 
   it('shows the unconfirmed hint for dispatched values', () => {

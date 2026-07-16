@@ -8,6 +8,14 @@ export type SessionOptionSelectChoice = {
 
 export type SessionOptionValueSource = 'applied' | 'dispatched' | 'reported' | 'unknown'
 
+/** Closed set of reasons an option is not settable in the current mode. A key
+ *  (not free English) so the producer and the localized label stay in sync —
+ *  an exhaustive switch turns any drift into a type error instead of leaking
+ *  untranslated text. */
+export type SessionOptionDisabledReason =
+  | 'available-after-session-start'
+  | 'set-when-session-starts'
+
 export type SessionOptionDescriptor = {
   id: string
   label: string
@@ -22,7 +30,7 @@ export type SessionOptionDescriptor = {
     | { type: 'boolean'; currentValue?: boolean }
   valueSource: SessionOptionValueSource
   settable: boolean
-  disabledReason?: string
+  disabledReason?: SessionOptionDisabledReason
   /** Why: picker-only and toggle-only PTY commands cannot be represented as
    * a truthful radio/checkbox state, so the producer exposes an action row. */
   action?: { type: 'agent-picker' | 'toggle-command' }
@@ -30,7 +38,6 @@ export type SessionOptionDescriptor = {
 
 export type SessionOptionSetResult = {
   snapshot: SessionOptionDescriptor[]
-  notice?: string
 }
 
 export type PersistedNativeChatSessionOptions = Partial<
