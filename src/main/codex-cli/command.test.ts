@@ -1,4 +1,4 @@
-import { chmodSync, mkdtempSync, mkdirSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, mkdtempSync, mkdirSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { delimiter, dirname, join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -306,6 +306,39 @@ describe('resolveCliCommands', () => {
     })
 
     expect(resolved.get('codex')).toBe(commandPath)
+  })
+
+  it('matches macOS executable names case-insensitively on case-insensitive volumes', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'orca-cli-commands-'))
+    const pathDir = join(root, 'bin')
+    makeExecutable(join(pathDir, 'CODEX'))
+    // Why: the match is filesystem-driven, so this only asserts anything on a
+    // case-insensitive temp volume (the macOS default).
+    if (!existsSync(join(pathDir, 'codex'))) {
+      return
+    }
+
+    const resolved = await resolveCliCommands(['codex'], {
+      platform: 'darwin',
+      pathEnv: pathDir,
+      homePath: root
+    })
+
+    expect(resolved.get('codex')).toBe(join(pathDir, 'codex'))
+  })
+
+  it('keeps Linux executable matching case-sensitive', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'orca-cli-commands-'))
+    const pathDir = join(root, 'bin')
+    makeExecutable(join(pathDir, 'CODEX'))
+
+    const resolved = await resolveCliCommands(['codex'], {
+      platform: 'linux',
+      pathEnv: pathDir,
+      homePath: root
+    })
+
+    expect(resolved.get('codex')).toBe('codex')
   })
 })
 

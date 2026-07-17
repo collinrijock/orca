@@ -535,7 +535,32 @@ describe('preflight', () => {
 
     await expect(detectInstalledAgents()).resolves.toEqual(['claude'])
     expect(resolveCliCommandsMock).toHaveBeenCalledTimes(1)
-    expect(resolveCliCommandsMock).toHaveBeenCalledWith(expect.arrayContaining(['claude', 'codex']))
+    expect(resolveCliCommandsMock).toHaveBeenCalledWith(
+      expect.arrayContaining(['claude', 'codex']),
+      expect.objectContaining({ pathEnv: expect.any(String) })
+    )
+  })
+
+  it('merges the persisted Windows Path into the resolver PATH', async () => {
+    // Why: CLIs installed while Orca runs update the registry Path, not this
+    // process env; without the merge, Refresh misses them until a relaunch.
+    mergePersistedWindowsPathMock.mockImplementation((env: NodeJS.ProcessEnv) => {
+      env.PATH = ['C:\\fresh-install\\bin', env.PATH ?? ''].join(';')
+    })
+    // Why: detection filters on host-platform path.isAbsolute, so the resolved
+    // path stays posix-style while the merged segment stays Windows-shaped.
+    mockResolvedLocalCommands({ claude: '/fresh-install/bin/claude' })
+
+    await expect(detectInstalledAgents()).resolves.toEqual(['claude'])
+    expect(mergePersistedWindowsPathMock).toHaveBeenCalledTimes(1)
+    expect(resolveCliCommandsMock).toHaveBeenCalledWith(
+      expect.arrayContaining(['claude']),
+      expect.objectContaining({
+        pathEnv: expect.stringContaining('C:\\fresh-install\\bin')
+      })
+    )
+    // Why: detection must not leak the merged Path into the live process env.
+    expect(process.env.PATH ?? '').not.toContain('C:\\fresh-install\\bin')
   })
 
   it('treats an agent as not installed when the bulk resolver throws', async () => {

@@ -96,8 +96,16 @@ async function resolveCommandsInDirectories(
       // resolve by direct candidate probing, like the per-command resolver.
       entries = null
     }
+    // Why: Windows and default macOS volumes match executables
+    // case-insensitively, and the direct stat probing this index replaced
+    // inherited that from the filesystem. On darwin the candidate keeps the
+    // probe's name so the stat below still rejects it on a case-sensitive
+    // volume.
+    const caseInsensitiveLookup = platform === 'win32' || platform === 'darwin'
     const entryByLookupName = entries
-      ? new Map(entries.map((entry) => [platform === 'win32' ? entry.toLowerCase() : entry, entry]))
+      ? new Map(
+          entries.map((entry) => [caseInsensitiveLookup ? entry.toLowerCase() : entry, entry])
+        )
       : null
     for (const [commandName, executableNames] of executableNamesByCommand) {
       if (resolved.has(commandName)) {
@@ -107,12 +115,12 @@ async function resolveCommandsInDirectories(
         let candidate: string
         if (entryByLookupName) {
           const entry = entryByLookupName.get(
-            platform === 'win32' ? executableName.toLowerCase() : executableName
+            caseInsensitiveLookup ? executableName.toLowerCase() : executableName
           )
           if (!entry) {
             continue
           }
-          candidate = join(directory, entry)
+          candidate = join(directory, platform === 'win32' ? entry : executableName)
         } else {
           candidate = join(directory, executableName)
         }
