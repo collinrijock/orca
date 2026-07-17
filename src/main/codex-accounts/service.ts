@@ -313,23 +313,28 @@ export class CodexAccountService {
   // system default is and attribute usage, without ever mutating ~/.codex.
   private resolveSystemDefaultIdentity(): CodexSystemDefaultIdentity {
     const authFilePath = join(homedir(), '.codex', 'auth.json')
-    if (!existsSync(authFilePath)) {
-      // Why: no auth.json means either a signed-out home or an env-key/custom
-      // provider that authenticates via OPENAI_API_KEY instead of a token file.
-      return {
-        hasAuth: false,
-        authKind: this.hasEnvApiKey() ? 'api-key' : 'none',
-        email: null,
-        providerAccountId: null,
-        workspaceLabel: null
-      }
-    }
-
-    let raw: Record<string, unknown>
+    let contents: string
     try {
-      raw = JSON.parse(readFileSync(authFilePath, 'utf-8')) as Record<string, unknown>
+      // Why: a single read avoids an exists/read race and halves filesystem
+      // probes whenever an accounts snapshot resolves this live identity.
+      contents = readFileSync(authFilePath, 'utf-8')
     } catch (error) {
-      console.warn('[codex-accounts] Failed to read system-default Codex identity:', error)
+      const code = (error as NodeJS.ErrnoException | null)?.code
+      if (code === 'ENOENT' || code === 'ENOTDIR') {
+        // Why: no auth.json means either a signed-out home or an env-key/custom
+        // provider that authenticates via OPENAI_API_KEY instead of a token file.
+        return {
+          hasAuth: false,
+          authKind: this.hasEnvApiKey() ? 'api-key' : 'none',
+          email: null,
+          providerAccountId: null,
+          workspaceLabel: null
+        }
+      }
+      console.warn(
+        '[codex-accounts] Failed to read system-default Codex identity',
+        code ?? 'unknown-error'
+      )
       return {
         hasAuth: true,
         authKind: 'none',
@@ -338,6 +343,35 @@ export class CodexAccountService {
         workspaceLabel: null
       }
     }
+
+    let parsed: unknown
+    try {
+      parsed = JSON.parse(contents)
+    } catch {
+      // Why: SyntaxError messages can echo malformed input; never let auth
+      // contents or token fragments reach logs while degrading safely.
+      console.warn('[codex-accounts] System-default Codex auth is not valid JSON')
+      return {
+        hasAuth: true,
+        authKind: 'none',
+        email: null,
+        providerAccountId: null,
+        workspaceLabel: null
+      }
+    }
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      // Why: valid JSON can still have the wrong shape; account listing must
+      // degrade to an unknown identity instead of crashing the settings pane.
+      console.warn('[codex-accounts] System-default Codex auth has an unexpected format')
+      return {
+        hasAuth: true,
+        authKind: 'none',
+        email: null,
+        providerAccountId: null,
+        workspaceLabel: null
+      }
+    }
+    const raw = parsed as Record<string, unknown>
 
     if (typeof raw.OPENAI_API_KEY === 'string' && raw.OPENAI_API_KEY.trim() !== '') {
       // Why: API-key/custom-provider logins carry no OAuth identity or ChatGPT

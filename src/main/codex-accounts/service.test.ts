@@ -1682,6 +1682,48 @@ describe('CodexAccountService config sync', () => {
       })
     })
 
+    it('degrades safely when auth.json contains valid JSON with the wrong shape', async () => {
+      writeFileSync(systemAuthPath(), 'null', 'utf-8')
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      const service = await newService()
+
+      try {
+        const state = withoutEnvApiKey(() => service.listAccounts())
+
+        expect(state.systemDefault).toEqual({
+          hasAuth: true,
+          authKind: 'none',
+          email: null,
+          providerAccountId: null,
+          workspaceLabel: null
+        })
+        expect(warn).toHaveBeenCalledWith(
+          '[codex-accounts] System-default Codex auth has an unexpected format'
+        )
+      } finally {
+        warn.mockRestore()
+      }
+    })
+
+    it('does not log auth contents when auth.json is malformed', async () => {
+      const secret = 'sk-secret-review-never-log'
+      writeFileSync(systemAuthPath(), secret, 'utf-8')
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      const service = await newService()
+
+      try {
+        const state = withoutEnvApiKey(() => service.listAccounts())
+
+        expect(state.systemDefault?.authKind).toBe('none')
+        expect(warn).toHaveBeenCalledWith(
+          '[codex-accounts] System-default Codex auth is not valid JSON'
+        )
+        expect(JSON.stringify(warn.mock.calls)).not.toContain(secret)
+      } finally {
+        warn.mockRestore()
+      }
+    })
+
     it('reports an env OPENAI_API_KEY (no auth.json) as a custom provider', async () => {
       const service = await newService()
       const previous = process.env.OPENAI_API_KEY

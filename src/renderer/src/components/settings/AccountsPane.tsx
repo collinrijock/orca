@@ -409,6 +409,11 @@ export function AccountsPane({
   ).some((account) =>
     providerAccountIsActiveInView(account, claudeAccounts, accountRuntime, accountVisibilityOptions)
   )
+  // Why: the system default's real identity is host-scoped (it reflects the
+  // runtime's own ~/.codex), so only surface it in the host view. Per-distro
+  // WSL falls back to the generic label.
+  const systemCodexIdentity =
+    accountRuntime.runtime === 'host' ? codexAccounts.systemDefault : undefined
   // Why: the auth warning is derived from the desktop's own rate-limit poll;
   // with a remote owner it would misattribute local auth state to the server.
   const activeCodexAuthWarning =
@@ -418,16 +423,12 @@ export function AccountsPane({
           target: codexRateLimitTarget,
           runtime: accountRuntime,
           activeAccountId: activeCodexAccountId,
-          accountId: activeCodexAccountId
+          accountId: activeCodexAccountId,
+          authKind: activeCodexAccountId === null ? systemCodexIdentity?.authKind : undefined
         })
       : null
   const systemCodexNeedsReauthentication =
     activeCodexAccountId === null && Boolean(activeCodexAuthWarning)
-  // Why: the system default's real identity is host-scoped (it reflects the
-  // runtime's own ~/.codex), so only surface it in the host view. Per-distro
-  // WSL falls back to the generic label.
-  const systemCodexIdentity =
-    accountRuntime.runtime === 'host' ? codexAccounts.systemDefault : undefined
   const accountRuntimeUnavailable =
     accountRuntime.runtime === 'wsl' && !wslAvailable && !wslCapabilitiesLoading
 
