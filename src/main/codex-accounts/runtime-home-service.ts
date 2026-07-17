@@ -184,6 +184,10 @@ export class CodexRuntimeHomeService {
       // Returning null tells the PTY/env layer to inject no managed CODEX_HOME;
       // sessions, auth, and config all live in the native home. No system->
       // managed session bridge runs, so the real home stays the single source.
+      // First guarantee any still-synced managed account's refreshed token is
+      // read back to its own home: this early return skips syncForCurrentSelection,
+      // so a launch-time managed->default transition would otherwise lose it.
+      this.readBackOutgoingManagedHostAccountBeforeSystemDefault()
       return null
     }
     this.invalidateBackfillAfterManagedSystemDefaultLaunch(launchEnv)
@@ -296,6 +300,22 @@ export class CodexRuntimeHomeService {
       }
     })
     this.lastSyncedAccountId = null
+  }
+
+  // Why: the real-home / system-default lane leaves the shared runtime home
+  // untouched, so a managed account still recorded as synced (selection nulled
+  // without a syncForCurrentSelection pass, or auto-deselect on missing auth)
+  // can strand a Codex-refreshed token there. Run the managed->system-default
+  // transition to read that token back to its canonical per-account home before
+  // the real home takes over. Callers gate this on the system-default selection
+  // (host === null), so syncForCurrentSelection restores only Orca's runtime
+  // mirror from ~/.codex and never writes the real ~/.codex. No-op once the
+  // selection has already been reconciled to the system default.
+  private readBackOutgoingManagedHostAccountBeforeSystemDefault(): void {
+    if (this.lastSyncedAccountId === null) {
+      return
+    }
+    this.syncForCurrentSelection()
   }
 
   private invalidateBackfillAfterManagedSystemDefaultLaunch(launchEnv?: NodeJS.ProcessEnv): void {
@@ -482,6 +502,7 @@ export class CodexRuntimeHomeService {
       // CODEX_HOME before ~/.codex. Nested Orca launches can inherit the
       // managed home, restarting the background OAuth conflict (#5370), so
       // pin this non-interactive lane to the native home explicitly.
+      this.readBackOutgoingManagedHostAccountBeforeSystemDefault()
       return getSystemCodexHomePath()
     }
     this.syncForCurrentSelection()
@@ -595,6 +616,9 @@ export class CodexRuntimeHomeService {
       console.warn(
         '[codex-runtime-home] Active managed account is missing auth.json, restoring system default'
       )
+      if (this.lastSyncedAccountId === activeAccount.id) {
+        outgoingReadBackResult = this.recoverRefreshForMissingActiveAccount(activeAccount)
+      }
       this.store.updateSettings({
         activeCodexManagedAccountId: null,
         activeCodexManagedAccountIdsByRuntime: {
@@ -603,7 +627,9 @@ export class CodexRuntimeHomeService {
         }
       })
       if (this.lastSyncedAccountId !== null) {
-        this.restoreSystemDefaultSnapshot({ detectExternalLogin: true })
+        this.restoreSystemDefaultSnapshot({
+          detectExternalLogin: outgoingReadBackResult !== 'rejected'
+        })
         this.lastSyncedAccountId = null
       }
       return
@@ -735,6 +761,32 @@ export class CodexRuntimeHomeService {
       ...options,
       expectedAccountId: account.id
     })
+  }
+
+  private recoverRefreshForMissingActiveAccount(account: CodexManagedAccount): CodexReadBackResult {
+    try {
+      const runtimeAuthPath = this.getRuntimeAuthPath()
+      if (!existsSync(runtimeAuthPath) || this.lastWrittenAuthJson === null) {
+        return 'rejected'
+      }
+      const runtimeContents = readFileSync(runtimeAuthPath, 'utf-8')
+      if (runtimeContents === this.lastWrittenAuthJson) {
+        return 'unchanged'
+      }
+      // Why: the canonical file is gone, so the exact in-memory bytes Orca
+      // previously mirrored are the only safe identity baseline for recovery.
+      if (!this.runtimeAuthMatchesAccount(runtimeContents, account, this.lastWrittenAuthJson)) {
+        return 'rejected'
+      }
+      writeFileAtomically(join(account.managedHomePath, 'auth.json'), runtimeContents, {
+        mode: 0o600
+      })
+      this.lastWrittenAuthJson = runtimeContents
+      return 'persisted'
+    } catch (error) {
+      console.warn('[codex-runtime-home] Failed to recover missing managed auth:', error)
+      return 'rejected'
+    }
   }
 
   private safeSyncForCurrentSelection(): void {
