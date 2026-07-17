@@ -10,7 +10,7 @@ const RepoSelector = z.object({
 const WorkItemsList = RepoSelector.extend({
   limit: OptionalFiniteNumber,
   query: OptionalString,
-  before: OptionalString,
+  page: z.number().int().positive().optional(),
   noCache: z.boolean().optional()
 })
 
@@ -53,7 +53,8 @@ const PrForBranch = RepoSelector.extend({
   branch: requiredString('Missing branch'),
   linkedPRNumber: z.number().int().positive().nullable().optional(),
   fallbackPRNumber: z.number().int().positive().nullable().optional(),
-  acceptMergedFallbackPR: z.boolean().optional()
+  acceptMergedFallbackPR: z.boolean().optional(),
+  currentHeadOid: z.string().nullable().optional()
 })
 
 const Issue = RepoSelector.extend({
@@ -305,7 +306,7 @@ export const GITHUB_METHODS: RpcMethod[] = [
         params.repo,
         params.limit,
         params.query,
-        params.before,
+        params.page,
         params.noCache
       )
   }),
@@ -361,7 +362,8 @@ export const GITHUB_METHODS: RpcMethod[] = [
         params.branch,
         params.linkedPRNumber,
         params.fallbackPRNumber,
-        params.acceptMergedFallbackPR
+        params.acceptMergedFallbackPR,
+        params.currentHeadOid
       )
   }),
   defineMethod({

@@ -8,10 +8,18 @@ import {
   HOST_SIDEBAR_MIN_WIDTH,
   clampHostDockWidth,
   clampHostSidebarWidth,
+  loadNativeChatTabIds,
+  loadDisabledTerminalLiveInputHandles,
   loadHostSidebarWidth,
+  loadPushNotificationsEnabled,
   loadTerminalAutocompleteEnabled,
   loadTerminalLinkOpenMode,
+  readPushNotificationsPreference,
+  readDisabledTerminalLiveInputHandlesPreference,
+  saveDisabledTerminalLiveInputHandles,
   saveHostSidebarWidth,
+  saveNativeChatTabIds,
+  savePushNotificationsEnabled,
   saveTerminalAutocompleteEnabled,
   saveTerminalLinkOpenMode
 } from './preferences'
@@ -22,6 +30,71 @@ vi.mock('@react-native-async-storage/async-storage', () => ({
     setItem: vi.fn()
   }
 }))
+
+describe('native chat tab preference', () => {
+  beforeEach(() => {
+    vi.mocked(AsyncStorage.getItem).mockReset()
+    vi.mocked(AsyncStorage.setItem).mockReset()
+  })
+
+  it('loads and saves tab ids under a host-and-worktree scoped key', async () => {
+    vi.mocked(AsyncStorage.getItem).mockResolvedValue(JSON.stringify(['tab-1', 42, 'tab-2']))
+
+    await expect(loadNativeChatTabIds('host/one', 'folder:C:\\repo')).resolves.toEqual([
+      'tab-1',
+      'tab-2'
+    ])
+    expect(AsyncStorage.getItem).toHaveBeenCalledWith(
+      'orca:nativeChatTabs:host%2Fone:folder%3AC%3A%5Crepo'
+    )
+
+    await saveNativeChatTabIds('host/one', 'folder:C:\\repo', ['tab-2'])
+    expect(AsyncStorage.setItem).toHaveBeenCalledWith(
+      'orca:nativeChatTabs:host%2Fone:folder%3AC%3A%5Crepo',
+      JSON.stringify(['tab-2'])
+    )
+  })
+})
+
+describe('push notification preference', () => {
+  beforeEach(() => {
+    vi.mocked(AsyncStorage.getItem).mockReset()
+    vi.mocked(AsyncStorage.setItem).mockReset()
+  })
+
+  it('distinguishes an unset preference from an explicit disabled choice', async () => {
+    vi.mocked(AsyncStorage.getItem).mockResolvedValue(null)
+    await expect(readPushNotificationsPreference()).resolves.toEqual({
+      value: null,
+      loaded: true
+    })
+    await expect(loadPushNotificationsEnabled()).resolves.toBe(false)
+
+    vi.mocked(AsyncStorage.getItem).mockResolvedValue('false')
+    await expect(readPushNotificationsPreference()).resolves.toEqual({
+      value: false,
+      loaded: true
+    })
+  })
+
+  it('reports storage failures without enabling notifications', async () => {
+    vi.mocked(AsyncStorage.getItem).mockRejectedValue(new Error('storage unavailable'))
+
+    await expect(readPushNotificationsPreference()).resolves.toEqual({
+      value: null,
+      loaded: false
+    })
+    await expect(loadPushNotificationsEnabled()).resolves.toBe(false)
+  })
+
+  it('persists the onboarding decision in the existing mobile toggle', async () => {
+    await savePushNotificationsEnabled(true)
+    expect(AsyncStorage.setItem).toHaveBeenCalledWith('orca:pushNotificationsEnabled', 'true')
+
+    await savePushNotificationsEnabled(false)
+    expect(AsyncStorage.setItem).toHaveBeenCalledWith('orca:pushNotificationsEnabled', 'false')
+  })
+})
 
 describe('terminal autocomplete preference', () => {
   beforeEach(() => {
@@ -60,6 +133,62 @@ describe('terminal autocomplete preference', () => {
     await saveTerminalAutocompleteEnabled(false)
 
     expect(AsyncStorage.setItem).toHaveBeenCalledWith('orca:terminalAutocompleteEnabled', 'false')
+  })
+})
+
+describe('terminal live input disabled handles preference', () => {
+  beforeEach(() => {
+    vi.mocked(AsyncStorage.getItem).mockReset()
+    vi.mocked(AsyncStorage.setItem).mockReset()
+  })
+
+  it('defaults to no disabled handles when unset', async () => {
+    vi.mocked(AsyncStorage.getItem).mockResolvedValue(null)
+
+    await expect(loadDisabledTerminalLiveInputHandles('host-1', 'worktree-1')).resolves.toEqual(
+      new Set()
+    )
+    await expect(
+      readDisabledTerminalLiveInputHandlesPreference('host-1', 'worktree-1')
+    ).resolves.toEqual({ handles: new Set(), loaded: true })
+  })
+
+  it('loads only string terminal handles from storage', async () => {
+    vi.mocked(AsyncStorage.getItem).mockResolvedValue(JSON.stringify(['pty-1', 42, 'pty-2']))
+
+    await expect(loadDisabledTerminalLiveInputHandles('host-1', 'worktree-1')).resolves.toEqual(
+      new Set(['pty-1', 'pty-2'])
+    )
+  })
+
+  it('falls back to no disabled handles for invalid or unreadable storage', async () => {
+    vi.mocked(AsyncStorage.getItem).mockResolvedValue('not-json')
+
+    await expect(loadDisabledTerminalLiveInputHandles('host-1', 'worktree-1')).resolves.toEqual(
+      new Set()
+    )
+
+    vi.mocked(AsyncStorage.getItem).mockRejectedValue(new Error('storage unavailable'))
+
+    await expect(loadDisabledTerminalLiveInputHandles('host-1', 'worktree-1')).resolves.toEqual(
+      new Set()
+    )
+    await expect(
+      readDisabledTerminalLiveInputHandlesPreference('host-1', 'worktree-1')
+    ).resolves.toEqual({ handles: new Set(), loaded: false })
+  })
+
+  it('persists disabled handles per host and worktree', async () => {
+    await saveDisabledTerminalLiveInputHandles(
+      'host/one',
+      'folder:C:\\repo',
+      new Set(['pty-2', 'pty-1'])
+    )
+
+    expect(AsyncStorage.setItem).toHaveBeenCalledWith(
+      'orca:terminalLiveInputDisabled:host%2Fone:folder%3AC%3A%5Crepo',
+      JSON.stringify(['pty-2', 'pty-1'])
+    )
   })
 })
 

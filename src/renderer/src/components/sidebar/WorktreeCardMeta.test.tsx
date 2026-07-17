@@ -78,6 +78,39 @@ describe('WorktreeCardDetailsHover', () => {
     expect(markup.indexOf('feature/local-branch')).toBeLessThan(markup.indexOf('PR #456'))
   })
 
+  it('keeps the hover title unruled and inline editable while section bodies stay inset', () => {
+    const markup = renderToStaticMarkup(
+      <WorktreeCardDetailsHover
+        branchName="feature/local-branch"
+        workspaceTitle="Fix stale GH PR"
+        issue={{
+          number: 5518,
+          title: 'Agent monitor lists ephemeral headless subprocesses',
+          state: 'open',
+          url: 'https://github.com/acme/orca/issues/5518',
+          labels: []
+        }}
+        linearIssue={null}
+        review={null}
+        comment={null}
+        onRenameWorkspaceTitle={vi.fn()}
+        onEditIssue={vi.fn()}
+        onEditComment={vi.fn()}
+      >
+        <span>Fix stale GH PR</span>
+      </WorktreeCardDetailsHover>
+    )
+    const identityHeaderTag =
+      markup.match(/<div[^>]*data-worktree-hover-identity-header=""[^>]*>/)?.[0] ?? ''
+
+    expect(identityHeaderTag).not.toContain('border-l')
+    expect(identityHeaderTag).not.toContain('pl-2')
+    expect(markup).toContain('data-worktree-title-inline-rename=""')
+    expect(markup).toContain('cursor-text text-[13px] font-semibold')
+    expect(markup).toContain('Fix stale GH PR')
+    expect(markup).toContain('border-l border-border/70 pl-3')
+  })
+
   it('puts unlink behind the first PR actions menu and keeps GitHub last', () => {
     const markup = renderToStaticMarkup(
       <WorktreeCardDetailsHover
@@ -109,13 +142,15 @@ describe('WorktreeCardDetailsHover', () => {
 
     expect(moreActionsIndex).toBeGreaterThan(-1)
     expect(markup).toContain('More PR actions')
+    expect(markup).toContain('Copy link')
     expect(markup).toContain('Unlink PR')
     expect(moreActionsIndex).toBeLessThan(openInOrcaIndex)
     expect(openInOrcaIndex).toBeLessThan(viewOnGitHubIndex)
     expect(markup).not.toContain('aria-label="Unlink PR"')
+    expect(markup.indexOf('Copy link')).toBeLessThan(markup.indexOf('Unlink PR'))
   })
 
-  it('puts issue edit before open actions and keeps GitHub last', () => {
+  it('puts issue copy menu before edit and open actions and keeps GitHub last', () => {
     const markup = renderToStaticMarkup(
       <WorktreeCardDetailsHover
         issue={{
@@ -136,11 +171,17 @@ describe('WorktreeCardDetailsHover', () => {
       </WorktreeCardDetailsHover>
     )
 
+    const moreActionsIndex = markup.indexOf('aria-label="More issue actions"')
+    const copyLinkIndex = markup.indexOf('Copy link')
     const editIssueIndex = markup.indexOf('aria-label="Edit issue"')
     const openInOrcaIndex = markup.indexOf('aria-label="Open in Orca"')
     const viewOnGitHubIndex = markup.indexOf('aria-label="View on GitHub"')
 
+    expect(moreActionsIndex).toBeGreaterThan(-1)
+    expect(copyLinkIndex).toBeGreaterThan(-1)
     expect(editIssueIndex).toBeGreaterThan(-1)
+    expect(moreActionsIndex).toBeLessThan(editIssueIndex)
+    expect(copyLinkIndex).toBeLessThan(editIssueIndex)
     expect(editIssueIndex).toBeLessThan(openInOrcaIndex)
     expect(openInOrcaIndex).toBeLessThan(viewOnGitHubIndex)
   })

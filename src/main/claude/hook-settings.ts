@@ -1,10 +1,12 @@
-import { homedir } from 'os'
-import { join } from 'path'
+import { homedir } from 'node:os'
+import { join } from 'node:path'
 import {
+  buildManagedCommandHook,
   createManagedCommandMatcher,
   getSharedManagedScriptPath,
   removeManagedCommands,
   wrapPosixHookCommand,
+  wrapWindowsGitBashHookCommand,
   type HookDefinition,
   type HooksConfig
 } from '../agent-hooks/installer-utils'
@@ -30,6 +32,14 @@ export const CLAUDE_EVENTS = [
   // Why: OpenClaude skips normal Stop hooks after API/model errors and emits
   // StopFailure instead; without this hook Orca leaves the turn spinning.
   { eventName: 'StopFailure', definition: { hooks: [{ type: 'command', command: '' }] } },
+  // Why: subagent/teammate lifecycle feeds the sidebar's child rows and keeps
+  // a pane 'working' while background children outlive the lead's turn.
+  // TeammateIdle retires the working-only row when SubagentStop is lost;
+  // idle teammates still report status "running" in Stop's background_tasks.
+  // Older Claude builds ignore unregistered event names (StopFailure precedent).
+  { eventName: 'SubagentStart', definition: { hooks: [{ type: 'command', command: '' }] } },
+  { eventName: 'SubagentStop', definition: { hooks: [{ type: 'command', command: '' }] } },
+  { eventName: 'TeammateIdle', definition: { hooks: [{ type: 'command', command: '' }] } },
   // Why: PreToolUse gives the dashboard a live readout of the in-flight tool
   // (name + input preview) before it completes.
   {
@@ -73,12 +83,9 @@ export function getRemoteConfigPath(remoteHome: string, settings = CLAUDE_HOOK_S
 }
 
 export function getManagedCommand(scriptPath: string): string {
-  if (process.platform === 'win32') {
-    // Why: Claude Code runs hooks through Git Bash on Windows; forward slashes
-    // survive that shell layer while native Windows APIs still accept them.
-    return scriptPath.replaceAll('\\', '/')
-  }
-  return wrapPosixHookCommand(scriptPath)
+  return process.platform === 'win32'
+    ? wrapWindowsGitBashHookCommand(scriptPath)
+    : wrapPosixHookCommand(scriptPath)
 }
 
 export function getRemoteManagedCommand(scriptPath: string): string {
@@ -98,7 +105,7 @@ export function applyManagedHooks(
     const cleaned = removeManagedCommands(current, isManagedCommand)
     const definition: HookDefinition = {
       ...event.definition,
-      hooks: [{ type: 'command', command }]
+      hooks: [buildManagedCommandHook(command)]
     }
     nextHooks[event.eventName] = [...cleaned, definition]
   }

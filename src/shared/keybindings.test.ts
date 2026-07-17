@@ -21,6 +21,7 @@ import {
   normalizeKeybindingListForAction,
   normalizeKeybindingList
 } from './keybindings'
+import type { KeybindingActionId, KeybindingPlatform } from './keybindings'
 import { ALL_TUI_AGENTS } from './tui-agent-display-names'
 
 describe('keybindings', () => {
@@ -139,6 +140,24 @@ describe('keybindings', () => {
     })
   })
 
+  it('binds F7 / Shift+F7 for diff-change navigation and matches their events', () => {
+    // Opt-in actions accept bare / Shift-only function keys...
+    expect(normalizeKeybindingListForAction('editor.nextChange', 'F7')).toEqual(['F7'])
+    expect(normalizeKeybindingListForAction('editor.previousChange', 'Shift+F7')).toEqual([
+      'Shift+F7'
+    ])
+    // ...but they stay unsafe for actions that do not opt in.
+    expect(normalizeKeybinding('F7')).toMatchObject({ ok: false })
+    expect(normalizeKeybinding('Shift+F7')).toMatchObject({ ok: false })
+
+    const f7 = { key: 'F7', code: 'F7', control: false, meta: false, alt: false, shift: false }
+    const shiftF7 = { ...f7, shift: true }
+    expect(keybindingMatchesAction('editor.nextChange', f7, 'darwin')).toBe(true)
+    expect(keybindingMatchesAction('editor.nextChange', shiftF7, 'darwin')).toBe(false)
+    expect(keybindingMatchesAction('editor.previousChange', shiftF7, 'darwin')).toBe(true)
+    expect(keybindingMatchesAction('editor.previousChange', f7, 'darwin')).toBe(false)
+  })
+
   it('formats keybindings with platform labels', () => {
     expect(formatKeybindingList(['Mod+Shift+J'], 'darwin')).toBe('⌘⇧J')
     expect(formatKeybindingList(['Mod+Shift+J'], 'linux')).toBe('Ctrl+Shift+J')
@@ -178,6 +197,14 @@ describe('keybindings', () => {
     expect(formatKeybindingList(['Mod+Shift+O'], 'darwin')).toBe('⌘⇧O')
   })
 
+  it('defines platform-native replace-in-editor shortcuts', () => {
+    expect(getEffectiveKeybindingsForAction('editor.replace', 'darwin')).toEqual(['Mod+Alt+F'])
+    expect(getEffectiveKeybindingsForAction('editor.replace', 'linux')).toEqual(['Mod+H'])
+    expect(getEffectiveKeybindingsForAction('editor.replace', 'win32')).toEqual(['Mod+H'])
+    expect(formatKeybindingList(['Mod+Alt+F'], 'darwin')).toBe('⌘⌥F')
+    expect(formatKeybindingList(['Mod+H'], 'linux')).toBe('Ctrl+H')
+  })
+
   it('uses overrides as the complete effective binding list for an action', () => {
     const overrides = {
       'worktree.quickOpen': ['Ctrl+Alt+O', 'not-a-shortcut']
@@ -215,6 +242,108 @@ describe('keybindings', () => {
     })
   })
 
+  it('keeps zoom reset on Mod+0 and focuses worktree list on a distinct chord', () => {
+    // Why: both actions previously defaulted to Mod+0, so main-process zoom
+    // reset always won and Focus worktree list was unreachable (#8584).
+    for (const platform of ['darwin', 'linux', 'win32'] as const) {
+      expect(getEffectiveKeybindingsForAction('zoom.reset', platform)).toEqual(['Mod+0'])
+      expect(getEffectiveKeybindingsForAction('sidebar.focusWorktreeList', platform)).toEqual([
+        'Mod+Shift+0'
+      ])
+    }
+
+    const zoomResetInput = {
+      key: '0',
+      code: 'Digit0',
+      meta: true,
+      control: false,
+      alt: false,
+      shift: false
+    }
+    const focusListInput = { ...zoomResetInput, shift: true }
+
+    expect(keybindingMatchesAction('zoom.reset', zoomResetInput, 'darwin')).toBe(true)
+    expect(keybindingMatchesAction('sidebar.focusWorktreeList', zoomResetInput, 'darwin')).toBe(
+      false
+    )
+    expect(keybindingMatchesAction('sidebar.focusWorktreeList', focusListInput, 'darwin')).toBe(
+      true
+    )
+    expect(keybindingMatchesAction('zoom.reset', focusListInput, 'darwin')).toBe(false)
+
+    expect(
+      findKeybindingConflicts('darwin', { 'sidebar.focusWorktreeList': ['Mod+0'] })
+    ).toContainEqual({
+      binding: 'Mod+0',
+      actionIds: expect.arrayContaining(['zoom.reset', 'sidebar.focusWorktreeList'])
+    })
+  })
+
+  it('reports quick-command menu conflicts with global shortcuts and digit ranges', () => {
+    expect(
+      findKeybindingConflicts('darwin', {
+        'tab.openQuickCommandsMenu': ['Mod+P']
+      })
+    ).toContainEqual({
+      binding: 'Mod+P',
+      actionIds: expect.arrayContaining(['worktree.quickOpen', 'tab.openQuickCommandsMenu'])
+    })
+
+    expect(
+      findKeybindingConflicts('darwin', {
+        'tab.openQuickCommandsMenu': ['Cmd+P']
+      })
+    ).toContainEqual({
+      binding: 'Mod+P',
+      actionIds: expect.arrayContaining(['worktree.quickOpen', 'tab.openQuickCommandsMenu'])
+    })
+
+    expect(
+      findKeybindingConflicts('linux', {
+        'tab.openQuickCommandsMenu': ['Ctrl+P']
+      })
+    ).toContainEqual({
+      binding: 'Mod+P',
+      actionIds: expect.arrayContaining(['worktree.quickOpen', 'tab.openQuickCommandsMenu'])
+    })
+
+    expect(
+      findKeybindingConflicts('darwin', {
+        'tab.openQuickCommandsMenu': ['Mod+3']
+      })
+    ).toContainEqual({
+      binding: 'Mod+3',
+      actionIds: expect.arrayContaining(['workspace.selectByIndex', 'tab.openQuickCommandsMenu'])
+    })
+
+    expect(
+      findKeybindingConflicts('darwin', {
+        'tab.openQuickCommandsMenu': ['Cmd+3']
+      })
+    ).toContainEqual({
+      binding: 'Cmd+3',
+      actionIds: expect.arrayContaining(['workspace.selectByIndex', 'tab.openQuickCommandsMenu'])
+    })
+
+    expect(
+      findKeybindingConflicts('linux', {
+        'tab.openQuickCommandsMenu': ['Ctrl+3']
+      })
+    ).toContainEqual({
+      binding: 'Ctrl+3',
+      actionIds: expect.arrayContaining(['workspace.selectByIndex', 'tab.openQuickCommandsMenu'])
+    })
+
+    expect(
+      findKeybindingConflicts('linux', {
+        'tab.openQuickCommandsMenu': ['Alt+4']
+      })
+    ).toContainEqual({
+      binding: 'Alt+4',
+      actionIds: expect.arrayContaining(['tab.selectByIndex', 'tab.openQuickCommandsMenu'])
+    })
+  })
+
   it('defines macOS-only rename shortcuts that stay conflict-free', () => {
     expect(getEffectiveKeybindingsForAction('tab.rename', 'darwin')).toEqual(['Mod+R'])
     expect(getEffectiveKeybindingsForAction('tab.rename', 'linux')).toEqual([])
@@ -222,6 +351,7 @@ describe('keybindings', () => {
     expect(getEffectiveKeybindingsForAction('workspace.rename', 'darwin')).toEqual(['Mod+Alt+R'])
     expect(getEffectiveKeybindingsForAction('workspace.rename', 'linux')).toEqual([])
     expect(formatKeybindingList(['Mod+Alt+R'], 'darwin')).toBe('⌘⌥R')
+    expect(getKeybindingDefinition('tab.rename')?.searchKeywords).not.toContain('set title')
     expect(
       keybindingMatchesAction(
         'tab.rename',
@@ -248,6 +378,22 @@ describe('keybindings', () => {
           shift: false
         },
         'linux'
+      )
+    ).toBe(false)
+    expect(
+      keybindingMatchesAction(
+        'tab.rename',
+        {
+          key: 'r',
+          code: 'KeyR',
+          meta: true,
+          control: false,
+          alt: false,
+          shift: false
+        },
+        'darwin',
+        undefined,
+        { context: 'terminal', terminalShortcutPolicy: 'terminal-first' }
       )
     ).toBe(false)
 
@@ -395,6 +541,35 @@ describe('keybindings', () => {
     ).toBe(true)
   })
 
+  it('names terminal title shortcuts after pane menu actions', () => {
+    const setTitle = getKeybindingDefinition('terminal.setTitle')
+    const clearTitle = getKeybindingDefinition('terminal.clearPaneTitle')
+
+    expect(setTitle?.title).toBe('Set Title…')
+    expect(setTitle?.group).toBe('Terminal Panes')
+    expect(setTitle?.scope).toBe('terminal')
+    expect(setTitle?.searchKeywords).toContain('set title')
+    expect(getEffectiveKeybindingsForAction('terminal.setTitle', 'darwin')).toEqual([])
+    expect(getEffectiveKeybindingsForAction('terminal.setTitle', 'linux')).toEqual([])
+    expect(getEffectiveKeybindingsForAction('terminal.setTitle', 'win32')).toEqual([])
+
+    expect(clearTitle?.title).toBe('Clear Pane Title')
+    expect(clearTitle?.group).toBe('Terminal Panes')
+    expect(clearTitle?.scope).toBe('terminal')
+    expect(clearTitle?.searchKeywords).toContain('remove title')
+    expect(getEffectiveKeybindingsForAction('terminal.clearPaneTitle', 'darwin')).toEqual([])
+    expect(getEffectiveKeybindingsForAction('terminal.clearPaneTitle', 'linux')).toEqual([])
+    expect(getEffectiveKeybindingsForAction('terminal.clearPaneTitle', 'win32')).toEqual([])
+    expect(
+      keybindingMatchesAction(
+        'terminal.clearPaneTitle',
+        { key: 't', code: 'KeyT', control: false, meta: true, alt: true, shift: false },
+        'darwin',
+        { 'terminal.clearPaneTitle': ['Mod+Alt+T'] }
+      )
+    ).toBe(true)
+  })
+
   it('keeps workspace delete unassigned until users customize it', () => {
     const binding = {
       key: 'Backspace',
@@ -439,6 +614,133 @@ describe('keybindings', () => {
     )
   })
 
+  it('keeps the quick commands menu toggle unassigned until users customize it', () => {
+    const platforms: readonly KeybindingPlatform[] = ['darwin', 'linux', 'win32']
+
+    for (const platform of platforms) {
+      expect(getEffectiveKeybindingsForAction('tab.openQuickCommandsMenu', platform)).toEqual([])
+    }
+
+    const binding = {
+      key: 'q',
+      code: 'KeyQ',
+      control: true,
+      meta: false,
+      alt: false,
+      shift: true
+    }
+
+    expect(keybindingMatchesAction('tab.openQuickCommandsMenu', binding, 'linux')).toBe(false)
+    expect(
+      keybindingMatchesAction('tab.openQuickCommandsMenu', binding, 'linux', {
+        'tab.openQuickCommandsMenu': ['Mod+Shift+Q']
+      })
+    ).toBe(true)
+
+    const definition = getKeybindingDefinition('tab.openQuickCommandsMenu')
+    expect(definition?.title).toBe('Toggle Quick Commands menu')
+    expect(definition?.group).toBe('Quick Commands')
+    expect(definition?.scope).toBe('tabs')
+    expect(definition?.searchKeywords).toEqual(
+      expect.arrayContaining(['shortcut', 'quick', 'command', 'menu', 'tab'])
+    )
+  })
+
+  it('keeps the sleeping-workspaces toggle unassigned until users customize it', () => {
+    const binding = {
+      key: 's',
+      code: 'KeyS',
+      control: true,
+      meta: false,
+      alt: true,
+      shift: false
+    }
+
+    // Ships unbound on every platform (issue #5209): assign-it-yourself.
+    expect(getEffectiveKeybindingsForAction('sidebar.sleepingWorkspaces.toggle', 'darwin')).toEqual(
+      []
+    )
+    expect(getEffectiveKeybindingsForAction('sidebar.sleepingWorkspaces.toggle', 'linux')).toEqual(
+      []
+    )
+    expect(getEffectiveKeybindingsForAction('sidebar.sleepingWorkspaces.toggle', 'win32')).toEqual(
+      []
+    )
+    expect(keybindingMatchesAction('sidebar.sleepingWorkspaces.toggle', binding, 'linux')).toBe(
+      false
+    )
+    expect(
+      keybindingMatchesAction('sidebar.sleepingWorkspaces.toggle', binding, 'linux', {
+        'sidebar.sleepingWorkspaces.toggle': ['Mod+Alt+S']
+      })
+    ).toBe(true)
+
+    const definition = getKeybindingDefinition('sidebar.sleepingWorkspaces.toggle')
+    expect(definition?.title).toBe('Toggle Sleeping Workspaces')
+    expect(definition?.searchKeywords).toEqual(
+      expect.arrayContaining(['sleeping', 'workspaces', 'filter'])
+    )
+  })
+
+  it('defines floating workspace panel action metadata', () => {
+    const actionIds = [
+      'floatingWorkspace.maximize' as KeybindingActionId,
+      'floatingWorkspace.minimize' as KeybindingActionId
+    ] as const
+
+    for (const actionId of actionIds) {
+      expect(getKeybindingDefinition(actionId), actionId).toMatchObject({ id: actionId })
+    }
+  })
+
+  it('assigns the floating workspace maximize default only on macOS', () => {
+    const maximizeAction = 'floatingWorkspace.maximize' as KeybindingActionId
+
+    expect(getEffectiveKeybindingsForAction(maximizeAction, 'darwin')).toEqual(['Mod+Alt+Shift+A'])
+    expect(getEffectiveKeybindingsForAction(maximizeAction, 'linux')).toEqual([])
+    expect(getEffectiveKeybindingsForAction(maximizeAction, 'win32')).toEqual([])
+  })
+
+  it('captures and round-trips the macOS Option-composed maximize chord', () => {
+    const maximizeAction = 'floatingWorkspace.maximize' as KeybindingActionId
+
+    // Why: macOS Option+A composes to a glyph (å), so capture must resolve the
+    // chord through the physical-code fallback rather than the composed key,
+    // matching the matcher so a user override round-trips to the same binding.
+    const macComposedMaximize = {
+      key: 'å',
+      code: 'KeyA',
+      meta: true,
+      control: false,
+      alt: true,
+      shift: true
+    }
+    expect(keybindingFromInput(macComposedMaximize, 'darwin')).toEqual({
+      ok: true,
+      value: 'Mod+Alt+Shift+A'
+    })
+    expect(keybindingMatchesAction(maximizeAction, macComposedMaximize, 'darwin')).toBe(true)
+    // The captured override formats back to the same effective shortcut.
+    expect(
+      getEffectiveKeybindingsForAction(maximizeAction, 'darwin', {
+        [maximizeAction]: ['Mod+Alt+Shift+A']
+      })
+    ).toEqual(['Mod+Alt+Shift+A'])
+    expect(formatKeybindingList(['Mod+Alt+Shift+A'], 'darwin')).toBe('⌘⌥⇧A')
+  })
+
+  it('leaves floating workspace minimize unassigned because floating terminal toggle owns show and hide', () => {
+    const platforms: readonly KeybindingPlatform[] = ['darwin', 'linux', 'win32']
+    const minimizeAction = 'floatingWorkspace.minimize' as KeybindingActionId
+
+    for (const platform of platforms) {
+      expect(getEffectiveKeybindingsForAction(minimizeAction, platform)).toEqual([])
+    }
+    expect(getEffectiveKeybindingsForAction('floatingTerminal.toggle', 'darwin')).toEqual([
+      'Mod+Alt+A'
+    ])
+  })
+
   it('defines a macOS-only default for the new agent tab shortcut', () => {
     expect(getEffectiveKeybindingsForAction('tab.newAgent', 'darwin')).toEqual(['Mod+Alt+T'])
     expect(getEffectiveKeybindingsForAction('tab.newAgent', 'linux')).toEqual([])
@@ -447,6 +749,41 @@ describe('keybindings', () => {
       keybindingMatchesAction(
         'tab.newAgent',
         { key: 't', code: 'KeyT', meta: true, control: false, alt: true, shift: false },
+        'darwin'
+      )
+    ).toBe(true)
+  })
+
+  // Why: #8533 — both previously defaulted to Mod+Shift+E on darwin; emulator won.
+  it('keeps explorer on Mod+Shift+E and gives the mobile emulator a non-colliding macOS default', () => {
+    expect(getEffectiveKeybindingsForAction('sidebar.explorer.toggle', 'darwin')).toEqual([
+      'Mod+Shift+E'
+    ])
+    expect(getEffectiveKeybindingsForAction('tab.newSimulator', 'darwin')).toEqual([
+      'Mod+Alt+Shift+E'
+    ])
+    expect(getEffectiveKeybindingsForAction('tab.newSimulator', 'linux')).toEqual([])
+    expect(getEffectiveKeybindingsForAction('tab.newSimulator', 'win32')).toEqual([])
+    expect(formatKeybindingList(['Mod+Alt+Shift+E'], 'darwin')).toBe('⌘⌥⇧E')
+
+    expect(
+      keybindingMatchesAction(
+        'sidebar.explorer.toggle',
+        { key: 'e', code: 'KeyE', meta: true, control: false, alt: false, shift: true },
+        'darwin'
+      )
+    ).toBe(true)
+    expect(
+      keybindingMatchesAction(
+        'tab.newSimulator',
+        { key: 'e', code: 'KeyE', meta: true, control: false, alt: false, shift: true },
+        'darwin'
+      )
+    ).toBe(false)
+    expect(
+      keybindingMatchesAction(
+        'tab.newSimulator',
+        { key: 'e', code: 'KeyE', meta: true, control: false, alt: true, shift: true },
         'darwin'
       )
     ).toBe(true)
@@ -531,6 +868,32 @@ describe('keybindings', () => {
         { context: 'terminal', terminalShortcutPolicy: 'terminal-first' }
       )
     ).toBe(true)
+  })
+
+  it('keeps floating workspace tab shortcuts active in app focus even with terminal-first policy configured', () => {
+    const panelFocus = {
+      context: 'app',
+      terminalShortcutPolicy: 'terminal-first'
+    } as const
+
+    expect(
+      keybindingMatchesAction(
+        'tab.rename',
+        { key: 'r', code: 'KeyR', meta: true, control: false, alt: false, shift: false },
+        'darwin',
+        undefined,
+        panelFocus
+      )
+    ).toBe(true)
+    expect(
+      matchKeybindingDigitIndex(
+        'tab.selectByIndex',
+        { key: '4', code: 'Digit4', meta: false, control: false, alt: true, shift: false },
+        'linux',
+        undefined,
+        panelFocus
+      )
+    ).toBe(3)
   })
 
   it('keeps terminal-allowed app shortcuts active in terminal-first mode', () => {
@@ -693,6 +1056,67 @@ describe('keybindings', () => {
       ok: true,
       value: 'Mod+W'
     })
+  })
+
+  it('matches letter shortcuts on non-Latin layouts via the physical code (issue #6274)', () => {
+    // Cyrillic ЙЦУКЕН: physical C produces the logical key 'с' (Cyrillic es,
+    // U+0441) while code stays 'KeyC'. The produced character is not a Latin
+    // shortcut letter, so the chord must still match through the physical code.
+    const cyrillicCtrlC = {
+      key: 'с',
+      code: 'KeyC',
+      control: true,
+      meta: false,
+      alt: false,
+      shift: false
+    }
+    expect(keybindingMatchesAction('browser.grabElement', cyrillicCtrlC, 'win32')).toBe(true)
+    expect(keybindingMatchesAction('browser.grabElement', cyrillicCtrlC, 'linux')).toBe(true)
+
+    // Ctrl+Shift+C on the same layout (terminal copy) must match too.
+    expect(
+      keybindingMatchesAction('terminal.copySelection', { ...cyrillicCtrlC, shift: true }, 'win32')
+    ).toBe(true)
+
+    // Greek layout: physical P produces 'π' (U+03C0); Ctrl+P must still match.
+    expect(
+      keybindingMatchesAction(
+        'worktree.quickOpen',
+        { key: 'π', code: 'KeyP', control: true, meta: false, alt: false, shift: false },
+        'win32'
+      )
+    ).toBe(true)
+
+    // The fallback must not steal a different physical key: Ctrl+V (physical V,
+    // Cyrillic 'м') is not Ctrl+C, so grabElement must stay unmatched.
+    expect(
+      keybindingMatchesAction(
+        'browser.grabElement',
+        { key: 'м', code: 'KeyV', control: true, meta: false, alt: false, shift: false },
+        'win32'
+      )
+    ).toBe(false)
+  })
+
+  it('does not let non-Latin physical fallback hijack AltGr text input (issue #6274)', () => {
+    // Windows/Linux AltGr arrives as Ctrl+Alt. A composed character typed via
+    // AltGr (e.g. AltGr+C) must remain text input, never an app shortcut.
+    // editor.copyContext is Mod+Alt+C, so the modifier state otherwise matches —
+    // only the AltGr key gating may keep this from firing.
+    expect(
+      keybindingMatchesAction(
+        'editor.copyContext',
+        {
+          key: '¢',
+          code: 'KeyC',
+          control: true,
+          meta: false,
+          alt: true,
+          shift: false
+        },
+        'win32'
+      )
+    ).toBe(false)
   })
 
   it('uses shifted punctuation aliases only while Shift is pressed', () => {

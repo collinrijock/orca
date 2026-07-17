@@ -1,12 +1,23 @@
 import type { DaemonPtyAdapter } from './daemon-pty-adapter'
-import type { IPtyProvider, PtySpawnOptions, PtySpawnResult } from '../providers/types'
+import type {
+  IPtyProvider,
+  PtyBackgroundStreamEvent,
+  PtyProviderBufferSnapshot,
+  PtyProcessInfo,
+  PtySpawnOptions,
+  PtySpawnResult
+} from '../providers/types'
 
 export class DaemonPtyRouter implements IPtyProvider {
   private current: DaemonPtyAdapter
   private legacy: DaemonPtyAdapter[]
   private sessionAdapters = new Map<string, DaemonPtyAdapter>()
   private unsubscribers: (() => void)[] = []
-  private dataListeners: ((payload: { id: string; data: string }) => void)[] = []
+  private dataListeners: ((payload: {
+    id: string
+    data: string
+    sequenceChars?: number
+  }) => void)[] = []
   private exitListeners: ((payload: { id: string; code: number }) => void)[] = []
 
   constructor(opts: { current: DaemonPtyAdapter; legacy: DaemonPtyAdapter[] }) {
@@ -51,6 +62,11 @@ export class DaemonPtyRouter implements IPtyProvider {
     return result
   }
 
+  supportsGitCredentialGuardHost(sessionId?: string): boolean {
+    const adapter = sessionId ? this.adapterFor(sessionId) : this.current
+    return adapter.supportsGitCredentialGuardHost()
+  }
+
   async attach(id: string): Promise<void> {
     await this.adapterFor(id).attach(id)
   }
@@ -69,6 +85,18 @@ export class DaemonPtyRouter implements IPtyProvider {
 
   resize(id: string, cols: number, rows: number): void {
     this.adapterFor(id).resize(id, cols, rows)
+  }
+
+  pauseProducer(id: string): void {
+    this.adapterFor(id).pauseProducer(id)
+  }
+
+  resumeProducer(id: string): void {
+    this.adapterFor(id).resumeProducer(id)
+  }
+
+  setPtyBackgrounded(id: string, background: boolean): void {
+    this.adapterFor(id).setPtyBackgrounded(id, background)
   }
 
   async shutdown(id: string, opts: { immediate?: boolean; keepHistory?: boolean }): Promise<void> {
@@ -96,6 +124,21 @@ export class DaemonPtyRouter implements IPtyProvider {
     return this.adapterFor(id).getInitialCwd(id)
   }
 
+  async getAppliedSize(id: string): Promise<{ cols: number; rows: number } | null> {
+    return (await this.adapterFor(id).getAppliedSize?.(id)) ?? null
+  }
+
+  async getBufferSnapshot(
+    id: string,
+    opts?: { scrollbackRows?: number }
+  ): Promise<PtyProviderBufferSnapshot | null> {
+    return await this.adapterFor(id).getBufferSnapshot(id, opts)
+  }
+
+  canProvideAuthoritativeBufferSnapshot(id: string): boolean {
+    return this.adapterFor(id).canProvideAuthoritativeBufferSnapshot(id)
+  }
+
   async clearBuffer(id: string): Promise<void> {
     await this.adapterFor(id).clearBuffer(id)
   }
@@ -112,6 +155,10 @@ export class DaemonPtyRouter implements IPtyProvider {
     return this.adapterFor(id).getForegroundProcess(id)
   }
 
+  async confirmForegroundProcess(id: string): Promise<string | null> {
+    return this.adapterFor(id).confirmForegroundProcess(id)
+  }
+
   async serialize(ids: string[]): Promise<string> {
     return this.current.serialize(ids)
   }
@@ -120,7 +167,7 @@ export class DaemonPtyRouter implements IPtyProvider {
     await this.current.revive(state)
   }
 
-  async listProcesses(): Promise<{ id: string; cwd: string; title: string }[]> {
+  async listProcesses(): Promise<PtyProcessInfo[]> {
     // Why: runtime exact-stop/liveness flows must fail closed if any adapter
     // cannot provide a trustworthy process list.
     const results = await Promise.all(this.allAdapters().map((adapter) => adapter.listProcesses()))
@@ -135,12 +182,25 @@ export class DaemonPtyRouter implements IPtyProvider {
     return this.current.getProfiles()
   }
 
-  onData(callback: (payload: { id: string; data: string }) => void): () => void {
+  onData(
+    callback: (payload: { id: string; data: string; sequenceChars?: number }) => void
+  ): () => void {
     this.dataListeners.push(callback)
     return () => {
       const idx = this.dataListeners.indexOf(callback)
       if (idx !== -1) {
         this.dataListeners.splice(idx, 1)
+      }
+    }
+  }
+
+  onBackgroundStreamEvent(callback: (payload: PtyBackgroundStreamEvent) => void): () => void {
+    const unsubscribes = this.allAdapters().map((adapter) =>
+      adapter.onBackgroundStreamEvent(callback)
+    )
+    return () => {
+      for (const unsubscribe of unsubscribes) {
+        unsubscribe()
       }
     }
   }

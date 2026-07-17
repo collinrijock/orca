@@ -1,17 +1,15 @@
 import type { AiVaultSession } from '../../shared/ai-vault-types'
 import { parseDevinSessionFile } from './session-scanner-devin-parser'
+import { parseAntigravitySessionFile } from './session-scanner-antigravity-parser'
+import { parseDroidSessionFile } from './session-scanner-droid-parser'
 import { parseGrokSessionFile } from './session-scanner-grok-parser'
-import {
-  parseDroidSessionFile,
-  parseMessageGraphSessionFile,
-  parseRovoSessionFile
-} from './session-scanner-graph-parsers'
+import { parseMessageGraphSessionFile, parseRovoSessionFile } from './session-scanner-graph-parsers'
 import { parseKimiSessionFile } from './session-scanner-kimi-parser'
-import {
-  parseClaudeSessionFile,
-  parseCodexSessionFile,
-  parseGeminiSessionFile
-} from './session-scanner-primary-parsers'
+import { splitOpenCodeSqliteCandidate } from './session-scanner-opencode-sqlite-paths'
+import { parseOpenCodeSqliteSession } from './session-scanner-opencode-sqlite'
+import { parseClaudeSessionFile } from './session-scanner-primary-parsers'
+import { parseGeminiSessionFile } from './session-scanner-gemini-parsers'
+import { parseCodexSessionFile } from './session-scanner-codex-parser'
 import {
   parseCopilotSessionFile,
   parseCursorSessionFile,
@@ -20,6 +18,15 @@ import {
 } from './session-scanner-secondary-parsers'
 import type { SessionFileCandidate } from './session-scanner-types'
 
+/**
+ * Parse a single agent session file into an `AiVaultSession`. Routes to the
+ * appropriate agent-specific parser based on `candidate.agent`. For OpenCode
+ * SQLite candidates (synthetic `db#id` paths), routes to
+ * `parseOpenCodeSqliteSession` instead of the legacy JSON parser.
+ * @param candidate - The session file candidate to parse.
+ * @param platform - The platform to use for resume command generation.
+ * @returns The parsed `AiVaultSession`, or `null` if parsing fails.
+ */
 export async function parseAgentSessionFile(
   candidate: SessionFileCandidate,
   platform: NodeJS.Platform
@@ -31,12 +38,26 @@ export async function parseAgentSessionFile(
       return parseCodexSessionFile(candidate.file, platform, candidate.codexHome)
     case 'gemini':
       return parseGeminiSessionFile(candidate.file, platform)
+    case 'antigravity':
+      return parseAntigravitySessionFile(candidate.file, platform)
     case 'copilot':
       return parseCopilotSessionFile(candidate.file, platform)
     case 'cursor':
       return parseCursorSessionFile(candidate.file, platform)
-    case 'opencode':
+    case 'opencode': {
+      // Why: OpenCode 1.17.x sessions are read from SQLite via a synthetic
+      // <dbPath>#<sessionId> candidate path. Legacy file-based sessions use
+      // real filesystem paths and fall through to the JSON parser.
+      const sqliteCandidate = splitOpenCodeSqliteCandidate(candidate.file.path)
+      if (sqliteCandidate) {
+        return parseOpenCodeSqliteSession({
+          dbPath: sqliteCandidate.dbPath,
+          sessionId: sqliteCandidate.sessionId,
+          platform
+        })
+      }
       return parseOpenCodeSessionFile(candidate.file, platform)
+    }
     case 'grok':
       return parseGrokSessionFile(candidate.file, platform)
     case 'hermes':
@@ -47,6 +68,8 @@ export async function parseAgentSessionFile(
       return parseMessageGraphSessionFile('openclaw', candidate.file, platform)
     case 'pi':
       return parseMessageGraphSessionFile('pi', candidate.file, platform)
+    case 'omp':
+      return parseMessageGraphSessionFile('omp', candidate.file, platform)
     case 'droid':
       return parseDroidSessionFile(candidate.file, platform)
     case 'devin':

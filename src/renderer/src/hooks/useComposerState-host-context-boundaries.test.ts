@@ -3,6 +3,9 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
   canResolveFolderSmartGitHubSubmit,
+  getInitialAutoManagedWorkspaceName,
+  isExplicitWorkspaceNameInput,
+  resolveSmartGitHubCreateNames,
   resolveInitialWorkspaceRunSeed
 } from './useComposerState'
 
@@ -17,6 +20,71 @@ function sourceBetween(source: string, startPattern: string, endPattern: string)
 }
 
 describe('useComposerState host-context boundaries', () => {
+  it('treats typed workspace names as user-authored, not auto-managed', () => {
+    expect(isExplicitWorkspaceNameInput({ name: 'keep-my-name', lastAutoName: '' })).toBe(true)
+    expect(
+      isExplicitWorkspaceNameInput({
+        name: 'keep-my-name',
+        lastAutoName: 'keep-my-name'
+      })
+    ).toBe(false)
+    expect(isExplicitWorkspaceNameInput({ name: '#1234', lastAutoName: '' })).toBe(false)
+    expect(
+      isExplicitWorkspaceNameInput({
+        name: 'https://github.com/stablyai/orca/pull/1234',
+        lastAutoName: ''
+      })
+    ).toBe(false)
+  })
+
+  it('does not auto-own arbitrary prefilled names', () => {
+    expect(
+      getInitialAutoManagedWorkspaceName({
+        initialName: 'keep-my-name',
+        initialLinkedWorkItem: null
+      })
+    ).toBe('')
+  })
+
+  it('preserves explicit names when a linked PR start point resolves at submit time', () => {
+    expect(
+      resolveSmartGitHubCreateNames({
+        resolutionKind: 'pr-start-point',
+        smartWorkspaceName: 'title-derived-name',
+        smartDisplayName: 'Title derived name',
+        fallbackWorkspaceName: 'edited workspace',
+        nameIsAutoManaged: false
+      })
+    ).toEqual({ workspaceName: 'edited workspace', displayName: undefined })
+  })
+
+  it('keeps smart GitHub names for auto-managed PR start-point submissions', () => {
+    expect(
+      resolveSmartGitHubCreateNames({
+        resolutionKind: 'pr-start-point',
+        smartWorkspaceName: 'title-derived-name',
+        smartDisplayName: 'Title derived name',
+        fallbackWorkspaceName: 'https://github.com/stablyai/orca/pull/6772',
+        nameIsAutoManaged: true
+      })
+    ).toEqual({ workspaceName: 'title-derived-name', displayName: 'Title derived name' })
+  })
+
+  it('auto-owns linked-item generated prefilled names', () => {
+    expect(
+      getInitialAutoManagedWorkspaceName({
+        initialName: 'fix-workspace-name',
+        initialLinkedWorkItem: {
+          type: 'issue',
+          provider: 'github',
+          number: 1234,
+          title: 'Fix workspace name',
+          url: 'https://github.com/stablyai/orca/issues/1234'
+        }
+      })
+    ).toBe('fix-workspace-name')
+  })
+
   it('resolves GitHub PR bases against the selected run repo, not the source item repo', () => {
     const section = sourceBetween(
       HOOK_SOURCE,
@@ -28,6 +96,10 @@ describe('useComposerState host-context boundaries', () => {
     expect(section).toContain('resolveGitHubPrStartPointForRepo')
     expect(section).toContain('repoId: runRepo.id')
     expect(section).toContain('settings: itemRepoSettings')
+    expect(section).toContain('smartGitHubPrStartPointSelectionRef.current = startPointSelection')
+    expect(section).toContain(
+      'if (smartGitHubPrStartPointSelectionRef.current !== startPointSelection)'
+    )
     expect(section).not.toContain('repoId: repoForItem.id')
     expect(section).not.toContain('repo: repoForItem.id')
   })
@@ -45,6 +117,11 @@ describe('useComposerState host-context boundaries', () => {
     expect(section).toContain('worktree.resolveMrBase')
     expect(section).toContain('repo: runRepo.id')
     expect(section).not.toContain('repoId: repoForItem.id')
+    // Why (#6263): an unresolved MR base must surface a toast and clear stale
+    // state instead of silently dropping the worktree onto origin/master.
+    expect(section).toContain('toast.error(result.error)')
+    expect(section).toContain("'Failed to resolve MR base.'")
+    expect(section).toMatch(/\.catch\(\(error: unknown\) =>/)
   })
 
   it('does not use local SSH gates for runtime-owned folder targets', () => {
@@ -80,6 +157,40 @@ describe('useComposerState host-context boundaries', () => {
       "launchSource: telemetrySource === 'onboarding' ? 'onboarding' : 'new_workspace_composer'"
     )
     expect(submitSection).toContain('runtimeEnvironmentId: folderTargetRuntimeEnvironmentId')
+  })
+
+  it('detects composer agents against the repo host: SSH, then runtime, then local (#7082)', () => {
+    // Why: a repo owned by a paired runtime must show the runtime's agents, not
+    // the local machine's. SSH stays first priority; runtime falls through before
+    // local so an SSH repo never double-detects. Regression guard for #7082.
+    const selectorSection = sourceBetween(
+      HOOK_SOURCE,
+      'const detectedAgentList = useAppStore',
+      'const ensureDetectedAgents = useAppStore'
+    )
+    expect(selectorSection).toContain('if (isRemote) {')
+    expect(selectorSection).toContain('s.remoteDetectedAgentIds[connectionId]')
+    expect(selectorSection).toContain('if (runtimeEnvironmentId) {')
+    expect(selectorSection).toContain('s.runtimeDetectedAgentIds[runtimeEnvironmentId]')
+    expect(selectorSection).toContain('return s.detectedAgentIds')
+    // SSH branch is checked before the runtime branch.
+    expect(selectorSection.indexOf('if (isRemote) {')).toBeLessThan(
+      selectorSection.indexOf('if (runtimeEnvironmentId) {')
+    )
+
+    expect(HOOK_SOURCE).toContain(
+      'const runtimeEnvironmentId = selectedRepoSettings?.activeRuntimeEnvironmentId?.trim() || null'
+    )
+
+    // Detection effect fans out to the same three hosts in the same order and
+    // re-runs when the runtime environment changes.
+    const detectSection = sourceBetween(HOOK_SOURCE, 'const detect = isRemote', 'void detect.then')
+    expect(detectSection).toContain('ensureRemoteDetectedAgents(connectionId)')
+    expect(detectSection).toContain('ensureRuntimeDetectedAgents(runtimeEnvironmentId)')
+    expect(detectSection).toContain('ensureDetectedAgents()')
+    expect(HOOK_SOURCE).toContain(
+      '}, [connectionId, runtimeEnvironmentId, isRemote, selectedRepoSshStatus, disabledTuiAgents])'
+    )
   })
 
   it('seeds initial workspace run target from the task source context', () => {
@@ -132,6 +243,8 @@ describe('useComposerState host-context boundaries', () => {
       'const applyLinkedWorkItem = useCallback'
     )
     expect(directLookup).toContain('sourceContext: selectedRepoGitHubSourceContext')
+    expect(directLookup).toContain('lookupGitHubWorkItemByOwnerRepoForSource')
+    expect(directLookup).toContain('type: normalizedLinkQuery.directLink.type')
 
     const submitLookup = sourceBetween(
       HOOK_SOURCE,
@@ -153,6 +266,21 @@ describe('useComposerState host-context boundaries', () => {
     expect(submitLookup).toContain("kind: 'metadata-only'")
     expect(submitLookup).toContain('baseBranch: prStartPoint.baseBranch')
     expect(submitLookup).toContain('branchNameOverride: prStartPoint.branchNameOverride')
+    const selectedPrSubmitLookup = sourceBetween(
+      submitLookup,
+      'if (linkedWorkItem) {',
+      'const intent = getSmartGitHubSubmitIntent(name)'
+    )
+    expect(selectedPrSubmitLookup).toContain('smartGitHubPrStartPointSelectionRef.current')
+    expect(selectedPrSubmitLookup).toContain("linkedWorkItemIdentity?.type === 'pr'")
+    expect(selectedPrSubmitLookup).toContain("startPointIdentity?.type === 'pr'")
+    expect(selectedPrSubmitLookup).toContain(
+      'startPointIdentity.number === linkedWorkItemIdentity.number'
+    )
+    expect(selectedPrSubmitLookup).toContain('resolveGitHubPrStartPointForRepo')
+    expect(selectedPrSubmitLookup.indexOf('resolveGitHubPrStartPointForRepo')).toBeLessThan(
+      selectedPrSubmitLookup.indexOf("return { kind: 'none' }")
+    )
 
     const fullSubmit = sourceBetween(
       HOOK_SOURCE,
@@ -185,6 +313,36 @@ describe('useComposerState host-context boundaries', () => {
     expect(quickSubmit).not.toContain(
       'smartGitHubResolution?.branchNameOverride ?? branchNameOverride'
     )
+  })
+
+  it('saves setup startup policy before creating a workspace', () => {
+    const persistSection = sourceBetween(
+      HOOK_SOURCE,
+      'const persistSetupAgentStartupPolicy = useCallback',
+      'const handleSetupAgentStartupPolicyChange'
+    )
+    expect(persistSection).toContain('setupAgentStartupPolicySaveRef.current')
+    expect(persistSection).toContain('pendingSave?.repoId === currentRepo.id')
+    expect(persistSection).toContain('pendingSave.policy === policy')
+    expect(persistSection).toContain('await pendingSave.promise')
+    expect(persistSection).toContain('continue')
+    expect(HOOK_SOURCE).toContain('setupAgentStartupPolicyDraftRef.current')
+
+    const fullSubmit = sourceBetween(
+      HOOK_SOURCE,
+      'const submit = useCallback',
+      'const submitQuick = useCallback'
+    )
+    const fullPolicySave = fullSubmit.indexOf('await persistSetupAgentStartupPolicy()')
+    const fullCreate = fullSubmit.indexOf('const result = await createWorktree(')
+    expect(fullPolicySave).toBeGreaterThanOrEqual(0)
+    expect(fullCreate).toBeGreaterThan(fullPolicySave)
+
+    const quickSubmit = sourceBetween(HOOK_SOURCE, 'const submitQuick = useCallback', 'return {')
+    const quickPolicySave = quickSubmit.indexOf('await persistSetupAgentStartupPolicy()')
+    const quickCreate = quickSubmit.indexOf('const request: WorktreeCreationRequest = {')
+    expect(quickPolicySave).toBeGreaterThanOrEqual(0)
+    expect(quickCreate).toBeGreaterThan(quickPolicySave)
   })
 
   it('resolves submit-time GitHub smart input when folder child repos exist', () => {
@@ -221,6 +379,19 @@ describe('useComposerState host-context boundaries', () => {
     expect(section).not.toContain('folderSourceRequiresConnection')
   })
 
+  it('clears branch reuse state when manually editing the branch name', () => {
+    const section = sourceBetween(
+      HOOK_SOURCE,
+      'const handleBranchNameOverrideChange = useCallback',
+      'const addComposerAttachments = useCallback'
+    )
+
+    expect(section).toContain('resolveComposerManualBranchNameChange')
+    expect(section).toContain('setReuseEligibleBranch(null)')
+    expect(section).toContain('setReuseSelectedBranch(false)')
+    expect(section).toContain("branchAutoNameRef.current = ''")
+  })
+
   it('forces repo-scoped source reset when returning from folder target to a repo with the same id', () => {
     const handleRepoChange = sourceBetween(
       HOOK_SOURCE,
@@ -238,6 +409,49 @@ describe('useComposerState host-context boundaries', () => {
     expect(handleProjectChange).toContain(
       'handleRepoChange(nextRepoId, { forceResetStartFrom: isProjectGroupTarget })'
     )
+  })
+
+  it('keeps a Linear branch override when its workspace-scoped issue survives a repo change', () => {
+    const section = sourceBetween(
+      HOOK_SOURCE,
+      'const handleRepoChange = useCallback',
+      'const handleFolderSourceRepoChange = useCallback'
+    )
+
+    expect(section).toContain('const preservedLinearBranchName = preserveLinearLinkedWorkItem')
+    expect(section).toContain('getLinearLinkedWorkItemBranchName(linkedWorkItem)')
+    expect(section).toContain('setBranchNameOverride(preservedLinearBranchName)')
+    expect(section).toContain(
+      'setBranchNameOverridePreservesNameEdits(Boolean(preservedLinearBranchName))'
+    )
+    expect(section).toContain("branchAutoNameRef.current = preservedLinearBranchName ?? ''")
+  })
+
+  it('clears a Linear branch override when its linked issue is removed', () => {
+    const section = sourceBetween(
+      HOOK_SOURCE,
+      'const handleRemoveLinkedWorkItem = useCallback',
+      'const handleNameValueChange = useCallback'
+    )
+
+    expect(section).toContain('const removedLinearItem = isLinearLinkedWorkItem(linkedWorkItem)')
+    expect(section).toContain('if (removedLinearItem)')
+    expect(section).toContain('setBranchNameOverride(undefined)')
+    expect(section).toContain('setBranchNameOverridePreservesNameEdits(false)')
+    expect(section).toContain("branchAutoNameRef.current = ''")
+  })
+
+  it('selects a project by its own host instead of pinning the current host', () => {
+    // Regression: passing the current host as a hard `hostId` made picking a
+    // project set up only on a different host a silent no-op. The current host
+    // must be a preference (focusedHostScope), with a fallback to any ready host.
+    const handleProjectChange = sourceBetween(
+      HOOK_SOURCE,
+      'const handleProjectChange = useCallback',
+      'const handleSmartGitHubItemSelect'
+    )
+    expect(handleProjectChange).toContain('focusedHostScope: preferredHostId ?? workspaceHostScope')
+    expect(handleProjectChange).not.toContain('hostId: preferredHostId')
   })
 
   it('clears GitLab-specific linked state when clearing smart-name selection', () => {
@@ -261,6 +475,8 @@ describe('useComposerState host-context boundaries', () => {
     )
     expect(githubApply).toContain('setLinkedGitLabIssue(null)')
     expect(githubApply).toContain('setLinkedGitLabMR(null)')
+    expect(githubApply).toContain('setBranchNameOverridePreservesNameEdits(false)')
+    expect(githubApply).toContain("branchAutoNameRef.current = ''")
 
     const gitlabApply = sourceBetween(
       HOOK_SOURCE,
@@ -269,6 +485,8 @@ describe('useComposerState host-context boundaries', () => {
     )
     expect(gitlabApply).toContain("setLinkedIssue('')")
     expect(gitlabApply).toContain('setLinkedPR(null)')
+    expect(gitlabApply).toContain('setBranchNameOverridePreservesNameEdits(false)')
+    expect(gitlabApply).toContain("branchAutoNameRef.current = ''")
 
     const projectGroupSmartHandlers = sourceBetween(
       HOOK_SOURCE,
@@ -277,8 +495,12 @@ describe('useComposerState host-context boundaries', () => {
     )
     expect(projectGroupSmartHandlers).toContain('setLinkedGitLabIssue(null)')
     expect(projectGroupSmartHandlers).toContain('setLinkedGitLabMR(null)')
-    expect(projectGroupSmartHandlers).toContain("setLinkedIssue('')")
-    expect(projectGroupSmartHandlers).toContain('setLinkedPR(null)')
+    expect(projectGroupSmartHandlers).toContain(
+      "setLinkedIssue(identity.type === 'issue' ? String(identity.number) : '')"
+    )
+    expect(projectGroupSmartHandlers).toContain(
+      "setLinkedPR(identity.type === 'pr' ? identity.number : null)"
+    )
   })
 
   it('disables repo-backed folder smart lookup when a folder target has no source repos', () => {
@@ -358,8 +580,8 @@ describe('useComposerState host-context boundaries', () => {
 
     expect(section).toContain('resolveWorktreeCreateBaseBranch')
     expect(section).toContain('explicitBaseBranch: smartSubmitBaseBranch')
-    expect(section).toContain('repoWorktreeBaseRef: selectedRepo.worktreeBaseRef')
-    expect(section).toContain('getRuntimeRepoBaseRefDefault')
+    expect(section).not.toContain('repoWorktreeBaseRef: selectedRepo.worktreeBaseRef')
+    expect(section).not.toContain('getRuntimeRepoBaseRefDefault')
   })
 
   it('plans new workspace agent startup from the selected repo runtime', () => {
@@ -398,5 +620,69 @@ describe('useComposerState host-context boundaries', () => {
     expect(quickSubmit).not.toContain('explicitAgentChoice')
     expect(quickSubmit).not.toContain('shouldPrepareQuickLinkedWorkItemAgentPrompt')
     expect(HOOK_SOURCE).not.toContain('resolveQuickWorkspaceSubmitAgent')
+  })
+
+  it('keeps Linear starts out of issue-command templates without special draft routing', () => {
+    expect(HOOK_SOURCE).not.toContain('isOrcaCliAvailableForLaunch')
+    expect(HOOK_SOURCE).not.toContain('hasGeneratedLinearSourceContext')
+    expect(HOOK_SOURCE).not.toContain('shouldDraftGeneratedLinearContext')
+    expect(HOOK_SOURCE).toMatch(
+      /willApplyIssueCommandAsPrompt[\s\S]*linkedWorkItemProvider !== 'linear'/
+    )
+
+    const previewSection = sourceBetween(
+      HOOK_SOURCE,
+      'const shouldApplyLinkedOnlyTemplate =',
+      'const linkedOnlyTemplatePrompt'
+    )
+    expect(previewSection).toContain("linkedWorkItemProvider !== 'linear'")
+
+    const fullSubmit = sourceBetween(
+      HOOK_SOURCE,
+      'const submit = useCallback',
+      'const submitQuick = useCallback'
+    )
+    expect(fullSubmit).toContain("submitLinkedWorkItemProvider !== 'linear'")
+    expect(fullSubmit).toMatch(
+      /submitShouldRunIssueAutomation[\s\S]*submitLinkedWorkItemProvider !== 'linear'/
+    )
+    expect(fullSubmit).toContain('prompt: submitStartupPrompt')
+    expect(fullSubmit).toContain('const shouldSeedInitialAgentStatus =')
+    expect(fullSubmit).toContain('...(shouldSeedInitialAgentStatus')
+
+    const quickSubmit = sourceBetween(
+      HOOK_SOURCE,
+      'const submitQuick = useCallback',
+      'const createGateInput'
+    )
+    expect(quickSubmit).toContain('agent === null || !quickDraftPrompt')
+    expect(quickSubmit).toContain('startupPlan.draftPrompt = quickDraftPrompt')
+  })
+
+  it('gates per-workspace environment recipe discovery behind the experimental setting', () => {
+    const recipeLoadSection = sourceBetween(
+      HOOK_SOURCE,
+      'const ephemeralVmsEnabled',
+      'const selectedRepoConnectionId'
+    )
+    expect(recipeLoadSection).toContain('settings?.experimentalEphemeralVms === true')
+    expect(recipeLoadSection).toContain('!ephemeralVmsEnabled')
+    expect(recipeLoadSection).toContain('window.api.ephemeralVm')
+
+    const submitSection = sourceBetween(
+      HOOK_SOURCE,
+      'let ephemeralVmRecipe',
+      'const request: WorktreeCreationRequest'
+    )
+    expect(submitSection).toContain(
+      'const activeEphemeralVmRecipeId = ephemeralVmsEnabled ? selectedEphemeralVmRecipeId : null'
+    )
+    expect(submitSection).toContain('recipeId: activeEphemeralVmRecipeId')
+
+    const cardPropsSection = sourceBetween(HOOK_SOURCE, 'const cardProps', 'return {')
+    expect(cardPropsSection).toContain('ephemeralVmRecipes:')
+    expect(cardPropsSection).toContain('!ephemeralVmsEnabled')
+    expect(cardPropsSection).toContain('selectedEphemeralVmRecipeId:')
+    expect(cardPropsSection).toContain('ephemeralVmRecipeError:')
   })
 })

@@ -23,6 +23,7 @@ describe('AgentStateDot', () => {
     expect(markup).toContain('border-yellow-500')
     expect(markup).toContain('border-t-transparent')
     expect(markup).toContain('[animation:spin_1s_steps(12,end)_infinite]')
+    expect(markup).toContain('motion-reduce:animate-none')
     expect(markup).not.toContain('animate-spin')
   })
 
@@ -39,14 +40,17 @@ describe('AgentStateDot', () => {
     expect(markup).toContain('text-emerald-500')
   })
 
-  it('renders permission as an amber attention dot', () => {
-    const classNames = renderDotClassNames('permission')
+  it.each(['permission', 'waiting'] satisfies AgentDotState[])(
+    'renders %s as an amber attention dot',
+    (state) => {
+      const classNames = renderDotClassNames(state)
 
-    expect(classNames).toContain('bg-amber-500')
-    expect(classNames).not.toContain('bg-red-500')
-  })
+      expect(classNames).toContain('bg-amber-500')
+      expect(classNames).not.toContain('bg-red-500')
+    }
+  )
 
-  it.each(['blocked', 'waiting', 'interrupted'] satisfies AgentDotState[])(
+  it.each(['blocked', 'interrupted'] satisfies AgentDotState[])(
     'renders %s as a red attention dot',
     (state) => {
       const classNames = renderDotClassNames(state)

@@ -35,6 +35,7 @@ import type {
   WorkspaceSpaceWorktree
 } from '../../../../shared/workspace-space-types'
 import { cn } from '@/lib/utils'
+import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
 import { toast } from 'sonner'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { useAppStore } from '../../store'
@@ -43,6 +44,7 @@ import { getHostedReviewCacheKey } from '../../store/slices/hosted-review'
 import { issueCacheKey as getIssueCacheKey } from '../../store/slices/github'
 import { refreshGitStatusForWorktree } from '../right-sidebar/git-status-refresh'
 import { runWorktreeBatchDelete } from '../sidebar/delete-worktree-flow'
+import { prepareActiveWorktreeFocusAfterDelete } from '../sidebar/active-worktree-focus-after-delete'
 import { branchDisplayName } from '../sidebar/WorktreeCardHelpers'
 import { Badge } from '../ui/badge'
 import { Button } from '../ui/button'
@@ -82,6 +84,7 @@ import {
   type WorkspaceSpaceSortKey
 } from './workspace-space-presentation'
 import { translate } from '@/i18n/i18n'
+import type { WorktreeForceDeleteReason } from '../../../../shared/worktree-removal'
 
 const TREEMAP_FILLS = [
   'color-mix(in srgb, var(--chart-2) 34%, var(--card))',
@@ -96,6 +99,7 @@ type WorkspaceSpaceDeleteState = {
   isDeleting: boolean
   error: string | null
   canForceDelete: boolean
+  forceDeleteReason: WorktreeForceDeleteReason | null
 }
 
 type WorkspaceGitRefreshState = {
@@ -182,7 +186,7 @@ function getBranchStatus(
   return parts.join(', ')
 }
 
-function getWorkspaceDecisionDetails(
+export function getWorkspaceDecisionDetails(
   worktree: WorkspaceSpaceWorktree,
   inputs: WorkspaceDecisionInputs
 ): WorkspaceDecisionDetails {
@@ -196,11 +200,15 @@ function getWorkspaceDecisionDetails(
   const branch = workspaceRecord
     ? branchDisplayName(workspaceRecord.branch)
     : getWorkspaceSpaceBranchLabel(worktree)
+  const repo = inputs.repoMap.get(worktree.repoId)
   const reviewCacheKey = getHostedReviewCacheKey(
     worktree.repoPath,
     branch,
     inputs.settings,
-    worktree.repoId
+    worktree.repoId,
+    repo?.connectionId,
+    repo?.executionHostId,
+    repo !== undefined
   )
   const hostedReview = inputs.hostedReviewCache[reviewCacheKey]?.data
   const linkedPR = workspaceRecord?.linkedPR ?? null
@@ -213,7 +221,6 @@ function getWorkspaceDecisionDetails(
         ? `PR #${linkedPR}`
         : null
   const linkedIssue = workspaceRecord?.linkedIssue ?? null
-  const repo = inputs.repoMap.get(worktree.repoId)
   const issue =
     linkedIssue && repo
       ? inputs.issueCache[
@@ -223,7 +230,8 @@ function getWorkspaceDecisionDetails(
             linkedIssue,
             inputs.settings,
             repo.connectionId,
-            repo.executionHostId
+            repo.executionHostId,
+            true
           )
         ]?.data
       : null
@@ -314,9 +322,11 @@ function UpdatedMetric({
     if (scannedAt === null) {
       return
     }
+    // Refresh once immediately (unconditional, as before) so a rescan that lands
+    // while hidden isn't shown stale, then pause the ongoing 60s tick while the
+    // window is hidden — same visibility-gated pattern as useNow.
     setNow(Date.now())
-    const timer = window.setInterval(() => setNow(Date.now()), 60_000)
-    return () => window.clearInterval(timer)
+    return installWindowVisibilityInterval({ run: () => setNow(Date.now()), intervalMs: 60_000 })
   }, [scannedAt])
 
   return (
@@ -1592,6 +1602,7 @@ export function WorkspaceSpaceManagerPanel(): React.JSX.Element {
     (worktree: WorkspaceSpaceWorktree): void => {
       // Why: Space keeps normal deletes non-force so uncommitted work is not
       // discarded silently; a failed row gets this explicit recovery path.
+      const commitFocus = prepareActiveWorktreeFocusAfterDelete(worktree.worktreeId)
       void removeWorktree(worktree.worktreeId, true)
         .then((result) => {
           if (!result.ok) {
@@ -1606,6 +1617,7 @@ export function WorkspaceSpaceManagerPanel(): React.JSX.Element {
             )
             return
           }
+          commitFocus()
           handleDeletedWorktrees([worktree.worktreeId])
         })
         .catch((error: unknown) => {

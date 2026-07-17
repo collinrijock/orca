@@ -1,6 +1,6 @@
 import type { Worktree, Repo, TerminalTab, WorktreeLineage } from '../../../../shared/types'
 import { buildWorktreeComparator, sortWorktreesSmart } from './smart-sort'
-import { isInactiveWorkspace } from '@/lib/worktree-activity-state'
+import { getWorktreeIdsWithLiveAgent, isInactiveWorkspace } from '@/lib/worktree-activity-state'
 import { useAppStore } from '@/store'
 import { getAllWorktreesFromState, getRepoMapFromState } from '@/store/selectors'
 import { DEFAULT_SHOW_SLEEPING_WORKSPACES } from '../../../../shared/constants'
@@ -36,6 +36,7 @@ export type SidebarFilterState = {
   hideDefaultBranchWorkspace: boolean
   hideAutomationGeneratedWorkspaces: boolean
   visibleWorkspaceHostIds?: readonly ExecutionHostId[] | null
+  workspaceHostScope?: ExecutionHostScope
 }
 
 /**
@@ -53,7 +54,8 @@ export function sidebarHasActiveFilters(state: SidebarFilterState): boolean {
     state.filterRepoIds.length > 0 ||
     state.hideDefaultBranchWorkspace ||
     state.hideAutomationGeneratedWorkspaces ||
-    state.visibleWorkspaceHostIds != null
+    state.visibleWorkspaceHostIds != null ||
+    (state.workspaceHostScope != null && state.workspaceHostScope !== ALL_EXECUTION_HOSTS_SCOPE)
   )
 }
 
@@ -83,7 +85,9 @@ export function computeClearFilterActions(state: SidebarFilterState): ClearFilte
     resetFilterRepoIds: state.filterRepoIds.length > 0,
     resetHideDefaultBranchWorkspace: state.hideDefaultBranchWorkspace,
     resetHideAutomationGeneratedWorkspaces: state.hideAutomationGeneratedWorkspaces,
-    resetVisibleWorkspaceHostIds: state.visibleWorkspaceHostIds != null
+    resetVisibleWorkspaceHostIds:
+      state.visibleWorkspaceHostIds != null ||
+      (state.workspaceHostScope != null && state.workspaceHostScope !== ALL_EXECUTION_HOSTS_SCOPE)
   }
 }
 
@@ -106,6 +110,9 @@ export function computeVisibleWorktreeIds(
     tabsByWorktree: Record<string, Pick<TerminalTab, 'id'>[]> | null
     ptyIdsByTabId: Record<string, string[]> | null
     browserTabsByWorktree?: Record<string, { id: string }[]> | null
+    // Why required: every filter caller must preserve running agents through
+    // temporary PTY gaps instead of silently reverting #7197.
+    worktreeIdsWithLiveAgent: ReadonlySet<string>
     // Why required: every caller (WorktreeList, getVisibleWorktreeIds
     // fallback, tests) reads the flag from the UI store. Making the field
     // required prevents a future caller from silently dropping the filter by
@@ -167,7 +174,8 @@ export function computeVisibleWorktreeIds(
           w.id,
           opts.tabsByWorktree,
           opts.ptyIdsByTabId,
-          opts.browserTabsByWorktree
+          opts.browserTabsByWorktree,
+          opts.worktreeIdsWithLiveAgent
         )
     )
   }
@@ -301,6 +309,11 @@ export function getVisibleWorktreeIds(): string[] {
     tabsByWorktree: state.tabsByWorktree,
     ptyIdsByTabId: state.ptyIdsByTabId,
     browserTabsByWorktree: state.browserTabsByWorktree,
+    worktreeIdsWithLiveAgent: getWorktreeIdsWithLiveAgent(
+      state.agentStatusByPaneKey,
+      state.tabsByWorktree,
+      Date.now()
+    ),
     hideDefaultBranchWorkspace: state.hideDefaultBranchWorkspace,
     hideAutomationGeneratedWorkspaces: state.hideAutomationGeneratedWorkspaces,
     repoMap,

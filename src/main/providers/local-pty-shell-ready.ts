@@ -10,10 +10,9 @@
  * and a data scanner that detects that marker so the command can be written at
  * the right time.
  */
-import { tmpdir } from 'os'
-import { basename, win32 as pathWin32 } from 'path'
-import { mkdirSync, writeFileSync, chmodSync, existsSync } from 'fs'
-import { app } from 'electron'
+import { tmpdir } from 'node:os'
+import { basename, win32 as pathWin32 } from 'node:path'
+import { mkdirSync, writeFileSync, chmodSync, existsSync } from 'node:fs'
 import type * as pty from 'node-pty'
 import {
   encodePowerShellCommand,
@@ -21,6 +20,7 @@ import {
   isPowerShellExecutableName
 } from '../powershell-osc133-bootstrap'
 import { getPosixOmpShellWrapper } from '../pty/omp-shell-wrapper'
+import { buildStartupCommandSubmission } from '../../shared/startup-command-submission'
 import {
   getZshEnvTemplate,
   getZshFinalZdotdirRestoreBlock,
@@ -49,7 +49,11 @@ export type ShellReadySignal = {
 // ── Shell wrapper files ─────────────────────────────────────────────
 
 function getShellReadyWrapperRoot(): string {
-  const userDataPath = app?.getPath?.('userData') ?? process.env.ORCA_USER_DATA_PATH ?? tmpdir()
+  // Why: bundled into daemon-entry.js (a plain-node fork with no electron
+  // require), so this must not import electron. Main canonicalizes
+  // ORCA_USER_DATA_PATH to its own userData at startup (configureOrcaUserDataPathEnv)
+  // and the daemon fork sets it explicitly, so the env value matches this root.
+  const userDataPath = process.env.ORCA_USER_DATA_PATH ?? tmpdir()
   return `${userDataPath}/shell-ready`
 }
 
@@ -63,8 +67,8 @@ function getRequiredShellReadyWrapperPaths(root = getShellReadyWrapperRoot()): s
   ]
 }
 
-function shellReadyWrappersExist(): boolean {
-  return getRequiredShellReadyWrapperPaths().every((path) => existsSync(path))
+function shellReadyWrappersExist(root = getShellReadyWrapperRoot()): boolean {
+  return getRequiredShellReadyWrapperPaths(root).every((path) => existsSync(path))
 }
 
 // Why: if our own process inherited ZDOTDIR from a parent shell that was
@@ -118,6 +122,11 @@ elif [[ -f "$HOME/.bash_login" ]]; then
 elif [[ -f "$HOME/.profile" ]]; then
   source "$HOME/.profile"
 fi
+# Why: enable bracketed paste so Orca can deliver a multiline startup prompt as
+# a single literal paste (ESC[200~…ESC[201~). Without it, older readline builds
+# treat each embedded newline as Enter and mangle the prompt into PS2
+# continuation. Modern readline defaults this on; force it for the rest.
+[[ $- == *i* ]] && bind 'set enable-bracketed-paste on' 2>/dev/null
 # Why: preserve bash's normal login-shell contract. Many users already source
 # ~/.bashrc from ~/.bash_profile; forcing ~/.bashrc again here would duplicate
 # PATH edits, hooks, and prompt init in Orca startup-command shells.
@@ -140,6 +149,7 @@ __orca_restore_agent_teams_path
 # Why: user startup files may set the default OpenCode config after Orca's
 # spawn env; restore the Orca-managed config dir before the first prompt.
 [[ -n "\${ORCA_OPENCODE_CONFIG_DIR:-}" ]] && export OPENCODE_CONFIG_DIR="\${ORCA_OPENCODE_CONFIG_DIR}"
+[[ -n "\${ORCA_MIMOCODE_HOME:-}" ]] && export MIMOCODE_HOME="\${ORCA_MIMOCODE_HOME}"
 ${getPosixOmpShellWrapper()}
 # Why: Codex must keep using Orca's runtime CODEX_HOME after profile scripts.
 [[ -n "\${ORCA_CODEX_HOME:-}" ]] && export CODEX_HOME="\${ORCA_CODEX_HOME}"
@@ -255,6 +265,7 @@ __orca_restore_agent_teams_path() {
 if [[ ! -o login ]]; then
   # Why: ~/.zshrc can export the user's default OpenCode config after spawn.
   [[ -n "\${ORCA_OPENCODE_CONFIG_DIR:-}" ]] && export OPENCODE_CONFIG_DIR="\${ORCA_OPENCODE_CONFIG_DIR}"
+[[ -n "\${ORCA_MIMOCODE_HOME:-}" ]] && export MIMOCODE_HOME="\${ORCA_MIMOCODE_HOME}"
   ${getPosixOmpShellWrapper()}
   # Why: Codex must keep using Orca's runtime CODEX_HOME after rc files.
   [[ -n "\${ORCA_CODEX_HOME:-}" ]] && export CODEX_HOME="\${ORCA_CODEX_HOME}"
@@ -280,16 +291,12 @@ fi
 `
 }
 
-function ensureShellReadyWrappers(): void {
-  if (process.platform === 'win32') {
-    return
-  }
-  if (didEnsureShellReadyWrappers && shellReadyWrappersExist()) {
+export function ensureShellReadyWrappersAt(root = getShellReadyWrapperRoot()): void {
+  if (didEnsureShellReadyWrappers && shellReadyWrappersExist(root)) {
     return
   }
   didEnsureShellReadyWrappers = true
 
-  const root = getShellReadyWrapperRoot()
   const zshDir = `${root}/zsh`
   const bashDir = `${root}/bash`
 
@@ -318,6 +325,7 @@ __orca_restore_agent_teams_path() {
 __orca_restore_agent_teams_path
 # Why: .zlogin is the final login startup file before the prompt is shown.
 [[ -n "\${ORCA_OPENCODE_CONFIG_DIR:-}" ]] && export OPENCODE_CONFIG_DIR="\${ORCA_OPENCODE_CONFIG_DIR}"
+[[ -n "\${ORCA_MIMOCODE_HOME:-}" ]] && export MIMOCODE_HOME="\${ORCA_MIMOCODE_HOME}"
 ${getPosixOmpShellWrapper()}
 [[ -n "\${ORCA_CODEX_HOME:-}" ]] && export CODEX_HOME="\${ORCA_CODEX_HOME}"
 ${getZshShellReadyMarkerRegistrationBlock(SHELL_READY_MARKER_ESCAPED)}
@@ -354,6 +362,13 @@ ${getZshFinalZdotdirRestoreBlock()}
     // Reset the flag so next attempt will try again
     didEnsureShellReadyWrappers = false
   }
+}
+
+function ensureShellReadyWrappers(): void {
+  if (process.platform === 'win32') {
+    return
+  }
+  ensureShellReadyWrappersAt()
 }
 
 // ── Shell launch config ─────────────────────────────────────────────
@@ -429,7 +444,11 @@ export function writeStartupCommandWhenShellReady(
   readyPromise: Promise<void | ShellReadySignal>,
   proc: pty.IPty,
   startupCommand: string,
-  onExit: (cleanup: () => void) => void
+  onExit: (cleanup: () => void) => void,
+  // Why: only Orca-wrapped bash/zsh have bracketed-paste mode active, so
+  // multiline startup commands are wrapped in ESC[200~/ESC[201~ only there;
+  // other shells keep the raw submit path to avoid echoing the markers.
+  options: { bracketedPasteSafe?: boolean } = {}
 ): void {
   let sent = false
   let postReadyTimer: ReturnType<typeof setTimeout> | null = null
@@ -467,12 +486,17 @@ export function writeStartupCommandWhenShellReady(
     // Enter under ICRNL, so CR works there too, but this code path is reached
     // on Windows as well as POSIX via writeStartupCommandWhenShellReady.
     const submit = process.platform === 'win32' ? '\r' : '\n'
-    const endsWithSubmit = startupCommand.endsWith('\r') || startupCommand.endsWith('\n')
-    const payload = endsWithSubmit ? startupCommand : `${startupCommand}${submit}`
     // Why: startup commands are usually long, quoted agent launches. Writing
     // them in one PTY call after the shell-ready barrier avoids the incremental
-    // paste behavior that still dropped characters in practice.
-    proc.write(payload)
+    // paste behavior that still dropped characters in practice. Multiline
+    // prompts are additionally wrapped in bracketed paste (see the helper) so
+    // embedded newlines are inserted literally instead of submitting early.
+    proc.write(
+      buildStartupCommandSubmission(startupCommand, {
+        submit,
+        bracketedPasteSafe: options.bracketedPasteSafe === true
+      })
+    )
   }
 
   const schedulePostReadyFlush = (): void => {

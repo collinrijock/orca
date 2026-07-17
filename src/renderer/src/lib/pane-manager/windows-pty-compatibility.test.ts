@@ -1,9 +1,15 @@
+import { Terminal } from '@xterm/headless'
 import { describe, expect, it } from 'vitest'
 import {
   buildWindowsPtyCompatibilityOptions,
   isLocalNativeWindowsConpty,
-  isLocalNativeWindowsPty
+  isLocalNativeWindowsPty,
+  resolveWindowsShellOverride
 } from './windows-pty-compatibility'
+
+function writeTerminal(terminal: Terminal, data: string): Promise<void> {
+  return new Promise((resolve) => terminal.write(data, resolve))
+}
 
 describe('buildWindowsPtyCompatibilityOptions', () => {
   it('returns ConPTY compatibility options for local Windows terminals', () => {
@@ -13,7 +19,8 @@ describe('buildWindowsPtyCompatibilityOptions', () => {
         osRelease: '10.0.26100',
         connectionId: null,
         cwd: 'C:\\repo',
-        shellOverride: null
+        shellOverride: null,
+        executionHostId: 'local'
       })
     ).toEqual({
       windowsPty: { backend: 'conpty', buildNumber: 26100 }
@@ -27,11 +34,46 @@ describe('buildWindowsPtyCompatibilityOptions', () => {
         osRelease: 'bad-release',
         connectionId: null,
         cwd: 'C:\\repo',
-        shellOverride: null
+        shellOverride: null,
+        executionHostId: 'local'
       })
     ).toEqual({
       windowsPty: { backend: 'conpty' }
     })
+  })
+
+  it('omits old Windows build numbers that enable xterm legacy wrap heuristics', () => {
+    expect(
+      buildWindowsPtyCompatibilityOptions({
+        userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+        osRelease: '10.0.19045',
+        connectionId: null,
+        cwd: 'C:\\repo',
+        shellOverride: null,
+        executionHostId: 'local'
+      })
+    ).toEqual({
+      windowsPty: { backend: 'conpty' }
+    })
+  })
+
+  it('does not mark the row after a full-width Windows status line as wrapped', async () => {
+    const options = buildWindowsPtyCompatibilityOptions({
+      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+      osRelease: '10.0.19045',
+      connectionId: null,
+      cwd: 'C:\\repo',
+      shellOverride: null,
+      executionHostId: 'local'
+    })
+    const terminal = new Terminal({ cols: 20, rows: 5, ...options })
+
+    await writeTerminal(terminal, `${'─'.repeat(20)}\r\nNEXT\r\n`)
+
+    // Why: the Chinese report said scrollback stopped working; with the legacy
+    // xterm Windows wrap heuristic, a full-width row falsely wraps the next row.
+    expect(terminal.buffer.active.getLine(1)?.translateToString(true)).toBe('NEXT')
+    expect(terminal.buffer.active.getLine(1)?.isWrapped).toBe(false)
   })
 
   it('skips compatibility options for SSH-backed Windows terminals', () => {
@@ -41,7 +83,8 @@ describe('buildWindowsPtyCompatibilityOptions', () => {
         osRelease: '10.0.26100',
         connectionId: 'ssh-1',
         cwd: 'C:\\repo',
-        shellOverride: null
+        shellOverride: null,
+        executionHostId: 'local'
       })
     ).toEqual({})
   })
@@ -59,7 +102,8 @@ describe('buildWindowsPtyCompatibilityOptions', () => {
           osRelease: '10.0.26100',
           connectionId: null,
           cwd,
-          shellOverride: null
+          shellOverride: null,
+          executionHostId: 'local'
         })
       ).toEqual({})
     }
@@ -72,7 +116,8 @@ describe('buildWindowsPtyCompatibilityOptions', () => {
         osRelease: '10.0.26100',
         connectionId: null,
         cwd: 'C:\\repo',
-        shellOverride: 'C:\\Windows\\System32\\wsl.exe'
+        shellOverride: 'C:\\Windows\\System32\\wsl.exe',
+        executionHostId: 'local'
       })
     ).toEqual({})
   })
@@ -84,9 +129,73 @@ describe('buildWindowsPtyCompatibilityOptions', () => {
         osRelease: '23.0.0',
         connectionId: null,
         cwd: '/repo',
-        shellOverride: null
+        shellOverride: null,
+        executionHostId: 'local'
       })
     ).toEqual({})
+  })
+
+  it('does NOT return ConPTY options for a serve/remote-runtime pane even when the raw Windows heuristic matches', () => {
+    // Regression: a serve pane on a Windows client has no SSH connectionId and a
+    // Linux cwd, so the raw heuristic matches; the execution-host gate must still
+    // exclude it so a remote Linux PTY is not given the native-Windows ConPTY backend.
+    const serveContext = {
+      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+      osRelease: '10.0.26100',
+      connectionId: null,
+      cwd: '/home/me/workspaces/repo',
+      shellOverride: null
+    } as const
+    expect(isLocalNativeWindowsPty(serveContext)).toBe(true)
+    expect(
+      buildWindowsPtyCompatibilityOptions({ ...serveContext, executionHostId: 'runtime:my-serve' })
+    ).toEqual({})
+  })
+
+  it('does NOT return ConPTY options for an SSH-runtime pane', () => {
+    expect(
+      buildWindowsPtyCompatibilityOptions({
+        userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+        osRelease: '10.0.26100',
+        connectionId: null,
+        cwd: 'C:\\repo',
+        shellOverride: null,
+        executionHostId: 'ssh:my-host'
+      })
+    ).toEqual({})
+  })
+
+  it('classifies a global-WSL default shell as non-native, matching main', () => {
+    // Why: main folds the global terminalWindowsShell into its spawn
+    // classification (isNativeWindowsLocalPtySpawn). Without the fold the
+    // renderer would call a tab with no override native-ConPTY while main
+    // never marks it.
+    const windowsUserAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
+    expect(
+      isLocalNativeWindowsPty({
+        userAgent: windowsUserAgent,
+        connectionId: null,
+        cwd: 'C:\\repo',
+        shellOverride: resolveWindowsShellOverride(undefined, 'wsl.exe')
+      })
+    ).toBe(false)
+    // A tab-level override beats the global setting, both directions.
+    expect(
+      isLocalNativeWindowsPty({
+        userAgent: windowsUserAgent,
+        connectionId: null,
+        cwd: 'C:\\repo',
+        shellOverride: resolveWindowsShellOverride('powershell.exe', 'wsl.exe')
+      })
+    ).toBe(true)
+    expect(
+      isLocalNativeWindowsPty({
+        userAgent: windowsUserAgent,
+        connectionId: null,
+        cwd: 'C:\\repo',
+        shellOverride: resolveWindowsShellOverride('wsl.exe', 'powershell.exe')
+      })
+    ).toBe(false)
   })
 
   it('exposes the same local native Windows predicate for related renderer workarounds', () => {
@@ -150,6 +259,18 @@ describe('isLocalNativeWindowsConpty', () => {
       isLocalNativeWindowsConpty({
         ...localNativeWindowsContext,
         executionHostId: 'ssh:my-host'
+      })
+    ).toBe(false)
+  })
+
+  it('does NOT treat unresolved connection ownership as native ConPTY', () => {
+    expect(
+      isLocalNativeWindowsConpty({
+        userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+        connectionId: undefined,
+        cwd: '/home/me/repo',
+        shellOverride: null,
+        executionHostId: 'local'
       })
     ).toBe(false)
   })

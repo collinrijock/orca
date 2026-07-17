@@ -5,6 +5,7 @@ import { BaseRefPicker } from './BaseRefPicker'
 import { RepoSettingsDraftInput } from './RepositorySettingsDraftInput'
 import { SearchableSetting } from './SearchableSetting'
 import { translate } from '@/i18n/i18n'
+import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 
 type RepositoryWorktreeDefaultsUpdate = Pick<Repo, 'worktreeBasePath' | 'worktreeBaseRef'>
 
@@ -41,6 +42,7 @@ export function RepositoryWorktreeDefaultsSection({
         </Label>
         <BaseRefPicker
           repoId={repo.id}
+          hostId={getRepoExecutionHostId(repo)}
           currentBaseRef={repo.worktreeBaseRef}
           onSelect={(ref) => updateRepo(repo.id, { worktreeBaseRef: ref })}
           onUsePrimary={() => updateRepo(repo.id, { worktreeBaseRef: undefined })}
@@ -83,9 +85,16 @@ export function RepositoryWorktreeDefaultsSection({
           repoId={repo.id}
           storeValue={repo.worktreeBasePath ?? ''}
           placeholder={settings?.workspaceDir ?? ''}
-          onTextChange={(text) =>
-            updateRepo(repo.id, { worktreeBasePath: text.trim() ? text : undefined })
-          }
+          onTextChange={() => {}}
+          onBlur={(e) => {
+            const worktreeBasePath = e.currentTarget.value.trim() || undefined
+            // Why: even an unchanged worktreeBasePath update asks main to
+            // prepare the root, which can touch the filesystem.
+            if (worktreeBasePath === (repo.worktreeBasePath?.trim() || undefined)) {
+              return
+            }
+            updateRepo(repo.id, { worktreeBasePath })
+          }}
           className="h-9 text-sm"
         />
         <p className="text-xs text-muted-foreground">

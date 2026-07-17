@@ -1,13 +1,25 @@
 import { readFileSync } from 'node:fs'
-import { dirname, join, resolve } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { join, resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { parse } from 'yaml'
 
-const projectDir = resolve(dirname(fileURLToPath(import.meta.url)), '../..')
+const projectDir = resolve(import.meta.dirname, '../..')
 const packageJson = JSON.parse(readFileSync(join(projectDir, 'package.json'), 'utf8'))
 
 describe('Electron runtime package contract', () => {
+  it('keeps shared WebGL atlas invalidation reproducible from vendored source', () => {
+    const patch = readFileSync(
+      join(projectDir, 'config/patches/@xterm__addon-webgl@0.20.0-beta.286.patch'),
+      'utf8'
+    )
+
+    expect(patch).toContain('diff --git a/src/Types.ts b/src/Types.ts')
+    expect(patch).toContain('readonly clearModelGeneration: number')
+    expect(patch).toContain('const generation = this._atlas.clearModelGeneration')
+    expect(patch).toContain('this.clearModelGeneration++')
+    expect(patch).toContain('this._atlas._clearModelGeneration||0')
+  })
+
   it('keeps root postinstall as the single Electron binary install owner', () => {
     expect(packageJson.scripts.postinstall).toBe('node config/scripts/rebuild-native-deps.mjs')
     expect(packageJson.pnpm.onlyBuiltDependencies).not.toContain('electron')
@@ -61,22 +73,28 @@ describe('Electron runtime package contract', () => {
       'utf8'
     )
     const parsedWorkflow = parse(releaseWorkflow)
+    const macWorkflow = parse(
+      readFileSync(join(projectDir, '.github/workflows/release-mac-build.yml'), 'utf8')
+    )
     const releaseCommands = new Map(
       parsedWorkflow.jobs.build.strategy.matrix.include.map(({ platform, release_command }) => [
         platform,
         release_command
       ])
     )
+    const macReleaseCommand = macWorkflow.jobs['build-mac'].steps.find(
+      (step) => step.name === 'Publish release artifacts (macOS)'
+    ).with.command
 
-    expect([...releaseCommands.keys()].sort()).toEqual(['linux-arm64', 'linux-x64', 'mac', 'win'])
-    for (const command of releaseCommands.values()) {
+    expect([...releaseCommands.keys()].sort()).toEqual(['linux-arm64', 'linux-x64', 'win'])
+    for (const command of [...releaseCommands.values(), macReleaseCommand]) {
       expect(command).toContain('node config/scripts/ensure-native-runtime.mjs --runtime=electron')
       expect(command).toContain('electron-builder')
       expect(command.indexOf('ensure-native-runtime')).toBeLessThan(
         command.indexOf('electron-builder')
       )
     }
-    expect(releaseCommands.get('mac')).toContain(' && ORCA_MAC_RELEASE=1 ')
+    expect(macReleaseCommand).toContain(' && ORCA_MAC_RELEASE=1 ')
     expect(releaseCommands.get('linux-x64')).toContain(' && pnpm exec electron-builder ')
     expect(releaseCommands.get('linux-x64')).toContain('--linux AppImage deb rpm --x64')
     expect(releaseCommands.get('linux-arm64')).toContain('ORCA_LINUX_ARM64_RELEASE=1')
@@ -86,16 +104,298 @@ describe('Electron runtime package contract', () => {
     )
   })
 
-  it('lets release-cut tag a version that is already present on main', () => {
+  it('blocks Linux and macOS release packaging on watcher process fault recovery', () => {
+    const releaseWorkflow = parse(
+      readFileSync(join(projectDir, '.github/workflows/release-cut.yml'), 'utf8')
+    )
+    const macWorkflow = parse(
+      readFileSync(join(projectDir, '.github/workflows/release-mac-build.yml'), 'utf8')
+    )
+    const assertFaultGate = (steps, publishStepName, expectedCondition) => {
+      const names = steps.map((step) => step.name)
+      const gate = steps.find((step) => step.name === 'Gate runtime file-watcher process isolation')
+
+      expect(gate.if).toBe(expectedCondition)
+      expect(gate['continue-on-error']).toBeUndefined()
+      expect(gate.run).toContain('node config/scripts/runtime-file-watcher-fault-harness.mjs')
+      expect(gate.run).toContain('ELECTRON_RUN_AS_NODE=1 pnpm exec electron')
+      expect(names.indexOf('Build app')).toBeLessThan(names.indexOf(gate.name))
+      expect(names.indexOf(gate.name)).toBeLessThan(names.indexOf(publishStepName))
+    }
+
+    assertFaultGate(
+      releaseWorkflow.jobs.build.steps,
+      'Publish release artifacts (Linux)',
+      "runner.os == 'Linux'"
+    )
+    assertFaultGate(
+      macWorkflow.jobs['build-mac'].steps,
+      'Publish release artifacts (macOS)',
+      undefined
+    )
+  })
+
+  it('packages and release-gates the SSH relay watcher child', () => {
+    const relayBuild = readFileSync(join(projectDir, 'config/scripts/build-relay.mjs'), 'utf8')
+    const builderConfig = readFileSync(
+      join(projectDir, 'config/electron-builder.config.cjs'),
+      'utf8'
+    )
+    const remoteCommands = readFileSync(
+      join(projectDir, 'src/main/ssh/ssh-remote-commands.ts'),
+      'utf8'
+    )
+    const releaseWorkflow = parse(
+      readFileSync(join(projectDir, '.github/workflows/release-cut.yml'), 'utf8')
+    )
+    const macWorkflow = parse(
+      readFileSync(join(projectDir, '.github/workflows/release-mac-build.yml'), 'utf8')
+    )
+
+    expect(relayBuild).toContain("'parcel-watcher-process-entry.ts'")
+    expect(relayBuild).toContain("outfile: join(outDir, 'relay-watcher.js')")
+    expect(relayBuild).toContain("readFileSync(join(outDir, 'relay-watcher.js'))")
+    expect(builderConfig).toContain("from: 'out/relay'")
+    expect(remoteCommands).toContain("joinRemotePath(host, remoteRelayDir, 'relay-watcher.js')")
+
+    const assertRelayGate = (steps, publishStepName) => {
+      const names = steps.map((step) => step.name)
+      const gate = steps.find((step) => step.name === 'Gate SSH relay watcher process isolation')
+      expect(gate['continue-on-error']).toBeUndefined()
+      expect(gate.run).toContain('node config/scripts/relay-watcher-fault-harness.mjs')
+      expect(names.indexOf('Build app')).toBeLessThan(names.indexOf(gate.name))
+      expect(names.indexOf(gate.name)).toBeLessThan(names.indexOf(publishStepName))
+    }
+
+    assertRelayGate(releaseWorkflow.jobs.build.steps, 'Publish release artifacts (Linux)')
+    assertRelayGate(macWorkflow.jobs['build-mac'].steps, 'Publish release artifacts (macOS)')
+    const releaseNames = releaseWorkflow.jobs.build.steps.map((step) => step.name)
+    expect(releaseNames.indexOf('Gate SSH relay watcher process isolation')).toBeLessThan(
+      releaseNames.indexOf('Build Windows release artifacts')
+    )
+  })
+
+  it('pins the Windows release builder to the VS 2022 runner image', () => {
+    const releaseWorkflow = parse(
+      readFileSync(join(projectDir, '.github/workflows/release-cut.yml'), 'utf8')
+    )
+    const windowsReleaseEntry = releaseWorkflow.jobs.build.strategy.matrix.include.find(
+      ({ platform }) => platform === 'win'
+    )
+
+    expect(windowsReleaseEntry.os).toBe('windows-2022')
+  })
+
+  it('keeps release-cut signing provenance on GitHub-hosted runners', () => {
+    const releaseWorkflow = parse(
+      readFileSync(join(projectDir, '.github/workflows/release-cut.yml'), 'utf8')
+    )
+    const buildMatrixRunners = releaseWorkflow.jobs.build.strategy.matrix.include.map(
+      ({ os }) => os
+    )
+    const releaseWorkflowText = readFileSync(
+      join(projectDir, '.github/workflows/release-cut.yml'),
+      'utf8'
+    )
+    const macDispatchStep = releaseWorkflow.jobs['build-mac'].steps.find(
+      (step) => step.name === 'Run isolated macOS release build'
+    )
+
+    expect(releaseWorkflowText).not.toContain('blacksmith-')
+    expect(releaseWorkflow.jobs['build-mac']['runs-on']).toBe('ubuntu-latest')
+    expect(releaseWorkflow.jobs['build-mac'].permissions.actions).toBe('write')
+    expect(macDispatchStep.run).toBe('node config/scripts/run-release-mac-build-workflow.mjs')
+    expect(macDispatchStep.env.RELEASE_MAC_BUILD_WORKFLOW).toBe('release-mac-build.yml')
+    expect(macDispatchStep.env.RELEASE_MAC_BUILD_TAG).toBe('${{ needs.cut.outputs.tag }}')
+    expect(buildMatrixRunners).not.toContain('blacksmith-6vcpu-macos-15')
+    expect(releaseWorkflow.jobs['publish-release'].needs).toContain('build')
+    expect(releaseWorkflow.jobs['publish-release'].needs).toContain('build-mac')
+  })
+
+  it('runs the macOS release build in an isolated Blacksmith workflow', () => {
+    const releaseMacWorkflowText = readFileSync(
+      join(projectDir, '.github/workflows/release-mac-build.yml'),
+      'utf8'
+    )
+    const releaseMacWorkflow = parse(releaseMacWorkflowText)
+    const buildMacJob = releaseMacWorkflow.jobs['build-mac']
+    const checkoutStep = buildMacJob.steps.find((step) => step.name === 'Checkout')
+    const publishStep = buildMacJob.steps.find(
+      (step) => step.name === 'Publish release artifacts (macOS)'
+    )
+
+    expect(releaseMacWorkflow['run-name']).toBe(
+      'Mac release build ${{ inputs.tag }} (${{ inputs.release_run_id }})'
+    )
+    expect(releaseMacWorkflow.on.workflow_dispatch.inputs.tag.required).toBe(true)
+    expect(releaseMacWorkflow.on.workflow_dispatch.inputs.release_run_id.required).toBe(true)
+    expect(buildMacJob['runs-on']).toBe('blacksmith-6vcpu-macos-15')
+    expect(checkoutStep.with.ref).toBe('refs/tags/${{ inputs.tag }}')
+    expect(publishStep.with.command).toContain('ORCA_MAC_RELEASE=1')
+    expect(publishStep.with.command).toContain('electron-builder')
+    expect(publishStep.with.command).toContain('--mac --publish always')
+    expect(releaseMacWorkflowText).not.toContain('signpath/')
+    expect(releaseMacWorkflowText).not.toContain('SIGNPATH_')
+  })
+
+  it('preflights SignPath module install before Windows signing side effects', () => {
     const releaseWorkflow = readFileSync(
       join(projectDir, '.github/workflows/release-cut.yml'),
       'utf8'
     )
     const parsedWorkflow = parse(releaseWorkflow)
+    const steps = parsedWorkflow.jobs.build.steps
+    const stepNames = steps.map((step) => step.name)
+    const installStepIndexes = stepNames.flatMap((name, index) =>
+      name === 'Install SignPath PowerShell module' ? [index] : []
+    )
+    const buildIndex = stepNames.indexOf('Build Windows release artifacts')
+    const verifyNodePtyIndex = stepNames.indexOf('Verify Windows node-pty ConPTY runtime')
+    const uploadIndex = stepNames.indexOf('Upload unsigned Windows installer for SignPath')
+    const downloadIndex = stepNames.indexOf('Download signed Windows installer from SignPath')
+
+    expect(verifyNodePtyIndex).toBe(buildIndex + 1)
+    expect(installStepIndexes).toEqual([verifyNodePtyIndex + 1])
+    expect(installStepIndexes[0]).toBeLessThan(uploadIndex)
+
+    expect(steps[verifyNodePtyIndex].run).toContain(
+      'dist/win-unpacked/resources/node_modules/node-pty/build/Release'
+    )
+    expect(steps[verifyNodePtyIndex].run).toContain('conpty/conpty.dll')
+
+    const uploadThroughDownloadScript = steps
+      .slice(uploadIndex, downloadIndex + 1)
+      .map((step) => step.run ?? '')
+      .join('\n')
+
+    expect(uploadThroughDownloadScript).not.toContain('Install-Module -Name SignPath')
+
+    const installStep = steps[installStepIndexes[0]]
+    const installRun = installStep.run
+    const sleepSeconds = [...installRun.matchAll(/Start-Sleep -Seconds (\d+)/g)].map(
+      ([, seconds]) => seconds
+    )
+
+    expect(installStep.if).toBe("matrix.platform == 'win'")
+    expect(installStep.shell).toBe('pwsh')
+    expect(installRun).toContain(
+      'if ($null -eq (Get-PSRepository -Name PSGallery -ErrorAction SilentlyContinue))'
+    )
+    expect(installRun).toContain('Register-PSRepository -Default -InstallationPolicy Trusted')
+    expect(installRun).toContain('Set-PSRepository -Name PSGallery -InstallationPolicy Trusted')
+    expect(installRun).toMatch(/\$env:PSModulePath -split \[System\.IO\.Path\]::PathSeparator/)
+    expect(installRun).toContain(
+      "$signPathModulePath = Join-Path -Path $currentUserModuleRoot -ChildPath 'SignPath'"
+    )
+    expect(installRun).toMatch(/for \(\$attempt = 1; \$attempt -le 3; \$attempt\+\+\)/)
+    expect(sleepSeconds).toEqual(['15', '30'])
+    expect(installRun).toContain(
+      'Install-Module -Name SignPath -Repository PSGallery -MinimumVersion 4.0.0 -MaximumVersion 4.999.999 -Scope CurrentUser -Force -AllowClobber -ErrorAction Stop'
+    )
+    expect(installRun).toContain('Import-Module SignPath')
+    expect(installRun).toContain(
+      'Get-Command -Name Get-SignedArtifact -Module SignPath -ErrorAction Stop'
+    )
+    expect(installRun).toContain('Remove-Item -LiteralPath $signPathModulePath -Recurse -Force')
+    expect(installRun).not.toContain('SignPath*')
+    expect(installRun.indexOf('if ($attempt -eq 3)')).toBeLessThan(
+      installRun.indexOf('Remove-Item -LiteralPath $signPathModulePath')
+    )
+    expect(installRun).toMatch(/if \(\$attempt -eq 3\) {\s+throw\s+}/)
+    expect(installRun).not.toMatch(/throw\s+\$_/)
+  })
+
+  it('verifies Windows inner binary signatures fail-open before publishing', () => {
+    const releaseWorkflow = readFileSync(
+      join(projectDir, '.github/workflows/release-cut.yml'),
+      'utf8'
+    )
+    const parsedWorkflow = parse(releaseWorkflow)
+    const steps = parsedWorkflow.jobs.build.steps
+    const stepNames = steps.map((step) => step.name)
+    const outerVerifyIndex = stepNames.indexOf('Verify signed Windows installer')
+    const innerVerifyIndex = stepNames.indexOf('Verify Windows inner binary signatures')
+    const evidenceIndex = stepNames.indexOf('Upload Windows inner signing evidence')
+    const publishIndex = stepNames.indexOf('Publish signed Windows release artifacts')
+
+    expect(outerVerifyIndex).toBeGreaterThan(-1)
+    expect(innerVerifyIndex).toBe(outerVerifyIndex + 1)
+    expect(evidenceIndex).toBe(innerVerifyIndex + 1)
+    expect(publishIndex).toBe(evidenceIndex + 1)
+
+    // Why fail-open: unsigned inner binaries must warn, not block, until the
+    // flow is proven on a real release (issue #7785). Flip this to 'true'
+    // together with the workflow env to make the gate required.
+    expect(steps[innerVerifyIndex].env.ORCA_WINDOWS_INNER_SIGNATURE_REQUIRED).toBe('false')
+
+    // Why: every step in the inner-signing chain must be unable to fail the
+    // release — a SignPath outage or timeout falls through to today's
+    // unsigned-inner flow instead of blocking the cut.
+    const innerChainStepNames = [
+      'Stage unsigned inner PE files for signing',
+      'Upload unsigned inner binaries for SignPath',
+      'Submit inner binaries signing request',
+      'Notify Slack that inner-binary signing is waiting for approval',
+      'Download signed inner binaries from SignPath',
+      'Restore signed inner binaries into unpacked app',
+      'Replace cached elevate.exe with the signed copy',
+      'Rebuild NSIS installer from signed unpacked app'
+    ]
+    for (const stepName of innerChainStepNames) {
+      const step = steps[stepNames.indexOf(stepName)]
+      expect(step, stepName).toBeDefined()
+      expect(step['continue-on-error'], stepName).toBe(true)
+    }
+  })
+
+  it('publishes both Linux release matrix entries', () => {
+    const releaseWorkflow = readFileSync(
+      join(projectDir, '.github/workflows/release-cut.yml'),
+      'utf8'
+    )
+    const parsedWorkflow = parse(releaseWorkflow)
+    const publishLinuxStep = parsedWorkflow.jobs.build.steps.find(
+      (step) => step.name === 'Publish release artifacts (Linux)'
+    )
+
+    expect(publishLinuxStep.if).toContain("matrix.platform == 'linux-x64'")
+    expect(publishLinuxStep.if).toContain("matrix.platform == 'linux-arm64'")
+    expect(publishLinuxStep.with.command).toBe('${{ matrix.release_command }}')
+  })
+
+  it('keeps Linux postinstall repairing Chromium sandbox permissions', () => {
+    const afterInstallScript = readFileSync(
+      join(projectDir, 'resources/linux/packaging/after-install.sh'),
+      'utf8'
+    )
+
+    expect(afterInstallScript).toContain('chrome-sandbox')
+    expect(afterInstallScript).toContain('chmod 4755 "$sandbox"')
+    expect(afterInstallScript).not.toContain('chmod 0755 "$sandbox"')
+  })
+
+  it('keeps release-cut version commits self-healing and taggable on retries', () => {
+    const releaseWorkflow = readFileSync(
+      join(projectDir, '.github/workflows/release-cut.yml'),
+      'utf8'
+    )
+    const parsedWorkflow = parse(releaseWorkflow)
+    const checkoutStep = parsedWorkflow.jobs.cut.steps.find((step) => step.name === 'Checkout ref')
     const bumpStep = parsedWorkflow.jobs.cut.steps.find(
       (step) => step.name === 'Bump package.json and tag'
     )
 
+    const bumpIndex = bumpStep.run.indexOf(
+      'npm version "$VERSION" --no-git-tag-version --allow-same-version'
+    )
+    const generateIndex = bumpStep.run.indexOf(
+      'node config/scripts/generate-skill-bundle-manifest.mjs --write'
+    )
+    const stageIndex = bumpStep.run.indexOf('git add package.json resources/skills')
+    expect(checkoutStep.with['fetch-depth']).toBe(0)
+    expect(bumpIndex).toBeGreaterThanOrEqual(0)
+    expect(generateIndex).toBeGreaterThan(bumpIndex)
+    expect(stageIndex).toBeGreaterThan(generateIndex)
     expect(bumpStep.run).toContain('git diff --cached --quiet')
     expect(bumpStep.run).toContain('git commit --allow-empty -m "$commit_message"')
   })
@@ -260,6 +560,9 @@ describe('Electron runtime package contract', () => {
     expect(packageScripts['test:e2e:terminal-rendering-golden']).toContain(
       'terminal-raw-emoji-table-scroll-restore.spec.ts'
     )
+    expect(packageScripts['test:e2e:terminal-rendering-golden']).toContain(
+      'terminal-webgl-atlas-budget.spec.ts'
+    )
     expect(packageScripts['test:e2e:terminal-rendering-golden']).not.toContain(
       'terminal-long-table-scroll-restore.spec.ts'
     )
@@ -273,6 +576,8 @@ describe('Electron runtime package contract', () => {
       expect(runStep?.run).toContain('pnpm run test:e2e:terminal-rendering-golden')
     }
     expect(pullRequestPaths).toContain('tests/e2e/terminal-raw-emoji-table-scroll-restore.spec.ts')
+    expect(pullRequestPaths).toContain('tests/e2e/terminal-webgl-atlas-budget.spec.ts')
+    expect(pullRequestPaths).toContain('config/patches/@xterm__addon-webgl@0.20.0-beta.286.patch')
     expect(pullRequestPaths).toContain('tests/e2e/fixtures/terminal-emoji-table.md')
     expect(pullRequestPaths).toContain('src/renderer/src/lib/pane-manager/**')
     expect(releaseBuildNeeds).not.toContain('terminal-rendering-golden')

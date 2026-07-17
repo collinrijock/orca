@@ -1,9 +1,12 @@
+import { existsSync } from 'node:fs'
 import { basename, posix, win32 } from 'node:path'
+import { parseWslUncPath } from '../shared/wsl-paths'
 import { resolveCliCommand } from './codex-cli/command'
 import { getCmdExePath } from './win32-utils'
 
 export const EXTERNAL_EDITOR_CLI_COMMAND = 'code'
 const WINDOWS_CONSOLE_EDITORS = new Set(['nvim', 'vim'])
+const VSCODE_REMOTE_EDITORS = new Set(['code', 'code-insiders', 'code - insiders'])
 
 export type ExternalEditorLaunchSpec =
   | {
@@ -65,12 +68,36 @@ function stripMatchingQuotes(value: string): string {
   return trimmed
 }
 
-function isDirectExecutablePath(command: string, platform: NodeJS.Platform): boolean {
+function hasMatchingOuterQuotes(value: string): boolean {
+  const trimmed = value.trim()
+  const quote = trimmed[0]
+  return (quote === '"' || quote === "'") && trimmed.endsWith(quote)
+}
+
+function isWindowsExecutablePath(command: string): boolean {
+  return win32.isAbsolute(command) && /\.(?:cmd|exe|bat|com)$/i.test(command)
+}
+
+function isDirectExecutablePath(
+  command: string,
+  platform: NodeJS.Platform,
+  fileExists: (path: string) => boolean
+): boolean {
   const unquoted = stripMatchingQuotes(command)
   if (!/[\\/]/.test(unquoted)) {
     return false
   }
-  return platform === 'win32' ? win32.isAbsolute(unquoted) : posix.isAbsolute(unquoted)
+  const isAbsolutePath =
+    platform === 'win32' ? win32.isAbsolute(unquoted) : posix.isAbsolute(unquoted)
+  if (!isAbsolutePath) {
+    return false
+  }
+  if (!/\s/.test(unquoted) || hasMatchingOuterQuotes(command)) {
+    return true
+  }
+  // Why: unquoted POSIX paths can contain spaces, but so can shell commands
+  // with arguments. Only an existing path is safe to treat as one executable.
+  return platform === 'win32' ? isWindowsExecutablePath(unquoted) : fileExists(unquoted)
 }
 
 function shouldShowWindowsConsole(
@@ -81,11 +108,23 @@ function shouldShowWindowsConsole(
   return platform === 'win32' && WINDOWS_CONSOLE_EDITORS.has(getLauncherBaseName(command, options))
 }
 
-function buildExecutableArgs(editorCommand: string, pathValue: string): string[] {
-  if (getLauncherBaseName(editorCommand) === 'cursor') {
+function buildExecutableArgs(
+  editorCommand: string,
+  pathValue: string,
+  platform: NodeJS.Platform
+): string[] {
+  const launcherBaseName = getLauncherBaseName(editorCommand)
+  if (launcherBaseName === 'cursor') {
     // Why: Cursor can route bare folder launches through the last active
     // workbench. A new window keeps "Open in Cursor" scoped to this worktree.
     return ['--new-window', pathValue]
+  }
+  if (platform === 'win32' && VSCODE_REMOTE_EDITORS.has(launcherBaseName)) {
+    const wslPath = parseWslUncPath(pathValue)
+    if (wslPath) {
+      // Why: VS Code otherwise treats a WSL UNC path as a local Windows folder.
+      return ['--remote', `wsl+${wslPath.distro}`, wslPath.linuxPath]
+    }
   }
   return [pathValue]
 }
@@ -119,18 +158,19 @@ function buildShellLaunchSpec(
 export function resolveExternalEditorLaunchSpec(
   command: string | undefined,
   pathValue: string,
-  options: { platform?: NodeJS.Platform } = {}
+  options: { platform?: NodeJS.Platform; fileExists?: (path: string) => boolean } = {}
 ): ExternalEditorLaunchSpec {
   const platform = options.platform ?? process.platform
+  const fileExists = options.fileExists ?? existsSync
   const trimmed = command?.trim() || EXTERNAL_EDITOR_CLI_COMMAND
 
-  if (isDirectExecutablePath(trimmed, platform)) {
+  if (isDirectExecutablePath(trimmed, platform, fileExists)) {
     const editorCommand = stripMatchingQuotes(trimmed)
     return {
       kind: 'executable',
       hideWindowsConsole: !shouldShowWindowsConsole(editorCommand, platform),
       spawnCmd: editorCommand,
-      spawnArgs: buildExecutableArgs(editorCommand, pathValue)
+      spawnArgs: buildExecutableArgs(editorCommand, pathValue, platform)
     }
   }
 
@@ -143,6 +183,6 @@ export function resolveExternalEditorLaunchSpec(
     kind: 'executable',
     hideWindowsConsole: !shouldShowWindowsConsole(editorCommand, platform),
     spawnCmd: editorCommand,
-    spawnArgs: buildExecutableArgs(editorCommand, pathValue)
+    spawnArgs: buildExecutableArgs(editorCommand, pathValue, platform)
   }
 }

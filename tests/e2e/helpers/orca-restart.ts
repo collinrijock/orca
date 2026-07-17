@@ -15,10 +15,10 @@ import {
   type Page,
   type TestInfo
 } from '@stablyai/playwright-test'
-import { execSync } from 'child_process'
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'fs'
-import os from 'os'
-import path from 'path'
+import { execSync } from 'node:child_process'
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
 import { getE2ECompletedOnboardingProfile } from './e2e-completed-onboarding-profile'
 import { getOrcaElectronLaunchArgs } from './electron-launch-args'
 import { cleanupE2EDaemons, closeElectronAppForE2E } from './electron-process-shutdown'
@@ -35,6 +35,29 @@ type RestartSession = {
   close: (app: ElectronApplication) => Promise<void>
   /** Remove the shared userDataDir after the test is done. */
   dispose: () => Promise<void>
+}
+
+async function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    const timeout = setTimeout(resolve, ms)
+    timeout.unref?.()
+  })
+}
+
+async function removeProfileDir(userDataDir: string): Promise<void> {
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    try {
+      rmSync(userDataDir, { recursive: true, force: true })
+      return
+    } catch (error) {
+      if (attempt === 4) {
+        throw error
+      }
+      // Why: on Windows, taskkill can return before Electron/PTY handles are
+      // fully released, making immediate temp-profile deletion flaky.
+      await delay(250)
+    }
+  }
 }
 
 function shouldLaunchHeadful(testInfo: TestInfo): boolean {
@@ -90,7 +113,7 @@ export function createRestartSession(testInfo: TestInfo): RestartSession {
   const dispose = async (): Promise<void> => {
     await cleanupE2EDaemons(userDataDir)
     if (existsSync(userDataDir)) {
-      rmSync(userDataDir, { recursive: true, force: true })
+      await removeProfileDir(userDataDir)
     }
   }
 
@@ -107,36 +130,40 @@ export async function attachRepoAndOpenTerminal(page: Page, repoPath: string): P
     throw new Error(`attachRepoAndOpenTerminal: ${repoPath} is not a git repo`)
   }
 
-  await page.evaluate(async (repoPath) => {
-    await window.api.repos.add({ path: repoPath })
-  }, repoPath)
-
-  await page.evaluate(async () => {
-    const store = window.__store
-    if (!store) {
-      return
-    }
-    await store.getState().fetchRepos()
-  })
-
   const repoId = await page.evaluate(async (repoPath) => {
-    const store = window.__store
-    if (!store) {
-      return null
+    const result = await window.api.repos.add({ path: repoPath })
+    if ('error' in result) {
+      throw new Error(result.error)
     }
-    const repo = store.getState().repos.find((candidate) => candidate.path === repoPath)
-    if (!repo) {
-      return null
-    }
-    // Why: this restart fixture uses the global e2e repo, whose seeded Git
-    // worktree is external to Orca's workspace root after the visibility rollout.
-    await store.getState().updateRepo(repo.id, { externalWorktreeVisibility: 'show' })
-    return repo.id
+    return result.repo.id
   }, repoPath)
 
-  if (!repoId) {
-    throw new Error(`attachRepoAndOpenTerminal: expected e2e repo to be loaded: ${repoPath}`)
-  }
+  await expect
+    .poll(
+      () =>
+        page.evaluate(async (repoId) => {
+          const store = window.__store
+          if (!store) {
+            return false
+          }
+          // Why: repos.add emits a concurrent refresh whose generation can
+          // supersede this fetch; poll until either refresh publishes the repo.
+          await store.getState().fetchRepos()
+          const repo = store.getState().repos.find((candidate) => candidate.id === repoId)
+          if (!repo) {
+            return false
+          }
+          // Why: this restart fixture uses the global e2e repo, whose seeded Git
+          // worktree is external to Orca's workspace root after the visibility rollout.
+          await store.getState().updateRepo(repo.id, { externalWorktreeVisibility: 'show' })
+          return true
+        }, repoId),
+      {
+        timeout: 30_000,
+        message: `attachRepoAndOpenTerminal: expected e2e repo to be loaded: ${repoPath}`
+      }
+    )
+    .toBe(true)
 
   await page.waitForFunction(
     () => window.__store?.getState().workspaceSessionReady === true,
@@ -147,10 +174,7 @@ export async function attachRepoAndOpenTerminal(page: Page, repoPath: string): P
   // Why: fetchWorktrees() is async. Awaiting the outer page.evaluate returns
   // before the Zustand worktree slice has observed the hydrated state, so a
   // single evaluate() that reads worktreesByRepo can see an empty map. Poll
-  // the store until *any* worktree shows up, then pick the one that matches
-  // our seeded repo. Matching by basename is sufficient because each test
-  // run uses a unique tmp-dir suffix, and it avoids symlink-canonicalization
-  // mismatches between the path we pass in and the one the store records.
+  // the store until the seeded repo's worktree shows up.
   await expect
     .poll(
       async () =>
@@ -169,32 +193,22 @@ export async function attachRepoAndOpenTerminal(page: Page, repoPath: string): P
     )
     .toBe(true)
 
-  const repoBasename = path.basename(repoPath)
-  const worktreeId = await page.evaluate((repoBasename: string) => {
+  const worktreeId = await page.evaluate((repoId: string) => {
     const store = window.__store
     if (!store) {
       return null
     }
     const state = store.getState()
-    const allWorktrees = Object.values(state.worktreesByRepo).flat()
-    // Why: the primary worktree lives at the repo root, so its path ends with
-    // the repo directory name. The secondary worktree is a sibling directory
-    // and will not match this suffix. This gives us the primary deterministically
-    // without depending on boolean fields on the worktree record.
-    const primary =
-      allWorktrees.find(
-        (worktree) =>
-          worktree.path
-            .split(/[\\/]+/)
-            .filter(Boolean)
-            .pop() === repoBasename
-      ) ?? allWorktrees[0]
+    // Why: repo identity remains stable when Windows canonicalizes path casing
+    // or separators between the IPC and renderer layers.
+    const repoWorktrees = state.worktreesByRepo[repoId] ?? []
+    const primary = repoWorktrees.find((worktree) => worktree.isMainWorktree) ?? repoWorktrees[0]
     if (!primary) {
       return null
     }
     state.setActiveWorktree(primary.id)
     return primary.id
-  }, repoBasename)
+  }, repoId)
 
   if (!worktreeId) {
     throw new Error('attachRepoAndOpenTerminal: test repo did not surface in the store')

@@ -83,10 +83,12 @@ const EMPTY_BROWSER_PAGES_BY_WORKSPACE: AppState['browserPagesByWorkspace'] = {}
 const EMPTY_LAYOUT_BY_WORKTREE: AppState['layoutByWorktree'] = {}
 const EMPTY_AGENT_STATUS_BY_PANE_KEY: AppState['agentStatusByPaneKey'] = {}
 const AGENT_STATUS_SYNC_UPDATED_AT_BUCKET_MS = 30_000
+const RUNTIME_GRAPH_SYNC_COALESCE_MS = 16
 let syncScheduled = false
 let syncInFlight = false
 let syncPendingAfterFlight = false
 let syncEnabled = false
+let syncTimer: ReturnType<typeof setTimeout> | null = null
 let getStoreState: (() => AppState) | null = null
 let mobileSessionSnapshotVersion = 0
 let cachedTabsProjection: TabsProjectionCache | null = null
@@ -100,11 +102,21 @@ export function setRuntimeGraphStoreStateGetter(getter: (() => AppState) | null)
   getStoreState = getter
 }
 
+/** True while a TerminalPane for this tab is mounted (lifecycle effect ran). */
+export function hasRegisteredRuntimeTerminalTab(tabId: string): boolean {
+  return registeredTabs.has(tabId)
+}
+
 export function registerRuntimeTerminalTab(tab: RegisteredTerminalTab): () => void {
   registeredTabs.set(tab.tabId, tab)
   tabRegisteredAt.set(tab.tabId, Date.now())
   scheduleRuntimeGraphSync()
   return () => {
+    // Why: React can mount a replacement surface before the prior effect
+    // cleans up. Stale cleanup must not erase the successor's live registry.
+    if (registeredTabs.get(tab.tabId) !== tab) {
+      return
+    }
     registeredTabs.delete(tab.tabId)
     tabRegisteredAt.delete(tab.tabId)
     scheduleRuntimeGraphSync()
@@ -132,9 +144,20 @@ export function focusRuntimeTerminalSurface(tabId: string, leafId?: string | nul
 
 export function setRuntimeGraphSyncEnabled(enabled: boolean): void {
   syncEnabled = enabled
-  if (enabled) {
-    scheduleRuntimeGraphSync()
+  if (!enabled) {
+    syncPendingAfterFlight = false
+    clearScheduledRuntimeGraphSync()
+    return
   }
+  scheduleRuntimeGraphSync()
+}
+
+function clearScheduledRuntimeGraphSync(): void {
+  if (syncTimer !== null) {
+    clearTimeout(syncTimer)
+    syncTimer = null
+  }
+  syncScheduled = false
 }
 
 export function scheduleRuntimeGraphSync(): void {
@@ -146,10 +169,14 @@ export function scheduleRuntimeGraphSync(): void {
     return
   }
   syncScheduled = true
-  queueMicrotask(() => {
+  // Why: terminal title/status updates often arrive as separate IPC tasks.
+  // A frame-sized timer collapses that churn into one graph publish without
+  // tying runtime state publication to paint frames or visible-window status.
+  syncTimer = setTimeout(() => {
+    syncTimer = null
     syncScheduled = false
     void runRuntimeGraphSync()
-  })
+  }, RUNTIME_GRAPH_SYNC_COALESCE_MS)
 }
 
 async function runRuntimeGraphSync(): Promise<void> {
@@ -469,6 +496,9 @@ function buildRuntimeMobileAgentStatusProjection(
         })),
         toolName: entry.toolName ?? null,
         toolInput: entry.toolInput ?? null,
+        // Why: include so a newly-captured AskUserQuestion prompt re-fires the
+        // mobile session republish even when no other field changed.
+        interactivePrompt: entry.interactivePrompt ?? null,
         lastAssistantMessage: entry.lastAssistantMessage ?? null,
         interrupted: entry.interrupted ?? null
       }))
@@ -683,7 +713,11 @@ export function buildMobileSessionTabSnapshots(
     const unifiedTabByIdForWorktree = new Map(
       (state.unifiedTabsByWorktree[worktreeId] ?? []).map((tab) => [tab.id, tab])
     )
-    const editorIds = openFileIndexes.idsByWorktree.get(worktreeId) ?? []
+    const openFilesForWorktree = openFileIndexes.byWorktreeAndId.get(worktreeId)
+    const editorIds = (openFileIndexes.idsByWorktree.get(worktreeId) ?? []).filter((fileId) => {
+      const file = openFilesForWorktree?.get(fileId)
+      return file ? isMobilePublishableOpenFile(file) : false
+    })
     const publishableTerminalIds = [...terminalTabByIdForWorktree.values()]
       .filter((terminal) => !isWebOnlyMirroredTerminalTab(state, terminal))
       .map((terminal) => terminal.id)
@@ -715,8 +749,8 @@ export function buildMobileSessionTabSnapshots(
           )
         )
       } else if (item.type === 'editor') {
-        const file = openFileIndexes.byWorktreeAndId.get(worktreeId)?.get(item.id)
-        if (!file) {
+        const file = openFilesForWorktree?.get(item.id)
+        if (!file || !isMobilePublishableOpenFile(file)) {
           continue
         }
         const markdown = buildMobileMarkdownTab(
@@ -757,7 +791,6 @@ export function buildMobileSessionTabSnapshots(
     // Why: split-group projection can miss plain editor files during hydration.
     // Publish the missing file so paired mobile/web clients still mirror it.
     const fallbackEditorTabs: FallbackEditorTabTarget[] = []
-    const openFilesForWorktree = openFileIndexes.byWorktreeAndId.get(worktreeId)
     if (openFilesForWorktree) {
       const unifiedEditorTabs = getEditorUnifiedTabsForWorktree(state, worktreeId)
       const unifiedEditorFileIds = new Set(unifiedEditorTabs.map((tab) => tab.entityId))
@@ -766,7 +799,7 @@ export function buildMobileSessionTabSnapshots(
           continue
         }
         const file = openFilesForWorktree.get(unifiedTab.entityId)
-        if (!file) {
+        if (!file || !isMobilePublishableOpenFile(file)) {
           continue
         }
         const markdown = buildMobileMarkdownTab(
@@ -785,6 +818,9 @@ export function buildMobileSessionTabSnapshots(
         emittedEditorTabIds.add(unifiedTab.id)
       }
       for (const file of openFilesForWorktree.values()) {
+        if (!isMobilePublishableOpenFile(file)) {
+          continue
+        }
         if (emittedEditorFileIds.has(file.id)) {
           continue
         }
@@ -1165,9 +1201,9 @@ function hexToRgba(hex: string, alpha: number): string {
       .map((c) => c + c)
       .join('')
   }
-  const r = parseInt(clean.slice(0, 2), 16)
-  const g = parseInt(clean.slice(2, 4), 16)
-  const b = parseInt(clean.slice(4, 6), 16)
+  const r = Number.parseInt(clean.slice(0, 2), 16)
+  const g = Number.parseInt(clean.slice(2, 4), 16)
+  const b = Number.parseInt(clean.slice(4, 6), 16)
   return `rgba(${r}, ${g}, ${b}, ${alpha})`
 }
 
@@ -1416,6 +1452,23 @@ function isMobileFileDiffSource(
   diffSource: AppState['openFiles'][number]['diffSource']
 ): diffSource is 'staged' | 'unstaged' {
   return diffSource === 'staged' || diffSource === 'unstaged'
+}
+
+function isMobileUnsupportedCombinedDiffSource(
+  diffSource: AppState['openFiles'][number]['diffSource']
+): boolean {
+  return (
+    diffSource === 'combined-all' ||
+    diffSource === 'combined-uncommitted' ||
+    diffSource === 'combined-branch' ||
+    diffSource === 'combined-commit'
+  )
+}
+
+function isMobilePublishableOpenFile(file: AppState['openFiles'][number]): boolean {
+  // Why: combined diff tabs use display labels as relative paths and require
+  // the desktop combined renderer; mobile would otherwise try files.read.
+  return !isMobileUnsupportedCombinedDiffSource(file.diffSource)
 }
 
 function buildMobileBrowserTab(

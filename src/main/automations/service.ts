@@ -1,12 +1,12 @@
 import type { WebContents } from 'electron'
 import type { Store } from '../persistence'
-import type {
-  Automation,
-  AutomationDispatchRequest,
-  AutomationDispatchResult,
-  AutomationPrecheckResult,
-  AutomationRun,
-  AutomationRunStatus
+import {
+  isFinalAutomationRunStatus,
+  type Automation,
+  type AutomationDispatchRequest,
+  type AutomationDispatchResult,
+  type AutomationPrecheckResult,
+  type AutomationRun
 } from '../../shared/automations-types'
 import type { ClaudeUsageStore } from '../claude-usage/store'
 import type { CodexUsageStore } from '../codex-usage/store'
@@ -69,7 +69,9 @@ export class AutomationService {
     this.timer = setInterval(() => {
       void this.evaluateDueRuns()
     }, this.tickMs)
-    if (this.rendererReady) {
+    // Why: headless serve never gets a renderer-ready IPC, but due runs still
+    // need the same startup catch-up pass desktop gets after renderer attach.
+    if (this.rendererReady || this.headlessDispatcher) {
       void this.evaluateDueRuns()
     }
   }
@@ -133,7 +135,7 @@ export class AutomationService {
   async markDispatchResult(result: AutomationDispatchResult): Promise<AutomationRun> {
     const run = this.store.updateAutomationRun(result)
     clearAutomationDispatchTokens(run.automationId, run.id)
-    if (!isFinalRunStatus(run.status)) {
+    if (!isFinalAutomationRunStatus(run.status)) {
       return run
     }
     // Why: the renderer's mark-completed effect can re-fire for the same run
@@ -149,6 +151,11 @@ export class AutomationService {
       claudeUsage: this.claudeUsage,
       codexUsage: this.codexUsage
     })
+    // Why: the run is final during the await above, so a concurrent create-time
+    // retention prune may have evicted it — the usage write must not throw then.
+    if (!this.store.listAutomationRuns(run.automationId).some((entry) => entry.id === run.id)) {
+      return run
+    }
     return this.store.updateAutomationRun({
       runId: run.id,
       status: run.status,
@@ -262,12 +269,17 @@ export class AutomationService {
     }
     try {
       const launch = await this.headlessDispatcher!({ automation, run, target })
-      const updated = this.store.updateAutomationRun({
-        runId: run.id,
-        status: 'dispatched',
+      const launchRunTarget = {
         workspaceId: launch.workspaceId,
         workspaceDisplayName: launch.workspaceDisplayName ?? null,
         terminalSessionId: launch.terminalSessionId,
+        terminalPaneKey: launch.terminalPaneKey ?? null,
+        terminalPtyId: launch.terminalPtyId ?? null
+      }
+      const updated = this.store.updateAutomationRun({
+        runId: run.id,
+        status: 'dispatched',
+        ...launchRunTarget,
         error: null
       })
       if (launch.completion) {
@@ -276,9 +288,7 @@ export class AutomationService {
             this.markDispatchResult({
               runId: run.id,
               status: completion.status,
-              workspaceId: launch.workspaceId,
-              workspaceDisplayName: launch.workspaceDisplayName ?? null,
-              terminalSessionId: launch.terminalSessionId,
+              ...launchRunTarget,
               precheckResult,
               outputSnapshot: completion.outputSnapshot ?? null,
               error: completion.error ?? null
@@ -288,9 +298,7 @@ export class AutomationService {
             this.markDispatchResult({
               runId: run.id,
               status: 'dispatch_failed',
-              workspaceId: launch.workspaceId,
-              workspaceDisplayName: launch.workspaceDisplayName ?? null,
-              terminalSessionId: launch.terminalSessionId,
+              ...launchRunTarget,
               error: error instanceof Error ? error.message : String(error)
             })
           )
@@ -305,15 +313,4 @@ export class AutomationService {
       })
     }
   }
-}
-
-function isFinalRunStatus(status: AutomationRunStatus): boolean {
-  return (
-    status === 'completed' ||
-    status === 'dispatch_failed' ||
-    status === 'skipped_precheck' ||
-    status === 'skipped_missed' ||
-    status === 'skipped_unavailable' ||
-    status === 'skipped_needs_interactive_auth'
-  )
 }

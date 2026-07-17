@@ -3,11 +3,14 @@ import type { AiVaultSession } from '../../../../shared/ai-vault-types'
 import {
   latestSessionConversationTurn,
   recentSessionConversationTurns,
+  sessionDetailConversationTurns,
+  sessionModelLabel,
   sessionPreviewSearchText
 } from './ai-vault-session-display'
 
 const baseSession: AiVaultSession = {
   id: 'codex:1',
+  executionHostId: 'local',
   agent: 'codex',
   sessionId: 'session-1',
   title: 'Fix the flaky golden tests',
@@ -27,7 +30,10 @@ const baseSession: AiVaultSession = {
     { role: 'assistant', text: 'I updated the fixture ordering', timestamp: null },
     { role: 'system', text: 'hidden runtime bookkeeping', timestamp: null }
   ],
-  resumeCommand: "cd '/Users/ada/repo/app' && codex resume 'session-1'"
+  queuedMessageCount: 0,
+  subagentTranscriptCount: 0,
+  resumeCommand: "cd '/Users/ada/repo/app' && codex resume 'session-1'",
+  subagent: null
 }
 
 describe('ai vault session display', () => {
@@ -69,5 +75,28 @@ describe('ai vault session display', () => {
         previewMessages: [{ role: 'tool', text: 'tool-only transcript', timestamp: null }]
       })
     ).toBe('tool-only transcript')
+  })
+
+  it('drops title-matching turns and adjacent duplicates from detail turns', () => {
+    const session: AiVaultSession = {
+      ...baseSession,
+      title: 'Fix the flaky golden tests',
+      previewMessages: [
+        { role: 'user', text: 'Fix the flaky golden tests', timestamp: null },
+        { role: 'assistant', text: 'I updated the fixture ordering', timestamp: null },
+        { role: 'assistant', text: 'I updated the fixture ordering', timestamp: null },
+        { role: 'assistant', text: 'Added a regression test', timestamp: null }
+      ]
+    }
+
+    expect(sessionDetailConversationTurns(session, 3).map((turn) => turn.text)).toEqual([
+      'I updated the fixture ordering',
+      'Added a regression test'
+    ])
+  })
+
+  it('labels the session model only when the transcript recorded one', () => {
+    expect(sessionModelLabel(baseSession)).toBe('gpt-5.5')
+    expect(sessionModelLabel({ ...baseSession, model: null })).toBeNull()
   })
 })

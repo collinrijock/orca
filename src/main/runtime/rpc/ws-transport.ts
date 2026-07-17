@@ -1,13 +1,10 @@
-/* eslint-disable max-lines -- Why: the WebSocket transport owns connection
-   admission, heartbeat, pre-auth timeout, and client-id cleanup together; those
-   invariants are easier to audit in one transport boundary. */
 // Why: the WebSocket transport enables mobile clients to connect to the Orca
 // runtime over the local network. When TLS cert/key are provided it uses wss://
 // to prevent passive sniffing; otherwise it falls back to plain ws://. Per-device
 // tokens (validated by the message handler in OrcaRuntimeRpcServer) provide auth
 // regardless of transport encryption.
-import { createServer as createHttpsServer, type Server as HttpsServer } from 'https'
-import { createServer as createHttpServer, type Server as HttpServer } from 'http'
+import { createServer as createHttpsServer, type Server as HttpsServer } from 'node:https'
+import { createServer as createHttpServer, type Server as HttpServer } from 'node:http'
 import { WebSocketServer, type WebSocket } from 'ws'
 import type { RpcTransport } from './transport'
 import { createStaticWebClientHandler } from './static-web-client-handler'
@@ -51,6 +48,17 @@ export type WebSocketTransportOptions = {
   // Why: the pairing server can also serve the browser client, so users do
   // not need a second dev/static server once the web bundle is built.
   staticRoot?: string
+  // Why: paired mobile devices store the full ws://ip:port endpoint. Once a
+  // fallback port has been assigned and persisted, devices paired while it was
+  // active point at it, so it must be bound FIRST on later launches — binding
+  // the (now free) preferred port instead would strand those pairings
+  // (STA-1511). Callers pass the previously assigned fallback port here.
+  fallbackPort?: number
+  // Why: `orca serve --port <P>` clients dial the pinned port. Prefer that port
+  // first (fallback second) so a stale mobile-ws-fallback-port.json cannot
+  // silently steal the pin (issue #8535). Default auto/desktop keeps
+  // fallback-first for STA-1511 pairing stability.
+  preferPinnedPort?: boolean
 }
 
 export class WebSocketTransport implements RpcTransport {
@@ -61,6 +69,8 @@ export class WebSocketTransport implements RpcTransport {
   private readonly heartbeatIntervalMs: number
   private readonly preAuthTimeoutMs: number
   private readonly staticRoot: string | undefined
+  private readonly fallbackPort: number | undefined
+  private readonly preferPinnedPort: boolean
   private httpServer: HttpsServer | HttpServer | null = null
   private wss: WebSocketServer | null = null
   private heartbeatTimer: ReturnType<typeof setInterval> | null = null
@@ -84,7 +94,9 @@ export class WebSocketTransport implements RpcTransport {
     tlsKey,
     heartbeatIntervalMs,
     preAuthTimeoutMs,
-    staticRoot
+    staticRoot,
+    fallbackPort,
+    preferPinnedPort
   }: WebSocketTransportOptions) {
     this.host = host
     this.port = port
@@ -93,6 +105,8 @@ export class WebSocketTransport implements RpcTransport {
     this.heartbeatIntervalMs = heartbeatIntervalMs ?? HEARTBEAT_INTERVAL_MS
     this.preAuthTimeoutMs = preAuthTimeoutMs ?? PRE_AUTH_TIMEOUT_MS
     this.staticRoot = staticRoot
+    this.fallbackPort = fallbackPort
+    this.preferPinnedPort = preferPinnedPort === true
   }
 
   onMessage(handler: WebSocketMessageHandler): void {
@@ -144,22 +158,47 @@ export class WebSocketTransport implements RpcTransport {
       return
     }
 
-    // Why: when the preferred port is occupied (e.g. another Orca instance is
-    // already running), fall back to an OS-assigned port so mobile pairing
-    // still works. The QR code reads resolvedPort after start, so it will
-    // advertise the correct port regardless.
-    let port = this.port
-    try {
-      await this.tryListen(port)
-    } catch (error: unknown) {
-      if (isEAddressInUse(error) && port !== 0) {
-        console.warn(`[ws-transport] Port ${port} is in use, falling back to OS-assigned port`)
-        port = 0
+    // Why: default order binds a persisted fallback FIRST — devices paired
+    // while it was active store ws://ip:<fallback> and would be stranded if a
+    // later launch grabbed the (now free) preferred port instead (STA-1511).
+    // Explicit serve --port flips the order so the pinned port wins when free
+    // (issue #8535); fallback remains a secondary candidate for EADDRINUSE.
+    // Without a persisted fallback only the preferred port is tried. On
+    // EADDRINUSE each candidate falls through to the next, ending at port 0
+    // (OS-assigned) so mobile pairing still works when everything is taken.
+    // The QR code reads resolvedPort after start, so it always advertises the
+    // port that actually bound.
+    const persistedFallbackPort =
+      this.fallbackPort !== undefined && this.fallbackPort !== 0 && this.fallbackPort !== this.port
+        ? this.fallbackPort
+        : undefined
+    const candidatePorts =
+      persistedFallbackPort === undefined
+        ? [this.port]
+        : this.preferPinnedPort
+          ? [this.port, persistedFallbackPort]
+          : [persistedFallbackPort, this.port]
+    for (const port of candidatePorts) {
+      try {
         await this.tryListen(port)
-      } else {
-        throw error
+        return
+      } catch (error: unknown) {
+        // Why: a persisted fallback can become unbindable for reasons beyond
+        // EADDRINUSE (e.g. Windows reserves dynamic-range ports for Hyper-V
+        // after a reboot → EACCES). Any fallback failure must degrade to the
+        // next candidate — aborting would disable the transport every launch
+        // while the store still names that port. Only preferred-port failures
+        // other than EADDRINUSE are fatal.
+        if (port !== persistedFallbackPort && (!isEAddressInUse(error) || port === 0)) {
+          throw error
+        }
+        console.warn(
+          `[ws-transport] Failed to bind port ${port} (${error instanceof Error ? error.message : String(error)}), trying next candidate`
+        )
       }
     }
+    console.warn('[ws-transport] All configured ports failed to bind, using an OS-assigned port')
+    await this.tryListen(0)
   }
 
   private createHttpServer(): HttpServer | HttpsServer {

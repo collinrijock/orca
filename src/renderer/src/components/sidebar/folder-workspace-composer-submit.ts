@@ -4,7 +4,7 @@ import {
   type LinkedWorkItemSummary
 } from '@/lib/new-workspace'
 import { resolveQuickCreateLinkedWorkItemPrompt } from '@/lib/linked-work-item-context'
-import { isOrcaCliAvailableForLaunch } from '@/lib/orca-cli-launch-availability'
+import { createBrowserUuid } from '@/lib/browser-uuid'
 import {
   buildAgentDraftLaunchPlan,
   buildAgentStartupPlan,
@@ -17,7 +17,10 @@ import { TUI_AGENT_CONFIG } from '../../../../shared/tui-agent-config'
 import { isWindowsAbsolutePathLike } from '../../../../shared/cross-platform-path'
 import type { FolderWorkspace, ProjectGroup, TuiAgent } from '../../../../shared/types'
 import { isWslUncPath } from '../../../../shared/wsl-paths'
+import { resolveLocalWindowsAgentStartupShell } from '../../../../shared/windows-terminal-shell'
+import type { AgentStartupShell } from '../../../../shared/tui-agent-startup-shell'
 import type { LaunchSource } from '../../../../shared/telemetry-events'
+import type { SessionOptionValue } from '../../../../shared/native-chat-session-options'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 import {
   getLinkedItemDisplayName,
@@ -44,6 +47,8 @@ type SubmitFolderWorkspaceCreateParams = {
   agentCmdOverrides: Record<string, string> | undefined
   agentArgs?: string | null
   agentEnv?: Record<string, string>
+  sessionOptions?: Record<string, SessionOptionValue>
+  terminalWindowsShell?: string | null
   isRemote?: boolean
   launchSource?: LaunchSource
   runtimeEnvironmentId?: string | null
@@ -61,22 +66,21 @@ export function getFolderWorkspaceAgentLaunchPlatform(
   return parentPath && isWslUncPath(parentPath) ? 'linux' : CLIENT_PLATFORM
 }
 
-function buildFolderWorkspaceLinkedStartupPlan(args: {
+export function buildFolderWorkspaceLinkedStartupPlan(args: {
   agent: TuiAgent
   linkedWorkItem: LinkedWorkItemSummary
   note: string
-  cliAvailable: boolean
   agentCmdOverrides: Record<string, string> | undefined
   agentArgs?: string | null
   agentEnv?: Record<string, string>
+  sessionOptions?: Record<string, SessionOptionValue>
   platform: NodeJS.Platform
+  shell?: AgentStartupShell
+  isRemote: boolean
 }): AgentStartupPlan | null {
   const { prompt, draftPrompt } = resolveQuickCreateLinkedWorkItemPrompt(
     args.linkedWorkItem,
-    args.note,
-    {
-      cliAvailable: args.cliAvailable
-    }
+    args.note
   )
   const linkedDraftPrompt = (draftPrompt ?? prompt.trim()) || null
   const draftLaunchPlan = linkedDraftPrompt
@@ -86,7 +90,10 @@ function buildFolderWorkspaceLinkedStartupPlan(args: {
         cmdOverrides: args.agentCmdOverrides ?? {},
         agentArgs: args.agentArgs,
         agentEnv: args.agentEnv,
-        platform: args.platform
+        sessionOptions: args.sessionOptions,
+        platform: args.platform,
+        shell: args.shell,
+        isRemote: args.isRemote
       })
     : null
   if (draftLaunchPlan) {
@@ -96,6 +103,7 @@ function buildFolderWorkspaceLinkedStartupPlan(args: {
       expectedProcess: draftLaunchPlan.expectedProcess,
       followupPrompt: null,
       launchConfig: draftLaunchPlan.launchConfig,
+      ...(draftLaunchPlan.sessionOptions ? { sessionOptions: draftLaunchPlan.sessionOptions } : {}),
       ...(draftLaunchPlan.startupCommandDelivery
         ? { startupCommandDelivery: draftLaunchPlan.startupCommandDelivery }
         : {}),
@@ -111,7 +119,10 @@ function buildFolderWorkspaceLinkedStartupPlan(args: {
     cmdOverrides: args.agentCmdOverrides ?? {},
     agentArgs: args.agentArgs,
     agentEnv: args.agentEnv,
+    sessionOptions: args.sessionOptions,
     platform: args.platform,
+    shell: args.shell,
+    isRemote: args.isRemote,
     allowEmptyPromptLaunch: true
   })
   if (startupPlan && linkedDraftPrompt) {
@@ -154,7 +165,8 @@ export async function submitFolderWorkspaceCreate({
   agentCmdOverrides,
   agentArgs,
   agentEnv,
-  isRemote,
+  sessionOptions,
+  terminalWindowsShell,
   launchSource = 'sidebar',
   runtimeEnvironmentId = null,
   createFolderWorkspace,
@@ -167,23 +179,27 @@ export async function submitFolderWorkspaceCreate({
       ? linkedName
       : name.trim() || linkedName || `${projectGroup.name} workspace`
   const launchPlatform = getFolderWorkspaceAgentLaunchPlatform(projectGroup)
-  // Why: only suggest `orca linear` when the launched terminal can actually
-  // resolve the CLI; SSH launches get the relay shim, local launches may not.
-  const linearCliAvailable =
-    quickAgent && linkedWorkItem?.linearIdentifier
-      ? await isOrcaCliAvailableForLaunch({ remote: isRemote ?? projectGroup.connectionId != null })
-      : false
+  // Why: an SSH folder group runs the plain `orca` relay shim, so the Linux-only
+  // `orca-ide` rename must not be applied for remote launches.
+  const launchIsRemote = Boolean(projectGroup.connectionId)
+  const launchShell = resolveLocalWindowsAgentStartupShell({
+    platform: launchPlatform,
+    isRemote: launchIsRemote,
+    terminalWindowsShell
+  })
   const startupPlan =
     quickAgent && linkedWorkItem
       ? buildFolderWorkspaceLinkedStartupPlan({
           agent: quickAgent,
           linkedWorkItem,
           note,
-          cliAvailable: linearCliAvailable,
           agentCmdOverrides,
           agentArgs,
           agentEnv,
-          platform: launchPlatform
+          sessionOptions,
+          platform: launchPlatform,
+          shell: launchShell,
+          isRemote: launchIsRemote
         })
       : quickAgent
         ? buildAgentStartupPlan({
@@ -192,7 +208,10 @@ export async function submitFolderWorkspaceCreate({
             cmdOverrides: agentCmdOverrides ?? {},
             agentArgs,
             agentEnv,
+            sessionOptions,
             platform: launchPlatform,
+            shell: launchShell,
+            isRemote: launchIsRemote,
             allowEmptyPromptLaunch: true
           })
         : null
@@ -223,6 +242,11 @@ export async function submitFolderWorkspaceCreate({
     workspacePath: workspace.folderPath,
     connectionId: workspace.connectionId ?? projectGroup.connectionId
   })
+  if (startupPlan && !startupPlan.launchToken) {
+    // Why: delayed delivery must target the exact pane spawned from this queued
+    // startup, so both halves share one renderer-session token.
+    startupPlan.launchToken = createBrowserUuid()
+  }
 
   const startup =
     quickAgent && startupPlan
@@ -230,7 +254,10 @@ export async function submitFolderWorkspaceCreate({
           command: startupPlan.launchCommand,
           ...(startupPlan.env ? { env: startupPlan.env } : {}),
           launchConfig: startupPlan.launchConfig,
+          ...(startupPlan.launchToken ? { launchToken: startupPlan.launchToken } : {}),
           launchAgent: quickAgent,
+          ...(startupPlan.sessionOptions ? { sessionOptions: startupPlan.sessionOptions } : {}),
+          ...(startupPlan.draftPrompt ? { draftPrompt: startupPlan.draftPrompt } : {}),
           ...(startupPlan.startupCommandDelivery
             ? { startupCommandDelivery: startupPlan.startupCommandDelivery }
             : {}),

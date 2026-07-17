@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest'
 
 import type { LinearIssue } from '../../../shared/types'
-import { buildLinearIssueLinkedWorkItem, isLinearLinkedWorkItem } from './linear-linked-work-item'
+import {
+  buildLinearIssueLinkedWorkItem,
+  getLinearLinkedWorkItemBranchName,
+  isLinearLinkedWorkItem
+} from './linear-linked-work-item'
 
 function makeIssue(patch: Partial<LinearIssue> = {}): LinearIssue {
   return {
@@ -22,7 +26,7 @@ function makeIssue(patch: Partial<LinearIssue> = {}): LinearIssue {
 }
 
 describe('buildLinearIssueLinkedWorkItem', () => {
-  it('preserves Linear metadata without attaching ticket content', () => {
+  it('preserves Linear metadata without attaching prompt-time issue context', () => {
     const item = buildLinearIssueLinkedWorkItem(makeIssue())
 
     expect(item).toMatchObject({
@@ -34,9 +38,7 @@ describe('buildLinearIssueLinkedWorkItem', () => {
       linearIdentifier: 'ENG-123',
       linearOrganizationUrlKey: 'acme'
     })
-    // Why: ticket prose must never ride on the work item into launch prompts;
-    // agents fetch it through the `orca linear` CLI instead.
-    expect(Object.keys(item)).not.toContain('linkedContext')
+    expect(item).not.toHaveProperty('linkedContext')
   })
 
   it('carries the Linear workspace id when the issue has one', () => {
@@ -44,12 +46,44 @@ describe('buildLinearIssueLinkedWorkItem', () => {
 
     expect(item.linearWorkspaceId).toBe('ws-1')
   })
+
+  it('carries a normalized usable Linear branch name', () => {
+    const item = buildLinearIssueLinkedWorkItem(
+      makeIssue({ branchName: '  team/eng-123-fix-launch-context  ' })
+    )
+
+    expect(item.linearBranchName).toBe('team/eng-123-fix-launch-context')
+  })
+
+  it('omits unusable Linear branch names', () => {
+    const item = buildLinearIssueLinkedWorkItem(makeIssue({ branchName: '   ' }))
+
+    expect(item).not.toHaveProperty('linearBranchName')
+  })
 })
 
 describe('isLinearLinkedWorkItem', () => {
-  it('recognizes Linear-linked composer sources by identifier', () => {
+  it('recognizes Linear-linked composer sources by provider or identifier', () => {
     expect(isLinearLinkedWorkItem(buildLinearIssueLinkedWorkItem(makeIssue()))).toBe(true)
+    expect(isLinearLinkedWorkItem({ provider: 'linear' })).toBe(true)
+    expect(isLinearLinkedWorkItem({ linearIdentifier: '   ' })).toBe(false)
     expect(isLinearLinkedWorkItem({})).toBe(false)
     expect(isLinearLinkedWorkItem(null)).toBe(false)
+  })
+
+  it('only resolves branch overrides from Linear-linked items', () => {
+    expect(
+      getLinearLinkedWorkItemBranchName({
+        provider: 'linear',
+        linearIdentifier: 'ENG-123',
+        linearBranchName: '  team/eng-123-fix  '
+      })
+    ).toBe('team/eng-123-fix')
+    expect(
+      getLinearLinkedWorkItemBranchName({
+        provider: 'github',
+        linearBranchName: 'team/eng-123-fix'
+      })
+    ).toBeUndefined()
   })
 })

@@ -1,4 +1,3 @@
-/* eslint-disable max-lines -- Why: git RPC methods share one dispatcher fixture, and keeping the contract cases together makes method coverage easy to audit. */
 import { describe, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from '../dispatcher'
 import type { RpcRequest } from '../core'
@@ -55,6 +54,54 @@ describe('git RPC methods', () => {
     })
   })
 
+  it('forwards upstream-negative-cache bypass for status requests', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      getRuntimeGitStatus: vi.fn().mockResolvedValue({
+        entries: [],
+        conflictOperation: 'unknown'
+      })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: GIT_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('git.status', {
+        worktree: 'id:wt-1',
+        bypassEffectiveUpstreamNegativeCache: true
+      })
+    )
+
+    expect(runtime.getRuntimeGitStatus).toHaveBeenCalledWith('id:wt-1', {
+      bypassEffectiveUpstreamNegativeCache: true
+    })
+    expect(response).toMatchObject({
+      ok: true,
+      result: { entries: [] }
+    })
+  })
+
+  it('forwards line-stat reuse and request cancellation for status requests', async () => {
+    const controller = new AbortController()
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      getRuntimeGitStatus: vi.fn().mockResolvedValue({
+        entries: [],
+        conflictOperation: 'unknown'
+      })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: GIT_METHODS })
+
+    await dispatcher.dispatch(
+      makeRequest('git.status', { worktree: 'id:wt-1', reuseLineStats: true }),
+      { signal: controller.signal }
+    )
+
+    expect(runtime.getRuntimeGitStatus).toHaveBeenCalledWith('id:wt-1', {
+      reuseLineStats: true,
+      signal: controller.signal
+    })
+  })
+
   it('returns ignored paths for selected explorer rows', async () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',
@@ -76,6 +123,35 @@ describe('git RPC methods', () => {
     expect(response).toMatchObject({
       ok: true,
       result: ['dist/bundle.js']
+    })
+  })
+
+  it('returns submodule status for a selected worktree area', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      getRuntimeGitSubmoduleStatus: vi.fn().mockResolvedValue({
+        entries: [{ path: 'lib.ts', status: 'modified', area: 'unstaged' }],
+        conflictOperation: 'unknown'
+      })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: GIT_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('git.submoduleStatus', {
+        worktree: 'id:wt-1',
+        submodulePath: 'vendor/lib',
+        area: 'staged'
+      })
+    )
+
+    expect(runtime.getRuntimeGitSubmoduleStatus).toHaveBeenCalledWith(
+      'id:wt-1',
+      'vendor/lib',
+      'staged'
+    )
+    expect(response).toMatchObject({
+      ok: true,
+      result: { entries: [{ path: 'lib.ts' }] }
     })
   })
 

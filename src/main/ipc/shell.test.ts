@@ -1,4 +1,3 @@
-/* eslint-disable max-lines -- Why: shell IPC path validation, OS opener fallbacks, and launcher lifecycle tests share one mocked Electron/child_process boundary. */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { normalize, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -130,6 +129,22 @@ describe('registerShellHandlers', () => {
 
     const handler = getHandler('shell:pickAudio')
     await expect(handler({})).resolves.toBeNull()
+  })
+
+  it('picks an existing directory without enabling native directory creation', async () => {
+    showOpenDialogMock.mockResolvedValue({
+      canceled: false,
+      filePaths: ['/Users/kaylee/projects']
+    })
+
+    const handler = getHandler('shell:pickDirectory')
+    await expect(handler({}, { defaultPath: '/Users/kaylee' })).resolves.toBe(
+      '/Users/kaylee/projects'
+    )
+    expect(showOpenDialogMock).toHaveBeenCalledWith({
+      defaultPath: '/Users/kaylee',
+      properties: ['openDirectory']
+    })
   })
 
   describe('shell:openPath', () => {
@@ -305,6 +320,23 @@ describe('registerShellHandlers', () => {
         normalize(workspacePath)
       ])
     })
+
+    it.runIf(process.platform === 'win32')(
+      'forwards WSL remote arguments with spaces through the Windows launcher shim',
+      async () => {
+        const workspacePath = '\\\\wsl.localhost\\Ubuntu Preview\\home\\Ada Lovelace\\project'
+        const codeShim = 'C:\\Tools\\CODE.CMD'
+        resolveCliCommandMock.mockReturnValueOnce(codeShim)
+        const handler = getHandler('shell:openInExternalEditor')
+
+        await expect(handler({}, workspacePath, 'code')).resolves.toEqual({ ok: true })
+        expect(getSpawnArgsForWindowsMock).toHaveBeenCalledWith(codeShim, [
+          '--remote',
+          'wsl+Ubuntu Preview',
+          '/home/Ada Lovelace/project'
+        ])
+      }
+    )
 
     it('shows the Windows console for NeoVim executable launchers on Windows', async () => {
       const platformDescriptor = Object.getOwnPropertyDescriptor(process, 'platform')

@@ -112,6 +112,17 @@ export function setActiveSink(sink: TracerSink | null): void {
   activeSink = sink
 }
 
+/** Force records already handed to the tracer onto disk. Reserve this for
+ * crash boundaries where the process may not survive the normal batch window. */
+export function flushActiveSink(): void {
+  try {
+    activeSink?.flush()
+  } catch {
+    // Why: a disk/rotation failure in optional local diagnostics must never
+    // turn a recoverable renderer crash into a main-process crash.
+  }
+}
+
 /** Get the current parent context, or `undefined` if we are at the top of
  *  the trace tree. Renderer-IPC entry points capture this, embed it in
  *  span-event attributes (so cross-process spans can be visually linked
@@ -128,10 +139,16 @@ export function getActiveSpanContext(): SpanContext | undefined {
  * This is the function 90% of call sites should reach for: it keeps span
  * lifetime scoped to the async work it measures.
  */
+type SpanRecordDecision = (record: RedactableSpan) => boolean
+
 export async function withSpan<T>(
   name: string,
   fn: (span: ActiveSpan) => Promise<T> | T,
-  options?: { kind?: string; attributes?: Record<string, unknown> }
+  options?: {
+    kind?: string
+    attributes?: Record<string, unknown>
+    shouldRecord?: SpanRecordDecision
+  }
 ): Promise<T> {
   const span = startSpan(name, options)
   try {
@@ -157,7 +174,11 @@ export async function withSpan<T>(
  */
 export function startSpan(
   name: string,
-  options?: { kind?: string; attributes?: Record<string, unknown> }
+  options?: {
+    kind?: string
+    attributes?: Record<string, unknown>
+    shouldRecord?: SpanRecordDecision
+  }
 ): ActiveSpan {
   if (!activeSink) {
     return noopSpan
@@ -203,11 +224,20 @@ export function startSpan(
       exit
     }
 
+    if (options?.shouldRecord && !options.shouldRecord(record)) {
+      return
+    }
+
     const redacted = redactSpan(record, 'client')
     // Wrap in a `type: 'effect-span'` envelope so the NDJSON file is
     // compatible with Effect-style span output. Effect-oriented consumers
     // (the LGTM stack, jq cookbooks) can read the file unchanged.
-    activeSink?.push({ type: 'effect-span', ...redacted })
+    try {
+      activeSink?.push({ type: 'effect-span', ...redacted })
+    } catch {
+      // Why: tracing is optional; a local file rotation failure must not turn
+      // the instrumented operation into an application failure.
+    }
   }
 
   return {

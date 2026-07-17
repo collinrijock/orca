@@ -9,6 +9,7 @@ import {
   AlertTriangle,
   ChevronDown,
   ChevronRight,
+  Globe,
   LoaderCircle,
   MemoryStick,
   RotateCw,
@@ -31,13 +32,13 @@ import { cn } from '@/lib/utils'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { activateTabAndFocusPane } from '@/lib/activate-tab-and-focus-pane'
-import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
 import { useAppStore } from '../../store'
 import { useWorktreeMap } from '../../store/selectors'
 import { runWorktreeDelete } from '../sidebar/delete-worktree-flow'
 import { useDaemonActions, DaemonActionDialog } from '../shared/useDaemonActions'
-import type { AppMemory, UsageValues, Worktree } from '../../../../shared/types'
+import type { AppMemory, BrowserWorkspace, UsageValues, Worktree } from '../../../../shared/types'
 import { ORPHAN_WORKTREE_ID } from '../../../../shared/constants'
+import { getRepoExecutionHostId, parseExecutionHostId } from '../../../../shared/execution-host'
 import { isFolderRepo } from '../../../../shared/repo-kind'
 import { isWorkspaceOldForCleanup } from '../../../../shared/workspace-cleanup'
 import { mergeSnapshotAndSessions, UNATTRIBUTED_REPO_ID } from './mergeSnapshotAndSessions'
@@ -56,8 +57,11 @@ import {
 } from './resource-session-navigation'
 import {
   getResourceUsageAllWorktrees,
+  getResourceUsageBrowserTabsByWorktree,
+  getResourceUsagePtyIdsByTabId,
   getResourceUsageRepos,
   getResourceUsageRuntimePaneTitlesByTabId,
+  getResourceUsageTerminalLayoutsByTabId,
   getResourceUsageTabsByWorktree
 } from './resource-usage-open-slices'
 import {
@@ -68,10 +72,16 @@ import {
   getResourceManagerAriaLabel,
   getResourceManagerTooltipLines
 } from './resource-manager-terminal-copy'
+import {
+  buildResourceSessionBindingIndex,
+  countUnboundDaemonSessions,
+  type ResourceSessionBindingInputs
+} from './resource-session-bindings'
+import { createClosedResourceSessionCountSelector } from './resource-session-count-selector'
 import { translate } from '@/i18n/i18n'
 
 const POLL_MS = 2_000
-const SESSIONS_POLL_MS = 10_000
+const selectClosedResourceSessionCount = createClosedResourceSessionCountSelector()
 
 type SortOption = 'memory' | 'cpu' | 'name'
 
@@ -349,7 +359,9 @@ function sortProjectGroups(groups: UnifiedProjectGroup[], sort: SortOption): Uni
 
 // ─── Session row ────────────────────────────────────────────────────
 
-function SessionRow({
+// Exported (with WorktreeRow) for row-level regression tests pinning the kill
+// affordance and remote-chip presentation for SSH/orphan rows.
+export function SessionRow({
   session,
   worktreeId,
   onNavigate,
@@ -428,9 +440,21 @@ function SessionRow({
   )
 }
 
+function BrowserRow({ browser }: { browser: BrowserWorkspace }): React.JSX.Element {
+  const label = browser.title?.trim() || browser.label?.trim() || browser.url
+  return (
+    <div className="flex items-center gap-2 pl-10 pr-3 py-1.5">
+      <Globe className="size-3 shrink-0 text-muted-foreground" aria-hidden />
+      <span className="min-w-0 flex-1 truncate text-[11px] text-muted-foreground">{label}</span>
+      <MetricPair cpu={null} memory={null} size="small" />
+      <span className={ROW_TRAILING_GUTTER_CLS} aria-hidden />
+    </div>
+  )
+}
+
 // ─── Worktree row ───────────────────────────────────────────────────
 
-function WorktreeRow({
+export function WorktreeRow({
   worktree,
   storeRecord,
   activeWorktreeId,
@@ -451,7 +475,7 @@ function WorktreeRow({
   onKillSession: (session: UnifiedSessionRow) => void
   navigateToTab: (tabId: string, paneKey: string | null) => void
 }): React.JSX.Element {
-  const hasSessions = worktree.sessions.length > 0
+  const hasResources = worktree.sessions.length > 0 || worktree.browsers.length > 0
   // Why: synthetic buckets (orphan/unattributed) have no sidebar target to
   // reveal. Real and SSH-resolved worktrees both qualify for navigation —
   // navigateToWorktree handles the no-store-record case internally by
@@ -471,7 +495,7 @@ function WorktreeRow({
   return (
     <div className="border-b border-border/20 last:border-b-0">
       <div className="group/wtrow flex items-center ml-2 transition-colors hover:bg-muted/60">
-        {hasSessions ? (
+        {hasResources ? (
           <button
             type="button"
             onClick={onToggle}
@@ -596,6 +620,8 @@ function WorktreeRow({
             onKill={onKillSession}
           />
         ))}
+      {!isCollapsed &&
+        worktree.browsers.map((browser) => <BrowserRow key={browser.id} browser={browser} />)}
     </div>
   )
 }
@@ -731,7 +757,7 @@ export function ResourceUsageStatusSegment({
   const memorySnapshotError = useAppStore((s) => s.memorySnapshotError)
   const fetchSnapshot = useAppStore((s) => s.fetchMemorySnapshot)
   const workspaceSessionReady = useAppStore((s) => s.workspaceSessionReady)
-  const ptyIdsByTabId = useAppStore((s) => s.ptyIdsByTabId)
+  const closedSessionCount = useAppStore(selectClosedResourceSessionCount)
   const setActiveView = useAppStore((s) => s.setActiveView)
   const openModal = useAppStore((s) => s.openModal)
   const openSpacePage = useAppStore((s) => s.openSpacePage)
@@ -740,10 +766,6 @@ export function ResourceUsageStatusSegment({
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
   const workspaceSpaceScannedAt = useAppStore((s) => s.workspaceSpaceAnalysis?.scannedAt ?? null)
   const workspaceSpaceScanning = useAppStore((s) => s.workspaceSpaceScanning)
-  const activeRuntimeEnvironmentId = useAppStore(
-    (s) => s.settings?.activeRuntimeEnvironmentId ?? null
-  )
-  const runtimeEnvironmentActive = Boolean(activeRuntimeEnvironmentId?.trim())
 
   const [open, setOpen] = useState(false)
   const [sortOption, setSortOption] = useState<SortOption>('memory')
@@ -765,19 +787,28 @@ export function ResourceUsageStatusSegment({
   // merged tree needs them only while open, so closed status-bar badges should
   // not subscribe to those high-churn maps.
   const runtimePaneTitlesByTabId = useAppStore((s) =>
-    getResourceUsageRuntimePaneTitlesByTabId(s, open, runtimeEnvironmentActive)
+    getResourceUsageRuntimePaneTitlesByTabId(s, open)
   )
-  const repos = useAppStore((s) => getResourceUsageRepos(s, open, runtimeEnvironmentActive))
-  const allWorktrees = useAppStore((s) =>
-    getResourceUsageAllWorktrees(s, open, runtimeEnvironmentActive)
+  const repos = useAppStore((s) => getResourceUsageRepos(s, open))
+  const allWorktrees = useAppStore((s) => getResourceUsageAllWorktrees(s, open))
+  const tabsByWorktree = useAppStore((s) => getResourceUsageTabsByWorktree(s, open))
+  const browserTabsByWorktree = useAppStore((s) => getResourceUsageBrowserTabsByWorktree(s, open))
+  // Why: the closed trigger owns a scalar selector. Full binding maps stay
+  // behind open sentinels so unchanged counts do not rerender the segment.
+  const ptyIdsByTabId = useAppStore((s) => getResourceUsagePtyIdsByTabId(s, open))
+  const terminalLayoutsByTabId = useAppStore((s) => getResourceUsageTerminalLayoutsByTabId(s, open))
+  const resourceSnapshot = snapshot
+  // Why: ptyIdsByTabId intentionally tracks mounted/live panes only. Resource
+  // Manager also reads restored wake hints, but only for classification.
+  const resourceSessionBindings = useMemo<ResourceSessionBindingInputs>(
+    () => ({
+      ptyIdsByTabId,
+      tabsByWorktree,
+      terminalLayoutsByTabId,
+      workspaceSessionReady
+    }),
+    [ptyIdsByTabId, tabsByWorktree, terminalLayoutsByTabId, workspaceSessionReady]
   )
-  const tabsByWorktree = useAppStore((s) =>
-    getResourceUsageTabsByWorktree(s, open, runtimeEnvironmentActive)
-  )
-  // Why: this segment only understands the local Electron PTY/resource daemon.
-  // While a runtime server is active, hiding local samples avoids showing or
-  // killing sessions from the wrong machine.
-  const resourceSnapshot = runtimeEnvironmentActive ? null : snapshot
 
   // Why: after a kill confirms and the session unmounts, focus would otherwise
   // fall to <body>. We park a ref on the popover body so we can restore focus
@@ -806,13 +837,6 @@ export function ResourceUsageStatusSegment({
   )
 
   const refreshSessions = useCallback(async () => {
-    if (runtimeEnvironmentActive) {
-      if (mountedRef.current) {
-        setSessions([])
-        setSessionsError(false)
-      }
-      return
-    }
     try {
       const result = await window.api.pty.listSessions()
       if (!mountedRef.current) {
@@ -825,7 +849,7 @@ export function ResourceUsageStatusSegment({
         setSessionsError(true)
       }
     }
-  }, [mountedRef, runtimeEnvironmentActive])
+  }, [mountedRef])
 
   const daemonActions = useDaemonActions({
     onRestartSettled: () => {
@@ -842,7 +866,6 @@ export function ResourceUsageStatusSegment({
   // closes this popover; the status-bar trigger becomes the handoff point.
   const nextSpaceScanSnapshot = resolveResourceUsageSpaceScanReady({
     snapshot: spaceScanSnapshot,
-    runtimeEnvironmentActive,
     open,
     activeView,
     scannedAt: workspaceSpaceScannedAt,
@@ -859,41 +882,26 @@ export function ResourceUsageStatusSegment({
   }
   const spaceScanReady = nextSpaceScanSnapshot.ready
 
-  // Poll memory + sessions when popover is open. Sessions also poll in the
-  // background at a slower rate so the badge count stays reasonably fresh
-  // without keeping the Memory IPC hot.
+  // Poll memory when popover is open. Sessions are refreshed on open and after
+  // session actions; a closed status-bar badge must not globally inventory
+  // daemon PTYs because large preserved-session sets make that visible while
+  // typing.
   useEffect(() => {
-    if (!open || runtimeEnvironmentActive) {
+    if (!open) {
       return
     }
     void fetchSnapshot()
     void refreshSessions()
-    // Why: sessions already have an always-on poll in the effect below; only
-    // the memory snapshot is gated on the popover being open. Stacking a
-    // second sessions interval here doubled IPC traffic while the popover
-    // was open.
+    // Why: only the memory snapshot keeps an interval while the popover is
+    // open. Session inventory is explicit-on-open/action because it can be
+    // expensive with many daemon-preserved terminals.
     const memTimer = window.setInterval(() => {
       void fetchSnapshot()
     }, POLL_MS)
     return () => {
       window.clearInterval(memTimer)
     }
-  }, [open, runtimeEnvironmentActive, fetchSnapshot, refreshSessions])
-
-  useEffect(() => {
-    if (runtimeEnvironmentActive) {
-      setSessions([])
-      setSessionsError(false)
-      return
-    }
-    // Why: the closed-popover badge is informational. Polling daemon sessions
-    // while the whole window is hidden keeps IPC and daemon list calls hot for
-    // no visible UI; visibility refreshes catch the badge up immediately.
-    return installWindowVisibilityInterval({
-      run: () => void refreshSessions(),
-      intervalMs: SESSIONS_POLL_MS
-    })
-  }, [runtimeEnvironmentActive, refreshSessions])
+  }, [open, fetchSnapshot, refreshSessions])
 
   const repoDisplayNameById = useMemo(() => {
     const map = new Map<string, string>()
@@ -919,7 +927,22 @@ export function ResourceUsageStatusSegment({
     return map
   }, [repos])
 
+  // Why: runtime-hosted repos never have local daemon samples or killable
+  // local sessions; this map drives their per-row exclusion in the merge.
+  const repoRuntimeScopedById = useMemo(() => {
+    const map = new Map<string, boolean>()
+    for (const repo of repos) {
+      const parsed = parseExecutionHostId(getRepoExecutionHostId(repo))
+      map.set(repo.id, parsed?.kind === 'runtime')
+    }
+    return map
+  }, [repos])
+
   const repoById = useMemo(() => new Map(repos.map((repo) => [repo.id, repo])), [repos])
+  const worktreeById = useMemo(
+    () => new Map(allWorktrees.map((worktree) => [worktree.id, worktree])),
+    [allWorktrees]
+  )
 
   const oldWorkspaceCount = useMemo(() => {
     const now = Date.now()
@@ -943,54 +966,47 @@ export function ResourceUsageStatusSegment({
   // feel laggy because the segment is always mounted in the status bar.
   const unifiedRepos = useMemo(
     () =>
-      open && !runtimeEnvironmentActive
+      open
         ? mergeSnapshotAndSessions(resourceSnapshot, sessions, {
             tabsByWorktree,
             ptyIdsByTabId,
+            terminalLayoutsByTabId,
             runtimePaneTitlesByTabId,
             workspaceSessionReady,
             repoDisplayNameById,
-            repoConnectionIdById
+            repoConnectionIdById,
+            repoRuntimeScopedById,
+            browserTabsByWorktree,
+            worktreeById
           })
         : [],
     [
       open,
-      runtimeEnvironmentActive,
       resourceSnapshot,
       sessions,
       tabsByWorktree,
       ptyIdsByTabId,
+      terminalLayoutsByTabId,
       runtimePaneTitlesByTabId,
       workspaceSessionReady,
       repoDisplayNameById,
-      repoConnectionIdById
+      repoConnectionIdById,
+      repoRuntimeScopedById,
+      browserTabsByWorktree,
+      worktreeById
     ]
   )
 
-  // Why: orphanCount drives the trigger badge (always visible in the status
-  // bar, popover open or not) so it must compute outside the open-gate.
-  // Build the bound set with a single flat walk instead of nested Object
-  // iterations to keep this light on every store update.
+  // Why: orphan detection needs daemon inventory. Keep it open-only so the
+  // closed badge never reintroduces a background global session scan.
   const orphanCount = useMemo(() => {
-    if (!workspaceSessionReady || runtimeEnvironmentActive) {
+    if (!open || !workspaceSessionReady) {
       return 0
     }
-    const bound = new Set<string>()
-    for (const ids of Object.values(ptyIdsByTabId)) {
-      for (const id of ids) {
-        if (id) {
-          bound.add(id)
-        }
-      }
-    }
-    let n = 0
-    for (const s of sessions) {
-      if (!bound.has(s.id)) {
-        n++
-      }
-    }
-    return n
-  }, [sessions, ptyIdsByTabId, workspaceSessionReady, runtimeEnvironmentActive])
+    return countUnboundDaemonSessions(sessions, resourceSessionBindings)
+  }, [open, sessions, resourceSessionBindings, workspaceSessionReady])
+
+  const triggerSessionCount = open ? sessions.length : closedSessionCount
 
   const { totalMemory, totalCpu, hostShare, memBadgeLabel } = useMemo(() => {
     const memory = resourceSnapshot?.totalMemory ?? 0
@@ -1005,30 +1021,22 @@ export function ResourceUsageStatusSegment({
   }, [resourceSnapshot])
 
   // Why: memorySnapshotError is null both for "last fetch succeeded" and
-  // "never fetched". When the segment is mounted but the popover hasn't
-  // been opened, fetchMemorySnapshot has never run, so a sessions IPC
-  // failure on the always-on poll would otherwise be silent. Treat the
-  // absence of any snapshot plus a sessions error as unreachable too.
-  const daemonUnreachable =
-    !runtimeEnvironmentActive &&
-    sessionsError &&
-    (memorySnapshotError !== null || snapshot === null)
+  // "never fetched". If session refresh fails before a memory snapshot exists,
+  // treat that as daemon-unreachable too.
+  const daemonUnreachable = sessionsError && (memorySnapshotError !== null || snapshot === null)
   // Why: a partial failure where the sessions IPC fails but the snapshot
   // IPC still works was silently invisible after the merge — the old
   // SessionsTabPanel surfaced it as "Terminal sessions unavailable". Show
   // a slim inline notice so the user understands why the session list is
   // empty/stale even though the resource numbers look fine.
-  const sessionsOnlyError =
-    !runtimeEnvironmentActive && sessionsError && memorySnapshotError === null
+  const sessionsOnlyError = sessionsError && memorySnapshotError === null
   const resourceManagerTooltipLines = getResourceManagerTooltipLines({
     memoryLabel: memBadgeLabel,
-    sessionCount: sessions.length,
-    runtimeEnvironmentActive,
+    sessionCount: triggerSessionCount,
     spaceScanReady
   })
   const resourceManagerAriaLabel = getResourceManagerAriaLabel({
-    sessionCount: sessions.length,
-    runtimeEnvironmentActive,
+    sessionCount: triggerSessionCount,
     spaceScanReady
   })
 
@@ -1085,12 +1093,9 @@ export function ResourceUsageStatusSegment({
   }, [])
 
   const handleOpenWorkspaceCleanup = useCallback((): void => {
-    if (runtimeEnvironmentActive) {
-      return
-    }
     setOpen(false)
     queueMicrotask(() => openModal('workspace-cleanup'))
-  }, [openModal, runtimeEnvironmentActive])
+  }, [openModal])
 
   const handleKillSession = useCallback(
     (session: UnifiedSessionRow): void => {
@@ -1123,25 +1128,18 @@ export function ResourceUsageStatusSegment({
     if (!workspaceSessionReady) {
       return
     }
-    const bound = new Set<string>()
-    for (const ids of Object.values(ptyIdsByTabId)) {
-      for (const id of ids) {
-        if (id) {
-          bound.add(id)
-        }
-      }
-    }
+    const bound = buildResourceSessionBindingIndex(resourceSessionBindings).boundPtyIds
     const orphans = sessions.filter((s) => !bound.has(s.id))
     if (orphans.length === 0) {
       return
     }
-    // Why: optimistic removal so the rows disappear immediately rather than
-    // lingering up to SESSIONS_POLL_MS while the daemon-side list reconciles.
+    // Why: optimistic removal so rows disappear immediately instead of waiting
+    // for the next explicit daemon-side list refresh.
     const orphanIds = new Set(orphans.map((s) => s.id))
     setSessions((prev) => prev.filter((s) => !orphanIds.has(s.id)))
     await Promise.allSettled(orphans.map((s) => window.api.pty.kill(s.id)))
     void refreshSessions()
-  }, [sessions, ptyIdsByTabId, workspaceSessionReady, refreshSessions])
+  }, [sessions, resourceSessionBindings, workspaceSessionReady, refreshSessions])
 
   const runKillConfirmed = useCallback(async () => {
     if (!killConfirm) {
@@ -1151,7 +1149,7 @@ export function ResourceUsageStatusSegment({
     setKilling(true)
     // Why: optimistic removal — the kill X was on the row that's about to be
     // unmounted, so updating local state immediately avoids a flash where the
-    // dialog closes but the killed row stays for up to 10s.
+    // dialog closes but the killed row waits for the next list refresh.
     setSessions((prev) => prev.filter((s) => s.id !== target.sessionId))
     try {
       await window.api.pty.kill(target.sessionId)
@@ -1208,7 +1206,7 @@ export function ResourceUsageStatusSegment({
                   : resourceManagerAriaLabel
               }
             >
-              {spaceScanReady && !runtimeEnvironmentActive ? (
+              {spaceScanReady ? (
                 <span
                   className="absolute -right-0.5 -top-0.5 size-1.5 rounded-full bg-primary"
                   aria-hidden="true"
@@ -1223,16 +1221,16 @@ export function ResourceUsageStatusSegment({
                   <span className="text-muted-foreground/50">·</span>
                   <Terminal className="size-3 text-muted-foreground" />
                   <span className="text-[11px] tabular-nums text-muted-foreground">
-                    {sessions.length}
+                    {triggerSessionCount}
                     {orphanCount > 0 && (
                       <span className="text-yellow-500 ml-0.5">({orphanCount})</span>
                     )}
                   </span>
                 </>
               )}
-              {iconOnly && sessions.length > 0 && (
+              {iconOnly && triggerSessionCount > 0 && (
                 <span className="text-[11px] tabular-nums text-muted-foreground">
-                  {sessions.length}
+                  {triggerSessionCount}
                 </span>
               )}
               {daemonUnreachable && (
@@ -1279,15 +1277,7 @@ export function ResourceUsageStatusSegment({
           <div className="flex min-w-0 items-center gap-1.5 text-[11px] font-medium text-foreground">
             <MemoryStick className="size-3 shrink-0 text-muted-foreground" />
             <span className="truncate">
-              {runtimeEnvironmentActive
-                ? translate(
-                    'auto.components.status.bar.ResourceUsageStatusSegment.6a822b06a7',
-                    'Resource Manager'
-                  )
-                : translate(
-                    'auto.components.status.bar.ResourceUsageStatusSegment.6d9793d4bc',
-                    'Resource Manager - Terminals'
-                  )}
+              {translate('auto.components.status.bar.StatusBar.d1e1a7a6bf', 'Resource Manager')}
             </span>
           </div>
 
@@ -1297,7 +1287,7 @@ export function ResourceUsageStatusSegment({
                 <button
                   type="button"
                   onClick={() => daemonActions.setPending('restart')}
-                  disabled={daemonActions.isBusy || runtimeEnvironmentActive}
+                  disabled={daemonActions.isBusy}
                   aria-label={translate(
                     'auto.components.status.bar.ResourceUsageStatusSegment.c9382662bb',
                     'Restart daemon'
@@ -1308,15 +1298,10 @@ export function ResourceUsageStatusSegment({
                 </button>
               </TooltipTrigger>
               <TooltipContent side="top" sideOffset={6}>
-                {runtimeEnvironmentActive
-                  ? translate(
-                      'auto.components.status.bar.ResourceUsageStatusSegment.14ff448686',
-                      'Unavailable for runtime servers'
-                    )
-                  : translate(
-                      'auto.components.status.bar.ResourceUsageStatusSegment.c9382662bb',
-                      'Restart daemon'
-                    )}
+                {translate(
+                  'auto.components.status.bar.ResourceUsageStatusSegment.c9382662bb',
+                  'Restart daemon'
+                )}
               </TooltipContent>
             </Tooltip>
             <Tooltip delayDuration={200}>
@@ -1324,7 +1309,7 @@ export function ResourceUsageStatusSegment({
                 <button
                   type="button"
                   onClick={() => daemonActions.setPending('killAll')}
-                  disabled={daemonActions.isBusy || runtimeEnvironmentActive}
+                  disabled={daemonActions.isBusy}
                   aria-label={translate(
                     'auto.components.status.bar.ResourceUsageStatusSegment.bd19fd7a59',
                     'Kill all sessions'
@@ -1335,15 +1320,10 @@ export function ResourceUsageStatusSegment({
                 </button>
               </TooltipTrigger>
               <TooltipContent side="top" sideOffset={6}>
-                {runtimeEnvironmentActive
-                  ? translate(
-                      'auto.components.status.bar.ResourceUsageStatusSegment.14ff448686',
-                      'Unavailable for runtime servers'
-                    )
-                  : translate(
-                      'auto.components.status.bar.ResourceUsageStatusSegment.bd19fd7a59',
-                      'Kill all sessions'
-                    )}
+                {translate(
+                  'auto.components.status.bar.ResourceUsageStatusSegment.bd19fd7a59',
+                  'Kill all sessions'
+                )}
               </TooltipContent>
             </Tooltip>
           </div>
@@ -1581,66 +1561,55 @@ export function ResourceUsageStatusSegment({
 
             {!resourceSnapshot && !daemonUnreachable && (
               <div className="px-3 py-4 text-center text-xs text-muted-foreground">
-                {runtimeEnvironmentActive
-                  ? translate(
-                      'auto.components.status.bar.ResourceUsageStatusSegment.56b6888304',
-                      'Local resource usage hidden for runtime servers.'
-                    )
-                  : translate(
-                      'auto.components.status.bar.ResourceUsageStatusSegment.888dad8c55',
-                      'Loading…'
-                    )}
+                {translate(
+                  'auto.components.status.bar.ResourceUsageStatusSegment.888dad8c55',
+                  'Loading…'
+                )}
               </div>
             )}
           </div>
         </div>
 
-        {!runtimeEnvironmentActive || orphanCount > 0 ? (
-          <div className="border-t border-border/50 px-3 py-2 shrink-0">
-            {!runtimeEnvironmentActive ? (
-              <button
-                type="button"
-                onClick={handleOpenWorkspaceCleanup}
-                className="relative inline-flex w-full items-center justify-center rounded-md border border-border/70 px-2.5 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-accent/60"
-              >
-                <span className="min-w-0 truncate px-4 text-center">
-                  {translate(
-                    'auto.components.status.bar.ResourceUsageStatusSegment.92924a14e3',
-                    'Review inactive workspaces ({{value0}})',
-                    { value0: oldWorkspaceCount }
+        <div className="border-t border-border/50 px-3 py-2 shrink-0">
+          <button
+            type="button"
+            onClick={handleOpenWorkspaceCleanup}
+            className="relative inline-flex w-full items-center justify-center rounded-md border border-border/70 px-2.5 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-accent/60"
+          >
+            <span className="min-w-0 truncate px-4 text-center">
+              {translate(
+                'auto.components.status.bar.ResourceUsageStatusSegment.92924a14e3',
+                'Review inactive workspaces ({{value0}})',
+                { value0: oldWorkspaceCount }
+              )}
+            </span>
+            <ChevronRight
+              className="absolute right-2.5 size-3.5 text-muted-foreground"
+              aria-hidden
+            />
+          </button>
+          {orphanCount > 0 ? (
+            <button
+              type="button"
+              onClick={() => void handleKillOrphans()}
+              className="mt-2 inline-flex w-full items-center justify-center rounded-md border border-border/70 px-2.5 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-accent/60"
+            >
+              {orphanCount === 1
+                ? translate(
+                    'auto.components.status.bar.ResourceUsageStatusSegment.c7e3b1a0d9f2',
+                    'Kill {{value0}} orphan terminal',
+                    { value0: orphanCount }
+                  )
+                : translate(
+                    'auto.components.status.bar.ResourceUsageStatusSegment.d8f4c2b1e0a3',
+                    'Kill {{value0}} orphan terminals',
+                    { value0: orphanCount }
                   )}
-                </span>
-                <ChevronRight
-                  className="absolute right-2.5 size-3.5 text-muted-foreground"
-                  aria-hidden
-                />
-              </button>
-            ) : null}
-            {orphanCount > 0 ? (
-              <button
-                type="button"
-                onClick={() => void handleKillOrphans()}
-                className="mt-2 inline-flex w-full items-center justify-center rounded-md border border-border/70 px-2.5 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-accent/60"
-              >
-                {orphanCount === 1
-                  ? translate(
-                      'auto.components.status.bar.ResourceUsageStatusSegment.c7e3b1a0d9f2',
-                      'Kill {{value0}} orphan terminal',
-                      { value0: orphanCount }
-                    )
-                  : translate(
-                      'auto.components.status.bar.ResourceUsageStatusSegment.d8f4c2b1e0a3',
-                      'Kill {{value0}} orphan terminals',
-                      { value0: orphanCount }
-                    )}
-              </button>
-            ) : null}
-          </div>
-        ) : null}
+            </button>
+          ) : null}
+        </div>
 
-        {!runtimeEnvironmentActive ? (
-          <WorkspaceSpaceCompactPanel onOpenFullPage={openSpaceResults} />
-        ) : null}
+        <WorkspaceSpaceCompactPanel onOpenFullPage={openSpaceResults} />
       </PopoverContent>
       {/* Why: Radix Dialog must not be a descendant of PopoverContent — when
           the popover unmounts (e.g. clicking outside, focus moving to the
@@ -1721,7 +1690,7 @@ export function ResourceUsageStatusSegment({
           </DialogFooter>
         </DialogContent>
       </Dialog>
-      {!runtimeEnvironmentActive && <DaemonActionDialog api={daemonActions} />}
+      <DaemonActionDialog api={daemonActions} />
     </Popover>
   )
 }

@@ -1,8 +1,18 @@
 /* eslint-disable max-lines -- Why: this file centralizes cross-platform CLI install state, launcher resolution, and PATH registration so the public shell command stays consistent across packaged and development builds. */
 import { app } from 'electron'
 import { execFile } from 'node:child_process'
-import { existsSync } from 'node:fs'
-import { lstat, mkdir, readFile, readlink, symlink, unlink, writeFile } from 'node:fs/promises'
+import { constants, existsSync } from 'node:fs'
+import {
+  access,
+  lstat,
+  mkdir,
+  readFile,
+  readlink,
+  stat,
+  symlink,
+  unlink,
+  writeFile
+} from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path'
 import { promisify } from 'node:util'
@@ -104,8 +114,8 @@ export class CliInstaller {
   }
 
   async getStatus(): Promise<CliInstallStatus> {
-    const spec = this.resolveInstallSpec()
-    if (!spec) {
+    const defaultSpec = this.resolveInstallSpec()
+    if (!defaultSpec) {
       return {
         platform: this.platform,
         commandName: this.commandName,
@@ -133,11 +143,11 @@ export class CliInstaller {
       return {
         platform: this.platform,
         commandName: this.commandName,
-        commandPath: spec.commandPath,
-        pathDirectory: dirname(spec.commandPath),
+        commandPath: defaultSpec.commandPath,
+        pathDirectory: dirname(defaultSpec.commandPath),
         pathConfigured: false,
         launcherPath: null,
-        installMethod: spec.installMethod,
+        installMethod: defaultSpec.installMethod,
         supported: false,
         state: 'unsupported',
         currentTarget: null,
@@ -146,6 +156,7 @@ export class CliInstaller {
       }
     }
 
+    const spec = await this.resolveActiveInstallSpec(defaultSpec, launcherPath)
     const baseStatus =
       spec.installMethod === 'symlink'
         ? await this.inspectSymlink(spec.commandPath, launcherPath)
@@ -174,7 +185,7 @@ export class CliInstaller {
       await this.installAppImageWrapper(status.commandPath, status.launcherPath)
       await this.removeLegacyLinuxCommandIfManaged(status.launcherPath)
     } else if (this.isWindowsPackagedBundledCommand(status.commandPath, status.launcherPath)) {
-      // Why: packaged Windows already ships resources/bin/orca.cmd. Registration
+      // Why: packaged Windows already ships resources/bin/orca.exe. Registration
       // only owns the user PATH entry; rewriting the asset makes it recurse.
     } else {
       // Why: mkdir stays here for the Windows wrapper path — the target dir is
@@ -251,6 +262,66 @@ export class CliInstaller {
     return null
   }
 
+  private async resolveActiveInstallSpec(
+    defaultSpec: InstallSpec,
+    launcherPath: string
+  ): Promise<InstallSpec> {
+    if (
+      this.commandPathOverride ||
+      this.platform !== 'darwin' ||
+      defaultSpec.installMethod !== 'symlink'
+    ) {
+      return defaultSpec
+    }
+
+    const activeCommandPath = await this.findActivePathCommand(
+      launcherPath,
+      defaultSpec.commandPath
+    )
+    return activeCommandPath
+      ? {
+          commandPath: activeCommandPath,
+          installMethod: defaultSpec.installMethod
+        }
+      : defaultSpec
+  }
+
+  private async findActivePathCommand(
+    launcherPath: string,
+    defaultCommandPath: string
+  ): Promise<string | null> {
+    let reachedDefaultCommandPath = false
+    for (const commandPath of this.getPathCommandCandidates(defaultCommandPath)) {
+      const isDefaultCommandPath = samePathEntry(this.platform, commandPath, defaultCommandPath)
+      reachedDefaultCommandPath ||= isDefaultCommandPath
+
+      if (!(await isExecutableFile(commandPath))) {
+        continue
+      }
+
+      const status = await this.inspectSymlink(commandPath, launcherPath)
+      if (status.state !== 'not_installed') {
+        if (reachedDefaultCommandPath && !isDefaultCommandPath && status.state === 'conflict') {
+          // Why: a non-Orca command after an empty/default install slot can be
+          // shadowed safely by installing there; no user file needs replacing.
+          continue
+        }
+        // Why: PATH lookup is first-match-wins; use the executable command the
+        // shell will actually run, while preserving conflicts that shadow Orca.
+        return commandPath
+      }
+    }
+    return null
+  }
+
+  private getPathCommandCandidates(defaultCommandPath: string): string[] {
+    const commandName = basename(defaultCommandPath)
+    const pathCandidates = splitPathEntries(this.platform, this.processPathEnv ?? '').map((entry) =>
+      join(entry, commandName)
+    )
+    return uniquePathEntries(this.platform, pathCandidates)
+  }
+
   private resolveCommandPath(): string | null {
     if (this.commandPathOverride) {
       return this.commandPathOverride
@@ -285,7 +356,9 @@ export class CliInstaller {
     }
 
     if (this.platform === 'win32') {
-      return join(this.localAppDataPath, 'Programs', 'Orca', 'resources', 'bin', 'orca.cmd')
+      // Why: NSIS /D installs can live outside LOCALAPPDATA. The packaged
+      // resources directory is the authoritative native launcher location.
+      return getBundledLauncherPath(this.platform, this.resourcesPath)
     }
 
     return null
@@ -752,7 +825,7 @@ export class CliInstaller {
       return
     }
     entries.push(pathDirectory)
-    await this.userPathWriter(entries.join(';'))
+    await this.writeWindowsUserPathEntry(entries.join(';'), pathDirectory, 'add')
   }
 
   private async removeWindowsPathEntry(pathDirectory: string): Promise<void> {
@@ -760,10 +833,36 @@ export class CliInstaller {
       return
     }
     const current = await this.userPathReader()
-    const nextEntries = splitPathEntries('win32', current).filter(
-      (entry) => !samePathEntry('win32', entry, pathDirectory)
-    )
-    await this.userPathWriter(nextEntries.join(';'))
+    const entries = splitPathEntries('win32', current)
+    const nextEntries = entries.filter((entry) => !samePathEntry('win32', entry, pathDirectory))
+    if (nextEntries.length === entries.length) {
+      return
+    }
+    await this.writeWindowsUserPathEntry(nextEntries.join(';'), pathDirectory, 'remove')
+  }
+
+  // Why: raw PowerShell errors reach the UI, so translate denied PATH writes
+  // while preserving the original diagnostic as the error cause.
+  private async writeWindowsUserPathEntry(
+    value: string,
+    pathDirectory: string,
+    action: 'add' | 'remove'
+  ): Promise<void> {
+    try {
+      await this.userPathWriter(value)
+    } catch (error) {
+      if (!isWindowsUserPathPermissionError(error)) {
+        throw error
+      }
+      const guidance =
+        action === 'add'
+          ? `Add this folder to your PATH manually: ${pathDirectory}. Or run Orca as an administrator and try again.`
+          : `Remove this folder from your PATH manually: ${pathDirectory}. Or run Orca as an administrator and try again.`
+      throw new Error(
+        `Windows blocked updating your user PATH (access denied). This usually means your PATH environment variable is managed by Group Policy or your organization's device management. ${guidance}`,
+        { cause: error }
+      )
+    }
   }
 }
 
@@ -906,6 +1005,20 @@ function splitPathEntries(platform: NodeJS.Platform, value: string | null): stri
     .filter(Boolean)
 }
 
+function uniquePathEntries(platform: NodeJS.Platform, entries: string[]): string[] {
+  const seen = new Set<string>()
+  const result: string[] = []
+  for (const entry of entries) {
+    const key = platform === 'win32' ? normalizeWindowsPath(entry) : entry
+    if (seen.has(key)) {
+      continue
+    }
+    seen.add(key)
+    result.push(entry)
+  }
+  return result
+}
+
 function samePathEntry(platform: NodeJS.Platform, left: string, right: string): boolean {
   return platform === 'win32'
     ? normalizeWindowsPath(left) === normalizeWindowsPath(right)
@@ -915,6 +1028,19 @@ function samePathEntry(platform: NodeJS.Platform, left: string, right: string): 
 function isPathInsideOrEqual(parentPath: string, childPath: string): boolean {
   const childRelative = relative(parentPath, childPath)
   return childRelative === '' || (!childRelative.startsWith('..') && !isAbsolute(childRelative))
+}
+
+async function isExecutableFile(commandPath: string): Promise<boolean> {
+  try {
+    const stats = await stat(commandPath)
+    if (!stats.isFile()) {
+      return false
+    }
+    await access(commandPath, constants.X_OK)
+    return true
+  } catch {
+    return false
+  }
 }
 
 function normalizeWindowsPath(value: string): string {
@@ -937,6 +1063,26 @@ function isPermissionError(error: unknown): boolean {
 function isMissingError(error: unknown): boolean {
   return (
     error instanceof Error && 'code' in error && (error as NodeJS.ErrnoException).code === 'ENOENT'
+  )
+}
+
+// Why: localized permission errors retain these .NET/ACL markers even when
+// their human-readable PowerShell text is mojibake.
+function isWindowsUserPathPermissionError(error: unknown): boolean {
+  if (!(error instanceof Error)) {
+    return false
+  }
+  const stderr =
+    'stderr' in error && typeof (error as { stderr?: unknown }).stderr === 'string'
+      ? (error as { stderr: string }).stderr
+      : ''
+  const haystack = `${error.message}\n${stderr}`
+  return (
+    haystack.includes('UnauthorizedAccessException') ||
+    haystack.includes('SecurityException') ||
+    haystack.includes('Requested registry access is not allowed') ||
+    haystack.includes('Access is denied') ||
+    haystack.includes('Access to the registry key')
   )
 }
 
@@ -1039,7 +1185,7 @@ export function getBundledLauncherPath(
     return join(resourcesPath, 'bin', LINUX_COMMAND_NAME)
   }
   if (platform === 'win32') {
-    return join(resourcesPath, 'bin', 'orca.cmd')
+    return join(resourcesPath, 'bin', 'orca.exe')
   }
   return null
 }

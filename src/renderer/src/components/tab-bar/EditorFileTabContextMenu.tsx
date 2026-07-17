@@ -1,4 +1,14 @@
-import { Copy, ExternalLink, Pencil, Pin, PinOff } from 'lucide-react'
+import {
+  Copy,
+  ExternalLink,
+  Eye,
+  ListX,
+  PanelRightClose,
+  Pencil,
+  Pin,
+  PinOff,
+  X
+} from 'lucide-react'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -9,7 +19,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { useAppStore } from '@/store'
 import { showLocalPathOpenBlockedToast } from '@/lib/local-path-open-guard'
-import { useShortcutLabel } from '@/hooks/useShortcutLabel'
+import { useOptionalShortcutLabel } from '@/hooks/useShortcutLabel'
 import type { OpenFile } from '../../store/slices/editor'
 import { shouldBlockEditorTabLocalOpen } from './editor-tab-local-open-guard'
 import { translate } from '@/i18n/i18n'
@@ -81,8 +91,9 @@ export function EditorFileTabContextMenu({
   onCloseToRight,
   onOpenMarkdownPreview
 }: EditorFileTabContextMenuProps): React.JSX.Element {
-  const closeAllShortcut = useShortcutLabel('tab.closeAll')
-  const showCloseAllShortcut = closeAllShortcut !== 'Unassigned'
+  const renameShortcut = useOptionalShortcutLabel('tab.rename')
+  const closeShortcut = useOptionalShortcutLabel('tab.close')
+  const closeAllShortcut = useOptionalShortcutLabel('tab.closeAll')
 
   return (
     <DropdownMenu open={open} onOpenChange={onOpenChange} modal={false}>
@@ -106,6 +117,11 @@ export function EditorFileTabContextMenu({
           event.preventDefault()
         }}
       >
+        <TabWorkspaceLayoutMenuSection
+          unifiedTabId={unifiedTabId}
+          groupId={groupId}
+          trailingSeparator
+        />
         <DropdownMenuItem
           disabled={!canRename || isRenaming}
           onSelect={() => {
@@ -114,31 +130,35 @@ export function EditorFileTabContextMenu({
             onOpenRenameInput()
           }}
         >
-          <Pencil className="mr-1.5 size-3.5" />
+          <Pencil className="size-3.5" />
           {translate('auto.components.tab.bar.EditorFileTabContextMenu.68cc610e7f', 'Rename')}
+          {renameShortcut ? <DropdownMenuShortcut>{renameShortcut}</DropdownMenuShortcut> : null}
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={onTogglePin}>
-          {isPinned ? <PinOff className="mr-1.5 size-3.5" /> : <Pin className="mr-1.5 size-3.5" />}
+          {isPinned ? <PinOff className="size-3.5" /> : <Pin className="size-3.5" />}
           {isPinned
             ? translate('auto.components.tab.bar.EditorFileTabContextMenu.8e9d603a09', 'Unpin Tab')
             : translate('auto.components.tab.bar.EditorFileTabContextMenu.fdd29eb669', 'Pin Tab')}
         </DropdownMenuItem>
-        <TabWorkspaceLayoutMenuSection unifiedTabId={unifiedTabId} groupId={groupId} />
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={() => !isPinned && onClose()} disabled={isPinned}>
+          <X className="size-3.5" />
           {translate('auto.components.tab.bar.EditorFileTabContextMenu.1ba8492c5b', 'Close')}
+          {closeShortcut ? <DropdownMenuShortcut>{closeShortcut}</DropdownMenuShortcut> : null}
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={onCloseAll}>
+          <ListX className="size-3.5" />
           {translate(
             'auto.components.tab.bar.EditorFileTabContextMenu.ba1369dd24',
             'Close All Editor Tabs'
           )}
-          {showCloseAllShortcut ? (
+          {closeAllShortcut ? (
             <DropdownMenuShortcut>{closeAllShortcut}</DropdownMenuShortcut>
           ) : null}
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={onCloseToRight} disabled={!hasTabsToRight}>
+          <PanelRightClose className="size-3.5" />
           {translate(
             'auto.components.tab.bar.EditorFileTabContextMenu.e5ff31ccaf',
             'Close Tabs To The Right'
@@ -162,6 +182,7 @@ export function EditorFileTabContextMenu({
                 )
               }}
             >
+              <Eye className="size-3.5" />
               {translate(
                 'auto.components.tab.bar.EditorFileTabContextMenu.bfd5797ef4',
                 'Open Markdown Preview'
@@ -175,7 +196,7 @@ export function EditorFileTabContextMenu({
             void window.api.ui.writeClipboardText(file.filePath)
           }}
         >
-          <Copy className="w-3.5 h-3.5 mr-1.5" />
+          <Copy className="size-3.5" />
           {translate('auto.components.tab.bar.EditorFileTabContextMenu.5b85754786', 'Copy Path')}
         </DropdownMenuItem>
         <DropdownMenuItem
@@ -183,7 +204,7 @@ export function EditorFileTabContextMenu({
             void window.api.ui.writeClipboardText(file.relativePath)
           }}
         >
-          <Copy className="w-3.5 h-3.5 mr-1.5" />
+          <Copy className="size-3.5" />
           {translate(
             'auto.components.tab.bar.EditorFileTabContextMenu.52ce4f4605',
             'Copy Relative Path'
@@ -205,7 +226,7 @@ export function EditorFileTabContextMenu({
             window.api.shell.openPath(file.filePath)
           }}
         >
-          <ExternalLink className="w-3.5 h-3.5 mr-1.5" />
+          <ExternalLink className="size-3.5" />
           {revealLabel}
         </DropdownMenuItem>
       </DropdownMenuContent>

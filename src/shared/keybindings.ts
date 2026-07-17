@@ -48,8 +48,11 @@ export type KeybindingActionId =
   | 'sidebar.sourceControl.toggle'
   | 'sidebar.checks.toggle'
   | 'sidebar.ports.toggle'
+  | 'sidebar.sleepingWorkspaces.toggle'
   | 'sidebar.focusWorktreeList'
   | 'floatingTerminal.toggle'
+  | 'floatingWorkspace.maximize'
+  | 'floatingWorkspace.minimize'
   | 'zoom.in'
   | 'zoom.out'
   | 'zoom.reset'
@@ -74,6 +77,7 @@ export type KeybindingActionId =
   | 'tab.nextTerminal'
   | 'tab.previousTerminal'
   | 'tab.selectByIndex'
+  | 'tab.openQuickCommandsMenu'
   | 'browser.find'
   | 'browser.back'
   | 'browser.forward'
@@ -82,9 +86,12 @@ export type KeybindingActionId =
   | 'browser.focusAddressBar'
   | 'browser.grabElement'
   | 'editor.find'
+  | 'editor.replace'
   | 'editor.save'
   | 'editor.markdownPreview'
   | 'editor.copyContext'
+  | 'editor.previousChange'
+  | 'editor.nextChange'
   | 'fileExplorer.undo'
   | 'fileExplorer.redo'
   | 'fileExplorer.copyPath'
@@ -99,6 +106,8 @@ export type KeybindingActionId =
   | 'terminal.focusPreviousPane'
   | 'terminal.equalizePaneSizes'
   | 'terminal.expandPane'
+  | 'terminal.setTitle'
+  | 'terminal.clearPaneTitle'
   | 'terminal.closePane'
   | 'terminal.splitRight'
   | 'terminal.splitDown'
@@ -392,12 +401,34 @@ export const KEYBINDING_DEFINITIONS: readonly KeybindingDefinition[] = [
     }
   },
   {
+    id: 'sidebar.sleepingWorkspaces.toggle',
+    title: 'Toggle Sleeping Workspaces',
+    group: 'Global',
+    scope: 'global',
+    searchKeywords: [
+      'shortcut',
+      'sidebar',
+      'sleeping',
+      'asleep',
+      'workspaces',
+      'worktree',
+      'filter',
+      'show',
+      'hide'
+    ],
+    // Why: ship unbound — issue #5209 asks to "assign a shortcut", so we avoid
+    // claiming a cross-platform chord and let users bind it in Settings.
+    defaultBindings: platformBindings([])
+  },
+  {
     id: 'sidebar.focusWorktreeList',
     title: 'Focus worktree list',
     group: 'Global',
     scope: 'global',
     searchKeywords: ['shortcut', 'sidebar', 'worktree', 'focus'],
-    defaultBindings: platformBindings(['Mod+0'])
+    // Why: keep zoom.reset on the browser-standard Mod+0; this chord was
+    // unreachable while it shared that default (#8584).
+    defaultBindings: platformBindings(['Mod+Shift+0'])
   },
   {
     id: 'floatingTerminal.toggle',
@@ -406,6 +437,57 @@ export const KEYBINDING_DEFINITIONS: readonly KeybindingDefinition[] = [
     scope: 'global',
     searchKeywords: ['shortcut', 'floating terminal', 'terminal'],
     defaultBindings: platformBindings(['Mod+Alt+A']),
+    allowInTerminal: true
+  },
+  {
+    id: 'floatingWorkspace.maximize',
+    title: 'Maximize Floating Workspace Panel',
+    group: 'Global',
+    scope: 'global',
+    searchKeywords: [
+      'shortcut',
+      'floating',
+      'workspace',
+      'panel',
+      'floating workspace',
+      'workspace panel',
+      'maximize',
+      'expand'
+    ],
+    // Why: pairs with the floatingTerminal.toggle chord (Cmd+Opt+A) so
+    // maximize/restore lives on the same key anchor and stays one-handed,
+    // instead of the two-hand reach to Cmd+Opt+ArrowUp. macOS-only default;
+    // Linux/Windows stay unbound for users to assign.
+    defaultBindings: {
+      darwin: ['Mod+Alt+Shift+A'],
+      linux: [],
+      win32: []
+    },
+    allowInTerminal: true
+  },
+  {
+    id: 'floatingWorkspace.minimize',
+    title: 'Minimize Floating Workspace Panel',
+    group: 'Global',
+    scope: 'global',
+    searchKeywords: [
+      'shortcut',
+      'floating',
+      'workspace',
+      'panel',
+      'floating workspace',
+      'workspace panel',
+      'minimize',
+      'hide'
+    ],
+    // Why: intentionally unbound on every platform. floatingTerminal.toggle
+    // already owns the default show/hide chord; this action exists only so
+    // users can bind an explicit "hide the focused panel" shortcut in Settings.
+    defaultBindings: {
+      darwin: [],
+      linux: [],
+      win32: []
+    },
     allowInTerminal: true
   },
   {
@@ -487,8 +569,10 @@ export const KEYBINDING_DEFINITIONS: readonly KeybindingDefinition[] = [
     group: 'Tabs',
     scope: 'tabs',
     searchKeywords: ['shortcut', 'tab', 'simulator', 'emulator', 'mobile', 'ios', 'new'],
+    // Why: keep explorer on Mod+Shift+E (VS Code muscle memory). Emulator is
+    // macOS-only and less common, so it yields to a free chord (#8533).
     defaultBindings: {
-      darwin: ['Mod+Shift+E'],
+      darwin: ['Mod+Alt+Shift+E'],
       linux: [],
       win32: []
     }
@@ -628,6 +712,17 @@ export const KEYBINDING_DEFINITIONS: readonly KeybindingDefinition[] = [
     }
   },
   {
+    id: 'tab.openQuickCommandsMenu',
+    title: 'Toggle Quick Commands menu',
+    group: 'Quick Commands',
+    scope: 'tabs',
+    // Why: this tab-scoped action is also routed through the main window
+    // shortcut allowlist, so Settings must warn when it shadows global chords.
+    conflictGroup: 'global',
+    searchKeywords: ['shortcut', 'quick', 'command', 'menu', 'tab', 'group', 'toggle'],
+    defaultBindings: platformBindings([])
+  },
+  {
     id: 'browser.find',
     title: 'Find in Browser',
     group: 'Browser',
@@ -700,6 +795,20 @@ export const KEYBINDING_DEFINITIONS: readonly KeybindingDefinition[] = [
     defaultBindings: platformBindings(['Mod+F'])
   },
   {
+    id: 'editor.replace',
+    title: 'Replace in editor',
+    group: 'Editors',
+    scope: 'editor',
+    searchKeywords: ['shortcut', 'editor', 'replace', 'find', 'search'],
+    // Why: match the source editor's native replace shortcut — Cmd+Alt+F on
+    // macOS, Ctrl+H on Linux/Windows.
+    defaultBindings: {
+      darwin: ['Mod+Alt+F'],
+      linux: ['Mod+H'],
+      win32: ['Mod+H']
+    }
+  },
+  {
     id: 'editor.save',
     title: 'Save File',
     group: 'Editors',
@@ -722,6 +831,26 @@ export const KEYBINDING_DEFINITIONS: readonly KeybindingDefinition[] = [
     scope: 'editor',
     searchKeywords: ['shortcut', 'editor', 'copy', 'context'],
     defaultBindings: platformBindings(['Mod+Alt+C'])
+  },
+  // Why: F7 / Shift+F7 gives VS Code / JetBrains diff-change navigation. Function
+  // keys are safe as bare / Shift bindings, so both opt into allowBareKeybindings.
+  {
+    id: 'editor.previousChange',
+    title: 'Go to Previous Change',
+    group: 'Editors',
+    scope: 'editor',
+    searchKeywords: ['shortcut', 'editor', 'diff', 'change', 'hunk', 'previous'],
+    defaultBindings: platformBindings(['Shift+F7']),
+    allowBareKeybindings: true
+  },
+  {
+    id: 'editor.nextChange',
+    title: 'Go to Next Change',
+    group: 'Editors',
+    scope: 'editor',
+    searchKeywords: ['shortcut', 'editor', 'diff', 'change', 'hunk', 'next'],
+    defaultBindings: platformBindings(['F7']),
+    allowBareKeybindings: true
   },
   {
     id: 'fileExplorer.undo',
@@ -853,6 +982,22 @@ export const KEYBINDING_DEFINITIONS: readonly KeybindingDefinition[] = [
     defaultBindings: platformBindings(['Mod+Shift+Enter'])
   },
   {
+    id: 'terminal.setTitle',
+    title: 'Set Title…',
+    group: 'Terminal Panes',
+    scope: 'terminal',
+    searchKeywords: ['shortcut', 'terminal', 'pane', 'set title', 'title', 'rename'],
+    defaultBindings: platformBindings([])
+  },
+  {
+    id: 'terminal.clearPaneTitle',
+    title: 'Clear Pane Title',
+    group: 'Terminal Panes',
+    scope: 'terminal',
+    searchKeywords: ['shortcut', 'terminal', 'pane', 'clear title', 'remove title', 'title'],
+    defaultBindings: platformBindings([])
+  },
+  {
     id: 'terminal.closePane',
     title: 'Close active pane',
     group: 'Terminal Panes',
@@ -970,6 +1115,10 @@ function hasModifier(
   return Boolean(input.shift ?? input.shiftKey)
 }
 
+function isFunctionKeyToken(key: string): boolean {
+  return /^F([1-9]|1[0-9]|2[0-4])$/.test(key)
+}
+
 function normalizeKeyToken(token: string): string | null {
   if (token === ' ') {
     return 'Space'
@@ -983,6 +1132,10 @@ function normalizeKeyToken(token: string): string | null {
     return upper
   }
   if (upper.length === 1 && upper >= '0' && upper <= '9') {
+    return upper
+  }
+  // Function keys F1–F24 (event.key/event.code report them verbatim, e.g. F7).
+  if (isFunctionKeyToken(upper)) {
     return upper
   }
 
@@ -1184,22 +1337,31 @@ function canonicalizeParsedKeybinding(parsed: ParsedKeybinding): string {
 }
 
 function isSafeBareKey(parsed: ParsedKeybinding): boolean {
-  if (parsed.shift || parsed.mod || parsed.meta || parsed.control || parsed.alt) {
+  if (parsed.mod || parsed.meta || parsed.control || parsed.alt) {
     return false
   }
-  return [
-    'Backspace',
-    'Delete',
-    'Enter',
-    'Escape',
-    'Tab',
-    'ArrowLeft',
-    'ArrowRight',
-    'ArrowUp',
-    'ArrowDown',
-    'PageUp',
-    'PageDown'
-  ].includes(parsed.key)
+  // Function keys produce no text, so they're safe standalone or with Shift
+  // (e.g. F7 / Shift+F7 for diff-change navigation). Shift is only permitted
+  // alongside a function key — Shift+letter stays unsafe.
+  if (parsed.shift) {
+    return isFunctionKeyToken(parsed.key)
+  }
+  return (
+    isFunctionKeyToken(parsed.key) ||
+    [
+      'Backspace',
+      'Delete',
+      'Enter',
+      'Escape',
+      'Tab',
+      'ArrowLeft',
+      'ArrowRight',
+      'ArrowUp',
+      'ArrowDown',
+      'PageUp',
+      'PageDown'
+    ].includes(parsed.key)
+  )
 }
 
 function normalizeKeybindingWithOptions(
@@ -1409,6 +1571,51 @@ function canUsePhysicalCodeFallback(input: KeybindingInput): boolean {
   return PHYSICAL_CODE_FALLBACK_KEYS.has(input.key ?? '')
 }
 
+function isLatinShortcutKey(key: string): boolean {
+  // Why: A-Z / 0-9 are the only single chars a Latin shortcut token names; any
+  // other produced character (Cyrillic с, Greek π, ...) cannot be a deliberate
+  // remap of a Latin chord, so it is safe to fall back to the physical code.
+  if (key.length !== 1) {
+    return false
+  }
+  const upper = key.toUpperCase()
+  return (upper >= 'A' && upper <= 'Z') || (key >= '0' && key <= '9')
+}
+
+function shouldUseNonLatinShortcutPhysicalFallback(
+  input: KeybindingInput,
+  platform: NodeJS.Platform
+): boolean {
+  // Why: non-Latin layouts (Cyrillic, Greek, ...) report a non-Latin logical key
+  // for physical letter keys (issue #6274), so Ctrl/Meta shortcuts never match.
+  // Fall back to the physical code, but only when no logical shortcut token
+  // exists, a real primary modifier (Ctrl or Meta) is held, and this is not an
+  // AltGr (Ctrl+Alt) text-composition event. macOS is excluded — it already has
+  // dedicated Option-composed fallbacks and Cmd shortcuts are layout-stable.
+  if (getKeybindingPlatform(platform) === 'darwin') {
+    return false
+  }
+  const hasPrimaryModifier = hasModifier(input, 'control') || hasModifier(input, 'meta')
+  if (!hasPrimaryModifier) {
+    return false
+  }
+  // AltGr surfaces as Ctrl+Alt on Windows/Linux; treat it as text, not a chord.
+  if (hasModifier(input, 'control') && hasModifier(input, 'alt')) {
+    return false
+  }
+  if (logicalKeyTokenFromInput(input) !== null) {
+    return false
+  }
+  const key = input.key ?? ''
+  return key !== '' && !MODIFIER_KEYS.has(key) && !isLatinShortcutKey(key)
+}
+
+function canFallBackToPhysicalCode(input: KeybindingInput, platform: NodeJS.Platform): boolean {
+  return (
+    canUsePhysicalCodeFallback(input) || shouldUseNonLatinShortcutPhysicalFallback(input, platform)
+  )
+}
+
 function physicalCodeKeyTokenFromInput(input: KeybindingInput): string | null {
   const code = input.code ?? ''
   if (code.startsWith('Key') && code.length === 4) {
@@ -1460,7 +1667,8 @@ function keyTokenFromInput(input: KeybindingInput, platform: NodeJS.Platform): s
   }
   if (
     !canUsePhysicalCodeFallback(input) &&
-    !shouldUseMacOptionComposedCaptureFallback(input, platform)
+    !shouldUseMacOptionComposedCaptureFallback(input, platform) &&
+    !shouldUseNonLatinShortcutPhysicalFallback(input, platform)
   ) {
     return null
   }
@@ -1690,18 +1898,22 @@ function letterKeyMatches(
     return logicalKey === letter.toUpperCase()
   }
   return (
-    (canUsePhysicalCodeFallback(input) ||
+    (canFallBackToPhysicalCode(input, platform) ||
       shouldUseMacOptionLetterPhysicalFallback(parsed, input, platform)) &&
     input.code === `Key${letter.toUpperCase()}`
   )
 }
 
-function digitKeyMatches(input: KeybindingInput, digit: string): boolean {
+function digitKeyMatches(
+  input: KeybindingInput,
+  digit: string,
+  platform: NodeJS.Platform
+): boolean {
   const logicalKey = logicalKeyTokenFromInput(input)
   if (logicalKey && logicalKey.length === 1 && logicalKey >= '0' && logicalKey <= '9') {
     return logicalKey === digit
   }
-  return canUsePhysicalCodeFallback(input) && input.code === `Digit${digit}`
+  return canFallBackToPhysicalCode(input, platform) && input.code === `Digit${digit}`
 }
 
 function isPunctuationKeyToken(token: string | null): token is string {
@@ -1749,7 +1961,7 @@ function keyMatches(
     return letterKeyMatches(input, parsedKey, parsed, platform)
   }
   if (parsedKey.length === 1 && parsedKey >= '0' && parsedKey <= '9') {
-    return digitKeyMatches(input, parsedKey)
+    return digitKeyMatches(input, parsedKey, platform)
   }
 
   if (parsedKey === 'NumpadAdd' || parsedKey === 'NumpadSubtract') {
@@ -1770,7 +1982,7 @@ function keyMatches(
       return semanticKey === parsedKey
     }
     return (
-      (canUsePhysicalCodeFallback(input) ||
+      (canFallBackToPhysicalCode(input, platform) ||
         shouldUseMacOptionPunctuationPhysicalFallback(parsed, input, platform)) &&
       physicalPunctuationKey(input) === parsedKey
     )
@@ -1780,7 +1992,9 @@ function keyMatches(
   if (logicalKey !== null) {
     return logicalKey === parsedKey
   }
-  return canUsePhysicalCodeFallback(input) && physicalCodeKeyTokenFromInput(input) === parsedKey
+  return (
+    canFallBackToPhysicalCode(input, platform) && physicalCodeKeyTokenFromInput(input) === parsedKey
+  )
 }
 
 function resolveModifierToken(
@@ -1827,12 +2041,44 @@ export function keybindingMatchesInput(
   )
 }
 
+function keybindingConflictIdentityForParsed(
+  parsed: ParsedKeybinding,
+  platform: NodeJS.Platform
+): string {
+  if (parsed.doubleTapModifier) {
+    return `DoubleTap:${resolveModifierToken(parsed.doubleTapModifier, platform)}`
+  }
+  const modifiers = platformModifiers(parsed, platform)
+  return [
+    modifiers.meta ? 'Meta' : '',
+    modifiers.control ? 'Control' : '',
+    modifiers.alt ? 'Alt' : '',
+    modifiers.shift ? 'Shift' : '',
+    parsed.key
+  ].join('+')
+}
+
 function keybindingConflictIdentity(binding: string, platform: NodeJS.Platform): string {
   const parsed = parseKeybinding(binding)
-  if (!parsed?.doubleTapModifier) {
-    return binding
+  return parsed ? keybindingConflictIdentityForParsed(parsed, platform) : binding
+}
+
+function keybindingConflictIdentities(
+  actionId: KeybindingActionId,
+  binding: string,
+  platform: NodeJS.Platform
+): readonly string[] {
+  const exact = keybindingConflictIdentity(binding, platform)
+  if (!isDigitIndexActionId(actionId)) {
+    return [exact]
   }
-  return `DoubleTap:${resolveModifierToken(parsed.doubleTapModifier, platform)}`
+  const parsed = parseKeybinding(binding)
+  if (!parsed || parsed.doubleTapModifier || !DIGIT_INDEX_KEY_PATTERN.test(parsed.key)) {
+    return [exact]
+  }
+  return Array.from({ length: 9 }, (_, index) =>
+    keybindingConflictIdentityForParsed({ ...parsed, key: String(index + 1) }, platform)
+  )
 }
 
 export function keybindingMatchesAction(
@@ -1854,10 +2100,10 @@ export function keybindingMatchesAction(
   )
 }
 
-function digitFromInput(input: KeybindingInput): string | null {
+function digitFromInput(input: KeybindingInput, platform: NodeJS.Platform): string | null {
   for (let value = 1; value <= 9; value++) {
     const digit = String(value)
-    if (digitKeyMatches(input, digit)) {
+    if (digitKeyMatches(input, digit, platform)) {
       return digit
     }
   }
@@ -1880,7 +2126,7 @@ export function matchKeybindingDigitIndex(
   if (!definition || !keybindingIsActiveInContext(definition, options)) {
     return null
   }
-  const digit = digitFromInput(input)
+  const digit = digitFromInput(input, platform)
   if (!digit) {
     return null
   }
@@ -2016,20 +2262,37 @@ export function findKeybindingConflicts(
         groups.add(definition.scope)
       }
       for (const group of groups) {
-        const conflictKey = `${group}\u0000${keybindingConflictIdentity(binding, platform)}`
-        const current = owners.get(conflictKey) ?? { binding, actionIds: new Set() }
-        current.actionIds.add(definition.id)
-        owners.set(conflictKey, current)
+        for (const identity of keybindingConflictIdentities(definition.id, binding, platform)) {
+          const conflictKey = `${group}\u0000${identity}`
+          const current = owners.get(conflictKey) ?? { binding, actionIds: new Set() }
+          if (
+            !isDigitIndexActionId(definition.id) &&
+            Array.from(current.actionIds).some((actionId) => isDigitIndexActionId(actionId))
+          ) {
+            current.binding = binding
+          }
+          current.actionIds.add(definition.id)
+          owners.set(conflictKey, current)
+        }
       }
     }
   }
 
+  const seenConflictKeys = new Set<string>()
   return Array.from(owners.values())
     .filter(({ actionIds }) => actionIds.size > 1 && setIntersects(actionIds, customizedActions))
     .map(({ binding, actionIds }) => ({
       binding,
       actionIds: Array.from(actionIds)
     }))
+    .filter((conflict) => {
+      const key = `${conflict.binding}\u0000${conflict.actionIds.join('\u0000')}`
+      if (seenConflictKeys.has(key)) {
+        return false
+      }
+      seenConflictKeys.add(key)
+      return true
+    })
 }
 
 function setIntersects<T>(left: ReadonlySet<T>, right: ReadonlySet<T>): boolean {

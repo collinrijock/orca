@@ -1,7 +1,7 @@
 /* eslint-disable max-lines -- Why: this prototype keeps the real-data adapter
 and current visual skeleton together until the next refinement pass decides
 which pieces become production modules. */
-import React, { useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'react'
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import {
   Bell,
@@ -67,6 +67,11 @@ import { parsePaneKey } from '../../../../shared/stable-pane-id'
 import { isClipboardTextByteLengthOverLimit } from '../../../../shared/clipboard-text'
 import { migrationUnsupportedToAgentStatusEntry } from '@/lib/migration-unsupported-agent-entry'
 import { translate } from '@/i18n/i18n'
+import {
+  getActivityThreadTaskTitle,
+  getActivityThreadWorkspaceTitle,
+  resolveActivityThreadStatusPreview
+} from '@/lib/activity-thread-display'
 import { getAgentRowPrimaryText } from '@/lib/agent-row-primary-text'
 
 type ThreadReadFilter = 'all' | 'unread'
@@ -438,36 +443,28 @@ function agentMeta(event: ActivityEvent): string {
   return event.state === 'waiting' ? `${agent} waiting` : `${agent} blocked`
 }
 
-// Why (label hierarchy): mirror DashboardAgentRow — the agent's last prompt
-// IS what the agent is working on and is the primary signal users want at a
-// glance. A user-renamed customTitle still wins (explicit rename intent), but
-// the OSC-set live title ("Claude Code", "Codex", …) must NOT shadow the
-// prompt: agent CLIs set that title eagerly, so preferring it would pin every
-// row to the agent name and hide the actual turn. Fall back to a non-default
-// liveTitle only when there is no prompt at all.
-function paneTitleForEntry(entry: AgentStatusEntry, tab: TerminalTab): string {
-  const customTitle = tab.customTitle?.trim()
-  if (customTitle) {
-    return customTitle
-  }
-  const prompt = getAgentRowPrimaryText(entry)
-  if (prompt) {
-    return prompt
-  }
-  const liveTitle = tab.title?.trim()
-  const defaultTitle = tab.defaultTitle?.trim()
-  if (liveTitle && liveTitle !== defaultTitle) {
-    return liveTitle
-  }
-  return defaultTitle || liveTitle || 'Terminal'
+// Why (label hierarchy): Activity rows need a stable task identity across
+// follow-up turns. The live hook prompt tracks the current turn ("yes",
+// "ok proceed") and must not replace the task title when scanning many agents
+// across worktrees.
+function paneTitleForEntry(
+  entry: AgentStatusEntry,
+  tab: TerminalTab,
+  generatedTitlesEnabled: boolean
+): string {
+  return getActivityThreadTaskTitle({ entry, tab, generatedTitlesEnabled })
 }
 
-function paneTitleForEvent(event: ActivityEvent): string {
-  return paneTitleForEntry(event.entry, event.tab)
+function paneTitleForEvent(event: ActivityEvent, generatedTitlesEnabled: boolean): string {
+  return paneTitleForEntry(event.entry, event.tab, generatedTitlesEnabled)
 }
 
-function responsePreviewForEntry(entry: AgentStatusEntry): string {
-  return entry.lastAssistantMessage?.trim() ?? ''
+function statusPreviewForEntry(
+  entry: AgentStatusEntry,
+  agentState?: AgentStatusState | null,
+  previousPreview?: string
+): string {
+  return resolveActivityThreadStatusPreview(entry, agentState, previousPreview)
 }
 
 function isActivityEventState(state: AgentStatusState): state is ActivityEventState {
@@ -772,7 +769,9 @@ export function buildActivityEvents(args: {
 export function buildAgentPaneThreads(args: {
   events: ActivityEvent[]
   liveAgentByPaneKey: Record<string, ActivityLiveAgentSnapshot>
+  generatedTitlesEnabled?: boolean
 }): AgentPaneThread[] {
+  const generatedTitlesEnabled = args.generatedTitlesEnabled === true
   const byPaneKey = new Map<string, AgentPaneThread>()
   for (const event of args.events) {
     const paneKey = event.entry.paneKey
@@ -780,14 +779,14 @@ export function buildAgentPaneThreads(args: {
     if (!existing) {
       byPaneKey.set(paneKey, {
         paneKey,
-        paneTitle: paneTitleForEvent(event),
+        paneTitle: paneTitleForEvent(event, generatedTitlesEnabled),
         worktree: event.worktree,
         repo: event.repo,
         tab: event.tab,
         agentType: event.agentType,
         currentAgentState: null,
         currentAgentEntry: null,
-        responsePreview: responsePreviewForEntry(event.entry),
+        responsePreview: statusPreviewForEntry(event.entry, event.state),
         latestTimestamp: event.timestamp,
         latestEvent: event,
         events: [event],
@@ -802,10 +801,14 @@ export function buildAgentPaneThreads(args: {
       existing.migrationUnsupportedPtyId ?? event.migrationUnsupportedPtyId
     if (!existing.latestEvent || event.timestamp > existing.latestEvent.timestamp) {
       existing.latestEvent = event
-      existing.paneTitle = paneTitleForEvent(event)
+      existing.paneTitle = paneTitleForEvent(event, generatedTitlesEnabled)
       existing.agentType = event.agentType
       existing.tab = event.tab
-      existing.responsePreview = responsePreviewForEntry(event.entry)
+      existing.responsePreview = statusPreviewForEntry(
+        event.entry,
+        event.state,
+        existing.responsePreview
+      )
       existing.latestTimestamp = event.timestamp
     }
   }
@@ -815,14 +818,14 @@ export function buildAgentPaneThreads(args: {
     if (!existing) {
       byPaneKey.set(paneKey, {
         paneKey,
-        paneTitle: paneTitleForEntry(liveAgent.entry, liveAgent.tab),
+        paneTitle: paneTitleForEntry(liveAgent.entry, liveAgent.tab, generatedTitlesEnabled),
         worktree: liveAgent.worktree,
         repo: liveAgent.repo,
         tab: liveAgent.tab,
         agentType: liveAgent.agentType,
         currentAgentState: liveAgent.state,
         currentAgentEntry: liveAgent.entry,
-        responsePreview: responsePreviewForEntry(liveAgent.entry),
+        responsePreview: statusPreviewForEntry(liveAgent.entry, liveAgent.state),
         latestTimestamp: liveAgent.timestamp,
         latestEvent: null,
         events: [],
@@ -833,14 +836,18 @@ export function buildAgentPaneThreads(args: {
     // Why: live metadata is the current thread identity. Historical events stay
     // in the event list, but the row title/time/target must follow the active
     // turn so a running agent never shows the previous prompt as primary.
-    existing.paneTitle = paneTitleForEntry(liveAgent.entry, liveAgent.tab)
+    existing.paneTitle = paneTitleForEntry(liveAgent.entry, liveAgent.tab, generatedTitlesEnabled)
     existing.worktree = liveAgent.worktree
     existing.repo = liveAgent.repo
     existing.tab = liveAgent.tab
     existing.agentType = liveAgent.agentType
     existing.currentAgentState = liveAgent.state
     existing.currentAgentEntry = liveAgent.entry
-    existing.responsePreview = responsePreviewForEntry(liveAgent.entry)
+    existing.responsePreview = statusPreviewForEntry(
+      liveAgent.entry,
+      liveAgent.state,
+      existing.responsePreview
+    )
     existing.latestTimestamp = liveAgent.timestamp
   }
 
@@ -870,6 +877,78 @@ function EventTime({ timestamp }: { timestamp: number }): React.JSX.Element {
         {absolute}
       </TooltipContent>
     </Tooltip>
+  )
+}
+
+export function ActivityThreadOptionsMenu({
+  compactMode,
+  hasUnreadThreads,
+  onCompactModeChange,
+  onMarkAllThreadsRead
+}: {
+  compactMode: boolean
+  hasUnreadThreads: boolean
+  onCompactModeChange: (compactMode: boolean) => void
+  onMarkAllThreadsRead: () => void
+}): React.JSX.Element {
+  return (
+    <DropdownMenu>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          {/* Why: keep Tooltip and Dropdown from composing refs onto the same
+              button; the crash report's stack loops through Radix setRef. */}
+          <span className="inline-flex shrink-0">
+            <DropdownMenuTrigger asChild>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="size-8 shrink-0 border-input bg-transparent p-0 text-muted-foreground shadow-xs hover:bg-accent hover:text-accent-foreground dark:bg-transparent dark:hover:bg-accent dark:hover:text-accent-foreground"
+                aria-label={translate(
+                  'auto.components.activity.ActivityPrototypePage.db8a1878b5',
+                  'Thread list options'
+                )}
+              >
+                <MoreVertical className="size-3.5" />
+              </Button>
+            </DropdownMenuTrigger>
+          </span>
+        </TooltipTrigger>
+        <TooltipContent side="bottom">
+          {translate('auto.components.activity.ActivityPrototypePage.a472a14700', 'More options')}
+        </TooltipContent>
+      </Tooltip>
+      <DropdownMenuContent align="end" sideOffset={6}>
+        <DropdownMenuCheckboxItem
+          checked={compactMode}
+          onCheckedChange={(checked) => onCompactModeChange(checked === true)}
+          onSelect={(event) => event.preventDefault()}
+        >
+          {translate('auto.components.activity.ActivityPrototypePage.f70e4bec47', 'Compact mode')}
+        </DropdownMenuCheckboxItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onSelect={onMarkAllThreadsRead} disabled={!hasUnreadThreads}>
+          {translate('auto.components.activity.ActivityPrototypePage.023ff75afe', 'Mark all read')}
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
+}
+
+function ActivityProjectLabel({ repo }: { repo: Repo | null }): React.JSX.Element {
+  const label =
+    repo?.displayName?.trim() ||
+    translate('auto.components.activity.ActivityPrototypePage.5651b216c6', 'Unknown project')
+  return (
+    <div className="flex min-w-0 items-center gap-1.5">
+      {repo ? <RepoBadgeMark color={repo.badgeColor} /> : null}
+      <span
+        className="min-w-0 truncate text-[11px] font-semibold uppercase tracking-[0.04em] text-muted-foreground"
+        title={label}
+      >
+        {label}
+      </span>
+    </div>
   )
 }
 
@@ -999,7 +1078,7 @@ function threadSearchText(thread: AgentPaneThread): string {
   const latestEventText = latest
     ? `${agentTitle(latest)} ${agentSummary(latest)} ${agentMeta(latest)}`
     : ''
-  return `${thread.paneTitle} ${thread.worktree.displayName} ${thread.repo?.displayName ?? ''} ${formatAgentTypeLabel(thread.agentType)} ${stateLabel} ${currentPrompt} ${rawCurrentPrompt} ${currentSummary} ${thread.responsePreview} ${latestEventText}`.toLowerCase()
+  return `${thread.paneTitle} ${getActivityThreadWorkspaceTitle(thread.worktree)} ${thread.worktree.branch ?? ''} ${thread.repo?.displayName ?? ''} ${formatAgentTypeLabel(thread.agentType)} ${stateLabel} ${currentPrompt} ${rawCurrentPrompt} ${currentSummary} ${thread.responsePreview} ${latestEventText}`.toLowerCase()
 }
 
 export const ACTIVITY_SEARCH_QUERY_MAX_BYTES = 2 * 1024
@@ -1026,6 +1105,70 @@ export function activityThreadMatchesSearchQuery({
     return true
   }
   return threadSearchText(thread).includes(trimmedQuery.toLowerCase())
+}
+
+export function isActivityFilterFocusShortcut(
+  event: Pick<KeyboardEvent, 'altKey' | 'ctrlKey' | 'key' | 'metaKey' | 'shiftKey'>,
+  isMac = navigator.userAgent.includes('Mac')
+): boolean {
+  if (event.key.toLowerCase() !== 'f' || event.shiftKey || event.altKey) {
+    return false
+  }
+  return isMac ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey
+}
+
+export function shouldIgnoreActivityFilterFocusShortcutTarget(
+  target: Element | null,
+  terminalPortalTargets: (HTMLElement | null)[]
+): boolean {
+  if (!target) {
+    return false
+  }
+  // Why: the workspace terminal stays mounted while Activity is open; only the
+  // Activity-portaled terminal should keep Cmd/Ctrl+F for terminal search.
+  return terminalPortalTargets.some((portalTarget) => portalTarget?.contains(target) ?? false)
+}
+
+export function handleActivityFilterFocusShortcut({
+  activeElement,
+  event,
+  input,
+  isMac,
+  terminalPortalTargets
+}: {
+  activeElement: Element | null
+  event: Pick<
+    KeyboardEvent,
+    | 'altKey'
+    | 'ctrlKey'
+    | 'key'
+    | 'metaKey'
+    | 'preventDefault'
+    | 'shiftKey'
+    | 'stopImmediatePropagation'
+    | 'stopPropagation'
+  >
+  input: Pick<HTMLInputElement, 'focus' | 'select'> | null
+  isMac?: boolean
+  terminalPortalTargets: (HTMLElement | null)[]
+}): boolean {
+  if (shouldIgnoreActivityFilterFocusShortcutTarget(activeElement, terminalPortalTargets)) {
+    return false
+  }
+  if (!isActivityFilterFocusShortcut(event, isMac)) {
+    return false
+  }
+  if (!input) {
+    return false
+  }
+  event.preventDefault()
+  // Why: hidden workspace xterms can retain focus behind Activity; capture-phase
+  // handling must stop the chord before xterm forwards it to a local/SSH PTY.
+  event.stopPropagation()
+  event.stopImmediatePropagation()
+  input.focus()
+  input.select()
+  return true
 }
 
 function ThreadAgentStateIndicator({ thread }: { thread: AgentPaneThread }): React.JSX.Element {
@@ -1100,6 +1243,14 @@ function ThreadRow({
   const renderedResponsePreview = activityThreadResponseRenderPreview({
     responsePreview: thread.responsePreview
   })
+  const workspaceTitle = getActivityThreadWorkspaceTitle(thread.worktree)
+  const taskTitle = thread.paneTitle
+  const agentLabel = formatAgentTypeLabel(thread.agentType)
+  const showStatusPreview =
+    !compactMode &&
+    renderedResponsePreview.length > 0 &&
+    renderedResponsePreview !== taskTitle &&
+    renderedResponsePreview !== workspaceTitle
   return (
     <div
       data-current={selected ? 'true' : undefined}
@@ -1140,10 +1291,6 @@ function ThreadRow({
       {thread.unread ? (
         <span className="absolute left-0 top-1.5 bottom-1.5 w-0.5 rounded-r-full bg-primary" />
       ) : null}
-      {/* Why (right cluster aligned to title, not centered between rows):
-          parking the timestamp on the title row leaves the secondary row
-          full-width for the repo badge + branch name, which used to get
-          truncated when the right cluster ate horizontal space. */}
       <div className="flex min-w-0 items-start gap-2">
         <span className="inline-flex shrink-0 items-start gap-1">
           <ThreadAgentStateIndicator thread={thread} />
@@ -1152,128 +1299,126 @@ function ThreadRow({
           </span>
         </span>
         <div className="min-w-0 flex-1">
-          <span
-            className={cn(
-              'min-w-0 text-xs leading-snug',
-              compactMode ? 'block truncate' : 'line-clamp-3 break-words',
-              thread.unread ? 'font-semibold text-foreground' : 'font-medium text-foreground'
-            )}
-            title={compactMode ? thread.paneTitle : undefined}
-          >
-            {thread.paneTitle}
-          </span>
-          {!compactMode && renderedResponsePreview ? (
-            <CommentMarkdown
-              content={renderedResponsePreview}
-              className={cn(
-                // Why: mirror the in-workspace agent card's compact response
-                // preview while keeping Activity rows to one scannable line;
-                // the content is capped before markdown parsing to keep large
-                // assistant summaries cheap in long Activity lists.
-                'mt-1 h-[1lh] min-w-0 overflow-hidden truncate whitespace-nowrap text-[11px] font-normal leading-snug text-muted-foreground/80',
-                '[&_*]:inline [&_*]:!m-0 [&_*]:!p-0 [&_*]:!whitespace-nowrap [&_br]:hidden [&_ol]:list-none [&_ul]:list-none'
-              )}
-              title={thread.responsePreview}
-            />
-          ) : null}
-        </div>
-        <span className="inline-flex shrink-0 items-center gap-1.5 pt-px">
-          {/* Why (bell matches WorktreeCard pattern): unread → amber filled
-              bell as a static, non-interactive cue (selecting the thread
-              auto-marks it read, so a Mark-read button would be redundant);
-              read → outline Bell that fades in on row hover and acts as
-              Mark-unread. Bare button (no shadcn outline) so it reads as
-              an inline cue rather than a discrete control square. */}
-          <span className="inline-flex size-4 shrink-0 items-center justify-center">
-            {thread.unread ? (
-              <FilledBellIcon
-                className="size-[13px] shrink-0 text-amber-500 drop-shadow-sm"
-                aria-label={translate(
-                  'auto.components.activity.ActivityPrototypePage.beb2c19173',
-                  'Unread'
+          <div className="flex min-w-0 items-start gap-2">
+            <div className="min-w-0 flex-1 space-y-0.5">
+              <ActivityProjectLabel repo={thread.repo} />
+              <div
+                className={cn(
+                  'min-w-0 text-[13px] leading-snug',
+                  compactMode ? 'truncate' : 'line-clamp-2 break-words',
+                  thread.unread ? 'font-semibold text-foreground' : 'font-medium text-foreground'
                 )}
-              />
-            ) : (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    type="button"
-                    onClick={(event) => {
-                      event.stopPropagation()
-                      onMarkUnread()
-                    }}
-                    onMouseDown={(event) => event.stopPropagation()}
+                title={workspaceTitle}
+              >
+                {workspaceTitle}
+              </div>
+              {taskTitle !== workspaceTitle ? (
+                <div
+                  className={cn(
+                    'min-w-0 text-[12px] leading-snug text-muted-foreground',
+                    compactMode ? 'truncate' : 'line-clamp-2 break-words'
+                  )}
+                  title={taskTitle}
+                >
+                  {taskTitle}
+                </div>
+              ) : null}
+              {showStatusPreview ? (
+                <CommentMarkdown
+                  content={renderedResponsePreview}
+                  className={cn(
+                    'h-[1lh] min-w-0 overflow-hidden truncate whitespace-nowrap text-[11px] font-normal leading-snug text-muted-foreground/80',
+                    '[&_*]:inline [&_*]:!m-0 [&_*]:!p-0 [&_*]:!whitespace-nowrap [&_br]:hidden [&_ol]:list-none [&_ul]:list-none'
+                  )}
+                  title={thread.responsePreview}
+                />
+              ) : null}
+              <div className="flex min-w-0 items-center gap-1.5 pt-0.5">
+                <span className="shrink-0 text-[10px] text-muted-foreground/80">{agentLabel}</span>
+                {canJump ? (
+                  <span
                     className={cn(
-                      'group/unread flex size-4 shrink-0 cursor-pointer items-center justify-center rounded transition-all',
-                      'hover:bg-accent/80 active:scale-95',
-                      'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring'
-                    )}
-                    aria-label={translate(
-                      'auto.components.activity.ActivityPrototypePage.59b131fbd9',
-                      'Mark thread unread'
+                      'ml-auto inline-flex shrink-0 items-center transition-opacity',
+                      'can-hover:pointer-events-none can-hover:invisible can-hover:opacity-0',
+                      'group-hover:pointer-events-auto group-hover:visible group-hover:opacity-100'
                     )}
                   >
-                    <Bell className="size-3 text-muted-foreground/40 can-hover:opacity-0 transition-opacity group-hover:opacity-100 group-hover/unread:opacity-100" />
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent side="left">
-                  {translate(
-                    'auto.components.activity.ActivityPrototypePage.59b131fbd9',
-                    'Mark thread unread'
-                  )}
-                </TooltipContent>
-              </Tooltip>
-            )}
-          </span>
-          <EventTime timestamp={thread.latestTimestamp} />
-        </span>
-      </div>
-      <div className="flex min-w-0 items-center gap-1.5 pl-[42px]">
-        <EventRepoBadge repo={thread.repo} />
-        <span className="min-w-0 flex-1 truncate text-[11px] text-muted-foreground">
-          {thread.worktree.displayName}
-        </span>
-        {/* Why (Jump-to-workspace lives on the secondary row): the bell slot
-            on the title row already holds the unread/Mark-unread state, so
-            the navigation action gets its own slot down here aligned with
-            the worktree name. On hover-capable pointers, the hidden state
-            keeps the worktree-name's flex-1 width stable across hover. */}
-        {canJump ? (
-          <span
-            className={cn(
-              'ml-auto inline-flex shrink-0 items-center transition-opacity',
-              'can-hover:pointer-events-none can-hover:invisible can-hover:opacity-0',
-              'group-hover:pointer-events-auto group-hover:visible group-hover:opacity-100'
-            )}
-          >
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="icon-xs"
-                  aria-label={translate(
-                    'auto.components.activity.ActivityPrototypePage.4616ea39fd',
-                    'Jump to workspace'
-                  )}
-                  onClick={(event) => {
-                    event.stopPropagation()
-                    onJump()
-                  }}
-                  onMouseDown={(event) => event.stopPropagation()}
-                >
-                  <ExternalLink className="size-3" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="left">
-                {translate(
-                  'auto.components.activity.ActivityPrototypePage.4616ea39fd',
-                  'Jump to workspace'
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="icon-xs"
+                          aria-label={translate(
+                            'auto.components.activity.ActivityPrototypePage.4616ea39fd',
+                            'Jump to workspace'
+                          )}
+                          onClick={(event) => {
+                            event.stopPropagation()
+                            onJump()
+                          }}
+                          onMouseDown={(event) => event.stopPropagation()}
+                        >
+                          <ExternalLink className="size-3" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent side="left">
+                        {translate(
+                          'auto.components.activity.ActivityPrototypePage.4616ea39fd',
+                          'Jump to workspace'
+                        )}
+                      </TooltipContent>
+                    </Tooltip>
+                  </span>
+                ) : null}
+              </div>
+            </div>
+            <span className="inline-flex shrink-0 items-center gap-1.5 pt-px">
+              <span className="inline-flex size-4 shrink-0 items-center justify-center">
+                {thread.unread ? (
+                  <FilledBellIcon
+                    className="size-[13px] shrink-0 text-amber-500 drop-shadow-sm"
+                    aria-label={translate(
+                      'auto.components.activity.ActivityPrototypePage.beb2c19173',
+                      'Unread'
+                    )}
+                  />
+                ) : (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation()
+                          onMarkUnread()
+                        }}
+                        onMouseDown={(event) => event.stopPropagation()}
+                        className={cn(
+                          'group/unread flex size-4 shrink-0 cursor-pointer items-center justify-center rounded transition-all',
+                          'hover:bg-accent/80 active:scale-95',
+                          'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring'
+                        )}
+                        aria-label={translate(
+                          'auto.components.activity.ActivityPrototypePage.59b131fbd9',
+                          'Mark thread unread'
+                        )}
+                      >
+                        <Bell className="size-3 text-muted-foreground/40 can-hover:opacity-0 transition-opacity group-hover:opacity-100 group-hover/unread:opacity-100" />
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent side="left">
+                      {translate(
+                        'auto.components.activity.ActivityPrototypePage.59b131fbd9',
+                        'Mark thread unread'
+                      )}
+                    </TooltipContent>
+                  </Tooltip>
                 )}
-              </TooltipContent>
-            </Tooltip>
-          </span>
-        ) : null}
+              </span>
+              <EventTime timestamp={thread.latestTimestamp} />
+            </span>
+          </div>
+        </div>
       </div>
     </div>
   )
@@ -1283,6 +1428,7 @@ export default function ActivityPrototypePage(): React.JSX.Element {
   const [readFilter, setReadFilter] = useState<ThreadReadFilter>('all')
   const [groupBy, setGroupBy] = useState<ActivityGroupBy>('status')
   const [query, setQuery] = useState('')
+  const activityFilterInputRef = useRef<HTMLInputElement | null>(null)
   const [compactMode, setCompactMode] = useState(false)
   const [selectedPaneKey, setSelectedPaneKey] = useState<string | null>(null)
   const [displayedPaneKey, setDisplayedPaneKey] = useState<string | null>(null)
@@ -1319,7 +1465,8 @@ export default function ActivityPrototypePage(): React.JSX.Element {
       repoMap: getRepoMapFromState(s),
       acknowledgedAgentsByPaneKey: s.acknowledgedAgentsByPaneKey,
       acknowledgeAgents: s.acknowledgeAgents,
-      unacknowledgeAgents: s.unacknowledgeAgents
+      unacknowledgeAgents: s.unacknowledgeAgents,
+      generatedTitlesEnabled: s.settings?.tabAutoGenerateTitle === true
     }))
   )
   // Why: agentStatusEpoch is included in the dependency array (but not in the
@@ -1348,8 +1495,13 @@ export default function ActivityPrototypePage(): React.JSX.Element {
   )
 
   const allThreads = useMemo(
-    () => buildAgentPaneThreads({ events: allEvents, liveAgentByPaneKey }),
-    [allEvents, liveAgentByPaneKey]
+    () =>
+      buildAgentPaneThreads({
+        events: allEvents,
+        liveAgentByPaneKey,
+        generatedTitlesEnabled: storeData.generatedTitlesEnabled
+      }),
+    [allEvents, liveAgentByPaneKey, storeData.generatedTitlesEnabled]
   )
   const selectedPaneKeyIsLive =
     selectedPaneKey === null || allThreads.some((thread) => thread.paneKey === selectedPaneKey)
@@ -1555,6 +1707,20 @@ export default function ActivityPrototypePage(): React.JSX.Element {
     }
   }, [])
 
+  useEffect(() => {
+    const focusActivityFilter = (event: KeyboardEvent): void => {
+      handleActivityFilterFocusShortcut({
+        activeElement: document.activeElement,
+        event,
+        input: activityFilterInputRef.current,
+        terminalPortalTargets: [activePortalTargetEl, inactivePortalTargetEl]
+      })
+    }
+
+    window.addEventListener('keydown', focusActivityFilter, { capture: true })
+    return () => window.removeEventListener('keydown', focusActivityFilter, { capture: true })
+  }, [activePortalTargetEl, inactivePortalTargetEl])
+
   const markThreadRead = (thread: AgentPaneThread): void => {
     storeData.acknowledgeAgents([thread.paneKey])
   }
@@ -1660,6 +1826,7 @@ export default function ActivityPrototypePage(): React.JSX.Element {
               <div className="relative min-w-0 flex-1">
                 <Search className="pointer-events-none absolute left-2 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
                 <Input
+                  ref={activityFilterInputRef}
                   value={query}
                   onChange={(event) => setQuery(event.target.value)}
                   placeholder={translate(
@@ -1743,54 +1910,12 @@ export default function ActivityPrototypePage(): React.JSX.Element {
                   the toolbar focused on the high-frequency Filter + unread
                   toggle while still giving the action a stable home next to
                   the list it acts on (rather than the titlebar). */}
-              <DropdownMenu>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <DropdownMenuTrigger asChild>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        className="size-8 shrink-0 border-input bg-transparent p-0 text-muted-foreground shadow-xs hover:bg-accent hover:text-accent-foreground dark:bg-transparent dark:hover:bg-accent dark:hover:text-accent-foreground"
-                        aria-label={translate(
-                          'auto.components.activity.ActivityPrototypePage.db8a1878b5',
-                          'Thread list options'
-                        )}
-                      >
-                        <MoreVertical className="size-3.5" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                  </TooltipTrigger>
-                  <TooltipContent side="bottom">
-                    {translate(
-                      'auto.components.activity.ActivityPrototypePage.a472a14700',
-                      'More options'
-                    )}
-                  </TooltipContent>
-                </Tooltip>
-                <DropdownMenuContent align="end" sideOffset={6}>
-                  <DropdownMenuCheckboxItem
-                    checked={compactMode}
-                    onCheckedChange={(checked) => setCompactMode(checked === true)}
-                    onSelect={(event) => event.preventDefault()}
-                  >
-                    {translate(
-                      'auto.components.activity.ActivityPrototypePage.f70e4bec47',
-                      'Compact mode'
-                    )}
-                  </DropdownMenuCheckboxItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem
-                    onSelect={() => markAllThreadsRead()}
-                    disabled={!hasUnreadThreads}
-                  >
-                    {translate(
-                      'auto.components.activity.ActivityPrototypePage.023ff75afe',
-                      'Mark all read'
-                    )}
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+              <ActivityThreadOptionsMenu
+                compactMode={compactMode}
+                hasUnreadThreads={hasUnreadThreads}
+                onCompactModeChange={setCompactMode}
+                onMarkAllThreadsRead={markAllThreadsRead}
+              />
             </div>
           </div>
           <div className="min-h-0 flex-1 overflow-auto scrollbar-sleek">

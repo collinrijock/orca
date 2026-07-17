@@ -23,6 +23,7 @@ import {
 } from '../../../../shared/workspace-session-browser-history'
 import { pickNeighbor } from './tab-group-state'
 import { destroyWorkspaceWebviews } from './browser-webview-cleanup'
+import { pushRecentlyClosedTabKind } from './recently-closed-tabs'
 import {
   callRuntimeRpc,
   getActiveRuntimeTarget,
@@ -49,11 +50,16 @@ import {
   getExecutionHostIdForWorktree,
   getRuntimeEnvironmentIdForWorktree
 } from '@/lib/worktree-runtime-owner'
+import {
+  addAdditionalValidWorkspaceKeys,
+  type WorkspaceSessionHydrationOptions
+} from '@/lib/workspace-session-hydration-keys'
 
 type CreateBrowserTabOptions = {
   activate?: boolean
   title?: string
   sessionProfileId?: string | null
+  sessionPartition?: string | null
   // Why: callers like "Open Preview to the Side" need to place the new browser
   // tab in a specific (sibling or newly-split) group rather than the ambient
   // active group. Defaults to the worktree's current active group.
@@ -167,8 +173,15 @@ export type BrowserSlice = {
   addBrowserPageAnnotation: (annotation: BrowserPageAnnotation) => void
   deleteBrowserPageAnnotation: (pageId: string, annotationId: string) => void
   clearBrowserPageAnnotations: (pageId: string) => void
-  hydrateBrowserSession: (session: WorkspaceSessionState) => void
-  switchBrowserTabProfile: (workspaceId: string, profileId: string | null) => void
+  hydrateBrowserSession: (
+    session: WorkspaceSessionState,
+    options?: WorkspaceSessionHydrationOptions
+  ) => void
+  switchBrowserTabProfile: (
+    workspaceId: string,
+    profileId: string | null,
+    sessionPartition?: string | null
+  ) => void
   browserSessionProfiles: BrowserSessionProfile[]
   browserSessionProfilesByHostId: Partial<Record<ExecutionHostId, BrowserSessionProfile[]>>
   browserSessionImportState: {
@@ -323,12 +336,14 @@ function buildWorkspaceFromPage(
   worktreeId: string,
   page: BrowserPage,
   pageIds: string[],
-  sessionProfileId?: string | null
+  sessionProfileId?: string | null,
+  sessionPartition?: string | null
 ): BrowserWorkspace {
   return {
     id,
     worktreeId,
     sessionProfileId: sessionProfileId ?? null,
+    sessionPartition: sessionPartition ?? null,
     activePageId: page.id,
     pageIds,
     url: page.url,
@@ -506,7 +521,8 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
       worktreeId,
       page,
       [page.id],
-      sessionProfileId
+      sessionProfileId,
+      options?.sessionPartition
     )
 
     set((s) => {
@@ -711,6 +727,11 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
         { workspace: closedWorkspace, pages: closedPages },
         ...existingSnapshots.filter((entry) => entry.workspace.id !== closedWorkspace.id)
       ].slice(0, 10)
+      const nextRecentlyClosedTabKindsByWorktree = pushRecentlyClosedTabKind(
+        s.recentlyClosedTabKindsByWorktree,
+        owningWorktreeId,
+        'browser'
+      )
 
       const nextRecentlyClosedBrowserPagesByWorkspace = {
         ...s.recentlyClosedBrowserPagesByWorkspace
@@ -742,6 +763,7 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
         pendingAddressBarFocusByTabId: nextPendingAddressBarFocusByTabId,
         activeTabTypeByWorktree: nextActiveTabTypeByWorktree,
         recentlyClosedBrowserTabsByWorktree: nextRecentlyClosedBrowserTabsByWorktree,
+        recentlyClosedTabKindsByWorktree: nextRecentlyClosedTabKindsByWorktree,
         recentlyClosedBrowserPagesByWorkspace: nextRecentlyClosedBrowserPagesByWorkspace,
         remoteBrowserPageHandlesByPageId: nextRemoteBrowserPageHandlesByPageId,
         browserAnnotationsByPageId: nextBrowserAnnotationsByPageId
@@ -819,12 +841,14 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
     const snap = entryToRestore.workspace
     const pages = entryToRestore.pages
     const sessionProfileId = snap.sessionProfileId ?? null
+    const sessionPartition = snap.sessionPartition ?? null
 
     if (pages.length === 0) {
       const restored = get().createBrowserTab(worktreeId, snap.url, {
         title: snap.title,
         activate: true,
-        sessionProfileId
+        sessionProfileId,
+        sessionPartition
       })
       return get().browserTabsByWorktree[worktreeId]?.find((tab) => tab.id === restored.id) ?? null
     }
@@ -836,6 +860,7 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
       title: firstPage.title,
       activate: true,
       sessionProfileId,
+      sessionPartition,
       browserRuntimeEnvironmentId: firstPage.browserRuntimeEnvironmentId
     })
 
@@ -1493,7 +1518,7 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
       return { browserAnnotationsByPageId: nextByPageId }
     }),
 
-  hydrateBrowserSession: (session) => {
+  hydrateBrowserSession: (session, options) => {
     const persistedTabsByWorktree = session.browserTabsByWorktree ?? {}
     const currentState = get()
     const validWorktreeIdsForCleanup = new Set(
@@ -1505,6 +1530,7 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
     for (const workspace of currentState.folderWorkspaces) {
       validWorktreeIdsForCleanup.add(folderWorkspaceKey(workspace.id))
     }
+    addAdditionalValidWorkspaceKeys(validWorktreeIdsForCleanup, options)
 
     // Why: mirror closeBrowserTab's contract — reducers are pure, imperative
     // side effects bracket them. Compute dropped workspaces first, destroy
@@ -1537,6 +1563,7 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
       for (const workspace of s.folderWorkspaces) {
         validWorktreeIds.add(folderWorkspaceKey(workspace.id))
       }
+      addAdditionalValidWorkspaceKeys(validWorktreeIds, options)
 
       const browserTabsByWorktree: Record<string, BrowserWorkspace[]> = {}
       const browserPagesByWorkspace: Record<string, BrowserPage[]> = {}
@@ -1683,13 +1710,17 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
     }
   },
 
-  switchBrowserTabProfile: (workspaceId, profileId) => {
+  switchBrowserTabProfile: (workspaceId, profileId, sessionPartition) => {
     set((s) => {
       for (const [worktreeId, tabs] of Object.entries(s.browserTabsByWorktree)) {
         const tabIndex = tabs.findIndex((t) => t.id === workspaceId)
         if (tabIndex !== -1) {
           const updatedTabs = [...tabs]
-          updatedTabs[tabIndex] = { ...updatedTabs[tabIndex], sessionProfileId: profileId }
+          updatedTabs[tabIndex] = {
+            ...updatedTabs[tabIndex],
+            sessionProfileId: profileId,
+            sessionPartition: sessionPartition ?? null
+          }
           return {
             browserTabsByWorktree: {
               ...s.browserTabsByWorktree,

@@ -1,4 +1,3 @@
-/* eslint-disable max-lines -- Why: attachMainWindowServices centralizes main-window IPC wiring; keeping its integration-style mocks together avoids brittle cross-file setup. */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Store } from '../persistence'
 
@@ -17,7 +16,8 @@ const {
   registerPtyHandlersMock,
   hydrateLocalPtyRegistryAtBootMock,
   setupAutoUpdaterMock,
-  browserManagerUnregisterAllMock
+  browserManagerUnregisterAllMock,
+  runWorktreeChangeInvalidatorsMock
 } = vi.hoisted(() => ({
   onMock: vi.fn(),
   removeAllListenersMock: vi.fn(),
@@ -33,7 +33,8 @@ const {
   registerPtyHandlersMock: vi.fn(),
   hydrateLocalPtyRegistryAtBootMock: vi.fn(),
   setupAutoUpdaterMock: vi.fn(),
-  browserManagerUnregisterAllMock: vi.fn()
+  browserManagerUnregisterAllMock: vi.fn(),
+  runWorktreeChangeInvalidatorsMock: vi.fn()
 }))
 
 vi.mock('electron', () => ({
@@ -62,6 +63,10 @@ vi.mock('../ipc/repos', () => ({
 
 vi.mock('../ipc/worktrees', () => ({
   registerWorktreeHandlers: registerWorktreeHandlersMock
+}))
+
+vi.mock('../ipc/worktree-change-invalidators', () => ({
+  runWorktreeChangeInvalidators: runWorktreeChangeInvalidatorsMock
 }))
 
 vi.mock('../ipc/pty', () => ({
@@ -95,6 +100,7 @@ type MainWindowStub = {
   id?: number
   isDestroyed?: MockFn
   on: MockFn
+  once: MockFn
   webContents: {
     id?: number
     isDestroyed?: MockFn
@@ -120,6 +126,7 @@ function createMainWindow(extraWebContents: { on?: MockFn; send?: MockFn } = {})
     id: 1,
     isDestroyed: vi.fn(() => false),
     on: vi.fn(),
+    once: vi.fn(),
     webContents: {
       id: 1,
       isDestroyed: vi.fn(() => false),
@@ -159,6 +166,16 @@ function getClosedHandlers(mainWindowOnMock: MockFn): (() => void)[] {
   return mainWindowOnMock.mock.calls
     .filter(([event]) => event === 'closed')
     .map(([, handler]) => handler as () => void)
+}
+
+// Updater setup is deferred to first paint; fire the captured ready-to-show
+// handler and flush its setImmediate hop.
+async function fireReadyToShow(mainWindow: MainWindowStub): Promise<void> {
+  const handler = mainWindow.once.mock.calls.find(([event]) => event === 'ready-to-show')?.[1] as
+    | (() => void)
+    | undefined
+  handler?.()
+  await new Promise((resolve) => setImmediate(resolve))
 }
 
 describe('attachMainWindowServices', () => {
@@ -235,9 +252,10 @@ describe('attachMainWindowServices', () => {
   it('passes injected update quit cleanup to the auto-updater', async () => {
     const onBeforeUpdateQuit = vi.fn()
     const store = createStore()
+    const mainWindow = createMainWindow()
 
     attachMainWindowServices(
-      createMainWindow() as never,
+      mainWindow as never,
       store,
       createRuntime() as never,
       undefined,
@@ -245,6 +263,9 @@ describe('attachMainWindowServices', () => {
       { onBeforeUpdateQuit }
     )
 
+    // Deferred to first paint — must not be configured at attach time.
+    expect(setupAutoUpdaterMock).not.toHaveBeenCalled()
+    await fireReadyToShow(mainWindow)
     expect(setupAutoUpdaterMock).toHaveBeenCalledTimes(1)
     await setupAutoUpdaterMock.mock.calls[0][1].onBeforeQuit()
 
@@ -254,9 +275,11 @@ describe('attachMainWindowServices', () => {
 
   it('flushes the store before update quit when no cleanup is injected', async () => {
     const store = createStore()
+    const mainWindow = createMainWindow()
 
-    attachMainWindowServices(createMainWindow() as never, store, createRuntime() as never)
+    attachMainWindowServices(mainWindow as never, store, createRuntime() as never)
 
+    await fireReadyToShow(mainWindow)
     await setupAutoUpdaterMock.mock.calls[0][1].onBeforeQuit()
 
     expect(store.flush).toHaveBeenCalledTimes(1)
@@ -592,5 +615,57 @@ describe('attachMainWindowServices', () => {
         }
       ]
     ])
+    expect(runWorktreeChangeInvalidatorsMock).toHaveBeenCalledWith('repo-1')
+    expect(runWorktreeChangeInvalidatorsMock.mock.invocationCallOrder[0]).toBeLessThan(
+      sendMock.mock.invocationCallOrder[0]
+    )
+  })
+
+  it('accepts terminal reveal replies only from the main window renderer', async () => {
+    const sendMock = vi.fn()
+    const mainWindow = createMainWindow({ send: sendMock })
+    const runtime = createRuntime()
+
+    attachMainWindowServices(mainWindow as never, createStore(), runtime as never)
+
+    const notifier = runtime.setNotifier.mock.calls[0][0] as {
+      revealTerminalSession: (
+        worktreeId: string,
+        opts: {
+          ptyId: string
+          title?: string
+          cwd?: string
+          viewMode?: 'terminal' | 'chat'
+          activate?: boolean
+        }
+      ) => Promise<{ tabId: string; title?: string }>
+    }
+    const revealPromise = notifier.revealTerminalSession('wt-1', {
+      ptyId: 'pty-1',
+      title: 'SSH tmux',
+      cwd: '/repo/packages/web',
+      viewMode: 'chat'
+    })
+    const sentPayload = sendMock.mock.calls.find(
+      ([channel]) => channel === 'ui:createTerminal'
+    )?.[1]
+    const handler = onMock.mock.calls.find(
+      ([channel]) => channel === 'terminal:tabCreateReply'
+    )?.[1]
+    expect(sentPayload).toMatchObject({ cwd: '/repo/packages/web', viewMode: 'chat' })
+
+    handler?.(
+      { sender: { send: vi.fn() } },
+      { requestId: sentPayload.requestId, error: 'spoofed renderer reply' }
+    )
+    expect(removeListenerMock).not.toHaveBeenCalledWith('terminal:tabCreateReply', handler)
+
+    handler?.(
+      { sender: mainWindow.webContents },
+      { requestId: sentPayload.requestId, tabId: 'tab-1', title: 'SSH tmux' }
+    )
+
+    await expect(revealPromise).resolves.toEqual({ tabId: 'tab-1', title: 'SSH tmux' })
+    expect(removeListenerMock).toHaveBeenCalledWith('terminal:tabCreateReply', handler)
   })
 })

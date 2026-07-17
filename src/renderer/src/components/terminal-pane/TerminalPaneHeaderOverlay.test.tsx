@@ -44,18 +44,27 @@ function renderOverlay({
   paneTitles,
   paneCount = 2,
   showAlwaysOnHeaders = true,
+  showSplitButton = true,
   onClosePane = vi.fn(),
-  onRemoveTitle = vi.fn()
+  onRemoveTitle = vi.fn(),
+  onRenameSubmit = vi.fn(),
+  renameValue = '',
+  renamingPaneId = null
 }: {
   paneTitles: Record<number, string>
   paneCount?: number
   showAlwaysOnHeaders?: boolean
+  showSplitButton?: boolean
   onClosePane?: ReturnType<typeof vi.fn>
   onRemoveTitle?: ReturnType<typeof vi.fn>
+  onRenameSubmit?: ReturnType<typeof vi.fn>
+  renameValue?: string
+  renamingPaneId?: number | null
 }): {
   container: HTMLDivElement
   onClosePane: ReturnType<typeof vi.fn>
   onRemoveTitle: ReturnType<typeof vi.fn>
+  onRenameSubmit: ReturnType<typeof vi.fn>
 } {
   const panes = [makePane(1), makePane(2)]
   const container = document.createElement('div')
@@ -68,6 +77,7 @@ function renderOverlay({
         worktreeId="wt-1"
         cwd={path.join(path.sep, 'tmp')}
         showAlwaysOnHeaders={showAlwaysOnHeaders}
+        showSplitButton={showSplitButton}
         paneCount={paneCount}
         activePaneId={1}
         panes={panes}
@@ -76,8 +86,8 @@ function renderOverlay({
           1: { left: 0, top: 0, width: 200 },
           2: { left: 220, top: 0, width: 200 }
         }}
-        renamingPaneId={null}
-        renameValue=""
+        renamingPaneId={renamingPaneId}
+        renameValue={renameValue}
         renameInputRef={createRef<HTMLInputElement>()}
         titleUsesLightSurface={false}
         paneTitleBackground="transparent"
@@ -93,14 +103,31 @@ function renderOverlay({
         onRemoveTitle={onRemoveTitle as (paneId: number) => void}
         onClosePane={onClosePane as (paneId: number) => void}
         onRenameValueChange={vi.fn()}
-        onRenameSubmit={vi.fn()}
+        onRenameSubmit={onRenameSubmit as () => void}
         onRenameCancel={vi.fn()}
         onRenameBlur={vi.fn()}
       />
     )
   })
   mounted.push({ container, root })
-  return { container, onClosePane, onRemoveTitle }
+  return { container, onClosePane, onRemoveTitle, onRenameSubmit }
+}
+
+function pressInputKey(
+  input: HTMLInputElement,
+  key: string,
+  options?: { isComposing?: boolean; keyCode?: number }
+): void {
+  act(() => {
+    const event = new KeyboardEvent('keydown', { key, bubbles: true })
+    if (options?.isComposing !== undefined) {
+      Object.defineProperty(event, 'isComposing', { value: options.isComposing })
+    }
+    if (options?.keyCode !== undefined) {
+      Object.defineProperty(event, 'keyCode', { value: options.keyCode })
+    }
+    input.dispatchEvent(event)
+  })
 }
 
 afterEach(() => {
@@ -127,11 +154,13 @@ describe('TerminalPaneHeaderOverlay', () => {
     expect(onClosePane).not.toHaveBeenCalledWith(1)
   })
 
-  it('keeps close-pane available for untitled split pane headers', () => {
+  it('keeps split and close-pane controls available for untitled split pane headers', () => {
     const { container, onClosePane, onRemoveTitle } = renderOverlay({
       paneTitles: { 1: '', 2: '' }
     })
 
+    expect(container.querySelector('button[aria-label="Split Terminal Right"]')).not.toBeNull()
+    expect(container.querySelector('.pane-title-drag-handle')).toBeNull()
     const closePane = container.querySelector<HTMLButtonElement>('button[aria-label="Close Pane"]')
     expect(closePane).not.toBeNull()
 
@@ -139,5 +168,34 @@ describe('TerminalPaneHeaderOverlay', () => {
 
     expect(onClosePane).toHaveBeenCalledWith(1)
     expect(onRemoveTitle).not.toHaveBeenCalled()
+  })
+
+  it('omits the split control when the header affordance is hidden', () => {
+    const { container } = renderOverlay({
+      paneTitles: { 1: '', 2: '' },
+      paneCount: 1,
+      showSplitButton: false
+    })
+
+    expect(container.querySelector('button[aria-label="Split Terminal Right"]')).toBeNull()
+  })
+
+  it('ignores IME composition Enter before submitting a pane title rename', () => {
+    const { container, onRenameSubmit } = renderOverlay({
+      paneTitles: { 1: 'server', 2: '' },
+      renamingPaneId: 1,
+      renameValue: '日本語 pane'
+    })
+    const input = container.querySelector<HTMLInputElement>('.pane-title-input')
+
+    expect(input).not.toBeNull()
+
+    pressInputKey(input as HTMLInputElement, 'Enter', { isComposing: true })
+
+    expect(onRenameSubmit).not.toHaveBeenCalled()
+
+    pressInputKey(input as HTMLInputElement, 'Enter')
+
+    expect(onRenameSubmit).toHaveBeenCalledTimes(1)
   })
 })

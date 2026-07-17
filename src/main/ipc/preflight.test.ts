@@ -76,6 +76,7 @@ vi.mock('../gitea/client', () => ({
 import {
   _resetPreflightCache,
   detectInstalledAgents,
+  detectInstalledAgentsWithShellPathHydration,
   registerPreflightHandlers,
   runPreflightCheck
 } from './preflight'
@@ -105,6 +106,7 @@ describe('preflight', () => {
     handleMock.mockReset()
     execFileAsyncMock.mockReset()
     hydrateShellPathMock.mockReset()
+    hydrateShellPathMock.mockResolvedValue({ segments: [], ok: false, failureReason: 'no_shell' })
     mergePathSegmentsMock.mockReset()
     getActiveMultiplexerMock.mockReset()
     getBitbucketAuthStatusMock.mockReset()
@@ -490,6 +492,58 @@ describe('preflight', () => {
     await expect(detectInstalledAgents()).resolves.toEqual(['claude', 'cursor'])
   })
 
+  it('does not report Claude Agent Teams when only the Orca shim is present', async () => {
+    execFileAsyncMock.mockImplementation(async (command, args) => {
+      if (command !== 'which') {
+        throw new Error(`unexpected command ${String(command)}`)
+      }
+      if (String(args[0]) === 'orca') {
+        return { stdout: '/Applications/Orca.app/Contents/MacOS/orca\n' }
+      }
+      throw new Error('not found')
+    })
+
+    await expect(detectInstalledAgents()).resolves.toEqual([])
+  })
+
+  it('reports Claude Agent Teams when both Orca and Claude are present', async () => {
+    execFileAsyncMock.mockImplementation(async (command, args) => {
+      if (command !== 'which') {
+        throw new Error(`unexpected command ${String(command)}`)
+      }
+      if (String(args[0]) === 'claude') {
+        return { stdout: '/Users/test/.local/bin/claude\n' }
+      }
+      if (String(args[0]) === 'orca') {
+        return { stdout: '/Applications/Orca.app/Contents/MacOS/orca\n' }
+      }
+      throw new Error('not found')
+    })
+
+    await expect(detectInstalledAgents()).resolves.toEqual(['claude', 'claude-agent-teams'])
+  })
+
+  it('does not report Claude Agent Teams on native Windows', async () => {
+    Object.defineProperty(process, 'platform', {
+      configurable: true,
+      value: 'win32'
+    })
+    execFileAsyncMock.mockImplementation(async (command, args) => {
+      if (command !== 'where') {
+        throw new Error(`unexpected command ${String(command)}`)
+      }
+      if (String(args[0]) === 'claude') {
+        return { stdout: '/mock/windows/npm/claude.cmd\n' }
+      }
+      if (String(args[0]) === 'orca') {
+        return { stdout: '/mock/windows/programs/orca.cmd\n' }
+      }
+      throw new Error('not found')
+    })
+
+    await expect(detectInstalledAgents()).resolves.toEqual(['claude'])
+  })
+
   it('detects agents via the install-dir resolver when which fails (stripped GUI PATH)', async () => {
     // Why: cold GUI launches can run detection before shell-PATH hydration
     // adds user install dirs, so `which` can miss runnable CLIs.
@@ -575,6 +629,85 @@ describe('preflight', () => {
     await expect(handlers['preflight:detectAgents']()).resolves.toEqual(['openclaude', 'cursor'])
   })
 
+  it('hydrates shell PATH before user-facing agent detection', async () => {
+    const originalPath = process.env.PATH
+    process.env.PATH = '/usr/bin'
+    hydrateShellPathMock.mockResolvedValueOnce({
+      segments: ['/home/test/.local/bin'],
+      ok: true,
+      failureReason: 'none'
+    })
+    mergePathSegmentsMock.mockImplementationOnce((segments: string[]) => {
+      process.env.PATH = [...segments, '/usr/bin'].join(':')
+      return segments
+    })
+    execFileAsyncMock.mockImplementation(async (command, args) => {
+      if (command !== 'which') {
+        throw new Error(`unexpected command ${String(command)}`)
+      }
+      if (String(args[0]) === 'codex' && process.env.PATH?.startsWith('/home/test/.local/bin')) {
+        return { stdout: '/home/test/.local/bin/codex\n' }
+      }
+      throw new Error('not found')
+    })
+
+    try {
+      await expect(detectInstalledAgentsWithShellPathHydration()).resolves.toEqual(['codex'])
+    } finally {
+      if (originalPath === undefined) {
+        delete process.env.PATH
+      } else {
+        process.env.PATH = originalPath
+      }
+    }
+    expect(hydrateShellPathMock).toHaveBeenCalledWith()
+    expect(mergePathSegmentsMock).toHaveBeenCalledWith(['/home/test/.local/bin'])
+  })
+
+  it('does not run host shell hydration for WSL agent detection', async () => {
+    Object.defineProperty(process, 'platform', {
+      configurable: true,
+      value: 'win32'
+    })
+    execFileAsyncMock.mockImplementation(async (command, args) => {
+      if (command !== 'wsl.exe') {
+        throw new Error(`unexpected command ${String(command)}`)
+      }
+      const script = String(args[5])
+      if (script.includes("'claude'")) {
+        return { stdout: '__ORCA_AGENT_PATH__claude\t/home/test/.local/bin/claude\n' }
+      }
+      throw new Error('not found')
+    })
+
+    await expect(
+      detectInstalledAgentsWithShellPathHydration({ wslDistro: 'Ubuntu' })
+    ).resolves.toEqual(['claude'])
+    expect(hydrateShellPathMock).not.toHaveBeenCalled()
+  })
+
+  it('does not report Claude Agent Teams from WSL agent detection', async () => {
+    Object.defineProperty(process, 'platform', {
+      configurable: true,
+      value: 'win32'
+    })
+    execFileAsyncMock.mockImplementation(async (command, args) => {
+      if (command !== 'wsl.exe') {
+        throw new Error(`unexpected command ${String(command)}`)
+      }
+      const script = String(args[5])
+      expect(script).not.toContain("'orca'")
+      expect(script).not.toContain("'orca-dev'")
+      expect(script).not.toContain("'orca-ide'")
+      if (script.includes("'claude'")) {
+        return { stdout: '__ORCA_AGENT_PATH__claude\t/home/test/.local/bin/claude\n' }
+      }
+      throw new Error('not found')
+    })
+
+    await expect(detectInstalledAgents({ wslDistro: 'Ubuntu' })).resolves.toEqual(['claude'])
+  })
+
   it('detects Mistral Vibe from the installed vibe executable', async () => {
     execFileAsyncMock.mockImplementation(async (command, args) => {
       if (command !== 'which') {
@@ -647,6 +780,35 @@ describe('preflight', () => {
       handlers['preflight:detectRemoteAgents'](undefined, { connectionId: 'ssh-1' })
     ).resolves.toEqual([])
     expect(request).not.toHaveBeenCalled()
+  })
+
+  it('sends remote Windows shell capability probes through the SSH preflight path', async () => {
+    const request = vi.fn().mockResolvedValue({
+      wslAvailable: true,
+      wslDistros: ['Ubuntu'],
+      pwshAvailable: true,
+      gitBashAvailable: true,
+      hostPlatform: 'win32'
+    })
+    getActiveMultiplexerMock.mockReturnValue({
+      isDisposed: () => false,
+      request
+    })
+
+    registerPreflightHandlers()
+
+    await expect(
+      handlers['preflight:detectRemoteWindowsTerminalCapabilities'](undefined, {
+        connectionId: 'ssh-1'
+      })
+    ).resolves.toEqual({
+      wslAvailable: true,
+      wslDistros: ['Ubuntu'],
+      pwshAvailable: true,
+      gitBashAvailable: true,
+      hostPlatform: 'win32'
+    })
+    expect(request).toHaveBeenCalledWith('preflight.detectWindowsTerminalCapabilities', {})
   })
 
   it('detects agents from the selected WSL distro for a WSL workspace', async () => {

@@ -1,4 +1,4 @@
-import { win32 as pathWin32 } from 'path'
+import { win32 as pathWin32 } from 'node:path'
 import { isWindowsGitBashShellPath } from '../git-bash'
 import { parseWslPath, toLinuxPath, toWindowsWslPath } from '../wsl'
 import {
@@ -6,6 +6,7 @@ import {
   escapeWslShCommandForWindows,
   quotePosixShell
 } from '../../shared/wsl-login-shell-command'
+import { ensureShellReadyWrappersAt } from './local-pty-shell-ready'
 import {
   encodePowerShellCommand,
   getPowerShellOsc133Bootstrap
@@ -15,6 +16,13 @@ const CMD_EXE_COMMAND_LINE_MAX_CHARS = 8191
 const STARTUP_COMMAND_TEXT_MAX_CHARS = 6000
 const POWERSHELL_ENCODED_COMMAND_ARG_MAX_CHARS = 28_000
 const CMD_UTF8_SETUP_COMMAND = 'chcp 65001 > nul'
+// Why: Git for Windows' bash inherits the ConPTY console's OEM code page
+// (CP437), so a TUI that writes UTF-8 bytes straight to the console — agents
+// like Claude Code use WriteFile, not WriteConsoleW — renders as mojibake
+// (`❯` -> `Γ¥»`). Switch the console to UTF-8, then exec the normal interactive
+// login shell; cmd.exe and PowerShell already do the equivalent. The `;` (not
+// `&&`) keeps startup working even if chcp.com is missing.
+const GIT_BASH_UTF8_LOGIN_COMMAND = 'chcp.com 65001 >/dev/null 2>&1; exec "$BASH" --login -i'
 
 /** Result of resolving a Windows shell to its launch args + effective cwd.
  *
@@ -52,6 +60,11 @@ export type WindowsShellWslContext = {
  */
 function getCmdShellArgStartupCommand(command?: string): string | null {
   if (!command || command.length > STARTUP_COMMAND_TEXT_MAX_CHARS) {
+    return null
+  }
+  // Why: node-pty's C-runtime argv escaping changes normal cmd quotes in `/K`
+  // delivery, while the interactive parser preserves them through stdin.
+  if (command.includes('"')) {
     return null
   }
   const commandArg = `${CMD_UTF8_SETUP_COMMAND} & ${command}`
@@ -94,6 +107,7 @@ function getPowerShellEncodedCommand(startupCommand?: string): {
  * Builds wsl.exe arguments that enter the target directory through the distro shell.
  */
 function buildWslShellArgs(linuxCwd: string, distro?: string): string[] {
+  ensureShellReadyWrappersAt()
   const setupCommand = [
     `cd ${quotePosixShell(linuxCwd)}`,
     'export PATH="$HOME/.local/bin:$PATH"',
@@ -103,6 +117,19 @@ function buildWslShellArgs(linuxCwd: string, distro?: string): string[] {
   // login shell so terminal PATH matches the environment Orca detects.
   const shellArgs = ['--', 'sh', '-c', escapeWslShCommandForWindows(setupCommand)]
   return distro ? ['-d', distro, ...shellArgs] : shellArgs
+}
+
+function normalizeMsysDrivePath(cwd: string): string {
+  const match = cwd.match(/^\/([A-Za-z])(?:\/(.*))?$/)
+  if (!match) {
+    return cwd
+  }
+
+  // Why: Git Bash/MSYS launch contexts can hand Windows terminals `/d/repo`;
+  // ConPTY requires the equivalent native drive path as its cwd.
+  const driveLetter = match[1].toUpperCase()
+  const rest = match[2]?.replace(/\//g, '\\') ?? ''
+  return rest ? `${driveLetter}:\\${rest}` : `${driveLetter}:\\`
 }
 
 /** Build the argv + effective cwd for a Windows shell launch.
@@ -122,6 +149,8 @@ export function resolveWindowsShellLaunchArgs(
   startupCommand?: string
 ): WindowsShellLaunchArgs {
   const shellBasename = pathWin32.basename(shellPath).toLowerCase()
+  const nativeCwd = normalizeMsysDrivePath(cwd)
+  const isMsysDriveCwd = nativeCwd !== cwd
 
   if (shellBasename === 'cmd.exe') {
     const shellArgStartupCommand = getCmdShellArgStartupCommand(startupCommand)
@@ -133,8 +162,8 @@ export function resolveWindowsShellLaunchArgs(
           : CMD_UTF8_SETUP_COMMAND
       ],
       ...(shellArgStartupCommand ? { startupCommandDeliveredInShellArgs: true } : {}),
-      effectiveCwd: cwd,
-      validationCwd: cwd
+      effectiveCwd: nativeCwd,
+      validationCwd: nativeCwd
     }
   }
 
@@ -147,16 +176,16 @@ export function resolveWindowsShellLaunchArgs(
       ...(powerShellCommand.startupCommandDeliveredInShellArgs
         ? { startupCommandDeliveredInShellArgs: true }
         : {}),
-      effectiveCwd: cwd,
-      validationCwd: cwd
+      effectiveCwd: nativeCwd,
+      validationCwd: nativeCwd
     }
   }
 
   if (isWindowsGitBashShellPath(shellPath)) {
     return {
-      shellArgs: ['--login', '-i'],
-      effectiveCwd: cwd,
-      validationCwd: cwd
+      shellArgs: ['-c', GIT_BASH_UTF8_LOGIN_COMMAND],
+      effectiveCwd: nativeCwd,
+      validationCwd: nativeCwd
     }
   }
 
@@ -169,25 +198,25 @@ export function resolveWindowsShellLaunchArgs(
         validationCwd: cwd
       }
     }
-    if (wslContext?.treatPosixCwdAsWsl && cwd.startsWith('/')) {
+    if (wslContext?.treatPosixCwdAsWsl && cwd.startsWith('/') && !isMsysDriveCwd) {
       return {
         shellArgs: buildWslShellArgs(cwd, wslContext.distro),
         effectiveCwd: defaultCwd,
         validationCwd: toWindowsWslPath(cwd, wslContext.distro)
       }
     }
-    const driveMatch = cwd.replace(/\\/g, '/').match(/^([A-Za-z]):\/?(.*)$/)
-    const linuxCwd = driveMatch ? toLinuxPath(cwd) : '/mnt/c'
+    const driveMatch = nativeCwd.replace(/\\/g, '/').match(/^([A-Za-z]):\/?(.*)$/)
+    const linuxCwd = driveMatch ? toLinuxPath(nativeCwd) : '/mnt/c'
     return {
       shellArgs: buildWslShellArgs(linuxCwd, wslContext?.distro),
       effectiveCwd: defaultCwd,
-      validationCwd: cwd
+      validationCwd: nativeCwd
     }
   }
 
   return {
     shellArgs: [],
-    effectiveCwd: cwd,
-    validationCwd: cwd
+    effectiveCwd: nativeCwd,
+    validationCwd: nativeCwd
   }
 }

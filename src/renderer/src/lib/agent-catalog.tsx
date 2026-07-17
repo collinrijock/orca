@@ -9,10 +9,12 @@ import {
   CopilotIcon,
   KiloIcon,
   OmpIcon,
+  OpenCodeIcon,
   PiIcon
 } from './agent-icon-glyphs'
 import { translate } from '@/i18n/i18n'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
+import { AGENT_FAVICON_ASSETS } from './agent-favicon-assets'
 
 export type AgentCatalogEntry = {
   id: TuiAgent
@@ -86,8 +88,14 @@ export const getAgentCatalog = createLocalizedCatalog((): AgentCatalogEntry[] =>
     id: 'opencode',
     label: translate('auto.lib.agent.catalog.e7a4ca5103', 'OpenCode'),
     cmd: 'opencode',
-    faviconDomain: 'opencode.ai',
     homepageUrl: 'https://opencode.ai/docs/cli/'
+  },
+  {
+    id: 'mimo-code',
+    label: translate('auto.lib.agent.catalog.mimo_code_label', 'MiMo Code'),
+    cmd: 'mimo',
+    faviconDomain: 'mimo.xiaomi.com',
+    homepageUrl: 'https://mimo.xiaomi.com/coder'
   },
   {
     id: 'ante',
@@ -106,7 +114,8 @@ export const getAgentCatalog = createLocalizedCatalog((): AgentCatalogEntry[] =>
     id: 'omp',
     label: translate('auto.lib.agent.catalog.09973b4d84', 'OMP'),
     cmd: 'omp',
-    faviconDomain: 'omp.sh',
+    // Why: no faviconDomain — omp renders the hand-authored OmpIcon glyph, so a
+    // favicon fallback would never be reached.
     homepageUrl: 'https://omp.sh'
   },
   {
@@ -247,7 +256,9 @@ export const getAgentCatalog = createLocalizedCatalog((): AgentCatalogEntry[] =>
   {
     id: 'qwen-code',
     label: translate('auto.lib.agent.catalog.bee242fe3d', 'Qwen Code'),
-    cmd: 'qwen-code',
+    // Why: QwenLM/qwen-code installs its CLI executable as `qwen`; the package
+    // name is not the binary users put on PATH. Keep `id` for stable identity.
+    cmd: 'qwen',
     faviconDomain: 'qwenlm.github.io',
     homepageUrl: 'https://github.com/QwenLM/qwen-code'
   },
@@ -327,21 +338,33 @@ export function AgentIcon({
   if (agent === 'copilot') {
     return <CopilotIcon size={size} />
   }
+  if (agent === 'opencode') {
+    return <OpenCodeIcon size={size} />
+  }
   const catalogEntry = getAgentCatalog().find((a) => a.id === agent)
-  if (catalogEntry?.iconUrl) {
+  // Why: prefer the favicon bundled at build time so the icon renders without a
+  // live network request — Google's favicon service is unreachable in some
+  // regions and offline, which left these icons broken (#8451).
+  const bundledFaviconUrl = AGENT_FAVICON_ASSETS[agent]
+  // Why: one resolved src for guard + attribute so empty `iconUrl` cannot pass
+  // a truthy `||` check while `??` still renders a broken `<img src="">`.
+  const iconSrc = catalogEntry?.iconUrl ?? bundledFaviconUrl
+  if (iconSrc) {
     return (
       <img
-        src={catalogEntry.iconUrl}
+        src={iconSrc}
         width={size}
         height={size}
         alt=""
+        aria-hidden
         style={{ borderRadius: 2 }}
       />
     )
   }
   if (catalogEntry?.faviconDomain) {
-    // Why: agents without a published SVG icon use their site favicon via
-    // Google's favicon service — same source the README uses for the agent badge list.
+    // Why: agents without a published SVG icon or bundled favicon fall back to
+    // their site favicon via Google's favicon service — same source the README
+    // uses for the agent badge list.
     return (
       <img
         src={`https://www.google.com/s2/favicons?domain=${catalogEntry.faviconDomain}&sz=64`}

@@ -7,12 +7,13 @@ import {
   copyFileSync,
   renameSync,
   unlinkSync
-} from 'fs'
-import { homedir } from 'os'
-import { dirname, join } from 'path'
-import { randomUUID } from 'crypto'
+} from 'node:fs'
+import { homedir } from 'node:os'
+import { dirname, join } from 'node:path'
+import { randomUUID } from 'node:crypto'
 import type { AgentHookSource } from '../../shared/agent-hook-relay'
 import { grantDirAcl, isPermissionError } from '../win32-utils'
+import { POSIX_HOOK_STDIN_DRAIN_COMMAND } from './hook-stdin-contract'
 
 export type HookCommandConfig = {
   type: 'command'
@@ -35,6 +36,29 @@ export type HookDefinition = {
 export type HooksConfig = {
   hooks?: Record<string, HookDefinition[]>
   [key: string]: unknown
+}
+
+// Why: host-level backstop (seconds) for Orca-managed status hooks. The shell
+// wrapper's curl `--max-time 1.5` is the normal dead-endpoint bound; this caps a
+// hook the agent host itself runs in case that transport budget is bypassed.
+// Intentionally independent of Copilot's `timeoutSec: 5` — both managed budgets
+// coexist by design (#4633).
+export const MANAGED_HOOK_TIMEOUT_SECONDS = 10
+export const MANAGED_HOOK_TIMEOUT_MILLISECONDS = MANAGED_HOOK_TIMEOUT_SECONDS * 1000
+
+// Nested command hook used by the Claude-shaped `hooks: [...]` schema (Claude,
+// Codex, Gemini, Droid, Grok, Command Code, Devin).
+export function buildManagedCommandHook(
+  command: string,
+  timeout = MANAGED_HOOK_TIMEOUT_SECONDS
+): HookCommandConfig {
+  return { type: 'command', command, timeout }
+}
+
+// Direct command definition used by schemas that put `command` on the
+// definition itself (Cursor's documented top-level shape).
+export function buildManagedCommandDefinition(command: string): HookDefinition {
+  return { command, timeout: MANAGED_HOOK_TIMEOUT_SECONDS }
 }
 
 export function isPlainObject(value: unknown): value is Record<string, unknown> {
@@ -63,20 +87,35 @@ export function readHooksJson(configPath: string): HooksConfig | null {
 export function createManagedCommandMatcher(
   scriptFileName: string
 ): (command: string | undefined) => boolean {
-  const scriptStem = scriptFileName.replace(/\.(?:cmd|sh)$/, '')
-  // Why: local Windows installs use .cmd, while SSH/POSIX installs and older
-  // entries use .sh. A platform switch should still sweep stale Orca hooks.
+  const scriptStem = scriptFileName.replace(/\.(?:cmd|ps1|sh)$/, '')
+  // Why: local Windows installs use .cmd or Copilot's .ps1, while SSH/POSIX
+  // installs use .sh. A platform switch must still sweep stale Orca hooks.
   const needles = [
     `agent-hooks/${scriptFileName}`,
     `agent-hooks/${scriptStem}.cmd`,
+    `agent-hooks/${scriptStem}.ps1`,
     `agent-hooks/${scriptStem}.sh`
   ]
   return (command) => {
     if (!command) {
       return false
     }
-    const normalizedCommand = command.replaceAll('\\', '/')
+    const decodedCommand = decodePowerShellEncodedCommand(command)
+    const searchText = decodedCommand ? `${command}\n${decodedCommand}` : command
+    const normalizedCommand = searchText.replaceAll('\\', '/')
     return needles.some((needle) => normalizedCommand.includes(needle))
+  }
+}
+
+function decodePowerShellEncodedCommand(command: string): string | null {
+  const match = command.match(/\s-EncodedCommand\s+(\S+)/i)
+  if (!match) {
+    return null
+  }
+  try {
+    return Buffer.from(match[1], 'base64').toString('utf16le')
+  } catch {
+    return null
   }
 }
 
@@ -86,32 +125,120 @@ export function getSharedManagedScriptPath(scriptFileName: string): string {
   return join(homedir(), '.orca', 'agent-hooks', scriptFileName)
 }
 
+function quotePosixShellString(value: string): string {
+  return `'${value.replaceAll("'", "'\\''")}'`
+}
+
 // Why: a stale managed hook entry (left over after the user wiped userData,
 // switched dev↔prod installs, or had a partial install fail) used to fire
 // `/bin/sh "<missing path>"` on every tool call, which exits 127 and surfaces
 // as `PreToolUse hook (failed) error: hook exited with code 127` in the agent
-// transcript. Wrapping the launcher in `if [ -x ... ]; then ...; fi` makes a
-// missing/non-executable script a silent no-op so a broken install never
-// poisons the user's session. Failures inside the script itself are
-// unaffected — only the missing-script case short-circuits.
+// transcript. Guarding for a regular readable executable file makes a broken
+// install a silent no-op without hiding failures from a script that starts.
 export function wrapPosixHookCommand(scriptPath: string, env: Record<string, string> = {}): string {
   // Why: POSIX single-quote escape so $, `, ", and \ in scriptPath are taken
   // literally — avoids a shell-injection footgun if a future caller passes an
   // arbitrary path.
-  const quoted = `'${scriptPath.replaceAll("'", "'\\''")}'`
+  const quoted = quotePosixShellString(scriptPath)
   const envPrefix = Object.entries(env)
     .map(([key, value]) => `${key}='${value.replaceAll("'", "'\\''")}'`)
     .join(' ')
   const invocation = envPrefix ? `${envPrefix} /bin/sh ${quoted}` : `/bin/sh ${quoted}`
-  return `if [ -x ${quoted} ]; then ${invocation}; fi`
+  return `if [ -f ${quoted} ] && [ -r ${quoted} ] && [ -x ${quoted} ]; then ${invocation}; else ${POSIX_HOOK_STDIN_DRAIN_COMMAND}; fi`
+}
+
+function quotePowerShellString(value: string): string {
+  return `'${value.replaceAll("'", "''")}'`
+}
+
+function getWindowsPowerShellExecutablePath(): string {
+  const systemRoot = process.env.SystemRoot || 'C:\\Windows'
+  // Why: PATH lookup lets a worktree-local powershell.exe hijack hook payloads.
+  // Forward slashes keep this absolute path shell-friendly for cmd.exe and Git Bash.
+  return `${systemRoot.replaceAll('\\', '/')}/System32/WindowsPowerShell/v1.0/powershell.exe`
+}
+
+export function wrapWindowsHookCommand(
+  scriptPath: string,
+  env: Record<string, string> = {}
+): string {
+  // Why: the encoded launcher protects paths across Windows hook shells and
+  // owns stdin when a stale config points at a missing managed script.
+  const quoted = quotePowerShellString(scriptPath)
+  const envPrefix = Object.entries(env)
+    .map(([key, value]) => `$env:${key} = ${quotePowerShellString(value)}; `)
+    .join('')
+  const command = `${envPrefix}if (Test-Path -LiteralPath ${quoted} -PathType Leaf) { & ${quoted}; exit $LASTEXITCODE }; [Console]::In.ReadToEnd() | Out-Null; exit 0`
+  const encodedCommand = Buffer.from(command, 'utf16le').toString('base64')
+  return `${getWindowsPowerShellExecutablePath()} -NoProfile -ExecutionPolicy Bypass -EncodedCommand ${encodedCommand}`
+}
+
+export const WINDOWS_CMD_SAFE_PATH = /^[A-Za-z0-9_.:\\~-]+$/
+
+export function wrapWindowsCmdHookCommand(scriptPath: string): string {
+  // Why: Codex/Antigravity/Devin launch the hook command as a program (argv[0]),
+  // NOT through cmd.exe, so the launcher must be a single directly-spawnable
+  // token. The bare .cmd path is exactly that. A cmd-builtin `if exist …`
+  // launcher is unspawnable — its argv[0] is `if` — so it fails every hook with
+  // exit 1 (#8430 regression). A stale/missing script therefore surfaces a normal
+  // launch failure here; the missing-script stdin drain lives on the encoded
+  // fallback below, which needs a real interpreter for spaces/metacharacters
+  // anyway and cannot be reached by a cmd-builtin drain without breaking spawn.
+  return WINDOWS_CMD_SAFE_PATH.test(scriptPath) ? scriptPath : wrapWindowsHookCommand(scriptPath)
+}
+
+export const WINDOWS_GIT_BASH_SAFE_PATH = /^[A-Za-z0-9_.:/~-]+$/
+
+export function wrapWindowsGitBashHookCommand(scriptPath: string): string {
+  const bashPath = scriptPath.replaceAll('\\', '/')
+  // Why: Claude's Git Bash runner can execute a forward-slash .cmd directly;
+  // unsafe paths stay encoded and the fast path gains a missing-file drain.
+  return WINDOWS_GIT_BASH_SAFE_PATH.test(bashPath)
+    ? `if [ -f ${quotePosixShellString(bashPath)} ]; then ${quotePosixShellString(bashPath)}; else ${POSIX_HOOK_STDIN_DRAIN_COMMAND}; fi`
+    : wrapWindowsHookCommand(scriptPath)
 }
 
 export function buildWindowsAgentHookPostCommand(source: AgentHookSource): string {
-  // Why: Windows PowerShell 5.1 defaults redirected stdin/request bodies to the
-  // active code page. Hook payloads are UTF-8 JSON, so force UTF-8 on both read
-  // and POST or CJK prompts arrive in Orca as literal question marks. Timeout
-  // caps best-effort hook posts if the local listener stalls.
-  return `powershell -NoProfile -ExecutionPolicy Bypass -Command "$utf8=[System.Text.UTF8Encoding]::new($false); [Console]::InputEncoding=$utf8; [Console]::OutputEncoding=$utf8; $inputData=[Console]::In.ReadToEnd(); if ([string]::IsNullOrWhiteSpace($inputData)) { exit 0 }; try { $body=@{ paneKey=$env:ORCA_PANE_KEY; launchToken=$env:ORCA_AGENT_LAUNCH_TOKEN; tabId=$env:ORCA_TAB_ID; worktreeId=$env:ORCA_WORKTREE_ID; env=$env:ORCA_AGENT_HOOK_ENV; version=$env:ORCA_AGENT_HOOK_VERSION; payload=($inputData | ConvertFrom-Json) } | ConvertTo-Json -Depth 100 -Compress; $bodyBytes=$utf8.GetBytes($body); Invoke-WebRequest -UseBasicParsing -Method Post -Uri ('http://127.0.0.1:' + $env:ORCA_AGENT_HOOK_PORT + '/hook/${source}') -ContentType 'application/json; charset=utf-8' -Headers @{ 'X-Orca-Agent-Hook-Token'=$env:ORCA_AGENT_HOOK_TOKEN } -Body $bodyBytes -TimeoutSec 2 | Out-Null } catch {}"`
+  // Why: Codex runs these hooks inline on every turn. PowerShell startup alone
+  // makes trusted Windows hooks visibly slow, so mirror the POSIX curl path.
+  // Qualify curl so a repo-local curl.exe cannot hijack hook payloads.
+  return [
+    `"%SystemRoot%\\System32\\curl.exe" -sS -X POST "http://127.0.0.1:%ORCA_AGENT_HOOK_PORT%/hook/${source}" ^`,
+    '  --connect-timeout 0.5 --max-time 1.5 ^',
+    '  -H "Content-Type: application/x-www-form-urlencoded" ^',
+    '  -H "X-Orca-Agent-Hook-Token: %ORCA_AGENT_HOOK_TOKEN%" ^',
+    '  --data-urlencode "paneKey=%ORCA_PANE_KEY%" ^',
+    '  --data-urlencode "tabId=%ORCA_TAB_ID%" ^',
+    '  --data-urlencode "launchToken=%ORCA_AGENT_LAUNCH_TOKEN%" ^',
+    '  --data-urlencode "worktreeId=%ORCA_WORKTREE_ID%" ^',
+    '  --data-urlencode "env=%ORCA_AGENT_HOOK_ENV%" ^',
+    '  --data-urlencode "version=%ORCA_AGENT_HOOK_VERSION%" ^',
+    '  --data-urlencode "payload@-" >nul 2>nul'
+  ].join('\r\n')
+}
+
+// Why: status hooks fire up to 6× per turn; spawning PowerShell per post adds
+// ~300ms of interpreter startup each, which Codex 0.140's synchronous "Running
+// <event> hook" rows make visible. curl.exe (Windows 10 1803+) posts the same
+// form fields as the POSIX hook and reads the raw payload from stdin via
+// `--data-urlencode payload@-`, so UTF-8 (e.g. CJK prompts) survives byte-for-
+// byte without the code-page translation that previously forced PowerShell.
+export function buildWindowsAgentHookCurlPostCommand(source: AgentHookSource): string {
+  return [
+    '"%SystemRoot%\\System32\\curl.exe" -sS -X POST',
+    `"http://127.0.0.1:%ORCA_AGENT_HOOK_PORT%/hook/${source}"`,
+    '--connect-timeout 0.5 --max-time 1.5',
+    '-H "Content-Type: application/x-www-form-urlencoded"',
+    '-H "X-Orca-Agent-Hook-Token: %ORCA_AGENT_HOOK_TOKEN%"',
+    '--data-urlencode "paneKey=%ORCA_PANE_KEY%"',
+    '--data-urlencode "tabId=%ORCA_TAB_ID%"',
+    '--data-urlencode "launchToken=%ORCA_AGENT_LAUNCH_TOKEN%"',
+    '--data-urlencode "worktreeId=%ORCA_WORKTREE_ID%"',
+    '--data-urlencode "env=%ORCA_AGENT_HOOK_ENV%"',
+    '--data-urlencode "version=%ORCA_AGENT_HOOK_VERSION%"',
+    '--data-urlencode "payload@-"',
+    '>nul 2>&1'
+  ].join(' ')
 }
 
 export function removeManagedCommands(
@@ -190,7 +317,7 @@ export function writeManagedScript(scriptPath: string, content: string): void {
   try {
     writeScriptWithAclRetry(tmpPath, content)
     // Why: chmod before rename so the canonical path is never visible in a
-    // non-executable state; wrapPosixHookCommand's `[ -x ]` guard would
+    // unreadable/non-executable state; wrapPosixHookCommand's guards would
     // silently skip the hook in that window.
     if (process.platform !== 'win32') {
       chmodSync(tmpPath, 0o755)

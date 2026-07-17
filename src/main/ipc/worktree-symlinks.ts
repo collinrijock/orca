@@ -1,8 +1,8 @@
-import { execFile } from 'child_process'
-import { randomUUID } from 'crypto'
-import { symlink, mkdir, stat, lstat, unlink, rm, link, rmdir, chmod } from 'fs/promises'
-import { dirname, isAbsolute, resolve } from 'path'
-import { promisify } from 'util'
+import { execFile } from 'node:child_process'
+import { randomUUID } from 'node:crypto'
+import { symlink, mkdir, stat, lstat, unlink, rm, link, rmdir, chmod } from 'node:fs/promises'
+import { dirname, isAbsolute, resolve } from 'node:path'
+import { promisify } from 'node:util'
 
 type ExecFileAsync = (
   file: string,
@@ -334,6 +334,27 @@ export async function removeWorktreeLinkedPaths(
       }
     }
   }
+}
+
+export async function findExistingWorktreeSymlinkPaths(
+  worktreePath: string,
+  paths: readonly string[]
+): Promise<string[]> {
+  const symlinkPaths: string[] = []
+  for (const rawPath of paths) {
+    const safePath = getSafeRelativePath(rawPath)
+    if (!safePath.safe) {
+      continue
+    }
+    try {
+      if ((await lstat(resolve(worktreePath, safePath.rel))).isSymbolicLink()) {
+        symlinkPaths.push(safePath.rel)
+      }
+    } catch {
+      // Why: only a positively identified symlink may bypass dirty preflight.
+    }
+  }
+  return symlinkPaths
 }
 
 /** Remove previously-created symlinks from a worktree before deletion.

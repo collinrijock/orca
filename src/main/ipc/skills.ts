@@ -2,7 +2,9 @@ import { ipcMain } from 'electron'
 import type { Store } from '../persistence'
 import { discoverSkills } from '../skills/discovery'
 import type { SkillDiscoveryResult, SkillDiscoveryTarget } from '../../shared/skills'
+import type { SkillFreshnessInventory } from '../../shared/skill-freshness'
 import { getDefaultWslDistro, getWslHome } from '../wsl'
+import { inventorySkillFreshness } from '../skills/skill-freshness-inventory'
 
 type SkillDiscoveryRuntimeTarget =
   | { runtime: 'host' }
@@ -51,7 +53,14 @@ export function registerSkillsHandlers(store: Store): void {
         return discoverSkills({ repos: [], homeDir, cwd: homeDir })
       }
 
-      return discoverSkills({ repos: store.getRepos() })
+      const cwd = target?.cwd?.trim() || undefined
+      return cwd ? discoverSkills({ repos: [], cwd }) : discoverSkills({ repos: store.getRepos() })
     }
   )
+
+  ipcMain.handle('skills:freshnessInventory', async (): Promise<SkillFreshnessInventory> => {
+    // Why: the update command targets this machine's global homes. WSL and SSH
+    // inventories stay out until their installer rail has an equivalent proof.
+    return inventorySkillFreshness({ repos: store.getRepos() })
+  })
 }

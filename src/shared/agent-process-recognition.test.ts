@@ -25,6 +25,13 @@ describe('agent process recognition', () => {
     expect(isExpectedAgentProcess('/usr/local/bin/openclaude', 'claude')).toBe(false)
   })
 
+  it('recognizes the Droid foreground process on Windows', () => {
+    expect(recognizeAgentProcess(String.raw`C:\Users\dev\AppData\Roaming\npm\droid.cmd`)).toEqual({
+      agent: 'droid',
+      processName: 'droid'
+    })
+  })
+
   it('matches expected agents from platform-specific foreground process paths', () => {
     expect(recognizeAgentProcess('claude')).toEqual({
       agent: 'claude',
@@ -135,6 +142,19 @@ describe('agent process recognition', () => {
     expect(isRecognizedAgentType('vibe')).toBe(true)
   })
 
+  it('recognizes Qwen Code by its installed qwen executable', () => {
+    expect(recognizeAgentProcess('/home/dev/.local/bin/qwen')).toEqual({
+      agent: 'qwen-code',
+      processName: 'qwen'
+    })
+    expect(recognizeAgentProcess(String.raw`C:\Users\dev\AppData\Roaming\npm\qwen.cmd`)).toEqual({
+      agent: 'qwen-code',
+      processName: 'qwen'
+    })
+    expect(isExpectedAgentProcess('/usr/local/bin/qwen', 'qwen')).toBe(true)
+    expect(isRecognizedAgentType('qwen')).toBe(true)
+  })
+
   it('recognizes agent CLIs launched through interpreter wrappers', () => {
     expect(
       recognizeAgentProcessFromCommandLine('node /Users/dev/.nvm/versions/node/bin/codex')
@@ -176,6 +196,20 @@ describe('agent process recognition', () => {
         String.raw`node C:\Users\dev\AppData\Roaming\npm\node_modules\@google\gemini-cli\bundle\gemini.mjs`
       )
     ).toEqual({ agent: 'gemini', processName: 'gemini' })
+  })
+
+  it('recognizes only the agent subcommand of the generic Orca CLI', () => {
+    expect(recognizeAgentProcessFromCommandLine('orca claude-teams')).toEqual({
+      agent: 'claude-agent-teams',
+      processName: 'orca'
+    })
+    expect(recognizeAgentProcessFromCommandLine('orca status')).toBeNull()
+    expect(recognizeAgentProcessFromCommandLine('orca-dev terminal list')).toBeNull()
+    expect(recognizeAgentProcessFromCommandLine('node /usr/local/bin/orca claude-teams')).toEqual({
+      agent: 'claude-agent-teams',
+      processName: 'orca'
+    })
+    expect(recognizeAgentProcessFromCommandLine('node /usr/local/bin/orca status')).toBeNull()
   })
 
   it('does not classify prompt text as a wrapped agent command', () => {
