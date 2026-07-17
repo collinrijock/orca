@@ -38,6 +38,8 @@ function decodeHeader(frame: Buffer) {
   }
 }
 
+const completionFrame = Buffer.from('ORCAEND1', 'ascii')
+
 function decodePowerShellCommand(command: string): string {
   const encoded = command.match(/-EncodedCommand\s+([A-Za-z0-9+/=]+)$/u)?.[1]
   if (!encoded) {
@@ -89,7 +91,8 @@ describe('SSH relay runtime Windows system-SSH file destination', () => {
     expect(script).toContain('[IO.FileMode]::CreateNew')
     expect(script).toContain('[IO.FileShare]::None')
     expect(script).toContain('New-Object byte[] 65536')
-    expect(script).toContain('$inputStream.ReadByte() -ne -1')
+    expect(script).toContain("-ne 'ORCAEND1'")
+    expect(script).not.toContain('$inputStream.ReadByte()')
     for (const forbidden of ['ReadToEnd', 'CopyTo(', 'FromBase64String', 'ConvertFrom-Json']) {
       expect(script).not.toContain(forbidden)
     }
@@ -108,7 +111,10 @@ describe('SSH relay runtime Windows system-SSH file destination', () => {
 
     headerCallback?.()
     const destination = await opening
+    await destination.write(Buffer.alloc(65_537, 7))
     const closing = destination.close()
+    await vi.waitFor(() => expect(channel.write).toHaveBeenCalledTimes(3))
+    expect(channel.write.mock.calls[2]?.[0]).toEqual(completionFrame)
     resolve()
     await closing
   })
@@ -161,14 +167,33 @@ describe('SSH relay runtime Windows system-SSH file destination', () => {
     expect(channel.forceClose).not.toHaveBeenCalled()
   })
 
-  it('propagates receiver failure only after EOF and remote settlement', async () => {
+  it('propagates receiver failure only after framed completion and remote settlement', async () => {
     const { channel, reject } = createChannel()
     const destination = await openDestination(channel, { expectedSize: 0 })
     const closing = destination.close()
 
-    expect(channel.end).toHaveBeenCalledOnce()
-    reject(new Error('receiver rejected extra byte'))
-    await expect(closing).rejects.toThrow('receiver rejected extra byte')
+    await vi.waitFor(() => expect(channel.end).toHaveBeenCalledOnce())
+    expect(channel.write.mock.calls[1]?.[0]).toEqual(completionFrame)
+    reject(new Error('receiver rejected completion frame'))
+    await expect(closing).rejects.toThrow('receiver rejected completion frame')
+  })
+
+  it.each([
+    ['short', 2, Buffer.from([1])],
+    ['long', 1, Buffer.from([1, 2])]
+  ])('rejects a %s payload locally and aborts its channel', async (_kind, expectedSize, bytes) => {
+    const { channel, resolve } = createChannel()
+    channel.requestClose.mockImplementation(() => resolve())
+    const destination = await openDestination(channel, { expectedSize })
+
+    if (bytes.length > expectedSize) {
+      await expect(destination.write(bytes)).rejects.toThrow(/payload size mismatch/i)
+    } else {
+      await destination.write(bytes)
+      await expect(destination.close()).rejects.toThrow(/payload size mismatch/i)
+    }
+    expect(channel.requestClose).toHaveBeenCalledOnce()
+    expect(channel.forceClose).not.toHaveBeenCalled()
   })
 
   it.skipIf(process.platform !== 'win32')(
@@ -211,8 +236,12 @@ describe('SSH relay runtime Windows system-SSH file destination', () => {
             signal: new AbortController().signal,
             openChannel: openPowerShellChannel
           })
-          await destination.write(bytes)
-          await expect(destination.close()).rejects.toThrow(/PowerShell receiver failed/i)
+          if (bytes.length > expectedSize) {
+            await expect(destination.write(bytes)).rejects.toThrow(/payload size mismatch/i)
+          } else {
+            await destination.write(bytes)
+            await expect(destination.close()).rejects.toThrow(/payload size mismatch/i)
+          }
           await expect(readFile(remotePath)).rejects.toMatchObject({ code: 'ENOENT' })
         }
       } finally {

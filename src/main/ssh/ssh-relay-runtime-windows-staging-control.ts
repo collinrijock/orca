@@ -19,6 +19,7 @@ export type RunSshRelayRuntimeWindowsStagingControlOptions = Readonly<{
 }>
 
 const REQUEST_MAGIC = Buffer.from('ORCACTL1', 'ascii')
+const COMPLETION_MAGIC = Buffer.from('ORCAEND1', 'ascii')
 const FIXED_REQUEST_BYTES = 20
 const MAXIMUM_PATH_BYTES = 32 * 1024
 const COMMAND_TIMEOUT_MS = 30_000
@@ -32,7 +33,8 @@ const OPERATION_CODES: Record<SshRelayRuntimeWindowsStagingOperation, number> = 
 export const SSH_RELAY_RUNTIME_WINDOWS_STAGING_CONTROL_LIMITS = Object.freeze({
   commandTimeoutMs: COMMAND_TIMEOUT_MS,
   maximumPathBytes: MAXIMUM_PATH_BYTES,
-  maximumRequestBytes: FIXED_REQUEST_BYTES + MAXIMUM_PATH_BYTES * 2
+  maximumRequestBytes: FIXED_REQUEST_BYTES + MAXIMUM_PATH_BYTES * 2 + COMPLETION_MAGIC.length,
+  completionBytes: COMPLETION_MAGIC.length
 })
 
 const RECEIVER_SCRIPT = `
@@ -62,7 +64,9 @@ try {
   [byte[]]$pathBytes = New-Object byte[] ([int]$pathLength)
   Read-Exact $inputStream $rootBytes ([int]$rootLength)
   Read-Exact $inputStream $pathBytes ([int]$pathLength)
-  if ($inputStream.ReadByte() -ne -1) { throw 'extra byte' }
+  [byte[]]$completion = New-Object byte[] ${COMPLETION_MAGIC.length}
+  Read-Exact $inputStream $completion ${COMPLETION_MAGIC.length}
+  if ([Text.Encoding]::ASCII.GetString($completion) -ne 'ORCAEND1') { throw 'bad completion' }
   $utf8 = New-Object Text.UTF8Encoding($false, $true)
   $root = $utf8.GetString($rootBytes)
   $path = if ($pathLength -eq 0) { '' } else { $utf8.GetString($pathBytes) }
@@ -159,13 +163,16 @@ function buildRequest(
 ): Buffer {
   const rootBytes = Buffer.from(remoteRoot, 'utf8')
   const pathBytes = Buffer.from(remotePath, 'utf8')
-  const request = Buffer.alloc(FIXED_REQUEST_BYTES + rootBytes.length + pathBytes.length)
+  const request = Buffer.alloc(
+    FIXED_REQUEST_BYTES + rootBytes.length + pathBytes.length + COMPLETION_MAGIC.length
+  )
   REQUEST_MAGIC.copy(request, 0)
   request.writeUInt8(OPERATION_CODES[operation], 8)
   request.writeUInt32LE(rootBytes.length, 12)
   request.writeUInt32LE(pathBytes.length, 16)
   rootBytes.copy(request, FIXED_REQUEST_BYTES)
   pathBytes.copy(request, FIXED_REQUEST_BYTES + rootBytes.length)
+  COMPLETION_MAGIC.copy(request, FIXED_REQUEST_BYTES + rootBytes.length + pathBytes.length)
   return request
 }
 

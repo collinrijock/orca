@@ -39,7 +39,8 @@ function decodeRequest(frame: Buffer) {
     operation: frame.readUInt8(8),
     reserved: frame.subarray(9, 12),
     remoteRoot: frame.subarray(rootStart, pathStart).toString('utf8'),
-    remotePath: frame.subarray(pathStart, pathStart + pathLength).toString('utf8')
+    remotePath: frame.subarray(pathStart, pathStart + pathLength).toString('utf8'),
+    completion: frame.subarray(pathStart + pathLength).toString('ascii')
   }
 }
 
@@ -96,7 +97,8 @@ describe('SSH relay runtime Windows system-SSH staging control', () => {
       expect(script).toContain('New-Item -ItemType Directory -Path')
       expect(script).toContain('[IO.Path]::GetDirectoryName')
       expect(script).toContain('[IO.Directory]::Delete')
-      expect(script).toContain('$inputStream.ReadByte() -ne -1')
+      expect(script).toContain("-ne 'ORCAEND1'")
+      expect(script).not.toContain('$inputStream.ReadByte()')
       for (const forbidden of ['ReadToEnd', 'FromBase64String', 'ConvertFrom-Json']) {
         expect(script).not.toContain(forbidden)
       }
@@ -111,7 +113,8 @@ describe('SSH relay runtime Windows system-SSH staging control', () => {
         operation: opcode,
         reserved: Buffer.alloc(3),
         remoteRoot: 'C:/Users/测试/.orca-remote/stage',
-        remotePath
+        remotePath,
+        completion: 'ORCAEND1'
       })
       fixture.resolve()
       await expect(running).resolves.toBeUndefined()

@@ -14,12 +14,14 @@ export type OpenSshRelayRuntimeWindowsFileDestinationOptions = Readonly<{
 }>
 
 const HEADER_MAGIC = Buffer.from('ORCARLY1', 'ascii')
+const COMPLETION_MAGIC = Buffer.from('ORCAEND1', 'ascii')
 const FIXED_HEADER_BYTES = 20
 const MAXIMUM_PATH_BYTES = 32 * 1024
 const PAYLOAD_BUFFER_BYTES = 64 * 1024
 
 export const SSH_RELAY_RUNTIME_WINDOWS_FILE_DESTINATION_LIMITS = Object.freeze({
   maximumHeaderBytes: FIXED_HEADER_BYTES + MAXIMUM_PATH_BYTES,
+  completionBytes: COMPLETION_MAGIC.length,
   maximumPathBytes: MAXIMUM_PATH_BYTES,
   payloadBufferBytes: PAYLOAD_BUFFER_BYTES
 })
@@ -61,7 +63,9 @@ try {
     $outputStream.Write($buffer, 0, $read)
     $remaining -= $read
   }
-  if ($inputStream.ReadByte() -ne -1) { throw 'SSH relay runtime Windows receiver extra byte' }
+  [byte[]]$completion = New-Object byte[] ${COMPLETION_MAGIC.length}
+  Read-Exact $inputStream $completion ${COMPLETION_MAGIC.length}
+  if ([Text.Encoding]::ASCII.GetString($completion) -ne 'ORCAEND1') { throw 'bad completion' }
   $outputStream.Flush()
   $outputStream.Dispose()
   $outputStream = $null
@@ -142,7 +146,6 @@ export async function openSshRelayRuntimeWindowsFileDestination(
   try {
     // Why: the receiver must authenticate framing before any source buffer can be borrowed.
     await destination.write(header)
-    return destination
   } catch (error) {
     try {
       await destination.abort(error)
@@ -154,4 +157,51 @@ export async function openSshRelayRuntimeWindowsFileDestination(
     }
     throw error
   }
+
+  let payloadBytes = 0
+  const abortForSizeMismatch = async (): Promise<never> => {
+    const error = new Error('SSH relay runtime Windows file destination payload size mismatch')
+    try {
+      await destination.abort(error)
+    } catch (cleanupError) {
+      throw new AggregateError(
+        [error, cleanupError],
+        'SSH relay runtime Windows file size cleanup failed'
+      )
+    }
+    throw error
+  }
+  return Object.freeze({
+    write: async (chunk: Buffer): Promise<void> => {
+      if (!Buffer.isBuffer(chunk) || chunk.length === 0) {
+        return destination.write(chunk)
+      }
+      if (payloadBytes + chunk.length > options.expectedSize) {
+        return abortForSizeMismatch()
+      }
+      await destination.write(chunk)
+      payloadBytes += chunk.length
+    },
+    close: async (): Promise<void> => {
+      if (payloadBytes !== options.expectedSize) {
+        return abortForSizeMismatch()
+      }
+      try {
+        // Why: Win32-OpenSSH may retain stdin EOF; an explicit frame ends verified bytes instead.
+        await destination.write(COMPLETION_MAGIC)
+        await destination.close()
+      } catch (error) {
+        try {
+          await destination.abort(error)
+        } catch (cleanupError) {
+          throw new AggregateError(
+            [error, cleanupError],
+            'SSH relay runtime Windows file completion cleanup failed'
+          )
+        }
+        throw error
+      }
+    },
+    abort: (reason: unknown): Promise<void> => destination.abort(reason)
+  })
 }

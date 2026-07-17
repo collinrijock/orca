@@ -8,8 +8,8 @@ work; keep exact commands, runner identities, hashes, metrics, and residual gaps
 
 Date created: 2026-07-14<br>
 Last updated: 2026-07-17<br>
-Current phase: Milestone 6 / Work Package 5 bounded runtime transfer — **In progress — explicit remote-command dialect correction exact-head native qualification, 2026-07-17, Codex implementation owner**. Exact head `34b51eb12640795d1cdd99a17c6fbadda79c2f60`, run `29558649829`, and x64/ARM64 jobs `87816177268`/`87816177284` select a required `posix`/`powershell` file-channel dialect. `E-M6-WINDOWS-COMMAND-DIALECT-CORRECTION-LOCAL-001` records the correction locally green: POSIX retains `connection.exec(command)` exactly and PowerShell alone uses `{ wrapCommand: false }`. Commit/push only this package and require fresh native x64/ARM64 proof. Legacy remains the sole production path; real Apple/SignPath rehearsals remain deferred.<br>
-Session checkpoint: **COMMAND DIALECT CORRECTION LOCAL GREEN / NATIVE RERUN NEXT — 2026-07-17, Codex implementation owner** — 40 focused cases with two declared live skips, 285 release contracts with eight declared skips, typecheck, lint/reliability/max-lines, formatting, exact call-site audit, diff, and protected-resolver isolation pass. Full-size transfer, cancellation, concurrency, reuse, and exact profile teardown remain unproven. No product caller, upload, default/fallback, Beta, tuple publication, or signing behavior changed.<br>
+Current phase: Milestone 6 / Work Package 5 bounded runtime transfer — **In progress — explicit Windows completion framing locally green, exact-head native qualification next, 2026-07-17, Codex implementation owner**. Exact correction head `ad3c3975c099f0e197661091b1cec9b0a0d6d553`, run `29559577952`, and Windows x64/ARM64 jobs `87818965702`/`87818965757` independently time out after 1,200,018/1,200,015 ms with a fixture-user command chain still waiting. `E-M6-WINDOWS-FRAMED-COMPLETION-LOCAL-001` replaces the receiver's EOF dependency with an exact `ORCAEND1` frame while retaining local byte-count and remote frame validation; focused, broad, release, typecheck, lint, formatting, diff, and resolver-isolation gates pass. Commit/push only this package and require fresh native full-size/cancellation/concurrency/reuse/teardown proof. Legacy remains the sole production path; real Apple/SignPath rehearsals remain deferred.<br>
+Session checkpoint: **WINDOWS FRAMED COMPLETION LOCAL GREEN / NATIVE RERUN NEXT — 2026-07-17, Codex implementation owner** — 54 focused cases with three declared skips, 697 broad relay cases with ten declared skips, 285 release contracts with eight declared skips, typecheck, lint/reliability/max-lines, formatting, diff, and protected-resolver isolation pass. Both PowerShell receivers are now length-delimited and completion-framed, with no stdin-EOF read; local short/long payload mismatches abort boundedly. Native proof remains required. No product caller, upload, default/fallback, Beta, tuple publication, or signing behavior changed.<br>
 Primary design: [SSH relay GitHub Release plan](./2026-07-14-ssh-relay-github-release-plan.html)<br>
 Motivating issues: [#8450](https://github.com/stablyai/orca/issues/8450), [#1693](https://github.com/stablyai/orca/issues/1693)
 
@@ -20346,6 +20346,79 @@ lint` passes in 18.59 seconds real with the 26 existing warnings, all 41 reliabi
   require exact-head x64/ARM64 full-size serial/concurrent/collision/cancellation metrics,
   connection reuse, and exact fixture profile/directory teardown before advancing.
 
+### E-M6-WINDOWS-COMMAND-DIALECT-CI-RED-001 — both architectures retain an EOF-dependent receiver
+
+- Date/owner/source/run: 2026-07-17, Codex implementation owner; exact head
+  `ad3c3975c099f0e197661091b1cec9b0a0d6d553`, artifact run
+  [29559577952](https://github.com/stablyai/orca/actions/runs/29559577952), Windows x64 job
+  [87818965702](https://github.com/stablyai/orca/actions/runs/29559577952/job/87818965702) on
+  `windows-2022`, and native ARM64 job
+  [87818965757](https://github.com/stablyai/orca/actions/runs/29559577952/job/87818965757) on
+  `windows-11-arm`; both use Node 24.18.0 and official OpenSSH 10.0p2. X64 uses PowerShell
+  5.1.20348.4294 and ARM64 uses 5.1.26100.8655.
+- Preserved gates: each Windows job passes 101 artifact files, 864 runnable cases, and 19 declared
+  skips before the live step, including launcher compilation/lifecycle, exact clean-build identity,
+  runtime smoke, and source/cache boundaries. X64 measures 42 files / 96,527,161 bytes; ARM64
+  measures 42 / 85,213,511. Linux x64/ARM64 jobs `87818965677`/`87818965726`, Darwin x64/ARM64 jobs
+  `87818965712`/`87818965737`, and Linux oldest-userland supplements
+  `87819839680`/`87819839678` pass at the same exact head.
+- Pinned trust: the standalone strict-trust launcher succeeds with sentinel, ended stdout, natural
+  process exit/channel close 0, and zero stderr in 400.4242 ms on x64 and 719.5839 ms on ARM64.
+  This independently preserves the earlier launcher/trust correction before the full-size test.
+- Exact RED: the full-size test times out at its 1,200,000 ms ceiling after 1,200,018 ms on x64 and
+  1,200,015 ms on ARM64. Neither emits serial/concurrent/collision/cancellation metrics. X64
+  teardown finds fixture-owned `sshd-session.exe`, `cmd.exe`, `conhost.exe`, and `powershell.exe`;
+  ARM64 independently finds `cmd.exe`, `conhost.exe`, and `powershell.exe`. Both then correctly
+  report the still-locked `UsrClass.dat` instead of hiding fixture residue.
+- Classification: command routing now reaches a complete PowerShell receiver, but both control and
+  file protocols still demand a final stdin EOF after already length-delimited bytes. The retained
+  command chains select that shared EOF-dependent completion boundary as the next isolated
+  hypothesis; they do not prove which transfer phase was active, so no full-size or teardown item is
+  credited. Replace only the final EOF check with an explicit fixed completion frame, retain exact
+  local byte-count and remote frame validation, and require fresh x64/ARM64 proof.
+
+### E-M6-WINDOWS-FRAMED-COMPLETION-LOCAL-001 — explicit completion framing is locally green
+
+- Date/owner/base/runner: 2026-07-17, Codex implementation owner; uncommitted correction atop exact
+  native RED head `ad3c3975c099f0e197661091b1cec9b0a0d6d553` on Apple arm64, macOS 26.2 build
+  25C56, Node 26.5.0, and pnpm 10.24.0. The repository requests Node 24; native jobs remain
+  authoritative.
+- Implementation boundary: Windows staging-control requests and file streams now end with the exact
+  eight-byte ASCII frame `ORCAEND1`; their PowerShell 5.1 receivers read and verify that frame after
+  their already bounded length fields and never wait for stdin EOF. The file destination counts
+  accepted payload bytes locally, aborts boundedly on short/long input, and writes the completion
+  frame only after the declared size is exact. The remote receiver still uses `CreateNew`, exact
+  payload length, fixed 64 KiB buffering, and failure cleanup. POSIX/SFTP, SSH authentication,
+  connection reuse, launcher/trust, product/default, Beta, fallback, tuple, publication, and signing
+  behavior are unchanged.
+- Focused evidence: an initial focused run exposed two outdated test assumptions (closing without
+  the declared payload and asserting close synchronously); all product cases passed. After correcting
+  those framing oracles, `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts
+  --maxWorkers=1 src/main/ssh/ssh-relay-runtime-command-file-destination.test.ts
+  src/main/ssh/ssh-relay-runtime-system-ssh-file-channel.test.ts
+  src/main/ssh/ssh-relay-runtime-windows-file-destination.test.ts
+  src/main/ssh/ssh-relay-runtime-windows-staging-control.test.ts
+  src/main/ssh/ssh-relay-runtime-windows-tree-transfer.test.ts
+  src/main/ssh/ssh-relay-runtime-windows-system-ssh-openssh-full-size.test.ts` exits 0 with four
+  files passed, one live file skipped, 54 runnable cases passed, and three declared skips in 3.26
+  seconds real; maximum RSS is 146,571,264 bytes and peak footprint is 97,474,416 bytes.
+- Broad/release evidence: `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts
+  --maxWorkers=1 src/main/ssh/ssh-relay-*.test.ts` exits 0 with 53 files passed, six declared skipped,
+  697 runnable cases passed, and ten declared skips in 23.32 seconds real; maximum RSS is
+  301,826,048 bytes and peak footprint is 96,818,888 bytes. The exact release-contract command exits
+  0 with 51 files, 285 runnable cases, and eight declared skips in 12.44 seconds real; maximum RSS is
+  195,035,136 bytes and peak footprint is 97,294,144 bytes.
+- Static/isolation evidence: `/usr/bin/time -l pnpm typecheck` exits 0 in 2.86 seconds real with
+  1,242,497,024-byte maximum RSS and 97,031,904-byte peak footprint. `/usr/bin/time -l pnpm lint`
+  exits 0 in 13.52 seconds real with the existing 26 warnings, all 41 reliability gates, and the
+  355-entry max-lines ratchet; maximum RSS is 2,110,308,352 bytes and peak footprint is 97,441,720
+  bytes. Targeted `oxfmt --check`, `git diff --check`, exact no-`ReadByte()`/frame source audit, and
+  protected-resolver comparison pass.
+- Residual gate: local Darwin declares the PowerShell/live cases skipped. Commit/push this exact
+  package and require fresh native x64/ARM64 receiver syntax, full-size serial/concurrent/collision/
+  cancellation metrics, connection reuse, and exact fixture profile/directory teardown before
+  advancing.
+
 ## Accepted Gaps
 
 No product gap is accepted merely because it appears in this list. Each entry requires explicit
@@ -20404,10 +20477,10 @@ The project is not complete until every applicable item below is checked with ev
 
 ## Next Required Action
 
-Commit and push only the explicit command-dialect correction recorded by
-`E-M6-WINDOWS-COMMAND-DIALECT-CORRECTION-LOCAL-001`, then require exact-head Windows x64/ARM64
-full-size transfer, cancellation, concurrency, connection reuse, and exact profile/directory
-teardown evidence. Do not check the broad Milestone 6 Windows system-SSH item or add an
+Commit and push only the explicit Windows completion-framing correction recorded by
+`E-M6-WINDOWS-FRAMED-COMPLETION-LOCAL-001`, then require exact-head Windows x64/ARM64 full-size
+transfer, cancellation, concurrency, connection reuse, and exact profile/directory teardown
+evidence. Do not check the broad Milestone 6 Windows system-SSH item or add an
 Electron/startup/product importer, per-target mode wiring, fallback, tuple
 enablement, release publication, or default behavior.
 Keep Node upstream `.tar.xz` inputs, Windows ZIP, `ORCA_RELAY_PATH`, existing desktop required-assets

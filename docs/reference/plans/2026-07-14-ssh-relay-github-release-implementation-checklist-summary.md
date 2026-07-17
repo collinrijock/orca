@@ -9,21 +9,16 @@ keeps commands, hashes, runner identities, timings, and failure details.
 A checked box means the work has evidence in the detailed ledger. Design approval alone does not
 complete a box.
 
-Active checkpoint: **Milestone 6 / Work Package 5 bounded runtime transfer — explicit remote-command
-dialect correction locally green, exact-head native rerun next, 2026-07-17, Codex implementation
-owner.** Exact head
-`34b51eb12640795d1cdd99a17c6fbadda79c2f60`, run `29558649829`, and Windows x64/ARM64 jobs
-`87816177268`/`87816177284` prove pinned launcher control in 734.8928/681.1723 ms and advance the
-injected connection beyond its probe. Both then fail the first Windows staging command because the
-generic system-SSH file channel applies the POSIX `exec /bin/sh -c` wrapper to an already complete
-PowerShell command; no payload byte or transfer metric runs. All four primary non-Windows jobs and
-both Linux oldest-userland supplements pass. Add only an explicit `posix`/`powershell` command
-dialect at the file-channel boundary, preserving the exact POSIX call and using `wrapCommand: false`
-only for PowerShell. `E-M6-WINDOWS-COMMAND-DIALECT-CORRECTION-LOCAL-001` records 40 focused cases,
-285 release contracts, typecheck, full lint/reliability/max-lines, formatting, exact call-site audit,
-diff, and resolver isolation green. Commit/push this exact package and require native full-size,
-cancellation, concurrency, reuse, and exact teardown proof. No product/default caller, Beta,
-fallback, tuple, publication, or signing behavior is authorized.
+Active checkpoint: **Milestone 6 / Work Package 5 bounded runtime transfer — explicit Windows
+completion framing locally green, exact-head native rerun next, 2026-07-17, Codex implementation
+owner.** Exact head `ad3c3975c099f0e197661091b1cec9b0a0d6d553`, run `29559577952`, and Windows
+x64/ARM64 jobs `87818965702`/`87818965757` independently time out after 1,200,018/1,200,015 ms with
+one fixture-user command chain retained. The isolated correction replaces final stdin EOF reads with
+an exact `ORCAEND1` frame while preserving local size and remote frame validation. Local evidence is
+green through 54 focused cases, 697 broad relay cases, 285 release contracts, typecheck, full
+lint/reliability/max-lines, formatting, diff, and resolver isolation. Commit/push only this package
+and require fresh x64/ARM64 full-size, cancellation, concurrency, reuse, and exact teardown proof.
+No product/default caller, Beta, fallback, tuple, publication, or signing behavior is authorized.
 `E-M6-WINDOWS-SYSTEM-SSH-TREE-LIVE-PORTABLE-FIXTURE-LOCAL-001` records the portable-fixture
 correction locally green: the no-Orca-publication workflow oracle permits the one exact pinned
 Microsoft fixture release URL while Orca release URLs, `gh release`, and `contents: write` remain
