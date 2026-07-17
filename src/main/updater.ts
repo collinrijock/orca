@@ -2,6 +2,7 @@
 import { app, BrowserWindow, powerMonitor } from 'electron'
 import { is } from '@electron-toolkit/utils'
 import type { UpdateCheckOptions, UpdateStatus } from '../shared/types'
+import { isWindowsSignatureCheckUnavailableFailure } from '../shared/updater-windows-signature-check'
 import { killAllPty } from './ipc/pty'
 import { withUpdaterSpan } from './observability/instrumentation'
 import { loadElectronAutoUpdater, type ElectronAutoUpdater } from './electron-updater-loader'
@@ -522,6 +523,14 @@ function sendErrorStatus(message: string, userInitiated?: boolean): void {
     currentStatus.userInitiated === userInitiated
   ) {
     return
+  }
+  // Why: counts AV/EDR-blocked Windows signature checks in the field so we can
+  // size the affected cohort before investing in bigger updater changes.
+  if (isWindowsSignatureCheckUnavailableFailure(message)) {
+    recordUpdaterLifecycle('windows_signature_check_blocked', undefined, {
+      level: 'warn',
+      message: 'Windows update signature check could not run'
+    })
   }
   sendStatus({ state: 'error', message, userInitiated })
 }
