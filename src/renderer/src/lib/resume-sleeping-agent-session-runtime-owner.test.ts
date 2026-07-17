@@ -5,6 +5,7 @@ import {
   toRuntimeExecutionHostId,
   toSshExecutionHostId
 } from '../../../shared/execution-host'
+import { folderWorkspaceKey } from '../../../shared/workspace-scope'
 import { useAppStore } from '@/store'
 import { resumeSleepingAgentSessionsForWorktree } from './resume-sleeping-agent-session'
 
@@ -167,7 +168,9 @@ describe('resumeSleepingAgentSessionsForWorktree runtime-owner gate', () => {
     expect(state.sleepingAgentSessionsByPaneKey[runtimeRecord.paneKey]).toBe(runtimeRecord)
     expect(state.tabsByWorktree['wt-sibling']).toHaveLength(1)
     expect(state.sleepingAgentSessionsByPaneKey[localRecord.paneKey]).toBeUndefined()
-    const resumedLocalTab = state.tabsByWorktree['wt-target']?.find((tab) => tab.id !== 'tab-target')
+    const resumedLocalTab = state.tabsByWorktree['wt-target']?.find(
+      (tab) => tab.id !== 'tab-target'
+    )
     expect(resumedLocalTab?.launchAgent).toBe('claude')
   })
 
@@ -205,5 +208,78 @@ describe('resumeSleepingAgentSessionsForWorktree runtime-owner gate', () => {
     expect(
       useAppStore.getState().sleepingAgentSessionsByPaneKey[targetRecord.paneKey]
     ).toBeUndefined()
+  })
+
+  it('gates folder workspaces owned by a runtime project group (activation path)', () => {
+    // Why: folder activation also calls resumeSleepingAgentSessionsForWorktree
+    // with a folder:* workspace key; that path must share the same gate.
+    const workspaceKey = folderWorkspaceKey('folder-1')
+    const record = makeLiveRecord(workspaceKey, 'tab-folder')
+    useAppStore.setState({
+      settings: {
+        ...initialAppStoreState.settings,
+        activeRuntimeEnvironmentId: GLOBAL_FOCUSED_ENV
+      },
+      folderWorkspaces: [{ id: 'folder-1', projectGroupId: 'group-1', connectionId: null }],
+      projectGroups: [
+        {
+          id: 'group-1',
+          connectionId: null,
+          executionHostId: toRuntimeExecutionHostId('env-folder')
+        }
+      ],
+      tabsByWorktree: {
+        [workspaceKey]: [makeTerminalTab('tab-folder', workspaceKey)]
+      },
+      sleepingAgentSessionsByPaneKey: {
+        [record.paneKey]: record
+      }
+    } as never)
+
+    expect(resumeSleepingAgentSessionsForWorktree(workspaceKey)).toBe(0)
+    expect(useAppStore.getState().sleepingAgentSessionsByPaneKey[record.paneKey]).toBe(record)
+    expect(useAppStore.getState().tabsByWorktree[workspaceKey]).toHaveLength(1)
+  })
+
+  it('gates unmarked worktrees via the active runtime fallback (paired remote client)', () => {
+    // Why: remote clients often leave worktree.hostId unset and rely on the
+    // focused runtime env; that global fallback must also skip client resume.
+    const record = makeLiveRecord('wt-unmarked', 'tab-unmarked')
+    useAppStore.setState({
+      settings: {
+        ...initialAppStoreState.settings,
+        activeRuntimeEnvironmentId: 'env-paired'
+      },
+      repos: [{ id: 'repo-unmarked', executionHostId: null, connectionId: null }],
+      worktreesByRepo: {
+        'repo-unmarked': [{ id: 'wt-unmarked', repoId: 'repo-unmarked', path: '/repo/unmarked' }]
+      },
+      tabsByWorktree: {
+        'wt-unmarked': [makeTerminalTab('tab-unmarked', 'wt-unmarked')]
+      },
+      sleepingAgentSessionsByPaneKey: {
+        [record.paneKey]: record
+      }
+    } as never)
+
+    expect(resumeSleepingAgentSessionsForWorktree('wt-unmarked')).toBe(0)
+    expect(useAppStore.getState().sleepingAgentSessionsByPaneKey[record.paneKey]).toBe(record)
+  })
+
+  it('stays gated across re-entrant activation/startup resume races', () => {
+    // Why: worktree activation and Terminal startup hydration can both call
+    // resume for the same runtime-owned worktree before the mirror arrives.
+    const { targetRecord } = installState({
+      via: 'worktreeHost',
+      hostId: toRuntimeExecutionHostId('env-1')
+    })
+
+    expect(resumeSleepingAgentSessionsForWorktree('wt-target')).toBe(0)
+    expect(resumeSleepingAgentSessionsForWorktree('wt-target')).toBe(0)
+
+    const state = useAppStore.getState()
+    expect(state.tabsByWorktree['wt-target']).toHaveLength(1)
+    expect(state.pendingStartupByTabId).toEqual({})
+    expect(state.sleepingAgentSessionsByPaneKey[targetRecord.paneKey]).toBe(targetRecord)
   })
 })
