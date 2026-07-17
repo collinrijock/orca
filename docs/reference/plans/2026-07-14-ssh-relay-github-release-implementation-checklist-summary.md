@@ -9,17 +9,16 @@ keeps commands, hashes, runner identities, timings, and failure details.
 A checked box means the work has evidence in the detailed ledger. Design approval alone does not
 complete a box.
 
-Active checkpoint: **Milestone 6 / Work Package 5 bounded runtime transfer — Windows live-transfer
-phase/stall diagnostic locally green, exact-head native qualification next, 2026-07-17, Codex
-implementation owner.** Exact completion-framing head `19683ba24e8af031a6a02583b4f33e0746efb9ac`,
-run `29561480245`, and Windows x64/ARM64 jobs `87824691503`/`87824691472` independently time out
-after 1,200,020/1,200,022 ms with the same live fixture-user command chain, so final EOF is not the
-retained boundary. The test-only diagnostic records privacy-safe phase/file-progress evidence and
-aborts through the existing signal after 60 seconds without progress. Focused, broad, release,
-typecheck, lint/reliability/max-lines, diff, and protected-resolver isolation gates pass. Commit and
-push only this package; the next native RED must name and join the exact stalled operation before
-behavior changes. No product/default caller, Beta, fallback, tuple, publication, or signing behavior
-is authorized.
+Active checkpoint: **Milestone 6 / Work Package 5 bounded runtime transfer — Windows borrowed-chunk
+pipe-write correction locally green, exact-head native qualification next, 2026-07-17, Codex
+implementation owner.** Exact diagnostic head
+`ce4c7c481c790eacbf73162e5e03570fc2d3b490`, run `29563868935`, and Windows x64/ARM64 jobs
+`87832001707`/`87832001736` independently complete the 18-byte first file and stall before accepting
+any bytes of `THIRD_PARTY_LICENSES.txt`. The isolated correction uses sequential zero-copy 16 KiB
+Windows pipe views while retaining the borrowed source buffer until all subwrites settle. Focused,
+broad, release, typecheck, lint/reliability/max-lines, formatting, diff, and resolver isolation are
+green. Commit/push only this package for fresh native proof. No product/default caller, Beta,
+fallback, tuple, publication, or signing behavior is authorized.
 `E-M6-WINDOWS-SYSTEM-SSH-TREE-LIVE-PORTABLE-FIXTURE-LOCAL-001` records the portable-fixture
 correction locally green: the no-Orca-publication workflow oracle permits the one exact pinned
 Microsoft fixture release URL while Orca release URLs, `gh release`, and `contents: write` remain

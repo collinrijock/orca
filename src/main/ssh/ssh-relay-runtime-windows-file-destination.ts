@@ -18,12 +18,14 @@ const COMPLETION_MAGIC = Buffer.from('ORCAEND1', 'ascii')
 const FIXED_HEADER_BYTES = 20
 const MAXIMUM_PATH_BYTES = 32 * 1024
 const PAYLOAD_BUFFER_BYTES = 64 * 1024
+const MAXIMUM_PIPE_WRITE_BYTES = 16 * 1024
 
 export const SSH_RELAY_RUNTIME_WINDOWS_FILE_DESTINATION_LIMITS = Object.freeze({
   maximumHeaderBytes: FIXED_HEADER_BYTES + MAXIMUM_PATH_BYTES,
   completionBytes: COMPLETION_MAGIC.length,
   maximumPathBytes: MAXIMUM_PATH_BYTES,
-  payloadBufferBytes: PAYLOAD_BUFFER_BYTES
+  payloadBufferBytes: PAYLOAD_BUFFER_BYTES,
+  maximumPipeWriteBytes: MAXIMUM_PIPE_WRITE_BYTES
 })
 
 const RECEIVER_SCRIPT = `
@@ -179,7 +181,11 @@ export async function openSshRelayRuntimeWindowsFileDestination(
       if (payloadBytes + chunk.length > options.expectedSize) {
         return abortForSizeMismatch()
       }
-      await destination.write(chunk)
+      // Why: native Win32-OpenSSH stalls on one borrowed 64 KiB pipe write; awaited subviews keep
+      // the source buffer borrowed until every byte has crossed the same retention boundary.
+      for (let offset = 0; offset < chunk.length; offset += MAXIMUM_PIPE_WRITE_BYTES) {
+        await destination.write(chunk.subarray(offset, offset + MAXIMUM_PIPE_WRITE_BYTES))
+      }
       payloadBytes += chunk.length
     },
     close: async (): Promise<void> => {

@@ -8,8 +8,8 @@ work; keep exact commands, runner identities, hashes, metrics, and residual gaps
 
 Date created: 2026-07-14<br>
 Last updated: 2026-07-17<br>
-Current phase: Milestone 6 / Work Package 5 bounded runtime transfer — **In progress — Windows live-transfer phase/stall diagnostic locally green, exact-head native qualification next, 2026-07-17, Codex implementation owner**. Exact completion-framing head `19683ba24e8af031a6a02583b4f33e0746efb9ac`, run `29561480245`, and Windows x64/ARM64 jobs `87824691503`/`87824691472` independently time out after 1,200,020/1,200,022 ms with the same fixture-user command chain, falsifying final EOF as the retained boundary. `E-M6-WINDOWS-PHASE-STALL-DIAGNOSTIC-LOCAL-001` adds only privacy-safe phase/progress evidence and a 60-second inactivity abort through the existing transfer signal. Commit and push only this diagnostic package so the next native RED identifies and joins the exact operation. Legacy remains the sole production path; real Apple/SignPath rehearsals remain deferred.<br>
-Session checkpoint: **PHASE/STALL DIAGNOSTIC LOCAL GREEN / NATIVE RUN NEXT — 2026-07-17, Codex implementation owner** — focused, broad relay, release-contract, typecheck, targeted/full lint, reliability/max-lines, diff, and protected-resolver isolation gates pass. No transfer protocol, authentication, connection reuse, product caller, upload, default/fallback, Beta, tuple publication, or signing behavior changed.<br>
+Current phase: Milestone 6 / Work Package 5 bounded runtime transfer — **In progress — Windows borrowed-chunk pipe-write correction locally green, exact-head native qualification next, 2026-07-17, Codex implementation owner**. Exact diagnostic head `ce4c7c481c790eacbf73162e5e03570fc2d3b490`, run `29563868935`, and Windows x64/ARM64 jobs `87832001707`/`87832001736` independently prove the first borrowed 64 KiB payload write stalls. `E-M6-WINDOWS-PIPE-SUBWRITE-LOCAL-001` subdivides only that Windows destination write into sequential zero-copy 16 KiB views while retaining the source buffer until every subwrite settles. Commit/push only this correction and require fresh native proof. Legacy remains the sole production path; real Apple/SignPath rehearsals remain deferred.<br>
+Session checkpoint: **WINDOWS 16 KIB PIPE SUBWRITE LOCAL GREEN / NATIVE RUN NEXT — 2026-07-17, Codex implementation owner** — 55 focused cases with three declared skips, 698 broad relay cases with ten declared skips, 285 release contracts with eight declared skips, typecheck, targeted/full lint, reliability/max-lines, formatting, diff, and resolver isolation pass. The remote 64 KiB .NET buffer, source 64 KiB worker buffer, every other transfer family, and all product/default behavior remain unchanged.<br>
 Primary design: [SSH relay GitHub Release plan](./2026-07-14-ssh-relay-github-release-plan.html)<br>
 Motivating issues: [#8450](https://github.com/stablyai/orca/issues/8450), [#1693](https://github.com/stablyai/orca/issues/1693)
 
@@ -20482,6 +20482,79 @@ config/scripts/ssh-relay-runtime-workflow.test.mjs` exits 0 with four files pass
   this diagnostic and require exact-head x64/ARM64 phase/progress, inactivity settlement, connection
   reuse, and exact fixture profile/directory teardown evidence before changing transfer behavior.
 
+### E-M6-WINDOWS-PHASE-STALL-DIAGNOSTIC-CI-RED-001 — both architectures stall on the first 64 KiB payload write
+
+- Date/owner/source/run: 2026-07-17, Codex implementation owner; exact diagnostic head
+  `ce4c7c481c790eacbf73162e5e03570fc2d3b490`, artifact run
+  [29563868935](https://github.com/stablyai/orca/actions/runs/29563868935), Windows x64 job
+  [87832001707](https://github.com/stablyai/orca/actions/runs/29563868935/job/87832001707), and
+  native ARM64 job
+  [87832001736](https://github.com/stablyai/orca/actions/runs/29563868935/job/87832001736). Both jobs
+  pass 101 artifact-contract files, 866 runnable cases, and 19 declared skips before live transfer;
+  all Linux, Darwin, and Linux oldest-userland jobs pass at the same head.
+- Pinned trust and phase evidence: x64 pinned trust passes in 948.0027 ms and ARM64 in 715.4503 ms.
+  Connection completes in 1,166/1,046 ms. Both serial transfers then report exactly two progress
+  states: 18 bytes with one active file, followed by one completed file and zero active files. No
+  further byte is accepted before each 60,000 ms inactivity abort. The x64 test finishes in 72,398
+  ms and ARM64 in 76,250 ms instead of reaching the 1,200,000 ms outer ceiling.
+- Exact retained boundary: the first 18-byte `.version` file succeeds. Both local cleanup attempts
+  then fail with `EBUSY` on the next lexicographic file, `THIRD_PARTY_LICENSES.txt`, while the fixture
+  owns `sshd-session.exe`, `cmd.exe`, `conhost.exe`, and `powershell.exe`. Both profile teardowns
+  correctly fail on locked `UsrClass.dat`. This independently selects the first borrowed 64 KiB
+  payload write after successful header/open as the shared stall; it is not connection, staging-root,
+  first-file, final EOF, validation, concurrency, collision, or cancellation behavior.
+- Plan correction: retain the source stream's one reusable 64 KiB buffer and its borrowed-buffer
+  lifetime, but permit the Windows destination to subdivide that borrowed view into smaller awaited
+  pipe writes. It must not resolve the source write until every subwrite settles, copy or retain the
+  source buffer, change the receiver's fixed 64 KiB .NET buffer, or affect POSIX/SFTP. The HTML plan,
+  detailed checklist, and short checklist record this evidence-driven clarification before code
+  changes.
+- Residual gate: implement and locally prove only that boundary, then require fresh exact-head x64/
+  ARM64 full-size serial/concurrent/collision/cancellation metrics, bounded memory, connection reuse,
+  and exact fixture profile/directory teardown. No product/default/Beta/fallback/tuple/publication or
+  signing behavior is authorized.
+
+### E-M6-WINDOWS-PIPE-SUBWRITE-LOCAL-001 — borrowed 64 KiB chunks use awaited 16 KiB Windows pipe views
+
+- Date/owner/base/runner: 2026-07-17, Codex implementation owner; uncommitted correction atop exact
+  diagnostic head `ce4c7c481c790eacbf73162e5e03570fc2d3b490` on Apple arm64, macOS 26.2 build
+  25C56, Node 26.5.0, and pnpm 10.24.0. The repository requests Node 24; native jobs remain
+  authoritative.
+- Implementation boundary: the Windows file destination alone subdivides each borrowed source view
+  into sequential subviews of at most 16,384 bytes and awaits each existing channel callback before
+  issuing the next. It does not copy the chunk, increment accepted payload size, or resolve the
+  source write until all subwrites settle. Header/completion framing, exact declared size, remote
+  fixed 64 KiB .NET buffer, source fixed 64 KiB worker buffer, cancellation owner, POSIX, SFTP, SSH
+  authentication/reuse, product/default, Beta, fallback, tuple, publication, and signing behavior
+  remain unchanged. The HTML and both Markdown checklists record the evidence-driven clarification.
+- Purpose/focused evidence: a new retained-callback oracle proves 16,384/16,384/3-byte sequential
+  subviews share the original payload `ArrayBuffer`, no later subwrite starts early, and the source
+  write resolves only after all three callbacks. `/usr/bin/time -l pnpm exec vitest run --config
+config/vitest.config.ts --maxWorkers=1
+src/main/ssh/ssh-relay-runtime-command-file-destination.test.ts
+src/main/ssh/ssh-relay-runtime-system-ssh-file-channel.test.ts
+src/main/ssh/ssh-relay-runtime-windows-file-destination.test.ts
+src/main/ssh/ssh-relay-runtime-windows-staging-control.test.ts
+src/main/ssh/ssh-relay-runtime-windows-tree-transfer.test.ts
+src/main/ssh/ssh-relay-runtime-windows-system-ssh-openssh-full-size.test.ts` exits 0 with four files
+  passed, one live file skipped, 55 runnable cases passed, and three declared skips in 4.56 seconds
+  real; maximum RSS is 153,255,936 bytes and peak footprint is 97,113,968 bytes.
+- Broad/release evidence: the exact broad relay command exits 0 with 53 files passed, six declared
+  skipped, 698 runnable cases passed, and ten declared skips in 25.87 seconds real; maximum RSS is
+  304,594,944 bytes and peak footprint is 98,162,448 bytes. The exact release-contract command exits
+  0 with 51 files, 285 runnable cases passed, and eight declared skips in 16.42 seconds real; maximum
+  RSS is 195,739,648 bytes and peak footprint is 98,834,264 bytes.
+- Static evidence: the first typecheck reports only an unused test mock parameter and no production
+  error. After naming that deliberate unused parameter, `/usr/bin/time -l pnpm typecheck` exits 0 in
+  2.78 seconds real with 1,239,203,840-byte maximum RSS and 98,178,880-byte peak footprint. Targeted
+  `oxlint` exits 0. `/usr/bin/time -l pnpm lint` exits 0 in 15.80 seconds real with the existing 26
+  warnings, all 41 reliability gates, and the 355-entry max-lines ratchet; maximum RSS is
+  2,080,964,608 bytes and peak footprint is 97,032,048 bytes.
+- Residual gate: local Darwin skips native PowerShell/OpenSSH. Commit/push only this package and
+  require exact-head x64/ARM64 serial/concurrent/collision/cancellation timing and memory, complete
+  byte/tree validation, connection reuse, and exact fixture profile/directory teardown before
+  advancing.
+
 ## Accepted Gaps
 
 No product gap is accepted merely because it appears in this list. Each entry requires explicit
@@ -20540,12 +20613,12 @@ The project is not complete until every applicable item below is checked with ev
 
 ## Next Required Action
 
-Commit and push only the 60-second phase/stall diagnostic recorded by
-`E-M6-WINDOWS-PHASE-STALL-DIAGNOSTIC-LOCAL-001`, then require exact-head Windows x64/ARM64 phase,
-progress, inactivity settlement, connection reuse, and exact profile/directory teardown evidence.
-Do not check the broad Milestone 6 Windows system-SSH item or add an Electron/startup/product
-importer, per-target mode wiring, fallback, tuple enablement, release publication, or default
-behavior.
+Commit and push only the Windows pipe-subwrite correction recorded by
+`E-M6-WINDOWS-PIPE-SUBWRITE-LOCAL-001`, then require exact-head Windows x64/ARM64 full-size
+serial/concurrent/collision/cancellation metrics, bounded memory, connection reuse, and exact
+profile/directory teardown evidence. Do not check the broad Milestone 6 Windows system-SSH item or
+add an Electron/startup/product importer, per-target mode wiring, fallback, tuple enablement, release
+publication, or default behavior.
 Keep Node upstream `.tar.xz` inputs, Windows ZIP, `ORCA_RELAY_PATH`, existing desktop required-assets
 behavior, detached-signature byte encoding, Windows arm64 build 26100, macOS 13.5, Linux kernel 4.18,
 release-cut, desktop builds, publication, and every tuple separately gated.

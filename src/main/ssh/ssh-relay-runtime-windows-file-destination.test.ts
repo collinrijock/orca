@@ -113,8 +113,49 @@ describe('SSH relay runtime Windows system-SSH file destination', () => {
     const destination = await opening
     await destination.write(Buffer.alloc(65_537, 7))
     const closing = destination.close()
+    await vi.waitFor(() => expect(channel.write).toHaveBeenCalledTimes(7))
+    expect(channel.write.mock.calls[6]?.[0]).toEqual(completionFrame)
+    resolve()
+    await closing
+  })
+
+  it('subdivides a borrowed source chunk into sequential zero-copy pipe writes', async () => {
+    const { channel, resolve } = createChannel()
+    const callbacks: Callback[] = []
+    channel.write.mockImplementation((_chunk, callback) => {
+      if (channel.write.mock.calls.length === 1) {
+        callback()
+        return
+      }
+      callbacks.push(callback)
+    })
+    const maximum = SSH_RELAY_RUNTIME_WINDOWS_FILE_DESTINATION_LIMITS.maximumPipeWriteBytes
+    const payload = Buffer.alloc(maximum * 2 + 3, 9)
+    const destination = await openDestination(channel, { expectedSize: payload.length })
+    let settled = false
+    const writing = destination.write(payload).then(() => {
+      settled = true
+    })
+
+    await vi.waitFor(() => expect(channel.write).toHaveBeenCalledTimes(2))
+    expect(channel.write.mock.calls[1]?.[0]).toHaveLength(maximum)
+    expect(channel.write.mock.calls[1]?.[0].buffer).toBe(payload.buffer)
+    callbacks.shift()?.()
     await vi.waitFor(() => expect(channel.write).toHaveBeenCalledTimes(3))
-    expect(channel.write.mock.calls[2]?.[0]).toEqual(completionFrame)
+    expect(settled).toBe(false)
+    expect(channel.write.mock.calls[2]?.[0]).toHaveLength(maximum)
+    expect(channel.write.mock.calls[2]?.[0].buffer).toBe(payload.buffer)
+    callbacks.shift()?.()
+    await vi.waitFor(() => expect(channel.write).toHaveBeenCalledTimes(4))
+    expect(settled).toBe(false)
+    expect(channel.write.mock.calls[3]?.[0]).toHaveLength(3)
+    expect(channel.write.mock.calls[3]?.[0].buffer).toBe(payload.buffer)
+    callbacks.shift()?.()
+    await writing
+    expect(settled).toBe(true)
+    const closing = destination.close()
+    await vi.waitFor(() => expect(channel.write).toHaveBeenCalledTimes(5))
+    callbacks.shift()?.()
     resolve()
     await closing
   })
