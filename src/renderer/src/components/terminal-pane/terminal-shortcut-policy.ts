@@ -48,10 +48,24 @@ export type TerminalShortcutAction =
   | { type: 'sendInput'; data: string }
   | { type: 'switchInputSource' }
 
+/**
+ * Physical-key identity for pairing a native-only keydown with its keypress/keyup.
+ * Why: Chromium keypress can omit `code` and report only `key: " "`; normalize so
+ * keydown (`code: "Space"`) still matches the companion events.
+ */
 export function getTerminalShortcutKeyIdentity(
   event: Pick<TerminalShortcutEvent, 'key' | 'code'>
 ): string {
-  return event.code || event.key
+  const code = event.code?.trim()
+  if (code) {
+    return code
+  }
+  // Why: Space is the reported input-source chord; bare " " must not diverge
+  // from code-based identities used on keydown.
+  if (event.key === ' ' || event.key === 'Spacebar' || event.key === 'Space') {
+    return 'Space'
+  }
+  return event.key
 }
 
 export function consumeNativeOnlyTerminalShortcutCompanion(
@@ -61,12 +75,31 @@ export function consumeNativeOnlyTerminalShortcutCompanion(
   if (event.type !== 'keypress' && event.type !== 'keyup') {
     return false
   }
-  const identity = getTerminalShortcutKeyIdentity(event)
-  if (!pendingKeys.has(identity)) {
+  // Why: match either normalized identity so keypress without `code` still
+  // pairs with a keydown that used `code: "Space"`.
+  const candidates = new Set<string>([getTerminalShortcutKeyIdentity(event)])
+  if (event.code?.trim()) {
+    candidates.add(event.code.trim())
+  }
+  if (event.key === ' ' || event.key === 'Spacebar' || event.key === 'Space') {
+    candidates.add('Space')
+  }
+  let matched: string | null = null
+  for (const candidate of candidates) {
+    if (pendingKeys.has(candidate)) {
+      matched = candidate
+      break
+    }
+  }
+  if (!matched) {
     return false
   }
   if (event.type === 'keyup') {
-    pendingKeys.delete(identity)
+    pendingKeys.delete(matched)
+    // Why: drop any alias forms for the same physical key after release.
+    for (const candidate of candidates) {
+      pendingKeys.delete(candidate)
+    }
   }
   return true
 }

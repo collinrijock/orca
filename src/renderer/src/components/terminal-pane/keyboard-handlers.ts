@@ -306,7 +306,9 @@ export function useTerminalKeyboardShortcuts({
 
     const onKeyDown = (e: KeyboardEvent): void => {
       const shortcutKeyIdentity = getTerminalShortcutKeyIdentity(e)
-      pendingNativeOnlyShortcutKeys.delete(shortcutKeyIdentity)
+      // Why: companions only attach to the latest native-only chord; clear so a
+      // lost keyup (blur/focus steal) cannot suppress later Space text forever.
+      pendingNativeOnlyShortcutKeys.clear()
       const manager = managerRef.current
       if (!manager) {
         return
@@ -633,17 +635,38 @@ export function useTerminalKeyboardShortcuts({
       }
     }
 
+    // Why: modern Chromium can insert via beforeinput even when keydown is not
+    // preventDefault-ed; block insertText only while a native-only chord is live.
+    const onNativeOnlyBeforeInput = (e: Event): void => {
+      if (pendingNativeOnlyShortcutKeys.size === 0) {
+        return
+      }
+      if (!(e instanceof InputEvent) || e.inputType !== 'insertText') {
+        return
+      }
+      e.preventDefault()
+      e.stopImmediatePropagation()
+    }
+
+    const onNativeOnlyBlur = (): void => {
+      pendingNativeOnlyShortcutKeys.clear()
+    }
+
     window.addEventListener('keydown', onModifierDown, { capture: true })
     window.addEventListener('keyup', onModifierUp, { capture: true })
     window.addEventListener('keydown', onKeyDown, { capture: true })
     window.addEventListener('keypress', onNativeOnlyShortcutCompanion, { capture: true })
     window.addEventListener('keyup', onNativeOnlyShortcutCompanion, { capture: true })
+    window.addEventListener('beforeinput', onNativeOnlyBeforeInput, { capture: true })
+    window.addEventListener('blur', onNativeOnlyBlur)
     return () => {
       window.removeEventListener('keydown', onModifierDown, { capture: true })
       window.removeEventListener('keyup', onModifierUp, { capture: true })
       window.removeEventListener('keydown', onKeyDown, { capture: true })
       window.removeEventListener('keypress', onNativeOnlyShortcutCompanion, { capture: true })
       window.removeEventListener('keyup', onNativeOnlyShortcutCompanion, { capture: true })
+      window.removeEventListener('beforeinput', onNativeOnlyBeforeInput, { capture: true })
+      window.removeEventListener('blur', onNativeOnlyBlur)
     }
   }, [
     isActive,
