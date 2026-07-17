@@ -45,12 +45,14 @@ export function saveDefaultSessionView(view: MobileSessionView): Promise<void> {
   return write
 }
 
-type SessionViewOverridesRead = {
+export type SessionViewOverridesPreference = {
   overrides: Map<string, MobileSessionView>
   loaded: boolean
 }
 
-async function readSessionViewOverrides(key: string): Promise<SessionViewOverridesRead> {
+async function readSessionViewOverridesStorage(
+  key: string
+): Promise<SessionViewOverridesPreference> {
   let raw: string | null
   try {
     raw = await AsyncStorage.getItem(key)
@@ -95,9 +97,17 @@ export async function loadSessionViewOverrides(
   hostId: string,
   worktreeId: string
 ): Promise<Map<string, MobileSessionView>> {
+  return (await readSessionViewOverridesPreference(hostId, worktreeId)).overrides
+}
+
+/** Reads overrides without conflating an empty preference with unavailable storage. */
+export async function readSessionViewOverridesPreference(
+  hostId: string,
+  worktreeId: string
+): Promise<SessionViewOverridesPreference> {
   const key = sessionViewOverridesKey(hostId, worktreeId)
   await overrideUpdateBarriers.get(key)
-  return (await readSessionViewOverrides(key)).overrides
+  return readSessionViewOverridesStorage(key)
 }
 
 /** Persists one user mutation without replacing sibling overrides from another mount. */
@@ -110,7 +120,7 @@ export async function updateSessionViewOverride(
   const key = sessionViewOverridesKey(hostId, worktreeId)
   const previous = overrideUpdateBarriers.get(key) ?? Promise.resolve()
   const update = previous.then(async () => {
-    const current = await readSessionViewOverrides(key)
+    const current = await readSessionViewOverridesStorage(key)
     // Why: a transient read failure must not replace valid saved siblings with
     // a partial map containing only the latest tab.
     if (!current.loaded) {

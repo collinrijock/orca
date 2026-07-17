@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   loadDefaultSessionView,
   loadSessionViewOverrides,
+  readSessionViewOverridesPreference,
   updateSessionViewOverride,
   type MobileSessionView
 } from '../storage/session-view-preferences'
@@ -44,6 +45,7 @@ vi.mock('expo-router', async () => {
 vi.mock('../storage/session-view-preferences', () => ({
   loadDefaultSessionView: vi.fn(),
   loadSessionViewOverrides: vi.fn(),
+  readSessionViewOverridesPreference: vi.fn(),
   updateSessionViewOverride: vi.fn()
 }))
 
@@ -55,6 +57,9 @@ describe('useMobileSessionViewMode', () => {
     globalThis.IS_REACT_ACT_ENVIRONMENT = true
     vi.mocked(loadDefaultSessionView).mockReset().mockResolvedValue('terminal')
     vi.mocked(loadSessionViewOverrides).mockReset().mockResolvedValue(new Map())
+    vi.mocked(readSessionViewOverridesPreference)
+      .mockReset()
+      .mockResolvedValue({ overrides: new Map(), loaded: true })
     vi.mocked(updateSessionViewOverride).mockReset().mockResolvedValue(undefined)
     focusEffectRuntime.callback = null
   })
@@ -70,7 +75,10 @@ describe('useMobileSessionViewMode', () => {
     overrides?: Map<string, MobileSessionView>
   }): Promise<void> {
     vi.mocked(loadDefaultSessionView).mockResolvedValue(args.defaultView)
-    vi.mocked(loadSessionViewOverrides).mockResolvedValue(args.overrides ?? new Map())
+    vi.mocked(readSessionViewOverridesPreference).mockResolvedValue({
+      overrides: args.overrides ?? new Map(),
+      loaded: true
+    })
     function Harness(): null {
       controller = useMobileSessionViewMode({ hostId: 'h', worktreeId: 'w' })
       return null
@@ -124,7 +132,7 @@ describe('useMobileSessionViewMode', () => {
 
     expect(updateSessionViewOverride).toHaveBeenLastCalledWith('h', 'w', 't1', 'terminal')
     expect(controller?.isTabChatView('t1')).toBe(false)
-    expect(loadSessionViewOverrides).toHaveBeenCalledTimes(1)
+    expect(readSessionViewOverridesPreference).toHaveBeenCalledTimes(1)
   })
 
   it('toggles a terminal-default tab into chat', async () => {
@@ -141,10 +149,13 @@ describe('useMobileSessionViewMode', () => {
 
   it('does not expose overrides from the previous host while the next scope loads', async () => {
     const nextScopeLoad = deferred<Map<string, MobileSessionView>>()
-    vi.mocked(loadSessionViewOverrides).mockImplementation((hostId) =>
+    vi.mocked(readSessionViewOverridesPreference).mockImplementation((hostId) =>
       hostId === 'h1'
-        ? Promise.resolve(new Map([['same-tab-id', 'chat' as const]]))
-        : nextScopeLoad.promise
+        ? Promise.resolve({
+            overrides: new Map([['same-tab-id', 'chat' as const]]),
+            loaded: true
+          })
+        : nextScopeLoad.promise.then((overrides) => ({ overrides, loaded: true }))
     )
     function Harness(props: { hostId: string; worktreeId: string }): null {
       controller = useMobileSessionViewMode(props)
@@ -171,7 +182,9 @@ describe('useMobileSessionViewMode', () => {
 
   it('merges a toggle made during load with the other persisted overrides', async () => {
     const overridesLoad = deferred<Map<string, MobileSessionView>>()
-    vi.mocked(loadSessionViewOverrides).mockReturnValue(overridesLoad.promise)
+    vi.mocked(readSessionViewOverridesPreference).mockReturnValue(
+      overridesLoad.promise.then((overrides) => ({ overrides, loaded: true }))
+    )
     function Harness(): null {
       controller = useMobileSessionViewMode({ hostId: 'h', worktreeId: 'w' })
       return null
@@ -218,7 +231,8 @@ describe('useMobileSessionViewMode', () => {
     })
 
     expect(controller?.isTabChatView('t1')).toBe(false)
-    expect(loadSessionViewOverrides).toHaveBeenCalledTimes(2)
+    expect(readSessionViewOverridesPreference).toHaveBeenCalledTimes(1)
+    expect(loadSessionViewOverrides).toHaveBeenCalledTimes(1)
   })
 
   it('does not let an older failed override roll back a newer choice', async () => {
@@ -247,7 +261,9 @@ describe('useMobileSessionViewMode', () => {
 
   it('finishes an early toggle save after the route unmounts', async () => {
     const overridesLoad = deferred<Map<string, MobileSessionView>>()
-    vi.mocked(loadSessionViewOverrides).mockReturnValue(overridesLoad.promise)
+    vi.mocked(readSessionViewOverridesPreference).mockReturnValue(
+      overridesLoad.promise.then((overrides) => ({ overrides, loaded: true }))
+    )
     function Harness(): null {
       controller = useMobileSessionViewMode({ hostId: 'h', worktreeId: 'w' })
       return null
@@ -283,6 +299,27 @@ describe('useMobileSessionViewMode', () => {
       await Promise.resolve()
     })
 
-    expect(loadSessionViewOverrides).toHaveBeenCalledTimes(1)
+    expect(readSessionViewOverridesPreference).toHaveBeenCalledTimes(1)
+    expect(loadSessionViewOverrides).not.toHaveBeenCalled()
+  })
+
+  it('fails closed to terminal when overrides cannot be read under a chat default', async () => {
+    vi.mocked(loadDefaultSessionView).mockResolvedValue('chat')
+    vi.mocked(readSessionViewOverridesPreference).mockResolvedValue({
+      overrides: new Map(),
+      loaded: false
+    })
+
+    function Harness(): null {
+      controller = useMobileSessionViewMode({ hostId: 'h', worktreeId: 'w' })
+      return null
+    }
+    await act(async () => {
+      renderer = create(createElement(Harness))
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    expect(controller?.isTabChatView('t1')).toBe(false)
   })
 })

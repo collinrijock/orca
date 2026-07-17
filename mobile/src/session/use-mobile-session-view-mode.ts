@@ -3,8 +3,10 @@ import { useFocusEffect } from 'expo-router'
 import {
   loadDefaultSessionView,
   loadSessionViewOverrides,
+  readSessionViewOverridesPreference,
   updateSessionViewOverride,
-  type MobileSessionView
+  type MobileSessionView,
+  type SessionViewOverridesPreference
 } from '../storage/session-view-preferences'
 
 type ViewOverridesState = {
@@ -17,7 +19,7 @@ type ViewOverridesState = {
 type ViewOverridesRuntime = {
   hostId: string
   worktreeId: string
-  loadPromise: Promise<Map<string, MobileSessionView>>
+  loadPromise: Promise<SessionViewOverridesPreference>
   currentOverrides: Map<string, MobileSessionView>
   mutationRevisions: Map<string, number>
 }
@@ -75,7 +77,7 @@ export function useMobileSessionViewMode(args: {
     const next: ViewOverridesRuntime = {
       hostId: scopeHostId,
       worktreeId: scopeWorktreeId,
-      loadPromise: loadSessionViewOverrides(scopeHostId, scopeWorktreeId),
+      loadPromise: readSessionViewOverridesPreference(scopeHostId, scopeWorktreeId),
       currentOverrides: new Map(),
       mutationRevisions: new Map()
     }
@@ -91,15 +93,17 @@ export function useMobileSessionViewMode(args: {
   useEffect(() => {
     let active = true
     const runtime = ensureViewOverridesRuntime(hostId, worktreeId)
-    void runtime.loadPromise.then((persisted) => {
+    void runtime.loadPromise.then((preference) => {
       if (!active) {
         return
       }
       // Why: toggles made during the read are authoritative, but must not
       // discard unrelated persisted overrides from the same worktree.
-      const merged = mergeOverrides(persisted, runtime.currentOverrides)
+      const merged = mergeOverrides(preference.overrides, runtime.currentOverrides)
       runtime.currentOverrides = merged
-      const next = { hostId, worktreeId, overrides: merged, loaded: true }
+      // Why: an unreadable override store cannot safely be treated as empty when
+      // the default is chat; fail closed to terminal until a user toggles.
+      const next = { hostId, worktreeId, overrides: merged, loaded: preference.loaded }
       viewOverridesStateRef.current = next
       setViewOverridesState(next)
     })

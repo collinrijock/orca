@@ -24,6 +24,7 @@ import {
 import {
   loadDefaultSessionView,
   loadSessionViewOverrides,
+  readSessionViewOverridesPreference,
   saveDefaultSessionView,
   updateSessionViewOverride
 } from './session-view-preferences'
@@ -212,6 +213,11 @@ describe('session view preference', () => {
 
   it('does not replace saved overrides after a transient read failure', async () => {
     vi.mocked(AsyncStorage.getItem).mockRejectedValue(new Error('storage unavailable'))
+
+    await expect(readSessionViewOverridesPreference('host', 'worktree')).resolves.toEqual({
+      overrides: new Map(),
+      loaded: false
+    })
 
     await expect(updateSessionViewOverride('host', 'worktree', 'tab', 'chat')).rejects.toThrow(
       'Session view overrides could not be read'
