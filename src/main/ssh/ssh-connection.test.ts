@@ -1214,12 +1214,20 @@ describe('SshConnection', () => {
     const conn = new SshConnection(createTarget({ configHost: 'fdpass-host' }), createCallbacks())
 
     try {
-      const connect = expect(conn.connect()).rejects.toThrow('System SSH connection timed out')
+      const connect = expect(conn.connect()).rejects.toThrow(
+        'System SSH connection timed out (sentinel=true, stdoutEnded=true, processExit=0, channelClosed=false)'
+      )
+      await vi.advanceTimersByTimeAsync(0)
+      channel.emit('data', Buffer.from('ORCA-SYSTEM-SSH-OK\r\n'))
+      channel.emit('end')
+      channel.emit('exit', 0)
       await vi.advanceTimersByTimeAsync(30_000)
 
       await connect
       expect(channel.close).toHaveBeenCalled()
       expect(channel.listenerCount('data')).toBe(0)
+      expect(channel.listenerCount('end')).toBe(0)
+      expect(channel.listenerCount('exit')).toBe(0)
       expect(channel.listenerCount('error')).toBe(1)
       expect(channel.listenerCount('close')).toBe(1)
       expect(channel.stderr.listenerCount('data')).toBe(0)

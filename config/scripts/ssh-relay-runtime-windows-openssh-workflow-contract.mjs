@@ -74,6 +74,13 @@ export function assertWindowsOpenSshWorkflow(workflow, expect) {
   expect(stop.run).not.toContain('service-backup.json')
   expect(stop.run).not.toContain('sc.exe config')
   expect(stop.run).toContain('sc.exe delete')
+  expect(stop.run).toContain('Get-FixtureOwnedProcesses $fixtureSid')
+  expect(stop.run).toContain('$owner.Sid -eq $fixtureSid')
+  expect(stop.run).toContain('-MethodName Terminate')
+  expect(stop.run).toContain('Fixture account processes did not settle within 10 seconds')
+  expect(stop.run.indexOf('Stop-FixtureOwnedProcesses $userSid')).toBeLessThan(
+    stop.run.indexOf('Dismount-FixtureRegistryHive "${userSid}_Classes"')
+  )
   expect(stop.run).toContain('Dismount-FixtureRegistryHive "${userSid}_Classes"')
   expect(stop.run).toContain('Dismount-FixtureRegistryHive $userSid')
   expect(stop.run).toContain("Join-Path $env:SystemRoot 'System32/reg.exe'")

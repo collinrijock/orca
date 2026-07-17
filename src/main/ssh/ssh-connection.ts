@@ -702,9 +702,14 @@ export class SshConnection {
         let stdout = ''
         let stderr = ''
         let settled = false
+        let sentinelObserved = false
+        let stdoutEnded = false
+        let processExit: number | null | 'not-observed' = 'not-observed'
         const cleanup = (): void => {
           clearTimeout(timeout)
           channel.off('data', onStdoutData)
+          channel.off('end', onStdoutEnd)
+          channel.off('exit', onProcessExit)
           channel.stderr.off('data', onStderrData)
           channel.off('error', onError)
           channel.off('close', onClose)
@@ -720,6 +725,13 @@ export class SshConnection {
         }
         const onStdoutData = (data: Buffer): void => {
           stdout += data.toString('utf-8')
+          sentinelObserved = stdout.includes('ORCA-SYSTEM-SSH-OK')
+        }
+        const onStdoutEnd = (): void => {
+          stdoutEnded = true
+        }
+        const onProcessExit = (code: number | null): void => {
+          processExit = code
         }
         const onStderrData = (data: Buffer): void => {
           stderr += data.toString('utf-8')
@@ -748,11 +760,19 @@ export class SshConnection {
         const timeout = setTimeout(() => {
           settle(() => {
             channel.close()
-            reject(new Error('System SSH connection timed out'))
+            // Why: native Windows can separate process exit from inherited
+            // stdio closure; these booleans diagnose that boundary safely.
+            reject(
+              new Error(
+                `System SSH connection timed out (sentinel=${sentinelObserved}, stdoutEnded=${stdoutEnded}, processExit=${processExit}, channelClosed=false)`
+              )
+            )
           })
         }, CONNECT_TIMEOUT_MS)
 
         channel.on('data', onStdoutData)
+        channel.on('end', onStdoutEnd)
+        channel.on('exit', onProcessExit)
         channel.stderr.on('data', onStderrData)
         channel.on('error', onError)
         channel.on('close', onClose)

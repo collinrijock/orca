@@ -1697,6 +1697,36 @@ jobs:
           if (Test-Path -LiteralPath $log) { Get-Content -LiteralPath $log -Tail 200 }
           try {
             if ($ownsAccount -and $userSid) {
+              function Get-FixtureOwnedProcesses([string]$fixtureSid) {
+                return @(
+                  Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | ForEach-Object {
+                    $owner = Invoke-CimMethod -InputObject $_ -MethodName GetOwnerSid `
+                      -ErrorAction SilentlyContinue
+                    if ($owner.Sid -eq $fixtureSid) { $_ }
+                  }
+                )
+              }
+              function Stop-FixtureOwnedProcesses([string]$fixtureSid) {
+                for ($attempt = 1; $attempt -le 20; $attempt += 1) {
+                  $ownedProcesses = @(Get-FixtureOwnedProcesses $fixtureSid)
+                  if ($ownedProcesses.Count -eq 0) { return }
+                  foreach ($ownedProcess in $ownedProcesses) {
+                    Write-Output "fixture_owned_process=$($ownedProcess.Name):$($ownedProcess.ProcessId)"
+                    try {
+                      [void](Invoke-CimMethod -InputObject $ownedProcess -MethodName Terminate `
+                        -ErrorAction Stop)
+                    } catch {
+                      # The bounded ownership recheck handles processes that exit during termination.
+                    }
+                  }
+                  Start-Sleep -Milliseconds 500
+                }
+                $remaining = @(Get-FixtureOwnedProcesses $fixtureSid)
+                if ($remaining.Count -gt 0) {
+                  $identities = $remaining | ForEach-Object { "$($_.Name):$($_.ProcessId)" }
+                  throw "Fixture account processes did not settle within 10 seconds: $($identities -join ',')"
+                }
+              }
               function Dismount-FixtureRegistryHive([string]$hiveName) {
                 $registryPath = "Registry::HKEY_USERS\$hiveName"
                 if (-not (Test-Path -LiteralPath $registryPath)) { return }
@@ -1718,6 +1748,9 @@ jobs:
                   $process.Dispose()
                 }
               }
+              # Why: sshd's service process can exit before a fixture-user
+              # session descendant releases the profile registry handles.
+              Stop-FixtureOwnedProcesses $userSid
               $escapedSid = $userSid.Replace("'", "''")
               $profileFailure = $null
               for ($attempt = 1; $attempt -le 20; $attempt += 1) {

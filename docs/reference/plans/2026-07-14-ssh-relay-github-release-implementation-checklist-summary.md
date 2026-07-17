@@ -86,8 +86,26 @@ fixture SID's `_Classes` and primary hives before retrying native profile deleti
 workflow oracle is split by concrete domain responsibility without a max-lines bypass. Focused
 tests pass 115 cases with one declared native skip, all three PowerShell blocks parse, 283/283
 artifact contracts pass, typecheck and full lint/reliability/max-lines pass, formatting/diff are
-clean, and the protected resolver files remain unchanged. Commit/push this isolated package and
-require fresh native x64/arm64 proof before advancing.
+clean, and the protected resolver files remain unchanged. Exact head
+`8ae6dcf6450b5f081788357dd8fe776293fb0cfe` is pushed; artifact run `29543292239` is in progress
+with native x64 job `87769913124` and ARM64 job `87769913148` assigned. Fresh service/auth/
+full-size/cancellation/collision/reuse/teardown proof remains required before advancing.
+X64 job `87769913124` is RED after preserving every earlier gate and starting official OpenSSH:
+the probe still reports `System SSH connection timed out` after 31.337 seconds despite `-n`.
+Teardown proves the owned `_Classes` hive exists but `reg.exe unload` returns exit 1, then catches
+the same locked `UsrClass.dat`. Record native process exit/stdout-end/sentinel/channel-close state
+and settle fixture-user session processes before the hive loop. ARM64 job `87769913148`
+independently reproduces the same boundary: probe timeout after 31.06 seconds, `_Classes` unload
+exit 1, locked `UsrClass.dat`, and retained profile directory. Do not advance the milestone on
+this result.
+`E-M6-WINDOWS-SYSTEM-SSH-TREE-LIFECYCLE-DIAGNOSTIC-LOCAL-001` is locally green: timeout errors
+record only sentinel/stdout-end/process-exit/channel-close state, and fixture teardown enumerates
+and boundedly terminates only processes whose native owner SID exactly matches the account created
+by the fixture before attempting hive unload. Focused tests pass 115 cases with one native skip,
+all three PowerShell blocks parse, 283/283 artifact contracts pass, typecheck and full
+lint/reliability/max-lines pass, formatting/diff are clean, and protected resolvers are unchanged.
+Commit/push and require fresh x64/arm64 lifecycle evidence; do not treat this local oracle as native
+proof.
 `E-M6-WINDOWS-SYSTEM-SSH-TREE-LIVE-AUDIT-001` fixes the loopback-only official Microsoft
 server, fixture-owned non-admin account/ACL, exact host-key trust, Windows PowerShell 5.1,
 serial/default and four-channel metrics, cancellation/collision/cleanup, and deterministic teardown

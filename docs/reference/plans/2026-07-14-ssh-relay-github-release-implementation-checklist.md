@@ -9,7 +9,7 @@ work; keep exact commands, runner identities, hashes, metrics, and residual gaps
 Date created: 2026-07-14<br>
 Last updated: 2026-07-15<br>
 Current phase: Milestone 6 / Work Package 5 bounded runtime transfer — **In progress — 2026-07-15, Codex implementation owner: exact-head Windows OpenSSH live-proof diagnosis and fixture correction**. Keep every capability disconnected from every production/default SSH path. Real Apple/SignPath rehearsals remain an explicit late gate and are not on this package's critical path.<br>
-Session checkpoint: **WINDOWS NATIVE NO-INPUT/PROFILE-HIVE CORRECTION LOCALLY GREEN / EXACT-HEAD PROOF NEXT — 2026-07-15, Codex implementation owner** — exact head `b652c1ebcce3803443d84c89811146366cdbdd5b`, artifact run `29542292712`, x64 job `87766845800`, and ARM64 job `87766845741` preserve all prior artifact/build/cache/hash/closure/signer gates and independently expose the same native probe/profile gaps. `E-M6-WINDOWS-SYSTEM-SSH-TREE-LIVE-NOINPUT-PROFILE-CORRECTION-LOCAL-001` adds probe-only OpenSSH `-n` before `--` while retaining connection reuse and excluding `-n` from ordinary commands; boundedly unloads only the fixture-owned SID's `_Classes` and primary hives before retrying native profile deletion; retains exact teardown assertions; and splits the Windows workflow oracle by concrete domain responsibility without a max-lines bypass. Focused tests, all three PowerShell parses, 283 artifact contracts, typecheck, full lint/reliability/max-lines, formatting, diff, and protected-resolver isolation pass locally. Commit/push this isolated package and require fresh x64/arm64 proof. Production runtime bytes still cross authenticated SSH and no product remote downloads anything. Do not connect a product caller, change legacy upload/fallback/default behavior, enable a tuple, publish an artifact, or perform SignPath work. Merging to `main` remains prohibited, SignPath is deferred, and legacy remains the production default.<br>
+Session checkpoint: **WINDOWS NATIVE PROCESS/SESSION LIFECYCLE DIAGNOSTIC LOCALLY GREEN / EXACT-HEAD PROOF NEXT — 2026-07-15, Codex implementation owner** — exact head `b652c1ebcce3803443d84c89811146366cdbdd5b`, artifact run `29542292712`, x64 job `87766845800`, and ARM64 job `87766845741` preserve all prior artifact/build/cache/hash/closure/signer gates and independently expose the same native probe/profile gaps. Exact corrected head `8ae6dcf6450b5f081788357dd8fe776293fb0cfe`, run `29543292239`, x64 job `87769913124`, and ARM64 job `87769913148` remain RED: official OpenSSH starts, but probes still time out after 31.337/31.06 seconds and both fixture `_Classes` hive unloads return exit 1 before exact `UsrClass.dat`/directory failures. Win32 has no Orca control socket, so this is not an Orca ControlMaster retry path. `E-M6-WINDOWS-SYSTEM-SSH-TREE-LIFECYCLE-DIAGNOSTIC-LOCAL-001` adds non-sensitive sentinel/stdout-end/process-exit/channel-close timeout evidence and bounded exact-fixture-SID process settlement before hive removal; focused, PowerShell parse, 283-contract, typecheck, full lint/reliability/max-lines, formatting, diff, and protected-resolver gates pass locally. Commit/push and require fresh x64/arm64 lifecycle evidence. Do not advance Milestone 6. Production runtime bytes still cross authenticated SSH and no product remote downloads anything. Do not connect a product caller, change legacy upload/fallback/default behavior, enable a tuple, publish an artifact, or perform SignPath work. Merging to `main` remains prohibited, SignPath is deferred, and legacy remains the production default.<br>
 Primary design: [SSH relay GitHub Release plan](./2026-07-14-ssh-relay-github-release-plan.html)<br>
 Motivating issues: [#8450](https://github.com/stablyai/orca/issues/8450), [#1693](https://github.com/stablyai/orca/issues/1693)
 
@@ -19170,6 +19170,80 @@ config/scripts/ssh-relay-runtime-*.test.mjs` passes 50 files and 283/283 cases i
   Commit/push this isolated correction and require fresh exact-head x64/arm64 proof before closing
   the live Windows gate. Legacy remains the sole production/default path; SignPath and product
   caller/Beta/settings/fallback/tuple/publication work remain deferred.
+
+### E-M6-WINDOWS-SYSTEM-SSH-TREE-LIVE-NOINPUT-LIFECYCLE-RED-001 — native no-input option alone does not settle x64 probe or owned profile
+
+- Date/owner/head/run: 2026-07-15, Codex implementation owner; exact pushed head
+  `8ae6dcf6450b5f081788357dd8fe776293fb0cfe`, artifact run `29543292239`, native x64 job
+  `87769913124` (`windows-2022`, Windows Server 2022) and native ARM64 job `87769913148`
+  (`windows-11-arm`).
+- Preserved evidence: 100 files / 854 tests pass with 18 declared skips in the native contract
+  suite; exact build identity/smoke, full-size client cache, portable archive/library hashes and
+  signer closure, exact fixture ACLs, official OpenSSH 10.0p2 startup, authentication, and
+  PowerShell 5.1 all pass before the live transfer suite.
+- Probe RED: the exact full-size test fails after 31.337 seconds with
+  `System SSH connection timed out`; total Vitest duration is 32.28 seconds. Probe-only `-n` did
+  not establish child/channel settlement. `getControlSocketPath()` deliberately returns null on
+  win32, so Orca does not inject ControlMaster/ControlPersist for this client and disabling reuse
+  would not diagnose this failure.
+- Teardown RED: the owned fixture SID is
+  `S-1-5-21-4137868374-391603265-4009536220-1003`; bounded `reg.exe unload` sees its `_Classes`
+  hive but returns exit 1 throughout the ten-second retry. Exact filesystem deletion then identifies
+  `C:\Users\orca_ssh_fixture\AppData\Local\Microsoft\Windows\UsrClass.dat` as in use and the
+  profile directory remains. The service PID settlement check alone is insufficient evidence that
+  every fixture-user `sshd-session.exe` or descendant has exited.
+- ARM64 independent RED: official OpenSSH startup passes, then the exact full-size test times out
+  after 31.06 seconds with the same probe error. Its fixture SID
+  `S-1-5-21-1882319117-3219095328-2125279949-1001` has the same `_Classes` unload exit 1,
+  `UsrClass.dat` lock, and retained profile directory. The lifecycle gap is therefore shared by
+  both native Windows architectures.
+- Correction gate: first add bounded, non-sensitive lifecycle evidence for native process exit,
+  stdout end, sentinel observation, and channel close. Before hive unload, enumerate and boundedly
+  settle only processes owned by the fixture account SID, retaining exact service/account/profile/
+  directory absence assertions. Update the workflow oracle, parse all PowerShell blocks, rerun the
+  focused/283/static/format/isolation gates, then require fresh x64/arm64 proof. Legacy remains the
+  sole production/default path and SignPath remains deferred.
+
+### E-M6-WINDOWS-SYSTEM-SSH-TREE-LIFECYCLE-DIAGNOSTIC-LOCAL-001 — native probe state and exact-SID session settlement are locally green
+
+- Date/owner/base/runner: 2026-07-15, Codex implementation owner; uncommitted diagnostic package
+  atop exact RED head `8ae6dcf6450b5f081788357dd8fe776293fb0cfe` on Apple arm64, macOS 26.2
+  build 25C56, Node 26.5.0, pnpm 10.24.0. Native Windows execution remains required.
+- Probe evidence: the existing fail-closed 30-second timeout now reports whether the structured
+  sentinel was observed, stdout ended, the native child emitted an exit code, and the channel close
+  remained absent. The fields are booleans/an exit code only and expose no target, identity, path,
+  command, or credential. The focused test proves exact values and listener cleanup without changing
+  the success condition or legacy/default behavior.
+- Fixture correction: after service PID settlement and before registry/profile removal, teardown
+  enumerates `Win32_Process`, calls native `GetOwnerSid`, and acts only when the result exactly
+  equals the SID of the fixture-created account. Termination and ownership rechecks are bounded to
+  twenty 500ms attempts; remaining process names/PIDs cause failure. `_Classes`/primary hive unload,
+  native profile deletion, account deletion, filesystem deletion, and exact absence assertions all
+  remain mandatory.
+- Focused command: `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts
+--maxWorkers=1 src/main/ssh/ssh-connection.test.ts src/main/ssh/ssh-system-fallback.test.ts
+src/main/ssh/ssh-relay-runtime-windows-system-ssh-openssh-full-size.test.ts
+config/scripts/ssh-relay-runtime-workflow.test.mjs` passes 3 files plus one declared native skip,
+  115 passed tests plus one skip, in 4.34 seconds real; maximum RSS is 166,199,296 bytes and peak
+  footprint is 98,408,208 bytes. Independent YAML extraction plus PowerShell
+  `[scriptblock]::Create()` parses all three start/measure/stop blocks.
+- Release-contract command: `/usr/bin/time -l pnpm exec vitest run --config
+config/vitest.config.ts --maxWorkers=1 --reporter=dot
+config/scripts/ssh-relay-runtime-*.test.mjs` passes 50 files and 283/283 cases in 24.94 seconds
+  real; maximum RSS is 195,788,800 bytes and peak footprint is 97,654,544 bytes.
+- Static commands: `/usr/bin/time -l pnpm typecheck` passes in 5.02 seconds real with maximum RSS
+  1,236,762,624 bytes and peak footprint 97,965,912 bytes. `/usr/bin/time -l pnpm lint` passes in
+  24.59 seconds real with only the 26 pre-existing warnings, all 41 reliability gates, the
+  355-entry max-lines ratchet, bundled guides, and localization checks; maximum RSS is
+  1,979,744,256 bytes and peak footprint is 97,572,672 bytes.
+- Isolation evidence: targeted `oxfmt --check`, `git diff --check`, and exact working-tree equality
+  to `HEAD` for `ssh-remote-node-resolution.ts` and its test pass. Only the artifact workflow,
+  purpose-named Windows workflow oracle, system-SSH probe diagnostics/test, and three planning
+  artifacts are touched.
+- Residual boundary: local macOS proof cannot execute native Windows process ownership/termination,
+  `ssh.exe` lifecycle, registry hive unload, profile removal, or the live transfer. Commit/push and
+  require fresh exact-head x64/arm64 proof. Legacy remains the sole production/default path;
+  SignPath and product caller/Beta/settings/fallback/tuple/publication work remain deferred.
 
 ## Accepted Gaps
 
