@@ -59,6 +59,13 @@ export function decodeCodexTurnLifecycle(
   }
 }
 
+/** Claude stop reasons that end the lead generation (not mid-turn tool_use). */
+const CLAUDE_TERMINAL_STOP_REASONS = new Set(['end_turn', 'max_tokens', 'stop_sequence', 'refusal'])
+
+function isClaudeTerminalStopReason(value: unknown): boolean {
+  return typeof value === 'string' && CLAUDE_TERMINAL_STOP_REASONS.has(value)
+}
+
 export function decodeClaudeTurnLifecycle(
   line: string,
   fallbackId: string
@@ -75,10 +82,12 @@ export function decodeClaudeTurnLifecycle(
     // the active generation and must not be mistaken for the next user prompt.
     return { state: 'interrupted', turnId: interruptedMessageId, timestamp }
   }
-  if (record.type === 'assistant' && message?.stop_reason === 'end_turn') {
+  // Why: capable hosts disable the prose-fallback settlement path, so every
+  // real terminal stop_reason must emit completed — not only end_turn.
+  if (record.type === 'assistant' && isClaudeTerminalStopReason(message?.stop_reason)) {
     return {
       state: 'completed',
-      turnId: extractString(record.uuid) ?? extractString(message.id) ?? fallbackId,
+      turnId: extractString(record.uuid) ?? extractString(message?.id) ?? fallbackId,
       timestamp
     }
   }

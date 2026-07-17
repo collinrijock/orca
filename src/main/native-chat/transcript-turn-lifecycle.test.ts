@@ -73,22 +73,24 @@ describe('native chat transcript turn lifecycle', () => {
     ).toBeNull()
   })
 
-  it('uses Claude end_turn and excludes tool-result user rows', () => {
-    expect(
-      decodeClaudeTurnLifecycle(
-        JSON.stringify({
-          type: 'assistant',
-          uuid: 'assistant-1',
-          timestamp: '2026-07-16T23:45:37.608Z',
-          message: { role: 'assistant', stop_reason: 'end_turn', content: [] }
-        }),
-        'fallback'
-      )
-    ).toEqual({
-      state: 'completed',
-      turnId: 'assistant-1',
-      timestamp: Date.parse('2026-07-16T23:45:37.608Z')
-    })
+  it('uses Claude terminal stop_reasons and excludes tool-result user rows', () => {
+    for (const stopReason of ['end_turn', 'max_tokens', 'stop_sequence', 'refusal'] as const) {
+      expect(
+        decodeClaudeTurnLifecycle(
+          JSON.stringify({
+            type: 'assistant',
+            uuid: `assistant-${stopReason}`,
+            timestamp: '2026-07-16T23:45:37.608Z',
+            message: { role: 'assistant', stop_reason: stopReason, content: [] }
+          }),
+          'fallback'
+        )
+      ).toEqual({
+        state: 'completed',
+        turnId: `assistant-${stopReason}`,
+        timestamp: Date.parse('2026-07-16T23:45:37.608Z')
+      })
+    }
 
     expect(
       decodeClaudeTurnLifecycle(
@@ -100,6 +102,44 @@ describe('native chat transcript turn lifecycle', () => {
             role: 'user',
             content: [{ type: 'tool_result', tool_use_id: 'tool-1', content: 'ok' }]
           }
+        }),
+        'fallback'
+      )
+    ).toBeNull()
+  })
+
+  it('does not treat Claude mid-turn assistant rows as completed', () => {
+    expect(
+      decodeClaudeTurnLifecycle(
+        JSON.stringify({
+          type: 'assistant',
+          uuid: 'assistant-tool',
+          timestamp: '2026-07-16T23:45:37.608Z',
+          message: { role: 'assistant', stop_reason: 'tool_use', content: [] }
+        }),
+        'fallback'
+      )
+    ).toBeNull()
+
+    expect(
+      decodeClaudeTurnLifecycle(
+        JSON.stringify({
+          type: 'assistant',
+          uuid: 'assistant-null-stop',
+          timestamp: '2026-07-16T23:45:37.608Z',
+          message: { role: 'assistant', stop_reason: null, content: [] }
+        }),
+        'fallback'
+      )
+    ).toBeNull()
+
+    expect(
+      decodeClaudeTurnLifecycle(
+        JSON.stringify({
+          type: 'assistant',
+          uuid: 'assistant-missing-stop',
+          timestamp: '2026-07-16T23:45:37.608Z',
+          message: { role: 'assistant', content: [] }
         }),
         'fallback'
       )
