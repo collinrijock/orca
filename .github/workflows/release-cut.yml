@@ -472,13 +472,8 @@ jobs:
           # message and tag name explicitly (avoids npm's `v1.2.3` prefix
           # assumptions and any lifecycle scripts that would run on bump).
           npm version "$VERSION" --no-git-tag-version --allow-same-version
-          # Why: regenerate the bundled skill manifest so its appVersion tracks the
-          # just-bumped package.json. Otherwise the committed manifest keeps the
-          # prior version and verify:skill-bundle-manifest (run in `pnpm lint` and
-          # the PR `verify` job) goes red on every branch after the cut — which is
-          # how v1.4.144-rc.1/rc.2/rc.3 all shipped an rc.1 manifest. The generator
-          # is dependency-free (node builtins + git) so it needs no pnpm install,
-          # and the fetch-depth:0 checkout above gives it the full tag history.
+          # Why: package version is embedded in generated skill provenance; full tag
+          # history preserves released snapshots while the current version is updated.
           node config/scripts/generate-skill-bundle-manifest.mjs --write
           git add package.json resources/skills
           commit_message="release: v$VERSION"
