@@ -220,14 +220,26 @@ export class CodexRuntimeHomeService {
     return account
   }
 
-  private getSelfContainedManagedHostAccountHomes(): string[] {
+  // Why: session discovery must surface a managed account's own rollouts wherever
+  // they physically live. Flag ON makes every host managed home a live CODEX_HOME,
+  // so scan them all. Flag OFF (opt-out/rollback) hands launches back to the shared
+  // mirror, but a home that already accumulated rollouts while the flag was ON must
+  // still surface them — otherwise opting out silently hides history that is safe on
+  // disk. Gate the flag-OFF case on a sessions/ tree so a never-enabled install stays
+  // byte-identical to today (its per-account homes hold only auth, no rollouts).
+  private getManagedHostAccountHomesForSessionDiscovery(): string[] {
     const settings = this.store.getSettings()
-    if (!isCodexSystemDefaultRealHomeEnabled(settings)) {
-      return []
+    const flagEnabled = isCodexSystemDefaultRealHomeEnabled(settings)
+    const homes: string[] = []
+    for (const account of settings.codexManagedAccounts) {
+      if (this.getWslManagedHomePath(account)) {
+        continue
+      }
+      if (flagEnabled || existsSync(join(account.managedHomePath, 'sessions'))) {
+        homes.push(account.managedHomePath)
+      }
     }
-    return settings.codexManagedAccounts
-      .filter((account) => !this.getWslManagedHomePath(account))
-      .map((account) => account.managedHomePath)
+    return homes
   }
 
   private prepareSelfContainedManagedHomeForLaunch(account: CodexManagedAccount): string | null {
@@ -350,8 +362,9 @@ export class CodexRuntimeHomeService {
     }
     // Why: flag ON routes each managed host account to its own self-contained
     // home, so its rollouts live there rather than in the shared mirror. Scan
-    // every such home so account-scoped sessions still surface in the AI Vault.
-    for (const perAccountHome of this.getSelfContainedManagedHostAccountHomes()) {
+    // every such home — plus any that retained rollouts across an opt-out — so
+    // account-scoped sessions still surface in the AI Vault.
+    for (const perAccountHome of this.getManagedHostAccountHomesForSessionDiscovery()) {
       homes.push(perAccountHome)
     }
     return homes.filter((home, index) => homes.indexOf(home) === index)

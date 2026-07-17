@@ -1309,6 +1309,165 @@ describe('CodexRuntimeHomeService', () => {
     expect(readFileSync(runtimeAuthPath, 'utf-8')).toBe(account1Auth)
   })
 
+  it('keeps pre-E shared-mirror sessions discoverable alongside per-account rollouts (flag ON)', async () => {
+    // Pre-E history lives in the shared runtime mirror; after upgrading to
+    // per-account homes (flag ON) new rollouts land in the account's own home.
+    const sharedSessionsDir = join(getRuntimeCodexHomePath(), 'sessions', '2026', '07', '16')
+    mkdirSync(sharedSessionsDir, { recursive: true })
+    writeFileSync(join(sharedSessionsDir, 'rollout-pre-e.jsonl'), '{"record":"pre-e"}\n', 'utf-8')
+    const home1 = createManagedAuth(
+      testState.userDataDir,
+      'account-1',
+      createCodexAuthJson('one@example.com', 'acct-1', 'one')
+    )
+    const perAccountSessionsDir = join(home1, 'sessions', '2026', '07', '17')
+    mkdirSync(perAccountSessionsDir, { recursive: true })
+    writeFileSync(
+      join(perAccountSessionsDir, 'rollout-e-era.jsonl'),
+      '{"record":"e-era"}\n',
+      'utf-8'
+    )
+    const store = createStore(
+      createSettings({
+        codexSystemDefaultRealHomeEnabled: true,
+        codexManagedAccounts: [
+          {
+            id: 'account-1',
+            email: 'one@example.com',
+            managedHomePath: home1,
+            providerAccountId: 'acct-1',
+            workspaceLabel: null,
+            workspaceAccountId: 'acct-1',
+            createdAt: 1,
+            updatedAt: 1,
+            lastAuthenticatedAt: 1
+          }
+        ],
+        activeCodexManagedAccountId: 'account-1',
+        activeCodexManagedAccountIdsByRuntime: { host: 'account-1', wsl: {} }
+      })
+    )
+    const { CodexRuntimeHomeService } = await import('./runtime-home-service')
+    const service = new CodexRuntimeHomeService(store as never)
+
+    // Migrating to per-account homes must not strand the pre-E shared-mirror
+    // history: both roots surface in discovery so no session is lost.
+    const discovery = service.getHostCodexHomePathsForSessionDiscovery()
+    expect(discovery).toContain(getRuntimeCodexHomePath())
+    expect(discovery).toContain(home1)
+  })
+
+  it('surfaces per-account rollouts for session discovery after opting out (flag OFF)', async () => {
+    // The account ran with the flag ON and accumulated rollouts in its own home,
+    // then the user opted back out (flag OFF, byte-identical launch path).
+    const home1 = createManagedAuth(
+      testState.userDataDir,
+      'account-1',
+      createCodexAuthJson('one@example.com', 'acct-1', 'one')
+    )
+    const rolloutDir = join(home1, 'sessions', '2026', '07', '17')
+    mkdirSync(rolloutDir, { recursive: true })
+    writeFileSync(join(rolloutDir, 'rollout-e-era.jsonl'), '{"record":"e-era"}\n', 'utf-8')
+    const store = createStore(
+      createSettings({
+        codexSystemDefaultRealHomeEnabled: false,
+        codexManagedAccounts: [
+          {
+            id: 'account-1',
+            email: 'one@example.com',
+            managedHomePath: home1,
+            providerAccountId: 'acct-1',
+            workspaceLabel: null,
+            workspaceAccountId: 'acct-1',
+            createdAt: 1,
+            updatedAt: 1,
+            lastAuthenticatedAt: 1
+          }
+        ],
+        activeCodexManagedAccountId: 'account-1',
+        activeCodexManagedAccountIdsByRuntime: { host: 'account-1', wsl: {} }
+      })
+    )
+    const { CodexRuntimeHomeService } = await import('./runtime-home-service')
+    const service = new CodexRuntimeHomeService(store as never)
+
+    // Opting out must not hide rollouts that already live in the per-account home.
+    expect(service.getHostCodexHomePathsForSessionDiscovery()).toContain(home1)
+  })
+
+  it('does not scan an opted-out never-enabled account home that holds no rollouts', async () => {
+    // A pure never-enabled install keeps its per-account homes credential-only, so
+    // opt-out discovery must stay byte-identical to today (mirror home only).
+    const home1 = createManagedAuth(
+      testState.userDataDir,
+      'account-1',
+      createCodexAuthJson('one@example.com', 'acct-1', 'one')
+    )
+    const store = createStore(
+      createSettings({
+        codexSystemDefaultRealHomeEnabled: false,
+        codexManagedAccounts: [
+          {
+            id: 'account-1',
+            email: 'one@example.com',
+            managedHomePath: home1,
+            providerAccountId: 'acct-1',
+            workspaceLabel: null,
+            workspaceAccountId: 'acct-1',
+            createdAt: 1,
+            updatedAt: 1,
+            lastAuthenticatedAt: 1
+          }
+        ],
+        activeCodexManagedAccountId: 'account-1',
+        activeCodexManagedAccountIdsByRuntime: { host: 'account-1', wsl: {} }
+      })
+    )
+    const { CodexRuntimeHomeService } = await import('./runtime-home-service')
+    const service = new CodexRuntimeHomeService(store as never)
+
+    expect(service.getHostCodexHomePathsForSessionDiscovery()).not.toContain(home1)
+  })
+
+  it('preserves a fresh per-account credential and propagates it to the shared mirror on opt-out', async () => {
+    // Flag ON refreshed the account's token in its own home; the shared mirror's
+    // auth is frozen from before the ON period. Opting out (flag OFF) must not let
+    // the stale mirror token clobber the fresher per-account credential.
+    const freshAuth = createCodexAuthJson('one@example.com', 'acct-1', 'fresh', 4_000)
+    const staleAuth = createCodexAuthJson('one@example.com', 'acct-1', 'stale', 1_000)
+    const home1 = createManagedAuth(testState.userDataDir, 'account-1', freshAuth)
+    // A stale mirror auth left over from before the account ran with the flag ON.
+    writeFileSync(getRuntimeCodexAuthPath(), staleAuth, 'utf-8')
+    const store = createStore(
+      createSettings({
+        codexSystemDefaultRealHomeEnabled: false,
+        codexManagedAccounts: [
+          {
+            id: 'account-1',
+            email: 'one@example.com',
+            managedHomePath: home1,
+            providerAccountId: 'acct-1',
+            workspaceLabel: null,
+            workspaceAccountId: 'acct-1',
+            createdAt: 1,
+            updatedAt: 1,
+            lastAuthenticatedAt: 1
+          }
+        ],
+        activeCodexManagedAccountId: 'account-1',
+        activeCodexManagedAccountIdsByRuntime: { host: 'account-1', wsl: {} }
+      })
+    )
+    const { CodexRuntimeHomeService } = await import('./runtime-home-service')
+    // Constructor runs the startup opt-out sync (read-back + hot-swap).
+    new CodexRuntimeHomeService(store as never)
+
+    // The fresher per-account credential is preserved (never overwritten by the
+    // stale mirror read-back) and becomes the mirror's auth for the opted-out launch.
+    expect(readFileSync(join(home1, 'auth.json'), 'utf-8')).toBe(freshAuth)
+    expect(readFileSync(getRuntimeCodexAuthPath(), 'utf-8')).toBe(freshAuth)
+  })
+
   it('uses the same host CODEX_HOME after switching managed Codex accounts', async () => {
     const runtimeAuthPath = getRuntimeCodexAuthPath()
     const account1Auth = createCodexAuthJson('one@example.com', 'acct-1', 'one')
