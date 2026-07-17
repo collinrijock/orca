@@ -20,7 +20,7 @@ export function getGitHubUnavailableEmptyStateCopy(
       ),
       description: translate(
         'auto.components.right.sidebar.github.refresh.error.copy.01c85b5770',
-        "GitHub's API is temporarily unavailable — a GitHub-side outage, not Orca. This panel reloads automatically once it recovers."
+        "GitHub's API is temporarily unavailable. This panel reloads automatically once it recovers."
       )
     }
   }
@@ -32,7 +32,7 @@ export function getGitHubUnavailableEmptyStateCopy(
       ),
       description: translate(
         'auto.components.right.sidebar.github.refresh.error.copy.7d01d42a3a',
-        "GitHub is unreachable right now — check your connection. This isn't an Orca problem."
+        'GitHub is unreachable right now — check your connection, then try again shortly.'
       )
     }
   }

@@ -1759,7 +1759,7 @@
         "jiraSortDescending": "降序",
         "jiraSortBy": "排序方式",
         "jiraToggleSortDirection": "按{{value0}}排序",
-        "75a38d7df8": "GitHub data is temporarily unavailable — its API may be down, rate-limited, or unreachable. This isn't an Orca problem; try again shortly."
+        "75a38d7df8": "GitHub data is temporarily unavailable — its API may be down, rate-limited, or unreachable. Please try again shortly."
       },
       "Terminal": {
         "73768427cf": "关闭",
@@ -10274,9 +10274,9 @@
               "error": {
                 "copy": {
                   "580025e7b7": "GitHub is unavailable",
-                  "01c85b5770": "GitHub's API is temporarily unavailable — a GitHub-side outage, not Orca. This panel reloads automatically once it recovers.",
+                  "01c85b5770": "GitHub's API is temporarily unavailable. This panel reloads automatically once it recovers.",
                   "d1a9f2b165": "Can't reach GitHub",
-                  "7d01d42a3a": "GitHub is unreachable right now — check your connection. This isn't an Orca problem.",
+                  "7d01d42a3a": "GitHub is unreachable right now — check your connection, then try again shortly.",
                   "e9d681894a": "GitHub rate limit reached",
                   "8c77434d6f": "GitHub is rate-limiting requests. This panel refreshes once the limit resets.",
                   "79aa06bb2c": "Couldn't refresh — GitHub's API is temporarily unavailable. Showing the last known status.",

@@ -232,7 +232,7 @@ describe('getChecksPanelEmptyStateCopy', () => {
     ).toEqual({
       title: 'GitHub is unavailable',
       description:
-        "GitHub's API is temporarily unavailable — a GitHub-side outage, not Orca. This panel reloads automatically once it recovers."
+        "GitHub's API is temporarily unavailable. This panel reloads automatically once it recovers."
     })
   })
 
