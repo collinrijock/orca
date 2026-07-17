@@ -11,7 +11,7 @@ import {
   AGENT_SKILL_CLI_PREREQUISITE_NOTICE,
   ensureOrcaCliAvailableForAgentSkillTerminal
 } from '@/lib/agent-skill-cli-prerequisite'
-import { getLinearAgentSkillUpdateCommand } from '@/lib/linear-agent-skill-update-command'
+import { getLinearAgentSkillUpdateTarget } from '@/lib/linear-agent-skill-update-command'
 import { getLinearUsageExamples } from '@/lib/linear-usage-examples'
 import type { SkillUsageExample } from '@/lib/skill-usage-example'
 import {
@@ -69,16 +69,19 @@ export function LinearAgentSkillPane(): React.JSX.Element {
           ),
     [activeSkillRuntime.agentRuntime, activeSkillRuntime.installDisabledReason]
   )
+  const updateTarget = useMemo(
+    () => getLinearAgentSkillUpdateTarget(linearSkills, linearSkillInstalled),
+    [linearSkillInstalled, linearSkills]
+  )
   const updateCommand = useMemo(() => {
-    const command = getLinearAgentSkillUpdateCommand(linearSkills, linearSkillInstalled)
+    const command = updateTarget.command
     return activeSkillRuntime.installDisabledReason
       ? command
       : buildSkillCommandForRuntime(command, activeSkillRuntime.agentRuntime)
   }, [
     activeSkillRuntime.agentRuntime,
     activeSkillRuntime.installDisabledReason,
-    linearSkillInstalled,
-    linearSkills
+    updateTarget.command
   ])
 
   return (
@@ -134,7 +137,7 @@ export function LinearAgentSkillPane(): React.JSX.Element {
         // Why: the local-host-only freshness scan cannot vouch for a WSL runtime,
         // so fall back to the presence-only pill there (mirrors the other skills).
         freshnessSkillName={
-          activeSkillRuntime.agentRuntime?.runtime === 'wsl' ? undefined : ORCA_LINEAR_SKILL_NAME
+          activeSkillRuntime.agentRuntime?.runtime === 'wsl' ? undefined : updateTarget.skillName
         }
       />
 

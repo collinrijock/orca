@@ -9192,11 +9192,11 @@
           "androidApk": "Android APK"
         },
         "SkillUsageExampleDialog": {
-          "copiedPrompt": "Copied example prompt.",
-          "copyFailed": "Failed to copy prompt.",
-          "copyExampleAria": "Copy {{value0}} example prompt",
-          "done": "Done",
-          "copyPrompt": "Copy prompt"
+          "copiedPrompt": "复制示例提示。",
+          "copyFailed": "复制提示失败。",
+          "copyExampleAria": "复制 {{value0}} 示例提示",
+          "done": "完成",
+          "copyPrompt": "复制提示"
         },
         "LinearAgentSkillPane": {
           "title": "Linear",
