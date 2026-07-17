@@ -1758,7 +1758,8 @@
         "jiraSortAscending": "昇順",
         "jiraSortDescending": "降順",
         "jiraSortBy": "並べ替え",
-        "jiraToggleSortDirection": "{{value0}}に並べ替え"
+        "jiraToggleSortDirection": "{{value0}}に並べ替え",
+        "a735832e9c": "Can't reach GitHub — its API may be temporarily unavailable. This isn't an Orca problem; your pull requests and issues will reappear once GitHub is back."
       },
       "Terminal": {
         "73768427cf": "閉じる",
@@ -10267,6 +10268,24 @@
             "workspaceGone": "Couldn't open log — workspace is no longer available.",
             "notAuthorized": "Couldn't open log — path not authorized.",
             "alreadyEditable": "Log is already open for editing."
+          },
+          "github": {
+            "refresh": {
+              "error": {
+                "copy": {
+                  "580025e7b7": "GitHub is unavailable",
+                  "01c85b5770": "GitHub's API is temporarily unavailable — a GitHub-side outage, not Orca. This panel reloads automatically once it recovers.",
+                  "d1a9f2b165": "Can't reach GitHub",
+                  "7d01d42a3a": "GitHub is unreachable right now — check your connection. This isn't an Orca problem.",
+                  "e9d681894a": "GitHub rate limit reached",
+                  "8c77434d6f": "GitHub is rate-limiting requests. This panel refreshes once the limit resets.",
+                  "79aa06bb2c": "Couldn't refresh — GitHub's API is temporarily unavailable. Showing the last known status.",
+                  "6ec12cee0c": "Couldn't refresh — GitHub is unreachable right now. Showing the last known status.",
+                  "de088015e8": "Couldn't refresh — GitHub is rate-limiting requests. Showing the last known status.",
+                  "d9dd7c6687": "Couldn't refresh from GitHub. Showing the last known status."
+                }
+              }
+            }
           }
         }
       },

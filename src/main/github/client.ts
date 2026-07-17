@@ -29,6 +29,7 @@ import {
 } from '../../shared/hosted-review-refs'
 import { normalizeGitHubPRMergeMethodSettings } from '../../shared/github-pr-merge-methods'
 import { isGitHubWorkItemsQueryTooLarge } from '../../shared/github-work-items-query-bounds'
+import { classifyGitHubUnavailable } from '../../shared/github-api-availability'
 import { parseTaskQuery, type ParsedTaskQuery } from '../../shared/task-query'
 import {
   GITHUB_WORK_ITEMS_SSH_REMOTE_REQUIRED_MESSAGE,
@@ -184,18 +185,15 @@ function classifyPRRefreshError(
   err: unknown
 ): Extract<PRRefreshOutcome, { kind: 'upstream-error' }>['errorType'] {
   const message = err instanceof Error ? err.message : String(err)
+  // Why: GitHub-unreachable buckets (5xx outage / network / rate limit) share
+  // one detector with the Tasks work-item path so both surfaces attribute an
+  // outage to GitHub identically. Rate-limit responses also carry "HTTP 403",
+  // so this must run before the permission check below.
+  const unavailable = classifyGitHubUnavailable(message)
+  if (unavailable) {
+    return unavailable
+  }
   const lower = message.toLowerCase()
-  if (lower.includes('rate limit')) {
-    return 'rate_limited'
-  }
-  if (
-    lower.includes('timeout') ||
-    lower.includes('no such host') ||
-    lower.includes('network') ||
-    lower.includes('could not resolve host')
-  ) {
-    return 'network'
-  }
   if (lower.includes('http 403') || lower.includes('resource not accessible')) {
     return 'permission'
   }
@@ -215,6 +213,8 @@ function safePRRefreshErrorMessage(
       return 'GitHub authentication is unavailable. Check your gh login.'
     case 'network':
       return 'GitHub is unreachable right now. Check your network and try again.'
+    case 'server_error':
+      return "GitHub's API is temporarily unavailable (server error). This is a GitHub-side issue."
     case 'permission':
       return 'GitHub did not allow access to this pull request.'
     case 'repo_unavailable':

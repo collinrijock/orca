@@ -6299,6 +6299,51 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
     }
   })
 
+  it('flags githubUnavailable when a GitHub repo fails with a 5xx outage and no cache', async () => {
+    const store = createTestStore()
+    const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    mockApi.gh.listWorkItems.mockRejectedValue(new Error('HTTP 503: Service Unavailable'))
+
+    try {
+      const result = await store
+        .getState()
+        .fetchWorkItemsAcrossRepos(
+          [{ repoId: 'github-repo', path: '/server/github-repo' }],
+          24,
+          100,
+          ''
+        )
+
+      expect(result.items).toEqual([])
+      expect(result.failedCount).toBe(1)
+      expect(result.githubUnavailable).toBe(true)
+    } finally {
+      consoleWarn.mockRestore()
+    }
+  })
+
+  it('does not flag githubUnavailable for a 404 (not an outage)', async () => {
+    const store = createTestStore()
+    const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    mockApi.gh.listWorkItems.mockRejectedValue(new Error('HTTP 404: Not Found'))
+
+    try {
+      const result = await store
+        .getState()
+        .fetchWorkItemsAcrossRepos(
+          [{ repoId: 'github-repo', path: '/server/github-repo' }],
+          24,
+          100,
+          ''
+        )
+
+      expect(result.failedCount).toBe(1)
+      expect(result.githubUnavailable).toBe(false)
+    } finally {
+      consoleWarn.mockRestore()
+    }
+  })
+
   it('quietly skips SSH repos without a resolved GitHub remote in next-page fetches', async () => {
     const store = createTestStore()
     const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => {})
@@ -6482,7 +6527,7 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
           24,
           oversizedQuery
         )
-    ).resolves.toEqual({ items: [], failedCount: 0 })
+    ).resolves.toEqual({ items: [], failedCount: 0, githubUnavailable: false })
     await expect(
       store
         .getState()

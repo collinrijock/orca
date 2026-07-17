@@ -12,6 +12,7 @@ import type {
   GitHubPRRefreshCandidate,
   GitHubPRRefreshEvent,
   GitHubPRRefreshReason,
+  PRRefreshUpstreamErrorType,
   GitHubCommentResult,
   IssueInfo,
   PRCheckDetail,
@@ -46,6 +47,7 @@ import { hostedReviewInfoFromGitHubPRInfo } from '../../../../shared/hosted-revi
 import { getHostedReviewCacheKey, linkedReviewHintKey } from './hosted-review-cache-identity'
 import { getGitHubPRCacheKey, getGitHubRepoCacheKey } from './github-cache-key'
 import { isGitHubWorkItemsQueryTooLarge } from './github-work-items-query-bounds'
+import { classifyGitHubUnavailable } from '../../../../shared/github-api-availability'
 import { isMacAppDataPath } from '@/lib/passive-macos-app-data-access'
 import { translate } from '@/i18n/i18n'
 import {
@@ -659,6 +661,10 @@ export type PRRefreshState = {
   updatedAt: number
   pausedUntil?: number
   message?: string
+  // Why: lets error surfaces render translated, GitHub-attributed copy keyed on
+  // the failure kind (e.g. a 5xx outage vs. a rate limit) rather than showing
+  // the main process's English `message` verbatim.
+  errorType?: PRRefreshUpstreamErrorType
 }
 
 export type PRRefreshStateClearToken = {
@@ -2030,6 +2036,11 @@ export type GitHubSlice = {
    * the caller surfaces as a "N of M projects failed to load" banner. A repo
    * served from stale cache on rejection is NOT counted as failed — matching
    * the single-repo behavior of quietly serving stale data.
+   *
+   * `githubUnavailable` is true when at least one GitHub source failed (with no
+   * cache) and the failure looks like GitHub being unreachable/unavailable
+   * (5xx outage, network, or rate limit). The caller uses it to attribute the
+   * empty list to a GitHub outage instead of the generic failure banner.
    */
   fetchWorkItemsAcrossRepos: (
     repos: {
@@ -2042,7 +2053,7 @@ export type GitHubSlice = {
     displayLimit: number,
     query: string,
     options?: FetchOptions
-  ) => Promise<{ items: GitHubWorkItem[]; failedCount: number }>
+  ) => Promise<{ items: GitHubWorkItem[]; failedCount: number; githubUnavailable: boolean }>
   /** Fetch one numbered provider page. Pagination pages remain renderer-local. */
   fetchWorkItemsNextPage: (
     repos: {
@@ -2850,10 +2861,11 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
 
   fetchWorkItemsAcrossRepos: async (repos, perRepoLimit, displayLimit, query, options) => {
     if (isGitHubWorkItemsQueryTooLarge(query)) {
-      return { items: [], failedCount: 0 }
+      return { items: [], failedCount: 0, githubUnavailable: false }
     }
     const state = get()
     let failedCount = 0
+    let githubUnavailable = false
     const perProjectResults = await Promise.all(
       repos.map(async (r) => {
         try {
@@ -2887,12 +2899,17 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
           }
           console.warn(`[workItems] ${r.repoId} failed:`, err)
           failedCount += 1
+          // Why: attribute an empty list to a GitHub outage (vs. a generic
+          // failure) only when the fetch failed because GitHub is unreachable.
+          if (classifyGitHubUnavailable(err instanceof Error ? err.message : String(err))) {
+            githubUnavailable = true
+          }
           return [] as GitHubWorkItem[]
         }
       })
     )
     const merged = sortWorkItemsByNumber(perProjectResults.flat()).slice(0, displayLimit)
-    return { items: merged, failedCount }
+    return { items: merged, failedCount, githubUnavailable }
   },
 
   fetchWorkItemsNextPage: async (repos, perRepoLimit, displayLimit, query, page) => {
@@ -4112,7 +4129,8 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
               status: 'error',
               reason: event.reason,
               updatedAt: Date.now(),
-              message: event.outcome.message
+              message: event.outcome.message,
+              errorType: event.outcome.errorType
             }
             continue
           }

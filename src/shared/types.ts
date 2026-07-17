@@ -1179,19 +1179,24 @@ export type PRInfo = {
   conflictSummary?: PRConflictSummary
 }
 
+// server_error covers GitHub-side HTTP 5xx outages (githubstatus.com incidents),
+// distinct from a transport-level `network` failure or a `rate_limited` budget.
+export type PRRefreshUpstreamErrorType =
+  | 'rate_limited'
+  | 'auth'
+  | 'network'
+  | 'permission'
+  | 'repo_unavailable'
+  | 'gh_unavailable'
+  | 'server_error'
+  | 'unknown'
+
 export type PRRefreshOutcome =
   | { kind: 'found'; pr: PRInfo; fetchedAt: number }
   | { kind: 'no-pr'; fetchedAt: number }
   | {
       kind: 'upstream-error'
-      errorType:
-        | 'rate_limited'
-        | 'auth'
-        | 'network'
-        | 'permission'
-        | 'repo_unavailable'
-        | 'gh_unavailable'
-        | 'unknown'
+      errorType: PRRefreshUpstreamErrorType
       message: string
       fetchedAt: number
     }
