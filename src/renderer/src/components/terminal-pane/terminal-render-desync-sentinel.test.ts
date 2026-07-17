@@ -10,6 +10,14 @@ vi.mock('@/lib/pane-manager/pane-manager-registry', () => ({
 }))
 
 const recordTerminalWebglDiagnostic = vi.fn()
+const documentAddEventListener = vi.fn()
+const documentRemoveEventListener = vi.fn()
+class FakeNode {}
+const writeTerminalRenderDesyncEvidence = vi.fn().mockResolvedValue({
+  directory: '/evidence/capture',
+  pngPath: '/evidence/capture/corrupt.png',
+  metadataPath: '/evidence/capture/corrupt.json'
+})
 vi.mock('../../../../shared/terminal-webgl-diagnostics', () => ({
   recordTerminalWebglDiagnostic: (...args: Parameters<typeof recordTerminalWebglDiagnostic>) =>
     recordTerminalWebglDiagnostic(...args)
@@ -26,6 +34,7 @@ import {
 function fakePane(overrides: { paused?: boolean } = {}) {
   const refreshRows = vi.fn()
   const terminal = {
+    element: { contains: vi.fn(() => false) },
     rows: 24,
     cols: 80,
     buffer: {
@@ -69,9 +78,22 @@ const manyCells = (offset: number) => Array.from({ length: 120 }, (_, i) => offs
 describe('terminal-render-desync-sentinel', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    writeTerminalRenderDesyncEvidence.mockResolvedValue({
+      directory: '/evidence/capture',
+      pngPath: '/evidence/capture/corrupt.png',
+      metadataPath: '/evidence/capture/corrupt.json'
+    })
+    vi.stubGlobal('window', { api: { app: { writeTerminalRenderDesyncEvidence } } })
+    vi.stubGlobal('document', {
+      addEventListener: documentAddEventListener,
+      removeEventListener: documentRemoveEventListener
+    })
+    vi.stubGlobal('navigator', { userAgent: 'Mac' })
+    vi.stubGlobal('Node', FakeNode)
   })
   afterEach(() => {
     stopTerminalRenderDesyncSentinelForTesting()
+    vi.unstubAllGlobals()
   })
 
   function sampleWith(divergence: ReturnType<typeof divergenceOf> | null, paused = false) {
@@ -83,9 +105,8 @@ describe('terminal-render-desync-sentinel', () => {
     return { refreshRows }
   }
 
-  it('trips after the same cells stay missing across three consecutive samples', () => {
+  it('persists and recovers after the same cells stay missing twice', async () => {
     const cells = manyCells(0)
-    sampleWith(divergenceOf(cells))
     sampleWith(divergenceOf(cells))
     expect(recordTerminalWebglDiagnostic).not.toHaveBeenCalled()
     sampleWith(divergenceOf(cells))
@@ -93,14 +114,17 @@ describe('terminal-render-desync-sentinel', () => {
       'webgl-render-desync',
       expect.objectContaining({ paneKey: 'm1:p1', missing: 120 })
     )
-    expect(resetAndRefreshAllTerminalWebglAtlases).toHaveBeenCalledTimes(1)
+    await vi.waitFor(() => expect(resetAndRefreshAllTerminalWebglAtlases).toHaveBeenCalledTimes(1))
+    expect(writeTerminalRenderDesyncEvidence).toHaveBeenCalledWith(
+      expect.objectContaining({ phase: 'corrupt' })
+    )
     expect(getRenderDesyncEvidence()).toHaveLength(1)
     expect(getRenderDesyncEvidence()[0].bufferText).toContain('x')
   })
 
-  it('forces a synchronous full redraw before measuring', () => {
+  it('does not redraw before measuring the compositor-presented canvas', () => {
     const { refreshRows } = sampleWith(divergenceOf(manyCells(0)))
-    expect(refreshRows).toHaveBeenCalledWith(0, 23, true)
+    expect(refreshRows).not.toHaveBeenCalled()
   })
 
   it('does not trip when the missing cells move between samples (scroll lag)', () => {
@@ -116,41 +140,48 @@ describe('terminal-render-desync-sentinel', () => {
     const few = Array.from({ length: 10 }, (_, i) => i)
     sampleWith(divergenceOf(few))
     sampleWith(divergenceOf(few))
-    sampleWith(divergenceOf(few))
     expect(recordTerminalWebglDiagnostic).not.toHaveBeenCalled()
   })
 
   it('resets tracking for paused panes instead of sampling them', () => {
     const cells = manyCells(0)
     sampleWith(divergenceOf(cells))
-    sampleWith(divergenceOf(cells))
     sampleWith(divergenceOf(cells), true)
-    sampleWith(divergenceOf(cells))
     sampleWith(divergenceOf(cells))
     expect(recordTerminalWebglDiagnostic).not.toHaveBeenCalled()
   })
 
-  it('stays disarmed without the localStorage flag and arms with it', () => {
+  it('stays disarmed without the flag and starts a burst on modifier-click', () => {
     vi.useFakeTimers()
     try {
-      // The interval path runs the real measure; keep pane iteration inert so
-      // this test only asserts arming behavior.
-      forEachLivePaneForDesyncSentinel.mockImplementation(() => {})
       const storage = new Map<string, string>()
       vi.stubGlobal('localStorage', {
         getItem: (k: string) => storage.get(k) ?? null,
         setItem: (k: string, v: string) => storage.set(k, v)
       })
       maybeStartTerminalRenderDesyncSentinel()
-      vi.advanceTimersByTime(20_000)
+      const { pane } = fakePane()
+      const target = new FakeNode()
       expect(forEachLivePaneForDesyncSentinel).not.toHaveBeenCalled()
 
       storage.set(RENDER_DESYNC_SENTINEL_FLAG, '1')
       maybeStartTerminalRenderDesyncSentinel()
-      vi.advanceTimersByTime(5_100)
+      ;(
+        pane.terminal as never as {
+          _core: { _renderService: { _renderer: { value: { _canvas: { width: number } } } } }
+        }
+      )._core._renderService._renderer.value._canvas.width = 0
+      ;(
+        pane.terminal as { element: { contains: ReturnType<typeof vi.fn> } }
+      ).element.contains.mockReturnValue(true)
+      forEachLivePaneForDesyncSentinel.mockImplementation(
+        (visit: (key: string, pane: unknown) => void) => visit('m1:p1', pane)
+      )
+      const listener = documentAddEventListener.mock.calls.at(-1)?.[1]
+      listener({ button: 0, metaKey: true, ctrlKey: true, target })
+      vi.advanceTimersByTime(300)
       expect(forEachLivePaneForDesyncSentinel).toHaveBeenCalled()
     } finally {
-      vi.unstubAllGlobals()
       vi.useRealTimers()
     }
   })

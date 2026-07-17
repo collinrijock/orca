@@ -3,6 +3,15 @@ import {
   forEachLivePaneForDesyncSentinel,
   resetAndRefreshAllTerminalWebglAtlases
 } from '@/lib/pane-manager/pane-manager-registry'
+import {
+  activeBuffer,
+  bufferSnapshot,
+  measureDivergence,
+  missingSetsOverlap,
+  reachRenderInternals,
+  type SentinelRendererState,
+  type SentinelRenderInternals
+} from './terminal-render-desync-frame'
 
 /**
  * Flag-gated render-desync sentinel for WebGL terminal panes.
@@ -10,12 +19,10 @@ import {
  * Detects the "buffer is correct but the canvas renders stale/garbled glyphs"
  * class of bug (shared glyph-atlas desync) by comparing, per visible pane, the
  * cells the xterm buffer says hold glyphs against the ink actually present on
- * the WebGL canvas. Because the readback happens in the same task as a forced
- * synchronous redraw, a divergence means the render *model or atlas* is wrong —
- * not merely a missed present. A trip records a diagnostic breadcrumb with the
- * pane's renderer state, stashes evidence for bug reports, and runs the same
- * shared-atlas recovery a tab reveal performs, converting a stuck-garbled pane
- * into a self-healing one.
+ * the WebGL canvas. Modifier-clicks start a short burst that reads the
+ * compositor-presented canvas before any forced redraw can heal or destroy the
+ * failure. A confirmed trip writes the pixels, buffer, and atlas/model versions
+ * to local app data before running the shared-atlas recovery.
  *
  * Off by default; enabled via localStorage so a production build can arm it
  * from DevTools without a settings-schema change:
@@ -23,42 +30,25 @@ import {
  */
 
 export const RENDER_DESYNC_SENTINEL_FLAG = 'orca:render-desync-sentinel'
-const SAMPLE_INTERVAL_MS = 5_000
+const SAMPLE_INTERVAL_MS = 250
+const SAMPLE_BURST_MS = 10_000
 // A real desync is pinned to fixed screen cells; scroll/frame lag moves around.
 // Require the same cells missing across this many consecutive samples.
-const PERSISTENT_SAMPLES = 3
+const PERSISTENT_SAMPLES = 2
 const MIN_TEXT_CELLS = 200
 const MISSING_PCT_THRESHOLD = 8
-const MISSING_SET_MIN_OVERLAP = 0.5
 const MAX_EVIDENCE_ENTRIES = 4
-// Luminance floor distinguishing glyph ink from background in the cell center.
-const INK_LUMINANCE_FLOOR = 38
-
-type SentinelDivergence = {
-  textCells: number
-  missing: number
-  missPct: number
-  missingCells: Set<number>
-}
 
 export type SentinelEvidence = {
+  captureId: string
   paneKey: string
   when: number
   divergence: { textCells: number; missing: number; missPct: number }
   paused: boolean
-  atlasPages: number
+  rendererState: SentinelRendererState
   livePngDataUrl: string
   bufferText: string
-}
-
-type SentinelRenderInternals = {
-  rows: number
-  cols: number
-  refreshRows: (start: number, end: number, sync?: boolean) => void
-  isPaused: boolean
-  canvas: HTMLCanvasElement
-  cellWidth: number
-  cellHeight: number
+  persistedDirectory?: string
 }
 
 type SentinelPane = {
@@ -67,170 +57,16 @@ type SentinelPane = {
 }
 
 const missingHistoryByPane = new Map<string, Set<number>[]>()
+const pendingPaneKeys = new Set<string>()
+const healedCaptureTimeoutIds = new Set<ReturnType<typeof setTimeout>>()
 const evidence: SentinelEvidence[] = []
-let intervalId: ReturnType<typeof setInterval> | null = null
+let burstIntervalId: ReturnType<typeof setInterval> | null = null
+let burstTimeoutId: ReturnType<typeof setTimeout> | null = null
+let clickListener: ((event: MouseEvent) => void) | null = null
+let burstTerminal: unknown = null
 
 export function getRenderDesyncEvidence(): SentinelEvidence[] {
   return evidence
-}
-
-function reachRenderInternals(terminal: unknown): SentinelRenderInternals | null {
-  try {
-    const term = terminal as {
-      rows?: number
-      cols?: number
-      buffer?: unknown
-      _core?: {
-        _renderService?: {
-          _isPaused?: boolean
-          refreshRows?: (start: number, end: number, sync?: boolean) => void
-          _renderer?: {
-            value?: {
-              _canvas?: HTMLCanvasElement
-              _charAtlas?: unknown
-              dimensions?: { device?: { cell?: { width?: number; height?: number } } }
-            }
-          }
-        }
-      }
-    }
-    const service = term._core?._renderService
-    const renderer = service?._renderer?.value
-    const cell = renderer?.dimensions?.device?.cell
-    if (
-      typeof term.rows !== 'number' ||
-      typeof term.cols !== 'number' ||
-      typeof service?.refreshRows !== 'function' ||
-      !renderer?._canvas ||
-      !renderer._charAtlas ||
-      typeof cell?.width !== 'number' ||
-      typeof cell?.height !== 'number'
-    ) {
-      return null
-    }
-    return {
-      rows: term.rows,
-      cols: term.cols,
-      refreshRows: service.refreshRows.bind(service),
-      isPaused: service._isPaused === true,
-      canvas: renderer._canvas,
-      cellWidth: cell.width,
-      cellHeight: cell.height
-    }
-  } catch {
-    return null
-  }
-}
-
-type BufferLineLike = {
-  getCell: (x: number) => { getChars: () => string; getWidth: () => number } | undefined
-  translateToString: (trim: boolean) => string
-}
-
-type BufferLike = {
-  cursorY: number
-  viewportY: number
-  getLine: (y: number) => BufferLineLike | undefined
-}
-
-function activeBuffer(terminal: unknown): BufferLike | null {
-  const buffer = (terminal as { buffer?: { active?: BufferLike } }).buffer?.active
-  return buffer && typeof buffer.getLine === 'function' ? buffer : null
-}
-
-function measureDivergence(
-  internals: SentinelRenderInternals,
-  buffer: BufferLike
-): SentinelDivergence | null {
-  const { canvas, cellWidth, cellHeight, rows, cols } = internals
-  if (!canvas.width || !canvas.height) {
-    return null
-  }
-  const offscreen = document.createElement('canvas')
-  offscreen.width = canvas.width
-  offscreen.height = canvas.height
-  const ctx = offscreen.getContext('2d', { willReadFrequently: true })
-  if (!ctx) {
-    return null
-  }
-  ctx.drawImage(canvas, 0, 0)
-  const image = ctx.getImageData(0, 0, canvas.width, canvas.height).data
-
-  const missingCells = new Set<number>()
-  let textCells = 0
-  let missing = 0
-  for (let r = 0; r < rows; r++) {
-    if (r === buffer.cursorY) {
-      continue
-    }
-    const line = buffer.getLine(buffer.viewportY + r)
-    if (!line) {
-      continue
-    }
-    for (let c = 0; c < cols; c++) {
-      const cell = line.getCell(c)
-      if (!cell) {
-        continue
-      }
-      const chars = cell.getChars()
-      if (chars === '' || chars === ' ' || cell.getWidth() === 0) {
-        continue
-      }
-      // Sample the central half of the cell; edges carry anti-aliasing noise.
-      let ink = 0
-      let sampled = 0
-      const x0 = Math.round(c * cellWidth + cellWidth * 0.25)
-      const x1 = Math.round(c * cellWidth + cellWidth * 0.75)
-      const y0 = Math.round(r * cellHeight + cellHeight * 0.25)
-      const y1 = Math.round(r * cellHeight + cellHeight * 0.75)
-      for (let py = y0; py < y1; py += 2) {
-        for (let px = x0; px < x1; px += 2) {
-          if (px >= canvas.width || py >= canvas.height) {
-            continue
-          }
-          const i = (py * canvas.width + px) * 4
-          const luminance = 0.299 * image[i] + 0.587 * image[i + 1] + 0.114 * image[i + 2]
-          if (luminance > INK_LUMINANCE_FLOOR) {
-            ink++
-          }
-          sampled++
-        }
-      }
-      if (!sampled) {
-        continue
-      }
-      textCells++
-      if (ink === 0) {
-        missing++
-        missingCells.add(r * cols + c)
-      }
-    }
-  }
-  return {
-    textCells,
-    missing,
-    missingCells,
-    missPct: textCells ? (100 * missing) / textCells : 0
-  }
-}
-
-function missingSetsOverlap(a: Set<number>, b: Set<number>): boolean {
-  let intersection = 0
-  for (const cell of b) {
-    if (a.has(cell)) {
-      intersection++
-    }
-  }
-  const union = a.size + b.size - intersection
-  return union > 0 && intersection / union >= MISSING_SET_MIN_OVERLAP
-}
-
-function bufferSnapshot(buffer: BufferLike, rows: number): string {
-  const lines: string[] = []
-  for (let r = 0; r < rows; r++) {
-    lines.push(buffer.getLine(buffer.viewportY + r)?.translateToString(true) ?? '')
-  }
-  return lines.join('\n')
 }
 
 export function sampleRenderDesyncOnce(
@@ -238,23 +74,21 @@ export function sampleRenderDesyncOnce(
   measure: typeof measureDivergence = measureDivergence
 ): void {
   forEachLivePaneForDesyncSentinel((paneKey, pane) => {
-    const internals = reachRenderInternals((pane as SentinelPane).terminal)
+    const terminal = (pane as SentinelPane).terminal
+    if ((burstTerminal && terminal !== burstTerminal) || pendingPaneKeys.has(paneKey)) {
+      return
+    }
+    const internals = reachRenderInternals(terminal)
     if (!internals || internals.isPaused) {
       missingHistoryByPane.delete(paneKey)
       return
     }
-    const buffer = activeBuffer((pane as SentinelPane).terminal)
+    const buffer = activeBuffer(terminal)
     if (!buffer) {
       return
     }
-    // Redraw from the render model in this task so the readback below observes
-    // the model's actual output, not a possibly-dropped present. A divergence
-    // after this redraw is therefore a genuine model/atlas desync.
-    try {
-      internals.refreshRows(0, internals.rows - 1, true)
-    } catch {
-      return
-    }
+    // Why: the field failure can heal on any refresh. Read the canvas exactly
+    // as Chromium presented it; recovery happens only after durable evidence.
     const divergence = measure(internals, buffer)
     if (!divergence || divergence.textCells < MIN_TEXT_CELLS) {
       missingHistoryByPane.delete(paneKey)
@@ -277,39 +111,40 @@ export function sampleRenderDesyncOnce(
     }
 
     missingHistoryByPane.delete(paneKey)
+    pendingPaneKeys.add(paneKey)
     recordTerminalWebglDiagnostic('webgl-render-desync', {
       paneKey,
       textCells: divergence.textCells,
       missing: divergence.missing,
       missPct: Math.round(divergence.missPct * 10) / 10
     })
+    const entry: SentinelEvidence = {
+      captureId: createCaptureId(paneKey),
+      paneKey,
+      when: Date.now(),
+      divergence: {
+        textCells: divergence.textCells,
+        missing: divergence.missing,
+        missPct: divergence.missPct
+      },
+      paused: internals.isPaused,
+      rendererState: internals.rendererState,
+      livePngDataUrl: internals.canvas.toDataURL(),
+      bufferText: bufferSnapshot(buffer, internals.rows)
+    }
     if (evidence.length < MAX_EVIDENCE_ENTRIES) {
-      evidence.push({
-        paneKey,
-        when: Date.now(),
-        divergence: {
-          textCells: divergence.textCells,
-          missing: divergence.missing,
-          missPct: divergence.missPct
-        },
-        paused: internals.isPaused,
-        atlasPages: -1,
-        livePngDataUrl: internals.canvas.toDataURL(),
-        bufferText: bufferSnapshot(buffer, internals.rows)
-      })
+      evidence.push(entry)
     }
     console.warn(
       `[terminal] render desync detected on pane ${paneKey} ` +
-        `(${divergence.missing}/${divergence.textCells} cells, ${divergence.missPct.toFixed(1)}%) — recovering`
+        `(${divergence.missing}/${divergence.textCells} cells, ${divergence.missPct.toFixed(1)}%) — persisting evidence`
     )
-    // The same recovery a tab reveal performs: wipe the shared atlas and
-    // repaint every pane from its buffer.
-    resetAndRefreshAllTerminalWebglAtlases()
+    void persistEvidenceThenRecover(entry, internals)
   })
 }
 
 export function maybeStartTerminalRenderDesyncSentinel(): void {
-  if (intervalId != null) {
+  if (clickListener != null) {
     return
   }
   let enabled = false
@@ -321,15 +156,113 @@ export function maybeStartTerminalRenderDesyncSentinel(): void {
   if (!enabled) {
     return
   }
-  intervalId = setInterval(sampleRenderDesyncOnce, SAMPLE_INTERVAL_MS)
-  console.warn('[terminal] render-desync sentinel armed (5s sampling)')
+  clickListener = (event) => {
+    const isMac = navigator.userAgent.includes('Mac')
+    if (event.button !== 0 || (isMac ? !event.metaKey : !event.ctrlKey)) {
+      return
+    }
+    const target = event.target
+    if (!(target instanceof Node)) {
+      return
+    }
+    let clickedTerminal: unknown = null
+    forEachLivePaneForDesyncSentinel((_paneKey, pane) => {
+      const terminal = (pane as SentinelPane).terminal as { element?: HTMLElement }
+      if (terminal.element?.contains(target)) {
+        clickedTerminal = terminal
+      }
+    })
+    if (clickedTerminal) {
+      startSampleBurst(clickedTerminal)
+    }
+  }
+  document.addEventListener('mouseup', clickListener, true)
+  console.warn('[terminal] render-desync sentinel armed (10s post-link bursts)')
 }
 
 export function stopTerminalRenderDesyncSentinelForTesting(): void {
-  if (intervalId != null) {
-    clearInterval(intervalId)
-    intervalId = null
+  stopSampleBurst()
+  if (clickListener != null) {
+    document.removeEventListener('mouseup', clickListener, true)
+    clickListener = null
   }
   missingHistoryByPane.clear()
+  pendingPaneKeys.clear()
+  for (const timeoutId of healedCaptureTimeoutIds) {
+    clearTimeout(timeoutId)
+  }
+  healedCaptureTimeoutIds.clear()
   evidence.length = 0
+}
+
+function createCaptureId(paneKey: string): string {
+  const panePart = paneKey.replace(/[^a-zA-Z0-9_-]/g, '-')
+  const nonce = globalThis.crypto?.randomUUID?.() ?? Math.random().toString(36).slice(2)
+  return `${Date.now()}-${panePart}-${nonce}`
+}
+
+function startSampleBurst(terminal: unknown): void {
+  stopSampleBurst()
+  burstTerminal = terminal
+  sampleRenderDesyncOnce()
+  burstIntervalId = setInterval(sampleRenderDesyncOnce, SAMPLE_INTERVAL_MS)
+  burstTimeoutId = setTimeout(stopSampleBurst, SAMPLE_BURST_MS)
+}
+
+function stopSampleBurst(): void {
+  if (burstIntervalId != null) {
+    clearInterval(burstIntervalId)
+    burstIntervalId = null
+  }
+  if (burstTimeoutId != null) {
+    clearTimeout(burstTimeoutId)
+    burstTimeoutId = null
+  }
+  burstTerminal = null
+  missingHistoryByPane.clear()
+}
+
+async function persistEvidenceThenRecover(
+  entry: SentinelEvidence,
+  internals: SentinelRenderInternals
+): Promise<void> {
+  try {
+    const persisted = await window.api.app.writeTerminalRenderDesyncEvidence({
+      captureId: entry.captureId,
+      phase: 'corrupt',
+      pngDataUrl: entry.livePngDataUrl,
+      metadata: {
+        paneKey: entry.paneKey,
+        when: entry.when,
+        divergence: entry.divergence,
+        paused: entry.paused,
+        rendererState: entry.rendererState,
+        bufferText: entry.bufferText
+      }
+    })
+    entry.persistedDirectory = persisted.directory
+  } catch (error) {
+    // Why: a failed write must leave the bad pixels intact; recovering here
+    // would destroy the only evidence without producing a durable capture.
+    console.error('[terminal] could not persist render-desync evidence; leaving pane intact', error)
+    pendingPaneKeys.delete(entry.paneKey)
+    return
+  }
+
+  resetAndRefreshAllTerminalWebglAtlases()
+  const timeoutId = setTimeout(() => {
+    healedCaptureTimeoutIds.delete(timeoutId)
+    void window.api.app
+      .writeTerminalRenderDesyncEvidence({
+        captureId: entry.captureId,
+        phase: 'healed',
+        pngDataUrl: internals.canvas.toDataURL(),
+        metadata: { when: Date.now() }
+      })
+      .catch((error) =>
+        console.error('[terminal] could not persist healed render reference', error)
+      )
+      .finally(() => pendingPaneKeys.delete(entry.paneKey))
+  }, SAMPLE_INTERVAL_MS)
+  healedCaptureTimeoutIds.add(timeoutId)
 }
