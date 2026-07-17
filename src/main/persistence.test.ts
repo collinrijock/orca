@@ -2508,7 +2508,7 @@ describe('Store', () => {
     })
     expect(persisted.settings.sourceControlAi.actions.branchName).toEqual({
       agentId: 'claude',
-      commandInputTemplate: '{basePrompt}\n\nRollback commit prompt'
+      commandInputTemplate: 'Rollback commit prompt\n\n{basePrompt}'
     })
   })
 
