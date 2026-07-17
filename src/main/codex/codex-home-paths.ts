@@ -57,11 +57,15 @@ function getOrcaUserDataPath(): string {
   return join(process.env.XDG_CONFIG_HOME || join(homedir(), '.config'), 'orca')
 }
 
-export function syncSystemCodexResourcesIntoManagedHome(): void {
+// Why: each managed home (the shared runtime mirror, or a per-account
+// self-contained CODEX_HOME that the caller has already created) links the same
+// system resources with its own ownership markers, so a per-account launch home
+// is complete without ever symlinking into or mutating the user's real ~/.codex.
+export function syncSystemCodexResourcesIntoManagedHome(managedHomePath?: string): void {
+  const targetHome = managedHomePath ?? getOrcaManagedCodexHomePath()
   const systemHomePath = getSystemCodexHomePath()
-  const managedHomePath = getOrcaManagedCodexHomePath()
   for (const entryName of CODEX_SYSTEM_RESOURCE_ENTRIES) {
-    linkSystemCodexResource(systemHomePath, managedHomePath, entryName)
+    linkSystemCodexResource(systemHomePath, targetHome, entryName)
   }
 }
 
