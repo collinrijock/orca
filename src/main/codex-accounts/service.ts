@@ -142,9 +142,9 @@ export class CodexAccountService {
     try {
       const canonicalConfig = this.readCanonicalConfigForManagedHome(managedHomePath)
       this.assertOAuthAccountAddAllowed(canonicalConfig)
-      this.safeSyncCanonicalConfigIntoManagedHome(managedHomePath, canonicalConfig)
+      this.safeSyncCanonicalConfigIntoManagedHome(managedHomePath, canonicalConfig, accountId)
       await this.runCodexLogin(managedHomePath)
-      const identity = this.readIdentityFromHome(managedHomePath)
+      const identity = this.readIdentityFromHome(managedHomePath, accountId)
       if (!identity.email) {
         throw new Error('Codex login completed, but Orca could not resolve the account email.')
       }
@@ -188,7 +188,7 @@ export class CodexAccountService {
       await this.rateLimits.refreshForCodexAccountChange(outgoingAccountId, targetSelection)
       return this.getSnapshot()
     } catch (error) {
-      this.safeRemoveManagedHome(managedHomePath)
+      this.safeRemoveManagedHome(managedHomePath, accountId)
       throw error
     }
   }
@@ -197,9 +197,9 @@ export class CodexAccountService {
     const account = this.requireAccount(accountId)
     const managedHomePath = this.ensureManagedHomeForReauthentication(account)
 
-    this.safeSyncCanonicalConfigIntoManagedHome(managedHomePath)
+    this.safeSyncCanonicalConfigIntoManagedHome(managedHomePath, undefined, account.id)
     await this.runCodexLogin(managedHomePath)
-    const identity = this.readIdentityFromHome(managedHomePath)
+    const identity = this.readIdentityFromHome(managedHomePath, account.id)
     if (!identity.email) {
       throw new Error('Codex login completed, but Orca could not resolve the account email.')
     }
@@ -255,7 +255,7 @@ export class CodexAccountService {
     })
     this.runtimeHome.syncForCurrentSelection()
 
-    this.safeRemoveManagedHome(account.managedHomePath)
+    this.safeRemoveManagedHome(account.managedHomePath, account.id)
     // Why: a removed account can no longer appear in the switcher dropdown,
     // so purge its cached usage to avoid stale entries.
     this.rateLimits.evictInactiveCodexCache(accountId)
@@ -469,7 +469,7 @@ export class CodexAccountService {
     // prove the path belongs to Orca before deleting anything.
     writeFileSync(join(managedHomePath, '.orca-managed-home'), `${accountId}\n`, 'utf-8')
     return {
-      managedHomePath: this.assertManagedHomePath(managedHomePath),
+      managedHomePath: this.assertManagedHomePath(managedHomePath, accountId),
       managedHomeRuntime: 'host',
       wslDistro: null,
       wslLinuxHomePath: null
@@ -518,7 +518,7 @@ export class CodexAccountService {
     const managedHomePath = toWindowsWslPath(wslLinuxHomePath, distro)
     let trustedManagedHomePath: string
     try {
-      trustedManagedHomePath = this.assertManagedHomePath(managedHomePath)
+      trustedManagedHomePath = this.assertManagedHomePath(managedHomePath, accountId)
     } catch (error) {
       this.safeRemoveWslManagedHomeCandidate(distro, wslLinuxHomePath, accountId)
       throw error
@@ -542,10 +542,11 @@ export class CodexAccountService {
 
   private safeSyncCanonicalConfigIntoManagedHome(
     managedHomePath: string,
-    canonicalConfig?: CanonicalCodexConfig | null
+    canonicalConfig?: CanonicalCodexConfig | null,
+    expectedAccountId?: string
   ): void {
     try {
-      this.syncCanonicalConfigIntoManagedHome(managedHomePath, canonicalConfig)
+      this.syncCanonicalConfigIntoManagedHome(managedHomePath, canonicalConfig, expectedAccountId)
     } catch (error) {
       console.warn('[codex-accounts] Failed to seed managed config:', error)
     }
@@ -555,7 +556,7 @@ export class CodexAccountService {
     const settings = this.store.getSettings()
     for (const account of settings.codexManagedAccounts) {
       try {
-        this.syncCanonicalConfigIntoManagedHome(account.managedHomePath)
+        this.syncCanonicalConfigIntoManagedHome(account.managedHomePath, undefined, account.id)
       } catch (error) {
         console.warn('[codex-accounts] Failed to sync managed config:', error)
       }
@@ -573,13 +574,14 @@ export class CodexAccountService {
 
   private syncCanonicalConfigIntoManagedHome(
     managedHomePath: string,
-    canonicalConfig = this.readCanonicalConfigForManagedHome(managedHomePath)
+    canonicalConfig = this.readCanonicalConfigForManagedHome(managedHomePath),
+    expectedAccountId?: string
   ): void {
     if (canonicalConfig === null) {
       return
     }
 
-    const trustedManagedHomePath = this.assertManagedHomePath(managedHomePath)
+    const trustedManagedHomePath = this.assertManagedHomePath(managedHomePath, expectedAccountId)
     if (this.isSelfContainedHostManagedHome(trustedManagedHomePath)) {
       // Why: this home is codex's live CODEX_HOME, so mirror config with the
       // trust-preserving merge — the plain overwrite below would wipe the
@@ -703,11 +705,11 @@ export class CodexAccountService {
     const wslInfo = parseWslUncPath(account.managedHomePath)
     if (wslInfo && process.platform === 'win32') {
       this.ensureExpectedWslManagedHomeForReauthentication(account, wslInfo)
-      return this.assertManagedHomePath(account.managedHomePath)
+      return this.assertManagedHomePath(account.managedHomePath, account.id)
     }
 
     try {
-      return this.assertManagedHomePath(account.managedHomePath)
+      return this.assertManagedHomePath(account.managedHomePath, account.id)
     } catch (error) {
       if (!this.isMissingManagedHomeError(error)) {
         throw error
@@ -729,7 +731,7 @@ export class CodexAccountService {
     // but only at the exact Orca-owned account path persisted for this account.
     mkdirSync(expectedManagedHomePath, { recursive: true })
     writeFileSync(join(expectedManagedHomePath, '.orca-managed-home'), `${account.id}\n`, 'utf-8')
-    return this.assertManagedHomePath(expectedManagedHomePath)
+    return this.assertManagedHomePath(expectedManagedHomePath, account.id)
   }
 
   private ensureExpectedWslManagedHomeForReauthentication(
@@ -786,7 +788,7 @@ export class CodexAccountService {
     return resolvedLeft === resolvedRight
   }
 
-  private assertManagedHomePath(candidatePath: string): string {
+  private assertManagedHomePath(candidatePath: string, expectedAccountId?: string): string {
     const wslInfo = parseWslUncPath(candidatePath)
     if (wslInfo) {
       if (
@@ -794,6 +796,12 @@ export class CodexAccountService {
         !wslInfo.linuxPath.endsWith('/home')
       ) {
         throw new Error('Managed WSL Codex home is outside Orca account storage.')
+      }
+      if (
+        expectedAccountId !== undefined &&
+        !wslInfo.linuxPath.endsWith(`/.local/share/orca/codex-accounts/${expectedAccountId}/home`)
+      ) {
+        throw new Error('Managed WSL Codex home does not match its persisted account ID.')
       }
 
       if (process.platform === 'win32') {
@@ -814,7 +822,16 @@ export class CodexAccountService {
                   'candidate_real=$(readlink -f -- "$candidate")',
                   'managed_root_real=$(readlink -f -- "$managed_root")',
                   'test -f "$candidate_real/.orca-managed-home"',
-                  'case "$candidate_real" in "$managed_root_real"/*/home) printf "%s\\n" "$candidate_real" ;; *) exit 35 ;; esac'
+                  ...(expectedAccountId === undefined
+                    ? [
+                        'case "$candidate_real" in "$managed_root_real"/*/home) printf "%s\\n" "$candidate_real" ;; *) exit 35 ;; esac'
+                      ]
+                    : [
+                        `expected_marker=${shellQuote(expectedAccountId)}`,
+                        'test "$candidate_real" = "$managed_root_real/$expected_marker/home"',
+                        'test "$(cat "$candidate_real/.orca-managed-home")" = "$expected_marker"',
+                        'printf "%s\\n" "$candidate_real"'
+                      ])
                 ].join('\n')
               )
             ],
@@ -840,13 +857,21 @@ export class CodexAccountService {
       if (!existsSync(join(candidatePath, '.orca-managed-home'))) {
         throw new Error('Managed Codex home is missing Orca ownership marker.')
       }
+      if (
+        expectedAccountId !== undefined &&
+        readFileSync(join(candidatePath, '.orca-managed-home'), 'utf-8').trim() !==
+          expectedAccountId
+      ) {
+        throw new Error('Managed WSL Codex home ownership marker does not match its account ID.')
+      }
       return candidatePath
     }
 
     return assertOwnedHostCodexManagedHomePath({
       candidatePath,
       managedAccountsRoot: this.getManagedAccountsRoot(),
-      systemCodexHomePath: getSystemCodexHomePath()
+      systemCodexHomePath: getSystemCodexHomePath(),
+      expectedAccountId
     })
   }
 
@@ -892,10 +917,10 @@ export class CodexAccountService {
     }
   }
 
-  private safeRemoveManagedHome(candidatePath: string): void {
+  private safeRemoveManagedHome(candidatePath: string, expectedAccountId: string): void {
     let managedHomePath: string
     try {
-      managedHomePath = this.assertManagedHomePath(candidatePath)
+      managedHomePath = this.assertManagedHomePath(candidatePath, expectedAccountId)
     } catch (error) {
       console.warn('[codex-accounts] Refusing to remove untrusted managed home:', error)
       return
@@ -1060,8 +1085,13 @@ export class CodexAccountService {
     }
   }
 
-  private readIdentityFromHome(managedHomePath: string): ResolvedCodexIdentity {
-    return this.resolveIdentityFromCredentials(this.loadOAuthCredentials(managedHomePath))
+  private readIdentityFromHome(
+    managedHomePath: string,
+    expectedAccountId: string
+  ): ResolvedCodexIdentity {
+    return this.resolveIdentityFromCredentials(
+      this.loadOAuthCredentials(managedHomePath, expectedAccountId)
+    )
   }
 
   private resolveIdentityFromCredentials(
@@ -1092,8 +1122,14 @@ export class CodexAccountService {
     }
   }
 
-  private loadOAuthCredentials(managedHomePath: string): CodexOAuthCredentials {
-    const authFilePath = join(this.assertManagedHomePath(managedHomePath), 'auth.json')
+  private loadOAuthCredentials(
+    managedHomePath: string,
+    expectedAccountId: string
+  ): CodexOAuthCredentials {
+    const authFilePath = join(
+      this.assertManagedHomePath(managedHomePath, expectedAccountId),
+      'auth.json'
+    )
     return this.extractOAuthCredentials(
       JSON.parse(readFileSync(authFilePath, 'utf-8')) as Record<string, unknown>
     )

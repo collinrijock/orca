@@ -1444,6 +1444,13 @@ describe('CodexAccountService config sync', () => {
       execFileSync: vi.fn((_command: string, args: string[]) => {
         const script = decodeEncodedWslBashCommand(String(args.at(-1)))
         if (script.includes('readlink -f')) {
+          expect(script).toContain("expected_marker='account-1'")
+          expect(script).toContain(
+            'test "$candidate_real" = "$managed_root_real/$expected_marker/home"'
+          )
+          expect(script).toContain(
+            'test "$(cat "$candidate_real/.orca-managed-home")" = "$expected_marker"'
+          )
           return `${wslLinuxHomePath}\n`
         }
         return ''
@@ -1722,6 +1729,46 @@ describe('CodexAccountService config sync', () => {
     expect(result.activeAccountId).toBe(null)
     expect(existsSync(managedHomePath)).toBe(false)
     expect(runtimeHome.syncForCurrentSelection).toHaveBeenCalled()
+  })
+
+  it('refuses to remove a managed home owned by a different account', async () => {
+    const otherAccountHome = createManagedHome(
+      testState.userDataDir,
+      'account-2',
+      '',
+      '{"account":"other"}\n'
+    )
+    const settings = createSettings({
+      codexManagedAccounts: [
+        {
+          id: 'account-1',
+          email: 'user@example.com',
+          managedHomePath: otherAccountHome,
+          providerAccountId: null,
+          workspaceLabel: null,
+          workspaceAccountId: null,
+          createdAt: 1,
+          updatedAt: 1,
+          lastAuthenticatedAt: 1
+        }
+      ]
+    })
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const { CodexAccountService } = await import('./service')
+    const service = new CodexAccountService(
+      createStore(settings) as never,
+      createRateLimits() as never,
+      createRuntimeHome() as never
+    )
+
+    await service.removeAccount('account-1')
+
+    expect(readFileSync(join(otherAccountHome, 'auth.json'), 'utf-8')).toBe('{"account":"other"}\n')
+    expect(warnSpy).toHaveBeenCalledWith(
+      '[codex-accounts] Refusing to remove untrusted managed home:',
+      expect.any(Error)
+    )
+    warnSpy.mockRestore()
   })
 
   it('lists accounts with normalizeActiveSelection', async () => {
