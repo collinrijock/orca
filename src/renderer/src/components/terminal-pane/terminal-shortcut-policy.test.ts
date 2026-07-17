@@ -684,7 +684,8 @@ describe('kitty keyboard protocol panes', () => {
     input: TerminalShortcutEvent,
     macOptionAsAlt: 'true' | 'false' | 'left' | 'right' = 'false',
     optionKeyLocation = 0,
-    active: () => boolean = kittyActive
+    active: () => boolean = kittyActive,
+    optionAsAltIsExplicit = false
   ) =>
     resolveTerminalShortcutAction(
       input,
@@ -694,8 +695,35 @@ describe('kitty keyboard protocol panes', () => {
       false,
       undefined,
       undefined,
-      active
+      active,
+      undefined,
+      undefined,
+      undefined,
+      optionAsAltIsExplicit
     )
+
+  // Explicit Off + auto ASCII punctuation: see repro-8733-8399-kitty-option-compose.test.ts
+  it('lets explicit Option Off compose in kitty panes and keeps auto letter CSI-u', () => {
+    expect(
+      resolveKitty(event({ key: '{', code: 'Quote', altKey: true }), 'false', 0, kittyActive, true)
+    ).toEqual({ type: 'sendInput', data: '{' })
+    expect(
+      resolveKitty(event({ key: '∫', code: 'KeyB', altKey: true }), 'false', 0, kittyActive, true)
+    ).toEqual({ type: 'sendInput', data: '\x1bb' })
+    expect(resolveKitty(event({ key: '@', code: 'KeyL', altKey: true }))).toEqual({
+      type: 'sendInput',
+      data: '@'
+    })
+    expect(
+      resolveKitty(
+        event({ key: '∏', code: 'KeyP', altKey: true, shiftKey: true }),
+        'left',
+        2,
+        kittyActive,
+        true
+      )
+    ).toEqual({ type: 'sendInput', data: '∏' })
+  })
 
   it('encodes Option+letter as kitty CSI-u with the physical base key in compose mode', () => {
     // macOS composition reports key='π' for Option+P on ABC/compose layouts;

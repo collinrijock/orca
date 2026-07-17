@@ -1014,6 +1014,12 @@ export default function TerminalPane({
   const effectiveMacOptionAsAlt = useEffectiveMacOptionAsAlt(settings?.terminalMacOptionAsAlt)
   const macOptionAsAltRef = useRef<MacOptionAsAlt>(effectiveMacOptionAsAlt)
   macOptionAsAltRef.current = effectiveMacOptionAsAlt
+  // Why: policy must distinguish explicit Off/left/right from auto-resolved
+  // Off so kitty panes keep TUI Option hotkeys under auto while honoring an
+  // intentional compose choice (issues #8733 / #8399).
+  const optionAsAltIsExplicit = (settings?.terminalMacOptionAsAlt ?? 'auto') !== 'auto'
+  const optionAsAltIsExplicitRef = useRef(optionAsAltIsExplicit)
+  optionAsAltIsExplicitRef.current = optionAsAltIsExplicit
   const onPtyExitRef = useRef(onPtyExit)
   onPtyExitRef.current = onPtyExit
 
@@ -1849,6 +1855,7 @@ export default function TerminalPane({
     searchOpenRef,
     searchStateRef,
     macOptionAsAltRef,
+    optionAsAltIsExplicitRef,
     paneKittyKeyboardModesRef,
     keybindings,
     terminalShortcutPolicy: settings?.terminalShortcutPolicy ?? 'orca-first'

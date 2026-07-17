@@ -48,6 +48,20 @@ function kittyAltModifiers(shiftKey: boolean): number {
   return shiftKey ? 4 : 3
 }
 
+/**
+ * True for printable ASCII that is not a letter or digit (e.g. `@`, `{`, `[`).
+ * Why: international layouts compose these via Option/AltGr. Under auto-resolved
+ * Option-as-Alt Off we still CSI-u encode Option+letter glyphs (π, µ) so TUI
+ * hotkeys like OMP Alt+P work, but essential ASCII punctuation must stay text.
+ */
+function isComposedAsciiPunctuation(key: string): boolean {
+  if (key.length !== 1) {
+    return false
+  }
+  const code = key.charCodeAt(0)
+  return code >= 33 && code <= 126 && !/[a-zA-Z0-9]/.test(key)
+}
+
 /** The un-shifted ASCII character for a physical key code (letters, digits,
  *  and the punctuation map above), or undefined for unmapped codes. */
 function resolveUnshiftedCharacterForCode(code: string | undefined): string | undefined {
@@ -93,7 +107,12 @@ export function resolveTerminalShortcutAction(
   getWindowsShiftEnterEncoding?: () => WindowsShiftEnterEncoding,
   // Why: keybindings follow the client OS, but terminal byte protocols follow
   // the PTY host. They differ for macOS clients attached to Windows runtimes.
-  isWindowsTerminalHost: () => boolean = () => isWindows
+  isWindowsTerminalHost: () => boolean = () => isWindows,
+  // Why: 'auto' resolves to the same four modes as an explicit pick, but an
+  // explicit Off/left/right choice must win over kitty physical-key encoding
+  // so compose layouts keep punctuation (French-PC `{`, German `@`). Auto
+  // keeps letter CSI-u for TUI hotkeys and only special-cases ASCII punctuation.
+  optionAsAltIsExplicit = false
 ): TerminalShortcutAction | null {
   const platform: NodeJS.Platform = isMac ? 'darwin' : isWindows ? 'win32' : 'linux'
   if (!event.repeat) {
@@ -290,18 +309,38 @@ export function resolveTerminalShortcutAction(
   //
   // The handling depends on the macOptionAsAlt setting (mirrors Ghostty):
   // - 'true':  xterm handles all Option as Meta natively; nothing to do here.
-  // - kitty-protocol pane (any other mode): the TUI asked for modifier-accurate
-  //   keys, so every Option chord is encoded as kitty CSI-u with the physical
-  //   base key (Option+P → \x1b[112;3u). Without this, xterm's kitty encoder
-  //   reports the composed codepoint (alt+π), which no TUI binds — the chord
-  //   neither triggers the hotkey nor types the character (issue: OMP Alt+P /
-  //   Alt+M dead on compose layouts). Dead keys are exempt so composition
-  //   (Option+E → ´) keeps working.
+  // - kitty-protocol pane: auto-resolved compose mode and explicit Meta-side
+  //   modes encode Option+letter as kitty CSI-u with the physical base key
+  //   (Option+P → \x1b[112;3u) so TUI hotkeys work on compose layouts. An
+  //   explicitly chosen compose side keeps literal composed input instead.
+  //   Auto still keeps ASCII punctuation (German `@`, French `{`) as text.
+  //   Dead keys are exempt so composition (Option+E → ´) keeps working.
   // - 'false': compensate the three most critical readline shortcuts (B/F/D).
   // - 'left'/'right': the designated Option key acts as full Meta (emit Esc+
   //   for any single letter); the other key composes, with B/F/D compensated.
   if (isMac && !event.metaKey && !event.ctrlKey && event.altKey && macOptionAsAlt !== 'true') {
-    if (event.key !== 'Dead' && isKittyKeyboardActivePane?.()) {
+    // Why: event.location on a character key reports that key's position
+    // (always 0 for standard keys), NOT which modifier is held. The caller
+    // must track the Option key's own keydown location and pass it as
+    // optionKeyLocation.
+    const isLeftOption = optionKeyLocation === 1
+    const isRightOption = optionKeyLocation === 2
+    const shouldActAsMeta =
+      (macOptionAsAlt === 'left' && isLeftOption) || (macOptionAsAlt === 'right' && isRightOption)
+    const kittyActive = event.key !== 'Dead' && isKittyKeyboardActivePane?.() === true
+    const explicitComposeSide = optionAsAltIsExplicit && !shouldActAsMeta
+    const needsReadlineComposeCompensation =
+      !shouldActAsMeta &&
+      !event.shiftKey &&
+      (event.code === 'KeyB' || event.code === 'KeyF' || event.code === 'KeyD')
+
+    if (kittyActive && !explicitComposeSide) {
+      // Why: auto-resolved Off still CSI-u-encodes Option+letter for OMP-style
+      // hotkeys, but layout-essential ASCII punctuation must remain text even
+      // when the TUI enabled kitty (issues #8733 French `{`, #8399 German `@`).
+      if (!shouldActAsMeta && isComposedAsciiPunctuation(event.key)) {
+        return { type: 'sendInput', data: event.key }
+      }
       const baseCharacter =
         (event.code ? layoutBaseCharacterForCode?.(event.code) : undefined) ??
         resolveUnshiftedCharacterForCode(event.code)
@@ -313,17 +352,16 @@ export function resolveTerminalShortcutAction(
       }
     }
 
+    if (
+      kittyActive &&
+      explicitComposeSide &&
+      event.key.length === 1 &&
+      !needsReadlineComposeCompensation
+    ) {
+      return { type: 'sendInput', data: event.key }
+    }
+
     if (!event.shiftKey) {
-      // Why: event.location on a character key reports that key's position
-      // (always 0 for standard keys), NOT which modifier is held. The caller
-      // must track the Option key's own keydown location and pass it as
-      // optionKeyLocation.
-      const isLeftOption = optionKeyLocation === 1
-      const isRightOption = optionKeyLocation === 2
-
-      const shouldActAsMeta =
-        (macOptionAsAlt === 'left' && isLeftOption) || (macOptionAsAlt === 'right' && isRightOption)
-
       if (shouldActAsMeta) {
         // Emit Esc+key (e.g. Option+B → \x1bb) for letters, digits, and
         // mapped punctuation.
