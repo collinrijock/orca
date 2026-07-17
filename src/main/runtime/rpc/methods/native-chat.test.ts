@@ -8,9 +8,17 @@ const OVERSIZED = 'x'.repeat(5000)
 const cachedResult = vi.hoisted(() => ({
   value: {
     messages: [] as NativeChatMessage[],
+    // Optional so truncation-gating fixtures can omit it; lifecycle tests set it explicitly.
     lifecycle: undefined as
       | { state: 'working' | 'completed' | 'interrupted'; turnId: string; timestamp: number | null }
       | undefined
+  } as {
+    messages: NativeChatMessage[]
+    lifecycle?: {
+      state: 'working' | 'completed' | 'interrupted'
+      turnId: string
+      timestamp: number | null
+    }
   }
 }))
 const watcher = vi.hoisted(() => ({
