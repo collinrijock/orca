@@ -17,6 +17,7 @@ import type { CodexRuntimeHomeService } from './runtime-home-service'
 import { writeFileAtomically } from './fs-utils'
 import { rewriteRelativePathConfigValues } from '../codex/codex-config-path-reference-rewrite'
 import { stripCodexManagedHookTrustEntriesFromConfig } from '../codex/codex-managed-trust-reconciliation'
+import { isCodexSystemDefaultRealHomeEnabled } from '../codex/codex-real-home-flag'
 import { getCodexManagedHookInstallMaterial } from '../codex/hook-service'
 import { MANAGED_HOOK_TIMEOUT_SECONDS } from '../agent-hooks/installer-utils'
 import { resolveCodexCommand } from '../codex-cli/command'
@@ -472,15 +473,18 @@ export class CodexAccountService {
     // account while preserving consistent Codex behavior. Managed homes are
     // real CODEX_HOMEs for `codex login`, so relative path-valued settings
     // must keep resolving against the home the config was read from.
-    const material = getCodexManagedHookInstallMaterial()
-    // Why: source-home Orca trust is foreign to each managed home's hooks.json.
-    const sanitizedConfig = stripCodexManagedHookTrustEntriesFromConfig(canonicalConfig.contents, {
-      runtimeHomePath: canonicalConfig.sourceHomePath,
-      sourcePath: canonicalConfig.sourceHooksPath,
-      command: material.command,
-      managedEventLabels: new Set(Object.values(material.eventLabel)),
-      timeoutSec: MANAGED_HOOK_TIMEOUT_SECONDS
-    })
+    let sanitizedConfig = canonicalConfig.contents
+    if (isCodexSystemDefaultRealHomeEnabled(this.store.getSettings())) {
+      const material = getCodexManagedHookInstallMaterial()
+      // Why: source-home Orca trust is foreign to each managed home's hooks.json.
+      sanitizedConfig = stripCodexManagedHookTrustEntriesFromConfig(canonicalConfig.contents, {
+        runtimeHomePath: canonicalConfig.sourceHomePath,
+        sourcePath: canonicalConfig.sourceHooksPath,
+        command: material.command,
+        managedEventLabels: new Set(Object.values(material.eventLabel)),
+        timeoutSec: MANAGED_HOOK_TIMEOUT_SECONDS
+      })
+    }
     this.writeManagedConfig(
       trustedManagedHomePath,
       rewriteRelativePathConfigValues(sanitizedConfig, canonicalConfig.sourceHomePath)

@@ -394,6 +394,43 @@ describe('CodexAccountService config sync', () => {
     expectSanitizedManagedConfig()
   })
 
+  it('keeps flag-off config mirroring byte-identical', async () => {
+    const fixture = await createCanonicalHookTrustFixture()
+    const canonicalConfigPath = join(testState.fakeHomeDir, '.codex', 'config.toml')
+    writeFileSync(canonicalConfigPath, fixture.config, 'utf-8')
+    const managedHomePath = createManagedHome(
+      testState.userDataDir,
+      'account-1',
+      'approval_policy = "on-request"\n'
+    )
+    const settings = createSettings({
+      codexSystemDefaultRealHomeEnabled: false,
+      codexManagedAccounts: [
+        {
+          id: 'account-1',
+          email: 'user@example.com',
+          managedHomePath,
+          providerAccountId: null,
+          workspaceLabel: null,
+          workspaceAccountId: null,
+          createdAt: 1,
+          updatedAt: 1,
+          lastAuthenticatedAt: 1
+        }
+      ]
+    })
+
+    const { CodexAccountService } = await import('./service')
+    new CodexAccountService(
+      createStore(settings) as never,
+      createRateLimits() as never,
+      createRuntimeHome() as never
+    )
+
+    expect(readFileSync(join(managedHomePath, 'config.toml'), 'utf-8')).toBe(fixture.config)
+    expect(readFileSync(canonicalConfigPath, 'utf-8')).toBe(fixture.config)
+  })
+
   it('rewrites relative path config values when syncing into managed homes', async () => {
     const canonicalConfigPath = join(testState.fakeHomeDir, '.codex', 'config.toml')
     writeFileSync(

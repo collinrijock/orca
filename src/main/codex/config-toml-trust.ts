@@ -599,18 +599,34 @@ export function normalizeHookTrustKeyForLookup(key: string): string {
 }
 
 function findTrustBlockRanges(content: string, key: string): TrustBlockRange[] {
+  return findTrustBlockRangesForNormalizedKeys(
+    content,
+    new Set([normalizeHookTrustKeyForLookup(key)])
+  )
+}
+
+function findTrustBlockRangesForNormalizedKeys(
+  content: string,
+  normalizedKeys: ReadonlySet<string>
+): TrustBlockRange[] {
   const ranges: TrustBlockRange[] = []
-  const normalizedKey = normalizeHookTrustKeyForLookup(key)
+  if (normalizedKeys.size === 0) {
+    return ranges
+  }
   let cursor = 0
   let scanState = createTomlLineScanState()
   while (cursor < content.length) {
     const newlineIdx = content.indexOf('\n', cursor)
     const lineEnd = newlineIdx === -1 ? content.length : newlineIdx
     const rawLine = content.slice(cursor, lineEnd)
-    const line = rawLine.replace(/\r$/, '')
+    const lineWithoutCr = rawLine.replace(/\r$/, '')
+    const line =
+      cursor === 0 && lineWithoutCr.charCodeAt(0) === 0xfeff
+        ? lineWithoutCr.slice(1)
+        : lineWithoutCr
     const nextCursor = newlineIdx === -1 ? content.length : newlineIdx + 1
     const headerKey = isTomlStructuralLine(scanState) ? parseHookStateHeaderKey(line) : null
-    if (headerKey !== null && normalizeHookTrustKeyForLookup(headerKey) === normalizedKey) {
+    if (headerKey !== null && normalizedKeys.has(normalizeHookTrustKeyForLookup(headerKey))) {
       const headerLineEnd = rawLine.endsWith('\r') ? lineEnd - 1 : lineEnd
       const after = content.slice(headerLineEnd)
       const nextHeaderRel = findNextTableHeader(after)
@@ -887,11 +903,8 @@ export function removeHookTrustEntriesFromContent(
   content: string,
   keys: readonly string[]
 ): string {
-  return keys.reduce((updated, key) => removeTrustBlock(updated, key), content)
-}
-
-function removeTrustBlock(content: string, key: string): string {
-  const ranges = findTrustBlockRanges(content, key)
+  const normalizedKeys = new Set(keys.map(normalizeHookTrustKeyForLookup))
+  const ranges = findTrustBlockRangesForNormalizedKeys(content, normalizedKeys)
   if (ranges.length === 0) {
     return content
   }
@@ -912,8 +925,39 @@ export function readHookTrustEntries(configPath: string): Map<string, CodexHookT
   return readHookTrustEntriesFromContent(readTomlFile(configPath))
 }
 
+function readHookTrustBlockState(block: string): {
+  trustedHashes: Set<string>
+  enabled?: boolean
+} {
+  const trustedHashes = new Set<string>()
+  let enabled: boolean | undefined
+  let cursor = 0
+  let scanState = createTomlLineScanState()
+  while (cursor < block.length) {
+    const newlineIdx = block.indexOf('\n', cursor)
+    const lineEnd = newlineIdx === -1 ? block.length : newlineIdx
+    const line = block.slice(cursor, lineEnd).replace(/\r$/, '')
+    if (isTomlStructuralLine(scanState)) {
+      const hashMatch = /^[ \t]*trusted_hash[ \t]*=[ \t]*"((?:[^"\\]|\\.)*)"[ \t]*(?:#.*)?$/.exec(
+        line
+      )
+      if (hashMatch) {
+        trustedHashes.add(unescapeTomlString(hashMatch[1]))
+      }
+      const enabledMatch = /^[ \t]*enabled[ \t]*=[ \t]*(true|false)[ \t]*(?:#.*)?$/.exec(line)
+      if (enabledMatch) {
+        enabled = enabled !== false && enabledMatch[1] === 'true'
+      }
+    }
+    scanState = updateTomlLineScanState(scanState, line)
+    cursor = newlineIdx === -1 ? block.length : newlineIdx + 1
+  }
+  return { trustedHashes, enabled }
+}
+
 export function readHookTrustEntriesFromContent(content: string): Map<string, CodexHookTrustState> {
   const result = new HookTrustEntryMap()
+  const conflictingTrustedHashKeys = new Set<string>()
   // Why: walk line-by-line so `[hooks.state."..."]` inside a `"""..."""` or
   // `'''...'''` multi-line string isn't mistaken for a real header.
   let cursor = 0
@@ -922,7 +966,11 @@ export function readHookTrustEntriesFromContent(content: string): Map<string, Co
     const newlineIdx = content.indexOf('\n', cursor)
     const lineEnd = newlineIdx === -1 ? content.length : newlineIdx
     const rawLine = content.slice(cursor, lineEnd)
-    const line = rawLine.replace(/\r$/, '')
+    const lineWithoutCr = rawLine.replace(/\r$/, '')
+    const line =
+      cursor === 0 && lineWithoutCr.charCodeAt(0) === 0xfeff
+        ? lineWithoutCr.slice(1)
+        : lineWithoutCr
     const nextCursor = newlineIdx === -1 ? content.length : newlineIdx + 1
     const key = isTomlStructuralLine(scanState) ? parseHookStateHeaderKey(line) : null
     if (key !== null) {
@@ -931,21 +979,33 @@ export function readHookTrustEntriesFromContent(content: string): Map<string, Co
       const nextHeaderRel = findNextTableHeader(after)
       const blockEnd = nextHeaderRel === -1 ? content.length : nextCursor + nextHeaderRel
       const block = content.slice(nextCursor, blockEnd)
-      // Why: we own this block's shape (only `enabled` + `trusted_hash`), so
-      // a line scan beats pulling in a full TOML value parser.
-      const hashMatch = /^[ \t]*trusted_hash[ \t]*=[ \t]*"((?:[^"\\]|\\.)*)"/m.exec(block)
-      const enabledMatch = /^[ \t]*enabled[ \t]*=[ \t]*(true|false)[ \t\r]*(?:#.*)?$/m.exec(block)
+      const blockState = readHookTrustBlockState(block)
       const normalizedKey = normalizeHookTrustKeyForLookup(key)
       const existingState = result.get(normalizedKey)
-      const enabled = enabledMatch ? enabledMatch[1] === 'true' : undefined
+      const trustedHash =
+        blockState.trustedHashes.size === 1
+          ? blockState.trustedHashes.values().next().value
+          : undefined
+      if (
+        blockState.trustedHashes.size > 1 ||
+        (trustedHash !== undefined &&
+          existingState?.trustedHash !== undefined &&
+          existingState.trustedHash !== trustedHash)
+      ) {
+        // Why: conflicting normalized duplicates are malformed and cannot prove
+        // which block is owned, so trust cleanup must preserve them all.
+        conflictingTrustedHashKeys.add(normalizedKey)
+      }
       result.set(normalizedKey, {
-        trustedHash: hashMatch ? unescapeTomlString(hashMatch[1]) : existingState?.trustedHash,
+        trustedHash: conflictingTrustedHashKeys.has(normalizedKey)
+          ? undefined
+          : (trustedHash ?? existingState?.trustedHash),
         // Why: Windows writes both slash variants for one hook; a disabled copy
         // must remain authoritative regardless of which variant appears last.
         enabled:
-          existingState?.enabled === false || enabled === false
+          existingState?.enabled === false || blockState.enabled === false
             ? false
-            : (enabled ?? existingState?.enabled)
+            : (blockState.enabled ?? existingState?.enabled)
       })
       cursor = nextCursor
       continue
