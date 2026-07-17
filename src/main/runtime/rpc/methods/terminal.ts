@@ -37,6 +37,7 @@ import {
   MOBILE_SNAPSHOT_BYTE_BUDGET,
   MOBILE_SUBSCRIBE_SCROLLBACK_ROWS
 } from '../../scrollback-limits'
+import { assertTerminalAgentSendable } from '../terminal-agent-send-guard'
 
 const REQUESTED_SNAPSHOT_BYTE_BUDGET = 2 * 1024 * 1024
 const TERMINAL_STREAM_CHUNK_BYTES = 48 * 1024
@@ -404,16 +405,6 @@ function getTerminalSendGuardRefusedReason(error: unknown): 'no-agent' | 'permis
 function isTerminalSendGuardNotWritable(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error)
   return message.includes('terminal_guard_not_writable')
-}
-
-function isTerminalAgentStatusNotWritable(error: unknown): boolean {
-  const message = error instanceof Error ? error.message : String(error)
-  return [
-    'terminal_not_writable',
-    'terminal_handle_stale',
-    'terminal_gone',
-    'terminal_exited'
-  ].some((code) => message.includes(code))
 }
 
 function assertTerminalSendExactPtyBinding(
@@ -1270,28 +1261,16 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
       const assertSendPreconditions =
         params.requireAgentStatus === 'sendable'
           ? async (ptyId?: string): Promise<void> => {
-              assertTerminalSendExactPtyBinding(runtime, params.terminal, ptyId)
-              if (ptyId && isTerminalInputLockedForClient(runtime, ptyId, params.client)) {
-                throw new Error('terminal_guard_not_writable')
-              }
-              let agentStatus
-              try {
-                agentStatus = await runtime.getTerminalAgentStatus(params.terminal)
-              } catch (error) {
-                if (isTerminalAgentStatusNotWritable(error)) {
-                  throw new Error('terminal_guard_not_writable')
+              await assertTerminalAgentSendable({
+                runtime,
+                handle: params.terminal,
+                assertWritable: () => {
+                  assertTerminalSendExactPtyBinding(runtime, params.terminal, ptyId)
+                  if (ptyId && isTerminalInputLockedForClient(runtime, ptyId, params.client)) {
+                    throw new Error('terminal_guard_not_writable')
+                  }
                 }
-                throw error
-              }
-              // Why: a send callback can race a pane reconnect; status evidence
-              // must never authorize the callback's replacement PTY.
-              assertTerminalSendExactPtyBinding(runtime, params.terminal, ptyId)
-              if (!agentStatus.isRunningAgent) {
-                throw new Error('terminal_guard_no_agent')
-              }
-              if (agentStatus.status === 'permission') {
-                throw new Error('terminal_guard_permission')
-              }
+              })
             }
           : undefined
       if (params.requireAgentStatus === 'sendable') {
