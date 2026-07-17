@@ -215,6 +215,7 @@ import {
   ALL_EXECUTION_HOSTS_SCOPE,
   getRepoExecutionHostId,
   getSettingsFocusedExecutionHostId,
+  getWorktreeExecutionHostId,
   type ExecutionHostId
 } from '../../../../shared/execution-host'
 import { getRepoHeaderCreateState } from './repo-header-create-state'
@@ -2115,10 +2116,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
         const targetWorktree = worktrees.find((w) => w.id === pendingRevealWorktree.worktreeId)
         const targetRepo = targetWorktree ? repoMap.get(targetWorktree.repoId) : undefined
         if (targetWorktree) {
-          const hostId =
-            targetRepo && (targetRepo.connectionId || targetRepo.executionHostId)
-              ? getRepoExecutionHostId(targetRepo)
-              : defaultHostId
+          const hostId = getWorktreeExecutionHostId(targetWorktree, targetRepo, defaultHostId)
           const hostGroupKey = `host:${hostId}`
           if (collapsedGroups.has(hostGroupKey)) {
             toggleGroup(hostGroupKey)

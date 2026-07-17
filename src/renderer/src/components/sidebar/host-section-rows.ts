@@ -3,6 +3,7 @@ import {
   LOCAL_EXECUTION_HOST_ID,
   getLocalExecutionHostLabel,
   getRepoExecutionHostId,
+  getWorktreeExecutionHostId,
   type ExecutionHostId,
   type ExecutionHostKind,
   type ExecutionHostScope
@@ -69,9 +70,7 @@ function getFolderWorkspaceHostId(
 function getRowHostId(row: Row, defaultHostId: ExecutionHostId): ExecutionHostId | null {
   switch (row.type) {
     case 'item':
-      // Why: runtime and SSH snapshots can carry a more precise owner than the
-      // repo fallback; header localization already uses this worktree identity.
-      return row.worktree.hostId ?? getRepoHostId(row.repo, defaultHostId)
+      return getWorktreeExecutionHostId(row.worktree, row.repo, defaultHostId)
     case 'pending-creation':
     case 'imported-worktrees-card':
     case 'new-external-worktrees-inbox':

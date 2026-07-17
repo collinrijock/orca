@@ -38,6 +38,7 @@ import {
   getExecutionHostLabel,
   LOCAL_EXECUTION_HOST_ID,
   getRepoExecutionHostId,
+  getWorktreeExecutionHostId,
   type ExecutionHostId
 } from '../../../../shared/execution-host'
 import { parseWslUncPath } from '../../../../shared/wsl-paths'
@@ -476,7 +477,7 @@ function emitPinnedGroup(
   const pinnedRepoOrder: string[] = []
   const seenPinnedRepoIds = new Set<string>()
   for (const worktree of pinned) {
-    const hostId = getWorktreeHostId(worktree, repoMap, defaultHostId)
+    const hostId = getWorktreeExecutionHostId(worktree, repoMap.get(worktree.repoId), defaultHostId)
     hostWorktreeCounts.set(hostId, (hostWorktreeCounts.get(hostId) ?? 0) + 1)
     const hostIds = hostWorktreeIds.get(hostId) ?? []
     hostIds.push(worktree.id)
@@ -730,20 +731,6 @@ function getMixedHostContextLabels(
   return uniqueLabels.size > 1 ? labelsByRepoId : undefined
 }
 
-function getWorktreeHostId(
-  worktree: Worktree,
-  repoMap: Map<string, Repo>,
-  defaultHostId: ExecutionHostId
-): ExecutionHostId {
-  if (worktree.hostId) {
-    return worktree.hostId
-  }
-  const repo = repoMap.get(worktree.repoId)
-  return repo && (repo.connectionId || repo.executionHostId)
-    ? getRepoExecutionHostId(repo)
-    : defaultHostId
-}
-
 function getHostWorktreeCounts(
   worktrees: readonly Worktree[],
   repoMap: Map<string, Repo>,
@@ -759,7 +746,7 @@ function getHostWorktreeCounts(
       continue
     }
     seenWorktreeIds.add(worktree.id)
-    const hostId = getWorktreeHostId(worktree, repoMap, defaultHostId)
+    const hostId = getWorktreeExecutionHostId(worktree, repoMap.get(worktree.repoId), defaultHostId)
     counts.set(hostId, (counts.get(hostId) ?? 0) + 1)
   }
   return counts
@@ -780,7 +767,7 @@ function getHostWorktreeIds(
       continue
     }
     seenWorktreeIds.add(worktree.id)
-    const hostId = getWorktreeHostId(worktree, repoMap, defaultHostId)
+    const hostId = getWorktreeExecutionHostId(worktree, repoMap.get(worktree.repoId), defaultHostId)
     const ids = idsByHost.get(hostId) ?? []
     ids.push(worktree.id)
     idsByHost.set(hostId, ids)
