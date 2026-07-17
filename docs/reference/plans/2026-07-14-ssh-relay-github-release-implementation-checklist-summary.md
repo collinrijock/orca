@@ -9,16 +9,16 @@ keeps commands, hashes, runner identities, timings, and failure details.
 A checked box means the work has evidence in the detailed ledger. Design approval alone does not
 complete a box.
 
-Active checkpoint: **Milestone 6 / Work Package 5 bounded runtime transfer — Windows borrowed-chunk
-pipe-write correction locally green, exact-head native qualification next, 2026-07-17, Codex
-implementation owner.** Exact diagnostic head
-`ce4c7c481c790eacbf73162e5e03570fc2d3b490`, run `29563868935`, and Windows x64/ARM64 jobs
-`87832001707`/`87832001736` independently complete the 18-byte first file and stall before accepting
-any bytes of `THIRD_PARTY_LICENSES.txt`. The isolated correction uses sequential zero-copy 16 KiB
-Windows pipe views while retaining the borrowed source buffer until all subwrites settle. Focused,
-broad, release, typecheck, lint/reliability/max-lines, formatting, diff, and resolver isolation are
-green. Commit/push only this package for fresh native proof. No product/default caller, Beta,
-fallback, tuple, publication, or signing behavior is authorized.
+Active checkpoint: **Milestone 6 / Work Package 5 bounded runtime transfer — matched 4 KiB Windows
+pipe correction locally green, native qualification next, 2026-07-17, Codex implementation
+owner.** Exact head
+`c93111a14bdb5390f99aa44a9004449625cbdcb5`, run `29564980476`, and x64/ARM64 jobs
+`87835460661`/`87835460642` falsify client-only 16 KiB subdivision: x64 stalls after the 18-byte
+first file, while ARM64 completes the 180,827-byte license and stalls on `node.exe`. Client pipe
+writes and remote .NET reads now match at 4 KiB while preserving the source 64 KiB buffer; focused,
+broad, release, typecheck, lint/reliability/max-lines, formatting, diff, and resolver isolation pass.
+Commit/push only this package. No product/default caller, Beta, fallback, tuple, publication, or
+signing behavior is authorized.
 `E-M6-WINDOWS-SYSTEM-SSH-TREE-LIVE-PORTABLE-FIXTURE-LOCAL-001` records the portable-fixture
 correction locally green: the no-Orca-publication workflow oracle permits the one exact pinned
 Microsoft fixture release URL while Orca release URLs, `gh release`, and `contents: write` remain

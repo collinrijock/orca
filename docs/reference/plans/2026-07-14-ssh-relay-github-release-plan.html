@@ -1004,12 +1004,14 @@
                   Windows uses a bounded binary PowerShell/.NET path and must not materialize the
                   runtime as one JSON/base64 buffer. The client may subdivide each borrowed 64 KiB
                   source chunk into smaller awaited Windows pipe writes, but must not release or
-                  reuse that source buffer until every subwrite settles; the receiver retains its
-                  fixed 64 KiB .NET buffer. SFTP uses bounded concurrency. After locally verifying
-                  signed metadata and archive/tree hashes, transfer through authenticated SSH,
-                  restore every declared executable bit, then execute the transferred bundled Node
-                  to hash the entire staging tree. Verify the full tree, run bundled
-                  Node/native-module and minimal PTY/watcher probes, write a structured
+                  reuse that source buffer until every subwrite settles. Windows pipe writes and
+                  .NET reads use the same conservative 4 KiB quantum to avoid platform pipe
+                  backpressure cycles; the source worker retains its fixed 64 KiB buffer. SFTP uses
+                  bounded concurrency. After locally verifying signed metadata and archive/tree
+                  hashes, transfer through authenticated SSH, restore every declared executable bit,
+                  then execute the transferred bundled Node to hash the entire staging tree. Verify
+                  the full tree, run bundled Node/native-module and minimal PTY/watcher probes,
+                  write a structured
                   <code>.install-complete</code> containing schema, mode, and digest, atomically
                   publish the immutable install, and only then launch. Preserve current locks,
                   reconnect, and garbage collection.

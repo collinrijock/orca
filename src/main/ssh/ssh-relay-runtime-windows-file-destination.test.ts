@@ -90,7 +90,7 @@ describe('SSH relay runtime Windows system-SSH file destination', () => {
     expect(script).toContain('[Console]::OpenStandardInput()')
     expect(script).toContain('[IO.FileMode]::CreateNew')
     expect(script).toContain('[IO.FileShare]::None')
-    expect(script).toContain('New-Object byte[] 65536')
+    expect(script).toContain('New-Object byte[] 4096')
     expect(script).toContain("-ne 'ORCAEND1'")
     expect(script).not.toContain('$inputStream.ReadByte()')
     for (const forbidden of ['ReadToEnd', 'CopyTo(', 'FromBase64String', 'ConvertFrom-Json']) {
@@ -113,8 +113,11 @@ describe('SSH relay runtime Windows system-SSH file destination', () => {
     const destination = await opening
     await destination.write(Buffer.alloc(65_537, 7))
     const closing = destination.close()
-    await vi.waitFor(() => expect(channel.write).toHaveBeenCalledTimes(7))
-    expect(channel.write.mock.calls[6]?.[0]).toEqual(completionFrame)
+    const expectedWrites =
+      Math.ceil(65_537 / SSH_RELAY_RUNTIME_WINDOWS_FILE_DESTINATION_LIMITS.maximumPipeWriteBytes) +
+      2
+    await vi.waitFor(() => expect(channel.write).toHaveBeenCalledTimes(expectedWrites))
+    expect(channel.write.mock.calls.at(-1)?.[0]).toEqual(completionFrame)
     resolve()
     await closing
   })

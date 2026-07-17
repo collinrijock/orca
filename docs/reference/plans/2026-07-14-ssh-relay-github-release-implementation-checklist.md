@@ -8,8 +8,8 @@ work; keep exact commands, runner identities, hashes, metrics, and residual gaps
 
 Date created: 2026-07-14<br>
 Last updated: 2026-07-17<br>
-Current phase: Milestone 6 / Work Package 5 bounded runtime transfer — **In progress — Windows borrowed-chunk pipe-write correction locally green, exact-head native qualification next, 2026-07-17, Codex implementation owner**. Exact diagnostic head `ce4c7c481c790eacbf73162e5e03570fc2d3b490`, run `29563868935`, and Windows x64/ARM64 jobs `87832001707`/`87832001736` independently prove the first borrowed 64 KiB payload write stalls. `E-M6-WINDOWS-PIPE-SUBWRITE-LOCAL-001` subdivides only that Windows destination write into sequential zero-copy 16 KiB views while retaining the source buffer until every subwrite settles. Commit/push only this correction and require fresh native proof. Legacy remains the sole production path; real Apple/SignPath rehearsals remain deferred.<br>
-Session checkpoint: **WINDOWS 16 KIB PIPE SUBWRITE LOCAL GREEN / NATIVE RUN NEXT — 2026-07-17, Codex implementation owner** — 55 focused cases with three declared skips, 698 broad relay cases with ten declared skips, 285 release contracts with eight declared skips, typecheck, targeted/full lint, reliability/max-lines, formatting, diff, and resolver isolation pass. The remote 64 KiB .NET buffer, source 64 KiB worker buffer, every other transfer family, and all product/default behavior remain unchanged.<br>
+Current phase: Milestone 6 / Work Package 5 bounded runtime transfer — **In progress — matched 4 KiB Windows pipe correction locally green, native qualification next, 2026-07-17, Codex implementation owner**. Exact head `c93111a14bdb5390f99aa44a9004449625cbdcb5`, run `29564980476`, and Windows x64/ARM64 jobs `87835460661`/`87835460642` falsify client-only subdivision. `E-M6-WINDOWS-MATCHED-PIPE-LOCAL-001` matches client writes and remote .NET reads at 4 KiB while preserving the source 64 KiB buffer. Commit/push only this correction and require fresh native proof. Legacy remains the sole production path; real Apple/SignPath rehearsals remain deferred.<br>
+Session checkpoint: **MATCHED 4 KIB PIPE LOCAL GREEN / NATIVE RUN NEXT — 2026-07-17, Codex implementation owner** — focused, broad relay, release-contract, typecheck, full lint/reliability/max-lines, formatting, diff, and resolver isolation pass. No product caller, default/fallback, Beta, tuple publication, or signing behavior changed.<br>
 Primary design: [SSH relay GitHub Release plan](./2026-07-14-ssh-relay-github-release-plan.html)<br>
 Motivating issues: [#8450](https://github.com/stablyai/orca/issues/8450), [#1693](https://github.com/stablyai/orca/issues/1693)
 
@@ -20555,6 +20555,41 @@ src/main/ssh/ssh-relay-runtime-windows-system-ssh-openssh-full-size.test.ts` exi
   byte/tree validation, connection reuse, and exact fixture profile/directory teardown before
   advancing.
 
+### E-M6-WINDOWS-PIPE-SUBWRITE-CI-RED-001 — client-only subdivision is insufficient
+
+- Date/source/run: 2026-07-17; exact head `c93111a14bdb5390f99aa44a9004449625cbdcb5`, run
+  [29564980476](https://github.com/stablyai/orca/actions/runs/29564980476), x64 job
+  [87835460661](https://github.com/stablyai/orca/actions/runs/29564980476/job/87835460661), and
+  ARM64 job [87835460642](https://github.com/stablyai/orca/actions/runs/29564980476/job/87835460642).
+- Exact RED: x64 completes only the 18-byte `.version` file before the 60-second watchdog and retains
+  `THIRD_PARTY_LICENSES.txt`. ARM64 completes `.version` plus the 180,827-byte license file, then
+  stalls and retains `bin/node.exe` at 180,845 aggregate bytes. Tests finish in 72,580/77,910 ms;
+  both profile teardowns correctly expose retained fixture processes and locked `UsrClass.dat`.
+- Classification/correction: architecture-variable progress falsifies client-only 16 KiB subdivision
+  and file-specific failure. Match Windows pipe writes and PowerShell/.NET reads at a conservative
+  4,096-byte quantum, keep the source worker's 65,536-byte reusable buffer and zero-copy borrowed
+  views, and require fresh two-architecture full-size metrics and clean teardown. The HTML plan and
+  both Markdown checklists are updated before code.
+
+### E-M6-WINDOWS-MATCHED-PIPE-LOCAL-001 — matched 4 KiB Windows pipe quantum is locally green
+
+- Date/base/runner: 2026-07-17; uncommitted correction atop exact RED head
+  `c93111a14bdb5390f99aa44a9004449625cbdcb5` on Apple arm64, macOS 26.2, Node 26.5.0, pnpm
+  10.24.0. Native Node 24 jobs remain authoritative.
+- Boundary: client zero-copy subwrites and PowerShell/.NET reads are both capped at 4,096 bytes; the
+  source worker still owns one 65,536-byte buffer and releases it only after every subwrite callback.
+  Framing, size/tree verification, cancellation, POSIX/SFTP, SSH behavior, and product/default paths
+  are unchanged.
+- Evidence: focused Windows tests pass 55 runnable cases with three skips in 3.31 seconds real
+  (141,262,848-byte max RSS). Broad relay passes 698 cases with ten skips in 34.40 seconds real
+  (306,413,568-byte max RSS). Release contracts pass 285 cases with eight skips in 28.62 seconds;
+  typecheck passes in 4.30 seconds; full lint passes with the existing 26 warnings, 41 reliability
+  gates, and 355-entry max-lines ratchet in 26.32 seconds. Formatting, diff, and resolver isolation
+  pass. The initial focused run failed only because its expected write count still encoded 16 KiB;
+  the limit-derived oracle is green.
+- Residual: local Darwin skips native OpenSSH/PowerShell. Fresh x64/ARM64 full-size metrics and exact
+  teardown remain mandatory.
+
 ## Accepted Gaps
 
 No product gap is accepted merely because it appears in this list. Each entry requires explicit
@@ -20613,8 +20648,8 @@ The project is not complete until every applicable item below is checked with ev
 
 ## Next Required Action
 
-Commit and push only the Windows pipe-subwrite correction recorded by
-`E-M6-WINDOWS-PIPE-SUBWRITE-LOCAL-001`, then require exact-head Windows x64/ARM64 full-size
+Commit and push only the matched 4 KiB Windows pipe correction recorded by
+`E-M6-WINDOWS-MATCHED-PIPE-LOCAL-001`, then require exact-head Windows x64/ARM64 full-size
 serial/concurrent/collision/cancellation metrics, bounded memory, connection reuse, and exact
 profile/directory teardown evidence. Do not check the broad Milestone 6 Windows system-SSH item or
 add an Electron/startup/product importer, per-target mode wiring, fallback, tuple enablement, release
