@@ -128,6 +128,17 @@ describe('worktree git-common narrow watch (darwin)', () => {
     await vi.waitFor(() => {
       expect(subscribeMock).toHaveBeenCalledTimes(2)
     })
+
+    const receivedAfterRearm = received.length
+    childSubscriptions[0].callback(new Error('late error from replaced watcher'), [])
+    childSubscriptions[0].callback(null, [
+      { type: 'create', path: join(worktreesDir, 'late-old-event') }
+    ])
+    childSubscriptions[0].hooks.onInterruption?.()
+
+    // A replaced watch cannot tear down its successor or report stale events.
+    expect(received).toHaveLength(receivedAfterRearm)
+    expect(childSubscriptions[1].unsubscribe).not.toHaveBeenCalled()
   })
 
   it('reports a structural change after a watcher-child interruption', async () => {

@@ -162,12 +162,14 @@ async function startGitCommonNarrowWatch(
       return false
     }
     let errored = false
+    let active = true
     // Why: parcel tears its native stream down when the watched root is
     // deleted (e.g. `git worktree prune` removing an empty worktrees dir) —
     // sometimes surfaced as an error, sometimes as a delete event for the
     // root. Either way: notify, drop the dead stream, and let the existence
     // poll re-arm when a future worktree add recreates the dir.
     const teardownAndRearm = (): void => {
+      active = false
       errored = true
       const current = subscription
       subscription = null
@@ -180,7 +182,7 @@ async function startGitCommonNarrowWatch(
       const sub = await subscribeViaWatcherProcess(
         worktreesDir,
         (error, events) => {
-          if (disposed) {
+          if (disposed || !active) {
             return
           }
           if (error) {
@@ -203,7 +205,7 @@ async function startGitCommonNarrowWatch(
           // Why: a watcher-child crash drops events during the automatic
           // resubscribe gap; report a structural change so worktrees re-sync.
           onInterruption: () => {
-            if (!disposed) {
+            if (!disposed && active) {
               onEvents([{ type: 'update', path: worktreesDir }])
             }
           }
