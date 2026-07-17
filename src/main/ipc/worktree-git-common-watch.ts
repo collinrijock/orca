@@ -1,5 +1,6 @@
 import { stat } from 'node:fs/promises'
 import { join } from 'node:path'
+import { subscribeViaWatcherProcess } from './parcel-watcher-process'
 import type { WorktreeBaseWatchTarget } from './worktree-base-directory-event-filter'
 import type {
   WorktreeBasePollEvent,
@@ -20,6 +21,10 @@ import {
 // included). Other platforms: dir-listing poll (no fseventsd to protect, and
 // on Windows an open directory handle on `worktrees/` could interfere with
 // `git worktree prune` removing it).
+// The native stream is hosted in the crash-isolated watcher child, never the
+// Electron main process: watcher.node teardown races heap-corrupt the hosting
+// process when unsubscribe overlaps in-flight callbacks (issue #8732), and
+// root deletion via `git worktree prune` makes that overlap routine here.
 
 // Why: branch switches and commits made in the primary checkout rewrite these
 // top-level files (linked-worktree equivalents live under `worktrees/`).
@@ -172,26 +177,38 @@ async function startGitCommonNarrowWatch(
       armExistencePoll()
     }
     try {
-      const watcher = await import('@parcel/watcher')
-      const sub = await watcher.subscribe(worktreesDir, (error, events) => {
-        if (disposed) {
-          return
-        }
-        if (error) {
-          onEvents([{ type: 'update', path: worktreesDir }])
-          teardownAndRearm()
-          return
-        }
-        if (events.length > 0) {
-          const rootGone = events.some(
-            (event) => event.type === 'delete' && event.path === worktreesDir
-          )
-          onEvents(events.map((event) => ({ type: event.type, path: event.path })))
-          if (rootGone) {
+      const sub = await subscribeViaWatcherProcess(
+        worktreesDir,
+        (error, events) => {
+          if (disposed) {
+            return
+          }
+          if (error) {
+            onEvents([{ type: 'update', path: worktreesDir }])
             teardownAndRearm()
+            return
+          }
+          if (events.length > 0) {
+            const rootGone = events.some(
+              (event) => event.type === 'delete' && event.path === worktreesDir
+            )
+            onEvents(events.map((event) => ({ type: event.type, path: event.path })))
+            if (rootGone) {
+              teardownAndRearm()
+            }
+          }
+        },
+        {},
+        {
+          // Why: a watcher-child crash drops events during the automatic
+          // resubscribe gap; report a structural change so worktrees re-sync.
+          onInterruption: () => {
+            if (!disposed) {
+              onEvents([{ type: 'update', path: worktreesDir }])
+            }
           }
         }
-      })
+      )
       if (disposed || errored) {
         void sub.unsubscribe().catch(() => {})
         return !errored
