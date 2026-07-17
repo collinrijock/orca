@@ -4137,7 +4137,7 @@
       },
       "flakeHistory": {
         "status": "unknown",
-        "evidence": "The focused local run and the PR's macOS and Linux golden experiment jobs passed; soak history is not yet available."
+        "evidence": "The focused local macOS run and the PR's macOS golden experiment job passed. The Linux golden job skipped both WebGL atlas tests because WebGL was unavailable; soak history is not yet available."
       },
       "redGreenEvidence": {
         "status": "complete",
