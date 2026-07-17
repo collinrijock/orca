@@ -213,6 +213,7 @@ export async function snapshotValidationState(layout) {
   return {
     capturedAt: new Date().toISOString(),
     throwawayCodex: {
+      auth: await fingerprintFile(path.join(throwawayCodexHome, 'auth.json')),
       config: await fingerprintFile(path.join(throwawayCodexHome, 'config.toml')),
       hooks: await fingerprintFile(path.join(throwawayCodexHome, 'hooks.json'))
     },

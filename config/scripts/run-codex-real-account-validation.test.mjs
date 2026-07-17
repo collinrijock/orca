@@ -42,18 +42,25 @@ describe('Codex real-account validation harness', () => {
     expect(env.SAFE_VALUE).toBe('preserved')
   })
 
-  it('records only a fingerprint for managed auth', async () => {
+  it('records only fingerprints for system-default and managed auth', async () => {
     const layout = await createValidationLayout({
       primaryHome: path.join(os.tmpdir(), 'orca-primary-home-sentinel')
     })
     cleanupPaths.push(layout.tempRoot)
+    const systemHome = path.join(layout.homeDir, '.codex')
     const managedHome = path.join(layout.userDataDir, 'codex-accounts', 'account-1', 'home')
-    await mkdir(managedHome, { recursive: true })
+    await Promise.all([
+      mkdir(systemHome, { recursive: true }),
+      mkdir(managedHome, { recursive: true })
+    ])
+    await writeFile(path.join(systemHome, 'auth.json'), '{"refresh_token":"system-secret"}\n')
     await writeFile(path.join(managedHome, 'auth.json'), '{"refresh_token":"never-report-me"}\n')
 
     const snapshot = await snapshotValidationState(layout)
 
+    expect(snapshot.throwawayCodex.auth.sha256).toMatch(/^[a-f0-9]{64}$/)
     expect(snapshot.managedHomes[0].auth.sha256).toMatch(/^[a-f0-9]{64}$/)
+    expect(JSON.stringify(snapshot)).not.toContain('system-secret')
     expect(JSON.stringify(snapshot)).not.toContain('never-report-me')
   })
 })
