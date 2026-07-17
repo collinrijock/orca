@@ -7,7 +7,7 @@ import type { SshTarget } from '../../shared/ssh-types'
 import { buildSshArgs } from './system-ssh-args'
 import { findSystemSsh } from './system-ssh-binary'
 
-type DiagnosticMode = 'pipe-eof-no-n'
+type DiagnosticMode = 'overlapped-stdin-eof-no-n'
 
 type DiagnosticResult = {
   mode: DiagnosticMode
@@ -47,12 +47,12 @@ async function runDiagnostic(): Promise<DiagnosticResult> {
   if (!sshPath) {
     throw new Error('Native Windows OpenSSH client is unavailable')
   }
-  const mode: DiagnosticMode = 'pipe-eof-no-n'
+  const mode: DiagnosticMode = 'overlapped-stdin-eof-no-n'
   const startedAt = performance.now()
   const child = spawn(sshPath, [...buildSshArgs(createTarget()), 'echo ORCA-SYSTEM-SSH-OK'], {
-    // Why: isolate the upstream-recommended pipe EOF from Win32-OpenSSH's
-    // null-input path before changing the production no-input command.
-    stdio: ['pipe', 'pipe', 'pipe'],
+    // Why: isolate Windows overlapped stdin without changing output capture
+    // or the production no-input command.
+    stdio: ['overlapped', 'pipe', 'pipe'],
     windowsHide: true
   })
   child.stdin?.destroy()
@@ -133,7 +133,7 @@ async function runDiagnostic(): Promise<DiagnosticResult> {
 
 describe.skipIf(!hasLiveInput)('Windows OpenSSH no-input child-handle diagnostic', () => {
   it(
-    'qualifies a standard EOF pipe without the Windows null-input option',
+    'qualifies overlapped stdin EOF without the Windows null-input option',
     { timeout: 15_000 },
     async () => {
       expect(process.platform).toBe('win32')

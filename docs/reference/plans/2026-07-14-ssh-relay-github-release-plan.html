@@ -1649,12 +1649,14 @@
                     redirected-handle hang; native x64/arm64 evidence also proves that inherited,
                     standard-pipe, and overlapped-pipe handles all hang when the Windows client is
                     simultaneously forced through <code>-n</code>, so those runs do not isolate the
-                    child handle. Qualify the upstream-recommended standard-pipe EOF with Windows
-                    <code>-n</code> omitted as the next single-variable diagnostic; only test an
-                    overlapped stdin pipe, also without <code>-n</code>, if the standard pipe fails.
-                    POSIX retains ignored stdin plus <code>-n</code>; fixture-owned Windows session
-                    processes settle before profile hives are boundedly unloaded and native profile
-                    deletion begins; <code>MaxSessions=1</code>; interrupted upload; stale lock
+                    child handle. Native x64/arm64 evidence further rejects the upstream-recommended
+                    standard-pipe EOF when Windows <code>-n</code> is omitted because Node closes
+                    its parent writer only after <code>CreateProcess</code>. Qualify an overlapped
+                    stdin pipe with ordinary stdout/stderr and no <code>-n</code> as the next
+                    disconnected diagnostic. POSIX retains ignored stdin plus <code>-n</code>;
+                    fixture-owned Windows session processes settle before profile hives are
+                    boundedly unloaded and native profile deletion begins;
+                    <code>MaxSessions=1</code>; interrupted upload; stale lock
                   </td>
                   <td>
                     Bundled Node hashes the full staged tree before sentinel write;

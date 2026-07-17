@@ -133,7 +133,13 @@ single-variable diagnostic to use the upstream-recommended standard stdin pipe w
 and omit `-n` only on Windows. POSIX retains ignored stdin plus `-n`; production stays unchanged
 until x64 and ARM64 select the same console-independent strategy. The replacement disconnected
 diagnostic is locally green under `E-M6-WINDOWS-NOINPUT-PIPE-NO-N-LOCAL-001`; commit and run that
-exact head next.
+exact head next. Exact pushed head `daffd545d75570f198db093c3ba054ae1fa033ba` is under test in
+artifact run `29547488550`, Windows x64 job `87782833321`, and Windows ARM64 job `87782833288`.
+`E-M6-WINDOWS-NOINPUT-PIPE-NO-N-CI-RED-001` records the completed native result: both architectures
+time out at 8.03/8.04 seconds with no sentinel and exact profile RED. Next test only an overlapped
+stdin pipe with ordinary stdout/stderr and no `-n`; production remains unchanged. That replacement
+diagnostic is locally green under `E-M6-WINDOWS-NOINPUT-OVERLAPPED-NO-N-LOCAL-001`; commit and run
+the exact head next.
 `E-M6-WINDOWS-SYSTEM-SSH-TREE-LIVE-AUDIT-001` fixes the loopback-only official Microsoft
 server, fixture-owned non-admin account/ACL, exact host-key trust, Windows PowerShell 5.1,
 serial/default and four-channel metrics, cancellation/collision/cleanup, and deterministic teardown
