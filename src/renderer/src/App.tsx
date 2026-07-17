@@ -60,7 +60,10 @@ import { StarNagCard } from './components/StarNagCard'
 import { StarNagAgentValueMomentObserver } from './components/star-nag/StarNagAgentValueMomentObserver'
 import { StarNagToastHost } from './components/star-nag/StarNagToastHost'
 import { SkillFreshnessNudge } from './components/skills/SkillFreshnessNudge'
-import { SkillFreshnessUpdateDialog } from './components/skills/SkillFreshnessUpdateDialog'
+import {
+  getSkillFreshnessUpdateDialogRequest,
+  subscribeSkillFreshnessUpdateDialog
+} from './components/skills/skill-freshness-update-dialog'
 import { TelemetryFirstLaunchSurface } from './components/TelemetryFirstLaunchSurface'
 import { ZoomOverlay } from './components/ZoomOverlay'
 import { onOnboardingReopened } from './components/onboarding/show-onboarding-event'
@@ -303,6 +306,33 @@ function WindowControls(): React.JSX.Element {
         </svg>
       </button>
     </div>
+  )
+}
+
+const SkillFreshnessUpdateDialog = lazy(
+  () =>
+    import('./components/skills/SkillFreshnessUpdateDialog').then((module) => ({
+      default: module.SkillFreshnessUpdateDialog
+    })),
+  { reloadKey: 'skill-freshness-update-dialog' }
+)
+
+// Why: the dialog statically pulls the inline terminal (xterm/WebGL) and the
+// Markdown engine; mount it only once an open request exists so those modules
+// stay off the startup path.
+function SkillFreshnessUpdateDialogGate(): React.JSX.Element | null {
+  const requested = useSyncExternalStore(
+    subscribeSkillFreshnessUpdateDialog,
+    getSkillFreshnessUpdateDialogRequest,
+    getSkillFreshnessUpdateDialogRequest
+  )
+  if (!requested) {
+    return null
+  }
+  return (
+    <Suspense fallback={null}>
+      <SkillFreshnessUpdateDialog />
+    </Suspense>
   )
 }
 
@@ -2864,7 +2894,7 @@ function App(): React.JSX.Element {
               surface="overlay"
               compact
             >
-              <SkillFreshnessUpdateDialog />
+              <SkillFreshnessUpdateDialogGate />
             </RecoverableRenderErrorBoundary>
           </LinkRoutingPreferenceDialogProvider>
         </ConfirmationDialogProvider>

@@ -235,7 +235,7 @@ describe('resolveCliCommands', () => {
     delete process.env.Path
   })
 
-  it('resolves a batch from PATH and install directories', () => {
+  it('resolves a batch from PATH and install directories', async () => {
     const root = mkdtempSync(join(tmpdir(), 'orca-cli-commands-'))
     const pathDir = join(root, 'bin')
     const pathClaude = join(pathDir, 'claude')
@@ -245,7 +245,7 @@ describe('resolveCliCommands', () => {
     makeExecutable(nvmCodex)
     makeExecutable(pnpmOpencode)
 
-    const resolved = resolveCliCommands(['claude', 'codex', 'opencode', 'missing'], {
+    const resolved = await resolveCliCommands(['claude', 'codex', 'opencode', 'missing'], {
       platform: 'darwin',
       pathEnv: pathDir,
       homePath: root
@@ -257,13 +257,13 @@ describe('resolveCliCommands', () => {
     expect(resolved.get('missing')).toBe('missing')
   })
 
-  it('deduplicates command names in the returned map', () => {
+  it('deduplicates command names in the returned map', async () => {
     const root = mkdtempSync(join(tmpdir(), 'orca-cli-commands-'))
     const pathDir = join(root, 'bin')
     const pathClaude = join(pathDir, 'claude')
     makeExecutable(pathClaude)
 
-    const resolved = resolveCliCommands(['claude', 'claude'], {
+    const resolved = await resolveCliCommands(['claude', 'claude'], {
       platform: 'linux',
       pathEnv: pathDir,
       homePath: root
@@ -275,7 +275,7 @@ describe('resolveCliCommands', () => {
 
   it.skipIf(process.platform === 'win32')(
     'skips non-runnable batch candidates and continues through PATH',
-    () => {
+    async () => {
       const root = mkdtempSync(join(tmpdir(), 'orca-cli-commands-'))
       const badDir = join(root, 'bad-bin')
       const goodDir = join(root, 'good-bin')
@@ -283,7 +283,7 @@ describe('resolveCliCommands', () => {
       const goodCodex = join(goodDir, 'codex')
       makeExecutable(goodCodex)
 
-      const resolved = resolveCliCommands(['codex'], {
+      const resolved = await resolveCliCommands(['codex'], {
         platform: 'darwin',
         pathEnv: [badDir, goodDir].join(delimiter),
         homePath: root
@@ -293,13 +293,13 @@ describe('resolveCliCommands', () => {
     }
   )
 
-  it('matches Windows executable names case-insensitively, including .com', () => {
+  it('matches Windows executable names case-insensitively, including .com', async () => {
     const root = mkdtempSync(join(tmpdir(), 'orca-cli-commands-'))
     const pathDir = join(root, 'bin')
     const commandPath = join(pathDir, 'CODEX.COM')
     makeExecutable(commandPath)
 
-    const resolved = resolveCliCommands(['codex'], {
+    const resolved = await resolveCliCommands(['codex'], {
       platform: 'win32',
       pathEnv: pathDir,
       homePath: root

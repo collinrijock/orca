@@ -1,4 +1,5 @@
 import { accessSync, constants, existsSync, readdirSync, statSync } from 'node:fs'
+import { access, readdir, stat } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { delimiter, dirname, join } from 'node:path'
 
@@ -73,35 +74,49 @@ function findFirstExecutable(
   return null
 }
 
-function resolveCommandsInDirectories(
+// Why: bulk resolution runs on the Electron main process at startup, where a
+// slow PATH entry (dead network mount, FUSE dir) must stall this promise, not
+// the event loop — so this variant is async end to end.
+async function resolveCommandsInDirectories(
   platform: NodeJS.Platform,
   directories: readonly string[],
   executableNamesByCommand: ReadonlyMap<string, readonly string[]>,
   resolved: Map<string, string>
-): void {
+): Promise<void> {
   for (const directory of directories) {
-    let entries: string[]
+    let entries: string[] | null
     try {
-      entries = readdirSync(directory)
-    } catch {
-      continue
+      entries = await readdir(directory)
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code
+      if (code === 'ENOENT' || code === 'ENOTDIR') {
+        continue
+      }
+      // Why: search-only directories (x without r) fail readdir but still
+      // resolve by direct candidate probing, like the per-command resolver.
+      entries = null
     }
-    const entryByLookupName = new Map(
-      entries.map((entry) => [platform === 'win32' ? entry.toLowerCase() : entry, entry])
-    )
+    const entryByLookupName = entries
+      ? new Map(entries.map((entry) => [platform === 'win32' ? entry.toLowerCase() : entry, entry]))
+      : null
     for (const [commandName, executableNames] of executableNamesByCommand) {
       if (resolved.has(commandName)) {
         continue
       }
       for (const executableName of executableNames) {
-        const entry = entryByLookupName.get(
-          platform === 'win32' ? executableName.toLowerCase() : executableName
-        )
-        if (!entry) {
-          continue
+        let candidate: string
+        if (entryByLookupName) {
+          const entry = entryByLookupName.get(
+            platform === 'win32' ? executableName.toLowerCase() : executableName
+          )
+          if (!entry) {
+            continue
+          }
+          candidate = join(directory, entry)
+        } else {
+          candidate = join(directory, executableName)
         }
-        const candidate = join(directory, entry)
-        if (isRunnableCommand(platform, candidate)) {
+        if (await isRunnableCommandAsync(platform, candidate)) {
           resolved.set(commandName, candidate)
           break
         }
@@ -122,6 +137,25 @@ function isRunnableCommand(platform: NodeJS.Platform, candidate: string): boolea
     // Why: GUI fallback probing should skip placeholders/directories so spawn
     // can continue to a runnable CLI instead of failing later with EACCES/EISDIR.
     accessSync(candidate, constants.X_OK)
+    return true
+  } catch {
+    return false
+  }
+}
+
+async function isRunnableCommandAsync(
+  platform: NodeJS.Platform,
+  candidate: string
+): Promise<boolean> {
+  try {
+    const stats = await stat(candidate)
+    if (!stats.isFile()) {
+      return false
+    }
+    if (platform === 'win32') {
+      return true
+    }
+    await access(candidate, constants.X_OK)
     return true
   } catch {
     return false
@@ -221,10 +255,10 @@ export function resolveCliCommand(
   return versionManagerCandidate ?? commandName
 }
 
-export function resolveCliCommands(
+export async function resolveCliCommands(
   commandNames: readonly string[],
   options: ResolveCommandOptions = {}
-): Map<string, string> {
+): Promise<Map<string, string>> {
   const platform = options.platform ?? process.platform
   const pathEnv = options.pathEnv ?? process.env.PATH ?? process.env.Path ?? null
   const pathDirectories = splitPath(pathEnv)
@@ -245,9 +279,14 @@ export function resolveCliCommands(
   const resolved = new Map<string, string>()
 
   // Why: agent detection resolves many commands at once. Reading each PATH
-  // directory once avoids hundreds of synchronous failed stat calls at startup.
-  resolveCommandsInDirectories(platform, pathDirectories, executableNamesByCommand, resolved)
-  resolveCommandsInDirectories(platform, installDirectories, executableNamesByCommand, resolved)
+  // directory once avoids hundreds of failed stat calls at startup.
+  await resolveCommandsInDirectories(platform, pathDirectories, executableNamesByCommand, resolved)
+  await resolveCommandsInDirectories(
+    platform,
+    installDirectories,
+    executableNamesByCommand,
+    resolved
+  )
   for (const commandName of commandNamesUnique) {
     if (!resolved.has(commandName)) {
       resolved.set(commandName, commandName)

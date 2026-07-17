@@ -112,7 +112,7 @@ export async function detectInstalledAgents(context?: PreflightRuntimeContext): 
     KNOWN_TUI_AGENT_DETECTION_COMMANDS,
     process.platform
   )
-  const foundCommands = detectLocalCommands(probeCommands)
+  const foundCommands = await detectLocalCommands(probeCommands)
   const agents = resolveDetectedTuiAgentIds(
     KNOWN_TUI_AGENT_DETECTION_COMMANDS,
     foundCommands,
