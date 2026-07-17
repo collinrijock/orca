@@ -57,7 +57,11 @@ import {
   detectionUnavailable,
   resolveLocalTargetHomePath
 } from '../agent-launch/agent-launch-host-state'
-import { resolveAgentLaunchSpawn } from '../agent-launch/agent-launch-spawn'
+import {
+  resolveAgentLaunchSpawn,
+  sanitizeClientAgentLaunchSourceRecord
+} from '../agent-launch/agent-launch-spawn'
+import { ORCA_PROTECTED_ENV_KEYS } from '../agent-launch/compose-agent-launch-env'
 import { resolveResumeLaunchIngest } from '../agent-launch/agent-launch-resume-ingest'
 import { resolveRevalidatedVaultResume } from '../agent-launch/agent-launch-vault-resume'
 import { revalidateAiVaultResumeEntry } from './ai-vault-resume-command'
@@ -3866,6 +3870,10 @@ export function registerPtyHandlers(
       let agentLaunchToken: string | null = null
       let vaultLaunchNotices: PersistedLaunchNoticeState | null = null
       let agentLaunchSettled = false
+      // Track the settled outcome so the catch below only rolls back a genuinely
+      // failed launch — a throw AFTER a 'registered' settle must NOT delete the live
+      // PTY's just-registered resume record.
+      let agentLaunchSettlement: 'registered' | 'failed' | null = null
       // Host-minted generic background attempt for an unattended declaration
       // (ledger #8/#13). Non-null only when the request declares
       // `unattended:{kind:'background'}`; the spawn/registration seam then settles
@@ -3888,6 +3896,7 @@ export function registerPtyHandlers(
           return
         }
         agentLaunchSettled = true
+        agentLaunchSettlement = settlement
         getHostAgentLaunchBoundary().settleAgentLaunch(agentLaunchToken, settlement)
         if (backgroundDeclaration && backgroundDeclarationRequestedAgent) {
           settleBackgroundDeclarationSpawn(
@@ -3963,6 +3972,12 @@ export function registerPtyHandlers(
             args.commandDelivery = 'provider'
             args.launchConfig = ingest.launchConfig
             args.launchAgent = ingest.baseAgent
+            // Layer the captured agent env over the spawn env like the v1-snapshot
+            // and vault-fallback arms do; without this a pre-U5 cold-restore resumes
+            // without its ANTHROPIC_BASE_URL/API-key/proxy vars (wrong endpoint/auth).
+            if (ingest.launchConfig.agentEnv) {
+              args.env = { ...args.env, ...ingest.launchConfig.agentEnv }
+            }
           } else {
             resumeRequest = ingest.request
             resumeIntent = ingest.intent
@@ -4038,7 +4053,11 @@ export function registerPtyHandlers(
             vaultLaunchNotices = vaultResolution.launchNotices ?? null
           }
         } else {
-          resumeRequest = args.agentLaunch
+          // Strip any client-forged persisted-owner authority from the raw request:
+          // only a source-control-recipe owner (host-validated) may survive from
+          // client JSON, so a spoofed workspace/session owner can't mint fallback
+          // reference authority and bypass the untrusted_reference gate.
+          resumeRequest = sanitizeClientAgentLaunchSourceRecord(args.agentLaunch)
           // Ids-free background declaration: the host mints the attempt identity,
           // creates the generic attempt BEFORE resolution, and drives its own
           // background intent (ledger #8/#13). Only a named-agent selection carries
@@ -4086,6 +4105,13 @@ export function registerPtyHandlers(
                 (typeof args.worktreeId === 'string' && args.worktreeId.length > 0
                   ? args.worktreeId
                   : 'local-pty-spawn'),
+              // Feed the authoritative worktree so admission can enforce the
+              // per-worktree pending-launch cap (scope may be an attempt id, not
+              // the worktree, for a background launch).
+              worktreeId:
+                typeof args.worktreeId === 'string' && args.worktreeId.length > 0
+                  ? args.worktreeId
+                  : null,
               principal: { kind: 'local' },
               ...(resumePersistedSnapshot ? { persistedSnapshot: resumePersistedSnapshot } : {}),
               ...(resumeProviderSession ? { resumeProviderSession } : {})
@@ -4293,6 +4319,20 @@ export function registerPtyHandlers(
             : null
         const stablePaneKey = verifiedPaneKey ?? migrationUnsupportedPaneKey
         let baseEnv = baseEnvWithAuth ? { ...baseEnvWithAuth } : undefined
+        // Windows env keys are case-insensitive, so an inherited/spoofed non-canonical
+        // case variant of a protected Orca key (e.g. `orca_pane_key`) would reach the
+        // CreateProcess block alongside the canonical key and steal pane/hook identity.
+        // Drop every non-canonical case variant before Orca reclaims its own names.
+        if (baseEnv && process.platform === 'win32') {
+          for (const protectedKey of ORCA_PROTECTED_ENV_KEYS) {
+            const lower = protectedKey.toLowerCase()
+            for (const existing of Object.keys(baseEnv)) {
+              if (existing !== protectedKey && existing.toLowerCase() === lower) {
+                delete baseEnv[existing]
+              }
+            }
+          }
+        }
         const shouldRefreshAgentTeamsEnv =
           !args.connectionId &&
           runtime !== undefined &&
@@ -4532,11 +4572,7 @@ export function registerPtyHandlers(
           settleAgentLaunch('failed')
           return await existingPaneSpawn.promise
         }
-        finishTerminalInstall = beginPtySpawnForWorktree(
-          args.worktreeId,
-          cwd,
-          args.connectionId
-        )
+        finishTerminalInstall = beginPtySpawnForWorktree(args.worktreeId, cwd, args.connectionId)
         paneSpawnReservation = reservationPaneKey ? reservePaneSpawn(reservationPaneKey) : null
         const initiallyHidden = args.initiallyHidden === true
         // Why pre-spawn for daemon-host sessions (id minted up front): daemon
@@ -4995,8 +5031,10 @@ export function registerPtyHandlers(
         // admission reservation (no terminal survives to reconcile).
         settleAgentLaunch('failed')
         // Drop any private resume attribution staged for this launch so a failed
-        // spawn strands no record (no-op if register was not reached).
-        if (agentLaunchToken) {
+        // spawn strands no record (no-op if register was not reached). Guard on the
+        // settled outcome: a throw AFTER a 'registered' settle (e.g. in response
+        // assembly) must NOT roll back — the PTY is live and its record is valid.
+        if (agentLaunchToken && agentLaunchSettlement !== 'registered') {
           getHostAgentSessionRecordStore().rollbackByToken(agentLaunchToken)
         }
         rejectPaneSpawnReservation(reservationPaneKey, paneSpawnReservation, err)
