@@ -157,6 +157,33 @@ describe('CodexHookService', () => {
     expect(trustConfig).toContain(':permission_request:0:0')
   })
 
+  it('installs managed hooks + trust into a per-account self-contained home, not the shared mirror', () => {
+    const systemCodexHome = join(tmpHome, '.codex')
+    mkdirSync(systemCodexHome, { recursive: true })
+    writeFileSync(join(systemCodexHome, 'config.toml'), 'approval_policy = "on-request"\n', 'utf-8')
+
+    const perAccountHome = join(userDataDir, 'codex-accounts', 'account-1', 'home')
+    mkdirSync(perAccountHome, { recursive: true })
+    writeFileSync(join(perAccountHome, '.orca-managed-home'), 'account-1\n', 'utf-8')
+
+    const status = new CodexHookService().install(perAccountHome)
+    expect(status.state).toBe('installed')
+
+    // Hooks + trust land in THIS account's home.
+    const hooksConfig = JSON.parse(readFileSync(join(perAccountHome, 'hooks.json'), 'utf-8')) as {
+      hooks: Record<string, unknown>
+    }
+    expect(Object.keys(hooksConfig.hooks).sort()).toEqual(localManagedCodexEvents())
+    const trustConfig = readFileSync(join(perAccountHome, 'config.toml'), 'utf-8')
+    expect(trustConfig).toContain('approval_policy = "on-request"')
+    expect(trustConfig).toContain(':permission_request:0:0')
+
+    // The shared runtime mirror is never touched by a per-account install.
+    expect(existsSync(join(userDataDir, 'codex-runtime-home', 'home', 'hooks.json'))).toBe(false)
+    // ~/.codex is only read for canonical config, never mutated with hooks.
+    expect(existsSync(join(systemCodexHome, 'hooks.json'))).toBe(false)
+  })
+
   it('drops plugin manager metadata from runtime hooks.json during install', () => {
     const managedCodexHome = join(userDataDir, 'codex-runtime-home', 'home')
     mkdirSync(managedCodexHome, { recursive: true })

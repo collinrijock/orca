@@ -65,6 +65,7 @@ import { isCodexSystemDefaultRealHomeEnabled } from '../codex/codex-real-home-fl
 import { hasCustomCodexHomeOverride } from '../codex/codex-real-home-path'
 import { invalidateCodexSessionBackfillMarker } from '../codex/codex-session-backfill-marker'
 import { readShellStartupEnvVar } from '../pty/shell-startup-env'
+import { assertOwnedHostCodexManagedHomePath } from './host-codex-managed-home-ownership'
 
 type CodexAuthIdentity = {
   email: string | null
@@ -169,6 +170,15 @@ export class CodexRuntimeHomeService {
       this.startWslSessionBridgeForLaunch(wslTarget, runtimeHomePath)
       return runtimeHomePath
     }
+    const selfContainedAccount = this.getSelfContainedManagedHostAccount()
+    if (selfContainedAccount) {
+      const perAccountHome = this.prepareSelfContainedManagedHomeForLaunch(selfContainedAccount)
+      if (perAccountHome) {
+        return perAccountHome
+      }
+      // Why: the account's home lost its auth.json, so the selection was just
+      // dropped. Fall through and resolve this launch as the system default.
+    }
     if (this.isHostSystemDefaultRealHome(launchEnv)) {
       // Why (flag ON, system default): run Codex on the user's own ~/.codex.
       // Returning null tells the PTY/env layer to inject no managed CODEX_HOME;
@@ -187,6 +197,105 @@ export class CodexRuntimeHomeService {
       resolveHostCodexSessionSourceHome(this.store.getSettings())
     )
     return this.getRuntimeHomePath()
+  }
+
+  // Why: with the real-home flag ON, a managed HOST account runs against its own
+  // self-contained CODEX_HOME (codex-accounts/<id>/home) instead of the shared
+  // runtime mirror. Its auth.json lives there and codex refreshes it in place,
+  // so two accounts never race one auth.json (GAP-5) and the mirror can be
+  // deleted once no lane still injects it (GAP-1). WSL accounts keep their
+  // per-distro lane; the flag-OFF opt-out keeps the shared-home hot-swap.
+  private getSelfContainedManagedHostAccount(): CodexManagedAccount | null {
+    const settings = this.store.getSettings()
+    if (!isCodexSystemDefaultRealHomeEnabled(settings)) {
+      return null
+    }
+    const account = this.getActiveAccount(
+      settings.codexManagedAccounts,
+      normalizeCodexRuntimeSelection(settings).host
+    )
+    if (!account || this.getWslManagedHomePath(account)) {
+      return null
+    }
+    return account
+  }
+
+  private getSelfContainedManagedHostAccountHomes(): string[] {
+    const settings = this.store.getSettings()
+    if (!isCodexSystemDefaultRealHomeEnabled(settings)) {
+      return []
+    }
+    return settings.codexManagedAccounts
+      .filter((account) => !this.getWslManagedHomePath(account))
+      .map((account) => account.managedHomePath)
+  }
+
+  private prepareSelfContainedManagedHomeForLaunch(account: CodexManagedAccount): string | null {
+    const perAccountHome = this.getTrustedSelfContainedManagedHomePath(account)
+    if (!perAccountHome || !existsSync(join(perAccountHome, 'auth.json'))) {
+      // Why: drop the selection so this and future launches resolve to the
+      // system default rather than a home codex cannot authenticate against.
+      this.clearSelfContainedManagedSelection(account)
+      return null
+    }
+    // Why: link the user's real ~/.codex resources and mirror config into THIS
+    // home (never symlinking into or mutating ~/.codex), so the per-account home
+    // is a complete CODEX_HOME. Hooks/trust are installed by the launch caller.
+    this.lastSyncedAccountId = account.id
+    syncSystemCodexResourcesIntoManagedHome(perAccountHome)
+    syncSystemConfigIntoManagedCodexHome({
+      runtimeHomePath: perAccountHome,
+      systemHomePath: getSystemCodexHomePath()
+    })
+    return perAccountHome
+  }
+
+  // Why: the per-account home is both the launch CODEX_HOME and the credential
+  // store, so codex reads/refreshes auth.json in place — there is no shared-home
+  // hot-swap or token read-back to reconcile. Only validate the credential
+  // survives; a vanished auth.json drops the selection to the system default.
+  private syncSelfContainedManagedSelection(account: CodexManagedAccount): void {
+    const perAccountHome = this.getTrustedSelfContainedManagedHomePath(account)
+    if (perAccountHome && existsSync(join(perAccountHome, 'auth.json'))) {
+      this.lastSyncedAccountId = account.id
+      return
+    }
+    this.clearSelfContainedManagedSelection(account)
+  }
+
+  private getTrustedSelfContainedManagedHomePath(account: CodexManagedAccount): string | null {
+    try {
+      assertOwnedHostCodexManagedHomePath({
+        candidatePath: account.managedHomePath,
+        managedAccountsRoot: this.getManagedAccountsRoot(),
+        systemCodexHomePath: getSystemCodexHomePath(),
+        expectedAccountId: account.id
+      })
+      // Preserve the persisted path spelling (notably /var vs /private/var on
+      // macOS) so injected CODEX_HOME stays stable across the rollout.
+      return account.managedHomePath
+    } catch (error) {
+      console.warn('[codex-runtime-home] Refusing untrusted managed account home:', error)
+      return null
+    }
+  }
+
+  private clearSelfContainedManagedSelection(account: CodexManagedAccount): void {
+    console.warn(
+      '[codex-runtime-home] Active managed account home is invalid or missing auth.json, clearing selection'
+    )
+    const settings = this.store.getSettings()
+    if (normalizeCodexRuntimeSelection(settings).host !== account.id) {
+      return
+    }
+    this.store.updateSettings({
+      activeCodexManagedAccountId: null,
+      activeCodexManagedAccountIdsByRuntime: {
+        ...normalizeCodexRuntimeSelection(settings),
+        host: null
+      }
+    })
+    this.lastSyncedAccountId = null
   }
 
   private invalidateBackfillAfterManagedSystemDefaultLaunch(launchEnv?: NodeJS.ProcessEnv): void {
@@ -233,10 +342,17 @@ export class CodexRuntimeHomeService {
 
   getHostCodexHomePathsForSessionDiscovery(): string[] {
     const homes = [this.getRuntimeHomePath()]
-    if (this.isHostSystemDefaultRealHome()) {
-      // Why: nested Orca processes can retain an ambient managed CODEX_HOME;
-      // explicitly include the real lane so its sessions remain discoverable.
+    if (this.isHostSystemDefaultRealHome() || this.getSelfContainedManagedHostAccount()) {
+      // Why: nested Orca processes can retain an ambient managed CODEX_HOME.
+      // Per-account lanes no longer bridge real-home history into the shared
+      // mirror, so include the real root for both directly-routed host lanes.
       homes.push(getSystemCodexHomePath())
+    }
+    // Why: flag ON routes each managed host account to its own self-contained
+    // home, so its rollouts live there rather than in the shared mirror. Scan
+    // every such home so account-scoped sessions still surface in the AI Vault.
+    for (const perAccountHome of this.getSelfContainedManagedHostAccountHomes()) {
+      homes.push(perAccountHome)
     }
     return homes.filter((home, index) => homes.indexOf(home) === index)
   }
@@ -344,6 +460,23 @@ export class CodexRuntimeHomeService {
       const syncedRuntimeHomePath = this.getPreparedWslRateLimitHomePath(wslTarget)
       return syncedRuntimeHomePath ?? this.getWslSystemCodexHomePath(wslTarget)
     }
+    const selfContainedAccount = this.getSelfContainedManagedHostAccount()
+    const selfContainedHome = selfContainedAccount
+      ? this.getTrustedSelfContainedManagedHomePath(selfContainedAccount)
+      : null
+    if (
+      selfContainedAccount &&
+      selfContainedHome &&
+      existsSync(join(selfContainedHome, 'auth.json'))
+    ) {
+      // Why: the quota fetch reads the account's own auth.json in place; no
+      // shared-home hot-swap, and no per-poll resource relink (that is launch
+      // prep). Config was mirrored on add/select and refreshed at launch.
+      return selfContainedHome
+    }
+    if (selfContainedAccount) {
+      this.clearSelfContainedManagedSelection(selfContainedAccount)
+    }
     if (this.isHostSystemDefaultRealHome()) {
       // Why: null lets the fetcher fall back to the main process's inherited
       // CODEX_HOME before ~/.codex. Nested Orca launches can inherit the
@@ -360,6 +493,14 @@ export class CodexRuntimeHomeService {
   syncForCurrentSelection(target?: CodexAccountSelectionTarget): void {
     if (target?.runtime === 'wsl') {
       this.syncWslRuntimeForCurrentSelection(target)
+      return
+    }
+
+    const selfContainedAccount = this.getSelfContainedManagedHostAccount()
+    if (selfContainedAccount) {
+      // Why: self-contained managed homes hold their own auth, so the shared
+      // runtime home's snapshot/hot-swap/read-back machinery below must not run.
+      this.syncSelfContainedManagedSelection(selfContainedAccount)
       return
     }
 

@@ -26,7 +26,9 @@ import {
   normalizeCodexProjectPathForRevocationLookup,
   parseTrustKey,
   readHookTrustEntries,
+  readHookTrustEntriesFromContent,
   removeHookTrustEntries,
+  removeHookTrustEntriesFromContent,
   upsertHookTrustEntries,
   upsertProjectTrustLevel,
   upsertProjectTrustLevelInContent,
@@ -1662,6 +1664,70 @@ describe('readHookTrustEntries', () => {
     expect(result.get(keyA)?.enabled).toBe(true)
     expect(result.get(keyB)?.trustedHash).toBe('sha256:BBB')
     expect(result.get(keyB)?.enabled).toBe(true)
+  })
+
+  it('fails closed when normalized duplicate blocks have conflicting hashes', () => {
+    const key = '/x/hooks.json:stop:0:0'
+    writeFileSync(
+      configPath,
+      [
+        `[hooks.state."${key}"]`,
+        'trusted_hash = "sha256:USER"',
+        '',
+        `[hooks.state.'${key}']`,
+        'trusted_hash = "sha256:ORCA"',
+        ''
+      ].join('\n'),
+      'utf-8'
+    )
+
+    expect(readHookTrustEntries(configPath).get(key)?.trustedHash).toBeUndefined()
+  })
+
+  it('ignores trust-looking fields inside multiline strings', () => {
+    const key = '/x/hooks.json:stop:0:0'
+    writeFileSync(
+      configPath,
+      [
+        `[hooks.state."${key}"]`,
+        'note = """',
+        'trusted_hash = "sha256:NOT-A-FIELD"',
+        'enabled = false',
+        '"""',
+        ''
+      ].join('\n'),
+      'utf-8'
+    )
+
+    expect(readHookTrustEntries(configPath).get(key)).toEqual({
+      trustedHash: undefined,
+      enabled: undefined
+    })
+  })
+
+  it('does not accept an unterminated trusted_hash string', () => {
+    const key = '/x/hooks.json:stop:0:0'
+    writeFileSync(
+      configPath,
+      `[hooks.state."${key}"]\ntrusted_hash = "sha256:UNTERMINATED\n`,
+      'utf-8'
+    )
+
+    expect(readHookTrustEntries(configPath).get(key)?.trustedHash).toBeUndefined()
+  })
+
+  it('recognizes and removes a first trust block after a leading BOM', () => {
+    const key = '/x/hooks.json:stop:0:0'
+    const content = [
+      `\uFEFF[hooks.state."${key}"]`,
+      'trusted_hash = "sha256:ORCA"',
+      '[other]',
+      'value = true',
+      ''
+    ].join('\n')
+
+    expect(readHookTrustEntriesFromContent(content).get(key)?.trustedHash).toBe('sha256:ORCA')
+    expect(removeHookTrustEntriesFromContent(content, [key])).toBe('[other]\nvalue = true\n')
   })
 
   it('does not let triple quotes in comments hide later trust entries', () => {

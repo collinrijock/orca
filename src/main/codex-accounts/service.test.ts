@@ -16,6 +16,7 @@ import { join } from 'node:path'
 import { PassThrough } from 'node:stream'
 import type { GlobalSettings } from '../../shared/types'
 import { buildWslCodexAvailabilityArgs, buildWslCodexLoginArgs } from './wsl-codex-command'
+import type { readHookTrustEntries as ReadHookTrustEntries } from '../codex/config-toml-trust'
 
 const testState = {
   userDataDir: '',
@@ -47,6 +48,10 @@ function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings
   const agentStatusHooksEnabled = overrides.agentStatusHooksEnabled ?? true
   const tabAutoGenerateTitle = overrides.tabAutoGenerateTitle ?? false
   return {
+    // Config-sync/hot-swap tests assert the shared-mirror path; the RC defaults
+    // the real-home flag ON (per-account self-contained homes), so opt these
+    // managed cases out unless a test overrides it.
+    codexSystemDefaultRealHomeEnabled: overrides.codexSystemDefaultRealHomeEnabled ?? false,
     workspaceDir: testState.fakeHomeDir,
     nestWorkspaces: false,
     refreshLocalBaseRefOnWorktreeCreate: false,
@@ -220,6 +225,65 @@ function createCodexAuthJson(email: string, accountId: string, refreshToken: str
   )}\n`
 }
 
+async function createCanonicalHookTrustFixture(): Promise<{
+  config: string
+  orcaKeys: string[]
+  userKey: string
+}> {
+  const { MANAGED_HOOK_TIMEOUT_SECONDS } = await import('../agent-hooks/installer-utils')
+  const { getCodexManagedHookInstallMaterial } = await import('../codex/hook-service')
+  const { computeTrustKey, computeTrustedHash, escapeTomlString, normalizeHookTrustKeyForLookup } =
+    await import('../codex/config-toml-trust')
+  const { getCodexHookTrustSignature } = await import('../codex/codex-hook-identity')
+  const { writeCodexTrustGrantLedgerHome } = await import('../codex/codex-trust-grant-ledger')
+  const sourceHomePath = join(testState.fakeHomeDir, '.codex')
+  const sourcePath = join(sourceHomePath, 'hooks.json')
+  const material = getCodexManagedHookInstallMaterial()
+  const expectedHashEntry = {
+    sourcePath,
+    eventLabel: 'stop' as const,
+    groupIndex: 0,
+    handlerIndex: 0,
+    command: material.command,
+    timeoutSec: MANAGED_HOOK_TIMEOUT_SECONDS
+  }
+  const ledgerHashEntry = {
+    ...expectedHashEntry,
+    eventLabel: 'session_start' as const,
+    groupIndex: 1
+  }
+  const userEntry = {
+    ...expectedHashEntry,
+    groupIndex: 2,
+    command: 'user-authored-hook'
+  }
+  const expectedHashKey = computeTrustKey(expectedHashEntry)
+  const ledgerHashKey = computeTrustKey(ledgerHashEntry)
+  const userKey = computeTrustKey(userEntry)
+  const ledgerTrustedHash = 'sha256:codex-granted-orca-hook'
+  writeCodexTrustGrantLedgerHome(sourceHomePath, {
+    binary: null,
+    entries: {
+      [normalizeHookTrustKeyForLookup(ledgerHashKey)]: {
+        signature: getCodexHookTrustSignature(ledgerHashEntry),
+        trustedHash: ledgerTrustedHash
+      }
+    }
+  })
+  const block = (key: string, trustedHash: string): string =>
+    `[hooks.state."${escapeTomlString(key)}"]\ntrusted_hash = "${trustedHash}"\nenabled = true`
+  return {
+    config: [
+      'approval_policy = "never"',
+      block(expectedHashKey, computeTrustedHash(expectedHashEntry)),
+      block(ledgerHashKey, ledgerTrustedHash),
+      block(userKey, computeTrustedHash(userEntry))
+    ].join('\n\n'),
+    orcaKeys: [expectedHashKey, ledgerHashKey],
+    userKey
+  }
+}
+
 describe('CodexAccountService config sync', () => {
   beforeEach(() => {
     vi.resetModules()
@@ -280,6 +344,99 @@ describe('CodexAccountService config sync', () => {
     )
   })
 
+  it('does not seed source-home hook trust into a self-contained account home', async () => {
+    const fixture = await createCanonicalHookTrustFixture()
+    const canonicalConfigPath = join(testState.fakeHomeDir, '.codex', 'config.toml')
+    writeFileSync(canonicalConfigPath, fixture.config, 'utf-8')
+    const managedHomePath = createManagedHome(
+      testState.userDataDir,
+      'account-1',
+      'approval_policy = "on-request"\n'
+    )
+    const settings = createSettings({
+      codexSystemDefaultRealHomeEnabled: true,
+      codexManagedAccounts: [
+        {
+          id: 'account-1',
+          email: 'user@example.com',
+          managedHomePath,
+          providerAccountId: null,
+          workspaceLabel: null,
+          workspaceAccountId: null,
+          createdAt: 1,
+          updatedAt: 1,
+          lastAuthenticatedAt: 1
+        }
+      ]
+    })
+    const store = createStore(settings)
+    const rateLimits = createRateLimits()
+    const runtimeHome = createRuntimeHome()
+    const { readHookTrustEntries } = await import('../codex/config-toml-trust')
+    const { readCodexTrustGrantLedgerHome } = await import('../codex/codex-trust-grant-ledger')
+
+    const { CodexAccountService } = await import('./service')
+    const service = new CodexAccountService(
+      store as never,
+      rateLimits as never,
+      runtimeHome as never
+    )
+    const expectSanitizedManagedConfig = (): void => {
+      const entries = readHookTrustEntries(join(managedHomePath, 'config.toml'))
+      for (const key of fixture.orcaKeys) {
+        expect(entries.has(key)).toBe(false)
+      }
+      // The launch-time hook mirror remaps user trust to this home's hooks.json.
+      expect(entries.has(fixture.userKey)).toBe(false)
+    }
+
+    expectSanitizedManagedConfig()
+    expect(readFileSync(canonicalConfigPath, 'utf-8')).toBe(fixture.config)
+    expect(readCodexTrustGrantLedgerHome(join(testState.fakeHomeDir, '.codex'))).not.toBeNull()
+
+    writeFileSync(join(managedHomePath, 'config.toml'), 'approval_policy = "untrusted"\n', 'utf-8')
+    await service.selectAccount('account-1')
+
+    expectSanitizedManagedConfig()
+  })
+
+  it('keeps flag-off config mirroring byte-identical', async () => {
+    const fixture = await createCanonicalHookTrustFixture()
+    const canonicalConfigPath = join(testState.fakeHomeDir, '.codex', 'config.toml')
+    writeFileSync(canonicalConfigPath, fixture.config, 'utf-8')
+    const managedHomePath = createManagedHome(
+      testState.userDataDir,
+      'account-1',
+      'approval_policy = "on-request"\n'
+    )
+    const settings = createSettings({
+      codexSystemDefaultRealHomeEnabled: false,
+      codexManagedAccounts: [
+        {
+          id: 'account-1',
+          email: 'user@example.com',
+          managedHomePath,
+          providerAccountId: null,
+          workspaceLabel: null,
+          workspaceAccountId: null,
+          createdAt: 1,
+          updatedAt: 1,
+          lastAuthenticatedAt: 1
+        }
+      ]
+    })
+
+    const { CodexAccountService } = await import('./service')
+    new CodexAccountService(
+      createStore(settings) as never,
+      createRateLimits() as never,
+      createRuntimeHome() as never
+    )
+
+    expect(readFileSync(join(managedHomePath, 'config.toml'), 'utf-8')).toBe(fixture.config)
+    expect(readFileSync(canonicalConfigPath, 'utf-8')).toBe(fixture.config)
+  })
+
   it('rewrites relative path config values when syncing into managed homes', async () => {
     const canonicalConfigPath = join(testState.fakeHomeDir, '.codex', 'config.toml')
     writeFileSync(
@@ -325,7 +482,15 @@ describe('CodexAccountService config sync', () => {
 
   it('does not rewrite managed configs that already match canonical config', async () => {
     const canonicalConfigPath = join(testState.fakeHomeDir, '.codex', 'config.toml')
-    const canonicalConfig = 'approval_policy = "never"\nsandbox_mode = "danger-full-access"\n'
+    const { escapeTomlString } = await import('../codex/config-toml-trust')
+    const userHookKey = `${join(testState.fakeHomeDir, '.codex', 'user-hooks.json')}:stop:0:0`
+    const canonicalConfig = [
+      'approval_policy = "never"',
+      'sandbox_mode = "danger-full-access"',
+      `[hooks.state."${escapeTomlString(userHookKey)}"]`,
+      'trusted_hash = "sha256:user-owned"',
+      ''
+    ].join('\n')
     writeFileSync(canonicalConfigPath, canonicalConfig, 'utf-8')
     const managedHomePath = createManagedHome(
       testState.userDataDir,
@@ -562,6 +727,65 @@ describe('CodexAccountService config sync', () => {
 
     expect(spawnMock).toHaveBeenCalledTimes(1)
     expect(runtimeHome.syncForCurrentSelection).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not seed source-home hook trust when adding a self-contained account', async () => {
+    vi.resetModules()
+    let fixture: Awaited<ReturnType<typeof createCanonicalHookTrustFixture>>
+    let readHookTrustEntries: typeof ReadHookTrustEntries
+    const spawnMock = vi.fn(
+      (_command: string, _args: string[], options: { env: NodeJS.ProcessEnv }) => {
+        const child = new EventEmitter() as EventEmitter & {
+          stdout: PassThrough
+          stderr: PassThrough
+          kill: () => void
+        }
+        child.stdout = new PassThrough()
+        child.stderr = new PassThrough()
+        child.kill = vi.fn()
+
+        const loginHome = options.env.CODEX_HOME
+        expect(loginHome).toBeTruthy()
+        const entries = readHookTrustEntries(join(loginHome!, 'config.toml'))
+        for (const key of fixture.orcaKeys) {
+          expect(entries.has(key)).toBe(false)
+        }
+        expect(entries.has(fixture.userKey)).toBe(false)
+        writeFileSync(
+          join(loginHome!, 'auth.json'),
+          createCodexAuthJson('user@example.com', 'provider-account-1', 'refresh-token'),
+          'utf-8'
+        )
+
+        queueMicrotask(() => child.emit('close', 0))
+        return child
+      }
+    )
+
+    vi.doMock('node:child_process', () => ({
+      execFileSync: vi.fn(),
+      spawn: spawnMock
+    }))
+    vi.doMock('../codex-cli/command', () => ({
+      resolveCodexCommand: () => 'codex'
+    }))
+    fixture = await createCanonicalHookTrustFixture()
+    readHookTrustEntries = (await import('../codex/config-toml-trust')).readHookTrustEntries
+    writeFileSync(join(testState.fakeHomeDir, '.codex', 'config.toml'), fixture.config, 'utf-8')
+
+    const store = createStore(createSettings({ codexSystemDefaultRealHomeEnabled: true }))
+    const rateLimits = createRateLimits()
+    const runtimeHome = createRuntimeHome()
+    const { CodexAccountService } = await import('./service')
+    const service = new CodexAccountService(
+      store as never,
+      rateLimits as never,
+      runtimeHome as never
+    )
+
+    await service.addAccount()
+
+    expect(spawnMock).toHaveBeenCalledTimes(1)
   })
 
   it('recreates the expected missing managed home before reauthenticating', async () => {

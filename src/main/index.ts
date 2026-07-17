@@ -792,9 +792,11 @@ function prepareCodexRuntimeHomeForLaunch(
     // the persisted off switch so those launches cannot reinstall removed hooks.
     const status = hooksEnabled
       ? (codexHookService.installForRuntimeHome(runtimeHomePath, hookTarget) ??
-        codexHookService.install())
+        // Why: a managed account's launch home is its own self-contained
+        // CODEX_HOME, so hooks/trust must install there, not the shared mirror.
+        codexHookService.install(runtimeHomePath ?? undefined))
       : (codexHookService.refreshRuntimeUserHooksForRuntimeHome(runtimeHomePath, hookTarget) ??
-        codexHookService.refreshRuntimeUserHooks())
+        codexHookService.refreshRuntimeUserHooks(runtimeHomePath ?? undefined))
     if (status.state === 'error') {
       console.warn(
         `[codex-hook-service] failed to ${

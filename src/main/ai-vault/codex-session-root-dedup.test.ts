@@ -167,6 +167,41 @@ describe('dedupeCodexRolloutFileAliases', () => {
 
     expect(dedupeCodexRolloutFileAliases([host, wsl], accessors)).toEqual([host, wsl])
   })
+
+  it('prefers a per-account self-contained home over other non-default homes', () => {
+    const perAccount = {
+      agent: 'codex',
+      path: '/Users/ada/Library/Application Support/orca/codex-accounts/019f0000-aaaa-bbbb/home/sessions/2026/07/01/rollout-2026-07-01T10-00-00-019f0000-1111-7222-8333-444444444444.jsonl',
+      codexHome:
+        '/Users/ada/Library/Application Support/orca/codex-accounts/019f0000-aaaa-bbbb/home',
+      hardlinkIdentity: '3:71'
+    }
+    const custom = {
+      agent: 'codex',
+      path: '/Users/ada/custom-codex/sessions/2026/07/01/rollout-2026-07-01T10-00-00-019f0000-1111-7222-8333-444444444444.jsonl',
+      codexHome: '/Users/ada/custom-codex',
+      hardlinkIdentity: '3:71'
+    }
+    expect(dedupeCodexRolloutFileAliases([custom, perAccount], accessors)).toEqual([perAccount])
+    expect(dedupeCodexRolloutFileAliases([perAccount, custom], accessors)).toEqual([perAccount])
+  })
+
+  it('keeps the real home over a per-account home when they alias', () => {
+    const perAccount = {
+      agent: 'codex',
+      path: '/Users/ada/Library/Application Support/orca/codex-accounts/019f0000-aaaa-bbbb/home/sessions/2026/07/01/rollout-2026-07-01T10-00-00-019f0000-1111-7222-8333-444444444444.jsonl',
+      codexHome:
+        '/Users/ada/Library/Application Support/orca/codex-accounts/019f0000-aaaa-bbbb/home',
+      hardlinkIdentity: '1:42'
+    }
+    const real = {
+      agent: 'codex',
+      path: REAL_HOME_ROLLOUT,
+      codexHome: null,
+      hardlinkIdentity: '1:42'
+    }
+    expect(dedupeCodexRolloutFileAliases([perAccount, real], accessors)).toEqual([real])
+  })
 })
 
 describe('dedupeCodexSessionsBySessionId', () => {
