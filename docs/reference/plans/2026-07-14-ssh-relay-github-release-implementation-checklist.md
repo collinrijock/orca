@@ -8,8 +8,8 @@ work; keep exact commands, runner identities, hashes, metrics, and residual gaps
 
 Date created: 2026-07-14<br>
 Last updated: 2026-07-15<br>
-Current phase: Milestone 6 / Work Package 5 bounded runtime transfer — **In progress — 2026-07-15, Codex implementation owner: exact-head Windows OpenSSH live-proof diagnosis and fixture correction**. Keep every capability disconnected from every production/default SSH path. Real Apple/SignPath rehearsals remain an explicit late gate and are not on this package's critical path.<br>
-Session checkpoint: **WINDOWS OS-LEVEL NO-INPUT CORRECTION LOCALLY GREEN / EXACT-HEAD PROOF NEXT — 2026-07-15, Codex implementation owner** — exact head `b652c1ebcce3803443d84c89811146366cdbdd5b`, artifact run `29542292712`, x64 job `87766845800`, and ARM64 job `87766845741` preserve all prior artifact/build/cache/hash/closure/signer gates and independently expose the same native probe/profile gaps. Exact corrected head `8ae6dcf6450b5f081788357dd8fe776293fb0cfe`, run `29543292239`, x64 job `87769913124`, and ARM64 job `87769913148` remain RED despite probe-only `-n`. `E-M6-WINDOWS-SYSTEM-SSH-TREE-LIFECYCLE-DIAGNOSTIC-LOCAL-001` adds non-sensitive lifecycle evidence and exact-fixture-SID process settlement; every local gate passes. Exact diagnostic head `e4bcee3f3561e7cfd58aa90e7d35e6c597df8692`, run `29544129779`, x64 job `87772490863`, and ARM64 job `87772490900` prove official OpenSSH authentication and remote command-session close while both clients record `sentinel=false`, `stdoutEnded=false`, `processExit=not-observed`, and `channelClosed=false`. Win32 has no Orca control socket, so this is not a mux path. `E-M6-WINDOWS-SYSTEM-SSH-TREE-OS-NOINPUT-LOCAL-001` gives only no-input commands an OS-level ignored stdin handle while ordinary/payload commands retain a pipe; focused, PowerShell parse, 283-contract, typecheck, full lint/reliability/max-lines, formatting, diff, and protected-resolver gates pass locally. Commit/push and require fresh x64/arm64 live proof. Do not advance Milestone 6. Production runtime bytes still cross authenticated SSH and no product remote downloads anything. Do not connect a product caller, change legacy upload/fallback/default behavior, enable a tuple, publish an artifact, or perform SignPath work. Merging to `main` remains prohibited, SignPath is deferred, and legacy remains the production default.<br>
+Current phase: Milestone 6 / Work Package 5 bounded runtime transfer — **In progress — 2026-07-15, Codex implementation owner: cross-platform no-input process-handle correction and exact-head live proof**. Keep every capability disconnected from every production/default SSH path. Real Apple/SignPath rehearsals remain an explicit late gate and are not on this package's critical path.<br>
+Session checkpoint: **IGNORED-STDIN HYPOTHESIS NATIVELY FALSIFIED / PLATFORM-SPECIFIC EOF CORRECTION LOCALLY GREEN — 2026-07-15, Codex implementation owner** — exact diagnostic head `e4bcee3f3561e7cfd58aa90e7d35e6c597df8692`, run `29544129779`, x64 job `87772490863`, and ARM64 job `87772490900` prove official OpenSSH authentication and remote command-session close while both clients record `sentinel=false`, `stdoutEnded=false`, `processExit=not-observed`, and `channelClosed=false`. Exact ignored-stdin head `aab0775272aca2b03d55d045cbaf7aefc7511bfe`, artifact run `29544909117`, Linux x64/ARM64 jobs `87774941240`/`87774941211`, and Windows x64/ARM64 jobs `87774941207`/`87774941200` falsify the shared ignored-handle design. Both Linux jobs receive the sentinel but the self-referential no-input facade emits an argument-less synthetic close before the child close. Both Windows jobs instead reproduce the redirected-handle hang documented by Win32-OpenSSH issues #856 and #1330: authenticated remote command start/close, then 31.79/32.78-second timeouts with every lifecycle field false. The implementation-plan correction keeps ignored stdin on POSIX, uses an anonymous pipe with the parent write end destroyed immediately plus mandatory `-n` on Windows, and gives all no-input callers a separate fail-on-write facade. Focused 117+1, 283-contract, typecheck, full lint/reliability/max-lines, all three PowerShell parse, formatting, diff, and protected-resolver isolation gates pass locally; exact-head native proof is next. Do not advance Milestone 6. Production runtime bytes still cross authenticated SSH and no product remote downloads anything. Do not connect a product caller, change legacy upload/fallback/default behavior, enable a tuple, publish an artifact, or perform SignPath work. Merging to `main` remains prohibited, SignPath is deferred, and legacy remains the production default.<br>
 Primary design: [SSH relay GitHub Release plan](./2026-07-14-ssh-relay-github-release-plan.html)<br>
 Motivating issues: [#8450](https://github.com/stablyai/orca/issues/8450), [#1693](https://github.com/stablyai/orca/issues/1693)
 
@@ -19268,9 +19268,9 @@ config/scripts/ssh-relay-runtime-*.test.mjs` passes 50 files and 283/283 cases i
 
 ### E-M6-WINDOWS-SYSTEM-SSH-TREE-OS-NOINPUT-LOCAL-001 — no-input commands have no inherited OS pipe while payload commands remain piped
 
-- Date/owner/base/runner: 2026-07-15, Codex implementation owner; uncommitted correction atop
-  exact lifecycle RED head `e4bcee3f3561e7cfd58aa90e7d35e6c597df8692` on Apple arm64,
-  macOS 26.2 build 25C56, Node 26.5.0, pnpm 10.24.0. Native Windows execution remains required.
+- Date/owner/head/runner: 2026-07-15, Codex implementation owner; exact pushed head
+  `aab0775272aca2b03d55d045cbaf7aefc7511bfe` on Apple arm64, macOS 26.2 build 25C56, Node
+  26.5.0, pnpm 10.24.0. Native Windows execution remains required.
 - Correction: `spawnSystemSshCommand` uses `stdio: ['ignore', 'pipe', 'pipe']` only when
   `SystemSshBuildArgsOptions.noInput` is true; it retains OpenSSH `-n`. Every ordinary command and
   every file/tree payload keeps `stdio: ['pipe', 'pipe', 'pipe']`. When Node correctly exposes no
@@ -19300,6 +19300,72 @@ config/scripts/ssh-relay-runtime-*.test.mjs` passes 50 files and 283/283 cases i
   proof must show sentinel/process/channel settlement, full-size transfer metrics, cancellation,
   collision, cleanup, and exact profile/directory teardown. Legacy remains the sole
   production/default path; SignPath remains deferred.
+- Native proof result: artifact run `29544909117` tests exact head
+  `aab0775272aca2b03d55d045cbaf7aefc7511bfe`; native x64 job `87774941207` and native ARM64 job
+  `87774941200` both complete RED at the probe and exact profile teardown gates. See
+  `E-M6-CROSS-PLATFORM-NOINPUT-CI-RED-001`; neither job counts as enablement proof.
+
+### E-M6-CROSS-PLATFORM-NOINPUT-CI-RED-001 — shared ignored stdin regresses POSIX and preserves the Win32 redirected-handle hang
+
+- Date/owner/head/run: 2026-07-15, Codex implementation owner; exact pushed head
+  `aab0775272aca2b03d55d045cbaf7aefc7511bfe`, artifact run `29544909117`.
+- POSIX native RED: Linux x64 job `87774941240` and Linux ARM64 job `87774941211` on
+  `ubuntu-24.04` pass the 283-contract suite, target-native build, full-size cache, and live SFTP,
+  then fail the restricted OpenSSH system-SSH probe in 620/482 milliseconds. Both receive the
+  remote sentinel, but ending the self-referential no-input facade finishes the channel's writable
+  side; once stdout ends, the duplex auto-destroys and emits `close` without the child's exit code.
+  The purpose-named local regression reproduces that argument-less early close before correction.
+- Windows native RED: x64 job `87774941207` on `windows-2022` and ARM64 job `87774941200` on
+  `windows-11-arm` pass 100 files / 854 cases with 18 declared skips, target-native double-build,
+  full-size cache, exact fixture signatures/ACLs, and official OpenSSH 10.0p2 startup. Their remote
+  command sessions start and close, but the clients time out after 31.79/32.78 seconds with
+  `sentinel=false`, `stdoutEnded=false`, `processExit=not-observed`, and `channelClosed=false`.
+  Exact `_Classes` unload and `UsrClass.dat`/profile-directory checks remain RED on both runners.
+- Design correction evidence: [Win32-OpenSSH #856](https://github.com/PowerShell/Win32-OpenSSH/issues/856)
+  identifies redirected stdin handles under `CreateProcess` and recommends an anonymous pipe whose
+  write end is closed; [Win32-OpenSSH #1330](https://github.com/PowerShell/Win32-OpenSSH/issues/1330)
+  demonstrates that explicit `NUL` redirection executes the remote command and then hangs. The
+  reviewed plan and checklist now require ignored stdin only on POSIX and a destroyed parent pipe
+  end plus mandatory `-n` on Windows. Inheriting parent stdin is rejected because packaged Electron
+  clients need a console-independent boundary.
+- Residual gate: this run is RED and enables no tuple. Prove the corrected platform-specific child
+  handles on Linux x64/ARM64 and Windows x64/ARM64 before advancing.
+
+### E-M6-CROSS-PLATFORM-NOINPUT-EOF-LOCAL-001 — separate facade and platform-specific child EOF are locally green
+
+- Date/owner/base/runner: 2026-07-15, Codex implementation owner; uncommitted correction atop exact
+  RED head `aab0775272aca2b03d55d045cbaf7aefc7511bfe` on Apple arm64, macOS 26.2 build 25C56,
+  Node 26.5.0, pnpm 10.24.0.
+- Correction: all no-input commands retain OpenSSH `-n`. POSIX spawns with ignored stdin. Windows
+  spawns with an anonymous stdin pipe and destroys the parent write stream immediately, before the
+  caller can execute or retain it. A separate fail-on-write `Writable` exposes safe `stdin.end()`
+  semantics without ending the command duplex. Ordinary commands and every file/tree payload retain
+  their writable pipe unchanged.
+- Purpose RED/green: `pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1
+src/main/ssh/ssh-system-fallback.test.ts -t "keeps no-input command output open"` first fails
+  because `close` is called once without arguments before the simulated child closes, then passes
+  after the separate facade. The adjacent native-platform assertion requires ignored stdin on
+  POSIX, pipe plus immediate `destroy()` on Windows, mandatory `-n`, and no payload-path change.
+- Focused command: `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts
+--maxWorkers=1 src/main/ssh/ssh-connection.test.ts src/main/ssh/ssh-system-fallback.test.ts
+src/main/ssh/ssh-relay-runtime-windows-system-ssh-openssh-full-size.test.ts
+config/scripts/ssh-relay-runtime-workflow.test.mjs` passes 117 cases with one declared native skip in
+  3.74 seconds real; maximum RSS is 179,191,808 bytes and peak footprint is 97,097,416 bytes.
+- Release contracts: `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts
+--maxWorkers=1 --reporter=dot config/scripts/ssh-relay-runtime-*.test.mjs` passes 50 files and
+  283/283 cases in 22.72 seconds real; maximum RSS is 195,510,272 bytes and peak footprint is
+  98,178,856 bytes.
+- Static gates: `/usr/bin/time -l pnpm typecheck` passes in 4.37 seconds real with maximum RSS
+  1,241,350,144 bytes and peak footprint 96,835,248 bytes. `/usr/bin/time -l pnpm lint` passes in
+  31.43 seconds real with only 26 pre-existing warnings, all 41 reliability gates, and the 355-entry
+  max-lines ratchet; maximum RSS is 2,116,173,824 bytes and peak footprint is 97,572,792 bytes.
+- Workflow/isolation gates: Node YAML extraction invokes `pwsh -NoProfile -NonInteractive -Command
+'[scriptblock]::Create([Console]::In.ReadToEnd()) | Out-Null'` for the exact start, measure, and
+  stop workflow bodies; all three print `powershell_parse=pass`. Targeted `oxfmt --check`,
+  `git diff --check`, and exact equality to `HEAD` for both protected resolver files pass.
+- Residual boundary: local macOS cannot prove Win32 pipe-handle behavior or native fixture teardown.
+  Exact-head Linux x64/ARM64 and Windows x64/ARM64 live proof remains mandatory. Legacy remains the
+  sole production/default path; product/Beta/fallback/tuple/publication and SignPath stay absent.
 
 ## Accepted Gaps
 

@@ -1,5 +1,5 @@
 import { spawn, type ChildProcess } from 'node:child_process'
-import { Duplex } from 'node:stream'
+import { Duplex, Writable } from 'node:stream'
 import type { ClientChannel } from 'ssh2'
 import type { SshTarget } from '../../shared/ssh-types'
 import { wrapRemoteCommandForPosixShell, type SshExecOptions } from './ssh-connection-utils'
@@ -63,13 +63,17 @@ export function spawnSystemSshCommand(
   const remoteCommand =
     options?.wrapCommand === false ? command : wrapRemoteCommandForPosixShell(command)
   const noInput = options?.noInput === true
+  const stdinMode = noInput && process.platform !== 'win32' ? 'ignore' : 'pipe'
   const proc = spawn(sshPath, [...buildSshArgs(target, options), remoteCommand], {
-    // Why: Windows OpenSSH can keep an inherited pipe alive despite `-n`;
-    // no-input commands must not receive a writable OS handle at all.
-    stdio: [noInput ? 'ignore' : 'pipe', 'pipe', 'pipe'],
+    // Why: Win32-OpenSSH can hang when stdin is mapped to NUL; give it a
+    // pipe whose parent end is closed immediately, as required by #856/#1330.
+    stdio: [stdinMode, 'pipe', 'pipe'],
     windowsHide: true
   })
-  return wrapCommandProcess(proc)
+  if (noInput && process.platform === 'win32') {
+    proc.stdin?.destroy()
+  }
+  return wrapCommandProcess(proc, !noInput)
 }
 
 function wrapChildProcess(proc: ChildProcess): SystemSshProcess {
@@ -91,13 +95,13 @@ function wrapChildProcess(proc: ChildProcess): SystemSshProcess {
   }
 }
 
-function wrapCommandProcess(proc: ChildProcess): SystemSshCommandChannel {
+function wrapCommandProcess(proc: ChildProcess, acceptsInput: boolean): SystemSshCommandChannel {
   const duplex = new Duplex({
     read() {
       proc.stdout?.resume()
     },
     write(chunk, encoding, cb) {
-      if (!proc.stdin) {
+      if (!acceptsInput || !proc.stdin) {
         cb(new Error('System SSH command does not accept stdin'))
         return
       }
@@ -112,7 +116,15 @@ function wrapCommandProcess(proc: ChildProcess): SystemSshCommandChannel {
     _process?: ChildProcess
     close: () => void
   }
-  mutableChannel.stdin = proc.stdin ?? duplex
+  mutableChannel.stdin =
+    (acceptsInput ? proc.stdin : null) ??
+    new Writable({
+      // Why: ending a no-input facade must not half-close the readable command
+      // channel before the child reports its exit status.
+      write(_chunk, _encoding, cb) {
+        cb(new Error('System SSH command does not accept stdin'))
+      }
+    })
   mutableChannel.stderr = proc.stderr!
   mutableChannel._process = proc
   mutableChannel.close = () => {
@@ -129,7 +141,9 @@ function wrapCommandProcess(proc: ChildProcess): SystemSshCommandChannel {
     proc.off('exit', onExit)
     proc.off('close', onClose)
     proc.off('error', onProcessError)
-    proc.stdin?.off('error', onStreamError)
+    if (acceptsInput) {
+      proc.stdin?.off('error', onStreamError)
+    }
     proc.stdout!.off('error', onStreamError)
   }
   const fail = (err: Error): void => {
@@ -165,7 +179,9 @@ function wrapCommandProcess(proc: ChildProcess): SystemSshCommandChannel {
   proc.on('exit', onExit)
   proc.on('close', onClose)
   proc.on('error', onProcessError)
-  proc.stdin?.on('error', onStreamError)
+  if (acceptsInput) {
+    proc.stdin?.on('error', onStreamError)
+  }
   proc.stdout!.on('error', onStreamError)
 
   return channel

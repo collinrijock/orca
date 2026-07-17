@@ -113,12 +113,16 @@ session close: `sentinel=false`, `stdoutEnded=false`, `processExit=not-observed`
 handle in addition to `-n`; preserve piped stdin for every payload-bearing command. ARM64 job
 `87772490900` independently returns the same four-field lifecycle tuple after a 31.16-second test,
 so the correction is shared across native Windows architectures.
-`E-M6-WINDOWS-SYSTEM-SSH-TREE-OS-NOINPUT-LOCAL-001` is locally green: only no-input commands
-spawn with stdin ignored at the OS boundary and retain `-n`; ordinary and payload commands remain
-piped, and the no-input channel facade settles safely without a child stdin stream. Focused tests
-pass 116 cases with one native skip, all three PowerShell blocks parse, 283/283 artifact contracts
-pass, typecheck and full lint/reliability/max-lines pass, formatting/diff are clean, and protected
-resolvers remain unchanged. Commit/push and require fresh x64/arm64 live proof.
+`E-M6-WINDOWS-SYSTEM-SSH-TREE-OS-NOINPUT-LOCAL-001` records a locally green but native-falsified
+hypothesis: giving every no-input command an ignored OS stdin handle preserves the payload paths,
+but exact run `29544909117` proves the design is unsafe. Linux x64/ARM64 jobs
+`87774941240`/`87774941211` observe an argument-less synthetic channel close before child close;
+native Windows x64 job `87774941207` reproduces Win32-OpenSSH issues #856/#1330 by executing the
+remote command but hanging with all four lifecycle fields false; ARM64 job `87774941200`
+independently returns the same lifecycle RED. The corrected contract keeps POSIX stdin ignored,
+gives Windows an anonymous pipe whose parent write end is destroyed immediately plus mandatory
+`-n`, and uses a separate no-input `Writable` facade so ending it cannot half-close the command
+channel. Exact-head proof of that correction is next.
 `E-M6-WINDOWS-SYSTEM-SSH-TREE-LIVE-AUDIT-001` fixes the loopback-only official Microsoft
 server, fixture-owned non-admin account/ACL, exact host-key trust, Windows PowerShell 5.1,
 serial/default and four-channel metrics, cancellation/collision/cleanup, and deterministic teardown

@@ -164,6 +164,7 @@ describe('spawnSystemSsh', () => {
       write: ReturnType<typeof vi.fn>
       end: ReturnType<typeof vi.fn>
       on: ReturnType<typeof vi.fn>
+      destroy: ReturnType<typeof vi.fn>
     }
     stdout: { on: ReturnType<typeof vi.fn> }
     stderr: { on: ReturnType<typeof vi.fn> }
@@ -177,7 +178,7 @@ describe('spawnSystemSsh', () => {
     spawnMock.mockReset()
 
     mockProc = {
-      stdin: { write: vi.fn(), end: vi.fn(), on: vi.fn() },
+      stdin: { write: vi.fn(), end: vi.fn(), on: vi.fn(), destroy: vi.fn() },
       stdout: { on: vi.fn() },
       stderr: { on: vi.fn() },
       pid: 12345,
@@ -418,16 +419,46 @@ describe('spawnSystemSsh', () => {
     )
   })
 
-  it('spawns a no-input command without an inherited stdin pipe', () => {
-    spawnMock.mockReturnValueOnce({ ...mockProc, stdin: null })
+  it('spawns a no-input command with the platform-safe child stdin boundary', () => {
+    if (process.platform !== 'win32') {
+      spawnMock.mockReturnValueOnce({ ...mockProc, stdin: null })
+    }
     const channel = spawnSystemSshCommand(createTarget(), 'echo ready', { noInput: true })
 
     expect(spawnMock).toHaveBeenCalledWith(
       SYSTEM_SSH_PATH,
       expect.arrayContaining(['-n', '--', 'deploy@example.com']),
-      expect.objectContaining({ stdio: ['ignore', 'pipe', 'pipe'] })
+      expect.objectContaining({
+        stdio: [process.platform === 'win32' ? 'pipe' : 'ignore', 'pipe', 'pipe']
+      })
     )
+    if (process.platform === 'win32') {
+      expect(mockProc.stdin.destroy).toHaveBeenCalledOnce()
+    }
     expect(() => channel.stdin.end()).not.toThrow()
+  })
+
+  it('keeps no-input command output open until the child process closes', async () => {
+    const proc = createMockChildProcess()
+    if (process.platform !== 'win32') {
+      ;(proc as unknown as { stdin: null }).stdin = null
+    }
+    spawnMock.mockReturnValue(proc)
+
+    const channel = spawnSystemSshCommand(createTarget(), 'echo ready', { noInput: true })
+    const output: Buffer[] = []
+    const onClose = vi.fn()
+    channel.on('data', (chunk: Buffer) => output.push(chunk))
+    channel.on('close', onClose)
+
+    channel.stdin.end()
+    proc.stdout.end('ORCA-SYSTEM-SSH-OK\n')
+    await new Promise<void>((resolve) => setImmediate(resolve))
+
+    expect(Buffer.concat(output).toString('utf8')).toBe('ORCA-SYSTEM-SSH-OK\n')
+    expect(onClose).not.toHaveBeenCalled()
+    proc.emit('close', 0, null)
+    expect(onClose).toHaveBeenCalledWith(0, null)
   })
 
   it('spawns port forwards before the ssh destination terminator', () => {
