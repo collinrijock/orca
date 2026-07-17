@@ -889,6 +889,28 @@ export type BrowserLoadError = {
   validatedUrl: string
 }
 
+export type BrowserCertificateFailure = {
+  challengeId: string
+  browserPageId: string
+  errorCode: number | null
+  error: string
+  origin: string
+  displayHost: string
+  canProceed: boolean
+  observedAt: number
+}
+
+export type BrowserCertificateProceedFailureReason =
+  | 'expired'
+  | 'changed'
+  | 'ineligible'
+  | 'missing'
+  | 'navigated'
+
+export type BrowserCertificateProceedResult =
+  | { ok: true }
+  | { ok: false; reason: BrowserCertificateProceedFailureReason }
+
 // Why: BrowserPage persists the active viewport preset so CDP emulation can be
 // reapplied on reload/navigation without the user re-picking from the toolbar.
 export type BrowserViewportPresetId =
@@ -1469,6 +1491,11 @@ export type GitHubWorkItem = {
   labels: string[]
   updatedAt: string
   author: string | null
+  // Why: GHE user logins don't exist on github.com, so the github.com/{login}.png
+  // fallback 404s. Carry the API-provided avatar_url so github.com + Enterprise
+  // both render; absent on the gh-pr-view path (gh omits avatar), then the UI
+  // falls back to the login URL and finally an initials placeholder. See #8784.
+  authorAvatarUrl?: string
   branchName?: string
   baseRefName?: string
   // Why: PR checks are keyed by head commit; carrying this lets task rows use
@@ -3575,6 +3602,8 @@ export type CustomPet = {
 export type SpriteAnimation = {
   row: number
   frames: number
+  /** Per-frame holds in ms (length === frames). Absent means uniform sheet fps. */
+  frameDurationsMs?: number[]
 }
 
 export type PersistedTrustedOrcaHookEntry = {
@@ -3742,6 +3771,13 @@ export type GitDiffBinaryResult = {
   isImage?: boolean
   /** MIME type for binary preview rendering, e.g. "image/png" or "application/pdf" */
   mimeType?: string
+  /**
+   * True only when the modified side is a proven deletion (working-tree file gone
+   * or absent from the index) — distinct from an empty modified side caused by a
+   * read failure or size cap. Lets previewers fall back to the original bytes for
+   * a deletion without showing a stale image on a failed read.
+   */
+  modifiedDeleted?: boolean
 } & (
   | { originalIsBinary: true; modifiedIsBinary: boolean }
   | { originalIsBinary: boolean; modifiedIsBinary: true }
