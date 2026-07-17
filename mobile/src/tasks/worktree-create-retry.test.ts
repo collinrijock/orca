@@ -39,8 +39,6 @@ function scriptedClient(
   } as unknown as RpcClient
 }
 
-const noSleep = async (): Promise<void> => {}
-
 describe('createWorktreeWithNameRetry', () => {
   it('stamps a clientMutationId on the create request', async () => {
     const attempts: Attempt[] = []
@@ -49,8 +47,8 @@ describe('createWorktreeWithNameRetry', () => {
       client,
       baseName: 'otter',
       buildParams: (name) => ({ repo: 'id:r', name }),
-      mintMutationId: () => 'key-1',
-      sleep: noSleep
+      supportsIdempotentCutoverRetry: true,
+      mintMutationId: () => 'key-1'
     })
     expect(result).toEqual({ worktreeId: 'wt-1', name: 'otter' })
     expect(attempts).toHaveLength(1)
@@ -67,8 +65,8 @@ describe('createWorktreeWithNameRetry', () => {
       client,
       baseName: 'seal',
       buildParams: (name) => ({ repo: 'id:r', name }),
-      mintMutationId: () => 'key-mig',
-      sleep: noSleep
+      supportsIdempotentCutoverRetry: true,
+      mintMutationId: () => 'key-mig'
     })
     expect(result).toEqual({ worktreeId: 'wt-2', name: 'seal' })
     expect(attempts).toHaveLength(2)
@@ -87,8 +85,8 @@ describe('createWorktreeWithNameRetry', () => {
         client,
         baseName: 'crab',
         buildParams: (name) => ({ repo: 'id:r', name }),
-        mintMutationId: () => 'key-x',
-        sleep: noSleep
+        supportsIdempotentCutoverRetry: true,
+        mintMutationId: () => 'key-x'
       })
     ).rejects.toBeInstanceOf(LogicalClientCutoverError)
     // Initial attempt + 5 retries.
@@ -103,8 +101,8 @@ describe('createWorktreeWithNameRetry', () => {
         client,
         baseName: 'eel',
         buildParams: (name) => ({ repo: 'id:r', name }),
-        mintMutationId: () => 'key-t',
-        sleep: noSleep
+        supportsIdempotentCutoverRetry: true,
+        mintMutationId: () => 'key-t'
       })
     ).rejects.toThrow('Request timed out')
     expect(attempts).toHaveLength(1)
@@ -121,8 +119,8 @@ describe('createWorktreeWithNameRetry', () => {
       client,
       baseName: 'topic',
       buildParams: (name) => ({ repo: 'id:r', name }),
-      mintMutationId: () => `key-${(n += 1)}`,
-      sleep: noSleep
+      supportsIdempotentCutoverRetry: true,
+      mintMutationId: () => `key-${(n += 1)}`
     })
     expect(result).toEqual({ worktreeId: 'wt-3', name: 'topic-2' })
     expect(attempts).toHaveLength(2)
@@ -130,5 +128,21 @@ describe('createWorktreeWithNameRetry', () => {
     expect(attempts[0]!.params.clientMutationId).toBe('key-1')
     expect(attempts[1]!.params.clientMutationId).toBe('key-2')
     expect(attempts[1]!.params.name).toBe('topic-2')
+  })
+
+  it('does not replay an ambiguous cutover when the host lacks idempotency support', async () => {
+    const attempts: Attempt[] = []
+    const client = scriptedClient([{ throws: new LogicalClientCutoverError() }], attempts)
+    await expect(
+      createWorktreeWithNameRetry({
+        client,
+        baseName: 'ray',
+        buildParams: (name) => ({ repo: 'id:r', name }),
+        supportsIdempotentCutoverRetry: false,
+        mintMutationId: () => 'must-not-be-used'
+      })
+    ).rejects.toBeInstanceOf(LogicalClientCutoverError)
+    expect(attempts).toHaveLength(1)
+    expect(attempts[0]!.params.clientMutationId).toBeUndefined()
   })
 })

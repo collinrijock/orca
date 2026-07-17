@@ -1416,6 +1416,25 @@ describe('OrcaRuntimeService.dedupeWorktreeCreate', () => {
     expect(retried).toEqual(first)
   })
 
+  it('expires settled successes after the reconnect window', async () => {
+    vi.useFakeTimers()
+    try {
+      const runtime = new OrcaRuntimeService(store)
+      let calls = 0
+      const factory = (): Promise<{ n: number }> => Promise.resolve({ n: (calls += 1) })
+      await runtime.dedupeWorktreeCreate('id:r', 'key-1', factory)
+      await vi.advanceTimersByTimeAsync(59_999)
+      await runtime.dedupeWorktreeCreate('id:r', 'key-1', factory)
+      expect(calls).toBe(1)
+
+      await vi.advanceTimersByTimeAsync(1)
+      await runtime.dedupeWorktreeCreate('id:r', 'key-1', factory)
+      expect(calls).toBe(2)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('drops a failed create so a genuine retry starts fresh', async () => {
     const runtime = new OrcaRuntimeService(store)
     let calls = 0
@@ -1555,6 +1574,7 @@ describe('OrcaRuntimeService', () => {
     expect(status.capabilities).toContain('terminal.binary-stream.v1')
     expect(status.capabilities).toContain('workspace-ports.v1')
     expect(status.capabilities).toContain('mobile.tasks.v1')
+    expect(status.capabilities).toContain('worktree.create-idempotency.v1')
     expect(status.capabilities).toContain('project-host-setup.v1')
     expect(status.capabilities).toContain('linear.issue-attribute-filter.v1')
     expect(status.capabilities).not.toContain('browser.screencast.v1')

@@ -22,16 +22,15 @@ export type WorktreeCreateResult = { worktreeId: string; name: string } | { erro
 // instead of surfacing "RPC interrupted by connection migration" with the
 // worktree silently created.
 const WORKTREE_CREATE_CUTOVER_MAX_RETRIES = 5
-const WORKTREE_CREATE_CUTOVER_RETRY_DELAY_MS = 300
 
 export type CreateWorktreeWithNameRetryArgs = {
   client: RpcClient
   baseName: string
   buildParams: (name: string) => Record<string, unknown>
+  supportsIdempotentCutoverRetry: boolean
   maxAttempts?: number
   // Injected in tests; production mints a fresh idempotency key per candidate.
   mintMutationId?: () => string
-  sleep?: (ms: number) => Promise<void>
 }
 
 // Creates a worktree, retrying with a numeric suffix on a name-collision error.
@@ -42,18 +41,24 @@ export type CreateWorktreeWithNameRetryArgs = {
 export async function createWorktreeWithNameRetry(
   args: CreateWorktreeWithNameRetryArgs
 ): Promise<WorktreeCreateResult> {
-  const { client, baseName, buildParams } = args
+  const { client, baseName, buildParams, supportsIdempotentCutoverRetry } = args
   const maxAttempts = args.maxAttempts ?? CLIENT_WORKTREE_CREATE_MAX_ATTEMPTS
   const mintMutationId = args.mintMutationId ?? defaultWorktreeCreateMutationId
-  const sleep = args.sleep ?? defaultSleep
   let lastError: string | null = null
   for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
     const candidateName = getClientWorktreeCreateCandidate(baseName, attempt)
-    // Why: one idempotency key per candidate name. A cutover retry reuses the
-    // SAME key so the host dedupes (no duplicate worktree), while a name-collision
-    // bump is a genuinely new create that must mint a fresh key.
-    const params = { ...buildParams(candidateName), clientMutationId: mintMutationId() }
-    const response = await sendWorktreeCreateResilient(client, params, sleep)
+    const candidateParams = buildParams(candidateName)
+    // Why: older hosts strip unknown fields, so only stamp and replay when the
+    // host advertises idempotency. One key per candidate makes cutover retries
+    // safe while a name-collision bump remains a genuinely new create.
+    const params = supportsIdempotentCutoverRetry
+      ? { ...candidateParams, clientMutationId: mintMutationId() }
+      : candidateParams
+    const response = await sendWorktreeCreateResilient(
+      client,
+      params,
+      supportsIdempotentCutoverRetry
+    )
     if (response.ok) {
       const result = (response as RpcSuccess).result as { worktree: { id: string } }
       return { worktreeId: result.worktree.id, name: candidateName }
@@ -71,7 +76,7 @@ export async function createWorktreeWithNameRetry(
 async function sendWorktreeCreateResilient(
   client: RpcClient,
   params: Record<string, unknown>,
-  sleep: (ms: number) => Promise<void>
+  supportsIdempotentCutoverRetry: boolean
 ): Promise<RpcResponse> {
   for (let migrationRetry = 0; ; migrationRetry += 1) {
     try {
@@ -80,13 +85,14 @@ async function sendWorktreeCreateResilient(
       })
     } catch (error) {
       if (
+        !supportsIdempotentCutoverRetry ||
         !isLogicalClientCutoverError(error) ||
         migrationRetry >= WORKTREE_CREATE_CUTOVER_MAX_RETRIES
       ) {
         throw error
       }
-      // Give migrateTo a beat to settle on the authenticated replacement session.
-      await sleep(WORKTREE_CREATE_CUTOVER_RETRY_DELAY_MS)
+      // Why: LogicalClientCutoverError is raised only after migrateTo installs an
+      // authenticated replacement, so retry immediately instead of adding UI lag.
     }
   }
 }
@@ -101,8 +107,4 @@ function isLogicalClientCutoverError(error: unknown): boolean {
 function defaultWorktreeCreateMutationId(): string {
   const randomPart = Math.random().toString(36).slice(2, 10)
   return `worktree-create:${Date.now().toString(36)}:${randomPart}`
-}
-
-function defaultSleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms))
 }

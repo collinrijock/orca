@@ -51,6 +51,7 @@ import {
 import { createBlankWorkspace } from '../tasks/blank-workspace-create'
 import { createWorkspaceFromComposerSource } from '../tasks/source-workspace-create'
 import { MOBILE_TASKS_CAPABILITY } from '../tasks/mobile-tasks-capability'
+import { MOBILE_WORKTREE_CREATE_IDEMPOTENCY_CAPABILITY } from '../tasks/worktree-create-capability'
 import { normalizeWorkspaceAgent } from '../tasks/workspace-agent-selection'
 import {
   filterAvailableTaskProviders,
@@ -211,6 +212,7 @@ function NewWorktreeModalContent({
   const [note, setNote] = useState('')
   const [availableProviders, setAvailableProviders] = useState<TaskProvider[]>([])
   const [tasksSupported, setTasksSupported] = useState(false)
+  const [idempotentWorktreeCreateSupported, setIdempotentWorktreeCreateSupported] = useState(false)
   const [showAdvanced, setShowAdvanced] = useState(false)
   const [setupHookDetails, setSetupHookDetails] = useState<SetupHookDetails | null>(null)
   const [trustedOrcaHooks, setTrustedOrcaHooks] = useState<PersistedTrustedOrcaHooks>({})
@@ -417,6 +419,9 @@ function NewWorktreeModalContent({
       const capabilities =
         (statusResult?.result as { capabilities?: string[] } | undefined)?.capabilities ?? []
       setTasksSupported(capabilities.includes(MOBILE_TASKS_CAPABILITY))
+      setIdempotentWorktreeCreateSupported(
+        capabilities.includes(MOBILE_WORKTREE_CREATE_IDEMPOTENCY_CAPABILITY)
+      )
       const glabInstalled =
         (okResult(preflightRes)?.result as { glab?: { installed?: boolean } } | undefined)?.glab
           ?.installed === true
@@ -698,7 +703,8 @@ function NewWorktreeModalContent({
             },
             workspaceName: trimmedName || undefined,
             note: trimmedNote,
-            nameIsAutoManaged: composer.isNameAutoManaged
+            nameIsAutoManaged: composer.isNameAutoManaged,
+            supportsIdempotentCutoverRetry: idempotentWorktreeCreateSupported
           })
         : await createBlankWorkspace({
             client,
@@ -707,7 +713,8 @@ function NewWorktreeModalContent({
             startupCommand: command,
             createdWithAgentId,
             comment: trimmedNote,
-            setupDecision
+            setupDecision,
+            supportsIdempotentCutoverRetry: idempotentWorktreeCreateSupported
           })
       if ('error' in result) {
         setError(result.error)
