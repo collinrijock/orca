@@ -11,7 +11,8 @@ import { getSpawnArgsForWindows } from '../win32-utils'
 import type {
   CodexManagedAccount,
   CodexManagedAccountSummary,
-  CodexRateLimitAccountsState
+  CodexRateLimitAccountsState,
+  CodexSystemDefaultIdentity
 } from '../../shared/types'
 import type { CodexRuntimeHomeService } from './runtime-home-service'
 import { writeFileAtomically } from './fs-utils'
@@ -309,8 +310,102 @@ export class CodexAccountService {
         .map((account) => this.toSummary(account))
         .sort((a, b) => b.updatedAt - a.updatedAt),
       activeAccountId: normalizeCodexRuntimeSelection(settings).host,
-      activeAccountIdsByRuntime: normalizeCodexRuntimeSelection(settings)
+      activeAccountIdsByRuntime: normalizeCodexRuntimeSelection(settings),
+      systemDefault: this.resolveSystemDefaultIdentity()
     }
+  }
+
+  // Why: the system-default (activeAccountId:null) account has no stored
+  // identity — its effective login is whatever the real ~/.codex/auth.json is
+  // right now. Read it live and read-only so the switcher can display who the
+  // system default is and attribute usage, without ever mutating ~/.codex.
+  private resolveSystemDefaultIdentity(): CodexSystemDefaultIdentity {
+    const authFilePath = join(homedir(), '.codex', 'auth.json')
+    let contents: string
+    try {
+      // Why: a single read avoids an exists/read race and halves filesystem
+      // probes whenever an accounts snapshot resolves this live identity.
+      contents = readFileSync(authFilePath, 'utf-8')
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException | null)?.code
+      if (code === 'ENOENT' || code === 'ENOTDIR') {
+        // Why: no auth.json means either a signed-out home or an env-key/custom
+        // provider that authenticates via OPENAI_API_KEY instead of a token file.
+        return {
+          hasAuth: false,
+          authKind: this.hasEnvApiKey() ? 'api-key' : 'none',
+          email: null,
+          providerAccountId: null,
+          workspaceLabel: null
+        }
+      }
+      console.warn(
+        '[codex-accounts] Failed to read system-default Codex identity',
+        code ?? 'unknown-error'
+      )
+      return {
+        hasAuth: true,
+        authKind: 'none',
+        email: null,
+        providerAccountId: null,
+        workspaceLabel: null
+      }
+    }
+
+    let parsed: unknown
+    try {
+      parsed = JSON.parse(contents)
+    } catch {
+      // Why: SyntaxError messages can echo malformed input; never let auth
+      // contents or token fragments reach logs while degrading safely.
+      console.warn('[codex-accounts] System-default Codex auth is not valid JSON')
+      return {
+        hasAuth: true,
+        authKind: 'none',
+        email: null,
+        providerAccountId: null,
+        workspaceLabel: null
+      }
+    }
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      // Why: valid JSON can still have the wrong shape; account listing must
+      // degrade to an unknown identity instead of crashing the settings pane.
+      console.warn('[codex-accounts] System-default Codex auth has an unexpected format')
+      return {
+        hasAuth: true,
+        authKind: 'none',
+        email: null,
+        providerAccountId: null,
+        workspaceLabel: null
+      }
+    }
+    const raw = parsed as Record<string, unknown>
+
+    if (typeof raw.OPENAI_API_KEY === 'string' && raw.OPENAI_API_KEY.trim() !== '') {
+      // Why: API-key/custom-provider logins carry no OAuth identity or ChatGPT
+      // usage. Surface them as a custom provider, not a blank/broken row.
+      return {
+        hasAuth: true,
+        authKind: 'api-key',
+        email: null,
+        providerAccountId: null,
+        workspaceLabel: null
+      }
+    }
+
+    const identity = this.resolveIdentityFromCredentials(this.extractOAuthCredentials(raw))
+    return {
+      hasAuth: true,
+      authKind: 'oauth',
+      email: identity.email,
+      providerAccountId: identity.providerAccountId,
+      workspaceLabel: identity.workspaceLabel
+    }
+  }
+
+  private hasEnvApiKey(): boolean {
+    const key = process.env.OPENAI_API_KEY
+    return typeof key === 'string' && key.trim() !== ''
   }
 
   private toSummary(account: CodexManagedAccount): CodexManagedAccountSummary {
@@ -945,7 +1040,12 @@ export class CodexAccountService {
   }
 
   private readIdentityFromHome(managedHomePath: string): ResolvedCodexIdentity {
-    const credentials = this.loadOAuthCredentials(managedHomePath)
+    return this.resolveIdentityFromCredentials(this.loadOAuthCredentials(managedHomePath))
+  }
+
+  private resolveIdentityFromCredentials(
+    credentials: CodexOAuthCredentials
+  ): ResolvedCodexIdentity {
     const payload = credentials.idToken ? this.parseJwtPayload(credentials.idToken) : null
     const authClaims = this.readRecordClaim(payload, 'https://api.openai.com/auth')
     const profileClaims = this.readRecordClaim(payload, 'https://api.openai.com/profile')
@@ -973,8 +1073,12 @@ export class CodexAccountService {
 
   private loadOAuthCredentials(managedHomePath: string): CodexOAuthCredentials {
     const authFilePath = join(this.assertManagedHomePath(managedHomePath), 'auth.json')
-    const raw = JSON.parse(readFileSync(authFilePath, 'utf-8')) as Record<string, unknown>
+    return this.extractOAuthCredentials(
+      JSON.parse(readFileSync(authFilePath, 'utf-8')) as Record<string, unknown>
+    )
+  }
 
+  private extractOAuthCredentials(raw: Record<string, unknown>): CodexOAuthCredentials {
     // Why: API-key-based auth files have no OAuth tokens or JWT identity
     // claims. Returning nulls causes the caller to fail with a clear
     // "could not resolve the account email" error rather than crashing
