@@ -16,6 +16,7 @@ import type {
 import type { CodexRuntimeHomeService } from './runtime-home-service'
 import { writeFileAtomically } from './fs-utils'
 import { rewriteRelativePathConfigValues } from '../codex/codex-config-path-reference-rewrite'
+import { readCodexTopLevelModelProvider } from '../codex/codex-model-provider-config'
 import { resolveCodexCommand } from '../codex-cli/command'
 import type { Store } from '../persistence'
 import type { RateLimitService } from '../rate-limits/service'
@@ -130,7 +131,9 @@ export class CodexAccountService {
     const { managedHomePath } = managedHome
 
     try {
-      this.safeSyncCanonicalConfigIntoManagedHome(managedHomePath)
+      const canonicalConfig = this.readCanonicalConfigForManagedHome(managedHomePath)
+      this.assertOAuthAccountAddAllowed(canonicalConfig)
+      this.safeSyncCanonicalConfigIntoManagedHome(managedHomePath, canonicalConfig)
       await this.runCodexLogin(managedHomePath)
       const identity = this.readIdentityFromHome(managedHomePath)
       if (!identity.email) {
@@ -434,9 +437,12 @@ export class CodexAccountService {
     }
   }
 
-  private safeSyncCanonicalConfigIntoManagedHome(managedHomePath: string): void {
+  private safeSyncCanonicalConfigIntoManagedHome(
+    managedHomePath: string,
+    canonicalConfig?: CanonicalCodexConfig | null
+  ): void {
     try {
-      this.syncCanonicalConfigIntoManagedHome(managedHomePath)
+      this.syncCanonicalConfigIntoManagedHome(managedHomePath, canonicalConfig)
     } catch (error) {
       console.warn('[codex-accounts] Failed to seed managed config:', error)
     }
@@ -514,6 +520,21 @@ export class CodexAccountService {
       console.warn('[codex-accounts] Failed to read WSL canonical config:', error)
       return null
     }
+  }
+
+  private assertOAuthAccountAddAllowed(canonicalConfig: CanonicalCodexConfig | null): void {
+    const modelProvider = canonicalConfig
+      ? readCodexTopLevelModelProvider(canonicalConfig.contents)
+      : null
+    if (!modelProvider || modelProvider === 'openai') {
+      return
+    }
+
+    // Why: mirroring a custom-provider pin into an OAuth managed home makes
+    // the new OAuth credentials inert; fail before login and leave user config intact.
+    throw new Error(
+      `Orca cannot add a Codex OAuth account while ~/.codex/config.toml pins the custom provider ${JSON.stringify(modelProvider)}. Keep using the system-default account for this provider, or remove model_provider (or set it to "openai") before adding an OAuth account. Orca left your config unchanged.`
+    )
   }
 
   private writeManagedConfig(managedHomePath: string, contents: string): void {
