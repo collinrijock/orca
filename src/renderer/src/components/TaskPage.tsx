@@ -3788,9 +3788,9 @@ export default function TaskPage(): React.JSX.Element {
   // rejections populate tasksError instead — the two are mutually exclusive so
   // a successful-with-partial-failure read and a hard-reject don't double-show.
   const [failedCount, setFailedCount] = useState(0)
-  // Why: when the whole list fails because GitHub is unreachable (outage /
-  // network / rate limit), attribute it to GitHub instead of the vague "N of M
-  // projects failed to load" — an outage shouldn't read as an Orca bug.
+  // Why: when every selected refresh fails because GitHub is unreachable
+  // (outage / network / rate limit), attribute it to GitHub instead of making
+  // an empty or stale cached list look current.
   const [githubUnavailable, setGithubUnavailable] = useState(false)
   const [taskRefreshNonce, setTaskRefreshNonce] = useState(0)
   // Why: the fetch effect uses this to detect when a nonce bump is from the

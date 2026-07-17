@@ -2037,10 +2037,10 @@ export type GitHubSlice = {
    * served from stale cache on rejection is NOT counted as failed — matching
    * the single-repo behavior of quietly serving stale data.
    *
-   * `githubUnavailable` is true when every selected GitHub source failed (with
-   * no cache) because GitHub was unreachable/unavailable (5xx outage, network,
-   * or rate limit). The caller uses it to attribute the empty list to a global
-   * GitHub availability failure instead of the generic partial-failure banner.
+   * `githubUnavailable` is true when every selected GitHub source refresh failed
+   * because GitHub was unreachable/unavailable (5xx outage, network, or rate
+   * limit), even when stale cache data remains available. The caller uses it to
+   * attribute the stale/empty list instead of showing a normal-looking result.
    */
   fetchWorkItemsAcrossRepos: (
     repos: {
@@ -2865,6 +2865,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
     }
     const state = get()
     let failedCount = 0
+    let requestFailureCount = 0
     let unavailableFailureCount = 0
     let skippedSourceCount = 0
     const perProjectResults = await Promise.all(
@@ -2885,6 +2886,10 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
             skippedSourceCount += 1
             return [] as GitHubWorkItem[]
           }
+          requestFailureCount += 1
+          if (classifyGitHubUnavailable(err instanceof Error ? err.message : String(err))) {
+            unavailableFailureCount += 1
+          }
           const key =
             r.sourceContext?.provider === 'github'
               ? workItemsCacheKey(
@@ -2901,11 +2906,6 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
           }
           console.warn(`[workItems] ${r.repoId} failed:`, err)
           failedCount += 1
-          // Why: track reachability separately so the aggregate below can
-          // distinguish a global GitHub failure from a partial repo failure.
-          if (classifyGitHubUnavailable(err instanceof Error ? err.message : String(err))) {
-            unavailableFailureCount += 1
-          }
           return [] as GitHubWorkItem[]
         }
       })
@@ -2916,9 +2916,9 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
     // eligible source failed for a GitHub reachability reason; intentionally
     // skipped SSH repos are not GitHub sources for this calculation.
     const githubUnavailable =
-      failedCount > 0 &&
-      failedCount === repos.length - skippedSourceCount &&
-      unavailableFailureCount === failedCount
+      requestFailureCount > 0 &&
+      requestFailureCount === repos.length - skippedSourceCount &&
+      unavailableFailureCount === requestFailureCount
     return { items: merged, failedCount, githubUnavailable }
   },
 

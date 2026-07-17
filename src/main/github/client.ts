@@ -1288,6 +1288,11 @@ async function listQueriedWorkItems(
       }
     } catch (err) {
       const stderr = err instanceof Error ? err.message : String(err)
+      if (!prScope && classifyGitHubUnavailable(stderr)) {
+        // Why: a scoped issue query has no successful side to preserve. Let the
+        // cross-repo caller attribute the empty result to GitHub instead.
+        throw err
+      }
       return { items: [], issuesError: classifyListIssuesError(stderr) }
     }
   })()
@@ -1320,6 +1325,12 @@ async function listQueriedWorkItems(
       return hydrated
     } catch (err) {
       console.warn('listQueriedWorkItems PRs partial failure:', err)
+      const stderr = err instanceof Error ? err.message : String(err)
+      if (!issueScope && classifyGitHubUnavailable(stderr)) {
+        // Why: Tasks scopes every query to one work-item kind. Propagate an
+        // outage instead of converting the only failed source into an empty list.
+        throw err
+      }
       return []
     }
   })()

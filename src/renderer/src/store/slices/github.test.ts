@@ -6322,6 +6322,45 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
     }
   })
 
+  it('flags githubUnavailable while serving stale cached rows after a failed refresh', async () => {
+    const store = createTestStore()
+    const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const item = {
+      type: 'pr',
+      number: 8,
+      title: 'Cached PR',
+      url: 'https://example.test/8',
+      updatedAt: '2026-05-21T00:00:00Z'
+    } as GitHubWorkItem
+    mockApi.gh.listWorkItems
+      .mockResolvedValueOnce({
+        items: [item],
+        sources: {
+          issues: null,
+          prs: { owner: 'up', repo: 'r' },
+          originCandidate: { owner: 'up', repo: 'r' },
+          upstreamCandidate: null
+        }
+      })
+      .mockRejectedValueOnce(new Error('HTTP 503: Service Unavailable'))
+
+    try {
+      const repos = [{ repoId: 'github-repo', path: '/server/github-repo' }]
+      await store.getState().fetchWorkItemsAcrossRepos(repos, 24, 100, '')
+
+      const result = await store
+        .getState()
+        .fetchWorkItemsAcrossRepos(repos, 24, 100, '', { force: true })
+
+      expect(result.items).toEqual([{ ...item, repoId: 'github-repo' }])
+      expect(result.failedCount).toBe(0)
+      expect(result.githubUnavailable).toBe(true)
+      expect(mockApi.gh.listWorkItems).toHaveBeenCalledTimes(2)
+    } finally {
+      consoleWarn.mockRestore()
+    }
+  })
+
   it('ignores an ineligible SSH repo when every GitHub source is unavailable', async () => {
     const store = createTestStore()
     const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => {})
