@@ -18,9 +18,9 @@ type CycleContext = {
 }
 
 /**
- * Shared setup for the Cmd/Ctrl+Shift+[ / ] chords (both the type-scoped and
- * across-all-types variants). Returns null when there is no active worktree
- * or the visible nav has at most one tab (nothing to cycle).
+ * Shared setup for the type-scoped and across-all-types tab-cycle actions.
+ * Returns null when there is no active worktree or the visible nav has at most
+ * one tab (nothing to cycle).
  */
 function resolveCycleContext(): CycleContext | null {
   const store = useAppStore.getState()

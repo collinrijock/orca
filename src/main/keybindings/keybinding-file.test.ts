@@ -303,4 +303,46 @@ describe('keybinding-file', () => {
     expect(snapshot.overrides['terminal.search']).toEqual(['Mod+Shift+F'])
     expect(snapshot.overrides['tab.nextAllTypes']).toEqual(['Mod+Alt+BracketRight'])
   })
+
+  it('migrates root-level legacy overrides without losing custom shortcuts', () => {
+    writeFileSync(
+      filePath,
+      JSON.stringify({
+        version: 1,
+        'worktree.quickOpen': 'Mod+Shift+P',
+        'tab.nextSameType': 'Mod+K'
+      }),
+      'utf8'
+    )
+
+    seedLegacyTabSwitchBindings(filePath, 'darwin', LEGACY_TAB_SWITCH_BINDINGS)
+
+    const written = JSON.parse(readFileSync(filePath, 'utf8')) as {
+      keybindings: Record<string, unknown>
+      platforms: Record<string, Record<string, unknown>>
+      'worktree.quickOpen'?: unknown
+      'tab.nextSameType'?: unknown
+    }
+    expect(written['worktree.quickOpen']).toBeUndefined()
+    expect(written['tab.nextSameType']).toBeUndefined()
+    expect(written.keybindings).toMatchObject({
+      'worktree.quickOpen': ['Mod+Shift+P'],
+      'tab.nextSameType': ['Mod+K']
+    })
+    expect(readKeybindingFile(filePath, 'darwin').overrides).toMatchObject({
+      'worktree.quickOpen': ['Mod+Shift+P'],
+      'tab.nextSameType': ['Mod+K'],
+      'tab.nextAllTypes': ['Mod+Alt+BracketRight']
+    })
+  })
+
+  it('does not replace an unreadable keybindings file while seeding', () => {
+    const unreadableContents = '{{{not json'
+    writeFileSync(filePath, unreadableContents, 'utf8')
+
+    expect(() =>
+      seedLegacyTabSwitchBindings(filePath, 'darwin', LEGACY_TAB_SWITCH_BINDINGS)
+    ).toThrow()
+    expect(readFileSync(filePath, 'utf8')).toBe(unreadableContents)
+  })
 })

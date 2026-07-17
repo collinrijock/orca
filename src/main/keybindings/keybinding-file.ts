@@ -352,15 +352,20 @@ export function seedLegacyTabSwitchBindings(
   }
 
   const readResult = readJsonDocument(path)
-  const document = isJsonObject(readResult.document)
-    ? { ...readResult.document }
-    : createEmptyDocument()
+  if (!readResult.document) {
+    // Why: migration must never replace a user-owned file that could not be
+    // parsed; leaving the cohort pending allows a safe retry after repair.
+    throw new Error(readResult.error ?? 'Could not read keybindings file.')
+  }
+  const document = { ...readResult.document }
+  const common = isJsonObject(document.keybindings)
+    ? { ...document.keybindings }
+    : { ...current.commonOverrides }
   for (const rootKey of Object.keys(document)) {
     if (isKeybindingActionId(rootKey)) {
       delete document[rootKey]
     }
   }
-  const common = isJsonObject(document.keybindings) ? { ...document.keybindings } : {}
   const platforms = isJsonObject(document.platforms) ? { ...document.platforms } : {}
   const activePlatform = isJsonObject(platforms[keybindingPlatform])
     ? { ...(platforms[keybindingPlatform] as JsonObject) }
