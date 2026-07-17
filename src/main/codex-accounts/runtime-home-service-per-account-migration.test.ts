@@ -21,6 +21,7 @@ beforeEach(() => {
   for (const key of [
     'ORCA_USER_DATA_PATH',
     'ORCA_CODEX_SYSTEM_DEFAULT_REAL_HOME',
+    'ORCA_DISABLE_CODEX_TRUST_RPC',
     'CODEX_HOME',
     'ORCA_CODEX_HOME'
   ]) {
@@ -28,6 +29,7 @@ beforeEach(() => {
     delete process.env[key]
   }
   process.env.ORCA_USER_DATA_PATH = testState.userData
+  process.env.ORCA_DISABLE_CODEX_TRUST_RPC = '1'
   mkdirSync(systemHome(), { recursive: true })
   mkdirSync(sharedHome(), { recursive: true })
 })
@@ -45,6 +47,79 @@ afterEach(() => {
 })
 
 describe('CodexRuntimeHomeService per-account takeover composition', () => {
+  it('upgrades a realistic two-account shared-home fixture without losing auth or sessions', async () => {
+    const accountOneStale = createAuth('one@example.com', 'acct-1', 'one-stale', 1_000)
+    const accountOneMigrated = createAuth('one@example.com', 'acct-1', 'one-migrated', 2_000)
+    const accountTwoAuth = createAuth('two@example.com', 'acct-2', 'two-current', 3_000)
+    const accountOne = createManagedAccount('account-1', 'acct-1', accountOneStale)
+    const accountTwo = createManagedAccount(
+      'account-2',
+      'acct-2',
+      accountTwoAuth,
+      'two@example.com'
+    )
+    const sharedSession = join(sharedHome(), 'sessions', '2026', '07', 'rollout.jsonl')
+    mkdirSync(join(systemHome(), 'skills', 'fixture-skill'), { recursive: true })
+    mkdirSync(join(systemHome(), 'hooks'), { recursive: true })
+    mkdirSync(join(sharedHome(), 'sessions', '2026', '07'), { recursive: true })
+    writeFileSync(join(systemHome(), 'skills', 'fixture-skill', 'SKILL.md'), 'fixture skill\n')
+    writeFileSync(join(systemHome(), 'hooks', 'user-hook.sh'), '#!/bin/sh\n')
+    writeFileSync(
+      join(systemHome(), 'config.toml'),
+      'model = "fixture-model"\n\n[hooks.state."stale-fixture"]\nenabled = true\n'
+    )
+    writeFileSync(sharedSession, '{"session":"legacy-shared"}\n')
+    writeFileSync(sharedAuthPath(), accountOneMigrated)
+    const { settings, store } = createStore([accountOne, accountTwo], accountOne.id)
+    const { CodexRuntimeHomeService } = await import('./runtime-home-service')
+    const { CodexHookService } = await import('../codex/hook-service')
+    const service = new CodexRuntimeHomeService(store as never)
+    const hookService = new CodexHookService()
+
+    expect(readFileSync(join(accountOne.managedHomePath, 'auth.json'), 'utf8')).toBe(
+      accountOneMigrated
+    )
+    expect(readFileSync(join(accountTwo.managedHomePath, 'auth.json'), 'utf8')).toBe(accountTwoAuth)
+
+    for (const account of [accountOne, accountTwo]) {
+      selectManagedAccount(settings, account.id)
+      service.syncForCurrentSelection()
+      expect(service.prepareForCodexLaunch()).toBe(account.managedHomePath)
+      expect(
+        readFileSync(join(account.managedHomePath, 'skills', 'fixture-skill', 'SKILL.md'), 'utf8')
+      ).toBe('fixture skill\n')
+      expect(readFileSync(join(account.managedHomePath, 'hooks', 'user-hook.sh'), 'utf8')).toBe(
+        '#!/bin/sh\n'
+      )
+      const config = readFileSync(join(account.managedHomePath, 'config.toml'), 'utf8')
+      expect(config).toContain('model = "fixture-model"')
+      expect(config).not.toContain('[hooks.state')
+      expect(hookService.install(account.managedHomePath).state).toBe('installed')
+      expect(readFileSync(join(account.managedHomePath, 'hooks.json'), 'utf8')).toContain(
+        'codex-hook.sh'
+      )
+      expect(readFileSync(join(account.managedHomePath, 'config.toml'), 'utf8')).toContain(
+        '[hooks.state."'
+      )
+    }
+
+    const discoveryHomes = service.getHostCodexHomePathsForSessionDiscovery()
+    expect(discoveryHomes).toEqual(
+      expect.arrayContaining([
+        sharedHome(),
+        systemHome(),
+        accountOne.managedHomePath,
+        accountTwo.managedHomePath
+      ])
+    )
+    expect(new Set(discoveryHomes).size).toBe(discoveryHomes.length)
+    expect(readFileSync(sharedSession, 'utf8')).toBe('{"session":"legacy-shared"}\n')
+
+    writeFileSync(sharedAuthPath(), createAuth('two@example.com', 'acct-2', 'later-shared', 4_000))
+    expect(service.prepareForCodexLaunch()).toBe(accountTwo.managedHomePath)
+    expect(readFileSync(join(accountTwo.managedHomePath, 'auth.json'), 'utf8')).toBe(accountTwoAuth)
+  })
+
   it('migrates the one proven C-era refresh, launches E home, then ignores shared auth', async () => {
     const stale = createAuth('one@example.com', 'acct-1', 'stale', 1_000)
     const migrated = createAuth('one@example.com', 'acct-1', 'migrated', 2_000)
@@ -146,22 +221,28 @@ function createStore(accounts: CodexManagedAccount[], activeId: string | null) {
   }
 }
 
-function createManagedAccount(id: string, providerId: string, auth: string): CodexManagedAccount {
+function createManagedAccount(
+  id: string,
+  providerId: string,
+  auth: string,
+  email = 'one@example.com'
+): CodexManagedAccount {
   const home = join(testState.userData, 'codex-accounts', id, 'home')
   mkdirSync(home, { recursive: true })
   writeFileSync(join(home, '.orca-managed-home'), `${id}\n`, 'utf-8')
   writeFileSync(join(home, 'auth.json'), auth, 'utf-8')
-  return managedAccountRecord(id, providerId, home)
+  return managedAccountRecord(id, providerId, home, email)
 }
 
 function managedAccountRecord(
   id: string,
   providerAccountId: string,
-  managedHomePath: string
+  managedHomePath: string,
+  email = 'one@example.com'
 ): CodexManagedAccount {
   return {
     id,
-    email: 'one@example.com',
+    email,
     managedHomePath,
     providerAccountId,
     workspaceLabel: null,
@@ -170,6 +251,11 @@ function managedAccountRecord(
     updatedAt: 1,
     lastAuthenticatedAt: 1
   }
+}
+
+function selectManagedAccount(settings: GlobalSettings, accountId: string): void {
+  settings.activeCodexManagedAccountId = accountId
+  settings.activeCodexManagedAccountIdsByRuntime = { host: accountId, wsl: {} }
 }
 
 function systemHome(): string {
