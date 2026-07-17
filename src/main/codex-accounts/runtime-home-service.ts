@@ -174,6 +174,10 @@ export class CodexRuntimeHomeService {
       // Returning null tells the PTY/env layer to inject no managed CODEX_HOME;
       // sessions, auth, and config all live in the native home. No system->
       // managed session bridge runs, so the real home stays the single source.
+      // First guarantee any still-synced managed account's refreshed token is
+      // read back to its own home: this early return skips syncForCurrentSelection,
+      // so a launch-time managed->default transition would otherwise lose it.
+      this.readBackOutgoingManagedHostAccountBeforeSystemDefault()
       return null
     }
     this.invalidateBackfillAfterManagedSystemDefaultLaunch(launchEnv)
@@ -187,6 +191,22 @@ export class CodexRuntimeHomeService {
       resolveHostCodexSessionSourceHome(this.store.getSettings())
     )
     return this.getRuntimeHomePath()
+  }
+
+  // Why: the real-home / system-default lane leaves the shared runtime home
+  // untouched, so a managed account still recorded as synced (selection nulled
+  // without a syncForCurrentSelection pass, or auto-deselect on missing auth)
+  // can strand a Codex-refreshed token there. Run the managed->system-default
+  // transition to read that token back to its canonical per-account home before
+  // the real home takes over. Callers gate this on the system-default selection
+  // (host === null), so syncForCurrentSelection restores only Orca's runtime
+  // mirror from ~/.codex and never writes the real ~/.codex. No-op once the
+  // selection has already been reconciled to the system default.
+  private readBackOutgoingManagedHostAccountBeforeSystemDefault(): void {
+    if (this.lastSyncedAccountId === null) {
+      return
+    }
+    this.syncForCurrentSelection()
   }
 
   private invalidateBackfillAfterManagedSystemDefaultLaunch(launchEnv?: NodeJS.ProcessEnv): void {
