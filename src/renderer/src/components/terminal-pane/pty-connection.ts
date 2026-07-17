@@ -7147,7 +7147,13 @@ export function connectPanePty(
         // across the reveal, so re-enforce the restored intent post-parse —
         // otherwise a following pane can strand at the snapshot's bottom and
         // show a stale frame until a manual resize.
-        void waitForTerminalOutputParsed(pane.terminal).then(() => {
+        //
+        // Why bounded: an unbounded flush would synchronously parse a flood
+        // pane's whole queue at reveal. Enforcing after a partial drain is
+        // still correct — a follow anchor lands at the bottom and xterm's
+        // native follow tracks the remainder; pin restores are order-free.
+        flushTerminalOutput(pane.terminal, { maxChars: MAX_DEFERRED_REATTACH_LIVE_CHARS })
+        void waitForTerminalReplayWritesParsed(pane.terminal).then(() => {
           if (
             disposed ||
             transport.getPtyId() !== currentPtyId ||
@@ -7423,6 +7429,14 @@ export function connectPanePty(
             if (pendingReattachFit === fit) {
               pendingReattachFit = null
             }
+          }
+          if (isCurrentReattachPayload()) {
+            // Why: transport.resize is fire-and-forget on daemon/SSH, and a
+            // silently dropped resize leaves the PTY at stale rows while xterm
+            // is correct (field: input box floating above the pane bottom).
+            // Remount has no visibility-resume reassert, so verify against the
+            // provider's APPLIED size here; it re-forwards only on drift.
+            ptySizeReassertion.request({ fit: false })
           }
         } else if (isCurrentReattachPayload() && !isRemoteRuntimePtyId(reattachPtyId)) {
           window.api.pty.signal(reattachPtyId, 'SIGWINCH')

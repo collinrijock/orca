@@ -5791,7 +5791,12 @@ describe('connectPanePty', () => {
     reattach.resolve()
     await flushAsyncTicks()
 
-    expect(transport.resize).toHaveBeenLastCalledWith(65, 63)
+    expect(transport.resize).toHaveBeenCalledWith(65, 63)
+    // Why the trailing guarded call: transport.resize is fire-and-forget, so
+    // the reattach fit is followed by an applied-size verification. With no
+    // getSize readback available (this harness), it re-forwards the same grid
+    // once as a guarded claim instead of leaving the PTY size unverified.
+    expect(transport.resize).toHaveBeenLastCalledWith(65, 63, { claim: true })
   })
 
   it('adopts a live eager PTY and withholds snapshots after its renderer dies', async () => {
