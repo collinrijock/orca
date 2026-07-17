@@ -54,6 +54,7 @@ import { SshPane } from './SshPane'
 import { ExperimentalPane } from './ExperimentalPane'
 import { AgentsPane } from './AgentsPane'
 import { OrchestrationPane } from './OrchestrationPane'
+import { LinearAgentSkillPane } from './LinearAgentSkillPane'
 import { AccountsPane } from './AccountsPane'
 import { StatsPane } from '../stats/StatsPane'
 import { IntegrationsPane } from './IntegrationsPane'
@@ -101,6 +102,7 @@ import {
   useInstalledAgentSkill
 } from '@/hooks/useInstalledAgentSkills'
 import { useActiveProjectSkillRuntime } from '@/hooks/useActiveProjectSkillRuntime'
+import { useLinearProviderConnected } from '@/hooks/useLinearProviderConnected'
 import { useSkillFreshness } from '@/hooks/useSkillFreshness'
 import { getSkillFreshnessDisplayStatus } from '@/lib/skill-freshness-display-status'
 import { deriveNeededSectionIds, getInitialMountedSectionIds } from './settings-load-performance'
@@ -344,6 +346,9 @@ function Settings(): React.JSX.Element {
   const isMac = isMacUserAgent()
   const isWebClient = isWebClientLocation()
   const showDesktopOnlySettings = !isWebClient
+  // Why: the Linear capability section mirrors the nav registry's gate so the
+  // sidebar entry and the rendered section appear/disappear together.
+  const linearConnected = useLinearProviderConnected()
   const activeSkillRuntime = useActiveProjectSkillRuntime()
   const orchestrationSkill = useInstalledAgentSkill(ORCHESTRATION_SKILL_NAME, {
     discoveryTarget: activeSkillRuntime.discoveryTarget,
@@ -1255,6 +1260,20 @@ function Settings(): React.JSX.Element {
                 >
                   {isSectionMounted('orchestration') ? <OrchestrationPane /> : null}
                 </SettingsSection>
+
+                {linearConnected ? (
+                  <SettingsSection
+                    id="linear"
+                    title={translate('auto.components.settings.Settings.linearTitle', 'Linear')}
+                    description={translate(
+                      'auto.components.settings.Settings.linearDescription',
+                      'Give agents the skill to read and update your linked Linear tickets.'
+                    )}
+                    searchEntries={getSectionSearchEntries('linear')}
+                  >
+                    {isSectionMounted('linear') ? <LinearAgentSkillPane /> : null}
+                  </SettingsSection>
+                ) : null}
 
                 {showDesktopOnlySettings ? (
                   <>

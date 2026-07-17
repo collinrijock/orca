@@ -588,6 +588,17 @@
             "de50bef680": "macOS está bloqueando las notificaciones de Orca"
           }
         }
+      },
+      "linear": {
+        "usage": {
+          "examples": {
+            "readTicket": "Read the linked ticket",
+            "postUpdate": "Post a progress update",
+            "moveState": "Move the ticket forward",
+            "attachPr": "Attach the PR link",
+            "triageFollowups": "Triage and create follow-ups"
+          }
+        }
       }
     },
     "hooks": {
@@ -705,7 +716,9 @@
         "devSearchKeywordSonner": "sonner",
         "devSearchKeywordError": "error",
         "devSearchKeywordNotification": "notification",
-        "projectHostsSummary": "{{value0}} hosts"
+        "projectHostsSummary": "{{value0}} hosts",
+        "linearTitle": "Linear",
+        "linearDescription": "Give agents the skill to read and update your linked Linear tickets."
       },
       "useAppMenuPaste": {
         "pasteTooLarge": "El contenido pegado es demasiado grande."
@@ -5944,13 +5957,6 @@
           "3743ed080c": "Establecer comando",
           "f79084947b": "Nueva aplicación"
         },
-        "OrchestrationExamplesDialog": {
-          "3d1aa105e3": "Copiar prompt",
-          "9b4c004998": "Hecho",
-          "969cec9739": "Copiar prompt de ejemplo {{value0}}",
-          "4e46da1889": "No se pudo copiar el prompt.",
-          "80c6f2feb8": "Prompt de ejemplo copiado."
-        },
         "OrchestrationPane": {
           "52e0634e2c": "Pídele a un agente coordinador que use la orquestación para handoffs, handoffs de worktree y agentes secundarios secuenciales o paralelos.",
           "ae79504732": "Cómo usarlo",
@@ -6462,7 +6468,9 @@
           "2309068a6f": "destructivo",
           "65358016ea": "Desechar",
           "dev": "Herramientas de desarrollo",
-          "devDescription": "Herramientas solo de desarrollo para probar estados de la UI."
+          "devDescription": "Herramientas solo de desarrollo para probar estados de la UI.",
+          "linearTitle": "Linear",
+          "linearDescription": "Give agents the skill to read and update your linked Linear tickets."
         },
         "SettingsFormControls": {
           "42a4d15a30": "No hay fuentes coincidentes.",
@@ -9088,6 +9096,10 @@
                   "description": "Permite que tus agentes lean y editen tareas de Linear.",
                   "copyCommand": "Copiar comando"
                 }
+              },
+              "search": {
+                "title": "Linear",
+                "description": "Give agents the skill to read and update your linked Linear tickets."
               }
             }
           }
@@ -9168,6 +9180,21 @@
           "availability": "Disponible en",
           "testFlight": "TestFlight",
           "androidApk": "APK de Android"
+        },
+        "SkillUsageExampleDialog": {
+          "copiedPrompt": "Copied example prompt.",
+          "copyFailed": "Failed to copy prompt.",
+          "copyExampleAria": "Copy {{value0}} example prompt",
+          "done": "Done",
+          "copyPrompt": "Copy prompt"
+        },
+        "LinearAgentSkillPane": {
+          "title": "Linear",
+          "description": "Give agents the skill to read and update your linked Linear tickets.",
+          "skillTitle": "Linear skill",
+          "skillDescription": "Enables agents to read linked tickets and post updates to Linear through Orca.",
+          "howToUse": "How to use it",
+          "howToUseDescription": "Ask an agent working a Linear-linked worktree to read context, post updates, move the ticket, or attach the PR."
         }
       },
       "right": {

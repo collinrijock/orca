@@ -588,6 +588,17 @@
             "de50bef680": "macOS 正在阻止 Orca 通知"
           }
         }
+      },
+      "linear": {
+        "usage": {
+          "examples": {
+            "readTicket": "Read the linked ticket",
+            "postUpdate": "Post a progress update",
+            "moveState": "Move the ticket forward",
+            "attachPr": "Attach the PR link",
+            "triageFollowups": "Triage and create follow-ups"
+          }
+        }
       }
     },
     "hooks": {
@@ -705,7 +716,9 @@
         "devSearchKeywordSonner": "sonner",
         "devSearchKeywordError": "error",
         "devSearchKeywordNotification": "notification",
-        "projectHostsSummary": "{{value0}} 个主机"
+        "projectHostsSummary": "{{value0}} 个主机",
+        "linearTitle": "Linear",
+        "linearDescription": "Give agents the skill to read and update your linked Linear tickets."
       },
       "useAppMenuPaste": {
         "pasteTooLarge": "粘贴内容过大。"
@@ -5929,13 +5942,6 @@
           "3743ed080c": "设置命令",
           "f79084947b": "新应用程序"
         },
-        "OrchestrationExamplesDialog": {
-          "3d1aa105e3": "复制提示",
-          "9b4c004998": "完成",
-          "969cec9739": "复制 {{value0}} 示例提示",
-          "4e46da1889": "复制提示失败。",
-          "80c6f2feb8": "复制示例提示。"
-        },
         "OrchestrationPane": {
           "52e0634e2c": "要求协调智能体使用编排进行切换、工作树切换以及顺序或并行子智能体。",
           "ae79504732": "如何使用",
@@ -6447,7 +6453,9 @@
           "2309068a6f": "destructive",
           "65358016ea": "放弃",
           "dev": "开发工具",
-          "devDescription": "仅用于调试 UI 状态的开发工具。"
+          "devDescription": "仅用于调试 UI 状态的开发工具。",
+          "linearTitle": "Linear",
+          "linearDescription": "Give agents the skill to read and update your linked Linear tickets."
         },
         "SettingsFormControls": {
           "42a4d15a30": "没有匹配的字体。",
@@ -9088,6 +9096,10 @@
                   "description": "让您的智能体读取和编辑 Linear 任务。",
                   "copyCommand": "复制命令"
                 }
+              },
+              "search": {
+                "title": "Linear",
+                "description": "Give agents the skill to read and update your linked Linear tickets."
               }
             }
           }
@@ -9168,6 +9180,21 @@
           "availability": "可用平台：",
           "testFlight": "TestFlight",
           "androidApk": "Android APK"
+        },
+        "SkillUsageExampleDialog": {
+          "copiedPrompt": "Copied example prompt.",
+          "copyFailed": "Failed to copy prompt.",
+          "copyExampleAria": "Copy {{value0}} example prompt",
+          "done": "Done",
+          "copyPrompt": "Copy prompt"
+        },
+        "LinearAgentSkillPane": {
+          "title": "Linear",
+          "description": "Give agents the skill to read and update your linked Linear tickets.",
+          "skillTitle": "Linear skill",
+          "skillDescription": "Enables agents to read linked tickets and post updates to Linear through Orca.",
+          "howToUse": "How to use it",
+          "howToUseDescription": "Ask an agent working a Linear-linked worktree to read context, post updates, move the ticket, or attach the PR."
         }
       },
       "right": {
