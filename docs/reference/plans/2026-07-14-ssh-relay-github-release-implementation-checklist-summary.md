@@ -9,9 +9,9 @@ keeps commands, hashes, runner identities, timings, and failure details.
 A checked box means the work has evidence in the detailed ledger. Design approval alone does not
 complete a box.
 
-Active checkpoint: **Milestone 6 / Work Package 5 bounded runtime transfer — disconnected private-
-console plus bounded regular-output Windows diagnostic locally green; exact-head native proof
-required, 2026-07-16, Codex implementation owner.**
+Active checkpoint: **Milestone 6 / Work Package 5 bounded runtime transfer — bounded verbose
+Win32-OpenSSH lifecycle capture locally green; exact-head native proof required, 2026-07-16, Codex
+implementation owner.**
 `E-M6-WINDOWS-SYSTEM-SSH-TREE-LIVE-PORTABLE-FIXTURE-LOCAL-001` records the portable-fixture
 correction locally green: the no-Orca-publication workflow oracle permits the one exact pinned
 Microsoft fixture release URL while Orca release URLs, `gh release`, and `contents: write` remain
@@ -210,6 +210,21 @@ isolation pass. Seven native
 launcher cases plus live/full-size behavior remain honest local skips. Commit/push only this
 runner-temp diagnostic and require fresh exact-head Windows x64/ARM64 compilation, overflow,
 cleanup, cancellation, live lifecycle, and fixture-teardown proof. SignPath remains deferred.
+Exact head `149a122b735659b47d7718f409d14e1ed2f947c2`, run `29553325782`, and x64/ARM64 jobs
+`87800290122`/`87800290144` prove 101 files/862 cases with 19 skips, including both new overflow and
+capture-cleanup cases, plus unchanged reproducibility and full-size cache gates. The live probes
+still time out after 8017.5611/8042.1902 ms with ended stdout, closed channel, no sentinel/process
+exit, and zero stderr; both exact teardowns catch locked `UsrClass.dat`. All four non-Windows jobs
+and both Linux supplements pass. `E-M6-WINDOWS-PRIVATE-CONSOLE-REGULAR-OUTPUT-CI-RED-001` therefore
+falsifies output pipes as the remaining cause. Next add only an internal diagnostic deadline and
+bounded replay of verbose OpenSSH output before choosing ConPTY or another client. Production,
+Beta, fallback, tuple, publication, default, and signing paths remain untouched.
+`E-M6-WINDOWS-VERBOSE-LIFECYCLE-CAPTURE-LOCAL-001` records that diagnostic locally green: an
+optional 100-60,000 ms runner-only deadline terminates and settles the owned job before bounded
+output replay; the live suite uses 6 seconds, `-vvv`, outer 8/10-second safety ceilings, and a 16 KiB
+trace tail. Focused 119/119, all 285 release contracts, typecheck, full lint/reliability/max-lines,
+formatting, diff, and protected-resolver isolation pass with honest native skips. Commit/push only
+this artifact and require x64/ARM64 phase classification before selecting ConPTY or another client.
 `E-M6-WINDOWS-SYSTEM-SSH-TREE-LIVE-AUDIT-001` fixes the loopback-only official Microsoft
 server, fixture-owned non-admin account/ACL, exact host-key trust, Windows PowerShell 5.1,
 serial/default and four-channel metrics, cancellation/collision/cleanup, and deterministic teardown

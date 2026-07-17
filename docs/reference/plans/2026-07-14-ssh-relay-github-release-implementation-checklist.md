@@ -8,7 +8,7 @@ work; keep exact commands, runner identities, hashes, metrics, and residual gaps
 
 Date created: 2026-07-14<br>
 Last updated: 2026-07-16<br>
-Current phase: Milestone 6 / Work Package 5 bounded runtime transfer — **Locally green / exact-head native proof required — 2026-07-16, Codex implementation owner: disconnected private-console plus bounded regular-output diagnostic**. `E-M6-WINDOWS-PRIVATE-CONSOLE-REGULAR-OUTPUT-LOCAL-001` records the one-variable runner-temp candidate locally green: proven private-console EOF, distinct bounded regular-file output handles, delete-on-close cleanup, bounded job settlement, and post-exit replay. Commit/push only this package and require x64/ARM64 legacy compilation, native contracts, live lifecycle, and exact teardown evidence. Every production/default SSH path remains disconnected. Real Apple/SignPath rehearsals remain deferred.<br>
+Current phase: Milestone 6 / Work Package 5 bounded runtime transfer — **Locally green / bounded verbose client-lifecycle native proof required — 2026-07-16, Codex implementation owner**. `E-M6-WINDOWS-VERBOSE-LIFECYCLE-CAPTURE-LOCAL-001` records the runner-temp internal deadline, job settlement, bounded replay, and verbose trace-tail contracts locally green. Commit/push only this diagnostic and require both native architectures to identify the last completed client phase before selecting ConPTY or another client. Every production/default SSH path remains disconnected. Real Apple/SignPath rehearsals remain deferred.<br>
 Session checkpoint: **PRIVATE CONSOLE EOF PROVEN / PRIVATE OUTPUT PIPES FALSIFIED / BOUNDED REGULAR OUTPUT ACTIVE — 2026-07-16, Codex implementation owner** — exact head `5841b12bc94ecd1027e507e4b741e09fcb0a093d`, run `29552101635`, and x64/ARM64 jobs `87796673326`/`87796673353` both pass 101 files/860 cases with 19 skips, legacy compilation, real-console qualification/EOF, argv/binary/exit/handle-exclusion/cancellation, unchanged full-runtime reproducibility, and full-size cache gates. Live diagnostics still time out after 8025.1553/8034.6943 milliseconds with ended stdout, closed channel, no sentinel/process exit, and zero stderr; both exact teardowns catch locked `UsrClass.dat`. All four non-Windows primary jobs and both Linux supplements pass. No product caller, full-size Windows transfer claim, upload, default/fallback, Beta, tuple publication, or signing behavior changed.<br>
 Primary design: [SSH relay GitHub Release plan](./2026-07-14-ssh-relay-github-release-plan.html)<br>
 Motivating issues: [#8450](https://github.com/stablyai/orca/issues/8450), [#1693](https://github.com/stablyai/orca/issues/1693)
@@ -19891,6 +19891,75 @@ config/scripts/ssh-relay-runtime-workflow.test.mjs` passes 119 runnable cases wi
   Beta option, fallback, full-size Windows transfer claim, tuple, publication, default, signing, or
   SignPath behavior is authorized.
 
+### E-M6-WINDOWS-PRIVATE-CONSOLE-REGULAR-OUTPUT-CI-RED-001 — regular output files do not settle Win32-OpenSSH
+
+- Date/owner/head/run: 2026-07-16, Codex implementation owner; exact pushed head
+  `149a122b735659b47d7718f409d14e1ed2f947c2`, pull-request artifact run `29553325782`, Windows x64
+  job `87800290122` on `windows-2022`, and Windows ARM64 job `87800290144` on `windows-11-arm`.
+- Native contract proof: both architectures pass legacy .NET Framework compilation, the dedicated
+  console EOF probe, and 101 artifact-contract files with 862 runnable cases and 19 declared skips.
+  The two new cases raise the prior count from 860 to 862 and prove >16 MiB fail-closed output plus
+  successful/overflow delete-on-close cleanup; exact binary replay, argv, exit propagation,
+  unrelated-handle exclusion, job cancellation, and bounded settlement also pass. Both unchanged
+  runtimes pass build-twice identity, closure, smoke, and both full-size cache gates.
+- X64 live result: `mode=private-console-regular-output-launcher-no-n`,
+  `elapsedMs=8017.5611`, `success=false`, `timedOut=true`, `sentinel=false`, `stdoutEnded=true`,
+  `processExit=null`, `channelClosed=true`, `closeCode=null`, and `stderrBytes=0`.
+- ARM64 live result: the same lifecycle fields with `elapsedMs=8042.190199999999`. Both official
+  server logs prove accepted public-key authentication, remote command-session start, and remote
+  session close before the client requires bounded external termination. The full-size Windows
+  transfer remains correctly unexecuted after the failed diagnostic.
+- Teardown result: x64 cannot unload fixture class hive
+  `S-1-5-21-4137868374-391603265-4009536220-1003_Classes`; ARM64 independently cannot unload
+  `S-1-5-21-1882319117-3219095328-2125279949-1001_Classes`. Both catch the locked
+  `C:\Users\orca_ssh_fixture\AppData\Local\Microsoft\Windows\UsrClass.dat` and retained profile
+  directory instead of silently leaking fixture state.
+- Preserved evidence: Linux x64/ARM64 jobs `87800290119`/`87800290139`, Darwin x64/ARM64 jobs
+  `87800290123`/`87800290135`, and Linux oldest-userland supplements `87800855219`/`87800855211`
+  all pass at the same exact head.
+- Interpretation/next bound: private pipes, overlapped pipes, zero-length regular stdin, proven
+  console EOF, and now distinct bounded regular-file stdout/stderr all reproduce the live hang.
+  Do not select a production mechanism from speculation. Add only a runner-temp internal deadline
+  that terminates and settles the owned job before replaying bounded output, invoke the exact client
+  with verbose diagnostics, and record the last completed OpenSSH phase on both architectures.
+  ConPTY and alternate-client qualification remain subsequent evidence decisions. No product,
+  Beta, fallback, tuple, publication, default, signing, or SignPath behavior is authorized.
+
+### E-M6-WINDOWS-VERBOSE-LIFECYCLE-CAPTURE-LOCAL-001 — internal timeout and bounded trace capture are locally green
+
+- Date/owner/base/runner: 2026-07-16, Codex implementation owner; uncommitted artifact-only package
+  atop exact regular-output RED head `149a122b735659b47d7718f409d14e1ed2f947c2` on Apple arm64,
+  macOS 26.2 build 25C56, Node 26.5.0, and pnpm 10.24.0.
+- Diagnostic boundary: an optional runner-only `--diagnostic-timeout-ms` accepts 100 through 60,000
+  ms and leaves ordinary launcher calls unbounded as before. At deadline the launcher terminates
+  and waits for its owned job, replays the same bounded regular-file stdout/stderr, then returns a
+  diagnostic failure. The live purpose suite uses 6,000 ms, retains the existing 8,000/10,000 ms
+  external safety ceilings, inserts `-vvv` before the exact OpenSSH destination separator, and logs
+  only a 16 KiB stderr tail plus lifecycle fields. Production argument construction is unchanged.
+- Native contract design: the new Windows case writes stdout/stderr plus its PID, holds forever,
+  and requires internal timeout failure, exact replay, child-job termination, and unchanged capture-
+  file set. Existing console EOF, argv, binary output, overflow, cleanup, handle exclusion, exit,
+  and external-cancellation cases remain. The new native case is honestly skipped locally.
+- Syntax/focused evidence: both launcher scripts pass `node --check`.
+  `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1
+  src/main/ssh/ssh-connection.test.ts src/main/ssh/ssh-system-fallback.test.ts
+  src/main/ssh/ssh-system-no-input-windows-openssh.test.ts
+  src/main/ssh/ssh-relay-runtime-windows-system-ssh-openssh-full-size.test.ts
+  config/scripts/ssh-relay-runtime-windows-no-input-launcher.test.mjs
+  config/scripts/ssh-relay-runtime-workflow.test.mjs` passes 119 runnable cases with ten declared
+  native/live skips in 2.69 seconds real; maximum RSS is 171,212,800 bytes and peak footprint is
+  97,179,456 bytes.
+- Release/static evidence: the unquoted release-contract command passes 51 files and 285 runnable
+  cases with eight declared Windows skips in 12.19 seconds. `/usr/bin/time -l pnpm typecheck`
+  passes in 2.57 seconds real with 1,258,979,328-byte maximum RSS and 97,163,024-byte peak
+  footprint. `/usr/bin/time -l pnpm lint` passes in 21.90 seconds real with the 26 existing
+  warnings, all 41 reliability gates, and the 355-entry max-lines ratchet; maximum RSS is
+  2,039,169,024 bytes and peak footprint is 97,195,840 bytes.
+- Residual boundary: local source contracts do not prove legacy compilation, internal timeout/job
+  settlement, output replay, or useful OpenSSH verbose content on Windows. Commit/push this isolated
+  package and require exact-head x64/ARM64 evidence. Do not select ConPTY, another client, a product
+  caller, Beta, fallback, tuple, publication, default, signing, or SignPath behavior from local proof.
+
 ## Accepted Gaps
 
 No product gap is accepted merely because it appears in this list. Each entry requires explicit
@@ -19949,11 +20018,10 @@ The project is not complete until every applicable item below is checked with ev
 
 ## Next Required Action
 
-Commit and push only the private-console plus bounded regular-output diagnostic recorded by
-`E-M6-WINDOWS-PRIVATE-CONSOLE-REGULAR-OUTPUT-LOCAL-001`, then require exact-head Windows x64 and
-ARM64 legacy-compiler, console qualification/EOF, bounded binary output/overflow/cleanup,
-argv/exit/handle-exclusion/cancellation, live diagnostic, and exact profile/directory teardown
-evidence. Do not
+Commit and push only the bounded internal-timeout and verbose-output capture recorded by
+`E-M6-WINDOWS-VERBOSE-LIFECYCLE-CAPTURE-LOCAL-001`, then require exact-head Windows x64 and
+ARM64 legacy-compiler, launcher-timeout settlement, verbose-client phase classification, and exact
+profile/directory teardown evidence. Do not
 change the production Windows handle or check the broad Milestone 6 Windows system-SSH item until
 both architectures select the same console-independent strategy. Do not add an
 Electron/startup/product importer, per-target mode wiring, fallback, tuple

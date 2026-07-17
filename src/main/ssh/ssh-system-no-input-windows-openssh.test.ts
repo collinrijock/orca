@@ -7,7 +7,7 @@ import type { SshTarget } from '../../shared/ssh-types'
 import { buildSshArgs } from './system-ssh-args'
 import { findSystemSsh } from './system-ssh-binary'
 
-type DiagnosticMode = 'private-console-regular-output-launcher-no-n'
+type DiagnosticMode = 'private-console-regular-output-verbose-timeout'
 
 type DiagnosticResult = {
   mode: DiagnosticMode
@@ -19,6 +19,7 @@ type DiagnosticResult = {
   channelClosed: boolean
   closeCode: number | null | 'not-observed'
   stderrBytes: number
+  stderrTail: string
   elapsedMs: number
 }
 
@@ -48,19 +49,26 @@ async function runDiagnostic(): Promise<DiagnosticResult> {
   if (!sshPath) {
     throw new Error('Native Windows OpenSSH client is unavailable')
   }
-  const mode: DiagnosticMode = 'private-console-regular-output-launcher-no-n'
+  const mode: DiagnosticMode = 'private-console-regular-output-verbose-timeout'
   const startedAt = performance.now()
   // Why: Win32-OpenSSH still hangs with proven console EOF plus piped output, so this diagnostic
   // isolates stdout/stderr as bounded regular files without changing production transport.
+  const sshArgs = buildSshArgs(createTarget())
+  const destinationSeparator = sshArgs.indexOf('--')
+  if (destinationSeparator < 0) {
+    throw new Error('Windows OpenSSH diagnostic arguments lost the destination separator')
+  }
+  sshArgs.splice(destinationSeparator, 0, '-vvv')
   const child = spawn(
     launcherPath as string,
-    [sshPath, ...buildSshArgs(createTarget()), 'echo ORCA-SYSTEM-SSH-OK'],
+    ['--diagnostic-timeout-ms', '6000', sshPath, ...sshArgs, 'echo ORCA-SYSTEM-SSH-OK'],
     { stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true }
   )
 
   return new Promise((resolve, reject) => {
     let stdout = ''
     let stderrBytes = 0
+    let stderrTail = ''
     let stdoutEnded = false
     let processExit: number | null | 'not-observed' = 'not-observed'
     let channelClosed = false
@@ -91,6 +99,7 @@ async function runDiagnostic(): Promise<DiagnosticResult> {
         channelClosed,
         closeCode,
         stderrBytes,
+        stderrTail,
         elapsedMs: performance.now() - startedAt
       })
     }
@@ -115,6 +124,8 @@ async function runDiagnostic(): Promise<DiagnosticResult> {
     })
     child.stderr?.on('data', (chunk: Buffer) => {
       stderrBytes += chunk.length
+      // Why: retain only the diagnostic tail needed to classify the stuck client phase.
+      stderrTail = (stderrTail + chunk.toString('utf8')).slice(-16 * 1024)
     })
     child.on('exit', (code) => {
       processExit = code
@@ -138,16 +149,16 @@ async function runDiagnostic(): Promise<DiagnosticResult> {
 
 describe.skipIf(!hasLiveInput)('Windows OpenSSH no-input child-handle diagnostic', () => {
   it(
-    'qualifies private-console EOF plus regular-file output without the Windows null-input option',
+    'captures the verbose client phase after a bounded private-console diagnostic timeout',
     { timeout: 15_000 },
     async () => {
       expect(process.platform).toBe('win32')
-      const privateConsoleRegularOutputLauncherNoN = await runDiagnostic()
+      const privateConsoleRegularOutputVerboseTimeout = await runDiagnostic()
       console.log(
-        `ssh_windows_no_input_handle_diagnostic=${JSON.stringify({ privateConsoleRegularOutputLauncherNoN })}`
+        `ssh_windows_no_input_handle_diagnostic=${JSON.stringify({ privateConsoleRegularOutputVerboseTimeout })}`
       )
 
-      expect(privateConsoleRegularOutputLauncherNoN.success).toBe(true)
+      expect(privateConsoleRegularOutputVerboseTimeout.success).toBe(true)
     }
   )
 })

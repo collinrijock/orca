@@ -1,5 +1,6 @@
 using System;
 using System.ComponentModel;
+using System.Diagnostics;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -18,7 +19,11 @@ internal static class WindowsSshChildProcess
     private const uint OutputLimitPollMilliseconds = 50;
     private const uint JobSettlementTimeoutMilliseconds = 5000;
 
-    internal static int Run(string executablePath, string[] args)
+    internal static int Run(
+        string executablePath,
+        string[] args,
+        int diagnosticTimeoutMilliseconds
+    )
     {
         Stream launcherStdout = Console.OpenStandardOutput();
         Stream launcherStderr = Console.OpenStandardError();
@@ -70,7 +75,22 @@ internal static class WindowsSshChildProcess
                     throw LastWin32("ResumeThread failed.");
                 }
 
-                WaitForChildWithinOutputLimits(process.Process, outputs);
+                bool exited = WaitForChildWithinOutputLimits(
+                    process.Process,
+                    outputs,
+                    diagnosticTimeoutMilliseconds
+                );
+                if (!exited)
+                {
+                    // Why: the runner must recover verbose bytes without relying on an external
+                    // kill that also destroys the delete-on-close diagnostic captures.
+                    TerminateAndSettleJob(ref job);
+                    outputs.ReplayOutputs();
+                    throw new TimeoutException(
+                        "SSH child reached the " + diagnosticTimeoutMilliseconds +
+                        " ms diagnostic timeout."
+                    );
+                }
                 uint exitCode;
                 if (!GetExitCodeProcess(process.Process, out exitCode))
                 {
@@ -177,18 +197,33 @@ internal static class WindowsSshChildProcess
         }
     }
 
-    private static void WaitForChildWithinOutputLimits(
+    private static bool WaitForChildWithinOutputLimits(
         IntPtr process,
-        WindowsBoundedOutputFiles outputs
+        WindowsBoundedOutputFiles outputs,
+        int diagnosticTimeoutMilliseconds
     )
     {
+        Stopwatch elapsed = Stopwatch.StartNew();
         while (true)
         {
-            uint waitResult = WaitForSingleObject(process, OutputLimitPollMilliseconds);
+            uint waitMilliseconds = OutputLimitPollMilliseconds;
+            if (diagnosticTimeoutMilliseconds > 0)
+            {
+                long remaining = diagnosticTimeoutMilliseconds - elapsed.ElapsedMilliseconds;
+                if (remaining <= 0)
+                {
+                    return false;
+                }
+                if (remaining < waitMilliseconds)
+                {
+                    waitMilliseconds = (uint)remaining;
+                }
+            }
+            uint waitResult = WaitForSingleObject(process, waitMilliseconds);
             if (waitResult == WaitObject0)
             {
                 outputs.EnsureWithinLimits();
-                return;
+                return true;
             }
             if (waitResult == WaitFailed)
             {

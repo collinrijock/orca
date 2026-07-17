@@ -91,6 +91,7 @@ afterAll(() => {
 describe('Windows SSH no-input launcher', () => {
   it('keeps the artifact source scoped to the reviewed Win32 boundary', () => {
     const processSource = readFileSync(join(sourceRoot, 'WindowsSshChildProcess.cs'), 'utf8')
+    const programSource = readFileSync(join(sourceRoot, 'OrcaSshNoInputLauncher.cs'), 'utf8')
     const consoleSource = readFileSync(join(sourceRoot, 'WindowsPrivateConsoleInput.cs'), 'utf8')
     const outputSource = readFileSync(join(sourceRoot, 'WindowsBoundedOutputFiles.cs'), 'utf8')
 
@@ -103,6 +104,9 @@ describe('Windows SSH no-input launcher', () => {
     expect(processSource).toContain('OutputLimitPollMilliseconds = 50')
     expect(processSource).toContain('JobSettlementTimeoutMilliseconds = 5000')
     expect(processSource).toContain('TerminateJobObject')
+    expect(processSource).toContain('diagnosticTimeoutMilliseconds')
+    expect(programSource).toContain('--diagnostic-timeout-ms')
+    expect(programSource).toContain('diagnosticTimeoutMilliseconds > 60000')
     expect(processSource).toContain('outputs.EnsureWithinLimits()')
     expect(processSource).toContain('outputs.ReplayOutputs()')
     expect(processSource).not.toContain('WaitForMultipleObjects')
@@ -195,6 +199,26 @@ describe('Windows SSH no-input launcher', () => {
     expect(listCaptureFiles()).toEqual(capturesBefore)
   })
 
+  itWindows(
+    'terminates the child job and replays bounded output at the diagnostic deadline',
+    { timeout: 10_000 },
+    async () => {
+      const capturesBefore = listCaptureFiles()
+      const pidPath = join(fixtureRoot, 'timed-out-child.pid')
+      const result = runLauncher('hold', [pidPath], {}, 250)
+      const childPid = Number.parseInt(readFileSync(pidPath, 'utf8'), 10)
+
+      expect(result.status).toBe(1)
+      expect(result.stdout.toString('utf8')).toBe('ORCA-HOLD-STDOUT')
+      expect(result.stderr.toString('utf8')).toContain('ORCA-HOLD-STDERR')
+      expect(result.stderr.toString('utf8')).toContain(
+        'SSH child reached the 250 ms diagnostic timeout.'
+      )
+      await waitForProcessExit(childPid, 5_000)
+      expect(listCaptureFiles()).toEqual(capturesBefore)
+    }
+  )
+
   itWindows('does not leak an unrelated inheritable parent handle into the child', () => {
     const result = spawnSync(handleProbePath, [launcherPath], {
       cwd: fixtureRoot,
@@ -231,15 +255,21 @@ describe('Windows SSH no-input launcher', () => {
   )
 })
 
-function runLauncher(mode, args = [], options = {}) {
-  return spawnSync(launcherPath, [process.execPath, childFixturePath, mode, ...args], {
-    cwd: fixtureRoot,
-    encoding: null,
-    timeout: 10_000,
-    windowsHide: true,
-    maxBuffer: 32 * 1024 * 1024,
-    ...options
-  })
+function runLauncher(mode, args = [], options = {}, diagnosticTimeoutMs = null) {
+  const diagnosticArgs =
+    diagnosticTimeoutMs == null ? [] : ['--diagnostic-timeout-ms', String(diagnosticTimeoutMs)]
+  return spawnSync(
+    launcherPath,
+    [...diagnosticArgs, process.execPath, childFixturePath, mode, ...args],
+    {
+      cwd: fixtureRoot,
+      encoding: null,
+      timeout: 10_000,
+      windowsHide: true,
+      maxBuffer: 32 * 1024 * 1024,
+      ...options
+    }
+  )
 }
 
 function listCaptureFiles() {
@@ -328,6 +358,8 @@ if (mode === 'arguments-and-stdin') {
   }
 } else if (mode === 'hold') {
   require('node:fs').writeFileSync(process.argv[3], String(process.pid))
+  process.stdout.write('ORCA-HOLD-STDOUT')
+  process.stderr.write('ORCA-HOLD-STDERR')
   setInterval(() => {}, 1000)
 } else {
   process.exit(99)

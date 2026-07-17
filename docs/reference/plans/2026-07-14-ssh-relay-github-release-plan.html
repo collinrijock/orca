@@ -1670,12 +1670,15 @@
                     child while retaining private output pipes, exact handle inheritance, job
                     ownership, and bounded cancellation. Native x64/arm64 prove the console handle
                     and zero-byte cooked EOF but the live client still hangs, falsifying stdin alone.
-                    The next one-variable diagnostic retains that console stdin and replaces only
+                    The next one-variable diagnostic retained that console stdin and replaced only
                     child stdout/stderr pipes with unique delete-on-close regular files under an
                     explicit per-stream byte ceiling, bounded polling/cancellation, incremental
-                    post-exit replay, and exact cleanup. Build and live-test it on native x64/arm64
-                    before considering ConPTY, another SSH client, packaging, signing, or a product
-                    caller. POSIX retains ignored
+                    post-exit replay, and exact cleanup. Native x64/arm64 prove those contracts, but
+                    the live client still hangs with the same lifecycle tuple, falsifying redirected
+                    output pipes as the remaining cause. Before selecting ConPTY or another SSH
+                    client, the runner-only launcher must boundedly terminate its own diagnostic
+                    child and replay an exact verbose OpenSSH trace to classify the stuck client
+                    phase. Do not package, sign, or add a product caller. POSIX retains ignored
                     stdin plus <code>-n</code>; fixture-owned Windows session processes settle
                     before profile hives are boundedly unloaded and native profile deletion begins;
                     <code>MaxSessions=1</code>; interrupted upload; stale lock
