@@ -79,6 +79,9 @@ export const getWorkspaceCardLayoutEntry = createLocalizedCatalog(
   })
 )
 
+/** Stable Settings deep-link / scroll target for the edge-peek switch. */
+export const RIGHT_SIDEBAR_EDGE_PEEK_SETTING_ID = 'right-sidebar-edge-peek'
+
 export const getRightSidebarEdgePeekEntry = createLocalizedCatalog(
   (): SettingsSearchEntry => ({
     title: translate(

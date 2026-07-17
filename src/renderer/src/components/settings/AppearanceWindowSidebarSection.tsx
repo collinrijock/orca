@@ -23,7 +23,8 @@ import { LeftSidebarAppearanceSetting } from './LeftSidebarAppearanceSetting'
 import {
   getLeftSidebarAppearanceEntry,
   getRightSidebarEdgePeekEntry,
-  getWorkspaceCardLayoutEntry
+  getWorkspaceCardLayoutEntry,
+  RIGHT_SIDEBAR_EDGE_PEEK_SETTING_ID
 } from './appearance-sidebar-search'
 import { isRightSidebarEdgePeekEnabled } from '../right-sidebar/right-sidebar-edge-peek-preference'
 import { translate } from '@/i18n/i18n'
@@ -248,21 +249,23 @@ export function AppearanceWindowSidebarSection({
                     />
                   </SearchableSetting>
 
-                  <SearchableSetting
-                    title={rightSidebarEdgePeekEntry.title}
-                    description={rightSidebarEdgePeekEntry.description}
-                    keywords={rightSidebarEdgePeekEntry.keywords}
-                  >
-                    <SettingsSwitchRow
-                      label={rightSidebarEdgePeekEntry.title}
+                  <div data-settings-section={RIGHT_SIDEBAR_EDGE_PEEK_SETTING_ID}>
+                    <SearchableSetting
+                      title={rightSidebarEdgePeekEntry.title}
                       description={rightSidebarEdgePeekEntry.description}
-                      checked={edgePeekEnabled}
-                      onChange={() =>
-                        updateSettings({ rightSidebarEdgePeekEnabled: !edgePeekEnabled })
-                      }
-                      ariaLabel={rightSidebarEdgePeekEntry.title}
-                    />
-                  </SearchableSetting>
+                      keywords={rightSidebarEdgePeekEntry.keywords}
+                    >
+                      <SettingsSwitchRow
+                        label={rightSidebarEdgePeekEntry.title}
+                        description={rightSidebarEdgePeekEntry.description}
+                        checked={edgePeekEnabled}
+                        onChange={() =>
+                          updateSettings({ rightSidebarEdgePeekEnabled: !edgePeekEnabled })
+                        }
+                        ariaLabel={rightSidebarEdgePeekEntry.title}
+                      />
+                    </SearchableSetting>
+                  </div>
 
                   <SearchableSetting
                     title={translate(

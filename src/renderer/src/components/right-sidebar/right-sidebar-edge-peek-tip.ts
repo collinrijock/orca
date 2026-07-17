@@ -1,11 +1,18 @@
 import type { GlobalSettings } from '../../../../shared/types'
+import { translate } from '@/i18n/i18n'
+import {
+  getRightSidebarEdgePeekEntry,
+  RIGHT_SIDEBAR_EDGE_PEEK_SETTING_ID
+} from '@/components/settings/appearance-sidebar-search'
 import {
   isRightSidebarEdgePeekEnabled,
   isRightSidebarEdgePeekTipDismissed
 } from './right-sidebar-edge-peek-preference'
 
-/** How long the one-shot edge-peek hint stays visible. */
-export const RIGHT_SIDEBAR_EDGE_PEEK_TIP_VISIBLE_MS = 1000
+/** How long the one-shot edge-peek hint stays visible (long enough to read). */
+export const RIGHT_SIDEBAR_EDGE_PEEK_TIP_VISIBLE_MS = 2500
+
+export { RIGHT_SIDEBAR_EDGE_PEEK_SETTING_ID }
 
 type TipSettings = Pick<
   GlobalSettings,
@@ -22,4 +29,43 @@ export function markRightSidebarEdgePeekTipDismissed(args: {
   void Promise.resolve(args.updateSettings({ rightSidebarEdgePeekTipDismissed: true })).catch(
     () => {}
   )
+}
+
+export function getRightSidebarEdgePeekTipTitle(): string {
+  // Why: new key so older locale catalog rows for the short "to peek" title
+  // don't override this longer, more specific copy.
+  return translate(
+    'auto.components.right.sidebar.edge.peek.tip.titleLong',
+    'Hover over the right edge of the screen to quickly show this sidebar.'
+  )
+}
+
+export function getRightSidebarEdgePeekTipSettingsPrefix(): string {
+  return translate('auto.components.right.sidebar.edge.peek.tip.settingsPrefix', 'Turn this off in')
+}
+
+/** Clickable Settings breadcrumb for the edge-peek control. */
+export function getRightSidebarEdgePeekSettingsLinkLabel(): string {
+  return translate(
+    'auto.components.right.sidebar.edge.peek.tip.settingsLink',
+    'Settings › Appearance › {{value0}}',
+    { value0: getRightSidebarEdgePeekEntry().title }
+  )
+}
+
+/** Opens Appearance and scrolls/highlights the edge-peek switch. */
+export function openRightSidebarEdgePeekSetting(args: {
+  openSettingsPage: () => void
+  openSettingsTarget: (target: { pane: 'appearance'; repoId: null; sectionId: string }) => void
+  setSettingsSearchQuery: (query: string) => void
+}): void {
+  // Why: seed search so Appearance's Advanced disclosure force-opens (the switch
+  // lives under Advanced and is unmounted when collapsed).
+  args.setSettingsSearchQuery(getRightSidebarEdgePeekEntry().title)
+  args.openSettingsTarget({
+    pane: 'appearance',
+    repoId: null,
+    sectionId: RIGHT_SIDEBAR_EDGE_PEEK_SETTING_ID
+  })
+  args.openSettingsPage()
 }

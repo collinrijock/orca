@@ -1,9 +1,12 @@
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type JSX } from 'react'
 import { useAppStore } from '@/store'
-import { translate } from '@/i18n/i18n'
 import {
   RIGHT_SIDEBAR_EDGE_PEEK_TIP_VISIBLE_MS,
+  getRightSidebarEdgePeekSettingsLinkLabel,
+  getRightSidebarEdgePeekTipSettingsPrefix,
+  getRightSidebarEdgePeekTipTitle,
   markRightSidebarEdgePeekTipDismissed,
+  openRightSidebarEdgePeekSetting,
   shouldShowRightSidebarEdgePeekTip
 } from './right-sidebar-edge-peek-tip'
 import { isRightSidebarEdgePeekEnabled } from './right-sidebar-edge-peek-preference'
@@ -26,14 +29,17 @@ function measureToggleAnchor(): AnchorRect | null {
 
 /**
  * One-shot tip anchored under the right-sidebar titlebar toggle after the first
- * close while peek is enabled. Auto-hides after ~1s. Successful peeks also mark
- * the tip seen.
+ * close while peek is enabled. Auto-hides after a short delay. Successful peeks
+ * also mark the tip seen.
  */
 export function RightSidebarEdgePeekTipHost(): JSX.Element | null {
   const rightSidebarOpen = useAppStore((s) => s.rightSidebarOpen)
   const rightSidebarPeek = useAppStore((s) => s.rightSidebarPeek)
   const settings = useAppStore((s) => s.settings)
   const updateSettings = useAppStore((s) => s.updateSettings)
+  const openSettingsPage = useAppStore((s) => s.openSettingsPage)
+  const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
+  const setSettingsSearchQuery = useAppStore((s) => s.setSettingsSearchQuery)
   const [visible, setVisible] = useState(false)
   const [anchor, setAnchor] = useState<AnchorRect | null>(null)
   // Why: only fire on a true open→closed transition, not on first mount when
@@ -48,6 +54,12 @@ export function RightSidebarEdgePeekTipHost(): JSX.Element | null {
       window.clearTimeout(hideTimerRef.current)
       hideTimerRef.current = null
     }
+  }
+
+  const dismissVisibleTip = (): void => {
+    clearHideTimer()
+    setVisible(false)
+    markRightSidebarEdgePeekTipDismissed({ updateSettings: updateSettingsRef.current })
   }
 
   useEffect(() => {
@@ -65,8 +77,7 @@ export function RightSidebarEdgePeekTipHost(): JSX.Element | null {
     }
     setVisible(true)
     clearHideTimer()
-    // Why: brief, non-blocking discoverability — a full toast is too heavy for
-    // a one-shot edge gesture hint.
+    // Why: brief, non-blocking discoverability — not a sticky toast.
     hideTimerRef.current = window.setTimeout(() => {
       hideTimerRef.current = null
       setVisible(false)
@@ -132,26 +143,37 @@ export function RightSidebarEdgePeekTipHost(): JSX.Element | null {
     transform: 'translateX(-100%)'
   }
 
+  const openSettings = (): void => {
+    dismissVisibleTip()
+    openRightSidebarEdgePeekSetting({
+      openSettingsPage,
+      openSettingsTarget,
+      setSettingsSearchQuery
+    })
+  }
+
   return (
     <div
       role="status"
       aria-live="polite"
       data-testid="right-sidebar-edge-peek-tip"
       style={style}
-      className="pointer-events-none z-[90] w-max max-w-[240px] animate-in fade-in-0 zoom-in-95 slide-in-from-top-1 duration-150 motion-reduce:animate-none"
+      // Why: tip is mostly non-interactive; only the Settings link receives
+      // pointer events so it doesn't block titlebar clicks around the chip.
+      className="pointer-events-none z-[90] w-max max-w-[280px] animate-in fade-in-0 zoom-in-95 slide-in-from-top-1 duration-150 motion-reduce:animate-none"
     >
       <div className="relative rounded-md bg-foreground px-3 py-1.5 text-xs leading-snug text-background shadow-xs">
-        <div className="whitespace-nowrap">
-          {translate(
-            'auto.components.right.sidebar.edge.peek.tip.title',
-            'Hover the right edge to peek'
-          )}
-        </div>
-        <div className="whitespace-nowrap opacity-80">
-          {translate(
-            'auto.components.right.sidebar.edge.peek.tip.settings',
-            'Turn this off in Settings'
-          )}
+        <div>{getRightSidebarEdgePeekTipTitle()}</div>
+        <div className="opacity-80">
+          {getRightSidebarEdgePeekTipSettingsPrefix()}{' '}
+          <button
+            type="button"
+            data-testid="right-sidebar-edge-peek-tip-settings-link"
+            onClick={openSettings}
+            className="pointer-events-auto cursor-pointer font-medium underline underline-offset-2 hover:opacity-100"
+          >
+            {getRightSidebarEdgePeekSettingsLinkLabel()}
+          </button>
         </div>
         {/* Tooltip-style caret pointing up at the toggle icon. */}
         <span

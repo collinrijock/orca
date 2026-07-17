@@ -68,8 +68,10 @@ describe('RightSidebarEdgePeekTipHost', () => {
     rerender(<RightSidebarEdgePeekTipHost />)
 
     const tip = screen.getByTestId('right-sidebar-edge-peek-tip')
-    expect(tip.textContent).toContain('Hover the right edge to peek')
-    expect(tip.textContent).toContain('Turn this off in Settings')
+    expect(tip.textContent).toContain('Hover over the right edge of the screen')
+    expect(tip.textContent).toContain('Turn this off in')
+    expect(tip.textContent).toMatch(/Settings/)
+    expect(screen.getByTestId('right-sidebar-edge-peek-tip-settings-link')).toBeTruthy()
   })
 
   it('auto-hides after the visible duration and marks the tip dismissed', () => {
