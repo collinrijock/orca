@@ -60,6 +60,7 @@ const powerShellVersion = process.env.ORCA_SSH_RELAY_LIVE_WINDOWS_SYSTEM_SSH_POW
 const runtimeRoot = process.env.ORCA_SSH_RELAY_FULL_SIZE_RUNTIME_ROOT
 const identityPath = process.env.ORCA_SSH_RELAY_FULL_SIZE_IDENTITY
 const port = Number.parseInt(process.env.ORCA_SSH_RELAY_LIVE_WINDOWS_SYSTEM_SSH_PORT ?? '', 10)
+const LIVE_STALL_TIMEOUT_MS = 60_000
 const hasLiveInput = Boolean(
   host &&
   user &&
@@ -203,21 +204,62 @@ function stagePath(name: string, identity: MeasurementIdentity): string {
   return join(remoteRoot as string, `${name}-${identity.contentId.slice('sha256:'.length, 23)}`)
 }
 
-function createProgressRecorder(): {
+function logLivePhase(phase: string, details: Record<string, unknown> = {}): void {
+  console.log(`ssh_relay_live_windows_system_ssh_phase=${JSON.stringify({ phase, ...details })}`)
+}
+
+function createProgressRecorder(
+  phase: string,
+  onActivity: () => void
+): {
   record: (progress: SshRelayRuntimeSourceStreamProgress) => void
   snapshot: () => { bytes: number; updates: number; peakActiveFiles: number }
 } {
   let bytes = 0
   let updates = 0
   let peakActiveFiles = 0
+  let lastLoggedAt = 0
+  let lastLoggedFiles = -1
   return {
     record: (progress) => {
+      onActivity()
       bytes = progress.bytesTransferred
       updates += 1
       peakActiveFiles = Math.max(peakActiveFiles, progress.activeFiles)
+      const now = performance.now()
+      if (progress.filesCompleted !== lastLoggedFiles || now - lastLoggedAt >= 5_000) {
+        lastLoggedAt = now
+        lastLoggedFiles = progress.filesCompleted
+        logLivePhase(`${phase}-progress`, {
+          filesCompleted: progress.filesCompleted,
+          totalFiles: progress.totalFiles,
+          bytesTransferred: progress.bytesTransferred,
+          totalBytes: progress.totalBytes,
+          activeFiles: progress.activeFiles
+        })
+      }
     },
     snapshot: () => ({ bytes, updates, peakActiveFiles })
   }
+}
+
+function createLiveStallWatchdog(phase: string): {
+  signal: AbortSignal
+  activity: () => void
+  dispose: () => void
+} {
+  const controller = new AbortController()
+  let timeout: ReturnType<typeof setTimeout>
+  const activity = (): void => {
+    clearTimeout(timeout)
+    timeout = setTimeout(() => {
+      const error = new Error(`Live Windows system-SSH ${phase} stalled without progress`)
+      logLivePhase(`${phase}-stalled`, { inactivityMs: LIVE_STALL_TIMEOUT_MS })
+      controller.abort(error)
+    }, LIVE_STALL_TIMEOUT_MS)
+  }
+  activity()
+  return { signal: controller.signal, activity, dispose: () => clearTimeout(timeout) }
 }
 
 async function transfer(
@@ -236,6 +278,27 @@ async function transfer(
     onProgress,
     ...(maximumConcurrency === undefined ? {} : { maximumConcurrency })
   })
+}
+
+async function measureWatchedTransfer(
+  connection: SshConnection,
+  tree: SshRelayRuntimeScannedSourceTree,
+  stage: string,
+  phase: string,
+  maximumConcurrency?: number
+) {
+  const watchdog = createLiveStallWatchdog(phase)
+  const progress = createProgressRecorder(phase, watchdog.activity)
+  logLivePhase(`${phase}-start`)
+  try {
+    const measurement = await measure(() =>
+      transfer(connection, tree, stage, watchdog.signal, progress.record, maximumConcurrency)
+    )
+    logLivePhase(`${phase}-transfer-complete`, { elapsedMs: measurement.elapsedMs })
+    return { measurement, progress }
+  } finally {
+    watchdog.dispose()
+  }
 }
 
 describe.skipIf(!hasLiveInput)(
@@ -282,44 +345,40 @@ describe.skipIf(!hasLiveInput)(
         await Promise.all(stages.map((stage) => rm(stage, { recursive: true, force: true })))
 
         try {
+          logLivePhase('connect-start')
           await connection.connect()
           expect(connection.usesSystemSshTransport()).toBe(true)
+          logLivePhase('connect-complete')
 
-          const serialProgress = createProgressRecorder()
-          const serial = await measure(() =>
-            transfer(
-              connection,
-              tree,
-              serialStage,
-              new AbortController().signal,
-              serialProgress.record
-            )
+          const { measurement: serial, progress: serialProgress } = await measureWatchedTransfer(
+            connection,
+            tree,
+            serialStage,
+            'serial'
           )
+          logLivePhase('serial-validation-start')
           await validateTransferredTree(tree, serialStage)
+          logLivePhase('serial-validation-complete')
           expect(serialProgress.snapshot().peakActiveFiles).toBe(1)
 
-          const concurrentProgress = createProgressRecorder()
-          const concurrent = await measure(() =>
-            transfer(
-              connection,
-              tree,
-              concurrentStage,
-              new AbortController().signal,
-              concurrentProgress.record,
-              4
-            )
-          )
+          const { measurement: concurrent, progress: concurrentProgress } =
+            await measureWatchedTransfer(connection, tree, concurrentStage, 'concurrent', 4)
+          logLivePhase('concurrent-validation-start')
           await validateTransferredTree(tree, concurrentStage)
+          logLivePhase('concurrent-validation-complete')
           expect(concurrentProgress.snapshot().peakActiveFiles).toBeGreaterThan(1)
           expect(concurrentProgress.snapshot().peakActiveFiles).toBeLessThanOrEqual(4)
+          logLivePhase('collision-start')
           await expect(
             transfer(connection, tree, concurrentStage, new AbortController().signal, () => {})
           ).rejects.toBeTruthy()
           await validateTransferredTree(tree, concurrentStage)
+          logLivePhase('collision-complete')
 
           const controller = new AbortController()
-          const cancelledProgress = createProgressRecorder()
+          const cancelledProgress = createProgressRecorder('cancellation', () => {})
           let abortRequestedAt = 0
+          logLivePhase('cancellation-start')
           const cancelled = await measure(async () => {
             const outcome = transfer(
               connection,
@@ -343,7 +402,9 @@ describe.skipIf(!hasLiveInput)(
           await new Promise((resolve) => setTimeout(resolve, 500))
           await expect(lstat(cancelledStage)).rejects.toMatchObject({ code: 'ENOENT' })
           expect(cancelledProgress.snapshot().updates).toBe(updatesAfterSettlement)
+          logLivePhase('cancellation-complete', { settlementMs: cancelled.result })
 
+          logLivePhase('reuse-cleanup-start')
           await runSshRelayRuntimeWindowsStagingControl({
             operation: 'remove-root',
             remoteRoot: cancelledStage,
@@ -352,6 +413,7 @@ describe.skipIf(!hasLiveInput)(
               openSshRelayRuntimeSystemSshFileChannel(connection, command, signal, 'powershell')
           })
           expect(connection.getState().status).toBe('connected')
+          logLivePhase('reuse-cleanup-complete')
 
           const metrics = {
             tupleId: identity.tupleId,
@@ -387,8 +449,12 @@ describe.skipIf(!hasLiveInput)(
           )
           expect(cancelled.result).toBeLessThan(10_000)
         } finally {
+          logLivePhase('disconnect-start')
           await connection.disconnect()
+          logLivePhase('disconnect-complete')
+          logLivePhase('final-cleanup-start')
           await Promise.all(stages.map((stage) => rm(stage, { recursive: true, force: true })))
+          logLivePhase('final-cleanup-complete')
         }
       }
     )

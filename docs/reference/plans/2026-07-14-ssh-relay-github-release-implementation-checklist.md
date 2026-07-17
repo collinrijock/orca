@@ -8,8 +8,8 @@ work; keep exact commands, runner identities, hashes, metrics, and residual gaps
 
 Date created: 2026-07-14<br>
 Last updated: 2026-07-17<br>
-Current phase: Milestone 6 / Work Package 5 bounded runtime transfer — **In progress — explicit Windows completion framing locally green, exact-head native qualification next, 2026-07-17, Codex implementation owner**. Exact correction head `ad3c3975c099f0e197661091b1cec9b0a0d6d553`, run `29559577952`, and Windows x64/ARM64 jobs `87818965702`/`87818965757` independently time out after 1,200,018/1,200,015 ms with a fixture-user command chain still waiting. `E-M6-WINDOWS-FRAMED-COMPLETION-LOCAL-001` replaces the receiver's EOF dependency with an exact `ORCAEND1` frame while retaining local byte-count and remote frame validation; focused, broad, release, typecheck, lint, formatting, diff, and resolver-isolation gates pass. Commit/push only this package and require fresh native full-size/cancellation/concurrency/reuse/teardown proof. Legacy remains the sole production path; real Apple/SignPath rehearsals remain deferred.<br>
-Session checkpoint: **WINDOWS FRAMED COMPLETION LOCAL GREEN / NATIVE RERUN NEXT — 2026-07-17, Codex implementation owner** — 54 focused cases with three declared skips, 697 broad relay cases with ten declared skips, 285 release contracts with eight declared skips, typecheck, lint/reliability/max-lines, formatting, diff, and protected-resolver isolation pass. Both PowerShell receivers are now length-delimited and completion-framed, with no stdin-EOF read; local short/long payload mismatches abort boundedly. Native proof remains required. No product caller, upload, default/fallback, Beta, tuple publication, or signing behavior changed.<br>
+Current phase: Milestone 6 / Work Package 5 bounded runtime transfer — **In progress — Windows live-transfer phase/stall diagnostic locally green, exact-head native qualification next, 2026-07-17, Codex implementation owner**. Exact completion-framing head `19683ba24e8af031a6a02583b4f33e0746efb9ac`, run `29561480245`, and Windows x64/ARM64 jobs `87824691503`/`87824691472` independently time out after 1,200,020/1,200,022 ms with the same fixture-user command chain, falsifying final EOF as the retained boundary. `E-M6-WINDOWS-PHASE-STALL-DIAGNOSTIC-LOCAL-001` adds only privacy-safe phase/progress evidence and a 60-second inactivity abort through the existing transfer signal. Commit and push only this diagnostic package so the next native RED identifies and joins the exact operation. Legacy remains the sole production path; real Apple/SignPath rehearsals remain deferred.<br>
+Session checkpoint: **PHASE/STALL DIAGNOSTIC LOCAL GREEN / NATIVE RUN NEXT — 2026-07-17, Codex implementation owner** — focused, broad relay, release-contract, typecheck, targeted/full lint, reliability/max-lines, diff, and protected-resolver isolation gates pass. No transfer protocol, authentication, connection reuse, product caller, upload, default/fallback, Beta, tuple publication, or signing behavior changed.<br>
 Primary design: [SSH relay GitHub Release plan](./2026-07-14-ssh-relay-github-release-plan.html)<br>
 Motivating issues: [#8450](https://github.com/stablyai/orca/issues/8450), [#1693](https://github.com/stablyai/orca/issues/1693)
 
@@ -20083,20 +20083,20 @@ lint` passes in 18.59 seconds real with the 26 existing warnings, all 41 reliabi
   No packaged asset, Electron/startup caller, target setting, fallback, Beta, tuple, publication,
   default, signing, or SignPath path is connected.
 - Syntax/focused evidence: `node --check
-  config/scripts/build-windows-ssh-no-input-launcher.mjs` and `node --check
-  config/scripts/ssh-relay-runtime-windows-no-input-launcher.test.mjs` pass. `/usr/bin/time -l pnpm
-  exec vitest run --config config/vitest.config.ts --maxWorkers=1
-  src/main/ssh/ssh-connection.test.ts src/main/ssh/ssh-system-fallback.test.ts
-  src/main/ssh/system-ssh-command-launcher.test.ts
-  src/main/ssh/ssh-system-no-input-windows-openssh.test.ts
-  src/main/ssh/ssh-relay-runtime-windows-system-ssh-openssh-full-size.test.ts
-  config/scripts/ssh-relay-runtime-windows-no-input-launcher.test.mjs
-  config/scripts/ssh-relay-runtime-workflow.test.mjs` passes six files with one native file skipped,
+config/scripts/build-windows-ssh-no-input-launcher.mjs` and `node --check
+config/scripts/ssh-relay-runtime-windows-no-input-launcher.test.mjs` pass. `/usr/bin/time -l pnpm
+exec vitest run --config config/vitest.config.ts --maxWorkers=1
+src/main/ssh/ssh-connection.test.ts src/main/ssh/ssh-system-fallback.test.ts
+src/main/ssh/system-ssh-command-launcher.test.ts
+src/main/ssh/ssh-system-no-input-windows-openssh.test.ts
+src/main/ssh/ssh-relay-runtime-windows-system-ssh-openssh-full-size.test.ts
+config/scripts/ssh-relay-runtime-windows-no-input-launcher.test.mjs
+config/scripts/ssh-relay-runtime-workflow.test.mjs` passes six files with one native file skipped,
   124 runnable cases, and ten declared native/live skips in 4.35 seconds real; maximum RSS is
   150,519,808 bytes and peak footprint is 97,687,504 bytes.
 - Release/static evidence: `/usr/bin/time -l pnpm exec vitest run --config
-  config/vitest.config.ts --maxWorkers=1 --reporter=dot
-  config/scripts/ssh-relay-runtime-*.test.mjs` passes 51 files and 285 runnable cases with eight
+config/vitest.config.ts --maxWorkers=1 --reporter=dot
+config/scripts/ssh-relay-runtime-*.test.mjs` passes 51 files and 285 runnable cases with eight
   declared Windows skips in 17.95 seconds real; maximum RSS is 195,674,112 bytes and peak footprint
   is 97,228,728 bytes. `/usr/bin/time -l pnpm typecheck` passes in 2.77 seconds real with
   1,267,253,248-byte maximum RSS and 97,277,808-byte peak footprint. `/usr/bin/time -l pnpm lint`
@@ -20107,8 +20107,8 @@ lint` passes in 18.59 seconds real with the 26 existing warnings, all 41 reliabi
   `system-ssh-command-launcher.test.ts`, after which lint passes without a disable or ratchet change.
 - Formatting/isolation: `pnpm exec oxfmt --write` passes for all modified TypeScript and MJS files;
   `git diff --check` and exact `git diff --exit-code HEAD --
-  src/main/ssh/ssh-remote-node-resolution.ts
-  src/main/ssh/ssh-remote-node-resolution.test.ts` pass. The protected Milestone 0 resolver files
+src/main/ssh/ssh-remote-node-resolution.ts
+src/main/ssh/ssh-remote-node-resolution.test.ts` pass. The protected Milestone 0 resolver files
   remain byte-for-byte unchanged.
 - Residual gate: local mocks do not prove the adapter settles native Win32-OpenSSH or that the owned
   Windows fixture profile is released. Commit/push this isolated package, then require exact-head
@@ -20171,20 +20171,20 @@ lint` passes in 18.59 seconds real with the 26 existing warnings, all 41 reliabi
   signing remain unchanged. Unit contracts prove explicit Windows injection reports
   `windows-no-input-launcher`, while POSIX ignores the supplied Windows path and reports `direct`.
 - Syntax/focused evidence: both launcher scripts pass `node --check`. `/usr/bin/time -l pnpm exec
-  vitest run --config config/vitest.config.ts --maxWorkers=1
-  src/main/ssh/ssh-connection.test.ts src/main/ssh/ssh-system-fallback.test.ts
-  src/main/ssh/system-ssh-command-launcher.test.ts
-  src/main/ssh/ssh-system-no-input-windows-openssh.test.ts
-  src/main/ssh/ssh-relay-runtime-windows-system-ssh-openssh-full-size.test.ts
-  config/scripts/ssh-relay-runtime-windows-no-input-launcher.test.mjs
-  config/scripts/ssh-relay-runtime-workflow.test.mjs` passes six files with one skipped, 124
+vitest run --config config/vitest.config.ts --maxWorkers=1
+src/main/ssh/ssh-connection.test.ts src/main/ssh/ssh-system-fallback.test.ts
+src/main/ssh/system-ssh-command-launcher.test.ts
+src/main/ssh/ssh-system-no-input-windows-openssh.test.ts
+src/main/ssh/ssh-relay-runtime-windows-system-ssh-openssh-full-size.test.ts
+config/scripts/ssh-relay-runtime-windows-no-input-launcher.test.mjs
+config/scripts/ssh-relay-runtime-workflow.test.mjs` passes six files with one skipped, 124
   runnable cases, and ten declared native/live skips in 18.18 seconds real; maximum RSS is
   139,968,512 bytes and peak footprint is 97,785,640 bytes.
 - Release/static evidence: the exact unquoted release-contract command passes 51 files and 285
   runnable cases with eight declared Windows skips in 383.15 seconds real; maximum RSS is
   189,906,944 bytes and peak footprint is 97,523,424 bytes. The machine was under sustained load,
   so this timing is retained as observed evidence rather than a performance baseline. `/usr/bin/time
-  -l pnpm typecheck` passes in 110.83 seconds real with 1,795,964,928-byte maximum RSS and
+-l pnpm typecheck` passes in 110.83 seconds real with 1,795,964,928-byte maximum RSS and
   98,195,288-byte peak footprint. `/usr/bin/time -l pnpm lint` passes in 199.22 seconds real with
   the same 26 existing warnings, all 41 reliability gates, and the 355-entry max-lines ratchet;
   maximum RSS is 2,102,296,576 bytes and peak footprint is 97,589,080 bytes.
@@ -20249,16 +20249,16 @@ lint` passes in 18.59 seconds real with the 26 existing warnings, all 41 reliabi
   preventing the following full-size test from running.
 - Focused evidence: after an initial run exposed and corrected three assertion/source-oracle
   mismatches, `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts
-  --maxWorkers=1 src/main/ssh/ssh-connection.test.ts src/main/ssh/ssh-system-fallback.test.ts
-  src/main/ssh/system-ssh-command-launcher.test.ts
-  src/main/ssh/ssh-system-no-input-windows-openssh.test.ts
-  src/main/ssh/ssh-relay-runtime-windows-system-ssh-openssh-full-size.test.ts
-  config/scripts/ssh-relay-runtime-windows-no-input-launcher.test.mjs
-  config/scripts/ssh-relay-runtime-workflow.test.mjs` exits 0 with six files passed, one native file
+--maxWorkers=1 src/main/ssh/ssh-connection.test.ts src/main/ssh/ssh-system-fallback.test.ts
+src/main/ssh/system-ssh-command-launcher.test.ts
+src/main/ssh/ssh-system-no-input-windows-openssh.test.ts
+src/main/ssh/ssh-relay-runtime-windows-system-ssh-openssh-full-size.test.ts
+config/scripts/ssh-relay-runtime-windows-no-input-launcher.test.mjs
+config/scripts/ssh-relay-runtime-workflow.test.mjs` exits 0 with six files passed, one native file
   skipped, 126 runnable cases passed, and ten declared native/live skips in 22.65 seconds real;
   maximum RSS is 150,585,344 bytes and peak footprint is 97,769,280 bytes.
 - Release/static evidence: `/usr/bin/time -l pnpm exec vitest run --config
-  config/vitest.config.ts --maxWorkers=1 config/scripts/ssh-relay-runtime-*.test.mjs` exits 0 with 51
+config/vitest.config.ts --maxWorkers=1 config/scripts/ssh-relay-runtime-*.test.mjs` exits 0 with 51
   files, 285 runnable cases passed, and eight declared skips in 58.62 seconds real; maximum RSS is
   195,690,496 bytes and peak footprint is 97,539,832 bytes. `/usr/bin/time -l pnpm typecheck` exits
   0 in 11.38 seconds real with 1,774,403,584-byte maximum RSS and 98,293,520-byte peak footprint.
@@ -20295,7 +20295,7 @@ lint` passes in 18.59 seconds real with the 26 existing warnings, all 41 reliabi
   command, proving the constructor-injected launcher plus strict trust no longer blocks the probe.
 - Exact transfer RED: x64 fails after 1.520 seconds and ARM64 after 1.667 seconds with
   `SSH relay runtime system SSH file command failed (exit 1): 'exec' is not recognized as an
-  internal or external command, operable program or batch file.` The Windows staging layer already
+internal or external command, operable program or batch file.` The Windows staging layer already
   produced a complete encoded PowerShell command, but the generic system-SSH file channel called
   `connection.exec(command)` with its default POSIX wrapper. No staging root, payload byte,
   serial/concurrent/collision/cancellation measurement, or connection-reuse metric runs.
@@ -20320,17 +20320,17 @@ lint` passes in 18.59 seconds real with the 26 existing warnings, all 41 reliabi
   connection reuse, channel adaptation, byte streaming, cancellation ownership, diagnostics,
   launcher selection, strict trust, and every product/default caller remain unchanged.
 - Focused evidence: `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts
-  --maxWorkers=1 src/main/ssh/ssh-relay-runtime-system-ssh-file-channel.test.ts
-  src/main/ssh/ssh-relay-runtime-posix-tree-transfer.test.ts
-  src/main/ssh/ssh-relay-runtime-windows-tree-transfer.test.ts
-  src/main/ssh/ssh-relay-runtime-posix-system-ssh-openssh-full-size.test.ts
-  src/main/ssh/ssh-relay-runtime-windows-system-ssh-openssh-full-size.test.ts
-  config/scripts/ssh-relay-runtime-workflow.test.mjs` exits 0 with four files passed, two live files
+--maxWorkers=1 src/main/ssh/ssh-relay-runtime-system-ssh-file-channel.test.ts
+src/main/ssh/ssh-relay-runtime-posix-tree-transfer.test.ts
+src/main/ssh/ssh-relay-runtime-windows-tree-transfer.test.ts
+src/main/ssh/ssh-relay-runtime-posix-system-ssh-openssh-full-size.test.ts
+src/main/ssh/ssh-relay-runtime-windows-system-ssh-openssh-full-size.test.ts
+config/scripts/ssh-relay-runtime-workflow.test.mjs` exits 0 with four files passed, two live files
   skipped, 40 runnable cases passed, and two declared skips in 4.35 seconds real; maximum RSS is
   173,981,696 bytes and peak footprint is 97,801,928 bytes. The routing contract independently
   asserts the exact POSIX one-argument call and PowerShell `{ wrapCommand: false }` call.
 - Release/static evidence: `/usr/bin/time -l pnpm exec vitest run --config
-  config/vitest.config.ts --maxWorkers=1 config/scripts/ssh-relay-runtime-*.test.mjs` exits 0 with 51
+config/vitest.config.ts --maxWorkers=1 config/scripts/ssh-relay-runtime-*.test.mjs` exits 0 with 51
   files, 285 runnable cases passed, and eight declared skips in 20.51 seconds real; maximum RSS is
   195,592,192 bytes and peak footprint is 97,146,712 bytes. `/usr/bin/time -l pnpm typecheck` exits
   0 in 7.16 seconds real with 1,229,029,376-byte maximum RSS and 97,998,656-byte peak footprint.
@@ -20394,16 +20394,16 @@ lint` passes in 18.59 seconds real with the 26 existing warnings, all 41 reliabi
 - Focused evidence: an initial focused run exposed two outdated test assumptions (closing without
   the declared payload and asserting close synchronously); all product cases passed. After correcting
   those framing oracles, `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts
-  --maxWorkers=1 src/main/ssh/ssh-relay-runtime-command-file-destination.test.ts
-  src/main/ssh/ssh-relay-runtime-system-ssh-file-channel.test.ts
-  src/main/ssh/ssh-relay-runtime-windows-file-destination.test.ts
-  src/main/ssh/ssh-relay-runtime-windows-staging-control.test.ts
-  src/main/ssh/ssh-relay-runtime-windows-tree-transfer.test.ts
-  src/main/ssh/ssh-relay-runtime-windows-system-ssh-openssh-full-size.test.ts` exits 0 with four
+--maxWorkers=1 src/main/ssh/ssh-relay-runtime-command-file-destination.test.ts
+src/main/ssh/ssh-relay-runtime-system-ssh-file-channel.test.ts
+src/main/ssh/ssh-relay-runtime-windows-file-destination.test.ts
+src/main/ssh/ssh-relay-runtime-windows-staging-control.test.ts
+src/main/ssh/ssh-relay-runtime-windows-tree-transfer.test.ts
+src/main/ssh/ssh-relay-runtime-windows-system-ssh-openssh-full-size.test.ts` exits 0 with four
   files passed, one live file skipped, 54 runnable cases passed, and three declared skips in 3.26
   seconds real; maximum RSS is 146,571,264 bytes and peak footprint is 97,474,416 bytes.
 - Broad/release evidence: `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts
-  --maxWorkers=1 src/main/ssh/ssh-relay-*.test.ts` exits 0 with 53 files passed, six declared skipped,
+--maxWorkers=1 src/main/ssh/ssh-relay-*.test.ts` exits 0 with 53 files passed, six declared skipped,
   697 runnable cases passed, and ten declared skips in 23.32 seconds real; maximum RSS is
   301,826,048 bytes and peak footprint is 96,818,888 bytes. The exact release-contract command exits
   0 with 51 files, 285 runnable cases, and eight declared skips in 12.44 seconds real; maximum RSS is
@@ -20418,6 +20418,69 @@ lint` passes in 18.59 seconds real with the 26 existing warnings, all 41 reliabi
   package and require fresh native x64/ARM64 receiver syntax, full-size serial/concurrent/collision/
   cancellation metrics, connection reuse, and exact fixture profile/directory teardown before
   advancing.
+
+### E-M6-WINDOWS-FRAMED-COMPLETION-CI-RED-001 — explicit framing does not resolve the native stall
+
+- Date/owner/source/run: 2026-07-17, Codex implementation owner; exact head
+  `19683ba24e8af031a6a02583b4f33e0746efb9ac`, artifact run
+  [29561480245](https://github.com/stablyai/orca/actions/runs/29561480245), Windows x64 job
+  [87824691503](https://github.com/stablyai/orca/actions/runs/29561480245/job/87824691503) on
+  `windows-2022`, and native ARM64 job
+  [87824691472](https://github.com/stablyai/orca/actions/runs/29561480245/job/87824691472) on
+  `windows-11-arm`. Both use Node 24.18.0 and official OpenSSH 10.0p2; x64 uses PowerShell
+  5.1.20348.4294 and ARM64 uses 5.1.26100.8655.
+- Preserved gates: each Windows job passes 101 artifact-contract files, 866 runnable cases, and 19
+  declared skips before live transfer. The isolated pinned-trust control proves sentinel, ended
+  stdout, natural process exit/channel close 0, and zero stderr in 739.3636 ms on x64 and 704.6447
+  ms on ARM64.
+- Exact RED: the full-size test still reaches its 1,200,000 ms outer ceiling after 1,200,020 ms on
+  x64 and 1,200,022 ms on ARM64 without emitting a serial transfer metric. X64 teardown finds
+  fixture-owned `sshd-session.exe`, `cmd.exe`, `conhost.exe`, and `powershell.exe`; ARM64 finds
+  `cmd.exe`, `conhost.exe`, and `powershell.exe`. Both then correctly fail on the locked
+  `UsrClass.dat` profile instead of hiding residue.
+- Classification: identical failure after the exact `ORCAEND1` correction falsifies final stdin EOF
+  as the retained boundary. The run still does not identify whether the stall is connection, tree
+  preparation, channel start, payload progress, validation, or cleanup, so no second speculative
+  behavior change is authorized. Add privacy-safe phase/progress evidence and abort/join after a
+  shorter inactivity ceiling, then require both architectures to select the same exact boundary.
+
+### E-M6-WINDOWS-PHASE-STALL-DIAGNOSTIC-LOCAL-001 — bounded native diagnostic is locally green
+
+- Date/owner/base/runner: 2026-07-17, Codex implementation owner; uncommitted diagnostic atop exact
+  native RED head `19683ba24e8af031a6a02583b4f33e0746efb9ac` on Apple arm64, macOS 26.2 build
+  25C56, Node 26.5.0, and pnpm 10.24.0. The repository requests Node 24; native jobs remain
+  authoritative.
+- Implementation boundary: only the opt-in native full-size test changes. It records connection,
+  serial/concurrent transfer, validation, collision, cancellation, connection-reuse cleanup,
+  disconnect, and fixture cleanup phases. Progress contains only declared aggregate file/byte counts
+  and active-file concurrency; it never logs target paths, commands, usernames, keys, or transferred
+  contents. Serial and concurrent transfers reset a 60-second inactivity watchdog on progress and
+  abort through the existing bounded transfer signal; `finally` always disposes the timer. Transfer
+  framing, byte protocol, SSH authentication, connection reuse, product/default, Beta, fallback,
+  tuple, publication, and signing behavior remain unchanged.
+- Focused evidence: `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts
+--maxWorkers=1 src/main/ssh/ssh-relay-runtime-system-ssh-file-channel.test.ts
+src/main/ssh/ssh-relay-runtime-posix-tree-transfer.test.ts
+src/main/ssh/ssh-relay-runtime-windows-tree-transfer.test.ts
+src/main/ssh/ssh-relay-runtime-posix-system-ssh-openssh-full-size.test.ts
+src/main/ssh/ssh-relay-runtime-windows-system-ssh-openssh-full-size.test.ts
+config/scripts/ssh-relay-runtime-workflow.test.mjs` exits 0 with four files passed, two live files
+  skipped, 40 runnable cases passed, and two declared skips in 14.41 seconds real; maximum RSS is
+  154,386,432 bytes and peak footprint is 97,834,672 bytes.
+- Broad/release evidence: `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts
+--maxWorkers=1 src/main/ssh/ssh-relay-*.test.ts` exits 0 with 53 files passed, six declared skipped,
+  697 runnable cases passed, and ten declared skips in 26.78 seconds real; maximum RSS is 302,252,032
+  bytes and peak footprint is 98,342,624 bytes. The exact release-contract command exits 0 with 51
+  files, 285 runnable cases passed, and eight declared skips in 12.88 seconds real; maximum RSS is
+  195,756,032 bytes and peak footprint is 97,146,664 bytes.
+- Static/isolation evidence: `/usr/bin/time -l pnpm typecheck` exits 0 in 7.08 seconds real with
+  1,210,384,384-byte maximum RSS and 97,900,424-byte peak footprint. Targeted `oxlint` exits 0.
+  `/usr/bin/time -l pnpm lint` exits 0 in 14.36 seconds real with the existing 26 warnings, all 41
+  reliability gates, and the 355-entry max-lines ratchet; maximum RSS is 1,964,048,384 bytes and peak
+  footprint is 97,179,408 bytes. `git diff --check` and the exact protected-resolver comparison pass.
+- Residual gate: local Darwin skips both live files and cannot execute the watchdog. Commit/push only
+  this diagnostic and require exact-head x64/ARM64 phase/progress, inactivity settlement, connection
+  reuse, and exact fixture profile/directory teardown evidence before changing transfer behavior.
 
 ## Accepted Gaps
 
@@ -20477,12 +20540,12 @@ The project is not complete until every applicable item below is checked with ev
 
 ## Next Required Action
 
-Commit and push only the explicit Windows completion-framing correction recorded by
-`E-M6-WINDOWS-FRAMED-COMPLETION-LOCAL-001`, then require exact-head Windows x64/ARM64 full-size
-transfer, cancellation, concurrency, connection reuse, and exact profile/directory teardown
-evidence. Do not check the broad Milestone 6 Windows system-SSH item or add an
-Electron/startup/product importer, per-target mode wiring, fallback, tuple
-enablement, release publication, or default behavior.
+Commit and push only the 60-second phase/stall diagnostic recorded by
+`E-M6-WINDOWS-PHASE-STALL-DIAGNOSTIC-LOCAL-001`, then require exact-head Windows x64/ARM64 phase,
+progress, inactivity settlement, connection reuse, and exact profile/directory teardown evidence.
+Do not check the broad Milestone 6 Windows system-SSH item or add an Electron/startup/product
+importer, per-target mode wiring, fallback, tuple enablement, release publication, or default
+behavior.
 Keep Node upstream `.tar.xz` inputs, Windows ZIP, `ORCA_RELAY_PATH`, existing desktop required-assets
 behavior, detached-signature byte encoding, Windows arm64 build 26100, macOS 13.5, Linux kernel 4.18,
 release-cut, desktop builds, publication, and every tuple separately gated.

@@ -9,16 +9,17 @@ keeps commands, hashes, runner identities, timings, and failure details.
 A checked box means the work has evidence in the detailed ledger. Design approval alone does not
 complete a box.
 
-Active checkpoint: **Milestone 6 / Work Package 5 bounded runtime transfer — explicit Windows
-completion framing locally green, exact-head native rerun next, 2026-07-17, Codex implementation
-owner.** Exact head `ad3c3975c099f0e197661091b1cec9b0a0d6d553`, run `29559577952`, and Windows
-x64/ARM64 jobs `87818965702`/`87818965757` independently time out after 1,200,018/1,200,015 ms with
-one fixture-user command chain retained. The isolated correction replaces final stdin EOF reads with
-an exact `ORCAEND1` frame while preserving local size and remote frame validation. Local evidence is
-green through 54 focused cases, 697 broad relay cases, 285 release contracts, typecheck, full
-lint/reliability/max-lines, formatting, diff, and resolver isolation. Commit/push only this package
-and require fresh x64/ARM64 full-size, cancellation, concurrency, reuse, and exact teardown proof.
-No product/default caller, Beta, fallback, tuple, publication, or signing behavior is authorized.
+Active checkpoint: **Milestone 6 / Work Package 5 bounded runtime transfer — Windows live-transfer
+phase/stall diagnostic locally green, exact-head native qualification next, 2026-07-17, Codex
+implementation owner.** Exact completion-framing head `19683ba24e8af031a6a02583b4f33e0746efb9ac`,
+run `29561480245`, and Windows x64/ARM64 jobs `87824691503`/`87824691472` independently time out
+after 1,200,020/1,200,022 ms with the same live fixture-user command chain, so final EOF is not the
+retained boundary. The test-only diagnostic records privacy-safe phase/file-progress evidence and
+aborts through the existing signal after 60 seconds without progress. Focused, broad, release,
+typecheck, lint/reliability/max-lines, diff, and protected-resolver isolation gates pass. Commit and
+push only this package; the next native RED must name and join the exact stalled operation before
+behavior changes. No product/default caller, Beta, fallback, tuple, publication, or signing behavior
+is authorized.
 `E-M6-WINDOWS-SYSTEM-SSH-TREE-LIVE-PORTABLE-FIXTURE-LOCAL-001` records the portable-fixture
 correction locally green: the no-Orca-publication workflow oracle permits the one exact pinned
 Microsoft fixture release URL while Orca release URLs, `gh release`, and `contents: write` remain
