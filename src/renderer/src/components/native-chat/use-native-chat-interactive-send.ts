@@ -86,23 +86,22 @@ export function useNativeChatInteractiveSend(
       // Other agents' question tools commit a pasted answer, so send label text.
       // Gate on the transcript agent (not `=== 'claude'`) so OpenClaude — which
       // runs the same selector — takes the keystroke path too.
-      const onSettled =
-        agent === 'claude'
-          ? (delivered: boolean): void => {
-              if (!delivered) {
-                return
-              }
-              inferQuestionAnsweredFromCurrentStatus({
-                paneKey,
-                getStatusEntry: () => useAppStore.getState().agentStatusByPaneKey[paneKey],
-                inferQuestionAnswered: (request) =>
-                  window.api.agentStatus.inferQuestionAnswered(request).catch((err) => {
-                    console.warn('[agent-question] native-chat inference failed:', err)
-                    return false
-                  })
-              })
+      const onSettled = shouldStepNativeChatAskAnswer(agent)
+        ? (delivered: boolean): void => {
+            if (!delivered) {
+              return
             }
-          : undefined
+            inferQuestionAnsweredFromCurrentStatus({
+              paneKey,
+              getStatusEntry: () => useAppStore.getState().agentStatusByPaneKey[paneKey],
+              inferQuestionAnswered: (request) =>
+                window.api.agentStatus.inferQuestionAnswered(request).catch((err) => {
+                  console.warn('[agent-question] native-chat inference failed:', err)
+                  return false
+                })
+            })
+          }
+        : undefined
       const handle: NativeChatSendHandle = shouldStepNativeChatAskAnswer(agent)
         ? sendNativeChatAskAnswer(
             settings,
