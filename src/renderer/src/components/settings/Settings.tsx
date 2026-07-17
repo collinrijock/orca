@@ -12,7 +12,6 @@ import {
 import { toast } from 'sonner'
 import type { GlobalSettings, OrcaHooks, ProjectHostSetup, Repo } from '../../../../shared/types'
 import type { SpeechModelState } from '../../../../shared/speech-types'
-import type { SkillFreshnessInventory } from '../../../../shared/skill-freshness'
 import type {
   SourceControlAiSettings,
   SourceControlAiSettingsPatch
@@ -95,16 +94,21 @@ import type {
 } from '@/lib/settings-navigation-types'
 import {
   COMPUTER_USE_SKILL_NAME,
+  LINEAR_AGENT_SKILL_NAMES,
   ORCHESTRATION_SKILL_NAME
 } from '@/lib/agent-feature-install-commands'
 import {
   GLOBAL_AGENT_SKILL_SOURCE_KINDS,
-  useInstalledAgentSkill
+  useInstalledAgentSkill,
+  useInstalledAgentSkillNames
 } from '@/hooks/useInstalledAgentSkills'
 import { useActiveProjectSkillRuntime } from '@/hooks/useActiveProjectSkillRuntime'
 import { useLinearProviderConnected } from '@/hooks/useLinearProviderConnected'
 import { useSkillFreshness } from '@/hooks/useSkillFreshness'
-import { getSkillFreshnessDisplayStatus } from '@/lib/skill-freshness-display-status'
+import {
+  getAgentSkillNavInstallStatus,
+  getLinearAgentSkillNavInstallStatus
+} from '@/lib/agent-skill-nav-install-status'
 import { deriveNeededSectionIds, getInitialMountedSectionIds } from './settings-load-performance'
 import { translate } from '@/i18n/i18n'
 import { getProjectHostSetupProjectionFromState } from '../../store/selectors'
@@ -207,21 +211,6 @@ function getSettingsNavGroupDefinitionsForSearch(
     seenGroupIds.add(section.group)
     return [group]
   })
-}
-
-function getSkillNavInstallStatus(skill: {
-  name: string
-  installed: boolean
-  loading: boolean
-  inventory: SkillFreshnessInventory | null
-}): SettingsNavInstallStatus {
-  if (skill.loading) {
-    return 'checking'
-  }
-  if (!skill.installed) {
-    return 'install'
-  }
-  return getSkillFreshnessDisplayStatus(skill.inventory, skill.name)
 }
 
 function hasReadyVoiceModel(
@@ -351,6 +340,11 @@ function Settings(): React.JSX.Element {
   const linearConnected = useLinearProviderConnected()
   const activeSkillRuntime = useActiveProjectSkillRuntime()
   const orchestrationSkill = useInstalledAgentSkill(ORCHESTRATION_SKILL_NAME, {
+    discoveryTarget: activeSkillRuntime.discoveryTarget,
+    sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS
+  })
+  const linearSkill = useInstalledAgentSkillNames(LINEAR_AGENT_SKILL_NAMES, {
+    enabled: linearConnected,
     discoveryTarget: activeSkillRuntime.discoveryTarget,
     sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS
   })
@@ -739,6 +733,11 @@ function Settings(): React.JSX.Element {
   const baseNavSections = useSettingsNavigationMetadata()
   const { installed: orchestrationSkillInstalled, loading: orchestrationSkillLoading } =
     orchestrationSkill
+  const {
+    installed: linearSkillInstalled,
+    loading: linearSkillLoading,
+    skills: linearSkills
+  } = linearSkill
   const { installed: computerUseSkillInstalled, loading: computerUseSkillLoading } =
     computerUseSkill
   const capabilityInstallStatusBySectionId = useMemo(() => {
@@ -746,7 +745,7 @@ function Settings(): React.JSX.Element {
     const next = new Map<string, SettingsNavInstallStatus>([
       [
         'orchestration',
-        getSkillNavInstallStatus({
+        getAgentSkillNavInstallStatus({
           name: ORCHESTRATION_SKILL_NAME,
           installed: orchestrationSkillInstalled,
           loading: orchestrationSkillLoading,
@@ -754,10 +753,21 @@ function Settings(): React.JSX.Element {
         })
       ]
     ])
+    if (linearConnected) {
+      next.set(
+        'linear',
+        getLinearAgentSkillNavInstallStatus({
+          skills: linearSkills,
+          installed: linearSkillInstalled,
+          loading: linearSkillLoading,
+          inventory: applicableFreshnessInventory
+        })
+      )
+    }
     if (showDesktopOnlySettings) {
       next.set(
         'computer-use',
-        getSkillNavInstallStatus({
+        getAgentSkillNavInstallStatus({
           name: COMPUTER_USE_SKILL_NAME,
           installed: computerUseSkillInstalled,
           loading: computerUseSkillLoading,
@@ -779,6 +789,10 @@ function Settings(): React.JSX.Element {
   }, [
     computerUseSkillInstalled,
     computerUseSkillLoading,
+    linearConnected,
+    linearSkillInstalled,
+    linearSkillLoading,
+    linearSkills,
     modelStates,
     orchestrationSkillInstalled,
     orchestrationSkillLoading,
