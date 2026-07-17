@@ -64,7 +64,12 @@ export function assertWindowsOpenSshWorkflow(workflow, expect) {
   )
   expect(measure.shell).toBe('pwsh')
   expect(measure.run).toContain("$env:ORCA_SSH_FORCE_SYSTEM_TRANSPORT = '1'")
+  expect(measure.run).toContain('ssh-system-no-input-windows-openssh.test.ts')
   expect(measure.run).toContain('ssh-relay-runtime-windows-system-ssh-openssh-full-size.test.ts')
+  expect(measure.run.indexOf('ssh-system-no-input-windows-openssh.test.ts')).toBeLessThan(
+    measure.run.indexOf('ssh-relay-runtime-windows-system-ssh-openssh-full-size.test.ts')
+  )
+  expect(measure.run).toContain("throw 'Windows no-input handle diagnostic failed'")
   expect(measure.run).toContain("Join-Path $firstOutput 'runtime'")
   expect(stop.if).toBe("always() && runner.os == 'Windows'")
   expect(stop.shell).toBe('pwsh')

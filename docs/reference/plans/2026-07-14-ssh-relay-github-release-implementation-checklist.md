@@ -8,8 +8,8 @@ work; keep exact commands, runner identities, hashes, metrics, and residual gaps
 
 Date created: 2026-07-14<br>
 Last updated: 2026-07-15<br>
-Current phase: Milestone 6 / Work Package 5 bounded runtime transfer — **In progress — 2026-07-15, Codex implementation owner: cross-platform no-input process-handle correction and exact-head live proof**. Keep every capability disconnected from every production/default SSH path. Real Apple/SignPath rehearsals remain an explicit late gate and are not on this package's critical path.<br>
-Session checkpoint: **IGNORED-STDIN HYPOTHESIS NATIVELY FALSIFIED / PLATFORM-SPECIFIC EOF CORRECTION LOCALLY GREEN — 2026-07-15, Codex implementation owner** — exact diagnostic head `e4bcee3f3561e7cfd58aa90e7d35e6c597df8692`, run `29544129779`, x64 job `87772490863`, and ARM64 job `87772490900` prove official OpenSSH authentication and remote command-session close while both clients record `sentinel=false`, `stdoutEnded=false`, `processExit=not-observed`, and `channelClosed=false`. Exact ignored-stdin head `aab0775272aca2b03d55d045cbaf7aefc7511bfe`, artifact run `29544909117`, Linux x64/ARM64 jobs `87774941240`/`87774941211`, and Windows x64/ARM64 jobs `87774941207`/`87774941200` falsify the shared ignored-handle design. Both Linux jobs receive the sentinel but the self-referential no-input facade emits an argument-less synthetic close before the child close. Both Windows jobs instead reproduce the redirected-handle hang documented by Win32-OpenSSH issues #856 and #1330: authenticated remote command start/close, then 31.79/32.78-second timeouts with every lifecycle field false. The implementation-plan correction keeps ignored stdin on POSIX, uses an anonymous pipe with the parent write end destroyed immediately plus mandatory `-n` on Windows, and gives all no-input callers a separate fail-on-write facade. Focused 117+1, 283-contract, typecheck, full lint/reliability/max-lines, all three PowerShell parse, formatting, diff, and protected-resolver isolation gates pass locally; exact-head native proof is next. Do not advance Milestone 6. Production runtime bytes still cross authenticated SSH and no product remote downloads anything. Do not connect a product caller, change legacy upload/fallback/default behavior, enable a tuple, publish an artifact, or perform SignPath work. Merging to `main` remains prohibited, SignPath is deferred, and legacy remains the production default.<br>
+Current phase: Milestone 6 / Work Package 5 bounded runtime transfer — **In progress — 2026-07-15, Codex implementation owner: native Windows no-input handle qualification**. Keep every capability disconnected from every production/default SSH path. Real Apple/SignPath rehearsals remain an explicit late gate and are not on this package's critical path.<br>
+Session checkpoint: **POSIX EOF CORRECTION NATIVELY GREEN / STANDARD WINDOWS PIPE NATIVELY RED / HANDLE DIAGNOSTIC LOCALLY GREEN — 2026-07-15, Codex implementation owner** — exact correction head `4f57b885d24ad1755a5c863eaf37369208cecedb`, artifact run `29545688003`, and Linux x64/ARM64 jobs `87777401256`/`87777401218` prove the separate no-input facade through live SFTP and restricted no-tar POSIX system SSH with bounded full-size transfer, four-file concurrency, cancellation, and cleanup. Windows x64/ARM64 jobs `87777401200`/`87777401195` independently falsify the standard anonymous-pipe EOF hypothesis: official OpenSSH authenticates and the remote command closes, but clients time out after 31.36/31.82 seconds with `sentinel=false`, `stdoutEnded=false`, `processExit=not-observed`, and `channelClosed=false`; exact profile teardown remains RED. `E-M6-WINDOWS-NOINPUT-HANDLE-DIAGNOSTIC-LOCAL-001` adds a bounded, non-sensitive native comparison of a console-independent overlapped pipe and inherited-stdin upstream control before the unchanged full-size measurement; focused 117+2, 283-contract, typecheck, full lint/reliability/max-lines, all three PowerShell parse, formatting, diff, and protected-resolver gates pass locally. Commit/push and require native x64/ARM64 diagnostic output before selecting another production handle. Do not advance Milestone 6. Production runtime bytes still cross authenticated SSH and no product remote downloads anything. Do not connect a product caller, change legacy upload/fallback/default behavior, enable a tuple, publish an artifact, or perform SignPath work. Merging to `main` remains prohibited, SignPath is deferred, and legacy remains the production default.<br>
 Primary design: [SSH relay GitHub Release plan](./2026-07-14-ssh-relay-github-release-plan.html)<br>
 Motivating issues: [#8450](https://github.com/stablyai/orca/issues/8450), [#1693](https://github.com/stablyai/orca/issues/1693)
 
@@ -19366,6 +19366,73 @@ config/scripts/ssh-relay-runtime-workflow.test.mjs` passes 117 cases with one de
 - Residual boundary: local macOS cannot prove Win32 pipe-handle behavior or native fixture teardown.
   Exact-head Linux x64/ARM64 and Windows x64/ARM64 live proof remains mandatory. Legacy remains the
   sole production/default path; product/Beta/fallback/tuple/publication and SignPath stay absent.
+- Native proof dispatch: artifact run `29545688003` tests exact correction head
+  `4f57b885d24ad1755a5c863eaf37369208cecedb`; Windows x64/ARM64 jobs
+  `87777401200`/`87777401195` and Linux x64/ARM64 jobs `87777401256`/`87777401218` are in progress.
+  Do not count any job until its full live-transfer and exact teardown assertions complete.
+- Native POSIX proof: Linux x64 job `87777401256` is green for 124,846,430 bytes / 34 files on
+  OpenSSH 9.6p1 with 991.76 ms serial transfer, 721.90 ms at four-file concurrency, 14.09 ms
+  cancellation settlement, and bounded 3,407,872/802,816/0-byte incremental RSS. Linux ARM64 job
+  `87777401218` is green for 122,865,324 bytes / 34 files with 841.39 ms serial, 597.69 ms
+  concurrent, 14.91 ms cancellation, and bounded 4,399,104/786,432/131,072-byte incremental RSS.
+  Both use only `/bin/sh`, `mkdir`, `chmod`, `cat`, and `rm`; live SFTP, collision/cancellation,
+  cleanup, and artifact upload also pass.
+
+### E-M6-WINDOWS-NOINPUT-STANDARD-PIPE-CI-RED-001 — standard anonymous-pipe EOF is not sufficient for Win32-OpenSSH
+
+- Date/owner/head/run: 2026-07-15, Codex implementation owner; exact pushed head
+  `4f57b885d24ad1755a5c863eaf37369208cecedb`, artifact run `29545688003`, Windows x64 job
+  `87777401200` on `windows-2022`, and Windows ARM64 job `87777401195` on `windows-11-arm`.
+- Preserved native evidence: both jobs pass 100 files / 854 cases with 18 declared skips, exact
+  target-native double-build/smoke, full-size extraction/cache, official fixture trust/ACL/startup,
+  and Windows PowerShell 5.1 before the live probe. The Linux x64/ARM64 jobs listed above prove the
+  separate channel facade itself on both native POSIX architectures.
+- Shared Windows RED: destroying the parent side of a standard Node `pipe` before returning the
+  no-input channel does not change the native lifecycle. X64 times out after 31.36 seconds and ARM64
+  after 31.82 seconds with `sentinel=false`, `stdoutEnded=false`, `processExit=not-observed`, and
+  `channelClosed=false`, even though server logs prove pinned-key authentication and remote command
+  session close. Both exact `_Classes` unload and `UsrClass.dat`/profile-directory gates remain RED.
+- Course correction: standard pipes and explicit `NUL` are rejected. Before changing production
+  handles again, add a disconnected live diagnostic that compares Node's Windows `overlapped` pipe
+  with immediate parent destruction against inherited stdin as the upstream `GetStdHandle` control.
+  Require bounded settlement and exact lifecycle output on x64 and ARM64. Inherited stdin cannot be
+  selected for packaged Electron without separate no-console proof; overlapped pipe is preferred
+  only if both native architectures prove it.
+- Residual boundary: this is a RED diagnostic, not an availability exception. Legacy stays the sole
+  production/default path and no tuple, fallback, Beta, publication, or SignPath behavior changes.
+
+### E-M6-WINDOWS-NOINPUT-HANDLE-DIAGNOSTIC-LOCAL-001 — bounded native handle comparison is locally green
+
+- Date/owner/base/runner: 2026-07-15, Codex implementation owner; uncommitted diagnostic atop exact
+  standard-pipe RED head `4f57b885d24ad1755a5c863eaf37369208cecedb` on Apple arm64, macOS
+  26.2 build 25C56, Node 26.5.0, pnpm 10.24.0.
+- Diagnostic boundary: before the unchanged product full-size test, the native Windows workflow runs
+  one purpose-named live case. It first passes parent stdin through with mandatory `-n` as the
+  upstream `GetStdHandle` control, then gives `ssh.exe` Node `overlapped` stdin/stdout/stderr pipes
+  and immediately destroys only the parent stdin writer. Each attempt records only mode, bounded
+  timing, sentinel/stdout-end/process-exit/channel-close/code, and stderr byte count; it terminates at
+  8 seconds with a 10-second hard settlement bound. The inherited control must pass so a broken
+  fixture cannot falsely reject the overlapped candidate. No production handle selection changes.
+- Focused command: `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts
+--maxWorkers=1 src/main/ssh/ssh-connection.test.ts src/main/ssh/ssh-system-fallback.test.ts
+src/main/ssh/ssh-system-no-input-windows-openssh.test.ts
+src/main/ssh/ssh-relay-runtime-windows-system-ssh-openssh-full-size.test.ts
+config/scripts/ssh-relay-runtime-workflow.test.mjs` passes 117 cases with two declared native skips
+  in 10.10 seconds real; maximum RSS is 168,984,576 bytes and peak footprint is 97,507,256 bytes.
+- Release contracts: `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts
+--maxWorkers=1 --reporter=dot config/scripts/ssh-relay-runtime-*.test.mjs` passes 50 files and
+  283/283 cases in 44.50 seconds real; maximum RSS is 195,706,880 bytes and peak footprint is
+  97,343,296 bytes.
+- Static/workflow gates: `/usr/bin/time -l pnpm typecheck` passes in 5.59 seconds real with maximum
+  RSS 1,235,714,048 bytes and peak footprint 97,638,088 bytes. `/usr/bin/time -l pnpm lint` passes in
+  28.07 seconds real with only the 26 pre-existing warnings, all 41 reliability gates, and the
+  355-entry max-lines ratchet; maximum RSS is 2,066,743,296 bytes and peak footprint 98,047,832
+  bytes. Independent YAML extraction plus PowerShell `[scriptblock]::Create()` parses the exact
+  start/diagnostic+measure/stop blocks; the workflow oracle proves the diagnostic precedes the
+  full-size test and fails its step if the inherited control is invalid.
+- Residual boundary: local macOS intentionally skips the live case. Require exact-head native x64
+  and ARM64 output before selecting any Windows handle; keep profile teardown, full-size transfer,
+  default behavior, fallback, Beta, tuple publication, and SignPath separately gated.
 
 ## Accepted Gaps
 
@@ -19425,13 +19492,13 @@ The project is not complete until every applicable item below is checked with ev
 
 ## Next Required Action
 
-Commit and push the locally green isolated correction in
-`E-M6-WINDOWS-SYSTEM-SSH-TREE-LIVE-EXACT-HEAD-CORRECTION-LOCAL-001`, then require fresh exact-head
-x64/arm64 archive/native-closure/signature, ACL, PowerShell 5.1, exact
-full-size serial/four-channel/cancellation, collision, connection-reuse, and teardown evidence. Do
-not check the broad Milestone 6 Windows system-SSH item yet. Do not add an Electron/startup/product
-importer, per-target mode wiring, fallback, tuple enablement, release publication, or default
-behavior.
+Implement the purpose-named disconnected Windows no-input handle diagnostic required by
+`E-M6-WINDOWS-NOINPUT-STANDARD-PIPE-CI-RED-001`. Compare an overlapped pipe with immediate parent
+destruction against inherited stdin, keep each attempt bounded, and record sentinel/stdout-end/
+process-exit/channel-close on native x64 and ARM64. Do not change the production Windows handle or
+check the broad Milestone 6 Windows system-SSH item until the diagnostic selects a console-independent
+strategy. Do not add an Electron/startup/product importer, per-target mode wiring, fallback, tuple
+enablement, release publication, or default behavior.
 Keep Node upstream `.tar.xz` inputs, Windows ZIP, `ORCA_RELAY_PATH`, existing desktop required-assets
 behavior, detached-signature byte encoding, Windows arm64 build 26100, macOS 13.5, Linux kernel 4.18,
 release-cut, desktop builds, publication, and every tuple separately gated.

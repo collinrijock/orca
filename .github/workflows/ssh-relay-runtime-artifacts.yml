@@ -1645,6 +1645,9 @@ jobs:
           $env:HOME = $env:ORCA_SSH_RELAY_LIVE_WINDOWS_SYSTEM_SSH_CLIENT_HOME
           $env:USERPROFILE = $env:ORCA_SSH_RELAY_LIVE_WINDOWS_SYSTEM_SSH_CLIENT_HOME
           pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1 --reporter=verbose `
+            src/main/ssh/ssh-system-no-input-windows-openssh.test.ts
+          if ($LASTEXITCODE -ne 0) { throw 'Windows no-input handle diagnostic failed' }
+          pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1 --reporter=verbose `
             src/main/ssh/ssh-relay-runtime-windows-system-ssh-openssh-full-size.test.ts
           if ($LASTEXITCODE -ne 0) { throw 'full-size Windows system-SSH measurement failed' }
 

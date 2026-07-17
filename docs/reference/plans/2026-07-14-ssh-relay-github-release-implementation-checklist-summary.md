@@ -119,10 +119,16 @@ but exact run `29544909117` proves the design is unsafe. Linux x64/ARM64 jobs
 `87774941240`/`87774941211` observe an argument-less synthetic channel close before child close;
 native Windows x64 job `87774941207` reproduces Win32-OpenSSH issues #856/#1330 by executing the
 remote command but hanging with all four lifecycle fields false; ARM64 job `87774941200`
-independently returns the same lifecycle RED. The corrected contract keeps POSIX stdin ignored,
-gives Windows an anonymous pipe whose parent write end is destroyed immediately plus mandatory
-`-n`, and uses a separate no-input `Writable` facade so ending it cannot half-close the command
-channel. Exact-head proof of that correction is next.
+independently returns the same lifecycle RED. The corrected POSIX contract uses a separate no-input
+`Writable` facade so ending it cannot half-close the command channel. Exact correction head
+`4f57b885d24ad1755a5c863eaf37369208cecedb`, artifact run `29545688003`, and Linux x64/ARM64
+jobs `87777401256`/`87777401218` are green through live SFTP and restricted no-tar POSIX system
+SSH. Windows x64/ARM64 jobs `87777401200`/`87777401195` independently falsify the standard
+anonymous-pipe EOF hypothesis with the unchanged four-field timeout and profile RED. Next compare a
+console-independent overlapped pipe against inherited stdin as a diagnostic control; do not change
+the production Windows handle until native evidence selects it. The disconnected bounded diagnostic
+and workflow ordering are locally green under
+`E-M6-WINDOWS-NOINPUT-HANDLE-DIAGNOSTIC-LOCAL-001`; native x64/ARM64 execution is next.
 `E-M6-WINDOWS-SYSTEM-SSH-TREE-LIVE-AUDIT-001` fixes the loopback-only official Microsoft
 server, fixture-owned non-admin account/ACL, exact host-key trust, Windows PowerShell 5.1,
 serial/default and four-channel metrics, cancellation/collision/cleanup, and deterministic teardown
