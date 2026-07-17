@@ -1657,15 +1657,21 @@
                     created zero-length regular-file descriptor that is already at EOF before
                     <code>CreateProcess</code>; its fixture cleanup passes, but the direct client
                     still times out after the server closes the command session. The next bounded
-                    artifact-only capability is a disconnected Windows launcher with private
+                    artifact-only capability was a disconnected Windows launcher with private
                     anonymous stdin/stdout/stderr pipes, the stdin writer closed before
                     <code>CreateProcessW</code>, an exact inherited-handle list, hidden process
                     creation, bounded stdout/stderr pumps, exit propagation, and an owned job object
-                    that kills the SSH child when the launcher is cancelled. Build and live-test it
-                    on native x64/arm64 before packaging, signing, or adding a product caller. POSIX
-                    retains ignored stdin plus <code>-n</code>; fixture-owned Windows session
-                    processes settle before profile hives are boundedly unloaded and native profile
-                    deletion begins;
+                    that kills the SSH child when the launcher is cancelled. Exact native x64/arm64
+                    evidence proves that launcher compiles and passes all of those contracts, but
+                    Win32-OpenSSH still remains alive after authenticated remote command-session
+                    closure. This falsifies Node's pipe type and broad inherited-handle leakage. The
+                    next artifact-only diagnostic uses a hidden launcher-owned private real console,
+                    queues console EOF before child creation, and shares that console with the SSH
+                    child while retaining private output pipes, exact handle inheritance, job
+                    ownership, and bounded cancellation. Build and live-test it on native x64/arm64
+                    before packaging, signing, or adding a product caller. POSIX retains ignored
+                    stdin plus <code>-n</code>; fixture-owned Windows session processes settle
+                    before profile hives are boundedly unloaded and native profile deletion begins;
                     <code>MaxSessions=1</code>; interrupted upload; stale lock
                   </td>
                   <td>

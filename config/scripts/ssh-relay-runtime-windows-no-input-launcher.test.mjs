@@ -19,6 +19,7 @@ let fixtureRoot
 let launcherPath
 let childFixturePath
 let handleProbePath
+let consoleEofProbePath
 
 beforeAll(() => {
   if (process.platform !== 'win32') {
@@ -28,6 +29,7 @@ beforeAll(() => {
   launcherPath = join(fixtureRoot, 'orca-ssh-no-input.exe')
   childFixturePath = join(fixtureRoot, 'child-fixture.cjs')
   handleProbePath = join(fixtureRoot, 'windows-launcher-handle-probe.exe')
+  consoleEofProbePath = join(fixtureRoot, 'windows-console-eof-probe.exe')
   writeFileSync(childFixturePath, childFixtureSource, 'utf8')
   const build = spawnSync(process.execPath, [buildScript, '--output', launcherPath], {
     cwd: projectRoot,
@@ -57,6 +59,27 @@ beforeAll(() => {
     { cwd: projectRoot, encoding: 'utf8' }
   )
   expect(probeBuild.status, `${probeBuild.stdout}\n${probeBuild.stderr}`).toBe(0)
+
+  const eofProbeSource = join(
+    projectRoot,
+    'native',
+    'windows-ssh-no-input-launcher-test',
+    'WindowsConsoleEofProbe.cs'
+  )
+  const eofProbeBuild = spawnSync(
+    compilerPath,
+    [
+      '/nologo',
+      '/target:exe',
+      '/platform:anycpu',
+      '/optimize+',
+      '/warnaserror+',
+      `/out:${consoleEofProbePath}`,
+      eofProbeSource
+    ],
+    { cwd: projectRoot, encoding: 'utf8' }
+  )
+  expect(eofProbeBuild.status, `${eofProbeBuild.stdout}\n${eofProbeBuild.stderr}`).toBe(0)
 }, 20_000)
 
 afterAll(() => {
@@ -68,16 +91,28 @@ afterAll(() => {
 describe('Windows SSH no-input launcher', () => {
   it('keeps the artifact source scoped to the reviewed Win32 boundary', () => {
     const processSource = readFileSync(join(sourceRoot, 'WindowsSshChildProcess.cs'), 'utf8')
-    const pipeSource = readFileSync(join(sourceRoot, 'WindowsAnonymousPipeSet.cs'), 'utf8')
+    const consoleSource = readFileSync(join(sourceRoot, 'WindowsPrivateConsoleInput.cs'), 'utf8')
+    const pipeSource = readFileSync(join(sourceRoot, 'WindowsSshChildIo.cs'), 'utf8')
 
     expect(processSource).toContain('ProcThreadAttributeHandleList')
     expect(processSource).toContain('IntPtr.Size * 3')
     expect(processSource).toContain('CreateSuspended')
-    expect(processSource).toContain('CreateNoWindow')
+    expect(processSource).not.toContain('CreateNoWindow')
     expect(processSource).toContain('JobObjectLimitKillOnJobClose')
     expect(processSource).toContain('WaitForMultipleObjects')
     expect(processSource).toContain('if (processStarted && !assignedToJob)')
-    expect(pipeSource).toContain('CloseHandleChecked(stdinWrite)')
+    expect(consoleSource).toContain('AllocConsole()')
+    expect(consoleSource).toContain('"CONIN$"')
+    expect(consoleSource).toContain('ShowWindow(window, SwHide)')
+    expect(consoleSource).toContain('WriteConsoleInput')
+    expect(consoleSource).toContain('console.QueueEndOfInput()')
+    expect(processSource).toContain('WindowsPrivateConsoleInput.Create()')
+    expect(consoleSource.indexOf('console.QueueEndOfInput()')).toBeLessThan(
+      consoleSource.indexOf('return console;')
+    )
+    expect(processSource.indexOf('WindowsPrivateConsoleInput.Create()')).toBeLessThan(
+      processSource.indexOf('CreateProcess(')
+    )
     expect(pipeSource).toContain('PumpCompletionTimeoutMilliseconds')
     expect(pipeSource).toContain('pumpFailureSignal.Set()')
   })
@@ -95,14 +130,29 @@ describe('Windows SSH no-input launcher', () => {
     }
   )
 
-  itWindows('preserves exact arguments and provides child stdin EOF before execution', () => {
+  itWindows('preserves exact arguments and qualifies private-console stdin', () => {
     const args = ['', 'space value', 'quote"value', 'trailing slash\\', 'line one\nline two', '雪']
     const result = runLauncher('arguments-and-stdin', args, {
       input: Buffer.from('this input must not reach the SSH child', 'utf8')
     })
 
     expect(result.status, result.stderr.toString('utf8')).toBe(0)
-    expect(JSON.parse(result.stdout.toString('utf8'))).toEqual({ args, stdinBytes: 0 })
+    expect(JSON.parse(result.stdout.toString('utf8'))).toEqual({
+      args,
+      stdinIsTTY: true
+    })
+  })
+
+  itWindows('queues cooked private-console EOF before child execution', () => {
+    const result = spawnSync(launcherPath, [consoleEofProbePath], {
+      cwd: fixtureRoot,
+      encoding: 'utf8',
+      timeout: 10_000,
+      windowsHide: true
+    })
+
+    expect(result.status, result.stderr).toBe(0)
+    expect(result.stdout).toBe('ORCA-PRIVATE-CONSOLE-EOF bytes=0')
   })
 
   itWindows('preserves binary stdout and stderr and propagates the child exit code', () => {
@@ -219,12 +269,10 @@ async function waitForProcessExit(pid, timeoutMs) {
 
 const childFixtureSource = String.raw`const mode = process.argv[2]
 if (mode === 'arguments-and-stdin') {
-  let stdinBytes = 0
-  process.stdin.on('data', (chunk) => { stdinBytes += chunk.length })
-  process.stdin.on('end', () => {
-    process.stdout.write(JSON.stringify({ args: process.argv.slice(3), stdinBytes }))
-  })
-  process.stdin.resume()
+  process.stdout.write(JSON.stringify({
+    args: process.argv.slice(3),
+    stdinIsTTY: process.stdin.isTTY === true
+  }))
 } else if (mode === 'binary-output') {
   process.stdout.write(Buffer.from([0x00, 0xff, 0x10, 0x0a, 0x80]))
   process.stderr.write(Buffer.from([0xfe, 0x00, 0x7f, 0x0d, 0x0a]))

@@ -8,7 +8,6 @@ internal static class WindowsSshChildProcess
 {
     private const uint CreateSuspended = 0x00000004;
     private const uint ExtendedStartupInfoPresent = 0x00080000;
-    private const uint CreateNoWindow = 0x08000000;
     private const uint StartfUseStdHandles = 0x00000100;
     private const uint JobObjectLimitKillOnJobClose = 0x00002000;
     private const int JobObjectExtendedLimitInformationClass = 9;
@@ -19,7 +18,14 @@ internal static class WindowsSshChildProcess
 
     internal static int Run(string executablePath, string[] args)
     {
-        using (WindowsAnonymousPipeSet pipes = WindowsAnonymousPipeSet.Create())
+        Stream launcherStdout = Console.OpenStandardOutput();
+        Stream launcherStderr = Console.OpenStandardError();
+        using (WindowsPrivateConsoleInput console = WindowsPrivateConsoleInput.Create())
+        using (WindowsSshChildIo pipes = WindowsSshChildIo.Create(
+            console.InputHandle,
+            launcherStdout,
+            launcherStderr
+        ))
         {
             IntPtr job = IntPtr.Zero;
             IntPtr attributeList = IntPtr.Zero;
@@ -32,7 +38,9 @@ internal static class WindowsSshChildProcess
                 job = CreateKillOnCloseJob();
                 StartupInfoEx startup = CreateStartupInfo(pipes, out attributeList, out inheritedHandles);
                 StringBuilder commandLine = WindowsCommandLine.Build(executablePath, args);
-                uint flags = CreateSuspended | ExtendedStartupInfoPresent | CreateNoWindow;
+                // Why: the SSH child must share the hidden private console for CONIN$ to remain a
+                // real console handle; CREATE_NO_WINDOW would detach it from that console.
+                uint flags = CreateSuspended | ExtendedStartupInfoPresent;
                 if (!CreateProcess(
                     executablePath,
                     commandLine,
@@ -125,7 +133,7 @@ internal static class WindowsSshChildProcess
     }
 
     private static StartupInfoEx CreateStartupInfo(
-        WindowsAnonymousPipeSet pipes,
+        WindowsSshChildIo pipes,
         out IntPtr attributeList,
         out IntPtr inheritedHandles
     )

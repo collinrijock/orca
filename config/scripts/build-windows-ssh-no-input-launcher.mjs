@@ -12,8 +12,9 @@ const repoRoot = resolve(import.meta.dirname, '../..')
 const sourceRoot = join(repoRoot, 'native', 'windows-ssh-no-input-launcher')
 const sourcePaths = [
   'OrcaSshNoInputLauncher.cs',
-  'WindowsAnonymousPipeSet.cs',
   'WindowsCommandLine.cs',
+  'WindowsPrivateConsoleInput.cs',
+  'WindowsSshChildIo.cs',
   'WindowsSshChildProcess.cs'
 ].map((name) => join(sourceRoot, name))
 const outputPath = readArg('--output') ?? join(sourceRoot, '.build', 'orca-ssh-no-input.exe')

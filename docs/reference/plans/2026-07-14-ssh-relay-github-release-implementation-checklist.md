@@ -7,9 +7,9 @@ This file is the detailed evidence ledger. Use the tracker above for project sta
 work; keep exact commands, runner identities, hashes, metrics, and residual gaps here.
 
 Date created: 2026-07-14<br>
-Last updated: 2026-07-15<br>
-Current phase: Milestone 6 / Work Package 5 bounded runtime transfer — **In progress — 2026-07-15, Codex implementation owner: disconnected Windows launcher compiler correction**. `E-M6-WINDOWS-NOINPUT-LAUNCHER-COMPILE-CI-RED-001` records exact head `1f220a7135b83ef4c5f035ab729c114e828bf5b3`, run `29550660572`, and the same `CS0102` identifier collision from Windows x64/ARM64 jobs `87792250731`/`87792250710`. Rename only the integer job-information-class constant, re-prove local contracts, and require fresh native x64/ARM64 evidence. Keep every capability disconnected from every production/default SSH path. Real Apple/SignPath rehearsals remain deferred.<br>
-Session checkpoint: **LAUNCHER LOCAL CONTRACTS GREEN / X64 AND ARM64 LEGACY COMPILERS RED / ONE-IDENTIFIER CORRECTION ACTIVE — 2026-07-15, Codex implementation owner** — local focused 119/119, release contracts 285/285, typecheck, full lint/reliability/max-lines, formatting, diff, and resolver isolation pass. Both native jobs independently reject the constant/structure name collision before producing an executable or reaching live SSH; the runner-temp build, live fixture, full-size test, upload, production caller, legacy behavior, Beta, tuple publication, and SignPath remain untouched. Rename only `JobObjectExtendedLimitInformation` constant to `JobObjectExtendedLimitInformationClass`, commit/push, and rerun both native architectures.<br>
+Last updated: 2026-07-16<br>
+Current phase: Milestone 6 / Work Package 5 bounded runtime transfer — **In progress — 2026-07-16, Codex implementation owner: disconnected private-console Windows diagnostic native proof**. `E-M6-WINDOWS-PRIVATE-CONSOLE-LOCAL-001` records the unpackaged, unsigned, runner-temp diagnostic locally green. Commit/push only this artifact-only package and require fresh Windows x64/ARM64 legacy-compiler, real-console qualification, pre-execution cooked EOF, argv/binary/exit/handle-exclusion/cancellation, live lifecycle, and exact teardown proof. Keep every capability disconnected from every production/default SSH path. Real Apple/SignPath rehearsals remain deferred.<br>
+Session checkpoint: **PRIVATE CONSOLE CONTRACTS LOCALLY GREEN / X64 AND ARM64 NATIVE PROOF REQUIRED — 2026-07-16, Codex implementation owner** — the launcher captures its caller output streams, detaches from any inherited console, allocates and hides a private console, queues Ctrl+Z plus Enter into `CONIN$` before child creation, and shares that console with the suspended/job-owned child while retaining private stdout/stderr pipes and the exact three-handle list. A dedicated native probe requires character-device stdin, successful `GetConsoleMode`, and zero-byte cooked `ReadFile`. Local focused 119/119 with seven native skips, release contracts 285/285 with five native skips, typecheck, full lint/reliability/max-lines, formatting, diff, and resolver isolation pass. No product caller, full-size transfer claim, upload, default/fallback, Beta, tuple publication, or signing behavior changed.<br>
 Primary design: [SSH relay GitHub Release plan](./2026-07-14-ssh-relay-github-release-plan.html)<br>
 Motivating issues: [#8450](https://github.com/stablyai/orca/issues/8450), [#1693](https://github.com/stablyai/orca/issues/1693)
 
@@ -19627,8 +19627,8 @@ config/scripts/ssh-relay-runtime-workflow.test.mjs` passes 117 cases with two de
   `eee686d7f6203c88f00d607711d3816aaf444c61`, artifact run `29549252407`, Windows x64 job
   `87788106340` on `windows-2022`, and Windows ARM64 job `87788106351` on `windows-11-arm`.
 - Exact log command: `gh api repos/stablyai/orca/actions/jobs/<job-id>/logs | rg -n -C 15
-  'ssh_windows_no_input_handle_diagnostic|Windows no-input handle diagnostic failed|profile
-  teardown:|UsrClass.dat|regular-file-eof-no-n|stdinFixtureRemoved|sentinel|stderrBytes'` for each
+'ssh_windows_no_input_handle_diagnostic|Windows no-input handle diagnostic failed|profile
+teardown:|UsrClass.dat|regular-file-eof-no-n|stdinFixtureRemoved|sentinel|stderrBytes'` for each
   job.
 - Native result: x64 returns `success=false`, `timedOut=true`, `sentinel=false`,
   `stdoutEnded=true`, `processExit=null`, `channelClosed=true`, `closeCode=null`, `stderrBytes=0`,
@@ -19678,15 +19678,15 @@ config/scripts/ssh-relay-runtime-workflow.test.mjs` passes 117 cases with two de
   references in that step. Runtime archives, release evidence, product imports, production system-
   SSH arguments/handles, legacy fallback/default, Beta, tuple publication, and signing are unchanged.
 - Focused command: `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts
-  --maxWorkers=1 src/main/ssh/ssh-connection.test.ts src/main/ssh/ssh-system-fallback.test.ts
-  src/main/ssh/ssh-system-no-input-windows-openssh.test.ts
-  src/main/ssh/ssh-relay-runtime-windows-system-ssh-openssh-full-size.test.ts
-  config/scripts/ssh-relay-runtime-windows-no-input-launcher.test.mjs
-  config/scripts/ssh-relay-runtime-workflow.test.mjs` passes 119 cases with six declared native
+--maxWorkers=1 src/main/ssh/ssh-connection.test.ts src/main/ssh/ssh-system-fallback.test.ts
+src/main/ssh/ssh-system-no-input-windows-openssh.test.ts
+src/main/ssh/ssh-relay-runtime-windows-system-ssh-openssh-full-size.test.ts
+config/scripts/ssh-relay-runtime-windows-no-input-launcher.test.mjs
+config/scripts/ssh-relay-runtime-workflow.test.mjs` passes 119 cases with six declared native
   skips in 4.73 seconds real; maximum RSS is 167,936,000 bytes and peak footprint is 98,735,864
   bytes.
 - Release contracts: `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts
-  --maxWorkers=1 --reporter=dot config/scripts/ssh-relay-runtime-*.test.mjs` passes 51 files and
+--maxWorkers=1 --reporter=dot config/scripts/ssh-relay-runtime-*.test.mjs` passes 51 files and
   285/285 runnable cases with four declared Windows skips in 25.07 seconds real; maximum RSS is
   195,428,352 bytes and peak footprint is 97,638,160 bytes. One preceding quoted-glob invocation
   selected no files and exited 1; it is recorded as operator error and is not evidence.
@@ -19709,7 +19709,7 @@ config/scripts/ssh-relay-runtime-workflow.test.mjs` passes 117 cases with two de
   `1f220a7135b83ef4c5f035ab729c114e828bf5b3`, artifact run `29550660572`, Windows x64 job
   `87792250731` on `windows-2022`, and Windows ARM64 job `87792250710` on `windows-11-arm`.
 - Exact log command: `gh api repos/stablyai/orca/actions/jobs/<job-id>/logs | rg -n -C 8
-  'WindowsSshChildProcess.cs\\(14|error CS0102|Failed Suites|runtime-windows-no-input-launcher'`
+'WindowsSshChildProcess.cs\\(14|error CS0102|Failed Suites|runtime-windows-no-input-launcher'`
   for each job.
 - Native result: both architectures reach the purpose-named contract suite and the .NET Framework
   compiler independently returns `CS0102`: the integer job-information-class constant and the
@@ -19728,6 +19728,84 @@ config/scripts/ssh-relay-runtime-workflow.test.mjs` passes 117 cases with two de
   skips; the exact release-contract command passes 51 files and 285/285 runnable cases with four
   declared Windows skips. Syntax, `git diff --check`, and protected-resolver zero-diff pass. Commit/
   push the correction and require both native architectures from the corrected exact head.
+
+### E-M6-WINDOWS-NOINPUT-LAUNCHER-LIVE-CI-RED-001 — private redirected pipes do not settle Win32-OpenSSH
+
+- Date/owner/head/run: 2026-07-16, Codex implementation owner; exact pushed head
+  `6a716de14884f9c08c1e08140f87849f137622e2`, artifact run `29551003702`, Windows x64 job
+  `87793308016` on `windows-2022`, and Windows ARM64 job `87793308044` on `windows-11-arm`.
+  GitHub records the jobs from 2026-07-17 02:53Z through 03:03Z.
+- Native launcher proof: both architectures compile with the legacy .NET Framework compiler and
+  pass exact argv quoting, pre-execution stdin EOF, binary stdout/stderr, exit-code propagation,
+  unrelated inherited-handle exclusion, job-owned cancellation, and bounded settlement. Each full
+  artifact contract step passes 101 files, 859 runnable cases, and 19 declared skips. Both jobs
+  build and verify the unchanged full runtime before starting the disconnected live fixture.
+- Live x64 result: `elapsedMs=8024.0679`, `success=false`, `timedOut=true`, `sentinel=false`,
+  `stdoutEnded=true`, `processExit=null`, `channelClosed=true`, `closeCode=null`, and
+  `stderrBytes=0`.
+- Live ARM64 result: `elapsedMs=8031.6544` with the same remaining lifecycle fields. Both official
+  server logs prove authentication and remote command-session closure. The launcher remains alive
+  until the bounded diagnostic terminates it, so this is not transfer or enablement evidence.
+- Teardown result: both exact owned-profile teardowns remain RED because `UsrClass.dat` is locked.
+  The workflow correctly stops before the unchanged product full-size Windows transfer and upload.
+  All non-Windows primary jobs and both Linux oldest-userland supplements pass in the same run.
+- Interpretation: Node's Windows pipe type and broad inherited-handle leakage are falsified as the
+  cause. Win32-OpenSSH issue #1330 separately reports the same hang when all standard handles are
+  redirected, including cases where `-n`/NUL and `-T` do not help, while a real console stdin
+  behaves differently. Do not add sentinel-based forced success or kill-after-output: trustworthy
+  remote exit-status framing would be a separate reviewed protocol contract.
+- Next bounded diagnostic: allocate a launcher-owned private console, hide it, open `CONIN$`, queue
+  console EOF input before `CreateProcessW`, and share that console with the SSH child. Retain
+  private stdout/stderr pipes, the exact three-handle inheritance list, suspended job assignment,
+  bounded pumps, exit propagation, and cancellation ownership. First prove the precise console EOF
+  semantics with a native purpose-named probe, then require the live x64 and ARM64 lifecycle and
+  exact teardown. Keep the executable runner-temp-only and disconnected from product packaging.
+
+### E-M6-WINDOWS-PRIVATE-CONSOLE-LOCAL-001 — private real-console candidate is locally contract-green
+
+- Date/owner/base/runner: 2026-07-16, Codex implementation owner; uncommitted capability atop exact
+  private-pipe RED head `6a716de14884f9c08c1e08140f87849f137622e2` on Apple arm64, macOS 26.2
+  build 25C56, Node 26.5.0, and pnpm 10.24.0.
+- Source audit: PowerShell/openssh-portable exact source `e98b11e5de035cbd0eecbddc95a87da42f14671f`
+  initializes Win32 standard handles as synchronous external I/O, classifies console input as
+  `FILE_TYPE_CHAR`, and routes it through the dedicated synchronous console `ReadFile` path in
+  `contrib/win32/win32compat/w32fd.c`, `fileio.c`, and `termio.c`. Orca's existing `-T` in
+  `system-ssh-args.ts` prevents real-console stdin from requesting a remote PTY.
+- Artifact boundary: the launcher captures its caller's stdout/stderr streams before detaching from
+  any inherited console, allocates a private console, hides any console window, opens inheritable
+  `CONIN$`, selects processed line input, flushes it, and queues Ctrl+Z key-down/up plus Enter key-
+  down/up before `CreateProcessW`. The child shares that private console; `CREATE_NO_WINDOW` is
+  deliberately absent because it would detach the child from the console. Private anonymous stdout/
+  stderr pipes, exact three-handle inheritance, suspended job assignment, bounded pumps, exit
+  propagation, and kill-on-job-close cancellation remain intact.
+- Native contract design: a purpose-named legacy-compiler probe rejects non-character stdin or
+  failed `GetConsoleMode`, selects cooked input, directly calls `ReadFile`, and requires zero bytes.
+  The existing suite separately requires console-qualified stdin plus exact argv, binary output,
+  exit propagation, unrelated inherited-handle exclusion, and bounded job-owned cancellation.
+  Five Windows-native cases are declared skips locally; neither the console semantics nor the live
+  OpenSSH result is claimed without x64 and ARM64 runners.
+- Focused command: `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts
+--maxWorkers=1 src/main/ssh/ssh-connection.test.ts src/main/ssh/ssh-system-fallback.test.ts
+src/main/ssh/ssh-system-no-input-windows-openssh.test.ts
+src/main/ssh/ssh-relay-runtime-windows-system-ssh-openssh-full-size.test.ts
+config/scripts/ssh-relay-runtime-windows-no-input-launcher.test.mjs
+config/scripts/ssh-relay-runtime-workflow.test.mjs` passes 119 runnable cases with seven declared
+  native/live skips in 3.27 seconds real; maximum RSS is 171,180,032 bytes and peak footprint is
+  96,999,352 bytes.
+- Release contracts: `pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1
+--reporter=dot config/scripts/ssh-relay-runtime-*.test.mjs` passes 51 files and 285/285 runnable
+  cases with five declared Windows skips in 16.17 seconds. One prior quoted-glob invocation selected
+  no files and exited 1; it is operator error and not evidence.
+- Static gates: `/usr/bin/time -l pnpm typecheck` passes in 3.55 seconds real with maximum RSS
+  1,257,357,312 bytes and peak footprint 97,507,040 bytes. `/usr/bin/time -l pnpm lint` passes in
+  19.82 seconds real with the same 26 existing warnings, all 41 reliability gates, and the 355-entry
+  max-lines ratchet; maximum RSS is 2,041,757,696 bytes and peak footprint 97,179,360 bytes. Purpose-
+  file formatting, syntax, `git diff --check`, and protected-resolver zero-diff pass.
+- Residual boundary: commit/push this exact artifact-only package and require native x64/ARM64
+  legacy compilation plus all purpose-named contracts before interpreting the live result. A green
+  live diagnostic still would not authorize product packaging/caller, full-size transfer, fallback,
+  Beta, tuple enablement, publication, default behavior, or signing. A RED native probe or live
+  result must be recorded before selecting another mechanism such as ConPTY.
 
 ## Accepted Gaps
 
@@ -19787,10 +19865,10 @@ The project is not complete until every applicable item below is checked with ev
 
 ## Next Required Action
 
-Commit and push only the one-identifier compiler correction recorded by
-`E-M6-WINDOWS-NOINPUT-LAUNCHER-COMPILE-CI-RED-001`, then require exact-head Windows x64 and ARM64 legacy-
-compiler, argv/EOF/binary/exit/handle-exclusion/cancellation, live diagnostic, and exact profile/
-directory teardown evidence. Do not
+Commit and push only the private real-console stdin diagnostic recorded by
+`E-M6-WINDOWS-PRIVATE-CONSOLE-LOCAL-001`, then require exact-head Windows x64 and ARM64 legacy-
+compiler, console qualification/EOF, argv/binary/exit/handle-exclusion/cancellation, live
+diagnostic, and exact profile/directory teardown evidence. Do not
 change the production Windows handle or check the broad Milestone 6 Windows system-SSH item until
 both architectures select the same console-independent strategy. Do not add an
 Electron/startup/product importer, per-target mode wiring, fallback, tuple

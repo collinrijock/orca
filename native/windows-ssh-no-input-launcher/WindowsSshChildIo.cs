@@ -6,12 +6,14 @@ using System.Runtime.InteropServices;
 using System.Threading;
 using Microsoft.Win32.SafeHandles;
 
-internal sealed class WindowsAnonymousPipeSet : IDisposable
+internal sealed class WindowsSshChildIo : IDisposable
 {
     private const uint HandleFlagInherit = 0x00000001;
     private const int PumpCompletionTimeoutMilliseconds = 5000;
 
-    private IntPtr stdinRead;
+    private readonly IntPtr stdinRead;
+    private readonly Stream stdoutDestination;
+    private readonly Stream stderrDestination;
     private IntPtr stdoutWrite;
     private IntPtr stderrWrite;
     private SafeFileHandle stdoutRead;
@@ -21,8 +23,15 @@ internal sealed class WindowsAnonymousPipeSet : IDisposable
     private Exception pumpFailure;
     private readonly ManualResetEvent pumpFailureSignal = new ManualResetEvent(false);
 
-    private WindowsAnonymousPipeSet()
+    private WindowsSshChildIo(
+        IntPtr stdinRead,
+        Stream stdoutDestination,
+        Stream stderrDestination
+    )
     {
+        this.stdinRead = stdinRead;
+        this.stdoutDestination = stdoutDestination;
+        this.stderrDestination = stderrDestination;
     }
 
     internal IntPtr StdinRead { get { return stdinRead; } }
@@ -33,20 +42,22 @@ internal sealed class WindowsAnonymousPipeSet : IDisposable
         get { return pumpFailureSignal.SafeWaitHandle.DangerousGetHandle(); }
     }
 
-    internal static WindowsAnonymousPipeSet Create()
+    internal static WindowsSshChildIo Create(
+        IntPtr stdinRead,
+        Stream stdoutDestination,
+        Stream stderrDestination
+    )
     {
-        WindowsAnonymousPipeSet pipes = new WindowsAnonymousPipeSet();
+        WindowsSshChildIo pipes = new WindowsSshChildIo(
+            stdinRead,
+            stdoutDestination,
+            stderrDestination
+        );
         try
         {
             SecurityAttributes security = new SecurityAttributes();
             security.Length = Marshal.SizeOf(typeof(SecurityAttributes));
             security.InheritHandle = true;
-
-            IntPtr stdinWrite;
-            CreateCheckedPipe(out pipes.stdinRead, out stdinWrite, security);
-            SetNonInheritable(stdinWrite);
-            // Why: Win32-OpenSSH must see EOF before CreateProcessW, not after startup.
-            CloseHandleChecked(stdinWrite);
 
             IntPtr stdoutReadHandle;
             CreateCheckedPipe(out stdoutReadHandle, out pipes.stdoutWrite, security);
@@ -68,7 +79,6 @@ internal sealed class WindowsAnonymousPipeSet : IDisposable
 
     internal void CloseChildEndsInParent()
     {
-        CloseOwnedHandle(ref stdinRead);
         CloseOwnedHandle(ref stdoutWrite);
         CloseOwnedHandle(ref stderrWrite);
     }
@@ -77,11 +87,11 @@ internal sealed class WindowsAnonymousPipeSet : IDisposable
     {
         SafeFileHandle stdoutHandle = stdoutRead;
         stdoutRead = null;
-        stdoutPump = StartPump(stdoutHandle, Console.OpenStandardOutput(), "stdout");
+        stdoutPump = StartPump(stdoutHandle, stdoutDestination, "stdout");
 
         SafeFileHandle stderrHandle = stderrRead;
         stderrRead = null;
-        stderrPump = StartPump(stderrHandle, Console.OpenStandardError(), "stderr");
+        stderrPump = StartPump(stderrHandle, stderrDestination, "stderr");
     }
 
     internal void CompletePumps()
@@ -205,14 +215,6 @@ internal sealed class WindowsAnonymousPipeSet : IDisposable
             int error = Marshal.GetLastWin32Error();
             CloseHandle(handle);
             throw new Win32Exception(error, "SetHandleInformation failed.");
-        }
-    }
-
-    private static void CloseHandleChecked(IntPtr handle)
-    {
-        if (!CloseHandle(handle))
-        {
-            throw new Win32Exception(Marshal.GetLastWin32Error(), "CloseHandle failed.");
         }
     }
 

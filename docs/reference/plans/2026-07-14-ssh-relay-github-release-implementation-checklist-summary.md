@@ -1,6 +1,6 @@
 # SSH Relay Runtime Distribution — Short Implementation Checklist
 
-Last updated: 2026-07-15
+Last updated: 2026-07-16
 
 Use this file to track the project. The
 [detailed evidence ledger](./2026-07-14-ssh-relay-github-release-implementation-checklist.md)
@@ -9,8 +9,8 @@ keeps commands, hashes, runner identities, timings, and failure details.
 A checked box means the work has evidence in the detailed ledger. Design approval alone does not
 complete a box.
 
-Active checkpoint: **Milestone 6 / Work Package 5 bounded runtime transfer — disconnected Windows
-launcher compiler correction, 2026-07-15, Codex implementation owner.**
+Active checkpoint: **Milestone 6 / Work Package 5 bounded runtime transfer — disconnected private-
+console Windows diagnostic, 2026-07-16, Codex implementation owner.**
 `E-M6-WINDOWS-SYSTEM-SSH-TREE-LIVE-PORTABLE-FIXTURE-LOCAL-001` records the portable-fixture
 correction locally green: the no-Orca-publication workflow oracle permits the one exact pinned
 Microsoft fixture release URL while Orca release URLs, `gh release`, and `contents: write` remain
@@ -168,7 +168,26 @@ ARM64 live evidence next. Do not package or call it from production; SignPath re
 `29550660572`, and independent x64/ARM64 jobs `87792250731`/`87792250710`: both legacy compilers
 reject one constant/structure identifier collision before emitting an executable. The isolated
 correction renames only the integer information-class constant; focused 12/12 and release contracts
-285/285 pass locally. Commit/push and rerun both architectures next.
+285/285 pass locally. Corrected exact head `6a716de14`, run `29551003702`, and x64/ARM64 jobs
+`87793308016`/`87793308044` then pass legacy compilation and every native launcher contract plus the
+complete 101-file/859-case artifact contract step, but the live diagnostic still times out after
+8024.0679/8031.6544 milliseconds. Both observe ended stdout, a closed SSH channel, no sentinel or
+process exit, and zero stderr; both exact profile teardowns remain RED on locked `UsrClass.dat`.
+`E-M6-WINDOWS-NOINPUT-LAUNCHER-LIVE-CI-RED-001` therefore falsifies Node's pipe type and broad
+inherited-handle leakage. Next test only a hidden launcher-owned real-console stdin with console EOF
+queued before child creation while retaining private output pipes, exact handle inheritance, job
+ownership, and bounded cancellation. Keep it runner-temp-only and disconnected from product;
+SignPath remains deferred.
+`E-M6-WINDOWS-PRIVATE-CONSOLE-LOCAL-001` records the replacement candidate locally green. It
+captures launcher output before detaching, allocates and hides a private console, queues Ctrl+Z plus
+Enter into `CONIN$` before child creation, and shares that console with the suspended/job-owned SSH
+child while retaining private output pipes and the exact three-handle list. A dedicated native probe
+requires character-device stdin, successful `GetConsoleMode`, and a zero-byte cooked `ReadFile`.
+Focused 119/119 with seven native skips, all 285 release contracts with five native skips, typecheck,
+full lint/reliability/max-lines, formatting, diff, and protected-resolver isolation pass. Commit/push
+this artifact-only package and require fresh x64/ARM64 compiler, console/EOF, launcher, live SSH, and
+exact teardown proof; no product, Beta, fallback, tuple, publication, default, or SignPath work is
+included.
 `E-M6-WINDOWS-SYSTEM-SSH-TREE-LIVE-AUDIT-001` fixes the loopback-only official Microsoft
 server, fixture-owned non-admin account/ACL, exact host-key trust, Windows PowerShell 5.1,
 serial/default and four-channel metrics, cancellation/collision/cleanup, and deterministic teardown
