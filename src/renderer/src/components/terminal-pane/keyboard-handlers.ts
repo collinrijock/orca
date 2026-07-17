@@ -6,12 +6,9 @@ import type { IDisposable } from '@xterm/xterm'
 import type { ManagedPane, PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { PtyTransport } from './pty-transport'
 import { safeFind } from '../terminal-search-safe-find'
-import {
-  consumeNativeOnlyTerminalShortcutCompanion,
-  getTerminalShortcutKeyIdentity,
-  resolveTerminalShortcutAction
-} from './terminal-shortcut-policy'
+import { resolveTerminalShortcutAction } from './terminal-shortcut-policy'
 import type { MacOptionAsAlt } from './terminal-shortcut-policy'
+import { createTerminalNativeOnlyShortcutTracker } from './terminal-native-only-shortcut'
 import {
   keybindingMatchesAction,
   type KeybindingOverrides,
@@ -264,7 +261,7 @@ export function useTerminalKeyboardShortcuts({
     // held. To distinguish left vs right Option, we record the Option key's
     // location from its own keydown event and clear it on keyup.
     let optionKeyLocation = 0
-    const pendingNativeOnlyShortcutKeys = new Set<string>()
+    const nativeOnlyShortcutTracker = createTerminalNativeOnlyShortcutTracker()
     const onModifierDown = (e: KeyboardEvent): void => {
       if (e.key === 'Alt') {
         optionKeyLocation = e.location
@@ -305,10 +302,9 @@ export function useTerminalKeyboardShortcuts({
     }
 
     const onKeyDown = (e: KeyboardEvent): void => {
-      const shortcutKeyIdentity = getTerminalShortcutKeyIdentity(e)
-      // Why: companions only attach to the latest native-only chord; clear so a
-      // lost keyup (blur/focus steal) cannot suppress later Space text forever.
-      pendingNativeOnlyShortcutKeys.clear()
+      // Why: replace stale state only for this physical key so rollover cannot
+      // disarm a still-held native-only chord before its Kitty keyup arrives.
+      nativeOnlyShortcutTracker.prepareKeyDown(e)
       const manager = managerRef.current
       if (!manager) {
         return
@@ -410,7 +406,7 @@ export function useTerminalKeyboardShortcuts({
       if (action.type === 'switchInputSource') {
         // Why: the OS must receive its default action, while xterm must receive
         // none of the keydown, keypress, or keyup sequence.
-        pendingNativeOnlyShortcutKeys.add(shortcutKeyIdentity)
+        nativeOnlyShortcutTracker.armKeyDown(e)
         e.stopImmediatePropagation()
         return
       }
@@ -625,7 +621,7 @@ export function useTerminalKeyboardShortcuts({
     }
 
     const onNativeOnlyShortcutCompanion = (e: KeyboardEvent): void => {
-      if (consumeNativeOnlyTerminalShortcutCompanion(e, pendingNativeOnlyShortcutKeys)) {
+      if (nativeOnlyShortcutTracker.consumeCompanion(e)) {
         // Why: canceling only the companion keypress prevents Chromium's text
         // insertion without canceling the keydown default used by the OS switch.
         if (e.type === 'keypress') {
@@ -635,13 +631,10 @@ export function useTerminalKeyboardShortcuts({
       }
     }
 
-    // Why: modern Chromium can insert via beforeinput even when keydown is not
-    // preventDefault-ed; block insertText only while a native-only chord is live.
+    // Why: modern Chromium can skip keypress and insert via beforeinput; block
+    // only this chord's text so an IME commit in the same window remains intact.
     const onNativeOnlyBeforeInput = (e: Event): void => {
-      if (pendingNativeOnlyShortcutKeys.size === 0) {
-        return
-      }
-      if (!(e instanceof InputEvent) || e.inputType !== 'insertText') {
+      if (!(e instanceof InputEvent) || !nativeOnlyShortcutTracker.shouldSuppressBeforeInput(e)) {
         return
       }
       e.preventDefault()
@@ -649,7 +642,7 @@ export function useTerminalKeyboardShortcuts({
     }
 
     const onNativeOnlyBlur = (): void => {
-      pendingNativeOnlyShortcutKeys.clear()
+      nativeOnlyShortcutTracker.clear()
     }
 
     window.addEventListener('keydown', onModifierDown, { capture: true })

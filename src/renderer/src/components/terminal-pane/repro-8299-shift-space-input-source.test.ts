@@ -11,8 +11,10 @@
  */
 import { describe, expect, it } from 'vitest'
 import {
-  consumeNativeOnlyTerminalShortcutCompanion,
-  getTerminalShortcutKeyIdentity,
+  createTerminalNativeOnlyShortcutTracker,
+  getTerminalShortcutKeyIdentity
+} from './terminal-native-only-shortcut'
+import {
   resolveTerminalShortcutAction,
   type TerminalShortcutEvent
 } from './terminal-shortcut-policy'
@@ -70,7 +72,7 @@ describe('issue #8299 Shift+Space input-source switch regression', () => {
   })
 
   it('leaves unbound Shift+Space as non-action on macOS/Linux/Windows', () => {
-    // Why: Ghostty parity is opt-in; non-IME users keep ordinary Space input.
+    // Why: native-only behavior is opt-in; non-IME users keep ordinary Space input.
     for (const [isMac, isWindows] of [
       [true, false],
       [false, false],
@@ -118,17 +120,11 @@ describe('issue #8299 Shift+Space input-source switch regression', () => {
 
   it('suppresses keypress/keyup companions including keypress without code', () => {
     // Why: Chromium keypress may omit code and only report key:" ".
-    const pending = new Set([
-      getTerminalShortcutKeyIdentity(shortcutEvent({ key: ' ', code: 'Space', shiftKey: true }))
-    ])
-    expect(pending.has('Space')).toBe(true)
-    expect(
-      consumeNativeOnlyTerminalShortcutCompanion({ type: 'keypress', key: ' ' }, pending)
-    ).toBe(true)
-    expect(consumeNativeOnlyTerminalShortcutCompanion({ type: 'keyup', key: ' ' }, pending)).toBe(
-      true
-    )
-    expect(pending.size).toBe(0)
+    const tracker = createTerminalNativeOnlyShortcutTracker()
+    tracker.armKeyDown(shortcutEvent({ key: ' ', code: 'Space', shiftKey: true }))
+    expect(tracker.consumeCompanion({ type: 'keypress', key: ' ' })).toBe(true)
+    expect(tracker.consumeCompanion({ type: 'keyup', key: ' ' })).toBe(true)
+    expect(tracker.consumeCompanion({ type: 'keyup', key: ' ' })).toBe(false)
   })
 
   it('normalizes Space identities across key/code aliases', () => {
@@ -139,19 +135,47 @@ describe('issue #8299 Shift+Space input-source switch regression', () => {
   })
 
   it('does not suppress unrelated companions while Space is pending', () => {
-    const pending = new Set(['Space'])
+    const tracker = createTerminalNativeOnlyShortcutTracker()
+    tracker.armKeyDown({ key: ' ', code: 'Space' })
+    expect(tracker.consumeCompanion({ type: 'keypress', key: 'a', code: 'KeyA' })).toBe(false)
+    expect(tracker.consumeCompanion({ type: 'keydown', key: ' ', code: 'Space' })).toBe(false)
+    expect(tracker.consumeCompanion({ type: 'keypress', key: ' ' })).toBe(true)
+  })
+
+  it('keeps Space armed through unrelated key rollover until its keyup', () => {
+    const tracker = createTerminalNativeOnlyShortcutTracker()
+    tracker.armKeyDown({ key: ' ', code: 'Space' })
+    tracker.prepareKeyDown({ key: 'a', code: 'KeyA' })
+
     expect(
-      consumeNativeOnlyTerminalShortcutCompanion(
-        { type: 'keypress', key: 'a', code: 'KeyA' },
-        pending
-      )
+      tracker.shouldSuppressBeforeInput({ data: 'a', inputType: 'insertText', isComposing: false })
+    ).toBe(false)
+    expect(tracker.consumeCompanion({ type: 'keyup', key: ' ', code: 'Space' })).toBe(true)
+  })
+
+  it('replaces stale state when the same physical key is pressed again', () => {
+    const tracker = createTerminalNativeOnlyShortcutTracker()
+    tracker.armKeyDown({ key: ' ', code: 'Space' })
+    tracker.prepareKeyDown({ key: ' ', code: 'Space' })
+
+    expect(tracker.consumeCompanion({ type: 'keyup', key: ' ', code: 'Space' })).toBe(false)
+  })
+
+  it('suppresses only the shortcut text on the beforeinput fallback', () => {
+    const tracker = createTerminalNativeOnlyShortcutTracker()
+    tracker.armKeyDown({ key: ' ', code: 'Space' })
+    expect(
+      tracker.shouldSuppressBeforeInput({ data: ' ', inputType: 'insertText', isComposing: false })
+    ).toBe(true)
+    expect(
+      tracker.shouldSuppressBeforeInput({ data: '한', inputType: 'insertText', isComposing: false })
     ).toBe(false)
     expect(
-      consumeNativeOnlyTerminalShortcutCompanion(
-        { type: 'keydown', key: ' ', code: 'Space' },
-        pending
-      )
+      tracker.shouldSuppressBeforeInput({
+        data: ' ',
+        inputType: 'insertCompositionText',
+        isComposing: true
+      })
     ).toBe(false)
-    expect(pending.has('Space')).toBe(true)
   })
 })

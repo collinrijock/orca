@@ -1,7 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
+import { createTerminalNativeOnlyShortcutTracker } from './terminal-native-only-shortcut'
 import {
-  consumeNativeOnlyTerminalShortcutCompanion,
-  getTerminalShortcutKeyIdentity,
   resolveTerminalShortcutAction,
   type TerminalShortcutEvent
 } from './terminal-shortcut-policy'
@@ -712,23 +711,12 @@ describe('resolveTerminalShortcutAction', () => {
   })
 
   it('suppresses the full companion event sequence for a native-only shortcut', () => {
-    const pendingKeys = new Set([
-      getTerminalShortcutKeyIdentity(event({ key: ' ', code: 'Space', shiftKey: true }))
-    ])
+    const tracker = createTerminalNativeOnlyShortcutTracker()
+    tracker.armKeyDown(event({ key: ' ', code: 'Space', shiftKey: true }))
 
-    expect(
-      consumeNativeOnlyTerminalShortcutCompanion(
-        { type: 'keypress', key: ' ', code: 'Space' },
-        pendingKeys
-      )
-    ).toBe(true)
-    expect(
-      consumeNativeOnlyTerminalShortcutCompanion(
-        { type: 'keyup', key: ' ', code: 'Space' },
-        pendingKeys
-      )
-    ).toBe(true)
-    expect(pendingKeys.size).toBe(0)
+    expect(tracker.consumeCompanion({ type: 'keypress', key: ' ', code: 'Space' })).toBe(true)
+    expect(tracker.consumeCompanion({ type: 'keyup', key: ' ', code: 'Space' })).toBe(true)
+    expect(tracker.consumeCompanion({ type: 'keyup', key: ' ', code: 'Space' })).toBe(false)
   })
 })
 
