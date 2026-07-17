@@ -326,7 +326,14 @@ function SkillFreshnessUpdateDialogGate(): React.JSX.Element | null {
     getSkillFreshnessUpdateDialogRequest,
     getSkillFreshnessUpdateDialogRequest
   )
-  if (!requested) {
+  // Why: stay mounted after the first request — closing consumes the request
+  // in the same commit `open` flips false, and unmounting then would cut off
+  // Radix's exit animation.
+  const everRequestedRef = useRef(false)
+  if (requested) {
+    everRequestedRef.current = true
+  }
+  if (!everRequestedRef.current) {
     return null
   }
   return (

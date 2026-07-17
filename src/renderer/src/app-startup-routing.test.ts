@@ -238,7 +238,7 @@ describe('renderer startup runtime routing', () => {
 
     expect(source).toContain("import('./LinearAgentSkillSetupDialog').then")
     expect(source).not.toContain("from './LinearAgentSkillSetupDialog'")
-    expect(source).toContain('const setupDialog = setupDialogOpen ?')
+    expect(source).toContain('const setupDialog = setupDialogEverOpenedRef.current ?')
   })
 
   it('loads worktree note Markdown only with the hover detail surface', () => {

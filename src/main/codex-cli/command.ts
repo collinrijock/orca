@@ -1,4 +1,4 @@
-import { accessSync, constants, existsSync, readdirSync, statSync } from 'node:fs'
+import { accessSync, constants, existsSync, readdirSync, statSync, type Dirent } from 'node:fs'
 import { access, readdir, stat } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { delimiter, dirname, join } from 'node:path'
@@ -214,7 +214,17 @@ function getNvmVersionDirectories(homePath: string): string[] {
     return []
   }
 
-  return readdirSync(nvmVersionsDir, { withFileTypes: true })
+  // Why: bulk detection folds PATH and install dirs into one pass, so an
+  // unreadable nvm dir (stale mount, dangling symlink) must degrade to "no
+  // nvm dirs" instead of aborting resolution and discarding PATH-found CLIs.
+  let entries: Dirent[]
+  try {
+    entries = readdirSync(nvmVersionsDir, { withFileTypes: true })
+  } catch {
+    return []
+  }
+
+  return entries
     .filter((entry) => entry.isDirectory())
     .map((entry) => entry.name)
     .sort(compareVersionDesc)

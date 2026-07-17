@@ -86,6 +86,12 @@ export function LinearAgentSkillSetupPrompt({
   const [cliStatus, setCliStatus] = useState<CliInstallStatus | null>(null)
   const [cliLoading, setCliLoading] = useState(linked)
   const [setupDialogOpen, setSetupDialogOpen] = useState(false)
+  // Why: keep the dialog mounted once opened so closing can play Radix's exit
+  // animation; only the very first mount is deferred off the startup path.
+  const setupDialogEverOpenedRef = useRef(false)
+  if (setupDialogOpen) {
+    setupDialogEverOpenedRef.current = true
+  }
   const [setupCheckResult, setSetupCheckResult] = useState<SetupCheckResult>('idle')
   const [activeSetupCheckIdentity, setActiveSetupCheckIdentity] = useState<string | null>(null)
   const agentRuntime = useMemo(
@@ -287,8 +293,9 @@ export function LinearAgentSkillSetupPrompt({
   }
 
   // Why: rendering a lazy component with open=false still fetches its module.
-  // Gate the element itself so the inline installer terminal stays off startup.
-  const setupDialog = setupDialogOpen ? (
+  // Gate the element until the first open so the inline installer terminal
+  // stays off startup.
+  const setupDialog = setupDialogEverOpenedRef.current ? (
     <Suspense fallback={null}>
       <LinearAgentSkillSetupDialog
         open={setupDialogOpen}

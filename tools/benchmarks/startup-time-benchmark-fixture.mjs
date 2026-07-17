@@ -519,6 +519,11 @@ export function ensureStartupBenchmarkFixture(fixtureDir, options) {
     ['Service Worker', 'CacheStorage'],
     ['terminal-scrollback-snapshots']
   ]
+  // Why: rebuilding with a smaller file count must not inherit higher-index
+  // files from a prior larger fixture, or the icacls walk measures the old size.
+  for (const bucketRoot of new Set(buckets.map(([root]) => root))) {
+    rmSync(join(fixtureDir, bucketRoot), { recursive: true, force: true })
+  }
   const payload = 'x'.repeat(1024)
   let written = 0
   const started = Date.now()

@@ -327,6 +327,25 @@ describe('resolveCliCommands', () => {
     expect(resolved.get('codex')).toBe(join(pathDir, 'codex'))
   })
 
+  it('still resolves PATH commands when the nvm versions dir is unreadable', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'orca-cli-commands-'))
+    const pathDir = join(root, 'bin')
+    const pathClaude = join(pathDir, 'claude')
+    makeExecutable(pathClaude)
+    // Why: a file where a directory is expected makes readdir throw ENOTDIR,
+    // standing in for stale-mount/EACCES failures on ~/.nvm/versions/node.
+    makeNonExecutableFile(join(root, '.nvm', 'versions', 'node'))
+
+    const resolved = await resolveCliCommands(['claude', 'missing'], {
+      platform: 'darwin',
+      pathEnv: pathDir,
+      homePath: root
+    })
+
+    expect(resolved.get('claude')).toBe(pathClaude)
+    expect(resolved.get('missing')).toBe('missing')
+  })
+
   it('keeps Linux executable matching case-sensitive', async () => {
     const root = mkdtempSync(join(tmpdir(), 'orca-cli-commands-'))
     const pathDir = join(root, 'bin')
