@@ -4,9 +4,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   loadDefaultSessionView,
   loadSessionViewOverrides,
-  saveSessionViewOverrides,
+  updateSessionViewOverride,
   type MobileSessionView
-} from '../storage/preferences'
+} from '../storage/session-view-preferences'
 import {
   useMobileSessionViewMode,
   type MobileSessionViewModeController
@@ -35,10 +35,10 @@ vi.mock('expo-router', async () => {
   }
 })
 
-vi.mock('../storage/preferences', () => ({
+vi.mock('../storage/session-view-preferences', () => ({
   loadDefaultSessionView: vi.fn(),
   loadSessionViewOverrides: vi.fn(),
-  saveSessionViewOverrides: vi.fn()
+  updateSessionViewOverride: vi.fn()
 }))
 
 describe('useMobileSessionViewMode', () => {
@@ -49,7 +49,7 @@ describe('useMobileSessionViewMode', () => {
     globalThis.IS_REACT_ACT_ENVIRONMENT = true
     vi.mocked(loadDefaultSessionView).mockResolvedValue('terminal')
     vi.mocked(loadSessionViewOverrides).mockResolvedValue(new Map())
-    vi.mocked(saveSessionViewOverrides).mockReset().mockResolvedValue(undefined)
+    vi.mocked(updateSessionViewOverride).mockReset().mockResolvedValue(undefined)
     focusEffectRuntime.callback = null
   })
 
@@ -116,10 +116,7 @@ describe('useMobileSessionViewMode', () => {
       await Promise.resolve()
     })
 
-    const call = vi.mocked(saveSessionViewOverrides).mock.calls.at(-1)
-    expect(call?.[0]).toBe('h')
-    expect(call?.[1]).toBe('w')
-    expect(call?.[2].get('t1')).toBe('terminal')
+    expect(updateSessionViewOverride).toHaveBeenLastCalledWith('h', 'w', 't1', 'terminal')
     expect(controller?.isTabChatView('t1')).toBe(false)
   })
 
@@ -131,7 +128,7 @@ describe('useMobileSessionViewMode', () => {
       await Promise.resolve()
     })
 
-    expect(vi.mocked(saveSessionViewOverrides).mock.calls.at(-1)?.[2].get('t1')).toBe('chat')
+    expect(updateSessionViewOverride).toHaveBeenLastCalledWith('h', 'w', 't1', 'chat')
     expect(controller?.isTabChatView('t1')).toBe(true)
   })
 
@@ -179,7 +176,7 @@ describe('useMobileSessionViewMode', () => {
 
     act(() => controller?.toggleTabChatView('new-tab'))
     expect(controller?.isTabChatView('new-tab')).toBe(true)
-    expect(saveSessionViewOverrides).not.toHaveBeenCalled()
+    expect(updateSessionViewOverride).toHaveBeenCalledWith('h', 'w', 'new-tab', 'chat')
 
     await act(async () => {
       overridesLoad.resolve(new Map([['saved-tab', 'chat']]))
@@ -188,43 +185,16 @@ describe('useMobileSessionViewMode', () => {
     })
 
     expect(controller?.isTabChatView('saved-tab')).toBe(true)
-    const saved = vi.mocked(saveSessionViewOverrides).mock.calls.at(-1)?.[2]
-    expect([...(saved?.entries() ?? [])]).toEqual([
-      ['saved-tab', 'chat'],
-      ['new-tab', 'chat']
-    ])
+    expect(controller?.isTabChatView('new-tab')).toBe(true)
   })
 
-  it('serializes rapid persistence writes so the latest state lands last', async () => {
-    const firstSave = deferred<void>()
+  it('submits rapid mutations in event order', async () => {
     await mount({ defaultView: 'terminal' })
-    vi.mocked(saveSessionViewOverrides)
-      .mockImplementationOnce(() => firstSave.promise)
-      .mockResolvedValue(undefined)
+    act(() => controller?.toggleTabChatView('t1'))
+    act(() => controller?.toggleTabChatView('t2'))
 
-    await act(async () => {
-      controller?.toggleTabChatView('t1')
-      await Promise.resolve()
-    })
-    expect(saveSessionViewOverrides).toHaveBeenCalledTimes(1)
-
-    await act(async () => {
-      controller?.toggleTabChatView('t2')
-      await Promise.resolve()
-    })
-    expect(saveSessionViewOverrides).toHaveBeenCalledTimes(1)
-
-    await act(async () => {
-      firstSave.resolve()
-      await Promise.resolve()
-      await Promise.resolve()
-    })
-    expect(saveSessionViewOverrides).toHaveBeenCalledTimes(2)
-    const latest = vi.mocked(saveSessionViewOverrides).mock.calls.at(-1)?.[2]
-    expect([...(latest?.entries() ?? [])]).toEqual([
-      ['t1', 'chat'],
-      ['t2', 'chat']
-    ])
+    expect(updateSessionViewOverride).toHaveBeenNthCalledWith(1, 'h', 'w', 't1', 'chat')
+    expect(updateSessionViewOverride).toHaveBeenNthCalledWith(2, 'h', 'w', 't2', 'chat')
   })
 
   it('finishes an early toggle save after the route unmounts', async () => {
@@ -248,10 +218,6 @@ describe('useMobileSessionViewMode', () => {
       await Promise.resolve()
     })
 
-    const saved = vi.mocked(saveSessionViewOverrides).mock.calls.at(-1)?.[2]
-    expect([...(saved?.entries() ?? [])]).toEqual([
-      ['saved-tab', 'terminal'],
-      ['new-tab', 'chat']
-    ])
+    expect(updateSessionViewOverride).toHaveBeenCalledWith('h', 'w', 'new-tab', 'chat')
   })
 })

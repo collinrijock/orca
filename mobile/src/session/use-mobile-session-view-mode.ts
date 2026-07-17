@@ -3,9 +3,9 @@ import { useFocusEffect } from 'expo-router'
 import {
   loadDefaultSessionView,
   loadSessionViewOverrides,
-  saveSessionViewOverrides,
+  updateSessionViewOverride,
   type MobileSessionView
-} from '../storage/preferences'
+} from '../storage/session-view-preferences'
 
 type ViewOverridesState = {
   hostId: string
@@ -19,9 +19,6 @@ type ViewOverridesRuntime = {
   worktreeId: string
   loadPromise: Promise<Map<string, MobileSessionView>>
   currentOverrides: Map<string, MobileSessionView>
-  mutationRevision: number
-  lastQueuedMutationRevision: number
-  saveQueue: Promise<void>
 }
 
 function isOverrideScope(state: ViewOverridesState, hostId: string, worktreeId: string): boolean {
@@ -71,10 +68,7 @@ export function useMobileSessionViewMode(args: {
       hostId: scopeHostId,
       worktreeId: scopeWorktreeId,
       loadPromise: loadSessionViewOverrides(scopeHostId, scopeWorktreeId),
-      currentOverrides: new Map(),
-      mutationRevision: 0,
-      lastQueuedMutationRevision: 0,
-      saveQueue: Promise.resolve()
+      currentOverrides: new Map()
     }
     viewOverridesRuntimeRef.current = next
     return next
@@ -148,28 +142,17 @@ export function useMobileSessionViewMode(args: {
       // Flip from the tab's effective view (its override, else the default), so
       // a tab following a chat default can still be pinned back to terminal.
       const currentlyChat = (overrides.get(tabId) ?? defaultViewRef.current) === 'chat'
-      overrides.set(tabId, currentlyChat ? 'terminal' : 'chat')
+      const nextView = currentlyChat ? 'terminal' : 'chat'
+      overrides.set(tabId, nextView)
       const next = { ...currentScope, overrides }
       viewOverridesStateRef.current = next
       setViewOverridesState(next)
 
       const runtime = ensureViewOverridesRuntime(hostId, worktreeId)
       runtime.currentOverrides = overrides
-      runtime.mutationRevision += 1
-      // Persistence follows the already-started read so an early toggle merges
-      // with saved siblings, and it continues even if the route unmounts.
-      void runtime.loadPromise.then((persisted) => {
-        if (runtime.mutationRevision <= runtime.lastQueuedMutationRevision) {
-          return
-        }
-        runtime.lastQueuedMutationRevision = runtime.mutationRevision
-        const snapshot = mergeOverrides(persisted, runtime.currentOverrides)
-        // Why: serialized writes prevent an older, slower AsyncStorage write from
-        // landing after a newer toggle and restoring stale persisted state.
-        runtime.saveQueue = runtime.saveQueue
-          .then(() => saveSessionViewOverrides(hostId, worktreeId, snapshot))
-          .catch(() => undefined)
-      })
+      // Why: enqueue the individual mutation immediately so a remounted route
+      // cannot reorder it or replace unrelated overrides with a stale snapshot.
+      void updateSessionViewOverride(hostId, worktreeId, tabId, nextView)
     },
     [ensureViewOverridesRuntime, hostId, worktreeId]
   )

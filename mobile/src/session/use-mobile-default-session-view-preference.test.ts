@@ -5,7 +5,7 @@ import {
   loadDefaultSessionView,
   saveDefaultSessionView,
   type MobileSessionView
-} from '../storage/preferences'
+} from '../storage/session-view-preferences'
 import {
   useMobileDefaultSessionViewPreference,
   type MobileDefaultSessionViewPreference
@@ -19,7 +19,7 @@ function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
   return { promise, resolve }
 }
 
-vi.mock('../storage/preferences', () => ({
+vi.mock('../storage/session-view-preferences', () => ({
   DEFAULT_SESSION_VIEW: 'terminal',
   loadDefaultSessionView: vi.fn(),
   saveDefaultSessionView: vi.fn()
@@ -69,7 +69,7 @@ describe('useMobileDefaultSessionViewPreference', () => {
     expect(saveDefaultSessionView).toHaveBeenCalledWith('chat')
   })
 
-  it('serializes writes and coalesces rapid changes to the latest choice', async () => {
+  it('submits every change immediately so shared persistence preserves event order', async () => {
     const firstSave = deferred<void>()
     vi.mocked(saveDefaultSessionView)
       .mockImplementationOnce(() => firstSave.promise)
@@ -80,22 +80,21 @@ describe('useMobileDefaultSessionViewPreference', () => {
     await act(async () => {
       await Promise.resolve()
     })
-    expect(saveDefaultSessionView).toHaveBeenCalledTimes(1)
-
     act(() => preference?.setDefaultView('terminal'))
     act(() => preference?.setDefaultView('chat'))
     await act(async () => {
       await Promise.resolve()
     })
-    expect(saveDefaultSessionView).toHaveBeenCalledTimes(1)
+    expect(saveDefaultSessionView).toHaveBeenCalledTimes(3)
+    expect(saveDefaultSessionView).toHaveBeenNthCalledWith(2, 'terminal')
+    expect(saveDefaultSessionView).toHaveBeenNthCalledWith(3, 'chat')
 
     await act(async () => {
       firstSave.resolve()
       await firstSave.promise
       await Promise.resolve()
     })
-    expect(saveDefaultSessionView).toHaveBeenCalledTimes(2)
-    expect(saveDefaultSessionView).toHaveBeenNthCalledWith(2, 'chat')
+    expect(saveDefaultSessionView).toHaveBeenCalledTimes(3)
   })
 
   it('reloads the persisted value when the latest write fails', async () => {
@@ -143,7 +142,7 @@ describe('useMobileDefaultSessionViewPreference', () => {
     expect(saveDefaultSessionView).toHaveBeenNthCalledWith(2, 'terminal')
   })
 
-  it('finishes the latest queued write after the Settings route unmounts', async () => {
+  it('submits the latest write before the Settings route unmounts', async () => {
     const firstSave = deferred<void>()
     vi.mocked(saveDefaultSessionView)
       .mockImplementationOnce(() => firstSave.promise)
@@ -155,6 +154,7 @@ describe('useMobileDefaultSessionViewPreference', () => {
       await Promise.resolve()
     })
     act(() => preference?.setDefaultView('terminal'))
+    expect(saveDefaultSessionView).toHaveBeenNthCalledWith(2, 'terminal')
     act(() => renderer?.unmount())
     renderer = null
 
@@ -163,7 +163,5 @@ describe('useMobileDefaultSessionViewPreference', () => {
       await firstSave.promise
       await Promise.resolve()
     })
-
-    expect(saveDefaultSessionView).toHaveBeenNthCalledWith(2, 'terminal')
   })
 })

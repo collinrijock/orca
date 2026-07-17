@@ -8,8 +8,6 @@ import {
   HOST_SIDEBAR_MIN_WIDTH,
   clampHostDockWidth,
   clampHostSidebarWidth,
-  loadDefaultSessionView,
-  loadSessionViewOverrides,
   loadDisabledTerminalLiveInputHandles,
   loadHostSidebarWidth,
   loadPushNotificationsEnabled,
@@ -17,14 +15,18 @@ import {
   loadTerminalLinkOpenMode,
   readPushNotificationsPreference,
   readDisabledTerminalLiveInputHandlesPreference,
-  saveDefaultSessionView,
   saveDisabledTerminalLiveInputHandles,
   saveHostSidebarWidth,
-  saveSessionViewOverrides,
   savePushNotificationsEnabled,
   saveTerminalAutocompleteEnabled,
   saveTerminalLinkOpenMode
 } from './preferences'
+import {
+  loadDefaultSessionView,
+  loadSessionViewOverrides,
+  saveDefaultSessionView,
+  updateSessionViewOverride
+} from './session-view-preferences'
 
 vi.mock('@react-native-async-storage/async-storage', () => ({
   default: {
@@ -32,6 +34,14 @@ vi.mock('@react-native-async-storage/async-storage', () => ({
     setItem: vi.fn()
   }
 }))
+
+function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
+  let resolve!: (value: T) => void
+  const promise = new Promise<T>((resolvePromise) => {
+    resolve = resolvePromise
+  })
+  return { promise, resolve }
+}
 
 describe('session view preference', () => {
   beforeEach(() => {
@@ -51,7 +61,7 @@ describe('session view preference', () => {
     await expect(loadDefaultSessionView()).resolves.toBe('terminal')
   })
 
-  it('loads and saves per-tab overrides under a host-and-worktree scoped key', async () => {
+  it('loads and updates per-tab overrides under a host-and-worktree scoped key', async () => {
     vi.mocked(AsyncStorage.getItem).mockResolvedValue(
       JSON.stringify({ 'tab-1': 'chat', 'tab-2': 'terminal', 'tab-3': 'bogus' })
     )
@@ -65,14 +75,10 @@ describe('session view preference', () => {
       'orca:nativeChatTabs:host%2Fone:folder%3AC%3A%5Crepo'
     )
 
-    await saveSessionViewOverrides(
-      'host/one',
-      'folder:C:\\repo',
-      new Map([['tab-2', 'chat' as const]])
-    )
+    await updateSessionViewOverride('host/one', 'folder:C:\\repo', 'tab-2', 'chat')
     expect(AsyncStorage.setItem).toHaveBeenCalledWith(
       'orca:nativeChatTabs:host%2Fone:folder%3AC%3A%5Crepo',
-      JSON.stringify({ 'tab-2': 'chat' })
+      JSON.stringify({ 'tab-1': 'chat', 'tab-2': 'chat' })
     )
   })
 
@@ -84,6 +90,142 @@ describe('session view preference', () => {
       ['tab-1', 'chat'],
       ['tab-2', 'chat']
     ])
+  })
+
+  it('serializes default writes across callers and makes reads wait for the latest', async () => {
+    let stored = 'terminal'
+    const firstWrite = deferred<void>()
+    vi.mocked(AsyncStorage.getItem).mockImplementation(async () => stored)
+    vi.mocked(AsyncStorage.setItem)
+      .mockImplementationOnce(async (_key, value) => {
+        await firstWrite.promise
+        stored = value
+      })
+      .mockImplementation(async (_key, value) => {
+        stored = value
+      })
+
+    const older = saveDefaultSessionView('chat')
+    await Promise.resolve()
+    const newer = saveDefaultSessionView('terminal')
+    const reloaded = loadDefaultSessionView()
+    await Promise.resolve()
+
+    expect(AsyncStorage.setItem).toHaveBeenCalledTimes(1)
+    firstWrite.resolve()
+    await Promise.all([older, newer])
+
+    await expect(reloaded).resolves.toBe('terminal')
+    expect(AsyncStorage.setItem).toHaveBeenNthCalledWith(1, 'orca:defaultSessionView', 'chat')
+    expect(AsyncStorage.setItem).toHaveBeenNthCalledWith(2, 'orca:defaultSessionView', 'terminal')
+  })
+
+  it('continues the shared default queue after a failed write', async () => {
+    let stored = 'terminal'
+    vi.mocked(AsyncStorage.getItem).mockImplementation(async () => stored)
+    vi.mocked(AsyncStorage.setItem)
+      .mockRejectedValueOnce(new Error('storage unavailable'))
+      .mockImplementation(async (_key, value) => {
+        stored = value
+      })
+
+    const failed = expect(saveDefaultSessionView('terminal')).rejects.toThrow('storage unavailable')
+    const latest = saveDefaultSessionView('chat')
+    await failed
+    await latest
+
+    await expect(loadDefaultSessionView()).resolves.toBe('chat')
+    expect(AsyncStorage.setItem).toHaveBeenCalledTimes(2)
+  })
+
+  it('orders per-tab mutations across callers without losing saved siblings', async () => {
+    let stored = JSON.stringify({ saved: 'chat' })
+    const firstWrite = deferred<void>()
+    vi.mocked(AsyncStorage.getItem).mockImplementation(async () => stored)
+    vi.mocked(AsyncStorage.setItem)
+      .mockImplementationOnce(async (_key, value) => {
+        await firstWrite.promise
+        stored = value
+      })
+      .mockImplementation(async (_key, value) => {
+        stored = value
+      })
+
+    const first = updateSessionViewOverride('host', 'worktree', 'first', 'terminal')
+    await vi.waitFor(() => expect(AsyncStorage.setItem).toHaveBeenCalledTimes(1))
+    const second = updateSessionViewOverride('host', 'worktree', 'second', 'chat')
+    const reloaded = loadSessionViewOverrides('host', 'worktree')
+
+    expect(AsyncStorage.setItem).toHaveBeenCalledTimes(1)
+    firstWrite.resolve()
+    await Promise.all([first, second])
+
+    await expect(reloaded).resolves.toEqual(
+      new Map([
+        ['saved', 'chat'],
+        ['first', 'terminal'],
+        ['second', 'chat']
+      ])
+    )
+  })
+
+  it('does not globally block updates for a different host and worktree', async () => {
+    const blockedWrite = deferred<void>()
+    vi.mocked(AsyncStorage.getItem).mockResolvedValue(null)
+    vi.mocked(AsyncStorage.setItem).mockImplementation(async (key) => {
+      if (key.includes('blocked-host')) {
+        await blockedWrite.promise
+      }
+    })
+
+    const blocked = updateSessionViewOverride('blocked-host', 'worktree', 'tab', 'chat')
+    await Promise.resolve()
+    await Promise.resolve()
+    await updateSessionViewOverride('other-host', 'worktree', 'tab', 'terminal')
+
+    expect(AsyncStorage.setItem).toHaveBeenCalledWith(
+      'orca:nativeChatTabs:other-host:worktree',
+      JSON.stringify({ tab: 'terminal' })
+    )
+    blockedWrite.resolve()
+    await blocked
+  })
+
+  it('continues a scoped override queue after a failed write', async () => {
+    let stored: string | null = null
+    vi.mocked(AsyncStorage.getItem).mockImplementation(async () => stored)
+    vi.mocked(AsyncStorage.setItem)
+      .mockRejectedValueOnce(new Error('storage unavailable'))
+      .mockImplementation(async (_key, value) => {
+        stored = value
+      })
+
+    const failed = updateSessionViewOverride('host', 'worktree', 'first', 'chat')
+    const latest = updateSessionViewOverride('host', 'worktree', 'second', 'terminal')
+    await Promise.all([failed, latest])
+
+    await expect(loadSessionViewOverrides('host', 'worktree')).resolves.toEqual(
+      new Map([['second', 'terminal']])
+    )
+  })
+
+  it('does not replace saved overrides after a transient read failure', async () => {
+    vi.mocked(AsyncStorage.getItem).mockRejectedValue(new Error('storage unavailable'))
+
+    await updateSessionViewOverride('host', 'worktree', 'tab', 'chat')
+
+    expect(AsyncStorage.setItem).not.toHaveBeenCalled()
+  })
+
+  it('repairs invalid preference data on the next user mutation', async () => {
+    vi.mocked(AsyncStorage.getItem).mockResolvedValue('not-json')
+
+    await updateSessionViewOverride('host', 'worktree', 'tab', 'chat')
+
+    expect(AsyncStorage.setItem).toHaveBeenCalledWith(
+      'orca:nativeChatTabs:host:worktree',
+      JSON.stringify({ tab: 'chat' })
+    )
   })
 })
 
