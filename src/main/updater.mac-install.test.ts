@@ -176,7 +176,16 @@ describe('updater mac install handoff', () => {
       )?.[1] as (() => void) | undefined
       nativeDownloadedHandler?.()
 
-      findConflictingAppInstancePidsMock.mockResolvedValue([4242])
+      findConflictingAppInstancePidsMock.mockImplementation(async () => {
+        // Why: without the marker already published, a new app can launch
+        // after this snapshot and recreate Squirrel's silent install stall.
+        expect(writeHandoffMarkerMock).toHaveBeenCalledWith(
+          '/tmp/orca-test-user-data',
+          process.execPath,
+          '1.0.51'
+        )
+        return [4242]
+      })
       quitAndInstall()
       await vi.waitFor(() => {
         expect(sendMock).toHaveBeenCalledWith(
@@ -190,6 +199,10 @@ describe('updater mac install handoff', () => {
       })
       expect(autoUpdaterMock.quitAndInstall).not.toHaveBeenCalled()
       expect(killAllPtyMock).not.toHaveBeenCalled()
+      expect(clearHandoffMarkerMock).toHaveBeenCalledWith(
+        '/tmp/orca-test-user-data',
+        process.execPath
+      )
 
       // Once the conflicting instance is gone, a retry must install normally.
       findConflictingAppInstancePidsMock.mockResolvedValue([])
@@ -197,13 +210,9 @@ describe('updater mac install handoff', () => {
       await vi.waitFor(() => {
         expect(autoUpdaterMock.quitAndInstall).toHaveBeenCalledWith(false, true)
       })
-      // The relaunch-race handoff marker must be down before the native call.
-      expect(writeHandoffMarkerMock).toHaveBeenCalledWith(
-        '/tmp/orca-test-user-data',
-        process.execPath,
-        '1.0.51'
-      )
-      expect(writeHandoffMarkerMock.mock.invocationCallOrder[0]).toBeLessThan(
+      // The retry publishes a fresh marker before the native call.
+      expect(writeHandoffMarkerMock).toHaveBeenCalledTimes(2)
+      expect(writeHandoffMarkerMock.mock.invocationCallOrder[1]).toBeLessThan(
         autoUpdaterMock.quitAndInstall.mock.invocationCallOrder[0]
       )
     }

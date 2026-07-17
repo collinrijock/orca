@@ -609,9 +609,15 @@ async function performQuitAndInstall(): Promise<void> {
       await runBeforeUpdateQuitCleanup()
       span.addEvent('pre_quit_cleanup_done')
 
+      if (process.platform === 'darwin') {
+        // Why: publish before the final conflict snapshot so a new launch
+        // cannot slip between that snapshot and ShipIt starting. Recovery and
+        // blocked handoffs clear the marker through resetQuitForUpdateState.
+        writeUpdateInstallHandoffMarker(app.getPath('appData'), process.execPath, app.getVersion())
+      }
       // Why: scan after the bounded cleanup so an instance that starts or
-      // exits during those 2.5s cannot make the handoff decision stale. Keep
-      // this to one process-table read per install attempt.
+      // exits during those 2.5s cannot make the handoff decision stale. The
+      // marker above gates launches after this one process-table snapshot.
       const conflictingPids = await findConflictingAppInstancePids()
       if (conflictingPids.length > 0) {
         resetQuitForUpdateState()
@@ -642,11 +648,6 @@ async function performQuitAndInstall(): Promise<void> {
       // Why: mark before the call so a sync 'error' during quitAndInstall can
       // recover; pre-native errors must not look like install failure.
       quitAndInstallNativeInvoked = true
-      if (process.platform === 'darwin') {
-        // Why: lets a launch that races Squirrel's install back off instead of
-        // aborting it (see update-install-launch-gate). Cleared on recovery.
-        writeUpdateInstallHandoffMarker(app.getPath('appData'), process.execPath, app.getVersion())
-      }
       // Why: invoke quitAndInstall before killAllPty/remove close listeners so a
       // sync 'error' (common "no filepath" path) recovers while windows and
       // local PTYs are still intact.
