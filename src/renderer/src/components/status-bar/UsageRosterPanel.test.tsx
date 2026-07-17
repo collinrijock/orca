@@ -35,4 +35,29 @@ describe('UsageRow', () => {
     expect(markup).toContain('Sign in')
     expect(markup).not.toContain('<button')
   })
+
+  it('keeps the bar fill consistent with the remaining percentage label', () => {
+    const markup = renderToStaticMarkup(
+      <UsageRow
+        p={{
+          ...signedOutCodex,
+          session: {
+            usedPercent: 25,
+            windowMinutes: 300,
+            resetsAt: null,
+            resetDescription: null
+          },
+          status: 'ok',
+          error: null
+        }}
+        display="remaining"
+        state={{ kind: 'usage', statusLabel: null }}
+        showSignInAction={false}
+      />
+    )
+
+    expect(markup).toContain('75%')
+    expect(markup).toContain('width:75%')
+    expect(markup).not.toContain('width:25%')
+  })
 })

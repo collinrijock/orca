@@ -332,6 +332,35 @@ describe('fetchProviderAccountsSnapshot', () => {
     await expect(second).resolves.toMatchObject({ codex: { activeAccountId: 'codex-two' } })
   })
 
+  it('does not share a local read with a remote environment named local', async () => {
+    let resolveClaude!: (state: ClaudeRateLimitAccountsState) => void
+    let resolveCodex!: (state: CodexRateLimitAccountsState) => void
+    claudeListLocal.mockImplementation(
+      () => new Promise<ClaudeRateLimitAccountsState>((resolve) => (resolveClaude = resolve))
+    )
+    codexListLocal.mockImplementation(
+      () => new Promise<CodexRateLimitAccountsState>((resolve) => (resolveCodex = resolve))
+    )
+
+    const local = fetchProviderAccountsSnapshot(LOCAL)
+    const remote = fetchProviderAccountsSnapshot({ activeRuntimeEnvironmentId: 'local' })
+    await flushMicrotasks()
+
+    expect(remote).not.toBe(local)
+    expect(runtimeEnvironmentSubscribe).toHaveBeenCalledTimes(1)
+    subscriptionCallbacks?.onResponse({
+      ok: true,
+      result: { type: 'ready', snapshot: snapshotFixture('remote-local') }
+    })
+    resolveClaude(emptyClaudeState())
+    resolveCodex(emptyCodexState())
+
+    await expect(remote).resolves.toMatchObject({
+      codex: { activeAccountId: 'codex-remote-local' }
+    })
+    await expect(local).resolves.toMatchObject({ codex: { activeAccountId: null } })
+  })
+
   it('resolves with the first remote snapshot and closes the subscription', async () => {
     const pending = fetchProviderAccountsSnapshot(REMOTE)
     await flushMicrotasks()

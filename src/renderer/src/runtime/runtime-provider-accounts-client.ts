@@ -38,7 +38,10 @@ const pendingProviderAccountsSnapshots = new Map<string, Promise<ProviderAccount
 function getProviderAccountsOwnerKey(
   settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined
 ): string {
-  return settings?.activeRuntimeEnvironmentId?.trim() || 'local'
+  const target = getActiveRuntimeTarget(settings)
+  // Why: environment ids are user-controlled strings; prefix the target kind
+  // so a remote id such as “local” cannot share the desktop's pending read.
+  return target.kind === 'local' ? 'local' : `environment:${target.environmentId}`
 }
 
 export function hasRemoteProviderAccountOwner(

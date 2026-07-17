@@ -15,21 +15,21 @@ import { formatPlanLabel, usageTextColorClass } from './usage-roster-formatting'
 import { getUsageRosterRowState, type UsageRosterRowState } from './usage-roster-row-state'
 
 type ProviderId = ProviderRateLimits['provider']
-type Section = { label: string; window: RateLimitWindow }
+export type UsageSection = { label: string; window: RateLimitWindow }
 
 // Windows/buckets that actually carry data — the null ones are absent limits.
-function usedSections(p: ProviderRateLimits): Section[] {
-  return getWindowSections(p).filter((s): s is Section => s.window !== null)
+function usedSections(p: ProviderRateLimits): UsageSection[] {
+  return getWindowSections(p).filter((s): s is UsageSection => s.window !== null)
 }
 
-function providerMaxUsed(sections: Section[]): number {
+function providerMaxUsed(sections: UsageSection[]): number {
   return sections.length > 0
     ? Math.max(...sections.map((s) => clampUsedPercent(s.window.usedPercent)))
     : 0
 }
 
 // Buckets (Gemini Flash/Pro) keep their model name; windows use their duration.
-function shortLabel(p: ProviderRateLimits, section: Section): string {
+function shortLabel(p: ProviderRateLimits, section: UsageSection): string {
   if (p.buckets?.some((b) => b.name === section.label)) {
     return section.label
   }
@@ -41,8 +41,23 @@ function shortLabel(p: ProviderRateLimits, section: Section): string {
   return formatWindowLabel(section.window.windowMinutes)
 }
 
+export function getTightestUsageSection(p: ProviderRateLimits): UsageSection | null {
+  const sections = usedSections(p)
+  if (sections.length === 0) {
+    return null
+  }
+  // Why: the footer promises one quiet summary per provider; choose urgency by
+  // consumption even when the user displays the complementary “% left” value.
+  const tightest = sections.reduce((current, candidate) =>
+    clampUsedPercent(candidate.window.usedPercent) > clampUsedPercent(current.window.usedPercent)
+      ? candidate
+      : current
+  )
+  return { ...tightest, label: shortLabel(p, tightest) }
+}
+
 // The soonest-resetting window summarizes the agent's next reset in one line.
-function soonestResetLabel(sections: Section[]): string | null {
+function soonestResetLabel(sections: UsageSection[]): string | null {
   const resets = sections
     .map((s) => s.window.resetsAt)
     .filter((r): r is number => typeof r === 'number')
@@ -109,7 +124,7 @@ export function UsageRow({
                 <span className="h-[5px] w-7 overflow-hidden rounded-full bg-muted">
                   <span
                     className={`block h-full rounded-full ${barColor(used)}`}
-                    style={{ width: `${used}%` }}
+                    style={{ width: `${shown}%` }}
                   />
                 </span>
                 <span className={`tabular-nums text-[11px] ${usageTextColorClass(used)}`}>
