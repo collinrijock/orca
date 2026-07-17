@@ -55,7 +55,7 @@ export function nativeChatSessionOptionDisabledReason(
         'components.native-chat.composer.availableAfterSessionStarts',
         'Available after the session starts.'
       )
-    case undefined:
+    default:
       return null
   }
 }
