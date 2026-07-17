@@ -92,6 +92,7 @@ export type KeybindingActionId =
   | 'editor.copyContext'
   | 'editor.previousChange'
   | 'editor.nextChange'
+  | 'editor.addReviewNote'
   | 'fileExplorer.undo'
   | 'fileExplorer.redo'
   | 'fileExplorer.copyPath'
@@ -851,6 +852,14 @@ export const KEYBINDING_DEFINITIONS: readonly KeybindingDefinition[] = [
     searchKeywords: ['shortcut', 'editor', 'diff', 'change', 'hunk', 'next'],
     defaultBindings: platformBindings(['F7']),
     allowBareKeybindings: true
+  },
+  {
+    id: 'editor.addReviewNote',
+    title: 'Add Review Note',
+    group: 'Editors',
+    scope: 'editor',
+    searchKeywords: ['shortcut', 'editor', 'markdown', 'note', 'comment', 'annotation', 'review'],
+    defaultBindings: platformBindings(['Mod+Alt+N'])
   },
   {
     id: 'fileExplorer.undo',
