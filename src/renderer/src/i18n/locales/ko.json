@@ -1759,7 +1759,7 @@
         "jiraSortDescending": "내림차순",
         "jiraSortBy": "정렬 기준",
         "jiraToggleSortDirection": "{{value0}}으로 정렬",
-        "75a38d7df8": "GitHub data is temporarily unavailable — its API may be down, rate-limited, or unreachable. Please try again shortly."
+        "75a38d7df8": "GitHub data is temporarily unavailable. Its API may be down, rate-limited, or unreachable. Please try again shortly."
       },
       "Terminal": {
         "73768427cf": "닫기",
@@ -10276,12 +10276,12 @@
                   "580025e7b7": "GitHub is unavailable",
                   "01c85b5770": "GitHub's API is temporarily unavailable. This panel reloads automatically once it recovers.",
                   "d1a9f2b165": "Can't reach GitHub",
-                  "7d01d42a3a": "GitHub is unreachable right now — check your connection, then try again shortly.",
+                  "7d01d42a3a": "GitHub is unreachable right now. Check your connection, then try again shortly.",
                   "e9d681894a": "GitHub rate limit reached",
                   "8c77434d6f": "GitHub is rate-limiting requests. This panel refreshes once the limit resets.",
-                  "79aa06bb2c": "Couldn't refresh — GitHub's API is temporarily unavailable. Showing the last known status.",
-                  "6ec12cee0c": "Couldn't refresh — GitHub is unreachable right now. Showing the last known status.",
-                  "de088015e8": "Couldn't refresh — GitHub is rate-limiting requests. Showing the last known status.",
+                  "79aa06bb2c": "Couldn't refresh. GitHub's API is temporarily unavailable. Showing the last known status.",
+                  "6ec12cee0c": "Couldn't refresh. GitHub is unreachable right now. Showing the last known status.",
+                  "de088015e8": "Couldn't refresh. GitHub is rate-limiting requests. Showing the last known status.",
                   "d9dd7c6687": "Couldn't refresh from GitHub. Showing the last known status."
                 }
               }

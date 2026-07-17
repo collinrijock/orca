@@ -9314,7 +9314,7 @@ export default function TaskPage(): React.JSX.Element {
                   >
                     {translate(
                       'auto.components.TaskPage.75a38d7df8',
-                      'GitHub data is temporarily unavailable — its API may be down, rate-limited, or unreachable. Please try again shortly.'
+                      'GitHub data is temporarily unavailable. Its API may be down, rate-limited, or unreachable. Please try again shortly.'
                     )}
                   </div>
                 ) : null}
