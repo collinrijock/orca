@@ -160,13 +160,18 @@ describe('LinearAgentSkillSetupPrompt update command', () => {
     )
   })
 
-  it('uses the legacy update command when only the legacy Linear skill is installed', async () => {
+  it('migrates a legacy-only install through the canonical install command', async () => {
+    mocks.skillState.installed = false
     mocks.skillState.skills = [legacyLinearSkillPath()]
 
     await renderPrompt()
 
     expect(mocks.panelProps.at(-1)).toEqual(
-      expect.objectContaining({ installedCommand: 'npx skills update linear-tickets --global' })
+      expect.objectContaining({
+        installed: false,
+        command: 'npx skills add https://github.com/stablyai/orca --skill orca-linear --global',
+        installedCommand: 'npx skills update orca-linear --global'
+      })
     )
   })
 

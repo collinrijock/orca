@@ -146,8 +146,8 @@ describe('LinearAgentSkillInstallCta', () => {
     expect(rendered.textContent).not.toContain('Not installed')
   })
 
-  it('updates through the legacy skill name when only linear-tickets is installed', async () => {
-    mocks.skillState.installed = true
+  it('migrates a legacy-only install through the canonical install command', async () => {
+    mocks.skillState.installed = false
     mocks.skillState.skills = [
       discoveredSkill({
         name: 'linear-tickets',
@@ -158,7 +158,11 @@ describe('LinearAgentSkillInstallCta', () => {
 
     const rendered = await renderCta()
 
-    expect(rendered.textContent).toContain('npx skills update linear-tickets --global')
+    expect(rendered.textContent).toContain(
+      'npx skills add https://github.com/stablyai/orca --skill orca-linear --global'
+    )
+    expect(rendered.textContent).toContain('Not installed')
+    expect(rendered.textContent).not.toContain('npx skills update linear-tickets --global')
   })
 
   it('notes that remote agent environments need their own setup', async () => {

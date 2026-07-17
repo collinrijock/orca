@@ -11,9 +11,9 @@ import {
 import {
   LINEAR_AGENT_SKILL_NAMES,
   ORCA_LINEAR_SKILL_INSTALL_COMMAND,
-  ORCA_LINEAR_SKILL_NAME
+  ORCA_LINEAR_SKILL_NAME,
+  ORCA_LINEAR_SKILL_UPDATE_COMMAND
 } from '@/lib/agent-feature-install-commands'
-import { getLinearAgentSkillUpdateCommand } from '@/lib/linear-agent-skill-update-command'
 import { cn } from '@/lib/utils'
 import { getLinearAgentSkillSetupInlineRuntimeCopy } from '../sidebar/linear-agent-skill-setup-copy'
 import {
@@ -57,12 +57,10 @@ export function LinearAgentSkillInstallCta({
   const command = useMemo(
     () =>
       buildSkillCommandForRuntime(
-        skill.installed
-          ? getLinearAgentSkillUpdateCommand(skill.skills, skill.installed)
-          : ORCA_LINEAR_SKILL_INSTALL_COMMAND,
+        skill.installed ? ORCA_LINEAR_SKILL_UPDATE_COMMAND : ORCA_LINEAR_SKILL_INSTALL_COMMAND,
         agentRuntime
       ),
-    [agentRuntime, skill.installed, skill.skills]
+    [agentRuntime, skill.installed]
   )
   const subordinateRowClass = useIntegrationSubordinateRowClass('space-y-1.5')
   const commandRowClass = useIntegrationCommandRowClass()

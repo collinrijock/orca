@@ -9,9 +9,9 @@ import {
 } from '@/hooks/useInstalledAgentSkills'
 import {
   LINEAR_AGENT_SKILL_NAMES,
-  ORCA_LINEAR_SKILL_INSTALL_COMMAND
+  ORCA_LINEAR_SKILL_INSTALL_COMMAND,
+  ORCA_LINEAR_SKILL_UPDATE_COMMAND
 } from '@/lib/agent-feature-install-commands'
-import { getLinearAgentSkillUpdateCommand } from '@/lib/linear-agent-skill-update-command'
 import {
   ensureOrcaCliAvailableForAgentSkillTerminal,
   isOrcaCliAvailableOnPath
@@ -122,12 +122,8 @@ export function LinearAgentSkillSetupPrompt({
     [agentRuntime]
   )
   const installedCommand = useMemo(
-    () =>
-      buildSkillCommandForRuntime(
-        getLinearAgentSkillUpdateCommand(skill.skills, skill.installed),
-        agentRuntime
-      ),
-    [agentRuntime, skill.installed, skill.skills]
+    () => buildSkillCommandForRuntime(ORCA_LINEAR_SKILL_UPDATE_COMMAND, agentRuntime),
+    [agentRuntime]
   )
   const terminalShellOverride = getLinearPromptTerminalShellOverride(
     currentPlatform,

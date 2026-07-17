@@ -5,13 +5,13 @@ import { LinearIcon } from '@/components/icons/LinearIcon'
 import {
   LINEAR_AGENT_SKILL_NAMES,
   ORCA_LINEAR_SKILL_INSTALL_COMMAND,
-  ORCA_LINEAR_SKILL_NAME
+  ORCA_LINEAR_SKILL_NAME,
+  ORCA_LINEAR_SKILL_UPDATE_COMMAND
 } from '@/lib/agent-feature-install-commands'
 import {
   AGENT_SKILL_CLI_PREREQUISITE_NOTICE,
   ensureOrcaCliAvailableForAgentSkillTerminal
 } from '@/lib/agent-skill-cli-prerequisite'
-import { getLinearAgentSkillUpdateTarget } from '@/lib/linear-agent-skill-update-command'
 import { getLinearUsageExamples } from '@/lib/linear-usage-examples'
 import type { SkillUsageExample } from '@/lib/skill-usage-example'
 import {
@@ -52,7 +52,6 @@ export function LinearAgentSkillPane(): React.JSX.Element {
     installed: linearSkillInstalled,
     loading: linearSkillLoading,
     error: linearSkillError,
-    skills: linearSkills,
     refresh: refreshLinearSkill
   } = useInstalledAgentSkillNames(LINEAR_AGENT_SKILL_NAMES, {
     discoveryTarget: activeSkillRuntime.discoveryTarget,
@@ -69,20 +68,14 @@ export function LinearAgentSkillPane(): React.JSX.Element {
           ),
     [activeSkillRuntime.agentRuntime, activeSkillRuntime.installDisabledReason]
   )
-  const updateTarget = useMemo(
-    () => getLinearAgentSkillUpdateTarget(linearSkills, linearSkillInstalled),
-    [linearSkillInstalled, linearSkills]
-  )
   const updateCommand = useMemo(() => {
-    const command = updateTarget.command
     return activeSkillRuntime.installDisabledReason
-      ? command
-      : buildSkillCommandForRuntime(command, activeSkillRuntime.agentRuntime)
-  }, [
-    activeSkillRuntime.agentRuntime,
-    activeSkillRuntime.installDisabledReason,
-    updateTarget.command
-  ])
+      ? ORCA_LINEAR_SKILL_UPDATE_COMMAND
+      : buildSkillCommandForRuntime(
+          ORCA_LINEAR_SKILL_UPDATE_COMMAND,
+          activeSkillRuntime.agentRuntime
+        )
+  }, [activeSkillRuntime.agentRuntime, activeSkillRuntime.installDisabledReason])
 
   return (
     <SearchableSetting
@@ -137,7 +130,7 @@ export function LinearAgentSkillPane(): React.JSX.Element {
         // Why: the local-host-only freshness scan cannot vouch for a WSL runtime,
         // so fall back to the presence-only pill there (mirrors the other skills).
         freshnessSkillName={
-          activeSkillRuntime.agentRuntime?.runtime === 'wsl' ? undefined : updateTarget.skillName
+          activeSkillRuntime.agentRuntime?.runtime === 'wsl' ? undefined : ORCA_LINEAR_SKILL_NAME
         }
       />
 
