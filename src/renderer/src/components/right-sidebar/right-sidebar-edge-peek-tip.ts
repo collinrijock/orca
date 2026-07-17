@@ -44,13 +44,9 @@ export function getRightSidebarEdgePeekTipSettingsPrefix(): string {
   return translate('auto.components.right.sidebar.edge.peek.tip.settingsPrefix', 'Turn this off in')
 }
 
-/** Clickable Settings breadcrumb for the edge-peek control. */
+/** Short clickable label; the target is still the edge-peek Appearance row. */
 export function getRightSidebarEdgePeekSettingsLinkLabel(): string {
-  return translate(
-    'auto.components.right.sidebar.edge.peek.tip.settingsLink',
-    'Settings › Appearance › {{value0}}',
-    { value0: getRightSidebarEdgePeekEntry().title }
-  )
+  return translate('auto.components.right.sidebar.edge.peek.tip.settingsLink', 'Settings')
 }
 
 /** Opens Appearance and scrolls/highlights the edge-peek switch. */

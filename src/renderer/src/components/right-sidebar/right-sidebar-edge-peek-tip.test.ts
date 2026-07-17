@@ -42,9 +42,7 @@ describe('markRightSidebarEdgePeekTipDismissed', () => {
 describe('tip copy', () => {
   it('describes the edge gesture and links into Settings', () => {
     expect(getRightSidebarEdgePeekTipTitle()).toContain('right edge')
-    expect(getRightSidebarEdgePeekSettingsLinkLabel()).toMatch(/Settings/)
-    expect(getRightSidebarEdgePeekSettingsLinkLabel()).toMatch(/Appearance/)
-    expect(getRightSidebarEdgePeekSettingsLinkLabel()).toMatch(/Edge Peek/)
+    expect(getRightSidebarEdgePeekSettingsLinkLabel()).toBe('Settings')
   })
 })
 
