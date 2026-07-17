@@ -956,6 +956,55 @@ describe('SshConnection', () => {
     expect(probeChannel?.stdin.end).toHaveBeenCalledOnce()
   })
 
+  it('passes an explicit Windows no-input launcher only to the system SSH probe', async () => {
+    vi.mocked(resolveWithSshG).mockResolvedValueOnce(createResolvedConfig())
+    const launcherPath = 'C:\\fixture\\orca-ssh-no-input-launcher.exe'
+    const conn = new SshConnection(createTarget({ configHost: 'fdpass-host' }), createCallbacks(), {
+      windowsNoInputLauncherPath: launcherPath
+    })
+
+    await conn.connect()
+    await conn.exec('echo after-connect')
+
+    expect(spawnSystemSshCommandMock).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ configHost: 'fdpass-host' }),
+      'echo ORCA-SYSTEM-SSH-OK',
+      expect.objectContaining({
+        noInput: true,
+        windowsNoInputLauncherPath: launcherPath
+      })
+    )
+    expect(spawnSystemSshCommandMock).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ configHost: 'fdpass-host' }),
+      'echo after-connect',
+      expect.not.objectContaining({ windowsNoInputLauncherPath: expect.anything() })
+    )
+  })
+
+  it('does not infer the Windows no-input launcher from the runner environment', async () => {
+    vi.mocked(resolveWithSshG).mockResolvedValueOnce(createResolvedConfig())
+    const previousLauncherPath = process.env.ORCA_SSH_WINDOWS_NO_INPUT_LAUNCHER
+    process.env.ORCA_SSH_WINDOWS_NO_INPUT_LAUNCHER = 'C:\\fixture\\orca-ssh-no-input-launcher.exe'
+    try {
+      const conn = new SshConnection(createTarget({ configHost: 'fdpass-host' }), createCallbacks())
+      await conn.connect()
+    } finally {
+      if (previousLauncherPath === undefined) {
+        delete process.env.ORCA_SSH_WINDOWS_NO_INPUT_LAUNCHER
+      } else {
+        process.env.ORCA_SSH_WINDOWS_NO_INPUT_LAUNCHER = previousLauncherPath
+      }
+    }
+
+    expect(spawnSystemSshCommandMock).toHaveBeenCalledWith(
+      expect.objectContaining({ configHost: 'fdpass-host' }),
+      'echo ORCA-SYSTEM-SSH-OK',
+      expect.not.objectContaining({ windowsNoInputLauncherPath: expect.anything() })
+    )
+  })
+
   it('allows concurrent exec commands for system SSH with an Orca ControlMaster socket', async () => {
     getOrcaControlSocketPathMock.mockReturnValue('/tmp/orca-ssh-501/live-socket')
     vi.mocked(resolveWithSshG).mockResolvedValueOnce(createResolvedConfig())

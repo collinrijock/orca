@@ -1679,9 +1679,13 @@
                     x64/arm64 then shows that Win32-OpenSSH ignores the workflow's overridden
                     profile variables for host-key discovery and stops before authentication while
                     looking for the runner account's missing default <code>known_hosts</code>.
-                    Before selecting ConPTY or another SSH client, pass only the fixture's exact
-                    pinned <code>known_hosts</code> path with strict host-key checking and require
-                    both architectures to pass. Do not weaken trust, package, sign, or add a product
+                    Passing only the fixture's exact pinned <code>known_hosts</code> path then
+                    proves strict trust, authentication, command execution, and natural launcher
+                    exit on both architectures. The following unchanged direct-spawn product probe
+                    still hangs after authenticated remote session close, selecting the
+                    private-console/ bounded-regular-output launcher rather than ConPTY or another
+                    SSH client. Add only an explicitly injected launcher-path adapter first; when
+                    absent, preserve existing behavior, and do not package, sign, or add a product
                     caller. POSIX retains ignored stdin plus <code>-n</code>; fixture-owned Windows
                     session processes settle before profile hives are boundedly unloaded and native
                     profile deletion begins; <code>MaxSessions=1</code>; interrupted upload; stale

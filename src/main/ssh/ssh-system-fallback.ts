@@ -4,7 +4,12 @@ export {
   getOrcaControlSocketPath,
   type SystemSshBuildArgsOptions
 } from './system-ssh-args'
-export { spawnSystemSsh, spawnSystemSshCommand, type SystemSshProcess } from './system-ssh-command'
+export {
+  spawnSystemSsh,
+  spawnSystemSshCommand,
+  type SystemSshCommandOptions,
+  type SystemSshProcess
+} from './system-ssh-command'
 export {
   downloadFileViaSystemSsh,
   uploadFileViaSystemSsh,

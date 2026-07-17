@@ -1,6 +1,6 @@
 # SSH Relay Runtime Distribution — Short Implementation Checklist
 
-Last updated: 2026-07-16
+Last updated: 2026-07-17
 
 Use this file to track the project. The
 [detailed evidence ledger](./2026-07-14-ssh-relay-github-release-implementation-checklist.md)
@@ -9,13 +9,15 @@ keeps commands, hashes, runner identities, timings, and failure details.
 A checked box means the work has evidence in the detailed ledger. Design approval alone does not
 complete a box.
 
-Active checkpoint: **Milestone 6 / Work Package 5 bounded runtime transfer — explicit fixture
-host-key trust correction in progress, 2026-07-16, Codex implementation owner.** Exact head
-`b24dda744892c2ee43a3fb345d889ba97adb4239`, run `29554073553`, and Windows x64/ARM64 jobs
-`87802525440`/`87802525442` prove the bounded verbose diagnostic and show both clients stop before
-authentication while looking for the runner account's missing default `known_hosts`. The next
-single-variable correction passes the fixture's exact pinned file with strict checking; production
-SSH arguments and every product/default path remain unchanged.
+Active checkpoint: **Milestone 6 / Work Package 5 bounded runtime transfer — explicit Windows
+no-input launcher-path adapter locally green, exact-head native rerun next, 2026-07-17, Codex implementation owner.** Exact head
+`a6feb8c3be0e15ae45fc6b431c1665e5fd84d2c9`, run `29554814775`, and Windows x64/ARM64 jobs
+`87804630533`/`87804630504` prove the strict-trust diagnostic naturally completes through the
+private-console launcher while the unchanged direct-spawn product probe still hangs after remote
+session close. The candidate is constructor-injected only into the native full-size purpose test;
+`E-M6-WINDOWS-NOINPUT-LAUNCHER-ADAPTER-LOCAL-001` records syntax, 124 focused cases, 285 release
+contracts, typecheck, lint/reliability/max-lines, formatting, diff, and protected-resolver isolation
+green. Exact-head native x64/ARM64 full-size and teardown gates remain before any product/default caller.
 `E-M6-WINDOWS-SYSTEM-SSH-TREE-LIVE-PORTABLE-FIXTURE-LOCAL-001` records the portable-fixture
 correction locally green: the no-Orca-publication workflow oracle permits the one exact pinned
 Microsoft fixture release URL while Orca release URLs, `gh release`, and `contents: write` remain
@@ -245,6 +247,15 @@ lint/reliability/max-lines, formatting, diff, and protected-resolver isolation p
 native/live skips. Commit/push only this runner diagnostic and require fresh x64/ARM64 strict-trust,
 authentication, natural settlement, full-size transfer, and exact teardown proof. Production,
 Beta, fallback, tuple, publication, default, and signing paths remain untouched.
+Exact head `a6feb8c3be0e15ae45fc6b431c1665e5fd84d2c9`, run `29554814775`, and Windows x64/ARM64 jobs
+`87804630533`/`87804630504` prove the strict diagnostic succeeds in 884.6485/707.1382 ms with the
+sentinel, ended stdout, natural exit/close 0, and exact pinned trust. The unchanged direct-spawn
+product probe then times out in 31113/30963 ms with all lifecycle fields unobserved after server-side
+authentication and command-session close. `E-M6-WINDOWS-DIAGNOSTIC-HOST-TRUST-CI-RED-001` selects
+the proven private-console/bounded-regular-output launcher on both architectures and authorizes only
+an explicitly injected launcher-path adapter. Core code must not read the workflow environment;
+when no path is supplied, existing behavior remains exact. Full-size, cancellation, concurrency,
+reuse, and teardown proof remain required before packaging or any product/Beta/default caller.
 `E-M6-WINDOWS-SYSTEM-SSH-TREE-LIVE-AUDIT-001` fixes the loopback-only official Microsoft
 server, fixture-owned non-admin account/ACL, exact host-key trust, Windows PowerShell 5.1,
 serial/default and four-channel metrics, cancellation/collision/cleanup, and deterministic teardown

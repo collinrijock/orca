@@ -19,7 +19,10 @@ export type SystemSshCommandChannel = ClientChannel & {
   _process?: ChildProcess
 }
 
-type SystemSshCommandOptions = SshExecOptions & SystemSshBuildArgsOptions
+export type SystemSshCommandOptions = SshExecOptions &
+  SystemSshBuildArgsOptions & {
+    windowsNoInputLauncherPath?: string
+  }
 
 /**
  * Spawn a system ssh process connecting to the given target.
@@ -63,14 +66,25 @@ export function spawnSystemSshCommand(
   const remoteCommand =
     options?.wrapCommand === false ? command : wrapRemoteCommandForPosixShell(command)
   const noInput = options?.noInput === true
-  const stdinMode = noInput && process.platform !== 'win32' ? 'ignore' : 'pipe'
-  const proc = spawn(sshPath, [...buildSshArgs(target, options), remoteCommand], {
+  const windowsNoInputLauncherPath =
+    noInput && process.platform === 'win32' ? options?.windowsNoInputLauncherPath : undefined
+  const sshArgs = buildSshArgs(
+    target,
+    windowsNoInputLauncherPath ? { ...options, noInput: false } : options
+  )
+  const executable = windowsNoInputLauncherPath ?? sshPath
+  const args = windowsNoInputLauncherPath
+    ? [sshPath, ...sshArgs, remoteCommand]
+    : [...sshArgs, remoteCommand]
+  const stdinMode =
+    windowsNoInputLauncherPath || (noInput && process.platform !== 'win32') ? 'ignore' : 'pipe'
+  const proc = spawn(executable, args, {
     // Why: Win32-OpenSSH can hang when stdin is mapped to NUL; give it a
-    // pipe whose parent end is closed immediately, as required by #856/#1330.
+    // proven launcher only when its verified path is explicitly supplied.
     stdio: [stdinMode, 'pipe', 'pipe'],
     windowsHide: true
   })
-  if (noInput && process.platform === 'win32') {
+  if (noInput && process.platform === 'win32' && !windowsNoInputLauncherPath) {
     proc.stdin?.destroy()
   }
   return wrapCommandProcess(proc, !noInput)

@@ -14,6 +14,7 @@ import {
   writeBufferViaSystemSsh,
   writeFileViaSystemSsh,
   type SystemSshBuildArgsOptions,
+  type SystemSshCommandOptions,
   type SystemSshProcess
 } from './ssh-system-fallback'
 import { resolveWithSshG, type SshResolvedConfig } from './ssh-config-parser'
@@ -44,6 +45,11 @@ export type { SshConnectionCallbacks } from './ssh-connection-utils'
 
 type SshRemoteFileOptions = {
   hostPlatform?: RemoteHostPlatform
+}
+
+export type SshConnectionSystemSshOptions = {
+  // Why: native qualification must not connect the launcher to a product/default caller yet.
+  windowsNoInputLauncherPath?: string
 }
 
 // Upper bound on waiting, after an abort, for the in-flight open callback or
@@ -77,15 +83,21 @@ export class SshConnection {
   private state: SshConnectionState
   private callbacks: SshConnectionCallbacks
   private target: SshTarget
+  private readonly systemSshOptions: SshConnectionSystemSshOptions
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null
   private disposed = false
   private cachedPassphrase: string | null = null
   private cachedPassword: string | null = null
   private connectGeneration = 0
 
-  constructor(target: SshTarget, callbacks: SshConnectionCallbacks) {
+  constructor(
+    target: SshTarget,
+    callbacks: SshConnectionCallbacks,
+    systemSshOptions: SshConnectionSystemSshOptions = {}
+  ) {
     this.target = target
     this.callbacks = callbacks
+    this.systemSshOptions = { ...systemSshOptions }
     this.state = {
       targetId: target.id,
       status: 'disconnected',
@@ -931,16 +943,24 @@ export class SshConnection {
 
   private spawnTrackedSystemSshCommand(
     command: string,
-    options?: SshExecOptions & Pick<SystemSshBuildArgsOptions, 'noInput'>
+    options?: SshExecOptions & Pick<SystemSshCommandOptions, 'noInput'>
   ): ClientChannel {
     if (options?.signal?.aborted) {
       throw createSshOperationAbortError()
     }
     const buildArgsOptions = this.getSystemSshBuildArgsOptions()
+    const windowsNoInputLauncherPath =
+      options?.noInput === true ? this.systemSshOptions.windowsNoInputLauncherPath : undefined
     const commandOptions =
-      options === undefined && Object.keys(buildArgsOptions).length === 0
+      options === undefined &&
+      Object.keys(buildArgsOptions).length === 0 &&
+      windowsNoInputLauncherPath === undefined
         ? undefined
-        : { ...options, ...buildArgsOptions }
+        : {
+            ...options,
+            ...buildArgsOptions,
+            ...(windowsNoInputLauncherPath === undefined ? {} : { windowsNoInputLauncherPath })
+          }
     const channel =
       commandOptions === undefined
         ? spawnSystemSshCommand(this.target, command)

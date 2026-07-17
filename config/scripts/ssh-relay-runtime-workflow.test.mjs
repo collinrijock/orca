@@ -142,8 +142,24 @@ describe('SSH relay runtime artifact workflow', () => {
   })
 
   it('runs full-size Windows system SSH against loopback native OpenSSH', async () => {
-    const workflow = parse(await readFile(workflowUrl, 'utf8'))
+    const [workflowSource, fullSizeSource, connectionSource, managerSource] = await Promise.all([
+      readFile(workflowUrl, 'utf8'),
+      readFile(
+        new URL(
+          '../../src/main/ssh/ssh-relay-runtime-windows-system-ssh-openssh-full-size.test.ts',
+          import.meta.url
+        ),
+        'utf8'
+      ),
+      readFile(new URL('../../src/main/ssh/ssh-connection.ts', import.meta.url), 'utf8'),
+      readFile(new URL('../../src/main/ssh/ssh-connection-manager.ts', import.meta.url), 'utf8')
+    ])
+    const workflow = parse(workflowSource)
     assertWindowsOpenSshWorkflow(workflow, expect)
+    expect(fullSizeSource).toContain('process.env.ORCA_SSH_WINDOWS_NO_INPUT_LAUNCHER')
+    expect(fullSizeSource).toContain('{ windowsNoInputLauncherPath: launcherPath as string }')
+    expect(connectionSource).not.toContain('ORCA_SSH_WINDOWS_NO_INPUT_LAUNCHER')
+    expect(managerSource).not.toContain('windowsNoInputLauncherPath')
   })
 
   it('uploads only the first output after two clean builds verify and compare', async () => {
