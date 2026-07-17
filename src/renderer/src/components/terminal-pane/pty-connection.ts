@@ -131,6 +131,7 @@ import { recordTerminalOutput } from '@/lib/pane-manager/pane-scroll'
 import { ensureArabicShapingJoinerForText } from '@/lib/pane-manager/terminal-arabic-shaping-joiner'
 import { clearTerminalScrollbackAndFollowOutput } from '@/lib/pane-manager/terminal-scrollback-clear'
 import {
+  enforceTerminalCurrentScrollIntent,
   getTerminalScrollIntentKind,
   markTerminalFollowOutput
 } from '@/lib/pane-manager/terminal-scroll-intent'
@@ -7128,6 +7129,7 @@ export function connectPanePty(
       // Why: createOrAttach snapshots precede bytes emitted before its IPC
       // reply. Paint the authoritative replay first, then admit those live
       // chunks so the replay clear cannot erase newer output.
+      let deliveredDeferredChunks = 0
       for (const chunk of chunks) {
         if (
           chunk.ptyId !== currentPtyId ||
@@ -7137,6 +7139,24 @@ export function connectPanePty(
           continue
         }
         dataCallback(chunk.data, chunk.meta, chunk.streamGeneration)
+        deliveredDeferredChunks += 1
+      }
+      if (deliveredDeferredChunks > 0) {
+        // Why: the replay's viewport anchor is a one-shot that ran before
+        // these deferred live chunks parsed. An inline TUI keeps appending
+        // across the reveal, so re-enforce the restored intent post-parse —
+        // otherwise a following pane can strand at the snapshot's bottom and
+        // show a stale frame until a manual resize.
+        void waitForTerminalOutputParsed(pane.terminal).then(() => {
+          if (
+            disposed ||
+            transport.getPtyId() !== currentPtyId ||
+            transportStreamGeneration !== currentGeneration
+          ) {
+            return
+          }
+          enforceTerminalCurrentScrollIntent(pane.terminal)
+        })
       }
     }
 

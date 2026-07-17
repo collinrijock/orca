@@ -1,3 +1,4 @@
+import { forceRepaintThroughRenderPause } from './terminal-render-pause-release'
 import { runGuardedWriteCompletionStep } from './xterm-write-callback-guard'
 
 export type ForegroundTerminalOutputTarget = {
@@ -39,6 +40,14 @@ function refreshVisibleRows(
   synchronously: boolean
 ): void {
   if (typeof terminal.rows !== 'number' || terminal.rows < 1) {
+    return
+  }
+
+  // Why: xterm's RenderService swallows refreshes while its IntersectionObserver
+  // still reports the just-revealed screen as hidden — a reattach replay parsed
+  // in that window would never paint (remount path has no reveal-repaint). The
+  // pause release drives one synchronous full render through the gate.
+  if (forceRepaintThroughRenderPause(terminal)) {
     return
   }
 

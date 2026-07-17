@@ -1,4 +1,5 @@
 import type { ManagedPane, ManagedPaneInternal, ScrollState } from './pane-manager-types'
+import { recordRendererCrashBreadcrumb } from '@/lib/crash-breadcrumb-recorder'
 import { getFitOverrideForPty } from './mobile-fit-overrides'
 import {
   captureTerminalStructuralScrollIntent,
@@ -196,6 +197,70 @@ export function safeFit(pane: ManagedPane): boolean {
   return completed
 }
 
+// Why the retry pump: a continuation parked while the pane is mid-reveal
+// unmeasurable has no guaranteed wake-up — the container size may already be
+// final, so no further ResizeObserver fit arrives, and the replayed xterm
+// stays at snapshot dims with no PTY resize/SIGWINCH until a manual window
+// resize (field: blank/gapped Codex pane on workspace switch).
+const SAFE_FIT_RETRY_MAX_ATTEMPTS = 40
+const SAFE_FIT_RETRY_SPACING_MS = 50
+const safeFitRetryByPane = new WeakMap<ManagedPane, { attempts: number; scheduled: boolean }>()
+
+function scheduleSafeFitRetryTick(run: () => void): void {
+  if (typeof requestAnimationFrame === 'function') {
+    requestAnimationFrame(() => {
+      setTimeout(run, SAFE_FIT_RETRY_SPACING_MS)
+    })
+    return
+  }
+  setTimeout(run, SAFE_FIT_RETRY_SPACING_MS)
+}
+
+function pruneStaleSafeFitContinuations(pane: ManagedPane): void {
+  const operations = pendingSafeFitContinuations.get(pane)
+  if (!operations) {
+    return
+  }
+  for (const [operationKey, pending] of operations) {
+    if (!pending.shouldContinue()) {
+      settlePendingSafeFitContinuation(pane, operationKey, pending, false)
+    }
+  }
+}
+
+function armSafeFitContinuationRetry(pane: ManagedPane): void {
+  const state = safeFitRetryByPane.get(pane) ?? { attempts: 0, scheduled: false }
+  safeFitRetryByPane.set(pane, state)
+  if (state.scheduled) {
+    return
+  }
+  state.scheduled = true
+  scheduleSafeFitRetryTick(() => {
+    state.scheduled = false
+    pruneStaleSafeFitContinuations(pane)
+    if (!pendingSafeFitContinuations.get(pane)?.size) {
+      safeFitRetryByPane.delete(pane)
+      return
+    }
+    state.attempts += 1
+    if (safeFit(pane)) {
+      safeFitRetryByPane.delete(pane)
+      return
+    }
+    if (state.attempts >= SAFE_FIT_RETRY_MAX_ATTEMPTS) {
+      safeFitRetryByPane.delete(pane)
+      // Why: an exhausted retry means a replay-parked PTY resize never ran —
+      // the field signature is a wrong-grid pane until a manual resize, so
+      // leave a diagnosable trace instead of failing silently.
+      recordRendererCrashBreadcrumb('terminal_safe_fit_retry_exhausted', {
+        paneId: pane.id
+      })
+      return
+    }
+    armSafeFitContinuationRetry(pane)
+  })
+}
+
 export function cancelPendingSafeFitContinuations(pane: ManagedPane): void {
   const operations = pendingSafeFitContinuations.get(pane)
   if (!operations) {
@@ -245,13 +310,17 @@ export function safeFitAndThen(
       `safe-fit-and-then:${operationKey}`,
       () => {
         if (pendingSafeFitContinuations.get(pane)?.get(operationKey) === pending) {
-          safeFit(pane)
+          if (!safeFit(pane)) {
+            armSafeFitContinuationRetry(pane)
+          }
         }
       }
     )
   ) {
     return { completion, cancel }
   }
-  safeFit(pane)
+  if (!safeFit(pane)) {
+    armSafeFitContinuationRetry(pane)
+  }
   return { completion, cancel }
 }
