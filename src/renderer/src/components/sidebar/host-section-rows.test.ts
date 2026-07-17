@@ -444,9 +444,7 @@ describe('addHostSectionRows', () => {
         count: 1,
         hostWorktreeCounts: new Map([[localHostId, 1]]),
         hostWorktreeIds: new Map([[localHostId, ['local-wt']]]),
-        worktreeIds: ['local-wt'],
-        runningCount: 1,
-        hostRunningCounts: new Map([[localHostId, 1]])
+        worktreeIds: ['local-wt']
       },
       repoHeader(ssh),
       item('ssh-wt', ssh)
@@ -480,7 +478,7 @@ describe('addHostSectionRows', () => {
       { hostId: 'ssh:ssh-1', count: 1 }
     ])
     expect(sectioned.filter((row) => row.type === 'header' && row.key === 'all')).toMatchObject([
-      { hostId: 'local', count: 1, runningCount: 1, worktreeIds: ['local-wt'] }
+      { hostId: 'local', count: 1, worktreeIds: ['local-wt'] }
     ])
   })
 

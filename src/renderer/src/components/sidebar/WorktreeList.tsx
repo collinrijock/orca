@@ -34,7 +34,6 @@ import {
   useWorktreeMap
 } from '@/store/selectors'
 import WorktreeCard, { type ActiveSurfaceVariant } from './WorktreeCard'
-import StatusIndicator from './StatusIndicator'
 import { WorktreeSidebarDropIndicator } from './WorktreeSidebarDropIndicator'
 import {
   getProjectGroupHeaderSectionEndByGroupId,
@@ -125,11 +124,8 @@ import { getWorktreeIdsWithLiveAgent } from '@/lib/worktree-activity-state'
 import { getEmptyProjectPlaceholderRepoIds } from './empty-project-placeholder-repos'
 import {
   getVisibleWorktreeBrowserActivityTabs,
-  getVisibleWorktreeTerminalActivityTabs,
-  getWorktreeSectionTerminalActivityTabs
+  getVisibleWorktreeTerminalActivityTabs
 } from './visible-worktree-activity-inputs'
-import { selectTerminalLayoutRootsForWorktrees } from './worktree-card-status-inputs'
-import { buildWorktreeSectionActivitySummaries } from './worktree-section-activity'
 import { selectWorktreeListReviewCacheInputs } from './worktree-list-review-cache-inputs'
 import {
   VIRTUALIZED_SCROLL_ANCHOR_RECORD_EVENT,
@@ -295,6 +291,10 @@ import {
   getProjectGroupExecutionHostIdForRows
 } from './worktree-list-host-filtering'
 import { getFolderWorkspaceCardPrDisplay } from './folder-workspace-card-pr-display'
+import {
+  getPreferredWorktreeRows,
+  getRenderedWorktreesInSidebarOrder
+} from './worktree-sidebar-row-preference'
 
 export {
   getScrollTopToRevealBounds,
@@ -743,27 +743,6 @@ function SectionMetricsBadge({ count }: { count: number }): React.JSX.Element {
   )
 }
 
-function SectionRunningBadge({ count }: { count: number }): React.JSX.Element {
-  const label = formatSectionActivityLabel(count, 'running workspace')
-
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <span
-          className="inline-flex h-4 shrink-0 items-center gap-1 rounded-full border border-worktree-sidebar-border bg-worktree-sidebar-accent px-1.5 text-[9px] font-medium leading-none text-muted-foreground/90"
-          aria-label={label}
-        >
-          <StatusIndicator status="working" aria-hidden="true" className="size-2.5" />
-          {count}
-        </span>
-      </TooltipTrigger>
-      <TooltipContent side="bottom" sideOffset={6}>
-        {label}
-      </TooltipContent>
-    </Tooltip>
-  )
-}
-
 function HostHeaderHealthIcon({
   health
 }: {
@@ -1088,41 +1067,6 @@ function getRenderRowWorktreeItem(row: RenderRow, worktreeId: string): WorktreeI
     return row.rows.find((item) => item.worktree.id === worktreeId) ?? null
   }
   return row.type === 'item' && row.worktree.id === worktreeId ? row : null
-}
-
-function getPreferredWorktreeRows(
-  rows: readonly WorktreeItemRow[],
-  pinnedDisplayPolicy: PinnedWorktreeDisplayPolicy
-): WorktreeItemRow[] {
-  // Why: when pinned rows are duplicated into natural groups, navigation and
-  // selection should prefer the natural-group copy and only fall back to pinned.
-  if (pinnedDisplayPolicy === 'single-location') {
-    const seen = new Set<string>()
-    return rows.filter((row) => {
-      if (seen.has(row.worktree.id)) {
-        return false
-      }
-      seen.add(row.worktree.id)
-      return true
-    })
-  }
-  const preferredRows: WorktreeItemRow[] = []
-  const seen = new Set<string>()
-  for (const row of rows) {
-    if (isPinnedWorktreeRow(row) || seen.has(row.worktree.id)) {
-      continue
-    }
-    preferredRows.push(row)
-    seen.add(row.worktree.id)
-  }
-  for (const row of rows) {
-    if (seen.has(row.worktree.id)) {
-      continue
-    }
-    preferredRows.push(row)
-    seen.add(row.worktree.id)
-  }
-  return preferredRows
 }
 
 function getRenderRowOptionId(
@@ -4457,9 +4401,6 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                         <div className="min-w-0 truncate text-[13px] font-semibold leading-none">
                           {row.label}
                         </div>
-                        {isHeaderCollapsed && row.runningCount && row.runningCount > 0 ? (
-                          <SectionRunningBadge count={row.runningCount} />
-                        ) : null}
                         <RepoForkIndicator upstream={row.repo?.upstream} />
                         <FolderPathStatusIndicator status={projectGroupPathStatus} />
                       </div>
@@ -5415,20 +5356,6 @@ const WorktreeList = React.memo(function WorktreeList({
   )
   const settings = useAppStore((s) => s.settings)
   const pinnedDisplayPolicy = getPinnedWorktreeDisplayPolicy(settings)
-  const sectionActivitySourceState = useAppStore(
-    useShallow((s) => ({
-      tabsByWorktree: getWorktreeSectionTerminalActivityTabs(s.tabsByWorktree),
-      browserTabsByWorktree: getVisibleWorktreeBrowserActivityTabs(s.browserTabsByWorktree),
-      ptyIdsByTabId: s.ptyIdsByTabId,
-      runtimePaneTitlesByTabId: s.runtimePaneTitlesByTabId,
-      terminalLayoutsByTabId: s.terminalLayoutsByTabId,
-      agentStatusEpoch: s.agentStatusEpoch,
-      agentStatusByPaneKey: s.agentStatusByPaneKey,
-      migrationUnsupportedByPtyId: s.migrationUnsupportedByPtyId,
-      retainedAgentsByPaneKey: s.retainedAgentsByPaneKey,
-      runtimeAgentOrchestrationByPaneKey: s.runtimeAgentOrchestrationByPaneKey
-    }))
-  )
   const sshTargetLabels = useAppStore((s) => s.sshTargetLabels)
   const sshConnectionStates = useAppStore((s) => s.sshConnectionStates)
   const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
@@ -5929,49 +5856,6 @@ const WorktreeList = React.memo(function WorktreeList({
     () => new Map(hostOptions.map((host) => [host.id, host.label])),
     [hostOptions]
   )
-  const sectionActivityWorktreeIds = useMemo(
-    () => worktrees.map((worktree) => worktree.id),
-    [worktrees]
-  )
-  const sectionActivityState = useMemo(
-    () => ({
-      ...sectionActivitySourceState,
-      terminalLayoutRootsByTabId: selectTerminalLayoutRootsForWorktrees(
-        sectionActivitySourceState,
-        sectionActivityWorktreeIds
-      )
-    }),
-    [sectionActivitySourceState, sectionActivityWorktreeIds]
-  )
-  const sectionActivitySummaries = useMemo(
-    () =>
-      buildWorktreeSectionActivitySummaries({
-        groupBy,
-        worktrees,
-        repoMap,
-        prCache,
-        workspaceStatuses,
-        settings,
-        projectGroups: visibleProjectGroupsForRows,
-        projectGrouping,
-        pinnedDisplayPolicy,
-        defaultHostId,
-        state: sectionActivityState
-      }),
-    [
-      defaultHostId,
-      groupBy,
-      pinnedDisplayPolicy,
-      prCache,
-      projectGrouping,
-      repoMap,
-      sectionActivityState,
-      settings,
-      visibleProjectGroupsForRows,
-      workspaceStatuses,
-      worktrees
-    ]
-  )
 
   // Build flat row list for rendering
   const rows: Row[] = useMemo(
@@ -5998,8 +5882,7 @@ const WorktreeList = React.memo(function WorktreeList({
         visibleFolderWorkspacesForRows,
         hostLabelById,
         defaultHostId,
-        pinnedDisplayPolicy,
-        sectionActivitySummaries
+        pinnedDisplayPolicy
       ),
     [
       groupBy,
@@ -6022,8 +5905,7 @@ const WorktreeList = React.memo(function WorktreeList({
       newExternalWorktreesInboxByRepo,
       pendingCreations,
       hostLabelById,
-      pinnedDisplayPolicy,
-      sectionActivitySummaries
+      pinnedDisplayPolicy
     ]
   )
   const orderedHostOptions = useMemo(
@@ -6105,23 +5987,10 @@ const WorktreeList = React.memo(function WorktreeList({
   // 'pr-status') can reorder cards into grouped sections. Using the flat
   // order would cause Cmd+1–9 shortcuts to not match the visual card
   // positions when grouping is active.
-  const renderedWorktrees = useMemo(() => {
-    const itemRows: WorktreeItemRow[] = []
-    const folderRows: Worktree[] = []
-    for (const row of sectionRows) {
-      if (row.type === 'item') {
-        itemRows.push(row)
-        continue
-      }
-      if (row.type === 'folder-workspace') {
-        folderRows.push(folderWorkspaceToWorktree(row.folderWorkspace))
-      }
-    }
-    return [
-      ...getPreferredWorktreeRows(itemRows, pinnedDisplayPolicy).map((row) => row.worktree),
-      ...folderRows
-    ]
-  }, [pinnedDisplayPolicy, sectionRows])
+  const renderedWorktrees = useMemo(
+    () => getRenderedWorktreesInSidebarOrder(sectionRows, pinnedDisplayPolicy),
+    [pinnedDisplayPolicy, sectionRows]
+  )
   const renderedWorktreeIds = useMemo(
     () => uniqueWorktreeIds(renderedWorktrees.map((worktree) => worktree.id)),
     [renderedWorktrees]

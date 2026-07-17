@@ -34,7 +34,6 @@ import type { AppState } from '../../store/types'
 import { getGitHubPRCacheKey, getLegacyGitHubPRCacheKey } from '../../store/slices/github-cache-key'
 import { getRepoDisplayLabelKey, getRepoDisplayLabelsByPath } from '@/lib/repo-display-labels'
 import { translate } from '@/i18n/i18n'
-import type { WorktreeSectionActivitySummary } from './worktree-section-activity'
 import {
   getExecutionHostLabel,
   LOCAL_EXECUTION_HOST_ID,
@@ -69,8 +68,6 @@ export type GroupHeaderRow = {
   hostWorktreeCounts?: ReadonlyMap<ExecutionHostId, number>
   hostWorktreeIds?: ReadonlyMap<ExecutionHostId, readonly string[]>
   worktreeIds?: readonly string[]
-  runningCount?: number
-  hostRunningCounts?: ReadonlyMap<ExecutionHostId, number>
 }
 
 export type WorktreeRow = {
@@ -468,8 +465,7 @@ function emitPinnedGroup(
   renderedNaturalAnchorRepoIds: ReadonlySet<string>,
   importedWorktreesByRepo: ReadonlyMap<string, ImportedWorktreesCardCandidate>,
   allowImportedFallback: boolean,
-  result: Row[],
-  activitySummary?: WorktreeSectionActivitySummary
+  result: Row[]
 ): void {
   const pinned = worktrees.filter((w) => w.isPinned)
   if (pinned.length === 0) {
@@ -500,9 +496,7 @@ function emitPinnedGroup(
     icon: PINNED_GROUP_META.icon,
     hostWorktreeCounts,
     hostWorktreeIds,
-    worktreeIds: pinned.map((worktree) => worktree.id),
-    runningCount: activitySummary?.runningCount,
-    hostRunningCounts: activitySummary?.hostRunningCounts
+    worktreeIds: pinned.map((worktree) => worktree.id)
   })
   if (collapsedGroups.has(PINNED_GROUP_KEY)) {
     for (const repoId of pinnedRepoOrder) {
@@ -1014,8 +1008,7 @@ export function buildRows(
   folderWorkspaces: readonly FolderWorkspace[] = [],
   hostLabelById?: ReadonlyMap<string, string>,
   defaultHostId: ExecutionHostId = LOCAL_EXECUTION_HOST_ID,
-  pinnedDisplayPolicy: PinnedWorktreeDisplayPolicy = getPinnedWorktreeDisplayPolicy(settings),
-  sectionActivitySummaries?: ReadonlyMap<string, WorktreeSectionActivitySummary>
+  pinnedDisplayPolicy: PinnedWorktreeDisplayPolicy = getPinnedWorktreeDisplayPolicy(settings)
 ): Row[] {
   const result: Row[] = []
   const projectIndex = buildProjectGroupingIndex(projectGrouping)
@@ -1050,14 +1043,6 @@ export function buildRows(
     settings,
     projectGrouping
   })
-  const getSectionActivity = (
-    key: string
-  ): Pick<GroupHeaderRow, 'runningCount' | 'hostRunningCounts'> => {
-    const summary = sectionActivitySummaries?.get(key)
-    return summary && summary.runningCount > 0
-      ? { runningCount: summary.runningCount, hostRunningCounts: summary.hostRunningCounts }
-      : {}
-  }
   // Repos whose only visible worktrees are pinned are surfaced via the pinned
   // section, so the repo-grouped inbox loop below must not re-create a group for them.
   const visiblePinnedRepoIds = new Set(
@@ -1071,8 +1056,7 @@ export function buildRows(
     renderedNaturalAnchorRepoIds,
     importedWorktreesByRepo,
     groupBy !== 'repo',
-    result,
-    sectionActivitySummaries?.get(PINNED_GROUP_KEY)
+    result
   )
   if (groupBy === 'none') {
     if (naturalWorktrees.length > 0) {
@@ -1085,8 +1069,7 @@ export function buildRows(
         icon: ALL_GROUP_META.icon,
         hostWorktreeCounts: getHostWorktreeCounts(naturalWorktrees, repoMap, defaultHostId),
         hostWorktreeIds: getHostWorktreeIds(naturalWorktrees, repoMap, defaultHostId),
-        worktreeIds: naturalWorktrees.map((worktree) => worktree.id),
-        ...getSectionActivity(ALL_GROUP_KEY)
+        worktreeIds: naturalWorktrees.map((worktree) => worktree.id)
       })
       if (!collapsedGroups.has(ALL_GROUP_KEY)) {
         appendWorktreeRows(result, naturalWorktrees, repoMap, lineageById, worktreeMap, {
@@ -1273,8 +1256,7 @@ export function buildRows(
                   icon: meta.icon,
                   hostWorktreeCounts: getHostWorktreeCounts(group.items, repoMap, defaultHostId),
                   hostWorktreeIds: getHostWorktreeIds(group.items, repoMap, defaultHostId),
-                  worktreeIds: group.items.map((worktree) => worktree.id),
-                  ...getSectionActivity(key)
+                  worktreeIds: group.items.map((worktree) => worktree.id)
                 }
               })()
             : (() => {
@@ -1289,8 +1271,7 @@ export function buildRows(
                   icon: meta.icon,
                   hostWorktreeCounts: getHostWorktreeCounts(group.items, repoMap, defaultHostId),
                   hostWorktreeIds: getHostWorktreeIds(group.items, repoMap, defaultHostId),
-                  worktreeIds: group.items.map((worktree) => worktree.id),
-                  ...getSectionActivity(key)
+                  worktreeIds: group.items.map((worktree) => worktree.id)
                 }
               })()
 
@@ -1438,8 +1419,7 @@ export function buildRows(
       tone: PROJECT_GROUP_META.tone,
       icon: PROJECT_GROUP_META.icon,
       projectGroup,
-      projectGroupDepth: depth,
-      ...getSectionActivity(key)
+      projectGroupDepth: depth
     })
     if (!collapsedGroups.has(key)) {
       for (const folderWorkspace of folderWorkspacesByProjectGroupId.get(projectGroup.id) ?? []) {

@@ -9,16 +9,8 @@ import type {
   WorkspaceStatusDefinition
 } from '../../../../shared/types'
 import {
-  getRepoExecutionHostId,
-  LOCAL_EXECUTION_HOST_ID,
-  type ExecutionHostId
-} from '../../../../shared/execution-host'
-import {
   getGroupKeysForWorktree,
-  getPinnedWorktreeDisplayPolicy,
-  type ProjectGroupingModel,
   type WorktreeGroupBy,
-  type PinnedWorktreeDisplayPolicy,
   PINNED_GROUP_KEY
 } from './worktree-list-groups'
 import {
@@ -36,7 +28,6 @@ export type WorktreeSectionActivityState = Pick<
   | 'agentStatusByPaneKey'
   | 'migrationUnsupportedByPtyId'
   | 'retainedAgentsByPaneKey'
-  | 'runtimeAgentOrchestrationByPaneKey'
 > & {
   tabsByWorktree: Record<string, readonly Pick<TerminalTab, 'id' | 'title'>[]>
   browserTabsByWorktree: Record<string, readonly BrowserActivityTab[]>
@@ -45,7 +36,6 @@ export type WorktreeSectionActivityState = Pick<
 
 export type WorktreeSectionActivitySummary = {
   runningCount: number
-  hostRunningCounts?: ReadonlyMap<ExecutionHostId, number>
 }
 
 export const EMPTY_WORKTREE_SECTION_ACTIVITY: WorktreeSectionActivitySummary = {
@@ -60,9 +50,6 @@ export function buildWorktreeSectionActivitySummaries({
   workspaceStatuses,
   settings,
   projectGroups,
-  projectGrouping,
-  pinnedDisplayPolicy = getPinnedWorktreeDisplayPolicy(settings),
-  defaultHostId = LOCAL_EXECUTION_HOST_ID,
   state
 }: {
   groupBy: WorktreeGroupBy
@@ -72,30 +59,23 @@ export function buildWorktreeSectionActivitySummaries({
   workspaceStatuses: readonly WorkspaceStatusDefinition[]
   settings?: AppState['settings']
   projectGroups: readonly ProjectGroup[]
-  projectGrouping?: ProjectGroupingModel
-  pinnedDisplayPolicy?: PinnedWorktreeDisplayPolicy
-  defaultHostId?: ExecutionHostId
   state: WorktreeSectionActivityState
 }): Map<string, WorktreeSectionActivitySummary> {
   const summaries = new Map<string, WorktreeSectionActivitySummary>()
 
   for (const worktree of worktrees) {
-    const naturalGroupKeys = getGroupKeysForWorktree(
-      groupBy,
-      worktree,
-      repoMap,
-      prCache,
-      workspaceStatuses,
-      settings,
-      projectGroups,
-      projectGrouping
-    )
-    const groupKeys =
-      worktree.isPinned && pinnedDisplayPolicy === 'single-location'
-        ? [PINNED_GROUP_KEY]
-        : worktree.isPinned
-          ? [PINNED_GROUP_KEY, ...naturalGroupKeys]
-          : naturalGroupKeys
+    const groupKeys = [
+      ...(worktree.isPinned ? [PINNED_GROUP_KEY] : []),
+      ...getGroupKeysForWorktree(
+        groupBy,
+        worktree,
+        repoMap,
+        prCache,
+        workspaceStatuses,
+        settings,
+        projectGroups
+      )
+    ]
     if (groupKeys.length === 0) {
       continue
     }
@@ -105,30 +85,12 @@ export function buildWorktreeSectionActivitySummaries({
       const summary = summaries.get(groupKey) ?? { ...EMPTY_WORKTREE_SECTION_ACTIVITY }
       if (status === 'working') {
         summary.runningCount++
-        const hostRunningCounts = new Map(summary.hostRunningCounts ?? [])
-        const hostId = getWorktreeHostId(worktree, repoMap, defaultHostId)
-        hostRunningCounts.set(hostId, (hostRunningCounts.get(hostId) ?? 0) + 1)
-        summary.hostRunningCounts = hostRunningCounts
       }
       summaries.set(groupKey, summary)
     }
   }
 
   return summaries
-}
-
-function getWorktreeHostId(
-  worktree: Worktree,
-  repoMap: ReadonlyMap<string, Repo>,
-  defaultHostId: ExecutionHostId
-): ExecutionHostId {
-  const repo = repoMap.get(worktree.repoId)
-  // Why: pinned headers can be cloned inside host sections, so hidden pinned
-  // activity must stay attributed to the owning host instead of the global key.
-  if (repo?.connectionId || repo?.executionHostId) {
-    return getRepoExecutionHostId(repo)
-  }
-  return defaultHostId
 }
 
 function getSectionWorktreeStatus(

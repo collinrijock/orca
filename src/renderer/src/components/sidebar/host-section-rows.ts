@@ -146,13 +146,11 @@ function localizePendingRowsForHost(
     }
     const count = row.hostWorktreeCounts.get(hostId)
     if (count !== undefined && count > 0) {
-      const runningCount = row.hostRunningCounts?.get(hostId)
       localized.push({
         ...row,
         count,
         hostId,
-        worktreeIds: row.hostWorktreeIds?.get(hostId) ?? row.worktreeIds,
-        runningCount: runningCount && runningCount > 0 ? runningCount : undefined
+        worktreeIds: row.hostWorktreeIds?.get(hostId) ?? row.worktreeIds
       })
     }
   }
@@ -219,13 +217,11 @@ export function addHostSectionRows(args: {
         }
         const hostRows = rowsByHostId.get(hostId) ?? []
         const hostIds = row.hostWorktreeIds?.get(hostId)
-        const runningCount = row.hostRunningCounts?.get(hostId)
         hostRows.push({
           ...row,
           count,
           hostId,
-          worktreeIds: hostIds ?? row.worktreeIds,
-          runningCount: runningCount && runningCount > 0 ? runningCount : undefined
+          worktreeIds: hostIds ?? row.worktreeIds
         })
         rowsByHostId.set(hostId, hostRows)
       }

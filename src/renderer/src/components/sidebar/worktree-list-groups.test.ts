@@ -2176,64 +2176,6 @@ describe('project groups', () => {
     })
   })
 
-  it('attaches activity summaries to Project Group headers', () => {
-    const group: ProjectGroup = {
-      id: 'group-1',
-      name: 'Platform',
-      parentPath: '/platform',
-      parentGroupId: null,
-      createdFrom: 'folder-scan',
-      tabOrder: 0,
-      isCollapsed: false,
-      color: null,
-      createdAt: 1,
-      updatedAt: 1
-    }
-    const groupedRepo: Repo = { ...repo, projectGroupId: group.id }
-    const hostRunningCounts = new Map([['local', 1] as const])
-
-    const rows = buildRows(
-      'repo',
-      [],
-      new Map([[groupedRepo.id, groupedRepo]]),
-      null,
-      new Set(),
-      undefined,
-      undefined,
-      undefined,
-      {},
-      new Map(),
-      false,
-      undefined,
-      [group],
-      new Set([groupedRepo.id]),
-      new Map(),
-      new Map(),
-      [],
-      undefined,
-      [],
-      undefined,
-      'local',
-      'single-location',
-      new Map([
-        [
-          'project-group:group-1',
-          {
-            runningCount: 1,
-            hostRunningCounts
-          }
-        ]
-      ])
-    )
-
-    expect(rows[0]).toMatchObject({
-      type: 'header',
-      key: 'project-group:group-1',
-      runningCount: 1,
-      hostRunningCounts
-    })
-  })
-
   it('does not resurrect filtered repos as empty Project Group headers', () => {
     const group: ProjectGroup = {
       id: 'group-1',
