@@ -331,7 +331,13 @@ describe('nativeChat.subscribe initial snapshot', () => {
     )
 
     expect(emitted).toEqual([
-      { type: 'snapshot', messages: [], hasMore: false, error: 'Transcript unavailable' }
+      {
+        type: 'snapshot',
+        messages: [],
+        hasMore: false,
+        turnLifecycleCapable: true,
+        error: 'Transcript unavailable'
+      }
     ])
   })
 
@@ -353,6 +359,7 @@ describe('nativeChat.subscribe initial snapshot', () => {
         messages: [],
         hasMore: false,
         beforeOffset: 0,
+        turnLifecycleCapable: true,
         error: 'Transcript unavailable'
       }
     ])
@@ -375,7 +382,8 @@ describe('nativeChat.subscribe initial snapshot', () => {
         type: 'snapshot',
         messages: [expect.objectContaining({ id: 'a-1' })],
         hasMore: false,
-        beforeOffset: 7
+        beforeOffset: 7,
+        turnLifecycleCapable: true
       }
     ])
   })

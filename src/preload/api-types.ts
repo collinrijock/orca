@@ -427,7 +427,11 @@ import type {
   AiVaultSubagentListArgs,
   AiVaultSubagentListResult
 } from '../shared/ai-vault-types'
-import type { AgentType, NativeChatMessage } from '../shared/native-chat-types'
+import type {
+  AgentType,
+  NativeChatMessage,
+  NativeChatTurnLifecycle
+} from '../shared/native-chat-types'
 import type { TelemetryConsentState } from '../shared/telemetry-consent-types'
 import type { AgentKind, LaunchSource, RequestKind } from '../shared/telemetry-events'
 import type { AppStarSource } from '../shared/gh-star-source'
@@ -836,16 +840,39 @@ export type AiVaultApi = {
 // notFound marks a miss caused by the transcript not existing on disk yet
 // (retry-worthy), as opposed to a real read/parse error (#8401).
 export type NativeChatReadSessionResult =
-  | { messages: NativeChatMessage[] }
+  | {
+      messages: NativeChatMessage[]
+      lifecycle?: NativeChatTurnLifecycle
+      /** True when this host can decode authoritative transcript turn boundaries. */
+      turnLifecycleCapable?: boolean
+    }
   | { error: string; notFound?: true }
 
 /** Messages appended to a live-tailed transcript since the previous emit. */
 export type NativeChatAppendedMessages = NativeChatMessage[]
 
 export type NativeChatSubscriptionFrame =
-  | { type: 'snapshot'; messages: NativeChatMessage[]; hasMore: boolean; error?: string }
-  | { type: 'replacement'; messages: NativeChatMessage[]; hasMore: boolean }
-  | { type: 'appended'; messages: NativeChatMessage[] }
+  | {
+      type: 'snapshot'
+      messages: NativeChatMessage[]
+      hasMore: boolean
+      error?: string
+      lifecycle?: NativeChatTurnLifecycle
+      turnLifecycleCapable?: boolean
+    }
+  | {
+      type: 'replacement'
+      messages: NativeChatMessage[]
+      hasMore: boolean
+      lifecycle?: NativeChatTurnLifecycle
+      turnLifecycleCapable?: boolean
+    }
+  | {
+      type: 'appended'
+      messages: NativeChatMessage[]
+      lifecycle?: NativeChatTurnLifecycle
+      turnLifecycleCapable?: boolean
+    }
 
 /** Wire payload for the `nativeChat:appended` push channel. */
 export type NativeChatAppendedPayload = {

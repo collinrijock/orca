@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useAppStore } from '../../store'
 import {
   NATIVE_CHAT_SOURCE_PRIORITY,
   type AgentType,
@@ -23,6 +22,8 @@ import {
   nextNativeChatLimit
 } from './native-chat-pagination'
 import { getNativeChatSessionTransport } from './native-chat-session-transport'
+import { useNativeChatTranscriptLifecycle } from './use-native-chat-transcript-lifecycle'
+import { useNativeChatHookStatus } from './use-native-chat-hook-status'
 
 export type UseNativeChatLiveSessionArgs = {
   /** Composite `${tabId}:${leafId}` key — selects the live hook entry. */
@@ -126,6 +127,8 @@ export function useNativeChatLiveSession(
   const [read, setRead] = useState<ReadState>({ phase: 'loading' })
   const [hasMore, setHasMore] = useState(false)
   const [loadingEarlier, setLoadingEarlier] = useState(false)
+  const [transcriptLifecycle, turnLifecycleCapable, transcriptLifecycleControl] =
+    useNativeChatTranscriptLifecycle()
   // The active read window; raised by loadEarlier to page in older history.
   const limitRef = useRef(NATIVE_CHAT_INITIAL_LIMIT)
 
@@ -139,14 +142,7 @@ export function useNativeChatLiveSession(
   // live frame costs O(incoming), not O(existing) (#18 parity for desktop).
   const appendMergerRef = useRef(createNativeChatMerger(NATIVE_CHAT_SOURCE_PRIORITY))
 
-  // Live hook state for this pane, selected narrowly so unrelated status churn
-  // doesn't re-render the chat view.
-  const hookState = useAppStore((s) => s.agentStatusByPaneKey[paneKey]?.state ?? null)
-  // When that state began (epoch ms). A separate primitive selector so it doesn't
-  // churn renders; lets a stale 'working' self-heal once this turn's reply lands.
-  const hookStateStartedAt = useAppStore(
-    (s) => s.agentStatusByPaneKey[paneKey]?.stateStartedAt ?? null
-  )
+  const [hookState, hookStateStartedAt, hookHasWorkingSubagents] = useNativeChatHookStatus(paneKey)
 
   const latestSessionId = useRef<string | null>(sessionId)
   latestSessionId.current = sessionId
@@ -170,6 +166,7 @@ export function useNativeChatLiveSession(
     // every source generation must invalidate pagination captured before it.
     transcriptEpochRef.current += 1
     setLoadingEarlier(false)
+    transcriptLifecycleControl.reset()
     if (!sessionId) {
       // No session id yet: nothing to read or tail. Surface live hook state on
       // an empty transcript; backfills once the id arrives (effect re-runs).
@@ -225,6 +222,10 @@ export function useNativeChatLiveSession(
             return
           }
           const messages = result?.messages ?? []
+          transcriptLifecycleControl.replace(
+            result?.lifecycle,
+            result?.turnLifecycleCapable === true
+          )
           setRead({ phase: 'ready', messages })
           setHasMore(hasMoreNativeChatHistory(messages.length, limitRef.current))
         })
@@ -258,12 +259,14 @@ export function useNativeChatLiveSession(
               setRead({ phase: 'error', error: frame.error })
               return
             }
+            transcriptLifecycleControl.replace(frame.lifecycle, frame.turnLifecycleCapable === true)
             replaceList(appendMergerRef.current, frame.messages)
             setAppended([])
             setRead({ phase: 'ready', messages: appendMergerRef.current.list })
             setHasMore(frame.hasMore)
             return
           }
+          transcriptLifecycleControl.append(frame.lifecycle, frame.turnLifecycleCapable === true)
           // Merge by id (re-emits replace in place) then bound to the window so
           // the bucket can't grow without limit. The base read still holds older
           // turns, and the assembler re-dedups the concat, so trimming the recent
@@ -296,7 +299,7 @@ export function useNativeChatLiveSession(
     }
     // `transport` identity changes on an owner flip, re-running this effect to
     // tear down the old host's subscription and open one against the new host.
-  }, [agent, sessionId, transcriptPath, transport])
+  }, [agent, sessionId, transcriptPath, transport, transcriptLifecycleControl])
 
   const loadEarlier = useCallback(() => {
     if (!sessionId || loadingEarlier || !hasMore || read.phase !== 'ready') {
@@ -304,6 +307,7 @@ export function useNativeChatLiveSession(
     }
     const nextLimit = nextNativeChatLimit(limitRef.current)
     const requestEpoch = transcriptEpochRef.current
+    const lifecycleRevision = transcriptLifecycleControl.revision()
     setLoadingEarlier(true)
     void transport
       .readSession(agent, sessionId, nextLimit, transcriptPath ?? undefined)
@@ -324,6 +328,7 @@ export function useNativeChatLiveSession(
         // Read results are an ordered tail — replace the base list so the older
         // page prepends in order; live appends stay in their separate bucket.
         setRead({ phase: 'ready', messages: result.messages })
+        transcriptLifecycleControl.replaceFromPagination(result.lifecycle, lifecycleRevision)
         setHasMore(hasMoreNativeChatHistory(result.messages.length, nextLimit))
       })
       .catch(() => {
@@ -339,7 +344,16 @@ export function useNativeChatLiveSession(
           setLoadingEarlier(false)
         }
       })
-  }, [agent, sessionId, transcriptPath, transport, hasMore, loadingEarlier, read.phase])
+  }, [
+    agent,
+    sessionId,
+    transcriptPath,
+    transport,
+    hasMore,
+    loadingEarlier,
+    read.phase,
+    transcriptLifecycleControl
+  ])
 
   // Assembled messages reuse the incremental assembler across appends. Computed
   // outside the status memo: hookState changes only the status override, not the
@@ -383,6 +397,9 @@ export function useNativeChatLiveSession(
       agent,
       hookState,
       stateStartedAt: hookStateStartedAt,
+      transcriptLifecycle,
+      turnLifecycleCapable,
+      hookHasWorkingSubagents,
       // Why: a watcher append (fix for #8401) can land content while the read is
       // still retrying ('loading') or after it settled into 'error' — in both
       // cases showing the live content beats a spinner or a stale error, so each
@@ -398,6 +415,9 @@ export function useNativeChatLiveSession(
     agent,
     hookState,
     hookStateStartedAt,
+    transcriptLifecycle,
+    turnLifecycleCapable,
+    hookHasWorkingSubagents,
     hasMore,
     loadingEarlier,
     loadEarlier,

@@ -156,10 +156,9 @@ function NativeChatResolvedView({
   const launchPrompt = useAppStore((s) => s.nativeChatLaunchPromptByTabId[terminalTabId] ?? null)
   const clearNativeChatLaunchPrompt = useAppStore((s) => s.clearNativeChatLaunchPrompt)
   const paneLaunchPrompt = launchPrompt?.agent === agent ? launchPrompt : null
-  // Live hook state for this pane, selected directly so the working indicator
-  // flips the instant the agent reports 'working' — even when switching to chat
-  // mid-turn before the transcript merge has caught up.
-  const hookWorking = useAppStore((s) => s.agentStatusByPaneKey[paneKey]?.state === 'working')
+  // The live-session merge reconciles hooks with replayable transcript turn
+  // boundaries; all working consumers must use that one lifecycle decision.
+  const liveWorking = session.status === 'working'
   // The agent's in-progress reply preview (hook), shown as a live streaming
   // bubble while it works — before the completed turn flushes to the transcript.
   const hookPreview = useAppStore((s) => s.agentStatusByPaneKey[paneKey]?.lastAssistantMessage)
@@ -308,9 +307,9 @@ function NativeChatResolvedView({
           ? [...sessionAfterCommandBoundaries.messages, ...pendingMessages]
           : sessionAfterCommandBoundaries.messages,
       previewText: hookPreview,
-      working: hookWorking
+      working: liveWorking
     })
-  }, [sessionAfterCommandBoundaries.messages, pendingMessages, hookPreview, hookWorking])
+  }, [sessionAfterCommandBoundaries.messages, pendingMessages, hookPreview, liveWorking])
   const sessionWithPending = useMemo<typeof session>(() => {
     if (pending.length === 0 && commandMarkers.length === 0 && !streamingText) {
       return sessionAfterCommandBoundaries
@@ -331,19 +330,14 @@ function NativeChatResolvedView({
   const viewState = selectNativeChatViewState(sessionWithPending)
 
   const isConversation = viewState.kind === 'ready'
-  // Drive "working" from the live hook state too: when toggling to chat while the
-  // agent is mid-turn, the merged transcript may not yet reflect the in-flight
-  // turn, but the hook already says 'working' — show the indicator immediately.
-  const viewWorking = viewState.kind === 'ready' && viewState.isWorking
   useEffect(() => {
-    if (shouldClearNativeChatWorkingSuppression({ viewWorking, hookWorking })) {
+    if (shouldClearNativeChatWorkingSuppression({ working: liveWorking })) {
       setWorkingInterrupted(false)
     }
-  }, [viewWorking, hookWorking])
+  }, [liveWorking])
   const isWorking = shouldShowNativeChatWorking({
     isConversation,
-    viewWorking,
-    hookWorking,
+    working: liveWorking,
     interrupted: workingInterrupted
   })
 

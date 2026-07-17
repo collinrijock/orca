@@ -68,7 +68,9 @@ describe('getNativeChatSessionTransport — selection', () => {
 
   it('returns the runtime adapter for an owner on the desktop client', async () => {
     markRuntimeEnvironmentCompatible(ENV)
-    runtimeEnvironmentsCall.mockResolvedValue(okEnvelope({ messages: [] }))
+    runtimeEnvironmentsCall.mockResolvedValue(
+      okEnvelope({ messages: [], turnLifecycleCapable: true })
+    )
     const transport = getNativeChatSessionTransport(ENV)
 
     await transport.readSession('claude', 'sess-1', 40, '/t/path')
@@ -80,6 +82,47 @@ describe('getNativeChatSessionTransport — selection', () => {
       timeoutMs: 15_000
     })
     expect(nativeChatReadSession).not.toHaveBeenCalled()
+  })
+
+  it('validates lifecycle metadata on runtime read responses', async () => {
+    markRuntimeEnvironmentCompatible(ENV)
+    const lifecycle = { state: 'completed', turnId: 'turn-1', timestamp: 42 } as const
+    runtimeEnvironmentsCall
+      .mockResolvedValueOnce(
+        okEnvelope({ messages: [message('valid')], turnLifecycleCapable: true, lifecycle })
+      )
+      .mockResolvedValueOnce(
+        okEnvelope({
+          messages: [message('invalid')],
+          lifecycle: { state: 'completed', turnId: '', timestamp: undefined }
+        })
+      )
+    const transport = getNativeChatSessionTransport(ENV)
+
+    await expect(transport.readSession('claude', 'sess-1')).resolves.toEqual({
+      messages: [message('valid')],
+      turnLifecycleCapable: true,
+      lifecycle
+    })
+    await expect(transport.readSession('claude', 'sess-1')).resolves.toEqual({
+      messages: [message('invalid')],
+      turnLifecycleCapable: false
+    })
+  })
+
+  it('accepts interrupted lifecycle metadata from a remote runtime', async () => {
+    markRuntimeEnvironmentCompatible(ENV)
+    const lifecycle = { state: 'interrupted', turnId: 'turn-2', timestamp: 43 } as const
+    runtimeEnvironmentsCall.mockResolvedValueOnce(
+      okEnvelope({ messages: [message('interrupted')], turnLifecycleCapable: true, lifecycle })
+    )
+    const transport = getNativeChatSessionTransport(ENV)
+
+    await expect(transport.readSession('codex', 'sess-1')).resolves.toEqual({
+      messages: [message('interrupted')],
+      turnLifecycleCapable: true,
+      lifecycle
+    })
   })
 
   it('returns the local adapter on the web client even with an owner (R3 guard)', async () => {
@@ -139,17 +182,55 @@ describe('runtime subscribe', () => {
     expect(onFrame).toHaveBeenNthCalledWith(1, {
       type: 'snapshot',
       messages: [message('m-1')],
-      hasMore: false
+      hasMore: false,
+      turnLifecycleCapable: false
     })
     expect(onFrame).toHaveBeenNthCalledWith(2, {
       type: 'snapshot',
       messages: [message('m-snapshot')],
-      hasMore: false
+      hasMore: false,
+      turnLifecycleCapable: false
     })
     expect(onFrame).toHaveBeenNthCalledWith(3, {
       type: 'replacement',
       messages: [message('m-replacement')],
-      hasMore: true
+      hasMore: true,
+      turnLifecycleCapable: false
+    })
+  })
+
+  it('validates lifecycle metadata on runtime stream frames', async () => {
+    markRuntimeEnvironmentCompatible(ENV)
+    const { deliver } = stubSubscribe()
+    const onFrame = vi.fn()
+    const transport = getNativeChatSessionTransport(ENV)
+    const lifecycle = { state: 'completed', turnId: 'turn-1', timestamp: 42 } as const
+
+    transport.subscribe({ subscriptionId: 's-1', agent: 'claude', sessionId: 'sess-1' }, onFrame)
+    await Promise.resolve()
+    deliver({
+      type: 'snapshot',
+      messages: [message('valid')],
+      turnLifecycleCapable: true,
+      lifecycle
+    })
+    deliver({
+      type: 'appended',
+      messages: [message('invalid')],
+      lifecycle: { state: 'completed', turnId: '', timestamp: undefined }
+    })
+
+    expect(onFrame).toHaveBeenNthCalledWith(1, {
+      type: 'snapshot',
+      messages: [message('valid')],
+      hasMore: false,
+      turnLifecycleCapable: true,
+      lifecycle
+    })
+    expect(onFrame).toHaveBeenNthCalledWith(2, {
+      type: 'appended',
+      messages: [message('invalid')],
+      turnLifecycleCapable: false
     })
   })
 
@@ -192,6 +273,7 @@ describe('runtime subscribe', () => {
       type: 'snapshot',
       messages: [],
       hasMore: false,
+      turnLifecycleCapable: false,
       error: 'runtime too old'
     })
   })

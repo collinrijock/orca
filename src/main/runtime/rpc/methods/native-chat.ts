@@ -5,6 +5,7 @@ import {
   readNativeChatTranscriptTail,
   subscribeNativeChatTranscript
 } from '../../../native-chat/transcript-watch'
+import { supportsNativeChatTranscriptTurnLifecycle } from '../../../native-chat/transcript-turn-lifecycle'
 import { defineMethod, defineStreamingMethod, type RpcAnyMethod, type RpcContext } from '../core'
 
 // Why: native chat renders an agent's own transcript (Claude/Codex JSONL). The
@@ -183,6 +184,7 @@ export const NATIVE_CHAT_METHODS: readonly RpcAnyMethod[] = [
     params: NativeChatSession,
     handler: async (params, { clientKind }) => {
       const limit = params.limit ?? MOBILE_NATIVE_CHAT_DEFAULT_WINDOW
+      const turnLifecycleCapable = supportsNativeChatTranscriptTurnLifecycle(params.agent)
       const result = await readNativeChatTranscriptTail({
         agent: params.agent,
         sessionId: params.sessionId,
@@ -194,7 +196,9 @@ export const NATIVE_CHAT_METHODS: readonly RpcAnyMethod[] = [
         ? {
             messages: windowForClient(result.messages, clientKind, limit),
             hasMore: result.hasMore,
-            beforeOffset: result.beforeOffset
+            beforeOffset: result.beforeOffset,
+            turnLifecycleCapable,
+            ...(result.lifecycle ? { lifecycle: result.lifecycle } : {})
           }
         : result
     }
@@ -215,6 +219,7 @@ export const NATIVE_CHAT_METHODS: readonly RpcAnyMethod[] = [
       const cleanupToken = params.subscriptionId ?? `${params.agent}:${params.sessionId}`
       const subscriptionId = `nativeChat:${connectionId ?? 'local'}:${cleanupToken}`
       const limit = params.limit ?? MOBILE_NATIVE_CHAT_DEFAULT_WINDOW
+      const turnLifecycleCapable = supportsNativeChatTranscriptTurnLifecycle(params.agent)
       runtime.registerSubscriptionCleanup(
         subscriptionId,
         () => {
@@ -232,7 +237,7 @@ export const NATIVE_CHAT_METHODS: readonly RpcAnyMethod[] = [
         sessionId: params.sessionId,
         transcriptPath: params.transcriptPath,
         initialLimit: limit,
-        onInitialSnapshot: (messages, hasMore, beforeOffset, error) => {
+        onInitialSnapshot: (messages, hasMore, beforeOffset, error, lifecycle) => {
           if (closed) {
             return
           }
@@ -243,10 +248,12 @@ export const NATIVE_CHAT_METHODS: readonly RpcAnyMethod[] = [
             messages: windowForClient(messages, clientKind, limit),
             hasMore,
             beforeOffset,
-            ...(error ? { error } : {})
+            turnLifecycleCapable,
+            ...(error ? { error } : {}),
+            ...(lifecycle ? { lifecycle } : {})
           })
         },
-        onReplace: (messages, hasMore, beforeOffset) => {
+        onReplace: (messages, hasMore, beforeOffset, lifecycle) => {
           if (closed) {
             return
           }
@@ -254,14 +261,21 @@ export const NATIVE_CHAT_METHODS: readonly RpcAnyMethod[] = [
             type: 'replacement',
             messages: windowForClient(messages, clientKind, limit),
             hasMore,
-            beforeOffset
+            beforeOffset,
+            turnLifecycleCapable,
+            ...(lifecycle ? { lifecycle } : {})
           })
         },
-        onAppend: (messages) => {
+        onAppend: (messages, lifecycle) => {
           if (closed) {
             return
           }
-          emit({ type: 'appended', messages: sanitizeAppendForClient(messages, clientKind) })
+          emit({
+            type: 'appended',
+            messages: sanitizeAppendForClient(messages, clientKind),
+            turnLifecycleCapable,
+            ...(lifecycle ? { lifecycle } : {})
+          })
         }
       })
       // The connection may have closed while the file was being resolved.
@@ -270,7 +284,13 @@ export const NATIVE_CHAT_METHODS: readonly RpcAnyMethod[] = [
         return
       }
       if (!subscription.watching) {
-        emit({ type: 'snapshot', messages: [], hasMore: false, error: 'Transcript unavailable' })
+        emit({
+          type: 'snapshot',
+          messages: [],
+          hasMore: false,
+          turnLifecycleCapable,
+          error: 'Transcript unavailable'
+        })
       }
       unsubscribe = subscription.unsubscribe
     }

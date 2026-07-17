@@ -1,16 +1,11 @@
 export function shouldShowNativeChatWorking(args: {
   isConversation: boolean
-  viewWorking: boolean
-  hookWorking: boolean
+  working: boolean
   interrupted: boolean
 }): boolean {
-  const rawWorking = args.isConversation && (args.viewWorking || args.hookWorking)
-  return rawWorking && !args.interrupted
+  return args.isConversation && args.working && !args.interrupted
 }
 
-export function shouldClearNativeChatWorkingSuppression(args: {
-  viewWorking: boolean
-  hookWorking: boolean
-}): boolean {
-  return !args.viewWorking && !args.hookWorking
+export function shouldClearNativeChatWorkingSuppression(args: { working: boolean }): boolean {
+  return !args.working
 }
