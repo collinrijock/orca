@@ -47,7 +47,9 @@ function readSingleSelectOptionCount(interactivePrompt: string | undefined): num
     }
     return question.options.length
   } catch {
-    return null
+    // Why: malformed JSON can be a length-capped multi-question payload. It is
+    // not equivalent to an older hook omitting tool input, so fail closed.
+    return -1
   }
 }
 

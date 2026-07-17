@@ -23,10 +23,13 @@ import { inferQuestionAnsweredFromCurrentStatus } from '../terminal-pane/agent-q
 const ESC = '\x1b'
 
 export type NativeChatInteractiveSend = {
-  /** Deliver the answer to an AskUserQuestion prompt. Returns the ms after which
-   *  every scheduled write has fired (0 if nothing was sent) so the caller can
-   *  keep the card up until the send settles. */
-  sendAnswer: (prompt: AskPrompt, selections: AskAnswerSelection[]) => number
+  /** Deliver the answer to an AskUserQuestion prompt. Claude-format selectors
+   *  verify every runtime write before reporting settlement. */
+  sendAnswer: (
+    prompt: AskPrompt,
+    selections: AskAnswerSelection[],
+    onDeliverySettled?: (delivered: boolean) => void
+  ) => { settleAfterMs: number; waitsForVerifiedDelivery: boolean }
   /** Send a raw control string (e.g. an approval option number or ESC) as-is. */
   sendRaw: (raw: string) => void
   /** Stop delayed writes without interrupting the agent. */
@@ -60,7 +63,10 @@ export function useNativeChatInteractiveSend(
   }, [])
   // Why: a split can be rebound without unmounting this view. Cancel during
   // commit so no delayed answer write can race the replacement PTY.
-  useLayoutEffect(() => cancelInFlight, [cancelInFlight, targetPtyId, terminalTabId])
+  useLayoutEffect(
+    () => cancelInFlight,
+    [agent, cancelInFlight, paneKey, targetPtyId, terminalTabId]
+  )
 
   const sendRaw = useCallback(
     (raw: string) => {
@@ -73,9 +79,13 @@ export function useNativeChatInteractiveSend(
   )
 
   const sendAnswer = useCallback(
-    (prompt: AskPrompt, selections: AskAnswerSelection[]): number => {
+    (
+      prompt: AskPrompt,
+      selections: AskAnswerSelection[],
+      onDeliverySettled?: (delivered: boolean) => void
+    ): { settleAfterMs: number; waitsForVerifiedDelivery: boolean } => {
       if (!targetPtyId || !hasAskAnswer(prompt, selections)) {
-        return 0
+        return { settleAfterMs: 0, waitsForVerifiedDelivery: false }
       }
       // Cancel any prior in-flight answer before starting a new one.
       cancelInFlight()
@@ -86,20 +96,26 @@ export function useNativeChatInteractiveSend(
       // Other agents' question tools commit a pasted answer, so send label text.
       // Gate on the transcript agent (not `=== 'claude'`) so OpenClaude — which
       // runs the same selector — takes the keystroke path too.
+      let settledHandle: NativeChatSendHandle | null = null
       const onSettled = shouldStepNativeChatAskAnswer(agent)
         ? (delivered: boolean): void => {
-            if (!delivered) {
-              return
+            if (settledHandle && inFlightRef.current === settledHandle) {
+              // Why: a completed verified send otherwise retains its timers,
+              // promises, and prompt callback until the next send or unmount.
+              inFlightRef.current = null
             }
-            inferQuestionAnsweredFromCurrentStatus({
-              paneKey,
-              getStatusEntry: () => useAppStore.getState().agentStatusByPaneKey[paneKey],
-              inferQuestionAnswered: (request) =>
-                window.api.agentStatus.inferQuestionAnswered(request).catch((err) => {
-                  console.warn('[agent-question] native-chat inference failed:', err)
-                  return false
-                })
-            })
+            if (delivered) {
+              inferQuestionAnsweredFromCurrentStatus({
+                paneKey,
+                getStatusEntry: () => useAppStore.getState().agentStatusByPaneKey[paneKey],
+                inferQuestionAnswered: (request) =>
+                  window.api.agentStatus.inferQuestionAnswered(request).catch((err) => {
+                    console.warn('[agent-question] native-chat inference failed:', err)
+                    return false
+                  })
+              })
+            }
+            onDeliverySettled?.(delivered)
           }
         : undefined
       const handle: NativeChatSendHandle = shouldStepNativeChatAskAnswer(agent)
@@ -113,8 +129,12 @@ export function useNativeChatInteractiveSend(
       // Why: native-chat answer writes bypass xterm.onData. Infer only after
       // every paced selector write has fired, so an early digit in a multi-step
       // answer cannot dismiss the wait or cancel the remaining writes.
+      settledHandle = handle
       inFlightRef.current = handle
-      return handle.settleAfterMs
+      return {
+        settleAfterMs: handle.settleAfterMs,
+        waitsForVerifiedDelivery: onSettled !== undefined
+      }
     },
     [terminalTabId, paneKey, targetPtyId, agent, cancelInFlight]
   )

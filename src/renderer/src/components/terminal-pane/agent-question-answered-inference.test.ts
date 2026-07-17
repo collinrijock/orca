@@ -108,6 +108,26 @@ describe('agent question-answered inference', () => {
     expect(inferQuestionAnswered).not.toHaveBeenCalled()
   })
 
+  it('keeps waiting when capped or malformed prompt JSON hides the question shape', () => {
+    const { inference, inferQuestionAnswered } = makeInference(
+      makeWaitingQuestionEntry({ interactivePrompt: '{"questions":[' })
+    )
+
+    inference.observeSentTerminalInput('\r')
+
+    expect(inferQuestionAnswered).not.toHaveBeenCalled()
+  })
+
+  it('keeps the legacy Enter fallback when the hook omitted tool input', () => {
+    const { inference, inferQuestionAnswered } = makeInference(
+      makeWaitingQuestionEntry({ interactivePrompt: undefined })
+    )
+
+    inference.observeSentTerminalInput('\r')
+
+    expect(inferQuestionAnswered).toHaveBeenCalledOnce()
+  })
+
   it('does not read status for ordinary terminal input', () => {
     const getStatusEntry = vi.fn(() => makeWaitingQuestionEntry())
     const inferQuestionAnswered = vi.fn()

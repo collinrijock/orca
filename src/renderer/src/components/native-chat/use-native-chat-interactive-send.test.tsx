@@ -112,12 +112,12 @@ describe('useNativeChatInteractiveSend', () => {
       useNativeChatInteractiveSend('tab-1', PANE_KEY, 'pty-1', 'claude')
     )
 
-    let settleMs = -1
+    let resultValue: ReturnType<typeof result.current.sendAnswer> | undefined
     act(() => {
-      settleMs = result.current.sendAnswer(PROMPT, [{ indices: [] }])
+      resultValue = result.current.sendAnswer(PROMPT, [{ indices: [] }])
     })
 
-    expect(settleMs).toBe(0)
+    expect(resultValue).toEqual({ settleAfterMs: 0, waitsForVerifiedDelivery: false })
     expect(mocks.sendNativeChatAskAnswer).not.toHaveBeenCalled()
     expect(mocks.sendNativeChatMessage).not.toHaveBeenCalled()
   })
@@ -130,6 +130,18 @@ describe('useNativeChatInteractiveSend', () => {
 
     act(() => result.current.sendAnswer(PROMPT, [{ indices: [0] }]))
     rerender({ targetPtyId: 'pty-2' })
+
+    expect(mocks.cancel).toHaveBeenCalledOnce()
+  })
+
+  it('cancels delayed answer writes when the pane identity changes', () => {
+    const { result, rerender } = renderHook(
+      ({ paneKey }) => useNativeChatInteractiveSend('tab-1', paneKey, 'pty-1', 'claude'),
+      { initialProps: { paneKey: PANE_KEY } }
+    )
+
+    act(() => result.current.sendAnswer(PROMPT, [{ indices: [0] }]))
+    rerender({ paneKey: 'tab-1:22222222-2222-4222-8222-222222222222' })
 
     expect(mocks.cancel).toHaveBeenCalledOnce()
   })
@@ -183,5 +195,25 @@ describe('useNativeChatInteractiveSend', () => {
       baselinePrompt: 'pick one',
       baselineAgentType: 'claude'
     })
+  })
+
+  it('reports verified delivery settlement to the question card', () => {
+    const onDeliverySettled = vi.fn()
+    const { result } = renderHook(() =>
+      useNativeChatInteractiveSend('tab-1', PANE_KEY, 'pty-1', 'claude')
+    )
+
+    let sendResult: ReturnType<typeof result.current.sendAnswer> | undefined
+    act(() => {
+      sendResult = result.current.sendAnswer(PROMPT, [{ indices: [1] }], onDeliverySettled)
+    })
+    expect(sendResult).toEqual({ settleAfterMs: 500, waitsForVerifiedDelivery: true })
+
+    const onSettled = mocks.sendNativeChatAskAnswer.mock.calls[0]?.[3]
+    onSettled?.(false)
+    expect(onDeliverySettled).toHaveBeenCalledExactlyOnceWith(false)
+
+    act(() => result.current.cancelPending())
+    expect(mocks.cancel).not.toHaveBeenCalled()
   })
 })
