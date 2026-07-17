@@ -4,7 +4,6 @@ import {
   buildAgentFeatureSkillUpdateCommand,
   COMPUTER_USE_SKILL_UPDATE_COMMAND,
   EPHEMERAL_VMS_SKILL_UPDATE_COMMAND,
-  LINEAR_AGENT_SKILL_NAMES,
   LINEAR_TICKETS_SKILL_UPDATE_COMMAND,
   ORCA_LINEAR_SKILL_UPDATE_COMMAND,
   ORCA_CLI_ORCHESTRATION_SKILL_INSTALL_COMMAND,
@@ -38,9 +37,5 @@ describe('agent feature skill commands', () => {
     expect(ORCA_CLI_ORCHESTRATION_SKILL_INSTALL_COMMAND).toBe(
       buildAgentFeatureSkillInstallCommand(['orca-cli', 'orchestration'])
     )
-  })
-
-  it('requires the canonical Linear skill so legacy installs migrate', () => {
-    expect(LINEAR_AGENT_SKILL_NAMES).toEqual(['orca-linear'])
   })
 })

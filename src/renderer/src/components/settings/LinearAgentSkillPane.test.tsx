@@ -16,7 +16,8 @@ const UPDATE_COMMAND = 'npx skills update orca-linear --global'
 const mocks = vi.hoisted(() => ({
   panelProps: [] as Record<string, unknown>[],
   runtime: 'native' as 'native' | 'wsl',
-  skillInstalled: true
+  skillInstalled: true,
+  updateSkillName: 'orca-linear'
 }))
 
 vi.mock('./AgentSkillSetupPanel', () => ({
@@ -38,6 +39,13 @@ vi.mock('./CliSkillRuntimeSetup', () => ({
   buildSkillCommandForRuntime: (command: string) => command,
   ensureWslCliAvailableForAgentSkillTerminal: vi.fn(),
   getWslCliDistroRequest: () => undefined
+}))
+
+vi.mock('@/lib/linear-agent-skill-update-command', () => ({
+  getLinearAgentSkillUpdateTarget: () => ({
+    command: UPDATE_COMMAND,
+    skillName: mocks.updateSkillName
+  })
 }))
 
 vi.mock('@/hooks/useInstalledAgentSkills', () => ({
@@ -86,6 +94,7 @@ describe('LinearAgentSkillPane', () => {
     mocks.panelProps.length = 0
     mocks.runtime = 'native'
     mocks.skillInstalled = true
+    mocks.updateSkillName = 'orca-linear'
   })
 
   it('renders the Linear skill card and the usage examples', () => {
@@ -121,16 +130,10 @@ describe('LinearAgentSkillPane', () => {
     expect(mocks.panelProps.at(-1)?.freshnessSkillName).toBeUndefined()
   })
 
-  it('offers the canonical install when the accepted skill is missing', async () => {
-    mocks.skillInstalled = false
+  it('checks freshness under the legacy name when that is the installed update target', async () => {
+    mocks.updateSkillName = 'linear-tickets'
     await renderPane()
 
-    expect(mocks.panelProps.at(-1)).toEqual(
-      expect.objectContaining({
-        installed: false,
-        command: ORCA_LINEAR_SKILL_INSTALL_COMMAND,
-        freshnessSkillName: ORCA_LINEAR_SKILL_NAME
-      })
-    )
+    expect(mocks.panelProps.at(-1)?.freshnessSkillName).toBe('linear-tickets')
   })
 })
