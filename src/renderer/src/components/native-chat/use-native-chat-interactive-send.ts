@@ -96,8 +96,18 @@ export function useNativeChatInteractiveSend(
       // Other agents' question tools commit a pasted answer, so send label text.
       // Gate on the transcript agent (not `=== 'claude'`) so OpenClaude — which
       // runs the same selector — takes the keystroke path too.
+      const stepsAnswer = shouldStepNativeChatAskAnswer(agent)
+      // Why: pin the answered question's baseline BEFORE delivery. A late settle
+      // callback (paced writes + remote acceptance can span seconds on SSH) must
+      // not read the live status and mint a fresh baseline for a replacement
+      // question that became current meanwhile — that would clear the new
+      // question's wait. The server re-validates this captured baseline and
+      // rejects a changed status, matching the terminal keystroke path.
+      const questionStatusBaseline = stepsAnswer
+        ? useAppStore.getState().agentStatusByPaneKey[paneKey]
+        : undefined
       let settledHandle: NativeChatSendHandle | null = null
-      const onSettled = shouldStepNativeChatAskAnswer(agent)
+      const onSettled = stepsAnswer
         ? (delivered: boolean): void => {
             if (settledHandle && inFlightRef.current === settledHandle) {
               // Why: a completed verified send otherwise retains its timers,
@@ -107,7 +117,7 @@ export function useNativeChatInteractiveSend(
             if (delivered) {
               inferQuestionAnsweredFromCurrentStatus({
                 paneKey,
-                getStatusEntry: () => useAppStore.getState().agentStatusByPaneKey[paneKey],
+                getStatusEntry: () => questionStatusBaseline,
                 inferQuestionAnswered: (request) =>
                   window.api.agentStatus.inferQuestionAnswered(request).catch((err) => {
                     console.warn('[agent-question] native-chat inference failed:', err)
@@ -118,7 +128,7 @@ export function useNativeChatInteractiveSend(
             onDeliverySettled?.(delivered)
           }
         : undefined
-      const handle: NativeChatSendHandle = shouldStepNativeChatAskAnswer(agent)
+      const handle: NativeChatSendHandle = stepsAnswer
         ? sendNativeChatAskAnswer(
             settings,
             targetPtyId,

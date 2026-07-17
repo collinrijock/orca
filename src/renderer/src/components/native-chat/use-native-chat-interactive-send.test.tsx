@@ -8,7 +8,9 @@ const mocks = vi.hoisted(() => ({
   inferQuestionAnswered: vi.fn(() => Promise.resolve(true)),
   sendRuntimePtyInput: vi.fn(),
   sendNativeChatAskAnswer: vi.fn(),
-  sendNativeChatMessage: vi.fn()
+  sendNativeChatMessage: vi.fn(),
+  // Mutable so a test can swap the live status between sendAnswer and settle.
+  storeState: { agentStatusByPaneKey: {} as Record<string, unknown> }
 }))
 
 const PANE_KEY = 'tab-1:11111111-1111-4111-8111-111111111111'
@@ -25,7 +27,7 @@ const waitingQuestion = {
 
 vi.mock('../../store', () => ({
   useAppStore: {
-    getState: () => ({ agentStatusByPaneKey: { [PANE_KEY]: waitingQuestion } })
+    getState: () => mocks.storeState
   }
 }))
 
@@ -52,6 +54,7 @@ const PROMPT: AskPrompt = {
 describe('useNativeChatInteractiveSend', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mocks.storeState = { agentStatusByPaneKey: { [PANE_KEY]: waitingQuestion } }
     Object.defineProperty(window, 'api', {
       configurable: true,
       value: { agentStatus: { inferQuestionAnswered: mocks.inferQuestionAnswered } }
@@ -188,6 +191,40 @@ describe('useNativeChatInteractiveSend', () => {
     expect(mocks.inferQuestionAnswered).not.toHaveBeenCalled()
     onSettled?.(true)
 
+    expect(mocks.inferQuestionAnswered).toHaveBeenCalledExactlyOnceWith({
+      paneKey: PANE_KEY,
+      baselineUpdatedAt: waitingQuestion.updatedAt,
+      baselineStateStartedAt: waitingQuestion.stateStartedAt,
+      baselinePrompt: 'pick one',
+      baselineAgentType: 'claude'
+    })
+  })
+
+  it('infers the answered question baseline, not a replacement that became current mid-send', () => {
+    const { result } = renderHook(() =>
+      useNativeChatInteractiveSend('tab-1', PANE_KEY, 'pty-1', 'claude')
+    )
+
+    // Answer question A while it is the current waiting question.
+    act(() => result.current.sendAnswer(PROMPT, [{ indices: [1] }]))
+
+    // A different AskUserQuestion becomes current before the paced send settles.
+    mocks.storeState = {
+      agentStatusByPaneKey: {
+        [PANE_KEY]: {
+          ...waitingQuestion,
+          prompt: 'second question',
+          updatedAt: waitingQuestion.updatedAt + 5000,
+          stateStartedAt: waitingQuestion.stateStartedAt + 5000
+        }
+      }
+    }
+
+    const onSettled = mocks.sendNativeChatAskAnswer.mock.calls[0]?.[3]
+    onSettled?.(true)
+
+    // The baseline is question A's (captured before delivery), so the server can
+    // reject it against the now-current question B instead of clearing B's wait.
     expect(mocks.inferQuestionAnswered).toHaveBeenCalledExactlyOnceWith({
       paneKey: PANE_KEY,
       baselineUpdatedAt: waitingQuestion.updatedAt,
