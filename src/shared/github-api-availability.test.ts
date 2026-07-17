@@ -20,6 +20,7 @@ describe('classifyGitHubUnavailable', () => {
       'connect ETIMEDOUT 140.82.112.5:443',
       'TimeoutError: request aborted',
       'NetworkError when attempting to fetch resource',
+      'network unavailable',
       'fetch failed',
       'socket hang up',
       'could not resolve host: api.github.com',
@@ -41,6 +42,11 @@ describe('classifyGitHubUnavailable', () => {
     expect(classifyGitHubUnavailable('HTTP 403: Resource not accessible by integration')).toBeNull()
     expect(classifyGitHubUnavailable('HTTP 404: Not Found')).toBeNull()
     expect(classifyGitHubUnavailable('could not resolve to a Repository with the name')).toBeNull()
+    expect(
+      classifyGitHubUnavailable(
+        "GraphQL: Could not resolve to a Repository with the name 'network'."
+      )
+    ).toBeNull()
     expect(classifyGitHubUnavailable('gh auth login required')).toBeNull()
     expect(classifyGitHubUnavailable('')).toBeNull()
   })
