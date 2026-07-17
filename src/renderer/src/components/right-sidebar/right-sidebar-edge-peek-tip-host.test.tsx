@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 
-import { act, cleanup, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import { RightSidebarEdgePeekTipHost } from './right-sidebar-edge-peek-tip-host'
@@ -90,6 +90,44 @@ describe('RightSidebarEdgePeekTipHost', () => {
       vi.advanceTimersByTime(RIGHT_SIDEBAR_EDGE_PEEK_TIP_VISIBLE_MS)
     })
 
+    expect(screen.queryByTestId('right-sidebar-edge-peek-tip')).toBeNull()
+    expect(updateSettings).toHaveBeenCalledWith({ rightSidebarEdgePeekTipDismissed: true })
+  })
+
+  it.each([
+    [
+      'pointer hover',
+      (link: HTMLElement) => fireEvent.pointerEnter(link),
+      (link: HTMLElement) => fireEvent.pointerLeave(link)
+    ],
+    [
+      'keyboard focus',
+      (link: HTMLElement) => fireEvent.focus(link),
+      (link: HTMLElement) => fireEvent.blur(link)
+    ]
+  ])('keeps the Settings link available during %s', (_label, beginInteraction, endInteraction) => {
+    mountToggleAnchor()
+    const updateSettings = vi.fn().mockResolvedValue(undefined)
+    useAppStore.setState({ updateSettings })
+    const { rerender } = render(<RightSidebarEdgePeekTipHost />)
+
+    act(() => {
+      useAppStore.setState({ rightSidebarOpen: false })
+    })
+    rerender(<RightSidebarEdgePeekTipHost />)
+    const link = screen.getByTestId('right-sidebar-edge-peek-tip-settings-link')
+
+    beginInteraction(link)
+    act(() => {
+      vi.advanceTimersByTime(RIGHT_SIDEBAR_EDGE_PEEK_TIP_VISIBLE_MS * 2)
+    })
+    expect(screen.getByTestId('right-sidebar-edge-peek-tip')).toBeTruthy()
+    expect(updateSettings).not.toHaveBeenCalled()
+
+    endInteraction(link)
+    act(() => {
+      vi.advanceTimersByTime(RIGHT_SIDEBAR_EDGE_PEEK_TIP_VISIBLE_MS)
+    })
     expect(screen.queryByTestId('right-sidebar-edge-peek-tip')).toBeNull()
     expect(updateSettings).toHaveBeenCalledWith({ rightSidebarEdgePeekTipDismissed: true })
   })

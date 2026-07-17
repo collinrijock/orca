@@ -62,6 +62,15 @@ export function RightSidebarEdgePeekTipHost(): JSX.Element | null {
     markRightSidebarEdgePeekTipDismissed({ updateSettings: updateSettingsRef.current })
   }
 
+  const scheduleHide = (): void => {
+    clearHideTimer()
+    hideTimerRef.current = window.setTimeout(() => {
+      hideTimerRef.current = null
+      setVisible(false)
+      markRightSidebarEdgePeekTipDismissed({ updateSettings: updateSettingsRef.current })
+    }, RIGHT_SIDEBAR_EDGE_PEEK_TIP_VISIBLE_MS)
+  }
+
   useEffect(() => {
     return () => clearHideTimer()
   }, [])
@@ -76,13 +85,8 @@ export function RightSidebarEdgePeekTipHost(): JSX.Element | null {
       return
     }
     setVisible(true)
-    clearHideTimer()
     // Why: brief, non-blocking discoverability — not a sticky toast.
-    hideTimerRef.current = window.setTimeout(() => {
-      hideTimerRef.current = null
-      setVisible(false)
-      markRightSidebarEdgePeekTipDismissed({ updateSettings: updateSettingsRef.current })
-    }, RIGHT_SIDEBAR_EDGE_PEEK_TIP_VISIBLE_MS)
+    scheduleHide()
   }, [rightSidebarOpen, settings])
 
   useEffect(() => {
@@ -170,6 +174,12 @@ export function RightSidebarEdgePeekTipHost(): JSX.Element | null {
             type="button"
             data-testid="right-sidebar-edge-peek-tip-settings-link"
             onClick={openSettings}
+            // Why: the one-shot timer must not remove an actionable control
+            // while a pointer or keyboard user is interacting with it.
+            onPointerEnter={clearHideTimer}
+            onPointerLeave={scheduleHide}
+            onFocus={clearHideTimer}
+            onBlur={scheduleHide}
             className="pointer-events-auto cursor-pointer font-medium underline underline-offset-2 hover:opacity-100"
           >
             {getRightSidebarEdgePeekSettingsLinkLabel()}

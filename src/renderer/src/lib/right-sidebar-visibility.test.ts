@@ -95,4 +95,23 @@ describe('right sidebar visibility helpers', () => {
       )
     ).toBe(true)
   })
+
+  it('reuses indexed worktree data across unrelated store writes', () => {
+    const state = makeState({ rightSidebarOpen: false, rightSidebarPeek: true })
+    let bucketReads = 0
+    const worktreesByRepo = new Proxy(state.worktreesByRepo, {
+      get(target, property, receiver) {
+        bucketReads += 1
+        return Reflect.get(target, property, receiver)
+      }
+    })
+    const indexedState = { ...state, worktreesByRepo }
+
+    expect(rightSidebarShowsPullRequestData(indexedState)).toBe(true)
+    expect(bucketReads).toBeGreaterThan(0)
+
+    bucketReads = 0
+    expect(rightSidebarShowsPullRequestData(indexedState)).toBe(true)
+    expect(bucketReads).toBe(0)
+  })
 })

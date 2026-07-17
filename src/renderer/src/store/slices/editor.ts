@@ -1492,7 +1492,9 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
     })),
   showRightSidebarFiles: () =>
     set((s) => ({
-      rightSidebarOpen: true,
+      // Why: content routing opens a fully hidden sidebar but must not silently
+      // pin an existing hover peek; the sidebar toggle owns that transition.
+      rightSidebarOpen: s.rightSidebarOpen || !s.rightSidebarPeek,
       rightSidebarTab: 'explorer',
       rightSidebarExplorerView: 'files',
       rightSidebarRouteRequestId: s.rightSidebarRouteRequestId + 1,
@@ -1508,7 +1510,8 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
   showRightSidebarSearch: (payload) =>
     set((s) => {
       const next = {
-        rightSidebarOpen: true,
+        // Why: switching Files/Search inside a peek keeps the overlay transient.
+        rightSidebarOpen: s.rightSidebarOpen || !s.rightSidebarPeek,
         rightSidebarTab: 'explorer' as const,
         rightSidebarExplorerView: 'search' as const,
         rightSidebarRouteRequestId: s.rightSidebarRouteRequestId + 1,
@@ -1598,7 +1601,8 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
   pendingExplorerReveal: null,
   revealInExplorer: (worktreeId, filePath) =>
     set((s) => ({
-      rightSidebarOpen: true,
+      // Why: an in-panel reveal is navigation, not an implicit pin action.
+      rightSidebarOpen: s.rightSidebarOpen || !s.rightSidebarPeek,
       rightSidebarTab: 'explorer',
       rightSidebarExplorerView: 'files',
       rightSidebarRouteRequestId: s.rightSidebarRouteRequestId + 1,
