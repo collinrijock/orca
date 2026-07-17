@@ -2,10 +2,12 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { LEGACY_TAB_SWITCH_BINDINGS } from '../../shared/keybindings'
 import {
   getUserKeybindingsPath,
   migrateLegacyKeybindings,
   readKeybindingFile,
+  seedLegacyTabSwitchBindings,
   writeKeybindingOverride
 } from './keybinding-file'
 
@@ -223,5 +225,51 @@ describe('keybinding-file', () => {
     expect(readKeybindingFile(filePath, 'linux').overrides).toEqual({
       'view.tasks': ['Ctrl+Alt+T']
     })
+  })
+
+  it('seeds the legacy tab-switch chords into the active platform section', () => {
+    const result = seedLegacyTabSwitchBindings(filePath, 'darwin', LEGACY_TAB_SWITCH_BINDINGS)
+
+    expect(result.seeded).toBe(true)
+    const snapshot = readKeybindingFile(filePath, 'darwin')
+    // Written to the platform section so Settings reset still works normally.
+    expect(snapshot.platformOverrides.darwin).toEqual({
+      'tab.nextSameType': ['Mod+Shift+BracketRight'],
+      'tab.previousSameType': ['Mod+Shift+BracketLeft'],
+      'tab.nextAllTypes': ['Mod+Alt+BracketRight'],
+      'tab.previousAllTypes': ['Mod+Alt+BracketLeft']
+    })
+    // Effective bindings reproduce the pre-swap behavior with no conflicts dropped.
+    expect(snapshot.overrides).toMatchObject({
+      'tab.nextSameType': ['Mod+Shift+BracketRight'],
+      'tab.nextAllTypes': ['Mod+Alt+BracketRight']
+    })
+    expect(snapshot.diagnostics).toEqual([])
+  })
+
+  it('skips the seed when the user has already customized any swapped action', () => {
+    writeKeybindingOverride(filePath, 'darwin', 'tab.nextSameType', ['Mod+Alt+K'])
+
+    const result = seedLegacyTabSwitchBindings(filePath, 'darwin', LEGACY_TAB_SWITCH_BINDINGS)
+
+    expect(result.seeded).toBe(false)
+    // The user's choice is untouched and the other actions stay on their defaults.
+    expect(readKeybindingFile(filePath, 'darwin').overrides).toEqual({
+      'tab.nextSameType': ['Mod+Alt+K']
+    })
+  })
+
+  it('leaves unrelated overrides intact and stays idempotent when seeding', () => {
+    writeKeybindingOverride(filePath, 'darwin', 'terminal.search', ['Mod+Shift+F'])
+
+    const first = seedLegacyTabSwitchBindings(filePath, 'darwin', LEGACY_TAB_SWITCH_BINDINGS)
+    const second = seedLegacyTabSwitchBindings(filePath, 'darwin', LEGACY_TAB_SWITCH_BINDINGS)
+
+    expect(first.seeded).toBe(true)
+    // A second pass is a no-op: the pins now read as existing customization.
+    expect(second.seeded).toBe(false)
+    const snapshot = readKeybindingFile(filePath, 'darwin')
+    expect(snapshot.overrides['terminal.search']).toEqual(['Mod+Shift+F'])
+    expect(snapshot.overrides['tab.nextAllTypes']).toEqual(['Mod+Alt+BracketRight'])
   })
 })

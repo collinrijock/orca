@@ -3042,6 +3042,12 @@ export type GlobalSettings = {
      *  false for fresh installs (no first-launch surface). */
     existedBeforeTelemetryRelease: boolean
   }
+  /** One-shot cohort marker for the tab-switch keybinding convention swap.
+   *  Absent before the migration runs. Set once on first boot after the swap:
+   *  `'pending'` for pre-existing installs (a seed then pins the old chords in
+   *  keybindings.json before flipping this to `'done'`), or `'done'` for fresh
+   *  installs, which adopt the new registry defaults with no seed. */
+  tabSwitchKeybindingSeed?: 'pending' | 'done'
   /** Local voice/dictation configuration (Phase 1 voice feature). Optional
    *  because profiles created before voice landed won't have the key;
    *  `getDefaultSettings()` hydrates `getDefaultVoiceSettings()` via the

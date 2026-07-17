@@ -318,6 +318,67 @@ export function migrateLegacyKeybindings(
   writeJsonDocument(path, document)
 }
 
+/**
+ * Pin the pre-swap tab-switch chords for a pre-existing install so upgrading
+ * users keep the shortcuts they learned. Writes into the active-platform
+ * section (mirroring `writeKeybindingOverride`) so the seeded values stay
+ * resettable from Settings. No-op when the user has already customized any of
+ * the swapped actions — that is custom territory, and a half-swapped pin would
+ * be worse than leaving their choices alone.
+ */
+export function seedLegacyTabSwitchBindings(
+  path: string,
+  platform: NodeJS.Platform,
+  legacyBindings: Readonly<Partial<Record<KeybindingActionId, string[]>>>
+): { seeded: boolean; snapshot: KeybindingFileSnapshot } {
+  const keybindingPlatform = getKeybindingPlatform(platform)
+  const actionIds = Object.keys(legacyBindings) as KeybindingActionId[]
+  const current = readKeybindingFile(path, platform)
+  const alreadyCustomized = actionIds.some(
+    (actionId) =>
+      Object.prototype.hasOwnProperty.call(current.commonOverrides, actionId) ||
+      PLATFORM_KEYS.some((os) =>
+        Object.prototype.hasOwnProperty.call(current.platformOverrides[os] ?? {}, actionId)
+      )
+  )
+  if (alreadyCustomized) {
+    return { seeded: false, snapshot: current }
+  }
+
+  const readResult = readJsonDocument(path)
+  const document = isJsonObject(readResult.document)
+    ? { ...readResult.document }
+    : createEmptyDocument()
+  for (const rootKey of Object.keys(document)) {
+    if (isKeybindingActionId(rootKey)) {
+      delete document[rootKey]
+    }
+  }
+  const common = isJsonObject(document.keybindings) ? { ...document.keybindings } : {}
+  const platforms = isJsonObject(document.platforms) ? { ...document.platforms } : {}
+  const activePlatform = isJsonObject(platforms[keybindingPlatform])
+    ? { ...(platforms[keybindingPlatform] as JsonObject) }
+    : {}
+  for (const actionId of actionIds) {
+    const normalized = normalizeKeybindingArrayForAction(actionId, legacyBindings[actionId] ?? [])
+    if (Array.isArray(normalized)) {
+      activePlatform[actionId] = normalized
+    }
+  }
+
+  document.version = FILE_VERSION
+  document.keybindings = common
+  document.platforms = {
+    ...platforms,
+    darwin: isJsonObject(platforms.darwin) ? platforms.darwin : {},
+    linux: isJsonObject(platforms.linux) ? platforms.linux : {},
+    win32: isJsonObject(platforms.win32) ? platforms.win32 : {},
+    [keybindingPlatform]: activePlatform
+  }
+  writeJsonDocument(path, document)
+  return { seeded: true, snapshot: readKeybindingFile(path, platform) }
+}
+
 export function writeKeybindingOverride(
   path: string,
   platform: NodeJS.Platform,

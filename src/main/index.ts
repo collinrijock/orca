@@ -1880,7 +1880,13 @@ app.whenReady().then(async () => {
   rateLimits.setNetworkProxySettingsResolver(() => store!.getSettings())
   keybindings = new KeybindingService({
     homePath: app.getPath('home'),
-    getLegacyOverrides: () => store!.getSettings().keybindings
+    getLegacyOverrides: () => store!.getSettings().keybindings,
+    legacyTabSwitchSeed: {
+      isPending: () => store!.getSettings().tabSwitchKeybindingSeed === 'pending',
+      markSeeded: () => {
+        store!.updateSettings({ tabSwitchKeybindingSeed: 'done' })
+      }
+    }
   })
   browserManager.setSettingsResolver(() => ({ keybindings: keybindings?.getOverrides() }))
   rateLimits.setInactiveClaudeAccountsResolver(() => {

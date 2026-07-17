@@ -3544,7 +3544,10 @@ export class Store {
       this.loadNeedsSave = true
     }
 
-    const migrated = this.migrateTelemetry(result, fileExistedOnLoad)
+    const migrated = this.migrateTabSwitchKeybindings(
+      this.migrateTelemetry(result, fileExistedOnLoad),
+      fileExistedOnLoad
+    )
 
     // githubCache lives in a sidecar file now (see getGithubCacheFile). A
     // legacy in-file cache (pre-sidecar build, or a downgrade round-trip) is
@@ -3580,6 +3583,34 @@ export class Store {
   //     the banner resolves (the consent resolver returns `pending_banner`
   //     until then, so nothing transmits).
   //   - `installId` — anonymous UUID v4. Stable across launches; not surfaced in the UI.
+  // One-shot cohort freeze for the tab-switch keybinding convention swap. Runs
+  // on every `load()` but is a no-op once `tabSwitchKeybindingSeed` is set. The
+  // decision must be frozen on the first post-swap launch: `fileExistedOnLoad`
+  // only distinguishes existing vs fresh on that first run (a fresh install's
+  // data file exists on every subsequent launch), so persist the verdict now.
+  private migrateTabSwitchKeybindings(
+    state: PersistedState,
+    fileExistedOnLoad: boolean
+  ): PersistedState {
+    const existing = state.settings?.tabSwitchKeybindingSeed
+    if (existing === 'pending' || existing === 'done') {
+      return state
+    }
+    // Why: mark dirty so the frozen cohort survives the next restart even if no
+    // other setting changes this session; without this a fresh install could be
+    // re-read as "existing" once its data file lands on disk.
+    this.loadNeedsSave = true
+    return {
+      ...state,
+      settings: {
+        ...state.settings,
+        // Existing installs pin the old chords via a keybindings.json seed;
+        // fresh installs need nothing beyond the new registry defaults.
+        tabSwitchKeybindingSeed: fileExistedOnLoad ? 'pending' : 'done'
+      }
+    }
+  }
+
   private migrateTelemetry(state: PersistedState, fileExistedOnLoad: boolean): PersistedState {
     const existing = state.settings?.telemetry
     // Why: the one-shot is complete only when all three invariants hold.
