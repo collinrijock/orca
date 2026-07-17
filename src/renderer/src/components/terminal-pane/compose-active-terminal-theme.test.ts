@@ -48,6 +48,18 @@ describe('composeActiveTerminalTheme', () => {
     expect(result!.background).toBe('#101010')
   })
 
+  it('preserves the Bold Text override for the pinned xterm theme.bold slot', () => {
+    // Why: #8595 — overrides.bold used to be spread into options.theme and
+    // then ignored by xterm; composition must keep shipping the key.
+    const base = { background: '#101010', foreground: '#fafafa' }
+    const result = composeActiveTerminalTheme(
+      base,
+      settingsWith({ terminalColorOverrides: { bold: '#ffc600' } })
+    )
+    expect(result!.bold).toBe('#ffc600')
+    expect(result!.foreground).toBe('#fafafa')
+  })
+
   it('applies background opacity by converting the hex background to rgba', () => {
     const base = { background: '#112233' }
     const result = composeActiveTerminalTheme(
