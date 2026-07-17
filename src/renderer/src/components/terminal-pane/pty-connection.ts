@@ -5182,6 +5182,14 @@ export function connectPanePty(
     let hiddenOutputRestoreGeneration = 0
     // Flood-backpressure suppression (HIDDEN_OUTPUT_RESTORE_FLOOD_SUPPRESS_MS).
     let hiddenOutputRestoreFloodSuppressedUntil = 0
+    // Why: once a restore snapshot's replay writes are queued, they WILL paint
+    // (xterm FIFO) even if the restore is abandoned mid-parse. Abandon must
+    // slice its pending write-through against this snapshot or every line the
+    // replay covers renders twice.
+    let hiddenOutputRestoreReplayingSnapshot: {
+      seq?: number
+      pendingDeliveryStartSeq?: number
+    } | null = null
     let hiddenOutputRestoreFloodRepaintTimer: ReturnType<typeof setTimeout> | null = null
     // Why: after a snapshot restore, main can still drain ACK-backlog chunks
     // whose bytes the snapshot already covers — writing them unguarded
@@ -6278,6 +6286,8 @@ export function connectPanePty(
         ? []
         : hiddenOutputRestorePendingChunks.slice()
       const hadPendingOverflow = hiddenOutputRestorePendingOverflow
+      const replayingSnapshot = hiddenOutputRestoreReplayingSnapshot
+      hiddenOutputRestoreReplayingSnapshot = null
       hiddenOutputRestoreGeneration += 1
       if (
         hiddenOutputSnapshotScrollRestore?.valid &&
@@ -6313,7 +6323,30 @@ export function connectPanePty(
       if (hadPendingOverflow) {
         return
       }
-      const pendingData = pendingChunks.map((chunk) => chunk.data).join('')
+      // Why: an abandoned-but-started replay is already queued in xterm's FIFO
+      // and will paint everything at or before its seq. Rewriting covered
+      // chunks raw duplicated TUI lines (field: same line stacked twice on
+      // reveal); slice against the replay and fall back raw only when offsets
+      // cannot be mapped — availability still wins over a dropped tail.
+      const replayedSeq = typeof replayingSnapshot?.seq === 'number' ? replayingSnapshot.seq : null
+      let pendingData = ''
+      for (const chunk of pendingChunks) {
+        const sliced =
+          replayedSeq === null ? chunk.data : getChunkDataAfterSnapshot(chunk, replayedSeq)
+        pendingData += sliced ?? chunk.data
+      }
+      if (replayingSnapshot && replayedSeq !== null) {
+        // Why: adopt the painting replay as the live reconcile baseline so
+        // main's ACK backlog at or below it dedups instead of duplicating.
+        setRestoredSnapshotBaseline(expectedPtyId, replayingSnapshot)
+        for (const chunk of pendingChunks) {
+          // Mirror the drain's continuity: written chunks advance the point
+          // so later live chunks are neither re-dropped nor misread as gaps.
+          if (typeof chunk.seq === 'number' && restoredSnapshotExpectedStartSeq !== null) {
+            restoredSnapshotExpectedStartSeq = Math.max(restoredSnapshotExpectedStartSeq, chunk.seq)
+          }
+        }
+      }
       if (pendingData) {
         writePtyOutputToXterm(pendingData, true)
       }
@@ -6358,6 +6391,7 @@ export function connectPanePty(
       resetHiddenRendererRiskState()
       hiddenOutputRestoreNeeded = false
       hiddenOutputRestorePtyId = null
+      hiddenOutputRestoreReplayingSnapshot = null
       hiddenOutputRestoreGeneration += 1
     }
 
@@ -6449,6 +6483,7 @@ export function connectPanePty(
       cols: number
       rows: number
       seq?: number
+      pendingDeliveryStartSeq?: number
       alternateScreen?: boolean
       scrollbackAnsi?: string
       pendingEscapeTailAnsi?: string
@@ -6484,6 +6519,14 @@ export function connectPanePty(
               return
             }
             scrollRestore.started = true
+            if (typeof snapshot.seq === 'number') {
+              hiddenOutputRestoreReplayingSnapshot = {
+                seq: snapshot.seq,
+                ...(typeof snapshot.pendingDeliveryStartSeq === 'number'
+                  ? { pendingDeliveryStartSeq: snapshot.pendingDeliveryStartSeq }
+                  : {})
+              }
+            }
             discardTerminalOutput(pane.terminal)
             if (
               hasSnapshotDimensions &&
@@ -6750,6 +6793,7 @@ export function connectPanePty(
           // still draining from main's ACK backlog below that point are
           // duplicates the dataCallback reconciliation must suppress.
           setRestoredSnapshotBaseline(currentPtyId, snapshot)
+          hiddenOutputRestoreReplayingSnapshot = null
           const needsFreshSnapshot = hiddenOutputRestoreFreshSnapshotNeeded
           hiddenOutputRestoreFreshSnapshotNeeded = false
           const drainOutcome = drainPendingLiveChunksAfterSnapshot(snapshot.seq)
