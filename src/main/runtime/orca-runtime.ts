@@ -5984,6 +5984,7 @@ export class OrcaRuntimeService {
     if (!options.resetIncarnation && previous !== wslDistro && this.headlessTerminals.has(ptyId)) {
       // Why: bytes parsed with two distro namespaces would leave an internally
       // inconsistent CWD; rebuild from the provider's authoritative snapshot.
+      this.terminalCwdByPtyId.delete(ptyId)
       this.replaceHeadlessTerminalAfterExecutionContextChange(ptyId)
     }
     return options.resetIncarnation === true || !hadExistingContext || previous !== wslDistro
@@ -7541,10 +7542,17 @@ export class OrcaRuntimeService {
           return
         }
         const data = `${snapshot.scrollbackAnsi ?? ''}${snapshot.data}`
-        this.recordOsc7MetadataForPty(ptyId, data)
+        // Why: a newer live OSC 7 can arrive while the snapshot is in flight;
+        // only seed metadata while no post-correction CWD has won the race.
+        if (!this.terminalCwdByPtyId.has(ptyId)) {
+          this.recordOsc7MetadataForPty(ptyId, data)
+        }
         await state.emulator.write(data)
         if (snapshot.cwd !== undefined) {
           state.emulator.setCwd(snapshot.cwd)
+          if (!this.terminalCwdByPtyId.has(ptyId) && snapshot.cwd?.trim()) {
+            this.terminalCwdByPtyId.set(ptyId, snapshot.cwd)
+          }
         }
         if (snapshot.oscLinks !== undefined) {
           state.emulator.setRestoredOscLinks(snapshot.oscLinks)
