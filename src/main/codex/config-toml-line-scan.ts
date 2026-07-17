@@ -122,6 +122,9 @@ export function parseTomlSingleLineStringValue(
   let value = ''
   while (index < line.length) {
     const char = line[index]
+    if (char === '\n' || char === '\r') {
+      return null
+    }
     if (char === quote) {
       return { value, start, end: index + 1 }
     }
@@ -135,6 +138,58 @@ export function parseTomlSingleLineStringValue(
       continue
     }
     value += char
+    index += 1
+  }
+  return null
+}
+
+// Why: serde accepts multiline TOML strings for String settings such as
+// model_provider, so safety classifiers cannot treat triple quotes as absent.
+export function parseTomlStringValue(source: string, offset: number): ParsedTomlString | null {
+  let index = offset
+  while (source[index] === ' ' || source[index] === '\t') {
+    index += 1
+  }
+
+  const delimiter = source.startsWith('"""', index)
+    ? '"""'
+    : source.startsWith("'''", index)
+      ? "'''"
+      : null
+  if (!delimiter) {
+    return parseTomlSingleLineStringValue(source, offset)
+  }
+
+  const start = index
+  index += delimiter.length
+  index = skipInitialTomlMultilineNewline(source, index)
+  let value = ''
+  while (index < source.length) {
+    if (source.startsWith(delimiter, index)) {
+      return { value, start, end: index + delimiter.length }
+    }
+
+    if (delimiter === '"""' && source[index] === '\\') {
+      const continuationEnd = getTomlMultilineContinuationEnd(source, index)
+      if (continuationEnd !== null) {
+        index = continuationEnd
+        continue
+      }
+      const escaped = parseTomlBasicStringEscape(source, index)
+      if (!escaped) {
+        return null
+      }
+      value += escaped.value
+      index = escaped.nextIndex
+      continue
+    }
+
+    if (source[index] === '\r') {
+      value += '\n'
+      index += source[index + 1] === '\n' ? 2 : 1
+      continue
+    }
+    value += source[index]
     index += 1
   }
   return null
@@ -159,6 +214,37 @@ function skipTomlBasicString(line: string, startIndex: number): number {
 function skipTomlLiteralString(line: string, startIndex: number): number {
   const endIndex = line.indexOf("'", startIndex)
   return endIndex === -1 ? line.length : endIndex + 1
+}
+
+function skipInitialTomlMultilineNewline(source: string, index: number): number {
+  if (source[index] === '\r' && source[index + 1] === '\n') {
+    return index + 2
+  }
+  return source[index] === '\n' ? index + 1 : index
+}
+
+function getTomlMultilineContinuationEnd(source: string, slashIndex: number): number | null {
+  let index = slashIndex + 1
+  while (source[index] === ' ' || source[index] === '\t') {
+    index += 1
+  }
+  if (source[index] === '\r' && source[index + 1] === '\n') {
+    index += 2
+  } else if (source[index] === '\n') {
+    index += 1
+  } else {
+    return null
+  }
+
+  while (
+    source[index] === ' ' ||
+    source[index] === '\t' ||
+    source[index] === '\n' ||
+    source[index] === '\r'
+  ) {
+    index += 1
+  }
+  return index
 }
 
 function parseTomlBasicStringEscape(
