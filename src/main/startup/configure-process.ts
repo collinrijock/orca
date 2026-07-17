@@ -1,6 +1,7 @@
 import { app } from 'electron'
-import { existsSync, readFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { existsSync, mkdirSync, readFileSync } from 'node:fs'
+import { homedir } from 'node:os'
+import { join, resolve } from 'node:path'
 import { getVersionManagerBinPaths } from '../codex-cli/command'
 import { getMainE2EConfig } from '../e2e-config'
 
@@ -183,6 +184,16 @@ export function configureDevUserDataPath(isDev: boolean): void {
     // dedicated userData path per launch prevents persisted repos, worktrees,
     // and session state from leaking between tests through the shared dev
     // profile while still leaving the user's real packaged profile untouched.
+    const e2eHomeDir = process.env.ORCA_E2E_HOME_DIR ?? join(e2eConfig.userDataDir, 'home')
+    // Why: E2E imports can resolve os.homedir() before Electron is ready. Abort
+    // startup if a direct launch skipped the disposable Node-home contract.
+    if (!areSameE2EHomePath(homedir(), e2eHomeDir)) {
+      throw new Error('Refusing to start E2E outside its disposable home boundary')
+    }
+    // Why: on macOS Electron resolves app.getPath('home') from the native user
+    // database, not HOME. Set it explicitly before any Codex paths are built.
+    mkdirSync(e2eHomeDir, { recursive: true, mode: 0o700 })
+    app.setPath('home', e2eHomeDir)
     app.setPath('userData', e2eConfig.userDataDir)
     return
   }
@@ -203,6 +214,14 @@ export function configureDevUserDataPath(isDev: boolean): void {
   // `pnpm dev` can overwrite the packaged app's runtime pointer and make the
   // public `orca` CLI look broken even though the packaged app is still open.
   app.setPath('userData', join(app.getPath('appData'), 'orca-dev'))
+}
+
+function areSameE2EHomePath(left: string, right: string): boolean {
+  const normalizedLeft = resolve(left)
+  const normalizedRight = resolve(right)
+  return process.platform === 'win32'
+    ? normalizedLeft.toLowerCase() === normalizedRight.toLowerCase()
+    : normalizedLeft === normalizedRight
 }
 
 export function configureOrcaUserDataPathEnv(): void {
