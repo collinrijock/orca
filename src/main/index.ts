@@ -18,6 +18,7 @@ import { ensureActiveOrcaProfile, initOrcaProfilePaths } from './orca-profiles/p
 import { getOrcaCloudAuthConfig } from './orca-profiles/profile-cloud-auth-config'
 import { getProfileUserDataPath } from './orca-profiles/profile-storage-paths'
 import { applyAppIcon } from './app-icon'
+import { relaunchApp } from './app-relaunch'
 import { StatsCollector, initStatsPath } from './stats/collector'
 import { ClaudeUsageStore, initClaudeUsagePath } from './claude-usage/store'
 import { CodexUsageStore, initCodexUsagePath } from './codex-usage/store'
@@ -1319,7 +1320,11 @@ function handleGpuChildCrash(reason: string, exitCode: number | null): void {
     return
   }
   isQuitting = true
-  app.relaunch()
+  relaunchApp('gpu-fallback', {
+    processReason: reason,
+    exitCode,
+    crashesInWindow: result.crashesInWindow
+  })
   app.exit(0)
 }
 
