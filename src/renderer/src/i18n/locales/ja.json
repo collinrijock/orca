@@ -10266,7 +10266,10 @@
             "peek": {
               "tip": {
                 "title": "Hover the right edge to peek",
-                "description": "The right sidebar slides over the editor without reflowing it. Click the toggle or use the shortcut to pin it open. Change this anytime in Settings › Appearance."
+                "description": "The right sidebar slides over the editor without reflowing it. Click the toggle or use the shortcut to pin it open. Change this anytime in Settings › Appearance.",
+                "titleLong": "Hover over the right edge of the screen to quickly show this sidebar.",
+                "settingsPrefix": "Turn this off in",
+                "settingsLink": "Settings"
               }
             }
           },

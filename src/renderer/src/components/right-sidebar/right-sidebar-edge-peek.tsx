@@ -13,6 +13,7 @@ const PEEK_TITLEBAR_ZONE_PX = 36
 const PEEK_INTERACTIVE_PORTAL_SELECTOR = [
   '[data-slot="context-menu-content"]',
   '[data-slot="context-menu-sub-content"]',
+  '[data-slot="dialog-content"]',
   '[data-slot="dropdown-menu-content"]',
   '[data-slot="dropdown-menu-sub-content"]',
   '[data-slot="hover-card-content"]',

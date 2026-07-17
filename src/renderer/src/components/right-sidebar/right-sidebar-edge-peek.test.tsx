@@ -220,22 +220,25 @@ describe('useRightSidebarEdgePeekDismiss', () => {
     expect(setPeek).not.toHaveBeenCalled()
   })
 
-  it('keeps the peek while the pointer uses portaled sidebar content', () => {
-    const setPeek = vi.fn()
-    const portalContent = document.createElement('div')
-    portalContent.dataset.slot = 'dropdown-menu-content'
-    document.body.appendChild(portalContent)
-    renderDismissHook({ setPeek })
+  it.each(['dropdown-menu-content', 'dialog-content'])(
+    'keeps the peek while the pointer uses portaled %s',
+    (portalSlot) => {
+      const setPeek = vi.fn()
+      const portalContent = document.createElement('div')
+      portalContent.dataset.slot = portalSlot
+      document.body.appendChild(portalContent)
+      renderDismissHook({ setPeek })
 
-    fireEvent.mouseMove(portalContent, { clientX: 400 })
-    vi.advanceTimersByTime(PEEK_CLOSE_DELAY_MS)
-    expect(setPeek).not.toHaveBeenCalled()
+      fireEvent.mouseMove(portalContent, { clientX: 400 })
+      vi.advanceTimersByTime(PEEK_CLOSE_DELAY_MS)
+      expect(setPeek).not.toHaveBeenCalled()
 
-    fireEvent.mouseMove(window, { clientX: 400 })
-    vi.advanceTimersByTime(PEEK_CLOSE_DELAY_MS)
-    expect(setPeek).toHaveBeenCalledWith(false)
-    portalContent.remove()
-  })
+      fireEvent.mouseMove(window, { clientX: 400 })
+      vi.advanceTimersByTime(PEEK_CLOSE_DELAY_MS)
+      expect(setPeek).toHaveBeenCalledWith(false)
+      portalContent.remove()
+    }
+  )
 
   it('does not dismiss when the boundary was measured mid entrance animation', () => {
     const setPeek = vi.fn()
