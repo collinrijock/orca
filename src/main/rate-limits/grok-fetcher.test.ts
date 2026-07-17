@@ -144,12 +144,17 @@ describe('fetchGrokRateLimits', () => {
     expect(result.monthly).toBeUndefined()
   })
 
-  it('maps monthly included usage for unified-billing accounts without a weekly period', async () => {
+  it('maps monthly included usage when a unified-billing response has an ambiguous weekly period', async () => {
     authState.file = freshAuthJson()
     netFetchMock
       .mockResolvedValueOnce(
         jsonResponse({
           config: {
+            currentPeriod: {
+              type: 'USAGE_PERIOD_TYPE_WEEKLY',
+              start: '2026-07-10T19:38:56.948570+00:00',
+              end: '2026-07-17T19:38:56.948570+00:00'
+            },
             isUnifiedBillingUser: true,
             subscriptionTier: 'SuperGrok'
           }
@@ -182,6 +187,7 @@ describe('fetchGrokRateLimits', () => {
         headers: expect.objectContaining({ Authorization: 'Bearer access-token' })
       })
     )
+    expect(netFetchMock).toHaveBeenCalledTimes(2)
   })
 
   // Why: 'unavailable' would make applyStalePolicy discard the last good
