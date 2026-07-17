@@ -8,11 +8,7 @@ import type { SshTarget } from '../../shared/ssh-types'
 import { buildSshArgs } from './system-ssh-args'
 import { findSystemSsh } from './system-ssh-binary'
 
-type DiagnosticMode =
-  | 'private-console-regular-output-production-args'
-  | 'private-console-regular-output-strict-trust'
-  | 'private-console-regular-output-verbose'
-  | 'private-console-regular-output-verbose-strict-trust'
+type DiagnosticMode = 'private-console-regular-output-strict-trust'
 
 type DiagnosticResult = {
   mode: DiagnosticMode
@@ -52,25 +48,9 @@ function createTarget(): SshTarget {
   }
 }
 
-function buildDiagnosticSshArgs(
-  target: SshTarget,
-  knownHostsPath: string,
-  options: { strictTrust: boolean; verbose: boolean } = { strictTrust: true, verbose: true }
-): string[] {
-  const sshArgs = buildSshArgs(target)
-  const destinationSeparator = sshArgs.indexOf('--')
-  if (destinationSeparator < 0) {
-    throw new Error('Windows OpenSSH diagnostic arguments lost the destination separator')
-  }
+function buildDiagnosticSshArgs(target: SshTarget, knownHostsPath: string): string[] {
   // Why: Win32-OpenSSH ignores overridden profile variables; use only the fixture's pinned trust.
-  const diagnosticArgs = [
-    ...(options.verbose ? ['-vvv'] : []),
-    ...(options.strictTrust
-      ? ['-o', 'StrictHostKeyChecking=yes', '-o', `UserKnownHostsFile=${knownHostsPath}`]
-      : [])
-  ]
-  sshArgs.splice(destinationSeparator, 0, ...diagnosticArgs)
-  return sshArgs
+  return buildSshArgs(target, { strictKnownHostsFile: knownHostsPath })
 }
 
 async function runDiagnostic(mode: DiagnosticMode, sshArgs: string[]): Promise<DiagnosticResult> {
@@ -167,8 +147,8 @@ async function runDiagnostic(mode: DiagnosticMode, sshArgs: string[]): Promise<D
   })
 }
 
-describe('Windows OpenSSH no-input diagnostic trust arguments', () => {
-  it('adds only strict fixture trust and verbosity before the destination separator', () => {
+describe('Windows OpenSSH no-input pinned trust arguments', () => {
+  it('adds only strict fixture trust before the destination separator', () => {
     const target: SshTarget = {
       id: 'windows-no-input-contract',
       label: 'windows-no-input-contract',
@@ -183,9 +163,8 @@ describe('Windows OpenSSH no-input diagnostic trust arguments', () => {
     const knownHostsPath = 'C:\\fixture\\client-home\\.ssh\\known_hosts'
     const productionArgs = buildSshArgs(target)
     const diagnosticArgs = buildDiagnosticSshArgs(target, knownHostsPath)
-    const destinationSeparator = productionArgs.indexOf('--')
+    const insertionIndex = productionArgs.indexOf('-T') + 1
     const diagnosticOnlyArgs = [
-      '-vvv',
       '-o',
       'StrictHostKeyChecking=yes',
       '-o',
@@ -193,50 +172,31 @@ describe('Windows OpenSSH no-input diagnostic trust arguments', () => {
     ]
 
     expect(diagnosticArgs).toEqual([
-      ...productionArgs.slice(0, destinationSeparator),
+      ...productionArgs.slice(0, insertionIndex),
       ...diagnosticOnlyArgs,
-      ...productionArgs.slice(destinationSeparator)
+      ...productionArgs.slice(insertionIndex)
     ])
-    expect(diagnosticArgs.indexOf('-vvv')).toBeLessThan(diagnosticArgs.indexOf('--'))
+    expect(diagnosticArgs).not.toContain('-vvv')
     expect(diagnosticArgs).not.toContain('StrictHostKeyChecking=no')
     expect(buildSshArgs(target)).toEqual(productionArgs)
   })
 })
 
-describe.skipIf(!hasLiveInput)('Windows OpenSSH no-input child-handle diagnostic', () => {
+describe.skipIf(!hasLiveInput)('Windows OpenSSH no-input pinned-trust control', () => {
   it(
-    'isolates production, strict-trust, and verbose launcher argument effects',
-    { timeout: 40_000 },
+    'settles the launcher with the exact pinned fixture host file',
+    { timeout: 15_000 },
     async () => {
       expect(process.platform).toBe('win32')
       const target = createTarget()
       const knownHostsPath = join(clientHome as string, '.ssh', 'known_hosts')
-      const production = await runDiagnostic(
-        'private-console-regular-output-production-args',
-        buildSshArgs(target)
-      )
       const strictTrust = await runDiagnostic(
         'private-console-regular-output-strict-trust',
-        buildDiagnosticSshArgs(target, knownHostsPath, { strictTrust: true, verbose: false })
-      )
-      const verbose = await runDiagnostic(
-        'private-console-regular-output-verbose',
-        buildDiagnosticSshArgs(target, knownHostsPath, { strictTrust: false, verbose: true })
-      )
-      const verboseStrictTrust = await runDiagnostic(
-        'private-console-regular-output-verbose-strict-trust',
         buildDiagnosticSshArgs(target, knownHostsPath)
       )
-      console.log(
-        `ssh_windows_no_input_argument_matrix=${JSON.stringify({ production, strictTrust, verbose, verboseStrictTrust })}`
-      )
+      console.log(`ssh_windows_no_input_pinned_trust=${JSON.stringify({ strictTrust })}`)
 
-      expect({
-        production: production.success,
-        strictTrust: strictTrust.success,
-        verbose: verbose.success,
-        verboseStrictTrust: verboseStrictTrust.success
-      }).toEqual({ production: true, strictTrust: true, verbose: true, verboseStrictTrust: true })
+      expect(strictTrust.success).toBe(true)
     }
   )
 })

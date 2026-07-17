@@ -51,6 +51,7 @@ type Measurement<T> = {
 const host = process.env.ORCA_SSH_RELAY_LIVE_WINDOWS_SYSTEM_SSH_HOST
 const user = process.env.ORCA_SSH_RELAY_LIVE_WINDOWS_SYSTEM_SSH_USER
 const identityFile = process.env.ORCA_SSH_RELAY_LIVE_WINDOWS_SYSTEM_SSH_IDENTITY
+const clientHome = process.env.ORCA_SSH_RELAY_LIVE_WINDOWS_SYSTEM_SSH_CLIENT_HOME
 const launcherPath = process.env.ORCA_SSH_WINDOWS_NO_INPUT_LAUNCHER
 const remoteRoot = process.env.ORCA_SSH_RELAY_LIVE_WINDOWS_SYSTEM_SSH_REMOTE_ROOT
 const serverVersion = process.env.ORCA_SSH_RELAY_LIVE_WINDOWS_SYSTEM_SSH_SERVER_VERSION
@@ -63,6 +64,7 @@ const hasLiveInput = Boolean(
   host &&
   user &&
   identityFile &&
+  clientHome &&
   launcherPath &&
   remoteRoot &&
   serverVersion &&
@@ -268,7 +270,10 @@ describe.skipIf(!hasLiveInput)(
         const connection = new SshConnection(
           target,
           { onStateChange: () => {} },
-          { windowsNoInputLauncherPath: launcherPath as string }
+          {
+            windowsNoInputLauncherPath: launcherPath as string,
+            strictKnownHostsFile: join(clientHome as string, '.ssh', 'known_hosts')
+          }
         )
         const serialStage = stagePath('system-serial', identity)
         const concurrentStage = stagePath('system-concurrent', identity)

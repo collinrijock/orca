@@ -157,9 +157,14 @@ describe('SSH relay runtime artifact workflow', () => {
     const workflow = parse(workflowSource)
     assertWindowsOpenSshWorkflow(workflow, expect)
     expect(fullSizeSource).toContain('process.env.ORCA_SSH_WINDOWS_NO_INPUT_LAUNCHER')
-    expect(fullSizeSource).toContain('{ windowsNoInputLauncherPath: launcherPath as string }')
+    expect(fullSizeSource).toContain('windowsNoInputLauncherPath: launcherPath as string')
+    expect(fullSizeSource).toContain(
+      "strictKnownHostsFile: join(clientHome as string, '.ssh', 'known_hosts')"
+    )
     expect(connectionSource).not.toContain('ORCA_SSH_WINDOWS_NO_INPUT_LAUNCHER')
+    expect(connectionSource).not.toContain('ORCA_SSH_RELAY_LIVE_WINDOWS_SYSTEM_SSH_CLIENT_HOME')
     expect(managerSource).not.toContain('windowsNoInputLauncherPath')
+    expect(managerSource).not.toContain('strictKnownHostsFile')
   })
 
   it('uploads only the first output after two clean builds verify and compare', async () => {

@@ -8,8 +8,8 @@ work; keep exact commands, runner identities, hashes, metrics, and residual gaps
 
 Date created: 2026-07-14<br>
 Last updated: 2026-07-17<br>
-Current phase: Milestone 6 / Work Package 5 bounded runtime transfer — **In progress — Windows launcher adapter argument-matrix native qualification, 2026-07-17, Codex implementation owner**. Exact head `42098d1b1393a97c03fec6e7b685859f8296b90d`, run `29555939964`, and x64/ARM64 jobs `87807875088`/`87807875112` preserve every artifact/launcher/cache gate and independently prove the standalone strict-trust launcher, but the injected `SshConnection` probe still times out with no lifecycle events before any full-size transfer. `E-M6-WINDOWS-NOINPUT-ARGUMENT-MATRIX-LOCAL-001` adds non-secret launch-mode telemetry and a bounded four-vector native comparison without changing behavior. Commit/push only that diagnostic. Keep the path absent from every product/default caller and keep legacy as the sole production path. Real Apple/SignPath rehearsals remain deferred.<br>
-Session checkpoint: **ADAPTER NATIVE RED / ARGUMENT MATRIX LOCAL GREEN — 2026-07-17, Codex implementation owner** — the next diagnostic compares production args, strict trust only, verbosity only, and strict plus verbose under the same launcher deadline, while timeout errors report only `direct`, `windows-no-input-launcher`, or `unknown`. Syntax, 124 focused cases with ten declared skips, 285 release contracts with eight declared skips, typecheck, lint/reliability/max-lines, formatting, diff, and protected-resolver isolation pass. The prior x64/ARM64 full-size and teardown gates remain red; no launch behavior, product caller, upload, default/fallback, Beta, tuple publication, or signing behavior changed.<br>
+Current phase: Milestone 6 / Work Package 5 bounded runtime transfer — **In progress — explicit pinned-host-trust correction exact-head native qualification, 2026-07-17, Codex implementation owner**. Exact head `167ec962dbb0269cfdf974ab8617a76a67545de7`, run `29557508199`, and x64/ARM64 jobs `87812780534`/`87812780579` select explicit pinned trust. `E-M6-WINDOWS-PINNED-HOST-TRUST-CORRECTION-LOCAL-001` records the correction locally green: constructor input reaches every command in the live purpose connection, launcher selection remains probe-only, the failing matrix is replaced by one bounded strict-trust control, and no environment or product caller is added. Commit/push only this package and require fresh native x64/ARM64 proof. Legacy remains the sole production path; real Apple/SignPath rehearsals remain deferred.<br>
+Session checkpoint: **PINNED TRUST CORRECTION LOCAL GREEN / NATIVE RERUN NEXT — 2026-07-17, Codex implementation owner** — 126 focused cases with ten declared skips, 285 release contracts with eight declared skips, typecheck, lint/reliability/max-lines, formatting, diff, protected-resolver isolation, and consumer isolation pass. Full-size transfer, cancellation, concurrency, reuse, and exact profile teardown remain unproven. No product caller, upload, default/fallback, Beta, tuple publication, or signing behavior changed.<br>
 Primary design: [SSH relay GitHub Release plan](./2026-07-14-ssh-relay-github-release-plan.html)<br>
 Motivating issues: [#8450](https://github.com/stablyai/orca/issues/8450), [#1693](https://github.com/stablyai/orca/issues/1693)
 
@@ -20195,6 +20195,86 @@ lint` passes in 18.59 seconds real with the 26 existing warnings, all 41 reliabi
   selection in the failing connection probe. Commit/push this diagnostic and require exact-head
   x64/ARM64 matrix plus timeout-label evidence before any behavior correction.
 
+### E-M6-WINDOWS-NOINPUT-ARGUMENT-MATRIX-CI-RED-001 — native matrix selects explicit pinned host trust
+
+- Date/owner/source/run: 2026-07-17, Codex implementation owner; exact head
+  `167ec962dbb0269cfdf974ab8617a76a67545de7`, artifact run
+  [29557508199](https://github.com/stablyai/orca/actions/runs/29557508199), Windows x64 job
+  [87812780534](https://github.com/stablyai/orca/actions/runs/29557508199/job/87812780534) on
+  `windows-2022`, and native ARM64 job
+  [87812780579](https://github.com/stablyai/orca/actions/runs/29557508199/job/87812780579) on
+  `windows-11-arm64`; both use Node 24.18.0.
+- Preserved gates: both Windows jobs pass 101 artifact files, 863 runnable cases, and 19 declared
+  skips before the live purpose step, including legacy launcher compilation, all launcher
+  argv/EOF/binary/overflow/cleanup/cancellation contracts, exact clean-build identity, runtime smoke,
+  and both full-size cache gates. Darwin x64/ARM64 jobs `87812780560`/`87812780548`, Linux
+  x64/ARM64 jobs `87812780522`/`87812780553`, and Linux oldest-userland supplements
+  `87813279471`/`87813279463` pass at the same exact head.
+- X64 matrix: production arguments fail after 6110.6764 ms and verbose-only after 6090.3466 ms;
+  both settle through process/channel close 1 with no sentinel. Strict pinned trust succeeds in
+  219.4604 ms and strict-plus-verbose in 243.0841 ms; both observe the sentinel, ended stdout,
+  process exit 0, channel close 0, and no internal timeout.
+- ARM64 matrix: production arguments fail after 6333.9305 ms and verbose-only after 6295.0097 ms
+  with the same bounded close-1 lifecycle. Strict pinned trust succeeds in 447.5773 ms and
+  strict-plus-verbose in 469.5499 ms with the complete success lifecycle.
+- Classification: both verbose traces show Win32-OpenSSH resolving host files under
+  `C:\Users\runneradmin` despite workflow HOME/USERPROFILE isolation. The exact fixture
+  `UserKnownHostsFile` plus `StrictHostKeyChecking=yes` is the only selected argument difference;
+  verbosity is irrelevant. This proves a qualification-fixture trust-path gap, not a launcher or
+  runtime-transfer failure.
+- Teardown/residual: the matrix deliberately expects all four vectors to succeed, so it stops each
+  Windows step before the injected `SshConnection` full-size test and no launch-mode or transfer
+  metric is produced. Both teardowns again detect unload exit 1 for the owned SID's `_Classes` hive,
+  locked `UsrClass.dat`, and the retained fixture profile directory. Add only explicit
+  constructor-injected `strictKnownHostsFile` input, propagate it to every command in the live
+  purpose test, and replace the intentionally failing matrix with a bounded strict-trust control.
+  Do not add an environment lookup, product/default caller, fallback, Beta, tuple, publication, or
+  signing behavior.
+
+### E-M6-WINDOWS-PINNED-HOST-TRUST-CORRECTION-LOCAL-001 — explicit qualification trust is locally green
+
+- Date/owner/base/runner: 2026-07-17, Codex implementation owner; uncommitted correction atop exact
+  matrix head `167ec962dbb0269cfdf974ab8617a76a67545de7` on Apple arm64, macOS 26.2 build 25C56,
+  Node 26.5.0, and pnpm 10.24.0. The repository requests Node 24; native jobs remain authoritative.
+- Implementation boundary: `SystemSshBuildArgsOptions.strictKnownHostsFile` emits only
+  `StrictHostKeyChecking=yes` and the exact `UserKnownHostsFile` before the destination when
+  explicitly supplied. `SshConnectionSystemSshOptions` carries that value to probe, exec, and file
+  operations for the native live purpose connection. The Windows no-input launcher remains
+  constructor-injected only into the probe. The full-size purpose test derives the exact fixture
+  file from its existing runner input; core code reads no workflow environment value, and the
+  manager/product/default path supplies neither option.
+- Diagnostic retirement: the intentionally failing four-vector native matrix is replaced by one
+  6,000 ms internal-deadline standalone launcher control using the same strict trust builder path.
+  This preserves independent launcher settlement evidence without spending two bounded failures or
+  preventing the following full-size test from running.
+- Focused evidence: after an initial run exposed and corrected three assertion/source-oracle
+  mismatches, `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts
+  --maxWorkers=1 src/main/ssh/ssh-connection.test.ts src/main/ssh/ssh-system-fallback.test.ts
+  src/main/ssh/system-ssh-command-launcher.test.ts
+  src/main/ssh/ssh-system-no-input-windows-openssh.test.ts
+  src/main/ssh/ssh-relay-runtime-windows-system-ssh-openssh-full-size.test.ts
+  config/scripts/ssh-relay-runtime-windows-no-input-launcher.test.mjs
+  config/scripts/ssh-relay-runtime-workflow.test.mjs` exits 0 with six files passed, one native file
+  skipped, 126 runnable cases passed, and ten declared native/live skips in 22.65 seconds real;
+  maximum RSS is 150,585,344 bytes and peak footprint is 97,769,280 bytes.
+- Release/static evidence: `/usr/bin/time -l pnpm exec vitest run --config
+  config/vitest.config.ts --maxWorkers=1 config/scripts/ssh-relay-runtime-*.test.mjs` exits 0 with 51
+  files, 285 runnable cases passed, and eight declared skips in 58.62 seconds real; maximum RSS is
+  195,690,496 bytes and peak footprint is 97,539,832 bytes. `/usr/bin/time -l pnpm typecheck` exits
+  0 in 11.38 seconds real with 1,774,403,584-byte maximum RSS and 98,293,520-byte peak footprint.
+  `/usr/bin/time -l pnpm lint` exits 0 in 25.24 seconds real with the existing 26 warnings, all 41
+  reliability gates, and the 355-entry max-lines ratchet; maximum RSS is 1,905,852,416 bytes and
+  peak footprint is 97,949,576 bytes.
+- Formatting/isolation: targeted `oxfmt --check`, `git diff --check`, the exact protected-resolver
+  comparison, and a non-test consumer search pass. The only non-test references are the inert
+  argument builder/propagation path; no manager, Electron/startup importer, environment lookup,
+  runtime transfer behavior, upload, default/fallback, Beta, tuple, publication, or signing path is
+  connected.
+- Residual gate: Darwin cannot execute the live Windows control or transfer. Commit/push this exact
+  correction and require exact-head x64/ARM64 launcher control, injected probe launch mode,
+  full-size serial/concurrent/collision/cancellation metrics, connection reuse, and exact fixture
+  profile/directory teardown before advancing.
+
 ## Accepted Gaps
 
 No product gap is accepted merely because it appears in this list. Each entry requires explicit
@@ -20253,11 +20333,11 @@ The project is not complete until every applicable item below is checked with ev
 
 ## Next Required Action
 
-Commit and push only the launch-mode and bounded argument-matrix diagnostic recorded by
-`E-M6-WINDOWS-NOINPUT-ARGUMENT-MATRIX-LOCAL-001`, then require exact-head Windows x64/ARM64 evidence
-before changing the adapter. The full-size transfer, cancellation, concurrency,
-connection reuse, and exact profile/directory teardown gates remain open. Do not check the broad
-Milestone 6 Windows system-SSH item or add an
+Commit and push only the explicit pinned-host-trust qualification correction recorded by
+`E-M6-WINDOWS-PINNED-HOST-TRUST-CORRECTION-LOCAL-001`, then require exact-head Windows x64/ARM64
+launcher control, launcher-backed probe, full-size transfer, cancellation, concurrency, connection
+reuse, and exact profile/directory teardown evidence. Do not check the broad Milestone 6 Windows
+system-SSH item or add an
 Electron/startup/product importer, per-target mode wiring, fallback, tuple
 enablement, release publication, or default behavior.
 Keep Node upstream `.tar.xz` inputs, Windows ZIP, `ORCA_RELAY_PATH`, existing desktop required-assets

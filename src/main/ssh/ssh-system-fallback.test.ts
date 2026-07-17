@@ -407,6 +407,24 @@ describe('spawnSystemSsh', () => {
     expect(args).not.toContain('-S')
   })
 
+  it('places explicit pinned host trust before the destination', () => {
+    const knownHostsPath = 'C:\\fixture\\client-home\\.ssh\\known_hosts'
+    const args = buildSshArgs(createTarget(), { strictKnownHostsFile: knownHostsPath })
+    const destinationIdx = args.indexOf('--')
+
+    expect(args).toEqual(
+      expect.arrayContaining([
+        '-o',
+        'StrictHostKeyChecking=yes',
+        '-o',
+        `UserKnownHostsFile=${knownHostsPath}`
+      ])
+    )
+    expect(args.indexOf('StrictHostKeyChecking=yes')).toBeLessThan(destinationIdx)
+    expect(args.indexOf(`UserKnownHostsFile=${knownHostsPath}`)).toBeLessThan(destinationIdx)
+    expect(args).not.toContain('StrictHostKeyChecking=no')
+  })
+
   it('spawns a remote command through the system ssh target', () => {
     spawnSystemSshCommand(createTarget({ configHost: 'fdpass-host' }), 'echo hello')
 
@@ -557,6 +575,22 @@ describe('spawnSystemSsh', () => {
     await expect(promise).resolves.toBeUndefined()
     expect(proc.stdin.end).toHaveBeenCalledWith(Buffer.from('contents'))
     expect(proc.stderr.listenerCount('data')).toBe(0)
+  })
+
+  it('propagates explicit pinned host trust through file operations', async () => {
+    const proc = createEventedProcess()
+    const knownHostsPath = 'C:\\fixture\\client-home\\.ssh\\known_hosts'
+    spawnMock.mockReturnValue(proc)
+
+    const promise = writeFileViaSystemSsh(createTarget(), '/tmp/file', 'contents', {
+      strictKnownHostsFile: knownHostsPath
+    })
+    proc.emit('close', 0, null)
+
+    await expect(promise).resolves.toBeUndefined()
+    const args = spawnMock.mock.calls[0][1] as string[]
+    expect(args).toContain('StrictHostKeyChecking=yes')
+    expect(args).toContain(`UserKnownHostsFile=${knownHostsPath}`)
   })
 
   it('writes binary buffers to POSIX system SSH targets with exclusive create', async () => {

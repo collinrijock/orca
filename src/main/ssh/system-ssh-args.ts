@@ -6,6 +6,7 @@ export type SystemSshBuildArgsOptions = {
   disableControlMaster?: boolean
   suppressOrcaControlMaster?: boolean
   noInput?: boolean
+  strictKnownHostsFile?: string
 }
 
 export function buildSshArgs(target: SshTarget, options?: SystemSshBuildArgsOptions): string[] {
@@ -18,6 +19,15 @@ export function buildSshArgs(target: SshTarget, options?: SystemSshBuildArgsOpti
     // Why: closing a parent pipe does not reliably detach native Windows
     // OpenSSH's input worker for commands that can never consume stdin.
     args.push('-n')
+  }
+  if (options?.strictKnownHostsFile) {
+    // Why: native fixtures need explicit pinned trust because Win32-OpenSSH ignores HOME overrides.
+    args.push(
+      '-o',
+      'StrictHostKeyChecking=yes',
+      '-o',
+      `UserKnownHostsFile=${options.strictKnownHostsFile}`
+    )
   }
 
   // Why: ControlMaster multiplexes all SSH exec commands over a single connection,
@@ -99,6 +109,9 @@ export function getSystemSshBuildArgsFromOperationOptions(
   }
   if (options?.noInput === true) {
     buildArgsOptions.noInput = true
+  }
+  if (options?.strictKnownHostsFile) {
+    buildArgsOptions.strictKnownHostsFile = options.strictKnownHostsFile
   }
   return Object.keys(buildArgsOptions).length === 0 ? undefined : buildArgsOptions
 }

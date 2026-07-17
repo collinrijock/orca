@@ -51,6 +51,8 @@ type SshRemoteFileOptions = {
 export type SshConnectionSystemSshOptions = {
   // Why: native qualification must not connect the launcher to a product/default caller yet.
   windowsNoInputLauncherPath?: string
+  // Why: Win32-OpenSSH resolves host files from the token profile, not isolated test HOME values.
+  strictKnownHostsFile?: string
 }
 
 // Upper bound on waiting, after an abort, for the in-flight open callback or
@@ -989,6 +991,9 @@ export class SshConnection {
     }
     if (this.systemSshControlMasterDisabledForSession) {
       options.disableControlMaster = true
+    }
+    if (this.systemSshOptions.strictKnownHostsFile) {
+      options.strictKnownHostsFile = this.systemSshOptions.strictKnownHostsFile
     }
     return options
   }

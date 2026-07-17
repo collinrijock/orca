@@ -956,11 +956,13 @@ describe('SshConnection', () => {
     expect(probeChannel?.stdin.end).toHaveBeenCalledOnce()
   })
 
-  it('passes an explicit Windows no-input launcher only to the system SSH probe', async () => {
+  it('limits the explicit launcher to the probe and carries explicit pinned trust to all commands', async () => {
     vi.mocked(resolveWithSshG).mockResolvedValueOnce(createResolvedConfig())
     const launcherPath = 'C:\\fixture\\orca-ssh-no-input-launcher.exe'
+    const knownHostsPath = 'C:\\fixture\\client-home\\.ssh\\known_hosts'
     const conn = new SshConnection(createTarget({ configHost: 'fdpass-host' }), createCallbacks(), {
-      windowsNoInputLauncherPath: launcherPath
+      windowsNoInputLauncherPath: launcherPath,
+      strictKnownHostsFile: knownHostsPath
     })
 
     await conn.connect()
@@ -972,14 +974,18 @@ describe('SshConnection', () => {
       'echo ORCA-SYSTEM-SSH-OK',
       expect.objectContaining({
         noInput: true,
-        windowsNoInputLauncherPath: launcherPath
+        windowsNoInputLauncherPath: launcherPath,
+        strictKnownHostsFile: knownHostsPath
       })
     )
     expect(spawnSystemSshCommandMock).toHaveBeenNthCalledWith(
       2,
       expect.objectContaining({ configHost: 'fdpass-host' }),
       'echo after-connect',
-      expect.not.objectContaining({ windowsNoInputLauncherPath: expect.anything() })
+      expect.objectContaining({ strictKnownHostsFile: knownHostsPath })
+    )
+    expect(spawnSystemSshCommandMock.mock.calls[1][2]).not.toEqual(
+      expect.objectContaining({ windowsNoInputLauncherPath: expect.anything() })
     )
   })
 
@@ -1001,7 +1007,10 @@ describe('SshConnection', () => {
     expect(spawnSystemSshCommandMock).toHaveBeenCalledWith(
       expect.objectContaining({ configHost: 'fdpass-host' }),
       'echo ORCA-SYSTEM-SSH-OK',
-      expect.not.objectContaining({ windowsNoInputLauncherPath: expect.anything() })
+      expect.not.objectContaining({
+        strictKnownHostsFile: expect.anything(),
+        windowsNoInputLauncherPath: expect.anything()
+      })
     )
   })
 

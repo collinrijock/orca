@@ -9,16 +9,20 @@ keeps commands, hashes, runner identities, timings, and failure details.
 A checked box means the work has evidence in the detailed ledger. Design approval alone does not
 complete a box.
 
-Active checkpoint: **Milestone 6 / Work Package 5 bounded runtime transfer — explicit Windows
-no-input launcher adapter native selection diagnostic next, 2026-07-17, Codex implementation owner.**
-Exact head `42098d1b1393a97c03fec6e7b685859f8296b90d`, run `29555939964`, and Windows x64/ARM64 jobs
-`87807875088`/`87807875112` pass every artifact/launcher/cache gate and the standalone strict-trust
-launcher in 944.6233/852.6974 ms. The injected `SshConnection` probe still times out in
-32211/32140 ms with no lifecycle events before transfer; both teardowns retain locked
-`UsrClass.dat`. `E-M6-WINDOWS-NOINPUT-ARGUMENT-MATRIX-LOCAL-001` records non-secret launch-mode
-telemetry plus a bounded production/strict/verbose argument matrix locally green with 124 focused
-cases, 285 release contracts, typecheck, lint/reliability/max-lines, diff, and resolver isolation.
-Commit/push this diagnostic next; no adapter change or product/default caller is authorized yet.
+Active checkpoint: **Milestone 6 / Work Package 5 bounded runtime transfer — explicit pinned-host-trust
+qualification correction locally green, exact-head native rerun next, 2026-07-17, Codex implementation
+owner.** Exact head
+`167ec962dbb0269cfdf974ab8617a76a67545de7`, run `29557508199`, and Windows x64/ARM64 jobs
+`87812780534`/`87812780579` independently select the same boundary: launcher-backed production and
+verbose-only arguments fail after the 6-second internal deadline because Win32-OpenSSH resolves
+`runneradmin` host files, while strict pinned trust succeeds with complete lifecycle settlement in
+219.4604/447.5773 ms and strict-plus-verbose succeeds in 243.0841/469.5499 ms. All four primary
+non-Windows jobs and both Linux oldest-userland supplements pass.
+`E-M6-WINDOWS-PINNED-HOST-TRUST-CORRECTION-LOCAL-001` records the selected correction locally green:
+126 focused cases, 285 release contracts, typecheck, full lint/reliability/max-lines, formatting,
+diff, protected-resolver isolation, and no product caller pass. Commit/push this exact package and
+require x64/ARM64 full-size, cancellation, concurrency, reuse, and exact teardown proof. No upload,
+Beta, fallback, tuple, publication, default, or signing behavior is authorized.
 `E-M6-WINDOWS-SYSTEM-SSH-TREE-LIVE-PORTABLE-FIXTURE-LOCAL-001` records the portable-fixture
 correction locally green: the no-Orca-publication workflow oracle permits the one exact pinned
 Microsoft fixture release URL while Orca release URLs, `gh release`, and `contents: write` remain
