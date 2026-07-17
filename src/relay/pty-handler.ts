@@ -219,6 +219,9 @@ type PtyProcessSummary = {
   title: string
   worktreeId?: string
   terminalHandle?: string
+  /** Host admission launch token echoed on re-list so crash reconciliation can
+   *  rejoin a main-surviving remote PTY to its pending launch by token. */
+  launchToken?: string
 }
 
 type SerializedPtyEntry = {
@@ -1163,7 +1166,8 @@ export class PtyHandler {
         cwd: managed.initialCwd,
         title,
         ...(managed.worktreeId ? { worktreeId: managed.worktreeId } : {}),
-        ...(managed.terminalHandle ? { terminalHandle: managed.terminalHandle } : {})
+        ...(managed.terminalHandle ? { terminalHandle: managed.terminalHandle } : {}),
+        ...(managed.launchToken ? { launchToken: managed.launchToken } : {})
       })
     }
     return results
