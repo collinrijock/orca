@@ -22,8 +22,7 @@ const CMD_UTF8_SETUP_COMMAND = 'chcp 65001 > nul'
 // (`❯` -> `Γ¥»`). Switch the console to UTF-8, then exec the normal interactive
 // login shell; cmd.exe and PowerShell already do the equivalent. The `;` (not
 // `&&`) keeps startup working even if chcp.com is missing.
-const GIT_BASH_UTF8_LOGIN_COMMAND =
-  'chcp.com 65001 >/dev/null 2>&1; exec "$BASH" --login -i'
+const GIT_BASH_UTF8_LOGIN_COMMAND = 'chcp.com 65001 >/dev/null 2>&1; exec "$BASH" --login -i'
 
 /** Result of resolving a Windows shell to its launch args + effective cwd.
  *
