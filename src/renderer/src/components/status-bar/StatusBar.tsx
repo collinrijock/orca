@@ -2092,8 +2092,8 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
   // floating-workspace activity and clears via the shared unread paths.
   const showFloatingWorkspaceAttentionDot = !floatingTerminalOpen && hasFloatingUnread
 
-  // Consolidated roster: the leading pill dot reflects the worst usage tier across
-  // every visible meter.
+  // Why: the roster must contain only status items the user left visible;
+  // otherwise an empty trigger would bypass those visibility controls.
   const rosterProviders = [
     showClaude ? visibleClaude : null,
     showCodex ? visibleCodex : null,
@@ -2151,7 +2151,7 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
           showEmptyUsageCta ? (
             <StatusBarUsageEmptyCta />
           ) : null
-        ) : (
+        ) : hasVisibleUsageMeters ? (
           // Consolidated roster pill → opens the all-agents Usage popover (mock parity).
           <UsagePercentageDisplayChangeNotice hasVisibleUsageMeters={hasVisibleUsageMeters}>
             <DropdownMenu open={usageMenuOpen} onOpenChange={setUsageMenuOpen} modal={false}>
@@ -2245,7 +2245,7 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
               </DropdownMenuContent>
             </DropdownMenu>
           </UsagePercentageDisplayChangeNotice>
-        )}
+        ) : null}
         {anyVisible && !isEmptyUsageState && (
           <Tooltip>
             <TooltipTrigger asChild>

@@ -22,8 +22,12 @@ vi.mock('../../store', () => ({
     selector({ usagePercentageDisplay: 'used' })
 }))
 
-function windowOf(usedPercent: number, windowMinutes: number): RateLimitWindow {
-  return { usedPercent, windowMinutes, resetsAt: null, resetDescription: null }
+function windowOf(
+  usedPercent: number,
+  windowMinutes: number,
+  resetsAt: number | null = null
+): RateLimitWindow {
+  return { usedPercent, windowMinutes, resetsAt, resetDescription: null }
 }
 
 // Grok unified-billing accounts surface a monthly window and nothing else.
@@ -103,5 +107,36 @@ describe('ProviderSegment monthly window', () => {
 
     expect(markup).toContain('80% used Pro')
     expect(markup).not.toContain('25% used')
+  })
+
+  // Why: #8378 — status-bar chip showed fixed window size ("5h") while the
+  // usage popup showed remaining time for the same resetsAt.
+  it('shows remaining session time on the chip when resetsAt is known (repro-8378)', async () => {
+    const { ProviderSegment } = await import('./StatusBar')
+    const now = 1_700_000_000_000
+    const dateNow = vi.spyOn(Date, 'now').mockReturnValue(now)
+    const remainingMs = 2 * 60 * 60_000 + 33 * 60_000
+
+    try {
+      const limits: ProviderRateLimits = {
+        provider: 'codex',
+        session: windowOf(42, 300, now + remainingMs),
+        weekly: windowOf(10, 10080, now + 6 * 24 * 60 * 60_000),
+        updatedAt: now,
+        error: null,
+        status: 'ok'
+      }
+      const markup = renderToStaticMarkup(
+        <ProviderSegment p={limits} compact={false} display="used" />
+      )
+
+      expect(markup).toContain('42% used 2h 33m')
+      expect(markup).not.toContain('5h')
+      // The consolidated footer intentionally renders only the tightest window.
+      expect(markup).not.toContain('10% used')
+      expect(markup).not.toContain('wk')
+    } finally {
+      dateNow.mockRestore()
+    }
   })
 })
