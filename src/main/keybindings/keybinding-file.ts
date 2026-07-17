@@ -340,12 +340,14 @@ export function seedLegacyTabSwitchBindings(
   const keybindingPlatform = getKeybindingPlatform(platform)
   const actionIds = Object.keys(legacyBindings) as KeybindingActionId[]
   const current = readKeybindingFile(path, platform)
-  // `current.overrides` is the effective override map for this platform (common
-  // + this platform's section). Skip any action that already resolves to a
-  // user-set binding here; a foreign-platform-only override must not block the
-  // pin, or this platform would drift to the new default.
+  const activePlatformOverrides = current.platformOverrides[keybindingPlatform] ?? {}
+  // Why: the new defaults can temporarily make a valid pre-swap customization
+  // look conflicting and remove it from `current.overrides`. Inspect the parsed
+  // common + active-platform sections directly so the seed never replaces it.
   const toSeed = actionIds.filter(
-    (actionId) => !Object.prototype.hasOwnProperty.call(current.overrides, actionId)
+    (actionId) =>
+      !Object.prototype.hasOwnProperty.call(current.commonOverrides, actionId) &&
+      !Object.prototype.hasOwnProperty.call(activePlatformOverrides, actionId)
   )
   if (toSeed.length === 0) {
     return { seeded: false, snapshot: current }

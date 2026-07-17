@@ -263,6 +263,38 @@ describe('keybinding-file', () => {
     })
   })
 
+  it('preserves pre-swap customizations that conflict only with the new defaults', () => {
+    // This was valid before the swap: moving nextSameType to Mod+K freed its
+    // old Shift+] chord for previousSameType. The new registry temporarily
+    // assigns Shift+] to nextAllTypes, but the seed must not mistake the
+    // resulting conflict for an absent user override and replace it.
+    writeFileSync(
+      filePath,
+      JSON.stringify({
+        version: 1,
+        platforms: {
+          darwin: {
+            'tab.nextSameType': ['Mod+K'],
+            'tab.previousSameType': ['Mod+Shift+BracketRight']
+          }
+        }
+      }),
+      'utf8'
+    )
+
+    seedLegacyTabSwitchBindings(filePath, 'darwin', LEGACY_TAB_SWITCH_BINDINGS)
+
+    expect(readKeybindingFile(filePath, 'darwin')).toMatchObject({
+      overrides: {
+        'tab.nextSameType': ['Mod+K'],
+        'tab.previousSameType': ['Mod+Shift+BracketRight'],
+        'tab.nextAllTypes': ['Mod+Alt+BracketRight'],
+        'tab.previousAllTypes': ['Mod+Alt+BracketLeft']
+      },
+      diagnostics: []
+    })
+  })
+
   it('is a no-op once every swapped action already resolves on this platform', () => {
     // Seeding writes the whole document at once, so it clears the per-write
     // conflict guard that a naive one-action-at-a-time write would trip.
