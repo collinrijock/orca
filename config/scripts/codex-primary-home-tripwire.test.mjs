@@ -1,6 +1,8 @@
+import { spawn } from 'node:child_process'
 import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
   describeCodexHomeChange,
@@ -24,6 +26,22 @@ async function createPrimaryHome() {
 }
 
 describe('Codex primary-home tripwire', () => {
+  it('keeps the standalone monitor alive until it is stopped', async () => {
+    const primaryHome = await createPrimaryHome()
+    const scriptPath = fileURLToPath(new URL('./codex-primary-home-tripwire.mjs', import.meta.url))
+    const child = spawn(process.execPath, [scriptPath, '--primary-home', primaryHome], {
+      stdio: ['ignore', 'pipe', 'pipe']
+    })
+
+    try {
+      await waitForStdout(child, '[CODEX HOME TRIPWIRE] Watching')
+      await new Promise((resolve) => setTimeout(resolve, 100))
+      expect(child.exitCode).toBeNull()
+    } finally {
+      child.kill()
+    }
+  })
+
   it('detects a write without reading file contents', async () => {
     const primaryHome = await createPrimaryHome()
     const tripwire = await startCodexPrimaryHomeTripwire({ primaryHome, intervalMs: 25 })
@@ -52,3 +70,25 @@ describe('Codex primary-home tripwire', () => {
     expect(describeCodexHomeChange(before, after)).toBeNull()
   })
 })
+
+function waitForStdout(child, expectedText) {
+  return new Promise((resolve, reject) => {
+    const timeout = setTimeout(
+      () => reject(new Error(`Timed out waiting for ${expectedText}`)),
+      2_000
+    )
+    let output = ''
+    child.stdout.setEncoding('utf8')
+    child.stdout.on('data', (chunk) => {
+      output += chunk
+      if (output.includes(expectedText)) {
+        clearTimeout(timeout)
+        resolve()
+      }
+    })
+    child.once('exit', (code) => {
+      clearTimeout(timeout)
+      reject(new Error(`Tripwire exited early with code ${code}`))
+    })
+  })
+}

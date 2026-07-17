@@ -125,7 +125,8 @@ export async function startCodexPrimaryHomeTripwire(options = {}) {
   }
 
   timer = setInterval(() => void scan(), intervalMs)
-  timer.unref?.()
+  // Why: this safety monitor must remain active even when it is the CLI's only open handle.
+  // Callers explicitly stop it after their validation window closes.
   return {
     codexHome,
     initialSnapshot,
