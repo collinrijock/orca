@@ -584,7 +584,8 @@ export function FloatingTerminalPanel({
       return
     }
     focusTerminalTabSurface(activeTerminalId, null, {
-      onImeRefocusSkipped: () => setFloatingTerminalInputFocusedInMain(false),
+      onImeRefocusSkipped: (active) =>
+        setFloatingTerminalInputFocusedInMain(isFloatingWorkspaceTerminalInputTarget(active)),
       refreshImeContext: true
     })
   }, [activeTerminalId, open])
@@ -1367,7 +1368,8 @@ export function FloatingTerminalPanel({
         // tab/leaf recovery; the shared TerminalPane owner cannot reclaim it.
         focusTerminalTabSurface(activeTerminalId, reclaim.leafId, {
           onlyIfFocusUnclaimed: true,
-          onImeRefocusSkipped: () => setFloatingTerminalInputFocusedInMain(false),
+          onImeRefocusSkipped: (active) =>
+            setFloatingTerminalInputFocusedInMain(isFloatingWorkspaceTerminalInputTarget(active)),
           refreshImeContext: true
         })
       }

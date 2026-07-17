@@ -823,6 +823,14 @@ describe('FloatingTerminalPanel close behavior', () => {
     mocks.setFloatingTerminalInputFocused.mockClear()
     mocks.focusTerminalTabSurface.mock.calls[0]?.[2].onImeRefocusSkipped()
     expect(mocks.setFloatingTerminalInputFocused).toHaveBeenCalledWith(false)
+
+    const newerFloatingInput = {
+      classList: { contains: (token: string) => token === 'xterm-helper-textarea' },
+      closest: vi.fn().mockReturnValue({})
+    }
+    Object.setPrototypeOf(newerFloatingInput, HTMLElement.prototype)
+    mocks.focusTerminalTabSurface.mock.calls[0]?.[2].onImeRefocusSkipped(newerFloatingInput)
+    expect(mocks.setFloatingTerminalInputFocused).toHaveBeenLastCalledWith(true)
   })
 
   it('preserves and reclaims terminal input ownership across window blur', async () => {

@@ -15,7 +15,7 @@ let pendingFocusFrameIds: number[] = []
 
 type FocusTerminalTabSurfaceOptions = {
   onlyIfFocusUnclaimed?: boolean
-  onImeRefocusSkipped?: () => void
+  onImeRefocusSkipped?: (activeElement: Element | null) => void
   refreshImeContext?: boolean
 }
 

@@ -98,7 +98,27 @@ describe('refreshTerminalImeInputContext', () => {
     for (const run of scheduled) {
       run()
     }
-    expect(onRefocusSkipped).toHaveBeenCalledOnce()
+    expect(onRefocusSkipped).toHaveBeenCalledWith(outside)
+  })
+
+  it('reports when a connected helper cannot accept the scheduled focus', () => {
+    const helper = appendHelper()
+    const onRefocusSkipped = vi.fn()
+    const scheduled: (() => void)[] = []
+    helper.focus()
+
+    refreshTerminalImeInputContext(helper, {
+      isMac: true,
+      onRefocusSkipped,
+      scheduleRefocus: (callback) => scheduled.push(callback)
+    })
+    vi.spyOn(helper, 'focus').mockImplementation(() => undefined)
+    for (const run of scheduled) {
+      run()
+    }
+
+    expect(document.activeElement).toBe(document.body)
+    expect(onRefocusSkipped).toHaveBeenCalledWith(document.body)
   })
 
   it('skips non-macOS platforms', () => {
