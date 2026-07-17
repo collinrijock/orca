@@ -11,6 +11,7 @@ import {
   hookDefinitionHasManagedCommand,
   MANAGED_HOOK_TIMEOUT_SECONDS,
   readHooksJson,
+  readHooksJsonWithRaw,
   removeManagedCommands,
   wrapPosixHookCommand,
   wrapWindowsCmdHookCommand,
@@ -605,8 +606,10 @@ function cleanupLegacySystemManagedHooks(): void {
   const systemHomePath = getSystemCodexHomePath()
   const hasRecordedRealHomeGrant =
     readCodexTrustGrantLedgerHomeForReconciliation(systemHomePath) !== null
-  const config = readHooksJson(legacyConfigPath)
-  if (!config?.hooks) {
+  // Why: the pre-write guard below compares against these bytes; a separate
+  // later read would let a concurrent save land between parse and snapshot.
+  const { raw: previousRaw, config } = readHooksJsonWithRaw(legacyConfigPath)
+  if (!config?.hooks || previousRaw === null) {
     if (hasRecordedRealHomeGrant) {
       removeSystemManagedHookTrustEntries(systemHomePath, legacyConfigPath)
     }
@@ -648,7 +651,6 @@ function cleanupLegacySystemManagedHooks(): void {
     // Why: this is the user's system hooks file, not Orca's runtime copy.
     // Remove only stale Orca hook entries and preserve other managers' metadata.
     const hooksWritePath = resolveHooksJsonWritePath(legacyConfigPath)
-    const previousRaw = readFileSync(legacyConfigPath, 'utf-8')
     const previousMode = statSync(hooksWritePath).mode
     mutateRealHomeHooksPreservingUserTrust({
       sourcePath: legacyConfigPath,

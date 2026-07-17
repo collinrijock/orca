@@ -25,6 +25,7 @@ import {
   wrapPosixHookCommand,
   wrapWindowsCmdHookCommand,
   wrapWindowsGitBashHookCommand,
+  readHooksJsonWithRaw,
   wrapWindowsHookCommand,
   writeManagedScript,
   writeHooksJson,
@@ -41,6 +42,28 @@ beforeEach(() => {
 
 afterEach(() => {
   rmSync(tmpDir, { recursive: true, force: true })
+})
+
+describe('readHooksJsonWithRaw', () => {
+  it('returns the parsed config together with the exact bytes it came from', () => {
+    const contents = '{"hooks": {"Stop": []}, "custom": 1}\n'
+    writeFileSync(configPath, contents, 'utf-8')
+
+    expect(readHooksJsonWithRaw(configPath)).toEqual({
+      raw: contents,
+      config: { hooks: { Stop: [] }, custom: 1 }
+    })
+  })
+
+  it('reports a missing file as an empty config with no raw bytes', () => {
+    expect(readHooksJsonWithRaw(configPath)).toEqual({ raw: null, config: {} })
+  })
+
+  it('keeps the raw bytes when the contents are not a JSON object', () => {
+    writeFileSync(configPath, 'not json\n', 'utf-8')
+
+    expect(readHooksJsonWithRaw(configPath)).toEqual({ raw: 'not json\n', config: null })
+  })
 })
 
 describe('writeHooksJson', () => {

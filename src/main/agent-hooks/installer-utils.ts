@@ -63,22 +63,12 @@ export function buildManagedCommandDefinition(command: string): HookDefinition {
   return { command, timeout: MANAGED_HOOK_TIMEOUT_SECONDS }
 }
 
-export function isPlainObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
-}
-
-export function readHooksJson(configPath: string): HooksConfig | null {
-  if (!existsSync(configPath)) {
-    return {}
-  }
-
-  try {
-    const parsed = JSON.parse(readFileSync(configPath, 'utf-8'))
-    return isPlainObject(parsed) ? parsed : null
-  } catch {
-    return null
-  }
-}
+export {
+  isPlainObject,
+  readHooksJson,
+  readHooksJsonWithRaw,
+  type HooksJsonSnapshot
+} from './hooks-json-read'
 
 // Why: callers in install/remove need to match not just the exact current
 // managed command, but also stale entries pointing at old script paths — e.g.

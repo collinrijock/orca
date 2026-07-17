@@ -5,7 +5,7 @@ import {
   buildManagedCommandHook,
   createManagedCommandMatcher,
   MANAGED_HOOK_TIMEOUT_SECONDS,
-  readHooksJson,
+  readHooksJsonWithRaw,
   removeManagedCommands,
   writeHooksJson,
   writeManagedScript,
@@ -119,7 +119,10 @@ function installRealHomeCodexHook(userDataPath: string): RealHomeCodexHookLane {
   const material = getCodexManagedHookInstallMaterial()
   const hooksJsonPath = getRealHomeHooksJsonPath()
   const hooksWritePath = resolveHooksJsonWritePath(hooksJsonPath)
-  const config = readHooksJson(hooksJsonPath)
+  // Why: the generation guard compares against these bytes before writing; a
+  // separate later read would let a concurrent save land between parse and
+  // snapshot and be silently overwritten by the stale parse.
+  const { raw: previousRaw, config } = readHooksJsonWithRaw(hooksJsonPath)
   if (!config) {
     // Why: an unparseable user file must never be clobbered; without a hook
     // entry the managed lane keeps status working for this host.
@@ -168,7 +171,6 @@ function installRealHomeCodexHook(userDataPath: string): RealHomeCodexHookLane {
     }
   }
 
-  const previousRaw = existsSync(hooksJsonPath) ? readFileSync(hooksJsonPath, 'utf-8') : null
   const previousMode = previousRaw === null ? undefined : statSync(hooksWritePath).mode
   backupRealHomeHooksJsonOnce(userDataPath, previousRaw)
   // Why: unknown top-level fields belong to the user (other managers'
@@ -268,8 +270,10 @@ function getInstallRetryAfterMs(reason: CodexTrustGrantFallbackReason): number {
 
 function sweepRealHomeCodexHook(): RealHomeCodexHookLane {
   const hooksJsonPath = getRealHomeHooksJsonPath()
-  const config = readHooksJson(hooksJsonPath)
-  if (!config?.hooks) {
+  // Why: single read — the pre-write generation guard must compare against
+  // the exact bytes this sweep's parse came from.
+  const { raw: previousRaw, config } = readHooksJsonWithRaw(hooksJsonPath)
+  if (!config?.hooks || previousRaw === null) {
     return 'removed'
   }
   const isManagedCommand = createManagedCommandMatcher(getCodexManagedScriptFileName())
@@ -295,7 +299,6 @@ function sweepRealHomeCodexHook(): RealHomeCodexHookLane {
   }
   if (removedAny) {
     const hooksWritePath = resolveHooksJsonWritePath(hooksJsonPath)
-    const previousRaw = readFileSync(hooksJsonPath, 'utf-8')
     const previousMode = statSync(hooksWritePath).mode
     mutateRealHomeHooksPreservingUserTrust({
       sourcePath: hooksJsonPath,

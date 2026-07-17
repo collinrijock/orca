@@ -88,6 +88,7 @@ beforeEach(() => {
 
 afterEach(() => {
   rebaseInternals.setSessionRunnerSync(null)
+  rebaseInternals.resetRetryState()
   rmSync(fakeHomeDir, { recursive: true, force: true })
   rmSync(userDataDir, { recursive: true, force: true })
   if (previousUserDataPath === undefined) {
@@ -403,6 +404,46 @@ describe('ensureRealHomeCodexHookState (opt-out sweep)', () => {
     )
     expect(operations).toEqual(['inspect-user-hook-trust', 'repair-user-hook-trust'])
     expect(readRealHooksJson().hooks?.Stop).toEqual([{ hooks: [before] }, { hooks: [after] }])
+  })
+
+  it('aborts without writing when hooks.json changes during the trust inspection', () => {
+    grantSucceeds()
+    const before = { type: 'command', command: 'before.sh' }
+    writeFileSync(
+      getRealHooksJsonPath(),
+      `${JSON.stringify({ hooks: { Stop: [{ hooks: [before] }] } }, null, 2)}\n`
+    )
+    ensureRealHomeCodexHookState({ hooksEnabled: true, userDataPath: userDataDir })
+    const installed = readRealHooksJson()
+    const after = { type: 'command', command: 'after.sh' }
+    installed.hooks!.Stop!.push({ hooks: [after] })
+    writeFileSync(getRealHooksJsonPath(), `${JSON.stringify(installed, null, 2)}\n`)
+    const userTrustToml = '[hooks.state."x:stop:0:0"]\ntrusted_hash = "user"\n'
+    writeFileSync(getRealConfigTomlPath(), userTrustToml, 'utf-8')
+    const concurrentSave = `${JSON.stringify({ hooks: { Stop: [{ hooks: [before] }] } }, null, 2)}\n`
+    const operations: string[] = []
+    rebaseInternals.setSessionRunnerSync((request) => {
+      operations.push(request.operation)
+      // A user save (or a second Orca instance) lands while the RPC runs.
+      writeFileSync(getRealHooksJsonPath(), concurrentSave, 'utf-8')
+      return {
+        outcome: 'inspected',
+        moves: request.moves.map((move) => ({
+          ...move,
+          reportedOldKey: move.oldKey,
+          wasTrusted: true,
+          enabled: true
+        }))
+      }
+    })
+
+    expect(ensureRealHomeCodexHookState({ hooksEnabled: false, userDataPath: userDataDir })).toBe(
+      'unavailable'
+    )
+
+    expect(operations).toEqual(['inspect-user-hook-trust'])
+    expect(readFileSync(getRealHooksJsonPath(), 'utf-8')).toBe(concurrentSave)
+    expect(readFileSync(getRealConfigTomlPath(), 'utf-8')).toBe(userTrustToml)
   })
 
   it('removes only Orca entries and reports the removed lane', () => {
