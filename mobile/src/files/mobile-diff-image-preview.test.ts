@@ -26,7 +26,26 @@ describe('mobileDiffImageDataUri', () => {
     ).toBe('data:image/png;base64,bmV3')
   })
 
-  it('falls back to the original bytes for a deleted image (modified side absent)', () => {
+  it('falls back to the original bytes for a proven deletion (modifiedDeleted)', () => {
+    expect(
+      mobileDiffImageDataUri({
+        kind: 'binary',
+        originalContent: 'b2xk',
+        originalIsBinary: true,
+        modifiedContent: '',
+        modifiedIsBinary: false,
+        modifiedDeleted: true,
+        isImage: true,
+        mimeType: 'image/jpeg'
+      })
+    ).toBe('data:image/jpeg;base64,b2xk')
+  })
+
+  // The reviewer's read-failure case: a relay/SSH read returns an empty modified
+  // side with modifiedIsBinary false and no modifiedDeleted flag. Without a proven
+  // deletion, falling back to the original would show a stale pre-change image, so
+  // "unavailable" (null) is the honest result.
+  it('returns null on a read failure (empty modified, no modifiedDeleted flag)', () => {
     expect(
       mobileDiffImageDataUri({
         kind: 'binary',
@@ -35,14 +54,14 @@ describe('mobileDiffImageDataUri', () => {
         modifiedContent: '',
         modifiedIsBinary: false,
         isImage: true,
-        mimeType: 'image/jpeg'
+        mimeType: 'image/png'
       })
-    ).toBe('data:image/jpeg;base64,b2xk')
+    ).toBeNull()
   })
 
-  // Guards the SSH/relay + >size-cap case: the modified side IS a binary image but
-  // its bytes arrive empty. Falling back to the original would render the stale
-  // pre-change image; "unavailable" is the honest result.
+  // Guards the >size-cap case: the modified side IS a binary image but its bytes
+  // arrive empty. Falling back to the original would render the stale pre-change
+  // image; "unavailable" is the honest result.
   it('returns null for a modify whose binary modified side is empty (no stale fallback)', () => {
     expect(
       mobileDiffImageDataUri({

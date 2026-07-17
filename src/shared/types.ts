@@ -3738,6 +3738,13 @@ export type GitDiffBinaryResult = {
   isImage?: boolean
   /** MIME type for binary preview rendering, e.g. "image/png" or "application/pdf" */
   mimeType?: string
+  /**
+   * True only when the modified side is a proven deletion (working-tree file gone
+   * or absent from the index) — distinct from an empty modified side caused by a
+   * read failure or size cap. Lets previewers fall back to the original bytes for
+   * a deletion without showing a stale image on a failed read.
+   */
+  modifiedDeleted?: boolean
 } & (
   | { originalIsBinary: true; modifiedIsBinary: boolean }
   | { originalIsBinary: boolean; modifiedIsBinary: true }

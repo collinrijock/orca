@@ -23,4 +23,8 @@ describe('buildImageDataUri', () => {
   it('returns null for application/pdf (not an <img> source)', () => {
     expect(buildImageDataUri('application/pdf', 'JVBER')).toBeNull()
   })
+
+  it('returns null for a non-image mime such as application/octet-stream', () => {
+    expect(buildImageDataUri('application/octet-stream', 'AAAA')).toBeNull()
+  })
 })

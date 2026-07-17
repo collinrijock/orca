@@ -21,7 +21,8 @@ describe('readWorkingDiffFile', () => {
 
     await expect(readWorkingDiffFile(filePath)).resolves.toEqual({
       content: 'hello',
-      isBinary: false
+      isBinary: false,
+      missing: false
     })
   })
 
@@ -32,7 +33,8 @@ describe('readWorkingDiffFile', () => {
 
     await expect(readWorkingDiffFile(filePath)).resolves.toEqual({
       content: '',
-      isBinary: true
+      isBinary: true,
+      missing: false
     })
   })
 
@@ -44,7 +46,19 @@ describe('readWorkingDiffFile', () => {
 
     await expect(readWorkingDiffFile(filePath)).resolves.toEqual({
       content: pngBytes.toString('base64'),
-      isBinary: true
+      isBinary: true,
+      missing: false
+    })
+  })
+
+  it('reports an absent working-tree file as a deletion', async () => {
+    tmpDir = await mkdtemp(path.join(tmpdir(), 'relay-working-file-'))
+    const filePath = path.join(tmpDir, 'deleted.png')
+
+    await expect(readWorkingDiffFile(filePath)).resolves.toEqual({
+      content: '',
+      isBinary: false,
+      missing: true
     })
   })
 })
