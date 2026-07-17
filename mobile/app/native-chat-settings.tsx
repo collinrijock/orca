@@ -34,7 +34,12 @@ export default function NativeChatSettingsScreen() {
   return (
     <View style={[styles.container, { paddingTop: insets.top + spacing.sm }]}>
       <View style={styles.topRow}>
-        <Pressable style={styles.backButton} onPress={() => router.back()}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Back"
+          style={styles.backButton}
+          onPress={() => router.back()}
+        >
           <ChevronLeft size={22} color={colors.textSecondary} />
         </Pressable>
         <Text style={styles.heading}>Native chat</Text>
@@ -57,6 +62,7 @@ export default function NativeChatSettingsScreen() {
               <Text style={styles.rowSublabel}>{chatDefault ? 'On' : 'Off'}</Text>
             </View>
             <Switch
+              accessibilityLabel="Open sessions in native chat"
               value={chatDefault}
               onValueChange={toggleDefault}
               trackColor={{ false: colors.bgRaised, true: colors.textSecondary }}
