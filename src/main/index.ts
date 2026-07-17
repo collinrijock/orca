@@ -452,7 +452,7 @@ configureOrcaUserDataPathEnv()
 if (
   shouldDeferLaunchForUpdateInstall({
     isPackaged: app.isPackaged,
-    userDataPath: app.getPath('userData'),
+    appDataPath: app.getPath('appData'),
     appVersion: app.getVersion()
   })
 ) {

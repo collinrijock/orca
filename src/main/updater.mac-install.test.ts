@@ -198,7 +198,11 @@ describe('updater mac install handoff', () => {
         expect(autoUpdaterMock.quitAndInstall).toHaveBeenCalledWith(false, true)
       })
       // The relaunch-race handoff marker must be down before the native call.
-      expect(writeHandoffMarkerMock).toHaveBeenCalledWith('/tmp/orca-test-user-data', '1.0.51')
+      expect(writeHandoffMarkerMock).toHaveBeenCalledWith(
+        '/tmp/orca-test-user-data',
+        process.execPath,
+        '1.0.51'
+      )
       expect(writeHandoffMarkerMock.mock.invocationCallOrder[0]).toBeLessThan(
         autoUpdaterMock.quitAndInstall.mock.invocationCallOrder[0]
       )

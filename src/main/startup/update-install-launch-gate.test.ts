@@ -1,11 +1,12 @@
-import { mkdtempSync, existsSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
-  UPDATE_INSTALL_HANDOFF_MARKER_FILE,
+  UPDATE_INSTALL_HANDOFF_ARMING_MS,
   UPDATE_INSTALL_HANDOFF_MAX_AGE_MS,
   clearUpdateInstallHandoffMarker,
+  getUpdateInstallHandoffMarkerPath,
   isBundleShipItRunning,
   shouldDeferLaunchForUpdateInstall,
   writeUpdateInstallHandoffMarker
@@ -20,14 +21,14 @@ const SHIPIT_ROW = `${SHIPIT_PATH} com.stablyai.orca.ShipIt`
 
 const tempDirs: string[] = []
 
-function makeUserData(): string {
+function makeAppData(): string {
   const dir = mkdtempSync(path.join(tmpdir(), 'orca-launch-gate-'))
   tempDirs.push(dir)
   return dir
 }
 
-function markerFile(userData: string): string {
-  return path.join(userData, UPDATE_INSTALL_HANDOFF_MARKER_FILE)
+function markerFile(appData: string, executablePath = APP_BIN): string {
+  return getUpdateInstallHandoffMarkerPath(appData, executablePath)
 }
 
 afterEach(() => {
@@ -57,15 +58,20 @@ describe('isBundleShipItRunning', () => {
 
 describe('shouldDeferLaunchForUpdateInstall', () => {
   it('reads all users so a privileged ShipIt install is visible', () => {
-    const userData = makeUserData()
-    writeUpdateInstallHandoffMarker(userData, '1.0.51')
+    const appData = makeAppData()
+    const createdAt = 1_000_000
+    writeUpdateInstallHandoffMarker(appData, APP_BIN, '1.0.51', createdAt)
     execFileSyncMock.mockReturnValue(SHIPIT_ROW)
 
     const defer = shouldDeferLaunchForUpdateInstall({
       isPackaged: true,
-      userDataPath: userData,
+      appDataPath: appData,
       appVersion: '1.0.51',
-      deps: { platform: 'darwin', executablePath: APP_BIN }
+      deps: {
+        platform: 'darwin',
+        executablePath: APP_BIN,
+        now: createdAt + UPDATE_INSTALL_HANDOFF_ARMING_MS + 1
+      }
     })
 
     expect(defer).toBe(true)
@@ -76,59 +82,134 @@ describe('shouldDeferLaunchForUpdateInstall', () => {
     )
   })
 
-  it('defers a same-version launch while this bundle’s installer is alive', () => {
-    const userData = makeUserData()
-    writeUpdateInstallHandoffMarker(userData, '1.0.51')
+  it('defers during marker arming without waiting for a process-table read', () => {
+    const appData = makeAppData()
+    const createdAt = 1_000_000
+    const readProcessList = vi.fn(() => '/usr/bin/ps')
+    writeUpdateInstallHandoffMarker(appData, APP_BIN, '1.0.51', createdAt)
 
     const defer = shouldDeferLaunchForUpdateInstall({
       isPackaged: true,
-      userDataPath: userData,
+      appDataPath: appData,
       appVersion: '1.0.51',
-      deps: { platform: 'darwin', executablePath: APP_BIN, readProcessList: () => SHIPIT_ROW }
+      deps: {
+        platform: 'darwin',
+        executablePath: APP_BIN,
+        now: createdAt + UPDATE_INSTALL_HANDOFF_ARMING_MS,
+        readProcessList
+      }
     })
 
     expect(defer).toBe(true)
-    expect(existsSync(markerFile(userData))).toBe(true)
+    expect(readProcessList).not.toHaveBeenCalled()
   })
 
-  it('lets the post-update relaunch through and clears the marker', () => {
-    const userData = makeUserData()
-    writeUpdateInstallHandoffMarker(userData, '1.0.51')
+  it('defers a same-version launch while this bundle’s installer is alive', () => {
+    const appData = makeAppData()
+    const createdAt = 1_000_000
+    writeUpdateInstallHandoffMarker(appData, APP_BIN, '1.0.51', createdAt)
 
     const defer = shouldDeferLaunchForUpdateInstall({
       isPackaged: true,
-      userDataPath: userData,
+      appDataPath: appData,
+      appVersion: '1.0.51',
+      deps: {
+        platform: 'darwin',
+        executablePath: APP_BIN,
+        now: createdAt + UPDATE_INSTALL_HANDOFF_ARMING_MS + 1,
+        readProcessList: () => SHIPIT_ROW
+      }
+    })
+
+    expect(defer).toBe(true)
+    expect(existsSync(markerFile(appData))).toBe(true)
+  })
+
+  it('shares the bundle-scoped marker across isolated userData profiles', () => {
+    const appData = makeAppData()
+    const createdAt = 1_000_000
+    writeUpdateInstallHandoffMarker(appData, APP_BIN, '1.0.51', createdAt)
+
+    const deferFromIsolatedProfile = shouldDeferLaunchForUpdateInstall({
+      isPackaged: true,
+      appDataPath: appData,
+      appVersion: '1.0.51',
+      deps: {
+        platform: 'darwin',
+        executablePath: APP_BIN,
+        now: createdAt + 1,
+        readProcessList: () => '/usr/bin/ps'
+      }
+    })
+
+    expect(deferFromIsolatedProfile).toBe(true)
+  })
+
+  it('does not share markers between side-by-side app bundles', () => {
+    const appData = makeAppData()
+    const otherAppBin = '/Applications/Orca Preview.app/Contents/MacOS/Orca'
+    writeUpdateInstallHandoffMarker(appData, APP_BIN, '1.0.51', 1_000_000)
+
+    expect(
+      shouldDeferLaunchForUpdateInstall({
+        isPackaged: true,
+        appDataPath: appData,
+        appVersion: '1.0.51',
+        deps: {
+          platform: 'darwin',
+          executablePath: otherAppBin,
+          now: 1_000_001,
+          readProcessList: () => SHIPIT_ROW
+        }
+      })
+    ).toBe(false)
+    expect(existsSync(markerFile(appData))).toBe(true)
+  })
+
+  it('lets the post-update relaunch through and clears the marker', () => {
+    const appData = makeAppData()
+    writeUpdateInstallHandoffMarker(appData, APP_BIN, '1.0.51')
+
+    const defer = shouldDeferLaunchForUpdateInstall({
+      isPackaged: true,
+      appDataPath: appData,
       appVersion: '1.0.61',
       deps: { platform: 'darwin', executablePath: APP_BIN, readProcessList: () => SHIPIT_ROW }
     })
 
     expect(defer).toBe(false)
-    expect(existsSync(markerFile(userData))).toBe(false)
+    expect(existsSync(markerFile(appData))).toBe(false)
   })
 
   it('launches normally once the installer has exited (aborted/failed install)', () => {
-    const userData = makeUserData()
-    writeUpdateInstallHandoffMarker(userData, '1.0.51')
+    const appData = makeAppData()
+    const createdAt = 1_000_000
+    writeUpdateInstallHandoffMarker(appData, APP_BIN, '1.0.51', createdAt)
 
     const defer = shouldDeferLaunchForUpdateInstall({
       isPackaged: true,
-      userDataPath: userData,
+      appDataPath: appData,
       appVersion: '1.0.51',
-      deps: { platform: 'darwin', executablePath: APP_BIN, readProcessList: () => '/usr/bin/ps' }
+      deps: {
+        platform: 'darwin',
+        executablePath: APP_BIN,
+        now: createdAt + UPDATE_INSTALL_HANDOFF_ARMING_MS + 1,
+        readProcessList: () => '/usr/bin/ps'
+      }
     })
 
     expect(defer).toBe(false)
-    expect(existsSync(markerFile(userData))).toBe(false)
+    expect(existsSync(markerFile(appData))).toBe(false)
   })
 
   it('expires stale markers instead of gating launches', () => {
-    const userData = makeUserData()
+    const appData = makeAppData()
     const staleCreatedAt = 1_000_000
-    writeUpdateInstallHandoffMarker(userData, '1.0.51', staleCreatedAt)
+    writeUpdateInstallHandoffMarker(appData, APP_BIN, '1.0.51', staleCreatedAt)
 
     const defer = shouldDeferLaunchForUpdateInstall({
       isPackaged: true,
-      userDataPath: userData,
+      appDataPath: appData,
       appVersion: '1.0.51',
       deps: {
         platform: 'darwin',
@@ -139,30 +220,33 @@ describe('shouldDeferLaunchForUpdateInstall', () => {
     })
 
     expect(defer).toBe(false)
-    expect(existsSync(markerFile(userData))).toBe(false)
+    expect(existsSync(markerFile(appData))).toBe(false)
   })
 
   it('fails open on corrupt markers, unreadable process tables, and other platforms', () => {
-    const userData = makeUserData()
-    writeFileSync(markerFile(userData), 'not json')
+    const appData = makeAppData()
+    mkdirSync(path.dirname(markerFile(appData)), { recursive: true })
+    writeFileSync(markerFile(appData), 'not json')
     expect(
       shouldDeferLaunchForUpdateInstall({
         isPackaged: true,
-        userDataPath: userData,
+        appDataPath: appData,
         appVersion: '1.0.51',
         deps: { platform: 'darwin', executablePath: APP_BIN, readProcessList: () => SHIPIT_ROW }
       })
     ).toBe(false)
 
-    writeUpdateInstallHandoffMarker(userData, '1.0.51')
+    const createdAt = 1_000_000
+    writeUpdateInstallHandoffMarker(appData, APP_BIN, '1.0.51', createdAt)
     expect(
       shouldDeferLaunchForUpdateInstall({
         isPackaged: true,
-        userDataPath: userData,
+        appDataPath: appData,
         appVersion: '1.0.51',
         deps: {
           platform: 'darwin',
           executablePath: APP_BIN,
+          now: createdAt + UPDATE_INSTALL_HANDOFF_ARMING_MS + 1,
           readProcessList: () => {
             throw new Error('ps timed out')
           }
@@ -170,11 +254,11 @@ describe('shouldDeferLaunchForUpdateInstall', () => {
       })
     ).toBe(false)
 
-    writeUpdateInstallHandoffMarker(userData, '1.0.51')
+    writeUpdateInstallHandoffMarker(appData, APP_BIN, '1.0.51')
     expect(
       shouldDeferLaunchForUpdateInstall({
         isPackaged: true,
-        userDataPath: userData,
+        appDataPath: appData,
         appVersion: '1.0.51',
         deps: { platform: 'win32', executablePath: APP_BIN, readProcessList: () => SHIPIT_ROW }
       })
@@ -183,17 +267,32 @@ describe('shouldDeferLaunchForUpdateInstall', () => {
     expect(
       shouldDeferLaunchForUpdateInstall({
         isPackaged: false,
-        userDataPath: userData,
+        appDataPath: appData,
         appVersion: '1.0.51',
         deps: { platform: 'darwin', executablePath: APP_BIN, readProcessList: () => SHIPIT_ROW }
       })
     ).toBe(false)
   })
 
+  it('fails open and clears a marker timestamped in the future', () => {
+    const appData = makeAppData()
+    writeUpdateInstallHandoffMarker(appData, APP_BIN, '1.0.51', 2_000_000)
+
+    expect(
+      shouldDeferLaunchForUpdateInstall({
+        isPackaged: true,
+        appDataPath: appData,
+        appVersion: '1.0.51',
+        deps: { platform: 'darwin', executablePath: APP_BIN, now: 1_000_000 }
+      })
+    ).toBe(false)
+    expect(existsSync(markerFile(appData))).toBe(false)
+  })
+
   it('clearUpdateInstallHandoffMarker removes the marker', () => {
-    const userData = makeUserData()
-    writeUpdateInstallHandoffMarker(userData, '1.0.51')
-    clearUpdateInstallHandoffMarker(userData)
-    expect(existsSync(markerFile(userData))).toBe(false)
+    const appData = makeAppData()
+    writeUpdateInstallHandoffMarker(appData, APP_BIN, '1.0.51')
+    clearUpdateInstallHandoffMarker(appData, APP_BIN)
+    expect(existsSync(markerFile(appData))).toBe(false)
   })
 })

@@ -1,5 +1,6 @@
 import { execFileSync } from 'node:child_process'
-import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { createHash } from 'node:crypto'
+import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 
 // Why: Squirrel.Mac installs by swapping the bundle AFTER the app exits, and
@@ -11,7 +12,11 @@ import path from 'node:path'
 // launch that finds the marker fresh while this bundle's ShipIt installer is
 // still alive exits instead — ShipIt then finishes and relaunches the updated
 // app itself, so the user's click still ends with Orca open.
-export const UPDATE_INSTALL_HANDOFF_MARKER_FILE = 'update-install-handoff.json'
+export const UPDATE_INSTALL_HANDOFF_MARKER_DIRECTORY = 'orca-update-install-handoffs'
+// Why: quitAndInstall writes the marker immediately before spawning ShipIt.
+// During this bounded arming window, the marker is authoritative because the
+// installer may not be visible in the process table yet.
+export const UPDATE_INSTALL_HANDOFF_ARMING_MS = 5_000
 // Why: the handoff normally resolves in seconds; the ceiling only bounds how
 // long a crashed install could keep gating launches. The live-ShipIt check is
 // the real gate, so a stale marker never locks the app out.
@@ -25,44 +30,84 @@ export type UpdateInstallHandoffMarker = {
   createdAtMs: number
 }
 
-function markerPath(userDataPath: string): string {
-  return path.join(userDataPath, UPDATE_INSTALL_HANDOFF_MARKER_FILE)
+function removeFileBestEffort(filePath: string): void {
+  try {
+    rmSync(filePath, { force: true })
+  } catch {
+    // Marker cleanup must never prevent an install or a normal app launch.
+  }
+}
+
+function bundleRootForExecutable(executablePath: string): string {
+  // Why: these paths always describe a macOS bundle, even in cross-platform
+  // unit tests, so host-native separators would change the identity.
+  return path.posix.resolve(executablePath, '..', '..', '..')
+}
+
+export function getUpdateInstallHandoffMarkerPath(
+  appDataPath: string,
+  executablePath: string
+): string {
+  // Why: appData is shared by isolated Orca profiles, while the executable
+  // hash keeps side-by-side app bundles from gating each other's launches.
+  const bundleId = createHash('sha256')
+    .update(bundleRootForExecutable(executablePath))
+    .digest('hex')
+    .slice(0, 16)
+  return path.join(appDataPath, UPDATE_INSTALL_HANDOFF_MARKER_DIRECTORY, `${bundleId}.json`)
 }
 
 /** Written by the updater immediately before the native install handoff. */
 export function writeUpdateInstallHandoffMarker(
-  userDataPath: string,
+  appDataPath: string,
+  executablePath: string,
   appVersion: string,
   now = Date.now()
 ): void {
+  const finalPath = getUpdateInstallHandoffMarkerPath(appDataPath, executablePath)
+  const temporaryPath = `${finalPath}.${process.pid}.${now}.tmp`
   try {
     const marker: UpdateInstallHandoffMarker = { appVersion, createdAtMs: now }
-    writeFileSync(markerPath(userDataPath), JSON.stringify(marker))
+    mkdirSync(path.dirname(finalPath), { recursive: true })
+    writeFileSync(temporaryPath, JSON.stringify(marker))
+    // Why: a direct overwrite can expose partial JSON to the launch racing
+    // this write. Same-directory rename publishes the complete marker at once.
+    renameSync(temporaryPath, finalPath)
   } catch {
     // Why: the marker only powers the relaunch-race guard; failing to write
     // it must never block the install itself.
+  } finally {
+    removeFileBestEffort(temporaryPath)
   }
 }
 
-export function clearUpdateInstallHandoffMarker(userDataPath: string): void {
-  try {
-    rmSync(markerPath(userDataPath), { force: true })
-  } catch {
-    /* Removal is best-effort; a stale marker self-expires. */
-  }
+export function clearUpdateInstallHandoffMarker(appDataPath: string, executablePath: string): void {
+  removeFileBestEffort(getUpdateInstallHandoffMarkerPath(appDataPath, executablePath))
 }
 
-function readUpdateInstallHandoffMarker(userDataPath: string): UpdateInstallHandoffMarker | null {
+function readUpdateInstallHandoffMarker(
+  appDataPath: string,
+  executablePath: string
+): UpdateInstallHandoffMarker | null {
+  const filePath = getUpdateInstallHandoffMarkerPath(appDataPath, executablePath)
   try {
-    if (!existsSync(markerPath(userDataPath))) {
+    if (!existsSync(filePath)) {
       return null
     }
-    const parsed = JSON.parse(readFileSync(markerPath(userDataPath), 'utf8'))
-    if (typeof parsed?.appVersion !== 'string' || typeof parsed?.createdAtMs !== 'number') {
+    const parsed = JSON.parse(readFileSync(filePath, 'utf8'))
+    if (
+      typeof parsed?.appVersion !== 'string' ||
+      typeof parsed?.createdAtMs !== 'number' ||
+      !Number.isFinite(parsed.createdAtMs)
+    ) {
+      removeFileBestEffort(filePath)
       return null
     }
     return { appVersion: parsed.appVersion, createdAtMs: parsed.createdAtMs }
   } catch {
+    // Why: a corrupt marker cannot ever become actionable; removing it avoids
+    // repeated startup reads while preserving the fail-open contract.
+    removeFileBestEffort(filePath)
     return null
   }
 }
@@ -82,9 +127,7 @@ function readProcessCommandList(): string {
  * this exact install is considered. */
 export function isBundleShipItRunning(executablePath: string, processCommandList: string): boolean {
   // /Applications/Orca.app/Contents/MacOS/Orca → /Applications/Orca.app
-  // Why: this matcher always receives a macOS path, even when its unit tests
-  // run on Windows, so host-native separators would corrupt the comparison.
-  const bundleRoot = path.posix.resolve(executablePath, '..', '..', '..')
+  const bundleRoot = bundleRootForExecutable(executablePath)
   const shipItPath = path.posix.join(
     bundleRoot,
     'Contents',
@@ -112,11 +155,12 @@ export type UpdateInstallLaunchGateDeps = {
  * Decide whether this launch should exit to let an in-flight update install
  * finish. Sync by design — it must resolve before any startup side effects,
  * and the process-table read only happens on the rare fresh-marker path.
- * Fails open everywhere: an unreadable marker or process table means launch.
+ * An unreadable marker fails open; after the bounded arming phase, an
+ * unreadable process table does too.
  */
 export function shouldDeferLaunchForUpdateInstall(options: {
   isPackaged: boolean
-  userDataPath: string
+  appDataPath: string
   appVersion: string
   deps?: UpdateInstallLaunchGateDeps
 }): boolean {
@@ -124,33 +168,38 @@ export function shouldDeferLaunchForUpdateInstall(options: {
   if (platform !== 'darwin' || !options.isPackaged) {
     return false
   }
-  const marker = readUpdateInstallHandoffMarker(options.userDataPath)
+  const executablePath = options.deps?.executablePath ?? process.execPath
+  const marker = readUpdateInstallHandoffMarker(options.appDataPath, executablePath)
   if (!marker) {
     return false
   }
   // A different running version means the install already happened (or was
   // rolled elsewhere) — this launch is the post-update relaunch.
   if (marker.appVersion !== options.appVersion) {
-    clearUpdateInstallHandoffMarker(options.userDataPath)
+    clearUpdateInstallHandoffMarker(options.appDataPath, executablePath)
     return false
   }
   const now = options.deps?.now ?? Date.now()
-  if (now - marker.createdAtMs > UPDATE_INSTALL_HANDOFF_MAX_AGE_MS) {
-    clearUpdateInstallHandoffMarker(options.userDataPath)
+  const markerAgeMs = now - marker.createdAtMs
+  if (markerAgeMs < 0 || markerAgeMs > UPDATE_INSTALL_HANDOFF_MAX_AGE_MS) {
+    clearUpdateInstallHandoffMarker(options.appDataPath, executablePath)
     return false
+  }
+  if (markerAgeMs <= UPDATE_INSTALL_HANDOFF_ARMING_MS) {
+    return true
   }
   let processList: string
   try {
     processList = (options.deps?.readProcessList ?? readProcessCommandList)()
   } catch {
-    clearUpdateInstallHandoffMarker(options.userDataPath)
+    clearUpdateInstallHandoffMarker(options.appDataPath, executablePath)
     return false
   }
-  if (isBundleShipItRunning(options.deps?.executablePath ?? process.execPath, processList)) {
+  if (isBundleShipItRunning(executablePath, processList)) {
     return true
   }
   // Same version and no installer left: the install died (aborted/failed).
   // Clear the marker so this and future launches proceed normally.
-  clearUpdateInstallHandoffMarker(options.userDataPath)
+  clearUpdateInstallHandoffMarker(options.appDataPath, executablePath)
   return false
 }

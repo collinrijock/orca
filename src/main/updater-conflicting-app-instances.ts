@@ -9,25 +9,66 @@ import { execFile } from 'node:child_process'
 // user sees "app quit but never relaunched, still on the old version".
 // Detecting those instances before the install handoff turns that silent
 // wedge into an actionable message.
-const PROCESS_LIST_TIMEOUT_MS = 2_000
-// Why: a busy dev machine's per-user process table can exceed execFile's 1MB
-// default; truncation would silently drop a conflicting instance.
-const PROCESS_LIST_MAX_BYTES = 16 * 1024 * 1024
+const RUNNING_APPLICATION_QUERY_TIMEOUT_MS = 2_000
+const RUNNING_APPLICATION_QUERY_MAX_BYTES = 64 * 1024
 
-export type ProcessListReader = () => Promise<string>
+// Why: Squirrel identifies blockers as NSRunningApplication instances by
+// bundle identity. An exact-executable `ps` scan also catches Orca CLI
+// processes running through ELECTRON_RUN_AS_NODE, even though AppKit gives
+// those processes no bundle id or URL and Squirrel does not wait for them.
+const RUNNING_APPLICATION_QUERY = String.raw`
+function run(argv) {
+  ObjC.import('AppKit')
+  const executablePath = argv[0]
+  const currentPid = Number(argv[1])
+  const applications = $.NSWorkspace.sharedWorkspace.runningApplications
+  const pids = []
+  for (let index = 0; index < applications.count; index += 1) {
+    const application = applications.objectAtIndex(index)
+    const executableUrl = application.executableURL
+    const bundleIdentifier = application.bundleIdentifier
+    const pid = Number(application.processIdentifier)
+    if (
+      executableUrl &&
+      bundleIdentifier &&
+      String(ObjC.unwrap(executableUrl.path)) === executablePath &&
+      pid !== currentPid
+    ) {
+      pids.push(String(pid))
+    }
+  }
+  return pids.join('\n')
+}`
 
-function readCurrentUserProcessList(): Promise<string> {
+export type RunningApplicationPidReader = (
+  executablePath: string,
+  currentPid: number
+) => Promise<string>
+
+function readCurrentUserRunningApplicationPids(
+  executablePath: string,
+  currentPid: number
+): Promise<string> {
   return new Promise((resolve, reject) => {
-    // Why: `-x` (without `-a`) scopes to the current user's processes, which
-    // mirrors NSRunningApplication's login-session scope — another macOS
-    // user's Orca does not block ShipIt and must not block the update here.
-    // On macOS `comm` is the full executable path, so instances launched from
-    // the same bundle match exactly whatever their argv or profile is.
-    // Pin the system binary because Orca hydrates PATH from the user's shell.
+    // Why: query AppKit in one bounded subprocess instead of launching a probe
+    // per candidate. Passing paths as argv avoids script interpolation, and
+    // osascript needs no Accessibility permission for NSWorkspace metadata.
     execFile(
-      '/bin/ps',
-      ['-xo', 'pid=,comm='],
-      { encoding: 'utf8', timeout: PROCESS_LIST_TIMEOUT_MS, maxBuffer: PROCESS_LIST_MAX_BYTES },
+      '/usr/bin/osascript',
+      [
+        '-l',
+        'JavaScript',
+        '-e',
+        RUNNING_APPLICATION_QUERY,
+        '--',
+        executablePath,
+        String(currentPid)
+      ],
+      {
+        encoding: 'utf8',
+        timeout: RUNNING_APPLICATION_QUERY_TIMEOUT_MS,
+        maxBuffer: RUNNING_APPLICATION_QUERY_MAX_BYTES
+      },
       (error, stdout) => {
         if (error) {
           reject(error)
@@ -39,22 +80,15 @@ function readCurrentUserProcessList(): Promise<string> {
   })
 }
 
-/** Parse `ps -xo pid=,comm=` output into pids whose executable path equals
- * `executablePath`, excluding `currentPid`. Executable paths may contain
- * spaces, so only the leading pid column is positional. */
-export function parseSameExecutablePids(
-  psOutput: string,
-  executablePath: string,
-  currentPid: number
-): number[] {
+export function parseRunningApplicationPids(output: string, currentPid: number): number[] {
   const pids: number[] = []
-  for (const line of psOutput.split('\n')) {
-    const match = /^\s*(\d+)\s+(.+?)\s*$/.exec(line)
-    if (!match) {
+  for (const line of output.split('\n')) {
+    const normalized = line.trim()
+    if (!/^\d+$/.test(normalized)) {
       continue
     }
-    const pid = Number(match[1])
-    if (pid !== currentPid && match[2] === executablePath) {
+    const pid = Number(normalized)
+    if (pid > 0 && pid !== currentPid) {
       pids.push(pid)
     }
   }
@@ -65,7 +99,7 @@ export type ConflictingInstanceDeps = {
   platform?: NodeJS.Platform
   executablePath?: string
   currentPid?: number
-  readProcessList?: ProcessListReader
+  readRunningApplicationPids?: RunningApplicationPidReader
 }
 
 /**
@@ -73,8 +107,8 @@ export type ConflictingInstanceDeps = {
  *
  * macOS-only by design: this mirrors Squirrel.Mac's pre-install wait/abort
  * semantics. The Windows and Linux installers manage running instances
- * themselves. Fails open — an undetectable process table must never block an
- * update install.
+ * themselves. Fails open — an unavailable application query must never block
+ * an update install.
  */
 export async function findConflictingAppInstancePids(
   deps: ConflictingInstanceDeps = {}
@@ -82,13 +116,14 @@ export async function findConflictingAppInstancePids(
   if ((deps.platform ?? process.platform) !== 'darwin') {
     return []
   }
+  const executablePath = deps.executablePath ?? process.execPath
+  const currentPid = deps.currentPid ?? process.pid
   try {
-    const output = await (deps.readProcessList ?? readCurrentUserProcessList)()
-    return parseSameExecutablePids(
-      output,
-      deps.executablePath ?? process.execPath,
-      deps.currentPid ?? process.pid
+    const output = await (deps.readRunningApplicationPids ?? readCurrentUserRunningApplicationPids)(
+      executablePath,
+      currentPid
     )
+    return parseRunningApplicationPids(output, currentPid)
   } catch {
     return []
   }

@@ -645,7 +645,7 @@ async function performQuitAndInstall(): Promise<void> {
       if (process.platform === 'darwin') {
         // Why: lets a launch that races Squirrel's install back off instead of
         // aborting it (see update-install-launch-gate). Cleared on recovery.
-        writeUpdateInstallHandoffMarker(app.getPath('userData'), app.getVersion())
+        writeUpdateInstallHandoffMarker(app.getPath('appData'), process.execPath, app.getVersion())
       }
       // Why: invoke quitAndInstall before killAllPty/remove close listeners so a
       // sync 'error' (common "no filepath" path) recovers while windows and
@@ -707,7 +707,7 @@ function resetQuitForUpdateState(): void {
   resetMacInstallState()
   // Why: install recovery keeps this process alive, so the handoff marker
   // would otherwise gate the user's next manual relaunch for no reason.
-  clearUpdateInstallHandoffMarker(app.getPath('userData'))
+  clearUpdateInstallHandoffMarker(app.getPath('appData'), process.execPath)
 }
 
 // Why: electron-updater often reports quitAndInstall failures via the 'error'
